@@ -47,17 +47,26 @@ public static class PlaygroundLintRunner
     /// <summary>Reusable buffer for JSON serialization. Guarded by <see cref="EngineGate"/>.</summary>
     private static readonly ArrayBufferWriter<byte> JsonBuffer = new(4096);
 
-    /// <summary>Reusable UTF-8 byte buffer for YAML source. Guarded by <see cref="EngineGate"/>.</summary>
-    private static byte[] _utf8Buffer = new byte[4096];
-
     /// <summary>Cached severity display strings indexed by <see cref="DiagnosticSeverity"/>.</summary>
     private static readonly string[] SeverityStrings = ["Info", "Warning", "Error"];
 
     private static readonly JsonWriterOptions CamelCaseWriterOptions = new() { Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping };
 
+    /// <summary>Incremental parse context for D-5b root section reuse. Guarded by <see cref="EngineGate"/>.</summary>
+    private static readonly IncrementalParseContext IncrementalCtx = new();
+
+    /// <summary>Cached last input source string for identity-based short circuit. Guarded by <see cref="EngineGate"/>.</summary>
+    private static string? _lastYamlSource;
+
+    /// <summary>Cached last file path for identity-based short circuit. Guarded by <see cref="EngineGate"/>.</summary>
+    private static string? _lastFilePath;
+
+    /// <summary>Cached last JSON output for identity-based short circuit. Guarded by <see cref="EngineGate"/>.</summary>
+    private static byte[]? _lastJsonOutput;
 
     /// <summary>
     /// Parses and lints <paramref name="yamlSource"/> and returns a UTF-8 JSON byte array of diagnostics.
+    /// Uses incremental parsing (D-5b) to skip unchanged root sections when possible.
     /// Suitable for WASM interop where JavaScript can decode with TextDecoder, or for
     /// scenarios where the result is written directly to a stream.
     /// </summary>
@@ -68,22 +77,55 @@ public static class PlaygroundLintRunner
 
         lock (EngineGate)
         {
-            var utf8Yaml = RentUtf8Buffer(yamlSource);
-            var result = Engine.Check(utf8Yaml, filePath, LintWithFixMetadata);
-            try
+            // Fast path: if source and filePath are identical to last call, return cached output
+            if (ReferenceEquals(yamlSource, _lastYamlSource)
+                && string.Equals(filePath, _lastFilePath, StringComparison.Ordinal)
+                && _lastJsonOutput is not null)
             {
-                JsonBuffer.Clear();
-                using (var writer = new Utf8JsonWriter(JsonBuffer, CamelCaseWriterOptions))
-                {
-                    WriteDiagnosticsArray(writer, result.Diagnostics);
-                }
+                return _lastJsonOutput;
+            }
 
-                return JsonBuffer.WrittenSpan.ToArray();
-            }
-            finally
+            var utf8Yaml = EncodeToDoubleBuffer(yamlSource);
+
+            LintResult lintResult;
+            var ownsArena = false;
+
+            // Action metadata files (action.yml) require classified parsing — not incremental.
+            if (DocumentKindClassifier.GetPathHintKind(filePath) == DocumentKind.ActionMetadata)
             {
-                result.ParseResult.Arena?.Dispose();
+                lintResult = Engine.Check(utf8Yaml, filePath, LintWithFixMetadata);
+                ownsArena = true; // Engine.Check creates its own arena; we must dispose it
             }
+            else
+            {
+                // D-5b: Use incremental parse to skip unchanged root sections
+                var parseResult = IncrementalCtx.ParseIncrementally(utf8Yaml, filePath);
+
+                // Lint the (possibly incrementally-parsed) result
+                lintResult = Engine.CheckWithParseResult(utf8Yaml, filePath, LintWithFixMetadata, parseResult);
+            }
+
+            JsonBuffer.Clear();
+            using (var writer = new Utf8JsonWriter(JsonBuffer, CamelCaseWriterOptions))
+            {
+                WriteDiagnosticsArray(writer, lintResult.Diagnostics.AsSpan());
+            }
+
+            // Dispose arena for ActionMetadata path (not owned by IncrementalParseContext)
+            if (ownsArena)
+            {
+                lintResult.ParseResult.Arena?.Dispose();
+            }
+
+            // NOTE: Incremental path arena is NOT disposed — IncrementalParseContext owns it for reuse
+            var result = JsonBuffer.WrittenSpan.ToArray();
+
+            // Cache for identity-based short circuit
+            _lastYamlSource = yamlSource;
+            _lastFilePath = filePath;
+            _lastJsonOutput = result;
+
+            return result;
         }
     }
 
@@ -206,19 +248,32 @@ public static class PlaygroundLintRunner
     }
 
     /// <summary>
-    /// Returns an exact-sized UTF-8 byte[] for the given string, reusing the static buffer
-    /// when the byte length matches exactly. Must be called under <see cref="EngineGate"/>.
-    /// The parser requires exact-length arrays because VYaml reads utf8Yaml.AsMemory() fully.
+    /// Double-buffer for UTF-8 encoding. By alternating between two buffers,
+    /// the buffer that <see cref="IncrementalParseContext"/> stores as <c>_previousSource</c>
+    /// is never overwritten by the next call. Only allocates when the required exact size
+    /// differs from the existing buffer.
+    /// Guarded by <see cref="EngineGate"/>.
     /// </summary>
-    private static byte[] RentUtf8Buffer(string source)
+    private static byte[]? _utf8BufA;
+    private static byte[]? _utf8BufB;
+    private static bool _useUtf8BufA = true;
+
+    /// <summary>
+    /// Encodes <paramref name="source"/> into the inactive double-buffer and returns it.
+    /// Only allocates when the byte length changes from the last call to this buffer slot.
+    /// The returned array has <c>Length == byteCount</c> (exact size) so VYaml and the
+    /// parser see no trailing garbage. Must be called under <see cref="EngineGate"/>.
+    /// </summary>
+    private static byte[] EncodeToDoubleBuffer(string source)
     {
         var byteCount = Encoding.UTF8.GetByteCount(source);
-        if (_utf8Buffer.Length != byteCount)
+        ref var buf = ref (_useUtf8BufA ? ref _utf8BufA : ref _utf8BufB);
+        if (buf is null || buf.Length != byteCount)
         {
-            _utf8Buffer = new byte[byteCount];
+            buf = new byte[byteCount];
         }
-
-        Encoding.UTF8.GetBytes(source, _utf8Buffer);
-        return _utf8Buffer;
+        Encoding.UTF8.GetBytes(source, buf);
+        _useUtf8BufA = !_useUtf8BufA;
+        return buf;
     }
 }

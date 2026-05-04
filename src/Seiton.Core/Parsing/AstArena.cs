@@ -166,6 +166,20 @@ public sealed class AstArena : IDisposable
     private ExecAction[] _execActions;
     private int _execActionCount;
 
+    // D-1: Pooled diagnostics buffer registered by ParseClassified/ParseIncremental.
+    // Returned to ArrayPool<Diagnostic>.Shared on Dispose.
+    private Diagnostic[]? _diagnosticsBuffer;
+
+    // D-2: Pooled lint diagnostics buffer registered by LintEngine.
+    // Returned to ArrayPool<Diagnostic>.Shared on Dispose.
+    private Diagnostic[]? _lintDiagnosticsBuffer;
+
+    // D-4: Pooled SliceMap Entry[] arrays registered during parsing.
+    // Each entry stores the array reference + a cached return delegate.
+    // Returned to the appropriate ArrayPool<T>.Shared on Dispose/Reset.
+    private (Array Buffer, Action<Array> Return)[] _sliceMapBuffers = new (Array, Action<Array>)[32];
+    private int _sliceMapBufferCount;
+
     internal AstArena(byte[] source, int stringCapacity = 64, int boolCapacity = 8, int intCapacity = 4, int floatCapacity = 4)
     {
         _source = source;
@@ -197,6 +211,70 @@ public sealed class AstArena : IDisposable
     }
 
     /// <summary>
+    /// Registers a pooled diagnostics array with this arena. The array will be returned
+    /// to <see cref="ArrayPool{T}.Shared"/> when this arena is disposed.
+    /// </summary>
+    internal void RegisterDiagnosticsBuffer(Diagnostic[] buffer) => _diagnosticsBuffer = buffer;
+
+    /// <summary>
+    /// Registers a pooled SliceMap Entry[] array with this arena. The array will be returned
+    /// to <see cref="ArrayPool{T}.Shared"/> when this arena is disposed or reset.
+    /// Uses a static cached delegate per type T to avoid per-call allocations.
+    /// </summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    internal void RegisterSliceMapBuffer<T>(T[] array)
+    {
+        if (_sliceMapBufferCount == _sliceMapBuffers.Length)
+        {
+            Array.Resize(ref _sliceMapBuffers, _sliceMapBuffers.Length * 2);
+        }
+
+        _sliceMapBuffers[_sliceMapBufferCount++] = (array, PoolReturnCache<T>.Instance);
+    }
+
+    /// <summary>
+    /// Registers a pooled lint diagnostics array with this arena. The array will be returned
+    /// to <see cref="ArrayPool{T}.Shared"/> when this arena is disposed.
+    /// If a previous lint buffer was registered, it is returned to the pool immediately
+    /// (supports repeated lint calls on the same arena, e.g. IncrementalParseContext).
+    /// </summary>
+    internal void RegisterLintDiagnosticsBuffer(Diagnostic[] buffer)
+    {
+        if (_lintDiagnosticsBuffer is not null)
+        {
+            ArrayPool<Diagnostic>.Shared.Return(_lintDiagnosticsBuffer, clearArray: true);
+        }
+
+        _lintDiagnosticsBuffer = buffer;
+    }
+
+    /// <summary>
+    /// Returns the lint diagnostics buffer to the pool without disposing the arena.
+    /// Call this before retaining an arena whose lint data has already been consumed.
+    /// </summary>
+    internal void ReleaseLintDiagnosticsBuffer()
+    {
+        if (_lintDiagnosticsBuffer is not null)
+        {
+            ArrayPool<Diagnostic>.Shared.Return(_lintDiagnosticsBuffer, clearArray: true);
+            _lintDiagnosticsBuffer = null;
+        }
+    }
+
+    /// <summary>
+    /// Returns the parse diagnostics buffer to the pool without disposing the arena.
+    /// Call this before retaining an arena whose parse diagnostics have already been consumed.
+    /// </summary>
+    internal void ReleaseDiagnosticsBuffer()
+    {
+        if (_diagnosticsBuffer is not null)
+        {
+            ArrayPool<Diagnostic>.Shared.Return(_diagnosticsBuffer, clearArray: true);
+            _diagnosticsBuffer = null;
+        }
+    }
+
+    /// <summary>
     /// Returns the arena to the ThreadStatic cache for reuse.
     /// After disposal, handles obtained from this arena must not be resolved.
     /// Backing arrays that have grown beyond their default capacity are returned to
@@ -206,6 +284,28 @@ public sealed class AstArena : IDisposable
     /// </summary>
     public void Dispose()
     {
+        // Return pooled diagnostics buffer if registered
+        if (_diagnosticsBuffer is not null)
+        {
+            ArrayPool<Diagnostic>.Shared.Return(_diagnosticsBuffer, clearArray: true);
+            _diagnosticsBuffer = null;
+        }
+
+        // Return pooled lint diagnostics buffer if registered
+        if (_lintDiagnosticsBuffer is not null)
+        {
+            ArrayPool<Diagnostic>.Shared.Return(_lintDiagnosticsBuffer, clearArray: true);
+            _lintDiagnosticsBuffer = null;
+        }
+
+        // D-4: Return all registered SliceMap Entry[] arrays to their respective pools
+        for (var i = 0; i < _sliceMapBufferCount; i++)
+        {
+            _sliceMapBuffers[i].Return(_sliceMapBuffers[i].Buffer);
+            _sliceMapBuffers[i] = default;
+        }
+        _sliceMapBufferCount = 0;
+
         // Reset pooled objects to release references to prior AST graphs (Steps lists, SliceMaps, etc.)
         // This prevents memory retention across parse calls, which is critical in WASM.
         for (var i = 0; i < _jobCount; i++) _jobs[i]?.Reset();
@@ -607,6 +707,64 @@ public sealed class AstArena : IDisposable
         return obj;
     }
 
+    // Incremental parse support
+
+    /// <summary>
+    /// Copies node entries (strings, bools, ints, floats) from <paramref name="source"/> into this arena,
+    /// limited to the specified counts. After this call, handles from the source arena in the imported
+    /// range resolve correctly against this arena. New entries added after this call receive indices
+    /// beyond the imported range.
+    /// </summary>
+    internal void BulkImportFrom(AstArena source, int stringLimit, int boolLimit, int intLimit, int floatLimit)
+    {
+        var sc = Math.Min(source._stringCount, stringLimit);
+        if (sc > 0)
+        {
+            EnsureMinCapacity(ref _strings, sc);
+            Array.Copy(source._strings, 0, _strings, 0, sc);
+            _stringCount = sc;
+        }
+
+        var bc = Math.Min(source._boolCount, boolLimit);
+        if (bc > 0)
+        {
+            EnsureMinCapacity(ref _bools, bc);
+            Array.Copy(source._bools, 0, _bools, 0, bc);
+            _boolCount = bc;
+        }
+
+        var ic = Math.Min(source._intCount, intLimit);
+        if (ic > 0)
+        {
+            EnsureMinCapacity(ref _ints, ic);
+            Array.Copy(source._ints, 0, _ints, 0, ic);
+            _intCount = ic;
+        }
+
+        var fc = Math.Min(source._floatCount, floatLimit);
+        if (fc > 0)
+        {
+            EnsureMinCapacity(ref _floats, fc);
+            Array.Copy(source._floats, 0, _floats, 0, fc);
+            _floatCount = fc;
+        }
+    }
+
+    /// <summary>Gets the current number of string entries in the arena.</summary>
+    internal int StringCount => _stringCount;
+
+    /// <summary>Gets the current number of bool entries in the arena.</summary>
+    internal int BoolCount => _boolCount;
+
+    /// <summary>Gets the current number of int entries in the arena.</summary>
+    internal int IntCount => _intCount;
+
+    /// <summary>Gets the current number of float entries in the arena.</summary>
+    internal int FloatCount => _floatCount;
+
+    /// <summary>Gets the number of Job objects allocated from this arena's pool.</summary>
+    internal int JobCount => _jobCount;
+
     // Debug helpers (§6.2 debugging experience)
 
     /// <summary>
@@ -656,4 +814,15 @@ public sealed class AstArena : IDisposable
         public StringNodeId Expression = expression;
         public TextRange Range = range;
     }
+}
+
+/// <summary>
+/// Caches a single <see cref="Action{Array}"/> delegate per type T that returns the array
+/// to <see cref="ArrayPool{T}.Shared"/>. Uses <c>clearArray: true</c> when T contains
+/// references to prevent retaining prior AST objects in the shared pool.
+/// </summary>
+internal static class PoolReturnCache<T>
+{
+    public static readonly Action<Array> Instance = static arr =>
+        ArrayPool<T>.Shared.Return((T[])arr, clearArray: RuntimeHelpers.IsReferenceOrContainsReferences<T>());
 }

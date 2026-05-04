@@ -5,6 +5,19 @@ using Seiton.Core.Parsing.Ast;
 namespace Seiton.Core.Parsing;
 
 /// <summary>
+/// Entry for a job that should be skipped during incremental parsing (D-5c).
+/// The parser compares each job's positional index against this list and reuses the previous Job if matched.
+/// </summary>
+internal readonly struct JobSkipEntry(Utf8Slice key, Job job)
+{
+    /// <summary>The job ID key slice (offset+length into source).</summary>
+    public readonly Utf8Slice Key = key;
+
+    /// <summary>The previous Job AST node to reuse.</summary>
+    public readonly Job Job = job;
+}
+
+/// <summary>
 /// Hand-written pull-parser that converts UTF-8 YAML into the typed workflow/action metadata AST.
 /// Partial class split by section: Jobs, Steps, Strategy, Events, Containers, etc.
 /// </summary>
@@ -66,21 +79,16 @@ public static partial class WorkflowParser
             var parseReader = new VYamlStreamAdapter(utf8Yaml.AsMemory());
             var parseMode = finalKind == DocumentKind.ActionMetadata ? ParseMode.ActionMetadata : ParseMode.Workflow;
             var arena = AstArena.Rent(utf8Yaml);
-            var parseResult = ParseCore(ref parseReader, arena, utf8Yaml, parseMode);
-
-            // Check for unused anchors and recursive aliases after parsing while the adapter is still alive
-            var unusedBuf = threadstaticUnusedAnchorBuf ??= new (string, TextPosition)[32];
-            var unusedAnchors = parseReader.GetUnusedAnchors(unusedBuf);
-            var recursiveBuf = threadstaticRecursiveAliasBuf ??= new (string, TextPosition, TextPosition)[32];
-            var recursiveAliases = parseReader.GetRecursiveAliases(recursiveBuf);
-
-            var diagnostics = new PooledBuffer<Diagnostic>(parseResult.Diagnostics.Length + 2 + unusedAnchors.Length + recursiveAliases.Length);
+            var diagnostics = new PooledBuffer<Diagnostic>(16);
             try
             {
-                for (var i = 0; i < parseResult.Diagnostics.Length; i++)
-                {
-                    diagnostics.Add(parseResult.Diagnostics[i]);
-                }
+                var coreResult = ParseCore(ref parseReader, arena, utf8Yaml, parseMode, ref diagnostics);
+
+                // Check for unused anchors and recursive aliases after parsing while the adapter is still alive
+                var unusedBuf = threadstaticUnusedAnchorBuf ??= new (string, TextPosition)[32];
+                var unusedAnchors = parseReader.GetUnusedAnchors(unusedBuf);
+                var recursiveBuf = threadstaticRecursiveAliasBuf ??= new (string, TextPosition, TextPosition)[32];
+                var recursiveAliases = parseReader.GetRecursiveAliases(recursiveBuf);
 
                 for (var i = 0; i < unusedAnchors.Length; i++)
                 {
@@ -116,13 +124,23 @@ public static partial class WorkflowParser
                     }
                 }
 
-                parseResult = parseResult with { Diagnostics = diagnostics.ToArray() };
+                // Transfer the pooled array directly to ParseResult (no .ToArray() copy)
+                var (diagArray, diagCount) = diagnostics.DetachArray();
+                var parseResult = new ParseResult(
+                    coreResult.Workflow,
+                    coreResult.ActionMetadata,
+                    new DiagnosticList(diagArray, diagCount),
+                    coreResult.HasFatalError,
+                    coreResult.Arena);
+
+                // Register the pooled diagnostics array with the arena for lifecycle management
+                arena.RegisterDiagnosticsBuffer(diagArray);
+
+                return new ClassifiedParseResult(
+                    parseResult,
+                    new DocumentKindClassification(pathHintKind, finalKind, hasHintMismatch, isAmbiguous));
             }
             finally { diagnostics.Dispose(); }
-
-            return new ClassifiedParseResult(
-                parseResult,
-                new DocumentKindClassification(pathHintKind, finalKind, hasHintMismatch, isAmbiguous));
         }
         catch (Exception ex)
         {
@@ -139,7 +157,7 @@ public static partial class WorkflowParser
                 Message: $"yaml parse failure: {ex.Message}",
                 Location: location,
                 FilePath: string.IsNullOrEmpty(filePath) ? null : filePath);
-            var parseResult = new ParseResult(default, default, [diagnostic], HasFatalError: true);
+            var parseResult = new ParseResult(default, default, new DiagnosticList([diagnostic]), HasFatalError: true);
             return new ClassifiedParseResult(
                 parseResult,
                 new DocumentKindClassification(pathHintKind, DocumentKind.Unknown, HasHintMismatch: false, IsAmbiguous: false));
@@ -195,7 +213,18 @@ public static partial class WorkflowParser
     internal static ParseResult ParseWithReader<TReader>(ref TReader reader, AstArena arena, ReadOnlySpan<byte> source)
         where TReader : IYamlStreamReader, allows ref struct
     {
-        return ParseCore(ref reader, arena, source, ParseMode.Workflow);
+        var diagnostics = new PooledBuffer<Diagnostic>(16);
+        try
+        {
+            var result = ParseCore(ref reader, arena, source, ParseMode.Workflow, ref diagnostics);
+            var (diagArray, diagCount) = diagnostics.DetachArray();
+            arena.RegisterDiagnosticsBuffer(diagArray);
+            return new ParseResult(result.Workflow, result.ActionMetadata, new DiagnosticList(diagArray, diagCount), result.HasFatalError, result.Arena);
+        }
+        finally
+        {
+            diagnostics.Dispose();
+        }
     }
 
     private static bool TryReadRootStructuralHints<TReader>(ref TReader reader, out bool hasJobs, out bool hasRuns)
@@ -247,13 +276,61 @@ public static partial class WorkflowParser
         return true;
     }
 
-    private static ParseResult ParseCore<TReader>(ref TReader reader, AstArena arena, ReadOnlySpan<byte> source, ParseMode parseMode)
+    private static ParseCoreResult ParseCore<TReader>(ref TReader reader, AstArena arena, ReadOnlySpan<byte> source, ParseMode parseMode, ref PooledBuffer<Diagnostic> diagnostics)
         where TReader : IYamlStreamReader, allows ref struct
     {
+        return ParseCoreInner(ref reader, arena, source, parseMode, ref diagnostics, rootSkipMask: 0);
+    }
+
+    /// <summary>
+    /// Parses a workflow with a root section skip mask for incremental parsing (D-5b).
+    /// Sections whose bit is set in <paramref name="rootSkipMask"/> are skipped via SkipCurrentNode().
+    /// The caller must patch in previous AST nodes for skipped sections.
+    /// </summary>
+    internal static ParseResult ParseIncremental(byte[] utf8Yaml, string filePath, AstArena arena, byte rootSkipMask, JobSkipEntry[]? jobSkipEntries = null)
+    {
+        var reader = new VYamlStreamAdapter(utf8Yaml.AsMemory());
         var diagnostics = new PooledBuffer<Diagnostic>(16);
         try
         {
-            return ParseCoreInner(ref reader, arena, source, parseMode, ref diagnostics);
+            var result = ParseCoreInner(ref reader, arena, (ReadOnlySpan<byte>)utf8Yaml, ParseMode.Workflow, ref diagnostics, rootSkipMask, jobSkipEntries);
+
+            // Check for unused anchors and recursive aliases (same as ParseClassified)
+            var unusedBuf = threadstaticUnusedAnchorBuf ??= new (string, TextPosition)[32];
+            var unusedAnchors = reader.GetUnusedAnchors(unusedBuf);
+            var recursiveBuf = threadstaticRecursiveAliasBuf ??= new (string, TextPosition, TextPosition)[32];
+            var recursiveAliases = reader.GetRecursiveAliases(recursiveBuf);
+
+            for (var i = 0; i < unusedAnchors.Length; i++)
+            {
+                var (name, pos) = unusedAnchors[i];
+                AddWarning(ref diagnostics, $"anchor \"{name}\" is defined but not used", pos);
+            }
+
+            for (var i = 0; i < recursiveAliases.Length; i++)
+            {
+                var (name, pos, anchorPos) = recursiveAliases[i];
+                var message = anchorPos.Line > 0
+                    ? $"recursive alias \"{name}\" is found. anchor was declared at line:{anchorPos.Line}, column:{anchorPos.Column}"
+                    : $"recursive alias \"{name}\" is found";
+                AddError(ref diagnostics, message, pos);
+            }
+
+            // Stamp file path on all diagnostics
+            if (!string.IsNullOrEmpty(filePath) && diagnostics.Count > 0)
+            {
+                var span = diagnostics.AsSpan();
+                for (var i = 0; i < span.Length; i++)
+                {
+                    diagnostics.Replace(i, span[i] with { FilePath = filePath });
+                }
+            }
+
+            // Transfer pooled array directly (no .ToArray() copy)
+            var (diagArray, diagCount) = diagnostics.DetachArray();
+            arena.RegisterDiagnosticsBuffer(diagArray);
+
+            return new ParseResult(result.Workflow, result.ActionMetadata, new DiagnosticList(diagArray, diagCount), result.HasFatalError, result.Arena);
         }
         finally
         {
@@ -261,7 +338,16 @@ public static partial class WorkflowParser
         }
     }
 
-    private static ParseResult ParseCoreInner<TReader>(ref TReader reader, AstArena arena, ReadOnlySpan<byte> source, ParseMode parseMode, ref PooledBuffer<Diagnostic> diagnostics)
+    /// <summary>Lightweight result from ParseCoreInner — diagnostics stay in the caller's PooledBuffer.</summary>
+    private readonly struct ParseCoreResult(Workflow? workflow, ActionMetadata? actionMetadata, bool hasFatalError, AstArena? arena)
+    {
+        public readonly Workflow? Workflow = workflow;
+        public readonly ActionMetadata? ActionMetadata = actionMetadata;
+        public readonly bool HasFatalError = hasFatalError;
+        public readonly AstArena? Arena = arena;
+    }
+
+    private static ParseCoreResult ParseCoreInner<TReader>(ref TReader reader, AstArena arena, ReadOnlySpan<byte> source, ParseMode parseMode, ref PooledBuffer<Diagnostic> diagnostics, byte rootSkipMask = 0, JobSkipEntry[]? jobSkipEntries = null)
         where TReader : IYamlStreamReader, allows ref struct
     {
         reader.SkipHeader();
@@ -269,7 +355,7 @@ public static partial class WorkflowParser
         if (reader.CurrentKind != YamlEventKind.MappingStart)
         {
             AddError(ref diagnostics, "workflow root must be object", reader.CurrentStart);
-            return new ParseResult(default, default, diagnostics.ToArray(), HasFatalError: true);
+            return new ParseCoreResult(default, default, hasFatalError: true, arena);
         }
 
         var workflowStart = reader.CurrentStart;
@@ -334,6 +420,16 @@ public static partial class WorkflowParser
                     continue;
                 }
 
+                // D-5b: Skip unchanged root sections (incremental parse).
+                // The caller will patch in previous AST nodes for skipped sections.
+                if (rootSkipMask != 0 && (rootSkipMask & (1 << workflowKeyOrdinal)) != 0)
+                {
+                    if (wk == WorkflowRootMappingKey.On) hasOn = true;
+                    else if (wk == WorkflowRootMappingKey.Jobs) hasJobs = true;
+                    if (!reader.End) reader.SkipCurrentNode();
+                    continue;
+                }
+
                 switch (wk)
                 {
                     case WorkflowRootMappingKey.Name:
@@ -370,6 +466,10 @@ public static partial class WorkflowParser
                             {
                                 AddError(ref diagnostics, "jobs must be object", reader.CurrentStart);
                                 reader.SkipCurrentNode();
+                            }
+                            else if (jobSkipEntries is { Length: > 0 })
+                            {
+                                jobs = ParseJobsMappingIncremental(ref reader, arena, ref diagnostics, source, jobSkipEntries);
                             }
                             else
                             {
@@ -543,7 +643,7 @@ public static partial class WorkflowParser
                 Branding = actionBranding,
                 Range = workflowRange,
             };
-            return new ParseResult(null, actionMetadata, diagnostics.ToArray(), HasFatalError: false, arena);
+            return new ParseCoreResult(null, actionMetadata, hasFatalError: false, arena);
         }
 
         var workflow = new Workflow
@@ -559,7 +659,7 @@ public static partial class WorkflowParser
             Range = workflowRange,
         };
 
-        return new ParseResult(workflow, null, diagnostics.ToArray(), HasFatalError: false, arena);
+        return new ParseCoreResult(workflow, null, hasFatalError: false, arena);
     }
 
     private static Permissions? ParsePermissionsNode<TReader>(ref TReader reader, AstArena arena, ref PooledBuffer<Diagnostic> diagnostics, ReadOnlySpan<byte> source, string error)
@@ -669,9 +769,11 @@ public static partial class WorkflowParser
                 reader.Read();
             }
 
+            var (scopeEntries, scopeCount) = scopes.DetachArray();
+            arena.RegisterSliceMapBuffer(scopeEntries);
             return new Permissions
             {
-                Scopes = new SliceMap<PermissionScope>(scopes.ToArray(), caseSensitive: true),
+                Scopes = new SliceMap<PermissionScope>(scopeEntries, scopeCount, caseSensitive: true),
                 Range = range,
             };
         }
@@ -781,9 +883,11 @@ public static partial class WorkflowParser
                 reader.Read();
             }
 
+            var (varEntries, varCount) = vars.DetachArray();
+            arena.RegisterSliceMapBuffer(varEntries);
             return new Env
             {
-                Vars = new SliceMap<EnvVar>(vars.ToArray(), caseSensitive: true),
+                Vars = new SliceMap<EnvVar>(varEntries, varCount, caseSensitive: true),
                 Range = range,
             };
         }
@@ -1207,7 +1311,133 @@ public static partial class WorkflowParser
                 reader.Read();
             }
 
-            return new SliceMap<Job>(jobs.ToArray(), caseSensitive: false);
+            var (jobEntries, jobCount) = jobs.DetachArray();
+            arena.RegisterSliceMapBuffer(jobEntries);
+            return new SliceMap<Job>(jobEntries, jobCount, caseSensitive: false);
+        }
+        finally { jobs.Dispose(); }
+    }
+
+    /// <summary>
+    /// Incremental variant of <see cref="ParseJobsMapping{TReader}"/> (D-5c).
+    /// For each job, checks whether it matches a skip entry (by positional index and key bytes).
+    /// If matched, the job subtree is skipped via <c>SkipCurrentNode()</c> and the previous Job is reused.
+    /// </summary>
+    private static SliceMap<Job> ParseJobsMappingIncremental<TReader>(ref TReader reader, AstArena arena, ref PooledBuffer<Diagnostic> diagnostics, ReadOnlySpan<byte> source, JobSkipEntry[] skipEntries)
+        where TReader : IYamlStreamReader, allows ref struct
+    {
+        var jobs = new PooledBuffer<SliceMap<Job>.Entry>(8);
+        try
+        {
+            Span<long> keyStore = stackalloc long[64];
+            var keyCount = 0;
+            var jobIndex = 0;
+            // current is MappingStart
+            reader.Read();
+
+            while (!reader.End && reader.CurrentKind != YamlEventKind.MappingEnd)
+            {
+                if (reader.CurrentKind != YamlEventKind.Scalar)
+                {
+                    AddError(ref diagnostics, "job id must be string", reader.CurrentStart);
+                    reader.SkipCurrentNode();
+                    if (!reader.End && reader.CurrentKind != YamlEventKind.MappingEnd)
+                    {
+                        reader.SkipCurrentNode();
+                    }
+                    jobIndex++;
+                    continue;
+                }
+
+                var jobIdMark = reader.CurrentStart;
+                var jobId = reader.GetScalarSlice();
+                var jobIdUtf8 = reader.GetScalarUtf8();
+
+                // D-5c: Check if this job can be skipped (same position, same key bytes)
+                if ((uint)jobIndex < (uint)skipEntries.Length)
+                {
+                    var skipEntry = skipEntries[jobIndex];
+                    if (skipEntry.Job is not null &&
+                        skipEntry.Key.Length == jobId.Length &&
+                        source[skipEntry.Key.Offset..(skipEntry.Key.Offset + skipEntry.Key.Length)]
+                            .SequenceEqual(source[jobId.Offset..(jobId.Offset + jobId.Length)]))
+                    {
+                        // Job matches — skip its subtree and reuse previous Job
+                        // Register key for duplicate detection; if duplicate, skip without adding
+                        if (!TryRegisterDynamicKey(
+                            source,
+                            jobIdUtf8,
+                            jobId.Offset,
+                            jobId.Length,
+                            jobIdMark,
+                            ref diagnostics,
+                            keyStore,
+                            ref keyCount,
+                            caseSensitive: false,
+                            "jobs"))
+                        {
+                            reader.Read(); // consume key
+                            if (!reader.End)
+                            {
+                                reader.SkipCurrentNode();
+                            }
+                            jobIndex++;
+                            continue;
+                        }
+
+                        reader.Read(); // consume job id key
+                        if (!reader.End)
+                        {
+                            reader.SkipCurrentNode(); // skip job body
+                        }
+                        jobs.Add(new SliceMap<Job>.Entry(jobId, skipEntry.Job));
+                        jobIndex++;
+                        continue;
+                    }
+                }
+
+                if (!TryRegisterDynamicKey(
+                    source,
+                    jobIdUtf8,
+                    jobId.Offset,
+                    jobId.Length,
+                    jobIdMark,
+                    ref diagnostics,
+                    keyStore,
+                    ref keyCount,
+                    caseSensitive: false,
+                    "jobs"))
+                {
+                    reader.Read(); // consume key
+                    if (!reader.End)
+                    {
+                        reader.SkipCurrentNode();
+                    }
+                    jobIndex++;
+                    continue;
+                }
+
+                var jobIdNode = arena.AddString(jobId, reader.IsScalarQuoted(), BuildScalarLocation(jobIdMark, jobIdUtf8.Length));
+                reader.Read(); // consume job id
+
+                if (reader.End)
+                {
+                    break;
+                }
+
+                var job = ParseJobNode(ref reader, arena, ref diagnostics, source, jobId, jobIdMark, jobIdNode);
+                jobs.Add(new SliceMap<Job>.Entry(jobId, job));
+                jobIndex++;
+            }
+
+            if (reader.CurrentKind == YamlEventKind.MappingEnd)
+            {
+                reader.Read();
+            }
+
+            var (jobEntries, jobCount) = jobs.DetachArray();
+            arena.RegisterSliceMapBuffer(jobEntries);
+            return new SliceMap<Job>(jobEntries, jobCount, caseSensitive: false);
         }
         finally { jobs.Dispose(); }
     }

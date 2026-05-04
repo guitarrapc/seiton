@@ -55,6 +55,21 @@ internal struct PooledBuffer<T>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public readonly T[] ToArray() => _count == 0 ? [] : _items.AsSpan(0, _count).ToArray();
 
+    /// <summary>
+    /// Transfers ownership of the internal array to the caller. After this call,
+    /// the buffer is empty and <see cref="Dispose"/> becomes a no-op.
+    /// The caller is responsible for returning the array to <see cref="ArrayPool{T}.Shared"/>.
+    /// </summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public (T[] Array, int Count) DetachArray()
+    {
+        var arr = _items;
+        var count = _count;
+        _items = null!;
+        _count = 0;
+        return (arr, count);
+    }
+
     [MethodImpl(MethodImplOptions.NoInlining)]
     private void Grow()
     {

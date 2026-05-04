@@ -435,7 +435,9 @@ public static partial class WorkflowParser
                 reader.Read();
             }
 
-            return new SliceMap<WorkflowCallEventSecret>(map.ToArray(), caseSensitive: false);
+            var (secretEntries, secretCount) = map.DetachArray();
+            arena.RegisterSliceMapBuffer(secretEntries);
+            return new SliceMap<WorkflowCallEventSecret>(secretEntries, secretCount, caseSensitive: false);
         }
         finally { map.Dispose(); }
     }
@@ -617,7 +619,9 @@ public static partial class WorkflowParser
                 reader.Read();
             }
 
-            return new SliceMap<WorkflowCallEventOutput>(map.ToArray(), caseSensitive: false);
+            var (outputEntries, outputCount) = map.DetachArray();
+            arena.RegisterSliceMapBuffer(outputEntries);
+            return new SliceMap<WorkflowCallEventOutput>(outputEntries, outputCount, caseSensitive: false);
         }
         finally { map.Dispose(); }
     }

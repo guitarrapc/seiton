@@ -9,12 +9,22 @@ namespace Seiton.Core.Linting.Rules;
 /// <summary>Flags action references not pinned to a full commit SHA.</summary>
 public sealed class UnpinnedUsesRule() : RuleBase(RuleId.UnpinnedUses)
 {
-    // Cache last-produced "not pinned" message to avoid repeated string allocation
+    // Cache last-produced "not pinned" message and decoded text to avoid repeated string allocation
     // for the same action ref (common: all steps use the same action)
     private Utf8Slice _lastUnpinnedStepUsesSlice;
     private string? _lastUnpinnedStepMessage;
+    private string? _lastDecodedUsesText;
 
     public override string Name => "Unpinned Uses Rule";
+
+    public override void VisitWorkflowPre(Workflow workflow)
+    {
+        base.VisitWorkflowPre(workflow);
+        // Clear per-source cache — slice offsets are invalid across different source bytes.
+        _lastUnpinnedStepUsesSlice = default;
+        _lastUnpinnedStepMessage = null;
+        _lastDecodedUsesText = null;
+    }
 
     public override void VisitJobPre(Job job)
     {
@@ -130,16 +140,17 @@ public sealed class UnpinnedUsesRule() : RuleBase(RuleId.UnpinnedUses)
         }
 
         var usesSlice = Arena.GetStringSlice(actionExec.Uses);
-        var message = GetUnpinnedStepMessage(usesSlice);
-        AddStepWarning(step, message, usesRefLocation, PinDiagnosticMetadata.ForUsesRef(Decode(usesSlice)));
+        var message = GetUnpinnedStepMessage(usesSlice, out var decodedUsesText);
+        AddStepWarning(step, message, usesRefLocation, PinDiagnosticMetadata.ForUsesRef(decodedUsesText));
     }
 
-    private string GetUnpinnedStepMessage(Utf8Slice usesSlice)
+    private string GetUnpinnedStepMessage(Utf8Slice usesSlice, out string decodedUsesText)
     {
         if (_lastUnpinnedStepMessage is not null
             && usesSlice.Offset == _lastUnpinnedStepUsesSlice.Offset
             && usesSlice.Length == _lastUnpinnedStepUsesSlice.Length)
         {
+            decodedUsesText = _lastDecodedUsesText!;
             return _lastUnpinnedStepMessage;
         }
 
@@ -150,6 +161,7 @@ public sealed class UnpinnedUsesRule() : RuleBase(RuleId.UnpinnedUses)
             && usesSlice.AsSpan(Config.Utf8Yaml).SequenceEqual(_lastUnpinnedStepUsesSlice.AsSpan(Config.Utf8Yaml)))
         {
             _lastUnpinnedStepUsesSlice = usesSlice;
+            decodedUsesText = _lastDecodedUsesText!;
             return _lastUnpinnedStepMessage;
         }
 
@@ -159,6 +171,8 @@ public sealed class UnpinnedUsesRule() : RuleBase(RuleId.UnpinnedUses)
         var msg = $"action uses '{usesText}' is not pinned to a full-length commit SHA{urlSuffix} (fixable with --fix --enable-pin-network)";
         _lastUnpinnedStepUsesSlice = usesSlice;
         _lastUnpinnedStepMessage = msg;
+        _lastDecodedUsesText = usesText;
+        decodedUsesText = usesText;
         return msg;
     }
 

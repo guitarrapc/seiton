@@ -26,8 +26,6 @@ public sealed class LintEngine
     private readonly Dictionary<string, int> _suppressedByRule = new(StringComparer.Ordinal);
     private readonly List<SuppressionRecord> _suppressionRecords = new();
     private readonly LintConfig _effectiveConfig = new();
-    private Diagnostic[] _resultDiagnostics = new Diagnostic[16];
-    private Diagnostic[] _resultDiagnosticsSwap = new Diagnostic[16];
 
     // NormalizeRules reusable collections
     private readonly Dictionary<string, RuleConfig> _normalizedRulesDict = new(StringComparer.Ordinal);
@@ -42,6 +40,10 @@ public sealed class LintEngine
 
     // S-6: Reusable buffer for BuildKnownJobIdSlices (avoids per-call allocation)
     private Utf8Slice[] _knownJobIdSlices = new Utf8Slice[8];
+
+    // A-8: NormalizeExclusions reusable collections
+    private readonly List<NormalizedExclusion> _normalizedExclusions = new(4);
+    private readonly List<Diagnostic> _exclusionDiagnostics = new();
 
     /// <summary>
     /// Online rules that were activated during the most recent <see cref="Check"/> call.
@@ -105,6 +107,39 @@ public sealed class LintEngine
 
         var classifiedParseResult = WorkflowParser.ParseClassified(utf8Yaml, filePath);
         var parseResult = classifiedParseResult.ParseResult;
+        return CheckCore(utf8Yaml, filePath, config, parseResult, classifiedParseResult.Classification.FinalKind);
+    }
+
+    /// <summary>
+    /// Lints a pre-parsed <see cref="ParseResult"/> without re-parsing.
+    /// Used by Playground incremental parsing (D-5b) where parsing is done externally.
+    /// Infers <see cref="DocumentKind"/> from the parse result content.
+    /// </summary>
+    internal LintResult CheckWithParseResult(byte[] utf8Yaml, string filePath, LintConfig? config, ParseResult parseResult)
+    {
+        ArgumentNullException.ThrowIfNull(utf8Yaml);
+        ArgumentException.ThrowIfNullOrEmpty(filePath);
+
+        var kind = parseResult.ActionMetadata is not null ? DocumentKind.ActionMetadata : DocumentKind.Workflow;
+        return CheckCore(utf8Yaml, filePath, config, parseResult, kind);
+    }
+
+    /// <summary>
+    /// Lints a pre-parsed <see cref="ParseResult"/> with optional job skipping (D-5d).
+    /// When <paramref name="skipJobs"/>[i] is true, lint rules are not run on that job
+    /// (its diagnostics are expected to be supplied from a cache by the caller).
+    /// </summary>
+    internal LintResult CheckWithParseResult(byte[] utf8Yaml, string filePath, LintConfig? config, ParseResult parseResult, bool[]? skipJobs)
+    {
+        ArgumentNullException.ThrowIfNull(utf8Yaml);
+        ArgumentException.ThrowIfNullOrEmpty(filePath);
+
+        var kind = parseResult.ActionMetadata is not null ? DocumentKind.ActionMetadata : DocumentKind.Workflow;
+        return CheckCore(utf8Yaml, filePath, config, parseResult, kind, skipJobs);
+    }
+
+    private LintResult CheckCore(byte[] utf8Yaml, string filePath, LintConfig? config, ParseResult parseResult, DocumentKind documentKind, bool[]? skipJobs = null)
+    {
         if (parseResult.HasFatalError || (parseResult.Workflow is null && parseResult.ActionMetadata is null))
         {
             return new LintResult(parseResult, parseResult.Diagnostics)
@@ -158,7 +193,7 @@ public sealed class LintEngine
                 continue;
             }
 
-            if (!rule.SupportsDocumentKind(classifiedParseResult.Classification.FinalKind))
+            if (!rule.SupportsDocumentKind(documentKind))
             {
                 continue;
             }
@@ -178,7 +213,7 @@ public sealed class LintEngine
                 continue;
             }
 
-            if (!onlineRule.SupportsDocumentKind(classifiedParseResult.Classification.FinalKind))
+            if (!onlineRule.SupportsDocumentKind(documentKind))
             {
                 continue;
             }
@@ -195,7 +230,7 @@ public sealed class LintEngine
 
         if (parseResult.Workflow is not null)
         {
-            _visitor.Visit(parseResult.Workflow);
+            _visitor.Visit(parseResult.Workflow, skipJobs);
         }
         else if (parseResult.ActionMetadata is not null)
         {
@@ -307,48 +342,40 @@ public sealed class LintEngine
     private LintResult BuildLintResult(ParseResult parseResult)
     {
         var count = _diagnostics.Count;
-
-        // Swap: the previous result's array becomes the candidate for this call
-        (_resultDiagnostics, _resultDiagnosticsSwap) = (_resultDiagnosticsSwap, _resultDiagnostics);
-
-        if (_resultDiagnostics.Length != count)
-        {
-            _resultDiagnostics = new Diagnostic[count];
-        }
-
+        var buffer = new PooledBuffer<Diagnostic>(count > 0 ? count : 4);
         for (var i = 0; i < count; i++)
         {
-            _resultDiagnostics[i] = _diagnostics[i];
+            buffer.Add(_diagnostics[i]);
         }
 
-        return new LintResult(parseResult, _resultDiagnostics)
+        var (diagArray, diagCount) = buffer.DetachArray();
+        buffer.Dispose();
+        parseResult.Arena?.RegisterLintDiagnosticsBuffer(diagArray);
+
+        return new LintResult(parseResult, new DiagnosticList(diagArray, diagCount))
         {
             SuppressionSummary = SuppressionSummary.Empty,
         };
     }
 
     /// <summary>
-    /// Builds a <see cref="LintResult"/> with suppression summary using the two-buffer swap pattern.
+    /// Builds a <see cref="LintResult"/> with suppression summary using PooledBuffer + DetachArray.
     /// </summary>
     private LintResult BuildLintResultWithSuppression(ParseResult parseResult)
     {
         var count = _diagnostics.Count;
-
-        (_resultDiagnostics, _resultDiagnosticsSwap) = (_resultDiagnosticsSwap, _resultDiagnostics);
-
-        if (_resultDiagnostics.Length != count)
-        {
-            _resultDiagnostics = new Diagnostic[count];
-        }
-
+        var buffer = new PooledBuffer<Diagnostic>(count > 0 ? count : 4);
         for (var i = 0; i < count; i++)
         {
-            _resultDiagnostics[i] = _diagnostics[i];
+            buffer.Add(_diagnostics[i]);
         }
 
+        var (diagArray, diagCount) = buffer.DetachArray();
+        buffer.Dispose();
+        parseResult.Arena?.RegisterLintDiagnosticsBuffer(diagArray);
+
         // Create caller-owned snapshots for suppression summary.
-        // Unlike diagnostics (two-buffer swap, documented as engine-owned),
-        // suppression data uses snapshot semantics so callers can safely
+        // Suppression data uses snapshot semantics so callers can safely
         // retain SuppressionSummary across subsequent Check() calls.
         var suppressionCount = _suppressionRecords.Count;
         var suppressionRecordsSnapshot = new SuppressionRecord[suppressionCount];
@@ -363,7 +390,7 @@ public sealed class LintEngine
             suppressedByRuleSnapshot[pair.Key] = pair.Value;
         }
 
-        return new LintResult(parseResult, _resultDiagnostics)
+        return new LintResult(parseResult, new DiagnosticList(diagArray, diagCount))
         {
             SuppressionSummary = new SuppressionSummary(suppressionCount, suppressedByRuleSnapshot, suppressionRecordsSnapshot),
         };
@@ -1028,15 +1055,15 @@ public sealed class LintEngine
         }
 
         var knownJobIdSlices = BuildKnownJobIdSlices(workflow, arena);
-        var normalized = new List<NormalizedExclusion>(exclusions.Count);
-        var diagnostics = new List<Diagnostic>();
+        _normalizedExclusions.Clear();
+        _exclusionDiagnostics.Clear();
 
         for (var i = 0; i < exclusions.Count; i++)
         {
             var exclusion = exclusions[i];
             if (string.IsNullOrWhiteSpace(exclusion.File))
             {
-                diagnostics.Add(new Diagnostic(
+                _exclusionDiagnostics.Add(new Diagnostic(
                     DiagnosticSeverity.Error,
                     "exclusion file pattern must not be empty",
                     new TextRange(0, 1, 1, 1, 1, 2),
@@ -1053,7 +1080,7 @@ public sealed class LintEngine
             else
             {
                 var ruleIds = new HashSet<string>(StringComparer.Ordinal);
-                ExclusionNormalizer.CollectResolvedExclusionRules(exclusion.Rules, filePath, diagnostics, ruleIds);
+                ExclusionNormalizer.CollectResolvedExclusionRules(exclusion.Rules, filePath, _exclusionDiagnostics, ruleIds);
 
                 if (ruleIds.Count == 0)
                 {
@@ -1070,7 +1097,7 @@ public sealed class LintEngine
                     var jobId = exclusion.Jobs[j];
                     if (!string.IsNullOrEmpty(jobId) && !ContainsJobIdOrdinalIgnoreCase(knownJobIdSlices, utf8Yaml, jobId))
                     {
-                        diagnostics.Add(new Diagnostic(
+                        _exclusionDiagnostics.Add(new Diagnostic(
                             DiagnosticSeverity.Error,
                             $"unknown job-id '{jobId}' in exclusion configuration",
                             new TextRange(0, jobId.Length, 1, 1, 1, 1 + jobId.Length),
@@ -1079,10 +1106,13 @@ public sealed class LintEngine
                 }
             }
 
-            normalized.Add(new NormalizedExclusion(NormalizePath(exclusion.File), normalizedRuleIds, exclusion.Jobs));
+            _normalizedExclusions.Add(new NormalizedExclusion(NormalizePath(exclusion.File), normalizedRuleIds, exclusion.Jobs));
         }
 
-        return new ExclusionsNormalization(normalized, normalizedFilePath, diagnostics.ToArray());
+        return new ExclusionsNormalization(
+            _normalizedExclusions.Count > 0 ? _normalizedExclusions.ToArray() : [],
+            normalizedFilePath,
+            _exclusionDiagnostics.Count > 0 ? _exclusionDiagnostics.ToArray() : []);
     }
     private static int CompareDiagnosticsByRulePriority(Diagnostic x, Diagnostic y)
     {
