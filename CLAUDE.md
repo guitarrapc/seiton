@@ -115,7 +115,7 @@ To run specific tests (e.g., ExpressionTests), from the repo root:
 dotnet test --project tests/Seiton.Core.Tests --treenode-filter /*/*/ExpressionTests/*
 ```
 
-To run a single test method (e.g., `InferType_GitHubRetentionDays` in `ExpressionTests`):
+To run a single test method (e.g., `InferType_GitHubRetentionDays_ReturnsString` in `ExpressionTests`):
 
 ```shell
 dotnet test --project tests/Seiton.Core.Tests --treenode-filter /*/*/ExpressionTests/InferType_GitHubRetentionDays*
