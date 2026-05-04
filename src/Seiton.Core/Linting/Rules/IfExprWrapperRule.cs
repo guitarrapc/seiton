@@ -9,11 +9,22 @@ public sealed class IfExprWrapperRule() : RuleBase(RuleId.IfExprWrapper)
     private const string FixDescription = "wrap in ${{ }}";
 
     // §9: Diagnostic message deduplication — cache last emitted message for repeated conditions
+    private byte[]? _lastYaml;
     private Utf8Slice _lastSlice;
     private string? _lastMessage;
     private string? _lastFixText;
 
     public override string Name => "If Expression Wrapper Rule";
+
+    public override void VisitWorkflowPre(Workflow workflow)
+    {
+        base.VisitWorkflowPre(workflow);
+        // Reset cache on new file to avoid stale offset references
+        _lastYaml = null;
+        _lastMessage = null;
+        _lastFixText = null;
+        _lastSlice = default;
+    }
 
     public override void VisitJobPre(Job job)
     {
@@ -56,29 +67,95 @@ public sealed class IfExprWrapperRule() : RuleBase(RuleId.IfExprWrapper)
             return;
         }
 
-        // This is an expression without ${{ }} wrapper — emit warning with auto-fix
+        // Determine if auto-fix is safe
+        var canFix = CanOfferAutoFix(condition, raw);
+
+        // This is an expression without ${{ }} wrapper — emit warning with optional auto-fix
         var slice = Arena.GetStringSlice(condition);
         var range = Arena.GetStringRange(condition);
         var (message, fixText) = GetOrBuildDiagnosticStrings(slice, Config.Utf8Yaml);
 
-        var edit = new TextEdit(slice.Offset, slice.Length, fixText);
-        var fix = new DiagnosticFix(FixDescription, [edit]);
+        DiagnosticFix? fix = null;
+        if (canFix)
+        {
+            var edit = BuildFixEdit(condition, slice, fixText);
+            fix = new DiagnosticFix(FixDescription, [edit]);
+        }
 
         if (job is not null)
         {
-            AddJobWarning(job, message, range, fix);
+            if (fix is { } f)
+            {
+                AddJobWarning(job, message, range, f);
+            }
+            else
+            {
+                AddJobWarning(job, message, range);
+            }
         }
 
         if (step is not null)
         {
-            AddStepWarning(step, message, range, fix);
+            if (fix is { } f)
+            {
+                AddStepWarning(step, message, range, f);
+            }
+            else
+            {
+                AddStepWarning(step, message, range);
+            }
         }
+    }
+
+    /// <summary>Determines whether auto-fix is safe for this condition.</summary>
+    private bool CanOfferAutoFix(StringNodeId condition, ReadOnlySpan<byte> raw)
+    {
+        // Block scalars (trailing \n) — fix would break YAML structure
+        if (raw.Length > 0 && raw[raw.Length - 1] == (byte)'\n')
+        {
+            return false;
+        }
+
+        // Contains ${{ marker but isn't a clean wrapper — fix would nest markers
+        if (ExpressionScanHelpers.ContainsExpressionMarker(raw))
+        {
+            return false;
+        }
+
+        return true;
+    }
+
+    /// <summary>Builds the TextEdit, expanding range to include surrounding quotes if needed.</summary>
+    private TextEdit BuildFixEdit(StringNodeId condition, Utf8Slice slice, string fixText)
+    {
+        var offset = slice.Offset;
+        var length = slice.Length;
+
+        // If the node is quoted, expand the range to include surrounding quotes
+        if (Arena.GetStringQuoted(condition) && Config.Utf8Yaml is not null)
+        {
+            var before = offset - 1;
+            var after = offset + length;
+            if (before >= 0 && after < Config.Utf8Yaml.Length)
+            {
+                var bc = Config.Utf8Yaml[before];
+                var ac = Config.Utf8Yaml[after];
+                if ((bc == (byte)'\'' && ac == (byte)'\'') || (bc == (byte)'"' && ac == (byte)'"'))
+                {
+                    offset = before;
+                    length += 2;
+                }
+            }
+        }
+
+        return new TextEdit(offset, length, fixText);
     }
 
     private (string Message, string FixText) GetOrBuildDiagnosticStrings(Utf8Slice currentSlice, byte[] utf8Yaml)
     {
-        // §9: reuse cached strings when the same condition bytes repeat
+        // §9: reuse cached strings when the same condition bytes repeat (same file only)
         if (_lastMessage is not null
+            && ReferenceEquals(_lastYaml, utf8Yaml)
             && currentSlice.Length == _lastSlice.Length
             && utf8Yaml.AsSpan(currentSlice.Offset, currentSlice.Length)
                 .SequenceEqual(utf8Yaml.AsSpan(_lastSlice.Offset, _lastSlice.Length)))
@@ -97,6 +174,7 @@ public sealed class IfExprWrapperRule() : RuleBase(RuleId.IfExprWrapper)
         var message = $"if: condition \"{rawText}\" is missing ${{{{ }}}} wrapper; expressions should be wrapped in ${{{{ }}}}";
         var fixText = $"${{{{ {rawText} }}}}";
 
+        _lastYaml = utf8Yaml;
         _lastSlice = currentSlice;
         _lastMessage = message;
         _lastFixText = fixText;

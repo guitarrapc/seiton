@@ -179,7 +179,7 @@ Column definitions:
 | `forbidden-uses` | ✓ | — | Warn/Error per policy when `uses:` references violate configured allow/deny patterns. |
 | `ref-version-mismatch` | ✓ | — | Warn when symbolic ref/version intent mismatches resolved commit lineage expectations. |
 | `use-trusted-publishing` | ✓ | — | Warn when publishing/release flows do not use trusted publishing/OIDC-based provenance paths where expected. |
-| `if-expr-wrapper` | ✓ | ✓ | Warn when `if:` conditions are missing the `${{ }}` expression wrapper; auto-fix wraps the bare expression. |
+| `if-expr-wrapper` | ✓ | ✓ (safe cases) | Warn when `if:` conditions are missing the `${{ }}` expression wrapper; auto-fix offered only for unquoted single-line scalars without existing `${{` markers. |
 
 Rule set compatibility policy:
 
@@ -1248,7 +1248,7 @@ The following table classifies each default rule by fix feasibility.
 | `schedule-event` | ✗ Not auto-fixable | Cron expression and timezone corrections require scheduler knowledge and user intent. |
 | `workflow-call-input-default` | ✗ Not auto-fixable | Default value corrections require understanding of caller contracts and intended type semantics. |
 | `use-trusted-publishing` | ✗ Not auto-fixable | Trusted publishing migration depends on registry ecosystem and release architecture. |
-| `if-expr-wrapper` | ✓ Auto-fixable | Wraps bare `if:` expressions in `${{ }}`. Semantics-preserving (GitHub Actions auto-applies the wrapper at runtime). |
+| `if-expr-wrapper` | ✓ Auto-fixable (safe cases) | Wraps unquoted single-line `if:` expressions in `${{ }}`. Fix is suppressed for block scalars (structural newline), quoted scalars (quote expansion), and values already containing `${{` markers (would nest). |
 
 ### 8.5 Fix Safety Policy
 
@@ -1637,4 +1637,4 @@ This subsection follows the same operator-facing style as §4.5 and is non-norma
 | `forbidden-uses` | Enforces policy-controlled deny/allow constraints for third-party actions and reusable workflows. | Replace disallowed dependencies with approved references and pin to reviewed commits. | ✗ | Allowlist drift can block urgent security updates; maintain emergency override process with audit trail. |
 | `ref-version-mismatch` | Detects inconsistency between version intent and resolved ref/sha provenance. | Align symbolic version intent and pinned commit lineage, or pin directly with updated provenance annotation. | ✗ | Tag/release metadata can be manipulated upstream; combine with signed provenance verification where possible. |
 | `use-trusted-publishing` | Detects release/publish jobs that bypass trusted publishing controls (OIDC/provenance). | Adopt trusted publishing path and disable long-lived publishing secrets where ecosystem support exists. | ✗ | Trusted publishing coverage varies by registry; keep fallback controls and explicit exception governance. |
-| `if-expr-wrapper` | Detects `if:` conditions missing the `${{ }}` expression wrapper. While GitHub Actions auto-applies the wrapper at runtime, explicit wrapping improves readability and avoids confusion. | Wrap bare expressions in `${{ }}`. | ✓ | Semantics-preserving; the fix adds the wrapper that GitHub Actions would apply implicitly. |
+| `if-expr-wrapper` | Detects `if:` conditions missing the `${{ }}` expression wrapper. While GitHub Actions auto-applies the wrapper at runtime, explicit wrapping improves readability and avoids confusion. | Wrap bare expressions in `${{ }}`. | ✓ (safe cases) | Auto-fix only for unquoted single-line scalars without `${{` markers. Block/quoted scalars and values containing `${{` emit warning without fix. |

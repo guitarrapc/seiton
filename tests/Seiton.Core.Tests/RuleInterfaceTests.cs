@@ -6498,6 +6498,92 @@ public sealed class RuleInterfaceTests
     }
 
     [Test]
+    public async Task IfExprWrapperRule_BlockScalar_NoAutoFix()
+    {
+        // Block scalar `if: |\n  expr\n` must NOT offer auto-fix (trailing \n is structural)
+        var yaml = "on: push\njobs:\n  build:\n    runs-on: ubuntu-latest\n    steps:\n      - if: |\n          github.event_name == 'push'\n        run: echo ok\n";
+        var result = new LintEngine([new IfExprWrapperRule()]).Check(
+            Encoding.UTF8.GetBytes(yaml), "test.yaml");
+        var diagnostics = result.Diagnostics.Where(d => d.RuleId == "if-expr-wrapper").ToArray();
+
+        await Assert.That(diagnostics).Count().IsGreaterThanOrEqualTo(1);
+        // Block scalar must not offer auto-fix (would break YAML structure)
+        await Assert.That(diagnostics[0].Fix is null).IsTrue();
+    }
+
+    [Test]
+    public async Task IfExprWrapperRule_QuotedScalar_FixIncludesQuotes()
+    {
+        // Quoted scalar `if: "expr"` — fix must replace including surrounding quotes
+        var yaml = """
+        on: push
+        jobs:
+            build:
+                runs-on: ubuntu-latest
+                steps:
+                    - if: "github.event_name == 'push'"
+                      run: echo ok
+        """;
+
+        var sourceBytes = Encoding.UTF8.GetBytes(yaml);
+        var engine = new LintEngine([new IfExprWrapperRule()]);
+        var result = engine.Check(sourceBytes, "test.yaml", new LintConfig { Fix = new FixConfig { Enabled = true } });
+        var diagnostic = result.Diagnostics.First(x => x.RuleId == "if-expr-wrapper");
+
+        await Assert.That(diagnostic.Fix is not null).IsTrue();
+        // Apply fix and verify the result doesn't have leftover quotes around ${{ }}
+        var revalidated = FixEngine.ApplyAndRelint(engine, sourceBytes, "test.yaml", [diagnostic]);
+        var fixedText = Encoding.UTF8.GetString(revalidated.UpdatedUtf8Yaml).Replace("\r\n", "\n", StringComparison.Ordinal);
+
+        await Assert.That(fixedText).Contains("${{ github.event_name == 'push' }}");
+        await Assert.That(fixedText).DoesNotContain("\"${{ github.event_name == 'push' }}\"");
+    }
+
+    [Test]
+    public async Task IfExprWrapperRule_ContainsExpressionMarker_NoFix()
+    {
+        // Value already contains ${{ but isn't a clean wrapper (leading !) — should warn but NOT offer fix
+        var yaml = """
+        on: push
+        jobs:
+            build:
+                runs-on: ubuntu-latest
+                steps:
+                    - if: "!${{ cancelled() }}"
+                      run: echo ok
+        """;
+
+        var result = new LintEngine([new IfExprWrapperRule()]).Check(
+            Encoding.UTF8.GetBytes(yaml), "test.yaml");
+        var diagnostics = result.Diagnostics.Where(d => d.RuleId == "if-expr-wrapper").ToArray();
+
+        // This fires (not a clean wrapper) but must NOT offer fix (would nest ${{ }})
+        await Assert.That(diagnostics).Count().IsGreaterThanOrEqualTo(1);
+        await Assert.That(diagnostics[0].Fix is null).IsTrue();
+    }
+
+    [Test]
+    public async Task IfExprWrapperRule_ReuseAcrossFiles_NoCrash()
+    {
+        // Rule instance reused across multiple Check calls must not crash
+        // when the cached slice offset from file1 exceeds file2's length.
+        var rule = new IfExprWrapperRule();
+        var engine = new LintEngine([rule]);
+
+        // Long YAML with condition near the end (high offset cached)
+        var yaml1 = "on: push\njobs:\n  a:\n    runs-on: ubuntu-latest\n    steps:\n      - run: echo aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\n      - run: echo bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\n      - run: echo cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\n      - if: github.ref == 'main'\n        run: echo 1\n";
+        // Short YAML with same-length condition — cached offset from yaml1 exceeds yaml2 length
+        var yaml2 = "on: push\njobs:\n  b:\n    runs-on: ubuntu-latest\n    steps:\n      - if: github.ref == 'main'\n        run: echo 2\n";
+
+        var result1 = engine.Check(Encoding.UTF8.GetBytes(yaml1), "file1.yml");
+        await Assert.That(result1.Diagnostics.Any(d => d.RuleId == "if-expr-wrapper")).IsTrue();
+
+        // Second call with shorter yaml must not throw (stale cache offset > yaml2.Length)
+        var result2 = engine.Check(Encoding.UTF8.GetBytes(yaml2), "file2.yml");
+        await Assert.That(result2.Diagnostics.Any(d => d.RuleId == "if-expr-wrapper")).IsTrue();
+    }
+
+    [Test]
     public async Task RuleRegression_FakeTernaryRule_TableDriven()
     {
         var cases = new[]
