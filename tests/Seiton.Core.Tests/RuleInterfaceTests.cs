@@ -6448,6 +6448,20 @@ public sealed class RuleInterfaceTests
                           run: echo ng
             """,
             ["missing ${{ }} wrapper"]),
+            new RuleCase(
+            "ng-snapshot-if-bare-expression",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    snapshot:
+                        image-name: test
+                        if: github.event_name == 'push'
+                    steps:
+                        - run: echo ng
+            """,
+            ["missing ${{ }} wrapper"]),
         };
 
         await AssertRuleCases(new IfExprWrapperRule(), "if-expr-wrapper", cases);

@@ -30,6 +30,12 @@ public sealed class IfExprWrapperRule() : RuleBase(RuleId.IfExprWrapper)
     public override void VisitJobPre(Job job)
     {
         ValidateCondition(job.If, job, null);
+
+        // snapshot.if
+        if (job.Snapshot is { } snapshot)
+        {
+            ValidateCondition(snapshot.If, job, null);
+        }
     }
 
     public override void VisitStep(Step step)
