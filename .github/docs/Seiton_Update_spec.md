@@ -241,6 +241,8 @@ When official GitHub sources disagree for webhook activity types:
 
 `context-types` follows the **standard** profile (§3.4) with an additional repository-managed override file merged in Stage 3: GitHub Docs `contexts.md` is parsed into intermediate JSON and merged into `context-types.json` together with the override; the merged file is the source of truth for codegen.
 
+**Orchestrator:** `fetch-context-types` (and the `context-types` step inside `fetch --dataset all` / `update`) runs Stage 1–2 **and** `merge-context-types-sources` so `context-types.json` stays aligned with the latest Docs parse before the manifest is saved.
+
 #### 4.3.3 Function Specs
 
 `function-specs` follows the **composite primary** profile (§3.4): codegen reads a hand-maintained `function-specs.json` while Stage 1–2 ingest Docs `expressions.md` into `parsed/docs-function-names.json` for gap detection and validation. No separate merge stage exists; `fetch-function-specs` updates manifest and intermediate artifacts used by `validate-function-specs`.
@@ -452,6 +454,7 @@ The manifest is updated atomically during Stage 1 (fetch) operations.
 
 - **`sourceUrls` + `rawFileHashes` + `fetchedAtUtc`** are the canonical record of Stage 1: which HTTPS URLs were used and the **`sha256:`** of each **committed** file under `raw/` (file name ↔ digest), after repository newline normalization where applicable.
 - **Raw files** are the pre-parse documents from those URLs; operational “which URL applies” is always reconciled with the manifest for fetched datasets (§3.2).
+- **`ManifestDatasetUrlSemantics`** (enforced when URLs are resolved for fetch) validates **host and full path** for fixed datasets: for example `raw.githubusercontent.com` URLs must be exactly under **`/github/docs/main/…`** with documented file paths (forks on `raw.githubusercontent.com` that reuse a file name elsewhere fail), and selected `docs.github.com` / `json.schemastore.org` / `data.iana.org` URLs must match their canonical paths exactly.
 - **Stage 2 JSON** (whether under `parsed/` or, when collapsed, the canonical snapshot file) holds the extracted model and SHOULD repeat **raw file name + `sha256`** linkage as described in §3.3 so reviewers can validate “this parse came from these bytes” alongside the manifest. That linkage is **not** a second competing source of truth: it must remain **consistent** with `manifest.json` for the same committed raw files.
 - **HTTPS `sourceUrl` fields** inside Stage 2 artifacts (when present) MUST match the manifest-backed URL configuration for Stage 1 (§3.3).
 - Datasets **without** Stage 1 have **no** manifest entry; their canonical JSON is maintained per the appropriate profile in §3.4.

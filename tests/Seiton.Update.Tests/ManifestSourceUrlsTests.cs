@@ -274,6 +274,90 @@ public sealed class ManifestSourceUrlsTests
     }
 
     [Test]
+    public async Task Resolve_WhenAvailabilityUrlNotOfficialDocsRepo_Throws()
+    {
+        var dir = NewTempDir();
+        try
+        {
+            WriteManifest(dir,
+            [
+                new SourceManifestEntry
+                {
+                    Dataset = "availability",
+                    SourceUrls =
+                    [
+                        "https://raw.githubusercontent.com/myfork/docs/main/content/actions/reference/workflows-and-actions/contexts.md",
+                    ],
+                    FetchedAtUtc = "2026-01-01T00:00:00+00:00",
+                    RawFileHashes = [],
+                },
+            ]);
+            await Assert.That(() => ManifestSourceUrls.Resolve(dir, "availability", 1))
+                .Throws<InvalidOperationException>();
+        }
+        finally
+        {
+            Directory.Delete(dir, recursive: true);
+        }
+    }
+
+    [Test]
+    public async Task Resolve_WhenAvailabilityUrlWrongBranchOnOfficialRepo_Throws()
+    {
+        var dir = NewTempDir();
+        try
+        {
+            WriteManifest(dir,
+            [
+                new SourceManifestEntry
+                {
+                    Dataset = "availability",
+                    SourceUrls =
+                    [
+                        "https://raw.githubusercontent.com/github/docs/not-main/content/actions/reference/workflows-and-actions/contexts.md",
+                    ],
+                    FetchedAtUtc = "2026-01-01T00:00:00+00:00",
+                    RawFileHashes = [],
+                },
+            ]);
+            await Assert.That(() => ManifestSourceUrls.Resolve(dir, "availability", 1))
+                .Throws<InvalidOperationException>();
+        }
+        finally
+        {
+            Directory.Delete(dir, recursive: true);
+        }
+    }
+
+    [Test]
+    public async Task Resolve_WhenEventPayloadDocsPathWrongPage_Throws()
+    {
+        var dir = NewTempDir();
+        try
+        {
+            WriteManifest(dir,
+            [
+                new SourceManifestEntry
+                {
+                    Dataset = "event-payload-types",
+                    SourceUrls =
+                    [
+                        "https://docs.github.com/en/webhooks/webhook-events-and-payloads/other",
+                    ],
+                    FetchedAtUtc = "2026-01-01T00:00:00+00:00",
+                    RawFileHashes = [],
+                },
+            ]);
+            await Assert.That(() => ManifestSourceUrls.Resolve(dir, "event-payload-types", 1))
+                .Throws<InvalidOperationException>();
+        }
+        finally
+        {
+            Directory.Delete(dir, recursive: true);
+        }
+    }
+
+    [Test]
     public async Task Resolve_WhenUrlNotAbsolute_Throws()
     {
         var dir = NewTempDir();

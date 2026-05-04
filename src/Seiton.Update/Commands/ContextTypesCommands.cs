@@ -11,6 +11,10 @@ internal static class ContextTypesCommands
         var fetcher = new GitHubContextTypesFetcher();
         var entry = await fetcher.FetchAsync(repoRoot);
 
+        // Same as per-dataset maintainer flow: parsed docs are useless for codegen until merged with overrides.
+        var mergeService = new ContextTypesMergeService();
+        mergeService.Merge(repoRoot);
+
         var manifestService = new ManifestService();
         var manifest = manifestService.Load(repoRoot);
         manifest = manifestService.Upsert(manifest, entry);

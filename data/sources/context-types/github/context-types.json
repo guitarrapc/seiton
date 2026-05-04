@@ -241,6 +241,22 @@
         {
           "name": "status",
           "type": "string"
+        },
+        {
+          "name": "workflow_file_path",
+          "type": "string"
+        },
+        {
+          "name": "workflow_ref",
+          "type": "string"
+        },
+        {
+          "name": "workflow_repository",
+          "type": "string"
+        },
+        {
+          "name": "workflow_sha",
+          "type": "string"
         }
       ]
     },
