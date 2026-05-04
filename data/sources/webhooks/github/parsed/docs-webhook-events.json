@@ -1,6 +1,12 @@
 {
   "schemaVersion": 1,
   "source": "github-docs-markdown-raw",
+  "rawSources": [
+    {
+      "fileName": "events-that-trigger-workflows.docs.md",
+      "sha256": "sha256:94c38c06c5cf8d15113bb21db4468c9d762eb0de21d6705e7fd9967063063936"
+    }
+  ],
   "events": [
     {
       "name": "branch_protection_rule",

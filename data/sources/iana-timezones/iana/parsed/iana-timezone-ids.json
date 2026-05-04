@@ -1,6 +1,12 @@
 {
   "schemaVersion": 1,
   "source": "iana-tzdb-tzdata-zi",
+  "rawSources": [
+    {
+      "fileName": "tzdata.zi",
+      "sha256": "sha256:9ae46c0ed5ceda93b8baa23cf6e4f2f6fc145e06e9ed50c41c94f2b2643b8a37"
+    }
+  ],
   "version": "2026b",
   "zones": [
     "Africa/Abidjan",

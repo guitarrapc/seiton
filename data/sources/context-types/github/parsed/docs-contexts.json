@@ -1,6 +1,12 @@
 {
   "schemaVersion": 1,
   "source": "github-contexts-docs-raw",
+  "rawSources": [
+    {
+      "fileName": "contexts.docs.md",
+      "sha256": "sha256:aec6d6355e5bf66933f6bd73a91ded98c793e6b7e2e5b5dcb9aca367e004c704"
+    }
+  ],
   "contexts": [
     {
       "name": "github",

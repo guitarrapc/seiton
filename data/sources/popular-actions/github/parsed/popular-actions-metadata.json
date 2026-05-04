@@ -1,6 +1,60 @@
 {
   "schemaVersion": 1,
   "source": "github-action-metadata-raw",
+  "rawSources": [
+    {
+      "fileName": "actions_cache.action.yml",
+      "sha256": "sha256:76800ac65970bd71dee3e8da2fbf013447f156d64afb0bccb32cf348438c4158"
+    },
+    {
+      "fileName": "actions_checkout.action.yml",
+      "sha256": "sha256:11b63452f6e43ffb5ab8bfdaaafb8a915b354318e3ad9bce4eb0686b9e380f90"
+    },
+    {
+      "fileName": "actions_download-artifact.action.yml",
+      "sha256": "sha256:102a8f43c775dd47462ad2982728642a8fbcee7dc92a9a5fd70c6e85049a5b71"
+    },
+    {
+      "fileName": "actions_setup-dotnet.action.yml",
+      "sha256": "sha256:fe97c86f2c47cde199f9665c2633b5d1f4d9c6164a4690c2f36e58632e3f0203"
+    },
+    {
+      "fileName": "actions_setup-go.action.yml",
+      "sha256": "sha256:4ee4677f2582defd9f6859d5d9c0927ee51f7d5599118509a9b49cf50c4853d6"
+    },
+    {
+      "fileName": "actions_setup-node.action.yml",
+      "sha256": "sha256:5d7454e64fa238596afa390822f4c6c074d197ca8c5307f2470a8e8b8c9ada5e"
+    },
+    {
+      "fileName": "actions_stale.action.yml",
+      "sha256": "sha256:600628efb2f205df106856f1b62c4183c9005441ce5348bbc294d831b0a2b00f"
+    },
+    {
+      "fileName": "actions_upload-artifact.action.yml",
+      "sha256": "sha256:2adbdab5421ad5dbdbf6d9579f7db5d8ccf6785c5e979bf35ba82bd629905f22"
+    },
+    {
+      "fileName": "docker_login-action.action.yml",
+      "sha256": "sha256:221f3597f75c297303f394c538498db8b9cb843addbbdbb5f73916cbdaf23e24"
+    },
+    {
+      "fileName": "octokit_request-action.action.yml",
+      "sha256": "sha256:1f90bc24030b0630dc052c241b6bb8b1893cf08d1fdaaff20678bf5eca12226f"
+    },
+    {
+      "fileName": "pypa_gh-action-pypi-publish.action.yml",
+      "sha256": "sha256:2b7d2b707146c0f036b85296e952b258b85522b9ba5a9ab86511b95c56d8c251"
+    },
+    {
+      "fileName": "reviewdog_action-actionlint.action.yml",
+      "sha256": "sha256:4dc0b6d8607ec6e5f713f5f8ce4126e11a39f578e897f994457343b97828c09e"
+    },
+    {
+      "fileName": "rhysd_action-setup-vim.action.yml",
+      "sha256": "sha256:37f20b1cb919a0d5e51752ff5c4e1fb7c9f228a399aab1a657e2b77bce3a33c4"
+    }
+  ],
   "actions": [
     {
       "actionRef": "actions/cache@v5",

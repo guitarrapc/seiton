@@ -2,6 +2,12 @@
   "schemaVersion": 1,
   "source": "github-token-available-permissions-reusable",
   "sourceUrl": "https://raw.githubusercontent.com/github/docs/main/data/reusables/actions/github-token-available-permissions.md",
+  "rawSources": [
+    {
+      "fileName": "github-token-available-permissions.md",
+      "sha256": "sha256:c06af1393b15fe3ecfdf98fc4e0cc2a3b29c008226b353df3a0c2be0fb3e6469"
+    }
+  ],
   "scopes": [
     {
       "name": "actions",

@@ -1,6 +1,12 @@
 {
   "schemaVersion": 1,
   "source": "github-workflow-schema-raw",
+  "rawSources": [
+    {
+      "fileName": "github-workflow.schema.json",
+      "sha256": "sha256:ef02f1bba7d827c56f65b9c1cb590a2950388e51a7988374b4857089cff16538"
+    }
+  ],
   "events": [
     {
       "name": "branch_protection_rule",

@@ -1,6 +1,4 @@
-﻿using System.Security.Cryptography;
-using System.Text;
-using System.Text.Json;
+﻿using System.Text.Json;
 using Seiton.Update.Model;
 using Seiton.Update.Parsers;
 using Seiton.Update.Services;
@@ -21,7 +19,7 @@ internal sealed class GitHubEventPayloadTypesFetcher
         ParseLocalSourceFiles(repoRoot);
 
         var rawPath = Path.Combine(EventPayloadTypesSourcePathResolver.ResolveRawDir(repoRoot), "webhook-events-and-payloads.html");
-        var docsHash = ComputeSha256(File.ReadAllText(rawPath));
+        var docsHash = SourceContentHasher.ComputeSha256(File.ReadAllText(rawPath));
         var sourceUrls = ManifestSourceUrls.Resolve(repoRoot, "event-payload-types", 1).ToList();
 
         return new SourceManifestEntry
@@ -46,7 +44,7 @@ internal sealed class GitHubEventPayloadTypesFetcher
 
         var docsUrl = ManifestSourceUrls.ResolveSingle(repoRoot, "event-payload-types");
         var htmlContent = await client.GetStringAsync(docsUrl);
-        var hash = ComputeSha256(htmlContent);
+        var hash = SourceContentHasher.ComputeSha256(htmlContent);
         UpdateLogger.Info($"[fetch:event-payload-types:sources] downloaded {htmlContent.Length} bytes ({hash[..16]}...)");
 
         var rawDir = EventPayloadTypesSourcePathResolver.ResolveRawDir(repoRoot);
@@ -67,13 +65,16 @@ internal sealed class GitHubEventPayloadTypesFetcher
         var parser = new WebhookEventPayloadDocsParser();
         var model = parser.Parse(htmlContent);
 
+        var rawSources = Stage2ArtifactRawSources.FromFiles((rawPath, Path.GetFileName(rawPath)));
+        var modelWithMeta = new EventPayloadTypesModel(model.SchemaVersion, model.Source, model.Events, rawSources);
+
         UpdateLogger.Info($"[parse:event-payload-types:sources] parsed {model.Events.Count} events.");
 
         // Write parsed JSON
         var parsedDir = EventPayloadTypesSourcePathResolver.ResolveParsedDir(repoRoot);
         Directory.CreateDirectory(parsedDir);
         var parsedPath = Path.Combine(parsedDir, "parsed-event-payload-types.json");
-        var parsedJson = TextNormalization.NormalizeToLf(JsonSerializer.Serialize(model, JsonOptions));
+        var parsedJson = TextNormalization.NormalizeToLf(JsonSerializer.Serialize(modelWithMeta, JsonOptions));
         File.WriteAllText(parsedPath, parsedJson);
         UpdateLogger.Info($"[parse:event-payload-types:sources] wrote {parsedPath}");
 
@@ -81,7 +82,7 @@ internal sealed class GitHubEventPayloadTypesFetcher
         var primaryDir = EventPayloadTypesSourcePathResolver.ResolvePrimaryDir(repoRoot);
         Directory.CreateDirectory(primaryDir);
         var primaryPath = Path.Combine(primaryDir, "event_payload_types.json");
-        var primaryJson = TextNormalization.NormalizeToLf(JsonSerializer.Serialize(model, JsonOptions));
+        var primaryJson = TextNormalization.NormalizeToLf(JsonSerializer.Serialize(modelWithMeta, JsonOptions));
 
         var existing = File.Exists(primaryPath)
             ? TextNormalization.NormalizeToLf(File.ReadAllText(primaryPath))
@@ -96,12 +97,5 @@ internal sealed class GitHubEventPayloadTypesFetcher
         {
             UpdateLogger.Info("[parse:event-payload-types:sources] snapshot already up to date.");
         }
-    }
-
-    private static string ComputeSha256(string content)
-    {
-        var bytes = Encoding.UTF8.GetBytes(content);
-        var hash = SHA256.HashData(bytes);
-        return $"sha256:{Convert.ToHexStringLower(hash)}";
     }
 }

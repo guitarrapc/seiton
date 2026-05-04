@@ -1,6 +1,12 @@
 {
   "schemaVersion": 1,
   "source": "github-expressions-docs-raw",
+  "rawSources": [
+    {
+      "fileName": "expressions.docs.md",
+      "sha256": "sha256:3d06bb17ad3a7872b7f878666a6b599a2bc4079fc22e49c915673cf150df6230"
+    }
+  ],
   "functionNames": [
     "always",
     "cancelled",

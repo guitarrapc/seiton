@@ -1,6 +1,4 @@
-﻿using System.Security.Cryptography;
-using System.Text;
-using System.Text.Json;
+﻿using System.Text.Json;
 using Seiton.Update.Model;
 using Seiton.Update.Parsers;
 using Seiton.Update.Services;
@@ -28,7 +26,7 @@ internal sealed class GitHubPermissionsFetcher
         MergeParsedSources(repoRoot);
 
         var paths = Paths(repoRoot);
-        var rawHash = ComputeSha256(File.ReadAllText(paths.RawDocsPath));
+        var rawHash = SourceContentHasher.ComputeSha256(File.ReadAllText(paths.RawDocsPath));
         var sourceUrls = ManifestSourceUrls.Resolve(repoRoot, "permissions", 1).ToList();
 
         return new SourceManifestEntry
@@ -53,7 +51,7 @@ internal sealed class GitHubPermissionsFetcher
 
         var docsUrl = ManifestSourceUrls.ResolveSingle(repoRoot, "permissions");
         var docsContent = await client.GetStringAsync(docsUrl);
-        var docsHash = ComputeSha256(docsContent);
+        var docsHash = SourceContentHasher.ComputeSha256(docsContent);
         UpdateLogger.Info($"[fetch:permissions:sources] downloaded docs={docsContent.Length} bytes ({docsHash[..16]}...)");
 
         var paths = Paths(repoRoot);
@@ -87,6 +85,7 @@ internal sealed class GitHubPermissionsFetcher
             SchemaVersion = 1,
             Source = "github-token-available-permissions-reusable",
             SourceUrl = sourceUrl,
+            RawSources = Stage2ArtifactRawSources.FromFiles((paths.RawDocsPath, Path.GetFileName(paths.RawDocsPath))),
             Scopes = model.Scopes.Select(s => new ParsedPermissionsSnapshot.ScopeEntry
             {
                 Name = s.Name,
@@ -158,13 +157,6 @@ internal sealed class GitHubPermissionsFetcher
         };
     }
 
-    private static string ComputeSha256(string content)
-    {
-        var bytes = Encoding.UTF8.GetBytes(content);
-        var hash = SHA256.HashData(bytes);
-        return "sha256:" + Convert.ToHexStringLower(hash);
-    }
-
     private sealed class PermissionsPaths
     {
         public string RawDocsPath { get; set; } = string.Empty;
@@ -178,6 +170,7 @@ internal sealed class GitHubPermissionsFetcher
         public string Source { get; set; } = string.Empty;
         /// <summary>HTTPS URL from manifest configuration for this dataset (same contract as Stage 1 fetch).</summary>
         public string? SourceUrl { get; set; }
+        public List<RawSourceRef>? RawSources { get; set; }
         public List<ScopeEntry> Scopes { get; set; } = [];
 
         internal sealed class ScopeEntry

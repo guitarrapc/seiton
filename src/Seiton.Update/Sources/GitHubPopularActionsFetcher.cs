@@ -1,6 +1,4 @@
-﻿using System.Security.Cryptography;
-using System.Text;
-using System.Text.Json;
+﻿using System.Text.Json;
 using System.Text.Json.Serialization;
 using Seiton.Update.Model;
 using Seiton.Update.Parsers;
@@ -35,7 +33,7 @@ internal sealed class GitHubPopularActionsFetcher
         foreach (var source in sources)
         {
             var path = Path.Combine(paths.RawDir, source.RawFileName);
-            hashes[source.RawFileName] = ComputeSha256(File.ReadAllText(path));
+            hashes[source.RawFileName] = SourceContentHasher.ComputeSha256(File.ReadAllText(path));
         }
 
         return new SourceManifestEntry
@@ -77,7 +75,7 @@ internal sealed class GitHubPopularActionsFetcher
         foreach (var source in sources)
         {
             var content = await client.GetStringAsync(source.Url);
-            var hash = ComputeSha256(content);
+            var hash = SourceContentHasher.ComputeSha256(content);
             var rawPath = Path.Combine(paths.RawDir, source.RawFileName);
 
             File.WriteAllText(rawPath, content.Replace("\r\n", "\n"));
@@ -131,6 +129,9 @@ internal sealed class GitHubPopularActionsFetcher
         parsed.Actions = parsed.Actions
             .OrderBy(static x => x.Uses, StringComparer.Ordinal)
             .ToList();
+
+        parsed.RawSources = Stage2ArtifactRawSources.FromFiles(
+            sources.Select(s => (Path.Combine(paths.RawDir, s.RawFileName!), s.RawFileName!)).ToArray());
 
         Directory.CreateDirectory(Path.GetDirectoryName(paths.ParsedPath)!);
         File.WriteAllText(paths.ParsedPath, JsonSerializer.Serialize(parsed, JsonOptions).Replace("\r\n", "\n"));
@@ -396,13 +397,6 @@ internal sealed class GitHubPopularActionsFetcher
         }
     }
 
-    private static string ComputeSha256(string content)
-    {
-        var bytes = Encoding.UTF8.GetBytes(content);
-        var hash = SHA256.HashData(bytes);
-        return "sha256:" + Convert.ToHexStringLower(hash);
-    }
-
     private sealed class PopularActionSource
     {
         public string ActionRef { get; set; } = string.Empty;
@@ -441,6 +435,7 @@ internal sealed class GitHubPopularActionsFetcher
     {
         public int SchemaVersion { get; set; }
         public string Source { get; set; } = string.Empty;
+        public List<RawSourceRef>? RawSources { get; set; }
         public List<ParsedPopularAction> Actions { get; set; } = [];
     }
 

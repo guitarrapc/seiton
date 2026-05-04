@@ -1,6 +1,16 @@
 {
   "schemaVersion": 1,
   "source": "github-docs-hosted-and-larger-runners",
+  "rawSources": [
+    {
+      "fileName": "github-hosted-runners.docs.md",
+      "sha256": "sha256:c98f6265b98ab912ed946ba61f7e6c8706a4bd55709b919e1e6aad22774eecbd"
+    },
+    {
+      "fileName": "larger-runners.docs.md",
+      "sha256": "sha256:f450df8fe12ade809ca0b83f402a1b323e8467404bc96b447f9326853e8384a4"
+    }
+  ],
   "labels": [
     {
       "label": "macos-14",

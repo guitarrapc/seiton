@@ -126,7 +126,7 @@
         },
         {
           "name": "retention_days",
-          "type": "number"
+          "type": "string"
         },
         {
           "name": "run_attempt",

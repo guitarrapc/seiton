@@ -1,6 +1,4 @@
-﻿using System.Security.Cryptography;
-using System.Text;
-using System.Text.Json;
+﻿using System.Text.Json;
 using Seiton.Update.Model;
 using Seiton.Update.Parsers;
 using Seiton.Update.Services;
@@ -22,7 +20,7 @@ internal sealed class IanaTimeZonesFetcher
         MergeParsedSources(repoRoot);
 
         var paths = Paths(repoRoot);
-        var rawHash = ComputeSha256(File.ReadAllText(paths.RawTzdataZiPath));
+        var rawHash = SourceContentHasher.ComputeSha256(File.ReadAllText(paths.RawTzdataZiPath));
 
         var sourceUrls = ManifestSourceUrls.Resolve(repoRoot, "iana-timezones", 1).ToList();
 
@@ -48,7 +46,7 @@ internal sealed class IanaTimeZonesFetcher
 
         var tzUrl = ManifestSourceUrls.ResolveSingle(repoRoot, "iana-timezones");
         var content = await client.GetStringAsync(tzUrl);
-        var hash = ComputeSha256(content);
+        var hash = SourceContentHasher.ComputeSha256(content);
         UpdateLogger.Info($"[fetch:iana-timezones:sources] downloaded tzdata.zi={content.Length} bytes ({hash[..16]}...)");
 
         var paths = Paths(repoRoot);
@@ -75,10 +73,12 @@ internal sealed class IanaTimeZonesFetcher
         var parser = new IanaTimeZonesZiParser();
         var result = parser.Parse(ziContent);
 
+        var rawSources = Stage2ArtifactRawSources.FromFiles((paths.RawTzdataZiPath, Path.GetFileName(paths.RawTzdataZiPath)));
         var parsed = new
         {
             schemaVersion = 1,
             source = "iana-tzdb-tzdata-zi",
+            rawSources,
             version = result.Version,
             zones = result.Zones,
             links = result.Links,
@@ -157,13 +157,6 @@ internal sealed class IanaTimeZonesFetcher
         };
     }
 
-    private static string ComputeSha256(string content)
-    {
-        var bytes = Encoding.UTF8.GetBytes(content);
-        var hash = SHA256.HashData(bytes);
-        return "sha256:" + Convert.ToHexStringLower(hash);
-    }
-
     private sealed class IanaTimeZonesPaths
     {
         public string RawTzdataZiPath { get; set; } = string.Empty;
@@ -174,6 +167,7 @@ internal sealed class IanaTimeZonesFetcher
     private sealed class ParsedSnapshot
     {
         public string? Version { get; set; }
+        public List<RawSourceRef>? RawSources { get; set; }
         public List<string>? Zones { get; set; }
         public List<string>? Links { get; set; }
     }

@@ -1,6 +1,4 @@
-﻿using System.Security.Cryptography;
-using System.Text;
-using System.Text.Json;
+﻿using System.Text.Json;
 using Seiton.Update.Model;
 using Seiton.Update.Parsers;
 using Seiton.Update.Services;
@@ -22,7 +20,7 @@ internal sealed class GitHubExpectedKeysFetcher
 
         var rawDir = Services.ExpectedKeysSourcePathResolver.ResolveRawDir(repoRoot);
         var rawPath = Path.Combine(rawDir, "workflow-syntax.md");
-        var docsHash = ComputeSha256(File.ReadAllText(rawPath));
+        var docsHash = SourceContentHasher.ComputeSha256(File.ReadAllText(rawPath));
         var sourceUrls = ManifestSourceUrls.Resolve(repoRoot, "expected-keys", 1).ToList();
 
         return new SourceManifestEntry
@@ -47,7 +45,7 @@ internal sealed class GitHubExpectedKeysFetcher
 
         var docsUrl = ManifestSourceUrls.ResolveSingle(repoRoot, "expected-keys");
         var docsContent = await client.GetStringAsync(docsUrl);
-        var docsHash = ComputeSha256(docsContent);
+        var docsHash = SourceContentHasher.ComputeSha256(docsContent);
         UpdateLogger.Info($"[fetch:expected-keys:sources] downloaded docs={docsContent.Length} bytes ({docsHash[..16]}...)");
 
         var rawDir = Services.ExpectedKeysSourcePathResolver.ResolveRawDir(repoRoot);
@@ -79,6 +77,9 @@ internal sealed class GitHubExpectedKeysFetcher
         // Serialize to canonical snapshot JSON
         var snapshot = new ExpectedKeysSnapshot
         {
+            SchemaVersion = 1,
+            Source = "github-workflow-syntax-docs-raw",
+            RawSources = Stage2ArtifactRawSources.FromFiles((rawPath, Path.GetFileName(rawPath))),
             Sections = model.Sections.Select(static s => new ExpectedKeysSnapshotSection
             {
                 Name = s.Name,
@@ -97,15 +98,11 @@ internal sealed class GitHubExpectedKeysFetcher
         UpdateLogger.Info($"[parse:expected-keys:sources] wrote {outputPath} ({model.Sections.Count} sections)");
     }
 
-    private static string ComputeSha256(string content)
-    {
-        var bytes = Encoding.UTF8.GetBytes(content);
-        var hash = SHA256.HashData(bytes);
-        return "sha256:" + Convert.ToHexStringLower(hash);
-    }
-
     private sealed class ExpectedKeysSnapshot
     {
+        public int SchemaVersion { get; set; }
+        public string Source { get; set; } = string.Empty;
+        public List<RawSourceRef>? RawSources { get; set; }
         public List<ExpectedKeysSnapshotSection>? Sections { get; set; }
     }
 

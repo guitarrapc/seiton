@@ -1,5 +1,4 @@
-﻿using System.Security.Cryptography;
-using System.Text;
+﻿using System.Text;
 using System.Text.Json;
 using Seiton.Update.Model;
 using Seiton.Update.Parsers;
@@ -22,8 +21,8 @@ internal sealed class GitHubWebhookFetcher
         MergeParsedSources(repoRoot, excludeSchemaOnly);
 
         var paths = Paths(repoRoot);
-        var schemaHash = ComputeSha256(File.ReadAllText(paths.RawSchemaPath));
-        var docsHash = ComputeSha256(File.ReadAllText(paths.RawDocsPath));
+        var schemaHash = SourceContentHasher.ComputeSha256(File.ReadAllText(paths.RawSchemaPath));
+        var docsHash = SourceContentHasher.ComputeSha256(File.ReadAllText(paths.RawDocsPath));
         var sourceUrls = ManifestSourceUrls.Resolve(repoRoot, "webhooks", 2).ToList();
 
         return new SourceManifestEntry
@@ -50,8 +49,8 @@ internal sealed class GitHubWebhookFetcher
         var urls = ManifestSourceUrls.Resolve(repoRoot, "webhooks", 2);
         var schemaContent = await client.GetStringAsync(urls[0]);
         var docsContent = await client.GetStringAsync(urls[1]);
-        var schemaHash = ComputeSha256(schemaContent);
-        var docsHash = ComputeSha256(docsContent);
+        var schemaHash = SourceContentHasher.ComputeSha256(schemaContent);
+        var docsHash = SourceContentHasher.ComputeSha256(docsContent);
         UpdateLogger.Info($"[fetch:webhooks:sources] downloaded schema={schemaContent.Length} bytes ({schemaHash[..16]}...), docs={docsContent.Length} bytes ({docsHash[..16]}...)");
 
         var paths = Paths(repoRoot);
@@ -88,6 +87,7 @@ internal sealed class GitHubWebhookFetcher
         {
             SchemaVersion = 1,
             Source = "github-workflow-schema-raw",
+            RawSources = Stage2ArtifactRawSources.FromFiles((paths.RawSchemaPath, Path.GetFileName(paths.RawSchemaPath))),
             Events = schemaEvents
                 .OrderBy(static x => x.Name, StringComparer.Ordinal)
                 .Select(static x => new ParsedWebhookEvent
@@ -102,6 +102,7 @@ internal sealed class GitHubWebhookFetcher
         {
             SchemaVersion = 1,
             Source = "github-docs-markdown-raw",
+            RawSources = Stage2ArtifactRawSources.FromFiles((paths.RawDocsPath, Path.GetFileName(paths.RawDocsPath))),
             Events = docsEventNames
                 .OrderBy(static x => x, StringComparer.Ordinal)
                 .Select(name => new ParsedDocsWebhookEvent
@@ -717,13 +718,6 @@ internal sealed class GitHubWebhookFetcher
         return "[" + string.Join(", ", normalized) + "]";
     }
 
-    private static string ComputeSha256(string content)
-    {
-        var bytes = Encoding.UTF8.GetBytes(content);
-        var hash = SHA256.HashData(bytes);
-        return "sha256:" + Convert.ToHexStringLower(hash);
-    }
-
     private sealed class WebhookPaths
     {
         public string RawSchemaPath { get; set; } = string.Empty;
@@ -737,6 +731,7 @@ internal sealed class GitHubWebhookFetcher
     {
         public int SchemaVersion { get; set; }
         public string Source { get; set; } = string.Empty;
+        public List<RawSourceRef>? RawSources { get; set; }
         public List<ParsedWebhookEvent> Events { get; set; } = [];
     }
 
@@ -744,6 +739,7 @@ internal sealed class GitHubWebhookFetcher
     {
         public int SchemaVersion { get; set; }
         public string Source { get; set; } = string.Empty;
+        public List<RawSourceRef>? RawSources { get; set; }
         public List<ParsedDocsWebhookEvent> Events { get; set; } = [];
     }
 
