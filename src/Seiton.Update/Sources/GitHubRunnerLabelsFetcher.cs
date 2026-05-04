@@ -1,16 +1,12 @@
-﻿using System.Security.Cryptography;
-using System.Text;
-using System.Text.Json;
+﻿using System.Text.Json;
 using Seiton.Update.Model;
 using Seiton.Update.Parsers;
+using Seiton.Update.Services;
 
 namespace Seiton.Update.Sources;
 
 internal sealed class GitHubRunnerLabelsFetcher
 {
-    private const string DocsSourceUrl = "https://docs.github.com/en/actions/reference/runners/github-hosted-runners.md";
-    private const string LargerRunnersDocsUrl = "https://docs.github.com/en/actions/reference/runners/larger-runners.md";
-
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
         WriteIndented = true,
@@ -24,13 +20,14 @@ internal sealed class GitHubRunnerLabelsFetcher
         MergeParsedSources(repoRoot);
 
         var paths = Paths(repoRoot);
-        var docsHash = ComputeSha256(File.ReadAllText(paths.RawDocsPath));
-        var largerHash = ComputeSha256(File.ReadAllText(paths.RawLargerRunnersPath));
+        var docsHash = SourceContentHasher.ComputeSha256(File.ReadAllText(paths.RawDocsPath));
+        var largerHash = SourceContentHasher.ComputeSha256(File.ReadAllText(paths.RawLargerRunnersPath));
+        var sourceUrls = ManifestSourceUrls.Resolve(repoRoot, "runner-labels", 2).ToList();
 
         return new SourceManifestEntry
         {
             Dataset = "runner-labels",
-            SourceUrls = [DocsSourceUrl, LargerRunnersDocsUrl],
+            SourceUrls = sourceUrls,
             FetchedAtUtc = DateTimeOffset.UtcNow.ToString("O"),
             RawFileHashes = new Dictionary<string, string>
             {
@@ -48,12 +45,13 @@ internal sealed class GitHubRunnerLabelsFetcher
         client.DefaultRequestHeaders.UserAgent.ParseAdd("Seiton.Update/1.0");
         client.Timeout = TimeSpan.FromSeconds(60);
 
-        var docsContent = await client.GetStringAsync(DocsSourceUrl);
-        var docsHash = ComputeSha256(docsContent);
+        var urls = ManifestSourceUrls.Resolve(repoRoot, "runner-labels", 2);
+        var docsContent = await client.GetStringAsync(urls[0]);
+        var docsHash = SourceContentHasher.ComputeSha256(docsContent);
         UpdateLogger.Info($"[fetch:runner-labels:sources] downloaded docs={docsContent.Length} bytes ({docsHash[..16]}...)");
 
-        var largerContent = await client.GetStringAsync(LargerRunnersDocsUrl);
-        var largerHash = ComputeSha256(largerContent);
+        var largerContent = await client.GetStringAsync(urls[1]);
+        var largerHash = SourceContentHasher.ComputeSha256(largerContent);
         UpdateLogger.Info($"[fetch:runner-labels:sources] downloaded larger-runners={largerContent.Length} bytes ({largerHash[..16]}...)");
 
         var paths = Paths(repoRoot);
@@ -92,10 +90,20 @@ internal sealed class GitHubRunnerLabelsFetcher
             labels = labels.Concat(largerLabels).ToArray();
         }
 
+        var rawFileTuples = new List<(string fullPath, string fileName)>
+        {
+            (paths.RawDocsPath, Path.GetFileName(paths.RawDocsPath)),
+        };
+        if (File.Exists(paths.RawLargerRunnersPath))
+        {
+            rawFileTuples.Add((paths.RawLargerRunnersPath, Path.GetFileName(paths.RawLargerRunnersPath)));
+        }
+
         var parsed = new ParsedRunnerLabelsSnapshot
         {
             SchemaVersion = 1,
             Source = "github-docs-hosted-and-larger-runners",
+            RawSources = Stage2ArtifactRawSources.FromFiles(rawFileTuples.ToArray()),
             Labels = labels
                 .OrderBy(static x => x.Label, StringComparer.Ordinal)
                 .Select(static x => new ParsedRunnerLabelEntry
@@ -205,13 +213,6 @@ internal sealed class GitHubRunnerLabelsFetcher
         };
     }
 
-    private static string ComputeSha256(string content)
-    {
-        var bytes = Encoding.UTF8.GetBytes(content);
-        var hash = SHA256.HashData(bytes);
-        return "sha256:" + Convert.ToHexStringLower(hash);
-    }
-
     private sealed class RunnerLabelsPaths
     {
         public string RawDocsPath { get; set; } = string.Empty;
@@ -225,6 +226,7 @@ internal sealed class GitHubRunnerLabelsFetcher
     {
         public int SchemaVersion { get; set; }
         public string Source { get; set; } = string.Empty;
+        public List<RawSourceRef>? RawSources { get; set; }
         public List<ParsedRunnerLabelEntry> Labels { get; set; } = [];
     }
 

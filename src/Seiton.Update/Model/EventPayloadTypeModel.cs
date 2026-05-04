@@ -5,7 +5,8 @@ namespace Seiton.Update.Model;
 internal sealed record EventPayloadTypesModel(
     int SchemaVersion,
     string Source,
-    IReadOnlyList<EventPayloadEntry> Events);
+    IReadOnlyList<EventPayloadEntry> Events,
+    IReadOnlyList<RawSourceRef>? RawSources = null);
 
 internal sealed record EventPayloadEntry(
     string Name,

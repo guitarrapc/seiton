@@ -419,14 +419,14 @@ public sealed class ExpressionTests
     }
 
     [Test]
-    public async Task InferType_GitHubRetentionDays_ReturnsNumber()
+    public async Task InferType_GitHubRetentionDays_ReturnsString()
     {
         var expression = "github.retention_days"u8;
         var parseResult = ExpressionParser.Parse(expression);
 
         var type = ExpressionSemanticAnalyzer.InferType(parseResult.RootNode, parseResult.Nodes, parseResult.Arguments, expression);
 
-        await Assert.That(type).IsEqualTo(ExprType.Number);
+        await Assert.That(type).IsEqualTo(ExprType.String);
     }
 
     [Test]

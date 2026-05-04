@@ -126,7 +126,7 @@
         },
         {
           "name": "retention_days",
-          "type": "number"
+          "type": "string"
         },
         {
           "name": "run_attempt",
@@ -240,6 +240,22 @@
         },
         {
           "name": "status",
+          "type": "string"
+        },
+        {
+          "name": "workflow_file_path",
+          "type": "string"
+        },
+        {
+          "name": "workflow_ref",
+          "type": "string"
+        },
+        {
+          "name": "workflow_repository",
+          "type": "string"
+        },
+        {
+          "name": "workflow_sha",
           "type": "string"
         }
       ]

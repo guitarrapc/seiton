@@ -1,18 +1,17 @@
-﻿using System.Security.Cryptography;
-using System.Text;
-using System.Text.Json;
+﻿using System.Text.Json;
 using Seiton.Update.Model;
 using Seiton.Update.Parsers;
+using Seiton.Update.Services;
 
 namespace Seiton.Update.Sources;
 
 internal sealed class GitHubPermissionsFetcher
 {
     /// <summary>
-    /// The reusable data file that contains the YAML permissions block with all scopes and allowed values.
-    /// This is the same content rendered at https://docs.github.com/en/actions/writing-workflows/workflow-syntax-for-github-actions#permissions
+    /// Fetches and parses the reusable YAML permissions block (scopes and allowed values) from GitHub Docs.
+    /// Provenance for fetch URL and raw bytes is recorded in <c>data/sources/manifest.json</c>;
+    /// <see cref="ParsedPermissionsSnapshot.SourceUrl"/> mirrors the manifest-configured URL at parse time.
     /// </summary>
-    private const string DocsSourceUrl = "https://raw.githubusercontent.com/github/docs/main/data/reusables/actions/github-token-available-permissions.md";
 
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
@@ -27,12 +26,13 @@ internal sealed class GitHubPermissionsFetcher
         MergeParsedSources(repoRoot);
 
         var paths = Paths(repoRoot);
-        var rawHash = ComputeSha256(File.ReadAllText(paths.RawDocsPath));
+        var rawHash = SourceContentHasher.ComputeSha256(File.ReadAllText(paths.RawDocsPath));
+        var sourceUrls = ManifestSourceUrls.Resolve(repoRoot, "permissions", 1).ToList();
 
         return new SourceManifestEntry
         {
             Dataset = "permissions",
-            SourceUrls = [DocsSourceUrl],
+            SourceUrls = sourceUrls,
             FetchedAtUtc = DateTimeOffset.UtcNow.ToString("O"),
             RawFileHashes = new Dictionary<string, string>
             {
@@ -49,8 +49,9 @@ internal sealed class GitHubPermissionsFetcher
         client.DefaultRequestHeaders.UserAgent.ParseAdd("Seiton.Update/1.0");
         client.Timeout = TimeSpan.FromSeconds(60);
 
-        var docsContent = await client.GetStringAsync(DocsSourceUrl);
-        var docsHash = ComputeSha256(docsContent);
+        var docsUrl = ManifestSourceUrls.ResolveSingle(repoRoot, "permissions");
+        var docsContent = await client.GetStringAsync(docsUrl);
+        var docsHash = SourceContentHasher.ComputeSha256(docsContent);
         UpdateLogger.Info($"[fetch:permissions:sources] downloaded docs={docsContent.Length} bytes ({docsHash[..16]}...)");
 
         var paths = Paths(repoRoot);
@@ -77,10 +78,14 @@ internal sealed class GitHubPermissionsFetcher
         var parser = new GitHubDocsPermissionsMarkdownParser();
         var model = parser.Parse(rawText);
 
+        var sourceUrl = ManifestSourceUrls.ResolveSingle(repoRoot, "permissions");
+
         var snapshot = new ParsedPermissionsSnapshot
         {
             SchemaVersion = 1,
             Source = "github-token-available-permissions-reusable",
+            SourceUrl = sourceUrl,
+            RawSources = Stage2ArtifactRawSources.FromFiles((paths.RawDocsPath, Path.GetFileName(paths.RawDocsPath))),
             Scopes = model.Scopes.Select(s => new ParsedPermissionsSnapshot.ScopeEntry
             {
                 Name = s.Name,
@@ -125,9 +130,13 @@ internal sealed class GitHubPermissionsFetcher
         // Sort alphabetically
         scopes.Sort((a, b) => string.Compare(a.Name, b.Name, StringComparison.Ordinal));
 
+        var provenance = !string.IsNullOrWhiteSpace(parsed.SourceUrl)
+            ? parsed.SourceUrl.Trim()
+            : parsed.Source;
+
         var merged = new MergedPermissions
         {
-            Source = DocsSourceUrl,
+            Source = provenance,
             Scopes = scopes,
         };
 
@@ -148,13 +157,6 @@ internal sealed class GitHubPermissionsFetcher
         };
     }
 
-    private static string ComputeSha256(string content)
-    {
-        var bytes = Encoding.UTF8.GetBytes(content);
-        var hash = SHA256.HashData(bytes);
-        return "sha256:" + Convert.ToHexStringLower(hash);
-    }
-
     private sealed class PermissionsPaths
     {
         public string RawDocsPath { get; set; } = string.Empty;
@@ -166,6 +168,9 @@ internal sealed class GitHubPermissionsFetcher
     {
         public int SchemaVersion { get; set; }
         public string Source { get; set; } = string.Empty;
+        /// <summary>HTTPS URL from manifest configuration for this dataset (same contract as Stage 1 fetch).</summary>
+        public string? SourceUrl { get; set; }
+        public List<RawSourceRef>? RawSources { get; set; }
         public List<ScopeEntry> Scopes { get; set; } = [];
 
         internal sealed class ScopeEntry

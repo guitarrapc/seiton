@@ -1,15 +1,12 @@
-﻿using System.Security.Cryptography;
-using System.Text;
-using System.Text.Json;
+﻿using System.Text.Json;
 using Seiton.Update.Model;
 using Seiton.Update.Parsers;
+using Seiton.Update.Services;
 
 namespace Seiton.Update.Sources;
 
 internal sealed class GitHubFunctionNamesFetcher
 {
-    private const string DocsSourceUrl = "https://raw.githubusercontent.com/github/docs/main/content/actions/reference/workflows-and-actions/expressions.md";
-
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
         WriteIndented = true,
@@ -22,12 +19,13 @@ internal sealed class GitHubFunctionNamesFetcher
         ParseLocalSourceFiles(repoRoot);
 
         var paths = Paths(repoRoot);
-        var docsHash = ComputeSha256(File.ReadAllText(paths.RawDocsPath));
+        var docsHash = SourceContentHasher.ComputeSha256(File.ReadAllText(paths.RawDocsPath));
+        var sourceUrls = ManifestSourceUrls.Resolve(repoRoot, "function-specs", 1).ToList();
 
         return new SourceManifestEntry
         {
             Dataset = "function-specs",
-            SourceUrls = [DocsSourceUrl],
+            SourceUrls = sourceUrls,
             FetchedAtUtc = DateTimeOffset.UtcNow.ToString("O"),
             RawFileHashes = new Dictionary<string, string>
             {
@@ -44,8 +42,9 @@ internal sealed class GitHubFunctionNamesFetcher
         client.DefaultRequestHeaders.UserAgent.ParseAdd("Seiton.Update/1.0");
         client.Timeout = TimeSpan.FromSeconds(60);
 
-        var docsContent = await client.GetStringAsync(DocsSourceUrl);
-        var docsHash = ComputeSha256(docsContent);
+        var docsUrl = ManifestSourceUrls.ResolveSingle(repoRoot, "function-specs");
+        var docsContent = await client.GetStringAsync(docsUrl);
+        var docsHash = SourceContentHasher.ComputeSha256(docsContent);
         UpdateLogger.Info($"[fetch:function-specs:sources] downloaded docs={docsContent.Length} bytes ({docsHash[..16]}...)");
 
         var paths = Paths(repoRoot);
@@ -76,6 +75,7 @@ internal sealed class GitHubFunctionNamesFetcher
         {
             SchemaVersion = 1,
             Source = "github-expressions-docs-raw",
+            RawSources = Stage2ArtifactRawSources.FromFiles((paths.RawDocsPath, Path.GetFileName(paths.RawDocsPath))),
             FunctionNames = names.ToList(),
         };
 
@@ -95,13 +95,6 @@ internal sealed class GitHubFunctionNamesFetcher
         };
     }
 
-    private static string ComputeSha256(string content)
-    {
-        var bytes = Encoding.UTF8.GetBytes(content);
-        var hash = SHA256.HashData(bytes);
-        return "sha256:" + Convert.ToHexStringLower(hash);
-    }
-
     private sealed class FunctionNamesPaths
     {
         public string RawDocsPath { get; set; } = string.Empty;
@@ -112,6 +105,7 @@ internal sealed class GitHubFunctionNamesFetcher
     {
         public int SchemaVersion { get; set; }
         public string Source { get; set; } = string.Empty;
+        public List<RawSourceRef>? RawSources { get; set; }
         public List<string> FunctionNames { get; set; } = [];
     }
 }

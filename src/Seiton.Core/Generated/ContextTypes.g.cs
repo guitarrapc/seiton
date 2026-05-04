@@ -46,7 +46,7 @@ internal static class ContextTypes
                 { new Utf8String("repository_owner"u8), ExprType.String },
                 { new Utf8String("repository_owner_id"u8), ExprType.String },
                 { new Utf8String("repository_visibility"u8), ExprType.String },
-                { new Utf8String("retention_days"u8), ExprType.Number },
+                { new Utf8String("retention_days"u8), ExprType.String },
                 { new Utf8String("run_attempt"u8), ExprType.String },
                 { new Utf8String("run_id"u8), ExprType.String },
                 { new Utf8String("run_number"u8), ExprType.String },
@@ -86,6 +86,10 @@ internal static class ContextTypes
                 { new Utf8String("container"u8), jobType_container },
                 { new Utf8String("services"u8), ExprType.Object(dynamicPropertyType: jobType_services_value) },
                 { new Utf8String("status"u8), ExprType.String },
+                { new Utf8String("workflow_file_path"u8), ExprType.String },
+                { new Utf8String("workflow_ref"u8), ExprType.String },
+                { new Utf8String("workflow_repository"u8), ExprType.String },
+                { new Utf8String("workflow_sha"u8), ExprType.String },
             },
             strict: true);
         var runnerType = ExprType.Object(

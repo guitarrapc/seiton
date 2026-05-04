@@ -1,11 +1,11 @@
-﻿using System.Text.Json;
+using System.Text.Json;
 using Seiton.Update.Model;
 using Seiton.Update.Parsers;
 using Seiton.Update.Services;
 
 namespace Seiton.Update.Sources;
 
-internal sealed class GitHubExpectedKeysFetcher
+internal sealed class GitHubShellsFetcher
 {
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
@@ -19,14 +19,14 @@ internal sealed class GitHubExpectedKeysFetcher
         ParseLocalSourceFiles(repoRoot);
         MergeParsedSources(repoRoot);
 
-        var rawDir = Services.ExpectedKeysSourcePathResolver.ResolveRawDir(repoRoot);
-        var rawPath = Path.Combine(rawDir, "workflow-syntax.md");
+        var rawDir = ShellsSourcePathResolver.ResolveRawDir(repoRoot);
+        var rawPath = Path.Combine(rawDir, "supported-shells.md");
         var docsHash = SourceContentHasher.ComputeSha256(File.ReadAllText(rawPath));
-        var sourceUrls = ManifestSourceUrls.Resolve(repoRoot, "expected-keys", 1).ToList();
+        var sourceUrls = ManifestSourceUrls.Resolve(repoRoot, "shells", 1).ToList();
 
         return new SourceManifestEntry
         {
-            Dataset = "expected-keys",
+            Dataset = "shells",
             SourceUrls = sourceUrls,
             FetchedAtUtc = DateTimeOffset.UtcNow.ToString("O"),
             RawFileHashes = new Dictionary<string, string>
@@ -38,79 +38,78 @@ internal sealed class GitHubExpectedKeysFetcher
 
     public async Task FetchSourceFilesAsync(string repoRoot)
     {
-        UpdateLogger.Info("[fetch:expected-keys:sources] downloading official GitHub source files...");
+        UpdateLogger.Info("[fetch:shells:sources] downloading official GitHub source files...");
 
         using var client = new HttpClient();
         client.DefaultRequestHeaders.UserAgent.ParseAdd("Seiton.Update/1.0");
         client.Timeout = TimeSpan.FromSeconds(60);
 
-        var docsUrl = ManifestSourceUrls.ResolveSingle(repoRoot, "expected-keys");
+        var docsUrl = ManifestSourceUrls.ResolveSingle(repoRoot, "shells");
         var docsContent = await client.GetStringAsync(docsUrl);
         var docsHash = SourceContentHasher.ComputeSha256(docsContent);
-        UpdateLogger.Info($"[fetch:expected-keys:sources] downloaded docs={docsContent.Length} bytes ({docsHash[..16]}...)");
+        UpdateLogger.Info($"[fetch:shells:sources] downloaded docs={docsContent.Length} bytes ({docsHash[..16]}...)");
 
-        var rawDir = Services.ExpectedKeysSourcePathResolver.ResolveRawDir(repoRoot);
+        var rawDir = ShellsSourcePathResolver.ResolveRawDir(repoRoot);
         Directory.CreateDirectory(rawDir);
 
-        var rawPath = Path.Combine(rawDir, "workflow-syntax.md");
+        var rawPath = Path.Combine(rawDir, "supported-shells.md");
         File.WriteAllText(rawPath, TextNormalization.NormalizeToLf(docsContent));
 
-        UpdateLogger.Info($"[fetch:expected-keys:sources] wrote {rawPath}");
+        UpdateLogger.Info($"[fetch:shells:sources] wrote {rawPath}");
     }
 
     public void ParseLocalSourceFiles(string repoRoot)
     {
-        var rawDir = Services.ExpectedKeysSourcePathResolver.ResolveRawDir(repoRoot);
-        var rawPath = Path.Combine(rawDir, "workflow-syntax.md");
+        var rawDir = ShellsSourcePathResolver.ResolveRawDir(repoRoot);
+        var rawPath = Path.Combine(rawDir, "supported-shells.md");
         if (!File.Exists(rawPath))
         {
             throw new FileNotFoundException(
-                "Expected keys raw source files are missing. Run fetch-expected-keys-sources first.",
+                "Shells raw source files are missing. Run fetch-shells-sources first.",
                 rawPath);
         }
 
-        UpdateLogger.Info("[parse:expected-keys:sources] parsing local raw source files...");
+        UpdateLogger.Info("[parse:shells:sources] parsing local raw source files...");
 
         var docsText = File.ReadAllText(rawPath);
-        var parser = new WorkflowSyntaxExpectedKeysParser();
-        var model = parser.Parse(docsText);
+        var parser = new GitHubDocsSupportedShellsMarkdownParser();
+        var rows = parser.Parse(docsText);
 
-        // Serialize to canonical snapshot JSON
-        var snapshot = new ExpectedKeysSnapshot
+        var snapshot = new ShellsSnapshotRoot
         {
             SchemaVersion = 1,
-            Source = "github-workflow-syntax-docs-raw",
+            Source = "github-docs-supported-shells-reusable",
             RawSources = Stage2ArtifactRawSources.FromFiles((rawPath, Path.GetFileName(rawPath))),
-            Sections = model.Sections.Select(static s => new ExpectedKeysSnapshotSection
+            Shells = rows.Select(static r => new ShellsSnapshotShell
             {
-                Name = s.Name,
-                Description = s.Description,
-                Keys = s.Keys.ToList(),
+                Name = r.Name,
+                Platforms = r.Platforms.ToList(),
+                Command = r.Command,
             }).ToList(),
         };
 
         var json = JsonSerializer.Serialize(snapshot, JsonOptions);
-        var parsedDir = ExpectedKeysSourcePathResolver.ResolveParsedDir(repoRoot);
+        var parsedDir = ShellsSourcePathResolver.ResolveParsedDir(repoRoot);
         Directory.CreateDirectory(parsedDir);
 
-        var parsedPath = Path.Combine(parsedDir, "expected-keys.json");
+        var parsedPath = Path.Combine(parsedDir, "shells.json");
         File.WriteAllText(parsedPath, TextNormalization.NormalizeToLf(json + "\n"));
 
-        UpdateLogger.Info($"[parse:expected-keys:sources] wrote {parsedPath} ({model.Sections.Count} sections)");
+        UpdateLogger.Info($"[parse:shells:sources] wrote {parsedPath} ({rows.Count} shells)");
     }
 
     public void MergeParsedSources(string repoRoot)
     {
-        var parsedDir = ExpectedKeysSourcePathResolver.ResolveParsedDir(repoRoot);
-        var parsedPath = Path.Combine(parsedDir, "expected-keys.json");
+        var parsedDir = ShellsSourcePathResolver.ResolveParsedDir(repoRoot);
+        var parsedPath = Path.Combine(parsedDir, "shells.json");
         if (!File.Exists(parsedPath))
         {
             throw new FileNotFoundException(
-                "Expected keys parsed source files are missing. Run parse-expected-keys-sources first.",
+                "Shells parsed source files are missing. Run parse-shells-sources first.",
                 parsedPath);
         }
 
-        UpdateLogger.Info("[merge:expected-keys:sources] merging parsed snapshot into canonical expected-keys.json...");
+        UpdateLogger.Info("[merge:shells:sources] merging parsed snapshot into canonical shells.json...");
 
         var normalized = TextNormalization.NormalizeToLf(File.ReadAllText(parsedPath));
         if (!normalized.EndsWith("\n", StringComparison.Ordinal))
@@ -118,7 +117,7 @@ internal sealed class GitHubExpectedKeysFetcher
             normalized += "\n";
         }
 
-        var primaryPath = Path.Combine(ExpectedKeysSourcePathResolver.ResolvePrimaryDir(repoRoot), "expected-keys.json");
+        var primaryPath = Path.Combine(ShellsSourcePathResolver.ResolvePrimaryDir(repoRoot), "shells.json");
         var existing = File.Exists(primaryPath)
             ? TextNormalization.NormalizeToLf(File.ReadAllText(primaryPath))
             : string.Empty;
@@ -127,26 +126,26 @@ internal sealed class GitHubExpectedKeysFetcher
         {
             Directory.CreateDirectory(Path.GetDirectoryName(primaryPath)!);
             File.WriteAllText(primaryPath, normalized);
-            UpdateLogger.Info($"[merge:expected-keys:sources] wrote {primaryPath}");
+            UpdateLogger.Info($"[merge:shells:sources] wrote {primaryPath}");
         }
         else
         {
-            UpdateLogger.Info("[merge:expected-keys:sources] canonical snapshot already up to date.");
+            UpdateLogger.Info("[merge:shells:sources] canonical snapshot already up to date.");
         }
     }
 
-    private sealed class ExpectedKeysSnapshot
+    private sealed class ShellsSnapshotRoot
     {
         public int SchemaVersion { get; set; }
         public string Source { get; set; } = string.Empty;
         public List<RawSourceRef>? RawSources { get; set; }
-        public List<ExpectedKeysSnapshotSection>? Sections { get; set; }
+        public List<ShellsSnapshotShell>? Shells { get; set; }
     }
 
-    private sealed class ExpectedKeysSnapshotSection
+    private sealed class ShellsSnapshotShell
     {
         public string? Name { get; set; }
-        public string? Description { get; set; }
-        public List<string>? Keys { get; set; }
+        public List<string>? Platforms { get; set; }
+        public string? Command { get; set; }
     }
 }

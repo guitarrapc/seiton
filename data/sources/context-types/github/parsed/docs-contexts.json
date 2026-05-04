@@ -1,6 +1,12 @@
 {
   "schemaVersion": 1,
   "source": "github-contexts-docs-raw",
+  "rawSources": [
+    {
+      "fileName": "contexts.docs.md",
+      "sha256": "sha256:4f21e3affbc4aac5fbf17358038265fc473592829138af2e364288d77261870a"
+    }
+  ],
   "contexts": [
     {
       "name": "github",
@@ -209,6 +215,22 @@
         },
         {
           "path": "status",
+          "type": "string"
+        },
+        {
+          "path": "workflow_ref",
+          "type": "string"
+        },
+        {
+          "path": "workflow_sha",
+          "type": "string"
+        },
+        {
+          "path": "workflow_repository",
+          "type": "string"
+        },
+        {
+          "path": "workflow_file_path",
           "type": "string"
         }
       ]

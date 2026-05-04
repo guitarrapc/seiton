@@ -1,8 +1,8 @@
-﻿using System.Security.Cryptography;
-using System.Text;
-using System.Text.Json;
+﻿using System.Text.Json;
+using System.Text.Json.Serialization;
 using Seiton.Update.Model;
 using Seiton.Update.Parsers;
+using Seiton.Update.Services;
 
 namespace Seiton.Update.Sources;
 
@@ -12,7 +12,13 @@ internal sealed class GitHubPopularActionsFetcher
     {
         WriteIndented = true,
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
-        DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull,
+        DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
+    };
+
+    private static readonly JsonSerializerOptions TargetsFileJsonOptions = new()
+    {
+        PropertyNameCaseInsensitive = true,
+        UnmappedMemberHandling = JsonUnmappedMemberHandling.Disallow,
     };
 
     public async Task<SourceManifestEntry> FetchAsync(string repoRoot)
@@ -27,7 +33,7 @@ internal sealed class GitHubPopularActionsFetcher
         foreach (var source in sources)
         {
             var path = Path.Combine(paths.RawDir, source.RawFileName);
-            hashes[source.RawFileName] = ComputeSha256(File.ReadAllText(path));
+            hashes[source.RawFileName] = SourceContentHasher.ComputeSha256(File.ReadAllText(path));
         }
 
         return new SourceManifestEntry
@@ -69,7 +75,7 @@ internal sealed class GitHubPopularActionsFetcher
         foreach (var source in sources)
         {
             var content = await client.GetStringAsync(source.Url);
-            var hash = ComputeSha256(content);
+            var hash = SourceContentHasher.ComputeSha256(content);
             var rawPath = Path.Combine(paths.RawDir, source.RawFileName);
 
             File.WriteAllText(rawPath, content.Replace("\r\n", "\n"));
@@ -123,6 +129,9 @@ internal sealed class GitHubPopularActionsFetcher
         parsed.Actions = parsed.Actions
             .OrderBy(static x => x.Uses, StringComparer.Ordinal)
             .ToList();
+
+        parsed.RawSources = Stage2ArtifactRawSources.FromFiles(
+            sources.Select(s => (Path.Combine(paths.RawDir, s.RawFileName!), s.RawFileName!)).ToArray());
 
         Directory.CreateDirectory(Path.GetDirectoryName(paths.ParsedPath)!);
         File.WriteAllText(paths.ParsedPath, JsonSerializer.Serialize(parsed, JsonOptions).Replace("\r\n", "\n"));
@@ -231,17 +240,25 @@ internal sealed class GitHubPopularActionsFetcher
         }
 
         var configText = File.ReadAllText(configPath);
-        var config = JsonSerializer.Deserialize<PopularActionsTargetConfig>(configText, new JsonSerializerOptions
+        PopularActionsTargetsFile config;
+        try
         {
-            PropertyNameCaseInsensitive = true,
-        }) ?? throw new InvalidDataException($"Invalid popular-actions target config: {configPath}");
+            config = JsonSerializer.Deserialize<PopularActionsTargetsFile>(configText, TargetsFileJsonOptions)
+                ?? throw new InvalidDataException($"Invalid popular-actions target config: {configPath}");
+        }
+        catch (JsonException ex)
+        {
+            throw new InvalidDataException(
+                $"Invalid popular-actions target config: {configPath}. Remove unknown properties (e.g. obsolete \"url\"); URLs are defined in manifest only. {ex.Message}",
+                ex);
+        }
 
         var sources = (config.Targets ?? [])
             .Select(static x => new PopularActionSource
             {
                 ActionRef = (x.ActionRef ?? string.Empty).Trim(),
                 Uses = (x.Uses ?? string.Empty).Trim(),
-                Url = (x.Url ?? string.Empty).Trim(),
+                Url = string.Empty,
                 RawFileName = (x.RawFileName ?? string.Empty).Trim(),
                 MaxDeprecatedMajorVersion = x.MaxDeprecatedMajorVersion,
             })
@@ -263,11 +280,6 @@ internal sealed class GitHubPopularActionsFetcher
             if (string.IsNullOrWhiteSpace(source.Uses))
             {
                 throw new InvalidDataException($"Popular-actions target config {entryName}.uses is required.");
-            }
-
-            if (string.IsNullOrWhiteSpace(source.Url))
-            {
-                throw new InvalidDataException($"Popular-actions target config {entryName}.url is required.");
             }
 
             if (string.IsNullOrWhiteSpace(source.RawFileName))
@@ -292,20 +304,97 @@ internal sealed class GitHubPopularActionsFetcher
 
             if (string.IsNullOrWhiteSpace(source.ActionRef))
             {
-                source.ActionRef = source.Uses;
+                throw new InvalidDataException($"Popular-actions target config {entryName}.actionRef is required (owner/repo@ref, e.g. actions/checkout@v6).");
+            }
+
+            var atIdx = source.ActionRef.LastIndexOf('@');
+            if (atIdx <= 0 || atIdx == source.ActionRef.Length - 1)
+            {
+                throw new InvalidDataException($"Popular-actions target config {entryName}.actionRef must include a non-empty ref after '@'.");
+            }
+
+            var actionRefPrefix = source.ActionRef[..atIdx].Trim();
+            if (!string.Equals(actionRefPrefix, source.Uses, StringComparison.Ordinal))
+            {
+                throw new InvalidDataException(
+                    $"Popular-actions target config {entryName}.actionRef must start with the same owner/repo as uses (expected '{source.Uses}@…', got '{source.ActionRef}').");
             }
         }
 
-        return sources
+        sources = sources
             .OrderBy(static x => x.Uses, StringComparer.Ordinal)
             .ToList();
+
+        var manifestUrls = ManifestSourceUrls.Resolve(repoRoot, "popular-actions", expectedCount: null);
+        if (manifestUrls.Count != sources.Count)
+        {
+            throw new InvalidDataException(
+                $"popular-actions: manifest.json lists {manifestUrls.Count} sourceUrls but targets.json has {sources.Count} targets. " +
+                "Ensure each target has a matching URL in manifest sourceUrls in uses-ascending order.");
+        }
+
+        for (var i = 0; i < sources.Count; i++)
+        {
+            EnsurePopularActionUrlMatchesTarget(sources[i], manifestUrls[i], i);
+            sources[i].Url = manifestUrls[i];
+        }
+
+        return sources;
     }
 
-    private static string ComputeSha256(string content)
+    /// <summary>
+    /// Ensures the manifest URL points at raw.githubusercontent.com under the same owner/repo/ref as
+    /// <see cref="PopularActionSource.ActionRef"/>, so URL edits cannot fetch a different version or subtree.
+    /// </summary>
+    private static void EnsurePopularActionUrlMatchesTarget(PopularActionSource source, string url, int index)
     {
-        var bytes = Encoding.UTF8.GetBytes(content);
-        var hash = SHA256.HashData(bytes);
-        return "sha256:" + Convert.ToHexStringLower(hash);
+        var uses = source.Uses;
+        if (!Uri.TryCreate(url, UriKind.Absolute, out var uri) ||
+            !string.Equals(uri.Scheme, Uri.UriSchemeHttps, StringComparison.OrdinalIgnoreCase) ||
+            !string.Equals(uri.Host, "raw.githubusercontent.com", StringComparison.OrdinalIgnoreCase))
+        {
+            throw new InvalidDataException(
+                $"popular-actions: manifest sourceUrls[{index}] must be an absolute https URL on raw.githubusercontent.com for uses '{uses}'. url={url}");
+        }
+
+        var segments = uri.AbsolutePath.Split('/', StringSplitOptions.RemoveEmptyEntries);
+        if (segments.Length < 3)
+        {
+            throw new InvalidDataException(
+                $"popular-actions: manifest sourceUrls[{index}] path must be /owner/repo/ref/.../action metadata. uses='{uses}' url={url}");
+        }
+
+        var ownerEnd = uses.IndexOf('/');
+        if (ownerEnd <= 0 || ownerEnd == uses.Length - 1 || uses.IndexOf('/', ownerEnd + 1) >= 0)
+        {
+            throw new InvalidDataException($"popular-actions: targets uses '{uses}' must be exactly owner/repo.");
+        }
+
+        var owner = uses[..ownerEnd];
+        var repo = uses[(ownerEnd + 1)..];
+        if (!string.Equals(segments[0], owner, StringComparison.OrdinalIgnoreCase) ||
+            !string.Equals(segments[1], repo, StringComparison.OrdinalIgnoreCase))
+        {
+            throw new InvalidDataException(
+                $"popular-actions: manifest sourceUrls[{index}] path starts with '{segments[0]}/{segments[1]}' but targets[{index}] uses '{uses}' after sorting. Re-order or fix manifest URLs to match uses order.");
+        }
+
+        var file = segments[^1];
+        if (!file.Equals("action.yml", StringComparison.OrdinalIgnoreCase) &&
+            !file.Equals("action.yaml", StringComparison.OrdinalIgnoreCase))
+        {
+            throw new InvalidDataException(
+                $"popular-actions: manifest sourceUrls[{index}] must reference action.yml or action.yaml. url={url}");
+        }
+
+        var atIdx = source.ActionRef.LastIndexOf('@');
+        var refFromTarget = source.ActionRef[(atIdx + 1)..].Trim();
+        var pathRef = string.Join("/", segments[2..^1]);
+        if (!string.Equals(pathRef, refFromTarget, StringComparison.Ordinal))
+        {
+            throw new InvalidDataException(
+                $"popular-actions: manifest sourceUrls[{index}] path ref is '{pathRef}' but targets actionRef expects ref '{refFromTarget}' (full '{source.ActionRef}'). url={url}");
+        }
     }
 
     private sealed class PopularActionSource
@@ -317,10 +406,22 @@ internal sealed class GitHubPopularActionsFetcher
         public int MaxDeprecatedMajorVersion { get; set; }
     }
 
-    private sealed class PopularActionsTargetConfig
+    /// <summary>targets.json only — download URLs must not appear here (manifest only).</summary>
+    private sealed class PopularActionsTargetsFile
     {
+        [JsonPropertyName("$schema")]
+        public string? JsonSchema { get; set; }
+
         public int SchemaVersion { get; set; } = 1;
-        public List<PopularActionSource>? Targets { get; set; }
+        public List<PopularTargetFileEntry>? Targets { get; set; }
+    }
+
+    private sealed class PopularTargetFileEntry
+    {
+        public string? ActionRef { get; set; }
+        public string? Uses { get; set; }
+        public string? RawFileName { get; set; }
+        public int MaxDeprecatedMajorVersion { get; set; }
     }
 
     private sealed class PopularActionsPaths
@@ -334,6 +435,7 @@ internal sealed class GitHubPopularActionsFetcher
     {
         public int SchemaVersion { get; set; }
         public string Source { get; set; } = string.Empty;
+        public List<RawSourceRef>? RawSources { get; set; }
         public List<ParsedPopularAction> Actions { get; set; } = [];
     }
 

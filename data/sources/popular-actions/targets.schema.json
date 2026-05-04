@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://seiton.local/schemas/popular-actions/targets.schema.json",
   "title": "Seiton Popular Actions Targets",
-  "description": "Repository-managed target set for popular actions updater.",
+  "description": "Repository-managed target set for popular actions updater. Download URLs are in data/sources/manifest.json (dataset popular-actions), in the same order as targets sorted by uses.",
   "type": "object",
   "additionalProperties": false,
   "required": [
@@ -27,28 +27,22 @@
       "type": "object",
       "additionalProperties": false,
       "required": [
+        "actionRef",
         "uses",
-        "url",
         "rawFileName"
       ],
       "properties": {
         "actionRef": {
           "type": "string",
           "minLength": 1,
-          "description": "Display/reference value. If omitted, updater treats it as same as uses."
+          "pattern": "^[^@\\s]+/[^@\\s]+@\\S+$",
+          "description": "Pinned action ref (owner/repo@tag-or-branch) for fetch validation and version checks; must match manifest download URL."
         },
         "uses": {
           "type": "string",
           "minLength": 1,
           "pattern": "^[^@\\s]+/[^@\\s]+$",
           "description": "Canonical uses key, for example actions/checkout"
-        },
-        "url": {
-          "type": "string",
-          "minLength": 1,
-          "format": "uri",
-          "pattern": "^https://",
-          "description": "Immutable metadata source locator"
         },
         "rawFileName": {
           "type": "string",
