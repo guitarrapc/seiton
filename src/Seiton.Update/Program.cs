@@ -31,6 +31,41 @@ app.Add("verify", (string dataset = "all") =>
     }
 });
 
+app.Add("fetch", async (string dataset = "all", bool excludeSchemaOnly = false) =>
+{
+    var code = await RunFetch(repoRoot, dataset, excludeSchemaOnly);
+    if (code != 0)
+    {
+        Environment.ExitCode = code;
+        throw new InvalidOperationException($"fetch failed with code {code}");
+    }
+});
+
+// Orchestrator: full upstream refresh + codegen + verify gate (same dataset order as sync/verify all).
+app.Add("update", async (bool excludeSchemaOnly = false) =>
+{
+    var fetchCode = await RunFetch(repoRoot, "all", excludeSchemaOnly);
+    if (fetchCode != 0)
+    {
+        Environment.ExitCode = fetchCode;
+        throw new InvalidOperationException($"update failed at fetch with code {fetchCode}");
+    }
+
+    var syncCode = RunSync(repoRoot, "all");
+    if (syncCode != 0)
+    {
+        Environment.ExitCode = syncCode;
+        throw new InvalidOperationException($"update failed at sync with code {syncCode}");
+    }
+
+    var verifyCode = RunVerify(repoRoot, "all");
+    if (verifyCode != 0)
+    {
+        Environment.ExitCode = verifyCode;
+        throw new InvalidOperationException($"update failed at verify with code {verifyCode}");
+    }
+});
+
 // Convenience aliases to avoid option handling for the most common workflow.
 app.Add("sync-webhooks", () =>
 {
@@ -724,6 +759,132 @@ try
 catch
 {
     return Environment.ExitCode == 0 ? 1 : Environment.ExitCode;
+}
+
+static async Task<int> RunFetch(string repoRoot, string dataset, bool webhooksExcludeSchemaOnly)
+{
+    if (dataset is "webhooks")
+    {
+        return await WebhookCommands.Fetch(repoRoot, webhooksExcludeSchemaOnly);
+    }
+
+    if (dataset is "availability")
+    {
+        return await AvailabilityCommands.Fetch(repoRoot);
+    }
+
+    if (dataset is "popular-actions")
+    {
+        return await PopularActionsCommands.Fetch(repoRoot);
+    }
+
+    if (dataset is "runner-labels")
+    {
+        return await RunnerLabelsCommands.Fetch(repoRoot);
+    }
+
+    if (dataset is "context-types")
+    {
+        return await ContextTypesCommands.Fetch(repoRoot);
+    }
+
+    if (dataset is "function-specs")
+    {
+        return await FunctionSpecsCommands.Fetch(repoRoot);
+    }
+
+    if (dataset is "permissions")
+    {
+        return await PermissionsCommands.Fetch(repoRoot);
+    }
+
+    if (dataset is "iana-timezones")
+    {
+        return await IanaTimeZonesCommands.Fetch(repoRoot);
+    }
+
+    if (dataset is "shells")
+    {
+        return await ShellsCommands.Fetch(repoRoot);
+    }
+
+    if (dataset is "expected-keys")
+    {
+        return await ExpectedKeysCommands.Fetch(repoRoot);
+    }
+
+    if (dataset is "event-payload-types")
+    {
+        return await EventPayloadTypesCommands.Fetch(repoRoot);
+    }
+
+    if (dataset is "all")
+    {
+        var code = await WebhookCommands.Fetch(repoRoot, webhooksExcludeSchemaOnly);
+        if (code != 0)
+        {
+            return code;
+        }
+
+        code = await AvailabilityCommands.Fetch(repoRoot);
+        if (code != 0)
+        {
+            return code;
+        }
+
+        code = await PopularActionsCommands.Fetch(repoRoot);
+        if (code != 0)
+        {
+            return code;
+        }
+
+        code = await RunnerLabelsCommands.Fetch(repoRoot);
+        if (code != 0)
+        {
+            return code;
+        }
+
+        code = await ContextTypesCommands.Fetch(repoRoot);
+        if (code != 0)
+        {
+            return code;
+        }
+
+        code = await FunctionSpecsCommands.Fetch(repoRoot);
+        if (code != 0)
+        {
+            return code;
+        }
+
+        code = await PermissionsCommands.Fetch(repoRoot);
+        if (code != 0)
+        {
+            return code;
+        }
+
+        code = await IanaTimeZonesCommands.Fetch(repoRoot);
+        if (code != 0)
+        {
+            return code;
+        }
+
+        code = await ShellsCommands.Fetch(repoRoot);
+        if (code != 0)
+        {
+            return code;
+        }
+
+        code = await ExpectedKeysCommands.Fetch(repoRoot);
+        if (code != 0)
+        {
+            return code;
+        }
+
+        return await EventPayloadTypesCommands.Fetch(repoRoot);
+    }
+
+    UpdateLogger.Error($"Unsupported fetch dataset: {dataset}");
+    return 1;
 }
 
 static int RunSync(string repoRoot, string dataset)

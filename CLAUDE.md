@@ -62,6 +62,9 @@ data/sources/{dataset}/github/
 - `sync-{dataset}` — generate `.g.cs` from snapshot/source JSON
 - `verify-{dataset}` — check `.g.cs` is up to date (CI)
 - `validate-{dataset}` — cross-check source data against docs (optional)
+- **`fetch --dataset all`** — run every dataset’s `fetch-{dataset}` orchestrator in dependency order (network)
+- **`sync --dataset all`** / **`verify --dataset all`** — regenerate or verify every `.g.cs`
+- **`update`** — `fetch --dataset all`, then `sync --dataset all`, then `verify --dataset all` (full maintainer refresh)
 
 Not all datasets implement all stages. Some use hand-written JSON as primary source and only implement sync/verify. See `.github/docs/Seiton_Update_spec.md` for details.
 

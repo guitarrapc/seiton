@@ -364,10 +364,13 @@ Per-dataset commands follow this naming pattern:
 
 | Command | Description |
 |---|---|
+| `fetch --dataset {name\|all}` | Run the `fetch-{dataset}` orchestrator (Stage 1–3 + manifest for that dataset) for one dataset or **all** in the same order as `sync`/`verify` |
+| `fetch --dataset all --exclude-schema-only` | Same as full fetch, but the **webhooks** step uses schema-excluded mode (same flag as `fetch-webhooks`) |
 | `sync --dataset {name\|all}` | Run sync for specified dataset or all datasets |
 | `verify --dataset {name\|all}` | Run verify for specified dataset or all datasets |
+| `update` | Run **`fetch --dataset all`**, then **`sync --dataset all`**, then **`verify --dataset all`**; optional `--exclude-schema-only` applies to the webhooks fetch step |
 
-`sync --dataset all` / `verify --dataset all` processes every dataset in a fixed internal order: webhooks → availability → popular-actions → runner-labels → context-types → function-specs → permissions → iana-timezones → shells → expected-keys → event-payload-types.
+`fetch --dataset all` / `sync --dataset all` / `verify --dataset all` process every dataset in a fixed internal order: webhooks → availability → popular-actions → runner-labels → context-types → function-specs → permissions → iana-timezones → shells → expected-keys → event-payload-types.
 
 ### 5.4 Exit Codes
 
@@ -499,8 +502,7 @@ CI `verify` on generated `.g.cs` and `Seiton.Update.Tests` contract tests on com
 
 ```
 schedule + workflow_dispatch
-  → fetch all datasets (network)
-  → sync --dataset all (codegen)
+  → update   # or: fetch --dataset all → sync --dataset all → verify --dataset all
   → dotnet test (validate)
   → if changes detected → auto PR
 ```
@@ -510,6 +512,14 @@ schedule + workflow_dispatch
 Individual datasets can be refreshed independently:
 
 ```shell
+# Full upstream refresh, regenerate all .g.cs, and verify (one command)
+dotnet run --project src/Seiton.Update -- update
+
+# Or as separate steps
+dotnet run --project src/Seiton.Update -- fetch --dataset all
+dotnet run --project src/Seiton.Update -- sync --dataset all
+dotnet run --project src/Seiton.Update -- verify --dataset all
+
 # Refresh webhooks end-to-end
 dotnet run --project src/Seiton.Update -- fetch-webhooks
 dotnet run --project src/Seiton.Update -- sync-webhooks
