@@ -13,6 +13,7 @@ public sealed class IfExprWrapperRule() : RuleBase(RuleId.IfExprWrapper)
     private Utf8Slice _lastSlice;
     private string? _lastMessage;
     private string? _lastFixText;
+    private bool _lastContainsMarker;
 
     public override string Name => "If Expression Wrapper Rule";
 
@@ -68,12 +69,13 @@ public sealed class IfExprWrapperRule() : RuleBase(RuleId.IfExprWrapper)
         }
 
         // Determine if auto-fix is safe
-        var canFix = CanOfferAutoFix(condition, raw);
+        var containsMarker = ExpressionScanHelpers.ContainsExpressionMarker(raw);
+        var canFix = CanOfferAutoFix(raw, containsMarker);
 
         // This is an expression without ${{ }} wrapper — emit warning with optional auto-fix
         var slice = Arena.GetStringSlice(condition);
         var range = Arena.GetStringRange(condition);
-        var (message, fixText) = GetOrBuildDiagnosticStrings(slice, Config.Utf8Yaml);
+        var (message, fixText) = GetOrBuildDiagnosticStrings(slice, Config.Utf8Yaml, containsMarker);
 
         DiagnosticFix? fix = null;
         if (canFix)
@@ -108,7 +110,7 @@ public sealed class IfExprWrapperRule() : RuleBase(RuleId.IfExprWrapper)
     }
 
     /// <summary>Determines whether auto-fix is safe for this condition.</summary>
-    private bool CanOfferAutoFix(StringNodeId condition, ReadOnlySpan<byte> raw)
+    private static bool CanOfferAutoFix(ReadOnlySpan<byte> raw, bool containsMarker)
     {
         // Block scalars (trailing \n) — fix would break YAML structure
         if (raw.Length > 0 && raw[raw.Length - 1] == (byte)'\n')
@@ -117,7 +119,7 @@ public sealed class IfExprWrapperRule() : RuleBase(RuleId.IfExprWrapper)
         }
 
         // Contains ${{ marker but isn't a clean wrapper — fix would nest markers
-        if (ExpressionScanHelpers.ContainsExpressionMarker(raw))
+        if (containsMarker)
         {
             return false;
         }
@@ -151,10 +153,11 @@ public sealed class IfExprWrapperRule() : RuleBase(RuleId.IfExprWrapper)
         return new TextEdit(offset, length, fixText);
     }
 
-    private (string Message, string FixText) GetOrBuildDiagnosticStrings(Utf8Slice currentSlice, byte[] utf8Yaml)
+    private (string Message, string FixText) GetOrBuildDiagnosticStrings(Utf8Slice currentSlice, byte[] utf8Yaml, bool containsMarker)
     {
         // §9: reuse cached strings when the same condition bytes repeat (same file only)
         if (_lastMessage is not null
+            && _lastContainsMarker == containsMarker
             && ReferenceEquals(_lastYaml, utf8Yaml)
             && currentSlice.Length == _lastSlice.Length
             && utf8Yaml.AsSpan(currentSlice.Offset, currentSlice.Length)
@@ -171,13 +174,16 @@ public sealed class IfExprWrapperRule() : RuleBase(RuleId.IfExprWrapper)
         }
 
         var rawText = System.Text.Encoding.UTF8.GetString(rawSpan);
-        var message = $"if: condition \"{rawText}\" is missing ${{{{ }}}} wrapper; expressions should be wrapped in ${{{{ }}}}";
+        var message = containsMarker
+            ? $"if: condition \"{rawText}\" is not properly wrapped in ${{{{ }}}}; use a single ${{{{ expression }}}}"
+            : $"if: condition \"{rawText}\" is missing ${{{{ }}}} wrapper; expressions should be wrapped in ${{{{ }}}}";
         var fixText = $"${{{{ {rawText} }}}}";
 
         _lastYaml = utf8Yaml;
         _lastSlice = currentSlice;
         _lastMessage = message;
         _lastFixText = fixText;
+        _lastContainsMarker = containsMarker;
 
         return (message, fixText);
     }

@@ -6560,6 +6560,9 @@ public sealed class RuleInterfaceTests
         // This fires (not a clean wrapper) but must NOT offer fix (would nest ${{ }})
         await Assert.That(diagnostics).Count().IsGreaterThanOrEqualTo(1);
         await Assert.That(diagnostics[0].Fix is null).IsTrue();
+        // Message should say "not properly wrapped" (not "missing wrapper") when ${{ is already present
+        await Assert.That(diagnostics[0].Message).DoesNotContain("missing");
+        await Assert.That(diagnostics[0].Message).Contains("not properly wrapped");
     }
 
     [Test]
