@@ -179,7 +179,7 @@ Column definitions:
 | `forbidden-uses` | ✓ | — | Warn/Error per policy when `uses:` references violate configured allow/deny patterns. |
 | `ref-version-mismatch` | ✓ | — | Warn when symbolic ref/version intent mismatches resolved commit lineage expectations. |
 | `use-trusted-publishing` | ✓ | — | Warn when publishing/release flows do not use trusted publishing/OIDC-based provenance paths where expected. |
-| `if-expr-wrapper` | ✓ | ✓ (safe cases) | Warn when `if:` conditions are missing the `${{ }}` expression wrapper; auto-fix offered only for unquoted single-line scalars without existing `${{` markers. |
+| `if-expr-wrapper` | ✓ | ✓ (safe cases) | Warn when `if:` conditions are missing the `${{ }}` expression wrapper; auto-fix offered for single-line scalars (including quoted scalars) without existing `${{` markers. |
 
 Rule set compatibility policy:
 
