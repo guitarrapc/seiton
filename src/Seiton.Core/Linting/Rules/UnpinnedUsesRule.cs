@@ -11,8 +11,6 @@ namespace Seiton.Core.Linting.Rules;
 /// <summary>Flags action references not pinned to a full commit SHA.</summary>
 public sealed class UnpinnedUsesRule() : RuleBase(RuleId.UnpinnedUses)
 {
-    private const int OwnerRepoKeyStackBytes = 512;
-
     // Cache last-produced "not pinned" message and decoded text to avoid repeated string allocation
     // for the same action ref (common: all steps use the same action)
     private Utf8Slice _lastUnpinnedStepUsesSlice;
@@ -33,7 +31,7 @@ public sealed class UnpinnedUsesRule() : RuleBase(RuleId.UnpinnedUses)
             _ignoreActionsUtf8 = new byte[ignoreActions.Count][];
             for (var i = 0; i < ignoreActions.Count; i++)
             {
-                _ignoreActionsUtf8[i] = Encoding.UTF8.GetBytes(ignoreActions[i]);
+                _ignoreActionsUtf8[i] = Encoding.UTF8.GetBytes(ignoreActions[i].ToLowerInvariant());
             }
         }
         else
@@ -389,30 +387,39 @@ public sealed class UnpinnedUsesRule() : RuleBase(RuleId.UnpinnedUses)
         }
 
         var need = owner.Length + 1 + repo.Length;
-        if (need <= OwnerRepoKeyStackBytes)
+        Span<byte> scratch = stackalloc byte[need <= 128 ? need : 0];
+        byte[]? rented = null;
+        if (need > 128)
         {
-            Span<byte> scratch = stackalloc byte[OwnerRepoKeyStackBytes];
-            if (!TryGetOwnerRepoPolicyKey(actionPath, scratch, out var ownerRepoKey))
-            {
-                return false;
-            }
-
-            return MatchAnyIgnorePattern(ownerRepoKey);
+            rented = ArrayPool<byte>.Shared.Rent(need);
+            scratch = rented.AsSpan(0, need);
         }
 
-        var rented = ArrayPool<byte>.Shared.Rent(need);
         try
         {
-            if (!TryGetOwnerRepoPolicyKey(actionPath, rented.AsSpan(0, need), out var ownerRepoKey))
+            // Write ASCII-lowercased owner/repo key directly (avoids re-parsing in TryGetOwnerRepoPolicyKey)
+            var o = 0;
+            for (var i = 0; i < owner.Length; i++)
             {
-                return false;
+                var b = owner[i];
+                scratch[o++] = b is >= (byte)'A' and <= (byte)'Z' ? (byte)(b + 32) : b;
             }
 
-            return MatchAnyIgnorePattern(ownerRepoKey);
+            scratch[o++] = (byte)'/';
+            for (var i = 0; i < repo.Length; i++)
+            {
+                var b = repo[i];
+                scratch[o++] = b is >= (byte)'A' and <= (byte)'Z' ? (byte)(b + 32) : b;
+            }
+
+            return MatchAnyIgnorePattern(scratch[..need]);
         }
         finally
         {
-            ArrayPool<byte>.Shared.Return(rented);
+            if (rented is not null)
+            {
+                ArrayPool<byte>.Shared.Return(rented);
+            }
         }
     }
 

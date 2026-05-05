@@ -181,8 +181,8 @@ public sealed class LintEngine
             normalizedRules.Rules,
             config?.Fix,
             config?.Network,
-            config?.Output);
-        _effectiveConfig.Verbose = config?.Verbose ?? false;
+            config?.Output,
+            config?.Verbose ?? false);
         var effectiveConfig = _effectiveConfig;
 
         _activeRules.Clear();

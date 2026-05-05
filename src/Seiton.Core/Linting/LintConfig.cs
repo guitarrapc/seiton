@@ -137,7 +137,8 @@ public sealed class LintConfig
         IReadOnlyDictionary<string, RuleConfig>? rules,
         FixConfig? fix,
         NetworkConfig? network,
-        OutputConfig? output)
+        OutputConfig? output,
+        bool verbose = false)
     {
         var contentHash = ComputeContentHash(utf8Yaml);
         var sameContent = contentHash == _sourceContentHash
@@ -152,6 +153,7 @@ public sealed class LintConfig
         _fix = fix ?? DefaultFix;
         _network = network ?? DefaultNetwork;
         _output = output ?? DefaultOutput;
+        Verbose = verbose;
         if (!sameContent)
         {
             _lineStarts = null;
