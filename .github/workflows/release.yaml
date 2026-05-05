@@ -78,6 +78,9 @@ jobs:
         run: dotnet workload install wasm-tools
       - name: Build
         run: dotnet build -c Release
+      - name: Install Playwright (Chromium) for playground UI tests
+        run: pwsh tests/Seiton.Playground.Tests/bin/Release/net10.0/playwright.ps1
+          install chromium
       - name: Test
         run: dotnet test -c Release --no-build
       - name: Verify generated data
@@ -175,7 +178,7 @@ jobs:
 
       - name: Create GitHub Release
         run: |
-          gh release create "$TAG" release/* --repo "$GITHUB_REPOSITORY" --title "${VERSION}" --generate-notes
+          gh release create "$TAG" release/* --repo "$GITHUB_REPOSITORY" --title "${VERSION}" --generate-notes --draft
         env:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ needs.validate.outputs.tag }}
