@@ -30,15 +30,17 @@ jobs:
         run: |
           set -euo pipefail
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            RAW="${{ inputs.tag }}"
+            RAW="${TAG}"
             TAG="v${RAW#v}"
           else
             TAG="${GITHUB_REF#refs/tags/}"
           fi
           echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
+        env:
+          TAG: ${{ inputs.tag }}
 
       - name: Verify tag on remote (workflow_dispatch)
-        if: github.event_name == 'workflow_dispatch'
+        if: ${{ github.event_name == 'workflow_dispatch' }}
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
@@ -126,13 +128,13 @@ jobs:
           publish/
 
       - name: Create archive (Linux/macOS)
-        if: runner.os != 'Windows'
+        if: ${{ runner.os != 'Windows' }}
         run: |
           cd publish
           tar czf ../${{ matrix.artifact }}.tar.gz *
 
       - name: Create archive (Windows)
-        if: runner.os == 'Windows'
+        if: ${{ runner.os == 'Windows' }}
         shell: pwsh
         run: |
           Compress-Archive -Path publish/* -DestinationPath ${{ matrix.artifact }}.zip
