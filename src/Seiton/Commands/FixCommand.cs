@@ -72,23 +72,26 @@ internal static class FixCommand
         }
 
         // Build pin remediation engine if network pin/image resolution is enabled.
+        // CLI flags override config; config is used as fallback.
         // GitHub and OCI use separate HttpClients: GitHub bearer calls only follow same-origin redirects;
         // registry clients may rely on cross-origin redirects (e.g. auth challenges).
         PinRemediationEngine? pinRemediation = null;
         HttpClient? githubHttpClient = null;
         HttpClient? ociHttpClient = null;
-        if (enablePinNetwork || enableImageNetwork)
+        var effectivePinNetwork = enablePinNetwork || (lintConfig?.Fix.Pinning.EnableNetwork ?? false);
+        var effectiveImageNetwork = enableImageNetwork || (lintConfig?.Fix.Images.EnableNetwork ?? false);
+        if (effectivePinNetwork || effectiveImageNetwork)
         {
-            githubHttpClient = enablePinNetwork ? GitHubApiHttpClientFactory.CreateForGitHubApi() : null;
-            ociHttpClient = enableImageNetwork ? new HttpClient() : null;
+            githubHttpClient = effectivePinNetwork ? GitHubApiHttpClientFactory.CreateForGitHubApi() : null;
+            ociHttpClient = effectiveImageNetwork ? new HttpClient() : null;
             var networkConfig = lintConfig?.Network ?? new NetworkConfig();
             var pinningConfig = lintConfig?.Fix.Pinning ?? new FixPinningConfig();
             var imagesConfig = lintConfig?.Fix.Images ?? new FixImagesConfig();
 
-            IActionShaResolver? shaResolver = enablePinNetwork
+            IActionShaResolver? shaResolver = effectivePinNetwork
                 ? new GitHubActionShaResolver(githubHttpClient!, pinningConfig, networkConfig.GitHub)
                 : null;
-            IImageDigestResolver? imageResolver = enableImageNetwork
+            IImageDigestResolver? imageResolver = effectiveImageNetwork
                 ? new OciImageDigestResolver(ociHttpClient!, imagesConfig)
                 : null;
 

@@ -41,9 +41,10 @@ Out of scope:
 
 1. The CLI is a thin wrapper. No lint/parse/fix logic lives here.
 2. All user-supplied flags and environment variables are translated into `LintConfig` before passing to `Seiton.Core`.
-3. A single config path flows through `LintEngine` — CLI options that overlap with config keys override or supplement the loaded config in a defined precedence order.
-4. Deterministic output: given identical inputs, CLI output bytes must be identical.
-5. NativeAOT: no reflection-based serialization at startup; all JSON/output paths must be AOT-compatible.
+3. **Config-first**: every CLI flag that has a corresponding config-file key must use the config value as its effective default. The CLI flag only *overrides* the config value — it never ignores it. If a feature is enabled in the config file, it must be active even when the CLI flag is not explicitly passed.
+4. A single config path flows through `LintEngine` — CLI options that overlap with config keys override or supplement the loaded config in a defined precedence order.
+5. Deterministic output: given identical inputs, CLI output bytes must be identical.
+6. NativeAOT: no reflection-based serialization at startup; all JSON/output paths must be AOT-compatible.
 
 ---
 
@@ -152,12 +153,13 @@ All flags apply to the default root command unless otherwise noted.
 |---|---|---|---|---|
 | `--dry-run` | | `bool` | `false` | Print unified diffs to stdout; do not modify files. |
 | `--check` | | `bool` | `false` | Exit non-zero if fixable diagnostics exist; do not apply fixes. |
-| `--enable-pin-network` | | `bool` | `false` | Override `fix.pinning.enable-network: true` for this run. |
-| `--enable-image-network` | | `bool` | `false` | Override `fix.images.enable-network: true` for this run. |
+| `--enable-pin-network` | | `bool` | `false` | Force-enable network access for action SHA resolution. When omitted, the effective value comes from `fix.pinning.enable-network` in config. |
+| `--enable-image-network` | | `bool` | `false` | Force-enable network access for container image digest resolution. When omitted, the effective value comes from `fix.images.enable-network` in config. |
 
 Operational rule:
 
 - `--dry-run`, `--check`, `--enable-pin-network`, and `--enable-image-network` are valid only when fix mode is active (`--fix` or `fix` subcommand).
+- Network-assisted remediation is active when **either** the CLI flag is passed **or** the corresponding config key is `true`. The CLI flag is a force-enable override — it cannot disable a config-enabled setting.
 
 ### 3.4 Init Flags (init subcommand)
 
@@ -241,6 +243,8 @@ For each configurable setting, the effective value is resolved in this order (hi
 
 This ensures users can always override config-file defaults at the command line without editing the file.
 
+**Implication for boolean enable-flags**: For flags like `--enable-pin-network` that map to config boolean keys (`fix.pinning.enable-network`), the effective value is `CLI flag || config value`. The CLI flag can only force-enable; it cannot force-disable a config-enabled setting. To disable, the user must change the config file.
+
 ### 5.2 Config Path Resolution
 
 1. If `--config` / `SEITON_CONFIG` is set, use that path exclusively. Error if file does not exist.
@@ -261,15 +265,18 @@ Operational clarification:
 
 ### 5.3 Flag-to-Config Mapping
 
-| CLI flag / env var | `LintConfig` field |
-|---|---|
-| `--ignore` | `LintConfig.IgnorePatterns` (additive merge with config-file patterns) |
-| `--min-severity` | filter applied post-lint before output (not stored in `LintConfig`) |
-| `--enable-pin-network` | `FixPinningConfig.EnableNetwork` (override to `true`) |
-| `--enable-image-network` | `FixImagesConfig.EnableNetwork` (override to `true`) |
-| `SEITON_GITHUB_TOKEN` / `GITHUB_TOKEN` | resolved by `GitHubNetworkConfig` token resolution (not stored in config file) |
+| CLI flag / env var | `LintConfig` field | Merge semantics |
+|---|---|---|
+| `--ignore` | `LintConfig.IgnorePatterns` | Additive merge with config-file patterns |
+| `--min-severity` | (post-lint filter) | Applied after lint; not stored in `LintConfig` |
+| `--verbose` | `LintConfig.Verbose` | CLI-only (no config key); sets `true` when passed |
+| `--enable-pin-network` | `FixPinningConfig.EnableNetwork` | `CLI \|\| config` — force-enable override |
+| `--enable-image-network` | `FixImagesConfig.EnableNetwork` | `CLI \|\| config` — force-enable override |
+| `SEITON_GITHUB_TOKEN` / `GITHUB_TOKEN` | (runtime token) | Resolved by `GitHubNetworkConfig` token resolution; not stored in config file |
 
 All other behavior comes from the resolved `LintConfig` loaded from the config file.
+
+**Implementation rule**: When adding a new CLI flag that maps to a config key, always compute the effective value as `cliFlag || configValue` (for booleans) or `cliValue ?? configValue ?? default` (for nullable types). The CLI must never silently ignore a config-file setting.
 
 ---
 
