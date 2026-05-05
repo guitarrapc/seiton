@@ -1,19 +1,22 @@
 name: Deploy Playground
 
-on:
-  push:
-    tags:
-      - 'v*'
-  workflow_dispatch:
-    inputs:
-      version:
-        description: 'Existing Git tag to deploy (e.g. v1.0.0 or 1.0.0). Must already exist on the remote.'
-        required: true
-        type: string
-
 concurrency:
   group: pages
   cancel-in-progress: false
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Existing Git tag to deploy (e.g. v1.0.0 or 1.0.0). Must already
+          exist on the remote."
+        required: true
+        type: string
+
+permissions: {}
 
 jobs:
   build:
@@ -51,7 +54,8 @@ jobs:
         with:
           persist-credentials: false
           fetch-depth: 0
-          ref: ${{ github.event_name == 'workflow_dispatch' && steps.tag.outputs.ref || github.ref }}
+          ref: ${{ github.event_name == 'workflow_dispatch' && steps.tag.outputs.ref ||
+            github.ref }}
 
       - name: Deploy summary
         run: |
@@ -59,14 +63,15 @@ jobs:
           echo "- **Ref:** \`${{ github.event_name == 'workflow_dispatch' && steps.tag.outputs.ref || github.ref }}\`" >> "$GITHUB_STEP_SUMMARY"
           echo "- **Commit:** \`$(git rev-parse HEAD)\`" >> "$GITHUB_STEP_SUMMARY"
 
-      - uses: actions/setup-dotnet@v4
+      - uses: guitarrapc/actions/.github/actions/setup-dotnet@main
         with:
-          dotnet-version: '10.0.x'
+          dotnet-version: 10.0
       - name: Install wasm-tools workload
         run: dotnet workload install wasm-tools
       # No -p:Version: the tree at this ref already defines Version (Directory.Build.props etc.).
       - name: Publish Playground (browser-wasm Release)
-        run: dotnet publish src/Seiton.Playground/Seiton.Playground.csproj -c Release -r browser-wasm -o publish/
+        run: |
+          dotnet publish src/Seiton.Playground/Seiton.Playground.csproj -c Release -r browser-wasm -o publish/
       - name: Add .nojekyll
         run: touch publish/wwwroot/.nojekyll
       - uses: actions/upload-pages-artifact@v3
