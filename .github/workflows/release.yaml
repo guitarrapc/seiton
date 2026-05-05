@@ -174,13 +174,9 @@ jobs:
           echo '```' >> "$GITHUB_STEP_SUMMARY"
 
       - name: Create GitHub Release
+        run: |
+          gh release create "$TAG" release/* --repo "$GITHUB_REPOSITORY" --title "${VERSION}" --generate-notes
         env:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ needs.validate.outputs.tag }}
           VERSION: ${{ needs.validate.outputs.version }}
-        run: |
-          set -euo pipefail
-          gh release create "$TAG" release/* \
-            --repo "$GITHUB_REPOSITORY" \
-            --title "seiton ${VERSION}" \
-            --generate-notes
