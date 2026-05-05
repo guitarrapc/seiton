@@ -45,8 +45,11 @@ internal static class FixCommand
         if (CheckCommand.HasConfigErrors(configDiags, resolvedFormat, colorEnabled, oneline))
             return ExitCode.FatalError;
 
-        if (verbose && lintConfig is not null)
+        if (verbose)
+        {
+            lintConfig ??= new LintConfig();
             lintConfig.Verbose = true;
+        }
 
         CliConfigBridge.WriteResolvedConfigVerbose(Console.Error, verbose, configPath);
 
@@ -110,6 +113,7 @@ internal static class FixCommand
                 Exclusions = lintConfig?.Exclusions,
                 Fix = (lintConfig?.Fix ?? new FixConfig()) with { Enabled = true },
                 Network = lintConfig?.Network ?? new NetworkConfig(),
+                Verbose = lintConfig?.Verbose ?? false,
             };
 
             for (var i = 0; i < resolvedFiles.Length; i++)

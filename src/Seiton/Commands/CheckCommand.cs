@@ -39,8 +39,11 @@ internal static class CheckCommand
         if (HasConfigErrors(configDiags, resolvedFormat, colorEnabled, oneline))
             return ExitCode.FatalError;
 
-        if (verbose && lintConfig is not null)
+        if (verbose)
+        {
+            lintConfig ??= new LintConfig();
             lintConfig.Verbose = true;
+        }
 
         CliConfigBridge.WriteResolvedConfigVerbose(Console.Error, verbose, configPath);
 

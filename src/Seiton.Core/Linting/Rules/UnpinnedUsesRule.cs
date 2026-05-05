@@ -383,7 +383,12 @@ public sealed class UnpinnedUsesRule() : RuleBase(RuleId.UnpinnedUses)
             return false;
         }
 
-        var need = actionPath.Length; // owner/repo is always <= actionPath length
+        if (!TryParseOwnerRepoSegments(actionPath, out var owner, out var repo))
+        {
+            return false;
+        }
+
+        var need = owner.Length + 1 + repo.Length;
         if (need <= OwnerRepoKeyStackBytes)
         {
             Span<byte> scratch = stackalloc byte[OwnerRepoKeyStackBytes];
