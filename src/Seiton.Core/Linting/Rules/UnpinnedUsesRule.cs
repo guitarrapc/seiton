@@ -95,7 +95,7 @@ public sealed class UnpinnedUsesRule() : RuleBase(RuleId.UnpinnedUses)
             if (Config.Verbose)
             {
                 var ignoredUsesText = Decode(Arena.GetStringSlice(workflowCall.Uses));
-                AddJobInfo(job, $"unpinned-uses: ignored '{ignoredUsesText}' (matched ignore-actions pattern)", usesLocation);
+                AddJobInfo(job, $"ignored '{ignoredUsesText}' (matched ignore-actions pattern)", usesLocation);
             }
 
             return;
@@ -178,7 +178,7 @@ public sealed class UnpinnedUsesRule() : RuleBase(RuleId.UnpinnedUses)
             if (Config.Verbose)
             {
                 var ignoredUsesText = Decode(Arena.GetStringSlice(actionExec.Uses));
-                AddStepInfo(step, $"unpinned-uses: ignored '{ignoredUsesText}' (matched ignore-actions pattern)", usesLocation);
+                AddStepInfo(step, $"ignored '{ignoredUsesText}' (matched ignore-actions pattern)", usesLocation);
             }
 
             return;
