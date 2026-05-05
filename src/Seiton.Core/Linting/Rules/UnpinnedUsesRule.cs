@@ -1,4 +1,6 @@
-﻿using Seiton.Core.Linting.PinRemediation;
+﻿using System.Buffers;
+using System.Text;
+using Seiton.Core.Linting.PinRemediation;
 using Seiton.Core.Parsing;
 using Seiton.Core.Parsing.Ast;
 
@@ -9,13 +11,36 @@ namespace Seiton.Core.Linting.Rules;
 /// <summary>Flags action references not pinned to a full commit SHA.</summary>
 public sealed class UnpinnedUsesRule() : RuleBase(RuleId.UnpinnedUses)
 {
+    private const int OwnerRepoKeyStackBytes = 512;
+
     // Cache last-produced "not pinned" message and decoded text to avoid repeated string allocation
     // for the same action ref (common: all steps use the same action)
     private Utf8Slice _lastUnpinnedStepUsesSlice;
     private string? _lastUnpinnedStepMessage;
     private string? _lastDecodedUsesText;
 
+    private byte[][] _ignoreActionsUtf8 = [];
+
     public override string Name => "Unpinned Uses Rule";
+
+    public override void SetConfig(LintConfig config)
+    {
+        base.SetConfig(config);
+        var ruleConfig = config.GetRuleConfig(Id);
+        var ignoreActions = ruleConfig?.IgnoreActions;
+        if (ignoreActions is { Count: > 0 })
+        {
+            _ignoreActionsUtf8 = new byte[ignoreActions.Count][];
+            for (var i = 0; i < ignoreActions.Count; i++)
+            {
+                _ignoreActionsUtf8[i] = Encoding.UTF8.GetBytes(ignoreActions[i]);
+            }
+        }
+        else
+        {
+            _ignoreActionsUtf8 = [];
+        }
+    }
 
     public override void VisitWorkflowPre(Workflow workflow)
     {
@@ -64,6 +89,17 @@ public sealed class UnpinnedUsesRule() : RuleBase(RuleId.UnpinnedUses)
 
         if (IsFullCommitSha(parsedJob.Ref))
         {
+            return;
+        }
+
+        if (IsIgnoredAction(parsedJob.ActionPath))
+        {
+            if (Config.Verbose)
+            {
+                var ignoredUsesText = Decode(Arena.GetStringSlice(workflowCall.Uses));
+                AddJobInfo(job, $"unpinned-uses: ignored '{ignoredUsesText}' (matched ignore-actions pattern)", usesLocation);
+            }
+
             return;
         }
 
@@ -136,6 +172,17 @@ public sealed class UnpinnedUsesRule() : RuleBase(RuleId.UnpinnedUses)
 
         if (IsFullCommitSha(parsedStep.Ref))
         {
+            return;
+        }
+
+        if (IsIgnoredAction(parsedStep.ActionPath))
+        {
+            if (Config.Verbose)
+            {
+                var ignoredUsesText = Decode(Arena.GetStringSlice(actionExec.Uses));
+                AddStepInfo(step, $"unpinned-uses: ignored '{ignoredUsesText}' (matched ignore-actions pattern)", usesLocation);
+            }
+
             return;
         }
 
@@ -327,5 +374,53 @@ public sealed class UnpinnedUsesRule() : RuleBase(RuleId.UnpinnedUses)
         }
 
         return new string(chars);
+    }
+
+    private bool IsIgnoredAction(ReadOnlySpan<byte> actionPath)
+    {
+        if (_ignoreActionsUtf8.Length == 0)
+        {
+            return false;
+        }
+
+        var need = actionPath.Length; // owner/repo is always <= actionPath length
+        if (need <= OwnerRepoKeyStackBytes)
+        {
+            Span<byte> scratch = stackalloc byte[OwnerRepoKeyStackBytes];
+            if (!TryGetOwnerRepoPolicyKey(actionPath, scratch, out var ownerRepoKey))
+            {
+                return false;
+            }
+
+            return MatchAnyIgnorePattern(ownerRepoKey);
+        }
+
+        var rented = ArrayPool<byte>.Shared.Rent(need);
+        try
+        {
+            if (!TryGetOwnerRepoPolicyKey(actionPath, rented.AsSpan(0, need), out var ownerRepoKey))
+            {
+                return false;
+            }
+
+            return MatchAnyIgnorePattern(ownerRepoKey);
+        }
+        finally
+        {
+            ArrayPool<byte>.Shared.Return(rented);
+        }
+    }
+
+    private bool MatchAnyIgnorePattern(ReadOnlySpan<byte> ownerRepoKeyUtf8)
+    {
+        for (var i = 0; i < _ignoreActionsUtf8.Length; i++)
+        {
+            if (WildcardMatchUsesPolicy(ownerRepoKeyUtf8, _ignoreActionsUtf8[i]))
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 }

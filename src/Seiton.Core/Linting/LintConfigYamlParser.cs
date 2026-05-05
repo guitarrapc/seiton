@@ -65,6 +65,7 @@ internal static class LintConfigYamlParser
         (RuleKeyFlags.Deny, "deny"),
         (RuleKeyFlags.MaxStepEnvSecrets, "max-step-env-secrets"),
         (RuleKeyFlags.MaxJobSecrets, "max-job-secrets"),
+        (RuleKeyFlags.IgnoreActions, "ignore-actions"),
     ];
 
     /// <summary>Parses lint configuration YAML bytes into a <see cref="LintConfigParseResult"/>.</summary>
@@ -408,6 +409,7 @@ internal static class LintConfigYamlParser
         IReadOnlyList<string>? assumeEvents = null;
         IReadOnlyList<string>? allow = null;
         IReadOnlyList<string>? deny = null;
+        IReadOnlyList<string>? ignoreActions = null;
         int? maxStepEnvSecrets = null;
         int? maxJobSecrets = null;
         var seenKeyFlags = RuleKeyFlags.None;
@@ -470,6 +472,10 @@ internal static class LintConfigYamlParser
                     seenKeyFlags |= RuleKeyFlags.Deny;
                     deny = NullIfEmpty(ParseStringList(value, "deny", diagnostics, filePath));
                     break;
+                case "ignore-actions":
+                    seenKeyFlags |= RuleKeyFlags.IgnoreActions;
+                    ignoreActions = NullIfEmpty(ParseStringList(value, "ignore-actions", diagnostics, filePath));
+                    break;
                 case "max-step-env-secrets":
                     seenKeyFlags |= RuleKeyFlags.MaxStepEnvSecrets;
                     if (!TryCoerceInt(value, out var ms) || ms < 0)
@@ -514,6 +520,7 @@ internal static class LintConfigYamlParser
             AssumeEvents = assumeEvents,
             Allow = allow,
             Deny = deny,
+            IgnoreActions = ignoreActions,
             MaxStepEnvSecrets = maxStepEnvSecrets,
             MaxJobSecrets = maxJobSecrets,
         };

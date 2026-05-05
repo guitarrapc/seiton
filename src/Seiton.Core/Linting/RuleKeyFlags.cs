@@ -21,4 +21,5 @@ internal enum RuleKeyFlags : ushort
     Deny = 1 << 7,
     MaxStepEnvSecrets = 1 << 8,
     MaxJobSecrets = 1 << 9,
+    IgnoreActions = 1 << 10,
 }

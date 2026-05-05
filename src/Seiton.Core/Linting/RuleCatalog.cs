@@ -323,6 +323,7 @@ internal static class RuleCatalog
                 RuleId.UnredactedSecrets => RuleKeyFlags.OutputCommands,
                 RuleId.ExprUndefinedVar => RuleKeyFlags.AssumeEvents,
                 RuleId.ForbiddenUses => RuleKeyFlags.Allow | RuleKeyFlags.Deny,
+                RuleId.UnpinnedUses => RuleKeyFlags.IgnoreActions,
                 RuleId.OverprovisionedSecrets => RuleKeyFlags.MaxStepEnvSecrets | RuleKeyFlags.MaxJobSecrets,
                 _ => RuleKeyFlags.None,
             };

@@ -45,6 +45,9 @@ internal static class FixCommand
         if (CheckCommand.HasConfigErrors(configDiags, resolvedFormat, colorEnabled, oneline))
             return ExitCode.FatalError;
 
+        if (verbose && lintConfig is not null)
+            lintConfig.Verbose = true;
+
         CliConfigBridge.WriteResolvedConfigVerbose(Console.Error, verbose, configPath);
 
         // Resolve input files

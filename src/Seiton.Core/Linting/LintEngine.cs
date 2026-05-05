@@ -182,6 +182,7 @@ public sealed class LintEngine
             config?.Fix,
             config?.Network,
             config?.Output);
+        _effectiveConfig.Verbose = config?.Verbose ?? false;
         var effectiveConfig = _effectiveConfig;
 
         _activeRules.Clear();
