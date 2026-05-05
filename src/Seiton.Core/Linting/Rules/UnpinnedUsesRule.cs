@@ -1,4 +1,6 @@
-﻿using Seiton.Core.Linting.PinRemediation;
+﻿using System.Buffers;
+using System.Text;
+using Seiton.Core.Linting.PinRemediation;
 using Seiton.Core.Parsing;
 using Seiton.Core.Parsing.Ast;
 
@@ -15,7 +17,28 @@ public sealed class UnpinnedUsesRule() : RuleBase(RuleId.UnpinnedUses)
     private string? _lastUnpinnedStepMessage;
     private string? _lastDecodedUsesText;
 
+    private byte[][] _ignoreActionsUtf8 = [];
+
     public override string Name => "Unpinned Uses Rule";
+
+    public override void SetConfig(LintConfig config)
+    {
+        base.SetConfig(config);
+        var ruleConfig = config.GetRuleConfig(Id);
+        var ignoreActions = ruleConfig?.IgnoreActions;
+        if (ignoreActions is { Count: > 0 })
+        {
+            _ignoreActionsUtf8 = new byte[ignoreActions.Count][];
+            for (var i = 0; i < ignoreActions.Count; i++)
+            {
+                _ignoreActionsUtf8[i] = Encoding.UTF8.GetBytes(ignoreActions[i].ToLowerInvariant());
+            }
+        }
+        else
+        {
+            _ignoreActionsUtf8 = [];
+        }
+    }
 
     public override void VisitWorkflowPre(Workflow workflow)
     {
@@ -64,6 +87,17 @@ public sealed class UnpinnedUsesRule() : RuleBase(RuleId.UnpinnedUses)
 
         if (IsFullCommitSha(parsedJob.Ref))
         {
+            return;
+        }
+
+        if (IsIgnoredAction(parsedJob.ActionPath))
+        {
+            if (Config.Verbose)
+            {
+                var ignoredUsesText = Decode(Arena.GetStringSlice(workflowCall.Uses));
+                AddJobInfo(job, $"ignored '{ignoredUsesText}' (matched ignore-actions pattern)", usesLocation);
+            }
+
             return;
         }
 
@@ -136,6 +170,17 @@ public sealed class UnpinnedUsesRule() : RuleBase(RuleId.UnpinnedUses)
 
         if (IsFullCommitSha(parsedStep.Ref))
         {
+            return;
+        }
+
+        if (IsIgnoredAction(parsedStep.ActionPath))
+        {
+            if (Config.Verbose)
+            {
+                var ignoredUsesText = Decode(Arena.GetStringSlice(actionExec.Uses));
+                AddStepInfo(step, $"ignored '{ignoredUsesText}' (matched ignore-actions pattern)", usesLocation);
+            }
+
             return;
         }
 
@@ -327,5 +372,67 @@ public sealed class UnpinnedUsesRule() : RuleBase(RuleId.UnpinnedUses)
         }
 
         return new string(chars);
+    }
+
+    private bool IsIgnoredAction(ReadOnlySpan<byte> actionPath)
+    {
+        if (_ignoreActionsUtf8.Length == 0)
+        {
+            return false;
+        }
+
+        if (!TryParseOwnerRepoSegments(actionPath, out var owner, out var repo))
+        {
+            return false;
+        }
+
+        var need = owner.Length + 1 + repo.Length;
+        Span<byte> scratch = stackalloc byte[need <= 128 ? need : 0];
+        byte[]? rented = null;
+        if (need > 128)
+        {
+            rented = ArrayPool<byte>.Shared.Rent(need);
+            scratch = rented.AsSpan(0, need);
+        }
+
+        try
+        {
+            // Write ASCII-lowercased owner/repo key directly (avoids re-parsing in TryGetOwnerRepoPolicyKey)
+            var o = 0;
+            for (var i = 0; i < owner.Length; i++)
+            {
+                var b = owner[i];
+                scratch[o++] = b is >= (byte)'A' and <= (byte)'Z' ? (byte)(b + 32) : b;
+            }
+
+            scratch[o++] = (byte)'/';
+            for (var i = 0; i < repo.Length; i++)
+            {
+                var b = repo[i];
+                scratch[o++] = b is >= (byte)'A' and <= (byte)'Z' ? (byte)(b + 32) : b;
+            }
+
+            return MatchAnyIgnorePattern(scratch[..need]);
+        }
+        finally
+        {
+            if (rented is not null)
+            {
+                ArrayPool<byte>.Shared.Return(rented);
+            }
+        }
+    }
+
+    private bool MatchAnyIgnorePattern(ReadOnlySpan<byte> ownerRepoKeyUtf8)
+    {
+        for (var i = 0; i < _ignoreActionsUtf8.Length; i++)
+        {
+            if (WildcardMatchUsesPolicy(ownerRepoKeyUtf8, _ignoreActionsUtf8[i]))
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 }

@@ -135,6 +135,12 @@ rules:
     allow:
       - "approved-org/*"
 
+  # Ignore specific actions from unpinned-uses checks.
+  unpinned-uses:
+    ignore-actions:
+      - "my-org/internal-action"
+      - "my-org/setup-*"
+
 # ─── Exclusions ──────────────────────────────────────────────────────────────
 exclusions:
   # Suppress specific rules for all files matching a path glob.
@@ -235,6 +241,7 @@ Some rules accept additional configuration keys. All `extend` lists add to the b
 | `cache-poisoning` | `untrusted-triggers.extend` | Additional trigger events to treat as untrusted. |
 | `unredacted-secrets` | `output-commands.extend` | Additional shell commands to watch for secret printing. |
 | `forbidden-uses` | `deny` / `allow` | Glob patterns for denying or allowing `uses:` references. |
+| `unpinned-uses` | `ignore-actions` | Glob patterns for actions to exclude from SHA-pinning checks. |
 | `overprovisioned-secrets` | `max-step-env-secrets` / `max-job-secrets` | Integer thresholds for secret over-provisioning detection. |
 
 ---

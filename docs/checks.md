@@ -751,6 +751,18 @@ Warns when `uses:` references are not pinned to a full 40-character commit SHA. 
 
 Use `seiton fix --enable-pin-network` to automatically resolve and apply SHA pins.
 
+**Configuration — ignore specific actions:**
+
+```yaml
+rules:
+  unpinned-uses:
+    ignore-actions:
+      - "my-org/internal-action"
+      - "my-org/setup-*"
+```
+
+Patterns use wildcard matching (`*` = any sequence, `?` = single character) against `owner/repo`.
+
 ---
 
 ### `unpinned-image`

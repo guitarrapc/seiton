@@ -375,6 +375,29 @@ public sealed class LintConfigLibraryTests
     }
 
     [Test]
+    public async Task Validate_UnpinnedUsesIgnoreActions_ParseCorrectly()
+    {
+        var yaml = """
+        rules:
+          unpinned-uses:
+            ignore-actions:
+              - guitarrapc/setup-dotnet
+              - my-org/*
+        """;
+
+        var result = LintConfigLibrary.Validate(yaml, "seiton.yaml");
+
+        await Assert.That(result.IsValid).IsTrue();
+        await Assert.That(result.Config).IsNotNull();
+
+        var unpinnedConfig = result.Config!.Rules!["unpinned-uses"];
+        await Assert.That(unpinnedConfig.IgnoreActions).IsNotNull();
+        await Assert.That(unpinnedConfig.IgnoreActions!.Count).IsEqualTo(2);
+        await Assert.That(unpinnedConfig.IgnoreActions![0]).IsEqualTo("guitarrapc/setup-dotnet");
+        await Assert.That(unpinnedConfig.IgnoreActions![1]).IsEqualTo("my-org/*");
+    }
+
+    [Test]
     public async Task Validate_Exclusions_NewFieldNames_ParseCorrectly()
     {
         var yaml = """

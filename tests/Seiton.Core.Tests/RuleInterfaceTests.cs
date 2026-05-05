@@ -2107,6 +2107,140 @@ public sealed class RuleInterfaceTests
     }
 
     [Test]
+    public async Task RuleRegression_UnpinnedUsesRule_IgnoreActions_TableDriven()
+    {
+        var config = new LintConfig
+        {
+            Rules = new Dictionary<string, RuleConfig>
+            {
+                ["unpinned-uses"] = new RuleConfig
+                {
+                    IgnoreActions = ["guitarrapc/setup-dotnet", "my-org/*"],
+                },
+            },
+        };
+
+        var cases = new[]
+        {
+            new RuleCase(
+            "ok-ignored-exact-match",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - uses: guitarrapc/setup-dotnet@main
+            """,
+            []),
+            new RuleCase(
+            "ok-ignored-wildcard-match",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - uses: my-org/some-action@v1
+            """,
+            []),
+            new RuleCase(
+            "ng-not-ignored-still-warns",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - uses: actions/checkout@v4
+            """,
+            ["not pinned to a full-length commit SHA"]),
+            new RuleCase(
+            "ok-ignored-reusable-workflow",
+            """
+            on: push
+            jobs:
+                release:
+                    uses: guitarrapc/setup-dotnet/.github/workflows/reusable.yml@main
+            """,
+            []),
+            new RuleCase(
+            "ng-reusable-workflow-not-ignored",
+            """
+            on: push
+            jobs:
+                release:
+                    uses: other-org/repo/.github/workflows/reusable.yml@main
+            """,
+            ["not pinned to a full-length commit SHA"]),
+        };
+
+        await AssertRuleCases(new UnpinnedUsesRule(), "unpinned-uses", cases, config);
+    }
+
+    [Test]
+    public async Task RuleRegression_UnpinnedUsesRule_IgnoreActions_Verbose_EmitsInfo()
+    {
+        var config = new LintConfig
+        {
+            Verbose = true,
+            Rules = new Dictionary<string, RuleConfig>
+            {
+                ["unpinned-uses"] = new RuleConfig
+                {
+                    IgnoreActions = ["guitarrapc/setup-dotnet"],
+                },
+            },
+        };
+
+        var yaml = NormalizeYaml("""
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - uses: guitarrapc/setup-dotnet@main
+            """);
+
+        var result = new LintEngine([new UnpinnedUsesRule()])
+            .Check(Encoding.UTF8.GetBytes(yaml), "verbose-test.yml", config);
+        var infoDiags = result.Diagnostics.Where(x => x.RuleId == "unpinned-uses" && x.Severity == DiagnosticSeverity.Info).ToArray();
+        await Assert.That(infoDiags.Length).IsEqualTo(1);
+        await Assert.That(infoDiags[0].Message).Contains("ignored");
+        await Assert.That(infoDiags[0].Message).Contains("guitarrapc/setup-dotnet@main");
+    }
+
+    [Test]
+    public async Task RuleRegression_UnpinnedUsesRule_IgnoreActions_NoVerbose_NoInfo()
+    {
+        var config = new LintConfig
+        {
+            Verbose = false,
+            Rules = new Dictionary<string, RuleConfig>
+            {
+                ["unpinned-uses"] = new RuleConfig
+                {
+                    IgnoreActions = ["guitarrapc/setup-dotnet"],
+                },
+            },
+        };
+
+        var yaml = NormalizeYaml("""
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - uses: guitarrapc/setup-dotnet@main
+            """);
+
+        var result = new LintEngine([new UnpinnedUsesRule()])
+            .Check(Encoding.UTF8.GetBytes(yaml), "no-verbose-test.yml", config);
+        var infoDiags = result.Diagnostics.Where(x => x.RuleId == "unpinned-uses" && x.Severity == DiagnosticSeverity.Info).ToArray();
+        await Assert.That(infoDiags.Length).IsEqualTo(0);
+    }
+
+    [Test]
     public async Task LintEngine_UnpinnedUsesRule_LocalActionResolution_ReportsMissingMetadata()
     {
         var rootDir = Path.Combine(Path.GetTempPath(), "seiton-local-action-" + Guid.NewGuid().ToString("N", System.Globalization.CultureInfo.InvariantCulture));

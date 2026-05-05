@@ -60,6 +60,11 @@ public static class LintConfigLibrary
           #   deny:
           #     - some-untrusted-org/*
 
+          # unpinned-uses:
+          #   ignore-actions:
+          #     - my-org/internal-action
+          #     - my-org/setup-*
+
           # overprovisioned-secrets:
           #   max-step-env-secrets: 5
           #   max-job-secrets: 5

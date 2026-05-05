@@ -114,6 +114,12 @@ public sealed class LintConfig
     /// </summary>
     public bool SkipSuppressionSummary { get; init; }
 
+    /// <summary>
+    /// When <c>true</c>, rules may emit additional informational diagnostics (e.g. ignored actions).
+    /// Corresponds to the CLI <c>--verbose</c> flag.
+    /// </summary>
+    public bool Verbose { get; set; }
+
     private static readonly FixConfig DefaultFix = new();
     private static readonly NetworkConfig DefaultNetwork = new();
     private static readonly OutputConfig DefaultOutput = new();
@@ -131,7 +137,8 @@ public sealed class LintConfig
         IReadOnlyDictionary<string, RuleConfig>? rules,
         FixConfig? fix,
         NetworkConfig? network,
-        OutputConfig? output)
+        OutputConfig? output,
+        bool verbose = false)
     {
         var contentHash = ComputeContentHash(utf8Yaml);
         var sameContent = contentHash == _sourceContentHash
@@ -146,6 +153,7 @@ public sealed class LintConfig
         _fix = fix ?? DefaultFix;
         _network = network ?? DefaultNetwork;
         _output = output ?? DefaultOutput;
+        Verbose = verbose;
         if (!sameContent)
         {
             _lineStarts = null;
@@ -198,6 +206,9 @@ public sealed record RuleConfig
     public int? MaxStepEnvSecrets { get; init; }
     /// <summary>Gets the max job secrets threshold for <c>overprovisioned-secrets</c>.</summary>
     public int? MaxJobSecrets { get; init; }
+
+    /// <summary>Gets the ignore-actions patterns for <c>unpinned-uses</c>.</summary>
+    public IReadOnlyList<string>? IgnoreActions { get; init; }
 }
 
 /// <summary>A list that extends (appends to) a rule's built-in defaults, matching the YAML <c>extend:</c> key.</summary>

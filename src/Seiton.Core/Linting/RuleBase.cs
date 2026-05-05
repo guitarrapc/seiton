@@ -125,6 +125,11 @@ public abstract class RuleBase : IRule
         AddDiagnostic(DiagnosticSeverity.Warning, message, BuildJobLocation(job));
     }
 
+    protected void AddJobInfo(Job job, string message, TextRange location)
+    {
+        AddDiagnostic(DiagnosticSeverity.Info, message, location);
+    }
+
     protected void AddJobWarning(Job job, string message, TextRange location)
     {
         AddDiagnostic(DiagnosticSeverity.Warning, message, location);
