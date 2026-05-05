@@ -1,0 +1,174 @@
+name: Release CLI
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Existing Git tag to release (e.g. v1.0.0). Must already exist on
+          the remote."
+        required: true
+        type: string
+
+permissions: {}
+
+jobs:
+  # Gate: validate version, run tests, verify generated data
+  validate:
+    permissions:
+      contents: read
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      tag: ${{ steps.version.outputs.tag }}
+    steps:
+      - name: Resolve tag ref
+        id: ref
+        run: |
+          set -euo pipefail
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            RAW="${{ inputs.tag }}"
+            TAG="v${RAW#v}"
+          else
+            TAG="${GITHUB_REF#refs/tags/}"
+          fi
+          echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
+
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+          ref: ${{ steps.ref.outputs.tag }}
+
+      - name: Verify version ↔ tag consistency
+        id: version
+        run: |
+          set -euo pipefail
+          TAG="${{ steps.ref.outputs.tag }}"
+          # Extract version from Directory.Build.props
+          PROPS_VERSION=$(grep -oP '(?<=<Version>)[^<]+' Directory.Build.props)
+          TAG_VERSION="${TAG#v}"
+          if [ "$PROPS_VERSION" != "$TAG_VERSION" ]; then
+            echo "::error::Version mismatch: Directory.Build.props has '$PROPS_VERSION' but tag is '$TAG' (expected '$TAG_VERSION')"
+            exit 1
+          fi
+          echo "version=${PROPS_VERSION}" >> "$GITHUB_OUTPUT"
+          echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
+          echo "### Version check passed" >> "$GITHUB_STEP_SUMMARY"
+          echo "- **Tag:** \`${TAG}\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "- **Version:** \`${PROPS_VERSION}\`" >> "$GITHUB_STEP_SUMMARY"
+
+      - uses: guitarrapc/actions/.github/actions/setup-dotnet@main
+        with:
+          dotnet-version: 10.0
+      - name: Build
+        run: dotnet build -c Release
+      - name: Test
+        run: dotnet test -c Release --no-build -- --report-trx
+      - name: Verify generated data
+        run: dotnet run --project src/Seiton.Update -- verify --dataset all
+
+  # Publish: multi-platform AOT binaries
+  publish:
+    needs: validate
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: true
+      matrix:
+        include:
+          - os: ubuntu-24.04
+            rid: linux-x64
+            artifact: seiton-linux-amd64
+          - os: ubuntu-24.04-arm
+            rid: linux-arm64
+            artifact: seiton-linux-arm64
+          - os: windows-2025
+            rid: win-x64
+            artifact: seiton-win-amd64
+          - os: windows-11-arm
+            rid: win-arm64
+            artifact: seiton-win-arm64
+          - os: macos-26
+            rid: osx-arm64
+            artifact: seiton-osx-arm64
+          - os: macos-26-intel
+            rid: osx-x64
+            artifact: seiton-osx-amd64
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+          ref: ${{ needs.validate.outputs.tag }}
+
+      - uses: guitarrapc/actions/.github/actions/setup-dotnet@main
+        with:
+          dotnet-version: 10.0
+
+      - name: Publish (AOT)
+        run: dotnet publish src/Seiton/Seiton.csproj -c Release -r ${{ matrix.rid }} -o
+          publish/
+
+      - name: Create archive (Linux/macOS)
+        if: runner.os != 'Windows'
+        run: |
+          cd publish
+          tar czf ../${{ matrix.artifact }}.tar.gz *
+
+      - name: Create archive (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          Compress-Archive -Path publish/* -DestinationPath ${{ matrix.artifact }}.zip
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact }}
+          path: |
+            ${{ matrix.artifact }}.tar.gz
+            ${{ matrix.artifact }}.zip
+          if-no-files-found: error
+
+  # Release: create GitHub Release with checksums
+  release:
+    needs: [ validate, publish ]
+    permissions:
+      contents: write
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts/
+
+      - name: Collect release assets and generate checksums
+        run: |
+          set -euo pipefail
+          mkdir -p release
+          find artifacts/ -type f \( -name '*.tar.gz' -o -name '*.zip' \) -exec cp {} release/ \;
+          cd release
+          sha256sum * > checksums-sha256.txt
+          echo "### Release assets" >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+          cat checksums-sha256.txt >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ needs.validate.outputs.tag }}
+          VERSION: ${{ needs.validate.outputs.version }}
+        run: |
+          set -euo pipefail
+          gh release create "$TAG" release/* \
+            --repo "$GITHUB_REPOSITORY" \
+            --title "seiton ${VERSION}" \
+            --generate-notes
