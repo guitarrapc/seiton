@@ -26,22 +26,34 @@
   </PropertyGroup>
 
   <!--
-    CSS: default #[.{fingerprint}]! keeps fingerprinted files for cache busting.
-    Standalone publish often leaves href="style.css" while only style.<hash>.css exists on disk;
-    UI tests pass -p:PlaygroundSoftCssFingerprint=true to use ? so style.css is emitted (matches tests / simple static hosts).
-    If gh-pages shows missing styles with ! only, add a publish target to rewrite the link or align with SDK updates.
+    Static-host deploy (GitHub Pages): use -p:PlaygroundSoftFingerprint=true so the SDK
+    emits BOTH fingerprinted AND non-fingerprinted files.  This keeps href="style.css" and
+    import './_framework/dotnet.js' resolvable without server-side rewrites or import maps.
+    Default (!) keeps only fingerprinted files (suited for hosts that handle import maps).
   -->
-  <PropertyGroup Condition="'$(PlaygroundSoftCssFingerprint)' == 'true'">
-    <PlaygroundCssFingerprintExpression>#[.{fingerprint}]?</PlaygroundCssFingerprintExpression>
+  <PropertyGroup Condition="'$(PlaygroundSoftFingerprint)' == 'true'">
+    <PlaygroundFingerprintSuffix>?</PlaygroundFingerprintSuffix>
   </PropertyGroup>
-  <PropertyGroup Condition="'$(PlaygroundSoftCssFingerprint)' != 'true'">
-    <PlaygroundCssFingerprintExpression>#[.{fingerprint}]!</PlaygroundCssFingerprintExpression>
+  <PropertyGroup Condition="'$(PlaygroundSoftFingerprint)' != 'true'">
+    <PlaygroundFingerprintSuffix>!</PlaygroundFingerprintSuffix>
   </PropertyGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\Seiton.Playground.Core\Seiton.Playground.Core.csproj" />
-    <StaticWebAssetFingerprintPattern Include="JS" Pattern="*.js" Expression="#[.{fingerprint}]!" />
-    <StaticWebAssetFingerprintPattern Include="CSS" Pattern="*.css" Expression="$(PlaygroundCssFingerprintExpression)" />
+    <StaticWebAssetFingerprintPattern Include="JS" Pattern="*.js" Expression="#[.{fingerprint}]$(PlaygroundFingerprintSuffix)" />
+    <StaticWebAssetFingerprintPattern Include="CSS" Pattern="*.css" Expression="#[.{fingerprint}]$(PlaygroundFingerprintSuffix)" />
   </ItemGroup>
+
+  <!--
+    Static-host fallback: copy the fingerprinted dotnet entry JS to _framework/dotnet.js so that
+    the ES module import in main.js resolves without an import map (GitHub Pages has no rewrite rules).
+  -->
+  <Target Name="_CopyDotnetJsFallback" AfterTargets="Publish" Condition="'$(PlaygroundSoftFingerprint)' == 'true'">
+    <ItemGroup>
+      <_DotnetEntryJs Include="$(PublishDir)wwwroot/_framework/dotnet.*.js"
+                      Exclude="$(PublishDir)wwwroot/_framework/dotnet.native.*.js;$(PublishDir)wwwroot/_framework/dotnet.runtime.*.js" />
+    </ItemGroup>
+    <Copy SourceFiles="@(_DotnetEntryJs)" DestinationFiles="$(PublishDir)wwwroot/_framework/dotnet.js" />
+  </Target>
 
 </Project>
