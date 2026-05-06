@@ -9,11 +9,9 @@ namespace Seiton.Playground.Tests;
 [NotInParallel(PlaygroundUiTestHost.ParallelLockKey)]
 public sealed class PlaygroundUiLayoutTests
 {
-    private static readonly Regex s_localStylesheetHref = new(@"href=""style[^""]*\.css""",
-        RegexOptions.IgnoreCase | RegexOptions.Compiled, TimeSpan.FromSeconds(1));
+    private static readonly Regex _localStylesheetHref = new(@"href=""style[^""]*\.css""", RegexOptions.IgnoreCase | RegexOptions.Compiled, TimeSpan.FromSeconds(1));
 
-    private static readonly Regex s_fingerprintedMainScriptSrc = new(@"src=""main(\.[^""]+)?\.js""",
-        RegexOptions.IgnoreCase | RegexOptions.Compiled, TimeSpan.FromSeconds(1));
+    private static readonly Regex _mainScriptSrc = new(@"src=""main(\.[^""]+ )?\.js""", RegexOptions.IgnoreCase | RegexOptions.Compiled, TimeSpan.FromSeconds(1));
 
     private static readonly SemaphoreSlim s_browserGate = new(1, 1);
     /// <summary>Released by <see cref="DisposePlaywrightSessionAsync"/> or <see cref="TryDisposePlaywrightSessionOnProcessExit"/>.</summary>
@@ -146,13 +144,13 @@ public sealed class PlaygroundUiLayoutTests
     }
 
     [Test]
-    public async Task PublishedIndex_ResolvesStylesheetAndFingerprintedMain()
+    public async Task PublishedIndex_ResolvesStylesheetAndMainScript()
     {
         var host = await PlaygroundUiTestHost.GetOrCreateAsync();
         var html = await File.ReadAllTextAsync(Path.Combine(host.WwwRootPath, "index.html"));
         await Assert.That(html.Contains("#[.{fingerprint}]", StringComparison.Ordinal)).IsFalse();
-        await Assert.That(s_localStylesheetHref.IsMatch(html)).IsTrue();
-        await Assert.That(s_fingerprintedMainScriptSrc.IsMatch(html)).IsTrue();
+        await Assert.That(_localStylesheetHref.IsMatch(html)).IsTrue();
+        await Assert.That(_mainScriptSrc.IsMatch(html)).IsTrue();
         await Assert.That(html).Contains("<script type=\"importmap\">", StringComparison.Ordinal);
 
         await Assert.That(html.Contains(">Permalink</button>", StringComparison.Ordinal)).IsFalse();
