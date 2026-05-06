@@ -44,4 +44,16 @@
     <StaticWebAssetFingerprintPattern Include="CSS" Pattern="*.css" Expression="#[.{fingerprint}]$(PlaygroundFingerprintSuffix)" />
   </ItemGroup>
 
+  <!--
+    Static-host fallback: copy the fingerprinted dotnet entry JS to _framework/dotnet.js so that
+    the ES module import in main.js resolves without an import map (GitHub Pages has no rewrite rules).
+  -->
+  <Target Name="_CopyDotnetJsFallback" AfterTargets="Publish" Condition="'$(PlaygroundSoftFingerprint)' == 'true'">
+    <ItemGroup>
+      <_DotnetEntryJs Include="$(PublishDir)wwwroot/_framework/dotnet.*.js"
+                      Exclude="$(PublishDir)wwwroot/_framework/dotnet.native.*.js;$(PublishDir)wwwroot/_framework/dotnet.runtime.*.js" />
+    </ItemGroup>
+    <Copy SourceFiles="@(_DotnetEntryJs)" DestinationFiles="$(PublishDir)wwwroot/_framework/dotnet.js" />
+  </Target>
+
 </Project>

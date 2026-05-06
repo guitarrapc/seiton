@@ -12,7 +12,7 @@ public sealed class PlaygroundUiLayoutTests
     private static readonly Regex s_localStylesheetHref = new(@"href=""style[^""]*\.css""",
         RegexOptions.IgnoreCase | RegexOptions.Compiled, TimeSpan.FromSeconds(1));
 
-    private static readonly Regex s_fingerprintedMainScriptSrc = new(@"src=""main\.[^""]+\.js""",
+    private static readonly Regex s_fingerprintedMainScriptSrc = new(@"src=""main(\.[^""]+)?\.js""",
         RegexOptions.IgnoreCase | RegexOptions.Compiled, TimeSpan.FromSeconds(1));
 
     private static readonly SemaphoreSlim s_browserGate = new(1, 1);
