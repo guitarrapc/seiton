@@ -219,12 +219,10 @@ main {
   justify-content: flex-start;
   gap: 1.25rem 1.5rem;
   padding: 1.15rem 1.25rem;
-  background: linear-gradient(
-    180deg,
-    var(--header-gradient-top) 0%,
-    var(--bg) 65%,
-    var(--bg) 100%
-  );
+  background: linear-gradient(180deg,
+      var(--header-gradient-top) 0%,
+      var(--bg) 65%,
+      var(--bg) 100%);
   border-bottom: 1px solid var(--header-border);
   box-shadow: var(--header-shadow);
 }
@@ -530,6 +528,7 @@ a.version-badge:focus-visible {
     max-width: min(10rem, 100%);
   }
 }
+
 .fetch-group {
   display: flex;
   flex: 1 1 14rem;
@@ -637,6 +636,16 @@ a.version-badge:focus-visible {
 @media (max-width: 880px) {
   #linter {
     grid-template-columns: 1fr;
+  }
+
+  #editor-wrap {
+    min-height: 0;
+  }
+
+  .results-column {
+    position: static;
+    max-height: none;
+    overflow-y: visible;
   }
 }
 
