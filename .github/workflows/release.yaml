@@ -178,7 +178,7 @@ jobs:
 
       - name: Create GitHub Release
         run: |
-          gh release create "$TAG" release/* --repo "$GITHUB_REPOSITORY" --title "${VERSION}" --generate-notes --draft
+          gh release create "$TAG" release/* --repo "$GITHUB_REPOSITORY" --title "v${VERSION}" --generate-notes --draft
         env:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ needs.validate.outputs.tag }}
