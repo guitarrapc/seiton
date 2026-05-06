@@ -185,7 +185,7 @@ internal static class PlaygroundUiTestHost
         var psi = new ProcessStartInfo
         {
             FileName = "dotnet",
-            Arguments = $"publish \"{csproj}\" -c Debug -o \"{publishDir}\" -v q -p:RunAOTCompilation=false -p:PublishTrimmed=false -p:PlaygroundSoftCssFingerprint=true",
+            Arguments = $"publish \"{csproj}\" -c Debug -o \"{publishDir}\" -v q -p:RunAOTCompilation=false -p:PublishTrimmed=false -p:PlaygroundSoftFingerprint=true",
             RedirectStandardOutput = true,
             RedirectStandardError = true,
             UseShellExecute = false,
