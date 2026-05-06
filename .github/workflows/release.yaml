@@ -151,11 +151,13 @@ jobs:
             ${{ matrix.artifact }}.zip
           if-no-files-found: error
 
-  # Release: create GitHub Release with checksums
+  # Release: create GitHub Release with checksums + SLSA attestation
   release:
     needs: [ validate, publish ]
     permissions:
       contents: write
+      id-token: write
+      attestations: write
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
@@ -175,6 +177,13 @@ jobs:
           echo '```' >> "$GITHUB_STEP_SUMMARY"
           cat checksums-sha256.txt >> "$GITHUB_STEP_SUMMARY"
           echo '```' >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Attest build provenance (SLSA)
+        uses: actions/attest-build-provenance@a2bbfa25375fe432b6a289bc6b6cd05ecd0c4c32 # v4.1.0
+        with:
+          subject-path: |
+            release/*.tar.gz
+            release/*.zip
 
       - name: Create GitHub Release
         run: |
