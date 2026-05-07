@@ -18,7 +18,7 @@
   /* Editor surfaces align with CodeMirror material-darker. */
   --editor-surface: #212121;
   --editor-gutter-bg: #191919;
-  --results-surface: #171c26;
+  --results-surface: #151a24;
   --text: #eceff1;
   --muted: #78909c;
   --accent: #5590ff;
@@ -106,7 +106,7 @@
     --pos-chip-fg: #f3f3f3;
     --rule-chip-bg: #363835;
     --rule-chip-fg: #f3f3f3;
-    --fix-chip-bg: rgba(46, 125, 50, 0.16);
+    --fix-chip-bg: #25e09a6e;
     --fix-chip-fg: #010d0a;
     --notification-error-bg: rgba(198, 40, 40, 0.1);
     --notification-error-fg: #b71c1c;
@@ -165,7 +165,7 @@
   --pos-chip-fg: #f3f3f3;
   --rule-chip-bg: #363835;
   --rule-chip-fg: #f3f3f3;
-  --fix-chip-bg: #363835;
+  --fix-chip-bg: #25e09a6e;
   --fix-chip-fg: #010d0a;
   --notification-error-bg: rgba(198, 40, 40, 0.1);
   --notification-error-fg: #b71c1c;
@@ -219,10 +219,6 @@ main {
   justify-content: flex-start;
   gap: 1.25rem 1.5rem;
   padding: 1.15rem 1.25rem;
-  background: linear-gradient(180deg,
-      var(--header-gradient-top) 0%,
-      var(--bg) 65%,
-      var(--bg) 100%);
   border-bottom: 1px solid var(--header-border);
   box-shadow: var(--header-shadow);
 }
