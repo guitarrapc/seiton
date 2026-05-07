@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256" viewBox="0 0 256 256" fill="none">
+  <title>Seiton icon - light theme</title>
+  <desc>Minimal grid icon with an outlined center slot and a floating tile to the right.</desc>
+
+  <g fill="#111111">
+    <rect x="24"  y="24"  width="56" height="56" rx="12"/>
+    <rect x="100" y="24"  width="56" height="56" rx="12"/>
+    <rect x="176" y="24"  width="56" height="56" rx="12"/>
+
+    <rect x="24"  y="100" width="56" height="56" rx="12"/>
+
+    <rect x="24"  y="176" width="56" height="56" rx="12"/>
+    <rect x="100" y="176" width="56" height="56" rx="12"/>
+    <rect x="176" y="176" width="56" height="56" rx="12"/>
+  </g>
+
+  <rect x="100" y="100" width="56" height="56" rx="12" stroke="#8FA4BC" stroke-width="8"/>
+
+  <g fill="#8FA4BC">
+    <circle cx="190" cy="128" r="5"/>
+    <circle cx="210" cy="128" r="5"/>
+    <circle cx="230" cy="128" r="5"/>
+  </g>
+</svg>
