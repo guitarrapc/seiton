@@ -447,6 +447,12 @@ editor.on('change', (_cm, changeObj) => {
         });
     }
 
+    // Clear stale permalink hash when content changes
+    if (window.location.hash && window.location.hash.length > 1) {
+        history.replaceState(null, '', `${location.pathname}${location.search}`);
+        showToast('Permalink is outdated. Press Share to update.', 'info', 2000);
+    }
+
     // If lint is currently in progress, mark that a retry is needed after it finishes.
     // The debounce timer is still managed so that rapid typing coalesces properly.
     if (lintInProgress) {
