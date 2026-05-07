@@ -107,7 +107,7 @@
     --rule-chip-bg: #363835;
     --rule-chip-fg: #f3f3f3;
     --fix-chip-bg: rgba(46, 125, 50, 0.16);
-    --fix-chip-fg: #010d0a;
+    --fix-chip-fg: #f3f3f3;
     --notification-error-bg: rgba(198, 40, 40, 0.1);
     --notification-error-fg: #b71c1c;
     --notification-success-bg: rgba(46, 125, 50, 0.1);
@@ -166,7 +166,7 @@
   --rule-chip-bg: #363835;
   --rule-chip-fg: #f3f3f3;
   --fix-chip-bg: #363835;
-  --fix-chip-fg: #010d0a;
+  --fix-chip-fg: #f3f3f3;
   --notification-error-bg: rgba(198, 40, 40, 0.1);
   --notification-error-fg: #b71c1c;
   --notification-success-bg: rgba(46, 125, 50, 0.1);
