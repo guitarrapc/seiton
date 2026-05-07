@@ -404,6 +404,12 @@ main {
   text-underline-offset: 0.15em;
 }
 
+#header-bar h1 a:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
 .tagline {
   margin: 0.45rem 0 0;
   font-size: clamp(1rem, 0.92rem + 0.35vw, 1.12rem);
