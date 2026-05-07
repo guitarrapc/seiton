@@ -219,10 +219,6 @@ main {
   justify-content: flex-start;
   gap: 1.25rem 1.5rem;
   padding: 1.15rem 1.25rem;
-  background: linear-gradient(180deg,
-      var(--header-gradient-top) 0%,
-      var(--bg) 65%,
-      var(--bg) 100%);
   border-bottom: 1px solid var(--header-border);
   box-shadow: var(--header-shadow);
 }
