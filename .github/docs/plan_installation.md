@@ -14,6 +14,8 @@
 | Scoop (Windows) | ✅ | ✅ [`guitarrapc/scoop-bucket`](https://github.com/guitarrapc/scoop-bucket)、Excavator 更新 |
 | Winget (Windows) | ✅ | ❌ winget-pkgs PR 未提出 |
 | Docker (GHCR) | ✅ | ✅ Release ワークフローで linux/amd64・arm64 を push |
+| mise | ❌ | ❌ レジストリ登録・ドキュメント未対応 |
+| aqua | ❌ | ❌ aqua-registry への登録・ドキュメント未対応 |
 | ダウンロード／インストール用スクリプト（curl \| sh 等） | — | **非サポート**（公式には提供しない） |
 | GitHub Action | ❌ | ❌ action.yml 未作成 |
 
@@ -146,11 +148,49 @@ checksums-sha256.txt
 
 ---
 
-### フェーズ 5 — Winget
+### フェーズ 5 — mise
+
+**WHY**: [mise](https://mise.jdx.dev/)（旧 rtx）は言語ランタイムと CLI を一元管理する用途で普及しており、GitHub Releases 由来のバイナリをバージョン固定しやすい。
+
+#### 5-1. レジストリ／バックエンド
+
+- **推奨**: [mise registry](https://github.com/jdx/mise/tree/main/registry)（または現行の登録フロー）に **Seiton** を追加し、リリース資産名（`seiton-{os}-{arch}.tar.gz` / `seiton-win-*.zip`）と一致する取得 URL・正規表現を定義する。
+- 代替・併用: `mise.toml` / `config.toml` で **github backend** や既存の汎用プラグイン（[GitHub Release 型のテンプレート](https://mise.jdx.dev/)に準拠）を文書化する。
+
+#### 5-2. 検証とドキュメント
+
+- macOS / Linux / Windows（利用可能なら）で `mise install seiton`（または `mise use -g seiton@x.y.z`）を確認。
+- [docs/installation.md](../../docs/installation.md) に mise セクションを追加。
+
+**完了条件**: ドキュメントどおりに `mise` で Seiton をインストール・バージョン切替できる。
+
+---
+
+### フェーズ 6 — aqua
+
+**WHY**: [aqua](https://aquaproj.github.io/) は CLI を宣言的に固定し、CI とローカルで同じバージョンを再現しやすい（`aqua.yaml` + `aqua install`）。
+
+#### 6-1. aqua-registry
+
+- [aquaproj/aqua-registry](https://github.com/aquaproj/aqua-registry) に **パッケージ定義**を追加する（`github_release` 等）。アセット:
+  - Linux: `seiton-linux-amd64.tar.gz` / `seiton-linux-arm64.tar.gz`
+  - macOS: `seiton-osx-amd64.tar.gz` / `seiton-osx-arm64.tar.gz`
+  - Windows: `seiton-win-amd64.zip` / `seiton-win-arm64.zip`
+- 実行ファイル名: Linux/macOS は `seiton`、Windows は `seiton.exe`（registry の `files` / `replacements` で整合）。
+
+#### 6-2. 検証とドキュメント
+
+- `aqua install`（または `aqua i`）で導入確認（パッケージ名・インデックスは registry のマージ後の定義に従う）。
+
+**完了条件**: 公開された aqua-registry のパッケージ名どおり `aqua install` で Seiton を導入できる。
+
+---
+
+### フェーズ 7 — Winget
 
 **WHY**: Windows の公式パッケージ管理。ただし `microsoft/winget-pkgs` リポジトリへの PR が必要で審査があるため優先度は低い。
 
-#### 5-1. Winget マニフェスト作成
+#### 7-1. Winget マニフェスト作成
 
 - `winget-pkgs` リポジトリの規約に従いマニフェスト一式を作成:
   - `manifests/g/guitarrapc/seiton/{version}/` 配下に:
@@ -159,7 +199,7 @@ checksums-sha256.txt
     - `guitarrapc.seiton.yaml` (version manifest)
 - InstallerType: `zip` (展開後にパスへ配置) or `portable`。
 
-#### 5-2. 自動化
+#### 7-2. 自動化
 
 - `vedantmgoyal9/winget-releaser` Action や `wingetcreate` CLI で release 時にPRを自動作成。
 
@@ -167,11 +207,11 @@ checksums-sha256.txt
 
 ---
 
-### フェーズ 6 — GitHub Action (オプション)
+### フェーズ 8 — GitHub Action (オプション)
 
 **WHY**: GitHub Actions ワークフロー内で seiton を直接ステップとして使えると利便性が高い。ただし本ツールの主用途が GitHub Actions YAML の lint であることを考えると、CI で走らせるニーズは高い。
 
-#### 6-1. action.yml の作成
+#### 8-1. action.yml の作成
 
 - リポジトリルートに `action.yml` を配置。
 - Composite action として実装:
@@ -183,7 +223,7 @@ checksums-sha256.txt
   - `version`: インストールするバージョン（デフォルト `latest`）。
   - `args`: seiton に渡す追加引数。
 
-#### 6-2. ドキュメント
+#### 8-2. ドキュメント
 
 - `docs/usage.md` に GitHub Actions での利用例を追記。
 
@@ -198,11 +238,13 @@ checksums-sha256.txt
   ├── フェーズ 2 (Homebrew) ← 独立
   ├── フェーズ 3 (Scoop)    ← 独立
   ├── フェーズ 4 (Docker)   ← 独立
-  ├── フェーズ 5 (Winget)   ← 独立
-  └── フェーズ 6 (GitHub Action) ← 独立（専用スクリプト不要）
+  ├── フェーズ 5 (mise)     ← 独立（レジストリ／ドキュメント）
+  ├── フェーズ 6 (aqua)     ← 独立（aqua-registry）
+  ├── フェーズ 7 (Winget)   ← 独立
+  └── フェーズ 8 (GitHub Action) ← 独立（専用スクリプト不要）
 ```
 
-フェーズ 2〜6 は互いに独立しており、並行して進められる。
+フェーズ 2〜8 は互いに独立しており、並行して進められる。
 
 ## リスクと考慮事項
 
@@ -211,4 +253,5 @@ checksums-sha256.txt
 | Winget 審査の遅延・リジェクト | Windows ユーザーが winget で入れられない | Scoop を代替として先行提供。winget は安定版で再挑戦 |
 | Homebrew Formula のアーキテクチャ分岐の複雑さ | macOS x64/arm64、Linux x64/arm64 の 4 パターン | `Hardware::CPU` ガードで分岐する標準パターンを採用 |
 | Docker マルチアーキ manifest のビルド時間 | CI 時間増加 | publish ジョブのバイナリを流用し、Docker ビルド自体は COPY のみで高速 |
-| リリースアセット名変更の可能性 | 全チャネルの URL が壊れる | アセット名を変更する場合はすべてのチャネル（Formula, bucket, docs, 利用例 YAML）を同時更新する |
+| mise / aqua レジストリのレビュー・命名規約 | マージまで時間がかかる、却下の可能性 | 事前に既存パッケージ（同様の GitHub Release 配布 CLI）を参照し、PR 説明にアセット名表を添付 |
+| リリースアセット名変更の可能性 | 全チャネルの URL が壊れる | アセット名を変更する場合はすべてのチャネル（Formula, bucket, docs, 利用例 YAML、mise / aqua 定義）を同時更新する |
