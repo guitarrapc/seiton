@@ -14,7 +14,7 @@
 | Scoop (Windows) | ✅ | ❌ bucket リポジトリ・マニフェスト未作成 |
 | Winget (Windows) | ✅ | ❌ winget-pkgs PR 未提出 |
 | Docker (GHCR) | ✅ | ❌ Dockerfile 無し、GHCR push 未実装 |
-| install.sh (CI) | ✅ | ❌ スクリプト未作成 |
+| ダウンロード／インストール用スクリプト（curl \| sh 等） | — | **非サポート**（公式には提供しない） |
 | GitHub Action | ❌ | ❌ action.yml 未作成 |
 
 ### リリースアセット名（現行 release.yaml）
@@ -29,12 +29,12 @@ seiton-win-arm64.zip
 checksums-sha256.txt
 ```
 
-> **注意**: `docs/installation.md` の Manual セクションでは `seiton-windows-x64.zip`, `seiton-macos-arm64.tar.gz`, `seiton-linux-x64.tar.gz` と記載しているが、実際のリリースアセット名は上記の通り異なる。ドキュメント修正が必要。
+> **注意（反映済み）**: Manual 記載のアセット名は `docs/installation.md` で実リリース名に合わせてある。
 
 ## ゴールと非ゴール
 
 - **ゴール**: ドキュメントに記載した全チャネルを実装し、ユーザーが実際にインストールできるようにする。
-- **非ゴール**: CLI 本体の機能変更。パッケージマネージャの公式リポジトリ（Homebrew core、Scoop Main bucket）への登録（将来検討）。
+- **非ゴール**: CLI 本体の機能変更。パッケージマネージャの公式リポジトリ（Homebrew core、Scoop Main bucket）への登録（将来検討）。**インストール用シェルスクリプトの配布**（セキュリティ・運用の方針により見送り）。
 
 ## 実装フェーズ
 
@@ -42,9 +42,9 @@ checksums-sha256.txt
 
 ---
 
-### フェーズ 1 — ドキュメント修正 + install.sh
+### フェーズ 1 — ドキュメント（リリースアセット名の整合）
 
-**WHY**: 手動ダウンロードは既に動作するので、まずドキュメントのアセット名不一致を修正する。install.sh は CI ユーザーの即時ニーズを満たす最小実装。
+**WHY**: 手動ダウンロードは既に動作する。文書上のファイル名を実リリースと一致させ、CI 例などは **リリースアーカイブを直接取得する**形で示す。
 
 #### 1-1. ドキュメントのアセット名修正
 
@@ -53,20 +53,7 @@ checksums-sha256.txt
   - `seiton-macos-arm64.tar.gz` → `seiton-osx-arm64.tar.gz`
   - `seiton-linux-x64.tar.gz` → `seiton-linux-amd64.tar.gz`
 
-#### 1-2. install.sh の作成
-
-- リポジトリルートまたは `scripts/` に `install.sh` を配置。
-- release workflow で release アセットに同梱する。
-- 要件:
-  - OS/Arch を自動検出し、対応するアセットを GitHub Releases API からダウンロード。
-  - `INSTALL_DIR` 環境変数でインストール先を変更可能（デフォルト `/usr/local/bin`）。
-  - `VERSION` 環境変数で特定バージョンを指定可能（デフォルト `latest`）。
-  - checksum 検証 (`checksums-sha256.txt` を利用)。
-  - POSIX sh 互換（bash 非依存）。
-- リリースアセット URL パターン: `https://github.com/guitarrapc/seiton/releases/latest/download/{artifact}`
-- 参考実装: actionlint の `install.sh`, zizmor の installer
-
-**完了条件**: `curl ... | sh` で Linux/macOS に seiton がインストールできる。
+**完了条件**: 利用者が Releases のアセット名とドキュメントを読み違えない。
 
 ---
 
@@ -199,7 +186,9 @@ checksums-sha256.txt
 
 - リポジトリルートに `action.yml` を配置。
 - Composite action として実装:
-  - install.sh を利用してバイナリをセットアップ。
+  - リリースから該当 OS のアーカイブを取得（例: `gh release download` または `curl` + tar／zip）。
+
+    推奨はワークフロー内で明示的に取得する手順と同様に、**検証可能なステップ**にすること（公式インストールスクリプトは提供しない）。
   - `seiton` コマンドを実行。
 - 入力パラメータ:
   - `version`: インストールするバージョン（デフォルト `latest`）。
@@ -216,15 +205,15 @@ checksums-sha256.txt
 ## フェーズ間の依存関係
 
 ```
-フェーズ 1 (docs修正 + install.sh)
+フェーズ 1 (docs / アセット名)
   ├── フェーズ 2 (Homebrew) ← 独立
   ├── フェーズ 3 (Scoop)    ← 独立
   ├── フェーズ 4 (Docker)   ← 独立
   ├── フェーズ 5 (Winget)   ← 独立
-  └── フェーズ 6 (GitHub Action) ← install.sh に依存
+  └── フェーズ 6 (GitHub Action) ← 独立（専用スクリプト不要）
 ```
 
-フェーズ 2〜5 は互いに独立しており、並行して進められる。フェーズ 6 は install.sh を利用するためフェーズ 1 完了後に着手。
+フェーズ 2〜6 は互いに独立しており、並行して進められる。
 
 ## リスクと考慮事項
 
@@ -233,5 +222,4 @@ checksums-sha256.txt
 | Winget 審査の遅延・リジェクト | Windows ユーザーが winget で入れられない | Scoop を代替として先行提供。winget は安定版で再挑戦 |
 | Homebrew Formula のアーキテクチャ分岐の複雑さ | macOS x64/arm64、Linux x64/arm64 の 4 パターン | `Hardware::CPU` ガードで分岐する標準パターンを採用 |
 | Docker マルチアーキ manifest のビルド時間 | CI 時間増加 | publish ジョブのバイナリを流用し、Docker ビルド自体は COPY のみで高速 |
-| install.sh の POSIX 互換性 | Alpine 等の一部環境で動かない | `#!/bin/sh` で書き、bashism を避ける。CI matrix で Alpine/Ubuntu/macOS をテスト |
-| リリースアセット名変更の可能性 | 全チャネルの URL が壊れる | アセット名を変更する場合はすべてのチャネル（Formula, bucket, install.sh, docs）を同時更新する |
+| リリースアセット名変更の可能性 | 全チャネルの URL が壊れる | アセット名を変更する場合はすべてのチャネル（Formula, bucket, docs, 利用例 YAML）を同時更新する |

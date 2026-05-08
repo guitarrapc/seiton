@@ -303,7 +303,8 @@ jobs:
 
       - name: Install seiton
         run: |
-          curl -L https://github.com/guitarrapc/seiton/releases/latest/download/install.sh | sh
+          curl -fsSL https://github.com/guitarrapc/seiton/releases/latest/download/seiton-linux-amd64.tar.gz | tar xz
+          sudo mv seiton /usr/local/bin/
 
       - name: Run seiton
         run: seiton --format sarif > seiton.sarif

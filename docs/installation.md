@@ -38,7 +38,7 @@ scoop install seiton
 
 ### Manual
 
-1. Download the latest `seiton-windows-x64.zip` from the [releases page](https://github.com/guitarrapc/seiton/releases).
+1. Download the latest `seiton-win-amd64.zip` (x64) or `seiton-win-arm64.zip` (ARM64) from the [releases page](https://github.com/guitarrapc/seiton/releases).
 2. Extract and place `seiton.exe` in a directory that is in your `PATH`.
 
 ---
@@ -54,9 +54,11 @@ brew install guitarrapc/tap/seiton
 ### Manual
 
 ```sh
-curl -L https://github.com/guitarrapc/seiton/releases/latest/download/seiton-macos-arm64.tar.gz | tar xz
+curl -L https://github.com/guitarrapc/seiton/releases/latest/download/seiton-osx-arm64.tar.gz | tar xz
 sudo mv seiton /usr/local/bin/
 ```
+
+For Intel Macs, use `seiton-osx-amd64.tar.gz` instead.
 
 ---
 
@@ -71,9 +73,11 @@ brew install guitarrapc/tap/seiton
 ### Manual
 
 ```sh
-curl -L https://github.com/guitarrapc/seiton/releases/latest/download/seiton-linux-x64.tar.gz | tar xz
+curl -L https://github.com/guitarrapc/seiton/releases/latest/download/seiton-linux-amd64.tar.gz | tar xz
 sudo mv seiton /usr/local/bin/
 ```
+
+For Linux arm64, use `seiton-linux-arm64.tar.gz` instead.
 
 ---
 
@@ -89,22 +93,6 @@ Lint the workflow files in the current repository:
 
 ```sh
 docker run --rm -v "$PWD:/repo" ghcr.io/guitarrapc/seiton:latest /repo
-```
-
----
-
-## Download Script (CI)
-
-To install the latest release in a CI environment without a package manager:
-
-```sh
-curl -L https://github.com/guitarrapc/seiton/releases/latest/download/install.sh | sh
-```
-
-This places `seiton` in `/usr/local/bin` by default. Specify a custom path with `INSTALL_DIR`:
-
-```sh
-curl -L https://github.com/guitarrapc/seiton/releases/latest/download/install.sh | INSTALL_DIR=~/.local/bin sh
 ```
 
 ---

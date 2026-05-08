@@ -55,10 +55,9 @@ brew install guitarrapc/tap/seiton
 
 # Windows
 winget install guitarrapc.seiton
-
-# Or download the latest release
-curl -L https://github.com/guitarrapc/seiton/releases/latest/download/install.sh | sh
 ```
+
+For other platforms, download a prebuilt archive from the [releases page](https://github.com/guitarrapc/seiton/releases) and add `seiton` to your `PATH` (see [Installation](docs/installation.md)).
 
 Run it:
 
