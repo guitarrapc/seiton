@@ -71,8 +71,8 @@ internal static class CheckCommand
 
         var hasStdin = files.Contains("-");
 
-        // 1-file or stdin: sequential fast path (no ThreadLocal overhead)
-        if (resolvedFiles.Length <= 1 || hasStdin)
+        // 1-file, single CPU, or stdin: sequential fast path (no ThreadLocal overhead)
+        if (resolvedFiles.Length <= 1 || hasStdin || Environment.ProcessorCount <= 1)
         {
             var engine = new LintEngine();
             for (var i = 0; i < resolvedFiles.Length; i++)
