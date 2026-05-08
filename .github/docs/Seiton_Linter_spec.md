@@ -46,6 +46,16 @@ Current profile note (C# runtime):
 - If finalized kind is `action-metadata`, the linter traverses the action-metadata AST (`VisitActionMetadataPre` → `runs.steps` via `VisitStep` → `VisitActionMetadataPost`). Rules opt in via `SupportsDocumentKind`; workflow-only rules are skipped for this input kind.
 - Workflow inputs use the workflow traversal sequence in §4.2; action-metadata inputs do not receive `VisitWorkflowPre`/`VisitEvent`/`VisitJobPre`/`VisitJobPost` (no synthetic empty `Workflow` is injected).
 
+### 2.1. Multi-File Execution Model
+
+`Check` processes a single file and is **safe for per-file parallel execution** under these constraints:
+
+- Each concurrent invocation must use its own engine instance (no shared mutable state between workers).
+- Diagnostics returned from each invocation must be owned by the caller (copies, not references into engine-internal storage).
+- Final output order must be **deterministic**: diagnostics are aggregated in input-file order regardless of worker completion order.
+- When a single file is provided, or when input is read from stdin, parallel dispatch is unnecessary; the implementation may use a sequential fast path.
+- `Fix` (§8) remains **sequential-only**; it mutates files and must not be parallelized.
+
 ---
 
 ## 3. Parser/Linter Boundary

@@ -29,13 +29,16 @@ public sealed class LintEngine
 
     // NormalizeRules reusable collections
     private readonly Dictionary<string, RuleConfig> _normalizedRulesDict = new(StringComparer.Ordinal);
-    private readonly List<Diagnostic> _ruleNormDiagnostics = new();
+
+    // Shared config diagnostics buffer: used sequentially by NormalizeRules, NormalizeExclusions,
+    // and ParseInlineSuppression. Each caller Clear()s before use and the result is consumed via
+    // AddRange before the next caller runs.
+    private readonly List<Diagnostic> _configDiagnostics = new();
 
     // ParseInlineSuppression reusable collections
     private readonly Dictionary<int, Dictionary<string, SuppressionAnchor>> _nextLineRuleSuppressions = new();
     private readonly Dictionary<string, SuppressionAnchor> _fileRuleSuppressions = new(StringComparer.Ordinal);
     private readonly Dictionary<string, Dictionary<string, SuppressionAnchor>> _jobRuleSuppressions = new(StringComparer.OrdinalIgnoreCase);
-    private readonly List<Diagnostic> _suppressionDiagnostics = new();
     private readonly List<JobScope> _jobScopes = new();
 
     // S-6: Reusable buffer for BuildKnownJobIdSlices (avoids per-call allocation)
@@ -43,7 +46,6 @@ public sealed class LintEngine
 
     // A-8: NormalizeExclusions reusable collections
     private readonly List<NormalizedExclusion> _normalizedExclusions = new(4);
-    private readonly List<Diagnostic> _exclusionDiagnostics = new();
 
     /// <summary>
     /// Online rules that were activated during the most recent <see cref="Check"/> call.
@@ -93,11 +95,19 @@ public sealed class LintEngine
     /// <summary>Parses and lints the given YAML, applying the optional <paramref name="config"/>.</summary>
     /// <remarks>
     /// <para>
-    /// <b>Result lifetime:</b> The returned <see cref="LintResult"/> shares backing arrays with the engine
-    /// via a two-buffer swap pattern. Only the most recent result and the immediately preceding one are
-    /// guaranteed to remain valid. Callers must not retain a <see cref="LintResult"/> across more than one
-    /// subsequent <see cref="Check"/> call on the same <see cref="LintEngine"/> instance.
-    /// Use <see cref="LintResult.CopyDiagnostics"/> to obtain a caller-owned snapshot that is safe to retain.
+    /// <b>Thread safety:</b> A single <see cref="LintEngine"/> instance is <b>not</b> safe for concurrent
+    /// <see cref="Check"/> calls. Internal mutable state (diagnostics lists, visitor, rule instances, caches)
+    /// is cleared and reused on every call. For parallel multi-file linting, use
+    /// <c>ThreadLocal&lt;LintEngine&gt;</c> so each thread owns an independent instance.
+    /// The caller-provided <paramref name="config"/> is read-only from the engine's perspective — each engine
+    /// copies relevant settings into its own internal <c>_effectiveConfig</c> via <c>PrepareForRun</c>.
+    /// </para>
+    /// <para>
+    /// <b>Result lifetime:</b> The returned <see cref="LintResult"/> wraps a pooled <c>Diagnostic[]</c>
+    /// registered with the parse arena. Diagnostics are only safe to read until
+    /// <see cref="ParseResult.Arena"/> is disposed. Callers can either consume the diagnostics immediately
+    /// before disposing the arena, or call <see cref="LintResult.CopyDiagnostics"/> to create a caller-owned
+    /// snapshot when diagnostics must be retained beyond arena disposal.
     /// </para>
     /// </remarks>
     public LintResult Check(byte[] utf8Yaml, string filePath, LintConfig? config)
@@ -627,7 +637,7 @@ public sealed class LintEngine
         _nextLineRuleSuppressions.Clear();
         _fileRuleSuppressions.Clear();
         _jobRuleSuppressions.Clear();
-        _suppressionDiagnostics.Clear();
+        _configDiagnostics.Clear();
 
         ReadOnlySpan<byte> remaining = utf8Yaml;
         var lineStartOffset = 0;
@@ -729,7 +739,7 @@ public sealed class LintEngine
                         _nextLineRuleSuppressions[targetLine] = suppressedRuleIds;
                     }
 
-                    AddRuleIds(argsBytes, argsOffset, suppressedRuleIds, _suppressionDiagnostics, filePath, lineStartOffset, lineNumber);
+                    AddRuleIds(argsBytes, argsOffset, suppressedRuleIds, _configDiagnostics, filePath, lineStartOffset, lineNumber);
                 }
 
                 lineStartOffset += lineAdvance;
@@ -741,7 +751,7 @@ public sealed class LintEngine
             {
                 if (!argsBytes.IsEmpty)
                 {
-                    AddRuleIds(argsBytes, argsOffset, _fileRuleSuppressions, _suppressionDiagnostics, filePath, lineStartOffset, lineNumber);
+                    AddRuleIds(argsBytes, argsOffset, _fileRuleSuppressions, _configDiagnostics, filePath, lineStartOffset, lineNumber);
                 }
 
                 lineStartOffset += lineAdvance;
@@ -754,7 +764,7 @@ public sealed class LintEngine
                 var jobSep = argsBytes.IndexOfAny((byte)' ', (byte)'\t');
                 if (jobSep <= 0)
                 {
-                    _suppressionDiagnostics.Add(BuildInlineDirectiveError(
+                    _configDiagnostics.Add(BuildInlineDirectiveError(
                         "disable-job requires <job-id> and <rule-id list>",
                         filePath,
                         lineStartOffset,
@@ -777,7 +787,7 @@ public sealed class LintEngine
 
                 if (ruleIdListBytes.IsEmpty)
                 {
-                    _suppressionDiagnostics.Add(BuildInlineDirectiveError(
+                    _configDiagnostics.Add(BuildInlineDirectiveError(
                         "disable-job requires at least one rule-id",
                         filePath,
                         lineStartOffset,
@@ -803,7 +813,7 @@ public sealed class LintEngine
                 if (!knownJob)
                 {
                     var jobIdString = Encoding.UTF8.GetString(jobIdBytes);
-                    _suppressionDiagnostics.Add(new Diagnostic(
+                    _configDiagnostics.Add(new Diagnostic(
                         DiagnosticSeverity.Error,
                         $"unknown job-id '{jobIdString}' in inline suppression directive",
                         new TextRange(lineStartOffset + jobIdColumn - 1, jobIdBytes.Length, lineNumber, jobIdColumn, lineNumber, jobIdColumn + jobIdBytes.Length),
@@ -820,14 +830,14 @@ public sealed class LintEngine
                     _jobRuleSuppressions[jobIdKey] = jobSuppressedRuleIds;
                 }
 
-                AddRuleIds(ruleIdListBytes, ruleIdListOffset, jobSuppressedRuleIds, _suppressionDiagnostics, filePath, lineStartOffset, lineNumber);
+                AddRuleIds(ruleIdListBytes, ruleIdListOffset, jobSuppressedRuleIds, _configDiagnostics, filePath, lineStartOffset, lineNumber);
                 lineStartOffset += lineAdvance;
                 remaining = remaining[lineAdvance..];
                 continue;
             }
 
             // Unknown command
-            _suppressionDiagnostics.Add(BuildInlineDirectiveError(
+            _configDiagnostics.Add(BuildInlineDirectiveError(
                 $"unknown inline suppression command '{Encoding.UTF8.GetString(commandBytes)}'",
                 filePath,
                 lineStartOffset,
@@ -845,7 +855,7 @@ public sealed class LintEngine
             _jobRuleSuppressions,
             _jobScopes,
             utf8Yaml,
-            _suppressionDiagnostics);
+            _configDiagnostics);
     }
 
     private static Diagnostic BuildInlineDirectiveError(string message, string filePath, int lineStartOffset, int lineNumber, int tokenColumn, int tokenLength)
@@ -1042,9 +1052,9 @@ public sealed class LintEngine
         }
 
         _normalizedRulesDict.Clear();
-        _ruleNormDiagnostics.Clear();
-        RuleNormalizer.NormalizeRuleEntries(rules, filePath, _ruleNormDiagnostics, _normalizedRulesDict);
-        return new RulesNormalization(_normalizedRulesDict, _ruleNormDiagnostics);
+        _configDiagnostics.Clear();
+        RuleNormalizer.NormalizeRuleEntries(rules, filePath, _configDiagnostics, _normalizedRulesDict);
+        return new RulesNormalization(_normalizedRulesDict, _configDiagnostics);
     }
 
     private ExclusionsNormalization NormalizeExclusions(IReadOnlyList<LintExclusion>? exclusions, string filePath, Parsing.Ast.Workflow workflow, byte[] utf8Yaml, AstArena arena)
@@ -1057,14 +1067,14 @@ public sealed class LintEngine
 
         var knownJobIdSlices = BuildKnownJobIdSlices(workflow, arena);
         _normalizedExclusions.Clear();
-        _exclusionDiagnostics.Clear();
+        _configDiagnostics.Clear();
 
         for (var i = 0; i < exclusions.Count; i++)
         {
             var exclusion = exclusions[i];
             if (string.IsNullOrWhiteSpace(exclusion.File))
             {
-                _exclusionDiagnostics.Add(new Diagnostic(
+                _configDiagnostics.Add(new Diagnostic(
                     DiagnosticSeverity.Error,
                     "exclusion file pattern must not be empty",
                     new TextRange(0, 1, 1, 1, 1, 2),
@@ -1081,7 +1091,7 @@ public sealed class LintEngine
             else
             {
                 var ruleIds = new HashSet<string>(StringComparer.Ordinal);
-                ExclusionNormalizer.CollectResolvedExclusionRules(exclusion.Rules, filePath, _exclusionDiagnostics, ruleIds);
+                ExclusionNormalizer.CollectResolvedExclusionRules(exclusion.Rules, filePath, _configDiagnostics, ruleIds);
 
                 if (ruleIds.Count == 0)
                 {
@@ -1098,7 +1108,7 @@ public sealed class LintEngine
                     var jobId = exclusion.Jobs[j];
                     if (!string.IsNullOrEmpty(jobId) && !ContainsJobIdOrdinalIgnoreCase(knownJobIdSlices, utf8Yaml, jobId))
                     {
-                        _exclusionDiagnostics.Add(new Diagnostic(
+                        _configDiagnostics.Add(new Diagnostic(
                             DiagnosticSeverity.Error,
                             $"unknown job-id '{jobId}' in exclusion configuration",
                             new TextRange(0, jobId.Length, 1, 1, 1, 1 + jobId.Length),
@@ -1113,7 +1123,7 @@ public sealed class LintEngine
         return new ExclusionsNormalization(
             _normalizedExclusions.Count > 0 ? _normalizedExclusions.ToArray() : [],
             normalizedFilePath,
-            _exclusionDiagnostics.Count > 0 ? _exclusionDiagnostics.ToArray() : []);
+            _configDiagnostics.Count > 0 ? _configDiagnostics.ToArray() : []);
     }
     private static int CompareDiagnosticsByRulePriority(Diagnostic x, Diagnostic y)
     {
