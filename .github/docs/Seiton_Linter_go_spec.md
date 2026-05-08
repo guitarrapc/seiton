@@ -145,10 +145,15 @@ func (l *Linter) LintStdin(stdin io.Reader) ([]*Error, error)
 func (l *Linter) Lint(path string, content []byte, project *Project) ([]*Error, error)
 ```
 
-Execution model note:
+### 2.1. Multi-File Parallel Execution
 
-- Repository/file lint paths may use `errgroup` + semaphore for concurrent processing.
-- Project-scoped caches (for example local actions/reusable workflows) are shared across worker tasks.
+Shared contract reference: `Seiton_Linter_spec.md` §2.1.
+
+Go implementation:
+
+- Repository/file lint paths use `errgroup` + semaphore for concurrent processing.
+- Project-scoped caches (for example local actions/reusable workflows) are shared across worker goroutines.
+- Per-file `check` goroutines each own an independent rule set; diagnostics are collected per-file and merged in input-file order after all goroutines complete.
 
 ---
 

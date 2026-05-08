@@ -358,7 +358,7 @@ Machine: AMD Ryzen 9 7950X3D, 16C/32T, .NET 10.0.6, ShortRun
 
 ---
 
-## 7. Phase 5: CLI spec・ドキュメント更新
+## 7. Phase 5: CLI spec・ドキュメント更新（完了）
 
 ### 7.1 CLI spec 更新
 
@@ -368,11 +368,15 @@ Machine: AMD Ryzen 9 7950X3D, 16C/32T, .NET 10.0.6, ShortRun
 - fix コマンドは逐次処理を維持する旨
 - 出力順序の安定性保証（入力ファイル順）
 
-### 7.2 Linter spec 更新
+> **ステータス**: CLI spec は存在しないため省略。Linter spec 側で対応済み。
 
-`Seiton_Linter_spec.md` / `Seiton_Linter_csharp_spec.md` に以下を追記：
+### 7.2 Linter spec 更新（完了）
 
-- `LintEngine` のスレッドセーフティ契約（同一インスタンスの並行 Check は不可、per-thread 分離が必要）
+以下の仕様書を更新済み：
+
+- `Seiton_Linter_spec.md` §2.1 — 言語中立の Multi-File Execution Model（per-file 並列可、出力順安定、Fix は逐次のみ）
+- `Seiton_Linter_csharp_spec.md` §2.1 — C# 実装詳細（`Parallel.For` + `ThreadLocal<LintEngine>` + `CopyDiagnostics()` + スロット配列 + 逐次 fast path）
+- `Seiton_Linter_go_spec.md` §2.1 — Go 実装詳細（`errgroup` + semaphore + per-goroutine rule set + input-order merge）
 
 ---
 

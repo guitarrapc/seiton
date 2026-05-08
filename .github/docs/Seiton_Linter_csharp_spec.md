@@ -121,6 +121,18 @@ public sealed class LintEngine
 }
 ```
 
+### 2.1. Multi-File Parallel Execution
+
+Shared contract reference: `Seiton_Linter_spec.md` §2.1.
+
+C# implementation:
+
+- `CheckCommand` dispatches files via `Parallel.For` with `MaxDegreeOfParallelism = Environment.ProcessorCount`.
+- Each worker thread owns an independent `LintEngine` instance via `ThreadLocal<LintEngine>`. No engine state is shared across threads.
+- Results are written to a pre-allocated `FileCheckResult[]` slot array indexed by file position, guaranteeing deterministic output order.
+- Each worker calls `CopyDiagnostics()` to create caller-owned diagnostic copies that survive engine reuse.
+- Sequential fast path: when `resolvedFiles.Length <= 1`, input is stdin, or `Environment.ProcessorCount <= 1`, a single `LintEngine` is used without `Parallel.For`.
+
 ---
 
 ## 3. Pass/Rule Mapping
