@@ -16,6 +16,7 @@ on:
           - "*CoreParsingBenchmark*"
           - "*IncrementalParseBenchmark*"
           - "*LintConfigBenchmark*"
+          - "*MultiFileLintBenchmark*"
           - "*PlaygroundLintBenchmark*"
           - "*RuleCatalogBenchmark*"
 
