@@ -53,6 +53,7 @@ public class MultiFileLintBenchmark
         {
             var result = engine.Check(_yamlFiles[i], _filePaths[i]);
             total += result.Diagnostics.Length;
+            result.ParseResult.Arena?.Dispose();
         }
         return total;
     }
@@ -71,6 +72,7 @@ public class MultiFileLintBenchmark
             {
                 var result = engines.Value!.Check(_yamlFiles[i], _filePaths[i]);
                 slots[i] = result.Diagnostics.Length;
+                result.ParseResult.Arena?.Dispose();
             });
 
         var total = 0;
