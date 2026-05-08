@@ -181,6 +181,7 @@ checksums-sha256.txt
 #### 6-2. 検証とドキュメント
 
 - `aqua install`（または `aqua i`）で導入確認（パッケージ名・インデックスは registry のマージ後の定義に従う）。
+- [docs/installation.md](../../docs/installation.md) に手順を追記。
 
 **完了条件**: 公開された aqua-registry のパッケージ名どおり `aqua install` で Seiton を導入できる。
 

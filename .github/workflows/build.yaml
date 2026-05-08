@@ -14,7 +14,7 @@ jobs:
     permissions:
       contents: read
     runs-on: ubuntu-24.04
-    timeout-minutes: 10
+    timeout-minutes: 20
     steps:
       - name: Checkout
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
@@ -35,10 +35,35 @@ jobs:
       - name: Test
         run: dotnet test -c Release --no-build
       - name: Publish (CLI)
-        run: dotnet publish ./src/Seiton -c Release
+        run: dotnet publish src/Seiton/Seiton.csproj -c Release -r linux-x64 -o publish/
       - name: Publish (Playground)
         run: |
           dotnet publish src/Seiton.Playground/Seiton.Playground.csproj -c Release -r browser-wasm -p:PlaygroundSoftFingerprint=true -o publish/
+
+      - name: Verify CLI build
+        run: |
+          chmod +x ./publish/seiton
+          ./publish/seiton version
+      - name: Verify Docker image build (linux/amd64 only, no push)
+        run: |
+          set -euo pipefail
+          mkdir -p docker-smoke/amd64
+          cp publish/seiton docker-smoke/amd64/seiton
+          chmod +x docker-smoke/amd64/seiton
+          cp Dockerfile docker-smoke/
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@e468171a9de216ec08956ac3ada2f0791b6bd435 # v3.11.1
+      - name: Docker build (load locally)
+        uses: docker/build-push-action@263435318d21b8e681c14492fe198d362a7d2c83 # v6.18.0
+        with:
+          context: ./docker-smoke
+          file: ./docker-smoke/Dockerfile
+          platforms: linux/amd64
+          push: false
+          load: true
+          tags: seiton:ci-verify
+      - name: Run seiton in container
+        run: docker run --rm seiton:ci-verify version
 
   verify-updater:
     permissions:
