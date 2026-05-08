@@ -22,7 +22,7 @@
 |---|---|
 | **check コマンド** | ファイル単位で並列処理 |
 | **fix コマンド** | 逐次処理を維持（変更なし） |
-| **並列制御** | `Parallel.ForEach` + `MaxDegreeOfParallelism` |
+| **並列制御** | `Parallel.For` + `MaxDegreeOfParallelism` |
 | **デフォルト並列数** | `Environment.ProcessorCount` |
 | **1ファイル時** | 逐次 fast path（並列オーバーヘッド回避） |
 | **出力順** | 入力ファイル順で安定（actionlint と同等） |
@@ -33,9 +33,9 @@
 
 | 方式 | 評価 |
 |---|---|
-| `Parallel.ForEach` + `MaxDegreeOfParallelism` | **採用** — ファイル単位の CPU バウンド処理に最適。スレッドプール管理を CLR に委任でき、`MaxDegreeOfParallelism` で並行数を完全制御可能。actionlint の `errgroup` + `runtime.NumCPU()` と等価 |
+| `Parallel.For` + `MaxDegreeOfParallelism` | **採用** — インデックスベースのスロットアクセスに最適。スレッドプール管理を CLR に委任でき、`MaxDegreeOfParallelism` で並行数を完全制御可能。actionlint の `errgroup` + `runtime.NumCPU()` と等価 |
 | `System.IO.Pipelines` キュー方式 | **不採用** — I/O ストリーム処理向き。ファイル単位の独立タスクには過剰。パイプラインの接続・完了管理がオーバーヘッドになる |
-| `Task.WhenAll` + `SemaphoreSlim` | 候補だが `Parallel.ForEach` のほうが同期処理に自然。async は不要（check は同期 CPU バウンド） |
+| `Task.WhenAll` + `SemaphoreSlim` | 候補だが `Parallel.For` のほうが同期処理に自然。async は不要（check は同期 CPU バウンド） |
 
 ---
 
@@ -193,7 +193,7 @@ LintEngine および依存コンポーネントのスレッドセーフでない
 内容:
   1. 1つの LintEngine インスタンスを作成
   2. 複数ファイルの UTF-8 YAML を用意
-  3. Parallel.ForEach で同一エンジンに同時 Check() 呼び出し
+  3. Parallel.For で同一エンジンに同時 Check() 呼び出し
   4. 結果の不整合またはクラッシュを検出 → テストとしては「現状の不安全性を文書化」する目的
 ```
 
@@ -209,7 +209,7 @@ LintEngine および依存コンポーネントのスレッドセーフでない
 // CheckCommand 内（並列パス）
 using var engines = new ThreadLocal<LintEngine>(() => new LintEngine(), trackAllValues: false);
 
-Parallel.ForEach(resolvedFiles, parallelOptions, (filePath, _, index) =>
+Parallel.For(0, resolvedFiles.Length, parallelOptions, index =>
 {
     var engine = engines.Value!;
     // ... engine.Check(utf8Yaml, filePath, lintConfig) ...
@@ -262,8 +262,7 @@ Parallel.ForEach(resolvedFiles, parallelOptions, (filePath, _, index) =>
 // 入力順にスロットを確保（actionlint の workspace[] に相当）
 var slots = new FileCheckResult[resolvedFiles.Length];
 
-Parallel.ForEach(
-    Enumerable.Range(0, resolvedFiles.Length),
+Parallel.For(0, resolvedFiles.Length,
     parallelOptions,
     index =>
     {
@@ -334,7 +333,7 @@ internal readonly struct FileCheckResult
 | 大量ファイルテスト | 100ファイルで並列実行し、クラッシュ・デッドロックが発生しないことを検証 | ✅ `StressTest_NoCrashOrDeadlock` (100 files, Repeat(3)) |
 | LintResult 所有権テスト | CopyDiagnostics の結果が後続 Check 呼び出し後も有効であることを検証 | ✅ `CopyDiagnostics_SurvivesSubsequentCheckCalls` |
 
-テスト合計: 11/11 通過（P1: 6, P2: 3, P4: 2）
+テスト合計: 8 メソッド通過（P1: 3 メソッド（うち StressTest は Repeat(3)）, P2: 3, P4: 2）
 
 ### 6.2 ベンチマーク比較（P4 実測結果）
 
