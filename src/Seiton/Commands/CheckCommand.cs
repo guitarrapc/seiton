@@ -99,6 +99,7 @@ internal static class CheckCommand
                 var result = engine.Check(utf8Yaml, filePath, lintConfig);
                 allDiagnostics.AddRange(result.Diagnostics);
                 sourceMap?.TryAdd(filePath, utf8Yaml);
+                result.ParseResult.Arena?.Dispose();
             }
         }
         else
@@ -120,14 +121,16 @@ internal static class CheckCommand
 
                     var engine = engines.Value!;
                     var result = engine.Check(utf8Yaml, filePath, lintConfig);
-                    slots[i] = new FileCheckResult(result.CopyDiagnostics(), filePath, utf8Yaml);
+                    slots[i] = new FileCheckResult(result.CopyDiagnostics(), filePath, sourceMap is not null ? utf8Yaml : null);
+                    result.ParseResult.Arena?.Dispose();
                 });
 
             // Aggregate in input order for stable output
             for (var i = 0; i < slots.Length; i++)
             {
                 allDiagnostics.AddRange(slots[i].Diagnostics);
-                sourceMap?.TryAdd(slots[i].FilePath, slots[i].Utf8Yaml);
+                if (sourceMap is not null && slots[i].Utf8Yaml is { } yaml)
+                    sourceMap.TryAdd(slots[i].FilePath, yaml);
             }
         }
 
@@ -230,9 +233,9 @@ internal readonly struct FileCheckResult
 {
     public readonly Diagnostic[] Diagnostics;
     public readonly string FilePath;
-    public readonly byte[] Utf8Yaml;
+    public readonly byte[]? Utf8Yaml;
 
-    public FileCheckResult(Diagnostic[] diagnostics, string filePath, byte[] utf8Yaml)
+    public FileCheckResult(Diagnostic[] diagnostics, string filePath, byte[]? utf8Yaml)
     {
         Diagnostics = diagnostics;
         FilePath = filePath;

@@ -46,6 +46,7 @@ public sealed class LintEngineThreadSafetyTests
         {
             var result = sequentialEngine.Check(yamlFiles[i], filePaths[i]);
             baselineCounts[i] = result.Diagnostics.Length;
+            result.ParseResult.Arena?.Dispose();
         }
 
         // Run parallel with per-thread engines
@@ -60,6 +61,7 @@ public sealed class LintEngineThreadSafetyTests
                 var engine = engines.Value!;
                 var result = engine.Check(yamlFiles[i], filePaths[i]);
                 parallelCounts[i] = result.Diagnostics.Length;
+                result.ParseResult.Arena?.Dispose();
             });
 
         // Per-thread engines must produce identical diagnostic counts
@@ -97,6 +99,7 @@ public sealed class LintEngineThreadSafetyTests
                 var d = result.Diagnostics[j];
                 baselineResults[i][j] = (d.RuleId ?? "", d.Location.StartLine, d.Message);
             }
+            result.ParseResult.Arena?.Dispose();
         }
 
         // Parallel execution
@@ -117,6 +120,7 @@ public sealed class LintEngineThreadSafetyTests
                     diags[j] = (d.RuleId ?? "", d.Location.StartLine, d.Message);
                 }
                 parallelResults[i] = diags;
+                result.ParseResult.Arena?.Dispose();
             });
 
         // Verify full content match
@@ -158,6 +162,7 @@ public sealed class LintEngineThreadSafetyTests
                 var engine = engines.Value!;
                 var result = engine.Check(yamlFiles[i], filePaths[i]);
                 Interlocked.Add(ref totalDiagnostics, result.Diagnostics.Length);
+                result.ParseResult.Arena?.Dispose();
             });
 
         // Just verify we got some diagnostics without crashing
@@ -190,6 +195,7 @@ public sealed class LintEngineThreadSafetyTests
         {
             var result = sequentialEngine.Check(yamlFiles[i], filePaths[i]);
             baselineDiags[i] = result.CopyDiagnostics();
+            result.ParseResult.Arena?.Dispose();
         }
 
         // Parallel with slot pattern
@@ -203,6 +209,7 @@ public sealed class LintEngineThreadSafetyTests
             {
                 var result = engines.Value!.Check(yamlFiles[i], filePaths[i]);
                 slots[i] = result.CopyDiagnostics();
+                result.ParseResult.Arena?.Dispose();
             });
 
         // Aggregate in input order and compare
@@ -241,6 +248,7 @@ public sealed class LintEngineThreadSafetyTests
         {
             var result = engine.Check(yamlFiles[i], filePaths[i]);
             copiedResults[i] = result.CopyDiagnostics();
+            result.ParseResult.Arena?.Dispose();
         }
 
         // After all Check() calls, verify ALL copied results are still valid
@@ -249,6 +257,7 @@ public sealed class LintEngineThreadSafetyTests
         {
             var freshResult = verifyEngine.Check(yamlFiles[i], filePaths[i]);
             var freshDiags = freshResult.CopyDiagnostics();
+            freshResult.ParseResult.Arena?.Dispose();
 
             await Assert.That(copiedResults[i].Length).IsEqualTo(freshDiags.Length);
             for (var j = 0; j < freshDiags.Length; j++)
@@ -286,6 +295,7 @@ public sealed class LintEngineThreadSafetyTests
         {
             var result = sequentialEngine.Check(yamlFiles[i], filePaths[i], sharedConfig);
             baselineCounts[i] = result.Diagnostics.Length;
+            result.ParseResult.Arena?.Dispose();
         }
 
         // Parallel with shared config
@@ -299,6 +309,7 @@ public sealed class LintEngineThreadSafetyTests
             {
                 var result = engines.Value!.Check(yamlFiles[i], filePaths[i], sharedConfig);
                 parallelCounts[i] = result.Diagnostics.Length;
+                result.ParseResult.Arena?.Dispose();
             });
 
         for (var i = 0; i < fileCount; i++)
@@ -340,6 +351,7 @@ public sealed class LintEngineThreadSafetyTests
                 {
                     var result = engines.Value!.Check(yamlFiles[i], filePaths[i]);
                     slots[i] = result.CopyDiagnostics();
+                    result.ParseResult.Arena?.Dispose();
                 });
 
             // Flatten in input order → fingerprint
@@ -394,6 +406,7 @@ public sealed class LintEngineThreadSafetyTests
             {
                 var result = engines.Value!.Check(yamlFiles[i], filePaths[i]);
                 slots[i] = (result.CopyDiagnostics(), filePaths[i]);
+                result.ParseResult.Arena?.Dispose();
             });
 
         // Aggregate in input order
@@ -410,6 +423,7 @@ public sealed class LintEngineThreadSafetyTests
         {
             var result = sequentialEngine.Check(yamlFiles[i], filePaths[i]);
             baselineDiags.AddRange(result.CopyDiagnostics());
+            result.ParseResult.Arena?.Dispose();
         }
 
         // Parallel aggregate must match sequential aggregate
