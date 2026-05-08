@@ -1,0 +1,38 @@
+name: Bump Homebrew Formula
+
+# Publish a release → regenerate Formula/seiton.rb on the default branch from
+# checksums-sha256.txt (same-repo tap pattern; cf. rhysd/actionlint Casks/).
+
+on:
+  release:
+    types: [published]
+
+permissions:
+  contents: write
+
+concurrency:
+  group: homebrew-formula-${{ github.repository }}
+  cancel-in-progress: false
+
+jobs:
+  bump-formula:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Checkout default branch
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          # Use HOMEBREW_FORMULA_PUSH_TOKEN when default GITHUB_TOKEN cannot push (e.g. branch protection).
+          token: ${{ secrets.HOMEBREW_FORMULA_PUSH_TOKEN || github.token }}
+
+      - name: Commit Formula/seiton.rb
+        env:
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          SEITON_TAG: ${{ github.event.release.tag_name }}
+        run: |
+          set -euo pipefail
+          VERSION="${SEITON_TAG#v}"
+          export SEITON_VERSION="$VERSION"
+          export CHECKSUMS_URL="https://github.com/${GITHUB_REPOSITORY}/releases/download/${SEITON_TAG}/checksums-sha256.txt"
+          bash scripts/commit-homebrew-formula.sh

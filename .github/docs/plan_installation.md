@@ -10,7 +10,7 @@
 |------|:---:|:---:|
 | Prebuilt Binaries（手動 DL） | ✅ | ✅ release.yaml で自動ビルド・公開済み |
 | Build from Source | ✅ | ✅ 動作する |
-| Homebrew (macOS/Linux) | ✅ | ❌ tap リポジトリ・Formula 未作成 |
+| Homebrew (macOS/Linux) | ✅ | △ 本体リポ `Formula/seiton.rb`・Release publish 時に CI が更新 |
 | Scoop (Windows) | ✅ | ❌ bucket リポジトリ・マニフェスト未作成 |
 | Winget (Windows) | ✅ | ❌ winget-pkgs PR 未提出 |
 | Docker (GHCR) | ✅ | ❌ Dockerfile 無し、GHCR push 未実装 |
@@ -61,24 +61,20 @@ checksums-sha256.txt
 
 **WHY**: macOS/Linux ユーザーの標準インストール手段。tap 方式なら外部審査不要で自律的に運用できる。
 
-#### 2-1. tap リポジトリの作成
+#### 2-1. 同一リポに Formula（メンテナ・運用）
 
-- `guitarrapc/homebrew-tap` リポジトリを作成。
-- Formula ファイル `Formula/seiton.rb` を配置。
-  - `url` は GitHub Releases のアセット URL（OS/Arch で分岐）。
-  - `sha256` はリリース時に自動更新。
-  - `version` はタグから導出。
-  - `def install`: tar 展開 → `bin.install "seiton"`
+- **専用 `homebrew-tap` は不要。** `Formula/seiton.rb` を **Seiton 本体リポジトリ**に置き、`brew tap owner/repo` でそのまま指す（[rhysd/actionlint](https://github.com/rhysd/actionlint) の Cask と同様の「ツール repo を tap する」パターン）。
+- ブランチ保護で `GITHUB_TOKEN` の push が弾かれるときは **PAT `HOMEBREW_FORMULA_PUSH_TOKEN`** を用意（[packaging/homebrew/README.md](../../packaging/homebrew/README.md)）。
 
-#### 2-2. リリース自動化
+#### 2-2. Formula とリリース連動（実装済み）
 
-- `release.yaml` の release ジョブ完了後に Formula を自動更新するステップを追加。
-- 方法の選択肢:
-  - **A**: `mislav/bump-homebrew-formula-action` を利用（シンプル）。
-  - **B**: release workflow 内で直接 `homebrew-tap` リポジトリへ commit/push（`GH_TOKEN` + Fine-grained PAT で）。
-- macOS / Linux の両アーキテクチャ対応（`on_macos` / `on_linux` で URL 分岐）。
+- リリースのたびに Formula を更新する必要があるため、Release **Published** 時に `checksums-sha256.txt` から `Formula/seiton.rb` を再生成し、**デフォルトブランチへコミット**する。
+- 実装:
+  - [scripts/render-homebrew-seiton-formula.sh](../../scripts/render-homebrew-seiton-formula.sh) — Linux/macOS × amd64/arm64
+  - [scripts/commit-homebrew-formula.sh](../../scripts/commit-homebrew-formula.sh) — 本体リポで commit / push
+  - [.github/workflows/homebrew-formula.yaml](../../.github/workflows/homebrew-formula.yaml) — `release: types: [published]`
 
-**完了条件**: `brew install guitarrapc/tap/seiton` でインストールできる。新リリース時に Formula が自動更新される。
+**完了条件**: `brew tap <owner>/seiton` → `brew install seiton` が動き、**Release を Publish するたび** Formula が本体 `main`（等）に更新される。
 
 ---
 

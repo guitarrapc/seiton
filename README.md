@@ -50,8 +50,9 @@ test.yml:6:5: [warning] job-permissions-required: job 'test' does not declare ex
 Install Seiton (see [Installation](docs/installation.md) for all options):
 
 ```sh
-# Homebrew (macOS/Linux)
-brew install guitarrapc/tap/seiton
+# Homebrew (macOS/Linux) — tap this repo; see docs/installation.md
+brew tap guitarrapc/seiton https://github.com/guitarrapc/seiton
+brew install seiton
 
 # Windows
 winget install guitarrapc.seiton

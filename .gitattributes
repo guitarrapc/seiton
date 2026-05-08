@@ -1,5 +1,7 @@
 .github/** text eol=lf
 data/** text eol=lf
+scripts/**/*.sh text eol=lf
+scripts/fixtures/** text eol=lf
 
 data/** linguist-vendored
 sandbox/** linguist-vendored

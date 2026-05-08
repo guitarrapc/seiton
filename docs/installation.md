@@ -47,8 +47,18 @@ scoop install seiton
 
 ### Homebrew
 
+This repo provides [`Formula/seiton.rb`](https://github.com/guitarrapc/seiton/blob/main/Formula/seiton.rb) (updated automatically when a GitHub Release is published). Tap the **application repository**, then install:
+
 ```sh
-brew install guitarrapc/tap/seiton
+brew tap guitarrapc/seiton https://github.com/guitarrapc/seiton
+brew install seiton
+```
+
+If you use the default GitHub short form and your repo is `github.com/guitarrapc/seiton`:
+
+```sh
+brew tap guitarrapc/seiton
+brew install seiton
 ```
 
 ### Manual
@@ -66,8 +76,11 @@ For Intel Macs, use `seiton-osx-amd64.tar.gz` instead.
 
 ### Homebrew (Linux)
 
+Same as macOS: tap [`guitarrapc/seiton`](https://github.com/guitarrapc/seiton) (formula includes Linux amd64/arm64).
+
 ```sh
-brew install guitarrapc/tap/seiton
+brew tap guitarrapc/seiton https://github.com/guitarrapc/seiton
+brew install seiton
 ```
 
 ### Manual
