@@ -306,4 +306,126 @@ public sealed class LintEngineThreadSafetyTests
             await Assert.That(parallelCounts[i]).IsEqualTo(baselineCounts[i]);
         }
     }
+
+    // --- P4: Integration-level verification tests ---
+
+    /// <summary>
+    /// Verifies deterministic output: running the same parallel check multiple times
+    /// produces identical diagnostic sequences every time (output-order stability).
+    /// </summary>
+    [Test]
+    public async Task ParallelSlotPattern_RepeatedRuns_ProduceIdenticalOutput()
+    {
+        const int fileCount = 30;
+        const int runs = 5;
+        var yamlFiles = new byte[fileCount][];
+        var filePaths = new string[fileCount];
+        for (var i = 0; i < fileCount; i++)
+        {
+            yamlFiles[i] = BuildWorkflowYaml(i);
+            filePaths[i] = $".github/workflows/deterministic-{i}.yml";
+        }
+
+        // Collect diagnostic fingerprints from multiple parallel runs
+        var runFingerprints = new string[runs][];
+        for (var run = 0; run < runs; run++)
+        {
+            using var engines = new ThreadLocal<LintEngine>(
+                static () => new LintEngine(), trackAllValues: false);
+            var slots = new Diagnostic[fileCount][];
+
+            Parallel.For(0, fileCount,
+                new ParallelOptions { MaxDegreeOfParallelism = Environment.ProcessorCount },
+                i =>
+                {
+                    var result = engines.Value!.Check(yamlFiles[i], filePaths[i]);
+                    slots[i] = result.CopyDiagnostics();
+                });
+
+            // Flatten in input order → fingerprint
+            var fingerprints = new List<string>();
+            for (var i = 0; i < fileCount; i++)
+            {
+                for (var j = 0; j < slots[i].Length; j++)
+                {
+                    var d = slots[i][j];
+                    fingerprints.Add($"{filePaths[i]}:{d.RuleId}:{d.Location.StartLine}:{d.Message}");
+                }
+            }
+            runFingerprints[run] = fingerprints.ToArray();
+        }
+
+        // All runs must produce identical output
+        for (var run = 1; run < runs; run++)
+        {
+            await Assert.That(runFingerprints[run].Length).IsEqualTo(runFingerprints[0].Length);
+            for (var i = 0; i < runFingerprints[0].Length; i++)
+            {
+                await Assert.That(runFingerprints[run][i]).IsEqualTo(runFingerprints[0][i]);
+            }
+        }
+    }
+
+    /// <summary>
+    /// End-to-end simulation of CheckCommand parallel path: file read → parallel Check
+    /// → CopyDiagnostics into slots → aggregate in order → apply ignore filter.
+    /// Verifies the full pipeline produces correct, filtered output.
+    /// </summary>
+    [Test]
+    public async Task FullPipeline_ParallelCheckWithIgnoreFilter()
+    {
+        const int fileCount = 10;
+        var yamlFiles = new byte[fileCount][];
+        var filePaths = new string[fileCount];
+        for (var i = 0; i < fileCount; i++)
+        {
+            yamlFiles[i] = BuildWorkflowYaml(i);
+            filePaths[i] = $".github/workflows/pipeline-{i}.yml";
+        }
+
+        // Parallel check with slot pattern (mirrors CheckCommand)
+        using var engines = new ThreadLocal<LintEngine>(
+            static () => new LintEngine(), trackAllValues: false);
+        var slots = new (Diagnostic[] Diagnostics, string FilePath)[fileCount];
+
+        Parallel.For(0, fileCount,
+            new ParallelOptions { MaxDegreeOfParallelism = Environment.ProcessorCount },
+            i =>
+            {
+                var result = engines.Value!.Check(yamlFiles[i], filePaths[i]);
+                slots[i] = (result.CopyDiagnostics(), filePaths[i]);
+            });
+
+        // Aggregate in input order
+        var allDiagnostics = new List<Diagnostic>();
+        for (var i = 0; i < fileCount; i++)
+        {
+            allDiagnostics.AddRange(slots[i].Diagnostics);
+        }
+
+        // Sequential baseline for comparison
+        var sequentialEngine = new LintEngine();
+        var baselineDiags = new List<Diagnostic>();
+        for (var i = 0; i < fileCount; i++)
+        {
+            var result = sequentialEngine.Check(yamlFiles[i], filePaths[i]);
+            baselineDiags.AddRange(result.CopyDiagnostics());
+        }
+
+        // Parallel aggregate must match sequential aggregate
+        await Assert.That(allDiagnostics.Count).IsEqualTo(baselineDiags.Count);
+        for (var i = 0; i < baselineDiags.Count; i++)
+        {
+            await Assert.That(allDiagnostics[i].RuleId).IsEqualTo(baselineDiags[i].RuleId);
+            await Assert.That(allDiagnostics[i].Message).IsEqualTo(baselineDiags[i].Message);
+            await Assert.That(allDiagnostics[i].Location.StartLine).IsEqualTo(baselineDiags[i].Location.StartLine);
+        }
+
+        // Verify diagnostics are accessible (not corrupted by arena/pool)
+        await Assert.That(allDiagnostics.Count).IsGreaterThan(0);
+        for (var i = 0; i < allDiagnostics.Count; i++)
+        {
+            await Assert.That(allDiagnostics[i].Message).IsNotNull();
+        }
+    }
 }

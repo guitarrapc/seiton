@@ -327,20 +327,34 @@ internal readonly struct FileCheckResult
 
 ### 6.1 結合テスト
 
-| テスト | 内容 |
-|---|---|
-| 出力順安定性テスト | 同一ファイルセットで複数回 check を実行し、診断出力が毎回同一であることを検証 |
-| 並列結果一致テスト | 逐次パス（1ファイルずつ）と並列パスで同一の診断結果が得られることを検証 |
-| 大量ファイルテスト | 50+ ファイルで並列実行し、クラッシュ・デッドロックが発生しないことを検証 |
-| LintResult 所有権テスト | 並列パスで取得した Diagnostics が arena 返却後も有効であることを検証（`CopyDiagnostics` の必要性確認） |
+| テスト | 内容 | 状態 |
+|---|---|---|
+| 出力順安定性テスト | 同一ファイルセットで5回並列実行し、診断出力が毎回同一であることを検証 | ✅ `ParallelSlotPattern_RepeatedRuns_ProduceIdenticalOutput` |
+| 並列結果一致テスト | 逐次パス（1ファイルずつ）と並列パスで同一の診断結果が得られることを検証 | ✅ `FullPipeline_ParallelCheckWithIgnoreFilter` + P1 `DiagnosticContentMatchesSequential` |
+| 大量ファイルテスト | 100ファイルで並列実行し、クラッシュ・デッドロックが発生しないことを検証 | ✅ `StressTest_NoCrashOrDeadlock` (100 files, Repeat(3)) |
+| LintResult 所有権テスト | CopyDiagnostics の結果が後続 Check 呼び出し後も有効であることを検証 | ✅ `CopyDiagnostics_SurvivesSubsequentCheckCalls` |
 
-### 6.2 ベンチマーク比較
+テスト合計: 11/11 通過（P1: 6, P2: 3, P4: 2）
 
-P0 で作成した `MultiFileLintBenchmark` を再実行し、並列化前後のスループットを比較する。
+### 6.2 ベンチマーク比較（P4 実測結果）
 
-- **F1**: Sequential と Parallel で有意な差がないこと（fast path 確認）
-- **F10/F50**: Parallel が Sequential より高速であること
-- **Allocated**: Parallel のアロケーション増加が ThreadLocal 分の LintEngine 生成コストのみであること
+Machine: AMD Ryzen 9 7950X3D, 16C/32T, .NET 10.0.6, ShortRun
+
+| Count | Method | Mean | Ratio | Allocated | Alloc Ratio |
+|---|---|---:|---:|---:|---:|
+| **F1** | Sequential | 1.444 ms | 1.00 | 192 KB | 1.00 |
+| **F1** | Parallel | 1.398 ms | 0.97 | 194 KB | 1.01 |
+| **F10** | Sequential | 14.772 ms | 1.00 | 1,469 KB | 1.00 |
+| **F10** | Parallel | 2.830 ms | **0.19** | 1,926 KB | 1.31 |
+| **F50** | Sequential | 74.468 ms | 1.00 | 7,142 KB | 1.00 |
+| **F50** | Parallel | 10.796 ms | **0.15** | 8,702 KB | 1.22 |
+
+**分析:**
+
+- **F1**: 差なし（Ratio 0.97）。fast path が正しく機能
+- **F10**: **5.2x 高速化**（14.8ms → 2.8ms）。アロケーション +31%（ThreadLocal LintEngine 生成分）
+- **F50**: **6.9x 高速化**（74.5ms → 10.8ms）。アロケーション +22%
+- アロケーション増加は ThreadLocal 分の LintEngine コンストラクタコストのみ。ファイル数が増えるほど相対比率が下がる（F50: +22% < F10: +31%）
 
 ---
 
