@@ -30,8 +30,9 @@ public sealed class LintEngine
     // NormalizeRules reusable collections
     private readonly Dictionary<string, RuleConfig> _normalizedRulesDict = new(StringComparer.Ordinal);
 
-    // Shared config diagnostics buffer: used sequentially by NormalizeRules, ParseInlineSuppression.
-    // Each caller Clear()s before use and the result is consumed via AddRange before the next caller runs.
+    // Shared config diagnostics buffer: used sequentially by NormalizeRules, NormalizeExclusions,
+    // and ParseInlineSuppression. Each caller Clear()s before use and the result is consumed via
+    // AddRange before the next caller runs.
     private readonly List<Diagnostic> _configDiagnostics = new();
 
     // ParseInlineSuppression reusable collections
@@ -103,9 +104,10 @@ public sealed class LintEngine
     /// </para>
     /// <para>
     /// <b>Result lifetime:</b> The returned <see cref="LintResult"/> wraps a pooled <c>Diagnostic[]</c>
-    /// registered with the parse arena. The backing array remains valid as long as the arena is not disposed.
-    /// In typical sequential loops the arena stays alive, but callers that need to retain diagnostics across
-    /// arbitrary lifetimes should call <see cref="LintResult.CopyDiagnostics"/> for a caller-owned snapshot.
+    /// registered with the parse arena. Diagnostics are only safe to read until
+    /// <see cref="ParseResult.Arena"/> is disposed. Callers can either consume the diagnostics immediately
+    /// before disposing the arena, or call <see cref="LintResult.CopyDiagnostics"/> to create a caller-owned
+    /// snapshot when diagnostics must be retained beyond arena disposal.
     /// </para>
     /// </remarks>
     public LintResult Check(byte[] utf8Yaml, string filePath, LintConfig? config)

@@ -11,6 +11,9 @@ namespace Seiton.Core.Tests;
 /// </summary>
 public sealed class LintEngineThreadSafetyTests
 {
+    /// <summary>Cap parallelism to avoid excessive resource usage on high-core CI agents while still exercising concurrency.</summary>
+    private static readonly int MaxParallelism = Math.Min(4, Environment.ProcessorCount);
+
     private static byte[] BuildWorkflowYaml(int index) => Encoding.UTF8.GetBytes(
         $"""
         name: workflow-{index}
@@ -55,7 +58,7 @@ public sealed class LintEngineThreadSafetyTests
         var parallelCounts = new int[fileCount];
 
         Parallel.For(0, fileCount,
-            new ParallelOptions { MaxDegreeOfParallelism = Environment.ProcessorCount },
+            new ParallelOptions { MaxDegreeOfParallelism = MaxParallelism },
             i =>
             {
                 var engine = engines.Value!;
@@ -108,7 +111,7 @@ public sealed class LintEngineThreadSafetyTests
         var parallelResults = new (string RuleId, int Line, string Message)[fileCount][];
 
         Parallel.For(0, fileCount,
-            new ParallelOptions { MaxDegreeOfParallelism = Environment.ProcessorCount },
+            new ParallelOptions { MaxDegreeOfParallelism = MaxParallelism },
             i =>
             {
                 var engine = engines.Value!;
@@ -156,7 +159,7 @@ public sealed class LintEngineThreadSafetyTests
         var totalDiagnostics = 0;
 
         Parallel.For(0, fileCount,
-            new ParallelOptions { MaxDegreeOfParallelism = Environment.ProcessorCount },
+            new ParallelOptions { MaxDegreeOfParallelism = MaxParallelism },
             i =>
             {
                 var engine = engines.Value!;
@@ -204,7 +207,7 @@ public sealed class LintEngineThreadSafetyTests
         var slots = new Diagnostic[fileCount][];
 
         Parallel.For(0, fileCount,
-            new ParallelOptions { MaxDegreeOfParallelism = Environment.ProcessorCount },
+            new ParallelOptions { MaxDegreeOfParallelism = MaxParallelism },
             i =>
             {
                 var result = engines.Value!.Check(yamlFiles[i], filePaths[i]);
@@ -304,7 +307,7 @@ public sealed class LintEngineThreadSafetyTests
         var parallelCounts = new int[fileCount];
 
         Parallel.For(0, fileCount,
-            new ParallelOptions { MaxDegreeOfParallelism = Environment.ProcessorCount },
+            new ParallelOptions { MaxDegreeOfParallelism = MaxParallelism },
             i =>
             {
                 var result = engines.Value!.Check(yamlFiles[i], filePaths[i], sharedConfig);
@@ -346,7 +349,7 @@ public sealed class LintEngineThreadSafetyTests
             var slots = new Diagnostic[fileCount][];
 
             Parallel.For(0, fileCount,
-                new ParallelOptions { MaxDegreeOfParallelism = Environment.ProcessorCount },
+                new ParallelOptions { MaxDegreeOfParallelism = MaxParallelism },
                 i =>
                 {
                     var result = engines.Value!.Check(yamlFiles[i], filePaths[i]);
@@ -401,7 +404,7 @@ public sealed class LintEngineThreadSafetyTests
         var slots = new (Diagnostic[] Diagnostics, string FilePath)[fileCount];
 
         Parallel.For(0, fileCount,
-            new ParallelOptions { MaxDegreeOfParallelism = Environment.ProcessorCount },
+            new ParallelOptions { MaxDegreeOfParallelism = MaxParallelism },
             i =>
             {
                 var result = engines.Value!.Check(yamlFiles[i], filePaths[i]);
