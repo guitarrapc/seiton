@@ -230,6 +230,15 @@ Parallel.ForEach(resolvedFiles, parallelOptions, (filePath, _, index) =>
 - スレッド数分の LintEngine が生成されるが、`Parallel.ForEach` はスレッドを再利用するため実際の生成数は `MaxDegreeOfParallelism` 以下
 - 1ファイル fast path では `ThreadLocal` を使わず直接 `new LintEngine()` → 追加アロケーションなし
 
+### 4.4 P2 実装結果（監査済み）
+
+| 懸念事項 | 結果 |
+|---|---|
+| `LintConfig` スレッドセーフティ | ✅ **安全**。各 `LintEngine` は自身の `_effectiveConfig = new LintConfig()` を保持。呼び出し元の `lintConfig` は `PrepareForRun` で読み取り専用としてコピーされる。`_expressionCache`（`Dictionary`）と `_lineStarts` は `_effectiveConfig` 上にあり、スレッド間で共有されない |
+| `Diagnostic` 所有権 | ✅ **解決**。`BuildLintResult` は `PooledBuffer.DetachArray()` で内部リストから分離した配列を生成し、`AstArena` に登録する。アリーナは `Check()` ループ中に dispose されないため配列は有効だが、安全のため並列スロットパターンでは `CopyDiagnostics()` を使用する |
+| コンフィグ診断フィールド | ✅ **削減済み**。`_ruleNormDiagnostics` + `_suppressionDiagnostics` + `_exclusionDiagnostics` → 単一 `_configDiagnostics` に統合（P1 で実施） |
+| テスト網羅性 | ✅ **9テスト通過**。スロットパターン出力順安定性、`CopyDiagnostics` 保持、共有 `LintConfig` 安全性を検証済み |
+
 ---
 
 ## 5. Phase 3: CheckCommand 並列化 + 出力順安定化
@@ -263,8 +272,8 @@ Parallel.ForEach(
         var utf8Yaml = File.ReadAllBytes(filePath);
         var result = engine.Check(utf8Yaml, filePath, lintConfig);
 
-        // スロットに書き込み（各indexは一意なのでロック不要）
-        slots[index] = new FileCheckResult(result.Diagnostics, filePath, utf8Yaml);
+        // CopyDiagnostics で caller-owned コピーを取得（アリーナ寿命に依存しない）
+        slots[index] = new FileCheckResult(result.CopyDiagnostics(), filePath, utf8Yaml);
     });
 
 // 入力順で集約
@@ -281,11 +290,11 @@ for (var i = 0; i < slots.Length; i++)
 // 軽量な結果格納構造体
 internal readonly struct FileCheckResult
 {
-    public readonly IReadOnlyList<Diagnostic> Diagnostics;
+    public readonly Diagnostic[] Diagnostics; // CopyDiagnostics() の戻り値（caller-owned）
     public readonly string FilePath;
     public readonly byte[]? Utf8Yaml; // sourceMap 用（null 可）
 
-    public FileCheckResult(IReadOnlyList<Diagnostic> diagnostics, string filePath, byte[]? utf8Yaml)
+    public FileCheckResult(Diagnostic[] diagnostics, string filePath, byte[]? utf8Yaml)
     {
         Diagnostics = diagnostics;
         FilePath = filePath;
@@ -355,19 +364,20 @@ P0 で作成した `MultiFileLintBenchmark` を再実行し、並列化前後の
 
 ## 8. 実装上の注意事項
 
-### 8.1 Diagnostic の所有権
+### 8.1 Diagnostic の所有権（解決済み）
 
-`LintResult.Diagnostics` はアリーナ管理のバッファを参照している可能性がある。並列パスでは `Check()` 完了後にアリーナが返却されるため、Diagnostics を後続集約で使用する前に所有権を確保する必要がある。
+`LintResult.Diagnostics` は `DiagnosticList`（`Diagnostic[]` + count のラッパー構造体）を返す。この配列は `PooledBuffer.DetachArray()` で分離され、`AstArena` に登録される。
 
-確認事項：
-- `result.Diagnostics` が返す `IReadOnlyList<Diagnostic>` は LintEngine 内部リストの参照か、コピーか
-- コピーでない場合、次回の `Check()` 呼び出しで上書きされるため、スロット書き込み前にコピーが必要
+- **アリーナ寿命**: 各 `Check()` は `AstArena.Rent()` で新しいアリーナを取得する。アリーナは `ParseResult` 経由で `LintResult` に保持され、Check ループ中は dispose されない。したがって次の `Check()` が前回結果の配列を無効化することはない。
+- **並列パスでの対応**: 安全のため `CopyDiagnostics()` を使用してアリーナ寿命に依存しない caller-owned コピーを取得する。`CopyDiagnostics()` は `Diagnostics.AsSpan().ToArray()` で新しい配列を割り当てる。
+- **逐次パスとの整合**: 現行 CheckCommand は `allDiagnostics.AddRange(result.Diagnostics)` で即座に値をコピーしているため問題なし。
 
-### 8.2 LintConfig の共有
+### 8.2 LintConfig の共有（解決済み）
 
 - `LintConfig` インスタンスはスレッド間で共有される（読み取り専用として）
-- `LintEngine.Check()` 内で `_effectiveConfig` にコピーしているため、入力 `lintConfig` 自体の可変操作はない
-- ただし `LintConfig` 内部のキャッシュ（式キャッシュ等）がスレッドセーフか確認が必要
+- 各 `LintEngine` は自身の `_effectiveConfig = new LintConfig()` フィールドを保持。`PrepareForRun` で呼び出し元 `lintConfig` の設定値（`Fix`, `Network`, `Output`, `Verbose`）をコピーするが、呼び出し元オブジェクト自体は変更しない
+- `_expressionCache`（`Dictionary<long, ExpressionCacheEntry>`）と `_lineStarts`（`int[]`）は `_effectiveConfig` 上に存在し、スレッド間で共有されない
+- **結論**: 呼び出し元の `lintConfig` は並列パスで安全に共有可能。テスト `SharedLintConfig_SafeAcrossThreadLocalEngines` で検証済み
 
 ### 8.3 ThreadLocal の Dispose
 
