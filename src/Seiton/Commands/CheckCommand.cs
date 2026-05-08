@@ -66,34 +66,69 @@ internal static class CheckCommand
         }
 
         // Lint files
-        var engine = new LintEngine();
         var allDiagnostics = new List<Diagnostic>();
         Dictionary<string, byte[]>? sourceMap = resolvedFormat == OutputFormat.Text && !oneline ? new() : null;
 
-        for (var i = 0; i < resolvedFiles.Length; i++)
+        var hasStdin = files.Contains("-");
+
+        // 1-file or stdin: sequential fast path (no ThreadLocal overhead)
+        if (resolvedFiles.Length <= 1 || hasStdin)
         {
-            var filePath = resolvedFiles[i];
-            byte[] utf8Yaml;
-
-            if (filePath == "-")
+            var engine = new LintEngine();
+            for (var i = 0; i < resolvedFiles.Length; i++)
             {
-                using var ms = new MemoryStream();
-                using var stdin = Console.OpenStandardInput();
-                stdin.CopyTo(ms);
-                utf8Yaml = ms.ToArray();
-                filePath = stdinFilename;
+                var filePath = resolvedFiles[i];
+                byte[] utf8Yaml;
+
+                if (filePath == "-")
+                {
+                    using var ms = new MemoryStream();
+                    using var stdin = Console.OpenStandardInput();
+                    stdin.CopyTo(ms);
+                    utf8Yaml = ms.ToArray();
+                    filePath = stdinFilename;
+                }
+                else
+                {
+                    utf8Yaml = File.ReadAllBytes(filePath);
+                }
+
+                if (verbose)
+                    Console.Error.WriteLine($"checking {filePath}...");
+
+                var result = engine.Check(utf8Yaml, filePath, lintConfig);
+                allDiagnostics.AddRange(result.Diagnostics);
+                sourceMap?.TryAdd(filePath, utf8Yaml);
             }
-            else
+        }
+        else
+        {
+            // 2+ files: parallel with per-thread LintEngine isolation
+            using var engines = new ThreadLocal<LintEngine>(
+                static () => new LintEngine(), trackAllValues: false);
+            var slots = new FileCheckResult[resolvedFiles.Length];
+
+            Parallel.For(0, resolvedFiles.Length,
+                new ParallelOptions { MaxDegreeOfParallelism = Environment.ProcessorCount },
+                i =>
+                {
+                    var filePath = resolvedFiles[i];
+                    var utf8Yaml = File.ReadAllBytes(filePath);
+
+                    if (verbose)
+                        Console.Error.WriteLine($"checking {filePath}...");
+
+                    var engine = engines.Value!;
+                    var result = engine.Check(utf8Yaml, filePath, lintConfig);
+                    slots[i] = new FileCheckResult(result.CopyDiagnostics(), filePath, utf8Yaml);
+                });
+
+            // Aggregate in input order for stable output
+            for (var i = 0; i < slots.Length; i++)
             {
-                utf8Yaml = File.ReadAllBytes(filePath);
+                allDiagnostics.AddRange(slots[i].Diagnostics);
+                sourceMap?.TryAdd(slots[i].FilePath, slots[i].Utf8Yaml);
             }
-
-            if (verbose)
-                Console.Error.WriteLine($"checking {filePath}...");
-
-            var result = engine.Check(utf8Yaml, filePath, lintConfig);
-            allDiagnostics.AddRange(result.Diagnostics);
-            sourceMap?.TryAdd(filePath, utf8Yaml);
         }
 
         // Apply ignore patterns
@@ -187,5 +222,20 @@ internal static class CheckCommand
             "info" => DiagnosticSeverity.Info,
             _ => null,
         };
+    }
+}
+
+/// <summary>Lightweight result slot for parallel check. Holds caller-owned diagnostic copy.</summary>
+internal readonly struct FileCheckResult
+{
+    public readonly Diagnostic[] Diagnostics;
+    public readonly string FilePath;
+    public readonly byte[] Utf8Yaml;
+
+    public FileCheckResult(Diagnostic[] diagnostics, string filePath, byte[] utf8Yaml)
+    {
+        Diagnostics = diagnostics;
+        FilePath = filePath;
+        Utf8Yaml = utf8Yaml;
     }
 }
