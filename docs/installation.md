@@ -103,17 +103,24 @@ For Linux arm64, use `seiton-linux-arm64.tar.gz` instead.
 
 ## Docker
 
-An official Docker image is available from the GitHub Container Registry:
+Official multi-arch images (**linux/amd64**, **linux/arm64**) are published to GHCR when a version tag release is built:
 
 ```sh
 docker pull ghcr.io/guitarrapc/seiton:latest
+# or pin (match a released version / tag):
+docker pull ghcr.io/guitarrapc/seiton:0.9.4
+docker pull ghcr.io/guitarrapc/seiton:v0.9.4
 ```
 
-Lint the workflow files in the current repository:
+The image name must be **lowercase** (`ghcr.io/<user>/<repo>`). If your GitHub repo is not `guitarrapc/seiton`, substitute your `owner/repo` path.
+
+Lint the workflow files in the current directory (mount read-only content into the container):
 
 ```sh
-docker run --rm -v "$PWD:/repo" ghcr.io/guitarrapc/seiton:latest /repo
+docker run --rm -v "$PWD:/repo:ro" ghcr.io/guitarrapc/seiton:latest /repo
 ```
+
+`:ro` avoids permission issues with the default non-writable mount.
 
 ---
 

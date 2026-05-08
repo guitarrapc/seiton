@@ -13,7 +13,7 @@
 | Homebrew (macOS/Linux) | ✅ | △ 本体リポ `Formula/seiton.rb`・Release publish 時に CI が更新 |
 | Scoop (Windows) | ✅ | ✅ [`guitarrapc/scoop-bucket`](https://github.com/guitarrapc/scoop-bucket)、Excavator 更新 |
 | Winget (Windows) | ✅ | ❌ winget-pkgs PR 未提出 |
-| Docker (GHCR) | ✅ | ❌ Dockerfile 無し、GHCR push 未実装 |
+| Docker (GHCR) | ✅ | ✅ Release ワークフローで linux/amd64・arm64 を push |
 | ダウンロード／インストール用スクリプト（curl \| sh 等） | — | **非サポート**（公式には提供しない） |
 | GitHub Action | ❌ | ❌ action.yml 未作成 |
 
@@ -126,29 +126,23 @@ checksums-sha256.txt
 
 ---
 
-### フェーズ 4 — Docker イメージ (GHCR)
+### フェーズ 4 — Docker イメージ (GHCR) — 完了
 
 **WHY**: CI/CD パイプラインや Docker ベースのワークフローで利用したいユーザー向け。
 
-#### 4-1. Dockerfile の作成
+#### 4-1. Dockerfile（実装済み）
 
-- NativeAOT のシングルバイナリなので `scratch` or `gcr.io/distroless/static-debian12` ベースで極小イメージ。
-  ```dockerfile
-  FROM scratch
-  COPY seiton /seiton
-  ENTRYPOINT ["/seiton"]
-  ```
-- マルチアーキテクチャ対応 (`linux/amd64`, `linux/arm64`)。
+- リポジトリルート [`Dockerfile`](../../Dockerfile): `gcr.io/distroless/base-debian12` + リリースビルド済み Linux AOT バイナリ（glibc）。マルチアーキは Buildx の `TARGETARCH` で `amd64` / `arm64` の `COPY` を切り替え。
 
-#### 4-2. release workflow への組み込み
+#### 4-2. release workflow（実装済み）
 
-- `release.yaml` に Docker ビルド・push ジョブを追加:
-  - `docker/login-action` で GHCR 認証。
-  - `docker/build-push-action` + `docker/setup-buildx-action` でマルチアーキ manifest push。
-  - タグ付け: `ghcr.io/guitarrapc/seiton:latest`, `ghcr.io/guitarrapc/seiton:vX.Y.Z`
-- permissions: `packages: write` を追加。
+- [`.github/workflows/release.yaml`](../../.github/workflows/release.yaml) の **`docker` ジョブ**（`needs: validate, publish`）:
+  - `seiton-linux-{amd64,arm64}.tar.gz` を展開して build context を組み立て
+  - `docker/setup-qemu-action`, `docker/setup-buildx-action`, `docker/login-action`（GHCR）, `docker/build-push-action`
+  - タグ: `:latest`, `:<Version>`, `:<tag>`（例 `v0.9.4`）
+  - ジョブ権限: `packages: write`
 
-**完了条件**: `docker pull ghcr.io/guitarrapc/seiton:latest` → `docker run --rm -v "$PWD:/repo" ghcr.io/guitarrapc/seiton:latest /repo` で動作する。
+**完了条件**: `docker pull ghcr.io/<owner>/<repo>:latest` → `docker run --rm -v "$PWD:/repo:ro" ... /repo` で動作する（`<owner>/<repo>` は小文字の GitHub リポジトリパス）。
 
 ---
 
