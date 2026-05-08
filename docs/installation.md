@@ -32,9 +32,16 @@ winget install guitarrapc.seiton
 
 ### Scoop
 
+Package manifests are in [`guitarrapc/scoop-bucket`](https://github.com/guitarrapc/scoop-bucket). The bucket uses an [Excavator](https://github.com/ScoopInstaller/Excavator)-style scheduled workflow so `checkver` / `autoupdate` in the manifest track [Seiton releases](https://github.com/guitarrapc/seiton/releases).
+
+Add the bucket once, then install:
+
 ```powershell
+scoop bucket add guitarrapc https://github.com/guitarrapc/scoop-bucket
 scoop install seiton
 ```
+
+Upgrade later with `scoop update seiton` (or `scoop update`).
 
 ### Manual
 

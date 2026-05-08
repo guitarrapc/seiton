@@ -11,7 +11,7 @@
 | Prebuilt Binaries（手動 DL） | ✅ | ✅ release.yaml で自動ビルド・公開済み |
 | Build from Source | ✅ | ✅ 動作する |
 | Homebrew (macOS/Linux) | ✅ | △ 本体リポ `Formula/seiton.rb`・Release publish 時に CI が更新 |
-| Scoop (Windows) | ✅ | ❌ bucket リポジトリ・マニフェスト未作成 |
+| Scoop (Windows) | ✅ | ✅ [`guitarrapc/scoop-bucket`](https://github.com/guitarrapc/scoop-bucket)、Excavator 更新 |
 | Winget (Windows) | ✅ | ❌ winget-pkgs PR 未提出 |
 | Docker (GHCR) | ✅ | ❌ Dockerfile 無し、GHCR push 未実装 |
 | ダウンロード／インストール用スクリプト（curl \| sh 等） | — | **非サポート**（公式には提供しない） |
@@ -78,7 +78,7 @@ checksums-sha256.txt
 
 ---
 
-### フェーズ 3 — Scoop bucket
+### フェーズ 3 — Scoop bucket - 完了
 
 **WHY**: Windows ユーザーの標準パッケージ管理の一つ。JSON マニフェスト 1 ファイルで済み実装コストが低い。
 
@@ -112,8 +112,7 @@ checksums-sha256.txt
 
 #### 3-2. リリース自動化
 
-- release workflow 完了後に scoop-bucket リポジトリのマニフェストを自動更新。
-- Scoop の `autoupdate` + `checkver` が設定されていれば、Excavator bot が自動 PR を出すことも可能。
+- Scoop の `autoupdate` + `checkver` が設定されており、Excavator bot が自動更新
 
 #### 3-3. docs/installation.md の更新
 
