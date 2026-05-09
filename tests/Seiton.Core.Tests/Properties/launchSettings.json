@@ -1,0 +1,13 @@
+{
+  "profiles": {
+    "Seiton.Core.Tests": {
+      "commandName": "Project"
+    },
+    "Update_.seiton.out": {
+      "commandName": "Project",
+      "environmentVariables": {
+        "SEITON_UPDATE_OUT": "1"
+      }
+    }
+  }
+}
