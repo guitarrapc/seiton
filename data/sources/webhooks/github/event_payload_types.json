@@ -1,12 +1,6 @@
 {
   "schemaVersion": 2,
   "source": "github-docs-webhook-events-and-payloads",
-  "rawSources": [
-    {
-      "fileName": "webhook-events-and-payloads.html",
-      "sha256": "sha256:f8aab5a51b2c387260e67f88330598f7f7f4be97efd98dbd2841578dc275adc0"
-    }
-  ],
   "events": [
     {
       "name": "branch_protection_configuration",
@@ -3386,6 +3380,12 @@
           "elementType": null
         }
       ]
+    }
+  ],
+  "rawSources": [
+    {
+      "fileName": "webhook-events-and-payloads.html",
+      "sha256": "sha256:7e6735e414561b50055c518a808937ad3b38efb320f9aa162d870c2a90971123"
     }
   ]
 }
