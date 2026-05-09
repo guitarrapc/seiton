@@ -25,7 +25,7 @@ internal static class RunnerLabels
 
     internal static bool IsPreviewHostedLabel(ReadOnlySpan<byte> labelUtf8)
     {
-        return EqualsAsciiIgnoreCase(labelUtf8, "windows-2025-vs2026"u8);
+        return false;
     }
 
     internal static bool IsStableHostedLabel(ReadOnlySpan<byte> labelUtf8)
@@ -56,6 +56,7 @@ internal static class RunnerLabels
             || EqualsAsciiIgnoreCase(labelUtf8, "windows-11-arm"u8)
             || EqualsAsciiIgnoreCase(labelUtf8, "windows-2022"u8)
             || EqualsAsciiIgnoreCase(labelUtf8, "windows-2025"u8)
+            || EqualsAsciiIgnoreCase(labelUtf8, "windows-2025-vs2026"u8)
             || EqualsAsciiIgnoreCase(labelUtf8, "windows-latest"u8)
             || EqualsAsciiIgnoreCase(labelUtf8, "windows-latest-8-cores"u8);
     }

@@ -28,10 +28,9 @@
     "windows-11-arm",
     "windows-2022",
     "windows-2025",
+    "windows-2025-vs2026",
     "windows-latest",
     "windows-latest-8-cores"
   ],
-  "previewLabels": [
-    "windows-2025-vs2026"
-  ]
+  "previewLabels": []
 }

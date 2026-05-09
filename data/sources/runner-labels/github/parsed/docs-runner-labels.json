@@ -4,7 +4,7 @@
   "rawSources": [
     {
       "fileName": "github-hosted-runners.docs.md",
-      "sha256": "sha256:7550f3ebad58d1d9cb1e32324e1163c83100a5367055b8dd12e440af2e931ccb"
+      "sha256": "sha256:d9c99ee80c6bf0cd3f0681ed5de16df944e5c613c11aff17331df4f8079435aa"
     },
     {
       "fileName": "larger-runners.docs.md",
@@ -106,7 +106,7 @@
     },
     {
       "label": "windows-2025-vs2026",
-      "isPreview": true
+      "isPreview": false
     },
     {
       "label": "windows-latest",
