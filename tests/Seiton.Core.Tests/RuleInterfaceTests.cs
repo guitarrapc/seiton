@@ -5136,7 +5136,7 @@ public sealed class RuleInterfaceTests
                         - run: echo ng
                         - uses: actions/checkout@v4
             """,
-            ["must define timeout-minutes", "set timeout-minutes on every step"]),
+            ["should define timeout-minutes", "default is 360 minutes", "set timeout-minutes on each step instead"]),
         };
 
         await AssertRuleCases(new JobTimeoutMinutesRequiredRule(), "job-timeout-minutes-required", cases);
