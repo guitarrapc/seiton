@@ -7,6 +7,9 @@ namespace Seiton.Core.Linting.Rules;
 /// <summary>Requires each job to declare an explicit <c>timeout-minutes</c> value.</summary>
 public sealed class JobTimeoutMinutesRequiredRule() : RuleBase(RuleId.JobTimeoutMinutesRequired)
 {
+    /// <summary>GitHub's default job timeout when <c>timeout-minutes</c> is omitted.</summary>
+    internal const int GitHubDefaultTimeoutMinutes = 360;
+
     public override string Name => "Job Timeout Minutes Required Rule";
 
     public override void VisitJobPre(Job job)
@@ -22,7 +25,7 @@ public sealed class JobTimeoutMinutesRequiredRule() : RuleBase(RuleId.JobTimeout
         }
 
         var jobId = Decode(Arena.GetStringSlice(job.Id));
-        var message = $"jobs.'{jobId}' must define timeout-minutes; alternatively, set timeout-minutes on every step";
+        var message = $"jobs.'{jobId}' should define timeout-minutes (default is {GitHubDefaultTimeoutMinutes} minutes); if not possible, set timeout-minutes on each step instead";
         if (Config.Fix.Enabled
             && Config.Utf8Yaml is not null
             && Config.Fix.Defaults.JobTimeoutMinutes is not null
