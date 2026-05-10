@@ -239,7 +239,7 @@ public static partial class WorkflowParser
 
             var unknown = Encoding.UTF8.GetString(keyUtf8);
             reader.Read();
-            var inputSuggestion = SuggestionHelper.FindClosest(unknown, ["default", "deprecationMessage", "description", "required"]);
+            var inputSuggestion = SuggestionHelper.FindClosestFromFormattedKeys(unknown, Generated.ExpectedKeys.ActionMetadataInputOptionKeys);
             var inputMsg = inputSuggestion is not null
                 ? $"unexpected action input option: {unknown}. did you mean \"{inputSuggestion}\"?"
                 : $"unexpected action input option: {unknown}";
@@ -419,7 +419,7 @@ public static partial class WorkflowParser
 
             var unknown = Encoding.UTF8.GetString(keyUtf8);
             reader.Read();
-            var outputSuggestion = SuggestionHelper.FindClosest(unknown, ["description", "value"]);
+            var outputSuggestion = SuggestionHelper.FindClosestFromFormattedKeys(unknown, Generated.ExpectedKeys.ActionMetadataOutputOptionKeys);
             var outputMsg = outputSuggestion is not null
                 ? $"unexpected action output option: {unknown}. did you mean \"{outputSuggestion}\"?"
                 : $"unexpected action output option: {unknown}";
@@ -522,7 +522,7 @@ public static partial class WorkflowParser
 
             var unknown = Encoding.UTF8.GetString(keyUtf8);
             reader.Read();
-            var brandingSuggestion = SuggestionHelper.FindClosest(unknown, ["color", "icon"]);
+            var brandingSuggestion = SuggestionHelper.FindClosestFromFormattedKeys(unknown, Generated.ExpectedKeys.ActionMetadataBrandingKeys);
             var brandingMsg = brandingSuggestion is not null
                 ? $"unexpected action branding key: {unknown}. did you mean \"{brandingSuggestion}\"?"
                 : $"unexpected action branding key: {unknown}";
@@ -717,7 +717,7 @@ public static partial class WorkflowParser
 
             var unknown = Encoding.UTF8.GetString(keyUtf8);
             reader.Read();
-            var runsSuggestion = SuggestionHelper.FindClosest(unknown, ["args", "entrypoint", "env", "image", "main", "post", "post-if", "pre", "pre-if", "steps", "using"]);
+            var runsSuggestion = SuggestionHelper.FindClosestFromFormattedKeys(unknown, Generated.ExpectedKeys.ActionMetadataRunsKeys);
             var runsMsg = runsSuggestion is not null
                 ? $"unexpected action runs key: {unknown}. did you mean \"{runsSuggestion}\"?"
                 : $"unexpected action runs key: {unknown}";

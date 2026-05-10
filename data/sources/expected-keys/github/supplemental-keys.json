@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "source": "supplemental-action-metadata-keys",
-  "description": "Hand-written action metadata top-level keys not derived from workflow-syntax.md. These keys correspond to the ActionMetadataRootKeyTable in the parser plus 'name' and 'author'.",
+  "description": "Hand-written keys not derived from workflow-syntax.md. Includes action metadata sections and other parser sections whose keys come from action.yml spec or are not heading-based.",
   "sections": [
     {
       "name": "action-metadata",
@@ -14,6 +14,65 @@
         "name",
         "outputs",
         "runs"
+      ]
+    },
+    {
+      "name": "action-metadata-branding",
+      "description": "Expected keys for action metadata branding section",
+      "keys": [
+        "color",
+        "icon"
+      ]
+    },
+    {
+      "name": "action-metadata-input-option",
+      "description": "Expected keys for action metadata input option fields",
+      "keys": [
+        "default",
+        "deprecationMessage",
+        "description",
+        "required"
+      ]
+    },
+    {
+      "name": "action-metadata-output-option",
+      "description": "Expected keys for action metadata output option fields",
+      "keys": [
+        "description",
+        "value"
+      ]
+    },
+    {
+      "name": "action-metadata-runs",
+      "description": "Expected keys for action metadata runs section",
+      "keys": [
+        "args",
+        "entrypoint",
+        "env",
+        "image",
+        "main",
+        "post",
+        "post-if",
+        "pre",
+        "pre-if",
+        "steps",
+        "using"
+      ]
+    },
+    {
+      "name": "repository-dispatch",
+      "description": "Expected keys for on.repository_dispatch section",
+      "keys": [
+        "types"
+      ]
+    },
+    {
+      "name": "snapshot",
+      "description": "Expected keys for jobs.<job_id>.snapshot section",
+      "keys": [
+        "if",
+        "image-name",
+        "version"
       ]
     }
   ]

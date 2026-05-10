@@ -52,7 +52,7 @@ public static partial class WorkflowParser
 
             var unknown = Encoding.UTF8.GetString(keyUtf8);
             reader.Read();
-            var rdSuggestion = SuggestionHelper.FindClosest(unknown, ["types"]);
+            var rdSuggestion = SuggestionHelper.FindClosestFromFormattedKeys(unknown, Generated.ExpectedKeys.RepositoryDispatchKeys);
             var rdMsg = rdSuggestion is not null
                 ? $"on.repository_dispatch unexpected key \"{unknown}\" for \"repository_dispatch\" section. did you mean \"{rdSuggestion}\"? expected \"types\""
                 : $"on.repository_dispatch unexpected key \"{unknown}\" for \"repository_dispatch\" section. expected \"types\"";

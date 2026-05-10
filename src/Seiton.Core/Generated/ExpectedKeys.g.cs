@@ -11,6 +11,18 @@ internal static class ExpectedKeys
     /// <summary>Top-level action metadata keys</summary>
     internal const string ActionMetadataKeys = "\"author\", \"branding\", \"description\", \"inputs\", \"name\", \"outputs\", \"runs\"";
 
+    /// <summary>Expected keys for action metadata branding section</summary>
+    internal const string ActionMetadataBrandingKeys = "\"color\", \"icon\"";
+
+    /// <summary>Expected keys for action metadata input option fields</summary>
+    internal const string ActionMetadataInputOptionKeys = "\"default\", \"deprecationMessage\", \"description\", \"required\"";
+
+    /// <summary>Expected keys for action metadata output option fields</summary>
+    internal const string ActionMetadataOutputOptionKeys = "\"description\", \"value\"";
+
+    /// <summary>Expected keys for action metadata runs section</summary>
+    internal const string ActionMetadataRunsKeys = "\"args\", \"entrypoint\", \"env\", \"image\", \"main\", \"post\", \"post-if\", \"pre\", \"pre-if\", \"steps\", \"using\"";
+
     /// <summary>Keys valid for action-form steps (with 'uses')</summary>
     internal const string ActionStepKeys = "\"continue-on-error\", \"env\", \"id\", \"if\", \"name\", \"timeout-minutes\", \"uses\", \"with\"";
 
@@ -71,6 +83,9 @@ internal static class ExpectedKeys
     /// <summary>Expected keys for on.workflow_run</summary>
     internal const string OnWorkflowRunKeys = "\"branches\", \"branches-ignore\", \"workflows\"";
 
+    /// <summary>Expected keys for on.repository_dispatch section</summary>
+    internal const string RepositoryDispatchKeys = "\"types\"";
+
     /// <summary>Keys valid for run-form steps (with 'run')</summary>
     internal const string RunStepKeys = "\"continue-on-error\", \"env\", \"id\", \"if\", \"name\", \"run\", \"shell\", \"timeout-minutes\", \"working-directory\"";
 
@@ -82,6 +97,9 @@ internal static class ExpectedKeys
 
     /// <summary>Expected keys for jobs.<job_id>.services.<service_id></summary>
     internal const string ServiceKeys = "\"command\", \"credentials\", \"entrypoint\", \"env\", \"image\", \"options\", \"ports\", \"volumes\"";
+
+    /// <summary>Expected keys for jobs.<job_id>.snapshot section</summary>
+    internal const string SnapshotKeys = "\"if\", \"image-name\", \"version\"";
 
     /// <summary>Expected keys for jobs.<job_id>.steps[*]</summary>
     internal const string StepKeys = "\"continue-on-error\", \"env\", \"id\", \"if\", \"name\", \"run\", \"shell\", \"timeout-minutes\", \"uses\", \"with\", \"working-directory\"";

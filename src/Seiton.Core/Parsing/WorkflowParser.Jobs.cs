@@ -741,10 +741,10 @@ public static partial class WorkflowParser
 
             var unknownSnapKey = Encoding.UTF8.GetString(keyUtf8);
             reader.Read();
-            var snapSuggestion = SuggestionHelper.FindClosest(unknownSnapKey, ["version", "image-name", "if"]);
+            var snapSuggestion = SuggestionHelper.FindClosestFromFormattedKeys(unknownSnapKey, Generated.ExpectedKeys.SnapshotKeys);
             var snapMessage = snapSuggestion is not null
-                ? $"unexpected key \"{unknownSnapKey}\" for \"{section}\". did you mean \"{snapSuggestion}\"? expected one of \"version\", \"image-name\", \"if\""
-                : $"unexpected key \"{unknownSnapKey}\" for \"{section}\". expected one of \"version\", \"image-name\", \"if\"";
+                ? $"unexpected key \"{unknownSnapKey}\" for \"{section}\". did you mean \"{snapSuggestion}\"? expected one of {Generated.ExpectedKeys.SnapshotKeys}"
+                : $"unexpected key \"{unknownSnapKey}\" for \"{section}\". expected one of {Generated.ExpectedKeys.SnapshotKeys}";
             AddError(ref diagnostics, snapMessage, keyMark);
             if (!reader.End)
             {
