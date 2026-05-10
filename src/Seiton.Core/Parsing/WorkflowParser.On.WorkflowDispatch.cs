@@ -50,13 +50,17 @@ public static partial class WorkflowParser
                 continue;
             }
 
+            var keySlice = reader.GetScalarSlice();
             var unknown = Encoding.UTF8.GetString(keyUtf8);
             reader.Read();
             var wdSuggestion = SuggestionHelper.FindClosestFromFormattedKeys(unknown, Generated.ExpectedKeys.OnWorkflowDispatchKeys);
             var wdMsg = wdSuggestion is not null
                 ? $"on.workflow_dispatch unexpected key \"{unknown}\" for \"workflow_dispatch\" section. did you mean \"{wdSuggestion}\"? expected \"inputs\""
                 : $"on.workflow_dispatch unexpected key \"{unknown}\" for \"workflow_dispatch\" section. expected \"inputs\"";
-            AddError(ref diagnostics, wdMsg, keyMark);
+            var wdFix = wdSuggestion is not null
+                ? new DiagnosticFix($"replace '{unknown}' with '{wdSuggestion}'", [new TextEdit(keySlice.Offset, keySlice.Length, wdSuggestion)])
+                : (DiagnosticFix?)null;
+            AddError(ref diagnostics, wdMsg, keyMark, wdFix);
             if (!reader.End)
             {
                 reader.SkipCurrentNode();
@@ -243,13 +247,17 @@ public static partial class WorkflowParser
                 }
             }
 
+            var keySlice = reader.GetScalarSlice();
             var unknown = Encoding.UTF8.GetString(keyUtf8);
             reader.Read();
             var wdInputSuggestion = SuggestionHelper.FindClosestFromFormattedKeys(unknown, Generated.ExpectedKeys.WorkflowDispatchInputFieldKeys);
             var wdInputMsg = wdInputSuggestion is not null
                 ? $"on.workflow_dispatch.inputs unexpected key \"{unknown}\" for \"inputs\" section. did you mean \"{wdInputSuggestion}\"? expected one of {Generated.ExpectedKeys.WorkflowDispatchInputFieldKeys}"
                 : $"on.workflow_dispatch.inputs unexpected key \"{unknown}\" for \"inputs\" section. expected one of {Generated.ExpectedKeys.WorkflowDispatchInputFieldKeys}";
-            AddError(ref diagnostics, wdInputMsg, keyMark);
+            var wdInputFix = wdInputSuggestion is not null
+                ? new DiagnosticFix($"replace '{unknown}' with '{wdInputSuggestion}'", [new TextEdit(keySlice.Offset, keySlice.Length, wdInputSuggestion)])
+                : (DiagnosticFix?)null;
+            AddError(ref diagnostics, wdInputMsg, keyMark, wdInputFix);
             if (!reader.End)
             {
                 reader.SkipCurrentNode();

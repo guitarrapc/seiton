@@ -121,6 +121,7 @@ public static partial class WorkflowParser
         // so we defer reporting until after the mapping loop when stepForm is determined.
         string? deferredUnknownKey = null;
         TextPosition deferredUnknownMark = default;
+        Utf8Slice deferredUnknownKeySlice = default;
         var hasAnyKey = false;
         StringNodeId idNode = default;
         StringNodeId ifNode = default;
@@ -155,7 +156,6 @@ public static partial class WorkflowParser
 
             var keyMark = reader.CurrentStart;
             var keyUtf8 = reader.GetScalarUtf8();
-
             if (IsMergeKey(keyUtf8, keyMark, ref diagnostics, FormatStepPrefix(source, jobId, stepIndex)))
             {
                 reader.Read();
@@ -329,6 +329,7 @@ public static partial class WorkflowParser
             // keyUtf8 span is invalidated by reader.Read(); capture what we need BEFORE advancing.
             var isKnownButNotHandled = IsKnownStepKey(keyUtf8);
             var unknownKey = isKnownButNotHandled ? null : Encoding.UTF8.GetString(keyUtf8);
+            var unknownKeySlice = isKnownButNotHandled ? default : reader.GetScalarSlice();
 
             reader.Read();
 
@@ -347,7 +348,10 @@ public static partial class WorkflowParser
                 var stepMsg = stepSuggestion is not null
                     ? $"{FormatStepPrefix(source, jobId, stepIndex)} unexpected key \"{unknownKey}\" for step to execute action. did you mean \"{stepSuggestion}\"? expected one of {ActionStepExpectedKeys}"
                     : $"{FormatStepPrefix(source, jobId, stepIndex)} unexpected key \"{unknownKey}\" for step to execute action. expected one of {ActionStepExpectedKeys}";
-                AddError(ref diagnostics, stepMsg, keyMark);
+                var stepFix = stepSuggestion is not null
+                    ? new DiagnosticFix($"replace '{unknownKey}' with '{stepSuggestion}'", [new TextEdit(unknownKeySlice.Offset, unknownKeySlice.Length, stepSuggestion)])
+                    : (DiagnosticFix?)null;
+                AddError(ref diagnostics, stepMsg, keyMark, stepFix);
             }
             else if (stepForm == 1)
             {
@@ -355,13 +359,17 @@ public static partial class WorkflowParser
                 var stepMsg = stepSuggestion is not null
                     ? $"{FormatStepPrefix(source, jobId, stepIndex)} unexpected key \"{unknownKey}\" for step to run shell command. did you mean \"{stepSuggestion}\"? expected one of {RunStepExpectedKeys}"
                     : $"{FormatStepPrefix(source, jobId, stepIndex)} unexpected key \"{unknownKey}\" for step to run shell command. expected one of {RunStepExpectedKeys}";
-                AddError(ref diagnostics, stepMsg, keyMark);
+                var stepFix = stepSuggestion is not null
+                    ? new DiagnosticFix($"replace '{unknownKey}' with '{stepSuggestion}'", [new TextEdit(unknownKeySlice.Offset, unknownKeySlice.Length, stepSuggestion)])
+                    : (DiagnosticFix?)null;
+                AddError(ref diagnostics, stepMsg, keyMark, stepFix);
             }
             else if (deferredUnknownKey is null)
             {
                 // stepForm == 0: defer until post-mapping when step type is known
                 deferredUnknownKey = unknownKey;
                 deferredUnknownMark = keyMark;
+                deferredUnknownKeySlice = unknownKeySlice;
             }
             if (!reader.End)
             {
@@ -383,7 +391,10 @@ public static partial class WorkflowParser
                 var deferredMsg = deferredSuggestion is not null
                     ? $"{FormatStepPrefix(source, jobId, stepIndex)} unexpected key \"{deferredUnknownKey}\" for step to execute action. did you mean \"{deferredSuggestion}\"? expected one of {ActionStepExpectedKeys}"
                     : $"{FormatStepPrefix(source, jobId, stepIndex)} unexpected key \"{deferredUnknownKey}\" for step to execute action. expected one of {ActionStepExpectedKeys}";
-                AddError(ref diagnostics, deferredMsg, deferredUnknownMark);
+                var deferredFix = deferredSuggestion is not null
+                    ? new DiagnosticFix($"replace '{deferredUnknownKey}' with '{deferredSuggestion}'", [new TextEdit(deferredUnknownKeySlice.Offset, deferredUnknownKeySlice.Length, deferredSuggestion)])
+                    : (DiagnosticFix?)null;
+                AddError(ref diagnostics, deferredMsg, deferredUnknownMark, deferredFix);
             }
             else
             {
@@ -391,7 +402,10 @@ public static partial class WorkflowParser
                 var deferredMsg = deferredSuggestion is not null
                     ? $"{FormatStepPrefix(source, jobId, stepIndex)} unexpected key \"{deferredUnknownKey}\" for step to run shell command. did you mean \"{deferredSuggestion}\"? expected one of {RunStepExpectedKeys}"
                     : $"{FormatStepPrefix(source, jobId, stepIndex)} unexpected key \"{deferredUnknownKey}\" for step to run shell command. expected one of {RunStepExpectedKeys}";
-                AddError(ref diagnostics, deferredMsg, deferredUnknownMark);
+                var deferredFix = deferredSuggestion is not null
+                    ? new DiagnosticFix($"replace '{deferredUnknownKey}' with '{deferredSuggestion}'", [new TextEdit(deferredUnknownKeySlice.Offset, deferredUnknownKeySlice.Length, deferredSuggestion)])
+                    : (DiagnosticFix?)null;
+                AddError(ref diagnostics, deferredMsg, deferredUnknownMark, deferredFix);
             }
         }
 

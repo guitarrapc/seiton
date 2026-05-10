@@ -172,7 +172,10 @@ public static partial class WorkflowParser
             var webhookMsg1 = webhookSuggestion1 is not null
                 ? $"on.{eventInfo.Name} unexpected key \"{unknownKeyText}\" for \"{eventInfo.Name}\" section. did you mean \"{webhookSuggestion1}\"? expected one of {Generated.ExpectedKeys.WebhookEventOptionKeys}"
                 : $"on.{eventInfo.Name} unexpected key \"{unknownKeyText}\" for \"{eventInfo.Name}\" section. expected one of {Generated.ExpectedKeys.WebhookEventOptionKeys}";
-            AddError(ref diagnostics, webhookMsg1, keyMark);
+            var webhookFix1 = webhookSuggestion1 is not null
+                ? new DiagnosticFix($"replace '{unknownKeyText}' with '{webhookSuggestion1}'", [new TextEdit(keySlice.Offset, keySlice.Length, webhookSuggestion1)])
+                : (DiagnosticFix?)null;
+            AddError(ref diagnostics, webhookMsg1, keyMark, webhookFix1);
             if (!reader.End) { reader.SkipCurrentNode(); }
         }
 
@@ -484,7 +487,10 @@ public static partial class WorkflowParser
             var webhookMsg2 = webhookSuggestion2 is not null
                 ? $"on.{eventInfo.Name} unexpected key \"{unknownKey}\" for \"{eventInfo.Name}\" section. did you mean \"{webhookSuggestion2}\"? expected one of {Generated.ExpectedKeys.WebhookEventOptionKeys}"
                 : $"on.{eventInfo.Name} unexpected key \"{unknownKey}\" for \"{eventInfo.Name}\" section. expected one of {Generated.ExpectedKeys.WebhookEventOptionKeys}";
-            AddError(ref diagnostics, webhookMsg2, keyMark);
+            var webhookFix2 = webhookSuggestion2 is not null
+                ? new DiagnosticFix($"replace '{unknownKey}' with '{webhookSuggestion2}'", [new TextEdit(keySlice.Offset, keySlice.Length, webhookSuggestion2)])
+                : (DiagnosticFix?)null;
+            AddError(ref diagnostics, webhookMsg2, keyMark, webhookFix2);
             reader.SkipCurrentNode();
         }
 

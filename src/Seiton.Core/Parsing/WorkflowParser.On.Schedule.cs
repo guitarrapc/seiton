@@ -128,13 +128,17 @@ public static partial class WorkflowParser
                 }
             }
 
+            var keySlice = reader.GetScalarSlice();
             var unknown = Encoding.UTF8.GetString(keyUtf8);
             reader.Read();
             var schedSuggestion = SuggestionHelper.FindClosestFromFormattedKeys(unknown, Generated.ExpectedKeys.ScheduleEntryKeys);
             var schedMsg = schedSuggestion is not null
                 ? $"on.schedule unexpected key \"{unknown}\" for \"schedule\" section. did you mean \"{schedSuggestion}\"? expected one of {Generated.ExpectedKeys.ScheduleEntryKeys}"
                 : $"on.schedule unexpected key \"{unknown}\" for \"schedule\" section. expected one of {Generated.ExpectedKeys.ScheduleEntryKeys}";
-            AddError(ref diagnostics, schedMsg, keyMark);
+            var schedFix = schedSuggestion is not null
+                ? new DiagnosticFix($"replace '{unknown}' with '{schedSuggestion}'", [new TextEdit(keySlice.Offset, keySlice.Length, schedSuggestion)])
+                : (DiagnosticFix?)null;
+            AddError(ref diagnostics, schedMsg, keyMark, schedFix);
             if (!reader.End)
             {
                 reader.SkipCurrentNode();

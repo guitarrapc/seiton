@@ -82,13 +82,17 @@ public static partial class WorkflowParser
                 }
             }
 
+            var keySlice = reader.GetScalarSlice();
             var unknown = Encoding.UTF8.GetString(keyUtf8);
             reader.Read();
             var wcSuggestion = SuggestionHelper.FindClosestFromFormattedKeys(unknown, Generated.ExpectedKeys.OnWorkflowCallKeys);
             var wcMsg = wcSuggestion is not null
                 ? $"on.workflow_call unexpected key \"{unknown}\" for \"workflow_call\" section. did you mean \"{wcSuggestion}\"? expected one of {Generated.ExpectedKeys.OnWorkflowCallKeys}"
                 : $"on.workflow_call unexpected key \"{unknown}\" for \"workflow_call\" section. expected one of {Generated.ExpectedKeys.OnWorkflowCallKeys}";
-            AddError(ref diagnostics, wcMsg, keyMark);
+            var wcFix = wcSuggestion is not null
+                ? new DiagnosticFix($"replace '{unknown}' with '{wcSuggestion}'", [new TextEdit(keySlice.Offset, keySlice.Length, wcSuggestion)])
+                : (DiagnosticFix?)null;
+            AddError(ref diagnostics, wcMsg, keyMark, wcFix);
             if (!reader.End)
             {
                 reader.SkipCurrentNode();
@@ -292,13 +296,17 @@ public static partial class WorkflowParser
                 }
             }
 
+            var keySlice = reader.GetScalarSlice();
             var unknown = Encoding.UTF8.GetString(keyUtf8);
             reader.Read();
             var wcInputSuggestion = SuggestionHelper.FindClosestFromFormattedKeys(unknown, Generated.ExpectedKeys.WorkflowCallInputFieldKeys);
             var wcInputMsg = wcInputSuggestion is not null
                 ? $"on.workflow_call.inputs unexpected key \"{unknown}\" for \"inputs\" section. did you mean \"{wcInputSuggestion}\"? expected one of {Generated.ExpectedKeys.WorkflowCallInputFieldKeys}"
                 : $"on.workflow_call.inputs unexpected key \"{unknown}\" for \"inputs\" section. expected one of {Generated.ExpectedKeys.WorkflowCallInputFieldKeys}";
-            AddError(ref diagnostics, wcInputMsg, keyMark);
+            var wcInputFix = wcInputSuggestion is not null
+                ? new DiagnosticFix($"replace '{unknown}' with '{wcInputSuggestion}'", [new TextEdit(keySlice.Offset, keySlice.Length, wcInputSuggestion)])
+                : (DiagnosticFix?)null;
+            AddError(ref diagnostics, wcInputMsg, keyMark, wcInputFix);
             if (!reader.End)
             {
                 reader.SkipCurrentNode();
@@ -539,13 +547,17 @@ public static partial class WorkflowParser
                 }
             }
 
+            var keySlice = reader.GetScalarSlice();
             var unknown = Encoding.UTF8.GetString(keyUtf8);
             reader.Read();
             var wcSecretSuggestion = SuggestionHelper.FindClosestFromFormattedKeys(unknown, Generated.ExpectedKeys.WorkflowCallSecretFieldKeys);
             var wcSecretMsg = wcSecretSuggestion is not null
                 ? $"on.workflow_call.secrets unexpected key \"{unknown}\" for \"secrets\" section. did you mean \"{wcSecretSuggestion}\"? expected one of {Generated.ExpectedKeys.WorkflowCallSecretFieldKeys}"
                 : $"on.workflow_call.secrets unexpected key \"{unknown}\" for \"secrets\" section. expected one of {Generated.ExpectedKeys.WorkflowCallSecretFieldKeys}";
-            AddError(ref diagnostics, wcSecretMsg, keyMark);
+            var wcSecretFix = wcSecretSuggestion is not null
+                ? new DiagnosticFix($"replace '{unknown}' with '{wcSecretSuggestion}'", [new TextEdit(keySlice.Offset, keySlice.Length, wcSecretSuggestion)])
+                : (DiagnosticFix?)null;
+            AddError(ref diagnostics, wcSecretMsg, keyMark, wcSecretFix);
             if (!reader.End)
             {
                 reader.SkipCurrentNode();
@@ -736,13 +748,17 @@ public static partial class WorkflowParser
                 }
             }
 
+            var keySlice = reader.GetScalarSlice();
             var unknown = Encoding.UTF8.GetString(keyUtf8);
             reader.Read();
             var wcOutputSuggestion = SuggestionHelper.FindClosestFromFormattedKeys(unknown, Generated.ExpectedKeys.WorkflowCallOutputFieldKeys);
             var wcOutputMsg = wcOutputSuggestion is not null
                 ? $"on.workflow_call.outputs unexpected key \"{unknown}\" for \"outputs\" section. did you mean \"{wcOutputSuggestion}\"? expected one of {Generated.ExpectedKeys.WorkflowCallOutputFieldKeys}"
                 : $"on.workflow_call.outputs unexpected key \"{unknown}\" for \"outputs\" section. expected one of {Generated.ExpectedKeys.WorkflowCallOutputFieldKeys}";
-            AddError(ref diagnostics, wcOutputMsg, keyMark);
+            var wcOutputFix = wcOutputSuggestion is not null
+                ? new DiagnosticFix($"replace '{unknown}' with '{wcOutputSuggestion}'", [new TextEdit(keySlice.Offset, keySlice.Length, wcOutputSuggestion)])
+                : (DiagnosticFix?)null;
+            AddError(ref diagnostics, wcOutputMsg, keyMark, wcOutputFix);
             if (!reader.End)
             {
                 reader.SkipCurrentNode();

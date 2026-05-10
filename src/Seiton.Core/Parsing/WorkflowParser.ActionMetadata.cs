@@ -237,13 +237,17 @@ public static partial class WorkflowParser
                 }
             }
 
+            var keySlice = reader.GetScalarSlice();
             var unknown = Encoding.UTF8.GetString(keyUtf8);
             reader.Read();
             var inputSuggestion = SuggestionHelper.FindClosestFromFormattedKeys(unknown, Generated.ExpectedKeys.ActionMetadataInputOptionKeys);
             var inputMsg = inputSuggestion is not null
                 ? $"unexpected action input option: {unknown}. did you mean \"{inputSuggestion}\"?"
                 : $"unexpected action input option: {unknown}";
-            AddError(ref diagnostics, inputMsg, keyMark);
+            var inputFix = inputSuggestion is not null
+                ? new DiagnosticFix($"replace '{unknown}' with '{inputSuggestion}'", [new TextEdit(keySlice.Offset, keySlice.Length, inputSuggestion)])
+                : (DiagnosticFix?)null;
+            AddError(ref diagnostics, inputMsg, keyMark, inputFix);
             if (!reader.End)
             {
                 reader.SkipCurrentNode();
@@ -417,13 +421,17 @@ public static partial class WorkflowParser
                 }
             }
 
+            var keySlice = reader.GetScalarSlice();
             var unknown = Encoding.UTF8.GetString(keyUtf8);
             reader.Read();
             var outputSuggestion = SuggestionHelper.FindClosestFromFormattedKeys(unknown, Generated.ExpectedKeys.ActionMetadataOutputOptionKeys);
             var outputMsg = outputSuggestion is not null
                 ? $"unexpected action output option: {unknown}. did you mean \"{outputSuggestion}\"?"
                 : $"unexpected action output option: {unknown}";
-            AddError(ref diagnostics, outputMsg, keyMark);
+            var outputFix = outputSuggestion is not null
+                ? new DiagnosticFix($"replace '{unknown}' with '{outputSuggestion}'", [new TextEdit(keySlice.Offset, keySlice.Length, outputSuggestion)])
+                : (DiagnosticFix?)null;
+            AddError(ref diagnostics, outputMsg, keyMark, outputFix);
             if (!reader.End)
             {
                 reader.SkipCurrentNode();
@@ -520,13 +528,17 @@ public static partial class WorkflowParser
                 }
             }
 
+            var keySlice = reader.GetScalarSlice();
             var unknown = Encoding.UTF8.GetString(keyUtf8);
             reader.Read();
             var brandingSuggestion = SuggestionHelper.FindClosestFromFormattedKeys(unknown, Generated.ExpectedKeys.ActionMetadataBrandingKeys);
             var brandingMsg = brandingSuggestion is not null
                 ? $"unexpected action branding key: {unknown}. did you mean \"{brandingSuggestion}\"?"
                 : $"unexpected action branding key: {unknown}";
-            AddError(ref diagnostics, brandingMsg, keyMark);
+            var brandingFix = brandingSuggestion is not null
+                ? new DiagnosticFix($"replace '{unknown}' with '{brandingSuggestion}'", [new TextEdit(keySlice.Offset, keySlice.Length, brandingSuggestion)])
+                : (DiagnosticFix?)null;
+            AddError(ref diagnostics, brandingMsg, keyMark, brandingFix);
             if (!reader.End)
             {
                 reader.SkipCurrentNode();
@@ -715,13 +727,17 @@ public static partial class WorkflowParser
                 }
             }
 
+            var keySlice = reader.GetScalarSlice();
             var unknown = Encoding.UTF8.GetString(keyUtf8);
             reader.Read();
             var runsSuggestion = SuggestionHelper.FindClosestFromFormattedKeys(unknown, Generated.ExpectedKeys.ActionMetadataRunsKeys);
             var runsMsg = runsSuggestion is not null
                 ? $"unexpected action runs key: {unknown}. did you mean \"{runsSuggestion}\"?"
                 : $"unexpected action runs key: {unknown}";
-            AddError(ref diagnostics, runsMsg, keyMark);
+            var runsFix = runsSuggestion is not null
+                ? new DiagnosticFix($"replace '{unknown}' with '{runsSuggestion}'", [new TextEdit(keySlice.Offset, keySlice.Length, runsSuggestion)])
+                : (DiagnosticFix?)null;
+            AddError(ref diagnostics, runsMsg, keyMark, runsFix);
             if (!reader.End)
             {
                 reader.SkipCurrentNode();

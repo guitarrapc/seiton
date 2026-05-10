@@ -326,6 +326,7 @@ public static partial class WorkflowParser
                 }
             }
 
+            var keySlice = reader.GetScalarSlice();
             var unknownKey = Encoding.UTF8.GetString(keyUtf8);
             reader.Read();
             var containerSectionType = isService ? "services" : "container";
@@ -336,7 +337,10 @@ public static partial class WorkflowParser
             var containerMsg = containerSuggestion is not null
                 ? $"{FormatContainerSectionName(source, jobId, serviceName, isService)} unexpected key \"{unknownKey}\" for \"{containerSectionType}\" section. did you mean \"{containerSuggestion}\"? expected one of {expectedKeys}"
                 : $"{FormatContainerSectionName(source, jobId, serviceName, isService)} unexpected key \"{unknownKey}\" for \"{containerSectionType}\" section. expected one of {expectedKeys}";
-            AddError(ref diagnostics, containerMsg, keyMark);
+            var containerFix = containerSuggestion is not null
+                ? new DiagnosticFix($"replace '{unknownKey}' with '{containerSuggestion}'", [new TextEdit(keySlice.Offset, keySlice.Length, containerSuggestion)])
+                : (DiagnosticFix?)null;
+            AddError(ref diagnostics, containerMsg, keyMark, containerFix);
             if (!reader.End) reader.SkipCurrentNode();
         }
 
@@ -495,13 +499,17 @@ public static partial class WorkflowParser
                 }
             }
 
+            var keySlice = reader.GetScalarSlice();
             var unknownKey = Encoding.UTF8.GetString(keyUtf8);
             reader.Read();
             var credSuggestion = SuggestionHelper.FindClosestFromFormattedKeys(unknownKey, Generated.ExpectedKeys.CredentialsKeys);
             var credMsg = credSuggestion is not null
                 ? $"{FormatContainerSectionName(source, jobId, serviceName, isService)}.credentials unexpected key \"{unknownKey}\" for \"credentials\" section. did you mean \"{credSuggestion}\"? expected one of {Generated.ExpectedKeys.CredentialsKeys}"
                 : $"{FormatContainerSectionName(source, jobId, serviceName, isService)}.credentials unexpected key \"{unknownKey}\" for \"credentials\" section. expected one of {Generated.ExpectedKeys.CredentialsKeys}";
-            AddError(ref diagnostics, credMsg, keyMark);
+            var credFix = credSuggestion is not null
+                ? new DiagnosticFix($"replace '{unknownKey}' with '{credSuggestion}'", [new TextEdit(keySlice.Offset, keySlice.Length, credSuggestion)])
+                : (DiagnosticFix?)null;
+            AddError(ref diagnostics, credMsg, keyMark, credFix);
             if (!reader.End) reader.SkipCurrentNode();
         }
 
