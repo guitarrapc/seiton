@@ -1027,7 +1027,7 @@ public static partial class WorkflowParser
 
                     var unknownRunKey = Encoding.UTF8.GetString(runKeyUtf8);
                     reader.Read();
-                    var runPrefix = sectionContext.Length > 0 ? $"{sectionContext}.defaults.run " : "";
+                    var runPrefix = sectionContext.Length > 0 ? $"{sectionContext}.defaults.run " : "defaults.run ";
                     AddError(ref diagnostics, $"{runPrefix}unexpected key \"{unknownRunKey}\" for \"run\" section. expected one of {Generated.ExpectedKeys.DefaultsRunKeys}", runKeyMark);
                     if (!reader.End) reader.SkipCurrentNode();
                 }
@@ -1045,7 +1045,7 @@ public static partial class WorkflowParser
 
             var unknownDefaultsKey = Encoding.UTF8.GetString(keyUtf8);
             reader.Read();
-            var defaultsPrefix = sectionContext.Length > 0 ? $"{sectionContext}.defaults " : "";
+            var defaultsPrefix = sectionContext.Length > 0 ? $"{sectionContext}.defaults " : "defaults ";
             AddError(ref diagnostics, $"{defaultsPrefix}expected \"run\" key for \"defaults\" section but got \"{unknownDefaultsKey}\"", keyMark);
             if (!reader.End) reader.SkipCurrentNode();
         }
@@ -1161,7 +1161,7 @@ public static partial class WorkflowParser
 
             var unknownConcurrencyKey = Encoding.UTF8.GetString(keyUtf8);
             reader.Read();
-            var concurrencyPrefix = sectionContext.Length > 0 ? $"{sectionContext}.concurrency " : "";
+            var concurrencyPrefix = sectionContext.Length > 0 ? $"{sectionContext}.concurrency " : "concurrency ";
             AddError(ref diagnostics, $"{concurrencyPrefix}unexpected key \"{unknownConcurrencyKey}\" for \"concurrency\" section. expected one of {Generated.ExpectedKeys.ConcurrencyKeys}", innerKeyMark);
             if (!reader.End) reader.SkipCurrentNode();
         }
