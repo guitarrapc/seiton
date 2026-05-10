@@ -1,4 +1,4 @@
-﻿using System.Text;
+using System.Text;
 using Seiton.Update.Model;
 
 namespace Seiton.Update.Generators;
@@ -229,21 +229,14 @@ internal sealed class WebhookTypesCSharpGenerator
                 sb.AppendLine();
                 sb.Append("        ");
             }
+            else
+            {
+                sb.Append(' ');
+            }
 
             sb.Append($"\"{events[i].Name}\"");
             if (i < events.Count - 1)
-            {
                 sb.Append(',');
-                if ((i + 1) % 5 == 0)
-                {
-                    sb.AppendLine();
-                    sb.Append("        ");
-                }
-                else
-                {
-                    sb.Append(' ');
-                }
-            }
         }
 
         sb.AppendLine();
