@@ -98,11 +98,13 @@ Parse raw bytes into structured JSON (the **Stage 2 product**). On disk this usu
 
 Apply conflict resolution policy across all parsed artifacts to produce one canonical snapshot.
 
-- Input: Parsed JSON files from Stage 2
+- Input: Parsed JSON files from Stage 2, plus optional **supplemental JSON** (hand-written sections not derivable from raw sources)
 - Output:
   - Canonical snapshot: `data/sources/{dataset}/{provider}/{snapshot}.json`
   - Official-source diff report: `data/sources/reports/official-{dataset}-source-diff.md` (when applicable)
 - Network access: **no**
+
+**Supplemental merge pattern**: Some datasets need key sets or entries that are not present in the raw source files parsed in Stage 2 (for example, action metadata keys are not in `workflow-syntax.md`). These are maintained as hand-written `supplemental-*.json` files alongside the canonical snapshot. Stage 3 reads the supplemental file, merges its entries into the parsed model (deduplicating by name, sorting alphabetically), and writes the combined result as the canonical snapshot. This keeps Stage 2 pure (derived only from raw) while allowing the canonical snapshot to include repository-managed additions. Current datasets using this pattern: `runner-labels` (`supplemental-labels.json`), `expected-keys` (`supplemental-keys.json`).
 
 #### 3.1.4 Codegen — Sync .g.cs
 
@@ -169,11 +171,12 @@ Each stage may be invoked independently:
 ### 3.6 Storage Path Convention
 
 ```
-data/sources/{dataset}/{provider}/raw/        ← Stage 1: raw downloaded source files
-data/sources/{dataset}/{provider}/parsed/     ← Stage 2: per-source parsed JSON (if not collapsed)
-data/sources/{dataset}/{provider}/{name}.json ← Stage 3 (or collapsed Stage 2): canonical snapshot
-data/sources/reports/                         ← diff and parity reports (not manifest-backed)
-data/sources/manifest.json                    ← fetch provenance for datasets with Stage 1
+data/sources/{dataset}/{provider}/raw/                  ← Stage 1: raw downloaded source files
+data/sources/{dataset}/{provider}/parsed/               ← Stage 2: per-source parsed JSON (if not collapsed)
+data/sources/{dataset}/{provider}/supplemental-*.json   ← Hand-written entries merged in Stage 3 (optional)
+data/sources/{dataset}/{provider}/{name}.json           ← Stage 3 (or collapsed Stage 2): canonical snapshot
+data/sources/reports/                                   ← diff and parity reports (not manifest-backed)
+data/sources/manifest.json                              ← fetch provenance for datasets with Stage 1
 ```
 
 Not every path appears for every dataset. Some omit `parsed/` (collapsed), some omit `raw/` (hand-authored). See §4.0.
@@ -190,7 +193,7 @@ Cross-walk of maintainer-facing datasets (including satellite **`event-payload-t
 |---|---|---|---|---|---|
 | availability | `availability` | Standard | `.../raw/contexts.docs.md` | `.../parsed/docs-context-availability.json` | `availability.json` |
 | context-types | `context-types` | Standard | `.../raw/contexts.docs.md` | `.../parsed/docs-contexts.json` | `context-types.json` (+ hand-maintained override JSON merged in Stage 3) |
-| expected-keys | `expected-keys` | Standard (passthrough merge) | `.../raw/workflow-syntax.md` | `.../parsed/expected-keys.json` | `expected-keys.json` (copy of parsed) |
+| expected-keys | `expected-keys` | Standard | `.../raw/workflow-syntax.md` | `.../parsed/expected-keys.json` | `expected-keys.json` (parsed + supplemental merge) |
 | function-specs | `function-specs` | Composite primary | `.../raw/expressions.docs.md` | `.../parsed/docs-function-names.json` | `function-specs.json` (hand-maintained base) |
 | iana-timezones | `iana-timezones` | Standard | `.../raw/tzdata.zi` | `.../parsed/iana-timezone-ids.json` | `iana_timezones.json` |
 | permissions | `permissions` | Standard | `.../raw/github-token-available-permissions.md` | `.../parsed/permissions-scopes.json` | `permissions.json` |
@@ -303,7 +306,7 @@ All methods use `ReadOnlySpan<byte>` comparisons for zero-allocation hot-path us
 
 #### 4.3.7 Expected Keys
 
-`expected-keys` follows the **standard** raw → **`parsed/expected-keys.json`** → **`expected-keys.json`** layout (§3.4): Stage 2 writes the parsed hierarchy; Stage 3 (`merge-expected-keys-sources`) copies the normalized JSON to `expected-keys.json` for codegen and other tools (for example webhooks sync) without additional transforms.
+`expected-keys` follows the **standard** raw → **`parsed/expected-keys.json`** → **`expected-keys.json`** layout (§3.4): Stage 2 writes the parsed hierarchy; Stage 3 (`merge-expected-keys-sources`) deserializes the parsed JSON, merges hand-written supplemental sections from `supplemental-keys.json` (§3.1.3), sorts all sections alphabetically, and writes the combined result as `expected-keys.json`.
 
 `expected-keys` fetches `workflow-syntax.md` from GitHub Docs and builds a complete parent→child key hierarchy by parsing all `## \`...\`` headings. The algorithm:
 
@@ -315,7 +318,7 @@ All methods use `ReadOnlySpan<byte>` comparisons for zero-allocation hot-path us
 6. Derive `action-step` (step keys minus `run`, `shell`, `working-directory`) and `run-step` (step keys minus `uses`, `with`) from the `step` section.
 7. Supplement sections whose sub-keys are documented in body text rather than as headings (`credentials`: `password`/`username`; `runs-on`: `group`/`labels`).
 
-Stage 3 is a **passthrough** of Stage 2 into `expected-keys.json`. The canonical file has ~37 sections covering:
+Stage 3 merges supplemental sections (for example `action-metadata`: keys for action.yml top-level that are not in workflow-syntax.md) into the parsed output. The canonical file has ~38 sections covering:
 
 - Top-level workflow keys, `on` event names, per-event filter keys (`on.push`, `on.pull_request`, etc.)
 - `on.workflow_call`/`on.workflow_dispatch` sub-keys and input/secret sub-keys
@@ -403,6 +406,7 @@ data/sources/popular-actions/targets.json
 
 data/sources/runner-labels/github/raw/*
 data/sources/runner-labels/github/parsed/*
+data/sources/runner-labels/github/supplemental-labels.json
 data/sources/runner-labels/github/runner_labels.json
 
 data/sources/context-types/github/raw/*
@@ -427,6 +431,7 @@ data/sources/shells/github/shells.json
 
 data/sources/expected-keys/github/raw/workflow-syntax.md
 data/sources/expected-keys/github/parsed/expected-keys.json
+data/sources/expected-keys/github/supplemental-keys.json
 data/sources/expected-keys/github/expected-keys.json
 
 data/sources/reports/*
