@@ -228,7 +228,7 @@ public sealed class ParserTests
         """);
 
         var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "unknown.yml");
-        await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("unexpected key \"foobar\" for \"workflow\" section", StringComparison.Ordinal))).IsTrue();
+        await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("unexpected key \"foobar\" at workflow top level", StringComparison.Ordinal))).IsTrue();
     }
 
     [Test]
@@ -2018,7 +2018,7 @@ public sealed class ParserTests
         {
             new ErrFixtureExpectation("empty.yaml", ["workflow root must be object"]),
             new ErrFixtureExpectation("empty_on.yaml", ["unknown event"]),
-            new ErrFixtureExpectation("case_sensitive_keys.yaml", ["unexpected key", "for \"workflow\" section", "jobs.'test1' unexpected key"]),
+            new ErrFixtureExpectation("case_sensitive_keys.yaml", ["unexpected key", "at workflow top level", "jobs.'test1' unexpected key"]),
             new ErrFixtureExpectation("duplicate_keys.yaml", ["is duplicated in"]),
             new ErrFixtureExpectation("invalid_int_at_max_parallel.yaml", ["strategy.max-parallel must be integer"]),
             new ErrFixtureExpectation("invalid_steps.yaml", ["unexpected key", "must run script"]),

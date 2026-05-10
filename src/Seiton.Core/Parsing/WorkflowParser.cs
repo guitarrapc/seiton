@@ -596,8 +596,8 @@ public static partial class WorkflowParser
             AddError(
                 ref diagnostics,
                 parseMode == ParseMode.ActionMetadata
-                    ? $"unexpected key \"{unknownKey}\" for \"action metadata\" section. expected one of {Generated.ExpectedKeys.WorkflowKeys}"
-                    : $"unexpected key \"{unknownKey}\" for \"workflow\" section. expected one of {Generated.ExpectedKeys.WorkflowKeys}",
+                    ? $"unexpected key \"{unknownKey}\" at action metadata top level. expected one of {Generated.ExpectedKeys.WorkflowKeys}"
+                    : $"unexpected key \"{unknownKey}\" at workflow top level. expected one of {Generated.ExpectedKeys.WorkflowKeys}",
                 keyMark);
             if (!reader.End)
             {

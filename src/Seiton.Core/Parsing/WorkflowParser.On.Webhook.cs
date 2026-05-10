@@ -84,7 +84,7 @@ public static partial class WorkflowParser
                 var eventsForFilter = WebhookTypes.GetEventsForFilter(unknownKeyText);
                 if (eventsForFilter.Length > 0)
                 {
-                    AddError(ref diagnostics, $"\"{unknownKeyText}\" filter is not available for {eventInfo.Name} event. it is only for {eventsForFilter} events", keyMark);
+                    AddError(ref diagnostics, $"on.{eventInfo.Name} \"{unknownKeyText}\" filter is not available for {eventInfo.Name} event. it is only for {eventsForFilter} events", keyMark);
                 }
                 else
                 {
@@ -183,19 +183,19 @@ public static partial class WorkflowParser
         if (hasBranches && hasBranchesIgnore)
         {
             var mark = branchesIgnoreMark.Offset > branchesMark.Offset ? branchesIgnoreMark : branchesMark;
-            AddError(ref diagnostics, $"both \"branches\" and \"branches-ignore\" filters cannot be used for the same event \"{eventInfo.Name}\". note: use '!' to negate patterns", mark);
+            AddError(ref diagnostics, $"on.{eventInfo.Name} both \"branches\" and \"branches-ignore\" filters cannot be used for the same event \"{eventInfo.Name}\". note: use '!' to negate patterns", mark);
         }
 
         if (hasTags && hasTagsIgnore)
         {
             var mark = tagsIgnoreMark.Offset > tagsMark.Offset ? tagsIgnoreMark : tagsMark;
-            AddError(ref diagnostics, $"both \"tags\" and \"tags-ignore\" filters cannot be used for the same event \"{eventInfo.Name}\". note: use '!' to negate patterns", mark);
+            AddError(ref diagnostics, $"on.{eventInfo.Name} both \"tags\" and \"tags-ignore\" filters cannot be used for the same event \"{eventInfo.Name}\". note: use '!' to negate patterns", mark);
         }
 
         if (hasPaths && hasPathsIgnore)
         {
             var mark = pathsIgnoreMark.Offset > pathsMark.Offset ? pathsIgnoreMark : pathsMark;
-            AddError(ref diagnostics, $"both \"paths\" and \"paths-ignore\" filters cannot be used for the same event \"{eventInfo.Name}\". note: use '!' to negate patterns", mark);
+            AddError(ref diagnostics, $"on.{eventInfo.Name} both \"paths\" and \"paths-ignore\" filters cannot be used for the same event \"{eventInfo.Name}\". note: use '!' to negate patterns", mark);
         }
 
         return new WebhookEvent
@@ -500,19 +500,19 @@ public static partial class WorkflowParser
         if (hasBranches && hasBranchesIgnore)
         {
             var mark = branchesIgnoreMark.Offset > branchesMark.Offset ? branchesIgnoreMark : branchesMark;
-            AddError(ref diagnostics, $"both \"branches\" and \"branches-ignore\" filters cannot be used for the same event \"{eventInfo.Name}\". note: use '!' to negate patterns", mark);
+            AddError(ref diagnostics, $"on.{eventInfo.Name} both \"branches\" and \"branches-ignore\" filters cannot be used for the same event \"{eventInfo.Name}\". note: use '!' to negate patterns", mark);
         }
 
         if (hasTags && hasTagsIgnore)
         {
             var mark = tagsIgnoreMark.Offset > tagsMark.Offset ? tagsIgnoreMark : tagsMark;
-            AddError(ref diagnostics, $"both \"tags\" and \"tags-ignore\" filters cannot be used for the same event \"{eventInfo.Name}\". note: use '!' to negate patterns", mark);
+            AddError(ref diagnostics, $"on.{eventInfo.Name} both \"tags\" and \"tags-ignore\" filters cannot be used for the same event \"{eventInfo.Name}\". note: use '!' to negate patterns", mark);
         }
 
         if (hasPaths && hasPathsIgnore)
         {
             var mark = pathsIgnoreMark.Offset > pathsMark.Offset ? pathsIgnoreMark : pathsMark;
-            AddError(ref diagnostics, $"both \"paths\" and \"paths-ignore\" filters cannot be used for the same event \"{eventInfo.Name}\". note: use '!' to negate patterns", mark);
+            AddError(ref diagnostics, $"on.{eventInfo.Name} both \"paths\" and \"paths-ignore\" filters cannot be used for the same event \"{eventInfo.Name}\". note: use '!' to negate patterns", mark);
         }
     }
 

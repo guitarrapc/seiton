@@ -1,4 +1,4 @@
-test.yaml:2:1: unexpected key "NAME" for "workflow" section. expected one of "concurrency", "defaults", "env", "jobs", "name", "on", "permissions", "run-name" [syntax-check]
+test.yaml:2:1: unexpected key "NAME" at workflow top level. expected one of "concurrency", "defaults", "env", "jobs", "name", "on", "permissions", "run-name" [syntax-check]
 test.yaml:5:3: on: unknown event "SCHEDULE". see https://docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows for list of all event names [syntax-check]
 test.yaml:9:9: on.workflow_dispatch.inputs unexpected key "DESCRIPTION" for "inputs" section. expected one of "default", "description", "options", "required", "type" [syntax-check]
 test.yaml:11:5: on.repository_dispatch expected "types" key for "repository_dispatch" section but got "TYPES" [syntax-check]
