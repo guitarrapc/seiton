@@ -788,6 +788,78 @@ public sealed class ParserTests
     }
 
     [Test]
+    public async Task Parse_OnUnknownEvent_SuggestsClosestEvent()
+    {
+        // "pus" is close to "push" (Levenshtein distance 1)
+        var yaml = NormalizeEol("""
+        on: pus
+        jobs: {}
+        """);
+        var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "on-unknown-suggest.yml");
+        await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("unknown event \"pus\"", StringComparison.Ordinal) && x.Message.Contains("did you mean \"push\"?", StringComparison.Ordinal))).IsTrue();
+    }
+
+    [Test]
+    public async Task Parse_OnUnknownEvent_NoSuggestionWhenTooDistant()
+    {
+        // "xyzabc" is far from any event, fallback to URL
+        var yaml = NormalizeEol("""
+        on: xyzabc
+        jobs: {}
+        """);
+        var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "on-unknown-no-suggest.yml");
+        var diag = result.Diagnostics.First(x => x.Message.Contains("unknown event \"xyzabc\"", StringComparison.Ordinal));
+        await Assert.That(diag.Message.Contains("see https://docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows", StringComparison.Ordinal)).IsTrue();
+        await Assert.That(diag.Message.Contains("did you mean", StringComparison.Ordinal)).IsFalse();
+    }
+
+    [Test]
+    public async Task Parse_OnEventNoAllowedOptions_ReportsNoOptionsAccepted()
+    {
+        // "create" event does not accept any options
+        var yaml = NormalizeEol("""
+        on:
+          create:
+            foo: bar
+        jobs: {}
+        """);
+        var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "on-no-options.yml");
+        await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("on.create unexpected key \"foo\" for \"create\" section. this event does not accept any options", StringComparison.Ordinal))).IsTrue();
+    }
+
+    [Test]
+    public async Task Parse_OnEventUnknownOption_IncludesExpectedList()
+    {
+        // Unknown option on push should list all allowed options
+        var yaml = NormalizeEol("""
+        on:
+          push:
+            unknown-filter: 1
+        jobs: {}
+        """);
+        var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "on-unknown-option-list.yml");
+        var diag = result.Diagnostics.First(x => x.Message.Contains("unexpected key \"unknown-filter\"", StringComparison.Ordinal));
+        await Assert.That(diag.Message.Contains("expected one of", StringComparison.Ordinal)).IsTrue();
+        await Assert.That(diag.Message.Contains("\"branches\"", StringComparison.Ordinal)).IsTrue();
+        await Assert.That(diag.Message.Contains("\"tags\"", StringComparison.Ordinal)).IsTrue();
+    }
+
+    [Test]
+    public async Task Parse_UnknownKey_ActionMetadata_ReportsAtActionMetadataTopLevel()
+    {
+        var yaml = NormalizeEol("""
+        name: My Action
+        description: desc
+        runs:
+          using: composite
+          steps: []
+        foobar: 1
+        """);
+        var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "action.yml");
+        await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("unexpected key \"foobar\" at action metadata top level", StringComparison.Ordinal))).IsTrue();
+    }
+
+    [Test]
     public async Task Parse_OnEventOptionsTypeInvalid_ReportsError()
     {
         var yaml = NormalizeEol("""
