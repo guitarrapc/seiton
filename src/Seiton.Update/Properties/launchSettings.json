@@ -3,6 +3,22 @@
     "Seiton.Update": {
       "commandName": "Project",
       "commandLineArgs": "sync"
+    },
+    "fetch": {
+      "commandName": "Project",
+      "commandLineArgs": "fetch --dataset all"
+    },
+    "sync": {
+      "commandName": "Project",
+      "commandLineArgs": "sync --dataset all"
+    },
+    "verify": {
+      "commandName": "Project",
+      "commandLineArgs": "verify --dataset all"
+    },
+    "update": {
+      "commandName": "Project",
+      "commandLineArgs": "update"
     }
   }
 }

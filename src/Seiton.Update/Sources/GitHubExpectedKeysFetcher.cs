@@ -112,27 +112,70 @@ internal sealed class GitHubExpectedKeysFetcher
 
         UpdateLogger.Info("[merge:expected-keys:sources] merging parsed snapshot into canonical expected-keys.json...");
 
-        var normalized = TextNormalization.NormalizeToLf(File.ReadAllText(parsedPath));
-        if (!normalized.EndsWith("\n", StringComparison.Ordinal))
+        var parsedText = File.ReadAllText(parsedPath);
+        var parsed = JsonSerializer.Deserialize<ExpectedKeysSnapshot>(parsedText, new JsonSerializerOptions
         {
-            normalized += "\n";
+            PropertyNameCaseInsensitive = true,
+        }) ?? throw new InvalidDataException($"Invalid parsed expected-keys snapshot: {parsedPath}");
+
+        var sections = parsed.Sections?.ToList() ?? [];
+
+        // Merge supplemental sections (hand-written, not from docs)
+        var supplementalPath = ExpectedKeysSourcePathResolver.ResolveSupplementalKeys(repoRoot);
+        if (File.Exists(supplementalPath))
+        {
+            var supText = File.ReadAllText(supplementalPath);
+            var supDoc = JsonSerializer.Deserialize<SupplementalKeysSnapshot>(supText, new JsonSerializerOptions
+            {
+                PropertyNameCaseInsensitive = true,
+            });
+
+            if (supDoc?.Sections is { Count: > 0 })
+            {
+                var existingNames = new HashSet<string>(sections.Select(s => s.Name ?? ""), StringComparer.Ordinal);
+                var added = 0;
+                foreach (var supSection in supDoc.Sections)
+                {
+                    if (!string.IsNullOrEmpty(supSection.Name) && existingNames.Add(supSection.Name!))
+                    {
+                        sections.Add(supSection);
+                        added++;
+                    }
+                }
+
+                sections.Sort((a, b) => string.Compare(a.Name, b.Name, StringComparison.Ordinal));
+                UpdateLogger.Info($"[merge:expected-keys:sources] merged {added} supplemental section(s) from {Path.GetFileName(supplementalPath)}");
+            }
         }
+
+        parsed.Sections = sections;
+        parsed.Source = "github-workflow-syntax-docs-merged";
+
+        var mergedJson = TextNormalization.NormalizeToLf(JsonSerializer.Serialize(parsed, JsonOptions) + "\n");
 
         var primaryPath = Path.Combine(ExpectedKeysSourcePathResolver.ResolvePrimaryDir(repoRoot), "expected-keys.json");
         var existing = File.Exists(primaryPath)
             ? TextNormalization.NormalizeToLf(File.ReadAllText(primaryPath))
             : string.Empty;
 
-        if (!string.Equals(existing, normalized, StringComparison.Ordinal))
+        if (!string.Equals(existing, mergedJson, StringComparison.Ordinal))
         {
             Directory.CreateDirectory(Path.GetDirectoryName(primaryPath)!);
-            File.WriteAllText(primaryPath, normalized);
+            File.WriteAllText(primaryPath, mergedJson);
             UpdateLogger.Info($"[merge:expected-keys:sources] wrote {primaryPath}");
         }
         else
         {
             UpdateLogger.Info("[merge:expected-keys:sources] canonical snapshot already up to date.");
         }
+    }
+
+    private sealed class SupplementalKeysSnapshot
+    {
+        public int SchemaVersion { get; set; }
+        public string Source { get; set; } = string.Empty;
+        public string? Description { get; set; }
+        public List<ExpectedKeysSnapshotSection>? Sections { get; set; }
     }
 
     private sealed class ExpectedKeysSnapshot

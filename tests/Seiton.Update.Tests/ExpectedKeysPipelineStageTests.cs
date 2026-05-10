@@ -1,4 +1,4 @@
-using System.Text.Json;
+﻿using System.Text.Json;
 using Seiton.Update.Sources;
 
 namespace Seiton.Update.Tests;
@@ -88,6 +88,14 @@ public sealed class ExpectedKeysPipelineStageTests
         foreach (var file in Directory.GetFiles(srcRawDir))
         {
             File.Copy(file, Path.Combine(dstRawDir, Path.GetFileName(file)));
+        }
+
+        // Copy supplemental file (hand-written sections merged in Stage 3)
+        var supplementalSrc = Path.Combine(repoRoot, "data", "sources", "expected-keys", "github", "supplemental-keys.json");
+        if (File.Exists(supplementalSrc))
+        {
+            var dstGithubDir = Path.Combine(tempRepo, "data", "sources", "expected-keys", "github");
+            File.Copy(supplementalSrc, Path.Combine(dstGithubDir, "supplemental-keys.json"));
         }
 
         return tempRepo;

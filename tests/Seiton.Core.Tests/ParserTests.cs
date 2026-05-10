@@ -228,7 +228,7 @@ public sealed class ParserTests
         """);
 
         var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "unknown.yml");
-        await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("unexpected key \"foobar\" for \"workflow\" section", StringComparison.Ordinal))).IsTrue();
+        await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("unexpected key \"foobar\" at workflow top level", StringComparison.Ordinal))).IsTrue();
     }
 
     [Test]
@@ -284,7 +284,7 @@ public sealed class ParserTests
         """);
 
         var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "test.yml");
-        await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("jobs.'deploy'.defaults expected \"run\" key for \"defaults\" section", StringComparison.Ordinal))).IsTrue();
+        await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("jobs.'deploy'.defaults unexpected key \"RUN\" for \"defaults\" section. expected \"run\"", StringComparison.Ordinal))).IsTrue();
         await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("jobs.'deploy'.defaults.run unexpected key", StringComparison.Ordinal) && x.Message.Contains("for \"run\" section", StringComparison.Ordinal))).IsTrue();
     }
 
@@ -788,6 +788,86 @@ public sealed class ParserTests
     }
 
     [Test]
+    public async Task Parse_OnUnknownEvent_SuggestsClosestEvent()
+    {
+        // "pus" is close to "push" (Levenshtein distance 1)
+        var yaml = NormalizeEol("""
+        on: pus
+        jobs: {}
+        """);
+        var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "on-unknown-suggest.yml");
+        await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("unknown event \"pus\"", StringComparison.Ordinal) && x.Message.Contains("did you mean \"push\"?", StringComparison.Ordinal))).IsTrue();
+    }
+
+    [Test]
+    public async Task Parse_OnUnknownEvent_NoSuggestionWhenTooDistant()
+    {
+        // "xyzabc" is far from any event, fallback to URL
+        var yaml = NormalizeEol("""
+        on: xyzabc
+        jobs: {}
+        """);
+        var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "on-unknown-no-suggest.yml");
+        var diag = result.Diagnostics.First(x => x.Message.Contains("unknown event \"xyzabc\"", StringComparison.Ordinal));
+        await Assert.That(diag.Message.Contains("see https://docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows", StringComparison.Ordinal)).IsTrue();
+        await Assert.That(diag.Message.Contains("did you mean", StringComparison.Ordinal)).IsFalse();
+    }
+
+    [Test]
+    public async Task Parse_OnEventNoAllowedOptions_ReportsNoOptionsAccepted()
+    {
+        // "create" event does not accept any options
+        var yaml = NormalizeEol("""
+        on:
+          create:
+            foo: bar
+        jobs: {}
+        """);
+        var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "on-no-options.yml");
+        await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("on.create unexpected key \"foo\" for \"create\" section. this event does not accept any options", StringComparison.Ordinal))).IsTrue();
+    }
+
+    [Test]
+    public async Task Parse_OnEventUnknownOption_IncludesExpectedList()
+    {
+        // Unknown option on push should list all allowed options
+        var yaml = NormalizeEol("""
+        on:
+          push:
+            unknown-filter: 1
+        jobs: {}
+        """);
+        var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "on-unknown-option-list.yml");
+        var diag = result.Diagnostics.First(x => x.Message.Contains("unexpected key \"unknown-filter\"", StringComparison.Ordinal));
+        await Assert.That(diag.Message.Contains("expected one of", StringComparison.Ordinal)).IsTrue();
+        await Assert.That(diag.Message.Contains("\"branches\"", StringComparison.Ordinal)).IsTrue();
+        await Assert.That(diag.Message.Contains("\"tags\"", StringComparison.Ordinal)).IsTrue();
+    }
+
+    [Test]
+    public async Task Parse_UnknownKey_ActionMetadata_ReportsAtActionMetadataTopLevel()
+    {
+        var yaml = NormalizeEol("""
+        name: My Action
+        description: desc
+        runs:
+          using: composite
+          steps: []
+        foobar: 1
+        """);
+        var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "action.yml");
+        var diag = result.Diagnostics.First(x => x.Message.Contains("unexpected key \"foobar\" at action metadata top level", StringComparison.Ordinal));
+        // Should list action metadata keys, not workflow keys
+        await Assert.That(diag.Message.Contains("\"runs\"", StringComparison.Ordinal)).IsTrue();
+        await Assert.That(diag.Message.Contains("\"branding\"", StringComparison.Ordinal)).IsTrue();
+        await Assert.That(diag.Message.Contains("\"author\"", StringComparison.Ordinal)).IsTrue();
+        // Should NOT contain workflow-only keys
+        await Assert.That(diag.Message.Contains("\"jobs\"", StringComparison.Ordinal)).IsFalse();
+        await Assert.That(diag.Message.Contains("\"on\"", StringComparison.Ordinal)).IsFalse();
+        await Assert.That(diag.Message.Contains("\"concurrency\"", StringComparison.Ordinal)).IsFalse();
+    }
+
+    [Test]
     public async Task Parse_OnEventOptionsTypeInvalid_ReportsError()
     {
         var yaml = NormalizeEol("""
@@ -810,7 +890,7 @@ public sealed class ParserTests
         jobs: {}
         """);
         var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "on-unknown-option.yml");
-        await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("on.push does not support option: unknown-filter", StringComparison.Ordinal))).IsTrue();
+        await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("on.push unexpected key \"unknown-filter\" for \"push\" section", StringComparison.Ordinal))).IsTrue();
     }
 
     [Test]
@@ -852,7 +932,7 @@ public sealed class ParserTests
         jobs: {}
         """);
         var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "on-unknown-option-no-suggest.yml");
-        var diag = result.Diagnostics.First(x => x.Message.Contains("on.push does not support option: xyz", StringComparison.Ordinal));
+        var diag = result.Diagnostics.First(x => x.Message.Contains("on.push unexpected key \"xyz\" for \"push\" section", StringComparison.Ordinal));
         await Assert.That(diag.Message.Contains("did you mean", StringComparison.Ordinal)).IsFalse();
     }
 
@@ -904,7 +984,7 @@ public sealed class ParserTests
         jobs: {}
         """);
         var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "on-unknown-option-no-fix.yml");
-        var diag = result.Diagnostics.First(x => x.Message.Contains("on.push does not support option: xyz", StringComparison.Ordinal));
+        var diag = result.Diagnostics.First(x => x.Message.Contains("on.push unexpected key \"xyz\" for \"push\" section", StringComparison.Ordinal));
         await Assert.That(diag.Fix is null).IsTrue();
     }
 
@@ -938,7 +1018,7 @@ public sealed class ParserTests
         jobs: {}
         """);
         var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "on-disallowed-option.yml");
-        await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("expected \"inputs\" key for \"workflow_dispatch\" section but got \"paths\"", StringComparison.Ordinal))).IsTrue();
+        await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("unexpected key \"paths\" for \"workflow_dispatch\" section. expected \"inputs\"", StringComparison.Ordinal))).IsTrue();
     }
 
     [Test]
@@ -991,7 +1071,7 @@ public sealed class ParserTests
         """);
         var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "on-repository-dispatch-types.yml");
         await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("unsupported activity type", StringComparison.Ordinal))).IsFalse();
-        await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("does not support option", StringComparison.Ordinal))).IsFalse();
+        await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("unexpected key", StringComparison.Ordinal))).IsFalse();
     }
 
     [Test]
@@ -1768,7 +1848,7 @@ public sealed class ParserTests
                         entrypoint: [x]
                 jobs: {}
                 """),
-                "on.image_version does not support option: entrypoint"
+                "on.image_version unexpected key \"entrypoint\" for \"image_version\" section. expected one of \"names\", \"versions\""
             ),
             (
                 "names-must-be-sequence",
@@ -2018,7 +2098,7 @@ public sealed class ParserTests
         {
             new ErrFixtureExpectation("empty.yaml", ["workflow root must be object"]),
             new ErrFixtureExpectation("empty_on.yaml", ["unknown event"]),
-            new ErrFixtureExpectation("case_sensitive_keys.yaml", ["unexpected key", "for \"workflow\" section", "jobs.'test1' unexpected key"]),
+            new ErrFixtureExpectation("case_sensitive_keys.yaml", ["unexpected key", "at workflow top level", "jobs.'test1' unexpected key"]),
             new ErrFixtureExpectation("duplicate_keys.yaml", ["is duplicated in"]),
             new ErrFixtureExpectation("invalid_int_at_max_parallel.yaml", ["strategy.max-parallel must be integer"]),
             new ErrFixtureExpectation("invalid_steps.yaml", ["unexpected key", "must run script"]),

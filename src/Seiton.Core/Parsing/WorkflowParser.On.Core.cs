@@ -256,7 +256,11 @@ public static partial class WorkflowParser
     {
         if (!eventInfo.IsKnown)
         {
-            AddError(ref diagnostics, $"unknown event \"{eventInfo.Name}\". see https://docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows for list of all event names", eventMark);
+            var suggestion = SuggestionHelper.FindClosest(eventInfo.Name, WebhookTypes.AllEventNames);
+            var message = suggestion is not null
+                ? $"on: unknown event \"{eventInfo.Name}\". did you mean \"{suggestion}\"?"
+                : $"on: unknown event \"{eventInfo.Name}\". see https://docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows for list of all event names";
+            AddError(ref diagnostics, message, eventMark);
         }
     }
 

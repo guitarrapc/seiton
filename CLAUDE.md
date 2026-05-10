@@ -51,6 +51,7 @@ Each generated dataset follows a consistent multi-stage pipeline:
 data/sources/{dataset}/github/
   raw/          ← Stage 1: fetched raw files from official sources (network)
   parsed/       ← Stage 2: parsed intermediate JSON (local, deterministic)
+  supplemental-*.json ← Hand-written entries merged in Stage 3 (optional)
   {name}.json   ← Stage 3: merged canonical snapshot or hand-written source
 ```
 
@@ -66,7 +67,7 @@ data/sources/{dataset}/github/
 - **`sync --dataset all`** / **`verify --dataset all`** — regenerate or verify every `.g.cs`
 - **`update`** — `fetch --dataset all`, then `sync --dataset all`, then `verify --dataset all` (full maintainer refresh)
 
-Not all datasets implement all stages. Some use hand-written JSON as primary source and only implement sync/verify. See `.github/docs/Seiton_Update_spec.md` for details.
+Not all datasets implement all stages. Some use hand-written JSON as primary source and only implement sync/verify. Some datasets have **supplemental JSON** (`supplemental-*.json`) for hand-written entries that are not derivable from raw sources (e.g. action metadata keys not in `workflow-syntax.md`). Stage 3 merges these into the canonical snapshot. See `.github/docs/Seiton_Update_spec.md` §3.1.3 for details.
 
 **When adding a new dataset pipeline**, follow the existing pattern:
 1. Create a `SourcePathResolver` in `Services/` (with legacy path fallback)

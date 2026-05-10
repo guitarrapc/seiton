@@ -84,7 +84,7 @@ public static partial class WorkflowParser
 
             var unknown = Encoding.UTF8.GetString(keyUtf8);
             reader.Read();
-            AddError(ref diagnostics, $"unexpected key \"{unknown}\" for \"workflow_call\" section. expected one of {Generated.ExpectedKeys.OnWorkflowCallKeys}", keyMark);
+            AddError(ref diagnostics, $"on.workflow_call unexpected key \"{unknown}\" for \"workflow_call\" section. expected one of {Generated.ExpectedKeys.OnWorkflowCallKeys}", keyMark);
             if (!reader.End)
             {
                 reader.SkipCurrentNode();
@@ -290,7 +290,7 @@ public static partial class WorkflowParser
 
             var unknown = Encoding.UTF8.GetString(keyUtf8);
             reader.Read();
-            AddError(ref diagnostics, $"unexpected key \"{unknown}\" for inputs at workflow_call event. expected one of {Generated.ExpectedKeys.WorkflowCallInputFieldKeys}", keyMark);
+            AddError(ref diagnostics, $"on.workflow_call.inputs unexpected key \"{unknown}\" for \"inputs\" section. expected one of {Generated.ExpectedKeys.WorkflowCallInputFieldKeys}", keyMark);
             if (!reader.End)
             {
                 reader.SkipCurrentNode();
@@ -726,7 +726,7 @@ public static partial class WorkflowParser
 
             var unknown = Encoding.UTF8.GetString(keyUtf8);
             reader.Read();
-            AddError(ref diagnostics, $"unexpected key \"{unknown}\" for outputs at workflow_call event. expected one of {Generated.ExpectedKeys.WorkflowCallOutputFieldKeys}", keyMark);
+            AddError(ref diagnostics, $"on.workflow_call.outputs unexpected key \"{unknown}\" for \"outputs\" section. expected one of {Generated.ExpectedKeys.WorkflowCallOutputFieldKeys}", keyMark);
             if (!reader.End)
             {
                 reader.SkipCurrentNode();

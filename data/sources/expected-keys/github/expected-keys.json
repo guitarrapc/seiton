@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "source": "github-workflow-syntax-docs-raw",
+  "source": "github-workflow-syntax-docs-merged",
   "rawSources": [
     {
       "fileName": "workflow-syntax.md",
@@ -8,6 +8,19 @@
     }
   ],
   "sections": [
+    {
+      "name": "action-metadata",
+      "description": "Top-level action metadata keys",
+      "keys": [
+        "author",
+        "branding",
+        "description",
+        "inputs",
+        "name",
+        "outputs",
+        "runs"
+      ]
+    },
     {
       "name": "action-step",
       "description": "Keys valid for action-form steps (with \u0027uses\u0027)",

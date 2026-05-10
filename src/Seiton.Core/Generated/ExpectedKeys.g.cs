@@ -8,6 +8,9 @@ namespace Seiton.Core.Generated;
 
 internal static class ExpectedKeys
 {
+    /// <summary>Top-level action metadata keys</summary>
+    internal const string ActionMetadataKeys = "\"author\", \"branding\", \"description\", \"inputs\", \"name\", \"outputs\", \"runs\"";
+
     /// <summary>Keys valid for action-form steps (with 'uses')</summary>
     internal const string ActionStepKeys = "\"continue-on-error\", \"env\", \"id\", \"if\", \"name\", \"timeout-minutes\", \"uses\", \"with\"";
 

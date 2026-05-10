@@ -62,7 +62,7 @@ internal sealed class WebhookTypesCSharpGenerator
             sb.Append($"        {ToEventIdName(e.Name)},\n");
         }
 
-        sb.Append(
+        sb.AppendLine(
             """
                 }
 
@@ -74,7 +74,7 @@ internal sealed class WebhookTypesCSharpGenerator
             sb.Append($"        if (eventNameUtf8.SequenceEqual(\"{e.Name}\"u8)) {{ eventName = \"{e.Name}\"; spec = new(EventId.{ToEventIdName(e.Name)}); return true; }}\n");
         }
 
-        sb.Append(
+        sb.AppendLine(
             """
 
                     eventName = string.Empty;
@@ -106,7 +106,7 @@ internal sealed class WebhookTypesCSharpGenerator
             }
         }
 
-        sb.Append(
+        sb.AppendLine(
             """
                             _ => false,
                         };
@@ -145,7 +145,7 @@ internal sealed class WebhookTypesCSharpGenerator
             sb.Append($"                EventId.{ToEventIdName(e.Name)} => {BuildAnyValueCondition(e.ActivityTypes!, "valueUtf8")},\n");
         }
 
-        sb.Append(
+        sb.AppendLine(
             """
                             _ => false,
                         };
@@ -178,7 +178,7 @@ internal sealed class WebhookTypesCSharpGenerator
             """);
 
         // Generate GetAllowedOptionNames: returns string[] of valid option names for suggestion
-        sb.Append(
+        sb.AppendLine(
             """
 
                     public string[] GetAllowedOptionNames()
@@ -218,6 +218,29 @@ internal sealed class WebhookTypesCSharpGenerator
             """
                 }
             """);
+
+        // Generate AllEventNames: static array of all known event name strings
+        sb.AppendLine("    internal static readonly string[] AllEventNames =");
+        sb.Append("    [");
+        for (var i = 0; i < events.Count; i++)
+        {
+            if (i % 5 == 0)
+            {
+                sb.AppendLine();
+                sb.Append("        ");
+            }
+            else
+            {
+                sb.Append(' ');
+            }
+
+            sb.Append($"\"{events[i].Name}\"");
+            if (i < events.Count - 1)
+                sb.Append(',');
+        }
+
+        sb.AppendLine();
+        sb.AppendLine("    ];");
 
         // Generate GetEventsForFilter: reverse lookup from filter key → comma-separated event list
         AppendGetEventsForFilter(sb, optionMap);

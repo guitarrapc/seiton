@@ -84,17 +84,11 @@ public static partial class WorkflowParser
                 var eventsForFilter = WebhookTypes.GetEventsForFilter(unknownKeyText);
                 if (eventsForFilter.Length > 0)
                 {
-                    AddError(ref diagnostics, $"\"{unknownKeyText}\" filter is not available for {eventInfo.Name} event. it is only for {eventsForFilter} events", keyMark);
+                    AddError(ref diagnostics, $"on.{eventInfo.Name} \"{unknownKeyText}\" filter is not available for {eventInfo.Name} event. it is only for {eventsForFilter} events", keyMark);
                 }
                 else
                 {
-                    var suggestion = SuggestionHelper.FindClosest(unknownKeyText!, eventInfo.Spec.GetAllowedOptionNames());
-                    var message = suggestion is not null
-                        ? $"on.{eventInfo.Name} does not support option: {unknownKeyText}. did you mean \"{suggestion}\"?"
-                        : $"on.{eventInfo.Name} does not support option: {unknownKeyText}";
-                    var fix = suggestion is not null
-                        ? new DiagnosticFix($"replace '{unknownKeyText}' with '{suggestion}'", [new TextEdit(keySlice.Offset, keySlice.Length, suggestion)])
-                        : (DiagnosticFix?)null;
+                    var (message, fix) = BuildUnexpectedOptionDiagnostic(eventInfo.Name, unknownKeyText!, keySlice, eventInfo.Spec.GetAllowedOptionNames());
                     AddError(ref diagnostics, message, keyMark, fix);
                 }
                 if (!reader.End) { reader.SkipCurrentNode(); }
@@ -174,7 +168,7 @@ public static partial class WorkflowParser
                 }
             }
 
-            AddError(ref diagnostics, $"unexpected key \"{unknownKeyText}\" for \"{eventInfo.Name}\" section. expected one of {Generated.ExpectedKeys.WebhookEventOptionKeys}", keyMark);
+            AddError(ref diagnostics, $"on.{eventInfo.Name} unexpected key \"{unknownKeyText}\" for \"{eventInfo.Name}\" section. expected one of {Generated.ExpectedKeys.WebhookEventOptionKeys}", keyMark);
             if (!reader.End) { reader.SkipCurrentNode(); }
         }
 
@@ -183,19 +177,19 @@ public static partial class WorkflowParser
         if (hasBranches && hasBranchesIgnore)
         {
             var mark = branchesIgnoreMark.Offset > branchesMark.Offset ? branchesIgnoreMark : branchesMark;
-            AddError(ref diagnostics, $"both \"branches\" and \"branches-ignore\" filters cannot be used for the same event \"{eventInfo.Name}\". note: use '!' to negate patterns", mark);
+            AddError(ref diagnostics, $"on.{eventInfo.Name} both \"branches\" and \"branches-ignore\" filters cannot be used for the same event \"{eventInfo.Name}\". note: use '!' to negate patterns", mark);
         }
 
         if (hasTags && hasTagsIgnore)
         {
             var mark = tagsIgnoreMark.Offset > tagsMark.Offset ? tagsIgnoreMark : tagsMark;
-            AddError(ref diagnostics, $"both \"tags\" and \"tags-ignore\" filters cannot be used for the same event \"{eventInfo.Name}\". note: use '!' to negate patterns", mark);
+            AddError(ref diagnostics, $"on.{eventInfo.Name} both \"tags\" and \"tags-ignore\" filters cannot be used for the same event \"{eventInfo.Name}\". note: use '!' to negate patterns", mark);
         }
 
         if (hasPaths && hasPathsIgnore)
         {
             var mark = pathsIgnoreMark.Offset > pathsMark.Offset ? pathsIgnoreMark : pathsMark;
-            AddError(ref diagnostics, $"both \"paths\" and \"paths-ignore\" filters cannot be used for the same event \"{eventInfo.Name}\". note: use '!' to negate patterns", mark);
+            AddError(ref diagnostics, $"on.{eventInfo.Name} both \"paths\" and \"paths-ignore\" filters cannot be used for the same event \"{eventInfo.Name}\". note: use '!' to negate patterns", mark);
         }
 
         return new WebhookEvent
@@ -387,13 +381,7 @@ public static partial class WorkflowParser
             {
                 var key = Encoding.UTF8.GetString(keyUtf8);
                 reader.Read();
-                var suggestion = SuggestionHelper.FindClosest(key, eventInfo.Spec.GetAllowedOptionNames());
-                var message = suggestion is not null
-                    ? $"on.{eventInfo.Name} does not support option: {key}. did you mean \"{suggestion}\"?"
-                    : $"on.{eventInfo.Name} does not support option: {key}";
-                var fix = suggestion is not null
-                    ? new DiagnosticFix($"replace '{key}' with '{suggestion}'", [new TextEdit(keySlice.Offset, keySlice.Length, suggestion)])
-                    : (DiagnosticFix?)null;
+                var (message, fix) = BuildUnexpectedOptionDiagnostic(eventInfo.Name, key, keySlice, eventInfo.Spec.GetAllowedOptionNames());
                 AddError(ref diagnostics, message, keyMark, fix);
                 if (!reader.End)
                 {
@@ -488,7 +476,7 @@ public static partial class WorkflowParser
 
             var unknownKey = Encoding.UTF8.GetString(keyUtf8);
             reader.Read();
-            AddError(ref diagnostics, $"unexpected key \"{unknownKey}\" for \"{eventInfo.Name}\" section. expected one of {Generated.ExpectedKeys.WebhookEventOptionKeys}", keyMark);
+            AddError(ref diagnostics, $"on.{eventInfo.Name} unexpected key \"{unknownKey}\" for \"{eventInfo.Name}\" section. expected one of {Generated.ExpectedKeys.WebhookEventOptionKeys}", keyMark);
             reader.SkipCurrentNode();
         }
 
@@ -500,19 +488,19 @@ public static partial class WorkflowParser
         if (hasBranches && hasBranchesIgnore)
         {
             var mark = branchesIgnoreMark.Offset > branchesMark.Offset ? branchesIgnoreMark : branchesMark;
-            AddError(ref diagnostics, $"both \"branches\" and \"branches-ignore\" filters cannot be used for the same event \"{eventInfo.Name}\". note: use '!' to negate patterns", mark);
+            AddError(ref diagnostics, $"on.{eventInfo.Name} both \"branches\" and \"branches-ignore\" filters cannot be used for the same event \"{eventInfo.Name}\". note: use '!' to negate patterns", mark);
         }
 
         if (hasTags && hasTagsIgnore)
         {
             var mark = tagsIgnoreMark.Offset > tagsMark.Offset ? tagsIgnoreMark : tagsMark;
-            AddError(ref diagnostics, $"both \"tags\" and \"tags-ignore\" filters cannot be used for the same event \"{eventInfo.Name}\". note: use '!' to negate patterns", mark);
+            AddError(ref diagnostics, $"on.{eventInfo.Name} both \"tags\" and \"tags-ignore\" filters cannot be used for the same event \"{eventInfo.Name}\". note: use '!' to negate patterns", mark);
         }
 
         if (hasPaths && hasPathsIgnore)
         {
             var mark = pathsIgnoreMark.Offset > pathsMark.Offset ? pathsIgnoreMark : pathsMark;
-            AddError(ref diagnostics, $"both \"paths\" and \"paths-ignore\" filters cannot be used for the same event \"{eventInfo.Name}\". note: use '!' to negate patterns", mark);
+            AddError(ref diagnostics, $"on.{eventInfo.Name} both \"paths\" and \"paths-ignore\" filters cannot be used for the same event \"{eventInfo.Name}\". note: use '!' to negate patterns", mark);
         }
     }
 
@@ -561,5 +549,27 @@ public static partial class WorkflowParser
         {
             reader.Read();
         }
+    }
+
+    private static (string Message, DiagnosticFix? Fix) BuildUnexpectedOptionDiagnostic(
+        string eventName, string keyText, Utf8Slice keySlice, string[] allowedOptions)
+    {
+        var suggestion = SuggestionHelper.FindClosest(keyText, allowedOptions);
+        string message;
+        if (allowedOptions.Length == 0)
+        {
+            message = $"on.{eventName} unexpected key \"{keyText}\" for \"{eventName}\" section. this event does not accept any options";
+        }
+        else
+        {
+            var expectedList = SuggestionHelper.FormatExpectedOptions(allowedOptions);
+            message = suggestion is not null
+                ? $"on.{eventName} unexpected key \"{keyText}\" for \"{eventName}\" section. expected one of {expectedList}. did you mean \"{suggestion}\"?"
+                : $"on.{eventName} unexpected key \"{keyText}\" for \"{eventName}\" section. expected one of {expectedList}";
+        }
+        var fix = suggestion is not null
+            ? new DiagnosticFix($"replace '{keyText}' with '{suggestion}'", [new TextEdit(keySlice.Offset, keySlice.Length, suggestion)])
+            : (DiagnosticFix?)null;
+        return (message, fix);
     }
 }
