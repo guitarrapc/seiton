@@ -40,4 +40,32 @@ public sealed class SuggestionHelperTests
         var result = SuggestionHelper.FindClosest("Branchs", ["branches", "paths", "tags"]);
         await Assert.That(result).IsEqualTo("branches");
     }
+
+    [Test]
+    public async Task FindClosestFromFormattedKeys_SingleKey_FindsMatch()
+    {
+        var result = SuggestionHelper.FindClosestFromFormattedKeys("branchs", "\"branches\"");
+        await Assert.That(result).IsEqualTo("branches");
+    }
+
+    [Test]
+    public async Task FindClosestFromFormattedKeys_MultipleKeys_FindsClosest()
+    {
+        var result = SuggestionHelper.FindClosestFromFormattedKeys("branchs", "\"branches\", \"paths\", \"tags\"");
+        await Assert.That(result).IsEqualTo("branches");
+    }
+
+    [Test]
+    public async Task FindClosestFromFormattedKeys_EmptyString_ReturnsNull()
+    {
+        var result = SuggestionHelper.FindClosestFromFormattedKeys("branches", "");
+        await Assert.That(result).IsNull();
+    }
+
+    [Test]
+    public async Task FindClosestFromFormattedKeys_NoCloseMatch_ReturnsNull()
+    {
+        var result = SuggestionHelper.FindClosestFromFormattedKeys("zzzzz", "\"branches\", \"paths\", \"tags\"");
+        await Assert.That(result).IsNull();
+    }
 }
