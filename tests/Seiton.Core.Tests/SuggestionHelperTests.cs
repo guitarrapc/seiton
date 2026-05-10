@@ -36,7 +36,7 @@ public sealed class SuggestionHelperTests
     [Test]
     public async Task FindClosest_MixedCaseWithTypo_SuggestsMatch()
     {
-        // "Branchs" should match "branches" (case-insensitive distance 2: missing 'e', 's' mismatch)
+        // "Branchs" should match "branches" with case-insensitive distance 1 (missing 'e')
         var result = SuggestionHelper.FindClosest("Branchs", ["branches", "paths", "tags"]);
         await Assert.That(result).IsEqualTo("branches");
     }
