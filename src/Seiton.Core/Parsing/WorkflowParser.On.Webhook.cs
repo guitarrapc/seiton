@@ -90,10 +90,18 @@ public static partial class WorkflowParser
                 {
                     var allowedOptions = eventInfo.Spec.GetAllowedOptionNames();
                     var suggestion = SuggestionHelper.FindClosest(unknownKeyText!, allowedOptions);
-                    var expectedList = SuggestionHelper.FormatExpectedOptions(allowedOptions);
-                    var message = suggestion is not null
-                        ? $"on.{eventInfo.Name} unexpected key \"{unknownKeyText}\" for \"{eventInfo.Name}\" section. expected one of {expectedList}. did you mean \"{suggestion}\"?"
-                        : $"on.{eventInfo.Name} unexpected key \"{unknownKeyText}\" for \"{eventInfo.Name}\" section. expected one of {expectedList}";
+                    string message;
+                    if (allowedOptions.Length == 0)
+                    {
+                        message = $"on.{eventInfo.Name} unexpected key \"{unknownKeyText}\" for \"{eventInfo.Name}\" section. this event does not accept any options";
+                    }
+                    else
+                    {
+                        var expectedList = SuggestionHelper.FormatExpectedOptions(allowedOptions);
+                        message = suggestion is not null
+                            ? $"on.{eventInfo.Name} unexpected key \"{unknownKeyText}\" for \"{eventInfo.Name}\" section. expected one of {expectedList}. did you mean \"{suggestion}\"?"
+                            : $"on.{eventInfo.Name} unexpected key \"{unknownKeyText}\" for \"{eventInfo.Name}\" section. expected one of {expectedList}";
+                    }
                     var fix = suggestion is not null
                         ? new DiagnosticFix($"replace '{unknownKeyText}' with '{suggestion}'", [new TextEdit(keySlice.Offset, keySlice.Length, suggestion)])
                         : (DiagnosticFix?)null;
@@ -391,10 +399,18 @@ public static partial class WorkflowParser
                 reader.Read();
                 var allowedOptions = eventInfo.Spec.GetAllowedOptionNames();
                 var suggestion = SuggestionHelper.FindClosest(key, allowedOptions);
-                var expectedList = SuggestionHelper.FormatExpectedOptions(allowedOptions);
-                var message = suggestion is not null
-                    ? $"on.{eventInfo.Name} unexpected key \"{key}\" for \"{eventInfo.Name}\" section. expected one of {expectedList}. did you mean \"{suggestion}\"?"
-                    : $"on.{eventInfo.Name} unexpected key \"{key}\" for \"{eventInfo.Name}\" section. expected one of {expectedList}";
+                string message;
+                if (allowedOptions.Length == 0)
+                {
+                    message = $"on.{eventInfo.Name} unexpected key \"{key}\" for \"{eventInfo.Name}\" section. this event does not accept any options";
+                }
+                else
+                {
+                    var expectedList = SuggestionHelper.FormatExpectedOptions(allowedOptions);
+                    message = suggestion is not null
+                        ? $"on.{eventInfo.Name} unexpected key \"{key}\" for \"{eventInfo.Name}\" section. expected one of {expectedList}. did you mean \"{suggestion}\"?"
+                        : $"on.{eventInfo.Name} unexpected key \"{key}\" for \"{eventInfo.Name}\" section. expected one of {expectedList}";
+                }
                 var fix = suggestion is not null
                     ? new DiagnosticFix($"replace '{key}' with '{suggestion}'", [new TextEdit(keySlice.Offset, keySlice.Length, suggestion)])
                     : (DiagnosticFix?)null;
