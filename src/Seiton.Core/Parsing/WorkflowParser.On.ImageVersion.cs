@@ -84,9 +84,10 @@ public static partial class WorkflowParser
             var unknown = Encoding.UTF8.GetString(keyUtf8);
             reader.Read();
             var suggestion = SuggestionHelper.FindClosest(unknown, ImageVersionOptionNames);
+            var expectedList = SuggestionHelper.FormatExpectedOptions(ImageVersionOptionNames);
             var message = suggestion is not null
-                ? $"on.image_version does not support option: {unknown}. did you mean \"{suggestion}\"?"
-                : $"on.image_version does not support option: {unknown}";
+                ? $"on.image_version unexpected key \"{unknown}\" for \"image_version\" section. expected one of {expectedList}. did you mean \"{suggestion}\"?"
+                : $"on.image_version unexpected key \"{unknown}\" for \"image_version\" section. expected one of {expectedList}";
             var fix = suggestion is not null
                 ? new DiagnosticFix($"replace '{unknown}' with '{suggestion}'", [new TextEdit(keySlice.Offset, keySlice.Length, suggestion)])
                 : (DiagnosticFix?)null;

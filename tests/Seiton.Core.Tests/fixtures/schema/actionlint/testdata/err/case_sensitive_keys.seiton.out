@@ -5,7 +5,7 @@ test.yaml:11:5: on.repository_dispatch unexpected key "TYPES" for "repository_di
 test.yaml:15:9: on.workflow_call.inputs unexpected key "DESCRIPTION" for "inputs" section. expected one of "default", "description", "required", "type" [syntax-check]
 test.yaml:19:9: on.workflow_call.secrets unexpected key "DESCRIPTION" for "secrets" section. expected one of "description", "required" [syntax-check]
 test.yaml:22:9: on.workflow_call.outputs unexpected key "DESCRIPTION" for "outputs" section. expected one of "description", "value" [syntax-check]
-test.yaml:25:5: on.push does not support option: BRANCHES [syntax-check]
+test.yaml:25:5: on.push unexpected key "BRANCHES" for "push" section. expected one of "branches", "branches-ignore", "paths", "paths-ignore", "tags", "tags-ignore" [syntax-check]
 test.yaml:28:3: defaults unexpected key "RUN" for "defaults" section. expected "run" [syntax-check]
 test.yaml:30:5: defaults.run unexpected key "SHELL" for "run" section. expected one of "shell", "working-directory" [syntax-check]
 test.yaml:33:3: concurrency unexpected key "GROUP" for "concurrency" section. expected one of "cancel-in-progress", "group" [syntax-check]

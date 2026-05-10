@@ -810,7 +810,7 @@ public sealed class ParserTests
         jobs: {}
         """);
         var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "on-unknown-option.yml");
-        await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("on.push does not support option: unknown-filter", StringComparison.Ordinal))).IsTrue();
+        await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("on.push unexpected key \"unknown-filter\" for \"push\" section", StringComparison.Ordinal))).IsTrue();
     }
 
     [Test]
@@ -852,7 +852,7 @@ public sealed class ParserTests
         jobs: {}
         """);
         var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "on-unknown-option-no-suggest.yml");
-        var diag = result.Diagnostics.First(x => x.Message.Contains("on.push does not support option: xyz", StringComparison.Ordinal));
+        var diag = result.Diagnostics.First(x => x.Message.Contains("on.push unexpected key \"xyz\" for \"push\" section", StringComparison.Ordinal));
         await Assert.That(diag.Message.Contains("did you mean", StringComparison.Ordinal)).IsFalse();
     }
 
@@ -904,7 +904,7 @@ public sealed class ParserTests
         jobs: {}
         """);
         var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "on-unknown-option-no-fix.yml");
-        var diag = result.Diagnostics.First(x => x.Message.Contains("on.push does not support option: xyz", StringComparison.Ordinal));
+        var diag = result.Diagnostics.First(x => x.Message.Contains("on.push unexpected key \"xyz\" for \"push\" section", StringComparison.Ordinal));
         await Assert.That(diag.Fix is null).IsTrue();
     }
 
@@ -991,7 +991,7 @@ public sealed class ParserTests
         """);
         var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "on-repository-dispatch-types.yml");
         await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("unsupported activity type", StringComparison.Ordinal))).IsFalse();
-        await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("does not support option", StringComparison.Ordinal))).IsFalse();
+        await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("unexpected key", StringComparison.Ordinal))).IsFalse();
     }
 
     [Test]
@@ -1768,7 +1768,7 @@ public sealed class ParserTests
                         entrypoint: [x]
                 jobs: {}
                 """),
-                "on.image_version does not support option: entrypoint"
+                "on.image_version unexpected key \"entrypoint\" for \"image_version\" section. expected one of \"names\", \"versions\""
             ),
             (
                 "names-must-be-sequence",

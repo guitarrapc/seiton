@@ -67,4 +67,22 @@ internal static class SuggestionHelper
 
         return prev[b.Length];
     }
+
+    /// <summary>
+    /// Formats an array of option names as a quoted, comma-separated list for diagnostic messages.
+    /// e.g. ["a", "b"] → "\"a\", \"b\""
+    /// </summary>
+    public static string FormatExpectedOptions(ReadOnlySpan<string> options)
+    {
+        if (options.Length == 0) return string.Empty;
+        if (options.Length == 1) return $"\"{options[0]}\"";
+
+        var sb = new System.Text.StringBuilder();
+        for (var i = 0; i < options.Length; i++)
+        {
+            if (i > 0) sb.Append(", ");
+            sb.Append('"').Append(options[i]).Append('"');
+        }
+        return sb.ToString();
+    }
 }

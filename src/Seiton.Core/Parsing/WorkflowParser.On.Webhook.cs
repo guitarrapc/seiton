@@ -88,10 +88,12 @@ public static partial class WorkflowParser
                 }
                 else
                 {
-                    var suggestion = SuggestionHelper.FindClosest(unknownKeyText!, eventInfo.Spec.GetAllowedOptionNames());
+                    var allowedOptions = eventInfo.Spec.GetAllowedOptionNames();
+                    var suggestion = SuggestionHelper.FindClosest(unknownKeyText!, allowedOptions);
+                    var expectedList = SuggestionHelper.FormatExpectedOptions(allowedOptions);
                     var message = suggestion is not null
-                        ? $"on.{eventInfo.Name} does not support option: {unknownKeyText}. did you mean \"{suggestion}\"?"
-                        : $"on.{eventInfo.Name} does not support option: {unknownKeyText}";
+                        ? $"on.{eventInfo.Name} unexpected key \"{unknownKeyText}\" for \"{eventInfo.Name}\" section. expected one of {expectedList}. did you mean \"{suggestion}\"?"
+                        : $"on.{eventInfo.Name} unexpected key \"{unknownKeyText}\" for \"{eventInfo.Name}\" section. expected one of {expectedList}";
                     var fix = suggestion is not null
                         ? new DiagnosticFix($"replace '{unknownKeyText}' with '{suggestion}'", [new TextEdit(keySlice.Offset, keySlice.Length, suggestion)])
                         : (DiagnosticFix?)null;
@@ -387,10 +389,12 @@ public static partial class WorkflowParser
             {
                 var key = Encoding.UTF8.GetString(keyUtf8);
                 reader.Read();
-                var suggestion = SuggestionHelper.FindClosest(key, eventInfo.Spec.GetAllowedOptionNames());
+                var allowedOptions = eventInfo.Spec.GetAllowedOptionNames();
+                var suggestion = SuggestionHelper.FindClosest(key, allowedOptions);
+                var expectedList = SuggestionHelper.FormatExpectedOptions(allowedOptions);
                 var message = suggestion is not null
-                    ? $"on.{eventInfo.Name} does not support option: {key}. did you mean \"{suggestion}\"?"
-                    : $"on.{eventInfo.Name} does not support option: {key}";
+                    ? $"on.{eventInfo.Name} unexpected key \"{key}\" for \"{eventInfo.Name}\" section. expected one of {expectedList}. did you mean \"{suggestion}\"?"
+                    : $"on.{eventInfo.Name} unexpected key \"{key}\" for \"{eventInfo.Name}\" section. expected one of {expectedList}";
                 var fix = suggestion is not null
                     ? new DiagnosticFix($"replace '{key}' with '{suggestion}'", [new TextEdit(keySlice.Offset, keySlice.Length, suggestion)])
                     : (DiagnosticFix?)null;

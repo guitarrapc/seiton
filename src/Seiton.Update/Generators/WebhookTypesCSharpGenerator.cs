@@ -219,6 +219,25 @@ internal sealed class WebhookTypesCSharpGenerator
                 }
             """);
 
+        // Generate AllEventNames: static array of all known event name strings
+        sb.AppendLine("    internal static readonly string[] AllEventNames =");
+        sb.Append("    [");
+        for (var i = 0; i < events.Count; i++)
+        {
+            if (i % 5 == 0)
+            {
+                sb.AppendLine();
+                sb.Append("        ");
+            }
+
+            sb.Append($"\"{events[i].Name}\"");
+            if (i < events.Count - 1)
+                sb.Append(", ");
+        }
+
+        sb.AppendLine();
+        sb.AppendLine("    ];");
+
         // Generate GetEventsForFilter: reverse lookup from filter key → comma-separated event list
         AppendGetEventsForFilter(sb, optionMap);
 
