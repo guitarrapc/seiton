@@ -52,7 +52,7 @@ public static partial class WorkflowParser
 
             var unknown = Encoding.UTF8.GetString(keyUtf8);
             reader.Read();
-            AddError(ref diagnostics, $"on.workflow_dispatch expected \"inputs\" key for \"workflow_dispatch\" section but got \"{unknown}\"", keyMark);
+            AddError(ref diagnostics, $"on.workflow_dispatch unexpected key \"{unknown}\" for \"workflow_dispatch\" section. expected \"inputs\"", keyMark);
             if (!reader.End)
             {
                 reader.SkipCurrentNode();

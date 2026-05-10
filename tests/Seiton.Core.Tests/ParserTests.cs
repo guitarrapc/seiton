@@ -284,7 +284,7 @@ public sealed class ParserTests
         """);
 
         var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "test.yml");
-        await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("jobs.'deploy'.defaults expected \"run\" key for \"defaults\" section", StringComparison.Ordinal))).IsTrue();
+        await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("jobs.'deploy'.defaults unexpected key \"RUN\" for \"defaults\" section. expected \"run\"", StringComparison.Ordinal))).IsTrue();
         await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("jobs.'deploy'.defaults.run unexpected key", StringComparison.Ordinal) && x.Message.Contains("for \"run\" section", StringComparison.Ordinal))).IsTrue();
     }
 
@@ -938,7 +938,7 @@ public sealed class ParserTests
         jobs: {}
         """);
         var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "on-disallowed-option.yml");
-        await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("expected \"inputs\" key for \"workflow_dispatch\" section but got \"paths\"", StringComparison.Ordinal))).IsTrue();
+        await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("unexpected key \"paths\" for \"workflow_dispatch\" section. expected \"inputs\"", StringComparison.Ordinal))).IsTrue();
     }
 
     [Test]

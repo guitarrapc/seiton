@@ -1046,7 +1046,7 @@ public static partial class WorkflowParser
             var unknownDefaultsKey = Encoding.UTF8.GetString(keyUtf8);
             reader.Read();
             var defaultsPrefix = sectionContext.Length > 0 ? $"{sectionContext}.defaults " : "defaults ";
-            AddError(ref diagnostics, $"{defaultsPrefix}expected \"run\" key for \"defaults\" section but got \"{unknownDefaultsKey}\"", keyMark);
+            AddError(ref diagnostics, $"{defaultsPrefix}unexpected key \"{unknownDefaultsKey}\" for \"defaults\" section. expected \"run\"", keyMark);
             if (!reader.End) reader.SkipCurrentNode();
         }
 
