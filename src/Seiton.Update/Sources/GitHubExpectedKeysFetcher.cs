@@ -154,11 +154,11 @@ internal sealed class GitHubExpectedKeysFetcher
         var mergedJson = TextNormalization.NormalizeToLf(JsonSerializer.Serialize(parsed, JsonOptions) + "\n");
 
         var primaryPath = Path.Combine(ExpectedKeysSourcePathResolver.ResolvePrimaryDir(repoRoot), "expected-keys.json");
-        var existing2 = File.Exists(primaryPath)
+        var existing = File.Exists(primaryPath)
             ? TextNormalization.NormalizeToLf(File.ReadAllText(primaryPath))
             : string.Empty;
 
-        if (!string.Equals(existing2, mergedJson, StringComparison.Ordinal))
+        if (!string.Equals(existing, mergedJson, StringComparison.Ordinal))
         {
             Directory.CreateDirectory(Path.GetDirectoryName(primaryPath)!);
             File.WriteAllText(primaryPath, mergedJson);
