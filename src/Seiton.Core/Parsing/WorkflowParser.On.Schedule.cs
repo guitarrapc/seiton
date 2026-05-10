@@ -130,7 +130,7 @@ public static partial class WorkflowParser
 
             var unknown = Encoding.UTF8.GetString(keyUtf8);
             reader.Read();
-            AddError(ref diagnostics, $"unexpected key \"{unknown}\" for \"schedule\" section. expected one of {Generated.ExpectedKeys.ScheduleEntryKeys}", keyMark);
+            AddError(ref diagnostics, $"on.schedule unexpected key \"{unknown}\" for \"schedule\" section. expected one of {Generated.ExpectedKeys.ScheduleEntryKeys}", keyMark);
             if (!reader.End)
             {
                 reader.SkipCurrentNode();
