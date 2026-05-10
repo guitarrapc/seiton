@@ -856,7 +856,15 @@ public sealed class ParserTests
         foobar: 1
         """);
         var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "action.yml");
-        await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("unexpected key \"foobar\" at action metadata top level", StringComparison.Ordinal))).IsTrue();
+        var diag = result.Diagnostics.First(x => x.Message.Contains("unexpected key \"foobar\" at action metadata top level", StringComparison.Ordinal));
+        // Should list action metadata keys, not workflow keys
+        await Assert.That(diag.Message.Contains("\"runs\"", StringComparison.Ordinal)).IsTrue();
+        await Assert.That(diag.Message.Contains("\"branding\"", StringComparison.Ordinal)).IsTrue();
+        await Assert.That(diag.Message.Contains("\"author\"", StringComparison.Ordinal)).IsTrue();
+        // Should NOT contain workflow-only keys
+        await Assert.That(diag.Message.Contains("\"jobs\"", StringComparison.Ordinal)).IsFalse();
+        await Assert.That(diag.Message.Contains("\"on\"", StringComparison.Ordinal)).IsFalse();
+        await Assert.That(diag.Message.Contains("\"concurrency\"", StringComparison.Ordinal)).IsFalse();
     }
 
     [Test]

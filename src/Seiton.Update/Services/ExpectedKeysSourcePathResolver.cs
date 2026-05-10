@@ -59,4 +59,12 @@ internal static class ExpectedKeysSourcePathResolver
     {
         return Path.Combine(repoRoot, "data", "sources", "expected-keys", "github");
     }
+
+    /// <summary>
+    /// Hand-written supplemental sections (e.g. action-metadata keys not in workflow-syntax.md).
+    /// </summary>
+    public static string ResolveSupplementalKeys(string repoRoot)
+    {
+        return Path.Combine(repoRoot, "data", "sources", "expected-keys", "github", "supplemental-keys.json");
+    }
 }

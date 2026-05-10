@@ -1,0 +1,20 @@
+{
+  "schemaVersion": 1,
+  "source": "supplemental-action-metadata-keys",
+  "description": "Hand-written action metadata top-level keys not derived from workflow-syntax.md. These keys correspond to the ActionMetadataRootKeyTable in the parser plus 'name' and 'author'.",
+  "sections": [
+    {
+      "name": "action-metadata",
+      "description": "Top-level action metadata keys",
+      "keys": [
+        "author",
+        "branding",
+        "description",
+        "inputs",
+        "name",
+        "outputs",
+        "runs"
+      ]
+    }
+  ]
+}
