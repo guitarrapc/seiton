@@ -503,7 +503,11 @@ public static partial class WorkflowParser
                 continue;
             }
 
-            AddError(ref diagnostics, $"jobs.'{DecodeUtf8(source, jobId)}' unexpected key \"{unknownJobKey}\" for \"job\" section. expected one of {Generated.ExpectedKeys.JobKeys}", keyMark);
+            var jobSuggestion = SuggestionHelper.FindClosestFromFormattedKeys(unknownJobKey!, Generated.ExpectedKeys.JobKeys);
+            var jobMessage = jobSuggestion is not null
+                ? $"jobs.'{DecodeUtf8(source, jobId)}' unexpected key \"{unknownJobKey}\" for \"job\" section. did you mean \"{jobSuggestion}\"? expected one of {Generated.ExpectedKeys.JobKeys}"
+                : $"jobs.'{DecodeUtf8(source, jobId)}' unexpected key \"{unknownJobKey}\" for \"job\" section. expected one of {Generated.ExpectedKeys.JobKeys}";
+            AddError(ref diagnostics, jobMessage, keyMark);
             if (!reader.End)
             {
                 reader.SkipCurrentNode();
@@ -737,7 +741,11 @@ public static partial class WorkflowParser
 
             var unknownSnapKey = Encoding.UTF8.GetString(keyUtf8);
             reader.Read();
-            AddError(ref diagnostics, $"unexpected key \"{unknownSnapKey}\" for \"{section}\". expected one of \"version\", \"image-name\", \"if\"", keyMark);
+            var snapSuggestion = SuggestionHelper.FindClosestFromFormattedKeys(unknownSnapKey, Generated.ExpectedKeys.SnapshotKeys);
+            var snapMessage = snapSuggestion is not null
+                ? $"unexpected key \"{unknownSnapKey}\" for \"{section}\". did you mean \"{snapSuggestion}\"? expected one of {Generated.ExpectedKeys.SnapshotKeys}"
+                : $"unexpected key \"{unknownSnapKey}\" for \"{section}\". expected one of {Generated.ExpectedKeys.SnapshotKeys}";
+            AddError(ref diagnostics, snapMessage, keyMark);
             if (!reader.End)
             {
                 reader.SkipCurrentNode();
@@ -886,7 +894,11 @@ public static partial class WorkflowParser
 
                 var unknownRunsOnKey = Encoding.UTF8.GetString(keyUtf8);
                 reader.Read();
-                AddError(ref diagnostics, $"jobs.'{DecodeUtf8(source, jobId)}'.runs-on unexpected key \"{unknownRunsOnKey}\" for \"runs-on\" section. expected one of {Generated.ExpectedKeys.RunsOnKeys}", keyMark);
+                var runsOnSuggestion = SuggestionHelper.FindClosestFromFormattedKeys(unknownRunsOnKey, Generated.ExpectedKeys.RunsOnKeys);
+                var runsOnMessage = runsOnSuggestion is not null
+                    ? $"jobs.'{DecodeUtf8(source, jobId)}'.runs-on unexpected key \"{unknownRunsOnKey}\" for \"runs-on\" section. did you mean \"{runsOnSuggestion}\"? expected one of {Generated.ExpectedKeys.RunsOnKeys}"
+                    : $"jobs.'{DecodeUtf8(source, jobId)}'.runs-on unexpected key \"{unknownRunsOnKey}\" for \"runs-on\" section. expected one of {Generated.ExpectedKeys.RunsOnKeys}";
+                AddError(ref diagnostics, runsOnMessage, keyMark);
                 hasUnknownKey = true;
                 if (!reader.End) reader.SkipCurrentNode();
             }
@@ -1027,7 +1039,11 @@ public static partial class WorkflowParser
 
             var unknownEnvKey = Encoding.UTF8.GetString(keyUtf8);
             reader.Read();
-            AddError(ref diagnostics, $"jobs.'{DecodeUtf8(source, jobId)}'.environment unexpected key \"{unknownEnvKey}\" for \"environment\" section. expected one of {Generated.ExpectedKeys.EnvironmentKeys}", keyMark);
+            var envSuggestion = SuggestionHelper.FindClosestFromFormattedKeys(unknownEnvKey, Generated.ExpectedKeys.EnvironmentKeys);
+            var envMessage = envSuggestion is not null
+                ? $"jobs.'{DecodeUtf8(source, jobId)}'.environment unexpected key \"{unknownEnvKey}\" for \"environment\" section. did you mean \"{envSuggestion}\"? expected one of {Generated.ExpectedKeys.EnvironmentKeys}"
+                : $"jobs.'{DecodeUtf8(source, jobId)}'.environment unexpected key \"{unknownEnvKey}\" for \"environment\" section. expected one of {Generated.ExpectedKeys.EnvironmentKeys}";
+            AddError(ref diagnostics, envMessage, keyMark);
             if (!reader.End)
             {
                 reader.SkipCurrentNode();

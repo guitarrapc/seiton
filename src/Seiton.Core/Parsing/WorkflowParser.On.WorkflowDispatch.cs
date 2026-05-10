@@ -52,7 +52,11 @@ public static partial class WorkflowParser
 
             var unknown = Encoding.UTF8.GetString(keyUtf8);
             reader.Read();
-            AddError(ref diagnostics, $"on.workflow_dispatch unexpected key \"{unknown}\" for \"workflow_dispatch\" section. expected \"inputs\"", keyMark);
+            var wdSuggestion = SuggestionHelper.FindClosestFromFormattedKeys(unknown, Generated.ExpectedKeys.OnWorkflowDispatchKeys);
+            var wdMsg = wdSuggestion is not null
+                ? $"on.workflow_dispatch unexpected key \"{unknown}\" for \"workflow_dispatch\" section. did you mean \"{wdSuggestion}\"? expected \"inputs\""
+                : $"on.workflow_dispatch unexpected key \"{unknown}\" for \"workflow_dispatch\" section. expected \"inputs\"";
+            AddError(ref diagnostics, wdMsg, keyMark);
             if (!reader.End)
             {
                 reader.SkipCurrentNode();
@@ -241,7 +245,11 @@ public static partial class WorkflowParser
 
             var unknown = Encoding.UTF8.GetString(keyUtf8);
             reader.Read();
-            AddError(ref diagnostics, $"on.workflow_dispatch.inputs unexpected key \"{unknown}\" for \"inputs\" section. expected one of {Generated.ExpectedKeys.WorkflowDispatchInputFieldKeys}", keyMark);
+            var wdInputSuggestion = SuggestionHelper.FindClosestFromFormattedKeys(unknown, Generated.ExpectedKeys.WorkflowDispatchInputFieldKeys);
+            var wdInputMsg = wdInputSuggestion is not null
+                ? $"on.workflow_dispatch.inputs unexpected key \"{unknown}\" for \"inputs\" section. did you mean \"{wdInputSuggestion}\"? expected one of {Generated.ExpectedKeys.WorkflowDispatchInputFieldKeys}"
+                : $"on.workflow_dispatch.inputs unexpected key \"{unknown}\" for \"inputs\" section. expected one of {Generated.ExpectedKeys.WorkflowDispatchInputFieldKeys}";
+            AddError(ref diagnostics, wdInputMsg, keyMark);
             if (!reader.End)
             {
                 reader.SkipCurrentNode();

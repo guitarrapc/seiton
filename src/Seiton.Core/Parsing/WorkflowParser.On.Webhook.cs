@@ -168,7 +168,11 @@ public static partial class WorkflowParser
                 }
             }
 
-            AddError(ref diagnostics, $"on.{eventInfo.Name} unexpected key \"{unknownKeyText}\" for \"{eventInfo.Name}\" section. expected one of {Generated.ExpectedKeys.WebhookEventOptionKeys}", keyMark);
+            var webhookSuggestion1 = SuggestionHelper.FindClosestFromFormattedKeys(unknownKeyText!, Generated.ExpectedKeys.WebhookEventOptionKeys);
+            var webhookMsg1 = webhookSuggestion1 is not null
+                ? $"on.{eventInfo.Name} unexpected key \"{unknownKeyText}\" for \"{eventInfo.Name}\" section. did you mean \"{webhookSuggestion1}\"? expected one of {Generated.ExpectedKeys.WebhookEventOptionKeys}"
+                : $"on.{eventInfo.Name} unexpected key \"{unknownKeyText}\" for \"{eventInfo.Name}\" section. expected one of {Generated.ExpectedKeys.WebhookEventOptionKeys}";
+            AddError(ref diagnostics, webhookMsg1, keyMark);
             if (!reader.End) { reader.SkipCurrentNode(); }
         }
 
@@ -476,7 +480,11 @@ public static partial class WorkflowParser
 
             var unknownKey = Encoding.UTF8.GetString(keyUtf8);
             reader.Read();
-            AddError(ref diagnostics, $"on.{eventInfo.Name} unexpected key \"{unknownKey}\" for \"{eventInfo.Name}\" section. expected one of {Generated.ExpectedKeys.WebhookEventOptionKeys}", keyMark);
+            var webhookSuggestion2 = SuggestionHelper.FindClosestFromFormattedKeys(unknownKey, Generated.ExpectedKeys.WebhookEventOptionKeys);
+            var webhookMsg2 = webhookSuggestion2 is not null
+                ? $"on.{eventInfo.Name} unexpected key \"{unknownKey}\" for \"{eventInfo.Name}\" section. did you mean \"{webhookSuggestion2}\"? expected one of {Generated.ExpectedKeys.WebhookEventOptionKeys}"
+                : $"on.{eventInfo.Name} unexpected key \"{unknownKey}\" for \"{eventInfo.Name}\" section. expected one of {Generated.ExpectedKeys.WebhookEventOptionKeys}";
+            AddError(ref diagnostics, webhookMsg2, keyMark);
             reader.SkipCurrentNode();
         }
 
@@ -564,7 +572,7 @@ public static partial class WorkflowParser
         {
             var expectedList = SuggestionHelper.FormatExpectedOptions(allowedOptions);
             message = suggestion is not null
-                ? $"on.{eventName} unexpected key \"{keyText}\" for \"{eventName}\" section. expected one of {expectedList}. did you mean \"{suggestion}\"?"
+                ? $"on.{eventName} unexpected key \"{keyText}\" for \"{eventName}\" section. did you mean \"{suggestion}\"? expected one of {expectedList}"
                 : $"on.{eventName} unexpected key \"{keyText}\" for \"{eventName}\" section. expected one of {expectedList}";
         }
         var fix = suggestion is not null

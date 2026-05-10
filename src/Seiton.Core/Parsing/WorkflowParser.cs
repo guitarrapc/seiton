@@ -593,12 +593,17 @@ public static partial class WorkflowParser
 
             var unknownKey = Encoding.UTF8.GetString(keyUtf8);
             reader.Read();
-            AddError(
-                ref diagnostics,
-                parseMode == ParseMode.ActionMetadata
-                    ? $"unexpected key \"{unknownKey}\" at action metadata top level. expected one of {Generated.ExpectedKeys.ActionMetadataKeys}"
-                    : $"unexpected key \"{unknownKey}\" at workflow top level. expected one of {Generated.ExpectedKeys.WorkflowKeys}",
-                keyMark);
+            var expectedKeys = parseMode == ParseMode.ActionMetadata
+                ? Generated.ExpectedKeys.ActionMetadataKeys
+                : Generated.ExpectedKeys.WorkflowKeys;
+            var suggestion = SuggestionHelper.FindClosestFromFormattedKeys(unknownKey, expectedKeys);
+            var prefix = parseMode == ParseMode.ActionMetadata
+                ? "unexpected key \"{0}\" at action metadata top level."
+                : "unexpected key \"{0}\" at workflow top level.";
+            var message = suggestion is not null
+                ? $"{string.Format(prefix, unknownKey)} did you mean \"{suggestion}\"? expected one of {expectedKeys}"
+                : $"{string.Format(prefix, unknownKey)} expected one of {expectedKeys}";
+            AddError(ref diagnostics, message, keyMark);
             if (!reader.End)
             {
                 reader.SkipCurrentNode();
@@ -1028,7 +1033,11 @@ public static partial class WorkflowParser
                     var unknownRunKey = Encoding.UTF8.GetString(runKeyUtf8);
                     reader.Read();
                     var runPrefix = sectionContext.Length > 0 ? $"{sectionContext}.defaults.run " : "defaults.run ";
-                    AddError(ref diagnostics, $"{runPrefix}unexpected key \"{unknownRunKey}\" for \"run\" section. expected one of {Generated.ExpectedKeys.DefaultsRunKeys}", runKeyMark);
+                    var runSuggestion = SuggestionHelper.FindClosestFromFormattedKeys(unknownRunKey, Generated.ExpectedKeys.DefaultsRunKeys);
+                    var runMessage = runSuggestion is not null
+                        ? $"{runPrefix}unexpected key \"{unknownRunKey}\" for \"run\" section. did you mean \"{runSuggestion}\"? expected one of {Generated.ExpectedKeys.DefaultsRunKeys}"
+                        : $"{runPrefix}unexpected key \"{unknownRunKey}\" for \"run\" section. expected one of {Generated.ExpectedKeys.DefaultsRunKeys}";
+                    AddError(ref diagnostics, runMessage, runKeyMark);
                     if (!reader.End) reader.SkipCurrentNode();
                 }
 
@@ -1046,7 +1055,11 @@ public static partial class WorkflowParser
             var unknownDefaultsKey = Encoding.UTF8.GetString(keyUtf8);
             reader.Read();
             var defaultsPrefix = sectionContext.Length > 0 ? $"{sectionContext}.defaults " : "defaults ";
-            AddError(ref diagnostics, $"{defaultsPrefix}unexpected key \"{unknownDefaultsKey}\" for \"defaults\" section. expected \"run\"", keyMark);
+            var defaultsSuggestion = SuggestionHelper.FindClosestFromFormattedKeys(unknownDefaultsKey, Generated.ExpectedKeys.DefaultsKeys);
+            var defaultsMessage = defaultsSuggestion is not null
+                ? $"{defaultsPrefix}unexpected key \"{unknownDefaultsKey}\" for \"defaults\" section. did you mean \"{defaultsSuggestion}\"? expected \"run\""
+                : $"{defaultsPrefix}unexpected key \"{unknownDefaultsKey}\" for \"defaults\" section. expected \"run\"";
+            AddError(ref diagnostics, defaultsMessage, keyMark);
             if (!reader.End) reader.SkipCurrentNode();
         }
 
@@ -1162,7 +1175,11 @@ public static partial class WorkflowParser
             var unknownConcurrencyKey = Encoding.UTF8.GetString(keyUtf8);
             reader.Read();
             var concurrencyPrefix = sectionContext.Length > 0 ? $"{sectionContext}.concurrency " : "concurrency ";
-            AddError(ref diagnostics, $"{concurrencyPrefix}unexpected key \"{unknownConcurrencyKey}\" for \"concurrency\" section. expected one of {Generated.ExpectedKeys.ConcurrencyKeys}", innerKeyMark);
+            var concurrencySuggestion = SuggestionHelper.FindClosestFromFormattedKeys(unknownConcurrencyKey, Generated.ExpectedKeys.ConcurrencyKeys);
+            var concurrencyMessage = concurrencySuggestion is not null
+                ? $"{concurrencyPrefix}unexpected key \"{unknownConcurrencyKey}\" for \"concurrency\" section. did you mean \"{concurrencySuggestion}\"? expected one of {Generated.ExpectedKeys.ConcurrencyKeys}"
+                : $"{concurrencyPrefix}unexpected key \"{unknownConcurrencyKey}\" for \"concurrency\" section. expected one of {Generated.ExpectedKeys.ConcurrencyKeys}";
+            AddError(ref diagnostics, concurrencyMessage, innerKeyMark);
             if (!reader.End) reader.SkipCurrentNode();
         }
 

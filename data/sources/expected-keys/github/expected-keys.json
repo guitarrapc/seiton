@@ -22,6 +22,49 @@
       ]
     },
     {
+      "name": "action-metadata-branding",
+      "description": "Expected keys for action metadata branding section",
+      "keys": [
+        "color",
+        "icon"
+      ]
+    },
+    {
+      "name": "action-metadata-input-option",
+      "description": "Expected keys for action metadata input option fields",
+      "keys": [
+        "default",
+        "deprecationMessage",
+        "description",
+        "required"
+      ]
+    },
+    {
+      "name": "action-metadata-output-option",
+      "description": "Expected keys for action metadata output option fields",
+      "keys": [
+        "description",
+        "value"
+      ]
+    },
+    {
+      "name": "action-metadata-runs",
+      "description": "Expected keys for action metadata runs section",
+      "keys": [
+        "args",
+        "entrypoint",
+        "env",
+        "image",
+        "main",
+        "post",
+        "post-if",
+        "pre",
+        "pre-if",
+        "steps",
+        "using"
+      ]
+    },
+    {
       "name": "action-step",
       "description": "Keys valid for action-form steps (with \u0027uses\u0027)",
       "keys": [
@@ -221,6 +264,13 @@
       ]
     },
     {
+      "name": "repository-dispatch",
+      "description": "Expected keys for on.repository_dispatch section",
+      "keys": [
+        "types"
+      ]
+    },
+    {
       "name": "run-step",
       "description": "Keys valid for run-form steps (with \u0027run\u0027)",
       "keys": [
@@ -263,6 +313,15 @@
         "options",
         "ports",
         "volumes"
+      ]
+    },
+    {
+      "name": "snapshot",
+      "description": "Expected keys for jobs.\u003Cjob_id\u003E.snapshot section",
+      "keys": [
+        "if",
+        "image-name",
+        "version"
       ]
     },
     {
