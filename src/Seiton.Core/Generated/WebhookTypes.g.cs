@@ -56,7 +56,8 @@ internal static class WebhookTypes
     }
 
     public static bool TryGet(ReadOnlySpan<byte> eventNameUtf8, out string eventName, out EventSpec spec)
-    {        if (eventNameUtf8.SequenceEqual("branch_protection_rule"u8)) { eventName = "branch_protection_rule"; spec = new(EventId.BranchProtectionRule); return true; }
+    {
+        if (eventNameUtf8.SequenceEqual("branch_protection_rule"u8)) { eventName = "branch_protection_rule"; spec = new(EventId.BranchProtectionRule); return true; }
         if (eventNameUtf8.SequenceEqual("check_run"u8)) { eventName = "check_run"; spec = new(EventId.CheckRun); return true; }
         if (eventNameUtf8.SequenceEqual("check_suite"u8)) { eventName = "check_suite"; spec = new(EventId.CheckSuite); return true; }
         if (eventNameUtf8.SequenceEqual("create"u8)) { eventName = "create"; spec = new(EventId.Create); return true; }
@@ -112,7 +113,8 @@ internal static class WebhookTypes
         public bool IsOptionAllowed(ReadOnlySpan<byte> optionUtf8)
         {
             return Id switch
-            {                EventId.BranchProtectionRule => optionUtf8.SequenceEqual("types"u8),
+            {
+                EventId.BranchProtectionRule => optionUtf8.SequenceEqual("types"u8),
                 EventId.CheckRun => optionUtf8.SequenceEqual("types"u8),
                 EventId.CheckSuite => optionUtf8.SequenceEqual("types"u8),
                 EventId.Discussion => optionUtf8.SequenceEqual("types"u8),
@@ -154,7 +156,8 @@ internal static class WebhookTypes
             }
 
             return Id switch
-            {                EventId.BranchProtectionRule => valueUtf8.SequenceEqual("created"u8) || valueUtf8.SequenceEqual("deleted"u8) || valueUtf8.SequenceEqual("edited"u8),
+            {
+                EventId.BranchProtectionRule => valueUtf8.SequenceEqual("created"u8) || valueUtf8.SequenceEqual("deleted"u8) || valueUtf8.SequenceEqual("edited"u8),
                 EventId.CheckRun => valueUtf8.SequenceEqual("completed"u8) || valueUtf8.SequenceEqual("created"u8) || valueUtf8.SequenceEqual("requested_action"u8) || valueUtf8.SequenceEqual("rerequested"u8),
                 EventId.CheckSuite => valueUtf8.SequenceEqual("completed"u8),
                 EventId.Discussion => valueUtf8.SequenceEqual("answered"u8) || valueUtf8.SequenceEqual("category_changed"u8) || valueUtf8.SequenceEqual("created"u8) || valueUtf8.SequenceEqual("deleted"u8) || valueUtf8.SequenceEqual("edited"u8) || valueUtf8.SequenceEqual("labeled"u8) || valueUtf8.SequenceEqual("locked"u8) || valueUtf8.SequenceEqual("pinned"u8) || valueUtf8.SequenceEqual("transferred"u8) || valueUtf8.SequenceEqual("unanswered"u8) || valueUtf8.SequenceEqual("unlabeled"u8) || valueUtf8.SequenceEqual("unlocked"u8) || valueUtf8.SequenceEqual("unpinned"u8),
@@ -182,7 +185,8 @@ internal static class WebhookTypes
         private ActivityTypesMode GetTypesMode()
         {
             return Id switch
-            {                EventId.RepositoryDispatch => ActivityTypesMode.Any,
+            {
+                EventId.RepositoryDispatch => ActivityTypesMode.Any,
                 EventId.BranchProtectionRule or EventId.CheckRun or EventId.CheckSuite or EventId.Discussion or EventId.DiscussionComment or EventId.IssueComment or EventId.Issues or EventId.Label or EventId.MergeGroup or EventId.Milestone or EventId.Project or EventId.ProjectCard or EventId.ProjectColumn or EventId.PullRequest or EventId.PullRequestReview or EventId.PullRequestReviewComment or EventId.PullRequestTarget or EventId.RegistryPackage or EventId.Release or EventId.Watch or EventId.WorkflowRun => ActivityTypesMode.Restricted,
                 _ => ActivityTypesMode.NotSupported,
             };
@@ -191,7 +195,8 @@ internal static class WebhookTypes
         public string[] GetAllowedOptionNames()
         {
             return Id switch
-            {                EventId.BranchProtectionRule => ["types"],
+            {
+                EventId.BranchProtectionRule => ["types"],
                 EventId.CheckRun => ["types"],
                 EventId.CheckSuite => ["types"],
                 EventId.Discussion => ["types"],
