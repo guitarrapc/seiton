@@ -232,7 +232,18 @@ internal sealed class WebhookTypesCSharpGenerator
 
             sb.Append($"\"{events[i].Name}\"");
             if (i < events.Count - 1)
-                sb.Append(", ");
+            {
+                sb.Append(',');
+                if ((i + 1) % 5 == 0)
+                {
+                    sb.AppendLine();
+                    sb.Append("        ");
+                }
+                else
+                {
+                    sb.Append(' ');
+                }
+            }
         }
 
         sb.AppendLine();
