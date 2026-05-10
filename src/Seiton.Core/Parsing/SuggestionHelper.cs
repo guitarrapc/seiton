@@ -54,9 +54,11 @@ internal static class SuggestionHelper
         for (var i = 1; i <= a.Length; i++)
         {
             curr[0] = i;
+            var lc = char.ToLowerInvariant(a[i - 1]);
             for (var j = 1; j <= b.Length; j++)
             {
-                var cost = a[i - 1] == b[j - 1] ? 0 : 1;
+                var rc = char.ToLowerInvariant(b[j - 1]);
+                var cost = lc == rc ? 0 : 1;
                 curr[j] = Math.Min(
                     Math.Min(curr[j - 1] + 1, prev[j] + 1),
                     prev[j - 1] + cost);
@@ -84,5 +86,37 @@ internal static class SuggestionHelper
             sb.Append('"').Append(options[i]).Append('"');
         }
         return sb.ToString();
+    }
+
+    /// <summary>
+    /// Finds the closest match from a pre-formatted expected-keys string (e.g. <c>"\"a\", \"b\", \"c\""</c>).
+    /// Parses the keys out and delegates to <see cref="FindClosest"/>.
+    /// Used only on error paths — allocation is acceptable.
+    /// </summary>
+    public static string? FindClosestFromFormattedKeys(string input, string formattedKeys)
+    {
+        var candidates = ParseFormattedKeys(formattedKeys);
+        return FindClosest(input, candidates);
+    }
+
+    /// <summary>
+    /// Parses a pre-formatted expected-keys string like <c>"\"a\", \"b\""</c> into a string array <c>["a", "b"]</c>.
+    /// </summary>
+    private static string[] ParseFormattedKeys(string formatted)
+    {
+        if (string.IsNullOrEmpty(formatted)) return [];
+
+        var keys = new System.Collections.Generic.List<string>();
+        var i = 0;
+        while (i < formatted.Length)
+        {
+            var start = formatted.IndexOf('"', i);
+            if (start < 0) break;
+            var end = formatted.IndexOf('"', start + 1);
+            if (end < 0) break;
+            keys.Add(formatted.Substring(start + 1, end - start - 1));
+            i = end + 1;
+        }
+        return keys.ToArray();
     }
 }

@@ -52,7 +52,11 @@ public static partial class WorkflowParser
 
             var unknown = Encoding.UTF8.GetString(keyUtf8);
             reader.Read();
-            AddError(ref diagnostics, $"on.repository_dispatch unexpected key \"{unknown}\" for \"repository_dispatch\" section. expected \"types\"", keyMark);
+            var rdSuggestion = SuggestionHelper.FindClosest(unknown, ["types"]);
+            var rdMsg = rdSuggestion is not null
+                ? $"on.repository_dispatch unexpected key \"{unknown}\" for \"repository_dispatch\" section. did you mean \"{rdSuggestion}\"? expected \"types\""
+                : $"on.repository_dispatch unexpected key \"{unknown}\" for \"repository_dispatch\" section. expected \"types\"";
+            AddError(ref diagnostics, rdMsg, keyMark);
             if (!reader.End)
             {
                 reader.SkipCurrentNode();

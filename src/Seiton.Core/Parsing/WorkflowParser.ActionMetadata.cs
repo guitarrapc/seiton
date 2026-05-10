@@ -239,7 +239,11 @@ public static partial class WorkflowParser
 
             var unknown = Encoding.UTF8.GetString(keyUtf8);
             reader.Read();
-            AddError(ref diagnostics, $"unexpected action input option: {unknown}", keyMark);
+            var inputSuggestion = SuggestionHelper.FindClosest(unknown, ["default", "deprecationMessage", "description", "required"]);
+            var inputMsg = inputSuggestion is not null
+                ? $"unexpected action input option: {unknown}. did you mean \"{inputSuggestion}\"?"
+                : $"unexpected action input option: {unknown}";
+            AddError(ref diagnostics, inputMsg, keyMark);
             if (!reader.End)
             {
                 reader.SkipCurrentNode();
@@ -415,7 +419,11 @@ public static partial class WorkflowParser
 
             var unknown = Encoding.UTF8.GetString(keyUtf8);
             reader.Read();
-            AddError(ref diagnostics, $"unexpected action output option: {unknown}", keyMark);
+            var outputSuggestion = SuggestionHelper.FindClosest(unknown, ["description", "value"]);
+            var outputMsg = outputSuggestion is not null
+                ? $"unexpected action output option: {unknown}. did you mean \"{outputSuggestion}\"?"
+                : $"unexpected action output option: {unknown}";
+            AddError(ref diagnostics, outputMsg, keyMark);
             if (!reader.End)
             {
                 reader.SkipCurrentNode();
@@ -514,7 +522,11 @@ public static partial class WorkflowParser
 
             var unknown = Encoding.UTF8.GetString(keyUtf8);
             reader.Read();
-            AddError(ref diagnostics, $"unexpected action branding key: {unknown}", keyMark);
+            var brandingSuggestion = SuggestionHelper.FindClosest(unknown, ["color", "icon"]);
+            var brandingMsg = brandingSuggestion is not null
+                ? $"unexpected action branding key: {unknown}. did you mean \"{brandingSuggestion}\"?"
+                : $"unexpected action branding key: {unknown}";
+            AddError(ref diagnostics, brandingMsg, keyMark);
             if (!reader.End)
             {
                 reader.SkipCurrentNode();
@@ -705,7 +717,11 @@ public static partial class WorkflowParser
 
             var unknown = Encoding.UTF8.GetString(keyUtf8);
             reader.Read();
-            AddError(ref diagnostics, $"unexpected action runs key: {unknown}", keyMark);
+            var runsSuggestion = SuggestionHelper.FindClosest(unknown, ["args", "entrypoint", "env", "image", "main", "post", "post-if", "pre", "pre-if", "steps", "using"]);
+            var runsMsg = runsSuggestion is not null
+                ? $"unexpected action runs key: {unknown}. did you mean \"{runsSuggestion}\"?"
+                : $"unexpected action runs key: {unknown}";
+            AddError(ref diagnostics, runsMsg, keyMark);
             if (!reader.End)
             {
                 reader.SkipCurrentNode();

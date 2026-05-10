@@ -24,4 +24,20 @@ public sealed class SuggestionHelperTests
         var result = SuggestionHelper.FormatExpectedOptions(["branches", "paths", "tags"]);
         await Assert.That(result).IsEqualTo("\"branches\", \"paths\", \"tags\"");
     }
+
+    [Test]
+    public async Task FindClosest_CaseDifferentInput_SuggestsMatch()
+    {
+        // "BRANCHES" should match "branches" with case-insensitive distance 0
+        var result = SuggestionHelper.FindClosest("BRANCHES", ["branches", "paths", "tags"]);
+        await Assert.That(result).IsEqualTo("branches");
+    }
+
+    [Test]
+    public async Task FindClosest_MixedCaseWithTypo_SuggestsMatch()
+    {
+        // "Branchs" should match "branches" (case-insensitive distance 2: missing 'e', 's' mismatch)
+        var result = SuggestionHelper.FindClosest("Branchs", ["branches", "paths", "tags"]);
+        await Assert.That(result).IsEqualTo("branches");
+    }
 }

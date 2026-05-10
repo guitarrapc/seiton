@@ -284,7 +284,7 @@ public sealed class ParserTests
         """);
 
         var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "test.yml");
-        await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("jobs.'deploy'.defaults unexpected key \"RUN\" for \"defaults\" section. expected \"run\"", StringComparison.Ordinal))).IsTrue();
+        await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("jobs.'deploy'.defaults unexpected key \"RUN\" for \"defaults\" section. did you mean \"run\"?", StringComparison.Ordinal))).IsTrue();
         await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("jobs.'deploy'.defaults.run unexpected key", StringComparison.Ordinal) && x.Message.Contains("for \"run\" section", StringComparison.Ordinal))).IsTrue();
     }
 
@@ -1019,6 +1019,136 @@ public sealed class ParserTests
         """);
         var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "on-disallowed-option.yml");
         await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("unexpected key \"paths\" for \"workflow_dispatch\" section. expected \"inputs\"", StringComparison.Ordinal))).IsTrue();
+    }
+
+    [Test]
+    public async Task Parse_OnEventUpperCaseOption_SuggestsLowerCaseMatch()
+    {
+        // "BRANCHES" should suggest "branches" via case-insensitive Levenshtein
+        var yaml = NormalizeEol("""
+        on:
+          push:
+            BRANCHES: [main]
+        jobs: {}
+        """);
+        var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "on-upper-case-option.yml");
+        await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("did you mean \"branches\"?", StringComparison.Ordinal))).IsTrue();
+    }
+
+    [Test]
+    public async Task Parse_OnUnknownEvent_UpperCase_SuggestsLowerCaseMatch()
+    {
+        // "PUSH" should suggest "push" via case-insensitive Levenshtein
+        var yaml = NormalizeEol("""
+        on: PUSH
+        jobs: {}
+        """);
+        var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "on-upper-case-event.yml");
+        await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("did you mean \"push\"?", StringComparison.Ordinal))).IsTrue();
+    }
+
+    [Test]
+    public async Task Parse_OnUnknownEvent_SuggestionIncludesUrl()
+    {
+        // When a suggestion is found, the URL should still be present for user reference
+        var yaml = NormalizeEol("""
+        on: PUSH
+        jobs: {}
+        """);
+        var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "on-event-url.yml");
+        var diag = result.Diagnostics.First(x => x.Message.Contains("unknown event \"PUSH\"", StringComparison.Ordinal));
+        await Assert.That(diag.Message.Contains("did you mean \"push\"?", StringComparison.Ordinal)).IsTrue();
+        await Assert.That(diag.Message.Contains("see https://docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows", StringComparison.Ordinal)).IsTrue();
+    }
+
+    [Test]
+    public async Task Parse_OnEventUnknownOption_SuggestionBeforeExpectedList()
+    {
+        // "did you mean" should appear BEFORE "expected one of" for readability
+        var yaml = NormalizeEol("""
+        on:
+          push:
+            BRANCHES: [main]
+        jobs: {}
+        """);
+        var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "on-option-order.yml");
+        var diag = result.Diagnostics.First(x => x.Message.Contains("BRANCHES", StringComparison.Ordinal));
+        var didYouMeanIdx = diag.Message.IndexOf("did you mean", StringComparison.Ordinal);
+        var expectedIdx = diag.Message.IndexOf("expected one of", StringComparison.Ordinal);
+        await Assert.That(didYouMeanIdx).IsGreaterThanOrEqualTo(0);
+        await Assert.That(expectedIdx).IsGreaterThanOrEqualTo(0);
+        await Assert.That(didYouMeanIdx).IsLessThan(expectedIdx);
+    }
+
+    [Test]
+    public async Task Parse_WorkflowTopLevel_UpperCaseKey_SuggestsLowerCase()
+    {
+        // Workflow top-level "NAME" should suggest "name"
+        var yaml = NormalizeEol("""
+        NAME: test
+        on: push
+        jobs: {}
+        """);
+        var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "workflow-upper-key.yml");
+        var diag = result.Diagnostics.First(x => x.Message.Contains("unexpected key \"NAME\"", StringComparison.Ordinal));
+        await Assert.That(diag.Message.Contains("did you mean \"name\"?", StringComparison.Ordinal)).IsTrue();
+    }
+
+    [Test]
+    public async Task Parse_DefaultsSection_UpperCaseKey_SuggestsLowerCase()
+    {
+        // defaults "RUN" should suggest "run"
+        var yaml = NormalizeEol("""
+        on: push
+        defaults:
+          RUN:
+            shell: bash
+        jobs:
+          test:
+            runs-on: ubuntu-latest
+            steps:
+              - run: echo hi
+        """);
+        var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "defaults-upper-key.yml");
+        var diag = result.Diagnostics.First(x => x.Message.Contains("unexpected key \"RUN\"", StringComparison.Ordinal));
+        await Assert.That(diag.Message.Contains("did you mean \"run\"?", StringComparison.Ordinal)).IsTrue();
+    }
+
+    [Test]
+    public async Task Parse_JobSection_UpperCaseKey_SuggestsLowerCase()
+    {
+        // Job "NAME" should suggest "name"
+        var yaml = NormalizeEol("""
+        on: push
+        jobs:
+          test:
+            NAME: test
+            runs-on: ubuntu-latest
+            steps:
+              - run: echo hi
+        """);
+        var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "job-upper-key.yml");
+        var diag = result.Diagnostics.First(x => x.Message.Contains("unexpected key \"NAME\"", StringComparison.Ordinal));
+        await Assert.That(diag.Message.Contains("did you mean \"name\"?", StringComparison.Ordinal)).IsTrue();
+    }
+
+    [Test]
+    public async Task Parse_StepSection_UpperCaseKey_SuggestsLowerCase()
+    {
+        // Step "ENV" should suggest "env"
+        var yaml = NormalizeEol("""
+        on: push
+        jobs:
+          test:
+            runs-on: ubuntu-latest
+            steps:
+              - run: echo hi
+                ENV:
+                  FOO: bar
+        """);
+        var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "step-upper-key.yml");
+        var diag = result.Diagnostics.First(x => x.Message.Contains("unexpected key \"ENV\"", StringComparison.Ordinal));
+        await Assert.That(diag.Message.Contains("did you mean \"env\"?", StringComparison.Ordinal)).IsTrue();
     }
 
     [Test]

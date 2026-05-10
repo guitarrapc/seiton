@@ -332,7 +332,11 @@ public static partial class WorkflowParser
             var expectedKeys = isService
                 ? Generated.ExpectedKeys.ServiceKeys
                 : Generated.ExpectedKeys.ContainerKeys;
-            AddError(ref diagnostics, $"{FormatContainerSectionName(source, jobId, serviceName, isService)} unexpected key \"{unknownKey}\" for \"{containerSectionType}\" section. expected one of {expectedKeys}", keyMark);
+            var containerSuggestion = SuggestionHelper.FindClosestFromFormattedKeys(unknownKey, expectedKeys);
+            var containerMsg = containerSuggestion is not null
+                ? $"{FormatContainerSectionName(source, jobId, serviceName, isService)} unexpected key \"{unknownKey}\" for \"{containerSectionType}\" section. did you mean \"{containerSuggestion}\"? expected one of {expectedKeys}"
+                : $"{FormatContainerSectionName(source, jobId, serviceName, isService)} unexpected key \"{unknownKey}\" for \"{containerSectionType}\" section. expected one of {expectedKeys}";
+            AddError(ref diagnostics, containerMsg, keyMark);
             if (!reader.End) reader.SkipCurrentNode();
         }
 
@@ -493,7 +497,11 @@ public static partial class WorkflowParser
 
             var unknownKey = Encoding.UTF8.GetString(keyUtf8);
             reader.Read();
-            AddError(ref diagnostics, $"{FormatContainerSectionName(source, jobId, serviceName, isService)}.credentials unexpected key \"{unknownKey}\" for \"credentials\" section. expected one of {Generated.ExpectedKeys.CredentialsKeys}", keyMark);
+            var credSuggestion = SuggestionHelper.FindClosestFromFormattedKeys(unknownKey, Generated.ExpectedKeys.CredentialsKeys);
+            var credMsg = credSuggestion is not null
+                ? $"{FormatContainerSectionName(source, jobId, serviceName, isService)}.credentials unexpected key \"{unknownKey}\" for \"credentials\" section. did you mean \"{credSuggestion}\"? expected one of {Generated.ExpectedKeys.CredentialsKeys}"
+                : $"{FormatContainerSectionName(source, jobId, serviceName, isService)}.credentials unexpected key \"{unknownKey}\" for \"credentials\" section. expected one of {Generated.ExpectedKeys.CredentialsKeys}";
+            AddError(ref diagnostics, credMsg, keyMark);
             if (!reader.End) reader.SkipCurrentNode();
         }
 

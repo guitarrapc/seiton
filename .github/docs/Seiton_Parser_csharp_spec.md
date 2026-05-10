@@ -1275,13 +1275,19 @@ public readonly record struct TextRange(
 The parser attaches `DiagnosticFix` on error paths where a deterministic fix is available.
 
 **Implementation:**
-- `SuggestionHelper.FindClosest(input, candidates)` — Levenshtein distance-based suggestion utility in `Parsing/SuggestionHelper.cs`. Used only on error paths (allocations acceptable).
+- `SuggestionHelper.FindClosest(input, candidates)` — Case-insensitive Levenshtein distance-based suggestion utility in `Parsing/SuggestionHelper.cs`. Used only on error paths (allocations acceptable).
+- `SuggestionHelper.FindClosestFromFormattedKeys(input, formattedKeys)` — Parses pre-formatted `ExpectedKeys` const strings (e.g. `"\"a\", \"b\""`) into candidates and delegates to `FindClosest`. Used for sections whose expected keys come from `Generated/ExpectedKeys.g.cs`.
 - `EventSpec.GetAllowedOptionNames()` — generated method in `WebhookTypes.g.cs` returning `string[]` of valid option names per event.
 - Fix uses `Utf8Slice` (captured before `reader.Read()`) for byte offset and length of the key to replace.
+
+**Message ordering:** When a suggestion is found, `did you mean "{suggestion}"?` always appears **before** `expected one of {list}`.
 
 **Fixable parser diagnostics:**
 - Unknown webhook event option with close Levenshtein match → replaces key with suggestion
 - Unknown `image_version` option with close match → replaces key with suggestion (candidates: `names`, `versions`)
+
+**Suggestion-only diagnostics (no auto-fix, all sections):**
+- Workflow/action-metadata top-level keys, job keys, step keys, container/service/credential keys, defaults/defaults.run keys, concurrency keys, strategy keys, runs-on keys, schedule/repository_dispatch/workflow_call/workflow_dispatch keys, action metadata input/output/branding/runs keys
 
 ---
 

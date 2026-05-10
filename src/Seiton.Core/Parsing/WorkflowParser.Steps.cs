@@ -343,11 +343,19 @@ public static partial class WorkflowParser
 
             if (stepForm == 2)
             {
-                AddError(ref diagnostics, $"{FormatStepPrefix(source, jobId, stepIndex)} unexpected key \"{unknownKey}\" for step to execute action. expected one of {ActionStepExpectedKeys}", keyMark);
+                var stepSuggestion = SuggestionHelper.FindClosestFromFormattedKeys(unknownKey!, ActionStepExpectedKeys);
+                var stepMsg = stepSuggestion is not null
+                    ? $"{FormatStepPrefix(source, jobId, stepIndex)} unexpected key \"{unknownKey}\" for step to execute action. did you mean \"{stepSuggestion}\"? expected one of {ActionStepExpectedKeys}"
+                    : $"{FormatStepPrefix(source, jobId, stepIndex)} unexpected key \"{unknownKey}\" for step to execute action. expected one of {ActionStepExpectedKeys}";
+                AddError(ref diagnostics, stepMsg, keyMark);
             }
             else if (stepForm == 1)
             {
-                AddError(ref diagnostics, $"{FormatStepPrefix(source, jobId, stepIndex)} unexpected key \"{unknownKey}\" for step to run shell command. expected one of {RunStepExpectedKeys}", keyMark);
+                var stepSuggestion = SuggestionHelper.FindClosestFromFormattedKeys(unknownKey!, RunStepExpectedKeys);
+                var stepMsg = stepSuggestion is not null
+                    ? $"{FormatStepPrefix(source, jobId, stepIndex)} unexpected key \"{unknownKey}\" for step to run shell command. did you mean \"{stepSuggestion}\"? expected one of {RunStepExpectedKeys}"
+                    : $"{FormatStepPrefix(source, jobId, stepIndex)} unexpected key \"{unknownKey}\" for step to run shell command. expected one of {RunStepExpectedKeys}";
+                AddError(ref diagnostics, stepMsg, keyMark);
             }
             else if (deferredUnknownKey is null)
             {
@@ -370,9 +378,21 @@ public static partial class WorkflowParser
         if (deferredUnknownKey is not null && stepForm != 0)
         {
             if (stepForm == 2)
-                AddError(ref diagnostics, $"{FormatStepPrefix(source, jobId, stepIndex)} unexpected key \"{deferredUnknownKey}\" for step to execute action. expected one of {ActionStepExpectedKeys}", deferredUnknownMark);
+            {
+                var deferredSuggestion = SuggestionHelper.FindClosestFromFormattedKeys(deferredUnknownKey, ActionStepExpectedKeys);
+                var deferredMsg = deferredSuggestion is not null
+                    ? $"{FormatStepPrefix(source, jobId, stepIndex)} unexpected key \"{deferredUnknownKey}\" for step to execute action. did you mean \"{deferredSuggestion}\"? expected one of {ActionStepExpectedKeys}"
+                    : $"{FormatStepPrefix(source, jobId, stepIndex)} unexpected key \"{deferredUnknownKey}\" for step to execute action. expected one of {ActionStepExpectedKeys}";
+                AddError(ref diagnostics, deferredMsg, deferredUnknownMark);
+            }
             else
-                AddError(ref diagnostics, $"{FormatStepPrefix(source, jobId, stepIndex)} unexpected key \"{deferredUnknownKey}\" for step to run shell command. expected one of {RunStepExpectedKeys}", deferredUnknownMark);
+            {
+                var deferredSuggestion = SuggestionHelper.FindClosestFromFormattedKeys(deferredUnknownKey, RunStepExpectedKeys);
+                var deferredMsg = deferredSuggestion is not null
+                    ? $"{FormatStepPrefix(source, jobId, stepIndex)} unexpected key \"{deferredUnknownKey}\" for step to run shell command. did you mean \"{deferredSuggestion}\"? expected one of {RunStepExpectedKeys}"
+                    : $"{FormatStepPrefix(source, jobId, stepIndex)} unexpected key \"{deferredUnknownKey}\" for step to run shell command. expected one of {RunStepExpectedKeys}";
+                AddError(ref diagnostics, deferredMsg, deferredUnknownMark);
+            }
         }
 
         // Post-mapping: report secondary key conflicts based on step form

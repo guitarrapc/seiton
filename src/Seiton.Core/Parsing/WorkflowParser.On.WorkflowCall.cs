@@ -84,7 +84,11 @@ public static partial class WorkflowParser
 
             var unknown = Encoding.UTF8.GetString(keyUtf8);
             reader.Read();
-            AddError(ref diagnostics, $"on.workflow_call unexpected key \"{unknown}\" for \"workflow_call\" section. expected one of {Generated.ExpectedKeys.OnWorkflowCallKeys}", keyMark);
+            var wcSuggestion = SuggestionHelper.FindClosestFromFormattedKeys(unknown, Generated.ExpectedKeys.OnWorkflowCallKeys);
+            var wcMsg = wcSuggestion is not null
+                ? $"on.workflow_call unexpected key \"{unknown}\" for \"workflow_call\" section. did you mean \"{wcSuggestion}\"? expected one of {Generated.ExpectedKeys.OnWorkflowCallKeys}"
+                : $"on.workflow_call unexpected key \"{unknown}\" for \"workflow_call\" section. expected one of {Generated.ExpectedKeys.OnWorkflowCallKeys}";
+            AddError(ref diagnostics, wcMsg, keyMark);
             if (!reader.End)
             {
                 reader.SkipCurrentNode();
@@ -290,7 +294,11 @@ public static partial class WorkflowParser
 
             var unknown = Encoding.UTF8.GetString(keyUtf8);
             reader.Read();
-            AddError(ref diagnostics, $"on.workflow_call.inputs unexpected key \"{unknown}\" for \"inputs\" section. expected one of {Generated.ExpectedKeys.WorkflowCallInputFieldKeys}", keyMark);
+            var wcInputSuggestion = SuggestionHelper.FindClosestFromFormattedKeys(unknown, Generated.ExpectedKeys.WorkflowCallInputFieldKeys);
+            var wcInputMsg = wcInputSuggestion is not null
+                ? $"on.workflow_call.inputs unexpected key \"{unknown}\" for \"inputs\" section. did you mean \"{wcInputSuggestion}\"? expected one of {Generated.ExpectedKeys.WorkflowCallInputFieldKeys}"
+                : $"on.workflow_call.inputs unexpected key \"{unknown}\" for \"inputs\" section. expected one of {Generated.ExpectedKeys.WorkflowCallInputFieldKeys}";
+            AddError(ref diagnostics, wcInputMsg, keyMark);
             if (!reader.End)
             {
                 reader.SkipCurrentNode();
@@ -533,7 +541,11 @@ public static partial class WorkflowParser
 
             var unknown = Encoding.UTF8.GetString(keyUtf8);
             reader.Read();
-            AddError(ref diagnostics, $"on.workflow_call.secrets unexpected key \"{unknown}\" for \"secrets\" section. expected one of {Generated.ExpectedKeys.WorkflowCallSecretFieldKeys}", keyMark);
+            var wcSecretSuggestion = SuggestionHelper.FindClosestFromFormattedKeys(unknown, Generated.ExpectedKeys.WorkflowCallSecretFieldKeys);
+            var wcSecretMsg = wcSecretSuggestion is not null
+                ? $"on.workflow_call.secrets unexpected key \"{unknown}\" for \"secrets\" section. did you mean \"{wcSecretSuggestion}\"? expected one of {Generated.ExpectedKeys.WorkflowCallSecretFieldKeys}"
+                : $"on.workflow_call.secrets unexpected key \"{unknown}\" for \"secrets\" section. expected one of {Generated.ExpectedKeys.WorkflowCallSecretFieldKeys}";
+            AddError(ref diagnostics, wcSecretMsg, keyMark);
             if (!reader.End)
             {
                 reader.SkipCurrentNode();
@@ -726,7 +738,11 @@ public static partial class WorkflowParser
 
             var unknown = Encoding.UTF8.GetString(keyUtf8);
             reader.Read();
-            AddError(ref diagnostics, $"on.workflow_call.outputs unexpected key \"{unknown}\" for \"outputs\" section. expected one of {Generated.ExpectedKeys.WorkflowCallOutputFieldKeys}", keyMark);
+            var wcOutputSuggestion = SuggestionHelper.FindClosestFromFormattedKeys(unknown, Generated.ExpectedKeys.WorkflowCallOutputFieldKeys);
+            var wcOutputMsg = wcOutputSuggestion is not null
+                ? $"on.workflow_call.outputs unexpected key \"{unknown}\" for \"outputs\" section. did you mean \"{wcOutputSuggestion}\"? expected one of {Generated.ExpectedKeys.WorkflowCallOutputFieldKeys}"
+                : $"on.workflow_call.outputs unexpected key \"{unknown}\" for \"outputs\" section. expected one of {Generated.ExpectedKeys.WorkflowCallOutputFieldKeys}";
+            AddError(ref diagnostics, wcOutputMsg, keyMark);
             if (!reader.End)
             {
                 reader.SkipCurrentNode();
