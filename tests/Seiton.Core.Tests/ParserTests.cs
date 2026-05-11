@@ -283,7 +283,7 @@ public sealed class ParserTests
         """);
 
         var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "test.yml");
-        await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("jobs.'build' unexpected key \"image-id\" for \"snapshot\" section", StringComparison.Ordinal))).IsTrue();
+        await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("jobs.'build'.snapshot unexpected key \"image-id\" for \"snapshot\" section", StringComparison.Ordinal))).IsTrue();
     }
 
     [Test]
