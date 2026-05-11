@@ -513,7 +513,7 @@ public sealed class ExpressionTests
             new TextRange(0, expression.Length, 1, 1, 1, expression.Length),
             ExpressionValidationContext.StepRun);
 
-        await Assert.That(diagnostics.Any(x => x.Message.Contains("property \"typo_field\" is not defined in object type", StringComparison.Ordinal))).IsTrue();
+        await Assert.That(diagnostics.Any(x => x.Message.Contains("property \"typo_field\" is not defined in \"github\" context", StringComparison.Ordinal))).IsTrue();
     }
 
     [Test]
@@ -835,7 +835,26 @@ public sealed class ExpressionTests
         var diagnostics = ExpressionSemanticAnalyzer.ValidateDynamicPropertyAccess(
             parseResult, expression, location, overrides);
 
-        await Assert.That(diagnostics.Any(x => x.Message.Contains("\"nonexistent\" is not defined in object type", StringComparison.Ordinal))).IsTrue();
+        await Assert.That(diagnostics.Any(x => x.Message.Contains("\"nonexistent\" is not defined in \"steps\" context", StringComparison.Ordinal))).IsTrue();
+        await Assert.That(diagnostics.Any(x => x.Message.Contains("Available properties are: build", StringComparison.Ordinal))).IsTrue();
+    }
+
+    [Test]
+    public async Task ValidateDynamicPropertyAccess_EmptyStrictObject_NoPropertiesMessage()
+    {
+        var expression = "needs.ghost.outputs.foo"u8;
+        var parseResult = ExpressionParser.Parse(expression);
+        var location = new TextRange(0, expression.Length, 1, 1, 1, expression.Length);
+
+        // Empty strict object — no properties defined
+        var needsType = ExprType.Object(strict: true);
+        (byte[] NameUtf8, ExprType Type)[] overrides = [("needs"u8.ToArray(), needsType)];
+
+        var diagnostics = ExpressionSemanticAnalyzer.ValidateDynamicPropertyAccess(
+            parseResult, expression, location, overrides);
+
+        await Assert.That(diagnostics.Any(x => x.Message.Contains("no properties are defined", StringComparison.Ordinal))).IsTrue();
+        await Assert.That(diagnostics.Any(x => x.Message.Contains("Available properties are:", StringComparison.Ordinal))).IsFalse();
     }
 
     [Test]
@@ -871,7 +890,34 @@ public sealed class ExpressionTests
         var diagnostics = ExpressionSemanticAnalyzer.ValidateDynamicPropertyAccess(
             parseResult, expression, location, overrides);
 
-        await Assert.That(diagnostics.Any(x => x.Message.Contains("\"unknown_key\" is not defined in object type", StringComparison.Ordinal))).IsTrue();
+        await Assert.That(diagnostics.Any(x => x.Message.Contains("\"unknown_key\" is not defined in \"matrix\" context", StringComparison.Ordinal))).IsTrue();
+        await Assert.That(diagnostics.Any(x => x.Message.Contains("Available properties are: os", StringComparison.Ordinal))).IsTrue();
+        // Message must NOT contain the object type shape (no redundant info)
+        await Assert.That(diagnostics.Any(x => x.Message.Contains("{os: ", StringComparison.Ordinal))).IsFalse();
+    }
+
+    [Test]
+    public async Task ValidateDynamicPropertyAccess_MultipleProperties_SortedAlphabetically()
+    {
+        var expression = "matrix.missing"u8;
+        var parseResult = ExpressionParser.Parse(expression);
+        var location = new TextRange(0, expression.Length, 1, 1, 1, expression.Length);
+
+        // Insert keys in non-alphabetical order to verify sorting
+        var matrixType = ExprType.Object(
+            new Dictionary<Utf8String, ExprType>
+            {
+                { new Utf8String("zebra"u8), ExprType.Any },
+                { new Utf8String("apple"u8), ExprType.Any },
+                { new Utf8String("node"u8), ExprType.Any },
+            },
+            strict: true);
+        (byte[] NameUtf8, ExprType Type)[] overrides = [("matrix"u8.ToArray(), matrixType)];
+
+        var diagnostics = ExpressionSemanticAnalyzer.ValidateDynamicPropertyAccess(
+            parseResult, expression, location, overrides);
+
+        await Assert.That(diagnostics.Any(x => x.Message.Contains("Available properties are: apple, node, zebra", StringComparison.Ordinal))).IsTrue();
     }
 
     [Test]
@@ -896,7 +942,8 @@ public sealed class ExpressionTests
         var diagnostics = ExpressionSemanticAnalyzer.ValidateDynamicPropertyAccess(
             parseResult, expression, location, overrides);
 
-        await Assert.That(diagnostics.Any(x => x.Message.Contains("\"nonexistent\" is not defined in object type", StringComparison.Ordinal))).IsTrue();
+        await Assert.That(diagnostics.Any(x => x.Message.Contains("\"nonexistent\" is not defined in \"needs\" context", StringComparison.Ordinal))).IsTrue();
+        await Assert.That(diagnostics.Any(x => x.Message.Contains("Available properties are: my-dep", StringComparison.Ordinal))).IsTrue();
     }
 
     [Test]
@@ -914,7 +961,8 @@ public sealed class ExpressionTests
         var diagnostics = ExpressionSemanticAnalyzer.ValidateDynamicPropertyAccess(
             parseResult, expression, location, overrides);
 
-        await Assert.That(diagnostics.Any(x => x.Message.Contains("\"unknown_param\" is not defined in object type", StringComparison.Ordinal))).IsTrue();
+        await Assert.That(diagnostics.Any(x => x.Message.Contains("\"unknown_param\" is not defined in \"inputs\" context", StringComparison.Ordinal))).IsTrue();
+        await Assert.That(diagnostics.Any(x => x.Message.Contains("Available properties are: environment", StringComparison.Ordinal))).IsTrue();
     }
 
     [Test]
@@ -927,6 +975,45 @@ public sealed class ExpressionTests
 
         var looseStepsType = ExprType.Object(dynamicPropertyType: ExprType.Any);
         (byte[] NameUtf8, ExprType Type)[] overrides = [("steps"u8.ToArray(), looseStepsType)];
+
+        var diagnostics = ExpressionSemanticAnalyzer.ValidateDynamicPropertyAccess(
+            parseResult, expression, location, overrides);
+
+        await Assert.That(diagnostics).IsEmpty();
+    }
+
+    [Test]
+    public async Task ValidateDynamicPropertyAccess_IndexAccessUnknownKey_ReportsDiagnostic()
+    {
+        // inputs['unknown'] should be flagged when inputs is a strict object
+        var expression = "inputs['unknown']"u8;
+        var parseResult = ExpressionParser.Parse(expression);
+        var location = new TextRange(0, expression.Length, 1, 1, 1, expression.Length);
+
+        var inputsType = ExprType.Object(
+            new Dictionary<Utf8String, ExprType> { { new Utf8String("environment"u8), ExprType.String } },
+            strict: true);
+        (byte[] NameUtf8, ExprType Type)[] overrides = [("inputs"u8.ToArray(), inputsType)];
+
+        var diagnostics = ExpressionSemanticAnalyzer.ValidateDynamicPropertyAccess(
+            parseResult, expression, location, overrides);
+
+        await Assert.That(diagnostics.Any(x => x.Message.Contains("\"unknown\" is not defined in \"inputs\" context", StringComparison.Ordinal))).IsTrue();
+        await Assert.That(diagnostics.Any(x => x.Message.Contains("Available properties are: environment", StringComparison.Ordinal))).IsTrue();
+    }
+
+    [Test]
+    public async Task ValidateDynamicPropertyAccess_IndexAccessKnownKey_NoDiagnostics()
+    {
+        // inputs['environment'] should pass when it's defined
+        var expression = "inputs['environment']"u8;
+        var parseResult = ExpressionParser.Parse(expression);
+        var location = new TextRange(0, expression.Length, 1, 1, 1, expression.Length);
+
+        var inputsType = ExprType.Object(
+            new Dictionary<Utf8String, ExprType> { { new Utf8String("environment"u8), ExprType.String } },
+            strict: true);
+        (byte[] NameUtf8, ExprType Type)[] overrides = [("inputs"u8.ToArray(), inputsType)];
 
         var diagnostics = ExpressionSemanticAnalyzer.ValidateDynamicPropertyAccess(
             parseResult, expression, location, overrides);
@@ -1522,7 +1609,8 @@ public sealed class ExpressionTests
             new TextRange(0, expression.Length, 1, 1, 1, expression.Length),
             ExpressionValidationContext.StepRun);
 
-        await Assert.That(diagnostics.Any(x => x.Message.Contains("property \"mac\" is not defined in object type {", StringComparison.Ordinal))).IsTrue();
+        await Assert.That(diagnostics.Any(x => x.Message.Contains("property \"mac\" is not defined in", StringComparison.Ordinal))).IsTrue();
+        await Assert.That(diagnostics.Any(x => x.Message.Contains("Available properties are: linux, win", StringComparison.Ordinal))).IsTrue();
     }
 
     [Test]

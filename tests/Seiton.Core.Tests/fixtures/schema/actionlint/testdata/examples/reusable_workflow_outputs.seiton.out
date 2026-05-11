@@ -1,1 +1,1 @@
-test.yaml:7:16: property "imagetag" is not defined in object type {image_tag: string} [expression]
+test.yaml:7:16: property "imagetag" is not defined in "jobs" context. Available properties are: image_tag [expression]

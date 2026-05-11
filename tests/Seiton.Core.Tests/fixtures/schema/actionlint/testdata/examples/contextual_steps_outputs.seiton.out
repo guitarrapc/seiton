@@ -1,2 +1,2 @@
-test.yaml:10:20: property "get_value" is not defined in object type {} [expression]
-test.yaml:22:20: property "get_value" is not defined in object type {} [expression]
+test.yaml:10:20: property "get_value" is not defined in "steps" context; no properties are defined [expression]
+test.yaml:22:20: property "get_value" is not defined in "steps" context; no properties are defined [expression]
