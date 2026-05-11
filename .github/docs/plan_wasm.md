@@ -214,6 +214,31 @@ PartialChange (=キーストローク相当) が FullChange より 15× 多い�
 
 **Phase 1 単体で WASM クラッシュは解消される可能性が非常に高い**。IncrementalParseBenchmark の実測値 (131 KB/call with D-5d) がこれを裏付ける。
 
+### 5.1 最終実測結果 (全 Phase 完了後)
+
+> Phase 3 (ExprParser ReadOnlyMemory) は revert 済み。最終コードは Phase 1, 2, 4, 5 + レビュー対応を含む。
+
+**PlaygroundLintBenchmark** (10 回合計):
+
+| シナリオ | Size | Before (初期) | After (最終) | 削減率 | Per-call |
+|---|---|---|---|---|---|
+| PartialChange | Large | 109,104 KB | **376 KB** | **-99.7%** | **~37.6 KB** |
+| FullChange | Large | 7,305 KB | **171 KB** | **-97.7%** | **~17.1 KB** |
+| PartialChange | Small | 117 KB | **127 KB** | +8.5%* | ~12.7 KB |
+| FullChange | Small | 25,784 KB | **51 KB** | **-99.8%** | ~5.1 KB |
+| NoChange | Large | 234 KB | **0 B** | **-100%** | 0 B |
+| NoChange | Small | 14 KB | **0 B** | **-100%** | 0 B |
+
+\* Small PartialChange は D-5d キャッシュ構築コストが 1 job 構成で相対的に大きいため微増。絶対値は 127 KB と WASM で問題にならない。
+
+**CoreLintBenchmark** (単発):
+
+| シナリオ | Before (初期) | After (最終) | 変化 |
+|---|---|---|---|
+| Large FixEnabled=false | 717.68 KB | **710.18 KB** | -7.5 KB |
+| Large FixEnabled=true | 747.73 KB | **740.23 KB** | -7.5 KB |
+| Medium/Small | 変化なし | 変化なし | — |
+
 ---
 
 ## 6. 実装上の注意
