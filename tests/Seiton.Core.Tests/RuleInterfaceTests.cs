@@ -14293,7 +14293,9 @@ public sealed class RuleInterfaceTests
         var result = engine.Check(Encoding.UTF8.GetBytes(yaml), "test.yaml");
         try
         {
-            var diag = result.Diagnostics.FirstOrDefault(d => d.Message?.Contains("is not pinned to a full-length commit SHA") == true);
+            var diag = result.Diagnostics.FirstOrDefault(d =>
+                d.RuleId == "unpinned-uses" &&
+                d.Message?.Contains("is not pinned to a full-length commit SHA") == true);
             var message = diag.Message;
             await Assert.That(message).IsNotNull();
             await Assert.That(message!.StartsWith("'actions/checkout@v4'", StringComparison.Ordinal)).IsTrue();
