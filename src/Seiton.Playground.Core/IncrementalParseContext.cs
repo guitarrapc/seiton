@@ -944,7 +944,7 @@ public sealed class IncrementalParseContext
     /// Returns <c>null</c> if no jobs can be skipped.
     /// Must be called under the same lock that guards <see cref="ParseIncrementally"/>.
     /// </summary>
-    public bool[]? BuildSkipJobs(int jobCount)
+    internal bool[]? BuildSkipJobs(int jobCount)
     {
         if (jobCount <= 0 || _lastReusedJobs is null || _cachedJobDiagnostics is null)
             return null;
@@ -974,7 +974,7 @@ public sealed class IncrementalParseContext
     /// The returned span is valid until the next call to this method.
     /// Must be called under the same lock that guards <see cref="ParseIncrementally"/>.
     /// </summary>
-    public ReadOnlySpan<Diagnostic> MergeDiagnosticsWithCache(DiagnosticList freshDiagnostics, bool[]? skipJobs)
+    internal ReadOnlySpan<Diagnostic> MergeDiagnosticsWithCache(DiagnosticList freshDiagnostics, bool[]? skipJobs)
     {
         // Cache per-job diagnostics for next call (always, even when no jobs were skipped)
         if (skipJobs is null)
@@ -1034,10 +1034,8 @@ public sealed class IncrementalParseContext
         // Merge cached diagnostics for skipped jobs and update cache
         var finalDiagnostics = MergeDiagnosticsWithCache(lintResult.Diagnostics, skipJobs);
 
-        // Serialize to JSON and parse into elements (matching PlaygroundLintRunner format)
-        // MergeDiagnosticsWithCache returns a span backed by either the DiagnosticList or a materialized array,
-        // so ToArray() here is the only copy for this path.
-        return SerializeDiagnosticsToJson(new DiagnosticList(finalDiagnostics.ToArray()));
+        // Serialize directly from span — no extra array copy
+        return SerializeDiagnosticsToJson(finalDiagnostics);
     }
 
     /// <summary>
@@ -1110,6 +1108,9 @@ public sealed class IncrementalParseContext
     }
 
     private JsonElement[] SerializeDiagnosticsToJson(DiagnosticList diagnostics)
+        => SerializeDiagnosticsToJson(diagnostics.AsSpan());
+
+    private JsonElement[] SerializeDiagnosticsToJson(ReadOnlySpan<Diagnostic> diagnostics)
     {
         var buffer = _jsonBuffer ??= new ArrayBufferWriter<byte>(4096);
         buffer.Clear();
