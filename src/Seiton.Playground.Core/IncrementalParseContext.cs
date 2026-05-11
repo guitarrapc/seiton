@@ -233,6 +233,24 @@ public sealed class IncrementalParseContext
             return new ParseResult(_previousWorkflow, null, _previousDiagnostics, _previousHasFatalError, _previousArena);
         }
 
+        // P-1: Early exit for single-job workflows where the job changed.
+        // With only 1 job, if the jobs section changed, ComputeJobSkipEntries would
+        // return null after the full scan pipeline → FullParseAndStore.
+        // Detect this early by comparing just the jobs section hash, skipping the scan.
+        if (_registry.JobCount == 1 && _previousSourceLength == utf8Yaml.Length)
+        {
+            var prevJobsEntry = _registry.GetRootSection(RootSectionKind.Jobs);
+            if (prevJobsEntry.IsValid && prevJobsEntry.EndOffset <= utf8Yaml.Length)
+            {
+                var jobsSpan = utf8Yaml.AsSpan(prevJobsEntry.StartOffset, prevJobsEntry.EndOffset - prevJobsEntry.StartOffset);
+                if (ComputeHash(jobsSpan) != prevJobsEntry.ContentHash)
+                {
+                    _lastReusedJobs = null;
+                    return FullParseAndStore(utf8Yaml, filePath);
+                }
+            }
+        }
+
         // Scan new source for section boundaries
         var newRegistry = default(SectionRegistry);
         ScanRootSections(utf8Yaml, ref newRegistry);

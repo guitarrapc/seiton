@@ -92,7 +92,7 @@ incremental パス（iterations 1-9）が 1 回あたりに支払うコスト：
 
 ### 3.1 即効性のある改善（Low-Hanging Fruit）
 
-#### P-1: Small (1 job) の early exit — スキャン前に job 変更を検出
+#### P-1: Small (1 job) の early exit — スキャン前に job 変更を検出 ✅ 実装済み
 
 現状は `ScanRootSections` → `ScanJobSections` → `ComputeSkipMask` → `ComputeJobSkipEntries` → null → `FullParseAndStore` のフルパイプラインを走らせた後に「スキップ不可」と判定している。
 
@@ -103,6 +103,24 @@ incremental パス（iterations 1-9）が 1 回あたりに支払うコスト：
       FullParseAndStore 自体のコストは変わらないが、無駄な前処理が消える。
 推定効果: Small で 5-10% 改善。
 ```
+
+**実装結果** (2026-05-12):
+
+実装箇所: `IncrementalParseContext.ParseIncrementally()` — `IsSourceIdentical` チェック直後に early exit を追加。
+条件: `_registry.JobCount == 1 && _previousSourceLength == utf8Yaml.Length` のとき、前回の jobs セクション byte 範囲の XXH64 hash を新ソースと比較。hash が異なれば `FullParseAndStore` に直行し、scan pipeline 全体をスキップ。
+
+ベンチマーク比較 (PlaygroundLintBenchmark, ShortRun):
+
+| Method        | Size  | Mean (Before)   | Mean (After)    | Allocated (Before) | Allocated (After) |
+|-------------- |------ |----------------:|----------------:|-------------------:|------------------:|
+| PartialChange | Small | 1,134,251 ns    | 1,362,326 ns    | 154,000 B          | **124,640 B (-19.1%)** |
+| PartialChange | Large | 4,715,521 ns    | 5,332,563 ns    | 627,396 B          | 376,109 B         |
+
+- Small の **allocation が 19.1% 削減** (154 KB → 125 KB)。scan pipeline スキップにより ScanRootSections / ScanJobSections / ComputeSkipMask / ComputeJobSkipEntries の一時メモリが不要に。
+- Mean (実行時間) は ShortRun (3 iterations) の高 error margin 内のノイズ。時間改善の正確な計測にはより多い iteration 数が必要。
+- Large は `_registry.JobCount == 6` のため P-1 の影響外。差分はベンチマークノイズ。
+
+テスト: `IncrementalParseJobSkipTests` に P-1 用テスト 4 件追加。全 72 テスト pass。
 
 #### P-2: MergeDiagnosticsWithCache の Sort 排除
 
@@ -202,16 +220,16 @@ incremental parse の根本的な設計変更。VYaml でソース全体をト�
 
 ## 4. 推奨実施順
 
-| 優先度 | ID | 改善策 | 推定効果 | 実装コスト |
-|---:|---|---|---|---|
-| 1 | P-1 | Small の early exit | Small 5-10% | 低 |
-| 2 | P-2 | Merge sort 排除 | Large 3-5% | 低 |
-| 3 | P-3 | Cache 配列再利用 | Large 2-3% | 低 |
-| 4 | P-4 | Lint setup 差分スキップ | 10-15% | 中 |
-| 5 | P-6 | BulkImport 条件付きスキップ | 5-10% | 中 |
-| 6 | P-7 | Lint job-level 差分 | 30-40% | 高 |
-| 7 | P-5 | VYaml skip 範囲拡大 | 20-30% | 高 |
-| 8 | P-8 | 変更 job だけパース | 50-60% | 非常に高 |
+| 優先度 | ID | 改善策 | 推定効果 | 実装コスト | 状態 |
+|---:|---|---|---|---|---|
+| 1 | P-1 | Small の early exit | Small alloc -19% | 低 | ✅ 実装済み |
+| 2 | P-2 | Merge sort 排除 | Large 3-5% | 低 | |
+| 3 | P-3 | Cache 配列再利用 | Large 2-3% | 低 | |
+| 4 | P-4 | Lint setup 差分スキップ | 10-15% | 中 | |
+| 5 | P-6 | BulkImport 条件付きスキップ | 5-10% | 中 | |
+| 6 | P-7 | Lint job-level 差分 | 30-40% | 高 | |
+| 7 | P-5 | VYaml skip 範囲拡大 | 20-30% | 高 | |
+| 8 | P-8 | 変更 job だけパース | 50-60% | 非常に高 | |
 
 ## 5. 結論
 
