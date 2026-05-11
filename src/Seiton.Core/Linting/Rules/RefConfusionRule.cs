@@ -15,7 +15,7 @@ public sealed class RefConfusionRule() : OnlineRuleBase(RuleId.RefConfusion)
         }
 
         AddError(
-            $"action uses '{target.UsesText}' references ambiguous symbolic ref '{target.Reference}' present as both branch and tag in '{target.Owner}/{target.Repo}'",
+            $"'{target.UsesText}' references ambiguous symbolic ref '{target.Reference}' present as both branch and tag in '{target.Owner}/{target.Repo}'",
             target.Location);
     }
 }

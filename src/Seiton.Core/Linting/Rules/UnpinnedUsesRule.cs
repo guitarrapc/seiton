@@ -80,7 +80,7 @@ public sealed class UnpinnedUsesRule() : RuleBase(RuleId.UnpinnedUses)
             var invalidUsesText = Decode(Arena.GetStringSlice(workflowCall.Uses));
             AddJobError(
                 job,
-                $"jobs.'{formatJobId}'.uses reusable workflow uses '{invalidUsesText}' has invalid reference format; expected owner/repo/path@ref",
+                $"jobs.'{formatJobId}'.uses '{invalidUsesText}' has invalid reference format; expected owner/repo/path@ref",
                 usesLocation);
             return;
         }
@@ -105,7 +105,7 @@ public sealed class UnpinnedUsesRule() : RuleBase(RuleId.UnpinnedUses)
         var usesText = Decode(Arena.GetStringSlice(workflowCall.Uses));
         var url = ActionRefHelpers.BuildGitHubUrl(usesText);
         var urlSuffix = url is not null ? $". see {url}" : "";
-        AddJobWarning(job, $"jobs.'{jobId}'.uses reusable workflow uses '{usesText}' is not pinned to a full-length commit SHA{urlSuffix} (fixable with --fix --enable-pin-network)", usesRefLocation, PinDiagnosticMetadata.ForUsesRef(usesText));
+        AddJobWarning(job, $"jobs.'{jobId}'.uses '{usesText}' is not pinned to a full-length commit SHA{urlSuffix} (fixable with --fix --enable-pin-network)", usesRefLocation, PinDiagnosticMetadata.ForUsesRef(usesText));
     }
 
     public override void VisitStep(Step step)
@@ -127,7 +127,7 @@ public sealed class UnpinnedUsesRule() : RuleBase(RuleId.UnpinnedUses)
         {
             if (uses.Length <= "docker://"u8.Length)
             {
-                AddStepError(step, "action uses 'docker://' must include an image reference", usesLocation);
+                AddStepError(step, "'docker://' must include an image reference", usesLocation);
             }
             else if (uses[^1] == (byte)':')
             {
@@ -163,7 +163,7 @@ public sealed class UnpinnedUsesRule() : RuleBase(RuleId.UnpinnedUses)
             var invalidUsesText = Decode(Arena.GetStringSlice(actionExec.Uses));
             AddStepError(
                 step,
-                $"action uses '{invalidUsesText}' has invalid reference format; expected owner/repo[/path]@ref",
+                $"'{invalidUsesText}' has invalid reference format; expected owner/repo[/path]@ref",
                 usesLocation);
             return;
         }
@@ -213,7 +213,7 @@ public sealed class UnpinnedUsesRule() : RuleBase(RuleId.UnpinnedUses)
         var usesText = Decode(usesSlice);
         var url = ActionRefHelpers.BuildGitHubUrl(usesText);
         var urlSuffix = url is not null ? $". see {url}" : "";
-        var msg = $"action uses '{usesText}' is not pinned to a full-length commit SHA{urlSuffix} (fixable with --fix --enable-pin-network)";
+        var msg = $"'{usesText}' is not pinned to a full-length commit SHA{urlSuffix} (fixable with --fix --enable-pin-network)";
         _lastUnpinnedStepUsesSlice = usesSlice;
         _lastUnpinnedStepMessage = msg;
         _lastDecodedUsesText = usesText;

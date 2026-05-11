@@ -15,7 +15,7 @@ public sealed class StaleActionRefsRule() : OnlineRuleBase(RuleId.StaleActionRef
         }
 
         AddWarning(
-            $"action uses '{target.UsesText}' pins commit '{target.Reference}' that is not associated with any current tag in '{target.Owner}/{target.Repo}'",
+            $"'{target.UsesText}' pins commit '{target.Reference}' that is not associated with any current tag in '{target.Owner}/{target.Repo}'",
             target.Location);
     }
 }

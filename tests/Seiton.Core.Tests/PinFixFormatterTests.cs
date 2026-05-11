@@ -14,7 +14,7 @@ public sealed class PinFixFormatterTests
         var oldRef = "actions/checkout@v4";
         var diagnostic = new Diagnostic(
             DiagnosticSeverity.Warning,
-            "action uses 'actions/checkout@v4' is not pinned to a full-length commit SHA",
+            "'actions/checkout@v4' is not pinned to a full-length commit SHA",
             new TextRange(0, source.Length, 1, 1, 2, 32),
             RuleId: "unpinned-uses",
             Metadata: PinDiagnosticMetadata.ForUsesRef(oldRef));
@@ -37,7 +37,7 @@ public sealed class PinFixFormatterTests
         var oldRef = "docker://ghcr.io/astral-sh/uv:latest";
         var diagnostic = new Diagnostic(
             DiagnosticSeverity.Warning,
-            "docker action uses 'docker://ghcr.io/astral-sh/uv:latest' is not pinned by digest (expected @sha256:<64-hex>)",
+            "'docker://ghcr.io/astral-sh/uv:latest' is not pinned by digest (expected @sha256:<64-hex>)",
             new TextRange(0, source.Length, 1, 1, 2, 60),
             RuleId: "unpinned-image",
             Metadata: PinDiagnosticMetadata.ForImageRef(oldRef));
@@ -59,7 +59,7 @@ public sealed class PinFixFormatterTests
         var source = Encoding.UTF8.GetBytes(yaml);
         var diagnostic = new Diagnostic(
             DiagnosticSeverity.Warning,
-            "action uses 'actions/checkout@v4' is not pinned to a full-length commit SHA",
+            "'actions/checkout@v4' is not pinned to a full-length commit SHA",
             new TextRange(0, source.Length, 1, 1, 2, 32),
             RuleId: "unpinned-uses");
 
@@ -76,7 +76,7 @@ public sealed class PinFixFormatterTests
         var source = Encoding.UTF8.GetBytes(yaml);
         var diagnostic = new Diagnostic(
             DiagnosticSeverity.Warning,
-            $"action uses 'actions/checkout@{sha}' is not pinned to a full-length commit SHA",
+            $"'actions/checkout@{sha}' is not pinned to a full-length commit SHA",
             new TextRange(0, source.Length, 1, 1, 2, 70),
             RuleId: "unpinned-uses",
             Metadata: PinDiagnosticMetadata.ForUsesRef($"actions/checkout@{sha}"));
@@ -94,7 +94,7 @@ public sealed class PinFixFormatterTests
         var source = Encoding.UTF8.GetBytes(yaml);
         var diagnostic = new Diagnostic(
             DiagnosticSeverity.Warning,
-            $"docker action uses 'docker://ghcr.io/astral-sh/uv@{digest}' is not pinned by digest (expected @sha256:<64-hex>)",
+            $"'docker://ghcr.io/astral-sh/uv@{digest}' is not pinned by digest (expected @sha256:<64-hex>)",
             new TextRange(0, source.Length, 1, 1, 2, 120),
             RuleId: "unpinned-image",
             Metadata: PinDiagnosticMetadata.ForImageRef($"docker://ghcr.io/astral-sh/uv@{digest}"));

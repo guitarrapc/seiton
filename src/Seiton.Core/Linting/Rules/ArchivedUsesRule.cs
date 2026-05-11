@@ -36,7 +36,7 @@ public sealed class ArchivedUsesRule() : RuleBase(RuleId.ArchivedUses)
 
         AddJobWarning(
             job,
-            $"reusable workflow uses archived repository '{ownerRepo}'; replace with actively maintained alternative",
+            $"'{ownerRepo}' is archived; replace with actively maintained alternative",
             BuildUsesLocation(job.WorkflowCall));
     }
 
@@ -59,7 +59,7 @@ public sealed class ArchivedUsesRule() : RuleBase(RuleId.ArchivedUses)
 
         AddStepWarning(
             step,
-            $"action uses archived repository '{ownerRepo}'; replace with actively maintained alternative",
+            $"'{ownerRepo}' is archived; replace with actively maintained alternative",
             BuildUsesLocation(action));
     }
 

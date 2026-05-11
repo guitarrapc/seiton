@@ -58,7 +58,7 @@ public sealed class UnpinnedImageRule() : RuleBase(RuleId.UnpinnedImage)
 
         var usesText = Decode(Arena.GetStringSlice(usesNode));
         var usesLocation = actionExec.UsesKeyRange ?? Arena.GetStringRange(usesNode);
-        AddStepWarning(step, $"docker action uses '{usesText}' is not pinned by digest (expected @sha256:<64-hex>)", usesLocation, PinDiagnosticMetadata.ForImageRef(usesText));
+        AddStepWarning(step, $"'{usesText}' is not pinned by digest (expected @sha256:<64-hex>)", usesLocation, PinDiagnosticMetadata.ForImageRef(usesText));
     }
 
     private void ReportIfUnpinnedContainerImage(Job job, StringNodeId imageNode, string locationName)

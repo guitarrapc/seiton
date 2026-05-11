@@ -15,7 +15,7 @@ public sealed class KnownVulnerableActionsRule() : OnlineRuleBase(RuleId.KnownVu
         }
 
         AddError(
-            $"action uses '{target.UsesText}' matches vulnerable advisory '{advisory.AdvisoryId}': {advisory.Summary}",
+            $"'{target.UsesText}' matches vulnerable advisory '{advisory.AdvisoryId}': {advisory.Summary}",
             target.Location);
     }
 }
