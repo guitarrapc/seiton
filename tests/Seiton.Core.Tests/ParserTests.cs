@@ -6758,13 +6758,15 @@ public sealed class ParserTests
         """);
         var sourceBytes = Encoding.UTF8.GetBytes(yaml);
         var result = WorkflowParser.Parse(sourceBytes, "fix-workflow-top.yml");
-        var diag = result.Diagnostics.First(x => x.Message.Contains("did you mean \"name\"?", StringComparison.Ordinal));
+        var diag = result.Diagnostics.FirstOrDefault(x => x.Message.Contains("did you mean \"name\"?", StringComparison.Ordinal));
+        await Assert.That(diag.Message).IsNotNull();
 
         await Assert.That(diag.Fix is not null).IsTrue();
         var fixedYaml = Seiton.Core.Linting.Fixing.FixEngine.Apply(sourceBytes, [diag.Fix!.Value]);
         var fixedText = Encoding.UTF8.GetString(fixedYaml);
         await Assert.That(fixedText).Contains("name: test");
         await Assert.That(fixedText).DoesNotContain("NAME:");
+        result.Arena?.Dispose();
     }
 
     [Test]
@@ -6784,13 +6786,15 @@ public sealed class ParserTests
         """);
         var sourceBytes = Encoding.UTF8.GetBytes(yaml);
         var result = WorkflowParser.Parse(sourceBytes, "fix-job-key.yml");
-        var diag = result.Diagnostics.First(x => x.Message.Contains("did you mean \"defaults\"?", StringComparison.Ordinal));
+        var diag = result.Diagnostics.FirstOrDefault(x => x.Message.Contains("did you mean \"defaults\"?", StringComparison.Ordinal));
+        await Assert.That(diag.Message).IsNotNull();
 
         await Assert.That(diag.Fix is not null).IsTrue();
         var fixedYaml = Seiton.Core.Linting.Fixing.FixEngine.Apply(sourceBytes, [diag.Fix!.Value]);
         var fixedText = Encoding.UTF8.GetString(fixedYaml);
         await Assert.That(fixedText).Contains("defaults:");
         await Assert.That(fixedText).DoesNotContain("default:");
+        result.Arena?.Dispose();
     }
 
     [Test]
@@ -6808,13 +6812,15 @@ public sealed class ParserTests
         """);
         var sourceBytes = Encoding.UTF8.GetBytes(yaml);
         var result = WorkflowParser.Parse(sourceBytes, "fix-step-key.yml");
-        var diag = result.Diagnostics.First(x => x.Message.Contains("did you mean \"name\"?", StringComparison.Ordinal));
+        var diag = result.Diagnostics.FirstOrDefault(x => x.Message.Contains("did you mean \"name\"?", StringComparison.Ordinal));
+        await Assert.That(diag.Message).IsNotNull();
 
         await Assert.That(diag.Fix is not null).IsTrue();
         var fixedYaml = Seiton.Core.Linting.Fixing.FixEngine.Apply(sourceBytes, [diag.Fix!.Value]);
         var fixedText = Encoding.UTF8.GetString(fixedYaml);
         await Assert.That(fixedText).Contains("name: test");
         await Assert.That(fixedText).DoesNotContain("nam:");
+        result.Arena?.Dispose();
     }
 
     [Test]
@@ -6829,12 +6835,14 @@ public sealed class ParserTests
         """);
         var sourceBytes = Encoding.UTF8.GetBytes(yaml);
         var result = WorkflowParser.Parse(sourceBytes, "fix-concurrency-key.yml");
-        var diag = result.Diagnostics.First(x => x.Message.Contains("did you mean \"group\"?", StringComparison.Ordinal));
+        var diag = result.Diagnostics.FirstOrDefault(x => x.Message.Contains("did you mean \"group\"?", StringComparison.Ordinal));
+        await Assert.That(diag.Message).IsNotNull();
 
         await Assert.That(diag.Fix is not null).IsTrue();
         var fixedYaml = Seiton.Core.Linting.Fixing.FixEngine.Apply(sourceBytes, [diag.Fix!.Value]);
         var fixedText = Encoding.UTF8.GetString(fixedYaml);
         await Assert.That(fixedText).Contains("group: ci");
+        result.Arena?.Dispose();
     }
 
     [Test]
@@ -6854,12 +6862,14 @@ public sealed class ParserTests
         """);
         var sourceBytes = Encoding.UTF8.GetBytes(yaml);
         var result = WorkflowParser.Parse(sourceBytes, "fix-strategy-key.yml");
-        var diag = result.Diagnostics.First(x => x.Message.Contains("did you mean \"matrix\"?", StringComparison.Ordinal));
+        var diag = result.Diagnostics.FirstOrDefault(x => x.Message.Contains("did you mean \"matrix\"?", StringComparison.Ordinal));
+        await Assert.That(diag.Message).IsNotNull();
 
         await Assert.That(diag.Fix is not null).IsTrue();
         var fixedYaml = Seiton.Core.Linting.Fixing.FixEngine.Apply(sourceBytes, [diag.Fix!.Value]);
         var fixedText = Encoding.UTF8.GetString(fixedYaml);
         await Assert.That(fixedText).Contains("matrix:");
+        result.Arena?.Dispose();
     }
 
     [Test]
@@ -6878,12 +6888,14 @@ public sealed class ParserTests
         """);
         var sourceBytes = Encoding.UTF8.GetBytes(yaml);
         var result = WorkflowParser.Parse(sourceBytes, "fix-container-key.yml");
-        var diag = result.Diagnostics.First(x => x.Message.Contains("did you mean \"image\"?", StringComparison.Ordinal));
+        var diag = result.Diagnostics.FirstOrDefault(x => x.Message.Contains("did you mean \"image\"?", StringComparison.Ordinal));
+        await Assert.That(diag.Message).IsNotNull();
 
         await Assert.That(diag.Fix is not null).IsTrue();
         var fixedYaml = Seiton.Core.Linting.Fixing.FixEngine.Apply(sourceBytes, [diag.Fix!.Value]);
         var fixedText = Encoding.UTF8.GetString(fixedYaml);
         await Assert.That(fixedText).Contains("image: ubuntu");
+        result.Arena?.Dispose();
     }
 
     [Test]
@@ -6905,12 +6917,14 @@ public sealed class ParserTests
         """);
         var sourceBytes = Encoding.UTF8.GetBytes(yaml);
         var result = WorkflowParser.Parse(sourceBytes, "fix-credentials-key.yml");
-        var diag = result.Diagnostics.First(x => x.Message.Contains("did you mean \"username\"?", StringComparison.Ordinal));
+        var diag = result.Diagnostics.FirstOrDefault(x => x.Message.Contains("did you mean \"username\"?", StringComparison.Ordinal));
+        await Assert.That(diag.Message).IsNotNull();
 
         await Assert.That(diag.Fix is not null).IsTrue();
         var fixedYaml = Seiton.Core.Linting.Fixing.FixEngine.Apply(sourceBytes, [diag.Fix!.Value]);
         var fixedText = Encoding.UTF8.GetString(fixedYaml);
         await Assert.That(fixedText).Contains("username:");
+        result.Arena?.Dispose();
     }
 
     [Test]
@@ -6926,12 +6940,14 @@ public sealed class ParserTests
         """);
         var sourceBytes = Encoding.UTF8.GetBytes(yaml);
         var result = WorkflowParser.Parse(sourceBytes, "fix-defaults-run-key.yml");
-        var diag = result.Diagnostics.First(x => x.Message.Contains("did you mean \"shell\"?", StringComparison.Ordinal));
+        var diag = result.Diagnostics.FirstOrDefault(x => x.Message.Contains("did you mean \"shell\"?", StringComparison.Ordinal));
+        await Assert.That(diag.Message).IsNotNull();
 
         await Assert.That(diag.Fix is not null).IsTrue();
         var fixedYaml = Seiton.Core.Linting.Fixing.FixEngine.Apply(sourceBytes, [diag.Fix!.Value]);
         var fixedText = Encoding.UTF8.GetString(fixedYaml);
         await Assert.That(fixedText).Contains("shell: bash");
+        result.Arena?.Dispose();
     }
 
     [Test]
@@ -6950,12 +6966,14 @@ public sealed class ParserTests
         """);
         var sourceBytes = Encoding.UTF8.GetBytes(yaml);
         var result = WorkflowParser.Parse(sourceBytes, "fix-environment-key.yml");
-        var diag = result.Diagnostics.First(x => x.Message.Contains("did you mean \"name\"?", StringComparison.Ordinal));
+        var diag = result.Diagnostics.FirstOrDefault(x => x.Message.Contains("did you mean \"name\"?", StringComparison.Ordinal));
+        await Assert.That(diag.Message).IsNotNull();
 
         await Assert.That(diag.Fix is not null).IsTrue();
         var fixedYaml = Seiton.Core.Linting.Fixing.FixEngine.Apply(sourceBytes, [diag.Fix!.Value]);
         var fixedText = Encoding.UTF8.GetString(fixedYaml);
         await Assert.That(fixedText).Contains("name: production");
+        result.Arena?.Dispose();
     }
 
     [Test]
@@ -6973,12 +6991,14 @@ public sealed class ParserTests
         """);
         var sourceBytes = Encoding.UTF8.GetBytes(yaml);
         var result = WorkflowParser.Parse(sourceBytes, "fix-runs-on-key.yml");
-        var diag = result.Diagnostics.First(x => x.Message.Contains("did you mean \"labels\"?", StringComparison.Ordinal));
+        var diag = result.Diagnostics.FirstOrDefault(x => x.Message.Contains("did you mean \"labels\"?", StringComparison.Ordinal));
+        await Assert.That(diag.Message).IsNotNull();
 
         await Assert.That(diag.Fix is not null).IsTrue();
         var fixedYaml = Seiton.Core.Linting.Fixing.FixEngine.Apply(sourceBytes, [diag.Fix!.Value]);
         var fixedText = Encoding.UTF8.GetString(fixedYaml);
         await Assert.That(fixedText).Contains("labels:");
+        result.Arena?.Dispose();
     }
 
     [Test]
@@ -6995,12 +7015,14 @@ public sealed class ParserTests
         """);
         var sourceBytes = Encoding.UTF8.GetBytes(yaml);
         var result = WorkflowParser.Parse(sourceBytes, "fix-workflow-call-key.yml");
-        var diag = result.Diagnostics.First(x => x.Message.Contains("did you mean \"inputs\"?", StringComparison.Ordinal));
+        var diag = result.Diagnostics.FirstOrDefault(x => x.Message.Contains("did you mean \"inputs\"?", StringComparison.Ordinal));
+        await Assert.That(diag.Message).IsNotNull();
 
         await Assert.That(diag.Fix is not null).IsTrue();
         var fixedYaml = Seiton.Core.Linting.Fixing.FixEngine.Apply(sourceBytes, [diag.Fix!.Value]);
         var fixedText = Encoding.UTF8.GetString(fixedYaml);
         await Assert.That(fixedText).Contains("inputs:");
+        result.Arena?.Dispose();
     }
 
     [Test]
@@ -7017,12 +7039,14 @@ public sealed class ParserTests
         """);
         var sourceBytes = Encoding.UTF8.GetBytes(yaml);
         var result = WorkflowParser.Parse(sourceBytes, "fix-workflow-dispatch-key.yml");
-        var diag = result.Diagnostics.First(x => x.Message.Contains("did you mean \"inputs\"?", StringComparison.Ordinal));
+        var diag = result.Diagnostics.FirstOrDefault(x => x.Message.Contains("did you mean \"inputs\"?", StringComparison.Ordinal));
+        await Assert.That(diag.Message).IsNotNull();
 
         await Assert.That(diag.Fix is not null).IsTrue();
         var fixedYaml = Seiton.Core.Linting.Fixing.FixEngine.Apply(sourceBytes, [diag.Fix!.Value]);
         var fixedText = Encoding.UTF8.GetString(fixedYaml);
         await Assert.That(fixedText).Contains("inputs:");
+        result.Arena?.Dispose();
     }
 
     [Test]
@@ -7037,12 +7061,14 @@ public sealed class ParserTests
         """);
         var sourceBytes = Encoding.UTF8.GetBytes(yaml);
         var result = WorkflowParser.Parse(sourceBytes, "fix-repo-dispatch-key.yml");
-        var diag = result.Diagnostics.First(x => x.Message.Contains("did you mean \"types\"?", StringComparison.Ordinal));
+        var diag = result.Diagnostics.FirstOrDefault(x => x.Message.Contains("did you mean \"types\"?", StringComparison.Ordinal));
+        await Assert.That(diag.Message).IsNotNull();
 
         await Assert.That(diag.Fix is not null).IsTrue();
         var fixedYaml = Seiton.Core.Linting.Fixing.FixEngine.Apply(sourceBytes, [diag.Fix!.Value]);
         var fixedText = Encoding.UTF8.GetString(fixedYaml);
         await Assert.That(fixedText).Contains("types:");
+        result.Arena?.Dispose();
     }
 
     [Test]
@@ -7057,12 +7083,14 @@ public sealed class ParserTests
         """);
         var sourceBytes = Encoding.UTF8.GetBytes(yaml);
         var result = WorkflowParser.Parse(sourceBytes, "fix-schedule-key.yml");
-        var diag = result.Diagnostics.First(x => x.Message.Contains("did you mean \"cron\"?", StringComparison.Ordinal));
+        var diag = result.Diagnostics.FirstOrDefault(x => x.Message.Contains("did you mean \"cron\"?", StringComparison.Ordinal));
+        await Assert.That(diag.Message).IsNotNull();
 
         await Assert.That(diag.Fix is not null).IsTrue();
         var fixedYaml = Seiton.Core.Linting.Fixing.FixEngine.Apply(sourceBytes, [diag.Fix!.Value]);
         var fixedText = Encoding.UTF8.GetString(fixedYaml);
         await Assert.That(fixedText).Contains("cron:");
+        result.Arena?.Dispose();
     }
 
     [Test]
@@ -7082,12 +7110,14 @@ public sealed class ParserTests
         """);
         var sourceBytes = Encoding.UTF8.GetBytes(yaml);
         var result = WorkflowParser.Parse(sourceBytes, "fix-snapshot-key.yml");
-        var diag = result.Diagnostics.First(x => x.Message.Contains("did you mean \"version\"?", StringComparison.Ordinal));
+        var diag = result.Diagnostics.FirstOrDefault(x => x.Message.Contains("did you mean \"version\"?", StringComparison.Ordinal));
+        await Assert.That(diag.Message).IsNotNull();
 
         await Assert.That(diag.Fix is not null).IsTrue();
         var fixedYaml = Seiton.Core.Linting.Fixing.FixEngine.Apply(sourceBytes, [diag.Fix!.Value]);
         var fixedText = Encoding.UTF8.GetString(fixedYaml);
         await Assert.That(fixedText).Contains("version:");
+        result.Arena?.Dispose();
     }
 
     [Test]
@@ -7100,12 +7130,14 @@ public sealed class ParserTests
         """);
         var sourceBytes = Encoding.UTF8.GetBytes(yaml);
         var result = WorkflowParser.Parse(sourceBytes, "fix-unknown-event.yml");
-        var diag = result.Diagnostics.First(x => x.Message.Contains("did you mean \"push\"?", StringComparison.Ordinal));
+        var diag = result.Diagnostics.FirstOrDefault(x => x.Message.Contains("did you mean \"push\"?", StringComparison.Ordinal));
+        await Assert.That(diag.Message).IsNotNull();
 
         await Assert.That(diag.Fix is not null).IsTrue();
         var fixedYaml = Seiton.Core.Linting.Fixing.FixEngine.Apply(sourceBytes, [diag.Fix!.Value]);
         var fixedText = Encoding.UTF8.GetString(fixedYaml);
         await Assert.That(fixedText).Contains("on: push");
+        result.Arena?.Dispose();
     }
 
     [Test]
@@ -7123,11 +7155,13 @@ public sealed class ParserTests
         """);
         var sourceBytes = Encoding.UTF8.GetBytes(yaml);
         var result = WorkflowParser.Parse(sourceBytes, "action.yml");
-        var diag = result.Diagnostics.First(x => x.Message.Contains("did you mean \"description\"?", StringComparison.Ordinal));
+        var diag = result.Diagnostics.FirstOrDefault(x => x.Message.Contains("did you mean \"description\"?", StringComparison.Ordinal));
+        await Assert.That(diag.Message).IsNotNull();
 
         await Assert.That(diag.Fix is not null).IsTrue();
         var fixedYaml = Seiton.Core.Linting.Fixing.FixEngine.Apply(sourceBytes, [diag.Fix!.Value]);
         var fixedText = Encoding.UTF8.GetString(fixedYaml);
         await Assert.That(fixedText).Contains("description:");
+        result.Arena?.Dispose();
     }
 }
