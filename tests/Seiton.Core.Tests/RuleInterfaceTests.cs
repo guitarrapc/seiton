@@ -14291,8 +14291,16 @@ public sealed class RuleInterfaceTests
 
         var engine = new LintEngine();
         var result = engine.Check(Encoding.UTF8.GetBytes(yaml), "test.yaml");
-        var diag = result.Diagnostics.FirstOrDefault(d => d.Message?.Contains("is not pinned to a full-length commit SHA") == true);
-        await Assert.That(diag.Message).IsNotNull();
-        await Assert.That(diag.Message!.StartsWith("'actions/checkout@v4'", StringComparison.Ordinal)).IsTrue();
+        try
+        {
+            var diag = result.Diagnostics.FirstOrDefault(d => d.Message?.Contains("is not pinned to a full-length commit SHA") == true);
+            var message = diag.Message;
+            await Assert.That(message).IsNotNull();
+            await Assert.That(message!.StartsWith("'actions/checkout@v4'", StringComparison.Ordinal)).IsTrue();
+        }
+        finally
+        {
+            result.ParseResult.Arena?.Dispose();
+        }
     }
 }
