@@ -176,7 +176,7 @@ Human-readable output with file path, line, column, severity, rule ID, and messa
 
 ```
 .github/workflows/ci.yml:18:7: [error] template-injection: untrusted value 'github.event.pull_request.title' interpolated directly into run script
-.github/workflows/ci.yml:42:5: [warning] unpinned-uses: action 'actions/checkout@v4' is not pinned to a full commit SHA
+.github/workflows/ci.yml:42:5: [warning] unpinned-uses: 'actions/checkout@v4' is not pinned to a full commit SHA
 ```
 
 Use `--oneline` to produce one line per diagnostic (useful for `grep`/`awk` pipelines).

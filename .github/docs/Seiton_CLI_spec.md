@@ -335,7 +335,7 @@ error[job-permissions-required]: job "build" omits explicit permissions declarat
      |
    = help: add an explicit `permissions:` block to this job
 
-warning[unpinned-uses]: action uses 'actions/checkout@v4' is not pinned to a full-length commit SHA
+warning[unpinned-uses]: 'actions/checkout@v4' is not pinned to a full-length commit SHA
   --> .github/workflows/build.yml:8:11
      |
    8 |         uses: actions/checkout@v4

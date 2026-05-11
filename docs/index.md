@@ -56,7 +56,7 @@ Example output:
 
 ```
 .github/workflows/ci.yml:18:7: [error] template-injection: untrusted value 'github.event.pull_request.title' interpolated directly into run script; use env: indirection instead
-.github/workflows/ci.yml:42:5: [warning] unpinned-uses: action 'actions/checkout@v4' is not pinned to a full commit SHA
+.github/workflows/ci.yml:42:5: [warning] unpinned-uses: 'actions/checkout@v4' is not pinned to a full commit SHA
 .github/workflows/ci.yml:55:5: [warning] job-permissions-required: job 'build' does not declare explicit permissions
 ```
 

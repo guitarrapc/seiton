@@ -39,7 +39,7 @@ jobs:
 
 ```
 test.yml:8:7: [error] template-injection: untrusted value 'github.event.pull_request.title' interpolated directly into run script; use env: indirection instead
-test.yml:9:5: [warning] unpinned-uses: action 'actions/checkout@v4' is not pinned to a full commit SHA
+test.yml:9:5: [warning] unpinned-uses: 'actions/checkout@v4' is not pinned to a full commit SHA
 test.yml:12:9: [error] popular-action-inputs: input 'node_version' is not defined in action 'actions/setup-node@v4'; did you mean 'node-version'?
 test.yml:9:5: [warning] checkout-persist-credentials: 'actions/checkout' should set 'persist-credentials: false'
 test.yml:6:5: [warning] job-permissions-required: job 'test' does not declare explicit permissions
