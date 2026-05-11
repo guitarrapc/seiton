@@ -874,6 +874,32 @@ public sealed class ExpressionTests
 
         await Assert.That(diagnostics.Any(x => x.Message.Contains("\"unknown_key\" is not defined in \"matrix\" context", StringComparison.Ordinal))).IsTrue();
         await Assert.That(diagnostics.Any(x => x.Message.Contains("Available properties are: os", StringComparison.Ordinal))).IsTrue();
+        // Message must NOT contain the object type shape (no redundant info)
+        await Assert.That(diagnostics.Any(x => x.Message.Contains("{os: ", StringComparison.Ordinal))).IsFalse();
+    }
+
+    [Test]
+    public async Task ValidateDynamicPropertyAccess_MultipleProperties_SortedAlphabetically()
+    {
+        var expression = "matrix.missing"u8;
+        var parseResult = ExpressionParser.Parse(expression);
+        var location = new TextRange(0, expression.Length, 1, 1, 1, expression.Length);
+
+        // Insert keys in non-alphabetical order to verify sorting
+        var matrixType = ExprType.Object(
+            new Dictionary<Utf8String, ExprType>
+            {
+                { new Utf8String("zebra"u8), ExprType.Any },
+                { new Utf8String("apple"u8), ExprType.Any },
+                { new Utf8String("node"u8), ExprType.Any },
+            },
+            strict: true);
+        (byte[] NameUtf8, ExprType Type)[] overrides = [("matrix"u8.ToArray(), matrixType)];
+
+        var diagnostics = ExpressionSemanticAnalyzer.ValidateDynamicPropertyAccess(
+            parseResult, expression, location, overrides);
+
+        await Assert.That(diagnostics.Any(x => x.Message.Contains("Available properties are: apple, node, zebra", StringComparison.Ordinal))).IsTrue();
     }
 
     [Test]
@@ -1527,7 +1553,7 @@ public sealed class ExpressionTests
             ExpressionValidationContext.StepRun);
 
         await Assert.That(diagnostics.Any(x => x.Message.Contains("property \"mac\" is not defined in", StringComparison.Ordinal))).IsTrue();
-        await Assert.That(diagnostics.Any(x => x.Message.Contains("Available properties are: win, linux", StringComparison.Ordinal))).IsTrue();
+        await Assert.That(diagnostics.Any(x => x.Message.Contains("Available properties are: linux, win", StringComparison.Ordinal))).IsTrue();
     }
 
     [Test]

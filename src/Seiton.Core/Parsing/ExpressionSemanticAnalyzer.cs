@@ -1389,7 +1389,7 @@ public static class ExpressionSemanticAnalyzer
     {
         var contextLabel = rootName == "object" ? "object type" : $"\"{rootName}\" context";
         var availableProps = FormatPropertyNames(objectType);
-        return $"property \"{propName}\" is not defined in {contextLabel} {FormatObjectType(objectType)}. Available properties are: {availableProps}";
+        return $"property \"{propName}\" is not defined in {contextLabel}. Available properties are: {availableProps}";
     }
 
     private static string FormatPropertyNames(ObjectExprType objectType)
@@ -1399,17 +1399,25 @@ public static class ExpressionSemanticAnalyzer
             return "none";
         }
 
-        var sb = new System.Text.StringBuilder();
-        var first = true;
+        // Sort property names for deterministic output across Dictionary enumeration orders
+        var names = new string[objectType.Properties.Count];
+        var i = 0;
         foreach (var pair in objectType.Properties)
         {
-            if (!first)
+            names[i++] = Encoding.UTF8.GetString(pair.Key.Span);
+        }
+
+        Array.Sort(names, StringComparer.Ordinal);
+
+        var sb = new System.Text.StringBuilder();
+        for (var j = 0; j < names.Length; j++)
+        {
+            if (j > 0)
             {
                 sb.Append(", ");
             }
 
-            sb.Append(Encoding.UTF8.GetString(pair.Key.Span));
-            first = false;
+            sb.Append(names[j]);
         }
 
         return sb.ToString();

@@ -1,2 +1,2 @@
-test.yaml:8:19: property "my_action" is not defined in "steps" context {}. Available properties are: none [expression]
-test.yaml:15:19: property "some-value" is not defined in "steps" context {some_value: string}. Available properties are: some_value [expression]
+test.yaml:8:19: property "my_action" is not defined in "steps" context. Available properties are: none [expression]
+test.yaml:15:19: property "some-value" is not defined in "steps" context. Available properties are: some_value [expression]

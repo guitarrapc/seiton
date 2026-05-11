@@ -1,2 +1,2 @@
-test.yaml:6:16: property "some_output" is not defined in "jobs" context {}. Available properties are: none [expression]
-test.yaml:9:16: property "unknown_output" is not defined in "jobs" context {foo: string}. Available properties are: foo [expression]
+test.yaml:6:16: property "some_output" is not defined in "jobs" context. Available properties are: none [expression]
+test.yaml:9:16: property "unknown_output" is not defined in "jobs" context. Available properties are: foo [expression]
