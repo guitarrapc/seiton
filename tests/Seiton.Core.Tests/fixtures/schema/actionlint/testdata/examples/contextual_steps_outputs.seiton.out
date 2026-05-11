@@ -1,2 +1,2 @@
-test.yaml:10:20: property "get_value" is not defined in steps object type {}. Available properties are: none [expression]
-test.yaml:22:20: property "get_value" is not defined in steps object type {}. Available properties are: none [expression]
+test.yaml:10:20: property "get_value" is not defined in "steps" context {}. Available properties are: none [expression]
+test.yaml:22:20: property "get_value" is not defined in "steps" context {}. Available properties are: none [expression]

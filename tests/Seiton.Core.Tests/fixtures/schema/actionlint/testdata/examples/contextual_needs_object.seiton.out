@@ -1,4 +1,4 @@
-test.yaml:16:20: property "prepare" is not defined in needs object type {}. Available properties are: none [expression]
-test.yaml:26:20: property "foo" is not defined in needs object type {installed: string}. Available properties are: installed [expression]
-test.yaml:28:20: property "some_job" is not defined in needs object type {install: object; prepare: object}. Available properties are: install, prepare [expression]
-test.yaml:33:20: property "build" is not defined in needs object type {}. Available properties are: none [expression]
+test.yaml:16:20: property "prepare" is not defined in "needs" context {}. Available properties are: none [expression]
+test.yaml:26:20: property "foo" is not defined in "needs" context {installed: string}. Available properties are: installed [expression]
+test.yaml:28:20: property "some_job" is not defined in "needs" context {install: object; prepare: object}. Available properties are: install, prepare [expression]
+test.yaml:33:20: property "build" is not defined in "needs" context {}. Available properties are: none [expression]

@@ -1,3 +1,3 @@
-test.yaml:19:20: property "platform" is not defined in matrix object type {os: string; node: string; package: object; npm: any}. Available properties are: os, node, package, npm [expression]
-test.yaml:21:20: property "dev" is not defined in matrix object type {name: any; optional: bool}. Available properties are: name, optional [expression]
-test.yaml:34:20: property "os" is not defined in matrix object type {}. Available properties are: none [expression]
+test.yaml:19:20: property "platform" is not defined in "matrix" context {os: string; node: string; package: object; npm: any}. Available properties are: os, node, package, npm [expression]
+test.yaml:21:20: property "dev" is not defined in "matrix" context {name: any; optional: bool}. Available properties are: name, optional [expression]
+test.yaml:34:20: property "os" is not defined in "matrix" context {}. Available properties are: none [expression]

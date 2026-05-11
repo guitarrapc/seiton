@@ -1387,9 +1387,9 @@ public static class ExpressionSemanticAnalyzer
 
     private static string FormatUndefinedPropertyMessage(string propName, ObjectExprType objectType, string rootName)
     {
-        var prefix = rootName == "object" ? "" : rootName + " ";
+        var contextLabel = rootName == "object" ? "object type" : $"\"{rootName}\" context";
         var availableProps = FormatPropertyNames(objectType);
-        return $"property \"{propName}\" is not defined in {prefix}object type {FormatObjectType(objectType)}. Available properties are: {availableProps}";
+        return $"property \"{propName}\" is not defined in {contextLabel} {FormatObjectType(objectType)}. Available properties are: {availableProps}";
     }
 
     private static string FormatPropertyNames(ObjectExprType objectType)
