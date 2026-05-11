@@ -27,6 +27,12 @@ public sealed class LintConfig
     private long _sourceContentHash;
 
     /// <summary>
+    /// Maximum number of cached expression parse results. When exceeded the cache is
+    /// cleared to bound memory in long-lived processes (e.g. WASM playground).
+    /// </summary>
+    private const int MaxExpressionCacheEntries = 512;
+
+    /// <summary>
     /// Parses an expression with content-based deduplication. Expressions with identical
     /// byte content share the same parse result, even across different source documents.
     /// </summary>
@@ -42,18 +48,25 @@ public sealed class LintConfig
         _expressionCache ??= new();
         if (_expressionCache.TryGetValue(key, out var entry))
         {
-            // Collision guard: XXH64 match + identical length makes false positive < 1 in 2^64
-            if (entry.Length == expression.Length)
+            // Collision guard: full byte comparison to guarantee correctness
+            if (expression.SequenceEqual(entry.ExpressionBytes))
             {
                 return entry.Result;
             }
 
-            // Hash collision with different length — parse without caching (extremely rare)
+            // Hash collision with different content — parse without caching (extremely rare)
             return ExpressionParser.Parse(expression);
         }
 
         var result = ExpressionParser.Parse(expression);
-        _expressionCache[key] = new ExpressionCacheEntry(expression.Length, result);
+
+        // Evict all entries when the cache exceeds the cap to bound memory
+        if (_expressionCache.Count >= MaxExpressionCacheEntries)
+        {
+            _expressionCache.Clear();
+        }
+
+        _expressionCache[key] = new ExpressionCacheEntry(expression.ToArray(), result);
         return result;
     }
 
@@ -63,7 +76,7 @@ public sealed class LintConfig
         return (long)XxHash64.Hash(span);
     }
 
-    private readonly record struct ExpressionCacheEntry(int Length, ExpressionParseResult Result);
+    private readonly record struct ExpressionCacheEntry(byte[] ExpressionBytes, ExpressionParseResult Result);
 
     /// <summary>
     /// Returns the line-start offset array for Utf8Yaml, lazily built on first access.
@@ -121,7 +134,9 @@ public sealed class LintConfig
 
     /// <summary>
     /// Resets per-call state and updates properties for a new lint run.
-    /// Preserves expression cache across source changes (cache keys are content-hash-based).
+    /// Preserves expression cache across source changes (cache keys are content-hash-based,
+    /// collision guard uses full byte comparison, and entry count is capped at
+    /// <see cref="MaxExpressionCacheEntries"/> to bound memory).
     /// Line starts are recomputed when the source content changes.
     /// Safe even when the same byte[] is reused with different content.
     /// </summary>
