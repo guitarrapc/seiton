@@ -89,26 +89,35 @@ public static class PlaygroundLintRunner
 
             LintResult lintResult;
             var ownsArena = false;
+            ReadOnlySpan<Diagnostic> diagnosticsToSerialize;
 
             // Action metadata files (action.yml) require classified parsing — not incremental.
             if (DocumentKindClassifier.GetPathHintKind(filePath) == DocumentKind.ActionMetadata)
             {
                 lintResult = Engine.Check(utf8Yaml, filePath, LintWithFixMetadata);
                 ownsArena = true; // Engine.Check creates its own arena; we must dispose it
+                diagnosticsToSerialize = lintResult.Diagnostics.AsSpan();
             }
             else
             {
-                // D-5b: Use incremental parse to skip unchanged root sections
+                // D-5b/5c: Use incremental parse to skip unchanged root sections and jobs
                 var parseResult = IncrementalCtx.ParseIncrementally(utf8Yaml, filePath);
 
-                // Lint the (possibly incrementally-parsed) result
-                lintResult = Engine.CheckWithParseResult(utf8Yaml, filePath, LintWithFixMetadata, parseResult);
+                // D-5d: Build skip mask — reused jobs with cached diagnostics skip lint
+                var jobCount = parseResult.Workflow?.Jobs.Count ?? 0;
+                var skipJobs = IncrementalCtx.BuildSkipJobs(jobCount);
+
+                // Lint with optional job skipping
+                lintResult = Engine.CheckWithParseResult(utf8Yaml, filePath, LintWithFixMetadata, parseResult, skipJobs);
+
+                // Merge fresh diagnostics with cached diagnostics for skipped jobs
+                diagnosticsToSerialize = IncrementalCtx.MergeDiagnosticsWithCache(lintResult.Diagnostics, skipJobs);
             }
 
             JsonBuffer.Clear();
             using (var writer = new Utf8JsonWriter(JsonBuffer, CamelCaseWriterOptions))
             {
-                WriteDiagnosticsArray(writer, lintResult.Diagnostics.AsSpan());
+                WriteDiagnosticsArray(writer, diagnosticsToSerialize);
             }
 
             // Dispose arena for ActionMetadata path (not owned by IncrementalParseContext)

@@ -229,4 +229,30 @@ PartialChange (=キーストローク相当) が FullChange より 15× 多い�
 
 ## 7. Lessons Learned (実装後に更新)
 
-_(各 Phase 完了後に実際の結果・予想との差分・追加で発見した問題を記録する)_
+### Phase 1 結果 (2026-05-12)
+
+**アプローチ**: Option B を採用 — `IncrementalParseContext` に `BuildSkipJobs()` / `MergeDiagnosticsWithCache()` public メソッドを追加し、`RunToJsonUtf8` 内で D-5d ロジックを使用。既存の `LintIncrementally()` もこれらの共通メソッドを呼ぶようリファクタリング。
+
+**変更ファイル**:
+- `src/Seiton.Playground.Core/IncrementalParseContext.cs` — `BuildSkipJobs()`, `MergeDiagnosticsWithCache()` 追加、`LintIncrementally()` リファクタリング
+- `src/Seiton.Playground.Core/PlaygroundLintRunner.cs` — `RunToJsonUtf8` で D-5d 有効化
+
+**テスト結果**: 全テスト通過 (Playground: 68/68、Core: 1290/1290)
+
+**ベンチマーク結果** (PlaygroundLintBenchmark, ShortRun):
+
+| シナリオ | Before Alloc (10回) | After Alloc (10回) | 削減率 | Per-call |
+|---|---|---|---|---|
+| **PartialChange Large** | **109,104 KB** | **627 KB** | **-99.4%** | **~63 KB/call** |
+| PartialChange Small | 116.95 KB | 154 KB | +32%* | ~15 KB/call |
+| FullChange Large | 7,305 KB | 409 KB | -94.4% | ~41 KB/call |
+| FullChange Small | 25,784 KB | 67 KB | -99.7% | ~7 KB/call |
+| NoChange Large | 233.83 KB | 0 B | -100% | 0 B/call |
+| NoChange Small | 13.75 KB | 0 B | -100% | 0 B/call |
+
+\* Small PartialChange の +32% は、D-5d キャッシュ構築コスト（`CacheJobDiagnostics` の per-job 配列確保）が 1 job の場合に相対的に大きいため。絶対値は 154 KB と十分小さく、WASM では問題にならない。
+
+**予想との差分**:
+- 予想: PartialChange Large ~1.5 MB/call → 実測: **~63 KB/call** — 予想を大幅に上回る改善。D-5d による job skip に加え、expression cache が reused source で有効に機能したことが寄与。
+- NoChange パスが 0 B allocation になったのは、identity check shortcircuit で `EncodeToDoubleBuffer` すら呼ばないため。以前は `ReferenceEquals` チェック後も一部の処理が走っていた可能性。
+- FullChange も大幅改善 (-94.4%) は、D-5d の job cache が 2回目以降のベンチマーク iterations で効いたため。
