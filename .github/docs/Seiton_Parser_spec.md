@@ -470,7 +470,7 @@ When any key is unknown (not in the section's allowed key set), the parser perfo
 3. Distance threshold adapts to input length: ≤4 chars → max 1, ≤8 chars → max 2, >8 chars → max 3.
 
 **Diagnostic message format:**
-- When a close match is found: `did you mean "{suggestion}"?` appears **before** the expected key list, and the diagnostic carries a `DiagnosticFix` (for event option keys) that replaces the unknown key bytes with the suggested option name.
+- When a close match is found: `did you mean "{suggestion}"?` appears **before** the expected key list, and the diagnostic carries a `DiagnosticFix` that replaces the unknown key bytes with the suggested key name.
 - When no match is within threshold: plain `expected one of {list}` message with no suggestion or fix.
 - For unknown events with a suggestion, the URL reference is **always included** (not dropped when a suggestion is present).
 

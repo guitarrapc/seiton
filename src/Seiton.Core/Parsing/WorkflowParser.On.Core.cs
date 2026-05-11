@@ -15,11 +15,11 @@ public static partial class WorkflowParser
         {
             var eventMark = reader.CurrentStart;
             var eventInfo = ReadOnEventInfo(ref reader); // try-catch inside for non-UTF8 scalars
-            ValidateKnownOnEvent(in eventInfo, eventMark, ref diagnostics);
             Utf8Slice eventSlice;
             int eventByteLen;
             try { var u = reader.GetScalarUtf8(); eventSlice = reader.GetScalarSlice(); eventByteLen = u.Length; }
             catch { eventSlice = default; eventByteLen = 0; }
+            ValidateKnownOnEvent(in eventInfo, eventMark, eventSlice, ref diagnostics);
             var nameNode = arena.AddString(eventSlice, reader.IsScalarQuoted(), BuildScalarLocation(eventMark, eventByteLen));
             reader.Read();
             // spec §3.4.1: schedule requires mapping form; scalar form is an error
@@ -48,11 +48,11 @@ public static partial class WorkflowParser
 
                     var eventMark = reader.CurrentStart;
                     var eventInfo = ReadOnEventInfo(ref reader);
-                    ValidateKnownOnEvent(in eventInfo, eventMark, ref diagnostics);
                     Utf8Slice eventSlice;
                     int eventByteLen;
                     try { var u = reader.GetScalarUtf8(); eventSlice = reader.GetScalarSlice(); eventByteLen = u.Length; }
                     catch { eventSlice = default; eventByteLen = 0; }
+                    ValidateKnownOnEvent(in eventInfo, eventMark, eventSlice, ref diagnostics);
                     var nameNode = arena.AddString(eventSlice, reader.IsScalarQuoted(), BuildScalarLocation(eventMark, eventByteLen));
                     reader.Read();
                     // spec §3.4.1: schedule requires mapping form; scalar form is an error
@@ -113,11 +113,11 @@ public static partial class WorkflowParser
                     }
 
                     var eventInfo = ReadOnEventInfo(ref reader);
-                    ValidateKnownOnEvent(in eventInfo, eventMark, ref diagnostics);
                     Utf8Slice eventSlice;
                     int eventByteLen;
                     try { var u = reader.GetScalarUtf8(); eventSlice = reader.GetScalarSlice(); eventByteLen = u.Length; }
                     catch { eventSlice = default; eventByteLen = 0; }
+                    ValidateKnownOnEvent(in eventInfo, eventMark, eventSlice, ref diagnostics);
                     var nameNode = arena.AddString(eventSlice, reader.IsScalarQuoted(), BuildScalarLocation(eventMark, eventByteLen));
                     reader.Read(); // consume event key
 
@@ -252,7 +252,7 @@ public static partial class WorkflowParser
             || scalarUtf8.SequenceEqual("NULL"u8);
     }
 
-    private static void ValidateKnownOnEvent(in OnEventInfo eventInfo, TextPosition eventMark, ref PooledBuffer<Diagnostic> diagnostics)
+    private static void ValidateKnownOnEvent(in OnEventInfo eventInfo, TextPosition eventMark, Utf8Slice eventSlice, ref PooledBuffer<Diagnostic> diagnostics)
     {
         if (!eventInfo.IsKnown)
         {
@@ -260,7 +260,10 @@ public static partial class WorkflowParser
             var message = suggestion is not null
                 ? $"on: unknown event \"{eventInfo.Name}\". did you mean \"{suggestion}\"? see https://docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows for list of all event names"
                 : $"on: unknown event \"{eventInfo.Name}\". see https://docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows for list of all event names";
-            AddError(ref diagnostics, message, eventMark);
+            var fix = suggestion is not null && eventSlice.Length > 0
+                ? new DiagnosticFix($"replace '{eventInfo.Name}' with '{suggestion}'", [new TextEdit(eventSlice.Offset, eventSlice.Length, suggestion)])
+                : (DiagnosticFix?)null;
+            AddError(ref diagnostics, message, eventMark, fix);
         }
     }
 

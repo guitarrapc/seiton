@@ -591,6 +591,7 @@ public static partial class WorkflowParser
                 }
             }
 
+            var keySlice = reader.GetScalarSlice();
             var unknownKey = Encoding.UTF8.GetString(keyUtf8);
             reader.Read();
             var expectedKeys = parseMode == ParseMode.ActionMetadata
@@ -603,7 +604,10 @@ public static partial class WorkflowParser
             var message = suggestion is not null
                 ? $"{string.Format(prefix, unknownKey)} did you mean \"{suggestion}\"? expected one of {expectedKeys}"
                 : $"{string.Format(prefix, unknownKey)} expected one of {expectedKeys}";
-            AddError(ref diagnostics, message, keyMark);
+            var fix = suggestion is not null
+                ? new DiagnosticFix($"replace '{unknownKey}' with '{suggestion}'", [new TextEdit(keySlice.Offset, keySlice.Length, suggestion)])
+                : (DiagnosticFix?)null;
+            AddError(ref diagnostics, message, keyMark, fix);
             if (!reader.End)
             {
                 reader.SkipCurrentNode();
@@ -1030,6 +1034,7 @@ public static partial class WorkflowParser
                         }
                     }
 
+                    var runKeySlice = reader.GetScalarSlice();
                     var unknownRunKey = Encoding.UTF8.GetString(runKeyUtf8);
                     reader.Read();
                     var runPrefix = sectionContext.Length > 0 ? $"{sectionContext}.defaults.run " : "defaults.run ";
@@ -1037,7 +1042,10 @@ public static partial class WorkflowParser
                     var runMessage = runSuggestion is not null
                         ? $"{runPrefix}unexpected key \"{unknownRunKey}\" for \"run\" section. did you mean \"{runSuggestion}\"? expected one of {Generated.ExpectedKeys.DefaultsRunKeys}"
                         : $"{runPrefix}unexpected key \"{unknownRunKey}\" for \"run\" section. expected one of {Generated.ExpectedKeys.DefaultsRunKeys}";
-                    AddError(ref diagnostics, runMessage, runKeyMark);
+                    var runFix = runSuggestion is not null
+                        ? new DiagnosticFix($"replace '{unknownRunKey}' with '{runSuggestion}'", [new TextEdit(runKeySlice.Offset, runKeySlice.Length, runSuggestion)])
+                        : (DiagnosticFix?)null;
+                    AddError(ref diagnostics, runMessage, runKeyMark, runFix);
                     if (!reader.End) reader.SkipCurrentNode();
                 }
 
@@ -1052,6 +1060,7 @@ public static partial class WorkflowParser
                 continue;
             }
 
+            var keySlice = reader.GetScalarSlice();
             var unknownDefaultsKey = Encoding.UTF8.GetString(keyUtf8);
             reader.Read();
             var defaultsPrefix = sectionContext.Length > 0 ? $"{sectionContext}.defaults " : "defaults ";
@@ -1059,7 +1068,10 @@ public static partial class WorkflowParser
             var defaultsMessage = defaultsSuggestion is not null
                 ? $"{defaultsPrefix}unexpected key \"{unknownDefaultsKey}\" for \"defaults\" section. did you mean \"{defaultsSuggestion}\"? expected \"run\""
                 : $"{defaultsPrefix}unexpected key \"{unknownDefaultsKey}\" for \"defaults\" section. expected \"run\"";
-            AddError(ref diagnostics, defaultsMessage, keyMark);
+            var defaultsFix = defaultsSuggestion is not null
+                ? new DiagnosticFix($"replace '{unknownDefaultsKey}' with '{defaultsSuggestion}'", [new TextEdit(keySlice.Offset, keySlice.Length, defaultsSuggestion)])
+                : (DiagnosticFix?)null;
+            AddError(ref diagnostics, defaultsMessage, keyMark, defaultsFix);
             if (!reader.End) reader.SkipCurrentNode();
         }
 
@@ -1172,6 +1184,7 @@ public static partial class WorkflowParser
                 }
             }
 
+            var innerKeySlice = reader.GetScalarSlice();
             var unknownConcurrencyKey = Encoding.UTF8.GetString(keyUtf8);
             reader.Read();
             var concurrencyPrefix = sectionContext.Length > 0 ? $"{sectionContext}.concurrency " : "concurrency ";
@@ -1179,7 +1192,10 @@ public static partial class WorkflowParser
             var concurrencyMessage = concurrencySuggestion is not null
                 ? $"{concurrencyPrefix}unexpected key \"{unknownConcurrencyKey}\" for \"concurrency\" section. did you mean \"{concurrencySuggestion}\"? expected one of {Generated.ExpectedKeys.ConcurrencyKeys}"
                 : $"{concurrencyPrefix}unexpected key \"{unknownConcurrencyKey}\" for \"concurrency\" section. expected one of {Generated.ExpectedKeys.ConcurrencyKeys}";
-            AddError(ref diagnostics, concurrencyMessage, innerKeyMark);
+            var concurrencyFix = concurrencySuggestion is not null
+                ? new DiagnosticFix($"replace '{unknownConcurrencyKey}' with '{concurrencySuggestion}'", [new TextEdit(innerKeySlice.Offset, innerKeySlice.Length, concurrencySuggestion)])
+                : (DiagnosticFix?)null;
+            AddError(ref diagnostics, concurrencyMessage, innerKeyMark, concurrencyFix);
             if (!reader.End) reader.SkipCurrentNode();
         }
 

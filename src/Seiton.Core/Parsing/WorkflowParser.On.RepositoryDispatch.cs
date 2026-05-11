@@ -50,13 +50,17 @@ public static partial class WorkflowParser
                 continue;
             }
 
+            var keySlice = reader.GetScalarSlice();
             var unknown = Encoding.UTF8.GetString(keyUtf8);
             reader.Read();
             var rdSuggestion = SuggestionHelper.FindClosestFromFormattedKeys(unknown, Generated.ExpectedKeys.RepositoryDispatchKeys);
             var rdMsg = rdSuggestion is not null
                 ? $"on.repository_dispatch unexpected key \"{unknown}\" for \"repository_dispatch\" section. did you mean \"{rdSuggestion}\"? expected \"types\""
                 : $"on.repository_dispatch unexpected key \"{unknown}\" for \"repository_dispatch\" section. expected \"types\"";
-            AddError(ref diagnostics, rdMsg, keyMark);
+            var rdFix = rdSuggestion is not null
+                ? new DiagnosticFix($"replace '{unknown}' with '{rdSuggestion}'", [new TextEdit(keySlice.Offset, keySlice.Length, rdSuggestion)])
+                : (DiagnosticFix?)null;
+            AddError(ref diagnostics, rdMsg, keyMark, rdFix);
             if (!reader.End)
             {
                 reader.SkipCurrentNode();

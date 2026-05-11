@@ -148,13 +148,17 @@ public static partial class WorkflowParser
                 }
             }
 
+            var keySlice = reader.GetScalarSlice();
             var unknownKey = Encoding.UTF8.GetString(keyUtf8);
             reader.Read(); // consume key
             var strategySuggestion = SuggestionHelper.FindClosestFromFormattedKeys(unknownKey, Generated.ExpectedKeys.StrategyKeys);
             var strategyMsg = strategySuggestion is not null
                 ? $"jobs.'{DecodeUtf8(source, jobId)}'.strategy unexpected key \"{unknownKey}\" for \"strategy\" section. did you mean \"{strategySuggestion}\"? expected one of {Generated.ExpectedKeys.StrategyKeys}"
                 : $"jobs.'{DecodeUtf8(source, jobId)}'.strategy unexpected key \"{unknownKey}\" for \"strategy\" section. expected one of {Generated.ExpectedKeys.StrategyKeys}";
-            AddError(ref diagnostics, strategyMsg, keyMark);
+            var strategyFix = strategySuggestion is not null
+                ? new DiagnosticFix($"replace '{unknownKey}' with '{strategySuggestion}'", [new TextEdit(keySlice.Offset, keySlice.Length, strategySuggestion)])
+                : (DiagnosticFix?)null;
+            AddError(ref diagnostics, strategyMsg, keyMark, strategyFix);
             if (!reader.End)
             {
                 reader.SkipCurrentNode();

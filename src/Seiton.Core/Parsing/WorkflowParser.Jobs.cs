@@ -491,6 +491,7 @@ public static partial class WorkflowParser
 
             var isKnownKey = IsKnownJobKey(keyUtf8);
             var unknownJobKey = !isKnownKey ? Encoding.UTF8.GetString(keyUtf8) : null;
+            var keySlice = !isKnownKey ? reader.GetScalarSlice() : default;
 
             reader.Read();
 
@@ -507,7 +508,10 @@ public static partial class WorkflowParser
             var jobMessage = jobSuggestion is not null
                 ? $"jobs.'{DecodeUtf8(source, jobId)}' unexpected key \"{unknownJobKey}\" for \"job\" section. did you mean \"{jobSuggestion}\"? expected one of {Generated.ExpectedKeys.JobKeys}"
                 : $"jobs.'{DecodeUtf8(source, jobId)}' unexpected key \"{unknownJobKey}\" for \"job\" section. expected one of {Generated.ExpectedKeys.JobKeys}";
-            AddError(ref diagnostics, jobMessage, keyMark);
+            var jobFix = jobSuggestion is not null
+                ? new DiagnosticFix($"replace '{unknownJobKey}' with '{jobSuggestion}'", [new TextEdit(keySlice.Offset, keySlice.Length, jobSuggestion)])
+                : (DiagnosticFix?)null;
+            AddError(ref diagnostics, jobMessage, keyMark, jobFix);
             if (!reader.End)
             {
                 reader.SkipCurrentNode();
@@ -739,13 +743,17 @@ public static partial class WorkflowParser
                 continue;
             }
 
+            var keySlice = reader.GetScalarSlice();
             var unknownSnapKey = Encoding.UTF8.GetString(keyUtf8);
             reader.Read();
             var snapSuggestion = SuggestionHelper.FindClosestFromFormattedKeys(unknownSnapKey, Generated.ExpectedKeys.SnapshotKeys);
             var snapMessage = snapSuggestion is not null
                 ? $"unexpected key \"{unknownSnapKey}\" for \"{section}\". did you mean \"{snapSuggestion}\"? expected one of {Generated.ExpectedKeys.SnapshotKeys}"
                 : $"unexpected key \"{unknownSnapKey}\" for \"{section}\". expected one of {Generated.ExpectedKeys.SnapshotKeys}";
-            AddError(ref diagnostics, snapMessage, keyMark);
+            var snapFix = snapSuggestion is not null
+                ? new DiagnosticFix($"replace '{unknownSnapKey}' with '{snapSuggestion}'", [new TextEdit(keySlice.Offset, keySlice.Length, snapSuggestion)])
+                : (DiagnosticFix?)null;
+            AddError(ref diagnostics, snapMessage, keyMark, snapFix);
             if (!reader.End)
             {
                 reader.SkipCurrentNode();
@@ -892,13 +900,17 @@ public static partial class WorkflowParser
                     continue;
                 }
 
+                var keySlice = reader.GetScalarSlice();
                 var unknownRunsOnKey = Encoding.UTF8.GetString(keyUtf8);
                 reader.Read();
                 var runsOnSuggestion = SuggestionHelper.FindClosestFromFormattedKeys(unknownRunsOnKey, Generated.ExpectedKeys.RunsOnKeys);
                 var runsOnMessage = runsOnSuggestion is not null
                     ? $"jobs.'{DecodeUtf8(source, jobId)}'.runs-on unexpected key \"{unknownRunsOnKey}\" for \"runs-on\" section. did you mean \"{runsOnSuggestion}\"? expected one of {Generated.ExpectedKeys.RunsOnKeys}"
                     : $"jobs.'{DecodeUtf8(source, jobId)}'.runs-on unexpected key \"{unknownRunsOnKey}\" for \"runs-on\" section. expected one of {Generated.ExpectedKeys.RunsOnKeys}";
-                AddError(ref diagnostics, runsOnMessage, keyMark);
+                var runsOnFix = runsOnSuggestion is not null
+                    ? new DiagnosticFix($"replace '{unknownRunsOnKey}' with '{runsOnSuggestion}'", [new TextEdit(keySlice.Offset, keySlice.Length, runsOnSuggestion)])
+                    : (DiagnosticFix?)null;
+                AddError(ref diagnostics, runsOnMessage, keyMark, runsOnFix);
                 hasUnknownKey = true;
                 if (!reader.End) reader.SkipCurrentNode();
             }
@@ -1037,13 +1049,17 @@ public static partial class WorkflowParser
                 continue;
             }
 
+            var keySlice = reader.GetScalarSlice();
             var unknownEnvKey = Encoding.UTF8.GetString(keyUtf8);
             reader.Read();
             var envSuggestion = SuggestionHelper.FindClosestFromFormattedKeys(unknownEnvKey, Generated.ExpectedKeys.EnvironmentKeys);
             var envMessage = envSuggestion is not null
                 ? $"jobs.'{DecodeUtf8(source, jobId)}'.environment unexpected key \"{unknownEnvKey}\" for \"environment\" section. did you mean \"{envSuggestion}\"? expected one of {Generated.ExpectedKeys.EnvironmentKeys}"
                 : $"jobs.'{DecodeUtf8(source, jobId)}'.environment unexpected key \"{unknownEnvKey}\" for \"environment\" section. expected one of {Generated.ExpectedKeys.EnvironmentKeys}";
-            AddError(ref diagnostics, envMessage, keyMark);
+            var envFix = envSuggestion is not null
+                ? new DiagnosticFix($"replace '{unknownEnvKey}' with '{envSuggestion}'", [new TextEdit(keySlice.Offset, keySlice.Length, envSuggestion)])
+                : (DiagnosticFix?)null;
+            AddError(ref diagnostics, envMessage, keyMark, envFix);
             if (!reader.End)
             {
                 reader.SkipCurrentNode();

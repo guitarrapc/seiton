@@ -6744,4 +6744,424 @@ public sealed class ParserTests
         var requiresLabelsDiag = result.Diagnostics.FirstOrDefault(d => d.Message?.Contains("requires labels", StringComparison.Ordinal) == true);
         await Assert.That(requiresLabelsDiag.Message).IsNull();
     }
+
+    // ==================== DiagnosticFix for Levenshtein suggestions ====================
+
+    [Test]
+    public async Task Parse_WorkflowTopLevel_Fix_WhenSuggestionFound()
+    {
+        // Workflow top-level "NAME" → "name": fix should replace key bytes
+        var yaml = NormalizeEol("""
+        NAME: test
+        on: push
+        jobs: {}
+        """);
+        var sourceBytes = Encoding.UTF8.GetBytes(yaml);
+        var result = WorkflowParser.Parse(sourceBytes, "fix-workflow-top.yml");
+        var diag = result.Diagnostics.FirstOrDefault(x => x.Message.Contains("did you mean \"name\"?", StringComparison.Ordinal));
+        await Assert.That(diag.Message).IsNotNull();
+
+        await Assert.That(diag.Fix is not null).IsTrue();
+        var fixedYaml = Seiton.Core.Linting.Fixing.FixEngine.Apply(sourceBytes, [diag.Fix!.Value]);
+        var fixedText = Encoding.UTF8.GetString(fixedYaml);
+        await Assert.That(fixedText).Contains("name: test");
+        await Assert.That(fixedText).DoesNotContain("NAME:");
+        result.Arena?.Dispose();
+    }
+
+    [Test]
+    public async Task Parse_JobUnknownKey_Fix_WhenSuggestionFound()
+    {
+        // Job key "default" → "defaults": fix should replace key bytes
+        var yaml = NormalizeEol("""
+        on: push
+        jobs:
+          build:
+            runs-on: ubuntu-latest
+            default:
+              run:
+                shell: bash
+            steps:
+              - run: echo hi
+        """);
+        var sourceBytes = Encoding.UTF8.GetBytes(yaml);
+        var result = WorkflowParser.Parse(sourceBytes, "fix-job-key.yml");
+        var diag = result.Diagnostics.FirstOrDefault(x => x.Message.Contains("did you mean \"defaults\"?", StringComparison.Ordinal));
+        await Assert.That(diag.Message).IsNotNull();
+
+        await Assert.That(diag.Fix is not null).IsTrue();
+        var fixedYaml = Seiton.Core.Linting.Fixing.FixEngine.Apply(sourceBytes, [diag.Fix!.Value]);
+        var fixedText = Encoding.UTF8.GetString(fixedYaml);
+        await Assert.That(fixedText).Contains("defaults:");
+        await Assert.That(fixedText).DoesNotContain("default:");
+        result.Arena?.Dispose();
+    }
+
+    [Test]
+    public async Task Parse_StepUnknownKey_Fix_WhenSuggestionFound()
+    {
+        // Step key "nam" → "name": fix should replace key bytes
+        var yaml = NormalizeEol("""
+        on: push
+        jobs:
+          build:
+            runs-on: ubuntu-latest
+            steps:
+              - run: echo hi
+                nam: test
+        """);
+        var sourceBytes = Encoding.UTF8.GetBytes(yaml);
+        var result = WorkflowParser.Parse(sourceBytes, "fix-step-key.yml");
+        var diag = result.Diagnostics.FirstOrDefault(x => x.Message.Contains("did you mean \"name\"?", StringComparison.Ordinal));
+        await Assert.That(diag.Message).IsNotNull();
+
+        await Assert.That(diag.Fix is not null).IsTrue();
+        var fixedYaml = Seiton.Core.Linting.Fixing.FixEngine.Apply(sourceBytes, [diag.Fix!.Value]);
+        var fixedText = Encoding.UTF8.GetString(fixedYaml);
+        await Assert.That(fixedText).Contains("name: test");
+        await Assert.That(fixedText).DoesNotContain("nam:");
+        result.Arena?.Dispose();
+    }
+
+    [Test]
+    public async Task Parse_ConcurrencyUnknownKey_Fix_WhenSuggestionFound()
+    {
+        // Concurrency key "gropu" → "group": fix should replace key bytes
+        var yaml = NormalizeEol("""
+        on: push
+        concurrency:
+          gropu: ci
+        jobs: {}
+        """);
+        var sourceBytes = Encoding.UTF8.GetBytes(yaml);
+        var result = WorkflowParser.Parse(sourceBytes, "fix-concurrency-key.yml");
+        var diag = result.Diagnostics.FirstOrDefault(x => x.Message.Contains("did you mean \"group\"?", StringComparison.Ordinal));
+        await Assert.That(diag.Message).IsNotNull();
+
+        await Assert.That(diag.Fix is not null).IsTrue();
+        var fixedYaml = Seiton.Core.Linting.Fixing.FixEngine.Apply(sourceBytes, [diag.Fix!.Value]);
+        var fixedText = Encoding.UTF8.GetString(fixedYaml);
+        await Assert.That(fixedText).Contains("group: ci");
+        result.Arena?.Dispose();
+    }
+
+    [Test]
+    public async Task Parse_StrategyUnknownKey_Fix_WhenSuggestionFound()
+    {
+        // Strategy key "matri" → "matrix": fix should replace key bytes
+        var yaml = NormalizeEol("""
+        on: push
+        jobs:
+          build:
+            runs-on: ubuntu-latest
+            strategy:
+              matri:
+                os: [ubuntu-latest]
+            steps:
+              - run: echo hi
+        """);
+        var sourceBytes = Encoding.UTF8.GetBytes(yaml);
+        var result = WorkflowParser.Parse(sourceBytes, "fix-strategy-key.yml");
+        var diag = result.Diagnostics.FirstOrDefault(x => x.Message.Contains("did you mean \"matrix\"?", StringComparison.Ordinal));
+        await Assert.That(diag.Message).IsNotNull();
+
+        await Assert.That(diag.Fix is not null).IsTrue();
+        var fixedYaml = Seiton.Core.Linting.Fixing.FixEngine.Apply(sourceBytes, [diag.Fix!.Value]);
+        var fixedText = Encoding.UTF8.GetString(fixedYaml);
+        await Assert.That(fixedText).Contains("matrix:");
+        result.Arena?.Dispose();
+    }
+
+    [Test]
+    public async Task Parse_ContainerUnknownKey_Fix_WhenSuggestionFound()
+    {
+        // Container key "imag" → "image": fix should replace key bytes
+        var yaml = NormalizeEol("""
+        on: push
+        jobs:
+          build:
+            runs-on: ubuntu-latest
+            container:
+              imag: ubuntu
+            steps:
+              - run: echo hi
+        """);
+        var sourceBytes = Encoding.UTF8.GetBytes(yaml);
+        var result = WorkflowParser.Parse(sourceBytes, "fix-container-key.yml");
+        var diag = result.Diagnostics.FirstOrDefault(x => x.Message.Contains("did you mean \"image\"?", StringComparison.Ordinal));
+        await Assert.That(diag.Message).IsNotNull();
+
+        await Assert.That(diag.Fix is not null).IsTrue();
+        var fixedYaml = Seiton.Core.Linting.Fixing.FixEngine.Apply(sourceBytes, [diag.Fix!.Value]);
+        var fixedText = Encoding.UTF8.GetString(fixedYaml);
+        await Assert.That(fixedText).Contains("image: ubuntu");
+        result.Arena?.Dispose();
+    }
+
+    [Test]
+    public async Task Parse_CredentialsUnknownKey_Fix_WhenSuggestionFound()
+    {
+        // Credentials key "user" → "username": fix should replace key bytes
+        var yaml = NormalizeEol("""
+        on: push
+        jobs:
+          build:
+            runs-on: ubuntu-latest
+            container:
+              image: private.registry/app
+              credentials:
+                usernme: ${{ secrets.USER }}
+                password: ${{ secrets.PASS }}
+            steps:
+              - run: echo hi
+        """);
+        var sourceBytes = Encoding.UTF8.GetBytes(yaml);
+        var result = WorkflowParser.Parse(sourceBytes, "fix-credentials-key.yml");
+        var diag = result.Diagnostics.FirstOrDefault(x => x.Message.Contains("did you mean \"username\"?", StringComparison.Ordinal));
+        await Assert.That(diag.Message).IsNotNull();
+
+        await Assert.That(diag.Fix is not null).IsTrue();
+        var fixedYaml = Seiton.Core.Linting.Fixing.FixEngine.Apply(sourceBytes, [diag.Fix!.Value]);
+        var fixedText = Encoding.UTF8.GetString(fixedYaml);
+        await Assert.That(fixedText).Contains("username:");
+        result.Arena?.Dispose();
+    }
+
+    [Test]
+    public async Task Parse_DefaultsRunUnknownKey_Fix_WhenSuggestionFound()
+    {
+        // defaults.run key "shel" → "shell": fix should replace key bytes
+        var yaml = NormalizeEol("""
+        on: push
+        defaults:
+          run:
+            shel: bash
+        jobs: {}
+        """);
+        var sourceBytes = Encoding.UTF8.GetBytes(yaml);
+        var result = WorkflowParser.Parse(sourceBytes, "fix-defaults-run-key.yml");
+        var diag = result.Diagnostics.FirstOrDefault(x => x.Message.Contains("did you mean \"shell\"?", StringComparison.Ordinal));
+        await Assert.That(diag.Message).IsNotNull();
+
+        await Assert.That(diag.Fix is not null).IsTrue();
+        var fixedYaml = Seiton.Core.Linting.Fixing.FixEngine.Apply(sourceBytes, [diag.Fix!.Value]);
+        var fixedText = Encoding.UTF8.GetString(fixedYaml);
+        await Assert.That(fixedText).Contains("shell: bash");
+        result.Arena?.Dispose();
+    }
+
+    [Test]
+    public async Task Parse_EnvironmentUnknownKey_Fix_WhenSuggestionFound()
+    {
+        // Environment key "nam" → "name": fix should replace key bytes
+        var yaml = NormalizeEol("""
+        on: push
+        jobs:
+          build:
+            runs-on: ubuntu-latest
+            environment:
+              nam: production
+            steps:
+              - run: echo hi
+        """);
+        var sourceBytes = Encoding.UTF8.GetBytes(yaml);
+        var result = WorkflowParser.Parse(sourceBytes, "fix-environment-key.yml");
+        var diag = result.Diagnostics.FirstOrDefault(x => x.Message.Contains("did you mean \"name\"?", StringComparison.Ordinal));
+        await Assert.That(diag.Message).IsNotNull();
+
+        await Assert.That(diag.Fix is not null).IsTrue();
+        var fixedYaml = Seiton.Core.Linting.Fixing.FixEngine.Apply(sourceBytes, [diag.Fix!.Value]);
+        var fixedText = Encoding.UTF8.GetString(fixedYaml);
+        await Assert.That(fixedText).Contains("name: production");
+        result.Arena?.Dispose();
+    }
+
+    [Test]
+    public async Task Parse_RunsOnUnknownKey_Fix_WhenSuggestionFound()
+    {
+        // runs-on key "label" → "labels": fix should replace key bytes
+        var yaml = NormalizeEol("""
+        on: push
+        jobs:
+          build:
+            runs-on:
+              label: [ubuntu-latest]
+            steps:
+              - run: echo hi
+        """);
+        var sourceBytes = Encoding.UTF8.GetBytes(yaml);
+        var result = WorkflowParser.Parse(sourceBytes, "fix-runs-on-key.yml");
+        var diag = result.Diagnostics.FirstOrDefault(x => x.Message.Contains("did you mean \"labels\"?", StringComparison.Ordinal));
+        await Assert.That(diag.Message).IsNotNull();
+
+        await Assert.That(diag.Fix is not null).IsTrue();
+        var fixedYaml = Seiton.Core.Linting.Fixing.FixEngine.Apply(sourceBytes, [diag.Fix!.Value]);
+        var fixedText = Encoding.UTF8.GetString(fixedYaml);
+        await Assert.That(fixedText).Contains("labels:");
+        result.Arena?.Dispose();
+    }
+
+    [Test]
+    public async Task Parse_WorkflowCallUnknownKey_Fix_WhenSuggestionFound()
+    {
+        // workflow_call key "input" → "inputs": fix should replace key bytes
+        var yaml = NormalizeEol("""
+        on:
+          workflow_call:
+            input:
+              name:
+                type: string
+        jobs: {}
+        """);
+        var sourceBytes = Encoding.UTF8.GetBytes(yaml);
+        var result = WorkflowParser.Parse(sourceBytes, "fix-workflow-call-key.yml");
+        var diag = result.Diagnostics.FirstOrDefault(x => x.Message.Contains("did you mean \"inputs\"?", StringComparison.Ordinal));
+        await Assert.That(diag.Message).IsNotNull();
+
+        await Assert.That(diag.Fix is not null).IsTrue();
+        var fixedYaml = Seiton.Core.Linting.Fixing.FixEngine.Apply(sourceBytes, [diag.Fix!.Value]);
+        var fixedText = Encoding.UTF8.GetString(fixedYaml);
+        await Assert.That(fixedText).Contains("inputs:");
+        result.Arena?.Dispose();
+    }
+
+    [Test]
+    public async Task Parse_WorkflowDispatchUnknownKey_Fix_WhenSuggestionFound()
+    {
+        // workflow_dispatch key "input" → "inputs": fix should replace key bytes
+        var yaml = NormalizeEol("""
+        on:
+          workflow_dispatch:
+            input:
+              name:
+                type: string
+        jobs: {}
+        """);
+        var sourceBytes = Encoding.UTF8.GetBytes(yaml);
+        var result = WorkflowParser.Parse(sourceBytes, "fix-workflow-dispatch-key.yml");
+        var diag = result.Diagnostics.FirstOrDefault(x => x.Message.Contains("did you mean \"inputs\"?", StringComparison.Ordinal));
+        await Assert.That(diag.Message).IsNotNull();
+
+        await Assert.That(diag.Fix is not null).IsTrue();
+        var fixedYaml = Seiton.Core.Linting.Fixing.FixEngine.Apply(sourceBytes, [diag.Fix!.Value]);
+        var fixedText = Encoding.UTF8.GetString(fixedYaml);
+        await Assert.That(fixedText).Contains("inputs:");
+        result.Arena?.Dispose();
+    }
+
+    [Test]
+    public async Task Parse_RepositoryDispatchUnknownKey_Fix_WhenSuggestionFound()
+    {
+        // repository_dispatch key "type" → "types": fix should replace key bytes
+        var yaml = NormalizeEol("""
+        on:
+          repository_dispatch:
+            type: [deploy]
+        jobs: {}
+        """);
+        var sourceBytes = Encoding.UTF8.GetBytes(yaml);
+        var result = WorkflowParser.Parse(sourceBytes, "fix-repo-dispatch-key.yml");
+        var diag = result.Diagnostics.FirstOrDefault(x => x.Message.Contains("did you mean \"types\"?", StringComparison.Ordinal));
+        await Assert.That(diag.Message).IsNotNull();
+
+        await Assert.That(diag.Fix is not null).IsTrue();
+        var fixedYaml = Seiton.Core.Linting.Fixing.FixEngine.Apply(sourceBytes, [diag.Fix!.Value]);
+        var fixedText = Encoding.UTF8.GetString(fixedYaml);
+        await Assert.That(fixedText).Contains("types:");
+        result.Arena?.Dispose();
+    }
+
+    [Test]
+    public async Task Parse_ScheduleUnknownKey_Fix_WhenSuggestionFound()
+    {
+        // schedule key "crons" → "cron": fix should replace key bytes
+        var yaml = NormalizeEol("""
+        on:
+          schedule:
+            - crons: '0 0 * * *'
+        jobs: {}
+        """);
+        var sourceBytes = Encoding.UTF8.GetBytes(yaml);
+        var result = WorkflowParser.Parse(sourceBytes, "fix-schedule-key.yml");
+        var diag = result.Diagnostics.FirstOrDefault(x => x.Message.Contains("did you mean \"cron\"?", StringComparison.Ordinal));
+        await Assert.That(diag.Message).IsNotNull();
+
+        await Assert.That(diag.Fix is not null).IsTrue();
+        var fixedYaml = Seiton.Core.Linting.Fixing.FixEngine.Apply(sourceBytes, [diag.Fix!.Value]);
+        var fixedText = Encoding.UTF8.GetString(fixedYaml);
+        await Assert.That(fixedText).Contains("cron:");
+        result.Arena?.Dispose();
+    }
+
+    [Test]
+    public async Task Parse_SnapshotUnknownKey_Fix_WhenSuggestionFound()
+    {
+        // snapshot key "versio" → "version": fix should replace key bytes
+        var yaml = NormalizeEol("""
+        on: push
+        jobs:
+          build:
+            runs-on: ubuntu-latest
+            snapshot:
+              image-name: test
+              versio: "1.0"
+            steps:
+              - run: echo hi
+        """);
+        var sourceBytes = Encoding.UTF8.GetBytes(yaml);
+        var result = WorkflowParser.Parse(sourceBytes, "fix-snapshot-key.yml");
+        var diag = result.Diagnostics.FirstOrDefault(x => x.Message.Contains("did you mean \"version\"?", StringComparison.Ordinal));
+        await Assert.That(diag.Message).IsNotNull();
+
+        await Assert.That(diag.Fix is not null).IsTrue();
+        var fixedYaml = Seiton.Core.Linting.Fixing.FixEngine.Apply(sourceBytes, [diag.Fix!.Value]);
+        var fixedText = Encoding.UTF8.GetString(fixedYaml);
+        await Assert.That(fixedText).Contains("version:");
+        result.Arena?.Dispose();
+    }
+
+    [Test]
+    public async Task Parse_OnUnknownEvent_Fix_WhenSuggestionFound()
+    {
+        // Unknown event "pusH" → "push": fix should replace key bytes
+        var yaml = NormalizeEol("""
+        on: pusH
+        jobs: {}
+        """);
+        var sourceBytes = Encoding.UTF8.GetBytes(yaml);
+        var result = WorkflowParser.Parse(sourceBytes, "fix-unknown-event.yml");
+        var diag = result.Diagnostics.FirstOrDefault(x => x.Message.Contains("did you mean \"push\"?", StringComparison.Ordinal));
+        await Assert.That(diag.Message).IsNotNull();
+
+        await Assert.That(diag.Fix is not null).IsTrue();
+        var fixedYaml = Seiton.Core.Linting.Fixing.FixEngine.Apply(sourceBytes, [diag.Fix!.Value]);
+        var fixedText = Encoding.UTF8.GetString(fixedYaml);
+        await Assert.That(fixedText).Contains("on: push");
+        result.Arena?.Dispose();
+    }
+
+    [Test]
+    public async Task Parse_ActionMetadataTopLevel_Fix_WhenSuggestionFound()
+    {
+        // Action metadata top-level "descriptin" → "description": fix should replace key bytes
+        var yaml = NormalizeEol("""
+        name: test
+        descriptin: A test action
+        runs:
+          using: composite
+          steps:
+            - run: echo hi
+              shell: bash
+        """);
+        var sourceBytes = Encoding.UTF8.GetBytes(yaml);
+        var result = WorkflowParser.Parse(sourceBytes, "action.yml");
+        var diag = result.Diagnostics.FirstOrDefault(x => x.Message.Contains("did you mean \"description\"?", StringComparison.Ordinal));
+        await Assert.That(diag.Message).IsNotNull();
+
+        await Assert.That(diag.Fix is not null).IsTrue();
+        var fixedYaml = Seiton.Core.Linting.Fixing.FixEngine.Apply(sourceBytes, [diag.Fix!.Value]);
+        var fixedText = Encoding.UTF8.GetString(fixedYaml);
+        await Assert.That(fixedText).Contains("description:");
+        result.Arena?.Dispose();
+    }
 }
