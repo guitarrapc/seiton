@@ -274,6 +274,12 @@ internal static class DynamicContextTypeBuilder
     /// Same as <see cref="BuildMatrixOverride"/> but reuses <paramref name="reusableProps"/> to avoid
     /// per-call dictionary allocation. The dictionary is cleared before use.
     /// </summary>
+    /// <remarks>
+    /// The returned <see cref="ExprType"/> holds a reference to <paramref name="reusableProps"/>
+    /// via <c>ExprType.Object(reusableProps, ...)</c>. Because the dictionary is cleared and
+    /// repopulated on each call, callers must treat the returned type as ephemeral — valid only
+    /// until the next call that reuses the same <paramref name="reusableProps"/> instance.
+    /// </remarks>
     internal static (byte[] NameUtf8, ExprType Type) BuildMatrixOverrideInto(
         Dictionary<Utf8String, ExprType> reusableProps,
         Matrix? matrix, AstArena? arena = null, byte[]? utf8Yaml = null)
@@ -637,6 +643,12 @@ internal static class DynamicContextTypeBuilder
     /// Same as <see cref="BuildNeedsOverride"/> but reuses <paramref name="reusableProps"/> to avoid
     /// per-call dictionary allocation. The dictionary is cleared before use.
     /// </summary>
+    /// <remarks>
+    /// The returned <see cref="ExprType"/> holds a reference to <paramref name="reusableProps"/>
+    /// via <c>ExprType.Object(reusableProps, ...)</c>. Because the dictionary is cleared and
+    /// repopulated on each call, callers must treat the returned type as ephemeral — valid only
+    /// until the next call that reuses the same <paramref name="reusableProps"/> instance.
+    /// </remarks>
     internal static (byte[] NameUtf8, ExprType Type) BuildNeedsOverrideInto(
         Dictionary<Utf8String, ExprType> reusableProps,
         StringNodeId[]? needs,

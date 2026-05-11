@@ -129,25 +129,18 @@ public static class PlaygroundLintRunner
             // NOTE: Incremental path arena is NOT disposed — IncrementalParseContext owns it for reuse
             var written = JsonBuffer.WrittenSpan;
 
-            // Reuse previous buffer when possible to avoid per-call byte[] allocation
+            // Reuse previous buffer when content is identical to avoid per-call byte[] allocation.
+            // When content differs we always allocate a new array so that callers who retain
+            // a previous result never observe their buffer mutating.
             byte[] result;
-            if (_lastJsonOutput is not null && _lastJsonOutput.Length == written.Length)
+            if (_lastJsonOutput is not null && written.SequenceEqual(_lastJsonOutput))
             {
-                if (written.SequenceEqual(_lastJsonOutput))
-                {
-                    // Content identical — return cached output (zero alloc)
-                    result = _lastJsonOutput;
-                }
-                else
-                {
-                    // Same length, different content — overwrite in place (zero alloc)
-                    written.CopyTo(_lastJsonOutput);
-                    result = _lastJsonOutput;
-                }
+                // Content identical — return cached output (zero alloc)
+                result = _lastJsonOutput;
             }
             else
             {
-                // Length changed — must allocate
+                // Content or length changed — allocate new array
                 result = written.ToArray();
             }
 

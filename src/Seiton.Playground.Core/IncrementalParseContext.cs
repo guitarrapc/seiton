@@ -1007,9 +1007,10 @@ public sealed class IncrementalParseContext
             return cmp != 0 ? cmp : string.Compare(a.Message, b.Message, StringComparison.Ordinal);
         });
 
-        // Cache per-job diagnostics from merged result
-        CacheJobDiagnostics(new DiagnosticList(System.Runtime.InteropServices.CollectionsMarshal.AsSpan(merged).ToArray()));
-        return System.Runtime.InteropServices.CollectionsMarshal.AsSpan(merged);
+        // Cache per-job diagnostics from merged result — reuse the same materialized array
+        var mergedArray = System.Runtime.InteropServices.CollectionsMarshal.AsSpan(merged).ToArray();
+        CacheJobDiagnostics(new DiagnosticList(mergedArray));
+        return mergedArray;
     }
 
     /// <summary>
@@ -1034,6 +1035,8 @@ public sealed class IncrementalParseContext
         var finalDiagnostics = MergeDiagnosticsWithCache(lintResult.Diagnostics, skipJobs);
 
         // Serialize to JSON and parse into elements (matching PlaygroundLintRunner format)
+        // MergeDiagnosticsWithCache returns a span backed by either the DiagnosticList or a materialized array,
+        // so ToArray() here is the only copy for this path.
         return SerializeDiagnosticsToJson(new DiagnosticList(finalDiagnostics.ToArray()));
     }
 
