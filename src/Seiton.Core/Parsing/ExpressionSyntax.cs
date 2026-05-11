@@ -44,9 +44,9 @@ public readonly record struct ExpressionNode(
 /// <summary>Result of parsing a GitHub Actions expression string.</summary>
 public readonly record struct ExpressionParseResult(
     int RootNode,
-    ExpressionNode[] Nodes,
-    int[] Arguments,
-    Diagnostic[] Diagnostics)
+    ReadOnlyMemory<ExpressionNode> Nodes,
+    ReadOnlyMemory<int> Arguments,
+    ReadOnlyMemory<Diagnostic> Diagnostics)
 {
     /// <summary>Gets whether the parse produced a valid root node.</summary>
     public bool HasRoot => RootNode >= 0;

@@ -17,11 +17,48 @@ public static class ExpressionParser
             parser.AddError($"unexpected token at position {parser.Position}");
         }
 
+        // Detach non-empty buffers to avoid ToArray copy; empty ones returned to pool by Dispose
+        var nodesCount = parser.NodesAsSpan().Length;
+        ReadOnlyMemory<ExpressionNode> nodes;
+        if (nodesCount > 0)
+        {
+            var (arr, count) = parser.NodesDetach();
+            nodes = new ReadOnlyMemory<ExpressionNode>(arr, 0, count);
+        }
+        else
+        {
+            nodes = default;
+        }
+
+        var argsCount = parser.ArgsAsSpan().Length;
+        ReadOnlyMemory<int> args;
+        if (argsCount > 0)
+        {
+            var (arr, count) = parser.ArgsDetach();
+            args = new ReadOnlyMemory<int>(arr, 0, count);
+        }
+        else
+        {
+            args = default;
+        }
+
+        var diagsCount = parser.DiagnosticsAsSpan().Length;
+        ReadOnlyMemory<Diagnostic> diags;
+        if (diagsCount > 0)
+        {
+            var (arr, count) = parser.DiagnosticsDetach();
+            diags = new ReadOnlyMemory<Diagnostic>(arr, 0, count);
+        }
+        else
+        {
+            diags = default;
+        }
+
         return new ExpressionParseResult(
             RootNode: root,
-            Nodes: parser.NodesToArray(),
-            Arguments: parser.ArgumentsToArray(),
-            Diagnostics: parser.DiagnosticsToArray());
+            Nodes: nodes,
+            Arguments: args,
+            Diagnostics: diags);
     }
 
     /// <summary>
@@ -589,10 +626,13 @@ public static class ExpressionParser
         }
 
         public ExpressionNode[] NodesToArray() => _nodes.ToArray();
+        public (ExpressionNode[] Array, int Count) NodesDetach() => _nodes.DetachArray();
 
         public int[] ArgumentsToArray() => _args.ToArray();
+        public (int[] Array, int Count) ArgsDetach() => _args.DetachArray();
 
         public Diagnostic[] DiagnosticsToArray() => _diagnostics.ToArray();
+        public (Diagnostic[] Array, int Count) DiagnosticsDetach() => _diagnostics.DetachArray();
 
         public ReadOnlySpan<ExpressionNode> NodesAsSpan() => _nodes.AsSpan();
 

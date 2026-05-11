@@ -292,3 +292,39 @@ CoreLintBenchmark: 回帰なし（全サイズで Allocated 同値）
 **予想との差分**:
 - 予想: ~30-50% 削減 → 実測: **~1-6%** — Phase 1 で expression cache が reused source 上で既に効いていたため、残存する expression 再パースの量が予想より小さかった。PartialChange では skip された job の expression は lint 自体が走らず、FullChange では全 expression が新規だが 2 回目以降のイテレーションでキャッシュヒットする。
 - 改善幅は控えめだが、キャッシュが source 変更を跨いで生存するようになったことで、同一 expression の再パースを完全に防止する効果がある。
+
+### Phase 3 結果 (2026-05-12)
+
+**アプローチ**: `ExpressionParseResult` のフィールドを `T[]` から `ReadOnlyMemory<T>` に変更し、`ExpressionParser.Parse()` で `PooledBuffer.DetachArray()` を使用して `ToArray()` コピーを回避。downstream の全メソッドシグネチャを `ExpressionNode[]`/`int[]` → `ReadOnlySpan<ExpressionNode>`/`ReadOnlySpan<int>` に変更。
+
+**変更内容**:
+1. `ExpressionSyntax.cs` — `ExpressionParseResult` のフィールドを `ReadOnlyMemory<T>` に変更
+2. `ExpressionParser.cs` — `Parse()` で `DetachArray()` を使用。空バッファは pool に返却し、非空バッファのみ detach
+3. 18 ファイルで約 90 箇所のメソッドシグネチャ・call site 変更（`.Span` 追加、パラメータ型変更）
+4. `WorkflowSecretsRule.cs` / `JobSecretsRule.cs` — delegate 型は `ReadOnlySpan<T>` を取れないため `ReadOnlyMemory<T>` に変更
+
+**変更ファイル**:
+- `src/Seiton.Core/Parsing/ExpressionSyntax.cs`, `ExpressionParser.cs`, `ExpressionSemanticAnalyzer.cs`, `ExpressionExtractor.cs`, `ExpressionVisitor.cs`, `DynamicContextTypeBuilder.cs`
+- `src/Seiton.Core/Linting/Rules/` — FakeTernaryRule, IfCondRule, JobSecretsRule, WorkflowSecretsRule, SecretsOutsideEnvRule, UnredactedSecretsRule, SecretsWholeContextAccessRule, ExprUndefinedVarRule, RunContextDirectUseAnalyzer, RunEnvContextDirectUseRule, RunSecretsContextDirectUseRule, RunInputsContextDirectUseRule, TemplateInjectionRule
+- `tests/Seiton.Core.Tests/ExpressionTests.cs`
+
+**テスト結果**: 全テスト通過 (1529/1529)
+
+**ベンチマーク結果**:
+
+CoreLintBenchmark: 回帰なし（全サイズで Allocated 同値）
+
+PlaygroundLintBenchmark: 回帰なし（実質ゼロ変化）
+
+| シナリオ | Size | Phase 2 | Phase 3 | 変化 |
+|---|---|---|---|---|
+| PartialChange | Small | 144,560 B | 144,560 B | 0% |
+| FullChange | Small | 65,470 B | 65,470 B | 0% |
+| PartialChange | Large | 617,956 B | 617,369 B | -0.1% |
+| FullChange | Large | 407,498 B | 407,498 B | 0% |
+
+**予想との差分**:
+- 予想: ~14% 削減 (Large FixEnabled=false: 717 KB → ~600 KB) → 実測: **0%**
+- Phase 2 でキャッシュが source 変更を跨いで生存するため、BenchmarkDotNet の warmup 中に全 expression がキャッシュされ、measured iterations では `Parse()` 自体が呼ばれない。`DetachArray()` は初回パース時のみ効果があるが、warmup で吸収される。
+- 実際のアロケーション改善はコールドスタート（初回 lint 実行）でのみ発生。150 unique expressions × ~120 bytes/expression ≈ ~18 KB の `ToArray()` コピーが回避される。
+- 主な価値はアロケーション削減ではなく、**アーキテクチャ改善**: `ExpressionParseResult` が ArrayPool backed `ReadOnlyMemory<T>` を使用し、GC-tracked ヒープ確保を回避する設計に移行。

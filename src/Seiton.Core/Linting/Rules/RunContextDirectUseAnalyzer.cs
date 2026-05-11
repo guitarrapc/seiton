@@ -221,8 +221,8 @@ internal static class RunContextDirectUseAnalyzer
     internal static bool ContainsContextRootReference(
         int nodeId,
         int parentId,
-        ExpressionNode[] nodes,
-        int[] arguments,
+        ReadOnlySpan<ExpressionNode> nodes,
+        ReadOnlySpan<int> arguments,
         ReadOnlySpan<byte> expression,
         ReadOnlySpan<byte> rootToken)
     {
@@ -256,8 +256,8 @@ internal static class RunContextDirectUseAnalyzer
     private static bool ContainsContextRootReferenceInFunction(
         ExpressionNode functionCallNode,
         int functionCallNodeId,
-        ExpressionNode[] nodes,
-        int[] arguments,
+        ReadOnlySpan<ExpressionNode> nodes,
+        ReadOnlySpan<int> arguments,
         ReadOnlySpan<byte> expression,
         ReadOnlySpan<byte> rootToken)
     {

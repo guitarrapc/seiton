@@ -27,7 +27,7 @@ public sealed class ExpressionTests
 
         await Assert.That(result.Diagnostics).IsEmpty();
         await Assert.That(result.HasRoot).IsTrue();
-        await Assert.That(result.Nodes[result.RootNode].Kind).IsEqualTo(ExpressionNodeKind.Binary);
+        await Assert.That(result.Nodes.Span[result.RootNode].Kind).IsEqualTo(ExpressionNodeKind.Binary);
     }
 
     [Test]
@@ -45,7 +45,7 @@ public sealed class ExpressionTests
 
         await Assert.That(result.Diagnostics).IsEmpty();
         await Assert.That(result.HasRoot).IsTrue();
-        await Assert.That(result.Nodes[result.RootNode].Kind).IsEqualTo(ExpressionNodeKind.MemberAccess);
+        await Assert.That(result.Nodes.Span[result.RootNode].Kind).IsEqualTo(ExpressionNodeKind.MemberAccess);
     }
 
     [Test]
@@ -65,7 +65,7 @@ public sealed class ExpressionTests
 
         await Assert.That(result.Diagnostics).IsEmpty();
         await Assert.That(result.HasRoot).IsTrue();
-        await Assert.That(result.Nodes[result.RootNode].Kind).IsEqualTo(ExpressionNodeKind.IndexAccess);
+        await Assert.That(result.Nodes.Span[result.RootNode].Kind).IsEqualTo(ExpressionNodeKind.IndexAccess);
     }
 
     [Test]
@@ -104,7 +104,7 @@ public sealed class ExpressionTests
 
         var result = ExpressionExtractor.ExtractAndParse(Encoding.UTF8.GetBytes(yaml));
 
-        await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("parse error", StringComparison.Ordinal))).IsFalse();
+        await Assert.That(result.Diagnostics.ToArray().Any(x => x.Message.Contains("parse error", StringComparison.Ordinal))).IsFalse();
     }
 
     [Test]
@@ -115,7 +115,7 @@ public sealed class ExpressionTests
         var result = ExpressionExtractor.ExtractAndParse(Encoding.UTF8.GetBytes(yaml));
 
         await Assert.That(result.Occurrences.Length).IsEqualTo(1);
-        await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("expression parse error", StringComparison.Ordinal))).IsTrue();
+        await Assert.That(result.Diagnostics.ToArray().Any(x => x.Message.Contains("expression parse error", StringComparison.Ordinal))).IsTrue();
     }
 
     [Test]
@@ -128,7 +128,7 @@ public sealed class ExpressionTests
             ExpressionValidationContext.JobEnv);
 
         await Assert.That(result.Occurrences.Length).IsEqualTo(1);
-        await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("context 'steps' is not available in job expressions", StringComparison.Ordinal))).IsFalse();
+        await Assert.That(result.Diagnostics.ToArray().Any(x => x.Message.Contains("context 'steps' is not available in job expressions", StringComparison.Ordinal))).IsFalse();
     }
 
     [Test]
@@ -244,7 +244,7 @@ public sealed class ExpressionTests
     {
         var result = ExpressionParser.Parse("1 + 2"u8);
 
-        await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("unexpected token", StringComparison.Ordinal))).IsTrue();
+        await Assert.That(result.Diagnostics.ToArray().Any(x => x.Message.Contains("unexpected token", StringComparison.Ordinal))).IsTrue();
     }
 
     [Test]
@@ -252,7 +252,7 @@ public sealed class ExpressionTests
     {
         var result = ExpressionParser.Parse("-1"u8);
 
-        await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("unexpected token '-'", StringComparison.Ordinal))).IsTrue();
+        await Assert.That(result.Diagnostics.ToArray().Any(x => x.Message.Contains("unexpected token '-'", StringComparison.Ordinal))).IsTrue();
     }
 
     // InferType: literal nodes
@@ -263,7 +263,7 @@ public sealed class ExpressionTests
         var expression = "'hello'"u8;
         var parseResult = ExpressionParser.Parse(expression);
 
-        var type = ExpressionSemanticAnalyzer.InferType(parseResult.RootNode, parseResult.Nodes, parseResult.Arguments, expression);
+        var type = ExpressionSemanticAnalyzer.InferType(parseResult.RootNode, parseResult.Nodes.Span, parseResult.Arguments.Span, expression);
 
         await Assert.That(type).IsEqualTo(ExprType.String);
     }
@@ -274,7 +274,7 @@ public sealed class ExpressionTests
         var expression = "42"u8;
         var parseResult = ExpressionParser.Parse(expression);
 
-        var type = ExpressionSemanticAnalyzer.InferType(parseResult.RootNode, parseResult.Nodes, parseResult.Arguments, expression);
+        var type = ExpressionSemanticAnalyzer.InferType(parseResult.RootNode, parseResult.Nodes.Span, parseResult.Arguments.Span, expression);
 
         await Assert.That(type).IsEqualTo(ExprType.Number);
     }
@@ -285,7 +285,7 @@ public sealed class ExpressionTests
         var expression = "true"u8;
         var parseResult = ExpressionParser.Parse(expression);
 
-        var type = ExpressionSemanticAnalyzer.InferType(parseResult.RootNode, parseResult.Nodes, parseResult.Arguments, expression);
+        var type = ExpressionSemanticAnalyzer.InferType(parseResult.RootNode, parseResult.Nodes.Span, parseResult.Arguments.Span, expression);
 
         await Assert.That(type).IsEqualTo(ExprType.Bool);
     }
@@ -296,7 +296,7 @@ public sealed class ExpressionTests
         var expression = "null"u8;
         var parseResult = ExpressionParser.Parse(expression);
 
-        var type = ExpressionSemanticAnalyzer.InferType(parseResult.RootNode, parseResult.Nodes, parseResult.Arguments, expression);
+        var type = ExpressionSemanticAnalyzer.InferType(parseResult.RootNode, parseResult.Nodes.Span, parseResult.Arguments.Span, expression);
 
         await Assert.That(type).IsEqualTo(ExprType.Null);
     }
@@ -309,7 +309,7 @@ public sealed class ExpressionTests
         var expression = "!cancelled()"u8;
         var parseResult = ExpressionParser.Parse(expression);
 
-        var type = ExpressionSemanticAnalyzer.InferType(parseResult.RootNode, parseResult.Nodes, parseResult.Arguments, expression);
+        var type = ExpressionSemanticAnalyzer.InferType(parseResult.RootNode, parseResult.Nodes.Span, parseResult.Arguments.Span, expression);
 
         await Assert.That(type).IsEqualTo(ExprType.Bool);
     }
@@ -320,7 +320,7 @@ public sealed class ExpressionTests
         var expression = "github.ref == 'refs/heads/main'"u8;
         var parseResult = ExpressionParser.Parse(expression);
 
-        var type = ExpressionSemanticAnalyzer.InferType(parseResult.RootNode, parseResult.Nodes, parseResult.Arguments, expression);
+        var type = ExpressionSemanticAnalyzer.InferType(parseResult.RootNode, parseResult.Nodes.Span, parseResult.Arguments.Span, expression);
 
         await Assert.That(type).IsEqualTo(ExprType.Bool);
     }
@@ -332,7 +332,7 @@ public sealed class ExpressionTests
         var expression = "success() && github.event_name == 'push'"u8;
         var parseResult = ExpressionParser.Parse(expression);
 
-        var type = ExpressionSemanticAnalyzer.InferType(parseResult.RootNode, parseResult.Nodes, parseResult.Arguments, expression);
+        var type = ExpressionSemanticAnalyzer.InferType(parseResult.RootNode, parseResult.Nodes.Span, parseResult.Arguments.Span, expression);
 
         await Assert.That(type).IsEqualTo(ExprType.Any);
     }
@@ -345,7 +345,7 @@ public sealed class ExpressionTests
         var expression = "contains(github.ref, 'main')"u8;
         var parseResult = ExpressionParser.Parse(expression);
 
-        var type = ExpressionSemanticAnalyzer.InferType(parseResult.RootNode, parseResult.Nodes, parseResult.Arguments, expression);
+        var type = ExpressionSemanticAnalyzer.InferType(parseResult.RootNode, parseResult.Nodes.Span, parseResult.Arguments.Span, expression);
 
         await Assert.That(type).IsEqualTo(ExprType.Bool);
     }
@@ -356,7 +356,7 @@ public sealed class ExpressionTests
         var expression = "format('Hello {0}', github.actor)"u8;
         var parseResult = ExpressionParser.Parse(expression);
 
-        var type = ExpressionSemanticAnalyzer.InferType(parseResult.RootNode, parseResult.Nodes, parseResult.Arguments, expression);
+        var type = ExpressionSemanticAnalyzer.InferType(parseResult.RootNode, parseResult.Nodes.Span, parseResult.Arguments.Span, expression);
 
         await Assert.That(type).IsEqualTo(ExprType.String);
     }
@@ -367,7 +367,7 @@ public sealed class ExpressionTests
         var expression = "fromJson(steps.build.outputs.matrix)"u8;
         var parseResult = ExpressionParser.Parse(expression);
 
-        var type = ExpressionSemanticAnalyzer.InferType(parseResult.RootNode, parseResult.Nodes, parseResult.Arguments, expression);
+        var type = ExpressionSemanticAnalyzer.InferType(parseResult.RootNode, parseResult.Nodes.Span, parseResult.Arguments.Span, expression);
 
         await Assert.That(type).IsEqualTo(ExprType.Any);
     }
@@ -378,7 +378,7 @@ public sealed class ExpressionTests
         var expression = "fromJson('{\"enabled\":true}').enabled"u8;
         var parseResult = ExpressionParser.Parse(expression);
 
-        var type = ExpressionSemanticAnalyzer.InferType(parseResult.RootNode, parseResult.Nodes, parseResult.Arguments, expression);
+        var type = ExpressionSemanticAnalyzer.InferType(parseResult.RootNode, parseResult.Nodes.Span, parseResult.Arguments.Span, expression);
 
         await Assert.That(type).IsEqualTo(ExprType.Bool);
     }
@@ -389,7 +389,7 @@ public sealed class ExpressionTests
         var expression = "fromJson('[1,2,3]')[0]"u8;
         var parseResult = ExpressionParser.Parse(expression);
 
-        var type = ExpressionSemanticAnalyzer.InferType(parseResult.RootNode, parseResult.Nodes, parseResult.Arguments, expression);
+        var type = ExpressionSemanticAnalyzer.InferType(parseResult.RootNode, parseResult.Nodes.Span, parseResult.Arguments.Span, expression);
 
         await Assert.That(type).IsEqualTo(ExprType.Number);
     }
@@ -402,7 +402,7 @@ public sealed class ExpressionTests
         var expression = "github.ref"u8;
         var parseResult = ExpressionParser.Parse(expression);
 
-        var type = ExpressionSemanticAnalyzer.InferType(parseResult.RootNode, parseResult.Nodes, parseResult.Arguments, expression);
+        var type = ExpressionSemanticAnalyzer.InferType(parseResult.RootNode, parseResult.Nodes.Span, parseResult.Arguments.Span, expression);
 
         await Assert.That(type).IsEqualTo(ExprType.String);
     }
@@ -413,7 +413,7 @@ public sealed class ExpressionTests
         var expression = "github.ref_protected"u8;
         var parseResult = ExpressionParser.Parse(expression);
 
-        var type = ExpressionSemanticAnalyzer.InferType(parseResult.RootNode, parseResult.Nodes, parseResult.Arguments, expression);
+        var type = ExpressionSemanticAnalyzer.InferType(parseResult.RootNode, parseResult.Nodes.Span, parseResult.Arguments.Span, expression);
 
         await Assert.That(type).IsEqualTo(ExprType.Bool);
     }
@@ -424,7 +424,7 @@ public sealed class ExpressionTests
         var expression = "github.retention_days"u8;
         var parseResult = ExpressionParser.Parse(expression);
 
-        var type = ExpressionSemanticAnalyzer.InferType(parseResult.RootNode, parseResult.Nodes, parseResult.Arguments, expression);
+        var type = ExpressionSemanticAnalyzer.InferType(parseResult.RootNode, parseResult.Nodes.Span, parseResult.Arguments.Span, expression);
 
         await Assert.That(type).IsEqualTo(ExprType.String);
     }
@@ -435,7 +435,7 @@ public sealed class ExpressionTests
         var expression = "job.status"u8;
         var parseResult = ExpressionParser.Parse(expression);
 
-        var type = ExpressionSemanticAnalyzer.InferType(parseResult.RootNode, parseResult.Nodes, parseResult.Arguments, expression);
+        var type = ExpressionSemanticAnalyzer.InferType(parseResult.RootNode, parseResult.Nodes.Span, parseResult.Arguments.Span, expression);
 
         await Assert.That(type).IsEqualTo(ExprType.String);
     }
@@ -446,7 +446,7 @@ public sealed class ExpressionTests
         var expression = "runner.os"u8;
         var parseResult = ExpressionParser.Parse(expression);
 
-        var type = ExpressionSemanticAnalyzer.InferType(parseResult.RootNode, parseResult.Nodes, parseResult.Arguments, expression);
+        var type = ExpressionSemanticAnalyzer.InferType(parseResult.RootNode, parseResult.Nodes.Span, parseResult.Arguments.Span, expression);
 
         await Assert.That(type).IsEqualTo(ExprType.String);
     }
@@ -457,7 +457,7 @@ public sealed class ExpressionTests
         var expression = "env.MY_VAR"u8;
         var parseResult = ExpressionParser.Parse(expression);
 
-        var type = ExpressionSemanticAnalyzer.InferType(parseResult.RootNode, parseResult.Nodes, parseResult.Arguments, expression);
+        var type = ExpressionSemanticAnalyzer.InferType(parseResult.RootNode, parseResult.Nodes.Span, parseResult.Arguments.Span, expression);
 
         await Assert.That(type).IsEqualTo(ExprType.String);
     }
@@ -468,7 +468,7 @@ public sealed class ExpressionTests
         var expression = "github.event.pull_request"u8;
         var parseResult = ExpressionParser.Parse(expression);
 
-        var type = ExpressionSemanticAnalyzer.InferType(parseResult.RootNode, parseResult.Nodes, parseResult.Arguments, expression);
+        var type = ExpressionSemanticAnalyzer.InferType(parseResult.RootNode, parseResult.Nodes.Span, parseResult.Arguments.Span, expression);
 
         await Assert.That(type).IsEqualTo(ExprType.Any);
     }
@@ -479,7 +479,7 @@ public sealed class ExpressionTests
         var expression = "github"u8;
         var parseResult = ExpressionParser.Parse(expression);
 
-        var type = ExpressionSemanticAnalyzer.InferType(parseResult.RootNode, parseResult.Nodes, parseResult.Arguments, expression);
+        var type = ExpressionSemanticAnalyzer.InferType(parseResult.RootNode, parseResult.Nodes.Span, parseResult.Arguments.Span, expression);
 
         await Assert.That(type is ObjectExprType).IsTrue();
     }
@@ -590,8 +590,7 @@ public sealed class ExpressionTests
 
         ExpressionVisitor.VisitExprNode(
             parseResult.RootNode,
-            parseResult.Nodes,
-            parseResult.Arguments,
+            parseResult.Nodes.Span, parseResult.Arguments.Span,
             (_, node, _, entering) => calls.Add((entering, node.Kind)));
 
         await Assert.That(calls.Count).IsEqualTo(2);
@@ -609,8 +608,7 @@ public sealed class ExpressionTests
 
         ExpressionVisitor.VisitExprNode(
             parseResult.RootNode,
-            parseResult.Nodes,
-            parseResult.Arguments,
+            parseResult.Nodes.Span, parseResult.Arguments.Span,
             (_, node, _, entering) =>
             {
                 if (entering) visitedKinds.Add(node.Kind);
@@ -643,7 +641,7 @@ public sealed class ExpressionTests
     private static List<string> CollectIdentifierNames(ReadOnlySpan<byte> expressionUtf8, ExpressionParseResult parseResult)
     {
         var visitor = new IdentifierNamesVisitor { ExpressionUtf8 = expressionUtf8, Identifiers = new List<string>() };
-        ExpressionVisitor.VisitExprNode(parseResult.RootNode, parseResult.Nodes, parseResult.Arguments, ref visitor);
+        ExpressionVisitor.VisitExprNode(parseResult.RootNode, parseResult.Nodes.Span, parseResult.Arguments.Span, ref visitor);
         return visitor.Identifiers;
     }
 
@@ -675,8 +673,7 @@ public sealed class ExpressionTests
 
         ExpressionVisitor.VisitExprNode(
             parseResult.RootNode,
-            parseResult.Nodes,
-            parseResult.Arguments,
+            parseResult.Nodes.Span, parseResult.Arguments.Span,
             (_, node, _, entering) => log.Add($"{(entering ? "enter" : "leave")}:{node.Kind}"));
 
         // Unary enter must precede its child's enter, and Unary leave must follow its child's leave.
@@ -698,8 +695,7 @@ public sealed class ExpressionTests
 
         ExpressionVisitor.VisitExprNode(
             parseResult.RootNode,
-            parseResult.Nodes,
-            parseResult.Arguments,
+            parseResult.Nodes.Span, parseResult.Arguments.Span,
             (nodeId, _, parentId, entering) =>
             {
                 if (entering) parentMap[nodeId] = parentId;
@@ -768,7 +764,7 @@ public sealed class ExpressionTests
 
         var result = ExpressionExtractor.ExtractAndParse(Encoding.UTF8.GetBytes(yaml));
 
-        await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("parse error", StringComparison.Ordinal))).IsFalse();
+        await Assert.That(result.Diagnostics.ToArray().Any(x => x.Message.Contains("parse error", StringComparison.Ordinal))).IsFalse();
     }
 
     // ValidateDynamicPropertyAccess
@@ -2060,8 +2056,7 @@ public sealed class ExpressionTests
 
         var type = ExpressionSemanticAnalyzer.InferType(
             parseResult.RootNode,
-            parseResult.Nodes,
-            parseResult.Arguments,
+            parseResult.Nodes.Span, parseResult.Arguments.Span,
             expression);
 
         await Assert.That(type).IsTypeOf<AnyExprType>();
@@ -2266,7 +2261,7 @@ public sealed class ExpressionTests
     {
         var expression = "\"hello\""u8;
         var parseResult = ExpressionParser.Parse(expression);
-        await Assert.That(parseResult.Diagnostics.Any(d => d.Message.Contains("single quotes", StringComparison.OrdinalIgnoreCase))).IsTrue();
+        await Assert.That(parseResult.Diagnostics.ToArray().Any(d => d.Message.Contains("single quotes", StringComparison.OrdinalIgnoreCase))).IsTrue();
     }
 
     [Test]
@@ -2274,6 +2269,6 @@ public sealed class ExpressionTests
     {
         var expression = "'hello'"u8;
         var parseResult = ExpressionParser.Parse(expression);
-        await Assert.That(parseResult.Diagnostics.Any(d => d.Message.Contains("single quotes", StringComparison.OrdinalIgnoreCase))).IsFalse();
+        await Assert.That(parseResult.Diagnostics.ToArray().Any(d => d.Message.Contains("single quotes", StringComparison.OrdinalIgnoreCase))).IsFalse();
     }
 }

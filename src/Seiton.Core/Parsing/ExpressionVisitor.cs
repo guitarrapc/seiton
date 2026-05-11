@@ -50,8 +50,8 @@ public static class ExpressionVisitor
     /// <param name="parentId">Index of the parent; -1 for the root call.</param>
     public static void VisitExprNode(
         int nodeId,
-        ExpressionNode[] nodes,
-        int[] arguments,
+        ReadOnlySpan<ExpressionNode> nodes,
+        ReadOnlySpan<int> arguments,
         ExprNodeVisitor visitor,
         int parentId = -1)
     {
@@ -109,8 +109,8 @@ public static class ExpressionVisitor
     /// </summary>
     public static void VisitExprNode<TVisitor>(
         int nodeId,
-        ExpressionNode[] nodes,
-        int[] arguments,
+        ReadOnlySpan<ExpressionNode> nodes,
+        ReadOnlySpan<int> arguments,
         ref TVisitor visitor,
         int parentId = -1)
         where TVisitor : IExprNodeVisitor, allows ref struct

@@ -181,14 +181,14 @@ public sealed class TemplateInjectionRule() : RuleBase(RuleId.TemplateInjection)
         int exprAbsoluteOffset,
         int exprLength)
     {
-        CollectUntrustedReferences(parseResult.RootNode, parseResult.Nodes, parseResult.Arguments, expression, safeDepth: 0,
+        CollectUntrustedReferences(parseResult.RootNode, parseResult.Nodes.Span, parseResult.Arguments.Span, expression, safeDepth: 0,
             step, valueSlice, bodyStart, trimOffset, lineStarts, sinkName, exprAbsoluteOffset, exprLength);
     }
 
     private void CollectUntrustedReferences(
         int nodeId,
-        ExpressionNode[] nodes,
-        int[] arguments,
+        ReadOnlySpan<ExpressionNode> nodes,
+        ReadOnlySpan<int> arguments,
         ReadOnlySpan<byte> expression,
         int safeDepth,
         Step step,
@@ -241,8 +241,8 @@ public sealed class TemplateInjectionRule() : RuleBase(RuleId.TemplateInjection)
 
     private void CollectUntrustedReferencesInFunction(
         ExpressionNode functionCallNode,
-        ExpressionNode[] nodes,
-        int[] arguments,
+        ReadOnlySpan<ExpressionNode> nodes,
+        ReadOnlySpan<int> arguments,
         ReadOnlySpan<byte> expression,
         int safeDepth,
         Step step,
@@ -277,8 +277,8 @@ public sealed class TemplateInjectionRule() : RuleBase(RuleId.TemplateInjection)
     /// <summary>Walk a matched untrusted path tree and check IndexAccess right-side sub-expressions for nested untrusted references.</summary>
     private void CollectNestedIndexReferences(
         int nodeId,
-        ExpressionNode[] nodes,
-        int[] arguments,
+        ReadOnlySpan<ExpressionNode> nodes,
+        ReadOnlySpan<int> arguments,
         ReadOnlySpan<byte> expression,
         Step step,
         Utf8Slice valueSlice,
@@ -311,7 +311,7 @@ public sealed class TemplateInjectionRule() : RuleBase(RuleId.TemplateInjection)
     private void EmitUntrustedDiagnostic(
         Step step,
         int nodeId,
-        ExpressionNode[] nodes,
+        ReadOnlySpan<ExpressionNode> nodes,
         ReadOnlySpan<byte> expression,
         Utf8Slice valueSlice,
         int bodyStart,
@@ -946,7 +946,7 @@ public sealed class TemplateInjectionRule() : RuleBase(RuleId.TemplateInjection)
         return -1;
     }
 
-    private static int FindRootIdentifierOffset(int nodeId, ExpressionNode[] nodes)
+    private static int FindRootIdentifierOffset(int nodeId, ReadOnlySpan<ExpressionNode> nodes)
     {
         var current = nodeId;
         while (current >= 0 && current < nodes.Length)
@@ -997,7 +997,7 @@ public sealed class TemplateInjectionRule() : RuleBase(RuleId.TemplateInjection)
         return sb.ToString();
     }
 
-    private static bool IsSafeFunctionCall(ExpressionNode functionCallNode, ExpressionNode[] nodes, ReadOnlySpan<byte> expression)
+    private static bool IsSafeFunctionCall(ExpressionNode functionCallNode, ReadOnlySpan<ExpressionNode> nodes, ReadOnlySpan<byte> expression)
     {
         if (functionCallNode.Left < 0 || functionCallNode.Left >= nodes.Length)
         {
@@ -1016,7 +1016,7 @@ public sealed class TemplateInjectionRule() : RuleBase(RuleId.TemplateInjection)
             || TokenEqualsIgnoreCase(calleeName, "endswith"u8);
     }
 
-    private static bool IsUntrustedReference(int nodeId, ExpressionNode[] nodes, ReadOnlySpan<byte> expression)
+    private static bool IsUntrustedReference(int nodeId, ReadOnlySpan<ExpressionNode> nodes, ReadOnlySpan<byte> expression)
     {
         Span<PathSegment> segments = stackalloc PathSegment[16];
         if (!TryBuildPathSegments(nodeId, nodes, expression, segments, out var count))
@@ -1037,7 +1037,7 @@ public sealed class TemplateInjectionRule() : RuleBase(RuleId.TemplateInjection)
 
     private static bool TryBuildPathSegments(
         int nodeId,
-        ExpressionNode[] nodes,
+        ReadOnlySpan<ExpressionNode> nodes,
         ReadOnlySpan<byte> expression,
         Span<PathSegment> destination,
         out int count)
@@ -1107,7 +1107,7 @@ public sealed class TemplateInjectionRule() : RuleBase(RuleId.TemplateInjection)
         }
     }
 
-    private static bool TryGetIndexSegment(int nodeId, ExpressionNode[] nodes, out Utf8Slice token)
+    private static bool TryGetIndexSegment(int nodeId, ReadOnlySpan<ExpressionNode> nodes, out Utf8Slice token)
     {
         token = default;
         if (nodeId < 0 || nodeId >= nodes.Length)
