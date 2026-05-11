@@ -90,6 +90,12 @@ incremental パス（iterations 1-9）が 1 回あたりに支払うコスト：
 
 ## 3. 改善策
 
+```
+/performance-requirements
+P-1: Small (1 job) の early exit — スキャン前に job 変更を検出を実装してください。
+実装後は、テストとベンチマークで改善を確認してください。plan_partial.md に更新内容を記載して
+```
+
 ### 3.1 即効性のある改善（Low-Hanging Fruit）
 
 #### P-1: Small (1 job) の early exit — スキャン前に job 変更を検出 ✅ 実装済み
