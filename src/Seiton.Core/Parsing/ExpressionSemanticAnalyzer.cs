@@ -1187,9 +1187,10 @@ public static class ExpressionSemanticAnalyzer
             if (!strictObj.TryGetProperty(propertyName, out _))
             {
                 var propNameText = Encoding.UTF8.GetString(propertyName);
+                var rootName = GetChainRootName(node.Left, nodes, expressionUtf8);
                 diagnostics.Add(new Diagnostic(
                     DiagnosticSeverity.Error,
-                    $"property \"{propNameText}\" is not defined in object type {FormatObjectType(strictObj)}",
+                    FormatUndefinedPropertyMessage(propNameText, strictObj, rootName),
                     expressionLocation));
             }
         }
@@ -1333,9 +1334,10 @@ public static class ExpressionSemanticAnalyzer
         if (!strictObj.TryGetProperty(propNameSpan, out _))
         {
             var propNameText = Encoding.UTF8.GetString(propNameSpan);
+            var rootName = GetChainRootName(node.Left, nodes, expressionUtf8);
             diagnostics.Add(new Diagnostic(
                 DiagnosticSeverity.Error,
-                $"property \"{propNameText}\" is not defined in object type {FormatObjectType(strictObj)}",
+                FormatUndefinedPropertyMessage(propNameText, strictObj, rootName),
                 expressionLocation));
         }
     }
@@ -1380,6 +1382,36 @@ public static class ExpressionSemanticAnalyzer
         }
 
         sb.Append('}');
+        return sb.ToString();
+    }
+
+    private static string FormatUndefinedPropertyMessage(string propName, ObjectExprType objectType, string rootName)
+    {
+        var prefix = rootName == "object" ? "" : rootName + " ";
+        var availableProps = FormatPropertyNames(objectType);
+        return $"property \"{propName}\" is not defined in {prefix}object type {FormatObjectType(objectType)}. Available properties are: {availableProps}";
+    }
+
+    private static string FormatPropertyNames(ObjectExprType objectType)
+    {
+        if (objectType.Properties is null || objectType.Properties.Count == 0)
+        {
+            return "none";
+        }
+
+        var sb = new System.Text.StringBuilder();
+        var first = true;
+        foreach (var pair in objectType.Properties)
+        {
+            if (!first)
+            {
+                sb.Append(", ");
+            }
+
+            sb.Append(Encoding.UTF8.GetString(pair.Key.Span));
+            first = false;
+        }
+
         return sb.ToString();
     }
 
@@ -1525,9 +1557,10 @@ public static class ExpressionSemanticAnalyzer
         if (!strictObj.TryGetProperty(propNameSpan, out _))
         {
             var propNameText = Encoding.UTF8.GetString(propNameSpan);
+            var rootName = GetChainRootName(node.Left, nodes, expressionUtf8);
             diagnostics.Add(new Diagnostic(
                 DiagnosticSeverity.Error,
-                $"property \"{propNameText}\" is not defined in object type {FormatObjectType(strictObj)}",
+                FormatUndefinedPropertyMessage(propNameText, strictObj, rootName),
                 expressionLocation));
         }
     }

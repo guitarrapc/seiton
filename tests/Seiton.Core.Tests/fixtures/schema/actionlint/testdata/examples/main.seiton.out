@@ -6,5 +6,5 @@ test.yaml:14:31: action uses 'actions/checkout@v4' is not pinned to a full-lengt
 test.yaml:15:33: action uses 'actions/setup-node@v4' is not pinned to a full-length commit SHA. see https://github.com/actions/setup-node/tree/v4 (fixable with --fix --enable-pin-network) [action]
 test.yaml:17:25: unknown input 'node_version' for action 'actions/setup-node@v4'. available inputs are "architecture", "cache", "cache-dependency-path", "check-latest", "mirror", "mirror-token", "node-version", "node-version-file", "package-manager-cache", "registry-url", "scope", "token". did you mean 'node-version'? see https://github.com/actions/setup-node/tree/v4 [action]
 test.yaml:18:28: action uses 'actions/cache@v4' is not pinned to a full-length commit SHA. see https://github.com/actions/cache/tree/v4 (fixable with --fix --enable-pin-network) [action]
-test.yaml:21:16: property "platform" is not defined in object type {os: string} [expression]
+test.yaml:21:16: property "platform" is not defined in matrix object type {os: string}. Available properties are: os [expression]
 test.yaml:22:13: receiver of object dereference "permissions" must be type of object but got "string" [expression]

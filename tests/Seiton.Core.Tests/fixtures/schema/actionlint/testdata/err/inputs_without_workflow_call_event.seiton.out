@@ -1,1 +1,1 @@
-test.yaml:7:19: property "some_input" is not defined in object type {} [expression]
+test.yaml:7:19: property "some_input" is not defined in inputs object type {}. Available properties are: none [expression]
