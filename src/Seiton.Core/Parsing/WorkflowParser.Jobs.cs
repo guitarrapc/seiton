@@ -1,4 +1,4 @@
-﻿using System.Text;
+using System.Text;
 using Seiton.Core.Generated;
 using Seiton.Core.Parsing.Ast;
 
@@ -506,8 +506,8 @@ public static partial class WorkflowParser
 
             var jobSuggestion = SuggestionHelper.FindClosestFromFormattedKeys(unknownJobKey!, Generated.ExpectedKeys.JobKeys);
             var jobMessage = jobSuggestion is not null
-                ? $"jobs.'{DecodeUtf8(source, jobId)}' unexpected key \"{unknownJobKey}\" for \"job\" section. did you mean \"{jobSuggestion}\"? expected one of {Generated.ExpectedKeys.JobKeys}"
-                : $"jobs.'{DecodeUtf8(source, jobId)}' unexpected key \"{unknownJobKey}\" for \"job\" section. expected one of {Generated.ExpectedKeys.JobKeys}";
+                ? $"jobs.'{DecodeUtf8(source, jobId)}' has unexpected key \"{unknownJobKey}\" for \"job\" section. did you mean \"{jobSuggestion}\"? expected one of {Generated.ExpectedKeys.JobKeys}"
+                : $"jobs.'{DecodeUtf8(source, jobId)}' has unexpected key \"{unknownJobKey}\" for \"job\" section. expected one of {Generated.ExpectedKeys.JobKeys}";
             var jobFix = jobSuggestion is not null
                 ? new DiagnosticFix($"replace '{unknownJobKey}' with '{jobSuggestion}'", [new TextEdit(keySlice.Offset, keySlice.Length, jobSuggestion)])
                 : (DiagnosticFix?)null;
@@ -748,8 +748,8 @@ public static partial class WorkflowParser
             reader.Read();
             var snapSuggestion = SuggestionHelper.FindClosestFromFormattedKeys(unknownSnapKey, Generated.ExpectedKeys.SnapshotKeys);
             var snapMessage = snapSuggestion is not null
-                ? $"{section} unexpected key \"{unknownSnapKey}\" for \"snapshot\" section. did you mean \"{snapSuggestion}\"? expected one of {Generated.ExpectedKeys.SnapshotKeys}"
-                : $"{section} unexpected key \"{unknownSnapKey}\" for \"snapshot\" section. expected one of {Generated.ExpectedKeys.SnapshotKeys}";
+                ? $"{section} has unexpected key \"{unknownSnapKey}\" for \"snapshot\" section. did you mean \"{snapSuggestion}\"? expected one of {Generated.ExpectedKeys.SnapshotKeys}"
+                : $"{section} has unexpected key \"{unknownSnapKey}\" for \"snapshot\" section. expected one of {Generated.ExpectedKeys.SnapshotKeys}";
             var snapFix = snapSuggestion is not null
                 ? new DiagnosticFix($"replace '{unknownSnapKey}' with '{snapSuggestion}'", [new TextEdit(keySlice.Offset, keySlice.Length, snapSuggestion)])
                 : (DiagnosticFix?)null;
@@ -905,8 +905,8 @@ public static partial class WorkflowParser
                 reader.Read();
                 var runsOnSuggestion = SuggestionHelper.FindClosestFromFormattedKeys(unknownRunsOnKey, Generated.ExpectedKeys.RunsOnKeys);
                 var runsOnMessage = runsOnSuggestion is not null
-                    ? $"jobs.'{DecodeUtf8(source, jobId)}'.runs-on unexpected key \"{unknownRunsOnKey}\" for \"runs-on\" section. did you mean \"{runsOnSuggestion}\"? expected one of {Generated.ExpectedKeys.RunsOnKeys}"
-                    : $"jobs.'{DecodeUtf8(source, jobId)}'.runs-on unexpected key \"{unknownRunsOnKey}\" for \"runs-on\" section. expected one of {Generated.ExpectedKeys.RunsOnKeys}";
+                    ? $"jobs.'{DecodeUtf8(source, jobId)}'.runs-on has unexpected key \"{unknownRunsOnKey}\" for \"runs-on\" section. did you mean \"{runsOnSuggestion}\"? expected one of {Generated.ExpectedKeys.RunsOnKeys}"
+                    : $"jobs.'{DecodeUtf8(source, jobId)}'.runs-on has unexpected key \"{unknownRunsOnKey}\" for \"runs-on\" section. expected one of {Generated.ExpectedKeys.RunsOnKeys}";
                 var runsOnFix = runsOnSuggestion is not null
                     ? new DiagnosticFix($"replace '{unknownRunsOnKey}' with '{runsOnSuggestion}'", [new TextEdit(keySlice.Offset, keySlice.Length, runsOnSuggestion)])
                     : (DiagnosticFix?)null;
@@ -1054,8 +1054,8 @@ public static partial class WorkflowParser
             reader.Read();
             var envSuggestion = SuggestionHelper.FindClosestFromFormattedKeys(unknownEnvKey, Generated.ExpectedKeys.EnvironmentKeys);
             var envMessage = envSuggestion is not null
-                ? $"jobs.'{DecodeUtf8(source, jobId)}'.environment unexpected key \"{unknownEnvKey}\" for \"environment\" section. did you mean \"{envSuggestion}\"? expected one of {Generated.ExpectedKeys.EnvironmentKeys}"
-                : $"jobs.'{DecodeUtf8(source, jobId)}'.environment unexpected key \"{unknownEnvKey}\" for \"environment\" section. expected one of {Generated.ExpectedKeys.EnvironmentKeys}";
+                ? $"jobs.'{DecodeUtf8(source, jobId)}'.environment has unexpected key \"{unknownEnvKey}\" for \"environment\" section. did you mean \"{envSuggestion}\"? expected one of {Generated.ExpectedKeys.EnvironmentKeys}"
+                : $"jobs.'{DecodeUtf8(source, jobId)}'.environment has unexpected key \"{unknownEnvKey}\" for \"environment\" section. expected one of {Generated.ExpectedKeys.EnvironmentKeys}";
             var envFix = envSuggestion is not null
                 ? new DiagnosticFix($"replace '{unknownEnvKey}' with '{envSuggestion}'", [new TextEdit(keySlice.Offset, keySlice.Length, envSuggestion)])
                 : (DiagnosticFix?)null;

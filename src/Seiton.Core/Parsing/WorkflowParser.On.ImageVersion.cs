@@ -1,4 +1,4 @@
-﻿// on.image_version — names and versions lists.
+// on.image_version — names and versions lists.
 
 using System.Text;
 using Seiton.Core.Parsing.Ast;
@@ -86,8 +86,8 @@ public static partial class WorkflowParser
             var suggestion = SuggestionHelper.FindClosest(unknown, ImageVersionOptionNames);
             var expectedList = SuggestionHelper.FormatExpectedOptions(ImageVersionOptionNames);
             var message = suggestion is not null
-                ? $"on.image_version unexpected key \"{unknown}\" for \"image_version\" section. did you mean \"{suggestion}\"? expected one of {expectedList}"
-                : $"on.image_version unexpected key \"{unknown}\" for \"image_version\" section. expected one of {expectedList}";
+                ? $"on.image_version has unexpected key \"{unknown}\" for \"image_version\" section. did you mean \"{suggestion}\"? expected one of {expectedList}"
+                : $"on.image_version has unexpected key \"{unknown}\" for \"image_version\" section. expected one of {expectedList}";
             var fix = suggestion is not null
                 ? new DiagnosticFix($"replace '{unknown}' with '{suggestion}'", [new TextEdit(keySlice.Offset, keySlice.Length, suggestion)])
                 : (DiagnosticFix?)null;

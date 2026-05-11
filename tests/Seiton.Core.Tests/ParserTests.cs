@@ -245,7 +245,7 @@ public sealed class ParserTests
         """);
 
         var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "test.yml");
-        await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("jobs.'build' unexpected key \"FOOBAR\" for \"job\" section", StringComparison.Ordinal))).IsTrue();
+        await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("jobs.'build' has unexpected key \"FOOBAR\" for \"job\" section", StringComparison.Ordinal))).IsTrue();
     }
 
     [Test]
@@ -264,7 +264,7 @@ public sealed class ParserTests
         """);
 
         var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "test.yml");
-        await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("jobs.'deploy'.concurrency unexpected key", StringComparison.Ordinal) && x.Message.Contains("for \"concurrency\" section", StringComparison.Ordinal))).IsTrue();
+        await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("jobs.'deploy'.concurrency has unexpected key", StringComparison.Ordinal) && x.Message.Contains("for \"concurrency\" section", StringComparison.Ordinal))).IsTrue();
     }
 
     [Test]
@@ -283,7 +283,7 @@ public sealed class ParserTests
         """);
 
         var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "test.yml");
-        await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("jobs.'build'.snapshot unexpected key \"image-id\" for \"snapshot\" section", StringComparison.Ordinal))).IsTrue();
+        await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("jobs.'build'.snapshot has unexpected key \"image-id\" for \"snapshot\" section", StringComparison.Ordinal))).IsTrue();
     }
 
     [Test]
@@ -303,8 +303,8 @@ public sealed class ParserTests
         """);
 
         var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "test.yml");
-        await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("jobs.'deploy'.defaults unexpected key \"RUN\" for \"defaults\" section. did you mean \"run\"?", StringComparison.Ordinal))).IsTrue();
-        await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("jobs.'deploy'.defaults.run unexpected key", StringComparison.Ordinal) && x.Message.Contains("for \"run\" section", StringComparison.Ordinal))).IsTrue();
+        await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("jobs.'deploy'.defaults has unexpected key \"RUN\" for \"defaults\" section. did you mean \"run\"?", StringComparison.Ordinal))).IsTrue();
+        await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("jobs.'deploy'.defaults.run has unexpected key", StringComparison.Ordinal) && x.Message.Contains("for \"run\" section", StringComparison.Ordinal))).IsTrue();
     }
 
     [Test]
@@ -322,7 +322,7 @@ public sealed class ParserTests
         """);
 
         var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "test.yml");
-        await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("jobs.'build'.strategy unexpected key", StringComparison.Ordinal) && x.Message.Contains("for \"strategy\" section", StringComparison.Ordinal))).IsTrue();
+        await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("jobs.'build'.strategy has unexpected key", StringComparison.Ordinal) && x.Message.Contains("for \"strategy\" section", StringComparison.Ordinal))).IsTrue();
     }
 
     [Test]
@@ -341,7 +341,7 @@ public sealed class ParserTests
         """);
 
         var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "test.yml");
-        await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("jobs.'deploy'.environment unexpected key", StringComparison.Ordinal) && x.Message.Contains("for \"environment\" section", StringComparison.Ordinal))).IsTrue();
+        await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("jobs.'deploy'.environment has unexpected key", StringComparison.Ordinal) && x.Message.Contains("for \"environment\" section", StringComparison.Ordinal))).IsTrue();
     }
 
     [Test]
@@ -360,7 +360,7 @@ public sealed class ParserTests
         """);
 
         var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "test.yml");
-        await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("jobs.'build'.container unexpected key", StringComparison.Ordinal) && x.Message.Contains("for \"container\" section", StringComparison.Ordinal))).IsTrue();
+        await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("jobs.'build'.container has unexpected key", StringComparison.Ordinal) && x.Message.Contains("for \"container\" section", StringComparison.Ordinal))).IsTrue();
     }
 
     [Test]
@@ -382,7 +382,7 @@ public sealed class ParserTests
         """);
 
         var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "test.yml");
-        await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("jobs.'build'.container.credentials unexpected key", StringComparison.Ordinal) && x.Message.Contains("for \"credentials\" section", StringComparison.Ordinal))).IsTrue();
+        await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("jobs.'build'.container.credentials has unexpected key", StringComparison.Ordinal) && x.Message.Contains("for \"credentials\" section", StringComparison.Ordinal))).IsTrue();
     }
 
     [Test]
@@ -402,7 +402,7 @@ public sealed class ParserTests
         """);
 
         var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "test.yml");
-        await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("jobs.'build'.services.'redis' unexpected key", StringComparison.Ordinal) && x.Message.Contains("for \"services\" section", StringComparison.Ordinal))).IsTrue();
+        await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("jobs.'build'.services.'redis' has unexpected key", StringComparison.Ordinal) && x.Message.Contains("for \"services\" section", StringComparison.Ordinal))).IsTrue();
     }
 
     [Test]
@@ -425,7 +425,7 @@ public sealed class ParserTests
         """);
 
         var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "test.yml");
-        await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("jobs.'build'.services.'redis'.credentials unexpected key", StringComparison.Ordinal) && x.Message.Contains("for \"credentials\" section", StringComparison.Ordinal))).IsTrue();
+        await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("jobs.'build'.services.'redis'.credentials has unexpected key", StringComparison.Ordinal) && x.Message.Contains("for \"credentials\" section", StringComparison.Ordinal))).IsTrue();
     }
 
     [Test]
@@ -441,7 +441,7 @@ public sealed class ParserTests
         """);
 
         var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "test.yml");
-        await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("on.workflow_dispatch.inputs unexpected key", StringComparison.Ordinal) && x.Message.Contains("for \"inputs\" section", StringComparison.Ordinal))).IsTrue();
+        await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("on.workflow_dispatch.inputs has unexpected key", StringComparison.Ordinal) && x.Message.Contains("for \"inputs\" section", StringComparison.Ordinal))).IsTrue();
     }
 
     [Test]
@@ -457,7 +457,7 @@ public sealed class ParserTests
         """);
 
         var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "test.yml");
-        await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("on.workflow_call.secrets unexpected key", StringComparison.Ordinal) && x.Message.Contains("for \"secrets\" section", StringComparison.Ordinal))).IsTrue();
+        await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("on.workflow_call.secrets has unexpected key", StringComparison.Ordinal) && x.Message.Contains("for \"secrets\" section", StringComparison.Ordinal))).IsTrue();
     }
 
     [Test]
@@ -491,7 +491,7 @@ public sealed class ParserTests
         """);
 
         var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "test.yml");
-        await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("jobs.'build'.runs-on unexpected key", StringComparison.Ordinal) && x.Message.Contains("for \"runs-on\" section", StringComparison.Ordinal))).IsTrue();
+        await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("jobs.'build'.runs-on has unexpected key", StringComparison.Ordinal) && x.Message.Contains("for \"runs-on\" section", StringComparison.Ordinal))).IsTrue();
     }
 
     [Test]
@@ -843,7 +843,7 @@ public sealed class ParserTests
         jobs: {}
         """);
         var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "on-no-options.yml");
-        await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("on.create unexpected key \"foo\" for \"create\" section. this event does not accept any options", StringComparison.Ordinal))).IsTrue();
+        await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("on.create has unexpected key \"foo\" for \"create\" section. this event does not accept any options", StringComparison.Ordinal))).IsTrue();
     }
 
     [Test]
@@ -909,7 +909,7 @@ public sealed class ParserTests
         jobs: {}
         """);
         var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "on-unknown-option.yml");
-        await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("on.push unexpected key \"unknown-filter\" for \"push\" section", StringComparison.Ordinal))).IsTrue();
+        await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("on.push has unexpected key \"unknown-filter\" for \"push\" section", StringComparison.Ordinal))).IsTrue();
     }
 
     [Test]
@@ -951,7 +951,7 @@ public sealed class ParserTests
         jobs: {}
         """);
         var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "on-unknown-option-no-suggest.yml");
-        var diag = result.Diagnostics.First(x => x.Message.Contains("on.push unexpected key \"xyz\" for \"push\" section", StringComparison.Ordinal));
+        var diag = result.Diagnostics.First(x => x.Message.Contains("on.push has unexpected key \"xyz\" for \"push\" section", StringComparison.Ordinal));
         await Assert.That(diag.Message.Contains("did you mean", StringComparison.Ordinal)).IsFalse();
     }
 
@@ -1003,7 +1003,7 @@ public sealed class ParserTests
         jobs: {}
         """);
         var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "on-unknown-option-no-fix.yml");
-        var diag = result.Diagnostics.First(x => x.Message.Contains("on.push unexpected key \"xyz\" for \"push\" section", StringComparison.Ordinal));
+        var diag = result.Diagnostics.First(x => x.Message.Contains("on.push has unexpected key \"xyz\" for \"push\" section", StringComparison.Ordinal));
         await Assert.That(diag.Fix is null).IsTrue();
     }
 
@@ -1037,7 +1037,7 @@ public sealed class ParserTests
         jobs: {}
         """);
         var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "on-disallowed-option.yml");
-        await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("unexpected key \"paths\" for \"workflow_dispatch\" section. expected \"inputs\"", StringComparison.Ordinal))).IsTrue();
+        await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("has unexpected key \"paths\" for \"workflow_dispatch\" section. expected \"inputs\"", StringComparison.Ordinal))).IsTrue();
     }
 
     [Test]
@@ -1997,7 +1997,7 @@ public sealed class ParserTests
                         entrypoint: [x]
                 jobs: {}
                 """),
-                "on.image_version unexpected key \"entrypoint\" for \"image_version\" section. expected one of \"names\", \"versions\""
+                "on.image_version has unexpected key \"entrypoint\" for \"image_version\" section. expected one of \"names\", \"versions\""
             ),
             (
                 "names-must-be-sequence",
@@ -2247,7 +2247,7 @@ public sealed class ParserTests
         {
             new ErrFixtureExpectation("empty.yaml", ["workflow root must be object"]),
             new ErrFixtureExpectation("empty_on.yaml", ["unknown event"]),
-            new ErrFixtureExpectation("case_sensitive_keys.yaml", ["unexpected key", "at workflow top level", "jobs.'test1' unexpected key"]),
+            new ErrFixtureExpectation("case_sensitive_keys.yaml", ["unexpected key", "at workflow top level", "jobs.'test1' has unexpected key"]),
             new ErrFixtureExpectation("duplicate_keys.yaml", ["is duplicated in"]),
             new ErrFixtureExpectation("invalid_int_at_max_parallel.yaml", ["strategy.max-parallel must be integer"]),
             new ErrFixtureExpectation("invalid_steps.yaml", ["unexpected key", "must run script"]),

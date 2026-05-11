@@ -1,4 +1,4 @@
-﻿using System.Text;
+using System.Text;
 using Seiton.Core.Parsing.Ast;
 
 namespace Seiton.Core.Parsing;
@@ -317,7 +317,7 @@ public static partial class WorkflowParser
                             continue;
                         }
                         // entrypoint/command are service-only keys — report as unexpected for container.
-                        AddError(ref diagnostics, $"{FormatContainerSectionName(source, jobId, serviceName, isService)} unexpected key \"{ContainerDuplicateSubKey(ck)}\" for \"container\" section. expected one of {Generated.ExpectedKeys.ContainerKeys}", keyMark);
+                        AddError(ref diagnostics, $"{FormatContainerSectionName(source, jobId, serviceName, isService)} has unexpected key \"{ContainerDuplicateSubKey(ck)}\" for \"container\" section. expected one of {Generated.ExpectedKeys.ContainerKeys}", keyMark);
                         if (!reader.End) reader.SkipCurrentNode();
                         continue;
                     default:
@@ -335,8 +335,8 @@ public static partial class WorkflowParser
                 : Generated.ExpectedKeys.ContainerKeys;
             var containerSuggestion = SuggestionHelper.FindClosestFromFormattedKeys(unknownKey, expectedKeys);
             var containerMsg = containerSuggestion is not null
-                ? $"{FormatContainerSectionName(source, jobId, serviceName, isService)} unexpected key \"{unknownKey}\" for \"{containerSectionType}\" section. did you mean \"{containerSuggestion}\"? expected one of {expectedKeys}"
-                : $"{FormatContainerSectionName(source, jobId, serviceName, isService)} unexpected key \"{unknownKey}\" for \"{containerSectionType}\" section. expected one of {expectedKeys}";
+                ? $"{FormatContainerSectionName(source, jobId, serviceName, isService)} has unexpected key \"{unknownKey}\" for \"{containerSectionType}\" section. did you mean \"{containerSuggestion}\"? expected one of {expectedKeys}"
+                : $"{FormatContainerSectionName(source, jobId, serviceName, isService)} has unexpected key \"{unknownKey}\" for \"{containerSectionType}\" section. expected one of {expectedKeys}";
             var containerFix = containerSuggestion is not null
                 ? new DiagnosticFix($"replace '{unknownKey}' with '{containerSuggestion}'", [new TextEdit(keySlice.Offset, keySlice.Length, containerSuggestion)])
                 : (DiagnosticFix?)null;
@@ -504,8 +504,8 @@ public static partial class WorkflowParser
             reader.Read();
             var credSuggestion = SuggestionHelper.FindClosestFromFormattedKeys(unknownKey, Generated.ExpectedKeys.CredentialsKeys);
             var credMsg = credSuggestion is not null
-                ? $"{FormatContainerSectionName(source, jobId, serviceName, isService)}.credentials unexpected key \"{unknownKey}\" for \"credentials\" section. did you mean \"{credSuggestion}\"? expected one of {Generated.ExpectedKeys.CredentialsKeys}"
-                : $"{FormatContainerSectionName(source, jobId, serviceName, isService)}.credentials unexpected key \"{unknownKey}\" for \"credentials\" section. expected one of {Generated.ExpectedKeys.CredentialsKeys}";
+                ? $"{FormatContainerSectionName(source, jobId, serviceName, isService)}.credentials has unexpected key \"{unknownKey}\" for \"credentials\" section. did you mean \"{credSuggestion}\"? expected one of {Generated.ExpectedKeys.CredentialsKeys}"
+                : $"{FormatContainerSectionName(source, jobId, serviceName, isService)}.credentials has unexpected key \"{unknownKey}\" for \"credentials\" section. expected one of {Generated.ExpectedKeys.CredentialsKeys}";
             var credFix = credSuggestion is not null
                 ? new DiagnosticFix($"replace '{unknownKey}' with '{credSuggestion}'", [new TextEdit(keySlice.Offset, keySlice.Length, credSuggestion)])
                 : (DiagnosticFix?)null;

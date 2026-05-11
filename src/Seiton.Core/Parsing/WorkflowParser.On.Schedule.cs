@@ -1,4 +1,4 @@
-﻿// on.schedule — scheduled event and cron entry parsing.
+// on.schedule — scheduled event and cron entry parsing.
 
 using System.Text;
 using Seiton.Core.Parsing.Ast;
@@ -133,8 +133,8 @@ public static partial class WorkflowParser
             reader.Read();
             var schedSuggestion = SuggestionHelper.FindClosestFromFormattedKeys(unknown, Generated.ExpectedKeys.ScheduleEntryKeys);
             var schedMsg = schedSuggestion is not null
-                ? $"on.schedule unexpected key \"{unknown}\" for \"schedule\" section. did you mean \"{schedSuggestion}\"? expected one of {Generated.ExpectedKeys.ScheduleEntryKeys}"
-                : $"on.schedule unexpected key \"{unknown}\" for \"schedule\" section. expected one of {Generated.ExpectedKeys.ScheduleEntryKeys}";
+                ? $"on.schedule has unexpected key \"{unknown}\" for \"schedule\" section. did you mean \"{schedSuggestion}\"? expected one of {Generated.ExpectedKeys.ScheduleEntryKeys}"
+                : $"on.schedule has unexpected key \"{unknown}\" for \"schedule\" section. expected one of {Generated.ExpectedKeys.ScheduleEntryKeys}";
             var schedFix = schedSuggestion is not null
                 ? new DiagnosticFix($"replace '{unknown}' with '{schedSuggestion}'", [new TextEdit(keySlice.Offset, keySlice.Length, schedSuggestion)])
                 : (DiagnosticFix?)null;
