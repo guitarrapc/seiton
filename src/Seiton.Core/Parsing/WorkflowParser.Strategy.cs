@@ -1,4 +1,4 @@
-﻿using System.Text;
+using System.Text;
 using Seiton.Core.Parsing.Ast;
 
 namespace Seiton.Core.Parsing;
@@ -153,8 +153,8 @@ public static partial class WorkflowParser
             reader.Read(); // consume key
             var strategySuggestion = SuggestionHelper.FindClosestFromFormattedKeys(unknownKey, Generated.ExpectedKeys.StrategyKeys);
             var strategyMsg = strategySuggestion is not null
-                ? $"jobs.'{DecodeUtf8(source, jobId)}'.strategy unexpected key \"{unknownKey}\" for \"strategy\" section. did you mean \"{strategySuggestion}\"? expected one of {Generated.ExpectedKeys.StrategyKeys}"
-                : $"jobs.'{DecodeUtf8(source, jobId)}'.strategy unexpected key \"{unknownKey}\" for \"strategy\" section. expected one of {Generated.ExpectedKeys.StrategyKeys}";
+                ? $"jobs.'{DecodeUtf8(source, jobId)}'.strategy has unexpected key \"{unknownKey}\" for \"strategy\" section. did you mean \"{strategySuggestion}\"? expected one of {Generated.ExpectedKeys.StrategyKeys}"
+                : $"jobs.'{DecodeUtf8(source, jobId)}'.strategy has unexpected key \"{unknownKey}\" for \"strategy\" section. expected one of {Generated.ExpectedKeys.StrategyKeys}";
             var strategyFix = strategySuggestion is not null
                 ? new DiagnosticFix($"replace '{unknownKey}' with '{strategySuggestion}'", [new TextEdit(keySlice.Offset, keySlice.Length, strategySuggestion)])
                 : (DiagnosticFix?)null;

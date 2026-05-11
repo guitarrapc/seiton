@@ -1040,8 +1040,8 @@ public static partial class WorkflowParser
                     var runPrefix = sectionContext.Length > 0 ? $"{sectionContext}.defaults.run " : "defaults.run ";
                     var runSuggestion = SuggestionHelper.FindClosestFromFormattedKeys(unknownRunKey, Generated.ExpectedKeys.DefaultsRunKeys);
                     var runMessage = runSuggestion is not null
-                        ? $"{runPrefix}unexpected key \"{unknownRunKey}\" for \"run\" section. did you mean \"{runSuggestion}\"? expected one of {Generated.ExpectedKeys.DefaultsRunKeys}"
-                        : $"{runPrefix}unexpected key \"{unknownRunKey}\" for \"run\" section. expected one of {Generated.ExpectedKeys.DefaultsRunKeys}";
+                        ? $"{runPrefix}has unexpected key \"{unknownRunKey}\" for \"run\" section. did you mean \"{runSuggestion}\"? expected one of {Generated.ExpectedKeys.DefaultsRunKeys}"
+                        : $"{runPrefix}has unexpected key \"{unknownRunKey}\" for \"run\" section. expected one of {Generated.ExpectedKeys.DefaultsRunKeys}";
                     var runFix = runSuggestion is not null
                         ? new DiagnosticFix($"replace '{unknownRunKey}' with '{runSuggestion}'", [new TextEdit(runKeySlice.Offset, runKeySlice.Length, runSuggestion)])
                         : (DiagnosticFix?)null;
@@ -1066,8 +1066,8 @@ public static partial class WorkflowParser
             var defaultsPrefix = sectionContext.Length > 0 ? $"{sectionContext}.defaults " : "defaults ";
             var defaultsSuggestion = SuggestionHelper.FindClosestFromFormattedKeys(unknownDefaultsKey, Generated.ExpectedKeys.DefaultsKeys);
             var defaultsMessage = defaultsSuggestion is not null
-                ? $"{defaultsPrefix}unexpected key \"{unknownDefaultsKey}\" for \"defaults\" section. did you mean \"{defaultsSuggestion}\"? expected \"run\""
-                : $"{defaultsPrefix}unexpected key \"{unknownDefaultsKey}\" for \"defaults\" section. expected \"run\"";
+                ? $"{defaultsPrefix}has unexpected key \"{unknownDefaultsKey}\" for \"defaults\" section. did you mean \"{defaultsSuggestion}\"? expected \"run\""
+                : $"{defaultsPrefix}has unexpected key \"{unknownDefaultsKey}\" for \"defaults\" section. expected \"run\"";
             var defaultsFix = defaultsSuggestion is not null
                 ? new DiagnosticFix($"replace '{unknownDefaultsKey}' with '{defaultsSuggestion}'", [new TextEdit(keySlice.Offset, keySlice.Length, defaultsSuggestion)])
                 : (DiagnosticFix?)null;
@@ -1190,8 +1190,8 @@ public static partial class WorkflowParser
             var concurrencyPrefix = sectionContext.Length > 0 ? $"{sectionContext}.concurrency " : "concurrency ";
             var concurrencySuggestion = SuggestionHelper.FindClosestFromFormattedKeys(unknownConcurrencyKey, Generated.ExpectedKeys.ConcurrencyKeys);
             var concurrencyMessage = concurrencySuggestion is not null
-                ? $"{concurrencyPrefix}unexpected key \"{unknownConcurrencyKey}\" for \"concurrency\" section. did you mean \"{concurrencySuggestion}\"? expected one of {Generated.ExpectedKeys.ConcurrencyKeys}"
-                : $"{concurrencyPrefix}unexpected key \"{unknownConcurrencyKey}\" for \"concurrency\" section. expected one of {Generated.ExpectedKeys.ConcurrencyKeys}";
+                ? $"{concurrencyPrefix}has unexpected key \"{unknownConcurrencyKey}\" for \"concurrency\" section. did you mean \"{concurrencySuggestion}\"? expected one of {Generated.ExpectedKeys.ConcurrencyKeys}"
+                : $"{concurrencyPrefix}has unexpected key \"{unknownConcurrencyKey}\" for \"concurrency\" section. expected one of {Generated.ExpectedKeys.ConcurrencyKeys}";
             var concurrencyFix = concurrencySuggestion is not null
                 ? new DiagnosticFix($"replace '{unknownConcurrencyKey}' with '{concurrencySuggestion}'", [new TextEdit(innerKeySlice.Offset, innerKeySlice.Length, concurrencySuggestion)])
                 : (DiagnosticFix?)null;

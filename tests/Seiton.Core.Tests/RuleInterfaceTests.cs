@@ -14305,4 +14305,31 @@ public sealed class RuleInterfaceTests
             result.ParseResult.Arena?.Dispose();
         }
     }
+
+    [Test]
+    public async Task UnexpectedKey_MessageContainsHas()
+    {
+        var yaml = """
+            on:
+              push:
+                BRANCHES: [main]
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - run: echo hello
+            """;
+
+        var parseResult = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "test.yaml");
+        try
+        {
+            var diagnostics = parseResult.Diagnostics.Where(d => d.Message?.Contains("unexpected key", StringComparison.Ordinal) == true).ToList();
+            await Assert.That(diagnostics).IsNotEmpty();
+            await Assert.That(diagnostics[0].Message).Contains("has unexpected key");
+        }
+        finally
+        {
+            parseResult.Arena?.Dispose();
+        }
+    }
 }

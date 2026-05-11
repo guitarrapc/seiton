@@ -1,4 +1,4 @@
-﻿using System.Text;
+using System.Text;
 using Seiton.Core.Parsing.Ast;
 
 namespace Seiton.Core.Parsing;
@@ -172,7 +172,7 @@ public static partial class WorkflowParser
                     case StepMappingKey.Run:
                         if (stepForm == 2) // was action, now becomes run; flag previous primary (uses)
                         {
-                            AddError(ref diagnostics, $"{FormatStepPrefix(source, jobId, stepIndex)} unexpected key \"uses\" for step to run shell command. expected one of {RunStepExpectedKeys}", firstPrimaryMark);
+                            AddError(ref diagnostics, $"{FormatStepPrefix(source, jobId, stepIndex)} has unexpected key \"uses\" for step to run shell command. expected one of {RunStepExpectedKeys}", firstPrimaryMark);
                         }
                         firstPrimaryMark = keyMark;
                         stepForm = 1;
@@ -194,7 +194,7 @@ public static partial class WorkflowParser
                         usesKeyRange = BuildScalarLocation(keyMark, keyLen);
                         if (stepForm == 1) // was run, now becomes action; flag previous primary (run)
                         {
-                            AddError(ref diagnostics, $"{FormatStepPrefix(source, jobId, stepIndex)} unexpected key \"run\" for step to execute action. expected one of {ActionStepExpectedKeys}", firstPrimaryMark);
+                            AddError(ref diagnostics, $"{FormatStepPrefix(source, jobId, stepIndex)} has unexpected key \"run\" for step to execute action. expected one of {ActionStepExpectedKeys}", firstPrimaryMark);
                         }
                         firstPrimaryMark = keyMark;
                         stepForm = 2;
@@ -346,8 +346,8 @@ public static partial class WorkflowParser
             {
                 var stepSuggestion = SuggestionHelper.FindClosestFromFormattedKeys(unknownKey!, ActionStepExpectedKeys);
                 var stepMsg = stepSuggestion is not null
-                    ? $"{FormatStepPrefix(source, jobId, stepIndex)} unexpected key \"{unknownKey}\" for step to execute action. did you mean \"{stepSuggestion}\"? expected one of {ActionStepExpectedKeys}"
-                    : $"{FormatStepPrefix(source, jobId, stepIndex)} unexpected key \"{unknownKey}\" for step to execute action. expected one of {ActionStepExpectedKeys}";
+                    ? $"{FormatStepPrefix(source, jobId, stepIndex)} has unexpected key \"{unknownKey}\" for step to execute action. did you mean \"{stepSuggestion}\"? expected one of {ActionStepExpectedKeys}"
+                    : $"{FormatStepPrefix(source, jobId, stepIndex)} has unexpected key \"{unknownKey}\" for step to execute action. expected one of {ActionStepExpectedKeys}";
                 var stepFix = stepSuggestion is not null
                     ? new DiagnosticFix($"replace '{unknownKey}' with '{stepSuggestion}'", [new TextEdit(unknownKeySlice.Offset, unknownKeySlice.Length, stepSuggestion)])
                     : (DiagnosticFix?)null;
@@ -357,8 +357,8 @@ public static partial class WorkflowParser
             {
                 var stepSuggestion = SuggestionHelper.FindClosestFromFormattedKeys(unknownKey!, RunStepExpectedKeys);
                 var stepMsg = stepSuggestion is not null
-                    ? $"{FormatStepPrefix(source, jobId, stepIndex)} unexpected key \"{unknownKey}\" for step to run shell command. did you mean \"{stepSuggestion}\"? expected one of {RunStepExpectedKeys}"
-                    : $"{FormatStepPrefix(source, jobId, stepIndex)} unexpected key \"{unknownKey}\" for step to run shell command. expected one of {RunStepExpectedKeys}";
+                    ? $"{FormatStepPrefix(source, jobId, stepIndex)} has unexpected key \"{unknownKey}\" for step to run shell command. did you mean \"{stepSuggestion}\"? expected one of {RunStepExpectedKeys}"
+                    : $"{FormatStepPrefix(source, jobId, stepIndex)} has unexpected key \"{unknownKey}\" for step to run shell command. expected one of {RunStepExpectedKeys}";
                 var stepFix = stepSuggestion is not null
                     ? new DiagnosticFix($"replace '{unknownKey}' with '{stepSuggestion}'", [new TextEdit(unknownKeySlice.Offset, unknownKeySlice.Length, stepSuggestion)])
                     : (DiagnosticFix?)null;
@@ -389,8 +389,8 @@ public static partial class WorkflowParser
             {
                 var deferredSuggestion = SuggestionHelper.FindClosestFromFormattedKeys(deferredUnknownKey, ActionStepExpectedKeys);
                 var deferredMsg = deferredSuggestion is not null
-                    ? $"{FormatStepPrefix(source, jobId, stepIndex)} unexpected key \"{deferredUnknownKey}\" for step to execute action. did you mean \"{deferredSuggestion}\"? expected one of {ActionStepExpectedKeys}"
-                    : $"{FormatStepPrefix(source, jobId, stepIndex)} unexpected key \"{deferredUnknownKey}\" for step to execute action. expected one of {ActionStepExpectedKeys}";
+                    ? $"{FormatStepPrefix(source, jobId, stepIndex)} has unexpected key \"{deferredUnknownKey}\" for step to execute action. did you mean \"{deferredSuggestion}\"? expected one of {ActionStepExpectedKeys}"
+                    : $"{FormatStepPrefix(source, jobId, stepIndex)} has unexpected key \"{deferredUnknownKey}\" for step to execute action. expected one of {ActionStepExpectedKeys}";
                 var deferredFix = deferredSuggestion is not null
                     ? new DiagnosticFix($"replace '{deferredUnknownKey}' with '{deferredSuggestion}'", [new TextEdit(deferredUnknownKeySlice.Offset, deferredUnknownKeySlice.Length, deferredSuggestion)])
                     : (DiagnosticFix?)null;
@@ -400,8 +400,8 @@ public static partial class WorkflowParser
             {
                 var deferredSuggestion = SuggestionHelper.FindClosestFromFormattedKeys(deferredUnknownKey, RunStepExpectedKeys);
                 var deferredMsg = deferredSuggestion is not null
-                    ? $"{FormatStepPrefix(source, jobId, stepIndex)} unexpected key \"{deferredUnknownKey}\" for step to run shell command. did you mean \"{deferredSuggestion}\"? expected one of {RunStepExpectedKeys}"
-                    : $"{FormatStepPrefix(source, jobId, stepIndex)} unexpected key \"{deferredUnknownKey}\" for step to run shell command. expected one of {RunStepExpectedKeys}";
+                    ? $"{FormatStepPrefix(source, jobId, stepIndex)} has unexpected key \"{deferredUnknownKey}\" for step to run shell command. did you mean \"{deferredSuggestion}\"? expected one of {RunStepExpectedKeys}"
+                    : $"{FormatStepPrefix(source, jobId, stepIndex)} has unexpected key \"{deferredUnknownKey}\" for step to run shell command. expected one of {RunStepExpectedKeys}";
                 var deferredFix = deferredSuggestion is not null
                     ? new DiagnosticFix($"replace '{deferredUnknownKey}' with '{deferredSuggestion}'", [new TextEdit(deferredUnknownKeySlice.Offset, deferredUnknownKeySlice.Length, deferredSuggestion)])
                     : (DiagnosticFix?)null;
@@ -413,14 +413,14 @@ public static partial class WorkflowParser
         if (stepForm == 2) // action step: shell and working-directory are unexpected
         {
             if (shellKeyMark != default)
-                AddError(ref diagnostics, $"{FormatStepPrefix(source, jobId, stepIndex)} unexpected key \"shell\" for step to execute action. expected one of {ActionStepExpectedKeys}", shellKeyMark);
+                AddError(ref diagnostics, $"{FormatStepPrefix(source, jobId, stepIndex)} has unexpected key \"shell\" for step to execute action. expected one of {ActionStepExpectedKeys}", shellKeyMark);
             if (wdKeyMark != default)
-                AddError(ref diagnostics, $"{FormatStepPrefix(source, jobId, stepIndex)} unexpected key \"working-directory\" for step to execute action. expected one of {ActionStepExpectedKeys}", wdKeyMark);
+                AddError(ref diagnostics, $"{FormatStepPrefix(source, jobId, stepIndex)} has unexpected key \"working-directory\" for step to execute action. expected one of {ActionStepExpectedKeys}", wdKeyMark);
         }
         else if (stepForm == 1) // run step: with is unexpected
         {
             if (withKeyMark != default)
-                AddError(ref diagnostics, $"{FormatStepPrefix(source, jobId, stepIndex)} unexpected key \"with\" for step to run shell command. expected one of {RunStepExpectedKeys}", withKeyMark);
+                AddError(ref diagnostics, $"{FormatStepPrefix(source, jobId, stepIndex)} has unexpected key \"with\" for step to run shell command. expected one of {RunStepExpectedKeys}", withKeyMark);
         }
 
         // Empty mapping (e.g. `- {}`)

@@ -1,4 +1,4 @@
-﻿// on.repository_dispatch — types and options.
+// on.repository_dispatch — types and options.
 
 using System.Text;
 using Seiton.Core.Parsing.Ast;
@@ -55,8 +55,8 @@ public static partial class WorkflowParser
             reader.Read();
             var rdSuggestion = SuggestionHelper.FindClosestFromFormattedKeys(unknown, Generated.ExpectedKeys.RepositoryDispatchKeys);
             var rdMsg = rdSuggestion is not null
-                ? $"on.repository_dispatch unexpected key \"{unknown}\" for \"repository_dispatch\" section. did you mean \"{rdSuggestion}\"? expected \"types\""
-                : $"on.repository_dispatch unexpected key \"{unknown}\" for \"repository_dispatch\" section. expected \"types\"";
+                ? $"on.repository_dispatch has unexpected key \"{unknown}\" for \"repository_dispatch\" section. did you mean \"{rdSuggestion}\"? expected \"types\""
+                : $"on.repository_dispatch has unexpected key \"{unknown}\" for \"repository_dispatch\" section. expected \"types\"";
             var rdFix = rdSuggestion is not null
                 ? new DiagnosticFix($"replace '{unknown}' with '{rdSuggestion}'", [new TextEdit(keySlice.Offset, keySlice.Length, rdSuggestion)])
                 : (DiagnosticFix?)null;

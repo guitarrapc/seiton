@@ -1,4 +1,4 @@
-﻿// Generic webhook on.* — filters, types, branches/tags/paths, and option validation helpers.
+// Generic webhook on.* — filters, types, branches/tags/paths, and option validation helpers.
 
 using System.Text;
 using Seiton.Core.Generated;
@@ -170,8 +170,8 @@ public static partial class WorkflowParser
 
             var webhookSuggestion1 = SuggestionHelper.FindClosestFromFormattedKeys(unknownKeyText!, Generated.ExpectedKeys.WebhookEventOptionKeys);
             var webhookMsg1 = webhookSuggestion1 is not null
-                ? $"on.{eventInfo.Name} unexpected key \"{unknownKeyText}\" for \"{eventInfo.Name}\" section. did you mean \"{webhookSuggestion1}\"? expected one of {Generated.ExpectedKeys.WebhookEventOptionKeys}"
-                : $"on.{eventInfo.Name} unexpected key \"{unknownKeyText}\" for \"{eventInfo.Name}\" section. expected one of {Generated.ExpectedKeys.WebhookEventOptionKeys}";
+                ? $"on.{eventInfo.Name} has unexpected key \"{unknownKeyText}\" for \"{eventInfo.Name}\" section. did you mean \"{webhookSuggestion1}\"? expected one of {Generated.ExpectedKeys.WebhookEventOptionKeys}"
+                : $"on.{eventInfo.Name} has unexpected key \"{unknownKeyText}\" for \"{eventInfo.Name}\" section. expected one of {Generated.ExpectedKeys.WebhookEventOptionKeys}";
             var webhookFix1 = webhookSuggestion1 is not null
                 ? new DiagnosticFix($"replace '{unknownKeyText}' with '{webhookSuggestion1}'", [new TextEdit(keySlice.Offset, keySlice.Length, webhookSuggestion1)])
                 : (DiagnosticFix?)null;
@@ -485,8 +485,8 @@ public static partial class WorkflowParser
             reader.Read();
             var webhookSuggestion2 = SuggestionHelper.FindClosestFromFormattedKeys(unknownKey, Generated.ExpectedKeys.WebhookEventOptionKeys);
             var webhookMsg2 = webhookSuggestion2 is not null
-                ? $"on.{eventInfo.Name} unexpected key \"{unknownKey}\" for \"{eventInfo.Name}\" section. did you mean \"{webhookSuggestion2}\"? expected one of {Generated.ExpectedKeys.WebhookEventOptionKeys}"
-                : $"on.{eventInfo.Name} unexpected key \"{unknownKey}\" for \"{eventInfo.Name}\" section. expected one of {Generated.ExpectedKeys.WebhookEventOptionKeys}";
+                ? $"on.{eventInfo.Name} has unexpected key \"{unknownKey}\" for \"{eventInfo.Name}\" section. did you mean \"{webhookSuggestion2}\"? expected one of {Generated.ExpectedKeys.WebhookEventOptionKeys}"
+                : $"on.{eventInfo.Name} has unexpected key \"{unknownKey}\" for \"{eventInfo.Name}\" section. expected one of {Generated.ExpectedKeys.WebhookEventOptionKeys}";
             var webhookFix2 = webhookSuggestion2 is not null
                 ? new DiagnosticFix($"replace '{unknownKey}' with '{webhookSuggestion2}'", [new TextEdit(keySlice.Offset, keySlice.Length, webhookSuggestion2)])
                 : (DiagnosticFix?)null;
@@ -572,14 +572,14 @@ public static partial class WorkflowParser
         string message;
         if (allowedOptions.Length == 0)
         {
-            message = $"on.{eventName} unexpected key \"{keyText}\" for \"{eventName}\" section. this event does not accept any options";
+            message = $"on.{eventName} has unexpected key \"{keyText}\" for \"{eventName}\" section. this event does not accept any options";
         }
         else
         {
             var expectedList = SuggestionHelper.FormatExpectedOptions(allowedOptions);
             message = suggestion is not null
-                ? $"on.{eventName} unexpected key \"{keyText}\" for \"{eventName}\" section. did you mean \"{suggestion}\"? expected one of {expectedList}"
-                : $"on.{eventName} unexpected key \"{keyText}\" for \"{eventName}\" section. expected one of {expectedList}";
+                ? $"on.{eventName} has unexpected key \"{keyText}\" for \"{eventName}\" section. did you mean \"{suggestion}\"? expected one of {expectedList}"
+                : $"on.{eventName} has unexpected key \"{keyText}\" for \"{eventName}\" section. expected one of {expectedList}";
         }
         var fix = suggestion is not null
             ? new DiagnosticFix($"replace '{keyText}' with '{suggestion}'", [new TextEdit(keySlice.Offset, keySlice.Length, suggestion)])

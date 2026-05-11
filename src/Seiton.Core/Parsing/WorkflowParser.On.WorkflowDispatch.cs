@@ -1,4 +1,4 @@
-﻿// on.workflow_dispatch — inputs and dispatch input field parsing.
+// on.workflow_dispatch — inputs and dispatch input field parsing.
 
 using System.Text;
 using Seiton.Core.Parsing.Ast;
@@ -55,8 +55,8 @@ public static partial class WorkflowParser
             reader.Read();
             var wdSuggestion = SuggestionHelper.FindClosestFromFormattedKeys(unknown, Generated.ExpectedKeys.OnWorkflowDispatchKeys);
             var wdMsg = wdSuggestion is not null
-                ? $"on.workflow_dispatch unexpected key \"{unknown}\" for \"workflow_dispatch\" section. did you mean \"{wdSuggestion}\"? expected \"inputs\""
-                : $"on.workflow_dispatch unexpected key \"{unknown}\" for \"workflow_dispatch\" section. expected \"inputs\"";
+                ? $"on.workflow_dispatch has unexpected key \"{unknown}\" for \"workflow_dispatch\" section. did you mean \"{wdSuggestion}\"? expected \"inputs\""
+                : $"on.workflow_dispatch has unexpected key \"{unknown}\" for \"workflow_dispatch\" section. expected \"inputs\"";
             var wdFix = wdSuggestion is not null
                 ? new DiagnosticFix($"replace '{unknown}' with '{wdSuggestion}'", [new TextEdit(keySlice.Offset, keySlice.Length, wdSuggestion)])
                 : (DiagnosticFix?)null;
@@ -252,8 +252,8 @@ public static partial class WorkflowParser
             reader.Read();
             var wdInputSuggestion = SuggestionHelper.FindClosestFromFormattedKeys(unknown, Generated.ExpectedKeys.WorkflowDispatchInputFieldKeys);
             var wdInputMsg = wdInputSuggestion is not null
-                ? $"on.workflow_dispatch.inputs unexpected key \"{unknown}\" for \"inputs\" section. did you mean \"{wdInputSuggestion}\"? expected one of {Generated.ExpectedKeys.WorkflowDispatchInputFieldKeys}"
-                : $"on.workflow_dispatch.inputs unexpected key \"{unknown}\" for \"inputs\" section. expected one of {Generated.ExpectedKeys.WorkflowDispatchInputFieldKeys}";
+                ? $"on.workflow_dispatch.inputs has unexpected key \"{unknown}\" for \"inputs\" section. did you mean \"{wdInputSuggestion}\"? expected one of {Generated.ExpectedKeys.WorkflowDispatchInputFieldKeys}"
+                : $"on.workflow_dispatch.inputs has unexpected key \"{unknown}\" for \"inputs\" section. expected one of {Generated.ExpectedKeys.WorkflowDispatchInputFieldKeys}";
             var wdInputFix = wdInputSuggestion is not null
                 ? new DiagnosticFix($"replace '{unknown}' with '{wdInputSuggestion}'", [new TextEdit(keySlice.Offset, keySlice.Length, wdInputSuggestion)])
                 : (DiagnosticFix?)null;
