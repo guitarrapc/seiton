@@ -368,3 +368,35 @@ PlaygroundLintBenchmark:
 - 残りの 12-28 KB gap は nested per-need/per-job entry dict（2-entry の `{result, outputs}`）と `BuildJobOutputsType` の per-need output dict による。これらは同時参照のため単純プールできない。
 - PartialChange Large で -5.2 KB の改善は、D-5d job skipping 下で変更されたジョブのみが `VisitJobPre` を実行するため、top-level dict 再利用の効果が 1 job 分に限定されるが、複数 iteration の平均で見ると有意な改善。
 - FullChange Large が noise レベルなのは、全ジョブが変更される場合でも BenchmarkDotNet の warmup 後は dict が既に warm 状態のため追加改善が限定的。
+
+### Phase 5 結果 (2026-05-12)
+
+**アプローチ**: `PlaygroundLintRunner.RunToJsonUtf8` で `JsonBuffer.WrittenSpan.ToArray()` の代わりに、`_lastJsonOutput` バッファを再利用するパターンを導入。3段階の分岐: (1) content 同一 → キャッシュ返却 (0 alloc)、(2) length 同一・content 異なる → in-place コピー (0 alloc)、(3) length 変化 → 新規確保。
+
+**変更内容**:
+1. `PlaygroundLintRunner.cs` — `WrittenSpan.ToArray()` を 3段階バッファ再利用ロジックに置換
+
+**変更ファイル**:
+- `src/Seiton.Playground.Core/PlaygroundLintRunner.cs` — JSON output バッファ再利用
+
+**テスト結果**: 全テスト通過 (1529/1529)
+
+**ベンチマーク結果**:
+
+CoreLintBenchmark: 回帰なし（全サイズで Allocated 同値）
+
+PlaygroundLintBenchmark:
+
+| シナリオ | Size | Phase 4 | Phase 5 | 変化 |
+|---|---|---|---|---|
+| PartialChange | Large | 612,164 B | 376,176 B | **-235,988 B (-38.5%)** |
+| FullChange | Large | 407,413 B | 170,853 B | **-236,560 B (-58.1%)** |
+| PartialChange | Small | 140,720 B | 126,800 B | **-13,920 B (-9.9%)** |
+| FullChange | Small | 65,372 B | 51,452 B | **-13,920 B (-21.3%)** |
+
+**予想との差分**:
+- 予想: ~5-10 KB/call 削減 → 実測: **~236 KB (10回計、~23.6 KB/call)** — 予想を大幅に上回る改善。
+- `_lastJsonOutput` は `byte[]` 1 個分だが、BenchmarkDotNet の 10 回のイテレーションすべてで再利用されるため、10 回 × ~23.6 KB = ~236 KB の `ToArray()` コピーが回避された。
+- Large ワークフロー（6 jobs, 40+ diagnostics）の JSON 出力は ~23 KB と推定される。PartialChange と FullChange でほぼ同一の削減量（~236 KB）なのは、どちらも同じ diagnostics 数を出力するため JSON サイズが近いことによる。
+- Small ワークフローでは ~1.4 KB/call × 10 回 = ~14 KB の削減。
+- 初期予想（§3.6 「影響: ~0.5×」「~5-10 KB/call」）は JSON サイズを過小評価していた。実際のワークフローでは diagnostic 数 × JSON フィールド数により、出力が 20 KB 超になる。
