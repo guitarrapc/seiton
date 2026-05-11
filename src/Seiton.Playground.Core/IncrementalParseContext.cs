@@ -933,10 +933,85 @@ public sealed class IncrementalParseContext
         SkipSuppressionSummary = true,
     };
 
-    // Reusable buffers for LintIncrementally (avoids per-call allocations)
+    // Reusable buffers for LintIncrementally / BuildSkipJobs (avoids per-call allocations)
     private bool[]? _skipJobsBuf;
     private List<Diagnostic>? _mergedDiagnostics;
     private ArrayBufferWriter<byte>? _jsonBuffer;
+
+    /// <summary>
+    /// Builds a <c>skipJobs</c> array indicating which jobs can skip linting because
+    /// they were reused (D-5c) and have cached diagnostics from the previous lint run.
+    /// Returns <c>null</c> if no jobs can be skipped.
+    /// Must be called under the same lock that guards <see cref="ParseIncrementally"/>.
+    /// </summary>
+    internal bool[]? BuildSkipJobs(int jobCount)
+    {
+        if (jobCount <= 0 || _lastReusedJobs is null || _cachedJobDiagnostics is null)
+            return null;
+
+        // Reuse buffer, grow only when needed
+        if (_skipJobsBuf is null || _skipJobsBuf.Length < jobCount)
+            _skipJobsBuf = new bool[jobCount];
+        else
+            Array.Clear(_skipJobsBuf, 0, jobCount);
+
+        var anySkippable = false;
+        for (var i = 0; i < jobCount && i < _lastReusedJobs.Length; i++)
+        {
+            if (_lastReusedJobs[i] && i < _cachedJobDiagnostics.Length && _cachedJobDiagnostics[i] is not null)
+            {
+                _skipJobsBuf[i] = true;
+                anySkippable = true;
+            }
+        }
+
+        return anySkippable ? _skipJobsBuf : null;
+    }
+
+    /// <summary>
+    /// Merges fresh lint diagnostics with cached diagnostics for skipped jobs.
+    /// If <paramref name="skipJobs"/> is <c>null</c>, returns <paramref name="freshDiagnostics"/> unchanged.
+    /// The returned span is valid until the next call to this method.
+    /// Must be called under the same lock that guards <see cref="ParseIncrementally"/>.
+    /// </summary>
+    internal ReadOnlySpan<Diagnostic> MergeDiagnosticsWithCache(DiagnosticList freshDiagnostics, bool[]? skipJobs)
+    {
+        // Cache per-job diagnostics for next call (always, even when no jobs were skipped)
+        if (skipJobs is null)
+        {
+            CacheJobDiagnostics(freshDiagnostics);
+            return freshDiagnostics.AsSpan();
+        }
+
+        var merged = _mergedDiagnostics ??= new(32);
+        merged.Clear();
+
+        // Add fresh diagnostics from the linter
+        for (var i = 0; i < freshDiagnostics.Length; i++)
+            merged.Add(freshDiagnostics[i]);
+
+        // Add cached diagnostics for skipped jobs
+        for (var i = 0; i < skipJobs.Length; i++)
+        {
+            if (skipJobs[i] && _cachedJobDiagnostics![i] is { } cached)
+            {
+                for (var c = 0; c < cached.Length; c++)
+                    merged.Add(cached[c]);
+            }
+        }
+
+        // Sort by offset for consistent output
+        merged.Sort(static (a, b) =>
+        {
+            var cmp = a.Location.Start.CompareTo(b.Location.Start);
+            return cmp != 0 ? cmp : string.Compare(a.Message, b.Message, StringComparison.Ordinal);
+        });
+
+        // Cache per-job diagnostics from merged result — reuse the same materialized array
+        var mergedArray = System.Runtime.InteropServices.CollectionsMarshal.AsSpan(merged).ToArray();
+        CacheJobDiagnostics(new DiagnosticList(mergedArray));
+        return mergedArray;
+    }
 
     /// <summary>
     /// Parses and lints incrementally. Unchanged jobs reuse cached diagnostics from
@@ -949,76 +1024,17 @@ public sealed class IncrementalParseContext
         // Parse incrementally (D-5b/5c)
         var parseResult = ParseIncrementally(utf8Yaml, filePath);
 
-        // Determine which jobs to skip linting (reused and have cached diagnostics)
-        bool[]? skipJobs = null;
-        if (_lastReusedJobs is not null && _cachedJobDiagnostics is not null)
-        {
-            var jobCount = parseResult.Workflow?.Jobs.Count ?? 0;
-            if (jobCount > 0)
-            {
-                // Reuse buffer, grow only when needed
-                if (_skipJobsBuf is null || _skipJobsBuf.Length < jobCount)
-                    _skipJobsBuf = new bool[jobCount];
-                else
-                    Array.Clear(_skipJobsBuf, 0, jobCount);
-
-                var anySkippable = false;
-                for (var i = 0; i < jobCount && i < _lastReusedJobs.Length; i++)
-                {
-                    if (_lastReusedJobs[i] && i < _cachedJobDiagnostics.Length && _cachedJobDiagnostics[i] is not null)
-                    {
-                        _skipJobsBuf[i] = true;
-                        anySkippable = true;
-                    }
-                }
-
-                if (anySkippable)
-                    skipJobs = _skipJobsBuf;
-            }
-        }
+        // Build skip mask from reused jobs + cached diagnostics
+        var jobCount = parseResult.Workflow?.Jobs.Count ?? 0;
+        var skipJobs = BuildSkipJobs(jobCount);
 
         // Lint with optional job skipping
         var lintResult = _lintEngine.CheckWithParseResult(utf8Yaml, filePath, LintConfig, parseResult, skipJobs);
 
-        // Merge cached diagnostics for skipped jobs
-        DiagnosticList finalDiagnostics;
-        if (skipJobs is not null)
-        {
-            var merged = _mergedDiagnostics ??= new(32);
-            merged.Clear();
+        // Merge cached diagnostics for skipped jobs and update cache
+        var finalDiagnostics = MergeDiagnosticsWithCache(lintResult.Diagnostics, skipJobs);
 
-            // Add fresh diagnostics from the linter
-            var lintDiags = lintResult.Diagnostics;
-            for (var i = 0; i < lintDiags.Length; i++)
-                merged.Add(lintDiags[i]);
-
-            // Add cached diagnostics for skipped jobs
-            for (var i = 0; i < skipJobs.Length; i++)
-            {
-                if (skipJobs[i] && _cachedJobDiagnostics![i] is { } cached)
-                {
-                    for (var c = 0; c < cached.Length; c++)
-                        merged.Add(cached[c]);
-                }
-            }
-
-            // Sort by offset for consistent output
-            merged.Sort(static (a, b) =>
-            {
-                var cmp = a.Location.Start.CompareTo(b.Location.Start);
-                return cmp != 0 ? cmp : string.Compare(a.Message, b.Message, StringComparison.Ordinal);
-            });
-            finalDiagnostics = merged.ToArray();
-        }
-        else
-        {
-            finalDiagnostics = lintResult.Diagnostics;
-        }
-
-        // Cache per-job diagnostics for next call
-        CacheJobDiagnostics(finalDiagnostics);
-
-        // Serialize to JSON and parse into elements (matching PlaygroundLintRunner format)
+        // Serialize directly from span — no extra array copy
         return SerializeDiagnosticsToJson(finalDiagnostics);
     }
 
@@ -1092,6 +1108,9 @@ public sealed class IncrementalParseContext
     }
 
     private JsonElement[] SerializeDiagnosticsToJson(DiagnosticList diagnostics)
+        => SerializeDiagnosticsToJson(diagnostics.AsSpan());
+
+    private JsonElement[] SerializeDiagnosticsToJson(ReadOnlySpan<Diagnostic> diagnostics)
     {
         var buffer = _jsonBuffer ??= new ArrayBufferWriter<byte>(4096);
         buffer.Clear();
