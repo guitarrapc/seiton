@@ -14323,10 +14323,9 @@ public sealed class RuleInterfaceTests
         var parseResult = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "test.yaml");
         try
         {
-            var diag = parseResult.Diagnostics.FirstOrDefault(d => d.Message.Contains("unexpected key", StringComparison.Ordinal));
-            var message = diag.Message;
-            await Assert.That(message).IsNotNull();
-            await Assert.That(message!).Contains("has unexpected key");
+            var diagnostics = parseResult.Diagnostics.Where(d => d.Message?.Contains("unexpected key", StringComparison.Ordinal) == true).ToList();
+            await Assert.That(diagnostics).IsNotEmpty();
+            await Assert.That(diagnostics[0].Message).Contains("has unexpected key");
         }
         finally
         {
