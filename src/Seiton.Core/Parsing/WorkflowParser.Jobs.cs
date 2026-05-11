@@ -748,8 +748,8 @@ public static partial class WorkflowParser
             reader.Read();
             var snapSuggestion = SuggestionHelper.FindClosestFromFormattedKeys(unknownSnapKey, Generated.ExpectedKeys.SnapshotKeys);
             var snapMessage = snapSuggestion is not null
-                ? $"unexpected key \"{unknownSnapKey}\" for \"{section}\". did you mean \"{snapSuggestion}\"? expected one of {Generated.ExpectedKeys.SnapshotKeys}"
-                : $"unexpected key \"{unknownSnapKey}\" for \"{section}\". expected one of {Generated.ExpectedKeys.SnapshotKeys}";
+                ? $"{section} unexpected key \"{unknownSnapKey}\" for \"snapshot\" section. did you mean \"{snapSuggestion}\"? expected one of {Generated.ExpectedKeys.SnapshotKeys}"
+                : $"{section} unexpected key \"{unknownSnapKey}\" for \"snapshot\" section. expected one of {Generated.ExpectedKeys.SnapshotKeys}";
             var snapFix = snapSuggestion is not null
                 ? new DiagnosticFix($"replace '{unknownSnapKey}' with '{snapSuggestion}'", [new TextEdit(keySlice.Offset, keySlice.Length, snapSuggestion)])
                 : (DiagnosticFix?)null;
