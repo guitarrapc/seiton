@@ -8176,6 +8176,44 @@ public sealed class RuleInterfaceTests
                           run: echo "$VAL"
             """,
             ["\"unknown_param\" is not defined in \"inputs\" context"]),
+            // index access: inputs['unknown'] should be flagged the same as inputs.unknown
+            new RuleCase(
+            "ng-index-access-unknown-input",
+            """
+            on:
+                workflow_call:
+                    inputs:
+                        environment:
+                            type: string
+                            required: true
+            jobs:
+                deploy:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - env:
+                            VAL: ${{ inputs['unknown_param'] }}
+                          run: echo "$VAL"
+            """,
+            ["\"unknown_param\" is not defined in \"inputs\" context"]),
+            // index access: inputs['environment'] should pass
+            new RuleCase(
+            "ok-index-access-known-input",
+            """
+            on:
+                workflow_call:
+                    inputs:
+                        environment:
+                            type: string
+                            required: true
+            jobs:
+                deploy:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - env:
+                            VAL: ${{ inputs['environment'] }}
+                          run: echo "$VAL"
+            """,
+            []),
             // regression: matrix include-only axis keys should be accessible
             new RuleCase(
             "ok-matrix-include-only-axis-accessible",

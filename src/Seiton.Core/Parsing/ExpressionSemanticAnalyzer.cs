@@ -1604,6 +1604,22 @@ public static class ExpressionSemanticAnalyzer
                 $"index of object must be string, but got {rightType.TypeName}",
                 expressionLocation));
         }
+        else if (leftType is ObjectExprType { Strict: true } strictObj
+            && node.Right >= 0
+            && node.Right < nodes.Length
+            && nodes[node.Right].Kind == ExpressionNodeKind.StringLiteral)
+        {
+            var propertyName = nodes[node.Right].Token.AsSpan(expressionUtf8);
+            if (!strictObj.TryGetProperty(propertyName, out _))
+            {
+                var propNameText = Encoding.UTF8.GetString(propertyName);
+                var rootName = GetChainRootName(node.Left, nodes, expressionUtf8);
+                diagnostics.Add(new Diagnostic(
+                    DiagnosticSeverity.Error,
+                    FormatUndefinedPropertyMessage(propNameText, strictObj, rootName),
+                    expressionLocation));
+            }
+        }
     }
 
     /// <summary>

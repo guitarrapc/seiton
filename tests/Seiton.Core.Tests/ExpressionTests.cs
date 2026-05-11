@@ -982,6 +982,45 @@ public sealed class ExpressionTests
         await Assert.That(diagnostics).IsEmpty();
     }
 
+    [Test]
+    public async Task ValidateDynamicPropertyAccess_IndexAccessUnknownKey_ReportsDiagnostic()
+    {
+        // inputs['unknown'] should be flagged when inputs is a strict object
+        var expression = "inputs['unknown']"u8;
+        var parseResult = ExpressionParser.Parse(expression);
+        var location = new TextRange(0, expression.Length, 1, 1, 1, expression.Length);
+
+        var inputsType = ExprType.Object(
+            new Dictionary<Utf8String, ExprType> { { new Utf8String("environment"u8), ExprType.String } },
+            strict: true);
+        (byte[] NameUtf8, ExprType Type)[] overrides = [("inputs"u8.ToArray(), inputsType)];
+
+        var diagnostics = ExpressionSemanticAnalyzer.ValidateDynamicPropertyAccess(
+            parseResult, expression, location, overrides);
+
+        await Assert.That(diagnostics.Any(x => x.Message.Contains("\"unknown\" is not defined in \"inputs\" context", StringComparison.Ordinal))).IsTrue();
+        await Assert.That(diagnostics.Any(x => x.Message.Contains("Available properties are: environment", StringComparison.Ordinal))).IsTrue();
+    }
+
+    [Test]
+    public async Task ValidateDynamicPropertyAccess_IndexAccessKnownKey_NoDiagnostics()
+    {
+        // inputs['environment'] should pass when it's defined
+        var expression = "inputs['environment']"u8;
+        var parseResult = ExpressionParser.Parse(expression);
+        var location = new TextRange(0, expression.Length, 1, 1, 1, expression.Length);
+
+        var inputsType = ExprType.Object(
+            new Dictionary<Utf8String, ExprType> { { new Utf8String("environment"u8), ExprType.String } },
+            strict: true);
+        (byte[] NameUtf8, ExprType Type)[] overrides = [("inputs"u8.ToArray(), inputsType)];
+
+        var diagnostics = ExpressionSemanticAnalyzer.ValidateDynamicPropertyAccess(
+            parseResult, expression, location, overrides);
+
+        await Assert.That(diagnostics).IsEmpty();
+    }
+
     // Operator type validation
 
     [Test]
