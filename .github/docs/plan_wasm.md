@@ -328,3 +328,43 @@ PlaygroundLintBenchmark: 回帰なし（実質ゼロ変化）
 - Phase 2 でキャッシュが source 変更を跨いで生存するため、BenchmarkDotNet の warmup 中に全 expression がキャッシュされ、measured iterations では `Parse()` 自体が呼ばれない。`DetachArray()` は初回パース時のみ効果があるが、warmup で吸収される。
 - 実際のアロケーション改善はコールドスタート（初回 lint 実行）でのみ発生。150 unique expressions × ~120 bytes/expression ≈ ~18 KB の `ToArray()` コピーが回避される。
 - 主な価値はアロケーション削減ではなく、**アーキテクチャ改善**: `ExpressionParseResult` が ArrayPool backed `ReadOnlyMemory<T>` を使用し、GC-tracked ヒープ確保を回避する設計に移行。
+
+### Phase 4 結果 (2026-07-11)
+
+**アプローチ**: `BuildStepsOverrideInto` パターンを `BuildMatrixOverride`・`BuildNeedsOverride` に展開。caller 側で reusable dictionary を保持し、per-job 呼び出しで `.Clear()` + 再利用する。per-need/per-job entry の nested dictionary（2-entry `{result, outputs}`）は各 need/job ごとに異なる `outputsType` を持ち同時に参照されるため、プールの対象外とした。
+
+**変更内容**:
+1. `DynamicContextTypeBuilder.cs` — `BuildMatrixOverrideInto(Dictionary<Utf8String, ExprType> reusableProps, ...)` 追加。既存 `BuildMatrixOverride` と同一ロジックだが、引数の dictionary を `.Clear()` して再利用
+2. `DynamicContextTypeBuilder.cs` — `BuildNeedsOverrideInto(Dictionary<Utf8String, ExprType> reusableProps, ...)` 追加。main props dict のみ再利用、per-need entry dict は新規確保のまま
+3. `ExprUndefinedVarRule.cs` — `_matrixOverrideProps`, `_needsOverrideProps` フィールド追加。`VisitJobPre` で `BuildMatrixOverrideInto` / `BuildNeedsOverrideInto` を使用
+
+**変更ファイル**:
+- `src/Seiton.Core/Parsing/DynamicContextTypeBuilder.cs` — `BuildMatrixOverrideInto`, `BuildNeedsOverrideInto` 追加
+- `src/Seiton.Core/Linting/Rules/ExprUndefinedVarRule.cs` — reusable dict fields 追加、`VisitJobPre` の call site 変更
+
+**テスト結果**: 全テスト通過 (1529/1529)
+
+**ベンチマーク結果**:
+
+CoreLintBenchmark:
+
+| シナリオ | Phase 3 | Phase 4 | 変化 |
+|---|---|---|---|
+| Large FixEnabled=false | 717.68 KB | 710.18 KB | **-7.5 KB** |
+| Large FixEnabled=true | 747.73 KB | 740.23 KB | **-7.5 KB** |
+
+PlaygroundLintBenchmark:
+
+| シナリオ | Size | Phase 3 | Phase 4 | 変化 |
+|---|---|---|---|---|
+| PartialChange | Large | 617,369 B | 612,164 B | **-5,205 B** |
+| FullChange | Large | 407,498 B | 407,413 B | -85 B |
+| PartialChange | Small | 144,560 B | 140,720 B | -3,840 B |
+| FullChange | Small | 65,470 B | 65,372 B | -98 B |
+
+**予想との差分**:
+- 予想: ~20-40 KB 削減 → 実測: **~7.5 KB** — 予想の約 1/3。
+- top-level dict (matrix 1個 + needs 1個) × 6 jobs = 12 dict が再利用対象。各 dict のベースオーバーヘッド（object header + buckets + entries 配列）が ~600-1200 bytes で、12 × ~650 bytes ≈ ~7.8 KB と実測に一致。
+- 残りの 12-28 KB gap は nested per-need/per-job entry dict（2-entry の `{result, outputs}`）と `BuildJobOutputsType` の per-need output dict による。これらは同時参照のため単純プールできない。
+- PartialChange Large で -5.2 KB の改善は、D-5d job skipping 下で変更されたジョブのみが `VisitJobPre` を実行するため、top-level dict 再利用の効果が 1 job 分に限定されるが、複数 iteration の平均で見ると有意な改善。
+- FullChange Large が noise レベルなのは、全ジョブが変更される場合でも BenchmarkDotNet の warmup 後は dict が既に warm 状態のため追加改善が限定的。

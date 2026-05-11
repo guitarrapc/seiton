@@ -31,6 +31,9 @@ public sealed class ExprUndefinedVarRule() : RuleBase(RuleId.ExprUndefinedVar)
     private int _currentStepIndex;
     // Reusable dictionary for BuildStepsOverrideInto (avoids per-step allocation)
     private readonly Dictionary<Utf8String, ExprType> _stepsOverrideProps = new();
+    // Reusable dictionaries for BuildMatrixOverrideInto / BuildNeedsOverrideInto (avoids per-job allocation)
+    private readonly Dictionary<Utf8String, ExprType> _matrixOverrideProps = new();
+    private readonly Dictionary<Utf8String, ExprType> _needsOverrideProps = new();
     // Local action output resolver for building strict step output types
     private LocalActionOutputResolver? _localActionOutputResolver;
     private Func<ReadOnlyMemory<byte>, string[]?>? _localActionOutputResolverFunc;
@@ -223,8 +226,9 @@ public sealed class ExprUndefinedVarRule() : RuleBase(RuleId.ExprUndefinedVar)
         }
 
         var yaml = Config.Utf8Yaml;
-        var matrixOverride = DynamicContextTypeBuilder.BuildMatrixOverride(job.Strategy?.Matrix, Arena, yaml);
-        var needsOverride = DynamicContextTypeBuilder.BuildNeedsOverride(
+        var matrixOverride = DynamicContextTypeBuilder.BuildMatrixOverrideInto(_matrixOverrideProps, job.Strategy?.Matrix, Arena, yaml);
+        var needsOverride = DynamicContextTypeBuilder.BuildNeedsOverrideInto(
+            _needsOverrideProps,
             job.Needs,
             _currentWorkflow?.Jobs ?? default,
             Arena,

@@ -271,6 +271,76 @@ internal static class DynamicContextTypeBuilder
     }
 
     /// <summary>
+    /// Same as <see cref="BuildMatrixOverride"/> but reuses <paramref name="reusableProps"/> to avoid
+    /// per-call dictionary allocation. The dictionary is cleared before use.
+    /// </summary>
+    internal static (byte[] NameUtf8, ExprType Type) BuildMatrixOverrideInto(
+        Dictionary<Utf8String, ExprType> reusableProps,
+        Matrix? matrix, AstArena? arena = null, byte[]? utf8Yaml = null)
+    {
+        reusableProps.Clear();
+        if (utf8Yaml is null)
+        {
+            return (MatrixKeyUtf8, looseDynamic);
+        }
+
+        if (matrix is null)
+        {
+            return (MatrixKeyUtf8, ExprType.Object(reusableProps, strict: true));
+        }
+
+        if (matrix.Expression.HasValue)
+        {
+            return (MatrixKeyUtf8, looseDynamic);
+        }
+
+        var rows = matrix.Rows;
+        var include = matrix.Include;
+
+        if ((rows is null || rows.Value.Count == 0) && (include is null || include.Count == 0))
+        {
+            return (MatrixKeyUtf8, looseDynamic);
+        }
+
+        if (rows is { Count: > 0 })
+        {
+            foreach (var row in rows)
+            {
+                reusableProps[row.Key.ToUtf8StringZeroCopy(utf8Yaml)] = InferMatrixRowType(row.Value, utf8Yaml, arena);
+            }
+        }
+
+        if (include is not null)
+        {
+            for (var i = 0; i < include.Count; i++)
+            {
+                var combo = include[i];
+                if (combo.Entries is null) continue;
+                for (var j = 0; j < combo.Entries.Count; j++)
+                {
+                    var entry = combo.Entries[j];
+                    foreach (var pair in entry)
+                    {
+                        var key = pair.Key.ToUtf8StringZeroCopy(utf8Yaml);
+                        if (key.Length == 0)
+                        {
+                            key = new Utf8String("null"u8);
+                        }
+                        if (!reusableProps.ContainsKey(key))
+                        {
+                            reusableProps[key] = InferIncludeValueType(pair.Value, utf8Yaml, arena);
+                        }
+                    }
+                }
+            }
+        }
+
+        return reusableProps.Count == 0
+            ? (MatrixKeyUtf8, looseDynamic)
+            : (MatrixKeyUtf8, ExprType.Object(reusableProps, strict: true));
+    }
+
+    /// <summary>
     /// Infers the type of a matrix row from its values.
     /// When all values are objects with the same key set, returns a strict object type.
     /// When all values are arrays, returns an array type.
@@ -561,6 +631,50 @@ internal static class DynamicContextTypeBuilder
         return props.Count == 0
             ? (NeedsKeyUtf8, looseDynamic)
             : (NeedsKeyUtf8, ExprType.Object(props, strict: true));
+    }
+
+    /// <summary>
+    /// Same as <see cref="BuildNeedsOverride"/> but reuses <paramref name="reusableProps"/> to avoid
+    /// per-call dictionary allocation. The dictionary is cleared before use.
+    /// </summary>
+    internal static (byte[] NameUtf8, ExprType Type) BuildNeedsOverrideInto(
+        Dictionary<Utf8String, ExprType> reusableProps,
+        StringNodeId[]? needs,
+        SliceMap<Job> allJobs,
+        AstArena arena,
+        byte[]? utf8Yaml)
+    {
+        reusableProps.Clear();
+        if (needs is null || needs.Length == 0)
+        {
+            return (NeedsKeyUtf8, ExprType.Object(reusableProps, strict: true));
+        }
+
+        for (var i = 0; i < needs.Length; i++)
+        {
+            var needSlice = arena.GetStringSlice(needs[i]);
+            var needIdBytes = needSlice.AsSpan(utf8Yaml);
+            if (needIdBytes.IsEmpty)
+            {
+                continue;
+            }
+
+            var outputsType = FindJobOutputsType(needIdBytes, allJobs, utf8Yaml);
+
+            var needsEntryType = ExprType.Object(
+                new Dictionary<Utf8String, ExprType>
+                {
+                    { resultKey, ExprType.String },
+                    { outputsKey, outputsType },
+                },
+                strict: true);
+
+            reusableProps[needSlice.ToUtf8StringZeroCopy(utf8Yaml!)] = needsEntryType;
+        }
+
+        return reusableProps.Count == 0
+            ? (NeedsKeyUtf8, looseDynamic)
+            : (NeedsKeyUtf8, ExprType.Object(reusableProps, strict: true));
     }
 
     private static ExprType FindJobOutputsType(
