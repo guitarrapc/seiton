@@ -1,3 +1,3 @@
 test.yaml:19:20: property "platform" is not defined in "matrix" context. Available properties are: node, npm, os, package [expression]
 test.yaml:21:20: property "dev" is not defined in "matrix" context. Available properties are: name, optional [expression]
-test.yaml:34:20: property "os" is not defined in "matrix" context. Available properties are: none [expression]
+test.yaml:34:20: property "os" is not defined in "matrix" context; no properties are defined [expression]

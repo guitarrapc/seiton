@@ -1,1 +1,1 @@
-test.yaml:7:19: property "some_input" is not defined in "inputs" context. Available properties are: none [expression]
+test.yaml:7:19: property "some_input" is not defined in "inputs" context; no properties are defined [expression]

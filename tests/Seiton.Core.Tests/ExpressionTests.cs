@@ -840,6 +840,24 @@ public sealed class ExpressionTests
     }
 
     [Test]
+    public async Task ValidateDynamicPropertyAccess_EmptyStrictObject_NoPropertiesMessage()
+    {
+        var expression = "needs.ghost.outputs.foo"u8;
+        var parseResult = ExpressionParser.Parse(expression);
+        var location = new TextRange(0, expression.Length, 1, 1, 1, expression.Length);
+
+        // Empty strict object — no properties defined
+        var needsType = ExprType.Object(strict: true);
+        (byte[] NameUtf8, ExprType Type)[] overrides = [("needs"u8.ToArray(), needsType)];
+
+        var diagnostics = ExpressionSemanticAnalyzer.ValidateDynamicPropertyAccess(
+            parseResult, expression, location, overrides);
+
+        await Assert.That(diagnostics.Any(x => x.Message.Contains("no properties are defined", StringComparison.Ordinal))).IsTrue();
+        await Assert.That(diagnostics.Any(x => x.Message.Contains("Available properties are:", StringComparison.Ordinal))).IsFalse();
+    }
+
+    [Test]
     public async Task ValidateDynamicPropertyAccess_MatrixKnownKey_NoDiagnostics()
     {
         var expression = "matrix.os"u8;
