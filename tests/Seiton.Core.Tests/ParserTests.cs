@@ -268,6 +268,25 @@ public sealed class ParserTests
     }
 
     [Test]
+    public async Task Parse_UnknownKey_Snapshot_IncludesJobPathInMessage()
+    {
+        var yaml = NormalizeEol("""
+        on: push
+        jobs:
+            build:
+                runs-on: ubuntu-latest
+                snapshot:
+                    image-name: my-image
+                    image-id: my-custom-image
+                steps:
+                    - run: echo
+        """);
+
+        var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "test.yml");
+        await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("jobs.'build' unexpected key \"image-id\" for \"snapshot\" section", StringComparison.Ordinal))).IsTrue();
+    }
+
+    [Test]
     public async Task Parse_UnknownKey_JobDefaults_IncludesJobPathInMessage()
     {
         var yaml = NormalizeEol("""
