@@ -39,7 +39,7 @@ public sealed class FakeTernaryRule() : RuleBase(RuleId.FakeTernary)
             return;
         }
 
-        if (!ContainsFakeTernary(parseResult.RootNode, parseResult.Nodes.Span, parseResult.Arguments.Span, expression))
+        if (!ContainsFakeTernary(parseResult.RootNode, parseResult.Nodes, parseResult.Arguments, expression))
         {
             return;
         }
@@ -56,7 +56,7 @@ public sealed class FakeTernaryRule() : RuleBase(RuleId.FakeTernary)
         }
     }
 
-    private static bool ContainsFakeTernary(int nodeId, ReadOnlySpan<ExpressionNode> nodes, ReadOnlySpan<int> arguments, ReadOnlySpan<byte> expression)
+    private static bool ContainsFakeTernary(int nodeId, ExpressionNode[] nodes, int[] arguments, ReadOnlySpan<byte> expression)
     {
         if (nodeId < 0 || nodeId >= nodes.Length)
         {
@@ -103,8 +103,8 @@ public sealed class FakeTernaryRule() : RuleBase(RuleId.FakeTernary)
 
     private static bool ContainsFakeTernaryInArguments(
         ExpressionNode node,
-        ReadOnlySpan<ExpressionNode> nodes,
-        ReadOnlySpan<int> arguments,
+        ExpressionNode[] nodes,
+        int[] arguments,
         ReadOnlySpan<byte> expression)
     {
         for (var i = 0; i < node.ArgCount; i++)

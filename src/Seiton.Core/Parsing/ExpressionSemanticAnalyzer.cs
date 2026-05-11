@@ -70,7 +70,7 @@ public static class ExpressionSemanticAnalyzer
         }
 
         var diagnostics = new List<Diagnostic>();
-        ValidateNode(parseResult.RootNode, -1, parseResult.Nodes.Span, parseResult.Arguments.Span, expressionUtf8, expressionLocation, context, allowStatusCheckFunctions, diagnostics);
+        ValidateNode(parseResult.RootNode, -1, parseResult.Nodes, parseResult.Arguments, expressionUtf8, expressionLocation, context, allowStatusCheckFunctions, diagnostics);
         return diagnostics.ToArray();
     }
 
@@ -99,8 +99,8 @@ public static class ExpressionSemanticAnalyzer
     /// <summary>Infers the static type of the expression node at <paramref name="nodeId"/>.</summary>
     public static ExprType InferType(
         int nodeId,
-        ReadOnlySpan<ExpressionNode> nodes,
-        ReadOnlySpan<int> arguments,
+        ExpressionNode[] nodes,
+        int[] arguments,
         ReadOnlySpan<byte> expressionUtf8)
     {
         return InferTypeSpan(nodeId, nodes, arguments, expressionUtf8);
@@ -121,7 +121,7 @@ public static class ExpressionSemanticAnalyzer
             return null;
         }
 
-        var type = InferTypeSpan(parseResult.RootNode, parseResult.Nodes.Span, parseResult.Arguments.Span, expressionUtf8);
+        var type = InferTypeSpan(parseResult.RootNode, parseResult.Nodes, parseResult.Arguments, expressionUtf8);
         return CheckTypeForTemplate(type, expressionLocation);
     }
 
@@ -140,7 +140,7 @@ public static class ExpressionSemanticAnalyzer
             return null;
         }
 
-        var type = InferTypeWithOverrides(parseResult.RootNode, parseResult.Nodes.Span, parseResult.Arguments.Span, expressionUtf8, contextOverrides);
+        var type = InferTypeWithOverrides(parseResult.RootNode, parseResult.Nodes, parseResult.Arguments, expressionUtf8, contextOverrides);
         return CheckTypeForTemplate(type, expressionLocation);
     }
 
@@ -197,8 +197,8 @@ public static class ExpressionSemanticAnalyzer
         }
 
         var type = contextOverrides is not null
-            ? InferTypeWithOverrides(parseResult.RootNode, parseResult.Nodes.Span, parseResult.Arguments.Span, expressionUtf8, contextOverrides)
-            : InferTypeSpan(parseResult.RootNode, parseResult.Nodes.Span, parseResult.Arguments.Span, expressionUtf8);
+            ? InferTypeWithOverrides(parseResult.RootNode, parseResult.Nodes, parseResult.Arguments, expressionUtf8, contextOverrides)
+            : InferTypeSpan(parseResult.RootNode, parseResult.Nodes, parseResult.Arguments, expressionUtf8);
 
         // object and any are acceptable; concrete non-object types are errors
         return type switch
@@ -227,8 +227,8 @@ public static class ExpressionSemanticAnalyzer
         }
 
         var type = contextOverrides is not null
-            ? InferTypeWithOverrides(parseResult.RootNode, parseResult.Nodes.Span, parseResult.Arguments.Span, expressionUtf8, contextOverrides)
-            : InferTypeSpan(parseResult.RootNode, parseResult.Nodes.Span, parseResult.Arguments.Span, expressionUtf8);
+            ? InferTypeWithOverrides(parseResult.RootNode, parseResult.Nodes, parseResult.Arguments, expressionUtf8, contextOverrides)
+            : InferTypeSpan(parseResult.RootNode, parseResult.Nodes, parseResult.Arguments, expressionUtf8);
 
         return type switch
         {
@@ -261,8 +261,8 @@ public static class ExpressionSemanticAnalyzer
         }
 
         var type = contextOverrides is not null
-            ? InferTypeWithOverrides(parseResult.RootNode, parseResult.Nodes.Span, parseResult.Arguments.Span, expressionUtf8, contextOverrides)
-            : InferTypeSpan(parseResult.RootNode, parseResult.Nodes.Span, parseResult.Arguments.Span, expressionUtf8);
+            ? InferTypeWithOverrides(parseResult.RootNode, parseResult.Nodes, parseResult.Arguments, expressionUtf8, contextOverrides)
+            : InferTypeSpan(parseResult.RootNode, parseResult.Nodes, parseResult.Arguments, expressionUtf8);
 
         // object and any are acceptable; concrete non-object types are errors
         return type switch
@@ -1451,8 +1451,8 @@ public static class ExpressionSemanticAnalyzer
         var diagnostics = new List<Diagnostic>();
         ValidateNodePropertyAccess(
             parseResult.RootNode,
-            parseResult.Nodes.Span,
-            parseResult.Arguments.Span,
+            parseResult.Nodes,
+            parseResult.Arguments,
             expressionUtf8,
             expressionLocation,
             contextOverrides,
@@ -1478,8 +1478,8 @@ public static class ExpressionSemanticAnalyzer
 
         ValidateNodePropertyAccess(
             parseResult.RootNode,
-            parseResult.Nodes.Span,
-            parseResult.Arguments.Span,
+            parseResult.Nodes,
+            parseResult.Arguments,
             expressionUtf8,
             expressionLocation,
             contextOverrides,

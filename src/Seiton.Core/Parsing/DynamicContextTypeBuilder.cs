@@ -584,8 +584,8 @@ internal static class DynamicContextTypeBuilder
 
         return ExpressionSemanticAnalyzer.InferType(
             parseResult.RootNode,
-            parseResult.Nodes.Span,
-            parseResult.Arguments.Span,
+            parseResult.Nodes,
+            parseResult.Arguments,
             body);
     }
 

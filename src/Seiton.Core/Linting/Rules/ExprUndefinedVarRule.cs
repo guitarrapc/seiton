@@ -148,7 +148,7 @@ public sealed class ExprUndefinedVarRule() : RuleBase(RuleId.ExprUndefinedVar)
         }
 
         var inferredType = ExpressionSemanticAnalyzer.InferTypeWithOverrides(
-            parseResult.RootNode, parseResult.Nodes.Span, parseResult.Arguments.Span, expression, overrides);
+            parseResult.RootNode, parseResult.Nodes, parseResult.Arguments, expression, overrides);
 
         var expectedTypeName = input.Type switch
         {
@@ -564,8 +564,8 @@ public sealed class ExprUndefinedVarRule() : RuleBase(RuleId.ExprUndefinedVar)
         VisitExpressionNode(
             parseResult.RootNode,
             parentId: -1,
-            parseResult.Nodes.Span,
-            parseResult.Arguments.Span,
+            parseResult.Nodes,
+            parseResult.Arguments,
             expression,
             context,
             sinkName,
@@ -638,8 +638,8 @@ public sealed class ExprUndefinedVarRule() : RuleBase(RuleId.ExprUndefinedVar)
             VisitExpressionNode(
                 parseResult.RootNode,
                 parentId: -1,
-                parseResult.Nodes.Span,
-                parseResult.Arguments.Span,
+                parseResult.Nodes,
+                parseResult.Arguments,
                 expression,
                 context,
                 sinkName,
@@ -663,8 +663,8 @@ public sealed class ExprUndefinedVarRule() : RuleBase(RuleId.ExprUndefinedVar)
     private void VisitExpressionNode<TTarget>(
         int nodeId,
         int parentId,
-        ReadOnlySpan<ExpressionNode> nodes,
-        ReadOnlySpan<int> arguments,
+        ExpressionNode[] nodes,
+        int[] arguments,
         ReadOnlySpan<byte> expression,
         ExpressionValidationContext context,
         string sinkName,

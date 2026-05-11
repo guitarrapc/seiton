@@ -77,8 +77,8 @@ public sealed class RunInputsContextDirectUseRule() : RuleBase(RuleId.RunInputsC
             if (!ContainsInputsReference(
                 parseResult.RootNode,
                 parentId: -1,
-                parseResult.Nodes.Span,
-                parseResult.Arguments.Span,
+                parseResult.Nodes,
+                parseResult.Arguments,
                 expression))
             {
                 continue;
@@ -208,8 +208,8 @@ public sealed class RunInputsContextDirectUseRule() : RuleBase(RuleId.RunInputsC
     private static bool ContainsInputsReference(
         int nodeId,
         int parentId,
-        ReadOnlySpan<ExpressionNode> nodes,
-        ReadOnlySpan<int> arguments,
+        ExpressionNode[] nodes,
+        int[] arguments,
         ReadOnlySpan<byte> expression)
     {
         if (nodeId < 0 || nodeId >= nodes.Length)
@@ -255,8 +255,8 @@ public sealed class RunInputsContextDirectUseRule() : RuleBase(RuleId.RunInputsC
     private static bool ContainsInputsReferenceInFunction(
         ExpressionNode functionCallNode,
         int functionCallNodeId,
-        ReadOnlySpan<ExpressionNode> nodes,
-        ReadOnlySpan<int> arguments,
+        ExpressionNode[] nodes,
+        int[] arguments,
         ReadOnlySpan<byte> expression)
     {
         if (ContainsInputsReference(functionCallNode.Left, functionCallNodeId, nodes, arguments, expression))
@@ -281,7 +281,7 @@ public sealed class RunInputsContextDirectUseRule() : RuleBase(RuleId.RunInputsC
         return false;
     }
 
-    private static bool IsGithubEventInputsChain(int nodeId, ReadOnlySpan<ExpressionNode> nodes, ReadOnlySpan<byte> expression)
+    private static bool IsGithubEventInputsChain(int nodeId, ExpressionNode[] nodes, ReadOnlySpan<byte> expression)
     {
         if (nodeId < 0 || nodeId >= nodes.Length)
         {
@@ -302,7 +302,7 @@ public sealed class RunInputsContextDirectUseRule() : RuleBase(RuleId.RunInputsC
         return IsGithubEventChain(node.Left, nodes, expression);
     }
 
-    private static bool IsGithubEventChain(int nodeId, ReadOnlySpan<ExpressionNode> nodes, ReadOnlySpan<byte> expression)
+    private static bool IsGithubEventChain(int nodeId, ExpressionNode[] nodes, ReadOnlySpan<byte> expression)
     {
         if (nodeId < 0 || nodeId >= nodes.Length)
         {
@@ -323,7 +323,7 @@ public sealed class RunInputsContextDirectUseRule() : RuleBase(RuleId.RunInputsC
         return IsIdentifierNode(node.Left, nodes, expression, "github"u8);
     }
 
-    private static bool IsIdentifierNode(int nodeId, ReadOnlySpan<ExpressionNode> nodes, ReadOnlySpan<byte> expression, ReadOnlySpan<byte> expected)
+    private static bool IsIdentifierNode(int nodeId, ExpressionNode[] nodes, ReadOnlySpan<byte> expression, ReadOnlySpan<byte> expected)
     {
         if (nodeId < 0 || nodeId >= nodes.Length)
         {

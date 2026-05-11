@@ -100,14 +100,14 @@ public sealed class WorkflowSecretsRule() : RuleBase(RuleId.WorkflowSecrets)
             || ContainsGitHubTokenReference(parseResult.RootNode, parseResult.Nodes, parseResult.Arguments, expression);
     }
 
-    private static bool ContainsSecretsReference(int nodeId, ReadOnlyMemory<ExpressionNode> nodes, ReadOnlyMemory<int> arguments, ReadOnlySpan<byte> expression)
+    private static bool ContainsSecretsReference(int nodeId, ExpressionNode[] nodes, int[] arguments, ReadOnlySpan<byte> expression)
     {
         if (nodeId < 0 || nodeId >= nodes.Length)
         {
             return false;
         }
 
-        var node = nodes.Span[nodeId];
+        var node = nodes[nodeId];
         if (node.Kind == ExpressionNodeKind.Identifier
             && EqualsAsciiIgnoreCase(node.Token.AsSpan(expression), "secrets"u8))
         {
@@ -117,15 +117,15 @@ public sealed class WorkflowSecretsRule() : RuleBase(RuleId.WorkflowSecrets)
         return ContainsReferenceInChildren(node, nodeId, nodes, arguments, expression, ContainsSecretsReference);
     }
 
-    private static bool ContainsGitHubTokenReference(int nodeId, ReadOnlyMemory<ExpressionNode> nodes, ReadOnlyMemory<int> arguments, ReadOnlySpan<byte> expression)
+    private static bool ContainsGitHubTokenReference(int nodeId, ExpressionNode[] nodes, int[] arguments, ReadOnlySpan<byte> expression)
     {
         if (nodeId < 0 || nodeId >= nodes.Length)
         {
             return false;
         }
 
-        var node = nodes.Span[nodeId];
-        if (IsGitHubTokenAccess(node, nodes.Span, expression))
+        var node = nodes[nodeId];
+        if (IsGitHubTokenAccess(node, nodes, expression))
         {
             return true;
         }
@@ -133,7 +133,7 @@ public sealed class WorkflowSecretsRule() : RuleBase(RuleId.WorkflowSecrets)
         return ContainsReferenceInChildren(node, nodeId, nodes, arguments, expression, ContainsGitHubTokenReference);
     }
 
-    private static bool IsGitHubTokenAccess(ExpressionNode node, ReadOnlySpan<ExpressionNode> nodes, ReadOnlySpan<byte> expression)
+    private static bool IsGitHubTokenAccess(ExpressionNode node, ExpressionNode[] nodes, ReadOnlySpan<byte> expression)
     {
         if (node.Kind == ExpressionNodeKind.MemberAccess)
         {
@@ -172,13 +172,13 @@ public sealed class WorkflowSecretsRule() : RuleBase(RuleId.WorkflowSecrets)
         return false;
     }
 
-    private delegate bool NodeMatcher(int nodeId, ReadOnlyMemory<ExpressionNode> nodes, ReadOnlyMemory<int> arguments, ReadOnlySpan<byte> expression);
+    private delegate bool NodeMatcher(int nodeId, ExpressionNode[] nodes, int[] arguments, ReadOnlySpan<byte> expression);
 
     private static bool ContainsReferenceInChildren(
         ExpressionNode node,
         int parentNodeId,
-        ReadOnlyMemory<ExpressionNode> nodes,
-        ReadOnlyMemory<int> arguments,
+        ExpressionNode[] nodes,
+        int[] arguments,
         ReadOnlySpan<byte> expression,
         NodeMatcher matcher)
     {
@@ -200,8 +200,8 @@ public sealed class WorkflowSecretsRule() : RuleBase(RuleId.WorkflowSecrets)
     private static bool ContainsReferenceInFunctionCall(
         ExpressionNode functionCallNode,
         int functionCallNodeId,
-        ReadOnlyMemory<ExpressionNode> nodes,
-        ReadOnlyMemory<int> arguments,
+        ExpressionNode[] nodes,
+        int[] arguments,
         ReadOnlySpan<byte> expression,
         NodeMatcher matcher)
     {
@@ -218,7 +218,7 @@ public sealed class WorkflowSecretsRule() : RuleBase(RuleId.WorkflowSecrets)
                 continue;
             }
 
-            if (matcher(arguments.Span[argIndex], nodes, arguments, expression))
+            if (matcher(arguments[argIndex], nodes, arguments, expression))
             {
                 return true;
             }

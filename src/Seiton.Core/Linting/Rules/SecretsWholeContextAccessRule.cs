@@ -164,8 +164,8 @@ public sealed class SecretsWholeContextAccessRule() : RuleBase(RuleId.SecretsWho
             if (!ContainsSecretsWholeContextReference(
                     parseResult.RootNode,
                     parentId: -1,
-                    parseResult.Nodes.Span,
-                    parseResult.Arguments.Span,
+                    parseResult.Nodes,
+                    parseResult.Arguments,
                     expression))
             {
                 continue;
@@ -181,8 +181,8 @@ public sealed class SecretsWholeContextAccessRule() : RuleBase(RuleId.SecretsWho
     private static bool ContainsSecretsWholeContextReference(
         int nodeId,
         int parentId,
-        ReadOnlySpan<ExpressionNode> nodes,
-        ReadOnlySpan<int> arguments,
+        ExpressionNode[] nodes,
+        int[] arguments,
         ReadOnlySpan<byte> expression)
     {
         if (nodeId < 0 || nodeId >= nodes.Length)
@@ -223,8 +223,8 @@ public sealed class SecretsWholeContextAccessRule() : RuleBase(RuleId.SecretsWho
     private static bool ContainsSecretsWholeContextReferenceInFunction(
         ExpressionNode functionCallNode,
         int functionCallNodeId,
-        ReadOnlySpan<ExpressionNode> nodes,
-        ReadOnlySpan<int> arguments,
+        ExpressionNode[] nodes,
+        int[] arguments,
         ReadOnlySpan<byte> expression)
     {
         // Check the function name expression (left child)
@@ -256,7 +256,7 @@ public sealed class SecretsWholeContextAccessRule() : RuleBase(RuleId.SecretsWho
     /// Returns false only when secrets is the left child of MemberAccess/IndexAccess/WildcardAccess,
     /// which means a specific key is being accessed (secrets.KEY or secrets['KEY']).
     /// </summary>
-    private static bool IsWholeContextAccess(int nodeId, int parentId, ReadOnlySpan<ExpressionNode> nodes)
+    private static bool IsWholeContextAccess(int nodeId, int parentId, ExpressionNode[] nodes)
     {
         if (parentId >= 0 && parentId < nodes.Length)
         {

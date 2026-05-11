@@ -65,12 +65,11 @@ public static class ExpressionExtractor
         {
             var expression = occurrence.Slice.AsSpan(utf8Yaml);
             var result = ExpressionParser.Parse(expression);
-            var diags = result.Diagnostics.Span;
             for (var i = 0; i < result.Diagnostics.Length; i++)
             {
                 diagnostics.Add(new Diagnostic(
-                    diags[i].Severity,
-                    $"expression parse error: {diags[i].Message}",
+                    result.Diagnostics[i].Severity,
+                    $"expression parse error: {result.Diagnostics[i].Message}",
                     occurrence.Location));
             }
         }
@@ -90,12 +89,11 @@ public static class ExpressionExtractor
         {
             var expression = occurrence.Slice.AsSpan(utf8Yaml);
             var parseResult = ExpressionParser.Parse(expression);
-            var parseDiags = parseResult.Diagnostics.Span;
             for (var i = 0; i < parseResult.Diagnostics.Length; i++)
             {
                 diagnostics.Add(new Diagnostic(
-                    parseDiags[i].Severity,
-                    $"expression parse error: {parseDiags[i].Message}",
+                    parseResult.Diagnostics[i].Severity,
+                    $"expression parse error: {parseResult.Diagnostics[i].Message}",
                     occurrence.Location));
             }
 
@@ -104,8 +102,8 @@ public static class ExpressionExtractor
             {
                 ExpressionSemanticAnalyzer.ValidateInline(
                     parseResult.RootNode,
-                    parseResult.Nodes.Span,
-                    parseResult.Arguments.Span,
+                    parseResult.Nodes,
+                    parseResult.Arguments,
                     expression,
                     occurrence.Location,
                     context,

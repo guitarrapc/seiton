@@ -51,8 +51,8 @@ public sealed class RunEnvContextDirectUseRule() : RuleBase(RuleId.RunEnvContext
             if (!ContainsContextRootReference(
                 parseResult.RootNode,
                 parentId: -1,
-                parseResult.Nodes.Span,
-                parseResult.Arguments.Span,
+                parseResult.Nodes,
+                parseResult.Arguments,
                 expression,
                 "env"u8))
             {

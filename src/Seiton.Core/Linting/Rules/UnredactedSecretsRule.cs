@@ -346,10 +346,10 @@ public sealed class UnredactedSecretsRule() : RuleBase(RuleId.UnredactedSecrets)
             return false;
         }
 
-        return ContainsSecretsReference(parseResult.RootNode, parseResult.Nodes.Span, parseResult.Arguments.Span, expression);
+        return ContainsSecretsReference(parseResult.RootNode, parseResult.Nodes, parseResult.Arguments, expression);
     }
 
-    private static bool ContainsSecretsReference(int nodeId, ReadOnlySpan<ExpressionNode> nodes, ReadOnlySpan<int> arguments, ReadOnlySpan<byte> expression)
+    private static bool ContainsSecretsReference(int nodeId, ExpressionNode[] nodes, int[] arguments, ReadOnlySpan<byte> expression)
     {
         if (nodeId < 0 || nodeId >= nodes.Length)
         {
@@ -378,7 +378,7 @@ public sealed class UnredactedSecretsRule() : RuleBase(RuleId.UnredactedSecrets)
         };
     }
 
-    private static bool ContainsSecretsReferenceInFunctionCall(ExpressionNode functionCallNode, ReadOnlySpan<ExpressionNode> nodes, ReadOnlySpan<int> arguments, ReadOnlySpan<byte> expression)
+    private static bool ContainsSecretsReferenceInFunctionCall(ExpressionNode functionCallNode, ExpressionNode[] nodes, int[] arguments, ReadOnlySpan<byte> expression)
     {
         if (ContainsSecretsReference(functionCallNode.Left, nodes, arguments, expression))
         {

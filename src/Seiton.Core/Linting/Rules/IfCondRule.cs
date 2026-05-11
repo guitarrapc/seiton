@@ -116,7 +116,7 @@ public sealed class IfCondRule() : RuleBase(RuleId.IfCond)
             return;
         }
 
-        if (IsConstantBool(parseResult.RootNode, parseResult.Nodes.Span, parseResult.Arguments.Span, expression, out var value))
+        if (IsConstantBool(parseResult.RootNode, parseResult.Nodes, parseResult.Arguments, expression, out var value))
         {
             var expressionText = Encoding.UTF8.GetString(expression).Trim();
             var message = $"constant expression \"{expressionText}\" in condition. remove the if: section";
@@ -132,7 +132,7 @@ public sealed class IfCondRule() : RuleBase(RuleId.IfCond)
         }
     }
 
-    private static bool IsConstantBool(int nodeId, ReadOnlySpan<ExpressionNode> nodes, ReadOnlySpan<int> arguments, ReadOnlySpan<byte> expression, out bool value)
+    private static bool IsConstantBool(int nodeId, ExpressionNode[] nodes, int[] arguments, ReadOnlySpan<byte> expression, out bool value)
     {
         var result = TryEvaluateConstant(nodeId, nodes, arguments, expression);
         if (result.IsConstant)
@@ -182,7 +182,7 @@ public sealed class IfCondRule() : RuleBase(RuleId.IfCond)
         };
     }
 
-    private static ConstantResult TryEvaluateConstant(int nodeId, ReadOnlySpan<ExpressionNode> nodes, ReadOnlySpan<int> arguments, ReadOnlySpan<byte> expression)
+    private static ConstantResult TryEvaluateConstant(int nodeId, ExpressionNode[] nodes, int[] arguments, ReadOnlySpan<byte> expression)
     {
         if (nodeId < 0 || nodeId >= nodes.Length)
         {
@@ -268,7 +268,7 @@ public sealed class IfCondRule() : RuleBase(RuleId.IfCond)
     }
 
     /// <summary>Evaluates a function call with all-constant arguments for known pure functions.</summary>
-    private static ConstantResult TryEvaluateConstantFunction(ExpressionNode node, ReadOnlySpan<ExpressionNode> nodes, ReadOnlySpan<int> arguments, ReadOnlySpan<byte> expression)
+    private static ConstantResult TryEvaluateConstantFunction(ExpressionNode node, ExpressionNode[] nodes, int[] arguments, ReadOnlySpan<byte> expression)
     {
         if (node.Left < 0 || node.Left >= nodes.Length)
         {

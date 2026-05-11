@@ -77,8 +77,8 @@ public sealed class RunSecretsContextDirectUseRule() : RuleBase(RuleId.RunSecret
             if (!ContainsContextRootReference(
                 parseResult.RootNode,
                 parentId: -1,
-                parseResult.Nodes.Span,
-                parseResult.Arguments.Span,
+                parseResult.Nodes,
+                parseResult.Arguments,
                 expression,
                 "secrets"u8))
             {
