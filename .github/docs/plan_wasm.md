@@ -256,3 +256,39 @@ PartialChange (=キーストローク相当) が FullChange より 15× 多い�
 - 予想: PartialChange Large ~1.5 MB/call → 実測: **~63 KB/call** — 予想を大幅に上回る改善。D-5d による job skip に加え、expression cache が reused source で有効に機能したことが寄与。
 - NoChange パスが 0 B allocation になったのは、identity check shortcircuit で `EncodeToDoubleBuffer` すら呼ばないため。以前は `ReferenceEquals` チェック後も一部の処理が走っていた可能性。
 - FullChange も大幅改善 (-94.4%) は、D-5d の job cache が 2回目以降のベンチマーク iterations で効いたため。
+
+### Phase 2 結果 (2026-05-12)
+
+**アプローチ**: `LintConfig.PrepareForRun()` の `_expressionCache.Clear()` を削除し、expression cache を source 変更を跨いで保持するように変更。cache key は既に XXH64(expression bytes) で content-based なので、異なる source でも同一 expression はヒットする。
+
+**変更内容**:
+1. `_expressionCache.Clear()` を削除 — source 変更時にもキャッシュを保持
+2. collision guard を簡素化 — offset ベースの `Utf8Yaml.AsSpan(entry.Offset, entry.Length).SequenceEqual(expression)` を `entry.Length == expression.Length` に変更。XXH64 + length 一致で false positive は < 1/2^64
+3. `ExpressionCacheEntry` から `Offset` フィールドを除去 — source 参照が不要に
+4. `Utf8Yaml is null` チェックを除去 — キャッシュが source 非依存に
+
+**変更ファイル**:
+- `src/Seiton.Core/Linting/LintConfig.cs` — `PrepareForRun()` の cache clear 撤廃、`ParseExpression()` の collision guard 簡素化、`ExpressionCacheEntry` から `Offset` 除去
+
+**安全性の根拠**:
+- `ExpressionParser.Parse(ReadOnlySpan<byte>)` は expression bytes のみを入力に取り、source YAML への参照を持たない
+- `ExpressionParseResult` の中身は `RootNode`(int)、`ExpressionNode[]`、`int[]`、`Diagnostic[]` — すべて expression 内部の相対位置。source YAML のオフセットは含まれない
+- `ExpressionNode.Token` は `Utf8Slice`（offset + length）だが、expression span 内の相対位置
+- 同一 expression は source のどこに出現しても、source が何回変わっても、パース結果は同一
+
+**テスト結果**: 全テスト通過 (1529/1529)
+
+**ベンチマーク結果** (PlaygroundLintBenchmark, ShortRun):
+
+| シナリオ | Size | Before Alloc (10回) | After Alloc (10回) | 削減率 | Per-call |
+|---|---|---|---|---|---|
+| PartialChange | Small | 154,000 B | 144,560 B | -6.1% | ~14 KB/call |
+| FullChange | Small | 67,427 B | 65,470 B | -2.9% | ~7 KB/call |
+| PartialChange | Large | 626,809 B | 617,956 B | -1.4% | ~62 KB/call |
+| FullChange | Large | 409,287 B | 407,498 B | -0.4% | ~41 KB/call |
+
+CoreLintBenchmark: 回帰なし（全サイズで Allocated 同値）
+
+**予想との差分**:
+- 予想: ~30-50% 削減 → 実測: **~1-6%** — Phase 1 で expression cache が reused source 上で既に効いていたため、残存する expression 再パースの量が予想より小さかった。PartialChange では skip された job の expression は lint 自体が走らず、FullChange では全 expression が新規だが 2 回目以降のイテレーションでキャッシュヒットする。
+- 改善幅は控えめだが、キャッシュが source 変更を跨いで生存するようになったことで、同一 expression の再パースを完全に防止する効果がある。

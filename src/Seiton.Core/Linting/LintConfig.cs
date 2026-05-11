@@ -1,7 +1,6 @@
 ﻿using Seiton.Core.Linting.PinRemediation;
 using Seiton.Core.Parsing;
 using System.Runtime.CompilerServices;
-using System.Runtime.InteropServices;
 
 namespace Seiton.Core.Linting;
 
@@ -29,12 +28,11 @@ public sealed class LintConfig
 
     /// <summary>
     /// Parses an expression with content-based deduplication. Expressions with identical
-    /// byte content at different source positions share the same parse result.
-    /// The expression span must originate from Utf8Yaml.
+    /// byte content share the same parse result, even across different source documents.
     /// </summary>
     public ExpressionParseResult ParseExpression(ReadOnlySpan<byte> expression)
     {
-        if (Utf8Yaml is null || expression.IsEmpty)
+        if (expression.IsEmpty)
         {
             return ExpressionParser.Parse(expression);
         }
@@ -44,21 +42,18 @@ public sealed class LintConfig
         _expressionCache ??= new();
         if (_expressionCache.TryGetValue(key, out var entry))
         {
-            // Verify content match (collision guard)
-            if (Utf8Yaml.AsSpan(entry.Offset, entry.Length).SequenceEqual(expression))
+            // Collision guard: XXH64 match + identical length makes false positive < 1 in 2^64
+            if (entry.Length == expression.Length)
             {
                 return entry.Result;
             }
 
-            // Hash collision with different content — parse without caching (extremely rare)
+            // Hash collision with different length — parse without caching (extremely rare)
             return ExpressionParser.Parse(expression);
         }
 
         var result = ExpressionParser.Parse(expression);
-        var offset = (int)Unsafe.ByteOffset(
-            ref MemoryMarshal.GetArrayDataReference(Utf8Yaml),
-            ref MemoryMarshal.GetReference(expression));
-        _expressionCache[key] = new ExpressionCacheEntry(offset, expression.Length, result);
+        _expressionCache[key] = new ExpressionCacheEntry(expression.Length, result);
         return result;
     }
 
@@ -68,7 +63,7 @@ public sealed class LintConfig
         return (long)XxHash64.Hash(span);
     }
 
-    private readonly record struct ExpressionCacheEntry(int Offset, int Length, ExpressionParseResult Result);
+    private readonly record struct ExpressionCacheEntry(int Length, ExpressionParseResult Result);
 
     /// <summary>
     /// Returns the line-start offset array for Utf8Yaml, lazily built on first access.
@@ -126,8 +121,8 @@ public sealed class LintConfig
 
     /// <summary>
     /// Resets per-call state and updates properties for a new lint run.
-    /// Preserves expression cache and line starts when the source content is unchanged
-    /// (detected via XXH64 hash + length + full byte comparison to eliminate collision risk).
+    /// Preserves expression cache across source changes (cache keys are content-hash-based).
+    /// Line starts are recomputed when the source content changes.
     /// Safe even when the same byte[] is reused with different content.
     /// </summary>
     internal void PrepareForRun(
@@ -157,10 +152,6 @@ public sealed class LintConfig
         if (!sameContent)
         {
             _lineStarts = null;
-            if (_expressionCache is not null)
-            {
-                _expressionCache.Clear();
-            }
         }
     }
 
