@@ -15,7 +15,7 @@ public sealed class PinRemediationEngineTests
         {
             new Diagnostic(
                 DiagnosticSeverity.Warning,
-                "action uses 'actions/checkout@v4' is not pinned to a full-length commit SHA",
+                "'actions/checkout@v4' is not pinned to a full-length commit SHA",
                 new TextRange(0, source.Length, 1, 1, 2, 30),
                 RuleId: "unpinned-uses",
                 Metadata: PinDiagnosticMetadata.ForUsesRef("actions/checkout@v4")),
@@ -41,19 +41,19 @@ public sealed class PinRemediationEngineTests
         {
             new Diagnostic(
                 DiagnosticSeverity.Warning,
-                "action uses 'actions/checkout@v4' is not pinned to a full-length commit SHA",
+                "'actions/checkout@v4' is not pinned to a full-length commit SHA",
                 new TextRange(0, source.Length, 1, 1, 2, 30),
                 RuleId: "unpinned-uses",
                 Metadata: PinDiagnosticMetadata.ForUsesRef("actions/checkout@v4")),
             new Diagnostic(
                 DiagnosticSeverity.Warning,
-                "docker action uses 'docker://ghcr.io/astral-sh/uv:latest' is not pinned by digest (expected @sha256:<64-hex>)",
+                "'docker://ghcr.io/astral-sh/uv:latest' is not pinned by digest (expected @sha256:<64-hex>)",
                 new TextRange(0, source.Length, 1, 1, 3, 60),
                 RuleId: "unpinned-image",
                 Metadata: PinDiagnosticMetadata.ForImageRef("docker://ghcr.io/astral-sh/uv:latest")),
             new Diagnostic(
                 DiagnosticSeverity.Warning,
-                "action uses 'actions/setup-go@v5' is not pinned to a full-length commit SHA",
+                "'actions/setup-go@v5' is not pinned to a full-length commit SHA",
                 new TextRange(0, source.Length, 1, 1, 3, 60),
                 RuleId: "unpinned-uses",
                 Metadata: PinDiagnosticMetadata.ForUsesRef("actions/setup-go@v5")),
@@ -95,7 +95,7 @@ public sealed class PinRemediationEngineTests
         {
             new Diagnostic(
                 DiagnosticSeverity.Warning,
-                "action uses 'actions/setup-go@v5' is not pinned to a full-length commit SHA",
+                "'actions/setup-go@v5' is not pinned to a full-length commit SHA",
                 new TextRange(0, source.Length, 1, 1, 2, 32),
                 RuleId: "unpinned-uses",
                 Metadata: PinDiagnosticMetadata.ForUsesRef("actions/setup-go@v5")),

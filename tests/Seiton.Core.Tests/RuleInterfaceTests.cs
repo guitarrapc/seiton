@@ -6806,7 +6806,7 @@ public sealed class RuleInterfaceTests
                     steps:
                         - uses: actions-rs/toolchain@v1
             """,
-            ["archived repository", "actions-rs/toolchain"]),
+            ["is archived", "actions-rs/toolchain"]),
             new RuleCase(
             "ng-archived-reusable-workflow-repo",
             """
@@ -6815,7 +6815,7 @@ public sealed class RuleInterfaceTests
                 reuse:
                     uses: actions-rs/cargo/.github/workflows/reuse.yml@v1
             """,
-            ["archived repository", "actions-rs/cargo"]),
+            ["is archived", "actions-rs/cargo"]),
         };
 
         await AssertRuleCases(new ArchivedUsesRule(), "archived-uses", cases);
@@ -14275,5 +14275,34 @@ public sealed class RuleInterfaceTests
         await Assert.That(emptyDiag.Message).IsNotNull();
         await Assert.That(emptyDiag.Message!).Contains("available labels are");
         await Assert.That(emptyDiag.Message!).Contains("ubuntu-latest");
+    }
+
+    [Test]
+    public async Task UnpinnedUses_MessageStartsWithActionName_NotActionUses()
+    {
+        var yaml = """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - uses: actions/checkout@v4
+            """;
+
+        var engine = new LintEngine();
+        var result = engine.Check(Encoding.UTF8.GetBytes(yaml), "test.yaml");
+        try
+        {
+            var diag = result.Diagnostics.FirstOrDefault(d =>
+                d.RuleId == "unpinned-uses" &&
+                d.Message?.Contains("is not pinned to a full-length commit SHA") == true);
+            var message = diag.Message;
+            await Assert.That(message).IsNotNull();
+            await Assert.That(message!.StartsWith("'actions/checkout@v4'", StringComparison.Ordinal)).IsTrue();
+        }
+        finally
+        {
+            result.ParseResult.Arena?.Dispose();
+        }
     }
 }

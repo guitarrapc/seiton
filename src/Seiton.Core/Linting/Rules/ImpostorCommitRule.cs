@@ -15,7 +15,7 @@ public sealed class ImpostorCommitRule() : OnlineRuleBase(RuleId.ImpostorCommit)
         }
 
         AddError(
-            $"action uses '{target.UsesText}' pins commit '{target.Reference}' that is not reachable in '{target.Owner}/{target.Repo}'",
+            $"'{target.UsesText}' pins commit '{target.Reference}' that is not reachable in '{target.Owner}/{target.Repo}'",
             target.Location);
     }
 }
