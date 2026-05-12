@@ -381,6 +381,27 @@ internal static class PopularActions
                 _ => 0,
             };
         }
+
+        internal (string Scope, string Access)[] GetRequiredPermissions()
+        {
+            return Id switch
+            {
+                ActionId.ActionsCache => [],
+                ActionId.ActionsCheckout => [("contents", "read")],
+                ActionId.ActionsDownloadArtifact => [],
+                ActionId.ActionsSetupDotnet => [],
+                ActionId.ActionsSetupGo => [],
+                ActionId.ActionsSetupNode => [],
+                ActionId.ActionsStale => [("issues", "write"), ("pull-requests", "write")],
+                ActionId.ActionsUploadArtifact => [],
+                ActionId.DockerLoginAction => [],
+                ActionId.OctokitRequestAction => [],
+                ActionId.PypaGhActionPypiPublish => [("id-token", "write")],
+                ActionId.ReviewdogActionActionlint => [("contents", "read")],
+                ActionId.RhysdActionSetupVim => [],
+                _ => [],
+            };
+        }
     }
 
     internal static bool TryGet(ReadOnlySpan<byte> usesUtf8, out ActionSpec spec)

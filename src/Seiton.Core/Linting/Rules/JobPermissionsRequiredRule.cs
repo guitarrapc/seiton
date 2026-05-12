@@ -1,6 +1,7 @@
 ﻿using Seiton.Core.Parsing.Ast;
 using Seiton.Core.Parsing;
 using Seiton.Core.Linting.Fixing;
+using Seiton.Core.Generated;
 
 namespace Seiton.Core.Linting.Rules;
 
@@ -69,7 +70,7 @@ public sealed class JobPermissionsRequiredRule() : RuleBase(RuleId.JobPermission
         }
 
         var lineEnding = FixFormatting.DetectDominantLineEnding(utf8Yaml);
-        var permissionsLine = bodyIndent + "permissions: {}" + lineEnding;
+        var permissionsText = BuildPermissionsText(job, parentIndent, bodyIndent, lineEnding);
 
         var anchorLine = FindKeyLine(utf8Yaml, jobLine + 1, jobEndLine, bodyIndent, "runs-on:"u8);
         if (anchorLine < 0)
@@ -85,11 +86,11 @@ public sealed class JobPermissionsRequiredRule() : RuleBase(RuleId.JobPermission
             insertOffset = FindLineEndOffsetIncludingNewLine(utf8Yaml, anchorLine);
             if (insertOffset > 0 && insertOffset <= utf8Yaml.Length && utf8Yaml[insertOffset - 1] != (byte)'\n')
             {
-                insertText = lineEnding + permissionsLine;
+                insertText = lineEnding + permissionsText;
             }
             else
             {
-                insertText = permissionsLine;
+                insertText = permissionsText;
             }
         }
         else
@@ -98,18 +99,18 @@ public sealed class JobPermissionsRequiredRule() : RuleBase(RuleId.JobPermission
             if (firstSiblingLine >= 0)
             {
                 insertOffset = FindLineStartOffset(utf8Yaml, firstSiblingLine);
-                insertText = permissionsLine;
+                insertText = permissionsText;
             }
             else
             {
                 insertOffset = FindLineEndOffsetIncludingNewLine(utf8Yaml, jobLine);
                 if (insertOffset > 0 && insertOffset <= utf8Yaml.Length && utf8Yaml[insertOffset - 1] != (byte)'\n')
                 {
-                    insertText = lineEnding + permissionsLine;
+                    insertText = lineEnding + permissionsText;
                 }
                 else
                 {
-                    insertText = permissionsLine;
+                    insertText = permissionsText;
                 }
             }
         }
@@ -118,6 +119,130 @@ public sealed class JobPermissionsRequiredRule() : RuleBase(RuleId.JobPermission
             "insert explicit job permissions mapping",
             [new TextEdit(insertOffset, 0, insertText)]);
         return true;
+    }
+
+    private string BuildPermissionsText(Job job, string parentIndent, string bodyIndent, string lineEnding)
+    {
+        var merged = CollectRequiredPermissions(job);
+        if (merged.Count == 0)
+        {
+            return bodyIndent + "permissions: {}" + lineEnding;
+        }
+
+        // Infer child indent from parentIndent→bodyIndent relationship (add one level)
+        var indentUnit = InferIndentUnit(parentIndent, bodyIndent);
+        var childIndent = bodyIndent + indentUnit;
+
+        var sb = new System.Text.StringBuilder();
+        sb.Append(bodyIndent);
+        sb.Append("permissions:");
+        sb.Append(lineEnding);
+        foreach (var (scope, access) in merged.OrderBy(static kv => kv.Key, StringComparer.Ordinal))
+        {
+            sb.Append(childIndent);
+            sb.Append(scope);
+            sb.Append(": ");
+            sb.Append(access);
+            sb.Append(lineEnding);
+        }
+
+        return sb.ToString();
+    }
+
+    private Dictionary<string, string> CollectRequiredPermissions(Job job)
+    {
+        var merged = new Dictionary<string, string>(StringComparer.Ordinal);
+
+        if (job.Steps is null)
+        {
+            return merged;
+        }
+
+        foreach (var step in job.Steps)
+        {
+            if (step.Exec is not ExecAction action)
+            {
+                continue;
+            }
+
+            var usesValue = Arena.GetStringValue(action.Uses);
+            if (usesValue.IsEmpty)
+            {
+                continue;
+            }
+
+            if (!PopularActions.TryGet(usesValue, out var spec))
+            {
+                continue;
+            }
+
+            var perms = spec.GetRequiredPermissions();
+            for (var i = 0; i < perms.Length; i++)
+            {
+                var (scope, access) = perms[i];
+                if (merged.TryGetValue(scope, out var existing))
+                {
+                    if (AccessLevel(access) > AccessLevel(existing))
+                    {
+                        merged[scope] = access;
+                    }
+                }
+                else
+                {
+                    merged[scope] = access;
+                }
+            }
+        }
+
+        return merged;
+    }
+
+    private static int AccessLevel(string access)
+    {
+        return access switch
+        {
+            "none" => 0,
+            "read" => 1,
+            "write" => 2,
+            _ => -1,
+        };
+    }
+
+    private static string InferIndentUnit(string parentIndent, string bodyIndent)
+    {
+        // bodyIndent = parentIndent + indentUnit. Derive the unit from the difference.
+        if (bodyIndent.Length == 0)
+        {
+            return "  ";
+        }
+
+        if (bodyIndent[0] == '\t')
+        {
+            if (parentIndent.Length < bodyIndent.Length
+                && bodyIndent.StartsWith(parentIndent, StringComparison.Ordinal))
+            {
+                var tabUnit = bodyIndent[parentIndent.Length..];
+                if (tabUnit.Length > 0 && tabUnit.AsSpan().IndexOfAnyExcept('\t') < 0)
+                {
+                    return tabUnit;
+                }
+            }
+
+            return "\t";
+        }
+
+        if (parentIndent.Length < bodyIndent.Length
+            && bodyIndent.StartsWith(parentIndent, StringComparison.Ordinal))
+        {
+            var spaceUnit = bodyIndent[parentIndent.Length..];
+            if (spaceUnit.Length > 0 && spaceUnit.AsSpan().IndexOfAnyExcept(' ') < 0)
+            {
+                return spaceUnit;
+            }
+        }
+
+        // Fallback: safer common YAML default
+        return "  ";
     }
 
     private static int FindKeyLine(byte[] utf8Yaml, int startLine, int endLine, string indent, ReadOnlySpan<byte> keyPrefix)

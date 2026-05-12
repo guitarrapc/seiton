@@ -104,7 +104,7 @@ Apply conflict resolution policy across all parsed artifacts to produce one cano
   - Official-source diff report: `data/sources/reports/official-{dataset}-source-diff.md` (when applicable)
 - Network access: **no**
 
-**Supplemental merge pattern**: Some datasets need key sets or entries that are not present in the raw source files parsed in Stage 2 (for example, action metadata keys are not in `workflow-syntax.md`). These are maintained as hand-written `supplemental-*.json` files alongside the canonical snapshot. Stage 3 reads the supplemental file, merges its entries into the parsed model (deduplicating by name, sorting alphabetically), and writes the combined result as the canonical snapshot. This keeps Stage 2 pure (derived only from raw) while allowing the canonical snapshot to include repository-managed additions. Current datasets using this pattern: `runner-labels` (`supplemental-labels.json`), `expected-keys` (`supplemental-keys.json`).
+**Supplemental merge pattern**: Some datasets need key sets or entries that are not present in the raw source files parsed in Stage 2 (for example, action metadata keys are not in `workflow-syntax.md`). These are maintained as hand-written `supplemental-*.json` files alongside the canonical snapshot. Stage 3 reads the supplemental file, merges its entries into the parsed model (deduplicating by name, sorting alphabetically), and writes the combined result as the canonical snapshot. This keeps Stage 2 pure (derived only from raw) while allowing the canonical snapshot to include repository-managed additions. Current datasets using this pattern: `runner-labels` (`supplemental-labels.json`), `expected-keys` (`supplemental-keys.json`), `popular-actions` (`supplemental-required-permissions.json`).
 
 #### 3.1.4 Codegen — Sync .g.cs
 
@@ -271,6 +271,7 @@ The popular-actions pipeline extracts the following metadata from each fetched `
 | `inputs` | `action.yml` `inputs:` section | Input names and `required` flags |
 | `outputs` | `action.yml` `outputs:` section | Output names |
 | `runsUsing` | `action.yml` `runs.using` value | Runtime identifier (e.g. `node20`, `composite`, `docker`) |
+| `requiredPermissions` | `supplemental-required-permissions.json` | Required GitHub token permission scopes (e.g. `contents: read`). Hand-written; merged during Stage 3 |
 
 The Stage 2 parser (`GitHubActionMetadataYamlParser`) extracts `inputs`, `outputs`, and `runsUsing` independently from raw `action.yml` files using line-based indent-aware parsing.
 
@@ -281,6 +282,7 @@ The codegen stage (`PopularActionsCSharpGenerator`) produces:
 - `IsInputAllowed(name)` — case-insensitive input name lookup
 - `GetOutputNames()` — returns `byte[][]` of known output names
 - `GetRunsUsing()` — returns `ReadOnlySpan<byte>` of the `runs.using` value
+- `GetRequiredPermissions()` — returns `(string Scope, string Access)[]` of required permission scopes
 
 These generated methods are consumed by linter rules (`popular-action-inputs`, `outdated-action-runner`, `expr-undefined-var`) at compile time, with no runtime network access.
 
@@ -402,6 +404,7 @@ data/sources/availability/github/availability.json
 data/sources/popular-actions/github/raw/*.action.yml
 data/sources/popular-actions/github/parsed/*
 data/sources/popular-actions/github/popular_actions.json
+data/sources/popular-actions/supplemental-required-permissions.json
 data/sources/popular-actions/targets.json
 
 data/sources/runner-labels/github/raw/*

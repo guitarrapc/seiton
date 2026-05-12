@@ -22,7 +22,13 @@ internal sealed class PopularActionsCSharpGenerator
                     .OrderBy(static n => n.Name, StringComparer.Ordinal)
                     .ToArray(),
                 x.RunsUsing,
-                x.MaxDeprecatedMajorVersion))
+                x.MaxDeprecatedMajorVersion,
+                x.RequiredPermissions
+                    .Where(static p => !string.IsNullOrWhiteSpace(p.Scope))
+                    .DistinctBy(static p => (p.Scope, p.Access), EqualityComparer<(string, string)>.Default)
+                    .OrderBy(static p => p.Scope, StringComparer.Ordinal)
+                    .ThenBy(static p => p.Access, StringComparer.Ordinal)
+                    .ToArray()))
             .OrderBy(static x => x.Uses, StringComparer.Ordinal)
             .ToArray();
 
@@ -282,6 +288,38 @@ internal sealed class PopularActionsCSharpGenerator
         sb.Append(
             """
                             _ => 0,
+                        };
+                    }
+
+                    internal (string Scope, string Access)[] GetRequiredPermissions()
+                    {
+                        return Id switch
+                        {
+            """);
+        sb.AppendLine();
+
+        foreach (var action in normalized)
+        {
+            var actionId = ToActionIdName(action.Uses);
+            if (action.RequiredPermissions.Count == 0)
+            {
+                sb.AppendLine($"                ActionId.{actionId} => [],");
+            }
+            else
+            {
+                var items = string.Join(", ", action.RequiredPermissions.Select(static p =>
+                {
+                    var scope = p.Scope.Replace("\\", "\\\\").Replace("\"", "\\\"");
+                    var access = p.Access.Replace("\\", "\\\\").Replace("\"", "\\\"");
+                    return $"(\"{scope}\", \"{access}\")";
+                }));
+                sb.AppendLine($"                ActionId.{actionId} => [{items}],");
+            }
+        }
+
+        sb.Append(
+            """
+                            _ => [],
                         };
                     }
                 }

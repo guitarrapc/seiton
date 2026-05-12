@@ -1254,6 +1254,8 @@ jobs:
 
 Warns when a job omits an explicit `permissions:` declaration. Without explicit permissions the job inherits potentially broad defaults.
 
+When auto-fix is enabled, the fix infers minimum required permission scopes from known popular actions used in the job's steps (e.g. `actions/checkout` requires `contents: read`). If multiple actions require the same scope, the highest access level wins (write > read). When no known action requirements are found, the fix inserts `permissions: {}`.
+
 **Example trigger:**
 
 ```yaml
@@ -1275,6 +1277,18 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
+    steps:
+      - uses: actions/checkout@v4
+```
+
+If the job uses only actions without known permission requirements, `permissions: {}` is inserted:
+
+```yaml
+on: push
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions: {}
     steps:
       - run: echo ok
 ```

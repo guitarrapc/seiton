@@ -174,6 +174,29 @@ internal sealed class GitHubPopularActionsFetcher
             }
         }
 
+        // Load supplemental required permissions
+        var supplementalPermissionsPath = Path.Combine(
+            repoRoot, "data", "sources", "popular-actions", "supplemental-required-permissions.json");
+        var requiredPermissionsLookup = new Dictionary<string, SupplementalPermissionEntry[]>(StringComparer.Ordinal);
+        if (File.Exists(supplementalPermissionsPath))
+        {
+            var supText = File.ReadAllText(supplementalPermissionsPath);
+            var supData = JsonSerializer.Deserialize<SupplementalRequiredPermissionsFile>(supText, new JsonSerializerOptions
+            {
+                PropertyNameCaseInsensitive = true,
+            });
+            if (supData?.Actions is not null)
+            {
+                foreach (var entry in supData.Actions)
+                {
+                    if (!string.IsNullOrWhiteSpace(entry.Uses) && entry.RequiredPermissions is { Count: > 0 })
+                    {
+                        requiredPermissionsLookup[entry.Uses] = entry.RequiredPermissions.ToArray();
+                    }
+                }
+            }
+        }
+
         var snapshot = new
         {
             schemaVersion = 1,
@@ -197,6 +220,15 @@ internal sealed class GitHubPopularActionsFetcher
                         .ToArray(),
                     runsUsing = x.RunsUsing ?? string.Empty,
                     maxDeprecatedMajorVersion = deprecatedVersionLookup.GetValueOrDefault(x.Uses, 0),
+                    requiredPermissions = requiredPermissionsLookup.TryGetValue(x.Uses, out var perms)
+                        ? perms
+                            .Where(static p => !string.IsNullOrWhiteSpace(p.Scope))
+                            .DistinctBy(static p => (p.Scope, p.Access), EqualityComparer<(string, string)>.Default)
+                            .OrderBy(static p => p.Scope, StringComparer.Ordinal)
+                            .ThenBy(static p => p.Access, StringComparer.Ordinal)
+                            .Select(static p => new { scope = p.Scope, access = p.Access })
+                            .ToArray()
+                        : Array.Empty<object>(),
                 })
                 .ToArray(),
         };
@@ -458,5 +490,22 @@ internal sealed class GitHubPopularActionsFetcher
     private sealed class ParsedPopularActionOutput
     {
         public string Name { get; set; } = string.Empty;
+    }
+
+    private sealed class SupplementalRequiredPermissionsFile
+    {
+        public List<SupplementalPermissionAction>? Actions { get; set; }
+    }
+
+    private sealed class SupplementalPermissionAction
+    {
+        public string Uses { get; set; } = string.Empty;
+        public List<SupplementalPermissionEntry>? RequiredPermissions { get; set; }
+    }
+
+    private sealed class SupplementalPermissionEntry
+    {
+        public string Scope { get; set; } = string.Empty;
+        public string Access { get; set; } = string.Empty;
     }
 }

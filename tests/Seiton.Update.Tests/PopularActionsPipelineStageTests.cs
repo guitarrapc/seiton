@@ -421,6 +421,14 @@ public sealed class PopularActionsPipelineStageTests
             await Assert.That(inputNames).Contains("fetch-depth");
             await Assert.That(inputNames).Contains("repository");
             await Assert.That(inputNames).Contains("token");
+
+            // Verify requiredPermissions from supplemental merge
+            var reqPerms = checkout.GetProperty("requiredPermissions")
+                .EnumerateArray()
+                .Select(x => (scope: x.GetProperty("scope").GetString()!, access: x.GetProperty("access").GetString()!))
+                .ToList();
+
+            await Assert.That(reqPerms).Contains(("contents", "read"));
         }
         finally
         {
@@ -520,6 +528,13 @@ public sealed class PopularActionsPipelineStageTests
         Directory.CreateDirectory(dstParsed);
 
         File.Copy(srcTargets, Path.Combine(dstTargetsDir, "targets.json"), overwrite: true);
+
+        // Copy supplemental files (e.g., supplemental-required-permissions.json)
+        foreach (var supFile in Directory.GetFiles(
+            Path.Combine(repoRoot, "data", "sources", "popular-actions"), "supplemental-*.json"))
+        {
+            File.Copy(supFile, Path.Combine(dstTargetsDir, Path.GetFileName(supFile)), overwrite: true);
+        }
 
         foreach (var file in Directory.GetFiles(srcParsed))
         {
