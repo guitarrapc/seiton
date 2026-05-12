@@ -421,6 +421,14 @@ public sealed class PopularActionsPipelineStageTests
             await Assert.That(inputNames).Contains("fetch-depth");
             await Assert.That(inputNames).Contains("repository");
             await Assert.That(inputNames).Contains("token");
+
+            // Verify requiredPermissions from supplemental merge
+            var reqPerms = checkout.GetProperty("requiredPermissions")
+                .EnumerateArray()
+                .Select(x => (scope: x.GetProperty("scope").GetString()!, access: x.GetProperty("access").GetString()!))
+                .ToList();
+
+            await Assert.That(reqPerms).Contains(("contents", "read"));
         }
         finally
         {

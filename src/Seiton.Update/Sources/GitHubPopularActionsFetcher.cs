@@ -221,7 +221,13 @@ internal sealed class GitHubPopularActionsFetcher
                     runsUsing = x.RunsUsing ?? string.Empty,
                     maxDeprecatedMajorVersion = deprecatedVersionLookup.GetValueOrDefault(x.Uses, 0),
                     requiredPermissions = requiredPermissionsLookup.TryGetValue(x.Uses, out var perms)
-                        ? perms.Select(static p => new { scope = p.Scope, access = p.Access }).ToArray()
+                        ? perms
+                            .Where(static p => !string.IsNullOrWhiteSpace(p.Scope))
+                            .DistinctBy(static p => (p.Scope, p.Access), EqualityComparer<(string, string)>.Default)
+                            .OrderBy(static p => p.Scope, StringComparer.Ordinal)
+                            .ThenBy(static p => p.Access, StringComparer.Ordinal)
+                            .Select(static p => new { scope = p.Scope, access = p.Access })
+                            .ToArray()
                         : Array.Empty<object>(),
                 })
                 .ToArray(),

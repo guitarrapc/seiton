@@ -23,7 +23,12 @@ internal sealed class PopularActionsCSharpGenerator
                     .ToArray(),
                 x.RunsUsing,
                 x.MaxDeprecatedMajorVersion,
-                x.RequiredPermissions))
+                x.RequiredPermissions
+                    .Where(static p => !string.IsNullOrWhiteSpace(p.Scope))
+                    .DistinctBy(static p => (p.Scope, p.Access), EqualityComparer<(string, string)>.Default)
+                    .OrderBy(static p => p.Scope, StringComparer.Ordinal)
+                    .ThenBy(static p => p.Access, StringComparer.Ordinal)
+                    .ToArray()))
             .OrderBy(static x => x.Uses, StringComparer.Ordinal)
             .ToArray();
 
@@ -302,7 +307,12 @@ internal sealed class PopularActionsCSharpGenerator
             }
             else
             {
-                var items = string.Join(", ", action.RequiredPermissions.Select(static p => $"(\"{p.Scope}\", \"{p.Access}\")"));
+                var items = string.Join(", ", action.RequiredPermissions.Select(static p =>
+                {
+                    var scope = p.Scope.Replace("\\", "\\\\").Replace("\"", "\\\"");
+                    var access = p.Access.Replace("\\", "\\\\").Replace("\"", "\\\"");
+                    return $"(\"{scope}\", \"{access}\")";
+                }));
                 sb.AppendLine($"                ActionId.{actionId} => [{items}],");
             }
         }
