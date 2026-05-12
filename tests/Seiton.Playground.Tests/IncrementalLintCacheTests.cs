@@ -207,8 +207,13 @@ public sealed class IncrementalLintCacheTests
         if (cmp != 0) return cmp;
         cmp = string.CompareOrdinal(GetStringProperty(left, "message"), GetStringProperty(right, "message"));
         if (cmp != 0) return cmp;
-        // Total ordering: fall back to raw JSON text so Array.Sort cannot reorder
-        // distinct diagnostics that share the same primary fields.
+        cmp = string.CompareOrdinal(GetStringProperty(left, "severity"), GetStringProperty(right, "severity"));
+        if (cmp != 0) return cmp;
+        cmp = GetBoolProperty(left, "fixable").CompareTo(GetBoolProperty(right, "fixable"));
+        if (cmp != 0) return cmp;
+        cmp = string.CompareOrdinal(GetStringProperty(left, "fixDescription"), GetStringProperty(right, "fixDescription"));
+        if (cmp != 0) return cmp;
+        // Final total-order fallback.
         return string.CompareOrdinal(left.GetRawText(), right.GetRawText());
     }
 
@@ -217,4 +222,7 @@ public sealed class IncrementalLintCacheTests
 
     private static string GetStringProperty(System.Text.Json.JsonElement element, string propertyName) =>
         element.TryGetProperty(propertyName, out var prop) ? prop.GetString() ?? string.Empty : string.Empty;
+
+    private static bool GetBoolProperty(System.Text.Json.JsonElement element, string propertyName) =>
+        element.TryGetProperty(propertyName, out var prop) && prop.ValueKind is System.Text.Json.JsonValueKind.True;
 }
