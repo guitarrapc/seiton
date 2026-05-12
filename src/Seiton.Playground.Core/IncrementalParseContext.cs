@@ -949,11 +949,13 @@ public sealed class IncrementalParseContext
         if (jobCount <= 0 || _lastReusedJobs is null || _cachedJobDiagnostics is null)
             return null;
 
-        // Reuse buffer, grow only when needed
-        if (_skipJobsBuf is null || _skipJobsBuf.Length < jobCount)
+        // Reuse buffer only when it already matches the current job count.
+        // This ensures callers never observe stale trailing entries from a
+        // previous larger run when iterating skipJobs.Length.
+        if (_skipJobsBuf is null || _skipJobsBuf.Length != jobCount)
             _skipJobsBuf = new bool[jobCount];
         else
-            Array.Clear(_skipJobsBuf, 0, jobCount);
+            Array.Clear(_skipJobsBuf);
 
         var anySkippable = false;
         for (var i = 0; i < jobCount && i < _lastReusedJobs.Length; i++)

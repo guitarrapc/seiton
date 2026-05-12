@@ -101,7 +101,6 @@ Validates core job shape. `uses` (reusable workflow call) is mutually exclusive 
 on: push
 jobs:
   build:
-    runs-on: ubuntu-latest
     steps:                  # ERROR: "runs-on" section is missing
       - run: echo hello
 ```
@@ -326,7 +325,7 @@ Validates `job.id` and `step.id` values. IDs must use only alphanumeric characte
 ```yaml
 on: push
 jobs:
-  "bad id":                 # ERROR: must start with a letter or _
+  1build:                   # ERROR: must start with a letter or _
     runs-on: ubuntu-latest
     steps:
       - run: echo ng
@@ -990,7 +989,7 @@ jobs:
     steps:
       - env:
           MY_SECRET: ${{ secrets.MY_SECRET }}
-        run: echo "$MY_SECRET"
+        run: some-command --token "$MY_SECRET"
 ```
 
 ---
