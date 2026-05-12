@@ -1126,7 +1126,9 @@ public sealed class IncrementalParseContext
         {
             var fresh = freshDiagnostics[i];
             if (fresh.Location.Start == cached.Location.Start &&
+                fresh.Location.Length == cached.Location.Length &&
                 fresh.Severity == cached.Severity &&
+                string.Equals(fresh.RuleId, cached.RuleId, StringComparison.Ordinal) &&
                 string.Equals(fresh.Message, cached.Message, StringComparison.Ordinal))
             {
                 return true;
