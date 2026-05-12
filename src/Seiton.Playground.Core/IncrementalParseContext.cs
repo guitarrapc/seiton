@@ -1072,12 +1072,20 @@ public sealed class IncrementalParseContext
         return diag.Location.Start.CompareTo(targetOffset);
     }
 
-    /// <summary>Compares two diagnostics by offset, then by message for stable merge order.</summary>
+    /// <summary>
+    /// Compares two diagnostics using the same ordering as LintEngine.CompareDiagnosticsByLocation:
+    /// (line, column, ruleId, message). This ensures merged output matches the order that
+    /// LintEngine produces for fresh diagnostics.
+    /// </summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static int CompareDiagnostics(in Diagnostic a, in Diagnostic b)
     {
-        var cmp = a.Location.Start.CompareTo(b.Location.Start);
-        return cmp != 0 ? cmp : string.Compare(a.Message, b.Message, StringComparison.Ordinal);
+        var cmp = a.Location.StartLine.CompareTo(b.Location.StartLine);
+        if (cmp != 0) return cmp;
+        cmp = a.Location.StartColumn.CompareTo(b.Location.StartColumn);
+        if (cmp != 0) return cmp;
+        cmp = string.CompareOrdinal(a.RuleId, b.RuleId);
+        return cmp != 0 ? cmp : string.CompareOrdinal(a.Message, b.Message);
     }
 
     /// <summary>
