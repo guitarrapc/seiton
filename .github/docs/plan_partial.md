@@ -228,7 +228,7 @@ XXH64 でソース全体をハッシュし、前回と同一なら結果を再�
 
 PartialChange Large と FullChange ではプリスキャンで改善傾向だが、主要ターゲットの PartialChange Small で一貫して悪化。ベースラインの run-to-run 変動が ±34% あり改善と判断できる水準ではない。
 
-#### P-5: VYaml tokenization のスキップ範囲拡大
+#### P-5: VYaml tokenization のスキップ範囲拡大 — 見送り
 
 現在、`ParseIncremental` は VYaml にソース全体を渡し、skip 対象セクションは `SkipCurrentNode()` で飛ばす。しかし VYaml の `SkipCurrentNode()` はトークンを読み進めるだけで、字句解析（UTF-8 デコード、indent 追跡）はスキップできない。
 
@@ -241,6 +241,12 @@ VYaml の tokenizer に「指定バイト範囲をスキップ」機能があれ
 複雑性: 高。個別 job パースは VYaml の document boundary 管理と整合性を取る必要あり。
 リスク: VYaml の state 管理を迂回するため、anchor/alias 解決が壊れる可能性。
 ```
+
+**見送りの理由:**
+
+1. **外部依存**: VYaml の tokenizer 内部に「バイト範囲スキップ」機能を追加する必要があり、自プロジェクトで制御不可能。VYaml は外部ライブラリであり、fork して維持するコストも高い。
+2. **代替案が P-8 と重複**: 「変更 job だけ個別パース」という代替案は P-8 そのもの。P-5 独自の価値がなく、取り組むなら P-8 に集約すべき。
+3. **anchor/alias 破壊リスク**: VYaml の state 管理（indent 追跡、anchor テーブル）を迂回するとYAML 仕様準拠が壊れる。ワークフローファイルで anchor/alias は稀だが、壊れた場合の検出が困難。
 
 #### P-6: BulkImportFrom の条件付きスキップ
 
@@ -299,7 +305,7 @@ incremental parse の根本的な設計変更。VYaml でソース全体をト�
 | 4 | P-4 | Lint setup 差分スキップ | CPU 時間削減 (alloc 変化なし) | 中 | 見送り |
 | 5 | P-6 | BulkImport 条件付きスキップ | 5-10% | 中 | |
 | 6 | P-7 | Lint job-level 差分 | 30-40% | 高 | |
-| 7 | P-5 | VYaml skip 範囲拡大 | 20-30% | 高 | |
+| 7 | P-5 | VYaml skip 範囲拡大 | 20-30% | 高 | 見送り |
 | 8 | P-8 | 変更 job だけパース | 50-60% | 非常に高 | |
 
 ## 5. 結論
