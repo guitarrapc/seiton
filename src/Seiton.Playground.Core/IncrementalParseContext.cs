@@ -1004,31 +1004,80 @@ public sealed class IncrementalParseContext
         var merged = _mergedDiagnostics ??= new(32);
         merged.Clear();
 
-        // Add fresh diagnostics from the linter
-        for (var i = 0; i < freshDiagnostics.Length; i++)
-            merged.Add(freshDiagnostics[i]);
+        // Both fresh diagnostics and per-job cached diagnostics are already sorted by offset.
+        // Cached job arrays are non-overlapping and ordered by position (job0 < job1 < ...),
+        // so concatenating them in job order produces a sorted sequence.
+        // Use a two-pointer merge to combine them in O(n+m) instead of Sort which is O((n+m) log(n+m)).
 
-        // Add cached diagnostics for skipped jobs
-        for (var i = 0; i < skipJobs.Length; i++)
+        var freshSpan = freshDiagnostics.AsSpan();
+        var fi = 0; // fresh index
+
+        // Walk through jobs in order. For each skipped job with cached diagnostics,
+        // merge its cached entries with fresh entries that precede or interleave.
+        for (var j = 0; j < skipJobs.Length; j++)
         {
-            if (skipJobs[i] && _cachedJobDiagnostics![i] is { } cached)
+            if (!skipJobs[j] || _cachedJobDiagnostics![j] is not { } cached || cached.Length == 0)
+                continue;
+
+            // Add all fresh diagnostics whose offset < first cached entry offset
+            var cachedStart = cached[0].Location.Start;
+            while (fi < freshSpan.Length && CompareDiagnosticOrder(freshSpan[fi], cachedStart) < 0)
             {
-                for (var c = 0; c < cached.Length; c++)
-                    merged.Add(cached[c]);
+                merged.Add(freshSpan[fi]);
+                fi++;
+            }
+
+            // Merge cached entries with remaining fresh entries in the same offset range
+            var ci = 0;
+            var cachedEnd = cached[^1].Location.Start;
+            while (ci < cached.Length && fi < freshSpan.Length && CompareDiagnosticOrder(freshSpan[fi], cachedEnd) <= 0)
+            {
+                if (CompareDiagnostics(cached[ci], freshSpan[fi]) <= 0)
+                {
+                    merged.Add(cached[ci]);
+                    ci++;
+                }
+                else
+                {
+                    merged.Add(freshSpan[fi]);
+                    fi++;
+                }
+            }
+
+            // Drain remaining cached entries for this job
+            while (ci < cached.Length)
+            {
+                merged.Add(cached[ci]);
+                ci++;
             }
         }
 
-        // Sort by offset for consistent output
-        merged.Sort(static (a, b) =>
+        // Drain remaining fresh diagnostics after all cached jobs
+        while (fi < freshSpan.Length)
         {
-            var cmp = a.Location.Start.CompareTo(b.Location.Start);
-            return cmp != 0 ? cmp : string.Compare(a.Message, b.Message, StringComparison.Ordinal);
-        });
+            merged.Add(freshSpan[fi]);
+            fi++;
+        }
 
         // Cache per-job diagnostics from merged result — reuse the same materialized array
         var mergedArray = System.Runtime.InteropServices.CollectionsMarshal.AsSpan(merged).ToArray();
         CacheJobDiagnostics(new DiagnosticList(mergedArray));
         return mergedArray;
+    }
+
+    /// <summary>Compares a diagnostic's offset against a target offset for merge ordering.</summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private static int CompareDiagnosticOrder(in Diagnostic diag, int targetOffset)
+    {
+        return diag.Location.Start.CompareTo(targetOffset);
+    }
+
+    /// <summary>Compares two diagnostics by offset, then by message for stable merge order.</summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private static int CompareDiagnostics(in Diagnostic a, in Diagnostic b)
+    {
+        var cmp = a.Location.Start.CompareTo(b.Location.Start);
+        return cmp != 0 ? cmp : string.Compare(a.Message, b.Message, StringComparison.Ordinal);
     }
 
     /// <summary>

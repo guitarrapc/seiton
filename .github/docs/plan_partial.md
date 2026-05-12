@@ -128,7 +128,7 @@ P-1: Small (1 job) の early exit — スキャン前に job 変更を検出を�
 
 テスト: `IncrementalParseJobSkipTests` に P-1 用テスト 4 件追加。全 72 テスト pass。
 
-#### P-2: MergeDiagnosticsWithCache の Sort 排除
+#### P-2: MergeDiagnosticsWithCache の Sort 排除 ✅ 実装済み
 
 現在 `MergeDiagnosticsWithCache` は毎回 `List.Sort()` を実行しているが、fresh diagnostics も cached diagnostics も既に offset 順でソート済みの場合が多い。2 つのソート済みリストのマージは O(n+m) で可能。
 
@@ -137,6 +137,24 @@ P-1: Small (1 job) の early exit — スキャン前に job 変更を検出を�
       CacheJobDiagnostics が格納する Diagnostic[] も offset 順を保証。
 推定効果: Large で 3-5% 改善（diagnostic 数に比例）。
 ```
+
+**実装結果** (2026-05-12):
+
+実装箇所: `IncrementalParseContext.MergeDiagnosticsWithCache()` — `List.Sort()` を two-pointer merge に置換。
+fresh diagnostics (linter 出力、offset 順) と cached per-job diagnostics (job byte 範囲順に連結すると offset 順) の 2 つのソート済みシーケンスを O(n+m) でマージ。`CompareDiagnostics` / `CompareDiagnosticOrder` ヘルパーを `AggressiveInlining` 付きで追加。
+
+ベンチマーク比較 (PlaygroundLintBenchmark, ShortRun, P-1+P-2 累積):
+
+| Method        | Size  | Mean (P-1 only) | Mean (P-1+P-2)  | Allocated (P-1+P-2) |
+|-------------- |------ |----------------:|----------------:|--------------------:|
+| PartialChange | Small | 1,362,326 ns    | 1,389,655 ns    | 124,640 B           |
+| PartialChange | Large | 5,332,563 ns    | 4,793,429 ns    | 376,176 B           |
+
+- allocation は変化なし（Sort → merge は同じメモリ使用量）。
+- Large の Mean が ~10% 改善 (5.33ms → 4.79ms) だが ShortRun ノイズの範囲内。
+- 改善はアルゴリズム的: O((n+m) log(n+m)) → O(n+m)。diagnostic 数が多い workflow ほど効果大。
+
+テスト: 既存の `IncrementalLintCacheTests` (5 件) + `IncrementalParseJobSkipTests` 含む全 72 テスト pass。
 
 #### P-3: CacheJobDiagnostics の配列再利用
 
@@ -229,7 +247,7 @@ incremental parse の根本的な設計変更。VYaml でソース全体をト�
 | 優先度 | ID | 改善策 | 推定効果 | 実装コスト | 状態 |
 |---:|---|---|---|---|---|
 | 1 | P-1 | Small の early exit | Small alloc -19% | 低 | ✅ 実装済み |
-| 2 | P-2 | Merge sort 排除 | Large 3-5% | 低 | |
+| 2 | P-2 | Merge sort 排除 | Large O(n+m) | 低 | ✅ 実装済み |
 | 3 | P-3 | Cache 配列再利用 | Large 2-3% | 低 | |
 | 4 | P-4 | Lint setup 差分スキップ | 10-15% | 中 | |
 | 5 | P-6 | BulkImport 条件付きスキップ | 5-10% | 中 | |
