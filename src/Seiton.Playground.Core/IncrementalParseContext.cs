@@ -233,24 +233,6 @@ public sealed class IncrementalParseContext
             return new ParseResult(_previousWorkflow, null, _previousDiagnostics, _previousHasFatalError, _previousArena);
         }
 
-        // P-1: Early exit for single-job workflows where the job changed.
-        // With only 1 job, if the jobs section changed, ComputeJobSkipEntries would
-        // return null after the full scan pipeline → FullParseAndStore.
-        // Detect this early by comparing just the jobs section hash, skipping the scan.
-        if (_registry.JobCount == 1 && _previousSourceLength == utf8Yaml.Length)
-        {
-            var prevJobsEntry = _registry.GetRootSection(RootSectionKind.Jobs);
-            if (prevJobsEntry.IsValid && prevJobsEntry.EndOffset <= utf8Yaml.Length)
-            {
-                var jobsSpan = utf8Yaml.AsSpan(prevJobsEntry.StartOffset, prevJobsEntry.EndOffset - prevJobsEntry.StartOffset);
-                if (ComputeHash(jobsSpan) != prevJobsEntry.ContentHash)
-                {
-                    _lastReusedJobs = null;
-                    return FullParseAndStore(utf8Yaml, filePath);
-                }
-            }
-        }
-
         // Scan new source for section boundaries
         var newRegistry = default(SectionRegistry);
         ScanRootSections(utf8Yaml, ref newRegistry);
@@ -960,26 +942,64 @@ public sealed class IncrementalParseContext
     /// Builds a <c>skipJobs</c> array indicating which jobs can skip linting because
     /// they were reused (D-5c) and have cached diagnostics from the previous lint run.
     /// Returns <c>null</c> if no jobs can be skipped.
+    /// Jobs with <c>needs</c> dependencies are invalidated (not skipped) whenever any
+    /// other job has changed, because cross-job rules (e.g. NeedsGraphRule,
+    /// ExprUndefinedVarRule) may produce diagnostics that depend on other jobs' state.
     /// Must be called under the same lock that guards <see cref="ParseIncrementally"/>.
     /// </summary>
-    internal bool[]? BuildSkipJobs(int jobCount)
+    internal bool[]? BuildSkipJobs(int jobCount, Workflow? workflow)
     {
         if (jobCount <= 0 || _lastReusedJobs is null || _cachedJobDiagnostics is null)
             return null;
 
-        // Reuse buffer, grow only when needed
-        if (_skipJobsBuf is null || _skipJobsBuf.Length < jobCount)
+        // Reuse buffer only when it already matches the current job count.
+        // This ensures callers never observe stale trailing entries from a
+        // previous larger run when iterating skipJobs.Length.
+        if (_skipJobsBuf is null || _skipJobsBuf.Length != jobCount)
             _skipJobsBuf = new bool[jobCount];
         else
-            Array.Clear(_skipJobsBuf, 0, jobCount);
+            Array.Clear(_skipJobsBuf);
 
         var anySkippable = false;
+        var anyChanged = false;
         for (var i = 0; i < jobCount && i < _lastReusedJobs.Length; i++)
         {
             if (_lastReusedJobs[i] && i < _cachedJobDiagnostics.Length && _cachedJobDiagnostics[i] is not null)
             {
                 _skipJobsBuf[i] = true;
                 anySkippable = true;
+            }
+            else
+            {
+                anyChanged = true;
+            }
+        }
+
+        if (!anySkippable)
+            return null;
+
+        // Cross-job invalidation: if any job changed, don't skip jobs with 'needs'
+        // because their cached diagnostics may reference the changed job's state.
+        if (anyChanged && workflow is not null)
+        {
+            var jobs = workflow.Jobs.Entries;
+            for (var i = 0; i < jobCount && i < jobs.Length; i++)
+            {
+                if (_skipJobsBuf[i] && jobs[i].Value?.Needs is { Length: > 0 })
+                {
+                    _skipJobsBuf[i] = false;
+                }
+            }
+
+            // Recheck if any are still skippable
+            anySkippable = false;
+            for (var i = 0; i < jobCount; i++)
+            {
+                if (_skipJobsBuf[i])
+                {
+                    anySkippable = true;
+                    break;
+                }
             }
         }
 
@@ -1004,89 +1024,38 @@ public sealed class IncrementalParseContext
         var merged = _mergedDiagnostics ??= new(32);
         merged.Clear();
 
-        // Both fresh diagnostics and per-job cached diagnostics are already sorted by
-        // LintEngine's ordering (line, column, ruleId, message).
-        // Cached job arrays are non-overlapping and ordered by position (job0 < job1 < ...),
-        // so concatenating them in job order produces a sorted sequence.
-        // Use a two-pointer merge to combine them in O(n+m) instead of Sort which is O((n+m) log(n+m)).
+        // Add fresh diagnostics from the linter
+        for (var i = 0; i < freshDiagnostics.Length; i++)
+            merged.Add(freshDiagnostics[i]);
 
-        var freshSpan = freshDiagnostics.AsSpan();
-        var fi = 0; // fresh index
-
-        // Walk through jobs in order. For each skipped job with cached diagnostics,
-        // merge its cached entries with fresh entries that precede or interleave.
-        for (var j = 0; j < skipJobs.Length; j++)
+        // Add cached diagnostics for skipped jobs, deduplicating against fresh diagnostics.
+        // VisitWorkflowPost rules (e.g. NeedsGraphRule.DetectCycles) always run and may emit
+        // diagnostics at skipped-job locations that are also in the cache from the previous run.
+        for (var i = 0; i < skipJobs.Length; i++)
         {
-            if (!skipJobs[j] || _cachedJobDiagnostics![j] is not { } cached || cached.Length == 0)
-                continue;
-
-            // Add all fresh diagnostics whose offset < first cached entry offset
-            var cachedStart = cached[0].Location.Start;
-            while (fi < freshSpan.Length && CompareDiagnosticOrder(freshSpan[fi], cachedStart) < 0)
+            if (skipJobs[i] && _cachedJobDiagnostics![i] is { } cached)
             {
-                merged.Add(freshSpan[fi]);
-                fi++;
-            }
-
-            // Merge cached entries with remaining fresh entries in the same offset range
-            var ci = 0;
-            var cachedEnd = cached[^1].Location.Start;
-            while (ci < cached.Length && fi < freshSpan.Length && CompareDiagnosticOrder(freshSpan[fi], cachedEnd) <= 0)
-            {
-                if (CompareDiagnostics(cached[ci], freshSpan[fi]) <= 0)
+                for (var c = 0; c < cached.Length; c++)
                 {
-                    merged.Add(cached[ci]);
-                    ci++;
+                    var diag = cached[c];
+                    if (!IsDuplicateOfFresh(freshDiagnostics, diag))
+                        merged.Add(diag);
                 }
-                else
-                {
-                    merged.Add(freshSpan[fi]);
-                    fi++;
-                }
-            }
-
-            // Drain remaining cached entries for this job
-            while (ci < cached.Length)
-            {
-                merged.Add(cached[ci]);
-                ci++;
             }
         }
 
-        // Drain remaining fresh diagnostics after all cached jobs
-        while (fi < freshSpan.Length)
+        // Sort by offset for consistent output
+        merged.Sort(static (a, b) =>
         {
-            merged.Add(freshSpan[fi]);
-            fi++;
-        }
+            var cmp = a.Location.Start.CompareTo(b.Location.Start);
+            return cmp != 0 ? cmp : string.Compare(a.Message, b.Message, StringComparison.Ordinal);
+        });
 
-        // Cache per-job diagnostics from merged result — reuse the same materialized array
+        // Materialize the merged diagnostics into a new array snapshot for cache refresh
+        // and for the returned span.
         var mergedArray = System.Runtime.InteropServices.CollectionsMarshal.AsSpan(merged).ToArray();
         CacheJobDiagnostics(new DiagnosticList(mergedArray));
         return mergedArray;
-    }
-
-    /// <summary>Compares a diagnostic's offset against a target offset for merge ordering.</summary>
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    private static int CompareDiagnosticOrder(in Diagnostic diag, int targetOffset)
-    {
-        return diag.Location.Start.CompareTo(targetOffset);
-    }
-
-    /// <summary>
-    /// Compares two diagnostics using the same ordering as LintEngine.CompareDiagnosticsByLocation:
-    /// (line, column, ruleId, message). This ensures merged output matches the order that
-    /// LintEngine produces for fresh diagnostics.
-    /// </summary>
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    private static int CompareDiagnostics(in Diagnostic a, in Diagnostic b)
-    {
-        var cmp = a.Location.StartLine.CompareTo(b.Location.StartLine);
-        if (cmp != 0) return cmp;
-        cmp = a.Location.StartColumn.CompareTo(b.Location.StartColumn);
-        if (cmp != 0) return cmp;
-        cmp = string.CompareOrdinal(a.RuleId, b.RuleId);
-        return cmp != 0 ? cmp : string.CompareOrdinal(a.Message, b.Message);
     }
 
     /// <summary>
@@ -1102,7 +1071,7 @@ public sealed class IncrementalParseContext
 
         // Build skip mask from reused jobs + cached diagnostics
         var jobCount = parseResult.Workflow?.Jobs.Count ?? 0;
-        var skipJobs = BuildSkipJobs(jobCount);
+        var skipJobs = BuildSkipJobs(jobCount, parseResult.Workflow);
 
         // Lint with optional job skipping
         var lintResult = _lintEngine.CheckWithParseResult(utf8Yaml, filePath, LintConfig, parseResult, skipJobs);
@@ -1130,6 +1099,10 @@ public sealed class IncrementalParseContext
         if (_cachedJobDiagnostics is null || _cachedJobDiagnostics.Length < jobCount)
             _cachedJobDiagnostics = new Diagnostic[jobCount][];
 
+        // Clear existing cache entries
+        for (var i = 0; i < jobCount; i++)
+            _cachedJobDiagnostics[i] = null;
+
         // Count diagnostics per job first (avoids List<> per job)
         int[]? rentedCounts = null;
         Span<int> counts = jobCount <= 64
@@ -1151,18 +1124,11 @@ public sealed class IncrementalParseContext
             }
         }
 
-        // Allocate or reuse per-job arrays based on counted sizes (P-3: reuse when same length)
+        // Allocate per-job arrays based on counted sizes
         for (var j = 0; j < jobCount; j++)
         {
             if (counts[j] > 0)
-            {
-                if (_cachedJobDiagnostics[j] is null || _cachedJobDiagnostics[j]!.Length != counts[j])
-                    _cachedJobDiagnostics[j] = new Diagnostic[counts[j]];
-            }
-            else
-            {
-                _cachedJobDiagnostics[j] = null;
-            }
+                _cachedJobDiagnostics[j] = new Diagnostic[counts[j]];
         }
 
         // Fill arrays (reset counts as write indices)
@@ -1184,6 +1150,29 @@ public sealed class IncrementalParseContext
 
         if (rentedCounts is not null)
             ArrayPool<int>.Shared.Return(rentedCounts);
+    }
+
+    /// <summary>
+    /// Checks if a cached diagnostic duplicates one already in freshDiagnostics.
+    /// VisitWorkflowPost rules (e.g. NeedsGraphRule cycle detection) always run and may
+    /// produce diagnostics at locations within skipped jobs, causing overlap with cache.
+    /// </summary>
+    private static bool IsDuplicateOfFresh(DiagnosticList freshDiagnostics, Diagnostic cached)
+    {
+        for (var i = 0; i < freshDiagnostics.Length; i++)
+        {
+            var fresh = freshDiagnostics[i];
+            if (fresh.Location.Start == cached.Location.Start &&
+                fresh.Location.Length == cached.Location.Length &&
+                fresh.Severity == cached.Severity &&
+                string.Equals(fresh.RuleId, cached.RuleId, StringComparison.Ordinal) &&
+                string.Equals(fresh.Message, cached.Message, StringComparison.Ordinal))
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private JsonElement[] SerializeDiagnosticsToJson(DiagnosticList diagnostics)
