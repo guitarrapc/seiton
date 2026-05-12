@@ -1015,7 +1015,8 @@ public sealed class IncrementalParseContext
             return cmp != 0 ? cmp : string.Compare(a.Message, b.Message, StringComparison.Ordinal);
         });
 
-        // Cache per-job diagnostics from merged result — reuse the same materialized array
+        // Materialize the merged diagnostics into a new array snapshot for cache refresh
+        // and for the returned span.
         var mergedArray = System.Runtime.InteropServices.CollectionsMarshal.AsSpan(merged).ToArray();
         CacheJobDiagnostics(new DiagnosticList(mergedArray));
         return mergedArray;
