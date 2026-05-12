@@ -14496,7 +14496,7 @@ public sealed class RuleInterfaceTests
     }
 
     [Test]
-    public async Task DisableNextLine_Matrix_DisableJobScope_CheckBehavior()
+    public async Task DisableJob_Matrix_CheckBehavior()
     {
         // Check if disable-job suppresses matrix diagnostics.
         var yaml = """
@@ -14665,15 +14665,8 @@ public sealed class RuleInterfaceTests
         var result = new LintEngine().Check(Encoding.UTF8.GetBytes(yaml), "test.yml");
         using var arena = result.ParseResult.Arena;
 
-        // First token "dangerous-triggers" is parsed correctly (it's the first arg before space).
-        // Wait — actually AddRuleIds receives the full argsBytes after the command.
-        // Let me re-check: argsBytes = "dangerous-triggers job-permissions-required"
-        // AddRuleIds splits by comma only, so the entire string is one token.
-        // No wait: the code splits command from args at first space, so:
-        //   commandBytes = "disable-next-line"
-        //   argsBytes = "dangerous-triggers job-permissions-required"
-        // Then AddRuleIds splits by comma. No comma → single token "dangerous-triggers job-permissions-required"
-        // which fails to resolve as a rule ID → config error.
+        // Rule IDs are split by comma only, so space-separated IDs are treated as one
+        // unknown rule-id token and therefore do not suppress diagnostics.
 
         // Both rules should still be active (not suppressed)
         var configErrors = result.Diagnostics.Where(d => d.RuleId is null && d.Message.Contains("unknown rule-id", StringComparison.Ordinal)).ToArray();
@@ -14683,32 +14676,6 @@ public sealed class RuleInterfaceTests
     // ──────────────────────────────────────────────────────────────────────
     // disable-job: job-body diagnostics (Job.Range must cover full mapping)
     // ──────────────────────────────────────────────────────────────────────
-
-    [Test]
-    public async Task DisableJob_Matrix_SuppressesDiagnostic()
-    {
-        var yaml = """
-        # seiton: disable-job build matrix
-        on: push
-        jobs:
-            build:
-                strategy:
-                    matrix:
-                        os: []
-                runs-on: ubuntu-latest
-                timeout-minutes: 10
-                permissions: {}
-                steps:
-                    - run: echo ok
-        """;
-
-        var result = new LintEngine().Check(Encoding.UTF8.GetBytes(yaml), "test.yml");
-        using var arena = result.ParseResult.Arena;
-        var matrixDiags = result.Diagnostics.Where(d => d.RuleId == "matrix").ToArray();
-
-        await Assert.That(matrixDiags).IsEmpty();
-        await Assert.That(result.SuppressionSummary.SuppressedByRule.ContainsKey("matrix")).IsTrue();
-    }
 
     [Test]
     public async Task DisableJob_RunnerNoLatest_SuppressesDiagnostic()
