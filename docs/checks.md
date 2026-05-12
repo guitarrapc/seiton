@@ -1108,10 +1108,10 @@ jobs:
 **Remediation:** Route untrusted trigger paths to ephemeral GitHub-hosted runners:
 
 ```yaml
-on: push
+on: pull_request
 jobs:
   build:
-    runs-on: self-hosted
+    runs-on: ubuntu-latest              # use GitHub-hosted runner
     steps:
       - run: echo ok
 ```
