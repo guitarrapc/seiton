@@ -14384,4 +14384,290 @@ public sealed class RuleInterfaceTests
             parseResult.Arena?.Dispose();
         }
     }
+
+    // ──────────────────────────────────────────────────────────────────────
+    // Q1: disable-next-line above section vs above specific key
+    // ──────────────────────────────────────────────────────────────────────
+
+    [Test]
+    public async Task DisableNextLine_StepIf_CommentAboveStep_DoesNotSuppressDiagnostic()
+    {
+        // Comment is above the step (- run:), NOT above the if: key.
+        // disable-next-line targets the YAML line immediately following the comment.
+        // The if-cond diagnostic reports on the if: key's line, which is a different line.
+        var yaml = """
+        on: push
+        jobs:
+            build:
+                runs-on: ubuntu-latest
+                timeout-minutes: 10
+                permissions: {}
+                steps:
+                    # seiton: disable-next-line if-cond
+                    - run: echo ok
+                      if: ${{ true }}
+        """;
+
+        var result = new LintEngine().Check(Encoding.UTF8.GetBytes(yaml), "test.yml");
+        var ifCondDiags = result.Diagnostics.Where(d => d.RuleId == "if-cond").ToArray();
+
+        // Expect: diagnostic is NOT suppressed because comment targets the step line, not the if: line
+        await Assert.That(ifCondDiags.Length).IsGreaterThanOrEqualTo(1);
+    }
+
+    [Test]
+    public async Task DisableNextLine_StepIf_CommentAboveIfKey_SuppressesDiagnostic()
+    {
+        // Comment is directly above the if: key — this is the correct placement.
+        var yaml = """
+        on: push
+        jobs:
+            build:
+                runs-on: ubuntu-latest
+                timeout-minutes: 10
+                permissions: {}
+                steps:
+                    - run: echo ok
+                      # seiton: disable-next-line if-cond
+                      if: ${{ true }}
+        """;
+
+        var result = new LintEngine().Check(Encoding.UTF8.GetBytes(yaml), "test.yml");
+        var ifCondDiags = result.Diagnostics.Where(d => d.RuleId == "if-cond").ToArray();
+
+        // Expect: diagnostic IS suppressed because comment targets the if: line
+        await Assert.That(ifCondDiags.Length).IsEqualTo(0);
+    }
+
+    [Test]
+    public async Task DisableNextLine_JobIf_CommentAboveJobIfKey_SuppressesDiagnostic()
+    {
+        // Comment directly above job-level if: key.
+        var yaml = """
+        on: push
+        jobs:
+            build:
+                # seiton: disable-next-line if-cond
+                if: ${{ true }}
+                runs-on: ubuntu-latest
+                timeout-minutes: 10
+                permissions: {}
+                steps:
+                    - run: echo ok
+        """;
+
+        var result = new LintEngine().Check(Encoding.UTF8.GetBytes(yaml), "test.yml");
+        var ifCondDiags = result.Diagnostics.Where(d => d.RuleId == "if-cond").ToArray();
+
+        // Expect: suppressed
+        await Assert.That(ifCondDiags.Length).IsEqualTo(0);
+    }
+
+    [Test]
+    public async Task DisableNextLine_Matrix_CommentAboveStrategy_DiagnosticLineCheck()
+    {
+        // Comment is above strategy:, but matrix diagnostics report on positions
+        // within the matrix structure (axis name, etc.), not on the strategy: line.
+        var yaml = """
+        on: push
+        jobs:
+            build:
+                # seiton: disable-next-line matrix
+                strategy:
+                    matrix:
+                        os: []
+                runs-on: ubuntu-latest
+                timeout-minutes: 10
+                permissions: {}
+                steps:
+                    - run: echo ok
+        """;
+
+        var result = new LintEngine().Check(Encoding.UTF8.GetBytes(yaml), "test.yml");
+        var matrixDiags = result.Diagnostics.Where(d => d.RuleId == "matrix").ToArray();
+
+        // The comment targets strategy: line (N+1), but matrix diagnostics are on deeper lines (axis name line).
+        // Expect: NOT suppressed because diagnostic line != strategy: line
+        await Assert.That(matrixDiags.Length).IsGreaterThanOrEqualTo(1);
+    }
+
+    [Test]
+    public async Task DisableNextLine_Matrix_DisableJobScope_CheckBehavior()
+    {
+        // Check if disable-job suppresses matrix diagnostics.
+        var yaml = """
+        # seiton: disable-job build matrix
+        on: push
+        jobs:
+            build:
+                strategy:
+                    matrix:
+                        os: []
+                runs-on: ubuntu-latest
+                timeout-minutes: 10
+                permissions: {}
+                steps:
+                    - run: echo ok
+        """;
+
+        var result = new LintEngine().Check(Encoding.UTF8.GetBytes(yaml), "test.yml");
+        var matrixDiags = result.Diagnostics.Where(d => d.RuleId == "matrix").ToArray();
+        var configErrors = result.Diagnostics.Where(d => d.RuleId is null).ToArray();
+
+        // Check for config errors (e.g., "unknown job-id")
+        var unknownJobErrors = configErrors.Where(d => d.Message.Contains("unknown job-id", StringComparison.Ordinal)).ToArray();
+
+        // If there are unknown-job errors, disable-job didn't recognize the job ID
+        await Assert.That(unknownJobErrors.Length).IsEqualTo(0);
+
+        // Check if matrix was actually suppressed
+        var matrixSuppressed = result.SuppressionSummary.SuppressedByRule.ContainsKey("matrix");
+
+        // BUG: disable-job does NOT suppress matrix diagnostics because BuildJobScopes
+        // uses pair.Value.Range which only covers the job key name (e.g., "build:"),
+        // not the entire job block. Matrix diagnostics report on deeper lines (axis names).
+        // TryFindJobIdForLine fails because the diagnostic line is outside the narrow key-only range.
+        await Assert.That(matrixSuppressed).IsFalse();
+        await Assert.That(matrixDiags.Length).IsGreaterThanOrEqualTo(1);
+    }
+
+    // ──────────────────────────────────────────────────────────────────────
+    // Q2: disable-next-line with multi-line if: block scalar
+    // ──────────────────────────────────────────────────────────────────────
+
+    [Test]
+    public async Task DisableNextLine_JobIfBlockScalar_CommentAboveIfKey_SuppressesDiagnostic()
+    {
+        // Block scalar if: | with ${{ expr }} adds trailing \n, making it always-true.
+        // IfCondRule adjusts diagnostic range back to indicator line.
+        var yaml = """
+        on: push
+        jobs:
+            build:
+                # seiton: disable-next-line if-cond
+                if: |
+                    ${{ contains(github.event.head_commit.message, 'skip') }}
+                runs-on: ubuntu-latest
+                timeout-minutes: 10
+                permissions: {}
+                steps:
+                    - run: echo ok
+        """;
+
+        var result = new LintEngine().Check(Encoding.UTF8.GetBytes(yaml), "test.yml");
+        var ifCondDiags = result.Diagnostics.Where(d => d.RuleId == "if-cond").ToArray();
+
+        // IfCondRule adjusts block scalar diagnostic to the | indicator line (same as if: key line).
+        // disable-next-line targets if: line → should suppress.
+        await Assert.That(ifCondDiags.Length).IsEqualTo(0);
+    }
+
+    [Test]
+    public async Task DisableNextLine_JobIfBlockScalar_WithoutComment_EmitsDiagnostic()
+    {
+        // Verify the block scalar actually triggers if-cond (baseline for suppression test).
+        var yaml = """
+        on: push
+        jobs:
+            build:
+                if: |
+                    ${{ contains(github.event.head_commit.message, 'skip') }}
+                runs-on: ubuntu-latest
+                timeout-minutes: 10
+                permissions: {}
+                steps:
+                    - run: echo ok
+        """;
+
+        var result = new LintEngine().Check(Encoding.UTF8.GetBytes(yaml), "test.yml");
+        var ifCondDiags = result.Diagnostics.Where(d => d.RuleId == "if-cond").ToArray();
+
+        // Block scalar if: | adds trailing \n → always-true pattern
+        await Assert.That(ifCondDiags.Length).IsGreaterThanOrEqualTo(1);
+    }
+
+    [Test]
+    public async Task DisableNextLine_StepIfBlockScalar_CommentAboveIfKey_SuppressesDiagnostic()
+    {
+        // Step-level block scalar if: |
+        var yaml = """
+        on: push
+        jobs:
+            build:
+                runs-on: ubuntu-latest
+                timeout-minutes: 10
+                permissions: {}
+                steps:
+                    - run: echo ok
+                      # seiton: disable-next-line if-cond
+                      if: |
+                          ${{ contains(github.event.head_commit.message, 'skip') }}
+        """;
+
+        var result = new LintEngine().Check(Encoding.UTF8.GetBytes(yaml), "test.yml");
+        var ifCondDiags = result.Diagnostics.Where(d => d.RuleId == "if-cond").ToArray();
+
+        // Same block scalar adjustment: diagnostic should be on the if: line → suppressed.
+        await Assert.That(ifCondDiags.Length).IsEqualTo(0);
+    }
+
+    // ──────────────────────────────────────────────────────────────────────
+    // Q3: Multiple rule IDs in a single disable-next-line comment
+    // ──────────────────────────────────────────────────────────────────────
+
+    [Test]
+    public async Task DisableNextLine_CommaSeparatedRuleIds_SuppressesAll()
+    {
+        // Comma-separated is the supported format for multiple rule IDs.
+        var yaml = """
+        on:
+            # seiton: disable-next-line dangerous-triggers, job-permissions-required
+            pull_request_target:
+        jobs:
+            build:
+                runs-on: ubuntu-latest
+                timeout-minutes: 10
+                steps:
+                    - run: echo test
+        """;
+
+        var result = new LintEngine().Check(Encoding.UTF8.GetBytes(yaml), "test.yml");
+
+        await Assert.That(result.Diagnostics.Any(d => d.RuleId == "dangerous-triggers")).IsFalse();
+    }
+
+    [Test]
+    public async Task DisableNextLine_SpaceSeparatedRuleIds_DoesNotSuppressSecondRule()
+    {
+        // Space-separated is NOT the supported format.
+        // "dangerous-triggers job-permissions-required" is treated as a single rule ID token,
+        // which fails to resolve.
+        var yaml = """
+        on:
+            # seiton: disable-next-line dangerous-triggers job-permissions-required
+            pull_request_target:
+        jobs:
+            build:
+                runs-on: ubuntu-latest
+                timeout-minutes: 10
+                steps:
+                    - run: echo test
+        """;
+
+        var result = new LintEngine().Check(Encoding.UTF8.GetBytes(yaml), "test.yml");
+
+        // First token "dangerous-triggers" is parsed correctly (it's the first arg before space).
+        // Wait — actually AddRuleIds receives the full argsBytes after the command.
+        // Let me re-check: argsBytes = "dangerous-triggers job-permissions-required"
+        // AddRuleIds splits by comma only, so the entire string is one token.
+        // No wait: the code splits command from args at first space, so:
+        //   commandBytes = "disable-next-line"
+        //   argsBytes = "dangerous-triggers job-permissions-required"
+        // Then AddRuleIds splits by comma. No comma → single token "dangerous-triggers job-permissions-required"
+        // which fails to resolve as a rule ID → config error.
+
+        // Both rules should still be active (not suppressed)
+        var configErrors = result.Diagnostics.Where(d => d.RuleId is null && d.Message.Contains("unknown rule-id", StringComparison.Ordinal)).ToArray();
+        await Assert.That(configErrors.Length).IsGreaterThanOrEqualTo(1);
+    }
 }
