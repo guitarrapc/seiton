@@ -11,6 +11,12 @@ public sealed class IncrementalLintCacheTests
 {
     private const string FilePath = ".github/workflows/ci.yml";
 
+    /// <summary>
+    /// In the 2-job test YAMLs, the <c>deploy:</c> key is on line 7 (1-indexed).
+    /// Job-level rules (e.g. job-timeout-minutes-required) report at the job id line.
+    /// </summary>
+    private const int DeployJobStartLine = 7;
+
     [Test]
     public async Task LintIncrementally_UnchangedJob_ReusesCachedDiagnostics()
     {
@@ -24,14 +30,14 @@ public sealed class IncrementalLintCacheTests
         // First call: full lint — establishes cache
         var result1 = ctx.LintIncrementally(Encoding.UTF8.GetBytes(yaml1), FilePath);
 
-        // Deploy job starts at line 8 in these YAMLs — filter by line range
-        const int deployStartLine = 8;
-        var deployDiags1 = result1.Where(d => d.GetProperty("line").GetInt32() >= deployStartLine).ToArray();
+        // Deploy job starts at the `deploy:` key on line 7 in these YAMLs.
+        // Job-level lint rules report at the job id line, so include line 7.
+        var deployDiags1 = result1.Where(d => d.GetProperty("line").GetInt32() >= DeployJobStartLine).ToArray();
 
         // Second call: "build" changes, "deploy" is identical (same offset + hash)
         var result2 = ctx.LintIncrementally(Encoding.UTF8.GetBytes(yaml2), FilePath);
 
-        var deployDiags2 = result2.Where(d => d.GetProperty("line").GetInt32() >= deployStartLine).ToArray();
+        var deployDiags2 = result2.Where(d => d.GetProperty("line").GetInt32() >= DeployJobStartLine).ToArray();
 
         // Deploy diagnostics should be identical (reused from cache)
         await Assert.That(deployDiags2.Length).IsEqualTo(deployDiags1.Length);
@@ -128,14 +134,13 @@ public sealed class IncrementalLintCacheTests
         var result1 = ctx.LintIncrementally(Encoding.UTF8.GetBytes(yaml1), FilePath);
         var result2 = ctx.LintIncrementally(Encoding.UTF8.GetBytes(yaml2), FilePath);
 
-        // Deploy job starts at line 8 — filter by line range, not message text
-        const int deployStartLine = 8;
+        // Deploy job starts at the `deploy:` key on line 7 — filter by line range
         var deployDiags1 = result1
-            .Where(d => d.GetProperty("line").GetInt32() >= deployStartLine)
+            .Where(d => d.GetProperty("line").GetInt32() >= DeployJobStartLine)
             .OrderBy(d => d.GetProperty("line").GetInt32())
             .ToArray();
         var deployDiags2 = result2
-            .Where(d => d.GetProperty("line").GetInt32() >= deployStartLine)
+            .Where(d => d.GetProperty("line").GetInt32() >= DeployJobStartLine)
             .OrderBy(d => d.GetProperty("line").GetInt32())
             .ToArray();
 
@@ -168,8 +173,7 @@ public sealed class IncrementalLintCacheTests
             await Assert.That(result.Length).IsEqualTo(result1.Length);
 
             // Deploy diagnostics should be present and correct (from cache)
-            // Deploy job starts at line 8 in these YAMLs
-            var deployDiags = result.Where(d => d.GetProperty("line").GetInt32() >= 8).ToArray();
+            var deployDiags = result.Where(d => d.GetProperty("line").GetInt32() >= DeployJobStartLine).ToArray();
             await Assert.That(deployDiags.Length).IsGreaterThan(0);
 
             // Verify against fresh full lint
