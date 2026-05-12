@@ -992,13 +992,19 @@ public sealed class IncrementalParseContext
         for (var i = 0; i < freshDiagnostics.Length; i++)
             merged.Add(freshDiagnostics[i]);
 
-        // Add cached diagnostics for skipped jobs
+        // Add cached diagnostics for skipped jobs, deduplicating against fresh diagnostics.
+        // VisitWorkflowPost rules (e.g. NeedsGraphRule.DetectCycles) always run and may emit
+        // diagnostics at skipped-job locations that are also in the cache from the previous run.
         for (var i = 0; i < skipJobs.Length; i++)
         {
             if (skipJobs[i] && _cachedJobDiagnostics![i] is { } cached)
             {
                 for (var c = 0; c < cached.Length; c++)
-                    merged.Add(cached[c]);
+                {
+                    var diag = cached[c];
+                    if (!IsDuplicateOfFresh(freshDiagnostics, diag))
+                        merged.Add(diag);
+                }
             }
         }
 
@@ -1107,6 +1113,27 @@ public sealed class IncrementalParseContext
 
         if (rentedCounts is not null)
             ArrayPool<int>.Shared.Return(rentedCounts);
+    }
+
+    /// <summary>
+    /// Checks if a cached diagnostic duplicates one already in freshDiagnostics.
+    /// VisitWorkflowPost rules (e.g. NeedsGraphRule cycle detection) always run and may
+    /// produce diagnostics at locations within skipped jobs, causing overlap with cache.
+    /// </summary>
+    private static bool IsDuplicateOfFresh(DiagnosticList freshDiagnostics, Diagnostic cached)
+    {
+        for (var i = 0; i < freshDiagnostics.Length; i++)
+        {
+            var fresh = freshDiagnostics[i];
+            if (fresh.Location.Start == cached.Location.Start &&
+                fresh.Severity == cached.Severity &&
+                string.Equals(fresh.Message, cached.Message, StringComparison.Ordinal))
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private JsonElement[] SerializeDiagnosticsToJson(DiagnosticList diagnostics)

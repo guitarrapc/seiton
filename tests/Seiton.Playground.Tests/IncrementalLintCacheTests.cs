@@ -132,6 +132,36 @@ public sealed class IncrementalLintCacheTests
     }
 
     [Test]
+    public async Task LintIncrementally_WorkflowPostDiagnostics_NoDuplicatesWhenJobSkipped()
+    {
+        // Regression: NeedsGraphRule.DetectCycles runs in VisitWorkflowPost (always runs),
+        // emitting a diagnostic at a skipped job's location. MergeDiagnosticsWithCache
+        // must not duplicate it with the same diagnostic from the cache.
+        // Scenario: jobs a and b have a cycle. On 2nd call only "b" changes.
+        var yaml1 = "on: push\njobs:\n  a:\n    needs: b\n    runs-on: ubuntu-latest\n    steps:\n      - run: echo a\n  b:\n    needs: a\n    runs-on: ubuntu-latest\n    steps:\n      - run: echo b\n";
+        var yaml2 = "on: push\njobs:\n  a:\n    needs: b\n    runs-on: ubuntu-latest\n    steps:\n      - run: echo a\n  b:\n    needs: a\n    runs-on: ubuntu-latest\n    steps:\n      - run: echo b2\n";
+
+        var ctx = new IncrementalParseContext();
+        var result1 = ctx.LintIncrementally(Encoding.UTF8.GetBytes(yaml1), FilePath);
+        var result2 = ctx.LintIncrementally(Encoding.UTF8.GetBytes(yaml2), FilePath);
+
+        // Fresh lint of yaml2 (no cache) to compare
+        var freshCtx = new IncrementalParseContext();
+        var freshResult = freshCtx.LintIncrementally(Encoding.UTF8.GetBytes(yaml2), FilePath);
+
+        // Cycle diagnostics must not be duplicated
+        var cycleDiags2 = result2.Where(d =>
+            d.GetProperty("message").GetString()!.Contains("cyclic")).ToArray();
+        var cycleDiagsFresh = freshResult.Where(d =>
+            d.GetProperty("message").GetString()!.Contains("cyclic")).ToArray();
+
+        await Assert.That(cycleDiags2.Length).IsEqualTo(cycleDiagsFresh.Length);
+
+        // Total diagnostic count must also match fresh lint
+        await Assert.That(result2.Length).IsEqualTo(freshResult.Length);
+    }
+
+    [Test]
     public async Task LintIncrementally_SkippedJobDiagnosticsHaveCorrectOffsets()
     {
         // Verify that cached diagnostics have correct line/column (same offset = same line)
