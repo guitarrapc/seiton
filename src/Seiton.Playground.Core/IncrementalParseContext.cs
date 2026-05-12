@@ -1004,7 +1004,8 @@ public sealed class IncrementalParseContext
         var merged = _mergedDiagnostics ??= new(32);
         merged.Clear();
 
-        // Both fresh diagnostics and per-job cached diagnostics are already sorted by offset.
+        // Both fresh diagnostics and per-job cached diagnostics are already sorted by
+        // LintEngine's ordering (line, column, ruleId, message).
         // Cached job arrays are non-overlapping and ordered by position (job0 < job1 < ...),
         // so concatenating them in job order produces a sorted sequence.
         // Use a two-pointer merge to combine them in O(n+m) instead of Sort which is O((n+m) log(n+m)).
