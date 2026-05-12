@@ -603,7 +603,10 @@ public sealed class LintEngine
 
     private static bool TryFindJobIdForLine(int line, IReadOnlyList<JobScope> jobScopes, byte[] source, out string jobId)
     {
-        for (var i = 0; i < jobScopes.Count; i++)
+        // Iterate in reverse: scopes are in YAML order (ascending StartLine).
+        // When ranges overlap at boundaries (MappingEnd points to next sibling's line),
+        // reverse iteration picks the scope with the highest StartLine <= line, which is correct.
+        for (var i = jobScopes.Count - 1; i >= 0; i--)
         {
             var scope = jobScopes[i];
             if (line >= scope.StartLine && line <= scope.EndLine)

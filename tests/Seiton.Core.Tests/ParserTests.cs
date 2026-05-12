@@ -7183,4 +7183,462 @@ public sealed class ParserTests
         await Assert.That(fixedText).Contains("description:");
         result.Arena?.Dispose();
     }
+
+    // ──────────────────────────────────────────────────────────────────────
+    // Job.Range covers the full job mapping block
+    // ──────────────────────────────────────────────────────────────────────
+
+    [Test]
+    public async Task Parse_JobRange_CoversFullMappingBlock()
+    {
+        var yaml = NormalizeEol("""
+        on: push
+        jobs:
+            build:
+                runs-on: ubuntu-latest
+                strategy:
+                    matrix:
+                        os: [ubuntu-latest]
+                steps:
+                    - run: echo ok
+        """);
+
+        var bytes = Encoding.UTF8.GetBytes(yaml);
+        var result = WorkflowParser.Parse(bytes, "job-range.yml");
+        var arena = result.Arena!;
+
+        await Assert.That(result.HasFatalError).IsFalse();
+
+        var buildJob = result.Workflow!.Jobs.Get(bytes, "build"u8);
+        var range = buildJob.Range;
+
+        // StartLine should be the job ID line (line 3, 1-based)
+        await Assert.That(range.StartLine).IsEqualTo(3);
+        // EndLine should cover the last line of the job mapping (line 9, 1-based: "    - run: echo ok")
+        await Assert.That(range.EndLine).IsGreaterThanOrEqualTo(9);
+        result.Arena?.Dispose();
+    }
+
+    [Test]
+    public async Task Parse_JobRange_MultipleJobs_EachCoversOwnMapping()
+    {
+        var yaml = NormalizeEol("""
+        on: push
+        jobs:
+            build:
+                runs-on: ubuntu-latest
+                steps:
+                    - run: echo build
+            test:
+                runs-on: ubuntu-latest
+                steps:
+                    - run: echo test
+        """);
+
+        var bytes = Encoding.UTF8.GetBytes(yaml);
+        var result = WorkflowParser.Parse(bytes, "multi-job-range.yml");
+        var arena = result.Arena!;
+
+        await Assert.That(result.HasFatalError).IsFalse();
+
+        var buildJob = result.Workflow!.Jobs.Get(bytes, "build"u8);
+        var testJob = result.Workflow!.Jobs.Get(bytes, "test"u8);
+
+        // build: L3, test: L7
+        await Assert.That(buildJob.Range.StartLine).IsEqualTo(3);
+        await Assert.That(testJob.Range.StartLine).IsEqualTo(7);
+
+        // build should end at or before test starts (MappingEnd may point to next sibling's line)
+        await Assert.That(buildJob.Range.EndLine).IsLessThanOrEqualTo(testJob.Range.StartLine);
+        // test should cover its full body
+        await Assert.That(testJob.Range.EndLine).IsGreaterThanOrEqualTo(10);
+        result.Arena?.Dispose();
+    }
+
+    [Test]
+    public async Task Parse_JobRange_ReusableWorkflowCall_CoversFullMapping()
+    {
+        var yaml = NormalizeEol("""
+        on: push
+        jobs:
+            call:
+                uses: org/repo/.github/workflows/reusable.yml@main
+                with:
+                    param1: value1
+                secrets: inherit
+        """);
+
+        var bytes = Encoding.UTF8.GetBytes(yaml);
+        var result = WorkflowParser.Parse(bytes, "reusable-job-range.yml");
+        var arena = result.Arena!;
+
+        await Assert.That(result.HasFatalError).IsFalse();
+
+        var callJob = result.Workflow!.Jobs.Get(bytes, "call"u8);
+
+        await Assert.That(callJob.Range.StartLine).IsEqualTo(3);
+        await Assert.That(callJob.Range.EndLine).IsGreaterThanOrEqualTo(7);
+        result.Arena?.Dispose();
+    }
+
+    // ──────────────────────────────────────────────────────────────────────
+    // Job AST field coverage (needs, if, permissions, environment, concurrency, defaults, snapshot)
+    // ──────────────────────────────────────────────────────────────────────
+
+    [Test]
+    public async Task Parse_JobAst_NeedsSingleString_PopulatesNeedsArray()
+    {
+        var yaml = NormalizeEol("""
+        on: push
+        jobs:
+            build:
+                runs-on: ubuntu-latest
+                steps:
+                    - run: echo build
+            test:
+                needs: build
+                runs-on: ubuntu-latest
+                steps:
+                    - run: echo test
+        """);
+
+        var bytes = Encoding.UTF8.GetBytes(yaml);
+        var result = WorkflowParser.Parse(bytes, "needs-single.yml");
+        var arena = result.Arena!;
+
+        await Assert.That(result.HasFatalError).IsFalse();
+        var testJob = result.Workflow!.Jobs.Get(bytes, "test"u8);
+        await Assert.That(testJob.Needs).IsNotNull();
+        await Assert.That(testJob.Needs!.Length).IsEqualTo(1);
+        await Assert.That(arena.GetStringValue(testJob.Needs[0]).ToArray()).IsEquivalentTo("build"u8.ToArray());
+        result.Arena?.Dispose();
+    }
+
+    [Test]
+    public async Task Parse_JobAst_NeedsArray_PopulatesNeedsArray()
+    {
+        var yaml = NormalizeEol("""
+        on: push
+        jobs:
+            build:
+                runs-on: ubuntu-latest
+                steps:
+                    - run: echo build
+            lint:
+                runs-on: ubuntu-latest
+                steps:
+                    - run: echo lint
+            deploy:
+                needs: [build, lint]
+                runs-on: ubuntu-latest
+                steps:
+                    - run: echo deploy
+        """);
+
+        var bytes = Encoding.UTF8.GetBytes(yaml);
+        var result = WorkflowParser.Parse(bytes, "needs-array.yml");
+        var arena = result.Arena!;
+
+        await Assert.That(result.HasFatalError).IsFalse();
+        var deployJob = result.Workflow!.Jobs.Get(bytes, "deploy"u8);
+        await Assert.That(deployJob.Needs).IsNotNull();
+        await Assert.That(deployJob.Needs!.Length).IsEqualTo(2);
+        result.Arena?.Dispose();
+    }
+
+    [Test]
+    public async Task Parse_JobAst_If_PopulatesIfField()
+    {
+        var yaml = NormalizeEol("""
+        on: push
+        jobs:
+            build:
+                if: github.ref == 'refs/heads/main'
+                runs-on: ubuntu-latest
+                steps:
+                    - run: echo ok
+        """);
+
+        var bytes = Encoding.UTF8.GetBytes(yaml);
+        var result = WorkflowParser.Parse(bytes, "job-if.yml");
+        var arena = result.Arena!;
+
+        await Assert.That(result.HasFatalError).IsFalse();
+        var job = result.Workflow!.Jobs.Get(bytes, "build"u8);
+        await Assert.That(job.If.HasValue).IsTrue();
+        await Assert.That(job.IfKeyRange).IsNotNull();
+        result.Arena?.Dispose();
+    }
+
+    [Test]
+    public async Task Parse_JobAst_Permissions_PopulatesJobPermissions()
+    {
+        var yaml = NormalizeEol("""
+        on: push
+        jobs:
+            build:
+                permissions:
+                    contents: read
+                    pull-requests: write
+                runs-on: ubuntu-latest
+                steps:
+                    - run: echo ok
+        """);
+
+        var bytes = Encoding.UTF8.GetBytes(yaml);
+        var result = WorkflowParser.Parse(bytes, "job-permissions.yml");
+        var arena = result.Arena!;
+
+        await Assert.That(result.HasFatalError).IsFalse();
+        var job = result.Workflow!.Jobs.Get(bytes, "build"u8);
+        await Assert.That(job.Permissions).IsNotNull();
+        result.Arena?.Dispose();
+    }
+
+    [Test]
+    public async Task Parse_JobAst_EnvironmentString_PopulatesEnvironment()
+    {
+        var yaml = NormalizeEol("""
+        on: push
+        jobs:
+            deploy:
+                environment: production
+                runs-on: ubuntu-latest
+                steps:
+                    - run: echo deploy
+        """);
+
+        var bytes = Encoding.UTF8.GetBytes(yaml);
+        var result = WorkflowParser.Parse(bytes, "job-env-string.yml");
+        var arena = result.Arena!;
+
+        await Assert.That(result.HasFatalError).IsFalse();
+        var job = result.Workflow!.Jobs.Get(bytes, "deploy"u8);
+        await Assert.That(job.Environment).IsNotNull();
+        result.Arena?.Dispose();
+    }
+
+    [Test]
+    public async Task Parse_JobAst_EnvironmentMapping_PopulatesEnvironment()
+    {
+        var yaml = NormalizeEol("""
+        on: push
+        jobs:
+            deploy:
+                environment:
+                    name: production
+                    url: https://example.com
+                runs-on: ubuntu-latest
+                steps:
+                    - run: echo deploy
+        """);
+
+        var bytes = Encoding.UTF8.GetBytes(yaml);
+        var result = WorkflowParser.Parse(bytes, "job-env-mapping.yml");
+        var arena = result.Arena!;
+
+        await Assert.That(result.HasFatalError).IsFalse();
+        var job = result.Workflow!.Jobs.Get(bytes, "deploy"u8);
+        await Assert.That(job.Environment).IsNotNull();
+        result.Arena?.Dispose();
+    }
+
+    [Test]
+    public async Task Parse_JobAst_Concurrency_PopulatesJobConcurrency()
+    {
+        var yaml = NormalizeEol("""
+        on: push
+        jobs:
+            build:
+                concurrency:
+                    group: ci-${{ github.ref }}
+                    cancel-in-progress: true
+                runs-on: ubuntu-latest
+                steps:
+                    - run: echo ok
+        """);
+
+        var bytes = Encoding.UTF8.GetBytes(yaml);
+        var result = WorkflowParser.Parse(bytes, "job-concurrency.yml");
+        var arena = result.Arena!;
+
+        await Assert.That(result.HasFatalError).IsFalse();
+        var job = result.Workflow!.Jobs.Get(bytes, "build"u8);
+        await Assert.That(job.Concurrency).IsNotNull();
+        result.Arena?.Dispose();
+    }
+
+    [Test]
+    public async Task Parse_JobAst_Defaults_PopulatesJobDefaults()
+    {
+        var yaml = NormalizeEol("""
+        on: push
+        jobs:
+            build:
+                defaults:
+                    run:
+                        shell: bash
+                        working-directory: src
+                runs-on: ubuntu-latest
+                steps:
+                    - run: echo ok
+        """);
+
+        var bytes = Encoding.UTF8.GetBytes(yaml);
+        var result = WorkflowParser.Parse(bytes, "job-defaults.yml");
+        var arena = result.Arena!;
+
+        await Assert.That(result.HasFatalError).IsFalse();
+        var job = result.Workflow!.Jobs.Get(bytes, "build"u8);
+        await Assert.That(job.Defaults).IsNotNull();
+        result.Arena?.Dispose();
+    }
+
+    [Test]
+    public async Task Parse_JobAst_Snapshot_PopulatesSnapshotFields()
+    {
+        var yaml = NormalizeEol("""
+        on: push
+        jobs:
+            build:
+                runs-on: ubuntu-latest
+                snapshot:
+                    version: v1
+                    image-name: myimage
+                    if: github.ref == 'refs/heads/main'
+                steps:
+                    - run: echo ok
+        """);
+
+        var bytes = Encoding.UTF8.GetBytes(yaml);
+        var result = WorkflowParser.Parse(bytes, "job-snapshot.yml");
+        var arena = result.Arena!;
+
+        await Assert.That(result.HasFatalError).IsFalse();
+        var job = result.Workflow!.Jobs.Get(bytes, "build"u8);
+        await Assert.That(job.Snapshot).IsNotNull();
+        await Assert.That(job.Snapshot!.Version.HasValue).IsTrue();
+        await Assert.That(job.Snapshot.ImageName.HasValue).IsTrue();
+        await Assert.That(job.Snapshot.If.HasValue).IsTrue();
+        result.Arena?.Dispose();
+    }
+
+    // ──────────────────────────────────────────────────────────────────────
+    // Job.Range edge cases
+    // ──────────────────────────────────────────────────────────────────────
+
+    [Test]
+    public async Task Parse_JobRange_DeepNestedBody_CoversEntireMapping()
+    {
+        var yaml = NormalizeEol("""
+        on: push
+        jobs:
+            build:
+                runs-on: ubuntu-latest
+                permissions:
+                    contents: read
+                env:
+                    FOO: bar
+                strategy:
+                    matrix:
+                        os: [ubuntu-latest, windows-latest]
+                container:
+                    image: node:20
+                services:
+                    redis:
+                        image: redis:7
+                steps:
+                    - run: echo step1
+                    - run: echo step2
+                    - run: echo step3
+        """);
+
+        var bytes = Encoding.UTF8.GetBytes(yaml);
+        var result = WorkflowParser.Parse(bytes, "deep-job-range.yml");
+
+        await Assert.That(result.HasFatalError).IsFalse();
+        var job = result.Workflow!.Jobs.Get(bytes, "build"u8);
+        await Assert.That(job.Range.StartLine).IsEqualTo(3);
+        // Must cover all the way to the last step (line 20)
+        await Assert.That(job.Range.EndLine).IsGreaterThanOrEqualTo(20);
+        result.Arena?.Dispose();
+    }
+
+    [Test]
+    public async Task Parse_JobRange_SingleJobEndOfFile_CoversFullMapping()
+    {
+        // No trailing newline after last content line
+        var yaml = NormalizeEol("on: push\njobs:\n    build:\n        runs-on: ubuntu-latest\n        steps:\n            - run: echo ok");
+
+        var bytes = Encoding.UTF8.GetBytes(yaml);
+        var result = WorkflowParser.Parse(bytes, "eof-job-range.yml");
+
+        await Assert.That(result.HasFatalError).IsFalse();
+        var job = result.Workflow!.Jobs.Get(bytes, "build"u8);
+        await Assert.That(job.Range.StartLine).IsEqualTo(3);
+        await Assert.That(job.Range.EndLine).IsGreaterThanOrEqualTo(6);
+        result.Arena?.Dispose();
+    }
+
+    [Test]
+    public async Task Parse_JobRange_ThreeJobs_MiddleJobRangeIsCorrect()
+    {
+        var yaml = NormalizeEol("""
+        on: push
+        jobs:
+            lint:
+                runs-on: ubuntu-latest
+                steps:
+                    - run: echo lint
+            build:
+                runs-on: ubuntu-latest
+                strategy:
+                    matrix:
+                        os: [ubuntu-latest]
+                steps:
+                    - run: echo build
+            deploy:
+                runs-on: ubuntu-latest
+                steps:
+                    - run: echo deploy
+        """);
+
+        var bytes = Encoding.UTF8.GetBytes(yaml);
+        var result = WorkflowParser.Parse(bytes, "three-jobs-range.yml");
+
+        await Assert.That(result.HasFatalError).IsFalse();
+        var lintJob = result.Workflow!.Jobs.Get(bytes, "lint"u8);
+        var buildJob = result.Workflow!.Jobs.Get(bytes, "build"u8);
+        var deployJob = result.Workflow!.Jobs.Get(bytes, "deploy"u8);
+
+        // lint: L3, build: L7, deploy: L14
+        await Assert.That(lintJob.Range.StartLine).IsEqualTo(3);
+        await Assert.That(buildJob.Range.StartLine).IsEqualTo(7);
+        await Assert.That(deployJob.Range.StartLine).IsEqualTo(14);
+
+        // build range should cover its body (matrix + steps) but end at or before deploy
+        await Assert.That(buildJob.Range.EndLine).IsGreaterThanOrEqualTo(12);
+        await Assert.That(buildJob.Range.EndLine).IsLessThanOrEqualTo(deployJob.Range.StartLine);
+        result.Arena?.Dispose();
+    }
+
+    [Test]
+    public async Task Parse_JobRange_MinimalUsesJob_CoversMapping()
+    {
+        var yaml = NormalizeEol("""
+        on: push
+        jobs:
+            call:
+                uses: org/repo/.github/workflows/reusable.yml@main
+        """);
+
+        var bytes = Encoding.UTF8.GetBytes(yaml);
+        var result = WorkflowParser.Parse(bytes, "minimal-uses-range.yml");
+
+        await Assert.That(result.HasFatalError).IsFalse();
+        var job = result.Workflow!.Jobs.Get(bytes, "call"u8);
+        await Assert.That(job.Range.StartLine).IsEqualTo(3);
+        await Assert.That(job.Range.EndLine).IsGreaterThanOrEqualTo(4);
+        result.Arena?.Dispose();
+    }
 }

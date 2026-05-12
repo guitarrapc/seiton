@@ -1,4 +1,4 @@
-using System.Text;
+﻿using System.Text;
 using Seiton.Core.Generated;
 using Seiton.Core.Parsing.Ast;
 
@@ -518,8 +518,10 @@ public static partial class WorkflowParser
             }
         }
 
+        var mappingEndMark = jobIdMark;
         if (reader.CurrentKind == YamlEventKind.MappingEnd)
         {
+            mappingEndMark = reader.CurrentStart;
             reader.Read();
         }
 
@@ -591,7 +593,7 @@ public static partial class WorkflowParser
         job.Services = servicesNode;
         job.WorkflowCall = workflowCallNode;
         job.Snapshot = snapshotNode;
-        job.Range = arena.GetStringRange(jobIdNode);
+        job.Range = BuildCompositeLocation(jobIdMark, mappingEndMark);
         return job;
     }
 
