@@ -204,7 +204,12 @@ public sealed class IncrementalLintCacheTests
         cmp = GetIntProperty(left, "column").CompareTo(GetIntProperty(right, "column"));
         if (cmp != 0) return cmp;
         cmp = string.CompareOrdinal(GetStringProperty(left, "ruleId"), GetStringProperty(right, "ruleId"));
-        return cmp != 0 ? cmp : string.CompareOrdinal(GetStringProperty(left, "message"), GetStringProperty(right, "message"));
+        if (cmp != 0) return cmp;
+        cmp = string.CompareOrdinal(GetStringProperty(left, "message"), GetStringProperty(right, "message"));
+        if (cmp != 0) return cmp;
+        // Total ordering: fall back to raw JSON text so Array.Sort cannot reorder
+        // distinct diagnostics that share the same primary fields.
+        return string.CompareOrdinal(left.GetRawText(), right.GetRawText());
     }
 
     private static int GetIntProperty(System.Text.Json.JsonElement element, string propertyName) =>
