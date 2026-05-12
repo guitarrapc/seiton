@@ -1544,6 +1544,58 @@ public sealed class RuleInterfaceTests
                         - run: echo ng
             """,
             ["\"\" is invalid for permission for all the scopes. available values are \"read-all\", \"write-all\" or {}"]),
+            // warn: scalar read-all at workflow level
+            new RuleCase(
+            "ng-workflow-scalar-read-all",
+            """
+            on: push
+            permissions: read-all
+            jobs:
+                test:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - run: echo ng
+            """,
+            ["permissions scalar 'read-all' is overly broad; use explicit per-scope mapping in each job's permissions instead"]),
+            // warn: scalar write-all at workflow level
+            new RuleCase(
+            "ng-workflow-scalar-write-all",
+            """
+            on: push
+            permissions: write-all
+            jobs:
+                test:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - run: echo ng
+            """,
+            ["permissions scalar 'write-all' is overly broad; use explicit per-scope mapping in each job's permissions instead"]),
+            // warn: scalar read-all at job level
+            new RuleCase(
+            "ng-job-scalar-read-all",
+            """
+            on: push
+            jobs:
+                test:
+                    permissions: read-all
+                    runs-on: ubuntu-latest
+                    steps:
+                        - run: echo ng
+            """,
+            ["permissions scalar 'read-all' is overly broad; use explicit per-scope mapping instead"]),
+            // warn: scalar write-all at job level
+            new RuleCase(
+            "ng-job-scalar-write-all",
+            """
+            on: push
+            jobs:
+                test:
+                    permissions: write-all
+                    runs-on: ubuntu-latest
+                    steps:
+                        - run: echo ng
+            """,
+            ["permissions scalar 'write-all' is overly broad; use explicit per-scope mapping instead"]),
         };
 
         await AssertRuleCases(new PermissionsRule(), "permissions", cases);

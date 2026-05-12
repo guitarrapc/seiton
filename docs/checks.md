@@ -175,13 +175,23 @@ jobs:
 |---|---|---|
 | ✓ | — | ✗ |
 
-Validates `permissions` values. Scalar must be `read-all` or `write-all`. Per-scope values must be `read`, `write`, or `none`.
+Validates `permissions` values. Scalar must be `read-all` or `write-all`. Per-scope values must be `read`, `write`, or `none`. Even when valid, scalar permissions (`read-all`, `write-all`) emit a warning because explicit per-scope mapping is preferred.
 
 **Example trigger:**
 
 ```yaml
 on: push
 permissions: admin-all              # ERROR: must be 'read-all' or 'write-all'
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo ng
+```
+
+```yaml
+on: push
+permissions: read-all               # WARNING: overly broad; prefer explicit per-scope mapping
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -200,9 +210,20 @@ jobs:
       - run: echo ng
 ```
 
-**Remediation:**
+**Remediation:** Replace scalar permissions with explicit per-scope mapping at the job level:
 
 ```yaml
+# Before (workflow-level scalar)
+on: push
+permissions: read-all
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo ng
+
+---
+# After (job-level explicit scopes)
 on: push
 jobs:
   build:
