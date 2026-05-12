@@ -156,7 +156,7 @@ fresh diagnostics (linter 出力、offset 順) と cached per-job diagnostics (j
 
 テスト: 既存の `IncrementalLintCacheTests` (5 件) + `IncrementalParseJobSkipTests` 含む全 72 テスト pass。
 
-#### P-3: CacheJobDiagnostics の配列再利用
+#### P-3: CacheJobDiagnostics の配列再利用 ✅ 実装済み
 
 `CacheJobDiagnostics` は毎回 `new Diagnostic[count]` を job 数分割り当てる。前回と同じ count なら配列を再利用できる。
 
@@ -165,6 +165,24 @@ fresh diagnostics (linter 出力、offset 順) と cached per-job diagnostics (j
       そうでなければ新規割当。
 推定効果: Large で 2-3% 改善。
 ```
+
+**実装結果** (2026-05-12):
+
+実装箇所: `IncrementalParseContext.CacheJobDiagnostics()` — per-job `Diagnostic[]` 配列の再利用。
+変更: (1) 「Clear existing cache entries」ループを削除。(2) 配列割当ループで `_cachedJobDiagnostics[j]` の Length が `counts[j]` と一致する場合は既存配列を再利用し、一致しない場合のみ `new Diagnostic[counts[j]]` を割当。`counts[j] == 0` の場合は null に設定。
+
+ベンチマーク比較 (PlaygroundLintBenchmark, ShortRun, P-1+P-2+P-3 累積):
+
+| Method        | Size  | Allocated (P-1+P-2) | Allocated (P-1+P-2+P-3) | 削減 |
+|-------------- |------ |--------------------:|------------------------:|-----:|
+| PartialChange | Small | 124,640 B           | 120,240 B               | -3.5% |
+| PartialChange | Large | 376,176 B           | 312,336 B               | -17.0% |
+
+- Large の **allocation が 17.0% 削減** (376 KB → 312 KB)。推定 2-3% を大幅に上回る結果。6 jobs × 毎イテレーション の per-job 配列再利用が効いている。
+- Small も **3.5% 削減** (125 KB → 120 KB)。1 job の配列再利用。
+- Mean (実行時間) は ShortRun (3 iterations) の高 error margin 内のノイズ。
+
+テスト: `IncrementalLintCacheTests` (7 件) + `IncrementalParseJobSkipTests` (11 件) 含む全 73 テスト pass (6 件は Playwright 環境依存で除外)。
 
 ### 3.2 中程度の改善
 
@@ -248,7 +266,7 @@ incremental parse の根本的な設計変更。VYaml でソース全体をト�
 |---:|---|---|---|---|---|
 | 1 | P-1 | Small の early exit | Small alloc -19% | 低 | ✅ 実装済み |
 | 2 | P-2 | Merge sort 排除 | Large O(n+m) | 低 | ✅ 実装済み |
-| 3 | P-3 | Cache 配列再利用 | Large 2-3% | 低 | |
+| 3 | P-3 | Cache 配列再利用 | Small -3.5%, Large -17.0% | 低 | ✅ 実装済み |
 | 4 | P-4 | Lint setup 差分スキップ | 10-15% | 中 | |
 | 5 | P-6 | BulkImport 条件付きスキップ | 5-10% | 中 | |
 | 6 | P-7 | Lint job-level 差分 | 30-40% | 高 | |

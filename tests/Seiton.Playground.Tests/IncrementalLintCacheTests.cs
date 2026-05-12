@@ -159,4 +159,35 @@ public sealed class IncrementalLintCacheTests
                 .IsEqualTo(deployDiags1[i].GetProperty("line").GetInt32());
         }
     }
+
+    [Test]
+    public async Task LintIncrementally_RepeatedSameCountEdits_DiagnosticsRemainCorrect()
+    {
+        // P-3: Verify correctness when CacheJobDiagnostics is called repeatedly
+        // with the same diagnostic count per job (the reuse scenario).
+        // 3 iterations with same-length edits: diagnostic counts per job stay constant.
+        var ctx = new IncrementalParseContext();
+
+        var yaml1 = "on: push\njobs:\n  build:\n    runs-on: ubuntu-latest\n    steps:\n      - run: echo edit0\n  deploy:\n    runs-on: ubuntu-latest\n    steps:\n      - run: echo deploy\n";
+        var result1 = ctx.LintIncrementally(Encoding.UTF8.GetBytes(yaml1), FilePath);
+
+        // Repeated same-length edits on build job only
+        for (var i = 1; i <= 3; i++)
+        {
+            var yaml = $"on: push\njobs:\n  build:\n    runs-on: ubuntu-latest\n    steps:\n      - run: echo edit{i}\n  deploy:\n    runs-on: ubuntu-latest\n    steps:\n      - run: echo deploy\n";
+            var result = ctx.LintIncrementally(Encoding.UTF8.GetBytes(yaml), FilePath);
+
+            // Each iteration should produce the same number of diagnostics
+            await Assert.That(result.Length).IsEqualTo(result1.Length);
+
+            // Deploy diagnostics should be present and correct (from cache)
+            var deployDiags = result.Where(d => d.GetProperty("message").GetString()!.Contains("'deploy'")).ToArray();
+            await Assert.That(deployDiags.Length).IsGreaterThan(0);
+
+            // Verify against fresh full lint
+            var freshCtx = new IncrementalParseContext();
+            var freshResult = freshCtx.LintIncrementally(Encoding.UTF8.GetBytes(yaml), FilePath);
+            await Assert.That(result.Length).IsEqualTo(freshResult.Length);
+        }
+    }
 }

@@ -1121,10 +1121,6 @@ public sealed class IncrementalParseContext
         if (_cachedJobDiagnostics is null || _cachedJobDiagnostics.Length < jobCount)
             _cachedJobDiagnostics = new Diagnostic[jobCount][];
 
-        // Clear existing cache entries
-        for (var i = 0; i < jobCount; i++)
-            _cachedJobDiagnostics[i] = null;
-
         // Count diagnostics per job first (avoids List<> per job)
         int[]? rentedCounts = null;
         Span<int> counts = jobCount <= 64
@@ -1146,11 +1142,18 @@ public sealed class IncrementalParseContext
             }
         }
 
-        // Allocate per-job arrays based on counted sizes
+        // Allocate or reuse per-job arrays based on counted sizes (P-3: reuse when same length)
         for (var j = 0; j < jobCount; j++)
         {
             if (counts[j] > 0)
-                _cachedJobDiagnostics[j] = new Diagnostic[counts[j]];
+            {
+                if (_cachedJobDiagnostics[j] is null || _cachedJobDiagnostics[j]!.Length != counts[j])
+                    _cachedJobDiagnostics[j] = new Diagnostic[counts[j]];
+            }
+            else
+            {
+                _cachedJobDiagnostics[j] = null;
+            }
         }
 
         // Fill arrays (reset counts as write indices)
