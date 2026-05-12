@@ -98,15 +98,33 @@ Validates core job shape. `uses` (reusable workflow call) is mutually exclusive 
 **Example trigger:**
 
 ```yaml
+on: push
 jobs:
   build:
-    uses: org/shared/.github/workflows/build.yml@main
-    runs-on: ubuntu-latest  # ERROR: incompatible with uses
-    steps:                  # ERROR: incompatible with uses
+    runs-on: ubuntu-latest
+    steps:                  # ERROR: "runs-on" section is missing
       - run: echo hello
 ```
 
-**Remediation:** Remove `steps` / `runs-on` from reusable-call jobs. Add them only to executable jobs.
+```yaml
+on: push
+jobs:
+  reuse:
+    uses: owner/repo/.github/workflows/reuse.yml@main
+    steps:                  # ERROR: cannot have both uses and steps
+      - run: echo hello
+```
+
+**Remediation:**
+
+```yaml
+on: push
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo ok
+```
 
 ---
 
@@ -121,13 +139,34 @@ Validates reusable workflow call semantics. `with` and `secrets` are only valid 
 **Example trigger:**
 
 ```yaml
+on: push
 jobs:
-  deploy:
-    with:               # ERROR: with requires uses
-      env: production
+  build:
+    runs-on: ubuntu-latest
+    with:                   # ERROR: key 'with' requires uses
+      target: prod
+    steps:
+      - run: echo ng
 ```
 
-**Remediation:** Add `uses:` to the job when passing `with`/`secrets`. Remove incompatible execution keys from reusable-call jobs.
+```yaml
+on: push
+jobs:
+  reuse:
+    uses: owner/repo/.github/workflows/reuse.yml@main
+    container: node:20      # ERROR: incompatible with uses
+```
+
+**Remediation:**
+
+```yaml
+on: push
+jobs:
+  reuse:
+    uses: owner/repo/.github/workflows/reuse.yml@main
+    with:
+      target: prod
+```
 
 ---
 
@@ -142,11 +181,38 @@ Validates `permissions` values. Scalar must be `read-all` or `write-all`. Per-sc
 **Example trigger:**
 
 ```yaml
-permissions:
-  contents: admin   # ERROR: invalid value
+on: push
+permissions: admin-all              # ERROR: must be 'read-all' or 'write-all'
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo ng
 ```
 
-**Remediation:** Use `read`, `write`, or `none` for each scope. `read-all` and `write-all` are also accepted but seiton warn against their use in favor of explicit scopes.
+```yaml
+on: push
+jobs:
+  build:
+    permissions:
+      contents: admin              # ERROR: must be 'read', 'write', or 'none'
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo ng
+```
+
+**Remediation:**
+
+```yaml
+on: push
+jobs:
+  build:
+    permissions:
+      contents: read
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo ok
+```
 
 ---
 
@@ -161,12 +227,45 @@ Validates the job dependency graph. Errors on unknown dependency targets and cir
 **Example trigger:**
 
 ```yaml
+on: push
 jobs:
-  deploy:
-    needs: [build, test, missing-job]   # ERROR: missing-job does not exist
+  build:
+    needs: nonexistent       # ERROR: references unknown job
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo ng
 ```
 
-**Remediation:** Fix the `needs` list to reference existing job IDs. Redesign to eliminate circular dependencies.
+```yaml
+on: push
+jobs:
+  a:
+    needs: b                 # ERROR: cyclic dependencies detected
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo a
+  b:
+    needs: a
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo b
+```
+
+**Remediation:**
+
+```yaml
+on: push
+jobs:
+  setup:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo setup
+  build:
+    needs: setup
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo build
+```
 
 ---
 
@@ -181,12 +280,36 @@ Validates shell names in workflow/job defaults and `run` steps. Reports shells o
 **Example trigger:**
 
 ```yaml
-steps:
-  - run: echo hello
-    shell: fish    # ERROR: unsupported shell
+on: push
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo hello
+        shell: zsh             # ERROR: invalid shell name
 ```
 
-**Remediation:** Use a supported shell name (`bash`, `sh`, `pwsh`, `powershell`, `cmd`, `python`).
+```yaml
+on: push
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo hello
+        shell: cmd             # ERROR: cmd is not available on ubuntu
+```
+
+**Remediation:**
+
+```yaml
+on: push
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo hello
+        shell: bash
+```
 
 ---
 
@@ -201,11 +324,35 @@ Validates `job.id` and `step.id` values. IDs must use only alphanumeric characte
 **Example trigger:**
 
 ```yaml
+on: push
 jobs:
-  "my job":    # ERROR: spaces not allowed in job ID
+  "bad id":                 # ERROR: must start with a letter or _
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo ng
 ```
 
-**Remediation:** Use slug-style identifiers (e.g. `my-job`). Update all `needs`, `steps.<id>`, and expression references after renaming.
+```yaml
+on: push
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - id: setup.v1          # ERROR: invalid step ID
+        run: echo ng
+```
+
+**Remediation:**
+
+```yaml
+on: push
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - id: setup-v1
+        run: echo ok
+```
 
 ---
 
@@ -223,12 +370,20 @@ Validates glob syntax in event trigger filters. Reports invalid patterns and inc
 on:
   push:
     branches:
-      - "**[invalid"    # ERROR: invalid glob syntax
-    branches-ignore:    # ERROR: incompatible with branches
+      - "**[invalid"          # ERROR: invalid glob syntax
+    branches-ignore:          # ERROR: incompatible with branches
       - develop
 ```
 
-**Remediation:** Fix the glob syntax. Do not combine `branches` and `branches-ignore` in the same event.
+**Remediation:**
+
+```yaml
+on:
+  push:
+    branches:
+      - main
+      - "feature/**"
+```
 
 ---
 
@@ -243,10 +398,35 @@ Warns on unknown GitHub-hosted runner labels in `runs-on`. Self-hosted labels an
 **Example trigger:**
 
 ```yaml
-runs-on: ubuntu-9999    # WARNING: unknown label
+on: push
+jobs:
+  build:
+    runs-on: ubuntu-9999     # WARNING: unknown label
+    steps:
+      - run: echo ng
 ```
 
-**Remediation:** Use a known GitHub-hosted label. For self-hosted runners, add their labels to `rules.runner-label.known-hosted-labels.extend` in [configuration](configuration.md).
+```yaml
+on: push
+jobs:
+  build:
+    runs-on: [ubuntu-latest, windows-latest]  # ERROR: OS conflict
+    steps:
+      - run: echo ng
+```
+
+**Remediation:**
+
+```yaml
+on: push
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    steps:
+      - run: echo ok
+```
+
+For self-hosted runners, add their labels to `rules.runner-label.known-hosted-labels.extend` in [configuration](configuration.md).
 
 ---
 
@@ -261,10 +441,24 @@ Warns when moving `*-latest` runner labels (`ubuntu-latest`, `windows-latest`, `
 **Example trigger:**
 
 ```yaml
-runs-on: ubuntu-latest    # WARNING: prefer explicit version
+on: push
+jobs:
+  build:
+    runs-on: ubuntu-latest   # WARNING: prefer explicit version
+    steps:
+      - run: echo ng
 ```
 
-**Remediation:** Use explicit versioned labels such as `ubuntu-24.04`.
+**Remediation:**
+
+```yaml
+on: push
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    steps:
+      - run: echo ok
+```
 
 ---
 
@@ -279,12 +473,28 @@ Validates input names for well-known popular actions. Reports unknown input keys
 **Example trigger:**
 
 ```yaml
-- uses: actions/checkout@v4
-  with:
-    fetch-depht: 1    # ERROR: typo; correct key is fetch-depth
+on: push
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depht: 1      # ERROR: typo; did you mean 'fetch-depth'?
 ```
 
-**Remediation:** Fix the input name to match the action's documented keys.
+**Remediation:**
+
+```yaml
+on: push
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+```
 
 ---
 
@@ -299,6 +509,8 @@ Requires an explicit `shell` declaration on composite action `run` steps. Applie
 **Example trigger (action.yml):**
 
 ```yaml
+name: My action
+description: Sample composite action
 runs:
   using: composite
   steps:
@@ -306,7 +518,17 @@ runs:
       # ERROR: shell is required for composite action run steps
 ```
 
-**Remediation:** Add `shell: bash` (or your target shell) to every `run` step in composite actions.
+**Remediation:**
+
+```yaml
+name: My action
+description: Sample composite action
+runs:
+  using: composite
+  steps:
+    - run: echo hello
+      shell: bash
+```
 
 ---
 
@@ -531,10 +753,25 @@ Detects deprecated workflow command syntax (`::set-output`, `::save-state`, `::a
 **Example trigger:**
 
 ```yaml
-- run: echo "::set-output name=digest::$DIGEST"
+on: push
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "::set-output name=digest::$DIGEST"
+        # ERROR: workflow command "set-output" was deprecated
 ```
 
-**Remediation:** Replace with `$GITHUB_OUTPUT`, `$GITHUB_STATE`, `$GITHUB_PATH`, `$GITHUB_ENV` file mechanisms.
+**Remediation:**
+
+```yaml
+on: push
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "result=ok" >> "$GITHUB_OUTPUT"
+```
 
 ---
 
@@ -578,11 +815,26 @@ Warns when high-risk trigger events (`pull_request_target`, `workflow_run`, etc.
 **Example trigger:**
 
 ```yaml
-on:
-  pull_request_target:    # WARNING: dangerous trigger
+on: pull_request_target    # WARNING: potentially dangerous trigger
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo ng
 ```
 
-**Remediation:** Restrict the trigger scope, add strict `if` condition guards, or replace with a safer event (`pull_request` without `_target`).
+**Remediation:**
+
+```yaml
+on: push
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo ok
+```
+
+Restrict the trigger scope, add strict `if` condition guards, or replace with a safer event (`pull_request` without `_target`).
 
 **Configuration — extend the dangerous-events set:**
 
@@ -607,11 +859,26 @@ Errors when `${{ env.* }}` is directly interpolated inside a `run` script. Shell
 **Example trigger:**
 
 ```yaml
-- run: echo "${{ env.VERSION }}"
-  # ERROR: use $VERSION instead
+on: push
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "${{ env.VERSION }}"  # ERROR: use $VERSION instead
 ```
 
-**Remediation:** Replace `${{ env.VAR }}` with `$VAR` (bash/sh) or `$env:VAR` (PowerShell).
+**Remediation:**
+
+```yaml
+on: push
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "$VERSION"
+```
+
+Replace `${{ env.VAR }}` with `$VAR` (bash/sh) or `$env:VAR` (PowerShell).
 
 ---
 
@@ -626,16 +893,26 @@ Errors when `${{ secrets.* }}` is directly interpolated inside a `run` script. S
 **Example trigger:**
 
 ```yaml
-- run: curl -H "Authorization: Bearer ${{ secrets.TOKEN }}"
-  # ERROR: use env: indirection
+on: push
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - run: curl -H "Authorization: Bearer ${{ secrets.TOKEN }}"
+        # ERROR: use env: indirection
 ```
 
 **Remediation:**
 
 ```yaml
-- env:
-    TOKEN: ${{ secrets.TOKEN }}
-  run: curl -H "Authorization: Bearer $TOKEN"
+on: push
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - env:
+          TOKEN: ${{ secrets.TOKEN }}
+        run: curl -H "Authorization: Bearer $TOKEN"
 ```
 
 ---
@@ -695,11 +972,26 @@ Errors when an expression references the entire `secrets` context as an object (
 **Example trigger:**
 
 ```yaml
-- run: echo "${{ toJson(secrets) }}"
-  # ERROR: exposes all secrets
+on: push
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "${{ toJson(secrets) }}"  # ERROR: exposes all secrets
 ```
 
-**Remediation:** Access only the specific secret key needed: `${{ secrets.MY_SECRET }}`.
+**Remediation:**
+
+```yaml
+on: push
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - env:
+          MY_SECRET: ${{ secrets.MY_SECRET }}
+        run: echo "$MY_SECRET"
+```
 
 ---
 
@@ -1040,12 +1332,28 @@ rules:
 
 Warns when `actions/checkout` is used without `persist-credentials: false`. Persisting credentials in `.git/config` increases secret exposure risk.
 
+**Example trigger:**
+
+```yaml
+on: push
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4  # ERROR: should set persist-credentials to false
+```
+
 **Remediation:**
 
 ```yaml
-- uses: actions/checkout@v4
-  with:
-    persist-credentials: false
+on: push
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
 ```
 
 ---
@@ -1605,6 +1913,17 @@ rules:
 
 Errors when `uses:` references resolve to action versions listed in known vulnerability advisory data.
 
+**Example trigger:**
+
+```yaml
+on: push
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/example@v1   # ERROR: known vulnerable version
+```
+
 **Remediation:** Upgrade to the fixed release line or pin to a non-vulnerable commit.
 
 ---
@@ -1617,6 +1936,18 @@ Errors when `uses:` references resolve to action versions listed in known vulner
 
 Errors when a SHA-pinned `uses:` reference points to a commit that is not reachable in the referenced repository's expected history. Detects ghost or impostor commit supply-chain abuse.
 
+**Example trigger:**
+
+```yaml
+on: push
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@abc1234567890abc1234567890abc1234567890a
+        # ERROR: commit is not reachable in the repository
+```
+
 **Remediation:** Replace with a verified commit from the trusted tag/release mapping.
 
 ---
@@ -1628,6 +1959,17 @@ Errors when a SHA-pinned `uses:` reference points to a commit that is not reacha
 | ✗ | online | ✗ |
 
 Errors when a symbolic ref (tag or branch name) in `uses:` is ambiguous — the same name exists in both refs/tags and refs/heads.
+
+**Example trigger:**
+
+```yaml
+on: push
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: owner/action@v2      # ERROR: ambiguous ref (tag and branch both exist)
+```
 
 **Remediation:** Use a full SHA pin, or enforce ref-namespace disambiguation policy.
 
