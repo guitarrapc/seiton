@@ -1,4 +1,4 @@
-﻿using System.Text;
+using System.Text;
 using Seiton.Core.Generated;
 using Seiton.Core.Parsing.Ast;
 

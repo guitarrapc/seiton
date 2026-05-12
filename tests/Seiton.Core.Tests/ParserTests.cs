@@ -7205,7 +7205,6 @@ public sealed class ParserTests
 
         var bytes = Encoding.UTF8.GetBytes(yaml);
         var result = WorkflowParser.Parse(bytes, "job-range.yml");
-        var arena = result.Arena!;
 
         await Assert.That(result.HasFatalError).IsFalse();
 
@@ -7237,7 +7236,6 @@ public sealed class ParserTests
 
         var bytes = Encoding.UTF8.GetBytes(yaml);
         var result = WorkflowParser.Parse(bytes, "multi-job-range.yml");
-        var arena = result.Arena!;
 
         await Assert.That(result.HasFatalError).IsFalse();
 
@@ -7270,7 +7268,6 @@ public sealed class ParserTests
 
         var bytes = Encoding.UTF8.GetBytes(yaml);
         var result = WorkflowParser.Parse(bytes, "reusable-job-range.yml");
-        var arena = result.Arena!;
 
         await Assert.That(result.HasFatalError).IsFalse();
 

@@ -14409,6 +14409,7 @@ public sealed class RuleInterfaceTests
         """;
 
         var result = new LintEngine().Check(Encoding.UTF8.GetBytes(yaml), "test.yml");
+        using var arena = result.ParseResult.Arena;
         var ifCondDiags = result.Diagnostics.Where(d => d.RuleId == "if-cond").ToArray();
 
         // Expect: diagnostic is NOT suppressed because comment targets the step line, not the if: line
@@ -14433,6 +14434,7 @@ public sealed class RuleInterfaceTests
         """;
 
         var result = new LintEngine().Check(Encoding.UTF8.GetBytes(yaml), "test.yml");
+        using var arena = result.ParseResult.Arena;
         var ifCondDiags = result.Diagnostics.Where(d => d.RuleId == "if-cond").ToArray();
 
         // Expect: diagnostic IS suppressed because comment targets the if: line
@@ -14457,6 +14459,7 @@ public sealed class RuleInterfaceTests
         """;
 
         var result = new LintEngine().Check(Encoding.UTF8.GetBytes(yaml), "test.yml");
+        using var arena = result.ParseResult.Arena;
         var ifCondDiags = result.Diagnostics.Where(d => d.RuleId == "if-cond").ToArray();
 
         // Expect: suppressed
@@ -14484,6 +14487,7 @@ public sealed class RuleInterfaceTests
         """;
 
         var result = new LintEngine().Check(Encoding.UTF8.GetBytes(yaml), "test.yml");
+        using var arena = result.ParseResult.Arena;
         var matrixDiags = result.Diagnostics.Where(d => d.RuleId == "matrix").ToArray();
 
         // The comment targets strategy: line (N+1), but matrix diagnostics are on deeper lines (axis name line).
@@ -14511,6 +14515,7 @@ public sealed class RuleInterfaceTests
         """;
 
         var result = new LintEngine().Check(Encoding.UTF8.GetBytes(yaml), "test.yml");
+        using var arena = result.ParseResult.Arena;
         var matrixDiags = result.Diagnostics.Where(d => d.RuleId == "matrix").ToArray();
         var configErrors = result.Diagnostics.Where(d => d.RuleId is null).ToArray();
 
@@ -14554,6 +14559,7 @@ public sealed class RuleInterfaceTests
         """;
 
         var result = new LintEngine().Check(Encoding.UTF8.GetBytes(yaml), "test.yml");
+        using var arena = result.ParseResult.Arena;
         var ifCondDiags = result.Diagnostics.Where(d => d.RuleId == "if-cond").ToArray();
 
         // IfCondRule adjusts block scalar diagnostic to the | indicator line (same as if: key line).
@@ -14579,6 +14585,7 @@ public sealed class RuleInterfaceTests
         """;
 
         var result = new LintEngine().Check(Encoding.UTF8.GetBytes(yaml), "test.yml");
+        using var arena = result.ParseResult.Arena;
         var ifCondDiags = result.Diagnostics.Where(d => d.RuleId == "if-cond").ToArray();
 
         // Block scalar if: | adds trailing \n → always-true pattern
@@ -14604,6 +14611,7 @@ public sealed class RuleInterfaceTests
         """;
 
         var result = new LintEngine().Check(Encoding.UTF8.GetBytes(yaml), "test.yml");
+        using var arena = result.ParseResult.Arena;
         var ifCondDiags = result.Diagnostics.Where(d => d.RuleId == "if-cond").ToArray();
 
         // Same block scalar adjustment: diagnostic should be on the if: line → suppressed.
@@ -14619,20 +14627,21 @@ public sealed class RuleInterfaceTests
     {
         // Comma-separated is the supported format for multiple rule IDs.
         var yaml = """
-        on:
-            # seiton: disable-next-line dangerous-triggers, job-permissions-required
-            pull_request_target:
+        on: push
         jobs:
+            # seiton: disable-next-line job-timeout-minutes-required, job-permissions-required
             build:
-                runs-on: ubuntu-latest
-                timeout-minutes: 10
+                runs-on: ubuntu-24.04
                 steps:
                     - run: echo test
         """;
 
         var result = new LintEngine().Check(Encoding.UTF8.GetBytes(yaml), "test.yml");
+        using var arena = result.ParseResult.Arena;
 
-        await Assert.That(result.Diagnostics.Any(d => d.RuleId == "dangerous-triggers")).IsFalse();
+        // Both comma-separated rule IDs should be suppressed
+        await Assert.That(result.Diagnostics.Any(d => d.RuleId == "job-timeout-minutes-required")).IsFalse();
+        await Assert.That(result.Diagnostics.Any(d => d.RuleId == "job-permissions-required")).IsFalse();
     }
 
     [Test]
@@ -14654,6 +14663,7 @@ public sealed class RuleInterfaceTests
         """;
 
         var result = new LintEngine().Check(Encoding.UTF8.GetBytes(yaml), "test.yml");
+        using var arena = result.ParseResult.Arena;
 
         // First token "dangerous-triggers" is parsed correctly (it's the first arg before space).
         // Wait — actually AddRuleIds receives the full argsBytes after the command.
@@ -14693,6 +14703,7 @@ public sealed class RuleInterfaceTests
         """;
 
         var result = new LintEngine().Check(Encoding.UTF8.GetBytes(yaml), "test.yml");
+        using var arena = result.ParseResult.Arena;
         var matrixDiags = result.Diagnostics.Where(d => d.RuleId == "matrix").ToArray();
 
         await Assert.That(matrixDiags).IsEmpty();
@@ -14715,6 +14726,7 @@ public sealed class RuleInterfaceTests
         """;
 
         var result = new LintEngine().Check(Encoding.UTF8.GetBytes(yaml), "test.yml");
+        using var arena = result.ParseResult.Arena;
         var runnerDiags = result.Diagnostics.Where(d => d.RuleId == "runner-no-latest").ToArray();
 
         await Assert.That(runnerDiags).IsEmpty();
@@ -14738,6 +14750,7 @@ public sealed class RuleInterfaceTests
         """;
 
         var result = new LintEngine().Check(Encoding.UTF8.GetBytes(yaml), "test.yml");
+        using var arena = result.ParseResult.Arena;
         var ifCondDiags = result.Diagnostics.Where(d => d.RuleId == "if-cond").ToArray();
 
         await Assert.That(ifCondDiags).IsEmpty();
@@ -14766,6 +14779,7 @@ public sealed class RuleInterfaceTests
         """;
 
         var result = new LintEngine().Check(Encoding.UTF8.GetBytes(yaml), "test.yml");
+        using var arena = result.ParseResult.Arena;
         var runnerDiags = result.Diagnostics.Where(d => d.RuleId == "runner-no-latest").ToArray();
 
         // Only 'test' job should still have runner-no-latest diagnostics
@@ -14790,6 +14804,7 @@ public sealed class RuleInterfaceTests
         """;
 
         var result = new LintEngine().Check(Encoding.UTF8.GetBytes(yaml), "test.yml");
+        using var arena = result.ParseResult.Arena;
         var timeoutDiags = result.Diagnostics.Where(d => d.RuleId == "job-timeout-minutes-required").ToArray();
 
         await Assert.That(timeoutDiags).IsEmpty();
@@ -14826,6 +14841,7 @@ public sealed class RuleInterfaceTests
         };
 
         var result = new LintEngine().Check(Encoding.UTF8.GetBytes(yaml), "workflows/main.yml", config);
+        using var arena = result.ParseResult.Arena;
         var matrixDiags = result.Diagnostics.Where(d => d.RuleId == "matrix").ToArray();
 
         await Assert.That(matrixDiags).IsEmpty();
@@ -14855,6 +14871,7 @@ public sealed class RuleInterfaceTests
         };
 
         var result = new LintEngine().Check(Encoding.UTF8.GetBytes(yaml), "workflows/main.yml", config);
+        using var arena = result.ParseResult.Arena;
         var runnerDiags = result.Diagnostics.Where(d => d.RuleId == "runner-no-latest").ToArray();
 
         await Assert.That(runnerDiags).IsEmpty();
@@ -14888,12 +14905,12 @@ public sealed class RuleInterfaceTests
         };
 
         var result = new LintEngine().Check(Encoding.UTF8.GetBytes(yaml), "workflows/main.yml", config);
+        using var arena = result.ParseResult.Arena;
 
         // 'build' job diagnostics (runner-no-latest, action-ref, job-permissions-required, etc.) should be suppressed
-        // 'test' job should still have diagnostics
-        var testPerms = result.Diagnostics.Where(d => d.RuleId == "job-permissions-required").ToArray();
-        // test job doesn't have permissions, so it should be diagnosed; but build should not
-        // We just verify build's diagnostics are suppressed and at least some suppression occurred
+        // 'test' job should still have runner-no-latest diagnostic (not excluded)
+        var testRunnerDiags = result.Diagnostics.Where(d => d.RuleId == "runner-no-latest").ToArray();
+        await Assert.That(testRunnerDiags.Length).IsEqualTo(1);
         await Assert.That(result.SuppressionSummary.TotalSuppressed).IsGreaterThanOrEqualTo(1);
         await Assert.That(result.SuppressionSummary.Records.Any(x => x.Source == SuppressionSource.ConfigJob)).IsTrue();
     }
@@ -14919,6 +14936,7 @@ public sealed class RuleInterfaceTests
         """;
 
         var result = new LintEngine().Check(Encoding.UTF8.GetBytes(yaml), "test.yml");
+        using var arena = result.ParseResult.Arena;
         var checkoutDiags = result.Diagnostics.Where(d => d.RuleId == "checkout-persist-credentials").ToArray();
 
         await Assert.That(checkoutDiags).IsEmpty();
@@ -14943,6 +14961,7 @@ public sealed class RuleInterfaceTests
         """;
 
         var result = new LintEngine().Check(Encoding.UTF8.GetBytes(yaml), "test.yml");
+        using var arena = result.ParseResult.Arena;
         var wrapperDiags = result.Diagnostics.Where(d => d.RuleId == "if-expr-wrapper").ToArray();
 
         await Assert.That(wrapperDiags).IsEmpty();
@@ -14965,6 +14984,7 @@ public sealed class RuleInterfaceTests
         """;
 
         var result = new LintEngine().Check(Encoding.UTF8.GetBytes(yaml), "test.yml");
+        using var arena = result.ParseResult.Arena;
         var permsDiags = result.Diagnostics.Where(d => d.RuleId == "job-permissions-required").ToArray();
 
         await Assert.That(permsDiags).IsEmpty();
@@ -14990,6 +15010,7 @@ public sealed class RuleInterfaceTests
         """;
 
         var result = new LintEngine().Check(Encoding.UTF8.GetBytes(yaml), "test.yml");
+        using var arena = result.ParseResult.Arena;
         var runnerDiags = result.Diagnostics.Where(d => d.RuleId == "runner-no-latest").ToArray();
         var timeoutDiags = result.Diagnostics.Where(d => d.RuleId == "job-timeout-minutes-required").ToArray();
 
@@ -15015,6 +15036,7 @@ public sealed class RuleInterfaceTests
         """;
 
         var result = new LintEngine().Check(Encoding.UTF8.GetBytes(yaml), "test.yml");
+        using var arena = result.ParseResult.Arena;
         var configErrors = result.Diagnostics.Where(d =>
             d.RuleId is null
             && d.Message.Contains("disable-job requires", StringComparison.Ordinal)).ToArray();
@@ -15038,10 +15060,11 @@ public sealed class RuleInterfaceTests
         """;
 
         var result = new LintEngine().Check(Encoding.UTF8.GetBytes(yaml), "test.yml");
+        using var arena = result.ParseResult.Arena;
 
         await Assert.That(result.SuppressionSummary.Records.Any(x => x.Source == SuppressionSource.InlineJob)).IsTrue();
         await Assert.That(result.SuppressionSummary.Records.All(x =>
-            x.Source == SuppressionSource.InlineJob || x.Source != SuppressionSource.ConfigJob)).IsTrue();
+            x.Source != SuppressionSource.ConfigJob)).IsTrue();
     }
 
     // ──────────────────────────────────────────────────────────────────────
@@ -15076,6 +15099,7 @@ public sealed class RuleInterfaceTests
         """;
 
         var result = new LintEngine().Check(Encoding.UTF8.GetBytes(yaml), "test.yml");
+        using var arena = result.ParseResult.Arena;
         var runnerDiags = result.Diagnostics.Where(d => d.RuleId == "runner-no-latest").ToArray();
 
         // lint and deploy should still have runner-no-latest diagnostics
@@ -15107,6 +15131,7 @@ public sealed class RuleInterfaceTests
         """;
 
         var result = new LintEngine().Check(Encoding.UTF8.GetBytes(yaml), "test.yml");
+        using var arena = result.ParseResult.Arena;
 
         // build: runner-no-latest suppressed, timeout-minutes NOT suppressed (has timeout)
         var buildRunnerDiags = result.Diagnostics.Where(d => d.RuleId == "runner-no-latest").ToArray();
@@ -15139,6 +15164,7 @@ public sealed class RuleInterfaceTests
         """;
 
         var result = new LintEngine().Check(Encoding.UTF8.GetBytes(yaml), "test.yml");
+        using var arena = result.ParseResult.Arena;
 
         // runner-no-latest suppressed by disable-job
         var runnerDiags = result.Diagnostics.Where(d => d.RuleId == "runner-no-latest").ToArray();
@@ -15192,6 +15218,7 @@ public sealed class RuleInterfaceTests
         };
 
         var result = new LintEngine().Check(Encoding.UTF8.GetBytes(yaml), "workflows/main.yml", config);
+        using var arena = result.ParseResult.Arena;
         var runnerDiags = result.Diagnostics.Where(d => d.RuleId == "runner-no-latest").ToArray();
 
         // deploy uses ubuntu-24.04 which doesn't have -latest, so no diagnostic expected for deploy either
@@ -15232,6 +15259,7 @@ public sealed class RuleInterfaceTests
         };
 
         var result = new LintEngine().Check(Encoding.UTF8.GetBytes(yaml), "workflows/main.yml", config);
+        using var arena = result.ParseResult.Arena;
         var checkoutDiags = result.Diagnostics.Where(d => d.RuleId == "checkout-persist-credentials").ToArray();
 
         // build's checkout-persist-credentials suppressed, test's should remain
@@ -15268,6 +15296,7 @@ public sealed class RuleInterfaceTests
         };
 
         var result = new LintEngine().Check(Encoding.UTF8.GetBytes(yaml), "workflows/main.yml", config);
+        using var arena = result.ParseResult.Arena;
 
         // build: runner-no-latest suppressed, but job-timeout-minutes-required should still appear
         var buildTimeout = result.Diagnostics.Where(d => d.RuleId == "job-timeout-minutes-required" && d.Location.StartLine <= 7).ToArray();
@@ -15304,6 +15333,7 @@ public sealed class RuleInterfaceTests
         };
 
         var result = new LintEngine().Check(Encoding.UTF8.GetBytes(yaml), "workflows/main.yml", config);
+        using var arena = result.ParseResult.Arena;
 
         await Assert.That(result.SuppressionSummary.Records.Any(x => x.Source == SuppressionSource.ConfigJob)).IsTrue();
     }
@@ -15328,6 +15358,7 @@ public sealed class RuleInterfaceTests
         };
 
         var result = new LintEngine().Check(Encoding.UTF8.GetBytes(yaml), "workflows/main.yml", config);
+        using var arena = result.ParseResult.Arena;
         var inheritDiags = result.Diagnostics.Where(d => d.RuleId == "deny-inherit-secrets").ToArray();
 
         await Assert.That(inheritDiags).IsEmpty();
