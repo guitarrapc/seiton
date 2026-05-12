@@ -33,6 +33,7 @@ This page documents all lint rules included in Seiton.
 - [env-var](#env-var)
 - [if-cond](#if-cond)
 - [fake-ternary](#fake-ternary)
+- [if-expr-wrapper](#if-expr-wrapper)
 - [deprecated-commands](#deprecated-commands)
 
 ### Security
@@ -317,7 +318,52 @@ runs:
 
 Validates `strategy.matrix` definitions. Reports inconsistent keys, invalid `include`/`exclude` shapes, and suspicious expansion patterns.
 
-**Remediation:** Normalize matrix axes and `include`/`exclude` rules. Test expected expansion counts.
+**Example trigger:**
+
+```yaml
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        os: []              # ERROR: axis has no values
+        exclude:
+          - arch: x64       # ERROR: unknown axis 'arch'
+    steps:
+      - run: echo ng
+```
+
+```yaml
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        node: [10, 12, 14]
+        os: [ubuntu-latest, macos-latest]
+        exclude:
+          - node: 13        # ERROR: value 13 does not match matrix combinations
+            os: ubuntu-latest
+    steps:
+      - run: echo ng
+```
+
+**Remediation:**
+
+```yaml
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+        node: [20]
+        exclude:
+          - node: 20
+            os: windows-latest
+    steps:
+      - run: echo ok
+```
 
 ---
 
@@ -329,7 +375,35 @@ Validates `strategy.matrix` definitions. Reports inconsistent keys, invalid `inc
 
 Warns on risky environment variable naming and usage patterns across workflow, job, and step scopes.
 
-**Remediation:** Use stable uppercase snake-case names and minimize the scope at which environment values are declared.
+**Example trigger:**
+
+```yaml
+on: push
+env:
+  github_token: x           # ERROR: not portable (lowercase)
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - env:
+          TOKEN-NAME: x     # ERROR: not portable (contains dash)
+        run: echo ng
+```
+
+**Remediation:**
+
+```yaml
+on: push
+env:
+  GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - env:
+          TOKEN_NAME: x
+        run: echo ok
+```
 
 ---
 
@@ -341,7 +415,33 @@ Warns on risky environment variable naming and usage patterns across workflow, j
 
 Warns on malformed, constant, or unsound `if` conditions. Reports always-true / always-false conditions and context misuse.
 
-**Remediation:** Rewrite with explicit boolean intent and scope-valid contexts.
+**Example trigger:**
+
+```yaml
+jobs:
+  build:
+    if: ${{ false }}        # ERROR: constant expression in condition
+    runs-on: ubuntu-latest
+    steps:
+      - if: ${{ !false }}   # ERROR: constant expression
+        run: echo ng
+      - if: ${{ 42 }}       # ERROR: constant expression
+        run: echo ng
+      - if: "${{ github.event_name == 'push' }} "  # ERROR: always true (trailing chars)
+        run: echo ng
+```
+
+**Remediation:**
+
+```yaml
+jobs:
+  build:
+    if: ${{ github.ref != '' }}
+    runs-on: ubuntu-latest
+    steps:
+      - if: ${{ success() }}
+        run: echo ok
+```
 
 ---
 
@@ -353,7 +453,70 @@ Warns on malformed, constant, or unsound `if` conditions. Reports always-true / 
 
 Warns when `cond && a || b` fake ternary idioms are used in expression-bearing fields. This pattern has different semantics from a true ternary when `a` is falsy.
 
-**Remediation:** Use explicit `if`-based branching instead of short-circuit ternary emulation.
+**Example trigger:**
+
+```yaml
+jobs:
+  build:
+    # ERROR: fake ternary pattern
+    if: ${{ github.ref_name == 'main' && 'prod' || 'dev' }}
+    runs-on: ubuntu-latest
+    steps:
+      - if: ${{ inputs.deploy && 'yes' || 'no' }}
+        run: echo ng
+```
+
+**Remediation:** Use explicit `if`-based branching or GitHub Actions' native conditional:
+
+```yaml
+jobs:
+  build:
+    if: ${{ github.ref_name == 'main' }}
+    runs-on: ubuntu-latest
+    steps:
+      - if: ${{ inputs.deploy }}
+        run: echo yes
+```
+
+---
+
+### `if-expr-wrapper`
+
+| Default | Network | Auto-fix |
+|---|---|---|
+| ✓ | — | △ |
+
+Warns when `if:` conditions are missing the `${{ }}` expression wrapper. Auto-fix is offered for single-line scalars without existing `${{` markers.
+
+**Example trigger:**
+
+```yaml
+jobs:
+  build:
+    if: github.ref != 'refs/heads/main'   # WARNING: missing ${{ }} wrapper
+    runs-on: ubuntu-latest
+    steps:
+      - if: github.event_name == 'push'   # WARNING: missing ${{ }} wrapper
+        run: echo ng
+      - if: "!cancelled()"                # WARNING: missing ${{ }} wrapper
+        run: echo ng
+```
+
+**Remediation:** Wrap expressions in `${{ }}`:
+
+```yaml
+jobs:
+  build:
+    if: ${{ github.ref != 'refs/heads/main' }}
+    runs-on: ubuntu-latest
+    steps:
+      - if: ${{ github.event_name == 'push' }}
+        run: echo ok
+      - if: ${{ !cancelled() }}
+        run: echo ok
+```
+
+> **Note:** Bare `true`, `false`, `always()`, `failure()`, `cancelled()`, `success()` literals are intentionally excluded from this rule since GitHub Actions handles them natively.
 
 ---
 
@@ -485,7 +648,39 @@ Errors when `${{ secrets.* }}` is directly interpolated inside a `run` script. S
 
 Errors when `${{ inputs.* }}` or `${{ github.event.inputs.* }}` are directly interpolated inside a `run` script. Inputs may be user-controlled.
 
-**Remediation:** Map via `env:` and validate/normalize the value before use in the script body.
+**Example trigger:**
+
+```yaml
+on:
+  workflow_dispatch:
+    inputs:
+      benchmark:
+        required: false
+        type: string
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "${{ inputs.benchmark }}"   # ERROR: use env: indirection
+```
+
+**Remediation:**
+
+```yaml
+on:
+  workflow_dispatch:
+    inputs:
+      benchmark:
+        required: false
+        type: string
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - env:
+          BENCHMARK: ${{ inputs.benchmark }}
+        run: echo "$BENCHMARK"
+```
 
 ---
 
@@ -516,7 +711,39 @@ Errors when an expression references the entire `secrets` context as an object (
 
 Errors when expressions reference context roots unavailable in the current scope (e.g. `steps.*` at job level).
 
-**Remediation:** Use only the context variables available at the expression's scope.
+**Example trigger:**
+
+```yaml
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    if: ${{ steps.prep.outputs.ok == 'true' }}  # ERROR: "steps" not allowed here
+    steps:
+      - run: echo ok
+```
+
+```yaml
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    if: ${{ matrix.os == 'ubuntu-latest' }}     # ERROR: "matrix" not allowed here
+    steps:
+      - run: echo ok
+```
+
+**Remediation:** Use only the context variables available at the expression's scope:
+
+```yaml
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    if: ${{ github.ref == 'refs/heads/main' }}
+    steps:
+      - id: prep
+        run: echo "ok=true" >> "$GITHUB_OUTPUT"
+      - if: ${{ steps.prep.outputs.ok == 'true' }}
+        run: echo ok
+```
 
 ---
 
@@ -528,7 +755,43 @@ Errors when expressions reference context roots unavailable in the current scope
 
 Warns when `actions/cache` is used in workflows that accept untrusted triggers (`pull_request`, `pull_request_target`, `workflow_run`). An attacker can write a poisoned cache entry that affects later privileged runs.
 
-**Remediation:** Split trusted and untrusted jobs. Namespace cache keys by trust boundary and avoid broad `restore-keys` fallback patterns.
+**Example trigger:**
+
+```yaml
+on: pull_request
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/cache@v4       # WARNING: cache on untrusted trigger
+        with:
+          path: ~/.npm
+          key: npm-${{ runner.os }}
+```
+
+**Remediation:** Split trusted and untrusted jobs. Namespace cache keys by trust boundary:
+
+```yaml
+on: push
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/cache@v4
+        with:
+          path: ~/.npm
+          key: npm-${{ runner.os }}
+```
+
+**Configuration — extend untrusted triggers:**
+
+```yaml
+rules:
+  cache-poisoning:
+    untrusted-triggers:
+      extend:
+        - issue_comment
+```
 
 ---
 
@@ -540,7 +803,27 @@ Warns when `actions/cache` is used in workflows that accept untrusted triggers (
 
 Warns when self-hosted runners are used in workflows with untrusted triggers. Compromised host isolation can expose long-lived credentials and filesystem state.
 
-**Remediation:** Add strict `if` guards, isolate runner groups, and route untrusted trigger paths to ephemeral GitHub-hosted runners.
+**Example trigger:**
+
+```yaml
+on: pull_request
+jobs:
+  build:
+    runs-on: self-hosted              # WARNING: self-hosted on untrusted trigger
+    steps:
+      - run: echo ok
+```
+
+**Remediation:** Route untrusted trigger paths to ephemeral GitHub-hosted runners:
+
+```yaml
+on: push
+jobs:
+  build:
+    runs-on: self-hosted
+    steps:
+      - run: echo ok
+```
 
 ---
 
@@ -552,7 +835,27 @@ Warns when self-hosted runners are used in workflows with untrusted triggers. Co
 
 Detects unsafe command construction from untrusted inputs in `run` scripts.
 
-**Remediation:** Use argument-safe invocation, strict quoting, and allowlist validation.
+**Example trigger:**
+
+```yaml
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    env:
+      ACTIONS_ALLOW_UNSECURE_COMMANDS: true  # ERROR: insecure commands enabled
+    steps:
+      - run: echo ng
+```
+
+**Remediation:** Remove `ACTIONS_ALLOW_UNSECURE_COMMANDS` and migrate to environment files:
+
+```yaml
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "MY_VAR=value" >> "$GITHUB_ENV"
+```
 
 ---
 
@@ -568,7 +871,31 @@ Detects unsafe command construction from untrusted inputs in `run` scripts.
 
 Errors when workflow or job permissions are set to `write-all`. This rule cannot be disabled.
 
-**Remediation:** Replace `write-all` with `read-all` or an explicit minimal scope map.
+**Example trigger:**
+
+```yaml
+on: push
+permissions: write-all             # ERROR: write-all is forbidden
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo ng
+```
+
+**Remediation:** Replace `write-all` with an explicit minimal scope map:
+
+```yaml
+on: push
+permissions:
+  contents: read
+  packages: write
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo ok
+```
 
 ---
 
@@ -580,7 +907,30 @@ Errors when workflow or job permissions are set to `write-all`. This rule cannot
 
 Errors when workflow or job permissions are set to `read-all`. Explicit least-privilege scope declarations must be used.
 
-**Remediation:** Replace `read-all` with an explicit scope map such as `contents: read`.
+**Example trigger:**
+
+```yaml
+on: push
+permissions: read-all               # ERROR: read-all is too broad
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo ng
+```
+
+**Remediation:** Replace `read-all` with an explicit scope map:
+
+```yaml
+on: push
+permissions:
+  contents: read
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo ok
+```
 
 ---
 
@@ -592,7 +942,30 @@ Errors when workflow or job permissions are set to `read-all`. Explicit least-pr
 
 Warns when a job omits an explicit `permissions:` declaration. Without explicit permissions the job inherits potentially broad defaults.
 
-**Remediation:** Add an explicit `permissions:` map to every job, using the minimum required scopes.
+**Example trigger:**
+
+```yaml
+on: push
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    # WARNING: no permissions declared
+    steps:
+      - run: echo ng
+```
+
+**Remediation:** Add an explicit `permissions:` map to every job:
+
+```yaml
+on: push
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - run: echo ok
+```
 
 ---
 
@@ -604,7 +977,48 @@ Warns when a job omits an explicit `permissions:` declaration. Without explicit 
 
 Warns when custom or private registry images are used in `job.container` or `job.services.*` without a `credentials` block.
 
-**Remediation:** Add a `credentials:` block with `username` and `password` fields. Alternatively, move to an approved public registry.
+**Example trigger:**
+
+```yaml
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    container:
+      image: registry.example.com/team/app:1.0.0  # ERROR: no credentials
+    services:
+      db:
+        image: private.example.org/team/db:15     # ERROR: no credentials
+    steps:
+      - run: echo ng
+```
+
+```yaml
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    container:
+      image: example.com/owner/image
+      credentials:
+        username: user
+        password: pass             # ERROR: hardcoded password
+    steps:
+      - run: echo ng
+```
+
+**Remediation:**
+
+```yaml
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    container:
+      image: registry.example.com/team/app:1.0.0
+      credentials:
+        username: ${{ secrets.REG_USER }}
+        password: ${{ secrets.REG_PASS }}
+    steps:
+      - run: echo ok
+```
 
 **Configuration — extend public registries:**
 
@@ -644,7 +1058,40 @@ Warns when `actions/checkout` is used without `persist-credentials: false`. Pers
 
 Errors when workflow-level `env` assigns `secrets.*` or `github.token` values in multi-job workflows. Secrets scoped this broadly are available to all jobs, including those that do not need them.
 
-**Remediation:** Move secret assignments from workflow-level `env` to the minimal job or step scope that actually requires them.
+**Example trigger:**
+
+```yaml
+on: push
+env:
+  GITHUB_TOKEN: ${{ github.token }}         # ERROR: exposed to all jobs
+  DATADOG_API_KEY: ${{ secrets.DATADOG_API_KEY }}
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo a
+  b:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo b
+```
+
+**Remediation:** Move secret assignments to the minimal job or step scope:
+
+```yaml
+on: push
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    steps:
+      - env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: echo a
+  b:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo b
+```
 
 ---
 
@@ -656,7 +1103,33 @@ Errors when workflow-level `env` assigns `secrets.*` or `github.token` values in
 
 Errors when job-level `env` assigns `secrets.*` or `github.token` values in jobs with multiple steps.
 
-**Remediation:** Move secret assignments from job-level `env` to the specific step that requires them.
+**Example trigger:**
+
+```yaml
+on: push
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    env:
+      GITHUB_TOKEN: ${{ github.token }}     # ERROR: exposed to all steps
+    steps:
+      - run: echo first
+      - run: echo second
+```
+
+**Remediation:** Move secret assignments to the specific step that requires them:
+
+```yaml
+on: push
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: echo first
+      - run: echo second
+```
 
 ---
 
@@ -667,6 +1140,34 @@ Errors when job-level `env` assigns `secrets.*` or `github.token` values in jobs
 | ✓ | — | ✗ |
 
 Warns when secret-derived environment variables appear to be printed via output commands (`echo`, `printf`, `Write-Host`, `Write-Output`). GitHub masking is not guaranteed for transformed or derived secret values.
+
+**Example trigger:**
+
+```yaml
+on: push
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    env:
+      TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - run: echo "${TOKEN}"     # WARNING: secret-derived variable printed
+```
+
+**Remediation:** Avoid printing secret values. If debugging is needed, use `::add-mask`:
+
+```yaml
+on: push
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - env:
+          TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          echo "::add-mask::${TOKEN}"
+          # use $TOKEN in commands without printing it
+```
 
 **Configuration — extend output commands:**
 
@@ -688,7 +1189,31 @@ rules:
 
 Warns when `secrets.*` appears in `if` conditions, `uses:` references, or reusable-call input values instead of a controlled `env:` handoff.
 
-**Remediation:** Move secret access to explicit `env:` mapping at the minimal scope needed.
+**Example trigger:**
+
+```yaml
+on: push
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - if: ${{ secrets.GITHUB_TOKEN != '' }}   # ERROR: secrets in step.if
+        run: echo ng
+```
+
+**Remediation:** Move secret access to explicit `env:` mapping at the minimal scope needed:
+
+```yaml
+on: push
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - env:
+          TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          if [ -n "$TOKEN" ]; then echo ok; fi
+```
 
 ---
 
@@ -700,7 +1225,39 @@ Warns when `secrets.*` appears in `if` conditions, `uses:` references, or reusab
 
 Warns when secrets are mapped at a broader scope (workflow or job) than is required. Enforces least-privilege secret handoff boundaries.
 
-**Remediation:** Restrict secret mapping to the minimum execution unit that actually consumes the value.
+**Example trigger:**
+
+```yaml
+on: push
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - env:
+          TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          API_KEY: ${{ secrets.API_KEY }}
+          SECRET_KEY: ${{ secrets.SECRET_KEY }}
+          PRIVATE_KEY: ${{ secrets.PRIVATE_KEY }}
+          APP_ID: ${{ secrets.APP_ID }}
+          DEPLOY_KEY: ${{ secrets.DEPLOY_KEY }}  # ERROR: more than 5 secrets
+        run: echo ng
+```
+
+**Remediation:** Restrict secret mapping to the minimum required:
+
+```yaml
+on: push
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - env:
+          TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: echo "Step 1 only needs TOKEN"
+      - env:
+          API_KEY: ${{ secrets.API_KEY }}
+        run: echo "Step 2 only needs API_KEY"
+```
 
 ---
 
@@ -712,14 +1269,25 @@ Warns when secrets are mapped at a broader scope (workflow or job) than is requi
 
 Errors when a reusable workflow call job uses `secrets: inherit`. Full secret inheritance propagates all secrets across workflow boundaries without explicit declaration.
 
+**Example trigger:**
+
+```yaml
+on: push
+jobs:
+  reuse:
+    uses: owner/repo/.github/workflows/reuse.yml@main
+    secrets: inherit          # ERROR: full secret inheritance is forbidden
+```
+
 **Remediation:** Map only the required secrets explicitly:
 
 ```yaml
+on: push
 jobs:
-  call:
-    uses: org/repo/.github/workflows/shared.yml@main
+  reuse:
+    uses: owner/repo/.github/workflows/reuse.yml@main
     secrets:
-      MY_SECRET: ${{ secrets.MY_SECRET }}
+      token: ${{ secrets.GITHUB_TOKEN }}
 ```
 
 ---
@@ -797,7 +1365,25 @@ container:
 
 Warns when `uses:` references point to GitHub-archived repositories. Archived repositories are read-only and no longer receive security fixes.
 
-**Remediation:** Replace with an actively maintained alternative, or maintain a governed fork.
+**Example trigger:**
+
+```yaml
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions-rs/toolchain@v1   # WARNING: repository is archived
+```
+
+**Remediation:** Replace with an actively maintained alternative:
+
+```yaml
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: dtolnay/rust-toolchain@stable
+```
 
 ---
 
@@ -809,7 +1395,25 @@ Warns when `uses:` references point to GitHub-archived repositories. Archived re
 
 Warns when a version annotation or comment does not match the resolved commit's lineage. Prevents misleading provenance narratives.
 
-**Remediation:** Align the version annotation with the actual pinned SHA.
+**Example trigger:**
+
+```yaml
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: owner/action-v1@v2.0.0   # ERROR: path hint 'v1' mismatches ref 'v2'
+```
+
+**Remediation:** Align the version annotation with the actual pinned SHA:
+
+```yaml
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: owner/action-v2@v2.1.0
+```
 
 ---
 
@@ -820,6 +1424,26 @@ Warns when a version annotation or comment does not match the resolved commit's 
 | ✓ | — | ✗ |
 
 Errors or warns (per policy) when `uses:` references violate configured allow/deny patterns.
+
+**Example trigger:**
+
+```yaml
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: bad-org/unsafe-action@v1   # ERROR: denied by policy
+```
+
+**Remediation:** Replace with an allowed action, or add an explicit exception:
+
+```yaml
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: approved-org/safe-action@v1
+```
 
 **Configuration:**
 
@@ -842,7 +1466,41 @@ rules:
 
 Errors when `actions/create-github-app-token` is invoked without permission-limiting inputs, or when `owner`-scoped token issuance omits `repositories` to constrain the installation scope.
 
-**Remediation:** Add `permissions` or `permission-*` inputs. If `owner` is set, also set `repositories`.
+**Example trigger:**
+
+```yaml
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      # ERROR: missing permission constraints
+      - uses: actions/create-github-app-token@v2
+```
+
+```yaml
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      # ERROR: owner set without repositories constraint
+      - uses: actions/create-github-app-token@v2
+        with:
+          owner: ${{ github.repository_owner }}
+          permission-issues: write
+```
+
+**Remediation:**
+
+```yaml
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/create-github-app-token@v2
+        with:
+          repositories: repo-a,repo-b
+          permission-contents: read
+```
 
 ---
 
@@ -854,7 +1512,31 @@ Errors when `actions/create-github-app-token` is invoked without permission-limi
 
 Errors when executable jobs omit `timeout-minutes`. Prevents runaway jobs from consuming unlimited runner time.
 
-**Remediation:** Add `timeout-minutes:` to each job. Auto-fix is available when `fix.defaults.job-timeout-minutes` is set in [configuration](configuration.md).
+**Example trigger:**
+
+```yaml
+on: push
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    # ERROR: missing timeout-minutes
+    steps:
+      - run: echo ng
+```
+
+**Remediation:**
+
+```yaml
+on: push
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - run: echo ok
+```
+
+Auto-fix is available when `fix.defaults.job-timeout-minutes` is set in [configuration](configuration.md).
 
 ---
 
@@ -866,7 +1548,38 @@ Errors when executable jobs omit `timeout-minutes`. Prevents runaway jobs from c
 
 Warns when a publishing or release workflow uses long-lived credentials instead of a trusted OIDC/provenance-based publishing flow.
 
-**Remediation:** Adopt trusted publishing (e.g. PyPI Trusted Publishers, npm provenance) and remove long-lived publish secrets.
+**Example trigger:**
+
+```yaml
+on: push
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - run: npm publish             # WARNING: no id-token permission
+```
+
+```yaml
+on: push
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - run: twine upload dist/*     # WARNING: use trusted publishing
+```
+
+**Remediation:** Adopt trusted publishing with OIDC:
+
+```yaml
+on: push
+jobs:
+  publish:
+    permissions:
+      id-token: write
+    runs-on: ubuntu-latest
+    steps:
+      - run: npm publish
+```
 
 ---
 
