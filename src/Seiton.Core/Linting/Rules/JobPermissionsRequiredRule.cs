@@ -70,7 +70,7 @@ public sealed class JobPermissionsRequiredRule() : RuleBase(RuleId.JobPermission
         }
 
         var lineEnding = FixFormatting.DetectDominantLineEnding(utf8Yaml);
-        var permissionsText = BuildPermissionsText(job, bodyIndent, lineEnding);
+        var permissionsText = BuildPermissionsText(job, parentIndent, bodyIndent, lineEnding);
 
         var anchorLine = FindKeyLine(utf8Yaml, jobLine + 1, jobEndLine, bodyIndent, "runs-on:"u8);
         if (anchorLine < 0)
@@ -121,7 +121,7 @@ public sealed class JobPermissionsRequiredRule() : RuleBase(RuleId.JobPermission
         return true;
     }
 
-    private string BuildPermissionsText(Job job, string bodyIndent, string lineEnding)
+    private string BuildPermissionsText(Job job, string parentIndent, string bodyIndent, string lineEnding)
     {
         var merged = CollectRequiredPermissions(job);
         if (merged.Count == 0)
@@ -129,8 +129,8 @@ public sealed class JobPermissionsRequiredRule() : RuleBase(RuleId.JobPermission
             return bodyIndent + "permissions: {}" + lineEnding;
         }
 
-        // Infer child indent from bodyIndent (add one level)
-        var indentUnit = InferIndentUnit(bodyIndent);
+        // Infer child indent from parentIndent→bodyIndent relationship (add one level)
+        var indentUnit = InferIndentUnit(parentIndent, bodyIndent);
         var childIndent = bodyIndent + indentUnit;
 
         var sb = new System.Text.StringBuilder();
@@ -208,28 +208,40 @@ public sealed class JobPermissionsRequiredRule() : RuleBase(RuleId.JobPermission
         };
     }
 
-    private static string InferIndentUnit(string bodyIndent)
+    private static string InferIndentUnit(string parentIndent, string bodyIndent)
     {
-        // bodyIndent is the indent of the job's child keys (e.g., "        " for 8 spaces with 4-space indent)
-        // We need to find the indent unit. Common cases: 2 spaces, 4 spaces, tab.
+        // bodyIndent = parentIndent + indentUnit. Derive the unit from the difference.
         if (bodyIndent.Length == 0)
         {
-            return "    ";
+            return "  ";
         }
 
         if (bodyIndent[0] == '\t')
         {
+            if (parentIndent.Length < bodyIndent.Length
+                && bodyIndent.StartsWith(parentIndent, StringComparison.Ordinal))
+            {
+                var tabUnit = bodyIndent[parentIndent.Length..];
+                if (tabUnit.Length > 0 && tabUnit.AsSpan().IndexOfAnyExcept('\t') < 0)
+                {
+                    return tabUnit;
+                }
+            }
+
             return "\t";
         }
 
-        // bodyIndent for a child key is parentIndent + unitIndent.
-        // We don't know parentIndent exactly, but we can try common units.
-        // If bodyIndent length is divisible by 4, use 4. If by 2, use 2.
-        if (bodyIndent.Length % 4 == 0)
+        if (parentIndent.Length < bodyIndent.Length
+            && bodyIndent.StartsWith(parentIndent, StringComparison.Ordinal))
         {
-            return "    ";
+            var spaceUnit = bodyIndent[parentIndent.Length..];
+            if (spaceUnit.Length > 0 && spaceUnit.AsSpan().IndexOfAnyExcept(' ') < 0)
+            {
+                return spaceUnit;
+            }
         }
 
+        // Fallback: safer common YAML default
         return "  ";
     }
 

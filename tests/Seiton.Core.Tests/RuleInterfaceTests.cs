@@ -10749,6 +10749,7 @@ public sealed class RuleInterfaceTests
 
         var result = new LintEngine([new JobPermissionsRequiredRule()])
             .Check(Encoding.UTF8.GetBytes(yaml), "job-permissions-required-no-fix-ambiguous.yml");
+        using var _ = result.ParseResult.Arena;
         var diagnostic = result.Diagnostics.First(x => x.RuleId == "job-permissions-required");
 
         await Assert.That(diagnostic.Fix is null).IsTrue();
@@ -10770,6 +10771,7 @@ public sealed class RuleInterfaceTests
         var sourceBytes = Encoding.UTF8.GetBytes(yaml);
         var engine = new LintEngine([new JobPermissionsRequiredRule()]);
         var result = engine.Check(sourceBytes, "job-permissions-required-fix-checkout.yml", new LintConfig { Fix = new FixConfig { Enabled = true } });
+        using var _1 = result.ParseResult.Arena;
         var diagnostic = result.Diagnostics.First(x => x.RuleId == "job-permissions-required");
 
         await Assert.That(diagnostic.Fix is not null).IsTrue();
@@ -10784,6 +10786,7 @@ public sealed class RuleInterfaceTests
 
         // Relint should pass
         var relint = engine.Check(fixedBytes, "job-permissions-required-fix-checkout.yml");
+        using var _2 = relint.ParseResult.Arena;
         await Assert.That(relint.Diagnostics.Any(x => x.RuleId == "job-permissions-required")).IsFalse();
     }
 
@@ -10803,6 +10806,7 @@ public sealed class RuleInterfaceTests
         var sourceBytes = Encoding.UTF8.GetBytes(yaml);
         var engine = new LintEngine([new JobPermissionsRequiredRule()]);
         var result = engine.Check(sourceBytes, "job-permissions-required-fix-multi.yml", new LintConfig { Fix = new FixConfig { Enabled = true } });
+        using var _ = result.ParseResult.Arena;
         var diagnostic = result.Diagnostics.First(x => x.RuleId == "job-permissions-required");
 
         await Assert.That(diagnostic.Fix is not null).IsTrue();
@@ -10832,6 +10836,7 @@ public sealed class RuleInterfaceTests
         var sourceBytes = Encoding.UTF8.GetBytes(yaml);
         var engine = new LintEngine([new JobPermissionsRequiredRule()]);
         var result = engine.Check(sourceBytes, "job-permissions-required-fix-no-known-actions.yml", new LintConfig { Fix = new FixConfig { Enabled = true } });
+        using var _ = result.ParseResult.Arena;
         var diagnostic = result.Diagnostics.First(x => x.RuleId == "job-permissions-required");
 
         await Assert.That(diagnostic.Fix is not null).IsTrue();

@@ -403,8 +403,8 @@ data/sources/availability/github/availability.json
 
 data/sources/popular-actions/github/raw/*.action.yml
 data/sources/popular-actions/github/parsed/*
-data/sources/popular-actions/github/supplemental-required-permissions.json
 data/sources/popular-actions/github/popular_actions.json
+data/sources/popular-actions/supplemental-required-permissions.json
 data/sources/popular-actions/targets.json
 
 data/sources/runner-labels/github/raw/*
