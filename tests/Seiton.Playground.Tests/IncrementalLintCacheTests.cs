@@ -11,6 +11,12 @@ public sealed class IncrementalLintCacheTests
 {
     private const string FilePath = ".github/workflows/ci.yml";
 
+    /// <summary>
+    /// In the 2-job test YAMLs, the <c>deploy:</c> key is on line 7 (1-indexed).
+    /// Job-level rules (e.g. job-timeout-minutes-required) report at the job id line.
+    /// </summary>
+    private const int DeployJobStartLine = 7;
+
     [Test]
     public async Task LintIncrementally_UnchangedJob_ReusesCachedDiagnostics()
     {
@@ -24,13 +30,14 @@ public sealed class IncrementalLintCacheTests
         // First call: full lint — establishes cache
         var result1 = ctx.LintIncrementally(Encoding.UTF8.GetBytes(yaml1), FilePath);
 
-        // Count diagnostics that belong to the "deploy" job (by checking message contains "deploy")
-        var deployDiags1 = result1.Where(d => d.GetProperty("message").GetString()!.Contains("'deploy'")).ToArray();
+        // Deploy job starts at the `deploy:` key on line 7 in these YAMLs.
+        // Job-level lint rules report at the job id line, so include line 7.
+        var deployDiags1 = result1.Where(d => d.GetProperty("line").GetInt32() >= DeployJobStartLine).ToArray();
 
         // Second call: "build" changes, "deploy" is identical (same offset + hash)
         var result2 = ctx.LintIncrementally(Encoding.UTF8.GetBytes(yaml2), FilePath);
 
-        var deployDiags2 = result2.Where(d => d.GetProperty("message").GetString()!.Contains("'deploy'")).ToArray();
+        var deployDiags2 = result2.Where(d => d.GetProperty("line").GetInt32() >= DeployJobStartLine).ToArray();
 
         // Deploy diagnostics should be identical (reused from cache)
         await Assert.That(deployDiags2.Length).IsEqualTo(deployDiags1.Length);
@@ -83,23 +90,8 @@ public sealed class IncrementalLintCacheTests
         // Diagnostic counts must match
         await Assert.That(incrementalResult.Length).IsEqualTo(freshResult.Length);
 
-        // Each diagnostic message must match (sorted by offset for determinism)
-        var sortedIncremental = incrementalResult
-            .OrderBy(d => d.GetProperty("line").GetInt32())
-            .ThenBy(d => d.GetProperty("message").GetString())
-            .ToArray();
-        var sortedFresh = freshResult
-            .OrderBy(d => d.GetProperty("line").GetInt32())
-            .ThenBy(d => d.GetProperty("message").GetString())
-            .ToArray();
-
-        for (var i = 0; i < sortedFresh.Length; i++)
-        {
-            await Assert.That(sortedIncremental[i].GetProperty("message").GetString())
-                .IsEqualTo(sortedFresh[i].GetProperty("message").GetString());
-            await Assert.That(sortedIncremental[i].GetProperty("line").GetInt32())
-                .IsEqualTo(sortedFresh[i].GetProperty("line").GetInt32());
-        }
+        // Each diagnostic must match by full content (sorted by line/column/ruleId/message)
+        await AssertDiagnosticsEquivalent(incrementalResult, freshResult);
     }
 
     [Test]
@@ -204,13 +196,13 @@ public sealed class IncrementalLintCacheTests
         var result1 = ctx.LintIncrementally(Encoding.UTF8.GetBytes(yaml1), FilePath);
         var result2 = ctx.LintIncrementally(Encoding.UTF8.GetBytes(yaml2), FilePath);
 
-        // Deploy diagnostics should have same line numbers in both runs
+        // Deploy job starts at the `deploy:` key on line 7 — filter by line range
         var deployDiags1 = result1
-            .Where(d => d.GetProperty("message").GetString()!.Contains("'deploy'"))
+            .Where(d => d.GetProperty("line").GetInt32() >= DeployJobStartLine)
             .OrderBy(d => d.GetProperty("line").GetInt32())
             .ToArray();
         var deployDiags2 = result2
-            .Where(d => d.GetProperty("message").GetString()!.Contains("'deploy'"))
+            .Where(d => d.GetProperty("line").GetInt32() >= DeployJobStartLine)
             .OrderBy(d => d.GetProperty("line").GetInt32())
             .ToArray();
 
@@ -221,4 +213,78 @@ public sealed class IncrementalLintCacheTests
                 .IsEqualTo(deployDiags1[i].GetProperty("line").GetInt32());
         }
     }
+
+    [Test]
+    public async Task LintIncrementally_RepeatedSameCountEdits_DiagnosticsRemainCorrect()
+    {
+        // P-3: Verify correctness when CacheJobDiagnostics is called repeatedly
+        // with the same diagnostic count per job (the reuse scenario).
+        // 3 iterations with same-length edits: diagnostic counts per job stay constant.
+        var ctx = new IncrementalParseContext();
+
+        var yaml1 = "on: push\njobs:\n  build:\n    runs-on: ubuntu-latest\n    steps:\n      - run: echo edit0\n  deploy:\n    runs-on: ubuntu-latest\n    steps:\n      - run: echo deploy\n";
+        var result1 = ctx.LintIncrementally(Encoding.UTF8.GetBytes(yaml1), FilePath);
+
+        // Repeated same-length edits on build job only
+        for (var i = 1; i <= 3; i++)
+        {
+            var yaml = $"on: push\njobs:\n  build:\n    runs-on: ubuntu-latest\n    steps:\n      - run: echo edit{i}\n  deploy:\n    runs-on: ubuntu-latest\n    steps:\n      - run: echo deploy\n";
+            var result = ctx.LintIncrementally(Encoding.UTF8.GetBytes(yaml), FilePath);
+
+            // Each iteration should produce the same number of diagnostics
+            await Assert.That(result.Length).IsEqualTo(result1.Length);
+
+            // Deploy diagnostics should be present and correct (from cache)
+            var deployDiags = result.Where(d => d.GetProperty("line").GetInt32() >= DeployJobStartLine).ToArray();
+            await Assert.That(deployDiags.Length).IsGreaterThan(0);
+
+            // Verify against fresh full lint
+            var freshCtx = new IncrementalParseContext();
+            var freshResult = freshCtx.LintIncrementally(Encoding.UTF8.GetBytes(yaml), FilePath);
+            await Assert.That(result.Length).IsEqualTo(freshResult.Length);
+            await AssertDiagnosticsEquivalent(result, freshResult);
+        }
+    }
+
+    private static async Task AssertDiagnosticsEquivalent(System.Text.Json.JsonElement[] actual, System.Text.Json.JsonElement[] expected)
+    {
+        var actualOrdered = (System.Text.Json.JsonElement[])actual.Clone();
+        var expectedOrdered = (System.Text.Json.JsonElement[])expected.Clone();
+        Array.Sort(actualOrdered, CompareDiagnosticElements);
+        Array.Sort(expectedOrdered, CompareDiagnosticElements);
+        await Assert.That(actualOrdered.Length).IsEqualTo(expectedOrdered.Length);
+        for (var i = 0; i < actualOrdered.Length; i++)
+        {
+            await Assert.That(actualOrdered[i].GetRawText()).IsEqualTo(expectedOrdered[i].GetRawText());
+        }
+    }
+
+    private static int CompareDiagnosticElements(System.Text.Json.JsonElement left, System.Text.Json.JsonElement right)
+    {
+        var cmp = GetIntProperty(left, "line").CompareTo(GetIntProperty(right, "line"));
+        if (cmp != 0) return cmp;
+        cmp = GetIntProperty(left, "column").CompareTo(GetIntProperty(right, "column"));
+        if (cmp != 0) return cmp;
+        cmp = string.CompareOrdinal(GetStringProperty(left, "ruleId"), GetStringProperty(right, "ruleId"));
+        if (cmp != 0) return cmp;
+        cmp = string.CompareOrdinal(GetStringProperty(left, "message"), GetStringProperty(right, "message"));
+        if (cmp != 0) return cmp;
+        cmp = string.CompareOrdinal(GetStringProperty(left, "severity"), GetStringProperty(right, "severity"));
+        if (cmp != 0) return cmp;
+        cmp = GetBoolProperty(left, "fixable").CompareTo(GetBoolProperty(right, "fixable"));
+        if (cmp != 0) return cmp;
+        cmp = string.CompareOrdinal(GetStringProperty(left, "fixDescription"), GetStringProperty(right, "fixDescription"));
+        if (cmp != 0) return cmp;
+        // Final total-order fallback.
+        return string.CompareOrdinal(left.GetRawText(), right.GetRawText());
+    }
+
+    private static int GetIntProperty(System.Text.Json.JsonElement element, string propertyName) =>
+        element.TryGetProperty(propertyName, out var prop) ? prop.GetInt32() : 0;
+
+    private static string GetStringProperty(System.Text.Json.JsonElement element, string propertyName) =>
+        element.TryGetProperty(propertyName, out var prop) ? prop.GetString() ?? string.Empty : string.Empty;
+
+    private static bool GetBoolProperty(System.Text.Json.JsonElement element, string propertyName) =>
+        element.TryGetProperty(propertyName, out var prop) && prop.ValueKind is System.Text.Json.JsonValueKind.True;
 }
