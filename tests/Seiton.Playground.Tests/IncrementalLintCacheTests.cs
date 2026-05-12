@@ -24,13 +24,14 @@ public sealed class IncrementalLintCacheTests
         // First call: full lint — establishes cache
         var result1 = ctx.LintIncrementally(Encoding.UTF8.GetBytes(yaml1), FilePath);
 
-        // Count diagnostics that belong to the "deploy" job (by checking message contains "deploy")
-        var deployDiags1 = result1.Where(d => d.GetProperty("message").GetString()!.Contains("'deploy'")).ToArray();
+        // Deploy job starts at line 8 in these YAMLs — filter by line range
+        const int deployStartLine = 8;
+        var deployDiags1 = result1.Where(d => d.GetProperty("line").GetInt32() >= deployStartLine).ToArray();
 
         // Second call: "build" changes, "deploy" is identical (same offset + hash)
         var result2 = ctx.LintIncrementally(Encoding.UTF8.GetBytes(yaml2), FilePath);
 
-        var deployDiags2 = result2.Where(d => d.GetProperty("message").GetString()!.Contains("'deploy'")).ToArray();
+        var deployDiags2 = result2.Where(d => d.GetProperty("line").GetInt32() >= deployStartLine).ToArray();
 
         // Deploy diagnostics should be identical (reused from cache)
         await Assert.That(deployDiags2.Length).IsEqualTo(deployDiags1.Length);
@@ -127,13 +128,14 @@ public sealed class IncrementalLintCacheTests
         var result1 = ctx.LintIncrementally(Encoding.UTF8.GetBytes(yaml1), FilePath);
         var result2 = ctx.LintIncrementally(Encoding.UTF8.GetBytes(yaml2), FilePath);
 
-        // Deploy diagnostics should have same line numbers in both runs
+        // Deploy job starts at line 8 — filter by line range, not message text
+        const int deployStartLine = 8;
         var deployDiags1 = result1
-            .Where(d => d.GetProperty("message").GetString()!.Contains("'deploy'"))
+            .Where(d => d.GetProperty("line").GetInt32() >= deployStartLine)
             .OrderBy(d => d.GetProperty("line").GetInt32())
             .ToArray();
         var deployDiags2 = result2
-            .Where(d => d.GetProperty("message").GetString()!.Contains("'deploy'"))
+            .Where(d => d.GetProperty("line").GetInt32() >= deployStartLine)
             .OrderBy(d => d.GetProperty("line").GetInt32())
             .ToArray();
 
@@ -166,7 +168,8 @@ public sealed class IncrementalLintCacheTests
             await Assert.That(result.Length).IsEqualTo(result1.Length);
 
             // Deploy diagnostics should be present and correct (from cache)
-            var deployDiags = result.Where(d => d.GetProperty("message").GetString()!.Contains("'deploy'")).ToArray();
+            // Deploy job starts at line 8 in these YAMLs
+            var deployDiags = result.Where(d => d.GetProperty("line").GetInt32() >= 8).ToArray();
             await Assert.That(deployDiags.Length).IsGreaterThan(0);
 
             // Verify against fresh full lint
@@ -190,23 +193,19 @@ public sealed class IncrementalLintCacheTests
         }
     }
 
-    private static int CompareDiagnosticElements(System.Text.Json.JsonElement left, System.Text.Json.JsonElement right) =>
-        string.CompareOrdinal(GetDiagnosticSortKey(left), GetDiagnosticSortKey(right));
-
-    private static string GetDiagnosticSortKey(System.Text.Json.JsonElement diagnostic) =>
-        string.Join(
-            "\u001f",
-            GetPropertyText(diagnostic, "line"),
-            GetPropertyText(diagnostic, "column"),
-            GetPropertyText(diagnostic, "ruleId"),
-            GetPropertyText(diagnostic, "message"));
-
-    private static string GetPropertyText(System.Text.Json.JsonElement element, string propertyName)
+    private static int CompareDiagnosticElements(System.Text.Json.JsonElement left, System.Text.Json.JsonElement right)
     {
-        if (!element.TryGetProperty(propertyName, out var property))
-            return string.Empty;
-        return property.ValueKind == System.Text.Json.JsonValueKind.String
-            ? property.GetString() ?? string.Empty
-            : property.GetRawText();
+        var cmp = GetIntProperty(left, "line").CompareTo(GetIntProperty(right, "line"));
+        if (cmp != 0) return cmp;
+        cmp = GetIntProperty(left, "column").CompareTo(GetIntProperty(right, "column"));
+        if (cmp != 0) return cmp;
+        cmp = string.CompareOrdinal(GetStringProperty(left, "ruleId"), GetStringProperty(right, "ruleId"));
+        return cmp != 0 ? cmp : string.CompareOrdinal(GetStringProperty(left, "message"), GetStringProperty(right, "message"));
     }
+
+    private static int GetIntProperty(System.Text.Json.JsonElement element, string propertyName) =>
+        element.TryGetProperty(propertyName, out var prop) ? prop.GetInt32() : 0;
+
+    private static string GetStringProperty(System.Text.Json.JsonElement element, string propertyName) =>
+        element.TryGetProperty(propertyName, out var prop) ? prop.GetString() ?? string.Empty : string.Empty;
 }
