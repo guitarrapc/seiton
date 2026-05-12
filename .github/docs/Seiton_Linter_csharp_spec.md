@@ -242,7 +242,7 @@ The current default rule scope in C# is:
 |---|---|
 | `job-structure` | Validate core job shape constraints: `uses` is mutually exclusive with `steps`/`runs-on`, and each job requires either reusable-call form (`uses`) or executable form (`runs-on` + `steps`). |
 | `reusable-workflow` | Validate reusable workflow call semantics: `with`/`secrets` require `uses`, reusable-call jobs must reject incompatible execution keys, and local reusable calls should validate caller `with`/`secrets` against called workflow `on.workflow_call` contracts when statically resolvable. |
-| `permissions` | Validate `permissions` value domain: scalar must be `read-all` or `write-all`; scope values must be `read`, `write`, or `none`. |
+| `permissions` | Validate `permissions` value domain: scalar must be `read-all` or `write-all`; scope values must be `read`, `write`, or `none`. Valid scalar values (`read-all`, `write-all`) emit a warning recommending explicit per-scope mapping; workflow-level warning additionally suggests moving to job-level permissions. |
 | `popular-action-inputs` | Validate known action input names against maintained popular-action metadata and emit diagnostics for unknown inputs. |
 | `outdated-action-runner` | Error when a popular action's `runs.using` runtime is deprecated. Catalog-driven: looks up the action in `PopularActions` generated catalog, reads `GetRunsUsing()`, and checks against a maintained list of deprecated runtimes (`node12`, `node16`). |
 | `unpinned-uses` | Warn when `uses:` references are not pinned to full commit SHA for remote actions/reusable workflows; additionally validate `uses` reference format and local action reference sanity where statically resolvable. |

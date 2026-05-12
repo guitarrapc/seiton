@@ -39,6 +39,13 @@ public sealed class PermissionsRule() : RuleBase(RuleId.Permissions)
             {
                 AddError($"permissions scalar must be 'read-all' or 'write-all', but got '{value}'", Arena.GetStringRange(permissions.All), workflow, job);
             }
+            else
+            {
+                var hint = workflow is not null
+                    ? "use explicit per-scope mapping in each job's permissions instead"
+                    : "use explicit per-scope mapping instead";
+                AddWarning($"permissions scalar '{value}' is overly broad; {hint}", Arena.GetStringRange(permissions.All), workflow, job);
+            }
         }
 
         if (permissions.Scopes is null)
@@ -93,6 +100,20 @@ public sealed class PermissionsRule() : RuleBase(RuleId.Permissions)
         if (workflow is not null)
         {
             AddWorkflowError(workflow, message, location);
+        }
+    }
+
+    private void AddWarning(string message, TextRange location, Workflow? workflow, Job? job)
+    {
+        if (job is not null)
+        {
+            AddJobWarning(job, message, location);
+            return;
+        }
+
+        if (workflow is not null)
+        {
+            AddWorkflowWarning(workflow, message, location);
         }
     }
 }
