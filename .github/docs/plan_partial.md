@@ -186,7 +186,7 @@ fresh diagnostics (linter 出力、offset 順) と cached per-job diagnostics (j
 
 ### 3.2 中程度の改善
 
-#### P-4: Lint setup の差分スキップ
+#### P-4: Lint setup の差分スキップ — 見送り
 
 `CheckCore` は毎回 `NormalizeRules` + `ParseInlineSuppression` + `NormalizeExclusions` を実行するが、これらはソースが変わらない限り結果が同じ。incremental パスで source content hash が同じ部分に限り、前回の結果を再利用する。
 
@@ -198,6 +198,35 @@ fresh diagnostics (linter 出力、offset 順) と cached per-job diagnostics (j
 推定効果: 10-15% 改善（特に Large で suppression スキャンが重い場合）。
 複雑性: 中。ParseInlineSuppression の差分スキャンには section registry の活用が必要。
 ```
+
+**検証結果** (2026-05-12): 設計上のリスクとベンチマーク効果の不足により見送り。
+
+試行した 2 つのアプローチ:
+
+**(a) `ParseInlineSuppression` 内の SIMD プリスキャン + `CheckCore` での完全スキップ**:
+ソースに `"seiton:"u8` が含まれない場合、`ParseInlineSuppression` をスキップ。
+
+**(b) ソースコンテンツハッシュによるキャッシュ**:
+XXH64 でソース全体をハッシュし、前回と同一なら結果を再利用。
+
+**見送りの理由:**
+
+1. **責務の二重化と不整合**: `"seiton:"u8` の存在チェックが `CheckCore`（呼び出し元）と `ParseInlineSuppression`（実装）の 2 箇所に分散。呼び出し元の `config?.Exclusions` 状態によって `InlineSuppression.Empty`（JobScopes 空）と JobScopes 構築済みの 2 つの異なるパスが存在し、`ParseInlineSuppression` の契約（JobScopes が常に有効）を呼び出し元が条件付きで破る設計。P-1～P-3 が `IncrementalParseContext` 内で閉じた最適化であるのに対し、`LintEngine` の制御フローを変更する点で一貫性がない。
+
+2. **暗黙の前提条件への依存**: `CheckCore` で `InlineSuppression.Empty` を返せるのは「`TryGetConfigSuppressionRecord` が `normalizedExclusions.Count == 0` で early return するから `JobScopes` は参照されない」という下流の実装詳細に依存した推論。シグネチャからは読み取れず、将来 `InlineSuppression.JobScopes` を別用途で参照するコードが追加された場合に壊れる。
+
+3. **ベンチマーク改善なし**: allocation は全ケースで変化なし（`ParseInlineSuppression` はプリアロケート済みコレクション使用）。CPU 時間はアプローチ (b) のハッシュ計算オーバーヘッドにより PartialChange で悪化。アプローチ (a) のプリスキャンのみでも ShortRun の run-to-run 変動（±34%）に埋もれ、安定した改善を確認できず。
+
+同一マシンでの before/after 比較 (ShortRun):
+
+| Method        | Size  | Before (ns)  | After: hash cache (ns) | After: pre-scan only (ns) |
+|-------------- |------ |-------------:|------------------------:|--------------------------:|
+| PartialChange | Small | 2,213,949    | 3,910,805 (+76.6%)      | 2,866,218 (+29%)          |
+| PartialChange | Large | 8,708,695    | 9,265,997 (+6.4%)       | 7,537,275 (-13.5%)        |
+| FullChange    | Small | 547,832      | 738,608 (+34.8%)        | 480,195 (-12.4%)          |
+| FullChange    | Large | 2,783,099    | 3,141,680 (+12.9%)      | 2,346,240 (-15.7%)        |
+
+PartialChange Large と FullChange ではプリスキャンで改善傾向だが、主要ターゲットの PartialChange Small で一貫して悪化。ベースラインの run-to-run 変動が ±34% あり改善と判断できる水準ではない。
 
 #### P-5: VYaml tokenization のスキップ範囲拡大
 
@@ -267,7 +296,7 @@ incremental parse の根本的な設計変更。VYaml でソース全体をト�
 | 1 | P-1 | Small の early exit | Small alloc -19% | 低 | ✅ 実装済み |
 | 2 | P-2 | Merge sort 排除 | Large O(n+m) | 低 | ✅ 実装済み |
 | 3 | P-3 | Cache 配列再利用 | Small -3.5%, Large -17.0% | 低 | ✅ 実装済み |
-| 4 | P-4 | Lint setup 差分スキップ | 10-15% | 中 | |
+| 4 | P-4 | Lint setup 差分スキップ | CPU 時間削減 (alloc 変化なし) | 中 | 見送り |
 | 5 | P-6 | BulkImport 条件付きスキップ | 5-10% | 中 | |
 | 6 | P-7 | Lint job-level 差分 | 30-40% | 高 | |
 | 7 | P-5 | VYaml skip 範囲拡大 | 20-30% | 高 | |
@@ -279,4 +308,4 @@ PartialChange が FullChange より遅い根本原因は **「FullChange は実�
 
 FullChange ベンチマークは incremental optimization の最良ケース（全スキップ）を測定しており、PartialChange は実際のユーザー操作に近いケースを測定している。**PartialChange の改善こそが実用的なパフォーマンス改善** となる。
 
-短期的には P-1 ~ P-3 の低コスト改善で 10-15% の改善が見込め、中期的には P-4 の lint setup 差分スキップで追加 10-15% の改善が見込める。構造的改善（P-7, P-8）は大きな効果が期待できるが、設計の複雑性とリスクを考慮して慎重に進める必要がある。
+短期的には P-1 ~ P-3 の低コスト改善で 10-15% の改善が見込め、中期的には P-6 の BulkImport 条件付きスキップや P-7 の job-level 差分 lint で追加改善が見込める。P-4 は設計上の一貫性とベンチマーク効果の不足により見送り。構造的改善（P-7, P-8）は大きな効果が期待できるが、設計の複雑性とリスクを考慮して慎重に進める必要がある。
