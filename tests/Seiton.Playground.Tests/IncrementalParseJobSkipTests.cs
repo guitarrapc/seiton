@@ -187,4 +187,117 @@ public sealed class IncrementalParseJobSkipTests
         var buildJob2 = result2.Workflow!.Jobs.Entries[0].Value;
         await Assert.That(ReferenceEquals(buildJob1, buildJob2)).IsFalse();
     }
+
+    // ─────────────────────────────────────────────────────────────────────
+    // P-1: Single-job early exit — skip scan pipeline when job changed
+    // ─────────────────────────────────────────────────────────────────────
+
+    [Test]
+    public async Task ParseIncrementally_SingleJob_SameLengthEdit_ProducesCorrectResult()
+    {
+        // Single job: same-length edit should take P-1 early exit and still produce correct AST
+        var yaml1 = Encoding.UTF8.GetBytes(
+            "on: push\njobs:\n  build:\n    runs-on: ubuntu-latest\n    steps:\n      - run: echo hello\n");
+
+        var ctx = new IncrementalParseContext();
+        var result1 = ctx.ParseIncrementally(yaml1, FilePath);
+        await Assert.That(result1.Workflow).IsNotNull();
+        await Assert.That(result1.Workflow!.Jobs.Count).IsEqualTo(1);
+
+        // Same-length edit: "hello" → "world" (P-1 detects jobs hash change → FullParseAndStore)
+        var yaml2 = Encoding.UTF8.GetBytes(
+            "on: push\njobs:\n  build:\n    runs-on: ubuntu-latest\n    steps:\n      - run: echo world\n");
+
+        var result2 = ctx.ParseIncrementally(yaml2, FilePath);
+        await Assert.That(result2.Workflow).IsNotNull();
+        await Assert.That(result2.Workflow!.Jobs.Count).IsEqualTo(1);
+
+        // Verify the step content was updated
+        var arena = result2.Arena!;
+        var step = result2.Workflow!.Jobs.Entries[0].Value.Steps![0];
+        var exec = step.Exec as ExecRun;
+        var runValue = arena.GetStringValue(exec!.Run);
+        await Assert.That(Encoding.UTF8.GetString(runValue)).Contains("world");
+    }
+
+    [Test]
+    public async Task ParseIncrementally_SingleJob_RepeatedSameLengthEdits_AllCorrect()
+    {
+        // Simulates the PartialChange benchmark pattern: repeated same-length edits on single job
+        var ctx = new IncrementalParseContext();
+
+        var yaml0 = Encoding.UTF8.GetBytes(
+            "on: push\njobs:\n  build:\n    runs-on: ubuntu-latest\n    steps:\n      - run: echo edit0\n");
+        var r0 = ctx.ParseIncrementally(yaml0, FilePath);
+        await Assert.That(r0.Workflow).IsNotNull();
+
+        // Iterate through same-length edits (edit0 → edit1 → edit2 → ...)
+        for (var i = 1; i <= 5; i++)
+        {
+            var yaml = Encoding.UTF8.GetBytes(
+                $"on: push\njobs:\n  build:\n    runs-on: ubuntu-latest\n    steps:\n      - run: echo edit{i}\n");
+            var result = ctx.ParseIncrementally(yaml, FilePath);
+            await Assert.That(result.Workflow).IsNotNull();
+            await Assert.That(result.Workflow!.Jobs.Count).IsEqualTo(1);
+
+            var arena = result.Arena!;
+            var step = result.Workflow!.Jobs.Entries[0].Value.Steps![0];
+            var exec = step.Exec as ExecRun;
+            var runValue = arena.GetStringValue(exec!.Run);
+            await Assert.That(Encoding.UTF8.GetString(runValue)).Contains($"edit{i}");
+        }
+    }
+
+    [Test]
+    public async Task ParseIncrementally_SingleJob_UnchangedContent_SkipsReparse()
+    {
+        // Single job, same-length source, jobs section unchanged → should NOT take P-1 exit
+        // (only root section name changed, jobs identical)
+        var yaml1 = Encoding.UTF8.GetBytes(
+            "name: AA\non: push\njobs:\n  build:\n    runs-on: ubuntu-latest\n    steps:\n      - run: echo ok\n");
+
+        var ctx = new IncrementalParseContext();
+        var result1 = ctx.ParseIncrementally(yaml1, FilePath);
+        await Assert.That(result1.Workflow).IsNotNull();
+
+        // Change only name (same length: "AA" → "BB"), jobs section unchanged
+        var yaml2 = Encoding.UTF8.GetBytes(
+            "name: BB\non: push\njobs:\n  build:\n    runs-on: ubuntu-latest\n    steps:\n      - run: echo ok\n");
+
+        var result2 = ctx.ParseIncrementally(yaml2, FilePath);
+        await Assert.That(result2.Workflow).IsNotNull();
+        await Assert.That(result2.Workflow!.Jobs.Count).IsEqualTo(1);
+
+        // Job should still be correct
+        var arena = result2.Arena!;
+        var step = result2.Workflow!.Jobs.Entries[0].Value.Steps![0];
+        var exec = step.Exec as ExecRun;
+        var runValue = arena.GetStringValue(exec!.Run);
+        await Assert.That(Encoding.UTF8.GetString(runValue)).Contains("echo ok");
+    }
+
+    [Test]
+    public async Task ParseIncrementally_SingleJob_DifferentLengthEdit_ProducesCorrectResult()
+    {
+        // Single job with different-length edit → source length differs → P-1 does not apply
+        // (falls through to normal path which also goes to FullParseAndStore)
+        var yaml1 = Encoding.UTF8.GetBytes(
+            "on: push\njobs:\n  build:\n    runs-on: ubuntu-latest\n    steps:\n      - run: echo short\n");
+
+        var ctx = new IncrementalParseContext();
+        ctx.ParseIncrementally(yaml1, FilePath);
+
+        var yaml2 = Encoding.UTF8.GetBytes(
+            "on: push\njobs:\n  build:\n    runs-on: ubuntu-latest\n    steps:\n      - run: echo much-longer-text\n");
+
+        var result2 = ctx.ParseIncrementally(yaml2, FilePath);
+        await Assert.That(result2.Workflow).IsNotNull();
+        await Assert.That(result2.Workflow!.Jobs.Count).IsEqualTo(1);
+
+        var arena = result2.Arena!;
+        var step = result2.Workflow!.Jobs.Entries[0].Value.Steps![0];
+        var exec = step.Exec as ExecRun;
+        var runValue = arena.GetStringValue(exec!.Run);
+        await Assert.That(Encoding.UTF8.GetString(runValue)).Contains("much-longer-text");
+    }
 }
