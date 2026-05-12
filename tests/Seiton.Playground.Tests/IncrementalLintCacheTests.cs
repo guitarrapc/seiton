@@ -83,23 +83,8 @@ public sealed class IncrementalLintCacheTests
         // Diagnostic counts must match
         await Assert.That(incrementalResult.Length).IsEqualTo(freshResult.Length);
 
-        // Each diagnostic message must match (sorted by offset for determinism)
-        var sortedIncremental = incrementalResult
-            .OrderBy(d => d.GetProperty("line").GetInt32())
-            .ThenBy(d => d.GetProperty("message").GetString())
-            .ToArray();
-        var sortedFresh = freshResult
-            .OrderBy(d => d.GetProperty("line").GetInt32())
-            .ThenBy(d => d.GetProperty("message").GetString())
-            .ToArray();
-
-        for (var i = 0; i < sortedFresh.Length; i++)
-        {
-            await Assert.That(sortedIncremental[i].GetProperty("message").GetString())
-                .IsEqualTo(sortedFresh[i].GetProperty("message").GetString());
-            await Assert.That(sortedIncremental[i].GetProperty("line").GetInt32())
-                .IsEqualTo(sortedFresh[i].GetProperty("line").GetInt32());
-        }
+        // Each diagnostic must match by full content (sorted by line/column/ruleId/message)
+        await AssertDiagnosticsEquivalent(incrementalResult, freshResult);
     }
 
     [Test]
@@ -188,6 +173,40 @@ public sealed class IncrementalLintCacheTests
             var freshCtx = new IncrementalParseContext();
             var freshResult = freshCtx.LintIncrementally(Encoding.UTF8.GetBytes(yaml), FilePath);
             await Assert.That(result.Length).IsEqualTo(freshResult.Length);
+            await AssertDiagnosticsEquivalent(result, freshResult);
         }
+    }
+
+    private static async Task AssertDiagnosticsEquivalent(System.Text.Json.JsonElement[] actual, System.Text.Json.JsonElement[] expected)
+    {
+        var actualOrdered = (System.Text.Json.JsonElement[])actual.Clone();
+        var expectedOrdered = (System.Text.Json.JsonElement[])expected.Clone();
+        Array.Sort(actualOrdered, CompareDiagnosticElements);
+        Array.Sort(expectedOrdered, CompareDiagnosticElements);
+        await Assert.That(actualOrdered.Length).IsEqualTo(expectedOrdered.Length);
+        for (var i = 0; i < actualOrdered.Length; i++)
+        {
+            await Assert.That(actualOrdered[i].GetRawText()).IsEqualTo(expectedOrdered[i].GetRawText());
+        }
+    }
+
+    private static int CompareDiagnosticElements(System.Text.Json.JsonElement left, System.Text.Json.JsonElement right) =>
+        string.CompareOrdinal(GetDiagnosticSortKey(left), GetDiagnosticSortKey(right));
+
+    private static string GetDiagnosticSortKey(System.Text.Json.JsonElement diagnostic) =>
+        string.Join(
+            "\u001f",
+            GetPropertyText(diagnostic, "line"),
+            GetPropertyText(diagnostic, "column"),
+            GetPropertyText(diagnostic, "ruleId"),
+            GetPropertyText(diagnostic, "message"));
+
+    private static string GetPropertyText(System.Text.Json.JsonElement element, string propertyName)
+    {
+        if (!element.TryGetProperty(propertyName, out var property))
+            return string.Empty;
+        return property.ValueKind == System.Text.Json.JsonValueKind.String
+            ? property.GetString() ?? string.Empty
+            : property.GetRawText();
     }
 }
