@@ -307,6 +307,44 @@ steps:
   - uses: actions/checkout@v4
 ```
 
+`disable-next-line` suppresses diagnostics reported on **the very next YAML line** only. The comment must be placed directly above the key that the rule reports on — not above the parent node.
+
+For example, to suppress an `if-cond` diagnostic, the comment must be directly above the `if:` key:
+
+```yaml
+steps:
+  # ✗ Does NOT work — targets the step line, but if-cond reports on the if: line
+  # seiton: disable-next-line if-cond
+  - run: echo ok
+    if: ${{ true }}
+
+  # ✓ Works — comment is directly above the if: key
+  - run: echo ok
+    # seiton: disable-next-line if-cond
+    if: ${{ true }}
+```
+
+Similarly, for `matrix` diagnostics that report on axis names inside the matrix block:
+
+```yaml
+jobs:
+  build:
+    strategy:
+      matrix:
+        # ✓ Works — directly above the axis that triggers the diagnostic
+        # seiton: disable-next-line matrix
+        os: []
+```
+
+> **Block scalars:** For multi-line `if:` conditions using block scalars (`|` or `>`), `disable-next-line` above the `if:` key works correctly. The diagnostic is adjusted to the `if:` key line, not the content line.
+>
+> ```yaml
+> # ✓ Works — block scalar diagnostic is adjusted to the if: key line
+> # seiton: disable-next-line if-cond
+> if: |
+>     ${{ contains(github.event.head_commit.message, 'skip') }}
+> ```
+
 ### Suppress within a job
 
 ```yaml
@@ -324,7 +362,19 @@ Place at the top of the workflow file:
 # seiton: disable-file dangerous-triggers
 ```
 
-Multiple rule IDs are comma-separated. Inline directives take precedence over config-file exclusions.
+### Multiple rule IDs
+
+Multiple rule IDs are **comma-separated**. Spaces between commas are allowed, but space-separated rule IDs are **not** supported:
+
+```yaml
+# ✓ Comma-separated — both rules are suppressed
+# seiton: disable-next-line dangerous-triggers, job-permissions-required
+
+# ✗ Space-separated — treated as a single unknown rule ID, produces a config error
+# seiton: disable-next-line dangerous-triggers job-permissions-required
+```
+
+Inline directives take precedence over config-file exclusions.
 
 ---
 
