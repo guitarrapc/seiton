@@ -34,6 +34,14 @@
       ]
     },
     {
+      "name": "code-quality",
+      "allowed": [
+        "read",
+        "write",
+        "none"
+      ]
+    },
+    {
       "name": "contents",
       "allowed": [
         "read",
