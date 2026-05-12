@@ -32,7 +32,8 @@ internal sealed class GitHubPopularActionsSourceParser
                 (x.Inputs ?? []).Select(static i => new PopularActionInputModel(i.Name, i.Required, i.DeprecationMessage)).ToArray(),
                 (x.Outputs ?? []).Select(static o => new PopularActionOutputModel(o.Name)).ToArray(),
                 x.RunsUsing ?? string.Empty,
-                x.MaxDeprecatedMajorVersion ?? 0))
+                x.MaxDeprecatedMajorVersion ?? 0,
+                (x.RequiredPermissions ?? []).Select(static p => new PopularActionRequiredPermissionModel(p.Scope, p.Access)).ToArray()))
             .OrderBy(static x => x.Uses, StringComparer.Ordinal)
             .ToArray();
     }
@@ -49,6 +50,7 @@ internal sealed class GitHubPopularActionsSourceParser
         public List<PopularActionOutputEntry>? Outputs { get; set; }
         public string? RunsUsing { get; set; }
         public int? MaxDeprecatedMajorVersion { get; set; }
+        public List<PopularActionRequiredPermissionEntry>? RequiredPermissions { get; set; }
     }
 
     private sealed class PopularActionInputEntry
@@ -61,5 +63,11 @@ internal sealed class GitHubPopularActionsSourceParser
     private sealed class PopularActionOutputEntry
     {
         public string Name { get; set; } = string.Empty;
+    }
+
+    private sealed class PopularActionRequiredPermissionEntry
+    {
+        public string Scope { get; set; } = string.Empty;
+        public string Access { get; set; } = string.Empty;
     }
 }

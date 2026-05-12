@@ -115,8 +115,23 @@ job.Range = new TextRange(
 ---
 
 メモ
-```
+
 - permissionsルールは、permissionsのミニマムとして {} を差し込みます。しかし、実際のところactions/checkoutを使っているなら`contents: read`が必須になります。こう考えるとpermissions: {} を差し込むのはfalse-positiveを生む可能性があると思います。これをうまく改善できないでしょうか? (ワークフローレベルのpermissionsが {} なのは問題ないと思います。)
 
 - imposter commitって、フォーク先のコミットを指している場合もひっかけられる? つまり、本来差しているリポジトリのコミットだけが信頼すべきだが、フォーク先のコミットも拾えるがために、悪意のあるユーザーがフォーク先でコミットを作成して、それを指すことができる可能性があるのではないかと心配しています。
+- zizmorのconcurrency-limitsに相当するルールってありますか?
+
+By default, GitHub Actions allows multiple instances of the same workflow to run concurrently, even when the new runs fully supersede the old. This can be a resource waste vector for attackers, particularly on billed runners. Separately, it can be a source of subtle race conditions when attempting to locate artifacts by workflow and job identifiers, rather than run IDs.
+
+Remediation🔗
+Include a concurrency setting in your workflow that sets the cancel-in-progress option either to true or to an expression that will be true in most cases. Specifying false would allow separate instances of the workflows to run concurrently, whereas true will imply that running jobs are cancelled as soon as the workflow is re-triggered.
+
+Example
+
+cancel-true.yml
+
+```yaml
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 ```

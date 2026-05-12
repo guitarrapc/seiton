@@ -1,0 +1,83 @@
+{
+  "schemaVersion": 1,
+  "source": "supplemental-required-permissions",
+  "description": "Hand-written minimum GITHUB_TOKEN permissions required by each popular action under default configuration. These cannot be derived from action.yml metadata.",
+  "actions": [
+    {
+      "uses": "actions/cache",
+      "requiredPermissions": []
+    },
+    {
+      "uses": "actions/checkout",
+      "requiredPermissions": [
+        {
+          "scope": "contents",
+          "access": "read"
+        }
+      ]
+    },
+    {
+      "uses": "actions/download-artifact",
+      "requiredPermissions": []
+    },
+    {
+      "uses": "actions/setup-dotnet",
+      "requiredPermissions": []
+    },
+    {
+      "uses": "actions/setup-go",
+      "requiredPermissions": []
+    },
+    {
+      "uses": "actions/setup-node",
+      "requiredPermissions": []
+    },
+    {
+      "uses": "actions/stale",
+      "requiredPermissions": [
+        {
+          "scope": "issues",
+          "access": "write"
+        },
+        {
+          "scope": "pull-requests",
+          "access": "write"
+        }
+      ]
+    },
+    {
+      "uses": "actions/upload-artifact",
+      "requiredPermissions": []
+    },
+    {
+      "uses": "docker/login-action",
+      "requiredPermissions": []
+    },
+    {
+      "uses": "octokit/request-action",
+      "requiredPermissions": []
+    },
+    {
+      "uses": "pypa/gh-action-pypi-publish",
+      "requiredPermissions": [
+        {
+          "scope": "id-token",
+          "access": "write"
+        }
+      ]
+    },
+    {
+      "uses": "reviewdog/action-actionlint",
+      "requiredPermissions": [
+        {
+          "scope": "contents",
+          "access": "read"
+        }
+      ]
+    },
+    {
+      "uses": "rhysd/action-setup-vim",
+      "requiredPermissions": []
+    }
+  ]
+}

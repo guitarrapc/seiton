@@ -45,7 +45,8 @@
         }
       ],
       "runsUsing": "node24",
-      "maxDeprecatedMajorVersion": 3
+      "maxDeprecatedMajorVersion": 3,
+      "requiredPermissions": []
     },
     {
       "uses": "actions/checkout",
@@ -140,7 +141,13 @@
         }
       ],
       "runsUsing": "node24",
-      "maxDeprecatedMajorVersion": 3
+      "maxDeprecatedMajorVersion": 3,
+      "requiredPermissions": [
+        {
+          "scope": "contents",
+          "access": "read"
+        }
+      ]
     },
     {
       "uses": "actions/download-artifact",
@@ -192,7 +199,8 @@
         }
       ],
       "runsUsing": "node24",
-      "maxDeprecatedMajorVersion": 3
+      "maxDeprecatedMajorVersion": 3,
+      "requiredPermissions": []
     },
     {
       "uses": "actions/setup-dotnet",
@@ -247,7 +255,8 @@
         }
       ],
       "runsUsing": "node24",
-      "maxDeprecatedMajorVersion": 3
+      "maxDeprecatedMajorVersion": 3,
+      "requiredPermissions": []
     },
     {
       "uses": "actions/setup-go",
@@ -294,7 +303,8 @@
         }
       ],
       "runsUsing": "node24",
-      "maxDeprecatedMajorVersion": 3
+      "maxDeprecatedMajorVersion": 3,
+      "requiredPermissions": []
     },
     {
       "uses": "actions/setup-node",
@@ -357,7 +367,8 @@
         }
       ],
       "runsUsing": "node24",
-      "maxDeprecatedMajorVersion": 3
+      "maxDeprecatedMajorVersion": 3,
+      "requiredPermissions": []
     },
     {
       "uses": "actions/stale",
@@ -592,7 +603,17 @@
         }
       ],
       "runsUsing": "node24",
-      "maxDeprecatedMajorVersion": 8
+      "maxDeprecatedMajorVersion": 8,
+      "requiredPermissions": [
+        {
+          "scope": "issues",
+          "access": "write"
+        },
+        {
+          "scope": "pull-requests",
+          "access": "write"
+        }
+      ]
     },
     {
       "uses": "actions/upload-artifact",
@@ -642,7 +663,8 @@
         }
       ],
       "runsUsing": "node24",
-      "maxDeprecatedMajorVersion": 3
+      "maxDeprecatedMajorVersion": 3,
+      "requiredPermissions": []
     },
     {
       "uses": "docker/login-action",
@@ -678,7 +700,8 @@
       ],
       "outputs": [],
       "runsUsing": "node24",
-      "maxDeprecatedMajorVersion": 2
+      "maxDeprecatedMajorVersion": 2,
+      "requiredPermissions": []
     },
     {
       "uses": "octokit/request-action",
@@ -704,7 +727,8 @@
         }
       ],
       "runsUsing": "node24",
-      "maxDeprecatedMajorVersion": 0
+      "maxDeprecatedMajorVersion": 0,
+      "requiredPermissions": []
     },
     {
       "uses": "pypa/gh-action-pypi-publish",
@@ -773,7 +797,13 @@
       ],
       "outputs": [],
       "runsUsing": "composite",
-      "maxDeprecatedMajorVersion": 0
+      "maxDeprecatedMajorVersion": 0,
+      "requiredPermissions": [
+        {
+          "scope": "id-token",
+          "access": "write"
+        }
+      ]
     },
     {
       "uses": "reviewdog/action-actionlint",
@@ -818,7 +848,13 @@
       ],
       "outputs": [],
       "runsUsing": "docker",
-      "maxDeprecatedMajorVersion": 0
+      "maxDeprecatedMajorVersion": 0,
+      "requiredPermissions": [
+        {
+          "scope": "contents",
+          "access": "read"
+        }
+      ]
     },
     {
       "uses": "rhysd/action-setup-vim",
@@ -849,7 +885,8 @@
         }
       ],
       "runsUsing": "node24",
-      "maxDeprecatedMajorVersion": 0
+      "maxDeprecatedMajorVersion": 0,
+      "requiredPermissions": []
     }
   ]
 }

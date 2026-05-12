@@ -521,6 +521,13 @@ public sealed class PopularActionsPipelineStageTests
 
         File.Copy(srcTargets, Path.Combine(dstTargetsDir, "targets.json"), overwrite: true);
 
+        // Copy supplemental files (e.g., supplemental-required-permissions.json)
+        foreach (var supFile in Directory.GetFiles(
+            Path.Combine(repoRoot, "data", "sources", "popular-actions"), "supplemental-*.json"))
+        {
+            File.Copy(supFile, Path.Combine(dstTargetsDir, Path.GetFileName(supFile)), overwrite: true);
+        }
+
         foreach (var file in Directory.GetFiles(srcParsed))
         {
             File.Copy(file, Path.Combine(dstParsed, Path.GetFileName(file)));

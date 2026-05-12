@@ -10755,6 +10755,95 @@ public sealed class RuleInterfaceTests
     }
 
     [Test]
+    public async Task LintEngine_JobPermissionsRequired_Fix_InsertsContentsRead_WhenJobUsesCheckout()
+    {
+        var yaml = """
+        on: push
+        jobs:
+            build:
+                runs-on: ubuntu-latest
+                steps:
+                    - uses: actions/checkout@v4
+                    - run: echo ok
+        """;
+
+        var sourceBytes = Encoding.UTF8.GetBytes(yaml);
+        var engine = new LintEngine([new JobPermissionsRequiredRule()]);
+        var result = engine.Check(sourceBytes, "job-permissions-required-fix-checkout.yml", new LintConfig { Fix = new FixConfig { Enabled = true } });
+        var diagnostic = result.Diagnostics.First(x => x.RuleId == "job-permissions-required");
+
+        await Assert.That(diagnostic.Fix is not null).IsTrue();
+
+        var fixedBytes = FixEngine.Apply(sourceBytes, diagnostic.Fix!.Value.Edits);
+        var fixedText = Encoding.UTF8.GetString(fixedBytes).Replace("\r\n", "\n", StringComparison.Ordinal);
+
+        // Fix should insert contents: read, not empty {}
+        await Assert.That(fixedText.Contains("permissions: {}", StringComparison.Ordinal)).IsFalse();
+        await Assert.That(fixedText.Contains("permissions:", StringComparison.Ordinal)).IsTrue();
+        await Assert.That(fixedText.Contains("contents: read", StringComparison.Ordinal)).IsTrue();
+
+        // Relint should pass
+        var relint = engine.Check(fixedBytes, "job-permissions-required-fix-checkout.yml");
+        await Assert.That(relint.Diagnostics.Any(x => x.RuleId == "job-permissions-required")).IsFalse();
+    }
+
+    [Test]
+    public async Task LintEngine_JobPermissionsRequired_Fix_MergesPermissions_WhenJobUsesMultipleKnownActions()
+    {
+        var yaml = """
+        on: push
+        jobs:
+            build:
+                runs-on: ubuntu-latest
+                steps:
+                    - uses: actions/checkout@v4
+                    - uses: actions/stale@v9
+        """;
+
+        var sourceBytes = Encoding.UTF8.GetBytes(yaml);
+        var engine = new LintEngine([new JobPermissionsRequiredRule()]);
+        var result = engine.Check(sourceBytes, "job-permissions-required-fix-multi.yml", new LintConfig { Fix = new FixConfig { Enabled = true } });
+        var diagnostic = result.Diagnostics.First(x => x.RuleId == "job-permissions-required");
+
+        await Assert.That(diagnostic.Fix is not null).IsTrue();
+
+        var fixedBytes = FixEngine.Apply(sourceBytes, diagnostic.Fix!.Value.Edits);
+        var fixedText = Encoding.UTF8.GetString(fixedBytes).Replace("\r\n", "\n", StringComparison.Ordinal);
+
+        // Fix should contain merged permissions from both actions
+        await Assert.That(fixedText.Contains("permissions: {}", StringComparison.Ordinal)).IsFalse();
+        await Assert.That(fixedText.Contains("contents: read", StringComparison.Ordinal)).IsTrue();
+        await Assert.That(fixedText.Contains("issues: write", StringComparison.Ordinal)).IsTrue();
+        await Assert.That(fixedText.Contains("pull-requests: write", StringComparison.Ordinal)).IsTrue();
+    }
+
+    [Test]
+    public async Task LintEngine_JobPermissionsRequired_Fix_InsertsEmptyPermissions_WhenNoKnownActionsUsed()
+    {
+        var yaml = """
+        on: push
+        jobs:
+            build:
+                runs-on: ubuntu-latest
+                steps:
+                    - run: echo ok
+        """;
+
+        var sourceBytes = Encoding.UTF8.GetBytes(yaml);
+        var engine = new LintEngine([new JobPermissionsRequiredRule()]);
+        var result = engine.Check(sourceBytes, "job-permissions-required-fix-no-known-actions.yml", new LintConfig { Fix = new FixConfig { Enabled = true } });
+        var diagnostic = result.Diagnostics.First(x => x.RuleId == "job-permissions-required");
+
+        await Assert.That(diagnostic.Fix is not null).IsTrue();
+
+        var fixedBytes = FixEngine.Apply(sourceBytes, diagnostic.Fix!.Value.Edits);
+        var fixedText = Encoding.UTF8.GetString(fixedBytes).Replace("\r\n", "\n", StringComparison.Ordinal);
+
+        // No known actions → empty permissions
+        await Assert.That(fixedText.Contains("permissions: {}", StringComparison.Ordinal)).IsTrue();
+    }
+
+    [Test]
     public async Task AutoFixCatalog_FixableRulesAttachFix_TableDriven()
     {
         var cases = new[]

@@ -22,7 +22,8 @@ internal sealed class PopularActionsCSharpGenerator
                     .OrderBy(static n => n.Name, StringComparer.Ordinal)
                     .ToArray(),
                 x.RunsUsing,
-                x.MaxDeprecatedMajorVersion))
+                x.MaxDeprecatedMajorVersion,
+                x.RequiredPermissions))
             .OrderBy(static x => x.Uses, StringComparer.Ordinal)
             .ToArray();
 
@@ -282,6 +283,33 @@ internal sealed class PopularActionsCSharpGenerator
         sb.Append(
             """
                             _ => 0,
+                        };
+                    }
+
+                    internal (string Scope, string Access)[] GetRequiredPermissions()
+                    {
+                        return Id switch
+                        {
+            """);
+        sb.AppendLine();
+
+        foreach (var action in normalized)
+        {
+            var actionId = ToActionIdName(action.Uses);
+            if (action.RequiredPermissions.Count == 0)
+            {
+                sb.AppendLine($"                ActionId.{actionId} => [],");
+            }
+            else
+            {
+                var items = string.Join(", ", action.RequiredPermissions.Select(static p => $"(\"{p.Scope}\", \"{p.Access}\")"));
+                sb.AppendLine($"                ActionId.{actionId} => [{items}],");
+            }
+        }
+
+        sb.Append(
+            """
+                            _ => [],
                         };
                     }
                 }
