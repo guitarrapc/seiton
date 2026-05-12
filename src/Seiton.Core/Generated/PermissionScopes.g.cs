@@ -15,6 +15,7 @@ internal static class PermissionScopes
         "artifact-metadata",
         "attestations",
         "checks",
+        "code-quality",
         "contents",
         "deployments",
         "discussions",
@@ -31,7 +32,7 @@ internal static class PermissionScopes
     ];
 
     /// <summary>Pre-formatted list of all scope names for error messages.</summary>
-    internal static readonly string AllScopesList = "\"actions\", \"artifact-metadata\", \"attestations\", \"checks\", \"contents\", \"deployments\", \"discussions\", \"id-token\", \"issues\", \"models\", \"packages\", \"pages\", \"pull-requests\", \"repository-projects\", \"security-events\", \"statuses\", \"vulnerability-alerts\"";
+    internal static readonly string AllScopesList = "\"actions\", \"artifact-metadata\", \"attestations\", \"checks\", \"code-quality\", \"contents\", \"deployments\", \"discussions\", \"id-token\", \"issues\", \"models\", \"packages\", \"pages\", \"pull-requests\", \"repository-projects\", \"security-events\", \"statuses\", \"vulnerability-alerts\"";
 
     internal static bool IsKnownScope(string name)
     {
@@ -41,6 +42,7 @@ internal static class PermissionScopes
             "artifact-metadata" => true,
             "attestations" => true,
             "checks" => true,
+            "code-quality" => true,
             "contents" => true,
             "deployments" => true,
             "discussions" => true,
@@ -70,6 +72,7 @@ internal static class PermissionScopes
             "artifact-metadata" => ["read", "write", "none"],
             "attestations" => ["read", "write", "none"],
             "checks" => ["read", "write", "none"],
+            "code-quality" => ["read", "write", "none"],
             "contents" => ["read", "write", "none"],
             "deployments" => ["read", "write", "none"],
             "discussions" => ["read", "write", "none"],
