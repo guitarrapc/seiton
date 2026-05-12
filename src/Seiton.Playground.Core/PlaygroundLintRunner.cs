@@ -105,7 +105,7 @@ public static class PlaygroundLintRunner
 
                 // D-5d: Build skip mask — reused jobs with cached diagnostics skip lint
                 var jobCount = parseResult.Workflow?.Jobs.Count ?? 0;
-                var skipJobs = IncrementalCtx.BuildSkipJobs(jobCount);
+                var skipJobs = IncrementalCtx.BuildSkipJobs(jobCount, parseResult.Workflow);
 
                 // Lint with optional job skipping
                 lintResult = Engine.CheckWithParseResult(utf8Yaml, filePath, LintWithFixMetadata, parseResult, skipJobs);

@@ -942,9 +942,12 @@ public sealed class IncrementalParseContext
     /// Builds a <c>skipJobs</c> array indicating which jobs can skip linting because
     /// they were reused (D-5c) and have cached diagnostics from the previous lint run.
     /// Returns <c>null</c> if no jobs can be skipped.
+    /// Jobs with <c>needs</c> dependencies are invalidated (not skipped) whenever any
+    /// other job has changed, because cross-job rules (e.g. NeedsGraphRule,
+    /// ExprUndefinedVarRule) may produce diagnostics that depend on other jobs' state.
     /// Must be called under the same lock that guards <see cref="ParseIncrementally"/>.
     /// </summary>
-    internal bool[]? BuildSkipJobs(int jobCount)
+    internal bool[]? BuildSkipJobs(int jobCount, Workflow? workflow)
     {
         if (jobCount <= 0 || _lastReusedJobs is null || _cachedJobDiagnostics is null)
             return null;
@@ -958,12 +961,45 @@ public sealed class IncrementalParseContext
             Array.Clear(_skipJobsBuf);
 
         var anySkippable = false;
+        var anyChanged = false;
         for (var i = 0; i < jobCount && i < _lastReusedJobs.Length; i++)
         {
             if (_lastReusedJobs[i] && i < _cachedJobDiagnostics.Length && _cachedJobDiagnostics[i] is not null)
             {
                 _skipJobsBuf[i] = true;
                 anySkippable = true;
+            }
+            else
+            {
+                anyChanged = true;
+            }
+        }
+
+        if (!anySkippable)
+            return null;
+
+        // Cross-job invalidation: if any job changed, don't skip jobs with 'needs'
+        // because their cached diagnostics may reference the changed job's state.
+        if (anyChanged && workflow is not null)
+        {
+            var jobs = workflow.Jobs.Entries;
+            for (var i = 0; i < jobCount && i < jobs.Length; i++)
+            {
+                if (_skipJobsBuf[i] && jobs[i].Value?.Needs is { Length: > 0 })
+                {
+                    _skipJobsBuf[i] = false;
+                }
+            }
+
+            // Recheck if any are still skippable
+            anySkippable = false;
+            for (var i = 0; i < jobCount; i++)
+            {
+                if (_skipJobsBuf[i])
+                {
+                    anySkippable = true;
+                    break;
+                }
             }
         }
 
@@ -1035,7 +1071,7 @@ public sealed class IncrementalParseContext
 
         // Build skip mask from reused jobs + cached diagnostics
         var jobCount = parseResult.Workflow?.Jobs.Count ?? 0;
-        var skipJobs = BuildSkipJobs(jobCount);
+        var skipJobs = BuildSkipJobs(jobCount, parseResult.Workflow);
 
         // Lint with optional job skipping
         var lintResult = _lintEngine.CheckWithParseResult(utf8Yaml, filePath, LintConfig, parseResult, skipJobs);
