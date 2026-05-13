@@ -304,7 +304,7 @@ For one-off suppressions inside a workflow file, use inline comment directives.
 ```yaml
 steps:
   # seiton: disable-next-line unpinned-uses
-  - uses: actions/checkout@v4
+  - uses: actions/checkout@v6
 ```
 
 `disable-next-line` suppresses diagnostics reported on **the very next YAML line** only. The comment must be placed directly above the key that the rule reports on — not above the parent node.

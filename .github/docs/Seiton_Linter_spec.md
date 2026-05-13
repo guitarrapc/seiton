@@ -1551,8 +1551,8 @@ When `skip` (the default), resolution failures (network error, auth failure, tim
 
 An `unpinned-uses` diagnostic fix replaces the `@ref` portion of the `uses:` value:
 
-- Before: `uses: actions/checkout@v4`
-- After: `uses: actions/checkout@<sha40> # v4`
+- Before: `uses: actions/checkout@v6`
+- After: `uses: actions/checkout@<sha40> # v6.0.2`
 
 The separator between SHA and comment defaults to ` # ` (matches pinact's `separator` default). Comment preserves the original ref string verbatim.
 
