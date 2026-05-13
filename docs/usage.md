@@ -1,10 +1,43 @@
 # Usage
 
-This page describes how to use the `seiton` command locally and in CI/CD.
+```shell
+$ seiton --help
+Usage: [command] [arguments...] [options...] [-h|--help] [--version]
+
+Lint workflow files by default, or apply fixes when --fix is specified.
+
+Arguments:
+  [0] <string[]?>    Workflow files or directories to lint. Auto-discovers .github/workflows/ if omitted.
+
+Options:
+  --config <string?>           Path to config file. Auto-discovered from .github/seiton.yaml if omitted. [Default: null]
+  --stdin-filename <string>    Filename used when reading from stdin (-). [Default: @"<stdin>"]
+  --ignore <string[]?>         Substring patterns for messages to ignore (case-insensitive). [Default: null]
+  --min-severity <string?>     Minimum severity to report: error | warning | info. [Default: null]
+  --format <OutputFormat>      Output format: text | json | sarif. [Default: Text]
+  --oneline                    Print each diagnostic on a single line.
+  --color <ColorMode>          Color mode: auto | always | never. [Default: Auto]
+  --no-color                   Disable color output (overrides --color).
+  --verbose                    Print progress information to stderr.
+  --fix                        Enable fix mode for the root command (equivalent to the fix subcommand).
+  --dry-run                    Print unified diff without modifying files (requires --fix).
+  --check                      Exit non-zero if fixable diagnostics exist, without applying fixes (requires --fix).
+  --enable-pin-network         Allow network requests to resolve action SHA pins (requires --fix).
+  --enable-image-network       Allow network requests to resolve container image digests (requires --fix).
+  --include-actions            When no FILES are provided, include .github/actions/ in auto-discovery.
+
+Commands:
+  check              Lint workflow files.
+  init               Generate a starter seiton config file.
+  validate-config    Validate the seiton config file.
+  version            Show version and runtime information.
+```
+
 
 ---
 
 ## Basic Usage
+
 
 With no arguments, `seiton` discovers and lints all `*.yml` / `*.yaml` files under `.github/workflows/` relative to the current working directory:
 
@@ -293,11 +326,11 @@ permissions: {}
 
 jobs:
   seiton:
-    name: seiton
-    runs-on: ubuntu-latest
     permissions:
       security-events: write
       contents: read
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
@@ -373,8 +406,11 @@ on:
 permissions: {}
 
 jobs:
-  seiton:
+    permissions:
+      security-events: write
+      contents: read
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
@@ -402,18 +438,6 @@ repos:
     rev: v1.0.0
     hooks:
       - id: seiton
-```
-
----
-
-## Integration with reviewdog
-
-```yaml
-- name: Run seiton with reviewdog
-  uses: reviewdog/action-seiton@v1
-  with:
-    github_token: ${{ secrets.GITHUB_TOKEN }}
-    reporter: github-pr-review
 ```
 
 ---
