@@ -89,7 +89,7 @@ curl -fsSL https://raw.githubusercontent.com/guitarrapc/seiton/main/scripts/down
 
 The script auto-detects your OS and architecture, downloads the latest release, verifies the SHA-256 checksum, extracts the binary to the current directory by default, and never uses `sudo`. If `gh` is available, it also attempts SLSA attestation verification.
 
-This script is also suitable for CI shell steps. On GitHub Actions, it appends the target directory to `GITHUB_PATH` for subsequent steps and writes `executable` and `directory` step outputs when `GITHUB_OUTPUT` is available.
+This script is also suitable for CI shell steps. On GitHub Actions, it writes the `executable` step output when `GITHUB_OUTPUT` is available.
 
 When you need to download a specific version, pass `--version`. The following example downloads `0.9.6`:
 
