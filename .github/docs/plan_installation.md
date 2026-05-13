@@ -58,6 +58,7 @@ checksums-sha256.txt
   - デフォルトで最新リリースを取得（`--version` でバージョン指定可）
   - デフォルトインストール先 `/usr/local/bin`（`--dir` で変更可、書き込み不可なら `sudo` を使用）
   - `checksums-sha256.txt` による SHA-256 検証
+  - `gh` CLI が利用可能な場合は SLSA build provenance 検証も実行（ベストエフォート）
   - PATH 未登録時のヒント表示
 - セキュリティ考慮:
   - `set -euo pipefail` で安全に失敗

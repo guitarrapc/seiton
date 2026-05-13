@@ -218,6 +218,16 @@ main() {
   verify_checksum "${tmpdir}/${asset_name}" "${tmpdir}/checksums-sha256.txt"
   echo "Checksum verified."
 
+  # Verify SLSA provenance (best-effort: only when gh CLI is available)
+  if command -v gh >/dev/null 2>&1; then
+    echo "Verifying SLSA build provenance..."
+    if gh attestation verify "${tmpdir}/${asset_name}" -R "${REPO}" 2>/dev/null; then
+      echo "SLSA provenance verified."
+    else
+      echo "Warning: SLSA provenance verification failed. Continuing with checksum-only verification." >&2
+    fi
+  fi
+
   # Extract
   echo "Extracting..."
   if [ "$extension" = "tar.gz" ]; then
