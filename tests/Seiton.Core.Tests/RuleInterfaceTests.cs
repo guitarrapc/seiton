@@ -413,17 +413,31 @@ public sealed class RuleInterfaceTests
     {
         await Assert.That(RuleCatalog.TryResolveRuleId("known-vulnerable-actions", out var knownVulnerable)).IsTrue();
         await Assert.That(knownVulnerable).IsEqualTo(RuleId.KnownVulnerableActions);
-        await Assert.That(RuleCatalog.GetCanonicalRuleId("local-action-inputs")).IsEqualTo("seiton-lint-rule-048");
-        await Assert.That(RuleCatalog.GetCanonicalRuleId("workflow-call-input-default")).IsEqualTo("seiton-lint-rule-049");
-        await Assert.That(RuleCatalog.GetCanonicalRuleId("outdated-action-runner")).IsEqualTo("seiton-lint-rule-050");
-        await Assert.That(RuleCatalog.GetCanonicalRuleId("if-expr-wrapper")).IsEqualTo("seiton-lint-rule-051");
-        await Assert.That(RuleCatalog.GetCanonicalRuleId("concurrency-limits")).IsEqualTo("seiton-lint-rule-052");
-        await Assert.That(RuleCatalog.GetCanonicalRuleId("known-vulnerable-actions")).IsEqualTo("seiton-lint-rule-053");
+        await Assert.That(RuleCatalog.GetCanonicalRuleId("local-action-inputs")).IsEqualTo("seiton-lint-rule-052");
+        await Assert.That(RuleCatalog.GetCanonicalRuleId("workflow-call-input-default")).IsEqualTo("seiton-lint-rule-053");
+        await Assert.That(RuleCatalog.GetCanonicalRuleId("outdated-action-runner")).IsEqualTo("seiton-lint-rule-054");
+        await Assert.That(RuleCatalog.GetCanonicalRuleId("if-expr-wrapper")).IsEqualTo("seiton-lint-rule-055");
+        await Assert.That(RuleCatalog.GetCanonicalRuleId("concurrency-limits")).IsEqualTo("seiton-lint-rule-056");
+        await Assert.That(RuleCatalog.GetCanonicalRuleId("known-vulnerable-actions")).IsEqualTo("seiton-lint-rule-030");
 
-        await Assert.That(RuleCatalog.TryResolveRuleId("seiton-lint-rule-054", out var impostorCommit)).IsTrue();
+        await Assert.That(RuleCatalog.TryResolveRuleId("seiton-lint-rule-031", out var impostorCommit)).IsTrue();
         await Assert.That(impostorCommit).IsEqualTo(RuleId.ImpostorCommit);
-        await Assert.That(RuleCatalog.GetCanonicalRuleId("ref-confusion")).IsEqualTo("seiton-lint-rule-055");
-        await Assert.That(RuleCatalog.GetCanonicalRuleId("stale-action-refs")).IsEqualTo("seiton-lint-rule-056");
+        await Assert.That(RuleCatalog.GetCanonicalRuleId("ref-confusion")).IsEqualTo("seiton-lint-rule-032");
+        await Assert.That(RuleCatalog.GetCanonicalRuleId("stale-action-refs")).IsEqualTo("seiton-lint-rule-033");
+    }
+
+    [Test]
+    public async Task RuleCatalog_CanonicalId_IsDerivedFromPriority()
+    {
+        // Canonical ID number must equal priority + 1, so adding new rules never shifts existing IDs.
+        // Priority 29 → seiton-lint-rule-030, not dependent on array position.
+        await Assert.That(RuleCatalog.GetCanonicalRuleId("known-vulnerable-actions")).IsEqualTo("seiton-lint-rule-030");
+        await Assert.That(RuleCatalog.GetCanonicalRuleId("impostor-commit")).IsEqualTo("seiton-lint-rule-031");
+        await Assert.That(RuleCatalog.GetCanonicalRuleId("ref-confusion")).IsEqualTo("seiton-lint-rule-032");
+        await Assert.That(RuleCatalog.GetCanonicalRuleId("stale-action-refs")).IsEqualTo("seiton-lint-rule-033");
+        await Assert.That(RuleCatalog.GetCanonicalRuleId("cache-poisoning")).IsEqualTo("seiton-lint-rule-034");
+        await Assert.That(RuleCatalog.GetCanonicalRuleId("local-action-inputs")).IsEqualTo("seiton-lint-rule-052");
+        await Assert.That(RuleCatalog.GetCanonicalRuleId("concurrency-limits")).IsEqualTo("seiton-lint-rule-056");
     }
 
     [Test]
