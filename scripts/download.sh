@@ -50,7 +50,7 @@ need_cmd() {
 publish_github_actions_metadata() {
   local executable_path="$1" target_dir="$2"
 
-  if [ -n "${GITHUB_ACTIONS:-}" ]; then
+  if [ -n "${GITHUB_ACTIONS:-}" ] || [ -n "${GITHUB_ACTION:-}" ]; then
     if [ -n "${GITHUB_PATH:-}" ]; then
       printf '%s\n' "$target_dir" >> "$GITHUB_PATH"
     fi
