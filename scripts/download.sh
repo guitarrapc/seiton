@@ -228,7 +228,7 @@ main() {
     exit 1
   fi
 
-  tmpdir="$(mktemp -d)"
+  tmpdir="$(mktemp -d "${TMPDIR:-/tmp}/seiton.XXXXXX")"
 
   echo "Downloading ${asset_name}..."
   if ! curl --proto '=https' --tlsv1.2 -fSL -o "${tmpdir}/${asset_name}" \
