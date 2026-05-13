@@ -421,7 +421,7 @@ jobs:
           persist-credentials: false
 
       - name: Run seiton in Docker
-        run: docker run --rm -v "$PWD:/repo:ro" ghcr.io/guitarrapc/seiton:latest /repo --format sarif > seiton.sarif
+        run: docker run --rm -v "$PWD:/repo:ro" ghcr.io/guitarrapc/seiton:latest --format sarif /repo > seiton.sarif
 
       - name: Upload SARIF
         uses: github/codeql-action/upload-sarif@ce28f5bb42d3534e5d0f3a320ca0b28ee32a72d0 # v3
@@ -432,25 +432,11 @@ jobs:
 
 ---
 
-## Integration with pre-commit
-
-Add Seiton to your `.pre-commit-config.yaml`:
-
-```yaml
-repos:
-  - repo: https://github.com/guitarrapc/seiton
-    rev: v1.0.0
-    hooks:
-      - id: seiton
-```
-
----
-
 ## Exit Codes
 
 | Code | Meaning |
 |---|---|
-| `0` | No errors found (warnings may exist). |
-| `1` | One or more errors or fixable diagnostics found. |
+| `0` | No warnings or errors found (info diagnostics may exist). |
+| `1` | One or more warnings, errors, or fixable diagnostics found. |
 | `2` | Invalid command-line options. |
 | `3` | Fatal error (for example config parse failure or unreadable file). |
