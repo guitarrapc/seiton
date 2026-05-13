@@ -119,20 +119,20 @@ The following example downloads Seiton into the runner temp directory. Because t
 
 ```yaml
 - name: Download seiton
-	id: seiton
-	run: |
-		mkdir -p "$RUNNER_TEMP/seiton-bin"
-		curl -fsSL https://raw.githubusercontent.com/guitarrapc/seiton/main/scripts/download.sh | bash -s -- --dir "$RUNNER_TEMP/seiton-bin"
+  id: seiton
+  run: |
+    mkdir -p "$RUNNER_TEMP/seiton-bin"
+    curl -fsSL https://raw.githubusercontent.com/guitarrapc/seiton/main/scripts/download.sh | bash -s -- --dir "$RUNNER_TEMP/seiton-bin"
 
 - name: Run seiton
-	run: seiton --format sarif > seiton.sarif
+  run: seiton --format sarif > seiton.sarif
 ```
 
 If you need the exact downloaded path, use the step outputs written by the script:
 
 ```yaml
 - name: Show downloaded binary path
-	run: echo "${{ steps.seiton.outputs.executable }}"
+  run: echo "${{ steps.seiton.outputs.executable }}"
 ```
 
 ---

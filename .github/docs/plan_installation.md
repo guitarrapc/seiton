@@ -174,7 +174,7 @@ curl -fsSL https://raw.githubusercontent.com/guitarrapc/seiton/main/scripts/down
 
 #### 4-1. Dockerfile（実装済み）
 
-- リポジトリルート [`Dockerfile`](../../Dockerfile): `gcr.io/distroless/base-debian12` + リリースビルド済み Linux AOT バイナリ（glibc）。マルチアーキは Buildx の `TARGETARCH` で `amd64` / `arm64` の `COPY` を切り替え。
+- リポジトリルート [`Dockerfile`](../../Dockerfile): `gcr.io/distroless/base-debian13:nonroot` + リリースビルド済み Linux AOT バイナリ（glibc）。マルチアーキは Buildx の `TARGETARCH` で `amd64` / `arm64` の `COPY` を切り替え。
 
 #### 4-2. release workflow（実装済み）
 
