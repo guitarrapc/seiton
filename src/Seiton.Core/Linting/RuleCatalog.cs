@@ -10,7 +10,6 @@ namespace Seiton.Core.Linting;
 /// </summary>
 internal static class RuleCatalog
 {
-    private const string CanonicalPrefix = "seiton-lint-rule-";
 
     // Rule responsibilities are intentionally split:
     // - job-structure: cross-key structural constraints on Job shape.
@@ -49,7 +48,7 @@ internal static class RuleCatalog
         (RuleId.JobTimeoutMinutesRequired, 27, static () => new JobTimeoutMinutesRequiredRule()),
         (RuleId.GitHubAppTokenInputs, 28, static () => new GitHubAppTokenInputsRule()),
         // Priorities 29-32 are reserved for online rules (see OnlineRuleFactories).
-        // Canonical ID = priority + 1; keep priorities unique and never reuse a published priority.
+        // Keep priorities unique; they determine rule execution order.
         (RuleId.CachePoisoning, 33, static () => new CachePoisoningRule()),
         (RuleId.SelfHostedRunner, 34, static () => new SelfHostedRunnerRule()),
         (RuleId.UnredactedSecrets, 35, static () => new UnredactedSecretsRule()),
@@ -88,10 +87,6 @@ internal static class RuleCatalog
     private static readonly IReadOnlySet<RuleId> OptInOnlyRuleIds = BuildOptInOnlyRuleIdSet();
 
     private static readonly (RuleId Id, int Priority)[] AllRuleMetadata = BuildAllRuleMetadata();
-
-    private static readonly IReadOnlyDictionary<string, RuleId> CanonicalRuleIdToRuleId = BuildCanonicalRuleIdMap();
-
-    private static readonly IReadOnlyDictionary<RuleId, string> RuleIdToCanonicalRuleId = BuildReverseCanonicalRuleIdMap();
 
     private static readonly IReadOnlySet<RuleId> NonDisableableRuleIds = BuildNonDisableableRuleIdSet();
 
@@ -147,43 +142,16 @@ internal static class RuleCatalog
         return PriorityByRuleIdString.TryGetValue(ruleId, out var priority) ? priority : int.MaxValue - 1;
     }
 
-    /// <summary>Resolves a kebab-case ID or canonical ID (e.g. <c>seiton-lint-rule-001</c>) to a <see cref="RuleId"/>.</summary>
-    public static bool TryResolveRuleId(string? idOrCanonical, out RuleId resolvedRuleId)
+    /// <summary>Resolves a kebab-case semantic rule ID (e.g. <c>job-permissions-required</c>) to a <see cref="RuleId"/>.</summary>
+    public static bool TryResolveRuleId(string? ruleId, out RuleId resolvedRuleId)
     {
         resolvedRuleId = default;
-        if (string.IsNullOrWhiteSpace(idOrCanonical))
-        {
-            return false;
-        }
-
-        if (RuleIdExtensions.TryParse(idOrCanonical, out resolvedRuleId))
-        {
-            return true;
-        }
-
-        if (!CanonicalRuleIdToRuleId.TryGetValue(idOrCanonical, out var mappedRuleId))
-        {
-            return false;
-        }
-
-        resolvedRuleId = mappedRuleId;
-        return true;
-    }
-
-    /// <summary>Returns the canonical ID (<c>seiton-lint-rule-NNN</c>) for the given rule, or <c>null</c> if not found.</summary>
-    public static string? GetCanonicalRuleId(string? ruleId)
-    {
         if (string.IsNullOrWhiteSpace(ruleId))
         {
-            return null;
+            return false;
         }
 
-        if (RuleIdExtensions.TryParse(ruleId, out var parsed) && RuleIdToCanonicalRuleId.TryGetValue(parsed, out var canonical))
-        {
-            return canonical;
-        }
-
-        return null;
+        return RuleIdExtensions.TryParse(ruleId, out resolvedRuleId);
     }
 
     /// <summary>Suggests a similar rule ID for a possible typo, or returns <c>null</c> if no close match is found.</summary>
@@ -230,22 +198,6 @@ internal static class RuleCatalog
         return AllowedRuleConfigKeys.TryGetValue(ruleId, out allowedKeys);
     }
 
-    private static IReadOnlyDictionary<string, RuleId> BuildCanonicalRuleIdMap()
-    {
-        var map = new Dictionary<string, RuleId>(StringComparer.Ordinal);
-        for (var i = 0; i < AllRuleMetadata.Length; i++)
-        {
-            var canonicalId = $"{CanonicalPrefix}{(AllRuleMetadata[i].Priority + 1).ToString("000", System.Globalization.CultureInfo.InvariantCulture)}";
-            if (!map.TryAdd(canonicalId, AllRuleMetadata[i].Id))
-            {
-                throw new InvalidOperationException(
-                    $"Duplicate rule priority detected: canonical ID '{canonicalId}' (priority {AllRuleMetadata[i].Priority}) is already assigned to '{map[canonicalId]}'. Rule '{AllRuleMetadata[i].Id}' cannot share the same priority.");
-            }
-        }
-
-        return map;
-    }
-
     private static (RuleId Id, int Priority)[] BuildAllRuleMetadata()
     {
         var metadata = new (RuleId Id, int Priority)[DefaultRuleFactories.Length + OnlineRuleFactories.Length];
@@ -282,17 +234,6 @@ internal static class RuleCatalog
         }
 
         return dict.ToFrozenDictionary(dict.Comparer);
-    }
-
-    private static IReadOnlyDictionary<RuleId, string> BuildReverseCanonicalRuleIdMap()
-    {
-        var reverse = new Dictionary<RuleId, string>();
-        foreach (var pair in CanonicalRuleIdToRuleId)
-        {
-            reverse[pair.Value] = pair.Key;
-        }
-
-        return reverse;
     }
 
     private static IReadOnlySet<RuleId> BuildNonDisableableRuleIdSet()

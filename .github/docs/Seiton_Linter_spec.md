@@ -337,12 +337,7 @@ Token resolution order (`SEITON_GITHUB_TOKEN` → `GITHUB_TOKEN`) is hardcoded a
 
 ### 5.1 Rule Identifier Contract
 
-- Rule identifiers used by exclusion/suppression should use semantic IDs (for example: `job-permissions-required`) as the primary format.
-- Stable canonical IDs (`seiton-lint-rule-001`, `seiton-lint-rule-002`, ...) are accepted for backward compatibility.
- - Canonical IDs are derived directly from the rule priority using `seiton-lint-rule-{priority + 1:000}`.
- - Once a canonical ID has been published for a rule, that rule's priority is immutable in future releases. Reordering published rules is therefore not supported, because doing so would change the derived canonical ID.
- - If a human-readable rule name changes, the canonical ID remains unchanged because the published priority remains unchanged.
- - Implementations do not maintain a separate frozen historical `canonical ID -> rule` mapping independent of current priorities; compatibility for canonical IDs is provided by keeping published priorities fixed.
+- Rule identifiers use semantic IDs (kebab-case, e.g. `job-permissions-required`) as the sole accepted format.
 - Unknown rule IDs in config or inline directives are configuration errors.
 
 ### 5.2 Priority and Precedence
@@ -650,7 +645,7 @@ Interpretation notes:
 - `network` configures shared network behavior (error handling, timeouts, concurrency, GitHub API settings).
 - `output.sort-order` controls diagnostic output ordering: `location` (default) sorts by source position for file-reading order; `rule` sorts by rule priority for batch-fixing.
 - `exclusions[].file` and optional `exclusions[].jobs` define config-based suppression scope.
-- `exclusions[].rules` accepts one or more semantic rule IDs; canonical IDs remain accepted for backward compatibility per §5.1.
+- `exclusions[].rules` accepts one or more semantic rule IDs per §5.1.
 - Inline directives such as `# seiton: disable-next-line ...` are not part of the config file YAML; they are written inside workflow source files and are specified separately in §5.5.
 - Token resolution order (`SEITON_GITHUB_TOKEN` → `GITHUB_TOKEN`) is hardcoded and not configurable.
 
