@@ -13062,8 +13062,6 @@ public sealed class RuleInterfaceTests
 
         public string Name => $"Duplicate-{Id.ToId()}";
 
-        public bool IsEnabledByDefault => true;
-
         public bool SupportsDocumentKind(DocumentKind documentKind) => true;
 
         public IReadOnlyList<Diagnostic> GetDiagnostics() => diagnostics;
@@ -13109,8 +13107,6 @@ public sealed class RuleInterfaceTests
 
         public string Name => "Config Capture Rule";
 
-        public bool IsEnabledByDefault => true;
-
         public bool SupportsDocumentKind(DocumentKind documentKind) => true;
 
         public LintConfig? LastConfig { get; private set; }
@@ -13155,8 +13151,6 @@ public sealed class RuleInterfaceTests
         public RuleId Id => RuleId.JobStructure;
 
         public string Name => "Test Rule";
-
-        public bool IsEnabledByDefault => true;
 
         public bool SupportsDocumentKind(DocumentKind documentKind) => true;
 

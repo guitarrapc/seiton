@@ -18,9 +18,6 @@ public abstract class OnlineRuleBase : RuleBase, IOnlineRule
 
     protected OnlineRuleBase(RuleId id) : base(id) { }
 
-    /// <inheritdoc />
-    public override bool IsEnabledByDefault => false;
-
     public IReadOnlyList<ActionAuditTarget> CollectedTargets => _targets;
 
     public override bool SupportsDocumentKind(DocumentKind documentKind)

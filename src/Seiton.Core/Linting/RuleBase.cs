@@ -18,9 +18,6 @@ public abstract class RuleBase : IRule
 
     public abstract string Name { get; }
 
-    /// <inheritdoc />
-    public virtual bool IsEnabledByDefault => true;
-
     public virtual bool SupportsDocumentKind(DocumentKind documentKind)
     {
         return documentKind == DocumentKind.Workflow || documentKind == DocumentKind.ActionMetadata;
