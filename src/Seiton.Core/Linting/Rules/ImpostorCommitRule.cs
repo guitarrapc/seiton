@@ -25,7 +25,7 @@ public sealed class ImpostorCommitRule() : OnlineRuleBase(RuleId.ImpostorCommit)
         if (!resolution.Value.IsReachable)
         {
             AddError(
-                $"'{target.UsesText}' pins commit '{target.Reference}' that exists in '{target.Owner}/{target.Repo}' object storage but is not reachable from any branch or tag (possible impostor commit from a fork)",
+                $"'{target.UsesText}' pins commit '{target.Reference}' that exists in '{target.Owner}/{target.Repo}' object storage but is not reachable from any branch HEAD or tag (possible impostor commit from a fork)",
                 target.Location);
         }
     }
