@@ -441,6 +441,26 @@ public sealed class RuleInterfaceTests
     }
 
     [Test]
+    public async Task RuleCatalog_Priorities_AreUnique()
+    {
+        // Priorities must be unique across all rules because canonical IDs are derived from them.
+        // Duplicate priorities would cause canonical ID collisions.
+        var allRuleIds = Enum.GetValues<RuleId>().Where(id => id != RuleId.Syntax).ToArray();
+        var priorityToRule = new Dictionary<int, string>();
+        foreach (var ruleId in allRuleIds)
+        {
+            var semanticId = ruleId.ToId();
+            var priority = RuleCatalog.GetPriority(semanticId);
+            await Assert.That(priority).IsNotEqualTo(int.MaxValue).Because($"rule '{semanticId}' must have a registered priority");
+            if (priorityToRule.TryGetValue(priority, out var existing))
+            {
+                Assert.Fail($"Priority {priority} is used by both '{existing}' and '{semanticId}'. Priorities must be unique.");
+            }
+            priorityToRule[priority] = semanticId;
+        }
+    }
+
+    [Test]
     public async Task RuleRegression_JobStructureRule_TableDriven()
     {
         var cases = new[]
