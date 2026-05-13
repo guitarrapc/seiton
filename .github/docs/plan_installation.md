@@ -180,7 +180,7 @@ curl -fsSL https://raw.githubusercontent.com/guitarrapc/seiton/main/scripts/inst
 - [`.github/workflows/release.yaml`](../../.github/workflows/release.yaml) の **`docker` ジョブ**（`needs: validate, publish`）:
   - `seiton-linux-{amd64,arm64}.tar.gz` を展開して build context を組み立て
   - `docker/setup-qemu-action`, `docker/setup-buildx-action`, `docker/login-action`（GHCR）, `docker/build-push-action`
-  - タグ: `:latest`, `:<Version>`, `:<tag>`（例 `v0.9.4`）
+  - タグ: `:latest`, `:<Version>`, `:<tag>`（例 `v0.9.6`）
   - ジョブ権限: `packages: write`
 
 **完了条件**: `docker pull ghcr.io/<owner>/<repo>:latest` → `docker run --rm -v "$PWD:/repo:ro" ... /repo` で動作する（`<owner>/<repo>` は小文字の GitHub リポジトリパス）。

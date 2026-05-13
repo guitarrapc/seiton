@@ -2,7 +2,7 @@
 
 エンドユーザー向け手順は [docs/installation.md](../../docs/installation.md) の Homebrew 節を参照。
 
-## 方針（actionlint に近い）
+## 方針
 
 - **専用の `homebrew-tap` リポジトリは使わない。**
 - 本リポジトリ直下に `Formula/seiton.rb` を置き、ユーザーは **`brew tap <owner>/<repo>`** でこのリポを指す（例: `guitarrapc/seiton`）。
@@ -10,7 +10,7 @@
 
 ## 権限
 
-- 既定は **`GITHUB_TOKEN`（`contents: write`）** で push。`main` 等に **ブランチ保護**があり bot の push が弾かれる場合は、push 可能な **PAT を `HOMEBREW_FORMULA_PUSH_TOKEN`** として登録する（`checkout` の `token` に使われる）。
+- 既定は **`GITHUB_TOKEN`（`contents: write`）** で push。
 
 ## スクリプト
 
@@ -25,8 +25,8 @@
 ```bash
 cd /path/to/seiton
 export GITHUB_REPOSITORY=guitarrapc/seiton
-export SEITON_TAG=v0.9.4
-export SEITON_VERSION=0.9.4
+export SEITON_TAG=v0.9.6
+export SEITON_VERSION=0.9.6
 export CHECKSUMS_FILE=./checksums-sha256.txt
 # export SKIP_PUSH=1   # コミットまでで止める
 bash scripts/commit-homebrew-formula.sh
