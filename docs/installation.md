@@ -162,8 +162,8 @@ You can build & publish binary for the platform you're building on.
 
 ```sh
 dotnet publish -c Release -r win-x64 src/Seiton/Seiton.csproj -o publish/win-x64
-dotnet publish -c Release -r linux-x64 src/Seiton/Seiton.csproj -o publish/win-x64
-dotnet publish -c Release -r osx-arm64 src/Seiton/Seiton.csproj -o publish/win-x64
+dotnet publish -c Release -r linux-x64 src/Seiton/Seiton.csproj -o publish/linux-x64
+dotnet publish -c Release -r osx-arm64 src/Seiton/Seiton.csproj -o publish/osx-arm64
 ```
 
 ---
