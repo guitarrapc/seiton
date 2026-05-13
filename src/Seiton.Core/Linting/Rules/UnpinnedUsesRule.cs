@@ -74,6 +74,17 @@ public sealed class UnpinnedUsesRule() : RuleBase(RuleId.UnpinnedUses)
             return;
         }
 
+        // ../ prefix is not valid for reusable workflows (only ./ is allowed)
+        if (uses.StartsWith("../"u8))
+        {
+            var usesStr = Decode(Arena.GetStringSlice(workflowCall.Uses));
+            AddJobError(
+                job,
+                $"reusable workflow call \"{usesStr}\" at \"uses\" is not following the format \"owner/repo/path/to/workflow.yml@ref\" nor \"./path/to/workflow.yml\". see https://docs.github.com/en/actions/learn-github-actions/reusing-workflows for more details",
+                usesLocation);
+            return;
+        }
+
         if (!TryParseRemoteUses(uses, out var parsedJob))
         {
             var formatJobId = Decode(Arena.GetStringSlice(job.Id));

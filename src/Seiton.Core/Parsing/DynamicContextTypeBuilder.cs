@@ -597,7 +597,8 @@ internal static class DynamicContextTypeBuilder
 
     /// <summary>
     /// Builds the needs context type override for a job.
-    /// Returns a strict object keyed by depended-on job IDs, or a loose object when needs is empty.
+    /// Returns a strict object keyed by depended-on job IDs, or a strict empty object when needs is empty
+    /// (so any <c>needs.X</c> reference is flagged as undefined).
     /// </summary>
     internal static (byte[] NameUtf8, ExprType Type) BuildNeedsOverride(
         StringNodeId[]? needs,
