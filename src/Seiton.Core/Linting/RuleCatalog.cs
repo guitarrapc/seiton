@@ -16,7 +16,7 @@ internal static class RuleCatalog
     // - reusable-workflow: uses/with/secrets semantics and forbidden keys in reusable calls.
     // - permissions: scalar/scope value domain validation for permissions.
     // - popular-action-inputs: known-action input-name validation (warning-level).
-    // OptIn: false = default-on, true = opt-in only (requires rules.<id>.enabled: true).
+    // OptIn: false = default-on, true = opt-in only (requires a rules.<id> entry; enabled defaults to true).
     private static readonly (RuleId Id, int Priority, bool OptIn, Func<IRule> Factory)[] DefaultRuleFactories =
     [
         (RuleId.JobStructure, 0, false, static () => new JobStructureRule()),
