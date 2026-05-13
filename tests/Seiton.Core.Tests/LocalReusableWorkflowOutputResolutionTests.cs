@@ -68,6 +68,8 @@ public sealed class LocalReusableWorkflowOutputResolutionTests
                 .Check(File.ReadAllBytes(callerPath), callerPath);
             using var _ = result.ParseResult.Arena;
 
+            await Assert.That(result.ParseResult.HasFatalError).IsFalse();
+
             var msgs = result.Diagnostics
                 .Where(x => x.RuleId == "expr-undefined-var")
                 .Select(x => x.Message)
@@ -128,6 +130,8 @@ public sealed class LocalReusableWorkflowOutputResolutionTests
             var result = new LintEngine([new ExprUndefinedVarRule()])
                 .Check(File.ReadAllBytes(callerPath), callerPath);
             using var _ = result.ParseResult.Arena;
+
+            await Assert.That(result.ParseResult.HasFatalError).IsFalse();
 
             var msgs = result.Diagnostics
                 .Where(x => x.RuleId == "expr-undefined-var")
@@ -201,6 +205,8 @@ public sealed class LocalReusableWorkflowOutputResolutionTests
                 .Check(File.ReadAllBytes(callerPath), callerPath);
             using var _ = result.ParseResult.Arena;
 
+            await Assert.That(result.ParseResult.HasFatalError).IsFalse();
+
             var msgs = result.Diagnostics
                 .Where(x => x.RuleId == "expr-undefined-var")
                 .Select(x => x.Message)
@@ -269,6 +275,8 @@ public sealed class LocalReusableWorkflowOutputResolutionTests
             var result = new LintEngine([new ExprUndefinedVarRule()])
                 .Check(File.ReadAllBytes(callerPath), callerPath);
             using var _ = result.ParseResult.Arena;
+
+            await Assert.That(result.ParseResult.HasFatalError).IsFalse();
 
             var msgs = result.Diagnostics
                 .Where(x => x.RuleId == "expr-undefined-var")
@@ -341,6 +349,8 @@ public sealed class LocalReusableWorkflowOutputResolutionTests
                 .Check(File.ReadAllBytes(callerPath), callerPath);
             using var _ = result.ParseResult.Arena;
 
+            await Assert.That(result.ParseResult.HasFatalError).IsFalse();
+
             var msgs = result.Diagnostics
                 .Where(x => x.RuleId == "expr-undefined-var")
                 .Select(x => x.Message)
@@ -401,6 +411,8 @@ public sealed class LocalReusableWorkflowOutputResolutionTests
             var result = new LintEngine([new ExprUndefinedVarRule()])
                 .Check(File.ReadAllBytes(callerPath), callerPath);
             using var _ = result.ParseResult.Arena;
+
+            await Assert.That(result.ParseResult.HasFatalError).IsFalse();
 
             var msgs = result.Diagnostics
                 .Where(x => x.RuleId == "expr-undefined-var")

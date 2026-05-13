@@ -60,7 +60,7 @@ public sealed class UnpinnedUsesRule() : RuleBase(RuleId.UnpinnedUses)
         var uses = Arena.GetStringValue(workflowCall.Uses);
         var usesLocation = BuildUsesLocation(workflowCall);
         var usesRefLocation = BuildRefLocation(Arena.GetStringSlice(workflowCall.Uses), uses, Config.Utf8Yaml, usesLocation);
-        if (uses.StartsWith("./"u8) || uses.StartsWith("../"u8))
+        if (uses.StartsWith("./"u8))
         {
             if (uses.IndexOf((byte)'@') >= 0)
             {
