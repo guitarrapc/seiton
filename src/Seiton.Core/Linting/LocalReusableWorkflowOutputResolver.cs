@@ -10,8 +10,11 @@ namespace Seiton.Core.Linting;
 /// </summary>
 internal sealed class LocalReusableWorkflowOutputResolver
 {
+    private static readonly StringComparer PathComparer =
+        OperatingSystem.IsWindows() ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal;
+
     private readonly string _workflowFilePath;
-    private readonly Dictionary<string, string[]?> _cache = new(StringComparer.OrdinalIgnoreCase);
+    private readonly Dictionary<string, string[]?> _cache = new(PathComparer);
 
     public LocalReusableWorkflowOutputResolver(string workflowFilePath)
     {
@@ -83,7 +86,10 @@ internal sealed class LocalReusableWorkflowOutputResolver
         // Use Path.GetRelativePath which is filesystem-aware and avoids case-sensitivity issues
         // with string prefix comparisons on case-sensitive platforms.
         var relativeToBas = Path.GetRelativePath(baseDirectory, resolvedPath);
-        if (relativeToBas.StartsWith("..", StringComparison.Ordinal) || Path.IsPathRooted(relativeToBas))
+        var isTraversal = string.Equals(relativeToBas, "..", StringComparison.Ordinal)
+            || relativeToBas.StartsWith($"..{Path.DirectorySeparatorChar}", StringComparison.Ordinal)
+            || relativeToBas.StartsWith($"..{Path.AltDirectorySeparatorChar}", StringComparison.Ordinal);
+        if (isTraversal || Path.IsPathRooted(relativeToBas))
         {
             return null;
         }

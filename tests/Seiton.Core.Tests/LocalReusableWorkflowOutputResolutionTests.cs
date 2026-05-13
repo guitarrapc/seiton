@@ -523,4 +523,87 @@ public sealed class LocalReusableWorkflowOutputResolutionTests
             }
         }
     }
+
+    [Test]
+    public async Task ResolveOutputNames_DotDotPrefixedDirectoryName_NotFalsePositiveRejection()
+    {
+        // A directory named "..special" (starts with ".." but is NOT path traversal) must NOT be
+        // rejected by the traversal guard. When Path.GetRelativePath returns "..special/..." it
+        // starts with ".." but is a valid child, not a parent traversal.
+        // This scenario triggers when the uses path does NOT start with ./.github/ — the
+        // baseDirectory falls back to the workflow directory, and a sibling named "..special" is valid.
+        var rootDir = Path.Combine(Path.GetTempPath(), "seiton-resolver-dotdotdir-" + Guid.NewGuid().ToString("N", System.Globalization.CultureInfo.InvariantCulture));
+        var workflowsDir = Path.Combine(rootDir, ".github", "workflows");
+        Directory.CreateDirectory(workflowsDir);
+
+        // Create a subdirectory named "..special" directly under the workflows dir (the base).
+        // When uses = "./..special/reusable.yml" (no .github prefix), base = workflowsDir,
+        // and relative path from base = "..special/reusable.yml" which starts with "..".
+        var specialDir = Path.Combine(workflowsDir, "..special");
+        Directory.CreateDirectory(specialDir);
+
+        var reusablePath = Path.Combine(specialDir, "reusable.yml");
+        var callerPath = Path.Combine(workflowsDir, "caller.yml");
+
+        try
+        {
+            var reusableYaml = """
+            on:
+              workflow_call:
+                outputs:
+                  version:
+                    description: The computed version
+                    value: ${{ jobs.compute.outputs.ver }}
+            jobs:
+              compute:
+                runs-on: ubuntu-latest
+                outputs:
+                  ver: ${{ steps.v.outputs.ver }}
+                steps:
+                  - id: v
+                    run: echo "ver=1.0.0" >> "$GITHUB_OUTPUT"
+            """;
+
+            // Reference via a path that does NOT start with "./.github/" so the base is
+            // the workflow directory. The resolver should see "..special/reusable.yml" as a
+            // valid child, not as parent traversal.
+            var callerYaml = """
+            on: push
+            jobs:
+              get-ver:
+                uses: ./..special/reusable.yml
+              deploy:
+                runs-on: ubuntu-latest
+                needs: [get-ver]
+                steps:
+                  - env:
+                      TAG: ${{ needs.get-ver.outputs.nonexistent }}
+                    run: echo "$TAG"
+            """;
+
+            File.WriteAllText(reusablePath, reusableYaml, Encoding.UTF8);
+            File.WriteAllText(callerPath, callerYaml, Encoding.UTF8);
+
+            var result = new LintEngine([new ExprUndefinedVarRule()])
+                .Check(File.ReadAllBytes(callerPath), callerPath);
+            using var _ = result.ParseResult.Arena;
+
+            await Assert.That(result.ParseResult.HasFatalError).IsFalse();
+
+            // If resolution succeeds, "nonexistent" should be flagged as undefined
+            // because the reusable workflow only declares "version".
+            var msgs = result.Diagnostics
+                .Where(x => x.RuleId == "expr-undefined-var")
+                .Select(x => x.Message)
+                .ToArray();
+            await Assert.That(msgs.Any(m => m.Contains("is not defined", StringComparison.Ordinal))).IsTrue();
+        }
+        finally
+        {
+            if (Directory.Exists(rootDir))
+            {
+                Directory.Delete(rootDir, recursive: true);
+            }
+        }
+    }
 }

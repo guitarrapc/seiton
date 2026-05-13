@@ -9,8 +9,11 @@ namespace Seiton.Core.Linting;
 /// </summary>
 internal sealed class LocalActionOutputResolver
 {
+    private static readonly StringComparer PathComparer =
+        OperatingSystem.IsWindows() ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal;
+
     private readonly string _workflowFilePath;
-    private readonly Dictionary<string, string[]?> _cache = new(StringComparer.OrdinalIgnoreCase);
+    private readonly Dictionary<string, string[]?> _cache = new(PathComparer);
 
     public LocalActionOutputResolver(string workflowFilePath)
     {
