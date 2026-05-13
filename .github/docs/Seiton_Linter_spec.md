@@ -339,11 +339,10 @@ Token resolution order (`SEITON_GITHUB_TOKEN` → `GITHUB_TOKEN`) is hardcoded a
 
 - Rule identifiers used by exclusion/suppression should use semantic IDs (for example: `job-permissions-required`) as the primary format.
 - Stable canonical IDs (`seiton-lint-rule-001`, `seiton-lint-rule-002`, ...) are accepted for backward compatibility.
- - Any canonical ID that has been published in a prior release is a permanent legacy alias and must continue to resolve to the same rule in all future releases.
- - For new canonical IDs, implementations may derive the initial value from the rule's priority using `seiton-lint-rule-{priority + 1:000}`, but only if doing so does not conflict with any previously published canonical ID mapping.
- - Canonical IDs are immutable once published. If priority/order changes would otherwise change a derived canonical ID, the previously published canonical ID mapping takes precedence and must be preserved.
- - If a human-readable rule name changes, canonical ID must remain unchanged.
- - Migration/compatibility note: implementations that previously exposed canonical IDs must retain a frozen historical mapping of canonical ID -> rule so that existing config files and inline directives continue to work without silent remapping.
+ - Canonical IDs are derived directly from the rule priority using `seiton-lint-rule-{priority + 1:000}`.
+ - Once a canonical ID has been published for a rule, that rule's priority is immutable in future releases. Reordering published rules is therefore not supported, because doing so would change the derived canonical ID.
+ - If a human-readable rule name changes, the canonical ID remains unchanged because the published priority remains unchanged.
+ - Implementations do not maintain a separate frozen historical `canonical ID -> rule` mapping independent of current priorities; compatibility for canonical IDs is provided by keeping published priorities fixed.
 - Unknown rule IDs in config or inline directives are configuration errors.
 
 ### 5.2 Priority and Precedence
