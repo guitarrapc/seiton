@@ -52,6 +52,34 @@ need_cmd() {
   fi
 }
 
+install_binary() {
+  local src="$1" dest="$2" install_path
+  install_path="$(dirname "$dest")"
+
+  mkdir -p "$install_path"
+
+  if [ -w "$install_path" ]; then
+    cp "$src" "$dest"
+    chmod +x "$dest"
+    return
+  fi
+
+  if [ "$(id -u)" -eq 0 ]; then
+    cp "$src" "$dest"
+    chmod +x "$dest"
+    return
+  fi
+
+  if ! command -v sudo >/dev/null 2>&1; then
+    echo "Error: cannot install to ${install_path} because it is not writable and 'sudo' is not available. Re-run as root or choose a writable directory with --dir." >&2
+    exit 1
+  fi
+
+  echo "Elevated permissions required to install to ${install_path}."
+  sudo cp "$src" "$dest"
+  sudo chmod +x "$dest"
+}
+
 # Fetch the latest release tag from the GitHub API.
 # Uses /releases/latest which returns a single object (avoids fragile grep on arrays).
 fetch_latest_tag() {
@@ -253,32 +281,14 @@ main() {
   fi
 
   # Install
-  local src="${tmpdir}/${BINARY_NAME}"
-  local dest="${install_dir}/${BINARY_NAME}"
+  local executable_name="$BINARY_NAME"
   if [ "$os" = "win" ]; then
-    src="${src}.exe"
-    dest="${dest}.exe"
+    executable_name="${executable_name}.exe"
   fi
 
-  mkdir -p "$install_dir"
-  if [ -w "$install_dir" ]; then
-    cp "$src" "$dest"
-  else
-    echo "Elevated permissions required to install to ${install_dir}."
-    if [ "$(id -u)" -eq 0 ]; then
-      cp "$src" "$dest"
-    else
-      if ! command -v sudo >/dev/null 2>&1; then
-        echo "Error: cannot install to ${install_dir} because it is not writable and 'sudo' is not available. Re-run as root or choose a writable directory with --dir." >&2
-        exit 1
-      fi
-      sudo cp "$src" "$dest"
-      sudo chmod +x "$dest"
-    fi
-  fi
-  if [ -w "$install_dir" ] || [ "$(id -u)" -eq 0 ]; then
-    chmod +x "$dest"
-  fi
+  local src="${tmpdir}/${executable_name}"
+  local dest="${install_dir}/${executable_name}"
+  install_binary "$src" "$dest"
 
   echo ""
   echo "Installed ${BINARY_NAME} ${version} to ${dest}"
