@@ -4,7 +4,12 @@ using Seiton.Core.Linting.Rules;
 
 namespace Seiton.Core.Tests;
 
-public sealed class LocalReusableWorkflowOutputResolverTests
+/// <summary>
+/// Integration tests for local reusable workflow output resolution via ExprUndefinedVarRule.
+/// Validates that the resolver's guards (prefix, extension, size cap, path traversal)
+/// correctly determine whether needs.&lt;job&gt;.outputs.* is treated as strict or loose.
+/// </summary>
+public sealed class LocalReusableWorkflowOutputResolutionTests
 {
     [Test]
     public async Task ResolveOutputNames_DotDotSlashPrefix_NotResolved()

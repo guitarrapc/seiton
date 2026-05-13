@@ -166,8 +166,10 @@ Create `src/Seiton.Core/Linting/LocalReusableWorkflowOutputResolver.cs`:
 
 - Constructor: `(string workflowFilePath)`
 - Method: `string[]? ResolveOutputNames(ReadOnlySpan<byte> usesValue)`
-  - Guard: only `./ ` or `../` prefix, no `@` in value
+  - Guard: only `./` prefix (not `../`), no `@` in value, must end with `.yml`/`.yaml`
   - Resolve path using same pattern as `LocalActionOutputResolver`
+  - Guard: resolved path must stay under base directory (path traversal protection)
+  - Guard: file size must not exceed 2 MB
   - Parse workflow, find `WorkflowCallEvent`, extract `Outputs` keys
   - Cache results per resolved path
   - Return `null` if unresolvable, `string[0]` if no outputs, `string[N]` for N output names

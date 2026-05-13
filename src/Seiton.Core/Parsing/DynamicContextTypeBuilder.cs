@@ -736,7 +736,8 @@ internal static class DynamicContextTypeBuilder
                             var outputProps = new Dictionary<Utf8String, ExprType>(outputNames.Length);
                             for (var i = 0; i < outputNames.Length; i++)
                             {
-                                outputProps[new Utf8String(System.Text.Encoding.UTF8.GetBytes(outputNames[i]))] = ExprType.String;
+                                var encoded = System.Text.Encoding.UTF8.GetBytes(outputNames[i]);
+                                outputProps[new Utf8String(encoded.AsMemory())] = ExprType.String;
                             }
 
                             return ExprType.Object(outputProps, strict: true);
