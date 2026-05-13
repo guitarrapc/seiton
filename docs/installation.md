@@ -84,20 +84,37 @@ gh attestation verify -R guitarrapc/seiton seiton-linux-amd64.tar.gz
 
 `gh attestation verify` checks the build provenance attached to the release artifact, which provides stronger supply-chain guarantees than checksum verification alone.
 
-### Install manually after download
+---
 
-On macOS or Linux:
+## Install Script
+
+The install script is the fastest way to install Seiton on macOS or Linux.
 
 ```sh
-tar xzf <archive>
-sudo mv seiton /usr/local/bin/
+curl -fsSL https://raw.githubusercontent.com/guitarrapc/seiton/main/scripts/install.sh | bash
 ```
 
-On Windows:
+The script auto-detects your OS and architecture, downloads the latest release, verifies the SHA-256 checksum, and installs the binary to `/usr/local/bin` by default. If `gh` is available, it also attempts SLSA attestation verification.
 
-1. Download `seiton-win-amd64.zip` or `seiton-win-arm64.zip`.
-2. Extract `seiton.exe`.
-3. Place `seiton.exe` in a directory that is in your `PATH`.
+Install a specific version:
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/guitarrapc/seiton/main/scripts/install.sh | bash -s -- --version 0.9.6
+```
+
+Install to a custom directory:
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/guitarrapc/seiton/main/scripts/install.sh | bash -s -- --dir ~/.local/bin
+```
+
+Combine both options:
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/guitarrapc/seiton/main/scripts/install.sh | bash -s -- --version 0.9.6 --dir ~/.local/bin
+```
+
+If the destination directory is not in your `PATH`, the script prints a hint explaining what to add.
 
 ---
 
@@ -138,39 +155,6 @@ To produce a self-contained NativeAOT binary:
 ```sh
 dotnet publish -c Release src/Seiton/Seiton.csproj
 ```
-
----
-
-## Install Script
-
-The install script is the fastest way to install Seiton on macOS or Linux.
-
-```sh
-curl -fsSL https://raw.githubusercontent.com/guitarrapc/seiton/main/scripts/install.sh | bash
-```
-
-The script auto-detects your OS and architecture, downloads the latest release, verifies the SHA-256 checksum, and installs the binary to `/usr/local/bin` by default. If `gh` is available, it also attempts SLSA attestation verification.
-
-Install a specific version:
-
-```sh
-curl -fsSL https://raw.githubusercontent.com/guitarrapc/seiton/main/scripts/install.sh | bash -s -- --version 0.9.6
-```
-
-Install to a custom directory:
-
-```sh
-curl -fsSL https://raw.githubusercontent.com/guitarrapc/seiton/main/scripts/install.sh | bash -s -- --dir ~/.local/bin
-```
-
-Combine both options:
-
-```sh
-curl -fsSL https://raw.githubusercontent.com/guitarrapc/seiton/main/scripts/install.sh | bash -s -- --version 0.9.6 --dir ~/.local/bin
-```
-
-If the destination directory is not in your `PATH`, the script prints a hint explaining what to add.
-
 
 ---
 
