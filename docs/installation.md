@@ -4,6 +4,38 @@ This page describes how to install Seiton.
 
 ---
 
+## Install Script (macOS/Linux)
+
+The quickest way to install Seiton on macOS or Linux:
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/guitarrapc/seiton/main/scripts/install.sh | bash
+```
+
+The script auto-detects your platform and architecture, downloads the latest release, verifies the SHA-256 checksum, and installs to `/usr/local/bin`.
+
+Install a specific version:
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/guitarrapc/seiton/main/scripts/install.sh | bash -s -- --version 1.0.0
+```
+
+Install to a custom directory:
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/guitarrapc/seiton/main/scripts/install.sh | bash -s -- --dir ~/.local/bin
+```
+
+Combine options:
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/guitarrapc/seiton/main/scripts/install.sh | bash -s -- --version 1.0.0 --dir ~/.local/bin
+```
+
+If the install directory is not in your `PATH`, the script prints a hint to add it.
+
+---
+
 ## Prebuilt Binaries
 
 Download a prebuilt binary for your platform from the [releases page](https://github.com/guitarrapc/seiton/releases).

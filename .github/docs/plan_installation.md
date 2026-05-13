@@ -16,7 +16,7 @@
 | Docker (GHCR) | ✅ | ✅ Release ワークフローで linux/amd64・arm64 を push |
 | mise | ❌ | ❌ レジストリ登録・ドキュメント未対応 |
 | aqua | ❌ | ❌ aqua-registry への登録・ドキュメント未対応 |
-| ダウンロード／インストール用スクリプト（curl \| sh 等） | — | **非サポート**（公式には提供しない） |
+| ダウンロード／インストール用スクリプト（curl \| sh 等） | ✅ | ✅ `scripts/install.sh`（main ブランチ） |
 | GitHub Action | ❌ | ❌ action.yml 未作成 |
 
 ### リリースアセット名（現行 release.yaml）
@@ -36,11 +36,47 @@ checksums-sha256.txt
 ## ゴールと非ゴール
 
 - **ゴール**: ドキュメントに記載した全チャネルを実装し、ユーザーが実際にインストールできるようにする。
-- **非ゴール**: CLI 本体の機能変更。パッケージマネージャの公式リポジトリ（Homebrew core、Scoop Main bucket）への登録（将来検討）。**インストール用シェルスクリプトの配布**（セキュリティ・運用の方針により見送り）。
+- **非ゴール**: CLI 本体の機能変更。パッケージマネージャの公式リポジトリ（Homebrew core、Scoop Main bucket）への登録（将来検討）。
 
 ## 実装フェーズ
 
 優先度とユーザーカバレッジに基づき、以下の順で実装する。
+
+---
+
+### フェーズ 0 — インストールスクリプト — 完了
+
+**WHY**: `curl | bash` ワンライナーは CI やローカルセットアップで最も手軽。チェックサム検証を内蔵し安全性を担保する。
+
+#### 実装
+
+- [`scripts/install.sh`](../../scripts/install.sh) を main ブランチに配置。
+- 機能:
+  - プラットフォーム自動判別（`uname -s` → `linux`/`osx`/`win`、`uname -m` → `amd64`/`arm64`）
+  - デフォルトで最新リリースを取得（`--version` でバージョン指定可）
+  - デフォルトインストール先 `/usr/local/bin`（`--dir` で変更可、書き込み不可なら `sudo` を使用）
+  - `checksums-sha256.txt` による SHA-256 検証
+  - PATH 未登録時のヒント表示
+- セキュリティ考慮:
+  - `set -euo pipefail` で安全に失敗
+  - `curl --proto '=https' --tlsv1.2` で TLS を強制
+  - tmpdir + EXIT trap で一時ファイルを確実に削除
+  - JSON パース不要（`/releases/latest` エンドポイントを利用）
+
+#### 利用方法
+
+```sh
+# 最新版をインストール
+curl -fsSL https://raw.githubusercontent.com/guitarrapc/seiton/main/scripts/install.sh | bash
+
+# バージョン指定
+curl -fsSL https://raw.githubusercontent.com/guitarrapc/seiton/main/scripts/install.sh | bash -s -- --version 1.0.0
+
+# インストール先指定
+curl -fsSL https://raw.githubusercontent.com/guitarrapc/seiton/main/scripts/install.sh | bash -s -- --dir ~/.local/bin
+```
+
+**完了条件**: 上記ワンライナーで Linux/macOS に seiton がインストールされ、チェックサム検証が通る。
 
 ---
 
@@ -235,6 +271,7 @@ checksums-sha256.txt
 ## フェーズ間の依存関係
 
 ```
+フェーズ 0 (install.sh) ← 独立（完了）
 フェーズ 1 (docs / アセット名)
   ├── フェーズ 2 (Homebrew) ← 独立
   ├── フェーズ 3 (Scoop)    ← 独立
