@@ -19,6 +19,12 @@ internal sealed class LocalReusableWorkflowOutputResolver
     }
 
     /// <summary>
+    /// Maximum file size (2 MB) the resolver will attempt to read.
+    /// Files larger than this are assumed non-workflow and skipped.
+    /// </summary>
+    private const long MaxFileSizeBytes = 2 * 1024 * 1024;
+
+    /// <summary>
     /// Given a local reusable workflow uses reference (e.g. "./.github/workflows/reusable.yml"),
     /// returns the output names declared in <c>on.workflow_call.outputs</c>,
     /// or null if the workflow cannot be resolved.
@@ -26,12 +32,19 @@ internal sealed class LocalReusableWorkflowOutputResolver
     /// </summary>
     public string[]? ResolveOutputNames(ReadOnlySpan<byte> usesValue)
     {
-        if (!usesValue.StartsWith("./"u8) && !usesValue.StartsWith("../"u8))
+        // GitHub Actions local reusable workflows must start with "./"
+        if (!usesValue.StartsWith("./"u8))
         {
             return null;
         }
 
         if (usesValue.IndexOf((byte)'@') >= 0)
+        {
+            return null;
+        }
+
+        // Require .yml or .yaml extension (case-insensitive on the raw bytes)
+        if (!EndsWithYmlExtension(usesValue))
         {
             return null;
         }
@@ -67,6 +80,20 @@ internal sealed class LocalReusableWorkflowOutputResolver
         }
 
         if (!File.Exists(resolvedPath))
+        {
+            return null;
+        }
+
+        // Skip oversized files to avoid performance/availability issues
+        try
+        {
+            var fileInfo = new FileInfo(resolvedPath);
+            if (fileInfo.Length > MaxFileSizeBytes)
+            {
+                return null;
+            }
+        }
+        catch
         {
             return null;
         }
@@ -176,5 +203,37 @@ internal sealed class LocalReusableWorkflowOutputResolver
         }
 
         return new string(chars);
+    }
+
+    private static bool EndsWithYmlExtension(ReadOnlySpan<byte> value)
+    {
+        // .yml (case-insensitive)
+        if (value.Length >= 4)
+        {
+            var tail = value[^4..];
+            if (tail[0] == (byte)'.'
+                && (tail[1] == (byte)'y' || tail[1] == (byte)'Y')
+                && (tail[2] == (byte)'m' || tail[2] == (byte)'M')
+                && (tail[3] == (byte)'l' || tail[3] == (byte)'L'))
+            {
+                return true;
+            }
+        }
+
+        // .yaml (case-insensitive)
+        if (value.Length >= 5)
+        {
+            var tail = value[^5..];
+            if (tail[0] == (byte)'.'
+                && (tail[1] == (byte)'y' || tail[1] == (byte)'Y')
+                && (tail[2] == (byte)'a' || tail[2] == (byte)'A')
+                && (tail[3] == (byte)'m' || tail[3] == (byte)'M')
+                && (tail[4] == (byte)'l' || tail[4] == (byte)'L'))
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 }
