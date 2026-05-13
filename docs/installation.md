@@ -177,11 +177,16 @@ To produce a self-contained NativeAOT binary, `dotnet publish` also requires the
 
 NativeAOT publish is OS-specific. You can cross-compile between architectures on the same OS with the required native toolchain installed, but not across operating systems.
 
-You can build & publish binary for the platform you're building on.
+Run only the command that matches the OS you are currently using:
 
 ```sh
+# Windows machine
 dotnet publish -c Release -r win-x64 src/Seiton/Seiton.csproj -o publish/win-x64
+
+# Linux machine
 dotnet publish -c Release -r linux-x64 src/Seiton/Seiton.csproj -o publish/linux-x64
+
+# macOS machine
 dotnet publish -c Release -r osx-arm64 src/Seiton/Seiton.csproj -o publish/osx-arm64
 ```
 
