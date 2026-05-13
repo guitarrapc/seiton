@@ -1,5 +1,9 @@
 # Usage
 
+This page describes how to use `seiton` locally and in CI/CD.
+
+## Current CLI Help
+
 ```shell
 $ seiton --help
 Usage: [command] [arguments...] [options...] [-h|--help] [--version]
@@ -33,12 +37,11 @@ Commands:
   version            Show version and runtime information.
 ```
 
+The examples below clarify the current behavior where fixes are enabled with `--fix` on the root command.
 
 ---
 
 ## Basic Usage
-
-
 With no arguments, `seiton` discovers and lints all `*.yml` / `*.yaml` files under `.github/workflows/` relative to the current working directory:
 
 ```sh
@@ -67,7 +70,7 @@ cat .github/workflows/ci.yml | seiton - --stdin-filename ci.yml
 
 ## Commands
 
-### `seiton` (default)
+### seiton
 
 Lint one or more GitHub Actions YAML files. This is the primary user-facing operation.
 
@@ -75,35 +78,33 @@ Lint one or more GitHub Actions YAML files. This is the primary user-facing oper
 seiton [FILES...] [FLAGS]
 ```
 
-### `seiton check`
-
 Identical to the default command in check mode. Provided for scripting clarity.
 
 ```sh
 seiton check [FILES...] [FLAGS]
 ```
 
-### `seiton fix`
+### seiton --fix
 
-Apply auto-fixes in place for all fixable diagnostics.
+To apply auto-fixes, use the root command with `--fix`.
 
 ```sh
-seiton fix [FILES...] [FLAGS]
+seiton --fix [FILES...] [FLAGS]
 ```
 
 Use `--dry-run` to preview diffs without modifying files:
 
 ```sh
-seiton fix --dry-run
+seiton --fix --dry-run
 ```
 
 Use `--check` to exit non-zero if any fixable diagnostic exists (without applying fixes):
 
 ```sh
-seiton fix --check
+seiton --fix --check
 ```
 
-### `seiton init`
+### seiton init
 
 Generate a starter config file at `.github/seiton.yaml`:
 
@@ -123,7 +124,7 @@ Overwrite an existing config file:
 seiton init --force
 ```
 
-### `seiton validate-config`
+### seiton validate-config
 
 Validate the resolved config file. Useful in CI jobs that maintain `.github/seiton.yaml`:
 
@@ -131,7 +132,7 @@ Validate the resolved config file. Useful in CI jobs that maintain `.github/seit
 seiton validate-config
 ```
 
-### `seiton version`
+### seiton version
 
 Print the version, build metadata, and target platform:
 
@@ -155,14 +156,13 @@ seiton version
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
-| `--ignore` | `string[]` | (none) | Regex patterns to suppress diagnostics by message. **`MatchTimeout`** = **2 s** per pattern (same cap as config `ignore-actions`); on timeout the diagnostic is **not** suppressed. Repeatable. |
-
+| `--ignore` | `string[]` | (none) | Case-insensitive substring patterns for messages to ignore. Repeatable. |
 | `--min-severity` | `error\|warning\|info` | (none) | Suppress diagnostics below this severity. |
-| `--fix` | `bool` | `false` | Run in fix mode (equivalent to `seiton fix`). |
+| `--fix` | `bool` | `false` | Run in fix mode on the root command. |
 
 ### Fix Flags
 
-These flags are valid only in fix mode (`--fix` or the `fix` subcommand).
+These flags are valid only when `--fix` is enabled on the root command.
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
@@ -193,11 +193,10 @@ All CLI flags can alternatively be set via environment variables. A flag always 
 | `SEITON_FORMAT` | `--format` | Output format (`text`, `json`, `sarif`). |
 | `SEITON_NO_COLOR` | `--no-color` | Any non-empty value disables color. |
 | `NO_COLOR` | `--no-color` | Standard `NO_COLOR` convention (fallback). |
-| `SEITON_GITHUB_TOKEN` | (internal) | GitHub API token for network-assisted operations. Takes priority over `GITHUB_TOKEN`. |
-| `GITHUB_TOKEN` | (internal) | GitHub API token fallback. |
-| `SEITON_LOG_LEVEL` | `--verbose` | `debug`, `info`, `warn`, `error`. `debug` implies `--verbose`. |
+| `SEITON_GITHUB_TOKEN` | (internal) | GitHub API token for online checks and network-assisted remediation. Takes priority over `GITHUB_TOKEN`. |
+| `GITHUB_TOKEN` | (internal) | GitHub API token fallback for online checks and network-assisted remediation. |
 
-When `CI=true` (standard GitHub Actions variable), color output defaults to `never` and progress indicators are suppressed.
+When `CI` is set, automatic color detection behaves as `never`.
 
 ---
 
@@ -249,7 +248,7 @@ seiton --format sarif > seiton.sarif
 
 ### Command-Line
 
-Use `--ignore` with a regular expression to suppress diagnostics whose messages match:
+Use `--ignore` with one or more case-insensitive substrings to suppress diagnostics whose messages match:
 
 ```sh
 # Suppress all runner-label warnings
@@ -364,6 +363,10 @@ Or download and run `seiton` in one step:
 
 If you need a specific version or download directory, pass `--version` and `--dir` to the script as described in [Installation](installation.md#download-script).
 
+If you only need plain text output and do not need the downloaded path later, running the download script and `./seiton` in one step is the simplest option. If you need to reuse the binary across later steps, prefer the `executable` step output form above.
+
+---
+
 ## Docker
 
 Official container images are published to GHCR for `linux/amd64` and `linux/arm64`.
@@ -406,6 +409,7 @@ on:
 permissions: {}
 
 jobs:
+  seiton:
     permissions:
       security-events: write
       contents: read
@@ -448,4 +452,5 @@ repos:
 |---|---|
 | `0` | No errors found (warnings may exist). |
 | `1` | One or more errors or fixable diagnostics found. |
-| `2` | Fatal error (config parse failure, invalid arguments, unreadable file). |
+| `2` | Invalid command-line options. |
+| `3` | Fatal error (for example config parse failure or unreadable file). |
