@@ -2,22 +2,30 @@
 
 This page describes how to install Seiton.
 
+Choose the method that matches your environment:
+
+- macOS or Linux: use the install script for the quickest setup.
+- Windows: use Scoop if you want package-manager installation.
+- Any platform: download a prebuilt binary from GitHub Releases.
+- CI or isolated environments: use the Docker image.
+- Local development: build from source with the .NET SDK.
+
 ---
 
 ## Install Script (macOS/Linux)
 
-The quickest way to install Seiton on macOS or Linux:
+The install script is the fastest way to install Seiton on macOS or Linux.
 
 ```sh
 curl -fsSL https://raw.githubusercontent.com/guitarrapc/seiton/main/scripts/install.sh | bash
 ```
 
-The script auto-detects your platform and architecture, downloads the latest release, verifies the SHA-256 checksum, and installs to `/usr/local/bin`.
+The script auto-detects your OS and architecture, downloads the latest release, verifies the SHA-256 checksum, and installs the binary to `/usr/local/bin` by default.
 
 Install a specific version:
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/guitarrapc/seiton/main/scripts/install.sh | bash -s -- --version 1.0.0
+curl -fsSL https://raw.githubusercontent.com/guitarrapc/seiton/main/scripts/install.sh | bash -s -- --version <version>
 ```
 
 Install to a custom directory:
@@ -26,22 +34,70 @@ Install to a custom directory:
 curl -fsSL https://raw.githubusercontent.com/guitarrapc/seiton/main/scripts/install.sh | bash -s -- --dir ~/.local/bin
 ```
 
-Combine options:
+Combine both options:
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/guitarrapc/seiton/main/scripts/install.sh | bash -s -- --version 1.0.0 --dir ~/.local/bin
+curl -fsSL https://raw.githubusercontent.com/guitarrapc/seiton/main/scripts/install.sh | bash -s -- --version <version> --dir ~/.local/bin
 ```
 
-If the install directory is not in your `PATH`, the script prints a hint to add it.
+If the destination directory is not in your `PATH`, the script prints a hint explaining what to add.
 
 ---
 
-## GitHub CLI
+## Package Managers
 
-If you have the [GitHub CLI](https://cli.github.com/) installed (pre-installed on GitHub Actions runners), you can download and verify a release asset directly:
+### Homebrew (macOS/Linux)
+
+Seiton provides a Homebrew formula from the repository tap:
 
 ```sh
-version=v0.9.6
+brew tap guitarrapc/seiton
+brew install seiton
+```
+
+If you prefer the explicit repository URL:
+
+```sh
+brew tap guitarrapc/seiton https://github.com/guitarrapc/seiton
+brew install seiton
+```
+
+### Scoop (Windows)
+
+Seiton is available from [`guitarrapc/scoop-bucket`](https://github.com/guitarrapc/scoop-bucket).
+
+```powershell
+scoop bucket add guitarrapc https://github.com/guitarrapc/scoop-bucket
+scoop install seiton
+```
+
+Upgrade later with `scoop update seiton`.
+
+---
+
+## Prebuilt Binaries
+
+Download a release archive from the [GitHub Releases page](https://github.com/guitarrapc/seiton/releases), extract it, and place the resulting executable in a directory on your `PATH`.
+
+The prebuilt binary is a NativeAOT single-file executable. No .NET runtime is required.
+
+| Platform | Architecture | Archive |
+|---|---|---|
+| Linux | x64 | `seiton-linux-amd64.tar.gz` |
+| Linux | arm64 | `seiton-linux-arm64.tar.gz` |
+| macOS | x64 (Intel) | `seiton-osx-amd64.tar.gz` |
+| macOS | arm64 (Apple Silicon) | `seiton-osx-arm64.tar.gz` |
+| Windows | x64 | `seiton-win-amd64.zip` |
+| Windows | arm64 | `seiton-win-arm64.zip` |
+
+### Download with GitHub CLI and verify attestation
+
+If you already use [GitHub CLI](https://cli.github.com/), you can download and verify a release artifact directly.
+
+Example for Linux x64:
+
+```sh
+version=<version>
 asset=seiton-linux-amd64.tar.gz
 gh release download -R guitarrapc/seiton "$version" -p "$asset"
 gh attestation verify "$asset" -R guitarrapc/seiton
@@ -49,138 +105,49 @@ tar xzf "$asset"
 sudo mv seiton /usr/local/bin/
 ```
 
-`gh attestation verify` checks the SLSA build provenance attestation attached to each release, providing stronger supply-chain guarantees than checksum verification alone.
+For other platforms, change `asset` to one of the archive names listed above.
 
-Adjust `asset` for your platform: `seiton-osx-arm64.tar.gz` (macOS ARM), `seiton-osx-amd64.tar.gz` (macOS Intel), `seiton-linux-arm64.tar.gz` (Linux ARM), or `seiton-win-amd64.zip` / `seiton-win-arm64.zip` (Windows).
+`gh attestation verify` checks the build provenance attached to the release artifact, which provides stronger supply-chain guarantees than checksum verification alone.
 
----
+### Install manually after download
 
-## Prebuilt Binaries
-
-Download a prebuilt archive from the [releases page](https://github.com/guitarrapc/seiton/releases) for your platform, extract it, and place the `seiton` executable in a directory on your `$PATH`.
-
-| OS | Architecture | Archive |
-|---|---|---|
-| Linux | x64 | `seiton-linux-amd64.tar.gz` |
-| Linux | arm64 | `seiton-linux-arm64.tar.gz` |
-| macOS | arm64 (Apple Silicon) | `seiton-osx-arm64.tar.gz` |
-| macOS | x64 (Intel) | `seiton-osx-amd64.tar.gz` |
-| Windows | x64 | `seiton-win-amd64.zip` |
-| Windows | arm64 | `seiton-win-arm64.zip` |
-
-The binary is a NativeAOT single-file executable. No .NET runtime is required.
-
-### Verify downloaded assets
-
-If you have the [GitHub CLI](https://cli.github.com/), you can verify the SLSA build provenance attestation attached to each release:
+On macOS or Linux:
 
 ```sh
-gh attestation verify <asset> -R guitarrapc/seiton
-```
-
-This provides stronger supply-chain guarantees than checksum verification alone.
-
----
-
-## Windows
-
-### Scoop
-
-Package manifests are in [`guitarrapc/scoop-bucket`](https://github.com/guitarrapc/scoop-bucket). The bucket uses an [Excavator](https://github.com/ScoopInstaller/Excavator)-style scheduled workflow so `checkver` / `autoupdate` in the manifest track [Seiton releases](https://github.com/guitarrapc/seiton/releases).
-
-Add the bucket once, then install:
-
-```powershell
-scoop bucket add guitarrapc https://github.com/guitarrapc/scoop-bucket
-scoop install seiton
-```
-
-Upgrade later with `scoop update seiton` (or `scoop update`).
-
-### Manual
-
-1. Download the latest `seiton-win-amd64.zip` (x64) or `seiton-win-arm64.zip` (ARM64) from the [releases page](https://github.com/guitarrapc/seiton/releases).
-2. Extract and place `seiton.exe` in a directory that is in your `PATH`.
-
----
-
-## macOS
-
-### Homebrew
-
-This repo provides [`Formula/seiton.rb`](https://github.com/guitarrapc/seiton/blob/main/Formula/seiton.rb) (updated automatically when a GitHub Release is published). Tap the **application repository**, then install:
-
-```sh
-brew tap guitarrapc/seiton https://github.com/guitarrapc/seiton
-brew install seiton
-```
-
-If you use the default GitHub short form and your repo is `github.com/guitarrapc/seiton`:
-
-```sh
-brew tap guitarrapc/seiton
-brew install seiton
-```
-
-### Manual
-
-Download `seiton-osx-arm64.tar.gz` (Apple Silicon) or `seiton-osx-amd64.tar.gz` (Intel) from the [releases page](https://github.com/guitarrapc/seiton/releases), then:
-
-```sh
-tar xzf seiton-osx-arm64.tar.gz
+tar xzf <archive>
 sudo mv seiton /usr/local/bin/
 ```
 
----
+On Windows:
 
-## Linux
-
-### Homebrew (Linux)
-
-Same as macOS: tap [`guitarrapc/seiton`](https://github.com/guitarrapc/seiton) (formula includes Linux amd64/arm64).
-
-```sh
-brew tap guitarrapc/seiton https://github.com/guitarrapc/seiton
-brew install seiton
-```
-
-### Manual
-
-Download `seiton-linux-amd64.tar.gz` (x64) or `seiton-linux-arm64.tar.gz` (arm64) from the [releases page](https://github.com/guitarrapc/seiton/releases), then:
-
-```sh
-tar xzf seiton-linux-amd64.tar.gz
-sudo mv seiton /usr/local/bin/
-```
+1. Download `seiton-win-amd64.zip` or `seiton-win-arm64.zip`.
+2. Extract `seiton.exe`.
+3. Place `seiton.exe` in a directory that is in your `PATH`.
 
 ---
 
 ## Docker
 
-Official multi-arch images (**linux/amd64**, **linux/arm64**) are published to GHCR when a version tag release is built:
+Official multi-architecture container images are published to GHCR for `linux/amd64` and `linux/arm64`.
 
 ```sh
 docker pull ghcr.io/guitarrapc/seiton:latest
-# or pin (match a released version / tag):
-docker pull ghcr.io/guitarrapc/seiton:0.9.4
-docker pull ghcr.io/guitarrapc/seiton:v0.9.4
+docker pull ghcr.io/guitarrapc/seiton:<version>
 ```
 
-The image name must be **lowercase** (`ghcr.io/<user>/<repo>`). If your GitHub repo is not `guitarrapc/seiton`, substitute your `owner/repo` path.
-
-Lint the workflow files in the current directory (mount read-only content into the container):
+Lint the workflow files in the current directory:
 
 ```sh
 docker run --rm -v "$PWD:/repo:ro" ghcr.io/guitarrapc/seiton:latest /repo
 ```
 
-`:ro` avoids permission issues with the default non-writable mount.
+The `:ro` mount keeps the repository read-only inside the container.
 
 ---
 
 ## Build from Source
 
-Building from source requires the [.NET SDK](https://dotnet.microsoft.com/download) (version 10.0 or later).
+Building from source requires the [.NET SDK](https://dotnet.microsoft.com/download) version 10.0 or later.
 
 ```sh
 git clone https://github.com/guitarrapc/seiton.git
@@ -188,7 +155,7 @@ cd seiton
 dotnet build -c Release src/Seiton/Seiton.csproj
 ```
 
-The output binary will be in `src/Seiton/bin/Release/net10.0/`.
+The build output is written under `src/Seiton/bin/Release/net10.0/`.
 
 To produce a self-contained NativeAOT binary:
 
@@ -206,10 +173,10 @@ Run `seiton version` to confirm the installation succeeded:
 seiton version
 ```
 
-Expected output (example):
+Example output:
 
-```
-seiton 1.0.0
+```text
+seiton <version>
 built with .NET 10.0.0 (NativeAOT), linux/x64
 ```
 
