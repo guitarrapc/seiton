@@ -6,8 +6,8 @@ There are several ways to install Seiton.
 
 1. [Homebrew](#homebrew)
 1. [Scoop](#scoop)
-1. [Install Script](#install-script)
 1. [Prebuilt Binaries](#prebuilt-binaries)
+1. [Install Script](#install-script)
 1. [Docker](#docker)
 1. [Build from Source](#build-from-source)
 1. [Verify the Installation](#verify-the-installation)
@@ -42,38 +42,6 @@ scoop install seiton
 ```
 
 Upgrade later with `scoop update seiton`.
-
----
-
-## Install Script
-
-The install script is the fastest way to install Seiton on macOS or Linux.
-
-```sh
-curl -fsSL https://raw.githubusercontent.com/guitarrapc/seiton/main/scripts/install.sh | bash
-```
-
-The script auto-detects your OS and architecture, downloads the latest release, verifies the SHA-256 checksum, and installs the binary to `/usr/local/bin` by default. If `gh` is available, it also attempts SLSA attestation verification.
-
-Install a specific version:
-
-```sh
-curl -fsSL https://raw.githubusercontent.com/guitarrapc/seiton/main/scripts/install.sh | bash -s -- --version <version>
-```
-
-Install to a custom directory:
-
-```sh
-curl -fsSL https://raw.githubusercontent.com/guitarrapc/seiton/main/scripts/install.sh | bash -s -- --dir ~/.local/bin
-```
-
-Combine both options:
-
-```sh
-curl -fsSL https://raw.githubusercontent.com/guitarrapc/seiton/main/scripts/install.sh | bash -s -- --version <version> --dir ~/.local/bin
-```
-
-If the destination directory is not in your `PATH`, the script prints a hint explaining what to add.
 
 ---
 
@@ -165,6 +133,39 @@ To produce a self-contained NativeAOT binary:
 ```sh
 dotnet publish -c Release src/Seiton/Seiton.csproj
 ```
+
+---
+
+## Install Script
+
+The install script is the fastest way to install Seiton on macOS or Linux.
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/guitarrapc/seiton/main/scripts/install.sh | bash
+```
+
+The script auto-detects your OS and architecture, downloads the latest release, verifies the SHA-256 checksum, and installs the binary to `/usr/local/bin` by default. If `gh` is available, it also attempts SLSA attestation verification.
+
+Install a specific version:
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/guitarrapc/seiton/main/scripts/install.sh | bash -s -- --version <version>
+```
+
+Install to a custom directory:
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/guitarrapc/seiton/main/scripts/install.sh | bash -s -- --dir ~/.local/bin
+```
+
+Combine both options:
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/guitarrapc/seiton/main/scripts/install.sh | bash -s -- --version <version> --dir ~/.local/bin
+```
+
+If the destination directory is not in your `PATH`, the script prints a hint explaining what to add.
+
 
 ---
 
