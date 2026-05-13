@@ -67,15 +67,20 @@ If you already use [GitHub CLI](https://cli.github.com/), you can download and v
 Example for Linux x64:
 
 ```sh
-version=<version>
+version=v0.9.6
 asset=seiton-linux-amd64.tar.gz
 gh release download -R guitarrapc/seiton "$version" -p "$asset"
-gh attestation verify "$asset" -R guitarrapc/seiton
 tar xzf "$asset"
 sudo mv seiton /usr/local/bin/
 ```
 
 For other platforms, change `asset` to one of the archive names listed above.
+
+Optionally, you can verify the attestation of the downloaded artifact. This is highly recommended in terms of security.
+
+```sh
+gh attestation verify -R guitarrapc/seiton seiton-linux-amd64.tar.gz
+```
 
 `gh attestation verify` checks the build provenance attached to the release artifact, which provides stronger supply-chain guarantees than checksum verification alone.
 
@@ -102,8 +107,8 @@ Official multi-architecture container images are published to GHCR for `linux/am
 
 ```sh
 docker pull ghcr.io/guitarrapc/seiton:latest
-docker pull ghcr.io/guitarrapc/seiton:<version>
-docker pull ghcr.io/guitarrapc/seiton:v<version>
+docker pull ghcr.io/guitarrapc/seiton:0.9.6
+docker pull ghcr.io/guitarrapc/seiton:v0.9.6
 ```
 
 Lint the workflow files in the current directory:
@@ -149,7 +154,7 @@ The script auto-detects your OS and architecture, downloads the latest release, 
 Install a specific version:
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/guitarrapc/seiton/main/scripts/install.sh | bash -s -- --version <version>
+curl -fsSL https://raw.githubusercontent.com/guitarrapc/seiton/main/scripts/install.sh | bash -s -- --version 0.9.6
 ```
 
 Install to a custom directory:
@@ -161,7 +166,7 @@ curl -fsSL https://raw.githubusercontent.com/guitarrapc/seiton/main/scripts/inst
 Combine both options:
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/guitarrapc/seiton/main/scripts/install.sh | bash -s -- --version <version> --dir ~/.local/bin
+curl -fsSL https://raw.githubusercontent.com/guitarrapc/seiton/main/scripts/install.sh | bash -s -- --version 0.9.6 --dir ~/.local/bin
 ```
 
 If the destination directory is not in your `PATH`, the script prints a hint explaining what to add.
@@ -180,7 +185,7 @@ seiton version
 Example output:
 
 ```text
-seiton <version>
+seiton 0.9.6
 built with .NET 10.0.0 (NativeAOT), linux/x64
 ```
 
