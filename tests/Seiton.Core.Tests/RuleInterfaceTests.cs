@@ -12915,7 +12915,59 @@ public sealed class RuleInterfaceTests
             ["missing 'cancel-in-progress'", "does not declare concurrency"]),
         };
 
-        await AssertRuleCases(new ConcurrencyLimitsRule(), "concurrency-limits", cases);
+        // concurrency-limits is opt-in; provide config that enables it.
+        var config = new LintConfig
+        {
+            Rules = new Dictionary<string, RuleConfig>
+            {
+                ["concurrency-limits"] = new RuleConfig { Enabled = true },
+            },
+        };
+
+        await AssertRuleCases(new ConcurrencyLimitsRule(), "concurrency-limits", cases, config);
+    }
+
+    [Test]
+    public async Task RuleRegression_ConcurrencyLimitsRule_DisabledByDefault()
+    {
+        // concurrency-limits is opt-in: LintEngine.Check without config must NOT emit its diagnostics.
+        var yaml = System.Text.Encoding.UTF8.GetBytes(NormalizeYaml("""
+            on: push
+            jobs:
+              build:
+                runs-on: ubuntu-latest
+                steps:
+                  - run: echo hello
+            """));
+        var engine = new LintEngine();
+        var result = engine.Check(yaml, ".github/workflows/test.yml");
+        using var _ = result.ParseResult.Arena;
+        await Assert.That(result.Diagnostics.Where(d => d.RuleId == "concurrency-limits").ToArray()).IsEmpty();
+    }
+
+    [Test]
+    public async Task RuleRegression_ConcurrencyLimitsRule_EnabledWithConfig()
+    {
+        // concurrency-limits emits diagnostics when explicitly enabled via config.
+        var yaml = System.Text.Encoding.UTF8.GetBytes(NormalizeYaml("""
+            on: push
+            jobs:
+              build:
+                runs-on: ubuntu-latest
+                steps:
+                  - run: echo hello
+            """));
+        var config = new LintConfig
+        {
+            Rules = new Dictionary<string, RuleConfig>
+            {
+                ["concurrency-limits"] = new RuleConfig { Enabled = true },
+            },
+        };
+        var engine = new LintEngine();
+        var result = engine.Check(yaml, ".github/workflows/test.yml", config);
+        using var _ = result.ParseResult.Arena;
+        await Assert.That(result.Diagnostics.Where(d => d.RuleId == "concurrency-limits").ToArray()).IsNotEmpty();
     }
 
     private static async Task AssertRuleCases(IRule rule, string ruleId, RuleCase[] cases, LintConfig? config = null)
@@ -12927,6 +12979,7 @@ public sealed class RuleInterfaceTests
             var result = config is null
                 ? new LintEngine([rule]).Check(Encoding.UTF8.GetBytes(yaml), $"rule-case-{c.Name}.yml")
                 : new LintEngine([rule]).Check(Encoding.UTF8.GetBytes(yaml), $"rule-case-{c.Name}.yml", config);
+            using var _ = result.ParseResult.Arena;
             var diagnostics = result.Diagnostics.Where(x => x.RuleId == ruleId).ToArray();
 
             if (c.ExpectedSubstrings.Length == 0)

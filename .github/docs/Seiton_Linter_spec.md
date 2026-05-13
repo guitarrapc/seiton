@@ -190,7 +190,7 @@ Column definitions:
 | `ref-version-mismatch` | ✓ | — | Warn when symbolic ref/version intent mismatches resolved commit lineage expectations. |
 | `use-trusted-publishing` | ✓ | — | Warn when publishing/release flows do not use trusted publishing/OIDC-based provenance paths where expected. |
 | `if-expr-wrapper` | ✓ | ✓ (safe cases) | Warn when `if:` conditions are missing the `${{ }}` expression wrapper; auto-fix offered for single-line scalars (including quoted scalars) without existing `${{` markers. |
-| `concurrency-limits` | ✓ | — | Warn when workflows or jobs lack `concurrency` settings with `cancel-in-progress`. Skips reusable-only (`on: workflow_call`) workflows and workflow-call jobs. |
+| `concurrency-limits` | ✗ | — | Warn when workflows or jobs lack `concurrency` settings with `cancel-in-progress`. Skips reusable-only (`on: workflow_call`) workflows and workflow-call jobs. |
 
 Rule set compatibility policy:
 
@@ -692,15 +692,15 @@ This section describes four canonical usage profiles. Each profile states which 
 
 Config file is absent or empty. No configuration is required.
 
-**Active rules:** All default local-AST rules — the complete §4.4 catalog **except** the four online rules (default `enabled: false`).
+**Active rules:** All default local-AST rules — the complete §4.4 catalog **except** the four online rules and opt-in local rules (default `enabled: false`).
 
 Specifically, the following are **active** without any config:
 
-`job-structure`, `reusable-workflow`, `permissions`, `popular-action-inputs`, `unpinned-uses`, `unpinned-image`, `dangerous-triggers`, `job-permissions-required`, `needs-graph`, `shell-name`, `runner-label`, `runner-no-latest`, `id-naming`, `glob-pattern`, `deny-write-all`, `credentials`, `template-injection`, `expr-undefined-var`, `run-env-context-direct-use`, `run-secrets-context-direct-use`, `run-inputs-context-direct-use`, `secrets-whole-context-access`, `checkout-persist-credentials`, `deny-read-all`, `deny-inherit-secrets`, `job-timeout-minutes-required`, `github-app-token-inputs`, `workflow-secrets`, `job-secrets`, `action-shell-is-required`, `cache-poisoning`, `self-hosted-runner`, `unredacted-secrets`, `secrets-outside-env`, `matrix`, `env-var`, `deprecated-commands`, `if-cond`, `fake-ternary`, `archived-uses`, `insecure-commands`, `overprovisioned-secrets`, `forbidden-uses`, `ref-version-mismatch`, `use-trusted-publishing`, `if-expr-wrapper`, `concurrency-limits`
+`job-structure`, `reusable-workflow`, `permissions`, `popular-action-inputs`, `unpinned-uses`, `unpinned-image`, `dangerous-triggers`, `job-permissions-required`, `needs-graph`, `shell-name`, `runner-label`, `runner-no-latest`, `id-naming`, `glob-pattern`, `deny-write-all`, `credentials`, `template-injection`, `expr-undefined-var`, `run-env-context-direct-use`, `run-secrets-context-direct-use`, `run-inputs-context-direct-use`, `secrets-whole-context-access`, `checkout-persist-credentials`, `deny-read-all`, `deny-inherit-secrets`, `job-timeout-minutes-required`, `github-app-token-inputs`, `workflow-secrets`, `job-secrets`, `action-shell-is-required`, `cache-poisoning`, `self-hosted-runner`, `unredacted-secrets`, `secrets-outside-env`, `matrix`, `env-var`, `deprecated-commands`, `if-cond`, `fake-ternary`, `archived-uses`, `insecure-commands`, `overprovisioned-secrets`, `forbidden-uses`, `ref-version-mismatch`, `use-trusted-publishing`, `if-expr-wrapper`
 
-The following are **not active** (online rules; require `rules.<id>.enabled: true`):
+The following are **not active** (require `rules.<id>.enabled: true`):
 
-`known-vulnerable-actions`, `impostor-commit`, `ref-confusion`, `stale-action-refs`
+`concurrency-limits` (opt-in local rule), `known-vulnerable-actions`, `impostor-commit`, `ref-confusion`, `stale-action-refs` (online rules)
 
 **Auto-fix behavior:** Local-only fixes attach for `deny-write-all`, `deny-read-all`, `job-permissions-required`, `run-env-context-direct-use` (partial), `run-secrets-context-direct-use` (partial), `run-inputs-context-direct-use` (partial), `template-injection` (partial), `popular-action-inputs` (partial), `checkout-persist-credentials` (partial), `job-timeout-minutes-required` (partial). `unpinned-uses` / `unpinned-image` carry pin-network fixes (require `--enable-pin-network` / `--enable-image-network`).
 

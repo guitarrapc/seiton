@@ -767,7 +767,7 @@ jobs:
 
 | Default | Network | Auto-fix |
 |---|---|---|
-| ✓ | — | ✗ |
+| ✗ | — | ✗ |
 
 Warns when workflows or jobs lack `concurrency` settings with explicit `cancel-in-progress`. Without concurrency limits, parallel runs can waste resources and cause race conditions.
 
