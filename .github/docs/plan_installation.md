@@ -16,7 +16,7 @@
 | Docker (GHCR) | ✅ | ✅ Release ワークフローで linux/amd64・arm64 を push |
 | mise | ❌ | ❌ 見送り（実績不足でレジストリ登録不可） |
 | aqua | ❌ | ❌ 見送り（実績不足で aqua-registry 登録不可） |
-| ダウンロード／インストール用スクリプト（curl \| sh 等） | ✅ | ✅ `scripts/install.sh`（main ブランチ） |
+| ダウンロード用スクリプト（curl \| sh 等） | ✅ | ✅ `scripts/download.sh`（main ブランチ） |
 | GitHub CLI (`gh release download`) | ✅ | ✅ ドキュメントのみ（release workflow の SLSA attestation をそのまま利用） |
 | GitHub Action | ❌ | ❌ `guitarrapc/seiton-action` リポ未作成 |
 | dotnet tool (NuGet) | ❌ | ❌ NuGet パッケージ未公開 |
@@ -46,20 +46,20 @@ checksums-sha256.txt
 
 ---
 
-### フェーズ 0 — インストールスクリプト — 完了
+### フェーズ 0 — ダウンロードスクリプト — 完了
 
-**WHY**: `curl | bash` ワンライナーは CI やローカルセットアップで最も手軽。チェックサム検証を内蔵し安全性を担保する。
+**WHY**: `curl | bash` ワンライナーは CI やローカルセットアップで最も手軽。勝手にシステム領域へ配置せず、チェックサム検証を内蔵した download-only スクリプトにする。
 
 #### 実装
 
-- [`scripts/install.sh`](../../scripts/install.sh) を main ブランチに配置。
+- [`scripts/download.sh`](../../scripts/download.sh) を main ブランチに配置。
 - 機能:
   - プラットフォーム自動判別（`uname -s` → `linux`/`osx`/`win`、`uname -m` → `amd64`/`arm64`）
   - デフォルトで最新リリースを取得（`--version` でバージョン指定可）
-  - デフォルトインストール先 `/usr/local/bin`（`--dir` で変更可、書き込み不可なら `sudo` を使用）
+  - デフォルトでカレントディレクトリに展開（`--dir` で既存ディレクトリ指定可）
   - `checksums-sha256.txt` による SHA-256 検証
   - `gh` CLI が利用可能な場合は SLSA build provenance 検証も実行（ベストエフォート）
-  - PATH 未登録時のヒント表示
+  - `sudo` を使わず、PATH 変更も自動で行わない
 - セキュリティ考慮:
   - `set -euo pipefail` で安全に失敗
   - `curl --proto '=https' --tlsv1.2` で TLS を強制
@@ -69,17 +69,18 @@ checksums-sha256.txt
 #### 利用方法
 
 ```sh
-# 最新版をインストール
-curl -fsSL https://raw.githubusercontent.com/guitarrapc/seiton/main/scripts/install.sh | bash
+# 最新版をカレントディレクトリへダウンロード
+curl -fsSL https://raw.githubusercontent.com/guitarrapc/seiton/main/scripts/download.sh | bash
 
 # バージョン指定
-curl -fsSL https://raw.githubusercontent.com/guitarrapc/seiton/main/scripts/install.sh | bash -s -- --version 1.0.0
+curl -fsSL https://raw.githubusercontent.com/guitarrapc/seiton/main/scripts/download.sh | bash -s -- --version 1.0.0
 
-# インストール先指定
-curl -fsSL https://raw.githubusercontent.com/guitarrapc/seiton/main/scripts/install.sh | bash -s -- --dir ~/.local/bin
+# 既存ディレクトリ指定
+mkdir -p ./bin
+curl -fsSL https://raw.githubusercontent.com/guitarrapc/seiton/main/scripts/download.sh | bash -s -- --dir ./bin
 ```
 
-**完了条件**: 上記ワンライナーで Linux/macOS に seiton がインストールされ、チェックサム検証が通る。
+**完了条件**: 上記ワンライナーで Linux/macOS に seiton バイナリをダウンロードでき、チェックサム検証が通る。
 
 ---
 
@@ -222,7 +223,7 @@ curl -fsSL https://raw.githubusercontent.com/guitarrapc/seiton/main/scripts/inst
 
 - `guitarrapc/seiton-action` リポジトリを作成。
 - `action.yml` を配置。Composite action として実装:
-  - `scripts/install.sh` を利用して該当 OS の seiton バイナリを取得・検証。
+  - `scripts/download.sh` を利用して該当 OS の seiton バイナリを取得・検証。
   - `seiton` コマンドを実行。
 - 入力パラメータ:
   - `version`: インストールするバージョン（デフォルト `latest`）。
@@ -284,7 +285,7 @@ curl -fsSL https://raw.githubusercontent.com/guitarrapc/seiton/main/scripts/inst
 ## フェーズ間の依存関係
 
 ```
-フェーズ 0 (install.sh) ← 独立（完了）
+フェーズ 0 (download.sh) ← 独立（完了）
 フェーズ 1 (docs / アセット名)
   ├── フェーズ 2 (Homebrew) ← 独立
   ├── フェーズ 3 (Scoop)    ← 独立（完了）
@@ -305,4 +306,4 @@ curl -fsSL https://raw.githubusercontent.com/guitarrapc/seiton/main/scripts/inst
 | Homebrew Formula のアーキテクチャ分岐の複雑さ | macOS x64/arm64、Linux x64/arm64 の 4 パターン | `Hardware::CPU` ガードで分岐する標準パターンを採用 |
 | Docker マルチアーキ manifest のビルド時間 | CI 時間増加 | publish ジョブのバイナリを流用し、Docker ビルド自体は COPY のみで高速 |
 | リリースアセット名変更の可能性 | 全チャネルの URL が壊れる | アセット名を変更する場合はすべてのチャネル（Formula, bucket, docs, 利用例 YAML）を同時更新する |
-| mise / aqua / Winget 登録の前提条件 | 利用実績がないと審査・登録が通らない | 十分な実績を得た段階で再検討。それまでは install.sh / Homebrew / Scoop / Docker でカバー |
+| mise / aqua / Winget 登録の前提条件 | 利用実績がないと審査・登録が通らない | 十分な実績を得た段階で再検討。それまでは download.sh / Homebrew / Scoop / Docker でカバー |

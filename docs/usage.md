@@ -276,6 +276,8 @@ seiton action.yml .github/actions/my-action/action.yml
 
 ## Integration with GitHub Actions
 
+The download script in [Installation](installation.md#download-script) is intended for shell-based CI setup. On GitHub Actions it appends the target directory to `GITHUB_PATH`, so later steps can invoke `seiton` directly, and it also exposes `executable` and `directory` step outputs.
+
 ### Using SARIF (recommended for public repos and GitHub Enterprise with Advanced Security)
 
 ```yaml
@@ -285,7 +287,7 @@ on:
   push:
     branches: [main]
   pull_request:
-    branches: ["**"]
+    branches: ["main"]
 
 permissions: {}
 
@@ -301,10 +303,11 @@ jobs:
         with:
           persist-credentials: false
 
-      - name: Install seiton
+      - name: Download seiton
+        id: seiton
         run: |
-          curl -fsSL https://github.com/guitarrapc/seiton/releases/latest/download/seiton-linux-amd64.tar.gz | tar xz
-          sudo mv seiton /usr/local/bin/
+          mkdir -p "$RUNNER_TEMP/seiton-bin"
+          curl -fsSL https://raw.githubusercontent.com/guitarrapc/seiton/main/scripts/download.sh | bash -s -- --dir "$RUNNER_TEMP/seiton-bin"
 
       - name: Run seiton
         run: seiton --format sarif > seiton.sarif

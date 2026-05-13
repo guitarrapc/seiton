@@ -1,16 +1,15 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# install.sh — Download and install the seiton binary from GitHub Releases.
+# download.sh — Download the seiton binary from GitHub Releases.
 # Usage:
-#   curl -fsSL https://raw.githubusercontent.com/guitarrapc/seiton/main/scripts/install.sh | bash
-#   curl -fsSL https://raw.githubusercontent.com/guitarrapc/seiton/main/scripts/install.sh | bash -s -- --version 1.0.0
-#   curl -fsSL https://raw.githubusercontent.com/guitarrapc/seiton/main/scripts/install.sh | bash -s -- --dir ~/.local/bin
+#   curl -fsSL https://raw.githubusercontent.com/guitarrapc/seiton/main/scripts/download.sh | bash
+#   curl -fsSL https://raw.githubusercontent.com/guitarrapc/seiton/main/scripts/download.sh | bash -s -- --version 1.0.0
+#   curl -fsSL https://raw.githubusercontent.com/guitarrapc/seiton/main/scripts/download.sh | bash -s -- --dir ./bin
 
 REPO="guitarrapc/seiton"
 BINARY_NAME="seiton"
 
-# Globals for cleanup trap
 tmpdir=""
 
 cleanup() {
@@ -19,8 +18,6 @@ cleanup() {
   fi
 }
 trap cleanup EXIT
-
-# --- Platform detection ---
 
 detect_os() {
   local os
@@ -37,13 +34,11 @@ detect_arch() {
   local arch
   arch="$(uname -m)"
   case "$arch" in
-    x86_64|amd64)   echo "amd64" ;;
-    aarch64|arm64)   echo "arm64" ;;
+    x86_64|amd64) echo "amd64" ;;
+    aarch64|arm64) echo "arm64" ;;
     *) echo "Error: Unsupported architecture: $arch" >&2; exit 1 ;;
   esac
 }
-
-# --- Helpers ---
 
 need_cmd() {
   if ! command -v "$1" >/dev/null 2>&1; then
@@ -52,36 +47,19 @@ need_cmd() {
   fi
 }
 
-install_binary() {
-  local src="$1" dest="$2" install_path
-  install_path="$(dirname "$dest")"
+publish_github_actions_metadata() {
+  local executable_path="$1" target_dir="$2"
 
-  mkdir -p "$install_path"
-
-  if [ -w "$install_path" ]; then
-    cp "$src" "$dest"
-    chmod +x "$dest"
-    return
+  if [ -n "$GITHUB_ACTION" ]; then
+    if [ -n "${GITHUB_OUTPUT:-}" ]; then
+      printf 'executable=%s\n' "$executable_path" | tee -a "$GITHUB_OUTPUT"
+    elif [ -n "${GITHUB_ACTION:-}" ]; then
+      # GitHub Enterprise instances may still rely on the legacy workflow command.
+      echo "::set-output name=executable::${executable_path}"
+    fi
   fi
-
-  if [ "$(id -u)" -eq 0 ]; then
-    cp "$src" "$dest"
-    chmod +x "$dest"
-    return
-  fi
-
-  if ! command -v sudo >/dev/null 2>&1; then
-    echo "Error: cannot install to ${install_path} because it is not writable and 'sudo' is not available. Re-run as root or choose a writable directory with --dir." >&2
-    exit 1
-  fi
-
-  echo "Elevated permissions required to install to ${install_path}."
-  sudo cp "$src" "$dest"
-  sudo chmod +x "$dest"
 }
 
-# Fetch the latest release tag from the GitHub API.
-# Uses /releases/latest which returns a single object (avoids fragile grep on arrays).
 fetch_latest_tag() {
   local tag
   tag="$(curl --proto '=https' --tlsv1.2 -fsSL \
@@ -94,7 +72,6 @@ fetch_latest_tag() {
   echo "$tag"
 }
 
-# Verify SHA-256 checksum of a file against a checksums file.
 verify_checksum() {
   local file="$1" checksums_file="$2" filename
   filename="$(basename "$file")"
@@ -138,36 +115,36 @@ verify_checksum() {
   fi
 }
 
-# --- Argument parsing ---
-
 usage() {
   cat <<EOF
-Usage: install.sh [OPTIONS]
+Usage: download.sh [OPTIONS]
 
 Options:
-  -v, --version VERSION   Install a specific version (e.g. 1.0.0 or v1.0.0).
+  -v, --version VERSION   Download a specific version (e.g. 1.0.0 or v1.0.0).
                           Default: latest release.
-  -d, --dir DIRECTORY     Install to this directory. Default: /usr/local/bin.
+  -d, --dir DIRECTORY     Directory to place the extracted binary in.
+                          Default: current directory.
   -h, --help              Show this help message.
 
+GitHub Actions:
+  When GITHUB_ACTIONS is set, the script appends the target directory to
+  GITHUB_PATH and writes executable/directory outputs when available.
+
 Examples:
-  # Install latest to /usr/local/bin
-  curl -fsSL https://raw.githubusercontent.com/${REPO}/main/scripts/install.sh | bash
+  # Download the latest binary to the current directory
+  curl -fsSL https://raw.githubusercontent.com/${REPO}/main/scripts/download.sh | bash
 
-  # Install version 1.2.0
-  curl -fsSL https://raw.githubusercontent.com/${REPO}/main/scripts/install.sh | bash -s -- -v 1.2.0
+  # Download version 1.2.0 to the current directory
+  curl -fsSL https://raw.githubusercontent.com/${REPO}/main/scripts/download.sh | bash -s -- -v 1.2.0
 
-  # Install to custom directory
-  curl -fsSL https://raw.githubusercontent.com/${REPO}/main/scripts/install.sh | bash -s -- -d ~/.local/bin
+  # Download to an existing directory
+  curl -fsSL https://raw.githubusercontent.com/${REPO}/main/scripts/download.sh | bash -s -- -d ./bin
 EOF
 }
 
-# --- Main ---
-
 main() {
-  local version="" install_dir=""
+  local version="" target_dir=""
 
-  # Parse arguments
   while [ $# -gt 0 ]; do
     case "$1" in
       -v|--version)
@@ -183,7 +160,7 @@ main() {
           echo "Error: --dir requires a value." >&2
           exit 1
         fi
-        install_dir="$2"
+        target_dir="$2"
         shift 2
         ;;
       -h|--help)
@@ -198,9 +175,7 @@ main() {
     esac
   done
 
-  # Check required commands
   need_cmd curl
-  need_cmd tar
   need_cmd uname
 
   local os arch
@@ -208,10 +183,8 @@ main() {
   arch="$(detect_arch)"
   echo "Detected platform: ${os}/${arch}"
 
-  # Resolve version / tag
   local tag
   if [ -n "$version" ]; then
-    # Normalize: strip leading 'v' then re-add for tag
     version="${version#v}"
     tag="v${version}"
   else
@@ -221,24 +194,35 @@ main() {
   fi
   echo "Version: ${version} (${tag})"
 
-  # Determine asset name
-  local asset_name extension
+  local extension
   if [ "$os" = "win" ]; then
     extension="zip"
   else
     extension="tar.gz"
   fi
-  asset_name="${BINARY_NAME}-${os}-${arch}.${extension}"
 
-  # Determine install directory
-  if [ -z "$install_dir" ]; then
-    install_dir="/usr/local/bin"
+  local asset_name="${BINARY_NAME}-${os}-${arch}.${extension}"
+  local executable_name="$BINARY_NAME"
+  if [ "$os" = "win" ]; then
+    executable_name="${executable_name}.exe"
   fi
 
-  # Create temp directory
+  if [ -z "$target_dir" ]; then
+    target_dir="$(pwd)"
+  else
+    if [ ! -d "$target_dir" ]; then
+      echo "Error: directory '$target_dir' does not exist." >&2
+      exit 1
+    fi
+    target_dir="$(cd "$target_dir" && pwd)"
+  fi
+  if [ ! -w "$target_dir" ]; then
+    echo "Error: directory '$target_dir' is not writable." >&2
+    exit 1
+  fi
+
   tmpdir="$(mktemp -d)"
 
-  # Download asset
   echo "Downloading ${asset_name}..."
   if ! curl --proto '=https' --tlsv1.2 -fSL -o "${tmpdir}/${asset_name}" \
     "https://github.com/${REPO}/releases/download/${tag}/${asset_name}"; then
@@ -247,7 +231,6 @@ main() {
     exit 1
   fi
 
-  # Download checksums
   echo "Downloading checksums..."
   if ! curl --proto '=https' --tlsv1.2 -fSL -o "${tmpdir}/checksums-sha256.txt" \
     "https://github.com/${REPO}/releases/download/${tag}/checksums-sha256.txt"; then
@@ -255,12 +238,10 @@ main() {
     exit 1
   fi
 
-  # Verify checksum
   echo "Verifying checksum..."
   verify_checksum "${tmpdir}/${asset_name}" "${tmpdir}/checksums-sha256.txt"
   echo "Checksum verified."
 
-  # Verify SLSA provenance (best-effort: only when gh CLI is available)
   if command -v gh >/dev/null 2>&1; then
     echo "Verifying SLSA build provenance..."
     if gh attestation verify "${tmpdir}/${asset_name}" -R "${REPO}" 2>/dev/null; then
@@ -270,41 +251,23 @@ main() {
     fi
   fi
 
-  # Extract
   echo "Extracting..."
   if [ "$extension" = "tar.gz" ]; then
-    tar xzf "${tmpdir}/${asset_name}" -C "${tmpdir}"
+    need_cmd tar
+    tar xzf "${tmpdir}/${asset_name}" -C "${tmpdir}" "$executable_name"
   else
-    # zip (Windows/MSYS)
     need_cmd unzip
-    unzip -q "${tmpdir}/${asset_name}" -d "${tmpdir}"
+    unzip -q "${tmpdir}/${asset_name}" "$executable_name" -d "${tmpdir}"
   fi
 
-  # Install
-  local executable_name="$BINARY_NAME"
-  if [ "$os" = "win" ]; then
-    executable_name="${executable_name}.exe"
-  fi
+  cp "${tmpdir}/${executable_name}" "${target_dir}/${executable_name}"
+  chmod +x "${target_dir}/${executable_name}"
 
-  local src="${tmpdir}/${executable_name}"
-  local dest="${install_dir}/${executable_name}"
-  install_binary "$src" "$dest"
+  publish_github_actions_metadata "${target_dir}/${executable_name}" "$target_dir"
 
   echo ""
-  echo "Installed ${BINARY_NAME} ${version} to ${dest}"
-
-  # PATH hint if the directory is not already in PATH
-  case ":${PATH}:" in
-    *":${install_dir}:"*) ;;
-    *)
-      echo ""
-      echo "Note: '${install_dir}' is not in your PATH."
-      echo "Add it with:"
-      echo "  export PATH=\"${install_dir}:\$PATH\""
-      echo ""
-      echo "To make it permanent, add that line to your shell profile (~/.bashrc, ~/.zshrc, etc.)."
-      ;;
-  esac
+  echo "Downloaded ${BINARY_NAME} ${version} to ${target_dir}/${executable_name}"
+  echo "Run it with: ${target_dir}/${executable_name} version"
 }
 
 main "$@"

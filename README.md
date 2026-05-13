@@ -47,11 +47,11 @@ test.yml:6:5: [warning] job-permissions-required: job 'test' does not declare ex
 
 ## Quick Start
 
-Install Seiton (see [Installation](docs/installation.md) for all options):
+Install or download Seiton (see [Installation](docs/installation.md) for all options):
 
 ```sh
-# Install script (macOS/Linux)
-curl -fsSL https://raw.githubusercontent.com/guitarrapc/seiton/main/scripts/install.sh | bash
+# Download script (macOS/Linux, downloads to the current directory)
+curl -fsSL https://raw.githubusercontent.com/guitarrapc/seiton/main/scripts/download.sh | bash
 
 # Homebrew (macOS/Linux)
 brew tap guitarrapc/seiton https://github.com/guitarrapc/seiton
@@ -62,7 +62,7 @@ scoop bucket add guitarrapc https://github.com/guitarrapc/scoop-bucket
 scoop install seiton
 ```
 
-For other platforms, download a prebuilt archive from the [releases page](https://github.com/guitarrapc/seiton/releases) and add `seiton` to your `PATH` (see [Installation](docs/installation.md)).
+If you used the download script, run `./seiton` in the commands below from the download directory, or move the binary into your `PATH`. For other platforms, download a prebuilt archive from the [releases page](https://github.com/guitarrapc/seiton/releases) and add `seiton` to your `PATH` (see [Installation](docs/installation.md)).
 
 Run it:
 

@@ -2,12 +2,12 @@
 
 Seiton is distributed as a single-file NativeAOT binary, so in most cases you only need to place the executable in your `PATH`.
 
-There are several ways to install Seiton.
+There are several ways to install or download Seiton.
 
 1. [Homebrew](#homebrew)
 1. [Scoop](#scoop)
 1. [Prebuilt Binaries](#prebuilt-binaries)
-1. [Install Script](#install-script)
+1. [Download Script](#download-script)
 1. [Docker](#docker)
 1. [Build from Source](#build-from-source)
 1. [Verify the Installation](#verify-the-installation)
@@ -79,35 +79,61 @@ gh attestation verify -R guitarrapc/seiton seiton-linux-amd64.tar.gz
 
 ---
 
-## Install Script
+## Download Script
 
-To install Seiton with one command, the install script is available. This is the fastest way to install Seiton on macOS or Linux when you want a quick setup without using a package manager.
+To download Seiton with one command, the download script is available. This is the fastest way to fetch a verified binary on macOS or Linux without using a package manager or modifying your system directories.
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/guitarrapc/seiton/main/scripts/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/guitarrapc/seiton/main/scripts/download.sh | bash
 ```
 
-The script auto-detects your OS and architecture, downloads the latest release, verifies the SHA-256 checksum, and installs `seiton` to `/usr/local/bin` by default. If `gh` is available, it also attempts SLSA attestation verification.
+The script auto-detects your OS and architecture, downloads the latest release, verifies the SHA-256 checksum, extracts the binary to the current directory by default, and never uses `sudo`. If `gh` is available, it also attempts SLSA attestation verification.
 
-When you need to install a specific version, pass `--version`. The following example installs `0.9.6`:
+This script is also suitable for CI shell steps. On GitHub Actions, it appends the target directory to `GITHUB_PATH` for subsequent steps and writes `executable` and `directory` step outputs when `GITHUB_OUTPUT` is available.
+
+When you need to download a specific version, pass `--version`. The following example downloads `0.9.6`:
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/guitarrapc/seiton/main/scripts/install.sh | bash -s -- --version 0.9.6
+curl -fsSL https://raw.githubusercontent.com/guitarrapc/seiton/main/scripts/download.sh | bash -s -- --version 0.9.6
 ```
 
-When you need to install to a custom directory, pass `--dir`:
+When you need to place the binary in an existing directory, pass `--dir`:
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/guitarrapc/seiton/main/scripts/install.sh | bash -s -- --dir ~/.local/bin
+mkdir -p ./bin
+curl -fsSL https://raw.githubusercontent.com/guitarrapc/seiton/main/scripts/download.sh | bash -s -- --dir ./bin
 ```
 
 You can also combine both options:
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/guitarrapc/seiton/main/scripts/install.sh | bash -s -- --version 0.9.6 --dir ~/.local/bin
+mkdir -p ./bin
+curl -fsSL https://raw.githubusercontent.com/guitarrapc/seiton/main/scripts/download.sh | bash -s -- --version 0.9.6 --dir ./bin
 ```
 
-If the destination directory is not in your `PATH`, the script prints a hint explaining what to add.
+If the binary is not in your `PATH`, run it with a relative path such as `./seiton version`, or move it to a directory that is already on your `PATH`.
+
+### On GitHub Actions
+
+The following example downloads Seiton into the runner temp directory. Because the script appends that directory to `GITHUB_PATH`, later steps can run `seiton` directly.
+
+```yaml
+- name: Download seiton
+	id: seiton
+	run: |
+		mkdir -p "$RUNNER_TEMP/seiton-bin"
+		curl -fsSL https://raw.githubusercontent.com/guitarrapc/seiton/main/scripts/download.sh | bash -s -- --dir "$RUNNER_TEMP/seiton-bin"
+
+- name: Run seiton
+	run: seiton --format sarif > seiton.sarif
+```
+
+If you need the exact downloaded path, use the step outputs written by the script:
+
+```yaml
+- name: Show downloaded binary path
+	run: echo "${{ steps.seiton.outputs.executable }}"
+```
 
 ---
 
@@ -163,7 +189,7 @@ dotnet publish -c Release -r osx-arm64 src/Seiton/Seiton.csproj -o publish/osx-a
 
 ## Verify the Installation
 
-Run `seiton version` to confirm the installation succeeded:
+Run `seiton version` to confirm the installation succeeded. If you downloaded the binary into the current directory, run `./seiton version` instead:
 
 ```sh
 seiton version
