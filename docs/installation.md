@@ -20,7 +20,7 @@ The install script is the fastest way to install Seiton on macOS or Linux.
 curl -fsSL https://raw.githubusercontent.com/guitarrapc/seiton/main/scripts/install.sh | bash
 ```
 
-The script auto-detects your OS and architecture, downloads the latest release, verifies the SHA-256 checksum, and installs the binary to `/usr/local/bin` by default.
+The script auto-detects your OS and architecture, downloads the latest release, verifies the SHA-256 checksum, and installs the binary to `/usr/local/bin` by default. If `gh` is available, it also attempts SLSA attestation verification.
 
 Install a specific version:
 
@@ -133,6 +133,7 @@ Official multi-architecture container images are published to GHCR for `linux/am
 ```sh
 docker pull ghcr.io/guitarrapc/seiton:latest
 docker pull ghcr.io/guitarrapc/seiton:<version>
+docker pull ghcr.io/guitarrapc/seiton:v<version>
 ```
 
 Lint the workflow files in the current directory:
