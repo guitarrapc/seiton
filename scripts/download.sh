@@ -127,8 +127,7 @@ Options:
   -h, --help              Show this help message.
 
 GitHub Actions:
-  When GITHUB_ACTIONS is set, the script appends the target directory to
-  GITHUB_PATH and writes executable/directory outputs when available.
+  When GITHUB_ACTIONS is set, the script write executable outputs when available.
 
 Examples:
   # Download the latest binary to the current directory
