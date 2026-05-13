@@ -115,25 +115,7 @@ If the binary is not in your `PATH`, run it with a relative path such as `./seit
 
 ### On GitHub Actions
 
-The following example downloads Seiton into the runner temp directory. Because the script appends that directory to `GITHUB_PATH`, later steps can run `seiton` directly.
-
-```yaml
-- name: Download seiton
-  id: seiton
-  run: |
-    mkdir -p "$RUNNER_TEMP/seiton-bin"
-    curl -fsSL https://raw.githubusercontent.com/guitarrapc/seiton/main/scripts/download.sh | bash -s -- --dir "$RUNNER_TEMP/seiton-bin"
-
-- name: Run seiton
-  run: seiton --format sarif > seiton.sarif
-```
-
-If you need the exact downloaded path, use the step outputs written by the script:
-
-```yaml
-- name: Show downloaded binary path
-  run: echo "${{ steps.seiton.outputs.executable }}"
-```
+See [usage](usage.md#github-actions) for how to use the download script in GitHub Actions.
 
 ---
 

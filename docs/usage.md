@@ -306,67 +306,6 @@ seiton action.yml .github/actions/my-action/action.yml
 
 ---
 
-## Integration with GitHub Actions
-
-Preparing `seiton` with the download script from [Installation](installation.md#download-script) is recommended for shell-based CI setup. On GitHub Actions the script writes the absolute downloaded binary path to the `executable` step output, so later steps can invoke it directly. Please ensure `shell: bash` is set for steps running the download script, since Windows runners default to `pwsh`.
-
-### Using SARIF (recommended for public repos and GitHub Enterprise with Advanced Security)
-
-```yaml
-name: Lint GitHub Actions
-
-on:
-  push:
-    branches: [main]
-  pull_request:
-    branches: [main]
-
-permissions: {}
-
-jobs:
-  seiton:
-    permissions:
-      security-events: write
-      contents: read
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    steps:
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
-        with:
-          persist-credentials: false
-
-      - name: Download seiton
-        id: get-seiton
-        run: curl -fsSL https://raw.githubusercontent.com/guitarrapc/seiton/main/scripts/download.sh | bash
-        shell: bash
-
-      - name: Run seiton
-        run: ${{ steps.get-seiton.outputs.executable }} --format sarif > seiton.sarif
-        shell: bash
-
-      - name: Upload SARIF
-        uses: github/codeql-action/upload-sarif@ce28f5bb42d3534e5d0f3a320ca0b28ee32a72d0 # v3
-        if: always()
-        with:
-          sarif_file: seiton.sarif
-```
-
-Or download and run `seiton` in one step:
-
-```yaml
-- name: Run seiton
-  run: |
-    curl -fsSL https://raw.githubusercontent.com/guitarrapc/seiton/main/scripts/download.sh | bash
-    ./seiton --format text
-  shell: bash
-```
-
-If you need a specific version or download directory, pass `--version` and `--dir` to the script as described in [Installation](installation.md#download-script).
-
-If you only need plain text output and do not need the downloaded path later, running the download script and `./seiton` in one step is the simplest option. If you need to reuse the binary across later steps, prefer the `executable` step output form above.
-
----
-
 ## Docker
 
 Official container images are published to GHCR for `linux/amd64` and `linux/arm64`.
@@ -395,6 +334,55 @@ To lint specific files, pass them as explicit arguments inside the mounted repos
 docker run --rm -v "$PWD:/repo:ro" ghcr.io/guitarrapc/seiton:latest /repo/.github/workflows/ci.yml /repo/action.yml
 ```
 
+---
+
+## GitHub Actions
+
+Preparing `seiton` with the download script from [Installation](installation.md#download-script) is recommended for shell-based CI setup. On GitHub Actions the script writes the absolute downloaded binary path to the `executable` step output, so later steps can invoke it directly. Please ensure `shell: bash` is set for steps running the download script, since Windows runners default to `pwsh`.
+
+### Using SARIF (recommended for public repos and GitHub Enterprise with Advanced Security)
+
+```yaml
+name: Lint GitHub Actions
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions: {}
+
+jobs:
+  seiton:
+    permissions:
+      security-events: write
+      contents: read
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - name: Download seiton
+        id: get-seiton
+        run: curl -fsSL https://raw.githubusercontent.com/guitarrapc/seiton/main/scripts/download.sh | bash
+        shell: bash
+
+      - name: Run seiton
+        run: ${{ steps.get-seiton.outputs.executable }} --format sarif > seiton.sarif
+        shell: bash
+
+      - name: Upload SARIF
+        uses: github/codeql-action/upload-sarif@ce28f5bb42d3534e5d0f3a320ca0b28ee32a72d0 # v3
+        if: always()
+        with:
+          sarif_file: seiton.sarif
+```
+
+- If you need a specific version or download directory, pass `--version` and `--dir` to the script as described in [Installation](installation.md#download-script).
+
 To use the Docker image on GitHub Actions:
 
 ```yaml
@@ -416,7 +404,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: actions/checkout@v6
         with:
           persist-credentials: false
 
