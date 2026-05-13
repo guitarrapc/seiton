@@ -179,7 +179,8 @@ seiton version
 Example output:
 
 ```text
-0.9.6
+seiton 0.9.6
+built with .NET 10.0.3, win-x64
 ```
 
 ---
