@@ -11,6 +11,9 @@ public sealed class ConcurrencyLimitsRule() : RuleBase(RuleId.ConcurrencyLimits)
 
     public override string Name => "Concurrency Limits Rule";
 
+    /// <inheritdoc />
+    public override bool IsEnabledByDefault => false;
+
     public override bool SupportsDocumentKind(DocumentKind documentKind) => documentKind == DocumentKind.Workflow;
 
     public override void VisitWorkflowPre(Workflow workflow)

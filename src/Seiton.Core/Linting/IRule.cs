@@ -11,6 +11,9 @@ public interface IRule : IPass
     /// <summary>Gets the human-readable display name for this rule.</summary>
     public string Name { get; }
 
+    /// <summary>Returns whether this rule is enabled by default (opt-in rules return <c>false</c>).</summary>
+    public bool IsEnabledByDefault { get; }
+
     /// <summary>Returns whether this rule applies to the given <paramref name="documentKind"/>.</summary>
     public bool SupportsDocumentKind(DocumentKind documentKind);
 

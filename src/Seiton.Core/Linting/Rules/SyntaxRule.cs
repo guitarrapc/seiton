@@ -12,6 +12,8 @@ public sealed class SyntaxRule : IRule
 
     public string Name => "Syntax Rule";
 
+    public bool IsEnabledByDefault => true;
+
     public bool SupportsDocumentKind(DocumentKind documentKind)
     {
         for (var i = 0; i < rules.Length; i++)

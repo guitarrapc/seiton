@@ -16,63 +16,62 @@ internal static class RuleCatalog
     // - reusable-workflow: uses/with/secrets semantics and forbidden keys in reusable calls.
     // - permissions: scalar/scope value domain validation for permissions.
     // - popular-action-inputs: known-action input-name validation (warning-level).
-    // OptIn: false = default-on, true = opt-in only (requires rules.<id>.enabled: true).
-    private static readonly (RuleId Id, int Priority, bool OptIn, Func<IRule> Factory)[] DefaultRuleFactories =
+    private static readonly (RuleId Id, int Priority, Func<IRule> Factory)[] DefaultRuleFactories =
     [
-        (RuleId.JobStructure, 0, false, static () => new JobStructureRule()),
-        (RuleId.ReusableWorkflow, 1, false, static () => new ReusableWorkflowRule()),
-        (RuleId.Permissions, 2, false, static () => new PermissionsRule()),
-        (RuleId.PopularActionInputs, 3, false, static () => new PopularActionInputsRule()),
-        (RuleId.UnpinnedUses, 4, false, static () => new UnpinnedUsesRule()),
-        (RuleId.UnpinnedImage, 5, false, static () => new UnpinnedImageRule()),
-        (RuleId.DangerousTriggers, 6, false, static () => new DangerousTriggersRule()),
-        (RuleId.JobPermissionsRequired, 7, false, static () => new JobPermissionsRequiredRule()),
-        (RuleId.NeedsGraph, 8, false, static () => new NeedsGraphRule()),
-        (RuleId.ShellName, 9, false, static () => new ShellNameRule()),
-        (RuleId.RunnerLabel, 10, false, static () => new RunnerLabelRule()),
-        (RuleId.IdNaming, 11, false, static () => new IdNamingRule()),
-        (RuleId.GlobPattern, 12, false, static () => new GlobPatternRule()),
-        (RuleId.DispatchInputs, 13, false, static () => new DispatchInputsRule()),
-        (RuleId.ScheduleEvent, 14, false, static () => new ScheduleEventRule()),
-        (RuleId.DenyWriteAll, 15, false, static () => new DenyWriteAllRule()),
-        (RuleId.Credentials, 16, false, static () => new CredentialsRule()),
-        (RuleId.TemplateInjection, 17, false, static () => new TemplateInjectionRule()),
-        (RuleId.ExprUndefinedVar, 18, false, static () => new ExprUndefinedVarRule()),
-        (RuleId.RunEnvContextDirectUse, 19, false, static () => new RunEnvContextDirectUseRule()),
-        (RuleId.RunnerNoLatest, 20, false, static () => new RunnerNoLatestRule()),
-        (RuleId.RunSecretsContextDirectUse, 21, false, static () => new RunSecretsContextDirectUseRule()),
-        (RuleId.RunInputsContextDirectUse, 22, false, static () => new RunInputsContextDirectUseRule()),
-        (RuleId.SecretsWholeContextAccess, 23, false, static () => new SecretsWholeContextAccessRule()),
-        (RuleId.CheckoutPersistCredentials, 24, false, static () => new CheckoutPersistCredentialsRule()),
-        (RuleId.DenyReadAll, 25, false, static () => new DenyReadAllRule()),
-        (RuleId.DenyInheritSecrets, 26, false, static () => new DenyInheritSecretsRule()),
-        (RuleId.JobTimeoutMinutesRequired, 27, false, static () => new JobTimeoutMinutesRequiredRule()),
-        (RuleId.GitHubAppTokenInputs, 28, false, static () => new GitHubAppTokenInputsRule()),
+        (RuleId.JobStructure, 0, static () => new JobStructureRule()),
+        (RuleId.ReusableWorkflow, 1, static () => new ReusableWorkflowRule()),
+        (RuleId.Permissions, 2, static () => new PermissionsRule()),
+        (RuleId.PopularActionInputs, 3, static () => new PopularActionInputsRule()),
+        (RuleId.UnpinnedUses, 4, static () => new UnpinnedUsesRule()),
+        (RuleId.UnpinnedImage, 5, static () => new UnpinnedImageRule()),
+        (RuleId.DangerousTriggers, 6, static () => new DangerousTriggersRule()),
+        (RuleId.JobPermissionsRequired, 7, static () => new JobPermissionsRequiredRule()),
+        (RuleId.NeedsGraph, 8, static () => new NeedsGraphRule()),
+        (RuleId.ShellName, 9, static () => new ShellNameRule()),
+        (RuleId.RunnerLabel, 10, static () => new RunnerLabelRule()),
+        (RuleId.IdNaming, 11, static () => new IdNamingRule()),
+        (RuleId.GlobPattern, 12, static () => new GlobPatternRule()),
+        (RuleId.DispatchInputs, 13, static () => new DispatchInputsRule()),
+        (RuleId.ScheduleEvent, 14, static () => new ScheduleEventRule()),
+        (RuleId.DenyWriteAll, 15, static () => new DenyWriteAllRule()),
+        (RuleId.Credentials, 16, static () => new CredentialsRule()),
+        (RuleId.TemplateInjection, 17, static () => new TemplateInjectionRule()),
+        (RuleId.ExprUndefinedVar, 18, static () => new ExprUndefinedVarRule()),
+        (RuleId.RunEnvContextDirectUse, 19, static () => new RunEnvContextDirectUseRule()),
+        (RuleId.RunnerNoLatest, 20, static () => new RunnerNoLatestRule()),
+        (RuleId.RunSecretsContextDirectUse, 21, static () => new RunSecretsContextDirectUseRule()),
+        (RuleId.RunInputsContextDirectUse, 22, static () => new RunInputsContextDirectUseRule()),
+        (RuleId.SecretsWholeContextAccess, 23, static () => new SecretsWholeContextAccessRule()),
+        (RuleId.CheckoutPersistCredentials, 24, static () => new CheckoutPersistCredentialsRule()),
+        (RuleId.DenyReadAll, 25, static () => new DenyReadAllRule()),
+        (RuleId.DenyInheritSecrets, 26, static () => new DenyInheritSecretsRule()),
+        (RuleId.JobTimeoutMinutesRequired, 27, static () => new JobTimeoutMinutesRequiredRule()),
+        (RuleId.GitHubAppTokenInputs, 28, static () => new GitHubAppTokenInputsRule()),
         // Priorities 29-32 are reserved for online rules (see OnlineRuleFactories).
         // Keep priorities unique; they determine rule execution order.
-        (RuleId.CachePoisoning, 33, false, static () => new CachePoisoningRule()),
-        (RuleId.SelfHostedRunner, 34, false, static () => new SelfHostedRunnerRule()),
-        (RuleId.UnredactedSecrets, 35, false, static () => new UnredactedSecretsRule()),
-        (RuleId.SecretsOutsideEnv, 36, false, static () => new SecretsOutsideEnvRule()),
-        (RuleId.WorkflowSecrets, 37, false, static () => new WorkflowSecretsRule()),
-        (RuleId.JobSecrets, 38, false, static () => new JobSecretsRule()),
-        (RuleId.ActionShellIsRequired, 39, false, static () => new ActionShellIsRequiredRule()),
-        (RuleId.Matrix, 40, false, static () => new MatrixRule()),
-        (RuleId.EnvVar, 41, false, static () => new EnvVarRule()),
-        (RuleId.DeprecatedCommands, 42, false, static () => new DeprecatedCommandsRule()),
-        (RuleId.IfCond, 43, false, static () => new IfCondRule()),
-        (RuleId.FakeTernary, 44, false, static () => new FakeTernaryRule()),
-        (RuleId.ArchivedUses, 45, false, static () => new ArchivedUsesRule()),
-        (RuleId.InsecureCommands, 46, false, static () => new InsecureCommandsRule()),
-        (RuleId.OverprovisionedSecrets, 47, false, static () => new OverprovisionedSecretsRule()),
-        (RuleId.ForbiddenUses, 48, false, static () => new ForbiddenUsesRule()),
-        (RuleId.RefVersionMismatch, 49, false, static () => new RefVersionMismatchRule()),
-        (RuleId.UseTrustedPublishing, 50, false, static () => new UseTrustedPublishingRule()),
-        (RuleId.LocalActionInputs, 51, false, static () => new LocalActionInputsRule()),
-        (RuleId.WorkflowCallInputDefault, 52, false, static () => new WorkflowCallInputDefaultRule()),
-        (RuleId.OutdatedActionRunner, 53, false, static () => new OutdatedActionRunnerRule()),
-        (RuleId.IfExprWrapper, 54, false, static () => new IfExprWrapperRule()),
-        (RuleId.ConcurrencyLimits, 55, true, static () => new ConcurrencyLimitsRule()),
+        (RuleId.CachePoisoning, 33, static () => new CachePoisoningRule()),
+        (RuleId.SelfHostedRunner, 34, static () => new SelfHostedRunnerRule()),
+        (RuleId.UnredactedSecrets, 35, static () => new UnredactedSecretsRule()),
+        (RuleId.SecretsOutsideEnv, 36, static () => new SecretsOutsideEnvRule()),
+        (RuleId.WorkflowSecrets, 37, static () => new WorkflowSecretsRule()),
+        (RuleId.JobSecrets, 38, static () => new JobSecretsRule()),
+        (RuleId.ActionShellIsRequired, 39, static () => new ActionShellIsRequiredRule()),
+        (RuleId.Matrix, 40, static () => new MatrixRule()),
+        (RuleId.EnvVar, 41, static () => new EnvVarRule()),
+        (RuleId.DeprecatedCommands, 42, static () => new DeprecatedCommandsRule()),
+        (RuleId.IfCond, 43, static () => new IfCondRule()),
+        (RuleId.FakeTernary, 44, static () => new FakeTernaryRule()),
+        (RuleId.ArchivedUses, 45, static () => new ArchivedUsesRule()),
+        (RuleId.InsecureCommands, 46, static () => new InsecureCommandsRule()),
+        (RuleId.OverprovisionedSecrets, 47, static () => new OverprovisionedSecretsRule()),
+        (RuleId.ForbiddenUses, 48, static () => new ForbiddenUsesRule()),
+        (RuleId.RefVersionMismatch, 49, static () => new RefVersionMismatchRule()),
+        (RuleId.UseTrustedPublishing, 50, static () => new UseTrustedPublishingRule()),
+        (RuleId.LocalActionInputs, 51, static () => new LocalActionInputsRule()),
+        (RuleId.WorkflowCallInputDefault, 52, static () => new WorkflowCallInputDefaultRule()),
+        (RuleId.OutdatedActionRunner, 53, static () => new OutdatedActionRunnerRule()),
+        (RuleId.IfExprWrapper, 54, static () => new IfExprWrapperRule()),
+        (RuleId.ConcurrencyLimits, 55, static () => new ConcurrencyLimitsRule()),
     ];
 
     // Online rules: opt-in only (disabled by default), participate in WorkflowVisitor
@@ -230,19 +229,23 @@ internal static class RuleCatalog
     {
         var set = new HashSet<RuleId>();
 
-        // Local rules marked as opt-in.
+        // Derive opt-in status from each rule's IsEnabledByDefault property.
         for (var i = 0; i < DefaultRuleFactories.Length; i++)
         {
-            if (DefaultRuleFactories[i].OptIn)
+            var rule = DefaultRuleFactories[i].Factory();
+            if (!rule.IsEnabledByDefault)
             {
                 set.Add(DefaultRuleFactories[i].Id);
             }
         }
 
-        // Online rules are always opt-in.
         for (var i = 0; i < OnlineRuleFactories.Length; i++)
         {
-            set.Add(OnlineRuleFactories[i].Id);
+            var rule = OnlineRuleFactories[i].Factory();
+            if (!rule.IsEnabledByDefault)
+            {
+                set.Add(OnlineRuleFactories[i].Id);
+            }
         }
 
         return set;
