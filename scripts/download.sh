@@ -50,12 +50,13 @@ need_cmd() {
 publish_github_actions_metadata() {
   local executable_path="$1" target_dir="$2"
 
-  if [ -n "${GITHUB_ACTIONS:-}" ] || [ -n "${GITHUB_ACTION:-}" ]; then
+  if [ -n "${GITHUB_ACTIONS:-}" ] || [ -n "${GITHUB_OUTPUT:-}" ] || [ -n "${GITHUB_PATH:-}" ]; then
     if [ -n "${GITHUB_PATH:-}" ]; then
       printf '%s\n' "$target_dir" >> "$GITHUB_PATH"
     fi
 
     if [ -n "${GITHUB_OUTPUT:-}" ]; then
+      # Expose both the fully-qualified executable path and directory for later steps.
       printf 'executable=%s\n' "$executable_path" >> "$GITHUB_OUTPUT"
       printf 'directory=%s\n' "$target_dir" >> "$GITHUB_OUTPUT"
     else
