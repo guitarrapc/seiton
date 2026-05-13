@@ -17,6 +17,7 @@
 | mise | ❌ | ❌ 見送り（実績不足でレジストリ登録不可） |
 | aqua | ❌ | ❌ 見送り（実績不足で aqua-registry 登録不可） |
 | ダウンロード／インストール用スクリプト（curl \| sh 等） | ✅ | ✅ `scripts/install.sh`（main ブランチ） |
+| GitHub CLI (`gh release download`) | ✅ | ✅ ドキュメントのみ（release workflow の SLSA attestation をそのまま利用） |
 | GitHub Action | ❌ | ❌ `guitarrapc/seiton-action` リポ未作成 |
 | dotnet tool (NuGet) | ❌ | ❌ NuGet パッケージ未公開 |
 

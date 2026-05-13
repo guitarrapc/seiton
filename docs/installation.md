@@ -36,6 +36,25 @@ If the install directory is not in your `PATH`, the script prints a hint to add 
 
 ---
 
+## GitHub CLI
+
+If you have the [GitHub CLI](https://cli.github.com/) installed (pre-installed on GitHub Actions runners), you can download and verify a release asset directly:
+
+```sh
+version=v0.9.6
+asset=seiton-linux-amd64.tar.gz
+gh release download -R guitarrapc/seiton "$version" -p "$asset"
+gh attestation verify "$asset" -R guitarrapc/seiton
+tar xzf "$asset"
+sudo mv seiton /usr/local/bin/
+```
+
+`gh attestation verify` checks the SLSA build provenance attestation attached to each release, providing stronger supply-chain guarantees than checksum verification alone.
+
+Adjust `asset` for your platform: `seiton-osx-arm64.tar.gz` (macOS ARM), `seiton-osx-amd64.tar.gz` (macOS Intel), `seiton-linux-arm64.tar.gz` (Linux ARM), or `seiton-win-amd64.zip` / `seiton-win-arm64.zip` (Windows).
+
+---
+
 ## Prebuilt Binaries
 
 Download a prebuilt binary for your platform from the [releases page](https://github.com/guitarrapc/seiton/releases).
