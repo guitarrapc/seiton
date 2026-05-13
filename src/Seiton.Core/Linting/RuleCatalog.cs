@@ -201,14 +201,25 @@ internal static class RuleCatalog
     private static (RuleId Id, int Priority)[] BuildAllRuleMetadata()
     {
         var metadata = new (RuleId Id, int Priority)[DefaultRuleFactories.Length + OnlineRuleFactories.Length];
+        var seen = new HashSet<int>(metadata.Length);
         for (var i = 0; i < DefaultRuleFactories.Length; i++)
         {
             metadata[i] = (DefaultRuleFactories[i].Id, DefaultRuleFactories[i].Priority);
+            if (!seen.Add(DefaultRuleFactories[i].Priority))
+            {
+                throw new InvalidOperationException(
+                    $"Duplicate rule priority {DefaultRuleFactories[i].Priority} detected for rule '{DefaultRuleFactories[i].Id}'. Priorities must be unique.");
+            }
         }
 
         for (var i = 0; i < OnlineRuleFactories.Length; i++)
         {
             metadata[DefaultRuleFactories.Length + i] = (OnlineRuleFactories[i].Id, OnlineRuleFactories[i].Priority);
+            if (!seen.Add(OnlineRuleFactories[i].Priority))
+            {
+                throw new InvalidOperationException(
+                    $"Duplicate rule priority {OnlineRuleFactories[i].Priority} detected for rule '{OnlineRuleFactories[i].Id}'. Priorities must be unique.");
+            }
         }
 
         return metadata;

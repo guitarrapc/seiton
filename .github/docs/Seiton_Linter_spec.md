@@ -337,8 +337,8 @@ Token resolution order (`SEITON_GITHUB_TOKEN` → `GITHUB_TOKEN`) is hardcoded a
 
 ### 5.1 Rule Identifier Contract
 
-- Rule identifiers use semantic IDs (kebab-case, e.g. `job-permissions-required`) as the sole accepted format.
-- Unknown rule IDs in config or inline directives are configuration errors.
+- Rule identifiers must use semantic IDs (kebab-case, e.g. `job-permissions-required`) as the sole accepted format in configuration and inline directives.
+- Any non-semantic or unknown rule ID in config or inline directives is a configuration error.
 
 ### 5.2 Priority and Precedence
 
@@ -374,7 +374,7 @@ Inline suppression supports file/job/next-line scopes.
 - `disable-job` applies to diagnostics inside the specified `job.id` scope.
 - `disable-file` applies to all diagnostics in the current workflow file.
 - A directive can target one or multiple rule IDs.
-- Multiple rule ID format is comma-separated; semantic IDs are recommended.
+- Multiple rule ID format is comma-separated; semantic IDs (kebab-case) are required per §5.1.
 
 Canonical directive format:
 

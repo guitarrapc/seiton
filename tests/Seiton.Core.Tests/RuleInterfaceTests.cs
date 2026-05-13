@@ -11795,7 +11795,7 @@ public sealed class RuleInterfaceTests
     }
 
     [Test]
-    public async Task LintEngine_DisabledRule_SemanticIdInRuleOptions_DoesNotEmitDiagnostics()
+    public async Task LintEngine_CanonicalIdInRuleOptions_EmitsConfigDiagnosticAndDoesNotDisable()
     {
         var yaml = """
         on: push
@@ -11807,16 +11807,19 @@ public sealed class RuleInterfaceTests
         """;
 
         var engine = new LintEngine([new JobPermissionsRequiredRule()]);
-        var disabledConfig = new LintConfig
+        var configWithCanonicalId = new LintConfig
         {
             Rules = new Dictionary<string, RuleConfig>
             {
-                ["job-permissions-required"] = new RuleConfig { Enabled = false },
+                ["seiton-lint-rule-008"] = new RuleConfig { Enabled = false },
             },
         };
 
-        var result = engine.Check(Encoding.UTF8.GetBytes(yaml), "rule-disable-semantic.yml", disabledConfig);
-        await Assert.That(result.Diagnostics.Any(x => x.RuleId == "job-permissions-required")).IsFalse();
+        var result = engine.Check(Encoding.UTF8.GetBytes(yaml), "rule-disable-canonical.yml", configWithCanonicalId);
+        // Canonical ID is rejected as unknown — the rule is NOT disabled
+        await Assert.That(result.Diagnostics.Any(x => x.RuleId == "job-permissions-required")).IsTrue();
+        // A config diagnostic is emitted for the unknown rule ID
+        await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("unknown rule-id 'seiton-lint-rule-008'"))).IsTrue();
     }
 
     [Test]
