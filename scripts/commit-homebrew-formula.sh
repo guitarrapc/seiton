@@ -28,7 +28,7 @@ if [ ! -d .git ]; then
 fi
 
 RENDER="${ROOT_DIR}/scripts/render-homebrew-seiton-formula.sh"
-TMP="$(mktemp -d)"
+TMP="$(mktemp -d "${TMPDIR:-/tmp}/seiton.XXXXXX")"
 trap 'rm -rf "$TMP"' EXIT
 
 if [ -n "${CHECKSUMS_URL:-}" ]; then
