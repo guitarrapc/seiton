@@ -82,6 +82,7 @@ internal sealed class LocalReusableWorkflowOutputResolver
         }
 
         var parseResult = WorkflowParser.Parse(bytes, resolvedPath);
+        using var _ = parseResult.Arena;
         if (parseResult.HasFatalError || parseResult.Workflow is null)
         {
             return null;

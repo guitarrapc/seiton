@@ -719,7 +719,7 @@ internal static class DynamicContextTypeBuilder
             if (job.WorkflowCall is not null)
             {
                 // Try local resolution for local reusable workflow references
-                if (localReusableOutputResolver is not null && arena is not null && job.WorkflowCall.Uses.HasValue)
+                if (localReusableOutputResolver is not null && arena is not null && utf8Yaml is not null && job.WorkflowCall.Uses.HasValue)
                 {
                     var usesSlice = arena.GetStringSlice(job.WorkflowCall.Uses);
                     if (!usesSlice.IsEmpty)

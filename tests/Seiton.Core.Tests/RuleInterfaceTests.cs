@@ -9078,7 +9078,9 @@ public sealed class RuleInterfaceTests
                           run: echo "$TAG"
             """,
             []),
-            // Local reusable workflow call — same behavior, no local outputs
+            // Local reusable workflow call — needs.<reusable-job>.outputs.* is only treated as
+            // loose when the referenced workflow cannot be resolved locally. If it can be
+            // resolved and defines on.workflow_call.outputs, validation is strict.
             new RuleCase(
             "ok-local-reusable-workflow-call-needs-outputs",
             """
@@ -9166,6 +9168,7 @@ public sealed class RuleInterfaceTests
             File.WriteAllText(callerPath, NormalizeYaml(callerYamlNg), Encoding.UTF8);
             var resultNg = new LintEngine([new ExprUndefinedVarRule()])
                 .Check(File.ReadAllBytes(callerPath), callerPath);
+            using var _ng = resultNg.ParseResult.Arena;
             var msgsNg = resultNg.Diagnostics.Where(x => x.RuleId == "expr-undefined-var").Select(x => x.Message).ToArray();
             await Assert.That(msgsNg.Any(m => m.Contains("\"typo_output\" is not defined", StringComparison.Ordinal))).IsTrue();
 
@@ -9173,6 +9176,7 @@ public sealed class RuleInterfaceTests
             File.WriteAllText(callerPath, NormalizeYaml(callerYamlOk), Encoding.UTF8);
             var resultOk = new LintEngine([new ExprUndefinedVarRule()])
                 .Check(File.ReadAllBytes(callerPath), callerPath);
+            using var _ok = resultOk.ParseResult.Arena;
             var msgsOk = resultOk.Diagnostics.Where(x => x.RuleId == "expr-undefined-var").Select(x => x.Message).ToArray();
             await Assert.That(msgsOk.Any(m => m.Contains("is not defined", StringComparison.Ordinal))).IsFalse();
         }
@@ -9231,6 +9235,7 @@ public sealed class RuleInterfaceTests
 
             var result = new LintEngine([new ExprUndefinedVarRule()])
                 .Check(File.ReadAllBytes(callerPath), callerPath);
+            using var _arena = result.ParseResult.Arena;
             var msgs = result.Diagnostics.Where(x => x.RuleId == "expr-undefined-var").Select(x => x.Message).ToArray();
             // The called workflow declares no outputs, so needs.compute.outputs.something should be flagged
             await Assert.That(msgs.Any(m => m.Contains("is not defined", StringComparison.Ordinal) || m.Contains("no properties are defined", StringComparison.Ordinal))).IsTrue();

@@ -152,13 +152,13 @@ Add test cases to `RuleInterfaceTests`:
 
 2. **`ok-local-reusable-workflow-known-output`**: Local reusable workflow with `on.workflow_call.outputs` that defines `version`, caller references `needs.<job>.outputs.version` → should produce zero diagnostics.
 
-3. **`ok-local-reusable-workflow-no-outputs`**: Local reusable workflow with `on.workflow_call` but no `outputs:`, caller references `needs.<job>.outputs.something` → should remain loose (no diagnostic), because the called workflow may set outputs dynamically.
+3. **`ng-local-reusable-workflow-no-outputs`**: Local reusable workflow with `on.workflow_call` but no `outputs:`, caller references `needs.<job>.outputs.something` → should flag `"something" is not defined in "needs" context`, because a called workflow with no declared outputs resolves to a strict empty outputs object.
 
 4. **`ok-remote-reusable-workflow-unchanged`**: Remote reusable workflow reference (`owner/repo/path@ref`) → should remain loose (no diagnostic). Existing test covers this but re-confirm no regression.
 
 Test fixtures: Create local reusable workflow YAML files under `tests/Seiton.Core.Tests/fixtures/` for the resolver to find. Use a temporary directory structure or the existing project-relative fixture pattern.
 
-Verify all new tests **fail** (the ng case produces no diagnostic, the ok cases may already pass).
+Verify all new tests **fail** (the ng cases produce no diagnostic, the ok cases may already pass).
 
 ### Step 2: Implement `LocalReusableWorkflowOutputResolver`
 
