@@ -1,0 +1,380 @@
+# Seiton.Core ライブラリ公開計画
+
+本書は `Seiton.Core` を NuGet ライブラリとして公開し、他の .NET アプリケーションから Seiton の Parse / Lint / Fix 機能を利用可能にするために、考慮すべき論点と対策案を整理したものである。
+
+対象は主に `src/Seiton.Core/` の公開であり、CLI 配布（`src/Seiton/`）やインストールチャネルの整備は本書の主題ではない。
+
+## 現状
+
+`Seiton.Core` はすでに parser / linter の実装本体として成立しており、外部利用の入口になりうる public API も一部存在する。
+
+- [`WorkflowParser`](../../src/Seiton.Core/Parsing/WorkflowParser.cs) に `Parse` / `ParseClassified` がある
+- [`LintEngine`](../../src/Seiton.Core/Linting/LintEngine.cs) に `Check(byte[] utf8Yaml, string filePath, LintConfig? config)` がある
+- [`ParseResult`](../../src/Seiton.Core/Parsing/Diagnostics.cs) と [`LintResult`](../../src/Seiton.Core/Linting/LintResult.cs) は public
+- [`FixEngine`](../../src/Seiton.Core/Linting/Fixing/FixEngine.cs) も public で、fix 実行 API として使いうる
+
+一方で、現在の `Seiton.Core` は「CLI の内部実装」に近い形で育っており、公開ライブラリとしては以下の未整備箇所がある。
+
+- [`Directory.Build.props`](../../Directory.Build.props) で `IsPackable=false`
+- [`Seiton.Core.csproj`](../../src/Seiton.Core/Seiton.Core.csproj) は `net10.0` 単一ターゲット
+- low-level API が多く、安定化対象の公開面が大きい
+- pooled buffer / `AstArena` のライフタイム制約が外部利用者に露出している
+- thread-safe でない前提の型がある
+- NuGet パッケージメタデータ、README、サンプル、互換性ポリシーが未整備
+
+## ゴールと非ゴール
+
+- **ゴール**: 他のアプリが Seiton の Parse / Lint / Fix を安全かつ明快に利用できるライブラリ配布を実現する
+- **ゴール**: 公開 API の安定面を定義し、SemVer に基づいて運用できる状態にする
+- **ゴール**: NuGet パッケージとして pack / publish / 検証まで自動化する
+- **非ゴール**: CLI の主要 UX をライブラリ API にそのまま移植すること
+- **非ゴール**: 初回公開時点で Seiton のすべての内部型を安定 API として保証すること
+- **非ゴール**: 他言語向け SDK を同時に設計すること
+
+## 推奨方針
+
+推奨は次のいずれかである。
+
+1. **`Seiton.Core` をそのまま公開せず、安定 facade を追加してから公開する**
+2. **内部実装寄りの `Seiton.Core` と、外部公開向け facade パッケージを分離する**
+
+現時点では 2 を推奨する。
+
+理由:
+
+- `Seiton.Core` には最適化都合で public になっている型が混ざっている可能性が高い
+- parser / lint engine は allocation 最適化や AST 設計変更の影響を受けやすく、公開互換性を直接背負わせると進化速度が落ちる
+- facade パッケージを別にすれば、外部公開 API を小さく保ったまま `Seiton.Core` を内部実装として改善し続けられる
+
+候補:
+
+- `Seiton.Core` を実装ライブラリとして維持し、`Seiton.SDK` または `Seiton.Core.Api` を公開面にする
+- もし単一パッケージでいくなら、`Seiton.Core` 内に facade namespace を用意し、既存 low-level API は将来的に advanced 扱いへ寄せる
+
+## 考慮事項と対策案
+
+### 1. 公開 API 面積が大きすぎる
+
+**論点**:
+
+- `Parsing.Ast`、`Linting`、`Generated` 配下に public 型が多数存在する
+- これらを全部サポート対象にすると、将来の内部最適化や AST 変更が破壊的変更になりやすい
+
+**対策案**:
+
+- 外部公開 API を facade に限定する
+- 初回公開で保証する型を明示的に絞る
+- `PublicAPI.Shipped.txt` / `PublicAPI.Unshipped.txt` などで公開 API を固定する
+- low-level API は internal 化できるものから順次閉じる
+
+**最低限の facade API 案**:
+
+```csharp
+public static class SeitonParser
+{
+    public static SeitonParseResult Parse(string yaml, string filePath);
+    public static SeitonParseResult Parse(byte[] utf8Yaml, string filePath);
+}
+
+public static class SeitonLinter
+{
+    public static SeitonLintResult Lint(string yaml, string filePath, SeitonLintOptions? options = null);
+    public static SeitonLintResult Lint(byte[] utf8Yaml, string filePath, SeitonLintOptions? options = null);
+}
+```
+
+### 2. ライフタイム制約が危険
+
+**論点**:
+
+- [`LintResult`](../../src/Seiton.Core/Linting/LintResult.cs) は pooled diagnostics を返し、`ParseResult.Arena` の寿命に依存する
+- 外部利用者は `Arena.Dispose()` 前提を知らずに診断配列を保持しがち
+
+**対策案**:
+
+- facade では caller-owned な immutable 結果 DTO にコピーして返す
+- `AstArena` や pooled buffer を facade からは見せない
+- low-level API を残す場合も XML doc と README でライフタイム制約を明示する
+- 必要なら `ToImmutable()` / `Snapshot()` のような API を追加する
+
+### 3. スレッドセーフでない型がある
+
+**論点**:
+
+- [`LintEngine`](../../src/Seiton.Core/Linting/LintEngine.cs) は内部状態を再利用するため、同時実行安全ではない
+- ライブラリ利用者は singleton 登録や並列処理で誤用しやすい
+
+**対策案**:
+
+- facade は stateless static API または per-call インスタンス生成に寄せる
+- `LintEngine` をそのまま公開し続ける場合は thread-safety を明示する
+- 並列利用ガイドとサンプルを README に追加する
+
+### 4. 入力 API が低レベルすぎる
+
+**論点**:
+
+- 現在の主要 API は `byte[] utf8Yaml` を要求する
+- 多くの利用者は `string`、`Stream`、`FileInfo`、`TextReader` ベースの API を期待する
+
+**対策案**:
+
+- facade に `string` / `byte[]` オーバーロードを用意する
+- `Stream` 対応は必要性を見て追加する
+- `filePath` は必須のまま維持し、診断位置と document kind 推定に使う
+
+### 5. ターゲットフレームワークが `net10.0` 固定
+
+**論点**:
+
+- [`Seiton.Core.csproj`](../../src/Seiton.Core/Seiton.Core.csproj) は `net10.0` のみ
+- ライブラリ利用者としては `net8.0` / `net9.0` を求める可能性が高い
+
+**対策案**:
+
+- `net8.0;net10.0` もしくは `net8.0;net9.0;net10.0` の multi-target を検討する
+- AOT analyzer や API availability の差分がある場合は conditional compile を導入する
+- もし `net10.0` のみを維持するなら、その理由を README と package description に明記する
+
+### 6. パッケージング設定が未整備
+
+**論点**:
+
+- pack 不可設定のまま
+- `PackageId`、説明文、ライセンス、README 埋め込みなどが未設定
+
+**対策案**:
+
+- `src/Seiton.Core/Seiton.Core.csproj` で `IsPackable=true` を明示する
+- 必要な NuGet metadata を追加する
+- パッケージ README とサンプルコードを含める
+- `PackageTags` に `github-actions`, `yaml`, `linter`, `security`, `aot` などを設定する
+
+### 7. 依存関係と transitive dependency の扱い
+
+**論点**:
+
+- `VYaml` が外部依存として露出する
+- 将来的に依存入れ替えが起きると、公開 API への影響が出る可能性がある
+
+**対策案**:
+
+- facade では `VYaml` 型を public surface に出さない
+- 依存ライブラリ由来の例外や型をそのまま露出しない
+- transitive dependency の更新ポリシーを release note に残す
+
+### 8. オンラインルールとネットワーク依存の扱い
+
+**論点**:
+
+- online audit、GitHub API、SHA/digest pin 解決はネットワークと認証を伴う
+- ライブラリ利用者は「オフライン lint」と「オンライン拡張 lint」を分けて扱いたい可能性が高い
+
+**対策案**:
+
+- 初回公開では offline Parse / Lint を主 API にする
+- online rule は opt-in の別 API または別 namespace に分離する
+- `HttpClient` / resolver interface を DI 可能にしてテストしやすくする
+- タイムアウト、リトライ、認証、失敗時ポリシーをオプションで明示する
+
+### 9. Fix API は破壊的編集を伴う
+
+**論点**:
+
+- fix はファイル書き換え、revalidation、network-assisted pinning まで関わる
+- ライブラリ API としては Parse / Lint より設計難度が高い
+
+**対策案**:
+
+- 初回公開では Parse / Lint を優先し、Fix は後続フェーズに分ける
+- Fix を公開する場合は「差分を返す API」と「適用する API」を分離する
+- ファイル I/O を伴う API よりも、text edit ベース API を優先する
+
+### 10. DocumentKind と filePath 推定の扱い
+
+**論点**:
+
+- `WorkflowParser.ParseClassified` は `filePath` をヒントに kind 推定する
+- 呼び出し側が仮想入力を渡すとき、ファイル名がないと期待結果がぶれうる
+
+**対策案**:
+
+- facade API でも `filePath` は基本必須にする
+- stdin 的なケース向けに `<memory>` や `action.yml` 相当の path hint を許す
+- kind を明示指定できるオーバーロードを後続で検討する
+
+### 11. 公開後の破壊的変更管理
+
+**論点**:
+
+- 一度公開した public 型は、内部都合で簡単に変えられなくなる
+- まだ仕様が固まり切っていない領域まで公開すると SemVer 運用が破綻しやすい
+
+**対策案**:
+
+- 安定 API と experimental API を分ける
+- experimental には namespace / パッケージ / ドキュメント上の明示を入れる
+- breaking change は release note と upgrade guide を必須化する
+- `Microsoft.CodeAnalysis.PublicApiAnalyzers` などを使って CI で API 変更検知する
+
+### 12. サンプルとドキュメント不足
+
+**論点**:
+
+- ライブラリは CLI よりも README のサンプル品質が重要
+- 利用者は「最短で 10 行くらいのコード」が欲しい
+
+**対策案**:
+
+- パッケージ README に最小サンプルを置く
+- Parse only / Lint only / config あり / diagnostics snapshot の 4 パターンを示す
+- `sandbox/DotnetFiles/` にライブラリ利用例を追加して検証を兼ねる
+
+### 13. テストと検証観点の追加が必要
+
+**論点**:
+
+- 今のテストは主に CLI / core 実装前提であり、NuGet 消費者視点の API 契約テストが薄い
+
+**対策案**:
+
+- facade API の契約テストを追加する
+- pack 後に別サンプルプロジェクトから package 参照して動かす integration test を追加する
+- 診断配列保持、並列利用、config 読み込み、オンライン rule 無効時の挙動を検証する
+
+### 14. パッケージ名・責務の衝突
+
+**論点**:
+
+- `Seiton` は CLI、`Seiton.Core` は実装、将来 `dotnet tool` も NuGet に載る
+- 同じ NuGet 上で役割が近いパッケージが増えると利用者が混乱する
+
+**対策案**:
+
+- 命名ポリシーを先に決める
+- 例:
+  - `Seiton` = CLI / dotnet tool 用
+  - `Seiton.Core` = 内部実装寄り、非推奨公開または上級者向け
+  - `Seiton.SDK` = 外部利用向け安定ライブラリ
+- package description に責務を明記する
+
+## 推奨フェーズ
+
+### フェーズ 0 — パッケージ戦略の決定
+
+**WHY**: `Seiton.Core` をそのまま公開するか、facade を別パッケージにするかで以後の設計が大きく変わる。
+
+#### 実施内容
+
+- `Seiton.Core` 直公開か `Seiton.SDK` 分離かを決定する
+- 安定 API と非安定 API の境界を決める
+- package naming policy を確定する
+
+**完了条件**: 公開対象パッケージ名、責務、保証する public API の範囲が文書化される。
+
+---
+
+### フェーズ 1 — facade API の設計
+
+**WHY**: 現在の API は実装都合が強く、外部利用者が安全に使うには facade が必要。
+
+#### 実施内容
+
+- caller-owned result DTO を設計する
+- Parse / Lint 用の最小 API を定義する
+- config / online rule / fix の扱いを切り分ける
+- lifetime / thread-safety を facade で隠蔽する
+
+**完了条件**: 外部公開予定 API の C# シグネチャが固まり、サンプルコードを書ける。
+
+---
+
+### フェーズ 2 — csproj と packaging の整備
+
+**WHY**: pack / publish できる形にしないと評価も配布もできない。
+
+#### 実施内容
+
+- `IsPackable=true`
+- `PackageId`, `Description`, `License`, `ProjectUrl`, `RepositoryUrl`, `PackageReadmeFile` を設定
+- target framework を再検討し必要なら multi-target 化する
+
+**完了条件**: `dotnet pack` でローカル package が生成できる。
+
+---
+
+### フェーズ 3 — API 契約テストと消費者テスト
+
+**WHY**: ライブラリ公開では CLI テストだけでは足りない。
+
+#### 実施内容
+
+- facade API の unit test を追加
+- package を参照する sample / test project を追加
+- parallel use、diagnostic snapshot、config あり / なしを検証
+- 公開 API 差分チェックを CI に入れる
+
+**完了条件**: pack した package を別プロジェクトから参照して Parse / Lint が通る。
+
+---
+
+### フェーズ 4 — README / サンプル / リリース自動化
+
+**WHY**: パッケージ公開後の利用体験は README でほぼ決まる。
+
+#### 実施内容
+
+- NuGet README を整備
+- 最小サンプルと注意点を記載
+- release workflow に `dotnet pack` / `dotnet nuget push` を追加
+- API 互換性・変更点を release note に出す
+
+**完了条件**: NuGet から install し、README を見て最小コードで利用できる。
+
+---
+
+### フェーズ 5 — online rule / fix API の拡張
+
+**WHY**: これらは価値が高いが設計難度も高いため、コア公開の後段に分ける。
+
+#### 実施内容
+
+- online lint API を opt-in で設計
+- resolver / `HttpClient` 注入を整理
+- fix API を text edit 중심に公開
+- file I/O と純粋計算 API を分離
+
+**完了条件**: Parse / Lint の安定 API を壊さずに online / fix を追加できる。
+
+## 初回公開で推奨するスコープ
+
+初回公開では次に絞ることを推奨する。
+
+- Parse
+- Lint（offline rules のみ）
+- `LintConfig` もしくは facade 用 options
+- caller-owned diagnostics/result DTO
+
+初回では見送る候補:
+
+- online audit
+- file system を伴う fix 適用 API
+- 低レベル AST mutation API
+- internal performance-oriented helper 型の公開
+
+## リスクと対策
+
+| リスク | 影響 | 対策 |
+|--------|------|------|
+| public API を広げすぎる | 将来の最適化が破壊的変更になる | facade に絞る、API 差分チェックを CI 化 |
+| pooled result を利用者が保持する | use-after-dispose 相当のバグ | immutable snapshot DTO を返す |
+| `net10.0` 固定で利用者が限られる | 採用障壁が高い | multi-target を検討、固定理由を明示 |
+| online/fix まで初回に盛り込む | 設計が複雑化し公開が遅れる | 初回は Parse / Lint に限定 |
+| CLI と library package の責務が曖昧 | 利用者が混乱する | package naming と責務文書を先に決める |
+| SemVer 運用が曖昧 | 利用者が更新しづらい | 安定 API 面を固定し、breaking change policy を明記 |
+
+## まとめ
+
+`Seiton.Core` は技術的にはすでに外部公開可能な機能を持っているが、そのまま公開すると内部実装の都合が public 契約になりすぎる。公開するなら、**安定 facade を定義し、lifetime / thread-safety / API surface を整理した上で NuGet 化する**のが最も安全である。
+
+最初の一歩としては、`Seiton.Core` 直公開か `Seiton.SDK` 分離かを決め、その前提で facade API の最小スコープを固定するのがよい。
