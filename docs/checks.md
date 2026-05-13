@@ -499,7 +499,7 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           fetch-depht: 1      # ERROR: typo; did you mean 'fetch-depth'?
 ```
@@ -512,7 +512,7 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           fetch-depth: 1
 ```
@@ -1327,7 +1327,7 @@ jobs:
     permissions:
       contents: read
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 ```
 
 If the job uses only actions without known permission requirements, `permissions: {}` is inserted:
@@ -1423,7 +1423,7 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4  # ERROR: should set persist-credentials to false
+      - uses: actions/checkout@v6  # ERROR: should set persist-credentials to false
 ```
 
 **Remediation:**
@@ -1434,7 +1434,7 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           persist-credentials: false
 ```
@@ -1698,14 +1698,14 @@ Warns when `uses:` references are not pinned to a full 40-character commit SHA. 
 **Example trigger:**
 
 ```yaml
-- uses: actions/checkout@v4       # WARNING: not SHA-pinned
+- uses: actions/checkout@v6       # WARNING: not SHA-pinned
 - uses: actions/checkout@main     # WARNING: not SHA-pinned
 ```
 
 **Remediation:** Pin to the commit SHA and retain the version as a comment:
 
 ```yaml
-- uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  # v4.2.2
+- uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
 ```
 
 Use `seiton fix --enable-pin-network` to automatically resolve and apply SHA pins.

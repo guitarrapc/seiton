@@ -1,11 +1,47 @@
 # Usage
 
-This page describes how to use the `seiton` command locally and in CI/CD.
+This page describes how to use `seiton` locally and in CI/CD.
+
+## Current CLI Help
+
+```shell
+$ seiton --help
+Usage: [command] [arguments...] [options...] [-h|--help] [--version]
+
+Lint workflow files by default, or apply fixes when --fix is specified.
+
+Arguments:
+  [0] <string[]?>    Workflow files or directories to lint. Auto-discovers .github/workflows/ if omitted.
+
+Options:
+  --config <string?>           Path to config file. Auto-discovered from .github/seiton.yaml if omitted. [Default: null]
+  --stdin-filename <string>    Filename used when reading from stdin (-). [Default: @"<stdin>"]
+  --ignore <string[]?>         Substring patterns for messages to ignore (case-insensitive). [Default: null]
+  --min-severity <string?>     Minimum severity to report: error | warning | info. [Default: null]
+  --format <OutputFormat>      Output format: text | json | sarif. [Default: Text]
+  --oneline                    Print each diagnostic on a single line.
+  --color <ColorMode>          Color mode: auto | always | never. [Default: Auto]
+  --no-color                   Disable color output (overrides --color).
+  --verbose                    Print progress information to stderr.
+  --fix                        Enable fix mode for the root command (equivalent to the fix subcommand).
+  --dry-run                    Print unified diff without modifying files (requires --fix).
+  --check                      Exit non-zero if fixable diagnostics exist, without applying fixes (requires --fix).
+  --enable-pin-network         Allow network requests to resolve action SHA pins (requires --fix).
+  --enable-image-network       Allow network requests to resolve container image digests (requires --fix).
+  --include-actions            When no FILES are provided, include .github/actions/ in auto-discovery.
+
+Commands:
+  check              Lint workflow files.
+  init               Generate a starter seiton config file.
+  validate-config    Validate the seiton config file.
+  version            Show version and runtime information.
+```
+
+The examples below clarify the current behavior where fixes are enabled with `--fix` on the root command.
 
 ---
 
 ## Basic Usage
-
 With no arguments, `seiton` discovers and lints all `*.yml` / `*.yaml` files under `.github/workflows/` relative to the current working directory:
 
 ```sh
@@ -34,7 +70,7 @@ cat .github/workflows/ci.yml | seiton - --stdin-filename ci.yml
 
 ## Commands
 
-### `seiton` (default)
+### seiton
 
 Lint one or more GitHub Actions YAML files. This is the primary user-facing operation.
 
@@ -42,35 +78,33 @@ Lint one or more GitHub Actions YAML files. This is the primary user-facing oper
 seiton [FILES...] [FLAGS]
 ```
 
-### `seiton check`
-
 Identical to the default command in check mode. Provided for scripting clarity.
 
 ```sh
 seiton check [FILES...] [FLAGS]
 ```
 
-### `seiton fix`
+### seiton --fix
 
-Apply auto-fixes in place for all fixable diagnostics.
+To apply auto-fixes, use the root command with `--fix`.
 
 ```sh
-seiton fix [FILES...] [FLAGS]
+seiton --fix [FILES...] [FLAGS]
 ```
 
 Use `--dry-run` to preview diffs without modifying files:
 
 ```sh
-seiton fix --dry-run
+seiton --fix --dry-run
 ```
 
 Use `--check` to exit non-zero if any fixable diagnostic exists (without applying fixes):
 
 ```sh
-seiton fix --check
+seiton --fix --check
 ```
 
-### `seiton init`
+### seiton init
 
 Generate a starter config file at `.github/seiton.yaml`:
 
@@ -90,7 +124,7 @@ Overwrite an existing config file:
 seiton init --force
 ```
 
-### `seiton validate-config`
+### seiton validate-config
 
 Validate the resolved config file. Useful in CI jobs that maintain `.github/seiton.yaml`:
 
@@ -98,7 +132,7 @@ Validate the resolved config file. Useful in CI jobs that maintain `.github/seit
 seiton validate-config
 ```
 
-### `seiton version`
+### seiton version
 
 Print the version, build metadata, and target platform:
 
@@ -122,14 +156,13 @@ seiton version
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
-| `--ignore` | `string[]` | (none) | Regex patterns to suppress diagnostics by message. **`MatchTimeout`** = **2 s** per pattern (same cap as config `ignore-actions`); on timeout the diagnostic is **not** suppressed. Repeatable. |
-
+| `--ignore` | `string[]` | (none) | Case-insensitive substring patterns for messages to ignore. Repeatable. |
 | `--min-severity` | `error\|warning\|info` | (none) | Suppress diagnostics below this severity. |
-| `--fix` | `bool` | `false` | Run in fix mode (equivalent to `seiton fix`). |
+| `--fix` | `bool` | `false` | Run in fix mode on the root command. |
 
 ### Fix Flags
 
-These flags are valid only in fix mode (`--fix` or the `fix` subcommand).
+These flags are valid only when `--fix` is enabled on the root command.
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
@@ -160,11 +193,10 @@ All CLI flags can alternatively be set via environment variables. A flag always 
 | `SEITON_FORMAT` | `--format` | Output format (`text`, `json`, `sarif`). |
 | `SEITON_NO_COLOR` | `--no-color` | Any non-empty value disables color. |
 | `NO_COLOR` | `--no-color` | Standard `NO_COLOR` convention (fallback). |
-| `SEITON_GITHUB_TOKEN` | (internal) | GitHub API token for network-assisted operations. Takes priority over `GITHUB_TOKEN`. |
-| `GITHUB_TOKEN` | (internal) | GitHub API token fallback. |
-| `SEITON_LOG_LEVEL` | `--verbose` | `debug`, `info`, `warn`, `error`. `debug` implies `--verbose`. |
+| `SEITON_GITHUB_TOKEN` | (internal) | GitHub API token for online checks and network-assisted remediation. Takes priority over `GITHUB_TOKEN`. |
+| `GITHUB_TOKEN` | (internal) | GitHub API token fallback for online checks and network-assisted remediation. |
 
-When `CI=true` (standard GitHub Actions variable), color output defaults to `never` and progress indicators are suppressed.
+When `CI` is set, automatic color detection behaves as `never`.
 
 ---
 
@@ -176,7 +208,7 @@ Human-readable output with file path, line, column, severity, rule ID, and messa
 
 ```
 .github/workflows/ci.yml:18:7: [error] template-injection: untrusted value 'github.event.pull_request.title' interpolated directly into run script
-.github/workflows/ci.yml:42:5: [warning] unpinned-uses: 'actions/checkout@v4' is not pinned to a full commit SHA
+.github/workflows/ci.yml:42:5: [warning] unpinned-uses: 'actions/checkout@v6' is not pinned to a full commit SHA
 ```
 
 Use `--oneline` to produce one line per diagnostic (useful for `grep`/`awk` pipelines).
@@ -216,7 +248,7 @@ seiton --format sarif > seiton.sarif
 
 ### Command-Line
 
-Use `--ignore` with a regular expression to suppress diagnostics whose messages match:
+Use `--ignore` with one or more case-insensitive substrings to suppress diagnostics whose messages match:
 
 ```sh
 # Suppress all runner-label warnings
@@ -236,7 +268,7 @@ Add `# seiton: disable-next-line <rule-id>` in your workflow file to suppress th
 ```yaml
 steps:
   # seiton: disable-next-line unpinned-uses
-  - uses: actions/checkout@v4
+  - uses: actions/checkout@v6
 ```
 
 Suppress for an entire job:
@@ -276,6 +308,8 @@ seiton action.yml .github/actions/my-action/action.yml
 
 ## Integration with GitHub Actions
 
+Preparing `seiton` with the download script from [Installation](installation.md#download-script) is recommended for shell-based CI setup. On GitHub Actions the script writes the absolute downloaded binary path to the `executable` step output, so later steps can invoke it directly. Please ensure `shell: bash` is set for steps running the download script, since Windows runners default to `pwsh`.
+
 ### Using SARIF (recommended for public repos and GitHub Enterprise with Advanced Security)
 
 ```yaml
@@ -285,28 +319,30 @@ on:
   push:
     branches: [main]
   pull_request:
-    branches: ["**"]
+    branches: [main]
 
 permissions: {}
 
 jobs:
   seiton:
-    name: seiton
-    runs-on: ubuntu-latest
     permissions:
       security-events: write
       contents: read
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
           persist-credentials: false
 
-      - name: Install seiton
-        run: |
-          curl -L https://github.com/guitarrapc/seiton/releases/latest/download/install.sh | sh
+      - name: Download seiton
+        id: get-seiton
+        run: curl -fsSL https://raw.githubusercontent.com/guitarrapc/seiton/main/scripts/download.sh | bash
+        shell: bash
 
       - name: Run seiton
-        run: seiton --format sarif > seiton.sarif
+        run: ${{ steps.get-seiton.outputs.executable }} --format sarif > seiton.sarif
+        shell: bash
 
       - name: Upload SARIF
         uses: github/codeql-action/upload-sarif@ce28f5bb42d3534e5d0f3a320ca0b28ee32a72d0 # v3
@@ -315,46 +351,83 @@ jobs:
           sarif_file: seiton.sarif
 ```
 
-### Using GitHub Annotations
-
-```yaml
-- name: Run seiton
-  run: seiton --format json | seiton-annotate
-```
-
-Or with plain text format, use the standard GitHub problem matcher output:
+Or download and run `seiton` in one step:
 
 ```yaml
 - name: Run seiton
   run: |
-    seiton --format text 2>&1 | tee seiton.txt
-    if grep -q '\[error\]' seiton.txt; then exit 1; fi
+    curl -fsSL https://raw.githubusercontent.com/guitarrapc/seiton/main/scripts/download.sh | bash
+    ./seiton --format text
+  shell: bash
 ```
+
+If you need a specific version or download directory, pass `--version` and `--dir` to the script as described in [Installation](installation.md#download-script).
+
+If you only need plain text output and do not need the downloaded path later, running the download script and `./seiton` in one step is the simplest option. If you need to reuse the binary across later steps, prefer the `executable` step output form above.
 
 ---
 
-## Integration with pre-commit
+## Docker
 
-Add Seiton to your `.pre-commit-config.yaml`:
+Official container images are published to GHCR for `linux/amd64` and `linux/arm64`.
 
-```yaml
-repos:
-  - repo: https://github.com/guitarrapc/seiton
-    rev: v1.0.0
-    hooks:
-      - id: seiton
+Available tags include:
+
+- `ghcr.io/guitarrapc/seiton:latest`
+- `ghcr.io/guitarrapc/seiton:0.9.6`
+- `ghcr.io/guitarrapc/seiton:v0.9.6`
+
+To confirm the image works:
+
+```sh
+docker run --rm ghcr.io/guitarrapc/seiton:latest version
 ```
 
----
+To lint all workflow files in the current repository, mount the repository read-only and pass the repository root path:
 
-## Integration with reviewdog
+```sh
+docker run --rm -v "$PWD:/repo:ro" ghcr.io/guitarrapc/seiton:latest /repo
+```
+
+To lint specific files, pass them as explicit arguments inside the mounted repository:
+
+```sh
+docker run --rm -v "$PWD:/repo:ro" ghcr.io/guitarrapc/seiton:latest /repo/.github/workflows/ci.yml /repo/action.yml
+```
+
+To use the Docker image on GitHub Actions:
 
 ```yaml
-- name: Run seiton with reviewdog
-  uses: reviewdog/action-seiton@v1
-  with:
-    github_token: ${{ secrets.GITHUB_TOKEN }}
-    reporter: github-pr-review
+name: Lint GitHub Actions
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions: {}
+
+jobs:
+  seiton:
+    permissions:
+      security-events: write
+      contents: read
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+
+      - name: Run seiton in Docker
+        run: docker run --rm -v "$PWD:/repo:ro" ghcr.io/guitarrapc/seiton:latest --format sarif /repo > seiton.sarif
+
+      - name: Upload SARIF
+        uses: github/codeql-action/upload-sarif@ce28f5bb42d3534e5d0f3a320ca0b28ee32a72d0 # v3
+        if: always()
+        with:
+          sarif_file: seiton.sarif
 ```
 
 ---
@@ -363,6 +436,7 @@ repos:
 
 | Code | Meaning |
 |---|---|
-| `0` | No errors found (warnings may exist). |
-| `1` | One or more errors or fixable diagnostics found. |
-| `2` | Fatal error (config parse failure, invalid arguments, unreadable file). |
+| `0` | No warnings or errors found (info diagnostics may exist). |
+| `1` | One or more warnings, errors, or fixable diagnostics found. |
+| `2` | Invalid command-line options. |
+| `3` | Fatal error (for example config parse failure or unreadable file). |

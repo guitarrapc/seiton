@@ -362,7 +362,7 @@ jobs:
     runs-on: \${{ matrix.os }}
     steps:
       - run: echo "hello"
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - uses: actions/setup-node@v4
         with:
           node_version: 18.x

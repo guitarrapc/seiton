@@ -29,7 +29,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - run: echo "Title: ${{ github.event.pull_request.title }}"
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - uses: actions/setup-node@v4
         with:
           node_version: 18.x
@@ -39,7 +39,7 @@ jobs:
 
 ```
 test.yml:8:7: [error] template-injection: untrusted value 'github.event.pull_request.title' interpolated directly into run script; use env: indirection instead
-test.yml:9:5: [warning] unpinned-uses: 'actions/checkout@v4' is not pinned to a full commit SHA
+test.yml:9:5: [warning] unpinned-uses: 'actions/checkout@v6' is not pinned to a full commit SHA
 test.yml:12:9: [error] popular-action-inputs: input 'node_version' is not defined in action 'actions/setup-node@v4'; did you mean 'node-version'?
 test.yml:9:5: [warning] checkout-persist-credentials: 'actions/checkout' should set 'persist-credentials: false'
 test.yml:6:5: [warning] job-permissions-required: job 'test' does not declare explicit permissions
@@ -47,18 +47,22 @@ test.yml:6:5: [warning] job-permissions-required: job 'test' does not declare ex
 
 ## Quick Start
 
-Install Seiton (see [Installation](docs/installation.md) for all options):
+Install or download Seiton (see [Installation](docs/installation.md) for all options):
 
 ```sh
+# Download script (macOS/Linux, downloads to the current directory)
+curl -fsSL https://raw.githubusercontent.com/guitarrapc/seiton/main/scripts/download.sh | bash
+
 # Homebrew (macOS/Linux)
-brew install guitarrapc/tap/seiton
+brew tap guitarrapc/seiton https://github.com/guitarrapc/seiton
+brew install seiton
 
-# Windows
-winget install guitarrapc.seiton
-
-# Or download the latest release
-curl -L https://github.com/guitarrapc/seiton/releases/latest/download/install.sh | sh
+# Windows (Scoop)
+scoop bucket add guitarrapc https://github.com/guitarrapc/scoop-bucket
+scoop install seiton
 ```
+
+If you used the download script, run `./seiton` in the commands below from the download directory, or move the binary into your `PATH`. For other platforms, download a prebuilt archive from the [releases page](https://github.com/guitarrapc/seiton/releases) and add `seiton` to your `PATH` (see [Installation](docs/installation.md)).
 
 Run it:
 
