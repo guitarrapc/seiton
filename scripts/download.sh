@@ -51,17 +51,11 @@ publish_github_actions_metadata() {
   local executable_path="$1" target_dir="$2"
 
   if [ -n "${GITHUB_ACTIONS:-}" ]; then
-    if [ -n "${GITHUB_PATH:-}" ]; then
-      printf '%s\n' "$target_dir" >> "$GITHUB_PATH"
-    fi
-
     if [ -n "${GITHUB_OUTPUT:-}" ]; then
-      printf 'executable=%s\n' "$executable_path" >> "$GITHUB_OUTPUT"
-      printf 'directory=%s\n' "$target_dir" >> "$GITHUB_OUTPUT"
+      printf 'executable=%s\n' "$executable_path" | tee -a "$GITHUB_OUTPUT"
     else
       # GitHub Enterprise instances may still rely on the legacy workflow command.
       echo "::set-output name=executable::${executable_path}"
-      echo "::set-output name=directory::${target_dir}"
     fi
   fi
 }

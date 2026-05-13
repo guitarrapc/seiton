@@ -276,7 +276,7 @@ seiton action.yml .github/actions/my-action/action.yml
 
 ## Integration with GitHub Actions
 
-The download script in [Installation](installation.md#download-script) is intended for shell-based CI setup. On GitHub Actions it appends the target directory to `GITHUB_PATH`, so later steps can invoke `seiton` directly, and it also exposes `executable` and `directory` step outputs.
+The download script in [Installation](installation.md#download-script) is intended for shell-based CI setup. On GitHub Actions it outputs the `executable` path to step outputs, so later steps can invoke `seiton` directly. Please ensure `shell: bash` is set for steps running `seiton` to guarantee proper output parsing.
 
 ### Using SARIF (recommended for public repos and GitHub Enterprise with Advanced Security)
 
@@ -285,7 +285,7 @@ name: Lint GitHub Actions
 
 on:
   push:
-    branches: [main]
+    branches: ["main"]
   pull_request:
     branches: ["main"]
 
@@ -304,35 +304,18 @@ jobs:
           persist-credentials: false
 
       - name: Download seiton
-        id: seiton
-        run: |
-          mkdir -p "$RUNNER_TEMP/seiton-bin"
-          curl -fsSL https://raw.githubusercontent.com/guitarrapc/seiton/main/scripts/download.sh | bash -s -- --dir "$RUNNER_TEMP/seiton-bin"
+        id: get-seiton
+        run: curl -fsSL https://raw.githubusercontent.com/guitarrapc/seiton/main/scripts/download.sh | bash"
+        shell: bash
 
       - name: Run seiton
-        run: seiton --format sarif > seiton.sarif
+        run: ${{ steps.get-seiton.outputs.executable }} --format sarif > seiton.sarif
 
       - name: Upload SARIF
         uses: github/codeql-action/upload-sarif@ce28f5bb42d3534e5d0f3a320ca0b28ee32a72d0 # v3
         if: always()
         with:
           sarif_file: seiton.sarif
-```
-
-### Using GitHub Annotations
-
-```yaml
-- name: Run seiton
-  run: seiton --format json | seiton-annotate
-```
-
-Or with plain text format, use the standard GitHub problem matcher output:
-
-```yaml
-- name: Run seiton
-  run: |
-    seiton --format text 2>&1 | tee seiton.txt
-    if grep -q '\[error\]' seiton.txt; then exit 1; fi
 ```
 
 ---
