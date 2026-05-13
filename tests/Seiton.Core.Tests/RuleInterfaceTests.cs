@@ -12941,6 +12941,7 @@ public sealed class RuleInterfaceTests
             """));
         var engine = new LintEngine();
         var result = engine.Check(yaml, ".github/workflows/test.yml");
+        using var _ = result.ParseResult.Arena;
         await Assert.That(result.Diagnostics.Where(d => d.RuleId == "concurrency-limits").ToArray()).IsEmpty();
     }
 
@@ -12965,6 +12966,7 @@ public sealed class RuleInterfaceTests
         };
         var engine = new LintEngine();
         var result = engine.Check(yaml, ".github/workflows/test.yml", config);
+        using var _ = result.ParseResult.Arena;
         await Assert.That(result.Diagnostics.Where(d => d.RuleId == "concurrency-limits").ToArray()).IsNotEmpty();
     }
 
@@ -12977,6 +12979,7 @@ public sealed class RuleInterfaceTests
             var result = config is null
                 ? new LintEngine([rule]).Check(Encoding.UTF8.GetBytes(yaml), $"rule-case-{c.Name}.yml")
                 : new LintEngine([rule]).Check(Encoding.UTF8.GetBytes(yaml), $"rule-case-{c.Name}.yml", config);
+            using var _ = result.ParseResult.Arena;
             var diagnostics = result.Diagnostics.Where(x => x.RuleId == ruleId).ToArray();
 
             if (c.ExpectedSubstrings.Length == 0)
