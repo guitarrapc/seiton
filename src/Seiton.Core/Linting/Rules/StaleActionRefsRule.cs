@@ -9,7 +9,8 @@ public sealed class StaleActionRefsRule() : OnlineRuleBase(RuleId.StaleActionRef
 
     public override void EvaluateTarget(ActionAuditTarget target, ActionAdvisory? advisory, ActionRefResolution? resolution)
     {
-        if (resolution is null || !target.IsCommitSha || !resolution.Value.CommitExists || resolution.Value.IsTaggedCommit)
+        if (resolution is null || !target.IsCommitSha || !resolution.Value.CommitExists
+            || resolution.Value.IsTaggedCommit || !resolution.Value.IsReachable)
         {
             return;
         }

@@ -106,7 +106,8 @@ public sealed class OnlineAuditEngineTests
                         CommitExists: true,
                         HasBranchReference: false,
                         HasTagReference: false,
-                        IsTaggedCommit: false));
+                        IsTaggedCommit: false,
+                        IsReachable: true));
                 }
 
                 if (owner == "actions" && repo == "setup-go")
@@ -115,7 +116,8 @@ public sealed class OnlineAuditEngineTests
                         CommitExists: false,
                         HasBranchReference: true,
                         HasTagReference: true,
-                        IsTaggedCommit: false));
+                        IsTaggedCommit: false,
+                        IsReachable: false));
                 }
 
                 if (owner == "octo-org" && repo == "reusable")
@@ -124,7 +126,8 @@ public sealed class OnlineAuditEngineTests
                         CommitExists: false,
                         HasBranchReference: true,
                         HasTagReference: false,
-                        IsTaggedCommit: false));
+                        IsTaggedCommit: false,
+                        IsReachable: false));
                 }
 
                 return Task.FromResult(new ActionRefResolution());
@@ -160,7 +163,8 @@ public sealed class OnlineAuditEngineTests
                 CommitExists: false,
                 HasBranchReference: false,
                 HasTagReference: false,
-                IsTaggedCommit: false))),
+                IsTaggedCommit: false,
+                IsReachable: false))),
             new NetworkConfig());
 
         var result = await auditEngine.AuditAsync(lintResult, engine.ActiveOnlineRules);
@@ -237,7 +241,8 @@ public sealed class OnlineAuditEngineTests
                 CommitExists: false,
                 HasBranchReference: true,
                 HasTagReference: true,
-                IsTaggedCommit: false))),
+                IsTaggedCommit: false,
+                IsReachable: false))),
             new NetworkConfig());
 
         var result = await auditEngine.AuditAsync(lintResult, engine.ActiveOnlineRules);
@@ -361,6 +366,125 @@ public sealed class OnlineAuditEngineTests
 
         await Assert.That(result.SkippedCount).IsEqualTo(0);
         await Assert.That(calls).IsEqualTo(1);
+    }
+
+    [Test]
+    public async Task AuditAsync_AddsImpostorCommit_WhenCommitExistsButNotReachable()
+    {
+        var engine = new LintEngine();
+        var source = Encoding.UTF8.GetBytes(
+            """
+            jobs:
+              build:
+                runs-on: ubuntu-latest
+                steps:
+                  - uses: actions/checkout@bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
+            """);
+        var lintResult = engine.Check(source, "workflow.yml", EnableAllOnlineRules());
+
+        var auditEngine = new OnlineAuditEngine(
+            null,
+            new DelegateActionRefResolver((_, _, _, _) => Task.FromResult(new ActionRefResolution(
+                CommitExists: true,
+                HasBranchReference: false,
+                HasTagReference: false,
+                IsTaggedCommit: false,
+                IsReachable: false))),
+            new NetworkConfig());
+
+        var result = await auditEngine.AuditAsync(lintResult, engine.ActiveOnlineRules);
+
+        await Assert.That(result.AddedCount).IsEqualTo(1);
+        await Assert.That(result.Diagnostics.Any(x => x.RuleId == "impostor-commit" && x.Message.Contains("impostor commit from a fork", StringComparison.Ordinal))).IsTrue();
+    }
+
+    [Test]
+    public async Task AuditAsync_NoImpostorCommit_WhenCommitIsTagged()
+    {
+        var engine = new LintEngine();
+        var source = Encoding.UTF8.GetBytes(
+            """
+            jobs:
+              build:
+                runs-on: ubuntu-latest
+                steps:
+                  - uses: actions/checkout@bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
+            """);
+        var lintResult = engine.Check(source, "workflow.yml", EnableAllOnlineRules());
+
+        var auditEngine = new OnlineAuditEngine(
+            null,
+            new DelegateActionRefResolver((_, _, _, _) => Task.FromResult(new ActionRefResolution(
+                CommitExists: true,
+                HasBranchReference: false,
+                HasTagReference: false,
+                IsTaggedCommit: true,
+                IsReachable: true))),
+            new NetworkConfig());
+
+        var result = await auditEngine.AuditAsync(lintResult, engine.ActiveOnlineRules);
+
+        await Assert.That(result.Diagnostics.Any(x => x.RuleId == "impostor-commit")).IsFalse();
+    }
+
+    [Test]
+    public async Task AuditAsync_NoImpostorCommit_WhenCommitIsBranchHead()
+    {
+        var engine = new LintEngine();
+        var source = Encoding.UTF8.GetBytes(
+            """
+            jobs:
+              build:
+                runs-on: ubuntu-latest
+                steps:
+                  - uses: actions/checkout@bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
+            """);
+        var lintResult = engine.Check(source, "workflow.yml", EnableAllOnlineRules());
+
+        var auditEngine = new OnlineAuditEngine(
+            null,
+            new DelegateActionRefResolver((_, _, _, _) => Task.FromResult(new ActionRefResolution(
+                CommitExists: true,
+                HasBranchReference: false,
+                HasTagReference: false,
+                IsTaggedCommit: false,
+                IsReachable: true))),
+            new NetworkConfig());
+
+        var result = await auditEngine.AuditAsync(lintResult, engine.ActiveOnlineRules);
+
+        await Assert.That(result.Diagnostics.Any(x => x.RuleId == "impostor-commit")).IsFalse();
+    }
+
+    [Test]
+    public async Task AuditAsync_StaleRefs_SkipsUnreachableCommit()
+    {
+        var engine = new LintEngine();
+        var source = Encoding.UTF8.GetBytes(
+            """
+            jobs:
+              build:
+                runs-on: ubuntu-latest
+                steps:
+                  - uses: actions/checkout@bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
+            """);
+        var lintResult = engine.Check(source, "workflow.yml", EnableAllOnlineRules());
+
+        var auditEngine = new OnlineAuditEngine(
+            null,
+            new DelegateActionRefResolver((_, _, _, _) => Task.FromResult(new ActionRefResolution(
+                CommitExists: true,
+                HasBranchReference: false,
+                HasTagReference: false,
+                IsTaggedCommit: false,
+                IsReachable: false))),
+            new NetworkConfig());
+
+        var result = await auditEngine.AuditAsync(lintResult, engine.ActiveOnlineRules);
+
+        // impostor-commit should fire, but stale-action-refs should NOT (defers to impostor-commit)
+        await Assert.That(result.Diagnostics.Any(x => x.RuleId == "impostor-commit")).IsTrue();
+        await Assert.That(result.Diagnostics.Any(x => x.RuleId == "stale-action-refs")).IsFalse();
     }
 
     private sealed class DelegateActionAdvisoryProvider(

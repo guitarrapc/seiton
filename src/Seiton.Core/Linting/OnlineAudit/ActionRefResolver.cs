@@ -23,7 +23,8 @@ public readonly record struct ActionRefResolution(
     bool CommitExists,
     bool HasBranchReference,
     bool HasTagReference,
-    bool IsTaggedCommit);
+    bool IsTaggedCommit,
+    bool IsReachable);
 
 /// <summary>Default implementation of <see cref="IActionRefResolver"/> using the GitHub REST API.</summary>
 public sealed class ActionRefResolver(HttpClient httpClient, GitHubNetworkConfig githubConfig) : IActionRefResolver
@@ -70,15 +71,28 @@ public sealed class ActionRefResolver(HttpClient httpClient, GitHubNetworkConfig
                 CommitExists: false,
                 HasBranchReference: false,
                 HasTagReference: false,
-                IsTaggedCommit: false);
+                IsTaggedCommit: false,
+                IsReachable: false);
         }
 
         var isTaggedCommit = await IsTaggedCommitWithFallbackAsync(owner, repo, reference, token, cancellationToken);
+        if (isTaggedCommit)
+        {
+            return new ActionRefResolution(
+                CommitExists: true,
+                HasBranchReference: false,
+                HasTagReference: false,
+                IsTaggedCommit: true,
+                IsReachable: true);
+        }
+
+        var isBranchHead = await IsBranchHeadWithFallbackAsync(owner, repo, reference, token, cancellationToken);
         return new ActionRefResolution(
             CommitExists: true,
             HasBranchReference: false,
             HasTagReference: false,
-            IsTaggedCommit: isTaggedCommit);
+            IsTaggedCommit: false,
+            IsReachable: isBranchHead);
     }
 
     private async Task<ActionRefResolution> ResolveSymbolicRefAsync(
@@ -94,7 +108,8 @@ public sealed class ActionRefResolver(HttpClient httpClient, GitHubNetworkConfig
             CommitExists: false,
             HasBranchReference: branchExists,
             HasTagReference: tagExists,
-            IsTaggedCommit: false);
+            IsTaggedCommit: false,
+            IsReachable: false);
     }
 
     private async Task<bool> CommitExistsWithFallbackAsync(
@@ -198,6 +213,35 @@ public sealed class ActionRefResolver(HttpClient httpClient, GitHubNetworkConfig
         }
 
         return false;
+    }
+
+    private async Task<bool> IsBranchHeadWithFallbackAsync(
+        string owner,
+        string repo,
+        string sha,
+        string token,
+        CancellationToken cancellationToken)
+    {
+        var path = $"repos/{owner}/{repo}/commits/{sha}/branches-where-head";
+        var response = await SendGetWithFallbackAsync(path, token, cancellationToken);
+        if (response is null)
+        {
+            return false;
+        }
+
+        using (response)
+        {
+            if (response.StatusCode == HttpStatusCode.NotFound)
+            {
+                return false;
+            }
+
+            response.EnsureSuccessStatusCode();
+            await using var stream = await response.Content.ReadAsStreamAsync(cancellationToken);
+            using var document = await JsonDocument.ParseAsync(stream, cancellationToken: cancellationToken);
+            return document.RootElement.ValueKind == JsonValueKind.Array
+                && document.RootElement.GetArrayLength() > 0;
+        }
     }
 
     private async Task<HttpResponseMessage?> SendGetWithFallbackAsync(

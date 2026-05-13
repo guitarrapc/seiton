@@ -298,6 +298,27 @@ dotnet run -c Release
 
 **予想**: パーサー/ローカル lint のベンチマークに影響なし。online ルールはベンチマーク対象外（ネットワーク依存のため）。`ActionRefResolution` の `bool` 追加は struct コピーコストに影響しない。
 
+### ベンチマーク結果（実装後）
+
+```
+BenchmarkDotNet v0.15.6, Windows 11 (10.0.26200.8246)
+AMD Ryzen 9 7950X3D 4.20GHz, 1 CPU, 32 logical and 16 physical cores
+.NET SDK 10.0.202
+  [Host]   : .NET 10.0.6 (10.0.6, 10.0.626.17701), X64 RyuJIT x86-64-v4
+  ShortRun : .NET 10.0.6 (10.0.6, 10.0.626.17701), X64 RyuJIT x86-64-v4
+
+| Method                            | Size   | FixEnabled | Mean         | Allocated |
+|---------------------------------- |------- |----------- |-------------:|----------:|
+| 'LintEngine.Check (parse + lint)' | Small  | False      |     72.02 μs |  24.06 KB |
+| 'LintEngine.Check (parse + lint)' | Small  | True       |     85.81 μs |  25.52 KB |
+| 'LintEngine.Check (parse + lint)' | Medium | False      |  1,300.22 μs | 137.28 KB |
+| 'LintEngine.Check (parse + lint)' | Medium | True       |  2,544.26 μs | 150.64 KB |
+| 'LintEngine.Check (parse + lint)' | Large  | False      | 23,439.49 μs | 710.18 KB |
+| 'LintEngine.Check (parse + lint)' | Large  | True       | 35,226.56 μs | 764.91 KB |
+```
+
+**結論**: Ratio=1.00、Alloc Ratio=1.00 — 全サイズでベースラインと同等。回帰なし確認済み。
+
 ## 6. スペック更新
 
 ### `Seiton_Linter_spec.md`
@@ -314,14 +335,14 @@ dotnet run -c Release
 
 ## 7. 実装チェックリスト
 
-- [ ] `ActionRefResolution` に `IsReachable` フィールド追加
-- [ ] `IsBranchHeadWithFallbackAsync` メソッド追加
-- [ ] `ResolveCommitAsync` でタグなしコミットに対して `IsBranchHeadWithFallbackAsync` 呼び出し
-- [ ] `ImpostorCommitRule.EvaluateTarget` でフォーク由来コミットの検出ロジック追加
-- [ ] `StaleActionRefsRule.EvaluateTarget` で `IsReachable == false` のスキップ追加
-- [ ] 既存テストのコンパイルエラー修正（`ActionRefResolution` コンストラクタ変更）
-- [ ] 新規テスト追加（impostor commit フォークケース）
-- [ ] 全テスト通過確認
-- [ ] ベンチマーク比較（CoreLintBenchmark: Mean/Allocated ±10% 以内）
-- [ ] `Seiton_Linter_spec.md` 更新
-- [ ] `Seiton_Linter_csharp_spec.md` 更新
+- [x] `ActionRefResolution` に `IsReachable` フィールド追加
+- [x] `IsBranchHeadWithFallbackAsync` メソッド追加
+- [x] `ResolveCommitAsync` でタグなしコミットに対して `IsBranchHeadWithFallbackAsync` 呼び出し
+- [x] `ImpostorCommitRule.EvaluateTarget` でフォーク由来コミットの検出ロジック追加
+- [x] `StaleActionRefsRule.EvaluateTarget` で `IsReachable == false` のスキップ追加
+- [x] 既存テストのコンパイルエラー修正（`ActionRefResolution` コンストラクタ変更）
+- [x] 新規テスト追加（impostor commit フォークケース）
+- [x] 全テスト通過確認
+- [x] ベンチマーク比較（CoreLintBenchmark: Mean/Allocated ±10% 以内）
+- [x] `Seiton_Linter_spec.md` 更新
+- [x] `Seiton_Linter_csharp_spec.md` 更新
