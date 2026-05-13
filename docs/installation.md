@@ -19,13 +19,6 @@ There are several ways to install Seiton.
 Seiton provides a Homebrew formula from the repository tap for macOS and Linux:
 
 ```sh
-brew tap guitarrapc/seiton
-brew install seiton
-```
-
-If you prefer the explicit repository URL:
-
-```sh
 brew tap guitarrapc/seiton https://github.com/guitarrapc/seiton
 brew install seiton
 ```

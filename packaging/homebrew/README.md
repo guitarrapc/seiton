@@ -5,7 +5,7 @@
 ## 方針
 
 - **専用の `homebrew-tap` リポジトリは使わない。**
-- 本リポジトリ直下に `Formula/seiton.rb` を置き、ユーザーは **`brew tap <owner>/<repo>`** でこのリポを指す（例: `guitarrapc/seiton`）。
+- 本リポジトリ直下に `Formula/seiton.rb` を置き、ユーザーは **`brew tap guitarrapc/seiton https://github.com/guitarrapc/seiton`** でこのリポを明示的に tap する。
 - **リリースごと**に `version` と各アーキテクチャの `url` / `sha256` を直す必要がある。GitHub Release が **Published** になったとき [.github/workflows/homebrew-formula.yaml](../../.github/workflows/homebrew-formula.yaml) が `checksums-sha256.txt` から Formula を再生成し、**デフォルトブランチへコミット**する。
 
 ## 権限
