@@ -29,10 +29,10 @@ require_hash() {
   fi
 }
 
-require_hash "linux-amd64.tar.gz" "$H_LINUX_AMD64"
-require_hash "linux-arm64.tar.gz" "$H_LINUX_ARM64"
-require_hash "osx-amd64.tar.gz" "$H_OSX_AMD64"
-require_hash "osx-arm64.tar.gz" "$H_OSX_ARM64"
+require_hash "seiton-linux-amd64.tar.gz" "$H_LINUX_AMD64"
+require_hash "seiton-linux-arm64.tar.gz" "$H_LINUX_ARM64"
+require_hash "seiton-osx-amd64.tar.gz" "$H_OSX_AMD64"
+require_hash "seiton-osx-arm64.tar.gz" "$H_OSX_ARM64"
 
 BASE="https://github.com/${OWNER}/${NAME}/releases/download/${TAG}"
 
