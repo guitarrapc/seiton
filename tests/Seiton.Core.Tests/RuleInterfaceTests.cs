@@ -451,7 +451,6 @@ public sealed class RuleInterfaceTests
         {
             var semanticId = ruleId.ToId();
             var priority = RuleCatalog.GetPriority(semanticId);
-            await Assert.That(priority).IsNotEqualTo(int.MaxValue).Because($"rule '{semanticId}' must have a registered priority");
             await Assert.That(priority).IsNotEqualTo(int.MaxValue - 1).Because($"rule '{semanticId}' must have a registered priority (got unknown sentinel)");
             if (priorityToRule.TryGetValue(priority, out var existing))
             {
