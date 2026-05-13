@@ -112,6 +112,7 @@ Seiton includes **50+ rules** across four categories. Each rule has a dedicated 
 | [env-var](docs/checks.md#env-var) | ✓ | ✗ | Risky environment variable patterns |
 | [if-cond](docs/checks.md#if-cond) | ✓ | ✗ | Constant or unsound `if` conditions |
 | [fake-ternary](docs/checks.md#fake-ternary) | ✓ | ✗ | `cond && a \|\| b` fake ternary idioms |
+| [concurrency-limits](docs/checks.md#concurrency-limits) | ✓ | ✗ | Missing concurrency settings with `cancel-in-progress` |
 | [deprecated-commands](docs/checks.md#deprecated-commands) | ✓ | ✗ | Deprecated workflow commands |
 | [dispatch-inputs](docs/checks.md#dispatch-inputs) | ✓ | ✗ | Invalid `workflow_dispatch` input definitions |
 | [schedule-event](docs/checks.md#schedule-event) | ✓ | ✗ | Invalid schedule cron/timezone |

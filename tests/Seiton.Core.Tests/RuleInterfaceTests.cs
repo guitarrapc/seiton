@@ -296,7 +296,7 @@ public sealed class RuleInterfaceTests
     {
         var rules = RuleCatalog.CreateDefaultRules();
 
-        await Assert.That(rules.Length).IsEqualTo(51);
+        await Assert.That(rules.Length).IsEqualTo(52);
         await Assert.That(rules[0].Id).IsEqualTo(RuleId.JobStructure);
         await Assert.That(rules[1].Id).IsEqualTo(RuleId.ReusableWorkflow);
         await Assert.That(rules[2].Id).IsEqualTo(RuleId.Permissions);
@@ -348,6 +348,7 @@ public sealed class RuleInterfaceTests
         await Assert.That(rules[48].Id).IsEqualTo(RuleId.WorkflowCallInputDefault);
         await Assert.That(rules[49].Id).IsEqualTo(RuleId.OutdatedActionRunner);
         await Assert.That(rules[50].Id).IsEqualTo(RuleId.IfExprWrapper);
+        await Assert.That(rules[51].Id).IsEqualTo(RuleId.ConcurrencyLimits);
 
         await Assert.That(RuleCatalog.GetPriority("job-structure")).IsEqualTo(0);
         await Assert.That(RuleCatalog.GetPriority("reusable-workflow")).IsEqualTo(1);
@@ -400,6 +401,7 @@ public sealed class RuleInterfaceTests
         await Assert.That(RuleCatalog.GetPriority("workflow-call-input-default")).IsEqualTo(52);
         await Assert.That(RuleCatalog.GetPriority("outdated-action-runner")).IsEqualTo(53);
         await Assert.That(RuleCatalog.GetPriority("if-expr-wrapper")).IsEqualTo(54);
+        await Assert.That(RuleCatalog.GetPriority("concurrency-limits")).IsEqualTo(55);
         await Assert.That(RuleCatalog.GetPriority("known-vulnerable-actions")).IsEqualTo(29);
         await Assert.That(RuleCatalog.GetPriority("impostor-commit")).IsEqualTo(30);
         await Assert.That(RuleCatalog.GetPriority("ref-confusion")).IsEqualTo(31);
@@ -415,12 +417,13 @@ public sealed class RuleInterfaceTests
         await Assert.That(RuleCatalog.GetCanonicalRuleId("workflow-call-input-default")).IsEqualTo("seiton-lint-rule-049");
         await Assert.That(RuleCatalog.GetCanonicalRuleId("outdated-action-runner")).IsEqualTo("seiton-lint-rule-050");
         await Assert.That(RuleCatalog.GetCanonicalRuleId("if-expr-wrapper")).IsEqualTo("seiton-lint-rule-051");
-        await Assert.That(RuleCatalog.GetCanonicalRuleId("known-vulnerable-actions")).IsEqualTo("seiton-lint-rule-052");
+        await Assert.That(RuleCatalog.GetCanonicalRuleId("concurrency-limits")).IsEqualTo("seiton-lint-rule-052");
+        await Assert.That(RuleCatalog.GetCanonicalRuleId("known-vulnerable-actions")).IsEqualTo("seiton-lint-rule-053");
 
-        await Assert.That(RuleCatalog.TryResolveRuleId("seiton-lint-rule-053", out var impostorCommit)).IsTrue();
+        await Assert.That(RuleCatalog.TryResolveRuleId("seiton-lint-rule-054", out var impostorCommit)).IsTrue();
         await Assert.That(impostorCommit).IsEqualTo(RuleId.ImpostorCommit);
-        await Assert.That(RuleCatalog.GetCanonicalRuleId("ref-confusion")).IsEqualTo("seiton-lint-rule-054");
-        await Assert.That(RuleCatalog.GetCanonicalRuleId("stale-action-refs")).IsEqualTo("seiton-lint-rule-055");
+        await Assert.That(RuleCatalog.GetCanonicalRuleId("ref-confusion")).IsEqualTo("seiton-lint-rule-055");
+        await Assert.That(RuleCatalog.GetCanonicalRuleId("stale-action-refs")).IsEqualTo("seiton-lint-rule-056");
     }
 
     [Test]
@@ -12698,6 +12701,194 @@ public sealed class RuleInterfaceTests
         await Assert.That(result.Diagnostics.Any(x => x.RuleId is null && x.Message.Contains("output-commands extend entry must not be empty", StringComparison.Ordinal))).IsTrue();
         await Assert.That(result.Diagnostics.Any(x => x.RuleId is null && x.Message.Contains("allow pattern must not be empty", StringComparison.Ordinal))).IsTrue();
         await Assert.That(result.Diagnostics.Any(x => x.RuleId is null && x.Message.Contains("deny pattern must not be empty", StringComparison.Ordinal))).IsTrue();
+    }
+
+    [Test]
+    public async Task RuleRegression_ConcurrencyLimitsRule_TableDriven()
+    {
+        var cases = new[]
+        {
+            new RuleCase(
+            "ok-workflow-concurrency-with-cancel-true",
+            """
+            on: push
+            concurrency:
+                group: ${{ github.workflow }}-${{ github.ref }}
+                cancel-in-progress: true
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - run: echo ok
+            """,
+            []),
+            new RuleCase(
+            "ok-workflow-concurrency-with-cancel-false",
+            """
+            on: push
+            concurrency:
+                group: ${{ github.workflow }}-${{ github.ref }}
+                cancel-in-progress: false
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - run: echo ok
+            """,
+            []),
+            new RuleCase(
+            "ok-workflow-concurrency-with-cancel-expression",
+            """
+            on: push
+            concurrency:
+                group: ${{ github.workflow }}-${{ github.ref }}
+                cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - run: echo ok
+            """,
+            []),
+            new RuleCase(
+            "ok-job-concurrency-with-cancel-true",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    concurrency:
+                        group: ${{ github.workflow }}-${{ github.ref }}
+                        cancel-in-progress: true
+                    steps:
+                        - run: echo ok
+            """,
+            []),
+            new RuleCase(
+            "ok-job-concurrency-with-cancel-false",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    concurrency:
+                        group: ${{ github.workflow }}-${{ github.ref }}
+                        cancel-in-progress: false
+                    steps:
+                        - run: echo ok
+            """,
+            []),
+            new RuleCase(
+            "ok-reusable-only-workflow",
+            """
+            on: workflow_call
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - run: echo ok
+            """,
+            []),
+            new RuleCase(
+            "ok-reusable-workflow-call-job",
+            """
+            on: push
+            concurrency:
+                group: ${{ github.workflow }}-${{ github.ref }}
+                cancel-in-progress: true
+            jobs:
+                reuse:
+                    uses: owner/repo/.github/workflows/reuse.yml@main
+            """,
+            []),
+            new RuleCase(
+            "ok-workflow-concurrency-covers-all-jobs",
+            """
+            on: push
+            concurrency:
+                group: ${{ github.workflow }}-${{ github.ref }}
+                cancel-in-progress: true
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - run: echo ok
+                deploy:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - run: echo ok
+            """,
+            []),
+            new RuleCase(
+            "ok-workflow-call-mixed-triggers",
+            """
+            on:
+                push:
+                workflow_call:
+            concurrency:
+                group: ${{ github.workflow }}-${{ github.ref }}
+                cancel-in-progress: true
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - run: echo ok
+            """,
+            []),
+            new RuleCase(
+            "ng-workflow-concurrency-bare",
+            """
+            on: push
+            concurrency: my-group
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - run: echo ng
+            """,
+            ["missing 'cancel-in-progress'"]),
+            new RuleCase(
+            "ng-no-concurrency-anywhere",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - run: echo ng
+            """,
+            ["does not declare concurrency"]),
+            new RuleCase(
+            "ng-job-concurrency-bare",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    concurrency: my-group
+                    steps:
+                        - run: echo ng
+            """,
+            ["missing 'cancel-in-progress'"]),
+            new RuleCase(
+            "ng-mixed-jobs",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    concurrency: my-group
+                    steps:
+                        - run: echo ng
+                deploy:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - run: echo ng
+            """,
+            ["missing 'cancel-in-progress'", "does not declare concurrency"]),
+        };
+
+        await AssertRuleCases(new ConcurrencyLimitsRule(), "concurrency-limits", cases);
     }
 
     private static async Task AssertRuleCases(IRule rule, string ruleId, RuleCase[] cases, LintConfig? config = null)

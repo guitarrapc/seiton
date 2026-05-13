@@ -75,6 +75,7 @@ public sealed class ActionlintExamplesCompatTests
         "run-secrets-context-direct-use",
         "run-inputs-context-direct-use",
         "secrets-whole-context-access",
+        "concurrency-limits",
         "syntax",
     };
 

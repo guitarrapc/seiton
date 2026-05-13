@@ -34,6 +34,7 @@ This page documents all lint rules included in Seiton.
 - [if-cond](#if-cond)
 - [fake-ternary](#fake-ternary)
 - [if-expr-wrapper](#if-expr-wrapper)
+- [concurrency-limits](#concurrency-limits)
 - [deprecated-commands](#deprecated-commands)
 
 ### Security
@@ -759,6 +760,54 @@ jobs:
 ```
 
 > **Note:** Bare `true`, `false`, `always()`, `failure()`, `cancelled()`, `success()` literals are intentionally excluded from this rule since GitHub Actions handles them natively.
+
+---
+
+### `concurrency-limits`
+
+| Default | Network | Auto-fix |
+|---|---|---|
+| ✓ | — | ✗ |
+
+Warns when workflows or jobs lack `concurrency` settings with explicit `cancel-in-progress`. Without concurrency limits, parallel runs can waste resources and cause race conditions.
+
+**Example trigger:**
+
+```yaml
+on: push
+# WARNING: workflow does not declare concurrency
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo ng
+```
+
+```yaml
+on: push
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    concurrency: my-group  # WARNING: missing 'cancel-in-progress'
+    steps:
+      - run: echo ng
+```
+
+**Remediation:** Add a `concurrency` block with `group` and `cancel-in-progress`:
+
+```yaml
+on: push
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo ok
+```
+
+> **Note:** Reusable-only workflows (`on: workflow_call`) and workflow-call jobs (`uses:`) are skipped. When workflow-level concurrency is set, job-level checks are suppressed.
 
 ---
 

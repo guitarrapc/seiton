@@ -211,8 +211,8 @@ online audit rules（4）:
 
 | 区分 | 件数 | Seiton 状況 |
 |---|---:|---|
-| 直接対応済み | 14 | `cache-poisoning`, `dangerous-triggers`, `impostor-commit`, `insecure-commands`, `known-vulnerable-actions`, `ref-confusion`, `secrets-inherit`, `secrets-outside-env`, `self-hosted-runner`, `stale-action-refs`, `template-injection`, `unpinned-images`, `unpinned-uses`, `unredacted-secrets` |
-| 部分対応 | 8 | `archived-uses`, `concurrency-limits`, `excessive-permissions`, `forbidden-uses`, `overprovisioned-secrets`, `ref-version-mismatch`, `undocumented-permissions`, `use-trusted-publishing` |
+| 直接対応済み | 15 | `cache-poisoning`, `concurrency-limits`, `dangerous-triggers`, `impostor-commit`, `insecure-commands`, `known-vulnerable-actions`, `ref-confusion`, `secrets-inherit`, `secrets-outside-env`, `self-hosted-runner`, `stale-action-refs`, `template-injection`, `unpinned-images`, `unpinned-uses`, `unredacted-secrets` |
+| 部分対応 | 7 | `archived-uses`, `excessive-permissions`, `forbidden-uses`, `overprovisioned-secrets`, `ref-version-mismatch`, `undocumented-permissions`, `use-trusted-publishing` |
 | 未対応 | 12 | 高度セキュリティ監査群（残差分） |
 
 zizmor 監査ID別対応表（実装確認ベース）:
@@ -224,7 +224,7 @@ zizmor 監査ID別対応表（実装確認ベース）:
 | `artipacked` | ❌ | 専用監査なし |
 | `bot-conditions` | ❌ | 専用監査なし |
 | `cache-poisoning` | ✅ | `cache-poisoning` |
-| `concurrency-limits` | 🟡 | 近接チェックはあるが専用監査は未実装 |
+| `concurrency-limits` | ✅ | `concurrency-limits` — ワークフロー/ジョブレベルの concurrency 設定と cancel-in-progress を検査 |
 | `dangerous-triggers` | ✅ | `dangerous-triggers` |
 | `dependabot-cooldown` | ❌ | 専用監査なし |
 | `dependabot-execution` | ❌ | 専用監査なし |

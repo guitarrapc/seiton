@@ -65,6 +65,7 @@ internal static class RuleIdExtensions
         RuleId.WorkflowCallInputDefault => "workflow-call-input-default",
         RuleId.OutdatedActionRunner => "outdated-action-runner",
         RuleId.IfExprWrapper => "if-expr-wrapper",
+        RuleId.ConcurrencyLimits => "concurrency-limits",
         RuleId.Syntax => "syntax",
         _ => throw new ArgumentOutOfRangeException(nameof(id), id, null),
     };
