@@ -48,7 +48,8 @@ internal static class RuleCatalog
         (RuleId.DenyInheritSecrets, 26, static () => new DenyInheritSecretsRule()),
         (RuleId.JobTimeoutMinutesRequired, 27, static () => new JobTimeoutMinutesRequiredRule()),
         (RuleId.GitHubAppTokenInputs, 28, static () => new GitHubAppTokenInputsRule()),
-        // Online rules start here (29+), but are included in the default factories for priority ordering and canonical ID assignment.
+        // Priorities 29-32 are reserved for online rules (see OnlineRuleFactories).
+        // Canonical ID = priority + 1; keep priorities unique and never reuse a published priority.
         (RuleId.CachePoisoning, 33, static () => new CachePoisoningRule()),
         (RuleId.SelfHostedRunner, 34, static () => new SelfHostedRunnerRule()),
         (RuleId.UnredactedSecrets, 35, static () => new UnredactedSecretsRule()),
@@ -234,7 +235,12 @@ internal static class RuleCatalog
         var map = new Dictionary<string, RuleId>(StringComparer.Ordinal);
         for (var i = 0; i < AllRuleMetadata.Length; i++)
         {
-            map[$"{CanonicalPrefix}{(i + 1).ToString("000", System.Globalization.CultureInfo.InvariantCulture)}"] = AllRuleMetadata[i].Id;
+            var canonicalId = $"{CanonicalPrefix}{(AllRuleMetadata[i].Priority + 1).ToString("000", System.Globalization.CultureInfo.InvariantCulture)}";
+            if (!map.TryAdd(canonicalId, AllRuleMetadata[i].Id))
+            {
+                throw new InvalidOperationException(
+                    $"Duplicate rule priority detected: canonical ID '{canonicalId}' (priority {AllRuleMetadata[i].Priority}) is already assigned to '{map[canonicalId]}'. Rule '{AllRuleMetadata[i].Id}' cannot share the same priority.");
+            }
         }
 
         return map;
