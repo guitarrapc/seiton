@@ -539,7 +539,7 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4\6
+      - uses: actions/checkout@v4
 
       - uses: actions/setup-dotnet@v4
         with:
