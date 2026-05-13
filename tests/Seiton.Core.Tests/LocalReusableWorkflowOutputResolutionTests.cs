@@ -433,4 +433,94 @@ public sealed class LocalReusableWorkflowOutputResolutionTests
             }
         }
     }
+
+    [Test]
+    public async Task ResolveOutputNames_CaseDifferentPath_NotResolvedOnCaseSensitiveFs()
+    {
+        // On case-sensitive filesystems (Linux), a sibling directory whose name differs only by case
+        // must NOT be treated as "under the base directory". The old StartsWith(OrdinalIgnoreCase) guard
+        // would incorrectly allow this; Path.GetRelativePath correctly rejects it.
+        // On Windows (case-insensitive FS), the directories cannot differ by case alone, so this test
+        // validates the general containment logic instead.
+        var rootDir = Path.Combine(Path.GetTempPath(), "seiton-resolver-case-" + Guid.NewGuid().ToString("N", System.Globalization.CultureInfo.InvariantCulture));
+        var workflowsDir = Path.Combine(rootDir, ".github", "workflows");
+        Directory.CreateDirectory(workflowsDir);
+
+        // Create a sibling directory with UPPER-case name
+        var siblingName = Path.GetFileName(rootDir).ToUpperInvariant();
+        var siblingDir = Path.Combine(Path.GetDirectoryName(rootDir)!, siblingName);
+        var siblingWorkflowsDir = Path.Combine(siblingDir, ".github", "workflows");
+        Directory.CreateDirectory(siblingWorkflowsDir);
+
+        var callerPath = Path.Combine(workflowsDir, "caller.yml");
+        var evilPath = Path.Combine(siblingWorkflowsDir, "evil.yml");
+
+        try
+        {
+            // Place a valid reusable workflow in the sibling (case-different) directory
+            var evilYaml = """
+            on:
+              workflow_call:
+                outputs:
+                  secret:
+                    description: Should not be resolvable on case-sensitive FS
+                    value: ${{ jobs.x.outputs.v }}
+            jobs:
+              x:
+                runs-on: ubuntu-latest
+                outputs:
+                  v: ${{ steps.s.outputs.v }}
+                steps:
+                  - id: s
+                    run: echo "v=leaked" >> "$GITHUB_OUTPUT"
+            """;
+
+            File.WriteAllText(evilPath, evilYaml, Encoding.UTF8);
+
+            // Construct a uses path that traverses via ../ into the case-different sibling
+            // ./.github/workflows/../../../<SIBLING>/.github/workflows/evil.yml
+            var usesPath = "./.github/workflows/../../../" + siblingName + "/.github/workflows/evil.yml";
+
+            var callerYaml = "on: push\njobs:\n  escaped:\n    uses: " + usesPath + "\n  deploy:\n    runs-on: ubuntu-latest\n    needs: [escaped]\n    steps:\n      - env:\n          TAG: ${{ needs.escaped.outputs.typo }}\n        run: echo \"$TAG\"\n";
+            File.WriteAllText(callerPath, callerYaml, Encoding.UTF8);
+
+            var result = new LintEngine([new ExprUndefinedVarRule()])
+                .Check(File.ReadAllBytes(callerPath), callerPath);
+            using var _ = result.ParseResult.Arena;
+
+            await Assert.That(result.ParseResult.HasFatalError).IsFalse();
+
+            if (OperatingSystem.IsWindows())
+            {
+                // On Windows, case-insensitive FS means the sibling IS the same directory.
+                // Path.GetRelativePath correctly treats them as same → resolution succeeds.
+                // Actual case-bypass attack is impossible on Windows.
+                // No assertion on "is not defined" — may or may not fire depending on whether
+                // sibling == root (which it does on Windows).
+            }
+            else
+            {
+                // On Linux/macOS (case-sensitive FS), the sibling is a DIFFERENT directory.
+                // Path.GetRelativePath returns "../<SIBLING>/..." which starts with ".."
+                // → guard rejects → loose typing → no "is not defined" error.
+                var msgs = result.Diagnostics
+                    .Where(x => x.RuleId == "expr-undefined-var")
+                    .Select(x => x.Message)
+                    .ToArray();
+                await Assert.That(msgs.Any(m => m.Contains("is not defined", StringComparison.Ordinal))).IsFalse();
+            }
+        }
+        finally
+        {
+            if (Directory.Exists(rootDir))
+            {
+                Directory.Delete(rootDir, recursive: true);
+            }
+            // On case-sensitive FS, sibling is a different directory that needs separate cleanup
+            if (!string.Equals(rootDir, siblingDir, StringComparison.Ordinal) && Directory.Exists(siblingDir))
+            {
+                Directory.Delete(siblingDir, recursive: true);
+            }
+        }
+    }
 }

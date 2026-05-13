@@ -79,11 +79,11 @@ internal sealed class LocalReusableWorkflowOutputResolver
             return null;
         }
 
-        // Guard against path traversal: resolved path must remain under the base directory
-        var baseWithSeparator = baseDirectory.EndsWith(Path.DirectorySeparatorChar)
-            ? baseDirectory
-            : baseDirectory + Path.DirectorySeparatorChar;
-        if (!resolvedPath.StartsWith(baseWithSeparator, StringComparison.OrdinalIgnoreCase))
+        // Guard against path traversal: resolved path must remain under the base directory.
+        // Use Path.GetRelativePath which is filesystem-aware and avoids case-sensitivity issues
+        // with string prefix comparisons on case-sensitive platforms.
+        var relativeToBas = Path.GetRelativePath(baseDirectory, resolvedPath);
+        if (relativeToBas.StartsWith("..", StringComparison.Ordinal) || Path.IsPathRooted(relativeToBas))
         {
             return null;
         }
