@@ -71,12 +71,26 @@ verify_checksum() {
   local file="$1" checksums_file="$2" filename
   filename="$(basename "$file")"
 
-  local expected
-  expected="$(grep "${filename}" "$checksums_file" | awk '{print $1}')"
-  if [ -z "$expected" ]; then
+  local expected matches match_count
+  matches="$(awk -v filename="$filename" '
+    {
+      file = $2
+      sub(/^\*/, "", file)
+      if (file == filename) {
+        print $1
+      }
+    }
+  ' "$checksums_file")"
+  match_count="$(printf '%s\n' "$matches" | awk 'NF { count++ } END { print count + 0 }')"
+  if [ "$match_count" -eq 0 ]; then
     echo "Error: checksum entry for '${filename}' not found in checksums file." >&2
     exit 1
   fi
+  if [ "$match_count" -ne 1 ]; then
+    echo "Error: multiple checksum entries found for '${filename}' in checksums file." >&2
+    exit 1
+  fi
+  expected="$matches"
 
   local actual
   if command -v sha256sum >/dev/null 2>&1; then
@@ -239,19 +253,32 @@ main() {
   fi
 
   # Install
+  local src="${tmpdir}/${BINARY_NAME}"
   local dest="${install_dir}/${BINARY_NAME}"
   if [ "$os" = "win" ]; then
+    src="${src}.exe"
     dest="${dest}.exe"
   fi
 
   mkdir -p "$install_dir"
   if [ -w "$install_dir" ]; then
-    cp "${tmpdir}/${BINARY_NAME}" "$dest"
+    cp "$src" "$dest"
   else
     echo "Elevated permissions required to install to ${install_dir}."
-    sudo cp "${tmpdir}/${BINARY_NAME}" "$dest"
+    if [ "$(id -u)" -eq 0 ]; then
+      cp "$src" "$dest"
+    else
+      if ! command -v sudo >/dev/null 2>&1; then
+        echo "Error: cannot install to ${install_dir} because it is not writable and 'sudo' is not available. Re-run as root or choose a writable directory with --dir." >&2
+        exit 1
+      fi
+      sudo cp "$src" "$dest"
+      sudo chmod +x "$dest"
+    fi
   fi
-  chmod +x "$dest"
+  if [ -w "$install_dir" ] || [ "$(id -u)" -eq 0 ]; then
+    chmod +x "$dest"
+  fi
 
   echo ""
   echo "Installed ${BINARY_NAME} ${version} to ${dest}"
