@@ -116,11 +116,18 @@ brew install seiton
 ### Manual
 
 ```sh
-curl -L https://github.com/guitarrapc/seiton/releases/latest/download/seiton-osx-arm64.tar.gz | tar xz
+curl -L https://github.com/guitarrapc/seiton/releases/latest/download/seiton-osx-arm64.tar.gz -o seiton-osx-arm64.tar.gz
+tar xzf seiton-osx-arm64.tar.gz
 sudo mv seiton /usr/local/bin/
 ```
 
 For Intel Macs, use `seiton-osx-amd64.tar.gz` instead.
+
+If you have the [GitHub CLI](https://cli.github.com/), you can verify SLSA build provenance before installing:
+
+```sh
+gh attestation verify seiton-osx-arm64.tar.gz -R guitarrapc/seiton
+```
 
 ---
 
@@ -138,11 +145,18 @@ brew install seiton
 ### Manual
 
 ```sh
-curl -L https://github.com/guitarrapc/seiton/releases/latest/download/seiton-linux-amd64.tar.gz | tar xz
+curl -L https://github.com/guitarrapc/seiton/releases/latest/download/seiton-linux-amd64.tar.gz -o seiton-linux-amd64.tar.gz
+tar xzf seiton-linux-amd64.tar.gz
 sudo mv seiton /usr/local/bin/
 ```
 
 For Linux arm64, use `seiton-linux-arm64.tar.gz` instead.
+
+If you have the [GitHub CLI](https://cli.github.com/), you can verify SLSA build provenance before installing:
+
+```sh
+gh attestation verify seiton-linux-amd64.tar.gz -R guitarrapc/seiton
+```
 
 ---
 
