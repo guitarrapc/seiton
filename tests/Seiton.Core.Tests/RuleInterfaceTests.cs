@@ -9101,6 +9101,150 @@ public sealed class RuleInterfaceTests
     }
 
     [Test]
+    public async Task RuleRegression_ExprUndefinedVarRule_LocalReusableWorkflowOutputResolution()
+    {
+        var rootDir = Path.Combine(Path.GetTempPath(), "seiton-local-reusable-" + Guid.NewGuid().ToString("N", System.Globalization.CultureInfo.InvariantCulture));
+        var workflowsDir = Path.Combine(rootDir, ".github", "workflows");
+        Directory.CreateDirectory(workflowsDir);
+
+        var reusablePath = Path.Combine(workflowsDir, "reusable.yml");
+        var callerPath = Path.Combine(workflowsDir, "caller.yml");
+
+        try
+        {
+            // Reusable workflow declares one output: "version"
+            var reusableYaml = """
+            on:
+              workflow_call:
+                outputs:
+                  version:
+                    description: The computed version
+                    value: ${{ jobs.compute.outputs.ver }}
+            jobs:
+              compute:
+                runs-on: ubuntu-latest
+                outputs:
+                  ver: ${{ steps.v.outputs.ver }}
+                steps:
+                  - id: v
+                    run: echo "ver=1.0.0" >> "$GITHUB_OUTPUT"
+            """;
+
+            // Case 1: ng — references undefined output "typo_output"
+            var callerYamlNg = """
+            on: push
+            jobs:
+              new-version:
+                uses: ./.github/workflows/reusable.yml
+              deploy:
+                runs-on: ubuntu-latest
+                needs: [new-version]
+                steps:
+                  - env:
+                      TAG: ${{ needs.new-version.outputs.typo_output }}
+                    run: echo "$TAG"
+            """;
+
+            // Case 2: ok — references valid output "version"
+            var callerYamlOk = """
+            on: push
+            jobs:
+              new-version:
+                uses: ./.github/workflows/reusable.yml
+              deploy:
+                runs-on: ubuntu-latest
+                needs: [new-version]
+                steps:
+                  - env:
+                      TAG: ${{ needs.new-version.outputs.version }}
+                    run: echo "$TAG"
+            """;
+
+            File.WriteAllText(reusablePath, NormalizeYaml(reusableYaml), Encoding.UTF8);
+
+            // Test ng case
+            File.WriteAllText(callerPath, NormalizeYaml(callerYamlNg), Encoding.UTF8);
+            var resultNg = new LintEngine([new ExprUndefinedVarRule()])
+                .Check(File.ReadAllBytes(callerPath), callerPath);
+            var msgsNg = resultNg.Diagnostics.Where(x => x.RuleId == "expr-undefined-var").Select(x => x.Message).ToArray();
+            await Assert.That(msgsNg.Any(m => m.Contains("\"typo_output\" is not defined", StringComparison.Ordinal))).IsTrue();
+
+            // Test ok case
+            File.WriteAllText(callerPath, NormalizeYaml(callerYamlOk), Encoding.UTF8);
+            var resultOk = new LintEngine([new ExprUndefinedVarRule()])
+                .Check(File.ReadAllBytes(callerPath), callerPath);
+            var msgsOk = resultOk.Diagnostics.Where(x => x.RuleId == "expr-undefined-var").Select(x => x.Message).ToArray();
+            await Assert.That(msgsOk.Any(m => m.Contains("is not defined", StringComparison.Ordinal))).IsFalse();
+        }
+        finally
+        {
+            if (Directory.Exists(rootDir))
+            {
+                Directory.Delete(rootDir, recursive: true);
+            }
+        }
+    }
+
+    [Test]
+    public async Task RuleRegression_ExprUndefinedVarRule_LocalReusableWorkflowNoOutputs()
+    {
+        var rootDir = Path.Combine(Path.GetTempPath(), "seiton-local-reusable-noout-" + Guid.NewGuid().ToString("N", System.Globalization.CultureInfo.InvariantCulture));
+        var workflowsDir = Path.Combine(rootDir, ".github", "workflows");
+        Directory.CreateDirectory(workflowsDir);
+
+        var reusablePath = Path.Combine(workflowsDir, "reusable-no-outputs.yml");
+        var callerPath = Path.Combine(workflowsDir, "caller.yml");
+
+        try
+        {
+            // Reusable workflow with workflow_call but NO outputs declared
+            var reusableYaml = """
+            on:
+              workflow_call:
+                inputs:
+                  ref:
+                    type: string
+            jobs:
+              work:
+                runs-on: ubuntu-latest
+                steps:
+                  - run: echo "working"
+            """;
+
+            // Caller references an output that doesn't exist — should be flagged
+            var callerYaml = """
+            on: push
+            jobs:
+              compute:
+                uses: ./.github/workflows/reusable-no-outputs.yml
+              deploy:
+                runs-on: ubuntu-latest
+                needs: [compute]
+                steps:
+                  - env:
+                      X: ${{ needs.compute.outputs.something }}
+                    run: echo "$X"
+            """;
+
+            File.WriteAllText(reusablePath, NormalizeYaml(reusableYaml), Encoding.UTF8);
+            File.WriteAllText(callerPath, NormalizeYaml(callerYaml), Encoding.UTF8);
+
+            var result = new LintEngine([new ExprUndefinedVarRule()])
+                .Check(File.ReadAllBytes(callerPath), callerPath);
+            var msgs = result.Diagnostics.Where(x => x.RuleId == "expr-undefined-var").Select(x => x.Message).ToArray();
+            // The called workflow declares no outputs, so needs.compute.outputs.something should be flagged
+            await Assert.That(msgs.Any(m => m.Contains("is not defined", StringComparison.Ordinal) || m.Contains("no properties are defined", StringComparison.Ordinal))).IsTrue();
+        }
+        finally
+        {
+            if (Directory.Exists(rootDir))
+            {
+                Directory.Delete(rootDir, recursive: true);
+            }
+        }
+    }
+
+    [Test]
     public async Task RuleRegression_ExprUndefinedVarRule_NeedsUndefinedJob_TableDriven()
     {
         var cases = new[]

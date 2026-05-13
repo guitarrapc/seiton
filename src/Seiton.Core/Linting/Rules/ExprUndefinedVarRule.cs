@@ -37,6 +37,9 @@ public sealed class ExprUndefinedVarRule() : RuleBase(RuleId.ExprUndefinedVar)
     // Local action output resolver for building strict step output types
     private LocalActionOutputResolver? _localActionOutputResolver;
     private Func<ReadOnlyMemory<byte>, string[]?>? _localActionOutputResolverFunc;
+    // Local reusable workflow output resolver for building strict needs output types
+    private LocalReusableWorkflowOutputResolver? _localReusableOutputResolver;
+    private Func<ReadOnlyMemory<byte>, string[]?>? _localReusableOutputResolverFunc;
 
     public override void VisitWorkflowPre(Workflow workflow)
     {
@@ -51,11 +54,15 @@ public sealed class ExprUndefinedVarRule() : RuleBase(RuleId.ExprUndefinedVar)
         {
             _localActionOutputResolver = new LocalActionOutputResolver(Config.FilePath);
             _localActionOutputResolverFunc = mem => _localActionOutputResolver.ResolveOutputNames(mem.Span);
+            _localReusableOutputResolver = new LocalReusableWorkflowOutputResolver(Config.FilePath);
+            _localReusableOutputResolverFunc = mem => _localReusableOutputResolver.ResolveOutputNames(mem.Span);
         }
         else
         {
             _localActionOutputResolver = null;
             _localActionOutputResolverFunc = null;
+            _localReusableOutputResolver = null;
+            _localReusableOutputResolverFunc = null;
         }
 
         // Workflow-level field checks
@@ -232,7 +239,8 @@ public sealed class ExprUndefinedVarRule() : RuleBase(RuleId.ExprUndefinedVar)
             job.Needs,
             _currentWorkflow?.Jobs ?? default,
             Arena,
-            yaml);
+            yaml,
+            _localReusableOutputResolverFunc);
 
         // Store job steps for incremental step override building in VisitStep
         _currentJobSteps = job.Steps;
