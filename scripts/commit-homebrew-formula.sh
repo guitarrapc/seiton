@@ -1,8 +1,7 @@
 #!/usr/bin/env bash
 # Render Formula/seiton.rb from checksums, commit, and push on the current branch (this repo).
-# actionlint と同様、tap 先は専用 homebrew-tap ではなく本体リポジトリ。
 #
-# Run from Seiton repository root (must have .git). Typical CI: checkout default branch, then run.
+# Run from Seiton repository root (must have .git). CI: checkout default branch, then run on ubuntu only.
 #
 # Required env:
 #   GITHUB_REPOSITORY — owner/name (e.g. guitarrapc/seiton)
@@ -29,7 +28,7 @@ if [ ! -d .git ]; then
 fi
 
 RENDER="${ROOT_DIR}/scripts/render-homebrew-seiton-formula.sh"
-TMP="$(mktemp -d "${TMPDIR:-/tmp}/commit-homebrew-formula.XXXXXX" 2>/dev/null || mktemp -d -t commit-homebrew-formula)"
+TMP="$(mktemp -d)"
 trap 'rm -rf "$TMP"' EXIT
 
 if [ -n "${CHECKSUMS_URL:-}" ]; then
