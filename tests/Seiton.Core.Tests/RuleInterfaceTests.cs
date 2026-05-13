@@ -409,42 +409,31 @@ public sealed class RuleInterfaceTests
     }
 
     [Test]
-    public async Task RuleCatalog_OnlineAuditRules_AreKnownForResolutionAndCanonicalIds()
+    public async Task RuleCatalog_OnlineAuditRules_AreKnownForResolution()
     {
         await Assert.That(RuleCatalog.TryResolveRuleId("known-vulnerable-actions", out var knownVulnerable)).IsTrue();
         await Assert.That(knownVulnerable).IsEqualTo(RuleId.KnownVulnerableActions);
-        await Assert.That(RuleCatalog.GetCanonicalRuleId("local-action-inputs")).IsEqualTo("seiton-lint-rule-052");
-        await Assert.That(RuleCatalog.GetCanonicalRuleId("workflow-call-input-default")).IsEqualTo("seiton-lint-rule-053");
-        await Assert.That(RuleCatalog.GetCanonicalRuleId("outdated-action-runner")).IsEqualTo("seiton-lint-rule-054");
-        await Assert.That(RuleCatalog.GetCanonicalRuleId("if-expr-wrapper")).IsEqualTo("seiton-lint-rule-055");
-        await Assert.That(RuleCatalog.GetCanonicalRuleId("concurrency-limits")).IsEqualTo("seiton-lint-rule-056");
-        await Assert.That(RuleCatalog.GetCanonicalRuleId("known-vulnerable-actions")).IsEqualTo("seiton-lint-rule-030");
-
-        await Assert.That(RuleCatalog.TryResolveRuleId("seiton-lint-rule-031", out var impostorCommit)).IsTrue();
+        await Assert.That(RuleCatalog.TryResolveRuleId("impostor-commit", out var impostorCommit)).IsTrue();
         await Assert.That(impostorCommit).IsEqualTo(RuleId.ImpostorCommit);
-        await Assert.That(RuleCatalog.GetCanonicalRuleId("ref-confusion")).IsEqualTo("seiton-lint-rule-032");
-        await Assert.That(RuleCatalog.GetCanonicalRuleId("stale-action-refs")).IsEqualTo("seiton-lint-rule-033");
+        await Assert.That(RuleCatalog.TryResolveRuleId("ref-confusion", out var refConfusion)).IsTrue();
+        await Assert.That(refConfusion).IsEqualTo(RuleId.RefConfusion);
+        await Assert.That(RuleCatalog.TryResolveRuleId("stale-action-refs", out var staleActionRefs)).IsTrue();
+        await Assert.That(staleActionRefs).IsEqualTo(RuleId.StaleActionRefs);
     }
 
     [Test]
-    public async Task RuleCatalog_CanonicalId_IsDerivedFromPriority()
+    public async Task RuleCatalog_CanonicalIdFormat_IsRejectedAsUnknown()
     {
-        // Canonical ID number must equal priority + 1, so adding new rules never shifts existing IDs.
-        // Priority 29 → seiton-lint-rule-030, not dependent on array position.
-        await Assert.That(RuleCatalog.GetCanonicalRuleId("known-vulnerable-actions")).IsEqualTo("seiton-lint-rule-030");
-        await Assert.That(RuleCatalog.GetCanonicalRuleId("impostor-commit")).IsEqualTo("seiton-lint-rule-031");
-        await Assert.That(RuleCatalog.GetCanonicalRuleId("ref-confusion")).IsEqualTo("seiton-lint-rule-032");
-        await Assert.That(RuleCatalog.GetCanonicalRuleId("stale-action-refs")).IsEqualTo("seiton-lint-rule-033");
-        await Assert.That(RuleCatalog.GetCanonicalRuleId("cache-poisoning")).IsEqualTo("seiton-lint-rule-034");
-        await Assert.That(RuleCatalog.GetCanonicalRuleId("local-action-inputs")).IsEqualTo("seiton-lint-rule-052");
-        await Assert.That(RuleCatalog.GetCanonicalRuleId("concurrency-limits")).IsEqualTo("seiton-lint-rule-056");
+        // Canonical IDs (seiton-lint-rule-NNN) are no longer supported; only semantic IDs are accepted.
+        await Assert.That(RuleCatalog.TryResolveRuleId("seiton-lint-rule-001", out _)).IsFalse();
+        await Assert.That(RuleCatalog.TryResolveRuleId("seiton-lint-rule-008", out _)).IsFalse();
+        await Assert.That(RuleCatalog.TryResolveRuleId("seiton-lint-rule-030", out _)).IsFalse();
     }
 
     [Test]
     public async Task RuleCatalog_Priorities_AreUnique()
     {
-        // Priorities must be unique across all rules because canonical IDs are derived from them.
-        // Duplicate priorities would cause canonical ID collisions.
+        // Priorities must be unique across all rules for deterministic rule ordering.
         var allRuleIds = Enum.GetValues<RuleId>().Where(id => id != RuleId.Syntax).ToArray();
         var priorityToRule = new Dictionary<int, string>();
         foreach (var ruleId in allRuleIds)
@@ -11806,7 +11795,7 @@ public sealed class RuleInterfaceTests
     }
 
     [Test]
-    public async Task LintEngine_DisabledRule_CanonicalIdInRuleOptions_DoesNotEmitDiagnostics()
+    public async Task LintEngine_CanonicalIdInRuleOptions_EmitsConfigDiagnosticAndDoesNotDisable()
     {
         var yaml = """
         on: push
@@ -11818,7 +11807,7 @@ public sealed class RuleInterfaceTests
         """;
 
         var engine = new LintEngine([new JobPermissionsRequiredRule()]);
-        var disabledConfig = new LintConfig
+        var configWithCanonicalId = new LintConfig
         {
             Rules = new Dictionary<string, RuleConfig>
             {
@@ -11826,8 +11815,12 @@ public sealed class RuleInterfaceTests
             },
         };
 
-        var result = engine.Check(Encoding.UTF8.GetBytes(yaml), "rule-disable-canonical.yml", disabledConfig);
-        await Assert.That(result.Diagnostics.Any(x => x.RuleId == "job-permissions-required")).IsFalse();
+        var result = engine.Check(Encoding.UTF8.GetBytes(yaml), "rule-disable-canonical.yml", configWithCanonicalId);
+        using var _ = result.ParseResult.Arena;
+        // Canonical ID is rejected as unknown — the rule is NOT disabled
+        await Assert.That(result.Diagnostics.Any(x => x.RuleId == "job-permissions-required")).IsTrue();
+        // A config diagnostic is emitted for the unknown rule ID
+        await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("unknown rule-id 'seiton-lint-rule-008'"))).IsTrue();
     }
 
     [Test]
@@ -11864,7 +11857,7 @@ public sealed class RuleInterfaceTests
         var yaml = """
         on: push
         jobs:
-            # seiton: disable-next-line seiton-lint-rule-008
+            # seiton: disable-next-line job-permissions-required
             build:
                 runs-on: ubuntu-latest
                 steps:
@@ -11887,7 +11880,7 @@ public sealed class RuleInterfaceTests
     {
         var yaml = """
         on:
-            # seiton: disable-next-line seiton-lint-rule-007, seiton-lint-rule-008
+            # seiton: disable-next-line dangerous-triggers, job-permissions-required
             pull_request_target:
         jobs:
             build:

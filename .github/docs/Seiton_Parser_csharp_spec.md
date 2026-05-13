@@ -293,7 +293,7 @@ Alias resolution is a current-contract feature owned entirely by the adapter lay
 `System.String` may appear **only** in the following locations:
 
 1. **Diagnostic output** — `Diagnostic.Message`, `Diagnostic.RuleId`, `Diagnostic.Help`
-2. **Rule metadata in diagnostics** — canonical rule ID text in diagnostic output
+2. **Rule metadata in diagnostics** — rule ID text in diagnostic output
 3. **Diagnostic-only adapter method** — `IYamlStreamReader.GetScalarString()`
 4. **Compile-time literal parameters** — section name strings passed to error-reporting helpers (e.g., `"jobs"` in `ParseMapping`)
 
