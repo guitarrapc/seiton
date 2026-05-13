@@ -56,12 +56,6 @@ The binary is a NativeAOT single-file executable. No .NET runtime is required.
 
 ## Windows
 
-### Winget
-
-```powershell
-winget install guitarrapc.seiton
-```
-
 ### Scoop
 
 Package manifests are in [`guitarrapc/scoop-bucket`](https://github.com/guitarrapc/scoop-bucket). The bucket uses an [Excavator](https://github.com/ScoopInstaller/Excavator)-style scheduled workflow so `checkver` / `autoupdate` in the manifest track [Seiton releases](https://github.com/guitarrapc/seiton/releases).

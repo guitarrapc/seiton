@@ -57,8 +57,9 @@ curl -fsSL https://raw.githubusercontent.com/guitarrapc/seiton/main/scripts/inst
 brew tap guitarrapc/seiton https://github.com/guitarrapc/seiton
 brew install seiton
 
-# Windows
-winget install guitarrapc.seiton
+# Windows (Scoop)
+scoop bucket add guitarrapc https://github.com/guitarrapc/scoop-bucket
+scoop install seiton
 ```
 
 For other platforms, download a prebuilt archive from the [releases page](https://github.com/guitarrapc/seiton/releases) and add `seiton` to your `PATH` (see [Installation](docs/installation.md)).
