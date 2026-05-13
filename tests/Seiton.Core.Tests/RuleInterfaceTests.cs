@@ -9052,6 +9052,55 @@ public sealed class RuleInterfaceTests
     }
 
     [Test]
+    public async Task RuleRegression_ExprUndefinedVarRule_ReusableWorkflowCallNeedsOutputs_TableDriven()
+    {
+        var cases = new[]
+        {
+            // Reusable workflow call jobs don't declare outputs locally — their outputs come from
+            // the called workflow. The linter cannot determine the available outputs without
+            // fetching the remote workflow, so needs.<reusable-job>.outputs.* must be treated as
+            // loose (no false positive).
+            new RuleCase(
+            "ok-reusable-workflow-call-needs-outputs",
+            """
+            on: push
+            jobs:
+                new-version:
+                    uses: owner/repo/.github/workflows/reusable.yml@main
+                    with:
+                        ref: main
+                deploy:
+                    runs-on: ubuntu-latest
+                    needs: [new-version]
+                    steps:
+                        - env:
+                            TAG: ${{ needs.new-version.outputs.version }}
+                          run: echo "$TAG"
+            """,
+            []),
+            // Local reusable workflow call — same behavior, no local outputs
+            new RuleCase(
+            "ok-local-reusable-workflow-call-needs-outputs",
+            """
+            on: push
+            jobs:
+                new-version:
+                    uses: ./.github/workflows/reusable.yml
+                deploy:
+                    runs-on: ubuntu-latest
+                    needs: [new-version]
+                    steps:
+                        - env:
+                            TAG: ${{ needs.new-version.outputs.version }}
+                          run: echo "$TAG"
+            """,
+            []),
+        };
+
+        await AssertRuleCases(new ExprUndefinedVarRule(), "expr-undefined-var", cases);
+    }
+
+    [Test]
     public async Task RuleRegression_ExprUndefinedVarRule_NeedsUndefinedJob_TableDriven()
     {
         var cases = new[]

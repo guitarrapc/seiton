@@ -712,7 +712,15 @@ internal static class DynamicContextTypeBuilder
     {
         if (job.Outputs is not { Count: > 0 } outputs || utf8Yaml is null)
         {
-            // No outputs defined — return strict empty so that any outputs.X is flagged as undefined
+            // Reusable workflow call jobs: outputs come from the called workflow and cannot
+            // be determined statically without fetching the remote definition.
+            // Return loose type so needs.<job>.outputs.* is not flagged as undefined.
+            if (job.WorkflowCall is not null)
+            {
+                return ExprType.Object(dynamicPropertyType: ExprType.String);
+            }
+
+            // Normal jobs with no outputs — return strict empty so that any outputs.X is flagged as undefined
             return ExprType.Object(strict: true);
         }
 
