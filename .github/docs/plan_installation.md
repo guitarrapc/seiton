@@ -12,12 +12,13 @@
 | Build from Source | ✅ | ✅ 動作する |
 | Homebrew (macOS/Linux) | ✅ | △ 本体リポ `Formula/seiton.rb`・Release publish 時に CI が更新 |
 | Scoop (Windows) | ✅ | ✅ [`guitarrapc/scoop-bucket`](https://github.com/guitarrapc/scoop-bucket)、Excavator 更新 |
-| Winget (Windows) | ✅ | ❌ winget-pkgs PR 未提出 |
+| Winget (Windows) | ❌ | ❌ 見送り（実績不足で winget-pkgs 審査不可） |
 | Docker (GHCR) | ✅ | ✅ Release ワークフローで linux/amd64・arm64 を push |
-| mise | ❌ | ❌ レジストリ登録・ドキュメント未対応 |
-| aqua | ❌ | ❌ aqua-registry への登録・ドキュメント未対応 |
+| mise | ❌ | ❌ 見送り（実績不足でレジストリ登録不可） |
+| aqua | ❌ | ❌ 見送り（実績不足で aqua-registry 登録不可） |
 | ダウンロード／インストール用スクリプト（curl \| sh 等） | ✅ | ✅ `scripts/install.sh`（main ブランチ） |
-| GitHub Action | ❌ | ❌ action.yml 未作成 |
+| GitHub Action | ❌ | ❌ `guitarrapc/seiton-action` リポ未作成 |
+| dotnet tool (NuGet) | ❌ | ❌ NuGet パッケージ未公開 |
 
 ### リリースアセット名（現行 release.yaml）
 
@@ -184,63 +185,21 @@ curl -fsSL https://raw.githubusercontent.com/guitarrapc/seiton/main/scripts/inst
 
 ---
 
-### フェーズ 5 — mise
+### フェーズ 5 — mise — 見送り
 
-**WHY**: [mise](https://mise.jdx.dev/)（旧 rtx）は言語ランタイムと CLI を一元管理する用途で普及しており、GitHub Releases 由来のバイナリをバージョン固定しやすい。
-
-#### 5-1. レジストリ／バックエンド
-
-- **推奨**: [mise registry](https://github.com/jdx/mise/tree/main/registry)（または現行の登録フロー）に **Seiton** を追加し、リリース資産名（`seiton-{os}-{arch}.tar.gz` / `seiton-win-*.zip`）と一致する取得 URL・正規表現を定義する。
-- 代替・併用: `mise.toml` / `config.toml` で **github backend** や既存の汎用プラグイン（[GitHub Release 型のテンプレート](https://mise.jdx.dev/)に準拠）を文書化する。
-
-#### 5-2. 検証とドキュメント
-
-- macOS / Linux / Windows（利用可能なら）で `mise install seiton`（または `mise use -g seiton@x.y.z`）を確認。
-- [docs/installation.md](../../docs/installation.md) に mise セクションを追加。
-
-**完了条件**: ドキュメントどおりに `mise` で Seiton をインストール・バージョン切替できる。
+**見送り理由**: mise registry への登録にはツールとしての実績が必要であり、現時点では登録できない。十分な利用実績が得られた段階で再検討する。
 
 ---
 
-### フェーズ 6 — aqua
+### フェーズ 6 — aqua — 見送り
 
-**WHY**: [aqua](https://aquaproj.github.io/) は CLI を宣言的に固定し、CI とローカルで同じバージョンを再現しやすい（`aqua.yaml` + `aqua install`）。
-
-#### 6-1. aqua-registry
-
-- [aquaproj/aqua-registry](https://github.com/aquaproj/aqua-registry) に **パッケージ定義**を追加する（`github_release` 等）。アセット:
-  - Linux: `seiton-linux-amd64.tar.gz` / `seiton-linux-arm64.tar.gz`
-  - macOS: `seiton-osx-amd64.tar.gz` / `seiton-osx-arm64.tar.gz`
-  - Windows: `seiton-win-amd64.zip` / `seiton-win-arm64.zip`
-- 実行ファイル名: Linux/macOS は `seiton`、Windows は `seiton.exe`（registry の `files` / `replacements` で整合）。
-
-#### 6-2. 検証とドキュメント
-
-- `aqua install`（または `aqua i`）で導入確認（パッケージ名・インデックスは registry のマージ後の定義に従う）。
-- [docs/installation.md](../../docs/installation.md) に手順を追記。
-
-**完了条件**: 公開された aqua-registry のパッケージ名どおり `aqua install` で Seiton を導入できる。
+**見送り理由**: aqua-registry への登録にはツールとしての実績が必要であり、現時点では登録できない。十分な利用実績が得られた段階で再検討する。
 
 ---
 
-### フェーズ 7 — Winget
+### フェーズ 7 — Winget — 見送り
 
-**WHY**: Windows の公式パッケージ管理。ただし `microsoft/winget-pkgs` リポジトリへの PR が必要で審査があるため優先度は低い。
-
-#### 7-1. Winget マニフェスト作成
-
-- `winget-pkgs` リポジトリの規約に従いマニフェスト一式を作成:
-  - `manifests/g/guitarrapc/seiton/{version}/` 配下に:
-    - `guitarrapc.seiton.installer.yaml`
-    - `guitarrapc.seiton.locale.en-US.yaml`
-    - `guitarrapc.seiton.yaml` (version manifest)
-- InstallerType: `zip` (展開後にパスへ配置) or `portable`。
-
-#### 7-2. 自動化
-
-- `vedantmgoyal9/winget-releaser` Action や `wingetcreate` CLI で release 時にPRを自動作成。
-
-**完了条件**: `winget install guitarrapc.seiton` でインストールできる。
+**見送り理由**: `microsoft/winget-pkgs` リポジトリへの PR には審査があり、ツールとしての実績が不足している現時点では通らない可能性が高い。Scoop で Windows ユーザーをカバーできるため、十分な利用実績が得られた段階で再検討する。
 
 ---
 
@@ -248,23 +207,75 @@ curl -fsSL https://raw.githubusercontent.com/guitarrapc/seiton/main/scripts/inst
 
 **WHY**: GitHub Actions ワークフロー内で seiton を直接ステップとして使えると利便性が高い。ただし本ツールの主用途が GitHub Actions YAML の lint であることを考えると、CI で走らせるニーズは高い。
 
-#### 8-1. action.yml の作成
+**方針: 別リポジトリ (`guitarrapc/seiton-action`) で管理する。**
 
-- リポジトリルートに `action.yml` を配置。
-- Composite action として実装:
-  - リリースから該当 OS のアーカイブを取得（例: `gh release download` または `curl` + tar／zip）。
+同一リポジトリに `action.yml` を置く案もあるが、以下の理由から別リポとする:
 
-    推奨はワークフロー内で明示的に取得する手順と同様に、**検証可能なステップ**にすること（公式インストールスクリプトは提供しない）。
+- **タグ衝突の回避**: CLI は固定 semver タグ (`v1.0.0`) でリリースするが、Action の慣例は floating major タグ (`v1`) を最新 `v1.x.x` に追従させる。同一リポでは両タグ体系が干渉しリリースフローが複雑化する。
+- **チェックアウトの軽量化**: `uses:` で参照するとリポジトリ全体がチェックアウトされる。CLI ソースコードを含むリポは不必要に大きい。
+- **seiton 自身との混乱回避**: seiton は `action.yml` を lint するツールなので、ルートに実際の `action.yml` があると開発時に紛らわしい。
+- **業界標準**: ツール系 Action の一般的なパターン（`reviewdog/action-*` 等）と合致する。
+
+#### 8-1. seiton-action リポジトリの作成
+
+- `guitarrapc/seiton-action` リポジトリを作成。
+- `action.yml` を配置。Composite action として実装:
+  - `scripts/install.sh` を利用して該当 OS の seiton バイナリを取得・検証。
   - `seiton` コマンドを実行。
 - 入力パラメータ:
   - `version`: インストールするバージョン（デフォルト `latest`）。
   - `args`: seiton に渡す追加引数。
+- タグ運用: リリース時に `v1.0.0` タグを打ち、`v1` floating tag を追従させる。
 
-#### 8-2. ドキュメント
+#### 8-2. リリース連動
+
+- seiton 本体のリリース時に seiton-action 側のデフォルトバージョンを更新する（手動 or workflow_dispatch）。
+
+#### 8-3. ドキュメント
 
 - `docs/usage.md` に GitHub Actions での利用例を追記。
 
-**完了条件**: ワークフロー内で `uses: guitarrapc/seiton@v1` として利用できる。
+**完了条件**: ワークフロー内で `uses: guitarrapc/seiton-action@v1` として利用できる。
+
+---
+
+### フェーズ 9 — dotnet tool (NuGet)
+
+**WHY**: .NET SDK を持つ開発者や CI 環境では `dotnet tool install -g seiton` が最も手軽。NuGet は自己申請で審査不要のため、mise/aqua/winget と異なり即座に公開できる。
+
+**注意**: dotnet tool は framework-dependent 実行のため NativeAOT バイナリより起動が遅い。また利用者に .NET SDK 10.0+ が必要。NativeAOT バイナリが不要な環境（CI で .NET SDK が既にある、.NET 開発者のローカル環境）向け。
+
+#### 9-1. csproj の変更
+
+- `src/Seiton/Seiton.csproj` に以下を追加:
+  ```xml
+  <PackAsTool>true</PackAsTool>
+  <ToolCommandName>seiton</ToolCommandName>
+  <IsPackable>true</IsPackable>
+  <PackageId>seiton</PackageId>
+  ```
+- `Directory.Build.props` の `<IsPackable>false</IsPackable>` はソリューション全体のデフォルトなので、Seiton.csproj 側で上書きする。
+- `PublishAot=true` は `dotnet pack` 時には影響しない（tool は framework-dependent）。
+
+#### 9-2. NuGet パッケージメタデータ
+
+- `Seiton.csproj` または `Directory.Build.props` にメタデータを追加:
+  - `PackageDescription`, `PackageTags`, `PackageLicenseExpression` (MIT), `PackageProjectUrl`, `RepositoryUrl`, `PackageReadmeFile`
+
+#### 9-3. リリース自動化
+
+- release workflow に `dotnet pack` + `dotnet nuget push` ステップを追加（publish ジョブ後または release ジョブ内）。
+- NuGet API キーを GitHub Secrets (`NUGET_API_KEY`) に登録。
+
+#### 9-4. ドキュメント
+
+- `docs/installation.md` に dotnet tool セクションを追加:
+  ```sh
+  dotnet tool install -g seiton
+  ```
+- `README.md` の Quick Start にも追記。
+
+**完了条件**: `dotnet tool install -g seiton` でインストールでき、`seiton version` が動作する。
 
 ---
 
@@ -274,12 +285,13 @@ curl -fsSL https://raw.githubusercontent.com/guitarrapc/seiton/main/scripts/inst
 フェーズ 0 (install.sh) ← 独立（完了）
 フェーズ 1 (docs / アセット名)
   ├── フェーズ 2 (Homebrew) ← 独立
-  ├── フェーズ 3 (Scoop)    ← 独立
-  ├── フェーズ 4 (Docker)   ← 独立
-  ├── フェーズ 5 (mise)     ← 独立（レジストリ／ドキュメント）
-  ├── フェーズ 6 (aqua)     ← 独立（aqua-registry）
-  ├── フェーズ 7 (Winget)   ← 独立
-  └── フェーズ 8 (GitHub Action) ← 独立（専用スクリプト不要）
+  ├── フェーズ 3 (Scoop)    ← 独立（完了）
+  ├── フェーズ 4 (Docker)   ← 独立（完了）
+  ├── フェーズ 5 (mise)     ← 見送り
+  ├── フェーズ 6 (aqua)     ← 見送り
+  ├── フェーズ 7 (Winget)   ← 見送り
+  ├── フェーズ 8 (GitHub Action) ← 独立（別リポ seiton-action）
+  └── フェーズ 9 (dotnet tool) ← 独立（NuGet、審査不要）
 ```
 
 フェーズ 2〜8 は互いに独立しており、並行して進められる。
@@ -288,8 +300,7 @@ curl -fsSL https://raw.githubusercontent.com/guitarrapc/seiton/main/scripts/inst
 
 | リスク | 影響 | 対策 |
 |--------|------|------|
-| Winget 審査の遅延・リジェクト | Windows ユーザーが winget で入れられない | Scoop を代替として先行提供。winget は安定版で再挑戦 |
 | Homebrew Formula のアーキテクチャ分岐の複雑さ | macOS x64/arm64、Linux x64/arm64 の 4 パターン | `Hardware::CPU` ガードで分岐する標準パターンを採用 |
 | Docker マルチアーキ manifest のビルド時間 | CI 時間増加 | publish ジョブのバイナリを流用し、Docker ビルド自体は COPY のみで高速 |
-| mise / aqua レジストリのレビュー・命名規約 | マージまで時間がかかる、却下の可能性 | 事前に既存パッケージ（同様の GitHub Release 配布 CLI）を参照し、PR 説明にアセット名表を添付 |
-| リリースアセット名変更の可能性 | 全チャネルの URL が壊れる | アセット名を変更する場合はすべてのチャネル（Formula, bucket, docs, 利用例 YAML、mise / aqua 定義）を同時更新する |
+| リリースアセット名変更の可能性 | 全チャネルの URL が壊れる | アセット名を変更する場合はすべてのチャネル（Formula, bucket, docs, 利用例 YAML）を同時更新する |
+| mise / aqua / Winget 登録の前提条件 | 利用実績がないと審査・登録が通らない | 十分な実績を得た段階で再検討。それまでは install.sh / Homebrew / Scoop / Docker でカバー |
