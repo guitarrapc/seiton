@@ -351,4 +351,69 @@ public sealed class LocalReusableWorkflowOutputResolverTests
             }
         }
     }
+
+    [Test]
+    public async Task ResolveOutputNames_PathTraversal_NotResolved()
+    {
+        // A crafted uses path with ../ segments that escapes the repository root must be rejected.
+        var rootDir = Path.Combine(Path.GetTempPath(), "seiton-resolver-traversal-" + Guid.NewGuid().ToString("N", System.Globalization.CultureInfo.InvariantCulture));
+        var workflowsDir = Path.Combine(rootDir, ".github", "workflows");
+        Directory.CreateDirectory(workflowsDir);
+
+        // Place a valid workflow file OUTSIDE the repository root (in a sibling directory)
+        var outsideDir = rootDir + "-outside";
+        Directory.CreateDirectory(outsideDir);
+        var outsidePath = Path.Combine(outsideDir, "evil.yml");
+        var callerPath = Path.Combine(workflowsDir, "caller.yml");
+
+        try
+        {
+            var outsideYaml = """
+            on:
+              workflow_call:
+                outputs:
+                  secret:
+                    description: Should not be resolvable
+                    value: ${{ jobs.x.outputs.v }}
+            jobs:
+              x:
+                runs-on: ubuntu-latest
+                outputs:
+                  v: ${{ steps.s.outputs.v }}
+                steps:
+                  - id: s
+                    run: echo "v=leaked" >> "$GITHUB_OUTPUT"
+            """;
+
+            // Path traversal: escapes repo root via enough ../ segments
+            // ./.github/workflows/../../../<rootDir>-outside/evil.yml
+            // After Path.GetFullPath this lands outside the repository root
+            var callerYaml = "on: push\njobs:\n  escaped:\n    uses: ./.github/workflows/../../../" + Path.GetFileName(outsideDir) + "/evil.yml\n  deploy:\n    runs-on: ubuntu-latest\n    needs: [escaped]\n    steps:\n      - env:\n          TAG: ${{ needs.escaped.outputs.typo }}\n        run: echo \"$TAG\"\n";
+
+            File.WriteAllText(outsidePath, outsideYaml, Encoding.UTF8);
+            File.WriteAllText(callerPath, callerYaml, Encoding.UTF8);
+
+            var result = new LintEngine([new ExprUndefinedVarRule()])
+                .Check(File.ReadAllBytes(callerPath), callerPath);
+            using var _ = result.ParseResult.Arena;
+
+            var msgs = result.Diagnostics
+                .Where(x => x.RuleId == "expr-undefined-var")
+                .Select(x => x.Message)
+                .ToArray();
+            // Path traversal must be rejected → loose → no "is not defined" error
+            await Assert.That(msgs.Any(m => m.Contains("is not defined", StringComparison.Ordinal))).IsFalse();
+        }
+        finally
+        {
+            if (Directory.Exists(rootDir))
+            {
+                Directory.Delete(rootDir, recursive: true);
+            }
+            if (Directory.Exists(outsideDir))
+            {
+                Directory.Delete(outsideDir, recursive: true);
+            }
+        }
+    }
 }

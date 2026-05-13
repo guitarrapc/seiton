@@ -79,6 +79,15 @@ internal sealed class LocalReusableWorkflowOutputResolver
             return null;
         }
 
+        // Guard against path traversal: resolved path must remain under the base directory
+        var baseWithSeparator = baseDirectory.EndsWith(Path.DirectorySeparatorChar)
+            ? baseDirectory
+            : baseDirectory + Path.DirectorySeparatorChar;
+        if (!resolvedPath.StartsWith(baseWithSeparator, StringComparison.OrdinalIgnoreCase))
+        {
+            return null;
+        }
+
         if (!File.Exists(resolvedPath))
         {
             return null;

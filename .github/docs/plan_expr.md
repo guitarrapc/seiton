@@ -6,7 +6,7 @@ Enable `expr-undefined-var` to validate `needs.<reusable-job>.outputs.*` referen
 
 Scope:
 
-- **In scope**: Local reusable workflow references (`./` or `../` prefix, no `@ref`)
+- **In scope**: Local reusable workflow references (`./` prefix only, no `@ref`)
 - **Out of scope**: Remote reusable workflow references (`owner/repo/path@ref`) — these remain loose. Remote resolution requires network access and belongs to a future online rule extension.
 
 ## 2. Current Behavior
@@ -51,7 +51,7 @@ BuildJobOutputsType(Job job, byte[]? utf8Yaml, Func<ReadOnlyMemory<byte>, string
 
 When `job.WorkflowCall is not null`:
 
-1. Check if `uses:` starts with `./` or `../` (local reference)
+1. Check if `uses:` starts with `./` (local reference; `../` is not a valid GitHub Actions local reference)
 2. If local and resolver is available → call resolver → return strict type if resolved
 3. Otherwise → return loose type (existing behavior)
 
