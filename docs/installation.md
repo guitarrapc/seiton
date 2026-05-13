@@ -4,12 +4,44 @@ Seiton is distributed as a single-file NativeAOT binary, so in most cases you on
 
 There are several ways to install Seiton.
 
+1. [Homebrew](#homebrew)
+1. [Scoop](#scoop)
 1. [Install Script](#install-script)
-1. [Package Managers](#package-managers)
 1. [Prebuilt Binaries](#prebuilt-binaries)
 1. [Docker](#docker)
 1. [Build from Source](#build-from-source)
 1. [Verify the Installation](#verify-the-installation)
+
+---
+
+## Homebrew
+
+Seiton provides a Homebrew formula from the repository tap for macOS and Linux:
+
+```sh
+brew tap guitarrapc/seiton
+brew install seiton
+```
+
+If you prefer the explicit repository URL:
+
+```sh
+brew tap guitarrapc/seiton https://github.com/guitarrapc/seiton
+brew install seiton
+```
+
+---
+
+## Scoop
+
+Seiton is available from [`guitarrapc/scoop-bucket`](https://github.com/guitarrapc/scoop-bucket) for Windows.
+
+```powershell
+scoop bucket add guitarrapc https://github.com/guitarrapc/scoop-bucket
+scoop install seiton
+```
+
+Upgrade later with `scoop update seiton`.
 
 ---
 
@@ -42,37 +74,6 @@ curl -fsSL https://raw.githubusercontent.com/guitarrapc/seiton/main/scripts/inst
 ```
 
 If the destination directory is not in your `PATH`, the script prints a hint explaining what to add.
-
----
-
-## Package Managers
-
-### Homebrew (macOS/Linux)
-
-Seiton provides a Homebrew formula from the repository tap:
-
-```sh
-brew tap guitarrapc/seiton
-brew install seiton
-```
-
-If you prefer the explicit repository URL:
-
-```sh
-brew tap guitarrapc/seiton https://github.com/guitarrapc/seiton
-brew install seiton
-```
-
-### Scoop (Windows)
-
-Seiton is available from [`guitarrapc/scoop-bucket`](https://github.com/guitarrapc/scoop-bucket).
-
-```powershell
-scoop bucket add guitarrapc https://github.com/guitarrapc/scoop-bucket
-scoop install seiton
-```
-
-Upgrade later with `scoop update seiton`.
 
 ---
 
