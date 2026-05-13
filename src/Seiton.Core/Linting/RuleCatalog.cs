@@ -235,7 +235,12 @@ internal static class RuleCatalog
         var map = new Dictionary<string, RuleId>(StringComparer.Ordinal);
         for (var i = 0; i < AllRuleMetadata.Length; i++)
         {
-            map[$"{CanonicalPrefix}{(AllRuleMetadata[i].Priority + 1).ToString("000", System.Globalization.CultureInfo.InvariantCulture)}"] = AllRuleMetadata[i].Id;
+            var canonicalId = $"{CanonicalPrefix}{(AllRuleMetadata[i].Priority + 1).ToString("000", System.Globalization.CultureInfo.InvariantCulture)}";
+            if (!map.TryAdd(canonicalId, AllRuleMetadata[i].Id))
+            {
+                throw new InvalidOperationException(
+                    $"Duplicate rule priority detected: canonical ID '{canonicalId}' (priority {AllRuleMetadata[i].Priority}) is already assigned to '{map[canonicalId]}'. Rule '{AllRuleMetadata[i].Id}' cannot share the same priority.");
+            }
         }
 
         return map;

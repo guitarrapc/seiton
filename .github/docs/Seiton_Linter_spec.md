@@ -339,9 +339,11 @@ Token resolution order (`SEITON_GITHUB_TOKEN` → `GITHUB_TOKEN`) is hardcoded a
 
 - Rule identifiers used by exclusion/suppression should use semantic IDs (for example: `job-permissions-required`) as the primary format.
 - Stable canonical IDs (`seiton-lint-rule-001`, `seiton-lint-rule-002`, ...) are accepted for backward compatibility.
-- Canonical IDs are derived from the rule's priority: `seiton-lint-rule-{priority + 1:000}`. This ensures that adding new rules never changes existing canonical IDs.
-- Canonical IDs are immutable once published. Priorities must never be reused or reassigned.
-- If a human-readable rule name changes, canonical ID must remain unchanged.
+ - Any canonical ID that has been published in a prior release is a permanent legacy alias and must continue to resolve to the same rule in all future releases.
+ - For new canonical IDs, implementations may derive the initial value from the rule's priority using `seiton-lint-rule-{priority + 1:000}`, but only if doing so does not conflict with any previously published canonical ID mapping.
+ - Canonical IDs are immutable once published. If priority/order changes would otherwise change a derived canonical ID, the previously published canonical ID mapping takes precedence and must be preserved.
+ - If a human-readable rule name changes, canonical ID must remain unchanged.
+ - Migration/compatibility note: implementations that previously exposed canonical IDs must retain a frozen historical mapping of canonical ID -> rule so that existing config files and inline directives continue to work without silent remapping.
 - Unknown rule IDs in config or inline directives are configuration errors.
 
 ### 5.2 Priority and Precedence
