@@ -376,7 +376,7 @@ Inline suppression supports file/job/next-line scopes.
 - A directive can target one or multiple rule IDs.
 - Multiple rule ID format is comma-separated; semantic IDs (kebab-case) are required per §5.1.
 
-Canonical directive format:
+Inline directive format:
 
 ```
 # seiton: disable-next-line job-permissions-required
