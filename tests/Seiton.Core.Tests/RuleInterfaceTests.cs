@@ -11816,6 +11816,7 @@ public sealed class RuleInterfaceTests
         };
 
         var result = engine.Check(Encoding.UTF8.GetBytes(yaml), "rule-disable-canonical.yml", configWithCanonicalId);
+        using var _ = result.ParseResult.Arena;
         // Canonical ID is rejected as unknown — the rule is NOT disabled
         await Assert.That(result.Diagnostics.Any(x => x.RuleId == "job-permissions-required")).IsTrue();
         // A config diagnostic is emitted for the unknown rule ID
