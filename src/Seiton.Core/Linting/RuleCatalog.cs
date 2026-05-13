@@ -227,11 +227,14 @@ internal static class RuleCatalog
 
     private static IReadOnlySet<RuleId> BuildOptInOnlyRuleIdSet()
     {
-        var set = new HashSet<RuleId>(OnlineRuleFactories.Length);
+        var set = new HashSet<RuleId>(OnlineRuleFactories.Length + 1);
         for (var i = 0; i < OnlineRuleFactories.Length; i++)
         {
             set.Add(OnlineRuleFactories[i].Id);
         }
+
+        // Local rules that are opt-in only (disabled by default).
+        set.Add(RuleId.ConcurrencyLimits);
 
         return set;
     }

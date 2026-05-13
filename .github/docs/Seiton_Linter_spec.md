@@ -190,7 +190,7 @@ Column definitions:
 | `ref-version-mismatch` | ✓ | — | Warn when symbolic ref/version intent mismatches resolved commit lineage expectations. |
 | `use-trusted-publishing` | ✓ | — | Warn when publishing/release flows do not use trusted publishing/OIDC-based provenance paths where expected. |
 | `if-expr-wrapper` | ✓ | ✓ (safe cases) | Warn when `if:` conditions are missing the `${{ }}` expression wrapper; auto-fix offered for single-line scalars (including quoted scalars) without existing `${{` markers. |
-| `concurrency-limits` | ✓ | — | Warn when workflows or jobs lack `concurrency` settings with `cancel-in-progress`. Skips reusable-only (`on: workflow_call`) workflows and workflow-call jobs. |
+| `concurrency-limits` | ✗ | — | Warn when workflows or jobs lack `concurrency` settings with `cancel-in-progress`. Skips reusable-only (`on: workflow_call`) workflows and workflow-call jobs. |
 
 Rule set compatibility policy:
 

@@ -12915,7 +12915,16 @@ public sealed class RuleInterfaceTests
             ["missing 'cancel-in-progress'", "does not declare concurrency"]),
         };
 
-        await AssertRuleCases(new ConcurrencyLimitsRule(), "concurrency-limits", cases);
+        // concurrency-limits is opt-in; provide config that enables it.
+        var config = new LintConfig
+        {
+            Rules = new Dictionary<string, RuleConfig>
+            {
+                ["concurrency-limits"] = new RuleConfig { Enabled = true },
+            },
+        };
+
+        await AssertRuleCases(new ConcurrencyLimitsRule(), "concurrency-limits", cases, config);
     }
 
     private static async Task AssertRuleCases(IRule rule, string ruleId, RuleCase[] cases, LintConfig? config = null)
