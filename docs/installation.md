@@ -57,19 +57,28 @@ Adjust `asset` for your platform: `seiton-osx-arm64.tar.gz` (macOS ARM), `seiton
 
 ## Prebuilt Binaries
 
-Download a prebuilt binary for your platform from the [releases page](https://github.com/guitarrapc/seiton/releases).
+Download a prebuilt archive from the [releases page](https://github.com/guitarrapc/seiton/releases) for your platform, extract it, and place the `seiton` executable in a directory on your `$PATH`.
 
-Extract the archive and place the `seiton` executable somewhere in your `$PATH`.
-
-Prebuilt binaries are provided for:
-
-| OS | Architecture |
-|---|---|
-| Linux | x64, arm64 |
-| macOS | x64, arm64 |
-| Windows | x64, arm64 |
+| OS | Architecture | Archive |
+|---|---|---|
+| Linux | x64 | `seiton-linux-amd64.tar.gz` |
+| Linux | arm64 | `seiton-linux-arm64.tar.gz` |
+| macOS | arm64 (Apple Silicon) | `seiton-osx-arm64.tar.gz` |
+| macOS | x64 (Intel) | `seiton-osx-amd64.tar.gz` |
+| Windows | x64 | `seiton-win-amd64.zip` |
+| Windows | arm64 | `seiton-win-arm64.zip` |
 
 The binary is a NativeAOT single-file executable. No .NET runtime is required.
+
+### Verify downloaded assets
+
+If you have the [GitHub CLI](https://cli.github.com/), you can verify the SLSA build provenance attestation attached to each release:
+
+```sh
+gh attestation verify <asset> -R guitarrapc/seiton
+```
+
+This provides stronger supply-chain guarantees than checksum verification alone.
 
 ---
 
@@ -115,18 +124,11 @@ brew install seiton
 
 ### Manual
 
+Download `seiton-osx-arm64.tar.gz` (Apple Silicon) or `seiton-osx-amd64.tar.gz` (Intel) from the [releases page](https://github.com/guitarrapc/seiton/releases), then:
+
 ```sh
-curl -L https://github.com/guitarrapc/seiton/releases/latest/download/seiton-osx-arm64.tar.gz -o seiton-osx-arm64.tar.gz
 tar xzf seiton-osx-arm64.tar.gz
 sudo mv seiton /usr/local/bin/
-```
-
-For Intel Macs, use `seiton-osx-amd64.tar.gz` instead.
-
-If you have the [GitHub CLI](https://cli.github.com/), you can verify SLSA build provenance before installing:
-
-```sh
-gh attestation verify seiton-osx-arm64.tar.gz -R guitarrapc/seiton
 ```
 
 ---
@@ -144,18 +146,11 @@ brew install seiton
 
 ### Manual
 
+Download `seiton-linux-amd64.tar.gz` (x64) or `seiton-linux-arm64.tar.gz` (arm64) from the [releases page](https://github.com/guitarrapc/seiton/releases), then:
+
 ```sh
-curl -L https://github.com/guitarrapc/seiton/releases/latest/download/seiton-linux-amd64.tar.gz -o seiton-linux-amd64.tar.gz
 tar xzf seiton-linux-amd64.tar.gz
 sudo mv seiton /usr/local/bin/
-```
-
-For Linux arm64, use `seiton-linux-arm64.tar.gz` instead.
-
-If you have the [GitHub CLI](https://cli.github.com/), you can verify SLSA build provenance before installing:
-
-```sh
-gh attestation verify seiton-linux-amd64.tar.gz -R guitarrapc/seiton
 ```
 
 ---
