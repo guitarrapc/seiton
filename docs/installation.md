@@ -1,18 +1,19 @@
 # Installation
 
-This page describes how to install Seiton.
+Seiton is distributed as a single-file NativeAOT binary, so in most cases you only need to place the executable in your `PATH`.
 
-Choose the method that matches your environment:
+There are several ways to install Seiton.
 
-- macOS or Linux: use the install script for the quickest setup.
-- Windows: use Scoop if you want package-manager installation.
-- Any platform: download a prebuilt binary from GitHub Releases.
-- CI or isolated environments: use the Docker image.
-- Local development: build from source with the .NET SDK.
+1. [Install Script](#install-script)
+1. [Package Managers](#package-managers)
+1. [Prebuilt Binaries](#prebuilt-binaries)
+1. [Docker](#docker)
+1. [Build from Source](#build-from-source)
+1. [Verify the Installation](#verify-the-installation)
 
 ---
 
-## Install Script (macOS/Linux)
+## Install Script
 
 The install script is the fastest way to install Seiton on macOS or Linux.
 
