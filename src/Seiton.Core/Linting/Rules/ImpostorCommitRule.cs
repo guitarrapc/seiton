@@ -9,13 +9,24 @@ public sealed class ImpostorCommitRule() : OnlineRuleBase(RuleId.ImpostorCommit)
 
     public override void EvaluateTarget(ActionAuditTarget target, ActionAdvisory? advisory, ActionRefResolution? resolution)
     {
-        if (resolution is null || !target.IsCommitSha || resolution.Value.CommitExists)
+        if (resolution is null || !target.IsCommitSha)
         {
             return;
         }
 
-        AddError(
-            $"'{target.UsesText}' pins commit '{target.Reference}' that is not reachable in '{target.Owner}/{target.Repo}'",
-            target.Location);
+        if (!resolution.Value.CommitExists)
+        {
+            AddError(
+                $"'{target.UsesText}' pins commit '{target.Reference}' that is not reachable in '{target.Owner}/{target.Repo}'",
+                target.Location);
+            return;
+        }
+
+        if (!resolution.Value.IsReachable)
+        {
+            AddError(
+                $"'{target.UsesText}' pins commit '{target.Reference}' that exists in '{target.Owner}/{target.Repo}' object storage but is not reachable from any branch HEAD or tag (possible impostor commit from a fork)",
+                target.Location);
+        }
     }
 }
