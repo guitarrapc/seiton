@@ -88,27 +88,27 @@ gh attestation verify -R guitarrapc/seiton seiton-linux-amd64.tar.gz
 
 ## Install Script
 
-The install script is the fastest way to install Seiton on macOS or Linux.
+To install Seiton with one command, the install script is available. This is the fastest way to install Seiton on macOS or Linux when you want a quick setup without using a package manager.
 
 ```sh
 curl -fsSL https://raw.githubusercontent.com/guitarrapc/seiton/main/scripts/install.sh | bash
 ```
 
-The script auto-detects your OS and architecture, downloads the latest release, verifies the SHA-256 checksum, and installs the binary to `/usr/local/bin` by default. If `gh` is available, it also attempts SLSA attestation verification.
+The script auto-detects your OS and architecture, downloads the latest release, verifies the SHA-256 checksum, and installs `seiton` to `/usr/local/bin` by default. If `gh` is available, it also attempts SLSA attestation verification.
 
-Install a specific version:
+When you need to install a specific version, pass `--version`. The following example installs `0.9.6`:
 
 ```sh
 curl -fsSL https://raw.githubusercontent.com/guitarrapc/seiton/main/scripts/install.sh | bash -s -- --version 0.9.6
 ```
 
-Install to a custom directory:
+When you need to install to a custom directory, pass `--dir`:
 
 ```sh
 curl -fsSL https://raw.githubusercontent.com/guitarrapc/seiton/main/scripts/install.sh | bash -s -- --dir ~/.local/bin
 ```
 
-Combine both options:
+You can also combine both options:
 
 ```sh
 curl -fsSL https://raw.githubusercontent.com/guitarrapc/seiton/main/scripts/install.sh | bash -s -- --version 0.9.6 --dir ~/.local/bin
