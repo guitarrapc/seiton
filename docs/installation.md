@@ -150,10 +150,20 @@ dotnet build -c Release src/Seiton/Seiton.csproj
 
 The build output is written under `src/Seiton/bin/Release/net10.0/`.
 
-To produce a self-contained NativeAOT binary:
+To produce a self-contained NativeAOT binary, `dotnet publish` also requires the native toolchain for your platform:
+
+- Windows: Visual Studio 2022 or later with the Desktop development with C++ workload.
+- Ubuntu/Linux: `clang` and `zlib1g-dev` at minimum on Ubuntu-based distributions. Other distributions need the equivalent compiler and zlib development packages.
+- macOS: the latest Xcode Command Line Tools.
+
+NativeAOT publish is OS-specific. You can cross-compile between architectures on the same OS with the required native toolchain installed, but not across operating systems.
+
+You can build & publish binary for the platform you're building on.
 
 ```sh
-dotnet publish -c Release src/Seiton/Seiton.csproj
+dotnet publish -c Release -r win-x64 src/Seiton/Seiton.csproj -o publish/win-x64
+dotnet publish -c Release -r linux-x64 src/Seiton/Seiton.csproj -o publish/win-x64
+dotnet publish -c Release -r osx-arm64 src/Seiton/Seiton.csproj -o publish/win-x64
 ```
 
 ---
@@ -169,8 +179,7 @@ seiton version
 Example output:
 
 ```text
-seiton 0.9.6
-built with .NET 10.0.0 (NativeAOT), linux/x64
+0.9.6
 ```
 
 ---
