@@ -1,7 +1,7 @@
 # 競合ツール比較判定表（Seiton）
 
 > 目的: actionlint / ghalint / zizmor / pinact / dockerfile-pin / frizbee と Seiton の機能差分を明確化し、採用検討の優先度を決める。
-> 更新日: 2026-04-18
+> 更新日: 2026-05-13
 
 ---
 
@@ -18,7 +18,7 @@
 | 比較対象 | Lint機能 | Auto-fix / Remediation | 仕様追従データ更新 | 対象ファイル範囲 | 認証/GHES運用 | 総合判定 |
 |---|---|---|---|---|---|---|
 | actionlint | 🟡 | ❌ | ✅ | 🟡 | 🟡 | 🟡 |
-| ghalint | 🟡 | ❌ | ❌ | 🟡 | ❌ | 🟡 |
+| ghalint | ✅ | ❌ | ❌ | 🟡 | ❌ | ✅ |
 | zizmor | 🟡 | 🟡 | ✅ | ✅ | 🟡 | 🟡 |
 | pinact | 🟡 | ✅ | N/A | 🟡 | ✅ | ✅ |
 | dockerfile-pin | N/A | 🟡 | N/A | ✅ | 🟡 | 🟡 |
@@ -27,12 +27,13 @@
 
 補足:
 - Seiton の Lint/Remediation は GitHub Actions 中心に強い。
-- ルール総数は 49（default local 45 + online audit 4、`RuleCatalog` 基準）まで拡張済み。
+- ルール総数は 56（default local 52 + online audit 4、`RuleCatalog` 基準）まで拡張済み。
+- ghalint 全 13 ポリシーを完全カバー（✅ 昇格）。
 - Dockerfile/compose/任意YAML全般まで広げると、dockerfile-pin/frizbee に対して現状は部分的。
 
 ### 2.1 現在の実装済みルール一覧（最新）
 
-default local rules（45）:
+default local rules（52）:
 
 - `job-structure`
 - `reusable-workflow`
@@ -47,6 +48,8 @@ default local rules（45）:
 - `runner-label`
 - `id-naming`
 - `glob-pattern`
+- `dispatch-inputs`
+- `schedule-event`
 - `deny-write-all`
 - `credentials`
 - `template-injection`
@@ -65,9 +68,9 @@ default local rules（45）:
 - `self-hosted-runner`
 - `unredacted-secrets`
 - `secrets-outside-env`
-- `workflow_secrets`
-- `job_secrets`
-- `action_shell_is_required`
+- `workflow-secrets`
+- `job-secrets`
+- `action-shell-is-required`
 - `matrix`
 - `env-var`
 - `deprecated-commands`
@@ -79,6 +82,11 @@ default local rules（45）:
 - `forbidden-uses`
 - `ref-version-mismatch`
 - `use-trusted-publishing`
+- `local-action-inputs`
+- `workflow-call-input-default`
+- `outdated-action-runner`
+- `if-expr-wrapper`
+- `concurrency-limits`
 
 online audit rules（4）:
 
@@ -93,8 +101,8 @@ online audit rules（4）:
 
 | 機能カテゴリ | actionlint | ghalint | zizmor | pinact | dockerfile-pin | frizbee | Seiton現状 | 判定 | 採用優先度 |
 |---|---|---|---|---|---|---|---|---|---|
-実装済み（49 rules: default local 45 + online audit 4）
-| セキュリティ監査ルール網羅 | 中 | 中 | 非常に強い（30+ audits） | なし | なし | なし | 実装済み（zizmor 監査 14件対応 + 8件部分対応） | 🟡 | P1 |
+実装済み（56 rules: default local 52 + online audit 4）
+| セキュリティ監査ルール網羅 | 中 | 中 | 非常に強い（36 audits） | なし | なし | なし | 実装済み（zizmor 監査 17件対応 + 7件部分対応） | 🟡 | P1 |
 | UsesのSHA pin診断 | あり | あり | あり | 主機能 | なし | あり | 実装済み | ✅ | 維持 |
 | Image digest pin診断 | 部分 | 部分 | あり | なし | 主機能 | 主機能 | 実装済み | ✅ | 維持 |
 | Network-assisted pin fix | なし | なし | 部分 | 強い | 強い | 強い | 実装済み | ✅ | 維持 |
@@ -124,7 +132,8 @@ online audit rules（4）:
 - `unsound-contains`
 - `github-env`
 - `hardcoded-container-credentials`
-- 理由: Step 15.6 で high-value 6 監査（`archived-uses` / `insecure-commands` / `overprovisioned-secrets` / `forbidden-uses` / `ref-version-mismatch` / `use-trusted-publishing`）は実装済み。次は exploitability が高い未対応監査を優先。
+- `unpinned-tools`（新規追加）
+- 理由: exploitability が高い未対応監査を優先。`unpinned-tools` は外部ツールのバージョン固定漏れを検出し、supply chain 攻撃面を減らす。
 
 3. trusted publishing / uses policy の運用強化
 - `forbidden-uses` の allow/deny ポリシー精緻化
@@ -151,13 +160,25 @@ online audit rules（4）:
 - `validate-input` 相当（ghalint experimental）
 - 理由: 効果はあるが安定運用観点で優先度は低め
 
+3. zizmor 低優先度監査の取り込み
+- `anonymous-definition`（名前未定義）
+- `bot-conditions`（スプーフ可能な bot チェック）
+- `obfuscation`（難読化検出）
+- `misfeature`（非推奨 Actions 機能使用）
+- `superfluous-actions`（ランナー標準機能で代替可能なアクション）
+- `dependabot-execution` / `dependabot-cooldown`（Dependabot 設定検査）
+- `artipacked`（アーティファクトクレデンシャル漏洩）
+- 理由: セキュリティ影響が限定的か、運用導入コストが高い
+
 ---
 
 ## 5. 結論
 
 - Seiton は既に「Lint + 安全なFix + Network-assisted pin remediation + opt-in online audit + 追従更新」の統合基盤を持ち、競合の中核機能の多くを満たしている。
+- ghalint は全 13 ポリシーを完全カバーし、完全上位互換を達成。
+- actionlint は 17 ルール中 15 ルールを同等以上にカバー（残: shellcheck / pyflakes 外部連携のみ）。
 - 競合を完全に上回るには、次の2点が鍵。
-  - 残存 zizmor/ghalint 監査差分の吸収（P0）
+  - 残存 zizmor 監査差分の吸収（P0: 12件未対応 → `unpinned-tools` 等の高価値監査から段階実装）
   - dockerfile-pin/frizbee級の対象ファイル範囲拡張（P0）
 
 この順で実装すれば、Seitonは「競合機能を包括しつつ、より現代的な統合ツール」という目標に最短で近づく。
@@ -176,19 +197,21 @@ online audit rules（4）:
 | credentials | ✅ | `credentials` |
 | shell-name | ✅ | `shell-name` |
 | runner-label | ✅ | `runner-label` |
-| events | 🟡 | `dangerous-triggers` + `glob-pattern` で一部吸収（Step 15.7 で activity type 制約と branches/tags/paths 相互制約を追加。残: event payload 形状検証の深掘り） |
+| events | ✅ | `dangerous-triggers` + `glob-pattern` + `dispatch-inputs` + `schedule-event` で網羅（dispatch input type/options 検証・cron 構文検証を追加） |
 | job-needs | ✅ | `needs-graph` |
-| action | 🟡 | `popular-action-inputs` + `unpinned-uses` 等で一部吸収（Step 15.7 で uses 形式厳格化と local action 解決を追加。残: metadata 起点の総合検証拡張） |
+| action | ✅ | `popular-action-inputs` + `unpinned-uses` + `local-action-inputs` で網羅（local action.yml 起点の inputs 契約検証を追加） |
 | env-var | ✅ | `env-var` |
 | id | ✅ | `id-naming` |
 | glob | ✅ | `glob-pattern` |
 | permissions | ✅ | `permissions` + `deny-write-all` |
-| workflow-call | 🟡 | `reusable-workflow` + `deny-inherit-secrets` で一部吸収（Step 15.7 で local reusable call の inputs/secrets 契約検証を追加。残: remote 呼び出し先を含む契約検証範囲拡張） |
-| expression | ✅ | `expr-undefined-var`（+式ベース系） |
+| workflow-call | ✅ | `reusable-workflow` + `deny-inherit-secrets` + `workflow-call-input-default` で網羅（input default 型整合検証を追加） |
+| expression | ✅ | `expr-undefined-var` + `if-expr-wrapper`（+ 式ベース系） |
 | deprecated-commands | ✅ | `deprecated-commands` |
-| if-cond | ✅ | `if-cond` |
+| if-cond | ✅ | `if-cond` + `if-expr-wrapper` |
 | shellcheck | ❌ | 外部 shellcheck 連携未実装 |
 | pyflakes | ❌ | 外部 pyflakes 連携未実装 |
+
+対応率: 15/17（88%）。未対応は外部ツール連携のみ。
 
 ### 6.2 ghalint ポリシー対応表（13件）
 
@@ -200,18 +223,21 @@ online audit rules（4）:
 | deny_inherit_secrets | ✅ | `deny-inherit-secrets` |
 | workflow_secrets | ✅ | `workflow-secrets` |
 | job_secrets | ✅ | `job-secrets` |
-| action_ref_should_be_full_length_commit_sha | ✅ | `unpinned-uses` + `unpinned-image` |
+| deny_job_container_latest_image | ✅ | `unpinned-image`（digest pinning 要求により `:latest` も検出） |
+| action_ref_should_be_full_length_commit_sha | ✅ | `unpinned-uses` |
 | github_app_should_limit_repositories | ✅ | `github-app-token-inputs` |
 | github_app_should_limit_permissions | ✅ | `github-app-token-inputs` |
 | action_shell_is_required | ✅ | `action-shell-is-required` |
 | job_timeout_minutes_is_required | ✅ | `job-timeout-minutes-required` |
 | checkout_persist_credentials_should_be_false | ✅ | `checkout-persist-credentials` |
 
-### 6.3 zizmor 監査対応サマリー（34件）
+対応率: 13/13（100%）。完全カバー達成。
+
+### 6.3 zizmor 監査対応サマリー（36件）
 
 | 区分 | 件数 | Seiton 状況 |
 |---|---:|---|
-| 直接対応済み | 15 | `cache-poisoning`, `concurrency-limits`, `dangerous-triggers`, `impostor-commit`, `insecure-commands`, `known-vulnerable-actions`, `ref-confusion`, `secrets-inherit`, `secrets-outside-env`, `self-hosted-runner`, `stale-action-refs`, `template-injection`, `unpinned-images`, `unpinned-uses`, `unredacted-secrets` |
+| 直接対応済み | 17 | `cache-poisoning`, `concurrency-limits`, `dangerous-triggers`, `github-app`, `impostor-commit`, `insecure-commands`, `known-vulnerable-actions`, `ref-confusion`, `secrets-inherit`, `secrets-outside-env`, `self-hosted-runner`, `stale-action-refs`, `template-injection`, `unpinned-images`, `unpinned-uses`, `unredacted-secrets`, `concurrency-limits` |
 | 部分対応 | 7 | `archived-uses`, `excessive-permissions`, `forbidden-uses`, `overprovisioned-secrets`, `ref-version-mismatch`, `undocumented-permissions`, `use-trusted-publishing` |
 | 未対応 | 12 | 高度セキュリティ監査群（残差分） |
 
@@ -230,6 +256,7 @@ zizmor 監査ID別対応表（実装確認ベース）:
 | `dependabot-execution` | ❌ | 専用監査なし |
 | `excessive-permissions` | 🟡 | `deny-write-all` / `deny-read-all` / `job-permissions-required` で部分対応 |
 | `forbidden-uses` | 🟡 | `forbidden-uses`（allow/deny wildcard の初期実装） |
+| `github-app` | ✅ | `github-app-token-inputs`（repositories/permissions 制限チェック） |
 | `github-env` | ❌ | 専用監査なし |
 | `hardcoded-container-credentials` | ❌ | 専用監査なし |
 | `impostor-commit` | ✅ | online 監査（`rules.impostor-commit.enabled: true` で有効化） |
@@ -248,17 +275,20 @@ zizmor 監査ID別対応表（実装確認ベース）:
 | `template-injection` | ✅ | `template-injection` |
 | `undocumented-permissions` | 🟡 | `permissions` / `job-permissions-required` で部分対応 |
 | `unpinned-images` | ✅ | `unpinned-image` |
+| `unpinned-tools` | ❌ | 専用監査なし（外部ツールバージョン固定漏れ検出） |
 | `unpinned-uses` | ✅ | `unpinned-uses` |
 | `unredacted-secrets` | ✅ | `unredacted-secrets` |
 | `unsound-condition` | ❌ | 専用監査なし |
 | `unsound-contains` | ❌ | 専用監査なし |
 | `use-trusted-publishing` | 🟡 | `use-trusted-publishing`（publish + `id-token: write` 判定の初期実装） |
 
+対応率: 24/36（67%）— 直接17 + 部分7。残12件未対応。
+
 ### 6.4 pinact / dockerfile-pin / frizbee（ルールエンジンではなく変換系）
 
 | ツール | 実装上の判定単位 | Seiton 対応状況 |
 |---|---|---|
-| pinact | `unpinned-action`, `parse-error`（SARIF rule）+ check/update/review 機能 | 🟡 （pin remediation は対応、comment整合check・review出力は不足） |
+| pinact | `unpinned-action`, `parse-error`（SARIF rule）+ check/update/review/verify 機能 | 🟡 （pin remediation は対応、comment整合check・review出力は不足） |
 | dockerfile-pin | `ok/fail/skip/warn` ステータス + Dockerfile/compose/actions image 書換 | 🟡 （actions内 image は対応、Dockerfile/compose は不足） |
 | frizbee | actions/image 置換 + skip sentinel + modified-file gate | 🟡 （actions/image resolverは対応、任意YAML image置換や専用CLI導線は不足） |
 
@@ -270,15 +300,19 @@ zizmor 監査ID別対応表（実装確認ベース）:
 
 1. Dockerfile / compose / 任意YAML image pin 拡張
 
-2. zizmor 残差分（未対応）
-- `unsound-condition`
-- `unsound-contains`
-- `github-env`
-- `hardcoded-container-credentials`
-
-補足（完了）:
-- actionlint parity: `matrix` / `env-var` / `deprecated-commands` / `if-cond`
-- zizmor high-value (Step 15.6):
+2. zizmor 残差分（未対応 12件）
+- `unsound-condition` — 条件式の健全性検査
+- `unsound-contains` — contains() の健全性検査
+- `github-env` — GITHUB_ENV への危険な書き込み検出
+- `hardcoded-container-credentials` — コンテナ設定のハードコード認証情報
+- `unpinned-tools` — 外部ツールのバージョン固定漏れ検出
+- `artipacked` — アーティファクトクレデンシャル漏洩
+- `bot-conditions` — スプーフ可能な bot actor チェック
+- `anonymous-definition` — name 未定義のワークフロー/アクション
+- `obfuscation` — 難読化された Actions 機能使用
+- `misfeature` — 非推奨/危険な Actions 機能使用
+- `superfluous-actions` — ランナー標準機能で代替可能
+- `dependabot-execution` / `dependabot-cooldown` — Dependabot 設定検査
 
 ### P1（適用範囲拡張）
 
@@ -290,14 +324,14 @@ zizmor 監査ID別対応表（実装確認ベース）:
 
 ## 8. 参照ドキュメント
 
-- .github/docsSeiton_Linter_spec.md
-- .github/docslinter_implementation_csharp_plan.md
-- .github/docscompetitor-actionlint-structure-details.md
-- .github/docscompetitor-ghalint-structure-details.md
-- .github/docscompetitor-zizmor-structure-details.md
-- .github/docscompetitor-pinact-structure-details.md
-- .github/docscompetitor-dockerfile-pin-structure-details.md
-- .github/docscompetitor-frizbee-structure-details.md
+- .github/docs/Seiton_Linter_spec.md
+- .github/docs/linter_implementation_csharp_plan.md
+- .github/docs/competitor-actionlint-structure-details.md
+- .github/docs/competitor-ghalint-structure-details.md
+- .github/docs/competitor-zizmor-structure-details.md
+- .github/docs/competitor-pinact-structure-details.md
+- .github/docs/competitor-dockerfile-pin-structure-details.md
+- .github/docs/competitor-frizbee-structure-details.md
 - .references/actionlint
 - .references/ghalint
 - .references/zizmor
