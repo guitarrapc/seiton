@@ -4,7 +4,7 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 FIX="${ROOT}/scripts/fixtures/homebrew-seiton-checksums.txt"
 RENDER="${ROOT}/scripts/render-homebrew-seiton-formula.sh"
-OUT="$(mktemp)"
+OUT="$(mktemp -t test-homebrew-formula-render 2>/dev/null || mktemp "${TMPDIR:-/tmp}/test-homebrew-formula-render.XXXXXX")"
 trap 'rm -f "$OUT"' EXIT
 
 bash "$RENDER" "0.9.6" "v0.9.6" "acme/seiton" "$FIX" > "$OUT"
