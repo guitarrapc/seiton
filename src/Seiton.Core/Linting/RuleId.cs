@@ -57,6 +57,7 @@ public enum RuleId
     WorkflowCallInputDefault,
     OutdatedActionRunner,
     IfExprWrapper,
+    ConcurrencyLimits,
 
     // Composite / internal-only (not in RuleCatalog)
     Syntax,

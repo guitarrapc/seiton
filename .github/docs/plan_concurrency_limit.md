@@ -232,6 +232,34 @@ dotnet run -c Release
 
 ルールは `bool` フィールド 2 つのみの追加なので、アロケーション増加は実質ゼロの見込み。Mean への影響も `null` チェック数回分であり無視できるレベル。
 
+### 6.4 ベンチマーク結果（実測値）
+
+実装後のベンチマーク結果。パフォーマンスへの悪影響は確認されなかった。
+
+#### CoreLintBenchmark
+
+| Size | FixEnabled | Mean | Allocated |
+|---|---|---|---|
+| Small | False | 66.82 µs | 24.06 KB |
+| Small | True | 68.06 µs | 25.52 KB |
+| Medium | False | 1,464.58 µs | 137.28 KB |
+| Medium | True | 2,005.06 µs | 150.64 KB |
+| Large | False | 21,603.01 µs | 710.18 KB |
+| Large | True | 35,537.18 µs | 764.91 KB |
+
+#### RuleCatalogBenchmark
+
+| Method | Mean | Allocated |
+|---|---|---|
+| RuleId.ToId() | 0.53 ns | 0 B |
+| IsNonDisableable(RuleId) | 2.30 ns | 0 B |
+| RuleIdExtensions.TryParse(string) | 7.80 ns | 0 B |
+| GetPriority(string) | 7.98 ns | 0 B |
+| TryResolveRuleId(string) | 9.49 ns | 0 B |
+| IsOptIn(string) | 10.12 ns | 0 B |
+
+**結論**: カタログ操作はすべてゼロアロケーション。CoreLintBenchmark も既存水準を維持しており、新ルール追加による性能劣化はなし。
+
 ---
 
 ## 7. 実装手順（Test-First）

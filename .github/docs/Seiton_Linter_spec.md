@@ -190,6 +190,7 @@ Column definitions:
 | `ref-version-mismatch` | ✓ | — | Warn when symbolic ref/version intent mismatches resolved commit lineage expectations. |
 | `use-trusted-publishing` | ✓ | — | Warn when publishing/release flows do not use trusted publishing/OIDC-based provenance paths where expected. |
 | `if-expr-wrapper` | ✓ | ✓ (safe cases) | Warn when `if:` conditions are missing the `${{ }}` expression wrapper; auto-fix offered for single-line scalars (including quoted scalars) without existing `${{` markers. |
+| `concurrency-limits` | ✓ | — | Warn when workflows or jobs lack `concurrency` settings with `cancel-in-progress`. Skips reusable-only (`on: workflow_call`) workflows and workflow-call jobs. |
 
 Rule set compatibility policy:
 
@@ -698,7 +699,7 @@ Config file is absent or empty. No configuration is required.
 
 Specifically, the following are **active** without any config:
 
-`job-structure`, `reusable-workflow`, `permissions`, `popular-action-inputs`, `unpinned-uses`, `unpinned-image`, `dangerous-triggers`, `job-permissions-required`, `needs-graph`, `shell-name`, `runner-label`, `runner-no-latest`, `id-naming`, `glob-pattern`, `deny-write-all`, `credentials`, `template-injection`, `expr-undefined-var`, `run-env-context-direct-use`, `run-secrets-context-direct-use`, `run-inputs-context-direct-use`, `secrets-whole-context-access`, `checkout-persist-credentials`, `deny-read-all`, `deny-inherit-secrets`, `job-timeout-minutes-required`, `github-app-token-inputs`, `workflow-secrets`, `job-secrets`, `action-shell-is-required`, `cache-poisoning`, `self-hosted-runner`, `unredacted-secrets`, `secrets-outside-env`, `matrix`, `env-var`, `deprecated-commands`, `if-cond`, `fake-ternary`, `archived-uses`, `insecure-commands`, `overprovisioned-secrets`, `forbidden-uses`, `ref-version-mismatch`, `use-trusted-publishing`, `if-expr-wrapper`
+`job-structure`, `reusable-workflow`, `permissions`, `popular-action-inputs`, `unpinned-uses`, `unpinned-image`, `dangerous-triggers`, `job-permissions-required`, `needs-graph`, `shell-name`, `runner-label`, `runner-no-latest`, `id-naming`, `glob-pattern`, `deny-write-all`, `credentials`, `template-injection`, `expr-undefined-var`, `run-env-context-direct-use`, `run-secrets-context-direct-use`, `run-inputs-context-direct-use`, `secrets-whole-context-access`, `checkout-persist-credentials`, `deny-read-all`, `deny-inherit-secrets`, `job-timeout-minutes-required`, `github-app-token-inputs`, `workflow-secrets`, `job-secrets`, `action-shell-is-required`, `cache-poisoning`, `self-hosted-runner`, `unredacted-secrets`, `secrets-outside-env`, `matrix`, `env-var`, `deprecated-commands`, `if-cond`, `fake-ternary`, `archived-uses`, `insecure-commands`, `overprovisioned-secrets`, `forbidden-uses`, `ref-version-mismatch`, `use-trusted-publishing`, `if-expr-wrapper`, `concurrency-limits`
 
 The following are **not active** (online rules; require `rules.<id>.enabled: true`):
 
@@ -1259,6 +1260,7 @@ The following table classifies each default rule by fix feasibility.
 | `workflow-call-input-default` | ✗ Not auto-fixable | Default value corrections require understanding of caller contracts and intended type semantics. |
 | `use-trusted-publishing` | ✗ Not auto-fixable | Trusted publishing migration depends on registry ecosystem and release architecture. |
 | `if-expr-wrapper` | ✓ Auto-fixable (safe cases) | Wraps single-line `if:` expressions in `${{ }}`, including quoted scalars. Fix is suppressed for block scalars (structural newline) and values already containing `${{` markers (would nest). |
+| `concurrency-limits` | ✗ Not auto-fixable | Concurrency group naming and cancel-in-progress policy depend on workflow semantics and user intent. |
 
 ### 8.5 Fix Safety Policy
 
@@ -1648,3 +1650,4 @@ This subsection follows the same operator-facing style as §4.5 and is non-norma
 | `ref-version-mismatch` | Detects inconsistency between version intent and resolved ref/sha provenance. | Align symbolic version intent and pinned commit lineage, or pin directly with updated provenance annotation. | ✗ | Tag/release metadata can be manipulated upstream; combine with signed provenance verification where possible. |
 | `use-trusted-publishing` | Detects release/publish jobs that bypass trusted publishing controls (OIDC/provenance). | Adopt trusted publishing path and disable long-lived publishing secrets where ecosystem support exists. | ✗ | Trusted publishing coverage varies by registry; keep fallback controls and explicit exception governance. |
 | `if-expr-wrapper` | Detects `if:` conditions missing the `${{ }}` expression wrapper. While GitHub Actions auto-applies the wrapper at runtime, explicit wrapping improves readability and avoids confusion. | Wrap bare expressions in `${{ }}`. | ✓ (safe cases) | Auto-fix for single-line scalars, including quoted single-line scalars, when the value does not already contain `${{` markers. Block scalars and values containing `${{` emit warning without fix. |
+| `concurrency-limits` | Detects workflows or jobs that lack `concurrency` settings with explicit `cancel-in-progress`. Without concurrency limits, parallel runs can waste resources and cause race conditions. | Add `concurrency` block with `group` and `cancel-in-progress` at workflow or job level. | ✗ | Skips reusable-only workflows (`on: workflow_call` only) and workflow-call jobs (`uses:`). When workflow-level concurrency is set, job-level checks are suppressed. |
