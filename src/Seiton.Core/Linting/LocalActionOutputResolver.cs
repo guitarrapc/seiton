@@ -82,13 +82,14 @@ internal sealed class LocalActionOutputResolver
             return null;
         }
 
-        var parseResult = WorkflowParser.Parse(bytes, actionYamlPath);
-        if (parseResult.HasFatalError || parseResult.ActionMetadata is null)
+        var parseHandle = WorkflowParser.Parse(bytes, actionYamlPath);
+        if (parseHandle.HasFatalError || parseHandle.ActionMetadata is null)
         {
+            parseHandle.Dispose();
             return null;
         }
 
-        var meta = parseResult.ActionMetadata;
+        var meta = parseHandle.ActionMetadata;
         if (meta.Outputs is null || meta.Outputs.Value.Count == 0)
         {
             return [];
@@ -101,6 +102,7 @@ internal sealed class LocalActionOutputResolver
             names[idx++] = Encoding.UTF8.GetString(kv.Key.AsSpan(bytes));
         }
 
+        parseHandle.Dispose();
         return names;
     }
 

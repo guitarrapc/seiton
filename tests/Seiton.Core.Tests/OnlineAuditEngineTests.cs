@@ -1,4 +1,4 @@
-﻿using System.Text;
+using System.Text;
 using Seiton.Core.Linting;
 using Seiton.Core.Linting.OnlineAudit;
 using Seiton.Core.Linting.PinRemediation;
@@ -30,7 +30,7 @@ public sealed class OnlineAuditEngineTests
                 steps:
                   - uses: actions/checkout@v4
             """);
-        var lintResult = engine.Check(source, "workflow.yml", EnableAllOnlineRules());
+        var lintResult = engine.CheckDirect(source, "workflow.yml", EnableAllOnlineRules(), out _);
 
         var auditEngine = new OnlineAuditEngine(
             new DelegateActionAdvisoryProvider((_, _, _, _) => Task.FromResult<ActionAdvisory?>(null)),
@@ -58,7 +58,7 @@ public sealed class OnlineAuditEngineTests
                   - uses: actions/checkout@v4
             """);
         // No config enabling online rules — they're opt-in
-        var lintResult = engine.Check(source, "workflow.yml");
+        var lintResult = engine.CheckDirect(source, "workflow.yml", out _);
 
         var auditEngine = new OnlineAuditEngine(
             new DelegateActionAdvisoryProvider((_, _, _, _) => Task.FromResult<ActionAdvisory?>(new ActionAdvisory("GHSA-test", "desc"))),
@@ -86,7 +86,7 @@ public sealed class OnlineAuditEngineTests
                   - uses: actions/checkout@aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
                   - uses: actions/setup-go@main
             """);
-        var lintResult = engine.Check(source, "workflow.yml", EnableAllOnlineRules());
+        var lintResult = engine.CheckDirect(source, "workflow.yml", EnableAllOnlineRules(), out _);
 
         var auditEngine = new OnlineAuditEngine(
             new DelegateActionAdvisoryProvider((owner, repo, reference, _) =>
@@ -155,7 +155,7 @@ public sealed class OnlineAuditEngineTests
                 steps:
                   - uses: actions/checkout@bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
             """);
-        var lintResult = engine.Check(source, "workflow.yml", EnableAllOnlineRules());
+        var lintResult = engine.CheckDirect(source, "workflow.yml", EnableAllOnlineRules(), out _);
 
         var auditEngine = new OnlineAuditEngine(
             null,
@@ -185,7 +185,7 @@ public sealed class OnlineAuditEngineTests
                 steps:
                   - uses: actions/checkout@v4
             """);
-        var lintResult = engine.Check(source, "workflow.yml", EnableAllOnlineRules());
+        var lintResult = engine.CheckDirect(source, "workflow.yml", EnableAllOnlineRules(), out _);
 
         var auditEngine = new OnlineAuditEngine(
             null,
@@ -210,7 +210,7 @@ public sealed class OnlineAuditEngineTests
                 steps:
                   - uses: actions/checkout@v4
             """);
-        var lintResult = engine.Check(source, "workflow.yml", EnableAllOnlineRules());
+        var lintResult = engine.CheckDirect(source, "workflow.yml", EnableAllOnlineRules(), out _);
 
         var auditEngine = new OnlineAuditEngine(
             null,
@@ -233,7 +233,7 @@ public sealed class OnlineAuditEngineTests
                 steps:
                   - uses: actions/checkout@v4
             """);
-        var lintResult = engine.Check(source, "workflow.yml", EnableAllOnlineRules());
+        var lintResult = engine.CheckDirect(source, "workflow.yml", EnableAllOnlineRules(), out _);
 
         var auditEngine = new OnlineAuditEngine(
             new DelegateActionAdvisoryProvider((_, _, _, _) => Task.FromResult<ActionAdvisory?>(new ActionAdvisory("GHSA-test", "desc"))),
@@ -263,7 +263,7 @@ public sealed class OnlineAuditEngineTests
                 steps:
                   - uses: actions/checkout@v4
             """);
-        engine.Check(source, "workflow.yml", EnableAllOnlineRules());
+        engine.CheckDirect(source, "workflow.yml", EnableAllOnlineRules(), out _);
 
         await Assert.That(engine.ActiveOnlineRules.Count).IsEqualTo(4);
         var ruleIds = engine.ActiveOnlineRules.Select(r => r.Id).OrderBy(id => id).ToArray();
@@ -292,7 +292,7 @@ public sealed class OnlineAuditEngineTests
                   - uses: ./local-action
                   - uses: docker://alpine:3.18
             """);
-        engine.Check(source, "workflow.yml", EnableAllOnlineRules());
+        engine.CheckDirect(source, "workflow.yml", EnableAllOnlineRules(), out _);
 
         // Each online rule should have collected 3 remote targets (excluding local and docker)
         for (var i = 0; i < engine.ActiveOnlineRules.Count; i++)
@@ -315,7 +315,7 @@ public sealed class OnlineAuditEngineTests
                 steps:
                   - uses: actions/checkout@v4
             """);
-        var lintResult = engine.Check(source, "workflow.yml", EnableAllOnlineRules());
+        var lintResult = engine.CheckDirect(source, "workflow.yml", EnableAllOnlineRules(), out _);
 
         var advisoryThrows = new DelegateActionAdvisoryProvider((_, _, _, _) =>
             throw new InvalidOperationException("advisory"));
@@ -347,7 +347,7 @@ public sealed class OnlineAuditEngineTests
                   - uses: actions/checkout@v4
             """);
 
-        var lintResult = engine.Check(source, "workflow.yml", EnableAllOnlineRules());
+        var lintResult = engine.CheckDirect(source, "workflow.yml", EnableAllOnlineRules(), out _);
 
         var calls = 0;
 
@@ -380,7 +380,7 @@ public sealed class OnlineAuditEngineTests
                 steps:
                   - uses: actions/checkout@bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
             """);
-        var lintResult = engine.Check(source, "workflow.yml", EnableAllOnlineRules());
+        var lintResult = engine.CheckDirect(source, "workflow.yml", EnableAllOnlineRules(), out _);
 
         var auditEngine = new OnlineAuditEngine(
             null,
@@ -410,7 +410,7 @@ public sealed class OnlineAuditEngineTests
                 steps:
                   - uses: actions/checkout@bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
             """);
-        var lintResult = engine.Check(source, "workflow.yml", EnableAllOnlineRules());
+        var lintResult = engine.CheckDirect(source, "workflow.yml", EnableAllOnlineRules(), out _);
 
         var auditEngine = new OnlineAuditEngine(
             null,
@@ -439,7 +439,7 @@ public sealed class OnlineAuditEngineTests
                 steps:
                   - uses: actions/checkout@bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
             """);
-        var lintResult = engine.Check(source, "workflow.yml", EnableAllOnlineRules());
+        var lintResult = engine.CheckDirect(source, "workflow.yml", EnableAllOnlineRules(), out _);
 
         var auditEngine = new OnlineAuditEngine(
             null,
@@ -468,7 +468,7 @@ public sealed class OnlineAuditEngineTests
                 steps:
                   - uses: actions/checkout@bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
             """);
-        var lintResult = engine.Check(source, "workflow.yml", EnableAllOnlineRules());
+        var lintResult = engine.CheckDirect(source, "workflow.yml", EnableAllOnlineRules(), out _);
 
         var auditEngine = new OnlineAuditEngine(
             null,

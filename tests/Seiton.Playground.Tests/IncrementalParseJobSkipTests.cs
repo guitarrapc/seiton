@@ -1,4 +1,4 @@
-﻿using System.Text;
+using System.Text;
 using Seiton.Core.Parsing.Ast;
 
 namespace Seiton.Playground.Tests;
@@ -57,7 +57,7 @@ public sealed class IncrementalParseJobSkipTests
         await Assert.That(result2.Workflow!.Jobs.Count).IsEqualTo(2);
 
         // deploy job's step should contain "finish"
-        var arena = result2.Arena!;
+        var arena = ctx.Arena!;
         var deployJob = result2.Workflow!.Jobs.Entries[1].Value;
         var step = deployJob.Steps![0];
         var exec = step.Exec as ExecRun;
@@ -80,7 +80,7 @@ public sealed class IncrementalParseJobSkipTests
             "on: push\njobs:\n  build:\n    runs-on: ubuntu-latest\n    steps:\n      - run: echo build2\n  deploy:\n    runs-on: ubuntu-latest\n    needs: [build]\n    steps:\n      - run: echo deploy\n");
 
         var result2 = ctx.ParseIncrementally(yaml2, FilePath);
-        var arena = result2.Arena!;
+        var arena = ctx.Arena!;
 
         // deploy job is reused — verify its needs and step resolve correctly
         var deployJob = result2.Workflow!.Jobs.Entries[1].Value;
@@ -213,7 +213,7 @@ public sealed class IncrementalParseJobSkipTests
         await Assert.That(result2.Workflow!.Jobs.Count).IsEqualTo(1);
 
         // Verify the step content was updated
-        var arena = result2.Arena!;
+        var arena = ctx.Arena!;
         var step = result2.Workflow!.Jobs.Entries[0].Value.Steps![0];
         var exec = step.Exec as ExecRun;
         var runValue = arena.GetStringValue(exec!.Run);
@@ -240,7 +240,7 @@ public sealed class IncrementalParseJobSkipTests
             await Assert.That(result.Workflow).IsNotNull();
             await Assert.That(result.Workflow!.Jobs.Count).IsEqualTo(1);
 
-            var arena = result.Arena!;
+            var arena = ctx.Arena!;
             var step = result.Workflow!.Jobs.Entries[0].Value.Steps![0];
             var exec = step.Exec as ExecRun;
             var runValue = arena.GetStringValue(exec!.Run);
@@ -269,7 +269,7 @@ public sealed class IncrementalParseJobSkipTests
         await Assert.That(result2.Workflow!.Jobs.Count).IsEqualTo(1);
 
         // Job should still be correct
-        var arena = result2.Arena!;
+        var arena = ctx.Arena!;
         var step = result2.Workflow!.Jobs.Entries[0].Value.Steps![0];
         var exec = step.Exec as ExecRun;
         var runValue = arena.GetStringValue(exec!.Run);
@@ -294,7 +294,7 @@ public sealed class IncrementalParseJobSkipTests
         await Assert.That(result2.Workflow).IsNotNull();
         await Assert.That(result2.Workflow!.Jobs.Count).IsEqualTo(1);
 
-        var arena = result2.Arena!;
+        var arena = ctx.Arena!;
         var step = result2.Workflow!.Jobs.Entries[0].Value.Steps![0];
         var exec = step.Exec as ExecRun;
         var runValue = arena.GetStringValue(exec!.Run);

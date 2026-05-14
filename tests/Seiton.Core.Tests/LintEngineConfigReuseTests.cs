@@ -1,4 +1,4 @@
-﻿using Seiton.Core.Linting;
+using Seiton.Core.Linting;
 using Seiton.Core.Parsing;
 using System.Text;
 
@@ -21,11 +21,11 @@ public sealed class LintEngineConfigReuseTests
 
         // Source 1: write-all on line 2
         var yaml1 = Encoding.UTF8.GetBytes("on: push\npermissions: write-all\njobs:\n  build:\n    runs-on: ubuntu-latest\n    steps:\n      - run: echo ok\n");
-        var result1 = engine.Check(yaml1, ".github/workflows/a.yml");
+        var result1 = engine.CheckDirect(yaml1, ".github/workflows/a.yml", out _);
 
         // Source 2: write-all on line 4 (preceded by extra blank lines)
         var yaml2 = Encoding.UTF8.GetBytes("on: push\n\n\npermissions: write-all\njobs:\n  build:\n    runs-on: ubuntu-latest\n    steps:\n      - run: echo ok\n");
-        var result2 = engine.Check(yaml2, ".github/workflows/b.yml");
+        var result2 = engine.CheckDirect(yaml2, ".github/workflows/b.yml", out _);
 
         // Both should detect write-all, but at different lines
         var writeAll1 = result1.Diagnostics.FirstOrDefault(d => d.RuleId == "deny-write-all");
@@ -47,10 +47,10 @@ public sealed class LintEngineConfigReuseTests
 
         // Call with explicit config
         var configWithFix = new LintConfig { Fix = new FixConfig { Enabled = true } };
-        var result1 = engine.Check(yaml, ".github/workflows/test.yml", configWithFix);
+        var result1 = engine.CheckDirect(yaml, ".github/workflows/test.yml", configWithFix, out _);
 
         // Call without config
-        var result2 = engine.Check(yaml, ".github/workflows/test.yml", config: null);
+        var result2 = engine.CheckDirect(yaml, ".github/workflows/test.yml", config: null, out _);
 
         // Both calls should produce the same diagnostic count and messages
         await Assert.That(result1.Diagnostics.Length).IsEqualTo(result2.Diagnostics.Length);
@@ -70,13 +70,13 @@ public sealed class LintEngineConfigReuseTests
         var yaml = Encoding.UTF8.GetBytes("on: push\npermissions: write-all\njobs:\n  build:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/checkout@v4\n");
 
         // Snapshot each result before the next Check() invalidates the backing array (two-buffer swap).
-        var result1 = engine.Check(yaml, ".github/workflows/ci.yml");
+        var result1 = engine.CheckDirect(yaml, ".github/workflows/ci.yml", out _);
         var snap1 = result1.Diagnostics.Select(d => (d.Message, d.Location.StartLine)).ToArray();
 
-        var result2 = engine.Check(yaml, ".github/workflows/ci.yml");
+        var result2 = engine.CheckDirect(yaml, ".github/workflows/ci.yml", out _);
         var snap2 = result2.Diagnostics.Select(d => (d.Message, d.Location.StartLine)).ToArray();
 
-        var result3 = engine.Check(yaml, ".github/workflows/ci.yml");
+        var result3 = engine.CheckDirect(yaml, ".github/workflows/ci.yml", out _);
         var snap3 = result3.Diagnostics.Select(d => (d.Message, d.Location.StartLine)).ToArray();
 
         await Assert.That(snap1.Length).IsEqualTo(snap2.Length);
@@ -103,11 +103,11 @@ public sealed class LintEngineConfigReuseTests
         var yaml2 = Encoding.UTF8.GetBytes("on:\n  pull_request:\njobs:\n  test:\n    runs-on: ubuntu-latest\n    steps:\n      - run: echo ${{ github.sha }}\n");
 
         // Snapshot result1 before subsequent Check() calls invalidate its backing array (two-buffer swap).
-        var result1 = engine.Check(yaml1, ".github/workflows/a.yml");
+        var result1 = engine.CheckDirect(yaml1, ".github/workflows/a.yml", out _);
         var snap1 = result1.Diagnostics.Select(d => d.Message).ToArray();
 
-        var result2 = engine.Check(yaml2, ".github/workflows/b.yml");
-        var result3 = engine.Check(yaml1, ".github/workflows/a.yml");
+        var result2 = engine.CheckDirect(yaml2, ".github/workflows/b.yml", out _);
+        var result3 = engine.CheckDirect(yaml1, ".github/workflows/a.yml", out _);
 
         // All calls should succeed without exceptions (no stale offset access)
         // and produce consistent results when re-checking the same source
@@ -131,14 +131,14 @@ public sealed class LintEngineConfigReuseTests
         {
             Output = new OutputConfig { SortOrder = DiagnosticSortOrder.Location },
         };
-        var result1 = engine.Check(yaml, ".github/workflows/ci.yml", configLocation);
+        var result1 = engine.CheckDirect(yaml, ".github/workflows/ci.yml", configLocation, out _);
 
         // Second call with Rule sort
         var configRule = new LintConfig
         {
             Output = new OutputConfig { SortOrder = DiagnosticSortOrder.Rule },
         };
-        var result2 = engine.Check(yaml, ".github/workflows/ci.yml", configRule);
+        var result2 = engine.CheckDirect(yaml, ".github/workflows/ci.yml", configRule, out _);
 
         // Both should have the same diagnostics count
         await Assert.That(result1.Diagnostics.Length).IsEqualTo(result2.Diagnostics.Length);
@@ -187,7 +187,7 @@ public sealed class LintEngineConfigReuseTests
 
         // Small workflow with known diagnostics
         var yaml1 = Encoding.UTF8.GetBytes("on: push\npermissions: write-all\njobs:\n  build:\n    runs-on: ubuntu-latest\n    steps:\n      - run: echo ok\n");
-        var result1 = engine.Check(yaml1, ".github/workflows/ci.yml");
+        var result1 = engine.CheckDirect(yaml1, ".github/workflows/ci.yml", out _);
 
         await Assert.That(result1.DiagnosticCount).IsEqualTo(result1.Diagnostics.Length);
         await Assert.That(result1.DiagnosticCount).IsGreaterThan(0);
@@ -198,12 +198,12 @@ public sealed class LintEngineConfigReuseTests
 
         // Larger workflow → more diagnostics
         var yaml2 = Encoding.UTF8.GetBytes("on: push\npermissions: write-all\njobs:\n  build:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/checkout@v4\n      - run: echo ok\n  test:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/checkout@v4\n      - run: echo test\n");
-        var result2 = engine.Check(yaml2, ".github/workflows/ci.yml");
+        var result2 = engine.CheckDirect(yaml2, ".github/workflows/ci.yml", out _);
         await Assert.That(result2.DiagnosticCount).IsEqualTo(result2.Diagnostics.Length);
 
         // Smaller workflow again → result array must shrink to exact size
         var yaml3 = Encoding.UTF8.GetBytes("on: push\njobs:\n  build:\n    runs-on: ubuntu-latest\n    steps:\n      - run: echo ok\n");
-        var result3 = engine.Check(yaml3, ".github/workflows/ci.yml");
+        var result3 = engine.CheckDirect(yaml3, ".github/workflows/ci.yml", out _);
         await Assert.That(result3.DiagnosticCount).IsEqualTo(result3.Diagnostics.Length);
     }
 
@@ -215,7 +215,7 @@ public sealed class LintEngineConfigReuseTests
         var yaml = Encoding.UTF8.GetBytes("on: push\npermissions: write-all\njobs:\n  build:\n    permissions:\n      contents: read\n    runs-on: ubuntu-latest\n    steps:\n      - run: echo ok\n");
 
         var config = new LintConfig { Fix = new FixConfig { Enabled = true } };
-        var result = engine.Check(yaml, ".github/workflows/ci.yml", config);
+        var result = engine.CheckDirect(yaml, ".github/workflows/ci.yml", config, out _);
 
         await Assert.That(result.Diagnostics.Length).IsGreaterThan(0);
 
@@ -247,15 +247,15 @@ public sealed class LintEngineConfigReuseTests
                 ["unpinned-uses"] = new() { Enabled = false },
             },
         };
-        var result1 = engine.Check(yaml, ".github/workflows/ci.yml", configDisable);
+        var result1 = engine.CheckDirect(yaml, ".github/workflows/ci.yml", configDisable, out _);
         var hasUnpinned1 = result1.Diagnostics.Any(d => d.RuleId == "unpinned-uses");
 
         // Second call: no rule config (unpinned-uses should fire)
-        var result2 = engine.Check(yaml, ".github/workflows/ci.yml");
+        var result2 = engine.CheckDirect(yaml, ".github/workflows/ci.yml", out _);
         var hasUnpinned2 = result2.Diagnostics.Any(d => d.RuleId == "unpinned-uses");
 
         // Third call: disable again
-        var result3 = engine.Check(yaml, ".github/workflows/ci.yml", configDisable);
+        var result3 = engine.CheckDirect(yaml, ".github/workflows/ci.yml", configDisable, out _);
         var hasUnpinned3 = result3.Diagnostics.Any(d => d.RuleId == "unpinned-uses");
 
         await Assert.That(hasUnpinned1).IsFalse();
@@ -278,16 +278,16 @@ public sealed class LintEngineConfigReuseTests
             "on: push\njobs:\n  build:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/checkout@v4\n");
 
         // First: suppressed → unpinned-uses should be suppressed
-        var result1 = engine.Check(yamlWithSuppression, ".github/workflows/ci.yml");
+        var result1 = engine.CheckDirect(yamlWithSuppression, ".github/workflows/ci.yml", out _);
         var suppressed1 = result1.SuppressionSummary.TotalSuppressed > 0
             && result1.SuppressionSummary.SuppressedByRule.ContainsKey("unpinned-uses");
 
         // Second: no suppression → unpinned-uses should appear
-        var result2 = engine.Check(yamlWithout, ".github/workflows/ci.yml");
+        var result2 = engine.CheckDirect(yamlWithout, ".github/workflows/ci.yml", out _);
         var hasUnpinned2 = result2.Diagnostics.Any(d => d.RuleId == "unpinned-uses");
 
         // Third: suppressed again
-        var result3 = engine.Check(yamlWithSuppression, ".github/workflows/ci.yml");
+        var result3 = engine.CheckDirect(yamlWithSuppression, ".github/workflows/ci.yml", out _);
         var suppressed3 = result3.SuppressionSummary.TotalSuppressed > 0
             && result3.SuppressionSummary.SuppressedByRule.ContainsKey("unpinned-uses");
 
@@ -318,10 +318,10 @@ public sealed class LintEngineConfigReuseTests
                 ["runner-label"] = new() { Enabled = false },
             },
         };
-        var result1 = engine.Check(yamlFileSuppression, ".github/workflows/ci.yml", config1);
+        var result1 = engine.CheckDirect(yamlFileSuppression, ".github/workflows/ci.yml", config1, out _);
 
         // Call 2: no suppression, no rule config
-        var result2 = engine.Check(yamlPlain, ".github/workflows/ci.yml");
+        var result2 = engine.CheckDirect(yamlPlain, ".github/workflows/ci.yml", out _);
 
         // unpinned-uses should be suppressed in result1, present in result2
         var suppressed1 = result1.SuppressionSummary.SuppressedByRule.ContainsKey("unpinned-uses");
@@ -344,7 +344,7 @@ public sealed class LintEngineConfigReuseTests
             "on: push\njobs:\n  build:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/checkout@v4\n");
 
         // Result 1: has suppression
-        var result1 = engine.Check(yamlWithSuppression, ".github/workflows/ci.yml");
+        var result1 = engine.CheckDirect(yamlWithSuppression, ".github/workflows/ci.yml", out _);
         var totalSuppressed1 = result1.SuppressionSummary.TotalSuppressed;
         var hasByRule1 = result1.SuppressionSummary.SuppressedByRule.ContainsKey("unpinned-uses");
         var recordCount1 = result1.SuppressionSummary.RecordCount;
@@ -355,7 +355,7 @@ public sealed class LintEngineConfigReuseTests
         await Assert.That(recordCount1).IsGreaterThan(0);
 
         // Result 2: no suppression — must not corrupt result1's suppression data
-        var result2 = engine.Check(yamlWithout, ".github/workflows/ci.yml");
+        var result2 = engine.CheckDirect(yamlWithout, ".github/workflows/ci.yml", out _);
         await Assert.That(result2.SuppressionSummary.TotalSuppressed).IsEqualTo(0);
 
         // Verify result1's suppression summary is unchanged (snapshot semantics)
@@ -364,7 +364,7 @@ public sealed class LintEngineConfigReuseTests
         await Assert.That(result1.SuppressionSummary.RecordCount).IsEqualTo(recordCount1);
 
         // Result 3: another call — result1 still intact
-        engine.Check(yamlWithout, ".github/workflows/ci.yml");
+        engine.CheckDirect(yamlWithout, ".github/workflows/ci.yml", out _);
         await Assert.That(result1.SuppressionSummary.SuppressedByRule.ContainsKey("unpinned-uses")).IsTrue();
         await Assert.That(result1.SuppressionSummary.RecordCount).IsEqualTo(recordCount1);
     }
@@ -381,12 +381,12 @@ public sealed class LintEngineConfigReuseTests
             "on: push\njobs:\n  build:\n    runs-on: ubuntu-latest\n    steps:\n      # seiton: disable-next-line unpinned-uses\n      - uses: actions/checkout@v4\n");
 
         // Without skip: summary should have suppression data
-        var resultFull = engine.Check(yaml, ".github/workflows/ci.yml");
+        var resultFull = engine.CheckDirect(yaml, ".github/workflows/ci.yml", out _);
         await Assert.That(resultFull.SuppressionSummary.TotalSuppressed).IsGreaterThan(0);
 
         // With skip: summary should be empty, but diagnostics should still be filtered
         var configSkip = new LintConfig { SkipSuppressionSummary = true };
-        var resultSkip = engine.Check(yaml, ".github/workflows/ci.yml", configSkip);
+        var resultSkip = engine.CheckDirect(yaml, ".github/workflows/ci.yml", configSkip, out _);
         await Assert.That(resultSkip.SuppressionSummary.TotalSuppressed).IsEqualTo(0);
         await Assert.That(resultSkip.SuppressionSummary.Records).IsEmpty();
 
@@ -424,14 +424,14 @@ public sealed class LintEngineConfigReuseTests
         bytes1.AsSpan(0, Math.Min(bytes1.Length, targetLen)).CopyTo(buffer);
         if (bytes1.Length < targetLen) buffer.AsSpan(bytes1.Length).Fill((byte)' ');
 
-        var result1 = engine.Check(buffer, ".github/workflows/ci.yml");
+        var result1 = engine.CheckDirect(buffer, ".github/workflows/ci.yml", out _);
         var writeAll1 = result1.Diagnostics.FirstOrDefault(d => d.RuleId == "deny-write-all");
 
         // Second call: overwrite the SAME buffer instance with yaml2 content
         bytes2.AsSpan(0, Math.Min(bytes2.Length, targetLen)).CopyTo(buffer);
         if (bytes2.Length < targetLen) buffer.AsSpan(bytes2.Length).Fill((byte)' ');
 
-        var result2 = engine.Check(buffer, ".github/workflows/ci.yml");
+        var result2 = engine.CheckDirect(buffer, ".github/workflows/ci.yml", out _);
         var writeAll2 = result2.Diagnostics.FirstOrDefault(d => d.RuleId == "deny-write-all");
 
         // Both should detect write-all (content is valid YAML in both cases)

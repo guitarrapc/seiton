@@ -1,4 +1,4 @@
-﻿using System.Text;
+using System.Text;
 using Seiton.Core.Linting;
 using Seiton.Core.Linting.Rules;
 
@@ -65,8 +65,7 @@ public sealed class LocalReusableWorkflowOutputResolutionTests
             File.WriteAllText(callerPath, callerYaml, Encoding.UTF8);
 
             var result = new LintEngine([new ExprUndefinedVarRule()])
-                .Check(File.ReadAllBytes(callerPath), callerPath);
-            using var _ = result.ParseResult.Arena;
+                .CheckDirect(File.ReadAllBytes(callerPath), callerPath, out _);
 
             await Assert.That(result.ParseResult.HasFatalError).IsFalse();
 
@@ -128,8 +127,7 @@ public sealed class LocalReusableWorkflowOutputResolutionTests
             File.WriteAllText(callerPath, callerYaml, Encoding.UTF8);
 
             var result = new LintEngine([new ExprUndefinedVarRule()])
-                .Check(File.ReadAllBytes(callerPath), callerPath);
-            using var _ = result.ParseResult.Arena;
+                .CheckDirect(File.ReadAllBytes(callerPath), callerPath, out _);
 
             await Assert.That(result.ParseResult.HasFatalError).IsFalse();
 
@@ -202,8 +200,7 @@ public sealed class LocalReusableWorkflowOutputResolutionTests
             File.WriteAllText(callerPath, callerYaml, Encoding.UTF8);
 
             var result = new LintEngine([new ExprUndefinedVarRule()])
-                .Check(File.ReadAllBytes(callerPath), callerPath);
-            using var _ = result.ParseResult.Arena;
+                .CheckDirect(File.ReadAllBytes(callerPath), callerPath, out _);
 
             await Assert.That(result.ParseResult.HasFatalError).IsFalse();
 
@@ -273,8 +270,7 @@ public sealed class LocalReusableWorkflowOutputResolutionTests
             File.WriteAllText(callerPath, callerYaml, Encoding.UTF8);
 
             var result = new LintEngine([new ExprUndefinedVarRule()])
-                .Check(File.ReadAllBytes(callerPath), callerPath);
-            using var _ = result.ParseResult.Arena;
+                .CheckDirect(File.ReadAllBytes(callerPath), callerPath, out _);
 
             await Assert.That(result.ParseResult.HasFatalError).IsFalse();
 
@@ -346,8 +342,7 @@ public sealed class LocalReusableWorkflowOutputResolutionTests
             File.WriteAllText(callerPath, callerYaml, Encoding.UTF8);
 
             var result = new LintEngine([new ExprUndefinedVarRule()])
-                .Check(File.ReadAllBytes(callerPath), callerPath);
-            using var _ = result.ParseResult.Arena;
+                .CheckDirect(File.ReadAllBytes(callerPath), callerPath, out _);
 
             await Assert.That(result.ParseResult.HasFatalError).IsFalse();
 
@@ -409,8 +404,7 @@ public sealed class LocalReusableWorkflowOutputResolutionTests
             File.WriteAllText(callerPath, callerYaml, Encoding.UTF8);
 
             var result = new LintEngine([new ExprUndefinedVarRule()])
-                .Check(File.ReadAllBytes(callerPath), callerPath);
-            using var _ = result.ParseResult.Arena;
+                .CheckDirect(File.ReadAllBytes(callerPath), callerPath, out _);
 
             await Assert.That(result.ParseResult.HasFatalError).IsFalse();
 
@@ -489,8 +483,7 @@ public sealed class LocalReusableWorkflowOutputResolutionTests
             File.WriteAllText(callerPath, callerYaml, Encoding.UTF8);
 
             var result = new LintEngine([new ExprUndefinedVarRule()])
-                .Check(File.ReadAllBytes(callerPath), callerPath);
-            using var _ = result.ParseResult.Arena;
+                .CheckDirect(File.ReadAllBytes(callerPath), callerPath, out _);
 
             await Assert.That(result.ParseResult.HasFatalError).IsFalse();
 
@@ -591,8 +584,7 @@ public sealed class LocalReusableWorkflowOutputResolutionTests
             File.WriteAllText(callerPath, callerYaml, Encoding.UTF8);
 
             var result = new LintEngine([new ExprUndefinedVarRule()])
-                .Check(File.ReadAllBytes(callerPath), callerPath);
-            using var _ = result.ParseResult.Arena;
+                .CheckDirect(File.ReadAllBytes(callerPath), callerPath, out _);
 
             await Assert.That(result.ParseResult.HasFatalError).IsFalse();
 
@@ -671,8 +663,7 @@ public sealed class LocalReusableWorkflowOutputResolutionTests
             File.WriteAllText(callerPath, callerYaml, Encoding.UTF8);
 
             var result = new LintEngine([new ExprUndefinedVarRule()])
-                .Check(File.ReadAllBytes(callerPath), callerPath);
-            using var _ = result.ParseResult.Arena;
+                .CheckDirect(File.ReadAllBytes(callerPath), callerPath, out _);
 
             await Assert.That(result.ParseResult.HasFatalError).IsFalse();
 
@@ -749,8 +740,7 @@ public sealed class LocalReusableWorkflowOutputResolutionTests
             File.WriteAllText(callerPath, callerYaml, Encoding.UTF8);
 
             var result = new LintEngine([new ExprUndefinedVarRule()])
-                .Check(File.ReadAllBytes(callerPath), callerPath);
-            using var _ = result.ParseResult.Arena;
+                .CheckDirect(File.ReadAllBytes(callerPath), callerPath, out _);
 
             await Assert.That(result.ParseResult.HasFatalError).IsFalse();
 

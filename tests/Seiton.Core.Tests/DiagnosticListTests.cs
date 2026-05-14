@@ -106,7 +106,7 @@ public class DiagnosticListTests
     public async Task ParseResult_Diagnostics_IsDiagnosticList()
     {
         var yaml = "on: push\njobs:\n  build:\n    runs-on: ubuntu-latest\n    steps:\n      - run: echo hi"u8.ToArray();
-        var result = WorkflowParser.ParseClassified(yaml, "test.yml").ParseResult;
+        var result = WorkflowParser.ParseClassified(yaml, "test.yml", out _).ParseResult;
         var diags = result.Diagnostics;
         // Should support both span and LINQ access
         var span = diags.AsSpan();
@@ -118,7 +118,7 @@ public class DiagnosticListTests
     {
         var yaml = "on: push\njobs:\n  build:\n    runs-on: ubuntu-latest\n    steps:\n      - run: echo hi"u8.ToArray();
         var engine = new LintEngine();
-        var result = engine.Check(yaml, "test.yml");
+        var result = engine.CheckDirect(yaml, "test.yml", out var arena);
 
         // LintResult.Diagnostics should be DiagnosticList, not Diagnostic[]
         DiagnosticList lintDiags = result.Diagnostics;
@@ -137,7 +137,7 @@ public class DiagnosticListTests
         // Invalid YAML that causes a fatal parse error
         var yaml = ":\n  ]["u8.ToArray();
         var engine = new LintEngine();
-        var result = engine.Check(yaml, "test.yml");
+        var result = engine.CheckDirect(yaml, "test.yml", out var arena);
 
         await Assert.That(result.HasFatalError).IsTrue();
 
@@ -153,7 +153,7 @@ public class DiagnosticListTests
         // Verify diagnostics remain accessible after arena dispose
         var yaml = "on: push\njobs:\n  build:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/checkout@v4"u8.ToArray();
         var engine = new LintEngine();
-        var result = engine.Check(yaml, "test.yml");
+        var result = engine.CheckDirect(yaml, "test.yml", out var arena);
 
         // Diagnostics should be accessible before dispose
         var countBefore = result.Diagnostics.Length;
@@ -162,6 +162,6 @@ public class DiagnosticListTests
         // After arena dispose, the backing arrays are returned to pool.
         // Accessing diagnostics after this point is undefined behavior.
         // This test verifies that dispose itself does not throw.
-        result.ParseResult.Arena?.Dispose();
+        arena?.Dispose();
     }
 }

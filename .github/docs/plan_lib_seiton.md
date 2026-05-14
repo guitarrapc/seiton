@@ -8,9 +8,10 @@
 
 `Seiton.Core` はすでに parser / linter の実装本体として成立しており、外部利用の入口になりうる public API も一部存在する。
 
-- [`WorkflowParser`](../../src/Seiton.Core/Parsing/WorkflowParser.cs) に `Parse` / `ParseClassified` がある
-- [`LintEngine`](../../src/Seiton.Core/Linting/LintEngine.cs) に `Check(byte[] utf8Yaml, string filePath, LintConfig? config)` がある
+- [`WorkflowParser`](../../src/Seiton.Core/Parsing/WorkflowParser.cs) に `Parse`（`ParseHandle` を返す）/ `ParseClassified` がある
+- [`LintEngine`](../../src/Seiton.Core/Linting/LintEngine.cs) に `Check(byte[] utf8Yaml, string filePath, LintConfig? config)` がある（`LintHandle` を返す）
 - [`ParseResult`](../../src/Seiton.Core/Parsing/Diagnostics.cs) と [`LintResult`](../../src/Seiton.Core/Linting/LintResult.cs) は public
+- [`ParseHandle`](../../src/Seiton.Core/Parsing/ParseHandle.cs) と [`LintHandle`](../../src/Seiton.Core/Linting/LintHandle.cs) は `ref struct : IDisposable` で Arena ライフタイムを管理
 - [`FixEngine`](../../src/Seiton.Core/Linting/Fixing/FixEngine.cs) も public で、fix 実行 API として使いうる
 
 一方で、現在の `Seiton.Core` は「CLI の内部実装」に近い形で育っており、公開ライブラリとしては以下の未整備箇所がある。
@@ -87,8 +88,8 @@ public static class SeitonLinter
 
 **論点**:
 
-- [`LintResult`](../../src/Seiton.Core/Linting/LintResult.cs) は pooled diagnostics を返し、`ParseResult.Arena` の寿命に依存する
-- 外部利用者は `Arena.Dispose()` 前提を知らずに診断配列を保持しがち
+- [`LintResult`](../../src/Seiton.Core/Linting/LintResult.cs) は pooled diagnostics を返し、Arena の寿命に依存する
+- ~~外部利用者は `Arena.Dispose()` 前提を知らずに診断配列を保持しがち~~ → **対策済み**: `ParseHandle` / `LintHandle` (`ref struct : IDisposable`) が Arena を隠蔽し、スコープ外保持をコンパイラが禁止する
 
 **本質的な問題の構造**:
 
@@ -96,7 +97,7 @@ public static class SeitonLinter
 
 | 型 | 所有権 | 利用者への露出 | 危険性 |
 |---|---|---|---|
-| `AstArena` | ThreadStatic pool | `ParseResult.Arena?` で露出 | Dispose 後に AST/Diagnostics 全てが無効 |
+| `AstArena` | ThreadStatic pool | `ParseHandle` / `LintHandle` 内部 (internal) | Handle の Dispose で安全に返却 |
 | `Diagnostic[]` | Arena に登録 | `DiagnosticList` 経由で参照 | Arena 廃棄で dangling |
 | `Workflow` / `ActionMetadata` | Arena 内の pooled 配列 | `ParseResult` フィールド | 同上 |
 | `StringNodeData[]` 等 | Arena 内 | NodeId handle 経由 | 同上 |
@@ -218,10 +219,50 @@ public readonly record struct WorkflowData(JobData[] Jobs, ...);
 
 **Seiton.Core 自体の改善（facade とは独立）**:
 
-1. **`ParseResult` から `Arena?` フィールドを除去する** — Arena は結果の一部ではなくリソース管理の関心事。`(ParseResult, AstArena)` タプルか `ref struct ParseHandle` でまとめる。
-2. **`DiagnosticList` を borrowed / owned で型レベル区別する** — 型で所有権を区別すれば誤用がコンパイル時に見える。
-3. **`LintEngine.Check()` の返り値を `ref struct` にする（.NET 10）** — `using var result = engine.Check(...)` で自然に Dispose。`ref struct` なのでフィールドに保持不可（コンパイラ強制）。
-4. **AST の外部公開は read-only snapshot を別型で返し、内部は pooled class を維持** — 大規模リファクタを避けつつ安全性を確保。
+1. ✅ **`ParseResult` から `Arena?` フィールドを除去する** — Arena は結果の一部ではなくリソース管理の関心事。`ref struct ParseHandle` でまとめる。
+2. **`DiagnosticList` を borrowed / owned で型レベル区別する** — 型で所有権を区別すれば誤用がコンパイル時に見える。（未着手）
+3. ✅ **`LintEngine.Check()` の返り値を `ref struct` にする（.NET 10）** — `using var result = engine.Check(...)` で自然に Dispose。`ref struct` なのでフィールドに保持不可（コンパイラ強制）。
+4. **AST の外部公開は read-only snapshot を別型で返し、内部は pooled class を維持** — 大規模リファクタを避けつつ安全性を確保。（未着手）
+
+#### 実装済み: ref struct ハンドル導入（項目 1, 3）
+
+**実施日**: 2026-05-14
+
+**変更内容**:
+
+- `ParseResult` から `AstArena? Arena` パラメータを除去
+- `ref struct ParseHandle : IDisposable` を新設（`src/Seiton.Core/Parsing/ParseHandle.cs`）
+  - `Result` (ParseResult), `Arena` (internal), 便利プロパティ (`HasFatalError`, `Workflow`, `ActionMetadata`, `Diagnostics`)
+  - `Dispose()` で Arena を ThreadStatic pool に返却
+- `ref struct LintHandle : IDisposable` を新設（`src/Seiton.Core/Linting/LintHandle.cs`）
+  - `Result` (LintResult), `ParseResult`, `Diagnostics`, `CopyDiagnostics()`, `Arena` (internal)
+  - `Dispose()` で Arena を ThreadStatic pool に返却
+- `WorkflowParser.Parse()` → `ParseHandle` を返す（public API）
+- `LintEngine.Check()` → `LintHandle` を返す（public API）
+- internal ヘルパー追加:
+  - `WorkflowParser.ParseDirect(byte[], string, out AstArena?)` — async テスト・ベンチマーク用
+  - `LintEngine.CheckDirect(byte[], string, out AstArena?)` — 同上
+  - `LintEngine.CheckDirect(byte[], string, LintConfig?, out AstArena?)` — config 付き
+- CLI (`CheckCommand`, `FixCommand`) は `using var handle = engine.Check(...)` パターンに移行
+- `FixCommand` は async 境界前に `CopyDiagnostics()` で所有権移転
+- `IncrementalParseContext` は `internal AstArena? Arena` プロパティで playground に公開
+- `Seiton.Playground.Core.csproj` に `InternalsVisibleTo: Seiton.Playground.Tests` 追加
+
+**ベンチマーク結果（回帰なし）**:
+
+| メトリクス | 変更前 | 変更後 | 差分 |
+|---|---|---|---|
+| CoreLint Large (fix=false) | 21838 μs / 327.08 KB | 21784 μs / 327.08 KB | 0% alloc |
+| CoreLint Large (fix=true) | 36310 μs / 381.93 KB | 32029 μs / 381.92 KB | 0% alloc |
+| CoreParsing Large | 18858 μs / 180.04 KB | 18037 μs / 180.04 KB | 0% alloc |
+
+**テスト結果**: 全 1615 テスト pass、0 failures
+
+**設計判断と教訓**:
+
+- `ref struct` は async メソッドの `await` 境界を跨げない。テストコード（TUnit は async）では `ParseDirect` / `CheckDirect` で `out AstArena?` を受け取り手動管理する internal API が必要だった。
+- CLI の並列パス (`Parallel.For`) では `LintHandle` をラムダ内で `using` できるため自然に動作する。
+- `FixCommand` のように結果を `await` 後に使う場合は、`CopyDiagnostics()` で owned 配列にコピーしてから handle を dispose する。これはパターン C (Owned snapshot) の部分適用に相当する。
 
 ### 3. スレッドセーフでない型がある
 

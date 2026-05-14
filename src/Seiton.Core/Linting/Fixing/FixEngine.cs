@@ -40,9 +40,11 @@ public static class FixEngine
             selectedDiagnostics.Add(diagnostic);
         }
 
-        var before = lintEngine.Check(utf8Yaml, filePath, config);
+        var beforeHandle = lintEngine.Check(utf8Yaml, filePath, config);
+        var before = beforeHandle.Result;
         var updatedUtf8Yaml = Apply(utf8Yaml, selectedDiagnostics);
-        var after = lintEngine.Check(updatedUtf8Yaml, filePath, config);
+        var afterHandle = lintEngine.Check(updatedUtf8Yaml, filePath, config);
+        var after = afterHandle.Result;
 
         ValidateRevalidation(before, after, selectedDiagnostics);
         return new RevalidationResult(before, after, updatedUtf8Yaml);
@@ -136,9 +138,11 @@ public static class FixEngine
         ArgumentException.ThrowIfNullOrEmpty(filePath);
         ArgumentNullException.ThrowIfNull(fixes);
 
-        var before = lintEngine.Check(utf8Yaml, filePath, config);
+        var beforeHandle = lintEngine.Check(utf8Yaml, filePath, config);
+        var before = beforeHandle.Result;
         var updatedUtf8Yaml = Apply(utf8Yaml, fixes);
-        var after = lintEngine.Check(updatedUtf8Yaml, filePath, config);
+        var afterHandle = lintEngine.Check(updatedUtf8Yaml, filePath, config);
+        var after = afterHandle.Result;
 
         ValidateRevalidation(before, after, selectedDiagnostics: null);
 

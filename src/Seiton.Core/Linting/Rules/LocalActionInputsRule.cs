@@ -153,9 +153,10 @@ public sealed class LocalActionInputsRule() : RuleBase(RuleId.LocalActionInputs)
             return true;
         }
 
-        var parseResult = WorkflowParser.Parse(bytes, actionYamlPath);
-        if (parseResult.HasFatalError || parseResult.ActionMetadata is null)
+        var parseHandle = WorkflowParser.Parse(bytes, actionYamlPath);
+        if (parseHandle.HasFatalError || parseHandle.ActionMetadata is null)
         {
+            parseHandle.Dispose();
             _cache[actionYamlPath] = (null, null, null, null);
             metadata = null;
             source = null;
@@ -163,10 +164,11 @@ public sealed class LocalActionInputsRule() : RuleBase(RuleId.LocalActionInputs)
             return true;
         }
 
-        _cache[actionYamlPath] = (parseResult.ActionMetadata, bytes, parseResult.Arena, parseResult.Diagnostics);
-        metadata = parseResult.ActionMetadata;
+        // Transfer arena ownership to the cache — don't dispose the handle
+        _cache[actionYamlPath] = (parseHandle.ActionMetadata, bytes, parseHandle.Arena, parseHandle.Diagnostics);
+        metadata = parseHandle.ActionMetadata;
         source = bytes;
-        arena = parseResult.Arena;
+        arena = parseHandle.Arena;
         return true;
     }
 

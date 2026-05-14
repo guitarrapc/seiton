@@ -1,4 +1,4 @@
-﻿using Seiton.Core.Linting;
+using Seiton.Core.Linting;
 using Seiton.Core.Linting.Fixing;
 using Seiton.Core.Linting.PinRemediation;
 using Seiton.Core.Linting.Rules;
@@ -16,7 +16,7 @@ public sealed class PinRemediationTests
     {
         var source = Encoding.UTF8.GetBytes(CreateUnpinnedYaml());
         var lintEngine = CreatePinLintEngine();
-        var lintResult = lintEngine.Check(source, "pin-remediation-success.yml");
+        var lintResult = lintEngine.CheckDirect(source, "pin-remediation-success.yml", out _);
 
         var engine = new PinRemediationEngine(
             new DelegateActionShaResolver((_, _, _, _) => Task.FromResult<(string?, string?)>((ActionSha, "v4"))),
@@ -37,7 +37,7 @@ public sealed class PinRemediationTests
     {
         var source = Encoding.UTF8.GetBytes(CreateUnpinnedYaml());
         var lintEngine = CreatePinLintEngine();
-        var lintResult = lintEngine.Check(source, "pin-remediation-network-off.yml");
+        var lintResult = lintEngine.CheckDirect(source, "pin-remediation-network-off.yml", out _);
 
         var actionCalls = 0;
         var imageCalls = 0;
@@ -69,7 +69,7 @@ public sealed class PinRemediationTests
     {
         var source = Encoding.UTF8.GetBytes(CreateUnpinnedYaml());
         var lintEngine = CreatePinLintEngine();
-        var lintResult = lintEngine.Check(source, "pin-remediation-fail-open.yml");
+        var lintResult = lintEngine.CheckDirect(source, "pin-remediation-fail-open.yml", out _);
 
         var engine = new PinRemediationEngine(
             new DelegateActionShaResolver((_, _, _, _) => throw new InvalidOperationException("action resolver failed")),
@@ -90,7 +90,7 @@ public sealed class PinRemediationTests
     {
         var source = Encoding.UTF8.GetBytes(CreateUnpinnedYaml());
         var lintEngine = CreatePinLintEngine();
-        var lintResult = lintEngine.Check(source, "pin-remediation-fail-closed.yml");
+        var lintResult = lintEngine.CheckDirect(source, "pin-remediation-fail-closed.yml", out _);
 
         var engine = new PinRemediationEngine(
             new DelegateActionShaResolver((_, _, _, _) => throw new InvalidOperationException("action resolver failed")),
@@ -106,7 +106,7 @@ public sealed class PinRemediationTests
     {
         var source = Encoding.UTF8.GetBytes(CreateUnpinnedYaml());
         var lintEngine = CreatePinLintEngine();
-        var lintResult = lintEngine.Check(source, "pin-remediation-revalidate.yml");
+        var lintResult = lintEngine.CheckDirect(source, "pin-remediation-revalidate.yml", out _);
 
         var remediationEngine = new PinRemediationEngine(
             new DelegateActionShaResolver((_, _, _, _) => Task.FromResult<(string?, string?)>((ActionSha, "v4"))),

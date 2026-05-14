@@ -5,11 +5,11 @@ namespace Seiton.Core.Linting;
 
 /// <summary>Combined parse and lint result for a single YAML document.</summary>
 /// <remarks>
-/// When returned by <see cref="LintEngine.Check(byte[], string, LintConfig?)"/>, the
-/// <see cref="Diagnostics"/> backing array is pooled and registered with the <see cref="ParseResult.Arena"/>.
-/// The array is returned to the pool when the Arena is disposed.
+/// When returned via <see cref="LintHandle"/> from <see cref="LintEngine.Check(byte[], string, LintConfig?)"/>, the
+/// <see cref="Diagnostics"/> backing array is pooled and registered with the <see cref="AstArena"/>.
+/// The array is returned to the pool when the handle is disposed.
 /// Call <see cref="CopyDiagnostics"/> to obtain a caller-owned copy that is safe to retain
-/// beyond the Arena's lifetime.
+/// beyond the handle's lifetime.
 /// </remarks>
 public readonly record struct LintResult(
     ParseResult ParseResult,

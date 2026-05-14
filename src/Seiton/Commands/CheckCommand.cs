@@ -96,10 +96,9 @@ internal static class CheckCommand
                 if (verbose)
                     Console.Error.WriteLine($"checking {filePath}...");
 
-                var result = engine.Check(utf8Yaml, filePath, lintConfig);
+                using var result = engine.Check(utf8Yaml, filePath, lintConfig);
                 allDiagnostics.AddRange(result.Diagnostics);
                 sourceMap?.TryAdd(filePath, utf8Yaml);
-                result.ParseResult.Arena?.Dispose();
             }
         }
         else
@@ -120,9 +119,8 @@ internal static class CheckCommand
                         Console.Error.WriteLine($"checking {filePath}...");
 
                     var engine = engines.Value!;
-                    var result = engine.Check(utf8Yaml, filePath, lintConfig);
+                    using var result = engine.Check(utf8Yaml, filePath, lintConfig);
                     slots[i] = new FileCheckResult(result.CopyDiagnostics(), filePath, sourceMap is not null ? utf8Yaml : null);
-                    result.ParseResult.Arena?.Dispose();
                 });
 
             // Aggregate in input order for stable output

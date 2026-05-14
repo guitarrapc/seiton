@@ -1,4 +1,4 @@
-﻿using Seiton.Core.Linting;
+using Seiton.Core.Linting;
 using System.Text;
 
 namespace Seiton.Benchmark;
@@ -55,9 +55,9 @@ public class CoreLintBenchmark
     [Benchmark(Baseline = true, Description = "LintEngine.Check (parse + lint)")]
     public int CheckWorkflow()
     {
-        var result = _engine.Check(_yamlBytes, _filePath, _lintConfig);
+        var result = _engine.CheckDirect(_yamlBytes, _filePath, _lintConfig, out var arena);
         var count = result.Diagnostics.Length;
-        result.ParseResult.Arena?.Dispose();
+        arena?.Dispose();
         return count;
     }
 }
