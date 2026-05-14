@@ -1,6 +1,6 @@
 ---
 name: performance-requirements
-description: Guidelines for writing high-performance and memory-efficient code in `src/Seiton.Core/` (Parsing and Linting). Covers zero allocations, per-run caching, zero-copy string design, and verification practices.
+description: Guidelines for writing high-performance and memory-efficient code in `src/Seiton.Core/` (Parsing and Linting) and generated code emitted by `src/Seiton.Update/Generators/`. Covers zero allocations, per-run caching, zero-copy string design, bounded stackalloc in generated code, error-path CPU budget, and verification practices.
 ---
 
 # Performance Requirements
@@ -181,3 +181,82 @@ Linting verification:
 | Same diagnostic message repeated N times | Last-message cache with byte equality check |
 | Small temp state (≤ 4-8 entries) in analysis | `stackalloc` + counter |
 | Large temp buffer | `ArrayPool<T>.Shared.Rent()` with try/finally Return |
+| `stackalloc` with input-derived length | Guard with max-known constant, early-return if exceeded |
+| Suggestion / "did you mean" on invalid input | Skip for inputs longer than max valid length |
+| Need to iterate `FrozenSet<string>` candidates | Accept `IReadOnlyCollection<string>` — struct enumerator, zero-alloc |
+
+## Generated Lookup Code (Seiton.Update)
+
+When generating static lookup classes (e.g. `IanaTimeZones.g.cs`), follow these patterns:
+
+### 11. Bounded stackalloc in Generated Code
+
+If generated code uses `stackalloc` with a size derived from input (e.g. UTF-8 span length), the generator **must** emit a compile-time max-length constant and guard before the stackalloc. User-controlled input can be arbitrarily long — unbounded stackalloc causes stack overflow (process-terminating).
+
+```csharp
+// ❌ Unbounded stackalloc — stack overflow on long input
+Span<char> chars = stackalloc char[utf8Id.Length];
+
+// ✅ Generator computes max from data, emits constant + early-return guard
+private const int MaxIdByteLength = 32; // computed by generator
+
+internal static bool IsKnown(ReadOnlySpan<byte> utf8Id)
+{
+    if (utf8Id.Length > MaxIdByteLength)
+        return false;
+
+    Span<char> chars = stackalloc char[MaxIdByteLength];
+    var charCount = Encoding.UTF8.GetChars(utf8Id, chars);
+    // AlternateLookup = KnownIds.GetAlternateLookup<ReadOnlySpan<char>>()
+    // Allows span-based lookup into FrozenSet without allocating a string
+    return AlternateLookup.Contains(chars[..charCount]);
+}
+```
+
+The generator must compute `maxByteLength` using `Encoding.UTF8.GetByteCount()` (not `string.Length`) and handle the empty-data case (return 0).
+
+`AlternateLookup` refers to `FrozenSet<string>.GetAlternateLookup<ReadOnlySpan<char>>()` — it enables span-based `Contains` without materializing a `string`.
+
+### 12. FrozenSet as Primary, No Redundant Arrays
+
+`FrozenSet<string>` is the correct primary store for immutable lookup sets. Do **not** keep a parallel `string[]` field:
+
+- `FrozenSet` already provides O(1) `Contains` and struct-enumerator `foreach` (zero-allocation iteration when called directly).
+- If suggestion logic needs to iterate candidates, accept `IReadOnlyCollection<string>` (which `FrozenSet` implements) rather than materializing an array. Note: interface dispatch via `IReadOnlyCollection` boxes the enumerator (one small allocation), but this is acceptable since suggestion runs only on error paths.
+- Suggestion tie-break order (when multiple candidates have equal Levenshtein distance) is non-deterministic from `FrozenSet` enumeration. This is acceptable — exact tie-break order is not a correctness concern.
+
+```csharp
+// ❌ Redundant static array alongside FrozenSet
+private static readonly string[] IdsArray = [.. KnownIds]; // extra alloc at type-init
+
+// ✅ FrozenSet is primary; iterate directly via IReadOnlyCollection
+internal static string? FindSuggestion(string input)
+    => SuggestionHelper.FindClosest(input, KnownIds); // FrozenSet implements IReadOnlyCollection
+```
+
+### 13. Error-Path CPU Budget
+
+Error paths (diagnostics, "did you mean" suggestions) are allowed to allocate, but must still be bounded for pathological inputs:
+
+- **Skip expensive computation for long inputs**: If input length exceeds the max valid value length (`MaxIdByteLength`), there is no plausible match — skip Levenshtein search entirely.
+- **Decode only what you display**: If displaying a truncated prefix, decode only that prefix from UTF-8 — don't decode the full multi-KB string. Use a separate display-cap constant (`MaxDisplayLength`, e.g. 40 bytes) distinct from the validation constant (`MaxIdByteLength`, e.g. 32 bytes).
+- **Short-circuit pattern**: Check `span.Length` (bytes) before decode, decode before suggestion.
+
+Two constants serve different purposes:
+- `MaxIdByteLength`: Maximum UTF-8 byte length of any known valid value (computed by generator from data). Used to guard `stackalloc` and `IsKnown`.
+- `MaxDisplayLength`: Maximum bytes to decode for diagnostic display (e.g. 40 bytes). Defined in the rule class. Applied to `span[..MaxDisplayLength]` then decoded to string with "..." appended.
+
+```csharp
+// ✅ Bounded error path — skip expensive work for pathological inputs
+if (span.Length > MaxDisplayLength)
+{
+    // Too long to be valid — decode prefix only, skip suggestion
+    display = string.Concat(Encoding.UTF8.GetString(span[..MaxDisplayLength]), "...");
+}
+else
+{
+    var decoded = Decode(slice);
+    display = decoded;
+    suggestion = FindSuggestion(decoded); // Levenshtein over ~600 candidates
+}
+```
