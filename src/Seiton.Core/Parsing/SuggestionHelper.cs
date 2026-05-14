@@ -30,7 +30,7 @@ internal static class SuggestionHelper
 
     /// <summary>
     /// Finds the closest match from <paramref name="candidates"/> for the given <paramref name="input"/>.
-    /// Uses foreach enumeration — zero-allocation for FrozenSet (struct enumerator).
+    /// Enumerates the provided collection to find the nearest acceptable candidate.
     /// </summary>
     public static string? FindClosest(string input, IReadOnlyCollection<string> candidates)
     {
