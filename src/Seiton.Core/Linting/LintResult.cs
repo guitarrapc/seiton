@@ -63,10 +63,24 @@ public sealed class LintResult : IDisposable
     }
 
     /// <summary>Gets whether the parse result contains a fatal error.</summary>
-    public bool HasFatalError => Data.HasFatalError;
+    public bool HasFatalError
+    {
+        get
+        {
+            ThrowIfDisposed();
+            return Data.HasFatalError;
+        }
+    }
 
     /// <summary>Gets the suppression summary from inline and exclusion rules.</summary>
-    public SuppressionSummary SuppressionSummary => Data.SuppressionSummary;
+    public SuppressionSummary SuppressionSummary
+    {
+        get
+        {
+            ThrowIfDisposed();
+            return Data.SuppressionSummary;
+        }
+    }
 
     /// <summary>Gets the number of lint diagnostics.</summary>
     public int DiagnosticCount
