@@ -1277,6 +1277,53 @@ IntelliSense で `result.` と打った時に見えるメソッドが 15 → 12 
 | API discoverability | `result.` の補完で表示されるメソッドが全て利用者タスクに直結すること |
 | 内部互換 | lint rules の書き方 (`Arena.GetStringValue(id)` via protected) は変更なし |
 
+##### 改善計画を完了しても残る構造的課題
+
+上記 Step 1〜6 を全て実施しても、**C. C# らしい使い勝手 (5/10)** の根本原因は解消しない。
+
+**問題の本質: 「result から得たノードを、再び result に渡してマテリアライズする」循環**
+
+```csharp
+using var result = WorkflowParser.Parse(yaml, path);
+var job = result.Workflow!.Jobs.Entries[0].Value;  // result から Job を得る
+var id = result.GetString(job.Id);                 // Job の中身を result に聞き直す
+```
+
+利用者の心理: 「`job` を手に入れたのに、`job.Id` の中身を見るのにまた `result` に戻る？」
+
+これは arena 設計の構造的帰結。`job.Id` は `StringNodeId` (arena 内のインデックス) であり、値そのものではない。resolve には arena の所有者 (`result`) が必要。設計としては正しいが、**利用者から見ると「なぜ自分で持っているオブジェクトが自分の値を知らないのか」** という違和感を生む。
+
+| 比較対象 | パターン | 利用者の感覚 |
+|---|---|---|
+| System.Text.Json | `element.GetString()` | ノード自体が値を返す。直感的 |
+| Roslyn | `token.Text` | 同上 |
+| **Seiton Core** | `result.GetString(node.Id)` | container に聞き直す。1 段間接的 |
+| Entity Framework | `context.Entry(entity).Property(...)` | 同構造だが EF はそれ自体が設計の核 |
+
+**なぜ Core API ではこれを解消しないか:**
+
+1. **zero-copy 保証**: `StringNodeId` → arena → source bytes の直接スライス。string 化は明示的 opt-in
+2. **lifetime 安全性**: arena が生きている間だけ値が有効。ノード自体が値を持つと、dispose 後に dangling reference
+3. **性能**: `job.Id` が `string` なら parse 時に全 scalar を UTF-8 → string デコードする。大半の scalar は lint 判定で UTF-8 span 比較だけで済み、string 化されない
+
+**対応方針: Core + Facade の二層構造**
+
+| 層 | 対象利用者 | API 特性 |
+|---|---|---|
+| **Core API** (現在) | 性能最重視の上級者・内部ツール | handle + resolve パターン。zero-copy。学習コストあり |
+| **Facade API** (将来) | 一般ライブラリ消費者 | string-materialized DTO。`job.Id` → `string`。アロケーションあり |
+
+Facade の設計イメージ:
+
+```csharp
+// Facade: 利用者が期待する C# 的 API
+var result = Seiton.Parse(yaml, path);          // string materialized、IDisposable 不要
+var jobId = result.Workflow.Jobs[0].Id;          // → "build" (string)
+var runsOn = result.Workflow.Jobs[0].RunsOn;     // → ["ubuntu-latest"] (string[])
+```
+
+Core API の改善計画 (Step 1〜6) は「Core の中で可能な限り摩擦を減らす」施策。根本解決は Facade 層で提供する。この二層構造はフェーズ 1 (facade API 設計) で具体化する。
+
 ### 3. スレッドセーフでない型がある
 
 **論点**:
