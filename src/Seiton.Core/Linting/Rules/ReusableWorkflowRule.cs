@@ -68,11 +68,7 @@ public sealed class ReusableWorkflowRule() : RuleBase(RuleId.ReusableWorkflow)
             // Local paths must not contain @ref — validate format before contract
             if (uses.IndexOf((byte)'@') >= 0)
             {
-                var usesStr = Decode(Arena.GetStringSlice(workflowCall.Uses));
-                AddJobError(
-                    job,
-                    $"reusable workflow call \"{usesStr}\" at \"uses\" is not following the format \"owner/repo/path/to/workflow.yml@ref\" nor \"./path/to/workflow.yml\". see https://docs.github.com/en/actions/learn-github-actions/reusing-workflows for more details",
-                    BuildUsesLocation(workflowCall));
+                AddReusableWorkflowUsesFormatError(job, workflowCall);
                 return;
             }
 
@@ -83,11 +79,7 @@ public sealed class ReusableWorkflowRule() : RuleBase(RuleId.ReusableWorkflow)
         // ../ prefix is not valid for reusable workflows (only ./ is allowed)
         if (uses.StartsWith("../"u8))
         {
-            var usesStr = Decode(Arena.GetStringSlice(workflowCall.Uses));
-            AddJobError(
-                job,
-                $"reusable workflow call \"{usesStr}\" at \"uses\" is not following the format \"owner/repo/path/to/workflow.yml@ref\" nor \"./path/to/workflow.yml\". see https://docs.github.com/en/actions/learn-github-actions/reusing-workflows for more details",
-                BuildUsesLocation(workflowCall));
+            AddReusableWorkflowUsesFormatError(job, workflowCall);
             return;
         }
 
@@ -101,11 +93,7 @@ public sealed class ReusableWorkflowRule() : RuleBase(RuleId.ReusableWorkflow)
         var atIndex = uses.IndexOf((byte)'@');
         if (atIndex < 0 || atIndex == uses.Length - 1)
         {
-            var usesStr = Decode(Arena.GetStringSlice(workflowCall.Uses));
-            AddJobError(
-                job,
-                $"reusable workflow call \"{usesStr}\" at \"uses\" is not following the format \"owner/repo/path/to/workflow.yml@ref\" nor \"./path/to/workflow.yml\". see https://docs.github.com/en/actions/learn-github-actions/reusing-workflows for more details",
-                BuildUsesLocation(workflowCall));
+            AddReusableWorkflowUsesFormatError(job, workflowCall);
             return;
         }
 
@@ -115,11 +103,7 @@ public sealed class ReusableWorkflowRule() : RuleBase(RuleId.ReusableWorkflow)
         // Must not start with /
         if (pathPart.Length > 0 && pathPart[0] == (byte)'/')
         {
-            var usesStr = Decode(Arena.GetStringSlice(workflowCall.Uses));
-            AddJobError(
-                job,
-                $"reusable workflow call \"{usesStr}\" at \"uses\" is not following the format \"owner/repo/path/to/workflow.yml@ref\" nor \"./path/to/workflow.yml\". see https://docs.github.com/en/actions/learn-github-actions/reusing-workflows for more details",
-                BuildUsesLocation(workflowCall));
+            AddReusableWorkflowUsesFormatError(job, workflowCall);
             return;
         }
 
@@ -135,12 +119,17 @@ public sealed class ReusableWorkflowRule() : RuleBase(RuleId.ReusableWorkflow)
         // Need at least 2 slashes: owner/repo/path (3 segments)
         if (slashCount < 2)
         {
-            var usesStr = Decode(Arena.GetStringSlice(workflowCall.Uses));
-            AddJobError(
-                job,
-                $"reusable workflow call \"{usesStr}\" at \"uses\" is not following the format \"owner/repo/path/to/workflow.yml@ref\" nor \"./path/to/workflow.yml\". see https://docs.github.com/en/actions/learn-github-actions/reusing-workflows for more details",
-                BuildUsesLocation(workflowCall));
+            AddReusableWorkflowUsesFormatError(job, workflowCall);
         }
+    }
+
+    private void AddReusableWorkflowUsesFormatError(Job job, WorkflowCall workflowCall)
+    {
+        var usesStr = Decode(Arena.GetStringSlice(workflowCall.Uses));
+        AddJobError(
+            job,
+            $"reusable workflow call \"{usesStr}\" at \"uses\" is not following the format \"owner/repo/path/to/workflow.yml@ref\" nor \"./path/to/workflow.yml\". see https://docs.github.com/en/actions/learn-github-actions/reusing-workflows for more details",
+            BuildUsesLocation(workflowCall));
     }
 
     private void ValidateLocalReusableWorkflowContract(Job job, WorkflowCall workflowCall, string jobId, ReadOnlySpan<byte> uses)
