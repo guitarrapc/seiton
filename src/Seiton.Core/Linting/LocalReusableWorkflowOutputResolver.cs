@@ -152,9 +152,9 @@ internal sealed class LocalReusableWorkflowOutputResolver
         }
 
         var parseHandle = WorkflowParser.Parse(bytes, resolvedPath);
+        using var _ = parseHandle;
         if (parseHandle.HasFatalError || parseHandle.Workflow is null)
         {
-            parseHandle.Dispose();
             return null;
         }
 
@@ -170,13 +170,11 @@ internal sealed class LocalReusableWorkflowOutputResolver
 
         if (workflowCallEvent is null)
         {
-            parseHandle.Dispose();
             return null;
         }
 
         if (workflowCallEvent.Outputs is not { Count: > 0 } outputs)
         {
-            parseHandle.Dispose();
             return [];
         }
 
@@ -187,7 +185,6 @@ internal sealed class LocalReusableWorkflowOutputResolver
             names[idx++] = Encoding.UTF8.GetString(kv.Key.AsSpan(bytes));
         }
 
-        parseHandle.Dispose();
         return names;
     }
 

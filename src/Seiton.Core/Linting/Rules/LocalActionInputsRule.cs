@@ -17,6 +17,7 @@ public sealed class LocalActionInputsRule() : RuleBase(RuleId.LocalActionInputs)
     public override void VisitWorkflowPre(Workflow workflow)
     {
         base.VisitWorkflowPre(workflow);
+        DisposeCachedArenas();
         _cache.Clear();
         _metadataCheckedPaths.Clear();
     }
@@ -126,6 +127,14 @@ public sealed class LocalActionInputsRule() : RuleBase(RuleId.LocalActionInputs)
                 step,
                 $"required input '{name}' is not set for local action",
                 BuildUsesLocation(action));
+        }
+    }
+
+    private void DisposeCachedArenas()
+    {
+        foreach (var entry in _cache.Values)
+        {
+            entry.Arena?.Dispose();
         }
     }
 

@@ -15,7 +15,7 @@ namespace Seiton.Core.Parsing;
 [CollectionBuilder(typeof(OwnedDiagnostics), nameof(Create))]
 public readonly struct OwnedDiagnostics : IReadOnlyList<Diagnostic>
 {
-    private readonly Diagnostic[] _array;
+    private readonly Diagnostic[]? _array;
 
     /// <summary>Creates an OwnedDiagnostics from a span (used by collection expressions).</summary>
     public static OwnedDiagnostics Create(ReadOnlySpan<Diagnostic> items) =>

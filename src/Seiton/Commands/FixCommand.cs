@@ -215,7 +215,7 @@ internal static class FixCommand
                     appliedFixes += currentHandle.FixableDiagnosticCount;
                     currentYaml = nextYaml;
                     currentHandle.Dispose();
-                    currentHandle = engine.Check(currentYaml, filePath, lintConfig);
+                    currentHandle = engine.Check(currentYaml, filePath, fixEnabledLintConfig);
                 }
 
                 File.WriteAllBytes(filePath, currentYaml);
