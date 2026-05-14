@@ -350,6 +350,107 @@ public readonly record struct WorkflowData(JobData[] Jobs, ...);
 
 **テスト結果**: 全 1626 テスト pass、0 failures（+11 新規 DetachTests）
 
+#### 計画: ref struct ハンドル廃止 → Parse/Check が直接 class を返す（項目 1,3,4 統合リファクタ）
+
+**動機**:
+
+項目 1,3 で導入した `ParseHandle` / `LintHandle` (ref struct) は「スコープ外で使えない」コンパイラ制約を活かす設計だったが、利用者視点で以下の問題がある:
+
+- ref struct は async 不可・フィールド保持不可・クロージャ不可 → テストコード（TUnit は全 async）で使えず `ParseDirect`/`CheckDirect` internal ハックが必要
+- 項目 4 の `Detach()` パターンが冗長: `{ using var h = Parse(...); owned = h.Detach(); } using (owned) { ... }`
+- 「class + IDisposable + using」で十分な安全性。ref struct の制約は利用者に不要な負荷
+
+**設計方針**: `Parse()` / `Check()` が直接 `OwnedParseResult` / `OwnedLintResult` (class, IDisposable) を返す。ParseHandle / LintHandle / Detach() / ParseDirect / CheckDirect をすべて廃止。
+
+**改善後の利用パターン**:
+
+```csharp
+// 1行で完結。async もフィールド保持も OK
+using var result = WorkflowParser.Parse(yaml, path);
+result.Workflow    // AST
+result.Diagnostics // DiagnosticList
+result.Arena       // handle 解決用
+
+using var result = engine.Check(yaml, path);
+await DoSomethingAsync(result); // ref struct ではないので問題なし
+```
+
+**OwnedParseResult 再設計** (ParseResult ラッパー、診断コピー廃止):
+
+```csharp
+public sealed class OwnedParseResult : IDisposable
+{
+    internal OwnedParseResult(ParseResult result, AstArena? arena);
+    public ParseResult Result { get; }                    // 内部 ParseResult (FixEngine 等)
+    public Workflow? Workflow => Result.Workflow;
+    public ActionMetadata? ActionMetadata => Result.ActionMetadata;
+    public DiagnosticList Diagnostics => Result.Diagnostics;  // arena 非依存、コピー不要
+    public bool HasFatalError => Result.HasFatalError;
+    public OwnedDiagnostics CopyDiagnostics();            // Dispose 後も保持したい場合用
+    public AstArena Arena => _arena ?? throw new ObjectDisposedException(...);
+    public void Dispose();
+}
+```
+
+**OwnedLintResult 再設計** (LintResult ラッパー):
+
+```csharp
+public sealed class OwnedLintResult : IDisposable
+{
+    internal OwnedLintResult(LintResult result, AstArena? arena);
+    public LintResult Result { get; }                     // 内部 LintResult
+    public Workflow? Workflow => Result.Workflow;
+    public ActionMetadata? ActionMetadata => Result.ActionMetadata;
+    public DiagnosticList Diagnostics => Result.Diagnostics;
+    public DiagnosticList ParseDiagnostics => Result.ParseDiagnostics;
+    public bool HasFatalError => Result.HasFatalError;
+    public bool HasFixableDiagnostics => Result.HasFixableDiagnostics;
+    public int FixableDiagnosticCount => Result.FixableDiagnosticCount;
+    public Diagnostic[] FixableDiagnostics => Result.FixableDiagnostics;
+    public SuppressionSummary SuppressionSummary => Result.SuppressionSummary;
+    public int DiagnosticCount => Result.DiagnosticCount;
+    public OwnedDiagnostics CopyDiagnostics();
+    public AstArena Arena => _arena ?? throw new ObjectDisposedException(...);
+    public void Dispose();
+}
+```
+
+**パフォーマンス影響見積**: OwnedParseResult (class) のヒープ割当 ≈ 32 bytes/call。Small ワークフロー (8.37 KB) で +0.4%。1% 許容範囲内。
+
+**削除対象**:
+
+| ファイル/メソッド | 理由 |
+|---|---|
+| `ParseHandle.cs` | OwnedParseResult に統合 |
+| `LintHandle.cs` | OwnedLintResult に統合 |
+| `Detach()` | Parse()/Check() が直接 Owned を返す |
+| `WorkflowParser.ParseDirect()` | Parse() が async で使えるので不要 |
+| `LintEngine.CheckDirect()` | Check() が async で使えるので不要 |
+
+**変更ファイル一覧**:
+
+| カテゴリ | ファイル数 | 内容 |
+|---|---|---|
+| Core 型変更 | 6 | OwnedParseResult/OwnedLintResult 再設計, WorkflowParser/LintEngine 返り値変更, ParseHandle/LintHandle 削除 |
+| Production callers | 8 | FixEngine, CheckCommand, FixCommand, PlaygroundLintRunner, 4 lint rules — プロパティ名同一のため機械的置換 |
+| Benchmarks | 4 | CheckDirect→Check, using 追加 |
+| Tests | ~8ファイル, ~230箇所 | ParseDirect→Parse, CheckDirect→Check, try/finally arena.Dispose() 除去, DetachTests 全面簡素化 |
+| Doc/Comments | 3 | XML doc 参照更新 |
+| Sandbox | ~15 | using 追加のみ（メソッド名同一） |
+
+**実装順序**:
+
+1. OwnedParseResult / OwnedLintResult を再設計（ParseResult/LintResult ラッパー化）
+2. WorkflowParser.Parse() → OwnedParseResult, LintEngine.Check() → OwnedLintResult に変更
+3. ParseDirect/CheckDirect を削除（コンパイルエラーで全呼び出し元を検出）
+4. ParseHandle.cs / LintHandle.cs を削除
+5. Production callers 修正 (FixEngine, CLI, Playground, lint rules)
+6. Benchmark 修正
+7. Tests 修正（機械的置換）
+8. Sandbox 修正
+9. ベンチマーク実行で回帰確認 (OwnedParseResult class alloc ≈ +32B 許容)
+10. DetachTests.cs を OwnedResultTests.cs にリネーム・簡素化
+
 ### 3. スレッドセーフでない型がある
 
 **論点**:
