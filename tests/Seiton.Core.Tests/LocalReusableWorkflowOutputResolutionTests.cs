@@ -494,21 +494,25 @@ public sealed class LocalReusableWorkflowOutputResolutionTests
 
             await Assert.That(result.ParseResult.HasFatalError).IsFalse();
 
+            var msgs = result.Diagnostics
+                .Where(x => x.RuleId == "expr-undefined-var")
+                .Select(x => x.Message)
+                .ToArray();
+
             if (!isCaseSensitiveFs)
             {
                 // On case-insensitive FS (Windows, default macOS), the sibling IS the same directory.
                 // Path.GetRelativePath correctly treats them as same → resolution succeeds.
                 // Actual case-bypass attack is impossible on case-insensitive FS.
+                // Resolution succeeds, so "typo" is checked against the resolved outputs ("v")
+                // and reported as not defined.
+                await Assert.That(msgs.Any(m => m.Contains("is not defined", StringComparison.Ordinal))).IsTrue();
             }
             else
             {
                 // On case-sensitive FS (Linux, case-sensitive macOS), the sibling is a DIFFERENT directory.
                 // Path.GetRelativePath returns "../<SIBLING>/..." which starts with ".."
                 // → guard rejects → loose typing → no "is not defined" error.
-                var msgs = result.Diagnostics
-                    .Where(x => x.RuleId == "expr-undefined-var")
-                    .Select(x => x.Message)
-                    .ToArray();
                 await Assert.That(msgs.Any(m => m.Contains("is not defined", StringComparison.Ordinal))).IsFalse();
             }
         }
