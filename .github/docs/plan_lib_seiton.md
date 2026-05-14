@@ -90,12 +90,138 @@ public static class SeitonLinter
 - [`LintResult`](../../src/Seiton.Core/Linting/LintResult.cs) は pooled diagnostics を返し、`ParseResult.Arena` の寿命に依存する
 - 外部利用者は `Arena.Dispose()` 前提を知らずに診断配列を保持しがち
 
-**対策案**:
+**本質的な問題の構造**:
 
-- facade では caller-owned な immutable 結果 DTO にコピーして返す
-- `AstArena` や pooled buffer を facade からは見せない
-- low-level API を残す場合も XML doc と README でライフタイム制約を明示する
-- 必要なら `ToImmutable()` / `Snapshot()` のような API を追加する
+`ParseResult` / `LintResult` は値型 (struct) だが、中身は pooled memory への borrowed reference。Rust で言えば lifetime パラメータなしの借用を返しているのと同じ。
+
+| 型 | 所有権 | 利用者への露出 | 危険性 |
+|---|---|---|---|
+| `AstArena` | ThreadStatic pool | `ParseResult.Arena?` で露出 | Dispose 後に AST/Diagnostics 全てが無効 |
+| `Diagnostic[]` | Arena に登録 | `DiagnosticList` 経由で参照 | Arena 廃棄で dangling |
+| `Workflow` / `ActionMetadata` | Arena 内の pooled 配列 | `ParseResult` フィールド | 同上 |
+| `StringNodeData[]` 等 | Arena 内 | NodeId handle 経由 | 同上 |
+
+これは facade レイヤーで snapshot を返すだけでは不十分であり、`Seiton.Core` 自体の API デザインの問題。
+
+**パフォーマンスコストの現実的評価**:
+
+- **Diagnostics 配列コピー**: 典型的なワークフローで 0〜50 件。50 件で ~5KB の memcpy。parsing 全体 (数 ms) に対してナノ秒オーダー。無視できる。
+- **AST snapshot**: 現在の `Workflow` / `Job` / `Step` は class で Arena 内に pooled。丸ごとコピーは高コスト。
+- **重要な洞察**: pooling が効くのは **parsing 中** の中間バッファ再利用（数百回の allocate/free 回避）。**結果の 1 回のコピー** は処理全体に対して無視できるコスト。
+
+**データ指向での解決パターン（3 段階）**:
+
+#### パターン A: Scope-bound processing（Core 内部向け・ゼロアロケーション）
+
+```csharp
+// 結果を「借りて処理する」パターン。所有権移転なし。
+public static TResult Parse<TResult>(
+    byte[] utf8Yaml,
+    string filePath,
+    ParseResultProcessor<TResult> processor);
+
+public delegate TResult ParseResultProcessor<TResult>(in ParseResultView view);
+
+// ref struct で escape をコンパイラが禁止
+public ref struct ParseResultView
+{
+    public readonly Workflow? Workflow;
+    public readonly ActionMetadata? ActionMetadata;
+    public readonly ReadOnlySpan<Diagnostic> Diagnostics;
+    public readonly bool HasFatalError;
+}
+```
+
+- 利用者は callback 内でしか結果にアクセスできない
+- Arena のライフタイムはフレームワーク側が管理
+- `ref struct` なので escape 不可（コンパイラが保証）
+
+#### パターン B: ref struct session（バッチ処理向け・ゼロアロケーション）
+
+```csharp
+// 複数ファイルを処理する際の amortized zero-alloc パターン
+public ref struct LintSession : IDisposable
+{
+    private AstArena _arena;
+
+    public static LintSession Create() => ...;
+
+    // 結果は session 内のみ有効。次の Check() で前の結果は無効。
+    public LintResultView Check(byte[] utf8Yaml, string filePath, LintConfig? config);
+
+    public void Dispose() => _arena.Dispose();
+}
+
+public ref struct LintResultView
+{
+    public ReadOnlySpan<Diagnostic> Diagnostics { get; }
+    public bool HasFatalError { get; }
+}
+```
+
+- `using var session = LintSession.Create();` で自然なスコープ管理
+- `ref struct` で escape 防止（.NET 10 なら `ref struct : IDisposable` が使える）
+- CLI やバッチ処理で allocation ゼロを維持
+
+#### パターン C: Owned snapshot（facade / SDK 向け・安全第一）
+
+```csharp
+// 完全に所有権を移転した結果を返す。Dispose 不要。
+public static ParseSnapshot Parse(byte[] utf8Yaml, string filePath);
+
+// Plain data。Pool も Arena も関係ない。
+public readonly record struct ParseSnapshot(
+    Diagnostic[] Diagnostics,
+    bool HasFatalError,
+    WorkflowData? Workflow);
+
+// WorkflowData は immutable flat data（struct/record の木）
+public readonly record struct WorkflowData(JobData[] Jobs, ...);
+```
+
+- 利用者視点で完全に安全。GC が管理する通常のオブジェクト。
+- 内部では Arena + pooling を使い、最後に 1 回だけ snapshot を取る。
+
+#### パターン比較
+
+| 観点 | A: Callback | B: ref struct session | C: Owned snapshot |
+|---|---|---|---|
+| 安全性 | コンパイラ保証 | using 忘れのみリスク | 完全安全 |
+| Allocation | ゼロ | ゼロ（session 内） | Diagnostics[] + AST data 1 回 |
+| 使いやすさ | △ callback nesting | ○ using スコープ | ◎ 最も自然 |
+| データ指向適合 | ◎ 関数 + データ | ○ session は state 持ち | ◎ plain record |
+| 適用場面 | single-shot 処理 | batch CLI / IDE | 外部ライブラリ利用者 |
+
+**推奨する対策案（3 層構成）**:
+
+```
+┌─────────────────────────────────────────────────────┐
+│ Seiton.SDK (facade)                                  │
+│  - ParseSnapshot Parse(byte[], string)               │
+│  - LintSnapshot Lint(byte[], string, options?)       │
+│  - パターン C: 完全 owned、Dispose 不要、安全         │
+└─────────────────────────────────────────────────────┘
+         │ (internal dependency)
+┌─────────────────────────────────────────────────────┐
+│ Seiton.Core Public API (advanced users)              │
+│  - パターン B: ref struct LintSession (batch)        │
+│  - パターン A: Parse<T>(..., processor) (callback)   │
+│  - 利用者がスコープを管理する上級 API                  │
+└─────────────────────────────────────────────────────┘
+         │
+┌─────────────────────────────────────────────────────┐
+│ Seiton.Core Internal (現行のまま)                     │
+│  - AstArena, pooled buffers, ThreadStatic cache      │
+│  - CLI / Playground が直接使う                        │
+└─────────────────────────────────────────────────────┘
+```
+
+**Seiton.Core 自体の改善（facade とは独立）**:
+
+1. **`ParseResult` から `Arena?` フィールドを除去する** — Arena は結果の一部ではなくリソース管理の関心事。`(ParseResult, AstArena)` タプルか `ref struct ParseHandle` でまとめる。
+2. **`DiagnosticList` を borrowed / owned で型レベル区別する** — 型で所有権を区別すれば誤用がコンパイル時に見える。
+3. **`LintEngine.Check()` の返り値を `ref struct` にする（.NET 10）** — `using var result = engine.Check(...)` で自然に Dispose。`ref struct` なのでフィールドに保持不可（コンパイラ強制）。
+4. **AST の外部公開は read-only snapshot を別型で返し、内部は pooled class を維持** — 大規模リファクタを避けつつ安全性を確保。
 
 ### 3. スレッドセーフでない型がある
 
