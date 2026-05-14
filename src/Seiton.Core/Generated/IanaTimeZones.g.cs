@@ -5,14 +5,32 @@
 // </auto-generated>
 
 using System.Collections.Frozen;
+using System.Text;
 
 namespace Seiton.Core.Generated;
 
 /// <summary>IANA Time Zone Database identifiers (version: 2026b). 598 entries.</summary>
 internal static class IanaTimeZones
 {
+    /// <summary>Maximum UTF-8 byte length of any known IANA timezone identifier.</summary>
+    private const int MaxIdByteLength = 32;
+
     /// <summary>Returns true if the given string is a known IANA timezone identifier (case-sensitive).</summary>
     internal static bool IsKnown(string id) => KnownIds.Contains(id);
+
+    /// <summary>Returns true if the given UTF-8 span is a known IANA timezone identifier (case-sensitive, zero-allocation).</summary>
+    internal static bool IsKnown(ReadOnlySpan<byte> utf8Id)
+    {
+        if (utf8Id.Length > MaxIdByteLength)
+            return false;
+
+        Span<char> chars = stackalloc char[MaxIdByteLength];
+        var charCount = Encoding.UTF8.GetChars(utf8Id, chars);
+        return AlternateLookup.Contains(chars[..charCount]);
+    }
+
+    /// <summary>Finds the closest known IANA timezone identifier for suggestion (error paths only).</summary>
+    internal static string? FindSuggestion(string input) => Parsing.SuggestionHelper.FindClosest(input, KnownIds);
 
     private static readonly FrozenSet<string> KnownIds = FrozenSet.ToFrozenSet(
     [
@@ -615,4 +633,6 @@ internal static class IanaTimeZones
         "WET",
         "Zulu"
     ], StringComparer.Ordinal);
+
+    private static readonly FrozenSet<string>.AlternateLookup<ReadOnlySpan<char>> AlternateLookup = KnownIds.GetAlternateLookup<ReadOnlySpan<char>>();
 }

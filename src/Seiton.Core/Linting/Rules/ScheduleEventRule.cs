@@ -71,6 +71,8 @@ public sealed class ScheduleEventRule() : RuleBase(RuleId.ScheduleEvent)
         }
     }
 
+    private const int MaxDisplayTimezoneLength = 40;
+
     private void ValidateTimezone(ScheduledEvent scheduleEvent, StringNodeId timezoneNode)
     {
         var yaml = Config.Utf8Yaml!;
@@ -87,9 +89,27 @@ public sealed class ScheduleEventRule() : RuleBase(RuleId.ScheduleEvent)
             return;
         }
 
-        if (!Generated.IanaTimeZones.IsKnown(Encoding.UTF8.GetString(span)))
+        if (!Generated.IanaTimeZones.IsKnown(span))
         {
-            AddEventError(scheduleEvent, $"on.schedule timezone '{Decode(Arena.GetStringSlice(timezoneNode))}' is invalid", Arena.GetStringRange(timezoneNode));
+            string display;
+            string? suggestion = null;
+
+            if (span.Length > MaxDisplayTimezoneLength)
+            {
+                // Too long to be valid — decode only prefix, skip expensive suggestion
+                display = string.Concat(Encoding.UTF8.GetString(span[..MaxDisplayTimezoneLength]), "...");
+            }
+            else
+            {
+                var decoded = Decode(Arena.GetStringSlice(timezoneNode));
+                display = decoded;
+                suggestion = Generated.IanaTimeZones.FindSuggestion(decoded);
+            }
+
+            var message = suggestion is not null
+                ? $"on.schedule timezone '{display}' is invalid. did you mean '{suggestion}'?"
+                : $"on.schedule timezone '{display}' is invalid";
+            AddEventError(scheduleEvent, message, Arena.GetStringRange(timezoneNode));
         }
     }
 

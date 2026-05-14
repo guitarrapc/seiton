@@ -28,6 +28,28 @@ internal static class SuggestionHelper
         return best is not null && IsDistanceAcceptable(input.Length, bestDistance) ? best : null;
     }
 
+    /// <summary>
+    /// Finds the closest match from <paramref name="candidates"/> for the given <paramref name="input"/>.
+    /// Enumerates the provided collection to find the nearest acceptable candidate.
+    /// </summary>
+    public static string? FindClosest(string input, IReadOnlyCollection<string> candidates)
+    {
+        string? best = null;
+        var bestDistance = int.MaxValue;
+
+        foreach (var candidate in candidates)
+        {
+            var distance = LevenshteinDistance(input, candidate);
+            if (distance < bestDistance)
+            {
+                bestDistance = distance;
+                best = candidate;
+            }
+        }
+
+        return best is not null && IsDistanceAcceptable(input.Length, bestDistance) ? best : null;
+    }
+
     private static bool IsDistanceAcceptable(int inputLength, int distance)
     {
         var threshold = inputLength switch
