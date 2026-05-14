@@ -62,6 +62,11 @@ internal sealed class LocalReusableWorkflowOutputResolver
             return cached;
         }
 
+        if (_cache.TryGetValue(relativePath, out cached))
+        {
+            return cached;
+        }
+
         var result = ResolveAndParse(relativePath, out var resolvedPath);
         var cacheKey = resolvedPath ?? normalizedKey ?? relativePath;
         _cache[cacheKey] = result;
