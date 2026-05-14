@@ -125,63 +125,74 @@ Replaced `new int[]` × 2 with inline `stackalloc` (≤128) / `ArrayPool` (>128)
 
 ---
 
-## Summary: Actionable Items by Priority
+## Design Trade-off Evaluation
 
-### Priority 1 (High Impact, Low Risk)
+Each candidate item is evaluated from three orthogonal perspectives before deciding whether to implement:
 
-| ID | Change | Expected Impact | Verification |
-|----|--------|----------------|--------------|
-| **ED-1** ✅ | `EditDistance.ComputeIgnoreCase`: Replace `new int[]` with `stackalloc`/`ArrayPool` | Eliminates 2 × `int[]` allocations per edit-distance call | `EditDistanceBenchmark`: ComputeAll 9,882→7,867 ns (-20%), 5568→0 B (-100%). 320 tests pass. |
-| **R-4** ✅ | `IanaTimeZones.IsKnown`: Add `ReadOnlySpan<byte>` overload via `FrozenSet.GetAlternateLookup<ReadOnlySpan<char>>()` + stackalloc char decode | Eliminates string allocation per timezone check (valid and invalid) | `IanaTimeZoneLookupBenchmark`: LookupValidAll 187→136 ns (-27%), 400→0 B (-100%). LookupInvalidAll 84→60 ns (-28%), 192→0 B (-100%). 320 RuleInterface + 202 ActionlintCompat tests pass. |
+1. **Security** — Could the change introduce data leakage across calls, expose sensitive path/content information, or create attack surface (e.g. shared mutable state across trust boundaries)?
+2. **Instance Lightness & State Complexity** — Does the change add long-lived fields, require careful lifecycle management (clear/dispose), or make concurrency reasoning harder?
+3. **Code Clarity & Simplicity** — Does the change increase cognitive load for maintainers, require non-obvious invariants, or obscure the algorithm's intent?
 
-### Priority 2 (Medium Impact)
+### Evaluation Matrix
 
-| ID | Change | Expected Impact | Verification |
-|----|--------|----------------|--------------|
-| **AR-1** | `GlobMatch` dictionary: Use `[ThreadStatic]` or field-level reuse | Eliminates Dictionary allocation per glob match call | `dotnet test`; manual benchmark if needed |
-| **L-3** | Suppression inner dictionaries: Pool or field-level reuse | Reduces per-job dictionary allocations for large workflows | `LintBenchmark` (Large) |
+| ID | Security | Instance Lightness | Code Clarity | Verdict |
+|----|----------|-------------------|--------------|---------|
+| **ED-1** ✅ | ◎ No state shared across calls; stackalloc is stack-local | ◎ No new fields; allocation is call-scoped | ○ Two inlined branches add code volume but intent is clear | **Implement** — pure local optimization, zero cross-call state |
+| **R-4** ✅ | ◎ `AlternateLookup` is a static readonly derived from static data; no mutable state | ◎ One static field added to generated code | ◎ Single-line overload; generated code hides complexity | **Implement** — zero-alloc with no architectural impact |
+| **L-1** | ◎ Snapshot semantics already required for public API | △ Already has `_suppressionRecords` field (reused via Clear); switching to field array adds capacity tracking | ○ Current `new[]` is maximally clear | **Won't Fix** — snapshot copy is intentional API contract; replacing `new[]` with a pooled buffer would only avoid a small Gen0 array on a per-file warm path |
+| **L-2** | ◎ Snapshot semantics | △ Same as L-1 | ○ Current code is clear | **Won't Fix** — same reasoning as L-1 |
+| **L-3** | ○ Inner dictionaries hold rule-id strings (non-sensitive); risk of stale entries if Clear is forgotten | △ `_nextLineRuleSuppressions` / `_jobRuleSuppressions` already exist as outer-dict fields; pooling inner dicts requires a `Queue<Dictionary>` or object pool, adding lifecycle complexity | ✗ Pool-and-return pattern is subtle; maintainers must understand borrow/return invariants | **Won't Fix** — inner dicts are created lazily only when suppression directives exist (rare); pooling adds complexity disproportionate to savings |
+| **AR-1** | ○ Cache holds `(int,int)→bool` (no sensitive data); but `[ThreadStatic]` + Clear-at-entry is fragile | △ `[ThreadStatic]` means dictionary persists for thread lifetime in thread pool; field-level would require breaking the static API contract of `ActionRefHelpers` | ✗ Current per-call `new` is maximally simple and stateless; any alternative adds implicit state coupling | **Won't Fix** — `GlobMatch` is called per-file × exclusion-count (typically 0–5); small Gen0 dictionary; simplicity > micro-optimization |
+| **AR-2** | ◎ Strings are returned as `out string` for API boundary | ◎ No state change | ◎ Current code is clear | **Won't Fix** — string materialization is required at API boundary; `Utf8Slice` would leak internal representation and break `out string` contract |
+| **R-5** | ○ Dictionary holds job-id Utf8String keys; no secret data | △ Making it a field requires `NeedsGraphRule` to manage lifecycle (clear in `VisitWorkflowPre`, risk of stale data across workflows if engine is reused) | △ Per-workflow allocation is simple and scoped; field adds lifecycle invariant | **Won't Fix** — per-workflow allocation (1 dict per lint call); converting to field saves one small alloc but adds state lifecycle complexity |
+| **R-6** | ◎ Only reached on cycle (error path) | ◎ No change needed | ◎ Already acceptable | **Won't Fix** — cold path only |
+| **R-7 to R-14** | ◎ All on diagnostic/error paths | ◎ No state impact | ◎ Current code is clear | **Won't Fix** — all are cold/diagnostic paths where allocation is acceptable by design |
+| **F-1 to F-6** | ◎ Fix engine is one-shot; no shared state | ◎ No change needed | ◎ Already clear | **Won't Fix** — fix application is not performance-critical |
 
-### Priority 3 (Low Impact / Cold Path)
+### Decision Summary
 
-All F-* and remaining R-* items. These are on diagnostic/fix paths only and do not affect steady-state linting performance.
+Only **ED-1** and **R-4** justified implementation:
+- Both are **call-local** optimizations (stackalloc / static alternate lookup) that add zero cross-call state.
+- Both affect the **success path** (not just error/diagnostic paths).
+- Both maintain or improve code clarity (ED-1's inlined branches are mechanical; R-4 is a single generated overload).
+
+All other items are **Won't Fix** because:
+- They are on cold/diagnostic/error paths where Gen0 allocation is acceptable.
+- The proposed fixes would introduce state lifecycle complexity (`[ThreadStatic]`, field-level pooling, Clear invariants) disproportionate to the savings.
+- The current code is maximally simple and stateless, which is the preferred default.
 
 ---
 
-## Implementation Workflow
+## Summary: Final Status
 
-For each item:
+### Completed (Phase 1)
 
-1. **Write test (red):** Add or identify an existing test that exercises the path. Confirm pass.
-2. **Implement fix (green):** Apply the suggested allocation elimination.
-3. **Run tests:** `dotnet test` — confirm no regressions.
-4. **Benchmark:**
-   - `cd src/Seiton.Benchmark && dotnet run -c Release`
-   - Compare `Allocated` column for `LintBenchmark` (Large) and `ParsingBenchmark` to previous baseline.
-5. **Document:** Update baseline numbers in `BenchmarkDotNet.Artifacts/results/`.
+| ID | Change | Result |
+|----|--------|--------|
+| **ED-1** ✅ | `EditDistance.ComputeIgnoreCase`: stackalloc/ArrayPool | ComputeAll -20% latency, -100% alloc. 320 tests pass. |
+| **R-4** ✅ | `IanaTimeZones.IsKnown`: ReadOnlySpan\<byte\> overload | LookupValidAll -27% latency, -100% alloc. 522 tests pass. |
 
----
+### Won't Fix (Evaluated and Rejected)
 
-## Benchmark Baseline Reference
-
-Before starting implementation, capture current baselines:
-
-```shell
-cd src/Seiton.Benchmark
-dotnet run -c Release -- --filter "*LintBenchmark*"
-dotnet run -c Release -- --filter "*ParsingBenchmark*"
-```
-
-Compare `Allocated` (bytes) before and after each change.
+| ID | Reason |
+|----|--------|
+| **L-1, L-2** | Snapshot semantics require new array for public API contract; warm path, small Gen0. |
+| **L-3** | Inner dictionaries only created when suppression directives exist (rare); pooling adds lifecycle complexity. |
+| **AR-1** | Per-call `new` is maximally simple; `[ThreadStatic]` or field-level breaks statelesness for minimal gain on warm path. |
+| **AR-2** | String materialization required at API boundary (`out string`). |
+| **R-5** | Per-workflow dictionary (1 per lint call); field-level adds lifecycle invariant for negligible savings. |
+| **R-6 to R-14** | All cold/diagnostic paths. |
+| **F-1 to F-6** | Fix application is not performance-critical (one-shot operation). |
 
 ---
 
 ## Conclusion
 
-The Seiton codebase is already well-optimized. The parser uses zero-alloc patterns throughout, and most linting rules only allocate strings on error/diagnostic paths (which is acceptable by design). The actionable items are:
+The Seiton codebase is well-optimized. The parser uses zero-alloc patterns throughout, and most linting rules only allocate on error/diagnostic paths (acceptable by design).
 
-1. **ED-1** (`EditDistance`) — ✅ **Done.** stackalloc/ArrayPool conversion: -20% latency, -100% alloc in loop scenarios.
-2. **R-4** (`IanaTimeZones.IsKnown`) — add a UTF-8 overload to avoid string allocation on the happy path.
-3. **AR-1** (`GlobMatch` dictionary reuse) — moderate improvement for workflows with file exclusions.
-4. **L-3** (suppression dictionary pooling) — helps large multi-job workflows.
+Two items were implemented:
 
-All other patterns are either already optimized or are on cold paths where allocation is acceptable.
+1. **ED-1** (`EditDistance`) — ✅ stackalloc/ArrayPool: -20% latency, -100% alloc in representative loop scenarios.
+2. **R-4** (`IanaTimeZones.IsKnown`) — ✅ `FrozenSet.GetAlternateLookup` + stackalloc: -27% latency, -100% alloc.
+
+All remaining items were evaluated against security, state complexity, and code clarity criteria and determined to be **Won't Fix** — the cost of added state management and code complexity exceeds the benefit of eliminating small Gen0 allocations on warm/cold paths.
