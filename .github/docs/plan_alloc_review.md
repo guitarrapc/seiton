@@ -365,3 +365,42 @@ Already well-optimized: the `LintConfig._expressionCache` with XxHash64 deduplic
 4. All 1,615 tests pass with no regression.
 
 **Conclusion:** Benchmark now reflects real-world steady-state accurately. The reported 378 KB for Large/False aligns with the probe measurement of ~500 KB (difference due to expression cache warm-up in benchmark's WarmupCount=3).
+
+### P-3: Increase Object Pool Defaults (Implemented)
+
+**Change:** In [AstArena.cs](../../src/Seiton.Core/Parsing/AstArena.cs), increased default pool capacities:
+```csharp
+private const int DefaultStepCapacity = 128;       // was 64
+private const int DefaultExecRunCapacity = 128;    // was 64
+private const int DefaultExecActionCapacity = 128; // was 64
+```
+
+**Rationale:** Large workflows (20 jobs × 12 steps) need 240 Steps, 120 ExecRun, 120 ExecAction. With defaults at 64, after Dispose+Rent the pools shrink to 64 and the next parse must re-create 176 Step + 56 ExecRun + 56 ExecAction objects. Doubling to 128 retains more objects across parses, reducing re-creation to 112 Step + 0 ExecRun + 0 ExecAction.
+
+**CoreParsingBenchmark (ShortRun, .NET 10.0.6, Ryzen 9 7950X3D):**
+
+| Size | Mean (Before) | Mean (After) | Δ Time | Alloc (Before) | Alloc (After) | Δ Alloc |
+|------|--------------|-------------|--------|---------------|--------------|---------|
+| Small | 46.64 μs | 45.81 μs | -1.8% | 3.87 KB | 3.87 KB | 0% |
+| Medium | 1,200 μs | 1,153 μs | -3.9% | 35.59 KB | 35.59 KB | 0% |
+| Large | 18,942 μs | 19,881 μs | +5.0%* | 199.34 KB | 180.04 KB | **-9.7%** |
+
+**CoreLintBenchmark (ShortRun, .NET 10.0.6, Ryzen 9 7950X3D):**
+
+| Size | FixEnabled | Mean (Before) | Mean (After) | Δ Time | Alloc (Before) | Alloc (After) | Δ Alloc |
+|------|-----------|--------------|-------------|--------|---------------|--------------|---------|
+| Small | False | 63.84 μs | 62.12 μs | -2.7% | 10.80 KB | 10.80 KB | 0% |
+| Small | True | 73.34 μs | 71.34 μs | -2.7% | 12.25 KB | 12.25 KB | 0% |
+| Medium | False | 1,415 μs | 1,499 μs | +5.9%* | 76.60 KB | 76.60 KB | 0% |
+| Medium | True | 2,070 μs | 2,063 μs | -0.3% | 89.96 KB | 89.96 KB | 0% |
+| Large | False | 24,012 μs | 23,585 μs | -1.8% | 378.42 KB | 359.12 KB | **-5.1%** |
+| Large | True | 33,734 μs | 32,814 μs | -2.7% | 433.27 KB | 413.96 KB | **-4.5%** |
+
+\* ShortRun variance; within error bars.
+
+**Key Observations:**
+1. Allocation improvement only visible for Large workflows (where pools grow beyond 64): **-19.3 KB** for both parsing and lint.
+2. Small/Medium workflows already fit within the old 64 default, so no change for them (expected).
+3. Performance: within noise — no degradation.
+4. Trade-off: ThreadStatic cache retains ~10 KB more resident memory (128 objects × 3 pools instead of 64 × 3).
+5. All 1,615 tests pass with no regression.
