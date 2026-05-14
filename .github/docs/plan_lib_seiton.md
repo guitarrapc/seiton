@@ -880,6 +880,188 @@ historical short-run 記録との比較（summary table の根拠）:
 4. `LintResult` に Parse 系と同じ accessor 群を完全対称で持たせるか、共通基底/共通 helper を使うか。
 5. 利用者が IntelliSense だけで値の読み方を理解できる命名になっているかを、サンプルコード基準で再評価すること。
 
+#### 利用者視点の API 分析と改善計画
+
+##### 現状の public surface（実装結果）
+
+```csharp
+public sealed class ParseResult : IDisposable
+{
+    // AST
+    public Workflow? Workflow { get; }
+    public ActionMetadata? ActionMetadata { get; }
+    public DiagnosticList Diagnostics { get; }
+    public bool HasFatalError { get; }
+    public ReadOnlySpan<byte> Source { get; }
+
+    // Value resolution (15 methods)
+    public string GetString(StringNodeId id);
+    public ReadOnlySpan<byte> GetUtf8(StringNodeId id);
+    public Utf8Slice GetSlice(StringNodeId id);
+    public bool IsQuoted(StringNodeId id);
+    public TextRange GetRange(StringNodeId id);
+    public TextRange GetRange(BoolNodeId id);
+    public TextRange GetRange(IntNodeId id);
+    public TextRange GetRange(FloatNodeId id);
+    public StringNodeId GetExpression(StringNodeId id);
+    public StringNodeId GetExpression(BoolNodeId id);
+    public StringNodeId GetExpression(IntNodeId id);
+    public StringNodeId GetExpression(FloatNodeId id);
+    public bool GetBool(BoolNodeId id);
+    public long GetInt(IntNodeId id);
+    public double GetFloat(FloatNodeId id);
+
+    public OwnedDiagnostics CopyDiagnostics();
+    public void Dispose();
+}
+```
+
+`LintResult` も同構造 + lint 固有 properties。
+
+##### 利用者コード（テストから再構成したパターン）
+
+```csharp
+// Parse → 値を読む
+using var result = WorkflowParser.Parse(yaml, path);
+var job = result.Workflow!.Jobs.Entries[0].Value;
+var jobId = result.GetString(job.Id);       // ← "build"
+
+// Lint → diagnostics を見る
+using var lint = engine.Check(yaml, path);
+foreach (var diag in lint.Diagnostics) { ... }
+```
+
+##### 評価: 良い点
+
+1. **`using var result = ...` で完結する**: async 越え OK、フィールド保持 OK。C# の日常的なコード。
+2. **Arena が公開 API から消えた**: 利用者は `result.GetString(id)` で直接値が取れる。メモリプールの概念を知らなくてよい。
+3. **NodeId overload で型安全**: `GetRange(StringNodeId)` と `GetRange(BoolNodeId)` は overload resolution が一意で、IDE 補完も素直。
+4. **Dispose 後の安全性**: `ObjectDisposedException` で明示的に壊れる。silent corruption がない。
+
+##### 評価: 残る違和感
+
+| 問題 | 具体例 | なぜ問題か |
+|---|---|---|
+| **`GetSlice` の用途が公開 API として不明瞭** | `result.GetSlice(id)` → `Utf8Slice` | `Utf8Slice` は offset+length のゼロコピーハンドル。lint rules が source 位置を特定するための internal 概念であり、通常の外部利用者は `GetString` か `GetUtf8` で済む。IntelliSense に並ぶと「3 つの文字列取得方法」が不必要に選択肢を増やす |
+| **`GetExpression` の意味が直感的でない** | `result.GetExpression(job.Id)` → `StringNodeId` | 名前だけでは「何を返すのか」が分からない。実態は「この scalar が `${{ }}` embedded expression を持っていればその expression 部分の StringNodeId を返す」という内部パーサー概念。外部利用者にとって「式があるか確認して式テキストを取得する」は 2 段 API (`HasExpression` + `GetExpressionText`) の方が自然 |
+| **`IsQuoted` は何のために必要？** | `result.IsQuoted(id)` → `bool` | YAML の引用符情報。fix engine が replacement text を生成する時に使う内部概念。外部利用者は「値」が欲しいだけで、引用符の有無はパーサー都合 |
+| **`Source` が `ReadOnlySpan<byte>` で逃がせない** | `var src = result.Source;` | Span は ref struct なのでフィールドに保持できない。UTF-8 の生バイト列を返す妥当な設計だが、利用シーンが不明確。lint fix の byte offset 検証に使う internal 概念に近い |
+| **`LintResult` が `ParseResult` の全メソッドを重複定義** | `LintResult.GetString(...)` | 1 概念 1 型を達成した代償で、同じ accessor が 2 つの結果型に完全対称にある。30 メソッドの表面積。将来のメンテコスト |
+| **`LintConfig.Arena` が public のまま** | `config.Arena` property は public setter | `ParseResult.Arena` は internal にしたが、`LintConfig` が公開し続けている。外部利用者が `LintConfig` を自前構築して `.Arena` を触る想定はないはず |
+
+##### 改善計画: Core API accessor の最終整理
+
+**方針**: Core advanced API は性能最重視の利用者向け。ただし「公開する必要がないものは閉じる」原則に従い、internal で十分なものは internal に退避する。
+
+**Step 1: public から除外すべきメソッド**
+
+| メソッド | 理由 | 対応 |
+|---|---|---|
+| `GetSlice(StringNodeId)` | `Utf8Slice` は fix engine / lint rules 用。外部利用者は `GetUtf8` で十分 | `internal` に変更 |
+| `IsQuoted(StringNodeId)` | fix engine 専用。外部からは不要 | `internal` に変更 |
+| `GetExpression(StringNodeId/Bool/Int/Float)` | lint rules が expression embedding を検出する内部 API。外部利用者向けの自然な API ではない | `internal` に変更 |
+| `Source` (ReadOnlySpan) | fix engine / advanced テスト向け。通常利用者は不要 | `internal` に変更 |
+
+**Step 2: public に残すべきメソッド（最終 public surface）**
+
+```csharp
+public sealed class ParseResult : IDisposable
+{
+    // AST
+    public Workflow? Workflow { get; }
+    public ActionMetadata? ActionMetadata { get; }
+    public DiagnosticList Diagnostics { get; }
+    public bool HasFatalError { get; }
+
+    // Value resolution — 利用者が必要とする 3 層
+    public string GetString(StringNodeId id);              // convenience: デコード済み文字列
+    public ReadOnlySpan<byte> GetUtf8(StringNodeId id);   // perf: zero-copy UTF-8 bytes
+    public bool GetBool(BoolNodeId id);
+    public long GetInt(IntNodeId id);
+    public double GetFloat(FloatNodeId id);
+
+    // Source location — diagnostic 表示に必要
+    public TextRange GetRange(StringNodeId id);
+    public TextRange GetRange(BoolNodeId id);
+    public TextRange GetRange(IntNodeId id);
+    public TextRange GetRange(FloatNodeId id);
+
+    // Ownership
+    public OwnedDiagnostics CopyDiagnostics();
+    public void Dispose();
+}
+```
+
+結果: **11 public methods** (値取得 5 + 位置取得 4 + copy 1 + dispose 1)。
+現状 15 → 11 へ縮小。4 methods が internal に退避。
+
+**Step 3: `LintConfig.Arena` の可視性**
+
+- `LintConfig.Arena` を `internal set` に変更（getter は internal で十分）
+- lint rules は `RuleBase.Arena` (protected, `Config.Arena!` を返す) 経由で引き続きアクセスできる
+- 外部から `new LintConfig { Arena = ... }` と書くユースケースはない
+
+**Step 4: 重複定義の対処**
+
+- `ParseResult` と `LintResult` の accessor は完全対称を維持する。利用者は `Parse()` の結果でも `Check()` の結果でも同じ API で値を読めるべき
+- ただし実装は共通化する: private static helper or shared extension で委譲し、メンテ負荷を減らす
+- interface (`IValueResolver`) を抽出する案は、利用パターンがポリモーフィック（`ParseResult` と `LintResult` を統一的に扱う）な場合のみ意味がある。現時点では不要
+
+**Step 5: `AstArena` の public visibility を消す最終判断**
+
+現状:
+- `AstArena` class 自体は `public sealed class`
+- `ParseResult.Arena` は `internal`
+- `LintConfig.Arena` は `public { get; set; }`
+- `RuleBase.Arena` は `protected`
+- `ReusableWorkflowRule` / `LocalActionInputsRule` が internal で Arena を触る
+
+Core advanced API としても、**外部利用者が `AstArena` を直接触る正当なユースケースはない**:
+- 値の読み出し → `result.GetString()` / `result.GetUtf8()` で完結
+- lint rules を自前で書く → `RuleBase.Arena` (protected) で完結
+- source bytes → 将来的に `result.GetSourceBytes()` (返り値 `ReadOnlyMemory<byte>`) で代替可能
+
+判断: **`AstArena` を `internal` class に変更する**。
+
+影響:
+- `LintConfig.Arena` → internal property に変更
+- `InternalsVisibleTo` で `Seiton.Benchmark`, `Seiton.Playground.Core`, `Seiton.Core.Tests` からは引き続きアクセス可能
+- `NodeId` struct 群 (`StringNodeId`, `BoolNodeId`, `IntNodeId`, `FloatNodeId`) は public のまま（AST ノードのフィールドとして外部利用者が参照する）
+
+##### 利用パターン比較: before → after
+
+```csharp
+// ── Before (今回の実装) ──────────────────────────────
+using var result = WorkflowParser.Parse(yaml, path);
+var job = result.Workflow!.Jobs.Entries[0].Value;
+var id = result.GetString(job.Id);            // ✅ OK
+var raw = result.GetUtf8(job.Id);             // ✅ OK
+var slice = result.GetSlice(job.Id);          // ❓ 外部利用者に不要
+var quoted = result.IsQuoted(job.Id);         // ❓ 外部利用者に不要
+var expr = result.GetExpression(job.Id);      // ❓ 内部概念
+var src = result.Source;                      // ❓ Span で逃がせない
+
+// ── After (改善後) ────────────────────────────────────
+using var result = WorkflowParser.Parse(yaml, path);
+var job = result.Workflow!.Jobs.Entries[0].Value;
+var id = result.GetString(job.Id);            // ✅ string (convenience)
+var raw = result.GetUtf8(job.Id);             // ✅ zero-copy bytes (perf)
+var range = result.GetRange(job.Id);          // ✅ source location
+// GetSlice, IsQuoted, GetExpression, Source → IDE に出ない
+```
+
+IntelliSense で `result.` と打った時に見えるメソッドが 15 → 11 に減り、全てが「利用者がやりたいこと」に直結する。
+
+##### 判定基準
+
+| 基準 | 閾値 |
+|---|---|
+| Allocation | `Alloc Ratio = 1.00` を維持 |
+| Performance | parse/lint hot path に変更なし (accessor は JIT inline 委譲のみ) |
+| テスト | 全テスト pass |
+| API discoverability | `result.` の補完で表示されるメソッドが全て利用者タスクに直結すること |
+| 内部互換 | lint rules の書き方 (`Arena.GetStringValue(id)` via protected) は変更なし |
+
 ### 3. スレッドセーフでない型がある
 
 **論点**:
