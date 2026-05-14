@@ -8,8 +8,8 @@ namespace Seiton.Core.Parsing;
 /// <para>
 /// Unlike <see cref="DiagnosticList"/> (which may reference arena-pooled memory),
 /// <see cref="OwnedDiagnostics"/> always owns its backing array and is not tied to
-/// any arena or result lifetime. Use <see cref="Linting.OwnedLintResult.CopyDiagnostics"/> or
-/// <see cref="OwnedParseResult.CopyDiagnostics"/> to obtain an instance.
+/// any arena or result lifetime. Use <see cref="ParseResult.CopyDiagnostics"/> or
+/// <see cref="Linting.LintResult.CopyDiagnostics"/> to obtain an instance.
 /// </para>
 /// </summary>
 [CollectionBuilder(typeof(OwnedDiagnostics), nameof(Create))]

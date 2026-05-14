@@ -195,6 +195,23 @@ public sealed class ResultTests
         await Assert.That(() => result.Workflow).Throws<ObjectDisposedException>();
         await Assert.That(() => result.Diagnostics).Throws<ObjectDisposedException>();
         await Assert.That(() => result.ParseDiagnostics).Throws<ObjectDisposedException>();
+        await Assert.That(() => result.DiagnosticCount).Throws<ObjectDisposedException>();
+        await Assert.That(() => result.HasFixableDiagnostics).Throws<ObjectDisposedException>();
+        await Assert.That(() => result.FixableDiagnosticCount).Throws<ObjectDisposedException>();
+        await Assert.That(() => result.FixableDiagnostics).Throws<ObjectDisposedException>();
+        await Assert.That(() => result.Fixes).Throws<ObjectDisposedException>();
+        await Assert.That(() => result.CopyDiagnostics()).Throws<ObjectDisposedException>();
+        await Assert.That(() => result.CopyParseDiagnostics()).Throws<ObjectDisposedException>();
+    }
+
+    [Test]
+    public async Task ParseResult_Dispose_ThrowsOnCopyDiagnostics()
+    {
+        ParseResult result = WorkflowParser.Parse(SimpleWorkflow, ".github/workflows/test.yml");
+
+        result.Dispose();
+
+        await Assert.That(() => result.CopyDiagnostics()).Throws<ObjectDisposedException>();
     }
 
     [Test]

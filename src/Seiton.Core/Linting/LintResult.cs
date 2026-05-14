@@ -69,19 +69,54 @@ public sealed class LintResult : IDisposable
     public SuppressionSummary SuppressionSummary => Data.SuppressionSummary;
 
     /// <summary>Gets the number of lint diagnostics.</summary>
-    public int DiagnosticCount => Data.DiagnosticCount;
+    public int DiagnosticCount
+    {
+        get
+        {
+            ThrowIfDisposed();
+            return Data.DiagnosticCount;
+        }
+    }
 
     /// <summary>Gets whether any diagnostics have an associated auto-fix.</summary>
-    public bool HasFixableDiagnostics => Data.HasFixableDiagnostics;
+    public bool HasFixableDiagnostics
+    {
+        get
+        {
+            ThrowIfDisposed();
+            return Data.HasFixableDiagnostics;
+        }
+    }
 
     /// <summary>Gets the fixable diagnostics count.</summary>
-    public int FixableDiagnosticCount => Data.FixableDiagnosticCount;
+    public int FixableDiagnosticCount
+    {
+        get
+        {
+            ThrowIfDisposed();
+            return Data.FixableDiagnosticCount;
+        }
+    }
 
     /// <summary>Gets all diagnostics that have an associated auto-fix.</summary>
-    public Diagnostic[] FixableDiagnostics => Data.FixableDiagnostics;
+    public Diagnostic[] FixableDiagnostics
+    {
+        get
+        {
+            ThrowIfDisposed();
+            return Data.FixableDiagnostics;
+        }
+    }
 
     /// <summary>Gets all auto-fix payloads from fixable diagnostics.</summary>
-    public DiagnosticFix[] Fixes => Data.Fixes;
+    public DiagnosticFix[] Fixes
+    {
+        get
+        {
+            ThrowIfDisposed();
+            return Data.Fixes;
+        }
+    }
 
     /// <summary>Gets the original UTF-8 YAML source bytes.</summary>
     internal ReadOnlySpan<byte> Source => Arena.Source;
@@ -123,7 +158,11 @@ public sealed class LintResult : IDisposable
     /// Returns a caller-owned copy of the lint diagnostics collection that remains valid
     /// even after this result has been disposed.
     /// </summary>
-    public OwnedDiagnostics CopyDiagnostics() => Data.CopyDiagnostics();
+    public OwnedDiagnostics CopyDiagnostics()
+    {
+        ThrowIfDisposed();
+        return Data.CopyDiagnostics();
+    }
 
     /// <summary>
     /// Returns a caller-owned copy of the parse diagnostics collection that remains valid
