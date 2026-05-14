@@ -4,7 +4,7 @@ using Seiton.Core.Parsing;
 
 namespace Seiton.Core.Tests;
 
-public sealed class DetachTests
+public sealed class OwnedResultTests
 {
     private static readonly byte[] SimpleWorkflow = Encoding.UTF8.GetBytes("""
         on: push
@@ -26,50 +26,33 @@ public sealed class DetachTests
         """);
 
     [Test]
-    public async Task ParseHandle_Detach_ReturnsOwnedParseResult()
+    public async Task Parse_ReturnsOwnedParseResult()
     {
-        OwnedParseResult owned;
-        {
-            using var handle = WorkflowParser.Parse(SimpleWorkflow, ".github/workflows/test.yml");
-            owned = handle.Detach();
-        }
-
-        using (owned)
-        {
-            await Assert.That(owned.Workflow).IsNotNull();
-            await Assert.That(owned.HasFatalError).IsFalse();
-        }
+        using var owned = WorkflowParser.Parse(SimpleWorkflow, ".github/workflows/test.yml");
+        await Assert.That(owned.Workflow).IsNotNull();
+        await Assert.That(owned.HasFatalError).IsFalse();
     }
 
     [Test]
-    public async Task ParseHandle_Detach_AstRemainsValidAfterHandleScope()
+    public async Task Parse_AstRemainsValidUntilOwnedResultDisposed()
     {
-        OwnedParseResult owned;
-        {
-            using var handle = WorkflowParser.Parse(SimpleWorkflow, ".github/workflows/test.yml");
-            owned = handle.Detach();
-        }
-        // handle is disposed here, but owned keeps arena alive
+        using var owned = WorkflowParser.Parse(SimpleWorkflow, ".github/workflows/test.yml");
+        await Assert.That(owned.Workflow).IsNotNull();
 
-        using (owned)
-        {
-            await Assert.That(owned.Workflow).IsNotNull();
+        // Arena should be accessible for handle resolution
+        var workflow = owned.Workflow!;
+        var jobs = workflow.Jobs;
+        await Assert.That(jobs.Count).IsEqualTo(1);
 
-            // Arena should be accessible for handle resolution
-            var workflow = owned.Workflow!;
-            var jobs = workflow.Jobs;
-            await Assert.That(jobs.Count).IsEqualTo(1);
-
-            // Resolve StringNodeId via arena
-            var job = jobs.Entries[0].Value;
-            var jobIdValue = owned.Arena.GetStringValue(job.Id);
-            var jobIdStr = Encoding.UTF8.GetString(jobIdValue);
-            await Assert.That(jobIdStr).IsEqualTo("build");
-        }
+        // Resolve StringNodeId via arena
+        var job = jobs.Entries[0].Value;
+        var jobIdValue = owned.Arena.GetStringValue(job.Id);
+        var jobIdStr = Encoding.UTF8.GetString(jobIdValue);
+        await Assert.That(jobIdStr).IsEqualTo("build");
     }
 
     [Test]
-    public async Task ParseHandle_Detach_DiagnosticsAreSafe()
+    public async Task Parse_DiagnosticsAreAccessible()
     {
         // Use a workflow with parse errors to get diagnostics
         var badYaml = Encoding.UTF8.GetBytes("""
@@ -81,121 +64,57 @@ public sealed class DetachTests
                 steps:
                   - run: echo hello
             """);
-
-        OwnedParseResult owned;
-        {
-            using var handle = WorkflowParser.Parse(badYaml, ".github/workflows/test.yml");
-            owned = handle.Detach();
-        }
-
-        using (owned)
-        {
-            // Diagnostics should be accessible after handle disposal
-            await Assert.That(owned.Diagnostics.Length).IsGreaterThanOrEqualTo(1);
-        }
+        using var owned = WorkflowParser.Parse(badYaml, ".github/workflows/test.yml");
+        await Assert.That(owned.Diagnostics.Length).IsGreaterThanOrEqualTo(1);
     }
 
     [Test]
-    public async Task ParseHandle_Detach_TransfersOwnership()
+    public async Task Parse_ActionMetadata_ReturnsOwnedParseResult()
     {
-        // After Detach, handle.Dispose() should be a no-op (arena transferred)
-        OwnedParseResult owned;
-        {
-            using var handle = WorkflowParser.Parse(SimpleWorkflow, ".github/workflows/test.yml");
-            owned = handle.Detach();
-            // handle.Dispose() runs here — should NOT dispose the arena
-        }
+        using var owned = WorkflowParser.Parse(SimpleAction, "action.yml");
+        await Assert.That(owned.ActionMetadata).IsNotNull();
+        await Assert.That(owned.Workflow).IsNull();
 
-        using (owned)
-        {
-            // Arena should still be valid
-            var workflow = owned.Workflow!;
-            var jobIdValue = owned.Arena.GetStringValue(workflow.Jobs.Entries[0].Value.Id);
-            var jobIdStr = Encoding.UTF8.GetString(jobIdValue);
-            await Assert.That(jobIdStr).IsEqualTo("build");
-        }
+        var name = owned.Arena.GetStringValue(owned.ActionMetadata!.Name);
+        var nameStr = Encoding.UTF8.GetString(name);
+        await Assert.That(nameStr).IsEqualTo("My Action");
     }
 
     [Test]
-    public async Task ParseHandle_Detach_ActionMetadata()
-    {
-        OwnedParseResult owned;
-        {
-            using var handle = WorkflowParser.Parse(SimpleAction, "action.yml");
-            owned = handle.Detach();
-        }
-
-        using (owned)
-        {
-            await Assert.That(owned.ActionMetadata).IsNotNull();
-            await Assert.That(owned.Workflow).IsNull();
-
-            var name = owned.Arena.GetStringValue(owned.ActionMetadata!.Name);
-            var nameStr = Encoding.UTF8.GetString(name);
-            await Assert.That(nameStr).IsEqualTo("My Action");
-        }
-    }
-
-    [Test]
-    public async Task LintHandle_Detach_ReturnsOwnedLintResult()
+    public async Task Check_ReturnsOwnedLintResult()
     {
         var engine = new LintEngine();
-        OwnedLintResult owned;
-        {
-            using var handle = engine.Check(SimpleWorkflow, ".github/workflows/test.yml");
-            owned = handle.Detach();
-        }
-
-        using (owned)
-        {
-            await Assert.That(owned.Workflow).IsNotNull();
-            await Assert.That(owned.HasFatalError).IsFalse();
-        }
+        using var owned = engine.Check(SimpleWorkflow, ".github/workflows/test.yml");
+        await Assert.That(owned.Workflow).IsNotNull();
+        await Assert.That(owned.HasFatalError).IsFalse();
     }
 
     [Test]
-    public async Task LintHandle_Detach_AstAndDiagnosticsValidAfterHandleScope()
+    public async Task Check_AstAndDiagnosticsAreAccessible()
     {
         var engine = new LintEngine();
-        OwnedLintResult owned;
-        {
-            using var handle = engine.Check(SimpleWorkflow, ".github/workflows/test.yml");
-            owned = handle.Detach();
-        }
+        using var owned = engine.Check(SimpleWorkflow, ".github/workflows/test.yml");
+        await Assert.That(owned.Workflow).IsNotNull();
 
-        using (owned)
-        {
-            await Assert.That(owned.Workflow).IsNotNull();
+        // Arena for handle resolution
+        var workflow = owned.Workflow!;
+        var job = workflow.Jobs.Entries[0].Value;
+        var jobIdStr = Encoding.UTF8.GetString(owned.Arena.GetStringValue(job.Id));
+        await Assert.That(jobIdStr).IsEqualTo("build");
 
-            // Arena for handle resolution
-            var workflow = owned.Workflow!;
-            var job = workflow.Jobs.Entries[0].Value;
-            var jobIdStr = Encoding.UTF8.GetString(owned.Arena.GetStringValue(job.Id));
-            await Assert.That(jobIdStr).IsEqualTo("build");
-
-            // Diagnostics should be present (lint rules fire)
-            await Assert.That(owned.DiagnosticCount).IsGreaterThanOrEqualTo(0);
-        }
+        // Diagnostics should be present (lint rules fire)
+        await Assert.That(owned.DiagnosticCount).IsGreaterThanOrEqualTo(0);
     }
 
     [Test]
-    public async Task LintHandle_Detach_TransfersOwnership()
+    public async Task Check_ResultKeepsArenaAliveUntilDispose()
     {
         var engine = new LintEngine();
-        OwnedLintResult owned;
-        {
-            using var handle = engine.Check(SimpleWorkflow, ".github/workflows/test.yml");
-            owned = handle.Detach();
-            // handle.Dispose() runs here — should NOT dispose the arena
-        }
-
-        using (owned)
-        {
-            var workflow = owned.Workflow!;
-            var jobIdValue = owned.Arena.GetStringValue(workflow.Jobs.Entries[0].Value.Id);
-            var jobIdStr = Encoding.UTF8.GetString(jobIdValue);
-            await Assert.That(jobIdStr).IsEqualTo("build");
-        }
+        using var owned = engine.Check(SimpleWorkflow, ".github/workflows/test.yml");
+        var workflow = owned.Workflow!;
+        var jobIdValue = owned.Arena.GetStringValue(workflow.Jobs.Entries[0].Value.Id);
+        var jobIdStr = Encoding.UTF8.GetString(jobIdValue);
+        await Assert.That(jobIdStr).IsEqualTo("build");
     }
 
     [Test]
@@ -213,8 +132,7 @@ public sealed class DetachTests
     private static async Task<OwnedParseResult> ParseAsync()
     {
         await Task.Yield(); // simulate async work
-        using var handle = WorkflowParser.Parse(SimpleWorkflow, ".github/workflows/test.yml");
-        return handle.Detach();
+        return WorkflowParser.Parse(SimpleWorkflow, ".github/workflows/test.yml");
     }
 
     [Test]
@@ -223,25 +141,16 @@ public sealed class DetachTests
         // Key feature: OwnedLintResult can be stored in fields (not possible with ref struct LintHandle)
         var holder = new ResultHolder();
         var engine = new LintEngine();
-        {
-            using var handle = engine.Check(SimpleWorkflow, ".github/workflows/test.yml");
-            holder.Result = handle.Detach();
-        }
+        holder.Result = engine.Check(SimpleWorkflow, ".github/workflows/test.yml");
 
-        using (holder.Result)
-        {
-            await Assert.That(holder.Result.Workflow).IsNotNull();
-        }
+        using var result = holder.Result;
+        await Assert.That(result!.Workflow).IsNotNull();
     }
 
     [Test]
     public async Task OwnedParseResult_Dispose_ThrowsOnArenaAccess()
     {
-        OwnedParseResult owned;
-        {
-            using var handle = WorkflowParser.Parse(SimpleWorkflow, ".github/workflows/test.yml");
-            owned = handle.Detach();
-        }
+        var owned = WorkflowParser.Parse(SimpleWorkflow, ".github/workflows/test.yml");
 
         owned.Dispose();
 

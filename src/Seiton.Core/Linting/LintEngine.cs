@@ -87,7 +87,7 @@ public sealed class LintEngine
 
     /// <summary>Parses and lints the given YAML with no explicit configuration.</summary>
     /// <inheritdoc cref="Check(byte[], string, LintConfig?)"/>
-    public LintHandle Check(byte[] utf8Yaml, string filePath)
+    public OwnedLintResult Check(byte[] utf8Yaml, string filePath)
     {
         return Check(utf8Yaml, filePath, config: null);
     }
@@ -103,13 +103,12 @@ public sealed class LintEngine
     /// copies relevant settings into its own internal <c>_effectiveConfig</c> via <c>PrepareForRun</c>.
     /// </para>
     /// <para>
-    /// <b>Result lifetime:</b> The returned <see cref="LintHandle"/> is a <c>ref struct</c> that owns the
-    /// underlying <see cref="AstArena"/>. Use <c>using var handle = engine.Check(...);</c> to ensure
-    /// proper disposal. The compiler prevents storing the handle in fields or escaping the scope.
-    /// Call <see cref="LintHandle.CopyDiagnostics"/> to obtain a caller-owned snapshot that outlives the handle.
+    /// <b>Result lifetime:</b> The returned <see cref="OwnedLintResult"/> owns the underlying
+    /// <see cref="AstArena"/>. Use <c>using var result = engine.Check(...);</c> to ensure proper disposal.
+    /// Call <see cref="OwnedLintResult.CopyDiagnostics"/> to obtain a caller-owned snapshot that outlives the result.
     /// </para>
     /// </remarks>
-    public LintHandle Check(byte[] utf8Yaml, string filePath, LintConfig? config)
+    public OwnedLintResult Check(byte[] utf8Yaml, string filePath, LintConfig? config)
     {
         ArgumentNullException.ThrowIfNull(utf8Yaml);
         ArgumentException.ThrowIfNullOrEmpty(filePath);
@@ -117,7 +116,7 @@ public sealed class LintEngine
         var classifiedParseResult = WorkflowParser.ParseClassified(utf8Yaml, filePath, out var arena);
         var parseResult = classifiedParseResult.ParseResult;
         var lintResult = CheckCore(utf8Yaml, filePath, config, parseResult, arena, classifiedParseResult.Classification.FinalKind);
-        return new LintHandle(lintResult, arena);
+        return new OwnedLintResult(lintResult, arena);
     }
 
     /// <summary>

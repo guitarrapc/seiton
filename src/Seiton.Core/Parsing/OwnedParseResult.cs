@@ -3,53 +3,52 @@
 namespace Seiton.Core.Parsing;
 
 /// <summary>
-/// A caller-owned parse result that retains the <see cref="AstArena"/> to keep AST objects
-/// and scalar node handles valid indefinitely.
+/// An owned parse result that retains the <see cref="AstArena"/> to keep AST objects
+/// and scalar node handles valid until disposal.
 /// <para>
-/// Unlike <see cref="ParseHandle"/> (which is a <c>ref struct</c> that must be consumed within
-/// a single scope), <see cref="OwnedParseResult"/> is a regular class that can be stored in
-/// fields, captured in closures, and passed across async boundaries.
-/// </para>
-/// <para>
-/// Obtain an instance via <see cref="ParseHandle.Detach"/>.
-/// </para>
-/// <para>
-/// Call <see cref="Dispose"/> when done to return pooled arrays to the shared pool.
-/// If not disposed, resources will be reclaimed by the finalizer (but with delayed cleanup).
+/// <see cref="OwnedParseResult"/> is a regular class that can be stored in fields,
+/// captured in closures, and passed across async boundaries.
 /// </para>
 /// </summary>
 public sealed class OwnedParseResult : IDisposable
 {
     private AstArena? _arena;
 
-    internal OwnedParseResult(
-        Workflow? workflow,
-        ActionMetadata? actionMetadata,
-        OwnedDiagnostics diagnostics,
-        bool hasFatalError,
-        AstArena? arena)
+    internal OwnedParseResult(ParseResult result, AstArena? arena)
     {
-        Workflow = workflow;
-        ActionMetadata = actionMetadata;
-        Diagnostics = diagnostics;
-        HasFatalError = hasFatalError;
+        Result = result;
         _arena = arena;
     }
 
+    /// <summary>Gets the underlying parse result data.</summary>
+    public ParseResult Result { get; }
+
     /// <summary>Gets the parsed workflow AST, if the document is a workflow file.</summary>
-    public Workflow? Workflow { get; }
+    public Workflow? Workflow => Result.Workflow;
 
     /// <summary>Gets the parsed action metadata AST, if the document is an action file.</summary>
-    public ActionMetadata? ActionMetadata { get; }
+    public ActionMetadata? ActionMetadata => Result.ActionMetadata;
 
-    /// <summary>
-    /// Gets the caller-owned diagnostics. These are safe to retain indefinitely,
-    /// independent of the arena lifetime.
-    /// </summary>
-    public OwnedDiagnostics Diagnostics { get; }
+    /// <summary>Gets the parse diagnostics. These remain valid until this result is disposed.</summary>
+    public DiagnosticList Diagnostics => Result.Diagnostics;
 
     /// <summary>Gets whether the parse result contains a fatal error.</summary>
-    public bool HasFatalError { get; }
+    public bool HasFatalError => Result.HasFatalError;
+
+    /// <summary>
+    /// Returns a caller-owned copy of the diagnostics collection that remains valid
+    /// even after this result has been disposed.
+    /// </summary>
+    public OwnedDiagnostics CopyDiagnostics()
+    {
+        var diags = Diagnostics;
+        if (diags.Length == 0)
+        {
+            return default;
+        }
+
+        return new OwnedDiagnostics(diags.AsSpan().ToArray());
+    }
 
     /// <summary>
     /// Gets the <see cref="AstArena"/> that backs scalar node handles

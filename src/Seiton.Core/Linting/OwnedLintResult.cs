@@ -4,69 +4,76 @@ using Seiton.Core.Parsing.Ast;
 namespace Seiton.Core.Linting;
 
 /// <summary>
-/// A caller-owned lint result that retains the <see cref="AstArena"/> to keep AST objects
-/// and scalar node handles valid indefinitely.
+/// An owned lint result that retains the <see cref="AstArena"/> to keep AST objects
+/// and scalar node handles valid until disposal.
 /// <para>
-/// Unlike <see cref="LintHandle"/> (which is a <c>ref struct</c> that must be consumed within
-/// a single scope), <see cref="OwnedLintResult"/> is a regular class that can be stored in
-/// fields, captured in closures, and passed across async boundaries.
-/// </para>
-/// <para>
-/// Obtain an instance via <see cref="LintHandle.Detach"/>.
-/// </para>
-/// <para>
-/// Call <see cref="Dispose"/> when done to return pooled arrays to the shared pool.
-/// If not disposed, resources will be reclaimed by the finalizer (but with delayed cleanup).
+/// <see cref="OwnedLintResult"/> is a regular class that can be stored in fields,
+/// captured in closures, and passed across async boundaries.
 /// </para>
 /// </summary>
 public sealed class OwnedLintResult : IDisposable
 {
     private AstArena? _arena;
 
-    internal OwnedLintResult(
-        Workflow? workflow,
-        ActionMetadata? actionMetadata,
-        OwnedDiagnostics diagnostics,
-        OwnedDiagnostics parseDiagnostics,
-        bool hasFatalError,
-        SuppressionSummary suppressionSummary,
-        AstArena? arena)
+    internal OwnedLintResult(LintResult result, AstArena? arena)
     {
-        Workflow = workflow;
-        ActionMetadata = actionMetadata;
-        Diagnostics = diagnostics;
-        ParseDiagnostics = parseDiagnostics;
-        HasFatalError = hasFatalError;
-        SuppressionSummary = suppressionSummary;
+        Result = result;
         _arena = arena;
     }
 
+    /// <summary>Gets the underlying lint result data.</summary>
+    public LintResult Result { get; }
+
     /// <summary>Gets the parsed workflow AST, if the document is a workflow file.</summary>
-    public Workflow? Workflow { get; }
+    public Workflow? Workflow => Result.Workflow;
 
     /// <summary>Gets the parsed action metadata AST, if the document is an action file.</summary>
-    public ActionMetadata? ActionMetadata { get; }
+    public ActionMetadata? ActionMetadata => Result.ActionMetadata;
 
-    /// <summary>
-    /// Gets the caller-owned lint diagnostics (combined parse + rule diagnostics, post-processed).
-    /// These are safe to retain indefinitely, independent of the arena lifetime.
-    /// </summary>
-    public OwnedDiagnostics Diagnostics { get; }
+    /// <summary>Gets the lint diagnostics. These remain valid until this result is disposed.</summary>
+    public DiagnosticList Diagnostics => Result.Diagnostics;
 
-    /// <summary>
-    /// Gets the caller-owned parse-phase diagnostics.
-    /// These are safe to retain indefinitely.
-    /// </summary>
-    public OwnedDiagnostics ParseDiagnostics { get; }
+    /// <summary>Gets the parse-phase diagnostics. These remain valid until this result is disposed.</summary>
+    public DiagnosticList ParseDiagnostics => Result.ParseDiagnostics;
 
     /// <summary>Gets whether the parse result contains a fatal error.</summary>
-    public bool HasFatalError { get; }
+    public bool HasFatalError => Result.HasFatalError;
 
     /// <summary>Gets the suppression summary from inline and exclusion rules.</summary>
-    public SuppressionSummary SuppressionSummary { get; }
+    public SuppressionSummary SuppressionSummary => Result.SuppressionSummary;
 
     /// <summary>Gets the number of lint diagnostics.</summary>
-    public int DiagnosticCount => Diagnostics.Length;
+    public int DiagnosticCount => Result.DiagnosticCount;
+
+    /// <summary>Gets whether any diagnostics have an associated auto-fix.</summary>
+    public bool HasFixableDiagnostics => Result.HasFixableDiagnostics;
+
+    /// <summary>Gets the fixable diagnostics count.</summary>
+    public int FixableDiagnosticCount => Result.FixableDiagnosticCount;
+
+    /// <summary>Gets all diagnostics that have an associated auto-fix.</summary>
+    public Diagnostic[] FixableDiagnostics => Result.FixableDiagnostics;
+
+    /// <summary>
+    /// Returns a caller-owned copy of the lint diagnostics collection that remains valid
+    /// even after this result has been disposed.
+    /// </summary>
+    public OwnedDiagnostics CopyDiagnostics() => Result.CopyDiagnostics();
+
+    /// <summary>
+    /// Returns a caller-owned copy of the parse diagnostics collection that remains valid
+    /// even after this result has been disposed.
+    /// </summary>
+    public OwnedDiagnostics CopyParseDiagnostics()
+    {
+        var diags = ParseDiagnostics;
+        if (diags.Length == 0)
+        {
+            return default;
+        }
+
+        return new OwnedDiagnostics(diags.AsSpan().ToArray());
+    }
 
     /// <summary>
     /// Gets the <see cref="AstArena"/> that backs scalar node handles

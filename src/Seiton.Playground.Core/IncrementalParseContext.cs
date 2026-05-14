@@ -188,7 +188,7 @@ public sealed class IncrementalParseContext
     /// <summary>Whether a previous parse result has been recorded.</summary>
     public bool HasPrevious => _previousSource is not null;
 
-    /// <summary>The arena that owns the current parse result's pooled data. For use with <see cref="Core.Linting.LintEngine.CheckWithParseResult"/>.</summary>
+    /// <summary>The arena that owns the current parse result's pooled data. For use with <see cref="Core.Linting.LintEngine.CheckWithParseResult(byte[], string, Core.Linting.LintConfig?, Core.Parsing.ParseResult, Core.Parsing.AstArena?)"/>.</summary>
     internal AstArena? Arena => _previousArena;
 
     /// <summary>The current section registry (valid only when <see cref="HasPrevious"/> is true).</summary>
@@ -391,7 +391,7 @@ public sealed class IncrementalParseContext
 
     /// <summary>
     /// Records section byte ranges and hashes from the given parsed source.
-    /// Call this after each successful <see cref="Core.Linting.LintEngine.Check"/> call.
+    /// Call this after each successful <see cref="Core.Linting.LintEngine.Check(byte[], string, Core.Linting.LintConfig?)"/> call.
     /// </summary>
     public void UpdateAfterParse(byte[] utf8Yaml, string filePath)
     {

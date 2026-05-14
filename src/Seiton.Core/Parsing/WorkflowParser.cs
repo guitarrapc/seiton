@@ -51,15 +51,16 @@ public static partial class WorkflowParser
         public WebhookTypes.EventSpec Spec { get; }
     }
 
-    /// <summary>Parses UTF-8 YAML into a <see cref="ParseHandle"/> containing the workflow or action metadata AST.</summary>
+    /// <summary>Parses UTF-8 YAML into an owned result containing the workflow or action metadata AST.</summary>
     /// <remarks>
-    /// The returned handle is a <c>ref struct</c> that manages the underlying <see cref="AstArena"/> lifetime.
-    /// Use <c>using var handle = WorkflowParser.Parse(...);</c> to ensure proper disposal.
+    /// The returned <see cref="OwnedParseResult"/> is a regular <see cref="IDisposable"/> class.
+    /// Use <c>using var result = WorkflowParser.Parse(...);</c> to ensure the underlying <see cref="AstArena"/>
+    /// is returned to the shared pool when you are done reading the AST.
     /// </remarks>
-    public static ParseHandle Parse(byte[] utf8Yaml, string filePath)
+    public static OwnedParseResult Parse(byte[] utf8Yaml, string filePath)
     {
         var classified = ParseClassified(utf8Yaml, filePath, out var arena);
-        return new ParseHandle(classified.ParseResult, arena);
+        return new OwnedParseResult(classified.ParseResult, arena);
     }
 
     /// <summary>

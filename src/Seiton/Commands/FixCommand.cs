@@ -133,8 +133,8 @@ internal static class FixCommand
                 if (verbose)
                     Console.Error.WriteLine($"fixing {filePath}...");
 
-                // Check the file. Copy diagnostics immediately so the arena can be disposed
-                // before any await boundaries (LintHandle is a ref struct).
+                // Check the file. Copy diagnostics immediately so they remain valid
+                // even after the owned lint result is disposed before async work.
                 OwnedDiagnostics lintDiagnostics;
                 {
                     using var handle = engine.Check(utf8Yaml, filePath, fixEnabledLintConfig);

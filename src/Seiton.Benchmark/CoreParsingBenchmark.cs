@@ -41,9 +41,8 @@ public class CoreParsingBenchmark
     [Benchmark(Baseline = true, Description = "WorkflowParser.Parse (AST + rules)")]
     public int ParseWorkflowFull()
     {
-        var result = WorkflowParser.Parse(_yamlBytes, _filePath);
+        using var result = WorkflowParser.Parse(_yamlBytes, _filePath);
         var count = (result.Workflow?.Jobs.Count ?? 0) + result.Diagnostics.Length;
-        result.Arena?.Dispose();
         return count;
     }
 
