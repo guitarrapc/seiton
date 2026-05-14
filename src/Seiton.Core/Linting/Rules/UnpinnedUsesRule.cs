@@ -60,7 +60,7 @@ public sealed class UnpinnedUsesRule() : RuleBase(RuleId.UnpinnedUses)
         var uses = Arena.GetStringValue(workflowCall.Uses);
         var usesLocation = BuildUsesLocation(workflowCall);
         var usesRefLocation = BuildRefLocation(Arena.GetStringSlice(workflowCall.Uses), uses, Config.Utf8Yaml, usesLocation);
-        if (uses.StartsWith("./"u8) || uses.StartsWith("../"u8))
+        if (uses.StartsWith("./"u8))
         {
             if (uses.IndexOf((byte)'@') >= 0)
             {
@@ -71,6 +71,13 @@ public sealed class UnpinnedUsesRule() : RuleBase(RuleId.UnpinnedUses)
                     usesRefLocation);
             }
 
+            return;
+        }
+
+        // ../ prefix is not valid for reusable workflows (only ./ is allowed).
+        // ReusableWorkflowRule owns this diagnostic; silently return to avoid double-reporting.
+        if (uses.StartsWith("../"u8))
+        {
             return;
         }
 

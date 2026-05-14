@@ -1,0 +1,282 @@
+﻿using System.Text;
+using Seiton.Core.Parsing;
+using Seiton.Core.Parsing.Ast;
+
+namespace Seiton.Core.Linting;
+
+/// <summary>
+/// Resolves local reusable workflow outputs for building needs context types.
+/// Caches parsed metadata across calls within a single workflow.
+/// </summary>
+internal sealed class LocalReusableWorkflowOutputResolver
+{
+    private static readonly StringComparer PathComparer =
+        OperatingSystem.IsWindows() ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal;
+
+    private readonly string _workflowFilePath;
+    private readonly Dictionary<string, string[]?> _cache = new(PathComparer);
+
+    public LocalReusableWorkflowOutputResolver(string workflowFilePath)
+    {
+        _workflowFilePath = workflowFilePath;
+    }
+
+    /// <summary>
+    /// Maximum file size (2 MB) the resolver will attempt to read.
+    /// Files larger than this are assumed non-workflow and skipped.
+    /// </summary>
+    private const long MaxFileSizeBytes = 2 * 1024 * 1024;
+
+    /// <summary>
+    /// Given a local reusable workflow uses reference (e.g. "./.github/workflows/reusable.yml"),
+    /// returns the output names declared in <c>on.workflow_call.outputs</c>,
+    /// or null if the workflow cannot be resolved.
+    /// Returns empty array when the workflow is resolved but declares no outputs.
+    /// </summary>
+    public string[]? ResolveOutputNames(ReadOnlySpan<byte> usesValue)
+    {
+        // GitHub Actions local reusable workflows must start with "./"
+        if (!usesValue.StartsWith("./"u8))
+        {
+            return null;
+        }
+
+        if (usesValue.IndexOf((byte)'@') >= 0)
+        {
+            return null;
+        }
+
+        // Require .yml or .yaml extension (case-insensitive on the raw bytes)
+        if (!EndsWithYmlExtension(usesValue))
+        {
+            return null;
+        }
+
+        var relativePath = DecodeAscii(usesValue).Replace('/', Path.DirectorySeparatorChar);
+
+        // Normalize to full path for cache key to maximize cache hits when
+        // semantically equivalent paths differ in raw form (e.g., extra ./ segments).
+        var normalizedKey = NormalizeCacheKey(relativePath);
+        if (normalizedKey is not null && _cache.TryGetValue(normalizedKey, out var cached))
+        {
+            return cached;
+        }
+
+        if (_cache.TryGetValue(relativePath, out cached))
+        {
+            return cached;
+        }
+
+        var result = ResolveAndParse(relativePath, out var resolvedPath);
+        var cacheKey = resolvedPath ?? normalizedKey ?? relativePath;
+        _cache[cacheKey] = result;
+        return result;
+    }
+
+    private string? NormalizeCacheKey(string relativePath)
+    {
+        var baseDirectory = ResolveLocalReferenceBaseDirectory(_workflowFilePath, relativePath);
+        if (string.IsNullOrEmpty(baseDirectory))
+        {
+            return null;
+        }
+
+        try
+        {
+            return Path.GetFullPath(Path.Combine(baseDirectory, TrimCurrentDirectoryPrefix(relativePath)));
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    private string[]? ResolveAndParse(string relativePath, out string? resolvedPath)
+    {
+        resolvedPath = null;
+
+        var baseDirectory = ResolveLocalReferenceBaseDirectory(_workflowFilePath, relativePath);
+        if (string.IsNullOrEmpty(baseDirectory))
+        {
+            return null;
+        }
+
+        try
+        {
+            resolvedPath = Path.GetFullPath(Path.Combine(baseDirectory, TrimCurrentDirectoryPrefix(relativePath)));
+        }
+        catch
+        {
+            return null;
+        }
+
+        // Guard against path traversal: resolved path must remain under the base directory.
+        // Use Path.GetRelativePath which is filesystem-aware and avoids case-sensitivity issues
+        // with string prefix comparisons on case-sensitive platforms.
+        var relativeToBase = Path.GetRelativePath(baseDirectory, resolvedPath);
+        var isTraversal = string.Equals(relativeToBase, "..", StringComparison.Ordinal)
+            || relativeToBase.StartsWith($"..{Path.DirectorySeparatorChar}", StringComparison.Ordinal)
+            || relativeToBase.StartsWith($"..{Path.AltDirectorySeparatorChar}", StringComparison.Ordinal);
+        if (isTraversal || Path.IsPathRooted(relativeToBase))
+        {
+            return null;
+        }
+
+        if (!File.Exists(resolvedPath))
+        {
+            return null;
+        }
+
+        // Skip oversized files to avoid performance/availability issues
+        try
+        {
+            var fileInfo = new FileInfo(resolvedPath);
+            if (fileInfo.Length > MaxFileSizeBytes)
+            {
+                return null;
+            }
+        }
+        catch
+        {
+            return null;
+        }
+
+        byte[] bytes;
+        try
+        {
+            bytes = File.ReadAllBytes(resolvedPath);
+        }
+        catch
+        {
+            return null;
+        }
+
+        var parseResult = WorkflowParser.Parse(bytes, resolvedPath);
+        using var _ = parseResult.Arena;
+        if (parseResult.HasFatalError || parseResult.Workflow is null)
+        {
+            return null;
+        }
+
+        WorkflowCallEvent? workflowCallEvent = null;
+        for (var i = 0; i < parseResult.Workflow.On.Count; i++)
+        {
+            if (parseResult.Workflow.On[i] is WorkflowCallEvent wce)
+            {
+                workflowCallEvent = wce;
+                break;
+            }
+        }
+
+        if (workflowCallEvent is null)
+        {
+            return null;
+        }
+
+        if (workflowCallEvent.Outputs is not { Count: > 0 } outputs)
+        {
+            return [];
+        }
+
+        var names = new string[outputs.Count];
+        var idx = 0;
+        foreach (var kv in outputs)
+        {
+            names[idx++] = Encoding.UTF8.GetString(kv.Key.AsSpan(bytes));
+        }
+
+        return names;
+    }
+
+    private static string ResolveLocalReferenceBaseDirectory(string workflowFilePath, string localPath)
+    {
+        var workflowDirectory = Path.GetDirectoryName(workflowFilePath);
+        if (string.IsNullOrEmpty(workflowDirectory))
+        {
+            return string.Empty;
+        }
+
+        if (localPath.StartsWith($".{Path.DirectorySeparatorChar}.github{Path.DirectorySeparatorChar}", StringComparison.Ordinal)
+            && TryGetRepositoryRoot(workflowFilePath, out var repositoryRoot))
+        {
+            return repositoryRoot;
+        }
+
+        return workflowDirectory;
+    }
+
+    private static bool TryGetRepositoryRoot(string workflowFilePath, out string repositoryRoot)
+    {
+        var separator = Path.DirectorySeparatorChar;
+        var marker = $"{separator}.github{separator}workflows{separator}";
+        var index = workflowFilePath.LastIndexOf(marker, StringComparison.OrdinalIgnoreCase);
+        if (index >= 0)
+        {
+            repositoryRoot = workflowFilePath[..index];
+            return true;
+        }
+
+        var markerAtEnd = $"{separator}.github{separator}workflows";
+        if (workflowFilePath.EndsWith(markerAtEnd, StringComparison.OrdinalIgnoreCase))
+        {
+            repositoryRoot = workflowFilePath[..^markerAtEnd.Length];
+            return true;
+        }
+
+        repositoryRoot = string.Empty;
+        return false;
+    }
+
+    private static string TrimCurrentDirectoryPrefix(string path)
+    {
+        if (path.StartsWith($".{Path.DirectorySeparatorChar}", StringComparison.Ordinal))
+        {
+            return path[2..];
+        }
+
+        return path;
+    }
+
+    private static string DecodeAscii(ReadOnlySpan<byte> utf8)
+    {
+        var chars = new char[utf8.Length];
+        for (var i = 0; i < utf8.Length; i++)
+        {
+            chars[i] = (char)utf8[i];
+        }
+
+        return new string(chars);
+    }
+
+    private static bool EndsWithYmlExtension(ReadOnlySpan<byte> value)
+    {
+        // .yml (case-insensitive)
+        if (value.Length >= 4)
+        {
+            var tail = value[^4..];
+            if (tail[0] == (byte)'.'
+                && (tail[1] == (byte)'y' || tail[1] == (byte)'Y')
+                && (tail[2] == (byte)'m' || tail[2] == (byte)'M')
+                && (tail[3] == (byte)'l' || tail[3] == (byte)'L'))
+            {
+                return true;
+            }
+        }
+
+        // .yaml (case-insensitive)
+        if (value.Length >= 5)
+        {
+            var tail = value[^5..];
+            if (tail[0] == (byte)'.'
+                && (tail[1] == (byte)'y' || tail[1] == (byte)'Y')
+                && (tail[2] == (byte)'a' || tail[2] == (byte)'A')
+                && (tail[3] == (byte)'m' || tail[3] == (byte)'M')
+                && (tail[4] == (byte)'l' || tail[4] == (byte)'L'))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+}
