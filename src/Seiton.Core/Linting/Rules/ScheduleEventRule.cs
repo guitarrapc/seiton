@@ -91,11 +91,21 @@ public sealed class ScheduleEventRule() : RuleBase(RuleId.ScheduleEvent)
 
         if (!Generated.IanaTimeZones.IsKnown(span))
         {
-            var decoded = Decode(Arena.GetStringSlice(timezoneNode));
-            var display = decoded.Length > MaxDisplayTimezoneLength
-                ? string.Concat(decoded.AsSpan(0, MaxDisplayTimezoneLength), "...")
-                : decoded;
-            var suggestion = Generated.IanaTimeZones.FindSuggestion(decoded);
+            string display;
+            string? suggestion = null;
+
+            if (span.Length > MaxDisplayTimezoneLength)
+            {
+                // Too long to be valid — decode only prefix, skip expensive suggestion
+                display = string.Concat(Encoding.UTF8.GetString(span[..MaxDisplayTimezoneLength]), "...");
+            }
+            else
+            {
+                var decoded = Decode(Arena.GetStringSlice(timezoneNode));
+                display = decoded;
+                suggestion = Generated.IanaTimeZones.FindSuggestion(decoded);
+            }
+
             var message = suggestion is not null
                 ? $"on.schedule timezone '{display}' is invalid. did you mean '{suggestion}'?"
                 : $"on.schedule timezone '{display}' is invalid";
