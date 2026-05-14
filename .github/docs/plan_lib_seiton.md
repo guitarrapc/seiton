@@ -1198,11 +1198,52 @@ public sealed class ParseResult : IDisposable
 - `NodeId` struct 群 (`StringNodeId`, `BoolNodeId`, `IntNodeId`, `FloatNodeId`) は public のまま（AST ノードのフィールドとして外部利用者が参照する）
 - `InternalsVisibleTo` で `Seiton.Benchmark`, `Seiton.Playground.Core`, `Seiton.Core.Tests` からは引き続きアクセス可能
 
-**Step 4: 重複定義の対処**
+**Step 4 (将来): 重複定義の対処**
 
 - `ParseResult` と `LintResult` の accessor は完全対称を維持する。利用者は `Parse()` の結果でも `Check()` の結果でも同じ API で値を読めるべき
 - ただし実装は共通化する: private static helper or shared extension で委譲し、メンテ負荷を減らす
 - interface (`IValueResolver`) を抽出する案は、利用パターンがポリモーフィック（`ParseResult` と `LintResult` を統一的に扱う）な場合のみ意味がある。現時点では不要
+
+**現時点での判断補足**:
+
+- この課題は **妥当**。現行実装では `ParseResult` / `LintResult` の accessor 群がほぼ 1 対 1 で重複しており、今後 accessor を 1 つ追加・修正するたびに 2 箇所同期が必要になる
+- 一方で重複の中身は「`AstArena` への薄い委譲」であり、現時点で不具合を生んでいるわけではない。したがって **利用者価値は低く、優先度は低めの保守リファクタ** と位置付けるのが妥当
+- 実施タイミングとしては「次に accessor を追加・変更する直前」または「public API がしばらく固まった時点」が良い。今すぐ必須ではない
+
+**実装するなら守るべき制約**:
+
+- public surface は増やさない。共通化は `internal` 実装に閉じる
+- `ParseResult` / `LintResult` の public メソッド名・シグネチャ・XML doc の対称性は維持する
+- `IDisposable` / `Arena` の所有権モデルは変えない。共通化対象は accessor 本体だけに限定する
+- interface / abstract base class / virtual dispatch は導入しない。ここで欲しいのはポリモーフィズムではなく、単純な実装重複の除去だけ
+
+**推奨する実装形**:
+
+```csharp
+internal static class ResultValueAccessors
+{
+  public static string GetString(AstArena arena, StringNodeId id) => Encoding.UTF8.GetString(arena.GetStringValue(id));
+  public static string GetString(AstArena arena, Utf8Slice key) => Encoding.UTF8.GetString(key.AsSpan(arena.Source));
+  public static ReadOnlySpan<byte> GetUtf8(AstArena arena, StringNodeId id) => arena.GetStringValue(id);
+  public static TextRange GetRange(AstArena arena, StringNodeId id) => arena.GetStringRange(id);
+  public static TextRange GetRange(AstArena arena, BoolNodeId id) => arena.GetBoolRange(id);
+  public static TextRange GetRange(AstArena arena, IntNodeId id) => arena.GetIntRange(id);
+  public static TextRange GetRange(AstArena arena, FloatNodeId id) => arena.GetFloatRange(id);
+  public static bool GetBool(AstArena arena, BoolNodeId id) => arena.GetBoolValue(id);
+  public static long GetInt(AstArena arena, IntNodeId id) => arena.GetIntValue(id);
+  public static double GetFloat(AstArena arena, FloatNodeId id) => arena.GetFloatValue(id);
+}
+```
+
+- `ParseResult` / `LintResult` は各 public メソッドからこの helper に 1 行委譲するだけに留める
+- helper は `AstArena` を明示引数に取る。共有基底クラスに `Arena` property を生やすより、依存関係が明確で副作用が少ない
+- `CopyDiagnostics()` / `CopyParseDiagnostics()` までは無理に共通化しない。そこは result ごとの責務差分があるため、accessor だけ切り出す方が分かりやすい
+
+**採用判断**:
+
+- `Seiton.Core` の「実装完了」判定には必須ではない
+- ただし今後 accessor を増やす可能性が残るなら、**小さく安全な保守改善として実施価値はある**
+- 優先順位は「公開 API の追加検討」「facade 設計」より下でよい
 
 **Step 5: C# 的 discoverability の補完**
 
