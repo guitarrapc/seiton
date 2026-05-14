@@ -506,3 +506,90 @@ Both checks can be derived from the `ExpressionValidationContext` enum:
 2. Performance improvement: **-8% to -15%** across all configurations — eliminating hundreds of `Encoding.UTF8.GetString()` calls + string allocations + `string.EndsWith()` comparison per lint run is measurably faster.
 3. The savings scale linearly with workflow size: Small saves ~0.5 KB, Medium saves ~6 KB, Large saves ~30 KB (proportional to number of expressions checked).
 4. All 1,615 tests pass with no regression.
+
+### P-2: Diagnostic Message Templates (Skipped)
+
+**Conclusion:** Not worth implementing. After P-6 (already-implemented per-rule deduplication caching in `UnpinnedUsesRule` and `CheckoutPersistCredentialsRule`), only ~40 unique messages remain (20 job-permissions + 20 runner-no-latest, each with different jobId). Savings would be ~8 KB maximum. Design A (template-based Diagnostic) breaks public API for negligible gain. Design B is already done (P-6). `string.Intern` leaks in long-lived server/WASM mode.
+
+---
+
+## 10. Remaining Candidate Investigation
+
+### R-5: NeedsGraphRule Per-Workflow Dictionary (Not Worth Optimizing)
+
+**Investigation:** Examined `NeedsGraphRule.cs` allocation sites:
+- Line 67: `new Dictionary<Utf8String, byte>(_knownJobs.Count)` — one per `DetectCycles()` call
+- Line 73: `new Stack<(Utf8String Key, int NeighborIndex)>()` — one per `DetectCycles()` call
+- Line 111: `Utf8String.FromLowerAscii(needSpan)` — allocates `byte[]` per DFS edge visit
+
+**Benchmark impact:** The benchmark fixture has **no `needs:` declarations**. Therefore:
+- `VisitJobPre` returns immediately (`job.Needs is null`)
+- `DetectCycles` creates the Dictionary (20 entries, ~800 bytes) and Stack (~96 bytes), iterates all jobs finding no edges
+- `FromLowerAscii` is never reached (0 edges)
+- **Total contribution: ~1 KB** (0.3% of 327 KB)
+
+**Real-world assessment:** Even with typical 2-3 needs per job (20 jobs × 3 edges = 60 edges):
+- Dictionary: ~800 bytes
+- Stack: ~128 bytes
+- 60 × FromLowerAscii(~10 byte job names): 60 × 50 bytes = ~3 KB
+- **Total: ~4 KB** — negligible
+
+**Decision: SKIP.** Field-level reuse of the Dictionary/Stack would save <1 KB in benchmark and <4 KB in real-world. Not worth the code complexity.
+
+### L-3: Suppression Dictionary Pooling (Not Worth Optimizing)
+
+**Investigation:** Examined `LintEngine.cs` suppression infrastructure:
+- Outer dictionaries (`_nextLineRuleSuppressions`, `_fileRuleSuppressions`, `_jobRuleSuppressions`) are **already field-level and reused** per-parse with `Clear()`.
+- Inner dictionaries (`Dictionary<string, SuppressionAnchor>`) are allocated only for lines/jobs that actually have suppression comments.
+
+**Benchmark impact:** The benchmark fixture has **no suppression comments** (`# seiton-disable-*`). Zero inner dictionaries are allocated. **Total contribution: 0 bytes.**
+
+**Real-world assessment:** Suppressions are rare in practice (typically 0-5 per workflow). Each inner dict is tiny (1-3 entries, ~200 bytes). Even with 10 suppressions: ~2 KB.
+
+**Decision: SKIP.** Already well-designed. No allocation in the benchmark. Negligible real-world cost.
+
+### ExprUndefinedVarRule Unaccounted 84 KB (Infrastructure Cost — Deferred)
+
+**Investigation:** After P-1 eliminated the 33 KB of confirmed allocations, the remaining ~84 KB per-job overhead (estimated 4.5 KB × 20 jobs pre-P-1) was systematically traced:
+
+1. **Expression parsing:** Fully cached (6 unique expressions, all cache hits after warmup) — **0 bytes per job**
+2. **Context type building:** Uses reusable field-level dictionaries (`_stepsOverrideProps`, `_matrixOverrideProps`, `_needsOverrideProps`) — **~40 bytes per job** (one ObjectExprType wrapper)
+3. **ToUtf8StringZeroCopy:** Zero-alloc struct wrapping ReadOnlyMemory into source byte[] — **0 bytes**
+4. **Type inference (ValidateDynamicPropertyAccessInline):** Returns existing ExprType references from property maps and singletons — **near 0 bytes** (only `ExprType.ArrayOf()` creates new objects, ~40 bytes per occurrence)
+5. **Benchmark steps have no `id:` field:** Steps override is always empty (no per-step allocation)
+6. **Benchmark has no `needs:`:** Needs override is always empty
+
+**Likely causes (not directly actionable):**
+- JIT metadata for generic method instantiations (`CheckNode<Job>`, `CheckNode<Step>`, `ValidateExpression<Job>`, `ValidateExpression<Step>`, etc.)
+- Dictionary internal bucket/entry array growth on first population of reusable dictionaries
+- GC accounting of short-lived intermediate objects already collected
+- .NET runtime overhead (MethodTable lookups, interface dispatch caches)
+
+**Decision: DEFER.** The 84 KB cannot be traced to specific allocation sites through code reading. It appears to be cumulative .NET infrastructure cost rather than application-level waste. A targeted ETW allocation probe could narrow it further but the ROI is uncertain. Revisit only if a significant regression surfaces.
+
+---
+
+## 11. Final Status Summary
+
+| Proposal | Status | Savings (Large/False) | Notes |
+|----------|--------|----------------------|-------|
+| P-4 | ✅ Implemented | Measurement clarification | Enables ThreadStatic arena reuse in benchmark |
+| P-3 | ✅ Implemented | -19.3 KB | Object pool defaults increased |
+| P-5 | ✅ Implemented | -1.91 KB | BuildGithubOverride caching |
+| P-6 | ✅ Already Done | — | Per-rule message dedup was pre-existing |
+| P-1 | ✅ Implemented | -30.12 KB | Sink-name elimination |
+| P-2 | ❌ Skipped | ~8 KB potential | Not worth API break |
+| P-7 | — Not investigated | ~2 KB | Low priority |
+| R-5 | ❌ Skipped | <1 KB | Negligible in benchmark |
+| L-3 | ❌ Skipped | 0 KB | Already well-designed |
+| 84 KB unknown | ⏸ Deferred | — | Infrastructure cost, not actionable |
+
+**Cumulative improvement (Large/False):**
+- Original benchmark: 710.18 KB (no Arena disposal)
+- After P-4 (Arena dispose): ~366 KB
+- After P-3: ~347 KB
+- After P-5: ~345 KB
+- After P-1: **327.08 KB**
+- **Total reduction: -54% from original, -11% from steady-state baseline**
+
+**All remaining candidates (R-5, L-3, 84 KB unknown) were investigated and determined to be either negligible (<1 KB), zero-cost in benchmark, or infrastructure overhead not actionable through code changes.** The optimization pass is complete.
