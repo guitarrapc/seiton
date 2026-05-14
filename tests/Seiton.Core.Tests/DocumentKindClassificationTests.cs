@@ -33,7 +33,8 @@ public sealed class DocumentKindClassificationTests
               shell: bash
         """;
 
-        var result = WorkflowParser.ParseClassified(Encoding.UTF8.GetBytes(yaml), ".github/actions/sample/action.yml", out _);
+        var result = WorkflowParser.ParseClassified(Encoding.UTF8.GetBytes(yaml), ".github/actions/sample/action.yml", out var arena);
+        using var _ = arena;
 
         await Assert.That(result.Classification.FinalKind).IsEqualTo(DocumentKind.ActionMetadata);
         await Assert.That(result.ParseResult.Workflow).IsNull();
@@ -57,7 +58,8 @@ public sealed class DocumentKindClassificationTests
               - run: echo hi
         """;
 
-        var result = WorkflowParser.ParseClassified(Encoding.UTF8.GetBytes(yaml), ".github/actions/sample/action.yml", out _);
+        var result = WorkflowParser.ParseClassified(Encoding.UTF8.GetBytes(yaml), ".github/actions/sample/action.yml", out var arena);
+        using var _ = arena;
 
         await Assert.That(result.Classification.FinalKind).IsEqualTo(DocumentKind.Workflow);
         await Assert.That(result.Classification.HasHintMismatch).IsTrue();
@@ -76,7 +78,8 @@ public sealed class DocumentKindClassificationTests
         jobs: {}
         """;
 
-        var result = WorkflowParser.ParseClassified(Encoding.UTF8.GetBytes(yaml), "ambiguous.yml", out _);
+        var result = WorkflowParser.ParseClassified(Encoding.UTF8.GetBytes(yaml), "ambiguous.yml", out var arena);
+        using var _ = arena;
 
         await Assert.That(result.Classification.FinalKind).IsEqualTo(DocumentKind.Unknown);
         await Assert.That(result.Classification.IsAmbiguous).IsTrue();
@@ -97,7 +100,7 @@ public sealed class DocumentKindClassificationTests
         """;
 
         var engine = new LintEngine();
-        var lint = engine.Check(Encoding.UTF8.GetBytes(yaml), ".github/actions/sample/action.yml");
+        using var lint = engine.Check(Encoding.UTF8.GetBytes(yaml), ".github/actions/sample/action.yml");
 
         await Assert.That(lint.Diagnostics).IsEmpty();
     }
@@ -116,7 +119,8 @@ public sealed class DocumentKindClassificationTests
               shell: bash
         """;
 
-        var result = WorkflowParser.ParseClassified(Encoding.UTF8.GetBytes(yaml), "action.yml", out _);
+        var result = WorkflowParser.ParseClassified(Encoding.UTF8.GetBytes(yaml), "action.yml", out var arena);
+        using var _ = arena;
         await Assert.That(result.ParseResult.Diagnostics.Any(d => d.Message.Contains("description", StringComparison.OrdinalIgnoreCase) && d.Message.Contains("required", StringComparison.OrdinalIgnoreCase))).IsTrue();
     }
 
@@ -131,7 +135,8 @@ public sealed class DocumentKindClassificationTests
             description: your name
         """;
 
-        var result = WorkflowParser.ParseClassified(Encoding.UTF8.GetBytes(yaml), "action.yml", out _);
+        var result = WorkflowParser.ParseClassified(Encoding.UTF8.GetBytes(yaml), "action.yml", out var arena);
+        using var _ = arena;
         await Assert.That(result.ParseResult.Diagnostics.Any(d => d.Message.Contains("runs", StringComparison.OrdinalIgnoreCase) && d.Message.Contains("required", StringComparison.OrdinalIgnoreCase))).IsTrue();
     }
 
@@ -148,7 +153,8 @@ public sealed class DocumentKindClassificationTests
               shell: bash
         """;
 
-        var result = WorkflowParser.ParseClassified(Encoding.UTF8.GetBytes(yaml), "action.yml", out _);
+        var result = WorkflowParser.ParseClassified(Encoding.UTF8.GetBytes(yaml), "action.yml", out var arena);
+        using var _ = arena;
         await Assert.That(result.ParseResult.Diagnostics.Any(d => d.Message.Contains("required", StringComparison.OrdinalIgnoreCase))).IsFalse();
     }
 
@@ -170,7 +176,8 @@ public sealed class DocumentKindClassificationTests
               shell: bash
         """;
 
-        var result = WorkflowParser.ParseClassified(Encoding.UTF8.GetBytes(yaml), "action.yml", out _);
+        var result = WorkflowParser.ParseClassified(Encoding.UTF8.GetBytes(yaml), "action.yml", out var arena);
+        using var _ = arena;
         await Assert.That(result.ParseResult.Diagnostics.Any(d => d.Message.Contains("gray-white", StringComparison.Ordinal) && d.Message.Contains("color", StringComparison.OrdinalIgnoreCase))).IsTrue();
     }
 
@@ -190,7 +197,8 @@ public sealed class DocumentKindClassificationTests
               shell: bash
         """;
 
-        var result = WorkflowParser.ParseClassified(Encoding.UTF8.GetBytes(yaml), "action.yml", out _);
+        var result = WorkflowParser.ParseClassified(Encoding.UTF8.GetBytes(yaml), "action.yml", out var arena);
+        using var _ = arena;
         await Assert.That(result.ParseResult.Diagnostics.Any(d => d.Message.Contains("dog", StringComparison.Ordinal) && d.Message.Contains("icon", StringComparison.OrdinalIgnoreCase))).IsTrue();
     }
 
@@ -210,7 +218,8 @@ public sealed class DocumentKindClassificationTests
               shell: bash
         """;
 
-        var result = WorkflowParser.ParseClassified(Encoding.UTF8.GetBytes(yaml), "action.yml", out _);
+        var result = WorkflowParser.ParseClassified(Encoding.UTF8.GetBytes(yaml), "action.yml", out var arena);
+        using var _ = arena;
         await Assert.That(result.ParseResult.Diagnostics.Any(d => d.Message.Contains("branding", StringComparison.OrdinalIgnoreCase))).IsFalse();
     }
 }

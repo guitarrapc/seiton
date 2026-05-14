@@ -81,6 +81,7 @@ public static partial class WorkflowParser
     internal static ClassifiedParseResult ParseClassified(byte[] utf8Yaml, string filePath, out AstArena? arena)
     {
         var pathHintKind = DocumentKindClassifier.GetPathHintKind(filePath);
+        AstArena? localArena = null;
 
         try
         {
@@ -98,7 +99,7 @@ public static partial class WorkflowParser
 
             var parseReader = new VYamlStreamAdapter(utf8Yaml.AsMemory());
             var parseMode = finalKind == DocumentKind.ActionMetadata ? ParseMode.ActionMetadata : ParseMode.Workflow;
-            var localArena = AstArena.Rent(utf8Yaml);
+            localArena = AstArena.Rent(utf8Yaml);
             var diagnostics = new PooledBuffer<Diagnostic>(16);
             try
             {
@@ -156,6 +157,7 @@ public static partial class WorkflowParser
                 localArena.RegisterDiagnosticsBuffer(diagArray);
 
                 arena = localArena;
+                localArena = null;
                 return new ClassifiedParseResult(
                     parseResult,
                     new DocumentKindClassification(pathHintKind, finalKind, hasHintMismatch, isAmbiguous));
@@ -164,6 +166,7 @@ public static partial class WorkflowParser
         }
         catch (Exception ex)
         {
+            localArena?.Dispose();
             arena = null;
             var (startLine, startColumn) = TryExtractLineCol(ex.Message);
             var location = new TextRange(

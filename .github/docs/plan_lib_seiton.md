@@ -8,9 +8,10 @@
 
 `Seiton.Core` はすでに parser / linter の実装本体として成立しており、外部利用の入口になりうる public API も一部存在する。
 
-- [`WorkflowParser`](../../src/Seiton.Core/Parsing/WorkflowParser.cs) に `Parse`（`ParseResult` を返す）/ `ParseClassified` がある
-- [`LintEngine`](../../src/Seiton.Core/Linting/LintEngine.cs) に `Check(byte[] utf8Yaml, string filePath, LintConfig? config)` がある（`LintResult` を返す）
-- public surface は [`ParseResult`](../../src/Seiton.Core/Parsing/OwnedParseResult.cs) / [`LintResult`](../../src/Seiton.Core/Linting/OwnedLintResult.cs) の 1 概念 1 型に整理済み
+- [`WorkflowParser`](../../src/Seiton.Core/Parsing/WorkflowParser.cs) に public な `Parse` がある（[`ParseResult`](../../src/Seiton.Core/Parsing/ParseResult.cs) を返す）
+- `ParseClassified` は現在の public surface には含まれていない
+- [`LintEngine`](../../src/Seiton.Core/Linting/LintEngine.cs) に `Check(byte[] utf8Yaml, string filePath, LintConfig? config)` がある（[`LintResult`](../../src/Seiton.Core/Linting/LintResult.cs) を返す）
+- public surface は [`ParseResult`](../../src/Seiton.Core/Parsing/ParseResult.cs) / [`LintResult`](../../src/Seiton.Core/Linting/LintResult.cs) のラッパー型に整理済み
 - Arena ライフタイムは `ParseResult` / `LintResult` が `IDisposable` で管理し、値解決 API (`GetString`, `GetUtf8` など) を結果型側に集約した
 - [`FixEngine`](../../src/Seiton.Core/Linting/Fixing/FixEngine.cs) も public で、fix 実行 API として使いうる
 

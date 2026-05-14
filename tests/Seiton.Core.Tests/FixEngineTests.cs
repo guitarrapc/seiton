@@ -205,7 +205,7 @@ public sealed class FixEngineTests
 
         var source = Encoding.UTF8.GetBytes(yaml);
         var engine = new LintEngine([new DenyWriteAllRule()]);
-        var before = engine.CheckDirect(source, "revalidate-deny.yml", out _);
+        using var before = engine.Check(source, "revalidate-deny.yml");
 
         var revalidated = FixEngine.ApplyAndRelint(engine, source, "revalidate-deny.yml", before.FixableDiagnostics);
 
@@ -267,7 +267,7 @@ public sealed class FixEngineTests
 
         var source = Encoding.UTF8.GetBytes(yaml);
         var engine = new LintEngine([new DenyWriteAllRule()]);
-        var before = engine.CheckDirect(source, "revalidate-expected-pass.yml", out _);
+                using var before = engine.Check(source, "revalidate-expected-pass.yml");
 
         var revalidated = FixEngine.ApplyAndRelint(
                 engine,
@@ -418,7 +418,7 @@ public sealed class FixEngineTests
 
         var source = Encoding.UTF8.GetBytes(sourceText);
         var engine = new LintEngine([new JobPermissionsRequiredRule()]);
-        var lint = engine.CheckDirect(source, "indent-2.yml", new LintConfig { Fix = new FixConfig { Enabled = true } }, out _);
+        using var lint = engine.Check(source, "indent-2.yml", new LintConfig { Fix = new FixConfig { Enabled = true } });
 
         await Assert.That(lint.Diagnostics.Any(x => x.RuleId == "job-permissions-required" && x.Fix is not null)).IsTrue();
 
@@ -443,7 +443,7 @@ public sealed class FixEngineTests
 
         var source = Encoding.UTF8.GetBytes(sourceText);
         var engine = new LintEngine([new JobPermissionsRequiredRule()]);
-        var lint = engine.CheckDirect(source, "indent-4.yml", new LintConfig { Fix = new FixConfig { Enabled = true } }, out _);
+        using var lint = engine.Check(source, "indent-4.yml", new LintConfig { Fix = new FixConfig { Enabled = true } });
 
         await Assert.That(lint.Diagnostics.Any(x => x.RuleId == "job-permissions-required" && x.Fix is not null)).IsTrue();
 

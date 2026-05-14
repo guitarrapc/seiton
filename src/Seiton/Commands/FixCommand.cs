@@ -203,24 +203,31 @@ internal static class FixCommand
 
                 // Subsequent re-check passes: local AST fixes only (pin diagnostics are now
                 // satisfied so they won't reappear). Skip pass 0 since it was already applied above.
-                var currentHandle = engine.Check(currentYaml, filePath, fixEnabledLintConfig);
-                for (var pass = 1; pass < maxFixPasses && currentHandle.HasFixableDiagnostics; pass++)
+                LintResult? currentHandle = null;
+                try
                 {
-                    var nextYaml = FixEngine.Apply(currentYaml, currentHandle.FixableDiagnostics);
-                    if (nextYaml.AsSpan().SequenceEqual(currentYaml))
+                    currentHandle = engine.Check(currentYaml, filePath, fixEnabledLintConfig);
+                    for (var pass = 1; pass < maxFixPasses && currentHandle.HasFixableDiagnostics; pass++)
                     {
-                        break;
+                        var nextYaml = FixEngine.Apply(currentYaml, currentHandle.FixableDiagnostics);
+                        if (nextYaml.AsSpan().SequenceEqual(currentYaml))
+                        {
+                            break;
+                        }
+
+                        appliedFixes += currentHandle.FixableDiagnosticCount;
+                        currentYaml = nextYaml;
+                        currentHandle.Dispose();
+                        currentHandle = engine.Check(currentYaml, filePath, fixEnabledLintConfig);
                     }
 
-                    appliedFixes += currentHandle.FixableDiagnosticCount;
-                    currentYaml = nextYaml;
-                    currentHandle.Dispose();
-                    currentHandle = engine.Check(currentYaml, filePath, fixEnabledLintConfig);
+                    File.WriteAllBytes(filePath, currentYaml);
+                    allDiagnostics.AddRange(currentHandle.Diagnostics);
                 }
-
-                File.WriteAllBytes(filePath, currentYaml);
-                allDiagnostics.AddRange(currentHandle.Diagnostics);
-                currentHandle.Dispose();
+                finally
+                {
+                    currentHandle?.Dispose();
+                }
 
                 if (verbose)
                     Console.Error.WriteLine($"  applied {appliedFixes} fix(es) to {filePath}");
