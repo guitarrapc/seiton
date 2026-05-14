@@ -52,7 +52,14 @@ public sealed class ParseResult : IDisposable
     }
 
     /// <summary>Gets whether the parse result contains a fatal error.</summary>
-    public bool HasFatalError => Data.HasFatalError;
+    public bool HasFatalError
+    {
+        get
+        {
+            ThrowIfDisposed();
+            return Data.HasFatalError;
+        }
+    }
 
     /// <summary>Gets the original UTF-8 YAML source bytes.</summary>
     internal ReadOnlySpan<byte> Source => Arena.Source;
