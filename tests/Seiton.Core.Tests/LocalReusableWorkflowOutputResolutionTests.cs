@@ -440,8 +440,8 @@ public sealed class LocalReusableWorkflowOutputResolutionTests
         // On case-sensitive filesystems (Linux), a sibling directory whose name differs only by case
         // must NOT be treated as "under the base directory". The old StartsWith(OrdinalIgnoreCase) guard
         // would incorrectly allow this; Path.GetRelativePath correctly rejects it.
-        // On Windows (case-insensitive FS), the directories cannot differ by case alone, so this test
-        // validates the general containment logic instead.
+        // On case-insensitive FS (Windows, default macOS), the directories cannot differ by case alone,
+        // so this test validates the general containment logic instead.
         var rootDir = Path.Combine(Path.GetTempPath(), "seiton-resolver-case-" + Guid.NewGuid().ToString("N", System.Globalization.CultureInfo.InvariantCulture));
         var workflowsDir = Path.Combine(rootDir, ".github", "workflows");
         Directory.CreateDirectory(workflowsDir);
@@ -451,6 +451,10 @@ public sealed class LocalReusableWorkflowOutputResolutionTests
         var siblingDir = Path.Combine(Path.GetDirectoryName(rootDir)!, siblingName);
         var siblingWorkflowsDir = Path.Combine(siblingDir, ".github", "workflows");
         Directory.CreateDirectory(siblingWorkflowsDir);
+
+        // Detect case-sensitivity at runtime by probing the actual filesystem.
+        // macOS default APFS is case-insensitive, so we cannot rely on OS checks alone.
+        var isCaseSensitiveFs = IsCaseSensitiveFileSystem(workflowsDir);
 
         var callerPath = Path.Combine(workflowsDir, "caller.yml");
         var evilPath = Path.Combine(siblingWorkflowsDir, "evil.yml");
@@ -490,17 +494,15 @@ public sealed class LocalReusableWorkflowOutputResolutionTests
 
             await Assert.That(result.ParseResult.HasFatalError).IsFalse();
 
-            if (OperatingSystem.IsWindows())
+            if (!isCaseSensitiveFs)
             {
-                // On Windows, case-insensitive FS means the sibling IS the same directory.
+                // On case-insensitive FS (Windows, default macOS), the sibling IS the same directory.
                 // Path.GetRelativePath correctly treats them as same → resolution succeeds.
-                // Actual case-bypass attack is impossible on Windows.
-                // No assertion on "is not defined" — may or may not fire depending on whether
-                // sibling == root (which it does on Windows).
+                // Actual case-bypass attack is impossible on case-insensitive FS.
             }
             else
             {
-                // On Linux/macOS (case-sensitive FS), the sibling is a DIFFERENT directory.
+                // On case-sensitive FS (Linux, case-sensitive macOS), the sibling is a DIFFERENT directory.
                 // Path.GetRelativePath returns "../<SIBLING>/..." which starts with ".."
                 // → guard rejects → loose typing → no "is not defined" error.
                 var msgs = result.Diagnostics
@@ -604,6 +606,28 @@ public sealed class LocalReusableWorkflowOutputResolutionTests
             {
                 Directory.Delete(rootDir, recursive: true);
             }
+        }
+    }
+
+    /// <summary>
+    /// Probes whether the filesystem at the given directory is case-sensitive.
+    /// Creates a temporary file and checks if an alternate-case path resolves to it.
+    /// </summary>
+    private static bool IsCaseSensitiveFileSystem(string directory)
+    {
+        var probeLower = Path.Combine(directory, ".caseprobe");
+        var probeUpper = Path.Combine(directory, ".CASEPROBE");
+        try
+        {
+            File.WriteAllText(probeLower, "probe");
+            // If the upper-case path also exists, the FS is case-insensitive
+            return !File.Exists(probeUpper);
+        }
+        finally
+        {
+            try { File.Delete(probeLower); } catch { /* best effort */ }
+            // On case-sensitive FS, probeUpper is a different (nonexistent) file — no cleanup needed.
+            // On case-insensitive FS, probeLower == probeUpper — already deleted above.
         }
     }
 }
