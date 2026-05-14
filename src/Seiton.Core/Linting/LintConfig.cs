@@ -17,7 +17,7 @@ public sealed class LintConfig
     public byte[]? Utf8Yaml { get; set; }
 
     /// <summary>Gets the AST arena from the parse result (used for per-run shared data).</summary>
-    public AstArena? Arena { get; set; }
+    internal AstArena? Arena { get; set; }
 
     /// <summary>Gets the file path of the document being linted.</summary>
     public string? FilePath { get; set; }

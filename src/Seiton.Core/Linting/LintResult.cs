@@ -55,15 +55,18 @@ public sealed class LintResult : IDisposable
     public DiagnosticFix[] Fixes => Data.Fixes;
 
     /// <summary>Gets the original UTF-8 YAML source bytes.</summary>
-    public ReadOnlySpan<byte> Source => Arena.Source;
+    internal ReadOnlySpan<byte> Source => Arena.Source;
 
     public string GetString(StringNodeId id) => Encoding.UTF8.GetString(GetUtf8(id));
 
+    /// <summary>Decodes a <see cref="Utf8Slice"/> map key into a string using the underlying source bytes.</summary>
+    public string GetString(Utf8Slice key) => Encoding.UTF8.GetString(key.AsSpan(Arena.Source));
+
     public ReadOnlySpan<byte> GetUtf8(StringNodeId id) => Arena.GetStringValue(id);
 
-    public Utf8Slice GetSlice(StringNodeId id) => Arena.GetStringSlice(id);
+    internal Utf8Slice GetSlice(StringNodeId id) => Arena.GetStringSlice(id);
 
-    public bool IsQuoted(StringNodeId id) => Arena.GetStringQuoted(id);
+    internal bool IsQuoted(StringNodeId id) => Arena.GetStringQuoted(id);
 
     public TextRange GetRange(StringNodeId id) => Arena.GetStringRange(id);
 
@@ -73,13 +76,13 @@ public sealed class LintResult : IDisposable
 
     public TextRange GetRange(FloatNodeId id) => Arena.GetFloatRange(id);
 
-    public StringNodeId GetExpression(StringNodeId id) => Arena.GetStringExpression(id);
+    internal StringNodeId GetExpression(StringNodeId id) => Arena.GetStringExpression(id);
 
-    public StringNodeId GetExpression(BoolNodeId id) => Arena.GetBoolExpression(id);
+    internal StringNodeId GetExpression(BoolNodeId id) => Arena.GetBoolExpression(id);
 
-    public StringNodeId GetExpression(IntNodeId id) => Arena.GetIntExpression(id);
+    internal StringNodeId GetExpression(IntNodeId id) => Arena.GetIntExpression(id);
 
-    public StringNodeId GetExpression(FloatNodeId id) => Arena.GetFloatExpression(id);
+    internal StringNodeId GetExpression(FloatNodeId id) => Arena.GetFloatExpression(id);
 
     public bool GetBool(BoolNodeId id) => Arena.GetBoolValue(id);
 

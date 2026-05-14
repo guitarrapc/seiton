@@ -394,7 +394,7 @@ public static ParseResult Parse(byte[] utf8Yaml, string filePath)
 public static ClassifiedParseResult ParseClassified(byte[] utf8Yaml, string filePath)
 ```
 
-- Return: `ParseResult { Workflow?, DiagnosticList Diagnostics, HasFatalError, GetString/GetUtf8/GetSlice/GetRange/GetExpression..., IDisposable }`
+- Return: `ParseResult { Workflow?, DiagnosticList Diagnostics, HasFatalError, GetString(StringNodeId), GetString(Utf8Slice), GetUtf8, GetBool/GetInt/GetFloat, GetRange..., CopyDiagnostics(), IDisposable }`
 - Returns parse diagnostics even if YAML parsing itself fails; `Workflow` is null
 - Errors during AST construction are accumulated, not immediately fatal
 - `ParseClassified` additionally returns `DocumentKindClassification` (`PathHintKind`, `FinalKind`, `HasHintMismatch`, `IsAmbiguous`) for linter/CLI routing.

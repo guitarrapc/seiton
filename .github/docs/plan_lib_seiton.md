@@ -1324,6 +1324,64 @@ var runsOn = result.Workflow.Jobs[0].RunsOn;     // → ["ubuntu-latest"] (strin
 
 Core API の改善計画 (Step 1〜6) は「Core の中で可能な限り摩擦を減らす」施策。根本解決は Facade 層で提供する。この二層構造はフェーズ 1 (facade API 設計) で具体化する。
 
+##### 実装結果 (API 最終整理)
+
+**実施内容:**
+
+| Step | 内容 | 状態 |
+|---|---|---|
+| Step 1 | `GetSlice`, `IsQuoted`, `GetExpression`×4, `Source` を `internal` に変更 (ParseResult + LintResult) | ✅ 完了 |
+| Step 2 | `GetString(Utf8Slice key)` を追加 (ParseResult + LintResult) — SliceMap key デコード用 | ✅ 完了 |
+| Step 3 | `AstArena` を `internal sealed class` に変更, `LintConfig.Arena` を `internal` に変更, `RuleBase.Arena`/`HasNodeValue` を `private protected` に変更 | ✅ 完了 |
+| Step 5 | NodeId 型 (StringNodeId, BoolNodeId, IntNodeId, FloatNodeId) に XML doc `<remarks>` 追加 — resolve 方法を記述 | ✅ 完了 |
+| 追加 | `InternalsVisibleTo("Seiton.Playground.Tests")` を `Seiton.Core.csproj` に追加 | ✅ 完了 |
+| レビュー対応 | `RuleBase` に protected scalar 解決 helper (`GetString`, `GetUtf8`, `GetBool/GetInt/GetFloat`, `GetRange`) を追加し、external custom rule の拡張面を復旧 | ✅ 完了 |
+
+**レビュー指摘と対応:**
+
+| 指摘 | 影響 | 対応 |
+|---|---|---|
+| `AstArena` を hidden にした結果、external custom rule が `RuleBase` から NodeId を解決できなくなった | `LintEngine(IEnumerable<IRule>)` / `AddRule(IRule)` が public であるにもかかわらず、拡張面が実質的に壊れる | `RuleBase` に public type だけで完結する protected helper を追加し、`AstArena` を hidden のまま custom rule author が値解決できるようにした |
+
+**テスト:** 全 1626 テスト pass（custom rule regression test 追加後）。
+
+**ベンチマーク比較:**
+
+CoreParsingBenchmark (`ParseWorkflowFull`):
+
+| Size | Before (μs) | After (μs) | Delta | Alloc Before | Alloc After |
+|---|---|---|---|---|---|
+| Small | 45.4 | 54.6 | +20.2%* | 3.87 KB | 3.87 KB |
+| Medium | 1,201 | 1,198 | -0.2% | 35.59 KB | 35.59 KB |
+| Large | 18,509 | 19,072 | +3.0%* | 180.04 KB | 180.04 KB |
+
+*Small の +20.2%, Large の +3.0% はどちらも visibility/helper 変更では説明できず、ShortRun variance の影響が大きい。Allocated は完全一致で、Medium が -0.2%、Large も +3.0% に収まっているため、今回の変更による parse hot path 回帰はないと判断する。
+
+CoreLintBenchmark (`LintEngine.Check`):
+
+| Size | FixEnabled | Before (μs) | After (μs) | Delta | Alloc Before | Alloc After |
+|---|---|---|---|---|---|---|
+| Medium | True | 2,042 | 2,142 | +4.9%* | 81.92 KB | 81.92 KB |
+| Large | False | 23,141 | 24,426 | +5.6%* | 327.08 KB | 327.08 KB |
+| Large | True | 33,398 | 33,468 | +0.2% | 381.92 KB | 381.92 KB |
+
+*Medium True / Large False は +5% 前後だが、Large True が +0.2%、Allocated が全ケース完全一致であり、helper 追加や可視性変更では実行パスは変化していない。ShortRun variance と判断する。
+
+確認再計測 (`CoreLintBenchmark.CheckWorkflow(Size: Large, FixEnabled: False)`, Warmup 5 / Iteration 10):
+
+| Case | Before (μs) | Re-run After (μs) | Delta | Alloc Before | Alloc After |
+|---|---|---|---|---|---|
+| Large / FixDisabled | 23,141 | 23,340 | +0.9% | 327.08 KB | 327.08 KB |
+
+この再計測により、`Large / FixEnabled=False` も +1% 未満であることを確認した。
+
+**結論:**
+- **Allocation: 完全同一** — 全サイズで 1 byte も変化なし。visibility 変更のみのため当然。
+- **Performance: 実質維持** — public helper 追加のみで parse/lint hot path に変更なし。Large parse +3.0%、Large lint (+Fix) +0.2%、Large lint (-Fix) も再計測で +0.9% に収まり、許容範囲内。
+- **Public API surface: 15 → 12 methods** に縮小 (ParseResult/LintResult 各)。`GetString(Utf8Slice)` を 1 つ追加。
+- **拡張 API surface: `RuleBase` helper で維持** — `AstArena` を隠したまま external custom rule は値解決可能。
+- **AstArena が外部から完全に不可視** — result API / custom rule API のどちらからも `AstArena` 自体は触れない。
+
 ### 3. スレッドセーフでない型がある
 
 **論点**:

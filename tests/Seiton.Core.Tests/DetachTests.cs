@@ -1,6 +1,7 @@
 ﻿using System.Text;
 using Seiton.Core.Linting;
 using Seiton.Core.Parsing;
+using Seiton.Core.Parsing.Ast;
 
 namespace Seiton.Core.Tests;
 
@@ -147,8 +148,30 @@ public sealed class OwnedResultTests
         await Assert.That(() => result.GetUtf8(jobId)).Throws<ObjectDisposedException>();
     }
 
+    [Test]
+    public async Task CustomRule_CanResolveNodeValuesWithoutAccessingArena()
+    {
+        var engine = new LintEngine([new CaptureJobIdRule()]);
+
+        using LintResult result = engine.Check(SimpleWorkflow, ".github/workflows/test.yml");
+
+        await Assert.That(result.DiagnosticCount).IsEqualTo(1);
+        var diagnostic = result.Diagnostics[0];
+        await Assert.That(diagnostic.Message).IsEqualTo("job id: build");
+    }
+
     private sealed class ResultHolder
     {
         public LintResult? Result { get; set; }
+    }
+
+    private sealed class CaptureJobIdRule() : RuleBase(RuleId.JobStructure)
+    {
+        public override string Name => "capture-job-id";
+
+        public override void VisitJobPre(Job job)
+        {
+            AddJobInfo(job, $"job id: {GetString(job.Id)}", GetRange(job.Id));
+        }
     }
 }

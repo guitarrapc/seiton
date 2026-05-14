@@ -46,6 +46,12 @@ Representative implementation surface:
 - `IRule`
 - `RuleCatalog`
 
+Current public ergonomics note:
+
+- `LintResult` mirrors `ParseResult` value-resolution helpers for external callers (`GetString(StringNodeId)`, `GetString(Utf8Slice)`, `GetUtf8`, `GetBool/GetInt/GetFloat`, `GetRange`, copy methods).
+- `RuleBase` exposes protected scalar-resolution helpers with the same public-type vocabulary so external custom rules can resolve `StringNodeId` / `BoolNodeId` / `IntNodeId` / `FloatNodeId` without any `AstArena` access.
+- `AstArena` itself is internal implementation detail and not part of the public extension contract.
+
 ### 0.4 Runtime Model
 
 Linter runtime assumes parser output as structural input and never reparses YAML structure.

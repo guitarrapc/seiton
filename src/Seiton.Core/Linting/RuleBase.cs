@@ -212,6 +212,36 @@ public abstract class RuleBase : IRule
         return value.Length == 0 ? string.Empty : Encoding.UTF8.GetString(value.Span);
     }
 
+    /// <summary>Resolves a string scalar handle to a UTF-16 string for custom rules.</summary>
+    protected string GetString(StringNodeId id) => Encoding.UTF8.GetString(Arena.GetStringValue(id));
+
+    /// <summary>Decodes a <see cref="Utf8Slice"/> map key into a UTF-16 string for custom rules.</summary>
+    protected string GetString(Utf8Slice key) => Encoding.UTF8.GetString(key.AsSpan(Arena.Source));
+
+    /// <summary>Resolves a string scalar handle to the underlying UTF-8 bytes for custom rules.</summary>
+    protected ReadOnlySpan<byte> GetUtf8(StringNodeId id) => Arena.GetStringValue(id);
+
+    /// <summary>Resolves a bool scalar handle for custom rules.</summary>
+    protected bool GetBool(BoolNodeId id) => Arena.GetBoolValue(id);
+
+    /// <summary>Resolves an int scalar handle for custom rules.</summary>
+    protected long GetInt(IntNodeId id) => Arena.GetIntValue(id);
+
+    /// <summary>Resolves a float scalar handle for custom rules.</summary>
+    protected double GetFloat(FloatNodeId id) => Arena.GetFloatValue(id);
+
+    /// <summary>Gets the source range for a string scalar handle for custom rules.</summary>
+    protected TextRange GetRange(StringNodeId id) => Arena.GetStringRange(id);
+
+    /// <summary>Gets the source range for a bool scalar handle for custom rules.</summary>
+    protected TextRange GetRange(BoolNodeId id) => Arena.GetBoolRange(id);
+
+    /// <summary>Gets the source range for an int scalar handle for custom rules.</summary>
+    protected TextRange GetRange(IntNodeId id) => Arena.GetIntRange(id);
+
+    /// <summary>Gets the source range for a float scalar handle for custom rules.</summary>
+    protected TextRange GetRange(FloatNodeId id) => Arena.GetFloatRange(id);
+
     protected TextRange BuildJobLocation(Job job)
     {
         var range = Arena.GetStringRange(job.Id);
@@ -248,7 +278,7 @@ public abstract class RuleBase : IRule
             EndColumn: range.StartColumn);
     }
 
-    protected AstArena Arena => Config.Arena!;
+    private protected AstArena Arena => Config.Arena!;
 
     protected TextRange BuildUsesLocation(ExecAction action)
     {
@@ -260,7 +290,7 @@ public abstract class RuleBase : IRule
         return workflowCall.UsesKeyRange ?? Arena.GetStringRange(workflowCall.Uses);
     }
 
-    protected static bool HasNodeValue(StringNodeId node, AstArena arena)
+    private protected static bool HasNodeValue(StringNodeId node, AstArena arena)
     {
         return node.HasValue && arena.GetStringSlice(node).Length > 0;
     }
