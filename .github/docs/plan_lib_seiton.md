@@ -558,6 +558,19 @@ foreach (var diag in lint.Diagnostics) { ... }
 - AST 値の読み出しは result 自身のメソッド。Arena を知る必要がない
 - perf 志向パス (`GetUtf8`) と convenience パス (`GetString`) を両立
 
+**今回の分析で確定した評価**:
+
+- **データ志向**: `Owned*` を class にしただけでは不十分で、`Arena` を public に残す限り「結果が自己完結している」体験にはならない。Core advanced API でも、borrowed 実装を result 自身の操作 API で包むべき。
+- **async/await 相性**: 現行の class + `IDisposable` 方針は妥当。`using var result = ...; await ...;` が自然に書けることは public API の必須条件であり、この方向は維持すべき。
+- **今後の設計改善**: 本質は rename そのものより `Arena` 隠蔽である。`ParseResult` / `LintResult` への統一は discoverability 改善のために必要だが、使い勝手を決めるのは `GetString` / `GetUtf8` / `GetRange` 群の導入である。
+- **ユーザー視点**: `using var result = WorkflowParser.Parse(...)` はすでに素直だが、その次の一手が `result.Arena.GetStringValue(...)` では API から使い方が読み取れない。結果オブジェクト自身が「読むための API」を持つ必要がある。
+
+**今回の計画で固定すること / 次ステップに回すこと**:
+
+- **今回固定する**: public API は `ParseResult` / `LintResult` の 1 概念 1 型へ寄せる、`Arena` は public から隠す、結果型に値解決メソッド群を持たせる、という方向性。
+- **次ステップで詰める**: `GetString / GetUtf8 / GetRange / GetExpression / GetSlice` の最終シグネチャ統一、命名、overload 範囲、`Source` の公開粒度。
+- **判断理由**: 今の段階で重要なのは API の責務境界を固めることであり、各 accessor の最終命名や細かい overload 設計は、その前提が固まってから詰める方がぶれない。
+
 ---
 
 ##### Step 1: 型名の統一（1 概念 1 型）
@@ -651,6 +664,11 @@ public sealed class ParseResult : IDisposable
 - 解決メソッドは Arena への 1 メソッド委譲のみ。JIT inline 可能。ゼロオーバーヘッド。
 - `GetString()` は string 生成するが、これは利用者が明示的に呼ぶ convenience API。hot path では `GetUtf8()` を使う。
 - lint rules は従来通り `Arena` (internal) に直接アクセスするため性能劣化なし。
+
+**補足**:
+
+- この段階では「解決メソッド群を public result に持たせる」ことまでを設計確定とし、個々の最終シグネチャ調整は別ステップで詰める。
+- つまり、`GetString / GetUtf8 / GetRange` 群を導入する方針自体は今回の分析で妥当と判断し、詳細な API shaping は次回の設計作業として扱う。
 
 ---
 
@@ -750,6 +768,14 @@ public sealed class LintResult : IDisposable
 - ベンチマーク: `Alloc Ratio = 1.00` を維持（解決メソッド自体はアロケーション増なし）
 - テスト: 全テスト pass
 - 利用者コード: `result.Arena.GetStringValue(...)` → `result.GetUtf8(...)` で短縮。Arena の概念が消える
+
+##### 次回に詰める具体論点
+
+1. `GetString` を string convenience API として常設するか、`DecodeString` など別名にするか。
+2. `GetUtf8` / `GetSlice` / `Source` の 3 つをすべて public に出すか、advanced 度合いで整理するか。
+3. `GetRange` / `GetExpression` を NodeId overload 群で揃えるか、共通 interface/utility に寄せるか。
+4. `LintResult` に Parse 系と同じ accessor 群を完全対称で持たせるか、共通基底/共通 helper を使うか。
+5. 利用者が IntelliSense だけで値の読み方を理解できる命名になっているかを、サンプルコード基準で再評価すること。
 
 ### 3. スレッドセーフでない型がある
 
