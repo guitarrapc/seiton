@@ -35,9 +35,9 @@ public readonly record struct Diagnostic(
 /// <summary>The result of parsing a YAML document into an AST.</summary>
 /// <remarks>
 /// This is a pure data carrier. Resource management (Arena disposal) is handled by
-/// <see cref="OwnedParseResult"/> or <see cref="Linting.OwnedLintResult"/> which wrap this result.
+/// <see cref="ParseResult"/> or <see cref="Linting.LintResult"/> which wrap this result.
 /// </remarks>
-public readonly record struct ParseResult(
+internal readonly record struct ParseResultData(
     Workflow? Workflow,
     ActionMetadata? ActionMetadata,
     DiagnosticList Diagnostics,

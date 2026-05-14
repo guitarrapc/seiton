@@ -1,4 +1,4 @@
-using System.Text;
+﻿using System.Text;
 using Seiton.Core.Parsing;
 
 namespace Seiton.Playground.Tests;
@@ -382,13 +382,13 @@ public sealed class IncrementalParseTests
                 $"on: push\nenv:\n  V: \"{i}\"\njobs:\n  build:\n    runs-on: ubuntu-latest\n    steps:\n      - run: echo ok\n  test:\n    runs-on: ubuntu-latest\n    steps:\n      - run: echo test\n");
             lastResult = ctx.ParseIncrementally(yaml, FilePath);
 
-            await Assert.That(lastResult.Value.Workflow).IsNotNull()
+            await Assert.That(lastResult!.Workflow).IsNotNull()
                 .Because($"iteration {i}: must produce valid workflow");
-            await Assert.That(lastResult.Value.Workflow!.Jobs.Count).IsEqualTo(2);
+            await Assert.That(lastResult.Workflow!.Jobs.Count).IsEqualTo(2);
         }
 
         // Verify last result is fully functional (no corruption from growth)
-        var job = lastResult!.Value.Workflow!.Jobs.Entries[0].Value;
+        var job = lastResult!.Workflow!.Jobs.Entries[0].Value;
         await Assert.That(job.RunsOn).IsNotNull();
         var arena = ctx.Arena!;
         var label = arena.GetStringValue(job.RunsOn!.Labels![0]);

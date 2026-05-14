@@ -1,25 +1,24 @@
-﻿using Seiton.Core.Parsing;
+﻿using System.Text;
 using Seiton.Core.Parsing.Ast;
-using System.Text;
 
-namespace Seiton.Core.Linting;
+namespace Seiton.Core.Parsing;
 
 /// <summary>
-/// A lint result that retains the <see cref="AstArena"/> to keep AST objects
+/// A parse result that retains the <see cref="AstArena"/> to keep AST objects
 /// and scalar node handles valid until disposal.
 /// </summary>
-public sealed class LintResult : IDisposable
+public sealed class ParseResult : IDisposable
 {
     private AstArena? _arena;
 
-    internal LintResult(LintResultData data, AstArena? arena)
+    internal ParseResult(ParseResultData data, AstArena? arena)
     {
         Data = data;
         _arena = arena;
     }
 
-    /// <summary>Gets the underlying lint result data for internal consumers.</summary>
-    internal LintResultData Data { get; }
+    /// <summary>Gets the underlying parse result data for internal consumers.</summary>
+    internal ParseResultData Data { get; }
 
     /// <summary>Gets the parsed workflow AST, if the document is a workflow file.</summary>
     public Workflow? Workflow => Data.Workflow;
@@ -27,32 +26,11 @@ public sealed class LintResult : IDisposable
     /// <summary>Gets the parsed action metadata AST, if the document is an action file.</summary>
     public ActionMetadata? ActionMetadata => Data.ActionMetadata;
 
-    /// <summary>Gets the lint diagnostics. These remain valid until this result is disposed.</summary>
+    /// <summary>Gets the parse diagnostics. These remain valid until this result is disposed.</summary>
     public DiagnosticList Diagnostics => Data.Diagnostics;
-
-    /// <summary>Gets the parse-phase diagnostics. These remain valid until this result is disposed.</summary>
-    public DiagnosticList ParseDiagnostics => Data.ParseDiagnostics;
 
     /// <summary>Gets whether the parse result contains a fatal error.</summary>
     public bool HasFatalError => Data.HasFatalError;
-
-    /// <summary>Gets the suppression summary from inline and exclusion rules.</summary>
-    public SuppressionSummary SuppressionSummary => Data.SuppressionSummary;
-
-    /// <summary>Gets the number of lint diagnostics.</summary>
-    public int DiagnosticCount => Data.DiagnosticCount;
-
-    /// <summary>Gets whether any diagnostics have an associated auto-fix.</summary>
-    public bool HasFixableDiagnostics => Data.HasFixableDiagnostics;
-
-    /// <summary>Gets the fixable diagnostics count.</summary>
-    public int FixableDiagnosticCount => Data.FixableDiagnosticCount;
-
-    /// <summary>Gets all diagnostics that have an associated auto-fix.</summary>
-    public Diagnostic[] FixableDiagnostics => Data.FixableDiagnostics;
-
-    /// <summary>Gets all auto-fix payloads from fixable diagnostics.</summary>
-    public DiagnosticFix[] Fixes => Data.Fixes;
 
     /// <summary>Gets the original UTF-8 YAML source bytes.</summary>
     public ReadOnlySpan<byte> Source => Arena.Source;
@@ -88,18 +66,12 @@ public sealed class LintResult : IDisposable
     public double GetFloat(FloatNodeId id) => Arena.GetFloatValue(id);
 
     /// <summary>
-    /// Returns a caller-owned copy of the lint diagnostics collection that remains valid
+    /// Returns a caller-owned copy of the diagnostics collection that remains valid
     /// even after this result has been disposed.
     /// </summary>
-    public OwnedDiagnostics CopyDiagnostics() => Data.CopyDiagnostics();
-
-    /// <summary>
-    /// Returns a caller-owned copy of the parse diagnostics collection that remains valid
-    /// even after this result has been disposed.
-    /// </summary>
-    public OwnedDiagnostics CopyParseDiagnostics()
+    public OwnedDiagnostics CopyDiagnostics()
     {
-        var diags = ParseDiagnostics;
+        var diags = Diagnostics;
         if (diags.Length == 0)
         {
             return default;
@@ -108,7 +80,7 @@ public sealed class LintResult : IDisposable
         return new OwnedDiagnostics(diags.AsSpan().ToArray());
     }
 
-    internal AstArena Arena => _arena ?? throw new ObjectDisposedException(nameof(LintResult));
+    internal AstArena Arena => _arena ?? throw new ObjectDisposedException(nameof(ParseResult));
 
     /// <summary>Returns pooled arrays to the shared pool. AST objects become invalid after this call.</summary>
     public void Dispose()

@@ -26,28 +26,25 @@ public sealed class OwnedResultTests
         """);
 
     [Test]
-    public async Task Parse_ReturnsOwnedParseResult()
+    public async Task Parse_ReturnsParseResult()
     {
-        using var owned = WorkflowParser.Parse(SimpleWorkflow, ".github/workflows/test.yml");
-        await Assert.That(owned.Workflow).IsNotNull();
-        await Assert.That(owned.HasFatalError).IsFalse();
+        using ParseResult result = WorkflowParser.Parse(SimpleWorkflow, ".github/workflows/test.yml");
+        await Assert.That(result.Workflow).IsNotNull();
+        await Assert.That(result.HasFatalError).IsFalse();
     }
 
     [Test]
-    public async Task Parse_AstRemainsValidUntilOwnedResultDisposed()
+    public async Task Parse_AstRemainsValidUntilResultDisposed()
     {
-        using var owned = WorkflowParser.Parse(SimpleWorkflow, ".github/workflows/test.yml");
-        await Assert.That(owned.Workflow).IsNotNull();
+        using ParseResult result = WorkflowParser.Parse(SimpleWorkflow, ".github/workflows/test.yml");
+        await Assert.That(result.Workflow).IsNotNull();
 
-        // Arena should be accessible for handle resolution
-        var workflow = owned.Workflow!;
+        var workflow = result.Workflow!;
         var jobs = workflow.Jobs;
         await Assert.That(jobs.Count).IsEqualTo(1);
 
-        // Resolve StringNodeId via arena
         var job = jobs.Entries[0].Value;
-        var jobIdValue = owned.Arena.GetStringValue(job.Id);
-        var jobIdStr = Encoding.UTF8.GetString(jobIdValue);
+        var jobIdStr = result.GetString(job.Id);
         await Assert.That(jobIdStr).IsEqualTo("build");
     }
 
@@ -64,81 +61,73 @@ public sealed class OwnedResultTests
                 steps:
                   - run: echo hello
             """);
-        using var owned = WorkflowParser.Parse(badYaml, ".github/workflows/test.yml");
-        await Assert.That(owned.Diagnostics.Length).IsGreaterThanOrEqualTo(1);
+        using ParseResult result = WorkflowParser.Parse(badYaml, ".github/workflows/test.yml");
+        await Assert.That(result.Diagnostics.Length).IsGreaterThanOrEqualTo(1);
     }
 
     [Test]
-    public async Task Parse_ActionMetadata_ReturnsOwnedParseResult()
+    public async Task Parse_ActionMetadata_ReturnsParseResult()
     {
-        using var owned = WorkflowParser.Parse(SimpleAction, "action.yml");
-        await Assert.That(owned.ActionMetadata).IsNotNull();
-        await Assert.That(owned.Workflow).IsNull();
+        using ParseResult result = WorkflowParser.Parse(SimpleAction, "action.yml");
+        await Assert.That(result.ActionMetadata).IsNotNull();
+        await Assert.That(result.Workflow).IsNull();
 
-        var name = owned.Arena.GetStringValue(owned.ActionMetadata!.Name);
-        var nameStr = Encoding.UTF8.GetString(name);
+        var nameStr = result.GetString(result.ActionMetadata!.Name);
         await Assert.That(nameStr).IsEqualTo("My Action");
     }
 
     [Test]
-    public async Task Check_ReturnsOwnedLintResult()
+    public async Task Check_ReturnsLintResult()
     {
         var engine = new LintEngine();
-        using var owned = engine.Check(SimpleWorkflow, ".github/workflows/test.yml");
-        await Assert.That(owned.Workflow).IsNotNull();
-        await Assert.That(owned.HasFatalError).IsFalse();
+        using LintResult result = engine.Check(SimpleWorkflow, ".github/workflows/test.yml");
+        await Assert.That(result.Workflow).IsNotNull();
+        await Assert.That(result.HasFatalError).IsFalse();
     }
 
     [Test]
     public async Task Check_AstAndDiagnosticsAreAccessible()
     {
         var engine = new LintEngine();
-        using var owned = engine.Check(SimpleWorkflow, ".github/workflows/test.yml");
-        await Assert.That(owned.Workflow).IsNotNull();
+        using LintResult result = engine.Check(SimpleWorkflow, ".github/workflows/test.yml");
+        await Assert.That(result.Workflow).IsNotNull();
 
-        // Arena for handle resolution
-        var workflow = owned.Workflow!;
+        var workflow = result.Workflow!;
         var job = workflow.Jobs.Entries[0].Value;
-        var jobIdStr = Encoding.UTF8.GetString(owned.Arena.GetStringValue(job.Id));
+        var jobIdStr = result.GetString(job.Id);
         await Assert.That(jobIdStr).IsEqualTo("build");
 
-        // Diagnostics should be present (lint rules fire)
-        await Assert.That(owned.DiagnosticCount).IsGreaterThanOrEqualTo(0);
+        await Assert.That(result.DiagnosticCount).IsGreaterThanOrEqualTo(0);
     }
 
     [Test]
-    public async Task Check_ResultKeepsArenaAliveUntilDispose()
+    public async Task Check_ResultKeepsHandlesResolvableUntilDispose()
     {
         var engine = new LintEngine();
-        using var owned = engine.Check(SimpleWorkflow, ".github/workflows/test.yml");
-        var workflow = owned.Workflow!;
-        var jobIdValue = owned.Arena.GetStringValue(workflow.Jobs.Entries[0].Value.Id);
-        var jobIdStr = Encoding.UTF8.GetString(jobIdValue);
+        using LintResult result = engine.Check(SimpleWorkflow, ".github/workflows/test.yml");
+        var workflow = result.Workflow!;
+        var jobIdStr = result.GetString(workflow.Jobs.Entries[0].Value.Id);
         await Assert.That(jobIdStr).IsEqualTo("build");
     }
 
     [Test]
-    public async Task OwnedParseResult_CanCrossAsyncBoundary()
+    public async Task ParseResult_CanCrossAsyncBoundary()
     {
-        // Key feature: OwnedParseResult is a class, not ref struct,
-        // so it can be used across async boundaries
-        using var owned = await ParseAsync();
-        await Assert.That(owned.Workflow).IsNotNull();
-        var jobIdStr = Encoding.UTF8.GetString(
-            owned.Arena.GetStringValue(owned.Workflow!.Jobs.Entries[0].Value.Id));
+        using ParseResult result = await ParseAsync();
+        await Assert.That(result.Workflow).IsNotNull();
+        var jobIdStr = result.GetString(result.Workflow!.Jobs.Entries[0].Value.Id);
         await Assert.That(jobIdStr).IsEqualTo("build");
     }
 
-    private static async Task<OwnedParseResult> ParseAsync()
+    private static async Task<ParseResult> ParseAsync()
     {
         await Task.Yield(); // simulate async work
         return WorkflowParser.Parse(SimpleWorkflow, ".github/workflows/test.yml");
     }
 
     [Test]
-    public async Task OwnedLintResult_CanBeStoredInField()
+    public async Task LintResult_CanBeStoredInField()
     {
-        // Key feature: OwnedLintResult can be stored in fields (not possible with ref struct LintHandle)
         var holder = new ResultHolder();
         var engine = new LintEngine();
         holder.Result = engine.Check(SimpleWorkflow, ".github/workflows/test.yml");
@@ -148,18 +137,18 @@ public sealed class OwnedResultTests
     }
 
     [Test]
-    public async Task OwnedParseResult_Dispose_ThrowsOnArenaAccess()
+    public async Task ParseResult_Dispose_ThrowsOnValueAccess()
     {
-        var owned = WorkflowParser.Parse(SimpleWorkflow, ".github/workflows/test.yml");
+        ParseResult result = WorkflowParser.Parse(SimpleWorkflow, ".github/workflows/test.yml");
+        var jobId = result.Workflow!.Jobs.Entries[0].Value.Id;
 
-        owned.Dispose();
+        result.Dispose();
 
-        // Accessing Arena after Dispose should throw
-        await Assert.That(() => _ = owned.Arena).Throws<ObjectDisposedException>();
+        await Assert.That(() => result.GetUtf8(jobId)).Throws<ObjectDisposedException>();
     }
 
     private sealed class ResultHolder
     {
-        public OwnedLintResult? Result { get; set; }
+        public LintResult? Result { get; set; }
     }
 }

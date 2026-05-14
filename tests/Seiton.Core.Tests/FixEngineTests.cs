@@ -1,4 +1,4 @@
-using Seiton.Core.Linting;
+﻿using Seiton.Core.Linting;
 using Seiton.Core.Linting.Fixing;
 using Seiton.Core.Linting.Rules;
 using Seiton.Core.Parsing;
@@ -169,8 +169,8 @@ public sealed class FixEngineTests
     [Test]
     public async Task LintResult_Fixes_ReturnsOnlyFixPayloads()
     {
-        var parseResult = new ParseResult(null, null, [], HasFatalError: false);
-        var result = new LintResult(
+        var parseResult = new ParseResultData(null, null, [], HasFatalError: false);
+        var result = new LintResultData(
             parseResult,
             [
                 new Diagnostic(

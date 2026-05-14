@@ -40,14 +40,27 @@ public static class FixEngine
             selectedDiagnostics.Add(diagnostic);
         }
 
-        var beforeHandle = lintEngine.Check(utf8Yaml, filePath, config);
-        var before = beforeHandle.Result;
-        var updatedUtf8Yaml = Apply(utf8Yaml, selectedDiagnostics);
-        var afterHandle = lintEngine.Check(updatedUtf8Yaml, filePath, config);
-        var after = afterHandle.Result;
-
-        ValidateRevalidation(before, after, selectedDiagnostics);
-        return new RevalidationResult(before, after, updatedUtf8Yaml);
+        var before = lintEngine.Check(utf8Yaml, filePath, config);
+        try
+        {
+            var updatedUtf8Yaml = Apply(utf8Yaml, selectedDiagnostics);
+            var after = lintEngine.Check(updatedUtf8Yaml, filePath, config);
+            try
+            {
+                ValidateRevalidation(before, after, selectedDiagnostics);
+                return new RevalidationResult(before, after, updatedUtf8Yaml);
+            }
+            catch
+            {
+                after.Dispose();
+                throw;
+            }
+        }
+        catch
+        {
+            before.Dispose();
+            throw;
+        }
     }
 
     /// <summary>Builds a unified diff string by applying the given <paramref name="fixes"/> to the YAML.</summary>
@@ -138,36 +151,49 @@ public static class FixEngine
         ArgumentException.ThrowIfNullOrEmpty(filePath);
         ArgumentNullException.ThrowIfNull(fixes);
 
-        var beforeHandle = lintEngine.Check(utf8Yaml, filePath, config);
-        var before = beforeHandle.Result;
-        var updatedUtf8Yaml = Apply(utf8Yaml, fixes);
-        var afterHandle = lintEngine.Check(updatedUtf8Yaml, filePath, config);
-        var after = afterHandle.Result;
-
-        ValidateRevalidation(before, after, selectedDiagnostics: null);
-
-        if (expectedClearedRuleIds is not null)
+        var before = lintEngine.Check(utf8Yaml, filePath, config);
+        try
         {
-            var expected = new HashSet<string>(StringComparer.Ordinal);
-            foreach (var ruleId in expectedClearedRuleIds)
+            var updatedUtf8Yaml = Apply(utf8Yaml, fixes);
+            var after = lintEngine.Check(updatedUtf8Yaml, filePath, config);
+            try
             {
-                if (!string.IsNullOrWhiteSpace(ruleId))
-                {
-                    expected.Add(ruleId);
-                }
-            }
+                ValidateRevalidation(before, after, selectedDiagnostics: null);
 
-            for (var i = 0; i < after.Diagnostics.Length; i++)
-            {
-                var ruleId = after.Diagnostics[i].RuleId;
-                if (ruleId is not null && expected.Contains(ruleId))
+                if (expectedClearedRuleIds is not null)
                 {
-                    throw new InvalidOperationException($"revalidation failed: expected diagnostics for rule '{ruleId}' to be cleared after fix apply");
+                    var expected = new HashSet<string>(StringComparer.Ordinal);
+                    foreach (var ruleId in expectedClearedRuleIds)
+                    {
+                        if (!string.IsNullOrWhiteSpace(ruleId))
+                        {
+                            expected.Add(ruleId);
+                        }
+                    }
+
+                    for (var i = 0; i < after.Diagnostics.Length; i++)
+                    {
+                        var ruleId = after.Diagnostics[i].RuleId;
+                        if (ruleId is not null && expected.Contains(ruleId))
+                        {
+                            throw new InvalidOperationException($"revalidation failed: expected diagnostics for rule '{ruleId}' to be cleared after fix apply");
+                        }
+                    }
                 }
+
+                return new RevalidationResult(before, after, updatedUtf8Yaml);
+            }
+            catch
+            {
+                after.Dispose();
+                throw;
             }
         }
-
-        return new RevalidationResult(before, after, updatedUtf8Yaml);
+        catch
+        {
+            before.Dispose();
+            throw;
+        }
     }
 
     /// <summary>Applies the given <paramref name="fixes"/> to the YAML and returns the updated bytes.</summary>
@@ -568,7 +594,24 @@ public static class FixEngine
 }
 
 /// <summary>Result of applying auto-fixes and re-linting, containing before/after diagnostics and the patched YAML.</summary>
-public readonly record struct RevalidationResult(
-    LintResult Before,
-    LintResult After,
-    byte[] UpdatedUtf8Yaml);
+public sealed class RevalidationResult : IDisposable
+{
+    internal RevalidationResult(LintResult before, LintResult after, byte[] updatedUtf8Yaml)
+    {
+        Before = before;
+        After = after;
+        UpdatedUtf8Yaml = updatedUtf8Yaml;
+    }
+
+    public LintResult Before { get; }
+
+    public LintResult After { get; }
+
+    public byte[] UpdatedUtf8Yaml { get; }
+
+    public void Dispose()
+    {
+        Before.Dispose();
+        After.Dispose();
+    }
+}

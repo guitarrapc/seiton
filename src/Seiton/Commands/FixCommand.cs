@@ -206,7 +206,7 @@ internal static class FixCommand
                 var currentHandle = engine.Check(currentYaml, filePath, fixEnabledLintConfig);
                 for (var pass = 1; pass < maxFixPasses && currentHandle.HasFixableDiagnostics; pass++)
                 {
-                    var nextYaml = FixEngine.Apply(currentYaml, currentHandle.Result.FixableDiagnostics);
+                    var nextYaml = FixEngine.Apply(currentYaml, currentHandle.FixableDiagnostics);
                     if (nextYaml.AsSpan().SequenceEqual(currentYaml))
                     {
                         break;

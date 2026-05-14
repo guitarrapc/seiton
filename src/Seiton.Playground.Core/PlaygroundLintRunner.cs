@@ -107,7 +107,7 @@ public static class PlaygroundLintRunner
                 var skipJobs = IncrementalCtx.BuildSkipJobs(jobCount, parseResult.Workflow);
 
                 // Lint with optional job skipping
-                var lintResult = Engine.CheckWithParseResult(utf8Yaml, filePath, LintWithFixMetadata, parseResult, IncrementalCtx.Arena, skipJobs);
+                var lintResult = Engine.CheckWithParseResult(utf8Yaml, filePath, LintWithFixMetadata, parseResult.Data, IncrementalCtx.Arena, skipJobs);
 
                 // Merge fresh diagnostics with cached diagnostics for skipped jobs
                 diagnosticsToSerialize = IncrementalCtx.MergeDiagnosticsWithCache(lintResult.Diagnostics, skipJobs);
@@ -202,7 +202,7 @@ public static class PlaygroundLintRunner
                     return Encoding.UTF8.GetString(current);
                 }
 
-                var filtered = CollectAutoApplicableFixes(result.Result.FixableDiagnostics);
+                var filtered = CollectAutoApplicableFixes(result.FixableDiagnostics);
                 if (filtered.Length == 0)
                 {
                     // Still has diagnostics with fixes attached, but none we auto-apply here (see CollectAutoApplicableFixes).

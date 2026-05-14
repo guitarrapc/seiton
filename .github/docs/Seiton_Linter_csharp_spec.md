@@ -84,7 +84,7 @@ Current implementation status should be tracked against `.github/docslinter_impl
 Shared contract (`Seiton_Linter_spec.md` §2):
 
 ```
-Check(utf8Yaml, filePath) -> OwnedLintResult
+Check(utf8Yaml, filePath) -> LintResult
 ```
 
 C# mapping:
@@ -110,9 +110,9 @@ Reference runtime shape:
 ```csharp
 public sealed class LintEngine
 {
-	public OwnedLintResult Check(byte[] utf8Yaml, string filePath)
+	public LintResult Check(byte[] utf8Yaml, string filePath)
 	{
-		// 1. Parse(utf8Yaml, filePath) -> OwnedParseResult / ParseResult data
+		// 1. Parse(utf8Yaml, filePath) -> ParseResult / internal ParseResultData
 		// 2. Construct IRule set
 		// 3. WorkflowVisitor.Visit(workflow)
 		// 4. Collect diagnostics from each Rule

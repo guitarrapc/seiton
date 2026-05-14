@@ -188,7 +188,7 @@ public sealed class IncrementalParseContext
     /// <summary>Whether a previous parse result has been recorded.</summary>
     public bool HasPrevious => _previousSource is not null;
 
-    /// <summary>The arena that owns the current parse result's pooled data. For use with <see cref="Core.Linting.LintEngine.CheckWithParseResult(byte[], string, Core.Linting.LintConfig?, Core.Parsing.ParseResult, Core.Parsing.AstArena?)"/>.</summary>
+    /// <summary>The arena that owns the current parse result's pooled data. For use with <see cref="Core.Linting.LintEngine.CheckWithParseResult(byte[], string, Core.Linting.LintConfig?, Core.Parsing.ParseResultData, Core.Parsing.AstArena?)"/>.</summary>
     internal AstArena? Arena => _previousArena;
 
     /// <summary>The current section registry (valid only when <see cref="HasPrevious"/> is true).</summary>
@@ -233,7 +233,7 @@ public sealed class IncrementalParseContext
             // Update stored reference so that if the caller reuses/overwrites the OLD buffer,
             // future comparisons will use the new (current) buffer as the baseline.
             _previousSource = utf8Yaml;
-            return new ParseResult(_previousWorkflow, null, _previousDiagnostics, _previousHasFatalError);
+            return new ParseResult(new ParseResultData(_previousWorkflow, null, _previousDiagnostics, _previousHasFatalError), _previousArena);
         }
 
         // Scan new source for section boundaries
@@ -386,7 +386,7 @@ public sealed class IncrementalParseContext
             oldArena?.Dispose();
         }
 
-        return parseResult;
+        return new ParseResult(parseResult, arena);
     }
 
     /// <summary>
@@ -440,7 +440,7 @@ public sealed class IncrementalParseContext
         return newHash == entry.ContentHash;
     }
 
-    private void BuildRegistry(byte[] source, ParseResult parseResult)
+    private void BuildRegistry(byte[] source, ParseResultData parseResult)
     {
         _registry = default;
 
@@ -559,7 +559,7 @@ public sealed class IncrementalParseContext
         // Dispose the old arena (if any) now that we've stored the new one
         oldArena?.Dispose();
 
-        return parseResult;
+        return new ParseResult(parseResult, arena);
     }
 
     /// <summary>
@@ -1077,7 +1077,7 @@ public sealed class IncrementalParseContext
         var skipJobs = BuildSkipJobs(jobCount, parseResult.Workflow);
 
         // Lint with optional job skipping
-        var lintResult = _lintEngine.CheckWithParseResult(utf8Yaml, filePath, LintConfig, parseResult, _previousArena, skipJobs);
+        var lintResult = _lintEngine.CheckWithParseResult(utf8Yaml, filePath, LintConfig, parseResult.Data, _previousArena, skipJobs);
 
         // Merge cached diagnostics for skipped jobs and update cache
         var finalDiagnostics = MergeDiagnosticsWithCache(lintResult.Diagnostics, skipJobs);

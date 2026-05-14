@@ -87,7 +87,7 @@ public sealed class LintEngine
 
     /// <summary>Parses and lints the given YAML with no explicit configuration.</summary>
     /// <inheritdoc cref="Check(byte[], string, LintConfig?)"/>
-    public OwnedLintResult Check(byte[] utf8Yaml, string filePath)
+    public LintResult Check(byte[] utf8Yaml, string filePath)
     {
         return Check(utf8Yaml, filePath, config: null);
     }
@@ -103,12 +103,12 @@ public sealed class LintEngine
     /// copies relevant settings into its own internal <c>_effectiveConfig</c> via <c>PrepareForRun</c>.
     /// </para>
     /// <para>
-    /// <b>Result lifetime:</b> The returned <see cref="OwnedLintResult"/> owns the underlying
+    /// <b>Result lifetime:</b> The returned <see cref="LintResult"/> owns the underlying
     /// <see cref="AstArena"/>. Use <c>using var result = engine.Check(...);</c> to ensure proper disposal.
-    /// Call <see cref="OwnedLintResult.CopyDiagnostics"/> to obtain a caller-owned snapshot that outlives the result.
+    /// Call <see cref="LintResult.CopyDiagnostics"/> to obtain a caller-owned snapshot that outlives the result.
     /// </para>
     /// </remarks>
-    public OwnedLintResult Check(byte[] utf8Yaml, string filePath, LintConfig? config)
+    public LintResult Check(byte[] utf8Yaml, string filePath, LintConfig? config)
     {
         ArgumentNullException.ThrowIfNull(utf8Yaml);
         ArgumentException.ThrowIfNullOrEmpty(filePath);
@@ -116,7 +116,7 @@ public sealed class LintEngine
         var classifiedParseResult = WorkflowParser.ParseClassified(utf8Yaml, filePath, out var arena);
         var parseResult = classifiedParseResult.ParseResult;
         var lintResult = CheckCore(utf8Yaml, filePath, config, parseResult, arena, classifiedParseResult.Classification.FinalKind);
-        return new OwnedLintResult(lintResult, arena);
+        return new LintResult(lintResult, arena);
     }
 
     /// <summary>
@@ -124,7 +124,7 @@ public sealed class LintEngine
     /// For internal/test use where <c>ref struct</c> handles cannot be used (e.g. async test methods).
     /// The caller is responsible for disposing the arena.
     /// </summary>
-    internal LintResult CheckDirect(byte[] utf8Yaml, string filePath, LintConfig? config, out AstArena? arena)
+    internal LintResultData CheckDirect(byte[] utf8Yaml, string filePath, LintConfig? config, out AstArena? arena)
     {
         ArgumentNullException.ThrowIfNull(utf8Yaml);
         ArgumentException.ThrowIfNullOrEmpty(filePath);
@@ -135,17 +135,17 @@ public sealed class LintEngine
     }
 
     /// <summary>Parses and lints the given YAML with no explicit configuration. Returns result with arena as out parameter.</summary>
-    internal LintResult CheckDirect(byte[] utf8Yaml, string filePath, out AstArena? arena)
+    internal LintResultData CheckDirect(byte[] utf8Yaml, string filePath, out AstArena? arena)
     {
         return CheckDirect(utf8Yaml, filePath, config: null, out arena);
     }
 
     /// <summary>
-    /// Lints a pre-parsed <see cref="ParseResult"/> without re-parsing.
+    /// Lints a pre-parsed <see cref="ParseResultData"/> without re-parsing.
     /// Used by Playground incremental parsing (D-5b) where parsing is done externally.
     /// Infers <see cref="DocumentKind"/> from the parse result content.
     /// </summary>
-    internal LintResult CheckWithParseResult(byte[] utf8Yaml, string filePath, LintConfig? config, ParseResult parseResult, AstArena? arena)
+    internal LintResultData CheckWithParseResult(byte[] utf8Yaml, string filePath, LintConfig? config, ParseResultData parseResult, AstArena? arena)
     {
         ArgumentNullException.ThrowIfNull(utf8Yaml);
         ArgumentException.ThrowIfNullOrEmpty(filePath);
@@ -155,11 +155,11 @@ public sealed class LintEngine
     }
 
     /// <summary>
-    /// Lints a pre-parsed <see cref="ParseResult"/> with optional job skipping (D-5d).
+    /// Lints a pre-parsed <see cref="ParseResultData"/> with optional job skipping (D-5d).
     /// When <paramref name="skipJobs"/>[i] is true, lint rules are not run on that job
     /// (its diagnostics are expected to be supplied from a cache by the caller).
     /// </summary>
-    internal LintResult CheckWithParseResult(byte[] utf8Yaml, string filePath, LintConfig? config, ParseResult parseResult, AstArena? arena, bool[]? skipJobs)
+    internal LintResultData CheckWithParseResult(byte[] utf8Yaml, string filePath, LintConfig? config, ParseResultData parseResult, AstArena? arena, bool[]? skipJobs)
     {
         ArgumentNullException.ThrowIfNull(utf8Yaml);
         ArgumentException.ThrowIfNullOrEmpty(filePath);
@@ -168,11 +168,11 @@ public sealed class LintEngine
         return CheckCore(utf8Yaml, filePath, config, parseResult, arena, kind, skipJobs);
     }
 
-    private LintResult CheckCore(byte[] utf8Yaml, string filePath, LintConfig? config, ParseResult parseResult, AstArena? arena, DocumentKind documentKind, bool[]? skipJobs = null)
+    private LintResultData CheckCore(byte[] utf8Yaml, string filePath, LintConfig? config, ParseResultData parseResult, AstArena? arena, DocumentKind documentKind, bool[]? skipJobs = null)
     {
         if (parseResult.HasFatalError || (parseResult.Workflow is null && parseResult.ActionMetadata is null))
         {
-            return new LintResult(parseResult, parseResult.Diagnostics)
+            return new LintResultData(parseResult, parseResult.Diagnostics)
             {
                 SuppressionSummary = SuppressionSummary.Empty,
             };
@@ -370,7 +370,7 @@ public sealed class LintEngine
     /// When the previous result's array (now in <c>_resultDiagnosticsSwap</c>) has the right length,
     /// it is reused with zero allocation. Otherwise a new array is allocated.
     /// </summary>
-    private LintResult BuildLintResult(ParseResult parseResult, AstArena? arena)
+    private LintResultData BuildLintResult(ParseResultData parseResult, AstArena? arena)
     {
         var count = _diagnostics.Count;
         var buffer = new PooledBuffer<Diagnostic>(count > 0 ? count : 4);
@@ -383,16 +383,16 @@ public sealed class LintEngine
         buffer.Dispose();
         arena?.RegisterLintDiagnosticsBuffer(diagArray);
 
-        return new LintResult(parseResult, new DiagnosticList(diagArray, diagCount))
+        return new LintResultData(parseResult, new DiagnosticList(diagArray, diagCount))
         {
             SuppressionSummary = SuppressionSummary.Empty,
         };
     }
 
     /// <summary>
-    /// Builds a <see cref="LintResult"/> with suppression summary using PooledBuffer + DetachArray.
+    /// Builds a <see cref="LintResultData"/> with suppression summary using PooledBuffer + DetachArray.
     /// </summary>
-    private LintResult BuildLintResultWithSuppression(ParseResult parseResult, AstArena? arena)
+    private LintResultData BuildLintResultWithSuppression(ParseResultData parseResult, AstArena? arena)
     {
         var count = _diagnostics.Count;
         var buffer = new PooledBuffer<Diagnostic>(count > 0 ? count : 4);
@@ -421,7 +421,7 @@ public sealed class LintEngine
             suppressedByRuleSnapshot[pair.Key] = pair.Value;
         }
 
-        return new LintResult(parseResult, new DiagnosticList(diagArray, diagCount))
+        return new LintResultData(parseResult, new DiagnosticList(diagArray, diagCount))
         {
             SuppressionSummary = new SuppressionSummary(suppressionCount, suppressedByRuleSnapshot, suppressionRecordsSnapshot),
         };

@@ -390,11 +390,11 @@ Implemented in `WorkflowParser.ActionMetadata.cs` (partial class).
 ### 1.1 Entry Point (Spec §1.1)
 
 ```csharp
-public static OwnedParseResult Parse(byte[] utf8Yaml, string filePath)
+public static ParseResult Parse(byte[] utf8Yaml, string filePath)
 public static ClassifiedParseResult ParseClassified(byte[] utf8Yaml, string filePath)
 ```
 
-- Return: `OwnedParseResult { Result, Workflow?, DiagnosticList Diagnostics, HasFatalError, AstArena Arena }`
+- Return: `ParseResult { Workflow?, DiagnosticList Diagnostics, HasFatalError, GetString/GetUtf8/GetSlice/GetRange/GetExpression..., IDisposable }`
 - Returns parse diagnostics even if YAML parsing itself fails; `Workflow` is null
 - Errors during AST construction are accumulated, not immediately fatal
 - `ParseClassified` additionally returns `DocumentKindClassification` (`PathHintKind`, `FinalKind`, `HasHintMismatch`, `IsAmbiguous`) for linter/CLI routing.
@@ -406,7 +406,7 @@ Parse(byte[], string)
   1. Create IYamlStreamReader via VYamlStreamAdapter
   2. reader.SkipHeader()
     3. WorkflowParser.ParseWorkflow(reader) → Workflow AST + Diagnostic[]
-    4. Return OwnedParseResult
+        4. Return ParseResult
 ```
 
 ### 1.3 Linter Integration

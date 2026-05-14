@@ -48,8 +48,8 @@ public sealed class FixModelTests
                 FilePath: "workflow.yml"),
         };
 
-        var result = new LintResult(
-            new ParseResult(new Parsing.Ast.Workflow(), null, [], false),
+        var result = new LintResultData(
+            new ParseResultData(new Parsing.Ast.Workflow(), null, [], false),
             diagnostics);
 
         await Assert.That(result.HasFixableDiagnostics).IsTrue();
@@ -71,8 +71,8 @@ public sealed class FixModelTests
                 FilePath: "workflow.yml"),
         };
 
-        var result = new LintResult(
-            new ParseResult(new Parsing.Ast.Workflow(), null, [], false),
+        var result = new LintResultData(
+            new ParseResultData(new Parsing.Ast.Workflow(), null, [], false),
             diagnostics);
 
         await Assert.That(result.HasFixableDiagnostics).IsFalse();

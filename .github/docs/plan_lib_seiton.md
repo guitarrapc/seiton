@@ -8,10 +8,10 @@
 
 `Seiton.Core` はすでに parser / linter の実装本体として成立しており、外部利用の入口になりうる public API も一部存在する。
 
-- [`WorkflowParser`](../../src/Seiton.Core/Parsing/WorkflowParser.cs) に `Parse`（`OwnedParseResult` を返す）/ `ParseClassified` がある
-- [`LintEngine`](../../src/Seiton.Core/Linting/LintEngine.cs) に `Check(byte[] utf8Yaml, string filePath, LintConfig? config)` がある（`OwnedLintResult` を返す）
-- [`ParseResult`](../../src/Seiton.Core/Parsing/Diagnostics.cs) と [`LintResult`](../../src/Seiton.Core/Linting/LintResult.cs) は public
-- Arena ライフタイムは [`OwnedParseResult`](../../src/Seiton.Core/Parsing/OwnedParseResult.cs) / [`OwnedLintResult`](../../src/Seiton.Core/Linting/OwnedLintResult.cs) が `IDisposable` で管理する
+- [`WorkflowParser`](../../src/Seiton.Core/Parsing/WorkflowParser.cs) に `Parse`（`ParseResult` を返す）/ `ParseClassified` がある
+- [`LintEngine`](../../src/Seiton.Core/Linting/LintEngine.cs) に `Check(byte[] utf8Yaml, string filePath, LintConfig? config)` がある（`LintResult` を返す）
+- public surface は [`ParseResult`](../../src/Seiton.Core/Parsing/OwnedParseResult.cs) / [`LintResult`](../../src/Seiton.Core/Linting/OwnedLintResult.cs) の 1 概念 1 型に整理済み
+- Arena ライフタイムは `ParseResult` / `LintResult` が `IDisposable` で管理し、値解決 API (`GetString`, `GetUtf8` など) を結果型側に集約した
 - [`FixEngine`](../../src/Seiton.Core/Linting/Fixing/FixEngine.cs) も public で、fix 実行 API として使いうる
 
 一方で、現在の `Seiton.Core` は「CLI の内部実装」に近い形で育っており、公開ライブラリとしては以下の未整備箇所がある。
@@ -722,6 +722,109 @@ public sealed class LintResult : IDisposable
 ---
 
 ##### 実装順序と影響範囲
+
+##### 実装結果
+
+- public API は `WorkflowParser.Parse()` → `ParseResult`、`LintEngine.Check()` → `LintResult` に統一した
+- 旧 public borrowed struct は internal `ParseResultData` / `LintResultData` に退避した
+- `ParseResult` / `LintResult` から public `Arena` と `.Result` を除去し、`GetString` / `GetUtf8` / `GetSlice` / `GetRange` / `GetExpression` / `GetBool` / `GetInt` / `GetFloat` / `IsQuoted` / `Source` を追加した
+- `FixEngine.RevalidationResult` は `LintResult` の寿命を保持する `IDisposable` class に変更した
+- CLI / Playground / tests は public wrapper 利用と internal data carrier 利用を境界で分離する形に追従した
+
+**検証結果**:
+
+- `dotnet build --nologo -v q` : pass
+- `dotnet test` : 1625 passed, 0 failed
+- focused API contract: `tests/Seiton.Core.Tests/DetachTests.cs` の 10 tests pass
+
+**ベンチマーク結果**:
+
+**ベンチマーク結果（今回の変更での性能変化）**:
+
+| メトリクス | 変更前 | 変更後 | 差分 |
+|---|---|---|---|
+| CoreLint Large (fix=false) | 21,784 us / 327.08 KB | 20,194 us / 327.08 KB | `-7.3%` / `0% alloc` |
+| CoreLint Large (fix=true) | 32,029 us / 381.92 KB | 30,065 us / 381.92 KB | `-6.1%` / `0% alloc` |
+| CoreParsing Large | 18,037 us / 180.04 KB | 20,443 us / 180.04 KB | `+13.3%` / `0% alloc` |
+
+解釈:
+
+- lint は Large の representative case で悪化なし。少なくとも今回の API 整理で lint 側の性能回帰は観測していない
+- parsing は allocation 維持を確認した一方、Large の ShortRun mean は悪化側に出た
+- ただし parsing Large は `ShortRun` + `N=3` で `Error` が大きく、今回の値だけで厳密に regression と断定するには弱い。time gate を厳密に通すなら、ここだけ iteration を増やした再測定が必要
+
+実行コマンド:
+
+```powershell
+dotnet run --project src/Seiton.Benchmark -c Release -- --filter "Seiton.Benchmark.CoreParsingBenchmark.*" --warmupCount 1 --iterationCount 3
+dotnet run --project src/Seiton.Benchmark -c Release -- --filter "Seiton.Benchmark.CoreLintBenchmark.*" --warmupCount 1 --iterationCount 3
+```
+
+実行条件:
+
+- BenchmarkDotNet `0.15.6`
+- `ShortRun(IterationCount=3, LaunchCount=1, WarmupCount=1)`
+- Windows 11 / .NET `10.0.6` / Ryzen 9 7950X3D
+- ばらつき確認のため parsing / lint ともに 2 回測定
+
+**CoreParsingBenchmark: 1回目**
+
+| Size | Mean | Error | StdDev | Allocated | Alloc Ratio |
+|---|---:|---:|---:|---:|---:|
+| Small | 48.219 us | 13.081 us | 0.717 us | 3.87 KB | 1.00 |
+| Medium | 1,094.427 us | 1,632.371 us | 89.476 us | 35.59 KB | 1.00 |
+| Large | 20,041.254 us | 6,417.139 us | 351.745 us | 180.04 KB | 1.00 |
+
+**CoreParsingBenchmark: 2回目（再測定）**
+
+| Size | Mean | Error | StdDev | Allocated | Alloc Ratio |
+|---|---:|---:|---:|---:|---:|
+| Small | 48.845 us | 34.538 us | 1.893 us | 3.87 KB | 1.00 |
+| Medium | 1,087.762 us | 1,403.770 us | 76.945 us | 35.59 KB | 1.00 |
+| Large | 20,442.798 us | 14,491.911 us | 794.351 us | 180.04 KB | 1.00 |
+
+補足:
+
+- parsing は 2 回とも allocation が全サイズで固定 (`3.87 KB` / `35.59 KB` / `180.04 KB`)
+- Large の mean は `20.04 ms` と `20.44 ms` で、過去に plan 内で記録していた `18.04-19.88 ms` より遅い
+- ただし今回の設定は `ShortRun` かつ `N=3` なので、Large の `Error` が大きく、時間値だけで厳密判定するには弱い
+- 今回の変更は parse hot path そのものではなく public wrapper / API surface の整理なので、allocation 維持は確認できた一方、time gate を厳密に通すなら iteration を増やした再測定が必要
+
+**CoreLintBenchmark: 1回目**
+
+| Size | FixEnabled | Mean | Error | StdDev | Allocated | Alloc Ratio |
+|---|---|---:|---:|---:|---:|---:|
+| Small | False | 66.04 us | 61.38 us | 3.365 us | 8.37 KB | 1.00 |
+| Small | True | 70.65 us | 25.21 us | 1.382 us | 9.82 KB | 1.00 |
+| Medium | False | 1,443.59 us | 1,221.89 us | 66.976 us | 68.56 KB | 1.00 |
+| Medium | True | 2,053.58 us | 1,295.51 us | 71.011 us | 81.92 KB | 1.00 |
+| Large | False | 23,223.38 us | 8,186.49 us | 448.729 us | 327.08 KB | 1.00 |
+| Large | True | 33,715.12 us | 8,171.57 us | 447.911 us | 381.92 KB | 1.00 |
+
+**CoreLintBenchmark: 2回目（再測定）**
+
+| Size | FixEnabled | Mean | Error | StdDev | Allocated | Alloc Ratio |
+|---|---|---:|---:|---:|---:|---:|
+| Small | False | 67.71 us | 44.11 us | 2.418 us | 8.37 KB | 1.00 |
+| Small | True | 68.45 us | 122.12 us | 6.694 us | 9.82 KB | 1.00 |
+| Medium | False | 1,569.21 us | 1,620.04 us | 88.800 us | 68.56 KB | 1.00 |
+| Medium | True | 1,766.53 us | 148.25 us | 8.126 us | 81.92 KB | 1.00 |
+| Large | False | 20,193.97 us | 4,581.51 us | 251.128 us | 327.08 KB | 1.00 |
+| Large | True | 30,065.10 us | 2,365.67 us | 129.670 us | 381.92 KB | 1.00 |
+
+historical short-run 記録との比較（summary table の根拠）:
+
+| Metric | Historical | This change (re-run) | Delta |
+|---|---:|---:|---:|
+| Lint Large fix=false | 21,784 us / 327.08 KB | 20,194 us / 327.08 KB | -7.3% / 0% alloc |
+| Lint Large fix=true | 32,029 us / 381.92 KB | 30,065 us / 381.92 KB | -6.1% / 0% alloc |
+| Parsing Large | 18,037 us / 180.04 KB | 20,443 us / 180.04 KB | +13.3% / 0% alloc |
+
+総括:
+
+- allocation は `CoreParsingBenchmark` / `CoreLintBenchmark` の全ケースで従来値を維持した
+- lint は再測定でも historical short-run 記録より悪化せず、Large はむしろ改善側
+- parsing は allocation 維持を確認したが、Large の mean は過去記録より遅めに出ている。wrapper 追加による managed allocation 増は観測されていないため、現時点では「API 整理で allocation regression はなし、time は要再測定余地あり」と評価するのが妥当
 
 **Phase A: internal struct 名変更**
 
