@@ -85,11 +85,11 @@ internal sealed class LocalReusableWorkflowOutputResolver
         // Guard against path traversal: resolved path must remain under the base directory.
         // Use Path.GetRelativePath which is filesystem-aware and avoids case-sensitivity issues
         // with string prefix comparisons on case-sensitive platforms.
-        var relativeToBas = Path.GetRelativePath(baseDirectory, resolvedPath);
-        var isTraversal = string.Equals(relativeToBas, "..", StringComparison.Ordinal)
-            || relativeToBas.StartsWith($"..{Path.DirectorySeparatorChar}", StringComparison.Ordinal)
-            || relativeToBas.StartsWith($"..{Path.AltDirectorySeparatorChar}", StringComparison.Ordinal);
-        if (isTraversal || Path.IsPathRooted(relativeToBas))
+        var relativeToBase = Path.GetRelativePath(baseDirectory, resolvedPath);
+        var isTraversal = string.Equals(relativeToBase, "..", StringComparison.Ordinal)
+            || relativeToBase.StartsWith($"..{Path.DirectorySeparatorChar}", StringComparison.Ordinal)
+            || relativeToBase.StartsWith($"..{Path.AltDirectorySeparatorChar}", StringComparison.Ordinal);
+        if (isTraversal || Path.IsPathRooted(relativeToBase))
         {
             return null;
         }
