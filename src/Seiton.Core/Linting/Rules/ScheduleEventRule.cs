@@ -95,7 +95,7 @@ public sealed class ScheduleEventRule() : RuleBase(RuleId.ScheduleEvent)
             var display = decoded.Length > MaxDisplayTimezoneLength
                 ? string.Concat(decoded.AsSpan(0, MaxDisplayTimezoneLength), "...")
                 : decoded;
-            var suggestion = SuggestionHelper.FindClosest(decoded, Generated.IanaTimeZones.GetIds());
+            var suggestion = Generated.IanaTimeZones.FindSuggestion(decoded);
             var message = suggestion is not null
                 ? $"on.schedule timezone '{display}' is invalid. did you mean '{suggestion}'?"
                 : $"on.schedule timezone '{display}' is invalid";

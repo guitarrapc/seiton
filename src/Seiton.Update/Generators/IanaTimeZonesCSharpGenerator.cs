@@ -45,8 +45,8 @@ internal sealed class IanaTimeZonesCSharpGenerator
         sb.AppendLine("        return AlternateLookup.Contains(chars[..charCount]);");
         sb.AppendLine("    }");
         sb.AppendLine();
-        sb.AppendLine("    /// <summary>Returns all known IANA timezone identifiers for suggestion lookup (error paths only). Allocates on each call.</summary>");
-        sb.AppendLine("    internal static string[] GetIds() => [.. KnownIds];");
+        sb.AppendLine("    /// <summary>Finds the closest known IANA timezone identifier for suggestion (error paths only).</summary>");
+        sb.AppendLine("    internal static string? FindSuggestion(string input) => Parsing.SuggestionHelper.FindClosest(input, KnownIds);");
         sb.AppendLine();
         sb.AppendLine("    private static readonly FrozenSet<string> KnownIds = FrozenSet.ToFrozenSet(");
         sb.AppendLine("    [");

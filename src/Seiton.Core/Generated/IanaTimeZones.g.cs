@@ -29,8 +29,8 @@ internal static class IanaTimeZones
         return AlternateLookup.Contains(chars[..charCount]);
     }
 
-    /// <summary>Returns all known IANA timezone identifiers for suggestion lookup (error paths only). Allocates on each call.</summary>
-    internal static string[] GetIds() => [.. KnownIds];
+    /// <summary>Finds the closest known IANA timezone identifier for suggestion (error paths only).</summary>
+    internal static string? FindSuggestion(string input) => Parsing.SuggestionHelper.FindClosest(input, KnownIds);
 
     private static readonly FrozenSet<string> KnownIds = FrozenSet.ToFrozenSet(
     [
