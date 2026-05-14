@@ -1,0 +1,11 @@
+on: push
+jobs:
+  # ../ prefix is not valid for reusable workflow calls
+  dotdot1:
+    uses: ../other-repo/.github/workflows/reusable.yml
+  # ../../ prefix
+  dotdot2:
+    uses: ../../workflows/reusable.yml
+  # ../ with @ref
+  dotdot3:
+    uses: ../other-repo/.github/workflows/reusable.yml@main

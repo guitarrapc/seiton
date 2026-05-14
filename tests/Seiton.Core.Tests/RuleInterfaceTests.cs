@@ -2179,16 +2179,17 @@ public sealed class RuleInterfaceTests
                         - name: broken step with no run or uses
             """,
             []),
-            // ../ prefix is not valid for reusable workflow calls (only ./ is allowed)
+            // ../ prefix is not valid for reusable workflow calls (only ./ is allowed).
+            // UnpinnedUsesRule silently returns; ReusableWorkflowRule owns this diagnostic.
             new RuleCase(
-            "ng-reusable-workflow-dotdotslash-prefix",
+            "ok-reusable-workflow-dotdotslash-defers-to-reusable-rule",
             """
             on: push
             jobs:
                 release:
                     uses: ../other-repo/.github/workflows/reusable.yml
             """,
-            ["not following the format", "./path/to/workflow.yml"]),
+            []),
         };
 
         await AssertRuleCases(new UnpinnedUsesRule(), "unpinned-uses", cases);
