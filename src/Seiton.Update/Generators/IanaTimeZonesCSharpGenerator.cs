@@ -14,7 +14,9 @@ internal sealed class IanaTimeZonesCSharpGenerator
             .OrderBy(static x => x, StringComparer.Ordinal)
             .ToArray();
 
-        var maxIdLength = allIds.Max(static x => x.Length);
+        var maxIdByteLength = allIds.Length > 0
+            ? allIds.Max(static x => Encoding.UTF8.GetByteCount(x))
+            : 0;
 
         var sb = new StringBuilder();
         GeneratorHelper.AppendGeneratedHeader(sb, "sync-iana-timezones");
@@ -26,8 +28,8 @@ internal sealed class IanaTimeZonesCSharpGenerator
         sb.AppendLine($"/// <summary>IANA Time Zone Database identifiers (version: {model.Version}). {allIds.Length} entries.</summary>");
         sb.AppendLine("internal static class IanaTimeZones");
         sb.AppendLine("{");
-        sb.AppendLine($"    /// <summary>Maximum byte length of any known IANA timezone identifier.</summary>");
-        sb.AppendLine($"    private const int MaxIdByteLength = {maxIdLength};");
+        sb.AppendLine($"    /// <summary>Maximum UTF-8 byte length of any known IANA timezone identifier.</summary>");
+        sb.AppendLine($"    private const int MaxIdByteLength = {maxIdByteLength};");
         sb.AppendLine();
         sb.AppendLine("    /// <summary>Returns true if the given string is a known IANA timezone identifier (case-sensitive).</summary>");
         sb.AppendLine("    internal static bool IsKnown(string id) => KnownIds.Contains(id);");
@@ -43,6 +45,9 @@ internal sealed class IanaTimeZonesCSharpGenerator
         sb.AppendLine("        return AlternateLookup.Contains(chars[..charCount]);");
         sb.AppendLine("    }");
         sb.AppendLine();
+        sb.AppendLine("    /// <summary>Returns all known IANA timezone identifiers for suggestion lookup (error paths only).</summary>");
+        sb.AppendLine("    internal static ReadOnlySpan<string> GetIds() => IdsArray;");
+        sb.AppendLine();
         sb.AppendLine("    private static readonly FrozenSet<string> KnownIds = FrozenSet.ToFrozenSet(");
         sb.AppendLine("    [");
 
@@ -55,6 +60,8 @@ internal sealed class IanaTimeZonesCSharpGenerator
         sb.AppendLine("    ], StringComparer.Ordinal);");
         sb.AppendLine();
         sb.AppendLine("    private static readonly FrozenSet<string>.AlternateLookup<ReadOnlySpan<char>> AlternateLookup = KnownIds.GetAlternateLookup<ReadOnlySpan<char>>();");
+        sb.AppendLine();
+        sb.AppendLine("    private static readonly string[] IdsArray = [.. KnownIds];");
         sb.AppendLine("}");
 
         return TextNormalization.NormalizeToLf(sb.ToString());

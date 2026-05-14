@@ -1,4 +1,5 @@
-﻿using Seiton.Core.Parsing;
+﻿using System.Text;
+using Seiton.Core.Parsing;
 using Seiton.Core.Parsing.Ast;
 
 namespace Seiton.Core.Linting.Rules;
@@ -70,6 +71,8 @@ public sealed class ScheduleEventRule() : RuleBase(RuleId.ScheduleEvent)
         }
     }
 
+    private const int MaxDisplayTimezoneLength = 40;
+
     private void ValidateTimezone(ScheduledEvent scheduleEvent, StringNodeId timezoneNode)
     {
         var yaml = Config.Utf8Yaml!;
@@ -88,7 +91,15 @@ public sealed class ScheduleEventRule() : RuleBase(RuleId.ScheduleEvent)
 
         if (!Generated.IanaTimeZones.IsKnown(span))
         {
-            AddEventError(scheduleEvent, $"on.schedule timezone '{Decode(Arena.GetStringSlice(timezoneNode))}' is invalid", Arena.GetStringRange(timezoneNode));
+            var decoded = Decode(Arena.GetStringSlice(timezoneNode));
+            var display = decoded.Length > MaxDisplayTimezoneLength
+                ? string.Concat(decoded.AsSpan(0, MaxDisplayTimezoneLength), "...")
+                : decoded;
+            var suggestion = SuggestionHelper.FindClosest(decoded, Generated.IanaTimeZones.GetIds());
+            var message = suggestion is not null
+                ? $"on.schedule timezone '{display}' is invalid. did you mean '{suggestion}'?"
+                : $"on.schedule timezone '{display}' is invalid";
+            AddEventError(scheduleEvent, message, Arena.GetStringRange(timezoneNode));
         }
     }
 

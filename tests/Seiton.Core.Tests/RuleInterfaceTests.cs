@@ -4491,6 +4491,20 @@ public sealed class RuleInterfaceTests
             """,
             ["timezone", "invalid"]),
             new RuleCase(
+            "ng-typo-timezone-did-you-mean",
+            """
+            on:
+                schedule:
+                    - cron: "0 0 * * *"
+                      timezone: "Asia/Toky"
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - run: echo ng
+            """,
+            ["timezone", "invalid", "did you mean", "Asia/Tokyo"]),
+            new RuleCase(
             "ng-empty-timezone",
             """
             on:

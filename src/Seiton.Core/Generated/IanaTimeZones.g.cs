@@ -12,7 +12,7 @@ namespace Seiton.Core.Generated;
 /// <summary>IANA Time Zone Database identifiers (version: 2026b). 598 entries.</summary>
 internal static class IanaTimeZones
 {
-    /// <summary>Maximum byte length of any known IANA timezone identifier.</summary>
+    /// <summary>Maximum UTF-8 byte length of any known IANA timezone identifier.</summary>
     private const int MaxIdByteLength = 32;
 
     /// <summary>Returns true if the given string is a known IANA timezone identifier (case-sensitive).</summary>
@@ -28,6 +28,9 @@ internal static class IanaTimeZones
         var charCount = Encoding.UTF8.GetChars(utf8Id, chars);
         return AlternateLookup.Contains(chars[..charCount]);
     }
+
+    /// <summary>Returns all known IANA timezone identifiers for suggestion lookup (error paths only).</summary>
+    internal static ReadOnlySpan<string> GetIds() => IdsArray;
 
     private static readonly FrozenSet<string> KnownIds = FrozenSet.ToFrozenSet(
     [
@@ -632,4 +635,6 @@ internal static class IanaTimeZones
     ], StringComparer.Ordinal);
 
     private static readonly FrozenSet<string>.AlternateLookup<ReadOnlySpan<char>> AlternateLookup = KnownIds.GetAlternateLookup<ReadOnlySpan<char>>();
+
+    private static readonly string[] IdsArray = [.. KnownIds];
 }
