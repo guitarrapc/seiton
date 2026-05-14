@@ -12,6 +12,8 @@ public abstract class RuleBase : IRule
     private readonly List<Diagnostic> diagnostics = [];
     protected LintConfig Config { get; private set; } = LintConfig.Empty;
 
+    internal void ResetDiagnostics() => diagnostics.Clear();
+
     public RuleId Id { get; }
 
     protected RuleBase(RuleId id) => Id = id;
@@ -33,7 +35,6 @@ public abstract class RuleBase : IRule
 
     public virtual void VisitWorkflowPre(Workflow workflow)
     {
-        diagnostics.Clear();
     }
 
     public virtual void VisitWorkflowPost(Workflow workflow)
@@ -42,7 +43,6 @@ public abstract class RuleBase : IRule
 
     public virtual void VisitActionMetadataPre(ActionMetadata metadata)
     {
-        diagnostics.Clear();
     }
 
     public virtual void VisitActionMetadataPost(ActionMetadata metadata)

@@ -11,6 +11,7 @@ namespace Seiton.Core.Linting;
 public sealed class LintResult : IDisposable
 {
     private AstArena? _arena;
+    private bool _disposed;
 
     internal LintResult(LintResultData data, AstArena? arena)
     {
@@ -22,16 +23,44 @@ public sealed class LintResult : IDisposable
     internal LintResultData Data { get; }
 
     /// <summary>Gets the parsed workflow AST, if the document is a workflow file.</summary>
-    public Workflow? Workflow => Data.Workflow;
+    public Workflow? Workflow
+    {
+        get
+        {
+            ThrowIfDisposed();
+            return Data.Workflow;
+        }
+    }
 
     /// <summary>Gets the parsed action metadata AST, if the document is an action file.</summary>
-    public ActionMetadata? ActionMetadata => Data.ActionMetadata;
+    public ActionMetadata? ActionMetadata
+    {
+        get
+        {
+            ThrowIfDisposed();
+            return Data.ActionMetadata;
+        }
+    }
 
     /// <summary>Gets the lint diagnostics. These remain valid until this result is disposed.</summary>
-    public DiagnosticList Diagnostics => Data.Diagnostics;
+    public DiagnosticList Diagnostics
+    {
+        get
+        {
+            ThrowIfDisposed();
+            return Data.Diagnostics;
+        }
+    }
 
     /// <summary>Gets the parse-phase diagnostics. These remain valid until this result is disposed.</summary>
-    public DiagnosticList ParseDiagnostics => Data.ParseDiagnostics;
+    public DiagnosticList ParseDiagnostics
+    {
+        get
+        {
+            ThrowIfDisposed();
+            return Data.ParseDiagnostics;
+        }
+    }
 
     /// <summary>Gets whether the parse result contains a fatal error.</summary>
     public bool HasFatalError => Data.HasFatalError;
@@ -111,12 +140,26 @@ public sealed class LintResult : IDisposable
         return new OwnedDiagnostics(diags.AsSpan().ToArray());
     }
 
-    internal AstArena Arena => _arena ?? throw new ObjectDisposedException(nameof(LintResult));
+    internal AstArena Arena => _disposed || _arena is null ? throw new ObjectDisposedException(nameof(LintResult)) : _arena;
+
+    private void ThrowIfDisposed()
+    {
+        if (_disposed)
+        {
+            throw new ObjectDisposedException(nameof(LintResult));
+        }
+    }
 
     /// <summary>Returns pooled arrays to the shared pool. AST objects become invalid after this call.</summary>
     public void Dispose()
     {
+        if (_disposed)
+        {
+            return;
+        }
+
         _arena?.Dispose();
         _arena = null;
+        _disposed = true;
     }
 }

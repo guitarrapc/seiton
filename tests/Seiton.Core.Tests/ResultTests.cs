@@ -5,7 +5,7 @@ using Seiton.Core.Parsing.Ast;
 
 namespace Seiton.Core.Tests;
 
-public sealed class OwnedResultTests
+public sealed class ResultTests
 {
     private static readonly byte[] SimpleWorkflow = Encoding.UTF8.GetBytes("""
         on: push
@@ -47,6 +47,15 @@ public sealed class OwnedResultTests
         var job = jobs.Entries[0].Value;
         var jobIdStr = result.GetString(job.Id);
         await Assert.That(jobIdStr).IsEqualTo("build");
+    }
+
+    [Test]
+    public async Task ParseResult_GetString_Utf8SliceKey_DecodesMapKeys()
+    {
+        using ParseResult result = WorkflowParser.Parse(SimpleWorkflow, ".github/workflows/test.yml");
+
+        var jobKey = result.Workflow!.Jobs.Entries[0].Key;
+        await Assert.That(result.GetString(jobKey)).IsEqualTo("build");
     }
 
     [Test]
@@ -112,6 +121,22 @@ public sealed class OwnedResultTests
     }
 
     [Test]
+    public async Task LintResult_CopyParseDiagnostics_RemainsValidAfterDispose()
+    {
+        var yaml = ":\n  ]["u8.ToArray();
+        var engine = new LintEngine();
+
+        OwnedDiagnostics parseDiagnostics;
+        using (LintResult result = engine.Check(yaml, "test.yml"))
+        {
+            await Assert.That(result.HasFatalError).IsTrue();
+            parseDiagnostics = result.CopyParseDiagnostics();
+        }
+
+        await Assert.That(parseDiagnostics.Length).IsGreaterThan(0);
+    }
+
+    [Test]
     public async Task ParseResult_CanCrossAsyncBoundary()
     {
         using ParseResult result = await ParseAsync();
@@ -149,6 +174,30 @@ public sealed class OwnedResultTests
     }
 
     [Test]
+    public async Task ParseResult_Dispose_ThrowsOnAstAndDiagnosticsAccess()
+    {
+        ParseResult result = WorkflowParser.Parse(SimpleWorkflow, ".github/workflows/test.yml");
+
+        result.Dispose();
+
+        await Assert.That(() => result.Workflow).Throws<ObjectDisposedException>();
+        await Assert.That(() => result.Diagnostics).Throws<ObjectDisposedException>();
+    }
+
+    [Test]
+    public async Task LintResult_Dispose_ThrowsOnAstAndDiagnosticsAccess()
+    {
+        var engine = new LintEngine();
+        LintResult result = engine.Check(SimpleWorkflow, ".github/workflows/test.yml");
+
+        result.Dispose();
+
+        await Assert.That(() => result.Workflow).Throws<ObjectDisposedException>();
+        await Assert.That(() => result.Diagnostics).Throws<ObjectDisposedException>();
+        await Assert.That(() => result.ParseDiagnostics).Throws<ObjectDisposedException>();
+    }
+
+    [Test]
     public async Task CustomRule_CanResolveNodeValuesWithoutAccessingArena()
     {
         var engine = new LintEngine([new CaptureJobIdRule()]);
@@ -158,6 +207,32 @@ public sealed class OwnedResultTests
         await Assert.That(result.DiagnosticCount).IsEqualTo(1);
         var diagnostic = result.Diagnostics[0];
         await Assert.That(diagnostic.Message).IsEqualTo("job id: build");
+    }
+
+    [Test]
+    public async Task CustomRule_VisitWorkflowPreWithoutBase_DoesNotLeakDiagnosticsAcrossChecks()
+    {
+        var engine = new LintEngine([new OverrideWorkflowPreWithoutBaseRule()]);
+
+        using var first = engine.Check(SimpleWorkflow, ".github/workflows/test.yml");
+        await Assert.That(first.DiagnosticCount).IsEqualTo(1);
+
+        using var second = engine.Check(SimpleWorkflow, ".github/workflows/test.yml");
+        await Assert.That(second.DiagnosticCount).IsEqualTo(1);
+        await Assert.That(second.Diagnostics[0].Message).IsEqualTo("workflow visited");
+    }
+
+    [Test]
+    public async Task CustomRule_VisitActionMetadataPreWithoutBase_DoesNotLeakDiagnosticsAcrossChecks()
+    {
+        var engine = new LintEngine([new OverrideActionMetadataPreWithoutBaseRule()]);
+
+        using var first = engine.Check(SimpleAction, "action.yml");
+        await Assert.That(first.DiagnosticCount).IsEqualTo(1);
+
+        using var second = engine.Check(SimpleAction, "action.yml");
+        await Assert.That(second.DiagnosticCount).IsEqualTo(1);
+        await Assert.That(second.Diagnostics[0].Message).IsEqualTo("action visited");
     }
 
     private sealed class ResultHolder
@@ -172,6 +247,26 @@ public sealed class OwnedResultTests
         public override void VisitJobPre(Job job)
         {
             AddJobInfo(job, $"job id: {GetString(job.Id)}", GetRange(job.Id));
+        }
+    }
+
+    private sealed class OverrideWorkflowPreWithoutBaseRule() : RuleBase(RuleId.JobStructure)
+    {
+        public override string Name => "override-workflow-pre-without-base";
+
+        public override void VisitWorkflowPre(Workflow workflow)
+        {
+            AddWarning("workflow visited", new TextRange(0, 0, 1, 1, 1, 1));
+        }
+    }
+
+    private sealed class OverrideActionMetadataPreWithoutBaseRule() : RuleBase(RuleId.JobStructure)
+    {
+        public override string Name => "override-action-pre-without-base";
+
+        public override void VisitActionMetadataPre(ActionMetadata metadata)
+        {
+            AddWarning("action visited", GetRange(metadata.Name));
         }
     }
 }

@@ -10,6 +10,7 @@ namespace Seiton.Core.Parsing;
 public sealed class ParseResult : IDisposable
 {
     private AstArena? _arena;
+    private bool _disposed;
 
     internal ParseResult(ParseResultData data, AstArena? arena)
     {
@@ -21,13 +22,34 @@ public sealed class ParseResult : IDisposable
     internal ParseResultData Data { get; }
 
     /// <summary>Gets the parsed workflow AST, if the document is a workflow file.</summary>
-    public Workflow? Workflow => Data.Workflow;
+    public Workflow? Workflow
+    {
+        get
+        {
+            ThrowIfDisposed();
+            return Data.Workflow;
+        }
+    }
 
     /// <summary>Gets the parsed action metadata AST, if the document is an action file.</summary>
-    public ActionMetadata? ActionMetadata => Data.ActionMetadata;
+    public ActionMetadata? ActionMetadata
+    {
+        get
+        {
+            ThrowIfDisposed();
+            return Data.ActionMetadata;
+        }
+    }
 
     /// <summary>Gets the parse diagnostics. These remain valid until this result is disposed.</summary>
-    public DiagnosticList Diagnostics => Data.Diagnostics;
+    public DiagnosticList Diagnostics
+    {
+        get
+        {
+            ThrowIfDisposed();
+            return Data.Diagnostics;
+        }
+    }
 
     /// <summary>Gets whether the parse result contains a fatal error.</summary>
     public bool HasFatalError => Data.HasFatalError;
@@ -83,12 +105,26 @@ public sealed class ParseResult : IDisposable
         return new OwnedDiagnostics(diags.AsSpan().ToArray());
     }
 
-    internal AstArena Arena => _arena ?? throw new ObjectDisposedException(nameof(ParseResult));
+    internal AstArena Arena => _disposed || _arena is null ? throw new ObjectDisposedException(nameof(ParseResult)) : _arena;
+
+    private void ThrowIfDisposed()
+    {
+        if (_disposed)
+        {
+            throw new ObjectDisposedException(nameof(ParseResult));
+        }
+    }
 
     /// <summary>Returns pooled arrays to the shared pool. AST objects become invalid after this call.</summary>
     public void Dispose()
     {
+        if (_disposed)
+        {
+            return;
+        }
+
         _arena?.Dispose();
         _arena = null;
+        _disposed = true;
     }
 }
