@@ -220,7 +220,7 @@ public readonly record struct WorkflowData(JobData[] Jobs, ...);
 **Seiton.Core 自体の改善（facade とは独立）**:
 
 1. ✅ **`ParseResult` から `Arena?` フィールドを除去する** — Arena は結果の一部ではなくリソース管理の関心事。`ref struct ParseHandle` でまとめる。
-2. **`DiagnosticList` を borrowed / owned で型レベル区別する** — 型で所有権を区別すれば誤用がコンパイル時に見える。（未着手）
+2. ✅ **`DiagnosticList` を borrowed / owned で型レベル区別する** — `OwnedDiagnostics` 型を導入し、`CopyDiagnostics()` の返り値で所有権を明示。
 3. ✅ **`LintEngine.Check()` の返り値を `ref struct` にする（.NET 10）** — `using var result = engine.Check(...)` で自然に Dispose。`ref struct` なのでフィールドに保持不可（コンパイラ強制）。
 4. **AST の外部公開は read-only snapshot を別型で返し、内部は pooled class を維持** — 大規模リファクタを避けつつ安全性を確保。（未着手）
 
@@ -263,6 +263,48 @@ public readonly record struct WorkflowData(JobData[] Jobs, ...);
 - `ref struct` は async メソッドの `await` 境界を跨げない。テストコード（TUnit は async）では `ParseDirect` / `CheckDirect` で `out AstArena?` を受け取り手動管理する internal API が必要だった。
 - CLI の並列パス (`Parallel.For`) では `LintHandle` をラムダ内で `using` できるため自然に動作する。
 - `FixCommand` のように結果を `await` 後に使う場合は、`CopyDiagnostics()` で owned 配列にコピーしてから handle を dispose する。これはパターン C (Owned snapshot) の部分適用に相当する。
+
+#### 実装済み: OwnedDiagnostics 型導入（項目 2）
+
+**実施日**: 2026-05-14
+
+**変更内容**:
+
+- `OwnedDiagnostics` readonly struct を新設（`src/Seiton.Core/Parsing/OwnedDiagnostics.cs`）
+  - `Diagnostic[]` のラッパー。`IReadOnlyList<Diagnostic>` を実装
+  - `AsSpan()`, `AsArray()`, struct `Enumerator`, implicit conversion to `Diagnostic[]`
+  - 型名で「この診断コレクションは caller-owned で安全に保持可能」と表現
+- `LintResult.CopyDiagnostics()` → 返り値を `Diagnostic[]` から `OwnedDiagnostics` に変更
+- `LintHandle.CopyDiagnostics()` → 同上
+- `ParseHandle.CopyDiagnostics()` → 新規追加（`OwnedDiagnostics` を返す）
+- CLI `CheckCommand`:
+  - `FileCheckResult.Diagnostics` を `OwnedDiagnostics` に変更
+  - 逐次パスの `allDiagnostics.AddRange(result.Diagnostics)` → `AddRange(result.Diagnostics.AsSpan())` に変更（span-based, IEnumerable boxing 回避）
+  - 並列パス集約も `AddRange(slots[i].Diagnostics.AsSpan())` に変更
+- CLI `FixCommand`: `lintDiagnostics` 変数を `OwnedDiagnostics` に変更
+- テストコード: `OwnedDiagnostics` → `Diagnostic[]` の implicit conversion により変更不要
+
+**型レベルの安全性改善**:
+
+| API | 返り値型 | 所有権 | 安全性 |
+|---|---|---|---|
+| `ParseHandle.Diagnostics` | `DiagnosticList` | borrowed (arena) | handle スコープ内のみ有効 |
+| `LintHandle.Diagnostics` | `DiagnosticList` | borrowed (arena) | handle スコープ内のみ有効 |
+| `ParseHandle.CopyDiagnostics()` | `OwnedDiagnostics` | caller-owned | 永続保持可能 |
+| `LintHandle.CopyDiagnostics()` | `OwnedDiagnostics` | caller-owned | 永続保持可能 |
+
+**追加最適化**: 逐次パスで `List<T>.AddRange(IEnumerable<T>)` → `List<T>.AddRange(ReadOnlySpan<T>)` に変更。IEnumerable 経由の yield-return state machine アロケーションを回避。
+
+**ベンチマーク結果（回帰なし）**:
+
+| メトリクス | 変更前 | 変更後 | 差分 |
+|---|---|---|---|
+| CoreLint Small (fix=false) | 8.37 KB | 8.37 KB | 0% alloc |
+| CoreLint Medium (fix=false) | 68.56 KB | 68.56 KB | 0% alloc |
+| CoreLint Large (fix=false) | 327.08 KB | 327.08 KB | 0% alloc |
+| CoreLint Large (fix=true) | 381.93 KB | 381.92 KB | 0% alloc |
+
+**テスト結果**: 全 1615 テスト pass、0 failures
 
 ### 3. スレッドセーフでない型がある
 

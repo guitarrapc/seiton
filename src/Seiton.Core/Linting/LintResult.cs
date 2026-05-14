@@ -113,17 +113,18 @@ public readonly record struct LintResult(
     }
 
     /// <summary>
-    /// Returns a caller-owned copy of the <see cref="Diagnostics"/> array.
-    /// Use this when the result must outlive the Arena's lifetime.
+    /// Returns a caller-owned copy of the <see cref="Diagnostics"/> collection.
+    /// The returned <see cref="OwnedDiagnostics"/> is safe to retain indefinitely,
+    /// unlike <see cref="Diagnostics"/> which may reference arena-pooled memory.
     /// </summary>
-    public Diagnostic[] CopyDiagnostics()
+    public OwnedDiagnostics CopyDiagnostics()
     {
         if (DiagnosticCount == 0)
         {
-            return [];
+            return default;
         }
 
-        return Diagnostics.AsSpan().ToArray();
+        return new OwnedDiagnostics(Diagnostics.AsSpan().ToArray());
     }
 }
 

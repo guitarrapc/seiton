@@ -70,10 +70,10 @@ public ref struct LintHandle : IDisposable
     public SuppressionSummary SuppressionSummary => Result.SuppressionSummary;
 
     /// <summary>
-    /// Returns a caller-owned copy of the diagnostics array.
-    /// The returned array is safe to retain beyond this handle's lifetime.
+    /// Returns a caller-owned copy of the diagnostics collection.
+    /// The returned <see cref="OwnedDiagnostics"/> is safe to retain beyond this handle's lifetime.
     /// </summary>
-    public Diagnostic[] CopyDiagnostics() => Result.CopyDiagnostics();
+    public OwnedDiagnostics CopyDiagnostics() => Result.CopyDiagnostics();
 
     /// <summary>Disposes the underlying <see cref="AstArena"/>, returning pooled buffers.</summary>
     public void Dispose()

@@ -135,7 +135,7 @@ internal static class FixCommand
 
                 // Check the file. Copy diagnostics immediately so the arena can be disposed
                 // before any await boundaries (LintHandle is a ref struct).
-                Diagnostic[] lintDiagnostics;
+                OwnedDiagnostics lintDiagnostics;
                 {
                     using var handle = engine.Check(utf8Yaml, filePath, fixEnabledLintConfig);
                     lintDiagnostics = handle.CopyDiagnostics();

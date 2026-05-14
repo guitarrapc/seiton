@@ -44,6 +44,18 @@ public ref struct ParseHandle : IDisposable
     /// <summary>Gets the diagnostics produced during parsing.</summary>
     public DiagnosticList Diagnostics => Result.Diagnostics;
 
+    /// <summary>
+    /// Returns a caller-owned copy of the diagnostics collection.
+    /// The returned <see cref="OwnedDiagnostics"/> is safe to retain beyond this handle's lifetime.
+    /// </summary>
+    public OwnedDiagnostics CopyDiagnostics()
+    {
+        var diags = Result.Diagnostics;
+        if (diags.Length == 0)
+            return default;
+        return new OwnedDiagnostics(diags.AsSpan().ToArray());
+    }
+
     /// <summary>Disposes the underlying <see cref="AstArena"/>, returning pooled buffers.</summary>
     public void Dispose()
     {

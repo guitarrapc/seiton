@@ -97,7 +97,7 @@ internal static class CheckCommand
                     Console.Error.WriteLine($"checking {filePath}...");
 
                 using var result = engine.Check(utf8Yaml, filePath, lintConfig);
-                allDiagnostics.AddRange(result.Diagnostics);
+                allDiagnostics.AddRange(result.Diagnostics.AsSpan());
                 sourceMap?.TryAdd(filePath, utf8Yaml);
             }
         }
@@ -126,7 +126,7 @@ internal static class CheckCommand
             // Aggregate in input order for stable output
             for (var i = 0; i < slots.Length; i++)
             {
-                allDiagnostics.AddRange(slots[i].Diagnostics);
+                allDiagnostics.AddRange(slots[i].Diagnostics.AsSpan());
                 if (sourceMap is not null && slots[i].Utf8Yaml is { } yaml)
                     sourceMap.TryAdd(slots[i].FilePath, yaml);
             }
@@ -229,11 +229,11 @@ internal static class CheckCommand
 /// <summary>Lightweight result slot for parallel check. Holds caller-owned diagnostic copy.</summary>
 internal readonly struct FileCheckResult
 {
-    public readonly Diagnostic[] Diagnostics;
+    public readonly OwnedDiagnostics Diagnostics;
     public readonly string FilePath;
     public readonly byte[]? Utf8Yaml;
 
-    public FileCheckResult(Diagnostic[] diagnostics, string filePath, byte[]? utf8Yaml)
+    public FileCheckResult(OwnedDiagnostics diagnostics, string filePath, byte[]? utf8Yaml)
     {
         Diagnostics = diagnostics;
         FilePath = filePath;
