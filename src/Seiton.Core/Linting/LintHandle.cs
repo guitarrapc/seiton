@@ -75,6 +75,29 @@ public ref struct LintHandle : IDisposable
     /// </summary>
     public OwnedDiagnostics CopyDiagnostics() => Result.CopyDiagnostics();
 
+    /// <summary>
+    /// Detaches the arena from this handle and returns a caller-owned <see cref="OwnedLintResult"/>
+    /// that keeps the AST and arena valid indefinitely.
+    /// <para>
+    /// After calling this method, this handle no longer owns the arena and <see cref="Dispose"/>
+    /// becomes a no-op. The caller is responsible for disposing the returned <see cref="OwnedLintResult"/>.
+    /// </para>
+    /// </summary>
+    public OwnedLintResult Detach()
+    {
+        var parseDiags = Result.ParseDiagnostics;
+        var owned = new OwnedLintResult(
+            Result.Workflow,
+            Result.ActionMetadata,
+            CopyDiagnostics(),
+            parseDiags.Length == 0 ? default : new OwnedDiagnostics(parseDiags.AsSpan().ToArray()),
+            Result.HasFatalError,
+            Result.SuppressionSummary,
+            _arena);
+        _arena = null; // transfer ownership — prevent double-dispose
+        return owned;
+    }
+
     /// <summary>Disposes the underlying <see cref="AstArena"/>, returning pooled buffers.</summary>
     public void Dispose()
     {

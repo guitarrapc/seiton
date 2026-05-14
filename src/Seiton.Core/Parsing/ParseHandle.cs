@@ -56,6 +56,26 @@ public ref struct ParseHandle : IDisposable
         return new OwnedDiagnostics(diags.AsSpan().ToArray());
     }
 
+    /// <summary>
+    /// Detaches the arena from this handle and returns a caller-owned <see cref="OwnedParseResult"/>
+    /// that keeps the AST and arena valid indefinitely.
+    /// <para>
+    /// After calling this method, this handle no longer owns the arena and <see cref="Dispose"/>
+    /// becomes a no-op. The caller is responsible for disposing the returned <see cref="OwnedParseResult"/>.
+    /// </para>
+    /// </summary>
+    public OwnedParseResult Detach()
+    {
+        var owned = new OwnedParseResult(
+            Result.Workflow,
+            Result.ActionMetadata,
+            CopyDiagnostics(),
+            Result.HasFatalError,
+            _arena);
+        _arena = null; // transfer ownership — prevent double-dispose
+        return owned;
+    }
+
     /// <summary>Disposes the underlying <see cref="AstArena"/>, returning pooled buffers.</summary>
     public void Dispose()
     {

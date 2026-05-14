@@ -222,7 +222,7 @@ public readonly record struct WorkflowData(JobData[] Jobs, ...);
 1. ✅ **`ParseResult` から `Arena?` フィールドを除去する** — Arena は結果の一部ではなくリソース管理の関心事。`ref struct ParseHandle` でまとめる。
 2. ✅ **`DiagnosticList` を borrowed / owned で型レベル区別する** — `OwnedDiagnostics` 型を導入し、`CopyDiagnostics()` の返り値で所有権を明示。
 3. ✅ **`LintEngine.Check()` の返り値を `ref struct` にする（.NET 10）** — `using var result = engine.Check(...)` で自然に Dispose。`ref struct` なのでフィールドに保持不可（コンパイラ強制）。
-4. **AST の外部公開は read-only snapshot を別型で返し、内部は pooled class を維持** — 大規模リファクタを避けつつ安全性を確保。（未着手）
+4. ✅ **AST の外部公開は read-only snapshot を別型で返し、内部は pooled class を維持** — `OwnedParseResult` / `OwnedLintResult` + `Detach()` で所有権移転。
 
 #### 実装済み: ref struct ハンドル導入（項目 1, 3）
 
@@ -305,6 +305,50 @@ public readonly record struct WorkflowData(JobData[] Jobs, ...);
 | CoreLint Large (fix=true) | 381.93 KB | 381.92 KB | 0% alloc |
 
 **テスト結果**: 全 1615 テスト pass、0 failures
+
+#### 実装済み: AST Detach 機構（項目 4）
+
+**実施日**: 2026-05-14
+
+**変更内容**:
+
+- `OwnedParseResult` sealed class を新設（`src/Seiton.Core/Parsing/OwnedParseResult.cs`）
+  - `IDisposable` を実装。`Dispose()` で Arena を解放
+  - `Workflow?`, `ActionMetadata?`, `OwnedDiagnostics Diagnostics`, `bool HasFatalError`, `AstArena Arena` プロパティ
+  - `Arena` は Dispose 後にアクセスすると `ObjectDisposedException` をスロー
+  - 通常のクラスなのでフィールド保持・async 境界越え・クロージャキャプチャが可能
+- `OwnedLintResult` sealed class を新設（`src/Seiton.Core/Linting/OwnedLintResult.cs`）
+  - `IDisposable` を実装。`Dispose()` で Arena を解放
+  - `Workflow?`, `ActionMetadata?`, `OwnedDiagnostics Diagnostics`, `OwnedDiagnostics ParseDiagnostics`, `bool HasFatalError`, `SuppressionSummary`, `AstArena Arena`, `int DiagnosticCount`
+- `ParseHandle.Detach()` メソッドを追加
+  - `OwnedParseResult` を生成し、診断を `OwnedDiagnostics` にコピー
+  - `_arena = null` にして handle の `Dispose()` が arena を二重解放しないようにする
+- `LintHandle.Detach()` メソッドを追加
+  - `OwnedLintResult` を生成し、lint/parse 両方の診断をコピー
+  - 同様に `_arena = null` で所有権移転
+- テスト: `DetachTests.cs` に 11 テストケースを追加
+  - ParseHandle/LintHandle の Detach、所有権移転、async 境界越え、フィールド保持、Dispose 後の ObjectDisposedException
+
+**所有権モデル**:
+
+| 操作 | Arena 所有者 | 用途 |
+|---|---|---|
+| `using var handle = parser.Parse(...)` | ParseHandle | 通常のスコープ内利用 |
+| `var owned = handle.Detach()` | OwnedParseResult | async 境界越え、フィールド保持 |
+| `owned.Dispose()` | (解放済み) | Arena を pool に返却 |
+
+**ベンチマーク結果（回帰なし）**:
+
+| メトリクス | 変更前 | 変更後 | 差分 |
+|---|---|---|---|
+| CoreLint Small (fix=false) | 8.37 KB | 8.37 KB | 0% alloc |
+| CoreLint Small (fix=true) | 9.82 KB | 9.82 KB | 0% alloc |
+| CoreLint Medium (fix=false) | 68.56 KB | 68.56 KB | 0% alloc |
+| CoreLint Medium (fix=true) | 81.92 KB | 81.92 KB | 0% alloc |
+| CoreLint Large (fix=false) | 327.08 KB | 327.08 KB | 0% alloc |
+| CoreLint Large (fix=true) | 381.93 KB | 381.93 KB | 0% alloc |
+
+**テスト結果**: 全 1626 テスト pass、0 failures（+11 新規 DetachTests）
 
 ### 3. スレッドセーフでない型がある
 
