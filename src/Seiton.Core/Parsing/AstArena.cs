@@ -367,9 +367,9 @@ public sealed class AstArena : IDisposable
 
     // Object pool default capacities (retain up to these sizes across parses)
     private const int DefaultJobCapacity = 24;
-    private const int DefaultStepCapacity = 64;
-    private const int DefaultExecRunCapacity = 64;
-    private const int DefaultExecActionCapacity = 64;
+    private const int DefaultStepCapacity = 128;
+    private const int DefaultExecRunCapacity = 128;
+    private const int DefaultExecActionCapacity = 128;
 
     private static void ShrinkIfOversized<T>(ref T[] array, int maxRetainedCapacity)
     {
