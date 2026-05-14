@@ -1,4 +1,4 @@
-using System.Reflection;
+﻿using System.Reflection;
 using Seiton.Core.Linting;
 
 namespace Seiton.Core.Tests;
@@ -9,7 +9,7 @@ public sealed class LocalReusableWorkflowOutputResolverUnitTests
     public async Task ResolveOutputNames_NormalizeKeyFails_FallsBackToRawPathCache()
     {
         var resolver = new LocalReusableWorkflowOutputResolver("/tmp/repo/.github/workflows/caller.yml");
-        var rawCacheKey = "./\0.yml";
+        var rawCacheKey = $".{Path.DirectorySeparatorChar}\0.yml";
         var cached = new[] { "cached_output" };
 
         var normalizeMethod = typeof(LocalReusableWorkflowOutputResolver).GetMethod("NormalizeCacheKey", BindingFlags.Instance | BindingFlags.NonPublic);
