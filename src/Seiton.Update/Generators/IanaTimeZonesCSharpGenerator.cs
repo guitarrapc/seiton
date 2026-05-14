@@ -14,6 +14,8 @@ internal sealed class IanaTimeZonesCSharpGenerator
             .OrderBy(static x => x, StringComparer.Ordinal)
             .ToArray();
 
+        var maxIdLength = allIds.Max(static x => x.Length);
+
         var sb = new StringBuilder();
         GeneratorHelper.AppendGeneratedHeader(sb, "sync-iana-timezones");
         sb.AppendLine("using System.Collections.Frozen;");
@@ -24,13 +26,19 @@ internal sealed class IanaTimeZonesCSharpGenerator
         sb.AppendLine($"/// <summary>IANA Time Zone Database identifiers (version: {model.Version}). {allIds.Length} entries.</summary>");
         sb.AppendLine("internal static class IanaTimeZones");
         sb.AppendLine("{");
+        sb.AppendLine($"    /// <summary>Maximum byte length of any known IANA timezone identifier.</summary>");
+        sb.AppendLine($"    private const int MaxIdByteLength = {maxIdLength};");
+        sb.AppendLine();
         sb.AppendLine("    /// <summary>Returns true if the given string is a known IANA timezone identifier (case-sensitive).</summary>");
         sb.AppendLine("    internal static bool IsKnown(string id) => KnownIds.Contains(id);");
         sb.AppendLine();
         sb.AppendLine("    /// <summary>Returns true if the given UTF-8 span is a known IANA timezone identifier (case-sensitive, zero-allocation).</summary>");
         sb.AppendLine("    internal static bool IsKnown(ReadOnlySpan<byte> utf8Id)");
         sb.AppendLine("    {");
-        sb.AppendLine("        Span<char> chars = stackalloc char[utf8Id.Length];");
+        sb.AppendLine("        if (utf8Id.Length > MaxIdByteLength)");
+        sb.AppendLine("            return false;");
+        sb.AppendLine();
+        sb.AppendLine("        Span<char> chars = stackalloc char[MaxIdByteLength];");
         sb.AppendLine("        var charCount = Encoding.UTF8.GetChars(utf8Id, chars);");
         sb.AppendLine("        return AlternateLookup.Contains(chars[..charCount]);");
         sb.AppendLine("    }");

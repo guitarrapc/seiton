@@ -12,13 +12,19 @@ namespace Seiton.Core.Generated;
 /// <summary>IANA Time Zone Database identifiers (version: 2026b). 598 entries.</summary>
 internal static class IanaTimeZones
 {
+    /// <summary>Maximum byte length of any known IANA timezone identifier.</summary>
+    private const int MaxIdByteLength = 32;
+
     /// <summary>Returns true if the given string is a known IANA timezone identifier (case-sensitive).</summary>
     internal static bool IsKnown(string id) => KnownIds.Contains(id);
 
     /// <summary>Returns true if the given UTF-8 span is a known IANA timezone identifier (case-sensitive, zero-allocation).</summary>
     internal static bool IsKnown(ReadOnlySpan<byte> utf8Id)
     {
-        Span<char> chars = stackalloc char[utf8Id.Length];
+        if (utf8Id.Length > MaxIdByteLength)
+            return false;
+
+        Span<char> chars = stackalloc char[MaxIdByteLength];
         var charCount = Encoding.UTF8.GetChars(utf8Id, chars);
         return AlternateLookup.Contains(chars[..charCount]);
     }
