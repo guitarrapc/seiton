@@ -54,17 +54,21 @@ internal sealed class LocalReusableWorkflowOutputResolver
 
         var relativePath = DecodeAscii(usesValue).Replace('/', Path.DirectorySeparatorChar);
 
-        if (_cache.TryGetValue(relativePath, out var cached))
+        // Normalize to full path for cache key to maximize cache hits when
+        // semantically equivalent paths differ in raw form (e.g., extra ./ segments).
+        var normalizedKey = NormalizeCacheKey(relativePath);
+        if (normalizedKey is not null && _cache.TryGetValue(normalizedKey, out var cached))
         {
             return cached;
         }
 
-        var result = ResolveAndParse(relativePath);
-        _cache[relativePath] = result;
+        var result = ResolveAndParse(relativePath, out var resolvedPath);
+        var cacheKey = resolvedPath ?? normalizedKey ?? relativePath;
+        _cache[cacheKey] = result;
         return result;
     }
 
-    private string[]? ResolveAndParse(string relativePath)
+    private string? NormalizeCacheKey(string relativePath)
     {
         var baseDirectory = ResolveLocalReferenceBaseDirectory(_workflowFilePath, relativePath);
         if (string.IsNullOrEmpty(baseDirectory))
@@ -72,7 +76,26 @@ internal sealed class LocalReusableWorkflowOutputResolver
             return null;
         }
 
-        string resolvedPath;
+        try
+        {
+            return Path.GetFullPath(Path.Combine(baseDirectory, TrimCurrentDirectoryPrefix(relativePath)));
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    private string[]? ResolveAndParse(string relativePath, out string? resolvedPath)
+    {
+        resolvedPath = null;
+
+        var baseDirectory = ResolveLocalReferenceBaseDirectory(_workflowFilePath, relativePath);
+        if (string.IsNullOrEmpty(baseDirectory))
+        {
+            return null;
+        }
+
         try
         {
             resolvedPath = Path.GetFullPath(Path.Combine(baseDirectory, TrimCurrentDirectoryPrefix(relativePath)));

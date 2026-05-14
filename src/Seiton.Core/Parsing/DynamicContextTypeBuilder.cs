@@ -715,41 +715,45 @@ internal static class DynamicContextTypeBuilder
 
     private static ObjectExprType BuildJobOutputsType(Job job, AstArena? arena, byte[]? utf8Yaml, Func<ReadOnlyMemory<byte>, string[]?>? localReusableOutputResolver = null)
     {
-        if (job.Outputs is not { Count: > 0 } outputs || utf8Yaml is null)
+        // Reusable workflow call jobs: outputs come from the called workflow's contract,
+        // not from any local outputs: block (which is invalid on a uses: job).
+        // Check WorkflowCall first so that an invalid local outputs: block doesn't shadow
+        // the called workflow's outputs.
+        if (job.WorkflowCall is not null)
         {
-            if (job.WorkflowCall is not null)
+            // Try local resolution for local reusable workflow references
+            if (localReusableOutputResolver is not null && arena is not null && utf8Yaml is not null && job.WorkflowCall.Uses.HasValue)
             {
-                // Try local resolution for local reusable workflow references
-                if (localReusableOutputResolver is not null && arena is not null && utf8Yaml is not null && job.WorkflowCall.Uses.HasValue)
+                var usesSlice = arena.GetStringSlice(job.WorkflowCall.Uses);
+                if (!usesSlice.IsEmpty)
                 {
-                    var usesSlice = arena.GetStringSlice(job.WorkflowCall.Uses);
-                    if (!usesSlice.IsEmpty)
+                    var usesMemory = utf8Yaml.AsMemory(usesSlice.Offset, usesSlice.Length);
+                    var outputNames = localReusableOutputResolver(usesMemory);
+                    if (outputNames is not null)
                     {
-                        var usesMemory = utf8Yaml.AsMemory(usesSlice.Offset, usesSlice.Length);
-                        var outputNames = localReusableOutputResolver(usesMemory);
-                        if (outputNames is not null)
+                        if (outputNames.Length == 0)
                         {
-                            if (outputNames.Length == 0)
-                            {
-                                return ExprType.Object(strict: true);
-                            }
-
-                            var outputProps = new Dictionary<Utf8String, ExprType>(outputNames.Length);
-                            for (var i = 0; i < outputNames.Length; i++)
-                            {
-                                var encoded = System.Text.Encoding.UTF8.GetBytes(outputNames[i]);
-                                outputProps[new Utf8String(encoded.AsMemory())] = ExprType.String;
-                            }
-
-                            return ExprType.Object(outputProps, strict: true);
+                            return ExprType.Object(strict: true);
                         }
+
+                        var outputProps = new Dictionary<Utf8String, ExprType>(outputNames.Length);
+                        for (var i = 0; i < outputNames.Length; i++)
+                        {
+                            var encoded = System.Text.Encoding.UTF8.GetBytes(outputNames[i]);
+                            outputProps[new Utf8String(encoded.AsMemory())] = ExprType.String;
+                        }
+
+                        return ExprType.Object(outputProps, strict: true);
                     }
                 }
-
-                // Remote or unresolvable: return loose type so needs.<job>.outputs.* is not flagged.
-                return ExprType.Object(dynamicPropertyType: ExprType.String);
             }
 
+            // Remote or unresolvable: return loose type so needs.<job>.outputs.* is not flagged.
+            return ExprType.Object(dynamicPropertyType: ExprType.String);
+        }
+
+        if (job.Outputs is not { Count: > 0 } outputs || utf8Yaml is null)
+        {
             // Normal jobs with no outputs — return strict empty so that any outputs.X is flagged as undefined
             return ExprType.Object(strict: true);
         }

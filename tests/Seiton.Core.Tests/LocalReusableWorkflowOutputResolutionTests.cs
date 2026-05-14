@@ -613,6 +613,165 @@ public sealed class LocalReusableWorkflowOutputResolutionTests
         }
     }
 
+    [Test]
+    public async Task ResolveOutputNames_ReusableCallJobWithLocalOutputs_UsesCalledWorkflowOutputs()
+    {
+        // When a reusable-workflow call job invalidly also declares outputs:,
+        // BuildJobOutputsType should prioritize the called workflow's outputs (via WorkflowCall)
+        // over the local outputs block.
+        var rootDir = Path.Combine(Path.GetTempPath(), "seiton-resolver-callwithoutputs-" + Guid.NewGuid().ToString("N", System.Globalization.CultureInfo.InvariantCulture));
+        var workflowsDir = Path.Combine(rootDir, ".github", "workflows");
+        Directory.CreateDirectory(workflowsDir);
+
+        var reusablePath = Path.Combine(workflowsDir, "reusable.yml");
+        var callerPath = Path.Combine(workflowsDir, "caller.yml");
+
+        try
+        {
+            // Reusable workflow declares output "version" only
+            var reusableYaml = """
+            on:
+              workflow_call:
+                outputs:
+                  version:
+                    description: The computed version
+                    value: ${{ jobs.compute.outputs.ver }}
+            jobs:
+              compute:
+                runs-on: ubuntu-latest
+                outputs:
+                  ver: ${{ steps.v.outputs.ver }}
+                steps:
+                  - id: v
+                    run: echo "ver=1.0.0" >> "$GITHUB_OUTPUT"
+            """;
+
+            // Caller has a reusable-workflow call job that also (invalidly) declares outputs:
+            // with "local_out". If we resolve from the local outputs, "version" would be
+            // flagged as undefined. If we correctly resolve from the called workflow,
+            // "version" is valid and "local_out" would be unknown.
+            var callerYaml = """
+            on: push
+            jobs:
+              get-ver:
+                uses: ./.github/workflows/reusable.yml
+                outputs:
+                  local_out: some_value
+              deploy:
+                runs-on: ubuntu-latest
+                needs: [get-ver]
+                steps:
+                  - env:
+                      VER: ${{ needs.get-ver.outputs.version }}
+                      BAD: ${{ needs.get-ver.outputs.nonexistent }}
+                    run: echo "$VER $BAD"
+            """;
+
+            File.WriteAllText(reusablePath, reusableYaml, Encoding.UTF8);
+            File.WriteAllText(callerPath, callerYaml, Encoding.UTF8);
+
+            var result = new LintEngine([new ExprUndefinedVarRule()])
+                .Check(File.ReadAllBytes(callerPath), callerPath);
+            using var _ = result.ParseResult.Arena;
+
+            await Assert.That(result.ParseResult.HasFatalError).IsFalse();
+
+            var msgs = result.Diagnostics
+                .Where(x => x.RuleId == "expr-undefined-var")
+                .Select(x => x.Message)
+                .ToArray();
+
+            // "version" comes from the called workflow — must NOT be flagged
+            await Assert.That(msgs.Any(m => m.Contains("\"version\" is not defined", StringComparison.Ordinal))).IsFalse();
+            // "nonexistent" is not in the called workflow — must be flagged
+            await Assert.That(msgs.Any(m => m.Contains("\"nonexistent\" is not defined", StringComparison.Ordinal))).IsTrue();
+        }
+        finally
+        {
+            if (Directory.Exists(rootDir))
+            {
+                Directory.Delete(rootDir, recursive: true);
+            }
+        }
+    }
+
+    [Test]
+    public async Task ResolveOutputNames_EquivalentPathsWithDotDotSegments_CacheHitsCorrectly()
+    {
+        // Two semantically equivalent uses paths that differ in raw form should resolve correctly.
+        // e.g., "./.github/workflows/reusable.yml" and "./.github/workflows/./reusable.yml"
+        var rootDir = Path.Combine(Path.GetTempPath(), "seiton-resolver-cachepath-" + Guid.NewGuid().ToString("N", System.Globalization.CultureInfo.InvariantCulture));
+        var workflowsDir = Path.Combine(rootDir, ".github", "workflows");
+        Directory.CreateDirectory(workflowsDir);
+
+        var reusablePath = Path.Combine(workflowsDir, "reusable.yml");
+        var callerPath = Path.Combine(workflowsDir, "caller.yml");
+
+        try
+        {
+            var reusableYaml = """
+            on:
+              workflow_call:
+                outputs:
+                  version:
+                    description: The computed version
+                    value: ${{ jobs.compute.outputs.ver }}
+            jobs:
+              compute:
+                runs-on: ubuntu-latest
+                outputs:
+                  ver: ${{ steps.v.outputs.ver }}
+                steps:
+                  - id: v
+                    run: echo "ver=1.0.0" >> "$GITHUB_OUTPUT"
+            """;
+
+            // Two jobs referencing the same reusable workflow via different path forms.
+            // Both should resolve and flag "nonexistent" as undefined.
+            var callerYaml = """
+            on: push
+            jobs:
+              job1:
+                uses: ./.github/workflows/reusable.yml
+              job2:
+                uses: ./.github/workflows/./reusable.yml
+              deploy:
+                runs-on: ubuntu-latest
+                needs: [job1, job2]
+                steps:
+                  - env:
+                      V1: ${{ needs.job1.outputs.nonexistent }}
+                      V2: ${{ needs.job2.outputs.nonexistent }}
+                    run: echo "$V1 $V2"
+            """;
+
+            File.WriteAllText(reusablePath, reusableYaml, Encoding.UTF8);
+            File.WriteAllText(callerPath, callerYaml, Encoding.UTF8);
+
+            var result = new LintEngine([new ExprUndefinedVarRule()])
+                .Check(File.ReadAllBytes(callerPath), callerPath);
+            using var _ = result.ParseResult.Arena;
+
+            await Assert.That(result.ParseResult.HasFatalError).IsFalse();
+
+            var msgs = result.Diagnostics
+                .Where(x => x.RuleId == "expr-undefined-var")
+                .Select(x => x.Message)
+                .ToArray();
+
+            // Both jobs should resolve strictly — "nonexistent" flagged for both
+            var undefinedCount = msgs.Count(m => m.Contains("\"nonexistent\" is not defined", StringComparison.Ordinal));
+            await Assert.That(undefinedCount).IsEqualTo(2);
+        }
+        finally
+        {
+            if (Directory.Exists(rootDir))
+            {
+                Directory.Delete(rootDir, recursive: true);
+            }
+        }
+    }
+
     /// <summary>
     /// Probes whether the filesystem at the given directory is case-sensitive.
     /// Creates a temporary file and checks if an alternate-case path resolves to it.
