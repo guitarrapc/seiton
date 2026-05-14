@@ -522,6 +522,235 @@ public sealed class OwnedLintResult : IDisposable
 5. **Core advanced API と facade API の責務を混ぜない**
   この計画で整えるのは `Seiton.Core` の advanced API の使い勝手であり、最終的な外部公開 API は snapshot/facade が担う。Core 側で利便性を上げつつも、公開ライブラリの完成形を Core の都合で固定しない。
 
+---
+
+#### 次ステップ計画: 「1 概念 1 型」原則に基づく Core API 最終整理
+
+**現状の問題点（利用者視点）**:
+
+```csharp
+using var result = WorkflowParser.Parse(yaml, path);
+// ✅ ここまでは自然
+var workflow = result.Workflow;
+
+// ❌ ここから不自然: "Arena" という内部メモリプール概念が露出
+var bytes = result.Arena.GetStringValue(job.Id);   // Arena って何？
+var text = Encoding.UTF8.GetString(bytes);          // なぜ自分でデコード？
+```
+
+利用者は「パース結果から値を読みたい」だけであり、メモリプーリング機構の存在を知る必要はない。
+
+また `OwnedParseResult` / `OwnedLintResult` という型名は「所有権が移転した結果」という実装モデルを説明しているのであり、利用者のタスク（「パースする」「チェックする」）を反映していない。
+
+**ゴール（利用者から見た理想的 API）**:
+
+```csharp
+using var result = WorkflowParser.Parse(yaml, path);
+var workflow = result.Workflow;
+var jobId = result.GetString(workflow.Jobs.Entries[0].Value.Id);  // 直感的
+ReadOnlySpan<byte> raw = result.GetUtf8(step.Run);               // perf 志向
+
+using var lint = engine.Check(yaml, path);
+foreach (var diag in lint.Diagnostics) { ... }
+```
+
+- 型名が API 契約と一致: `Parse()` → `ParseResult`, `Check()` → `LintResult`
+- AST 値の読み出しは result 自身のメソッド。Arena を知る必要がない
+- perf 志向パス (`GetUtf8`) と convenience パス (`GetString`) を両立
+
+---
+
+##### Step 1: 型名の統一（1 概念 1 型）
+
+| 現在 | 変更後 | visibility |
+|---|---|---|
+| `OwnedParseResult` (sealed class) | **`ParseResult`** | public |
+| `ParseResult` (readonly record struct) | **`ParseResultData`** | **internal** |
+| `OwnedLintResult` (sealed class) | **`LintResult`** | public |
+| `LintResult` (readonly record struct) | **`LintResultData`** | **internal** |
+
+**理由**:
+
+- 利用者から見える型は「1 概念 = 1 型」: `Parse()` が返すものは `ParseResult`。それ以上の分岐はない
+- 内部実装が data carrier struct を持つのは自由だが、public surface に出さない
+- `.Result` プロパティ（内部 struct へのアクセサ）は public から除去。代わりに internal accessor を提供
+
+**影響範囲**:
+
+- Public: `WorkflowParser.Parse()` → `ParseResult` を返す（利用者コードの型名だけ変わる）
+- Public: `LintEngine.Check()` → `LintResult` を返す
+- Internal: lint rules・CLI・playground は `ParseResultData` / `LintResultData` を参照（internal visibility で問題なし）
+- Tests: 型名変更に追従
+
+---
+
+##### Step 2: Arena 隠蔽 + 解決メソッド追加
+
+`AstArena` を **public surface から除去** し、結果型に値解決メソッドを追加する。
+
+```csharp
+public sealed class ParseResult : IDisposable
+{
+    // AST アクセス (現状と同じ)
+    public Workflow? Workflow { get; }
+    public ActionMetadata? ActionMetadata { get; }
+    public DiagnosticList Diagnostics { get; }
+    public bool HasFatalError { get; }
+
+    // ── 値解決メソッド (NEW) ──────────────────────────────
+
+    // String
+    public string GetString(StringNodeId id);                  // UTF-8 デコード済み (convenience)
+    public ReadOnlySpan<byte> GetUtf8(StringNodeId id);        // zero-copy UTF-8 bytes (perf)
+    public Utf8Slice GetSlice(StringNodeId id);                // zero-copy offset+length (advanced)
+    public bool IsQuoted(StringNodeId id);                     // YAML quoted?
+    public TextRange GetRange(StringNodeId id);                // source location
+    public StringNodeId GetExpression(StringNodeId id);        // embedded ${{ }}
+
+    // Bool
+    public bool GetBool(BoolNodeId id);
+    public TextRange GetRange(BoolNodeId id);
+    public StringNodeId GetExpression(BoolNodeId id);
+
+    // Int
+    public long GetInt(IntNodeId id);
+    public TextRange GetRange(IntNodeId id);
+    public StringNodeId GetExpression(IntNodeId id);
+
+    // Float
+    public double GetFloat(FloatNodeId id);
+    public TextRange GetRange(FloatNodeId id);
+    public StringNodeId GetExpression(FloatNodeId id);
+
+    // Source bytes (read-only)
+    public ReadOnlySpan<byte> Source { get; }
+
+    // ── Diagnostics copy (既存) ──────────────────────────
+    public OwnedDiagnostics CopyDiagnostics();
+
+    // ── Internal ─────────────────────────────────────────
+    internal AstArena Arena { get; }            // lint rules / playground 向け internal accessor
+    internal ParseResultData Data { get; }      // FixEngine 等 internal 向け
+
+    public void Dispose();
+}
+```
+
+**設計判断**:
+
+| 判断 | 理由 |
+|---|---|
+| `GetString(id)` は string を返す | convenience 重視。Core API でも「ちょっと確認したい」ケースが最多。alloc は parse 全体に対して無視できる |
+| `GetUtf8(id)` は `ReadOnlySpan<byte>` を返す | perf 志向の利用者向け。lint rules は内部的にこれを使う |
+| `GetRange` は overload (NodeId type で区別) | 利用者は「このノードの位置」を型を意識せず取得できる |
+| `Arena` は internal に退避 | lint rules は `RuleBase.Arena` 経由で引き続きゼロオーバーヘッドでアクセス |
+| `Source` は `ReadOnlySpan<byte>` | YAML 原文参照が必要な高度ユースケース向け |
+
+**パフォーマンス影響**:
+
+- 解決メソッドは Arena への 1 メソッド委譲のみ。JIT inline 可能。ゼロオーバーヘッド。
+- `GetString()` は string 生成するが、これは利用者が明示的に呼ぶ convenience API。hot path では `GetUtf8()` を使う。
+- lint rules は従来通り `Arena` (internal) に直接アクセスするため性能劣化なし。
+
+---
+
+##### Step 3: LintResult の同構造
+
+```csharp
+public sealed class LintResult : IDisposable
+{
+    // AST & diagnostics
+    public Workflow? Workflow { get; }
+    public ActionMetadata? ActionMetadata { get; }
+    public DiagnosticList Diagnostics { get; }
+    public DiagnosticList ParseDiagnostics { get; }
+    public bool HasFatalError { get; }
+    public SuppressionSummary SuppressionSummary { get; }
+    public int DiagnosticCount { get; }
+    public bool HasFixableDiagnostics { get; }
+    public int FixableDiagnosticCount { get; }
+    public Diagnostic[] FixableDiagnostics { get; }
+
+    // 値解決メソッド (ParseResult と同一シグネチャ)
+    public string GetString(StringNodeId id);
+    public ReadOnlySpan<byte> GetUtf8(StringNodeId id);
+    // ... (省略: ParseResult と同一)
+
+    // Diagnostics copy
+    public OwnedDiagnostics CopyDiagnostics();
+    public OwnedDiagnostics CopyParseDiagnostics();
+
+    // Internal
+    internal AstArena Arena { get; }
+    internal LintResultData Data { get; }
+
+    public void Dispose();
+}
+```
+
+---
+
+##### Step 4: 利用パターン比較
+
+| 観点 | 現在 | 変更後 |
+|---|---|---|
+| 型名 | `OwnedParseResult` | `ParseResult` |
+| 値取得 | `result.Arena.GetStringValue(id)` → `Encoding.UTF8.GetString(...)` | `result.GetString(id)` |
+| 値取得 (perf) | `result.Arena.GetStringValue(id)` (span) | `result.GetUtf8(id)` (span) |
+| 型の種類 (public) | `ParseResult` struct + `OwnedParseResult` class | `ParseResult` class のみ |
+| Arena 露出 | public property | internal (隠蔽) |
+| lint rules の書き方 | `Arena.GetStringValue(id)` via `RuleBase` | 変更なし (internal) |
+
+---
+
+##### 実装順序と影響範囲
+
+**Phase A: internal struct 名変更**
+
+1. `ParseResult` record struct → `ParseResultData` (internal)
+2. `LintResult` record struct → `LintResultData` (internal)
+3. internal 参照をすべて追従（parser, lint engine, CLI, playground, tests）
+4. この時点で public surface から旧名が消える
+
+**Phase B: public class 名変更**
+
+1. `OwnedParseResult` → `ParseResult`
+2. `OwnedLintResult` → `LintResult`
+3. public API ドキュメント・仕様書を更新
+
+**Phase C: Arena 隠蔽 + 解決メソッド追加**
+
+1. `Arena` property を `internal` に変更
+2. `GetString`, `GetUtf8`, `GetSlice`, `GetBool`, `GetInt`, `GetFloat`, `GetRange`, `GetExpression`, `IsQuoted` を結果型に追加
+3. テストを新パターン (`result.GetString(id)`) に更新
+4. `Source` property 追加
+5. `.Result` property を除去（`internal Data` に置換）
+
+**Phase D: ParseDirect / CheckDirect 除去の検討**
+
+- `ParseResult` class が async 対応なので、`ParseDirect` / `CheckDirect` の存在意義が消える
+- ベンチマーク内部用途 (`IncrementalParseBenchmark` 等) は internal `ParseResultData` + arena 直接操作で十分
+- 削除して public/internal 面積を縮小
+
+---
+
+##### リスクと対策
+
+| リスク | 対策 |
+|---|---|
+| `GetRange` overload の ambiguity | 各 NodeId 型は distinct struct のため overload resolution で一意 |
+| facade 設計との衝突 | facade は snapshot DTO を返す別パッケージ。Core API 変更は facade に影響しない |
+| internal struct 名変更の影響範囲が大きい | IDE rename refactoring で安全に実施可能 |
+| 解決メソッド追加で ParseResult class が肥大化 | 15 メソッド程度。IntelliSense で整理されるサイズ。interface extract は不要 |
+
+---
+
+##### 判定基準
+
+- ベンチマーク: `Alloc Ratio = 1.00` を維持（解決メソッド自体はアロケーション増なし）
+- テスト: 全テスト pass
+- 利用者コード: `result.Arena.GetStringValue(...)` → `result.GetUtf8(...)` で短縮。Arena の概念が消える
+
 ### 3. スレッドセーフでない型がある
 
 **論点**:
