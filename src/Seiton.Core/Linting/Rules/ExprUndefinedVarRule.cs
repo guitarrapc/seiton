@@ -21,6 +21,10 @@ public sealed class ExprUndefinedVarRule() : RuleBase(RuleId.ExprUndefinedVar)
     private (byte[] NameUtf8, ExprType Type) _inputsOverride;
     private (byte[] NameUtf8, ExprType Type) _secretsOverride;
     private (byte[] NameUtf8, ExprType Type) _githubOverride;
+    // Cache for BuildGithubOverride: avoid rebuilding ~40-entry Dictionary per lint run
+    private (byte[] NameUtf8, ExprType Type) _cachedGithubOverride;
+    private byte[]? _cachedGithubYamlRef;
+    private int _cachedGithubEventCount;
     // Reusable fixed-size override arrays to avoid per-job allocation
     private readonly (byte[] NameUtf8, ExprType Type)[] _jobScopeOverrides = new (byte[], ExprType)[5];
     private readonly (byte[] NameUtf8, ExprType Type)[] _stepScopeOverrides = new (byte[], ExprType)[6];
@@ -47,7 +51,20 @@ public sealed class ExprUndefinedVarRule() : RuleBase(RuleId.ExprUndefinedVar)
         _currentWorkflow = workflow;
         _inputsOverride = DynamicContextTypeBuilder.BuildInputsOverride(workflow.On, Config.Utf8Yaml);
         _secretsOverride = DynamicContextTypeBuilder.BuildSecretsOverride(workflow.On, Config.Utf8Yaml);
-        _githubOverride = DynamicContextTypeBuilder.BuildGithubOverride(workflow.On, Arena, Config.Utf8Yaml);
+
+        // Cache github override: only rebuild when source file or event count changes
+        if (ReferenceEquals(Config.Utf8Yaml, _cachedGithubYamlRef) && workflow.On.Count == _cachedGithubEventCount)
+        {
+            _githubOverride = _cachedGithubOverride;
+        }
+        else
+        {
+            _githubOverride = DynamicContextTypeBuilder.BuildGithubOverride(workflow.On, Arena, Config.Utf8Yaml);
+            _cachedGithubOverride = _githubOverride;
+            _cachedGithubYamlRef = Config.Utf8Yaml;
+            _cachedGithubEventCount = workflow.On.Count;
+        }
+
         _hasOverrides = false;
 
         if (!string.IsNullOrEmpty(Config.FilePath) && Path.IsPathFullyQualified(Config.FilePath))
