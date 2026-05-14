@@ -29,8 +29,8 @@ internal static class IanaTimeZones
         return AlternateLookup.Contains(chars[..charCount]);
     }
 
-    /// <summary>Returns all known IANA timezone identifiers for suggestion lookup (error paths only).</summary>
-    internal static ReadOnlySpan<string> GetIds() => IdsArray;
+    /// <summary>Returns all known IANA timezone identifiers for suggestion lookup (error paths only). Allocates on each call.</summary>
+    internal static string[] GetIds() => [.. KnownIds];
 
     private static readonly FrozenSet<string> KnownIds = FrozenSet.ToFrozenSet(
     [
@@ -635,6 +635,4 @@ internal static class IanaTimeZones
     ], StringComparer.Ordinal);
 
     private static readonly FrozenSet<string>.AlternateLookup<ReadOnlySpan<char>> AlternateLookup = KnownIds.GetAlternateLookup<ReadOnlySpan<char>>();
-
-    private static readonly string[] IdsArray = [.. KnownIds];
 }
