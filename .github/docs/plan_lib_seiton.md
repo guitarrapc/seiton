@@ -451,6 +451,72 @@ public sealed class OwnedLintResult : IDisposable
 9. ベンチマーク実行で回帰確認 (OwnedParseResult class alloc ≈ +32B 許容)
 10. DetachTests.cs を OwnedResultTests.cs にリネーム・簡素化
 
+**評価**:
+
+この計画は、現状の `ParseHandle` / `LintHandle` + `Detach()` よりは明確に良い。特に「`Parse()` した結果をそのまま `using` で使う」という形は C# 利用者の直感に沿っており、async/await やテストコードとの相性も改善する。一方で、これは **Seiton.Core の advanced API を整流する中間段階としては有効** だが、公開ライブラリの最終形としてはまだ改善余地がある。
+
+**データ志向の観点**:
+
+- 現状案は `ref struct` を廃止しても、AST 自体は依然として `AstArena` と NodeId handle に依存している
+- つまり「結果オブジェクトは class になって保持しやすくなる」が、「データそのものが自己完結している」わけではない
+- `OwnedParseResult` / `OwnedLintResult` が `Arena` を公開し続ける限り、利用者は AST 値の読み方として arena 解決を理解する必要がある
+- このため、**データ志向としては改善だが十分ではない**。真に素直な API は facade 側での owned snapshot (`WorkflowData`, `JobData` など) である
+
+**async/await 相性の観点**:
+
+- ここは現状より大きく改善する。`ref struct` は async メソッド・TUnit テスト・フィールド保持・クロージャで極端に扱いづらい
+- `ParseDirect` / `CheckDirect` という internal 回避 API が必要になっている時点で、public API が利用スタイルに負けている
+- `Parse()` / `Check()` が通常の `IDisposable` class を返せば、`using var result = ...; await ...;` が自然に書ける
+- C# では async/await が通常の制御フローであり、そこに素直に乗る API の方が長期的に保守しやすい
+
+**今後の設計改善の観点**:
+
+- この計画で `ParseHandle` / `LintHandle` / `ParseDirect` / `CheckDirect` / `Detach()` を整理できるのは良い
+- ただし最終的には、`OwnedParseResult` / `OwnedLintResult` という命名自体も「所有権モデルを利用者に説明している名前」であり、利用者タスク起点の名前ではない
+- C# らしい公開 API の終着点としては、`Parse()` が `ParseResult` を返し、`Check()` が `LintResult` を返す方が自然。現在の borrowed 側 struct は internal に退避させ、public には 1 概念 1 型を保つのが望ましい
+- さらに facade では `AstArena` 非公開・AST snapshot 化を進め、Core advanced API と SDK public API を明確に分けるのがよい
+
+**ユーザー視点 / 使い勝手の観点**:
+
+- 現状の `Detach()` 儀式は「仕組みを知っている人しか正しく使えない API」であり、使い方駆動ではなく実装都合駆動になっている
+- `using var result = WorkflowParser.Parse(yaml, path);` は API から使い方が読み取れるため、その点で大幅に前進
+- ただし `result.Arena.GetStringValue(job.Id)` のようなアクセスが残る限り、まだ「素直で分かりやすい API」とは言い切れない
+- 利用者が欲しいのは `job.IdText` や `step.RunText` のような直接読める値であり、arena 解決の仕組みではない
+- よって **この計画は「使いにくさを大きく減らす」が、「API を見ればそのまま使える」最終形ではない**
+
+**総合評価**:
+
+| 観点 | 評価 | コメント |
+|---|---|---|
+| データ志向 | △ | `ref struct` 除去は改善だが、`AstArena` 依存が残る |
+| async/await 相性 | ◎ | current API の最大の欠点を解消できる |
+| C# らしさ | ○ | `using var result = Parse(...)` は自然。`Owned*` 命名はやや内部都合 |
+| API から使い方が分かるか | ○ | `Detach()` は消えるが、`Arena` 公開がなお学習コスト |
+| facade への接続性 | ○ | Core advanced API の整理として有効。最終的には snapshot facade へ進むべき |
+
+**結論**:
+
+- **この計画は進める価値が高い**。少なくとも現状の `Detach()` ベース API より、C# らしく、async に強く、利用者視点で素直である
+- ただしこれは **公開ライブラリの最終形ではなく、Seiton.Core advanced API をまっすぐにするための整理ステップ** と位置付けるのが適切
+- 公開 API の最終ゴールは、`AstArena` や NodeId 解決を利用者に見せない snapshot/facade API である
+
+**この計画を採用する場合の設計原則**:
+
+1. **公開 API は 1 概念 1 型を守る**
+  `Parse()` は最終的に 1 つの `ParseResult`、`Check()` は 1 つの `LintResult` を返す形へ寄せる。`Handle` / `Owned` / `Direct` のような実装都合の分岐を public surface に増やさない。
+
+2. **async/await を通常経路として素直に通す**
+  public API は `await`・フィールド保持・クロージャ capture を自然に許容する。`ref struct` 制約を避けるための別 API や internal 回避経路を増やさない。
+
+3. **所有権や arena 解決の仕組みを利用者に押し付けない**
+  `Dispose` の必要性は許容しても、`Detach()` や `ParseDirect(..., out arena)` のようなライフタイム儀式は公開 API から排除する。さらに将来的には `AstArena` 参照自体も facade 側に隠蔽する。
+
+4. **高頻度経路の性能を守りつつ、利用者体験を優先する**
+  Small ケースで許容範囲内の微小アロケーション増であれば、API 単純化を優先する。ただし parser/lint hot path のゼロアロケーション原則は維持し、追加コストは result wrapper など境界部に限定する。
+
+5. **Core advanced API と facade API の責務を混ぜない**
+  この計画で整えるのは `Seiton.Core` の advanced API の使い勝手であり、最終的な外部公開 API は snapshot/facade が担う。Core 側で利便性を上げつつも、公開ライブラリの完成形を Core の都合で固定しない。
+
 ### 3. スレッドセーフでない型がある
 
 **論点**:
