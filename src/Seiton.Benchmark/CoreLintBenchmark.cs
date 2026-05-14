@@ -56,6 +56,8 @@ public class CoreLintBenchmark
     public int CheckWorkflow()
     {
         var result = _engine.Check(_yamlBytes, _filePath, _lintConfig);
-        return result.Diagnostics.Length;
+        var count = result.Diagnostics.Length;
+        result.ParseResult.Arena?.Dispose();
+        return count;
     }
 }

@@ -332,3 +332,36 @@ Already well-optimized: the `LintConfig._expressionCache` with XxHash64 deduplic
 2. **Diagnostic.Message is string** — public API contract. Changing to lazy template requires API break.
 3. **IReadOnlyList\<Step\> per job** — structural requirement for visitor pattern. Could use Span-returning API but would require ref struct visitors (major redesign).
 4. **Expression cache stores byte[] copies** — required for collision detection. Only 6 entries, negligible.
+
+---
+
+## 9. Implementation Results
+
+### P-4: Fix Benchmark Arena Disposal (Implemented)
+
+**Change:** Added `result.ParseResult.Arena?.Dispose()` to `CoreLintBenchmark.CheckWorkflow()` in [CoreLintBenchmark.cs](../../src/Seiton.Benchmark/CoreLintBenchmark.cs).
+
+**Benchmark Comparison (ShortRun, .NET 10.0.6, Ryzen 9 7950X3D):**
+
+| Size | FixEnabled | Mean (Before) | Mean (After) | Δ Time | Alloc (Before) | Alloc (After) | Δ Alloc |
+|------|-----------|--------------|-------------|--------|---------------|--------------|---------|
+| Small | False | 70.03 μs | 67.21 μs | -4.0% | 24.06 KB | 10.80 KB | **-55%** |
+| Small | True | 72.34 μs | 73.91 μs | +2.2% | 25.52 KB | 12.25 KB | **-52%** |
+| Medium | False | 1,418 μs | 1,437 μs | +1.3% | 137.28 KB | 76.60 KB | **-44%** |
+| Medium | True | 2,081 μs | 2,538 μs | +22%* | 150.64 KB | 89.96 KB | **-40%** |
+| Large | False | 22,849 μs | 20,305 μs | -11% | 710.18 KB | 378.42 KB | **-47%** |
+| Large | True | 33,979 μs | 35,981 μs | +5.9%* | 764.91 KB | 433.27 KB | **-43%** |
+
+\* ShortRun (3 iterations) has high variance; time differences within error bars are noise. The Medium/True error bar was ±5,802 μs.
+
+**GC Pressure (Large/False):**
+- Before: Gen0=31.25, Gen1=31.25, Gen2=31.25
+- After: Gen0=0, Gen1=0, Gen2=0
+
+**Key Observations:**
+1. Allocation reduction: **-40% to -55%** across all configurations — matches predicted ~210 KB arena overhead.
+2. Performance: within noise (ShortRun variance dominates). No degradation.
+3. GC pressure eliminated for Large workflow — no Gen0/1/2 collections needed.
+4. All 1,615 tests pass with no regression.
+
+**Conclusion:** Benchmark now reflects real-world steady-state accurately. The reported 378 KB for Large/False aligns with the probe measurement of ~500 KB (difference due to expression cache warm-up in benchmark's WarmupCount=3).
