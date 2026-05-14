@@ -442,3 +442,31 @@ else { /* rebuild and update cache */ }
 3. Performance: within noise — no degradation (time variance in ShortRun is dominated by system jitter).
 4. Invalidation is correct: `ReferenceEquals` on `byte[]` + event count ensures rebuild when a different file is linted.
 5. All 1,615 tests pass with no regression.
+
+### P-6: Per-Rule Diagnostic Deduplication (Already Implemented)
+
+**Finding:** Investigation revealed that the two high-impact rules targeted by P-6 **already have message deduplication caching**:
+
+1. **`UnpinnedUsesRule`** (120 identical messages in Large benchmark):
+   - Has `_lastUnpinnedStepUsesSlice`, `_lastUnpinnedStepMessage`, `_lastDecodedUsesText` fields
+   - Compares `usesSlice.Offset`/`Length` (fast path) or byte content (fallback) to reuse cached message string
+   - Resets per-source in `VisitSourcePre` for correctness
+
+2. **`CheckoutPersistCredentialsRule`** (120 identical messages in Large benchmark):
+   - Has `_lastUsesSlice`, `_lastMessage` fields
+   - `GetCachedMessage()` method compares slice length + byte content to reuse cached string
+
+**Remaining candidates:**
+- **`RunnerNoLatestRule`** (20 messages): Each message includes a unique `jobId` (e.g., "jobs.'job0'.runs-on label 'ubuntu-latest'..."). While `labelText` ("ubuntu-latest") repeats, the full message differs per job. Caching `labelText` decode alone would save ~1.2 KB (19 × ~66 bytes) — negligible.
+- **`JobPermissionsRequiredRule`** (20 messages): Each message includes a unique `jobId`. No deduplication possible.
+
+**Benchmark Confirmation (ShortRun, .NET 10.0.6, Ryzen 9 7950X3D):**
+
+| Size | FixEnabled | Mean | Alloc | Notes |
+|------|-----------|------|-------|-------|
+| Small | False | 65.08 μs | 8.88 KB | Unchanged from P-5 baseline |
+| Medium | False | 1,424 μs | 74.69 KB | Unchanged |
+| Large | False | 23,939 μs | 357.20 KB | Unchanged |
+| Large | True | 32,975 μs | 412.05 KB | Unchanged |
+
+**Conclusion:** P-6's predicted ~19 KB savings were already captured before this analysis. The message deduplication pattern was implemented in `UnpinnedUsesRule` and `CheckoutPersistCredentialsRule` prior to the deep allocation review. No additional implementation is needed. The remaining 40 diagnostics (20+20) have per-job unique messages that cannot benefit from deduplication.
