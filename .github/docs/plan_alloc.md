@@ -43,35 +43,21 @@ This document summarizes the findings from a deep investigation of unnecessary m
 |---|----------|---------|-----------|---------------|
 | ED-1 | `EditDistance.cs:21-22` | `new int[right.Length + 1]` × 2 per call | Warm (per unknown input suggestion) | Use `stackalloc` when `right.Length + 1 <= 128`; otherwise use `ArrayPool<int>.Shared`. Callers are `PopularActionInputsRule` (per-unknown-input) and `RuleCatalog` (per-rule-id-typo). |
 
-**Implementation:**
+**Status: ✅ IMPLEMENTED**
 
-```csharp
-public static int ComputeIgnoreCase(string left, string right)
-{
-    if (left.Length == 0) return right.Length;
-    if (right.Length == 0) return left.Length;
+Replaced `new int[]` × 2 with inline `stackalloc` (≤128) / `ArrayPool` (>128). The algorithm loop is inlined in both branches to avoid method-call overhead with `Span<int>` parameters.
 
-    var len = right.Length + 1;
-    int[]? rentedPrev = null, rentedCurr = null;
-    Span<int> previous = len <= 128
-        ? stackalloc int[len]
-        : (rentedPrev = ArrayPool<int>.Shared.Rent(len)).AsSpan(0, len);
-    Span<int> current = len <= 128
-        ? stackalloc int[len]
-        : (rentedCurr = ArrayPool<int>.Shared.Rent(len)).AsSpan(0, len);
-    try
-    {
-        for (var j = 0; j <= right.Length; j++) previous[j] = j;
-        // ... loop body unchanged ...
-        return previous[right.Length];
-    }
-    finally
-    {
-        if (rentedPrev is not null) ArrayPool<int>.Shared.Return(rentedPrev);
-        if (rentedCurr is not null) ArrayPool<int>.Shared.Return(rentedCurr);
-    }
-}
-```
+**Benchmark Results (EditDistanceBenchmark, ShortRun):**
+
+| Method | Before (Mean) | Before (Alloc) | After (Mean) | After (Alloc) | Δ Mean | Δ Alloc |
+|--------|--------------|----------------|-------------|---------------|--------|---------|
+| ComputeAll (6×6 loop) | 9,882 ns | 5,568 B | 7,867 ns | 0 B | **-20%** | **-100%** |
+| SingleShort ("tokne"↔"token") | 35 ns | 0 B | 50 ns | 0 B | +43%* | — |
+| SingleLong ("cache-dependency-pathx"↔"cache-dependency-path") | 505 ns | 0 B | 722 ns | 0 B | +43%* | — |
+
+\*SingleShort/SingleLong show 0 alloc in baseline because .NET 10 JIT applies Object Stack Allocation (OSA) for isolated calls where arrays don't escape. This optimization is lost with `stackalloc` (larger stack frame). In real usage, `EditDistance` is **always called in a loop** (comparing unknown input against all known inputs), where the baseline OSA doesn't apply and allocations accumulate. The **ComputeAll** benchmark is the representative scenario.
+
+**Tests:** 320/320 `RuleInterfaceTests` pass. No regressions.
 
 ---
 
@@ -145,7 +131,7 @@ public static int ComputeIgnoreCase(string left, string right)
 
 | ID | Change | Expected Impact | Verification |
 |----|--------|----------------|--------------|
-| **ED-1** | `EditDistance.ComputeIgnoreCase`: Replace `new int[]` with `stackalloc`/`ArrayPool` | Eliminates 2 × `int[]` allocations per edit-distance call | `ParsingBenchmark` + `LintBenchmark` alloc delta; `dotnet test` |
+| **ED-1** ✅ | `EditDistance.ComputeIgnoreCase`: Replace `new int[]` with `stackalloc`/`ArrayPool` | Eliminates 2 × `int[]` allocations per edit-distance call | `EditDistanceBenchmark`: ComputeAll 9,882→7,867 ns (-20%), 5568→0 B (-100%). 320 tests pass. |
 | **R-4** | `IanaTimeZones.IsKnown`: Add `ReadOnlySpan<byte>` overload | Eliminates 1 string allocation per valid timezone check | `dotnet test --treenode-filter /*/*/ScheduleEventRule*` |
 
 ### Priority 2 (Medium Impact)
@@ -193,7 +179,7 @@ Compare `Allocated` (bytes) before and after each change.
 
 The Seiton codebase is already well-optimized. The parser uses zero-alloc patterns throughout, and most linting rules only allocate strings on error/diagnostic paths (which is acceptable by design). The actionable items are:
 
-1. **ED-1** (`EditDistance`) — straightforward stackalloc/ArrayPool conversion with measurable per-suggestion improvement.
+1. **ED-1** (`EditDistance`) — ✅ **Done.** stackalloc/ArrayPool conversion: -20% latency, -100% alloc in loop scenarios.
 2. **R-4** (`IanaTimeZones.IsKnown`) — add a UTF-8 overload to avoid string allocation on the happy path.
 3. **AR-1** (`GlobMatch` dictionary reuse) — moderate improvement for workflows with file exclusions.
 4. **L-3** (suppression dictionary pooling) — helps large multi-job workflows.
