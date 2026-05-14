@@ -470,3 +470,39 @@ else { /* rebuild and update cache */ }
 | Large | True | 32,975 μs | 412.05 KB | Unchanged |
 
 **Conclusion:** P-6's predicted ~19 KB savings were already captured before this analysis. The message deduplication pattern was implemented in `UnpinnedUsesRule` and `CheckoutPersistCredentialsRule` prior to the deep allocation review. No additional implementation is needed. The remaining 40 diagnostics (20+20) have per-job unique messages that cannot benefit from deduplication.
+
+### P-1: Eliminate Sink-Name String Interpolation (Implemented)
+
+**Change:** In [ExprUndefinedVarRule.cs](../../src/Seiton.Core/Linting/Rules/ExprUndefinedVarRule.cs), removed the `string sinkName` parameter from all internal `CheckNode`, `CheckEnv`, `CheckSectionExpression`, `ValidateExpression`, `VisitExpressionNode`, `CheckNodeWithOverrides`, `CheckMatrixValues`, `CheckMatrixCombinationEntries`, and `ValidateTemplateType` methods.
+
+**Key Design Insight:** The `sinkName` parameter was never used in diagnostic messages — it was only consumed for two flow-control checks:
+1. `sinkName.EndsWith(".if")` → determines whether to parse value as bare expression
+2. `sinkName is "job.runs-on"` → determines which type check to apply in `ValidateTemplateType`
+
+Both checks can be derived from the `ExpressionValidationContext` enum:
+- `.if` check → `context is JobIf or StepIf or JobSnapshotIf`
+- `"job.runs-on"` check → replaced with `bool isRunsOnLabels` parameter (only 2 call sites set it true)
+
+**Eliminated allocations:**
+- `Decode(pair.Key)` per with-input (120 action steps × ~6 inputs = ~720 calls)
+- `$"step.with.{inputName}"` per with-input
+- `Decode(Arena.GetStringSlice(envVar.Name))` per env var
+- `$"{sinkName}-key"` / `$"{sinkName}.{keyName}"` per env var
+- `Decode(Arena.GetStringSlice(input.Name))` + `$"job.with.{inputName}"` per workflow call input
+
+**CoreLintBenchmark (ShortRun, .NET 10.0.6, Ryzen 9 7950X3D):**
+
+| Size | FixEnabled | Mean (Before) | Mean (After) | Δ Time | Alloc (Before) | Alloc (After) | Δ Alloc |
+|------|-----------|--------------|-------------|--------|---------------|--------------|---------|
+| Small | False | 65.08 μs | 55.48 μs | -14.7% | 8.88 KB | 8.37 KB | **-5.7%** |
+| Small | True | 68.49 μs | 63.99 μs | -6.6% | 10.34 KB | 9.82 KB | **-5.0%** |
+| Medium | False | 1,424 μs | 1,321 μs | -7.2% | 74.69 KB | 68.56 KB | **-8.2%** |
+| Medium | True | 2,042 μs | 1,841 μs | -9.9% | 88.05 KB | 81.92 KB | **-7.0%** |
+| Large | False | 23,939 μs | 20,694 μs | -13.5% | 357.20 KB | 327.08 KB | **-8.4%** |
+| Large | True | 32,975 μs | 30,198 μs | -8.4% | 412.05 KB | 381.92 KB | **-7.3%** |
+
+**Key Observations:**
+1. Allocation savings: **-30.12 KB** for Large/False, **-30.13 KB** for Large/True — consistent with the predicted ~33 KB from eliminating Decode() + interpolation strings.
+2. Performance improvement: **-8% to -15%** across all configurations — eliminating hundreds of `Encoding.UTF8.GetString()` calls + string allocations + `string.EndsWith()` comparison per lint run is measurably faster.
+3. The savings scale linearly with workflow size: Small saves ~0.5 KB, Medium saves ~6 KB, Large saves ~30 KB (proportional to number of expressions checked).
+4. All 1,615 tests pass with no regression.
