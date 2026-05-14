@@ -696,7 +696,7 @@ public sealed class LocalReusableWorkflowOutputResolutionTests
     }
 
     [Test]
-    public async Task ResolveOutputNames_EquivalentPathsWithDotDotSegments_CacheHitsCorrectly()
+    public async Task ResolveOutputNames_EquivalentPathsWithDotSegments_ResolveCorrectly()
     {
         // Two semantically equivalent uses paths that differ in raw form should resolve correctly.
         // e.g., "./.github/workflows/reusable.yml" and "./.github/workflows/./reusable.yml"
