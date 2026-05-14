@@ -7,7 +7,7 @@ internal static class EditDistance
 {
     /// <summary>
     /// Computes the Levenshtein edit distance between two strings using case-insensitive comparison.
-    /// Uses stackalloc for strings up to 128 chars to avoid heap allocations in loop scenarios.
+    /// Uses stackalloc for strings up to 127 chars to avoid heap allocations in loop scenarios.
     /// </summary>
     public static int ComputeIgnoreCase(string left, string right)
     {
