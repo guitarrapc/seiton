@@ -872,14 +872,6 @@ historical short-run 記録との比較（summary table の根拠）:
 - テスト: 全テスト pass
 - 利用者コード: `result.Arena.GetStringValue(...)` → `result.GetUtf8(...)` で短縮。Arena の概念が消える
 
-##### 次回に詰める具体論点
-
-1. `GetString` を string convenience API として常設するか、`DecodeString` など別名にするか。
-2. `GetUtf8` / `GetSlice` / `Source` の 3 つをすべて public に出すか、advanced 度合いで整理するか。
-3. `GetRange` / `GetExpression` を NodeId overload 群で揃えるか、共通 interface/utility に寄せるか。
-4. `LintResult` に Parse 系と同じ accessor 群を完全対称で持たせるか、共通基底/共通 helper を使うか。
-5. 利用者が IntelliSense だけで値の読み方を理解できる命名になっているかを、サンプルコード基準で再評価すること。
-
 #### 利用者視点の API 分析と改善計画
 
 ##### 現状の public surface（実装結果）
@@ -949,7 +941,206 @@ foreach (var diag in lint.Diagnostics) { ... }
 | **`LintResult` が `ParseResult` の全メソッドを重複定義** | `LintResult.GetString(...)` | 1 概念 1 型を達成した代償で、同じ accessor が 2 つの結果型に完全対称にある。30 メソッドの表面積。将来のメンテコスト |
 | **`LintConfig.Arena` が public のまま** | `config.Arena` property は public setter | `ParseResult.Arena` は internal にしたが、`LintConfig` が公開し続けている。外部利用者が `LintConfig` を自前構築して `.Arena` を触る想定はないはず |
 
-##### 改善計画: Core API accessor の最終整理
+##### 総合評価
+
+###### A. データ志向の観点
+
+**現状評価: 6/10 — 中途半端なデータ志向**
+
+良い点:
+- AST ノードは **opaque handle (NodeId) + flat arena** 構成。古典的な entity-component-system に近いデータ志向
+- `SliceMap<TValue>` は value-type entries を `ReadOnlySpan<Entry>` で返す。イテレーションはメモリ連続
+- `Utf8Slice(Offset, Length)` / `TextRange` は plain data struct でフィールドを直接読める
+
+問題点:
+- **AST 構造は class graph**: `Workflow` / `Job` / `Step` は `sealed class` で reference 型。ツリー走査はポインタ追跡
+- **使い方がハイブリッド**: AST はオブジェクトグラフで辿るが、scalar 値は arena handle で別途 resolve する。2 つの設計哲学の縫い目が利用者に見える
+- **arena handle の「間接アクセス感」**: `result.GetString(job.Id)` は結果型にメソッドを生やす OOP 的アプローチ。データ志向なら `JobData.Name` フィールドに直接 `string` が入っている（あるいは source 上のスライス情報が struct に同居している）方が「データ」感がある
+
+データ志向への深化案:
+
+```csharp
+// 案A: NodeId 自体に拡張メソッドで resolve 能力を持たせる (extension 経由で result を渡す)
+var name = job.Id.Resolve(result);  // StringNodeId.Resolve(ParseResult) → string
+
+// 案B: Property accessor を struct に焼く (結果型の概念を消す)
+// → ParseResult がない世界。AST struct 自体が値を持つ。ただし lifetime 管理が壊れるため不適
+```
+
+**結論**: 現状の「class AST + arena handle + result facade」のハイブリッドは performance と safety の両立として妥当。完全データ志向（全ノードが struct で arena にフラット配置）は API ergonomics を著しく犠牲にするため、現実的ではない。ただし **accessor の呼び出し方向** (データから見るか、コンテナから見るか) は改善余地がある（後述の extension method 案）。
+
+---
+
+###### B. async/await 相性の観点
+
+**現状評価: 8/10 — 実用的に問題なし**
+
+良い点:
+- `ParseResult` / `LintResult` は **reference type** (`sealed class`) なので async 越え OK
+- テストで実証済み: `Task<ParseResult>` で await 後に値アクセスが正常動作
+- `IDisposable` で明示的 lifetime → `await using` でも `using var` でもどちらも使える
+
+```csharp
+// ✅ async 対応パターン
+var result = await FetchAndParseAsync(url);
+using (result) { /* ... */ }
+
+// ✅ await using でも OK（IAsyncDisposable ではないが using var で十分）
+using var result = await Task.Run(() => WorkflowParser.Parse(bytes, path));
+```
+
+問題点:
+- `Parse()` 自体が sync-only: `byte[]` を渡す同期 API しかない。File I/O → parse の完全 async パスが無い
+- `ReadOnlySpan<byte>` を返す `GetUtf8()` / `Source` は async メソッド内で使えない（ref struct 制約）
+  - ただし `GetString()` が convenience 代替なので実害は小さい
+
+改善案:
+- `ParseAsync(Stream, string, CancellationToken)` は facade 層で提供（Core は sync のみで正しい）
+- `GetUtf8()` の async 不可は文書化で十分。perf-sensitive 利用者は sync path を選ぶ
+
+**結論**: Core API としては async 相性は十分。入口の async 化は facade の仕事であり、Core が sync-only なのは妥当な責務分離。
+
+---
+
+###### C. C# らしい使い勝手の観点
+
+**現状評価: 5/10 — 「動く」が「C# らしい」かは疑問**
+
+**C-1. 利用者の思考フローとの乖離**
+
+利用者の思考: 「Job の名前を取りたい」
+
+```csharp
+// ❌ 利用者の期待 (C# 的直感)
+var name = job.Name;           // → string? であってほしい
+
+// ✅ 現実
+var name = result.GetString(job.Name);  // job.Name は StringNodeId
+```
+
+`job.Name` が `StringNodeId` という「ハンドル」であることを知らないと、最初のステップでつまずく。`StringNodeId` は `.HasValue` しか public メンバがないため、IDE 補完で「次にどうすればいいか」が見えない。
+
+**C-2. NodeId の IntelliSense 問題**
+
+```csharp
+StringNodeId id = job.Name;
+id.  // IntelliSense: HasValue, Equals, GetHashCode, ToString ...
+     // 「この値をどう読むか」の手がかりがない
+```
+
+利用者は `id.` を打った時点で「result に戻って resolve する」ことに気づけない。C# の他のライブラリ (System.Text.Json の `JsonElement`、Roslyn の `SyntaxToken` 等) では、ノード自体に `.Value` / `.GetText()` が生えている。
+
+**C-3. 「result に聞く」パターンの認知負荷**
+
+| 設計パターン | 例 | C# エコシステムでの precedent |
+|---|---|---|
+| **Container resolve** (現状) | `result.GetString(handle)` | `IServiceProvider.GetService<T>()`, Entity Framework の `DbContext.Entry()` |
+| **Self-descriptive node** | `handle.Value` / `handle.GetString()` | `JsonElement.GetString()`, `SyntaxToken.Text` |
+| **Extension method** | `handle.Resolve(result)` | LINQ, `IEnumerable<T>.ToList()` |
+
+現状は「Container resolve」パターン。DI コンテナや DbContext に近い。これは **「何でも result に聞く」** という学習コストを伴う。
+
+**C-4. SliceMap イテレーションの摩擦**
+
+```csharp
+// 現状: Jobs を列挙して名前を出す
+foreach (var entry in result.Workflow!.Jobs)
+{
+    var key = entry.Key;                          // Utf8Slice
+    var keyStr = Encoding.UTF8.GetString(key.AsSpan(result.Source)); // source が必要！
+    var jobName = result.GetString(entry.Value.Name);
+}
+```
+
+`entry.Key` が `Utf8Slice` で、source bytes を渡さないと文字列にすらならない。これは「zero-copy のため」だが、利用者には「なぜ key が string じゃないのか」が不明。
+→ `Source` を internal にすると、key のデコードすらできなくなる。`Source` は public のまま残すか、代替手段が必要。
+
+---
+
+###### D. 使い方駆動 (Usage-Driven) 評価
+
+利用者の典型タスクごとに、現在の API で何ステップかかるか計測する。
+
+**タスク 1: 「ワークフロー内の全 job ID を列挙する」**
+
+```csharp
+using var result = WorkflowParser.Parse(yaml, path);
+foreach (var entry in result.Workflow!.Jobs)
+{
+    Console.WriteLine(result.GetString(entry.Value.Id));
+}
+```
+
+**評価**: 3 行。`result.GetString(entry.Value.Id)` は冗長だが許容範囲。
+**改善**: `entry.Value.Id` が直接 `string` なら 1 行減るが、perf 代償が大きい。
+
+**タスク 2: 「特定の job がどの runner で動くか調べる」**
+
+```csharp
+using var result = WorkflowParser.Parse(yaml, path);
+var job = result.Workflow!.Jobs.Entries[0].Value;
+var runner = job.RunsOn;
+// runner は Runner? → Labels の中身は StringNodeId[]
+if (runner?.Labels is { } labels)
+{
+    foreach (var label in labels)
+    {
+        Console.WriteLine(result.GetString(label));
+    }
+}
+```
+
+**評価**: ナビゲーション階層が深い。`runner.Labels` → `StringNodeId[]` → resolve という 3 段。
+C# 的に期待される形: `job.RunsOn?.Labels` → `string[]`。
+
+**タスク 3: 「lint して warning の一覧を表示する」**
+
+```csharp
+var engine = new LintEngine();
+using var result = engine.Check(yaml, path);
+foreach (var diag in result.Diagnostics)
+{
+    Console.WriteLine($"[{diag.Severity}] {diag.Message} at {diag.Range}");
+}
+```
+
+**評価**: 3 行。直感的で問題なし。diagnostics は string ベースなので resolve 不要。**ここは優秀**。
+
+**タスク 4: 「結果を別スレッドに渡して後で表示する」**
+
+```csharp
+var result = WorkflowParser.Parse(yaml, path);
+_ = Task.Run(() =>
+{
+    using (result)
+    {
+        var id = result.GetString(result.Workflow!.Jobs.Entries[0].Value.Id);
+        Console.WriteLine(id);
+    }
+});
+```
+
+**評価**: 問題なし。class で IDisposable なので thread 間受け渡しが自然。
+
+**タスク 5: 「diagnostic だけ保存して result を早期開放する」**
+
+```csharp
+OwnedDiagnostics diags;
+using (var result = WorkflowParser.Parse(yaml, path))
+{
+    diags = result.CopyDiagnostics();
+}
+// result は Dispose 済み、diags は使える
+foreach (var d in diags) { ... }
+```
+
+**評価**: `CopyDiagnostics()` で明示的なスナップショットを取る設計は C# 的に正しい。
+
+---
+
+##### 改善計画
+
+以下は評価結果に基づく、Core API accessor の最終整理計画。上から順に実施する。
 
 **方針**: Core advanced API は性能最重視の利用者向け。ただし「公開する必要がないものは閉じる」原則に従い、internal で十分なものは internal に退避する。
 
@@ -980,6 +1171,9 @@ public sealed class ParseResult : IDisposable
     public long GetInt(IntNodeId id);
     public double GetFloat(FloatNodeId id);
 
+    // Map key resolution — SliceMap のキーを文字列として取得
+    public string GetString(Utf8Slice key);               // P1: map key デコード
+
     // Source location — diagnostic 表示に必要
     public TextRange GetRange(StringNodeId id);
     public TextRange GetRange(BoolNodeId id);
@@ -992,14 +1186,17 @@ public sealed class ParseResult : IDisposable
 }
 ```
 
-結果: **11 public methods** (値取得 5 + 位置取得 4 + copy 1 + dispose 1)。
-現状 15 → 11 へ縮小。4 methods が internal に退避。
+結果: **12 public methods** (値取得 5 + key取得 1 + 位置取得 4 + copy 1 + dispose 1)。
+現状 15 → 12 へ縮小。internal に退避する 4 グループ (GetSlice, IsQuoted, GetExpression×4, Source) を閉じる。
 
-**Step 3: `LintConfig.Arena` の可視性**
+**Step 3: `LintConfig.Arena` / `AstArena` の可視性**
 
-- `LintConfig.Arena` を `internal set` に変更（getter は internal で十分）
+- `AstArena` を `internal sealed class` に変更する
+- `LintConfig.Arena` を `internal` property に変更
 - lint rules は `RuleBase.Arena` (protected, `Config.Arena!` を返す) 経由で引き続きアクセスできる
 - 外部から `new LintConfig { Arena = ... }` と書くユースケースはない
+- `NodeId` struct 群 (`StringNodeId`, `BoolNodeId`, `IntNodeId`, `FloatNodeId`) は public のまま（AST ノードのフィールドとして外部利用者が参照する）
+- `InternalsVisibleTo` で `Seiton.Benchmark`, `Seiton.Playground.Core`, `Seiton.Core.Tests` からは引き続きアクセス可能
 
 **Step 4: 重複定義の対処**
 
@@ -1007,26 +1204,30 @@ public sealed class ParseResult : IDisposable
 - ただし実装は共通化する: private static helper or shared extension で委譲し、メンテ負荷を減らす
 - interface (`IValueResolver`) を抽出する案は、利用パターンがポリモーフィック（`ParseResult` と `LintResult` を統一的に扱う）な場合のみ意味がある。現時点では不要
 
-**Step 5: `AstArena` の public visibility を消す最終判断**
+**Step 5: C# 的 discoverability の補完**
 
-現状:
-- `AstArena` class 自体は `public sealed class`
-- `ParseResult.Arena` は `internal`
-- `LintConfig.Arena` は `public { get; set; }`
-- `RuleBase.Arena` は `protected`
-- `ReusableWorkflowRule` / `LocalActionInputsRule` が internal で Arena を触る
+| 施策 | 効果 |
+|---|---|
+| `result.GetString(entry.Key)` overload (Utf8Slice → string) | Jobs/Outputs のキー列挙で `Encoding.UTF8.GetString` を手書きしなくて済む (Step 2 に含む) |
+| NodeId の `[DebuggerDisplay]` 改善 + XML doc に resolve パターン記述 | IDE hover 時に「result.GetString(id) で値が取れます」と表示 |
+| パッケージ README にタスク別サンプル 5 種を配置 | 新規利用者の学習コストを最小化 |
 
-Core advanced API としても、**外部利用者が `AstArena` を直接触る正当なユースケースはない**:
-- 値の読み出し → `result.GetString()` / `result.GetUtf8()` で完結
-- lint rules を自前で書く → `RuleBase.Arena` (protected) で完結
-- source bytes → 将来的に `result.GetSourceBytes()` (返り値 `ReadOnlyMemory<byte>`) で代替可能
+**Step 6 (将来): 利用者動線の C# 的整備**
 
-判断: **`AstArena` を `internal` class に変更する**。
+```csharp
+// 案1: Extension method で NodeId に resolve 能力を付与
+public static class ParseResultExtensions
+{
+    public static string Resolve(this StringNodeId id, ParseResult result) => result.GetString(id);
+}
+// → job.Id.Resolve(result) と書ける。LINQ 的パイプライン感覚
 
-影響:
-- `LintConfig.Arena` → internal property に変更
-- `InternalsVisibleTo` で `Seiton.Benchmark`, `Seiton.Playground.Core`, `Seiton.Core.Tests` からは引き続きアクセス可能
-- `NodeId` struct 群 (`StringNodeId`, `BoolNodeId`, `IntNodeId`, `FloatNodeId`) は public のまま（AST ノードのフィールドとして外部利用者が参照する）
+// 案2: Facade layer — string-materialized DTO
+// zero-copy 不要な利用者向けに「全部 string で返す」選択肢
+public sealed class SeitonResult { public string JobId { get; } ... }
+```
+
+---
 
 ##### 利用パターン比較: before → after
 
@@ -1043,14 +1244,28 @@ var src = result.Source;                      // ❓ Span で逃がせない
 
 // ── After (改善後) ────────────────────────────────────
 using var result = WorkflowParser.Parse(yaml, path);
-var job = result.Workflow!.Jobs.Entries[0].Value;
-var id = result.GetString(job.Id);            // ✅ string (convenience)
-var raw = result.GetUtf8(job.Id);             // ✅ zero-copy bytes (perf)
-var range = result.GetRange(job.Id);          // ✅ source location
+var workflow = result.Workflow!;
+foreach (var entry in workflow.Jobs)
+{
+    var jobKey = result.GetString(entry.Key);           // map key
+    var jobId = result.GetString(entry.Value.Id);      // scalar 値
+    var range = result.GetRange(entry.Value.Id);       // source location
+    Console.WriteLine($"Job '{jobId}' (key={jobKey}) at line {range.StartLine}");
+}
 // GetSlice, IsQuoted, GetExpression, Source → IDE に出ない
 ```
 
-IntelliSense で `result.` と打った時に見えるメソッドが 15 → 11 に減り、全てが「利用者がやりたいこと」に直結する。
+IntelliSense で `result.` と打った時に見えるメソッドが 15 → 12 に減り、全てが「利用者がやりたいこと」に直結する。
+
+##### ゴールイメージ: 設計原則
+
+| 原則 | 適用 |
+|---|---|
+| **見えるものだけが全て** | IntelliSense に出るメソッドは、全て利用者タスクに直結する |
+| **1 つの正解がある** | 文字列が欲しければ `GetString`。バイト列なら `GetUtf8`。迷わない |
+| **内部概念は漏らさない** | Arena, Slice, Quoted, Expression は internal。利用者はハンドルの実装詳細を知らない |
+| **C# の文法に乗る** | `using var` で lifetime、`foreach` で列挙、overload で型安全 |
+| **async に優しい** | class + IDisposable。Span 戻り値は sync convenience |
 
 ##### 判定基準
 
