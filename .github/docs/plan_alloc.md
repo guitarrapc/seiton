@@ -81,7 +81,7 @@ Replaced `new int[]` × 2 with inline `stackalloc` (≤128) / `ArrayPool` (>128)
 | R-1 | `PopularActionInputsRule` | Lines 61-62, 69, 106 | `Encoding.UTF8.GetString(...)` per-input per-step for diagnostics | High (N steps × M inputs) | Only decode when actually emitting a diagnostic — the `Encoding.UTF8.GetString` calls are inside the diagnostic emission path, which is correct. However the `unknownInputName` decode on line 69 happens unconditionally for every unknown input. Consider deferring to message builder. **Actually acceptable** since this is only reached for unknown inputs (error path). Keep as-is. |
 | R-2 | `IfCondRule` | Line 121 | `Encoding.UTF8.GetString(expression).Trim()` | Medium (per-constant-expression step/job) | Only called when expression is constant (error/warning path). Acceptable. |
 | R-3 | `ExprUndefinedVarRule` | Lines 694, 728 | `Encoding.UTF8.GetString(rootName/funcName)` per-context-error | Medium | Only in error paths. Acceptable. |
-| R-4 | `ScheduleEventRule` | Line 90 | `Generated.IanaTimeZones.IsKnown(Encoding.UTF8.GetString(span))` | Low-Medium | Called per-schedule entry. Consider adding a `IsKnown(ReadOnlySpan<byte>)` overload that uses UTF-8 comparison internally, avoiding string allocation on the happy path (timezone is valid). |
+| R-4 | `ScheduleEventRule` | Line 90 | `Generated.IanaTimeZones.IsKnown(Encoding.UTF8.GetString(span))` | Low-Medium | Called per-schedule entry. Added a `IsKnown(ReadOnlySpan<byte>)` overload that uses `FrozenSet<string>.GetAlternateLookup<ReadOnlySpan<char>>()` + stackalloc char decode, avoiding string allocation on the happy path (timezone is valid). |
 | R-5 | `NeedsGraphRule` | Line 67 | `new Dictionary<Utf8String, byte>(_knownJobs.Count)` per-workflow | Warm (per workflow, not per job) | Per-workflow. Low priority. Consider field-level dictionary cleared per workflow for repeated linting of the same engine instance. |
 | R-6 | `NeedsGraphRule` | Line 147 | `stack.ToArray()` in `BuildCyclePath` | Cold (only on cycle detection) | Acceptable — only reached when a cycle exists. |
 
@@ -132,7 +132,7 @@ Replaced `new int[]` × 2 with inline `stackalloc` (≤128) / `ArrayPool` (>128)
 | ID | Change | Expected Impact | Verification |
 |----|--------|----------------|--------------|
 | **ED-1** ✅ | `EditDistance.ComputeIgnoreCase`: Replace `new int[]` with `stackalloc`/`ArrayPool` | Eliminates 2 × `int[]` allocations per edit-distance call | `EditDistanceBenchmark`: ComputeAll 9,882→7,867 ns (-20%), 5568→0 B (-100%). 320 tests pass. |
-| **R-4** | `IanaTimeZones.IsKnown`: Add `ReadOnlySpan<byte>` overload | Eliminates 1 string allocation per valid timezone check | `dotnet test --treenode-filter /*/*/ScheduleEventRule*` |
+| **R-4** ✅ | `IanaTimeZones.IsKnown`: Add `ReadOnlySpan<byte>` overload via `FrozenSet.GetAlternateLookup<ReadOnlySpan<char>>()` + stackalloc char decode | Eliminates string allocation per timezone check (valid and invalid) | `IanaTimeZoneLookupBenchmark`: LookupValidAll 187→136 ns (-27%), 400→0 B (-100%). LookupInvalidAll 84→60 ns (-28%), 192→0 B (-100%). 320 RuleInterface + 202 ActionlintCompat tests pass. |
 
 ### Priority 2 (Medium Impact)
 

@@ -5,6 +5,7 @@
 // </auto-generated>
 
 using System.Collections.Frozen;
+using System.Text;
 
 namespace Seiton.Core.Generated;
 
@@ -13,6 +14,14 @@ internal static class IanaTimeZones
 {
     /// <summary>Returns true if the given string is a known IANA timezone identifier (case-sensitive).</summary>
     internal static bool IsKnown(string id) => KnownIds.Contains(id);
+
+    /// <summary>Returns true if the given UTF-8 span is a known IANA timezone identifier (case-sensitive, zero-allocation).</summary>
+    internal static bool IsKnown(ReadOnlySpan<byte> utf8Id)
+    {
+        Span<char> chars = stackalloc char[utf8Id.Length];
+        var charCount = Encoding.UTF8.GetChars(utf8Id, chars);
+        return AlternateLookup.Contains(chars[..charCount]);
+    }
 
     private static readonly FrozenSet<string> KnownIds = FrozenSet.ToFrozenSet(
     [
@@ -615,4 +624,6 @@ internal static class IanaTimeZones
         "WET",
         "Zulu"
     ], StringComparer.Ordinal);
+
+    private static readonly FrozenSet<string>.AlternateLookup<ReadOnlySpan<char>> AlternateLookup = KnownIds.GetAlternateLookup<ReadOnlySpan<char>>();
 }

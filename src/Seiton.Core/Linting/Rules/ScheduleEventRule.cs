@@ -1,5 +1,4 @@
-﻿using System.Text;
-using Seiton.Core.Parsing;
+﻿using Seiton.Core.Parsing;
 using Seiton.Core.Parsing.Ast;
 
 namespace Seiton.Core.Linting.Rules;
@@ -87,7 +86,7 @@ public sealed class ScheduleEventRule() : RuleBase(RuleId.ScheduleEvent)
             return;
         }
 
-        if (!Generated.IanaTimeZones.IsKnown(Encoding.UTF8.GetString(span)))
+        if (!Generated.IanaTimeZones.IsKnown(span))
         {
             AddEventError(scheduleEvent, $"on.schedule timezone '{Decode(Arena.GetStringSlice(timezoneNode))}' is invalid", Arena.GetStringRange(timezoneNode));
         }
