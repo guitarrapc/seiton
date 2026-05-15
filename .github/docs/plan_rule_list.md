@@ -309,7 +309,7 @@ OPTIONS:
 
 | ファイル | 変更内容 |
 |---|---|
-| `src/Seiton.Core/Linting/RuleCatalog.cs` | `GetAllRuleDescriptors()` public static メソッド追加 |
+| `src/Seiton.Core/Linting/RuleCatalog.cs` | `GetAllRuleDescriptors()` internal static メソッド追加 |
 | `src/Seiton/Program.cs` | `rules` サブコマンドの追加 |
 | `src/Seiton/Output/DiagnosticFormatter.cs` | `SeitonJsonContext` に `RuleStatusJsonEntry[]` を追加 |
 
@@ -321,7 +321,7 @@ seiton rules [--config PATH] [--format text|json]
 
 - `--config`: 設定ファイルパス (省略時は自動探索)
 - `--format`: 出力形式 (text がデフォルト、json も対応)
-- Exit code: 常に 0 (情報表示コマンド)
+- Exit code: 成功時は 0。無効なオプション時は 2 (`InvalidOptions`)、設定ファイル不在/不正時は 3 (`FatalError`)
 
 #### テスト結果
 
@@ -348,7 +348,7 @@ seiton rules [--config PATH] [--format text|json]
 |---|---|---|
 | `--enabled-only` / `--disabled-only` フィルタ | 未実装 | 初期リリースではシンプルに全件表示。フィルタは将来追加可能 |
 | ルール数 59 | 実際は 56 (52 default + 4 online) | プラン作成時のカウントミス |
-| `RuleCatalog` を public 化 | internal のまま、`GetAllRuleDescriptors()` のみ public | 最小限の公開範囲を維持 |
+| `RuleCatalog` を public 化 | internal のまま、`GetAllRuleDescriptors()` も internal。公開ファサードは `RuleListResolver` | 最小限の公開範囲を維持 |
 
 ### レビュー後の修正
 
