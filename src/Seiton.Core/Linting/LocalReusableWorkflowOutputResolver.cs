@@ -13,16 +13,15 @@ internal sealed class LocalReusableWorkflowOutputResolver
     private static readonly StringComparer PathComparer =
         OperatingSystem.IsWindows() ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal;
 
-    private readonly string _workflowFilePath;
     private readonly string _workflowDirectory;
     private readonly string? _repositoryRoot;
     private readonly Dictionary<string, string[]?> _cache = new(PathComparer);
 
     public LocalReusableWorkflowOutputResolver(string workflowFilePath)
     {
-        _workflowFilePath = ActionRefHelpers.NormalizePath(workflowFilePath);
         _workflowDirectory = ActionRefHelpers.NormalizePath(Path.GetDirectoryName(workflowFilePath) ?? string.Empty);
-        _repositoryRoot = ActionRefHelpers.TryGetRepositoryRoot(_workflowFilePath, out var repositoryRoot)
+        var normalizedWorkflowPath = ActionRefHelpers.NormalizePath(workflowFilePath);
+        _repositoryRoot = ActionRefHelpers.TryGetRepositoryRoot(normalizedWorkflowPath, out var repositoryRoot)
             ? repositoryRoot
             : null;
     }
@@ -60,22 +59,35 @@ internal sealed class LocalReusableWorkflowOutputResolver
 
         var relativePath = ActionRefHelpers.NormalizePath(DecodeAscii(usesValue));
 
-        // Normalize to full path for cache key to maximize cache hits when
-        // semantically equivalent paths differ in raw form (e.g., extra ./ segments).
-        var normalizedKey = NormalizeCacheKey(relativePath);
-        if (normalizedKey is not null && _cache.TryGetValue(normalizedKey, out var cached))
+        if (_cache.TryGetValue(relativePath, out var cached))
         {
             return cached;
         }
 
-        if (_cache.TryGetValue(relativePath, out cached))
+        // Normalize to full path for cache key to maximize cache hits when
+        // semantically equivalent paths differ in raw form (e.g., extra ./ segments).
+        var normalizedKey = NormalizeCacheKey(relativePath);
+        if (normalizedKey is not null && _cache.TryGetValue(normalizedKey, out cached))
         {
+            _cache[relativePath] = cached;
             return cached;
         }
 
         var result = ResolveAndParse(relativePath, out var resolvedPath);
-        var cacheKey = resolvedPath ?? normalizedKey ?? relativePath;
-        _cache[cacheKey] = result;
+        _cache[relativePath] = result;
+        if (normalizedKey is not null
+            && !string.Equals(normalizedKey, relativePath, StringComparison.Ordinal))
+        {
+            _cache[normalizedKey] = result;
+        }
+
+        if (resolvedPath is not null
+            && !string.Equals(resolvedPath, relativePath, StringComparison.Ordinal)
+            && !string.Equals(resolvedPath, normalizedKey, StringComparison.Ordinal))
+        {
+            _cache[resolvedPath] = result;
+        }
+
         return result;
     }
 

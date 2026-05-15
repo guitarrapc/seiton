@@ -12,16 +12,15 @@ internal sealed class LocalActionOutputResolver
     private static readonly StringComparer PathComparer =
         OperatingSystem.IsWindows() ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal;
 
-    private readonly string _workflowFilePath;
     private readonly string _workflowDirectory;
     private readonly string? _repositoryRoot;
     private readonly Dictionary<string, string[]?> _cache = new(PathComparer);
 
     public LocalActionOutputResolver(string workflowFilePath)
     {
-        _workflowFilePath = ActionRefHelpers.NormalizePath(workflowFilePath);
         _workflowDirectory = ActionRefHelpers.NormalizePath(Path.GetDirectoryName(workflowFilePath) ?? string.Empty);
-        _repositoryRoot = ActionRefHelpers.TryGetRepositoryRoot(_workflowFilePath, out var repositoryRoot)
+        var normalizedWorkflowPath = ActionRefHelpers.NormalizePath(workflowFilePath);
+        _repositoryRoot = ActionRefHelpers.TryGetRepositoryRoot(normalizedWorkflowPath, out var repositoryRoot)
             ? repositoryRoot
             : null;
     }
@@ -49,12 +48,32 @@ internal sealed class LocalActionOutputResolver
             return cached;
         }
 
-        var result = ResolveAndParse(relativePath);
+        var normalizedKey = NormalizeCacheKey(relativePath);
+        if (normalizedKey is not null && _cache.TryGetValue(normalizedKey, out cached))
+        {
+            _cache[relativePath] = cached;
+            return cached;
+        }
+
+        var result = ResolveAndParse(relativePath, out var resolvedPath);
         _cache[relativePath] = result;
+        if (normalizedKey is not null
+            && !string.Equals(normalizedKey, relativePath, StringComparison.Ordinal))
+        {
+            _cache[normalizedKey] = result;
+        }
+
+        if (resolvedPath is not null
+            && !string.Equals(resolvedPath, relativePath, StringComparison.Ordinal)
+            && !string.Equals(resolvedPath, normalizedKey, StringComparison.Ordinal))
+        {
+            _cache[resolvedPath] = result;
+        }
+
         return result;
     }
 
-    private string[]? ResolveAndParse(string relativePath)
+    private string? NormalizeCacheKey(string relativePath)
     {
         var baseDirectory = ResolveLocalReferenceBaseDirectory(relativePath);
         if (string.IsNullOrEmpty(baseDirectory))
@@ -62,7 +81,20 @@ internal sealed class LocalActionOutputResolver
             return null;
         }
 
-        var resolvedPath = ActionRefHelpers.NormalizeFullPath(baseDirectory, relativePath);
+        return ActionRefHelpers.NormalizeFullPath(baseDirectory, relativePath);
+    }
+
+    private string[]? ResolveAndParse(string relativePath, out string? resolvedPath)
+    {
+        resolvedPath = null;
+
+        var baseDirectory = ResolveLocalReferenceBaseDirectory(relativePath);
+        if (string.IsNullOrEmpty(baseDirectory))
+        {
+            return null;
+        }
+
+        resolvedPath = ActionRefHelpers.NormalizeFullPath(baseDirectory, relativePath);
         if (resolvedPath is null)
         {
             return null;

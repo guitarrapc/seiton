@@ -1,5 +1,6 @@
 ﻿using System.Buffers;
 using System.Globalization;
+using System.Runtime.CompilerServices;
 using System.Text;
 
 namespace Seiton.Core.Linting;
@@ -483,8 +484,14 @@ internal static class ActionRefHelpers
 
     private static bool IsAsciiDigit(byte value) => value is >= (byte)'0' and <= (byte)'9';
 
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     internal static string NormalizePath(string path)
     {
+        if (path.IndexOf('\\') < 0)
+        {
+            return path;
+        }
+
         return path.Replace('\\', '/');
     }
 

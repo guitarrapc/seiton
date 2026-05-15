@@ -16,6 +16,7 @@ This feedback is based on an evaluation of seiton 0.9.9 on Windows using PowerSh
 - [x] Update `LocalReusableWorkflowOutputResolver` and `LocalActionOutputResolver` to keep normalized paths internally and return normalized full paths.
 - [x] Precompute normalized workflow directory and repository root per resolver instance to avoid repeating path normalization work for each local reference lookup.
 - [x] Add regression tests for slash-normalized cache keys and shared local-path helper behavior.
+- [x] Review the implementation and fix follow-up issues found in review.
 - [x] Benchmark before/after.
 
 Benchmark notes for this implementation:
@@ -23,9 +24,20 @@ Benchmark notes for this implementation:
 - `CoreLintBenchmark` was run against a clean baseline worktree and the modified worktree. Managed allocation stayed unchanged in the project-wide benchmark, which indicates no regression in the broader lint path.
 - Because the changed code sits in the local action/reusable-workflow resolver path, a focused probe was also run with repeated local action resolution through `LintEngine.Check`.
 - Focused probe result:
-  - `AllocatedBytesPerOp`: `3,761,329.40` -> `3,477,112.36` (`-7.56%`)
-  - `ElapsedMsPerOp`: `23.034517` -> `23.199249` (`+0.71%`)
-- Interpretation: the targeted path shows a measurable allocation reduction with runtime held within the allowed tolerance.
+  - `AllocatedBytesPerOp`: `3,761,954.84` -> `3,477,373.16` (`-7.56%`)
+  - `ElapsedMsPerOp`: `24.741620` -> `24.765855` (`+0.10%`)
+- Broad benchmark result (baseline -> final current, second confirming run):
+  - Small / FixDisabled: `67.78 us` -> `66.71 us`
+  - Small / FixEnabled: `76.67 us` -> `70.06 us`
+  - Medium / FixDisabled: `1457.48 us` -> `1400.32 us`
+  - Medium / FixEnabled: `2068.34 us` -> `2014.60 us`
+  - Large / FixDisabled: `22688.24 us` -> `22316.26 us`
+  - Large / FixEnabled: `34105.72 us` -> `29862.03 us`
+- Review findings and fixes:
+  - `LocalActionOutputResolver` initially generated slash-normalized full-path cache keys but did not look them up. A review-only regression test exposed that mismatch, and the resolver now checks and stores both raw and normalized keys.
+  - The first review fix regressed the hot path by computing normalized full paths before every cache hit. The cache strategy was refined so repeated identical `uses:` strings hit the raw key first, while semantically equivalent alternate spellings still share the normalized alias.
+  - `ActionRefHelpers.NormalizePath()` now returns the original string when no backslash is present, avoiding a no-op allocation on already normalized paths.
+- Interpretation: the targeted path shows a measurable allocation reduction with runtime held comfortably within the allowed tolerance, and the broader benchmark remains non-regressive on the confirming run.
 
 Spec review for this implementation:
 
