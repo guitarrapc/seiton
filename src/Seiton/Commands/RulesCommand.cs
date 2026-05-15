@@ -56,14 +56,16 @@ internal static class RulesCommand
     private static void WriteText(TextWriter writer, IReadOnlyList<RuleStatus> statuses)
     {
         // Header
-        writer.WriteLine($"{"Rule",-40} {"Enabled",-9} {"Type",-8} {"Document",-10} {"Reason"}");
-        writer.WriteLine(new string('-', 90));
+        writer.WriteLine($"{"Rule",-40} {"Enabled",-9} {"Type",-8} {"Severity",-10} {"Fix",-5} {"Document",-10} {"Reason"}");
+        writer.WriteLine(new string('-', 105));
 
         for (var i = 0; i < statuses.Count; i++)
         {
             var s = statuses[i];
             var enabled = s.Enabled ? "yes" : "no";
             var type = s.Rule.IsOnline ? "online" : "local";
+            var severity = s.Rule.DefaultSeverity;
+            var fix = s.Rule.SupportsAutoFix ? "yes" : "no";
             var document = (s.Rule.SupportsWorkflow, s.Rule.SupportsAction) switch
             {
                 (true, true) => "both",
@@ -72,7 +74,7 @@ internal static class RulesCommand
                 _ => "none",
             };
 
-            writer.WriteLine($"{s.Rule.Id,-40} {enabled,-9} {type,-8} {document,-10} {s.Reason}");
+            writer.WriteLine($"{s.Rule.Id,-40} {enabled,-9} {type,-8} {severity,-10} {fix,-5} {document,-10} {s.Reason}");
         }
 
         // Footer: explain how to enable opt-in rules
@@ -97,6 +99,8 @@ internal static class RulesCommand
                 Name = s.Rule.Name,
                 Enabled = s.Enabled,
                 Type = s.Rule.IsOnline ? "online" : "local",
+                DefaultSeverity = s.Rule.DefaultSeverity,
+                SupportsAutoFix = s.Rule.SupportsAutoFix,
                 SupportsWorkflow = s.Rule.SupportsWorkflow,
                 SupportsAction = s.Rule.SupportsAction,
                 Reason = s.Reason,
@@ -114,6 +118,8 @@ internal sealed record RuleStatusJsonEntry
     public required string Name { get; init; }
     public required bool Enabled { get; init; }
     public required string Type { get; init; }
+    public required string DefaultSeverity { get; init; }
+    public required bool SupportsAutoFix { get; init; }
     public required bool SupportsWorkflow { get; init; }
     public required bool SupportsAction { get; init; }
     public required string Reason { get; init; }

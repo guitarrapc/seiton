@@ -148,12 +148,13 @@ seiton rules --format json
 Example text output:
 
 ```
-Rule                                     Enabled   Type     Document   Reason
-------------------------------------------------------------------------------------------
-job-structure                            yes       local    both       default
-template-injection                       yes       local    both       default
-concurrency-limits                       no        local    workflow   opt-in (not configured)
-known-vulnerable-actions                 no        online   workflow   opt-in (not configured)
+Rule                                     Enabled   Type     Severity   Fix   Document   Reason
+---------------------------------------------------------------------------------------------------------
+job-structure                            yes       local    error      no    both       default
+template-injection                       yes       local    error      yes   both       default
+unpinned-uses                            yes       local    mixed      yes   both       default
+concurrency-limits                       no        local    warning    no    workflow   opt-in (not configured)
+known-vulnerable-actions                 no        online   error      no    workflow   opt-in (not configured)
 
 To enable an opt-in rule, add to .github/seiton.yaml:
   rules:
@@ -168,6 +169,8 @@ Columns:
 - **Rule** — Rule ID (the identifier used in config files and inline directives).
 - **Enabled** — Whether the rule is active (`yes`) or inactive (`no`).
 - **Type** — `local` (offline) or `online` (requires network).
+- **Severity** — Default diagnostic severity: `error`, `warning`, or `mixed` (rule emits both errors and warnings depending on the condition).
+- **Fix** — Whether the rule supports auto-fix (`yes` or `no`).
 - **Document** — Which file types the rule applies to: `workflow`, `action`, or `both`.
 - **Reason** — Why the rule has its current state: `default`, `config (enabled)`, `config (disabled)`, or `opt-in (not configured)`.
 

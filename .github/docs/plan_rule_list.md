@@ -359,3 +359,52 @@ seiton rules [--config PATH] [--format text|json]
 
 - 全テスト: **1651 passed, 0 failed** (既存1634 + 新規17)
 - ベンチマーク: lint/parse 全サイズで **Allocated 完全一致** (±0%)
+
+---
+
+## Phase 2 拡張: DefaultSeverity / SupportsAutoFix カラム追加
+
+### 背景
+
+`seiton rules` の初期実装ではルールの有効/無効とタイプのみ表示していたが、以下のフィードバックがあった:
+
+1. ルールが fix 可能かどうかが分からない
+2. ルールごとの warning/error の区別が分からない
+
+### 実施内容
+
+`RuleDescriptor` に 2 フィールドを追加:
+
+```csharp
+public readonly record struct RuleDescriptor(
+    string Id,
+    string Name,
+    bool IsOptIn,
+    bool IsOnline,
+    bool SupportsWorkflow,
+    bool SupportsAction,
+    string DefaultSeverity,   // "error" | "warning" | "mixed"
+    bool SupportsAutoFix);    // true if rule can produce DiagnosticFix
+```
+
+`RuleCatalog` に静的メタデータルックアップを追加:
+- `GetDefaultSeverity(RuleId)`: spec §5.7.2 の per-rule severity table に準拠
+- `GetSupportsAutoFix(RuleId)`: 実装から導出 (DiagnosticFix を生成するルール)
+
+CLI `seiton rules` 出力に **Severity** カラムと **Fix** カラムを追加:
+
+```
+Rule                                     Enabled   Type     Severity   Fix   Document   Reason
+---------------------------------------------------------------------------------------------------------
+job-structure                            yes       local    error      no    both       default
+template-injection                       yes       local    error      yes   both       default
+unpinned-uses                            yes       local    mixed      yes   both       default
+```
+
+JSON 出力にも `defaultSeverity` と `supportsAutoFix` フィールドを追加。
+
+### テスト結果
+
+- 新規テスト 7 件追加 (`RuleCatalogDescriptorTests`): DefaultSeverity / SupportsAutoFix の検証
+- 全テスト: **1672 passed, 1 pre-existing failure** (unrelated exclusion test)
+- ベンチマーク: CoreLintBenchmark Allocated 完全一致 (±0%)

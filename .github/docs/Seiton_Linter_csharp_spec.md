@@ -355,7 +355,9 @@ public readonly record struct RuleDescriptor(
     bool IsOptIn,
     bool IsOnline,
     bool SupportsWorkflow,
-    bool SupportsAction);
+    bool SupportsAction,
+    string DefaultSeverity,
+    bool SupportsAutoFix);
 
 // Describes a rule's effective enabled state given a configuration.
 public readonly record struct RuleStatus(
@@ -366,6 +368,8 @@ public readonly record struct RuleStatus(
 
 - `RuleCatalog.GetAllRuleDescriptors()` (internal) returns cached `IReadOnlyList<RuleDescriptor>` covering all registered rules (default local + online). Uses `Lazy<RuleDescriptor[]>` for thread-safe one-time initialization. External consumers access rule metadata through the public `RuleListResolver` facade.
 - `RuleListResolver.Resolve(LintConfig?)` (public) computes `IReadOnlyList<RuleStatus>` reflecting the effective enabled/disabled state for each rule under the given configuration.
+- `DefaultSeverity`: `"error"`, `"warning"`, or `"mixed"` (rule emits diagnostics at multiple severity levels depending on the specific condition).
+- `SupportsAutoFix`: `true` when the rule can produce `DiagnosticFix` payloads for at least some of its diagnostics.
 
 Reason values: `"default"`, `"config (enabled)"`, `"config (disabled)"`, `"opt-in (not configured)"`.
 
