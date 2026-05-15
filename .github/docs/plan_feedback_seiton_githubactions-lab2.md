@@ -220,9 +220,10 @@ Observed:
 
 ## What still felt awkward
 
-- `run-env-context-direct-use` is still extremely noisy in sample/demo repositories. This is a repository-shaping issue rather than a rule correctness issue, but it means first-run experience on educational repos still needs tuning very quickly.
+- High-count findings are not inherently a problem when they are clearly fixable. In practice, rules such as `run-env-context-direct-use` can appear in large numbers on sample/demo repositories, but that does not materially harm the experience because `--fix` can clear them in one pass.
+- Repository-local tuning is still useful when a sample repository intentionally wants to keep insecure or pedagogical patterns unfixed for demonstration purposes. That is a legitimate exception case, not the normal path.
 - `--fix --dry-run` output can feel slightly awkward when diff output and summary/diagnostic text are mixed in one terminal stream. In practice, the fix is understandable, but the summary can appear visually close to the diff body and reduce scanability.
-- Verbose mode lists every checked file, which is useful, but on long runs the final summary is still the main anchor. The current per-rule breakdown helps a lot, so this is no longer a strong complaint.
+- Verbose mode lists every checked file, which is useful, but on long runs the final summary is still the main anchor. Because the current per-rule breakdown already keeps the run easy to interpret, this is a secondary concern rather than a meaningful product gap.
 
 ## Feedback for Seiton
 
@@ -235,13 +236,13 @@ Observed:
 
 ### Remaining feedback
 
-1. Demo/sample repositories still need repository-local tuning quickly.
-   - This is acceptable, but users should expect to add exclusions or disable some rules in educational repos.
-   - The new sample/demo tuning guide in the docs is the right direction.
-
-2. Consider making dry-run output sequencing a bit cleaner.
+1. Consider making dry-run output sequencing a bit cleaner.
    - The fix itself is good.
    - The remaining rough edge is visual ordering when diff output and summary text are emitted close together.
+
+2. Keep emphasizing actionable summaries rather than suppressing large fixable result sets.
+  - The number of findings is not the main problem when those findings are correct and auto-fixable.
+  - The current per-rule breakdown is useful because it helps users distinguish bulk-fixable issues from the smaller set of findings that still require human judgment.
 
 ## Overall impression
 
@@ -252,4 +253,5 @@ The two most important behavior gaps from the previous evaluation are no longer 
 - fix guidance for network-required pinning is explicit
 
 With a small repository-local config, the output becomes easy to reason about and the remaining findings look legitimate.
-At this point, the main caveat is not incorrect detection but the fact that sample-heavy repositories naturally need early tuning to separate educational examples from actionable findings.
+At this point, the main caveat is not incorrect detection and not the raw number of findings. The key question is whether the output makes the next action obvious.
+On that axis, the current implementation is in good shape: large fixable result sets are acceptable as long as they are accurate, summarized clearly, and easy to remediate with `--fix`, while the smaller set of non-auto-fixable findings remains visible for human review.
