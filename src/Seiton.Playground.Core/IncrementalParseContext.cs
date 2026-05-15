@@ -10,13 +10,28 @@ namespace Seiton.Playground;
 /// <summary>Identifies a root-level workflow section for incremental parsing.</summary>
 public enum RootSectionKind
 {
+    /// <summary>The workflow <c>name</c> section.</summary>
     Name = 0,
+
+    /// <summary>The workflow <c>run-name</c> section.</summary>
     RunName = 1,
+
+    /// <summary>The workflow <c>on</c> trigger section.</summary>
     On = 2,
+
+    /// <summary>The workflow <c>jobs</c> section.</summary>
     Jobs = 3,
+
+    /// <summary>The workflow root-level <c>env</c> section.</summary>
     Env = 4,
+
+    /// <summary>The workflow root-level <c>permissions</c> section.</summary>
     Permissions = 5,
+
+    /// <summary>The workflow root-level <c>defaults</c> section.</summary>
     Defaults = 6,
+
+    /// <summary>The workflow root-level <c>concurrency</c> section.</summary>
     Concurrency = 7,
 }
 
@@ -38,6 +53,11 @@ public readonly struct SectionEntry
     /// <summary>Whether the parser produced diagnostics for this section (always re-parse if true).</summary>
     public readonly bool HasDiagnostics;
 
+    /// <summary>Initializes a recorded section entry.</summary>
+    /// <param name="startOffset">Byte offset where the section content starts.</param>
+    /// <param name="endOffset">Byte offset just past the section content end.</param>
+    /// <param name="contentHash">XXH64 hash of the section bytes.</param>
+    /// <param name="hasDiagnostics"><see langword="true"/> when the previous parse reported diagnostics for this section.</param>
     public SectionEntry(int startOffset, int endOffset, long contentHash, bool hasDiagnostics = false)
     {
         StartOffset = startOffset;
@@ -130,6 +150,10 @@ public readonly struct EditRegion
     /// <summary>Length difference: newSource.Length - oldSource.Length.</summary>
     public readonly int Delta;
 
+    /// <summary>Initializes an edit region for the changed slice in the new source.</summary>
+    /// <param name="start">Byte offset where the edit starts.</param>
+    /// <param name="end">Byte offset where the edit ends in the new source.</param>
+    /// <param name="delta">Length difference between new and old source.</param>
     public EditRegion(int start, int end, int delta)
     {
         Start = start;
