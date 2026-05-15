@@ -594,6 +594,10 @@ public static class FixEngine
 }
 
 /// <summary>Result of applying auto-fixes and re-linting, containing before/after diagnostics and the patched YAML.</summary>
+/// <remarks>
+/// This type owns <see cref="Before"/> and <see cref="After"/>. Callers must dispose the instance,
+/// typically with <c>using var</c>, to release the underlying arenas and pooled buffers held by those results.
+/// </remarks>
 public sealed class RevalidationResult : IDisposable
 {
     internal RevalidationResult(LintResult before, LintResult after, byte[] updatedUtf8Yaml)
