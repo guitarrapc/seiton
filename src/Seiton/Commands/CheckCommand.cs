@@ -264,6 +264,9 @@ internal static class CheckCommand
     }
 
     internal static bool HasConfigErrors(Diagnostic[] configDiags, OutputFormat format, bool color, bool oneline)
+        => HasConfigErrors(configDiags, format, color, oneline, Console.Error);
+
+    internal static bool HasConfigErrors(Diagnostic[] configDiags, OutputFormat format, bool color, bool oneline, TextWriter error)
     {
         if (configDiags.Length == 0)
             return false;
@@ -280,7 +283,7 @@ internal static class CheckCommand
 
         if (hasError)
         {
-            DiagnosticFormatter.Write(Console.Error, configDiags, format, oneline, color);
+            DiagnosticFormatter.Write(error, configDiags, format, oneline, color);
         }
 
         return hasError;

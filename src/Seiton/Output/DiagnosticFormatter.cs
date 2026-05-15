@@ -374,116 +374,116 @@ public static class DiagnosticFormatter
 
 // --- JSON output models ---
 
-internal sealed class JsonDiagnosticEntry
+internal sealed record JsonDiagnosticEntry
 {
     [JsonPropertyName("file")]
-    public string File { get; set; } = "";
+    public required string File { get; init; }
     [JsonPropertyName("line")]
-    public int Line { get; set; }
+    public required int Line { get; init; }
     [JsonPropertyName("col")]
-    public int Col { get; set; }
+    public required int Col { get; init; }
     [JsonPropertyName("severity")]
-    public string Severity { get; set; } = "";
+    public required string Severity { get; init; }
     [JsonPropertyName("ruleId")]
-    public string RuleId { get; set; } = "";
+    public required string RuleId { get; init; }
     [JsonPropertyName("message")]
-    public string Message { get; set; } = "";
+    public required string Message { get; init; }
     [JsonPropertyName("fixable")]
-    public bool Fixable { get; set; }
+    public required bool Fixable { get; init; }
 }
 
 // --- SARIF 2.1.0 output models ---
 
-internal sealed class SarifLog
+internal sealed record SarifLog
 {
     [JsonPropertyName("version")]
-    public string Version { get; set; } = "2.1.0";
+    public string Version { get; init; } = "2.1.0";
     [JsonPropertyName("$schema")]
-    public string Schema { get; set; } = "https://raw.githubusercontent.com/oasis-tcs/sarif-spec/main/sarif-2.1/schema/sarif-schema-2.1.0.json";
+    public string Schema { get; init; } = "https://raw.githubusercontent.com/oasis-tcs/sarif-spec/main/sarif-2.1/schema/sarif-schema-2.1.0.json";
     [JsonPropertyName("runs")]
-    public SarifRun[] Runs { get; set; } = [];
+    public required SarifRun[] Runs { get; init; }
 }
 
-internal sealed class SarifRun
+internal sealed record SarifRun
 {
     [JsonPropertyName("tool")]
-    public SarifTool Tool { get; set; } = new();
+    public required SarifTool Tool { get; init; }
     [JsonPropertyName("results")]
-    public SarifResult[] Results { get; set; } = [];
+    public required SarifResult[] Results { get; init; }
 }
 
-internal sealed class SarifTool
+internal sealed record SarifTool
 {
     [JsonPropertyName("driver")]
-    public SarifDriver Driver { get; set; } = new();
+    public required SarifDriver Driver { get; init; }
 }
 
-internal sealed class SarifDriver
+internal sealed record SarifDriver
 {
     [JsonPropertyName("name")]
-    public string Name { get; set; } = "";
+    public required string Name { get; init; }
     [JsonPropertyName("informationUri")]
-    public string InformationUri { get; set; } = "";
+    public required string InformationUri { get; init; }
     [JsonPropertyName("rules")]
-    public SarifRule[] Rules { get; set; } = [];
+    public required SarifRule[] Rules { get; init; }
 }
 
-internal sealed class SarifRule
+internal sealed record SarifRule
 {
     [JsonPropertyName("id")]
-    public string Id { get; set; } = "";
+    public required string Id { get; init; }
 }
 
-internal sealed class SarifResult
+internal sealed record SarifResult
 {
     [JsonPropertyName("ruleId")]
-    public string RuleId { get; set; } = "";
+    public required string RuleId { get; init; }
     [JsonPropertyName("ruleIndex")]
-    public int RuleIndex { get; set; }
+    public required int RuleIndex { get; init; }
     [JsonPropertyName("level")]
-    public string Level { get; set; } = "";
+    public required string Level { get; init; }
     [JsonPropertyName("message")]
-    public SarifMessage Message { get; set; } = new();
+    public required SarifMessage Message { get; init; }
     [JsonPropertyName("locations")]
-    public SarifLocation[] Locations { get; set; } = [];
+    public required SarifLocation[] Locations { get; init; }
 }
 
-internal sealed class SarifMessage
+internal sealed record SarifMessage
 {
     [JsonPropertyName("text")]
-    public string Text { get; set; } = "";
+    public required string Text { get; init; }
 }
 
-internal sealed class SarifLocation
+internal sealed record SarifLocation
 {
     [JsonPropertyName("physicalLocation")]
-    public SarifPhysicalLocation PhysicalLocation { get; set; } = new();
+    public required SarifPhysicalLocation PhysicalLocation { get; init; }
 }
 
-internal sealed class SarifPhysicalLocation
+internal sealed record SarifPhysicalLocation
 {
     [JsonPropertyName("artifactLocation")]
-    public SarifArtifactLocation ArtifactLocation { get; set; } = new();
+    public required SarifArtifactLocation ArtifactLocation { get; init; }
     [JsonPropertyName("region")]
-    public SarifRegion Region { get; set; } = new();
+    public required SarifRegion Region { get; init; }
 }
 
-internal sealed class SarifArtifactLocation
+internal sealed record SarifArtifactLocation
 {
     [JsonPropertyName("uri")]
-    public string Uri { get; set; } = "";
+    public required string Uri { get; init; }
 }
 
-internal sealed class SarifRegion
+internal sealed record SarifRegion
 {
     [JsonPropertyName("startLine")]
-    public int StartLine { get; set; }
+    public required int StartLine { get; init; }
     [JsonPropertyName("startColumn")]
-    public int StartColumn { get; set; }
+    public required int StartColumn { get; init; }
     [JsonPropertyName("endLine")]
-    public int EndLine { get; set; }
+    public required int EndLine { get; init; }
     [JsonPropertyName("endColumn")]
-    public int EndColumn { get; set; }
+    public required int EndColumn { get; init; }
 }
 
 // --- Source-generated JSON context for NativeAOT ---

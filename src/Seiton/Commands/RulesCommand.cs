@@ -1,4 +1,5 @@
 ﻿using System.Text.Json;
+using System.Text.Json.Serialization;
 using Seiton.Config;
 using Seiton.Core.Linting;
 using Seiton.Output;
@@ -8,11 +9,14 @@ namespace Seiton.Commands;
 internal static class RulesCommand
 {
     public static int Run(string? config, OutputFormat format)
+        => Run(config, format, Console.Out, Console.Error);
+
+    internal static int Run(string? config, OutputFormat format, TextWriter output, TextWriter error)
     {
         var resolvedFormat = CliConfigBridge.ResolveOutputFormat(format);
         if (resolvedFormat == OutputFormat.Sarif)
         {
-            Console.Error.WriteLine("SARIF output is not supported for 'seiton rules'. Use --format text or --format json.");
+            error.WriteLine("SARIF output is not supported for 'seiton rules'. Use --format text or --format json.");
             return ExitCode.InvalidOptions;
         }
 
@@ -25,7 +29,7 @@ internal static class RulesCommand
         }
         catch (FileNotFoundException ex)
         {
-            Console.Error.WriteLine(ex.Message);
+            error.WriteLine(ex.Message);
             return ExitCode.FatalError;
         }
 
@@ -34,7 +38,7 @@ internal static class RulesCommand
             var (loaded, diagnostics) = CliConfigBridge.LoadConfig(configPath, enablePinNetwork: false, enableImageNetwork: false);
             lintConfig = loaded;
 
-            if (CheckCommand.HasConfigErrors(diagnostics, resolvedFormat, color: false, oneline: false))
+            if (CheckCommand.HasConfigErrors(diagnostics, resolvedFormat, color: false, oneline: false, error))
                 return ExitCode.FatalError;
         }
 
@@ -43,10 +47,10 @@ internal static class RulesCommand
         switch (resolvedFormat)
         {
             case OutputFormat.Json:
-                WriteJson(Console.Out, statuses);
+                WriteJson(output, statuses);
                 break;
             default:
-                WriteText(Console.Out, statuses);
+                WriteText(output, statuses);
                 break;
         }
 
@@ -114,13 +118,22 @@ internal static class RulesCommand
 
 internal sealed record RuleStatusJsonEntry
 {
+    [JsonPropertyName("id")]
     public required string Id { get; init; }
+    [JsonPropertyName("name")]
     public required string Name { get; init; }
+    [JsonPropertyName("enabled")]
     public required bool Enabled { get; init; }
+    [JsonPropertyName("type")]
     public required string Type { get; init; }
+    [JsonPropertyName("defaultSeverity")]
     public required string DefaultSeverity { get; init; }
+    [JsonPropertyName("supportsAutoFix")]
     public required bool SupportsAutoFix { get; init; }
+    [JsonPropertyName("supportsWorkflow")]
     public required bool SupportsWorkflow { get; init; }
+    [JsonPropertyName("supportsAction")]
     public required bool SupportsAction { get; init; }
+    [JsonPropertyName("reason")]
     public required string Reason { get; init; }
 }
