@@ -10,12 +10,14 @@ namespace Seiton.Core.Parsing;
 public sealed class ParseResult : IDisposable
 {
     private AstArena? _arena;
+    private readonly bool _ownsArena;
     private bool _disposed;
 
-    internal ParseResult(ParseResultData data, AstArena? arena)
+    internal ParseResult(ParseResultData data, AstArena? arena, bool ownsArena = true)
     {
         Data = data;
         _arena = arena;
+        _ownsArena = ownsArena;
     }
 
     /// <summary>Gets the underlying parse result data for internal consumers.</summary>
@@ -130,7 +132,11 @@ public sealed class ParseResult : IDisposable
             return;
         }
 
-        _arena?.Dispose();
+        if (_ownsArena)
+        {
+            _arena?.Dispose();
+        }
+
         _arena = null;
         _disposed = true;
     }

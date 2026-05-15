@@ -198,8 +198,9 @@ public sealed class IncrementalParseContext
     /// Parses the given YAML incrementally, skipping unchanged root sections (D-5b) and
     /// unchanged individual jobs (D-5c), reusing previous AST nodes for them.
     /// On first call (no previous data), performs a full parse.
-    /// The returned <see cref="ParseResult"/> is owned by this context — callers must NOT
-    /// dispose the Arena (the context manages arena lifecycle).
+    /// The returned <see cref="ParseResult"/> is a non-owning view over context-managed arena
+    /// state. Callers may dispose the result wrapper, but disposal does not release the arena;
+    /// arena lifetime is managed by this context.
     /// </summary>
     /// <remarks>
     /// <para>
@@ -233,7 +234,7 @@ public sealed class IncrementalParseContext
             // Update stored reference so that if the caller reuses/overwrites the OLD buffer,
             // future comparisons will use the new (current) buffer as the baseline.
             _previousSource = utf8Yaml;
-            return new ParseResult(new ParseResultData(_previousWorkflow, null, _previousDiagnostics, _previousHasFatalError), _previousArena);
+            return new ParseResult(new ParseResultData(_previousWorkflow, null, _previousDiagnostics, _previousHasFatalError), _previousArena, ownsArena: false);
         }
 
         // Scan new source for section boundaries
@@ -386,7 +387,7 @@ public sealed class IncrementalParseContext
             oldArena?.Dispose();
         }
 
-        return new ParseResult(parseResult, arena);
+        return new ParseResult(parseResult, arena, ownsArena: false);
     }
 
     /// <summary>
@@ -559,7 +560,7 @@ public sealed class IncrementalParseContext
         // Dispose the old arena (if any) now that we've stored the new one
         oldArena?.Dispose();
 
-        return new ParseResult(parseResult, arena);
+        return new ParseResult(parseResult, arena, ownsArena: false);
     }
 
     /// <summary>

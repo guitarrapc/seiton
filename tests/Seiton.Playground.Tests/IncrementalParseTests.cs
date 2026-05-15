@@ -143,6 +143,27 @@ public sealed class IncrementalParseTests
         }
     }
 
+    [Test]
+    public async Task ParseIncrementally_DisposedResult_DoesNotDisposeContextArena()
+    {
+        var ctx = new IncrementalParseContext();
+        var yaml1 = "on: push\njobs:\n  build:\n    runs-on: ubuntu-latest\n    steps:\n      - run: echo one\n"u8.ToArray();
+        var yaml2 = "on: push\njobs:\n  build:\n    runs-on: ubuntu-latest\n    steps:\n      - run: echo two\n"u8.ToArray();
+
+        var result1 = ctx.ParseIncrementally(yaml1, FilePath);
+        await Assert.That(result1.Workflow).IsNotNull();
+        result1.Dispose();
+
+        var result2 = ctx.ParseIncrementally(yaml2, FilePath);
+        await Assert.That(result2.Workflow).IsNotNull();
+        await Assert.That(result2.HasFatalError).IsFalse();
+
+        var arena = ctx.Arena!;
+        var job = result2.Workflow!.Jobs.Entries[0].Value;
+        var runsOnLabel = arena.GetStringValue(job.RunsOn!.Labels![0]);
+        await Assert.That(Encoding.UTF8.GetString(runsOnLabel)).IsEqualTo("ubuntu-latest");
+    }
+
     /// <summary>
     /// Regression test: verifies that reused Job objects remain valid after multiple
     /// incremental parses. This catches the use-after-free bug where disposing a retained

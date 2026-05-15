@@ -153,12 +153,10 @@ public class DiagnosticListTests
         // Verify result disposal itself does not throw after diagnostics were accessed.
         var yaml = "on: push\njobs:\n  build:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/checkout@v4"u8.ToArray();
         var engine = new LintEngine();
-        var result = engine.Check(yaml, "test.yml");
+        using var result = engine.Check(yaml, "test.yml");
 
         // Diagnostics should be accessible before dispose
         var countBefore = result.Diagnostics.Length;
         await Assert.That(countBefore).IsGreaterThanOrEqualTo(0);
-
-        result.Dispose();
     }
 }

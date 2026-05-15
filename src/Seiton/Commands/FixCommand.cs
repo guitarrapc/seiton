@@ -222,7 +222,7 @@ internal static class FixCommand
                     }
 
                     File.WriteAllBytes(filePath, currentYaml);
-                    allDiagnostics.AddRange(currentHandle.Diagnostics);
+                    allDiagnostics.AddRange(currentHandle.Diagnostics.AsSpan());
                 }
                 finally
                 {
