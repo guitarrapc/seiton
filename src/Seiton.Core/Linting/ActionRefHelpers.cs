@@ -517,7 +517,7 @@ internal static class ActionRefHelpers
             return string.Empty;
         }
 
-        if (NormalizePath(localPath).StartsWith("./.github/", StringComparison.Ordinal)
+        if (TrimCurrentDirectoryPrefix(localPath).StartsWith(".github/", StringComparison.Ordinal)
             && TryGetRepositoryRoot(workflowFilePath, out var repositoryRoot))
         {
             return repositoryRoot;
