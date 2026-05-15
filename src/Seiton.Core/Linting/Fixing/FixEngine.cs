@@ -119,6 +119,25 @@ public static class FixEngine
         writer.Write(diff);
     }
 
+    /// <summary>Writes a unified diff to <paramref name="writer"/> by applying fixes from the given diagnostics and returns whether any diff was emitted.</summary>
+    public static bool TryWriteUnifiedDiff(
+        TextWriter writer,
+        byte[] utf8Yaml,
+        IEnumerable<Diagnostic> diagnosticsWithFix,
+        string filePath,
+        int contextLines = 2)
+    {
+        ArgumentNullException.ThrowIfNull(writer);
+        var diff = BuildUnifiedDiff(utf8Yaml, diagnosticsWithFix, filePath, contextLines);
+        if (diff.Length == 0)
+        {
+            return false;
+        }
+
+        writer.Write(diff);
+        return true;
+    }
+
     /// <summary>Writes a unified diff to <paramref name="writer"/> by applying fixes from the given diagnostics.</summary>
     public static void WriteUnifiedDiff(
         TextWriter writer,
