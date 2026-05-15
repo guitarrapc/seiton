@@ -61,15 +61,28 @@ public sealed class RuleCatalogDescriptorTests
     [Test]
     public async Task GetAllRuleDescriptors_AllRulesAreDisableable()
     {
-        var descriptors = RuleCatalog.GetAllRuleDescriptors();
-        var denyWriteAll = descriptors.First(d => d.Id == "deny-write-all");
-        var denyReadAll = descriptors.First(d => d.Id == "deny-read-all");
-        var jobStructure = descriptors.First(d => d.Id == "job-structure");
+        // Verify that any rule (including security-critical ones) can be disabled via config
+        var config = new LintConfig
+        {
+            Rules = new Dictionary<string, RuleConfig>
+            {
+                ["deny-write-all"] = new RuleConfig { Enabled = false },
+                ["deny-read-all"] = new RuleConfig { Enabled = false },
+                ["job-structure"] = new RuleConfig { Enabled = false },
+            },
+        };
 
-        // All rules are disableable — no non-disableable concept exists
-        await Assert.That(denyWriteAll.Id).IsNotNull();
-        await Assert.That(denyReadAll.Id).IsNotNull();
-        await Assert.That(jobStructure.Id).IsNotNull();
+        var statuses = RuleListResolver.Resolve(config);
+        var denyWriteAll = statuses.First(s => s.Rule.Id == "deny-write-all");
+        var denyReadAll = statuses.First(s => s.Rule.Id == "deny-read-all");
+        var jobStructure = statuses.First(s => s.Rule.Id == "job-structure");
+
+        await Assert.That(denyWriteAll.Enabled).IsFalse();
+        await Assert.That(denyWriteAll.Reason).IsEqualTo("config (disabled)");
+        await Assert.That(denyReadAll.Enabled).IsFalse();
+        await Assert.That(denyReadAll.Reason).IsEqualTo("config (disabled)");
+        await Assert.That(jobStructure.Enabled).IsFalse();
+        await Assert.That(jobStructure.Reason).IsEqualTo("config (disabled)");
     }
 
     [Test]
