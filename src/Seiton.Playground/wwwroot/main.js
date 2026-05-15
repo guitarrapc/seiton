@@ -161,29 +161,30 @@ function themeAccessibilityLabel(mode) {
   return `Color theme: System. ${suffix}`;
 }
 
-const { getAssemblyExports, getConfig, runMain } = await dotnet
-  .withApplicationArguments('playground')
-  .create();
-
-const config = getConfig();
-const exports = await getAssemblyExports(config.mainAssemblyName);
-await runMain();
+let exports = null;
+let runtimeReady = false;
 
 /** Base URL for GitHub release pages; path segment is the semver tag (displayed with leading v). */
 const SEITON_RELEASE_TAG_BASE_URL = 'https://github.com/guitarrapc/seiton/releases/tag/';
 
 const versionEl = document.getElementById('playground-version');
-try {
-  const v = exports.Seiton.Playground.LintInterop.GetProductVersion();
-  if (versionEl && typeof v === 'string' && v.length > 0) {
-    const label = v.startsWith('v') ? v : `v${v}`;
-    versionEl.textContent = label;
-    versionEl.href = SEITON_RELEASE_TAG_BASE_URL + encodeURIComponent(label);
-    versionEl.setAttribute('aria-label', `Release ${label} — open on GitHub`);
-    versionEl.hidden = false;
+
+function syncVersionBadge() {
+  if (!exports || !versionEl) {
+    return;
   }
-} catch {
-  /* ignore — older bundles or trimmed exports */
+  try {
+    const v = exports.Seiton.Playground.LintInterop.GetProductVersion();
+    if (typeof v === 'string' && v.length > 0) {
+      const label = v.startsWith('v') ? v : `v${v}`;
+      versionEl.textContent = label;
+      versionEl.href = SEITON_RELEASE_TAG_BASE_URL + encodeURIComponent(label);
+      versionEl.setAttribute('aria-label', `Release ${label} — open on GitHub`);
+      versionEl.hidden = false;
+    }
+  } catch {
+    /* ignore — older bundles or trimmed exports */
+  }
 }
 
 const loading = document.getElementById('loading');
@@ -586,7 +587,7 @@ permalinkBtn.addEventListener('click', () => {
 });
 
 applyFixesBtn.addEventListener('click', () => {
-  if (!runtimeAlive) return;
+  if (!runtimeAlive || !runtimeReady || !exports) return;
   try {
     const original = editor.getValue();
     const yaml = exports.Seiton.Playground.LintInterop.ApplyAllFixes(
@@ -807,7 +808,7 @@ function handleRuntimeDeath() {
 }
 
 function runLint() {
-  if (!runtimeAlive) {
+  if (!runtimeAlive || !runtimeReady || !exports) {
     return;
   }
 
@@ -957,8 +958,28 @@ function getDefaultSource() {
   return SAMPLES.default;
 }
 
-loading.style.display = 'none';
-runLint();
-requestAnimationFrame(() => {
-  editor.refresh();
-});
+void initializeRuntime();
+
+async function initializeRuntime() {
+  try {
+    const runtime = await dotnet
+      .withApplicationArguments('playground')
+      .create();
+    const config = runtime.getConfig();
+    exports = await runtime.getAssemblyExports(config.mainAssemblyName);
+    await runtime.runMain();
+    runtimeReady = true;
+    syncVersionBadge();
+    loading.style.display = 'none';
+    runLint();
+    requestAnimationFrame(() => {
+      editor.refresh();
+    });
+  } catch (err) {
+    if (isRuntimeDeadError(err)) {
+      handleRuntimeDeath();
+      return;
+    }
+    showToast(err?.message ?? String(err), 'error', 60000);
+  }
+}
