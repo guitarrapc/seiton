@@ -23,7 +23,7 @@ Benchmark notes for this implementation:
 
 - `CoreLintBenchmark` was run against a clean baseline worktree and the modified worktree. Managed allocation stayed unchanged in the project-wide benchmark, which indicates no regression in the broader lint path.
 - Because the changed code sits in the local action/reusable-workflow resolver path, a focused probe was also run with repeated local action resolution through `LintEngine.Check`.
-- Focused probe result:
+- Focused probe result from an earlier intermediate run (kept here for implementation history; final PR measurements were taken after the follow-up review fixes below):
   - `AllocatedBytesPerOp`: `3,761,954.84` -> `3,477,373.16` (`-7.56%`)
   - `ElapsedMsPerOp`: `24.741620` -> `24.765855` (`+0.10%`)
 - Broad benchmark result (baseline -> final current, second confirming run):
