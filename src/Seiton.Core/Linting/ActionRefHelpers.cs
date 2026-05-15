@@ -533,19 +533,39 @@ internal static class ActionRefHelpers
         var index = normalizedWorkflowPath.LastIndexOf(marker, StringComparison.OrdinalIgnoreCase);
         if (index >= 0)
         {
-            repositoryRoot = normalizedWorkflowPath[..index];
+            repositoryRoot = NormalizeRootPrefix(normalizedWorkflowPath[..index]);
             return true;
         }
 
         const string markerAtEnd = "/.github/workflows";
         if (normalizedWorkflowPath.EndsWith(markerAtEnd, StringComparison.OrdinalIgnoreCase))
         {
-            repositoryRoot = normalizedWorkflowPath[..^markerAtEnd.Length];
+            repositoryRoot = NormalizeRootPrefix(normalizedWorkflowPath[..^markerAtEnd.Length]);
             return true;
         }
 
         repositoryRoot = string.Empty;
         return false;
+    }
+
+    /// <summary>
+    /// Ensures that a sliced repository root prefix is a valid rooted directory path.
+    /// Handles edge cases where the prefix is empty (Unix root) or a bare drive letter (Windows root).
+    /// </summary>
+    private static string NormalizeRootPrefix(string prefix)
+    {
+        if (prefix.Length == 0)
+        {
+            return "/";
+        }
+
+        // Windows bare drive letter (e.g. "C:") needs a trailing slash to be a valid rooted path
+        if (prefix.Length == 2 && prefix[1] == ':')
+        {
+            return string.Concat(prefix, "/");
+        }
+
+        return prefix;
     }
 
     internal static string? NormalizeFullPath(string baseDirectory, string relativePath)
