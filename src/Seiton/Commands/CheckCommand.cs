@@ -150,15 +150,15 @@ internal static class CheckCommand
         if (allDiagnostics.Count > 0)
             DiagnosticFormatter.Write(Console.Out, allDiagnostics, resolvedFormat, oneline, colorEnabled, sourceMap);
 
-        WriteSummary(allDiagnostics, resolvedFiles.Length, verbose);
+        WriteSummary(allDiagnostics, resolvedFiles.Length, verbose, showExitHint: minSeverity is null);
 
         return HasActionableDiagnostics(allDiagnostics) ? ExitCode.LintIssuesFound : ExitCode.Success;
     }
 
-    internal static void WriteSummary(List<Diagnostic> diagnostics, int fileCount, bool verbose = false)
-        => WriteSummary(Console.Error, diagnostics, fileCount, verbose);
+    internal static void WriteSummary(List<Diagnostic> diagnostics, int fileCount, bool verbose = false, bool showExitHint = false)
+        => WriteSummary(Console.Error, diagnostics, fileCount, verbose, showExitHint);
 
-    internal static void WriteSummary(TextWriter writer, List<Diagnostic> diagnostics, int fileCount, bool verbose = false)
+    internal static void WriteSummary(TextWriter writer, List<Diagnostic> diagnostics, int fileCount, bool verbose = false, bool showExitHint = false)
     {
         var errors = 0;
         var warnings = 0;
@@ -186,6 +186,12 @@ internal static class CheckCommand
         if (verbose && diagnostics.Count > 0)
         {
             WritePerRuleBreakdown(writer, diagnostics);
+        }
+
+        // Show hint when warnings cause non-zero exit but no errors exist
+        if (showExitHint && errors == 0 && warnings > 0)
+        {
+            writer.WriteLine("hint: use --min-severity error to treat warnings as non-blocking in CI");
         }
     }
 
@@ -224,6 +230,27 @@ internal static class CheckCommand
         }
 
         writer.WriteLine(sb.ToString());
+    }
+
+    internal static void WriteNetworkFixHint(TextWriter writer, List<Diagnostic> diagnostics, bool enablePinNetwork, bool enableImageNetwork)
+    {
+        var needsPin = false;
+        var needsImage = false;
+        for (var i = 0; i < diagnostics.Count; i++)
+        {
+            var ruleId = diagnostics[i].RuleId;
+            if (ruleId is null) continue;
+            if (!enablePinNetwork && ruleId == "unpinned-uses") needsPin = true;
+            if (!enableImageNetwork && ruleId == "unpinned-image") needsImage = true;
+            if (needsPin && needsImage) break;
+        }
+
+        if (needsPin && needsImage)
+            writer.WriteLine("hint: re-run with --enable-pin-network --enable-image-network to auto-fix pinning");
+        else if (needsPin)
+            writer.WriteLine("hint: re-run with --enable-pin-network to auto-fix action pinning");
+        else if (needsImage)
+            writer.WriteLine("hint: re-run with --enable-image-network to auto-fix image pinning");
     }
 
     internal static bool HasActionableDiagnostics(List<Diagnostic> diagnostics)

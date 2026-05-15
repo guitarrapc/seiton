@@ -388,11 +388,21 @@ seiton 0.9.9 is at a practical, usable stage. Rule message quality, `--verbose`/
    - **Benchmark**: Zero allocation increase. Timing identical to baseline (this code only runs in CLI, not in the benchmarked `LintEngine.Check` path).
    - **Tests**: 4 new tests in `WriteSummaryTests` (verbose shows breakdown, non-verbose omits breakdown, zero diagnostics omits breakdown, null RuleId excluded).
 
-3. **Improve exit code / severity guidance** (UX, medium priority)
+3. **Improve exit code / severity guidance** (UX, medium priority) — **DONE**
    - In summary line or `--help`, hint that `--min-severity error` ignores warnings in CI.
+   - **Implementation**: Added `showExitHint` parameter to `WriteSummary`. When `showExitHint` is true and the result has warnings but no errors, emits: `hint: use --min-severity error to treat warnings as non-blocking in CI`.
+   - `showExitHint` is set to `true` when `--min-severity` was NOT explicitly passed (i.e. `minSeverity is null`), so users who already know about the flag don't see the hint.
+   - **Tests**: 3 new tests (`WriteSummary_WarningsOnly_ShowsMinSeverityHint`, `WriteSummary_ErrorsAndWarnings_DoesNotShowMinSeverityHint`, `WriteSummary_WarningsOnly_ShowExitHintFalse_NoHint`).
+   - **Benchmark**: Zero allocation increase (CLI-only code, not in benchmarked path).
 
-4. **Improve message when fix requires network** (UX, medium priority)
+4. **Improve message when fix requires network** (UX, medium priority) — **DONE**
    - When `--fix` produces no changes for a rule that needs network, emit a hint like: `this rule's fix requires network access: re-run with --enable-image-network`.
+   - **Implementation**: Added `WriteNetworkFixHint(TextWriter, List<Diagnostic>, bool enablePinNetwork, bool enableImageNetwork)` to `CheckCommand`. Iterates diagnostics for `unpinned-uses` or `unpinned-image` rule IDs, and if the corresponding network flag is disabled, emits a hint about which flag(s) to add.
+   - Called from `FixCommand` after `WriteSummary` when diagnostics remain.
+   - **Tests**: 4 new tests (`WriteNetworkFixHint_UnpinnedUsesWithoutNetwork_ShowsHint`, `WriteNetworkFixHint_UnpinnedImageWithoutNetwork_ShowsHint`, `WriteNetworkFixHint_UnpinnedUsesWithNetworkEnabled_NoHint`, `WriteNetworkFixHint_NoDiagnosticsRequiringNetwork_NoHint`).
+   - **Benchmark**: Zero allocation increase (CLI-only code, not in benchmarked path).
 
-5. **Add tuning guide for sample/demo repos** (documentation, medium priority)
+5. **Add tuning guide for sample/demo repos** (documentation, medium priority) — **DONE**
    - Document recommended config patterns for educational/lab repositories.
+   - **Implementation**: Added "Tuning for Sample / Demo Repositories" section at end of `docs/configuration.md`.
+   - Covers: `--min-severity error` for CI, `rules.exclude` for noisy rules, inline directives for individual cases, and a combined example config.

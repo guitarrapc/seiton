@@ -257,7 +257,11 @@ internal static class FixCommand
             if (allDiagnostics.Count > 0)
                 DiagnosticFormatter.Write(Console.Out, allDiagnostics, resolvedFormat, oneline, colorEnabled);
 
-            CheckCommand.WriteSummary(allDiagnostics, resolvedFiles.Length, verbose);
+            CheckCommand.WriteSummary(allDiagnostics, resolvedFiles.Length, verbose, showExitHint: minSeverity is null);
+
+            // Hint about network flags when unfixed pin diagnostics remain
+            if (allDiagnostics.Count > 0)
+                CheckCommand.WriteNetworkFixHint(Console.Error, allDiagnostics, effectivePinNetwork, effectiveImageNetwork);
 
             if (check && hasFixable)
                 return ExitCode.LintIssuesFound;

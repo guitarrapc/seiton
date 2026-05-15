@@ -394,6 +394,56 @@ fix:
 
 If this is `null` or omitted, `job-timeout-minutes-required` does not apply an auto-fix.
 
+---
+
+## Tuning for Sample / Demo Repositories
+
+Sample and demo repos often trigger many warnings because they intentionally keep workflows simple. Here are recommended approaches for reducing noise:
+
+### Raise the severity threshold
+
+If warnings are informational and should not block CI, pass `--min-severity error`:
+
+```sh
+seiton check --min-severity error
+```
+
+This exits 0 when only warnings remain.
+
+### Disable noisy rules
+
+Suppress rules that are not relevant for sample code. In your config file:
+
+```yaml
+rules:
+  exclude:
+    - job-permissions-required
+    - job-timeout-minutes-required
+    - unpinned-uses
+```
+
+### Use inline directives sparingly
+
+For individual cases, prefer inline suppression over disabling the rule globally:
+
+```yaml
+# seiton: disable-next-line unpinned-uses
+uses: actions/checkout@v4
+```
+
+### Combine strategies
+
+A typical demo-repo config might look like:
+
+```yaml
+rules:
+  exclude:
+    - job-timeout-minutes-required
+    - dangerous-triggers
+```
+
+paired with `--min-severity error` in CI to allow remaining warnings through without failing the build.
+
 ### Network-Assisted SHA Pinning
 
 Auto-pin `uses:` references to commit SHAs by enabling the network:
