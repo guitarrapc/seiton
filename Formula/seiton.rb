@@ -4,15 +4,15 @@
 class Seiton < Formula
   desc "Lint GitHub Actions workflows and action metadata files"
   homepage "https://github.com/guitarrapc/seiton"
-  version "0.9.8"
+  version "0.9.9"
   license "MIT"
 
   on_macos do
     if Hardware::CPU.arm?
-      url "https://github.com/guitarrapc/seiton/releases/download/v0.9.8/seiton-osx-arm64.tar.gz"
+      url "https://github.com/guitarrapc/seiton/releases/download/v0.9.9/seiton-osx-arm64.tar.gz"
       sha256 "39efcdd3d3faa9ac08f70560f79f4644d76935bc4e86347ea24b52989d6c7656"
     elsif Hardware::CPU.intel?
-      url "https://github.com/guitarrapc/seiton/releases/download/v0.9.8/seiton-osx-amd64.tar.gz"
+      url "https://github.com/guitarrapc/seiton/releases/download/v0.9.9/seiton-osx-amd64.tar.gz"
       sha256 "40e23b359a0083db8a2dd29399d4f6f58c51d256db6158f66d00d4270f4ac3b5"
     else
       odie "seiton: unsupported macOS CPU"
@@ -21,10 +21,10 @@ class Seiton < Formula
 
   on_linux do
     if Hardware::CPU.arm? && Hardware::CPU.is_64_bit?
-      url "https://github.com/guitarrapc/seiton/releases/download/v0.9.8/seiton-linux-arm64.tar.gz"
+      url "https://github.com/guitarrapc/seiton/releases/download/v0.9.9/seiton-linux-arm64.tar.gz"
       sha256 "e0b24c9776069c6c2ca5116e3d9b5264355f7bcb50879dc568d4a0833d338ad9"
     elsif Hardware::CPU.intel? && Hardware::CPU.is_64_bit?
-      url "https://github.com/guitarrapc/seiton/releases/download/v0.9.8/seiton-linux-amd64.tar.gz"
+      url "https://github.com/guitarrapc/seiton/releases/download/v0.9.9/seiton-linux-amd64.tar.gz"
       sha256 "44be7f93c56def8190686c3b9b1f4157473ffba89af4537e615b7ad0266a1cef"
     else
       odie "seiton: unsupported Linux CPU"
