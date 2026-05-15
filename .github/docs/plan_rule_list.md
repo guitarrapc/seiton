@@ -134,8 +134,8 @@ template-injection              ✗        local     config (disabled)
 
 ```csharp
 private static readonly RuleDescriptor[] AllDescriptors = [
-    new("job-structure", "Job Structure Rule", IsOptIn: false, IsOnline: false, SupportsWorkflow: true, SupportsAction: false, DefaultSeverity: RuleSeverity.Warning, SupportsAutoFix: false),
-    new("reusable-workflow", "Reusable Workflow Rule", IsOptIn: false, IsOnline: false, SupportsWorkflow: true, SupportsAction: false, DefaultSeverity: RuleSeverity.Warning, SupportsAutoFix: false),
+    new("job-structure", "Job Structure Rule", IsOptIn: false, IsOnline: false, SupportsWorkflow: true, SupportsAction: false, DefaultSeverity: "warning", SupportsAutoFix: false),
+    new("reusable-workflow", "Reusable Workflow Rule", IsOptIn: false, IsOnline: false, SupportsWorkflow: true, SupportsAction: false, DefaultSeverity: "warning", SupportsAutoFix: false),
     // ... 全ルール
 ];
 ```
