@@ -1,4 +1,4 @@
-﻿using System.Text;
+using System.Text;
 using Seiton.Core.Linting;
 using Seiton.Core.Parsing;
 using Seiton.Core.Parsing.Ast;
@@ -618,7 +618,7 @@ public sealed class ParserTests
               - run: echo ok
         """);
 
-        var result = new LintEngine().CheckDirect(Encoding.UTF8.GetBytes(yaml), "workflow-env-step-context.yml", out _);
+        using var result = new LintEngine().Check(Encoding.UTF8.GetBytes(yaml), "workflow-env-step-context.yml");
         await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("\"steps\" is not allowed here", StringComparison.Ordinal))).IsTrue();
     }
 
@@ -2017,7 +2017,7 @@ public sealed class ParserTests
             var result = WorkflowParser.ParseDirect(bytes, $"on-image-version-invalid-{c.Name}.yml", out var arena);
             await Assert.That(result.Diagnostics.Any(x => x.Message.Contains(c.ExpectedDiagnostic, StringComparison.Ordinal))).IsTrue();
 
-            var lintResult = new LintEngine().CheckDirect(bytes, $"on-image-version-invalid-{c.Name}.yml", out _);
+            using var lintResult = new LintEngine().Check(bytes, $"on-image-version-invalid-{c.Name}.yml");
             await Assert.That(lintResult.Diagnostics.Any(x => x.Message.Contains(c.ExpectedDiagnostic, StringComparison.Ordinal))).IsTrue();
         }
     }
@@ -2068,7 +2068,7 @@ public sealed class ParserTests
             return;
         }
 
-        var result = new LintEngine().CheckDirect(File.ReadAllBytes(path), path, out _);
+        using var result = new LintEngine().Check(File.ReadAllBytes(path), path);
         var messages = result.Diagnostics.Select(static d => d.Message).ToArray();
 
         await Assert.That(messages.Any(static m => m.Contains("\"steps\" is not allowed here", StringComparison.Ordinal))).IsTrue();
@@ -2917,7 +2917,7 @@ public sealed class ParserTests
 
         var result = WorkflowParser.ParseDirect(Encoding.UTF8.GetBytes(yaml), "job-missing-runs-on.yml", out var arena);
         await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("\"runs-on\" section is missing", StringComparison.Ordinal))).IsTrue();
-        var lintResult = new LintEngine().CheckDirect(Encoding.UTF8.GetBytes(yaml), "job-missing-runs-on.yml", out _);
+        using var lintResult = new LintEngine().Check(Encoding.UTF8.GetBytes(yaml), "job-missing-runs-on.yml");
         await Assert.That(lintResult.Diagnostics.Any(x => x.Message.Contains("\"runs-on\" section is missing", StringComparison.Ordinal))).IsTrue();
     }
 
@@ -2934,7 +2934,7 @@ public sealed class ParserTests
         var result = WorkflowParser.ParseDirect(Encoding.UTF8.GetBytes(yaml), "job-missing-steps.yml", out var arena);
         await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("\"steps\" section is missing", StringComparison.Ordinal))).IsTrue();
 
-        var lintResult = new LintEngine().CheckDirect(Encoding.UTF8.GetBytes(yaml), "job-missing-steps.yml", out _);
+        using var lintResult = new LintEngine().Check(Encoding.UTF8.GetBytes(yaml), "job-missing-steps.yml");
         await Assert.That(lintResult.Diagnostics.Any(x => x.Message.Contains("\"steps\" section is missing", StringComparison.Ordinal))).IsTrue();
     }
 
@@ -2952,7 +2952,7 @@ public sealed class ParserTests
 
         var result = WorkflowParser.ParseDirect(Encoding.UTF8.GetBytes(yaml), "job-uses-steps.yml", out var arena);
         await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("cannot have both uses and steps", StringComparison.Ordinal))).IsTrue();
-        var lintResult = new LintEngine().CheckDirect(Encoding.UTF8.GetBytes(yaml), "job-uses-steps.yml", out _);
+        using var lintResult = new LintEngine().Check(Encoding.UTF8.GetBytes(yaml), "job-uses-steps.yml");
         await Assert.That(lintResult.Diagnostics.Any(x => x.Message.Contains("cannot have both uses and steps", StringComparison.Ordinal))).IsTrue();
     }
 
@@ -3059,7 +3059,7 @@ public sealed class ParserTests
                     APPLES: ${{ env.APPLES }}
         """);
 
-        var result = new LintEngine().CheckDirect(Encoding.UTF8.GetBytes(yaml), "reusable-workflow-call-secrets-location.yml", out _);
+        using var result = new LintEngine().Check(Encoding.UTF8.GetBytes(yaml), "reusable-workflow-call-secrets-location.yml");
         var diagnostic = result.Diagnostics.First(x => x.Message.Contains("\"env\" is not allowed here", StringComparison.Ordinal));
         var expectedLine = yaml.Split('\n')
             .Select((line, i) => (line, lineNumber: i + 1))
@@ -3989,7 +3989,7 @@ public sealed class ParserTests
             var fileName = $"job-reuse-forbidden-{c.Name}.yml";
 
             // Forbidden-key check is now handled by linter (ReusableWorkflowRule), not parser
-            var lintResult = new LintEngine().CheckDirect(Encoding.UTF8.GetBytes(yaml), fileName, out _);
+            using var lintResult = new LintEngine().Check(Encoding.UTF8.GetBytes(yaml), fileName);
             if (!lintResult.Diagnostics.Any(x => x.Message.Contains($"key '{c.Key}' is not allowed", StringComparison.Ordinal)))
             {
                 throw new InvalidOperationException($"lint case '{c.Name}' diagnostics: {string.Join(" | ", lintResult.Diagnostics.Select(x => x.Message))}");
@@ -4013,7 +4013,7 @@ public sealed class ParserTests
 
         var result = WorkflowParser.ParseDirect(Encoding.UTF8.GetBytes(yaml), "job-without-uses-with.yml", out var arena);
         await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("key 'with' requires uses", StringComparison.Ordinal))).IsTrue();
-        var lintResult = new LintEngine().CheckDirect(Encoding.UTF8.GetBytes(yaml), "job-without-uses-with.yml", out _);
+        using var lintResult = new LintEngine().Check(Encoding.UTF8.GetBytes(yaml), "job-without-uses-with.yml");
         await Assert.That(lintResult.Diagnostics.Any(x => x.Message.Contains("key 'with' requires uses", StringComparison.Ordinal))).IsTrue();
     }
 
@@ -4032,7 +4032,7 @@ public sealed class ParserTests
 
         var result = WorkflowParser.ParseDirect(Encoding.UTF8.GetBytes(yaml), "job-without-uses-secrets.yml", out var arena);
         await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("key 'secrets' requires uses", StringComparison.Ordinal))).IsTrue();
-        var lintResult = new LintEngine().CheckDirect(Encoding.UTF8.GetBytes(yaml), "job-without-uses-secrets.yml", out _);
+        using var lintResult = new LintEngine().Check(Encoding.UTF8.GetBytes(yaml), "job-without-uses-secrets.yml");
         await Assert.That(lintResult.Diagnostics.Any(x => x.Message.Contains("key 'secrets' requires uses", StringComparison.Ordinal))).IsTrue();
     }
 
@@ -4064,7 +4064,7 @@ public sealed class ParserTests
                     - run: echo ok
         """);
 
-        var result = new LintEngine().CheckDirect(Encoding.UTF8.GetBytes(yaml), "job-if-step-context.yml", out _);
+        using var result = new LintEngine().Check(Encoding.UTF8.GetBytes(yaml), "job-if-step-context.yml");
         await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("\"steps\" is not allowed here", StringComparison.Ordinal))).IsTrue();
     }
 
@@ -4081,7 +4081,7 @@ public sealed class ParserTests
                     - run: echo ok
         """);
 
-        var result = new LintEngine().CheckDirect(Encoding.UTF8.GetBytes(yaml), "job-if-strategy-context.yml", out _);
+        using var result = new LintEngine().Check(Encoding.UTF8.GetBytes(yaml), "job-if-strategy-context.yml");
         await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("\"strategy\" is not allowed here", StringComparison.Ordinal))).IsTrue();
     }
 
@@ -4098,7 +4098,7 @@ public sealed class ParserTests
                     - run: echo ok
         """);
 
-        var result = new LintEngine().CheckDirect(Encoding.UTF8.GetBytes(yaml), "job-if-matrix-context.yml", out _);
+        using var result = new LintEngine().Check(Encoding.UTF8.GetBytes(yaml), "job-if-matrix-context.yml");
         await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("\"matrix\" is not allowed here", StringComparison.Ordinal))).IsTrue();
     }
 
@@ -4115,7 +4115,7 @@ public sealed class ParserTests
                     - run: echo ok
         """);
 
-        var result = new LintEngine().CheckDirect(Encoding.UTF8.GetBytes(yaml), "job-if-secrets-context.yml", out _);
+        using var result = new LintEngine().Check(Encoding.UTF8.GetBytes(yaml), "job-if-secrets-context.yml");
         await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("\"secrets\" is not allowed here", StringComparison.Ordinal))).IsTrue();
     }
 
@@ -4149,7 +4149,7 @@ public sealed class ParserTests
                       run: echo ok
         """);
 
-        var result = new LintEngine().CheckDirect(Encoding.UTF8.GetBytes(yaml), "step-if-secrets-context.yml", out _);
+        using var result = new LintEngine().Check(Encoding.UTF8.GetBytes(yaml), "step-if-secrets-context.yml");
         await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("\"secrets\" is not allowed here", StringComparison.Ordinal))).IsTrue();
     }
 
@@ -4183,7 +4183,7 @@ public sealed class ParserTests
               - run: echo ok
         """);
 
-        var result = new LintEngine().CheckDirect(Encoding.UTF8.GetBytes(yaml), "job-env-step-context.yml", out _);
+        using var result = new LintEngine().Check(Encoding.UTF8.GetBytes(yaml), "job-env-step-context.yml");
         await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("\"steps\" is not allowed here", StringComparison.Ordinal))).IsTrue();
     }
 
@@ -4204,7 +4204,7 @@ public sealed class ParserTests
               - run: echo done
         """);
 
-        var result = new LintEngine().CheckDirect(Encoding.UTF8.GetBytes(yaml), "strategy-matrix-runner-context.yml", out _);
+        using var result = new LintEngine().Check(Encoding.UTF8.GetBytes(yaml), "strategy-matrix-runner-context.yml");
         await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("\"runner\" is not allowed here", StringComparison.Ordinal))).IsTrue();
     }
 
@@ -4855,7 +4855,7 @@ public sealed class ParserTests
                     - run: echo ok
         """);
 
-        var result = new LintEngine().CheckDirect(Encoding.UTF8.GetBytes(yaml), "workflow-env-hashfiles.yml", out _);
+        using var result = new LintEngine().Check(Encoding.UTF8.GetBytes(yaml), "workflow-env-hashfiles.yml");
         await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("\"hashFiles\" is not allowed here", StringComparison.Ordinal))).IsTrue();
     }
 
@@ -4872,7 +4872,7 @@ public sealed class ParserTests
                     - run: echo ok
         """);
 
-        var result = new LintEngine().CheckDirect(Encoding.UTF8.GetBytes(yaml), "job-if-hashfiles.yml", out _);
+        using var result = new LintEngine().Check(Encoding.UTF8.GetBytes(yaml), "job-if-hashfiles.yml");
         await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("\"hashFiles\" is not allowed here", StringComparison.Ordinal))).IsTrue();
     }
 
@@ -4892,7 +4892,7 @@ public sealed class ParserTests
               - run: echo ok
         """);
 
-        var result = new LintEngine().CheckDirect(Encoding.UTF8.GetBytes(yaml), "strategy-hashfiles.yml", out _);
+        using var result = new LintEngine().Check(Encoding.UTF8.GetBytes(yaml), "strategy-hashfiles.yml");
         await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("\"hashFiles\" is not allowed here", StringComparison.Ordinal))).IsTrue();
     }
 
@@ -4944,7 +4944,7 @@ public sealed class ParserTests
                     - run: echo ok
         """);
 
-        var result = new LintEngine().CheckDirect(Encoding.UTF8.GetBytes(yaml), "job-name-secrets.yml", out _);
+        using var result = new LintEngine().Check(Encoding.UTF8.GetBytes(yaml), "job-name-secrets.yml");
         await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("\"secrets\" is not allowed here", StringComparison.Ordinal))).IsTrue();
     }
 
@@ -4960,7 +4960,7 @@ public sealed class ParserTests
                     - run: echo ok
         """);
 
-        var result = new LintEngine().CheckDirect(Encoding.UTF8.GetBytes(yaml), "job-runs-on-secrets.yml", out _);
+        using var result = new LintEngine().Check(Encoding.UTF8.GetBytes(yaml), "job-runs-on-secrets.yml");
         await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("\"secrets\" is not allowed here", StringComparison.Ordinal))).IsTrue();
     }
 
@@ -4977,7 +4977,7 @@ public sealed class ParserTests
                     - run: echo ok
         """);
 
-        var result = new LintEngine().CheckDirect(Encoding.UTF8.GetBytes(yaml), "job-environment-secrets.yml", out _);
+        using var result = new LintEngine().Check(Encoding.UTF8.GetBytes(yaml), "job-environment-secrets.yml");
         await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("\"secrets\" is not allowed here", StringComparison.Ordinal))).IsTrue();
     }
 
@@ -5012,7 +5012,7 @@ public sealed class ParserTests
                     - run: echo ok
         """);
 
-        var result = new LintEngine().CheckDirect(Encoding.UTF8.GetBytes(yaml), "job-continue-on-error-secrets.yml", out _);
+        using var result = new LintEngine().Check(Encoding.UTF8.GetBytes(yaml), "job-continue-on-error-secrets.yml");
         await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("\"secrets\" is not allowed here", StringComparison.Ordinal))).IsTrue();
     }
 
@@ -5029,7 +5029,7 @@ public sealed class ParserTests
                     - run: echo ok
         """);
 
-        var result = new LintEngine().CheckDirect(Encoding.UTF8.GetBytes(yaml), "job-timeout-secrets.yml", out _);
+        using var result = new LintEngine().Check(Encoding.UTF8.GetBytes(yaml), "job-timeout-secrets.yml");
         await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("\"secrets\" is not allowed here", StringComparison.Ordinal))).IsTrue();
     }
 
@@ -5070,7 +5070,7 @@ public sealed class ParserTests
                     - run: echo ok
         """);
 
-        var result = new LintEngine().CheckDirect(Encoding.UTF8.GetBytes(yaml), "job-env-url-secrets.yml", out _);
+        using var result = new LintEngine().Check(Encoding.UTF8.GetBytes(yaml), "job-env-url-secrets.yml");
         await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("\"secrets\" is not allowed here", StringComparison.Ordinal))).IsTrue();
     }
 
@@ -5155,7 +5155,7 @@ public sealed class ParserTests
                     - run: echo ok
         """);
 
-        var result = new LintEngine().CheckDirect(Encoding.UTF8.GetBytes(yaml), "defaults-run-secrets.yml", out _);
+        using var result = new LintEngine().Check(Encoding.UTF8.GetBytes(yaml), "defaults-run-secrets.yml");
         await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("\"secrets\" is not allowed here", StringComparison.Ordinal))).IsTrue();
     }
 
@@ -5297,8 +5297,8 @@ public sealed class ParserTests
             steps:
               - name: broken
         """u8;
-        var lintResult = new LintEngine([new Seiton.Core.Linting.Rules.UnpinnedUsesRule()])
-            .CheckDirect(yaml.ToArray(), "test.yaml", out _);
+        using var lintResult = new LintEngine([new Seiton.Core.Linting.Rules.UnpinnedUsesRule()])
+            .Check(yaml.ToArray(), "test.yaml");
         // After the fix, no unpinned-uses diagnostic should be emitted for empty uses
         var hasUnpinned = lintResult.Diagnostics.Any(d => d.RuleId == "unpinned-uses");
         await Assert.That(hasUnpinned).IsFalse();
@@ -6218,7 +6218,7 @@ public sealed class ParserTests
               - run: echo ${{ matrix.null }}
         """);
 
-        var result = new LintEngine().CheckDirect(Encoding.UTF8.GetBytes(yaml), "test.yaml", out _);
+        using var result = new LintEngine().Check(Encoding.UTF8.GetBytes(yaml), "test.yaml");
         // Should NOT report "property \"null\" is not defined" — null key should be accessible
         var undefinedProp = result.Diagnostics.FirstOrDefault(d => d.Message.Contains("property \"null\" is not defined"));
         await Assert.That(undefinedProp.Message).IsNull();
@@ -6243,7 +6243,7 @@ public sealed class ParserTests
               - run: echo '${{ matrix.a == matrix.a2 }}'
         """);
 
-        var result = new LintEngine().CheckDirect(Encoding.UTF8.GetBytes(yaml), "test.yaml", out _);
+        using var result = new LintEngine().Check(Encoding.UTF8.GetBytes(yaml), "test.yaml");
         var compError = result.Diagnostics.FirstOrDefault(d => d.Message.Contains("cannot be compared") && d.Message.Contains("=="));
         await Assert.That(compError.Message).IsNotNull();
     }
@@ -6291,7 +6291,7 @@ public sealed class ParserTests
               - run: echo
 
         """);
-        var result = new LintEngine().CheckDirect(Encoding.UTF8.GetBytes(yaml), "test.yaml", out _);
+        using var result = new LintEngine().Check(Encoding.UTF8.GetBytes(yaml), "test.yaml");
         var escapeErr = result.Diagnostics.FirstOrDefault(d => d.Message.Contains("not a valid glob escape"));
         await Assert.That(escapeErr.Message).IsNotNull();
     }
@@ -6315,7 +6315,7 @@ public sealed class ParserTests
               - run: echo
 
         """);
-        var result = new LintEngine().CheckDirect(Encoding.UTF8.GetBytes(yaml), "test.yaml", out _);
+        using var result = new LintEngine().Check(Encoding.UTF8.GetBytes(yaml), "test.yaml");
         var escapeErr = result.Diagnostics.FirstOrDefault(d => d.Message.Contains("not a valid glob escape"));
         await Assert.That(escapeErr.Message).IsNotNull();
     }
@@ -6337,7 +6337,7 @@ public sealed class ParserTests
             steps:
               - run: echo
         """);
-        var result = new LintEngine().CheckDirect(Encoding.UTF8.GetBytes(yaml), "test.yaml", out _);
+        using var result = new LintEngine().Check(Encoding.UTF8.GetBytes(yaml), "test.yaml");
         var spaceErr = result.Diagnostics.FirstOrDefault(d => d.Message.Contains("leading and trailing spaces are not allowed in glob path"));
         await Assert.That(spaceErr.Message).IsNotNull();
     }
@@ -6361,7 +6361,7 @@ public sealed class ParserTests
             steps:
               - run: echo
         """);
-        var result = new LintEngine().CheckDirect(Encoding.UTF8.GetBytes(yaml), "test.yaml", out _);
+        using var result = new LintEngine().Check(Encoding.UTF8.GetBytes(yaml), "test.yaml");
         var allDiags = result.Diagnostics.Select(d => $"{d.Location.StartLine}:{d.Location.StartColumn}: {d.Message}").ToList();
         var spaceErr = result.Diagnostics.FirstOrDefault(d => d.Message.Contains("leading and trailing spaces are not allowed in glob path"));
         await Assert.That(spaceErr.Message).IsNotNull().Because(string.Join("\n", allDiags));
@@ -6432,7 +6432,7 @@ public sealed class ParserTests
             steps:
               - run: echo ${{ secrets.CALLING_WORKFLOW_SECRET }}
         """);
-        var result = new LintEngine().CheckDirect(Encoding.UTF8.GetBytes(yaml), "test.yaml", out _);
+        using var result = new LintEngine().Check(Encoding.UTF8.GetBytes(yaml), "test.yaml");
         // Should error about unknown secret, and the type should include GITHUB_TOKEN
         var secretErr = result.Diagnostics.FirstOrDefault(d => d.Message.Contains("CALLING_WORKFLOW_SECRET") && d.Message.Contains("not defined"));
         await Assert.That(secretErr.Message).IsNotNull();
@@ -6445,7 +6445,7 @@ public sealed class ParserTests
     public async Task Lint_RunsOnEmptyLabel_ReportedByParserNotRunnerLabel()
     {
         var yaml = "on: push\njobs:\n  test:\n    runs-on: ''\n    steps:\n      - run: echo\n";
-        var result = new LintEngine().CheckDirect(Encoding.UTF8.GetBytes(yaml), "test.yaml", out _);
+        using var result = new LintEngine().Check(Encoding.UTF8.GetBytes(yaml), "test.yaml");
         // Parser reports the empty label
         var parserErr = result.Diagnostics.FirstOrDefault(d => d.Message.Contains("should not be empty") && d.RuleId is null);
         await Assert.That(parserErr.Message).IsNotNull();
@@ -6459,7 +6459,7 @@ public sealed class ParserTests
     public async Task Lint_RunsOnEmptyLabelInArray_ReportedByParserNotRunnerLabel()
     {
         var yaml = "on: push\njobs:\n  test:\n    runs-on: ['x64', '']\n    steps:\n      - run: echo\n";
-        var result = new LintEngine().CheckDirect(Encoding.UTF8.GetBytes(yaml), "test.yaml", out _);
+        using var result = new LintEngine().Check(Encoding.UTF8.GetBytes(yaml), "test.yaml");
         // Parser reports the empty label
         var parserErr = result.Diagnostics.FirstOrDefault(d => d.Message?.Contains("should not be empty") == true && d.RuleId is null);
         await Assert.That(parserErr.Message).IsNotNull();
@@ -6500,7 +6500,7 @@ public sealed class ParserTests
                   path: bar
               - run: echo "${{ steps.cache.outputs }}"
         """);
-        var result = new LintEngine().CheckDirect(Encoding.UTF8.GetBytes(yaml), "test.yaml", out _);
+        using var result = new LintEngine().Check(Encoding.UTF8.GetBytes(yaml), "test.yaml");
         var allDiags = result.Diagnostics.Select(d => $"{d.Location.StartLine}:{d.Location.StartColumn}: {d.Message}").ToList();
         var objDiag = result.Diagnostics.FirstOrDefault(d => d.Message.Contains("cache-hit") && d.Message.Contains("[Object]"));
         await Assert.That(objDiag.Message).IsNotNull().Because($"Expected typed object diagnostic with 'cache-hit', got:\n{string.Join("\n", allDiags)}");
@@ -6521,7 +6521,7 @@ public sealed class ParserTests
                 run: echo "test=1" >> "$GITHUB_OUTPUT"
               - run: echo "${{ steps.foo.outputs }}"
         """);
-        var result = new LintEngine().CheckDirect(Encoding.UTF8.GetBytes(yaml), "test.yaml", out _);
+        using var result = new LintEngine().Check(Encoding.UTF8.GetBytes(yaml), "test.yaml");
         var allDiags = result.Diagnostics.Select(d => $"{d.Location.StartLine}:{d.Location.StartColumn}: {d.Message}").ToList();
         var objDiag = result.Diagnostics.FirstOrDefault(d => d.Message.Contains("{string => string}") && d.Message.Contains("[Object]"));
         await Assert.That(objDiag.Message).IsNotNull().Because($"Expected map-typed object diagnostic with '{{string => string}}', got:\n{string.Join("\n", allDiags)}");
@@ -6546,7 +6546,7 @@ public sealed class ParserTests
                   path: bar
               - run: echo "${{ github.event }} ${{ steps.cache.outputs }}"
         """);
-        var result = new LintEngine().CheckDirect(Encoding.UTF8.GetBytes(yaml), "test.yaml", out _);
+        using var result = new LintEngine().Check(Encoding.UTF8.GetBytes(yaml), "test.yaml");
         var objDiags = result.Diagnostics.Where(d => d.Message.Contains("[Object]")).ToList();
         var allDiags = result.Diagnostics.Select(d => $"{d.Location.StartLine}:{d.Location.StartColumn}: {d.Message}").ToList();
         await Assert.That(objDiags.Count).IsGreaterThanOrEqualTo(2).Because($"Expected 2 object diagnostics on same line, got:\n{string.Join("\n", allDiags)}");
