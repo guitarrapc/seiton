@@ -50,7 +50,9 @@ public readonly record struct RuleDescriptor(
     bool IsOptIn,           // opt-in only (disabled by default)
     bool IsOnline,          // requires network access
     bool SupportsWorkflow,  // applies to workflow documents
-    bool SupportsAction     // applies to action metadata documents
+    bool SupportsAction,    // applies to action metadata documents
+    string DefaultSeverity, // "error" | "warning" | "mixed"
+    bool SupportsAutoFix    // true if rule can produce DiagnosticFix
 );
 
 // RuleCatalog.cs に追加 (public static method)
