@@ -4,6 +4,7 @@ using Seiton.Output;
 
 namespace Seiton.Tests;
 
+[NotInParallel("ProcessState")]
 public sealed class RulesCommandTests
 {
     [Test]
@@ -62,6 +63,40 @@ public sealed class RulesCommandTests
                 Directory.Delete(tempDirectory, recursive: true);
             }
         }
+    }
+
+    [Test]
+    public async Task Run_SarifFormat_WritesErrorToInjectedWriter()
+    {
+        using var stdout = new StringWriter();
+        using var stderr = new StringWriter();
+
+        var exitCode = RulesCommand.Run(
+            config: null,
+            format: OutputFormat.Sarif,
+            output: stdout,
+            error: stderr);
+
+        await Assert.That(exitCode).IsEqualTo(ExitCode.InvalidOptions);
+        await Assert.That(stderr.ToString()).Contains("SARIF output is not supported");
+        await Assert.That(stdout.ToString()).IsEqualTo(string.Empty);
+    }
+
+    [Test]
+    public async Task Run_NonExistentConfig_WritesErrorToInjectedWriter()
+    {
+        using var stdout = new StringWriter();
+        using var stderr = new StringWriter();
+
+        var exitCode = RulesCommand.Run(
+            config: "/nonexistent/path/seiton.yaml",
+            format: OutputFormat.Text,
+            output: stdout,
+            error: stderr);
+
+        await Assert.That(exitCode).IsEqualTo(ExitCode.FatalError);
+        await Assert.That(stderr.ToString()).IsNotEqualTo(string.Empty);
+        await Assert.That(stdout.ToString()).IsEqualTo(string.Empty);
     }
 
     private static JsonElement FindRule(JsonElement root, string ruleId)

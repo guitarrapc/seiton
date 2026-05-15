@@ -38,7 +38,7 @@ internal static class RulesCommand
             var (loaded, diagnostics) = CliConfigBridge.LoadConfig(configPath, enablePinNetwork: false, enableImageNetwork: false);
             lintConfig = loaded;
 
-            if (CheckCommand.HasConfigErrors(diagnostics, resolvedFormat, color: false, oneline: false))
+            if (CheckCommand.HasConfigErrors(diagnostics, resolvedFormat, color: false, oneline: false, error))
                 return ExitCode.FatalError;
         }
 
