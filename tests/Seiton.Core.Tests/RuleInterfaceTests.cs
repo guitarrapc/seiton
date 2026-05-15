@@ -12666,7 +12666,7 @@ public sealed class RuleInterfaceTests
         {
             Exclusions =
             [
-                new LintExclusion("*.yml", ["deny-write-all"]),
+                new LintExclusion("**/*.yml", ["deny-write-all"]),
             ],
         };
 
