@@ -147,8 +147,13 @@ public sealed class LocalActionOutputResolverUnitTests
                 Directory.Delete(path, recursive: true);
             }
         }
-        catch
+        catch (IOException ex)
         {
+            TestContext.Progress.WriteLine($"Failed to delete temporary directory '{path}': {ex}");
+        }
+        catch (UnauthorizedAccessException ex)
+        {
+            TestContext.Progress.WriteLine($"Failed to delete temporary directory '{path}': {ex}");
         }
     }
 }
