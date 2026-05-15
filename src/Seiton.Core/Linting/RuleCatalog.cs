@@ -6,7 +6,7 @@ namespace Seiton.Core.Linting;
 
 /// <summary>
 /// Central registry of all lint rules: factory methods, priorities, policy flags (opt-in),
-/// minimum severities, and allowed per-rule configuration keys.
+/// and allowed per-rule configuration keys.
 /// </summary>
 internal static class RuleCatalog
 {

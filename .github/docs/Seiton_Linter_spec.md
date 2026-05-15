@@ -400,6 +400,81 @@ Linter contract supports mandatory safety constraints on selected rules.
 - All rules allow user-specified severity override via config.
 - Severity order is `Error > Warning > Info`.
 
+### 5.7.1 Default Severity Criteria
+
+Each rule's default diagnostic severity is determined by the following criteria. When a user config provides `rules.<rule-id>.severity`, that override applies to **all** diagnostics from the rule regardless of these criteria.
+
+| Severity | Criteria | Examples |
+|---|---|---|
+| **Error** | The workflow will **fail at runtime**, violates a hard correctness constraint, or represents an **active security vulnerability** (injection, undefined var, credential misuse). The user must fix this to have a working/safe workflow. | Invalid job structure, unknown needs target, template injection, deprecated runtime that will fail. |
+| **Warning** | A **best-practice violation** or **potential risk** that does not break execution but degrades security posture, maintainability, or reliability. The workflow runs but is suboptimal. | Unpinned action refs, missing explicit permissions, deprecated commands, dangerous triggers. |
+| **Info** | **Informational notice** with no correctness or security impact. Emitted only in verbose/observability contexts. | Suppression acknowledgements, ignored-action notifications. |
+
+**Mixed-severity rules**: Some rules emit diagnostics at different severities depending on the specific condition detected within a single rule. For example, `permissions` emits Error for invalid values but Warning for overly-broad valid scalars. When a user overrides severity via config, the override applies uniformly to all diagnostics from that rule.
+
+### 5.7.2 Per-Rule Default Severity
+
+The following table defines the normative default severity for each rule. Implementations must emit diagnostics at these levels when no user override is configured.
+
+| Rule ID | Default Severity | Notes |
+|---|---|---|
+| `job-structure` | error | |
+| `reusable-workflow` | error | |
+| `local-action-inputs` | mixed | error (invalid/missing inputs, invalid metadata), warning (deprecated inputs) |
+| `permissions` | mixed | error (invalid values), warning (overly-broad valid scalars) |
+| `popular-action-inputs` | warning | |
+| `outdated-action-runner` | error | |
+| `unpinned-uses` | mixed | error (invalid Docker ref format), warning (unpinned SHA), info (ignored-action verbose) |
+| `unpinned-image` | warning | |
+| `dangerous-triggers` | warning | |
+| `job-permissions-required` | warning | |
+| `needs-graph` | error | |
+| `shell-name` | mixed | error (invalid shell name), warning (shell-OS incompatibility) |
+| `runner-label` | mixed | warning (unknown labels), error (conflicting OS families) |
+| `runner-no-latest` | warning | |
+| `id-naming` | error | |
+| `glob-pattern` | error | |
+| `dispatch-inputs` | error | |
+| `schedule-event` | error | |
+| `workflow-call-input-default` | error | |
+| `deny-write-all` | error | |
+| `credentials` | mixed | warning (missing credentials), error (plaintext password) |
+| `template-injection` | error | |
+| `expr-undefined-var` | error | |
+| `run-env-context-direct-use` | error | |
+| `run-secrets-context-direct-use` | error | |
+| `run-inputs-context-direct-use` | error | |
+| `secrets-whole-context-access` | error | |
+| `checkout-persist-credentials` | warning | |
+| `known-vulnerable-actions` | error | online |
+| `impostor-commit` | error | online |
+| `ref-confusion` | error | online |
+| `stale-action-refs` | warning | online |
+| `deny-read-all` | error | |
+| `deny-inherit-secrets` | error | |
+| `job-timeout-minutes-required` | error | |
+| `github-app-token-inputs` | error | |
+| `workflow-secrets` | error | |
+| `job-secrets` | error | |
+| `action-shell-is-required` | error | |
+| `cache-poisoning` | warning | |
+| `self-hosted-runner` | warning | |
+| `unredacted-secrets` | warning | |
+| `secrets-outside-env` | warning | |
+| `matrix` | warning | |
+| `env-var` | warning | |
+| `deprecated-commands` | warning | |
+| `if-cond` | warning | |
+| `fake-ternary` | warning | |
+| `archived-uses` | warning | |
+| `insecure-commands` | warning | |
+| `overprovisioned-secrets` | warning | |
+| `forbidden-uses` | warning | |
+| `ref-version-mismatch` | warning | |
+| `use-trusted-publishing` | warning | |
+| `if-expr-wrapper` | warning | |
+| `concurrency-limits` | warning | opt-in |
+
 ### 5.8 Rule-Specific Configuration
 
 Selected rules accept rule-specific configuration keys within the `rules.<rule-id>` section, in addition to the shared `enabled` / `severity` keys.
@@ -633,8 +708,8 @@ output:
 
 Interpretation notes:
 
-- `rules.<rule-id>.enabled` controls rule enable/disable, subject to fail-safe constraints in §5.7.
-- `rules.<rule-id>.severity` overrides diagnostic severity, subject to fail-safe constraints in §5.7.
+- `rules.<rule-id>.enabled` controls rule enable/disable (§5.7).
+- `rules.<rule-id>.severity` overrides diagnostic severity for all diagnostics from that rule (§5.7).
 - Rule-specific keys (e.g. `events.extend`, `public-registries.extend`, `assume-events`) are defined per rule in §5.8.
 - Online rules (`known-vulnerable-actions`, `impostor-commit`, `ref-confusion`, `stale-action-refs`) are default `enabled: false`; setting `enabled: true` activates them and the system automatically requires network access.
 - `fix.defaults.job-timeout-minutes` sets the default `timeout-minutes` value used by `job-timeout-minutes-required` partial auto-fix; null/missing or `<= 0` disables fix attachment.
@@ -756,8 +831,7 @@ rules:
 Active rules: same as Profile 1; `runner-label` now accepts `ubuntu-24.04-large` without diagnostic; `dangerous-triggers` now treats `issue_comment` as dangerous.
 
 **Constraints:**
-- `deny-write-all` and `deny-read-all` cannot be disabled (fail-safe; §5.7).
-- Severity cannot be lowered below `error` for fail-safe rules.
+- All rules (including `deny-write-all` and `deny-read-all`) can be disabled or have their severity overridden via config (§5.7).
 
 ---
 

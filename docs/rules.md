@@ -1296,7 +1296,7 @@ jobs:
 |---|---|---|
 | ✓ | — | ✓ |
 
-Errors when workflow or job permissions are set to `write-all`. This rule cannot be disabled.
+Errors when workflow or job permissions are set to `write-all`.
 
 **Example trigger:**
 
