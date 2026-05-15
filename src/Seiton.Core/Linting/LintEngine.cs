@@ -1164,7 +1164,7 @@ public sealed class LintEngine
         }
 
         // Already a ** glob — works as-is
-        if (normalized.StartsWith("**/", StringComparison.Ordinal) || normalized.StartsWith("**", StringComparison.Ordinal) && normalized.Length == 2)
+        if (normalized == "**" || normalized.StartsWith("**/", StringComparison.Ordinal))
         {
             return normalized;
         }
