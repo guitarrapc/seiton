@@ -7,7 +7,7 @@ It parses workflow files and action metadata files, then runs a curated set of l
 
 ## What Seiton Does
 
-Seiton checks:
+Seiton rules:
 
 - **Workflow files** — `.github/workflows/*.yml` / `.github/workflows/*.yaml`
 - **Action metadata files** — `action.yml` / `action.yaml`, including `.github/actions/<name>/action.yml`
@@ -71,7 +71,7 @@ Example output:
 |---|---|
 | [Installation](installation.md) | How to install Seiton on Windows, macOS, and Linux. |
 | [Usage](usage.md) | Commands, flags, environment variables, CI integration. |
-| [Checks](checks.md) | Full list of all lint rules with examples and remediation guidance. |
+| [Rules](rules.md) | Full list of all lint rules with examples and remediation guidance. |
 | [Configuration](configuration.md) | Config file format, rule tuning, exclusions, and network options. |
 
 ---

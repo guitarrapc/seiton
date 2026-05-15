@@ -233,8 +233,8 @@ All CLI flags can alternatively be set via environment variables. A flag always 
 | `SEITON_FORMAT` | `--format` | Output format (`text`, `json`, `sarif`). |
 | `SEITON_NO_COLOR` | `--no-color` | Any non-empty value disables color. |
 | `NO_COLOR` | `--no-color` | Standard `NO_COLOR` convention (fallback). |
-| `SEITON_GITHUB_TOKEN` | (internal) | GitHub API token for online checks and network-assisted remediation. Takes priority over `GITHUB_TOKEN`. |
-| `GITHUB_TOKEN` | (internal) | GitHub API token fallback for online checks and network-assisted remediation. |
+| `SEITON_GITHUB_TOKEN` | (internal) | GitHub API token for online rules and network-assisted remediation. Takes priority over `GITHUB_TOKEN`. |
+| `GITHUB_TOKEN` | (internal) | GitHub API token fallback for online rules and network-assisted remediation. |
 
 When `CI` is set, automatic color detection behaves as `never`.
 
