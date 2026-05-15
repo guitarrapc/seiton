@@ -9,6 +9,28 @@ This feedback is based on an evaluation of seiton 0.9.9 on Windows using PowerSh
 - Repository type: GitHub Actions sample/lab repository with many intentionally demonstrative workflows
 - Goal: confirm whether detections are appropriate in this repository, tune config to exclude non-actionable findings, and evaluate usability/log readability
 
+## Implementation Plan
+
+- [x] Normalize local GitHub Actions reference paths to `/` instead of keeping Windows-specific `\` in resolver cache keys and resolved full paths.
+- [x] Centralize slash-normalized local path helpers in `ActionRefHelpers` so repository-root detection and `./` trimming no longer depend on `Path.DirectorySeparatorChar`.
+- [x] Update `LocalReusableWorkflowOutputResolver` and `LocalActionOutputResolver` to keep normalized paths internally and return normalized full paths.
+- [x] Precompute normalized workflow directory and repository root per resolver instance to avoid repeating path normalization work for each local reference lookup.
+- [x] Add regression tests for slash-normalized cache keys and shared local-path helper behavior.
+- [x] Benchmark before/after.
+
+Benchmark notes for this implementation:
+
+- `CoreLintBenchmark` was run against a clean baseline worktree and the modified worktree. Managed allocation stayed unchanged in the project-wide benchmark, which indicates no regression in the broader lint path.
+- Because the changed code sits in the local action/reusable-workflow resolver path, a focused probe was also run with repeated local action resolution through `LintEngine.Check`.
+- Focused probe result:
+  - `AllocatedBytesPerOp`: `3,761,329.40` -> `3,477,112.36` (`-7.56%`)
+  - `ElapsedMsPerOp`: `23.034517` -> `23.199249` (`+0.71%`)
+- Interpretation: the targeted path shows a measurable allocation reduction with runtime held within the allowed tolerance.
+
+Spec review for this implementation:
+
+- No spec document changes were required. The change is an internal path-normalization/return-shape consistency improvement inside local reference resolution, not a change to the documented CLI or lint-rule contract.
+
 ## Execution log
 
 ### 1. CLI confirmation

@@ -6,10 +6,29 @@ namespace Seiton.Core.Tests;
 public sealed class LocalReusableWorkflowOutputResolverUnitTests
 {
     [Test]
+    public async Task NormalizeCacheKey_ReturnsSlashNormalizedFullPath()
+    {
+        var repositoryRoot = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N"));
+        var workflowPath = Path.Combine(repositoryRoot, ".github", "workflows", "caller.yml");
+        var resolver = new LocalReusableWorkflowOutputResolver(workflowPath);
+
+        var normalizeMethod = typeof(LocalReusableWorkflowOutputResolver).GetMethod("NormalizeCacheKey", BindingFlags.Instance | BindingFlags.NonPublic);
+        await Assert.That(normalizeMethod).IsNotNull();
+
+        var normalizedKey = normalizeMethod!.Invoke(resolver, ["./.github/workflows/reusable.yml"]) as string;
+        var expected = ActionRefHelpers.NormalizePath(Path.GetFullPath(Path.Combine(repositoryRoot, ".github", "workflows", "reusable.yml")));
+
+        await Assert.That(normalizedKey).IsEqualTo(expected);
+        await Assert.That(normalizedKey).IsNotNull();
+        await Assert.That(normalizedKey!).DoesNotContain("\\");
+    }
+
+    [Test]
     public async Task ResolveOutputNames_NormalizeKeyFails_FallsBackToRawPathCache()
     {
         var resolver = new LocalReusableWorkflowOutputResolver("/tmp/repo/.github/workflows/caller.yml");
         var rawCacheKey = $".{Path.DirectorySeparatorChar}\0.yml";
+        var normalizedRawCacheKey = ActionRefHelpers.NormalizePath(rawCacheKey);
         var cached = new[] { "cached_output" };
 
         var normalizeMethod = typeof(LocalReusableWorkflowOutputResolver).GetMethod("NormalizeCacheKey", BindingFlags.Instance | BindingFlags.NonPublic);
@@ -22,7 +41,7 @@ public sealed class LocalReusableWorkflowOutputResolverUnitTests
 
         var cache = cacheField!.GetValue(resolver) as Dictionary<string, string[]?>;
         await Assert.That(cache).IsNotNull();
-        cache![rawCacheKey] = cached;
+        cache![normalizedRawCacheKey] = cached;
 
         var resolved = resolver.ResolveOutputNames("./\0.yml"u8);
 

@@ -488,6 +488,68 @@ internal static class ActionRefHelpers
         return path.Replace('\\', '/');
     }
 
+    internal static string TrimCurrentDirectoryPrefix(string path)
+    {
+        var normalized = NormalizePath(path);
+        if (normalized.StartsWith("./", StringComparison.Ordinal))
+        {
+            return normalized[2..];
+        }
+
+        return normalized;
+    }
+
+    internal static string ResolveLocalReferenceBaseDirectory(string workflowFilePath, string localPath)
+    {
+        var workflowDirectory = Path.GetDirectoryName(workflowFilePath);
+        if (string.IsNullOrEmpty(workflowDirectory))
+        {
+            return string.Empty;
+        }
+
+        if (NormalizePath(localPath).StartsWith("./.github/", StringComparison.Ordinal)
+            && TryGetRepositoryRoot(workflowFilePath, out var repositoryRoot))
+        {
+            return repositoryRoot;
+        }
+
+        return NormalizePath(workflowDirectory);
+    }
+
+    internal static bool TryGetRepositoryRoot(string workflowFilePath, out string repositoryRoot)
+    {
+        var normalizedWorkflowPath = NormalizePath(workflowFilePath);
+        const string marker = "/.github/workflows/";
+        var index = normalizedWorkflowPath.LastIndexOf(marker, StringComparison.OrdinalIgnoreCase);
+        if (index >= 0)
+        {
+            repositoryRoot = normalizedWorkflowPath[..index];
+            return true;
+        }
+
+        const string markerAtEnd = "/.github/workflows";
+        if (normalizedWorkflowPath.EndsWith(markerAtEnd, StringComparison.OrdinalIgnoreCase))
+        {
+            repositoryRoot = normalizedWorkflowPath[..^markerAtEnd.Length];
+            return true;
+        }
+
+        repositoryRoot = string.Empty;
+        return false;
+    }
+
+    internal static string? NormalizeFullPath(string baseDirectory, string relativePath)
+    {
+        try
+        {
+            return NormalizePath(Path.GetFullPath(Path.Combine(baseDirectory, TrimCurrentDirectoryPrefix(relativePath))));
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
     internal static bool GlobMatch(string pattern, string path)
     {
         if (pattern.Length == 0)
