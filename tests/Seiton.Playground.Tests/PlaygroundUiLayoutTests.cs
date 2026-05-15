@@ -181,14 +181,14 @@ public sealed class PlaygroundUiLayoutTests
     }
 
     /// <summary>
-    /// Runtime-dependent tests wait for the WASM loading banner to disappear.
+    /// URL input tests only need the lightweight client-side handlers from <c>main.js</c>.
     /// </summary>
-    private static async Task WaitForLoadingHiddenAsync(IPage page)
+    private static async Task WaitForUrlControlsReadyAsync(IPage page)
     {
         await page.WaitForFunctionAsync(
-            "() => { const l = document.getElementById('loading'); return l !== null && l.style.display === 'none'; }",
+            "() => document.body?.dataset.urlControlsReady === 'true'",
             arg: null,
-            new PageWaitForFunctionOptions { Timeout = 120_000 });
+            new PageWaitForFunctionOptions { Timeout = 10_000 });
     }
 
     [Test]
@@ -215,6 +215,7 @@ public sealed class PlaygroundUiLayoutTests
                 });
 
             await GotoPlaygroundAndWaitForLinterGridAsync(page, host.BaseUrl);
+            await WaitForUrlControlsReadyAsync(page);
 
             await page.FillAsync("#url-input", "https://seiton-fetch-stall.example.invalid/workflow.yml");
 
@@ -249,6 +250,7 @@ public sealed class PlaygroundUiLayoutTests
         var page = await context.NewPageAsync();
 
         await GotoPlaygroundAndWaitForLinterGridAsync(page, host.BaseUrl);
+    await WaitForUrlControlsReadyAsync(page);
 
         // Enter on an invalid-but-filled URL shows an info toast; focus stays in #url-input.
         await page.Locator("#url-input").FillAsync("http://oops");
@@ -281,6 +283,7 @@ public sealed class PlaygroundUiLayoutTests
         });
         var page = await context.NewPageAsync();
         await GotoPlaygroundAndWaitForLinterGridAsync(page, host.BaseUrl);
+        await WaitForUrlControlsReadyAsync(page);
 
         await page.FillAsync("#url-input", "http://oops");
         await Assert.That(await page.Locator("#fetch-btn").IsDisabledAsync()).IsTrue();
@@ -297,6 +300,7 @@ public sealed class PlaygroundUiLayoutTests
         });
         var page = await context.NewPageAsync();
         await GotoPlaygroundAndWaitForLinterGridAsync(page, host.BaseUrl);
+        await WaitForUrlControlsReadyAsync(page);
 
         await page.FillAsync("#url-input", "https://example.com/raw.yml");
         await Assert.That(await page.Locator("#fetch-btn").IsDisabledAsync()).IsFalse();

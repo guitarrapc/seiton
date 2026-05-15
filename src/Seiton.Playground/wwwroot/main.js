@@ -163,6 +163,7 @@ function themeAccessibilityLabel(mode) {
 
 let exports = null;
 let runtimeReady = false;
+let urlControlsReady = false;
 
 /** Base URL for GitHub release pages; path segment is the semver tag (displayed with leading v). */
 const SEITON_RELEASE_TAG_BASE_URL = 'https://github.com/guitarrapc/seiton/releases/tag/';
@@ -390,6 +391,14 @@ function syncFetchButtonEnabled() {
   }
   fetchBtn.title = FETCH_READY_TITLE;
   fetchBtn.setAttribute('aria-label', FETCH_READY_LABEL);
+}
+
+function markUrlControlsReady() {
+  if (urlControlsReady) {
+    return;
+  }
+  urlControlsReady = true;
+  document.body?.setAttribute('data-url-controls-ready', 'true');
 }
 
 const editor = CodeMirror(document.getElementById('editor'), {
@@ -646,6 +655,7 @@ if (urlInput) {
   });
 }
 syncFetchButtonEnabled();
+markUrlControlsReady();
 
 async function fetchAndLint() {
   if (fetchInFlight) {
