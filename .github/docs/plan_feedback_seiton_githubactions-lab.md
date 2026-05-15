@@ -352,3 +352,38 @@ output:
 Seiton is already usable and the rule messages are generally good. The strongest positive point is that `--verbose` plus `--oneline` makes it possible to understand what happened without guessing. The strongest issue found in this repository was exclusion behavior on Windows: the documented repo-root relative file exclusion shape did not work here, while basename glob exclusions did.
 
 For this repository specifically, a tuned config made the output much more natural. After tuning, the remaining warnings were the kinds of findings that are easy to discuss and easy to act on.
+
+## Action plan
+
+### Current status
+
+seiton 0.9.9 is at a practical, usable stage. Rule message quality, `--verbose`/`--oneline` output design, and `--fix --dry-run` review experience are all positively evaluated. Being able to narrow output to 5 warnings in a 122-file repository after config tuning demonstrates that rule accuracy and config flexibility are sufficient.
+
+### Identified issues
+
+| Priority | Issue | Impact |
+|----------|-------|--------|
+| **High** | Windows repo-root relative path exclusion does not work | `.github/workflows/foo.yml` passes validate-config but does not suppress diagnostics. `**/foo.yml` glob works. Path normalization bug. |
+| **High** | No per-rule count summary for large runs | Users must visually scan full output to identify which rules are causing the most noise. |
+| **Medium** | warning-only runs still exit non-zero | CI users need `--min-severity error` but this is not easily discoverable. |
+| **Medium** | No guidance when fix requires network flag | `--fix` for `unpinned-image` produces no diff without `--enable-image-network`, but the user is not told this. |
+| **Medium** | No tuning guide for sample/demo repositories | First-run experience in educational repos feels noisy even when detections are technically correct. |
+
+### Implementation order (recommended)
+
+1. **Fix Windows path normalization for exclusions** (bug, high priority)
+   - Exclusion file matching likely fails due to OS path separator (`\` vs `/`) or relative path resolution mismatch.
+   - `**/foo.yml` works but `.github/workflows/foo.yml` does not — suggests the exclusion pattern is not normalized, or the target file path has a different prefix.
+
+2. **Add per-rule count summary** (UX, high priority)
+   - After the existing `N errors, M warnings in F files` line, show rule-level counts (e.g. `run-env-context-direct-use: 28, dangerous-triggers: 5, ...`).
+   - Decide whether to show in `--verbose` only or always.
+
+3. **Improve exit code / severity guidance** (UX, medium priority)
+   - In summary line or `--help`, hint that `--min-severity error` ignores warnings in CI.
+
+4. **Improve message when fix requires network** (UX, medium priority)
+   - When `--fix` produces no changes for a rule that needs network, emit a hint like: `this rule's fix requires network access: re-run with --enable-image-network`.
+
+5. **Add tuning guide for sample/demo repos** (documentation, medium priority)
+   - Document recommended config patterns for educational/lab repositories.
