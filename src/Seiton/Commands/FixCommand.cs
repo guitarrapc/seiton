@@ -24,8 +24,12 @@ internal static class FixCommand
         bool check,
         bool enablePinNetwork,
         bool enableImageNetwork,
-        bool includeActions)
+        bool includeActions,
+        TextWriter? output = null,
+        TextWriter? error = null)
     {
+        var outputWriter = output ?? Console.Out;
+        var errorWriter = error ?? Console.Error;
         var resolvedFormat = CliConfigBridge.ResolveOutputFormat(format);
         var colorEnabled = CliConfigBridge.ResolveColorEnabled(color, noColor);
 
@@ -37,12 +41,12 @@ internal static class FixCommand
         }
         catch (FileNotFoundException ex)
         {
-            Console.Error.WriteLine(ex.Message);
+            errorWriter.WriteLine(ex.Message);
             return ExitCode.FatalError;
         }
 
         var (lintConfig, configDiags) = CliConfigBridge.LoadConfig(configPath, enablePinNetwork, enableImageNetwork);
-        if (CheckCommand.HasConfigErrors(configDiags, resolvedFormat, colorEnabled, oneline))
+        if (CheckCommand.HasConfigErrors(configDiags, resolvedFormat, colorEnabled, oneline, errorWriter))
             return ExitCode.FatalError;
 
         if (verbose)
@@ -51,7 +55,7 @@ internal static class FixCommand
             lintConfig.Verbose = true;
         }
 
-        CliConfigBridge.WriteResolvedConfigVerbose(Console.Error, verbose, configPath);
+        CliConfigBridge.WriteResolvedConfigVerbose(errorWriter, verbose, configPath);
 
         // Resolve input files
         string[] resolvedFiles;
@@ -61,13 +65,13 @@ internal static class FixCommand
         }
         catch (FileNotFoundException ex)
         {
-            Console.Error.WriteLine(ex.Message);
+            errorWriter.WriteLine(ex.Message);
             return ExitCode.FatalError;
         }
 
         if (resolvedFiles.Length == 0 && !files.Contains("-"))
         {
-            Console.Error.WriteLine(includeActions ? "no workflow/action files found" : "no workflow files found");
+            errorWriter.WriteLine(includeActions ? "no workflow/action files found" : "no workflow files found");
             return ExitCode.Success;
         }
 
@@ -107,6 +111,7 @@ internal static class FixCommand
         {
             var engine = new LintEngine();
             var allDiagnostics = new List<Diagnostic>();
+            var hasPrintedDiff = false;
 
             // Fix command always builds fixes; enable fix construction for all Check() calls.
             var fixEnabledLintConfig = new LintConfig
@@ -123,14 +128,14 @@ internal static class FixCommand
                 var filePath = resolvedFiles[i];
                 if (filePath == "-")
                 {
-                    Console.Error.WriteLine("fix: stdin not supported for fix command");
+                    errorWriter.WriteLine("fix: stdin not supported for fix command");
                     return ExitCode.InvalidOptions;
                 }
 
                 var utf8Yaml = File.ReadAllBytes(filePath);
 
                 if (verbose)
-                    Console.Error.WriteLine($"fixing {filePath}...");
+                    errorWriter.WriteLine($"fixing {filePath}...");
 
                 // Check the file. Copy diagnostics immediately so they remain valid
                 // even after the owned lint result is disposed before async work.
@@ -148,7 +153,7 @@ internal static class FixCommand
                     var remResult = await pinRemediation.RemediateAsync(lintDiagnostics, utf8Yaml);
                     effectiveDiagnostics = remResult.Diagnostics;
                     if (verbose && remResult.ResolvedCount > 0)
-                        Console.Error.WriteLine($"  resolved {remResult.ResolvedCount} pin(s) for {filePath}");
+                        errorWriter.WriteLine($"  resolved {remResult.ResolvedCount} pin(s) for {filePath}");
                 }
 
                 // Check whether any diagnostic (local or pin-remediated) has a fix attached.
@@ -178,7 +183,7 @@ internal static class FixCommand
                 if (dryRun)
                 {
                     // --dry-run: print diff using all effective (local + pin-remediated) fixes
-                    FixEngine.WriteUnifiedDiff(Console.Out, utf8Yaml, effectiveDiagnostics, filePath);
+                    hasPrintedDiff |= FixEngine.TryWriteUnifiedDiff(outputWriter, utf8Yaml, effectiveDiagnostics, filePath);
                     allDiagnostics.AddRange(effectiveDiagnostics);
                     continue;
                 }
@@ -227,7 +232,7 @@ internal static class FixCommand
                 }
 
                 if (verbose)
-                    Console.Error.WriteLine($"  applied {appliedFixes} fix(es) to {filePath}");
+                    errorWriter.WriteLine($"  applied {appliedFixes} fix(es) to {filePath}");
             }
 
             // Apply ignore patterns
@@ -252,13 +257,17 @@ internal static class FixCommand
 
             // Output remaining diagnostics
             if (allDiagnostics.Count > 0)
-                DiagnosticFormatter.Write(Console.Out, allDiagnostics, resolvedFormat, oneline, colorEnabled);
+            {
+                if (hasPrintedDiff)
+                    outputWriter.WriteLine();
+                DiagnosticFormatter.Write(outputWriter, allDiagnostics, resolvedFormat, oneline, colorEnabled);
+            }
 
-            CheckCommand.WriteSummary(allDiagnostics, resolvedFiles.Length, verbose, showExitHint: minSeverity is null);
+            CheckCommand.WriteSummary(errorWriter, allDiagnostics, resolvedFiles.Length, verbose, showExitHint: minSeverity is null);
 
             // Hint about network flags when unfixed pin diagnostics remain
             if (allDiagnostics.Count > 0)
-                CheckCommand.WriteNetworkFixHint(Console.Error, allDiagnostics, effectivePinNetwork, effectiveImageNetwork);
+                CheckCommand.WriteNetworkFixHint(errorWriter, allDiagnostics, effectivePinNetwork, effectiveImageNetwork);
 
             var hasFixableAfterFilters = false;
             for (var i = 0; i < allDiagnostics.Count; i++)
