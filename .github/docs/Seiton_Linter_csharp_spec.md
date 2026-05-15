@@ -45,6 +45,9 @@ Representative implementation surface:
 - `IPass`
 - `IRule`
 - `RuleCatalog`
+- `RuleDescriptor`
+- `RuleStatus`
+- `RuleListResolver`
 
 Current public ergonomics note:
 
@@ -80,6 +83,9 @@ Primary types:
 - `IPass`
 - `IRule`
 - `RuleCatalog`
+- `RuleDescriptor`
+- `RuleStatus`
+- `RuleListResolver`
 
 Current implementation status should be tracked against `.github/docslinter_implementation_csharp_plan.md`.
 
@@ -336,6 +342,33 @@ Current C# default local rules are intentionally partial for the following domai
 - `workflow-call`: partially covered by `reusable-workflow` / `deny-inherit-secrets`; still missing called-workflow contract validation (`inputs`/`secrets` required/type/default consistency and caller conformance).
 
 These are tracked as next-step parity-hardening items in `.github/docslinter_implementation_csharp_plan.md`.
+
+### 3.8 Rule Catalog Introspection API
+
+Public types for rule catalog introspection (used by `seiton rules` CLI command):
+
+```csharp
+// Describes a lint rule's static metadata without requiring instantiation for lint purposes.
+public readonly record struct RuleDescriptor(
+    string Id,
+    string Name,
+    bool IsOptIn,
+    bool IsOnline,
+    bool IsNonDisableable,
+    bool SupportsWorkflow,
+    bool SupportsAction);
+
+// Describes a rule's effective enabled state given a configuration.
+public readonly record struct RuleStatus(
+    RuleDescriptor Rule,
+    bool Enabled,
+    string Reason);
+```
+
+- `RuleCatalog.GetAllRuleDescriptors()` returns cached `IReadOnlyList<RuleDescriptor>` covering all registered rules (default local + online). Uses `Lazy<RuleDescriptor[]>` for thread-safe one-time initialization.
+- `RuleListResolver.Resolve(LintConfig?)` computes `IReadOnlyList<RuleStatus>` reflecting the effective enabled/disabled state for each rule under the given configuration.
+
+Reason values: `"default"`, `"config (enabled)"`, `"config (disabled)"`, `"opt-in (not configured)"`, `"non-disableable"`.
 
 ---
 
