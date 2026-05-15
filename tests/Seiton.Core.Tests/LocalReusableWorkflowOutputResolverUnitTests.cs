@@ -72,11 +72,13 @@ public sealed class LocalReusableWorkflowOutputResolverUnitTests
 
     private static string BuildReusableWorkflowYaml(string outputName)
     {
+        // NOTE: $$$""" uses {{{...}}} for interpolation; ${{ }} in YAML stays literal.
+        // Do NOT let formatters re-indent lines containing {{{...}}}.
         return $$$"""
             on:
               workflow_call:
                 outputs:
-                                    {{{outputName}}}:
+                  {{{outputName}}}:
                     value: ${{ jobs.example.outputs.value }}
             jobs:
               example:
