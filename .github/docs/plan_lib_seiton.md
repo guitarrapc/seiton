@@ -98,7 +98,7 @@ public static class SeitonLinter
 
 | 型 | 所有権 | 利用者への露出 | 危険性 |
 |---|---|---|---|
-| `AstArena` | ThreadStatic pool | `OwnedParseResult` / `OwnedLintResult` が所有 | Result の Dispose で安全に返却 |
+| `AstArena` | ThreadStatic pool | `ParseResult` / `LintResult` が所有 | Result の Dispose で安全に返却 |
 | `Diagnostic[]` | Arena に登録 | `DiagnosticList` 経由で参照 | Arena 廃棄で dangling |
 | `Workflow` / `ActionMetadata` | Arena 内の pooled 配列 | `ParseResult` フィールド | 同上 |
 | `StringNodeData[]` 等 | Arena 内 | NodeId handle 経由 | 同上 |
