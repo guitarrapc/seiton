@@ -90,7 +90,7 @@ public static class SeitonLinter
 **論点**:
 
 - [`LintResult`](../../src/Seiton.Core/Linting/LintResult.cs) は pooled diagnostics を返し、Arena の寿命に依存する
-- ~~外部利用者は `Arena.Dispose()` 前提を知らずに診断配列を保持しがち~~ → **対策済み**: `OwnedParseResult` / `OwnedLintResult` (`IDisposable`) が Arena を保持し、`using var result = ...` で自然に寿命管理できる
+- ~~外部利用者は `Arena.Dispose()` 前提を知らずに診断配列を保持しがち~~ → **対策済み**: `ParseResult` / `LintResult` (`IDisposable`) が Arena を保持し、`using var result = ...` で自然に寿命管理できる
 
 **本質的な問題の構造**:
 
