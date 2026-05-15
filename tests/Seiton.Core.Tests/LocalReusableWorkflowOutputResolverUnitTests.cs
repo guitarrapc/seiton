@@ -72,18 +72,20 @@ public sealed class LocalReusableWorkflowOutputResolverUnitTests
 
     private static string BuildReusableWorkflowYaml(string outputName)
     {
-                return "on:\n"
-                        + "  workflow_call:\n"
-                        + "    outputs:\n"
-                        + $"      {outputName}:\n"
-                        + "        value: ${{ jobs.example.outputs.value }}\n"
-                        + "jobs:\n"
-                        + "  example:\n"
-                        + "    runs-on: ubuntu-latest\n"
-                        + "    outputs:\n"
-                        + "      value: done\n"
-                        + "    steps:\n"
-                        + "      - run: echo ok\n";
+        return $$$"""
+        on:\n
+          workflow_call:
+          outputs:
+            {{{outputName}}}:
+            value: ${{jobs.example.outputs.value}}
+        jobs:
+          example:
+          runs-on: ubuntu-latest
+          outputs:
+            value: done
+          steps:
+            - run: echo ok
+        """;
     }
 
     private static void TryDeleteDirectory(string path)
