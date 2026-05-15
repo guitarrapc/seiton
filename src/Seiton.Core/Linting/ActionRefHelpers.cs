@@ -498,12 +498,15 @@ internal static class ActionRefHelpers
     internal static string TrimCurrentDirectoryPrefix(string path)
     {
         var normalized = NormalizePath(path);
-        if (normalized.StartsWith("./", StringComparison.Ordinal))
+        var start = 0;
+        while (start + 2 <= normalized.Length
+            && normalized[start] == '.'
+            && normalized[start + 1] == '/')
         {
-            return normalized[2..];
+            start += 2;
         }
 
-        return normalized;
+        return start == 0 ? normalized : normalized[start..];
     }
 
     internal static string ResolveLocalReferenceBaseDirectory(string workflowFilePath, string localPath)

@@ -188,8 +188,9 @@ internal sealed class LocalActionOutputResolver
             return string.Empty;
         }
 
+        var trimmedLocalPath = ActionRefHelpers.TrimCurrentDirectoryPrefix(localPath);
         if (_repositoryRoot is not null
-            && localPath.StartsWith("./.github/", StringComparison.Ordinal))
+            && trimmedLocalPath.StartsWith(".github/", StringComparison.Ordinal))
         {
             return _repositoryRoot;
         }

@@ -115,3 +115,11 @@ Use TUnit async assertions:
 await Assert.That(result.IsFatal).IsEqualTo(false);
 await Assert.That(result.Diagnostics).HasCount().EqualTo(0);
 ```
+
+## Test Design Guardrails
+
+- Prefer black-box tests that verify observable behavior through the public API or a stable integration seam.
+- Do not use reflection to invoke private methods or read/write private fields in tests. Those tests are brittle and usually indicate the wrong test target.
+- If a behavior is important but hard to reach through the public surface, first look for a user-visible scenario that exercises it end to end.
+- Only add a narrow `internal` test seam with `InternalsVisibleTo` when a black-box test is not practical and the seam itself represents a stable concept worth naming.
+- Avoid writing tests whose main assertion is about a private helper method. Test the behavior that helper exists to produce.

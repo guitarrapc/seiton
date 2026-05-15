@@ -1,72 +1,102 @@
-﻿using System.Reflection;
-using Seiton.Core.Linting;
+﻿using Seiton.Core.Linting;
 
 namespace Seiton.Core.Tests;
 
 public sealed class LocalReusableWorkflowOutputResolverUnitTests
 {
     [Test]
-    public async Task NormalizeCacheKey_ReturnsSlashNormalizedFullPath()
+    public async Task ResolveOutputNames_EquivalentWorkflowPaths_UsesCachedResolvedOutputs()
     {
         var repositoryRoot = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N"));
-        var workflowPath = Path.Combine(repositoryRoot, ".github", "workflows", "caller.yml");
-        var resolver = new LocalReusableWorkflowOutputResolver(workflowPath);
+        try
+        {
+            var workflowDirectory = Path.Combine(repositoryRoot, ".github", "workflows");
+            Directory.CreateDirectory(workflowDirectory);
+            var reusableWorkflowPath = Path.Combine(workflowDirectory, "reusable.yml");
+            File.WriteAllText(reusableWorkflowPath, BuildReusableWorkflowYaml("published_value"));
 
-        var normalizeMethod = typeof(LocalReusableWorkflowOutputResolver).GetMethod("NormalizeCacheKey", BindingFlags.Instance | BindingFlags.NonPublic);
-        await Assert.That(normalizeMethod).IsNotNull();
+            var callerPath = Path.Combine(workflowDirectory, "caller.yml");
+            var resolver = new LocalReusableWorkflowOutputResolver(callerPath);
 
-        var normalizedKey = normalizeMethod!.Invoke(resolver, ["./.github/workflows/reusable.yml"]) as string;
-        var expected = ActionRefHelpers.NormalizePath(Path.GetFullPath(Path.Combine(repositoryRoot, ".github", "workflows", "reusable.yml")));
+            var first = resolver.ResolveOutputNames("./.github/workflows/reusable.yml"u8);
+            await Assert.That(first).IsNotNull();
+            await Assert.That(first!).Count().IsEqualTo(1);
+            await Assert.That(first[0]).IsEqualTo("published_value");
 
-        await Assert.That(normalizedKey).IsEqualTo(expected);
-        await Assert.That(normalizedKey).IsNotNull();
-        await Assert.That(normalizedKey!).DoesNotContain("\\");
+            File.Delete(reusableWorkflowPath);
+
+            var second = resolver.ResolveOutputNames("././.github/workflows/reusable.yml"u8);
+            await Assert.That(second).IsNotNull();
+            await Assert.That(second!).Count().IsEqualTo(1);
+            await Assert.That(second[0]).IsEqualTo("published_value");
+        }
+        finally
+        {
+            TryDeleteDirectory(repositoryRoot);
+        }
     }
 
     [Test]
-    public async Task ResolveOutputNames_NonAsciiWorkflowPath_UsesUtf8DecodedCacheKey()
+    public async Task ResolveOutputNames_NonAsciiWorkflowPath_ResolvesUtf8Path()
     {
         var repositoryRoot = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N"));
-        var workflowPath = Path.Combine(repositoryRoot, ".github", "workflows", "caller.yml");
-        var resolver = new LocalReusableWorkflowOutputResolver(workflowPath);
-        var cached = new[] { "cached_output" };
+        try
+        {
+            var workflowDirectory = Path.Combine(repositoryRoot, ".github", "workflows");
+            Directory.CreateDirectory(workflowDirectory);
+            File.WriteAllText(Path.Combine(workflowDirectory, "再利用.yml"), BuildReusableWorkflowYaml("unicode_value"));
 
-        var cacheField = typeof(LocalReusableWorkflowOutputResolver).GetField("_cache", BindingFlags.Instance | BindingFlags.NonPublic);
-        await Assert.That(cacheField).IsNotNull();
+            var callerPath = Path.Combine(workflowDirectory, "caller.yml");
+            var resolver = new LocalReusableWorkflowOutputResolver(callerPath);
 
-        var cache = cacheField!.GetValue(resolver) as Dictionary<string, string[]?>;
-        await Assert.That(cache).IsNotNull();
+            var resolved = resolver.ResolveOutputNames("./.github/workflows/再利用.yml"u8);
 
-        var normalizedKey = ActionRefHelpers.NormalizePath(Path.GetFullPath(Path.Combine(repositoryRoot, ".github", "workflows", "再利用.yml")));
-        cache![normalizedKey] = cached;
-
-        var resolved = resolver.ResolveOutputNames("./.github/workflows/再利用.yml"u8);
-
-        await Assert.That(ReferenceEquals(resolved, cached)).IsTrue();
+            await Assert.That(resolved).IsNotNull();
+            await Assert.That(resolved!).Count().IsEqualTo(1);
+            await Assert.That(resolved[0]).IsEqualTo("unicode_value");
+        }
+        finally
+        {
+            TryDeleteDirectory(repositoryRoot);
+        }
     }
 
     [Test]
-    public async Task ResolveOutputNames_NormalizeKeyFails_FallsBackToRawPathCache()
+    public async Task ResolveOutputNames_InvalidPath_ReturnsNull()
     {
         var resolver = new LocalReusableWorkflowOutputResolver("/tmp/repo/.github/workflows/caller.yml");
-        var rawCacheKey = $".{Path.DirectorySeparatorChar}\0.yml";
-        var normalizedRawCacheKey = ActionRefHelpers.NormalizePath(rawCacheKey);
-        var cached = new[] { "cached_output" };
-
-        var normalizeMethod = typeof(LocalReusableWorkflowOutputResolver).GetMethod("NormalizeCacheKey", BindingFlags.Instance | BindingFlags.NonPublic);
-        await Assert.That(normalizeMethod).IsNotNull();
-        var normalizedKey = normalizeMethod!.Invoke(resolver, [rawCacheKey]) as string;
-        await Assert.That(normalizedKey).IsNull();
-
-        var cacheField = typeof(LocalReusableWorkflowOutputResolver).GetField("_cache", BindingFlags.Instance | BindingFlags.NonPublic);
-        await Assert.That(cacheField).IsNotNull();
-
-        var cache = cacheField!.GetValue(resolver) as Dictionary<string, string[]?>;
-        await Assert.That(cache).IsNotNull();
-        cache![normalizedRawCacheKey] = cached;
-
         var resolved = resolver.ResolveOutputNames("./\0.yml"u8);
 
-        await Assert.That(ReferenceEquals(resolved, cached)).IsTrue();
+        await Assert.That(resolved).IsNull();
+    }
+
+    private static string BuildReusableWorkflowYaml(string outputName)
+    {
+                return "on:\n"
+                        + "  workflow_call:\n"
+                        + "    outputs:\n"
+                        + $"      {outputName}:\n"
+                        + "        value: ${{ jobs.example.outputs.value }}\n"
+                        + "jobs:\n"
+                        + "  example:\n"
+                        + "    runs-on: ubuntu-latest\n"
+                        + "    outputs:\n"
+                        + "      value: done\n"
+                        + "    steps:\n"
+                        + "      - run: echo ok\n";
+    }
+
+    private static void TryDeleteDirectory(string path)
+    {
+        try
+        {
+            if (Directory.Exists(path))
+            {
+                Directory.Delete(path, recursive: true);
+            }
+        }
+        catch
+        {
+        }
     }
 }
