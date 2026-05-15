@@ -12566,10 +12566,10 @@ public sealed class RuleInterfaceTests
         };
 
         using var result = new LintEngine().Check(Encoding.UTF8.GetBytes(yaml), "severity-override.yml", config);
-        var configError = result.Diagnostics.FirstOrDefault(x => x.RuleId is null && x.Message.Contains("minimum severity", StringComparison.Ordinal));
+        var configDiagnostics = result.Diagnostics.Where(x => x.RuleId is null).ToArray();
         var ruleDiagnostic = result.Diagnostics.FirstOrDefault(x => x.RuleId == "deny-write-all");
 
-        await Assert.That(configError.Message).IsNull();
+        await Assert.That(configDiagnostics).IsEmpty();
         await Assert.That(ruleDiagnostic.Message.Length).IsGreaterThan(0);
         await Assert.That(ruleDiagnostic.Severity).IsEqualTo(DiagnosticSeverity.Warning);
     }
@@ -12622,10 +12622,10 @@ public sealed class RuleInterfaceTests
         };
 
         using var result = new LintEngine().Check(Encoding.UTF8.GetBytes(yaml), "severity-override-deny-read-all.yml", config);
-        var configError = result.Diagnostics.FirstOrDefault(x => x.RuleId is null && x.Message.Contains("minimum severity", StringComparison.Ordinal));
+        var configDiagnostics = result.Diagnostics.Where(x => x.RuleId is null).ToArray();
         var ruleDiagnostic = result.Diagnostics.FirstOrDefault(x => x.RuleId == "deny-read-all");
 
-        await Assert.That(configError.Message).IsNull();
+        await Assert.That(configDiagnostics).IsEmpty();
         await Assert.That(ruleDiagnostic.Message.Length).IsGreaterThan(0);
         await Assert.That(ruleDiagnostic.Severity).IsEqualTo(DiagnosticSeverity.Warning);
     }
