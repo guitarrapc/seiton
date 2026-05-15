@@ -1,0 +1,101 @@
+﻿using System.Text.Json;
+using Seiton.Config;
+using Seiton.Core.Linting;
+using Seiton.Output;
+
+namespace Seiton.Commands;
+
+internal static class RulesCommand
+{
+    public static int Run(string? config, OutputFormat format)
+    {
+        LintConfig? lintConfig = null;
+
+        string? configPath;
+        try
+        {
+            configPath = CliConfigBridge.ResolveConfigPath(config);
+        }
+        catch (FileNotFoundException ex)
+        {
+            Console.Error.WriteLine(ex.Message);
+            return ExitCode.FatalError;
+        }
+
+        if (configPath is not null)
+        {
+            var (loaded, diagnostics) = CliConfigBridge.LoadConfig(configPath, enablePinNetwork: false, enableImageNetwork: false);
+            lintConfig = loaded;
+        }
+
+        var statuses = RuleListResolver.Resolve(lintConfig);
+
+        switch (format)
+        {
+            case OutputFormat.Json:
+                WriteJson(Console.Out, statuses);
+                break;
+            default:
+                WriteText(Console.Out, statuses);
+                break;
+        }
+
+        return ExitCode.Success;
+    }
+
+    private static void WriteText(TextWriter writer, IReadOnlyList<RuleStatus> statuses)
+    {
+        // Header
+        writer.WriteLine($"{"Rule",-40} {"Enabled",-9} {"Type",-8} {"Document",-10} {"Reason"}");
+        writer.WriteLine(new string('-', 90));
+
+        for (var i = 0; i < statuses.Count; i++)
+        {
+            var s = statuses[i];
+            var enabled = s.Enabled ? "yes" : "no";
+            var type = s.Rule.IsOnline ? "online" : "local";
+            var document = (s.Rule.SupportsWorkflow, s.Rule.SupportsAction) switch
+            {
+                (true, true) => "both",
+                (true, false) => "workflow",
+                (false, true) => "action",
+                _ => "none",
+            };
+
+            writer.WriteLine($"{s.Rule.Id,-40} {enabled,-9} {type,-8} {document,-10} {s.Reason}");
+        }
+    }
+
+    private static void WriteJson(TextWriter writer, IReadOnlyList<RuleStatus> statuses)
+    {
+        var entries = new RuleStatusJsonEntry[statuses.Count];
+        for (var i = 0; i < statuses.Count; i++)
+        {
+            var s = statuses[i];
+            entries[i] = new RuleStatusJsonEntry
+            {
+                Id = s.Rule.Id,
+                Name = s.Rule.Name,
+                Enabled = s.Enabled,
+                Type = s.Rule.IsOnline ? "online" : "local",
+                SupportsWorkflow = s.Rule.SupportsWorkflow,
+                SupportsAction = s.Rule.SupportsAction,
+                Reason = s.Reason,
+            };
+        }
+
+        writer.Write(JsonSerializer.Serialize(entries, SeitonJsonContext.Default.RuleStatusJsonEntryArray));
+        writer.WriteLine();
+    }
+}
+
+internal sealed class RuleStatusJsonEntry
+{
+    public required string Id { get; init; }
+    public required string Name { get; init; }
+    public required bool Enabled { get; init; }
+    public required string Type { get; init; }
+    public required bool SupportsWorkflow { get; init; }
+    public required bool SupportsAction { get; init; }
+    public required string Reason { get; init; }
+}

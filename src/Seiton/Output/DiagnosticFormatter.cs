@@ -490,6 +490,7 @@ internal sealed class SarifRegion
 
 [JsonSerializable(typeof(JsonDiagnosticEntry[]))]
 [JsonSerializable(typeof(SarifLog))]
+[JsonSerializable(typeof(Commands.RuleStatusJsonEntry[]))]
 [JsonSourceGenerationOptions(
     WriteIndented = false,
     PropertyNamingPolicy = JsonKnownNamingPolicy.CamelCase,

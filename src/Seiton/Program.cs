@@ -113,6 +113,15 @@ internal class SeitonCli
         if (code != 0) Environment.ExitCode = code;
     }
 
+    /// <summary>List all available lint rules and their effective status.</summary>
+    /// <param name="config">Path to config file. Auto-discovered from .github/seiton.yaml if omitted.</param>
+    /// <param name="format">Output format: text | json.</param>
+    public void Rules(string? config = null, OutputFormat format = OutputFormat.Text)
+    {
+        var code = RulesCommand.Run(config, format);
+        if (code != 0) Environment.ExitCode = code;
+    }
+
     /// <summary>Show version and runtime information.</summary>
     public void Version()
     {

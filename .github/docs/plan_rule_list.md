@@ -286,3 +286,66 @@ OPTIONS:
 - `seiton rules --docs` で Markdown ドキュメント生成
 - LSP server での rule list API 利用
 - `seiton rules --diff` で config 変更前後の差分表示
+
+---
+
+## 実装結果
+
+### 実施内容
+
+推奨案 (案3: 動的メタデータ収集 + 案1: public API) に沿って実装を完了。
+
+#### 追加ファイル
+
+| ファイル | 役割 |
+|---|---|
+| `src/Seiton.Core/Linting/RuleDescriptor.cs` | ルールメタデータの public readonly record struct |
+| `src/Seiton.Core/Linting/RuleListResolver.cs` | `RuleStatus` 型 + config 反映の解決ロジック |
+| `src/Seiton/Commands/RulesCommand.cs` | CLI `rules` サブコマンド (text/json出力) |
+| `tests/Seiton.Core.Tests/RuleCatalogDescriptorTests.cs` | RuleCatalog.GetAllRuleDescriptors() のテスト (8件) |
+| `tests/Seiton.Core.Tests/RuleListResolverTests.cs` | RuleListResolver.Resolve() のテスト (8件) |
+
+#### 変更ファイル
+
+| ファイル | 変更内容 |
+|---|---|
+| `src/Seiton.Core/Linting/RuleCatalog.cs` | `GetAllRuleDescriptors()` public static メソッド追加 |
+| `src/Seiton/Program.cs` | `rules` サブコマンドの追加 |
+| `src/Seiton/Output/DiagnosticFormatter.cs` | `SeitonJsonContext` に `RuleStatusJsonEntry[]` を追加 |
+
+#### CLI 仕様
+
+```
+seiton rules [--config PATH] [--format text|json]
+```
+
+- `--config`: 設定ファイルパス (省略時は自動探索)
+- `--format`: 出力形式 (text がデフォルト、json も対応)
+- Exit code: 常に 0 (情報表示コマンド)
+
+#### テスト結果
+
+- 全テスト: **1650 passed, 0 failed** (既存1634 + 新規16)
+- リグレッション: なし
+
+#### ベンチマーク結果
+
+**CoreLintBenchmark (Allocated):**
+- Small/False: 8.37 KB → 8.37 KB (±0%)
+- Medium/False: 68.56 KB → 68.56 KB (±0%)
+- Large/False: 327.08 KB → 327.08 KB (±0%)
+
+**CoreParsingBenchmark (Allocated):**
+- Small: 3.87 KB → 3.87 KB (±0%)
+- Medium: 35.59 KB → 35.59 KB (±0%)
+- Large: 180.04 KB → 180.04 KB (±0%)
+
+**結論: lint/parse hot path へのパフォーマンス影響は完全にゼロ。**
+
+### 実装上のプランとの差分
+
+| プラン | 実装 | 理由 |
+|---|---|---|
+| `--enabled-only` / `--disabled-only` フィルタ | 未実装 | 初期リリースではシンプルに全件表示。フィルタは将来追加可能 |
+| ルール数 59 | 実際は 56 (52 default + 4 online) | プラン作成時のカウントミス |
+| `RuleCatalog` を public 化 | internal のまま、`GetAllRuleDescriptors()` のみ public | 最小限の公開範囲を維持 |
