@@ -72,11 +72,11 @@ public sealed class LocalReusableWorkflowOutputResolverUnitTests
 
     private static string BuildReusableWorkflowYaml(string outputName)
     {
-        return $$"""
+                return $$$"""
             on:
               workflow_call:
                 outputs:
-                  {{outputName}}:
+                                    {{{outputName}}}:
                     value: ${{ jobs.example.outputs.value }}
             jobs:
               example:
@@ -99,11 +99,11 @@ public sealed class LocalReusableWorkflowOutputResolverUnitTests
         }
         catch (IOException ex)
         {
-            TestContext.Progress.WriteLine($"Failed to delete test directory '{path}': {ex}");
+            Console.Error.WriteLine($"Failed to delete test directory '{path}': {ex}");
         }
         catch (UnauthorizedAccessException ex)
         {
-            TestContext.Progress.WriteLine($"Failed to delete test directory '{path}': {ex}");
+            Console.Error.WriteLine($"Failed to delete test directory '{path}': {ex}");
         }
     }
 }

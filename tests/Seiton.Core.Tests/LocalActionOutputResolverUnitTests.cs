@@ -149,11 +149,11 @@ public sealed class LocalActionOutputResolverUnitTests
         }
         catch (IOException ex)
         {
-            TestContext.Progress.WriteLine($"Failed to delete temporary directory '{path}': {ex}");
+            Console.Error.WriteLine($"Failed to delete temporary directory '{path}': {ex}");
         }
         catch (UnauthorizedAccessException ex)
         {
-            TestContext.Progress.WriteLine($"Failed to delete temporary directory '{path}': {ex}");
+            Console.Error.WriteLine($"Failed to delete temporary directory '{path}': {ex}");
         }
     }
 }
