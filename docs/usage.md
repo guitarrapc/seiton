@@ -169,7 +169,7 @@ Columns:
 - **Rule** — Rule ID (the identifier used in config files and inline directives).
 - **Enabled** — Whether the rule is active (`yes`) or inactive (`no`).
 - **Type** — `local` (offline) or `online` (requires network).
-- **Severity** — Default diagnostic severity: `error`, `warning`, or `mixed` (rule emits both errors and warnings depending on the condition).
+- **Severity** — Default diagnostic severity: `error`, `warning`, or `mixed` (rule emits multiple severities depending on the condition; `info` can also occur in some cases).
 - **Fix** — Whether the rule supports auto-fix (`yes` or `no`).
 - **Document** — Which file types the rule applies to: `workflow`, `action`, or `both`.
 - **Reason** — Why the rule has its current state: `default`, `config (enabled)`, `config (disabled)`, or `opt-in (not configured)`.
