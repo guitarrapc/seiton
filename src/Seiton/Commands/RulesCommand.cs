@@ -9,6 +9,13 @@ internal static class RulesCommand
 {
     public static int Run(string? config, OutputFormat format)
     {
+        var resolvedFormat = CliConfigBridge.ResolveOutputFormat(format);
+        if (resolvedFormat == OutputFormat.Sarif)
+        {
+            Console.Error.WriteLine("SARIF output is not supported for 'seiton rules'. Use --format text or --format json.");
+            return ExitCode.InvalidOptions;
+        }
+
         LintConfig? lintConfig = null;
 
         string? configPath;
@@ -27,18 +34,13 @@ internal static class RulesCommand
             var (loaded, diagnostics) = CliConfigBridge.LoadConfig(configPath, enablePinNetwork: false, enableImageNetwork: false);
             lintConfig = loaded;
 
-            if (diagnostics.Length > 0)
-            {
-                foreach (var d in diagnostics)
-                {
-                    Console.Error.WriteLine($"config: {d.Message}");
-                }
-            }
+            if (CheckCommand.HasConfigErrors(diagnostics, resolvedFormat, color: false, oneline: false))
+                return ExitCode.FatalError;
         }
 
         var statuses = RuleListResolver.Resolve(lintConfig);
 
-        switch (format)
+        switch (resolvedFormat)
         {
             case OutputFormat.Json:
                 WriteJson(Console.Out, statuses);

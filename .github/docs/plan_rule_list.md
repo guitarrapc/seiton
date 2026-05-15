@@ -237,8 +237,6 @@ seiton rules [OPTIONS]
 OPTIONS:
   --config <PATH>     Config file path (auto-discovered if omitted)
   --format <FORMAT>   Output format: text (default) | json
-  --enabled-only      Show only enabled rules
-  --disabled-only     Show only disabled rules
 ```
 
 ### 出力カラム
@@ -247,14 +245,16 @@ OPTIONS:
 |---|---|
 | id | Rule ID (kebab-case) |
 | name | Human-readable name |
-| enabled | ✓ / ✗ |
+| enabled | yes / no |
 | type | local / online |
 | document | workflow / action / both |
-| reason | default / config / opt-in / non-disableable |
+| reason | default / config (enabled) / config (disabled) / opt-in (not configured) / non-disableable |
 
 ### Exit Code
 
-- 0: 常に成功 (情報表示コマンド)
+- 0: 成功 (ルール一覧を出力)
+- 2: 無効なオプション (e.g. `--format sarif`)
+- 3: 致命的エラー (config ファイル不在またはバリデーション失敗)
 
 ---
 

@@ -126,7 +126,7 @@ seiton rules [--config PATH] [--format text|json]
 ```
 
 - `--config`: Explicit config file path. Auto-discovered if omitted.
-- `--format`: Output format (`text` or `json`). Defaults to `text`.
+- `--format`: Output format (`text` or `json`). Defaults to `text`. Also resolved from `SEITON_FORMAT` env var. SARIF is not supported and returns exit code 2.
 
 Resolves configuration (if available) and reports each rule's status:
 - Whether it is enabled or disabled
@@ -134,7 +134,10 @@ Resolves configuration (if available) and reports each rule's status:
 - Which document kinds it supports (workflow, action, or both)
 - The reason for its current state (default, config, opt-in, non-disableable)
 
-Always exits with code 0 (informational command).
+Exit codes:
+- `0`: Success (rule list printed).
+- `2`: Invalid options (e.g. `--format sarif`).
+- `3`: Fatal error (e.g. config file not found or validation failure).
 
 ### 2.7 `seiton version`
 
