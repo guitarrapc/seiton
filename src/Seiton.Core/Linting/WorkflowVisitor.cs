@@ -39,6 +39,11 @@ public sealed class WorkflowVisitor
 
         for (var i = 0; i < passes.Count; i++)
         {
+            if (passes[i] is RuleBase rule)
+            {
+                rule.ResetDiagnostics();
+            }
+
             passes[i].VisitWorkflowPre(workflow);
         }
 
@@ -98,6 +103,11 @@ public sealed class WorkflowVisitor
 
         for (var i = 0; i < passes.Count; i++)
         {
+            if (passes[i] is RuleBase rule)
+            {
+                rule.ResetDiagnostics();
+            }
+
             passes[i].VisitActionMetadataPre(metadata);
         }
 

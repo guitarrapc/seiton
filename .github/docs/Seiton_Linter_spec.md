@@ -27,7 +27,7 @@ Out of scope:
 ## 2. Entry Point Contract
 
 ```
-Check(utf8Yaml, filePath) -> LintResult
+Check(utf8Yaml, filePath) -> owned lint result
 ```
 
 High-level behavior:

@@ -1,4 +1,4 @@
-﻿using System.Text;
+using System.Text;
 using Seiton.Core.Linting;
 using Seiton.Playground;
 
@@ -58,8 +58,8 @@ public class IncrementalParseBenchmark
         _ctx = new IncrementalParseContext();
 
         // Warm up
-        var result = _engine.Check(_stableSource, FilePath, BenchConfig);
-        result.ParseResult.Arena?.Dispose();
+        var result = _engine.CheckDirect(_stableSource, FilePath, BenchConfig, out var arena);
+        arena?.Dispose();
         _ctx.UpdateAfterParse(_stableSource, FilePath);
     }
 
@@ -73,9 +73,9 @@ public class IncrementalParseBenchmark
         var total = 0;
         for (var i = 0; i < EditCount; i++)
         {
-            var result = _engine.Check(_stableSource, FilePath, BenchConfig);
+            var result = _engine.CheckDirect(_stableSource, FilePath, BenchConfig, out var arena);
             total += result.Diagnostics.Length;
-            result.ParseResult.Arena?.Dispose();
+            arena?.Dispose();
         }
         return total;
     }
@@ -91,9 +91,9 @@ public class IncrementalParseBenchmark
         for (var i = 0; i < EditCount; i++)
         {
             var source = _editSequence[i];
-            var result = _engine.Check(source, FilePath, BenchConfig);
+            var result = _engine.CheckDirect(source, FilePath, BenchConfig, out var arena);
             total += result.Diagnostics.Length;
-            result.ParseResult.Arena?.Dispose();
+            arena?.Dispose();
         }
         return total;
     }
@@ -132,9 +132,9 @@ public class IncrementalParseBenchmark
             total += edit.Start;
 
             // Full parse + lint (D-5b will selectively skip sections here)
-            var result = _engine.Check(source, FilePath, BenchConfig);
+            var result = _engine.CheckDirect(source, FilePath, BenchConfig, out var arena);
             total += result.Diagnostics.Length;
-            result.ParseResult.Arena?.Dispose();
+            arena?.Dispose();
 
             // Update registry for next iteration
             _ctx.UpdateAfterParse(source, FilePath);

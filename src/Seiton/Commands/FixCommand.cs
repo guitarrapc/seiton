@@ -133,14 +133,20 @@ internal static class FixCommand
                 if (verbose)
                     Console.Error.WriteLine($"fixing {filePath}...");
 
-                var result = engine.Check(utf8Yaml, filePath, fixEnabledLintConfig);
+                // Check the file. Copy diagnostics immediately so they remain valid
+                // even after the owned lint result is disposed before async work.
+                OwnedDiagnostics lintDiagnostics;
+                {
+                    using var handle = engine.Check(utf8Yaml, filePath, fixEnabledLintConfig);
+                    lintDiagnostics = handle.CopyDiagnostics();
+                }
 
                 // Apply network-assisted pin remediation: attaches SHA/digest DiagnosticFix values
                 // to unpinned-uses and unpinned-image diagnostics. This runs once per file.
-                IReadOnlyList<Diagnostic> effectiveDiagnostics = result.Diagnostics;
+                IReadOnlyList<Diagnostic> effectiveDiagnostics = lintDiagnostics;
                 if (pinRemediation != null)
                 {
-                    var remResult = await pinRemediation.RemediateAsync(result.Diagnostics, utf8Yaml);
+                    var remResult = await pinRemediation.RemediateAsync(lintDiagnostics, utf8Yaml);
                     effectiveDiagnostics = remResult.Diagnostics;
                     if (verbose && remResult.ResolvedCount > 0)
                         Console.Error.WriteLine($"  resolved {remResult.ResolvedCount} pin(s) for {filePath}");
@@ -197,22 +203,31 @@ internal static class FixCommand
 
                 // Subsequent re-check passes: local AST fixes only (pin diagnostics are now
                 // satisfied so they won't reappear). Skip pass 0 since it was already applied above.
-                var currentResult = engine.Check(currentYaml, filePath, fixEnabledLintConfig);
-                for (var pass = 1; pass < maxFixPasses && currentResult.HasFixableDiagnostics; pass++)
+                LintResult? currentHandle = null;
+                try
                 {
-                    var nextYaml = FixEngine.Apply(currentYaml, currentResult.FixableDiagnostics);
-                    if (nextYaml.AsSpan().SequenceEqual(currentYaml))
+                    currentHandle = engine.Check(currentYaml, filePath, fixEnabledLintConfig);
+                    for (var pass = 1; pass < maxFixPasses && currentHandle.HasFixableDiagnostics; pass++)
                     {
-                        break;
+                        var nextYaml = FixEngine.Apply(currentYaml, currentHandle.FixableDiagnostics);
+                        if (nextYaml.AsSpan().SequenceEqual(currentYaml))
+                        {
+                            break;
+                        }
+
+                        appliedFixes += currentHandle.FixableDiagnosticCount;
+                        currentYaml = nextYaml;
+                        currentHandle.Dispose();
+                        currentHandle = engine.Check(currentYaml, filePath, fixEnabledLintConfig);
                     }
 
-                    appliedFixes += currentResult.FixableDiagnosticCount;
-                    currentYaml = nextYaml;
-                    currentResult = engine.Check(currentYaml, filePath, lintConfig);
+                    File.WriteAllBytes(filePath, currentYaml);
+                    allDiagnostics.AddRange(currentHandle.Diagnostics.AsSpan());
                 }
-
-                File.WriteAllBytes(filePath, currentYaml);
-                allDiagnostics.AddRange(currentResult.Diagnostics);
+                finally
+                {
+                    currentHandle?.Dispose();
+                }
 
                 if (verbose)
                     Console.Error.WriteLine($"  applied {appliedFixes} fix(es) to {filePath}");

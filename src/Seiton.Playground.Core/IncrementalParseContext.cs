@@ -188,6 +188,9 @@ public sealed class IncrementalParseContext
     /// <summary>Whether a previous parse result has been recorded.</summary>
     public bool HasPrevious => _previousSource is not null;
 
+    /// <summary>The arena that owns the current parse result's pooled data. For use with <see cref="Core.Linting.LintEngine.CheckWithParseResult(byte[], string, Core.Linting.LintConfig?, Core.Parsing.ParseResultData, Core.Parsing.AstArena?)"/>.</summary>
+    internal AstArena? Arena => _previousArena;
+
     /// <summary>The current section registry (valid only when <see cref="HasPrevious"/> is true).</summary>
     public ref readonly SectionRegistry Registry => ref _registry;
 
@@ -195,8 +198,9 @@ public sealed class IncrementalParseContext
     /// Parses the given YAML incrementally, skipping unchanged root sections (D-5b) and
     /// unchanged individual jobs (D-5c), reusing previous AST nodes for them.
     /// On first call (no previous data), performs a full parse.
-    /// The returned <see cref="ParseResult"/> is owned by this context — callers must NOT
-    /// dispose the Arena (the context manages arena lifecycle).
+    /// The returned <see cref="ParseResult"/> is a non-owning view over context-managed arena
+    /// state. Callers may dispose the result wrapper, but disposal does not release the arena;
+    /// arena lifetime is managed by this context.
     /// </summary>
     /// <remarks>
     /// <para>
@@ -230,7 +234,7 @@ public sealed class IncrementalParseContext
             // Update stored reference so that if the caller reuses/overwrites the OLD buffer,
             // future comparisons will use the new (current) buffer as the baseline.
             _previousSource = utf8Yaml;
-            return new ParseResult(_previousWorkflow, null, _previousDiagnostics, _previousHasFatalError, _previousArena);
+            return new ParseResult(new ParseResultData(_previousWorkflow, null, _previousDiagnostics, _previousHasFatalError), _previousArena, ownsArena: false);
         }
 
         // Scan new source for section boundaries
@@ -383,16 +387,16 @@ public sealed class IncrementalParseContext
             oldArena?.Dispose();
         }
 
-        return parseResult;
+        return new ParseResult(parseResult, arena, ownsArena: false);
     }
 
     /// <summary>
     /// Records section byte ranges and hashes from the given parsed source.
-    /// Call this after each successful <see cref="Core.Linting.LintEngine.Check"/> call.
+    /// Call this after each successful <see cref="Core.Linting.LintEngine.Check(byte[], string, Core.Linting.LintConfig?)"/> call.
     /// </summary>
     public void UpdateAfterParse(byte[] utf8Yaml, string filePath)
     {
-        var result = Core.Parsing.WorkflowParser.ParseClassified(utf8Yaml, filePath);
+        var result = Core.Parsing.WorkflowParser.ParseClassified(utf8Yaml, filePath, out var arena);
         try
         {
             BuildRegistry(utf8Yaml, result.ParseResult);
@@ -400,7 +404,7 @@ public sealed class IncrementalParseContext
         }
         finally
         {
-            result.ParseResult.Arena?.Dispose();
+            arena?.Dispose();
         }
     }
 
@@ -437,7 +441,7 @@ public sealed class IncrementalParseContext
         return newHash == entry.ContentHash;
     }
 
-    private void BuildRegistry(byte[] source, ParseResult parseResult)
+    private void BuildRegistry(byte[] source, ParseResultData parseResult)
     {
         _registry = default;
 
@@ -516,25 +520,25 @@ public sealed class IncrementalParseContext
     private ParseResult FullParseAndStore(byte[] utf8Yaml, string filePath)
     {
         var oldArena = _previousArena;
-        var classifiedResult = WorkflowParser.ParseClassified(utf8Yaml, filePath);
+        var classifiedResult = WorkflowParser.ParseClassified(utf8Yaml, filePath, out var arena);
         var parseResult = classifiedResult.ParseResult;
 
         _previousSource = utf8Yaml;
         _previousSourceLength = utf8Yaml.Length;
         _previousFilePath = filePath;
         _previousWorkflow = parseResult.Workflow;
-        _previousArena = parseResult.Arena;
+        _previousArena = arena;
         _previousDiagnostics = parseResult.Diagnostics;
         _previousHasFatalError = parseResult.HasFatalError;
         BuildRegistryFromSource(utf8Yaml, parseResult.Diagnostics);
 
         // Record base entry counts (the full parse's arena defines the import cap)
-        if (parseResult.Arena is not null)
+        if (arena is not null)
         {
-            _baseStringCount = parseResult.Arena.StringCount;
-            _baseBoolCount = parseResult.Arena.BoolCount;
-            _baseIntCount = parseResult.Arena.IntCount;
-            _baseFloatCount = parseResult.Arena.FloatCount;
+            _baseStringCount = arena.StringCount;
+            _baseBoolCount = arena.BoolCount;
+            _baseIntCount = arena.IntCount;
+            _baseFloatCount = arena.FloatCount;
             // Store full-parse baseline for growth threshold detection
             _fullParseStringCount = _baseStringCount;
             _fullParseBoolCount = _baseBoolCount;
@@ -556,7 +560,7 @@ public sealed class IncrementalParseContext
         // Dispose the old arena (if any) now that we've stored the new one
         oldArena?.Dispose();
 
-        return parseResult;
+        return new ParseResult(parseResult, arena, ownsArena: false);
     }
 
     /// <summary>
@@ -1074,7 +1078,7 @@ public sealed class IncrementalParseContext
         var skipJobs = BuildSkipJobs(jobCount, parseResult.Workflow);
 
         // Lint with optional job skipping
-        var lintResult = _lintEngine.CheckWithParseResult(utf8Yaml, filePath, LintConfig, parseResult, skipJobs);
+        var lintResult = _lintEngine.CheckWithParseResult(utf8Yaml, filePath, LintConfig, parseResult.Data, _previousArena, skipJobs);
 
         // Merge cached diagnostics for skipped jobs and update cache
         var finalDiagnostics = MergeDiagnosticsWithCache(lintResult.Diagnostics, skipJobs);

@@ -55,9 +55,8 @@ public class CoreLintBenchmark
     [Benchmark(Baseline = true, Description = "LintEngine.Check (parse + lint)")]
     public int CheckWorkflow()
     {
-        var result = _engine.Check(_yamlBytes, _filePath, _lintConfig);
+        using var result = _engine.Check(_yamlBytes, _filePath, _lintConfig);
         var count = result.Diagnostics.Length;
-        result.ParseResult.Arena?.Dispose();
         return count;
     }
 }

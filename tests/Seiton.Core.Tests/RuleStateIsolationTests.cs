@@ -34,8 +34,8 @@ public sealed class RuleStateIsolationTests
 
         var engine = new LintEngine([new RunInputsContextDirectUseRule()]);
 
-        var first = engine.Check(Encoding.UTF8.GetBytes(violatingYaml), "first.yml");
-        var second = engine.Check(Encoding.UTF8.GetBytes(cleanYaml), "second.yml");
+        using var first = engine.Check(Encoding.UTF8.GetBytes(violatingYaml), "first.yml");
+        using var second = engine.Check(Encoding.UTF8.GetBytes(cleanYaml), "second.yml");
 
         await Assert.That(first.Diagnostics.Count(d => d.RuleId == "run-inputs-context-direct-use")).IsEqualTo(1);
         await Assert.That(second.Diagnostics.Count(d => d.RuleId == "run-inputs-context-direct-use")).IsEqualTo(0);
@@ -64,8 +64,8 @@ public sealed class RuleStateIsolationTests
 
         var engine = new LintEngine([new RunSecretsContextDirectUseRule()]);
 
-        var first = engine.Check(Encoding.UTF8.GetBytes(violatingYaml), "first.yml");
-        var second = engine.Check(Encoding.UTF8.GetBytes(cleanYaml), "second.yml");
+        using var first = engine.Check(Encoding.UTF8.GetBytes(violatingYaml), "first.yml");
+        using var second = engine.Check(Encoding.UTF8.GetBytes(cleanYaml), "second.yml");
 
         await Assert.That(first.Diagnostics.Count(d => d.RuleId == "run-secrets-context-direct-use")).IsEqualTo(1);
         await Assert.That(second.Diagnostics.Count(d => d.RuleId == "run-secrets-context-direct-use")).IsEqualTo(0);

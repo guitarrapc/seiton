@@ -1,26 +1,27 @@
-﻿using Seiton.Core.Parsing;
+﻿using System.Text;
 using Seiton.Core.Parsing.Ast;
-using System.Text;
 
-namespace Seiton.Core.Linting;
+namespace Seiton.Core.Parsing;
 
 /// <summary>
-/// A lint result that retains the <see cref="AstArena"/> to keep AST objects
+/// A parse result that retains the <see cref="AstArena"/> to keep AST objects
 /// and scalar node handles valid until disposal.
 /// </summary>
-public sealed class LintResult : IDisposable
+public sealed class ParseResult : IDisposable
 {
     private AstArena? _arena;
+    private readonly bool _ownsArena;
     private bool _disposed;
 
-    internal LintResult(LintResultData data, AstArena? arena)
+    internal ParseResult(ParseResultData data, AstArena? arena, bool ownsArena = true)
     {
         Data = data;
         _arena = arena;
+        _ownsArena = ownsArena;
     }
 
-    /// <summary>Gets the underlying lint result data for internal consumers.</summary>
-    internal LintResultData Data { get; }
+    /// <summary>Gets the underlying parse result data for internal consumers.</summary>
+    internal ParseResultData Data { get; }
 
     /// <summary>Gets the parsed workflow AST, if the document is a workflow file.</summary>
     public Workflow? Workflow
@@ -42,23 +43,13 @@ public sealed class LintResult : IDisposable
         }
     }
 
-    /// <summary>Gets the lint diagnostics. These remain valid until this result is disposed.</summary>
+    /// <summary>Gets the parse diagnostics. These remain valid until this result is disposed.</summary>
     public DiagnosticList Diagnostics
     {
         get
         {
             ThrowIfDisposed();
             return Data.Diagnostics;
-        }
-    }
-
-    /// <summary>Gets the parse-phase diagnostics. These remain valid until this result is disposed.</summary>
-    public DiagnosticList ParseDiagnostics
-    {
-        get
-        {
-            ThrowIfDisposed();
-            return Data.ParseDiagnostics;
         }
     }
 
@@ -69,66 +60,6 @@ public sealed class LintResult : IDisposable
         {
             ThrowIfDisposed();
             return Data.HasFatalError;
-        }
-    }
-
-    /// <summary>Gets the suppression summary from inline and exclusion rules.</summary>
-    public SuppressionSummary SuppressionSummary
-    {
-        get
-        {
-            ThrowIfDisposed();
-            return Data.SuppressionSummary;
-        }
-    }
-
-    /// <summary>Gets the number of lint diagnostics.</summary>
-    public int DiagnosticCount
-    {
-        get
-        {
-            ThrowIfDisposed();
-            return Data.DiagnosticCount;
-        }
-    }
-
-    /// <summary>Gets whether any diagnostics have an associated auto-fix.</summary>
-    public bool HasFixableDiagnostics
-    {
-        get
-        {
-            ThrowIfDisposed();
-            return Data.HasFixableDiagnostics;
-        }
-    }
-
-    /// <summary>Gets the fixable diagnostics count.</summary>
-    public int FixableDiagnosticCount
-    {
-        get
-        {
-            ThrowIfDisposed();
-            return Data.FixableDiagnosticCount;
-        }
-    }
-
-    /// <summary>Gets all diagnostics that have an associated auto-fix.</summary>
-    public Diagnostic[] FixableDiagnostics
-    {
-        get
-        {
-            ThrowIfDisposed();
-            return Data.FixableDiagnostics;
-        }
-    }
-
-    /// <summary>Gets all auto-fix payloads from fixable diagnostics.</summary>
-    public DiagnosticFix[] Fixes
-    {
-        get
-        {
-            ThrowIfDisposed();
-            return Data.Fixes;
         }
     }
 
@@ -169,22 +100,12 @@ public sealed class LintResult : IDisposable
     public double GetFloat(FloatNodeId id) => Arena.GetFloatValue(id);
 
     /// <summary>
-    /// Returns a caller-owned copy of the lint diagnostics collection that remains valid
+    /// Returns a caller-owned copy of the diagnostics collection that remains valid
     /// even after this result has been disposed.
     /// </summary>
     public OwnedDiagnostics CopyDiagnostics()
     {
-        ThrowIfDisposed();
-        return Data.CopyDiagnostics();
-    }
-
-    /// <summary>
-    /// Returns a caller-owned copy of the parse diagnostics collection that remains valid
-    /// even after this result has been disposed.
-    /// </summary>
-    public OwnedDiagnostics CopyParseDiagnostics()
-    {
-        var diags = ParseDiagnostics;
+        var diags = Diagnostics;
         if (diags.Length == 0)
         {
             return default;
@@ -193,13 +114,13 @@ public sealed class LintResult : IDisposable
         return new OwnedDiagnostics(diags.AsSpan().ToArray());
     }
 
-    internal AstArena Arena => _disposed || _arena is null ? throw new ObjectDisposedException(nameof(LintResult)) : _arena;
+    internal AstArena Arena => _disposed || _arena is null ? throw new ObjectDisposedException(nameof(ParseResult)) : _arena;
 
     private void ThrowIfDisposed()
     {
         if (_disposed)
         {
-            throw new ObjectDisposedException(nameof(LintResult));
+            throw new ObjectDisposedException(nameof(ParseResult));
         }
     }
 
@@ -211,7 +132,11 @@ public sealed class LintResult : IDisposable
             return;
         }
 
-        _arena?.Dispose();
+        if (_ownsArena)
+        {
+            _arena?.Dispose();
+        }
+
         _arena = null;
         _disposed = true;
     }

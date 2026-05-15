@@ -391,13 +391,12 @@ Implemented in `WorkflowParser.ActionMetadata.cs` (partial class).
 
 ```csharp
 public static ParseResult Parse(byte[] utf8Yaml, string filePath)
-public static ClassifiedParseResult ParseClassified(byte[] utf8Yaml, string filePath)
 ```
 
-- Return: `ParseResult { Workflow?, Diagnostic[], HasFatalError }`
-- Returns `Diagnostic[]` even if YAML parsing itself fails; `Workflow` is null
+- Return: `ParseResult { Workflow?, DiagnosticList Diagnostics, HasFatalError, GetString(StringNodeId), GetString(Utf8Slice), GetUtf8, GetBool/GetInt/GetFloat, GetRange..., CopyDiagnostics(), IDisposable }`
+- Returns parse diagnostics even if YAML parsing itself fails; `Workflow` is null
 - Errors during AST construction are accumulated, not immediately fatal
-- `ParseClassified` additionally returns `DocumentKindClassification` (`PathHintKind`, `FinalKind`, `HasHintMismatch`, `IsAmbiguous`) for linter/CLI routing.
+- Internal-only: `ParseClassified(byte[] utf8Yaml, string filePath, out AstArena? arena)` additionally returns `DocumentKindClassification` (`PathHintKind`, `FinalKind`, `HasHintMismatch`, `IsAmbiguous`) for linter/CLI routing.
 
 ### 1.2 Parse Pipeline
 
@@ -405,8 +404,8 @@ public static ClassifiedParseResult ParseClassified(byte[] utf8Yaml, string file
 Parse(byte[], string)
   1. Create IYamlStreamReader via VYamlStreamAdapter
   2. reader.SkipHeader()
-  3. WorkflowParser.ParseWorkflow(reader) → Workflow AST + Diagnostic[]
-  4. Return ParseResult
+    3. WorkflowParser.ParseWorkflow(reader) → Workflow AST + Diagnostic[]
+        4. Return ParseResult
 ```
 
 ### 1.3 Linter Integration

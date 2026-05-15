@@ -103,11 +103,9 @@ public sealed class LintEngine
     /// copies relevant settings into its own internal <c>_effectiveConfig</c> via <c>PrepareForRun</c>.
     /// </para>
     /// <para>
-    /// <b>Result lifetime:</b> The returned <see cref="LintResult"/> wraps a pooled <c>Diagnostic[]</c>
-    /// registered with the parse arena. Diagnostics are only safe to read until
-    /// <see cref="ParseResult.Arena"/> is disposed. Callers can either consume the diagnostics immediately
-    /// before disposing the arena, or call <see cref="LintResult.CopyDiagnostics"/> to create a caller-owned
-    /// snapshot when diagnostics must be retained beyond arena disposal.
+    /// <b>Result lifetime:</b> The returned <see cref="LintResult"/> owns the underlying
+    /// <see cref="AstArena"/>. Use <c>using var result = engine.Check(...);</c> to ensure proper disposal.
+    /// Call <see cref="LintResult.CopyDiagnostics"/> to obtain a caller-owned snapshot that outlives the result.
     /// </para>
     /// </remarks>
     public LintResult Check(byte[] utf8Yaml, string filePath, LintConfig? config)
@@ -115,44 +113,66 @@ public sealed class LintEngine
         ArgumentNullException.ThrowIfNull(utf8Yaml);
         ArgumentException.ThrowIfNullOrEmpty(filePath);
 
-        var classifiedParseResult = WorkflowParser.ParseClassified(utf8Yaml, filePath);
+        var classifiedParseResult = WorkflowParser.ParseClassified(utf8Yaml, filePath, out var arena);
         var parseResult = classifiedParseResult.ParseResult;
-        return CheckCore(utf8Yaml, filePath, config, parseResult, classifiedParseResult.Classification.FinalKind);
+        var lintResult = CheckCore(utf8Yaml, filePath, config, parseResult, arena, classifiedParseResult.Classification.FinalKind);
+        return new LintResult(lintResult, arena);
     }
 
     /// <summary>
-    /// Lints a pre-parsed <see cref="ParseResult"/> without re-parsing.
+    /// Parses and lints the given YAML, returning the result with the arena as an out parameter.
+    /// Used by internal callers that need explicit arena ownership without the <see cref="LintResult"/> wrapper.
+    /// The caller is responsible for disposing the returned arena.
+    /// </summary>
+    internal LintResultData CheckDirect(byte[] utf8Yaml, string filePath, LintConfig? config, out AstArena? arena)
+    {
+        ArgumentNullException.ThrowIfNull(utf8Yaml);
+        ArgumentException.ThrowIfNullOrEmpty(filePath);
+
+        var classifiedParseResult = WorkflowParser.ParseClassified(utf8Yaml, filePath, out arena);
+        var parseResult = classifiedParseResult.ParseResult;
+        return CheckCore(utf8Yaml, filePath, config, parseResult, arena, classifiedParseResult.Classification.FinalKind);
+    }
+
+    /// <summary>Parses and lints the given YAML with no explicit configuration. Returns result with arena as out parameter.</summary>
+    internal LintResultData CheckDirect(byte[] utf8Yaml, string filePath, out AstArena? arena)
+    {
+        return CheckDirect(utf8Yaml, filePath, config: null, out arena);
+    }
+
+    /// <summary>
+    /// Lints a pre-parsed <see cref="ParseResultData"/> without re-parsing.
     /// Used by Playground incremental parsing (D-5b) where parsing is done externally.
     /// Infers <see cref="DocumentKind"/> from the parse result content.
     /// </summary>
-    internal LintResult CheckWithParseResult(byte[] utf8Yaml, string filePath, LintConfig? config, ParseResult parseResult)
+    internal LintResultData CheckWithParseResult(byte[] utf8Yaml, string filePath, LintConfig? config, ParseResultData parseResult, AstArena? arena)
     {
         ArgumentNullException.ThrowIfNull(utf8Yaml);
         ArgumentException.ThrowIfNullOrEmpty(filePath);
 
         var kind = parseResult.ActionMetadata is not null ? DocumentKind.ActionMetadata : DocumentKind.Workflow;
-        return CheckCore(utf8Yaml, filePath, config, parseResult, kind);
+        return CheckCore(utf8Yaml, filePath, config, parseResult, arena, kind);
     }
 
     /// <summary>
-    /// Lints a pre-parsed <see cref="ParseResult"/> with optional job skipping (D-5d).
+    /// Lints a pre-parsed <see cref="ParseResultData"/> with optional job skipping (D-5d).
     /// When <paramref name="skipJobs"/>[i] is true, lint rules are not run on that job
     /// (its diagnostics are expected to be supplied from a cache by the caller).
     /// </summary>
-    internal LintResult CheckWithParseResult(byte[] utf8Yaml, string filePath, LintConfig? config, ParseResult parseResult, bool[]? skipJobs)
+    internal LintResultData CheckWithParseResult(byte[] utf8Yaml, string filePath, LintConfig? config, ParseResultData parseResult, AstArena? arena, bool[]? skipJobs)
     {
         ArgumentNullException.ThrowIfNull(utf8Yaml);
         ArgumentException.ThrowIfNullOrEmpty(filePath);
 
         var kind = parseResult.ActionMetadata is not null ? DocumentKind.ActionMetadata : DocumentKind.Workflow;
-        return CheckCore(utf8Yaml, filePath, config, parseResult, kind, skipJobs);
+        return CheckCore(utf8Yaml, filePath, config, parseResult, arena, kind, skipJobs);
     }
 
-    private LintResult CheckCore(byte[] utf8Yaml, string filePath, LintConfig? config, ParseResult parseResult, DocumentKind documentKind, bool[]? skipJobs = null)
+    private LintResultData CheckCore(byte[] utf8Yaml, string filePath, LintConfig? config, ParseResultData parseResult, AstArena? arena, DocumentKind documentKind, bool[]? skipJobs = null)
     {
         if (parseResult.HasFatalError || (parseResult.Workflow is null && parseResult.ActionMetadata is null))
         {
-            return new LintResult(parseResult, parseResult.Diagnostics)
+            return new LintResultData(parseResult, parseResult.Diagnostics)
             {
                 SuppressionSummary = SuppressionSummary.Empty,
             };
@@ -172,21 +192,21 @@ public sealed class LintEngine
         _diagnostics.AddRange(normalizedRules.ConfigurationDiagnostics);
 
         var workflowForSuppression = parseResult.Workflow ?? EmptyWorkflowForSuppression;
-        var inlineSuppression = ParseInlineSuppression(utf8Yaml, filePath, workflowForSuppression, parseResult.Arena!);
+        var inlineSuppression = ParseInlineSuppression(utf8Yaml, filePath, workflowForSuppression, arena!);
         _diagnostics.AddRange(inlineSuppression.ConfigurationDiagnostics);
 
-        var normalizedExclusions = NormalizeExclusions(config?.Exclusions, filePath, workflowForSuppression, utf8Yaml, parseResult.Arena!);
+        var normalizedExclusions = NormalizeExclusions(config?.Exclusions, filePath, workflowForSuppression, utf8Yaml, arena!);
         _diagnostics.AddRange(normalizedExclusions.ConfigurationDiagnostics);
 
         if (rules.Count == 0 && _onlineRules.Count == 0)
         {
-            return BuildLintResult(parseResult);
+            return BuildLintResult(parseResult, arena);
         }
 
         _visitor.Reset();
         _effectiveConfig.PrepareForRun(
             utf8Yaml,
-            parseResult.Arena,
+            arena,
             filePath,
             normalizedRules.Rules,
             config?.Fix,
@@ -236,7 +256,7 @@ public sealed class LintEngine
 
         if (_activeRules.Count == 0 && _activeOnlineRules.Count == 0)
         {
-            return BuildLintResult(parseResult);
+            return BuildLintResult(parseResult, arena);
         }
 
         if (parseResult.Workflow is not null)
@@ -339,10 +359,10 @@ public sealed class LintEngine
 
         if (config?.SkipSuppressionSummary == true)
         {
-            return BuildLintResult(parseResult);
+            return BuildLintResult(parseResult, arena);
         }
 
-        return BuildLintResultWithSuppression(parseResult);
+        return BuildLintResultWithSuppression(parseResult, arena);
     }
 
     /// <summary>
@@ -350,7 +370,7 @@ public sealed class LintEngine
     /// When the previous result's array (now in <c>_resultDiagnosticsSwap</c>) has the right length,
     /// it is reused with zero allocation. Otherwise a new array is allocated.
     /// </summary>
-    private LintResult BuildLintResult(ParseResult parseResult)
+    private LintResultData BuildLintResult(ParseResultData parseResult, AstArena? arena)
     {
         var count = _diagnostics.Count;
         var buffer = new PooledBuffer<Diagnostic>(count > 0 ? count : 4);
@@ -361,18 +381,18 @@ public sealed class LintEngine
 
         var (diagArray, diagCount) = buffer.DetachArray();
         buffer.Dispose();
-        parseResult.Arena?.RegisterLintDiagnosticsBuffer(diagArray);
+        arena?.RegisterLintDiagnosticsBuffer(diagArray);
 
-        return new LintResult(parseResult, new DiagnosticList(diagArray, diagCount))
+        return new LintResultData(parseResult, new DiagnosticList(diagArray, diagCount))
         {
             SuppressionSummary = SuppressionSummary.Empty,
         };
     }
 
     /// <summary>
-    /// Builds a <see cref="LintResult"/> with suppression summary using PooledBuffer + DetachArray.
+    /// Builds a <see cref="LintResultData"/> with suppression summary using PooledBuffer + DetachArray.
     /// </summary>
-    private LintResult BuildLintResultWithSuppression(ParseResult parseResult)
+    private LintResultData BuildLintResultWithSuppression(ParseResultData parseResult, AstArena? arena)
     {
         var count = _diagnostics.Count;
         var buffer = new PooledBuffer<Diagnostic>(count > 0 ? count : 4);
@@ -383,7 +403,7 @@ public sealed class LintEngine
 
         var (diagArray, diagCount) = buffer.DetachArray();
         buffer.Dispose();
-        parseResult.Arena?.RegisterLintDiagnosticsBuffer(diagArray);
+        arena?.RegisterLintDiagnosticsBuffer(diagArray);
 
         // Create caller-owned snapshots for suppression summary.
         // Suppression data uses snapshot semantics so callers can safely
@@ -401,7 +421,7 @@ public sealed class LintEngine
             suppressedByRuleSnapshot[pair.Key] = pair.Value;
         }
 
-        return new LintResult(parseResult, new DiagnosticList(diagArray, diagCount))
+        return new LintResultData(parseResult, new DiagnosticList(diagArray, diagCount))
         {
             SuppressionSummary = new SuppressionSummary(suppressionCount, suppressedByRuleSnapshot, suppressionRecordsSnapshot),
         };

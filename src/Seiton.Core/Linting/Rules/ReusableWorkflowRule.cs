@@ -190,9 +190,10 @@ public sealed class ReusableWorkflowRule() : RuleBase(RuleId.ReusableWorkflow)
             return null;
         }
 
-        var parseResult = WorkflowParser.Parse(bytes, resolvedPath);
+        var parseResult = WorkflowParser.ParseDirect(bytes, resolvedPath, out var parseArena);
         if (parseResult.HasFatalError || parseResult.Workflow is null)
         {
+            parseArena?.Dispose();
             AddJobError(job, $"jobs.'{jobId}' references local reusable workflow '{relativePath}' but it could not be parsed", BuildUsesLocation(workflowCall));
             localWorkflowContracts[resolvedPath] = null;
             return null;
@@ -210,12 +211,15 @@ public sealed class ReusableWorkflowRule() : RuleBase(RuleId.ReusableWorkflow)
 
         if (workflowCallEvent is null)
         {
+            parseArena?.Dispose();
             AddJobError(job, $"jobs.'{jobId}' references local workflow '{relativePath}' that does not declare on.workflow_call", BuildJobLocation(job));
             localWorkflowContracts[resolvedPath] = null;
             return null;
         }
 
-        var contract = LocalWorkflowContract.FromEvent(workflowCallEvent, bytes, parseResult.Arena!);
+        var ownedArena = parseArena!;
+        var contract = LocalWorkflowContract.FromEvent(workflowCallEvent, bytes, ownedArena);
+        ownedArena.Dispose();
         localWorkflowContracts[resolvedPath] = contract;
         return contract;
     }

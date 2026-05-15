@@ -20,7 +20,7 @@ public sealed class RuleInterfaceTests
               - run: echo hello
         """;
 
-        var result = new LintEngine().Check(Encoding.UTF8.GetBytes(yaml), "lint-engine.yml");
+        using var result = new LintEngine().Check(Encoding.UTF8.GetBytes(yaml), "lint-engine.yml");
 
         await Assert.That(result.HasFatalError).IsFalse();
         await Assert.That(result.Workflow is not null).IsTrue();
@@ -33,7 +33,7 @@ public sealed class RuleInterfaceTests
     {
         var yaml = "[]";
 
-        var result = new LintEngine().Check(Encoding.UTF8.GetBytes(yaml), "fatal.yml");
+        using var result = new LintEngine().Check(Encoding.UTF8.GetBytes(yaml), "fatal.yml");
 
         await Assert.That(result.HasFatalError).IsTrue();
         await Assert.That(result.Workflow).IsNull();
@@ -53,7 +53,7 @@ public sealed class RuleInterfaceTests
                     - run: echo hello
         """;
 
-        var result = new LintEngine().Check(Encoding.UTF8.GetBytes(yaml), "rule-filepath.yml");
+        using var result = new LintEngine().Check(Encoding.UTF8.GetBytes(yaml), "rule-filepath.yml");
         var diagnostic = result.Diagnostics.FirstOrDefault(x =>
             x.RuleId == "job-structure"
             && x.Message.Contains("\"runs-on\" section is missing", StringComparison.Ordinal));
@@ -247,7 +247,7 @@ public sealed class RuleInterfaceTests
         jobs: {}
         """.Replace("\r\n", "\n");
 
-        var result = new LintEngine().Check(Encoding.UTF8.GetBytes(yaml), "permissions-invalid-scalar.yml");
+        using var result = new LintEngine().Check(Encoding.UTF8.GetBytes(yaml), "permissions-invalid-scalar.yml");
 
         await Assert.That(result.ParseDiagnostics).IsEmpty();
         await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("permissions scalar must be 'read-all' or 'write-all'", StringComparison.Ordinal))).IsTrue();
@@ -267,7 +267,7 @@ public sealed class RuleInterfaceTests
                     - run: echo ok
         """.Replace("\r\n", "\n");
 
-        var result = new LintEngine().Check(Encoding.UTF8.GetBytes(yaml), "permissions-invalid-scope.yml");
+        using var result = new LintEngine().Check(Encoding.UTF8.GetBytes(yaml), "permissions-invalid-scope.yml");
 
         await Assert.That(result.ParseDiagnostics).IsEmpty();
         await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("\"admin\" is invalid as permission of scope \"contents\"", StringComparison.Ordinal))).IsTrue();
@@ -284,7 +284,7 @@ public sealed class RuleInterfaceTests
                 container: node:20
         """.Replace("\r\n", "\n");
 
-        var result = new LintEngine().Check(Encoding.UTF8.GetBytes(yaml), "reuse-forbidden-key.yml");
+        using var result = new LintEngine().Check(Encoding.UTF8.GetBytes(yaml), "reuse-forbidden-key.yml");
 
         // Parser no longer emits forbidden-key diagnostics (linter handles them)
         await Assert.That(result.ParseDiagnostics.Any(x => x.Message.Contains("calls reusable workflow with uses", StringComparison.Ordinal))).IsFalse();
@@ -633,7 +633,7 @@ public sealed class RuleInterfaceTests
             File.WriteAllText(calleePath, NormalizeYaml(calleeYaml), Encoding.UTF8);
             File.WriteAllText(callerPath, NormalizeYaml(callerYaml), Encoding.UTF8);
 
-            var result = new LintEngine([new ReusableWorkflowRule()])
+            using var result = new LintEngine([new ReusableWorkflowRule()])
                 .Check(File.ReadAllBytes(callerPath), callerPath);
 
             var ruleDiagnostics = result.Diagnostics.Where(x => x.RuleId == "reusable-workflow").Select(x => x.Message).ToArray();
@@ -697,7 +697,7 @@ public sealed class RuleInterfaceTests
             File.WriteAllText(calleePath, NormalizeYaml(calleeYaml), Encoding.UTF8);
             File.WriteAllText(callerPath, NormalizeYaml(callerYaml), Encoding.UTF8);
 
-            var result = new LintEngine([new ReusableWorkflowRule()])
+            using var result = new LintEngine([new ReusableWorkflowRule()])
                 .Check(File.ReadAllBytes(callerPath), callerPath);
 
             await Assert.That(result.Diagnostics.Any(x => x.RuleId == "reusable-workflow")).IsFalse();
@@ -749,7 +749,7 @@ public sealed class RuleInterfaceTests
             File.WriteAllText(calleePath, NormalizeYaml(calleeYaml), Encoding.UTF8);
             File.WriteAllText(callerPath, NormalizeYaml(callerYaml), Encoding.UTF8);
 
-            var result = new LintEngine([new ReusableWorkflowRule()])
+            using var result = new LintEngine([new ReusableWorkflowRule()])
                 .Check(File.ReadAllBytes(callerPath), callerPath);
 
             var ruleDiagnostics = result.Diagnostics.Where(x => x.RuleId == "reusable-workflow").Select(x => x.Message).ToArray();
@@ -776,7 +776,7 @@ public sealed class RuleInterfaceTests
                     uses: ./.github/workflows/reusable.yml@v1
             """);
 
-        var result = new LintEngine([new UnpinnedUsesRule()])
+        using var result = new LintEngine([new UnpinnedUsesRule()])
             .Check(Encoding.UTF8.GetBytes(yaml), "unpinned-local-ref.yml");
 
         var diagnostics = result.Diagnostics.Where(x => x.RuleId == "unpinned-uses").ToArray();
@@ -796,7 +796,7 @@ public sealed class RuleInterfaceTests
                     uses: invalid-format-no-at-ref
             """);
 
-        var result = new LintEngine([new UnpinnedUsesRule()])
+        using var result = new LintEngine([new UnpinnedUsesRule()])
             .Check(Encoding.UTF8.GetBytes(yaml), "unpinned-invalid-format.yml");
 
         var diagnostics = result.Diagnostics.Where(x => x.RuleId == "unpinned-uses").ToArray();
@@ -851,7 +851,7 @@ public sealed class RuleInterfaceTests
             File.WriteAllText(actionPath, NormalizeYaml(actionYaml), Encoding.UTF8);
             File.WriteAllText(callerPath, NormalizeYaml(callerYaml), Encoding.UTF8);
 
-            var result = new LintEngine([new LocalActionInputsRule()])
+            using var result = new LintEngine([new LocalActionInputsRule()])
                 .Check(File.ReadAllBytes(callerPath), callerPath);
 
             var msgs = result.Diagnostics.Where(x => x.RuleId == "local-action-inputs").Select(x => x.Message).ToArray();
@@ -907,7 +907,7 @@ public sealed class RuleInterfaceTests
             File.WriteAllText(actionPath, NormalizeYaml(actionYaml), Encoding.UTF8);
             File.WriteAllText(callerPath, NormalizeYaml(callerYaml), Encoding.UTF8);
 
-            var result = new LintEngine([new LocalActionInputsRule()])
+            using var result = new LintEngine([new LocalActionInputsRule()])
                 .Check(File.ReadAllBytes(callerPath), callerPath);
 
             await Assert.That(result.Diagnostics.Any(x => x.RuleId == "local-action-inputs" && x.Severity == DiagnosticSeverity.Warning && x.Message.Contains("deprecated", StringComparison.Ordinal) && x.Message.Contains("use something else", StringComparison.Ordinal))).IsTrue();
@@ -953,7 +953,7 @@ public sealed class RuleInterfaceTests
             File.WriteAllText(actionPath, NormalizeYaml(actionYaml), Encoding.UTF8);
             File.WriteAllText(callerPath, NormalizeYaml(callerYaml), Encoding.UTF8);
 
-            var result = new LintEngine([new LocalActionInputsRule()])
+            using var result = new LintEngine([new LocalActionInputsRule()])
                 .Check(File.ReadAllBytes(callerPath), callerPath);
 
             await Assert.That(result.Diagnostics.Any(x => x.RuleId == "local-action-inputs" && x.Message.Contains("deprecated runner 'node16'", StringComparison.Ordinal))).IsTrue();
@@ -1016,7 +1016,7 @@ public sealed class RuleInterfaceTests
 
             File.WriteAllText(callerPath, NormalizeYaml(callerYaml), Encoding.UTF8);
 
-            var result = new LintEngine([new LocalActionInputsRule()])
+            using var result = new LintEngine([new LocalActionInputsRule()])
                 .Check(File.ReadAllBytes(callerPath), callerPath);
 
             await Assert.That(result.Diagnostics.Any(x => x.RuleId == "local-action-inputs")).IsFalse();
@@ -1051,7 +1051,7 @@ public sealed class RuleInterfaceTests
 
             File.WriteAllText(callerPath, NormalizeYaml(callerYaml), Encoding.UTF8);
 
-            var result = new LintEngine([new LocalActionInputsRule()])
+            using var result = new LintEngine([new LocalActionInputsRule()])
                 .Check(File.ReadAllBytes(callerPath), callerPath);
 
             await Assert.That(result.Diagnostics.Any(x => x.RuleId == "local-action-inputs")).IsFalse();
@@ -1097,7 +1097,7 @@ public sealed class RuleInterfaceTests
                         - uses: ./.github/actions/my-action
             """), Encoding.UTF8);
 
-            var result = new LintEngine([new LocalActionInputsRule()])
+            using var result = new LintEngine([new LocalActionInputsRule()])
                 .Check(File.ReadAllBytes(callerPath), callerPath);
 
             await Assert.That(result.Diagnostics.Any(x => x.RuleId == "local-action-inputs" && x.Message.Contains("description is required", StringComparison.Ordinal))).IsTrue();
@@ -1145,7 +1145,7 @@ public sealed class RuleInterfaceTests
                         - uses: ./.github/actions/my-action
             """), Encoding.UTF8);
 
-            var result = new LintEngine([new LocalActionInputsRule()])
+            using var result = new LintEngine([new LocalActionInputsRule()])
                 .Check(File.ReadAllBytes(callerPath), callerPath);
 
             await Assert.That(result.Diagnostics.Any(x => x.RuleId == "local-action-inputs" && x.Message.Contains("\"env\" is not allowed", StringComparison.Ordinal) && x.Message.Contains("JavaScript action", StringComparison.Ordinal))).IsTrue();
@@ -1190,7 +1190,7 @@ public sealed class RuleInterfaceTests
                         - uses: ./.github/actions/my-action
             """), Encoding.UTF8);
 
-            var result = new LintEngine([new LocalActionInputsRule()])
+            using var result = new LintEngine([new LocalActionInputsRule()])
                 .Check(File.ReadAllBytes(callerPath), callerPath);
 
             await Assert.That(result.Diagnostics.Any(x => x.RuleId == "local-action-inputs" && x.Message.Contains("does not exist", StringComparison.Ordinal) && x.Message.Contains("nonexistent.js", StringComparison.Ordinal))).IsTrue();
@@ -1240,7 +1240,7 @@ public sealed class RuleInterfaceTests
                         - uses: ./.github/actions/my-action
             """), Encoding.UTF8);
 
-            var result = new LintEngine([new LocalActionInputsRule()])
+            using var result = new LintEngine([new LocalActionInputsRule()])
                 .Check(File.ReadAllBytes(callerPath), callerPath);
 
             await Assert.That(result.Diagnostics.Any(x => x.RuleId == "local-action-inputs" && x.Message.Contains("invalid branding icon", StringComparison.Ordinal))).IsTrue();
@@ -1288,7 +1288,7 @@ public sealed class RuleInterfaceTests
                         - uses: ./.github/actions/my-action
             """), Encoding.UTF8);
 
-            var result = new LintEngine([new LocalActionInputsRule()])
+            using var result = new LintEngine([new LocalActionInputsRule()])
                 .Check(File.ReadAllBytes(callerPath), callerPath);
 
             await Assert.That(result.Diagnostics.Any(x => x.RuleId == "local-action-inputs" && x.Message.Contains("env", StringComparison.Ordinal))).IsFalse();
@@ -1313,7 +1313,7 @@ public sealed class RuleInterfaceTests
             return;
         }
 
-        var result = new LintEngine([new LocalActionInputsRule()])
+        using var result = new LintEngine([new LocalActionInputsRule()])
             .Check(File.ReadAllBytes(path), path);
 
         var msgs = result.Diagnostics.Where(x => x.RuleId == "local-action-inputs").Select(x => x.Message).ToArray();
@@ -1366,7 +1366,7 @@ public sealed class RuleInterfaceTests
             File.WriteAllText(actionPath, NormalizeYaml(actionYaml), Encoding.UTF8);
             File.WriteAllText(callerPath, NormalizeYaml(callerYaml), Encoding.UTF8);
 
-            var result = new LintEngine([new ExprUndefinedVarRule()])
+            using var result = new LintEngine([new ExprUndefinedVarRule()])
                 .Check(File.ReadAllBytes(callerPath), callerPath);
 
             var msgs = result.Diagnostics.Where(x => x.RuleId == "expr-undefined-var").Select(x => x.Message).ToArray();
@@ -1689,7 +1689,7 @@ public sealed class RuleInterfaceTests
 
         var sourceBytes = Encoding.UTF8.GetBytes(yaml);
         var engine = new LintEngine([new PopularActionInputsRule()]);
-        var result = engine.Check(sourceBytes, "popular-action-inputs-fix.yml", new LintConfig { Fix = new FixConfig { Enabled = true } });
+        using var result = engine.Check(sourceBytes, "popular-action-inputs-fix.yml", new LintConfig { Fix = new FixConfig { Enabled = true } });
         var diagnostic = result.Diagnostics.First(x =>
             x.RuleId == "popular-action-inputs" && x.Message.Contains("fetch-depht", StringComparison.Ordinal));
 
@@ -1720,7 +1720,7 @@ public sealed class RuleInterfaceTests
 
         var sourceBytes = Encoding.UTF8.GetBytes(yaml);
         var engine = new LintEngine([new PopularActionInputsRule()]);
-        var result = engine.Check(sourceBytes, "popular-action-inputs-no-fix.yml", new LintConfig { Fix = new FixConfig { Enabled = true } });
+        using var result = engine.Check(sourceBytes, "popular-action-inputs-no-fix.yml", new LintConfig { Fix = new FixConfig { Enabled = true } });
         var diagnostic = result.Diagnostics.First(x =>
             x.RuleId == "popular-action-inputs" && x.Message.Contains("totally-unknown-input", StringComparison.Ordinal));
 
@@ -1969,7 +1969,7 @@ public sealed class RuleInterfaceTests
 
         var sourceBytes = Encoding.UTF8.GetBytes(yaml);
         var engine = new LintEngine([new CheckoutPersistCredentialsRule()]);
-        var result = engine.Check(sourceBytes, "checkout-persist-fix-insert-with.yml", new LintConfig { Fix = new FixConfig { Enabled = true } });
+        using var result = engine.Check(sourceBytes, "checkout-persist-fix-insert-with.yml", new LintConfig { Fix = new FixConfig { Enabled = true } });
         var diagnostic = result.Diagnostics.First(x => x.RuleId == "checkout-persist-credentials");
 
         await Assert.That(diagnostic.Fix is not null).IsTrue();
@@ -2001,7 +2001,7 @@ public sealed class RuleInterfaceTests
 
         var sourceBytes = Encoding.UTF8.GetBytes(yaml);
         var engine = new LintEngine([new CheckoutPersistCredentialsRule()]);
-        var result = engine.Check(sourceBytes, "checkout-persist-fix-existing-with.yml", new LintConfig { Fix = new FixConfig { Enabled = true } });
+        using var result = engine.Check(sourceBytes, "checkout-persist-fix-existing-with.yml", new LintConfig { Fix = new FixConfig { Enabled = true } });
         var diagnostic = result.Diagnostics.First(x => x.RuleId == "checkout-persist-credentials");
 
         await Assert.That(diagnostic.Fix is not null).IsTrue();
@@ -2032,7 +2032,7 @@ public sealed class RuleInterfaceTests
 
         var sourceBytes = Encoding.UTF8.GetBytes(yaml);
         var engine = new LintEngine([new CheckoutPersistCredentialsRule()]);
-        var result = engine.Check(sourceBytes, "checkout-persist-fix-replace.yml", new LintConfig { Fix = new FixConfig { Enabled = true } });
+        using var result = engine.Check(sourceBytes, "checkout-persist-fix-replace.yml", new LintConfig { Fix = new FixConfig { Enabled = true } });
         var diagnostic = result.Diagnostics.First(x => x.RuleId == "checkout-persist-credentials");
 
         await Assert.That(diagnostic.Fix is not null).IsTrue();
@@ -2071,8 +2071,8 @@ public sealed class RuleInterfaceTests
         """;
 
         var engine = new LintEngine([new CheckoutPersistCredentialsRule()]);
-        var expressionResult = engine.Check(Encoding.UTF8.GetBytes(expressionYaml), "checkout-persist-no-fix-expression.yml");
-        var flowResult = engine.Check(Encoding.UTF8.GetBytes(flowYaml), "checkout-persist-no-fix-flow.yml");
+        using var expressionResult = engine.Check(Encoding.UTF8.GetBytes(expressionYaml), "checkout-persist-no-fix-expression.yml");
+        using var flowResult = engine.Check(Encoding.UTF8.GetBytes(flowYaml), "checkout-persist-no-fix-flow.yml");
 
         await Assert.That(expressionResult.Diagnostics.First(x => x.RuleId == "checkout-persist-credentials").Fix is null).IsTrue();
         await Assert.That(flowResult.Diagnostics.First(x => x.RuleId == "checkout-persist-credentials").Fix is null).IsTrue();
@@ -2291,7 +2291,7 @@ public sealed class RuleInterfaceTests
                         - uses: guitarrapc/setup-dotnet@main
             """);
 
-        var result = new LintEngine([new UnpinnedUsesRule()])
+        using var result = new LintEngine([new UnpinnedUsesRule()])
             .Check(Encoding.UTF8.GetBytes(yaml), "verbose-test.yml", config);
         var infoDiags = result.Diagnostics.Where(x => x.RuleId == "unpinned-uses" && x.Severity == DiagnosticSeverity.Info).ToArray();
         await Assert.That(infoDiags.Length).IsEqualTo(1);
@@ -2323,7 +2323,7 @@ public sealed class RuleInterfaceTests
                         - uses: guitarrapc/setup-dotnet@main
             """);
 
-        var result = new LintEngine([new UnpinnedUsesRule()])
+        using var result = new LintEngine([new UnpinnedUsesRule()])
             .Check(Encoding.UTF8.GetBytes(yaml), "no-verbose-test.yml", config);
         var infoDiags = result.Diagnostics.Where(x => x.RuleId == "unpinned-uses" && x.Severity == DiagnosticSeverity.Info).ToArray();
         await Assert.That(infoDiags.Length).IsEqualTo(0);
@@ -2353,7 +2353,7 @@ public sealed class RuleInterfaceTests
 
             File.WriteAllText(callerPath, NormalizeYaml(callerYaml), Encoding.UTF8);
 
-            var result = new LintEngine([new UnpinnedUsesRule()])
+            using var result = new LintEngine([new UnpinnedUsesRule()])
                 .Check(File.ReadAllBytes(callerPath), callerPath);
 
             await Assert.That(result.Diagnostics.Any(x => x.RuleId == "unpinned-uses" && x.Message.Contains("missing action.yml or action.yaml", StringComparison.Ordinal))).IsTrue();
@@ -2381,7 +2381,7 @@ public sealed class RuleInterfaceTests
             usesLine,
             string.Empty);
 
-        var result = new LintEngine([new UnpinnedUsesRule()])
+        using var result = new LintEngine([new UnpinnedUsesRule()])
             .Check(Encoding.UTF8.GetBytes(NormalizeYaml(yaml)), "unpinned-uses-step-location.yml");
         var diagnostic = result.Diagnostics.First(x => x.RuleId == "unpinned-uses");
 
@@ -2402,7 +2402,7 @@ public sealed class RuleInterfaceTests
             usesLine,
             string.Empty);
 
-        var result = new LintEngine([new UnpinnedUsesRule()])
+        using var result = new LintEngine([new UnpinnedUsesRule()])
             .Check(Encoding.UTF8.GetBytes(NormalizeYaml(yaml)), "unpinned-uses-job-location.yml");
         var diagnostic = result.Diagnostics.First(x => x.RuleId == "unpinned-uses");
 
@@ -2421,7 +2421,7 @@ public sealed class RuleInterfaceTests
                     uses: owner/repo/.github/workflows/reusable.yml@main
             """);
 
-        var result = new LintEngine([new UnpinnedUsesRule()])
+        using var result = new LintEngine([new UnpinnedUsesRule()])
             .Check(Encoding.UTF8.GetBytes(yaml), "unpinned-uses-path.yml");
         var diagnostic = result.Diagnostics.First(x => x.RuleId == "unpinned-uses");
 
@@ -2441,7 +2441,7 @@ public sealed class RuleInterfaceTests
                         - uses: actions/checkout@v4
             """);
 
-        var result = new LintEngine([new UnpinnedUsesRule()])
+        using var result = new LintEngine([new UnpinnedUsesRule()])
             .Check(Encoding.UTF8.GetBytes(yaml), "unpinned-uses-fixable-order.yml");
         var diagnostic = result.Diagnostics.First(x => x.RuleId == "unpinned-uses");
 
@@ -2946,7 +2946,7 @@ public sealed class RuleInterfaceTests
                         - run: echo to
             """);
 
-        var result = new LintEngine([new NeedsGraphRule()]).Check(Encoding.UTF8.GetBytes(yaml), "test.yml");
+        using var result = new LintEngine([new NeedsGraphRule()]).Check(Encoding.UTF8.GetBytes(yaml), "test.yml");
         var diags = result.Diagnostics.Where(x => x.RuleId == "needs-graph" && x.Message.Contains("cyclic")).ToArray();
 
         await Assert.That(diags.Length).IsGreaterThanOrEqualTo(1);
@@ -3844,7 +3844,7 @@ public sealed class RuleInterfaceTests
 
         var sourceBytes = Encoding.UTF8.GetBytes(NormalizeYaml(yaml));
         var engine = new LintEngine([new IdNamingRule()]);
-        var result = engine.Check(sourceBytes, "id-naming-fix.yml");
+        using var result = engine.Check(sourceBytes, "id-naming-fix.yml");
         var diagnostic = result.Diagnostics.First(x => x.RuleId == "id-naming");
 
         await Assert.That(diagnostic.Fix).IsNotNull();
@@ -3878,7 +3878,7 @@ public sealed class RuleInterfaceTests
 
         var sourceBytes = Encoding.UTF8.GetBytes(NormalizeYaml(yaml));
         var engine = new LintEngine([new IdNamingRule()]);
-        var result = engine.Check(sourceBytes, "id-naming-needs-fix.yml");
+        using var result = engine.Check(sourceBytes, "id-naming-needs-fix.yml");
         var diagnostic = result.Diagnostics.First(x => x.RuleId == "id-naming");
 
         await Assert.That(diagnostic.Fix).IsNotNull();
@@ -3918,7 +3918,7 @@ public sealed class RuleInterfaceTests
 
         var sourceBytes = Encoding.UTF8.GetBytes(NormalizeYaml(yaml));
         var engine = new LintEngine([new IdNamingRule()]);
-        var result = engine.Check(sourceBytes, "id-naming-needs-seq-fix.yml");
+        using var result = engine.Check(sourceBytes, "id-naming-needs-seq-fix.yml");
         var diagnostic = result.Diagnostics.First(x => x.RuleId == "id-naming");
 
         await Assert.That(diagnostic.Fix).IsNotNull();
@@ -3958,7 +3958,7 @@ public sealed class RuleInterfaceTests
 
         var sourceBytes = Encoding.UTF8.GetBytes(NormalizeYaml(yaml));
         var engine = new LintEngine([new IdNamingRule()]);
-        var result = engine.Check(sourceBytes, "id-naming-needs-seq-fix-case-insensitive.yml");
+        using var result = engine.Check(sourceBytes, "id-naming-needs-seq-fix-case-insensitive.yml");
         var diagnostic = result.Diagnostics.First(x => x.RuleId == "id-naming");
 
         await Assert.That(diagnostic.Fix).IsNotNull();
@@ -3992,7 +3992,7 @@ public sealed class RuleInterfaceTests
 
         var sourceBytes = Encoding.UTF8.GetBytes(NormalizeYaml(yaml));
         var engine = new LintEngine([new IdNamingRule()]);
-        var result = engine.Check(sourceBytes, "id-naming-collision-kebab-existing.yml");
+        using var result = engine.Check(sourceBytes, "id-naming-collision-kebab-existing.yml");
 
         var diagnostic = result.Diagnostics.First(x =>
             x.RuleId == "id-naming"
@@ -4021,7 +4021,7 @@ public sealed class RuleInterfaceTests
 
         var sourceBytes = Encoding.UTF8.GetBytes(NormalizeYaml(yaml));
         var engine = new LintEngine([new IdNamingRule()]);
-        var result = engine.Check(sourceBytes, "id-naming-collision-case-insensitive.yml");
+        using var result = engine.Check(sourceBytes, "id-naming-collision-case-insensitive.yml");
 
         var diagnostic = result.Diagnostics.First(x =>
             x.RuleId == "id-naming"
@@ -4045,7 +4045,7 @@ public sealed class RuleInterfaceTests
 
         var sourceBytes = Encoding.UTF8.GetBytes(NormalizeYaml(yaml));
         var engine = new LintEngine([new IdNamingRule()]);
-        var result = engine.Check(sourceBytes, "id-naming-underscore-kebab.yml");
+        using var result = engine.Check(sourceBytes, "id-naming-underscore-kebab.yml");
         var diagnostic = result.Diagnostics.First(x => x.RuleId == "id-naming");
 
         await Assert.That(diagnostic.Fix).IsNotNull();
@@ -4958,7 +4958,8 @@ public sealed class RuleInterfaceTests
         //   line 6: "        foo.txt"     <- content at col 9
         // actionlint expects line 5, col 9
         var yaml = "on:\n  push:\n    paths:\n      - 'ok'\n      - |\n        foo.txt\njobs:\n  test:\n    runs-on: ubuntu-latest\n    steps:\n      - run: echo\n";
-        var result = new LintEngine([new GlobPatternRule()]).Check(
+        using var result = new LintEngine([new GlobPatternRule()]).Check(
+
             System.Text.Encoding.UTF8.GetBytes(yaml), "test.yaml");
         var diagnostics = result.Diagnostics.Where(d => d.RuleId == "glob-pattern" && d.Message.Contains("leading and trailing spaces")).ToArray();
 
@@ -5043,7 +5044,7 @@ public sealed class RuleInterfaceTests
 
         var sourceBytes = Encoding.UTF8.GetBytes(yaml);
         var engine = new LintEngine([new DenyWriteAllRule()]);
-        var result = engine.Check(sourceBytes, "deny-write-all-fix.yml");
+        using var result = engine.Check(sourceBytes, "deny-write-all-fix.yml");
         var diagnostic = result.Diagnostics.First(x => x.RuleId == "deny-write-all");
 
         await Assert.That(diagnostic.Fix is not null).IsTrue();
@@ -5072,7 +5073,7 @@ public sealed class RuleInterfaceTests
 
         var sourceBytes = Encoding.UTF8.GetBytes(yaml);
         var engine = new LintEngine([new DenyWriteAllRule()]);
-        var result = engine.Check(sourceBytes, "deny-write-all-job-fix.yml");
+        using var result = engine.Check(sourceBytes, "deny-write-all-job-fix.yml");
         var diagnostic = result.Diagnostics.First(x => x.RuleId == "deny-write-all");
 
         await Assert.That(diagnostic.Fix is not null).IsTrue();
@@ -5160,7 +5161,7 @@ public sealed class RuleInterfaceTests
 
         var sourceBytes = Encoding.UTF8.GetBytes(yaml);
         var engine = new LintEngine([new DenyReadAllRule()]);
-        var result = engine.Check(sourceBytes, "deny-read-all-fix.yml");
+        using var result = engine.Check(sourceBytes, "deny-read-all-fix.yml");
         var diagnostic = result.Diagnostics.First(x => x.RuleId == "deny-read-all");
 
         await Assert.That(diagnostic.Fix is not null).IsTrue();
@@ -5188,7 +5189,7 @@ public sealed class RuleInterfaceTests
 
         var sourceBytes = Encoding.UTF8.GetBytes(yaml);
         var engine = new LintEngine([new DenyReadAllRule()]);
-        var result = engine.Check(sourceBytes, "deny-read-all-job-fix.yml");
+        using var result = engine.Check(sourceBytes, "deny-read-all-job-fix.yml");
         var diagnostic = result.Diagnostics.First(x => x.RuleId == "deny-read-all");
 
         await Assert.That(diagnostic.Fix is not null).IsTrue();
@@ -5278,7 +5279,7 @@ public sealed class RuleInterfaceTests
             Fix = new FixConfig { Enabled = true, Defaults = new FixDefaultsConfig { JobTimeoutMinutes = 15 } },
         };
 
-        var result = engine.Check(sourceBytes, "job-timeout-minutes-required-fix.yml", config);
+        using var result = engine.Check(sourceBytes, "job-timeout-minutes-required-fix.yml", config);
         var diagnostic = result.Diagnostics.First(x => x.RuleId == "job-timeout-minutes-required");
 
         await Assert.That(diagnostic.Fix is not null).IsTrue();
@@ -5304,7 +5305,7 @@ public sealed class RuleInterfaceTests
 
         var sourceBytes = Encoding.UTF8.GetBytes(yaml);
         var engine = new LintEngine([new JobTimeoutMinutesRequiredRule()]);
-        var result = engine.Check(sourceBytes, "job-timeout-minutes-required-no-fix.yml", new LintConfig());
+        using var result = engine.Check(sourceBytes, "job-timeout-minutes-required-no-fix.yml", new LintConfig());
         var diagnostic = result.Diagnostics.First(x => x.RuleId == "job-timeout-minutes-required");
 
         await Assert.That(diagnostic.Fix is null).IsTrue();
@@ -5776,7 +5777,7 @@ public sealed class RuleInterfaceTests
                         APPLES: ${{ secrets.APPLES }}
         """;
 
-        var result = new LintEngine([new UnredactedSecretsRule()])
+        using var result = new LintEngine([new UnredactedSecretsRule()])
             .Check(Encoding.UTF8.GetBytes(yaml), "unredacted-secrets-location.yml");
         var diagnostic = result.Diagnostics.First(x => x.RuleId == "unredacted-secrets");
 
@@ -6113,7 +6114,7 @@ public sealed class RuleInterfaceTests
                         - run: echo ng
             """
             .Replace("\r\n", "\n");
-        var result = new LintEngine().Check(Encoding.UTF8.GetBytes(yaml), "exclude-obj.yml");
+        using var result = new LintEngine().Check(Encoding.UTF8.GetBytes(yaml), "exclude-obj.yml");
         var diag = result.Diagnostics.FirstOrDefault(d => d.Message.Contains("does not match"));
         await Assert.That(diag.Message).IsNotNull();
         // The exclude entry is on line 10-11 area — diagnostic must not be on line 7 (matrix range)
@@ -6139,7 +6140,7 @@ public sealed class RuleInterfaceTests
                         - run: echo ng
             """
             .Replace("\r\n", "\n");
-        var result = new LintEngine().Check(Encoding.UTF8.GetBytes(yaml), "exclude-arr.yml");
+        using var result = new LintEngine().Check(Encoding.UTF8.GetBytes(yaml), "exclude-arr.yml");
         var diag = result.Diagnostics.FirstOrDefault(d => d.Message.Contains("does not match"));
         await Assert.That(diag.Message).IsNotNull();
         // The exclude entry is on line 10-11 area — diagnostic must not be on line 7 (matrix range)
@@ -6499,7 +6500,8 @@ public sealed class RuleInterfaceTests
         //   line 7: "          true"       <- content at col 11
         // actionlint expects line 6, col 13 (the `|` position)
         var yaml = "on: push\njobs:\n  build:\n    runs-on: ubuntu-latest\n    steps:\n      - if: |\n          true\n        run: echo ng\n";
-        var result = new LintEngine([new IfCondRule()]).Check(
+        using var result = new LintEngine([new IfCondRule()]).Check(
+
             System.Text.Encoding.UTF8.GetBytes(yaml), "test.yaml");
         var diagnostics = result.Diagnostics.Where(d => d.RuleId == "if-cond").ToArray();
 
@@ -6520,7 +6522,8 @@ public sealed class RuleInterfaceTests
         //   line 7: "          ${{ false }}"      <- content at col 11
         // actionlint expects line 6, col 13
         var yaml = "on: push\njobs:\n  build:\n    runs-on: ubuntu-latest\n    steps:\n      - if: |\n          ${{ false }}\n        run: echo ng\n";
-        var result = new LintEngine([new IfCondRule()]).Check(
+        using var result = new LintEngine([new IfCondRule()]).Check(
+
             System.Text.Encoding.UTF8.GetBytes(yaml), "test.yaml");
         var diagnostics = result.Diagnostics.Where(d => d.RuleId == "if-cond").ToArray();
 
@@ -6539,7 +6542,8 @@ public sealed class RuleInterfaceTests
         //   line 4: "    if: |"      <- `if` at col 5, `|` at col 9
         //   line 5: "      true"     <- content at col 7
         var yaml = "on: push\njobs:\n  build:\n    if: |\n      true\n    runs-on: ubuntu-latest\n    steps:\n      - run: echo ng\n";
-        var result = new LintEngine([new IfCondRule()]).Check(
+        using var result = new LintEngine([new IfCondRule()]).Check(
+
             System.Text.Encoding.UTF8.GetBytes(yaml), "test.yaml");
         var diagnostics = result.Diagnostics.Where(d => d.RuleId == "if-cond").ToArray();
 
@@ -6733,7 +6737,7 @@ public sealed class RuleInterfaceTests
 
         var sourceBytes = Encoding.UTF8.GetBytes(yaml);
         var engine = new LintEngine([new IfExprWrapperRule()]);
-        var result = engine.Check(sourceBytes, "if-expr-wrapper-fix.yml", new LintConfig { Fix = new FixConfig { Enabled = true } });
+        using var result = engine.Check(sourceBytes, "if-expr-wrapper-fix.yml", new LintConfig { Fix = new FixConfig { Enabled = true } });
         var diagnostic = result.Diagnostics.First(x => x.RuleId == "if-expr-wrapper");
 
         await Assert.That(diagnostic.Fix is not null).IsTrue();
@@ -6752,7 +6756,8 @@ public sealed class RuleInterfaceTests
         // Regression: block scalar `if: |\n  expr` includes trailing \n in raw value.
         // The diagnostic message must NOT contain the raw newline.
         var yaml = "on: push\njobs:\n  build:\n    runs-on: ubuntu-latest\n    steps:\n      - if: |\n          github.event_name == 'push'\n        run: echo ok\n";
-        var result = new LintEngine([new IfExprWrapperRule()]).Check(
+        using var result = new LintEngine([new IfExprWrapperRule()]).Check(
+
             Encoding.UTF8.GetBytes(yaml), "test.yaml");
         var diagnostics = result.Diagnostics.Where(d => d.RuleId == "if-expr-wrapper").ToArray();
 
@@ -6767,7 +6772,8 @@ public sealed class RuleInterfaceTests
     {
         // Block scalar `if: |\n  expr\n` must NOT offer auto-fix (trailing \n is structural)
         var yaml = "on: push\njobs:\n  build:\n    runs-on: ubuntu-latest\n    steps:\n      - if: |\n          github.event_name == 'push'\n        run: echo ok\n";
-        var result = new LintEngine([new IfExprWrapperRule()]).Check(
+        using var result = new LintEngine([new IfExprWrapperRule()]).Check(
+
             Encoding.UTF8.GetBytes(yaml), "test.yaml");
         var diagnostics = result.Diagnostics.Where(d => d.RuleId == "if-expr-wrapper").ToArray();
 
@@ -6792,7 +6798,7 @@ public sealed class RuleInterfaceTests
 
         var sourceBytes = Encoding.UTF8.GetBytes(yaml);
         var engine = new LintEngine([new IfExprWrapperRule()]);
-        var result = engine.Check(sourceBytes, "test.yaml", new LintConfig { Fix = new FixConfig { Enabled = true } });
+        using var result = engine.Check(sourceBytes, "test.yaml", new LintConfig { Fix = new FixConfig { Enabled = true } });
         var diagnostic = result.Diagnostics.First(x => x.RuleId == "if-expr-wrapper");
 
         await Assert.That(diagnostic.Fix is not null).IsTrue();
@@ -6818,7 +6824,8 @@ public sealed class RuleInterfaceTests
                       run: echo ok
         """;
 
-        var result = new LintEngine([new IfExprWrapperRule()]).Check(
+        using var result = new LintEngine([new IfExprWrapperRule()]).Check(
+
             Encoding.UTF8.GetBytes(yaml), "test.yaml");
         var diagnostics = result.Diagnostics.Where(d => d.RuleId == "if-expr-wrapper").ToArray();
 
@@ -6843,11 +6850,11 @@ public sealed class RuleInterfaceTests
         // Short YAML with same-length condition — cached offset from yaml1 exceeds yaml2 length
         var yaml2 = "on: push\njobs:\n  b:\n    runs-on: ubuntu-latest\n    steps:\n      - if: github.ref == 'main'\n        run: echo 2\n";
 
-        var result1 = engine.Check(Encoding.UTF8.GetBytes(yaml1), "file1.yml");
+        using var result1 = engine.Check(Encoding.UTF8.GetBytes(yaml1), "file1.yml");
         await Assert.That(result1.Diagnostics.Any(d => d.RuleId == "if-expr-wrapper")).IsTrue();
 
         // Second call with shorter yaml must not throw (stale cache offset > yaml2.Length)
-        var result2 = engine.Check(Encoding.UTF8.GetBytes(yaml2), "file2.yml");
+        using var result2 = engine.Check(Encoding.UTF8.GetBytes(yaml2), "file2.yml");
         await Assert.That(result2.Diagnostics.Any(d => d.RuleId == "if-expr-wrapper")).IsTrue();
     }
 
@@ -7617,7 +7624,8 @@ public sealed class RuleInterfaceTests
                     steps:
                         - run: echo "Checking commit '${{ github.event.head_commit.message }}'"
             """);
-        var result = new LintEngine([new TemplateInjectionRule()]).Check(
+        using var result = new LintEngine([new TemplateInjectionRule()]).Check(
+
             System.Text.Encoding.UTF8.GetBytes(yaml), "position-test.yml");
         var diagnostics = result.Diagnostics.Where(x => x.RuleId == "template-injection").ToArray();
 
@@ -7644,7 +7652,8 @@ public sealed class RuleInterfaceTests
                     steps:
                         - run: echo ${{ github.event.pages[github.event.commits[github.event.issue.title].author.name].page_name }}
             """);
-        var result = new LintEngine([new TemplateInjectionRule()]).Check(
+        using var result = new LintEngine([new TemplateInjectionRule()]).Check(
+
             System.Text.Encoding.UTF8.GetBytes(yaml), "nested-test.yml");
         var diagnostics = result.Diagnostics
             .Where(x => x.RuleId == "template-injection")
@@ -9205,17 +9214,15 @@ public sealed class RuleInterfaceTests
 
             // Test ng case
             File.WriteAllText(callerPath, NormalizeYaml(callerYamlNg), Encoding.UTF8);
-            var resultNg = new LintEngine([new ExprUndefinedVarRule()])
+            using var resultNg = new LintEngine([new ExprUndefinedVarRule()])
                 .Check(File.ReadAllBytes(callerPath), callerPath);
-            using var _ng = resultNg.ParseResult.Arena;
             var msgsNg = resultNg.Diagnostics.Where(x => x.RuleId == "expr-undefined-var").Select(x => x.Message).ToArray();
             await Assert.That(msgsNg.Any(m => m.Contains("\"typo_output\" is not defined", StringComparison.Ordinal))).IsTrue();
 
             // Test ok case
             File.WriteAllText(callerPath, NormalizeYaml(callerYamlOk), Encoding.UTF8);
-            var resultOk = new LintEngine([new ExprUndefinedVarRule()])
+            using var resultOk = new LintEngine([new ExprUndefinedVarRule()])
                 .Check(File.ReadAllBytes(callerPath), callerPath);
-            using var _ok = resultOk.ParseResult.Arena;
             var msgsOk = resultOk.Diagnostics.Where(x => x.RuleId == "expr-undefined-var").Select(x => x.Message).ToArray();
             await Assert.That(msgsOk.Any(m => m.Contains("is not defined", StringComparison.Ordinal))).IsFalse();
         }
@@ -9272,9 +9279,8 @@ public sealed class RuleInterfaceTests
             File.WriteAllText(reusablePath, NormalizeYaml(reusableYaml), Encoding.UTF8);
             File.WriteAllText(callerPath, NormalizeYaml(callerYaml), Encoding.UTF8);
 
-            var result = new LintEngine([new ExprUndefinedVarRule()])
+            using var result = new LintEngine([new ExprUndefinedVarRule()])
                 .Check(File.ReadAllBytes(callerPath), callerPath);
-            using var _arena = result.ParseResult.Arena;
             var msgs = result.Diagnostics.Where(x => x.RuleId == "expr-undefined-var").Select(x => x.Message).ToArray();
             // The called workflow declares no outputs, so needs.compute.outputs.something should be flagged
             await Assert.That(msgs.Any(m => m.Contains("is not defined", StringComparison.Ordinal) || m.Contains("no properties are defined", StringComparison.Ordinal))).IsTrue();
@@ -10484,7 +10490,7 @@ public sealed class RuleInterfaceTests
                     steps:
                         - run: echo ok
             """);
-        var result = new LintEngine([]).Check(Encoding.UTF8.GetBytes(yaml), "fromjson-test.yml");
+        using var result = new LintEngine([]).Check(Encoding.UTF8.GetBytes(yaml), "fromjson-test.yml");
         var fromJsonErrors = result.Diagnostics
             .Where(x => x.Message.Contains("fromJSON()", StringComparison.Ordinal) && x.Message.Contains("JSON", StringComparison.Ordinal))
             .ToArray();
@@ -10511,7 +10517,7 @@ public sealed class RuleInterfaceTests
                         - uses: actions/checkout@v4
                           continue-on-error: ${{ env.OS == "macos-latest" }}
             """);
-        var result = new LintEngine([]).Check(Encoding.UTF8.GetBytes(yaml), "issue193.yml");
+        using var result = new LintEngine([]).Check(Encoding.UTF8.GetBytes(yaml), "issue193.yml");
 
         // Parser diagnostics have RuleId=null. Check all diagnostics.
         var hasDoubleQuoteError = result.Diagnostics.Any(x =>
@@ -10873,7 +10879,7 @@ public sealed class RuleInterfaceTests
 
         var sourceBytes = Encoding.UTF8.GetBytes(yaml);
         var engine = new LintEngine([new JobPermissionsRequiredRule()]);
-        var result = engine.Check(sourceBytes, "job-permissions-required-fix-runs-on.yml", new LintConfig { Fix = new FixConfig { Enabled = true } });
+        using var result = engine.Check(sourceBytes, "job-permissions-required-fix-runs-on.yml", new LintConfig { Fix = new FixConfig { Enabled = true } });
         var diagnostic = result.Diagnostics.First(x => x.RuleId == "job-permissions-required");
 
         await Assert.That(diagnostic.Fix is not null).IsTrue();
@@ -10905,7 +10911,7 @@ public sealed class RuleInterfaceTests
 
         var sourceBytes = Encoding.UTF8.GetBytes(yaml);
         var engine = new LintEngine([new JobPermissionsRequiredRule()]);
-        var result = engine.Check(sourceBytes, "job-permissions-required-fix-no-tab-introduce.yml", new LintConfig { Fix = new FixConfig { Enabled = true } });
+        using var result = engine.Check(sourceBytes, "job-permissions-required-fix-no-tab-introduce.yml", new LintConfig { Fix = new FixConfig { Enabled = true } });
         var diagnostic = result.Diagnostics.First(x => x.RuleId == "job-permissions-required");
 
         await Assert.That(diagnostic.Fix is not null).IsTrue();
@@ -10929,7 +10935,7 @@ public sealed class RuleInterfaceTests
 
         var sourceBytes = Encoding.UTF8.GetBytes(yaml);
         var engine = new LintEngine([new JobPermissionsRequiredRule()]);
-        var result = engine.Check(sourceBytes, "job-permissions-required-fix-uses.yml", new LintConfig { Fix = new FixConfig { Enabled = true } });
+        using var result = engine.Check(sourceBytes, "job-permissions-required-fix-uses.yml", new LintConfig { Fix = new FixConfig { Enabled = true } });
         var diagnostic = result.Diagnostics.First(x => x.RuleId == "job-permissions-required");
 
         await Assert.That(diagnostic.Fix is not null).IsTrue();
@@ -10942,7 +10948,7 @@ public sealed class RuleInterfaceTests
 
         await Assert.That(usesIndex >= 0).IsTrue();
         await Assert.That(permissionsIndex > usesIndex).IsTrue();
-        var relint = engine.Check(fixedBytes, "job-permissions-required-fix-uses.yml");
+        using var relint = engine.Check(fixedBytes, "job-permissions-required-fix-uses.yml");
         await Assert.That(relint.Diagnostics.Any(x => x.RuleId == "job-permissions-required")).IsFalse();
     }
 
@@ -10960,7 +10966,7 @@ public sealed class RuleInterfaceTests
 
         var sourceBytes = Encoding.UTF8.GetBytes(yaml);
         var engine = new LintEngine([new JobPermissionsRequiredRule()]);
-        var result = engine.Check(sourceBytes, "job-permissions-required-fix-whitespace.yml", new LintConfig { Fix = new FixConfig { Enabled = true } });
+        using var result = engine.Check(sourceBytes, "job-permissions-required-fix-whitespace.yml", new LintConfig { Fix = new FixConfig { Enabled = true } });
         var diagnostic = result.Diagnostics.First(x => x.RuleId == "job-permissions-required");
 
         await Assert.That(diagnostic.Fix is not null).IsTrue();
@@ -10986,7 +10992,7 @@ public sealed class RuleInterfaceTests
 
         var sourceBytes = Encoding.UTF8.GetBytes(yaml);
         var engine = new LintEngine([new JobPermissionsRequiredRule()]);
-        var result = engine.Check(sourceBytes, "job-permissions-required-fix-no-trailing.yml", new LintConfig { Fix = new FixConfig { Enabled = true } });
+        using var result = engine.Check(sourceBytes, "job-permissions-required-fix-no-trailing.yml", new LintConfig { Fix = new FixConfig { Enabled = true } });
         var diagnostic = result.Diagnostics.First(x => x.RuleId == "job-permissions-required");
 
         await Assert.That(diagnostic.Fix is not null).IsTrue();
@@ -11010,9 +11016,8 @@ public sealed class RuleInterfaceTests
             build: {}
         """;
 
-        var result = new LintEngine([new JobPermissionsRequiredRule()])
+        using var result = new LintEngine([new JobPermissionsRequiredRule()])
             .Check(Encoding.UTF8.GetBytes(yaml), "job-permissions-required-no-fix-ambiguous.yml");
-        using var _ = result.ParseResult.Arena;
         var diagnostic = result.Diagnostics.First(x => x.RuleId == "job-permissions-required");
 
         await Assert.That(diagnostic.Fix is null).IsTrue();
@@ -11033,8 +11038,7 @@ public sealed class RuleInterfaceTests
 
         var sourceBytes = Encoding.UTF8.GetBytes(yaml);
         var engine = new LintEngine([new JobPermissionsRequiredRule()]);
-        var result = engine.Check(sourceBytes, "job-permissions-required-fix-checkout.yml", new LintConfig { Fix = new FixConfig { Enabled = true } });
-        using var _1 = result.ParseResult.Arena;
+        using var result = engine.Check(sourceBytes, "job-permissions-required-fix-checkout.yml", new LintConfig { Fix = new FixConfig { Enabled = true } });
         var diagnostic = result.Diagnostics.First(x => x.RuleId == "job-permissions-required");
 
         await Assert.That(diagnostic.Fix is not null).IsTrue();
@@ -11048,8 +11052,7 @@ public sealed class RuleInterfaceTests
         await Assert.That(fixedText.Contains("contents: read", StringComparison.Ordinal)).IsTrue();
 
         // Relint should pass
-        var relint = engine.Check(fixedBytes, "job-permissions-required-fix-checkout.yml");
-        using var _2 = relint.ParseResult.Arena;
+        using var relint = engine.Check(fixedBytes, "job-permissions-required-fix-checkout.yml");
         await Assert.That(relint.Diagnostics.Any(x => x.RuleId == "job-permissions-required")).IsFalse();
     }
 
@@ -11068,8 +11071,7 @@ public sealed class RuleInterfaceTests
 
         var sourceBytes = Encoding.UTF8.GetBytes(yaml);
         var engine = new LintEngine([new JobPermissionsRequiredRule()]);
-        var result = engine.Check(sourceBytes, "job-permissions-required-fix-multi.yml", new LintConfig { Fix = new FixConfig { Enabled = true } });
-        using var _ = result.ParseResult.Arena;
+        using var result = engine.Check(sourceBytes, "job-permissions-required-fix-multi.yml", new LintConfig { Fix = new FixConfig { Enabled = true } });
         var diagnostic = result.Diagnostics.First(x => x.RuleId == "job-permissions-required");
 
         await Assert.That(diagnostic.Fix is not null).IsTrue();
@@ -11098,8 +11100,7 @@ public sealed class RuleInterfaceTests
 
         var sourceBytes = Encoding.UTF8.GetBytes(yaml);
         var engine = new LintEngine([new JobPermissionsRequiredRule()]);
-        var result = engine.Check(sourceBytes, "job-permissions-required-fix-no-known-actions.yml", new LintConfig { Fix = new FixConfig { Enabled = true } });
-        using var _ = result.ParseResult.Arena;
+        using var result = engine.Check(sourceBytes, "job-permissions-required-fix-no-known-actions.yml", new LintConfig { Fix = new FixConfig { Enabled = true } });
         var diagnostic = result.Diagnostics.First(x => x.RuleId == "job-permissions-required");
 
         await Assert.That(diagnostic.Fix is not null).IsTrue();
@@ -11694,7 +11695,7 @@ public sealed class RuleInterfaceTests
         for (var i = 0; i < cases.Length; i++)
         {
             var c = cases[i];
-            var result = new LintEngine([c.Rule]).Check(
+            using var result = new LintEngine([c.Rule]).Check(
                 Encoding.UTF8.GetBytes(NormalizeYaml(c.Yaml)),
                 $"fixability-{c.RuleId}.yml",
                 new LintConfig { Fix = new FixConfig { Enabled = true } });
@@ -11737,7 +11738,7 @@ public sealed class RuleInterfaceTests
 
         var sourceBytes = Encoding.UTF8.GetBytes(yaml);
         var engine = new LintEngine([new RunEnvContextDirectUseRule()]);
-        var result = engine.Check(sourceBytes, "run-env-fix-posix.yml");
+        using var result = engine.Check(sourceBytes, "run-env-fix-posix.yml");
         var diagnostic = result.Diagnostics.First(x => x.RuleId == "run-env-context-direct-use");
 
         await Assert.That(diagnostic.Fix is not null).IsTrue();
@@ -11765,7 +11766,7 @@ public sealed class RuleInterfaceTests
 
         var sourceBytes = Encoding.UTF8.GetBytes(yaml);
         var engine = new LintEngine([new RunEnvContextDirectUseRule()]);
-        var result = engine.Check(sourceBytes, "run-env-fix-powershell.yml");
+        using var result = engine.Check(sourceBytes, "run-env-fix-powershell.yml");
         var diagnostic = result.Diagnostics.First(x => x.RuleId == "run-env-context-direct-use");
 
         await Assert.That(diagnostic.Fix is not null).IsTrue();
@@ -11775,7 +11776,7 @@ public sealed class RuleInterfaceTests
 
         await Assert.That(fixedText.Contains("$env:VERSION", StringComparison.Ordinal)).IsTrue();
         await Assert.That(fixedText.Contains("${{ env['VERSION'] }}", StringComparison.Ordinal)).IsFalse();
-        var relint = engine.Check(fixedBytes, "run-env-fix-powershell.yml");
+        using var relint = engine.Check(fixedBytes, "run-env-fix-powershell.yml");
         await Assert.That(relint.Diagnostics.Any(x => x.RuleId == "run-env-context-direct-use")).IsFalse();
     }
 
@@ -11791,7 +11792,7 @@ public sealed class RuleInterfaceTests
                     - run: echo "${{ format('{0}', env.VERSION) }}"
         """;
 
-        var result = new LintEngine([new RunEnvContextDirectUseRule()])
+        using var result = new LintEngine([new RunEnvContextDirectUseRule()])
             .Check(Encoding.UTF8.GetBytes(yaml), "run-env-no-fix-composite.yml");
         var diagnostic = result.Diagnostics.First(x => x.RuleId == "run-env-context-direct-use");
 
@@ -11813,7 +11814,7 @@ public sealed class RuleInterfaceTests
                         EOF
         """;
 
-        var result = new LintEngine([new RunEnvContextDirectUseRule()])
+        using var result = new LintEngine([new RunEnvContextDirectUseRule()])
             .Check(Encoding.UTF8.GetBytes(yaml), "run-env-no-fix-heredoc.yml");
         var diagnostic = result.Diagnostics.First(x => x.RuleId == "run-env-context-direct-use");
 
@@ -11840,7 +11841,7 @@ public sealed class RuleInterfaceTests
                         OUTPUT_PATH: ${{ inputs.output-path }}/env
         """;
 
-        var result = new LintEngine([new RunEnvContextDirectUseRule()])
+        using var result = new LintEngine([new RunEnvContextDirectUseRule()])
             .Check(Encoding.UTF8.GetBytes(yaml), "run-env-location.yml");
         var diagnostic = result.Diagnostics.First(x => x.RuleId == "run-env-context-direct-use");
 
@@ -11872,7 +11873,7 @@ public sealed class RuleInterfaceTests
 
         var sourceBytes = Encoding.UTF8.GetBytes(yaml);
         var engine = new LintEngine([new RunSecretsContextDirectUseRule()]);
-        var result = engine.Check(sourceBytes, "run-secrets-fix-posix.yml");
+        using var result = engine.Check(sourceBytes, "run-secrets-fix-posix.yml");
         var diagnostic = result.Diagnostics.First(x => x.RuleId == "run-secrets-context-direct-use");
 
         await Assert.That(diagnostic.Fix is not null).IsTrue();
@@ -11898,7 +11899,7 @@ public sealed class RuleInterfaceTests
                     - run: echo "${{ secrets.MY_TOKEN }}"
         """;
 
-        var result = new LintEngine([new RunSecretsContextDirectUseRule()])
+        using var result = new LintEngine([new RunSecretsContextDirectUseRule()])
             .Check(Encoding.UTF8.GetBytes(yaml), "run-secrets-no-fix-ambiguous.yml");
         var diagnostic = result.Diagnostics.First(x => x.RuleId == "run-secrets-context-direct-use");
 
@@ -11922,7 +11923,7 @@ public sealed class RuleInterfaceTests
 
         var sourceBytes = Encoding.UTF8.GetBytes(yaml);
         var engine = new LintEngine([new RunInputsContextDirectUseRule()]);
-        var result = engine.Check(sourceBytes, "run-inputs-fix-powershell.yml");
+        using var result = engine.Check(sourceBytes, "run-inputs-fix-powershell.yml");
         var diagnostic = result.Diagnostics.First(x => x.RuleId == "run-inputs-context-direct-use");
 
         await Assert.That(diagnostic.Fix is not null).IsTrue();
@@ -11948,7 +11949,7 @@ public sealed class RuleInterfaceTests
                     - run: echo "${{ inputs.target }}"
         """;
 
-        var result = new LintEngine([new RunInputsContextDirectUseRule()])
+        using var result = new LintEngine([new RunInputsContextDirectUseRule()])
             .Check(Encoding.UTF8.GetBytes(yaml), "run-inputs-no-fix-ambiguous.yml");
         var diagnostic = result.Diagnostics.First(x => x.RuleId == "run-inputs-context-direct-use");
 
@@ -11972,7 +11973,7 @@ public sealed class RuleInterfaceTests
                       run: exit 1
         """.Replace("\r\n", "\n").Replace("\n", "\r\n");
 
-        var result = new LintEngine([new RunInputsContextDirectUseRule()])
+        using var result = new LintEngine([new RunInputsContextDirectUseRule()])
             .Check(Encoding.UTF8.GetBytes(yaml), "run-inputs-block-location.yml");
         var diagnostic = result.Diagnostics.First(x => x.RuleId == "run-inputs-context-direct-use");
 
@@ -11994,7 +11995,7 @@ public sealed class RuleInterfaceTests
                 new DuplicateDiagnosticRule(RuleId.JobStructure),
         ]);
 
-        var result = engine.Check(Encoding.UTF8.GetBytes(yaml), "priority-dedup.yml");
+        using var result = engine.Check(Encoding.UTF8.GetBytes(yaml), "priority-dedup.yml");
         var duplicated = result.Diagnostics
             .Where(static x => x.Message == "shared duplicate diagnostic")
             .ToArray();
@@ -12024,10 +12025,10 @@ public sealed class RuleInterfaceTests
             },
         };
 
-        var disabledResult = engine.Check(Encoding.UTF8.GetBytes(yaml), "rule-disable.yml", disabledConfig);
+        using var disabledResult = engine.Check(Encoding.UTF8.GetBytes(yaml), "rule-disable.yml", disabledConfig);
         await Assert.That(disabledResult.Diagnostics.Any(x => x.RuleId == "job-permissions-required")).IsFalse();
 
-        var enabledResult = engine.Check(Encoding.UTF8.GetBytes(yaml), "rule-enabled.yml");
+        using var enabledResult = engine.Check(Encoding.UTF8.GetBytes(yaml), "rule-enabled.yml");
         await Assert.That(enabledResult.Diagnostics.Any(x => x.RuleId == "job-permissions-required")).IsTrue();
     }
 
@@ -12052,8 +12053,7 @@ public sealed class RuleInterfaceTests
             },
         };
 
-        var result = engine.Check(Encoding.UTF8.GetBytes(yaml), "rule-disable-canonical.yml", configWithCanonicalId);
-        using var _ = result.ParseResult.Arena;
+        using var result = engine.Check(Encoding.UTF8.GetBytes(yaml), "rule-disable-canonical.yml", configWithCanonicalId);
         // Canonical ID is rejected as unknown — the rule is NOT disabled
         await Assert.That(result.Diagnostics.Any(x => x.RuleId == "job-permissions-required")).IsTrue();
         // A config diagnostic is emitted for the unknown rule ID
@@ -12081,7 +12081,7 @@ public sealed class RuleInterfaceTests
             },
         };
 
-        var result = engine.Check(Encoding.UTF8.GetBytes(yaml), "severity-override.yml", overrideConfig);
+        using var result = engine.Check(Encoding.UTF8.GetBytes(yaml), "severity-override.yml", overrideConfig);
         var diagnostic = result.Diagnostics.FirstOrDefault(x => x.RuleId == "job-permissions-required");
 
         await Assert.That(diagnostic.Message.Length).IsGreaterThan(0);
@@ -12105,7 +12105,7 @@ public sealed class RuleInterfaceTests
                     - run: echo two
         """;
 
-        var result = new LintEngine().Check(Encoding.UTF8.GetBytes(yaml), "inline-next-line.yml");
+        using var result = new LintEngine().Check(Encoding.UTF8.GetBytes(yaml), "inline-next-line.yml");
         var diagnostics = result.Diagnostics.Where(x => x.RuleId == "job-permissions-required").ToArray();
 
         await Assert.That(diagnostics.Length).IsEqualTo(1);
@@ -12126,7 +12126,7 @@ public sealed class RuleInterfaceTests
                     - run: echo test
         """;
 
-        var result = new LintEngine().Check(Encoding.UTF8.GetBytes(yaml), "inline-multi.yml");
+        using var result = new LintEngine().Check(Encoding.UTF8.GetBytes(yaml), "inline-multi.yml");
 
         await Assert.That(result.Diagnostics.Any(x => x.RuleId == "dangerous-triggers")).IsFalse();
         await Assert.That(result.Diagnostics.Any(x => x.RuleId == "job-permissions-required")).IsTrue();
@@ -12149,7 +12149,7 @@ public sealed class RuleInterfaceTests
                     - run: echo two
         """;
 
-        var result = new LintEngine().Check(Encoding.UTF8.GetBytes(yaml), "inline-semantic.yml");
+        using var result = new LintEngine().Check(Encoding.UTF8.GetBytes(yaml), "inline-semantic.yml");
         var diagnostics = result.Diagnostics.Where(x => x.RuleId == "job-permissions-required").ToArray();
 
         await Assert.That(diagnostics.Length).IsEqualTo(1);
@@ -12173,7 +12173,7 @@ public sealed class RuleInterfaceTests
                     - run: echo two
         """;
 
-        var result = new LintEngine().Check(Encoding.UTF8.GetBytes(yaml), "inline-seiton-next-line.yml");
+        using var result = new LintEngine().Check(Encoding.UTF8.GetBytes(yaml), "inline-seiton-next-line.yml");
         var diagnostics = result.Diagnostics.Where(x => x.RuleId == "job-permissions-required").ToArray();
 
         await Assert.That(diagnostics.Length).IsEqualTo(1);
@@ -12197,7 +12197,7 @@ public sealed class RuleInterfaceTests
                     - run: echo two
         """;
 
-        var result = new LintEngine().Check(Encoding.UTF8.GetBytes(yaml), "inline-seiton-file.yml");
+        using var result = new LintEngine().Check(Encoding.UTF8.GetBytes(yaml), "inline-seiton-file.yml");
 
         await Assert.That(result.Diagnostics.Any(x => x.RuleId == "job-permissions-required")).IsFalse();
     }
@@ -12219,7 +12219,7 @@ public sealed class RuleInterfaceTests
                     - run: echo two
         """;
 
-        var result = new LintEngine().Check(Encoding.UTF8.GetBytes(yaml), "inline-seiton-job.yml");
+        using var result = new LintEngine().Check(Encoding.UTF8.GetBytes(yaml), "inline-seiton-job.yml");
         var diagnostics = result.Diagnostics.Where(x => x.RuleId == "job-permissions-required").ToArray();
 
         await Assert.That(diagnostics.Length).IsEqualTo(1);
@@ -12239,7 +12239,7 @@ public sealed class RuleInterfaceTests
                     - run: echo test
         """;
 
-        var result = new LintEngine().Check(Encoding.UTF8.GetBytes(yaml), "inline-unknown-rule.yml");
+        using var result = new LintEngine().Check(Encoding.UTF8.GetBytes(yaml), "inline-unknown-rule.yml");
         var configError = result.Diagnostics.FirstOrDefault(x =>
             x.RuleId is null
             && x.Message.Contains("unknown rule-id", StringComparison.Ordinal));
@@ -12262,7 +12262,7 @@ public sealed class RuleInterfaceTests
                     - run: echo test
         """;
 
-        var result = new LintEngine().Check(Encoding.UTF8.GetBytes(yaml), "inline-seiton-unknown-job.yml");
+        using var result = new LintEngine().Check(Encoding.UTF8.GetBytes(yaml), "inline-seiton-unknown-job.yml");
         var configError = result.Diagnostics.FirstOrDefault(x =>
             x.RuleId is null
             && x.Message.Contains("unknown job-id", StringComparison.Ordinal));
@@ -12295,7 +12295,7 @@ public sealed class RuleInterfaceTests
             ],
         };
 
-        var result = new LintEngine().Check(Encoding.UTF8.GetBytes(yaml), "workflows/main.yml", config);
+        using var result = new LintEngine().Check(Encoding.UTF8.GetBytes(yaml), "workflows/main.yml", config);
 
         await Assert.That(result.Diagnostics.Any(x => x.RuleId == "job-permissions-required")).IsFalse();
         await Assert.That(result.SuppressionSummary.TotalSuppressed).IsEqualTo(2);
@@ -12327,7 +12327,7 @@ public sealed class RuleInterfaceTests
             ],
         };
 
-        var result = new LintEngine().Check(Encoding.UTF8.GetBytes(yaml), "workflows/main.yml", config);
+        using var result = new LintEngine().Check(Encoding.UTF8.GetBytes(yaml), "workflows/main.yml", config);
 
         // All diagnostics should be suppressed (file-level exclusion with no rule filter)
         await Assert.That(result.Diagnostics).IsEmpty();
@@ -12359,7 +12359,7 @@ public sealed class RuleInterfaceTests
             ],
         };
 
-        var result = new LintEngine().Check(Encoding.UTF8.GetBytes(yaml), "workflows/main.yml", config);
+        using var result = new LintEngine().Check(Encoding.UTF8.GetBytes(yaml), "workflows/main.yml", config);
 
         // 'build' job diagnostics should be suppressed, 'test' job diagnostics should remain
         var remaining = result.Diagnostics.Where(x => x.RuleId == "job-permissions-required").ToArray();
@@ -12393,7 +12393,7 @@ public sealed class RuleInterfaceTests
             ],
         };
 
-        var result = new LintEngine().Check(Encoding.UTF8.GetBytes(yaml), "workflows/main.yml", config);
+        using var result = new LintEngine().Check(Encoding.UTF8.GetBytes(yaml), "workflows/main.yml", config);
         var diagnostics = result.Diagnostics.Where(x => x.RuleId == "job-permissions-required").ToArray();
 
         await Assert.That(diagnostics.Length).IsEqualTo(1);
@@ -12423,7 +12423,7 @@ public sealed class RuleInterfaceTests
             ],
         };
 
-        var result = new LintEngine().Check(Encoding.UTF8.GetBytes(yaml), "workflows/main.yml", config);
+        using var result = new LintEngine().Check(Encoding.UTF8.GetBytes(yaml), "workflows/main.yml", config);
         var configError = result.Diagnostics.FirstOrDefault(x =>
             x.RuleId is null
             && x.Message.Contains("unknown rule-id", StringComparison.Ordinal));
@@ -12453,7 +12453,7 @@ public sealed class RuleInterfaceTests
             ],
         };
 
-        var result = new LintEngine().Check(Encoding.UTF8.GetBytes(yaml), "workflows/main.yml", config);
+        using var result = new LintEngine().Check(Encoding.UTF8.GetBytes(yaml), "workflows/main.yml", config);
         var configError = result.Diagnostics.FirstOrDefault(x =>
             x.RuleId is null
             && x.Message.Contains("unknown job-id", StringComparison.Ordinal));
@@ -12483,7 +12483,7 @@ public sealed class RuleInterfaceTests
             },
         };
 
-        var result = new LintEngine().Check(Encoding.UTF8.GetBytes(yaml), "failsafe-rule-options.yml", config);
+        using var result = new LintEngine().Check(Encoding.UTF8.GetBytes(yaml), "failsafe-rule-options.yml", config);
         var configError = result.Diagnostics.FirstOrDefault(x => x.RuleId is null && x.Message.Contains("non-disableable", StringComparison.Ordinal));
 
         await Assert.That(configError.Message.Length).IsGreaterThan(0);
@@ -12511,7 +12511,7 @@ public sealed class RuleInterfaceTests
             },
         };
 
-        var result = new LintEngine().Check(Encoding.UTF8.GetBytes(yaml), "failsafe-min-severity.yml", config);
+        using var result = new LintEngine().Check(Encoding.UTF8.GetBytes(yaml), "failsafe-min-severity.yml", config);
         var configError = result.Diagnostics.FirstOrDefault(x => x.RuleId is null && x.Message.Contains("minimum severity", StringComparison.Ordinal));
         var ruleDiagnostic = result.Diagnostics.FirstOrDefault(x => x.RuleId == "deny-write-all");
 
@@ -12541,7 +12541,7 @@ public sealed class RuleInterfaceTests
             },
         };
 
-        var result = new LintEngine().Check(Encoding.UTF8.GetBytes(yaml), "failsafe-rule-options-deny-read-all.yml", config);
+        using var result = new LintEngine().Check(Encoding.UTF8.GetBytes(yaml), "failsafe-rule-options-deny-read-all.yml", config);
         var configError = result.Diagnostics.FirstOrDefault(x => x.RuleId is null && x.Message.Contains("non-disableable", StringComparison.Ordinal));
 
         await Assert.That(configError.Message.Length).IsGreaterThan(0);
@@ -12569,7 +12569,7 @@ public sealed class RuleInterfaceTests
             },
         };
 
-        var result = new LintEngine().Check(Encoding.UTF8.GetBytes(yaml), "failsafe-min-severity-deny-read-all.yml", config);
+        using var result = new LintEngine().Check(Encoding.UTF8.GetBytes(yaml), "failsafe-min-severity-deny-read-all.yml", config);
         var configError = result.Diagnostics.FirstOrDefault(x => x.RuleId is null && x.Message.Contains("minimum severity", StringComparison.Ordinal));
         var ruleDiagnostic = result.Diagnostics.FirstOrDefault(x => x.RuleId == "deny-read-all");
 
@@ -12592,7 +12592,7 @@ public sealed class RuleInterfaceTests
                     - run: echo hello
         """;
 
-        var result = new LintEngine().Check(Encoding.UTF8.GetBytes(yaml), "failsafe-inline.yml");
+        using var result = new LintEngine().Check(Encoding.UTF8.GetBytes(yaml), "failsafe-inline.yml");
         var configError = result.Diagnostics.FirstOrDefault(x => x.RuleId is null && x.Message.Contains("non-disableable", StringComparison.Ordinal));
 
         await Assert.That(configError.Message.Length).IsGreaterThan(0);
@@ -12620,7 +12620,7 @@ public sealed class RuleInterfaceTests
             ],
         };
 
-        var result = new LintEngine().Check(Encoding.UTF8.GetBytes(yaml), "failsafe-exclusion.yml", config);
+        using var result = new LintEngine().Check(Encoding.UTF8.GetBytes(yaml), "failsafe-exclusion.yml", config);
         var configError = result.Diagnostics.FirstOrDefault(x => x.RuleId is null && x.Message.Contains("non-disableable", StringComparison.Ordinal));
 
         await Assert.That(configError.Message.Length).IsGreaterThan(0);
@@ -12648,7 +12648,7 @@ public sealed class RuleInterfaceTests
             },
         };
 
-        var result = new LintEngine().Check(Encoding.UTF8.GetBytes(yaml), "rule-options-unknown.yml", config);
+        using var result = new LintEngine().Check(Encoding.UTF8.GetBytes(yaml), "rule-options-unknown.yml", config);
         var configError = result.Diagnostics.FirstOrDefault(x =>
             x.RuleId is null
             && x.Message.Contains("unknown rule-id", StringComparison.Ordinal));
@@ -12682,7 +12682,7 @@ public sealed class RuleInterfaceTests
             },
         };
 
-        _ = new LintEngine([rule]).Check(Encoding.UTF8.GetBytes(yaml), "additive-customization.yml", config);
+        using var _ = new LintEngine([rule]).Check(Encoding.UTF8.GetBytes(yaml), "additive-customization.yml", config);
 
         await Assert.That(rule.LastConfig is not null).IsTrue();
         var dtRule = rule.LastConfig!.GetRuleConfig("dangerous-triggers");
@@ -12711,7 +12711,7 @@ public sealed class RuleInterfaceTests
 
         var rule = new ConfigCaptureRule();
 
-        _ = new LintEngine([rule]).Check(Encoding.UTF8.GetBytes(yaml), "additive-customization-default.yml", new LintConfig());
+        using var _ = new LintEngine([rule]).Check(Encoding.UTF8.GetBytes(yaml), "additive-customization-default.yml", new LintConfig());
 
         await Assert.That(rule.LastConfig is not null).IsTrue();
         await Assert.That(rule.LastConfig!.Rules).IsNull();
@@ -12742,7 +12742,7 @@ public sealed class RuleInterfaceTests
             },
         };
 
-        _ = new LintEngine([rule]).Check(Encoding.UTF8.GetBytes(yaml), "additive-customization-normalized.yml", config);
+        using var _ = new LintEngine([rule]).Check(Encoding.UTF8.GetBytes(yaml), "additive-customization-normalized.yml", config);
 
         await Assert.That(rule.LastConfig is not null).IsTrue();
         await Assert.That(rule.LastConfig!.GetRuleConfig("dangerous-triggers")?.Events?.Extend).IsEquivalentTo(new[] { "issue_comment" });
@@ -12773,7 +12773,7 @@ public sealed class RuleInterfaceTests
             },
         };
 
-        var result = new LintEngine([new DangerousTriggersRule()]).Check(Encoding.UTF8.GetBytes(yaml), "dangerous-trigger-custom.yml", config);
+        using var result = new LintEngine([new DangerousTriggersRule()]).Check(Encoding.UTF8.GetBytes(yaml), "dangerous-trigger-custom.yml", config);
 
         await Assert.That(result.Diagnostics.Any(x => x.RuleId == "dangerous-triggers" && x.Message.Contains("issue_comment", StringComparison.Ordinal))).IsTrue();
     }
@@ -12794,8 +12794,8 @@ public sealed class RuleInterfaceTests
         """;
 
         var engine = new LintEngine([new CachePoisoningRule()]);
-        var withoutConfig = engine.Check(Encoding.UTF8.GetBytes(yaml), "cache-poisoning-custom-without.yml");
-        var withConfig = engine.Check(
+        using var withoutConfig = engine.Check(Encoding.UTF8.GetBytes(yaml), "cache-poisoning-custom-without.yml");
+        using var withConfig = engine.Check(
             Encoding.UTF8.GetBytes(yaml),
             "cache-poisoning-custom-with.yml",
             new LintConfig
@@ -12823,8 +12823,8 @@ public sealed class RuleInterfaceTests
         """;
 
         var engine = new LintEngine([new SelfHostedRunnerRule()]);
-        var withoutConfig = engine.Check(Encoding.UTF8.GetBytes(yaml), "self-hosted-runner-custom-without.yml");
-        var withConfig = engine.Check(
+        using var withoutConfig = engine.Check(Encoding.UTF8.GetBytes(yaml), "self-hosted-runner-custom-without.yml");
+        using var withConfig = engine.Check(
             Encoding.UTF8.GetBytes(yaml),
             "self-hosted-runner-custom-with.yml",
             new LintConfig
@@ -12854,8 +12854,8 @@ public sealed class RuleInterfaceTests
         """;
 
         var engine = new LintEngine([new UnredactedSecretsRule()]);
-        var withoutConfig = engine.Check(Encoding.UTF8.GetBytes(yaml), "unredacted-secrets-custom-without.yml");
-        var withConfig = engine.Check(
+        using var withoutConfig = engine.Check(Encoding.UTF8.GetBytes(yaml), "unredacted-secrets-custom-without.yml");
+        using var withConfig = engine.Check(
             Encoding.UTF8.GetBytes(yaml),
             "unredacted-secrets-custom-with.yml",
             new LintConfig
@@ -12884,8 +12884,8 @@ public sealed class RuleInterfaceTests
         """;
 
         var engine = new LintEngine([new RunnerLabelRule()]);
-        var withoutConfig = engine.Check(Encoding.UTF8.GetBytes(yaml), "runner-label-custom-without.yml");
-        var withConfig = engine.Check(
+        using var withoutConfig = engine.Check(Encoding.UTF8.GetBytes(yaml), "runner-label-custom-without.yml");
+        using var withConfig = engine.Check(
             Encoding.UTF8.GetBytes(yaml),
             "runner-label-custom-with.yml",
             new LintConfig
@@ -12915,8 +12915,8 @@ public sealed class RuleInterfaceTests
         """;
 
         var engine = new LintEngine([new CredentialsRule()]);
-        var withoutConfig = engine.Check(Encoding.UTF8.GetBytes(yaml), "credentials-custom-without.yml");
-        var withConfig = engine.Check(
+        using var withoutConfig = engine.Check(Encoding.UTF8.GetBytes(yaml), "credentials-custom-without.yml");
+        using var withConfig = engine.Check(
             Encoding.UTF8.GetBytes(yaml),
             "credentials-custom-with.yml",
             new LintConfig
@@ -12956,7 +12956,7 @@ public sealed class RuleInterfaceTests
             },
         };
 
-        var result = new LintEngine([new ConfigCaptureRule()]).Check(Encoding.UTF8.GetBytes(yaml), "additive-customization-invalid.yml", config);
+        using var result = new LintEngine([new ConfigCaptureRule()]).Check(Encoding.UTF8.GetBytes(yaml), "additive-customization-invalid.yml", config);
 
         await Assert.That(result.Diagnostics.Any(x => x.RuleId is null && x.Message.Contains("events extend entry must not be empty", StringComparison.Ordinal))).IsTrue();
         await Assert.That(result.Diagnostics.Any(x => x.RuleId is null && x.Message.Contains("known-hosted-labels extend entry must not be empty", StringComparison.Ordinal))).IsTrue();
@@ -13177,8 +13177,7 @@ public sealed class RuleInterfaceTests
                   - run: echo hello
             """));
         var engine = new LintEngine();
-        var result = engine.Check(yaml, ".github/workflows/test.yml");
-        using var _ = result.ParseResult.Arena;
+        using var result = engine.Check(yaml, ".github/workflows/test.yml");
         await Assert.That(result.Diagnostics.Where(d => d.RuleId == "concurrency-limits").ToArray()).IsEmpty();
     }
 
@@ -13202,8 +13201,7 @@ public sealed class RuleInterfaceTests
             },
         };
         var engine = new LintEngine();
-        var result = engine.Check(yaml, ".github/workflows/test.yml", config);
-        using var _ = result.ParseResult.Arena;
+        using var result = engine.Check(yaml, ".github/workflows/test.yml", config);
         await Assert.That(result.Diagnostics.Where(d => d.RuleId == "concurrency-limits").ToArray()).IsNotEmpty();
     }
 
@@ -13213,10 +13211,9 @@ public sealed class RuleInterfaceTests
         {
             var c = cases[i];
             var yaml = NormalizeYaml(c.Yaml);
-            var result = config is null
+            using var result = config is null
                 ? new LintEngine([rule]).Check(Encoding.UTF8.GetBytes(yaml), $"rule-case-{c.Name}.yml")
                 : new LintEngine([rule]).Check(Encoding.UTF8.GetBytes(yaml), $"rule-case-{c.Name}.yml", config);
-            using var _ = result.ParseResult.Arena;
             var diagnostics = result.Diagnostics.Where(x => x.RuleId == ruleId).ToArray();
 
             if (c.ExpectedSubstrings.Length == 0)
@@ -13512,7 +13509,7 @@ public sealed class RuleInterfaceTests
             steps:
               - run: echo ok
         """u8;
-        var result = new LintEngine().Check(yaml.ToArray(), "test.yaml");
+        using var result = new LintEngine().Check(yaml.ToArray(), "test.yaml");
         var runsOnDiags = result.Diagnostics.Where(d => d.Message.Contains("\"runs-on\" section is missing")).ToArray();
         await Assert.That(runsOnDiags).Count().IsEqualTo(1);
     }
@@ -13530,7 +13527,7 @@ public sealed class RuleInterfaceTests
             steps:
               - run: echo ok
         """u8;
-        var result = new LintEngine().Check(yaml.ToArray(), "test.yaml");
+        using var result = new LintEngine().Check(yaml.ToArray(), "test.yaml");
         var bothDiags = result.Diagnostics.Where(d => d.Message.Contains("cannot have both uses and steps")).ToArray();
         await Assert.That(bothDiags).Count().IsEqualTo(1);
     }
@@ -13550,7 +13547,7 @@ public sealed class RuleInterfaceTests
                 steps:
                     - run: echo ok
         """u8;
-        var result = new LintEngine().Check(yaml.ToArray(), "test.yaml");
+        using var result = new LintEngine().Check(yaml.ToArray(), "test.yaml");
         await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("\"hashFiles\" is not allowed here", StringComparison.Ordinal))).IsTrue();
     }
 
@@ -13566,7 +13563,7 @@ public sealed class RuleInterfaceTests
                 steps:
                     - run: echo ok
         """u8;
-        var result = new LintEngine().Check(yaml.ToArray(), "test.yaml");
+        using var result = new LintEngine().Check(yaml.ToArray(), "test.yaml");
         await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("\"hashFiles\" is not allowed here", StringComparison.Ordinal))).IsTrue();
     }
 
@@ -13581,7 +13578,7 @@ public sealed class RuleInterfaceTests
                 steps:
                     - run: echo ${{ hashFiles('**/package-lock.json') }}
         """u8;
-        var result = new LintEngine().Check(yaml.ToArray(), "test.yaml");
+        using var result = new LintEngine().Check(yaml.ToArray(), "test.yaml");
         await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("hashFiles", StringComparison.Ordinal))).IsFalse();
     }
 
@@ -13599,7 +13596,7 @@ public sealed class RuleInterfaceTests
                         key: ${{ hashFiles('**/package-lock.json') }}
                         path: ./packages
         """u8;
-        var result = new LintEngine().Check(yaml.ToArray(), "test.yaml");
+        using var result = new LintEngine().Check(yaml.ToArray(), "test.yaml");
         await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("hashFiles", StringComparison.Ordinal))).IsFalse();
     }
 
@@ -13617,7 +13614,7 @@ public sealed class RuleInterfaceTests
                 steps:
                     - run: echo ok
         """u8;
-        var result = new LintEngine().Check(yaml.ToArray(), "test.yaml");
+        using var result = new LintEngine().Check(yaml.ToArray(), "test.yaml");
         await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("\"secrets\" is not allowed here", StringComparison.Ordinal))).IsTrue();
     }
 
@@ -13634,7 +13631,7 @@ public sealed class RuleInterfaceTests
                 steps:
                     - run: echo ok
         """u8;
-        var result = new LintEngine().Check(yaml.ToArray(), "test.yaml");
+        using var result = new LintEngine().Check(yaml.ToArray(), "test.yaml");
         await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("\"secrets\" is not allowed here", StringComparison.Ordinal))).IsFalse();
     }
 
@@ -13648,7 +13645,7 @@ public sealed class RuleInterfaceTests
                 uses: "foo/bar/workflow.yml"
         """u8;
 
-        var result = new LintEngine([new ReusableWorkflowRule()]).Check(yaml.ToArray(), "test.yaml");
+        using var result = new LintEngine([new ReusableWorkflowRule()]).Check(yaml.ToArray(), "test.yaml");
         var msgs = result.Diagnostics.Where(d => d.Message.Contains("is not following the format", StringComparison.Ordinal)).ToArray();
         await Assert.That(msgs.Length).IsGreaterThan(0);
         await Assert.That(msgs[0].Message.Contains("see https://docs.github.com/en/actions/learn-github-actions/reusing-workflows for more details", StringComparison.Ordinal)).IsTrue();
@@ -13666,7 +13663,7 @@ public sealed class RuleInterfaceTests
                     - run: echo hello
         """u8;
 
-        var result = new LintEngine().Check(yaml.ToArray(), "test.yaml");
+        using var result = new LintEngine().Check(yaml.ToArray(), "test.yaml");
         // Count messages about "steps" being not allowed — should be exactly 1, not 2 (parser + linter)
         var stepsNotAllowed = result.Diagnostics
             .Where(d => d.Message.Contains("key 'steps' is not allowed", StringComparison.Ordinal))
@@ -13694,7 +13691,7 @@ public sealed class RuleInterfaceTests
               - *step
         """u8;
 
-        var result = new LintEngine().Check(yaml.ToArray(), "test.yaml");
+        using var result = new LintEngine().Check(yaml.ToArray(), "test.yaml");
         // All alias-expanded steps point to the anchor position (same line:col).
         // The "unexpected key" errors differ only in step index prefix and must dedup to 1.
         var unexpectedKeyDiags = result.Diagnostics
@@ -13723,7 +13720,7 @@ public sealed class RuleInterfaceTests
             - *step
         """u8;
 
-        var result = new LintEngine().Check(yaml.ToArray(), "action.yaml");
+        using var result = new LintEngine().Check(yaml.ToArray(), "action.yaml");
         // All alias-expanded steps point to the anchor position (same line:col).
         // The "unexpected key" errors differ only in step index prefix (steps[N]) and must dedup to 1.
         var unexpectedKeyDiags = result.Diagnostics
@@ -13745,7 +13742,7 @@ public sealed class RuleInterfaceTests
               - run: echo
         """u8;
 
-        var result = new LintEngine().Check(yaml.ToArray(), "test.yaml");
+        using var result = new LintEngine().Check(yaml.ToArray(), "test.yaml");
         var forbiddenKeyDiag = result.Diagnostics
             .Where(d => d.Message.Contains("key 'steps' is not allowed", StringComparison.Ordinal))
             .ToArray();
@@ -13766,7 +13763,7 @@ public sealed class RuleInterfaceTests
             runs-on: ubuntu-latest
         """u8;
 
-        var result = new LintEngine().Check(yaml.ToArray(), "test.yaml");
+        using var result = new LintEngine().Check(yaml.ToArray(), "test.yaml");
         var forbiddenKeyDiag = result.Diagnostics
             .Where(d => d.Message.Contains("key 'runs-on' is not allowed", StringComparison.Ordinal))
             .ToArray();
@@ -13790,7 +13787,7 @@ public sealed class RuleInterfaceTests
               - run: echo
         """u8;
 
-        var result = new LintEngine().Check(yaml.ToArray(), "test.yaml");
+        using var result = new LintEngine().Check(yaml.ToArray(), "test.yaml");
         var requiresUsesDiag = result.Diagnostics
             .Where(d => d.Message.Contains("key 'with' requires uses", StringComparison.Ordinal))
             .ToArray();
@@ -13814,7 +13811,7 @@ public sealed class RuleInterfaceTests
               - run: echo
         """u8;
 
-        var result = new LintEngine().Check(yaml.ToArray(), "test.yaml");
+        using var result = new LintEngine().Check(yaml.ToArray(), "test.yaml");
         var requiresUsesDiag = result.Diagnostics
             .Where(d => d.Message.Contains("key 'secrets' requires uses", StringComparison.Ordinal))
             .ToArray();
@@ -13836,7 +13833,7 @@ public sealed class RuleInterfaceTests
               - run: echo
         """u8;
 
-        var result = new LintEngine().Check(yaml.ToArray(), "test.yaml");
+        using var result = new LintEngine().Check(yaml.ToArray(), "test.yaml");
         var bothDiag = result.Diagnostics
             .Where(d => d.Message.Contains("cannot have both uses and steps", StringComparison.Ordinal))
             .ToArray();
@@ -13857,7 +13854,7 @@ public sealed class RuleInterfaceTests
             runs-on: ubuntu-latest
         """u8;
 
-        var result = new LintEngine().Check(yaml.ToArray(), "test.yaml");
+        using var result = new LintEngine().Check(yaml.ToArray(), "test.yaml");
         var bothDiag = result.Diagnostics
             .Where(d => d.Message.Contains("cannot have both uses and runs-on", StringComparison.Ordinal))
             .ToArray();
@@ -13887,7 +13884,7 @@ public sealed class RuleInterfaceTests
               - run: echo ${{ contains(matrix.obj, matrix.str) }}
         """);
 
-        var result = new LintEngine().Check(Encoding.UTF8.GetBytes(yaml), "test.yaml");
+        using var result = new LintEngine().Check(Encoding.UTF8.GetBytes(yaml), "test.yaml");
         var allDiags = result.Diagnostics.Select(d => $"{d.Location.StartLine}:{d.Location.StartColumn}: {d.Message}").ToList();
 
         // Should have two "not assignable" diagnostics — one per overload
@@ -13918,7 +13915,7 @@ public sealed class RuleInterfaceTests
 
         var sourceBytes = Encoding.UTF8.GetBytes(yaml);
         var engine = new LintEngine([new TemplateInjectionRule()]);
-        var result = engine.Check(sourceBytes, "template-injection-fix.yml",
+        using var result = engine.Check(sourceBytes, "template-injection-fix.yml",
             new LintConfig { Fix = new FixConfig { Enabled = true } });
         var diagnostic = result.Diagnostics.First(x => x.RuleId == "template-injection");
 
@@ -13950,7 +13947,7 @@ public sealed class RuleInterfaceTests
 
         var sourceBytes = Encoding.UTF8.GetBytes(yaml);
         var engine = new LintEngine([new TemplateInjectionRule()]);
-        var result = engine.Check(sourceBytes, "template-injection-fix-pwsh.yml",
+        using var result = engine.Check(sourceBytes, "template-injection-fix-pwsh.yml",
             new LintConfig { Fix = new FixConfig { Enabled = true } });
         var diagnostic = result.Diagnostics.First(x => x.RuleId == "template-injection");
 
@@ -13979,7 +13976,7 @@ public sealed class RuleInterfaceTests
 
         var sourceBytes = Encoding.UTF8.GetBytes(yaml);
         var engine = new LintEngine([new TemplateInjectionRule()]);
-        var result = engine.Check(sourceBytes, "template-injection-fix-dedup.yml",
+        using var result = engine.Check(sourceBytes, "template-injection-fix-dedup.yml",
             new LintConfig { Fix = new FixConfig { Enabled = true } });
         var diagnostic = result.Diagnostics.First(x => x.RuleId == "template-injection");
 
@@ -14008,7 +14005,7 @@ public sealed class RuleInterfaceTests
 
         var sourceBytes = Encoding.UTF8.GetBytes(yaml);
         var engine = new LintEngine([new TemplateInjectionRule()]);
-        var result = engine.Check(sourceBytes, "template-injection-fix-reuse.yml",
+        using var result = engine.Check(sourceBytes, "template-injection-fix-reuse.yml",
             new LintConfig { Fix = new FixConfig { Enabled = true } });
         var diagnostic = result.Diagnostics.First(x => x.RuleId == "template-injection");
 
@@ -14037,7 +14034,7 @@ public sealed class RuleInterfaceTests
 
         var sourceBytes = Encoding.UTF8.GetBytes(yaml);
         var engine = new LintEngine([new TemplateInjectionRule()]);
-        var result = engine.Check(sourceBytes, "template-injection-no-fix-wildcard.yml",
+        using var result = engine.Check(sourceBytes, "template-injection-no-fix-wildcard.yml",
             new LintConfig { Fix = new FixConfig { Enabled = true } });
         var diagnostic = result.Diagnostics.First(x => x.RuleId == "template-injection");
 
@@ -14059,7 +14056,7 @@ public sealed class RuleInterfaceTests
 
         var sourceBytes = Encoding.UTF8.GetBytes(yaml);
         var engine = new LintEngine([new TemplateInjectionRule()]);
-        var result = engine.Check(sourceBytes, "template-injection-fix-head-ref.yml",
+        using var result = engine.Check(sourceBytes, "template-injection-fix-head-ref.yml",
             new LintConfig { Fix = new FixConfig { Enabled = true } });
         var diagnostic = result.Diagnostics.First(x => x.RuleId == "template-injection");
 
@@ -14088,7 +14085,7 @@ public sealed class RuleInterfaceTests
 
         var sourceBytes = Encoding.UTF8.GetBytes(yaml);
         var engine = new LintEngine([new TemplateInjectionRule()]);
-        var result = engine.Check(sourceBytes, "template-injection-fix-block.yml",
+        using var result = engine.Check(sourceBytes, "template-injection-fix-block.yml",
             new LintConfig { Fix = new FixConfig { Enabled = true } });
         var diagnostic = result.Diagnostics.First(x => x.RuleId == "template-injection");
 
@@ -14125,7 +14122,7 @@ public sealed class RuleInterfaceTests
 
         var sourceBytes = Encoding.UTF8.GetBytes(yaml);
         var engine = new LintEngine([new TemplateInjectionRule()]);
-        var result = engine.Check(sourceBytes, "template-injection-fix-list-item.yml",
+        using var result = engine.Check(sourceBytes, "template-injection-fix-list-item.yml",
             new LintConfig { Fix = new FixConfig { Enabled = true } });
         var diagnostic = result.Diagnostics.First(x => x.RuleId == "template-injection");
 
@@ -14135,7 +14132,7 @@ public sealed class RuleInterfaceTests
         var fixedText = Encoding.UTF8.GetString(fixedBytes);
 
         // The fixed output must be valid YAML that re-parses without fatal errors
-        var reparse = engine.Check(fixedBytes, "template-injection-fix-list-item.yml");
+        using var reparse = engine.Check(fixedBytes, "template-injection-fix-list-item.yml");
         await Assert.That(reparse.HasFatalError).IsEqualTo(false);
 
         // env: should be at the same indent as run: (inside the list item mapping)
@@ -14157,7 +14154,7 @@ public sealed class RuleInterfaceTests
         var sourceBytes = Encoding.UTF8.GetBytes(yaml);
         var engine = new LintEngine([new TemplateInjectionRule()]);
         // Fix.Enabled defaults to false
-        var result = engine.Check(sourceBytes, "template-injection-no-fix.yml");
+        using var result = engine.Check(sourceBytes, "template-injection-no-fix.yml");
         var diagnostic = result.Diagnostics.First(x => x.RuleId == "template-injection");
 
         // Diagnostic should exist but without a fix attached
@@ -14184,7 +14181,7 @@ public sealed class RuleInterfaceTests
 
         var sourceBytes = Encoding.UTF8.GetBytes(yaml);
         var engine = new LintEngine([new TemplateInjectionRule()]);
-        var result = engine.Check(sourceBytes, "template-injection-fix-multiline-env.yml",
+        using var result = engine.Check(sourceBytes, "template-injection-fix-multiline-env.yml",
             new LintConfig { Fix = new FixConfig { Enabled = true } });
         var diagnostic = result.Diagnostics.First(x => x.RuleId == "template-injection");
 
@@ -14201,7 +14198,7 @@ public sealed class RuleInterfaceTests
         await Assert.That(newEntryIdx).IsGreaterThan(echoLine2Idx);
 
         // The fixed output must still be valid YAML
-        var reparse = engine.Check(fixedBytes, "template-injection-fix-multiline-env.yml");
+        using var reparse = engine.Check(fixedBytes, "template-injection-fix-multiline-env.yml");
         await Assert.That(reparse.HasFatalError).IsEqualTo(false);
     }
 
@@ -14224,7 +14221,7 @@ public sealed class RuleInterfaceTests
 
         var sourceBytes = Encoding.UTF8.GetBytes(yaml);
         var engine = new LintEngine([new TemplateInjectionRule()]);
-        var result = engine.Check(sourceBytes, "template-injection-dedup-exhausted.yml",
+        using var result = engine.Check(sourceBytes, "template-injection-dedup-exhausted.yml",
             new LintConfig { Fix = new FixConfig { Enabled = true } });
         var diagnostic = result.Diagnostics.First(x => x.RuleId == "template-injection");
 
@@ -14250,7 +14247,7 @@ public sealed class RuleInterfaceTests
 
         var sourceBytes = Encoding.UTF8.GetBytes(yaml);
         var engine = new LintEngine([new TemplateInjectionRule()]);
-        var result = engine.Check(sourceBytes, "template-injection-fix-run-in-content.yml",
+        using var result = engine.Check(sourceBytes, "template-injection-fix-run-in-content.yml",
             new LintConfig { Fix = new FixConfig { Enabled = true } });
         var diagnostic = result.Diagnostics.First(x => x.RuleId == "template-injection");
 
@@ -14260,7 +14257,7 @@ public sealed class RuleInterfaceTests
         var fixedText = Encoding.UTF8.GetString(fixedBytes);
 
         // Fixed YAML must be parseable
-        var reparse = engine.Check(fixedBytes, "template-injection-fix-run-in-content.yml",
+        using var reparse = engine.Check(fixedBytes, "template-injection-fix-run-in-content.yml",
             new LintConfig { Fix = new FixConfig { Enabled = true } });
         await Assert.That(reparse.HasFatalError).IsEqualTo(false);
 
@@ -14290,7 +14287,7 @@ public sealed class RuleInterfaceTests
 
         var sourceBytes = Encoding.UTF8.GetBytes(yaml);
         var engine = new LintEngine([new TemplateInjectionRule()]);
-        var result = engine.Check(sourceBytes, "template-injection-heredoc.yml",
+        using var result = engine.Check(sourceBytes, "template-injection-heredoc.yml",
             new LintConfig { Fix = new FixConfig { Enabled = true } });
         var diagnostic = result.Diagnostics.First(x => x.RuleId == "template-injection");
 
@@ -14316,7 +14313,7 @@ public sealed class RuleInterfaceTests
 
         var sourceBytes = Encoding.UTF8.GetBytes(yaml);
         var engine = new LintEngine([new TemplateInjectionRule()]);
-        var result = engine.Check(sourceBytes, "template-injection-flow-env.yml",
+        using var result = engine.Check(sourceBytes, "template-injection-flow-env.yml",
             new LintConfig { Fix = new FixConfig { Enabled = true } });
         var diagnostic = result.Diagnostics.First(x => x.RuleId == "template-injection");
 
@@ -14356,10 +14353,10 @@ public sealed class RuleInterfaceTests
         var fixConfig = new LintConfig { Fix = new FixConfig { Enabled = true } };
 
         // First: check the workflow (this populates _currentWorkflow and _currentJob)
-        engine.Check(Encoding.UTF8.GetBytes(workflowYaml), ".github/workflows/ci.yml", fixConfig);
+        using var _ = engine.Check(Encoding.UTF8.GetBytes(workflowYaml), ".github/workflows/ci.yml", fixConfig);
 
         // Second: check the action metadata
-        var actionResult = engine.Check(Encoding.UTF8.GetBytes(actionYaml), "action.yml", fixConfig);
+        using var actionResult = engine.Check(Encoding.UTF8.GetBytes(actionYaml), "action.yml", fixConfig);
         await Assert.That(actionResult.HasFatalError).IsEqualTo(false);
         var actionDiag = actionResult.Diagnostics.First(x => x.RuleId == "template-injection");
         await Assert.That(actionDiag.Fix is not null).IsTrue();
@@ -14388,7 +14385,7 @@ public sealed class RuleInterfaceTests
 
         var sourceBytes = Encoding.UTF8.GetBytes(yaml);
         var engine = new LintEngine([new TemplateInjectionRule()]);
-        var result = engine.Check(sourceBytes, "template-injection-empty-env.yml",
+        using var result = engine.Check(sourceBytes, "template-injection-empty-env.yml",
             new LintConfig { Fix = new FixConfig { Enabled = true } });
         var diagnostic = result.Diagnostics.First(x => x.RuleId == "template-injection");
 
@@ -14413,7 +14410,7 @@ public sealed class RuleInterfaceTests
 
         var sourceBytes = Encoding.UTF8.GetBytes(yaml);
         var engine = new LintEngine([new TemplateInjectionRule()]);
-        var result = engine.Check(sourceBytes, "template-injection-compound.yml",
+        using var result = engine.Check(sourceBytes, "template-injection-compound.yml",
             new LintConfig { Fix = new FixConfig { Enabled = true } });
         var diagnostic = result.Diagnostics.First(x => x.RuleId == "template-injection");
 
@@ -14440,7 +14437,7 @@ public sealed class RuleInterfaceTests
 
         var sourceBytes = Encoding.UTF8.GetBytes(yaml);
         var engine = new LintEngine([new TemplateInjectionRule()]);
-        var result = engine.Check(sourceBytes, "template-injection-multi.yml",
+        using var result = engine.Check(sourceBytes, "template-injection-multi.yml",
             new LintConfig { Fix = new FixConfig { Enabled = true } });
         var diagnostics = result.Diagnostics
             .Where(x => x.RuleId == "template-injection")
@@ -14474,7 +14471,7 @@ public sealed class RuleInterfaceTests
 
         var sourceBytes = Encoding.UTF8.GetBytes(yaml);
         var engine = new LintEngine([new TemplateInjectionRule()]);
-        var result = engine.Check(sourceBytes, "template-injection-single-quote.yml",
+        using var result = engine.Check(sourceBytes, "template-injection-single-quote.yml",
             new LintConfig { Fix = new FixConfig { Enabled = true } });
         var diagnostic = result.Diagnostics.First(x => x.RuleId == "template-injection");
 
@@ -14498,7 +14495,7 @@ public sealed class RuleInterfaceTests
 
         var sourceBytes = Encoding.UTF8.GetBytes(yaml);
         var engine = new LintEngine([new TemplateInjectionRule()]);
-        var result = engine.Check(sourceBytes, "template-injection-double-quote.yml",
+        using var result = engine.Check(sourceBytes, "template-injection-double-quote.yml",
             new LintConfig { Fix = new FixConfig { Enabled = true } });
         var diagnostic = result.Diagnostics.First(x => x.RuleId == "template-injection");
 
@@ -14522,7 +14519,7 @@ public sealed class RuleInterfaceTests
 
         var sourceBytes = Encoding.UTF8.GetBytes(yaml);
         var engine = new LintEngine([new TemplateInjectionRule()]);
-        var result = engine.Check(sourceBytes, "template-injection-multiline-sq.yml",
+        using var result = engine.Check(sourceBytes, "template-injection-multiline-sq.yml",
             new LintConfig { Fix = new FixConfig { Enabled = true } });
         var diagnostic = result.Diagnostics.First(x => x.RuleId == "template-injection");
 
@@ -14546,7 +14543,7 @@ public sealed class RuleInterfaceTests
 
         var sourceBytes = Encoding.UTF8.GetBytes(yaml);
         var engine = new LintEngine([new TemplateInjectionRule()]);
-        var result = engine.Check(sourceBytes, "template-injection-sq-in-dq.yml",
+        using var result = engine.Check(sourceBytes, "template-injection-sq-in-dq.yml",
             new LintConfig { Fix = new FixConfig { Enabled = true } });
         var diagnostic = result.Diagnostics.First(x => x.RuleId == "template-injection");
 
@@ -14563,7 +14560,7 @@ public sealed class RuleInterfaceTests
 
         var sourceBytes = Encoding.UTF8.GetBytes(yaml);
         var engine = new LintEngine([new TemplateInjectionRule()]);
-        var result = engine.Check(sourceBytes, "template-injection-no-trailing-newline.yml",
+        using var result = engine.Check(sourceBytes, "template-injection-no-trailing-newline.yml",
             new LintConfig { Fix = new FixConfig { Enabled = true } });
         var diagnostic = result.Diagnostics.First(x => x.RuleId == "template-injection");
 
@@ -14594,7 +14591,7 @@ public sealed class RuleInterfaceTests
         """;
 
         var engine = new LintEngine([new JobPermissionsRequiredRule(), new RunnerNoLatestRule()]);
-        var result = engine.Check(Encoding.UTF8.GetBytes(yaml), "sort-order-default.yml");
+        using var result = engine.Check(Encoding.UTF8.GetBytes(yaml), "sort-order-default.yml");
 
         var ruleDiags = result.Diagnostics
             .Where(x => x.RuleId == "job-permissions-required" || x.RuleId == "runner-no-latest")
@@ -14627,7 +14624,7 @@ public sealed class RuleInterfaceTests
             Output = new OutputConfig { SortOrder = DiagnosticSortOrder.Rule },
         };
         var engine = new LintEngine([new JobPermissionsRequiredRule(), new RunnerNoLatestRule()]);
-        var result = engine.Check(Encoding.UTF8.GetBytes(yaml), "sort-order-rule.yml", config);
+        using var result = engine.Check(Encoding.UTF8.GetBytes(yaml), "sort-order-rule.yml", config);
 
         var ruleDiags = result.Diagnostics
             .Where(x => x.RuleId == "job-permissions-required" || x.RuleId == "runner-no-latest")
@@ -14714,7 +14711,7 @@ public sealed class RuleInterfaceTests
         """;
 
         var engine = new LintEngine([new JobPermissionsRequiredRule()]);
-        var result = engine.Check(Encoding.UTF8.GetBytes(yaml), "global-sort.yml");
+        using var result = engine.Check(Encoding.UTF8.GetBytes(yaml), "global-sort.yml");
 
         // Should have at least 2 diagnostics: parser (line 8) + rule (line 2)
         await Assert.That(result.Diagnostics.Length).IsGreaterThanOrEqualTo(2);
@@ -14746,7 +14743,7 @@ public sealed class RuleInterfaceTests
         """;
 
         var engine = new LintEngine([new RunnerLabelRule()]);
-        var result = engine.Check(Encoding.UTF8.GetBytes(yaml), "empty-label.yml");
+        using var result = engine.Check(Encoding.UTF8.GetBytes(yaml), "empty-label.yml");
 
         var runnerLabelDiags = result.Diagnostics.Where(d => d.RuleId == "runner-label").ToArray();
         await Assert.That(runnerLabelDiags.Length).IsEqualTo(0)
@@ -14767,7 +14764,7 @@ public sealed class RuleInterfaceTests
         """;
 
         var engine = new LintEngine([new RunnerLabelRule()]);
-        var result = engine.Check(Encoding.UTF8.GetBytes(yaml), "unknown-label.yml");
+        using var result = engine.Check(Encoding.UTF8.GetBytes(yaml), "unknown-label.yml");
 
         var runnerLabelDiag = result.Diagnostics.First(d => d.RuleId == "runner-label");
         // Must contain categorized sections
@@ -14798,7 +14795,8 @@ public sealed class RuleInterfaceTests
         """;
 
         var engine = new LintEngine([new RunnerLabelRule()]);
-        var result = engine.Check(
+        using var result = engine.Check(
+
             Encoding.UTF8.GetBytes(yaml),
             "custom-label.yml",
             new LintConfig
@@ -14847,7 +14845,7 @@ public sealed class RuleInterfaceTests
                 steps:
                   - uses: actions/checkout@0ad4b8fadaa221de15dcec353f45205ec38ea70b
             """;
-            var result = engine.Check(Encoding.UTF8.GetBytes(yaml), $"larger-runner-{label}.yml");
+            using var result = engine.Check(Encoding.UTF8.GetBytes(yaml), $"larger-runner-{label}.yml");
             var diags = result.Diagnostics.Where(d => d.RuleId == "runner-label").ToArray();
             await Assert.That(diags.Length).IsEqualTo(0)
                 .Because($"'{label}' is a GitHub larger runner label and should not be reported as unknown");
@@ -14869,7 +14867,7 @@ public sealed class RuleInterfaceTests
         """;
 
         var engine = new LintEngine([new RunnerLabelRule()]);
-        var result = engine.Check(Encoding.UTF8.GetBytes(yaml), "preset-label.yml");
+        using var result = engine.Check(Encoding.UTF8.GetBytes(yaml), "preset-label.yml");
 
         var runnerLabelDiags = result.Diagnostics.Where(d => d.RuleId == "runner-label").ToArray();
         await Assert.That(runnerLabelDiags.Length).IsEqualTo(0)
@@ -14944,7 +14942,7 @@ public sealed class RuleInterfaceTests
             """;
 
         var engine = new LintEngine();
-        var result = engine.Check(Encoding.UTF8.GetBytes(yaml), "test.yaml");
+        using var result = engine.Check(Encoding.UTF8.GetBytes(yaml), "test.yaml");
         try
         {
             var diag = result.Diagnostics.FirstOrDefault(d =>
@@ -14956,7 +14954,7 @@ public sealed class RuleInterfaceTests
         }
         finally
         {
-            result.ParseResult.Arena?.Dispose();
+
         }
     }
 
@@ -14983,7 +14981,7 @@ public sealed class RuleInterfaceTests
         }
         finally
         {
-            parseResult.Arena?.Dispose();
+
         }
     }
 
@@ -15010,8 +15008,7 @@ public sealed class RuleInterfaceTests
                       if: ${{ true }}
         """;
 
-        var result = new LintEngine().Check(Encoding.UTF8.GetBytes(yaml), "test.yml");
-        using var _ = result.ParseResult.Arena;
+        using var result = new LintEngine().Check(Encoding.UTF8.GetBytes(yaml), "test.yml");
         var ifCondDiags = result.Diagnostics.Where(d => d.RuleId == "if-cond").ToArray();
 
         // Expect: diagnostic is NOT suppressed because comment targets the step line, not the if: line
@@ -15035,8 +15032,7 @@ public sealed class RuleInterfaceTests
                       if: ${{ true }}
         """;
 
-        var result = new LintEngine().Check(Encoding.UTF8.GetBytes(yaml), "test.yml");
-        using var _ = result.ParseResult.Arena;
+        using var result = new LintEngine().Check(Encoding.UTF8.GetBytes(yaml), "test.yml");
         var ifCondDiags = result.Diagnostics.Where(d => d.RuleId == "if-cond").ToArray();
 
         // Expect: diagnostic IS suppressed because comment targets the if: line
@@ -15060,8 +15056,7 @@ public sealed class RuleInterfaceTests
                     - run: echo ok
         """;
 
-        var result = new LintEngine().Check(Encoding.UTF8.GetBytes(yaml), "test.yml");
-        using var _ = result.ParseResult.Arena;
+        using var result = new LintEngine().Check(Encoding.UTF8.GetBytes(yaml), "test.yml");
         var ifCondDiags = result.Diagnostics.Where(d => d.RuleId == "if-cond").ToArray();
 
         // Expect: suppressed
@@ -15088,8 +15083,7 @@ public sealed class RuleInterfaceTests
                     - run: echo ok
         """;
 
-        var result = new LintEngine().Check(Encoding.UTF8.GetBytes(yaml), "test.yml");
-        using var _ = result.ParseResult.Arena;
+        using var result = new LintEngine().Check(Encoding.UTF8.GetBytes(yaml), "test.yml");
         var matrixDiags = result.Diagnostics.Where(d => d.RuleId == "matrix").ToArray();
 
         // The comment targets strategy: line (N+1), but matrix diagnostics are on deeper lines (axis name line).
@@ -15116,8 +15110,7 @@ public sealed class RuleInterfaceTests
                     - run: echo ok
         """;
 
-        var result = new LintEngine().Check(Encoding.UTF8.GetBytes(yaml), "test.yml");
-        using var _ = result.ParseResult.Arena;
+        using var result = new LintEngine().Check(Encoding.UTF8.GetBytes(yaml), "test.yml");
         var matrixDiags = result.Diagnostics.Where(d => d.RuleId == "matrix").ToArray();
         var configErrors = result.Diagnostics.Where(d => d.RuleId is null).ToArray();
 
@@ -15160,8 +15153,7 @@ public sealed class RuleInterfaceTests
                     - run: echo ok
         """;
 
-        var result = new LintEngine().Check(Encoding.UTF8.GetBytes(yaml), "test.yml");
-        using var _ = result.ParseResult.Arena;
+        using var result = new LintEngine().Check(Encoding.UTF8.GetBytes(yaml), "test.yml");
         var ifCondDiags = result.Diagnostics.Where(d => d.RuleId == "if-cond").ToArray();
 
         // IfCondRule adjusts block scalar diagnostic to the | indicator line (same as if: key line).
@@ -15186,8 +15178,7 @@ public sealed class RuleInterfaceTests
                     - run: echo ok
         """;
 
-        var result = new LintEngine().Check(Encoding.UTF8.GetBytes(yaml), "test.yml");
-        using var _ = result.ParseResult.Arena;
+        using var result = new LintEngine().Check(Encoding.UTF8.GetBytes(yaml), "test.yml");
         var ifCondDiags = result.Diagnostics.Where(d => d.RuleId == "if-cond").ToArray();
 
         // Block scalar if: | adds trailing \n → always-true pattern
@@ -15212,8 +15203,7 @@ public sealed class RuleInterfaceTests
                           ${{ contains(github.event.head_commit.message, 'skip') }}
         """;
 
-        var result = new LintEngine().Check(Encoding.UTF8.GetBytes(yaml), "test.yml");
-        using var _ = result.ParseResult.Arena;
+        using var result = new LintEngine().Check(Encoding.UTF8.GetBytes(yaml), "test.yml");
         var ifCondDiags = result.Diagnostics.Where(d => d.RuleId == "if-cond").ToArray();
 
         // Same block scalar adjustment: diagnostic should be on the if: line → suppressed.
@@ -15238,8 +15228,7 @@ public sealed class RuleInterfaceTests
                     - run: echo test
         """;
 
-        var result = new LintEngine().Check(Encoding.UTF8.GetBytes(yaml), "test.yml");
-        using var _ = result.ParseResult.Arena;
+        using var result = new LintEngine().Check(Encoding.UTF8.GetBytes(yaml), "test.yml");
 
         // Both comma-separated rule IDs should be suppressed
         await Assert.That(result.Diagnostics.Any(d => d.RuleId == "job-timeout-minutes-required")).IsFalse();
@@ -15264,8 +15253,7 @@ public sealed class RuleInterfaceTests
                     - run: echo test
         """;
 
-        var result = new LintEngine().Check(Encoding.UTF8.GetBytes(yaml), "test.yml");
-        using var _ = result.ParseResult.Arena;
+        using var result = new LintEngine().Check(Encoding.UTF8.GetBytes(yaml), "test.yml");
 
         // Rule IDs are split by comma only, so space-separated IDs are treated as one
         // unknown rule-id token and therefore do not suppress diagnostics.
@@ -15294,8 +15282,7 @@ public sealed class RuleInterfaceTests
                     - run: echo ok
         """;
 
-        var result = new LintEngine().Check(Encoding.UTF8.GetBytes(yaml), "test.yml");
-        using var _ = result.ParseResult.Arena;
+        using var result = new LintEngine().Check(Encoding.UTF8.GetBytes(yaml), "test.yml");
         var runnerDiags = result.Diagnostics.Where(d => d.RuleId == "runner-no-latest").ToArray();
 
         await Assert.That(runnerDiags).IsEmpty();
@@ -15318,8 +15305,7 @@ public sealed class RuleInterfaceTests
                     - run: echo ok
         """;
 
-        var result = new LintEngine().Check(Encoding.UTF8.GetBytes(yaml), "test.yml");
-        using var _ = result.ParseResult.Arena;
+        using var result = new LintEngine().Check(Encoding.UTF8.GetBytes(yaml), "test.yml");
         var ifCondDiags = result.Diagnostics.Where(d => d.RuleId == "if-cond").ToArray();
 
         await Assert.That(ifCondDiags).IsEmpty();
@@ -15347,8 +15333,7 @@ public sealed class RuleInterfaceTests
                     - run: echo test
         """;
 
-        var result = new LintEngine().Check(Encoding.UTF8.GetBytes(yaml), "test.yml");
-        using var _ = result.ParseResult.Arena;
+        using var result = new LintEngine().Check(Encoding.UTF8.GetBytes(yaml), "test.yml");
         var runnerDiags = result.Diagnostics.Where(d => d.RuleId == "runner-no-latest").ToArray();
 
         // Only 'test' job should still have runner-no-latest diagnostics
@@ -15372,8 +15357,7 @@ public sealed class RuleInterfaceTests
                     - run: echo ok
         """;
 
-        var result = new LintEngine().Check(Encoding.UTF8.GetBytes(yaml), "test.yml");
-        using var _ = result.ParseResult.Arena;
+        using var result = new LintEngine().Check(Encoding.UTF8.GetBytes(yaml), "test.yml");
         var timeoutDiags = result.Diagnostics.Where(d => d.RuleId == "job-timeout-minutes-required").ToArray();
 
         await Assert.That(timeoutDiags).IsEmpty();
@@ -15409,8 +15393,7 @@ public sealed class RuleInterfaceTests
             ],
         };
 
-        var result = new LintEngine().Check(Encoding.UTF8.GetBytes(yaml), "workflows/main.yml", config);
-        using var _ = result.ParseResult.Arena;
+        using var result = new LintEngine().Check(Encoding.UTF8.GetBytes(yaml), "workflows/main.yml", config);
         var matrixDiags = result.Diagnostics.Where(d => d.RuleId == "matrix").ToArray();
 
         await Assert.That(matrixDiags).IsEmpty();
@@ -15439,8 +15422,7 @@ public sealed class RuleInterfaceTests
             ],
         };
 
-        var result = new LintEngine().Check(Encoding.UTF8.GetBytes(yaml), "workflows/main.yml", config);
-        using var _ = result.ParseResult.Arena;
+        using var result = new LintEngine().Check(Encoding.UTF8.GetBytes(yaml), "workflows/main.yml", config);
         var runnerDiags = result.Diagnostics.Where(d => d.RuleId == "runner-no-latest").ToArray();
 
         await Assert.That(runnerDiags).IsEmpty();
@@ -15473,8 +15455,7 @@ public sealed class RuleInterfaceTests
             ],
         };
 
-        var result = new LintEngine().Check(Encoding.UTF8.GetBytes(yaml), "workflows/main.yml", config);
-        using var _ = result.ParseResult.Arena;
+        using var result = new LintEngine().Check(Encoding.UTF8.GetBytes(yaml), "workflows/main.yml", config);
 
         // 'build' job diagnostics (runner-no-latest, action-ref, job-permissions-required, etc.) should be suppressed
         // 'test' job should still have runner-no-latest diagnostic (not excluded)
@@ -15504,8 +15485,7 @@ public sealed class RuleInterfaceTests
                     - uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332
         """;
 
-        var result = new LintEngine().Check(Encoding.UTF8.GetBytes(yaml), "test.yml");
-        using var _ = result.ParseResult.Arena;
+        using var result = new LintEngine().Check(Encoding.UTF8.GetBytes(yaml), "test.yml");
         var checkoutDiags = result.Diagnostics.Where(d => d.RuleId == "checkout-persist-credentials").ToArray();
 
         await Assert.That(checkoutDiags).IsEmpty();
@@ -15529,8 +15509,7 @@ public sealed class RuleInterfaceTests
                     - run: echo ok
         """;
 
-        var result = new LintEngine().Check(Encoding.UTF8.GetBytes(yaml), "test.yml");
-        using var _ = result.ParseResult.Arena;
+        using var result = new LintEngine().Check(Encoding.UTF8.GetBytes(yaml), "test.yml");
         var wrapperDiags = result.Diagnostics.Where(d => d.RuleId == "if-expr-wrapper").ToArray();
 
         await Assert.That(wrapperDiags).IsEmpty();
@@ -15552,8 +15531,7 @@ public sealed class RuleInterfaceTests
                     - run: echo ok
         """;
 
-        var result = new LintEngine().Check(Encoding.UTF8.GetBytes(yaml), "test.yml");
-        using var _ = result.ParseResult.Arena;
+        using var result = new LintEngine().Check(Encoding.UTF8.GetBytes(yaml), "test.yml");
         var permsDiags = result.Diagnostics.Where(d => d.RuleId == "job-permissions-required").ToArray();
 
         await Assert.That(permsDiags).IsEmpty();
@@ -15578,8 +15556,7 @@ public sealed class RuleInterfaceTests
                     - run: echo ok
         """;
 
-        var result = new LintEngine().Check(Encoding.UTF8.GetBytes(yaml), "test.yml");
-        using var _ = result.ParseResult.Arena;
+        using var result = new LintEngine().Check(Encoding.UTF8.GetBytes(yaml), "test.yml");
         var runnerDiags = result.Diagnostics.Where(d => d.RuleId == "runner-no-latest").ToArray();
         var timeoutDiags = result.Diagnostics.Where(d => d.RuleId == "job-timeout-minutes-required").ToArray();
 
@@ -15604,8 +15581,7 @@ public sealed class RuleInterfaceTests
                     - run: echo ok
         """;
 
-        var result = new LintEngine().Check(Encoding.UTF8.GetBytes(yaml), "test.yml");
-        using var _ = result.ParseResult.Arena;
+        using var result = new LintEngine().Check(Encoding.UTF8.GetBytes(yaml), "test.yml");
         var configErrors = result.Diagnostics.Where(d =>
             d.RuleId is null
             && d.Message.Contains("disable-job requires", StringComparison.Ordinal)).ToArray();
@@ -15628,8 +15604,7 @@ public sealed class RuleInterfaceTests
                     - run: echo ok
         """;
 
-        var result = new LintEngine().Check(Encoding.UTF8.GetBytes(yaml), "test.yml");
-        using var _ = result.ParseResult.Arena;
+        using var result = new LintEngine().Check(Encoding.UTF8.GetBytes(yaml), "test.yml");
 
         await Assert.That(result.SuppressionSummary.Records.Any(x => x.Source == SuppressionSource.InlineJob)).IsTrue();
         await Assert.That(result.SuppressionSummary.Records.All(x =>
@@ -15667,8 +15642,7 @@ public sealed class RuleInterfaceTests
                     - run: echo deploy
         """;
 
-        var result = new LintEngine().Check(Encoding.UTF8.GetBytes(yaml), "test.yml");
-        using var _ = result.ParseResult.Arena;
+        using var result = new LintEngine().Check(Encoding.UTF8.GetBytes(yaml), "test.yml");
         var runnerDiags = result.Diagnostics.Where(d => d.RuleId == "runner-no-latest").ToArray();
 
         // lint and deploy should still have runner-no-latest diagnostics
@@ -15699,8 +15673,7 @@ public sealed class RuleInterfaceTests
                     - run: echo test
         """;
 
-        var result = new LintEngine().Check(Encoding.UTF8.GetBytes(yaml), "test.yml");
-        using var _ = result.ParseResult.Arena;
+        using var result = new LintEngine().Check(Encoding.UTF8.GetBytes(yaml), "test.yml");
 
         // build: runner-no-latest suppressed, timeout-minutes NOT suppressed (has timeout)
         var buildRunnerDiags = result.Diagnostics.Where(d => d.RuleId == "runner-no-latest").ToArray();
@@ -15732,8 +15705,7 @@ public sealed class RuleInterfaceTests
                       run: echo ok
         """;
 
-        var result = new LintEngine().Check(Encoding.UTF8.GetBytes(yaml), "test.yml");
-        using var _ = result.ParseResult.Arena;
+        using var result = new LintEngine().Check(Encoding.UTF8.GetBytes(yaml), "test.yml");
 
         // runner-no-latest suppressed by disable-job
         var runnerDiags = result.Diagnostics.Where(d => d.RuleId == "runner-no-latest").ToArray();
@@ -15786,8 +15758,7 @@ public sealed class RuleInterfaceTests
             ],
         };
 
-        var result = new LintEngine().Check(Encoding.UTF8.GetBytes(yaml), "workflows/main.yml", config);
-        using var _ = result.ParseResult.Arena;
+        using var result = new LintEngine().Check(Encoding.UTF8.GetBytes(yaml), "workflows/main.yml", config);
         var runnerDiags = result.Diagnostics.Where(d => d.RuleId == "runner-no-latest").ToArray();
 
         // deploy uses ubuntu-24.04 which doesn't have -latest, so no diagnostic expected for deploy either
@@ -15827,8 +15798,7 @@ public sealed class RuleInterfaceTests
             ],
         };
 
-        var result = new LintEngine().Check(Encoding.UTF8.GetBytes(yaml), "workflows/main.yml", config);
-        using var _ = result.ParseResult.Arena;
+        using var result = new LintEngine().Check(Encoding.UTF8.GetBytes(yaml), "workflows/main.yml", config);
         var checkoutDiags = result.Diagnostics.Where(d => d.RuleId == "checkout-persist-credentials").ToArray();
 
         // build's checkout-persist-credentials suppressed, test's should remain
@@ -15864,8 +15834,7 @@ public sealed class RuleInterfaceTests
             ],
         };
 
-        var result = new LintEngine().Check(Encoding.UTF8.GetBytes(yaml), "workflows/main.yml", config);
-        using var _ = result.ParseResult.Arena;
+        using var result = new LintEngine().Check(Encoding.UTF8.GetBytes(yaml), "workflows/main.yml", config);
 
         // build: runner-no-latest suppressed, but job-timeout-minutes-required should still appear
         var buildTimeout = result.Diagnostics.Where(d => d.RuleId == "job-timeout-minutes-required" && d.Location.StartLine <= 7).ToArray();
@@ -15901,8 +15870,7 @@ public sealed class RuleInterfaceTests
             ],
         };
 
-        var result = new LintEngine().Check(Encoding.UTF8.GetBytes(yaml), "workflows/main.yml", config);
-        using var _ = result.ParseResult.Arena;
+        using var result = new LintEngine().Check(Encoding.UTF8.GetBytes(yaml), "workflows/main.yml", config);
 
         await Assert.That(result.SuppressionSummary.Records.Any(x => x.Source == SuppressionSource.ConfigJob)).IsTrue();
     }
@@ -15926,8 +15894,7 @@ public sealed class RuleInterfaceTests
             ],
         };
 
-        var result = new LintEngine().Check(Encoding.UTF8.GetBytes(yaml), "workflows/main.yml", config);
-        using var _ = result.ParseResult.Arena;
+        using var result = new LintEngine().Check(Encoding.UTF8.GetBytes(yaml), "workflows/main.yml", config);
         var inheritDiags = result.Diagnostics.Where(d => d.RuleId == "deny-inherit-secrets").ToArray();
 
         await Assert.That(inheritDiags).IsEmpty();

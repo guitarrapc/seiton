@@ -16,8 +16,8 @@ public readonly record struct DocumentKindClassification(
     bool IsAmbiguous);
 
 /// <summary>Parse result combined with document kind classification.</summary>
-public readonly record struct ClassifiedParseResult(
-    ParseResult ParseResult,
+internal readonly record struct ClassifiedParseResult(
+    ParseResultData ParseResult,
     DocumentKindClassification Classification);
 
 /// <summary>Classifies YAML documents as workflow or action metadata based on file path and structural hints.</summary>

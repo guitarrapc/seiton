@@ -33,9 +33,12 @@ public readonly record struct Diagnostic(
     IReadOnlyDictionary<string, string>? Metadata = null);
 
 /// <summary>The result of parsing a YAML document into an AST.</summary>
-public readonly record struct ParseResult(
+/// <remarks>
+/// This is a pure data carrier. Resource management (Arena disposal) is handled by
+/// <see cref="ParseResult"/> or <see cref="Linting.LintResult"/> which wrap this result.
+/// </remarks>
+internal readonly record struct ParseResultData(
     Workflow? Workflow,
     ActionMetadata? ActionMetadata,
     DiagnosticList Diagnostics,
-    bool HasFatalError,
-    AstArena? Arena = null);
+    bool HasFatalError);

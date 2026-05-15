@@ -1,4 +1,4 @@
-﻿using System.Text;
+using System.Text;
 using Seiton.Core.Linting;
 using Seiton.Core.Linting.Rules;
 
@@ -64,11 +64,10 @@ public sealed class LocalReusableWorkflowOutputResolutionTests
             File.WriteAllText(reusablePath, reusableYaml, Encoding.UTF8);
             File.WriteAllText(callerPath, callerYaml, Encoding.UTF8);
 
-            var result = new LintEngine([new ExprUndefinedVarRule()])
+            using var result = new LintEngine([new ExprUndefinedVarRule()])
                 .Check(File.ReadAllBytes(callerPath), callerPath);
-            using var _ = result.ParseResult.Arena;
 
-            await Assert.That(result.ParseResult.HasFatalError).IsFalse();
+            await Assert.That(result.HasFatalError).IsFalse();
 
             var msgs = result.Diagnostics
                 .Where(x => x.RuleId == "expr-undefined-var")
@@ -127,11 +126,10 @@ public sealed class LocalReusableWorkflowOutputResolutionTests
             File.WriteAllText(reusablePath, reusableContent, Encoding.UTF8);
             File.WriteAllText(callerPath, callerYaml, Encoding.UTF8);
 
-            var result = new LintEngine([new ExprUndefinedVarRule()])
+            using var result = new LintEngine([new ExprUndefinedVarRule()])
                 .Check(File.ReadAllBytes(callerPath), callerPath);
-            using var _ = result.ParseResult.Arena;
 
-            await Assert.That(result.ParseResult.HasFatalError).IsFalse();
+            await Assert.That(result.HasFatalError).IsFalse();
 
             var msgs = result.Diagnostics
                 .Where(x => x.RuleId == "expr-undefined-var")
@@ -201,11 +199,10 @@ public sealed class LocalReusableWorkflowOutputResolutionTests
             File.WriteAllText(reusablePath, reusableContent, Encoding.UTF8);
             File.WriteAllText(callerPath, callerYaml, Encoding.UTF8);
 
-            var result = new LintEngine([new ExprUndefinedVarRule()])
+            using var result = new LintEngine([new ExprUndefinedVarRule()])
                 .Check(File.ReadAllBytes(callerPath), callerPath);
-            using var _ = result.ParseResult.Arena;
 
-            await Assert.That(result.ParseResult.HasFatalError).IsFalse();
+            await Assert.That(result.HasFatalError).IsFalse();
 
             var msgs = result.Diagnostics
                 .Where(x => x.RuleId == "expr-undefined-var")
@@ -272,11 +269,10 @@ public sealed class LocalReusableWorkflowOutputResolutionTests
             File.WriteAllText(reusablePath, reusableYaml, Encoding.UTF8);
             File.WriteAllText(callerPath, callerYaml, Encoding.UTF8);
 
-            var result = new LintEngine([new ExprUndefinedVarRule()])
+            using var result = new LintEngine([new ExprUndefinedVarRule()])
                 .Check(File.ReadAllBytes(callerPath), callerPath);
-            using var _ = result.ParseResult.Arena;
 
-            await Assert.That(result.ParseResult.HasFatalError).IsFalse();
+            await Assert.That(result.HasFatalError).IsFalse();
 
             var msgs = result.Diagnostics
                 .Where(x => x.RuleId == "expr-undefined-var")
@@ -345,11 +341,10 @@ public sealed class LocalReusableWorkflowOutputResolutionTests
             File.WriteAllText(reusablePath, builder.ToString(), Encoding.UTF8);
             File.WriteAllText(callerPath, callerYaml, Encoding.UTF8);
 
-            var result = new LintEngine([new ExprUndefinedVarRule()])
+            using var result = new LintEngine([new ExprUndefinedVarRule()])
                 .Check(File.ReadAllBytes(callerPath), callerPath);
-            using var _ = result.ParseResult.Arena;
 
-            await Assert.That(result.ParseResult.HasFatalError).IsFalse();
+            await Assert.That(result.HasFatalError).IsFalse();
 
             var msgs = result.Diagnostics
                 .Where(x => x.RuleId == "expr-undefined-var")
@@ -408,11 +403,10 @@ public sealed class LocalReusableWorkflowOutputResolutionTests
             File.WriteAllText(outsidePath, outsideYaml, Encoding.UTF8);
             File.WriteAllText(callerPath, callerYaml, Encoding.UTF8);
 
-            var result = new LintEngine([new ExprUndefinedVarRule()])
+            using var result = new LintEngine([new ExprUndefinedVarRule()])
                 .Check(File.ReadAllBytes(callerPath), callerPath);
-            using var _ = result.ParseResult.Arena;
 
-            await Assert.That(result.ParseResult.HasFatalError).IsFalse();
+            await Assert.That(result.HasFatalError).IsFalse();
 
             var msgs = result.Diagnostics
                 .Where(x => x.RuleId == "expr-undefined-var")
@@ -488,11 +482,10 @@ public sealed class LocalReusableWorkflowOutputResolutionTests
             var callerYaml = "on: push\njobs:\n  escaped:\n    uses: " + usesPath + "\n  deploy:\n    runs-on: ubuntu-latest\n    needs: [escaped]\n    steps:\n      - env:\n          TAG: ${{ needs.escaped.outputs.typo }}\n        run: echo \"$TAG\"\n";
             File.WriteAllText(callerPath, callerYaml, Encoding.UTF8);
 
-            var result = new LintEngine([new ExprUndefinedVarRule()])
+            using var result = new LintEngine([new ExprUndefinedVarRule()])
                 .Check(File.ReadAllBytes(callerPath), callerPath);
-            using var _ = result.ParseResult.Arena;
 
-            await Assert.That(result.ParseResult.HasFatalError).IsFalse();
+            await Assert.That(result.HasFatalError).IsFalse();
 
             var msgs = result.Diagnostics
                 .Where(x => x.RuleId == "expr-undefined-var")
@@ -590,11 +583,10 @@ public sealed class LocalReusableWorkflowOutputResolutionTests
             File.WriteAllText(reusablePath, reusableYaml, Encoding.UTF8);
             File.WriteAllText(callerPath, callerYaml, Encoding.UTF8);
 
-            var result = new LintEngine([new ExprUndefinedVarRule()])
+            using var result = new LintEngine([new ExprUndefinedVarRule()])
                 .Check(File.ReadAllBytes(callerPath), callerPath);
-            using var _ = result.ParseResult.Arena;
 
-            await Assert.That(result.ParseResult.HasFatalError).IsFalse();
+            await Assert.That(result.HasFatalError).IsFalse();
 
             // If resolution succeeds, "nonexistent" should be flagged as undefined
             // because the reusable workflow only declares "version".
@@ -670,11 +662,10 @@ public sealed class LocalReusableWorkflowOutputResolutionTests
             File.WriteAllText(reusablePath, reusableYaml, Encoding.UTF8);
             File.WriteAllText(callerPath, callerYaml, Encoding.UTF8);
 
-            var result = new LintEngine([new ExprUndefinedVarRule()])
+            using var result = new LintEngine([new ExprUndefinedVarRule()])
                 .Check(File.ReadAllBytes(callerPath), callerPath);
-            using var _ = result.ParseResult.Arena;
 
-            await Assert.That(result.ParseResult.HasFatalError).IsFalse();
+            await Assert.That(result.HasFatalError).IsFalse();
 
             var msgs = result.Diagnostics
                 .Where(x => x.RuleId == "expr-undefined-var")
@@ -748,11 +739,10 @@ public sealed class LocalReusableWorkflowOutputResolutionTests
             File.WriteAllText(reusablePath, reusableYaml, Encoding.UTF8);
             File.WriteAllText(callerPath, callerYaml, Encoding.UTF8);
 
-            var result = new LintEngine([new ExprUndefinedVarRule()])
+            using var result = new LintEngine([new ExprUndefinedVarRule()])
                 .Check(File.ReadAllBytes(callerPath), callerPath);
-            using var _ = result.ParseResult.Arena;
 
-            await Assert.That(result.ParseResult.HasFatalError).IsFalse();
+            await Assert.That(result.HasFatalError).IsFalse();
 
             var msgs = result.Diagnostics
                 .Where(x => x.RuleId == "expr-undefined-var")

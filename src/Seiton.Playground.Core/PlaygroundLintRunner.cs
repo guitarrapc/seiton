@@ -87,15 +87,14 @@ public static class PlaygroundLintRunner
 
             var utf8Yaml = EncodeToDoubleBuffer(yamlSource);
 
-            LintResult lintResult;
-            var ownsArena = false;
             ReadOnlySpan<Diagnostic> diagnosticsToSerialize;
+            AstArena? ownedArena = null;
 
             // Action metadata files (action.yml) require classified parsing — not incremental.
             if (DocumentKindClassifier.GetPathHintKind(filePath) == DocumentKind.ActionMetadata)
             {
-                lintResult = Engine.Check(utf8Yaml, filePath, LintWithFixMetadata);
-                ownsArena = true; // Engine.Check creates its own arena; we must dispose it
+                var classifiedResult = WorkflowParser.ParseClassified(utf8Yaml, filePath, out ownedArena);
+                var lintResult = Engine.CheckWithParseResult(utf8Yaml, filePath, LintWithFixMetadata, classifiedResult.ParseResult, ownedArena);
                 diagnosticsToSerialize = lintResult.Diagnostics.AsSpan();
             }
             else
@@ -108,7 +107,7 @@ public static class PlaygroundLintRunner
                 var skipJobs = IncrementalCtx.BuildSkipJobs(jobCount, parseResult.Workflow);
 
                 // Lint with optional job skipping
-                lintResult = Engine.CheckWithParseResult(utf8Yaml, filePath, LintWithFixMetadata, parseResult, skipJobs);
+                var lintResult = Engine.CheckWithParseResult(utf8Yaml, filePath, LintWithFixMetadata, parseResult.Data, IncrementalCtx.Arena, skipJobs);
 
                 // Merge fresh diagnostics with cached diagnostics for skipped jobs
                 diagnosticsToSerialize = IncrementalCtx.MergeDiagnosticsWithCache(lintResult.Diagnostics, skipJobs);
@@ -121,10 +120,7 @@ public static class PlaygroundLintRunner
             }
 
             // Dispose arena for ActionMetadata path (not owned by IncrementalParseContext)
-            if (ownsArena)
-            {
-                lintResult.ParseResult.Arena?.Dispose();
-            }
+            ownedArena?.Dispose();
 
             // NOTE: Incremental path arena is NOT disposed — IncrementalParseContext owns it for reuse
             var written = JsonBuffer.WrittenSpan;
@@ -200,10 +196,9 @@ public static class PlaygroundLintRunner
         {
             lock (EngineGate)
             {
-                var result = Engine.Check(current, filePath, LintWithFixMetadata);
+                using var result = Engine.Check(current, filePath, LintWithFixMetadata);
                 if (!result.HasFixableDiagnostics)
                 {
-                    result.ParseResult.Arena?.Dispose();
                     return Encoding.UTF8.GetString(current);
                 }
 
@@ -211,21 +206,11 @@ public static class PlaygroundLintRunner
                 if (filtered.Length == 0)
                 {
                     // Still has diagnostics with fixes attached, but none we auto-apply here (see CollectAutoApplicableFixes).
-                    result.ParseResult.Arena?.Dispose();
                     return Encoding.UTF8.GetString(current);
                 }
 
                 var diag = PickNextDiagnosticToApply(filtered);
-                try
-                {
-                    current = FixEngine.Apply(current, new[] { diag });
-                }
-                finally
-                {
-                    // Dispose arena each pass so the next Check() reuses it via ThreadStatic cache.
-                    // Must be in finally so the arena is returned even if Apply throws.
-                    result.ParseResult.Arena?.Dispose();
-                }
+                current = FixEngine.Apply(current, new[] { diag });
             }
         }
 

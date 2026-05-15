@@ -17,6 +17,7 @@ public sealed class LocalActionInputsRule() : RuleBase(RuleId.LocalActionInputs)
     public override void VisitWorkflowPre(Workflow workflow)
     {
         base.VisitWorkflowPre(workflow);
+        DisposeCachedArenas();
         _cache.Clear();
         _metadataCheckedPaths.Clear();
     }
@@ -129,6 +130,14 @@ public sealed class LocalActionInputsRule() : RuleBase(RuleId.LocalActionInputs)
         }
     }
 
+    private void DisposeCachedArenas()
+    {
+        foreach (var entry in _cache.Values)
+        {
+            entry.Arena?.Dispose();
+        }
+    }
+
     private bool TryGetCachedAction(string actionYamlPath, out ActionMetadata? metadata, out byte[]? source, out AstArena? arena)
     {
         if (_cache.TryGetValue(actionYamlPath, out var entry))
@@ -153,9 +162,10 @@ public sealed class LocalActionInputsRule() : RuleBase(RuleId.LocalActionInputs)
             return true;
         }
 
-        var parseResult = WorkflowParser.Parse(bytes, actionYamlPath);
+        var parseResult = WorkflowParser.ParseDirect(bytes, actionYamlPath, out var parsedArena);
         if (parseResult.HasFatalError || parseResult.ActionMetadata is null)
         {
+            parsedArena?.Dispose();
             _cache[actionYamlPath] = (null, null, null, null);
             metadata = null;
             source = null;
@@ -163,10 +173,10 @@ public sealed class LocalActionInputsRule() : RuleBase(RuleId.LocalActionInputs)
             return true;
         }
 
-        _cache[actionYamlPath] = (parseResult.ActionMetadata, bytes, parseResult.Arena, parseResult.Diagnostics);
+        _cache[actionYamlPath] = (parseResult.ActionMetadata, bytes, parsedArena, parseResult.Diagnostics);
         metadata = parseResult.ActionMetadata;
         source = bytes;
-        arena = parseResult.Arena;
+        arena = parsedArena;
         return true;
     }
 

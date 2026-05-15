@@ -1,4 +1,4 @@
-﻿using Seiton.Core.Linting;
+using Seiton.Core.Linting;
 using System.Text;
 
 namespace Seiton.Benchmark;
@@ -51,9 +51,9 @@ public class MultiFileLintBenchmark
         var total = 0;
         for (var i = 0; i < _yamlFiles.Length; i++)
         {
-            var result = engine.Check(_yamlFiles[i], _filePaths[i]);
+            var result = engine.CheckDirect(_yamlFiles[i], _filePaths[i], out var arena);
             total += result.Diagnostics.Length;
-            result.ParseResult.Arena?.Dispose();
+            arena?.Dispose();
         }
         return total;
     }
@@ -70,9 +70,9 @@ public class MultiFileLintBenchmark
             new ParallelOptions { MaxDegreeOfParallelism = Environment.ProcessorCount },
             i =>
             {
-                var result = engines.Value!.Check(_yamlFiles[i], _filePaths[i]);
+                var result = engines.Value!.CheckDirect(_yamlFiles[i], _filePaths[i], out var arena);
                 slots[i] = result.Diagnostics.Length;
-                result.ParseResult.Arena?.Dispose();
+                arena?.Dispose();
             });
 
         var total = 0;

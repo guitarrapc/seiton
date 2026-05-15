@@ -51,16 +51,37 @@ public static partial class WorkflowParser
         public WebhookTypes.EventSpec Spec { get; }
     }
 
-    /// <summary>Parses UTF-8 YAML into a <see cref="ParseResult"/> containing the workflow or action metadata AST.</summary>
+    /// <summary>Parses UTF-8 YAML into a result containing the workflow or action metadata AST.</summary>
+    /// <remarks>
+    /// The returned <see cref="ParseResult"/> is a regular <see cref="IDisposable"/> class.
+    /// Use <c>using var result = WorkflowParser.Parse(...);</c> to ensure the underlying <see cref="AstArena"/>
+    /// is returned to the shared pool when you are done reading the AST.
+    /// </remarks>
     public static ParseResult Parse(byte[] utf8Yaml, string filePath)
     {
-        return ParseClassified(utf8Yaml, filePath).ParseResult;
+        var classified = ParseClassified(utf8Yaml, filePath, out var arena);
+        return new ParseResult(classified.ParseResult, arena);
+    }
+
+    /// <summary>
+    /// Parses UTF-8 YAML and returns the result with the arena as an out parameter.
+    /// Used by internal callers that need explicit arena ownership without the <see cref="ParseResult"/> wrapper.
+    /// The caller is responsible for disposing the returned arena.
+    /// </summary>
+    internal static ParseResultData ParseDirect(byte[] utf8Yaml, string filePath, out AstArena? arena)
+    {
+        var classified = ParseClassified(utf8Yaml, filePath, out arena);
+        return classified.ParseResult;
     }
 
     /// <summary>Parses UTF-8 YAML into a <see cref="ClassifiedParseResult"/> containing the AST and document kind classification.</summary>
-    public static ClassifiedParseResult ParseClassified(byte[] utf8Yaml, string filePath)
+    /// <param name="utf8Yaml">The UTF-8 encoded YAML source.</param>
+    /// <param name="filePath">The file path for diagnostic messages and document kind hinting.</param>
+    /// <param name="arena">The arena that owns pooled buffers. Caller is responsible for disposal.</param>
+    internal static ClassifiedParseResult ParseClassified(byte[] utf8Yaml, string filePath, out AstArena? arena)
     {
         var pathHintKind = DocumentKindClassifier.GetPathHintKind(filePath);
+        AstArena? localArena = null;
 
         try
         {
@@ -78,11 +99,11 @@ public static partial class WorkflowParser
 
             var parseReader = new VYamlStreamAdapter(utf8Yaml.AsMemory());
             var parseMode = finalKind == DocumentKind.ActionMetadata ? ParseMode.ActionMetadata : ParseMode.Workflow;
-            var arena = AstArena.Rent(utf8Yaml);
+            localArena = AstArena.Rent(utf8Yaml);
             var diagnostics = new PooledBuffer<Diagnostic>(16);
             try
             {
-                var coreResult = ParseCore(ref parseReader, arena, utf8Yaml, parseMode, ref diagnostics);
+                var coreResult = ParseCore(ref parseReader, localArena, utf8Yaml, parseMode, ref diagnostics);
 
                 // Check for unused anchors and recursive aliases after parsing while the adapter is still alive
                 var unusedBuf = threadstaticUnusedAnchorBuf ??= new (string, TextPosition)[32];
@@ -126,16 +147,17 @@ public static partial class WorkflowParser
 
                 // Transfer the pooled array directly to ParseResult (no .ToArray() copy)
                 var (diagArray, diagCount) = diagnostics.DetachArray();
-                var parseResult = new ParseResult(
+                var parseResult = new ParseResultData(
                     coreResult.Workflow,
                     coreResult.ActionMetadata,
                     new DiagnosticList(diagArray, diagCount),
-                    coreResult.HasFatalError,
-                    coreResult.Arena);
+                    coreResult.HasFatalError);
 
                 // Register the pooled diagnostics array with the arena for lifecycle management
-                arena.RegisterDiagnosticsBuffer(diagArray);
+                localArena.RegisterDiagnosticsBuffer(diagArray);
 
+                arena = localArena;
+                localArena = null;
                 return new ClassifiedParseResult(
                     parseResult,
                     new DocumentKindClassification(pathHintKind, finalKind, hasHintMismatch, isAmbiguous));
@@ -144,6 +166,8 @@ public static partial class WorkflowParser
         }
         catch (Exception ex)
         {
+            localArena?.Dispose();
+            arena = null;
             var (startLine, startColumn) = TryExtractLineCol(ex.Message);
             var location = new TextRange(
                 Start: 0,
@@ -157,7 +181,7 @@ public static partial class WorkflowParser
                 Message: $"yaml parse failure: {ex.Message}",
                 Location: location,
                 FilePath: string.IsNullOrEmpty(filePath) ? null : filePath);
-            var parseResult = new ParseResult(default, default, new DiagnosticList([diagnostic]), HasFatalError: true);
+            var parseResult = new ParseResultData(default, default, new DiagnosticList([diagnostic]), HasFatalError: true);
             return new ClassifiedParseResult(
                 parseResult,
                 new DocumentKindClassification(pathHintKind, DocumentKind.Unknown, HasHintMismatch: false, IsAmbiguous: false));
@@ -210,7 +234,7 @@ public static partial class WorkflowParser
         return (1, 1);
     }
 
-    internal static ParseResult ParseWithReader<TReader>(ref TReader reader, AstArena arena, ReadOnlySpan<byte> source)
+    internal static ParseResultData ParseWithReader<TReader>(ref TReader reader, AstArena arena, ReadOnlySpan<byte> source)
         where TReader : IYamlStreamReader, allows ref struct
     {
         var diagnostics = new PooledBuffer<Diagnostic>(16);
@@ -219,7 +243,7 @@ public static partial class WorkflowParser
             var result = ParseCore(ref reader, arena, source, ParseMode.Workflow, ref diagnostics);
             var (diagArray, diagCount) = diagnostics.DetachArray();
             arena.RegisterDiagnosticsBuffer(diagArray);
-            return new ParseResult(result.Workflow, result.ActionMetadata, new DiagnosticList(diagArray, diagCount), result.HasFatalError, result.Arena);
+            return new ParseResultData(result.Workflow, result.ActionMetadata, new DiagnosticList(diagArray, diagCount), result.HasFatalError);
         }
         finally
         {
@@ -287,7 +311,7 @@ public static partial class WorkflowParser
     /// Sections whose bit is set in <paramref name="rootSkipMask"/> are skipped via SkipCurrentNode().
     /// The caller must patch in previous AST nodes for skipped sections.
     /// </summary>
-    internal static ParseResult ParseIncremental(byte[] utf8Yaml, string filePath, AstArena arena, byte rootSkipMask, JobSkipEntry[]? jobSkipEntries = null)
+    internal static ParseResultData ParseIncremental(byte[] utf8Yaml, string filePath, AstArena arena, byte rootSkipMask, JobSkipEntry[]? jobSkipEntries = null)
     {
         var reader = new VYamlStreamAdapter(utf8Yaml.AsMemory());
         var diagnostics = new PooledBuffer<Diagnostic>(16);
@@ -330,7 +354,7 @@ public static partial class WorkflowParser
             var (diagArray, diagCount) = diagnostics.DetachArray();
             arena.RegisterDiagnosticsBuffer(diagArray);
 
-            return new ParseResult(result.Workflow, result.ActionMetadata, new DiagnosticList(diagArray, diagCount), result.HasFatalError, result.Arena);
+            return new ParseResultData(result.Workflow, result.ActionMetadata, new DiagnosticList(diagArray, diagCount), result.HasFatalError);
         }
         finally
         {

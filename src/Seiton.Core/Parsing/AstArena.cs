@@ -10,6 +10,7 @@ namespace Seiton.Core.Parsing;
 /// Type-safe handle referencing a string scalar node stored in <see cref="AstArena"/>.
 /// Default value (<c>default</c>) represents "no value" (equivalent to <c>null</c> on the old <c>StringNode?</c>).
 /// </summary>
+/// <remarks>To get the string value, call <c>result.GetString(id)</c> on the <c>ParseResult</c> or <c>LintResult</c> that produced this handle.</remarks>
 [DebuggerDisplay("{DebugDisplay,nq}")]
 public readonly record struct StringNodeId : IEquatable<StringNodeId>
 {
@@ -41,6 +42,7 @@ public readonly record struct StringNodeId : IEquatable<StringNodeId>
 /// <summary>
 /// Type-safe handle referencing a bool scalar node stored in <see cref="AstArena"/>.
 /// </summary>
+/// <remarks>To get the bool value, call <c>result.GetBool(id)</c> on the <c>ParseResult</c> or <c>LintResult</c> that produced this handle.</remarks>
 [DebuggerDisplay("{DebugDisplay,nq}")]
 public readonly record struct BoolNodeId : IEquatable<BoolNodeId>
 {
@@ -71,6 +73,7 @@ public readonly record struct BoolNodeId : IEquatable<BoolNodeId>
 /// <summary>
 /// Type-safe handle referencing an int scalar node stored in <see cref="AstArena"/>.
 /// </summary>
+/// <remarks>To get the int value, call <c>result.GetInt(id)</c> on the <c>ParseResult</c> or <c>LintResult</c> that produced this handle.</remarks>
 [DebuggerDisplay("{DebugDisplay,nq}")]
 public readonly record struct IntNodeId : IEquatable<IntNodeId>
 {
@@ -101,6 +104,7 @@ public readonly record struct IntNodeId : IEquatable<IntNodeId>
 /// <summary>
 /// Type-safe handle referencing a float scalar node stored in <see cref="AstArena"/>.
 /// </summary>
+/// <remarks>To get the float value, call <c>result.GetFloat(id)</c> on the <c>ParseResult</c> or <c>LintResult</c> that produced this handle.</remarks>
 [DebuggerDisplay("{DebugDisplay,nq}")]
 public readonly record struct FloatNodeId : IEquatable<FloatNodeId>
 {
@@ -135,7 +139,7 @@ public readonly record struct FloatNodeId : IEquatable<FloatNodeId>
 /// across parse calls and eliminate repeated array allocations.
 /// </summary>
 [DebuggerDisplay("AstArena: {_stringCount} strings, {_boolCount} bools, {_intCount} ints, {_floatCount} floats")]
-public sealed class AstArena : IDisposable
+internal sealed class AstArena : IDisposable
 {
     [ThreadStatic] private static AstArena? cached;
 

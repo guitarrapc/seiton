@@ -151,17 +151,17 @@ internal sealed class LocalReusableWorkflowOutputResolver
             return null;
         }
 
-        var parseResult = WorkflowParser.Parse(bytes, resolvedPath);
-        using var _ = parseResult.Arena;
-        if (parseResult.HasFatalError || parseResult.Workflow is null)
+        var parseHandle = WorkflowParser.Parse(bytes, resolvedPath);
+        using var _ = parseHandle;
+        if (parseHandle.HasFatalError || parseHandle.Workflow is null)
         {
             return null;
         }
 
         WorkflowCallEvent? workflowCallEvent = null;
-        for (var i = 0; i < parseResult.Workflow.On.Count; i++)
+        for (var i = 0; i < parseHandle.Workflow.On.Count; i++)
         {
-            if (parseResult.Workflow.On[i] is WorkflowCallEvent wce)
+            if (parseHandle.Workflow.On[i] is WorkflowCallEvent wce)
             {
                 workflowCallEvent = wce;
                 break;

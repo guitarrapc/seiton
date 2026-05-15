@@ -28,10 +28,10 @@
 ### 1.1 Entry Point
 
 ```
-Parse(utf8Yaml, filePath) -> ParseResult
+Parse(utf8Yaml, filePath) -> owned parse result
 ```
 
-- Return: `ParseResult { Workflow?, Diagnostic[], HasFatalError }`
+- Return: owned parse result containing `Workflow?`, `Diagnostic[]`, `HasFatalError`
 - Returns `Diagnostic[]` even if YAML parsing itself fails; `Workflow` is null in that case
 - Errors during AST construction are accumulated, not immediately fatal
 

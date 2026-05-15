@@ -47,9 +47,9 @@ public sealed class LintEngineThreadSafetyTests
         var baselineCounts = new int[fileCount];
         for (var i = 0; i < fileCount; i++)
         {
-            var result = sequentialEngine.Check(yamlFiles[i], filePaths[i]);
+            var result = sequentialEngine.CheckDirect(yamlFiles[i], filePaths[i], out var arena);
             baselineCounts[i] = result.Diagnostics.Length;
-            result.ParseResult.Arena?.Dispose();
+            arena?.Dispose();
         }
 
         // Run parallel with per-thread engines
@@ -62,9 +62,9 @@ public sealed class LintEngineThreadSafetyTests
             i =>
             {
                 var engine = engines.Value!;
-                var result = engine.Check(yamlFiles[i], filePaths[i]);
+                var result = engine.CheckDirect(yamlFiles[i], filePaths[i], out var arena);
                 parallelCounts[i] = result.Diagnostics.Length;
-                result.ParseResult.Arena?.Dispose();
+                arena?.Dispose();
             });
 
         // Per-thread engines must produce identical diagnostic counts
@@ -95,14 +95,14 @@ public sealed class LintEngineThreadSafetyTests
         var baselineResults = new (string RuleId, int Line, string Message)[fileCount][];
         for (var i = 0; i < fileCount; i++)
         {
-            var result = sequentialEngine.Check(yamlFiles[i], filePaths[i]);
+            var result = sequentialEngine.CheckDirect(yamlFiles[i], filePaths[i], out var arena);
             baselineResults[i] = new (string, int, string)[result.Diagnostics.Length];
             for (var j = 0; j < result.Diagnostics.Length; j++)
             {
                 var d = result.Diagnostics[j];
                 baselineResults[i][j] = (d.RuleId ?? "", d.Location.StartLine, d.Message);
             }
-            result.ParseResult.Arena?.Dispose();
+            arena?.Dispose();
         }
 
         // Parallel execution
@@ -115,7 +115,7 @@ public sealed class LintEngineThreadSafetyTests
             i =>
             {
                 var engine = engines.Value!;
-                var result = engine.Check(yamlFiles[i], filePaths[i]);
+                var result = engine.CheckDirect(yamlFiles[i], filePaths[i], out var arena);
                 var diags = new (string, int, string)[result.Diagnostics.Length];
                 for (var j = 0; j < result.Diagnostics.Length; j++)
                 {
@@ -123,7 +123,7 @@ public sealed class LintEngineThreadSafetyTests
                     diags[j] = (d.RuleId ?? "", d.Location.StartLine, d.Message);
                 }
                 parallelResults[i] = diags;
-                result.ParseResult.Arena?.Dispose();
+                arena?.Dispose();
             });
 
         // Verify full content match
@@ -163,9 +163,9 @@ public sealed class LintEngineThreadSafetyTests
             i =>
             {
                 var engine = engines.Value!;
-                var result = engine.Check(yamlFiles[i], filePaths[i]);
+                var result = engine.CheckDirect(yamlFiles[i], filePaths[i], out var arena);
                 Interlocked.Add(ref totalDiagnostics, result.Diagnostics.Length);
-                result.ParseResult.Arena?.Dispose();
+                arena?.Dispose();
             });
 
         // Just verify we got some diagnostics without crashing
@@ -196,9 +196,9 @@ public sealed class LintEngineThreadSafetyTests
         var baselineDiags = new Diagnostic[fileCount][];
         for (var i = 0; i < fileCount; i++)
         {
-            var result = sequentialEngine.Check(yamlFiles[i], filePaths[i]);
+            var result = sequentialEngine.CheckDirect(yamlFiles[i], filePaths[i], out var arena);
             baselineDiags[i] = result.CopyDiagnostics();
-            result.ParseResult.Arena?.Dispose();
+            arena?.Dispose();
         }
 
         // Parallel with slot pattern
@@ -210,9 +210,9 @@ public sealed class LintEngineThreadSafetyTests
             new ParallelOptions { MaxDegreeOfParallelism = MaxParallelism },
             i =>
             {
-                var result = engines.Value!.Check(yamlFiles[i], filePaths[i]);
+                var result = engines.Value!.CheckDirect(yamlFiles[i], filePaths[i], out var arena);
                 slots[i] = result.CopyDiagnostics();
-                result.ParseResult.Arena?.Dispose();
+                arena?.Dispose();
             });
 
         // Aggregate in input order and compare
@@ -249,18 +249,18 @@ public sealed class LintEngineThreadSafetyTests
         var copiedResults = new Diagnostic[fileCount][];
         for (var i = 0; i < fileCount; i++)
         {
-            var result = engine.Check(yamlFiles[i], filePaths[i]);
+            var result = engine.CheckDirect(yamlFiles[i], filePaths[i], out var arena);
             copiedResults[i] = result.CopyDiagnostics();
-            result.ParseResult.Arena?.Dispose();
+            arena?.Dispose();
         }
 
         // After all Check() calls, verify ALL copied results are still valid
         var verifyEngine = new LintEngine();
         for (var i = 0; i < fileCount; i++)
         {
-            var freshResult = verifyEngine.Check(yamlFiles[i], filePaths[i]);
+            var freshResult = verifyEngine.CheckDirect(yamlFiles[i], filePaths[i], out var arena);
             var freshDiags = freshResult.CopyDiagnostics();
-            freshResult.ParseResult.Arena?.Dispose();
+            arena?.Dispose();
 
             await Assert.That(copiedResults[i].Length).IsEqualTo(freshDiags.Length);
             for (var j = 0; j < freshDiags.Length; j++)
@@ -296,9 +296,9 @@ public sealed class LintEngineThreadSafetyTests
         var baselineCounts = new int[fileCount];
         for (var i = 0; i < fileCount; i++)
         {
-            var result = sequentialEngine.Check(yamlFiles[i], filePaths[i], sharedConfig);
+            var result = sequentialEngine.CheckDirect(yamlFiles[i], filePaths[i], sharedConfig, out var arena);
             baselineCounts[i] = result.Diagnostics.Length;
-            result.ParseResult.Arena?.Dispose();
+            arena?.Dispose();
         }
 
         // Parallel with shared config
@@ -310,9 +310,9 @@ public sealed class LintEngineThreadSafetyTests
             new ParallelOptions { MaxDegreeOfParallelism = MaxParallelism },
             i =>
             {
-                var result = engines.Value!.Check(yamlFiles[i], filePaths[i], sharedConfig);
+                var result = engines.Value!.CheckDirect(yamlFiles[i], filePaths[i], sharedConfig, out var arena);
                 parallelCounts[i] = result.Diagnostics.Length;
-                result.ParseResult.Arena?.Dispose();
+                arena?.Dispose();
             });
 
         for (var i = 0; i < fileCount; i++)
@@ -352,9 +352,9 @@ public sealed class LintEngineThreadSafetyTests
                 new ParallelOptions { MaxDegreeOfParallelism = MaxParallelism },
                 i =>
                 {
-                    var result = engines.Value!.Check(yamlFiles[i], filePaths[i]);
+                    var result = engines.Value!.CheckDirect(yamlFiles[i], filePaths[i], out var arena);
                     slots[i] = result.CopyDiagnostics();
-                    result.ParseResult.Arena?.Dispose();
+                    arena?.Dispose();
                 });
 
             // Flatten in input order → fingerprint
@@ -407,9 +407,9 @@ public sealed class LintEngineThreadSafetyTests
             new ParallelOptions { MaxDegreeOfParallelism = MaxParallelism },
             i =>
             {
-                var result = engines.Value!.Check(yamlFiles[i], filePaths[i]);
+                var result = engines.Value!.CheckDirect(yamlFiles[i], filePaths[i], out var arena);
                 slots[i] = (result.CopyDiagnostics(), filePaths[i]);
-                result.ParseResult.Arena?.Dispose();
+                arena?.Dispose();
             });
 
         // Aggregate in input order
@@ -424,9 +424,9 @@ public sealed class LintEngineThreadSafetyTests
         var baselineDiags = new List<Diagnostic>();
         for (var i = 0; i < fileCount; i++)
         {
-            var result = sequentialEngine.Check(yamlFiles[i], filePaths[i]);
+            var result = sequentialEngine.CheckDirect(yamlFiles[i], filePaths[i], out var arena);
             baselineDiags.AddRange(result.CopyDiagnostics());
-            result.ParseResult.Arena?.Dispose();
+            arena?.Dispose();
         }
 
         // Parallel aggregate must match sequential aggregate

@@ -61,7 +61,7 @@ public sealed class IncrementalParseTests
         await Assert.That(result2.Workflow).IsNotNull();
         await Assert.That(result2.Workflow!.On.Count).IsEqualTo(1);
         // The event should be pull_request, not stale push
-        var arena = result2.Arena!;
+        var arena = ctx.Arena!;
         var eventName = arena.GetStringValue(result2.Workflow!.On[0].EventName);
         await Assert.That(Encoding.UTF8.GetString(eventName)).IsEqualTo("pull_request");
     }
@@ -81,7 +81,7 @@ public sealed class IncrementalParseTests
         var result2 = ctx.ParseIncrementally(yaml2, FilePath);
 
         await Assert.That(result2.Workflow).IsNotNull();
-        var arena = result2.Arena!;
+        var arena = ctx.Arena!;
 
         // Permissions should resolve correctly
         var perms = result2.Workflow!.Permissions!;
@@ -105,7 +105,7 @@ public sealed class IncrementalParseTests
 
         // First parse produces a valid lintable workflow
         await Assert.That(result1.Workflow).IsNotNull();
-        await Assert.That(result1.Arena).IsNotNull();
+        await Assert.That(ctx.Arena).IsNotNull();
         await Assert.That(result1.Workflow!.Jobs.Count).IsEqualTo(1);
 
         // Second call: only step changed (root sections same)
@@ -115,10 +115,10 @@ public sealed class IncrementalParseTests
 
         // Second parse should also produce a valid lintable workflow
         await Assert.That(result2.Workflow).IsNotNull();
-        await Assert.That(result2.Arena).IsNotNull();
+        await Assert.That(ctx.Arena).IsNotNull();
         await Assert.That(result2.Workflow!.Jobs.Count).IsEqualTo(1);
         // On section should still be resolvable from the arena
-        var arena = result2.Arena!;
+        var arena = ctx.Arena!;
         var eventName = arena.GetStringValue(result2.Workflow!.On[0].EventName);
         await Assert.That(Encoding.UTF8.GetString(eventName)).IsEqualTo("push");
     }
@@ -141,6 +141,27 @@ public sealed class IncrementalParseTests
             await Assert.That(result.Workflow!.Env).IsNotNull();
             await Assert.That(result.Workflow!.Jobs.Count).IsEqualTo(1);
         }
+    }
+
+    [Test]
+    public async Task ParseIncrementally_DisposedResult_DoesNotDisposeContextArena()
+    {
+        var ctx = new IncrementalParseContext();
+        var yaml1 = "on: push\njobs:\n  build:\n    runs-on: ubuntu-latest\n    steps:\n      - run: echo one\n"u8.ToArray();
+        var yaml2 = "on: push\njobs:\n  build:\n    runs-on: ubuntu-latest\n    steps:\n      - run: echo two\n"u8.ToArray();
+
+        var result1 = ctx.ParseIncrementally(yaml1, FilePath);
+        await Assert.That(result1.Workflow).IsNotNull();
+        result1.Dispose();
+
+        var result2 = ctx.ParseIncrementally(yaml2, FilePath);
+        await Assert.That(result2.Workflow).IsNotNull();
+        await Assert.That(result2.HasFatalError).IsFalse();
+
+        var arena = ctx.Arena!;
+        var job = result2.Workflow!.Jobs.Entries[0].Value;
+        var runsOnLabel = arena.GetStringValue(job.RunsOn!.Labels![0]);
+        await Assert.That(Encoding.UTF8.GetString(runsOnLabel)).IsEqualTo("ubuntu-latest");
     }
 
     /// <summary>
@@ -190,7 +211,7 @@ public sealed class IncrementalParseTests
                 .Because($"iteration {i}: Job.Steps.Count must remain 1");
 
             // Verify the arena can still resolve string data for this job
-            var arena = result.Arena!;
+            var arena = ctx.Arena!;
             var runsOnLabel = arena.GetStringValue(job.RunsOn!.Labels![0]);
             await Assert.That(Encoding.UTF8.GetString(runsOnLabel))
                 .IsEqualTo("ubuntu-latest")
@@ -303,7 +324,7 @@ public sealed class IncrementalParseTests
         await Assert.That(jobA.Steps!.Count).IsEqualTo(1);
 
         // Verify job A's data is resolvable from the current arena
-        var arena = r2.Arena!;
+        var arena = ctx.Arena!;
         var runsOnLabel = arena.GetStringValue(jobA.RunsOn!.Labels![0]);
         await Assert.That(Encoding.UTF8.GetString(runsOnLabel)).IsEqualTo("ubuntu-latest");
     }
@@ -382,15 +403,15 @@ public sealed class IncrementalParseTests
                 $"on: push\nenv:\n  V: \"{i}\"\njobs:\n  build:\n    runs-on: ubuntu-latest\n    steps:\n      - run: echo ok\n  test:\n    runs-on: ubuntu-latest\n    steps:\n      - run: echo test\n");
             lastResult = ctx.ParseIncrementally(yaml, FilePath);
 
-            await Assert.That(lastResult.Value.Workflow).IsNotNull()
+            await Assert.That(lastResult!.Workflow).IsNotNull()
                 .Because($"iteration {i}: must produce valid workflow");
-            await Assert.That(lastResult.Value.Workflow!.Jobs.Count).IsEqualTo(2);
+            await Assert.That(lastResult.Workflow!.Jobs.Count).IsEqualTo(2);
         }
 
         // Verify last result is fully functional (no corruption from growth)
-        var job = lastResult!.Value.Workflow!.Jobs.Entries[0].Value;
+        var job = lastResult!.Workflow!.Jobs.Entries[0].Value;
         await Assert.That(job.RunsOn).IsNotNull();
-        var arena = lastResult.Value.Arena!;
+        var arena = ctx.Arena!;
         var label = arena.GetStringValue(job.RunsOn!.Labels![0]);
         await Assert.That(Encoding.UTF8.GetString(label)).IsEqualTo("ubuntu-latest");
     }
