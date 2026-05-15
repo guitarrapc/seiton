@@ -121,8 +121,8 @@ public sealed class LintEngine
 
     /// <summary>
     /// Parses and lints the given YAML, returning the result with the arena as an out parameter.
-    /// For internal/test use where <c>ref struct</c> handles cannot be used (e.g. async test methods).
-    /// The caller is responsible for disposing the arena.
+    /// Used by internal callers that need explicit arena ownership without the <see cref="LintResult"/> wrapper.
+    /// The caller is responsible for disposing the returned arena.
     /// </summary>
     internal LintResultData CheckDirect(byte[] utf8Yaml, string filePath, LintConfig? config, out AstArena? arena)
     {

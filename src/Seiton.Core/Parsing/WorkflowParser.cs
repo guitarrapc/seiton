@@ -65,8 +65,8 @@ public static partial class WorkflowParser
 
     /// <summary>
     /// Parses UTF-8 YAML and returns the result with the arena as an out parameter.
-    /// For internal/test use where <c>ref struct</c> handles cannot be used (e.g. async test methods).
-    /// The caller is responsible for disposing the arena.
+    /// Used by internal callers that need explicit arena ownership without the <see cref="ParseResult"/> wrapper.
+    /// The caller is responsible for disposing the returned arena.
     /// </summary>
     internal static ParseResultData ParseDirect(byte[] utf8Yaml, string filePath, out AstArena? arena)
     {
