@@ -352,3 +352,58 @@ output:
 Seiton is already usable and the rule messages are generally good. The strongest positive point is that `--verbose` plus `--oneline` makes it possible to understand what happened without guessing. The strongest issue found in this repository was exclusion behavior on Windows: the documented repo-root relative file exclusion shape did not work here, while basename glob exclusions did.
 
 For this repository specifically, a tuned config made the output much more natural. After tuning, the remaining warnings were the kinds of findings that are easy to discuss and easy to act on.
+
+## Action plan
+
+### Current status
+
+seiton 0.9.9 is at a practical, usable stage. Rule message quality, `--verbose`/`--oneline` output design, and `--fix --dry-run` review experience are all positively evaluated. Being able to narrow output to 5 warnings in a 122-file repository after config tuning demonstrates that rule accuracy and config flexibility are sufficient.
+
+### Identified issues
+
+| Priority | Issue | Impact |
+|----------|-------|--------|
+| **High** | Windows repo-root relative path exclusion does not work | `.github/workflows/foo.yml` passes validate-config but does not suppress diagnostics. `**/foo.yml` glob works. Path normalization bug. |
+| **High** | No per-rule count summary for large runs | Users must visually scan full output to identify which rules are causing the most noise. |
+| **Medium** | warning-only runs still exit non-zero | CI users need `--min-severity error` but this is not easily discoverable. |
+| **Medium** | No guidance when fix requires network flag | `--fix` for `unpinned-image` produces no diff without `--enable-image-network`, but the user is not told this. |
+| **Medium** | No tuning guide for sample/demo repositories | First-run experience in educational repos feels noisy even when detections are technically correct. |
+
+### Implementation order (recommended)
+
+1. **Fix Windows path normalization for exclusions** (bug, high priority) — **DONE**
+   - Exclusion file matching likely fails due to OS path separator (`\` vs `/`) or relative path resolution mismatch.
+   - `**/foo.yml` works but `.github/workflows/foo.yml` does not — suggests the exclusion pattern is not normalized, or the target file path has a different prefix.
+   - **Root cause**: `InputDiscovery` returns absolute paths via `Path.GetFullPath` (e.g. `D:\repo\.github\workflows\ci.yml`). After slash normalization this becomes `D:/repo/.github/workflows/ci.yml`. A relative exclusion pattern like `.github/workflows/ci.yml` was matched from position 0, so it could never match the absolute path prefix. Patterns starting with `**/` worked because `**` consumes arbitrary leading segments.
+   - **Fix**: Added `NormalizeExclusionPattern()` in `LintEngine.cs` that prepends `**/` to relative patterns (those not starting with `**/`, `/`, or a drive letter). This makes `.github/workflows/ci.yml` become `**/.github/workflows/ci.yml`, which correctly suffix-matches any absolute path.
+   - **Benchmark**: Zero allocation increase. Timing within noise (±3%).
+   - **Tests**: 2 new tests (`LintEngine_ConfigExclusion_RepoRootRelativePath_SuppressesDiagnostics`, `LintEngine_ConfigExclusion_RepoRootRelativeGlob_SuppressesDiagnostics`). All 8 existing exclusion tests still pass.
+
+2. **Add per-rule count summary** (UX, high priority) — **DONE**
+   - After the existing `N errors, M warnings in F files` line, show rule-level counts when `--verbose` is active and diagnostics > 0.
+   - Output format: `  unpinned-uses: 3, template-injection: 2, job-permissions-required: 1` (indented, sorted by count descending, then alphabetically).
+   - Parser diagnostics (null RuleId) are excluded from the breakdown.
+   - **Implementation**: Added `verbose` parameter to `WriteSummary(TextWriter, List<Diagnostic>, int, bool)`. The original overload `WriteSummary(List<Diagnostic>, int, bool)` delegates to `Console.Error`. Added `WritePerRuleBreakdown()` helper that builds a `Dictionary<string, int>`, sorts by count descending, and emits one line.
+   - **Call sites updated**: `CheckCommand` (line 153) and `FixCommand` (line 260) now pass the `verbose` flag.
+   - **Benchmark**: Zero allocation increase. Timing identical to baseline (this code only runs in CLI, not in the benchmarked `LintEngine.Check` path).
+   - **Tests**: 4 new tests in `WriteSummaryTests` (verbose shows breakdown, non-verbose omits breakdown, zero diagnostics omits breakdown, null RuleId excluded).
+
+3. **Improve exit code / severity guidance** (UX, medium priority) — **DONE**
+   - In summary line or `--help`, hint that `--min-severity error` ignores warnings in CI.
+   - **Implementation**: Added `showExitHint` parameter to `WriteSummary`. When `showExitHint` is true and the result has warnings but no errors, emits: `hint: use --min-severity error to treat warnings as non-blocking in CI`.
+   - `showExitHint` is set to `true` when `--min-severity` was NOT explicitly passed (i.e. `minSeverity is null`), so users who already know about the flag don't see the hint.
+  - **Review follow-up**: `fix --check` now also respects post-lint filtering for its exit code, so `--min-severity error` no longer leaves users with `0 issues` on screen but exit code `1` for filtered-out warning-only fixes.
+  - **Tests**: 3 new tests (`WriteSummary_WarningsOnly_ShowsMinSeverityHint`, `WriteSummary_ErrorsAndWarnings_DoesNotShowMinSeverityHint`, `WriteSummary_WarningsOnly_ShowExitHintFalse_NoHint`) plus 2 integration tests in `FixCommandTests` for `fix --check` exit-code behavior with and without `--min-severity error`.
+   - **Benchmark**: Zero allocation increase (CLI-only code, not in benchmarked path).
+
+4. **Improve message when fix requires network** (UX, medium priority) — **DONE**
+   - When `--fix` produces no changes for a rule that needs network, emit a hint like: `this rule's fix requires network access: re-run with --enable-image-network`.
+   - **Implementation**: Added `WriteNetworkFixHint(TextWriter, List<Diagnostic>, bool enablePinNetwork, bool enableImageNetwork)` to `CheckCommand`. Iterates diagnostics for `unpinned-uses` or `unpinned-image` rule IDs, and if the corresponding network flag is disabled, emits a hint about which flag(s) to add.
+   - Called from `FixCommand` after `WriteSummary` when diagnostics remain.
+   - **Tests**: 4 new tests (`WriteNetworkFixHint_UnpinnedUsesWithoutNetwork_ShowsHint`, `WriteNetworkFixHint_UnpinnedImageWithoutNetwork_ShowsHint`, `WriteNetworkFixHint_UnpinnedUsesWithNetworkEnabled_NoHint`, `WriteNetworkFixHint_NoDiagnosticsRequiringNetwork_NoHint`).
+   - **Benchmark**: Zero allocation increase (CLI-only code, not in benchmarked path).
+
+5. **Add tuning guide for sample/demo repos** (documentation, medium priority) — **DONE**
+   - Document recommended config patterns for educational/lab repositories.
+   - **Implementation**: Added "Tuning for Sample / Demo Repositories" section at end of `docs/configuration.md`.
+  - Covers: `--min-severity error` for CI, `enabled: false` for noisy rules, inline directives for individual cases, and a combined example config.

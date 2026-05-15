@@ -28,7 +28,7 @@ internal class SeitonCli
     /// <param name="verbose">Print progress information to stderr.</param>
     /// <param name="fix">Enable fix mode for the root command (equivalent to the fix subcommand).</param>
     /// <param name="dryRun">Print unified diff without modifying files (requires --fix).</param>
-    /// <param name="check">Exit non-zero if fixable diagnostics exist, without applying fixes (requires --fix).</param>
+    /// <param name="check">Exit non-zero if fixable diagnostics remain after filtering, without applying fixes (requires --fix).</param>
     /// <param name="enablePinNetwork">Allow network requests to resolve action SHA pins (requires --fix).</param>
     /// <param name="enableImageNetwork">Allow network requests to resolve container image digests (requires --fix).</param>
     /// <param name="includeActions">When no FILES are provided, include .github/actions/ in auto-discovery.</param>

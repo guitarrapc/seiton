@@ -12304,6 +12304,62 @@ public sealed class RuleInterfaceTests
     }
 
     [Test]
+    public async Task LintEngine_ConfigExclusion_RepoRootRelativePath_SuppressesDiagnostics()
+    {
+        // Bug: repo-root relative exclusion like ".github/workflows/ci.yml" should work
+        // even when the file path passed to Check is an absolute path (e.g. on Windows).
+        var yaml = """
+        on: push
+        jobs:
+            build:
+                runs-on: ubuntu-latest
+                steps:
+                    - run: echo one
+        """;
+
+        var config = new LintConfig
+        {
+            Exclusions =
+            [
+                new LintExclusion(".github/workflows/ci.yml", ["job-permissions-required"]),
+            ],
+        };
+
+        // Simulate absolute path as produced by CLI's Path.GetFullPath on Windows
+        using var result = new LintEngine().Check(Encoding.UTF8.GetBytes(yaml), "D:/repo/.github/workflows/ci.yml", config);
+
+        await Assert.That(result.Diagnostics.Any(x => x.RuleId == "job-permissions-required")).IsFalse();
+        await Assert.That(result.SuppressionSummary.TotalSuppressed).IsGreaterThanOrEqualTo(1);
+    }
+
+    [Test]
+    public async Task LintEngine_ConfigExclusion_RepoRootRelativeGlob_SuppressesDiagnostics()
+    {
+        // Pattern with glob but still repo-root relative (no leading **)
+        var yaml = """
+        on: push
+        jobs:
+            build:
+                runs-on: ubuntu-latest
+                steps:
+                    - run: echo one
+        """;
+
+        var config = new LintConfig
+        {
+            Exclusions =
+            [
+                new LintExclusion(".github/workflows/*.yml", ["job-permissions-required"]),
+            ],
+        };
+
+        using var result = new LintEngine().Check(Encoding.UTF8.GetBytes(yaml), "D:/repo/.github/workflows/ci.yml", config);
+
+        await Assert.That(result.Diagnostics.Any(x => x.RuleId == "job-permissions-required")).IsFalse();
+        await Assert.That(result.SuppressionSummary.TotalSuppressed).IsGreaterThanOrEqualTo(1);
+    }
+
+    [Test]
     public async Task LintEngine_ConfigExclusion_NullRules_SuppressesAllDiagnostics()
     {
         var yaml = """
