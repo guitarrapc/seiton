@@ -250,7 +250,7 @@ public sealed class PlaygroundUiLayoutTests
         var page = await context.NewPageAsync();
 
         await GotoPlaygroundAndWaitForLinterGridAsync(page, host.BaseUrl);
-    await WaitForUrlControlsReadyAsync(page);
+        await WaitForUrlControlsReadyAsync(page);
 
         // Enter on an invalid-but-filled URL shows an info toast; focus stays in #url-input.
         await page.Locator("#url-input").FillAsync("http://oops");

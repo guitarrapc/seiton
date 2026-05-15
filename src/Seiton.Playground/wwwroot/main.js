@@ -990,6 +990,9 @@ async function initializeRuntime() {
       handleRuntimeDeath();
       return;
     }
+    runtimeAlive = false;
+    runtimeReady = false;
+    loading.style.display = 'none';
     showToast(err?.message ?? String(err), 'error', 60000);
   }
 }
