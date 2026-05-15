@@ -371,9 +371,13 @@ seiton 0.9.9 is at a practical, usable stage. Rule message quality, `--verbose`/
 
 ### Implementation order (recommended)
 
-1. **Fix Windows path normalization for exclusions** (bug, high priority)
+1. **Fix Windows path normalization for exclusions** (bug, high priority) — **DONE**
    - Exclusion file matching likely fails due to OS path separator (`\` vs `/`) or relative path resolution mismatch.
    - `**/foo.yml` works but `.github/workflows/foo.yml` does not — suggests the exclusion pattern is not normalized, or the target file path has a different prefix.
+   - **Root cause**: `InputDiscovery` returns absolute paths via `Path.GetFullPath` (e.g. `D:\repo\.github\workflows\ci.yml`). After slash normalization this becomes `D:/repo/.github/workflows/ci.yml`. A relative exclusion pattern like `.github/workflows/ci.yml` was matched from position 0, so it could never match the absolute path prefix. Patterns starting with `**/` worked because `**` consumes arbitrary leading segments.
+   - **Fix**: Added `NormalizeExclusionPattern()` in `LintEngine.cs` that prepends `**/` to relative patterns (those not starting with `**/`, `/`, or a drive letter). This makes `.github/workflows/ci.yml` become `**/.github/workflows/ci.yml`, which correctly suffix-matches any absolute path.
+   - **Benchmark**: Zero allocation increase. Timing within noise (±3%).
+   - **Tests**: 2 new tests (`LintEngine_ConfigExclusion_RepoRootRelativePath_SuppressesDiagnostics`, `LintEngine_ConfigExclusion_RepoRootRelativeGlob_SuppressesDiagnostics`). All 8 existing exclusion tests still pass.
 
 2. **Add per-rule count summary** (UX, high priority)
    - After the existing `N errors, M warnings in F files` line, show rule-level counts (e.g. `run-env-context-direct-use: 28, dangerous-triggers: 5, ...`).

@@ -1140,7 +1140,7 @@ public sealed class LintEngine
                 }
             }
 
-            _normalizedExclusions.Add(new NormalizedExclusion(NormalizePath(exclusion.File), normalizedRuleIds, exclusion.Jobs));
+            _normalizedExclusions.Add(new NormalizedExclusion(NormalizeExclusionPattern(exclusion.File), normalizedRuleIds, exclusion.Jobs));
         }
 
         return new ExclusionsNormalization(
@@ -1148,6 +1148,37 @@ public sealed class LintEngine
             normalizedFilePath,
             _configDiagnostics.Count > 0 ? _configDiagnostics.ToArray() : []);
     }
+
+    /// <summary>
+    /// Normalizes an exclusion file pattern so that repo-root relative paths
+    /// (e.g. ".github/workflows/ci.yml") match against absolute file paths.
+    /// Patterns that already start with "**/" or are absolute are left as-is.
+    /// Relative patterns get "**/" prepended to enable suffix matching.
+    /// </summary>
+    private static string NormalizeExclusionPattern(string pattern)
+    {
+        var normalized = NormalizePath(pattern);
+        if (normalized.Length == 0)
+        {
+            return normalized;
+        }
+
+        // Already a ** glob — works as-is
+        if (normalized.StartsWith("**/", StringComparison.Ordinal) || normalized.StartsWith("**", StringComparison.Ordinal) && normalized.Length == 2)
+        {
+            return normalized;
+        }
+
+        // Absolute path (drive letter or root slash) — no prefix needed
+        if (normalized[0] == '/' || (normalized.Length >= 2 && normalized[1] == ':'))
+        {
+            return normalized;
+        }
+
+        // Relative pattern: prepend **/ so it matches as a suffix of any absolute path
+        return "**/" + normalized;
+    }
+
     private static int CompareDiagnosticsByRulePriority(Diagnostic x, Diagnostic y)
     {
         var byPriority = RuleCatalog.GetPriority(x.RuleId).CompareTo(RuleCatalog.GetPriority(y.RuleId));
