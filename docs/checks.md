@@ -2,6 +2,8 @@
 
 This page documents all lint rules included in Seiton.
 
+> **Tip:** Run `seiton rules` to see all rules and their effective enabled/disabled status in your terminal. Use `seiton rules --format json` for machine-readable output. See [Usage](usage.md#seiton-rules) for details.
+
 **Legend:**
 
 | Symbol | Meaning |

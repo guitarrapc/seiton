@@ -33,6 +33,7 @@ Options:
 Commands:
   check              Lint workflow files.
   init               Generate a starter seiton config file.
+  rules              List all available lint rules and their effective status.
   validate-config    Validate the seiton config file.
   version            Show version and runtime information.
 ```
@@ -123,6 +124,45 @@ Overwrite an existing config file:
 ```sh
 seiton init --force
 ```
+
+### seiton rules
+
+List all available lint rules and their effective enabled/disabled status:
+
+```sh
+seiton rules
+```
+
+Use `--config` to see how a specific config file affects rule states:
+
+```sh
+seiton rules --config .github/seiton.yaml
+```
+
+Output as JSON for programmatic consumption:
+
+```sh
+seiton rules --format json
+```
+
+Example text output:
+
+```
+Rule                                     Enabled   Type     Document   Reason
+------------------------------------------------------------------------------------------
+job-structure                            yes       local    both       default
+template-injection                       yes       local    both       default
+concurrency-limits                       no        local    workflow   opt-in (not configured)
+known-vulnerable-actions                 no        online   workflow   opt-in (not configured)
+```
+
+Columns:
+
+- **Rule** — Rule ID (the identifier used in config files and inline directives).
+- **Enabled** — Whether the rule is active (`yes`) or inactive (`no`).
+- **Type** — `local` (offline) or `online` (requires network).
+- **Document** — Which file types the rule applies to: `workflow`, `action`, or `both`.
+- **Reason** — Why the rule has its current state: `default`, `config (enabled)`, `config (disabled)`, `opt-in (not configured)`, or `non-disableable`.
 
 ### seiton validate-config
 

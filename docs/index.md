@@ -50,6 +50,9 @@ seiton --format json
 
 # Apply auto-fixes
 seiton --fix
+
+# List all available rules and their status
+seiton rules
 ```
 
 Example output:
