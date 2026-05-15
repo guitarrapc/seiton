@@ -1,0 +1,288 @@
+# Plan: Rule List Command
+
+## 背景・目的
+
+ユーザーが seiton でサポートされているルール一覧を簡単に確認できるようにする。ルールは config やCLI引数によって有効/無効が変動するため、「現在の設定で何が有効か」を含めて一覧表示できる機能が求められている。
+
+---
+
+## 現状分析
+
+### ルールメタデータの管理場所
+
+| 情報 | 管理場所 | アクセス可否 (CLI) |
+|---|---|---|
+| Rule ID (kebab-case) | `RuleIdExtensions.ToId()` | public |
+| Rule Name (human-readable) | 各 Rule クラスの `Name` プロパティ | internal (IRule は public だが Factory は internal) |
+| Opt-in フラグ | `RuleCatalog.IsOptIn()` | internal |
+| Non-disableable フラグ | `RuleCatalog.IsNonDisableable()` | internal |
+| Minimum severity | `RuleCatalog.TryGetMinimumSeverity()` | internal |
+| Allowed config keys | `RuleCatalog.TryGetAllowedConfigKeys()` | internal |
+| Priority (execution order) | `RuleCatalog.GetPriority()` | internal |
+| Online vs Local | `OnlineRuleFactories` vs `DefaultRuleFactories` | internal |
+| Document kind support | 各 Rule クラスの `SupportsDocumentKind()` | internal |
+| Default severity | ルールごとに `AddWarning`/`AddError` をハードコード | ソースのみ |
+
+### CLIからのアクセス制約
+
+- `RuleCatalog` は `internal static class` であり、CLI (`src/Seiton/`) からは直接アクセス不可
+- `Seiton.Core` の `InternalsVisibleTo` には `Seiton` (CLI) が含まれていない
+- CLI は `LintConfigLibrary` (public) 経由でのみ Core の機能にアクセスしている
+
+### 設定による有効/無効の変動パターン
+
+1. **Default-on ルール**: config で `enabled: false` にしない限り有効
+2. **Opt-in ルール** (`ConcurrencyLimits`): config に `rules.<id>` エントリがないと無効
+3. **Online ルール** (4件): ネットワーク有効 + config で有効化が必要
+4. **Non-disableable ルール** (`deny-write-all`, `deny-read-all`): config で無効化不可
+5. **Exclusion**: ファイル/ジョブ単位で特定ルールを抑制
+
+---
+
+## 実装案
+
+### 案1: `RuleCatalog` に public な一覧取得 API を追加 (推奨)
+
+#### 設計
+
+```csharp
+// Seiton.Core/Linting/RuleDescriptor.cs (新規, public)
+public readonly record struct RuleDescriptor(
+    string Id,              // kebab-case rule id
+    string Name,            // human-readable name
+    bool IsOptIn,           // opt-in only (disabled by default)
+    bool IsOnline,          // requires network access
+    bool IsNonDisableable,  // cannot be disabled by config
+    bool SupportsWorkflow,  // applies to workflow documents
+    bool SupportsAction     // applies to action metadata documents
+);
+
+// RuleCatalog.cs に追加 (public static method)
+public static IReadOnlyList<RuleDescriptor> GetAllRuleDescriptors();
+```
+
+#### 有効状態の解決
+
+```csharp
+// Seiton.Core/Linting/RuleListResolver.cs (新規, public)
+public readonly record struct RuleStatus(
+    RuleDescriptor Rule,
+    bool Enabled,           // 設定反映後の有効/無効
+    string Reason           // "default" | "config" | "opt-in (not configured)" | "non-disableable"
+);
+
+public static class RuleListResolver
+{
+    public static IReadOnlyList<RuleStatus> Resolve(LintConfig? config);
+}
+```
+
+#### CLI コマンド
+
+```
+seiton rules [--config PATH] [--format text|json]
+```
+
+出力例 (text):
+```
+Rule                            Enabled  Type      Reason
+────────────────────────────────────────────────────────────────
+job-structure                   ✓        local     default
+reusable-workflow               ✓        local     default
+permissions                     ✓        local     default
+...
+deny-write-all                  ✓        local     non-disableable
+deny-read-all                   ✓        local     non-disableable
+...
+concurrency-limits              ✗        local     opt-in (not configured)
+known-vulnerable-actions        ✗        online    opt-in (not configured)
+...
+template-injection              ✗        local     config (disabled)
+```
+
+出力例 (json):
+```json
+[
+  {
+    "id": "job-structure",
+    "name": "Job Structure Rule",
+    "enabled": true,
+    "type": "local",
+    "reason": "default",
+    "supportsWorkflow": true,
+    "supportsAction": false
+  }
+]
+```
+
+#### メリット
+
+- `Seiton.Core` にルール情報の正規 API が生まれ、Playground 等他の消費者も利用可能
+- Rule インスタンスを生成せずにメタデータを取得できる (パフォーマンス影響なし)
+- 既存の `RuleCatalog` の internal 構造を公開型に投影するだけで、ロジック変更なし
+
+#### デメリット
+
+- `RuleCatalog` の可視性変更 or 新しい public facade が必要
+- Rule ごとの `Name` と `SupportsDocumentKind` は現状 Factory 経由でしか取得不可 → 起動時 1回だけインスタンス生成して取得するか、静的メタデータとして二重管理
+
+---
+
+### 案2: 静的メタデータテーブル (二重管理だが最も軽量)
+
+#### 設計
+
+`RuleCatalog` 内に静的な `RuleDescriptor[]` を定義し、Rule クラスをインスタンス化せずに全メタデータを返す。
+
+```csharp
+private static readonly RuleDescriptor[] AllDescriptors = [
+    new("job-structure", "Job Structure Rule", IsOptIn: false, IsOnline: false, IsNonDisableable: false, SupportsWorkflow: true, SupportsAction: false),
+    new("reusable-workflow", "Reusable Workflow Rule", IsOptIn: false, IsOnline: false, IsNonDisableable: false, SupportsWorkflow: true, SupportsAction: false),
+    // ... 全ルール
+];
+```
+
+#### メリット
+
+- ゼロアロケーション (配列は static readonly)
+- ルールインスタンスを生成しない
+- 最もパフォーマンスに優れる
+
+#### デメリット
+
+- ルール追加時に `AllDescriptors` と `DefaultRuleFactories` の両方を更新する必要あり (二重管理)
+- Name や SupportsDocumentKind の不整合リスク → テストで検証可能
+
+---
+
+### 案3: 起動時に全ルールを1回インスタンス化してメタデータを収集
+
+#### 設計
+
+```csharp
+public static IReadOnlyList<RuleDescriptor> GetAllRuleDescriptors()
+{
+    var descriptors = new RuleDescriptor[DefaultRuleFactories.Length + OnlineRuleFactories.Length];
+    for (var i = 0; i < DefaultRuleFactories.Length; i++)
+    {
+        var rule = DefaultRuleFactories[i].Factory();
+        descriptors[i] = new RuleDescriptor(
+            DefaultRuleFactories[i].Id.ToId(),
+            rule.Name,
+            DefaultRuleFactories[i].OptIn,
+            IsOnline: false,
+            NonDisableableRuleIds.Contains(DefaultRuleFactories[i].Id),
+            rule.SupportsDocumentKind(DocumentKind.Workflow),
+            rule.SupportsDocumentKind(DocumentKind.ActionMetadata));
+    }
+    // + OnlineRuleFactories
+    return descriptors;
+}
+```
+
+#### メリット
+
+- 二重管理なし (既存の Factory + Rule クラスから動的に取得)
+- ルール追加時にメタデータ更新が自動的に反映
+
+#### デメリット
+
+- 全ルールをインスタンス化するコスト (とはいえ `rules` コマンド実行時のみ)
+- `rules` コマンドは lint とは独立なので、パフォーマンスインパクトは実質ゼロ
+
+---
+
+## 推奨案: 案3 (動的メタデータ収集) + 案1 の public API
+
+### 理由
+
+1. **二重管理回避**: ルール追加時にメタデータテーブルの更新忘れを防ぐ
+2. **パフォーマンス影響なし**: `rules` コマンドは独立実行で、lint hot path に影響しない
+3. **テスト容易性**: 全ルールのメタデータが正しく取得できることを1つのテストで検証
+4. **拡張性**: 将来的にカテゴリや説明文を追加する際も Rule クラスに属性追加だけで済む
+
+### 実装計画
+
+#### Phase 1: Seiton.Core API (優先度: 高)
+
+1. `RuleDescriptor` 型を定義 (`Seiton.Core/Linting/RuleDescriptor.cs`)
+2. `RuleStatus` 型を定義 (`Seiton.Core/Linting/RuleStatus.cs`)
+3. `RuleCatalog.GetAllRuleDescriptors()` を public static で追加
+4. `RuleListResolver.Resolve(LintConfig?)` を public static で追加
+5. テスト: `RuleCatalogTests` に全ルールの descriptor 検証を追加
+
+#### Phase 2: CLI コマンド (優先度: 高)
+
+1. `RulesCommand.cs` を `src/Seiton/Commands/` に追加
+2. `Program.cs` / `SeitonCli` にサブコマンド `rules` を追加
+3. Text / JSON 出力フォーマット対応
+4. テスト: `RulesCommandTests` で出力フォーマットを検証
+
+#### Phase 3: テスト & 検証 (優先度: 高)
+
+1. 全既存テストがパスすることを確認 (リグレッションなし)
+2. `RuleDescriptor` の完全性テスト (全 RuleId がカバーされていること)
+3. `RuleListResolver` のテスト (config パターン別の有効/無効解決)
+4. ベンチマーク確認: `CoreParsingBenchmark` と `CoreLintBenchmark` に影響なし
+
+---
+
+## CLI UX 設計
+
+### コマンド仕様
+
+```
+seiton rules [OPTIONS]
+
+OPTIONS:
+  --config <PATH>     Config file path (auto-discovered if omitted)
+  --format <FORMAT>   Output format: text (default) | json
+  --enabled-only      Show only enabled rules
+  --disabled-only     Show only disabled rules
+```
+
+### 出力カラム
+
+| カラム | 説明 |
+|---|---|
+| id | Rule ID (kebab-case) |
+| name | Human-readable name |
+| enabled | ✓ / ✗ |
+| type | local / online |
+| document | workflow / action / both |
+| reason | default / config / opt-in / non-disableable |
+
+### Exit Code
+
+- 0: 常に成功 (情報表示コマンド)
+
+---
+
+## パフォーマンス影響分析
+
+### lint hot path への影響
+
+- **なし**: `GetAllRuleDescriptors()` は `rules` コマンド実行時のみ呼ばれる
+- `RuleCatalog` の既存 static フィールド (`DefaultRuleFactories` 等) に変更なし
+- `LintEngine` のコードパスに変更なし
+
+### 新規コマンドのパフォーマンス
+
+- ルールインスタンス生成: ~55 ルール × 軽量コンストラクタ → 無視できるコスト
+- config 読み込み: 既存の `CliConfigBridge` を再利用
+
+### 検証手順
+
+1. `dotnet test` — 全テスト pass
+2. `CoreParsingBenchmark` — Mean/Allocated 変化なし
+3. `CoreLintBenchmark` — Mean/Allocated 変化なし
+
+---
+
+## 将来の拡展
+
+- カテゴリ (Correctness / Security / Supply Chain / Permissions) の追加
+- ルールごとの description (short/long) の追加
+- `seiton rules --docs` で Markdown ドキュメント生成
+- LSP server での rule list API 利用
+- `seiton rules --diff` で config 変更前後の差分表示
