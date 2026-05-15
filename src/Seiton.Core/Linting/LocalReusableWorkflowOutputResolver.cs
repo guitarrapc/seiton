@@ -13,12 +13,17 @@ internal sealed class LocalReusableWorkflowOutputResolver
     private static readonly StringComparer PathComparer =
         OperatingSystem.IsWindows() ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal;
 
-    private readonly string _workflowFilePath;
+    private readonly string _workflowDirectory;
+    private readonly string? _repositoryRoot;
     private readonly Dictionary<string, string[]?> _cache = new(PathComparer);
 
     public LocalReusableWorkflowOutputResolver(string workflowFilePath)
     {
-        _workflowFilePath = workflowFilePath;
+        _workflowDirectory = ActionRefHelpers.NormalizePath(Path.GetDirectoryName(workflowFilePath) ?? string.Empty);
+        var normalizedWorkflowPath = ActionRefHelpers.NormalizePath(workflowFilePath);
+        _repositoryRoot = ActionRefHelpers.TryGetRepositoryRoot(normalizedWorkflowPath, out var repositoryRoot)
+            ? repositoryRoot
+            : null;
     }
 
     /// <summary>
@@ -52,60 +57,63 @@ internal sealed class LocalReusableWorkflowOutputResolver
             return null;
         }
 
-        var relativePath = DecodeAscii(usesValue).Replace('/', Path.DirectorySeparatorChar);
+        var relativePath = ActionRefHelpers.NormalizePath(DecodeUtf8(usesValue));
+
+        if (_cache.TryGetValue(relativePath, out var cached))
+        {
+            return cached;
+        }
 
         // Normalize to full path for cache key to maximize cache hits when
         // semantically equivalent paths differ in raw form (e.g., extra ./ segments).
         var normalizedKey = NormalizeCacheKey(relativePath);
-        if (normalizedKey is not null && _cache.TryGetValue(normalizedKey, out var cached))
+        if (normalizedKey is not null && _cache.TryGetValue(normalizedKey, out cached))
         {
-            return cached;
-        }
-
-        if (_cache.TryGetValue(relativePath, out cached))
-        {
+            _cache[relativePath] = cached;
             return cached;
         }
 
         var result = ResolveAndParse(relativePath, out var resolvedPath);
-        var cacheKey = resolvedPath ?? normalizedKey ?? relativePath;
-        _cache[cacheKey] = result;
+        _cache[relativePath] = result;
+        if (normalizedKey is not null
+            && !string.Equals(normalizedKey, relativePath, StringComparison.Ordinal))
+        {
+            _cache[normalizedKey] = result;
+        }
+
+        if (resolvedPath is not null
+            && !string.Equals(resolvedPath, relativePath, StringComparison.Ordinal)
+            && !string.Equals(resolvedPath, normalizedKey, StringComparison.Ordinal))
+        {
+            _cache[resolvedPath] = result;
+        }
+
         return result;
     }
 
     private string? NormalizeCacheKey(string relativePath)
     {
-        var baseDirectory = ResolveLocalReferenceBaseDirectory(_workflowFilePath, relativePath);
+        var baseDirectory = ResolveLocalReferenceBaseDirectory(relativePath);
         if (string.IsNullOrEmpty(baseDirectory))
         {
             return null;
         }
 
-        try
-        {
-            return Path.GetFullPath(Path.Combine(baseDirectory, TrimCurrentDirectoryPrefix(relativePath)));
-        }
-        catch
-        {
-            return null;
-        }
+        return ActionRefHelpers.NormalizeFullPath(baseDirectory, relativePath);
     }
 
     private string[]? ResolveAndParse(string relativePath, out string? resolvedPath)
     {
         resolvedPath = null;
 
-        var baseDirectory = ResolveLocalReferenceBaseDirectory(_workflowFilePath, relativePath);
+        var baseDirectory = ResolveLocalReferenceBaseDirectory(relativePath);
         if (string.IsNullOrEmpty(baseDirectory))
         {
             return null;
         }
 
-        try
-        {
-            resolvedPath = Path.GetFullPath(Path.Combine(baseDirectory, TrimCurrentDirectoryPrefix(relativePath)));
-        }
-        catch
+        resolvedPath = ActionRefHelpers.NormalizeFullPath(baseDirectory, relativePath);
+        if (resolvedPath is null)
         {
             return null;
         }
@@ -188,64 +196,26 @@ internal sealed class LocalReusableWorkflowOutputResolver
         return names;
     }
 
-    private static string ResolveLocalReferenceBaseDirectory(string workflowFilePath, string localPath)
+    private string ResolveLocalReferenceBaseDirectory(string localPath)
     {
-        var workflowDirectory = Path.GetDirectoryName(workflowFilePath);
-        if (string.IsNullOrEmpty(workflowDirectory))
+        if (string.IsNullOrEmpty(_workflowDirectory))
         {
             return string.Empty;
         }
 
-        if (localPath.StartsWith($".{Path.DirectorySeparatorChar}.github{Path.DirectorySeparatorChar}", StringComparison.Ordinal)
-            && TryGetRepositoryRoot(workflowFilePath, out var repositoryRoot))
+        var trimmedLocalPath = ActionRefHelpers.TrimCurrentDirectoryPrefix(localPath);
+        if (_repositoryRoot is not null
+            && trimmedLocalPath.StartsWith(".github/", StringComparison.Ordinal))
         {
-            return repositoryRoot;
+            return _repositoryRoot;
         }
 
-        return workflowDirectory;
+        return _workflowDirectory;
     }
 
-    private static bool TryGetRepositoryRoot(string workflowFilePath, out string repositoryRoot)
+    private static string DecodeUtf8(ReadOnlySpan<byte> utf8)
     {
-        var separator = Path.DirectorySeparatorChar;
-        var marker = $"{separator}.github{separator}workflows{separator}";
-        var index = workflowFilePath.LastIndexOf(marker, StringComparison.OrdinalIgnoreCase);
-        if (index >= 0)
-        {
-            repositoryRoot = workflowFilePath[..index];
-            return true;
-        }
-
-        var markerAtEnd = $"{separator}.github{separator}workflows";
-        if (workflowFilePath.EndsWith(markerAtEnd, StringComparison.OrdinalIgnoreCase))
-        {
-            repositoryRoot = workflowFilePath[..^markerAtEnd.Length];
-            return true;
-        }
-
-        repositoryRoot = string.Empty;
-        return false;
-    }
-
-    private static string TrimCurrentDirectoryPrefix(string path)
-    {
-        if (path.StartsWith($".{Path.DirectorySeparatorChar}", StringComparison.Ordinal))
-        {
-            return path[2..];
-        }
-
-        return path;
-    }
-
-    private static string DecodeAscii(ReadOnlySpan<byte> utf8)
-    {
-        var chars = new char[utf8.Length];
-        for (var i = 0; i < utf8.Length; i++)
-        {
-            chars[i] = (char)utf8[i];
-        }
-
-        return new string(chars);
+        return Encoding.UTF8.GetString(utf8);
     }
 
     private static bool EndsWithYmlExtension(ReadOnlySpan<byte> value)

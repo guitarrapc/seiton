@@ -1,5 +1,6 @@
 ﻿using System.Buffers;
 using System.Globalization;
+using System.Runtime.CompilerServices;
 using System.Text;
 
 namespace Seiton.Core.Linting;
@@ -483,9 +484,100 @@ internal static class ActionRefHelpers
 
     private static bool IsAsciiDigit(byte value) => value is >= (byte)'0' and <= (byte)'9';
 
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     internal static string NormalizePath(string path)
     {
+        if (path.IndexOf('\\') < 0)
+        {
+            return path;
+        }
+
         return path.Replace('\\', '/');
+    }
+
+    internal static string TrimCurrentDirectoryPrefix(string path)
+    {
+        var normalized = NormalizePath(path);
+        var start = 0;
+        while (start + 2 <= normalized.Length
+            && normalized[start] == '.'
+            && normalized[start + 1] == '/')
+        {
+            start += 2;
+        }
+
+        return start == 0 ? normalized : normalized[start..];
+    }
+
+    internal static string ResolveLocalReferenceBaseDirectory(string workflowFilePath, string localPath)
+    {
+        var workflowDirectory = Path.GetDirectoryName(workflowFilePath);
+        if (string.IsNullOrEmpty(workflowDirectory))
+        {
+            return string.Empty;
+        }
+
+        if (TrimCurrentDirectoryPrefix(localPath).StartsWith(".github/", StringComparison.Ordinal)
+            && TryGetRepositoryRoot(workflowFilePath, out var repositoryRoot))
+        {
+            return repositoryRoot;
+        }
+
+        return NormalizePath(workflowDirectory);
+    }
+
+    internal static bool TryGetRepositoryRoot(string workflowFilePath, out string repositoryRoot)
+    {
+        var normalizedWorkflowPath = NormalizePath(workflowFilePath);
+        const string marker = "/.github/workflows/";
+        var index = normalizedWorkflowPath.LastIndexOf(marker, StringComparison.OrdinalIgnoreCase);
+        if (index >= 0)
+        {
+            repositoryRoot = NormalizeRootPrefix(normalizedWorkflowPath[..index]);
+            return true;
+        }
+
+        const string markerAtEnd = "/.github/workflows";
+        if (normalizedWorkflowPath.EndsWith(markerAtEnd, StringComparison.OrdinalIgnoreCase))
+        {
+            repositoryRoot = NormalizeRootPrefix(normalizedWorkflowPath[..^markerAtEnd.Length]);
+            return true;
+        }
+
+        repositoryRoot = string.Empty;
+        return false;
+    }
+
+    /// <summary>
+    /// Ensures that a sliced repository root prefix is a valid rooted directory path.
+    /// Handles edge cases where the prefix is empty (Unix root) or a bare drive letter (Windows root).
+    /// </summary>
+    private static string NormalizeRootPrefix(string prefix)
+    {
+        if (prefix.Length == 0)
+        {
+            return "/";
+        }
+
+        // Windows bare drive letter (e.g. "C:") needs a trailing slash to be a valid rooted path
+        if (prefix.Length == 2 && prefix[1] == ':')
+        {
+            return string.Concat(prefix, "/");
+        }
+
+        return prefix;
+    }
+
+    internal static string? NormalizeFullPath(string baseDirectory, string relativePath)
+    {
+        try
+        {
+            return NormalizePath(Path.GetFullPath(Path.Combine(baseDirectory, TrimCurrentDirectoryPrefix(relativePath))));
+        }
+        catch
+        {
+            return null;
+        }
     }
 
     internal static bool GlobMatch(string pattern, string path)
