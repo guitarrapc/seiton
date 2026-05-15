@@ -379,9 +379,14 @@ seiton 0.9.9 is at a practical, usable stage. Rule message quality, `--verbose`/
    - **Benchmark**: Zero allocation increase. Timing within noise (±3%).
    - **Tests**: 2 new tests (`LintEngine_ConfigExclusion_RepoRootRelativePath_SuppressesDiagnostics`, `LintEngine_ConfigExclusion_RepoRootRelativeGlob_SuppressesDiagnostics`). All 8 existing exclusion tests still pass.
 
-2. **Add per-rule count summary** (UX, high priority)
-   - After the existing `N errors, M warnings in F files` line, show rule-level counts (e.g. `run-env-context-direct-use: 28, dangerous-triggers: 5, ...`).
-   - Decide whether to show in `--verbose` only or always.
+2. **Add per-rule count summary** (UX, high priority) — **DONE**
+   - After the existing `N errors, M warnings in F files` line, show rule-level counts when `--verbose` is active and diagnostics > 0.
+   - Output format: `  unpinned-uses: 3, template-injection: 2, job-permissions-required: 1` (indented, sorted by count descending, then alphabetically).
+   - Parser diagnostics (null RuleId) are excluded from the breakdown.
+   - **Implementation**: Added `verbose` parameter to `WriteSummary(TextWriter, List<Diagnostic>, int, bool)`. The original overload `WriteSummary(List<Diagnostic>, int, bool)` delegates to `Console.Error`. Added `WritePerRuleBreakdown()` helper that builds a `Dictionary<string, int>`, sorts by count descending, and emits one line.
+   - **Call sites updated**: `CheckCommand` (line 153) and `FixCommand` (line 260) now pass the `verbose` flag.
+   - **Benchmark**: Zero allocation increase. Timing identical to baseline (this code only runs in CLI, not in the benchmarked `LintEngine.Check` path).
+   - **Tests**: 4 new tests in `WriteSummaryTests` (verbose shows breakdown, non-verbose omits breakdown, zero diagnostics omits breakdown, null RuleId excluded).
 
 3. **Improve exit code / severity guidance** (UX, medium priority)
    - In summary line or `--help`, hint that `--min-severity error` ignores warnings in CI.
