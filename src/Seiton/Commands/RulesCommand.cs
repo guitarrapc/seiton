@@ -72,6 +72,15 @@ internal static class RulesCommand
 
             writer.WriteLine($"{s.Rule.Id,-40} {enabled,-9} {type,-8} {document,-10} {s.Reason}");
         }
+
+        // Footer: explain how to enable opt-in rules
+        writer.WriteLine();
+        writer.WriteLine("To enable an opt-in rule, add to .github/seiton.yaml:");
+        writer.WriteLine("  rules:");
+        writer.WriteLine("    <rule-id>:");
+        writer.WriteLine("      enabled: true");
+        writer.WriteLine();
+        writer.WriteLine("Online rules use the GitHub API. Set GITHUB_TOKEN (or SEITON_GITHUB_TOKEN) to avoid rate limits.");
     }
 
     private static void WriteJson(TextWriter writer, IReadOnlyList<RuleStatus> statuses)

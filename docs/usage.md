@@ -154,6 +154,13 @@ job-structure                            yes       local    both       default
 template-injection                       yes       local    both       default
 concurrency-limits                       no        local    workflow   opt-in (not configured)
 known-vulnerable-actions                 no        online   workflow   opt-in (not configured)
+
+To enable an opt-in rule, add to .github/seiton.yaml:
+  rules:
+    <rule-id>:
+      enabled: true
+
+Online rules use the GitHub API. Set GITHUB_TOKEN (or SEITON_GITHUB_TOKEN) to avoid rate limits.
 ```
 
 Columns:
