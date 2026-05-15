@@ -15,7 +15,6 @@
 | Rule ID (kebab-case) | `RuleIdExtensions.ToId()` | public |
 | Rule Name (human-readable) | 各 Rule クラスの `Name` プロパティ | internal (IRule は public だが Factory は internal) |
 | Opt-in フラグ | `RuleCatalog.IsOptIn()` | internal |
-| Minimum severity | `RuleCatalog.TryGetMinimumSeverity()` | internal |
 | Allowed config keys | `RuleCatalog.TryGetAllowedConfigKeys()` | internal |
 | Priority (execution order) | `RuleCatalog.GetPriority()` | internal |
 | Online vs Local | `OnlineRuleFactories` vs `DefaultRuleFactories` | internal |

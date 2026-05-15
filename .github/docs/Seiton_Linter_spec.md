@@ -397,8 +397,7 @@ Non-normative note: parsers may allow optional spaces after commas, but normaliz
 Linter contract supports mandatory safety constraints on selected rules.
 
 - All rules are disableable by user configuration.
-- Some rules may define minimum severity.
-- If config attempts to set severity lower than rule minimum severity, linter must emit configuration error.
+- All rules allow user-specified severity override via config.
 - Severity order is `Error > Warning > Info`.
 
 ### 5.8 Rule-Specific Configuration
@@ -1337,7 +1336,7 @@ Exclusion-aware lint evaluation sequence is fixed as follows.
 
 1. Parse workflow and obtain parser diagnostics/AST.
 2. Validate exclusion configuration and inline directive syntax (including unknown rule ID errors).
-3. Build active rule set subject to minimum-severity constraints.
+3. Build active rule set.
 4. Execute rules and collect rule diagnostics.
 5. Apply severity overrides.
 6. Sort and deduplicate diagnostics.

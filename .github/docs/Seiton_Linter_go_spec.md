@@ -313,7 +313,7 @@ Go implementation must provide:
 - config-based exclusion matching
 - inline next-line directive handling
 - unknown rule-id as configuration error
-- fail-safe checks (minimum severity)
+- severity override application
 - suppression observability in lint result output
 
 ### 4.1 Rule-Specific Configuration Mapping

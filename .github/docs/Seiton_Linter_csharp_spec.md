@@ -382,7 +382,7 @@ C# implementation must provide:
 - config-based exclusion matching
 - inline next-line directive handling
 - unknown rule-id as configuration error
-- fail-safe checks (minimum severity)
+- severity override application
 - suppression observability in `LintResult`
 
 ### 4.1 Rule-Specific Configuration Mapping

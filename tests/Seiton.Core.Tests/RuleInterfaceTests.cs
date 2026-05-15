@@ -12545,7 +12545,7 @@ public sealed class RuleInterfaceTests
     }
 
     [Test]
-    public async Task LintEngine_MinimumSeverity_InRuleOptions_ReportsConfigurationErrorAndKeepsEffectiveSeverity()
+    public async Task LintEngine_DenyWriteAll_SeverityOverride_AppliesConfiguredSeverity()
     {
         var yaml = """
         on: push
@@ -12565,13 +12565,13 @@ public sealed class RuleInterfaceTests
             },
         };
 
-        using var result = new LintEngine().Check(Encoding.UTF8.GetBytes(yaml), "failsafe-min-severity.yml", config);
+        using var result = new LintEngine().Check(Encoding.UTF8.GetBytes(yaml), "severity-override.yml", config);
         var configError = result.Diagnostics.FirstOrDefault(x => x.RuleId is null && x.Message.Contains("minimum severity", StringComparison.Ordinal));
         var ruleDiagnostic = result.Diagnostics.FirstOrDefault(x => x.RuleId == "deny-write-all");
 
-        await Assert.That(configError.Message.Length).IsGreaterThan(0);
+        await Assert.That(configError.Message).IsNull();
         await Assert.That(ruleDiagnostic.Message.Length).IsGreaterThan(0);
-        await Assert.That(ruleDiagnostic.Severity).IsEqualTo(DiagnosticSeverity.Error);
+        await Assert.That(ruleDiagnostic.Severity).IsEqualTo(DiagnosticSeverity.Warning);
     }
 
     [Test]
@@ -12601,7 +12601,7 @@ public sealed class RuleInterfaceTests
     }
 
     [Test]
-    public async Task LintEngine_MinimumSeverity_DenyReadAll_InRuleOptions_ReportsConfigurationErrorAndKeepsEffectiveSeverity()
+    public async Task LintEngine_DenyReadAll_SeverityOverride_AppliesConfiguredSeverity()
     {
         var yaml = """
         on: push
@@ -12621,13 +12621,13 @@ public sealed class RuleInterfaceTests
             },
         };
 
-        using var result = new LintEngine().Check(Encoding.UTF8.GetBytes(yaml), "failsafe-min-severity-deny-read-all.yml", config);
+        using var result = new LintEngine().Check(Encoding.UTF8.GetBytes(yaml), "severity-override-deny-read-all.yml", config);
         var configError = result.Diagnostics.FirstOrDefault(x => x.RuleId is null && x.Message.Contains("minimum severity", StringComparison.Ordinal));
         var ruleDiagnostic = result.Diagnostics.FirstOrDefault(x => x.RuleId == "deny-read-all");
 
-        await Assert.That(configError.Message.Length).IsGreaterThan(0);
+        await Assert.That(configError.Message).IsNull();
         await Assert.That(ruleDiagnostic.Message.Length).IsGreaterThan(0);
-        await Assert.That(ruleDiagnostic.Severity).IsEqualTo(DiagnosticSeverity.Error);
+        await Assert.That(ruleDiagnostic.Severity).IsEqualTo(DiagnosticSeverity.Warning);
     }
 
     [Test]

@@ -89,8 +89,6 @@ internal static class RuleCatalog
 
     private static readonly (RuleId Id, int Priority)[] AllRuleMetadata = BuildAllRuleMetadata();
 
-    private static readonly IReadOnlyDictionary<RuleId, DiagnosticSeverity> MinimumSeverities = BuildMinimumSeverityMap();
-
     private static readonly IReadOnlyDictionary<RuleId, RuleKeyFlags> AllowedRuleConfigKeys = BuildAllowedRuleConfigKeys();
 
     private static readonly FrozenDictionary<string, int> PriorityByRuleIdString = BuildPriorityLookup();
@@ -217,12 +215,6 @@ internal static class RuleCatalog
         return bestDistance <= 4 ? bestCandidate : null;
     }
 
-    /// <summary>Gets the minimum severity enforced for the specified rule, if any.</summary>
-    public static bool TryGetMinimumSeverity(RuleId ruleId, out DiagnosticSeverity minimumSeverity)
-    {
-        return MinimumSeverities.TryGetValue(ruleId, out minimumSeverity);
-    }
-
     /// <summary>Gets the set of allowed rule-specific configuration keys for the specified rule.</summary>
     public static bool TryGetAllowedConfigKeys(RuleId ruleId, out RuleKeyFlags allowedKeys)
     {
@@ -287,15 +279,6 @@ internal static class RuleCatalog
         }
 
         return dict.ToFrozenDictionary(dict.Comparer);
-    }
-
-    private static IReadOnlyDictionary<RuleId, DiagnosticSeverity> BuildMinimumSeverityMap()
-    {
-        return new Dictionary<RuleId, DiagnosticSeverity>
-        {
-            [RuleId.DenyWriteAll] = DiagnosticSeverity.Error,
-            [RuleId.DenyReadAll] = DiagnosticSeverity.Error,
-        };
     }
 
     private static IReadOnlyDictionary<RuleId, RuleKeyFlags> BuildAllowedRuleConfigKeys()
