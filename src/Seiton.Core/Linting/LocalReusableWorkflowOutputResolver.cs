@@ -57,7 +57,7 @@ internal sealed class LocalReusableWorkflowOutputResolver
             return null;
         }
 
-        var relativePath = ActionRefHelpers.NormalizePath(DecodeAscii(usesValue));
+        var relativePath = ActionRefHelpers.NormalizePath(DecodeUtf8(usesValue));
 
         if (_cache.TryGetValue(relativePath, out var cached))
         {
@@ -212,9 +212,9 @@ internal sealed class LocalReusableWorkflowOutputResolver
         return _workflowDirectory;
     }
 
-    private static string DecodeAscii(ReadOnlySpan<byte> utf8)
+    private static string DecodeUtf8(ReadOnlySpan<byte> utf8)
     {
-        return Encoding.ASCII.GetString(utf8);
+        return Encoding.UTF8.GetString(utf8);
     }
 
     private static bool EndsWithYmlExtension(ReadOnlySpan<byte> value)

@@ -28,6 +28,28 @@ public sealed class LocalActionOutputResolverUnitTests
     }
 
     [Test]
+    public async Task ResolveOutputNames_NonAsciiGithubActionPath_UsesUtf8DecodedCacheKey()
+    {
+        var repositoryRoot = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N"));
+        var workflowPath = Path.Combine(repositoryRoot, ".github", "workflows", "caller.yml");
+        var resolver = new LocalActionOutputResolver(workflowPath);
+        var cached = new[] { "cached_output" };
+
+        var cacheField = typeof(LocalActionOutputResolver).GetField("_cache", BindingFlags.Instance | BindingFlags.NonPublic);
+        await Assert.That(cacheField).IsNotNull();
+
+        var cache = cacheField!.GetValue(resolver) as Dictionary<string, string[]?>;
+        await Assert.That(cache).IsNotNull();
+
+        var normalizedKey = ActionRefHelpers.NormalizePath(Path.GetFullPath(Path.Combine(repositoryRoot, ".github", "actions", "日本語")));
+        cache![normalizedKey] = cached;
+
+        var resolved = resolver.ResolveOutputNames("./.github/actions/日本語"u8);
+
+        await Assert.That(ReferenceEquals(resolved, cached)).IsTrue();
+    }
+
+    [Test]
     public async Task ResolveOutputNames_PathTraversal_ReturnsNull()
     {
         var repositoryRoot = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N"));
