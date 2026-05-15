@@ -1,4 +1,4 @@
-// Generic webhook on.* — filters, types, branches/tags/paths, and option validation helpers.
+﻿// Generic webhook on.* — filters, types, branches/tags/paths, and option validation helpers.
 
 using System.Text;
 using Seiton.Core.Generated;

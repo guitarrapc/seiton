@@ -8,8 +8,8 @@ public sealed class FixCommandTests
     [Test]
     public async Task FixCheck_MinSeverityError_IgnoresFixableWarningsForExitCode()
     {
-                var configPath = CreateConfigFile(
-                        """
+        var configPath = CreateConfigFile(
+                """
                         rules:
                             runner-no-latest:
                                 enabled: false

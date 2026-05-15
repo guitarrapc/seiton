@@ -1,4 +1,4 @@
-// on.schedule — scheduled event and cron entry parsing.
+﻿// on.schedule — scheduled event and cron entry parsing.
 
 using System.Text;
 using Seiton.Core.Parsing.Ast;

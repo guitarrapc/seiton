@@ -1,6 +1,5 @@
 ﻿using System.Collections.Frozen;
 using Seiton.Core.Linting.Rules;
-using Seiton.Core.Parsing;
 
 namespace Seiton.Core.Linting;
 

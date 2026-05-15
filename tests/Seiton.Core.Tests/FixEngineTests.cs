@@ -267,7 +267,7 @@ public sealed class FixEngineTests
 
         var source = Encoding.UTF8.GetBytes(yaml);
         var engine = new LintEngine([new DenyWriteAllRule()]);
-                using var before = engine.Check(source, "revalidate-expected-pass.yml");
+        using var before = engine.Check(source, "revalidate-expected-pass.yml");
 
         var revalidated = FixEngine.ApplyAndRelint(
                 engine,

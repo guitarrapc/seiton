@@ -1,4 +1,4 @@
-using System.Text;
+﻿using System.Text;
 using Seiton.Core.Linting;
 using Seiton.Core.Linting.Rules;
 

@@ -1,4 +1,4 @@
-using Seiton.Update.Parsers;
+﻿using Seiton.Update.Parsers;
 
 namespace Seiton.Update.Tests;
 

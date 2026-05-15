@@ -72,7 +72,7 @@ public sealed class LocalReusableWorkflowOutputResolverUnitTests
 
     private static string BuildReusableWorkflowYaml(string outputName)
     {
-                return $$$"""
+        return $$$"""
             on:
               workflow_call:
                 outputs:

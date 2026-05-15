@@ -1,4 +1,4 @@
-// on.image_version — names and versions lists.
+﻿// on.image_version — names and versions lists.
 
 using System.Text;
 using Seiton.Core.Parsing.Ast;

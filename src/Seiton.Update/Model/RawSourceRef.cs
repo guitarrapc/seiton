@@ -1,4 +1,4 @@
-namespace Seiton.Update.Model;
+﻿namespace Seiton.Update.Model;
 
 /// <summary>
 /// One fetched raw file's stable name (manifest <c>rawFileHashes</c> key) and UTF-8 content digest.

@@ -1,4 +1,4 @@
-namespace Seiton.Update.Services;
+﻿namespace Seiton.Update.Services;
 
 /// <summary>
 /// Ensures manifest sourceUrls match the intended official endpoints and slot order so reordering

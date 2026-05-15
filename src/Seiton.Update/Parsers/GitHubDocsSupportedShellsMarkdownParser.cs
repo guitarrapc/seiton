@@ -1,4 +1,4 @@
-namespace Seiton.Update.Parsers;
+﻿namespace Seiton.Update.Parsers;
 
 /// <summary>
 /// Parses the supported shells table from GitHub Docs

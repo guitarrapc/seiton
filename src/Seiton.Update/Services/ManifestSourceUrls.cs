@@ -1,6 +1,4 @@
-using Seiton.Update.Model;
-
-namespace Seiton.Update.Services;
+﻿namespace Seiton.Update.Services;
 
 internal static class ManifestSourceUrls
 {
