@@ -5,7 +5,7 @@ using Seiton.Core.Parsing;
 namespace Seiton.Core.Linting;
 
 /// <summary>
-/// Central registry of all lint rules: factory methods, priorities, policy flags (non-disableable, opt-in),
+/// Central registry of all lint rules: factory methods, priorities, policy flags (opt-in),
 /// minimum severities, and allowed per-rule configuration keys.
 /// </summary>
 internal static class RuleCatalog
@@ -89,8 +89,6 @@ internal static class RuleCatalog
 
     private static readonly (RuleId Id, int Priority)[] AllRuleMetadata = BuildAllRuleMetadata();
 
-    private static readonly IReadOnlySet<RuleId> NonDisableableRuleIds = BuildNonDisableableRuleIdSet();
-
     private static readonly IReadOnlyDictionary<RuleId, DiagnosticSeverity> MinimumSeverities = BuildMinimumSeverityMap();
 
     private static readonly IReadOnlyDictionary<RuleId, RuleKeyFlags> AllowedRuleConfigKeys = BuildAllowedRuleConfigKeys();
@@ -139,7 +137,6 @@ internal static class RuleCatalog
                 rule.Name,
                 entry.OptIn,
                 IsOnline: false,
-                NonDisableableRuleIds.Contains(entry.Id),
                 rule.SupportsDocumentKind(Parsing.DocumentKind.Workflow),
                 rule.SupportsDocumentKind(Parsing.DocumentKind.ActionMetadata));
         }
@@ -153,7 +150,6 @@ internal static class RuleCatalog
                 rule.Name,
                 IsOptIn: true,
                 IsOnline: true,
-                NonDisableableRuleIds.Contains(entry.Id),
                 rule.SupportsDocumentKind(Parsing.DocumentKind.Workflow),
                 rule.SupportsDocumentKind(Parsing.DocumentKind.ActionMetadata));
         }
@@ -219,12 +215,6 @@ internal static class RuleCatalog
         }
 
         return bestDistance <= 4 ? bestCandidate : null;
-    }
-
-    /// <summary>Returns whether the specified rule cannot be disabled by user configuration.</summary>
-    public static bool IsNonDisableable(RuleId ruleId)
-    {
-        return NonDisableableRuleIds.Contains(ruleId);
     }
 
     /// <summary>Gets the minimum severity enforced for the specified rule, if any.</summary>
@@ -297,15 +287,6 @@ internal static class RuleCatalog
         }
 
         return dict.ToFrozenDictionary(dict.Comparer);
-    }
-
-    private static IReadOnlySet<RuleId> BuildNonDisableableRuleIdSet()
-    {
-        return new HashSet<RuleId>
-        {
-            RuleId.DenyWriteAll,
-            RuleId.DenyReadAll,
-        };
     }
 
     private static IReadOnlyDictionary<RuleId, DiagnosticSeverity> BuildMinimumSeverityMap()

@@ -169,7 +169,7 @@ Columns:
 - **Enabled** — Whether the rule is active (`yes`) or inactive (`no`).
 - **Type** — `local` (offline) or `online` (requires network).
 - **Document** — Which file types the rule applies to: `workflow`, `action`, or `both`.
-- **Reason** — Why the rule has its current state: `default`, `config (enabled)`, `config (disabled)`, `opt-in (not configured)`, or `non-disableable`.
+- **Reason** — Why the rule has its current state: `default`, `config (enabled)`, `config (disabled)`, or `opt-in (not configured)`.
 
 ### seiton validate-config
 

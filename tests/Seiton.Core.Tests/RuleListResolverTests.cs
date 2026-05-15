@@ -72,7 +72,7 @@ public sealed class RuleListResolverTests
     }
 
     [Test]
-    public async Task Resolve_NonDisableableRule_CannotBeDisabled()
+    public async Task Resolve_DenyWriteAll_CanBeDisabledByConfig()
     {
         var config = new LintConfig
         {
@@ -85,8 +85,8 @@ public sealed class RuleListResolverTests
         var statuses = RuleListResolver.Resolve(config);
         var denyWriteAll = statuses.First(s => s.Rule.Id == "deny-write-all");
 
-        await Assert.That(denyWriteAll.Enabled).IsTrue();
-        await Assert.That(denyWriteAll.Reason).IsEqualTo("non-disableable");
+        await Assert.That(denyWriteAll.Enabled).IsFalse();
+        await Assert.That(denyWriteAll.Reason).IsEqualTo("config (disabled)");
     }
 
     [Test]

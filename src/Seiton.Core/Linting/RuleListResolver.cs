@@ -32,12 +32,6 @@ public static class RuleListResolver
 
     private static RuleStatus ResolveStatus(RuleDescriptor descriptor, LintConfig? config)
     {
-        // Non-disableable rules are always enabled
-        if (descriptor.IsNonDisableable)
-        {
-            return new RuleStatus(descriptor, Enabled: true, Reason: "non-disableable");
-        }
-
         // Check config for explicit override
         var ruleConfig = config?.GetRuleConfig(descriptor.Id);
 

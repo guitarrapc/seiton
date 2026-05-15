@@ -15,7 +15,6 @@
 | Rule ID (kebab-case) | `RuleIdExtensions.ToId()` | public |
 | Rule Name (human-readable) | 各 Rule クラスの `Name` プロパティ | internal (IRule は public だが Factory は internal) |
 | Opt-in フラグ | `RuleCatalog.IsOptIn()` | internal |
-| Non-disableable フラグ | `RuleCatalog.IsNonDisableable()` | internal |
 | Minimum severity | `RuleCatalog.TryGetMinimumSeverity()` | internal |
 | Allowed config keys | `RuleCatalog.TryGetAllowedConfigKeys()` | internal |
 | Priority (execution order) | `RuleCatalog.GetPriority()` | internal |
@@ -34,8 +33,7 @@
 1. **Default-on ルール**: config で `enabled: false` にしない限り有効
 2. **Opt-in ルール** (`ConcurrencyLimits`): config に `rules.<id>` エントリがないと無効
 3. **Online ルール** (4件): ネットワーク有効 + config で有効化が必要
-4. **Non-disableable ルール** (`deny-write-all`, `deny-read-all`): config で無効化不可
-5. **Exclusion**: ファイル/ジョブ単位で特定ルールを抑制
+4. **Exclusion**: ファイル/ジョブ単位で特定ルールを抑制
 
 ---
 
@@ -52,7 +50,6 @@ public readonly record struct RuleDescriptor(
     string Name,            // human-readable name
     bool IsOptIn,           // opt-in only (disabled by default)
     bool IsOnline,          // requires network access
-    bool IsNonDisableable,  // cannot be disabled by config
     bool SupportsWorkflow,  // applies to workflow documents
     bool SupportsAction     // applies to action metadata documents
 );
@@ -68,7 +65,7 @@ public static IReadOnlyList<RuleDescriptor> GetAllRuleDescriptors();
 public readonly record struct RuleStatus(
     RuleDescriptor Rule,
     bool Enabled,           // 設定反映後の有効/無効
-    string Reason           // "default" | "config" | "opt-in (not configured)" | "non-disableable"
+    string Reason           // "default" | "config" | "opt-in (not configured)"
 );
 
 public static class RuleListResolver
@@ -91,8 +88,8 @@ job-structure                   ✓        local     default
 reusable-workflow               ✓        local     default
 permissions                     ✓        local     default
 ...
-deny-write-all                  ✓        local     non-disableable
-deny-read-all                   ✓        local     non-disableable
+deny-write-all                  ✓        local     default
+deny-read-all                   ✓        local     default
 ...
 concurrency-limits              ✗        local     opt-in (not configured)
 known-vulnerable-actions        ✗        online    opt-in (not configured)
@@ -136,8 +133,8 @@ template-injection              ✗        local     config (disabled)
 
 ```csharp
 private static readonly RuleDescriptor[] AllDescriptors = [
-    new("job-structure", "Job Structure Rule", IsOptIn: false, IsOnline: false, IsNonDisableable: false, SupportsWorkflow: true, SupportsAction: false),
-    new("reusable-workflow", "Reusable Workflow Rule", IsOptIn: false, IsOnline: false, IsNonDisableable: false, SupportsWorkflow: true, SupportsAction: false),
+    new("job-structure", "Job Structure Rule", IsOptIn: false, IsOnline: false, SupportsWorkflow: true, SupportsAction: false),
+    new("reusable-workflow", "Reusable Workflow Rule", IsOptIn: false, IsOnline: false, SupportsWorkflow: true, SupportsAction: false),
     // ... 全ルール
 ];
 ```
@@ -171,7 +168,6 @@ public static IReadOnlyList<RuleDescriptor> GetAllRuleDescriptors()
             rule.Name,
             DefaultRuleFactories[i].OptIn,
             IsOnline: false,
-            NonDisableableRuleIds.Contains(DefaultRuleFactories[i].Id),
             rule.SupportsDocumentKind(DocumentKind.Workflow),
             rule.SupportsDocumentKind(DocumentKind.ActionMetadata));
     }
@@ -248,7 +244,7 @@ OPTIONS:
 | enabled | yes / no |
 | type | local / online |
 | document | workflow / action / both |
-| reason | default / config (enabled) / config (disabled) / opt-in (not configured) / non-disableable |
+| reason | default / config (enabled) / config (disabled) / opt-in (not configured) |
 
 ### Exit Code
 

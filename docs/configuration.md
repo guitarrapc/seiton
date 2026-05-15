@@ -215,7 +215,7 @@ rules:
     enabled: true
 ```
 
-> **Note:** Some rules cannot be disabled. Attempting to disable `deny-write-all` is a configuration error. See the [Rules](rules.md) page for each rule's constraints.
+> **Note:** Some rules enforce a minimum severity. For example, setting `deny-write-all` to `warning` is a configuration error because its minimum severity is `error`. See the [Rules](rules.md) page for each rule's constraints.
 
 ### Overriding Severity
 

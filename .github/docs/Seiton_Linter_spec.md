@@ -396,9 +396,8 @@ Non-normative note: parsers may allow optional spaces after commas, but normaliz
 
 Linter contract supports mandatory safety constraints on selected rules.
 
-- Some rules may be marked non-disableable.
+- All rules are disableable by user configuration.
 - Some rules may define minimum severity.
-- If config or inline directives attempt to disable a non-disableable rule, linter must emit configuration error.
 - If config attempts to set severity lower than rule minimum severity, linter must emit configuration error.
 - Severity order is `Error > Warning > Info`.
 
@@ -1263,7 +1262,7 @@ The following table classifies each default rule by fix feasibility.
 
 - A fix must be semantically equivalent for the common case; it must not silently change runtime behavior in a way that is not obvious from its description.
 - Unsafe transformations (for example, template-injection remediation that alters data flow) must not be provided as auto-fix; they may only appear as diagnostic message guidance.
-- Fail-safe rules (§5.7) that are non-disableable must not offer fixes that would circumvent their enforcement (for example, `deny-write-all` fix replaces with `read-all`, not with suppression).
+- Fail-safe rules (§5.7) must not offer fixes that would circumvent their intent (for example, `deny-write-all` fix replaces with `read-all`, not with suppression).
 
 ---
 
@@ -1338,7 +1337,7 @@ Exclusion-aware lint evaluation sequence is fixed as follows.
 
 1. Parse workflow and obtain parser diagnostics/AST.
 2. Validate exclusion configuration and inline directive syntax (including unknown rule ID errors).
-3. Build active rule set subject to non-disableable and minimum-severity constraints.
+3. Build active rule set subject to minimum-severity constraints.
 4. Execute rules and collect rule diagnostics.
 5. Apply severity overrides.
 6. Sort and deduplicate diagnostics.

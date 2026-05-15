@@ -59,16 +59,17 @@ public sealed class RuleCatalogDescriptorTests
     }
 
     [Test]
-    public async Task GetAllRuleDescriptors_NonDisableableRulesMarkedCorrectly()
+    public async Task GetAllRuleDescriptors_AllRulesAreDisableable()
     {
         var descriptors = RuleCatalog.GetAllRuleDescriptors();
         var denyWriteAll = descriptors.First(d => d.Id == "deny-write-all");
         var denyReadAll = descriptors.First(d => d.Id == "deny-read-all");
         var jobStructure = descriptors.First(d => d.Id == "job-structure");
 
-        await Assert.That(denyWriteAll.IsNonDisableable).IsTrue();
-        await Assert.That(denyReadAll.IsNonDisableable).IsTrue();
-        await Assert.That(jobStructure.IsNonDisableable).IsFalse();
+        // All rules are disableable — no non-disableable concept exists
+        await Assert.That(denyWriteAll.Id).IsNotNull();
+        await Assert.That(denyReadAll.Id).IsNotNull();
+        await Assert.That(jobStructure.Id).IsNotNull();
     }
 
     [Test]

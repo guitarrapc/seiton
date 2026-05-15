@@ -25,7 +25,7 @@ id-naming                                yes       local    both       default
 glob-pattern                             yes       local    both       default
 dispatch-inputs                          yes       local    both       default
 schedule-event                           yes       local    both       default
-deny-write-all                           yes       local    both       non-disableable
+deny-write-all                           yes       local    both       default
 credentials                              yes       local    both       default
 template-injection                       yes       local    both       default
 expr-undefined-var                       yes       local    both       default
@@ -35,7 +35,7 @@ run-secrets-context-direct-use           yes       local    both       default
 run-inputs-context-direct-use            yes       local    both       default
 secrets-whole-context-access             yes       local    both       default
 checkout-persist-credentials             yes       local    both       default
-deny-read-all                            yes       local    both       non-disableable
+deny-read-all                            yes       local    both       default
 deny-inherit-secrets                     yes       local    both       default
 job-timeout-minutes-required             yes       local    both       default
 github-app-token-inputs                  yes       local    both       default

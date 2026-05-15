@@ -86,12 +86,6 @@ public class RuleCatalogBenchmark
         return RuleCatalog.TryResolveRuleId(_ruleIdString, out _);
     }
 
-    [Benchmark(Description = "IsNonDisableable(RuleId)")]
-    public bool IsNonDisableable()
-    {
-        return RuleCatalog.IsNonDisableable(_ruleId);
-    }
-
     [Benchmark(Description = "IsOptIn(string)")]
     public bool IsOptIn()
     {

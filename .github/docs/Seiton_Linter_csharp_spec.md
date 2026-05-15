@@ -354,7 +354,6 @@ public readonly record struct RuleDescriptor(
     string Name,
     bool IsOptIn,
     bool IsOnline,
-    bool IsNonDisableable,
     bool SupportsWorkflow,
     bool SupportsAction);
 
@@ -368,7 +367,7 @@ public readonly record struct RuleStatus(
 - `RuleCatalog.GetAllRuleDescriptors()` (internal) returns cached `IReadOnlyList<RuleDescriptor>` covering all registered rules (default local + online). Uses `Lazy<RuleDescriptor[]>` for thread-safe one-time initialization. External consumers access rule metadata through the public `RuleListResolver` facade.
 - `RuleListResolver.Resolve(LintConfig?)` (public) computes `IReadOnlyList<RuleStatus>` reflecting the effective enabled/disabled state for each rule under the given configuration.
 
-Reason values: `"default"`, `"config (enabled)"`, `"config (disabled)"`, `"opt-in (not configured)"`, `"non-disableable"`.
+Reason values: `"default"`, `"config (enabled)"`, `"config (disabled)"`, `"opt-in (not configured)"`.
 
 ---
 
@@ -383,7 +382,7 @@ C# implementation must provide:
 - config-based exclusion matching
 - inline next-line directive handling
 - unknown rule-id as configuration error
-- fail-safe checks (non-disableable, minimum severity)
+- fail-safe checks (minimum severity)
 - suppression observability in `LintResult`
 
 ### 4.1 Rule-Specific Configuration Mapping
