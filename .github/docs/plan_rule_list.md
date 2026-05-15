@@ -406,5 +406,5 @@ JSON 出力にも `defaultSeverity` と `supportsAutoFix` フィールドを追�
 ### テスト結果
 
 - 新規テスト 7 件追加 (`RuleCatalogDescriptorTests`): DefaultSeverity / SupportsAutoFix の検証
-- 全テスト: **1672 passed, 1 pre-existing failure** (unrelated exclusion test)
-- ベンチマーク: CoreLintBenchmark Allocated 完全一致 (±0%)
+- 全テスト: 実行完了。失敗は既知の無関係な pre-existing failure のみ
+- ベンチマーク: CoreLintBenchmark Allocated に有意な回帰なし

@@ -6,6 +6,7 @@ namespace Seiton.Core.Linting;
 
 /// <summary>
 /// Central registry of all lint rules: factory methods, priorities, policy flags (opt-in),
+/// static rule metadata (default severity, auto-fix support) used to populate <see cref="RuleDescriptor"/>,
 /// and allowed per-rule configuration keys.
 /// </summary>
 internal static class RuleCatalog
@@ -218,7 +219,7 @@ internal static class RuleCatalog
         RuleId.OutdatedActionRunner => "error",
         RuleId.IfExprWrapper => "warning",
         RuleId.ConcurrencyLimits => "warning",
-        _ => "warning",
+        _ => throw new ArgumentOutOfRangeException(nameof(ruleId), ruleId, "No default severity defined for this rule."),
     };
 
     /// <summary>Returns whether the rule can produce auto-fix suggestions.</summary>

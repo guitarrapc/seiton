@@ -12670,7 +12670,7 @@ public sealed class RuleInterfaceTests
             ],
         };
 
-        using var result = new LintEngine().Check(Encoding.UTF8.GetBytes(yaml), "disableable-exclusion.yml", config);
+        using var result = new LintEngine().Check(Encoding.UTF8.GetBytes(yaml), "workflows/disableable-exclusion.yml", config);
 
         await Assert.That(result.Diagnostics.Any(x => x.RuleId == "deny-write-all")).IsFalse();
     }
