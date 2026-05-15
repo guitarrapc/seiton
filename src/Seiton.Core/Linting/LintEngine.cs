@@ -983,18 +983,7 @@ public sealed class LintEngine
                 if (RuleCatalog.TryResolveRuleId(ruleIdToken, out var internalRuleId))
                 {
                     var internalRuleIdString = internalRuleId.ToId();
-                    if (RuleCatalog.IsNonDisableable(internalRuleId))
-                    {
-                        configurationDiagnostics.Add(new Diagnostic(
-                            DiagnosticSeverity.Error,
-                            $"rule '{internalRuleIdString}' is non-disableable",
-                            new TextRange(tokenAbsStart, trimmedToken.Length, lineNumber, tokenColumn, lineNumber, tokenColumn + trimmedToken.Length),
-                            FilePath: filePath));
-                    }
-                    else
-                    {
-                        target[internalRuleIdString] = new SuppressionAnchor(lineNumber, tokenColumn);
-                    }
+                    target[internalRuleIdString] = new SuppressionAnchor(lineNumber, tokenColumn);
                 }
                 else
                 {

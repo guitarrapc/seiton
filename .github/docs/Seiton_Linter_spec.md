@@ -154,7 +154,7 @@ Column definitions:
 | `dispatch-inputs` | ✓ | — | Validate `on.workflow_dispatch.inputs` schema: types, required flags, choice options and defaults, boolean/number default literals, duplicate options, and the maximum input count. Empty strings in choice options are intentionally allowed (legitimate "no selection" pattern). |
 | `schedule-event` | ✓ | — | Validate `schedule` event entries: five-field cron syntax, minimum interval (GitHub's five-minute floor), and timezone strings against the IANA Time Zone Database (`IanaTimeZones.g.cs`, code-generated from `tzdata.zi`). Case-sensitive matching; `UTC` and `Local` are explicitly rejected. |
 | `workflow-call-input-default` | ✓ | — | Validate `on.workflow_call.inputs` defaults: required inputs must not have a default, boolean-typed inputs must default to `true` or `false`, and number-typed inputs must have a numeric default. Expression/interpolation defaults are skipped from type validation. |
-| `deny-write-all` | ✓ | — | Error when workflow/job permissions use `write-all`; this rule is fail-safe constrained by §5.7. |
+| `deny-write-all` | ✓ | — | Error when workflow/job permissions use `write-all`. |
 | `credentials` | ✓ | — | Warn when custom/private registry images in `job.container` or `job.services.*` are used without credentials, except registries treated as public by built-in plus additive config set. Error when `credentials.password` is a hardcoded literal instead of an expression (`${{ ... }}`). |
 | `template-injection` | ✓ | — | Error when untrusted `github.event`-origin data is directly interpolated into `run` script sinks or `actions/github-script` `script` input in unsafe ways. `env:` declarations are treated as indirection and are not reported by this rule. |
 | `expr-undefined-var` | ✓ | — | Error when expressions reference context roots unavailable in the current scope (for example job scope vs step scope context mismatch). Validates `step.run`, `step.if`, `step.env`, and `step.with` expressions. For `matrix` context, builds strict per-job types from matrix row definitions (including nested object property inference) and flags undefined axis keys. For `steps` context, builds strict per-job types from step IDs and validates forward references. For `needs` context, validates that referenced job IDs are declared in the job's `needs` list. For popular actions with known outputs, builds strict step output types and flags unknown output names. For local actions (`uses: ./...`), resolves `action.yml`/`action.yaml` metadata to build strict step output types and flags unknown output property names. For local reusable workflow call jobs (`uses: ./.github/workflows/...` at job level), resolves the called workflow's `on.workflow_call.outputs` to build strict needs output types and flags unknown output names. For remote reusable workflow call jobs (`uses: owner/repo/path@ref` at job level), `needs.<job>.outputs.*` is treated as loose (non-strict) because the called workflow's outputs cannot be determined statically without fetching the remote definition. |
@@ -251,7 +251,7 @@ Residual gaps continue to be tracked as parity-hardening work items in the imple
 | `dispatch-inputs` | Validates `on.workflow_dispatch.inputs` definitions (types, required, defaults, choice options, and input count limits). | More than 25 inputs; `choice` without options; invalid default for boolean/number/choice. | Prevents broken manual workflow runs from malformed dispatch input schema. | Fix `on.workflow_dispatch.inputs` definitions per GitHub’s workflow_dispatch input rules. | ✗ | Call-site `workflow_dispatch` payloads and `repository_dispatch` are out of scope for this rule; expression defaults may still need runtime checks. |
 | `schedule-event` | Validates scheduled workflow cron and timezone hints. | Fewer than five cron fields; invalid ranges; interval under five minutes; dubious timezone string (validated against IANA Time Zone Database identifiers). | Prevents schedules that GitHub rejects or that run too frequently. | Fix cron expression, interval, and timezone per GitHub schedule rules. | ✗ | Cron semantics and DST behavior depend on GitHub’s scheduler; re-verify after edits. |
 | `workflow-call-input-default` | Validates `on.workflow_call.inputs` default values against declared types. | Required input with a default; boolean input defaulting to `"yes"`; number input defaulting to `"abc"`. | Prevents invalid reusable workflow input contracts that cause runtime confusion or silent type mismatch. | Remove default from required inputs; use `true`/`false` for boolean defaults; use numeric literals for number defaults. | ✗ | Expression defaults are skipped from type validation; runtime coercion may still differ from declared type intent. |
-| `deny-write-all` | Fail-safe rule forbidding `write-all` permissions. | Workflow/job uses `permissions: write-all`. | Enforces hard least-privilege baseline and prevents blanket write grants. | Replace with `read-all` or explicit minimal scopes. | ✓ | Reduced scopes can break required write operations; add explicit targeted scopes where needed. |
+| `deny-write-all` | Rule forbidding `write-all` permissions. | Workflow/job uses `permissions: write-all`. | Enforces hard least-privilege baseline and prevents blanket write grants. | Replace with `read-all` or explicit minimal scopes. | ✓ | Reduced scopes can break required write operations; add explicit targeted scopes where needed. |
 | `credentials` | Warns when private/custom registry images lack credentials config. | `container.image` or `services.*.image` points to private host without `credentials`. | Prevents pull failures and accidental fallback assumptions. | Add proper `credentials` or move to approved public registry. | ✗ | Credential presence is not credential safety. Ensure secret storage, rotation, and least scope. |
 | `template-injection` | Detects unsafe direct interpolation of untrusted event data. | `run` script text directly embeds `github.event.*` user-controlled fields. | Mitigates command/script injection and unsafe template expansion. | Use safe indirection (`env` mapping, strict quoting, validation/sanitization). | △ Partial | Partial auto-fix applies only to `run:` sinks with deterministic paths (no wildcards); `actions/github-script` `script` inputs are not auto-fixed. Fix generates a mechanical env var name (e.g., `GITHUB_EVENT_HEAD_COMMIT_MESSAGE`) and inserts an `env:` mapping. If an existing unique env mapping for the same expression is found, it reuses that variable name. Names are deduplicated with `_2` suffix. **Fix boundary conditions (fix skipped when any apply):** (1) sink is not `run:` (e.g., `actions/github-script`); (2) path contains wildcard (`*`); (3) expression is part of a compound expression (not the whole `${{ }}`); (4) expression is inside a no-expand heredoc body (`<<'EOF'` / `<<"EOF"`); (5) expression is inside shell single quotes (`'...'`) where `${VAR}` would not expand; (6) step env is flow-style (`env: { ... }`); (7) step env exists but is empty (`env: {}`); (8) only one fix per step (multi-pass CLI handles remaining); (9) env var name deduplication exhausted (3 attempts). Sanitization defects may remain; add allowlist validation and escape-by-context patterns. |
 | `expr-undefined-var` | Detects context roots unavailable in current expression scope. | Job-level expression uses `steps.*`; invalid root for that location. | Prevents silent logic errors and brittle condition behavior. | Replace with scope-valid contexts or restructure where data is produced/consumed. | ✗ | Scope-valid expression can still be semantically wrong. Add tests for condition truth tables. |
@@ -392,15 +392,88 @@ Non-normative note: parsers may allow optional spaces after commas, but normaliz
 - Expiration (`expires`) is not required by contract.
 - Implementations may support optional metadata fields, but must not require them for valid exclusion entries.
 
-### 5.7 Fail-Safe Rule Policy
+### 5.7 Rule Configurability Policy
 
-Linter contract supports mandatory safety constraints on selected rules.
+All rules are fully configurable by the user.
 
-- Some rules may be marked non-disableable.
-- Some rules may define minimum severity.
-- If config or inline directives attempt to disable a non-disableable rule, linter must emit configuration error.
-- If config attempts to set severity lower than rule minimum severity, linter must emit configuration error.
+- All rules are disableable by user configuration.
+- All rules allow user-specified severity override via config.
 - Severity order is `Error > Warning > Info`.
+
+### 5.7.1 Default Severity Criteria
+
+Each rule's default diagnostic severity is determined by the following criteria. When a user config provides `rules.<rule-id>.severity`, that override applies to **all** diagnostics from the rule regardless of these criteria.
+
+| Severity | Criteria | Examples |
+|---|---|---|
+| **Error** | The workflow will **fail at runtime**, violates a hard correctness constraint, or represents an **active security vulnerability** (injection, undefined var, credential misuse). The user must fix this to have a working/safe workflow. | Invalid job structure, unknown needs target, template injection, deprecated runtime that will fail. |
+| **Warning** | A **best-practice violation** or **potential risk** that does not break execution but degrades security posture, maintainability, or reliability. The workflow runs but is suboptimal. | Unpinned action refs, missing explicit permissions, deprecated commands, dangerous triggers. |
+| **Info** | **Informational notice** with no correctness or security impact. Emitted only in verbose/observability contexts. | Suppression acknowledgements, ignored-action notifications. |
+
+**Mixed-severity rules**: Some rules emit diagnostics at different severities depending on the specific condition detected within a single rule. For example, `permissions` emits Error for invalid values but Warning for overly-broad valid scalars. When a user overrides severity via config, the override applies uniformly to all diagnostics from that rule.
+
+### 5.7.2 Per-Rule Default Severity
+
+The following table defines the normative default severity for each rule. Implementations must emit diagnostics at these levels when no user override is configured.
+
+| Rule ID | Default Severity | Notes |
+|---|---|---|
+| `job-structure` | error | |
+| `reusable-workflow` | error | |
+| `local-action-inputs` | mixed | error (invalid/missing inputs, invalid metadata), warning (deprecated inputs) |
+| `permissions` | mixed | error (invalid values), warning (overly-broad valid scalars) |
+| `popular-action-inputs` | warning | |
+| `outdated-action-runner` | error | |
+| `unpinned-uses` | mixed | error (invalid Docker ref format), warning (unpinned SHA), info (ignored-action verbose) |
+| `unpinned-image` | warning | |
+| `dangerous-triggers` | warning | |
+| `job-permissions-required` | warning | |
+| `needs-graph` | error | |
+| `shell-name` | mixed | error (invalid shell name), warning (shell-OS incompatibility) |
+| `runner-label` | mixed | warning (unknown labels), error (conflicting OS families) |
+| `runner-no-latest` | warning | |
+| `id-naming` | error | |
+| `glob-pattern` | error | |
+| `dispatch-inputs` | error | |
+| `schedule-event` | error | |
+| `workflow-call-input-default` | error | |
+| `deny-write-all` | error | |
+| `credentials` | mixed | warning (missing credentials), error (plaintext password) |
+| `template-injection` | error | |
+| `expr-undefined-var` | error | |
+| `run-env-context-direct-use` | error | |
+| `run-secrets-context-direct-use` | error | |
+| `run-inputs-context-direct-use` | error | |
+| `secrets-whole-context-access` | error | |
+| `checkout-persist-credentials` | warning | |
+| `known-vulnerable-actions` | error | online |
+| `impostor-commit` | error | online |
+| `ref-confusion` | error | online |
+| `stale-action-refs` | warning | online |
+| `deny-read-all` | error | |
+| `deny-inherit-secrets` | error | |
+| `job-timeout-minutes-required` | error | |
+| `github-app-token-inputs` | error | |
+| `workflow-secrets` | error | |
+| `job-secrets` | error | |
+| `action-shell-is-required` | error | |
+| `cache-poisoning` | warning | |
+| `self-hosted-runner` | warning | |
+| `unredacted-secrets` | warning | |
+| `secrets-outside-env` | warning | |
+| `matrix` | warning | |
+| `env-var` | warning | |
+| `deprecated-commands` | warning | |
+| `if-cond` | warning | |
+| `fake-ternary` | warning | |
+| `archived-uses` | warning | |
+| `insecure-commands` | warning | |
+| `overprovisioned-secrets` | warning | |
+| `forbidden-uses` | warning | |
+| `ref-version-mismatch` | warning | |
+| `use-trusted-publishing` | warning | |
+| `if-expr-wrapper` | warning | |
+| `concurrency-limits` | warning | opt-in |
 
 ### 5.8 Rule-Specific Configuration
 
@@ -635,8 +708,8 @@ output:
 
 Interpretation notes:
 
-- `rules.<rule-id>.enabled` controls rule enable/disable, subject to fail-safe constraints in §5.7.
-- `rules.<rule-id>.severity` overrides diagnostic severity, subject to fail-safe constraints in §5.7.
+- `rules.<rule-id>.enabled` controls rule enable/disable (§5.7).
+- `rules.<rule-id>.severity` overrides diagnostic severity for all diagnostics from that rule (§5.7).
 - Rule-specific keys (e.g. `events.extend`, `public-registries.extend`, `assume-events`) are defined per rule in §5.8.
 - Online rules (`known-vulnerable-actions`, `impostor-commit`, `ref-confusion`, `stale-action-refs`) are default `enabled: false`; setting `enabled: true` activates them and the system automatically requires network access.
 - `fix.defaults.job-timeout-minutes` sets the default `timeout-minutes` value used by `job-timeout-minutes-required` partial auto-fix; null/missing or `<= 0` disables fix attachment.
@@ -758,8 +831,7 @@ rules:
 Active rules: same as Profile 1; `runner-label` now accepts `ubuntu-24.04-large` without diagnostic; `dangerous-triggers` now treats `issue_comment` as dangerous.
 
 **Constraints:**
-- `deny-write-all` and `deny-read-all` cannot be disabled (fail-safe; §5.7).
-- Severity cannot be lowered below `error` for fail-safe rules.
+- All rules (including `deny-write-all` and `deny-read-all`) can be disabled or have their severity overridden via config (§5.7).
 
 ---
 
@@ -1263,7 +1335,7 @@ The following table classifies each default rule by fix feasibility.
 
 - A fix must be semantically equivalent for the common case; it must not silently change runtime behavior in a way that is not obvious from its description.
 - Unsafe transformations (for example, template-injection remediation that alters data flow) must not be provided as auto-fix; they may only appear as diagnostic message guidance.
-- Fail-safe rules (§5.7) that are non-disableable must not offer fixes that would circumvent their enforcement (for example, `deny-write-all` fix replaces with `read-all`, not with suppression).
+- Security-critical rules (§8.5) must not offer fixes that would circumvent their intent (for example, `deny-write-all` fix replaces with `read-all`, not with suppression).
 
 ---
 
@@ -1338,7 +1410,7 @@ Exclusion-aware lint evaluation sequence is fixed as follows.
 
 1. Parse workflow and obtain parser diagnostics/AST.
 2. Validate exclusion configuration and inline directive syntax (including unknown rule ID errors).
-3. Build active rule set subject to non-disableable and minimum-severity constraints.
+3. Build active rule set.
 4. Execute rules and collect rule diagnostics.
 5. Apply severity overrides.
 6. Sort and deduplicate diagnostics.

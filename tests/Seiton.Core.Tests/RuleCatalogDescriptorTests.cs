@@ -59,19 +59,6 @@ public sealed class RuleCatalogDescriptorTests
     }
 
     [Test]
-    public async Task GetAllRuleDescriptors_NonDisableableRulesMarkedCorrectly()
-    {
-        var descriptors = RuleCatalog.GetAllRuleDescriptors();
-        var denyWriteAll = descriptors.First(d => d.Id == "deny-write-all");
-        var denyReadAll = descriptors.First(d => d.Id == "deny-read-all");
-        var jobStructure = descriptors.First(d => d.Id == "job-structure");
-
-        await Assert.That(denyWriteAll.IsNonDisableable).IsTrue();
-        await Assert.That(denyReadAll.IsNonDisableable).IsTrue();
-        await Assert.That(jobStructure.IsNonDisableable).IsFalse();
-    }
-
-    [Test]
     public async Task GetAllRuleDescriptors_DocumentKindSupport()
     {
         var descriptors = RuleCatalog.GetAllRuleDescriptors();
@@ -88,5 +75,71 @@ public sealed class RuleCatalogDescriptorTests
         var jobStructure = descriptors.First(d => d.Id == "job-structure");
 
         await Assert.That(jobStructure.SupportsWorkflow).IsTrue();
+    }
+
+    [Test]
+    public async Task GetAllRuleDescriptors_EachHasDefaultSeverity()
+    {
+        var descriptors = RuleCatalog.GetAllRuleDescriptors();
+        var validSeverities = new[] { "error", "warning", "mixed" };
+
+        foreach (var d in descriptors)
+        {
+            await Assert.That(validSeverities).Contains(d.DefaultSeverity);
+        }
+    }
+
+    [Test]
+    public async Task GetAllRuleDescriptors_JobStructureDefaultSeverityIsError()
+    {
+        var descriptors = RuleCatalog.GetAllRuleDescriptors();
+        var jobStructure = descriptors.First(d => d.Id == "job-structure");
+
+        await Assert.That(jobStructure.DefaultSeverity).IsEqualTo("error");
+    }
+
+    [Test]
+    public async Task GetAllRuleDescriptors_UnpinnedUsesDefaultSeverityIsMixed()
+    {
+        var descriptors = RuleCatalog.GetAllRuleDescriptors();
+        var unpinnedUses = descriptors.First(d => d.Id == "unpinned-uses");
+
+        await Assert.That(unpinnedUses.DefaultSeverity).IsEqualTo("mixed");
+    }
+
+    [Test]
+    public async Task GetAllRuleDescriptors_PopularActionInputsDefaultSeverityIsWarning()
+    {
+        var descriptors = RuleCatalog.GetAllRuleDescriptors();
+        var popularActionInputs = descriptors.First(d => d.Id == "popular-action-inputs");
+
+        await Assert.That(popularActionInputs.DefaultSeverity).IsEqualTo("warning");
+    }
+
+    [Test]
+    public async Task GetAllRuleDescriptors_TemplateInjectionSupportsAutoFix()
+    {
+        var descriptors = RuleCatalog.GetAllRuleDescriptors();
+        var templateInjection = descriptors.First(d => d.Id == "template-injection");
+
+        await Assert.That(templateInjection.SupportsAutoFix).IsTrue();
+    }
+
+    [Test]
+    public async Task GetAllRuleDescriptors_JobStructureDoesNotSupportAutoFix()
+    {
+        var descriptors = RuleCatalog.GetAllRuleDescriptors();
+        var jobStructure = descriptors.First(d => d.Id == "job-structure");
+
+        await Assert.That(jobStructure.SupportsAutoFix).IsFalse();
+    }
+
+    [Test]
+    public async Task GetAllRuleDescriptors_UnpinnedUsesSupportsAutoFix()
+    {
+        var descriptors = RuleCatalog.GetAllRuleDescriptors();
+        var unpinnedUses = descriptors.First(d => d.Id == "unpinned-uses");
+
+        await Assert.That(unpinnedUses.SupportsAutoFix).IsTrue();
     }
 }

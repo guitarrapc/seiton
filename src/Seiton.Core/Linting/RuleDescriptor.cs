@@ -8,6 +8,7 @@ public readonly record struct RuleDescriptor(
     string Name,
     bool IsOptIn,
     bool IsOnline,
-    bool IsNonDisableable,
     bool SupportsWorkflow,
-    bool SupportsAction);
+    bool SupportsAction,
+    string DefaultSeverity,
+    bool SupportsAutoFix);

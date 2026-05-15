@@ -12519,7 +12519,7 @@ public sealed class RuleInterfaceTests
     }
 
     [Test]
-    public async Task LintEngine_NonDisableableRule_InRuleOptions_ReportsConfigurationErrorAndKeepsRuleEnabled()
+    public async Task LintEngine_DenyWriteAll_CanBeDisabledByConfig()
     {
         var yaml = """
         on: push
@@ -12539,15 +12539,13 @@ public sealed class RuleInterfaceTests
             },
         };
 
-        using var result = new LintEngine().Check(Encoding.UTF8.GetBytes(yaml), "failsafe-rule-options.yml", config);
-        var configError = result.Diagnostics.FirstOrDefault(x => x.RuleId is null && x.Message.Contains("non-disableable", StringComparison.Ordinal));
+        using var result = new LintEngine().Check(Encoding.UTF8.GetBytes(yaml), "disableable-rule-options.yml", config);
 
-        await Assert.That(configError.Message.Length).IsGreaterThan(0);
-        await Assert.That(result.Diagnostics.Any(x => x.RuleId == "deny-write-all")).IsTrue();
+        await Assert.That(result.Diagnostics.Any(x => x.RuleId == "deny-write-all")).IsFalse();
     }
 
     [Test]
-    public async Task LintEngine_MinimumSeverity_InRuleOptions_ReportsConfigurationErrorAndKeepsEffectiveSeverity()
+    public async Task LintEngine_DenyWriteAll_SeverityOverride_AppliesConfiguredSeverity()
     {
         var yaml = """
         on: push
@@ -12567,17 +12565,17 @@ public sealed class RuleInterfaceTests
             },
         };
 
-        using var result = new LintEngine().Check(Encoding.UTF8.GetBytes(yaml), "failsafe-min-severity.yml", config);
-        var configError = result.Diagnostics.FirstOrDefault(x => x.RuleId is null && x.Message.Contains("minimum severity", StringComparison.Ordinal));
+        using var result = new LintEngine().Check(Encoding.UTF8.GetBytes(yaml), "severity-override.yml", config);
+        var configDiagnostics = result.Diagnostics.Where(x => x.RuleId is null).ToArray();
         var ruleDiagnostic = result.Diagnostics.FirstOrDefault(x => x.RuleId == "deny-write-all");
 
-        await Assert.That(configError.Message.Length).IsGreaterThan(0);
+        await Assert.That(configDiagnostics).IsEmpty();
         await Assert.That(ruleDiagnostic.Message.Length).IsGreaterThan(0);
-        await Assert.That(ruleDiagnostic.Severity).IsEqualTo(DiagnosticSeverity.Error);
+        await Assert.That(ruleDiagnostic.Severity).IsEqualTo(DiagnosticSeverity.Warning);
     }
 
     [Test]
-    public async Task LintEngine_NonDisableableRule_DenyReadAll_InRuleOptions_ReportsConfigurationErrorAndKeepsRuleEnabled()
+    public async Task LintEngine_DenyReadAll_CanBeDisabledByConfig()
     {
         var yaml = """
         on: push
@@ -12597,15 +12595,13 @@ public sealed class RuleInterfaceTests
             },
         };
 
-        using var result = new LintEngine().Check(Encoding.UTF8.GetBytes(yaml), "failsafe-rule-options-deny-read-all.yml", config);
-        var configError = result.Diagnostics.FirstOrDefault(x => x.RuleId is null && x.Message.Contains("non-disableable", StringComparison.Ordinal));
+        using var result = new LintEngine().Check(Encoding.UTF8.GetBytes(yaml), "disableable-rule-options-deny-read-all.yml", config);
 
-        await Assert.That(configError.Message.Length).IsGreaterThan(0);
-        await Assert.That(result.Diagnostics.Any(x => x.RuleId == "deny-read-all")).IsTrue();
+        await Assert.That(result.Diagnostics.Any(x => x.RuleId == "deny-read-all")).IsFalse();
     }
 
     [Test]
-    public async Task LintEngine_MinimumSeverity_DenyReadAll_InRuleOptions_ReportsConfigurationErrorAndKeepsEffectiveSeverity()
+    public async Task LintEngine_DenyReadAll_SeverityOverride_AppliesConfiguredSeverity()
     {
         var yaml = """
         on: push
@@ -12625,17 +12621,17 @@ public sealed class RuleInterfaceTests
             },
         };
 
-        using var result = new LintEngine().Check(Encoding.UTF8.GetBytes(yaml), "failsafe-min-severity-deny-read-all.yml", config);
-        var configError = result.Diagnostics.FirstOrDefault(x => x.RuleId is null && x.Message.Contains("minimum severity", StringComparison.Ordinal));
+        using var result = new LintEngine().Check(Encoding.UTF8.GetBytes(yaml), "severity-override-deny-read-all.yml", config);
+        var configDiagnostics = result.Diagnostics.Where(x => x.RuleId is null).ToArray();
         var ruleDiagnostic = result.Diagnostics.FirstOrDefault(x => x.RuleId == "deny-read-all");
 
-        await Assert.That(configError.Message.Length).IsGreaterThan(0);
+        await Assert.That(configDiagnostics).IsEmpty();
         await Assert.That(ruleDiagnostic.Message.Length).IsGreaterThan(0);
-        await Assert.That(ruleDiagnostic.Severity).IsEqualTo(DiagnosticSeverity.Error);
+        await Assert.That(ruleDiagnostic.Severity).IsEqualTo(DiagnosticSeverity.Warning);
     }
 
     [Test]
-    public async Task LintEngine_NonDisableableRule_InlineSuppression_ReportsConfigurationErrorAndDoesNotSuppress()
+    public async Task LintEngine_DenyWriteAll_InlineSuppression_SuppressesDiagnostic()
     {
         var yaml = """
         on: push
@@ -12648,15 +12644,13 @@ public sealed class RuleInterfaceTests
                     - run: echo hello
         """;
 
-        using var result = new LintEngine().Check(Encoding.UTF8.GetBytes(yaml), "failsafe-inline.yml");
-        var configError = result.Diagnostics.FirstOrDefault(x => x.RuleId is null && x.Message.Contains("non-disableable", StringComparison.Ordinal));
+        using var result = new LintEngine().Check(Encoding.UTF8.GetBytes(yaml), "disableable-inline.yml");
 
-        await Assert.That(configError.Message.Length).IsGreaterThan(0);
-        await Assert.That(result.Diagnostics.Any(x => x.RuleId == "deny-write-all")).IsTrue();
+        await Assert.That(result.Diagnostics.Any(x => x.RuleId == "deny-write-all")).IsFalse();
     }
 
     [Test]
-    public async Task LintEngine_NonDisableableRule_ConfigExclusion_ReportsConfigurationErrorAndDoesNotSuppress()
+    public async Task LintEngine_DenyWriteAll_ConfigExclusion_SuppressesDiagnostic()
     {
         var yaml = """
         on: push
@@ -12676,12 +12670,9 @@ public sealed class RuleInterfaceTests
             ],
         };
 
-        using var result = new LintEngine().Check(Encoding.UTF8.GetBytes(yaml), "failsafe-exclusion.yml", config);
-        var configError = result.Diagnostics.FirstOrDefault(x => x.RuleId is null && x.Message.Contains("non-disableable", StringComparison.Ordinal));
+        using var result = new LintEngine().Check(Encoding.UTF8.GetBytes(yaml), "disableable-exclusion.yml", config);
 
-        await Assert.That(configError.Message.Length).IsGreaterThan(0);
-        await Assert.That(result.Diagnostics.Any(x => x.RuleId == "deny-write-all")).IsTrue();
-        await Assert.That(result.SuppressionSummary.TotalSuppressed).IsEqualTo(0);
+        await Assert.That(result.Diagnostics.Any(x => x.RuleId == "deny-write-all")).IsFalse();
     }
 
     [Test]

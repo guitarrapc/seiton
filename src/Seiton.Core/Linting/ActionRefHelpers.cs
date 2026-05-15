@@ -531,6 +531,17 @@ internal static class ActionRefHelpers
                         return true;
                     }
 
+                    // When ** is followed by /, also try matching the rest after /
+                    // at the current path position (zero-segment match).
+                    if (pattern[patternIndex] == '/')
+                    {
+                        if (GlobMatchCore(pattern, path, patternIndex + 1, pathIndex, cache))
+                        {
+                            cache[(patternIndex, pathIndex)] = true;
+                            return true;
+                        }
+                    }
+
                     for (var cursor = pathIndex; cursor <= pathLength; cursor++)
                     {
                         if (GlobMatchCore(pattern, path, patternIndex, cursor, cache))

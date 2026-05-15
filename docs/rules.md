@@ -8,64 +8,71 @@ Default rules are enabled with no configuration required.
 
 ```shell
 $ seiton rules
-Rule                                     Enabled   Type     Document   Reason
-------------------------------------------------------------------------------------------
-job-structure                            yes       local    both       default
-reusable-workflow                        yes       local    both       default
-permissions                              yes       local    both       default
-popular-action-inputs                    yes       local    both       default
-unpinned-uses                            yes       local    both       default
-unpinned-image                           yes       local    both       default
-dangerous-triggers                       yes       local    both       default
-job-permissions-required                 yes       local    both       default
-needs-graph                              yes       local    both       default
-shell-name                               yes       local    both       default
-runner-label                             yes       local    both       default
-id-naming                                yes       local    both       default
-glob-pattern                             yes       local    both       default
-dispatch-inputs                          yes       local    both       default
-schedule-event                           yes       local    both       default
-deny-write-all                           yes       local    both       non-disableable
-credentials                              yes       local    both       default
-template-injection                       yes       local    both       default
-expr-undefined-var                       yes       local    both       default
-run-env-context-direct-use               yes       local    both       default
-runner-no-latest                         yes       local    both       default
-run-secrets-context-direct-use           yes       local    both       default
-run-inputs-context-direct-use            yes       local    both       default
-secrets-whole-context-access             yes       local    both       default
-checkout-persist-credentials             yes       local    both       default
-deny-read-all                            yes       local    both       non-disableable
-deny-inherit-secrets                     yes       local    both       default
-job-timeout-minutes-required             yes       local    both       default
-github-app-token-inputs                  yes       local    both       default
-cache-poisoning                          yes       local    both       default
-self-hosted-runner                       yes       local    both       default
-unredacted-secrets                       yes       local    both       default
-secrets-outside-env                      yes       local    both       default
-workflow-secrets                         yes       local    both       default
-job-secrets                              yes       local    both       default
-action-shell-is-required                 yes       local    action     default
-matrix                                   yes       local    both       default
-env-var                                  yes       local    both       default
-deprecated-commands                      yes       local    both       default
-if-cond                                  yes       local    both       default
-fake-ternary                             yes       local    both       default
-archived-uses                            yes       local    both       default
-insecure-commands                        yes       local    both       default
-overprovisioned-secrets                  yes       local    both       default
-forbidden-uses                           yes       local    both       default
-ref-version-mismatch                     yes       local    both       default
-use-trusted-publishing                   yes       local    both       default
-local-action-inputs                      yes       local    workflow   default
-workflow-call-input-default              yes       local    both       default
-outdated-action-runner                   yes       local    both       default
-if-expr-wrapper                          yes       local    both       default
-concurrency-limits                       no        local    workflow   opt-in (not configured)
-known-vulnerable-actions                 no        online   workflow   opt-in (not configured)
-impostor-commit                          no        online   workflow   opt-in (not configured)
-ref-confusion                            no        online   workflow   opt-in (not configured)
-stale-action-refs                        no        online   workflow   opt-in (not configured)
+Rule                                     Enabled   Type     Severity   Fix   Document   Reason
+---------------------------------------------------------------------------------------------------------
+job-structure                            yes       local    error      no    both       default
+reusable-workflow                        yes       local    error      no    both       default
+permissions                              yes       local    mixed      no    both       default
+popular-action-inputs                    yes       local    warning    yes   both       default
+unpinned-uses                            yes       local    mixed      yes   both       default
+unpinned-image                           yes       local    warning    yes   both       default
+dangerous-triggers                       yes       local    warning    no    both       default
+job-permissions-required                 yes       local    warning    yes   both       default
+needs-graph                              yes       local    error      no    both       default
+shell-name                               yes       local    mixed      no    both       default
+runner-label                             yes       local    mixed      no    both       default
+id-naming                                yes       local    error      yes   both       default
+glob-pattern                             yes       local    error      no    both       default
+dispatch-inputs                          yes       local    error      no    both       default
+schedule-event                           yes       local    error      no    both       default
+deny-write-all                           yes       local    error      yes   both       default
+credentials                              yes       local    mixed      no    both       default
+template-injection                       yes       local    error      yes   both       default
+expr-undefined-var                       yes       local    error      no    both       default
+run-env-context-direct-use               yes       local    error      yes   both       default
+runner-no-latest                         yes       local    warning    no    both       default
+run-secrets-context-direct-use           yes       local    error      yes   both       default
+run-inputs-context-direct-use            yes       local    error      yes   both       default
+secrets-whole-context-access             yes       local    error      no    both       default
+checkout-persist-credentials             yes       local    warning    yes   both       default
+deny-read-all                            yes       local    error      yes   both       default
+deny-inherit-secrets                     yes       local    error      no    both       default
+job-timeout-minutes-required             yes       local    error      yes   both       default
+github-app-token-inputs                  yes       local    error      no    both       default
+cache-poisoning                          yes       local    warning    no    both       default
+self-hosted-runner                       yes       local    warning    no    both       default
+unredacted-secrets                       yes       local    warning    no    both       default
+secrets-outside-env                      yes       local    warning    no    both       default
+workflow-secrets                         yes       local    error      no    both       default
+job-secrets                              yes       local    error      no    both       default
+action-shell-is-required                 yes       local    error      no    action     default
+matrix                                   yes       local    warning    no    both       default
+env-var                                  yes       local    warning    no    both       default
+deprecated-commands                      yes       local    warning    no    both       default
+if-cond                                  yes       local    warning    no    both       default
+fake-ternary                             yes       local    warning    no    both       default
+archived-uses                            yes       local    warning    no    both       default
+insecure-commands                        yes       local    warning    no    both       default
+overprovisioned-secrets                  yes       local    warning    no    both       default
+forbidden-uses                           yes       local    warning    no    both       default
+ref-version-mismatch                     yes       local    warning    no    both       default
+use-trusted-publishing                   yes       local    warning    no    both       default
+local-action-inputs                      yes       local    mixed      no    workflow   default
+workflow-call-input-default              yes       local    error      no    both       default
+outdated-action-runner                   yes       local    error      no    both       default
+if-expr-wrapper                          yes       local    warning    yes   both       default
+concurrency-limits                       no        local    warning    no    workflow   opt-in (not configured)
+known-vulnerable-actions                 no        online   error      no    workflow   opt-in (not configured)
+impostor-commit                          no        online   error      no    workflow   opt-in (not configured)
+ref-confusion                            no        online   error      no    workflow   opt-in (not configured)
+stale-action-refs                        no        online   warning    no    workflow   opt-in (not configured)
+
+To enable an opt-in rule, add to .github/seiton.yaml:
+  rules:
+    <rule-id>:
+      enabled: true
+
+Online rules use the GitHub API. Set GITHUB_TOKEN (or SEITON_GITHUB_TOKEN) to avoid rate limits.
 ```
 
 **Legend:**
@@ -1296,7 +1303,7 @@ jobs:
 |---|---|---|
 | ✓ | — | ✓ |
 
-Errors when workflow or job permissions are set to `write-all`. This rule cannot be disabled.
+Errors when workflow or job permissions are set to `write-all`.
 
 **Example trigger:**
 

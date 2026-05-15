@@ -144,7 +144,7 @@ Seiton includes **50+ rules** across four categories. Each rule has a dedicated 
 
 | Rule | Default | Auto-fix | Description |
 |---|---|---|---|
-| [deny-write-all](docs/rules.md#deny-write-all) | ✓ | ✓ | `write-all` permissions (cannot be disabled) |
+| [deny-write-all](docs/rules.md#deny-write-all) | ✓ | ✓ | `write-all` permissions |
 | [deny-read-all](docs/rules.md#deny-read-all) | ✓ | ✓ | `read-all` permissions |
 | [job-permissions-required](docs/rules.md#job-permissions-required) | ✓ | ✓ | Missing job-level permissions |
 | [credentials](docs/rules.md#credentials) | ✓ | ✗ | Missing container registry credentials |

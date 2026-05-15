@@ -243,7 +243,7 @@ Go runtime behavior must align with `Seiton_Linter_spec.md` §4.4 for the defaul
 | `runner-no-latest` | Warn when moving GitHub-hosted labels (`ubuntu-latest`, `windows-latest`, `macos-latest`) are used in `runs-on`; prefer explicit version-pinned labels. |
 | `id-naming` | Error when `job.id` or `step.id` contains characters outside allowed identifier set. |
 | `glob-pattern` | Error on invalid event filter configuration, including invalid glob syntax (triple-star, unclosed bracket, reversed range, `*+` sequences), ref-name forbidden characters (`^`, `~`, `:`, space), single-dot and double-dot path segments, unsupported event options/types, and incompatible filter combinations (`branches` vs `branches-ignore`, `tags` vs `tags-ignore`, `paths` vs `paths-ignore`). |
-| `deny-write-all` | Error when workflow/job permissions use `write-all`; this rule is fail-safe constrained by `Seiton_Linter_spec.md` §5.7. |
+| `deny-write-all` | Error when workflow/job permissions use `write-all`. |
 | `credentials` | Warn when custom/private registry images in `job.container` or `job.services.*` are used without credentials, except registries treated as public by built-in plus additive config set. Error when `credentials.password` is a hardcoded literal instead of an expression (`${{ ... }}`). |
 | `template-injection` | Error when untrusted `github.event`-origin data is directly interpolated into `run` script sinks or `actions/github-script` `script` input in unsafe ways. `env:` declarations are treated as indirection and are not reported by this rule. |
 | `expr-undefined-var` | Error when expressions reference context roots unavailable in the current scope (for example job scope vs step scope context mismatch). Validates `step.run`, `step.if`, `step.env`, and `step.with` expressions. For `matrix` context, builds strict per-job types from matrix row definitions (including nested object property inference) and flags undefined axis keys. For `steps` context, builds strict per-job types from step IDs and validates forward references. For `needs` context, validates that referenced job IDs are declared in the job's `needs` list. For popular actions with known outputs, builds strict step output types and flags unknown output names. |
@@ -313,7 +313,7 @@ Go implementation must provide:
 - config-based exclusion matching
 - inline next-line directive handling
 - unknown rule-id as configuration error
-- fail-safe checks (non-disableable, minimum severity)
+- severity override application
 - suppression observability in lint result output
 
 ### 4.1 Rule-Specific Configuration Mapping

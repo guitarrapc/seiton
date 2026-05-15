@@ -215,8 +215,6 @@ rules:
     enabled: true
 ```
 
-> **Note:** Some rules cannot be disabled. Attempting to disable `deny-write-all` is a configuration error. See the [Rules](rules.md) page for each rule's constraints.
-
 ### Overriding Severity
 
 Override a rule's severity level with `severity`. Valid values: `error`, `warning`, `info`.
@@ -226,8 +224,6 @@ rules:
   checkout-persist-credentials:
     severity: warning
 ```
-
-> **Note:** Some rules enforce a minimum severity. Attempting to lower severity below the minimum is a configuration error.
 
 ### Rule-Specific Options
 

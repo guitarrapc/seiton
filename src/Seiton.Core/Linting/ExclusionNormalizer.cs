@@ -9,7 +9,7 @@ namespace Seiton.Core.Linting;
 internal static class ExclusionNormalizer
 {
     /// <summary>
-    /// Resolves and validates each rule ID in <paramref name="ruleIds"/>, adding normalized IDs to <paramref name="normalizedRuleIds"/> and emitting diagnostics for unknown or non-disableable rules.
+    /// Resolves and validates each rule ID in <paramref name="ruleIds"/>, adding normalized IDs to <paramref name="normalizedRuleIds"/> and emitting diagnostics for unknown rules.
     /// </summary>
     public static void CollectResolvedExclusionRules(
         IReadOnlyList<string> ruleIds,
@@ -22,16 +22,6 @@ internal static class ExclusionNormalizer
             var ruleId = ruleIds[j];
             if (RuleCatalog.TryResolveRuleId(ruleId, out var resolvedRuleId))
             {
-                if (RuleCatalog.IsNonDisableable(resolvedRuleId))
-                {
-                    diagnostics.Add(new Diagnostic(
-                        DiagnosticSeverity.Error,
-                        $"rule '{resolvedRuleId.ToId()}' is non-disableable",
-                        new TextRange(0, ruleId.Length, 1, 1, 1, 1 + ruleId.Length),
-                        FilePath: filePath));
-                    continue;
-                }
-
                 normalizedRuleIds.Add(resolvedRuleId.ToId());
                 continue;
             }

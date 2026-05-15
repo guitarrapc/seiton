@@ -5,8 +5,9 @@ using Seiton.Core.Parsing;
 namespace Seiton.Core.Linting;
 
 /// <summary>
-/// Central registry of all lint rules: factory methods, priorities, policy flags (non-disableable, opt-in),
-/// minimum severities, and allowed per-rule configuration keys.
+/// Central registry of all lint rules: factory methods, priorities, policy flags (opt-in),
+/// static rule metadata (default severity, auto-fix support) used to populate <see cref="RuleDescriptor"/>,
+/// and allowed per-rule configuration keys.
 /// </summary>
 internal static class RuleCatalog
 {
@@ -89,10 +90,6 @@ internal static class RuleCatalog
 
     private static readonly (RuleId Id, int Priority)[] AllRuleMetadata = BuildAllRuleMetadata();
 
-    private static readonly IReadOnlySet<RuleId> NonDisableableRuleIds = BuildNonDisableableRuleIdSet();
-
-    private static readonly IReadOnlyDictionary<RuleId, DiagnosticSeverity> MinimumSeverities = BuildMinimumSeverityMap();
-
     private static readonly IReadOnlyDictionary<RuleId, RuleKeyFlags> AllowedRuleConfigKeys = BuildAllowedRuleConfigKeys();
 
     private static readonly FrozenDictionary<string, int> PriorityByRuleIdString = BuildPriorityLookup();
@@ -139,9 +136,10 @@ internal static class RuleCatalog
                 rule.Name,
                 entry.OptIn,
                 IsOnline: false,
-                NonDisableableRuleIds.Contains(entry.Id),
                 rule.SupportsDocumentKind(Parsing.DocumentKind.Workflow),
-                rule.SupportsDocumentKind(Parsing.DocumentKind.ActionMetadata));
+                rule.SupportsDocumentKind(Parsing.DocumentKind.ActionMetadata),
+                GetDefaultSeverity(entry.Id),
+                GetSupportsAutoFix(entry.Id));
         }
 
         for (var i = 0; i < OnlineRuleFactories.Length; i++)
@@ -153,13 +151,96 @@ internal static class RuleCatalog
                 rule.Name,
                 IsOptIn: true,
                 IsOnline: true,
-                NonDisableableRuleIds.Contains(entry.Id),
                 rule.SupportsDocumentKind(Parsing.DocumentKind.Workflow),
-                rule.SupportsDocumentKind(Parsing.DocumentKind.ActionMetadata));
+                rule.SupportsDocumentKind(Parsing.DocumentKind.ActionMetadata),
+                GetDefaultSeverity(entry.Id),
+                GetSupportsAutoFix(entry.Id));
         }
 
         return descriptors;
     }
+
+    /// <summary>Returns the normative default severity for a rule: "error", "warning", or "mixed".</summary>
+    private static string GetDefaultSeverity(RuleId ruleId) => ruleId switch
+    {
+        RuleId.JobStructure => "error",
+        RuleId.ReusableWorkflow => "error",
+        RuleId.Permissions => "mixed",
+        RuleId.PopularActionInputs => "warning",
+        RuleId.UnpinnedUses => "mixed",
+        RuleId.UnpinnedImage => "warning",
+        RuleId.DangerousTriggers => "warning",
+        RuleId.JobPermissionsRequired => "warning",
+        RuleId.NeedsGraph => "error",
+        RuleId.ShellName => "mixed",
+        RuleId.RunnerLabel => "mixed",
+        RuleId.IdNaming => "error",
+        RuleId.GlobPattern => "error",
+        RuleId.DispatchInputs => "error",
+        RuleId.ScheduleEvent => "error",
+        RuleId.DenyWriteAll => "error",
+        RuleId.Credentials => "mixed",
+        RuleId.TemplateInjection => "error",
+        RuleId.ExprUndefinedVar => "error",
+        RuleId.RunEnvContextDirectUse => "error",
+        RuleId.RunnerNoLatest => "warning",
+        RuleId.RunSecretsContextDirectUse => "error",
+        RuleId.RunInputsContextDirectUse => "error",
+        RuleId.SecretsWholeContextAccess => "error",
+        RuleId.CheckoutPersistCredentials => "warning",
+        RuleId.DenyReadAll => "error",
+        RuleId.DenyInheritSecrets => "error",
+        RuleId.JobTimeoutMinutesRequired => "error",
+        RuleId.GitHubAppTokenInputs => "error",
+        RuleId.KnownVulnerableActions => "error",
+        RuleId.ImpostorCommit => "error",
+        RuleId.RefConfusion => "error",
+        RuleId.StaleActionRefs => "warning",
+        RuleId.CachePoisoning => "warning",
+        RuleId.SelfHostedRunner => "warning",
+        RuleId.UnredactedSecrets => "warning",
+        RuleId.SecretsOutsideEnv => "warning",
+        RuleId.WorkflowSecrets => "error",
+        RuleId.JobSecrets => "error",
+        RuleId.ActionShellIsRequired => "error",
+        RuleId.Matrix => "warning",
+        RuleId.EnvVar => "warning",
+        RuleId.DeprecatedCommands => "warning",
+        RuleId.IfCond => "warning",
+        RuleId.FakeTernary => "warning",
+        RuleId.ArchivedUses => "warning",
+        RuleId.InsecureCommands => "warning",
+        RuleId.OverprovisionedSecrets => "warning",
+        RuleId.ForbiddenUses => "warning",
+        RuleId.RefVersionMismatch => "warning",
+        RuleId.UseTrustedPublishing => "warning",
+        RuleId.LocalActionInputs => "mixed",
+        RuleId.WorkflowCallInputDefault => "error",
+        RuleId.OutdatedActionRunner => "error",
+        RuleId.IfExprWrapper => "warning",
+        RuleId.ConcurrencyLimits => "warning",
+        _ => throw new ArgumentOutOfRangeException(nameof(ruleId), ruleId, "No default severity defined for this rule."),
+    };
+
+    /// <summary>Returns whether the rule can produce auto-fix suggestions.</summary>
+    private static bool GetSupportsAutoFix(RuleId ruleId) => ruleId switch
+    {
+        RuleId.TemplateInjection => true,
+        RuleId.UnpinnedUses => true,
+        RuleId.UnpinnedImage => true,
+        RuleId.CheckoutPersistCredentials => true,
+        RuleId.DenyWriteAll => true,
+        RuleId.DenyReadAll => true,
+        RuleId.IdNaming => true,
+        RuleId.PopularActionInputs => true,
+        RuleId.RunEnvContextDirectUse => true,
+        RuleId.RunSecretsContextDirectUse => true,
+        RuleId.RunInputsContextDirectUse => true,
+        RuleId.JobPermissionsRequired => true,
+        RuleId.JobTimeoutMinutesRequired => true,
+        RuleId.IfExprWrapper => true,
+        _ => false,
+    };
 
     /// <summary>Returns whether the specified rule is opt-in only (disabled by default).</summary>
     public static bool IsOptIn(string? ruleId)
@@ -219,18 +300,6 @@ internal static class RuleCatalog
         }
 
         return bestDistance <= 4 ? bestCandidate : null;
-    }
-
-    /// <summary>Returns whether the specified rule cannot be disabled by user configuration.</summary>
-    public static bool IsNonDisableable(RuleId ruleId)
-    {
-        return NonDisableableRuleIds.Contains(ruleId);
-    }
-
-    /// <summary>Gets the minimum severity enforced for the specified rule, if any.</summary>
-    public static bool TryGetMinimumSeverity(RuleId ruleId, out DiagnosticSeverity minimumSeverity)
-    {
-        return MinimumSeverities.TryGetValue(ruleId, out minimumSeverity);
     }
 
     /// <summary>Gets the set of allowed rule-specific configuration keys for the specified rule.</summary>
@@ -297,24 +366,6 @@ internal static class RuleCatalog
         }
 
         return dict.ToFrozenDictionary(dict.Comparer);
-    }
-
-    private static IReadOnlySet<RuleId> BuildNonDisableableRuleIdSet()
-    {
-        return new HashSet<RuleId>
-        {
-            RuleId.DenyWriteAll,
-            RuleId.DenyReadAll,
-        };
-    }
-
-    private static IReadOnlyDictionary<RuleId, DiagnosticSeverity> BuildMinimumSeverityMap()
-    {
-        return new Dictionary<RuleId, DiagnosticSeverity>
-        {
-            [RuleId.DenyWriteAll] = DiagnosticSeverity.Error,
-            [RuleId.DenyReadAll] = DiagnosticSeverity.Error,
-        };
     }
 
     private static IReadOnlyDictionary<RuleId, RuleKeyFlags> BuildAllowedRuleConfigKeys()

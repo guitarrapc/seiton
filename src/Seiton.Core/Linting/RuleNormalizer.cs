@@ -17,7 +17,7 @@ internal static class RuleNormalizer
     }
 
     /// <summary>
-    /// Resolves rule IDs, enforces non-disableable and minimum-severity policy, and runs <see cref="RuleConfigNormalizer"/>.
+    /// Resolves rule IDs and runs <see cref="RuleConfigNormalizer"/>.
     /// </summary>
     public static void NormalizeRuleEntries(
         IReadOnlyDictionary<string, RuleConfig> rules,
@@ -39,27 +39,6 @@ internal static class RuleNormalizer
 
             var config = pair.Value;
             var resolvedRuleIdString = resolvedRuleId.ToId();
-            if (!config.Enabled && RuleCatalog.IsNonDisableable(resolvedRuleId))
-            {
-                diagnostics.Add(new Diagnostic(
-                    DiagnosticSeverity.Error,
-                    $"rule '{resolvedRuleIdString}' is non-disableable",
-                    new TextRange(0, pair.Key.Length, 1, 1, 1, 1 + pair.Key.Length),
-                    FilePath: filePath));
-                config = config with { Enabled = true };
-            }
-
-            if (config.Severity is not null
-                && RuleCatalog.TryGetMinimumSeverity(resolvedRuleId, out var minimumSeverity)
-                && config.Severity.Value < minimumSeverity)
-            {
-                diagnostics.Add(new Diagnostic(
-                    DiagnosticSeverity.Error,
-                    $"rule '{resolvedRuleIdString}' minimum severity is '{minimumSeverity}', but '{config.Severity.Value}' was specified",
-                    new TextRange(0, pair.Key.Length, 1, 1, 1, 1 + pair.Key.Length),
-                    FilePath: filePath));
-                config = config with { Severity = null };
-            }
 
             config = RuleConfigNormalizer.Normalize(config, filePath, diagnostics);
             destination[resolvedRuleIdString] = config;

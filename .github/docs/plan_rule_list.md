@@ -15,8 +15,6 @@
 | Rule ID (kebab-case) | `RuleIdExtensions.ToId()` | public |
 | Rule Name (human-readable) | 各 Rule クラスの `Name` プロパティ | internal (IRule は public だが Factory は internal) |
 | Opt-in フラグ | `RuleCatalog.IsOptIn()` | internal |
-| Non-disableable フラグ | `RuleCatalog.IsNonDisableable()` | internal |
-| Minimum severity | `RuleCatalog.TryGetMinimumSeverity()` | internal |
 | Allowed config keys | `RuleCatalog.TryGetAllowedConfigKeys()` | internal |
 | Priority (execution order) | `RuleCatalog.GetPriority()` | internal |
 | Online vs Local | `OnlineRuleFactories` vs `DefaultRuleFactories` | internal |
@@ -34,8 +32,7 @@
 1. **Default-on ルール**: config で `enabled: false` にしない限り有効
 2. **Opt-in ルール** (`ConcurrencyLimits`): config に `rules.<id>` エントリがないと無効
 3. **Online ルール** (4件): ネットワーク有効 + config で有効化が必要
-4. **Non-disableable ルール** (`deny-write-all`, `deny-read-all`): config で無効化不可
-5. **Exclusion**: ファイル/ジョブ単位で特定ルールを抑制
+4. **Exclusion**: ファイル/ジョブ単位で特定ルールを抑制
 
 ---
 
@@ -52,9 +49,10 @@ public readonly record struct RuleDescriptor(
     string Name,            // human-readable name
     bool IsOptIn,           // opt-in only (disabled by default)
     bool IsOnline,          // requires network access
-    bool IsNonDisableable,  // cannot be disabled by config
     bool SupportsWorkflow,  // applies to workflow documents
-    bool SupportsAction     // applies to action metadata documents
+    bool SupportsAction,    // applies to action metadata documents
+    string DefaultSeverity, // "error" | "warning" | "mixed"
+    bool SupportsAutoFix    // true if rule can produce DiagnosticFix
 );
 
 // RuleCatalog.cs に追加 (public static method)
@@ -68,7 +66,7 @@ public static IReadOnlyList<RuleDescriptor> GetAllRuleDescriptors();
 public readonly record struct RuleStatus(
     RuleDescriptor Rule,
     bool Enabled,           // 設定反映後の有効/無効
-    string Reason           // "default" | "config" | "opt-in (not configured)" | "non-disableable"
+    string Reason           // "default" | "config" | "opt-in (not configured)"
 );
 
 public static class RuleListResolver
@@ -91,8 +89,8 @@ job-structure                   ✓        local     default
 reusable-workflow               ✓        local     default
 permissions                     ✓        local     default
 ...
-deny-write-all                  ✓        local     non-disableable
-deny-read-all                   ✓        local     non-disableable
+deny-write-all                  ✓        local     default
+deny-read-all                   ✓        local     default
 ...
 concurrency-limits              ✗        local     opt-in (not configured)
 known-vulnerable-actions        ✗        online    opt-in (not configured)
@@ -136,8 +134,8 @@ template-injection              ✗        local     config (disabled)
 
 ```csharp
 private static readonly RuleDescriptor[] AllDescriptors = [
-    new("job-structure", "Job Structure Rule", IsOptIn: false, IsOnline: false, IsNonDisableable: false, SupportsWorkflow: true, SupportsAction: false),
-    new("reusable-workflow", "Reusable Workflow Rule", IsOptIn: false, IsOnline: false, IsNonDisableable: false, SupportsWorkflow: true, SupportsAction: false),
+    new("job-structure", "Job Structure Rule", IsOptIn: false, IsOnline: false, SupportsWorkflow: true, SupportsAction: false, DefaultSeverity: "warning", SupportsAutoFix: false),
+    new("reusable-workflow", "Reusable Workflow Rule", IsOptIn: false, IsOnline: false, SupportsWorkflow: true, SupportsAction: false, DefaultSeverity: "warning", SupportsAutoFix: false),
     // ... 全ルール
 ];
 ```
@@ -171,7 +169,6 @@ public static IReadOnlyList<RuleDescriptor> GetAllRuleDescriptors()
             rule.Name,
             DefaultRuleFactories[i].OptIn,
             IsOnline: false,
-            NonDisableableRuleIds.Contains(DefaultRuleFactories[i].Id),
             rule.SupportsDocumentKind(DocumentKind.Workflow),
             rule.SupportsDocumentKind(DocumentKind.ActionMetadata));
     }
@@ -248,7 +245,7 @@ OPTIONS:
 | enabled | yes / no |
 | type | local / online |
 | document | workflow / action / both |
-| reason | default / config (enabled) / config (disabled) / opt-in (not configured) / non-disableable |
+| reason | default / config (enabled) / config (disabled) / opt-in (not configured) |
 
 ### Exit Code
 
@@ -364,3 +361,52 @@ seiton rules [--config PATH] [--format text|json]
 
 - 全テスト: **1651 passed, 0 failed** (既存1634 + 新規17)
 - ベンチマーク: lint/parse 全サイズで **Allocated 完全一致** (±0%)
+
+---
+
+## Phase 2 拡張: DefaultSeverity / SupportsAutoFix カラム追加
+
+### 背景
+
+`seiton rules` の初期実装ではルールの有効/無効とタイプのみ表示していたが、以下のフィードバックがあった:
+
+1. ルールが fix 可能かどうかが分からない
+2. ルールごとの warning/error の区別が分からない
+
+### 実施内容
+
+`RuleDescriptor` に 2 フィールドを追加:
+
+```csharp
+public readonly record struct RuleDescriptor(
+    string Id,
+    string Name,
+    bool IsOptIn,
+    bool IsOnline,
+    bool SupportsWorkflow,
+    bool SupportsAction,
+    string DefaultSeverity,   // "error" | "warning" | "mixed"
+    bool SupportsAutoFix);    // true if rule can produce DiagnosticFix
+```
+
+`RuleCatalog` に静的メタデータルックアップを追加:
+- `GetDefaultSeverity(RuleId)`: spec §5.7.2 の per-rule severity table に準拠
+- `GetSupportsAutoFix(RuleId)`: 実装から導出 (DiagnosticFix を生成するルール)
+
+CLI `seiton rules` 出力に **Severity** カラムと **Fix** カラムを追加:
+
+```
+Rule                                     Enabled   Type     Severity   Fix   Document   Reason
+---------------------------------------------------------------------------------------------------------
+job-structure                            yes       local    error      no    both       default
+template-injection                       yes       local    error      yes   both       default
+unpinned-uses                            yes       local    mixed      yes   both       default
+```
+
+JSON 出力にも `defaultSeverity` と `supportsAutoFix` フィールドを追加。
+
+### テスト結果
+
+- 新規テスト 7 件追加 (`RuleCatalogDescriptorTests`): DefaultSeverity / SupportsAutoFix の検証
+- 全テスト: 実行完了。失敗は既知の無関係な pre-existing failure のみ
+- ベンチマーク: CoreLintBenchmark Allocated に有意な回帰なし

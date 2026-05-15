@@ -267,7 +267,7 @@ The current default rule scope in C# is:
 | `runner-no-latest` | Warn when moving GitHub-hosted labels (`ubuntu-latest`, `windows-latest`, `macos-latest`) are used in `runs-on`; prefer explicit version-pinned labels. |
 | `id-naming` | Error when `job.id` or `step.id` contains characters outside allowed identifier set. |
 | `glob-pattern` | Error on invalid event filter configuration, including invalid glob syntax (triple-star, unclosed bracket, reversed range, `*+` sequences), ref-name forbidden characters (`^`, `~`, `:`, space), single-dot and double-dot path segments, unsupported event options/types, and incompatible filter combinations (`branches` vs `branches-ignore`, `tags` vs `tags-ignore`, `paths` vs `paths-ignore`). |
-| `deny-write-all` | Error when workflow/job permissions use `write-all`; this rule is fail-safe constrained by `Seiton_Linter_spec.md` §5.7. |
+| `deny-write-all` | Error when workflow/job permissions use `write-all`. |
 | `credentials` | Warn when custom/private registry images in `job.container` or `job.services.*` are used without credentials, except registries treated as public by built-in plus additive config set. Error when `credentials.password` is a hardcoded literal instead of an expression (`${{ ... }}`). |
 | `template-injection` | Error when untrusted `github.event`-origin data is directly interpolated into `run` script sinks or `actions/github-script` `script` input in unsafe ways. `env:` declarations are treated as indirection and are not reported by this rule. |
 | `expr-undefined-var` | Error when expressions reference context roots unavailable in the current scope (for example job scope vs step scope context mismatch). Validates `step.run`, `step.if`, `step.env`, and `step.with` expressions. For `matrix` context, builds strict per-job types from matrix row definitions (including nested object property inference, array row detection, and scalar row detection) and flags undefined axis keys. For `steps` context, builds strict per-job types from step IDs and validates forward references. For `needs` context, validates that referenced job IDs are declared in the job's `needs` list. For popular actions with known outputs, builds strict step output types and flags unknown output names. For local actions (`uses: ./...`), resolves `action.yml`/`action.yaml` metadata via `LocalActionOutputResolver` to build strict step output types and flags unknown output property names. For local reusable workflow call jobs (`uses: ./.github/workflows/...` at job level), resolves the called workflow's `on.workflow_call.outputs` via `LocalReusableWorkflowOutputResolver` to build strict needs output types and flags unknown output names. For remote reusable workflow call jobs (`uses: owner/repo/path@ref` at job level), `needs.<job>.outputs.*` is treated as loose (non-strict) because the called workflow's outputs cannot be determined statically without fetching the remote definition. Template type checks (`CheckTemplateType` / `CheckTemplateTypeWithOverrides`) warn when `${{ }}` interpolation evaluates to object (`"[Object]"`), array (`"[Array]"`), or null (empty string); the override-aware variant uses dynamic context types for matrix/inputs/needs/steps so that e.g. `${{ matrix.bar }}` where `bar` is an array axis is correctly flagged. Env mapping type checks (`CheckEnvMappingType`) warn when `env: ${{ expr }}` evaluates to a non-object type (string, number, bool, array, null). Index access type checks (`ValidateIndexAccess` / `ValidateIndexAccessWithOverrides`) error when the index expression type is incompatible with the container type (e.g. boolean index on object, string index on array); the override-aware variant resolves dynamic context types so that e.g. `env[inputs.verbose]` where `verbose` is boolean is correctly flagged. |
@@ -354,9 +354,10 @@ public readonly record struct RuleDescriptor(
     string Name,
     bool IsOptIn,
     bool IsOnline,
-    bool IsNonDisableable,
     bool SupportsWorkflow,
-    bool SupportsAction);
+    bool SupportsAction,
+    string DefaultSeverity,
+    bool SupportsAutoFix);
 
 // Describes a rule's effective enabled state given a configuration.
 public readonly record struct RuleStatus(
@@ -367,8 +368,10 @@ public readonly record struct RuleStatus(
 
 - `RuleCatalog.GetAllRuleDescriptors()` (internal) returns cached `IReadOnlyList<RuleDescriptor>` covering all registered rules (default local + online). Uses `Lazy<RuleDescriptor[]>` for thread-safe one-time initialization. External consumers access rule metadata through the public `RuleListResolver` facade.
 - `RuleListResolver.Resolve(LintConfig?)` (public) computes `IReadOnlyList<RuleStatus>` reflecting the effective enabled/disabled state for each rule under the given configuration.
+- `DefaultSeverity`: `"error"`, `"warning"`, or `"mixed"` (rule emits diagnostics at multiple severity levels depending on the specific condition).
+- `SupportsAutoFix`: `true` when the rule can produce `DiagnosticFix` payloads for at least some of its diagnostics.
 
-Reason values: `"default"`, `"config (enabled)"`, `"config (disabled)"`, `"opt-in (not configured)"`, `"non-disableable"`.
+Reason values: `"default"`, `"config (enabled)"`, `"config (disabled)"`, `"opt-in (not configured)"`.
 
 ---
 
@@ -383,7 +386,7 @@ C# implementation must provide:
 - config-based exclusion matching
 - inline next-line directive handling
 - unknown rule-id as configuration error
-- fail-safe checks (non-disableable, minimum severity)
+- severity override application
 - suppression observability in `LintResult`
 
 ### 4.1 Rule-Specific Configuration Mapping

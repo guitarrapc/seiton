@@ -131,8 +131,10 @@ seiton rules [--config PATH] [--format text|json]
 Resolves configuration (if available) and reports each rule's status:
 - Whether it is enabled or disabled
 - Whether it is local or online
+- The rule's default severity (`error`, `warning`, or `mixed`)
+- Whether the rule supports auto-fix
 - Which document kinds it supports (workflow, action, or both)
-- The reason for its current state (default, config, opt-in, non-disableable)
+- The reason for its current state (default, config, opt-in)
 
 Exit codes:
 - `0`: Success (rule list printed).
