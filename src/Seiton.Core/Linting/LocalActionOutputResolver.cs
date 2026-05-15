@@ -100,6 +100,19 @@ internal sealed class LocalActionOutputResolver
             return null;
         }
 
+        // Guard against path traversal: resolved path must remain under the repository root
+        // (or the base directory when the repository root is unknown).
+        // Uses ../relative are valid within the repo, so check against repo root when available.
+        var traversalBase = _repositoryRoot ?? baseDirectory;
+        var relativeToBase = Path.GetRelativePath(traversalBase, resolvedPath);
+        var isTraversal = string.Equals(relativeToBase, "..", StringComparison.Ordinal)
+            || relativeToBase.StartsWith($"..{Path.DirectorySeparatorChar}", StringComparison.Ordinal)
+            || relativeToBase.StartsWith($"..{Path.AltDirectorySeparatorChar}", StringComparison.Ordinal);
+        if (isTraversal || Path.IsPathRooted(relativeToBase))
+        {
+            return null;
+        }
+
         var actionYamlPath = FindActionYaml(resolvedPath);
         if (actionYamlPath is null)
         {
@@ -116,10 +129,9 @@ internal sealed class LocalActionOutputResolver
             return null;
         }
 
-        var parseHandle = WorkflowParser.Parse(bytes, actionYamlPath);
+        using var parseHandle = WorkflowParser.Parse(bytes, actionYamlPath);
         if (parseHandle.HasFatalError || parseHandle.ActionMetadata is null)
         {
-            parseHandle.Dispose();
             return null;
         }
 
@@ -136,7 +148,6 @@ internal sealed class LocalActionOutputResolver
             names[idx++] = Encoding.UTF8.GetString(kv.Key.AsSpan(bytes));
         }
 
-        parseHandle.Dispose();
         return names;
     }
 
@@ -188,12 +199,6 @@ internal sealed class LocalActionOutputResolver
 
     private static string DecodeAscii(ReadOnlySpan<byte> utf8)
     {
-        var chars = new char[utf8.Length];
-        for (var i = 0; i < utf8.Length; i++)
-        {
-            chars[i] = (char)utf8[i];
-        }
-
-        return new string(chars);
+        return Encoding.ASCII.GetString(utf8);
     }
 }

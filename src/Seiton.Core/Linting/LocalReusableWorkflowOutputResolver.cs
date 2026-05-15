@@ -214,13 +214,7 @@ internal sealed class LocalReusableWorkflowOutputResolver
 
     private static string DecodeAscii(ReadOnlySpan<byte> utf8)
     {
-        var chars = new char[utf8.Length];
-        for (var i = 0; i < utf8.Length; i++)
-        {
-            chars[i] = (char)utf8[i];
-        }
-
-        return new string(chars);
+        return Encoding.ASCII.GetString(utf8);
     }
 
     private static bool EndsWithYmlExtension(ReadOnlySpan<byte> value)

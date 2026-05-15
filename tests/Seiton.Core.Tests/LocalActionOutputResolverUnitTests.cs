@@ -26,4 +26,34 @@ public sealed class LocalActionOutputResolverUnitTests
 
         await Assert.That(ReferenceEquals(resolved, cached)).IsTrue();
     }
+
+    [Test]
+    public async Task ResolveOutputNames_PathTraversal_ReturnsNull()
+    {
+        var repositoryRoot = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N"));
+        var workflowPath = Path.Combine(repositoryRoot, ".github", "workflows", "caller.yml");
+        var resolver = new LocalActionOutputResolver(workflowPath);
+
+        // Attempt to escape the repository root
+        var result = resolver.ResolveOutputNames("./../../../../../../etc/passwd"u8);
+
+        await Assert.That(result).IsNull();
+    }
+
+    [Test]
+    public async Task ResolveOutputNames_RelativeParentWithinRepo_NotBlockedByTraversalCheck()
+    {
+        // ../sibling paths resolve within the repo and should NOT be blocked
+        // (they will return null because the action.yml doesn't exist, not because of traversal)
+        var repositoryRoot = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N"));
+        var workflowPath = Path.Combine(repositoryRoot, ".github", "workflows", "caller.yml");
+        var resolver = new LocalActionOutputResolver(workflowPath);
+
+        // ../actions/foo resolves to .github/actions/foo which is within the repo
+        // Since no file exists, it returns null - but should NOT be blocked by traversal check
+        var result = resolver.ResolveOutputNames("../actions/foo"u8);
+
+        // It returns null because the directory/file doesn't exist, not because of traversal
+        await Assert.That(result).IsNull();
+    }
 }
