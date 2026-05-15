@@ -97,13 +97,13 @@ internal static class RulesCommand
     }
 }
 
-internal sealed class RuleStatusJsonEntry
+internal sealed record RuleStatusJsonEntry
 {
-    public string Id { get; set; } = "";
-    public string Name { get; set; } = "";
-    public bool Enabled { get; set; }
-    public string Type { get; set; } = "";
-    public bool SupportsWorkflow { get; set; }
-    public bool SupportsAction { get; set; }
-    public string Reason { get; set; } = "";
+    public required string Id { get; init; }
+    public required string Name { get; init; }
+    public required bool Enabled { get; init; }
+    public required string Type { get; init; }
+    public required bool SupportsWorkflow { get; init; }
+    public required bool SupportsAction { get; init; }
+    public required string Reason { get; init; }
 }
