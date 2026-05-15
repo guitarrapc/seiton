@@ -97,8 +97,13 @@ public sealed class LocalReusableWorkflowOutputResolverUnitTests
                 Directory.Delete(path, recursive: true);
             }
         }
-        catch
+        catch (IOException ex)
         {
+            TestContext.Progress.WriteLine($"Failed to delete test directory '{path}': {ex}");
+        }
+        catch (UnauthorizedAccessException ex)
+        {
+            TestContext.Progress.WriteLine($"Failed to delete test directory '{path}': {ex}");
         }
     }
 }
