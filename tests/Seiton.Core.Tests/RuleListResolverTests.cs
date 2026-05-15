@@ -1,5 +1,4 @@
 ﻿using Seiton.Core.Linting;
-using Seiton.Core.Parsing;
 
 namespace Seiton.Core.Tests;
 
@@ -107,5 +106,23 @@ public sealed class RuleListResolverTests
         var jobStructure = statuses.First(s => s.Rule.Id == "job-structure");
         await Assert.That(jobStructure.Enabled).IsTrue();
         await Assert.That(jobStructure.Reason).IsEqualTo("default");
+    }
+
+    [Test]
+    public async Task Resolve_ConfigExplicitlyEnablesDefaultRule_ReasonIsDefault()
+    {
+        var config = new LintConfig
+        {
+            Rules = new Dictionary<string, RuleConfig>
+            {
+                ["template-injection"] = new RuleConfig { Enabled = true },
+            }
+        };
+
+        var statuses = RuleListResolver.Resolve(config);
+        var templateInjection = statuses.First(s => s.Rule.Id == "template-injection");
+
+        await Assert.That(templateInjection.Enabled).IsTrue();
+        await Assert.That(templateInjection.Reason).IsEqualTo("default");
     }
 }

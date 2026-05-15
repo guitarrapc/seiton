@@ -26,6 +26,14 @@ internal static class RulesCommand
         {
             var (loaded, diagnostics) = CliConfigBridge.LoadConfig(configPath, enablePinNetwork: false, enableImageNetwork: false);
             lintConfig = loaded;
+
+            if (diagnostics.Length > 0)
+            {
+                foreach (var d in diagnostics)
+                {
+                    Console.Error.WriteLine($"config: {d.Message}");
+                }
+            }
         }
 
         var statuses = RuleListResolver.Resolve(lintConfig);
@@ -91,11 +99,11 @@ internal static class RulesCommand
 
 internal sealed class RuleStatusJsonEntry
 {
-    public required string Id { get; init; }
-    public required string Name { get; init; }
-    public required bool Enabled { get; init; }
-    public required string Type { get; init; }
-    public required bool SupportsWorkflow { get; init; }
-    public required bool SupportsAction { get; init; }
-    public required string Reason { get; init; }
+    public string Id { get; set; } = "";
+    public string Name { get; set; } = "";
+    public bool Enabled { get; set; }
+    public string Type { get; set; } = "";
+    public bool SupportsWorkflow { get; set; }
+    public bool SupportsAction { get; set; }
+    public string Reason { get; set; } = "";
 }

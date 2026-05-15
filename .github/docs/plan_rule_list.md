@@ -349,3 +349,18 @@ seiton rules [--config PATH] [--format text|json]
 | `--enabled-only` / `--disabled-only` フィルタ | 未実装 | 初期リリースではシンプルに全件表示。フィルタは将来追加可能 |
 | ルール数 59 | 実際は 56 (52 default + 4 online) | プラン作成時のカウントミス |
 | `RuleCatalog` を public 化 | internal のまま、`GetAllRuleDescriptors()` のみ public | 最小限の公開範囲を維持 |
+
+### レビュー後の修正
+
+| 指摘 | 対応 |
+|---|---|
+| `GetAllRuleDescriptors()` が毎回全ルールをインスタンス化 | `Lazy<RuleDescriptor[]>` でキャッシュ化。初回呼び出し時のみインスタンス化、以降は O(1) |
+| `RuleStatusJsonEntry` が既存スタイル (`{ get; set; } = ""`) と不一致 | 既存の `JsonDiagnosticEntry` パターンに合わせて修正 |
+| config 読み込み時の diagnostics が握りつぶされていた | stderr に `config: {message}` として出力 |
+| 未使用 `using Seiton.Core.Parsing` がテストファイルに残存 | 削除 |
+| default-on ルールの明示的 `enabled: true` 設定テストが欠落 | `Resolve_ConfigExplicitlyEnablesDefaultRule_ReasonIsDefault` テスト追加 |
+
+### 最終テスト結果
+
+- 全テスト: **1651 passed, 0 failed** (既存1634 + 新規17)
+- ベンチマーク: lint/parse 全サイズで **Allocated 完全一致** (±0%)

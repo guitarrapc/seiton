@@ -121,8 +121,12 @@ internal static class RuleCatalog
         return rules;
     }
 
-    /// <summary>Returns descriptors for all registered rules (default + online).</summary>
-    public static IReadOnlyList<RuleDescriptor> GetAllRuleDescriptors()
+    private static readonly Lazy<RuleDescriptor[]> CachedDescriptors = new(BuildAllRuleDescriptors);
+
+    /// <summary>Returns descriptors for all registered rules (default + online). Result is cached.</summary>
+    public static IReadOnlyList<RuleDescriptor> GetAllRuleDescriptors() => CachedDescriptors.Value;
+
+    private static RuleDescriptor[] BuildAllRuleDescriptors()
     {
         var descriptors = new RuleDescriptor[DefaultRuleFactories.Length + OnlineRuleFactories.Length];
 
