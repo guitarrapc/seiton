@@ -78,6 +78,9 @@ seiton --format json
 
 # Apply auto-fixes
 seiton --fix
+
+# List all available rules and their status
+seiton rules
 ```
 
 ## Documents
@@ -86,94 +89,94 @@ seiton --fix
 |---|---|
 | [Installation](docs/installation.md) | How to install Seiton on Windows, macOS, and Linux. |
 | [Usage](docs/usage.md) | Commands, flags, environment variables, CI integration. |
-| [Checks](docs/checks.md) | Full list of all lint rules with examples and remediation guidance. |
+| [Rules](docs/rules.md) | Full list of all lint rules with examples and remediation guidance. |
 | [Configuration](docs/configuration.md) | Config file format, rule tuning, exclusions, and network options. |
 
-## Checks
+## Rules
 
 Seiton includes **50+ rules** across four categories. Each rule has a dedicated documentation page with examples, rationale, and configuration options.
 
-> See the [full checks list](docs/checks.md) for a summary table. Click any rule name below for detailed documentation.
+> See the [full rules list](docs/rules.md) for a summary table. Click any rule name below for detailed documentation.
 
 ### Correctness
 
 | Rule | Default | Auto-fix | Description |
 |---|---|---|---|
-| [job-structure](docs/checks.md#job-structure) | ✓ | ✗ | `uses` is mutually exclusive with `steps`/`runs-on` |
-| [reusable-workflow](docs/checks.md#reusable-workflow) | ✓ | ✗ | Reusable workflow call semantics |
-| [permissions](docs/checks.md#permissions) | ✓ | ✗ | Invalid permission scope values |
-| [needs-graph](docs/checks.md#needs-graph) | ✓ | ✗ | Unknown dependency targets and cycles |
-| [shell-name](docs/checks.md#shell-name) | ✓ | ✗ | Unsupported shell names |
-| [id-naming](docs/checks.md#id-naming) | ✓ | ✗ | Invalid characters in job/step IDs |
-| [glob-pattern](docs/checks.md#glob-pattern) | ✓ | ✗ | Invalid glob syntax and filter conflicts |
-| [runner-label](docs/checks.md#runner-label) | ✓ | ✗ | Unknown GitHub-hosted runner labels |
-| [runner-no-latest](docs/checks.md#runner-no-latest) | ✓ | ✗ | Moving `*-latest` runner labels |
-| [popular-action-inputs](docs/checks.md#popular-action-inputs) | ✓ | △ | Typos in popular action input names |
-| [outdated-action-runner](docs/checks.md#outdated-action-runner) | ✓ | ✗ | Deprecated action `runs.using` runtimes |
-| [local-action-inputs](docs/checks.md#local-action-inputs) | ✓ | ✗ | Local action metadata contract validation |
-| [action-shell-is-required](docs/checks.md#action-shell-is-required) | ✓ | ✗ | Missing `shell` in composite action `run` steps |
-| [matrix](docs/checks.md#matrix) | ✓ | ✗ | Invalid matrix definitions |
-| [env-var](docs/checks.md#env-var) | ✓ | ✗ | Risky environment variable patterns |
-| [if-cond](docs/checks.md#if-cond) | ✓ | ✗ | Constant or unsound `if` conditions |
-| [fake-ternary](docs/checks.md#fake-ternary) | ✓ | ✗ | `cond && a \|\| b` fake ternary idioms |
-| [concurrency-limits](docs/checks.md#concurrency-limits) | ✗ | ✗ | Missing concurrency settings with `cancel-in-progress` |
-| [deprecated-commands](docs/checks.md#deprecated-commands) | ✓ | ✗ | Deprecated workflow commands |
-| [dispatch-inputs](docs/checks.md#dispatch-inputs) | ✓ | ✗ | Invalid `workflow_dispatch` input definitions |
-| [schedule-event](docs/checks.md#schedule-event) | ✓ | ✗ | Invalid schedule cron/timezone |
-| [workflow-call-input-default](docs/checks.md#workflow-call-input-default) | ✓ | ✗ | Invalid `workflow_call` input defaults |
+| [job-structure](docs/rules.md#job-structure) | ✓ | ✗ | `uses` is mutually exclusive with `steps`/`runs-on` |
+| [reusable-workflow](docs/rules.md#reusable-workflow) | ✓ | ✗ | Reusable workflow call semantics |
+| [permissions](docs/rules.md#permissions) | ✓ | ✗ | Invalid permission scope values |
+| [needs-graph](docs/rules.md#needs-graph) | ✓ | ✗ | Unknown dependency targets and cycles |
+| [shell-name](docs/rules.md#shell-name) | ✓ | ✗ | Unsupported shell names |
+| [id-naming](docs/rules.md#id-naming) | ✓ | ✗ | Invalid characters in job/step IDs |
+| [glob-pattern](docs/rules.md#glob-pattern) | ✓ | ✗ | Invalid glob syntax and filter conflicts |
+| [runner-label](docs/rules.md#runner-label) | ✓ | ✗ | Unknown GitHub-hosted runner labels |
+| [runner-no-latest](docs/rules.md#runner-no-latest) | ✓ | ✗ | Moving `*-latest` runner labels |
+| [popular-action-inputs](docs/rules.md#popular-action-inputs) | ✓ | △ | Typos in popular action input names |
+| [outdated-action-runner](docs/rules.md#outdated-action-runner) | ✓ | ✗ | Deprecated action `runs.using` runtimes |
+| [local-action-inputs](docs/rules.md#local-action-inputs) | ✓ | ✗ | Local action metadata contract validation |
+| [action-shell-is-required](docs/rules.md#action-shell-is-required) | ✓ | ✗ | Missing `shell` in composite action `run` steps |
+| [matrix](docs/rules.md#matrix) | ✓ | ✗ | Invalid matrix definitions |
+| [env-var](docs/rules.md#env-var) | ✓ | ✗ | Risky environment variable patterns |
+| [if-cond](docs/rules.md#if-cond) | ✓ | ✗ | Constant or unsound `if` conditions |
+| [fake-ternary](docs/rules.md#fake-ternary) | ✓ | ✗ | `cond && a \|\| b` fake ternary idioms |
+| [concurrency-limits](docs/rules.md#concurrency-limits) | ✗ | ✗ | Missing concurrency settings with `cancel-in-progress` |
+| [deprecated-commands](docs/rules.md#deprecated-commands) | ✓ | ✗ | Deprecated workflow commands |
+| [dispatch-inputs](docs/rules.md#dispatch-inputs) | ✓ | ✗ | Invalid `workflow_dispatch` input definitions |
+| [schedule-event](docs/rules.md#schedule-event) | ✓ | ✗ | Invalid schedule cron/timezone |
+| [workflow-call-input-default](docs/rules.md#workflow-call-input-default) | ✓ | ✗ | Invalid `workflow_call` input defaults |
 
 ### Security
 
 | Rule | Default | Auto-fix | Description |
 |---|---|---|---|
-| [template-injection](docs/checks.md#template-injection) | ✓ | △ | Untrusted data in `run` scripts |
-| [dangerous-triggers](docs/checks.md#dangerous-triggers) | ✓ | ✗ | High-risk trigger events |
-| [run-env-context-direct-use](docs/checks.md#run-env-context-direct-use) | ✓ | △ | `${{ env.* }}` in `run` scripts |
-| [run-secrets-context-direct-use](docs/checks.md#run-secrets-context-direct-use) | ✓ | △ | `${{ secrets.* }}` in `run` scripts |
-| [run-inputs-context-direct-use](docs/checks.md#run-inputs-context-direct-use) | ✓ | △ | `${{ inputs.* }}` in `run` scripts |
-| [secrets-whole-context-access](docs/checks.md#secrets-whole-context-access) | ✓ | ✗ | `toJson(secrets)` whole-context leaks |
-| [expr-undefined-var](docs/checks.md#expr-undefined-var) | ✓ | ✗ | Out-of-scope context references |
-| [cache-poisoning](docs/checks.md#cache-poisoning) | ✓ | ✗ | Cache usage with untrusted triggers |
-| [self-hosted-runner](docs/checks.md#self-hosted-runner) | ✓ | ✗ | Self-hosted runners with untrusted triggers |
-| [insecure-commands](docs/checks.md#insecure-commands) | ✓ | ✗ | Unsafe command construction |
+| [template-injection](docs/rules.md#template-injection) | ✓ | △ | Untrusted data in `run` scripts |
+| [dangerous-triggers](docs/rules.md#dangerous-triggers) | ✓ | ✗ | High-risk trigger events |
+| [run-env-context-direct-use](docs/rules.md#run-env-context-direct-use) | ✓ | △ | `${{ env.* }}` in `run` scripts |
+| [run-secrets-context-direct-use](docs/rules.md#run-secrets-context-direct-use) | ✓ | △ | `${{ secrets.* }}` in `run` scripts |
+| [run-inputs-context-direct-use](docs/rules.md#run-inputs-context-direct-use) | ✓ | △ | `${{ inputs.* }}` in `run` scripts |
+| [secrets-whole-context-access](docs/rules.md#secrets-whole-context-access) | ✓ | ✗ | `toJson(secrets)` whole-context leaks |
+| [expr-undefined-var](docs/rules.md#expr-undefined-var) | ✓ | ✗ | Out-of-scope context references |
+| [cache-poisoning](docs/rules.md#cache-poisoning) | ✓ | ✗ | Cache usage with untrusted triggers |
+| [self-hosted-runner](docs/rules.md#self-hosted-runner) | ✓ | ✗ | Self-hosted runners with untrusted triggers |
+| [insecure-commands](docs/rules.md#insecure-commands) | ✓ | ✗ | Unsafe command construction |
 
 ### Permissions & Secrets
 
 | Rule | Default | Auto-fix | Description |
 |---|---|---|---|
-| [deny-write-all](docs/checks.md#deny-write-all) | ✓ | ✓ | `write-all` permissions (cannot be disabled) |
-| [deny-read-all](docs/checks.md#deny-read-all) | ✓ | ✓ | `read-all` permissions |
-| [job-permissions-required](docs/checks.md#job-permissions-required) | ✓ | ✓ | Missing job-level permissions |
-| [credentials](docs/checks.md#credentials) | ✓ | ✗ | Missing container registry credentials |
-| [checkout-persist-credentials](docs/checks.md#checkout-persist-credentials) | ✓ | △ | `actions/checkout` persist-credentials |
-| [workflow-secrets](docs/checks.md#workflow-secrets) | ✓ | ✗ | Workflow-level secret assignments |
-| [job-secrets](docs/checks.md#job-secrets) | ✓ | ✗ | Job-level secret assignments |
-| [unredacted-secrets](docs/checks.md#unredacted-secrets) | ✓ | ✗ | Printing secret-derived values |
-| [secrets-outside-env](docs/checks.md#secrets-outside-env) | ✓ | ✗ | Secrets outside `env:` context |
-| [overprovisioned-secrets](docs/checks.md#overprovisioned-secrets) | ✓ | ✗ | Broad-scoped secret mappings |
-| [deny-inherit-secrets](docs/checks.md#deny-inherit-secrets) | ✓ | ✗ | `secrets: inherit` in reusable calls |
+| [deny-write-all](docs/rules.md#deny-write-all) | ✓ | ✓ | `write-all` permissions (cannot be disabled) |
+| [deny-read-all](docs/rules.md#deny-read-all) | ✓ | ✓ | `read-all` permissions |
+| [job-permissions-required](docs/rules.md#job-permissions-required) | ✓ | ✓ | Missing job-level permissions |
+| [credentials](docs/rules.md#credentials) | ✓ | ✗ | Missing container registry credentials |
+| [checkout-persist-credentials](docs/rules.md#checkout-persist-credentials) | ✓ | △ | `actions/checkout` persist-credentials |
+| [workflow-secrets](docs/rules.md#workflow-secrets) | ✓ | ✗ | Workflow-level secret assignments |
+| [job-secrets](docs/rules.md#job-secrets) | ✓ | ✗ | Job-level secret assignments |
+| [unredacted-secrets](docs/rules.md#unredacted-secrets) | ✓ | ✗ | Printing secret-derived values |
+| [secrets-outside-env](docs/rules.md#secrets-outside-env) | ✓ | ✗ | Secrets outside `env:` context |
+| [overprovisioned-secrets](docs/rules.md#overprovisioned-secrets) | ✓ | ✗ | Broad-scoped secret mappings |
+| [deny-inherit-secrets](docs/rules.md#deny-inherit-secrets) | ✓ | ✗ | `secrets: inherit` in reusable calls |
 
 ### Supply Chain
 
 | Rule | Default | Auto-fix | Description |
 |---|---|---|---|
-| [unpinned-uses](docs/checks.md#unpinned-uses) | ✓ | △ | Actions not pinned to commit SHA |
-| [unpinned-image](docs/checks.md#unpinned-image) | ✓ | △ | Images not pinned by digest |
-| [archived-uses](docs/checks.md#archived-uses) | ✓ | ✗ | Archived repository references |
-| [ref-version-mismatch](docs/checks.md#ref-version-mismatch) | ✓ | ✗ | Version annotation mismatch |
-| [forbidden-uses](docs/checks.md#forbidden-uses) | ✓ | ✗ | Policy-denied action references |
-| [github-app-token-inputs](docs/checks.md#github-app-token-inputs) | ✓ | ✗ | Unprivileged GitHub App token inputs |
-| [job-timeout-minutes-required](docs/checks.md#job-timeout-minutes-required) | ✓ | △ | Missing job timeout |
-| [use-trusted-publishing](docs/checks.md#use-trusted-publishing) | ✓ | ✗ | Long-lived publish credentials |
+| [unpinned-uses](docs/rules.md#unpinned-uses) | ✓ | △ | Actions not pinned to commit SHA |
+| [unpinned-image](docs/rules.md#unpinned-image) | ✓ | △ | Images not pinned by digest |
+| [archived-uses](docs/rules.md#archived-uses) | ✓ | ✗ | Archived repository references |
+| [ref-version-mismatch](docs/rules.md#ref-version-mismatch) | ✓ | ✗ | Version annotation mismatch |
+| [forbidden-uses](docs/rules.md#forbidden-uses) | ✓ | ✗ | Policy-denied action references |
+| [github-app-token-inputs](docs/rules.md#github-app-token-inputs) | ✓ | ✗ | Unprivileged GitHub App token inputs |
+| [job-timeout-minutes-required](docs/rules.md#job-timeout-minutes-required) | ✓ | △ | Missing job timeout |
+| [use-trusted-publishing](docs/rules.md#use-trusted-publishing) | ✓ | ✗ | Long-lived publish credentials |
 
 ### Online (opt-in)
 
 | Rule | Default | Auto-fix | Description |
 |---|---|---|---|
-| [known-vulnerable-actions](docs/checks.md#known-vulnerable-actions) | ✗ | ✗ | Known vulnerability advisory matches |
-| [impostor-commit](docs/checks.md#impostor-commit) | ✗ | ✗ | Ghost/impostor commit detection |
-| [ref-confusion](docs/checks.md#ref-confusion) | ✗ | ✗ | Tag/branch name ambiguity |
-| [stale-action-refs](docs/checks.md#stale-action-refs) | ✗ | ✗ | Outdated SHA pins |
+| [known-vulnerable-actions](docs/rules.md#known-vulnerable-actions) | ✗ | ✗ | Known vulnerability advisory matches |
+| [impostor-commit](docs/rules.md#impostor-commit) | ✗ | ✗ | Ghost/impostor commit detection |
+| [ref-confusion](docs/rules.md#ref-confusion) | ✗ | ✗ | Tag/branch name ambiguity |
+| [stale-action-refs](docs/rules.md#stale-action-refs) | ✗ | ✗ | Outdated SHA pins |
 
 ## Comparison with Other Tools
 

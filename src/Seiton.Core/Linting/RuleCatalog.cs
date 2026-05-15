@@ -121,6 +121,46 @@ internal static class RuleCatalog
         return rules;
     }
 
+    private static readonly Lazy<RuleDescriptor[]> CachedDescriptors = new(BuildAllRuleDescriptors);
+
+    /// <summary>Returns descriptors for all registered rules (default + online). Result is cached.</summary>
+    internal static IReadOnlyList<RuleDescriptor> GetAllRuleDescriptors() => CachedDescriptors.Value;
+
+    private static RuleDescriptor[] BuildAllRuleDescriptors()
+    {
+        var descriptors = new RuleDescriptor[DefaultRuleFactories.Length + OnlineRuleFactories.Length];
+
+        for (var i = 0; i < DefaultRuleFactories.Length; i++)
+        {
+            var entry = DefaultRuleFactories[i];
+            var rule = entry.Factory();
+            descriptors[i] = new RuleDescriptor(
+                entry.Id.ToId(),
+                rule.Name,
+                entry.OptIn,
+                IsOnline: false,
+                NonDisableableRuleIds.Contains(entry.Id),
+                rule.SupportsDocumentKind(Parsing.DocumentKind.Workflow),
+                rule.SupportsDocumentKind(Parsing.DocumentKind.ActionMetadata));
+        }
+
+        for (var i = 0; i < OnlineRuleFactories.Length; i++)
+        {
+            var entry = OnlineRuleFactories[i];
+            var rule = entry.Factory();
+            descriptors[DefaultRuleFactories.Length + i] = new RuleDescriptor(
+                entry.Id.ToId(),
+                rule.Name,
+                IsOptIn: true,
+                IsOnline: true,
+                NonDisableableRuleIds.Contains(entry.Id),
+                rule.SupportsDocumentKind(Parsing.DocumentKind.Workflow),
+                rule.SupportsDocumentKind(Parsing.DocumentKind.ActionMetadata));
+        }
+
+        return descriptors;
+    }
+
     /// <summary>Returns whether the specified rule is opt-in only (disabled by default).</summary>
     public static bool IsOptIn(string? ruleId)
     {

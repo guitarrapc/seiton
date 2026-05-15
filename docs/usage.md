@@ -33,6 +33,7 @@ Options:
 Commands:
   check              Lint workflow files.
   init               Generate a starter seiton config file.
+  rules              List all available lint rules and their effective status.
   validate-config    Validate the seiton config file.
   version            Show version and runtime information.
 ```
@@ -124,6 +125,52 @@ Overwrite an existing config file:
 seiton init --force
 ```
 
+### seiton rules
+
+List all available lint rules and their effective enabled/disabled status:
+
+```sh
+seiton rules
+```
+
+Use `--config` to see how a specific config file affects rule states:
+
+```sh
+seiton rules --config .github/seiton.yaml
+```
+
+Output as JSON for programmatic consumption:
+
+```sh
+seiton rules --format json
+```
+
+Example text output:
+
+```
+Rule                                     Enabled   Type     Document   Reason
+------------------------------------------------------------------------------------------
+job-structure                            yes       local    both       default
+template-injection                       yes       local    both       default
+concurrency-limits                       no        local    workflow   opt-in (not configured)
+known-vulnerable-actions                 no        online   workflow   opt-in (not configured)
+
+To enable an opt-in rule, add to .github/seiton.yaml:
+  rules:
+    <rule-id>:
+      enabled: true
+
+Online rules use the GitHub API. Set GITHUB_TOKEN (or SEITON_GITHUB_TOKEN) to avoid rate limits.
+```
+
+Columns:
+
+- **Rule** — Rule ID (the identifier used in config files and inline directives).
+- **Enabled** — Whether the rule is active (`yes`) or inactive (`no`).
+- **Type** — `local` (offline) or `online` (requires network).
+- **Document** — Which file types the rule applies to: `workflow`, `action`, or `both`.
+- **Reason** — Why the rule has its current state: `default`, `config (enabled)`, `config (disabled)`, `opt-in (not configured)`, or `non-disableable`.
+
 ### seiton validate-config
 
 Validate the resolved config file. Useful in CI jobs that maintain `.github/seiton.yaml`:
@@ -193,8 +240,8 @@ All CLI flags can alternatively be set via environment variables. A flag always 
 | `SEITON_FORMAT` | `--format` | Output format (`text`, `json`, `sarif`). |
 | `SEITON_NO_COLOR` | `--no-color` | Any non-empty value disables color. |
 | `NO_COLOR` | `--no-color` | Standard `NO_COLOR` convention (fallback). |
-| `SEITON_GITHUB_TOKEN` | (internal) | GitHub API token for online checks and network-assisted remediation. Takes priority over `GITHUB_TOKEN`. |
-| `GITHUB_TOKEN` | (internal) | GitHub API token fallback for online checks and network-assisted remediation. |
+| `SEITON_GITHUB_TOKEN` | (internal) | GitHub API token for online rules and network-assisted remediation. Takes priority over `GITHUB_TOKEN`. |
+| `GITHUB_TOKEN` | (internal) | GitHub API token fallback for online rules and network-assisted remediation. |
 
 When `CI` is set, automatic color detection behaves as `never`.
 

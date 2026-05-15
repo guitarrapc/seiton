@@ -59,6 +59,7 @@ src/
       CheckCommand.cs     # seiton check
       FixCommand.cs       # seiton fix
       InitCommand.cs      # seiton init
+      RulesCommand.cs     # seiton rules
       ValidateCommand.cs  # seiton validate-config
       VersionCommand.cs   # seiton version
     Output/
@@ -116,7 +117,29 @@ Parse and validate the resolved config file. Reports config errors and exits wit
 
 Useful in CI jobs that maintain `.github/seiton.yaml` to catch configuration drift before lint runs.
 
-### 2.6 `seiton version`
+### 2.6 `seiton rules`
+
+List all available lint rules and their effective enabled/disabled status.
+
+```
+seiton rules [--config PATH] [--format text|json]
+```
+
+- `--config`: Explicit config file path. Auto-discovered if omitted.
+- `--format`: Output format (`text` or `json`). Defaults to `text`. Also resolved from `SEITON_FORMAT` env var. SARIF is not supported and returns exit code 2.
+
+Resolves configuration (if available) and reports each rule's status:
+- Whether it is enabled or disabled
+- Whether it is local or online
+- Which document kinds it supports (workflow, action, or both)
+- The reason for its current state (default, config, opt-in, non-disableable)
+
+Exit codes:
+- `0`: Success (rule list printed).
+- `2`: Invalid options (e.g. `--format sarif`).
+- `3`: Fatal error (e.g. config file not found or validation failure).
+
+### 2.7 `seiton version`
 
 Print version, build metadata, and target platform to stdout.
 
