@@ -64,18 +64,34 @@ public sealed class LocalActionOutputResolverUnitTests
     public async Task ResolveOutputNames_PathTraversal_ReturnsNull()
     {
         var repositoryRoot = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N"));
+        var externalRoot = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N"));
         try
         {
-            var workflowPath = Path.Combine(repositoryRoot, ".github", "workflows", "caller.yml");
+            // Create the workflow directory so the resolver can compute paths
+            var workflowDirectory = Path.Combine(repositoryRoot, ".github", "workflows");
+            Directory.CreateDirectory(workflowDirectory);
+            var workflowPath = Path.Combine(workflowDirectory, "caller.yml");
+
+            // Create an action.yml OUTSIDE the repository root
+            var externalActionDirectory = Path.Combine(externalRoot, "escaped-action");
+            Directory.CreateDirectory(externalActionDirectory);
+            File.WriteAllText(Path.Combine(externalActionDirectory, "action.yml"), BuildActionYaml("escaped_output"));
+
+            // Compute a relative path from the workflow directory to the external action
+            var escapedRelativePath = Path.GetRelativePath(workflowDirectory, externalActionDirectory)
+                .Replace(Path.DirectorySeparatorChar, '/');
+
             var resolver = new LocalActionOutputResolver(workflowPath);
 
-            var result = resolver.ResolveOutputNames("./../../../../../../etc/passwd"u8);
+            // The file exists, but traversal guard must block it
+            var result = resolver.ResolveOutputNames(System.Text.Encoding.UTF8.GetBytes(escapedRelativePath));
 
             await Assert.That(result).IsNull();
         }
         finally
         {
             TryDeleteDirectory(repositoryRoot);
+            TryDeleteDirectory(externalRoot);
         }
     }
 
