@@ -107,7 +107,6 @@ internal static class FixCommand
         {
             var engine = new LintEngine();
             var allDiagnostics = new List<Diagnostic>();
-            var hasFixable = false;
 
             // Fix command always builds fixes; enable fix construction for all Check() calls.
             var fixEnabledLintConfig = new LintConfig
@@ -168,8 +167,6 @@ internal static class FixCommand
                     allDiagnostics.AddRange(effectiveDiagnostics);
                     continue;
                 }
-
-                hasFixable = true;
 
                 if (check)
                 {
@@ -263,7 +260,17 @@ internal static class FixCommand
             if (allDiagnostics.Count > 0)
                 CheckCommand.WriteNetworkFixHint(Console.Error, allDiagnostics, effectivePinNetwork, effectiveImageNetwork);
 
-            if (check && hasFixable)
+            var hasFixableAfterFilters = false;
+            for (var i = 0; i < allDiagnostics.Count; i++)
+            {
+                if (allDiagnostics[i].Fix is null)
+                    continue;
+
+                hasFixableAfterFilters = true;
+                break;
+            }
+
+            if (check && hasFixableAfterFilters)
                 return ExitCode.LintIssuesFound;
 
             return CheckCommand.HasActionableDiagnostics(allDiagnostics) ? ExitCode.LintIssuesFound : ExitCode.Success;

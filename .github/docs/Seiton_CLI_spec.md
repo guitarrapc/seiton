@@ -175,7 +175,7 @@ All flags apply to the default root command unless otherwise noted.
 | Flag | Short | Type | Default | Description |
 |---|---|---|---|---|
 | `--dry-run` | | `bool` | `false` | Print unified diffs to stdout; do not modify files. |
-| `--check` | | `bool` | `false` | Exit non-zero if fixable diagnostics exist; do not apply fixes. |
+| `--check` | | `bool` | `false` | Exit non-zero if fixable diagnostics remain after filtering; do not apply fixes. |
 | `--enable-pin-network` | | `bool` | `false` | Force-enable network access for action SHA resolution. When omitted, the effective value comes from `fix.pinning.enable-network` in config. |
 | `--enable-image-network` | | `bool` | `false` | Force-enable network access for container image digest resolution. When omitted, the effective value comes from `fix.images.enable-network` in config. |
 
@@ -468,7 +468,7 @@ Rule metadata (id, name, help URI) is emitted per-rule in `tool.driver.rules`.
 | `2` | Invalid CLI options — argument parsing failed. |
 | `3` | Fatal error — config file error, I/O failure, or internal engine failure. |
 
-For `fix --check`: exits with `1` if any fixable diagnostic was found (even if no non-fixable issues exist).
+For `fix --check`: exits with `1` if any fixable diagnostic remains after post-lint filters such as `--min-severity` are applied.
 
 ---
 

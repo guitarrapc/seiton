@@ -392,7 +392,8 @@ seiton 0.9.9 is at a practical, usable stage. Rule message quality, `--verbose`/
    - In summary line or `--help`, hint that `--min-severity error` ignores warnings in CI.
    - **Implementation**: Added `showExitHint` parameter to `WriteSummary`. When `showExitHint` is true and the result has warnings but no errors, emits: `hint: use --min-severity error to treat warnings as non-blocking in CI`.
    - `showExitHint` is set to `true` when `--min-severity` was NOT explicitly passed (i.e. `minSeverity is null`), so users who already know about the flag don't see the hint.
-   - **Tests**: 3 new tests (`WriteSummary_WarningsOnly_ShowsMinSeverityHint`, `WriteSummary_ErrorsAndWarnings_DoesNotShowMinSeverityHint`, `WriteSummary_WarningsOnly_ShowExitHintFalse_NoHint`).
+  - **Review follow-up**: `fix --check` now also respects post-lint filtering for its exit code, so `--min-severity error` no longer leaves users with `0 issues` on screen but exit code `1` for filtered-out warning-only fixes.
+  - **Tests**: 3 new tests (`WriteSummary_WarningsOnly_ShowsMinSeverityHint`, `WriteSummary_ErrorsAndWarnings_DoesNotShowMinSeverityHint`, `WriteSummary_WarningsOnly_ShowExitHintFalse_NoHint`) plus 2 integration tests in `FixCommandTests` for `fix --check` exit-code behavior with and without `--min-severity error`.
    - **Benchmark**: Zero allocation increase (CLI-only code, not in benchmarked path).
 
 4. **Improve message when fix requires network** (UX, medium priority) — **DONE**
@@ -405,4 +406,4 @@ seiton 0.9.9 is at a practical, usable stage. Rule message quality, `--verbose`/
 5. **Add tuning guide for sample/demo repos** (documentation, medium priority) — **DONE**
    - Document recommended config patterns for educational/lab repositories.
    - **Implementation**: Added "Tuning for Sample / Demo Repositories" section at end of `docs/configuration.md`.
-   - Covers: `--min-severity error` for CI, `rules.exclude` for noisy rules, inline directives for individual cases, and a combined example config.
+  - Covers: `--min-severity error` for CI, `enabled: false` for noisy rules, inline directives for individual cases, and a combined example config.

@@ -416,10 +416,12 @@ Suppress rules that are not relevant for sample code. In your config file:
 
 ```yaml
 rules:
-  exclude:
-    - job-permissions-required
-    - job-timeout-minutes-required
-    - unpinned-uses
+  job-permissions-required:
+    enabled: false
+  job-timeout-minutes-required:
+    enabled: false
+  unpinned-uses:
+    enabled: false
 ```
 
 ### Use inline directives sparingly
@@ -437,9 +439,10 @@ A typical demo-repo config might look like:
 
 ```yaml
 rules:
-  exclude:
-    - job-timeout-minutes-required
-    - dangerous-triggers
+  job-timeout-minutes-required:
+    enabled: false
+  dangerous-triggers:
+    enabled: false
 ```
 
 paired with `--min-severity error` in CI to allow remaining warnings through without failing the build.
