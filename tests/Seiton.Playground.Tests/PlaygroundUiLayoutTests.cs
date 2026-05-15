@@ -181,14 +181,14 @@ public sealed class PlaygroundUiLayoutTests
     }
 
     /// <summary>
-    /// <c>main.js</c> attaches URL listeners after the WASM bootstrap; layout-only tests do not need this.
+    /// URL input tests only need the lightweight client-side handlers from <c>main.js</c>.
     /// </summary>
-    private static async Task WaitForLoadingHiddenAsync(IPage page)
+    private static async Task WaitForUrlControlsReadyAsync(IPage page)
     {
         await page.WaitForFunctionAsync(
-            "() => { const l = document.getElementById('loading'); return l !== null && l.style.display === 'none'; }",
+            "() => document.body?.dataset.urlControlsReady === 'true'",
             arg: null,
-            new PageWaitForFunctionOptions { Timeout = 120_000 });
+            new PageWaitForFunctionOptions { Timeout = 10_000 });
     }
 
     [Test]
@@ -215,7 +215,7 @@ public sealed class PlaygroundUiLayoutTests
                 });
 
             await GotoPlaygroundAndWaitForLinterGridAsync(page, host.BaseUrl);
-            await WaitForLoadingHiddenAsync(page);
+            await WaitForUrlControlsReadyAsync(page);
 
             await page.FillAsync("#url-input", "https://seiton-fetch-stall.example.invalid/workflow.yml");
 
@@ -250,25 +250,26 @@ public sealed class PlaygroundUiLayoutTests
         var page = await context.NewPageAsync();
 
         await GotoPlaygroundAndWaitForLinterGridAsync(page, host.BaseUrl);
-        await WaitForLoadingHiddenAsync(page);
+    await WaitForUrlControlsReadyAsync(page);
 
         // Enter on an invalid-but-filled URL shows an info toast; focus stays in #url-input.
         await page.Locator("#url-input").FillAsync("http://oops");
         await page.Locator("#url-input").FocusAsync();
         await page.Keyboard.PressAsync("Enter");
 
-        await page.Locator("#toast-stack .toast").WaitForAsync(new LocatorWaitForOptions { Timeout = 10_000 });
+        var infoToast = page.Locator("#toast-stack .toast--info");
+        await infoToast.WaitForAsync(new LocatorWaitForOptions { Timeout = 10_000 });
 
         await page.Locator("#editor-wrap .CodeMirror").ClickAsync();
-
-        await page.Keyboard.PressAsync("Escape");
+        await page.EvaluateAsync(
+            "() => document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))");
 
         await page.WaitForFunctionAsync(
-            "() => document.querySelectorAll('#toast-stack .toast').length === 0",
+            "() => document.querySelectorAll('#toast-stack .toast--info').length === 0",
             arg: null,
             new PageWaitForFunctionOptions { Timeout = 5000 });
 
-        await Assert.That(await page.Locator("#toast-stack").Locator(".toast").CountAsync()).IsEqualTo(0);
+        await Assert.That(await infoToast.CountAsync()).IsEqualTo(0);
     }
 
     [Test]
@@ -282,7 +283,7 @@ public sealed class PlaygroundUiLayoutTests
         });
         var page = await context.NewPageAsync();
         await GotoPlaygroundAndWaitForLinterGridAsync(page, host.BaseUrl);
-        await WaitForLoadingHiddenAsync(page);
+        await WaitForUrlControlsReadyAsync(page);
 
         await page.FillAsync("#url-input", "http://oops");
         await Assert.That(await page.Locator("#fetch-btn").IsDisabledAsync()).IsTrue();
@@ -299,7 +300,7 @@ public sealed class PlaygroundUiLayoutTests
         });
         var page = await context.NewPageAsync();
         await GotoPlaygroundAndWaitForLinterGridAsync(page, host.BaseUrl);
-        await WaitForLoadingHiddenAsync(page);
+        await WaitForUrlControlsReadyAsync(page);
 
         await page.FillAsync("#url-input", "https://example.com/raw.yml");
         await Assert.That(await page.Locator("#fetch-btn").IsDisabledAsync()).IsFalse();
