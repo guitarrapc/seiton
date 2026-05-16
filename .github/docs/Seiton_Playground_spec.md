@@ -1,699 +1,304 @@
-# Seiton Playground (gh-pages) 仕様
+# Seiton Playground Specification
 
-> seiton の lint 機能をブラウザ上で体験できる Web Playground を GitHub Pages にデプロイする仕様。
-> actionlint playground を参照実装とし、「ブラウザ内完結・サーバー不要」の構成を採用する。
+> This document is WASM-language-neutral — it specifies WHAT the Playground does, not HOW a specific language implementation achieves it. Defines the playground functional contract: architecture, WASM interop API, UI behavior, deployment, and operational constraints. For C#-specific implementation details, see `Seiton_Playground_csharp_spec.md`.
 
----
-
-## 1. 背景と決定
-
-### 1.1 動機
-
-- actionlint は Go→WASM でブラウザ内 lint を実現する playground を gh-pages に公開している
-- seiton も同等の体験（ブラウザ上で YAML を入力→即座に lint 結果を表示）を提供したい
-- サーバーサイド不要（WASM 実行）にすることで、ユーザーの入力データが外部に送信されない安全な構成になる
-
-### 1.2 アプローチ選定
-
-| アプローチ | 概要 | バイナリサイズ | 成熟度 | 判定 |
-|---|---|---|---|---|
-| A. Blazor WebAssembly | Blazor フレームワーク経由で .NET ランタイムをブラウザに配信 | 5–15 MB (trimmed) | 安定 | **却下** — ファーストロードが遅く、バイナリサイズが大きい。実際に試した結果、改善困難と判断 |
-| **B. `wasm-experimental` (wasmbrowser)** | `dotnet new wasmbrowser` テンプレート。Blazor を使わず `[JSImport]`/`[JSExport]` で直接 JS ↔ .NET interop | 1–5 MB (trimmed+AOT) | 実験的 (API は .NET 7+ で安定) | **採用** — 最小構成で actionlint と同等のアーキテクチャを実現可能 |
-| C. NativeAOT→WASM (Emscripten) | dotnet/runtimelab の実験的コンパイラ | 最小 | 未成熟 | **却下** — プロダクション非推奨、ツールチェイン不安定 |
-
-### 1.3 決定
-
-**Option B (`wasm-experimental` / WebAssembly Browser App)** を採用する。
-
-- 参照ドキュメント: [JavaScript [JSImport]/[JSExport] interop with a WebAssembly Browser App project](https://learn.microsoft.com/en-us/aspnet/core/client-side/dotnet-interop/wasm-browser-app?view=aspnetcore-10.0)
-- ランタイム構成: [Configuring and hosting .NET WebAssembly applications](https://github.com/dotnet/runtime/blob/main/src/mono/wasm/features.md)
-
-このアプローチは上記 MS ドキュメントの内容そのもの。Blazor フレームワークに依存せず、`Microsoft.NET.Sdk.WebAssembly` SDK と `[JSImport]`/`[JSExport]` 属性で JS ↔ C# の相互呼出を行う。`dotnet publish` の出力（`_framework/` ディレクトリ）をそのまま静的ファイルとしてホスティングする。
+> **Cross-document rule**: This spec is the source of truth for playground behavior. When revised, also review and update `Seiton_Playground_csharp_spec.md` for consistency.
 
 ---
 
-## 2. アーキテクチャ
+## 1. Scope and Motivation
 
-### 2.1 actionlint との対応
+### 1.1 Purpose
 
-```
-actionlint                              seiton
-─────────                               ──────
-Go ライブラリ (actionlint pkg)           Seiton.Core (C# ライブラリ)
-  ↓ GOOS=js GOARCH=wasm                   ↓ dotnet publish (browser-wasm)
-main.wasm (単一 WASM バイナリ)           _framework/ (dotnet.native.wasm + trimmed DLLs)
-  ↓                                        ↓
-playground/main.go                       Seiton.Playground/LintInterop.cs
-  (Go→JS: window.runActionlint)            ([JSExport] RunLint)
-  ↓                                        ↓
-wasm_exec.js (Go WASM glue)             dotnet.js (dotnet WASM glue, 自動生成)
-  ↓                                        ↓
-index.ts + CodeMirror                    main.js + CodeMirror
-  ↓                                        ↓
-gh-pages (手動 deploy.bash)              gh-pages (GitHub Actions)
-```
+Provide a browser-based playground that runs Seiton's lint engine entirely in-browser via WebAssembly. User YAML input is never transmitted to a server.
 
-### 2.2 処理フロー
+### 1.2 Reference
 
-```
-[ブラウザ]
-  1. index.html ロード
-  2. main.js が dotnet.js を import → .NET WASM ランタイム起動
-  3. main.js が [JSExport] された C# メソッドへの参照を取得
-  4. ユーザーが CodeMirror エディタに YAML を入力
-  5. debounce 後、JS → C# の runLint(yamlSource) を呼出
-  6. C# 側: LintEngine.Check(utf8Yaml, filePath) 実行
-  7. C# → JS: 診断結果の配列を返却
-  8. JS 側: 結果をテーブルに表示 + エディタのガターにマーカー表示
-```
+The [actionlint playground](https://github.com/rhysd/actionlint/tree/main/playground) serves as reference architecture (Go→WASM, CodeMirror editor, static deployment).
 
-### 2.3 Seiton.Core の WASM 互換性
+### 1.3 Constraints
 
-Seiton.Core のコードを WASM 環境で実行する上での互換性評価:
-
-| 項目 | 互換性 | 備考 |
-|---|---|---|
-| `stackalloc` | ✅ 問題なし | .NET WASM ランタイムでサポート |
-| `System.Runtime.CompilerServices.Unsafe` | ✅ 問題なし | BCL の一部として含まれる |
-| `MemoryMarshal` | ✅ 問題なし | BCL の一部として含まれる |
-| `XxHash64.cs` (scalar impl) | ✅ 問題なし | SIMD 不使用、純粋な算術演算のみ |
-| `ReadOnlySpan<byte>` / UTF-8 比較 | ✅ 問題なし | ランタイムサポートあり |
-| VYaml 1.2.0 | ⚠️ 要検証 | 純粋 C# だが WASM での動作テストが必要 |
-| `HttpClient` (OnlineAudit) | ⚠️ 制限あり | ブラウザの fetch API 経由になるため CORS 制約。Playground ではオフライン lint のみ使用 |
-| SSE/AVX/Vector intrinsics | ✅ 該当なし | Seiton.Core では使用していない |
-
-結論: **Seiton.Core は WASM 互換。OnlineAudit（ネットワーク依存ルール）を無効化すれば、そのまま動作する見込み。**
+- No server-side processing — all lint execution happens in WASM on the client
+- Static hosting only (GitHub Pages)
+- Network-dependent lint rules (e.g., digest pinning, online audit) are disabled in the playground
 
 ---
 
-## 3. プロジェクト構成
+## 2. Architecture
 
-### 3.1 ディレクトリ構成
+### 2.1 Layer Diagram
 
 ```
-src/Seiton.Playground/
-  Seiton.Playground.csproj        ← WebAssembly Browser App プロジェクト
-  LintInterop.cs                  ← [JSExport] lint API (C# → JS bridge)
-  Program.cs                      ← WASM エントリポイント
-  wwwroot/
-    index.html                    ← メインページ (CodeMirror エディタ + 結果表示)
-    main.js                       ← JS エントリポイント (dotnet.js import + UI ロジック)
-    style.css                     ← スタイルシート
+┌────────────────────────────────────────────────┐
+│  Lint Engine (compiled to WASM)                │
+├────────────────────────────────────────────────┤
+│  WASM Interop Layer                            │
+│  Exports: RunLint / ApplyAllFixes / GetVersion │
+├────────────────────────────────────────────────┤
+│  WASM Runtime Glue (language-specific)         │
+├────────────────────────────────────────────────┤
+│  main.js + CodeMirror UI                       │
+├────────────────────────────────────────────────┤
+│  GitHub Pages (static hosting)                 │
+└────────────────────────────────────────────────┘
 ```
 
-### 3.2 プロジェクトファイル
+### 2.2 Processing Flow
 
-```xml
-<Project Sdk="Microsoft.NET.Sdk.WebAssembly">
+1. Browser loads `index.html`
+2. `main.js` initializes the WASM runtime
+3. JS obtains references to exported WASM functions
+4. User edits YAML in CodeMirror editor
+5. After debounce (300ms), JS calls `RunLint(yamlSource, filePath)`
+6. WASM side: parse + lint execution
+7. WASM returns diagnostic results as UTF-8 JSON
+8. JS renders results table + gutter markers in the editor
 
-  <PropertyGroup>
-    <TargetFramework>net10.0</TargetFramework>
-    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+### 2.3 WASM Interop API
 
-    <!-- サイズ最適化 -->
-    <InvariantGlobalization>true</InvariantGlobalization>
-    <InvariantTimezone>true</InvariantTimezone>
-    <PublishTrimmed>true</PublishTrimmed>
-    <TrimMode>full</TrimMode>
-    <RunAOTCompilation>true</RunAOTCompilation>
+Exported functions callable from JavaScript:
 
-    <!-- Webcil 形式 (ファイアウォール/ウイルススキャナ互換) -->
-    <WasmEnableWebcil>true</WasmEnableWebcil>
-  </PropertyGroup>
+| Function | Parameters | Return | Description |
+|---|---|---|---|
+| `RunLint` | `(yamlSource: string, filePath: string)` | UTF-8 JSON byte array | Diagnostic result array |
+| `ApplyAllFixes` | `(yamlSource: string, filePath: string)` | `string` | Fixed YAML (original text on error) |
+| `GetProductVersion` | none | `string` | Build version string |
 
-  <ItemGroup>
-    <ProjectReference Include="..\Seiton.Core\Seiton.Core.csproj" />
-  </ItemGroup>
+### 2.4 Diagnostic JSON Schema
 
-</Project>
+```json
+[
+  {
+    "message": "Diagnostic message text",
+    "line": 5,
+    "column": 3,
+    "severity": "Error | Warning | Info",
+    "ruleId": "rule-name | null",
+    "fixable": true,
+    "fixDescription": "Fix description | null"
+  }
+]
 ```
 
-**プロパティの説明**:
+### 2.5 Error Handling Contract
 
-| プロパティ | 値 | 理由 |
-|---|---|---|
-| `Sdk` | `Microsoft.NET.Sdk.WebAssembly` | `wasmbrowser` テンプレートの SDK。Blazor フレームワーク不使用 |
-| `AllowUnsafeBlocks` | `true` | `[JSImport]`/`[JSExport]` の Roslyn コードジェネレータが必要とする |
-| `InvariantGlobalization` | `true` | ICU データ不要 (数 MB 節約)。Seiton CLI も同設定 |
-| `InvariantTimezone` | `true` | タイムゾーンDB 不要 (サイズ削減) |
-| `PublishTrimmed` + `TrimMode=full` | `true` / `full` | 未使用コード除去。最大限のサイズ削減 |
-| `RunAOTCompilation` | `true` | IL→WASM AOT コンパイル。実行時パフォーマンス向上。publish 時のみ有効 |
-| `WasmEnableWebcil` | `true` | .dll ではなく .wasm 形式で配信 (デフォルト true、明示) |
-
-### 3.3 前提条件 (workload)
-
-```shell
-dotnet workload install wasm-tools
-dotnet workload install wasm-experimental   # テンプレート使用時のみ
-```
-
-`wasm-tools` は AOT コンパイル・ネイティブリビルド・trimming に必要。`wasm-experimental` は `dotnet new wasmbrowser` テンプレートを利用する場合のみ必要（手動でプロジェクトを構成する場合は不要）。
+- WASM exported functions must never propagate unhandled exceptions across the interop boundary. An unhandled exception causes the WASM runtime to abort irreversibly.
+- `RunLint`: on internal error, returns a single-element diagnostic array with `ruleId: "internal-error"`.
+- `ApplyAllFixes`: on error, returns the original input text unchanged.
+- `GetProductVersion`: on error, returns `"unknown"`.
 
 ---
 
-## 4. 実装コード
+## 3. Lint Execution Behavior
 
-### 4.1 C# 側: LintInterop.cs
+### 3.1 Debounce and Re-entry Control
 
-`[JSExport]` で JS から呼び出せる lint 関数を公開する。
+| Behavior | Specification |
+|---|---|
+| Debounce interval | 300ms after last `change` event |
+| Paste bypass | Lint executes immediately on paste (no debounce) |
+| Re-entry guard | `lintInProgress` flag prevents concurrent lint invocations |
+| Pending retry | If content changes during lint execution, a debounced re-lint is scheduled after completion |
+| Staleness check | Lint is skipped when `(source, filePath)` pair is identical to the last successful lint |
+| Staleness invalidation | File-type change, fix application, and URL fetch clear the staleness cache |
 
-```csharp
-using System.Runtime.InteropServices.JavaScript;
-using System.Text;
-using System.Text.Json;
-using Seiton.Core.Linting;
+### 3.2 Runtime Death Detection
 
-namespace Seiton.Playground;
+When the WASM runtime crashes (exits with non-zero code):
 
-public static partial class LintInterop
-{
-    private static readonly LintEngine s_engine = new();
+1. Set `runtimeAlive = false`
+2. Stop all subsequent lint/fix calls
+3. Display persistent error toast + inline message in the results pane prompting page reload
 
-    /// <summary>
-    /// JS から呼び出される lint エントリポイント。
-    /// YAML 文字列を受け取り、診断結果を JSON 文字列で返す。
-    /// </summary>
-    [JSExport]
-    public static string RunLint(string yamlSource, string filePath)
-    {
-        var utf8Yaml = Encoding.UTF8.GetBytes(yamlSource);
-        var result = s_engine.Check(utf8Yaml, filePath);
+Detection pattern: catch errors matching `"runtime already exited"` from WASM interop calls.
 
-        // 診断結果を JSON シリアライズして返す
-        var diagnostics = new List<object>();
-        foreach (var diag in result.Diagnostics)
-        {
-            diagnostics.Add(new
-            {
-                message = diag.Message,
-                line = diag.Line,
-                column = diag.Column,
-                severity = diag.Severity.ToString(),
-                ruleId = diag.RuleId,
-            });
-        }
+### 3.3 Apply All Fixes
 
-        return JsonSerializer.Serialize(diagnostics);
-    }
-}
+- Calls `ApplyAllFixes(source, filePath)` via WASM export
+- If returned YAML differs from input: update editor, invalidate staleness, re-lint
+- If unchanged: show informational toast (no fix was applicable or an error occurred)
+- Network-dependent fixes (pinning, digest resolution) are unavailable in WASM and are skipped
+
+---
+
+## 4. UI Specification
+
+### 4.1 Feature Catalog
+
+| Feature | Description |
+|---|---|
+| YAML editor | CodeMirror 5 with yaml mode, auto-grow (`viewportMargin: Infinity`), line numbers, active line highlight |
+| Real-time lint | Debounce 300ms, immediate on paste, staleness check |
+| Results table | Position chip + message + ruleId chip + fixable chip per diagnostic |
+| Gutter markers | Error = red (`--danger`), Warning = yellow (`--warning`), CSS class-based |
+| Row click jump | Clicking a diagnostic row moves editor cursor to that position |
+| Loading indicator | "Loading WebAssembly binary..." shown until WASM runtime is ready |
+| File type selector | `workflow` (`.github/workflows/test.yml`) / `action.yml` |
+| Sample selector | Built-in YAML snippets: default, simple, minimal, fixPermissions, matrix, actionComposite |
+| Permalink (share) | pako deflate → Base64 → URL hash → clipboard copy |
+| URL fetch | Fetch remote YAML by URL with validation and GitHub blob→raw conversion |
+| Toast notifications | Dismiss button + Escape key (capture phase), auto-dismiss with configurable duration |
+| Apply all fixes | Offline autofix with priority ordering (network fixes skipped) |
+| Version badge | Shown after WASM startup, links to GitHub Release page |
+| Color theme | System / Light / Dark cycle with localStorage persistence |
+| Runtime crash detection | Stops calls, shows reload prompt |
+
+### 4.2 Toast System
+
+- Container: `#toast-stack` (fixed position, top of viewport)
+- Independent from diagnostic results — lint results table is never cleared by toast operations
+- Dismiss: dedicated `button.toast__dismiss` or **Escape** key (document capture phase, dismisses topmost toast)
+- ARIA: `role="alert"` for error, `role="status"` for success/info
+- Auto-dismiss durations: error = 8s, success = 3.8s, info = 4.2s
+- URLs in toast body text are auto-linkified; link clicks do not propagate to toast dismiss
+
+### 4.3 URL Fetch
+
+- **Validation** (`looksLikePlausibleHttpFetchUrl`):
+  - Protocol: http(s) only
+  - Valid hosts: `localhost`, IPv4, IPv6, hostnames with ≥ 2 labels
+  - Empty input → button disabled, title "Enter a YAML URL first"
+  - Invalid input → button disabled, title "Incomplete URL"
+  - During fetch → both input and button disabled
+- **GitHub blob→raw normalization**: `github.com/{owner}/{repo}/blob/{ref}/{path}` → `raw.githubusercontent.com/{owner}/{repo}/{ref}/{path}`
+- **Error handling**: HTTP failure or HTML content-type → toast notification (results pane preserved)
+- **Enter key**: on empty/invalid input, shows info toast only (no fetch)
+- **Overlapping requests**: blocked via `fetchInFlight` flag
+
+### 4.4 Color Theme
+
+- **Default**: dark (`:root` tokens define dark palette)
+- **System tracking**: `prefers-color-scheme: light` overrides via `:root:not([data-theme])` selector
+- **Manual override**: footer button cycles **System → Light → Dark**
+- **Persistence**: `localStorage` key `seiton-playground-color-mode` (`light`/`dark` stored; `system` removes key)
+- **FOUC prevention**: inline `<script>` in `<head>` (before CSS) reads storage and sets `data-theme` + `meta[name=color-scheme]`
+- **CodeMirror themes**: dark = `material-darker`, light = `default`. System mode tracks OS `change` event.
+- **Gutter markers**: use `var(--danger)` / `var(--warning)` CSS custom properties
+
+### 4.5 OGP and Twitter Card Metadata
+
+| Meta Tag | Content |
+|---|---|
+| `<title>` | `seiton playground` |
+| `meta[name=description]` | `A security-focused linter & fixer for GitHub Actions in your browser` |
+| `meta[name=twitter:card]` | `summary_large_image` |
+| `meta[name=twitter:image]` | `https://guitarrapc.github.io/seiton/ogp.png?v=2` |
+| `meta[name=twitter:title]` | `seiton playground \| Try in your browser` |
+| `meta[name=twitter:description]` | `A security-focused linter & fixer for GitHub Actions` |
+| `meta[property=og:type]` | `website` |
+| `meta[property=og:url]` | `https://guitarrapc.github.io/seiton/` |
+| `meta[property=og:title]` | `seiton playground \| Try in your browser` |
+| `meta[property=og:image]` | `https://guitarrapc.github.io/seiton/ogp.png?v=2` |
+| `meta[property=og:description]` | `A security-focused linter & fixer for GitHub Actions` |
+| `meta[property=og:site_name]` | `seiton playground` |
+| `meta[name=apple-mobile-web-app-title]` | `seiton playground` |
+
+- OGP image: `ogp.png` with cache-bust query (`?v=2`)
+- Favicon: light/dark variants via `media="(prefers-color-scheme: ...)"` (`favicon.png` / `favicon-dark.png`)
+
+### 4.6 Page Structure
+
 ```
-
-**設計判断**:
-- `LintEngine` インスタンスを `static` フィールドで再利用 (内部ルールのセットアップコストを償却)
-- 戻り値は JSON 文字列。JS 側で `JSON.parse()` する。`[JSExport]` は primitive 型と string の marshalling を直接サポートするが、複雑なオブジェクトのやり取りは JSON 文字列経由が最もシンプル
-- `filePath` を引数にすることで、ユーザーが `.github/workflows/test.yml` と `action.yml` を選択可能にできる
-
-### 4.2 C# 側: Program.cs
-
-```csharp
-using System.Runtime.InteropServices.JavaScript;
-
-// WASM エントリポイント — ランタイム初期化のみ
-// LintInterop の [JSExport] メソッドは dotnet.js 経由で JS に公開される
-Console.WriteLine("Seiton WASM runtime initialized.");
-```
-
-`wasmbrowser` テンプレートでは `Program.Main` が `runMain()` 時に実行される。Lint 機能自体は `[JSExport]` 経由で JS から呼び出す。
-
-### 4.3 JS 側: main.js
-
-```javascript
-import { dotnet } from './_framework/dotnet.js';
-
-const { getAssemblyExports, getConfig, runMain } = await dotnet
-    .withApplicationArguments("playground")
-    .create();
-
-const config = getConfig();
-const exports = await getAssemblyExports(config.mainAssemblyName);
-await runMain();
-
-// ── CodeMirror セットアップ ──
-const editor = CodeMirror(document.getElementById('editor'), {
-    mode: 'yaml',
-    theme: 'material-darker',
-    lineNumbers: true,
-    lineWrapping: true,
-    autofocus: true,
-    styleActiveLine: true,
-    gutters: ['CodeMirror-linenumbers', 'error-marker'],
-    extraKeys: {
-        Tab(cm) {
-            cm.execCommand(cm.somethingSelected() ? 'indentMore' : 'insertSoftTab');
-        },
-    },
-    value: getDefaultSource(),
-});
-
-// ── Lint 実行 (debounce) ──
-const DEBOUNCE_MS = 300;
-let debounceId = null;
-
-editor.on('change', (_cm, changeObj) => {
-    if (debounceId !== null) {
-        clearTimeout(debounceId);
-    }
-
-    const run = () => {
-        debounceId = null;
-        runLint();
-    };
-
-    if (changeObj.origin === 'paste') {
-        run(); // ペースト時は即時実行
-    } else {
-        debounceId = setTimeout(run, DEBOUNCE_MS);
-    }
-});
-
-function runLint() {
-    const source = editor.getValue();
-    const filePath = getSelectedFilePath();
-
-    try {
-        const json = exports.Seiton.Playground.LintInterop.RunLint(source, filePath);
-        const diagnostics = JSON.parse(json);
-        renderResults(diagnostics);
-    } catch (err) {
-        showToast(err.message, 'error');
-    }
-}
-
-function renderResults(diagnostics) {
-    const body = document.getElementById('lint-result-body');
-    const successMsg = document.getElementById('success-msg');
-
-    body.textContent = '';
-    editor.clearGutter('error-marker');
-
-    if (diagnostics.length === 0) {
-        successMsg.style.display = 'block';
-        return;
-    }
-    successMsg.style.display = 'none';
-
-    for (const diag of diagnostics) {
-        const row = document.createElement('tr');
-        row.addEventListener('click', () => {
-            editor.setCursor({ line: diag.line - 1, ch: diag.column - 1 });
-            editor.focus();
-        });
-
-        // 位置タグ
-        const posCell = document.createElement('td');
-        const posTag = document.createElement('span');
-        posTag.className = 'tag is-dark is-medium';
-        posTag.textContent = `line:${diag.line}, col:${diag.column}`;
-        posCell.appendChild(posTag);
-        row.appendChild(posCell);
-
-        // メッセージ + ルール ID
-        const descCell = document.createElement('td');
-        descCell.textContent = diag.message;
-        const kindTag = document.createElement('span');
-        kindTag.className = 'tag is-dark';
-        kindTag.textContent = diag.ruleId;
-        kindTag.style.marginLeft = '4px';
-        descCell.appendChild(kindTag);
-        row.appendChild(descCell);
-
-        body.appendChild(row);
-
-        // ガターマーカー
-        const marker = document.createElement('div');
-        marker.style.color = '#ff5370';
-        marker.textContent = '●';
-        editor.setGutterMarker(diag.line - 1, 'error-marker', marker);
-    }
-}
-
-function showToast(message, variant = 'info') {
-    /* `#toast-stack`: ラッパー + `.toast__body` + `button.toast__dismiss`。実装は `wwwroot/main.js` */
-}
-
-function getSelectedFilePath() {
-    const select = document.getElementById('filetype-select');
-    return select ? select.value : '.github/workflows/test.yml';
-}
-
-function getDefaultSource() {
-    // URL hash からの復元（ツールバー共有ボタンで `history.replaceState` したハッシュ）
-    if (window.location.hash) {
-        try {
-            const b64 = window.location.hash.slice(1);
-            const compressed = Uint8Array.from(atob(b64), c => c.charCodeAt(0));
-            const decompressed = pako.inflate(compressed);
-            return new TextDecoder().decode(decompressed);
-        } catch { /* ignore */ }
-    }
-
-    return `# Paste your workflow YAML to check with seiton
-
-on:
-  push:
-    branch: main
-    tags:
-      - 'v\\d+'
-jobs:
-  test:
-    strategy:
-      matrix:
-        os: [macos-latest, linux-latest]
-    runs-on: \${{ matrix.os }}
-    steps:
-      - run: echo "hello"
-      - uses: actions/checkout@v6
-      - uses: actions/setup-node@v4
-        with:
-          node_version: 18.x
-`;
-}
-
-// 初回 lint 実行
-document.getElementById('loading').style.display = 'none';
-runLint();
-```
-
-### 4.4 HTML: index.html
-
-```html
-<!DOCTYPE html>
 <html lang="en">
   <head>
-    <title>seiton playground</title>
-    <meta charset="utf-8"/>
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <link rel="stylesheet" href="lib/css/codemirror.css">
-    <link rel="stylesheet" href="lib/css/material-darker.css">
-    <link rel="stylesheet" href="style.css">
-    <script src="lib/js/codemirror.js"></script>
-    <script src="lib/js/active-line.js"></script>
-    <script src="lib/js/yaml.js"></script>
-    <script src="lib/js/pako.min.js"></script>
-    <!-- _framework/dotnet.js のプリロード -->
-    <link rel="preload" href="./_framework/dotnet.boot.js" as="fetch" crossorigin="anonymous">
+    meta (charset, viewport, color-scheme, description, OGP, twitter:card, apple-mobile-web-app-title)
+    link rel="icon" (light/dark variants with prefers-color-scheme media query)
+    link rel="preconnect" (cdnjs.cloudflare.com, cdn.jsdelivr.net)
+    inline <script> (FOUC prevention)
+    CodeMirror CSS (CDN, non-blocking)
+    style.css (fingerprinted filename)
+    CodeMirror JS (CDN, defer)
   </head>
   <body>
-    <nav id="header-bar">
-      <header>
-        <h1>
-          <a href="https://github.com/guitarrapc/seiton">seiton</a> playground
-        </h1>
-        <h2>Security-focused linter &amp; fixer for GitHub Actions</h2>
-      </header>
-      <div id="controls">
-        <div class="controls-row controls-row--primary">
-          <button id="permalink-btn" type="button" class="toolbar-icon-btn"
-                  title="Share — copy link to clipboard; YAML is stored in URL hash"
-                  aria-label="Share — copy link to clipboard; YAML is stored in URL hash">
-            <svg class="toolbar-icon-btn__svg" viewBox="0 0 24 24" aria-hidden="true"><!-- 共有アイコン path は実装の `wwwroot/index.html` と同じ --></svg>
-          </button>
-          <span class="fetch-group" role="group" aria-label="Fetch YAML by URL">
-            <input type="url" id="url-input" aria-label="YAML URL" placeholder="https://…"/>
-            <button id="fetch-btn" type="button" class="toolbar-icon-btn" disabled
-                    title="Enter a YAML URL first"
-                    aria-label="Fetch and lint YAML — enter a URL first">
-              <svg class="toolbar-icon-btn__svg" viewBox="0 0 24 24" aria-hidden="true"><!-- 虫眼鏡 path は同上 --></svg>
-            </button>
-          </span>
-        </div>
-        <select id="filetype-select">
-          <option value=".github/workflows/test.yml" selected>workflow</option>
-          <option value="action.yml">action.yml</option>
-        </select>
-      </div>
+    <nav #header-bar>
+      <header> (site title + logo, #playground-version badge, tagline)
+      <div #controls> (permalink, URL fetch, file-type select, sample select)
     </nav>
-    <div id="toast-stack" class="toast-stack" aria-live="polite"></div>
+    <div #toast-stack aria-live="polite">
     <main>
-      <section id="linter">
-        <div id="editor" class="split-pane"></div>
-        <div class="split-pane">
-          <div id="loading" class="notification">Loading WebAssembly binary...</div>
-          <table id="lint-result" class="table">
-            <tbody id="lint-result-body"></tbody>
-          </table>
-          <div id="success-msg" class="notification" style="display:none">No errors found.</div>
-        </div>
+      <section #linter>
+        editor pane (#editor-wrap > #editor + #apply-fixes-btn)
+        results pane (.results-column > #loading + #lint-result + #success-msg)
       </section>
     </main>
-    <footer>
-      <p>
-        <a href="https://github.com/guitarrapc/seiton">seiton</a> — Security-focused linter & fixer for GitHub Actions.
-      </p>
-    </footer>
-    <script type="module" src="main.js"></script>
+    <section .playground-about>
+    <section .resources>
+    <footer> (GitHub link, copyright, #theme-cycle-btn)
+    <script type="module" src="main.js">
   </body>
 </html>
 ```
 
----
+### 4.7 External Dependencies (CDN)
 
-## 5. ビルドとパブリッシュ
-
-### 5.1 開発時 (ローカル)
-
-```shell
-# wasm-tools workload が必要
-dotnet workload install wasm-tools
-
-# ビルド
-dotnet build src/Seiton.Playground
-
-# ローカルサーバー起動 (dotnet run は WasmDevServer を起動する)
-dotnet run --project src/Seiton.Playground
-# → http://localhost:5292/index.html
-```
-
-`dotnet run` は開発用 WASM サーバーを起動する。AOT コンパイルは行われないため高速。
-
-### 5.2 パブリッシュ (リリースビルド)
-
-```shell
-dotnet publish src/Seiton.Playground -c Release
-```
-
-出力先: `src/Seiton.Playground/bin/Release/net10.0/browser-wasm/AppBundle/`
-
-このディレクトリ構造:
-
-```
-AppBundle/
-  index.html
-  main.js
-  style.css
-  lib/                      ← wwwroot からコピーされた静的ファイル
-  _framework/
-    dotnet.js               ← .NET WASM ランタイムローダー
-    dotnet.native.js        ← Emscripten POSIX エミュレーション層
-    dotnet.runtime.js       ← ブラウザ統合
-    dotnet.boot.js          ← アセットリスト + integrity hash
-    dotnet.native.wasm      ← コンパイル済み .NET ランタイム (Mono)
-    System.Private.CoreLib.wasm   ← BCL コア
-    Seiton.Core.wasm        ← trimmed Seiton.Core
-    Seiton.Playground.wasm  ← playground アプリ
-    ...                     ← その他 trimmed BCL アセンブリ
-```
-
-### 5.3 サイズ見込み
-
-| 構成 | 予想サイズ (Brotli 圧縮後) |
-|---|---|
-| trimmed + AOT + InvariantGlobalization + InvariantTimezone | **2–5 MB** |
-| 参考: actionlint main.wasm (wasm-opt 後) | 約 3 MB |
-
-`InvariantGlobalization` と `InvariantTimezone` で ICU データとタイムゾーン DB を除外できるため、大幅にサイズ削減できる。Seiton.Core は純粋な YAML パース + lint のみ（UI フレームワーク不使用）なので、trimming が効果的に働く見込み。
-
----
-
-## 6. GitHub Pages デプロイ
-
-### 6.1 デプロイ方式
-
-GitHub Actions の `actions/deploy-pages` を使用（新しい Pages artifact 方式）。`gh-pages` ブランチは使わない。
-
-actionlint は手動の `deploy.bash` でローカルから `gh-pages` ブランチに push する方式だが、seiton は GitHub Actions で自動デプロイする。
-
-### 6.2 ワークフロー
-
-```yaml
-# .github/workflows/playground.yml
-name: Deploy Playground
-
-on:
-  push:
-    branches: [main]
-    paths:
-      - 'src/Seiton.Playground/**'
-      - 'src/Seiton.Core/**'
-  workflow_dispatch:  # 手動トリガーも可能
-
-permissions:
-  pages: write
-  id-token: write
-
-concurrency:
-  group: pages
-  cancel-in-progress: false
-
-jobs:
-  build:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/setup-dotnet@v4
-        with:
-          dotnet-version: '10.0.x'
-
-      - name: Install wasm-tools workload
-        run: dotnet workload install wasm-tools
-
-      - name: Publish Playground
-        run: dotnet publish src/Seiton.Playground -c Release
-
-      - name: Add .nojekyll
-        run: touch src/Seiton.Playground/bin/Release/net10.0/browser-wasm/AppBundle/.nojekyll
-
-      - uses: actions/upload-pages-artifact@v3
-        with:
-          path: src/Seiton.Playground/bin/Release/net10.0/browser-wasm/AppBundle
-
-  deploy:
-    needs: build
-    runs-on: ubuntu-latest
-    environment:
-      name: github-pages
-      url: ${{ steps.deploy.outputs.page_url }}
-    steps:
-      - id: deploy
-        uses: actions/deploy-pages@v4
-```
-
-**ポイント**:
-- `.nojekyll` ファイルを追加して、GitHub Pages の Jekyll 処理を無効化（`_framework/` ディレクトリが `_` プレフィックスのため必須）
-- `paths` フィルターで Playground/Core に変更があった時のみトリガー
-- `concurrency` で同時デプロイを防止
-
-### 6.3 リポジトリ設定
-
-GitHub リポジトリの Settings → Pages で:
-- **Source**: GitHub Actions を選択
-
----
-
-## 7. サイズ最適化戦略
-
-優先度順:
-
-| # | 施策 | 効果 | 備考 |
-|---|---|---|---|
-| 1 | `InvariantGlobalization=true` | ICU データ除外 (数 MB) | Seiton CLI と同設定。lint に文化依存処理不要 |
-| 2 | `InvariantTimezone=true` | タイムゾーン DB 除外 | lint にタイムゾーン不要 |
-| 3 | `PublishTrimmed=true` + `TrimMode=full` | 未使用コード除去 | `full` モードで最大限の trimming |
-| 4 | `RunAOTCompilation=true` | IL→WASM、実行時 JIT 不要 | publish 時のみ有効。ビルド時間増加だが実行速度向上 |
-| 5 | Brotli 圧縮 | 転送サイズ 60-70% 削減 | `dotnet publish` が自動で `.br` ファイル生成。GitHub Pages が `Accept-Encoding: br` に対応 |
-| 6 | `_framework` のプリロード | 初期表示高速化 | `<link rel="preload">` で並列ダウンロード |
-
-### 7.1 Trimming 互換性
-
-Seiton.Core は以下の特性により trimming 親和性が高い:
-- リフレクション不使用（パーサーは手書き、ルールは静的登録）
-- JSON シリアライゼーション不使用（VYaml で YAML パース）
-- DI コンテナ不使用
-
-Playground 側の `JsonSerializer.Serialize()` は匿名型なので、必要に応じて Source Generator 対応にする。
-
----
-
-## 8. UI 機能
-
-actionlint playground を参照し、以下の機能を実装する:
-
-### 8.1 必須機能 (MVP)
-
-| 機能 | actionlint での実装 | seiton での実装 |
+| Library | Version | Purpose |
 |---|---|---|
-| YAML エディタ | CodeMirror 5 (yaml mode) | CodeMirror 5 or 6 (yaml mode) |
-| リアルタイム lint | debounce 300ms → `runActionlint()` | debounce 300ms → `LintInterop.RunLint()` |
-| 結果テーブル | 行番号 + メッセージ + kind タグ | 行番号 + メッセージ + ruleId タグ + severity |
-| ガターマーカー | エラー行に赤丸 | エラー行に赤丸 |
-| 行クリックジャンプ | テーブル行クリック → エディタカーソル移動 | 同左 |
-| ローディング表示 | "Loading WebAssembly binary..." | 同左 |
-| ファイル種別選択 | なし (workflow のみ) | workflow / action.yml 切替セレクト |
+| CodeMirror 5 | 5.65.16 | YAML editor (codemirror.min.js + yaml mode + active-line addon) |
+| CodeMirror material-darker | 5.65.16 | Dark theme |
+| pako | 2.1.0 | Permalink deflate/inflate (ESM import) |
 
-### 8.2 追加機能 (Post-MVP)
+---
 
-| 機能 | 説明 |
+## 5. Deployment
+
+### 5.1 Method
+
+GitHub Actions `actions/deploy-pages` (Pages artifact approach). No `gh-pages` branch.
+
+### 5.2 Workflow Triggers
+
+| Trigger | Behavior |
 |---|---|
-| 共有 URL（permalink） | `#permalink-btn`。**ラベルは共有（アップロード風）SVG アイコンのみ** — `title` / `aria-label` で説明。クリック後に `history.replaceState` で hash を更新しつつ、**完全な現在ページ URL（`location.href`）をクリップボードへコピー**（同期の一時 `textarea` + `execCommand('copy')` を優先し、無効時は `navigator.clipboard.writeText`。いずれも拒否時はユーザーにアドレスバーからコピーできる旨をツールチップで示す）。DOM id は後方互換のため `permalink-btn`。 |
-| GitHub/Gist URL からの読み込み | `#url-input` と `#fetch-btn`。**ボタンは虫眼鏡 SVG のみ**。**空、または明らかに未完成／不正な http(s)**（`new URL` 失敗、非 http(s)、ホストが単一ラベルのみ等）の間は **`disabled`** — `localhost`・IP（v4/v6）・二段以上のホストラベルのときだけ有効化（`main.js` の `looksLikePlausibleHttpFetchUrl`）。空時は `title` / `aria-label` が「先に URL」、不正時は「不完全」旨。**フェッチ中**（`main.js` の `fetchInFlight`）は **両方とも `disabled`** とし、`input`/paste が再度有効にしない。重なる **Enter**/クリックでのフェッチは **no-op**。キーボード **Enter** も空・不正なら info トーストのみ（フェッチは走らせない）。raw をブラウザ `fetch` で取得（CORS 依存）してエディタに設定してから lint する。HTTP 失敗・HTML 返却・無効 URL などは **結果ペインを伏せない** で、画面上部 **`#toast-stack` のトースト**（**`button.toast__dismiss` または Escape で閉じる**、自動消失）で知らせる。成功時もトーストで「読み込み完了」を短く通知してよい。 |
-| トースト（診断パネルとは独立） | WASM / 共有 / fetch / Apply fixes などで **lint 結果テーブルの表示を崩さない**。`RunLint` が例外を投げたときも直前の診断を残し、メッセージはトーストのみ。**本文に URL リンクを含め得るため、トースト全体をクリックで閉じるのではなく**、専用の閉じる `button` と **Escape**（**`document` 上のキャプチャ段階**：エディタ・URL のフォーカス中でも、`#toast-stack` の **最上位** を閉じる）で閉じる。外枠に `role="alert"`（error）/ `status`（成功・その他）。スタイルは `style.css` の `.toast-stack` / `.toast--*` / `.toast__dismiss`。 |
-| severity フィルター | error/warning/info の表示切替 |
+| `push.tags: ["v*"]` | Automatic deploy on release tag |
+| `workflow_dispatch` | Manual re-deploy of an existing tag (validates tag existence via API) |
 
-### 8.3 カラーテーマ（ライト / ダーク）
+### 5.3 Security Posture
 
-- **システム連動**: OS / ブラウザの `prefers-color-scheme`。手動で上書きしない場合は、`:root` のダークトークンをベースに、`@media (prefers-color-scheme: light)` の **` :root:not([data-theme])` だけ**がライト用トークンを上書きする（`no-preference` 含めて「ライト未指定」時はダーク側）。
-- **手動オーバーライド**: フッターのボタンで **System → Light → Dark** を巡回。選択は `localStorage` キー `seiton-playground-color-mode`（値 `light` / `dark` のみ永続化、`system` はキー削除）に保存。`html` に **`data-theme="light"`** を付与すると常にライト（` :root[data-theme="light"]` がシステム用ライトと同じトークン塊を適用）。**` data-theme="dark"`** は通常不要（`:root` 既定がダークのため）だが、一貫のためダーク選択時も付与し、`meta name="color-scheme"` を `light` / `dark` / `light dark` に合わせて更新する。
-- **初回描画**: `index.html` の **インライン `<script>`**（CSS より前）でストレージを読み、`data-theme` と `meta` を同期して FOUC を抑える。
-- **実装詳細**: ページ本体の色は `style.css` の **`var(--*)` トークン**のみ（生の色は `:root` / メディア / ` [data-theme="light"]` の定義部に限定）。
-- **CodeMirror**:
-  - **ダーク**: `material-darker`（CDN のテーマ CSS。シンタックス色用。将来 `wwwroot` にベンダーしてもよい）。
-  - **ライト**: **`default`**（`codemirror.min.css` に同梱の `.cm-s-default`）。追加のライト用テーマ CSS（例: eclipse）は **不要**。
-  - 実際のテーマ名は **ページの実効ライト/ダーク**（手動設定優先、なければ `prefers-color-scheme`）に合わせ、`main.js` が `editor.setOption('theme', …)` する。モードが **System** のときだけ OS の `change` でエディタも追従。
-- **ガターマーカー**: `.gutter-marker--error` / `--warning` と `var(--danger)` / `var(--warning)`。
+- Top-level `permissions: {}` (least privilege)
+- Per-job permissions: `contents: read`, `pages: write`, `id-token: write`
+- Checkout with `persist-credentials: false`
+- All action references pinned to full commit SHA
+- `concurrency.group: pages` prevents simultaneous deploys
 
----
+### 5.4 Static Hosting Requirements
 
-## 9. actionlint との構成差分サマリー
+- `.nojekyll` file required (protects `_framework/` directory from Jekyll underscore prefix filtering)
+- Fingerprinted + non-fingerprinted assets both emitted (no server-side import map rewriting on GitHub Pages)
 
-| 項目 | actionlint | seiton |
-|---|---|---|
-| 言語 | Go | C# (.NET 10) |
-| WASM ビルド | `GOOS=js GOARCH=wasm go build` | `dotnet publish` (Microsoft.NET.Sdk.WebAssembly) |
-| JS glue | `wasm_exec.js` (Go 標準) | `dotnet.js` (dotnet ランタイム、自動生成) |
-| WASM 成果物 | 単一 `main.wasm` | `_framework/` ディレクトリ (dotnet.native.wasm + アセンブリ群) |
-| JS ↔ WASM interop | `js.FuncOf` + `window.Set` | `[JSExport]` / `[JSImport]` 属性 |
-| WASM 最適化 | `wasm-opt` (Binaryen) | AOT + IL trimming + Brotli |
-| フロントエンド | TypeScript + npm (tsc ビルド) | 素の JavaScript（ビルドツール不要） |
-| エディタ | CodeMirror 5 | CodeMirror 5 or 6 |
-| デプロイ | 手動 `deploy.bash` → `gh-pages` ブランチ | GitHub Actions → Pages artifact |
-| `.nojekyll` | あり | あり（`_framework/` 保護のため必須） |
+### 5.5 Repository Configuration
+
+GitHub Settings → Pages → Source: **GitHub Actions**
 
 ---
 
-## 10. Lessons Learned
+## 6. Lessons Learned
 
-### 10.1 `[JSExport]` メソッドからの例外伝播で WASM ランタイムが死ぬ
+### 6.1 Unhandled Exceptions at WASM Interop Boundary Are Fatal
 
-**問題**: `[JSExport]` メソッド内でハンドルされない例外が interop 境界を超えて伝播すると、Mono WASM ランタイムが exit code 1 で abort する。一度 abort すると、以降のすべての `[JSExport]` 呼び出しが `"Assert failed: .NET runtime already exited with 1"` で失敗し、ページのリロードなしには復旧不可能になる。
+WASM runtimes abort on unhandled exceptions crossing the interop boundary. Once aborted, the runtime cannot be restarted without a full page reload.
 
-**発生シナリオ**: ユーザーがエディタで新規行を追加しながらタイプ中に debounce が発火 → 不完全な YAML に対してパーサー/リンターが例外を送出 → ランタイム死亡 → 以降の lint 呼び出しすべてが連鎖的に失敗。
+**Mitigation pattern**:
+- WASM side: wrap all exported functions in try/catch; return error information as normal return values
+- JS side: detect "runtime already exited" pattern → set `runtimeAlive = false` → suppress all subsequent calls
 
-**対策**:
-1. **C# 側**: すべての `[JSExport]` メソッド内に `try/catch(Exception)` を配置。例外をキャッチしてエラー JSON を返すことで、例外が interop 境界を超えないようにする。
-2. **JS 側**: `runtimeAlive` フラグを導入。"runtime already exited" パターンを検出したら以降の呼び出しを停止し、「ページをリロードしてください」メッセージを表示。
+### 6.2 Synchronous WASM Calls and JS Event Queue
 
-**教訓**: .NET WASM (browser-wasm) の `[JSExport]` メソッドは、例外が絶対に外に漏れない設計にしなければならない。通常の .NET アプリケーションと異なり、ハンドルされない例外＝プロセス終了＝復帰不可能。
+Synchronous WASM calls block the main thread. User input queues at the browser level during lint execution. After completion, queued `change` events cascade.
 
-### 10.2 同期 WASM 呼び出しに対する JS 側トリガー制御
+**Mitigation pattern**:
+1. `lintInProgress` flag (re-entry prevention)
+2. `lintPendingRetry` flag (post-completion retry with debounce)
+3. `lastLintedSource`/`lastLintedFilePath` (idempotency check)
 
-**問題**: `[JSExport]` は同期呼出し（メインスレッドブロック）のため、lint 実行中にユーザー入力がブラウザレベルでキューされる。lint 完了後にキューされた `change` イベントが連発 → debounce リセット → 300ms 後にまた lint → の連鎖で、高速タイプ時に不要な lint が繰り返される可能性がある。
+### 6.3 Static Hosting and WASM Framework Assets
 
-**対策** (`main.js` に以下の制御を導入):
-1. **`lintInProgress` フラグ (再入防止)**: lint 実行中に新たな `runLint()` 呼び出しが来た場合、即座に `lintPendingRetry = true` を設定して return。実行完了後に debounce 付きで再試行する。
-2. **`lintPendingRetry` フラグ (完了後リトライ)**: lint 実行中に `change` イベントが発生した場合にセットされる。lint 完了後、このフラグが立っていればさらに `DEBOUNCE_MS` 待ってから再 lint する（即時ではなく debounce を挟むことで、連打を吸収）。
-3. **`lastLintedFingerprint` (冪等性)**: `filePath + '\x00' + source` の文字列を記録し、前回と同一なら lint をスキップ。ファイル種別変更・fix 適用・fetch 読み込み時には明示的にクリアする。
-
-**設計判断**:
-- 同期呼出しであるため真の並行実行は起きないが、将来的に Web Worker 化や async 化する際のためにも再入防止は入れておく。
-- debounce (300ms) + staleness check の組み合わせで、高速タイプ時の無駄な lint を大幅に削減できる。
+- `_framework/` directory requires `.nojekyll` due to underscore prefix
+- Static hosts without import map support (GitHub Pages) require both fingerprinted and non-fingerprinted file output
 
 ---
 
-## 11. 参考リンク
+## 7. References
 
-- [JavaScript [JSImport]/[JSExport] interop with a WebAssembly Browser App project](https://learn.microsoft.com/en-us/aspnet/core/client-side/dotnet-interop/wasm-browser-app?view=aspnetcore-10.0)
-- [Configuring and hosting .NET WebAssembly applications](https://github.com/dotnet/runtime/blob/main/src/mono/wasm/features.md)
-- [JavaScript [JSImport]/[JSExport] interop in .NET WebAssembly](https://learn.microsoft.com/en-us/aspnet/core/client-side/dotnet-interop/?view=aspnetcore-10.0)
-- [actionlint playground ソース](https://github.com/rhysd/actionlint/tree/main/playground)
-- [dotnet.d.ts (.NET WASM runtime configuration)](https://github.com/dotnet/runtime/blob/main/src/mono/browser/runtime/dotnet.d.ts)
+- [actionlint playground source](https://github.com/rhysd/actionlint/tree/main/playground)
+- [CodeMirror 5](https://codemirror.net/5/)
+- [pako (zlib for browser)](https://github.com/nicolo-ribaudo/pako)
