@@ -104,14 +104,17 @@ Exit codes:
 
 Print version and target platform to stdout.
 
-Example output:
+Output structure:
 
 ```
-seiton 1.0.0
-built with .NET 10.0.0, win-x64
+seiton <semver>
+built with <runtime-description>, <platform-identifier>
 ```
 
-The exact format of the second line is implementation-defined (runtime description and platform identifier).
+The exact content of each placeholder is implementation-defined. Examples:
+
+- `built with .NET 10.0.0, win-x64` (C# NativeAOT build)
+- `built with go1.24.0, linux/amd64` (Go build)
 
 ---
 
@@ -394,7 +397,7 @@ Color coding (when color is enabled):
 
 ### 6.2 `json`
 
-AOT-compatible JSON array to stdout. Each element is one diagnostic.
+JSON array to stdout. Each element is one diagnostic.
 
 Schema (non-normative):
 
@@ -498,5 +501,6 @@ seiton validate-config --config .github/seiton.yaml
 When this document is revised, review and update:
 
 - `Seiton_CLI_csharp_spec.md` — C# implementation spec
-- `Seiton_Linter_csharp_spec.md` — if lint config bridge contract changes
-- `Seiton_Linter_spec.md` §5.10 — if config discovery order changes
+- `Seiton_CLI_go_spec.md` — Go implementation spec
+- `Seiton_Linter_spec.md` — if config bridge contract or discovery order changes
+- `Seiton_Linter_csharp_spec.md` — if `LintConfig` bridge contract changes
