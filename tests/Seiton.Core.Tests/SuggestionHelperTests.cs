@@ -1,4 +1,5 @@
 ﻿using Seiton.Core.Parsing;
+using System.Collections.Frozen;
 
 namespace Seiton.Core.Tests;
 
@@ -39,6 +40,16 @@ public sealed class SuggestionHelperTests
         // "Branchs" should match "branches" with case-insensitive distance 1 (missing 'e')
         var result = SuggestionHelper.FindClosest("Branchs", ["branches", "paths", "tags"]);
         await Assert.That(result).IsEqualTo("branches");
+    }
+
+    [Test]
+    public async Task FindClosest_ReadOnlyCollectionInputThatExceedsMaxCandidateLength_ReturnsNull()
+    {
+        IReadOnlyCollection<string> candidates = new[] { "run", "shell", "path" }.ToFrozenSet();
+
+        var result = SuggestionHelper.FindClosest("very-long-option-name", candidates);
+
+        await Assert.That(result).IsNull();
     }
 
     [Test]

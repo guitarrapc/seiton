@@ -153,14 +153,14 @@ public sealed class PopularActionInputsRule() : RuleBase(RuleId.PopularActionInp
         // Threshold: max distance is roughly 1/3 of the input name length, minimum 2
         var maxDistance = Math.Max(2, unknownInput.Length / 3);
         string? best = null;
-        var bestDistance = int.MaxValue;
+        var bestDistance = maxDistance + 1;
         var tied = false;
 
         for (var i = 0; i < inputNames.Length; i++)
         {
             var candidate = inputNames[i];
-            var distance = EditDistance.ComputeIgnoreCase(unknownInput, candidate);
-            if (distance < bestDistance && distance <= maxDistance)
+            var distance = EditDistance.ComputeIgnoreCase(unknownInput, candidate, maxDistance);
+            if (distance < bestDistance)
             {
                 bestDistance = distance;
                 best = candidate;

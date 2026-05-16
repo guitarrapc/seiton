@@ -2,6 +2,8 @@
 
 internal static class CliOptionSuggester
 {
+    private const int SuggestionDistanceThreshold = 3;
+
     private static readonly HashSet<string> KnownLongOptions =
     [
         "--help",
@@ -25,6 +27,9 @@ internal static class CliOptionSuggester
         "--force",
     ];
 
+    private static readonly int MaxNormalizedOptionLength = ComputeMaxNormalizedLength();
+    private static readonly int MaxPlausibleNormalizedOptionLength = MaxNormalizedOptionLength + SuggestionDistanceThreshold;
+
     private static readonly HashSet<string> LongOptionsWithValue =
     [
         "--config",
@@ -35,8 +40,6 @@ internal static class CliOptionSuggester
         "--color",
         "--output",
     ];
-
-    private const int SuggestionDistanceThreshold = 3;
 
     public static bool TryWriteSuggestionsForUnknownOptions(string[] args, TextWriter errorWriter)
     {
@@ -111,6 +114,7 @@ internal static class CliOptionSuggester
         {
             "seiton"
         };
+        var hasUnresolvedUnknownOption = false;
 
         for (var i = 0; i < args.Length; i++)
         {
@@ -138,6 +142,7 @@ internal static class CliOptionSuggester
 
             if (replacement is null)
             {
+                hasUnresolvedUnknownOption = true;
                 continue;
             }
 
@@ -174,7 +179,7 @@ internal static class CliOptionSuggester
             i++;
         }
 
-        return string.Join(' ', tokens);
+        return hasUnresolvedUnknownOption ? string.Empty : JoinCommandTokens(tokens);
     }
 
     private static bool TryGetLongOptionToken(string raw, out string optionToken)
@@ -193,6 +198,11 @@ internal static class CliOptionSuggester
     private static string? FindBestSuggestion(string optionToken)
     {
         var normalizedInput = Normalize(optionToken);
+        if (normalizedInput.Length > MaxPlausibleNormalizedOptionLength)
+        {
+            return null;
+        }
+
         string? best = null;
         var bestDistance = int.MaxValue;
 
@@ -231,7 +241,48 @@ internal static class CliOptionSuggester
 
     private static string Normalize(string option)
     {
-        return option.Replace("-", string.Empty, StringComparison.Ordinal);
+        return option.Replace("-", string.Empty, StringComparison.Ordinal).ToLowerInvariant();
+    }
+
+    private static int ComputeMaxNormalizedLength()
+    {
+        var max = 0;
+        foreach (var option in KnownLongOptions)
+        {
+            var len = Normalize(option).Length;
+            if (len > max) max = len;
+        }
+
+        return max;
+    }
+
+    private static string JoinCommandTokens(List<string> tokens)
+    {
+        var builder = new System.Text.StringBuilder();
+        for (var i = 0; i < tokens.Count; i++)
+        {
+            if (i > 0)
+            {
+                builder.Append(' ');
+            }
+
+            builder.Append(QuoteIfNeeded(tokens[i]));
+        }
+
+        return builder.ToString();
+    }
+
+    private static string QuoteIfNeeded(string token)
+    {
+        for (var i = 0; i < token.Length; i++)
+        {
+            if (char.IsWhiteSpace(token[i]))
+            {
+                return $"\"{token.Replace("\"", "\\\"", StringComparison.Ordinal)}\"";
+            }
+        }
+
+        return token;
     }
 
     private static int LevenshteinDistance(string a, string b)
@@ -246,29 +297,29 @@ internal static class CliOptionSuggester
             return a.Length;
         }
 
-        var prev = new int[b.Length + 1];
-        var curr = new int[b.Length + 1];
-
-        for (var j = 0; j <= b.Length; j++)
+        var n = b.Length;
+        Span<int> row = stackalloc int[n + 1];
+        for (var j = 0; j <= n; j++)
         {
-            prev[j] = j;
+            row[j] = j;
         }
 
         for (var i = 1; i <= a.Length; i++)
         {
-            curr[0] = i;
-            for (var j = 1; j <= b.Length; j++)
+            var prevDiagonal = row[0];
+            row[0] = i;
+            for (var j = 1; j <= n; j++)
             {
+                var old = row[j];
                 var substitutionCost = a[i - 1] == b[j - 1] ? 0 : 1;
-                curr[j] = Math.Min(
-                    Math.Min(curr[j - 1] + 1, prev[j] + 1),
-                    prev[j - 1] + substitutionCost);
+                row[j] = Math.Min(
+                    Math.Min(row[j - 1] + 1, old + 1),
+                    prevDiagonal + substitutionCost);
+                prevDiagonal = old;
             }
-
-            (prev, curr) = (curr, prev);
         }
 
-        return prev[b.Length];
+        return row[n];
     }
 
     private readonly record struct OptionSuggestion(string OptionToken, string? Suggestion);
