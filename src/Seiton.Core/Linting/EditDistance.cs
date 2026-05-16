@@ -1,4 +1,5 @@
-﻿using System.Runtime.CompilerServices;
+﻿using System.Buffers;
+using System.Runtime.CompilerServices;
 
 namespace Seiton.Core.Linting;
 
@@ -17,7 +18,7 @@ internal static class EditDistance
         if (right.Length == 0) return left.Length;
 
         // Myers64: pattern must be ≤ 64 chars. Use shorter string as pattern.
-        if (left.Length <= 64 && right.Length <= 64)
+        if (left.Length <= 64 && right.Length <= 64 && IsAscii(left) && IsAscii(right))
         {
             // Pattern = shorter side for Myers
             if (left.Length <= right.Length)
@@ -26,6 +27,18 @@ internal static class EditDistance
         }
 
         return OneRowDpIgnoreCase(left, right);
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private static bool IsAscii(string value)
+    {
+        for (var i = 0; i < value.Length; i++)
+        {
+            if (value[i] > 127)
+                return false;
+        }
+
+        return true;
     }
 
     /// <summary>
@@ -106,7 +119,7 @@ internal static class EditDistance
         var n = right.Length;
         var len = n + 1;
 
-        // For strings > 128 chars, use heap allocation (extremely rare in practice)
+        // For strings > 128 chars, rent buffers from ArrayPool.
         if (n > 128)
             return OneRowDpIgnoreCaseHeap(left, right);
 
@@ -143,41 +156,52 @@ internal static class EditDistance
     }
 
     /// <summary>
-    /// Heap-allocated 1-row DP fallback for very long strings (&gt; 128 chars).
+    /// ArrayPool-backed 1-row DP fallback for very long strings (&gt; 128 chars).
     /// </summary>
     private static int OneRowDpIgnoreCaseHeap(string left, string right)
     {
         var n = right.Length;
         var len = n + 1;
 
-        var rightLower = new char[n];
-        for (var j = 0; j < n; j++)
-            rightLower[j] = char.ToLowerInvariant(right[j]);
+        var rightLowerArray = ArrayPool<char>.Shared.Rent(n);
+        var rowArray = ArrayPool<int>.Shared.Rent(len);
 
-        var row = new int[len];
-        for (var j = 0; j < len; j++)
-            row[j] = j;
-
-        for (var i = 1; i <= left.Length; i++)
+        try
         {
-            var prevDiagonal = row[0];
-            row[0] = i;
-            var lc = char.ToLowerInvariant(left[i - 1]);
+            var rightLower = rightLowerArray.AsSpan(0, n);
+            for (var j = 0; j < n; j++)
+                rightLower[j] = char.ToLowerInvariant(right[j]);
 
-            for (var j = 1; j <= n; j++)
+            var row = rowArray.AsSpan(0, len);
+            for (var j = 0; j < len; j++)
+                row[j] = j;
+
+            for (var i = 1; i <= left.Length; i++)
             {
-                var old = row[j];
-                var substitutionCost = lc == rightLower[j - 1] ? 0 : 1;
-                var insertion = row[j - 1] + 1;
-                var deletion = old + 1;
-                var substitution = prevDiagonal + substitutionCost;
+                var prevDiagonal = row[0];
+                row[0] = i;
+                var lc = char.ToLowerInvariant(left[i - 1]);
 
-                row[j] = Math.Min(Math.Min(insertion, deletion), substitution);
-                prevDiagonal = old;
+                for (var j = 1; j <= n; j++)
+                {
+                    var old = row[j];
+                    var substitutionCost = lc == rightLower[j - 1] ? 0 : 1;
+                    var insertion = row[j - 1] + 1;
+                    var deletion = old + 1;
+                    var substitution = prevDiagonal + substitutionCost;
+
+                    row[j] = Math.Min(Math.Min(insertion, deletion), substitution);
+                    prevDiagonal = old;
+                }
             }
-        }
 
-        return row[n];
+            return row[n];
+        }
+        finally
+        {
+            ArrayPool<int>.Shared.Return(rowArray);
+            ArrayPool<char>.Shared.Return(rightLowerArray);
+        }
     }
 
     /// <summary>
@@ -266,41 +290,51 @@ internal static class EditDistance
         var n = right.Length;
         var len = n + 1;
 
-        // Pre-compute right-side lowercase using ArrayPool for large strings
-        var rightLower = new char[n];
-        for (var j = 0; j < n; j++)
-            rightLower[j] = char.ToLowerInvariant(right[j]);
+        var rightLowerArray = ArrayPool<char>.Shared.Rent(n);
+        var rowArray = ArrayPool<int>.Shared.Rent(len);
 
-        var row = new int[len];
-        for (var j = 0; j < len; j++)
-            row[j] = j;
-
-        for (var i = 1; i <= left.Length; i++)
+        try
         {
-            var prevDiagonal = row[0];
-            row[0] = i;
-            var lc = char.ToLowerInvariant(left[i - 1]);
-            var rowMin = int.MaxValue;
+            var rightLower = rightLowerArray.AsSpan(0, n);
+            for (var j = 0; j < n; j++)
+                rightLower[j] = char.ToLowerInvariant(right[j]);
 
-            for (var j = 1; j <= n; j++)
+            var row = rowArray.AsSpan(0, len);
+            for (var j = 0; j < len; j++)
+                row[j] = j;
+
+            for (var i = 1; i <= left.Length; i++)
             {
-                var old = row[j];
-                var substitutionCost = lc == rightLower[j - 1] ? 0 : 1;
-                var insertion = row[j - 1] + 1;
-                var deletion = old + 1;
-                var substitution = prevDiagonal + substitutionCost;
+                var prevDiagonal = row[0];
+                row[0] = i;
+                var lc = char.ToLowerInvariant(left[i - 1]);
+                var rowMin = int.MaxValue;
 
-                var val = Math.Min(Math.Min(insertion, deletion), substitution);
-                row[j] = val;
-                prevDiagonal = old;
+                for (var j = 1; j <= n; j++)
+                {
+                    var old = row[j];
+                    var substitutionCost = lc == rightLower[j - 1] ? 0 : 1;
+                    var insertion = row[j - 1] + 1;
+                    var deletion = old + 1;
+                    var substitution = prevDiagonal + substitutionCost;
 
-                if (val < rowMin) rowMin = val;
+                    var val = Math.Min(Math.Min(insertion, deletion), substitution);
+                    row[j] = val;
+                    prevDiagonal = old;
+
+                    if (val < rowMin) rowMin = val;
+                }
+
+                if (rowMin > maxDistance)
+                    return maxDistance + 1;
             }
 
-            if (rowMin > maxDistance)
-                return maxDistance + 1;
+            return row[n] <= maxDistance ? row[n] : maxDistance + 1;
         }
-
-        return row[n] <= maxDistance ? row[n] : maxDistance + 1;
+        finally
+        {
+            ArrayPool<int>.Shared.Return(rowArray);
+            ArrayPool<char>.Shared.Return(rightLowerArray);
+        }
     }
 }

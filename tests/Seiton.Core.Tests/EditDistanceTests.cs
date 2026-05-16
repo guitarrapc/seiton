@@ -41,6 +41,20 @@ public sealed class EditDistanceTests
         await Assert.That(result).IsEqualTo(0);
     }
 
+    [Test]
+    public async Task ComputeIgnoreCase_ShortNonAsciiExactMatch_ReturnsZero()
+    {
+        var result = EditDistance.ComputeIgnoreCase("caf\u00E9", "caf\u00E9");
+        await Assert.That(result).IsEqualTo(0);
+    }
+
+    [Test]
+    public async Task ComputeIgnoreCase_ShortNonAsciiCaseDifferent_ReturnsZero()
+    {
+        var result = EditDistance.ComputeIgnoreCase("\u00C5ngstr\u00F6m", "\u00E5NGSTR\u00D6M");
+        await Assert.That(result).IsEqualTo(0);
+    }
+
     // === Known distances (real GitHub Actions typos) ===
 
     [Test]
@@ -172,6 +186,31 @@ public sealed class EditDistanceTests
         var unbounded = EditDistance.ComputeIgnoreCase("environment-url", "environment_url");
         var bounded = EditDistance.ComputeIgnoreCase("environment-url", "environment_url", maxDistance: 100);
         await Assert.That(bounded).IsEqualTo(unbounded);
+    }
+
+    [Test]
+    public async Task ComputeIgnoreCase_LengthBoundary64And65_MatchesExpectedDistance()
+    {
+        var left64 = new string('a', 64);
+        var right64 = new string('a', 63) + "b";
+        var left65 = new string('a', 65);
+        var right65 = new string('a', 64) + "b";
+
+        await Assert.That(EditDistance.ComputeIgnoreCase(left64, right64)).IsEqualTo(1);
+        await Assert.That(EditDistance.ComputeIgnoreCase(left65, right65)).IsEqualTo(1);
+    }
+
+    [Test]
+    public async Task ComputeIgnoreCase_LongInputsBeyondStackallocThreshold_MatchesBetweenOverloads()
+    {
+        var left = new string('a', 129);
+        var right = new string('a', 128) + "b";
+
+        var unbounded = EditDistance.ComputeIgnoreCase(left, right);
+        var bounded = EditDistance.ComputeIgnoreCase(left, right, maxDistance: 2);
+
+        await Assert.That(unbounded).IsEqualTo(1);
+        await Assert.That(bounded).IsEqualTo(1);
     }
 
     // === Real-world scenario: "did you mean?" with multiple candidates ===

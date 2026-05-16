@@ -15,6 +15,12 @@ internal static class SuggestionHelper
     public static string? FindClosest(string input, ReadOnlySpan<string> candidates)
     {
         var maxDistance = GetThreshold(input.Length);
+        var maxCandidateLength = GetMaxCandidateLength(candidates);
+        if (input.Length > maxCandidateLength + maxDistance)
+        {
+            return null;
+        }
+
         string? best = null;
         var bestDistance = maxDistance + 1;
 
@@ -38,6 +44,20 @@ internal static class SuggestionHelper
     public static string? FindClosest(string input, IReadOnlyCollection<string> candidates)
     {
         var maxDistance = GetThreshold(input.Length);
+        var maxCandidateLength = 0;
+        foreach (var candidate in candidates)
+        {
+            if (candidate.Length > maxCandidateLength)
+            {
+                maxCandidateLength = candidate.Length;
+            }
+        }
+
+        if (input.Length > maxCandidateLength + maxDistance)
+        {
+            return null;
+        }
+
         string? best = null;
         var bestDistance = maxDistance + 1;
 
@@ -60,6 +80,20 @@ internal static class SuggestionHelper
         <= 8 => 2,
         _ => 3,
     };
+
+    private static int GetMaxCandidateLength(ReadOnlySpan<string> candidates)
+    {
+        var max = 0;
+        for (var i = 0; i < candidates.Length; i++)
+        {
+            if (candidates[i].Length > max)
+            {
+                max = candidates[i].Length;
+            }
+        }
+
+        return max;
+    }
 
     /// <summary>
     /// Formats an array of option names as a quoted, comma-separated list for diagnostic messages.

@@ -8,6 +8,12 @@ public class EditDistanceBenchmark
 {
     private string[] _lefts = null!;
     private string[] _rights = null!;
+    private string _ascii64 = null!;
+    private string _ascii64Typo = null!;
+    private string _ascii65 = null!;
+    private string _ascii65Typo = null!;
+    private string _long129 = null!;
+    private string _long129Typo = null!;
 
     // Simulates PopularActionInputsRule: unknown input vs 55 candidates (actions/stale)
     private string[] _staleCandidates = null!;
@@ -18,6 +24,12 @@ public class EditDistanceBenchmark
         // Simulate typical usage: comparing unknown input names against known inputs
         _lefts = ["tokne", "scrpt", "environment-url", "node-version", "registryUrl", "cache-dependency-pathx"];
         _rights = ["token", "script", "environment-url", "node-version", "registry-url", "cache-dependency-path"];
+        _ascii64 = new string('a', 64);
+        _ascii64Typo = new string('a', 63) + "b";
+        _ascii65 = new string('a', 65);
+        _ascii65Typo = new string('a', 64) + "b";
+        _long129 = new string('a', 129);
+        _long129Typo = new string('a', 128) + "b";
 
         // Largest real candidate set: actions/stale has 55 inputs
         _staleCandidates =
@@ -66,6 +78,24 @@ public class EditDistanceBenchmark
     public int SingleLong()
     {
         return EditDistance.ComputeIgnoreCase("cache-dependency-pathx", "cache-dependency-path");
+    }
+
+    [Benchmark]
+    public int Boundary64_Myers()
+    {
+        return EditDistance.ComputeIgnoreCase(_ascii64, _ascii64Typo);
+    }
+
+    [Benchmark]
+    public int Boundary65_OneRowDp()
+    {
+        return EditDistance.ComputeIgnoreCase(_ascii65, _ascii65Typo);
+    }
+
+    [Benchmark]
+    public int Long129_PooledFallback()
+    {
+        return EditDistance.ComputeIgnoreCase(_long129, _long129Typo, maxDistance: 2);
     }
 
     [Benchmark]

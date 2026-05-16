@@ -2,6 +2,10 @@
 
 internal static class CliOptionSuggester
 {
+    private const int SuggestionDistanceThreshold = 3;
+    private const int MaxNormalizedOptionLength = 18;
+    private const int MaxPlausibleNormalizedOptionLength = MaxNormalizedOptionLength + SuggestionDistanceThreshold;
+
     private static readonly HashSet<string> KnownLongOptions =
     [
         "--help",
@@ -35,8 +39,6 @@ internal static class CliOptionSuggester
         "--color",
         "--output",
     ];
-
-    private const int SuggestionDistanceThreshold = 3;
 
     public static bool TryWriteSuggestionsForUnknownOptions(string[] args, TextWriter errorWriter)
     {
@@ -111,6 +113,7 @@ internal static class CliOptionSuggester
         {
             "seiton"
         };
+        var hasUnresolvedUnknownOption = false;
 
         for (var i = 0; i < args.Length; i++)
         {
@@ -138,6 +141,7 @@ internal static class CliOptionSuggester
 
             if (replacement is null)
             {
+                hasUnresolvedUnknownOption = true;
                 continue;
             }
 
@@ -174,7 +178,7 @@ internal static class CliOptionSuggester
             i++;
         }
 
-        return string.Join(' ', tokens);
+        return hasUnresolvedUnknownOption ? string.Empty : JoinCommandTokens(tokens);
     }
 
     private static bool TryGetLongOptionToken(string raw, out string optionToken)
@@ -193,6 +197,11 @@ internal static class CliOptionSuggester
     private static string? FindBestSuggestion(string optionToken)
     {
         var normalizedInput = Normalize(optionToken);
+        if (normalizedInput.Length > MaxPlausibleNormalizedOptionLength)
+        {
+            return null;
+        }
+
         string? best = null;
         var bestDistance = int.MaxValue;
 
@@ -231,7 +240,36 @@ internal static class CliOptionSuggester
 
     private static string Normalize(string option)
     {
-        return option.Replace("-", string.Empty, StringComparison.Ordinal);
+        return option.Replace("-", string.Empty, StringComparison.Ordinal).ToLowerInvariant();
+    }
+
+    private static string JoinCommandTokens(List<string> tokens)
+    {
+        var builder = new System.Text.StringBuilder();
+        for (var i = 0; i < tokens.Count; i++)
+        {
+            if (i > 0)
+            {
+                builder.Append(' ');
+            }
+
+            builder.Append(QuoteIfNeeded(tokens[i]));
+        }
+
+        return builder.ToString();
+    }
+
+    private static string QuoteIfNeeded(string token)
+    {
+        for (var i = 0; i < token.Length; i++)
+        {
+            if (char.IsWhiteSpace(token[i]))
+            {
+                return $"\"{token.Replace("\"", "\\\"", StringComparison.Ordinal)}\"";
+            }
+        }
+
+        return token;
     }
 
     private static int LevenshteinDistance(string a, string b)
