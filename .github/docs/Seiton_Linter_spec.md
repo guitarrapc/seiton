@@ -1,7 +1,9 @@
 ﻿# Seiton Linter Specification
 
-> Defines the language-agnostic linter contract for rule execution, lint configuration, and diagnostic processing.
-> Detailed parser behavior is specified in `Seiton_Parser_spec.md`.
+> This document is language-neutral — it specifies WHAT the Linter does, not HOW a specific implementation achieves it. Defines the linter contract for rule execution, lint configuration, and diagnostic processing. For C#-specific implementation details, see `Seiton_Linter_csharp_spec.md`, For Go-specific implementation details, see `Seiton_Linter_go_spec.md`. Parser and linter behavior are specified in `Seiton_Parser_spec.md` and `Seiton_Linter_spec.md`.
+
+> **Cross-document rule**: This spec is the source of truth. When revised, also review and update `Seiton_Linter_csharp_spec.md`, `Seiton_Linter_go_spec.md` for consistency.
+
 
 ---
 

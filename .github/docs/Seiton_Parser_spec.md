@@ -1,10 +1,8 @@
 # Seiton Parser Specification
 
-> Defines the specification for syntactic analysis, AST construction, and expression parsing/validation of GitHub Actions workflow YAML and action metadata YAML.
-> This document is a language-agnostic parser specification. For C# implementation details, see `Seiton_Parser_csharp_spec.md`.
-> Linter execution model and rule configuration are defined in `Seiton_Linter_spec.md`.
->
-> **Cross-document rule**: This spec is the source of truth. When revised, also review and update `Seiton_Parser_csharp_spec.md`, `Seiton_Parser_go_spec.md`, and `parser_implementation_csharp_plan.md` for consistency.
+> This document is language-neutral — it specifies WHAT the Parser does, not HOW a specific implementation achieves it. Defines the parser contract for syntactic analysis, AST construction, and expression parsing/validation. For C#-specific implementation details, see `Seiton_Parser_csharp_spec.md`, For Go-specific implementation details, see `Seiton_Parser_go_spec.md`. Parser and linter behavior are specified in `Seiton_Parser_spec.md` and `Seiton_Linter_spec.md`.
+
+> **Cross-document rule**: This spec is the source of truth. When revised, also review and update `Seiton_Parser_csharp_spec.md`, `Seiton_Parser_go_spec.md` for consistency.
 
 ---
 
