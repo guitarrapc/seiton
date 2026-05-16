@@ -44,14 +44,7 @@ internal static class SuggestionHelper
     public static string? FindClosest(string input, IReadOnlyCollection<string> candidates)
     {
         var maxDistance = GetThreshold(input.Length);
-        var maxCandidateLength = 0;
-        foreach (var candidate in candidates)
-        {
-            if (candidate.Length > maxCandidateLength)
-            {
-                maxCandidateLength = candidate.Length;
-            }
-        }
+        var maxCandidateLength = GetMaxCandidateLength(candidates);
 
         if (input.Length > maxCandidateLength + maxDistance)
         {
@@ -89,6 +82,20 @@ internal static class SuggestionHelper
             if (candidates[i].Length > max)
             {
                 max = candidates[i].Length;
+            }
+        }
+
+        return max;
+    }
+
+    private static int GetMaxCandidateLength(IReadOnlyCollection<string> candidates)
+    {
+        var max = 0;
+        foreach (var candidate in candidates)
+        {
+            if (candidate.Length > max)
+            {
+                max = candidate.Length;
             }
         }
 

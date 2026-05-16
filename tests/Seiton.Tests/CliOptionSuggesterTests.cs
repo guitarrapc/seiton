@@ -10,9 +10,10 @@ public sealed class CliOptionSuggesterTests
         using var error = new StringWriter();
 
         var wrote = CliOptionSuggester.TryWriteSuggestionsForUnknownOptions(["--VERBOSE"], error);
+        var message = error.ToString();
 
         await Assert.That(wrote).IsTrue();
-        await Assert.That(error.ToString()).Contains("Did you mean '--verbose'?", StringComparison.Ordinal);
+        await Assert.That(message.Contains("Did you mean '--verbose'?", StringComparison.Ordinal)).IsTrue();
     }
 
     [Test]
@@ -21,10 +22,11 @@ public sealed class CliOptionSuggesterTests
         using var error = new StringWriter();
 
         var wrote = CliOptionSuggester.TryWriteSuggestionsForUnknownOptions(["--verboze", "--totally-unknown-option"], error);
+        var message = error.ToString();
 
         await Assert.That(wrote).IsTrue();
-        await Assert.That(error.ToString()).Contains("Did you mean '--verbose'?", StringComparison.Ordinal);
-        await Assert.That(error.ToString().Contains("Try:", StringComparison.Ordinal)).IsFalse();
+        await Assert.That(message.Contains("Did you mean '--verbose'?", StringComparison.Ordinal)).IsTrue();
+        await Assert.That(message.Contains("Try:", StringComparison.Ordinal)).IsFalse();
     }
 
     [Test]
@@ -33,8 +35,9 @@ public sealed class CliOptionSuggesterTests
         using var error = new StringWriter();
 
         var wrote = CliOptionSuggester.TryWriteSuggestionsForUnknownOptions(["--confg", "C:\\Users\\me\\My Config\\seiton.yaml"], error);
+        var message = error.ToString();
 
         await Assert.That(wrote).IsTrue();
-        await Assert.That(error.ToString()).Contains("Try: seiton --config \"C:\\Users\\me\\My Config\\seiton.yaml\"", StringComparison.Ordinal);
+        await Assert.That(message.Contains("Try: seiton --config \"C:\\Users\\me\\My Config\\seiton.yaml\"", StringComparison.Ordinal)).IsTrue();
     }
 }
