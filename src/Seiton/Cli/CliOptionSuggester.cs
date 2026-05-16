@@ -3,8 +3,6 @@
 internal static class CliOptionSuggester
 {
     private const int SuggestionDistanceThreshold = 3;
-    private const int MaxNormalizedOptionLength = 18;
-    private const int MaxPlausibleNormalizedOptionLength = MaxNormalizedOptionLength + SuggestionDistanceThreshold;
 
     private static readonly HashSet<string> KnownLongOptions =
     [
@@ -28,6 +26,9 @@ internal static class CliOptionSuggester
         "--output",
         "--force",
     ];
+
+    private static readonly int MaxNormalizedOptionLength = ComputeMaxNormalizedLength();
+    private static readonly int MaxPlausibleNormalizedOptionLength = MaxNormalizedOptionLength + SuggestionDistanceThreshold;
 
     private static readonly HashSet<string> LongOptionsWithValue =
     [
@@ -241,6 +242,18 @@ internal static class CliOptionSuggester
     private static string Normalize(string option)
     {
         return option.Replace("-", string.Empty, StringComparison.Ordinal).ToLowerInvariant();
+    }
+
+    private static int ComputeMaxNormalizedLength()
+    {
+        var max = 0;
+        foreach (var option in KnownLongOptions)
+        {
+            var len = Normalize(option).Length;
+            if (len > max) max = len;
+        }
+
+        return max;
     }
 
     private static string JoinCommandTokens(List<string> tokens)

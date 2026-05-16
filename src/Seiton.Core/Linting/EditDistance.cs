@@ -49,6 +49,9 @@ internal static class EditDistance
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static int ComputeIgnoreCase(string left, string right, int maxDistance)
     {
+        if (maxDistance < 0)
+            throw new ArgumentOutOfRangeException(nameof(maxDistance), maxDistance, "maxDistance must be non-negative.");
+
         if (left.Length == 0) return right.Length <= maxDistance ? right.Length : maxDistance + 1;
         if (right.Length == 0) return left.Length <= maxDistance ? left.Length : maxDistance + 1;
 
@@ -225,22 +228,19 @@ internal static class EditDistance
         var n = right.Length;
         var len = n + 1;
 
-        // Pre-compute right-side lowercase
-        Span<char> rightLower = stackalloc char[n <= 128 ? n : 128];
-        if (n > 128)
+        // Fallback for extremely long strings (shouldn't happen in practice)
+        if (n > 128 || len > 128)
         {
-            // Fallback for extremely long strings (shouldn't happen in practice)
             return OneRowDpIgnoreCaseWithCutoff(left, right, maxDistance);
         }
+
+        // Pre-compute right-side lowercase
+        Span<char> rightLower = stackalloc char[n];
         for (var j = 0; j < n; j++)
             rightLower[j] = char.ToLowerInvariant(right[j]);
 
         // 1-row banded DP
-        Span<int> row = stackalloc int[len <= 128 ? len : 128];
-        if (len > 128)
-        {
-            return OneRowDpIgnoreCaseWithCutoff(left, right, maxDistance);
-        }
+        Span<int> row = stackalloc int[len];
         for (var j = 0; j < len; j++)
             row[j] = j;
 

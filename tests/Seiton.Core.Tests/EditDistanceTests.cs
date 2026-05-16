@@ -58,7 +58,7 @@ public sealed class EditDistanceTests
     // === Known distances (real GitHub Actions typos) ===
 
     [Test]
-    public async Task ComputeIgnoreCase_TokenTypo_ReturnsOne()
+    public async Task ComputeIgnoreCase_TokenTransposition_ReturnsTwo()
     {
         // "tokne" → "token" (transposition = 2 edits in Levenshtein)
         var result = EditDistance.ComputeIgnoreCase("tokne", "token");
@@ -285,5 +285,14 @@ public sealed class EditDistanceTests
     {
         var result = EditDistance.ComputeIgnoreCase(a, b, maxDistance: maxDist);
         await Assert.That(result).IsEqualTo(maxDist + 1);
+    }
+
+    // === Negative maxDistance throws ===
+
+    [Test]
+    public async Task ComputeIgnoreCase_WithNegativeMaxDistance_ThrowsArgumentOutOfRange()
+    {
+        await Assert.That(() => EditDistance.ComputeIgnoreCase("abc", "xyz", maxDistance: -1))
+            .Throws<ArgumentOutOfRangeException>();
     }
 }
