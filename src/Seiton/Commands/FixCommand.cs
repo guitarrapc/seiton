@@ -1,4 +1,5 @@
-﻿using Seiton.Config;
+﻿using Seiton.Cli;
+using Seiton.Config;
 using Seiton.Core.Linting;
 using Seiton.Core.Linting.Fixing;
 using Seiton.Core.Linting.PinRemediation;
@@ -49,13 +50,15 @@ internal static class FixCommand
         if (CheckCommand.HasConfigErrors(configDiags, resolvedFormat, colorEnabled, oneline, errorWriter))
             return ExitCode.FatalError;
 
+        var verboseLogger = VerboseLogger.Create(verbose, errorWriter);
+
         if (verbose)
         {
             lintConfig ??= new LintConfig();
             lintConfig.Verbose = true;
         }
 
-        CliConfigBridge.WriteResolvedConfigVerbose(errorWriter, verbose, configPath);
+        verboseLogger.Log("config", configPath is not null ? Path.GetFullPath(configPath) : "(none, using defaults)");
 
         // Resolve input files
         string[] resolvedFiles;
@@ -134,8 +137,7 @@ internal static class FixCommand
 
                 var utf8Yaml = File.ReadAllBytes(filePath);
 
-                if (verbose)
-                    errorWriter.WriteLine($"fixing {filePath}...");
+                verboseLogger.Log($"fixing {filePath}...");
 
                 // Check the file. Copy diagnostics immediately so they remain valid
                 // even after the owned lint result is disposed before async work.
@@ -152,8 +154,8 @@ internal static class FixCommand
                 {
                     var remResult = await pinRemediation.RemediateAsync(lintDiagnostics, utf8Yaml);
                     effectiveDiagnostics = remResult.Diagnostics;
-                    if (verbose && remResult.ResolvedCount > 0)
-                        errorWriter.WriteLine($"  resolved {remResult.ResolvedCount} pin(s) for {filePath}");
+                    if (remResult.ResolvedCount > 0)
+                        verboseLogger.LogFile(filePath, $"resolved {remResult.ResolvedCount} pin(s)");
                 }
 
                 // Check whether any diagnostic (local or pin-remediated) has a fix attached.
@@ -231,8 +233,7 @@ internal static class FixCommand
                     currentHandle?.Dispose();
                 }
 
-                if (verbose)
-                    errorWriter.WriteLine($"  applied {appliedFixes} fix(es) to {filePath}");
+                verboseLogger.LogFile(filePath, $"applied {appliedFixes} fix(es)");
             }
 
             // Apply ignore patterns

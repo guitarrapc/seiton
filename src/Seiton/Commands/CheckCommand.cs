@@ -1,4 +1,5 @@
-﻿using Seiton.Config;
+﻿using Seiton.Cli;
+using Seiton.Config;
 using Seiton.Core.Linting;
 using Seiton.Core.Parsing;
 using Seiton.Output;
@@ -39,13 +40,15 @@ internal static class CheckCommand
         if (HasConfigErrors(configDiags, resolvedFormat, colorEnabled, oneline))
             return ExitCode.FatalError;
 
+        var verboseLogger = VerboseLogger.Create(verbose, Console.Error);
+
         if (verbose)
         {
             lintConfig ??= new LintConfig();
             lintConfig.Verbose = true;
         }
 
-        CliConfigBridge.WriteResolvedConfigVerbose(Console.Error, verbose, configPath);
+        verboseLogger.Log("config", configPath is not null ? Path.GetFullPath(configPath) : "(none, using defaults)");
 
         // Resolve input files
         string[] resolvedFiles;
@@ -93,8 +96,7 @@ internal static class CheckCommand
                     utf8Yaml = File.ReadAllBytes(filePath);
                 }
 
-                if (verbose)
-                    Console.Error.WriteLine($"checking {filePath}...");
+                verboseLogger.Log($"checking {filePath}...");
 
                 using var result = engine.Check(utf8Yaml, filePath, lintConfig);
                 allDiagnostics.AddRange(result.Diagnostics.AsSpan());
@@ -115,8 +117,7 @@ internal static class CheckCommand
                     var filePath = resolvedFiles[i];
                     var utf8Yaml = File.ReadAllBytes(filePath);
 
-                    if (verbose)
-                        Console.Error.WriteLine($"checking {filePath}...");
+                    verboseLogger.Log($"checking {filePath}...");
 
                     var engine = engines.Value!;
                     using var result = engine.Check(utf8Yaml, filePath, lintConfig);
