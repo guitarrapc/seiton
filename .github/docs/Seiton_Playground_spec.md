@@ -1,8 +1,8 @@
 # Seiton Playground Specification
 
-> This document is WASM-language-neutral — it specifies WHAT the Playground does, not HOW a specific language implementation achieves it. Defines the playground functional contract: architecture, WASM interop API, UI behavior, deployment, and operational constraints. For C#-specific implementation details, see `Seiton_Playground_csharp_spec.md`.
+> This document is WASM-language-neutral — it specifies WHAT the Playground does, not HOW a specific language implementation achieves it. Defines the playground functional contract: architecture, WASM interop API, UI behavior, deployment, and operational constraints. For language-specific implementation details, see `Seiton_Playground_csharp_spec.md` or `Seiton_Playground_go_spec.md`.
 
-> **Cross-document rule**: This spec is the source of truth for playground behavior. When revised, also review and update `Seiton_Playground_csharp_spec.md` for consistency.
+> **Cross-document rule**: This spec is the source of truth for playground behavior. When revised, also review and update `Seiton_Playground_csharp_spec.md` and `Seiton_Playground_go_spec.md` for consistency.
 
 ---
 
@@ -33,7 +33,7 @@ The [actionlint playground](https://github.com/rhysd/actionlint/tree/main/playgr
 │  Lint Engine (compiled to WASM)                │
 ├────────────────────────────────────────────────┤
 │  WASM Interop Layer                            │
-│  Exports: RunLint / ApplyAllFixes / GetVersion │
+│  Exports: RunLint / ApplyAllFixes / GetProductVersion │
 ├────────────────────────────────────────────────┤
 │  WASM Runtime Glue (language-specific)         │
 ├────────────────────────────────────────────────┤
@@ -80,11 +80,16 @@ Exported functions callable from JavaScript:
 ]
 ```
 
-### 2.5 Error Handling Contract
+### 2.5 Input Normalization
+
+- `yamlSource`: null/empty treated as empty string
+- `filePath`: null/whitespace trimmed; defaults to `.github/workflows/test.yml` when absent
+
+### 2.6 Error Handling Contract
 
 - WASM exported functions must never propagate unhandled exceptions across the interop boundary. An unhandled exception causes the WASM runtime to abort irreversibly.
-- `RunLint`: on internal error, returns a single-element diagnostic array with `ruleId: "internal-error"`.
-- `ApplyAllFixes`: on error, returns the original input text unchanged.
+- `RunLint`: on internal error, returns a single-element diagnostic array with `ruleId: "internal-error"`, message prefixed with `[internal error]`, position `(1,1)`, severity `Error`, `fixable: false`.
+- `ApplyAllFixes`: on error, logs to browser console and returns the original input text unchanged.
 - `GetProductVersion`: on error, returns `"unknown"`.
 
 ---
@@ -100,6 +105,7 @@ Exported functions callable from JavaScript:
 | Re-entry guard | `lintInProgress` flag prevents concurrent lint invocations |
 | Pending retry | If content changes during lint execution, a debounced re-lint is scheduled after completion |
 | Staleness check | Lint is skipped when `(source, filePath)` pair is identical to the last successful lint |
+| Staleness non-update | Internal-error results do not update the staleness cache (allows retry on next keystroke) |
 | Staleness invalidation | File-type change, fix application, and URL fetch clear the staleness cache |
 
 ### 3.2 Runtime Death Detection
@@ -108,7 +114,7 @@ When the WASM runtime crashes (exits with non-zero code):
 
 1. Set `runtimeAlive = false`
 2. Stop all subsequent lint/fix calls
-3. Display persistent error toast + inline message in the results pane prompting page reload
+3. Display persistent error toast (60s duration) + insert inline error row into results table prompting page reload
 
 Detection pattern: catch errors matching `"runtime already exited"` from WASM interop calls.
 
@@ -130,12 +136,12 @@ Detection pattern: catch errors matching `"runtime already exited"` from WASM in
 | YAML editor | CodeMirror 5 with yaml mode, auto-grow (`viewportMargin: Infinity`), line numbers, active line highlight |
 | Real-time lint | Debounce 300ms, immediate on paste, staleness check |
 | Results table | Position chip + message + ruleId chip + fixable chip per diagnostic |
-| Gutter markers | Error = red (`--danger`), Warning = yellow (`--warning`), CSS class-based |
+| Gutter markers | Error = red (`--danger`), Warning/Info = yellow (`--warning`), CSS class-based |
 | Row click jump | Clicking a diagnostic row moves editor cursor to that position |
 | Loading indicator | "Loading WebAssembly binary..." shown until WASM runtime is ready |
 | File type selector | `workflow` (`.github/workflows/test.yml`) / `action.yml` |
-| Sample selector | Built-in YAML snippets: default, simple, minimal, fixPermissions, matrix, actionComposite |
-| Permalink (share) | pako deflate → Base64 → URL hash → clipboard copy |
+| Sample selector | Built-in YAML snippets: default, simple, minimal, fixPermissions, matrix, actionComposite. `actionComposite` auto-switches file type to `action.yml`; others switch to workflow. |
+| Permalink (share) | pako deflate → Base64 → URL hash → clipboard copy (execCommand fallback + Clipboard API) |
 | URL fetch | Fetch remote YAML by URL with validation and GitHub blob→raw conversion |
 | Toast notifications | Dismiss button + Escape key (capture phase), auto-dismiss with configurable duration |
 | Apply all fixes | Offline autofix with priority ordering (network fixes skipped) |
@@ -150,7 +156,7 @@ Detection pattern: catch errors matching `"runtime already exited"` from WASM in
 - Dismiss: dedicated `button.toast__dismiss` or **Escape** key (document capture phase, dismisses topmost toast)
 - ARIA: `role="alert"` for error, `role="status"` for success/info
 - Auto-dismiss durations: error = 8s, success = 3.8s, info = 4.2s
-- URLs in toast body text are auto-linkified; link clicks do not propagate to toast dismiss
+- URLs in toast body text and diagnostic messages are auto-linkified; link clicks do not propagate to toast dismiss
 
 ### 4.3 URL Fetch
 
@@ -161,8 +167,9 @@ Detection pattern: catch errors matching `"runtime already exited"` from WASM in
   - Invalid input → button disabled, title "Incomplete URL"
   - During fetch → both input and button disabled
 - **GitHub blob→raw normalization**: `github.com/{owner}/{repo}/blob/{ref}/{path}` → `raw.githubusercontent.com/{owner}/{repo}/{ref}/{path}`
+- **Fetch options**: `mode: 'cors'`, `redirect: 'follow'`, `cache: 'no-store'`
 - **Error handling**: HTTP failure or HTML content-type → toast notification (results pane preserved)
-- **Enter key**: on empty/invalid input, shows info toast only (no fetch)
+- **Enter key**: on empty/invalid input, shows info toast only (no fetch); restores focus to input after toast
 - **Overlapping requests**: blocked via `fetchInFlight` flag
 
 ### 4.4 Color Theme
@@ -229,13 +236,23 @@ Detection pattern: catch errors matching `"runtime already exited"` from WASM in
 </html>
 ```
 
-### 4.7 External Dependencies (CDN)
+### 4.7 Responsive Layout
 
-| Library | Version | Purpose |
-|---|---|---|
-| CodeMirror 5 | 5.65.16 | YAML editor (codemirror.min.js + yaml mode + active-line addon) |
-| CodeMirror material-darker | 5.65.16 | Dark theme |
-| pako | 2.1.0 | Permalink deflate/inflate (ESM import) |
+| Breakpoint | Behavior |
+|---|---|
+| ≤ 639.98px | Controls row horizontal scroll, grid collapse to single column |
+| ≤ 880px | Reduced padding, narrower layout |
+| Desktop | Two-column grid: editor (left) + results (right, sticky with independent scroll, max 100dvh) |
+
+### 4.8 External Dependencies (CDN)
+
+| Library | Version | Purpose | Integrity |
+|---|---|---|---|
+| CodeMirror 5 | 5.65.16 | YAML editor (codemirror.min.js + yaml mode + active-line addon) | SRI hash pinned |
+| CodeMirror material-darker | 5.65.16 | Dark theme | SRI hash pinned |
+| pako | 2.1.0 | Permalink deflate/inflate (ESM import) | — |
+
+CSS resources use non-blocking loading pattern (`media="print"` + `onload` swap + `<noscript>` fallback).
 
 ---
 
@@ -252,20 +269,27 @@ GitHub Actions `actions/deploy-pages` (Pages artifact approach). No `gh-pages` b
 | `push.tags: ["v*"]` | Automatic deploy on release tag |
 | `workflow_dispatch` | Manual re-deploy of an existing tag (validates tag existence via API) |
 
-### 5.3 Security Posture
+### 5.3 Workflow Dispatch Behavior
+
+- Tag input is normalized (accepts with or without `v` prefix)
+- Tag existence is validated via GitHub API (`gh api`) before proceeding
+- Each job has explicit `timeout-minutes`
+
+### 5.4 Security Posture
 
 - Top-level `permissions: {}` (least privilege)
 - Per-job permissions: `contents: read`, `pages: write`, `id-token: write`
-- Checkout with `persist-credentials: false`
-- All action references pinned to full commit SHA
-- `concurrency.group: pages` prevents simultaneous deploys
+- Checkout with `persist-credentials: false`, `fetch-depth: 0`
+- Action references pinned to full commit SHA (exception: `setup-dotnet@main` for pre-release SDK)
+- `concurrency.group: pages` with `cancel-in-progress: false`
 
-### 5.4 Static Hosting Requirements
+### 5.5 Static Hosting Requirements
 
 - `.nojekyll` file required (protects `_framework/` directory from Jekyll underscore prefix filtering)
 - Fingerprinted + non-fingerprinted assets both emitted (no server-side import map rewriting on GitHub Pages)
+- Import map placeholder in HTML is rewritten by the SDK build
 
-### 5.5 Repository Configuration
+### 5.6 Repository Configuration
 
 GitHub Settings → Pages → Source: **GitHub Actions**
 

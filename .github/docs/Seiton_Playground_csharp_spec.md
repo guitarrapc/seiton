@@ -96,7 +96,32 @@ public static partial class LintInterop
 
 **Critical invariant**: Every `[JSExport]` method body is wrapped in `try/catch(Exception)`. The Mono WASM runtime aborts (`exit 1`) on any unhandled exception crossing the interop boundary, and cannot be restarted without a full page reload.
 
-### 1.2 Program.cs
+### 1.2 Input Normalization
+
+- `yamlSource`: null/whitespace treated as empty string
+- `filePath`: trimmed; defaults to `.github/workflows/test.yml` when null or whitespace
+
+### 1.3 Error Logging
+
+On exception, `RunLint` and `ApplyAllFixes` call `ConsoleError(message)` (`[JSImport("globalThis.console.error")]`) to log the exception message to the browser console before returning the safe fallback value.
+
+### 1.4 Internal-Error Diagnostic Payload
+
+When `RunLint` catches an exception, it returns:
+
+```json
+[{
+  "message": "[internal error] {ExceptionType}: {Message}",
+  "line": 1,
+  "column": 1,
+  "severity": "Error",
+  "ruleId": "internal-error",
+  "fixable": false,
+  "fixDescription": null
+}]
+```
+
+### 1.5 Program.cs
 
 ```csharp
 Console.WriteLine("Seiton WASM runtime initialized.");
@@ -128,15 +153,38 @@ Key implementation details:
 - **JSON serialization**: `ArrayBufferWriter<byte>` + `Utf8JsonWriter` (zero-allocation hot path). `JsonWriterOptions` with `UnsafeRelaxedJsonEscaping`.
 - **Double buffer**: Alternating `_utf8BufA`/`_utf8BufB` for UTF-8 encoding prevents overwriting the buffer that `IncrementalParseContext` holds as previous source.
 - **Identity-based short circuit**: If `yamlSource` (by reference) and `filePath` are identical to the last call, returns cached JSON output immediately.
+- **Byte-level cache reuse**: When serialized JSON bytes are content-equal to the previous result, the prior `byte[]` instance is reused (avoids allocation for unchanged output).
 
 ### 2.2 Incremental Parse (D-5b)
 
 `IncrementalParseContext` manages root-section hashing and per-job diagnostic caching for workflow documents:
 
-- Skips re-parsing unchanged root sections
+- **Source identity fast-path**: Reference-equal source skips all parsing and returns previous result
+- **File path change**: Forces full reparse to avoid stale cross-file caches
+- Skips re-parsing unchanged root sections (detected via XxHash64 of byte ranges)
 - Caches per-job diagnostics and merges them with fresh results for modified jobs
+- **Workflow-level diagnostics are never cached** — only job-range diagnostics are eligible
 - Action metadata files use classified parsing (not incremental)
 - Arena is owned by `IncrementalParseContext` and reused across calls
+
+#### 2.2.1 Guardrails
+
+| Guard | Threshold | Behavior |
+|---|---|---|
+| Arena retention cap | `MaxRetainedArenas = 4` | Exceeding triggers full-parse fallback + arena reset |
+| Growth threshold | 3× full-parse baseline entry count | Forces full reparse |
+| Diagnostic-tainted sections | Per-section flag | Tainted sections are never skipped on subsequent parses |
+| `needs` dependency invalidation | Any changed job | Reused jobs with `needs` referencing changed jobs are re-parsed |
+
+#### 2.2.2 Skip-Mask Policy
+
+- `name`, `run-name` root keys: excluded from skip mask (always re-parsed)
+- `jobs` root key: excluded from root skip mask (handled at job level)
+- Any changed tracked root key: disables root-level skipping entirely
+
+#### 2.2.3 Merged Output
+
+- Diagnostics from cached + fresh jobs are deduplicated and position-sorted for stable output
 
 ### 2.3 ApplyAllFixes Strategy
 
@@ -145,6 +193,7 @@ Key implementation details:
 - **Iteration cap**: 64 passes maximum
 - **Network fixes**: Skipped (pinning/digest remediation requires network unavailable in WASM)
 - **One fix per pass**: Picks the highest-priority fixable diagnostic and applies it, then re-lints
+- **Early termination**: If diagnostics contain fixable items but none pass the local applicability filter (e.g., all are network-dependent), returns immediately without iteration
 
 ### 2.4 PlaygroundDiagnosticDto
 
@@ -172,6 +221,15 @@ internal partial class PlaygroundJsonSerializerContext : JsonSerializerContext;
 ```
 
 `JsonSerializerIsReflectionEnabledByDefault=false` in the project file ensures trimming safety.
+
+### 2.6 PlaygroundBuildInfo — Version Precedence
+
+```
+InformationalVersion (preferred, e.g. "1.2.3+abc")
+  → strip commit metadata at '+'
+  → fallback: AssemblyVersion
+  → fallback: literal "0.0.0"
+```
 
 ---
 
