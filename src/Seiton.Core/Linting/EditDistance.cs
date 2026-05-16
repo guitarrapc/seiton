@@ -57,6 +57,16 @@ internal static class EditDistance
         if (lengthDiff > maxDistance)
             return maxDistance + 1;
 
+        // Most suggestion inputs are short ASCII. Reuse the exact Myers fast path,
+        // then clamp to maxDistance + 1 when the result exceeds the cutoff.
+        if (left.Length <= 64 && right.Length <= 64 && IsAscii(left) && IsAscii(right))
+        {
+            var exact = left.Length <= right.Length
+                ? Myers64IgnoreCase(left, right)
+                : Myers64IgnoreCase(right, left);
+            return exact <= maxDistance ? exact : maxDistance + 1;
+        }
+
         return BandedDpIgnoreCase(left, right, maxDistance);
     }
 

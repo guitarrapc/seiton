@@ -14,6 +14,8 @@ public class EditDistanceBenchmark
     private string _ascii65Typo = null!;
     private string _long129 = null!;
     private string _long129Typo = null!;
+    private string _earlyRejectLeft = null!;
+    private string _earlyRejectRight = null!;
 
     // Simulates PopularActionInputsRule: unknown input vs 55 candidates (actions/stale)
     private string[] _staleCandidates = null!;
@@ -30,6 +32,8 @@ public class EditDistanceBenchmark
         _ascii65Typo = new string('a', 64) + "b";
         _long129 = new string('a', 129);
         _long129Typo = new string('a', 128) + "b";
+        _earlyRejectLeft = "cache-dependency-pathx";
+        _earlyRejectRight = "token";
 
         // Largest real candidate set: actions/stale has 55 inputs
         _staleCandidates =
@@ -102,7 +106,7 @@ public class EditDistanceBenchmark
     public int WithMaxDistance_EarlyReject()
     {
         // Length difference 16 > maxDistance 3 → immediate return
-        return EditDistance.ComputeIgnoreCase("cache-dependency-pathx", "token", maxDistance: 3);
+        return EditDistance.ComputeIgnoreCase(_earlyRejectLeft, _earlyRejectRight, maxDistance: 3);
     }
 
     [Benchmark]
