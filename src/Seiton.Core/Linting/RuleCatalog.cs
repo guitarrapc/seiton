@@ -283,12 +283,13 @@ internal static class RuleCatalog
             return null;
         }
 
+        const int maxDistance = 4;
         var bestCandidate = string.Empty;
-        var bestDistance = int.MaxValue;
+        var bestDistance = maxDistance + 1;
         for (var i = 0; i < AllRuleMetadata.Length; i++)
         {
             var candidate = AllRuleMetadata[i].Id.ToId();
-            var distance = EditDistance.ComputeIgnoreCase(input, candidate);
+            var distance = EditDistance.ComputeIgnoreCase(input, candidate, maxDistance);
             if (distance >= bestDistance)
             {
                 continue;
@@ -298,7 +299,7 @@ internal static class RuleCatalog
             bestCandidate = candidate;
         }
 
-        return bestDistance <= 4 ? bestCandidate : null;
+        return bestDistance <= maxDistance ? bestCandidate : null;
     }
 
     /// <summary>Gets the set of allowed rule-specific configuration keys for the specified rule.</summary>

@@ -1,4 +1,6 @@
-﻿namespace Seiton.Core.Parsing;
+﻿using Seiton.Core.Linting;
+
+namespace Seiton.Core.Parsing;
 
 /// <summary>
 /// Provides "did you mean?" suggestions using Levenshtein distance.
@@ -12,12 +14,13 @@ internal static class SuggestionHelper
     /// </summary>
     public static string? FindClosest(string input, ReadOnlySpan<string> candidates)
     {
+        var maxDistance = GetThreshold(input.Length);
         string? best = null;
-        var bestDistance = int.MaxValue;
+        var bestDistance = maxDistance + 1;
 
         foreach (var candidate in candidates)
         {
-            var distance = LevenshteinDistance(input, candidate);
+            var distance = EditDistance.ComputeIgnoreCase(input, candidate, maxDistance);
             if (distance < bestDistance)
             {
                 bestDistance = distance;
@@ -25,7 +28,7 @@ internal static class SuggestionHelper
             }
         }
 
-        return best is not null && IsDistanceAcceptable(input.Length, bestDistance) ? best : null;
+        return best;
     }
 
     /// <summary>
@@ -34,12 +37,13 @@ internal static class SuggestionHelper
     /// </summary>
     public static string? FindClosest(string input, IReadOnlyCollection<string> candidates)
     {
+        var maxDistance = GetThreshold(input.Length);
         string? best = null;
-        var bestDistance = int.MaxValue;
+        var bestDistance = maxDistance + 1;
 
         foreach (var candidate in candidates)
         {
-            var distance = LevenshteinDistance(input, candidate);
+            var distance = EditDistance.ComputeIgnoreCase(input, candidate, maxDistance);
             if (distance < bestDistance)
             {
                 bestDistance = distance;
@@ -47,50 +51,15 @@ internal static class SuggestionHelper
             }
         }
 
-        return best is not null && IsDistanceAcceptable(input.Length, bestDistance) ? best : null;
+        return best;
     }
 
-    private static bool IsDistanceAcceptable(int inputLength, int distance)
+    private static int GetThreshold(int inputLength) => inputLength switch
     {
-        var threshold = inputLength switch
-        {
-            <= 4 => 1,
-            <= 8 => 2,
-            _ => 3,
-        };
-
-        return distance <= threshold;
-    }
-
-    private static int LevenshteinDistance(string a, string b)
-    {
-        if (a.Length == 0) return b.Length;
-        if (b.Length == 0) return a.Length;
-
-        var prev = new int[b.Length + 1];
-        var curr = new int[b.Length + 1];
-
-        for (var j = 0; j <= b.Length; j++)
-            prev[j] = j;
-
-        for (var i = 1; i <= a.Length; i++)
-        {
-            curr[0] = i;
-            var lc = char.ToLowerInvariant(a[i - 1]);
-            for (var j = 1; j <= b.Length; j++)
-            {
-                var rc = char.ToLowerInvariant(b[j - 1]);
-                var cost = lc == rc ? 0 : 1;
-                curr[j] = Math.Min(
-                    Math.Min(curr[j - 1] + 1, prev[j] + 1),
-                    prev[j - 1] + cost);
-            }
-
-            (prev, curr) = (curr, prev);
-        }
-
-        return prev[b.Length];
-    }
+        <= 4 => 1,
+        <= 8 => 2,
+        _ => 3,
+    };
 
     /// <summary>
     /// Formats an array of option names as a quoted, comma-separated list for diagnostic messages.
