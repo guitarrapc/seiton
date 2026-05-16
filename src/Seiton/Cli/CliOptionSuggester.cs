@@ -246,29 +246,29 @@ internal static class CliOptionSuggester
             return a.Length;
         }
 
-        var prev = new int[b.Length + 1];
-        var curr = new int[b.Length + 1];
-
-        for (var j = 0; j <= b.Length; j++)
+        var n = b.Length;
+        Span<int> row = stackalloc int[n + 1];
+        for (var j = 0; j <= n; j++)
         {
-            prev[j] = j;
+            row[j] = j;
         }
 
         for (var i = 1; i <= a.Length; i++)
         {
-            curr[0] = i;
-            for (var j = 1; j <= b.Length; j++)
+            var prevDiagonal = row[0];
+            row[0] = i;
+            for (var j = 1; j <= n; j++)
             {
+                var old = row[j];
                 var substitutionCost = a[i - 1] == b[j - 1] ? 0 : 1;
-                curr[j] = Math.Min(
-                    Math.Min(curr[j - 1] + 1, prev[j] + 1),
-                    prev[j - 1] + substitutionCost);
+                row[j] = Math.Min(
+                    Math.Min(row[j - 1] + 1, old + 1),
+                    prevDiagonal + substitutionCost);
+                prevDiagonal = old;
             }
-
-            (prev, curr) = (curr, prev);
         }
 
-        return prev[b.Length];
+        return row[n];
     }
 
     private readonly record struct OptionSuggestion(string OptionToken, string? Suggestion);
