@@ -78,16 +78,24 @@ Not all datasets implement all stages. Some use hand-written JSON as primary sou
 6. Create `Commands` in `Commands/` (static methods)
 7. Wire up commands in `Program.cs` (both convenience aliases and `RunSync`/`RunVerify` dispatchers)
 
-### Parser Allocation Guardrails (Always-On)
+### Allocation Guardrails (Always-On)
+
+**General**
+
+1. Avoid unnecessary allocations in hot paths, especially within the parser. Use `ReadOnlySpan<byte>` and `Utf8Slice` for key/value checks instead of materializing strings.
+2. Use `string` for diagnostics, logs, and explicit fallback paths where performance is not critical. However avoid always allocating strings, delay string conversion until necessary.
+3. Avoid `new T[]`, `List<T>`, `Dictionary<TKey, TValue>`, LINQ, or regex in lint rules that run on every workflow file on every commit.
+
+
+**Parser**
 
 For files under `src/Seiton.Core/Parsing/**`, follow these rules strictly.
 
 1. Hot path key/value checks must use UTF-8 span comparisons (`ReadOnlySpan<byte>`), not `string` comparisons.
 2. Avoid `GetScalarString()` and `Encoding.UTF8.GetString(...)` in normal success paths.
 3. String conversion is allowed only for diagnostics, logs, and explicit fallback paths.
-4. Do not introduce `new T[]`, `List<T>`, `Dictionary<TKey, TValue>`, LINQ, or regex in parser hot paths.
-5. Reuse parsed metadata (for example event spec resolution) instead of repeated lookups.
-6. If a value must be kept, prefer `Utf8Slice`/offset-length over materialized `string`.
+4. Reuse parsed metadata (for example event spec resolution) instead of repeated lookups.
+5. If a value must be kept, prefer `Utf8Slice`/offset-length over materialized `string`.
 
 Before completing parser changes, validate all of the following.
 
@@ -95,6 +103,14 @@ Before completing parser changes, validate all of the following.
 2. Newly introduced key checks are UTF-8 span based.
 3. Diagnostics still show useful text when errors occur.
 4. Parser test suite passes.
+
+**Linter**
+
+For files under `src/Seiton.Core/Linting/**`, follow these rules:
+
+1. Lint rules may use `string` for convenience, but should avoid unnecessary allocations in hot paths. Try use Span based APIs where possible, especially for key checks and value comparisons. However, this is not as strict as the parser since linting is generally less performance-sensitive.
+2. Always validate that lint rules still produce correct diagnostics and that the test suite passes after changes.
+3. Avoid introducing allocations in rules that run on every workflow file on every commit. If a rule is expensive, consider making it an opt-in rule that only runs when enabled. prefer a design that minimizes allocations (e.g., using `Utf8Slice` for value checks) while still producing clear diagnostics.
 
 ## How to Work on This Project
 
