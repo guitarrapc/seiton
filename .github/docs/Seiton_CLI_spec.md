@@ -44,7 +44,7 @@ Lint one or more GitHub Actions YAML files (workflow files and action metadata f
 When `--fix` is specified, the root command switches to fix mode: runs lint, then applies all available fix payloads to the source files in place.
 
 - If `--dry-run` is given, prints unified diffs to stdout without modifying files.
-- If `--check` is given, exits with a non-zero code when any fixable diagnostic exists (does not apply fixes).
+- If `--check` is given, exits with a non-zero code when any fixable diagnostic exists (does not apply fixes). When both `--check` and `--dry-run` are given, `--check` takes precedence (no diffs are printed, no fixes are applied).
 - Network-assisted pin remediation is activated when `fix.pinning.enable-network: true` or `fix.images.enable-network: true` is set in config (or via `--enable-pin-network` / `--enable-image-network` flags).
 
 When no `FILES` are given, discovers all `*.yml` / `*.yaml` files under `.github/workflows/` relative to the current working directory.
@@ -196,7 +196,7 @@ Command hint behavior:
 
 ## 3. Environment Variables
 
-All CLI flags can alternatively be set via environment variables. Flag takes precedence over environment variable.
+Certain CLI flags have environment variable equivalents (listed below). When both a flag and its env var are set, the flag takes precedence.
 
 | Environment Variable | Equivalent Flag | Notes |
 |---|---|---|
@@ -211,7 +211,7 @@ Token resolution order (`SEITON_GITHUB_TOKEN` → `GITHUB_TOKEN`) is a hardcoded
 
 ### 3.1 CI Environment Auto-Detection
 
-When `CI=true` (standard GitHub Actions environment variable):
+When the `CI` environment variable is set to any non-empty value (e.g. `CI=true` in GitHub Actions):
 
 - `--color` defaults to `never` unless explicitly overridden.
 - Verbose progress output is suppressed unless `--verbose` is explicitly set.
@@ -256,7 +256,7 @@ Operational clarification:
 
 | CLI flag / env var | Config field | Merge semantics |
 |---|---|---|
-| `--ignore` | `ignore-patterns` | Additive merge with config-file patterns |
+| `--ignore` | (post-lint filter) | CLI-only post-lint filter applied after lint. Not merged with config-file `ignore-patterns`. |
 | `--min-severity` | (post-lint filter) | Applied after lint; not stored in config |
 | `--verbose` | (CLI-only) | No config key; sets verbose when passed |
 | `--enable-pin-network` | `fix.pinning.enable-network` | `CLI \|\| config` — force-enable override |
@@ -279,7 +279,7 @@ When no `FILES` arguments are given to `check` / `fix`:
 
 Default auto-discovery scope remains workflow-first (`.github/workflows/`).
 
-When `--include-actions` is enabled, discovery additionally includes `.github/actions/` from the same nearest repository root search.
+When `--include-actions` is enabled, discovery additionally includes `.github/actions/`. Note: the workflows and actions directories are resolved independently — they may come from different ancestor levels if one is found higher in the directory tree than the other.
 
 Action metadata files are always accepted when explicitly passed in `FILES`.
 
@@ -421,7 +421,35 @@ SARIF 2.1.0 JSON output to stdout. Suitable for GitHub Code Scanning upload.
 
 Each diagnostic maps to a SARIF `result` under a `run` with tool identity `seiton`.
 
-Rule metadata (id, name, help URI) is emitted per-rule in `tool.driver.rules`.
+Rule metadata (`id`) is emitted per-rule in `tool.driver.rules`.
+
+### 6.4 Summary Output (stderr)
+
+After diagnostics are emitted to stdout, a summary line is always written to stderr:
+
+```
+<N> errors, <N> warnings, <N> infos in <N> file(s)
+```
+
+When no diagnostics exist: `0 issues in <N> file(s)`.
+
+Zero-count categories are omitted (e.g. `1 error in 3 files` when warnings and infos are zero).
+
+In `--verbose` mode with at least one diagnostic, a per-rule breakdown is appended:
+
+```
+  <rule-id>: <count>, <rule-id>: <count>, ...
+```
+
+Rules are sorted by count descending, then by rule ID lexicographically.
+
+When no `--min-severity` is explicitly set, errors are zero, and warnings are non-zero, a hint line is emitted:
+
+```
+hint: use --min-severity error to treat warnings as non-blocking in CI
+```
+
+In `--fix` mode, when network-assisted flags are not enabled but relevant diagnostics exist (`unpinned-uses` or `unpinned-image`), a hint is emitted suggesting the appropriate `--enable-pin-network` / `--enable-image-network` flags.
 
 ---
 

@@ -266,7 +266,10 @@ Shared contract reference: `Seiton_Linter_spec.md` §2.1.
 - Results are written to a pre-allocated `FileCheckResult[]` slot array indexed by file position, guaranteeing deterministic output order.
 - Each worker calls `CopyDiagnostics()` to create caller-owned diagnostic copies that survive engine reuse.
 - Post-lint filters (`--ignore`, `--min-severity`) are applied after aggregation.
-- Summary line is written to stderr (error/warning/info counts + file count).
+- Summary line is always written to stderr via `WriteSummary` (error/warning/info counts + file count).
+- In `--verbose` mode with diagnostics, `WritePerRuleBreakdown` appends per-rule counts sorted by count descending, then rule ID.
+- When no `--min-severity` is set, errors are zero, and warnings are non-zero, a hint line is emitted: `hint: use --min-severity error to treat warnings as non-blocking in CI`.
+- In fix mode, `WriteNetworkFixHint` emits a hint when `unpinned-uses` or `unpinned-image` diagnostics exist but the corresponding network flag is not enabled.
 
 ### 6.2 FixCommand
 
@@ -276,6 +279,7 @@ Shared contract reference: `Seiton_Linter_spec.md` §2.1.
 - Copies diagnostics immediately after `Check()` to avoid use-after-dispose of lint handles.
 - Stdin (`-`) is explicitly rejected in fix mode (returns `ExitCode.InvalidOptions`).
 - Network remediation (`PinRemediationEngine`) is constructed only when effective pin/image network is enabled.
+- When both `--check` and `--dry-run` are passed, `--check` takes precedence: no diffs are printed and no fixes are applied.
 
 ### 6.3 InputDiscovery
 
@@ -322,7 +326,7 @@ internal partial class SeitonJsonContext : JsonSerializerContext { }
 
 ### 7.2 SARIF Output
 
-SARIF 2.1.0 is emitted via manual `Utf8JsonWriter` construction (no external SARIF library) to maintain AOT compatibility and minimize dependencies.
+SARIF 2.1.0 is emitted via an object graph serialized with source-generated `System.Text.Json` (`JsonSerializer` + `JsonSerializerContext`). No external SARIF library is used, maintaining AOT compatibility and minimal dependencies.
 
 ### 7.3 Rich Text Output
 
