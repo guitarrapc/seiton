@@ -48,7 +48,10 @@ internal static class CheckCommand
             lintConfig.Verbose = true;
         }
 
-        verboseLogger.Log("config", configPath is not null ? Path.GetFullPath(configPath) : "(none, using defaults)");
+        if (verboseLogger.IsEnabled)
+        {
+            verboseLogger.Log("config", configPath is not null ? Path.GetFullPath(configPath) : "(none, using defaults)");
+        }
 
         // Resolve input files
         string[] resolvedFiles;
@@ -100,7 +103,10 @@ internal static class CheckCommand
                     utf8Yaml = File.ReadAllBytes(filePath);
                 }
 
-                verboseLogger.Log($"checking {filePath}...");
+                if (verboseLogger.IsEnabled)
+                {
+                    verboseLogger.Log($"checking {filePath}...");
+                }
 
                 var fileStart = verboseLogger.GetTimestamp();
                 using var result = engine.Check(utf8Yaml, filePath, lintConfig);
@@ -135,7 +141,10 @@ internal static class CheckCommand
                     var filePath = resolvedFiles[i];
                     var utf8Yaml = File.ReadAllBytes(filePath);
 
-                    verboseLogger.Log($"checking {filePath}...");
+                    if (verboseLogger.IsEnabled)
+                    {
+                        verboseLogger.Log($"checking {filePath}...");
+                    }
 
                     var fileStart = verboseLogger.GetTimestamp();
                     var engine = engines.Value!;
@@ -149,9 +158,7 @@ internal static class CheckCommand
                         verboseLogger.IsEnabled ? result.DisabledRuleCount : 0,
                         verboseLogger.IsEnabled ? result.DisabledRuleIds.ToArray() : [],
                         verboseLogger.IsEnabled ? result.DocumentKind : default,
-                        verboseLogger.IsEnabled ? fileElapsed : default,
-                        verboseLogger.IsEnabled ? result.DiagnosticCount : 0,
-                        verboseLogger.IsEnabled ? result.SuppressionSummary.TotalSuppressed : 0);
+                        verboseLogger.IsEnabled ? fileElapsed : default);
                 });
 
             // Aggregate in input order for stable output
@@ -366,7 +373,7 @@ internal static class CheckCommand
         logger.Log("suppressed", sb.ToString());
     }
 
-    private static void AccumulateSuppression(SuppressionSummary summary, ref int totalSuppressed, ref Dictionary<string, int>? suppressedByRule)
+    internal static void AccumulateSuppression(SuppressionSummary summary, ref int totalSuppressed, ref Dictionary<string, int>? suppressedByRule)
     {
         if (summary.TotalSuppressed == 0) return;
 
@@ -432,12 +439,12 @@ internal readonly struct FileCheckResult
     public readonly string[] DisabledRuleIds;
     public readonly DocumentKind DocumentKind;
     public readonly TimeSpan FileElapsed;
-    public readonly int FileDiagnosticCount;
-    public readonly int FileSuppressedCount;
+    public int FileDiagnosticCount => Diagnostics.Length;
+    public int FileSuppressedCount => SuppressionSummary.TotalSuppressed;
 
     public FileCheckResult(OwnedDiagnostics diagnostics, string filePath, byte[]? utf8Yaml, SuppressionSummary suppressionSummary = default,
         int activeRuleCount = 0, int disabledRuleCount = 0, string[]? disabledRuleIds = null, DocumentKind documentKind = default,
-        TimeSpan fileElapsed = default, int fileDiagnosticCount = 0, int fileSuppressedCount = 0)
+        TimeSpan fileElapsed = default)
     {
         Diagnostics = diagnostics;
         FilePath = filePath;
@@ -448,7 +455,5 @@ internal readonly struct FileCheckResult
         DisabledRuleIds = disabledRuleIds ?? [];
         DocumentKind = documentKind;
         FileElapsed = fileElapsed;
-        FileDiagnosticCount = fileDiagnosticCount;
-        FileSuppressedCount = fileSuppressedCount;
     }
 }

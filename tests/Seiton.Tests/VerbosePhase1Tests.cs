@@ -85,7 +85,8 @@ public sealed class VerbosePhase1Tests
 
         FixCommand.WriteEffectiveNetworkConfig(logger,
             enablePinNetwork: true, enableImageNetwork: false,
-            configPinNetwork: false, configImageNetwork: false);
+            pinningConfig: null,
+            imagesConfig: null);
 
         var lines = sw.ToString().TrimEnd().Split(Environment.NewLine);
         await Assert.That(lines).Count().IsEqualTo(2);
@@ -101,7 +102,8 @@ public sealed class VerbosePhase1Tests
 
         FixCommand.WriteEffectiveNetworkConfig(logger,
             enablePinNetwork: false, enableImageNetwork: false,
-            configPinNetwork: true, configImageNetwork: true);
+            pinningConfig: new FixPinningConfig { EnableNetwork = true, HasEnableNetwork = true },
+            imagesConfig: new FixImagesConfig { EnableNetwork = true, HasEnableNetwork = true });
 
         var lines = sw.ToString().TrimEnd().Split(Environment.NewLine);
         await Assert.That(lines).Count().IsEqualTo(2);
@@ -117,12 +119,30 @@ public sealed class VerbosePhase1Tests
 
         FixCommand.WriteEffectiveNetworkConfig(logger,
             enablePinNetwork: false, enableImageNetwork: false,
-            configPinNetwork: false, configImageNetwork: false);
+            pinningConfig: null,
+            imagesConfig: null);
 
         var lines = sw.ToString().TrimEnd().Split(Environment.NewLine);
         await Assert.That(lines).Count().IsEqualTo(2);
         await Assert.That(lines[0]).IsEqualTo("verbose: config: fix.pinning.enable-network=false (source: default)");
         await Assert.That(lines[1]).IsEqualTo("verbose: config: fix.images.enable-network=false (source: default)");
+    }
+
+    [Test]
+    public async Task WriteEffectiveNetworkConfig_ExplicitFalseInConfig_ShowsConfigSource()
+    {
+        using var sw = new StringWriter();
+        var logger = VerboseLogger.Create(verbose: true, sw);
+
+        FixCommand.WriteEffectiveNetworkConfig(logger,
+            enablePinNetwork: false, enableImageNetwork: false,
+            pinningConfig: new FixPinningConfig { EnableNetwork = false, HasEnableNetwork = true },
+            imagesConfig: new FixImagesConfig { EnableNetwork = false, HasEnableNetwork = true });
+
+        var lines = sw.ToString().TrimEnd().Split(Environment.NewLine);
+        await Assert.That(lines).Count().IsEqualTo(2);
+        await Assert.That(lines[0]).IsEqualTo("verbose: config: fix.pinning.enable-network=false (source: config)");
+        await Assert.That(lines[1]).IsEqualTo("verbose: config: fix.images.enable-network=false (source: config)");
     }
 
     // === Discovery Logging Tests ===

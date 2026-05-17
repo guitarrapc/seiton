@@ -34,7 +34,7 @@ internal readonly record struct LintResultData(
 
     /// <summary>
     /// Gets the IDs of rules that were disabled by config or opt-in status.
-    /// The backing array may be oversized; use <see cref="DisabledRuleCount"/> for the valid range.
+    /// The array length matches <see cref="DisabledRuleCount"/>.
     /// </summary>
     public string[] DisabledRuleIds { get; init; } = [];
 

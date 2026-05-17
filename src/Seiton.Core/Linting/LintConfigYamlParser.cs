@@ -697,6 +697,7 @@ internal static class LintConfigYamlParser
     private static FixPinningConfig ParseFixPinning(Dictionary<string, object?> map, List<Diagnostic> diagnostics, string filePath)
     {
         var enableNetwork = false;
+        var hasEnableNetwork = false;
         var minAgeDays = 14;
         IReadOnlyList<string> excludeBranches = [];
         IReadOnlyList<IgnoreActionEntry> ignoreActions = [];
@@ -713,6 +714,7 @@ internal static class LintConfigYamlParser
                     else
                     {
                         enableNetwork = en;
+                        hasEnableNetwork = true;
                     }
 
                     break;
@@ -742,6 +744,7 @@ internal static class LintConfigYamlParser
         return new FixPinningConfig
         {
             EnableNetwork = enableNetwork,
+            HasEnableNetwork = hasEnableNetwork,
             MinAgeDays = minAgeDays,
             ExcludeBranches = excludeBranches.Count > 0 ? excludeBranches : DefaultExcludeBranches,
             IgnoreActions = ignoreActions,
@@ -754,6 +757,7 @@ internal static class LintConfigYamlParser
     private static FixImagesConfig ParseFixImages(Dictionary<string, object?> map, List<Diagnostic> diagnostics, string filePath)
     {
         var enableNetwork = false;
+        var hasEnableNetwork = false;
         IReadOnlyList<string> excludeImages = [];
         IReadOnlyList<string> excludeTags = [];
         IReadOnlyList<string> ignoreImages = [];
@@ -770,6 +774,7 @@ internal static class LintConfigYamlParser
                     else
                     {
                         enableNetwork = en;
+                        hasEnableNetwork = true;
                     }
 
                     break;
@@ -791,6 +796,7 @@ internal static class LintConfigYamlParser
         return new FixImagesConfig
         {
             EnableNetwork = enableNetwork,
+            HasEnableNetwork = hasEnableNetwork,
             ExcludeImages = excludeImages.Count > 0 ? excludeImages : DefaultExcludeImages,
             ExcludeTags = excludeTags.Count > 0 ? excludeTags : DefaultExcludeTags,
             IgnoreImages = ignoreImages,

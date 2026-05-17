@@ -14,7 +14,10 @@ internal static class InputDiscovery
         if (files.Length > 0)
         {
             var result = ExpandFileArgs(files);
-            verboseLogger.Log("discovery", $"{result.Length} file(s) from explicit args");
+            if (verboseLogger.IsEnabled)
+            {
+                verboseLogger.Log("discovery", $"{result.Length} file(s) from explicit args");
+            }
             return result;
         }
 
@@ -23,14 +26,20 @@ internal static class InputDiscovery
 
     private static string[] DiscoverFiles(bool includeActions, VerboseLogger verboseLogger, string startDir)
     {
-        verboseLogger.Log("discovery", $"searching from {startDir}");
+        if (verboseLogger.IsEnabled)
+        {
+            verboseLogger.Log("discovery", $"searching from {startDir}");
+        }
 
         var files = new List<string>();
 
         var workflowsDir = FindWorkflowsDirectory(startDir);
         if (workflowsDir is not null && Directory.Exists(workflowsDir))
         {
-            verboseLogger.Log("discovery", $"found {workflowsDir}");
+            if (verboseLogger.IsEnabled)
+            {
+                verboseLogger.Log("discovery", $"found {workflowsDir}");
+            }
             files.AddRange(CollectYamlFiles(workflowsDir));
         }
 
@@ -39,12 +48,18 @@ internal static class InputDiscovery
             var actionsDir = FindActionsDirectory(startDir);
             if (actionsDir is not null && Directory.Exists(actionsDir))
             {
-                verboseLogger.Log("discovery", $"found {actionsDir}");
+                if (verboseLogger.IsEnabled)
+                {
+                    verboseLogger.Log("discovery", $"found {actionsDir}");
+                }
                 files.AddRange(CollectYamlFiles(actionsDir));
             }
         }
 
-        verboseLogger.Log("discovery", $"{files.Count} file(s) resolved");
+        if (verboseLogger.IsEnabled)
+        {
+            verboseLogger.Log("discovery", $"{files.Count} file(s) resolved");
+        }
 
         if (files.Count == 0)
         {

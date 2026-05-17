@@ -130,6 +130,7 @@ These items can be implemented purely in the CLI layer using data already return
    - `verbose: config: <path>` (already exists — keep)
    - `verbose: config: fix.pinning.enable-network=true (source: config)` / `(source: --enable-pin-network)`
    - `verbose: config: fix.images.enable-network=false (source: default)`
+   - If `enable-network: false` is explicitly present in config, still report `(source: config)` rather than `(source: default)`.
 3. **Suppression summary**: After lint, read `LintResult.SuppressionSummary` and emit:
    - `verbose: suppressed: <N> diagnostic(s) (<rule-id>: <count>, ...)`
    - Only when `TotalSuppressed > 0`.
@@ -158,7 +159,7 @@ These items can be implemented purely in the CLI layer using data already return
 **Implementation notes**:
 - `InputDiscovery.ResolveFiles` gained `VerboseLogger` and optional `startDirectory` parameters (for testability).
 - `CheckCommand.WriteSuppressionSummary` is shared by both Check and Fix commands.
-- `FixCommand.WriteEffectiveNetworkConfig` logs network flag values with source attribution (CLI / config / default).
+- `FixCommand.WriteEffectiveNetworkConfig` logs network flag values with source attribution (CLI / config / default), including explicit `false` values from config.
 - `FileCheckResult` struct extended with `SuppressionSummary` field for parallel-path capture.
 - Suppression accumulation guarded by `verboseLogger.IsEnabled` to avoid work when verbose is off.
 

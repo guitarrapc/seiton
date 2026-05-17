@@ -75,6 +75,22 @@ public sealed class LintResultMetadataTests
     }
 
     [Test]
+    public async Task Check_DisabledRuleIds_LengthMatchesDisabledRuleCount()
+    {
+        var engine = new LintEngine();
+        var config = new LintConfig
+        {
+            Rules = new Dictionary<string, RuleConfig>
+            {
+                ["job-permissions-required"] = new() { Enabled = false },
+            },
+        };
+        using var result = engine.Check(MinimalWorkflow, ".github/workflows/ci.yml", config);
+
+        await Assert.That(result.DisabledRuleIds.Length).IsEqualTo(result.DisabledRuleCount);
+    }
+
+    [Test]
     public async Task Check_NoConfig_OptInRulesAreDisabled()
     {
         var engine = new LintEngine();

@@ -58,7 +58,10 @@ internal static class FixCommand
             lintConfig.Verbose = true;
         }
 
-        verboseLogger.Log("config", configPath is not null ? Path.GetFullPath(configPath) : "(none, using defaults)");
+        if (verboseLogger.IsEnabled)
+        {
+            verboseLogger.Log("config", configPath is not null ? Path.GetFullPath(configPath) : "(none, using defaults)");
+        }
 
         // Resolve input files
         string[] resolvedFiles;
@@ -90,8 +93,8 @@ internal static class FixCommand
 
         WriteEffectiveNetworkConfig(verboseLogger,
             enablePinNetwork, enableImageNetwork,
-            lintConfig?.Fix.Pinning.EnableNetwork ?? false,
-            lintConfig?.Fix.Images.EnableNetwork ?? false);
+            lintConfig?.Fix.Pinning,
+            lintConfig?.Fix.Images);
 
         if (effectivePinNetwork || effectiveImageNetwork)
         {
@@ -147,7 +150,10 @@ internal static class FixCommand
 
                 var utf8Yaml = File.ReadAllBytes(filePath);
 
-                verboseLogger.Log($"fixing {filePath}...");
+                if (verboseLogger.IsEnabled)
+                {
+                    verboseLogger.Log($"fixing {filePath}...");
+                }
 
                 // Check the file. Copy diagnostics immediately so they remain valid
                 // even after the owned lint result is disposed before async work.
@@ -167,19 +173,7 @@ internal static class FixCommand
                         var fileElapsed = verboseLogger.GetElapsedTime(fileStart);
                         CheckCommand.WriteFileTimingSummary(verboseLogger, filePath, handle.DocumentKind, fileElapsed, handle.DiagnosticCount, handle.SuppressionSummary.TotalSuppressed);
 
-                        var s = handle.SuppressionSummary;
-                        if (s.TotalSuppressed > 0)
-                        {
-                            totalSuppressed += s.TotalSuppressed;
-                            suppressedByRule ??= new Dictionary<string, int>(StringComparer.Ordinal);
-                            foreach (var kvp in s.SuppressedByRule)
-                            {
-                                if (!suppressedByRule.TryGetValue(kvp.Key, out var existing))
-                                    suppressedByRule[kvp.Key] = kvp.Value;
-                                else
-                                    suppressedByRule[kvp.Key] = existing + kvp.Value;
-                            }
-                        }
+                        CheckCommand.AccumulateSuppression(handle.SuppressionSummary, ref totalSuppressed, ref suppressedByRule);
                     }
                 }
 
@@ -273,7 +267,10 @@ internal static class FixCommand
                     currentHandle?.Dispose();
                 }
 
-                verboseLogger.LogFile(filePath, $"applied {appliedFixes} fix(es)");
+                if (verboseLogger.IsEnabled)
+                {
+                    verboseLogger.LogFile(filePath, $"applied {appliedFixes} fix(es)");
+                }
             }
 
             // Apply ignore patterns
@@ -345,15 +342,15 @@ internal static class FixCommand
         VerboseLogger logger,
         bool enablePinNetwork,
         bool enableImageNetwork,
-        bool configPinNetwork,
-        bool configImageNetwork)
+        FixPinningConfig? pinningConfig,
+        FixImagesConfig? imagesConfig)
     {
-        var effectivePin = enablePinNetwork || configPinNetwork;
-        var pinSource = enablePinNetwork ? "--enable-pin-network" : configPinNetwork ? "config" : "default";
+        var effectivePin = enablePinNetwork || (pinningConfig?.EnableNetwork ?? false);
+        var pinSource = enablePinNetwork ? "--enable-pin-network" : pinningConfig?.HasEnableNetwork == true ? "config" : "default";
         logger.Log("config", $"fix.pinning.enable-network={(effectivePin ? "true" : "false")} (source: {pinSource})");
 
-        var effectiveImage = enableImageNetwork || configImageNetwork;
-        var imageSource = enableImageNetwork ? "--enable-image-network" : configImageNetwork ? "config" : "default";
+        var effectiveImage = enableImageNetwork || (imagesConfig?.EnableNetwork ?? false);
+        var imageSource = enableImageNetwork ? "--enable-image-network" : imagesConfig?.HasEnableNetwork == true ? "config" : "default";
         logger.Log("config", $"fix.images.enable-network={(effectiveImage ? "true" : "false")} (source: {imageSource})");
     }
 }
