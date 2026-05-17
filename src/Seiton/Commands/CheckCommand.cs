@@ -54,7 +54,7 @@ internal static class CheckCommand
         string[] resolvedFiles;
         try
         {
-            resolvedFiles = InputDiscovery.ResolveFiles(files, includeActions);
+            resolvedFiles = InputDiscovery.ResolveFiles(files, includeActions, verboseLogger);
         }
         catch (FileNotFoundException ex)
         {
@@ -71,6 +71,8 @@ internal static class CheckCommand
         // Lint files
         var allDiagnostics = new List<Diagnostic>();
         Dictionary<string, byte[]>? sourceMap = resolvedFormat == OutputFormat.Text && !oneline ? new() : null;
+        var totalSuppressed = 0;
+        Dictionary<string, int>? suppressedByRule = null;
 
         var hasStdin = files.Contains("-");
 
@@ -101,6 +103,9 @@ internal static class CheckCommand
                 using var result = engine.Check(utf8Yaml, filePath, lintConfig);
                 allDiagnostics.AddRange(result.Diagnostics.AsSpan());
                 sourceMap?.TryAdd(filePath, utf8Yaml);
+
+                if (verboseLogger.IsEnabled)
+                    AccumulateSuppression(result.SuppressionSummary, ref totalSuppressed, ref suppressedByRule);
             }
         }
         else
@@ -121,7 +126,10 @@ internal static class CheckCommand
 
                     var engine = engines.Value!;
                     using var result = engine.Check(utf8Yaml, filePath, lintConfig);
-                    slots[i] = new FileCheckResult(result.CopyDiagnostics(), filePath, sourceMap is not null ? utf8Yaml : null);
+                    slots[i] = new FileCheckResult(
+                        result.CopyDiagnostics(), filePath,
+                        sourceMap is not null ? utf8Yaml : null,
+                        verboseLogger.IsEnabled ? result.SuppressionSummary : default);
                 });
 
             // Aggregate in input order for stable output
@@ -130,6 +138,9 @@ internal static class CheckCommand
                 allDiagnostics.AddRange(slots[i].Diagnostics.AsSpan());
                 if (sourceMap is not null && slots[i].Utf8Yaml is { } yaml)
                     sourceMap.TryAdd(slots[i].FilePath, yaml);
+
+                if (verboseLogger.IsEnabled)
+                    AccumulateSuppression(slots[i].SuppressionSummary, ref totalSuppressed, ref suppressedByRule);
             }
         }
 
@@ -150,6 +161,12 @@ internal static class CheckCommand
         // Output
         if (allDiagnostics.Count > 0)
             DiagnosticFormatter.Write(Console.Out, allDiagnostics, resolvedFormat, oneline, colorEnabled, sourceMap);
+
+        if (totalSuppressed > 0)
+        {
+            WriteSuppressionSummary(verboseLogger,
+                new SuppressionSummary(totalSuppressed, suppressedByRule!, []));
+        }
 
         WriteSummary(allDiagnostics, resolvedFiles.Length, verbose, showExitHint: minSeverity is null);
 
@@ -290,6 +307,47 @@ internal static class CheckCommand
         return hasError;
     }
 
+    internal static void WriteSuppressionSummary(VerboseLogger logger, SuppressionSummary summary)
+    {
+        if (summary.TotalSuppressed == 0) return;
+
+        var sorted = new List<KeyValuePair<string, int>>(summary.SuppressedByRule);
+        sorted.Sort((a, b) =>
+        {
+            var byCount = b.Value.CompareTo(a.Value);
+            return byCount != 0 ? byCount : string.Compare(a.Key, b.Key, StringComparison.Ordinal);
+        });
+
+        var sb = new System.Text.StringBuilder();
+        sb.Append(summary.TotalSuppressed);
+        sb.Append(" diagnostic(s) (");
+        for (var i = 0; i < sorted.Count; i++)
+        {
+            if (i > 0) sb.Append(", ");
+            sb.Append(sorted[i].Key);
+            sb.Append(": ");
+            sb.Append(sorted[i].Value);
+        }
+        sb.Append(')');
+
+        logger.Log("suppressed", sb.ToString());
+    }
+
+    private static void AccumulateSuppression(SuppressionSummary summary, ref int totalSuppressed, ref Dictionary<string, int>? suppressedByRule)
+    {
+        if (summary.TotalSuppressed == 0) return;
+
+        totalSuppressed += summary.TotalSuppressed;
+        suppressedByRule ??= new Dictionary<string, int>(StringComparer.Ordinal);
+        foreach (var kvp in summary.SuppressedByRule)
+        {
+            if (!suppressedByRule.TryGetValue(kvp.Key, out var existing))
+                suppressedByRule[kvp.Key] = kvp.Value;
+            else
+                suppressedByRule[kvp.Key] = existing + kvp.Value;
+        }
+    }
+
     private static DiagnosticSeverity? ParseSeverity(string value)
     {
         return value.ToLowerInvariant() switch
@@ -308,11 +366,13 @@ internal readonly struct FileCheckResult
     public readonly OwnedDiagnostics Diagnostics;
     public readonly string FilePath;
     public readonly byte[]? Utf8Yaml;
+    public readonly SuppressionSummary SuppressionSummary;
 
-    public FileCheckResult(OwnedDiagnostics diagnostics, string filePath, byte[]? utf8Yaml)
+    public FileCheckResult(OwnedDiagnostics diagnostics, string filePath, byte[]? utf8Yaml, SuppressionSummary suppressionSummary = default)
     {
         Diagnostics = diagnostics;
         FilePath = filePath;
         Utf8Yaml = utf8Yaml;
+        SuppressionSummary = suppressionSummary;
     }
 }

@@ -64,7 +64,7 @@ internal static class FixCommand
         string[] resolvedFiles;
         try
         {
-            resolvedFiles = InputDiscovery.ResolveFiles(files, includeActions);
+            resolvedFiles = InputDiscovery.ResolveFiles(files, includeActions, verboseLogger);
         }
         catch (FileNotFoundException ex)
         {
@@ -87,6 +87,12 @@ internal static class FixCommand
         HttpClient? ociHttpClient = null;
         var effectivePinNetwork = enablePinNetwork || (lintConfig?.Fix.Pinning.EnableNetwork ?? false);
         var effectiveImageNetwork = enableImageNetwork || (lintConfig?.Fix.Images.EnableNetwork ?? false);
+
+        WriteEffectiveNetworkConfig(verboseLogger,
+            enablePinNetwork, enableImageNetwork,
+            lintConfig?.Fix.Pinning.EnableNetwork ?? false,
+            lintConfig?.Fix.Images.EnableNetwork ?? false);
+
         if (effectivePinNetwork || effectiveImageNetwork)
         {
             githubHttpClient = effectivePinNetwork ? GitHubApiHttpClientFactory.CreateForGitHubApi() : null;
@@ -115,6 +121,8 @@ internal static class FixCommand
             var engine = new LintEngine();
             var allDiagnostics = new List<Diagnostic>();
             var hasPrintedDiff = false;
+            var totalSuppressed = 0;
+            Dictionary<string, int>? suppressedByRule = null;
 
             // Fix command always builds fixes; enable fix construction for all Check() calls.
             var fixEnabledLintConfig = new LintConfig
@@ -145,6 +153,23 @@ internal static class FixCommand
                 {
                     using var handle = engine.Check(utf8Yaml, filePath, fixEnabledLintConfig);
                     lintDiagnostics = handle.CopyDiagnostics();
+
+                    if (verboseLogger.IsEnabled)
+                    {
+                        var s = handle.SuppressionSummary;
+                        if (s.TotalSuppressed > 0)
+                        {
+                            totalSuppressed += s.TotalSuppressed;
+                            suppressedByRule ??= new Dictionary<string, int>(StringComparer.Ordinal);
+                            foreach (var kvp in s.SuppressedByRule)
+                            {
+                                if (!suppressedByRule.TryGetValue(kvp.Key, out var existing))
+                                    suppressedByRule[kvp.Key] = kvp.Value;
+                                else
+                                    suppressedByRule[kvp.Key] = existing + kvp.Value;
+                            }
+                        }
+                    }
                 }
 
                 // Apply network-assisted pin remediation: attaches SHA/digest DiagnosticFix values
@@ -264,6 +289,12 @@ internal static class FixCommand
                 DiagnosticFormatter.Write(outputWriter, allDiagnostics, resolvedFormat, oneline, colorEnabled);
             }
 
+            if (totalSuppressed > 0)
+            {
+                CheckCommand.WriteSuppressionSummary(verboseLogger,
+                    new SuppressionSummary(totalSuppressed, suppressedByRule!, []));
+            }
+
             CheckCommand.WriteSummary(errorWriter, allDiagnostics, resolvedFiles.Length, verbose, showExitHint: minSeverity is null);
 
             // Hint about network flags when unfixed pin diagnostics remain
@@ -290,5 +321,21 @@ internal static class FixCommand
             githubHttpClient?.Dispose();
             ociHttpClient?.Dispose();
         }
+    }
+
+    internal static void WriteEffectiveNetworkConfig(
+        VerboseLogger logger,
+        bool enablePinNetwork,
+        bool enableImageNetwork,
+        bool configPinNetwork,
+        bool configImageNetwork)
+    {
+        var effectivePin = enablePinNetwork || configPinNetwork;
+        var pinSource = enablePinNetwork ? "--enable-pin-network" : configPinNetwork ? "config" : "default";
+        logger.Log("config", $"fix.pinning.enable-network={(effectivePin ? "true" : "false")} (source: {pinSource})");
+
+        var effectiveImage = enableImageNetwork || configImageNetwork;
+        var imageSource = enableImageNetwork ? "--enable-image-network" : configImageNetwork ? "config" : "default";
+        logger.Log("config", $"fix.images.enable-network={(effectiveImage ? "true" : "false")} (source: {imageSource})");
     }
 }

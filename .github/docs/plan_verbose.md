@@ -140,9 +140,27 @@ These items can be implemented purely in the CLI layer using data already return
 
 **Verification**:
 
-- [ ] Benchmark: `CoreLintBenchmark` before/after — expect identical (no Core changes).
-- [ ] Tests: Add CLI unit tests for verbose output content (TextWriter injection).
-- [ ] Regression: `dotnet test` — all green.
+- [x] Benchmark: `CoreLintBenchmark` before/after — identical (no Core changes). 0 B allocation delta.
+- [x] Tests: 10 CLI unit tests for verbose output content (TextWriter injection). All pass.
+- [x] Regression: `dotnet test` — 1748 tests, all green.
+
+**Benchmark results (Phase 1)**:
+
+| Size | FixEnabled | Before (μs) | After (μs) | Δ runtime | Alloc Before | Alloc After | Δ alloc |
+|------|-----------|-------------|------------|-----------|-------------|------------|---------|
+| Small | False | 55.64 | 63.34 | noise | 8.37 KB | 8.37 KB | 0 B |
+| Small | True | 64.61 | 63.57 | noise | 9.82 KB | 9.82 KB | 0 B |
+| Medium | False | 1,242.93 | 1,316.75 | noise | 68.56 KB | 68.56 KB | 0 B |
+| Medium | True | 1,791.07 | 1,903.57 | noise | 81.92 KB | 81.92 KB | 0 B |
+| Large | False | 20,064.24 | 20,810.91 | noise | 327.08 KB | 327.08 KB | 0 B |
+| Large | True | 30,107.98 | 32,663.41 | noise | 381.92 KB | 381.92 KB | 0 B |
+
+**Implementation notes**:
+- `InputDiscovery.ResolveFiles` gained `VerboseLogger` and optional `startDirectory` parameters (for testability).
+- `CheckCommand.WriteSuppressionSummary` is shared by both Check and Fix commands.
+- `FixCommand.WriteEffectiveNetworkConfig` logs network flag values with source attribution (CLI / config / default).
+- `FileCheckResult` struct extended with `SuppressionSummary` field for parallel-path capture.
+- Suppression accumulation guarded by `verboseLogger.IsEnabled` to avoid work when verbose is off.
 
 ---
 
