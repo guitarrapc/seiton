@@ -207,8 +207,9 @@ These items can be implemented purely in the CLI layer using data already return
 
 **Implementation notes**:
 - `DisabledRuleIds` counts only config/opt-in disabled rules, NOT document-kind mismatches (those are "not applicable", not "disabled").
-- Rule summary logged once per run (from first file), document kind logged per file.
-- Parallel path captures metadata in `FileCheckResult` struct; rule summary emitted during ordered aggregation.
+- Rule summary logged once per DocumentKind (workflow and action separately), since `ActiveRuleCount` varies by document kind while `DisabledRuleCount`/`DisabledRuleIds` are invariant.
+- Output format: `verbose: rules: <N> enabled, <M> disabled (workflow)` / `verbose: rules: <N> enabled, <M> disabled (action)`.
+- Parallel path captures metadata in `FileCheckResult` struct; rule summary and `checking <file>...` emitted during ordered aggregation (not inside `Parallel.For`) to guarantee deterministic output order.
 
 ---
 

@@ -91,10 +91,13 @@ internal static class FixCommand
         var effectivePinNetwork = enablePinNetwork || (lintConfig?.Fix.Pinning.EnableNetwork ?? false);
         var effectiveImageNetwork = enableImageNetwork || (lintConfig?.Fix.Images.EnableNetwork ?? false);
 
-        WriteEffectiveNetworkConfig(verboseLogger,
-            enablePinNetwork, enableImageNetwork,
-            lintConfig?.Fix.Pinning,
-            lintConfig?.Fix.Images);
+        if (verboseLogger.IsEnabled)
+        {
+            WriteEffectiveNetworkConfig(verboseLogger,
+                enablePinNetwork, enableImageNetwork,
+                lintConfig?.Fix.Pinning,
+                lintConfig?.Fix.Images);
+        }
 
         if (effectivePinNetwork || effectiveImageNetwork)
         {
@@ -126,7 +129,8 @@ internal static class FixCommand
             var hasPrintedDiff = false;
             var totalSuppressed = 0;
             Dictionary<string, int>? suppressedByRule = null;
-            var rulesSummaryLogged = false;
+            var workflowRuleSummaryLogged = false;
+            var actionRuleSummaryLogged = false;
             var totalStart = verboseLogger.GetTimestamp();
 
             // Fix command always builds fixes; enable fix construction for all Check() calls.
@@ -165,10 +169,10 @@ internal static class FixCommand
 
                     if (verboseLogger.IsEnabled)
                     {
-                        if (!rulesSummaryLogged)
+                        if (!CheckCommand.HasLoggedRuleSummaryForKind(handle.DocumentKind, ref workflowRuleSummaryLogged, ref actionRuleSummaryLogged))
                         {
-                            CheckCommand.WriteRuleSummary(verboseLogger, handle.ActiveRuleCount, handle.DisabledRuleCount, handle.DisabledRuleIds);
-                            rulesSummaryLogged = true;
+                            CheckCommand.WriteRuleSummary(verboseLogger, handle.ActiveRuleCount, handle.DisabledRuleCount, handle.DisabledRuleIds, handle.DocumentKind);
+                            CheckCommand.MarkRuleSummaryLogged(handle.DocumentKind, ref workflowRuleSummaryLogged, ref actionRuleSummaryLogged);
                         }
                         var fileElapsed = verboseLogger.GetElapsedTime(fileStart);
                         CheckCommand.WriteFileTimingSummary(verboseLogger, filePath, handle.DocumentKind, fileElapsed, handle.DiagnosticCount, handle.SuppressionSummary.TotalSuppressed);

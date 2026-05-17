@@ -5,7 +5,7 @@ using Seiton.Core.Parsing;
 
 namespace Seiton.Tests;
 
-public sealed class VerbosePhase2Tests
+public sealed class VerboseRuleSummaryTests
 {
     // === Rule Summary Logging Tests ===
 
@@ -15,10 +15,10 @@ public sealed class VerbosePhase2Tests
         using var sw = new StringWriter();
         var logger = VerboseLogger.Create(verbose: true, sw);
 
-        CheckCommand.WriteRuleSummary(logger, activeRuleCount: 42, disabledRuleCount: 15, disabledRuleIds: []);
+        CheckCommand.WriteRuleSummary(logger, activeRuleCount: 42, disabledRuleCount: 15, disabledRuleIds: [], DocumentKind.Workflow);
 
         await Assert.That(sw.ToString().TrimEnd())
-            .IsEqualTo("verbose: rules: 42 enabled, 15 disabled");
+            .IsEqualTo("verbose: rules: 42 enabled, 15 disabled (workflow)");
     }
 
     [Test]
@@ -28,11 +28,11 @@ public sealed class VerbosePhase2Tests
         var logger = VerboseLogger.Create(verbose: true, sw);
 
         CheckCommand.WriteRuleSummary(logger, activeRuleCount: 40, disabledRuleCount: 3,
-            disabledRuleIds: ["concurrency-limits", "impostor-commit", "ref-confusion"]);
+            disabledRuleIds: ["concurrency-limits", "impostor-commit", "ref-confusion"], DocumentKind.Workflow);
 
         var lines = sw.ToString().TrimEnd().Split(Environment.NewLine);
         await Assert.That(lines).Count().IsEqualTo(2);
-        await Assert.That(lines[0]).IsEqualTo("verbose: rules: 40 enabled, 3 disabled");
+        await Assert.That(lines[0]).IsEqualTo("verbose: rules: 40 enabled, 3 disabled (workflow)");
         await Assert.That(lines[1]).IsEqualTo("verbose: rules: disabled: concurrency-limits, impostor-commit, ref-confusion");
     }
 
@@ -42,10 +42,10 @@ public sealed class VerbosePhase2Tests
         using var sw = new StringWriter();
         var logger = VerboseLogger.Create(verbose: true, sw);
 
-        CheckCommand.WriteRuleSummary(logger, activeRuleCount: 57, disabledRuleCount: 0, disabledRuleIds: []);
+        CheckCommand.WriteRuleSummary(logger, activeRuleCount: 57, disabledRuleCount: 0, disabledRuleIds: [], DocumentKind.Workflow);
 
         var output = sw.ToString().TrimEnd();
-        await Assert.That(output).IsEqualTo("verbose: rules: 57 enabled, 0 disabled");
+        await Assert.That(output).IsEqualTo("verbose: rules: 57 enabled, 0 disabled (workflow)");
         await Assert.That(output).DoesNotContain("disabled:");
     }
 
@@ -56,7 +56,7 @@ public sealed class VerbosePhase2Tests
         var logger = VerboseLogger.Create(verbose: false, sw);
 
         CheckCommand.WriteRuleSummary(logger, activeRuleCount: 42, disabledRuleCount: 15,
-            disabledRuleIds: ["rule-a"]);
+            disabledRuleIds: ["rule-a"], DocumentKind.Workflow);
 
         await Assert.That(sw.ToString()).IsEqualTo("");
     }

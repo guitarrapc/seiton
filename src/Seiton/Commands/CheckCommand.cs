@@ -78,7 +78,8 @@ internal static class CheckCommand
         Dictionary<string, int>? suppressedByRule = null;
 
         var hasStdin = files.Contains("-");
-        var rulesSummaryLogged = false;
+        var workflowRuleSummaryLogged = false;
+        var actionRuleSummaryLogged = false;
         var totalStart = verboseLogger.GetTimestamp();
 
         // 1-file, single CPU, or stdin: sequential fast path (no ThreadLocal overhead)
@@ -115,10 +116,10 @@ internal static class CheckCommand
 
                 if (verboseLogger.IsEnabled)
                 {
-                    if (!rulesSummaryLogged)
+                    if (!HasLoggedRuleSummaryForKind(result.DocumentKind, ref workflowRuleSummaryLogged, ref actionRuleSummaryLogged))
                     {
-                        WriteRuleSummary(verboseLogger, result.ActiveRuleCount, result.DisabledRuleCount, result.DisabledRuleIds);
-                        rulesSummaryLogged = true;
+                        WriteRuleSummary(verboseLogger, result.ActiveRuleCount, result.DisabledRuleCount, result.DisabledRuleIds, result.DocumentKind);
+                        MarkRuleSummaryLogged(result.DocumentKind, ref workflowRuleSummaryLogged, ref actionRuleSummaryLogged);
                     }
                     var fileElapsed = verboseLogger.GetElapsedTime(fileStart);
                     var suppressedCount = result.SuppressionSummary.TotalSuppressed;
@@ -140,11 +141,6 @@ internal static class CheckCommand
                 {
                     var filePath = resolvedFiles[i];
                     var utf8Yaml = File.ReadAllBytes(filePath);
-
-                    if (verboseLogger.IsEnabled)
-                    {
-                        verboseLogger.Log($"checking {filePath}...");
-                    }
 
                     var fileStart = verboseLogger.GetTimestamp();
                     var engine = engines.Value!;
@@ -170,10 +166,11 @@ internal static class CheckCommand
 
                 if (verboseLogger.IsEnabled)
                 {
-                    if (!rulesSummaryLogged)
+                    verboseLogger.Log($"checking {slots[i].FilePath}...");
+                    if (!HasLoggedRuleSummaryForKind(slots[i].DocumentKind, ref workflowRuleSummaryLogged, ref actionRuleSummaryLogged))
                     {
-                        WriteRuleSummary(verboseLogger, slots[i].ActiveRuleCount, slots[i].DisabledRuleCount, slots[i].DisabledRuleIds);
-                        rulesSummaryLogged = true;
+                        WriteRuleSummary(verboseLogger, slots[i].ActiveRuleCount, slots[i].DisabledRuleCount, slots[i].DisabledRuleIds, slots[i].DocumentKind);
+                        MarkRuleSummaryLogged(slots[i].DocumentKind, ref workflowRuleSummaryLogged, ref actionRuleSummaryLogged);
                     }
                     WriteFileTimingSummary(verboseLogger, slots[i].FilePath, slots[i].DocumentKind, slots[i].FileElapsed, slots[i].FileDiagnosticCount, slots[i].FileSuppressedCount);
                     AccumulateSuppression(slots[i].SuppressionSummary, ref totalSuppressed, ref suppressedByRule);
@@ -388,9 +385,10 @@ internal static class CheckCommand
         }
     }
 
-    internal static void WriteRuleSummary(VerboseLogger logger, int activeRuleCount, int disabledRuleCount, ReadOnlySpan<string> disabledRuleIds)
+    internal static void WriteRuleSummary(VerboseLogger logger, int activeRuleCount, int disabledRuleCount, ReadOnlySpan<string> disabledRuleIds, DocumentKind documentKind)
     {
-        logger.Log("rules", $"{activeRuleCount} enabled, {disabledRuleCount} disabled");
+        var kind = documentKind == DocumentKind.ActionMetadata ? "action" : "workflow";
+        logger.Log("rules", $"{activeRuleCount} enabled, {disabledRuleCount} disabled ({kind})");
 
         if (disabledRuleIds.Length > 0)
         {
@@ -402,6 +400,19 @@ internal static class CheckCommand
             }
             logger.Log("rules", $"disabled: {sb}");
         }
+    }
+
+    internal static bool HasLoggedRuleSummaryForKind(DocumentKind kind, ref bool workflowLogged, ref bool actionLogged)
+    {
+        return kind == DocumentKind.ActionMetadata ? actionLogged : workflowLogged;
+    }
+
+    internal static void MarkRuleSummaryLogged(DocumentKind kind, ref bool workflowLogged, ref bool actionLogged)
+    {
+        if (kind == DocumentKind.ActionMetadata)
+            actionLogged = true;
+        else
+            workflowLogged = true;
     }
 
     internal static void WriteFileTimingSummary(VerboseLogger logger, string filePath, DocumentKind documentKind, TimeSpan elapsed, int diagnosticCount, int suppressedCount)

@@ -4,7 +4,7 @@ using Seiton.Core.Linting;
 
 namespace Seiton.Tests;
 
-public sealed class VerbosePhase1Tests
+public sealed class VerboseConfigTests
 {
     // === Suppression Summary Tests ===
 

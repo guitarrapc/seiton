@@ -4,7 +4,7 @@ using Seiton.Core.Parsing;
 
 namespace Seiton.Tests;
 
-public sealed class VerbosePhase3Tests
+public sealed class VerboseTimingTests
 {
     // === TimeProvider integration ===
 
