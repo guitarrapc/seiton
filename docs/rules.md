@@ -1008,7 +1008,7 @@ jobs:
 
 Detects credential leakage risk when `actions/checkout` (without `persist-credentials: false`) is combined with `actions/upload-artifact` that uploads a dangerous path (`.`, `..`, or `${{ github.workspace }}`).
 
-By default, `actions/checkout` persists a token in `.git/config`. If `actions/upload-artifact` then uploads the repository root, the credential is included in the artifact.
+  > **Note:** With legacy `actions/checkout` versions (v1-v5) persist a token in `.git/config`, `actions/checkout@v6+` correct this behavior and stores credentials in a separate file under `$RUNNER_TEMP`. Uploading the repository root or parent can therefore expose sensitive checkout state. With `actions/upload-artifact@v4`, hidden files are excluded by default, so legacy `.git/config` is typically only included when hidden files are uploaded explicitly, for example with `include-hidden-files: true`.
 
 **Severity:**
 
@@ -1649,7 +1649,9 @@ rules:
 |---|---|---|
 | ✓ | — | △ |
 
-Warns when `actions/checkout` is used without `persist-credentials: false`. Persisting credentials in `.git/config` increases secret exposure risk.
+Warns when `actions/checkout` is used without `persist-credentials: false`.
+
+Legacy `actions/checkout` versions persist credentials in `.git/config`; `actions/checkout@v6+` stores them in a separate file under `$RUNNER_TEMP`. Either way, leaving credentials persisted broadens later-step and artifact exposure.
 
 **Example trigger:**
 
@@ -1659,7 +1661,7 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6  # ERROR: should set persist-credentials to false
+      - uses: actions/checkout@v6  # WARNING: should set persist-credentials to false
 ```
 
 **Remediation:**
