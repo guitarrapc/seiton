@@ -209,6 +209,12 @@ public sealed class UnsoundContainsRule() : RuleBase(RuleId.UnsoundContains)
             return false;
         }
 
+        // Index access: env['MY_VAR'], github['ref'], inputs['target']
+        if (node.Kind == ExpressionNodeKind.IndexAccess)
+        {
+            return CheckIndexAccessUserControllable(node, nodes, exprBytes);
+        }
+
         // Member access chain: reconstruct context path
         if (node.Kind == ExpressionNodeKind.MemberAccess)
         {
@@ -290,6 +296,73 @@ public sealed class UnsoundContainsRule() : RuleBase(RuleId.UnsoundContains)
         }
 
         var kind = nodes[nodeId].Kind;
-        return kind == ExpressionNodeKind.MemberAccess || kind == ExpressionNodeKind.Identifier;
+        return kind == ExpressionNodeKind.MemberAccess
+            || kind == ExpressionNodeKind.Identifier
+            || kind == ExpressionNodeKind.IndexAccess;
+    }
+
+    /// <summary>Checks index-style access like env['MY_VAR'], github['ref'], inputs['target'].</summary>
+    private static bool CheckIndexAccessUserControllable(ExpressionNode node, ExpressionNode[] nodes, ReadOnlySpan<byte> exprBytes)
+    {
+        var baseId = node.Left;
+        var indexId = node.Right;
+
+        if (baseId < 0 || baseId >= nodes.Length || indexId < 0 || indexId >= nodes.Length)
+        {
+            return false;
+        }
+
+        var baseNode = nodes[baseId];
+        if (baseNode.Kind != ExpressionNodeKind.Identifier)
+        {
+            return false;
+        }
+
+        var rootToken = baseNode.Token.AsSpan(exprBytes);
+
+        // env['X'] - any env context is user-controllable
+        if (EqualsAsciiIgnoreCase(rootToken, "env"u8))
+        {
+            return true;
+        }
+
+        // inputs['X'] - any inputs context is user-controllable
+        if (EqualsAsciiIgnoreCase(rootToken, "inputs"u8))
+        {
+            return true;
+        }
+
+        // github['X'] - check specific property names
+        if (EqualsAsciiIgnoreCase(rootToken, "github"u8))
+        {
+            var indexNode = nodes[indexId];
+            if (indexNode.Kind != ExpressionNodeKind.StringLiteral)
+            {
+                return false;
+            }
+
+            var propName = GetStringLiteralContent(indexNode.Token, exprBytes);
+            return EqualsAsciiIgnoreCase(propName, Actor) ||
+                   EqualsAsciiIgnoreCase(propName, BaseRef) ||
+                   EqualsAsciiIgnoreCase(propName, HeadRef) ||
+                   EqualsAsciiIgnoreCase(propName, Ref) ||
+                   EqualsAsciiIgnoreCase(propName, RefName) ||
+                   EqualsAsciiIgnoreCase(propName, Sha) ||
+                   EqualsAsciiIgnoreCase(propName, TriggeringActor);
+        }
+
+        return false;
+    }
+
+    /// <summary>Gets the content of a string literal (inside the quotes).</summary>
+    private static ReadOnlySpan<byte> GetStringLiteralContent(Utf8Slice token, ReadOnlySpan<byte> exprBytes)
+    {
+        var span = token.AsSpan(exprBytes);
+        if (span.Length >= 2 && span[0] == (byte)'\'' && span[span.Length - 1] == (byte)'\'')
+        {
+            return span[1..^1];
+        }
+
+        return span;
     }
 }

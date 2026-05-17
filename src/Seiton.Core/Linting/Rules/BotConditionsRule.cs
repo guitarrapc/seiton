@@ -180,6 +180,13 @@ public sealed class BotConditionsRule() : RuleBase(RuleId.BotConditions)
         }
 
         var node = nodes[nodeId];
+
+        // Handle index-style access: github['actor'] or github['triggering_actor']
+        if (node.Kind == ExpressionNodeKind.IndexAccess)
+        {
+            return IsIndexAccessSpoofableActor(node, nodes, exprBytes);
+        }
+
         if (node.Kind != ExpressionNodeKind.MemberAccess)
         {
             return false;
@@ -250,6 +257,13 @@ public sealed class BotConditionsRule() : RuleBase(RuleId.BotConditions)
         }
 
         var node = nodes[nodeId];
+
+        // Handle index-style access: github['actor_id']
+        if (node.Kind == ExpressionNodeKind.IndexAccess)
+        {
+            return IsIndexAccessSpoofableActorId(node, nodes, exprBytes);
+        }
+
         if (node.Kind != ExpressionNodeKind.MemberAccess)
         {
             return false;
@@ -323,6 +337,77 @@ public sealed class BotConditionsRule() : RuleBase(RuleId.BotConditions)
         }
 
         return value[^BotSuffix.Length..].SequenceEqual(BotSuffix);
+    }
+
+    /// <summary>
+    /// Checks index-style access like github['actor'] or github['triggering_actor'].
+    /// Only handles depth-1 patterns where Left is Identifier("github") and Right is a StringLiteral.
+    /// </summary>
+    private static bool IsIndexAccessSpoofableActor(ExpressionNode node, ExpressionNode[] nodes, ReadOnlySpan<byte> exprBytes)
+    {
+        var baseId = node.Left;
+        var indexId = node.Right;
+
+        if (baseId < 0 || baseId >= nodes.Length || indexId < 0 || indexId >= nodes.Length)
+        {
+            return false;
+        }
+
+        var baseNode = nodes[baseId];
+        if (baseNode.Kind != ExpressionNodeKind.Identifier)
+        {
+            return false;
+        }
+
+        if (!EqualsAsciiIgnoreCase(baseNode.Token.AsSpan(exprBytes), "github"u8))
+        {
+            return false;
+        }
+
+        var indexNode = nodes[indexId];
+        if (indexNode.Kind != ExpressionNodeKind.StringLiteral)
+        {
+            return false;
+        }
+
+        var propName = GetStringLiteralContent(indexNode.Token, exprBytes);
+        return EqualsAsciiIgnoreCase(propName, Actor) ||
+               EqualsAsciiIgnoreCase(propName, TriggeringActor);
+    }
+
+    /// <summary>
+    /// Checks index-style access like github['actor_id'].
+    /// Only handles depth-1 patterns where Left is Identifier("github") and Right is a StringLiteral.
+    /// </summary>
+    private static bool IsIndexAccessSpoofableActorId(ExpressionNode node, ExpressionNode[] nodes, ReadOnlySpan<byte> exprBytes)
+    {
+        var baseId = node.Left;
+        var indexId = node.Right;
+
+        if (baseId < 0 || baseId >= nodes.Length || indexId < 0 || indexId >= nodes.Length)
+        {
+            return false;
+        }
+
+        var baseNode = nodes[baseId];
+        if (baseNode.Kind != ExpressionNodeKind.Identifier)
+        {
+            return false;
+        }
+
+        if (!EqualsAsciiIgnoreCase(baseNode.Token.AsSpan(exprBytes), "github"u8))
+        {
+            return false;
+        }
+
+        var indexNode = nodes[indexId];
+        if (indexNode.Kind != ExpressionNodeKind.StringLiteral)
+        {
+            return false;
+        }
+
+        var propName = GetStringLiteralContent(indexNode.Token, exprBytes);
+        return EqualsAsciiIgnoreCase(propName, ActorId);
     }
 
 }
