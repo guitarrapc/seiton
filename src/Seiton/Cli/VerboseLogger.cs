@@ -49,19 +49,28 @@ internal sealed class VerboseLogger
     /// </summary>
     public TimeSpan GetElapsedTime(long startTimestamp) => _timeProvider?.GetElapsedTime(startTimestamp) ?? TimeSpan.Zero;
 
-    /// <summary>Writes <c>verbose: &lt;category&gt;: &lt;message&gt;</c>.</summary>
+    /// <summary>
+    /// Writes <c>verbose: &lt;category&gt;: &lt;message&gt;</c>.
+    /// Callers sharing a logger across threads must provide a thread-safe <see cref="TextWriter"/>.
+    /// </summary>
     public void Log(string category, string message)
     {
         _writer?.WriteLine($"verbose: {category}: {message}");
     }
 
-    /// <summary>Writes <c>verbose: &lt;message&gt;</c>.</summary>
+    /// <summary>
+    /// Writes <c>verbose: &lt;message&gt;</c>.
+    /// Callers sharing a logger across threads must provide a thread-safe <see cref="TextWriter"/>.
+    /// </summary>
     public void Log(string message)
     {
         _writer?.WriteLine($"verbose: {message}");
     }
 
-    /// <summary>Writes <c>verbose: &lt;filePath&gt;: &lt;message&gt;</c>.</summary>
+    /// <summary>
+    /// Writes <c>verbose: &lt;filePath&gt;: &lt;message&gt;</c>.
+    /// Callers sharing a logger across threads must provide a thread-safe <see cref="TextWriter"/>.
+    /// </summary>
     public void LogFile(string filePath, string message)
     {
         _writer?.WriteLine($"verbose: {filePath}: {message}");

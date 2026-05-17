@@ -264,9 +264,10 @@ public sealed class LintEngine
         for (var i = 0; i < rules.Count; i++)
         {
             var rule = rules[i];
-            if (!IsRuleEnabled(rule.Id.ToId(), effectiveConfig.Rules))
+            var ruleId = rule.Id.ToId() ?? throw new InvalidOperationException($"Rule {rule.Id} must provide a non-null id.");
+            if (!IsRuleEnabled(ruleId, effectiveConfig.Rules))
             {
-                _disabledRuleIds.Add(rule.Id.ToId()!);
+                _disabledRuleIds.Add(ruleId);
                 continue;
             }
 
@@ -285,9 +286,10 @@ public sealed class LintEngine
         for (var i = 0; i < _onlineRules.Count; i++)
         {
             var onlineRule = _onlineRules[i];
-            if (!IsRuleEnabled(onlineRule.Id.ToId(), effectiveConfig.Rules))
+            var ruleId = onlineRule.Id.ToId() ?? throw new InvalidOperationException($"Rule {onlineRule.Id} must provide a non-null id.");
+            if (!IsRuleEnabled(ruleId, effectiveConfig.Rules))
             {
-                _disabledRuleIds.Add(onlineRule.Id.ToId()!);
+                _disabledRuleIds.Add(ruleId);
                 continue;
             }
 
@@ -420,13 +422,16 @@ public sealed class LintEngine
         IReadOnlyDictionary<string, RuleConfig>? normalizedRuleConfig,
         DocumentKind documentKind)
     {
+        _disabledRuleIds.Clear();
+
         var activeRuleCount = 0;
         for (var i = 0; i < rules.Count; i++)
         {
             var rule = rules[i];
-            if (!IsRuleEnabled(rule.Id.ToId(), normalizedRuleConfig))
+            var ruleId = rule.Id.ToId() ?? throw new InvalidOperationException($"Rule {rule.Id} must provide a non-null id.");
+            if (!IsRuleEnabled(ruleId, normalizedRuleConfig))
             {
-                _disabledRuleIds.Add(rule.Id.ToId()!);
+                _disabledRuleIds.Add(ruleId);
                 continue;
             }
 
@@ -439,9 +444,10 @@ public sealed class LintEngine
         for (var i = 0; i < _onlineRules.Count; i++)
         {
             var onlineRule = _onlineRules[i];
-            if (!IsRuleEnabled(onlineRule.Id.ToId(), normalizedRuleConfig))
+            var ruleId = onlineRule.Id.ToId() ?? throw new InvalidOperationException($"Rule {onlineRule.Id} must provide a non-null id.");
+            if (!IsRuleEnabled(ruleId, normalizedRuleConfig))
             {
-                _disabledRuleIds.Add(onlineRule.Id.ToId()!);
+                _disabledRuleIds.Add(ruleId);
                 continue;
             }
 

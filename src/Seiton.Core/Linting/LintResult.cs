@@ -118,7 +118,7 @@ public sealed class LintResult : IDisposable
         get
         {
             ThrowIfDisposed();
-            return Data.DisabledRuleIds.AsSpan(0, Data.DisabledRuleCount);
+            return Data.DisabledRuleIds.AsSpan();
         }
     }
 

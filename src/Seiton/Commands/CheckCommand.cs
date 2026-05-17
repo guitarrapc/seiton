@@ -426,15 +426,16 @@ internal static class CheckCommand
 
     internal static void AccumulateSuppression(SuppressionSummary summary, ref int totalSuppressed, ref Dictionary<string, int>? suppressedByRule)
     {
+        var perRuleSuppression = summary.SuppressedByRule ?? EmptySuppressedByRule;
         var totalToAdd = summary.TotalSuppressed;
-        var hasPerRuleSuppression = summary.SuppressedByRule.Count > 0;
+        var hasPerRuleSuppression = perRuleSuppression.Count > 0;
         if (totalToAdd == 0 && !hasPerRuleSuppression) return;
 
         if (hasPerRuleSuppression)
         {
             suppressedByRule ??= new Dictionary<string, int>(StringComparer.Ordinal);
             var summedSuppressed = 0;
-            foreach (var kvp in summary.SuppressedByRule)
+            foreach (var kvp in perRuleSuppression)
             {
                 summedSuppressed += kvp.Value;
                 ref var existing = ref CollectionsMarshal.GetValueRefOrAddDefault(suppressedByRule, kvp.Key, out _);

@@ -110,6 +110,19 @@ public sealed class VerbosePhase1Tests
         await Assert.That(suppressedByRule["rule-b"]).IsEqualTo(1);
     }
 
+    [Test]
+    public async Task AccumulateSuppression_NullPerRuleMap_TreatsMapAsEmpty()
+    {
+        var summary = new SuppressionSummary(2, null!, []);
+        var totalSuppressed = 0;
+        Dictionary<string, int>? suppressedByRule = null;
+
+        CheckCommand.AccumulateSuppression(summary, ref totalSuppressed, ref suppressedByRule);
+
+        await Assert.That(totalSuppressed).IsEqualTo(2);
+        await Assert.That(suppressedByRule).IsNull();
+    }
+
     // === Effective Network Config Tests ===
 
     [Test]

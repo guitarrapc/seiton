@@ -440,7 +440,7 @@ The following table defines the normative default severity for each rule. Implem
 | `schedule-event` | error | |
 | `workflow-call-input-default` | error | |
 | `deny-write-all` | error | |
-| `credentials` | mixed | warning (missing credentials), error (plaintext password), info (public-registry verbose) |
+| `credentials` | mixed | warning (missing credentials), error (plaintext password) |
 | `template-injection` | error | |
 | `expr-undefined-var` | error | |
 | `run-env-context-direct-use` | error | |

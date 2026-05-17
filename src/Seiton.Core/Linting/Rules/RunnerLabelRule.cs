@@ -57,6 +57,8 @@ public sealed class RunnerLabelRule() : RuleBase(RuleId.RunnerLabel)
             DetectMatrixLabelOsConflicts(job, jobId, runsOn.Labels, staticOsFamily, firstOsLabel);
         }
 
+        var loggedAdditionalKnownHostedLabel = false;
+
         for (var i = 0; i < runsOn.Labels.Length; i++)
         {
             var label = runsOn.Labels[i];
@@ -77,14 +79,8 @@ public sealed class RunnerLabelRule() : RuleBase(RuleId.RunnerLabel)
                 continue;
             }
 
-            if (IsAdditionalKnownHostedLabel(labelUtf8))
+            if (TryHandleAdditionalKnownHostedLabel(job, label, labelUtf8, ref loggedAdditionalKnownHostedLabel, dedupeInfoPerJob: false))
             {
-                if (Config.Verbose)
-                {
-                    var knownLabelText = Decode(Arena.GetStringSlice(label));
-                    AddJobInfo(job, $"label '{knownLabelText}' matched known-hosted-labels config, skipping", Arena.GetStringRange(label));
-                }
-
                 continue;
             }
 
@@ -386,15 +382,8 @@ public sealed class RunnerLabelRule() : RuleBase(RuleId.RunnerLabel)
                             continue;
                         }
 
-                        if (IsAdditionalKnownHostedLabel(labelUtf8))
+                        if (TryHandleAdditionalKnownHostedLabel(job, scalar.Value, labelUtf8, ref loggedAdditionalKnownHostedLabel, dedupeInfoPerJob: true))
                         {
-                            if (Config.Verbose && !loggedAdditionalKnownHostedLabel)
-                            {
-                                var knownLabelText = Decode(Arena.GetStringSlice(scalar.Value));
-                                AddJobInfo(job, $"label '{knownLabelText}' matched known-hosted-labels config, skipping", Arena.GetStringRange(scalar.Value));
-                                loggedAdditionalKnownHostedLabel = true;
-                            }
-
                             continue;
                         }
 
@@ -442,15 +431,8 @@ public sealed class RunnerLabelRule() : RuleBase(RuleId.RunnerLabel)
                                 continue;
                             }
 
-                            if (IsAdditionalKnownHostedLabel(elemUtf8))
+                            if (TryHandleAdditionalKnownHostedLabel(job, element.Value, elemUtf8, ref loggedAdditionalKnownHostedLabel, dedupeInfoPerJob: true))
                             {
-                                if (Config.Verbose && !loggedAdditionalKnownHostedLabel)
-                                {
-                                    var knownLabelText = Decode(Arena.GetStringSlice(element.Value));
-                                    AddJobInfo(job, $"label '{knownLabelText}' matched known-hosted-labels config, skipping", Arena.GetStringRange(element.Value));
-                                    loggedAdditionalKnownHostedLabel = true;
-                                }
-
                                 continue;
                             }
 
@@ -462,5 +444,22 @@ public sealed class RunnerLabelRule() : RuleBase(RuleId.RunnerLabel)
                     }
             }
         }
+    }
+
+    private bool TryHandleAdditionalKnownHostedLabel(Job job, StringNodeId labelNode, ReadOnlySpan<byte> labelUtf8, ref bool loggedAdditionalKnownHostedLabel, bool dedupeInfoPerJob)
+    {
+        if (!IsAdditionalKnownHostedLabel(labelUtf8))
+        {
+            return false;
+        }
+
+        if (Config.Verbose && (!dedupeInfoPerJob || !loggedAdditionalKnownHostedLabel))
+        {
+            var knownLabelText = Decode(Arena.GetStringSlice(labelNode));
+            AddJobInfo(job, $"label '{knownLabelText}' matched known-hosted-labels config, skipping", Arena.GetStringRange(labelNode));
+            loggedAdditionalKnownHostedLabel = true;
+        }
+
+        return true;
     }
 }
