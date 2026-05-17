@@ -14336,6 +14336,91 @@ public sealed class RuleInterfaceTests
                               include-hidden-files: true
             """,
             ["upload-artifact with path '.\\n", "persist-credentials: false"]),
+            // Edge case: ${{ github.workspace }}/.. uploads parent directory (dangerous)
+            new RuleCase(
+            "ng-checkout-upload-workspace-dotdot-suffix",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - uses: actions/checkout@v4
+                        - uses: actions/upload-artifact@v4
+                          with:
+                              name: my-artifact
+                              path: ${{ github.workspace }}/..
+                              include-hidden-files: true
+            """,
+            ["upload-artifact with path", "persist-credentials: false"]),
+            // Edge case: ${{ github.workspace }}\.. (backslash) uploads parent directory (dangerous)
+            new RuleCase(
+            "ng-checkout-upload-workspace-backslash-dotdot",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - uses: actions/checkout@v4
+                        - uses: actions/upload-artifact@v4
+                          with:
+                              name: my-artifact
+                              path: ${{ github.workspace }}\..
+                              include-hidden-files: true
+            """,
+            ["upload-artifact with path", "persist-credentials: false"]),
+            // Edge case: ./** glob pattern uploads everything recursively (dangerous)
+            new RuleCase(
+            "ng-checkout-upload-glob-dot-star-star",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - uses: actions/checkout@v4
+                        - uses: actions/upload-artifact@v4
+                          with:
+                              name: my-artifact
+                              path: ./**
+                              include-hidden-files: true
+            """,
+            ["upload-artifact with path", "persist-credentials: false"]),
+            // Edge case: ** alone matches everything from root (dangerous)
+            new RuleCase(
+            "ng-checkout-upload-glob-double-star",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - uses: actions/checkout@v4
+                        - uses: actions/upload-artifact@v4
+                          with:
+                              name: my-artifact
+                              path: "**"
+                              include-hidden-files: true
+            """,
+            ["upload-artifact with path", "persist-credentials: false"]),
+            // Safe case: dist/** is NOT dangerous (subdirectory glob)
+            new RuleCase(
+            "ok-checkout-upload-glob-subdir",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - uses: actions/checkout@v4
+                        - uses: actions/upload-artifact@v4
+                          with:
+                              name: my-artifact
+                              path: dist/**
+                              include-hidden-files: true
+            """,
+            []),
         };
 
         await AssertRuleCases(new ArtipackedRule(), "artipacked", cases);

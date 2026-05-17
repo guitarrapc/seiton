@@ -334,7 +334,8 @@ public sealed class ArtipackedRule() : RuleBase(RuleId.Artipacked)
 
     private static bool IsGitHubWorkspaceExpression(ReadOnlySpan<byte> value)
     {
-        // Match ${{ github.workspace }} with variable internal whitespace and optional trailing / or /. segments.
+        // Match ${{ github.workspace }} with variable internal whitespace and optional trailing
+        // separator, /., or /.. suffixes. All of these resolve to the workspace or its parent.
         var trimmed = value;
 
         while (true)
@@ -348,6 +349,13 @@ public sealed class ArtipackedRule() : RuleBase(RuleId.Artipacked)
             if (trimmed.Length >= 2 && trimmed[^1] == (byte)'.' && (trimmed[^2] == (byte)'/' || trimmed[^2] == (byte)'\\'))
             {
                 trimmed = trimmed[..^2];
+                continue;
+            }
+
+            // Strip /.. or \.. (parent directory traversal)
+            if (trimmed.Length >= 3 && trimmed[^1] == (byte)'.' && trimmed[^2] == (byte)'.' && (trimmed[^3] == (byte)'/' || trimmed[^3] == (byte)'\\'))
+            {
+                trimmed = trimmed[..^3];
                 continue;
             }
 
