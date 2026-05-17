@@ -76,6 +76,7 @@ internal static class CheckCommand
 
         var hasStdin = files.Contains("-");
         var rulesSummaryLogged = false;
+        var totalStart = verboseLogger.GetTimestamp();
 
         // 1-file, single CPU, or stdin: sequential fast path (no ThreadLocal overhead)
         if (resolvedFiles.Length <= 1 || hasStdin || Environment.ProcessorCount <= 1)
@@ -101,6 +102,7 @@ internal static class CheckCommand
 
                 verboseLogger.Log($"checking {filePath}...");
 
+                var fileStart = verboseLogger.GetTimestamp();
                 using var result = engine.Check(utf8Yaml, filePath, lintConfig);
                 allDiagnostics.AddRange(result.Diagnostics.AsSpan());
                 sourceMap?.TryAdd(filePath, utf8Yaml);
@@ -112,7 +114,9 @@ internal static class CheckCommand
                         WriteRuleSummary(verboseLogger, result.ActiveRuleCount, result.DisabledRuleCount, result.DisabledRuleIds);
                         rulesSummaryLogged = true;
                     }
-                    verboseLogger.LogFile(filePath, result.DocumentKind == DocumentKind.ActionMetadata ? "action" : "workflow");
+                    var fileElapsed = verboseLogger.GetElapsedTime(fileStart);
+                    var suppressedCount = result.SuppressionSummary.TotalSuppressed;
+                    WriteFileTimingSummary(verboseLogger, filePath, result.DocumentKind, fileElapsed, result.DiagnosticCount, suppressedCount);
                     AccumulateSuppression(result.SuppressionSummary, ref totalSuppressed, ref suppressedByRule);
                 }
             }
@@ -133,8 +137,10 @@ internal static class CheckCommand
 
                     verboseLogger.Log($"checking {filePath}...");
 
+                    var fileStart = verboseLogger.GetTimestamp();
                     var engine = engines.Value!;
                     using var result = engine.Check(utf8Yaml, filePath, lintConfig);
+                    var fileElapsed = verboseLogger.IsEnabled ? verboseLogger.GetElapsedTime(fileStart) : default;
                     slots[i] = new FileCheckResult(
                         result.CopyDiagnostics(), filePath,
                         sourceMap is not null ? utf8Yaml : null,
@@ -142,7 +148,10 @@ internal static class CheckCommand
                         verboseLogger.IsEnabled ? result.ActiveRuleCount : 0,
                         verboseLogger.IsEnabled ? result.DisabledRuleCount : 0,
                         verboseLogger.IsEnabled ? result.DisabledRuleIds.ToArray() : [],
-                        verboseLogger.IsEnabled ? result.DocumentKind : default);
+                        verboseLogger.IsEnabled ? result.DocumentKind : default,
+                        verboseLogger.IsEnabled ? fileElapsed : default,
+                        verboseLogger.IsEnabled ? result.DiagnosticCount : 0,
+                        verboseLogger.IsEnabled ? result.SuppressionSummary.TotalSuppressed : 0);
                 });
 
             // Aggregate in input order for stable output
@@ -159,7 +168,7 @@ internal static class CheckCommand
                         WriteRuleSummary(verboseLogger, slots[i].ActiveRuleCount, slots[i].DisabledRuleCount, slots[i].DisabledRuleIds);
                         rulesSummaryLogged = true;
                     }
-                    verboseLogger.LogFile(slots[i].FilePath, slots[i].DocumentKind == DocumentKind.ActionMetadata ? "action" : "workflow");
+                    WriteFileTimingSummary(verboseLogger, slots[i].FilePath, slots[i].DocumentKind, slots[i].FileElapsed, slots[i].FileDiagnosticCount, slots[i].FileSuppressedCount);
                     AccumulateSuppression(slots[i].SuppressionSummary, ref totalSuppressed, ref suppressedByRule);
                 }
             }
@@ -190,6 +199,9 @@ internal static class CheckCommand
         }
 
         WriteSummary(allDiagnostics, resolvedFiles.Length, verbose, showExitHint: minSeverity is null);
+
+        if (verboseLogger.IsEnabled)
+            WriteTotalTiming(verboseLogger, resolvedFiles.Length, verboseLogger.GetElapsedTime(totalStart));
 
         return HasActionableDiagnostics(allDiagnostics) ? ExitCode.LintIssuesFound : ExitCode.Success;
     }
@@ -385,6 +397,17 @@ internal static class CheckCommand
         }
     }
 
+    internal static void WriteFileTimingSummary(VerboseLogger logger, string filePath, DocumentKind documentKind, TimeSpan elapsed, int diagnosticCount, int suppressedCount)
+    {
+        var kind = documentKind == DocumentKind.ActionMetadata ? "action" : "workflow";
+        logger.LogFile(filePath, $"{kind}, {elapsed.TotalMilliseconds:F1} ms, {diagnosticCount} diagnostics, {suppressedCount} suppressed");
+    }
+
+    internal static void WriteTotalTiming(VerboseLogger logger, int fileCount, TimeSpan elapsed, string verb = "checked")
+    {
+        logger.Log("total", $"{fileCount} file(s) {verb} in {elapsed.TotalMilliseconds:F1} ms");
+    }
+
     private static DiagnosticSeverity? ParseSeverity(string value)
     {
         return value.ToLowerInvariant() switch
@@ -408,9 +431,13 @@ internal readonly struct FileCheckResult
     public readonly int DisabledRuleCount;
     public readonly string[] DisabledRuleIds;
     public readonly DocumentKind DocumentKind;
+    public readonly TimeSpan FileElapsed;
+    public readonly int FileDiagnosticCount;
+    public readonly int FileSuppressedCount;
 
     public FileCheckResult(OwnedDiagnostics diagnostics, string filePath, byte[]? utf8Yaml, SuppressionSummary suppressionSummary = default,
-        int activeRuleCount = 0, int disabledRuleCount = 0, string[]? disabledRuleIds = null, DocumentKind documentKind = default)
+        int activeRuleCount = 0, int disabledRuleCount = 0, string[]? disabledRuleIds = null, DocumentKind documentKind = default,
+        TimeSpan fileElapsed = default, int fileDiagnosticCount = 0, int fileSuppressedCount = 0)
     {
         Diagnostics = diagnostics;
         FilePath = filePath;
@@ -420,5 +447,8 @@ internal readonly struct FileCheckResult
         DisabledRuleCount = disabledRuleCount;
         DisabledRuleIds = disabledRuleIds ?? [];
         DocumentKind = documentKind;
+        FileElapsed = fileElapsed;
+        FileDiagnosticCount = fileDiagnosticCount;
+        FileSuppressedCount = fileSuppressedCount;
     }
 }

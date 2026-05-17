@@ -450,11 +450,24 @@ verbose: rules: <N> enabled, <M> disabled
 verbose: rules: disabled: <id1>, <id2>, ...   (only when M > 0)
 ```
 
-Per-file document kind is also emitted:
+Per-file timing summary consolidates document kind, elapsed time, diagnostic count, and suppressed count:
 
 ```
-verbose: <filepath>: workflow
-verbose: <filepath>: action
+verbose: <filepath>: workflow, 1.2 ms, 5 diagnostics, 2 suppressed
+verbose: <filepath>: action, 0.8 ms, 3 diagnostics, 0 suppressed
+```
+
+Total timing is emitted at the end:
+
+```
+verbose: total: 3 file(s) checked in 4.5 ms
+verbose: total: 3 file(s) fixed in 450.0 ms
+```
+
+In fix mode, network timing is emitted per file when pins are resolved:
+
+```
+verbose: network: resolved pins for <filepath> in 320.0 ms
 ```
 
 When no `--min-severity` is explicitly set, errors are zero, and warnings are non-zero, a hint line is emitted:

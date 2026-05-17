@@ -269,8 +269,10 @@ Shared contract reference: `Seiton_Linter_spec.md` §2.1.
 - Summary line is always written to stderr via `WriteSummary` (error/warning/info counts + file count).
 - In `--verbose` mode with diagnostics, `WritePerRuleBreakdown` appends per-rule counts sorted by count descending, then rule ID.
 - In `--verbose` mode, `WriteRuleSummary` emits rule activation counts (`verbose: rules: <N> enabled, <M> disabled`) and lists disabled rule IDs when present (`verbose: rules: disabled: <id1>, <id2>, ...`). Rule summary is logged once per run from the first file result.
-- In `--verbose` mode, per-file document kind is logged via `LogFile` (e.g. `verbose: .github/workflows/ci.yml: workflow`).
-- `FileCheckResult` carries `ActiveRuleCount`, `DisabledRuleCount`, `DisabledRuleIds`, and `DocumentKind` for the parallel aggregation path.
+- In `--verbose` mode, per-file timing is logged via `WriteFileTimingSummary` (e.g. `verbose: .github/workflows/ci.yml: workflow, 1.2 ms, 5 diagnostics, 2 suppressed`).
+- In `--verbose` mode, total timing is logged via `WriteTotalTiming` (e.g. `verbose: total: 3 file(s) checked in 4.5 ms`).
+- `VerboseLogger` exposes `GetTimestamp()` and `GetElapsedTime(long start)` delegating to `TimeProvider` for testable timing.
+- `FileCheckResult` carries `ActiveRuleCount`, `DisabledRuleCount`, `DisabledRuleIds`, `DocumentKind`, `FileElapsed`, `FileDiagnosticCount`, and `FileSuppressedCount` for the parallel aggregation path.
 - When no `--min-severity` is set, errors are zero, and warnings are non-zero, a hint line is emitted: `hint: use --min-severity error to treat warnings as non-blocking in CI`.
 - In fix mode, `WriteNetworkFixHint` emits a hint when `unpinned-uses` or `unpinned-image` diagnostics exist but the corresponding network flag is not enabled.
 
@@ -282,6 +284,8 @@ Shared contract reference: `Seiton_Linter_spec.md` §2.1.
 - Copies diagnostics immediately after `Check()` to avoid use-after-dispose of lint handles.
 - Stdin (`-`) is explicitly rejected in fix mode (returns `ExitCode.InvalidOptions`).
 - Network remediation (`PinRemediationEngine`) is constructed only when effective pin/image network is enabled.
+- In `--verbose` mode, network timing wraps `RemediateAsync()` and emits `verbose: network: resolved pins for <file> in <elapsed> ms`.
+- In `--verbose` mode, total timing emits `verbose: total: <N> file(s) fixed in <elapsed> ms`.
 - When both `--check` and `--dry-run` are passed, `--check` takes precedence: no diffs are printed and no fixes are applied.
 
 ### 6.3 InputDiscovery

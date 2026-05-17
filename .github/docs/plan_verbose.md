@@ -211,28 +211,48 @@ These items can be implemented purely in the CLI layer using data already return
 
 ---
 
-### Phase 3 — CLI Timing Instrumentation
+### Phase 3 — CLI Timing Instrumentation ✅
 
 **Priority**: Medium — addresses scenario 3 (performance triage).
 
 **Scope**:
 
-1. **Per-file timing**: Wrap `engine.Check()` call in `Stopwatch` (CLI layer only). Emit:
+1. **Per-file timing**: Wrap `engine.Check()` call with `TimeProvider` (CLI layer only). Emit:
    - `verbose: <file>: <kind>, <elapsed> ms, <N> diagnostics, <M> suppressed`
 2. **Total timing**: Wrap the entire check/fix loop. Emit:
    - `verbose: total: <N> file(s) checked in <elapsed> ms`
+   - `verbose: total: <N> file(s) fixed in <elapsed> ms`
 3. **Network timing** (fix mode): Wrap `pinRemediation.RemediateAsync()`. Emit:
    - `verbose: network: resolved pins for <file> in <elapsed> ms`
 
 **Core changes**: None.
 
-**Allocation impact**: `Stopwatch` is a struct (stack-allocated) — zero heap allocation.
+**Allocation impact**: `TimeProvider` delegates to `TimeProvider.System` — zero heap allocation on hot path.
+
+**Implementation notes**:
+- Used `TimeProvider` instead of `Stopwatch` for testability via DI.
+- `VerboseLogger` exposes `GetTimestamp()` and `GetElapsedTime(long start)` that delegate to `TimeProvider`.
+- `VerboseLogger.Null.GetTimestamp()` returns 0 (no-op when verbose is disabled).
+- `FileCheckResult` extended with `FileElapsed`, `FileDiagnosticCount`, `FileSuppressedCount` for parallel path.
+- Per-file line consolidates document kind from Phase 2 into richer timing line.
+- Tests use `FixedTimeProvider` (TimestampFrequency=1000, 1 tick = 1 ms) for deterministic assertions.
 
 **Verification**:
 
-- [ ] Benchmark: `CoreLintBenchmark` before/after — expect identical (no Core changes).
-- [ ] Tests: Verify timing lines appear in verbose output (approximate — check format, not exact ms).
-- [ ] Regression: `dotnet test` — all green.
+- [x] Benchmark: `CoreLintBenchmark` before/after — identical allocation (0 B delta).
+- [x] Tests: 12 tests verify timing line format (VerbosePhase3Tests).
+- [x] Regression: `dotnet test` — 1774 tests all green.
+
+**Benchmark results (after)**:
+
+| Size | FixEnabled | Mean (μs) | Allocated |
+|------|-----------|-----------|-----------|
+| Small | False | 71.72 | 8.37 KB |
+| Small | True | 75.37 | 9.82 KB |
+| Medium | False | 1,594.93 | 68.56 KB |
+| Medium | True | 2,291.30 | 81.92 KB |
+| Large | False | 24,297.22 | 327.08 KB |
+| Large | True | 44,525.51 | 381.92 KB |
 
 ---
 

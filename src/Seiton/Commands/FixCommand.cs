@@ -124,6 +124,7 @@ internal static class FixCommand
             var totalSuppressed = 0;
             Dictionary<string, int>? suppressedByRule = null;
             var rulesSummaryLogged = false;
+            var totalStart = verboseLogger.GetTimestamp();
 
             // Fix command always builds fixes; enable fix construction for all Check() calls.
             var fixEnabledLintConfig = new LintConfig
@@ -151,6 +152,7 @@ internal static class FixCommand
                 // Check the file. Copy diagnostics immediately so they remain valid
                 // even after the owned lint result is disposed before async work.
                 OwnedDiagnostics lintDiagnostics;
+                var fileStart = verboseLogger.GetTimestamp();
                 {
                     using var handle = engine.Check(utf8Yaml, filePath, fixEnabledLintConfig);
                     lintDiagnostics = handle.CopyDiagnostics();
@@ -162,7 +164,8 @@ internal static class FixCommand
                             CheckCommand.WriteRuleSummary(verboseLogger, handle.ActiveRuleCount, handle.DisabledRuleCount, handle.DisabledRuleIds);
                             rulesSummaryLogged = true;
                         }
-                        verboseLogger.LogFile(filePath, handle.DocumentKind == DocumentKind.ActionMetadata ? "action" : "workflow");
+                        var fileElapsed = verboseLogger.GetElapsedTime(fileStart);
+                        CheckCommand.WriteFileTimingSummary(verboseLogger, filePath, handle.DocumentKind, fileElapsed, handle.DiagnosticCount, handle.SuppressionSummary.TotalSuppressed);
 
                         var s = handle.SuppressionSummary;
                         if (s.TotalSuppressed > 0)
@@ -185,10 +188,14 @@ internal static class FixCommand
                 IReadOnlyList<Diagnostic> effectiveDiagnostics = lintDiagnostics;
                 if (pinRemediation != null)
                 {
+                    var netStart = verboseLogger.GetTimestamp();
                     var remResult = await pinRemediation.RemediateAsync(lintDiagnostics, utf8Yaml);
                     effectiveDiagnostics = remResult.Diagnostics;
-                    if (remResult.ResolvedCount > 0)
-                        verboseLogger.LogFile(filePath, $"resolved {remResult.ResolvedCount} pin(s)");
+                    if (remResult.ResolvedCount > 0 && verboseLogger.IsEnabled)
+                    {
+                        var netElapsed = verboseLogger.GetElapsedTime(netStart);
+                        verboseLogger.Log("network", $"resolved pins for {filePath} in {netElapsed.TotalMilliseconds:F1} ms");
+                    }
                 }
 
                 // Check whether any diagnostic (local or pin-remediated) has a fix attached.
@@ -304,6 +311,9 @@ internal static class FixCommand
             }
 
             CheckCommand.WriteSummary(errorWriter, allDiagnostics, resolvedFiles.Length, verbose, showExitHint: minSeverity is null);
+
+            if (verboseLogger.IsEnabled)
+                CheckCommand.WriteTotalTiming(verboseLogger, resolvedFiles.Length, verboseLogger.GetElapsedTime(totalStart), "fixed");
 
             // Hint about network flags when unfixed pin diagnostics remain
             if (allDiagnostics.Count > 0)

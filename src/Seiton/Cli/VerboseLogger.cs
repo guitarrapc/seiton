@@ -9,13 +9,15 @@
 internal sealed class VerboseLogger
 {
     /// <summary>A no-op logger that produces no output.</summary>
-    public static readonly VerboseLogger Null = new(null);
+    public static readonly VerboseLogger Null = new(null, null);
 
     private readonly TextWriter? _writer;
+    private readonly TimeProvider? _timeProvider;
 
-    private VerboseLogger(TextWriter? writer)
+    private VerboseLogger(TextWriter? writer, TimeProvider? timeProvider)
     {
         _writer = writer;
+        _timeProvider = timeProvider;
     }
 
     /// <summary>Gets whether verbose logging is active.</summary>
@@ -26,7 +28,24 @@ internal sealed class VerboseLogger
     /// when <paramref name="verbose"/> is <c>true</c>, or a no-op logger otherwise.
     /// </summary>
     public static VerboseLogger Create(bool verbose, TextWriter stderr)
-        => verbose ? new VerboseLogger(stderr) : Null;
+        => verbose ? new VerboseLogger(stderr, TimeProvider.System) : Null;
+
+    /// <summary>
+    /// Creates a <see cref="VerboseLogger"/> with an explicit <see cref="TimeProvider"/> (for testing).
+    /// </summary>
+    public static VerboseLogger Create(bool verbose, TextWriter stderr, TimeProvider timeProvider)
+        => verbose ? new VerboseLogger(stderr, timeProvider) : Null;
+
+    /// <summary>
+    /// Returns a timestamp for measuring elapsed time.
+    /// Returns 0 when verbose is disabled (callers guard with <see cref="IsEnabled"/>).
+    /// </summary>
+    public long GetTimestamp() => _timeProvider?.GetTimestamp() ?? 0;
+
+    /// <summary>
+    /// Returns the elapsed time since <paramref name="startTimestamp"/>.
+    /// </summary>
+    public TimeSpan GetElapsedTime(long startTimestamp) => _timeProvider?.GetElapsedTime(startTimestamp) ?? TimeSpan.Zero;
 
     /// <summary>Writes <c>verbose: &lt;category&gt;: &lt;message&gt;</c>.</summary>
     public void Log(string category, string message)
