@@ -294,15 +294,21 @@ Shared contract reference: `Seiton_Linter_spec.md` §2.1.
 
 ```go
 type fileCheckResult struct {
-    diagnostics      []*Diagnostic
-    filePath         string
-    utf8Yaml         []byte       // nil when not needed for snippet rendering
-    activeRuleCount  int
-    disabledRuleCount int
-    disabledRuleIDs  []string
-    documentKind     DocumentKind
+    diagnostics        []*Diagnostic
+    filePath           string
+    utf8Yaml           []byte // nil when not needed for snippet rendering
+    activeRuleCount    int
+    disabledRuleCount  int
+    disabledRuleIDs    []string
+    documentKind       DocumentKind
+    suppressionSummary SuppressionSummary
+    fileElapsed        time.Duration
+    fileDiagnosticCount int
+    fileSuppressedCount int
 }
 ```
+
+These per-file fields support the same ordered verbose aggregation path as the C# implementation: workers capture metadata in parallel, then the main thread emits deterministic rule summaries, timing, and suppression lines in input order.
 
 ### 6.2 Fix Orchestration
 

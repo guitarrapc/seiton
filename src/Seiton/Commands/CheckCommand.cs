@@ -207,7 +207,7 @@ internal static class CheckCommand
         if (totalSuppressed > 0)
         {
             WriteSuppressionSummary(verboseLogger,
-                new SuppressionSummary(totalSuppressed, suppressedByRule!, []));
+                CreateAggregatedSuppressionSummary(totalSuppressed, suppressedByRule!));
         }
 
         WriteSummary(allDiagnostics, resolvedFiles.Length, verbose, showExitHint: minSeverity is null);
@@ -378,17 +378,38 @@ internal static class CheckCommand
         logger.Log("suppressed", sb.ToString());
     }
 
+    internal static SuppressionSummary CreateAggregatedSuppressionSummary(int totalSuppressed, IReadOnlyDictionary<string, int> suppressedByRule)
+    {
+        // Aggregate summaries intentionally preserve only merged counts. Individual
+        // suppression records are file-scoped and are not meaningful after combining
+        // multiple files, so the record list is empty here by design.
+        return new SuppressionSummary(totalSuppressed, suppressedByRule, []);
+    }
+
     internal static void AccumulateSuppression(SuppressionSummary summary, ref int totalSuppressed, ref Dictionary<string, int>? suppressedByRule)
     {
-        if (summary.TotalSuppressed == 0) return;
+        var totalToAdd = summary.TotalSuppressed;
+        var hasPerRuleSuppression = summary.SuppressedByRule.Count > 0;
+        if (totalToAdd == 0 && !hasPerRuleSuppression) return;
 
-        totalSuppressed += summary.TotalSuppressed;
-        suppressedByRule ??= new Dictionary<string, int>(StringComparer.Ordinal);
-        foreach (var kvp in summary.SuppressedByRule)
+        if (hasPerRuleSuppression)
         {
-            ref var existing = ref CollectionsMarshal.GetValueRefOrAddDefault(suppressedByRule, kvp.Key, out _);
-            existing += kvp.Value;
+            suppressedByRule ??= new Dictionary<string, int>(StringComparer.Ordinal);
+            var summedSuppressed = 0;
+            foreach (var kvp in summary.SuppressedByRule)
+            {
+                summedSuppressed += kvp.Value;
+                ref var existing = ref CollectionsMarshal.GetValueRefOrAddDefault(suppressedByRule, kvp.Key, out _);
+                existing += kvp.Value;
+            }
+
+            if (totalToAdd == 0)
+            {
+                totalToAdd = summedSuppressed;
+            }
         }
+
+        totalSuppressed += totalToAdd;
     }
 
     internal static void WriteRuleSummary(VerboseLogger logger, int activeRuleCount, int disabledRuleCount, ReadOnlySpan<string> disabledRuleIds, DocumentKind documentKind)

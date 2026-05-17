@@ -38,12 +38,14 @@ internal sealed class VerboseLogger
 
     /// <summary>
     /// Returns a timestamp for measuring elapsed time.
-    /// Returns 0 when verbose is disabled (callers guard with <see cref="IsEnabled"/>).
+    /// Returns 0 when verbose is disabled, so callers may invoke this unguarded
+    /// and pass the result to <see cref="GetElapsedTime(long)"/>.
     /// </summary>
     public long GetTimestamp() => _timeProvider?.GetTimestamp() ?? 0;
 
     /// <summary>
     /// Returns the elapsed time since <paramref name="startTimestamp"/>.
+    /// Returns <see cref="TimeSpan.Zero"/> when verbose is disabled.
     /// </summary>
     public TimeSpan GetElapsedTime(long startTimestamp) => _timeProvider?.GetElapsedTime(startTimestamp) ?? TimeSpan.Zero;
 

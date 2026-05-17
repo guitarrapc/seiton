@@ -150,6 +150,12 @@ public readonly record struct SuppressionSummary(
     SuppressionRecord[] Records)
 {
     /// <summary>
+    /// Gets the file-scoped suppression records contributing to this summary.
+    /// Aggregated multi-file summaries may intentionally leave this empty while still
+    /// preserving <see cref="TotalSuppressed"/> and <see cref="SuppressedByRule"/>.
+    /// </summary>
+
+    /// <summary>
     /// Gets the number of valid records in <see cref="Records"/>.
     /// The backing array may be oversized when a reusable buffer is used.
     /// </summary>

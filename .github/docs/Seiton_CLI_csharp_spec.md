@@ -296,12 +296,13 @@ Shared contract reference: `Seiton_CLI_spec.md` §5.
 ```csharp
 internal static class InputDiscovery
 {
-    public static string[] ResolveFiles(string[] files, bool includeActions);
+  public static string[] ResolveFiles(string[] files, bool includeActions, VerboseLogger verboseLogger, string? startDirectory = null);
 }
 ```
 
 - Auto-discovery: walks parent directories to find `.github/workflows/` (and `.github/actions/` when `includeActions`).
 - Explicit args: expands directories recursively, validates file existence.
+- `VerboseLogger` and optional `startDirectory` support verbose discovery output and testability; production callers omit `startDirectory` to use the current working directory.
 - Uses `SearchOption.AllDirectories` for YAML file collection.
 - Sort: `StringComparer.Ordinal` for deterministic ordering.
 

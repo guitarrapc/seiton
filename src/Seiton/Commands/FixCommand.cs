@@ -309,7 +309,7 @@ internal static class FixCommand
             if (totalSuppressed > 0)
             {
                 CheckCommand.WriteSuppressionSummary(verboseLogger,
-                    new SuppressionSummary(totalSuppressed, suppressedByRule!, []));
+                    CheckCommand.CreateAggregatedSuppressionSummary(totalSuppressed, suppressedByRule!));
             }
 
             CheckCommand.WriteSummary(errorWriter, allDiagnostics, resolvedFiles.Length, verbose, showExitHint: minSeverity is null);
