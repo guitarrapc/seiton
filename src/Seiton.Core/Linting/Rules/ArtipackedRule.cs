@@ -192,10 +192,17 @@ public sealed class ArtipackedRule() : RuleBase(RuleId.Artipacked)
             pos++;
         }
 
-        // Check for dot separator
-        if (pos >= versionText.Length || versionText[pos] != (byte)'.')
+        // Exact major-only ref (e.g. @v4) is treated as floating tag pointing to latest
+        if (pos >= versionText.Length)
         {
-            return true; // No minor version specified (e.g. @v4)
+            return true;
+        }
+
+        // Any non-dot suffix after the major digits is an arbitrary ref/tag/branch
+        // (e.g. @v4-legacy) — treat conservatively as unknown version
+        if (versionText[pos] != (byte)'.')
+        {
+            return false;
         }
 
         // Parse minor version
@@ -276,7 +283,7 @@ public sealed class ArtipackedRule() : RuleBase(RuleId.Artipacked)
 
         while (path.Length > 0)
         {
-            var separatorIndex = path.IndexOf((byte)'/');
+            var separatorIndex = FindPathSeparator(path);
             var segment = separatorIndex >= 0 ? path[..separatorIndex] : path;
             path = separatorIndex >= 0 ? path[(separatorIndex + 1)..] : ReadOnlySpan<byte>.Empty;
 
@@ -304,13 +311,13 @@ public sealed class ArtipackedRule() : RuleBase(RuleId.Artipacked)
 
         while (true)
         {
-            if (trimmed.Length > 0 && trimmed[^1] == (byte)'/')
+            if (trimmed.Length > 0 && (trimmed[^1] == (byte)'/' || trimmed[^1] == (byte)'\\'))
             {
                 trimmed = trimmed[..^1];
                 continue;
             }
 
-            if (trimmed.Length >= 2 && trimmed[^1] == (byte)'.' && trimmed[^2] == (byte)'/')
+            if (trimmed.Length >= 2 && trimmed[^1] == (byte)'.' && (trimmed[^2] == (byte)'/' || trimmed[^2] == (byte)'\\'))
             {
                 trimmed = trimmed[..^2];
                 continue;
@@ -343,6 +350,24 @@ public sealed class ArtipackedRule() : RuleBase(RuleId.Artipacked)
 
         // Should be "github.workspace"
         return inner.SequenceEqual("github.workspace"u8);
+    }
+
+    /// <summary>Finds the first path separator (/ or \) in the span, or -1 if not found.</summary>
+    private static int FindPathSeparator(ReadOnlySpan<byte> span)
+    {
+        var fwd = span.IndexOf((byte)'/');
+        var bck = span.IndexOf((byte)'\\');
+        if (fwd < 0)
+        {
+            return bck;
+        }
+
+        if (bck < 0)
+        {
+            return fwd;
+        }
+
+        return fwd < bck ? fwd : bck;
     }
 
     /// <summary>Detects checkout v6+ from a semantic version ref (e.g. <c>actions/checkout@v6</c>).</summary>
@@ -386,9 +411,16 @@ public sealed class ArtipackedRule() : RuleBase(RuleId.Artipacked)
         return message;
     }
 
+    private static string FormatPathForMessage(string path)
+    {
+        const int maxLength = 120;
+        var formatted = path.Replace("\r", "\\r", StringComparison.Ordinal).Replace("\n", "\\n", StringComparison.Ordinal);
+        return formatted.Length <= maxLength ? formatted : string.Concat(formatted.AsSpan(0, maxLength), "...");
+    }
+
     private string BuildMessage(Utf8Slice pathSlice, bool isV6Plus)
     {
-        var uploadPath = Decode(pathSlice);
+        var uploadPath = FormatPathForMessage(Decode(pathSlice));
         if (isV6Plus)
         {
             return $"upload-artifact with path '{uploadPath}' may expose credentials; checkout v6+ stores credentials in $RUNNER_TEMP but persist-credentials: false is still recommended";

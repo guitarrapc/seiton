@@ -14106,7 +14106,7 @@ public sealed class RuleInterfaceTests
             ["upload-artifact with path", "persist-credentials: false"]),
             // Edge case: upload-artifact before checkout should not be reported because checkout runs later.
             new RuleCase(
-            "ng-upload-before-checkout",
+            "ok-upload-before-checkout",
             """
             on: push
             jobs:
@@ -14121,6 +14121,91 @@ public sealed class RuleInterfaceTests
                         - uses: actions/checkout@v4
             """,
             []),
+            // Edge case: upload-artifact v4 with arbitrary branch/tag ref like @v4-legacy should be treated conservatively
+            new RuleCase(
+            "ng-checkout-upload-v4-legacy-tag",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - uses: actions/checkout@v4
+                        - uses: actions/upload-artifact@v4-legacy
+                          with:
+                              name: my-artifact
+                              path: .
+            """,
+            ["upload-artifact with path '.'", "persist-credentials: false"]),
+            // Edge case: backslash path separators (Windows-style) should be treated as dangerous
+            new RuleCase(
+            "ng-checkout-upload-backslash-dot",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - uses: actions/checkout@v4
+                        - uses: actions/upload-artifact@v4
+                          with:
+                              name: my-artifact
+                              path: .\
+                              include-hidden-files: true
+            """,
+            ["upload-artifact with path", "persist-credentials: false"]),
+            new RuleCase(
+            "ng-checkout-upload-backslash-dotdot",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - uses: actions/checkout@v4
+                        - uses: actions/upload-artifact@v4
+                          with:
+                              name: my-artifact
+                              path: ..\
+                              include-hidden-files: true
+            """,
+            ["upload-artifact with path", "persist-credentials: false"]),
+            // Edge case: github.workspace with backslash trailing
+            new RuleCase(
+            "ng-checkout-upload-workspace-backslash",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - uses: actions/checkout@v4
+                        - uses: actions/upload-artifact@v4
+                          with:
+                              name: my-artifact
+                              path: ${{ github.workspace }}\
+                              include-hidden-files: true
+            """,
+            ["upload-artifact with path", "persist-credentials: false"]),
+            // Edge case: path with embedded newlines should be escaped in diagnostics
+            new RuleCase(
+            "ng-checkout-upload-multiline-path-escaped",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - uses: actions/checkout@v4
+                        - uses: actions/upload-artifact@v4
+                          with:
+                              name: my-artifact
+                              path: |
+                                  .
+                                  extra
+                              include-hidden-files: true
+            """,
+            ["upload-artifact with path '.", "persist-credentials: false"]),
         };
 
         await AssertRuleCases(new ArtipackedRule(), "artipacked", cases);
