@@ -357,12 +357,7 @@ public sealed class UnsoundContainsRule() : RuleBase(RuleId.UnsoundContains)
     /// <summary>Gets the content of a string literal (inside the quotes).</summary>
     private static ReadOnlySpan<byte> GetStringLiteralContent(Utf8Slice token, ReadOnlySpan<byte> exprBytes)
     {
-        var span = token.AsSpan(exprBytes);
-        if (span.Length >= 2 && span[0] == (byte)'\'' && span[span.Length - 1] == (byte)'\'')
-        {
-            return span[1..^1];
-        }
-
-        return span;
+        // ExpressionParser.ParseStringLiteral stores the token slice inside the quotes.
+        return token.AsSpan(exprBytes);
     }
 }
