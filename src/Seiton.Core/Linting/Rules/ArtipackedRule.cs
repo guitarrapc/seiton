@@ -326,10 +326,29 @@ public sealed class ArtipackedRule() : RuleBase(RuleId.Artipacked)
                 continue;
             }
 
+            // Glob metacharacters (*, ?, [, ]) can match anything including .git — treat as dangerous
+            if (ContainsGlobMetacharacters(segment))
+            {
+                continue;
+            }
+
             return false;
         }
 
         return true;
+    }
+
+    private static bool ContainsGlobMetacharacters(ReadOnlySpan<byte> segment)
+    {
+        foreach (var b in segment)
+        {
+            if (b is (byte)'*' or (byte)'?' or (byte)'[' or (byte)']' or (byte)'{' or (byte)'}')
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private static bool IsGitHubWorkspaceExpression(ReadOnlySpan<byte> value)
