@@ -299,7 +299,7 @@ zizmor 監査ID別対応表（実装確認ベース）:
 
 1. Dockerfile / compose / 任意YAML image pin 拡張
 
-2. zizmor 残差分（未対応 6件）
+2. zizmor 残差分（未対応 7件）
 - `github-env` — GITHUB_ENV への危険な書き込み検出
 - `anonymous-definition` — name 未定義のワークフロー/アクション
 - `obfuscation` — 難読化された Actions 機能使用
