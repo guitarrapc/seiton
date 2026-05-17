@@ -66,6 +66,7 @@ unsound-condition                        yes       local    warning    yes   bot
 unpinned-tools                           yes       local    warning    no    both       default
 unsound-contains                         yes       local    mixed      no    workflow   default
 bot-conditions                           yes       local    warning    no    workflow   default
+artipacked                               yes       local    mixed      no    workflow   default
 known-vulnerable-actions                 no        online   error      no    workflow   opt-in (not configured)
 impostor-commit                          no        online   error      no    workflow   opt-in (not configured)
 ref-confusion                            no        online   error      no    workflow   opt-in (not configured)
@@ -129,6 +130,7 @@ Online rules use the GitHub API. Set GITHUB_TOKEN (or SEITON_GITHUB_TOKEN) to av
 - [insecure-commands](#insecure-commands)
 - [unsound-contains](#unsound-contains)
 - [bot-conditions](#bot-conditions)
+- [artipacked](#artipacked)
 
 ### Permissions & Secrets
 
@@ -995,6 +997,53 @@ jobs:
 ```
 
   > **Note:** Known bot ID comparisons such as `github.actor_id == '49699333'` and equivalent bracket/index-style forms like `github['ACTOR_ID'] == 49699333` are also flagged. Prefer the corresponding trigger-author context like `github.event.pull_request.user.id`.
+
+---
+
+### `artipacked`
+
+| Default | Network | Auto-fix |
+|---|---|---|
+| ✓ | — | ✗ |
+
+Detects credential leakage risk when `actions/checkout` (without `persist-credentials: false`) is combined with `actions/upload-artifact` that uploads a dangerous path (`.`, `..`, or `${{ github.workspace }}`).
+
+By default, `actions/checkout` persists a token in `.git/config`. If `actions/upload-artifact` then uploads the repository root, the credential is included in the artifact.
+
+**Severity:**
+
+- **error** — checkout (non-v6+) without `persist-credentials: false` + upload of dangerous path
+- **warning** — checkout v6+ without `persist-credentials: false` + upload of dangerous path (v6+ stores credentials in `$RUNNER_TEMP` instead of `.git/config`)
+
+**Example trigger:**
+
+```yaml
+on: push
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/upload-artifact@v4
+        with:
+          name: my-artifact
+          path: .
+```
+
+**Remediation:** Set `persist-credentials: false` on the checkout step, or upload only specific subdirectories:
+
+```yaml
+steps:
+  - uses: actions/checkout@v4
+    with:
+      persist-credentials: false
+  - uses: actions/upload-artifact@v4
+    with:
+      name: my-artifact
+      path: dist/
+```
+
+  > **Note:** This rule is independent of `checkout-persist-credentials`. The latter flags every checkout without `persist-credentials: false`; `artipacked` only fires when combined with a dangerous upload-artifact path in the same job.
 
 ---
 

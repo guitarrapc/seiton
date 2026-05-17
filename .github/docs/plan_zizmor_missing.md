@@ -406,7 +406,7 @@ zizmor は tree-sitter（bash/pwsh 完全パーサー）を使用しているが
 - **検出対象**: `actions/checkout`（persist-credentials 未設定）と `actions/upload-artifact`（危険パスをアップロード）の組み合わせによる credential 漏洩リスク
 - **ルールID**: `artipacked`
 - **デフォルト**: on
-- **severity**: warning（checkout v6+ の場合は info、upload-artifact で `.` / `..` パスの場合は error）
+- **severity**: error（checkout 非 v6+ + 危険パス）、warning（checkout v6+ + 危険パス）
 - **検査ノード**: job 内の全 steps を線形スキャン
 - **判定ロジック**:
   1. job 内の steps を順に走査し、`actions/checkout` の使用を検出
@@ -431,10 +431,18 @@ zizmor は tree-sitter（bash/pwsh 完全パーサー）を使用しているが
 
 #### Phase 4 完了条件
 
-- [ ] `artipacked` ルール実装 + テスト green
-- [ ] `dotnet test` 全体 green（リグレッションなし）
-- [ ] ベンチマーク: Phase 3 ベースラインから実行時間 +3% 以内、アロケーション悪化なし
-- [ ] feature-matrix 更新
+- [x] `artipacked` ルール実装 + テスト green
+- [x] `dotnet test` 全体 green（リグレッションなし）— 1809/1809 passed
+- [x] ベンチマーク: アロケーション悪化なし（Small 8.43/9.88KB, Medium 68.63/82.03KB, Large 327.14/381.98KB — ベースラインと同等）
+- [x] feature-matrix 更新
+
+**実装メモ**:
+- `ArtipackedRule` は `checkout-persist-credentials` とは独立したルールとして実装（統合しない）
+- `VisitJobPost` で `job.Steps` を 2 パス走査し、まず unsafe checkout の有無を確定し、その後に危険な upload-artifact を報告
+- 危険パス判定: `.`, `..`, `${{ github.workspace }}`（各行を個別チェック）
+- checkout バージョン判定: セマンティックバージョン `@vN` のみ静的判定。SHA pin は unknown（非 v6+扱い）
+- diagnostic は upload-artifact の `path` 値位置に報告
+- severity: error（非v6+ + 危険パス）、warning（v6+ + 危険パス）
 
 ---
 

@@ -152,6 +152,7 @@ Seiton includes **50+ rules** across four categories. Each rule has a dedicated 
 | [job-permissions-required](docs/rules.md#job-permissions-required) | ✓ | ✓ | Missing job-level permissions |
 | [credentials](docs/rules.md#credentials) | ✓ | ✗ | Missing container registry credentials |
 | [checkout-persist-credentials](docs/rules.md#checkout-persist-credentials) | ✓ | △ | `actions/checkout` persist-credentials |
+| [artipacked](docs/rules.md#artipacked) | ✓ | ✗ | Checkout + dangerous upload-artifact credential leak |
 | [workflow-secrets](docs/rules.md#workflow-secrets) | ✓ | ✗ | Workflow-level secret assignments |
 | [job-secrets](docs/rules.md#job-secrets) | ✓ | ✗ | Job-level secret assignments |
 | [unredacted-secrets](docs/rules.md#unredacted-secrets) | ✓ | ✗ | Printing secret-derived values |

@@ -296,7 +296,7 @@ public sealed class RuleInterfaceTests
     {
         var rules = RuleCatalog.CreateDefaultRules();
 
-        await Assert.That(rules.Length).IsEqualTo(56);
+        await Assert.That(rules.Length).IsEqualTo(57);
         await Assert.That(rules[0].Id).IsEqualTo(RuleId.JobStructure);
         await Assert.That(rules[1].Id).IsEqualTo(RuleId.ReusableWorkflow);
         await Assert.That(rules[2].Id).IsEqualTo(RuleId.Permissions);
@@ -351,6 +351,9 @@ public sealed class RuleInterfaceTests
         await Assert.That(rules[51].Id).IsEqualTo(RuleId.ConcurrencyLimits);
         await Assert.That(rules[52].Id).IsEqualTo(RuleId.UnsoundCondition);
         await Assert.That(rules[53].Id).IsEqualTo(RuleId.UnpinnedTools);
+        await Assert.That(rules[54].Id).IsEqualTo(RuleId.UnsoundContains);
+        await Assert.That(rules[55].Id).IsEqualTo(RuleId.BotConditions);
+        await Assert.That(rules[56].Id).IsEqualTo(RuleId.Artipacked);
 
         await Assert.That(RuleCatalog.GetPriority("job-structure")).IsEqualTo(0);
         await Assert.That(RuleCatalog.GetPriority("reusable-workflow")).IsEqualTo(1);
@@ -406,6 +409,9 @@ public sealed class RuleInterfaceTests
         await Assert.That(RuleCatalog.GetPriority("concurrency-limits")).IsEqualTo(55);
         await Assert.That(RuleCatalog.GetPriority("unsound-condition")).IsEqualTo(56);
         await Assert.That(RuleCatalog.GetPriority("unpinned-tools")).IsEqualTo(57);
+        await Assert.That(RuleCatalog.GetPriority("unsound-contains")).IsEqualTo(58);
+        await Assert.That(RuleCatalog.GetPriority("bot-conditions")).IsEqualTo(59);
+        await Assert.That(RuleCatalog.GetPriority("artipacked")).IsEqualTo(60);
         await Assert.That(RuleCatalog.GetPriority("known-vulnerable-actions")).IsEqualTo(29);
         await Assert.That(RuleCatalog.GetPriority("impostor-commit")).IsEqualTo(30);
         await Assert.That(RuleCatalog.GetPriority("ref-confusion")).IsEqualTo(31);
@@ -13820,6 +13826,318 @@ public sealed class RuleInterfaceTests
         };
 
         await AssertRuleCases(new BotConditionsRule(), "bot-conditions", cases);
+    }
+
+    [Test]
+    public async Task RuleRegression_ArtipackedRule_TableDriven()
+    {
+        var cases = new[]
+        {
+            // Case 1: checkout (no persist-credentials) + upload-artifact (path: .) → error
+            new RuleCase(
+            "ng-checkout-upload-dot",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - uses: actions/checkout@v4
+                        - uses: actions/upload-artifact@v4
+                          with:
+                              name: my-artifact
+                              path: .
+            """,
+            ["upload-artifact with path '.'", "persist-credentials: false"]),
+            // Case 2: checkout (persist-credentials: false) + upload-artifact (path: .) → OK
+            new RuleCase(
+            "ok-checkout-persist-false",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - uses: actions/checkout@v4
+                          with:
+                              persist-credentials: false
+                        - uses: actions/upload-artifact@v4
+                          with:
+                              name: my-artifact
+                              path: .
+            """,
+            []),
+            // Case 3: checkout (no persist-credentials) + upload-artifact (path: dist/) → OK (safe path)
+            new RuleCase(
+            "ok-safe-path",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - uses: actions/checkout@v4
+                        - uses: actions/upload-artifact@v4
+                          with:
+                              name: my-artifact
+                              path: dist/
+            """,
+            []),
+            // Case 4: checkout v6+ (no persist-credentials) + upload-artifact (path: .) → warning (severity lowered)
+            new RuleCase(
+            "ng-checkout-v6-upload-dot",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - uses: actions/checkout@v6
+                        - uses: actions/upload-artifact@v4
+                          with:
+                              name: my-artifact
+                              path: .
+            """,
+            ["upload-artifact with path '.'", "v6+"]),
+            // Case 5: checkout only (no upload-artifact) → OK
+            new RuleCase(
+            "ok-checkout-only",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - uses: actions/checkout@v4
+            """,
+            []),
+            // Case 6: upload-artifact only (no checkout) → OK
+            new RuleCase(
+            "ok-upload-only",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - uses: actions/upload-artifact@v4
+                          with:
+                              name: my-artifact
+                              path: .
+            """,
+            []),
+            // Edge case: path: .. (parent directory) → error
+            new RuleCase(
+            "ng-checkout-upload-dotdot",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - uses: actions/checkout@v4
+                        - uses: actions/upload-artifact@v4
+                          with:
+                              name: my-artifact
+                              path: ..
+            """,
+            ["upload-artifact with path '..'", "persist-credentials: false"]),
+            // Edge case: path: ${{ github.workspace }} → error
+            new RuleCase(
+            "ng-checkout-upload-workspace",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - uses: actions/checkout@v4
+                        - uses: actions/upload-artifact@v4
+                          with:
+                              name: my-artifact
+                              path: ${{ github.workspace }}
+            """,
+            ["upload-artifact with path", "persist-credentials: false"]),
+            // Edge case: persist-credentials: true → still flagged
+            new RuleCase(
+            "ng-persist-true",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - uses: actions/checkout@v4
+                          with:
+                              persist-credentials: true
+                        - uses: actions/upload-artifact@v4
+                          with:
+                              name: my-artifact
+                              path: .
+            """,
+            ["upload-artifact with path '.'", "persist-credentials: false"]),
+            // Edge case: SHA-pinned checkout → treated as non-v6+ (unknown version)
+            new RuleCase(
+            "ng-checkout-sha-upload-dot",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
+                        - uses: actions/upload-artifact@v4
+                          with:
+                              name: my-artifact
+                              path: .
+            """,
+            ["upload-artifact with path '.'", "persist-credentials: false"]),
+            // Edge case: upload-artifact before checkout (order shouldn't matter)
+            new RuleCase(
+            "ng-upload-before-checkout",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - uses: actions/upload-artifact@v4
+                          with:
+                              name: my-artifact
+                              path: .
+                        - uses: actions/checkout@v4
+            """,
+            ["upload-artifact with path '.'", "persist-credentials: false"]),
+        };
+
+        await AssertRuleCases(new ArtipackedRule(), "artipacked", cases);
+    }
+
+    [Test]
+    public async Task RuleRegression_ArtipackedRule_ReportsAllDangerousUploadsInLargeJob()
+    {
+        var yaml = NormalizeYaml(
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - uses: actions/checkout@v4
+                        - uses: actions/upload-artifact@v4
+                          with:
+                              name: artifact-01
+                              path: .
+                        - uses: actions/upload-artifact@v4
+                          with:
+                              name: artifact-02
+                              path: .
+                        - uses: actions/upload-artifact@v4
+                          with:
+                              name: artifact-03
+                              path: .
+                        - uses: actions/upload-artifact@v4
+                          with:
+                              name: artifact-04
+                              path: .
+                        - uses: actions/upload-artifact@v4
+                          with:
+                              name: artifact-05
+                              path: .
+                        - uses: actions/upload-artifact@v4
+                          with:
+                              name: artifact-06
+                              path: .
+                        - uses: actions/upload-artifact@v4
+                          with:
+                              name: artifact-07
+                              path: .
+                        - uses: actions/upload-artifact@v4
+                          with:
+                              name: artifact-08
+                              path: .
+                        - uses: actions/upload-artifact@v4
+                          with:
+                              name: artifact-09
+                              path: .
+            """);
+
+        using var result = new LintEngine([new ArtipackedRule()]).Check(Encoding.UTF8.GetBytes(yaml), "artipacked-many-uploads.yml");
+        var diagnostics = result.Diagnostics.Where(x => x.RuleId == "artipacked").ToArray();
+
+        await Assert.That(diagnostics.Length).IsEqualTo(9);
+        await Assert.That(diagnostics.All(x => x.Severity == DiagnosticSeverity.Error)).IsTrue();
+    }
+
+    [Test]
+    public async Task RuleRegression_ArtipackedRule_DoesNotMissUnsafeCheckoutAfterSafeOnes()
+    {
+        var yaml = NormalizeYaml(
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - uses: actions/checkout@v4
+                          with:
+                              persist-credentials: false
+                        - uses: actions/checkout@v4
+                          with:
+                              persist-credentials: false
+                        - uses: actions/checkout@v4
+                          with:
+                              persist-credentials: false
+                        - uses: actions/checkout@v4
+                          with:
+                              persist-credentials: false
+                        - uses: actions/checkout@v4
+                          with:
+                              persist-credentials: false
+                        - uses: actions/checkout@v4
+                          with:
+                              persist-credentials: false
+                        - uses: actions/checkout@v4
+                          with:
+                              persist-credentials: false
+                        - uses: actions/checkout@v4
+                          with:
+                              persist-credentials: false
+                        - uses: actions/checkout@v4
+                        - uses: actions/upload-artifact@v4
+                          with:
+                              name: artifact
+                              path: .
+            """);
+
+        using var result = new LintEngine([new ArtipackedRule()]).Check(Encoding.UTF8.GetBytes(yaml), "artipacked-late-checkout.yml");
+        var diagnostics = result.Diagnostics.Where(x => x.RuleId == "artipacked").ToArray();
+
+        await Assert.That(diagnostics.Length).IsEqualTo(1);
+        await Assert.That(diagnostics[0].Severity).IsEqualTo(DiagnosticSeverity.Error);
+    }
+
+    [Test]
+    public async Task RuleRegression_ArtipackedRule_V6PlusUsesWarningSeverity()
+    {
+        var yaml = NormalizeYaml(
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - uses: actions/checkout@v6
+                        - uses: actions/upload-artifact@v4
+                          with:
+                              name: artifact
+                              path: .
+            """);
+
+        using var result = new LintEngine([new ArtipackedRule()]).Check(Encoding.UTF8.GetBytes(yaml), "artipacked-v6.yml");
+        var diagnostic = result.Diagnostics.Single(x => x.RuleId == "artipacked");
+
+        await Assert.That(diagnostic.Severity).IsEqualTo(DiagnosticSeverity.Warning);
     }
 
     private static async Task AssertRuleCases(IRule rule, string ruleId, RuleCase[] cases, LintConfig? config = null)

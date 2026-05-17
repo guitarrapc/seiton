@@ -77,6 +77,7 @@ internal static class RuleCatalog
         (RuleId.UnpinnedTools, 57, false, static () => new UnpinnedToolsRule()),
         (RuleId.UnsoundContains, 58, false, static () => new UnsoundContainsRule()),
         (RuleId.BotConditions, 59, false, static () => new BotConditionsRule()),
+        (RuleId.Artipacked, 60, false, static () => new ArtipackedRule()),
     ];
 
     // Online rules: opt-in only (disabled by default), participate in WorkflowVisitor
@@ -226,6 +227,7 @@ internal static class RuleCatalog
         RuleId.UnpinnedTools => "warning",
         RuleId.UnsoundContains => "mixed",
         RuleId.BotConditions => "warning",
+        RuleId.Artipacked => "mixed",
         _ => throw new ArgumentOutOfRangeException(nameof(ruleId), ruleId, "No default severity defined for this rule."),
     };
 

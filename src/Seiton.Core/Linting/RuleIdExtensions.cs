@@ -70,6 +70,7 @@ internal static class RuleIdExtensions
         RuleId.UnpinnedTools => "unpinned-tools",
         RuleId.UnsoundContains => "unsound-contains",
         RuleId.BotConditions => "bot-conditions",
+        RuleId.Artipacked => "artipacked",
         RuleId.Syntax => "syntax",
         _ => throw new ArgumentOutOfRangeException(nameof(id), id, null),
     };

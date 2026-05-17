@@ -167,7 +167,6 @@ online audit rules（4）:
 - `misfeature`（非推奨 Actions 機能使用）
 - `superfluous-actions`（ランナー標準機能で代替可能なアクション）
 - `dependabot-execution` / `dependabot-cooldown`（Dependabot 設定検査）
-- `artipacked`（アーティファクトクレデンシャル漏洩）
 - 理由: セキュリティ影響が限定的か、運用導入コストが高い
 
 ---
@@ -247,7 +246,7 @@ zizmor 監査ID別対応表（実装確認ベース）:
 |---|---|---|
 | `anonymous-definition` | ❌ | 専用監査なし |
 | `archived-uses` | 🟡 | `archived-uses`（静的判定の初期実装） |
-| `artipacked` | ❌ | 専用監査なし |
+| `artipacked` | ✅ | `artipacked` — checkout + upload-artifact のステップ間相関分析 |
 | `bot-conditions` | ✅ | `bot-conditions` |
 | `cache-poisoning` | ✅ | `cache-poisoning` |
 | `concurrency-limits` | ✅ | `concurrency-limits` — ワークフロー/ジョブレベルの concurrency 設定と cancel-in-progress を検査 |
@@ -300,9 +299,8 @@ zizmor 監査ID別対応表（実装確認ベース）:
 
 1. Dockerfile / compose / 任意YAML image pin 拡張
 
-2. zizmor 残差分（未対応 7件）
+2. zizmor 残差分（未対応 6件）
 - `github-env` — GITHUB_ENV への危険な書き込み検出
-- `artipacked` — アーティファクトクレデンシャル漏洩
 - `anonymous-definition` — name 未定義のワークフロー/アクション
 - `obfuscation` — 難読化された Actions 機能使用
 - `misfeature` — 非推奨/危険な Actions 機能使用

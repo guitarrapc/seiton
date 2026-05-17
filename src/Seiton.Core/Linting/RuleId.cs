@@ -62,6 +62,7 @@ public enum RuleId
     UnpinnedTools,
     UnsoundContains,
     BotConditions,
+    Artipacked,
 
     // Composite / internal-only (not in RuleCatalog)
     Syntax,
