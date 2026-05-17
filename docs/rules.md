@@ -1867,7 +1867,7 @@ container:
 |---|---|---|
 | ✓ | — | ✗ |
 
-Warns when known tool-setup actions rely on an unpinned tool version. This currently covers `aquasecurity/setup-trivy` and `1password/load-secrets-action` in both workflow steps and composite action steps.
+Warns when known tool-setup actions rely on an unpinned tool version. The list of known actions is maintained in `data/sources/unpinned-tools/unpinned_tools.json` and currently covers `aquasecurity/setup-trivy` and `1password/load-secrets-action` in both workflow steps and composite action steps. To add a new action, edit the JSON and run `dotnet run --project src/Seiton.Update -- sync-unpinned-tools`.
 
 **Example trigger:**
 

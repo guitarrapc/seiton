@@ -118,7 +118,7 @@ Zizmorのリファレンス実装は、.references/zizmorに配置されてい�
   2. `with` mapping に `version` キーがあるか確認
   3. なし → 検出（未固定）、`latest` → 検出、`${{ expr }}` → 検出（低信頼度）、具体値 → OK
 - **パフォーマンス影響**: 極小。uses の owner/repo 比較 + with キー走査のみ
-- **アクションリスト管理**: 初期は静的リスト（`ReadOnlySpan<byte>` ベース）。将来的に supplemental JSON で拡張可能にする
+- **アクションリスト管理**: `data/sources/unpinned-tools/unpinned_tools.json` に手書きJSON として管理。`Seiton.Update` パイプライン（sync/verify のみ）で `UnpinnedToolsActions.g.cs` にコード生成。新しいアクションの追加はJSONファイルを編集して `dotnet run --project src/Seiton.Update -- sync-unpinned-tools` を実行するだけで完了する
 - **拡張性**: `known-setup-actions.extend` 設定キーで追加アクションを受け付ける設計を検討
 
 **setup アクション初期リスト**（zizmor 実装ベース）:

@@ -1,4 +1,5 @@
 ﻿using System.Runtime.CompilerServices;
+using Seiton.Core.Generated;
 using Seiton.Core.Parsing;
 using Seiton.Core.Parsing.Ast;
 
@@ -7,23 +8,12 @@ namespace Seiton.Core.Linting.Rules;
 /// <summary>
 /// Flags steps that use known setup/tool actions without pinning the tool version,
 /// or using <c>version: latest</c>, or using a dynamic expression for the version.
+/// Known actions are maintained in <c>data/sources/unpinned-tools/unpinned_tools.json</c>
+/// and code-generated into <see cref="UnpinnedToolsActions"/>.
 /// </summary>
 public sealed class UnpinnedToolsRule() : RuleBase(RuleId.UnpinnedTools)
 {
-    // Known actions that install external tools where version pinning matters.
-    // Format: "owner/repo" (case-insensitive matching against uses before @ref).
-    private static ReadOnlySpan<byte> SetupTrivy => "aquasecurity/setup-trivy"u8;
-    private static ReadOnlySpan<byte> LoadSecretsAction => "1password/load-secrets-action"u8;
-
-    private static ReadOnlySpan<byte> VersionKey => "version"u8;
     private static ReadOnlySpan<byte> LatestValue => "latest"u8;
-
-    private const string SetupTrivyMissingVersionMessage = "'aquasecurity/setup-trivy' does not specify 'version' input; implicitly uses unpinned latest version";
-    private const string SetupTrivyLatestMessage = "'aquasecurity/setup-trivy' specifies 'version: latest' which is unpinned; pin to a specific version";
-    private const string SetupTrivyDynamicMessage = "'aquasecurity/setup-trivy' specifies 'version' dynamically which may be unpinned";
-    private const string LoadSecretsMissingVersionMessage = "'1password/load-secrets-action' does not specify 'version' input; implicitly uses unpinned latest version";
-    private const string LoadSecretsLatestMessage = "'1password/load-secrets-action' specifies 'version: latest' which is unpinned; pin to a specific version";
-    private const string LoadSecretsDynamicMessage = "'1password/load-secrets-action' specifies 'version' dynamically which may be unpinned";
 
     public override string Name => "Unpinned Tools Rule";
 
@@ -40,16 +30,18 @@ public sealed class UnpinnedToolsRule() : RuleBase(RuleId.UnpinnedTools)
             return;
         }
 
-        if (!TryGetKnownAction(uses, out var knownAction))
+        if (!TryGetKnownAction(uses, out var actionIndex))
         {
             return;
         }
 
+        var versionKey = UnpinnedToolsActions.GetVersionInputKey(actionIndex);
+
         // Check if version input is provided
-        if (actionExec.Inputs is null || !actionExec.Inputs.Value.TryGetValue(Config.Utf8Yaml, VersionKey, out var versionNode))
+        if (actionExec.Inputs is null || !actionExec.Inputs.Value.TryGetValue(Config.Utf8Yaml, versionKey, out var versionNode))
         {
             var location = BuildUsesLocation(actionExec);
-            AddStepWarning(step, knownAction.MissingVersionMessage, location);
+            AddStepWarning(step, UnpinnedToolsActions.GetMissingVersionMessage(actionIndex), location);
             return;
         }
 
@@ -64,7 +56,7 @@ public sealed class UnpinnedToolsRule() : RuleBase(RuleId.UnpinnedTools)
         if (versionValue.SequenceEqual(LatestValue))
         {
             var location = Arena.GetStringRange(versionNode);
-            AddStepWarning(step, knownAction.LatestMessage, location);
+            AddStepWarning(step, UnpinnedToolsActions.GetLatestMessage(actionIndex), location);
             return;
         }
 
@@ -72,14 +64,14 @@ public sealed class UnpinnedToolsRule() : RuleBase(RuleId.UnpinnedTools)
         if (ExpressionScanHelpers.TryExtractExpressionBody(versionValue, out _))
         {
             var location = Arena.GetStringRange(versionNode);
-            AddStepWarning(step, knownAction.DynamicMessage, location);
+            AddStepWarning(step, UnpinnedToolsActions.GetDynamicMessage(actionIndex), location);
         }
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    private static bool TryGetKnownAction(ReadOnlySpan<byte> uses, out KnownAction knownAction)
+    private static bool TryGetKnownAction(ReadOnlySpan<byte> uses, out int actionIndex)
     {
-        knownAction = default;
+        actionIndex = -1;
         if (!ActionRefHelpers.TryParseRemoteUses(uses, out var parsed))
         {
             return false;
@@ -91,20 +83,6 @@ public sealed class UnpinnedToolsRule() : RuleBase(RuleId.UnpinnedTools)
             return false;
         }
 
-        if (ownerRepo.SequenceEqual(SetupTrivy))
-        {
-            knownAction = new KnownAction(SetupTrivyMissingVersionMessage, SetupTrivyLatestMessage, SetupTrivyDynamicMessage);
-            return true;
-        }
-
-        if (ownerRepo.SequenceEqual(LoadSecretsAction))
-        {
-            knownAction = new KnownAction(LoadSecretsMissingVersionMessage, LoadSecretsLatestMessage, LoadSecretsDynamicMessage);
-            return true;
-        }
-
-        return false;
+        return UnpinnedToolsActions.TryGetKnownActionIndex(ownerRepo, out actionIndex);
     }
-
-    private readonly record struct KnownAction(string MissingVersionMessage, string LatestMessage, string DynamicMessage);
 }

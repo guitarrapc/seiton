@@ -1,0 +1,19 @@
+{
+  "schemaVersion": 1,
+  "source": "hand-curated",
+  "description": "Actions that install external tools where version pinning matters for supply-chain security.",
+  "actions": [
+    {
+      "owner": "aquasecurity",
+      "repo": "setup-trivy",
+      "versionInput": "version",
+      "description": "Trivy security scanner setup"
+    },
+    {
+      "owner": "1password",
+      "repo": "load-secrets-action",
+      "versionInput": "version",
+      "description": "1Password secrets loader"
+    }
+  ]
+}

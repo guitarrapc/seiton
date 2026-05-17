@@ -611,6 +611,26 @@ app.Add("merge-shells-sources", () =>
     }
 });
 
+app.Add("sync-unpinned-tools", () =>
+{
+    var code = UnpinnedToolsCommands.Sync(repoRoot);
+    if (code != 0)
+    {
+        Environment.ExitCode = code;
+        throw new InvalidOperationException($"sync-unpinned-tools failed with code {code}");
+    }
+});
+
+app.Add("verify-unpinned-tools", () =>
+{
+    var code = UnpinnedToolsCommands.Verify(repoRoot);
+    if (code != 0)
+    {
+        Environment.ExitCode = code;
+        throw new InvalidOperationException($"verify-unpinned-tools failed with code {code}");
+    }
+});
+
 app.Add("fetch-expected-keys", async () =>
 {
     var code = await ExpectedKeysCommands.Fetch(repoRoot);
@@ -939,6 +959,11 @@ static int RunSync(string repoRoot, string dataset)
         return ExpectedKeysCommands.Sync(repoRoot);
     }
 
+    if (dataset is "unpinned-tools")
+    {
+        return UnpinnedToolsCommands.Sync(repoRoot);
+    }
+
     if (dataset is "all")
     {
         var code = WebhookCommands.Sync(repoRoot);
@@ -996,6 +1021,12 @@ static int RunSync(string repoRoot, string dataset)
         }
 
         code = ExpectedKeysCommands.Sync(repoRoot);
+        if (code != 0)
+        {
+            return code;
+        }
+
+        code = UnpinnedToolsCommands.Sync(repoRoot);
         if (code != 0)
         {
             return code;
@@ -1065,6 +1096,11 @@ static int RunVerify(string repoRoot, string dataset)
         return ExpectedKeysCommands.Verify(repoRoot);
     }
 
+    if (dataset is "unpinned-tools")
+    {
+        return UnpinnedToolsCommands.Verify(repoRoot);
+    }
+
     if (dataset is "all")
     {
         var code = WebhookCommands.Verify(repoRoot);
@@ -1122,6 +1158,12 @@ static int RunVerify(string repoRoot, string dataset)
         }
 
         code = ExpectedKeysCommands.Verify(repoRoot);
+        if (code != 0)
+        {
+            return code;
+        }
+
+        code = UnpinnedToolsCommands.Verify(repoRoot);
         if (code != 0)
         {
             return code;

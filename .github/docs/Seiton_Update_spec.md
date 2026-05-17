@@ -202,6 +202,7 @@ Cross-walk of maintainer-facing datasets (including satellite **`event-payload-t
 | shells | `shells` | Standard (passthrough merge) | `.../raw/supported-shells.md` | `.../parsed/shells.json` | `shells.json` (copy of parsed) |
 | webhooks | `webhooks` | Standard | schema JSON + Docs `*.md` | multiple under `parsed/` | `webhook_types.json` |
 | event-payload-types | `event-payload-types` | Satellite | `webhooks/github/raw/webhook-events-and-payloads.html` | `webhooks/github/parsed/parsed-event-payload-types.json` | `webhooks/github/event_payload_types.json` |
+| unpinned-tools | — | Hand-authored (sync/verify only) | — | — | `unpinned_tools.json` |
 | reports | — | Reports | — | — | `data/sources/reports/*.md` |
 
 `context-types` and `function-specs` combine fetched material with **repository-managed** JSON; the table shows the main codegen inputs.
