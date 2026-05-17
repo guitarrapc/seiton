@@ -305,7 +305,7 @@ github.event.pull_request.user.id
 - [x] `bot-conditions` ルール実装 + テスト green
 - [x] `dotnet test` 全体 green（リグレッションなし）
 - [x] ベンチマーク: Phase 1 ベースラインから実行時間 +3% 以内、アロケーション悪化なし
-- [ ] feature-matrix 更新
+- [x] feature-matrix 更新
 
 #### Phase 2 実装結果
 
