@@ -611,6 +611,46 @@ app.Add("merge-shells-sources", () =>
     }
 });
 
+app.Add("fetch-unpinned-tools", async () =>
+{
+    var code = await UnpinnedToolsCommands.Fetch(repoRoot);
+    if (code != 0)
+    {
+        Environment.ExitCode = code;
+        throw new InvalidOperationException($"fetch-unpinned-tools failed with code {code}");
+    }
+});
+
+app.Add("fetch-unpinned-tools-sources", async () =>
+{
+    var code = await UnpinnedToolsCommands.FetchSources(repoRoot);
+    if (code != 0)
+    {
+        Environment.ExitCode = code;
+        throw new InvalidOperationException($"fetch-unpinned-tools-sources failed with code {code}");
+    }
+});
+
+app.Add("parse-unpinned-tools-sources", () =>
+{
+    var code = UnpinnedToolsCommands.ParseSources(repoRoot);
+    if (code != 0)
+    {
+        Environment.ExitCode = code;
+        throw new InvalidOperationException($"parse-unpinned-tools-sources failed with code {code}");
+    }
+});
+
+app.Add("merge-unpinned-tools-sources", () =>
+{
+    var code = UnpinnedToolsCommands.MergeSources(repoRoot);
+    if (code != 0)
+    {
+        Environment.ExitCode = code;
+        throw new InvalidOperationException($"merge-unpinned-tools-sources failed with code {code}");
+    }
+});
+
 app.Add("sync-unpinned-tools", () =>
 {
     var code = UnpinnedToolsCommands.Sync(repoRoot);
@@ -833,6 +873,11 @@ static async Task<int> RunFetch(string repoRoot, string dataset, bool webhooksEx
         return await ExpectedKeysCommands.Fetch(repoRoot);
     }
 
+    if (dataset is "unpinned-tools")
+    {
+        return await UnpinnedToolsCommands.Fetch(repoRoot);
+    }
+
     if (dataset is "event-payload-types")
     {
         return await EventPayloadTypesCommands.Fetch(repoRoot);
@@ -895,6 +940,12 @@ static async Task<int> RunFetch(string repoRoot, string dataset, bool webhooksEx
         }
 
         code = await ExpectedKeysCommands.Fetch(repoRoot);
+        if (code != 0)
+        {
+            return code;
+        }
+
+        code = await UnpinnedToolsCommands.Fetch(repoRoot);
         if (code != 0)
         {
             return code;

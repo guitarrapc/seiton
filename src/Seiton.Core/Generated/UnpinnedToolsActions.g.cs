@@ -10,8 +10,7 @@ internal static class UnpinnedToolsActions
 {
     internal static bool TryGetKnownActionIndex(ReadOnlySpan<byte> ownerRepo, out int index)
     {
-        if (ownerRepo.SequenceEqual("1password/load-secrets-action"u8)) { index = 0; return true; }
-        if (ownerRepo.SequenceEqual("aquasecurity/setup-trivy"u8)) { index = 1; return true; }
+        if (ownerRepo.SequenceEqual("aquasecurity/setup-trivy"u8)) { index = 0; return true; }
         index = -1;
         return false;
     }
@@ -19,28 +18,24 @@ internal static class UnpinnedToolsActions
     internal static ReadOnlySpan<byte> GetVersionInputKey(int index) => index switch
     {
         0 => "version"u8,
-        1 => "version"u8,
         _ => default,
     };
 
     internal static string GetMissingVersionMessage(int index) => index switch
     {
-        0 => "'1password/load-secrets-action' does not specify 'version' input; implicitly uses unpinned latest version",
-        1 => "'aquasecurity/setup-trivy' does not specify 'version' input; implicitly uses unpinned latest version",
+        0 => "'aquasecurity/setup-trivy' does not specify 'version' input; implicitly uses unpinned latest version",
         _ => "",
     };
 
     internal static string GetLatestMessage(int index) => index switch
     {
-        0 => "'1password/load-secrets-action' specifies 'version: latest' which is unpinned; pin to a specific version",
-        1 => "'aquasecurity/setup-trivy' specifies 'version: latest' which is unpinned; pin to a specific version",
+        0 => "'aquasecurity/setup-trivy' specifies 'version: latest' which is unpinned; pin to a specific version",
         _ => "",
     };
 
     internal static string GetDynamicMessage(int index) => index switch
     {
-        0 => "'1password/load-secrets-action' specifies 'version' dynamically which may be unpinned",
-        1 => "'aquasecurity/setup-trivy' specifies 'version' dynamically which may be unpinned",
+        0 => "'aquasecurity/setup-trivy' specifies 'version' dynamically which may be unpinned",
         _ => "",
     };
 }

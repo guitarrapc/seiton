@@ -7,14 +7,20 @@ internal static class UnpinnedToolsSourcePathResolver
 
     public static string ResolvePrimary(string repoRoot)
     {
-        var path = Path.Combine(ResolvePrimaryDir(repoRoot), "unpinned_tools.json");
-        if (File.Exists(path))
+        var githubSnapshot = Path.Combine(repoRoot, "data", "sources", "unpinned-tools", "github", "unpinned_tools.json");
+        if (File.Exists(githubSnapshot))
         {
-            return path;
+            return githubSnapshot;
+        }
+
+        var legacyPath = Path.Combine(ResolvePrimaryDir(repoRoot), "unpinned_tools.json");
+        if (File.Exists(legacyPath))
+        {
+            return legacyPath;
         }
 
         throw new FileNotFoundException(
-            "Primary unpinned-tools source not found. Create data/sources/unpinned-tools/unpinned_tools.json.",
-            path);
+            "Primary unpinned-tools source not found. Run fetch-unpinned-tools first, or provide data/sources/unpinned-tools/github/unpinned_tools.json.",
+            githubSnapshot);
     }
 }

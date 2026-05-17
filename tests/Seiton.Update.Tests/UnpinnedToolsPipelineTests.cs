@@ -15,12 +15,10 @@ public sealed class UnpinnedToolsPipelineTests
         var parser = new UnpinnedToolsSourceParser();
         var model = parser.Parse(sourcePath);
 
-        await Assert.That(model.Actions.Count).IsGreaterThanOrEqualTo(2);
-        // Sorted alphabetically: 1password < aquasecurity
-        await Assert.That(model.Actions[0].Owner).IsEqualTo("1password");
-        await Assert.That(model.Actions[0].Repo).IsEqualTo("load-secrets-action");
-        await Assert.That(model.Actions[1].Owner).IsEqualTo("aquasecurity");
-        await Assert.That(model.Actions[1].Repo).IsEqualTo("setup-trivy");
+        await Assert.That(model.Actions.Count).IsGreaterThanOrEqualTo(1);
+        await Assert.That(model.Actions[0].Owner).IsEqualTo("aquasecurity");
+        await Assert.That(model.Actions[0].Repo).IsEqualTo("setup-trivy");
+        await Assert.That(model.Actions[0].VersionInput).IsEqualTo("version");
     }
 
     [Test]
@@ -66,7 +64,6 @@ public sealed class UnpinnedToolsPipelineTests
         await Assert.That(code).Contains("GetLatestMessage");
         await Assert.That(code).Contains("GetDynamicMessage");
         await Assert.That(code).Contains("aquasecurity/setup-trivy");
-        await Assert.That(code).Contains("1password/load-secrets-action");
     }
 
     private static string FindRepoRoot()

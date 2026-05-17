@@ -128,6 +128,16 @@
       }
     },
     {
+      "dataset": "unpinned-tools",
+      "sourceUrls": [
+        "https://raw.githubusercontent.com/aquasecurity/setup-trivy/main/action.yaml"
+      ],
+      "fetchedAtUtc": "2026-05-17T07:28:45.1190823\u002B00:00",
+      "rawFileHashes": {
+        "aquasecurity_setup-trivy.action.yaml": "sha256:7fe5630d90ffc0dd016fe27e9ff42077ab60874dcbc2a3419523c0f9ef2ebfff"
+      }
+    },
+    {
       "dataset": "webhooks",
       "sourceUrls": [
         "https://json.schemastore.org/github-workflow.json",

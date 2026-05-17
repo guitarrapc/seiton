@@ -13398,17 +13398,6 @@ public sealed class RuleInterfaceTests
             """,
             ["dynamically", "unpinned"]),
             new RuleCase(
-            "ng-1password-no-version",
-            """
-            on: push
-            jobs:
-                build:
-                    runs-on: ubuntu-latest
-                    steps:
-                        - uses: 1password/load-secrets-action@v2
-            """,
-            ["does not specify 'version'", "unpinned latest"]),
-            new RuleCase(
             "ng-case-insensitive-owner-repo",
             """
             on: push

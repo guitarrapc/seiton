@@ -1,0 +1,23 @@
+{
+  "schemaVersion": 1,
+  "source": "github-action-metadata-raw",
+  "rawSources": [
+    {
+      "fileName": "aquasecurity_setup-trivy.action.yaml",
+      "sha256": "sha256:7fe5630d90ffc0dd016fe27e9ff42077ab60874dcbc2a3419523c0f9ef2ebfff"
+    }
+  ],
+  "actions": [
+    {
+      "uses": "aquasecurity/setup-trivy",
+      "versionInput": "version",
+      "allInputs": [
+        "cache",
+        "github-server-url",
+        "path",
+        "token",
+        "version"
+      ]
+    }
+  ]
+}
