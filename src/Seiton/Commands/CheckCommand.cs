@@ -166,7 +166,7 @@ internal static class CheckCommand
 
                 if (verboseLogger.IsEnabled)
                 {
-                    verboseLogger.Log($"checking {slots[i].FilePath}...");
+                    verboseLogger.Log($"checked {slots[i].FilePath}");
                     if (!HasLoggedRuleSummaryForKind(slots[i].DocumentKind, ref workflowRuleSummaryLogged, ref actionRuleSummaryLogged))
                     {
                         WriteRuleSummary(verboseLogger, slots[i].ActiveRuleCount, slots[i].DisabledRuleCount, slots[i].DisabledRuleIds, slots[i].DocumentKind);
