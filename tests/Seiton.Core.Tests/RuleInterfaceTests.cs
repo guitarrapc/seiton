@@ -14420,6 +14420,24 @@ public sealed class RuleInterfaceTests
                               path: ../..
             """,
             ["upload-artifact with path '../..'", "persist-credentials: false"]),
+            // Negative case: v6+ checkout + current-dir upload + no hidden files is safe.
+            // v6+ credentials are in $RUNNER_TEMP (not .git/config), and hidden files excluded,
+            // so current-dir upload does not expose credentials.
+            new RuleCase(
+            "ok-checkout-v6-upload-dot-no-hidden",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - uses: actions/checkout@v6
+                        - uses: actions/upload-artifact@v4.4
+                          with:
+                              name: my-artifact
+                              path: .
+            """,
+            []),
             // Edge case: leading-zero checkout refs are arbitrary tags, not semver v6+.
             new RuleCase(
             "ng-checkout-v06-upload-dot",

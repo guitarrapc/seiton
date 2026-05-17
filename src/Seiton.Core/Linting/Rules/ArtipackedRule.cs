@@ -75,8 +75,8 @@ public sealed class ArtipackedRule() : RuleBase(RuleId.Artipacked)
                 || actionExec.Inputs is null
                 || !actionExec.Inputs.Value.TryGetValue(utf8Yaml, "path"u8, out var pathNode)
                 || !TryClassifyDangerousPath(Arena.GetStringValue(pathNode), out var exposesParentDirectory)
-                || !(exposesParentDirectory && hasUnsafeV6PlusCheckout)
-                   && !MayIncludeHiddenFiles(actionExec, usesText, utf8Yaml))
+                || (!(exposesParentDirectory && hasUnsafeV6PlusCheckout)
+                    && !MayIncludeHiddenFiles(actionExec, usesText, utf8Yaml)))
             {
                 continue;
             }
