@@ -132,6 +132,8 @@ Seiton includes **50+ rules** across four categories. Each rule has a dedicated 
 |---|---|---|---|
 | [template-injection](docs/rules.md#template-injection) | ✓ | △ | Untrusted data in `run` scripts |
 | [dangerous-triggers](docs/rules.md#dangerous-triggers) | ✓ | ✗ | High-risk trigger events |
+| [unsound-contains](docs/rules.md#unsound-contains) | ✓ | ✗ | Bypassable `contains()` checks in conditions |
+| [bot-conditions](docs/rules.md#bot-conditions) | ✓ | ✗ | Spoofable bot actor checks |
 | [run-env-context-direct-use](docs/rules.md#run-env-context-direct-use) | ✓ | △ | `${{ env.* }}` in `run` scripts |
 | [run-secrets-context-direct-use](docs/rules.md#run-secrets-context-direct-use) | ✓ | △ | `${{ secrets.* }}` in `run` scripts |
 | [run-inputs-context-direct-use](docs/rules.md#run-inputs-context-direct-use) | ✓ | △ | `${{ inputs.* }}` in `run` scripts |

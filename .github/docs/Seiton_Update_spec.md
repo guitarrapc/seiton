@@ -155,7 +155,7 @@ Profiles explain datasets that do not use a literal `parsed/` directory or full 
 | **Standard** | `raw/` → `parsed/` → merge → `{snapshot}.json` | Merged snapshot | `availability`, `context-types`, `expected-keys`, `permissions`, `runner-labels`, `shells`, `webhooks`, `popular-actions`, `iana-timezones` |
 | **Collapsed Stage 2** | `raw/` → **`{snapshot}.json` directly** (no `parsed/` subtree) | Same file | *(none — prefer Standard + `parsed/`)*; reserved for narrow exceptions |
 | **Composite primary** | Maintained canonical JSON **plus** fetched raw and optional `parsed/` supplements | Hand-written base merged or validated against parses | `function-specs` (`function-specs.json` primary; `parsed/docs-function-names.json` from Docs) |
-| **Hand-authored snapshot** | No automated fetch | Maintainers edit JSON; optional `schemaVersion` / `source` for consistency | *(none currently)* |
+| **Hand-authored snapshot** | No automated fetch | Maintainers edit JSON; optional `schemaVersion` / `source` for consistency | `bot-actors`, `unpinned-tools` |
 | **Satellite manifest dataset** | Own manifest `dataset` key; files may live under another tree | Snapshot path defined by that tool | `event-payload-types` (manifest + raw/parsed under `webhooks/github/...`; codegen reads `event_payload_types.json`) |
 | **Reports** | — | — | `data/sources/reports/*.md` (diff / parity narrative only) |
 
@@ -200,6 +200,7 @@ Cross-walk of maintainer-facing datasets (including satellite **`event-payload-t
 | popular-actions | `popular-actions` | Standard | `.../raw/*.action.yml` (from `targets.json`) | `.../parsed/popular-actions-metadata.json` | `popular_actions.json` |
 | runner-labels | `runner-labels` | Standard | two `*.docs.md` under `raw/` | `.../parsed/docs-runner-labels.json` | `runner_labels.json` (+ optional supplemental JSON) |
 | shells | `shells` | Standard (passthrough merge) | `.../raw/supported-shells.md` | `.../parsed/shells.json` | `shells.json` (copy of parsed) |
+| bot-actors | — | Hand-authored snapshot | — | — | `bot-actors.json` |
 | webhooks | `webhooks` | Standard | schema JSON + Docs `*.md` | multiple under `parsed/` | `webhook_types.json` |
 | event-payload-types | `event-payload-types` | Satellite | `webhooks/github/raw/webhook-events-and-payloads.html` | `webhooks/github/parsed/parsed-event-payload-types.json` | `webhooks/github/event_payload_types.json` |
 | unpinned-tools | — | Hand-authored (sync/verify only) | — | — | `unpinned_tools.json` |
@@ -221,6 +222,7 @@ Cross-walk of maintainer-facing datasets (including satellite **`event-payload-t
 | iana-timezones | IANA `tzdata.zi` | `IanaTimeZones.g.cs` | IANA timezone identifiers (zones + links) for schedule-event timezone validation |
 | event-payload-types | GitHub Docs (HTML) | `EventPayloadTypes.g.cs` | Webhook event payload type shapes for expression typing |
 | shells | GitHub Docs reusable (`supported-shells.md`); table included from workflow-syntax `defaults.run.shell` | `Shells.g.cs` | Shell availability per OS platform for `shell-name` rule validation |
+| bot-actors | Hand-written GitHub API provenance JSON | `BotActors.g.cs` | Known bot actor logins and user IDs for provenance tracking and future audit consumers |
 | expected-keys | GitHub Docs | `ExpectedKeys.g.cs` | Expected YAML key lists per parser section for diagnostic messages |
 
 ### 4.2 Source of Truth Policy
@@ -363,6 +365,7 @@ Per-dataset commands follow this naming pattern:
 | permissions | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | — | — |
 | iana-timezones | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | — | — |
 | shells | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | — | — |
+| bot-actors | — | — | — | — | ✓ | ✓ | — | — |
 | expected-keys | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | — | — |
 | event-payload-types | ✓ | ✓ | ✓ | — | ✓ | ✓ | — | — |
 
@@ -378,7 +381,7 @@ Per-dataset commands follow this naming pattern:
 | `verify --dataset {name\|all}` | Run verify for specified dataset or all datasets |
 | `update` | Run **`fetch --dataset all`**, then **`sync --dataset all`**, then **`verify --dataset all`**; optional `--exclude-schema-only` applies to the webhooks fetch step |
 
-`fetch --dataset all` / `sync --dataset all` / `verify --dataset all` process every dataset in a fixed internal order: webhooks → availability → popular-actions → runner-labels → context-types → function-specs → permissions → iana-timezones → shells → expected-keys → event-payload-types.
+`fetch --dataset all` processes fetched datasets in a fixed internal order: webhooks → availability → popular-actions → runner-labels → context-types → function-specs → permissions → iana-timezones → shells → expected-keys → event-payload-types. `sync --dataset all` / `verify --dataset all` run the same sequence and additionally include the hand-authored `bot-actors` dataset before `event-payload-types`.
 
 ### 5.4 Exit Codes
 

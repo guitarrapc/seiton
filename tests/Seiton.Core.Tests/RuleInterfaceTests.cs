@@ -296,7 +296,7 @@ public sealed class RuleInterfaceTests
     {
         var rules = RuleCatalog.CreateDefaultRules();
 
-        await Assert.That(rules.Length).IsEqualTo(54);
+        await Assert.That(rules.Length).IsEqualTo(56);
         await Assert.That(rules[0].Id).IsEqualTo(RuleId.JobStructure);
         await Assert.That(rules[1].Id).IsEqualTo(RuleId.ReusableWorkflow);
         await Assert.That(rules[2].Id).IsEqualTo(RuleId.Permissions);
@@ -11711,6 +11711,32 @@ public sealed class RuleInterfaceTests
                             - uses: aquasecurity/setup-trivy@v0.2.0
                 """,
                 ExpectsFix: false),
+            new FixabilityCase(
+                "unsound-contains",
+                new UnsoundContainsRule(),
+                """
+                on: push
+                jobs:
+                    build:
+                        runs-on: ubuntu-latest
+                        if: contains('refs/heads/main', github.ref)
+                        steps:
+                            - run: echo test
+                """,
+                ExpectsFix: false),
+            new FixabilityCase(
+                "bot-conditions",
+                new BotConditionsRule(),
+                """
+                on: push
+                jobs:
+                    build:
+                        runs-on: ubuntu-latest
+                        if: github.actor == 'dependabot[bot]'
+                        steps:
+                            - run: echo test
+                """,
+                ExpectsFix: false),
         };
 
         for (var i = 0; i < cases.Length; i++)
@@ -13432,6 +13458,368 @@ public sealed class RuleInterfaceTests
         var diagnostics = result.Diagnostics.Where(x => x.RuleId == "unpinned-tools").ToArray();
         await Assert.That(diagnostics).HasSingleItem();
         await Assert.That(diagnostics[0].Message.Contains("does not specify 'version'", StringComparison.Ordinal)).IsTrue();
+    }
+
+    [Test]
+    public async Task RuleRegression_UnsoundContainsRule_TableDriven()
+    {
+        var cases = new[]
+        {
+            new RuleCase(
+            "error-contains-github-ref",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    if: contains('refs/heads/main refs/heads/develop', github.ref)
+                    steps:
+                        - run: echo test
+            """,
+            ["user-controllable context", "substring bypass"]),
+            new RuleCase(
+            "ok-fromjson-array-contains",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    if: contains(fromJSON('["main", "develop"]'), github.ref)
+                    steps:
+                        - run: echo test
+            """,
+            []),
+            new RuleCase(
+            "info-non-controllable-context",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    if: contains('push pull_request', github.event_name)
+                    steps:
+                        - run: echo test
+            """,
+            ["context reference", "substring bypass"]),
+            new RuleCase(
+            "error-or-contains-head-ref",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    if: false || contains('main,develop', github.head_ref)
+                    steps:
+                        - run: echo test
+            """,
+            ["user-controllable context", "substring bypass"]),
+            new RuleCase(
+            "error-not-contains-base-ref",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    if: "!contains('main|develop', github.base_ref)"
+                    steps:
+                        - run: echo test
+            """,
+            ["user-controllable context", "substring bypass"]),
+            new RuleCase(
+            "ok-no-contains",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    if: github.ref == 'refs/heads/main'
+                    steps:
+                        - run: echo test
+            """,
+            []),
+            new RuleCase(
+            "error-env-context",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - if: contains('expected_value', env.MY_VAR)
+                          run: echo test
+            """,
+            ["user-controllable context", "substring bypass"]),
+            new RuleCase(
+            "error-inputs-context",
+            """
+            on:
+                workflow_dispatch:
+                    inputs:
+                        target:
+                            type: string
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    if: contains('main develop', inputs.target)
+                    steps:
+                        - run: echo test
+            """,
+            ["user-controllable context", "substring bypass"]),
+            new RuleCase(
+            "error-fenced-expression",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    if: ${{ contains('refs/heads/main', github.ref) }}
+                    steps:
+                        - run: echo test
+            """,
+            ["user-controllable context", "substring bypass"]),
+            // --- Index-style context tests (zizmor parity) ---
+            new RuleCase(
+            "error-index-env-context",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - if: contains('expected_value', env['MY_VAR'])
+                          run: echo test
+            """,
+            ["user-controllable context", "substring bypass"]),
+            new RuleCase(
+            "error-index-github-ref",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    if: contains('refs/heads/main', github['ref'])
+                    steps:
+                        - run: echo test
+            """,
+            ["user-controllable context", "substring bypass"]),
+            new RuleCase(
+            "info-index-non-controllable",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    if: contains('push pull_request', github['event_name'])
+                    steps:
+                        - run: echo test
+            """,
+            ["context reference", "substring bypass"]),
+        };
+
+        await AssertRuleCases(new UnsoundContainsRule(), "unsound-contains", cases);
+    }
+
+    [Test]
+    public async Task RuleRegression_BotConditionsRule_TableDriven()
+    {
+        var cases = new[]
+        {
+            new RuleCase(
+            "warning-actor-dependabot",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    if: github.actor == 'dependabot[bot]'
+                    steps:
+                        - run: echo test
+            """,
+            ["spoofable context", "pull_request.user.login"]),
+            new RuleCase(
+            "warning-actor-id-known-bot",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    if: github.actor_id == '49699333'
+                    steps:
+                        - run: echo test
+            """,
+            ["spoofable context", "pull_request.user.login"]),
+            new RuleCase(
+            "warning-actor-id-known-bot-number",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    if: github.actor_id == 49699333
+                    steps:
+                        - run: echo test
+            """,
+            ["spoofable context", "pull_request.user.login"]),
+            new RuleCase(
+            "ok-actor-id-unknown",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    if: github.actor_id == '123456789'
+                    steps:
+                        - run: echo test
+            """,
+            []),
+            new RuleCase(
+            "warning-actor-github-actions-bot",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    if: github.actor == 'github-actions[bot]'
+                    steps:
+                        - run: echo test
+            """,
+            ["spoofable context", "pull_request.user.login"]),
+            new RuleCase(
+            "warning-triggering-actor-renovate",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    if: github.triggering_actor != 'renovate[bot]'
+                    steps:
+                        - run: echo test
+            """,
+            ["spoofable context", "pull_request.user.login"]),
+            new RuleCase(
+            "warning-pr-sender-login",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    if: github.event.pull_request.sender.login == 'dependabot[bot]'
+                    steps:
+                        - run: echo test
+            """,
+            ["spoofable context", "pull_request.user.login"]),
+            new RuleCase(
+            "ok-event-name-push",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    if: github.event_name == 'push'
+                    steps:
+                        - run: echo test
+            """,
+            []),
+            new RuleCase(
+            "ok-actor-not-bot",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    if: github.actor == 'my-user'
+                    steps:
+                        - run: echo test
+            """,
+            []),
+            new RuleCase(
+            "warning-pr-sender-id-known-bot",
+            """
+            on: pull_request
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    if: github.event.pull_request.sender.id == '41898282'
+                    steps:
+                        - run: echo test
+            """,
+            ["spoofable context", "pull_request.user.login"]),
+            new RuleCase(
+            "warning-step-actor-bot",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - if: github.actor == 'dependabot[bot]'
+                          run: echo test
+            """,
+            ["spoofable context", "pull_request.user.login"]),
+            // --- Index-style context tests (zizmor parity) ---
+            new RuleCase(
+            "warning-index-actor-bot",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    if: github['actor'] == 'dependabot[bot]'
+                    steps:
+                        - run: echo test
+            """,
+            ["spoofable context", "pull_request.user.login"]),
+            new RuleCase(
+            "warning-index-actor-case-insensitive",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    if: github['ACTOR'] == 'dependabot[bot]'
+                    steps:
+                        - run: echo test
+            """,
+            ["spoofable context", "pull_request.user.login"]),
+            new RuleCase(
+            "warning-index-actor-id-known-bot",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    if: github['ACTOR_ID'] == 49699333
+                    steps:
+                        - run: echo test
+            """,
+            ["spoofable context", "pull_request.user.login"]),
+            new RuleCase(
+            "warning-mixed-index-pr-sender-login",
+            """
+            on: pull_request
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    if: github.event['pull_request'].sender['login'] == 'dependabot[bot]'
+                    steps:
+                        - run: echo test
+            """,
+            ["spoofable context", "pull_request.user.login"]),
+            new RuleCase(
+            "warning-index-pr-sender-id-known-bot",
+            """
+            on: pull_request
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    if: github['event']['pull_request']['sender']['id'] == '41898282'
+                    steps:
+                        - run: echo test
+            """,
+            ["spoofable context", "pull_request.user.login"]),
+        };
+
+        await AssertRuleCases(new BotConditionsRule(), "bot-conditions", cases);
     }
 
     private static async Task AssertRuleCases(IRule rule, string ruleId, RuleCase[] cases, LintConfig? config = null)

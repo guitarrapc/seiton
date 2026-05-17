@@ -1,0 +1,27 @@
+{
+  "schemaVersion": 1,
+  "source": "github-api-users",
+  "description": "Known GitHub Bot actors and their user IDs. Used by BotConditionsRule to detect spoofable bot actor comparisons. IDs verified via GitHub API (e.g. https://api.github.com/users/dependabot%5Bbot%5D).",
+  "botActors": [
+    {
+      "login": "dependabot[bot]",
+      "id": 49699333,
+      "description": "GitHub native Dependabot for automated dependency updates"
+    },
+    {
+      "login": "dependabot-preview[bot]",
+      "id": 27856297,
+      "description": "Legacy Dependabot (pre-GitHub acquisition, deprecated but still seen in older repos)"
+    },
+    {
+      "login": "github-actions[bot]",
+      "id": 41898282,
+      "description": "Default bot identity for GitHub Actions workflow runs"
+    },
+    {
+      "login": "renovate[bot]",
+      "id": 29139614,
+      "description": "Mend Renovate for automated dependency updates"
+    }
+  ]
+}

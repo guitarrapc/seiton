@@ -75,6 +75,8 @@ internal static class RuleCatalog
         (RuleId.ConcurrencyLimits, 55, true, static () => new ConcurrencyLimitsRule()),
         (RuleId.UnsoundCondition, 56, false, static () => new UnsoundConditionRule()),
         (RuleId.UnpinnedTools, 57, false, static () => new UnpinnedToolsRule()),
+        (RuleId.UnsoundContains, 58, false, static () => new UnsoundContainsRule()),
+        (RuleId.BotConditions, 59, false, static () => new BotConditionsRule()),
     ];
 
     // Online rules: opt-in only (disabled by default), participate in WorkflowVisitor
@@ -222,6 +224,8 @@ internal static class RuleCatalog
         RuleId.ConcurrencyLimits => "warning",
         RuleId.UnsoundCondition => "warning",
         RuleId.UnpinnedTools => "warning",
+        RuleId.UnsoundContains => "mixed",
+        RuleId.BotConditions => "warning",
         _ => throw new ArgumentOutOfRangeException(nameof(ruleId), ruleId, "No default severity defined for this rule."),
     };
 

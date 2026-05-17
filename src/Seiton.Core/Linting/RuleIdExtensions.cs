@@ -68,6 +68,8 @@ internal static class RuleIdExtensions
         RuleId.ConcurrencyLimits => "concurrency-limits",
         RuleId.UnsoundCondition => "unsound-condition",
         RuleId.UnpinnedTools => "unpinned-tools",
+        RuleId.UnsoundContains => "unsound-contains",
+        RuleId.BotConditions => "bot-conditions",
         RuleId.Syntax => "syntax",
         _ => throw new ArgumentOutOfRangeException(nameof(id), id, null),
     };

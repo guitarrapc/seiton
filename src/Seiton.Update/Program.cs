@@ -671,6 +671,26 @@ app.Add("verify-unpinned-tools", () =>
     }
 });
 
+app.Add("sync-bot-actors", () =>
+{
+    var code = BotActorsCommands.Sync(repoRoot);
+    if (code != 0)
+    {
+        Environment.ExitCode = code;
+        throw new InvalidOperationException($"sync-bot-actors failed with code {code}");
+    }
+});
+
+app.Add("verify-bot-actors", () =>
+{
+    var code = BotActorsCommands.Verify(repoRoot);
+    if (code != 0)
+    {
+        Environment.ExitCode = code;
+        throw new InvalidOperationException($"verify-bot-actors failed with code {code}");
+    }
+});
+
 app.Add("fetch-expected-keys", async () =>
 {
     var code = await ExpectedKeysCommands.Fetch(repoRoot);
@@ -1015,6 +1035,11 @@ static int RunSync(string repoRoot, string dataset)
         return UnpinnedToolsCommands.Sync(repoRoot);
     }
 
+    if (dataset is "bot-actors")
+    {
+        return BotActorsCommands.Sync(repoRoot);
+    }
+
     if (dataset is "all")
     {
         var code = WebhookCommands.Sync(repoRoot);
@@ -1078,6 +1103,12 @@ static int RunSync(string repoRoot, string dataset)
         }
 
         code = UnpinnedToolsCommands.Sync(repoRoot);
+        if (code != 0)
+        {
+            return code;
+        }
+
+        code = BotActorsCommands.Sync(repoRoot);
         if (code != 0)
         {
             return code;
@@ -1152,6 +1183,11 @@ static int RunVerify(string repoRoot, string dataset)
         return UnpinnedToolsCommands.Verify(repoRoot);
     }
 
+    if (dataset is "bot-actors")
+    {
+        return BotActorsCommands.Verify(repoRoot);
+    }
+
     if (dataset is "all")
     {
         var code = WebhookCommands.Verify(repoRoot);
@@ -1215,6 +1251,12 @@ static int RunVerify(string repoRoot, string dataset)
         }
 
         code = UnpinnedToolsCommands.Verify(repoRoot);
+        if (code != 0)
+        {
+            return code;
+        }
+
+        code = BotActorsCommands.Verify(repoRoot);
         if (code != 0)
         {
             return code;
