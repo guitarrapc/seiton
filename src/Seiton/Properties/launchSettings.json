@@ -1,0 +1,11 @@
+{
+  "profiles": {
+    "Seiton": {
+      "commandName": "Project"
+    },
+    "Rules": {
+      "commandName": "Project",
+      "commandLineArgs": "rules"
+    }
+  }
+}
