@@ -79,7 +79,7 @@ public sealed class RunnerLabelRule() : RuleBase(RuleId.RunnerLabel)
                 continue;
             }
 
-            if (TryHandleAdditionalKnownHostedLabel(job, label, labelUtf8, ref loggedAdditionalKnownHostedLabel, dedupeInfoPerJob: false))
+            if (TryHandleAdditionalKnownHostedLabel(job, label, labelUtf8, ref loggedAdditionalKnownHostedLabel, dedupeInfoPerJob: true))
             {
                 continue;
             }
@@ -455,7 +455,7 @@ public sealed class RunnerLabelRule() : RuleBase(RuleId.RunnerLabel)
 
         if (Config.Verbose && (!dedupeInfoPerJob || !loggedAdditionalKnownHostedLabel))
         {
-            var knownLabelText = Decode(Arena.GetStringSlice(labelNode));
+            var knownLabelText = System.Text.Encoding.UTF8.GetString(labelUtf8);
             AddJobInfo(job, $"label '{knownLabelText}' matched known-hosted-labels config, skipping", Arena.GetStringRange(labelNode));
             loggedAdditionalKnownHostedLabel = true;
         }

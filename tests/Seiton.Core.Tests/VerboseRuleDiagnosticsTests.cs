@@ -383,6 +383,39 @@ public sealed class VerboseRuleDiagnosticsTests
     }
 
     [Test]
+    public async Task RunnerLabelRule_StaticMultiLabel_DeduplicatesVerboseInfoPerJob()
+    {
+        var config = new LintConfig
+        {
+            Verbose = true,
+            Rules = new Dictionary<string, RuleConfig>
+            {
+                ["runner-label"] = new RuleConfig
+                {
+                    KnownHostedLabels = new ExtendableList(["my-custom-runner", "my-custom-runner-2"]),
+                },
+            },
+        };
+
+        var yaml = NormalizeYaml("""
+            on: push
+            jobs:
+                build:
+                    runs-on: [my-custom-runner, my-custom-runner-2]
+                    steps:
+                        - run: echo hello
+            """);
+
+        using var result = new LintEngine([new RunnerLabelRule()])
+            .Check(Encoding.UTF8.GetBytes(yaml), "verbose-test.yml", config);
+        var infoDiags = result.Diagnostics
+            .Where(x => x.RuleId == "runner-label" && x.Severity == DiagnosticSeverity.Info)
+            .ToArray();
+        // Both labels are additional-known, but info is deduplicated to 1 per job
+        await Assert.That(infoDiags.Length).IsEqualTo(1);
+    }
+
+    [Test]
     public async Task RunnerLabelRule_MatrixAdditionalKnownLabelArray_DeduplicatesVerboseInfoPerJob()
     {
         var config = new LintConfig
