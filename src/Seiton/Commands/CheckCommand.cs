@@ -1,4 +1,5 @@
-﻿using System.Runtime.InteropServices;
+﻿using System.Globalization;
+using System.Runtime.InteropServices;
 using Seiton.Cli;
 using Seiton.Config;
 using Seiton.Core.Linting;
@@ -472,7 +473,7 @@ internal static class CheckCommand
     internal static void WriteFileTimingSummary(VerboseLogger logger, string filePath, DocumentKind documentKind, TimeSpan elapsed, int diagnosticCount, int suppressedCount)
     {
         var kind = GetDocumentKindLabel(documentKind);
-        logger.LogFile(filePath, $"{kind}, {elapsed.TotalMilliseconds:F1} ms, {diagnosticCount} diagnostics, {suppressedCount} suppressed");
+        logger.LogFile(filePath, $"{kind}, {FormatMilliseconds(elapsed)} ms, {diagnosticCount} diagnostics, {suppressedCount} suppressed");
     }
 
     internal static string GetDocumentKindLabel(DocumentKind documentKind)
@@ -487,7 +488,12 @@ internal static class CheckCommand
 
     internal static void WriteTotalTiming(VerboseLogger logger, int fileCount, TimeSpan elapsed, string verb = "checked")
     {
-        logger.Log("total", $"{fileCount} file(s) {verb} in {elapsed.TotalMilliseconds:F1} ms");
+        logger.Log("total", $"{fileCount} file(s) {verb} in {FormatMilliseconds(elapsed)} ms");
+    }
+
+    internal static string FormatMilliseconds(TimeSpan elapsed)
+    {
+        return elapsed.TotalMilliseconds.ToString("F1", CultureInfo.InvariantCulture);
     }
 
     private static DiagnosticSeverity? ParseSeverity(string value)

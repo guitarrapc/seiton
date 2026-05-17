@@ -269,13 +269,13 @@ Expand `Config.Verbose` usage to additional rules where "why was this skipped?" 
 | Rule | Verbose info emitted | Condition |
 |---|---|---|
 | `ForbiddenUsesRule` | `'<owner/repo>' matched allow pattern, skipping forbidden-uses check` | Action is denied but allowed by allow pattern |
-| `CredentialsRule` | `<locationName> registry '<host>' is public, skipping credentials check` | Registry matches built-in or additional public registries |
 | `RunnerLabelRule` | `label '<label>' matched known-hosted-labels config, skipping` | Label matches user-configured `additionalKnownHostedLabels` (not built-in) |
 
 Not implemented (deferred):
 
 | Rule | Reason |
 |---|---|
+| `CredentialsRule` | Verbose info for public registries was removed after review because the normal no-credentials path created too much noise in large workflows |
 | `UnpinnedImageRule` | No ignore/exclude logic exists in the rule itself (patterns only in pin remediation layer) |
 | `DangerousTriggersRule` | "Not dangerous" is the normal path for most events — verbose would be extremely noisy |
 | `TemplateInjectionRule` | Safe function pattern is deeply embedded in recursion; adding verbose would be invasive and low value |
@@ -301,7 +301,7 @@ if (IsIgnored(value))
 **Design decisions**:
 - `RunnerLabelRule` only emits verbose for user-configured `additionalKnownHostedLabels`, NOT built-in labels (ubuntu-latest, etc.) to avoid noise.
 - Matrix-expanded `runs-on: ${{ matrix.AXIS }}` paths now emit the same verbose skip info for user-configured `additionalKnownHostedLabels`; review found this gap after the initial Phase 4 implementation and the follow-up fix aligned matrix and static label behavior.
-- `CredentialsRule` was refactored to split the compound `!TryGetRegistryHost || IsPublic || IsAdditional` condition to insert verbose at the right point.
+- `CredentialsRule` was briefly refactored to expose the public-registry branch for verbose diagnostics, but the review pass removed that output because it added noise on the normal success path.
 - `ForbiddenUsesRule` emits verbose inside the existing local function that already captures `this` for `AddStepWarning`/`AddJobWarning`.
 
 **Verification**:

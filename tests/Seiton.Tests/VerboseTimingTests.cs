@@ -1,4 +1,5 @@
-﻿using Seiton.Cli;
+﻿using System.Globalization;
+using Seiton.Cli;
 using Seiton.Commands;
 using Seiton.Core.Parsing;
 
@@ -149,6 +150,34 @@ public sealed class VerboseTimingTests
         await Assert.That(sw.ToString()).IsEqualTo("");
     }
 
+    [Test]
+    public async Task TimingFormatting_UsesInvariantCulture()
+    {
+        using var sw = new StringWriter();
+        var logger = VerboseLogger.Create(verbose: true, sw);
+        var previousCulture = CultureInfo.CurrentCulture;
+        var previousUiCulture = CultureInfo.CurrentUICulture;
+
+        try
+        {
+            CultureInfo.CurrentCulture = new CultureInfo("fr-FR");
+            CultureInfo.CurrentUICulture = CultureInfo.CurrentCulture;
+
+            CheckCommand.WriteFileTimingSummary(logger, "ci.yml",
+                DocumentKind.Workflow, TimeSpan.FromMilliseconds(1.2), diagnosticCount: 5, suppressedCount: 2);
+            CheckCommand.WriteTotalTiming(logger, fileCount: 3, TimeSpan.FromMilliseconds(15.7));
+        }
+        finally
+        {
+            CultureInfo.CurrentCulture = previousCulture;
+            CultureInfo.CurrentUICulture = previousUiCulture;
+        }
+
+        var lines = sw.ToString().TrimEnd().Split(Environment.NewLine);
+        await Assert.That(lines[0]).IsEqualTo("verbose: ci.yml: workflow, 1.2 ms, 5 diagnostics, 2 suppressed");
+        await Assert.That(lines[1]).IsEqualTo("verbose: total: 3 file(s) checked in 15.7 ms");
+    }
+
     // === Network timing ===
 
     [Test]
@@ -158,7 +187,7 @@ public sealed class VerboseTimingTests
         var logger = VerboseLogger.Create(verbose: true, sw);
 
         // Simulates what FixCommand will emit
-        logger.Log("network", $"resolved pins for .github/workflows/ci.yml in {320.0:F1} ms");
+        logger.Log("network", $"resolved pins for .github/workflows/ci.yml in {CheckCommand.FormatMilliseconds(TimeSpan.FromMilliseconds(320.0))} ms");
 
         await Assert.That(sw.ToString().TrimEnd())
             .IsEqualTo("verbose: network: resolved pins for .github/workflows/ci.yml in 320.0 ms");

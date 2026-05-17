@@ -141,4 +141,22 @@ public sealed class LintResultMetadataTests
         await Assert.That(invalidResult.DisabledRuleIds.ToArray())
             .IsEquivalentTo(validResult.DisabledRuleIds.ToArray());
     }
+
+    [Test]
+    public async Task Check_FatalParseError_PreservesConfigDiagnostics()
+    {
+        var engine = new LintEngine();
+        var config = new LintConfig
+        {
+            Rules = new Dictionary<string, RuleConfig>
+            {
+                ["seiton-lint-rule-008"] = new() { Enabled = false },
+            },
+        };
+
+        using var result = engine.Check(InvalidAction, "action.yml", config);
+
+        await Assert.That(result.HasFatalError).IsTrue();
+        await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("unknown rule-id 'seiton-lint-rule-008'"))).IsTrue();
+    }
 }

@@ -119,11 +119,11 @@ public sealed class VerboseRuleDiagnosticsTests
     }
 
     // ==========================================================================
-    // CredentialsRule — verbose info when public registry is matched
+    // CredentialsRule — public registries stay silent to avoid verbose noise
     // ==========================================================================
 
     [Test]
-    public async Task CredentialsRule_PublicRegistry_Verbose_EmitsInfo()
+    public async Task CredentialsRule_PublicRegistry_Verbose_EmitsNoInfo()
     {
         var config = new LintConfig
         {
@@ -146,9 +146,7 @@ public sealed class VerboseRuleDiagnosticsTests
         var infoDiags = result.Diagnostics
             .Where(x => x.RuleId == "credentials" && x.Severity == DiagnosticSeverity.Info)
             .ToArray();
-        await Assert.That(infoDiags.Length).IsEqualTo(1);
-        await Assert.That(infoDiags[0].Message).Contains("ghcr.io");
-        await Assert.That(infoDiags[0].Message).Contains("public");
+        await Assert.That(infoDiags.Length).IsEqualTo(0);
     }
 
     [Test]
@@ -179,7 +177,7 @@ public sealed class VerboseRuleDiagnosticsTests
     }
 
     [Test]
-    public async Task CredentialsRule_AdditionalPublicRegistry_Verbose_EmitsInfo()
+    public async Task CredentialsRule_AdditionalPublicRegistry_Verbose_EmitsNoInfo()
     {
         var config = new LintConfig
         {
@@ -209,9 +207,7 @@ public sealed class VerboseRuleDiagnosticsTests
         var infoDiags = result.Diagnostics
             .Where(x => x.RuleId == "credentials" && x.Severity == DiagnosticSeverity.Info)
             .ToArray();
-        await Assert.That(infoDiags.Length).IsEqualTo(1);
-        await Assert.That(infoDiags[0].Message).Contains("myregistry.example.com");
-        await Assert.That(infoDiags[0].Message).Contains("public");
+        await Assert.That(infoDiags.Length).IsEqualTo(0);
     }
 
     // ==========================================================================

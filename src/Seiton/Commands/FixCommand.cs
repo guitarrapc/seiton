@@ -193,7 +193,7 @@ internal static class FixCommand
                     if (remResult.ResolvedCount > 0 && verboseLogger.IsEnabled)
                     {
                         var netElapsed = verboseLogger.GetElapsedTime(netStart);
-                        verboseLogger.Log("network", $"resolved pins for {filePath} in {netElapsed.TotalMilliseconds:F1} ms");
+                        verboseLogger.Log("network", $"resolved pins for {filePath} in {CheckCommand.FormatMilliseconds(netElapsed)} ms");
                     }
                 }
 

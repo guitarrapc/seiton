@@ -471,7 +471,7 @@ The following table defines the normative default severity for each rule. Implem
 | `archived-uses` | warning | |
 | `insecure-commands` | warning | |
 | `overprovisioned-secrets` | warning | |
-| `forbidden-uses` | mixed | warning (policy violation), info (allow-pattern verbose) |
+| `forbidden-uses` | mixed | warning (policy violation), info (allow-pattern overrides deny, verbose only) |
 | `ref-version-mismatch` | warning | |
 | `use-trusted-publishing` | warning | |
 | `if-expr-wrapper` | warning | |

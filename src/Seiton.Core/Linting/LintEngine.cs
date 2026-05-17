@@ -183,8 +183,21 @@ public sealed class LintEngine
 
         if (parseResult.HasFatalError || (parseResult.Workflow is null && parseResult.ActionMetadata is null))
         {
+            DiagnosticList diagnostics = parseResult.Diagnostics;
+            if (normalizedRules.ConfigurationDiagnostics.Count > 0)
+            {
+                var mergedDiagnostics = new Diagnostic[parseResult.Diagnostics.Length + normalizedRules.ConfigurationDiagnostics.Count];
+                parseResult.Diagnostics.AsSpan().CopyTo(mergedDiagnostics);
+                for (var i = 0; i < normalizedRules.ConfigurationDiagnostics.Count; i++)
+                {
+                    mergedDiagnostics[parseResult.Diagnostics.Length + i] = normalizedRules.ConfigurationDiagnostics[i];
+                }
+
+                diagnostics = new DiagnosticList(mergedDiagnostics);
+            }
+
             var (parseErrorActiveRuleCount, parseErrorDisabledRuleIds) = GetRuleActivationMetadataForDocumentKind(normalizedRules.Rules, documentKind);
-            return new LintResultData(parseResult, parseResult.Diagnostics)
+            return new LintResultData(parseResult, diagnostics)
             {
                 SuppressionSummary = SuppressionSummary.Empty,
                 DocumentKind = documentKind,
