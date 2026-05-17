@@ -14104,7 +14104,7 @@ public sealed class RuleInterfaceTests
                               include-hidden-files: true
             """,
             ["upload-artifact with path", "persist-credentials: false"]),
-            // Edge case: upload-artifact before checkout (order shouldn't matter)
+            // Edge case: upload-artifact before checkout should not be reported because checkout runs later.
             new RuleCase(
             "ng-upload-before-checkout",
             """
@@ -14120,7 +14120,7 @@ public sealed class RuleInterfaceTests
                               include-hidden-files: true
                         - uses: actions/checkout@v4
             """,
-            ["upload-artifact with path '.'", "persist-credentials: false"]),
+            []),
         };
 
         await AssertRuleCases(new ArtipackedRule(), "artipacked", cases);
@@ -14238,6 +14238,37 @@ public sealed class RuleInterfaceTests
 
         await Assert.That(diagnostics.Length).IsEqualTo(1);
         await Assert.That(diagnostics[0].Severity).IsEqualTo(DiagnosticSeverity.Error);
+    }
+
+    [Test]
+    public async Task RuleRegression_ArtipackedRule_ReportsOnlyUploadsAfterUnsafeCheckout()
+    {
+        var yaml = NormalizeYaml(
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - uses: actions/upload-artifact@v4
+                          with:
+                              name: before-checkout
+                              path: .
+                              include-hidden-files: true
+                        - uses: actions/checkout@v4
+                        - uses: actions/upload-artifact@v4
+                          with:
+                              name: after-checkout
+                              path: .
+                              include-hidden-files: true
+            """);
+
+        using var result = new LintEngine([new ArtipackedRule()]).Check(Encoding.UTF8.GetBytes(yaml), "artipacked-ordered-uploads.yml");
+        var diagnostics = result.Diagnostics.Where(x => x.RuleId == "artipacked").ToArray();
+
+        await Assert.That(diagnostics.Length).IsEqualTo(1);
+        await Assert.That(diagnostics[0].Message).Contains("upload-artifact with path '.'");
+        await Assert.That(diagnostics[0].Location.StartLine).IsEqualTo(15);
     }
 
     [Test]

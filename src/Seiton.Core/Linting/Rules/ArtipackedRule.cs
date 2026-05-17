@@ -43,39 +43,34 @@ public sealed class ArtipackedRule() : RuleBase(RuleId.Artipacked)
             }
 
             var usesText = Arena.GetStringValue(actionExec.Uses);
-            if (!PopularActions.TryGet(usesText, out var actionSpec)
-                || actionSpec.Id != PopularActions.ActionId.ActionsCheckout
-                || HasPersistCredentialsFalse(actionExec, utf8Yaml))
+            if (!PopularActions.TryGet(usesText, out var actionSpec))
             {
                 continue;
             }
 
-            if (IsV6OrLater(usesText))
+            if (actionSpec.Id == PopularActions.ActionId.ActionsCheckout)
             {
-                hasUnsafeV6PlusCheckout = true;
+                if (HasPersistCredentialsFalse(actionExec, utf8Yaml))
+                {
+                    continue;
+                }
+
+                if (IsV6OrLater(usesText))
+                {
+                    hasUnsafeV6PlusCheckout = true;
+                    continue;
+                }
+
+                hasUnsafeLegacyCheckout = true;
                 continue;
             }
 
-            hasUnsafeLegacyCheckout = true;
-            break;
-        }
-
-        if (!hasUnsafeLegacyCheckout && !hasUnsafeV6PlusCheckout)
-        {
-            return;
-        }
-
-        var reportAsWarning = !hasUnsafeLegacyCheckout && hasUnsafeV6PlusCheckout;
-        for (var i = 0; i < steps.Count; i++)
-        {
-            if (steps[i].Exec is not ExecAction actionExec)
+            if (!hasUnsafeLegacyCheckout && !hasUnsafeV6PlusCheckout)
             {
                 continue;
             }
 
-            var usesText = Arena.GetStringValue(actionExec.Uses);
-            if (!PopularActions.TryGet(usesText, out var actionSpec)
-                || actionSpec.Id != PopularActions.ActionId.ActionsUploadArtifact
+            if (actionSpec.Id != PopularActions.ActionId.ActionsUploadArtifact
                 || actionExec.Inputs is null
                 || !actionExec.Inputs.Value.TryGetValue(utf8Yaml, "path"u8, out var pathNode)
                 || !IsDangerousPath(Arena.GetStringValue(pathNode))
@@ -84,6 +79,7 @@ public sealed class ArtipackedRule() : RuleBase(RuleId.Artipacked)
                 continue;
             }
 
+            var reportAsWarning = !hasUnsafeLegacyCheckout;
             var message = GetCachedMessage(Arena.GetStringSlice(pathNode), reportAsWarning, utf8Yaml);
             if (reportAsWarning)
             {
