@@ -11,7 +11,7 @@ public sealed class RuleCatalogDescriptorTests
 
         // Total rules: 52 default + 4 online = 56
         // (Syntax is not in the catalog)
-        await Assert.That(descriptors.Count).IsEqualTo(56);
+        await Assert.That(descriptors.Count).IsEqualTo(58);
     }
 
     [Test]
@@ -66,6 +66,16 @@ public sealed class RuleCatalogDescriptorTests
 
         // action-shell-is-required applies to ActionMetadata
         await Assert.That(actionShellIsRequired.SupportsAction).IsTrue();
+    }
+
+    [Test]
+    public async Task GetAllRuleDescriptors_UnpinnedToolsSupportsActionMetadata()
+    {
+        var descriptors = RuleCatalog.GetAllRuleDescriptors();
+        var unpinnedTools = descriptors.First(d => d.Id == "unpinned-tools");
+
+        await Assert.That(unpinnedTools.SupportsWorkflow).IsTrue();
+        await Assert.That(unpinnedTools.SupportsAction).IsTrue();
     }
 
     [Test]

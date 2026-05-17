@@ -1,4 +1,5 @@
 test.yaml:8:13: if: condition "${{ false }}\n" is always evaluated to true because extra characters are around ${{ }} [if-cond]
+test.yaml:8:13: if: condition uses block scalar with fenced expression; trailing newline makes it always truthy; use strip chomping (|- or >-) [unsound-condition]
 test.yaml:11:14: if: condition "${{ false }} " is always evaluated to true because extra characters are around ${{ }} [if-cond]
 test.yaml:13:14: if: condition " ${{ false }}" is always evaluated to true because extra characters are around ${{ }} [if-cond]
 test.yaml:13:14: if: condition " ${{ false }}" is not properly wrapped in ${{ }}; use a single ${{ expression }} [if-expr-wrapper]

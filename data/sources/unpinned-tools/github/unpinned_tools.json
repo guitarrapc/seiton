@@ -1,0 +1,12 @@
+{
+  "schemaVersion": 1,
+  "source": "github-action-metadata-merged",
+  "actions": [
+    {
+      "owner": "aquasecurity",
+      "repo": "setup-trivy",
+      "versionInput": "version",
+      "description": "Trivy security scanner setup"
+    }
+  ]
+}

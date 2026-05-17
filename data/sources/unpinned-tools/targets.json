@@ -1,0 +1,12 @@
+{
+  "schemaVersion": 1,
+  "targets": [
+    {
+      "actionRef": "aquasecurity/setup-trivy@main",
+      "uses": "aquasecurity/setup-trivy",
+      "rawFileName": "aquasecurity_setup-trivy.action.yaml",
+      "versionInput": "version",
+      "description": "Trivy security scanner setup"
+    }
+  ]
+}

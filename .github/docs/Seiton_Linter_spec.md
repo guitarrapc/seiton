@@ -192,6 +192,8 @@ Column definitions:
 | `ref-version-mismatch` | ✓ | — | Warn when symbolic ref/version intent mismatches resolved commit lineage expectations. |
 | `use-trusted-publishing` | ✓ | — | Warn when publishing/release flows do not use trusted publishing/OIDC-based provenance paths where expected. |
 | `if-expr-wrapper` | ✓ | ✓ (safe cases) | Warn when `if:` conditions are missing the `${{ }}` expression wrapper; auto-fix offered for single-line scalars (including quoted scalars) without existing `${{` markers. |
+| `unsound-condition` | ✓ | ✓ (safe cases) | Warn when `if:` uses block scalars (`|` / `>`) with fenced expressions `${{ ... }}` so trailing newline clip-chomping makes the condition truthy; auto-fix rewrites to strip chomping (`|-` / `>-`) when the scalar indicator is found in source. |
+| `unpinned-tools` | ✓ | — | Warn when known tool-setup actions (data-driven via `unpinned_tools.json`) use an unpinned tool version (`with.version` missing, `latest`, or fenced expression). Applies to workflow steps and composite action steps. |
 | `concurrency-limits` | ✗ | — | Warn when workflows or jobs lack `concurrency` settings with `cancel-in-progress`. Skips reusable-only (`on: workflow_call`) workflows and workflow-call jobs. |
 
 Rule set compatibility policy:
@@ -475,6 +477,8 @@ The following table defines the normative default severity for each rule. Implem
 | `ref-version-mismatch` | warning | |
 | `use-trusted-publishing` | warning | |
 | `if-expr-wrapper` | warning | |
+| `unsound-condition` | warning | |
+| `unpinned-tools` | warning | |
 | `concurrency-limits` | warning | opt-in |
 
 ### 5.8 Rule-Specific Configuration
@@ -1331,6 +1335,8 @@ The following table classifies each default rule by fix feasibility.
 | `workflow-call-input-default` | ✗ Not auto-fixable | Default value corrections require understanding of caller contracts and intended type semantics. |
 | `use-trusted-publishing` | ✗ Not auto-fixable | Trusted publishing migration depends on registry ecosystem and release architecture. |
 | `if-expr-wrapper` | ✓ Auto-fixable (safe cases) | Wraps single-line `if:` expressions in `${{ }}`, including quoted scalars. Fix is suppressed for block scalars (structural newline) and values already containing `${{` markers (would nest). |
+| `unsound-condition` | ✓ Auto-fixable (safe cases) | Rewrites block-scalar indicators from clip chomping (`|` / `>`) to strip chomping (`|-` / `>-`) when the indicator can be located in source. |
+| `unpinned-tools` | ✗ Not auto-fixable | Required version value depends on the intended tool release and repository compatibility policy. |
 | `concurrency-limits` | ✗ Not auto-fixable | Concurrency group naming and cancel-in-progress policy depend on workflow semantics and user intent. |
 
 ### 8.5 Fix Safety Policy
@@ -1721,4 +1727,6 @@ This subsection follows the same operator-facing style as §4.5 and is non-norma
 | `ref-version-mismatch` | Detects inconsistency between version intent and resolved ref/sha provenance. | Align symbolic version intent and pinned commit lineage, or pin directly with updated provenance annotation. | ✗ | Tag/release metadata can be manipulated upstream; combine with signed provenance verification where possible. |
 | `use-trusted-publishing` | Detects release/publish jobs that bypass trusted publishing controls (OIDC/provenance). | Adopt trusted publishing path and disable long-lived publishing secrets where ecosystem support exists. | ✗ | Trusted publishing coverage varies by registry; keep fallback controls and explicit exception governance. |
 | `if-expr-wrapper` | Detects `if:` conditions missing the `${{ }}` expression wrapper. While GitHub Actions auto-applies the wrapper at runtime, explicit wrapping improves readability and avoids confusion. | Wrap bare expressions in `${{ }}`. | ✓ (safe cases) | Auto-fix for single-line scalars, including quoted single-line scalars, when the value does not already contain `${{` markers. Block scalars and values containing `${{` emit warning without fix. |
+| `unsound-condition` | Detects block-scalar `if:` values where a fenced expression `${{ ... }}` becomes truthy because YAML clip chomping preserves a trailing newline. | Use strip chomping (`|-` / `>-`) or convert the condition to a single-line scalar. | ✓ (safe cases) | Applies to workflow jobs, workflow steps, and composite action steps. Severity stays warning because `if-cond` already reports the same runtime hazard from a correctness perspective. |
+| `unpinned-tools` | Detects known tool-setup actions whose `with.version` input is omitted, set to `latest`, or provided dynamically. | Pin `with.version` to a concrete tool version supported by the repository. | ✗ | Known actions are data-driven via `data/sources/unpinned-tools/unpinned_tools.json` and code-generated into `UnpinnedToolsActions.g.cs`. Current set covers `aquasecurity/setup-trivy`; matching is case-insensitive on `owner/repo` and works in composite action steps too. |
 | `concurrency-limits` | Detects workflows or jobs that lack `concurrency` settings with explicit `cancel-in-progress`. Without concurrency limits, parallel runs can waste resources and cause race conditions. | Add `concurrency` block with `group` and `cancel-in-progress` at workflow or job level. | ✗ | Skips reusable-only workflows (`on: workflow_call` only) and workflow-call jobs (`uses:`). When workflow-level concurrency is set, job-level checks are suppressed. |

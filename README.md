@@ -119,6 +119,7 @@ Seiton includes **50+ rules** across four categories. Each rule has a dedicated 
 | [env-var](docs/rules.md#env-var) | ✓ | ✗ | Risky environment variable patterns |
 | [if-cond](docs/rules.md#if-cond) | ✓ | ✗ | Constant or unsound `if` conditions |
 | [fake-ternary](docs/rules.md#fake-ternary) | ✓ | ✗ | `cond && a \|\| b` fake ternary idioms |
+| [unsound-condition](docs/rules.md#unsound-condition) | ✓ | △ | Block-scalar `if:` conditions that become truthy because of trailing newline |
 | [concurrency-limits](docs/rules.md#concurrency-limits) | ✗ | ✗ | Missing concurrency settings with `cancel-in-progress` |
 | [deprecated-commands](docs/rules.md#deprecated-commands) | ✓ | ✗ | Deprecated workflow commands |
 | [dispatch-inputs](docs/rules.md#dispatch-inputs) | ✓ | ✗ | Invalid `workflow_dispatch` input definitions |
@@ -162,6 +163,7 @@ Seiton includes **50+ rules** across four categories. Each rule has a dedicated 
 |---|---|---|---|
 | [unpinned-uses](docs/rules.md#unpinned-uses) | ✓ | △ | Actions not pinned to commit SHA |
 | [unpinned-image](docs/rules.md#unpinned-image) | ✓ | △ | Images not pinned by digest |
+| [unpinned-tools](docs/rules.md#unpinned-tools) | ✓ | ✗ | Tool setup actions with unpinned external tool version |
 | [archived-uses](docs/rules.md#archived-uses) | ✓ | ✗ | Archived repository references |
 | [ref-version-mismatch](docs/rules.md#ref-version-mismatch) | ✓ | ✗ | Version annotation mismatch |
 | [forbidden-uses](docs/rules.md#forbidden-uses) | ✓ | ✗ | Policy-denied action references |

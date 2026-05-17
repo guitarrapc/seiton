@@ -132,7 +132,7 @@
 | §4.1 Pass Hooks (8 コールバック) | ✅ `IPass` インターフェースに全 8 フック |
 | §4.2 Traversal Order | ✅ `WorkflowVisitor.Visit` / `VisitActionMetadata` |
 | §4.3 Rule Contract | ✅ `IRule` : `IPass` + `Id` + `Name` + `SetConfig` + `GetDiagnostics` |
-| §4.4 Normative Rule Catalog (49 + 4) | ✅ `RuleCatalog` に全 53 ルール登録 |
+| §4.4 Normative Rule Catalog (54 + 4) | ✅ `RuleCatalog` に全 58 ルール登録 |
 | §5 Exclusion/Suppression | ✅ `LintEngine` 内で inline suppression + file exclusion 処理 |
 
 ### 4.3 欠落: なし
@@ -271,6 +271,6 @@ Seiton.Core は以下の設計目標をすべて達成している。
 3. **NativeAOT**: リフレクションゼロ、`PublishAot=true` 実証済み
 4. **データ志向**: AST は振る舞いのないデータコンテナ、式 AST はフラット struct 配列
 5. **YAML 差し替え**: `IYamlStreamReader` アダプタ層で VYaml を封じ込め（`LintConfigYamlParser` の 1 箇所のみ漏出、低リスク）
-6. **仕様準拠**: Parser spec 全ノード + Linter spec 全 53 ルールが実装済み
+6. **仕様準拠**: Parser spec 全ノード + Linter spec 全 58 ルールが実装済み
 
 リリースに向けた最終調整に進んで問題ない。

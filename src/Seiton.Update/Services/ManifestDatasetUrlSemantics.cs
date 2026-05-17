@@ -14,6 +14,7 @@ internal static class ManifestDatasetUrlSemantics
         switch (dataset)
         {
             case "popular-actions":
+            case "unpinned-tools":
                 return;
             case "webhooks":
                 RequireCount(urls, 2, dataset);

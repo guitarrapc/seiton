@@ -58,6 +58,8 @@ public enum RuleId
     OutdatedActionRunner,
     IfExprWrapper,
     ConcurrencyLimits,
+    UnsoundCondition,
+    UnpinnedTools,
 
     // Composite / internal-only (not in RuleCatalog)
     Syntax,
