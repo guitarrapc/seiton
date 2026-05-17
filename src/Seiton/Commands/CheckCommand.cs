@@ -396,7 +396,14 @@ internal static class CheckCommand
 
         var sb = new System.Text.StringBuilder();
         sb.Append(summary.TotalSuppressed);
-        sb.Append(" diagnostic(s) (");
+        sb.Append(" diagnostic(s)");
+        if (sorted.Count == 0)
+        {
+            logger.Log("suppressed", sb.ToString());
+            return;
+        }
+
+        sb.Append(" (");
         for (var i = 0; i < sorted.Count; i++)
         {
             if (i > 0) sb.Append(", ");

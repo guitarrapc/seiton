@@ -193,6 +193,7 @@ public sealed class LintEngine
     private LintResultData CheckCore(byte[] utf8Yaml, string filePath, LintConfig? config, ParseResultData parseResult, AstArena? arena, DocumentKind documentKind, bool[]? skipJobs = null)
     {
         var normalizedRules = NormalizeRules(config?.Rules, filePath);
+        _disabledRuleIds.Clear();
 
         if (parseResult.HasFatalError || (parseResult.Workflow is null && parseResult.ActionMetadata is null))
         {
@@ -241,6 +242,9 @@ public sealed class LintEngine
 
         if (rules.Count == 0 && _onlineRules.Count == 0)
         {
+            // Rule activation metadata is relative to the engine's installed rule set.
+            // A custom engine constructed with no rules therefore reports zero active/
+            // disabled rules even if config mentions rule ids that are unknown here.
             return BuildLintResult(parseResult, arena, documentKind, 0, 0, []);
         }
 
@@ -257,7 +261,6 @@ public sealed class LintEngine
         var effectiveConfig = _effectiveConfig;
 
         _activeRules.Clear();
-        _disabledRuleIds.Clear();
         for (var i = 0; i < rules.Count; i++)
         {
             var rule = rules[i];
@@ -417,8 +420,6 @@ public sealed class LintEngine
         IReadOnlyDictionary<string, RuleConfig>? normalizedRuleConfig,
         DocumentKind documentKind)
     {
-        _disabledRuleIds.Clear();
-
         var activeRuleCount = 0;
         for (var i = 0; i < rules.Count; i++)
         {

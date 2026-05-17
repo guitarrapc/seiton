@@ -272,7 +272,7 @@ internal static class FixCommand
                     currentHandle?.Dispose();
                 }
 
-                if (verboseLogger.IsEnabled)
+                if (verboseLogger.IsEnabled && appliedFixes > 0)
                 {
                     verboseLogger.LogFile(filePath, $"applied {appliedFixes} fix(es)");
                 }
@@ -308,8 +308,9 @@ internal static class FixCommand
 
             if (totalSuppressed > 0)
             {
+                var suppressionCounts = suppressedByRule ?? EmptySuppressedByRule;
                 CheckCommand.WriteSuppressionSummary(verboseLogger,
-                    CheckCommand.CreateAggregatedSuppressionSummary(totalSuppressed, suppressedByRule!));
+                    CheckCommand.CreateAggregatedSuppressionSummary(totalSuppressed, suppressionCounts));
             }
 
             CheckCommand.WriteSummary(errorWriter, allDiagnostics, resolvedFiles.Length, verbose, showExitHint: minSeverity is null);
@@ -358,4 +359,7 @@ internal static class FixCommand
         var imageSource = enableImageNetwork ? "--enable-image-network" : imagesConfig?.HasEnableNetwork == true ? "config" : "default";
         logger.Log("config", $"fix.images.enable-network={(effectiveImage ? "true" : "false")} (source: {imageSource})");
     }
+
+    private static readonly IReadOnlyDictionary<string, int> EmptySuppressedByRule =
+        new Dictionary<string, int>(StringComparer.Ordinal);
 }

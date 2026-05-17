@@ -76,6 +76,19 @@ public sealed class VerbosePhase1Tests
     }
 
     [Test]
+    public async Task WriteSuppressionSummary_WithoutPerRuleCounts_EmitsTotalOnly()
+    {
+        using var sw = new StringWriter();
+        var logger = VerboseLogger.Create(verbose: true, sw);
+        var summary = CheckCommand.CreateAggregatedSuppressionSummary(3, new Dictionary<string, int>(StringComparer.Ordinal));
+
+        CheckCommand.WriteSuppressionSummary(logger, summary);
+
+        await Assert.That(sw.ToString().TrimEnd())
+            .IsEqualTo("verbose: suppressed: 3 diagnostic(s)");
+    }
+
+    [Test]
     public async Task AccumulateSuppression_ZeroTotalWithPerRuleCounts_UsesSummedCounts()
     {
         var summary = new SuppressionSummary(
