@@ -17,7 +17,16 @@ internal static class BotActors
             || value.SequenceEqual("29139614"u8);
     }
 
-    /// <summary>Returns true if the value is a known bot login name (case-insensitive).</summary>
+    /// <summary>Returns true if the value contains any known bot user ID as a byte substring.</summary>
+    internal static bool ContainsKnownBotId(ReadOnlySpan<byte> value)
+    {
+        return value.IndexOf("27856297"u8) >= 0
+            || value.IndexOf("49699333"u8) >= 0
+            || value.IndexOf("41898282"u8) >= 0
+            || value.IndexOf("29139614"u8) >= 0;
+    }
+
+    /// <summary>Returns true if the value exactly matches a known bot login name.</summary>
     internal static bool IsKnownBotLogin(ReadOnlySpan<byte> value)
     {
         return value.SequenceEqual("dependabot-preview[bot]"u8)

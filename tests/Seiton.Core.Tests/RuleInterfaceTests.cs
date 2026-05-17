@@ -13598,7 +13598,7 @@ public sealed class RuleInterfaceTests
                     steps:
                         - run: echo test
             """,
-            ["spoofable context", "actor_id"]),
+            ["spoofable context", "pull_request.user.login"]),
             new RuleCase(
             "warning-actor-id-known-bot",
             """
@@ -13610,7 +13610,43 @@ public sealed class RuleInterfaceTests
                     steps:
                         - run: echo test
             """,
-            ["spoofable context", "actor_id"]),
+            ["spoofable context", "pull_request.user.login"]),
+            new RuleCase(
+            "warning-actor-id-known-bot-number",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    if: github.actor_id == 49699333
+                    steps:
+                        - run: echo test
+            """,
+            ["spoofable context", "pull_request.user.login"]),
+            new RuleCase(
+            "ok-actor-id-unknown",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    if: github.actor_id == '123456789'
+                    steps:
+                        - run: echo test
+            """,
+            []),
+            new RuleCase(
+            "warning-actor-github-actions-bot",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    if: github.actor == 'github-actions[bot]'
+                    steps:
+                        - run: echo test
+            """,
+            ["spoofable context", "pull_request.user.login"]),
             new RuleCase(
             "warning-triggering-actor-renovate",
             """
@@ -13622,7 +13658,7 @@ public sealed class RuleInterfaceTests
                     steps:
                         - run: echo test
             """,
-            ["spoofable context", "actor_id"]),
+            ["spoofable context", "pull_request.user.login"]),
             new RuleCase(
             "warning-pr-sender-login",
             """
@@ -13634,7 +13670,7 @@ public sealed class RuleInterfaceTests
                     steps:
                         - run: echo test
             """,
-            ["spoofable context", "actor_id"]),
+            ["spoofable context", "pull_request.user.login"]),
             new RuleCase(
             "ok-event-name-push",
             """
@@ -13660,6 +13696,18 @@ public sealed class RuleInterfaceTests
             """,
             []),
             new RuleCase(
+            "warning-pr-sender-id-known-bot",
+            """
+            on: pull_request
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    if: github.event.pull_request.sender.id == '41898282'
+                    steps:
+                        - run: echo test
+            """,
+            ["spoofable context", "pull_request.user.login"]),
+            new RuleCase(
             "warning-step-actor-bot",
             """
             on: push
@@ -13670,7 +13718,7 @@ public sealed class RuleInterfaceTests
                         - if: github.actor == 'dependabot[bot]'
                           run: echo test
             """,
-            ["spoofable context", "actor_id"]),
+            ["spoofable context", "pull_request.user.login"]),
         };
 
         await AssertRuleCases(new BotConditionsRule(), "bot-conditions", cases);

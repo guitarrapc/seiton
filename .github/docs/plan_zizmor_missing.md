@@ -257,11 +257,11 @@ inputs.*
 - **検査ノード**: job.if, step.if の式 AST
 - **判定ロジック**:
   1. if 条件の式をパース
-  2. AST を再帰走査し、spoofable コンテキスト（`github.actor`, `github.triggering_actor`, `github.event.pull_request.sender.login`）との等値比較を検出
-  3. 比較対象が `[bot]` サフィックスを持つ文字列リテラル、または既知の bot actor ID（`49699333` 等）の場合に検出
-  4. actor ID コンテキスト（`github.actor_id`, `github.event.pull_request.sender.id`）と既知 bot ID の比較も検出
+  2. AST を再帰走査し、spoofable actor-name コンテキスト（`github.actor`, `github.triggering_actor`, `github.event.pull_request.sender.login`）または spoofable actor-ID コンテキスト（`github.actor_id`, `github.event.pull_request.sender.id`）との等値比較を検出
+  3. actor-name コンテキスト側は `[bot]` サフィックスを持つ文字列リテラル、actor-ID コンテキスト側は `BotActors.g.cs` の既知 bot ID と一致するリテラルを検出
 - **パフォーマンス影響**: 中。式パースは `unsound-contains` と共有可能
 - **初期実装の簡略化**: zizmor の支配関係（domination）分析は省略。bot actor チェックの存在自体を warning として報告。confidence 区別は将来拡張
+- **データ provenance**: 既知 bot ID は hand-authored `bot-actors` データセットから `BotActors.g.cs` を生成し、ルールはその generated lookup を使って判定する
 
 **spoofable コンテキスト**:
 ```
@@ -270,18 +270,16 @@ github.triggering_actor
 github.event.pull_request.sender.login
 ```
 
-**spoofable actor ID コンテキスト**:
+**spoofable actor-ID コンテキスト**:
 ```
 github.actor_id
 github.event.pull_request.sender.id
 ```
 
-**既知 bot actor ID**（zizmor 準拠）:
+**推奨コンテキスト**:
 ```
-29110       (dependabot[bot] integration ID)
-49699333    (dependabot[bot])
-27856297    (dependabot-preview[bot])
-29139614    (renovate[bot])
+github.event.pull_request.user.login
+github.event.pull_request.user.id
 ```
 
 **テストケース**:
@@ -294,6 +292,8 @@ github.event.pull_request.sender.id
 | 4 | `github.event.pull_request.sender.login == 'dependabot[bot]'` | warning |
 | 5 | `github.event_name == 'push'`（bot 関連なし） | OK |
 | 6 | `github.actor == 'my-user'`（bot でない） | OK |
+| 7 | `github.event.pull_request.sender.id == '41898282'` | warning |
+| 8 | `github.actor_id == '123456789'` | OK |
 
 #### Phase 2 完了条件
 
@@ -308,9 +308,9 @@ github.event.pull_request.sender.id
 
 **実装内容**:
 - `UnsoundContainsRule.cs`: `contains('literal', context)` パターンを検出。式 AST を再帰走査し、第1引数が文字列リテラル かつ 第2引数が user-controllable コンテキストの場合に error、それ以外のコンテキストなら info を報告
-- `BotConditionsRule.cs`: `github.actor == 'bot[bot]'` 等のスプーフ可能な比較を検出。`==`/`!=` 演算子で spoofable コンテキストと `[bot]` サフィックスリテラル、または actor_id コンテキストと既知 bot ID の比較をwarning
+- `BotConditionsRule.cs`: `github.actor == 'bot[bot]'` 等のスプーフ可能な比較を検出。`==`/`!=` 演算子で spoofable actor-name コンテキストと `[bot]` サフィックスリテラル、または spoofable actor-ID コンテキストと generated `BotActors` に含まれる既知 bot ID の比較を warning
 - 共通の式走査基盤: 既存の `ExpressionParser.Parse()` + `ExpressionNode[]` flat array を直接ループで走査。`ExpressionVisitor` は使わず、flat array の直接イテレーションで allocation-free に実装
-- パフォーマンス最適化: 両ルールに **byte-level pre-filter** を追加。条件文字列に "contains" / "[bot]" / 既知bot ID が含まれない場合、式パースをスキップ
+- パフォーマンス最適化: 両ルールに **byte-level pre-filter** を追加。条件文字列に "contains" / "[bot]" / actor-id 系キーが含まれない場合、式パースをスキップ
 
 **ベンチマーク結果** (CoreLintBenchmark, 10 iterations):
 

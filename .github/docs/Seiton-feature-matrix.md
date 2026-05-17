@@ -248,7 +248,7 @@ zizmor 監査ID別対応表（実装確認ベース）:
 | `anonymous-definition` | ❌ | 専用監査なし |
 | `archived-uses` | 🟡 | `archived-uses`（静的判定の初期実装） |
 | `artipacked` | ❌ | 専用監査なし |
-| `bot-conditions` | ❌ | 専用監査なし |
+| `bot-conditions` | ✅ | `bot-conditions` |
 | `cache-poisoning` | ✅ | `cache-poisoning` |
 | `concurrency-limits` | ✅ | `concurrency-limits` — ワークフロー/ジョブレベルの concurrency 設定と cancel-in-progress を検査 |
 | `dangerous-triggers` | ✅ | `dangerous-triggers` |
@@ -279,10 +279,10 @@ zizmor 監査ID別対応表（実装確認ベース）:
 | `unpinned-uses` | ✅ | `unpinned-uses` |
 | `unredacted-secrets` | ✅ | `unredacted-secrets` |
 | `unsound-condition` | ✅ | `unsound-condition` |
-| `unsound-contains` | ❌ | 専用監査なし |
+| `unsound-contains` | ✅ | `unsound-contains` |
 | `use-trusted-publishing` | 🟡 | `use-trusted-publishing`（publish + `id-token: write` 判定の初期実装） |
 
-対応率: 27/36（75%）— 直接20 + 部分7。残9件未対応。
+対応率: 29/36（81%）— 残7件未対応。
 
 ### 6.4 pinact / dockerfile-pin / frizbee（ルールエンジンではなく変換系）
 
@@ -301,10 +301,8 @@ zizmor 監査ID別対応表（実装確認ベース）:
 1. Dockerfile / compose / 任意YAML image pin 拡張
 
 2. zizmor 残差分（未対応 9件）
-- `unsound-contains` — contains() の健全性検査
 - `github-env` — GITHUB_ENV への危険な書き込み検出
 - `artipacked` — アーティファクトクレデンシャル漏洩
-- `bot-conditions` — スプーフ可能な bot actor チェック
 - `anonymous-definition` — name 未定義のワークフロー/アクション
 - `obfuscation` — 難読化された Actions 機能使用
 - `misfeature` — 非推奨/危険な Actions 機能使用

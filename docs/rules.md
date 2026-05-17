@@ -64,6 +64,8 @@ if-expr-wrapper                          yes       local    warning    yes   bot
 concurrency-limits                       no        local    warning    no    workflow   opt-in (not configured)
 unsound-condition                        yes       local    warning    yes   both       default
 unpinned-tools                           yes       local    warning    no    both       default
+unsound-contains                         yes       local    mixed      no    workflow   default
+bot-conditions                           yes       local    warning    no    workflow   default
 known-vulnerable-actions                 no        online   error      no    workflow   opt-in (not configured)
 impostor-commit                          no        online   error      no    workflow   opt-in (not configured)
 ref-confusion                            no        online   error      no    workflow   opt-in (not configured)
@@ -125,6 +127,8 @@ Online rules use the GitHub API. Set GITHUB_TOKEN (or SEITON_GITHUB_TOKEN) to av
 - [cache-poisoning](#cache-poisoning)
 - [self-hosted-runner](#self-hosted-runner)
 - [insecure-commands](#insecure-commands)
+- [unsound-contains](#unsound-contains)
+- [bot-conditions](#bot-conditions)
 
 ### Permissions & Secrets
 
@@ -921,6 +925,76 @@ jobs:
 ```
 
 > **Note:** Reusable-only workflows (`on: workflow_call`) and workflow-call jobs (`uses:`) are skipped. When workflow-level concurrency is set, job-level checks are suppressed.
+
+---
+
+### `unsound-contains`
+
+| Default | Network | Auto-fix |
+|---|---|---|
+| ✓ | — | ✗ |
+
+Detects `contains()` conditions that treat a plain string like a membership list, allowing substring matches to bypass the intended check.
+
+**Example trigger:**
+
+```yaml
+jobs:
+  deploy:
+    if: contains('refs/heads/main refs/heads/develop', github.ref)
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo ng
+```
+
+**Remediation:** Use an actual array via `fromJSON()` or explicit equality checks:
+
+```yaml
+jobs:
+  deploy:
+    if: contains(fromJSON('["refs/heads/main","refs/heads/develop"]'), github.ref)
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo ok
+```
+
+> **Severity note:** This rule emits an error when the second argument is user-controllable (for example `github.ref`, `github.actor`, `env.*`, `inputs.*`) and an info diagnostic for other context references.
+
+---
+
+### `bot-conditions`
+
+| Default | Network | Auto-fix |
+|---|---|---|
+| ✓ | — | ✗ |
+
+Warns when a workflow gates privileged behavior on spoofable bot actor contexts such as `github.actor`, `github.triggering_actor`, `github.event.pull_request.sender.login`, `github.actor_id`, or `github.event.pull_request.sender.id`.
+
+**Example trigger:**
+
+```yaml
+on: pull_request_target
+jobs:
+  automerge:
+    if: github.actor == 'dependabot[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - run: gh pr merge --auto --merge "$PR_URL"
+```
+
+**Remediation:** Prefer a context tied to the PR author or other original trigger actor:
+
+```yaml
+on: pull_request_target
+jobs:
+  automerge:
+    if: github.event.pull_request.user.login == 'dependabot[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - run: gh pr merge --auto --merge "$PR_URL"
+```
+
+  > **Note:** Known bot ID comparisons such as `github.actor_id == '49699333'` are also flagged. Prefer the corresponding trigger-author context like `github.event.pull_request.user.id`.
 
 ---
 

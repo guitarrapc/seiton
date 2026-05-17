@@ -41,8 +41,28 @@ internal sealed class BotActorsCSharpGenerator
         sb.AppendLine("    }");
         sb.AppendLine();
 
-        // IsKnownBotLogin — checks if value matches a known bot login (case-insensitive)
-        sb.AppendLine("    /// <summary>Returns true if the value is a known bot login name (case-insensitive).</summary>");
+        // ContainsKnownBotId — checks if a larger span contains any known bot user ID
+        sb.AppendLine("    /// <summary>Returns true if the value contains any known bot user ID as a byte substring.</summary>");
+        sb.AppendLine("    internal static bool ContainsKnownBotId(ReadOnlySpan<byte> value)");
+        sb.AppendLine("    {");
+        if (actors.Length == 0)
+        {
+            sb.AppendLine("        return false;");
+        }
+        else
+        {
+            for (var i = 0; i < actors.Length; i++)
+            {
+                var op = i == 0 ? "return " : "    || ";
+                var suffix = i == actors.Length - 1 ? ";" : string.Empty;
+                sb.AppendLine($"        {op}value.IndexOf(\"{actors[i].Id}\"u8) >= 0{suffix}");
+            }
+        }
+        sb.AppendLine("    }");
+        sb.AppendLine();
+
+        // IsKnownBotLogin — checks if value matches a known bot login exactly
+        sb.AppendLine("    /// <summary>Returns true if the value exactly matches a known bot login name.</summary>");
         sb.AppendLine("    internal static bool IsKnownBotLogin(ReadOnlySpan<byte> value)");
         sb.AppendLine("    {");
         if (actors.Length == 0)

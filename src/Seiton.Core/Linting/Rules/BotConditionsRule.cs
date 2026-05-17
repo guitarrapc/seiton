@@ -7,24 +7,23 @@ namespace Seiton.Core.Linting.Rules;
 
 /// <summary>
 /// Detects spoofable bot actor comparisons like <c>github.actor == 'dependabot[bot]'</c>.
-/// The actor name can be spoofed; use actor_id for reliable bot detection.
+/// The actor name can be spoofed; prefer a trigger-author context such as <c>github.event.pull_request.user.login</c>.
 /// </summary>
 public sealed class BotConditionsRule() : RuleBase(RuleId.BotConditions)
 {
-    private const string WarningMessage = "bot actor check uses spoofable context; use actor_id with known bot IDs instead";
+    private const string WarningMessage = "bot actor check uses spoofable context; prefer github.event.pull_request.user.login, github.event.pull_request.user.id, or another trigger-author context";
     // Spoofable contexts
     private static ReadOnlySpan<byte> Actor => "actor"u8;
     private static ReadOnlySpan<byte> TriggeringActor => "triggering_actor"u8;
+    private static ReadOnlySpan<byte> ActorId => "actor_id"u8;
 
     // Spoofable deep contexts: github.event.pull_request.sender.login
     private static ReadOnlySpan<byte> Event => "event"u8;
     private static ReadOnlySpan<byte> PullRequest => "pull_request"u8;
     private static ReadOnlySpan<byte> Sender => "sender"u8;
+    private static ReadOnlySpan<byte> SenderId => "sender.id"u8;
     private static ReadOnlySpan<byte> Login => "login"u8;
-
-    // Actor ID contexts (also detectable as they compare against known bot IDs)
-    private static ReadOnlySpan<byte> ActorId => "actor_id"u8;
-    private static ReadOnlySpan<byte> SenderId => "id"u8;
+    private static ReadOnlySpan<byte> UserId => "id"u8;
 
     // Known bot suffixes
     private static ReadOnlySpan<byte> BotSuffix => "[bot]"u8;
@@ -61,9 +60,13 @@ public sealed class BotConditionsRule() : RuleBase(RuleId.BotConditions)
             return;
         }
 
-        // Fast pre-filter: skip parsing unless condition contains bot-related patterns
-        // Check for "[bot]" suffix (covers actor name comparisons) or digit sequences (covers actor_id comparisons)
-        if (!ContainsAsciiIgnoreCase(raw, BotSuffix) && !ContainsDigitSequence(raw))
+        // Fast pre-filter: skip parsing unless condition contains a bot login literal,
+        // or an actor ID context together with a known bot ID.
+        var hasBotLoginLiteral = ContainsAsciiIgnoreCase(raw, BotSuffix);
+        var hasBotActorIdCheck = BotActors.ContainsKnownBotId(raw) &&
+            (ContainsAsciiIgnoreCase(raw, ActorId) || ContainsAsciiIgnoreCase(raw, SenderId));
+
+        if (!hasBotLoginLiteral && !hasBotActorIdCheck)
         {
             return;
         }
@@ -117,7 +120,6 @@ public sealed class BotConditionsRule() : RuleBase(RuleId.BotConditions)
             }
 
             // Check pattern: spoofable_context == 'bot_name' or 'bot_name' == spoofable_context
-            // Also: actor_id_context == 'known_bot_id' or 'known_bot_id' == actor_id_context
             if (IsBotComparison(leftId, rightId, nodes, exprBytes) ||
                 IsBotComparison(rightId, leftId, nodes, exprBytes))
             {
@@ -146,10 +148,8 @@ public sealed class BotConditionsRule() : RuleBase(RuleId.BotConditions)
             return false;
         }
 
-        // Check if the context is a spoofable actor context
         if (IsSpoofableActorContext(contextNodeId, nodes, exprBytes))
         {
-            // The literal must have [bot] suffix
             if (literalNode.Kind == ExpressionNodeKind.StringLiteral)
             {
                 var literalSpan = GetStringLiteralContent(literalNode.Token, exprBytes);
@@ -159,17 +159,17 @@ public sealed class BotConditionsRule() : RuleBase(RuleId.BotConditions)
             return false;
         }
 
-        // Check if the context is an actor_id context
-        if (IsActorIdContext(contextNodeId, nodes, exprBytes))
+        if (!IsSpoofableActorIdContext(contextNodeId, nodes, exprBytes))
         {
-            // The literal must be a known bot ID
-            var literalSpan = literalNode.Kind == ExpressionNodeKind.StringLiteral
-                ? GetStringLiteralContent(literalNode.Token, exprBytes)
-                : literalNode.Token.AsSpan(exprBytes);
-            return IsKnownBotId(literalSpan);
+            return false;
         }
 
-        return false;
+        return literalNode.Kind switch
+        {
+            ExpressionNodeKind.StringLiteral => BotActors.IsKnownBotId(GetStringLiteralContent(literalNode.Token, exprBytes)),
+            ExpressionNodeKind.NumberLiteral => BotActors.IsKnownBotId(literalNode.Token.AsSpan(exprBytes)),
+            _ => false,
+        };
     }
 
     private static bool IsSpoofableActorContext(int nodeId, ExpressionNode[] nodes, ReadOnlySpan<byte> exprBytes)
@@ -242,7 +242,7 @@ public sealed class BotConditionsRule() : RuleBase(RuleId.BotConditions)
         return false;
     }
 
-    private static bool IsActorIdContext(int nodeId, ExpressionNode[] nodes, ReadOnlySpan<byte> exprBytes)
+    private static bool IsSpoofableActorIdContext(int nodeId, ExpressionNode[] nodes, ReadOnlySpan<byte> exprBytes)
     {
         if (nodeId < 0 || nodeId >= nodes.Length)
         {
@@ -255,7 +255,6 @@ public sealed class BotConditionsRule() : RuleBase(RuleId.BotConditions)
             return false;
         }
 
-        // Walk the member access chain
         var current = nodeId;
         Span<int> memberStack = stackalloc int[8];
         var depth = 0;
@@ -277,25 +276,17 @@ public sealed class BotConditionsRule() : RuleBase(RuleId.BotConditions)
         }
 
         var rootToken = nodes[current].Token.AsSpan(exprBytes);
-
-        if (!EqualsAsciiIgnoreCase(rootToken, "github"u8))
+        if (!EqualsAsciiIgnoreCase(rootToken, "github"u8) || depth < 1)
         {
             return false;
         }
 
-        if (depth < 1)
-        {
-            return false;
-        }
-
-        // github.actor_id
         var prop1 = nodes[memberStack[depth - 1]].Token.AsSpan(exprBytes);
         if (depth == 1)
         {
             return EqualsAsciiIgnoreCase(prop1, ActorId);
         }
 
-        // github.event.pull_request.sender.id (depth=4)
         if (depth == 4)
         {
             var prop2 = nodes[memberStack[depth - 2]].Token.AsSpan(exprBytes);
@@ -305,7 +296,7 @@ public sealed class BotConditionsRule() : RuleBase(RuleId.BotConditions)
             return EqualsAsciiIgnoreCase(prop1, Event) &&
                    EqualsAsciiIgnoreCase(prop2, PullRequest) &&
                    EqualsAsciiIgnoreCase(prop3, Sender) &&
-                   EqualsAsciiIgnoreCase(prop4, SenderId);
+                   EqualsAsciiIgnoreCase(prop4, UserId);
         }
 
         return false;
@@ -334,31 +325,4 @@ public sealed class BotConditionsRule() : RuleBase(RuleId.BotConditions)
         return value[^BotSuffix.Length..].SequenceEqual(BotSuffix);
     }
 
-    private static bool IsKnownBotId(ReadOnlySpan<byte> value)
-    {
-        return BotActors.IsKnownBotId(value);
-    }
-
-    /// <summary>Returns true if the span contains a sequence of 5+ consecutive ASCII digits (bot IDs are 5-8 digits).</summary>
-    private static bool ContainsDigitSequence(ReadOnlySpan<byte> span)
-    {
-        var consecutive = 0;
-        for (var i = 0; i < span.Length; i++)
-        {
-            if (span[i] >= (byte)'0' && span[i] <= (byte)'9')
-            {
-                consecutive++;
-                if (consecutive >= 5)
-                {
-                    return true;
-                }
-            }
-            else
-            {
-                consecutive = 0;
-            }
-        }
-
-        return false;
-    }
 }
