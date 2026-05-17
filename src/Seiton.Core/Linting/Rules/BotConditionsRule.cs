@@ -21,7 +21,6 @@ public sealed class BotConditionsRule() : RuleBase(RuleId.BotConditions)
     private static ReadOnlySpan<byte> Event => "event"u8;
     private static ReadOnlySpan<byte> PullRequest => "pull_request"u8;
     private static ReadOnlySpan<byte> Sender => "sender"u8;
-    private static ReadOnlySpan<byte> SenderId => "sender.id"u8;
     private static ReadOnlySpan<byte> Login => "login"u8;
     private static ReadOnlySpan<byte> UserId => "id"u8;
 
@@ -61,12 +60,12 @@ public sealed class BotConditionsRule() : RuleBase(RuleId.BotConditions)
         }
 
         // Fast pre-filter: skip parsing unless condition contains a bot login literal,
-        // or an actor ID context together with a known bot ID.
+        // or one of the small set of known bot IDs. The AST scan does the exact
+        // context-path discrimination, including mixed dot/index access forms.
         var hasBotLoginLiteral = ContainsAsciiIgnoreCase(raw, BotSuffix);
-        var hasBotActorIdCheck = BotActors.ContainsKnownBotId(raw) &&
-            (ContainsAsciiIgnoreCase(raw, ActorId) || ContainsAsciiIgnoreCase(raw, SenderId));
+        var hasKnownBotIdLiteral = BotActors.ContainsKnownBotId(raw);
 
-        if (!hasBotLoginLiteral && !hasBotActorIdCheck)
+        if (!hasBotLoginLiteral && !hasKnownBotIdLiteral)
         {
             return;
         }
@@ -179,141 +178,15 @@ public sealed class BotConditionsRule() : RuleBase(RuleId.BotConditions)
             return false;
         }
 
-        var node = nodes[nodeId];
-
-        // Handle index-style access: github['actor'] or github['triggering_actor']
-        if (node.Kind == ExpressionNodeKind.IndexAccess)
-        {
-            return IsIndexAccessSpoofableActor(node, nodes, exprBytes);
-        }
-
-        if (node.Kind != ExpressionNodeKind.MemberAccess)
-        {
-            return false;
-        }
-
-        // Walk the member access chain
-        var current = nodeId;
-        Span<int> memberStack = stackalloc int[8];
-        var depth = 0;
-
-        while (current >= 0 && current < nodes.Length && nodes[current].Kind == ExpressionNodeKind.MemberAccess)
-        {
-            if (depth >= memberStack.Length)
-            {
-                return false;
-            }
-
-            memberStack[depth++] = current;
-            current = nodes[current].Left;
-        }
-
-        if (current < 0 || current >= nodes.Length || nodes[current].Kind != ExpressionNodeKind.Identifier)
-        {
-            return false;
-        }
-
-        var rootToken = nodes[current].Token.AsSpan(exprBytes);
-
-        if (!EqualsAsciiIgnoreCase(rootToken, "github"u8))
-        {
-            return false;
-        }
-
-        if (depth < 1)
-        {
-            return false;
-        }
-
-        // github.actor or github.triggering_actor
-        var prop1 = nodes[memberStack[depth - 1]].Token.AsSpan(exprBytes);
-        if (depth == 1)
-        {
-            return EqualsAsciiIgnoreCase(prop1, Actor) ||
-                   EqualsAsciiIgnoreCase(prop1, TriggeringActor);
-        }
-
-        // github.event.pull_request.sender.login (depth=4)
-        if (depth == 4)
-        {
-            var prop2 = nodes[memberStack[depth - 2]].Token.AsSpan(exprBytes);
-            var prop3 = nodes[memberStack[depth - 3]].Token.AsSpan(exprBytes);
-            var prop4 = nodes[memberStack[depth - 4]].Token.AsSpan(exprBytes);
-
-            return EqualsAsciiIgnoreCase(prop1, Event) &&
-                   EqualsAsciiIgnoreCase(prop2, PullRequest) &&
-                   EqualsAsciiIgnoreCase(prop3, Sender) &&
-                   EqualsAsciiIgnoreCase(prop4, Login);
-        }
-
-        return false;
+        return MatchesGitHubPath(nodeId, nodes, exprBytes, Actor)
+            || MatchesGitHubPath(nodeId, nodes, exprBytes, TriggeringActor)
+            || MatchesGitHubPath(nodeId, nodes, exprBytes, Event, PullRequest, Sender, Login);
     }
 
     private static bool IsSpoofableActorIdContext(int nodeId, ExpressionNode[] nodes, ReadOnlySpan<byte> exprBytes)
     {
-        if (nodeId < 0 || nodeId >= nodes.Length)
-        {
-            return false;
-        }
-
-        var node = nodes[nodeId];
-
-        // Handle index-style access: github['actor_id']
-        if (node.Kind == ExpressionNodeKind.IndexAccess)
-        {
-            return IsIndexAccessSpoofableActorId(node, nodes, exprBytes);
-        }
-
-        if (node.Kind != ExpressionNodeKind.MemberAccess)
-        {
-            return false;
-        }
-
-        var current = nodeId;
-        Span<int> memberStack = stackalloc int[8];
-        var depth = 0;
-
-        while (current >= 0 && current < nodes.Length && nodes[current].Kind == ExpressionNodeKind.MemberAccess)
-        {
-            if (depth >= memberStack.Length)
-            {
-                return false;
-            }
-
-            memberStack[depth++] = current;
-            current = nodes[current].Left;
-        }
-
-        if (current < 0 || current >= nodes.Length || nodes[current].Kind != ExpressionNodeKind.Identifier)
-        {
-            return false;
-        }
-
-        var rootToken = nodes[current].Token.AsSpan(exprBytes);
-        if (!EqualsAsciiIgnoreCase(rootToken, "github"u8) || depth < 1)
-        {
-            return false;
-        }
-
-        var prop1 = nodes[memberStack[depth - 1]].Token.AsSpan(exprBytes);
-        if (depth == 1)
-        {
-            return EqualsAsciiIgnoreCase(prop1, ActorId);
-        }
-
-        if (depth == 4)
-        {
-            var prop2 = nodes[memberStack[depth - 2]].Token.AsSpan(exprBytes);
-            var prop3 = nodes[memberStack[depth - 3]].Token.AsSpan(exprBytes);
-            var prop4 = nodes[memberStack[depth - 4]].Token.AsSpan(exprBytes);
-
-            return EqualsAsciiIgnoreCase(prop1, Event) &&
-                   EqualsAsciiIgnoreCase(prop2, PullRequest) &&
-                   EqualsAsciiIgnoreCase(prop3, Sender) &&
-                   EqualsAsciiIgnoreCase(prop4, UserId);
-        }
-
-        return false;
+        return MatchesGitHubPath(nodeId, nodes, exprBytes, ActorId)
+            || MatchesGitHubPath(nodeId, nodes, exprBytes, Event, PullRequest, Sender, UserId);
     }
 
     /// <summary>Gets the content of a string literal (inside the quotes).</summary>
@@ -339,63 +212,82 @@ public sealed class BotConditionsRule() : RuleBase(RuleId.BotConditions)
         return value[^BotSuffix.Length..].SequenceEqual(BotSuffix);
     }
 
-    /// <summary>
-    /// Checks index-style access like github['actor'] or github['triggering_actor'].
-    /// Only handles depth-1 patterns where Left is Identifier("github") and Right is a StringLiteral.
-    /// </summary>
-    private static bool IsIndexAccessSpoofableActor(ExpressionNode node, ExpressionNode[] nodes, ReadOnlySpan<byte> exprBytes)
+    private static bool MatchesGitHubPath(
+        int nodeId,
+        ExpressionNode[] nodes,
+        ReadOnlySpan<byte> exprBytes,
+        ReadOnlySpan<byte> segment1)
     {
-        var baseId = node.Left;
-        var indexId = node.Right;
-
-        if (baseId < 0 || baseId >= nodes.Length || indexId < 0 || indexId >= nodes.Length)
+        if (nodeId < 0 || nodeId >= nodes.Length)
         {
             return false;
         }
 
-        var baseNode = nodes[baseId];
-        if (baseNode.Kind != ExpressionNodeKind.Identifier)
+        var current = nodeId;
+        if (!TryMatchPathSegment(ref current, nodes, exprBytes, segment1))
         {
             return false;
         }
 
-        if (!EqualsAsciiIgnoreCase(baseNode.Token.AsSpan(exprBytes), "github"u8))
-        {
-            return false;
-        }
-
-        var indexNode = nodes[indexId];
-        if (indexNode.Kind != ExpressionNodeKind.StringLiteral)
-        {
-            return false;
-        }
-
-        var propName = GetStringLiteralContent(indexNode.Token, exprBytes);
-        return EqualsAsciiIgnoreCase(propName, Actor) ||
-               EqualsAsciiIgnoreCase(propName, TriggeringActor);
+        return IsGitHubRoot(current, nodes, exprBytes);
     }
 
-    /// <summary>
-    /// Checks index-style access like github['actor_id'].
-    /// Only handles depth-1 patterns where Left is Identifier("github") and Right is a StringLiteral.
-    /// </summary>
-    private static bool IsIndexAccessSpoofableActorId(ExpressionNode node, ExpressionNode[] nodes, ReadOnlySpan<byte> exprBytes)
+    private static bool MatchesGitHubPath(
+        int nodeId,
+        ExpressionNode[] nodes,
+        ReadOnlySpan<byte> exprBytes,
+        ReadOnlySpan<byte> segment1,
+        ReadOnlySpan<byte> segment2,
+        ReadOnlySpan<byte> segment3,
+        ReadOnlySpan<byte> segment4)
     {
-        var baseId = node.Left;
+        if (nodeId < 0 || nodeId >= nodes.Length)
+        {
+            return false;
+        }
+
+        var current = nodeId;
+        if (!TryMatchPathSegment(ref current, nodes, exprBytes, segment4)
+            || !TryMatchPathSegment(ref current, nodes, exprBytes, segment3)
+            || !TryMatchPathSegment(ref current, nodes, exprBytes, segment2)
+            || !TryMatchPathSegment(ref current, nodes, exprBytes, segment1))
+        {
+            return false;
+        }
+
+        return IsGitHubRoot(current, nodes, exprBytes);
+    }
+
+    private static bool TryMatchPathSegment(
+        ref int nodeId,
+        ExpressionNode[] nodes,
+        ReadOnlySpan<byte> exprBytes,
+        ReadOnlySpan<byte> expectedSegment)
+    {
+        if (nodeId < 0 || nodeId >= nodes.Length)
+        {
+            return false;
+        }
+
+        var node = nodes[nodeId];
+        if (node.Kind == ExpressionNodeKind.MemberAccess)
+        {
+            if (!EqualsAsciiIgnoreCase(node.Token.AsSpan(exprBytes), expectedSegment))
+            {
+                return false;
+            }
+
+            nodeId = node.Left;
+            return true;
+        }
+
+        if (node.Kind != ExpressionNodeKind.IndexAccess)
+        {
+            return false;
+        }
+
         var indexId = node.Right;
-
-        if (baseId < 0 || baseId >= nodes.Length || indexId < 0 || indexId >= nodes.Length)
-        {
-            return false;
-        }
-
-        var baseNode = nodes[baseId];
-        if (baseNode.Kind != ExpressionNodeKind.Identifier)
-        {
-            return false;
-        }
-
-        if (!EqualsAsciiIgnoreCase(baseNode.Token.AsSpan(exprBytes), "github"u8))
+        if (indexId < 0 || indexId >= nodes.Length)
         {
             return false;
         }
@@ -406,8 +298,25 @@ public sealed class BotConditionsRule() : RuleBase(RuleId.BotConditions)
             return false;
         }
 
-        var propName = GetStringLiteralContent(indexNode.Token, exprBytes);
-        return EqualsAsciiIgnoreCase(propName, ActorId);
+        if (!EqualsAsciiIgnoreCase(GetStringLiteralContent(indexNode.Token, exprBytes), expectedSegment))
+        {
+            return false;
+        }
+
+        nodeId = node.Left;
+        return true;
+    }
+
+    private static bool IsGitHubRoot(int nodeId, ExpressionNode[] nodes, ReadOnlySpan<byte> exprBytes)
+    {
+        if (nodeId < 0 || nodeId >= nodes.Length)
+        {
+            return false;
+        }
+
+        var node = nodes[nodeId];
+        return node.Kind == ExpressionNodeKind.Identifier
+            && EqualsAsciiIgnoreCase(node.Token.AsSpan(exprBytes), "github"u8);
     }
 
 }

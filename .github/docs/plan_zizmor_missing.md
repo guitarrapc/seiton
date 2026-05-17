@@ -217,7 +217,7 @@ Phase 2 の実装前に以下を確認する:
 - **検査ノード**: job.if, step.if の式 AST
 - **判定ロジック**:
   1. if 条件の式をパース
-  2. AST を再帰走査し `contains(literal_string, context_ref)` パターンを検出
+  2. AST を再帰走査し `contains(literal_string, context_ref)` パターンを検出（dot-style と bracket/index-style を同一の context access として扱う）
   3. context_ref が user-controllable（`github.actor`, `github.ref`, `github.head_ref`, `github.base_ref`, `github.triggering_actor`, `github.sha`, `github.ref_name`, `env.*`, `inputs.*`）なら severity=error
   4. それ以外の context なら severity=info
 - **パフォーマンス影響**: 中。式パースが必要だが、if 条件を持つノードのみで実行。式パースキャッシュで軽減
@@ -257,7 +257,7 @@ inputs.*
 - **検査ノード**: job.if, step.if の式 AST
 - **判定ロジック**:
   1. if 条件の式をパース
-  2. AST を再帰走査し、spoofable actor-name コンテキスト（`github.actor`, `github.triggering_actor`, `github.event.pull_request.sender.login`）または spoofable actor-ID コンテキスト（`github.actor_id`, `github.event.pull_request.sender.id`）との等値比較を検出
+  2. AST を再帰走査し、spoofable actor-name コンテキスト（`github.actor`, `github.triggering_actor`, `github.event.pull_request.sender.login`）または spoofable actor-ID コンテキスト（`github.actor_id`, `github.event.pull_request.sender.id`）との等値比較を検出し、equivalent な bracket/index-style や mixed dot/index-style access も同値に扱う
   3. actor-name コンテキスト側は `[bot]` サフィックスを持つ文字列リテラル、actor-ID コンテキスト側は `BotActors.g.cs` の既知 bot ID と一致するリテラルを検出
 - **パフォーマンス影響**: 中。式パースは `unsound-contains` と共有可能
 - **初期実装の簡略化**: zizmor の支配関係（domination）分析は省略。bot actor チェックの存在自体を warning として報告。confidence 区別は将来拡張
@@ -288,9 +288,12 @@ github.event.pull_request.user.id
 |---|---|---|
 | 1 | `github.actor == 'dependabot[bot]'` | warning |
 | 2 | `github.actor_id == '49699333'` | warning |
-| 3 | `github.triggering_actor != 'renovate[bot]'` | warning |
-| 4 | `github.event.pull_request.sender.login == 'dependabot[bot]'` | warning |
-| 5 | `github.event_name == 'push'`（bot 関連なし） | OK |
+| 3 | `github['actor'] == 'dependabot[bot]'` | warning |
+| 4 | `github.event['pull_request'].sender['login'] == 'dependabot[bot]'` | warning |
+| 5 | `github['event']['pull_request']['sender']['id'] == '41898282'` | warning |
+| 6 | `github.triggering_actor != 'renovate[bot]'` | warning |
+| 7 | `github.event.pull_request.sender.login == 'dependabot[bot]'` | warning |
+| 8 | `github.event_name == 'push'`（bot 関連なし） | OK |
 | 6 | `github.actor == 'my-user'`（bot でない） | OK |
 | 7 | `github.event.pull_request.sender.id == '41898282'` | warning |
 | 8 | `github.actor_id == '123456789'` | OK |

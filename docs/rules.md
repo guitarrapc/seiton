@@ -958,7 +958,7 @@ jobs:
       - run: echo ok
 ```
 
-> **Severity note:** This rule emits an error when the second argument is user-controllable (for example `github.ref`, `github.actor`, `env.*`, `inputs.*`) and an info diagnostic for other context references.
+> **Severity note:** This rule emits an error when the second argument is user-controllable (for example `github.ref`, `github['ref']`, `github.actor`, `env.*`, `env['NAME']`, `inputs.*`) and an info diagnostic for other context references.
 
 ---
 
@@ -968,7 +968,7 @@ jobs:
 |---|---|---|
 | ✓ | — | ✗ |
 
-Warns when a workflow gates privileged behavior on spoofable bot actor contexts such as `github.actor`, `github.triggering_actor`, `github.event.pull_request.sender.login`, `github.actor_id`, or `github.event.pull_request.sender.id`.
+Warns when a workflow gates privileged behavior on spoofable bot actor contexts such as `github.actor`, `github['actor']`, `github.triggering_actor`, `github.event.pull_request.sender.login`, `github.event['pull_request'].sender['login']`, `github.actor_id`, or `github['event']['pull_request']['sender']['id']`.
 
 **Example trigger:**
 
@@ -994,7 +994,7 @@ jobs:
       - run: gh pr merge --auto --merge "$PR_URL"
 ```
 
-  > **Note:** Known bot ID comparisons such as `github.actor_id == '49699333'` are also flagged. Prefer the corresponding trigger-author context like `github.event.pull_request.user.id`.
+  > **Note:** Known bot ID comparisons such as `github.actor_id == '49699333'` and equivalent bracket/index-style forms like `github['ACTOR_ID'] == 49699333` are also flagged. Prefer the corresponding trigger-author context like `github.event.pull_request.user.id`.
 
 ---
 

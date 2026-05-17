@@ -13793,6 +13793,30 @@ public sealed class RuleInterfaceTests
                         - run: echo test
             """,
             ["spoofable context", "pull_request.user.login"]),
+            new RuleCase(
+            "warning-mixed-index-pr-sender-login",
+            """
+            on: pull_request
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    if: github.event['pull_request'].sender['login'] == 'dependabot[bot]'
+                    steps:
+                        - run: echo test
+            """,
+            ["spoofable context", "pull_request.user.login"]),
+            new RuleCase(
+            "warning-index-pr-sender-id-known-bot",
+            """
+            on: pull_request
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    if: github['event']['pull_request']['sender']['id'] == '41898282'
+                    steps:
+                        - run: echo test
+            """,
+            ["spoofable context", "pull_request.user.login"]),
         };
 
         await AssertRuleCases(new BotConditionsRule(), "bot-conditions", cases);
