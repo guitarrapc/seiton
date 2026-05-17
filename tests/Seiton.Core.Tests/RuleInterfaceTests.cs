@@ -13899,6 +13899,21 @@ public sealed class RuleInterfaceTests
                               path: .
             """,
             ["upload-artifact with path '.'", "v6+"]),
+            new RuleCase(
+            "ng-checkout-uppercase-v6-upload-dot",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - uses: actions/checkout@V6
+                        - uses: actions/upload-artifact@v4
+                          with:
+                              name: my-artifact
+                              path: .
+            """,
+            ["upload-artifact with path '.'", "v6+"]),
             // Case 5: checkout only (no upload-artifact) → OK
             new RuleCase(
             "ok-checkout-only",
@@ -13992,6 +14007,66 @@ public sealed class RuleInterfaceTests
                               path: .
             """,
             ["upload-artifact with path '.'", "persist-credentials: false"]),
+            new RuleCase(
+            "ng-checkout-upload-root-equivalent-dot-slash-dot",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - uses: actions/checkout@v4
+                        - uses: actions/upload-artifact@v4
+                          with:
+                              name: my-artifact
+                              path: ./.
+            """,
+            ["upload-artifact with path './.'", "persist-credentials: false"]),
+            new RuleCase(
+            "ng-checkout-upload-root-equivalent-dot-double-slash",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - uses: actions/checkout@v4
+                        - uses: actions/upload-artifact@v4
+                          with:
+                              name: my-artifact
+                              path: .//
+            """,
+            ["upload-artifact with path './/'", "persist-credentials: false"]),
+            new RuleCase(
+            "ng-checkout-upload-parent-equivalent-dotdot-slash-dot",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - uses: actions/checkout@v4
+                        - uses: actions/upload-artifact@v4
+                          with:
+                              name: my-artifact
+                              path: ../.
+            """,
+            ["upload-artifact with path '../.'", "persist-credentials: false"]),
+            new RuleCase(
+            "ng-checkout-upload-workspace-suffix",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - uses: actions/checkout@v4
+                        - uses: actions/upload-artifact@v4
+                          with:
+                              name: my-artifact
+                              path: ${{ github.workspace }}/.
+            """,
+            ["upload-artifact with path", "persist-credentials: false"]),
             // Edge case: upload-artifact before checkout (order shouldn't matter)
             new RuleCase(
             "ng-upload-before-checkout",
@@ -14138,6 +14213,37 @@ public sealed class RuleInterfaceTests
         var diagnostic = result.Diagnostics.Single(x => x.RuleId == "artipacked");
 
         await Assert.That(diagnostic.Severity).IsEqualTo(DiagnosticSeverity.Warning);
+    }
+
+    [Test]
+    public async Task RuleRegression_ArtipackedRule_ReportsPathValueLocation()
+    {
+        var yaml = NormalizeYaml(
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - uses: actions/checkout@v4
+                        - uses: actions/upload-artifact@v4
+                          with:
+                              name: artifact
+                              path: .
+            """);
+
+        using var result = new LintEngine([new ArtipackedRule()]).Check(Encoding.UTF8.GetBytes(yaml), "artipacked-location.yml");
+        var diagnostic = result.Diagnostics.Single(x => x.RuleId == "artipacked");
+        var lines = yaml.Split('\n');
+        var pathLineIndex = Array.FindIndex(lines, static x => x.Contains("path: .", StringComparison.Ordinal));
+        var pathLine = lines[pathLineIndex];
+        var expectedStartColumn = pathLine.IndexOf('.', StringComparison.Ordinal) + 1;
+        var expectedLine = pathLineIndex + 1;
+
+        await Assert.That(diagnostic.Location.StartLine).IsEqualTo(expectedLine);
+        await Assert.That(diagnostic.Location.StartColumn).IsEqualTo(expectedStartColumn);
+        await Assert.That(diagnostic.Location.EndLine).IsEqualTo(expectedLine);
+        await Assert.That(diagnostic.Location.EndColumn).IsEqualTo(expectedStartColumn);
     }
 
     private static async Task AssertRuleCases(IRule rule, string ruleId, RuleCase[] cases, LintConfig? config = null)

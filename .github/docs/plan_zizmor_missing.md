@@ -432,8 +432,8 @@ zizmor は tree-sitter（bash/pwsh 完全パーサー）を使用しているが
 #### Phase 4 完了条件
 
 - [x] `artipacked` ルール実装 + テスト green
-- [x] `dotnet test` 全体 green（リグレッションなし）— 1809/1809 passed
-- [x] ベンチマーク: アロケーション悪化なし（Small 8.43/9.88KB, Medium 68.63/82.03KB, Large 327.14/381.98KB — ベースラインと同等）
+- [x] `dotnet test` 全体 green（リグレッションなし）— 1813/1813 passed
+- [x] ベンチマーク: アロケーション悪化なし（Small 8.43/9.88KB, Medium 68.63/81.98KB, Large 327.14/381.98KB — ベースラインと同等）
 - [x] feature-matrix 更新
 
 **実装メモ**:

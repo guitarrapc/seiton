@@ -177,7 +177,7 @@ online audit rules（4）:
 - ghalint は全 13 ポリシーを完全カバーし、完全上位互換を達成。
 - actionlint は 17 ルール中 15 ルールを同等以上にカバー（残: shellcheck / pyflakes 外部連携のみ）。
 - 競合を完全に上回るには、次の2点が鍵。
-  - 残存 zizmor 監査差分の吸収（P0: 9件未対応 → `unsound-contains` や `github-env` などの高価値監査から段階実装）
+  - 残存 zizmor 監査差分の吸収（P0: 6件未対応 → `github-env` などの高価値監査から段階実装）
   - dockerfile-pin/frizbee級の対象ファイル範囲拡張（P0）
 
 この順で実装すれば、Seitonは「競合機能を包括しつつ、より現代的な統合ツール」という目標に最短で近づく。
@@ -281,7 +281,7 @@ zizmor 監査ID別対応表（実装確認ベース）:
 | `unsound-contains` | ✅ | `unsound-contains` |
 | `use-trusted-publishing` | 🟡 | `use-trusted-publishing`（publish + `id-token: write` 判定の初期実装） |
 
-対応率: 29/36（81%）— 残7件未対応。
+対応率: 30/36（83%）— 残6件未対応。
 
 ### 6.4 pinact / dockerfile-pin / frizbee（ルールエンジンではなく変換系）
 

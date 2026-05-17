@@ -139,41 +139,84 @@ public sealed class ArtipackedRule() : RuleBase(RuleId.Artipacked)
 
     private static bool IsDangerousLine(ReadOnlySpan<byte> line)
     {
-        // "." or "./"
-        if (line.Length == 1 && line[0] == (byte)'.')
+        if (IsCurrentDirectoryPath(line))
         {
             return true;
         }
 
-        if (line.Length == 2 && line[0] == (byte)'.' && line[1] == (byte)'/')
+        if (IsParentDirectoryPath(line))
         {
             return true;
         }
 
-        // ".." or "../"
-        if (line.Length == 2 && line[0] == (byte)'.' && line[1] == (byte)'.')
-        {
-            return true;
-        }
-
-        if (line.Length == 3 && line[0] == (byte)'.' && line[1] == (byte)'.' && line[2] == (byte)'/')
-        {
-            return true;
-        }
-
-        // ${{ github.workspace }} (with optional trailing /)
+        // ${{ github.workspace }} with optional trailing separators or /. suffixes
         return IsGitHubWorkspaceExpression(line);
+    }
+
+    private static bool IsCurrentDirectoryPath(ReadOnlySpan<byte> path)
+    {
+        var dotDotSegments = 0;
+        return TryClassifyRelativeDirectoryPath(path, out dotDotSegments) && dotDotSegments == 0;
+    }
+
+    private static bool IsParentDirectoryPath(ReadOnlySpan<byte> path)
+    {
+        var dotDotSegments = 0;
+        return TryClassifyRelativeDirectoryPath(path, out dotDotSegments) && dotDotSegments == 1;
+    }
+
+    private static bool TryClassifyRelativeDirectoryPath(ReadOnlySpan<byte> path, out int dotDotSegments)
+    {
+        dotDotSegments = 0;
+
+        while (path.Length > 0)
+        {
+            var separatorIndex = path.IndexOf((byte)'/');
+            var segment = separatorIndex >= 0 ? path[..separatorIndex] : path;
+            path = separatorIndex >= 0 ? path[(separatorIndex + 1)..] : ReadOnlySpan<byte>.Empty;
+
+            if (segment.Length == 0 || segment.SequenceEqual("."u8))
+            {
+                continue;
+            }
+
+            if (segment.SequenceEqual(".."u8))
+            {
+                dotDotSegments++;
+                if (dotDotSegments > 1)
+                {
+                    return false;
+                }
+
+                continue;
+            }
+
+            return false;
+        }
+
+        return true;
     }
 
     private static bool IsGitHubWorkspaceExpression(ReadOnlySpan<byte> value)
     {
-        // Match ${{ github.workspace }} with variable internal whitespace, optional trailing /
+        // Match ${{ github.workspace }} with variable internal whitespace and optional trailing / or /. segments.
         var trimmed = value;
 
-        // Strip optional trailing /
-        if (trimmed.Length > 0 && trimmed[^1] == (byte)'/')
+        while (true)
         {
-            trimmed = trimmed.Slice(0, trimmed.Length - 1);
+            if (trimmed.Length > 0 && trimmed[^1] == (byte)'/')
+            {
+                trimmed = trimmed[..^1];
+                continue;
+            }
+
+            if (trimmed.Length >= 2 && trimmed[^1] == (byte)'.' && trimmed[^2] == (byte)'/')
+            {
+                trimmed = trimmed[..^2];
+                continue;
+            }
+
+            break;
         }
 
         // Must start with "${{" and end with "}}"
@@ -205,40 +248,7 @@ public sealed class ArtipackedRule() : RuleBase(RuleId.Artipacked)
     /// <summary>Detects checkout v6+ from a semantic version ref (e.g. <c>actions/checkout@v6</c>).</summary>
     internal static bool IsV6OrLater(ReadOnlySpan<byte> usesText)
     {
-        var atIndex = usesText.IndexOf((byte)'@');
-        if (atIndex < 0 || atIndex + 2 >= usesText.Length)
-        {
-            return false;
-        }
-
-        var refPart = usesText.Slice(atIndex + 1);
-        if (refPart[0] != (byte)'v')
-        {
-            return false;
-        }
-
-        // Parse major version number
-        var major = 0;
-        var i = 1;
-        while (i < refPart.Length && refPart[i] >= (byte)'0' && refPart[i] <= (byte)'9')
-        {
-            major = major * 10 + (refPart[i] - (byte)'0');
-            i++;
-        }
-
-        // Must have consumed at least one digit
-        if (i == 1)
-        {
-            return false;
-        }
-
-        // Next char must be end, '.', or nothing (for tags like v6, v6.1.0)
-        if (i < refPart.Length && refPart[i] != (byte)'.')
-        {
-            return false;
-        }
-
-        return major >= 6;
+        return OutdatedActionRunnerRule.TryExtractMajorVersion(usesText, out var major) && major >= 6;
     }
 
     private static ReadOnlySpan<byte> TrimBytes(ReadOnlySpan<byte> span)
