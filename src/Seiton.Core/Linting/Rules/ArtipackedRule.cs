@@ -1,4 +1,5 @@
-﻿using Seiton.Core.Generated;
+﻿using System.Runtime.CompilerServices;
+using Seiton.Core.Generated;
 using Seiton.Core.Parsing;
 using Seiton.Core.Parsing.Ast;
 
@@ -140,6 +141,7 @@ public sealed class ArtipackedRule() : RuleBase(RuleId.Artipacked)
     }
 
     /// <summary>Case-insensitive YAML boolean false check (false, False, FALSE).</summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static bool IsBooleanFalse(ReadOnlySpan<byte> value)
     {
         return value.Length == 5
@@ -151,6 +153,7 @@ public sealed class ArtipackedRule() : RuleBase(RuleId.Artipacked)
     }
 
     /// <summary>Case-insensitive YAML boolean true check (true, True, TRUE).</summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static bool IsBooleanTrue(ReadOnlySpan<byte> value)
     {
         return value.Length == 4
@@ -295,11 +298,13 @@ public sealed class ArtipackedRule() : RuleBase(RuleId.Artipacked)
         return IsGitHubWorkspaceExpression(line);
     }
 
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static bool IsCurrentDirectoryPath(ReadOnlySpan<byte> path)
     {
         return TryClassifyRelativeDirectoryPath(path, out var dotDotSegments) && dotDotSegments == 0;
     }
 
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static bool IsParentDirectoryPath(ReadOnlySpan<byte> path)
     {
         return TryClassifyRelativeDirectoryPath(path, out var dotDotSegments) && dotDotSegments >= 1;
@@ -326,7 +331,7 @@ public sealed class ArtipackedRule() : RuleBase(RuleId.Artipacked)
                 continue;
             }
 
-            // Glob metacharacters (*, ?, [, ]) can match anything including .git — treat as dangerous
+            // Glob metacharacters can match arbitrary root content, including hidden files under .git.
             if (ContainsGlobMetacharacters(segment))
             {
                 continue;
@@ -338,10 +343,12 @@ public sealed class ArtipackedRule() : RuleBase(RuleId.Artipacked)
         return true;
     }
 
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static bool ContainsGlobMetacharacters(ReadOnlySpan<byte> segment)
     {
-        foreach (var b in segment)
+        for (var i = 0; i < segment.Length; i++)
         {
+            var b = segment[i];
             if (b is (byte)'*' or (byte)'?' or (byte)'[' or (byte)']' or (byte)'{' or (byte)'}')
             {
                 return true;
@@ -408,6 +415,7 @@ public sealed class ArtipackedRule() : RuleBase(RuleId.Artipacked)
     }
 
     /// <summary>Finds the first path separator (/ or \) in the span, or -1 if not found.</summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static int FindPathSeparator(ReadOnlySpan<byte> span)
     {
         var fwd = span.IndexOf((byte)'/');
@@ -432,6 +440,7 @@ public sealed class ArtipackedRule() : RuleBase(RuleId.Artipacked)
         return TryExtractMajorAndMinorVersion(usesText, out var major, out _, out _) && major >= 6;
     }
 
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static ReadOnlySpan<byte> TrimBytes(ReadOnlySpan<byte> span)
     {
         var start = 0;
