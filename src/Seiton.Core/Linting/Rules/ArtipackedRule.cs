@@ -85,20 +85,22 @@ public sealed class ArtipackedRule() : RuleBase(RuleId.Artipacked)
             if (actionSpec.Id != PopularActions.ActionId.ActionsUploadArtifact
                 || actionExec.Inputs is null
                 || !actionExec.Inputs.Value.TryGetValue(utf8Yaml, "path"u8, out var pathNode)
-                || !TryClassifyDangerousPath(Arena.GetStringValue(pathNode), out var exposesParentDirectory))
+                || !TryClassifyDangerousPath(Arena.GetStringValue(pathNode), out var exposesParentDirectory, out var excludesLegacyCredentialPath))
             {
                 continue;
             }
 
             var mayIncludeHiddenFiles = MayIncludeHiddenFiles(actionExec, usesText, utf8Yaml);
-            if (!(exposesParentDirectory && hasUnsafeV6PlusCheckout) && !mayIncludeHiddenFiles)
+            var mayExposeLegacyCredentials = hasUnsafeLegacyCheckout && mayIncludeHiddenFiles && !excludesLegacyCredentialPath;
+            var mayExposeV6PlusCredentials = hasUnsafeV6PlusCheckout && (mayIncludeHiddenFiles || exposesParentDirectory);
+            if (!mayExposeLegacyCredentials && !mayExposeV6PlusCredentials)
             {
                 continue;
             }
 
             // Error when legacy checkout credentials (.git/config) are actually exposed
             // (hidden files included); warning otherwise (only v6+ $RUNNER_TEMP concern).
-            var reportAsWarning = !(hasUnsafeLegacyCheckout && mayIncludeHiddenFiles);
+            var reportAsWarning = !mayExposeLegacyCredentials;
             var message = GetCachedMessage(Arena.GetStringSlice(pathNode), reportAsWarning, utf8Yaml);
             if (reportAsWarning)
             {
@@ -288,13 +290,14 @@ public sealed class ArtipackedRule() : RuleBase(RuleId.Artipacked)
     }
 
     /// <summary>Checks whether the upload path covers the repository root or parent directories.</summary>
-    internal static bool TryClassifyDangerousPath(ReadOnlySpan<byte> path, out bool exposesParentDirectory)
+    internal static bool TryClassifyDangerousPath(ReadOnlySpan<byte> path, out bool exposesParentDirectory, out bool excludesLegacyCredentialPath)
     {
         exposesParentDirectory = false;
+        excludesLegacyCredentialPath = false;
         var hasDangerousLine = false;
 
         // Handle multiline paths: each line is a separate glob. Scan all lines
-        // to accumulate exposesParentDirectory across the entire path value.
+        // to accumulate exposure and explicit .git exclusions across the entire path value.
         while (path.Length > 0)
         {
             // Find end of line
@@ -304,10 +307,17 @@ public sealed class ArtipackedRule() : RuleBase(RuleId.Artipacked)
             // Trim \r and spaces
             line = TrimBytes(line);
 
-            if (line.Length > 0 && TryClassifyDangerousLine(line, out var lineExposesParentDirectory))
+            if (line.Length > 0)
             {
-                hasDangerousLine = true;
-                exposesParentDirectory |= lineExposesParentDirectory;
+                if (TryClassifyLegacyCredentialExclusion(line))
+                {
+                    excludesLegacyCredentialPath = true;
+                }
+                else if (TryClassifyDangerousLine(line, out var lineExposesParentDirectory))
+                {
+                    hasDangerousLine = true;
+                    exposesParentDirectory |= lineExposesParentDirectory;
+                }
             }
 
             if (nlIndex < 0)
@@ -319,6 +329,83 @@ public sealed class ArtipackedRule() : RuleBase(RuleId.Artipacked)
         }
 
         return hasDangerousLine;
+    }
+
+    private static bool TryClassifyLegacyCredentialExclusion(ReadOnlySpan<byte> line)
+    {
+        if (line.Length == 0 || line[0] != (byte)'!')
+        {
+            return false;
+        }
+
+        return ExcludesLegacyCredentialPath(TrimBytes(line[1..]));
+    }
+
+    private static bool ExcludesLegacyCredentialPath(ReadOnlySpan<byte> pattern)
+    {
+        pattern = SkipCurrentDirectoryPrefixes(pattern);
+        if (MatchesLegacyCredentialExclusion(pattern))
+        {
+            return true;
+        }
+
+        while (pattern.StartsWith("**/"u8) || pattern.StartsWith("**\\"u8))
+        {
+            pattern = SkipCurrentDirectoryPrefixes(pattern[3..]);
+            if (MatchesLegacyCredentialExclusion(pattern))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private static ReadOnlySpan<byte> SkipCurrentDirectoryPrefixes(ReadOnlySpan<byte> pattern)
+    {
+        while (pattern.Length >= 2 && pattern[0] == (byte)'.' && (pattern[1] == (byte)'/' || pattern[1] == (byte)'\\'))
+        {
+            pattern = pattern[2..];
+        }
+
+        return pattern;
+    }
+
+    private static bool MatchesLegacyCredentialExclusion(ReadOnlySpan<byte> pattern)
+    {
+        if (!TryConsumeGitDirectory(ref pattern))
+        {
+            return false;
+        }
+
+        if (pattern.Length == 0)
+        {
+            return true;
+        }
+
+        if (pattern[0] != (byte)'/' && pattern[0] != (byte)'\\')
+        {
+            return false;
+        }
+
+        pattern = pattern[1..];
+        return pattern.SequenceEqual("**"u8)
+               || pattern.SequenceEqual("config"u8)
+               || pattern.StartsWith("config/"u8)
+               || pattern.StartsWith("config\\"u8);
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private static bool TryConsumeGitDirectory(ref ReadOnlySpan<byte> pattern)
+    {
+        if (!pattern.StartsWith(".git"u8))
+        {
+            return false;
+        }
+
+        pattern = pattern[4..];
+        return true;
     }
 
     private static bool TryClassifyDangerousLine(ReadOnlySpan<byte> line, out bool exposesParentDirectory)

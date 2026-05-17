@@ -1008,7 +1008,7 @@ jobs:
 
 Detects credential leakage risk when `actions/checkout` (without `persist-credentials: false`) is followed later in the same job by `actions/upload-artifact` uploading a dangerous path. Dangerous paths include repository-root and parent-directory forms such as `.`, `..`, `./**`, `**`, `${{ github.workspace }}`, and `${{ github.workspace }}/..`.
 
-  > **Note:** Legacy `actions/checkout` versions (v1-v5) persist a token in `.git/config`, while `actions/checkout@v6+` stores credentials under `$RUNNER_TEMP`. For `actions/upload-artifact`, pinned `v4.0`-`v4.3` releases may still include hidden files by default, while `v4.4+` and floating `@v4` exclude hidden files by default. That hidden-file default mainly protects legacy `.git/config`; it does not protect v6+ credentials when a parent-directory upload can reach `$RUNNER_TEMP`.
+  > **Note:** Legacy `actions/checkout` versions (v1-v5) persist a token in `.git/config`, while `actions/checkout@v6+` stores credentials under `$RUNNER_TEMP`. For `actions/upload-artifact`, pinned `v4.0`-`v4.3` releases may still include hidden files by default, while `v4.4+` and floating `@v4` exclude hidden files by default. That hidden-file default mainly protects legacy `.git/config`; it does not protect v6+ credentials when a parent-directory upload can reach `$RUNNER_TEMP`. Explicit exclusion globs such as `!.git/**` or `!.git/config` suppress the legacy `.git/config` case, but they do not suppress v6+ warnings when the upload can still reach `$RUNNER_TEMP`.
 
 **Severity:**
 

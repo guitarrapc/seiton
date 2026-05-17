@@ -15111,6 +15111,34 @@ public sealed class RuleInterfaceTests
     }
 
     [Test]
+    public async Task RuleRegression_ArtipackedRule_MultilinePathExcludingGitDirectoryIsSafe()
+    {
+        // Multi-line artifact paths support exclusion globs. When the root is uploaded
+        // but .git is excluded, legacy checkout credentials in .git/config are not exposed.
+        var yaml = NormalizeYaml(
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - uses: actions/checkout@v4
+                        - uses: actions/upload-artifact@v4
+                          with:
+                              name: artifact
+                              path: |
+                                  .
+                                  !.git/**
+                              include-hidden-files: true
+            """);
+
+        using var result = new LintEngine([new ArtipackedRule()]).Check(Encoding.UTF8.GetBytes(yaml), "artipacked-multiline-exclude-git.yml");
+        var diagnostics = result.Diagnostics.Where(x => x.RuleId == "artipacked").ToArray();
+
+        await Assert.That(diagnostics).IsEmpty();
+    }
+
+    [Test]
     public async Task RuleRegression_ArtipackedRule_ExpressionPathIsNotFlaggedAsDangerous()
     {
         // Dynamic expression path like ${{ inputs.artifact_path }} should not be
