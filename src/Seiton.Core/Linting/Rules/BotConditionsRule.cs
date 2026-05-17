@@ -1,4 +1,5 @@
-﻿using Seiton.Core.Parsing;
+﻿using Seiton.Core.Generated;
+using Seiton.Core.Parsing;
 using Seiton.Core.Parsing.Ast;
 using static Seiton.Core.Parsing.SpanHelpers;
 
@@ -27,12 +28,6 @@ public sealed class BotConditionsRule() : RuleBase(RuleId.BotConditions)
 
     // Known bot suffixes
     private static ReadOnlySpan<byte> BotSuffix => "[bot]"u8;
-
-    // Known bot actor IDs
-    private static ReadOnlySpan<byte> BotId29110 => "29110"u8;
-    private static ReadOnlySpan<byte> BotId49699333 => "49699333"u8;
-    private static ReadOnlySpan<byte> BotId27856297 => "27856297"u8;
-    private static ReadOnlySpan<byte> BotId29139614 => "29139614"u8;
 
     public override string Name => "Bot Conditions Rule";
 
@@ -67,12 +62,8 @@ public sealed class BotConditionsRule() : RuleBase(RuleId.BotConditions)
         }
 
         // Fast pre-filter: skip parsing unless condition contains bot-related patterns
-        // Check for "[bot]" suffix or known bot ID literals
-        if (!ContainsAsciiIgnoreCase(raw, BotSuffix) &&
-            raw.IndexOf(BotId29110) < 0 &&
-            raw.IndexOf(BotId49699333) < 0 &&
-            raw.IndexOf(BotId27856297) < 0 &&
-            raw.IndexOf(BotId29139614) < 0)
+        // Check for "[bot]" suffix (covers actor name comparisons) or digit sequences (covers actor_id comparisons)
+        if (!ContainsAsciiIgnoreCase(raw, BotSuffix) && !ContainsDigitSequence(raw))
         {
             return;
         }
@@ -345,9 +336,29 @@ public sealed class BotConditionsRule() : RuleBase(RuleId.BotConditions)
 
     private static bool IsKnownBotId(ReadOnlySpan<byte> value)
     {
-        return value.SequenceEqual(BotId29110) ||
-               value.SequenceEqual(BotId49699333) ||
-               value.SequenceEqual(BotId27856297) ||
-               value.SequenceEqual(BotId29139614);
+        return BotActors.IsKnownBotId(value);
+    }
+
+    /// <summary>Returns true if the span contains a sequence of 5+ consecutive ASCII digits (bot IDs are 5-8 digits).</summary>
+    private static bool ContainsDigitSequence(ReadOnlySpan<byte> span)
+    {
+        var consecutive = 0;
+        for (var i = 0; i < span.Length; i++)
+        {
+            if (span[i] >= (byte)'0' && span[i] <= (byte)'9')
+            {
+                consecutive++;
+                if (consecutive >= 5)
+                {
+                    return true;
+                }
+            }
+            else
+            {
+                consecutive = 0;
+            }
+        }
+
+        return false;
     }
 }
