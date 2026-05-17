@@ -128,17 +128,12 @@ online audit rules（4）:
 - 理由: `.references/dockerfile-pin` / `.references/frizbee` で実用機能が成熟しており、Actions外の供給網ギャップを早期に埋める効果が大きい
 
 2. 残存 zizmor high-value audits（次段）
-- `unsound-condition`
-- `unsound-contains`
 - `github-env`
-- `hardcoded-container-credentials`
-- `unpinned-tools`（新規追加）
-- 理由: exploitability が高い未対応監査を優先。`unpinned-tools` は外部ツールのバージョン固定漏れを検出し、supply chain 攻撃面を減らす。
+- 理由: exploitability が高い未対応監査を優先。
 
-3. trusted publishing / uses policy の運用強化
+3. uses policy の運用強化
 - `forbidden-uses` の allow/deny ポリシー精緻化
-- `use-trusted-publishing` のレジストリ/アクション判定精緻化
-- 理由: 現状は初期実装として有効だが、zizmor 同等レベルの網羅には運用設定と判定ロジックの拡張が必要
+- 理由: 運用設定と判定ロジックの拡張が必要
 
 ### P1（次点）
 
@@ -236,8 +231,8 @@ online audit rules（4）:
 
 | 区分 | 件数 | Seiton 状況 |
 |---|---:|---|
-| 直接対応済み | 22 | `artipacked`, `bot-conditions`, `cache-poisoning`, `concurrency-limits`, `dangerous-triggers`, `github-app`, `hardcoded-container-credentials`, `impostor-commit`, `insecure-commands`, `known-vulnerable-actions`, `ref-confusion`, `secrets-inherit`, `secrets-outside-env`, `self-hosted-runner`, `stale-action-refs`, `template-injection`, `unpinned-images`, `unpinned-tools`, `unpinned-uses`, `unredacted-secrets`, `unsound-condition`, `unsound-contains` |
-| 部分対応 | 7 | `archived-uses`, `excessive-permissions`, `forbidden-uses`, `overprovisioned-secrets`, `ref-version-mismatch`, `undocumented-permissions`, `use-trusted-publishing` |
+| 直接対応済み | 23 | `artipacked`, `bot-conditions`, `cache-poisoning`, `concurrency-limits`, `dangerous-triggers`, `github-app`, `hardcoded-container-credentials`, `impostor-commit`, `insecure-commands`, `known-vulnerable-actions`, `ref-confusion`, `secrets-inherit`, `secrets-outside-env`, `self-hosted-runner`, `stale-action-refs`, `template-injection`, `unpinned-images`, `unpinned-tools`, `unpinned-uses`, `unredacted-secrets`, `unsound-condition`, `unsound-contains`, `use-trusted-publishing` |
+| 部分対応 | 6 | `archived-uses`, `excessive-permissions`, `forbidden-uses`, `overprovisioned-secrets`, `ref-version-mismatch`, `undocumented-permissions` |
 | 未対応 | 7 | 高度セキュリティ監査群（残差分） |
 
 zizmor 監査ID別対応表（実装確認ベース）:
@@ -279,9 +274,9 @@ zizmor 監査ID別対応表（実装確認ベース）:
 | `unredacted-secrets` | ✅ | `unredacted-secrets` |
 | `unsound-condition` | ✅ | `unsound-condition` |
 | `unsound-contains` | ✅ | `unsound-contains` |
-| `use-trusted-publishing` | 🟡 | `use-trusted-publishing`（publish + `id-token: write` 判定の初期実装） |
+| `use-trusted-publishing` | ✅ | `use-trusted-publishing`（publish + `id-token: write` 判定） |
 
-対応率: 29/36（81%）— 残7件未対応。
+対応率: 29/36（81%）— 残7件未対応（うち2件はスコープ外）。
 
 ### 6.4 pinact / dockerfile-pin / frizbee（ルールエンジンではなく変換系）
 

@@ -11,7 +11,7 @@
 |---|---|
 | 完全対応済み | 23 |
 | 部分対応 | 6 |
-| 未対応（実装対象） | 4 |
+| 未対応（実装対象） | 5 |
 | スコープ外 | 2 |
 
 ### 1.1 完全対応済み（23 件）
@@ -33,7 +33,7 @@ feature-matrix では ❌ 未対応としているが、実装確認の結果 **
 | `dependabot-cooldown` | Seiton の対象ドキュメントは workflow / action.yml のみ。dependabot.yml はスコープ外 |
 | `dependabot-execution` | 同上 |
 
-### 1.4 未対応・実装対象（4 件）
+### 1.4 未対応・実装対象（5 件）
 
 | # | 監査ID | セキュリティ影響 | 実装複雑度 |
 |---|---|---|---|
@@ -41,9 +41,9 @@ feature-matrix では ❌ 未対応としているが、実装確認の結果 **
 | 2 | `anonymous-definition` | 低（可読性） | 極低 |
 | 3 | `misfeature` | 低（非推奨パターン） | 低 |
 | 4 | `superfluous-actions` | 低（最適化提案） | 低 |
-| — | `obfuscation` | 低（難読化検出） | 高 |
+| 5 | `obfuscation` | 低（難読化検出） | 高 |
 
-`obfuscation` は false positive リスクが高く実装が複雑なため、本計画では見送る。将来的に opt-in ルールとして検討。
+`obfuscation` は false positive リスクが高く実装が複雑なため、優先度は最低。将来的に opt-in ルールとして検討。
 
 ---
 
@@ -438,6 +438,12 @@ zizmor は tree-sitter（bash/pwsh 完全パーサー）を使用しているが
 - checkout バージョン判定: セマンティックバージョン `@vN` のみ静的判定。SHA pin は unknown（非 v6+扱い）
 - diagnostic は upload-artifact の `path` 値位置に報告
 - severity: error（非v6+ + 危険パス）、warning（v6+ + 危険パス）
+- バージョン ref に任意サフィックス（`@v6-legacy`, `@v4.4-legacy` 等）がある場合は unknown ref として保守的に扱う（非 v6+、unsafe minor version）
+- パッチバージョン（`@v4.6.2`）は受け入れ、メジャー.マイナーとして判定する（`@v4.6.2` → v4.6 → safe）
+
+**既知の制限事項**:
+- checkout の `with.path` で指定されたサブディレクトリ（例: `path: repo`）を追跡しない。upload-artifact の `path: repo` は `IsDangerousPath` の判定対象（`.`, `..`, `${{ github.workspace }}`）に該当しないため、`repo/.git/config` が含まれるケースは検出されない。これは将来の拡張候補として記録する（checkout path ↔ upload path の相関分析が必要）
+- 明示的な `.git` / `.git/config` パスの upload も現在は検出しない（zizmor も同様に未検出）
 
 ---
 
