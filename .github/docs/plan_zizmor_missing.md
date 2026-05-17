@@ -9,14 +9,14 @@
 
 | 区分 | 件数 |
 |---|---|
-| 完全対応済み | 18 |
+| 完全対応済み | 19 |
 | 部分対応 | 7 |
-| 未対応（実装対象） | 9 |
+| 未対応（実装対象） | 8 |
 | スコープ外 | 2 |
 
-### 1.1 完全対応済み（18 件）
+### 1.1 完全対応済み（19 件）
 
-`cache-poisoning`, `concurrency-limits`, `dangerous-triggers`, `github-app`, `hardcoded-container-credentials`（※後述）, `impostor-commit`, `insecure-commands`, `known-vulnerable-actions`, `ref-confusion`, `secrets-inherit`, `secrets-outside-env`, `self-hosted-runner`, `stale-action-refs`, `template-injection`, `unpinned-images`, `unpinned-uses`, `unredacted-secrets`, `use-trusted-publishing`
+`artipacked`, `cache-poisoning`, `concurrency-limits`, `dangerous-triggers`, `github-app`, `hardcoded-container-credentials`（※後述）, `impostor-commit`, `insecure-commands`, `known-vulnerable-actions`, `ref-confusion`, `secrets-inherit`, `secrets-outside-env`, `self-hosted-runner`, `stale-action-refs`, `template-injection`, `unpinned-images`, `unpinned-uses`, `unredacted-secrets`, `use-trusted-publishing`
 
 #### `hardcoded-container-credentials` について
 
@@ -33,7 +33,7 @@ feature-matrix では ❌ 未対応としているが、実装確認の結果 **
 | `dependabot-cooldown` | Seiton の対象ドキュメントは workflow / action.yml のみ。dependabot.yml はスコープ外 |
 | `dependabot-execution` | 同上 |
 
-### 1.4 未対応・実装対象（9 件）
+### 1.4 未対応・実装対象（8 件）
 
 | # | 監査ID | セキュリティ影響 | 実装複雑度 |
 |---|---|---|---|
@@ -42,10 +42,9 @@ feature-matrix では ❌ 未対応としているが、実装確認の結果 **
 | 3 | `github-env` | 高（RCE 同等） | 高 |
 | 4 | `bot-conditions` | 高（actor スプーフィング） | 高 |
 | 5 | `unpinned-tools` | 中（supply chain） | 低 |
-| 6 | `artipacked` | 中（credential 漏洩） | 中〜高 |
-| 7 | `anonymous-definition` | 低（可読性） | 極低 |
-| 8 | `misfeature` | 低（非推奨パターン） | 低 |
-| 9 | `superfluous-actions` | 低（最適化提案） | 低 |
+| 6 | `anonymous-definition` | 低（可読性） | 極低 |
+| 7 | `misfeature` | 低（非推奨パターン） | 低 |
+| 8 | `superfluous-actions` | 低（最適化提案） | 低 |
 | — | `obfuscation` | 低（難読化検出） | 高 |
 
 `obfuscation` は false positive リスクが高く実装が複雑なため、本計画では見送る。将来的に opt-in ルールとして検討。

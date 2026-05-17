@@ -214,11 +214,19 @@ public sealed class ArtipackedRule() : RuleBase(RuleId.Artipacked)
             minorPos++;
         }
 
-        if (minorPos > 0)
+        // No minor digits after dot (e.g. @v4. or @v4.x) — unknown ref
+        if (minorPos == 0)
         {
-            hasMinorVersion = true;
+            return false;
         }
 
+        // Trailing suffix after minor digits (e.g. @v4.4-legacy) — unknown ref
+        if (minorPos < minorText.Length)
+        {
+            return false;
+        }
+
+        hasMinorVersion = true;
         return true;
     }
 

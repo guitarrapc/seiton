@@ -14137,6 +14137,54 @@ public sealed class RuleInterfaceTests
                               path: .
             """,
             ["upload-artifact with path '.'", "persist-credentials: false"]),
+            // Edge case: @v4. (dot but no minor digits) should be treated conservatively
+            new RuleCase(
+            "ng-checkout-upload-v4-dot-only",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - uses: actions/checkout@v4
+                        - uses: actions/upload-artifact@v4.
+                          with:
+                              name: my-artifact
+                              path: .
+            """,
+            ["upload-artifact with path '.'", "persist-credentials: false"]),
+            // Edge case: @v4.x (non-numeric minor) should be treated conservatively
+            new RuleCase(
+            "ng-checkout-upload-v4-dot-x",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - uses: actions/checkout@v4
+                        - uses: actions/upload-artifact@v4.x
+                          with:
+                              name: my-artifact
+                              path: .
+            """,
+            ["upload-artifact with path '.'", "persist-credentials: false"]),
+            // Edge case: @v4.4-legacy (suffix after minor) should be treated conservatively
+            new RuleCase(
+            "ng-checkout-upload-v4-4-legacy",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - uses: actions/checkout@v4
+                        - uses: actions/upload-artifact@v4.4-legacy
+                          with:
+                              name: my-artifact
+                              path: .
+            """,
+            ["upload-artifact with path '.'", "persist-credentials: false"]),
             // Edge case: backslash path separators (Windows-style) should be treated as dangerous
             new RuleCase(
             "ng-checkout-upload-backslash-dot",
