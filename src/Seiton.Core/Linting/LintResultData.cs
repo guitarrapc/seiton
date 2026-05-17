@@ -143,18 +143,18 @@ internal readonly record struct LintResultData(
     }
 }
 
-/// <summary>Aggregated counts and per-rule breakdown of suppressed diagnostics.</summary>
+/// <summary>
+/// Aggregated counts and per-rule breakdown of suppressed diagnostics.
+/// <para>
+/// Aggregated multi-file summaries may intentionally leave <see cref="Records"/> empty
+/// while still preserving <see cref="TotalSuppressed"/> and <see cref="SuppressedByRule"/>.
+/// </para>
+/// </summary>
 public readonly record struct SuppressionSummary(
     int TotalSuppressed,
     IReadOnlyDictionary<string, int> SuppressedByRule,
     SuppressionRecord[] Records)
 {
-    /// <summary>
-    /// Gets the file-scoped suppression records contributing to this summary.
-    /// Aggregated multi-file summaries may intentionally leave this empty while still
-    /// preserving <see cref="TotalSuppressed"/> and <see cref="SuppressedByRule"/>.
-    /// </summary>
-
     /// <summary>
     /// Gets the number of valid records in <see cref="Records"/>.
     /// The backing array may be oversized when a reusable buffer is used.
