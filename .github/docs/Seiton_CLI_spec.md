@@ -443,6 +443,20 @@ In `--verbose` mode with at least one diagnostic, a per-rule breakdown is append
 
 Rules are sorted by count descending, then by rule ID lexicographically.
 
+In `--verbose` mode, rule activation metadata is emitted once per run:
+
+```
+verbose: rules: <N> enabled, <M> disabled
+verbose: rules: disabled: <id1>, <id2>, ...   (only when M > 0)
+```
+
+Per-file document kind is also emitted:
+
+```
+verbose: <filepath>: workflow
+verbose: <filepath>: action
+```
+
 When no `--min-severity` is explicitly set, errors are zero, and warnings are non-zero, a hint line is emitted:
 
 ```

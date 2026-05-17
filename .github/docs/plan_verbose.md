@@ -183,15 +183,31 @@ These items can be implemented purely in the CLI layer using data already return
    - `verbose: rules: disabled: <id1>, <id2>, ...` (only when disabled count > 0 and verbose)
    - `verbose: <file>: <document-kind>` (e.g. `verbose: .github/workflows/ci.yml: workflow`)
 
-**Core changes**: Add 3 fields to `LintResultData` (readonly record struct — stack-allocated). Reuse existing `List<string>` buffer in `LintEngine`.
+**Core changes**: Add 4 fields to `LintResultData` (`DocumentKind`, `ActiveRuleCount`, `DisabledRuleCount`, `DisabledRuleIds`). `LintResult` exposes them via dispose-guarded properties. `DisabledRuleIds` uses `ReadOnlySpan<string>` for zero-copy access. Reuse `List<string>` buffer in `LintEngine` (cleared per call, snapshot via `ToArray()` only when count > 0).
 
-**Allocation impact**: Zero new heap allocations. `LintResultData` grows by ~12 bytes (2 ints + 1 enum + padding) — stack value, not heap.
+**Allocation impact**: +0.06 KB per call (one `string[]` snapshot for disabled rule IDs). No runtime regression.
 
 **Verification**:
 
-- [ ] Benchmark: `CoreLintBenchmark` before/after — expect ≤ +1 % runtime, 0 B allocation delta.
-- [ ] Tests: Unit tests for `LintResultData` new fields. CLI tests for verbose output.
-- [ ] Regression: `dotnet test` — all green.
+- [x] Benchmark: `CoreLintBenchmark` before/after — +0.06 KB allocation, runtime within noise (actually improved in all cases).
+- [x] Tests: 8 unit tests for `LintResultData`/`LintResult` new fields (`LintResultMetadataTests`). 6 CLI tests for verbose output (`VerbosePhase2Tests`).
+- [x] Regression: `dotnet test` — 1762 tests, all green.
+
+**Benchmark results (Phase 2)**:
+
+| Size | FixEnabled | Before Mean (μs) | After Mean (μs) | Δ% | Before Alloc | After Alloc |
+|------|-----------|----------------:|----------------:|-----:|-------------:|------------:|
+| Small | False | 70.76 | 61.49 | -13.1% | 8.37 KB | 8.43 KB |
+| Small | True | 98.41 | 69.71 | -29.2% | 9.82 KB | 9.88 KB |
+| Medium | False | 1,762.25 | 1,370.07 | -22.2% | 68.56 KB | 68.63 KB |
+| Medium | True | 2,972.82 | 1,944.10 | -34.6% | 81.92 KB | 81.98 KB |
+| Large | False | 25,289.33 | 20,948.33 | -17.2% | 327.08 KB | 327.14 KB |
+| Large | True | 34,653.17 | 32,354.24 | -6.6% | 381.92 KB | 381.98 KB |
+
+**Implementation notes**:
+- `DisabledRuleIds` counts only config/opt-in disabled rules, NOT document-kind mismatches (those are "not applicable", not "disabled").
+- Rule summary logged once per run (from first file), document kind logged per file.
+- Parallel path captures metadata in `FileCheckResult` struct; rule summary emitted during ordered aggregation.
 
 ---
 

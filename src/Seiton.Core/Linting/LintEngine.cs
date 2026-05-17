@@ -26,6 +26,7 @@ public sealed class LintEngine
     private readonly Dictionary<string, int> _suppressedByRule = new(StringComparer.Ordinal);
     private readonly List<SuppressionRecord> _suppressionRecords = new();
     private readonly LintConfig _effectiveConfig = new();
+    private readonly List<string> _disabledRuleIds = new(8);
 
     // NormalizeRules reusable collections
     private readonly Dictionary<string, RuleConfig> _normalizedRulesDict = new(StringComparer.Ordinal);
@@ -175,6 +176,7 @@ public sealed class LintEngine
             return new LintResultData(parseResult, parseResult.Diagnostics)
             {
                 SuppressionSummary = SuppressionSummary.Empty,
+                DocumentKind = documentKind,
             };
         }
 
@@ -200,7 +202,7 @@ public sealed class LintEngine
 
         if (rules.Count == 0 && _onlineRules.Count == 0)
         {
-            return BuildLintResult(parseResult, arena);
+            return BuildLintResult(parseResult, arena, documentKind, 0, 0, []);
         }
 
         _visitor.Reset();
@@ -216,11 +218,13 @@ public sealed class LintEngine
         var effectiveConfig = _effectiveConfig;
 
         _activeRules.Clear();
+        _disabledRuleIds.Clear();
         for (var i = 0; i < rules.Count; i++)
         {
             var rule = rules[i];
             if (!IsRuleEnabled(rule.Id.ToId(), effectiveConfig.Rules))
             {
+                _disabledRuleIds.Add(rule.Id.ToId()!);
                 continue;
             }
 
@@ -241,6 +245,7 @@ public sealed class LintEngine
             var onlineRule = _onlineRules[i];
             if (!IsRuleEnabled(onlineRule.Id.ToId(), effectiveConfig.Rules))
             {
+                _disabledRuleIds.Add(onlineRule.Id.ToId()!);
                 continue;
             }
 
@@ -254,9 +259,13 @@ public sealed class LintEngine
             _activeOnlineRules.Add(onlineRule);
         }
 
+        var activeRuleCount = _activeRules.Count + _activeOnlineRules.Count;
+        var disabledRuleCount = _disabledRuleIds.Count;
+        var disabledRuleIdsSnapshot = disabledRuleCount > 0 ? _disabledRuleIds.ToArray() : [];
+
         if (_activeRules.Count == 0 && _activeOnlineRules.Count == 0)
         {
-            return BuildLintResult(parseResult, arena);
+            return BuildLintResult(parseResult, arena, documentKind, activeRuleCount, disabledRuleCount, disabledRuleIdsSnapshot);
         }
 
         if (parseResult.Workflow is not null)
@@ -359,10 +368,10 @@ public sealed class LintEngine
 
         if (config?.SkipSuppressionSummary == true)
         {
-            return BuildLintResult(parseResult, arena);
+            return BuildLintResult(parseResult, arena, documentKind, activeRuleCount, disabledRuleCount, disabledRuleIdsSnapshot);
         }
 
-        return BuildLintResultWithSuppression(parseResult, arena);
+        return BuildLintResultWithSuppression(parseResult, arena, documentKind, activeRuleCount, disabledRuleCount, disabledRuleIdsSnapshot);
     }
 
     /// <summary>
@@ -370,7 +379,7 @@ public sealed class LintEngine
     /// When the previous result's array (now in <c>_resultDiagnosticsSwap</c>) has the right length,
     /// it is reused with zero allocation. Otherwise a new array is allocated.
     /// </summary>
-    private LintResultData BuildLintResult(ParseResultData parseResult, AstArena? arena)
+    private LintResultData BuildLintResult(ParseResultData parseResult, AstArena? arena, DocumentKind documentKind, int activeRuleCount, int disabledRuleCount, string[] disabledRuleIds)
     {
         var count = _diagnostics.Count;
         var buffer = new PooledBuffer<Diagnostic>(count > 0 ? count : 4);
@@ -386,13 +395,17 @@ public sealed class LintEngine
         return new LintResultData(parseResult, new DiagnosticList(diagArray, diagCount))
         {
             SuppressionSummary = SuppressionSummary.Empty,
+            DocumentKind = documentKind,
+            ActiveRuleCount = activeRuleCount,
+            DisabledRuleCount = disabledRuleCount,
+            DisabledRuleIds = disabledRuleIds,
         };
     }
 
     /// <summary>
     /// Builds a <see cref="LintResultData"/> with suppression summary using PooledBuffer + DetachArray.
     /// </summary>
-    private LintResultData BuildLintResultWithSuppression(ParseResultData parseResult, AstArena? arena)
+    private LintResultData BuildLintResultWithSuppression(ParseResultData parseResult, AstArena? arena, DocumentKind documentKind, int activeRuleCount, int disabledRuleCount, string[] disabledRuleIds)
     {
         var count = _diagnostics.Count;
         var buffer = new PooledBuffer<Diagnostic>(count > 0 ? count : 4);
@@ -424,6 +437,10 @@ public sealed class LintEngine
         return new LintResultData(parseResult, new DiagnosticList(diagArray, diagCount))
         {
             SuppressionSummary = new SuppressionSummary(suppressionCount, suppressedByRuleSnapshot, suppressionRecordsSnapshot),
+            DocumentKind = documentKind,
+            ActiveRuleCount = activeRuleCount,
+            DisabledRuleCount = disabledRuleCount,
+            DisabledRuleIds = disabledRuleIds,
         };
     }
 

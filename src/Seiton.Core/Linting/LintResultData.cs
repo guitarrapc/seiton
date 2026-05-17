@@ -23,6 +23,21 @@ internal readonly record struct LintResultData(
     /// <summary>Gets the summary of suppressed diagnostics from inline and exclusion rules.</summary>
     public SuppressionSummary SuppressionSummary { get; init; } = SuppressionSummary.Empty;
 
+    /// <summary>Gets the document kind (workflow or action metadata) used during linting.</summary>
+    public DocumentKind DocumentKind { get; init; }
+
+    /// <summary>Gets the number of rules that were active (enabled and applicable) for this document.</summary>
+    public int ActiveRuleCount { get; init; }
+
+    /// <summary>Gets the number of rules that were disabled by config or opt-in status (not by document kind mismatch).</summary>
+    public int DisabledRuleCount { get; init; }
+
+    /// <summary>
+    /// Gets the IDs of rules that were disabled by config or opt-in status.
+    /// The backing array may be oversized; use <see cref="DisabledRuleCount"/> for the valid range.
+    /// </summary>
+    public string[] DisabledRuleIds { get; init; } = [];
+
     /// <summary>Gets the parsed workflow AST, if the document is a workflow file.</summary>
     public Workflow? Workflow => ParseResult.Workflow;
 

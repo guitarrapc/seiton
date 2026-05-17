@@ -123,6 +123,7 @@ internal static class FixCommand
             var hasPrintedDiff = false;
             var totalSuppressed = 0;
             Dictionary<string, int>? suppressedByRule = null;
+            var rulesSummaryLogged = false;
 
             // Fix command always builds fixes; enable fix construction for all Check() calls.
             var fixEnabledLintConfig = new LintConfig
@@ -156,6 +157,13 @@ internal static class FixCommand
 
                     if (verboseLogger.IsEnabled)
                     {
+                        if (!rulesSummaryLogged)
+                        {
+                            CheckCommand.WriteRuleSummary(verboseLogger, handle.ActiveRuleCount, handle.DisabledRuleCount, handle.DisabledRuleIds);
+                            rulesSummaryLogged = true;
+                        }
+                        verboseLogger.LogFile(filePath, handle.DocumentKind == DocumentKind.ActionMetadata ? "action" : "workflow");
+
                         var s = handle.SuppressionSummary;
                         if (s.TotalSuppressed > 0)
                         {

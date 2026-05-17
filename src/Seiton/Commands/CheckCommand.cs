@@ -75,6 +75,7 @@ internal static class CheckCommand
         Dictionary<string, int>? suppressedByRule = null;
 
         var hasStdin = files.Contains("-");
+        var rulesSummaryLogged = false;
 
         // 1-file, single CPU, or stdin: sequential fast path (no ThreadLocal overhead)
         if (resolvedFiles.Length <= 1 || hasStdin || Environment.ProcessorCount <= 1)
@@ -105,7 +106,15 @@ internal static class CheckCommand
                 sourceMap?.TryAdd(filePath, utf8Yaml);
 
                 if (verboseLogger.IsEnabled)
+                {
+                    if (!rulesSummaryLogged)
+                    {
+                        WriteRuleSummary(verboseLogger, result.ActiveRuleCount, result.DisabledRuleCount, result.DisabledRuleIds);
+                        rulesSummaryLogged = true;
+                    }
+                    verboseLogger.LogFile(filePath, result.DocumentKind == DocumentKind.ActionMetadata ? "action" : "workflow");
                     AccumulateSuppression(result.SuppressionSummary, ref totalSuppressed, ref suppressedByRule);
+                }
             }
         }
         else
@@ -129,7 +138,11 @@ internal static class CheckCommand
                     slots[i] = new FileCheckResult(
                         result.CopyDiagnostics(), filePath,
                         sourceMap is not null ? utf8Yaml : null,
-                        verboseLogger.IsEnabled ? result.SuppressionSummary : default);
+                        verboseLogger.IsEnabled ? result.SuppressionSummary : default,
+                        verboseLogger.IsEnabled ? result.ActiveRuleCount : 0,
+                        verboseLogger.IsEnabled ? result.DisabledRuleCount : 0,
+                        verboseLogger.IsEnabled ? result.DisabledRuleIds.ToArray() : [],
+                        verboseLogger.IsEnabled ? result.DocumentKind : default);
                 });
 
             // Aggregate in input order for stable output
@@ -140,7 +153,15 @@ internal static class CheckCommand
                     sourceMap.TryAdd(slots[i].FilePath, yaml);
 
                 if (verboseLogger.IsEnabled)
+                {
+                    if (!rulesSummaryLogged)
+                    {
+                        WriteRuleSummary(verboseLogger, slots[i].ActiveRuleCount, slots[i].DisabledRuleCount, slots[i].DisabledRuleIds);
+                        rulesSummaryLogged = true;
+                    }
+                    verboseLogger.LogFile(slots[i].FilePath, slots[i].DocumentKind == DocumentKind.ActionMetadata ? "action" : "workflow");
                     AccumulateSuppression(slots[i].SuppressionSummary, ref totalSuppressed, ref suppressedByRule);
+                }
             }
         }
 
@@ -348,6 +369,22 @@ internal static class CheckCommand
         }
     }
 
+    internal static void WriteRuleSummary(VerboseLogger logger, int activeRuleCount, int disabledRuleCount, ReadOnlySpan<string> disabledRuleIds)
+    {
+        logger.Log("rules", $"{activeRuleCount} enabled, {disabledRuleCount} disabled");
+
+        if (disabledRuleIds.Length > 0)
+        {
+            var sb = new System.Text.StringBuilder();
+            for (var i = 0; i < disabledRuleIds.Length; i++)
+            {
+                if (i > 0) sb.Append(", ");
+                sb.Append(disabledRuleIds[i]);
+            }
+            logger.Log("rules", $"disabled: {sb}");
+        }
+    }
+
     private static DiagnosticSeverity? ParseSeverity(string value)
     {
         return value.ToLowerInvariant() switch
@@ -367,12 +404,21 @@ internal readonly struct FileCheckResult
     public readonly string FilePath;
     public readonly byte[]? Utf8Yaml;
     public readonly SuppressionSummary SuppressionSummary;
+    public readonly int ActiveRuleCount;
+    public readonly int DisabledRuleCount;
+    public readonly string[] DisabledRuleIds;
+    public readonly DocumentKind DocumentKind;
 
-    public FileCheckResult(OwnedDiagnostics diagnostics, string filePath, byte[]? utf8Yaml, SuppressionSummary suppressionSummary = default)
+    public FileCheckResult(OwnedDiagnostics diagnostics, string filePath, byte[]? utf8Yaml, SuppressionSummary suppressionSummary = default,
+        int activeRuleCount = 0, int disabledRuleCount = 0, string[]? disabledRuleIds = null, DocumentKind documentKind = default)
     {
         Diagnostics = diagnostics;
         FilePath = filePath;
         Utf8Yaml = utf8Yaml;
         SuppressionSummary = suppressionSummary;
+        ActiveRuleCount = activeRuleCount;
+        DisabledRuleCount = disabledRuleCount;
+        DisabledRuleIds = disabledRuleIds ?? [];
+        DocumentKind = documentKind;
     }
 }

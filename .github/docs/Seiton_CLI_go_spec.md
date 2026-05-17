@@ -283,14 +283,20 @@ Shared contract reference: `Seiton_Linter_spec.md` §2.1.
 - Post-lint filters (`--ignore`, `--min-severity`) are applied after aggregation.
 - Summary line is always written to stderr via `writeSummary` (error/warning/info counts + file count).
 - In `--verbose` mode with diagnostics, per-rule breakdown is appended sorted by count descending, then rule ID.
+- In `--verbose` mode, `writeRuleSummary` emits rule activation counts and disabled rule IDs (once per run from first file result).
+- In `--verbose` mode, per-file document kind is logged (e.g. `verbose: .github/workflows/ci.yml: workflow`).
 - When no `--min-severity` is set, errors are zero, and warnings are non-zero, a hint line is emitted: `hint: use --min-severity error to treat warnings as non-blocking in CI`.
 - In fix mode, a network fix hint is emitted when `unpinned-uses` or `unpinned-image` diagnostics exist but the corresponding network flag is not enabled.
 
 ```go
 type fileCheckResult struct {
-    diagnostics []*Diagnostic
-    filePath    string
-    utf8Yaml    []byte // nil when not needed for snippet rendering
+    diagnostics      []*Diagnostic
+    filePath         string
+    utf8Yaml         []byte       // nil when not needed for snippet rendering
+    activeRuleCount  int
+    disabledRuleCount int
+    disabledRuleIDs  []string
+    documentKind     DocumentKind
 }
 ```
 

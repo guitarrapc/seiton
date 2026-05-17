@@ -82,6 +82,46 @@ public sealed class LintResult : IDisposable
         }
     }
 
+    /// <summary>Gets the document kind (workflow or action metadata) used during linting.</summary>
+    public DocumentKind DocumentKind
+    {
+        get
+        {
+            ThrowIfDisposed();
+            return Data.DocumentKind;
+        }
+    }
+
+    /// <summary>Gets the number of rules that were active (enabled and applicable) for this document.</summary>
+    public int ActiveRuleCount
+    {
+        get
+        {
+            ThrowIfDisposed();
+            return Data.ActiveRuleCount;
+        }
+    }
+
+    /// <summary>Gets the number of rules disabled by config or opt-in status (not by document kind mismatch).</summary>
+    public int DisabledRuleCount
+    {
+        get
+        {
+            ThrowIfDisposed();
+            return Data.DisabledRuleCount;
+        }
+    }
+
+    /// <summary>Gets the IDs of rules disabled by config or opt-in status.</summary>
+    public ReadOnlySpan<string> DisabledRuleIds
+    {
+        get
+        {
+            ThrowIfDisposed();
+            return Data.DisabledRuleIds.AsSpan(0, Data.DisabledRuleCount);
+        }
+    }
+
     /// <summary>Gets the number of lint diagnostics.</summary>
     public int DiagnosticCount
     {
