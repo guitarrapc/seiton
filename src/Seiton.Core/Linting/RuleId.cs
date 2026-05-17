@@ -60,6 +60,8 @@ public enum RuleId
     ConcurrencyLimits,
     UnsoundCondition,
     UnpinnedTools,
+    UnsoundContains,
+    BotConditions,
 
     // Composite / internal-only (not in RuleCatalog)
     Syntax,
