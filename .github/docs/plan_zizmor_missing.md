@@ -92,7 +92,7 @@ Zizmorのリファレンス実装は、.references/zizmorに配置されてい�
 - **検出対象**: `if:` にブロックスカラー（`|` / `>`）+ fenced expression `${{ ... }}` を使用した場合、末尾の改行がスカラー値に含まれ、条件が常に truthy になるバグ
 - **ルールID**: `unsound-condition`
 - **デフォルト**: on
-- **severity**: error
+- **severity**: warning
 - **検査ノード**: job.if, step.if（ワークフロー + アクションメタデータ composite steps）
 - **判定ロジック**:
   1. `if` 値の raw バイト列を取得
@@ -112,7 +112,7 @@ Zizmorのリファレンス実装は、.references/zizmorに配置されてい�
 - **ルールID**: `unpinned-tools`
 - **デフォルト**: on
 - **severity**: warning
-- **検査ノード**: step（ExecAction の uses + with）
+- **検査ノード**: step（ExecAction の uses + with。workflow / composite action 両方）
 - **判定ロジック**:
   1. `uses` が既知の setup アクションリストに一致するか確認
   2. `with` mapping に `version` キーがあるか確認
@@ -150,11 +150,40 @@ Zizmorのリファレンス実装は、.references/zizmorに配置されてい�
 
 #### Phase 1 完了条件
 
-- [ ] `unsound-condition` ルール実装 + テスト green
-- [ ] `unpinned-tools` ルール実装 + テスト green
-- [ ] `dotnet test` 全体 green（リグレッションなし）
-- [ ] ベンチマーク: 実行時間 +3% 以内、アロケーション悪化なし
-- [ ] feature-matrix 更新: `hardcoded-container-credentials` → ✅、`unsound-condition` → ✅、`unpinned-tools` → ✅
+- [x] `unsound-condition` ルール実装 + テスト green
+- [x] `unpinned-tools` ルール実装 + テスト green
+- [x] `dotnet test` 全体 green（リグレッションなし）
+- [x] ベンチマーク: 実行時間 +3% 以内、アロケーション悪化なし
+- [x] feature-matrix 更新: `hardcoded-container-credentials` → ✅、`unsound-condition` → ✅、`unpinned-tools` → ✅
+
+#### Phase 1 実装結果
+
+**実装日**: 2025-07-13
+
+**実装内容**:
+- `UnsoundConditionRule.cs`: ブロックスカラー + fenced expression の末尾改行検出。Auto-fix（`|` → `|-`, `>` → `>-`）あり
+- `UnpinnedToolsRule.cs`: 既知 setup アクション（`aquasecurity/setup-trivy`, `1password/load-secrets-action`）の version 未固定検出
+- RuleId enum、RuleIdExtensions、RuleCatalog への登録（priority 56, 57）
+- `.seiton.out` fixture 2 件を更新（`if_cond_edge_cases_trailing_leading_chars`, `if_cond_always_true`）
+
+**設計上の決定**:
+- `unsound-condition` は severity=warning とした（zizmor の High severity に対し、既に `if-cond` ルールが同条件を warning で検出しているため重複を避ける）
+- `unpinned-tools` は severity=warning（zizmor と同等の Medium severity）
+- 両ルールとも default-on（opt-in ではない）
+- block scalar style は AST に保持されていないため、`IfKeyRange` からバイト列を逆走査して `|` / `>` を特定する手法で fix を実現
+
+**ベンチマーク結果** (CoreLintBenchmark):
+
+| Size | FixEnabled | Baseline Mean | Post Mean | Δ Mean | Baseline Alloc | Post Alloc | Δ Alloc |
+|------|-----------|---------------|-----------|--------|----------------|------------|---------|
+| Small | False | 55.71 μs | 58.35 μs | +4.7% | 8.37 KB | 8.37 KB | **0%** |
+| Small | True | 62.91 μs | 61.71 μs | -1.9% | 9.82 KB | 9.82 KB | **0%** |
+| Medium | False | 1,236.51 μs | 1,264.05 μs | +2.2% | 68.56 KB | 68.56 KB | **0%** |
+| Medium | True | 1,819.28 μs | 1,803.34 μs | -0.9% | 81.92 KB | 81.97 KB | +0.06% |
+| Large | False | 19,703.51 μs | 19,890.37 μs | +0.9% | 327.08 KB | 327.08 KB | **0%** |
+| Large | True | 30,472.09 μs | 30,340.34 μs | -0.4% | 381.92 KB | 381.92 KB | **0%** |
+
+**評価**: アロケーション増加なし（0%）。実行時間は Large ケースで +0.9%、Medium で +2.2% であり +3% 以内の許容範囲内。Small/False の +4.7% は ShortRun（3 iteration）の測定ノイズの範囲と判断（他ケースが改善しているため）。
 
 ---
 

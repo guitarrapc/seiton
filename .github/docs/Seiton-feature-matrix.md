@@ -178,7 +178,7 @@ online audit rules（4）:
 - ghalint は全 13 ポリシーを完全カバーし、完全上位互換を達成。
 - actionlint は 17 ルール中 15 ルールを同等以上にカバー（残: shellcheck / pyflakes 外部連携のみ）。
 - 競合を完全に上回るには、次の2点が鍵。
-  - 残存 zizmor 監査差分の吸収（P0: 12件未対応 → `unpinned-tools` 等の高価値監査から段階実装）
+  - 残存 zizmor 監査差分の吸収（P0: 9件未対応 → `unsound-contains` や `github-env` などの高価値監査から段階実装）
   - dockerfile-pin/frizbee級の対象ファイル範囲拡張（P0）
 
 この順で実装すれば、Seitonは「競合機能を包括しつつ、より現代的な統合ツール」という目標に最短で近づく。
@@ -258,7 +258,7 @@ zizmor 監査ID別対応表（実装確認ベース）:
 | `forbidden-uses` | 🟡 | `forbidden-uses`（allow/deny wildcard の初期実装） |
 | `github-app` | ✅ | `github-app-token-inputs`（repositories/permissions 制限チェック） |
 | `github-env` | ❌ | 専用監査なし |
-| `hardcoded-container-credentials` | ❌ | 専用監査なし |
+| `hardcoded-container-credentials` | ✅ | `credentials`（`credentials.password` のハードコード検出） |
 | `impostor-commit` | ✅ | online 監査（`rules.impostor-commit.enabled: true` で有効化） |
 | `insecure-commands` | ✅ | `insecure-commands` |
 | `known-vulnerable-actions` | ✅ | online 監査（`rules.known-vulnerable-actions.enabled: true` で有効化） |
@@ -275,14 +275,14 @@ zizmor 監査ID別対応表（実装確認ベース）:
 | `template-injection` | ✅ | `template-injection` |
 | `undocumented-permissions` | 🟡 | `permissions` / `job-permissions-required` で部分対応 |
 | `unpinned-images` | ✅ | `unpinned-image` |
-| `unpinned-tools` | ❌ | 専用監査なし（外部ツールバージョン固定漏れ検出） |
+| `unpinned-tools` | ✅ | `unpinned-tools` |
 | `unpinned-uses` | ✅ | `unpinned-uses` |
 | `unredacted-secrets` | ✅ | `unredacted-secrets` |
-| `unsound-condition` | ❌ | 専用監査なし |
+| `unsound-condition` | ✅ | `unsound-condition` |
 | `unsound-contains` | ❌ | 専用監査なし |
 | `use-trusted-publishing` | 🟡 | `use-trusted-publishing`（publish + `id-token: write` 判定の初期実装） |
 
-対応率: 24/36（67%）— 直接17 + 部分7。残12件未対応。
+対応率: 27/36（75%）— 直接20 + 部分7。残9件未対応。
 
 ### 6.4 pinact / dockerfile-pin / frizbee（ルールエンジンではなく変換系）
 
@@ -300,12 +300,9 @@ zizmor 監査ID別対応表（実装確認ベース）:
 
 1. Dockerfile / compose / 任意YAML image pin 拡張
 
-2. zizmor 残差分（未対応 12件）
-- `unsound-condition` — 条件式の健全性検査
+2. zizmor 残差分（未対応 9件）
 - `unsound-contains` — contains() の健全性検査
 - `github-env` — GITHUB_ENV への危険な書き込み検出
-- `hardcoded-container-credentials` — コンテナ設定のハードコード認証情報
-- `unpinned-tools` — 外部ツールのバージョン固定漏れ検出
 - `artipacked` — アーティファクトクレデンシャル漏洩
 - `bot-conditions` — スプーフ可能な bot actor チェック
 - `anonymous-definition` — name 未定義のワークフロー/アクション

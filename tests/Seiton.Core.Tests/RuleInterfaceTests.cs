@@ -296,7 +296,7 @@ public sealed class RuleInterfaceTests
     {
         var rules = RuleCatalog.CreateDefaultRules();
 
-        await Assert.That(rules.Length).IsEqualTo(52);
+        await Assert.That(rules.Length).IsEqualTo(54);
         await Assert.That(rules[0].Id).IsEqualTo(RuleId.JobStructure);
         await Assert.That(rules[1].Id).IsEqualTo(RuleId.ReusableWorkflow);
         await Assert.That(rules[2].Id).IsEqualTo(RuleId.Permissions);
@@ -349,6 +349,8 @@ public sealed class RuleInterfaceTests
         await Assert.That(rules[49].Id).IsEqualTo(RuleId.OutdatedActionRunner);
         await Assert.That(rules[50].Id).IsEqualTo(RuleId.IfExprWrapper);
         await Assert.That(rules[51].Id).IsEqualTo(RuleId.ConcurrencyLimits);
+        await Assert.That(rules[52].Id).IsEqualTo(RuleId.UnsoundCondition);
+        await Assert.That(rules[53].Id).IsEqualTo(RuleId.UnpinnedTools);
 
         await Assert.That(RuleCatalog.GetPriority("job-structure")).IsEqualTo(0);
         await Assert.That(RuleCatalog.GetPriority("reusable-workflow")).IsEqualTo(1);
@@ -402,6 +404,8 @@ public sealed class RuleInterfaceTests
         await Assert.That(RuleCatalog.GetPriority("outdated-action-runner")).IsEqualTo(53);
         await Assert.That(RuleCatalog.GetPriority("if-expr-wrapper")).IsEqualTo(54);
         await Assert.That(RuleCatalog.GetPriority("concurrency-limits")).IsEqualTo(55);
+        await Assert.That(RuleCatalog.GetPriority("unsound-condition")).IsEqualTo(56);
+        await Assert.That(RuleCatalog.GetPriority("unpinned-tools")).IsEqualTo(57);
         await Assert.That(RuleCatalog.GetPriority("known-vulnerable-actions")).IsEqualTo(29);
         await Assert.That(RuleCatalog.GetPriority("impostor-commit")).IsEqualTo(30);
         await Assert.That(RuleCatalog.GetPriority("ref-confusion")).IsEqualTo(31);
@@ -11690,6 +11694,23 @@ public sealed class RuleInterfaceTests
                             - run: npm publish
                 """,
                 ExpectsFix: false),
+            new FixabilityCase(
+                "unsound-condition",
+                new UnsoundConditionRule(),
+                "on: push\njobs:\n  build:\n    runs-on: ubuntu-latest\n    if: |\n      ${{ true }}\n    steps:\n      - run: echo ng\n",
+                ExpectsFix: true),
+            new FixabilityCase(
+                "unpinned-tools",
+                new UnpinnedToolsRule(),
+                """
+                on: push
+                jobs:
+                    build:
+                        runs-on: ubuntu-latest
+                        steps:
+                            - uses: aquasecurity/setup-trivy@v0.2.0
+                """,
+                ExpectsFix: false),
         };
 
         for (var i = 0; i < cases.Length; i++)
@@ -13250,6 +13271,178 @@ public sealed class RuleInterfaceTests
         var engine = new LintEngine();
         using var result = engine.Check(yaml, ".github/workflows/test.yml", config);
         await Assert.That(result.Diagnostics.Where(d => d.RuleId == "concurrency-limits").ToArray()).IsNotEmpty();
+    }
+
+    [Test]
+    public async Task RuleRegression_UnsoundConditionRule_TableDriven()
+    {
+        var cases = new[]
+        {
+            new RuleCase(
+            "ok-plain-fenced-expression",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    if: ${{ github.event_name == 'push' }}
+                    steps:
+                        - run: echo ok
+            """,
+            []),
+            new RuleCase(
+            "ok-strip-chomping-literal",
+            "on: push\njobs:\n  build:\n    runs-on: ubuntu-latest\n    if: |-\n      ${{ github.event_name == 'push' }}\n    steps:\n      - run: echo ok\n",
+            []),
+            new RuleCase(
+            "ok-strip-chomping-folded",
+            "on: push\njobs:\n  build:\n    runs-on: ubuntu-latest\n    if: >-\n      ${{ github.event_name == 'push' }}\n    steps:\n      - run: echo ok\n",
+            []),
+            new RuleCase(
+            "ok-no-expression",
+            "on: push\njobs:\n  build:\n    runs-on: ubuntu-latest\n    if: |\n      true\n    steps:\n      - run: echo ok\n",
+            []),
+            new RuleCase(
+            "ng-literal-block-scalar-with-fenced-expr",
+            "on: push\njobs:\n  build:\n    runs-on: ubuntu-latest\n    if: |\n      ${{ github.event_name == 'push' }}\n    steps:\n      - run: echo ng\n",
+            ["always truthy", "strip chomping"]),
+            new RuleCase(
+            "ng-folded-block-scalar-with-fenced-expr",
+            "on: push\njobs:\n  build:\n    runs-on: ubuntu-latest\n    if: >\n      ${{ github.event_name == 'push' }}\n    steps:\n      - run: echo ng\n",
+            ["always truthy", "strip chomping"]),
+            new RuleCase(
+            "ng-step-block-scalar-with-fenced-expr",
+            "on: push\njobs:\n  build:\n    runs-on: ubuntu-latest\n    steps:\n      - if: |\n          ${{ github.event_name == 'push' }}\n        run: echo ng\n",
+            ["always truthy", "strip chomping"]),
+        };
+
+        await AssertRuleCases(new UnsoundConditionRule(), "unsound-condition", cases);
+    }
+
+    [Test]
+    public async Task UnsoundConditionRule_AutoFix_ReplacesLiteralIndicator()
+    {
+        var yaml = "on: push\njobs:\n  build:\n    runs-on: ubuntu-latest\n    if: |\n      ${{ true }}\n    steps:\n      - run: echo test\n";
+        var engine = new LintEngine([new UnsoundConditionRule()]);
+        using var result = engine.Check(Encoding.UTF8.GetBytes(yaml), "test.yml");
+        var diag = result.Diagnostics.FirstOrDefault(d => d.RuleId == "unsound-condition");
+        await Assert.That(diag.RuleId).IsEqualTo("unsound-condition");
+        await Assert.That(diag.Fix is not null).IsTrue();
+        await Assert.That(diag.Fix!.Value.Edits[0].NewText).IsEqualTo("|-");
+    }
+
+    [Test]
+    public async Task RuleRegression_UnpinnedToolsRule_TableDriven()
+    {
+        var cases = new[]
+        {
+            new RuleCase(
+            "ok-unrelated-action",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - uses: actions/checkout@v4
+            """,
+            []),
+            new RuleCase(
+            "ok-pinned-version",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - uses: aquasecurity/setup-trivy@v0.2.0
+                          with:
+                            version: v0.50.0
+            """,
+            []),
+            new RuleCase(
+            "ng-no-version-input",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - uses: aquasecurity/setup-trivy@v0.2.0
+            """,
+            ["does not specify 'version'", "unpinned latest"]),
+            new RuleCase(
+            "ng-version-latest",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - uses: aquasecurity/setup-trivy@v0.2.0
+                          with:
+                            version: latest
+            """,
+            ["version: latest", "unpinned"]),
+            new RuleCase(
+            "ng-version-dynamic-expression",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - uses: aquasecurity/setup-trivy@v0.2.0
+                          with:
+                            version: ${{ inputs.trivy-version }}
+            """,
+            ["dynamically", "unpinned"]),
+            new RuleCase(
+            "ng-1password-no-version",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - uses: 1password/load-secrets-action@v2
+            """,
+            ["does not specify 'version'", "unpinned latest"]),
+            new RuleCase(
+            "ng-case-insensitive-owner-repo",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - uses: AquaSecurity/Setup-Trivy@v0.2.0
+            """,
+            ["does not specify 'version'", "unpinned latest"]),
+        };
+
+        await AssertRuleCases(new UnpinnedToolsRule(), "unpinned-tools", cases);
+    }
+
+    [Test]
+    public async Task RuleRegression_UnpinnedToolsRule_ActionMetadataCompositeStep_Warns()
+    {
+        var yaml = NormalizeYaml("""
+            name: demo
+            description: demo composite action
+            runs:
+              using: composite
+              steps:
+                - uses: aquasecurity/setup-trivy@v0.2.0
+        """);
+
+        using var result = new LintEngine([new UnpinnedToolsRule()]).Check(
+            Encoding.UTF8.GetBytes(yaml),
+            ".github/actions/demo/action.yml");
+
+        var diagnostics = result.Diagnostics.Where(x => x.RuleId == "unpinned-tools").ToArray();
+        await Assert.That(diagnostics).HasSingleItem();
+        await Assert.That(diagnostics[0].Message.Contains("does not specify 'version'", StringComparison.Ordinal)).IsTrue();
     }
 
     private static async Task AssertRuleCases(IRule rule, string ruleId, RuleCase[] cases, LintConfig? config = null)

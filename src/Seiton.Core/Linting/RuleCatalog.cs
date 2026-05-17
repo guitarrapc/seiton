@@ -73,6 +73,8 @@ internal static class RuleCatalog
         (RuleId.OutdatedActionRunner, 53, false, static () => new OutdatedActionRunnerRule()),
         (RuleId.IfExprWrapper, 54, false, static () => new IfExprWrapperRule()),
         (RuleId.ConcurrencyLimits, 55, true, static () => new ConcurrencyLimitsRule()),
+        (RuleId.UnsoundCondition, 56, false, static () => new UnsoundConditionRule()),
+        (RuleId.UnpinnedTools, 57, false, static () => new UnpinnedToolsRule()),
     ];
 
     // Online rules: opt-in only (disabled by default), participate in WorkflowVisitor
@@ -218,6 +220,8 @@ internal static class RuleCatalog
         RuleId.OutdatedActionRunner => "error",
         RuleId.IfExprWrapper => "warning",
         RuleId.ConcurrencyLimits => "warning",
+        RuleId.UnsoundCondition => "warning",
+        RuleId.UnpinnedTools => "warning",
         _ => throw new ArgumentOutOfRangeException(nameof(ruleId), ruleId, "No default severity defined for this rule."),
     };
 
@@ -238,6 +242,7 @@ internal static class RuleCatalog
         RuleId.JobPermissionsRequired => true,
         RuleId.JobTimeoutMinutesRequired => true,
         RuleId.IfExprWrapper => true,
+        RuleId.UnsoundCondition => true,
         _ => false,
     };
 

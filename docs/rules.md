@@ -62,6 +62,8 @@ workflow-call-input-default              yes       local    error      no    bot
 outdated-action-runner                   yes       local    error      no    both       default
 if-expr-wrapper                          yes       local    warning    yes   both       default
 concurrency-limits                       no        local    warning    no    workflow   opt-in (not configured)
+unsound-condition                        yes       local    warning    yes   both       default
+unpinned-tools                           yes       local    warning    no    both       default
 known-vulnerable-actions                 no        online   error      no    workflow   opt-in (not configured)
 impostor-commit                          no        online   error      no    workflow   opt-in (not configured)
 ref-confusion                            no        online   error      no    workflow   opt-in (not configured)
@@ -107,6 +109,7 @@ Online rules use the GitHub API. Set GITHUB_TOKEN (or SEITON_GITHUB_TOKEN) to av
 - [if-cond](#if-cond)
 - [fake-ternary](#fake-ternary)
 - [if-expr-wrapper](#if-expr-wrapper)
+- [unsound-condition](#unsound-condition)
 - [concurrency-limits](#concurrency-limits)
 - [deprecated-commands](#deprecated-commands)
 
@@ -141,6 +144,7 @@ Online rules use the GitHub API. Set GITHUB_TOKEN (or SEITON_GITHUB_TOKEN) to av
 
 - [unpinned-uses](#unpinned-uses)
 - [unpinned-image](#unpinned-image)
+- [unpinned-tools](#unpinned-tools)
 - [archived-uses](#archived-uses)
 - [ref-version-mismatch](#ref-version-mismatch)
 - [forbidden-uses](#forbidden-uses)
@@ -833,6 +837,42 @@ jobs:
 ```
 
 > **Note:** Bare `true`, `false`, `always()`, `failure()`, `cancelled()`, `success()` literals are intentionally excluded from this rule since GitHub Actions handles them natively.
+
+---
+
+### `unsound-condition`
+
+| Default | Network | Auto-fix |
+|---|---|---|
+| ✓ | — | △ |
+
+Warns when `if:` uses a YAML block scalar (`|` or `>`) together with a fenced expression `${{ ... }}`. The trailing newline preserved by block-scalar clip chomping makes the final value a non-empty string, so the condition becomes truthy unexpectedly.
+
+**Example trigger:**
+
+```yaml
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    if: |
+      ${{ github.event_name == 'push' }}
+    steps:
+      - run: echo ng
+```
+
+**Remediation:** Use strip chomping so the trailing newline is removed:
+
+```yaml
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    if: |-
+      ${{ github.event_name == 'push' }}
+    steps:
+      - run: echo ok
+```
+
+Auto-fix rewrites `|` to `|-` and `>` to `>-` when Seiton can locate the block-scalar indicator in source.
 
 ---
 
@@ -1818,6 +1858,50 @@ container:
 container:
   image: ubuntu@sha256:a6d2f...
 ```
+
+---
+
+### `unpinned-tools`
+
+| Default | Network | Auto-fix |
+|---|---|---|
+| ✓ | — | ✗ |
+
+Warns when known tool-setup actions rely on an unpinned tool version. This currently covers `aquasecurity/setup-trivy` and `1password/load-secrets-action` in both workflow steps and composite action steps.
+
+**Example trigger:**
+
+```yaml
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: aquasecurity/setup-trivy@v0.2.0
+```
+
+```yaml
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: aquasecurity/setup-trivy@v0.2.0
+        with:
+          version: latest
+```
+
+**Remediation:** Pin `with.version` to a concrete tool version:
+
+```yaml
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: aquasecurity/setup-trivy@v0.2.0
+        with:
+          version: v0.51.2
+```
+
+Dynamic values such as `version: ${{ inputs.trivy-version }}` are also warned because they may resolve to an unpinned latest channel.
 
 ---
 
