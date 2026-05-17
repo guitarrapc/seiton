@@ -1,4 +1,4 @@
-using System.Runtime.InteropServices;
+﻿using System.Runtime.InteropServices;
 using Seiton.Cli;
 using Seiton.Config;
 using Seiton.Core.Linting;
@@ -137,6 +137,11 @@ internal static class CheckCommand
                 static () => new LintEngine(), trackAllValues: false);
             var slots = new FileCheckResult[resolvedFiles.Length];
 
+            // Rule activation metadata is invariant per DocumentKind within a run.
+            // Capture once per kind (at most 2 snapshots) instead of N per-file copies.
+            int workflowMetadataCaptured = 0, actionMetadataCaptured = 0;
+            RuleActivationMetadata workflowRuleMetadata = default, actionRuleMetadata = default;
+
             Parallel.For(0, resolvedFiles.Length,
                 new ParallelOptions { MaxDegreeOfParallelism = Environment.ProcessorCount },
                 i =>
@@ -154,13 +159,34 @@ internal static class CheckCommand
                     var engine = engines.Value!;
                     using var result = engine.Check(utf8Yaml, filePath, lintConfig);
                     var fileElapsed = verboseLogger.IsEnabled ? verboseLogger.GetElapsedTime(fileStart) : default;
+
+                    // Capture rule metadata only once per DocumentKind to avoid N string[] allocations.
+                    if (verboseLogger.IsEnabled && result.DocumentKind != DocumentKind.Unknown)
+                    {
+                        if (result.DocumentKind == DocumentKind.ActionMetadata)
+                        {
+                            if (Interlocked.CompareExchange(ref actionMetadataCaptured, 1, 0) == 0)
+                            {
+                                actionRuleMetadata = new RuleActivationMetadata(
+                                    result.ActiveRuleCount, result.DisabledRuleCount,
+                                    result.DisabledRuleIds.ToArray());
+                            }
+                        }
+                        else
+                        {
+                            if (Interlocked.CompareExchange(ref workflowMetadataCaptured, 1, 0) == 0)
+                            {
+                                workflowRuleMetadata = new RuleActivationMetadata(
+                                    result.ActiveRuleCount, result.DisabledRuleCount,
+                                    result.DisabledRuleIds.ToArray());
+                            }
+                        }
+                    }
+
                     slots[i] = new FileCheckResult(
                         result.CopyDiagnostics(), filePath,
                         sourceMap is not null ? utf8Yaml : null,
                         verboseLogger.IsEnabled ? result.SuppressionSummary : default,
-                        verboseLogger.IsEnabled ? result.ActiveRuleCount : 0,
-                        verboseLogger.IsEnabled ? result.DisabledRuleCount : 0,
-                        verboseLogger.IsEnabled ? result.DisabledRuleIds.ToArray() : [],
                         verboseLogger.IsEnabled ? result.DocumentKind : default,
                         verboseLogger.IsEnabled ? fileElapsed : default);
                 });
@@ -177,7 +203,8 @@ internal static class CheckCommand
                     if (slots[i].DocumentKind != DocumentKind.Unknown
                         && !HasLoggedRuleSummaryForKind(slots[i].DocumentKind, ref workflowRuleSummaryLogged, ref actionRuleSummaryLogged))
                     {
-                        WriteRuleSummary(verboseLogger, slots[i].ActiveRuleCount, slots[i].DisabledRuleCount, slots[i].DisabledRuleIds, slots[i].DocumentKind);
+                        var meta = slots[i].DocumentKind == DocumentKind.ActionMetadata ? actionRuleMetadata : workflowRuleMetadata;
+                        WriteRuleSummary(verboseLogger, meta.ActiveRuleCount, meta.DisabledRuleCount, meta.DisabledRuleIds, slots[i].DocumentKind);
                         MarkRuleSummaryLogged(slots[i].DocumentKind, ref workflowRuleSummaryLogged, ref actionRuleSummaryLogged);
                     }
                     WriteFileTimingSummary(verboseLogger, slots[i].FilePath, slots[i].DocumentKind, slots[i].FileElapsed, slots[i].FileDiagnosticCount, slots[i].FileSuppressedCount);
@@ -482,26 +509,37 @@ internal readonly struct FileCheckResult
     public readonly string FilePath;
     public readonly byte[]? Utf8Yaml;
     public readonly SuppressionSummary SuppressionSummary;
-    public readonly int ActiveRuleCount;
-    public readonly int DisabledRuleCount;
-    public readonly string[] DisabledRuleIds;
     public readonly DocumentKind DocumentKind;
     public readonly TimeSpan FileElapsed;
     public int FileDiagnosticCount => Diagnostics.Length;
     public int FileSuppressedCount => SuppressionSummary.TotalSuppressed;
 
     public FileCheckResult(OwnedDiagnostics diagnostics, string filePath, byte[]? utf8Yaml, SuppressionSummary suppressionSummary = default,
-        int activeRuleCount = 0, int disabledRuleCount = 0, string[]? disabledRuleIds = null, DocumentKind documentKind = default,
-        TimeSpan fileElapsed = default)
+        DocumentKind documentKind = default, TimeSpan fileElapsed = default)
     {
         Diagnostics = diagnostics;
         FilePath = filePath;
         Utf8Yaml = utf8Yaml;
         SuppressionSummary = suppressionSummary;
-        ActiveRuleCount = activeRuleCount;
-        DisabledRuleCount = disabledRuleCount;
-        DisabledRuleIds = disabledRuleIds ?? [];
         DocumentKind = documentKind;
         FileElapsed = fileElapsed;
+    }
+}
+
+/// <summary>
+/// Rule activation metadata captured once per DocumentKind in the parallel path.
+/// Invariant within a single lint run for a given DocumentKind.
+/// </summary>
+internal readonly struct RuleActivationMetadata
+{
+    public readonly int ActiveRuleCount;
+    public readonly int DisabledRuleCount;
+    public readonly string[] DisabledRuleIds;
+
+    public RuleActivationMetadata(int activeRuleCount, int disabledRuleCount, string[] disabledRuleIds)
+    {
+        ActiveRuleCount = activeRuleCount;
+        DisabledRuleCount = disabledRuleCount;
+        DisabledRuleIds = disabledRuleIds;
     }
 }

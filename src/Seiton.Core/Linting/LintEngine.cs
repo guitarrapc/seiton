@@ -179,9 +179,11 @@ public sealed class LintEngine
 
     private LintResultData CheckCore(byte[] utf8Yaml, string filePath, LintConfig? config, ParseResultData parseResult, AstArena? arena, DocumentKind documentKind, bool[]? skipJobs = null)
     {
+        var normalizedRules = NormalizeRules(config?.Rules, filePath);
+
         if (parseResult.HasFatalError || (parseResult.Workflow is null && parseResult.ActionMetadata is null))
         {
-            var (parseErrorActiveRuleCount, parseErrorDisabledRuleIds) = GetRuleActivationMetadataForDocumentKind(config?.Rules, filePath, documentKind);
+            var (parseErrorActiveRuleCount, parseErrorDisabledRuleIds) = GetRuleActivationMetadataForDocumentKind(normalizedRules.Rules, documentKind);
             return new LintResultData(parseResult, parseResult.Diagnostics)
             {
                 SuppressionSummary = SuppressionSummary.Empty,
@@ -202,7 +204,6 @@ public sealed class LintEngine
             }
         }
 
-        var normalizedRules = NormalizeRules(config?.Rules, filePath);
         _diagnostics.AddRange(normalizedRules.ConfigurationDiagnostics);
 
         var workflowForSuppression = parseResult.Workflow ?? EmptyWorkflowForSuppression;
@@ -387,13 +388,9 @@ public sealed class LintEngine
     }
 
     private (int ActiveRuleCount, string[] DisabledRuleIds) GetRuleActivationMetadataForDocumentKind(
-        IReadOnlyDictionary<string, RuleConfig>? rulesConfig,
-        string filePath,
+        IReadOnlyDictionary<string, RuleConfig>? normalizedRuleConfig,
         DocumentKind documentKind)
     {
-        var normalizedRules = NormalizeRules(rulesConfig, filePath);
-        var normalizedRuleConfig = normalizedRules.Rules;
-
         _disabledRuleIds.Clear();
 
         var activeRuleCount = 0;
