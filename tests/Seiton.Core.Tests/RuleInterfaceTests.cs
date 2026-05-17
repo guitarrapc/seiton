@@ -13833,7 +13833,7 @@ public sealed class RuleInterfaceTests
     {
         var cases = new[]
         {
-            // Case 1: checkout (no persist-credentials) + upload-artifact (path: .) → error
+            // Case 1: checkout (no persist-credentials) + upload-artifact v4 (path: ., include-hidden-files: true) → error
             new RuleCase(
             "ng-checkout-upload-dot",
             """
@@ -13847,6 +13847,7 @@ public sealed class RuleInterfaceTests
                           with:
                               name: my-artifact
                               path: .
+                              include-hidden-files: true
             """,
             ["upload-artifact with path '.'", "persist-credentials: false"]),
             // Case 2: checkout (persist-credentials: false) + upload-artifact (path: .) → OK
@@ -13883,7 +13884,7 @@ public sealed class RuleInterfaceTests
                               path: dist/
             """,
             []),
-            // Case 4: checkout v6+ (no persist-credentials) + upload-artifact (path: .) → warning (severity lowered)
+            // Case 4: checkout v6+ (no persist-credentials) + upload-artifact v4 (path: ., include-hidden-files: true) → warning (severity lowered)
             new RuleCase(
             "ng-checkout-v6-upload-dot",
             """
@@ -13897,6 +13898,7 @@ public sealed class RuleInterfaceTests
                           with:
                               name: my-artifact
                               path: .
+                              include-hidden-files: true
             """,
             ["upload-artifact with path '.'", "v6+"]),
             new RuleCase(
@@ -13912,6 +13914,7 @@ public sealed class RuleInterfaceTests
                           with:
                               name: my-artifact
                               path: .
+                              include-hidden-files: true
             """,
             ["upload-artifact with path '.'", "v6+"]),
             // Case 5: checkout only (no upload-artifact) → OK
@@ -13941,7 +13944,7 @@ public sealed class RuleInterfaceTests
                               path: .
             """,
             []),
-            // Edge case: path: .. (parent directory) → error
+            // Edge case: path: .. (parent directory) + hidden files → error
             new RuleCase(
             "ng-checkout-upload-dotdot",
             """
@@ -13955,9 +13958,10 @@ public sealed class RuleInterfaceTests
                           with:
                               name: my-artifact
                               path: ..
+                              include-hidden-files: true
             """,
             ["upload-artifact with path '..'", "persist-credentials: false"]),
-            // Edge case: path: ${{ github.workspace }} → error
+            // Edge case: path: ${{ github.workspace }} + hidden files → error
             new RuleCase(
             "ng-checkout-upload-workspace",
             """
@@ -13971,6 +13975,7 @@ public sealed class RuleInterfaceTests
                           with:
                               name: my-artifact
                               path: ${{ github.workspace }}
+                              include-hidden-files: true
             """,
             ["upload-artifact with path", "persist-credentials: false"]),
             // Edge case: persist-credentials: true → still flagged
@@ -13989,6 +13994,7 @@ public sealed class RuleInterfaceTests
                           with:
                               name: my-artifact
                               path: .
+                              include-hidden-files: true
             """,
             ["upload-artifact with path '.'", "persist-credentials: false"]),
             // Edge case: SHA-pinned checkout → treated as non-v6+ (unknown version)
@@ -14005,6 +14011,7 @@ public sealed class RuleInterfaceTests
                           with:
                               name: my-artifact
                               path: .
+                              include-hidden-files: true
             """,
             ["upload-artifact with path '.'", "persist-credentials: false"]),
             new RuleCase(
@@ -14020,6 +14027,7 @@ public sealed class RuleInterfaceTests
                           with:
                               name: my-artifact
                               path: ./.
+                              include-hidden-files: true
             """,
             ["upload-artifact with path './.'", "persist-credentials: false"]),
             new RuleCase(
@@ -14035,6 +14043,7 @@ public sealed class RuleInterfaceTests
                           with:
                               name: my-artifact
                               path: .//
+                              include-hidden-files: true
             """,
             ["upload-artifact with path './/'", "persist-credentials: false"]),
             new RuleCase(
@@ -14050,6 +14059,7 @@ public sealed class RuleInterfaceTests
                           with:
                               name: my-artifact
                               path: ../.
+                              include-hidden-files: true
             """,
             ["upload-artifact with path '../.'", "persist-credentials: false"]),
             new RuleCase(
@@ -14065,6 +14075,7 @@ public sealed class RuleInterfaceTests
                           with:
                               name: my-artifact
                               path: ${{ github.workspace }}/.
+                              include-hidden-files: true
             """,
             ["upload-artifact with path", "persist-credentials: false"]),
             // Edge case: upload-artifact before checkout (order shouldn't matter)
@@ -14080,6 +14091,7 @@ public sealed class RuleInterfaceTests
                           with:
                               name: my-artifact
                               path: .
+                              include-hidden-files: true
                         - uses: actions/checkout@v4
             """,
             ["upload-artifact with path '.'", "persist-credentials: false"]),
@@ -14103,38 +14115,47 @@ public sealed class RuleInterfaceTests
                           with:
                               name: artifact-01
                               path: .
+                              include-hidden-files: true
                         - uses: actions/upload-artifact@v4
                           with:
                               name: artifact-02
                               path: .
+                              include-hidden-files: true
                         - uses: actions/upload-artifact@v4
                           with:
                               name: artifact-03
                               path: .
+                              include-hidden-files: true
                         - uses: actions/upload-artifact@v4
                           with:
                               name: artifact-04
                               path: .
+                              include-hidden-files: true
                         - uses: actions/upload-artifact@v4
                           with:
                               name: artifact-05
                               path: .
+                              include-hidden-files: true
                         - uses: actions/upload-artifact@v4
                           with:
                               name: artifact-06
                               path: .
+                              include-hidden-files: true
                         - uses: actions/upload-artifact@v4
                           with:
                               name: artifact-07
                               path: .
+                              include-hidden-files: true
                         - uses: actions/upload-artifact@v4
                           with:
                               name: artifact-08
                               path: .
+                              include-hidden-files: true
                         - uses: actions/upload-artifact@v4
                           with:
                               name: artifact-09
                               path: .
+                              include-hidden-files: true
             """);
 
         using var result = new LintEngine([new ArtipackedRule()]).Check(Encoding.UTF8.GetBytes(yaml), "artipacked-many-uploads.yml");
@@ -14183,6 +14204,7 @@ public sealed class RuleInterfaceTests
                           with:
                               name: artifact
                               path: .
+                              include-hidden-files: true
             """);
 
         using var result = new LintEngine([new ArtipackedRule()]).Check(Encoding.UTF8.GetBytes(yaml), "artipacked-late-checkout.yml");
@@ -14207,12 +14229,84 @@ public sealed class RuleInterfaceTests
                           with:
                               name: artifact
                               path: .
+                              include-hidden-files: true
             """);
 
         using var result = new LintEngine([new ArtipackedRule()]).Check(Encoding.UTF8.GetBytes(yaml), "artipacked-v6.yml");
         var diagnostic = result.Diagnostics.Single(x => x.RuleId == "artipacked");
 
         await Assert.That(diagnostic.Severity).IsEqualTo(DiagnosticSeverity.Warning);
+    }
+
+    [Test]
+    public async Task RuleRegression_ArtipackedRule_DoesNotReportUploadArtifactV4_WhenHiddenFilesAreDefaultedOff()
+    {
+        var yaml = NormalizeYaml(
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - uses: actions/checkout@v4
+                        - uses: actions/upload-artifact@v4
+                          with:
+                              name: artifact
+                              path: .
+            """);
+
+        using var result = new LintEngine([new ArtipackedRule()]).Check(Encoding.UTF8.GetBytes(yaml), "artipacked-v4-default-hidden-files.yml");
+        var diagnostics = result.Diagnostics.Where(x => x.RuleId == "artipacked").ToArray();
+
+        await Assert.That(diagnostics).IsEmpty();
+    }
+
+    [Test]
+    public async Task RuleRegression_ArtipackedRule_ReportsUploadArtifactV4_WhenHiddenFilesAreIncluded()
+    {
+        var yaml = NormalizeYaml(
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - uses: actions/checkout@v4
+                        - uses: actions/upload-artifact@v4
+                          with:
+                              name: artifact
+                              path: .
+                              include-hidden-files: true
+            """);
+
+        using var result = new LintEngine([new ArtipackedRule()]).Check(Encoding.UTF8.GetBytes(yaml), "artipacked-v4-include-hidden.yml");
+        var diagnostic = result.Diagnostics.Single(x => x.RuleId == "artipacked");
+
+        await Assert.That(diagnostic.Severity).IsEqualTo(DiagnosticSeverity.Error);
+    }
+
+    [Test]
+    public async Task RuleRegression_ArtipackedRule_DoesNotReportUploadArtifactV4_WhenHiddenFilesAreExplicitlyDisabled()
+    {
+        var yaml = NormalizeYaml(
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - uses: actions/checkout@v4
+                        - uses: actions/upload-artifact@v4
+                          with:
+                              name: artifact
+                              path: .
+                              include-hidden-files: false
+            """);
+
+        using var result = new LintEngine([new ArtipackedRule()]).Check(Encoding.UTF8.GetBytes(yaml), "artipacked-v4-hidden-disabled.yml");
+        var diagnostics = result.Diagnostics.Where(x => x.RuleId == "artipacked").ToArray();
+
+        await Assert.That(diagnostics).IsEmpty();
     }
 
     [Test]
@@ -14230,6 +14324,7 @@ public sealed class RuleInterfaceTests
                           with:
                               name: artifact
                               path: .
+                              include-hidden-files: true
             """);
 
         using var result = new LintEngine([new ArtipackedRule()]).Check(Encoding.UTF8.GetBytes(yaml), "artipacked-location.yml");

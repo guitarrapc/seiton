@@ -78,7 +78,8 @@ public sealed class ArtipackedRule() : RuleBase(RuleId.Artipacked)
                 || actionSpec.Id != PopularActions.ActionId.ActionsUploadArtifact
                 || actionExec.Inputs is null
                 || !actionExec.Inputs.Value.TryGetValue(utf8Yaml, "path"u8, out var pathNode)
-                || !IsDangerousPath(Arena.GetStringValue(pathNode)))
+                || !IsDangerousPath(Arena.GetStringValue(pathNode))
+                || !MayIncludeHiddenFiles(actionExec, usesText, utf8Yaml))
             {
                 continue;
             }
@@ -106,6 +107,28 @@ public sealed class ArtipackedRule() : RuleBase(RuleId.Artipacked)
         var value = Arena.GetStringValue(persistCredentialsNode);
         return !ExpressionScanHelpers.ContainsExpressionMarker(persistCredentialsNode, Arena)
                && value.SequenceEqual("false"u8);
+    }
+
+    private bool MayIncludeHiddenFiles(ExecAction actionExec, ReadOnlySpan<byte> usesText, byte[] utf8Yaml)
+    {
+        if (!OutdatedActionRunnerRule.TryExtractMajorVersion(usesText, out var majorVersion) || majorVersion < 4)
+        {
+            return true;
+        }
+
+        if (actionExec.Inputs is null
+            || !actionExec.Inputs.Value.TryGetValue(utf8Yaml, "include-hidden-files"u8, out var includeHiddenFilesNode))
+        {
+            return false;
+        }
+
+        if (ExpressionScanHelpers.ContainsExpressionMarker(includeHiddenFilesNode, Arena))
+        {
+            return true;
+        }
+
+        var value = Arena.GetStringValue(includeHiddenFilesNode);
+        return value.SequenceEqual("true"u8);
     }
 
     /// <summary>Checks whether the upload path covers the repository root (and thus .git/config).</summary>

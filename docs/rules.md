@@ -1006,14 +1006,14 @@ jobs:
 |---|---|---|
 | ✓ | — | ✗ |
 
-Detects credential leakage risk when `actions/checkout` (without `persist-credentials: false`) is combined with `actions/upload-artifact` that uploads a dangerous path (`.`, `..`, or `${{ github.workspace }}`).
+Detects credential leakage risk when `actions/checkout` (without `persist-credentials: false`) is combined with `actions/upload-artifact` that uploads a dangerous path (`.`, `..`, or `${{ github.workspace }}`) in a way that may include hidden files.
 
   > **Note:** With legacy `actions/checkout` versions (v1-v5) persist a token in `.git/config`, `actions/checkout@v6+` correct this behavior and stores credentials in a separate file under `$RUNNER_TEMP`. Uploading the repository root or parent can therefore expose sensitive checkout state. With `actions/upload-artifact@v4`, hidden files are excluded by default, so legacy `.git/config` is typically only included when hidden files are uploaded explicitly, for example with `include-hidden-files: true`.
 
 **Severity:**
 
-- **error** — checkout (non-v6+) without `persist-credentials: false` + upload of dangerous path
-- **warning** — checkout v6+ without `persist-credentials: false` + upload of dangerous path (v6+ stores credentials in `$RUNNER_TEMP` instead of `.git/config`)
+- **error** — checkout (non-v6+) without `persist-credentials: false` + dangerous upload that may include hidden files
+- **warning** — checkout v6+ without `persist-credentials: false` + dangerous upload that may include hidden files (v6+ stores credentials in `$RUNNER_TEMP` instead of `.git/config`)
 
 **Example trigger:**
 
@@ -1028,6 +1028,7 @@ jobs:
         with:
           name: my-artifact
           path: .
+          include-hidden-files: true
 ```
 
 **Remediation:** Set `persist-credentials: false` on the checkout step, or upload only specific subdirectories:
@@ -1043,7 +1044,7 @@ steps:
       path: dist/
 ```
 
-  > **Note:** This rule is independent of `checkout-persist-credentials`. The latter flags every checkout without `persist-credentials: false`; `artipacked` only fires when combined with a dangerous upload-artifact path in the same job.
+  > **Note:** This rule is independent of `checkout-persist-credentials`. The latter flags every checkout without `persist-credentials: false`; `artipacked` only fires when combined with a dangerous upload-artifact path in the same job that may include hidden files.
 
 ---
 
