@@ -298,14 +298,15 @@ if (IsIgnored(value))
 
 **Design decisions**:
 - `RunnerLabelRule` only emits verbose for user-configured `additionalKnownHostedLabels`, NOT built-in labels (ubuntu-latest, etc.) to avoid noise.
+- Matrix-expanded `runs-on: ${{ matrix.AXIS }}` paths now emit the same verbose skip info for user-configured `additionalKnownHostedLabels`; review found this gap after the initial Phase 4 implementation and the follow-up fix aligned matrix and static label behavior.
 - `CredentialsRule` was refactored to split the compound `!TryGetRegistryHost || IsPublic || IsAdditional` condition to insert verbose at the right point.
 - `ForbiddenUsesRule` emits verbose inside the existing local function that already captures `this` for `AddStepWarning`/`AddJobWarning`.
 
 **Verification**:
 
 - [x] Benchmark: `CoreLintBenchmark` (with `Verbose=false`) before/after — 0 B allocation delta on all sizes.
-- [x] Tests: 9 per-rule unit tests (4 positive verbose, 5 negative/no-verbose). All pass.
-- [x] Regression: `dotnet test` — 1783 tests all green.
+- [x] Tests: 11 per-rule unit tests (6 positive verbose, 5 negative/no-verbose), including matrix-expanded runner label coverage. All pass.
+- [x] Regression: `dotnet test` — 1785 tests all green.
 
 **Benchmark results (after, .NET 10.0.8)**:
 
@@ -319,6 +320,7 @@ if (IsIgnored(value))
 | Large | True | 30,064.83 | 381.98 KB |
 
 Note: Runtime improvement vs Phase 3 baseline is due to .NET SDK version change (10.0.6 → 10.0.8), not Phase 4 code changes. Allocation is identical.
+Review follow-up re-ran `CoreLintBenchmark` after the matrix runner-label fix and allocations remained identical (`8.43 KB`, `9.88 KB`, `68.63 KB`, `81.98 KB`, `327.14 KB`, `381.98 KB`), confirming the additional verbose-only branch did not change the non-verbose benchmark path.
 
 ---
 

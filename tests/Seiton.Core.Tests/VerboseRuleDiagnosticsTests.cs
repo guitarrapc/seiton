@@ -310,4 +310,79 @@ public sealed class VerboseRuleDiagnosticsTests
             .ToArray();
         await Assert.That(infoDiags.Length).IsEqualTo(0);
     }
+
+    [Test]
+    public async Task RunnerLabelRule_MatrixAdditionalKnownLabel_Verbose_EmitsInfo()
+    {
+        var config = new LintConfig
+        {
+            Verbose = true,
+            Rules = new Dictionary<string, RuleConfig>
+            {
+                ["runner-label"] = new RuleConfig
+                {
+                    KnownHostedLabels = new ExtendableList(["my-custom-runner"]),
+                },
+            },
+        };
+
+        var yaml = NormalizeYaml("""
+            on: push
+            jobs:
+                build:
+                    strategy:
+                        matrix:
+                            runner: [my-custom-runner]
+                    runs-on: ${{ matrix.runner }}
+                    steps:
+                        - run: echo hello
+            """);
+
+        using var result = new LintEngine([new RunnerLabelRule()])
+            .Check(Encoding.UTF8.GetBytes(yaml), "verbose-test.yml", config);
+        var infoDiags = result.Diagnostics
+            .Where(x => x.RuleId == "runner-label" && x.Severity == DiagnosticSeverity.Info)
+            .ToArray();
+        await Assert.That(infoDiags.Length).IsEqualTo(1);
+        await Assert.That(infoDiags[0].Message).Contains("my-custom-runner");
+        await Assert.That(infoDiags[0].Message).Contains("known-hosted-labels");
+    }
+
+    [Test]
+    public async Task RunnerLabelRule_MatrixAdditionalKnownLabelArray_Verbose_EmitsInfo()
+    {
+        var config = new LintConfig
+        {
+            Verbose = true,
+            Rules = new Dictionary<string, RuleConfig>
+            {
+                ["runner-label"] = new RuleConfig
+                {
+                    KnownHostedLabels = new ExtendableList(["my-custom-runner"]),
+                },
+            },
+        };
+
+        var yaml = NormalizeYaml("""
+            on: push
+            jobs:
+                build:
+                    strategy:
+                        matrix:
+                            runner:
+                                - [my-custom-runner]
+                    runs-on: ${{ matrix.runner }}
+                    steps:
+                        - run: echo hello
+            """);
+
+        using var result = new LintEngine([new RunnerLabelRule()])
+            .Check(Encoding.UTF8.GetBytes(yaml), "verbose-test.yml", config);
+        var infoDiags = result.Diagnostics
+            .Where(x => x.RuleId == "runner-label" && x.Severity == DiagnosticSeverity.Info)
+            .ToArray();
+        await Assert.That(infoDiags.Length).IsEqualTo(1);
+        await Assert.That(infoDiags[0].Message).Contains("my-custom-runner");
+        await Assert.That(infoDiags[0].Message).Contains("known-hosted-labels");
+    }
 }

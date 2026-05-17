@@ -380,9 +380,19 @@ public sealed class RunnerLabelRule() : RuleBase(RuleId.RunnerLabel)
                         var labelUtf8 = Arena.GetStringValue(scalar.Value);
                         if (labelUtf8.IsEmpty
                             || RunnerLabels.IsKnownHostedLabel(labelUtf8)
-                            || RunnerLabels.IsSelfHostedPresetLabel(labelUtf8)
-                            || IsAdditionalKnownHostedLabel(labelUtf8))
+                            || RunnerLabels.IsSelfHostedPresetLabel(labelUtf8))
                         {
+                            continue;
+                        }
+
+                        if (IsAdditionalKnownHostedLabel(labelUtf8))
+                        {
+                            if (Config.Verbose)
+                            {
+                                var knownLabelText = Decode(Arena.GetStringSlice(scalar.Value));
+                                AddJobInfo(job, $"label '{knownLabelText}' matched known-hosted-labels config, skipping", Arena.GetStringRange(scalar.Value));
+                            }
+
                             continue;
                         }
 
@@ -425,9 +435,19 @@ public sealed class RunnerLabelRule() : RuleBase(RuleId.RunnerLabel)
                             var elemUtf8 = Arena.GetStringValue(element.Value);
                             if (elemUtf8.IsEmpty
                                 || RunnerLabels.IsKnownHostedLabel(elemUtf8)
-                                || RunnerLabels.IsSelfHostedPresetLabel(elemUtf8)
-                                || IsAdditionalKnownHostedLabel(elemUtf8))
+                                || RunnerLabels.IsSelfHostedPresetLabel(elemUtf8))
                             {
+                                continue;
+                            }
+
+                            if (IsAdditionalKnownHostedLabel(elemUtf8))
+                            {
+                                if (Config.Verbose)
+                                {
+                                    var knownLabelText = Decode(Arena.GetStringSlice(element.Value));
+                                    AddJobInfo(job, $"label '{knownLabelText}' matched known-hosted-labels config, skipping", Arena.GetStringRange(element.Value));
+                                }
+
                                 continue;
                             }
 
