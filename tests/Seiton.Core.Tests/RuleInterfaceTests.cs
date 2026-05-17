@@ -15081,6 +15081,61 @@ public sealed class RuleInterfaceTests
         await Assert.That(diagnostics).IsEmpty();
     }
 
+    [Test]
+    public async Task RuleRegression_ArtipackedRule_MultilinePathAccumulatesParentDir()
+    {
+        // Multi-line path: first line is "." (current-dir, not parent-exposing),
+        // second line is "../.." (parent-dir). The rule must scan all lines to
+        // accumulate exposesParentDirectory correctly.
+        var yaml = NormalizeYaml(
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - uses: actions/checkout@v6
+                        - uses: actions/upload-artifact@v4.4
+                          with:
+                              name: artifact
+                              path: |
+                                  .
+                                  ../..
+            """);
+
+        using var result = new LintEngine([new ArtipackedRule()]).Check(Encoding.UTF8.GetBytes(yaml), "artipacked-multiline.yml");
+        var diagnostic = result.Diagnostics.Single(x => x.RuleId == "artipacked");
+
+        await Assert.That(diagnostic.Severity).IsEqualTo(DiagnosticSeverity.Warning);
+        await Assert.That(diagnostic.Message).Contains("$RUNNER_TEMP");
+    }
+
+    [Test]
+    public async Task RuleRegression_ArtipackedRule_ExpressionPathIsNotFlaggedAsDangerous()
+    {
+        // Dynamic expression path like ${{ inputs.artifact_path }} should not be
+        // treated as a dangerous glob — it resolves at runtime and cannot be
+        // classified statically.
+        var yaml = NormalizeYaml(
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - uses: actions/checkout@v4
+                        - uses: actions/upload-artifact@v4
+                          with:
+                              name: artifact
+                              path: ${{ inputs.artifact_path }}
+            """);
+
+        using var result = new LintEngine([new ArtipackedRule()]).Check(Encoding.UTF8.GetBytes(yaml), "artipacked-expr-path.yml");
+        var diagnostics = result.Diagnostics.Where(x => x.RuleId == "artipacked").ToArray();
+
+        await Assert.That(diagnostics).IsEmpty();
+    }
+
     private static async Task AssertRuleCases(IRule rule, string ruleId, RuleCase[] cases, LintConfig? config = null)
     {
         for (var i = 0; i < cases.Length; i++)

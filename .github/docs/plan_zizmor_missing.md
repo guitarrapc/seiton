@@ -401,7 +401,7 @@ zizmor は tree-sitter（bash/pwsh 完全パーサー）を使用しているが
 - **検出対象**: `actions/checkout`（persist-credentials 未設定）と `actions/upload-artifact`（危険パスをアップロード）の組み合わせによる credential 漏洩リスク
 - **ルールID**: `artipacked`
 - **デフォルト**: on
-- **severity**: error（checkout 非 v6+ + 危険パス）、warning（checkout v6+ + 危険パス）
+- **severity**: error（非v6+ checkout + 隠しファイルを含む危険パス＝`.git/config` 露出）、warning（v6+ checkout + 親ディレクトリ upload＝`$RUNNER_TEMP` 到達リスク、または非v6+でも隠しファイル非対象の場合）
 - **検査ノード**: job 内の全 steps を線形スキャン
 - **判定ロジック**:
   1. job 内の steps を順に走査し、`actions/checkout` の使用を検出
@@ -437,7 +437,7 @@ zizmor は tree-sitter（bash/pwsh 完全パーサー）を使用しているが
 - 危険パス判定: `.`, `..`, `./**`, `**`, `${{ github.workspace }}`, `${{ github.workspace }}/..` などの root / parent / workspace 系パターン（各行を個別チェック）
 - checkout バージョン判定: leading zero のないセマンティックバージョン `@vN[.M[.P]]` のみ静的判定。SHA pin や `@v06` のような arbitrary tag は unknown（非 v6+扱い）
 - diagnostic は upload-artifact の `path` 値位置に報告
-- severity: error（非v6+ + 危険パス）、warning（v6+ + 危険パス）
+- severity: error（非v6+ + 隠しファイル含む＝`.git/config` 露出）、warning（v6+ + 親dir＝`$RUNNER_TEMP` 到達、または非v6+でも隠しファイル非対象）
 - バージョン ref に任意サフィックス（`@v6-legacy`, `@v4.4-legacy` 等）がある場合は unknown ref として保守的に扱う（非 v6+、unsafe minor version）
 - パッチバージョン（`@v4.6.2`）は受け入れ、メジャー.マイナーとして判定する（`@v4.6.2` → v4.6 → safe）
 

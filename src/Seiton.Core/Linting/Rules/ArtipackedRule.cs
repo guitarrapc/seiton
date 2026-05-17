@@ -291,8 +291,10 @@ public sealed class ArtipackedRule() : RuleBase(RuleId.Artipacked)
     internal static bool TryClassifyDangerousPath(ReadOnlySpan<byte> path, out bool exposesParentDirectory)
     {
         exposesParentDirectory = false;
+        var hasDangerousLine = false;
 
-        // Handle multiline paths: each line is a separate glob. If any line is dangerous, flag it.
+        // Handle multiline paths: each line is a separate glob. Scan all lines
+        // to accumulate exposesParentDirectory across the entire path value.
         while (path.Length > 0)
         {
             // Find end of line
@@ -304,8 +306,8 @@ public sealed class ArtipackedRule() : RuleBase(RuleId.Artipacked)
 
             if (line.Length > 0 && TryClassifyDangerousLine(line, out var lineExposesParentDirectory))
             {
+                hasDangerousLine = true;
                 exposesParentDirectory |= lineExposesParentDirectory;
-                return true;
             }
 
             if (nlIndex < 0)
@@ -316,7 +318,7 @@ public sealed class ArtipackedRule() : RuleBase(RuleId.Artipacked)
             path = path.Slice(nlIndex + 1);
         }
 
-        return false;
+        return hasDangerousLine;
     }
 
     private static bool TryClassifyDangerousLine(ReadOnlySpan<byte> line, out bool exposesParentDirectory)
@@ -375,6 +377,14 @@ public sealed class ArtipackedRule() : RuleBase(RuleId.Artipacked)
                 continue;
             }
 
+            // Expression segments (${{ ... }}) are not glob patterns — they resolve at runtime
+            // and their danger cannot be determined statically. Only ${{ github.workspace }}
+            // is handled separately by TryClassifyGitHubWorkspaceExpression.
+            if (ContainsExpressionMarker(segment))
+            {
+                return false;
+            }
+
             // Glob metacharacters can match arbitrary root content, including hidden files under .git.
             if (ContainsGlobMetacharacters(segment))
             {
@@ -385,6 +395,12 @@ public sealed class ArtipackedRule() : RuleBase(RuleId.Artipacked)
         }
 
         return true;
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private static bool ContainsExpressionMarker(ReadOnlySpan<byte> segment)
+    {
+        return segment.IndexOf("${{"u8) >= 0;
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -480,7 +496,7 @@ public sealed class ArtipackedRule() : RuleBase(RuleId.Artipacked)
         return fwd < bck ? fwd : bck;
     }
 
-    /// <summary>Finds the first path separator (/ or \) in the span, or -1 if not found.</summary>
+    /// <summary>Trims leading and trailing space, tab, and carriage return bytes from the span.</summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static ReadOnlySpan<byte> TrimBytes(ReadOnlySpan<byte> span)
     {
