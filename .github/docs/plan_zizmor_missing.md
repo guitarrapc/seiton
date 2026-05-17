@@ -438,7 +438,7 @@ zizmor は tree-sitter（bash/pwsh 完全パーサー）を使用しているが
 
 **実装メモ**:
 - `ArtipackedRule` は `checkout-persist-credentials` とは独立したルールとして実装（統合しない）
-- `VisitJobPost` で `job.Steps` を 2 パス走査し、まず unsafe checkout の有無を確定し、その後に危険な upload-artifact を報告
+- `VisitJobPost` では `job.Steps` を順に走査し、unsafe checkout の後に現れる危険な `upload-artifact` のみを報告（upload-before-checkout は報告しない）
 - 危険パス判定: `.`, `..`, `${{ github.workspace }}`（各行を個別チェック）
 - checkout バージョン判定: セマンティックバージョン `@vN` のみ静的判定。SHA pin は unknown（非 v6+扱い）
 - diagnostic は upload-artifact の `path` 値位置に報告
