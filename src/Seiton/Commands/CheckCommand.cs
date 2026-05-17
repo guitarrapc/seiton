@@ -540,6 +540,6 @@ internal readonly struct RuleActivationMetadata
     {
         ActiveRuleCount = activeRuleCount;
         DisabledRuleCount = disabledRuleCount;
-        DisabledRuleIds = disabledRuleIds;
+        DisabledRuleIds = disabledRuleIds ?? [];
     }
 }

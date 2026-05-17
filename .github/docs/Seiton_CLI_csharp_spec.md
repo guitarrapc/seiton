@@ -272,7 +272,7 @@ Shared contract reference: `Seiton_Linter_spec.md` §2.1.
 - In `--verbose` mode, per-file timing is logged via `WriteFileTimingSummary` (e.g. `verbose: .github/workflows/ci.yml: workflow, 1.2 ms, 5 diagnostics, 2 suppressed`).
 - In `--verbose` mode, total timing is logged via `WriteTotalTiming` (e.g. `verbose: total: 3 file(s) checked in 4.5 ms`).
 - `VerboseLogger` exposes `GetTimestamp()` and `GetElapsedTime(long start)` delegating to `TimeProvider` for testable timing.
-- `FileCheckResult` carries `ActiveRuleCount`, `DisabledRuleCount`, `DisabledRuleIds`, `DocumentKind`, `FileElapsed`, `FileDiagnosticCount` (computed), and `FileSuppressedCount` (computed) for the parallel aggregation path.
+- `FileCheckResult` carries `DocumentKind`, `FileElapsed`, `FileDiagnosticCount` (computed), and `FileSuppressedCount` (computed) for the parallel aggregation path. Rule activation metadata (`ActiveRuleCount`, `DisabledRuleCount`, `DisabledRuleIds`) is captured once per DocumentKind via `RuleActivationMetadata` using `Interlocked` — avoiding N redundant `string[]` snapshots when only at most 2 are needed.
 - In parallel mode, `checking <file>...` is emitted from inside `Parallel.For` as best-effort progress output; the lines are self-contained and may interleave, while aggregated diagnostics and summaries remain deterministic.
 - When no `--min-severity` is set, errors are zero, and warnings are non-zero, a hint line is emitted: `hint: use --min-severity error to treat warnings as non-blocking in CI`.
 - In fix mode, `WriteNetworkFixHint` emits a hint when `unpinned-uses` or `unpinned-image` diagnostics exist but the corresponding network flag is not enabled.

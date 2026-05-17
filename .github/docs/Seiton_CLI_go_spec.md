@@ -297,18 +297,22 @@ type fileCheckResult struct {
     diagnostics        []*Diagnostic
     filePath           string
     utf8Yaml           []byte // nil when not needed for snippet rendering
-    activeRuleCount    int
-    disabledRuleCount  int
-    disabledRuleIDs    []string
     documentKind       DocumentKind
     suppressionSummary SuppressionSummary
     fileElapsed        time.Duration
     fileDiagnosticCount int
     fileSuppressedCount int
 }
+
+// Captured once per DocumentKind via sync.Once or atomic CAS — avoids N redundant snapshots.
+type ruleActivationMetadata struct {
+    activeRuleCount   int
+    disabledRuleCount int
+    disabledRuleIDs   []string
+}
 ```
 
-These per-file fields support the same ordered verbose aggregation path as the C# implementation: workers capture metadata in parallel, then the main thread emits deterministic rule summaries, timing, and suppression lines in input order.
+Rule activation metadata is invariant per DocumentKind within a single lint run. Workers race to capture metadata once per kind (at most 2 snapshots) rather than storing redundant copies per file. The main goroutine emits deterministic rule summaries, timing, and suppression lines in input order.
 
 ### 6.2 Fix Orchestration
 
