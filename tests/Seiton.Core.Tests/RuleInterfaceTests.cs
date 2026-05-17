@@ -14438,6 +14438,25 @@ public sealed class RuleInterfaceTests
                               path: .
             """,
             []),
+            // Edge case: both legacy and v6+ checkout + parent-dir upload + hidden files excluded.
+            // Legacy .git/config is protected by hidden-file filter; only v6+ $RUNNER_TEMP concern
+            // remains, so severity should be warning (not error).
+            new RuleCase(
+            "ng-checkout-both-parent-dir-no-hidden-warning",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - uses: actions/checkout@v4
+                        - uses: actions/checkout@v6
+                        - uses: actions/upload-artifact@v4.4
+                          with:
+                              name: my-artifact
+                              path: ../..
+            """,
+            ["upload-artifact with path '../..'", "$RUNNER_TEMP"]),
             // Edge case: leading-zero checkout refs are arbitrary tags, not semver v6+.
             new RuleCase(
             "ng-checkout-v06-upload-dot",
@@ -14909,6 +14928,62 @@ public sealed class RuleInterfaceTests
         var diagnostics = result.Diagnostics.Where(x => x.RuleId == "artipacked").ToArray();
 
         await Assert.That(diagnostics).IsEmpty();
+    }
+
+    [Test]
+    public async Task RuleRegression_ArtipackedRule_BothCheckoutsParentDirNoHiddenIsWarning()
+    {
+        // When both legacy and v6+ checkout are present but hidden files excluded,
+        // legacy .git/config is protected by hidden-file filter. Only v6+ $RUNNER_TEMP
+        // is at risk via parent-dir, so severity should be warning (not error).
+        var yaml = NormalizeYaml(
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - uses: actions/checkout@v4
+                        - uses: actions/checkout@v6
+                        - uses: actions/upload-artifact@v4.4
+                          with:
+                              name: artifact
+                              path: ../..
+            """);
+
+        using var result = new LintEngine([new ArtipackedRule()]).Check(Encoding.UTF8.GetBytes(yaml), "artipacked-both-parent.yml");
+        var diagnostic = result.Diagnostics.Single(x => x.RuleId == "artipacked");
+
+        await Assert.That(diagnostic.Severity).IsEqualTo(DiagnosticSeverity.Warning);
+        await Assert.That(diagnostic.Message).Contains("$RUNNER_TEMP");
+    }
+
+    [Test]
+    public async Task RuleRegression_ArtipackedRule_BothCheckoutsWithHiddenFilesIsError()
+    {
+        // When both legacy and v6+ checkout are present AND hidden files included,
+        // legacy .git/config IS exposed, so severity should be error.
+        var yaml = NormalizeYaml(
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - uses: actions/checkout@v4
+                        - uses: actions/checkout@v6
+                        - uses: actions/upload-artifact@v4
+                          with:
+                              name: artifact
+                              path: .
+                              include-hidden-files: true
+            """);
+
+        using var result = new LintEngine([new ArtipackedRule()]).Check(Encoding.UTF8.GetBytes(yaml), "artipacked-both-hidden.yml");
+        var diagnostic = result.Diagnostics.Single(x => x.RuleId == "artipacked");
+
+        await Assert.That(diagnostic.Severity).IsEqualTo(DiagnosticSeverity.Error);
+        await Assert.That(diagnostic.Message).Contains(".git/config");
     }
 
     private static async Task AssertRuleCases(IRule rule, string ruleId, RuleCase[] cases, LintConfig? config = null)

@@ -231,8 +231,8 @@ online audit rules（4）:
 
 | 区分 | 件数 | Seiton 状況 |
 |---|---:|---|
-| 直接対応済み | 23 | `artipacked`, `bot-conditions`, `cache-poisoning`, `concurrency-limits`, `dangerous-triggers`, `github-app`, `hardcoded-container-credentials`, `impostor-commit`, `insecure-commands`, `known-vulnerable-actions`, `ref-confusion`, `secrets-inherit`, `secrets-outside-env`, `self-hosted-runner`, `stale-action-refs`, `template-injection`, `unpinned-images`, `unpinned-tools`, `unpinned-uses`, `unredacted-secrets`, `unsound-condition`, `unsound-contains`, `use-trusted-publishing` |
-| 部分対応 | 6 | `archived-uses`, `excessive-permissions`, `forbidden-uses`, `overprovisioned-secrets`, `ref-version-mismatch`, `undocumented-permissions` |
+| 直接対応済み | 22 | `artipacked`, `bot-conditions`, `cache-poisoning`, `concurrency-limits`, `dangerous-triggers`, `github-app`, `hardcoded-container-credentials`, `impostor-commit`, `insecure-commands`, `known-vulnerable-actions`, `ref-confusion`, `secrets-inherit`, `secrets-outside-env`, `self-hosted-runner`, `stale-action-refs`, `template-injection`, `unpinned-images`, `unpinned-tools`, `unpinned-uses`, `unredacted-secrets`, `unsound-condition`, `unsound-contains` |
+| 部分対応 | 7 | `archived-uses`, `excessive-permissions`, `forbidden-uses`, `overprovisioned-secrets`, `ref-version-mismatch`, `undocumented-permissions`, `use-trusted-publishing` |
 | 未対応 | 7 | 高度セキュリティ監査群（残差分） |
 
 zizmor 監査ID別対応表（実装確認ベース）:
@@ -274,7 +274,7 @@ zizmor 監査ID別対応表（実装確認ベース）:
 | `unredacted-secrets` | ✅ | `unredacted-secrets` |
 | `unsound-condition` | ✅ | `unsound-condition` |
 | `unsound-contains` | ✅ | `unsound-contains` |
-| `use-trusted-publishing` | ✅ | `use-trusted-publishing`（publish + `id-token: write` 判定） |
+| `use-trusted-publishing` | 🟡 | `use-trusted-publishing`（publish コマンド文字列ヒューリスティック + `id-token: write` 判定。NuGet/Cargo 等未対応、uses 判定なし） |
 
 対応率: 29/36（81%）— 残7件未対応（うち2件はスコープ外）。
 

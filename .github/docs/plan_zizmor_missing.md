@@ -9,22 +9,22 @@
 
 | 区分 | 件数 |
 |---|---|
-| 完全対応済み | 23 |
-| 部分対応 | 6 |
+| 完全対応済み | 22 |
+| 部分対応 | 7 |
 | 未対応（実装対象） | 5 |
 | スコープ外 | 2 |
 
-### 1.1 完全対応済み（23 件）
+### 1.1 完全対応済み（22 件）
 
-`artipacked`, `bot-conditions`, `cache-poisoning`, `concurrency-limits`, `dangerous-triggers`, `github-app`, `hardcoded-container-credentials`（※後述）, `impostor-commit`, `insecure-commands`, `known-vulnerable-actions`, `ref-confusion`, `secrets-inherit`, `secrets-outside-env`, `self-hosted-runner`, `stale-action-refs`, `template-injection`, `unpinned-images`, `unpinned-tools`, `unpinned-uses`, `unredacted-secrets`, `unsound-condition`, `unsound-contains`, `use-trusted-publishing`
+`artipacked`, `bot-conditions`, `cache-poisoning`, `concurrency-limits`, `dangerous-triggers`, `github-app`, `hardcoded-container-credentials`（※後述）, `impostor-commit`, `insecure-commands`, `known-vulnerable-actions`, `ref-confusion`, `secrets-inherit`, `secrets-outside-env`, `self-hosted-runner`, `stale-action-refs`, `template-injection`, `unpinned-images`, `unpinned-tools`, `unpinned-uses`, `unredacted-secrets`, `unsound-condition`, `unsound-contains`
 
 #### `hardcoded-container-credentials` について
 
 feature-matrix では ❌ 未対応としているが、実装確認の結果 **`credentials` ルールの `ValidateHardcodedPassword` メソッド**（`CredentialsRule.cs` L85–L113）が zizmor と同等のロジック（`credentials.password` が式でなければエラー）を既に実装済み。feature-matrix を ✅ に昇格すべき。
 
-### 1.2 部分対応（6 件）
+### 1.2 部分対応（7 件）
 
-`archived-uses`, `excessive-permissions`, `forbidden-uses`, `overprovisioned-secrets`, `ref-version-mismatch`, `undocumented-permissions`
+`archived-uses`, `excessive-permissions`, `forbidden-uses`, `overprovisioned-secrets`, `ref-version-mismatch`, `undocumented-permissions`, `use-trusted-publishing`
 
 ### 1.3 スコープ外（2 件）
 

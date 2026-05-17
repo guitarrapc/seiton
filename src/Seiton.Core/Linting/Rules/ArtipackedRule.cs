@@ -74,14 +74,20 @@ public sealed class ArtipackedRule() : RuleBase(RuleId.Artipacked)
             if (actionSpec.Id != PopularActions.ActionId.ActionsUploadArtifact
                 || actionExec.Inputs is null
                 || !actionExec.Inputs.Value.TryGetValue(utf8Yaml, "path"u8, out var pathNode)
-                || !TryClassifyDangerousPath(Arena.GetStringValue(pathNode), out var exposesParentDirectory)
-                || (!(exposesParentDirectory && hasUnsafeV6PlusCheckout)
-                    && !MayIncludeHiddenFiles(actionExec, usesText, utf8Yaml)))
+                || !TryClassifyDangerousPath(Arena.GetStringValue(pathNode), out var exposesParentDirectory))
             {
                 continue;
             }
 
-            var reportAsWarning = !hasUnsafeLegacyCheckout;
+            var mayIncludeHiddenFiles = MayIncludeHiddenFiles(actionExec, usesText, utf8Yaml);
+            if (!(exposesParentDirectory && hasUnsafeV6PlusCheckout) && !mayIncludeHiddenFiles)
+            {
+                continue;
+            }
+
+            // Error when legacy checkout credentials (.git/config) are actually exposed
+            // (hidden files included); warning otherwise (only v6+ $RUNNER_TEMP concern).
+            var reportAsWarning = !(hasUnsafeLegacyCheckout && mayIncludeHiddenFiles);
             var message = GetCachedMessage(Arena.GetStringSlice(pathNode), reportAsWarning, utf8Yaml);
             if (reportAsWarning)
             {
