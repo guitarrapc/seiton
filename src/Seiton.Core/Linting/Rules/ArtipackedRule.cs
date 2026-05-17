@@ -106,12 +106,24 @@ public sealed class ArtipackedRule() : RuleBase(RuleId.Artipacked)
 
         var value = Arena.GetStringValue(persistCredentialsNode);
         return !ExpressionScanHelpers.ContainsExpressionMarker(persistCredentialsNode, Arena)
-               && value.SequenceEqual("false"u8);
+               && IsBooleanFalse(value);
     }
 
     private bool MayIncludeHiddenFiles(ExecAction actionExec, ReadOnlySpan<byte> usesText, byte[] utf8Yaml)
     {
-        if (!OutdatedActionRunnerRule.TryExtractMajorVersion(usesText, out var majorVersion) || majorVersion < 4)
+        if (!TryExtractMajorAndMinorVersion(usesText, out var majorVersion, out var minorVersion, out var hasMinorVersion))
+        {
+            return true;
+        }
+
+        if (majorVersion < 4)
+        {
+            return true;
+        }
+
+        // upload-artifact v4.0-v4.3 included hidden files by default (include-hidden-files input did not exist).
+        // v4.4+ excludes hidden files by default. @v4 (no minor) is a floating tag pointing to latest v4.x (safe).
+        if (majorVersion == 4 && hasMinorVersion && minorVersion < 4)
         {
             return true;
         }
@@ -128,7 +140,83 @@ public sealed class ArtipackedRule() : RuleBase(RuleId.Artipacked)
         }
 
         var value = Arena.GetStringValue(includeHiddenFilesNode);
-        return value.SequenceEqual("true"u8);
+        return IsBooleanTrue(value);
+    }
+
+    /// <summary>Case-insensitive YAML boolean false check (false, False, FALSE).</summary>
+    private static bool IsBooleanFalse(ReadOnlySpan<byte> value)
+    {
+        return value.Length == 5
+               && (value[0] | 0x20) == (byte)'f'
+               && (value[1] | 0x20) == (byte)'a'
+               && (value[2] | 0x20) == (byte)'l'
+               && (value[3] | 0x20) == (byte)'s'
+               && (value[4] | 0x20) == (byte)'e';
+    }
+
+    /// <summary>Case-insensitive YAML boolean true check (true, True, TRUE).</summary>
+    private static bool IsBooleanTrue(ReadOnlySpan<byte> value)
+    {
+        return value.Length == 4
+               && (value[0] | 0x20) == (byte)'t'
+               && (value[1] | 0x20) == (byte)'r'
+               && (value[2] | 0x20) == (byte)'u'
+               && (value[3] | 0x20) == (byte)'e';
+    }
+
+    /// <summary>Extracts major and optionally minor version from a uses reference like <c>actions/upload-artifact@v4.4</c>.</summary>
+    private static bool TryExtractMajorAndMinorVersion(ReadOnlySpan<byte> usesText, out int majorVersion, out int minorVersion, out bool hasMinorVersion)
+    {
+        majorVersion = 0;
+        minorVersion = 0;
+        hasMinorVersion = false;
+
+        if (!OutdatedActionRunnerRule.TryExtractMajorVersion(usesText, out majorVersion))
+        {
+            return false;
+        }
+
+        // Look for .minor after the major version
+        var atIndex = usesText.IndexOf((byte)'@');
+        if (atIndex < 0)
+        {
+            return true;
+        }
+
+        var versionText = usesText[(atIndex + 1)..];
+        if (versionText.Length > 0 && (versionText[0] == (byte)'v' || versionText[0] == (byte)'V'))
+        {
+            versionText = versionText[1..];
+        }
+
+        // Skip major digits
+        var pos = 0;
+        while (pos < versionText.Length && versionText[pos] >= (byte)'0' && versionText[pos] <= (byte)'9')
+        {
+            pos++;
+        }
+
+        // Check for dot separator
+        if (pos >= versionText.Length || versionText[pos] != (byte)'.')
+        {
+            return true; // No minor version specified (e.g. @v4)
+        }
+
+        // Parse minor version
+        var minorText = versionText[(pos + 1)..];
+        var minorPos = 0;
+        while (minorPos < minorText.Length && minorText[minorPos] >= (byte)'0' && minorText[minorPos] <= (byte)'9')
+        {
+            minorVersion = (minorVersion * 10) + (minorText[minorPos] - (byte)'0');
+            minorPos++;
+        }
+
+        if (minorPos > 0)
+        {
+            hasMinorVersion = true;
+        }
+
+        return true;
     }
 
     /// <summary>Checks whether the upload path covers the repository root (and thus .git/config).</summary>
@@ -178,14 +266,12 @@ public sealed class ArtipackedRule() : RuleBase(RuleId.Artipacked)
 
     private static bool IsCurrentDirectoryPath(ReadOnlySpan<byte> path)
     {
-        var dotDotSegments = 0;
-        return TryClassifyRelativeDirectoryPath(path, out dotDotSegments) && dotDotSegments == 0;
+        return TryClassifyRelativeDirectoryPath(path, out var dotDotSegments) && dotDotSegments == 0;
     }
 
     private static bool IsParentDirectoryPath(ReadOnlySpan<byte> path)
     {
-        var dotDotSegments = 0;
-        return TryClassifyRelativeDirectoryPath(path, out dotDotSegments) && dotDotSegments == 1;
+        return TryClassifyRelativeDirectoryPath(path, out var dotDotSegments) && dotDotSegments >= 1;
     }
 
     private static bool TryClassifyRelativeDirectoryPath(ReadOnlySpan<byte> path, out int dotDotSegments)
@@ -206,11 +292,6 @@ public sealed class ArtipackedRule() : RuleBase(RuleId.Artipacked)
             if (segment.SequenceEqual(".."u8))
             {
                 dotDotSegments++;
-                if (dotDotSegments > 1)
-                {
-                    return false;
-                }
-
                 continue;
             }
 

@@ -281,7 +281,7 @@ zizmor 監査ID別対応表（実装確認ベース）:
 | `unsound-contains` | ✅ | `unsound-contains` |
 | `use-trusted-publishing` | 🟡 | `use-trusted-publishing`（publish + `id-token: write` 判定の初期実装） |
 
-対応率: 30/36（83%）— 残6件未対応。
+対応率: 29/36（81%）— 残7件未対応。
 
 ### 6.4 pinact / dockerfile-pin / frizbee（ルールエンジンではなく変換系）
 

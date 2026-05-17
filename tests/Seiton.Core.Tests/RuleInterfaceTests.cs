@@ -1960,6 +1960,32 @@ public sealed class RuleInterfaceTests
                               persist-credentials: ${{ inputs.persist_credentials }}
             """,
             ["should set with.persist-credentials to false"]),
+            new RuleCase(
+            "ok-checkout-persist-credentials-capitalized-False",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - uses: actions/checkout@v4
+                          with:
+                              persist-credentials: False
+            """,
+            []),
+            new RuleCase(
+            "ok-checkout-persist-credentials-uppercase-FALSE",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - uses: actions/checkout@v4
+                          with:
+                              persist-credentials: FALSE
+            """,
+            []),
         };
 
         await AssertRuleCases(new CheckoutPersistCredentialsRule(), "checkout-persist-credentials", cases);
@@ -14339,6 +14365,152 @@ public sealed class RuleInterfaceTests
         await Assert.That(diagnostic.Location.StartColumn).IsEqualTo(expectedStartColumn);
         await Assert.That(diagnostic.Location.EndLine).IsEqualTo(expectedLine);
         await Assert.That(diagnostic.Location.EndColumn).IsEqualTo(expectedStartColumn);
+    }
+
+    [Test]
+    public async Task RuleRegression_ArtipackedRule_ReportsMultipleParentDirectorySegments()
+    {
+        var yaml = NormalizeYaml(
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - uses: actions/checkout@v4
+                        - uses: actions/upload-artifact@v4
+                          with:
+                              name: artifact
+                              path: ../..
+                              include-hidden-files: true
+            """);
+
+        using var result = new LintEngine([new ArtipackedRule()]).Check(Encoding.UTF8.GetBytes(yaml), "artipacked-dotdotdot.yml");
+        var diagnostic = result.Diagnostics.Single(x => x.RuleId == "artipacked");
+
+        await Assert.That(diagnostic.Severity).IsEqualTo(DiagnosticSeverity.Error);
+    }
+
+    [Test]
+    public async Task RuleRegression_ArtipackedRule_ReportsDeepParentPath()
+    {
+        var yaml = NormalizeYaml(
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - uses: actions/checkout@v4
+                        - uses: actions/upload-artifact@v4
+                          with:
+                              name: artifact
+                              path: ../../.
+                              include-hidden-files: true
+            """);
+
+        using var result = new LintEngine([new ArtipackedRule()]).Check(Encoding.UTF8.GetBytes(yaml), "artipacked-deep-parent.yml");
+        var diagnostic = result.Diagnostics.Single(x => x.RuleId == "artipacked");
+
+        await Assert.That(diagnostic.Severity).IsEqualTo(DiagnosticSeverity.Error);
+    }
+
+    [Test]
+    public async Task RuleRegression_ArtipackedRule_CaseInsensitivePersistCredentialsFalse()
+    {
+        var yaml = NormalizeYaml(
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - uses: actions/checkout@v4
+                          with:
+                              persist-credentials: False
+                        - uses: actions/upload-artifact@v4
+                          with:
+                              name: artifact
+                              path: .
+                              include-hidden-files: true
+            """);
+
+        using var result = new LintEngine([new ArtipackedRule()]).Check(Encoding.UTF8.GetBytes(yaml), "artipacked-case-insensitive.yml");
+        var diagnostics = result.Diagnostics.Where(x => x.RuleId == "artipacked").ToArray();
+
+        await Assert.That(diagnostics).IsEmpty();
+    }
+
+    [Test]
+    public async Task RuleRegression_ArtipackedRule_CaseInsensitiveIncludeHiddenFilesTrue()
+    {
+        var yaml = NormalizeYaml(
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - uses: actions/checkout@v4
+                        - uses: actions/upload-artifact@v4
+                          with:
+                              name: artifact
+                              path: .
+                              include-hidden-files: True
+            """);
+
+        using var result = new LintEngine([new ArtipackedRule()]).Check(Encoding.UTF8.GetBytes(yaml), "artipacked-case-hidden.yml");
+        var diagnostic = result.Diagnostics.Single(x => x.RuleId == "artipacked");
+
+        await Assert.That(diagnostic.Severity).IsEqualTo(DiagnosticSeverity.Error);
+    }
+
+    [Test]
+    public async Task RuleRegression_ArtipackedRule_UploadArtifactV4_3_TreatsAsUnsafe()
+    {
+        // upload-artifact v4.0-v4.3 included hidden files by default
+        var yaml = NormalizeYaml(
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - uses: actions/checkout@v4
+                        - uses: actions/upload-artifact@v4.3
+                          with:
+                              name: artifact
+                              path: .
+            """);
+
+        using var result = new LintEngine([new ArtipackedRule()]).Check(Encoding.UTF8.GetBytes(yaml), "artipacked-v4.3.yml");
+        var diagnostic = result.Diagnostics.Single(x => x.RuleId == "artipacked");
+
+        await Assert.That(diagnostic.Severity).IsEqualTo(DiagnosticSeverity.Error);
+    }
+
+    [Test]
+    public async Task RuleRegression_ArtipackedRule_UploadArtifactV4_4_IsSafeByDefault()
+    {
+        // upload-artifact v4.4+ excludes hidden files by default
+        var yaml = NormalizeYaml(
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - uses: actions/checkout@v4
+                        - uses: actions/upload-artifact@v4.4
+                          with:
+                              name: artifact
+                              path: .
+            """);
+
+        using var result = new LintEngine([new ArtipackedRule()]).Check(Encoding.UTF8.GetBytes(yaml), "artipacked-v4.4.yml");
+        var diagnostics = result.Diagnostics.Where(x => x.RuleId == "artipacked").ToArray();
+
+        await Assert.That(diagnostics).IsEmpty();
     }
 
     private static async Task AssertRuleCases(IRule rule, string ruleId, RuleCase[] cases, LintConfig? config = null)
