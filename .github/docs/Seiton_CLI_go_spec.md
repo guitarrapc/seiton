@@ -287,7 +287,7 @@ Shared contract reference: `Seiton_Linter_spec.md` §2.1.
 - In `--verbose` mode, per-file timing is logged (e.g. `verbose: .github/workflows/ci.yml: workflow, 1.2 ms, 5 diagnostics, 2 suppressed`).
 - In `--verbose` mode, total timing is logged (e.g. `verbose: total: 3 file(s) checked in 4.5 ms`).
 - In parallel verbose mode, `verbose: checking <file>...` is best-effort progress output and may interleave rather than follow input order; aggregated diagnostics and summaries remain deterministic.
-- In fix mode, network timing wraps pin resolution and emits `verbose: network: resolved pins for <file> in <elapsed> ms`.
+- In fix mode, network timing wraps pin resolution and emits `verbose: network: resolved <count> pin(s) for <file> in <elapsed> ms`.
 - In fix mode, total timing emits `verbose: total: <N> file(s) fixed in <elapsed> ms`.
 - When no `--min-severity` is set, errors are zero, and warnings are non-zero, a hint line is emitted: `hint: use --min-severity error to treat warnings as non-blocking in CI`.
 - In fix mode, a network fix hint is emitted when `unpinned-uses` or `unpinned-image` diagnostics exist but the corresponding network flag is not enabled.

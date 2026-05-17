@@ -470,7 +470,7 @@ verbose: total: 3 file(s) fixed in 450.0 ms
 In fix mode, network timing is emitted per file when pins are resolved:
 
 ```
-verbose: network: resolved pins for <filepath> in 320.0 ms
+verbose: network: resolved 3 pin(s) for <filepath> in 320.0 ms
 ```
 
 In parallel verbose mode, `verbose: checking <filepath>...` is best-effort progress output and may appear interleaved rather than in input order. Diagnostic output and summary output remain deterministic.

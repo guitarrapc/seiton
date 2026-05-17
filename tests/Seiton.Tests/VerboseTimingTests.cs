@@ -187,10 +187,10 @@ public sealed class VerboseTimingTests
         var logger = VerboseLogger.Create(verbose: true, sw);
 
         // Simulates what FixCommand will emit
-        logger.Log("network", $"resolved pins for .github/workflows/ci.yml in {CheckCommand.FormatMilliseconds(TimeSpan.FromMilliseconds(320.0))} ms");
+        logger.Log("network", $"resolved 3 pin(s) for .github/workflows/ci.yml in {CheckCommand.FormatMilliseconds(TimeSpan.FromMilliseconds(320.0))} ms");
 
         await Assert.That(sw.ToString().TrimEnd())
-            .IsEqualTo("verbose: network: resolved pins for .github/workflows/ci.yml in 320.0 ms");
+            .IsEqualTo("verbose: network: resolved 3 pin(s) for .github/workflows/ci.yml in 320.0 ms");
     }
 
     /// <summary>

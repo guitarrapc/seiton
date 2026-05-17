@@ -381,4 +381,40 @@ public sealed class VerboseRuleDiagnosticsTests
         await Assert.That(infoDiags[0].Message).Contains("my-custom-runner");
         await Assert.That(infoDiags[0].Message).Contains("known-hosted-labels");
     }
+
+    [Test]
+    public async Task RunnerLabelRule_MatrixAdditionalKnownLabelArray_DeduplicatesVerboseInfoPerJob()
+    {
+        var config = new LintConfig
+        {
+            Verbose = true,
+            Rules = new Dictionary<string, RuleConfig>
+            {
+                ["runner-label"] = new RuleConfig
+                {
+                    KnownHostedLabels = new ExtendableList(["my-custom-runner", "my-custom-runner-2"]),
+                },
+            },
+        };
+
+        var yaml = NormalizeYaml("""
+            on: push
+            jobs:
+                build:
+                    strategy:
+                        matrix:
+                            runner:
+                                - [my-custom-runner, my-custom-runner-2]
+                    runs-on: ${{ matrix.runner }}
+                    steps:
+                        - run: echo hello
+            """);
+
+        using var result = new LintEngine([new RunnerLabelRule()])
+            .Check(Encoding.UTF8.GetBytes(yaml), "verbose-test.yml", config);
+        var infoDiags = result.Diagnostics
+            .Where(x => x.RuleId == "runner-label" && x.Severity == DiagnosticSeverity.Info)
+            .ToArray();
+        await Assert.That(infoDiags.Length).IsEqualTo(1);
+    }
 }

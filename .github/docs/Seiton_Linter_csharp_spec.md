@@ -114,6 +114,7 @@ Normative behavior follows `Seiton_Linter_spec.md` for:
 Current C# routing note:
 
 - `LintEngine.Check` uses parser kind classification and executes rule traversal with per-rule kind filtering.
+- When parser final classification is `Unknown`, `LintEngine.Check` falls back to the parser path-hint kind for result metadata so fatal parse errors on files like `action.yml` still report stable `DocumentKind` and rule-activation metadata.
 - Each `IRule` declares document-kind applicability, and `LintEngine` activates only rules that support the finalized kind.
 - `RuleBase` default applicability includes both workflow and action-metadata documents.
 

@@ -364,6 +364,7 @@ public sealed class RunnerLabelRule() : RuleBase(RuleId.RunnerLabel)
         }
 
         var jobId = Decode(Arena.GetStringSlice(job.Id));
+        var loggedAdditionalKnownHostedLabel = false;
 
         for (var i = 0; i < row.Values.Count; i++)
         {
@@ -387,10 +388,11 @@ public sealed class RunnerLabelRule() : RuleBase(RuleId.RunnerLabel)
 
                         if (IsAdditionalKnownHostedLabel(labelUtf8))
                         {
-                            if (Config.Verbose)
+                            if (Config.Verbose && !loggedAdditionalKnownHostedLabel)
                             {
                                 var knownLabelText = Decode(Arena.GetStringSlice(scalar.Value));
                                 AddJobInfo(job, $"label '{knownLabelText}' matched known-hosted-labels config, skipping", Arena.GetStringRange(scalar.Value));
+                                loggedAdditionalKnownHostedLabel = true;
                             }
 
                             continue;
@@ -442,10 +444,11 @@ public sealed class RunnerLabelRule() : RuleBase(RuleId.RunnerLabel)
 
                             if (IsAdditionalKnownHostedLabel(elemUtf8))
                             {
-                                if (Config.Verbose)
+                                if (Config.Verbose && !loggedAdditionalKnownHostedLabel)
                                 {
                                     var knownLabelText = Decode(Arena.GetStringSlice(element.Value));
                                     AddJobInfo(job, $"label '{knownLabelText}' matched known-hosted-labels config, skipping", Arena.GetStringRange(element.Value));
+                                    loggedAdditionalKnownHostedLabel = true;
                                 }
 
                                 continue;

@@ -96,6 +96,15 @@ public sealed class LintEngine
     /// <summary>Parses and lints the given YAML, applying the optional <paramref name="config"/>.</summary>
     /// <remarks>
     /// <para>
+    /// <b>Document kind metadata:</b> <see cref="LintResult.DocumentKind"/> prefers the parser's finalized
+    /// classification. When final classification is unknown, the engine falls back to the parser path hint kind
+    /// so files such as <c>action.yml</c> still return stable document-kind and rule-activation metadata even when
+    /// parsing fails before an AST is produced.
+    /// </para>
+    /// <para>
+    /// This fallback affects result metadata only; fatal parse errors still short-circuit before any rule traversal.
+    /// </para>
+    /// <para>
     /// <b>Thread safety:</b> A single <see cref="LintEngine"/> instance is <b>not</b> safe for concurrent
     /// <see cref="Check"/> calls. Internal mutable state (diagnostics lists, visitor, rule instances, caches)
     /// is cleared and reused on every call. For parallel multi-file linting, use
@@ -129,6 +138,10 @@ public sealed class LintEngine
     /// Used by internal callers that need explicit arena ownership without the <see cref="LintResult"/> wrapper.
     /// The caller is responsible for disposing the returned arena.
     /// </summary>
+    /// <remarks>
+    /// Mirrors <see cref="Check(byte[], string, LintConfig?)"/>, including path-hint fallback for
+    /// <see cref="LintResultData.DocumentKind"/> when parser final classification is unknown.
+    /// </remarks>
     internal LintResultData CheckDirect(byte[] utf8Yaml, string filePath, LintConfig? config, out AstArena? arena)
     {
         ArgumentNullException.ThrowIfNull(utf8Yaml);

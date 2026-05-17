@@ -10,6 +10,9 @@ namespace Seiton.Commands;
 
 internal static class CheckCommand
 {
+    private static readonly IReadOnlyDictionary<string, int> EmptySuppressedByRule =
+        new Dictionary<string, int>(0, StringComparer.Ordinal);
+
     public static int Run(
         string[] files,
         string? config,
@@ -235,7 +238,7 @@ internal static class CheckCommand
         if (totalSuppressed > 0)
         {
             WriteSuppressionSummary(verboseLogger,
-                CreateAggregatedSuppressionSummary(totalSuppressed, suppressedByRule!));
+                CreateAggregatedSuppressionSummary(totalSuppressed, suppressedByRule ?? EmptySuppressedByRule));
         }
 
         WriteSummary(allDiagnostics, resolvedFiles.Length, verbose, showExitHint: minSeverity is null);

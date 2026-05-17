@@ -285,7 +285,7 @@ Shared contract reference: `Seiton_Linter_spec.md` §2.1.
 - Copies diagnostics immediately after `Check()` to avoid use-after-dispose of lint handles.
 - Stdin (`-`) is explicitly rejected in fix mode (returns `ExitCode.InvalidOptions`).
 - Network remediation (`PinRemediationEngine`) is constructed only when effective pin/image network is enabled.
-- In `--verbose` mode, network timing wraps `RemediateAsync()` and emits `verbose: network: resolved pins for <file> in <elapsed> ms`.
+- In `--verbose` mode, network timing wraps `RemediateAsync()` and emits `verbose: network: resolved <count> pin(s) for <file> in <elapsed> ms`.
 - In `--verbose` mode, total timing emits `verbose: total: <N> file(s) fixed in <elapsed> ms`.
 - When both `--check` and `--dry-run` are passed, `--check` takes precedence: no diffs are printed and no fixes are applied.
 

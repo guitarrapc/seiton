@@ -225,7 +225,7 @@ These items can be implemented purely in the CLI layer using data already return
    - `verbose: total: <N> file(s) checked in <elapsed> ms`
    - `verbose: total: <N> file(s) fixed in <elapsed> ms`
 3. **Network timing** (fix mode): Wrap `pinRemediation.RemediateAsync()`. Emit:
-   - `verbose: network: resolved pins for <file> in <elapsed> ms`
+   - `verbose: network: resolved <count> pin(s) for <file> in <elapsed> ms`
 
 **Core changes**: None.
 
@@ -376,7 +376,7 @@ Fix mode additions:
 
 ```
 verbose: fixing .github/workflows/ci.yml...
-verbose: network: resolved pins for .github/workflows/ci.yml in 320 ms
+verbose: network: resolved 3 pin(s) for .github/workflows/ci.yml in 320 ms
 verbose: .github/workflows/ci.yml: applied 3 fix(es)
 verbose: total: 1 file(s) fixed in 450 ms
 ```

@@ -114,11 +114,7 @@ public sealed class LintResultMetadataTests
         // (they're simply not applicable, not user-disabled)
         // DisabledRuleCount should only reflect config/opt-in disabled rules
         var disabledIds = result.DisabledRuleIds.ToArray();
-        for (var i = 0; i < disabledIds.Length; i++)
-        {
-            // None of the disabled IDs should be null
-            await Assert.That(disabledIds[i]).IsNotNull();
-        }
+        await Assert.That(disabledIds).DoesNotContain("job-permissions-required");
     }
 
     [Test]
