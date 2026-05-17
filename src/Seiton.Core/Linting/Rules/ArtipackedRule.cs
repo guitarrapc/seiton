@@ -220,10 +220,30 @@ public sealed class ArtipackedRule() : RuleBase(RuleId.Artipacked)
             return false;
         }
 
-        // Trailing suffix after minor digits (e.g. @v4.4-legacy) — unknown ref
+        // Trailing content after minor digits
         if (minorPos < minorText.Length)
         {
-            return false;
+            // Accept optional numeric patch segment (e.g. @v4.6.2)
+            if (minorText[minorPos] == (byte)'.')
+            {
+                var patchText = minorText[(minorPos + 1)..];
+                var patchPos = 0;
+                while (patchPos < patchText.Length && patchText[patchPos] >= (byte)'0' && patchText[patchPos] <= (byte)'9')
+                {
+                    patchPos++;
+                }
+
+                // No patch digits after dot (e.g. @v4.6.) or trailing suffix (e.g. @v4.6.2-legacy) — unknown ref
+                if (patchPos == 0 || patchPos < patchText.Length)
+                {
+                    return false;
+                }
+            }
+            else
+            {
+                // Non-dot suffix after minor digits (e.g. @v4.4-legacy) — unknown ref
+                return false;
+            }
         }
 
         hasMinorVersion = true;
@@ -378,10 +398,11 @@ public sealed class ArtipackedRule() : RuleBase(RuleId.Artipacked)
         return fwd < bck ? fwd : bck;
     }
 
-    /// <summary>Detects checkout v6+ from a semantic version ref (e.g. <c>actions/checkout@v6</c>).</summary>
+    /// <summary>Detects checkout v6+ from a strict semantic version ref (e.g. <c>actions/checkout@v6</c>, <c>@v6.1</c>).
+    /// Arbitrary refs like <c>@v6-legacy</c> are not treated as v6+.</summary>
     internal static bool IsV6OrLater(ReadOnlySpan<byte> usesText)
     {
-        return OutdatedActionRunnerRule.TryExtractMajorVersion(usesText, out var major) && major >= 6;
+        return TryExtractMajorAndMinorVersion(usesText, out var major, out _, out _) && major >= 6;
     }
 
     private static ReadOnlySpan<byte> TrimBytes(ReadOnlySpan<byte> span)

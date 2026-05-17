@@ -13943,6 +13943,40 @@ public sealed class RuleInterfaceTests
                               include-hidden-files: true
             """,
             ["upload-artifact with path '.'", "v6+"]),
+            // Edge case: checkout @v6-legacy should be treated as non-v6+ (arbitrary ref, error not warning)
+            new RuleCase(
+            "ng-checkout-v6-legacy-upload-dot",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - uses: actions/checkout@v6-legacy
+                        - uses: actions/upload-artifact@v4
+                          with:
+                              name: my-artifact
+                              path: .
+                              include-hidden-files: true
+            """,
+            ["upload-artifact with path '.'", "persist-credentials: false"]),
+            // Edge case: checkout @v6.1 is valid semver v6+, should be warning
+            new RuleCase(
+            "ng-checkout-v6-1-upload-dot",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - uses: actions/checkout@v6.1
+                        - uses: actions/upload-artifact@v4
+                          with:
+                              name: my-artifact
+                              path: .
+                              include-hidden-files: true
+            """,
+            ["upload-artifact with path '.'", "v6+"]),
             // Case 5: checkout only (no upload-artifact) → OK
             new RuleCase(
             "ok-checkout-only",
@@ -14185,6 +14219,54 @@ public sealed class RuleInterfaceTests
                               path: .
             """,
             ["upload-artifact with path '.'", "persist-credentials: false"]),
+            // Edge case: @v4.6.2 (patch version) should be accepted as v4.6 (safe, no hidden files by default)
+            new RuleCase(
+            "ok-checkout-upload-v4-6-2-no-hidden",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - uses: actions/checkout@v4
+                        - uses: actions/upload-artifact@v4.6.2
+                          with:
+                              name: my-artifact
+                              path: .
+            """,
+            []),
+            // Edge case: @v4.3.1 (patch version, minor < 4) should be treated as unsafe (hidden files by default)
+            new RuleCase(
+            "ng-checkout-upload-v4-3-1-hidden-default",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - uses: actions/checkout@v4
+                        - uses: actions/upload-artifact@v4.3.1
+                          with:
+                              name: my-artifact
+                              path: .
+            """,
+            ["upload-artifact with path '.'", "persist-credentials: false"]),
+            // Edge case: @v4.6.2-legacy (patch with suffix) should be treated conservatively
+            new RuleCase(
+            "ng-checkout-upload-v4-6-2-legacy",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - uses: actions/checkout@v4
+                        - uses: actions/upload-artifact@v4.6.2-legacy
+                          with:
+                              name: my-artifact
+                              path: .
+            """,
+            ["upload-artifact with path '.'", "persist-credentials: false"]),
             // Edge case: backslash path separators (Windows-style) should be treated as dangerous
             new RuleCase(
             "ng-checkout-upload-backslash-dot",
@@ -14253,7 +14335,7 @@ public sealed class RuleInterfaceTests
                                   extra
                               include-hidden-files: true
             """,
-            ["upload-artifact with path '.", "persist-credentials: false"]),
+            ["upload-artifact with path '.\\n", "persist-credentials: false"]),
         };
 
         await AssertRuleCases(new ArtipackedRule(), "artipacked", cases);

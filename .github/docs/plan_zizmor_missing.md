@@ -9,22 +9,22 @@
 
 | 区分 | 件数 |
 |---|---|
-| 完全対応済み | 19 |
-| 部分対応 | 7 |
-| 未対応（実装対象） | 8 |
+| 完全対応済み | 23 |
+| 部分対応 | 6 |
+| 未対応（実装対象） | 4 |
 | スコープ外 | 2 |
 
-### 1.1 完全対応済み（19 件）
+### 1.1 完全対応済み（23 件）
 
-`artipacked`, `cache-poisoning`, `concurrency-limits`, `dangerous-triggers`, `github-app`, `hardcoded-container-credentials`（※後述）, `impostor-commit`, `insecure-commands`, `known-vulnerable-actions`, `ref-confusion`, `secrets-inherit`, `secrets-outside-env`, `self-hosted-runner`, `stale-action-refs`, `template-injection`, `unpinned-images`, `unpinned-uses`, `unredacted-secrets`, `use-trusted-publishing`
+`artipacked`, `bot-conditions`, `cache-poisoning`, `concurrency-limits`, `dangerous-triggers`, `github-app`, `hardcoded-container-credentials`（※後述）, `impostor-commit`, `insecure-commands`, `known-vulnerable-actions`, `ref-confusion`, `secrets-inherit`, `secrets-outside-env`, `self-hosted-runner`, `stale-action-refs`, `template-injection`, `unpinned-images`, `unpinned-tools`, `unpinned-uses`, `unredacted-secrets`, `unsound-condition`, `unsound-contains`, `use-trusted-publishing`
 
 #### `hardcoded-container-credentials` について
 
 feature-matrix では ❌ 未対応としているが、実装確認の結果 **`credentials` ルールの `ValidateHardcodedPassword` メソッド**（`CredentialsRule.cs` L85–L113）が zizmor と同等のロジック（`credentials.password` が式でなければエラー）を既に実装済み。feature-matrix を ✅ に昇格すべき。
 
-### 1.2 部分対応（7 件）
+### 1.2 部分対応（6 件）
 
-`archived-uses`, `excessive-permissions`, `forbidden-uses`, `overprovisioned-secrets`, `ref-version-mismatch`, `undocumented-permissions`, `unsound-condition`（`if-expr-wrapper` が一部カバー）
+`archived-uses`, `excessive-permissions`, `forbidden-uses`, `overprovisioned-secrets`, `ref-version-mismatch`, `undocumented-permissions`
 
 ### 1.3 スコープ外（2 件）
 
@@ -33,18 +33,14 @@ feature-matrix では ❌ 未対応としているが、実装確認の結果 **
 | `dependabot-cooldown` | Seiton の対象ドキュメントは workflow / action.yml のみ。dependabot.yml はスコープ外 |
 | `dependabot-execution` | 同上 |
 
-### 1.4 未対応・実装対象（8 件）
+### 1.4 未対応・実装対象（4 件）
 
 | # | 監査ID | セキュリティ影響 | 実装複雑度 |
 |---|---|---|---|
-| 1 | `unsound-condition` | 高（if 条件が常に truthy） | 低〜中 |
-| 2 | `unsound-contains` | 高（条件バイパス） | 中 |
-| 3 | `github-env` | 高（RCE 同等） | 高 |
-| 4 | `bot-conditions` | 高（actor スプーフィング） | 高 |
-| 5 | `unpinned-tools` | 中（supply chain） | 低 |
-| 6 | `anonymous-definition` | 低（可読性） | 極低 |
-| 7 | `misfeature` | 低（非推奨パターン） | 低 |
-| 8 | `superfluous-actions` | 低（最適化提案） | 低 |
+| 1 | `github-env` | 高（RCE 同等） | 高 |
+| 2 | `anonymous-definition` | 低（可読性） | 極低 |
+| 3 | `misfeature` | 低（非推奨パターン） | 低 |
+| 4 | `superfluous-actions` | 低（最適化提案） | 低 |
 | — | `obfuscation` | 低（難読化検出） | 高 |
 
 `obfuscation` は false positive リスクが高く実装が複雑なため、本計画では見送る。将来的に opt-in ルールとして検討。
