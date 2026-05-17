@@ -1,4 +1,5 @@
-﻿using Seiton.Config;
+﻿using Seiton.Cli;
+using Seiton.Config;
 using Seiton.Core.Linting;
 using Seiton.Core.Linting.Fixing;
 using Seiton.Core.Linting.PinRemediation;
@@ -49,19 +50,24 @@ internal static class FixCommand
         if (CheckCommand.HasConfigErrors(configDiags, resolvedFormat, colorEnabled, oneline, errorWriter))
             return ExitCode.FatalError;
 
+        var verboseLogger = VerboseLogger.Create(verbose, errorWriter);
+
         if (verbose)
         {
             lintConfig ??= new LintConfig();
             lintConfig.Verbose = true;
         }
 
-        CliConfigBridge.WriteResolvedConfigVerbose(errorWriter, verbose, configPath);
+        if (verboseLogger.IsEnabled)
+        {
+            verboseLogger.Log("config", configPath is not null ? Path.GetFullPath(configPath) : "(none, using defaults)");
+        }
 
         // Resolve input files
         string[] resolvedFiles;
         try
         {
-            resolvedFiles = InputDiscovery.ResolveFiles(files, includeActions);
+            resolvedFiles = InputDiscovery.ResolveFiles(files, includeActions, verboseLogger);
         }
         catch (FileNotFoundException ex)
         {
@@ -84,6 +90,15 @@ internal static class FixCommand
         HttpClient? ociHttpClient = null;
         var effectivePinNetwork = enablePinNetwork || (lintConfig?.Fix.Pinning.EnableNetwork ?? false);
         var effectiveImageNetwork = enableImageNetwork || (lintConfig?.Fix.Images.EnableNetwork ?? false);
+
+        if (verboseLogger.IsEnabled)
+        {
+            WriteEffectiveNetworkConfig(verboseLogger,
+                enablePinNetwork, enableImageNetwork,
+                lintConfig?.Fix.Pinning,
+                lintConfig?.Fix.Images);
+        }
+
         if (effectivePinNetwork || effectiveImageNetwork)
         {
             githubHttpClient = effectivePinNetwork ? GitHubApiHttpClientFactory.CreateForGitHubApi() : null;
@@ -112,6 +127,11 @@ internal static class FixCommand
             var engine = new LintEngine();
             var allDiagnostics = new List<Diagnostic>();
             var hasPrintedDiff = false;
+            var totalSuppressed = 0;
+            Dictionary<string, int>? suppressedByRule = null;
+            var workflowRuleSummaryLogged = false;
+            var actionRuleSummaryLogged = false;
+            var totalStart = verboseLogger.GetTimestamp();
 
             // Fix command always builds fixes; enable fix construction for all Check() calls.
             var fixEnabledLintConfig = new LintConfig
@@ -134,15 +154,32 @@ internal static class FixCommand
 
                 var utf8Yaml = File.ReadAllBytes(filePath);
 
-                if (verbose)
-                    errorWriter.WriteLine($"fixing {filePath}...");
+                if (verboseLogger.IsEnabled)
+                {
+                    verboseLogger.Log($"fixing {filePath}...");
+                }
 
                 // Check the file. Copy diagnostics immediately so they remain valid
                 // even after the owned lint result is disposed before async work.
                 OwnedDiagnostics lintDiagnostics;
+                var fileStart = verboseLogger.GetTimestamp();
                 {
                     using var handle = engine.Check(utf8Yaml, filePath, fixEnabledLintConfig);
                     lintDiagnostics = handle.CopyDiagnostics();
+
+                    if (verboseLogger.IsEnabled)
+                    {
+                        if (handle.DocumentKind != DocumentKind.Unknown
+                            && !CheckCommand.HasLoggedRuleSummaryForKind(handle.DocumentKind, ref workflowRuleSummaryLogged, ref actionRuleSummaryLogged))
+                        {
+                            CheckCommand.WriteRuleSummary(verboseLogger, handle.ActiveRuleCount, handle.DisabledRuleCount, handle.DisabledRuleIds, handle.DocumentKind);
+                            CheckCommand.MarkRuleSummaryLogged(handle.DocumentKind, ref workflowRuleSummaryLogged, ref actionRuleSummaryLogged);
+                        }
+                        var fileElapsed = verboseLogger.GetElapsedTime(fileStart);
+                        CheckCommand.WriteFileTimingSummary(verboseLogger, filePath, handle.DocumentKind, fileElapsed, handle.DiagnosticCount, handle.SuppressionSummary.TotalSuppressed);
+
+                        CheckCommand.AccumulateSuppression(handle.SuppressionSummary, ref totalSuppressed, ref suppressedByRule);
+                    }
                 }
 
                 // Apply network-assisted pin remediation: attaches SHA/digest DiagnosticFix values
@@ -150,10 +187,14 @@ internal static class FixCommand
                 IReadOnlyList<Diagnostic> effectiveDiagnostics = lintDiagnostics;
                 if (pinRemediation != null)
                 {
+                    var netStart = verboseLogger.GetTimestamp();
                     var remResult = await pinRemediation.RemediateAsync(lintDiagnostics, utf8Yaml);
                     effectiveDiagnostics = remResult.Diagnostics;
-                    if (verbose && remResult.ResolvedCount > 0)
-                        errorWriter.WriteLine($"  resolved {remResult.ResolvedCount} pin(s) for {filePath}");
+                    if (remResult.ResolvedCount > 0 && verboseLogger.IsEnabled)
+                    {
+                        var netElapsed = verboseLogger.GetElapsedTime(netStart);
+                        verboseLogger.Log("network", $"resolved {remResult.ResolvedCount} pin(s) for {filePath} in {CheckCommand.FormatMilliseconds(netElapsed)} ms");
+                    }
                 }
 
                 // Check whether any diagnostic (local or pin-remediated) has a fix attached.
@@ -231,8 +272,10 @@ internal static class FixCommand
                     currentHandle?.Dispose();
                 }
 
-                if (verbose)
-                    errorWriter.WriteLine($"  applied {appliedFixes} fix(es) to {filePath}");
+                if (verboseLogger.IsEnabled && appliedFixes > 0)
+                {
+                    verboseLogger.LogFile(filePath, $"applied {appliedFixes} fix(es)");
+                }
             }
 
             // Apply ignore patterns
@@ -263,7 +306,17 @@ internal static class FixCommand
                 DiagnosticFormatter.Write(outputWriter, allDiagnostics, resolvedFormat, oneline, colorEnabled);
             }
 
+            if (totalSuppressed > 0)
+            {
+                var suppressionCounts = suppressedByRule ?? EmptySuppressedByRule;
+                CheckCommand.WriteSuppressionSummary(verboseLogger,
+                    CheckCommand.CreateAggregatedSuppressionSummary(totalSuppressed, suppressionCounts));
+            }
+
             CheckCommand.WriteSummary(errorWriter, allDiagnostics, resolvedFiles.Length, verbose, showExitHint: minSeverity is null);
+
+            if (verboseLogger.IsEnabled)
+                CheckCommand.WriteTotalTiming(verboseLogger, resolvedFiles.Length, verboseLogger.GetElapsedTime(totalStart), "fixed");
 
             // Hint about network flags when unfixed pin diagnostics remain
             if (allDiagnostics.Count > 0)
@@ -290,4 +343,23 @@ internal static class FixCommand
             ociHttpClient?.Dispose();
         }
     }
+
+    internal static void WriteEffectiveNetworkConfig(
+        VerboseLogger logger,
+        bool enablePinNetwork,
+        bool enableImageNetwork,
+        FixPinningConfig? pinningConfig,
+        FixImagesConfig? imagesConfig)
+    {
+        var effectivePin = enablePinNetwork || (pinningConfig?.EnableNetwork ?? false);
+        var pinSource = enablePinNetwork ? "--enable-pin-network" : pinningConfig?.HasEnableNetwork == true ? "config" : "default";
+        logger.Log("config", $"fix.pinning.enable-network={(effectivePin ? "true" : "false")} (source: {pinSource})");
+
+        var effectiveImage = enableImageNetwork || (imagesConfig?.EnableNetwork ?? false);
+        var imageSource = enableImageNetwork ? "--enable-image-network" : imagesConfig?.HasEnableNetwork == true ? "config" : "default";
+        logger.Log("config", $"fix.images.enable-network={(effectiveImage ? "true" : "false")} (source: {imageSource})");
+    }
+
+    private static readonly IReadOnlyDictionary<string, int> EmptySuppressedByRule =
+        new Dictionary<string, int>(StringComparer.Ordinal);
 }

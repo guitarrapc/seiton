@@ -71,7 +71,12 @@ public sealed class CredentialsRule() : RuleBase(RuleId.Credentials)
             return;
         }
 
-        if (!TryGetRegistryHost(image, out var host) || IsPublicRegistry(host) || IsAdditionalPublicRegistry(host))
+        if (!TryGetRegistryHost(image, out var host))
+        {
+            return;
+        }
+
+        if (IsPublicRegistry(host) || IsAdditionalPublicRegistry(host))
         {
             return;
         }

@@ -84,10 +84,25 @@ public sealed class ForbiddenUsesRule() : RuleBase(RuleId.ForbiddenUses)
             {
                 if (!matchedDeny || matchedAllow)
                 {
+                    if (matchedDeny && matchedAllow && Config.Verbose)
+                    {
+                        var matchedOwnerRepoText = Encoding.UTF8.GetString(ownerRepoKey);
+                        var infoMessage = $"'{matchedOwnerRepoText}' matched allow pattern, skipping forbidden-uses check";
+                        if (step is not null)
+                        {
+                            AddStepInfo(step, infoMessage, location);
+                        }
+                        else if (job is not null)
+                        {
+                            AddJobInfo(job, infoMessage, location);
+                        }
+                    }
+
                     return;
                 }
 
-                var message = $"uses reference '{Encoding.UTF8.GetString(ownerRepoKey)}' is denied by forbidden-uses policy";
+                var deniedOwnerRepoText = Encoding.UTF8.GetString(ownerRepoKey);
+                var message = $"uses reference '{deniedOwnerRepoText}' is denied by forbidden-uses policy";
                 if (step is not null)
                 {
                     AddStepWarning(step, message, location);
@@ -102,7 +117,8 @@ public sealed class ForbiddenUsesRule() : RuleBase(RuleId.ForbiddenUses)
 
             if (allowPatterns.Count > 0 && !matchedAllow)
             {
-                var message = $"uses reference '{Encoding.UTF8.GetString(ownerRepoKey)}' is not in forbidden-uses allow policy";
+                var allowedOwnerRepoText = Encoding.UTF8.GetString(ownerRepoKey);
+                var message = $"uses reference '{allowedOwnerRepoText}' is not in forbidden-uses allow policy";
                 if (step is not null)
                 {
                     AddStepWarning(step, message, location);

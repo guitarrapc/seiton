@@ -114,6 +114,7 @@ Normative behavior follows `Seiton_Linter_spec.md` for:
 Current C# routing note:
 
 - `LintEngine.Check` uses parser kind classification and executes rule traversal with per-rule kind filtering.
+- When parser final classification is `Unknown`, `LintEngine.Check` falls back to the parser path-hint kind for result metadata so fatal parse errors on files like `action.yml` still report stable `DocumentKind` and rule-activation metadata.
 - Each `IRule` declares document-kind applicability, and `LintEngine` activates only rules that support the finalized kind.
 - `RuleBase` default applicability includes both workflow and action-metadata documents.
 
@@ -141,7 +142,7 @@ C# implementation:
 
 - `CheckCommand` dispatches files via `Parallel.For` with `MaxDegreeOfParallelism = Environment.ProcessorCount`.
 - Each worker thread owns an independent `LintEngine` instance via `ThreadLocal<LintEngine>`. No engine state is shared across threads.
-- Results are written to a pre-allocated `FileCheckResult[]` slot array indexed by file position, guaranteeing deterministic output order.
+- Results are written to a pre-allocated `FileCheckResult[]` slot array indexed by file position, guaranteeing deterministic aggregated diagnostic and summary output order.
 - Each worker calls `CopyDiagnostics()` to create caller-owned diagnostic copies that survive engine reuse.
 - Sequential fast path: when `resolvedFiles.Length <= 1`, input is stdin, or `Environment.ProcessorCount <= 1`, a single `LintEngine` is used without `Parallel.For`.
 

@@ -434,7 +434,7 @@ The following table defines the normative default severity for each rule. Implem
 | `job-permissions-required` | warning | |
 | `needs-graph` | error | |
 | `shell-name` | mixed | error (invalid shell name), warning (shell-OS incompatibility) |
-| `runner-label` | mixed | warning (unknown labels), error (conflicting OS families) |
+| `runner-label` | mixed | warning (unknown labels), error (conflicting OS families), info (additional-known-label verbose) |
 | `runner-no-latest` | warning | |
 | `id-naming` | error | |
 | `glob-pattern` | error | |
@@ -473,7 +473,7 @@ The following table defines the normative default severity for each rule. Implem
 | `archived-uses` | warning | |
 | `insecure-commands` | warning | |
 | `overprovisioned-secrets` | warning | |
-| `forbidden-uses` | warning | |
+| `forbidden-uses` | mixed | warning (policy violation), info (allow-pattern overrides deny, verbose only) |
 | `ref-version-mismatch` | warning | |
 | `use-trusted-publishing` | warning | |
 | `if-expr-wrapper` | warning | |

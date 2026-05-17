@@ -31,7 +31,7 @@ Out of scope:
 2. All user-supplied flags and environment variables are translated into a lint config before passing to the core engine.
 3. **Config-first**: every CLI flag that has a corresponding config-file key must use the config value as its effective default. The CLI flag only *overrides* the config value — it never ignores it. If a feature is enabled in the config file, it must be active even when the CLI flag is not explicitly passed.
 4. A single config path flows through the lint engine — CLI options that overlap with config keys override or supplement the loaded config in a defined precedence order.
-5. Deterministic output: given identical inputs, CLI output bytes must be identical.
+5. Deterministic diagnostics and summaries: given identical inputs, stdout diagnostics and stderr summaries must be identical. Best-effort verbose progress lines may interleave in parallel mode.
 
 ---
 
@@ -442,6 +442,38 @@ In `--verbose` mode with at least one diagnostic, a per-rule breakdown is append
 ```
 
 Rules are sorted by count descending, then by rule ID lexicographically.
+
+In `--verbose` mode, rule activation metadata is emitted once per document kind seen in the run:
+
+```
+verbose: rules: <N> enabled, <M> disabled (workflow)
+verbose: rules: <N> enabled, <M> disabled (action)
+verbose: rules: disabled: <id1>, <id2>, ...   (only when M > 0)
+```
+
+`DisabledRuleCount` and `DisabledRuleIds` reflect config/opt-in disabled rules only. The `(workflow)` / `(action)` suffix is included because `ActiveRuleCount` varies by document kind.
+
+Per-file timing summary consolidates document kind, elapsed time, diagnostic count, and suppressed count:
+
+```
+verbose: <filepath>: workflow, 1.2 ms, 5 diagnostics, 2 suppressed
+verbose: <filepath>: action, 0.8 ms, 3 diagnostics, 0 suppressed
+```
+
+Total timing is emitted at the end:
+
+```
+verbose: total: 3 file(s) checked in 4.5 ms
+verbose: total: 3 file(s) fixed in 450.0 ms
+```
+
+In fix mode, network timing is emitted per file when pins are resolved:
+
+```
+verbose: network: resolved 3 pin(s) for <filepath> in 320.0 ms
+```
+
+In parallel verbose mode, `verbose: checking <filepath>...` is best-effort progress output and may appear interleaved rather than in input order. Diagnostic output and summary output remain deterministic.
 
 When no `--min-severity` is explicitly set, errors are zero, and warnings are non-zero, a hint line is emitted:
 

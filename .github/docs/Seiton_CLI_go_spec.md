@@ -35,7 +35,7 @@ The Seiton CLI Go implementation provides:
 2. Standard library `flag`-based command dispatch (no framework dependency)
 3. Config bridge translating CLI flags/env vars into linter config
 4. Multi-format diagnostic output (text/json/SARIF) via `encoding/json`
-5. Parallel multi-file linting with deterministic output ordering
+5. Parallel multi-file linting with deterministic aggregated output ordering
 6. Pre-dispatch unknown option detection with edit-distance suggestions
 
 ### 0.3 Structure
@@ -57,7 +57,7 @@ Representative implementation surface:
 
 1. Keep CLI as thin wrapper — no lint/parse logic in the CLI layer.
 2. Use standard library where possible (`flag`, `encoding/json`, `os`); avoid external CLI framework dependencies.
-3. Keep multi-file output deterministic regardless of parallelization.
+3. Keep aggregated diagnostic and summary output deterministic regardless of parallelization; verbose progress lines may interleave.
 4. Keep config resolution aligned with `Seiton_CLI_spec.md` §4 precedence order.
 
 ---
@@ -279,20 +279,40 @@ Shared contract reference: `Seiton_Linter_spec.md` §2.1.
 
 - Uses `errgroup.Group` with `SetLimit(runtime.NumCPU())` for parallel multi-file linting.
 - Sequential path for single files, stdin, or `GOMAXPROCS=1`.
-- Results are collected into a pre-allocated `[]fileCheckResult` slice indexed by file position, guaranteeing deterministic output order.
+- Results are collected into a pre-allocated `[]fileCheckResult` slice indexed by file position, guaranteeing deterministic aggregated diagnostic and summary output order.
 - Post-lint filters (`--ignore`, `--min-severity`) are applied after aggregation.
 - Summary line is always written to stderr via `writeSummary` (error/warning/info counts + file count).
 - In `--verbose` mode with diagnostics, per-rule breakdown is appended sorted by count descending, then rule ID.
+- In `--verbose` mode, `writeRuleSummary` emits rule activation counts and disabled rule IDs once per document kind seen in the run (for example `verbose: rules: 42 enabled, 15 disabled (workflow)`).
+- In `--verbose` mode, per-file timing is logged (e.g. `verbose: .github/workflows/ci.yml: workflow, 1.2 ms, 5 diagnostics, 2 suppressed`).
+- In `--verbose` mode, total timing is logged (e.g. `verbose: total: 3 file(s) checked in 4.5 ms`).
+- In parallel verbose mode, `verbose: checking <file>...` is best-effort progress output and may interleave rather than follow input order; aggregated diagnostics and summaries remain deterministic.
+- In fix mode, network timing wraps pin resolution and emits `verbose: network: resolved <count> pin(s) for <file> in <elapsed> ms`.
+- In fix mode, total timing emits `verbose: total: <N> file(s) fixed in <elapsed> ms`.
 - When no `--min-severity` is set, errors are zero, and warnings are non-zero, a hint line is emitted: `hint: use --min-severity error to treat warnings as non-blocking in CI`.
 - In fix mode, a network fix hint is emitted when `unpinned-uses` or `unpinned-image` diagnostics exist but the corresponding network flag is not enabled.
 
 ```go
 type fileCheckResult struct {
-    diagnostics []*Diagnostic
-    filePath    string
-    utf8Yaml    []byte // nil when not needed for snippet rendering
+    diagnostics        []*Diagnostic
+    filePath           string
+    utf8Yaml           []byte // nil when not needed for snippet rendering
+    documentKind       DocumentKind
+    suppressionSummary SuppressionSummary
+    fileElapsed        time.Duration
+    fileDiagnosticCount int
+    fileSuppressedCount int
+}
+
+// Captured once per DocumentKind via sync.Once or atomic CAS — avoids N redundant snapshots.
+type ruleActivationMetadata struct {
+    activeRuleCount   int
+    disabledRuleCount int
+    disabledRuleIDs   []string
 }
 ```
+
+Rule activation metadata is invariant per DocumentKind within a single lint run. Workers race to capture metadata once per kind (at most 2 snapshots) rather than storing redundant copies per file. The main goroutine emits deterministic rule summaries, timing, and suppression lines in input order.
 
 ### 6.2 Fix Orchestration
 

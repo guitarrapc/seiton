@@ -35,7 +35,7 @@ The Seiton CLI C# implementation provides:
 2. ConsoleAppFramework source-generated command dispatch
 3. Config bridge translating CLI flags/env vars into `LintConfig`
 4. Multi-format diagnostic output (text/json/SARIF) via source-generated JSON serialization
-5. Parallel multi-file linting with deterministic output ordering
+5. Parallel multi-file linting with deterministic aggregated output ordering
 6. Pre-framework unknown option detection with edit-distance suggestions
 
 ### 0.3 Structure
@@ -57,7 +57,7 @@ Representative implementation surface:
 
 1. Keep CLI as thin wrapper — no lint/parse logic in this project.
 2. Keep all JSON serialization AOT-compatible (source-generated `System.Text.Json`).
-3. Keep multi-file output deterministic regardless of parallelization.
+3. Keep aggregated diagnostic and summary output deterministic regardless of parallelization; verbose progress lines may interleave.
 4. Keep config resolution aligned with `Seiton_CLI_spec.md` §4 precedence order.
 
 ---
@@ -263,11 +263,17 @@ Shared contract reference: `Seiton_Linter_spec.md` §2.1.
 
 - Uses `ThreadLocal<LintEngine>` for parallel multi-file linting when `ProcessorCount > 1` and more than 1 file is present.
 - Sequential path for single files, stdin, or single-core machines (avoids ThreadLocal overhead).
-- Results are written to a pre-allocated `FileCheckResult[]` slot array indexed by file position, guaranteeing deterministic output order.
+- Results are written to a pre-allocated `FileCheckResult[]` slot array indexed by file position, guaranteeing deterministic aggregated diagnostic and summary output order.
 - Each worker calls `CopyDiagnostics()` to create caller-owned diagnostic copies that survive engine reuse.
 - Post-lint filters (`--ignore`, `--min-severity`) are applied after aggregation.
 - Summary line is always written to stderr via `WriteSummary` (error/warning/info counts + file count).
 - In `--verbose` mode with diagnostics, `WritePerRuleBreakdown` appends per-rule counts sorted by count descending, then rule ID.
+- In `--verbose` mode, `WriteRuleSummary` emits rule activation counts (`verbose: rules: <N> enabled, <M> disabled (workflow)` or `(action)`) and lists disabled rule IDs when present (`verbose: rules: disabled: <id1>, <id2>, ...`). Rule summary is logged once per DocumentKind (workflow and action separately), since `ActiveRuleCount` varies by document kind.
+- In `--verbose` mode, per-file timing is logged via `WriteFileTimingSummary` (e.g. `verbose: .github/workflows/ci.yml: workflow, 1.2 ms, 5 diagnostics, 2 suppressed`).
+- In `--verbose` mode, total timing is logged via `WriteTotalTiming` (e.g. `verbose: total: 3 file(s) checked in 4.5 ms`).
+- `VerboseLogger` exposes `GetTimestamp()` and `GetElapsedTime(long start)` delegating to `TimeProvider` for testable timing.
+- `FileCheckResult` carries `DocumentKind`, `FileElapsed`, `FileDiagnosticCount` (computed), and `FileSuppressedCount` (computed) for the parallel aggregation path. Rule activation metadata (`ActiveRuleCount`, `DisabledRuleCount`, `DisabledRuleIds`) is captured once per DocumentKind via `RuleActivationMetadata` using `Interlocked` — avoiding N redundant `string[]` snapshots when only at most 2 are needed.
+- In parallel mode, `checking <file>...` is emitted from inside `Parallel.For` as best-effort progress output; the lines are self-contained and may interleave, while aggregated diagnostics and summaries remain deterministic.
 - When no `--min-severity` is set, errors are zero, and warnings are non-zero, a hint line is emitted: `hint: use --min-severity error to treat warnings as non-blocking in CI`.
 - In fix mode, `WriteNetworkFixHint` emits a hint when `unpinned-uses` or `unpinned-image` diagnostics exist but the corresponding network flag is not enabled.
 
@@ -279,6 +285,8 @@ Shared contract reference: `Seiton_Linter_spec.md` §2.1.
 - Copies diagnostics immediately after `Check()` to avoid use-after-dispose of lint handles.
 - Stdin (`-`) is explicitly rejected in fix mode (returns `ExitCode.InvalidOptions`).
 - Network remediation (`PinRemediationEngine`) is constructed only when effective pin/image network is enabled.
+- In `--verbose` mode, network timing wraps `RemediateAsync()` and emits `verbose: network: resolved <count> pin(s) for <file> in <elapsed> ms`.
+- In `--verbose` mode, total timing emits `verbose: total: <N> file(s) fixed in <elapsed> ms`.
 - When both `--check` and `--dry-run` are passed, `--check` takes precedence: no diffs are printed and no fixes are applied.
 
 ### 6.3 InputDiscovery
@@ -288,12 +296,13 @@ Shared contract reference: `Seiton_CLI_spec.md` §5.
 ```csharp
 internal static class InputDiscovery
 {
-    public static string[] ResolveFiles(string[] files, bool includeActions);
+  public static string[] ResolveFiles(string[] files, bool includeActions, VerboseLogger verboseLogger, string? startDirectory = null);
 }
 ```
 
 - Auto-discovery: walks parent directories to find `.github/workflows/` (and `.github/actions/` when `includeActions`).
 - Explicit args: expands directories recursively, validates file existence.
+- `VerboseLogger` and optional `startDirectory` support verbose discovery output and testability; production callers omit `startDirectory` to use the current working directory.
 - Uses `SearchOption.AllDirectories` for YAML file collection.
 - Sort: `StringComparer.Ordinal` for deterministic ordering.
 

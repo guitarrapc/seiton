@@ -26,6 +26,7 @@ public sealed class LintEngine
     private readonly Dictionary<string, int> _suppressedByRule = new(StringComparer.Ordinal);
     private readonly List<SuppressionRecord> _suppressionRecords = new();
     private readonly LintConfig _effectiveConfig = new();
+    private readonly List<string> _disabledRuleIds = new(8);
 
     // NormalizeRules reusable collections
     private readonly Dictionary<string, RuleConfig> _normalizedRulesDict = new(StringComparer.Ordinal);
@@ -95,6 +96,15 @@ public sealed class LintEngine
     /// <summary>Parses and lints the given YAML, applying the optional <paramref name="config"/>.</summary>
     /// <remarks>
     /// <para>
+    /// <b>Document kind metadata:</b> <see cref="LintResult.DocumentKind"/> prefers the parser's finalized
+    /// classification. When final classification is unknown, the engine falls back to the parser path hint kind
+    /// so files such as <c>action.yml</c> still return stable document-kind and rule-activation metadata even when
+    /// parsing fails before an AST is produced.
+    /// </para>
+    /// <para>
+    /// This fallback affects result metadata only; fatal parse errors still short-circuit before any rule traversal.
+    /// </para>
+    /// <para>
     /// <b>Thread safety:</b> A single <see cref="LintEngine"/> instance is <b>not</b> safe for concurrent
     /// <see cref="Check"/> calls. Internal mutable state (diagnostics lists, visitor, rule instances, caches)
     /// is cleared and reused on every call. For parallel multi-file linting, use
@@ -115,7 +125,11 @@ public sealed class LintEngine
 
         var classifiedParseResult = WorkflowParser.ParseClassified(utf8Yaml, filePath, out var arena);
         var parseResult = classifiedParseResult.ParseResult;
-        var lintResult = CheckCore(utf8Yaml, filePath, config, parseResult, arena, classifiedParseResult.Classification.FinalKind);
+        var classification = classifiedParseResult.Classification;
+        var documentKind = classification.FinalKind != DocumentKind.Unknown
+            ? classification.FinalKind
+            : classification.PathHintKind;
+        var lintResult = CheckCore(utf8Yaml, filePath, config, parseResult, arena, documentKind);
         return new LintResult(lintResult, arena);
     }
 
@@ -124,6 +138,10 @@ public sealed class LintEngine
     /// Used by internal callers that need explicit arena ownership without the <see cref="LintResult"/> wrapper.
     /// The caller is responsible for disposing the returned arena.
     /// </summary>
+    /// <remarks>
+    /// Mirrors <see cref="Check(byte[], string, LintConfig?)"/>, including path-hint fallback for
+    /// <see cref="LintResultData.DocumentKind"/> when parser final classification is unknown.
+    /// </remarks>
     internal LintResultData CheckDirect(byte[] utf8Yaml, string filePath, LintConfig? config, out AstArena? arena)
     {
         ArgumentNullException.ThrowIfNull(utf8Yaml);
@@ -131,7 +149,11 @@ public sealed class LintEngine
 
         var classifiedParseResult = WorkflowParser.ParseClassified(utf8Yaml, filePath, out arena);
         var parseResult = classifiedParseResult.ParseResult;
-        return CheckCore(utf8Yaml, filePath, config, parseResult, arena, classifiedParseResult.Classification.FinalKind);
+        var classification = classifiedParseResult.Classification;
+        var documentKind = classification.FinalKind != DocumentKind.Unknown
+            ? classification.FinalKind
+            : classification.PathHintKind;
+        return CheckCore(utf8Yaml, filePath, config, parseResult, arena, documentKind);
     }
 
     /// <summary>Parses and lints the given YAML with no explicit configuration. Returns result with arena as out parameter.</summary>
@@ -170,11 +192,32 @@ public sealed class LintEngine
 
     private LintResultData CheckCore(byte[] utf8Yaml, string filePath, LintConfig? config, ParseResultData parseResult, AstArena? arena, DocumentKind documentKind, bool[]? skipJobs = null)
     {
+        var normalizedRules = NormalizeRules(config?.Rules, filePath);
+        _disabledRuleIds.Clear();
+
         if (parseResult.HasFatalError || (parseResult.Workflow is null && parseResult.ActionMetadata is null))
         {
-            return new LintResultData(parseResult, parseResult.Diagnostics)
+            DiagnosticList diagnostics = parseResult.Diagnostics;
+            if (normalizedRules.ConfigurationDiagnostics.Count > 0)
+            {
+                var mergedDiagnostics = new Diagnostic[parseResult.Diagnostics.Length + normalizedRules.ConfigurationDiagnostics.Count];
+                parseResult.Diagnostics.AsSpan().CopyTo(mergedDiagnostics);
+                for (var i = 0; i < normalizedRules.ConfigurationDiagnostics.Count; i++)
+                {
+                    mergedDiagnostics[parseResult.Diagnostics.Length + i] = normalizedRules.ConfigurationDiagnostics[i];
+                }
+
+                diagnostics = new DiagnosticList(mergedDiagnostics);
+            }
+
+            var (parseErrorActiveRuleCount, parseErrorDisabledRuleIds) = GetRuleActivationMetadataForDocumentKind(normalizedRules.Rules, documentKind);
+            return new LintResultData(parseResult, diagnostics)
             {
                 SuppressionSummary = SuppressionSummary.Empty,
+                DocumentKind = documentKind,
+                ActiveRuleCount = parseErrorActiveRuleCount,
+                DisabledRuleCount = parseErrorDisabledRuleIds.Length,
+                DisabledRuleIds = parseErrorDisabledRuleIds,
             };
         }
 
@@ -188,7 +231,6 @@ public sealed class LintEngine
             }
         }
 
-        var normalizedRules = NormalizeRules(config?.Rules, filePath);
         _diagnostics.AddRange(normalizedRules.ConfigurationDiagnostics);
 
         var workflowForSuppression = parseResult.Workflow ?? EmptyWorkflowForSuppression;
@@ -200,7 +242,10 @@ public sealed class LintEngine
 
         if (rules.Count == 0 && _onlineRules.Count == 0)
         {
-            return BuildLintResult(parseResult, arena);
+            // Rule activation metadata is relative to the engine's installed rule set.
+            // A custom engine constructed with no rules therefore reports zero active/
+            // disabled rules even if config mentions rule ids that are unknown here.
+            return BuildLintResult(parseResult, arena, documentKind, 0, 0, []);
         }
 
         _visitor.Reset();
@@ -219,8 +264,10 @@ public sealed class LintEngine
         for (var i = 0; i < rules.Count; i++)
         {
             var rule = rules[i];
-            if (!IsRuleEnabled(rule.Id.ToId(), effectiveConfig.Rules))
+            var ruleId = rule.Id.ToId() ?? throw new InvalidOperationException($"Rule {rule.Id} must provide a non-null id.");
+            if (!IsRuleEnabled(ruleId, effectiveConfig.Rules))
             {
+                _disabledRuleIds.Add(ruleId);
                 continue;
             }
 
@@ -239,8 +286,10 @@ public sealed class LintEngine
         for (var i = 0; i < _onlineRules.Count; i++)
         {
             var onlineRule = _onlineRules[i];
-            if (!IsRuleEnabled(onlineRule.Id.ToId(), effectiveConfig.Rules))
+            var ruleId = onlineRule.Id.ToId() ?? throw new InvalidOperationException($"Rule {onlineRule.Id} must provide a non-null id.");
+            if (!IsRuleEnabled(ruleId, effectiveConfig.Rules))
             {
+                _disabledRuleIds.Add(ruleId);
                 continue;
             }
 
@@ -254,9 +303,13 @@ public sealed class LintEngine
             _activeOnlineRules.Add(onlineRule);
         }
 
+        var activeRuleCount = _activeRules.Count + _activeOnlineRules.Count;
+        var disabledRuleCount = _disabledRuleIds.Count;
+        var disabledRuleIdsSnapshot = disabledRuleCount > 0 ? _disabledRuleIds.ToArray() : [];
+
         if (_activeRules.Count == 0 && _activeOnlineRules.Count == 0)
         {
-            return BuildLintResult(parseResult, arena);
+            return BuildLintResult(parseResult, arena, documentKind, activeRuleCount, disabledRuleCount, disabledRuleIdsSnapshot);
         }
 
         if (parseResult.Workflow is not null)
@@ -359,10 +412,52 @@ public sealed class LintEngine
 
         if (config?.SkipSuppressionSummary == true)
         {
-            return BuildLintResult(parseResult, arena);
+            return BuildLintResult(parseResult, arena, documentKind, activeRuleCount, disabledRuleCount, disabledRuleIdsSnapshot);
         }
 
-        return BuildLintResultWithSuppression(parseResult, arena);
+        return BuildLintResultWithSuppression(parseResult, arena, documentKind, activeRuleCount, disabledRuleCount, disabledRuleIdsSnapshot);
+    }
+
+    private (int ActiveRuleCount, string[] DisabledRuleIds) GetRuleActivationMetadataForDocumentKind(
+        IReadOnlyDictionary<string, RuleConfig>? normalizedRuleConfig,
+        DocumentKind documentKind)
+    {
+        _disabledRuleIds.Clear();
+
+        var activeRuleCount = 0;
+        for (var i = 0; i < rules.Count; i++)
+        {
+            var rule = rules[i];
+            var ruleId = rule.Id.ToId() ?? throw new InvalidOperationException($"Rule {rule.Id} must provide a non-null id.");
+            if (!IsRuleEnabled(ruleId, normalizedRuleConfig))
+            {
+                _disabledRuleIds.Add(ruleId);
+                continue;
+            }
+
+            if (rule.SupportsDocumentKind(documentKind))
+            {
+                activeRuleCount++;
+            }
+        }
+
+        for (var i = 0; i < _onlineRules.Count; i++)
+        {
+            var onlineRule = _onlineRules[i];
+            var ruleId = onlineRule.Id.ToId() ?? throw new InvalidOperationException($"Rule {onlineRule.Id} must provide a non-null id.");
+            if (!IsRuleEnabled(ruleId, normalizedRuleConfig))
+            {
+                _disabledRuleIds.Add(ruleId);
+                continue;
+            }
+
+            if (onlineRule.SupportsDocumentKind(documentKind))
+            {
+                activeRuleCount++;
+            }
+        }
+
+        return (activeRuleCount, _disabledRuleIds.Count > 0 ? _disabledRuleIds.ToArray() : []);
     }
 
     /// <summary>
@@ -370,7 +465,7 @@ public sealed class LintEngine
     /// When the previous result's array (now in <c>_resultDiagnosticsSwap</c>) has the right length,
     /// it is reused with zero allocation. Otherwise a new array is allocated.
     /// </summary>
-    private LintResultData BuildLintResult(ParseResultData parseResult, AstArena? arena)
+    private LintResultData BuildLintResult(ParseResultData parseResult, AstArena? arena, DocumentKind documentKind, int activeRuleCount, int disabledRuleCount, string[] disabledRuleIds)
     {
         var count = _diagnostics.Count;
         var buffer = new PooledBuffer<Diagnostic>(count > 0 ? count : 4);
@@ -386,13 +481,17 @@ public sealed class LintEngine
         return new LintResultData(parseResult, new DiagnosticList(diagArray, diagCount))
         {
             SuppressionSummary = SuppressionSummary.Empty,
+            DocumentKind = documentKind,
+            ActiveRuleCount = activeRuleCount,
+            DisabledRuleCount = disabledRuleCount,
+            DisabledRuleIds = disabledRuleIds,
         };
     }
 
     /// <summary>
     /// Builds a <see cref="LintResultData"/> with suppression summary using PooledBuffer + DetachArray.
     /// </summary>
-    private LintResultData BuildLintResultWithSuppression(ParseResultData parseResult, AstArena? arena)
+    private LintResultData BuildLintResultWithSuppression(ParseResultData parseResult, AstArena? arena, DocumentKind documentKind, int activeRuleCount, int disabledRuleCount, string[] disabledRuleIds)
     {
         var count = _diagnostics.Count;
         var buffer = new PooledBuffer<Diagnostic>(count > 0 ? count : 4);
@@ -424,6 +523,10 @@ public sealed class LintEngine
         return new LintResultData(parseResult, new DiagnosticList(diagArray, diagCount))
         {
             SuppressionSummary = new SuppressionSummary(suppressionCount, suppressedByRuleSnapshot, suppressionRecordsSnapshot),
+            DocumentKind = documentKind,
+            ActiveRuleCount = activeRuleCount,
+            DisabledRuleCount = disabledRuleCount,
+            DisabledRuleIds = disabledRuleIds,
         };
     }
 

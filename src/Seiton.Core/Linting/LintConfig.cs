@@ -259,6 +259,8 @@ public sealed record FixPinningConfig
 {
     /// <summary>Gets whether network access is enabled for SHA resolution.</summary>
     public bool EnableNetwork { get; init; }
+    /// <summary>Gets whether <c>enable-network</c> was explicitly present in config.</summary>
+    public bool HasEnableNetwork { get; init; }
     /// <summary>Gets the minimum age in days for an action reference to be eligible for pinning.</summary>
     public int MinAgeDays { get; init; } = 14;
     /// <summary>Gets the branches excluded from pinning fix application.</summary>
@@ -275,6 +277,8 @@ public sealed record FixImagesConfig
 
     /// <summary>Gets whether network access is enabled for OCI image digest resolution.</summary>
     public bool EnableNetwork { get; init; }
+    /// <summary>Gets whether <c>enable-network</c> was explicitly present in config.</summary>
+    public bool HasEnableNetwork { get; init; }
 
     private IReadOnlyList<string> _excludeImages = DefaultExcludeImages;
 

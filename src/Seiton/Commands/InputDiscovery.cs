@@ -1,35 +1,64 @@
-﻿namespace Seiton.Commands;
+﻿using Seiton.Cli;
+
+namespace Seiton.Commands;
 
 internal static class InputDiscovery
 {
     /// <summary>
     /// Discover files from given arguments, or auto-discover from .github/workflows/.
     /// </summary>
-    public static string[] ResolveFiles(string[] files, bool includeActions)
+    public static string[] ResolveFiles(string[] files, bool includeActions, VerboseLogger verboseLogger, string? startDirectory = null)
     {
-        if (files.Length > 0)
-            return ExpandFileArgs(files);
+        var startDir = startDirectory ?? Environment.CurrentDirectory;
 
-        return DiscoverFiles(includeActions);
+        if (files.Length > 0)
+        {
+            var result = ExpandFileArgs(files);
+            if (verboseLogger.IsEnabled)
+            {
+                verboseLogger.Log("discovery", $"{result.Length} file(s) from explicit args");
+            }
+            return result;
+        }
+
+        return DiscoverFiles(includeActions, verboseLogger, startDir);
     }
 
-    private static string[] DiscoverFiles(bool includeActions)
+    private static string[] DiscoverFiles(bool includeActions, VerboseLogger verboseLogger, string startDir)
     {
+        if (verboseLogger.IsEnabled)
+        {
+            verboseLogger.Log("discovery", $"searching from {startDir}");
+        }
+
         var files = new List<string>();
 
-        var workflowsDir = FindWorkflowsDirectory(Environment.CurrentDirectory);
+        var workflowsDir = FindWorkflowsDirectory(startDir);
         if (workflowsDir is not null && Directory.Exists(workflowsDir))
         {
+            if (verboseLogger.IsEnabled)
+            {
+                verboseLogger.Log("discovery", $"found {workflowsDir}");
+            }
             files.AddRange(CollectYamlFiles(workflowsDir));
         }
 
         if (includeActions)
         {
-            var actionsDir = FindActionsDirectory(Environment.CurrentDirectory);
+            var actionsDir = FindActionsDirectory(startDir);
             if (actionsDir is not null && Directory.Exists(actionsDir))
             {
+                if (verboseLogger.IsEnabled)
+                {
+                    verboseLogger.Log("discovery", $"found {actionsDir}");
+                }
                 files.AddRange(CollectYamlFiles(actionsDir));
             }
+        }
+
+        if (verboseLogger.IsEnabled)
+        {
+            verboseLogger.Log("discovery", $"{files.Count} file(s) resolved");
         }
 
         if (files.Count == 0)

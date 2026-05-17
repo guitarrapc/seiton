@@ -208,6 +208,63 @@ public sealed class FixCommandTests
         }
     }
 
+    [Test]
+    public async Task Verbose_NoAppliedFixes_DoesNotLogZeroFixLine()
+    {
+        var configPath = CreateConfigFile(
+            """
+            rules:
+                runner-no-latest:
+                    enabled: false
+                job-timeout-minutes-required:
+                    enabled: false
+                job-permissions-required:
+                    enabled: false
+            """);
+        var filePath = CreateWorkflowFile(
+            """
+            on: push
+            jobs:
+              build:
+                runs-on: ubuntu-24.04
+                steps:
+                  - run: echo ok
+            """);
+
+        try
+        {
+            using var sw = new StringWriter();
+            using var stderr = new StringWriter();
+
+            var exitCode = await FixCommand.RunAsync(
+                [filePath],
+                config: configPath,
+                stdinFilename: "stdin.yml",
+                ignore: [],
+                minSeverity: null,
+                format: OutputFormat.Text,
+                oneline: true,
+                color: ColorMode.Never,
+                noColor: true,
+                verbose: true,
+                dryRun: false,
+                check: false,
+                enablePinNetwork: false,
+                enableImageNetwork: false,
+                includeActions: false,
+                output: sw,
+                error: stderr);
+
+            await Assert.That(exitCode).IsEqualTo(ExitCode.Success);
+            await Assert.That(stderr.ToString()).DoesNotContain("applied 0 fix(es)");
+        }
+        finally
+        {
+            DeleteContainingDirectory(filePath);
+            DeleteContainingDirectory(configPath);
+        }
+    }
+
     private static string CreateWorkflowFile(string yaml)
     {
         var dir = Path.Combine(Path.GetTempPath(), "Seiton.Tests", Guid.NewGuid().ToString("N"));
