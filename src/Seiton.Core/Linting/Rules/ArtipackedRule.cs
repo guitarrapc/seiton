@@ -56,13 +56,24 @@ public sealed class ArtipackedRule() : RuleBase(RuleId.Artipacked)
                     continue;
                 }
 
-                if (IsV6OrLater(usesText))
+                if (TryExtractMajorAndMinorVersion(usesText, out var checkoutMajor, out _, out _))
                 {
+                    if (checkoutMajor >= 6)
+                    {
+                        hasUnsafeV6PlusCheckout = true;
+                    }
+                    else
+                    {
+                        hasUnsafeLegacyCheckout = true;
+                    }
+                }
+                else
+                {
+                    // Cannot determine version (SHA/branch ref) — conservatively assume both risks
+                    hasUnsafeLegacyCheckout = true;
                     hasUnsafeV6PlusCheckout = true;
-                    continue;
                 }
 
-                hasUnsafeLegacyCheckout = true;
                 continue;
             }
 
@@ -469,13 +480,7 @@ public sealed class ArtipackedRule() : RuleBase(RuleId.Artipacked)
         return fwd < bck ? fwd : bck;
     }
 
-    /// <summary>Detects checkout v6+ from a strict semantic version ref (e.g. <c>actions/checkout@v6</c>, <c>@v6.1</c>).
-    /// Arbitrary refs like <c>@v6-legacy</c> are not treated as v6+.</summary>
-    internal static bool IsV6OrLater(ReadOnlySpan<byte> usesText)
-    {
-        return TryExtractMajorAndMinorVersion(usesText, out var major, out _, out _) && major >= 6;
-    }
-
+    /// <summary>Finds the first path separator (/ or \) in the span, or -1 if not found.</summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static ReadOnlySpan<byte> TrimBytes(ReadOnlySpan<byte> span)
     {

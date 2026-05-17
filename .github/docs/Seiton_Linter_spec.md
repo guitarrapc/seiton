@@ -454,7 +454,7 @@ The following table defines the normative default severity for each rule. Implem
 | `run-inputs-context-direct-use` | error | |
 | `secrets-whole-context-access` | error | |
 | `checkout-persist-credentials` | warning | |
-| `artipacked` | mixed | error (legacy checkout credentials exposed via hidden files), warning (v6+ $RUNNER_TEMP risk only) |
+| `artipacked` | mixed | error (legacy checkout credentials exposed via hidden files), warning (v6+ $RUNNER_TEMP risk only). Unknown-version refs (SHA/branch) conservatively assume both risks. |
 | `known-vulnerable-actions` | error | online |
 | `impostor-commit` | error | online |
 | `ref-confusion` | error | online |

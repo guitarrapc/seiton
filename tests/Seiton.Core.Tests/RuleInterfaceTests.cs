@@ -14457,6 +14457,23 @@ public sealed class RuleInterfaceTests
                               path: ../..
             """,
             ["upload-artifact with path '../..'", "$RUNNER_TEMP"]),
+            // Edge case: SHA-pinned checkout has unknown version — conservatively assumes both risks.
+            // With parent-dir upload and hidden files excluded, $RUNNER_TEMP risk yields warning.
+            new RuleCase(
+            "ng-checkout-sha-parent-dir-no-hidden-warning",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
+                        - uses: actions/upload-artifact@v4.4
+                          with:
+                              name: my-artifact
+                              path: ../..
+            """,
+            ["upload-artifact with path '../..'", "$RUNNER_TEMP"]),
             // Edge case: leading-zero checkout refs are arbitrary tags, not semver v6+.
             new RuleCase(
             "ng-checkout-v06-upload-dot",
@@ -14984,6 +15001,84 @@ public sealed class RuleInterfaceTests
 
         await Assert.That(diagnostic.Severity).IsEqualTo(DiagnosticSeverity.Error);
         await Assert.That(diagnostic.Message).Contains(".git/config");
+    }
+
+    [Test]
+    public async Task RuleRegression_ArtipackedRule_ShaPinnedCheckoutParentDirNoHiddenIsWarning()
+    {
+        // SHA-pinned checkout has unknown version — could be v6+.
+        // With parent-dir upload and hidden files excluded, $RUNNER_TEMP may be at risk → WARNING.
+        var yaml = NormalizeYaml(
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
+                        - uses: actions/upload-artifact@v4.4
+                          with:
+                              name: artifact
+                              path: ../..
+            """);
+
+        using var result = new LintEngine([new ArtipackedRule()]).Check(Encoding.UTF8.GetBytes(yaml), "artipacked-sha-parent.yml");
+        var diagnostic = result.Diagnostics.Single(x => x.RuleId == "artipacked");
+
+        await Assert.That(diagnostic.Severity).IsEqualTo(DiagnosticSeverity.Warning);
+        await Assert.That(diagnostic.Message).Contains("$RUNNER_TEMP");
+    }
+
+    [Test]
+    public async Task RuleRegression_ArtipackedRule_ShaPinnedCheckoutWithHiddenFilesIsError()
+    {
+        // SHA-pinned checkout has unknown version — could be legacy.
+        // With hidden files included, .git/config is at risk → ERROR.
+        var yaml = NormalizeYaml(
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
+                        - uses: actions/upload-artifact@v4
+                          with:
+                              name: artifact
+                              path: .
+                              include-hidden-files: true
+            """);
+
+        using var result = new LintEngine([new ArtipackedRule()]).Check(Encoding.UTF8.GetBytes(yaml), "artipacked-sha-hidden.yml");
+        var diagnostic = result.Diagnostics.Single(x => x.RuleId == "artipacked");
+
+        await Assert.That(diagnostic.Severity).IsEqualTo(DiagnosticSeverity.Error);
+        await Assert.That(diagnostic.Message).Contains(".git/config");
+    }
+
+    [Test]
+    public async Task RuleRegression_ArtipackedRule_ShaPinnedCheckoutCurrentDirNoHiddenIsSafe()
+    {
+        // SHA-pinned checkout with current-dir upload and hidden files excluded.
+        // Legacy .git/config is hidden (safe), v6+ $RUNNER_TEMP is not in current dir (safe) → no diagnostic.
+        var yaml = NormalizeYaml(
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
+                        - uses: actions/upload-artifact@v4.4
+                          with:
+                              name: artifact
+                              path: .
+            """);
+
+        using var result = new LintEngine([new ArtipackedRule()]).Check(Encoding.UTF8.GetBytes(yaml), "artipacked-sha-safe.yml");
+        var diagnostics = result.Diagnostics.Where(x => x.RuleId == "artipacked").ToArray();
+
+        await Assert.That(diagnostics).IsEmpty();
     }
 
     private static async Task AssertRuleCases(IRule rule, string ruleId, RuleCase[] cases, LintConfig? config = null)

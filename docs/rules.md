@@ -1015,6 +1015,8 @@ Detects credential leakage risk when `actions/checkout` (without `persist-creden
 - **error** — checkout (non-v6+) without `persist-credentials: false` + dangerous upload that may include hidden files
 - **warning** — checkout v6+ without `persist-credentials: false` + dangerous upload that may include hidden files, or a parent-directory upload that can reach `$RUNNER_TEMP`
 
+When checkout is pinned to a full SHA or branch ref (version cannot be determined statically), the rule conservatively assumes both legacy and v6+ risks apply.
+
 **Example trigger:**
 
 ```yaml
