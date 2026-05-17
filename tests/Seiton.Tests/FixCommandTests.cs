@@ -211,16 +211,16 @@ public sealed class FixCommandTests
     [Test]
     public async Task Verbose_NoAppliedFixes_DoesNotLogZeroFixLine()
     {
-                var configPath = CreateConfigFile(
-                        """
-                        rules:
-                            runner-no-latest:
-                                enabled: false
-                            job-timeout-minutes-required:
-                                enabled: false
-                            job-permissions-required:
-                                enabled: false
-                        """);
+        var configPath = CreateConfigFile(
+            """
+            rules:
+                runner-no-latest:
+                    enabled: false
+                job-timeout-minutes-required:
+                    enabled: false
+                job-permissions-required:
+                    enabled: false
+            """);
         var filePath = CreateWorkflowFile(
             """
             on: push
