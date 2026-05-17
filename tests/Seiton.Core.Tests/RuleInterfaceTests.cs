@@ -14404,6 +14404,55 @@ public sealed class RuleInterfaceTests
                               include-hidden-files: true
             """,
             ["upload-artifact with path", "persist-credentials: false"]),
+            // Edge case: checkout v6+ still leaks credentials when parent-directory upload can include $RUNNER_TEMP.
+            new RuleCase(
+            "ng-checkout-v6-upload-parent-dir-without-hidden-files",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - uses: actions/checkout@v6
+                        - uses: actions/upload-artifact@v4.4
+                          with:
+                              name: my-artifact
+                              path: ../..
+            """,
+            ["upload-artifact with path '../..'", "persist-credentials: false"]),
+            // Edge case: leading-zero checkout refs are arbitrary tags, not semver v6+.
+            new RuleCase(
+            "ng-checkout-v06-upload-dot",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - uses: actions/checkout@v06
+                        - uses: actions/upload-artifact@v4
+                          with:
+                              name: my-artifact
+                              path: .
+                              include-hidden-files: true
+            """,
+            ["upload-artifact with path '.'", "persist-credentials: false"]),
+            // Edge case: leading-zero upload refs are arbitrary tags, so hidden-file defaults stay unknown and conservative.
+            new RuleCase(
+            "ng-checkout-v4-upload-v04-dot",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - uses: actions/checkout@v4
+                        - uses: actions/upload-artifact@v04
+                          with:
+                              name: my-artifact
+                              path: .
+            """,
+            ["upload-artifact with path '.'", "persist-credentials: false"]),
             // Safe case: dist/** is NOT dangerous (subdirectory glob)
             new RuleCase(
             "ok-checkout-upload-glob-subdir",

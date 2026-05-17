@@ -408,7 +408,7 @@ zizmor は tree-sitter（bash/pwsh 完全パーサー）を使用しているが
   2. `persist-credentials: false` が設定されていない checkout をマーク
   3. 同一 job 内で `actions/upload-artifact` の使用を検出
   4. upload-artifact の `path` が `.`, `..`, `./**`, `**`, `${{ github.workspace }}`, `${{ github.workspace }}/..` 等の危険パスの場合に報告
-  5. checkout v6+ では credential 保存先が `$RUNNER_TEMP` に変わるため severity を下げる
+  5. checkout v6+ では credential 保存先が `$RUNNER_TEMP` に変わるため severity を下げる。ただし親ディレクトリ upload は hidden-files default off でも `$RUNNER_TEMP` に届きうるため報告する
 - **既存ルールとの関係**: `checkout-persist-credentials` は checkout 単体の検出。`artipacked` は checkout + upload の組み合わせ検出。重複する診断は `artipacked` 側で抑制する設計を検討
 - **パフォーマンス影響**: 低。ステップの線形スキャンのみ
 - **checkout バージョン判定**: ref がセマンティックバージョンの場合は静的判定。SHA pin の場合は判定不可（online lookup は行わない。zizmor は optional で online lookup するが、Seiton では初期実装で省略）
@@ -435,7 +435,7 @@ zizmor は tree-sitter（bash/pwsh 完全パーサー）を使用しているが
 - `ArtipackedRule` は `checkout-persist-credentials` とは独立したルールとして実装（統合しない）
 - `VisitJobPost` では `job.Steps` を順に走査し、unsafe checkout の後に現れる危険な `upload-artifact` のみを報告（upload-before-checkout は報告しない）
 - 危険パス判定: `.`, `..`, `./**`, `**`, `${{ github.workspace }}`, `${{ github.workspace }}/..` などの root / parent / workspace 系パターン（各行を個別チェック）
-- checkout バージョン判定: セマンティックバージョン `@vN` のみ静的判定。SHA pin は unknown（非 v6+扱い）
+- checkout バージョン判定: leading zero のないセマンティックバージョン `@vN[.M[.P]]` のみ静的判定。SHA pin や `@v06` のような arbitrary tag は unknown（非 v6+扱い）
 - diagnostic は upload-artifact の `path` 値位置に報告
 - severity: error（非v6+ + 危険パス）、warning（v6+ + 危険パス）
 - バージョン ref に任意サフィックス（`@v6-legacy`, `@v4.4-legacy` 等）がある場合は unknown ref として保守的に扱う（非 v6+、unsafe minor version）

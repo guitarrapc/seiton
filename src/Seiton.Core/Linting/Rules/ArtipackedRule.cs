@@ -74,8 +74,9 @@ public sealed class ArtipackedRule() : RuleBase(RuleId.Artipacked)
             if (actionSpec.Id != PopularActions.ActionId.ActionsUploadArtifact
                 || actionExec.Inputs is null
                 || !actionExec.Inputs.Value.TryGetValue(utf8Yaml, "path"u8, out var pathNode)
-                || !IsDangerousPath(Arena.GetStringValue(pathNode))
-                || !MayIncludeHiddenFiles(actionExec, usesText, utf8Yaml))
+                || !TryClassifyDangerousPath(Arena.GetStringValue(pathNode), out var exposesParentDirectory)
+                || !(exposesParentDirectory && hasUnsafeV6PlusCheckout)
+                   && !MayIncludeHiddenFiles(actionExec, usesText, utf8Yaml))
             {
                 continue;
             }
@@ -195,6 +196,11 @@ public sealed class ArtipackedRule() : RuleBase(RuleId.Artipacked)
             pos++;
         }
 
+        if (HasLeadingZeroNumericIdentifier(versionText, pos))
+        {
+            return false;
+        }
+
         // Exact major-only ref (e.g. @v4) is treated as floating tag pointing to latest
         if (pos >= versionText.Length)
         {
@@ -223,6 +229,11 @@ public sealed class ArtipackedRule() : RuleBase(RuleId.Artipacked)
             return false;
         }
 
+        if (HasLeadingZeroNumericIdentifier(minorText, minorPos))
+        {
+            return false;
+        }
+
         // Trailing content after minor digits
         if (minorPos < minorText.Length)
         {
@@ -237,7 +248,7 @@ public sealed class ArtipackedRule() : RuleBase(RuleId.Artipacked)
                 }
 
                 // No patch digits after dot (e.g. @v4.6.) or trailing suffix (e.g. @v4.6.2-legacy) — unknown ref
-                if (patchPos == 0 || patchPos < patchText.Length)
+                if (patchPos == 0 || patchPos < patchText.Length || HasLeadingZeroNumericIdentifier(patchText, patchPos))
                 {
                     return false;
                 }
@@ -253,9 +264,17 @@ public sealed class ArtipackedRule() : RuleBase(RuleId.Artipacked)
         return true;
     }
 
-    /// <summary>Checks whether the upload path covers the repository root (and thus .git/config).</summary>
-    internal static bool IsDangerousPath(ReadOnlySpan<byte> path)
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private static bool HasLeadingZeroNumericIdentifier(ReadOnlySpan<byte> text, int digitCount)
     {
+        return digitCount > 1 && text[0] == (byte)'0';
+    }
+
+    /// <summary>Checks whether the upload path covers the repository root or parent directories.</summary>
+    internal static bool TryClassifyDangerousPath(ReadOnlySpan<byte> path, out bool exposesParentDirectory)
+    {
+        exposesParentDirectory = false;
+
         // Handle multiline paths: each line is a separate glob. If any line is dangerous, flag it.
         while (path.Length > 0)
         {
@@ -266,8 +285,9 @@ public sealed class ArtipackedRule() : RuleBase(RuleId.Artipacked)
             // Trim \r and spaces
             line = TrimBytes(line);
 
-            if (line.Length > 0 && IsDangerousLine(line))
+            if (line.Length > 0 && TryClassifyDangerousLine(line, out var lineExposesParentDirectory))
             {
+                exposesParentDirectory |= lineExposesParentDirectory;
                 return true;
             }
 
@@ -282,8 +302,10 @@ public sealed class ArtipackedRule() : RuleBase(RuleId.Artipacked)
         return false;
     }
 
-    private static bool IsDangerousLine(ReadOnlySpan<byte> line)
+    private static bool TryClassifyDangerousLine(ReadOnlySpan<byte> line, out bool exposesParentDirectory)
     {
+        exposesParentDirectory = false;
+
         if (IsCurrentDirectoryPath(line))
         {
             return true;
@@ -291,11 +313,16 @@ public sealed class ArtipackedRule() : RuleBase(RuleId.Artipacked)
 
         if (IsParentDirectoryPath(line))
         {
+            exposesParentDirectory = true;
             return true;
         }
 
-        // ${{ github.workspace }} with optional trailing separators or /. suffixes
-        return IsGitHubWorkspaceExpression(line);
+        if (TryClassifyGitHubWorkspaceExpression(line, out exposesParentDirectory))
+        {
+            return true;
+        }
+
+        return false;
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -358,8 +385,10 @@ public sealed class ArtipackedRule() : RuleBase(RuleId.Artipacked)
         return false;
     }
 
-    private static bool IsGitHubWorkspaceExpression(ReadOnlySpan<byte> value)
+    private static bool TryClassifyGitHubWorkspaceExpression(ReadOnlySpan<byte> value, out bool exposesParentDirectory)
     {
+        exposesParentDirectory = false;
+
         // Match ${{ github.workspace }} with variable internal whitespace and optional trailing
         // separator, /., or /.. suffixes. All of these resolve to the workspace or its parent.
         var trimmed = value;
@@ -381,6 +410,7 @@ public sealed class ArtipackedRule() : RuleBase(RuleId.Artipacked)
             // Strip /.. or \.. (parent directory traversal)
             if (trimmed.Length >= 3 && trimmed[^1] == (byte)'.' && trimmed[^2] == (byte)'.' && (trimmed[^3] == (byte)'/' || trimmed[^3] == (byte)'\\'))
             {
+                exposesParentDirectory = true;
                 trimmed = trimmed[..^3];
                 continue;
             }
