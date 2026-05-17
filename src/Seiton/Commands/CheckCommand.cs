@@ -1,4 +1,5 @@
-﻿using Seiton.Cli;
+using System.Runtime.InteropServices;
+using Seiton.Cli;
 using Seiton.Config;
 using Seiton.Core.Linting;
 using Seiton.Core.Parsing;
@@ -116,7 +117,8 @@ internal static class CheckCommand
 
                 if (verboseLogger.IsEnabled)
                 {
-                    if (!HasLoggedRuleSummaryForKind(result.DocumentKind, ref workflowRuleSummaryLogged, ref actionRuleSummaryLogged))
+                    if (result.DocumentKind != DocumentKind.Unknown
+                        && !HasLoggedRuleSummaryForKind(result.DocumentKind, ref workflowRuleSummaryLogged, ref actionRuleSummaryLogged))
                     {
                         WriteRuleSummary(verboseLogger, result.ActiveRuleCount, result.DisabledRuleCount, result.DisabledRuleIds, result.DocumentKind);
                         MarkRuleSummaryLogged(result.DocumentKind, ref workflowRuleSummaryLogged, ref actionRuleSummaryLogged);
@@ -142,6 +144,12 @@ internal static class CheckCommand
                     var filePath = resolvedFiles[i];
                     var utf8Yaml = File.ReadAllBytes(filePath);
 
+                    if (verboseLogger.IsEnabled)
+                    {
+                        // Progress visibility matters more than ordering for this line in parallel mode.
+                        verboseLogger.Log($"checking {filePath}...");
+                    }
+
                     var fileStart = verboseLogger.GetTimestamp();
                     var engine = engines.Value!;
                     using var result = engine.Check(utf8Yaml, filePath, lintConfig);
@@ -166,8 +174,8 @@ internal static class CheckCommand
 
                 if (verboseLogger.IsEnabled)
                 {
-                    verboseLogger.Log($"checked {slots[i].FilePath}");
-                    if (!HasLoggedRuleSummaryForKind(slots[i].DocumentKind, ref workflowRuleSummaryLogged, ref actionRuleSummaryLogged))
+                    if (slots[i].DocumentKind != DocumentKind.Unknown
+                        && !HasLoggedRuleSummaryForKind(slots[i].DocumentKind, ref workflowRuleSummaryLogged, ref actionRuleSummaryLogged))
                     {
                         WriteRuleSummary(verboseLogger, slots[i].ActiveRuleCount, slots[i].DisabledRuleCount, slots[i].DisabledRuleIds, slots[i].DocumentKind);
                         MarkRuleSummaryLogged(slots[i].DocumentKind, ref workflowRuleSummaryLogged, ref actionRuleSummaryLogged);
@@ -378,16 +386,14 @@ internal static class CheckCommand
         suppressedByRule ??= new Dictionary<string, int>(StringComparer.Ordinal);
         foreach (var kvp in summary.SuppressedByRule)
         {
-            if (!suppressedByRule.TryGetValue(kvp.Key, out var existing))
-                suppressedByRule[kvp.Key] = kvp.Value;
-            else
-                suppressedByRule[kvp.Key] = existing + kvp.Value;
+            ref var existing = ref CollectionsMarshal.GetValueRefOrAddDefault(suppressedByRule, kvp.Key, out _);
+            existing += kvp.Value;
         }
     }
 
     internal static void WriteRuleSummary(VerboseLogger logger, int activeRuleCount, int disabledRuleCount, ReadOnlySpan<string> disabledRuleIds, DocumentKind documentKind)
     {
-        var kind = documentKind == DocumentKind.ActionMetadata ? "action" : "workflow";
+        var kind = GetDocumentKindLabel(documentKind);
         logger.Log("rules", $"{activeRuleCount} enabled, {disabledRuleCount} disabled ({kind})");
 
         if (disabledRuleIds.Length > 0)
@@ -417,8 +423,18 @@ internal static class CheckCommand
 
     internal static void WriteFileTimingSummary(VerboseLogger logger, string filePath, DocumentKind documentKind, TimeSpan elapsed, int diagnosticCount, int suppressedCount)
     {
-        var kind = documentKind == DocumentKind.ActionMetadata ? "action" : "workflow";
+        var kind = GetDocumentKindLabel(documentKind);
         logger.LogFile(filePath, $"{kind}, {elapsed.TotalMilliseconds:F1} ms, {diagnosticCount} diagnostics, {suppressedCount} suppressed");
+    }
+
+    internal static string GetDocumentKindLabel(DocumentKind documentKind)
+    {
+        return documentKind switch
+        {
+            DocumentKind.Workflow => "workflow",
+            DocumentKind.ActionMetadata => "action",
+            _ => "unknown",
+        };
     }
 
     internal static void WriteTotalTiming(VerboseLogger logger, int fileCount, TimeSpan elapsed, string verb = "checked")

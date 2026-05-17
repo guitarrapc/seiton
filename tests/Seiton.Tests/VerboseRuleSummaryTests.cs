@@ -50,6 +50,18 @@ public sealed class VerboseRuleSummaryTests
     }
 
     [Test]
+    public async Task WriteRuleSummary_ActionMetadata_UsesActionSuffix()
+    {
+        using var sw = new StringWriter();
+        var logger = VerboseLogger.Create(verbose: true, sw);
+
+        CheckCommand.WriteRuleSummary(logger, activeRuleCount: 5, disabledRuleCount: 2, disabledRuleIds: [], DocumentKind.ActionMetadata);
+
+        await Assert.That(sw.ToString().TrimEnd())
+            .IsEqualTo("verbose: rules: 5 enabled, 2 disabled (action)");
+    }
+
+    [Test]
     public async Task WriteRuleSummary_VerboseDisabled_EmitsNothing()
     {
         using var sw = new StringWriter();

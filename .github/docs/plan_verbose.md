@@ -49,7 +49,7 @@
    ```
    verbose: config: .github/seiton.yaml
    verbose: discovery: found 3 workflow file(s) under .github/workflows/
-   verbose: rules: 42 enabled, 15 disabled (config: 2, opt-in: 13)
+   verbose: rules: 42 enabled, 15 disabled (workflow)
    verbose: .github/workflows/ci.yml: workflow, 0.8 ms, 3 diagnostics, 1 suppressed
    ```
 5. **Incrementally deliverable**. Each phase is independently useful and shippable.
@@ -180,7 +180,7 @@ These items can be implemented purely in the CLI layer using data already return
    - Reuse `LintEngine._configDiagnostics` pattern: populate a reusable `List<string>` field on `LintEngine` with disabled rule IDs during the activation loop, expose via `LintResultData.DisabledRuleIds` as `ReadOnlySpan<string>`.
    - Use a `PooledBuffer<string>` or the existing list pattern. The list is cleared at the start of each `CheckCore` call — no new heap allocation per call.
 4. **CLI verbose output**:
-   - `verbose: rules: <N> enabled, <M> disabled`
+   - `verbose: rules: <N> enabled, <M> disabled (workflow|action)`
    - `verbose: rules: disabled: <id1>, <id2>, ...` (only when disabled count > 0 and verbose)
    - `verbose: <file>: <document-kind>` (e.g. `verbose: .github/workflows/ci.yml: workflow`)
 
@@ -209,7 +209,7 @@ These items can be implemented purely in the CLI layer using data already return
 - `DisabledRuleIds` counts only config/opt-in disabled rules, NOT document-kind mismatches (those are "not applicable", not "disabled").
 - Rule summary logged once per DocumentKind (workflow and action separately), since `ActiveRuleCount` varies by document kind while `DisabledRuleCount`/`DisabledRuleIds` are invariant.
 - Output format: `verbose: rules: <N> enabled, <M> disabled (workflow)` / `verbose: rules: <N> enabled, <M> disabled (action)`.
-- Parallel path captures metadata in `FileCheckResult` struct; rule summary and `checking <file>...` emitted during ordered aggregation (not inside `Parallel.For`) to guarantee deterministic output order.
+- Parallel path captures metadata in `FileCheckResult` struct; rule summary is emitted during ordered aggregation, while `checking <file>...` is emitted from worker threads as best-effort progress output and may interleave.
 
 ---
 
@@ -361,7 +361,7 @@ verbose: config: D:\repo\.github\seiton.yaml
 verbose: config: fix.pinning.enable-network=true (source: config)
 verbose: config: fix.images.enable-network=false (source: default)
 verbose: discovery: 1 file(s) from explicit args
-verbose: rules: 42 enabled, 15 disabled
+verbose: rules: 42 enabled, 15 disabled (workflow)
 verbose: rules: disabled: concurrency-limits, known-vulnerable-actions, impostor-commit, ref-confusion, stale-action-refs, ...
 verbose: checking .github/workflows/ci.yml...
 verbose: .github/workflows/ci.yml: workflow, 1.2 ms, 5 diagnostics, 2 suppressed
@@ -377,7 +377,7 @@ Fix mode additions:
 ```
 verbose: fixing .github/workflows/ci.yml...
 verbose: network: resolved pins for .github/workflows/ci.yml in 320 ms
-verbose: .github/workflows/ci.yml: applied 3 fix(es), 2 pass(es)
+verbose: .github/workflows/ci.yml: applied 3 fix(es)
 verbose: total: 1 file(s) fixed in 450 ms
 ```
 

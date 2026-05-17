@@ -116,7 +116,11 @@ public sealed class LintEngine
 
         var classifiedParseResult = WorkflowParser.ParseClassified(utf8Yaml, filePath, out var arena);
         var parseResult = classifiedParseResult.ParseResult;
-        var lintResult = CheckCore(utf8Yaml, filePath, config, parseResult, arena, classifiedParseResult.Classification.FinalKind);
+        var classification = classifiedParseResult.Classification;
+        var documentKind = classification.FinalKind != DocumentKind.Unknown
+            ? classification.FinalKind
+            : classification.PathHintKind;
+        var lintResult = CheckCore(utf8Yaml, filePath, config, parseResult, arena, documentKind);
         return new LintResult(lintResult, arena);
     }
 
@@ -132,7 +136,11 @@ public sealed class LintEngine
 
         var classifiedParseResult = WorkflowParser.ParseClassified(utf8Yaml, filePath, out arena);
         var parseResult = classifiedParseResult.ParseResult;
-        return CheckCore(utf8Yaml, filePath, config, parseResult, arena, classifiedParseResult.Classification.FinalKind);
+        var classification = classifiedParseResult.Classification;
+        var documentKind = classification.FinalKind != DocumentKind.Unknown
+            ? classification.FinalKind
+            : classification.PathHintKind;
+        return CheckCore(utf8Yaml, filePath, config, parseResult, arena, documentKind);
     }
 
     /// <summary>Parses and lints the given YAML with no explicit configuration. Returns result with arena as out parameter.</summary>
@@ -173,10 +181,14 @@ public sealed class LintEngine
     {
         if (parseResult.HasFatalError || (parseResult.Workflow is null && parseResult.ActionMetadata is null))
         {
+            var (parseErrorActiveRuleCount, parseErrorDisabledRuleIds) = GetRuleActivationMetadataForDocumentKind(config?.Rules, filePath, documentKind);
             return new LintResultData(parseResult, parseResult.Diagnostics)
             {
                 SuppressionSummary = SuppressionSummary.Empty,
                 DocumentKind = documentKind,
+                ActiveRuleCount = parseErrorActiveRuleCount,
+                DisabledRuleCount = parseErrorDisabledRuleIds.Length,
+                DisabledRuleIds = parseErrorDisabledRuleIds,
             };
         }
 
@@ -372,6 +384,50 @@ public sealed class LintEngine
         }
 
         return BuildLintResultWithSuppression(parseResult, arena, documentKind, activeRuleCount, disabledRuleCount, disabledRuleIdsSnapshot);
+    }
+
+    private (int ActiveRuleCount, string[] DisabledRuleIds) GetRuleActivationMetadataForDocumentKind(
+        IReadOnlyDictionary<string, RuleConfig>? rulesConfig,
+        string filePath,
+        DocumentKind documentKind)
+    {
+        var normalizedRules = NormalizeRules(rulesConfig, filePath);
+        var normalizedRuleConfig = normalizedRules.Rules;
+
+        _disabledRuleIds.Clear();
+
+        var activeRuleCount = 0;
+        for (var i = 0; i < rules.Count; i++)
+        {
+            var rule = rules[i];
+            if (!IsRuleEnabled(rule.Id.ToId(), normalizedRuleConfig))
+            {
+                _disabledRuleIds.Add(rule.Id.ToId()!);
+                continue;
+            }
+
+            if (rule.SupportsDocumentKind(documentKind))
+            {
+                activeRuleCount++;
+            }
+        }
+
+        for (var i = 0; i < _onlineRules.Count; i++)
+        {
+            var onlineRule = _onlineRules[i];
+            if (!IsRuleEnabled(onlineRule.Id.ToId(), normalizedRuleConfig))
+            {
+                _disabledRuleIds.Add(onlineRule.Id.ToId()!);
+                continue;
+            }
+
+            if (onlineRule.SupportsDocumentKind(documentKind))
+            {
+                activeRuleCount++;
+            }
+        }
+
+        return (activeRuleCount, _disabledRuleIds.Count > 0 ? _disabledRuleIds.ToArray() : []);
     }
 
     /// <summary>

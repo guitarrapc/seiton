@@ -7,6 +7,7 @@ public sealed class LintResultMetadataTests
 {
     private static readonly byte[] MinimalWorkflow = "on: push\njobs:\n  build:\n    runs-on: ubuntu-latest\n    steps:\n      - run: echo hi\n"u8.ToArray();
     private static readonly byte[] MinimalAction = "name: test\ndescription: test\nruns:\n  using: node20\n  main: index.js\n"u8.ToArray();
+    private static readonly byte[] InvalidAction = "name: test\nruns: [\n"u8.ToArray();
 
     [Test]
     public async Task Check_Workflow_ReturnsActiveRuleCount()
@@ -118,5 +119,26 @@ public sealed class LintResultMetadataTests
             // None of the disabled IDs should be null
             await Assert.That(disabledIds[i]).IsNotNull();
         }
+    }
+
+    [Test]
+    public async Task Check_FatalParseError_WithActionPathHint_PreservesRuleActivationMetadata()
+    {
+        var engine = new LintEngine();
+        var config = new LintConfig
+        {
+            Rules = new Dictionary<string, RuleConfig>
+            {
+                ["action-shell-required"] = new() { Enabled = false },
+            },
+        };
+
+        using var validResult = engine.Check(MinimalAction, "action.yml", config);
+        using var invalidResult = engine.Check(InvalidAction, "action.yml", config);
+
+        await Assert.That(invalidResult.ActiveRuleCount).IsEqualTo(validResult.ActiveRuleCount);
+        await Assert.That(invalidResult.DisabledRuleCount).IsEqualTo(validResult.DisabledRuleCount);
+        await Assert.That(invalidResult.DisabledRuleIds.ToArray())
+            .IsEquivalentTo(validResult.DisabledRuleIds.ToArray());
     }
 }
