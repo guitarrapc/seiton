@@ -1008,7 +1008,7 @@ jobs:
 
 Detects credential leakage risk when `actions/checkout` (without `persist-credentials: false`) is combined with `actions/upload-artifact` that uploads a dangerous path (`.`, `..`, or `${{ github.workspace }}`) in a way that may include hidden files.
 
-  > **Note:** Legacy `actions/checkout` versions (v1-v5) persist a token in `.git/config`, while `actions/checkout@v6+` corrects this behavior and stores credentials in a separate file under `$RUNNER_TEMP`. Uploading the repository root or parent can therefore expose sensitive checkout state. With `actions/upload-artifact@v4`, hidden files are excluded by default, so legacy `.git/config` is typically only included when hidden files are uploaded explicitly, for example with `include-hidden-files: true`.
+  > **Note:** Legacy `actions/checkout` versions (v1-v5) persist a token in `.git/config`, while `actions/checkout@v6+` corrects this behavior and stores credentials in a separate file under `$RUNNER_TEMP`. Uploading the repository root or parent can therefore expose sensitive checkout state. For `actions/upload-artifact`, pinned `v4.0`-`v4.3` releases may still include hidden files by default, while `v4.4+` and floating `@v4` exclude hidden files by default. Legacy `.git/config` is therefore typically only excluded by default on `v4.4+`/floating `@v4`, and hidden files can still be uploaded explicitly, for example with `include-hidden-files: true`.
 
 **Severity:**
 
