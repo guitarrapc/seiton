@@ -84,6 +84,19 @@ public sealed class ForbiddenUsesRule() : RuleBase(RuleId.ForbiddenUses)
             {
                 if (!matchedDeny || matchedAllow)
                 {
+                    if (matchedDeny && matchedAllow && Config.Verbose)
+                    {
+                        var infoMessage = $"'{Encoding.UTF8.GetString(ownerRepoKey)}' matched allow pattern, skipping forbidden-uses check";
+                        if (step is not null)
+                        {
+                            AddStepInfo(step, infoMessage, location);
+                        }
+                        else if (job is not null)
+                        {
+                            AddJobInfo(job, infoMessage, location);
+                        }
+                    }
+
                     return;
                 }
 

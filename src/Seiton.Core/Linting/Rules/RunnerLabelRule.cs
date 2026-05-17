@@ -72,8 +72,19 @@ public sealed class RunnerLabelRule() : RuleBase(RuleId.RunnerLabel)
                 continue;
             }
 
-            if (RunnerLabels.IsKnownHostedLabel(labelUtf8) || RunnerLabels.IsSelfHostedPresetLabel(labelUtf8) || IsAdditionalKnownHostedLabel(labelUtf8))
+            if (RunnerLabels.IsKnownHostedLabel(labelUtf8) || RunnerLabels.IsSelfHostedPresetLabel(labelUtf8))
             {
+                continue;
+            }
+
+            if (IsAdditionalKnownHostedLabel(labelUtf8))
+            {
+                if (Config.Verbose)
+                {
+                    var knownLabelText = Decode(Arena.GetStringSlice(label));
+                    AddJobInfo(job, $"label '{knownLabelText}' matched known-hosted-labels config, skipping", Arena.GetStringRange(label));
+                }
+
                 continue;
             }
 

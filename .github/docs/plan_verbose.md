@@ -256,22 +256,27 @@ These items can be implemented purely in the CLI layer using data already return
 
 ---
 
-### Phase 4 — Core Rule Verbose Diagnostics Expansion
+### Phase 4 — Core Rule Verbose Diagnostics Expansion ✅
 
 **Priority**: Low — incremental improvement for deep debugging. Implement on-demand per rule.
 
 **Scope**:
 
-Expand `Config.Verbose` usage to additional rules where "why was this skipped?" is a common user question. Candidates:
+Expand `Config.Verbose` usage to additional rules where "why was this skipped?" is a common user question. Implemented rules:
 
-| Rule | Verbose info to add |
+| Rule | Verbose info emitted | Condition |
+|---|---|---|
+| `ForbiddenUsesRule` | `'<owner/repo>' matched allow pattern, skipping forbidden-uses check` | Action is denied but allowed by allow pattern |
+| `CredentialsRule` | `<locationName> registry '<host>' is public, skipping credentials check` | Registry matches built-in or additional public registries |
+| `RunnerLabelRule` | `label '<label>' matched known-hosted-labels config, skipping` | Label matches user-configured `additionalKnownHostedLabels` (not built-in) |
+
+Not implemented (deferred):
+
+| Rule | Reason |
 |---|---|
-| `UnpinnedImageRule` | `ignored '<image>' (matched ignore-images/exclude-images pattern)` |
-| `ForbiddenUsesRule` | `'<action>' matched allow pattern '<pattern>', skipping` |
-| `CredentialsRule` | `'<registry>' matched public-registries, skipping` |
-| `DangerousTriggersRule` | `'<event>' not in dangerous events list, skipping` |
-| `TemplateInjectionRule` | `'<context>' treated as safe (mapped to env)` |
-| `RunnerLabelRule` | `'<label>' matched known-hosted-labels, skipping` |
+| `UnpinnedImageRule` | No ignore/exclude logic exists in the rule itself (patterns only in pin remediation layer) |
+| `DangerousTriggersRule` | "Not dangerous" is the normal path for most events — verbose would be extremely noisy |
+| `TemplateInjectionRule` | Safe function pattern is deeply embedded in recursion; adding verbose would be invasive and low value |
 
 **Implementation pattern** (identical to existing `UnpinnedUsesRule`):
 
@@ -287,15 +292,33 @@ if (IsIgnored(value))
 }
 ```
 
-**Core changes**: Add `Config.Verbose` checks in rule `Visit*` methods.
+**Core changes**: Add `Config.Verbose` checks in 3 rule `Visit*` methods.
 
 **Allocation impact**: Zero when `verbose=false` (the `if` short-circuits). When `verbose=true`, allocates diagnostic strings — acceptable because verbose mode is explicitly opt-in and not on the benchmark path.
 
+**Design decisions**:
+- `RunnerLabelRule` only emits verbose for user-configured `additionalKnownHostedLabels`, NOT built-in labels (ubuntu-latest, etc.) to avoid noise.
+- `CredentialsRule` was refactored to split the compound `!TryGetRegistryHost || IsPublic || IsAdditional` condition to insert verbose at the right point.
+- `ForbiddenUsesRule` emits verbose inside the existing local function that already captures `this` for `AddStepWarning`/`AddJobWarning`.
+
 **Verification**:
 
-- [ ] Benchmark: `CoreLintBenchmark` (with `Verbose=false`) before/after — expect 0 B allocation delta, ≤ +1 % runtime (branch prediction cost only).
-- [ ] Tests: Per-rule unit tests verifying verbose info diagnostics appear when `Verbose=true`.
-- [ ] Regression: `dotnet test` — all green.
+- [x] Benchmark: `CoreLintBenchmark` (with `Verbose=false`) before/after — 0 B allocation delta on all sizes.
+- [x] Tests: 9 per-rule unit tests (4 positive verbose, 5 negative/no-verbose). All pass.
+- [x] Regression: `dotnet test` — 1783 tests all green.
+
+**Benchmark results (after, .NET 10.0.8)**:
+
+| Size | FixEnabled | Mean (μs) | Allocated |
+|------|-----------|-----------|-----------|
+| Small | False | 55.52 | 8.43 KB |
+| Small | True | 61.57 | 9.88 KB |
+| Medium | False | 1,252.39 | 68.63 KB |
+| Medium | True | 1,788.40 | 81.98 KB |
+| Large | False | 19,468.09 | 327.14 KB |
+| Large | True | 30,064.83 | 381.98 KB |
+
+Note: Runtime improvement vs Phase 3 baseline is due to .NET SDK version change (10.0.6 → 10.0.8), not Phase 4 code changes. Allocation is identical.
 
 ---
 

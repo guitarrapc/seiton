@@ -71,8 +71,19 @@ public sealed class CredentialsRule() : RuleBase(RuleId.Credentials)
             return;
         }
 
-        if (!TryGetRegistryHost(image, out var host) || IsPublicRegistry(host) || IsAdditionalPublicRegistry(host))
+        if (!TryGetRegistryHost(image, out var host))
         {
+            return;
+        }
+
+        if (IsPublicRegistry(host) || IsAdditionalPublicRegistry(host))
+        {
+            if (Config.Verbose)
+            {
+                var publicHostText = Encoding.UTF8.GetString(host);
+                AddJobInfo(job, $"{locationName} registry '{publicHostText}' is public, skipping credentials check", Arena.GetStringRange(imageNode));
+            }
+
             return;
         }
 
