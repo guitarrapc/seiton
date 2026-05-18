@@ -464,6 +464,27 @@ public sealed class ArtipackedRule() : RuleBase(RuleId.Artipacked)
 
     private static bool CouldExcludeRunnerTempContents(ReadOnlySpan<byte> pattern)
     {
+        pattern = SkipCurrentDirectoryPrefixes(pattern);
+
+        if (MatchesRunnerTempContentExclusionPattern(pattern))
+        {
+            return true;
+        }
+
+        if (TryStripGitHubWorkspacePrefix(pattern, out var workspaceRelativePattern))
+        {
+            workspaceRelativePattern = SkipCurrentDirectoryPrefixes(workspaceRelativePattern);
+            if (MatchesRunnerTempContentExclusionPattern(workspaceRelativePattern))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private static bool MatchesRunnerTempContentExclusionPattern(ReadOnlySpan<byte> pattern)
+    {
         // Find the first glob character (* ? [). A bare path with no glob
         // only excludes the directory entry itself, not its contents.
         var firstGlobIndex = -1;
@@ -495,7 +516,31 @@ public sealed class ArtipackedRule() : RuleBase(RuleId.Artipacked)
             return false;
         }
 
+        // Suppressing the v6+ warning requires excluding the runner-temp subtree,
+        // not just one level of immediate children.
+        var tail = pattern[directoryPrefix.Length..];
+        if (!IsRecursiveSubtreePattern(tail))
+        {
+            return false;
+        }
+
         return TryClassifyRelativeDirectoryPath(directoryPrefix, out _, out var reachesRunnerTemp) && reachesRunnerTemp;
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private static bool IsRecursiveSubtreePattern(ReadOnlySpan<byte> tail)
+    {
+        if (tail.Length == 3 && (tail[0] == (byte)'/' || tail[0] == (byte)'\\'))
+        {
+            return tail[1] == (byte)'*' && tail[2] == (byte)'*';
+        }
+
+        if (tail.Length == 5 && (tail[0] == (byte)'/' || tail[0] == (byte)'\\') && tail[1] == (byte)'*' && tail[2] == (byte)'*')
+        {
+            return (tail[3] == (byte)'/' || tail[3] == (byte)'\\') && tail[4] == (byte)'*';
+        }
+
+        return false;
     }
 
     private static bool CouldExcludeLegacyCredentialPath(ReadOnlySpan<byte> pattern)

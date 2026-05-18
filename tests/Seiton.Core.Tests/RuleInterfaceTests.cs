@@ -15602,6 +15602,61 @@ public sealed class RuleInterfaceTests
     }
 
     [Test]
+    public async Task RuleRegression_ArtipackedRule_WorkspacePrefixedRunnerTempExclusionSuppressesV6Warning()
+    {
+        // Workspace-prefixed exclusions should behave like other workspace-relative
+        // artipacked paths and suppress the v6+ warning when they exclude temp contents.
+        var yaml = NormalizeYaml(
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - uses: actions/checkout@v6
+                        - uses: actions/upload-artifact@v4.4
+                          with:
+                              name: artifact
+                              path: |
+                                  ../..
+                                  !${{ github.workspace }}/../../_temp/**
+            """);
+
+        using var result = new LintEngine([new ArtipackedRule()]).Check(Encoding.UTF8.GetBytes(yaml), "artipacked-v6-parent-with-workspace-temp-exclusion.yml");
+        var diagnostics = result.Diagnostics.Where(x => x.RuleId == "artipacked").ToArray();
+
+        await Assert.That(diagnostics).IsEmpty();
+    }
+
+    [Test]
+    public async Task RuleRegression_ArtipackedRule_ShallowRunnerTempWildcardDoesNotSuppressV6Warning()
+    {
+        // !_temp/* only excludes immediate children and does not cover the full
+        // runner-temp subtree where checkout v6+ credentials may live.
+        var yaml = NormalizeYaml(
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - uses: actions/checkout@v6
+                        - uses: actions/upload-artifact@v4.4
+                          with:
+                              name: artifact
+                              path: |
+                                  ../..
+                                  !../../_temp/*
+            """);
+
+        using var result = new LintEngine([new ArtipackedRule()]).Check(Encoding.UTF8.GetBytes(yaml), "artipacked-v6-parent-with-shallow-temp-exclusion.yml");
+        var diagnostic = result.Diagnostics.Single(x => x.RuleId == "artipacked");
+
+        await Assert.That(diagnostic.Severity).IsEqualTo(DiagnosticSeverity.Warning);
+        await Assert.That(diagnostic.Message).Contains("$RUNNER_TEMP");
+    }
+
+    [Test]
     public async Task RuleRegression_ArtipackedRule_NestedCheckoutUploadPathWithoutRootLikeExpansionRemainsDeferred()
     {
         var yaml = NormalizeYaml(
@@ -15648,6 +15703,35 @@ public sealed class RuleInterfaceTests
             """);
 
         using var result = new LintEngine([new ArtipackedRule()]).Check(Encoding.UTF8.GetBytes(yaml), "artipacked-exclude-git-config-subpath.yml");
+        var diagnostic = result.Diagnostics.Single(x => x.RuleId == "artipacked");
+
+        await Assert.That(diagnostic.Severity).IsEqualTo(DiagnosticSeverity.Error);
+        await Assert.That(diagnostic.Message).Contains("persist-credentials: false");
+    }
+
+    [Test]
+    public async Task RuleRegression_ArtipackedRule_InternalWhitespaceInCheckoutPathDoesNotMatchDifferentExclusionPath()
+    {
+        var yaml = NormalizeYaml(
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - uses: actions/checkout@v4
+                          with:
+                              path: repo /nested
+                        - uses: actions/upload-artifact@v4
+                          with:
+                              name: artifact
+                              path: |
+                                  .
+                                  !repo/nested/.git/**
+                              include-hidden-files: true
+            """);
+
+        using var result = new LintEngine([new ArtipackedRule()]).Check(Encoding.UTF8.GetBytes(yaml), "artipacked-checkout-path-with-internal-whitespace.yml");
         var diagnostic = result.Diagnostics.Single(x => x.RuleId == "artipacked");
 
         await Assert.That(diagnostic.Severity).IsEqualTo(DiagnosticSeverity.Error);
