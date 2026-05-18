@@ -16,11 +16,11 @@
 
 ### 1.1 完全対応済み（22 件）
 
-`artipacked`, `bot-conditions`, `cache-poisoning`, `concurrency-limits`, `dangerous-triggers`, `github-app`, `hardcoded-container-credentials`（※後述）, `impostor-commit`, `insecure-commands`, `known-vulnerable-actions`, `ref-confusion`, `secrets-inherit`, `secrets-outside-env`, `self-hosted-runner`, `stale-action-refs`, `template-injection`, `unpinned-images`, `unpinned-tools`, `unpinned-uses`, `unredacted-secrets`, `unsound-condition`, `unsound-contains`
+`artipacked`, `bot-conditions`, `cache-poisoning`, `concurrency-limits`, `dangerous-triggers`, `github-app`, `hardcoded-container-credentials`, `impostor-commit`, `insecure-commands`, `known-vulnerable-actions`, `ref-confusion`, `secrets-inherit`, `secrets-outside-env`, `self-hosted-runner`, `stale-action-refs`, `template-injection`, `unpinned-images`, `unpinned-tools`, `unpinned-uses`, `unredacted-secrets`, `unsound-condition`, `unsound-contains`
 
 #### `hardcoded-container-credentials` について
 
-feature-matrix では ❌ 未対応としているが、実装確認の結果 **`credentials` ルールの `ValidateHardcodedPassword` メソッド**（`CredentialsRule.cs` L85–L113）が zizmor と同等のロジック（`credentials.password` が式でなければエラー）を既に実装済み。feature-matrix を ✅ に昇格すべき。
+feature-matrix 側も更新済みで、**`credentials` ルールの `ValidateHardcodedPassword` メソッド**（`CredentialsRule.cs` L85–L113）が zizmor と同等のロジック（`credentials.password` が式でなければエラー）を既に実装済みであることを反映している。
 
 ### 1.2 部分対応（7 件）
 
@@ -401,16 +401,16 @@ zizmor は tree-sitter（bash/pwsh 完全パーサー）を使用しているが
 - **検出対象**: `actions/checkout`（persist-credentials 未設定）と `actions/upload-artifact`（危険パスをアップロード）の組み合わせによる credential 漏洩リスク
 - **ルールID**: `artipacked`
 - **デフォルト**: on
-- **severity**: error（非v6+ checkout + 隠しファイルを含む危険パス＝`.git/config` 露出）、warning（v6+ または unknown-version checkout + 親ディレクトリ upload＝`$RUNNER_TEMP` 到達リスク）
+- **severity**: error（legacy リスクが実際に露出するケース）、warning（legacy リスクは抑えられるが v6+ または unknown-version checkout の parent-directory upload で `$RUNNER_TEMP` に到達しうるケース）
 - **検査ノード**: job 内の全 steps を線形スキャン
 - **判定ロジック**:
   1. job 内の steps を順に走査し、`actions/checkout` の使用を検出
   2. `persist-credentials: false` が設定されていない checkout をマーク
   3. 同一 job 内で `actions/upload-artifact` の使用を検出
-  4. upload-artifact の `path` が `.`, `..`, `./**`, `**`, `${{ github.workspace }}`, `${{ github.workspace }}/**`, `${{ github.workspace }}/..` 等の危険パスの場合に報告。ただし `!.git/**` / `!.git/config` のように legacy の `.git/config` を明示除外している場合はその legacy ケースを抑制する
+  4. upload-artifact の `path` が `.`, `..`, `./**`, `**`, `${{ github.workspace }}`, `${{ github.workspace }}/**`, `${{ github.workspace }}/..` 等の危険パスの場合に報告。ただし `!.git/**` / `!.git/config` のような legacy の明示除外は、workspace root に checkout された `.git/config` に対してのみその legacy ケースを抑制し、nested checkout path は `!repo/.git/**` のように実際の nested `.git` location を明示除外したときだけ抑制する
   5. checkout v6+ では credential 保存先が `$RUNNER_TEMP` に変わるため severity を下げる。ただし親ディレクトリ upload は hidden-files default off でも `$RUNNER_TEMP` に届きうるため報告する
 - **既存ルールとの関係**: `checkout-persist-credentials` は checkout 単体の検出。`artipacked` は checkout + upload の組み合わせ検出。重複する診断は `artipacked` 側で抑制する設計を検討
-- **パフォーマンス影響**: 低。ステップの線形スキャンのみ
+- **パフォーマンス影響**: 低。基本はステップの順次走査で、legacy exclusion globs を含む upload path に対してのみ preceding unsafe legacy checkouts を追加で照合する
 - **checkout バージョン判定**: ref がセマンティックバージョンの場合は静的判定。SHA pin の場合は判定不可（online lookup は行わない。zizmor は optional で online lookup するが、Seiton では初期実装で省略）
 
 **テストケース**:
@@ -434,11 +434,11 @@ zizmor は tree-sitter（bash/pwsh 完全パーサー）を使用しているが
 **実装メモ**:
 - `ArtipackedRule` は `checkout-persist-credentials` とは独立したルールとして実装（統合しない）
 - `VisitJobPost` では `job.Steps` を順に走査し、unsafe checkout の後に現れる危険な `upload-artifact` のみを報告（upload-before-checkout は報告しない）
-- 危険パス判定: `.`, `..`, `./**`, `**`, `${{ github.workspace }}`, `${{ github.workspace }}/**`, `${{ github.workspace }}/..` などの root / parent / workspace 系パターン（各行を個別チェック）。`!.git/**` / `!.git/config` は legacy `.git/config` 露出を抑制
-- checkout バージョン判定: leading zero のないセマンティックバージョン `@vN[.M[.P]]` のみ静的判定。SHA pin や `@v06` のような arbitrary tag は unknown（非 v6+扱い）
+- 危険パス判定: `.`, `..`, `./**`, `**`, `${{ github.workspace }}`, `${{ github.workspace }}/**`, `${{ github.workspace }}/..` などの root / parent / workspace 系パターン（各行を個別チェック）。`!.git/**` / `!.git/config` は workspace root の legacy `.git/config` 露出を抑制し、nested checkout path は `!repo/.git/**` のように実際の nested `.git` location を除外した場合のみ抑制する
+- checkout バージョン判定: leading zero のないセマンティックバージョン `@vN[.M[.P]]` のみ静的判定。SHA pin や `@v06` のような arbitrary tag は unknown として legacy / v6+ の両リスク bucket に保守的に入れる
 - diagnostic は upload-artifact の `path` 値位置に報告
-- severity: error（非v6+ + 隠しファイル含む＝`.git/config` 露出）、warning（v6+ / unknown-version + 親dir＝`$RUNNER_TEMP` 到達）
-- バージョン ref に任意サフィックス（`@v6-legacy`, `@v4.4-legacy` 等）がある場合は unknown ref として保守的に扱う（非 v6+、unsafe minor version）
+- severity: error（legacy リスクが実際に露出するケース）、warning（legacy リスクは抑えられるが v6+ の親dir upload で `$RUNNER_TEMP` に到達しうるケース）。unknown-version checkout は保守的に両側を評価する
+- バージョン ref に任意サフィックス（`@v6-legacy`, `@v4.4-legacy` 等）がある場合は unknown ref として保守的に扱う（checkout は legacy / v6+ の両リスク、upload-artifact は hidden-files behavior 不明）
 - パッチバージョン（`@v4.6.2`）は受け入れ、メジャー.マイナーとして判定する（`@v4.6.2` → v4.6 → safe）
 
 **既知の制限事項**:

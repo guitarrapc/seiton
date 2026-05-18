@@ -9,6 +9,8 @@ namespace Seiton.Core.Linting.Rules;
 /// is combined with <c>actions/upload-artifact</c> that uploads a dangerous path (e.g. <c>.</c>, <c>..</c>).</summary>
 public sealed class ArtipackedRule() : RuleBase(RuleId.Artipacked)
 {
+    private const int MaxNormalizedPathSegments = 128;
+
     private Utf8Slice _lastPathSlice;
     private bool _lastMessageIsV6Plus;
     private string? _lastMessage;
@@ -84,14 +86,23 @@ public sealed class ArtipackedRule() : RuleBase(RuleId.Artipacked)
 
             if (actionSpec.Id != PopularActions.ActionId.ActionsUploadArtifact
                 || actionExec.Inputs is null
-                || !actionExec.Inputs.Value.TryGetValue(utf8Yaml, "path"u8, out var pathNode)
-                || !TryClassifyDangerousPath(Arena.GetStringValue(pathNode), out var exposesParentDirectory, out var excludesLegacyCredentialPath))
+                || !actionExec.Inputs.Value.TryGetValue(utf8Yaml, "path"u8, out var pathNode))
+            {
+                continue;
+            }
+
+            var pathValue = Arena.GetStringValue(pathNode);
+            if (!TryClassifyDangerousPath(pathValue, out var exposesParentDirectory, out var excludesLegacyCredentialPath))
             {
                 continue;
             }
 
             var mayIncludeHiddenFiles = MayIncludeHiddenFiles(actionExec, usesText, utf8Yaml);
-            var mayExposeLegacyCredentials = hasUnsafeLegacyCheckout && mayIncludeHiddenFiles && !excludesLegacyCredentialPath;
+            var legacyCredentialsExcluded = excludesLegacyCredentialPath
+                                            && ArePrecedingLegacyCheckoutsExcludedByUploadPath(steps, i, pathValue, utf8Yaml);
+            var mayExposeLegacyCredentials = hasUnsafeLegacyCheckout
+                                             && mayIncludeHiddenFiles
+                                             && !legacyCredentialsExcluded;
             var mayExposeV6PlusCredentials = hasUnsafeV6PlusCheckout && exposesParentDirectory;
             if (!mayExposeLegacyCredentials && !mayExposeV6PlusCredentials)
             {
@@ -124,6 +135,68 @@ public sealed class ArtipackedRule() : RuleBase(RuleId.Artipacked)
         var value = Arena.GetStringValue(persistCredentialsNode);
         return !ExpressionScanHelpers.ContainsExpressionMarker(persistCredentialsNode, Arena)
                && IsBooleanFalse(value);
+    }
+
+    private bool ArePrecedingLegacyCheckoutsExcludedByUploadPath(IReadOnlyList<Step> steps, int uploadStepIndex, ReadOnlySpan<byte> uploadPath, byte[] utf8Yaml)
+    {
+        for (var i = 0; i < uploadStepIndex; i++)
+        {
+            if (steps[i].Exec is not ExecAction actionExec)
+            {
+                continue;
+            }
+
+            var usesText = Arena.GetStringValue(actionExec.Uses);
+            if (!PopularActions.TryGet(usesText, out var actionSpec)
+                || actionSpec.Id != PopularActions.ActionId.ActionsCheckout
+                || HasPersistCredentialsFalse(actionExec, utf8Yaml))
+            {
+                continue;
+            }
+
+            if (TryExtractMajorAndMinorVersion(usesText, out var checkoutMajor, out _, out _) && checkoutMajor >= 6)
+            {
+                continue;
+            }
+
+            if (!IsLegacyCheckoutPathExcludedByUploadPath(uploadPath, actionExec, utf8Yaml))
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    private bool IsLegacyCheckoutPathExcludedByUploadPath(ReadOnlySpan<byte> uploadPath, ExecAction checkoutAction, byte[] utf8Yaml)
+    {
+        ReadOnlySpan<byte> checkoutPath = ReadOnlySpan<byte>.Empty;
+        if (checkoutAction.Inputs is not null
+            && checkoutAction.Inputs.Value.TryGetValue(utf8Yaml, "path"u8, out var checkoutPathNode))
+        {
+            checkoutPath = Arena.GetStringValue(checkoutPathNode);
+        }
+
+        while (uploadPath.Length > 0)
+        {
+            var nlIndex = uploadPath.IndexOf((byte)'\n');
+            var line = nlIndex >= 0 ? uploadPath[..nlIndex] : uploadPath;
+            line = TrimBytes(line);
+
+            if (line.Length > 1 && line[0] == (byte)'!' && ExcludesLegacyCredentialPath(TrimBytes(line[1..]), checkoutPath))
+            {
+                return true;
+            }
+
+            if (nlIndex < 0)
+            {
+                break;
+            }
+
+            uploadPath = uploadPath[(nlIndex + 1)..];
+        }
+
+        return false;
     }
 
     private bool MayIncludeHiddenFiles(ExecAction actionExec, ReadOnlySpan<byte> usesText, byte[] utf8Yaml)
@@ -345,14 +418,14 @@ public sealed class ArtipackedRule() : RuleBase(RuleId.Artipacked)
             return false;
         }
 
-        return ExcludesLegacyCredentialPath(TrimBytes(line[1..]));
+        return CouldExcludeLegacyCredentialPath(TrimBytes(line[1..]));
     }
 
-    private static bool ExcludesLegacyCredentialPath(ReadOnlySpan<byte> pattern)
+    private static bool CouldExcludeLegacyCredentialPath(ReadOnlySpan<byte> pattern)
     {
         pattern = SkipCurrentDirectoryPrefixes(pattern);
 
-        if (MatchesNormalizedLegacyCredentialExclusion(pattern))
+        if (MatchesNormalizedLegacyCredentialExclusionPattern(pattern))
         {
             return true;
         }
@@ -360,7 +433,7 @@ public sealed class ArtipackedRule() : RuleBase(RuleId.Artipacked)
         if (TryStripGitHubWorkspacePrefix(pattern, out var workspaceRelativePattern))
         {
             workspaceRelativePattern = SkipCurrentDirectoryPrefixes(workspaceRelativePattern);
-            if (MatchesNormalizedLegacyCredentialExclusion(workspaceRelativePattern))
+            if (MatchesNormalizedLegacyCredentialExclusionPattern(workspaceRelativePattern))
             {
                 return true;
             }
@@ -369,72 +442,97 @@ public sealed class ArtipackedRule() : RuleBase(RuleId.Artipacked)
         return false;
     }
 
-    private static bool MatchesNormalizedLegacyCredentialExclusion(ReadOnlySpan<byte> pattern)
+    private static bool ExcludesLegacyCredentialPath(ReadOnlySpan<byte> pattern, ReadOnlySpan<byte> checkoutPath)
     {
-        Span<byte> segments = stackalloc byte[16];
-        var segmentCount = 0;
+        pattern = SkipCurrentDirectoryPrefixes(pattern);
 
-        while (pattern.Length > 0)
+        if (MatchesNormalizedLegacyCredentialExclusion(pattern, checkoutPath))
         {
-            var separatorIndex = FindPathSeparator(pattern);
-            var segment = separatorIndex >= 0 ? pattern[..separatorIndex] : pattern;
-            pattern = separatorIndex >= 0 ? pattern[(separatorIndex + 1)..] : [];
+            return true;
+        }
 
-            segment = TrimBytes(segment);
-            if (segment.Length == 0 || segment.SequenceEqual("."u8))
+        if (TryStripGitHubWorkspacePrefix(pattern, out var workspaceRelativePattern))
+        {
+            workspaceRelativePattern = SkipCurrentDirectoryPrefixes(workspaceRelativePattern);
+            if (MatchesNormalizedLegacyCredentialExclusion(workspaceRelativePattern, checkoutPath))
             {
-                continue;
+                return true;
             }
+        }
 
-            if (segment.SequenceEqual(".."u8))
-            {
-                if (segmentCount == 0)
-                {
-                    return false;
-                }
+        return false;
+    }
 
-                segmentCount--;
-                continue;
-            }
+    private static bool MatchesNormalizedLegacyCredentialExclusionPattern(ReadOnlySpan<byte> pattern)
+    {
+        Span<int> offsets = stackalloc int[MaxNormalizedPathSegments];
+        Span<int> lengths = stackalloc int[MaxNormalizedPathSegments];
+        if (!TryNormalizeRelativePathSegments(pattern, offsets, lengths, out var segmentCount, allowRecursiveWildcards: true))
+        {
+            return false;
+        }
 
-            if (ContainsExpressionMarker(segment))
-            {
-                return false;
-            }
+        if (segmentCount == 0)
+        {
+            return false;
+        }
 
-            byte segmentKind;
-            if (IsRecursiveWildcardSegment(segment))
-            {
-                segmentKind = 1;
-            }
-            else if (segment.SequenceEqual(".git"u8))
-            {
-                segmentKind = 2;
-            }
-            else if (segment.SequenceEqual("config"u8))
-            {
-                segmentKind = 3;
-            }
-            else
-            {
-                segmentKind = 4;
-            }
+        if (IsPatternSegment(pattern, offsets[segmentCount - 1], lengths[segmentCount - 1], ".git"u8))
+        {
+            return true;
+        }
 
-            if (segmentCount == segments.Length)
-            {
-                return false;
-            }
+        if (segmentCount < 2 || !IsPatternSegment(pattern, offsets[segmentCount - 2], lengths[segmentCount - 2], ".git"u8))
+        {
+            return false;
+        }
 
-            segments[segmentCount++] = segmentKind;
+        return IsPatternSegment(pattern, offsets[segmentCount - 1], lengths[segmentCount - 1], "**"u8)
+               || IsPatternSegment(pattern, offsets[segmentCount - 1], lengths[segmentCount - 1], "config"u8);
+    }
+
+    private static bool MatchesNormalizedLegacyCredentialExclusion(ReadOnlySpan<byte> pattern, ReadOnlySpan<byte> checkoutPath)
+    {
+            Span<int> patternOffsets = stackalloc int[MaxNormalizedPathSegments];
+            Span<int> patternLengths = stackalloc int[MaxNormalizedPathSegments];
+        if (!TryNormalizeRelativePathSegments(pattern, patternOffsets, patternLengths, out var patternSegmentCount, allowRecursiveWildcards: true))
+        {
+            return false;
+        }
+
+            Span<int> checkoutOffsets = stackalloc int[MaxNormalizedPathSegments];
+            Span<int> checkoutLengths = stackalloc int[MaxNormalizedPathSegments];
+        if (!TryNormalizeRelativePathSegments(checkoutPath, checkoutOffsets, checkoutLengths, out var checkoutSegmentCount, allowRecursiveWildcards: false))
+        {
+            return false;
         }
 
         var start = 0;
-        while (start < segmentCount && segments[start] == 1)
+        while (start < patternSegmentCount && IsPatternSegment(pattern, patternOffsets[start], patternLengths[start], "**"u8))
         {
             start++;
         }
 
-        if (start >= segmentCount || segments[start] != 2)
+        if (patternSegmentCount - start < checkoutSegmentCount + 1)
+        {
+            return false;
+        }
+
+        for (var i = 0; i < checkoutSegmentCount; i++)
+        {
+            if (!pattern.Slice(patternOffsets[start + i], patternLengths[start + i])
+                    .SequenceEqual(checkoutPath.Slice(checkoutOffsets[i], checkoutLengths[i])))
+            {
+                return false;
+            }
+        }
+
+        return MatchesLegacyCredentialExclusionTail(pattern, patternOffsets, patternLengths, patternSegmentCount, start + checkoutSegmentCount);
+    }
+
+    private static bool MatchesLegacyCredentialExclusionTail(ReadOnlySpan<byte> pattern, Span<int> offsets, Span<int> lengths, int segmentCount, int start)
+    {
+        if (start >= segmentCount || !IsPatternSegment(pattern, offsets[start], lengths[start], ".git"u8))
         {
             return false;
         }
@@ -445,13 +543,13 @@ public sealed class ArtipackedRule() : RuleBase(RuleId.Artipacked)
             return true;
         }
 
-        var nextSegment = segments[start + 1];
-        if (nextSegment == 1)
+        if (remaining != 2)
         {
-            return remaining == 2;
+            return false;
         }
 
-        return nextSegment == 3 && remaining == 2;
+        return IsPatternSegment(pattern, offsets[start + 1], lengths[start + 1], "**"u8)
+               || IsPatternSegment(pattern, offsets[start + 1], lengths[start + 1], "config"u8);
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -541,6 +639,93 @@ public sealed class ArtipackedRule() : RuleBase(RuleId.Artipacked)
     private static bool IsParentDirectoryPath(ReadOnlySpan<byte> path)
     {
         return TryClassifyRelativeDirectoryPath(path, out var dotDotSegments) && dotDotSegments >= 1;
+    }
+
+    private static bool TryNormalizeRelativePathSegments(ReadOnlySpan<byte> path, Span<int> offsets, Span<int> lengths, out int count, bool allowRecursiveWildcards)
+    {
+        count = 0;
+        var cursor = 0;
+
+        while (cursor < path.Length)
+        {
+            var separatorIndex = FindPathSeparator(path[cursor..]);
+            var rawSegmentStart = cursor;
+            var rawSegmentLength = separatorIndex >= 0 ? separatorIndex : path.Length - cursor;
+            cursor += rawSegmentLength;
+            if (separatorIndex >= 0)
+            {
+                cursor++;
+            }
+
+            var segmentStart = rawSegmentStart;
+            var segmentLength = rawSegmentLength;
+            while (segmentLength > 0 && IsPathTrimByte(path[segmentStart]))
+            {
+                segmentStart++;
+                segmentLength--;
+            }
+
+            while (segmentLength > 0 && IsPathTrimByte(path[segmentStart + segmentLength - 1]))
+            {
+                segmentLength--;
+            }
+
+            if (segmentLength == 0)
+            {
+                continue;
+            }
+
+            var segment = path.Slice(segmentStart, segmentLength);
+
+            if (segment.SequenceEqual("."u8))
+            {
+                continue;
+            }
+
+            if (segment.SequenceEqual(".."u8))
+            {
+                if (count == 0)
+                {
+                    return false;
+                }
+
+                count--;
+                continue;
+            }
+
+            if (ContainsExpressionMarker(segment) || IsSingleWildcardSegment(segment))
+            {
+                return false;
+            }
+
+            if (IsRecursiveWildcardSegment(segment) && !allowRecursiveWildcards)
+            {
+                return false;
+            }
+
+            if (count == offsets.Length)
+            {
+                return false;
+            }
+
+            offsets[count] = segmentStart;
+            lengths[count] = segmentLength;
+            count++;
+        }
+
+        return true;
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private static bool IsPatternSegment(ReadOnlySpan<byte> pattern, int offset, int length, ReadOnlySpan<byte> expected)
+    {
+        return pattern.Slice(offset, length).SequenceEqual(expected);
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private static bool IsPathTrimByte(byte value)
+    {
+        return value is (byte)' ' or (byte)'\t' or (byte)'\r';
     }
 
     private static bool TryClassifyRelativeDirectoryPath(ReadOnlySpan<byte> path, out int dotDotSegments)
@@ -813,7 +998,7 @@ public sealed class ArtipackedRule() : RuleBase(RuleId.Artipacked)
         var uploadPath = FormatPathForMessage(Decode(pathSlice));
         if (isV6Plus)
         {
-            return $"upload-artifact with path '{uploadPath}' may expose credentials; checkout v6+ stores credentials in $RUNNER_TEMP but persist-credentials: false is still recommended";
+            return $"upload-artifact with path '{uploadPath}' may expose credentials; checkout v6+ or an unknown checkout ref may store credentials in $RUNNER_TEMP, so persist-credentials: false is still recommended";
         }
 
         return $"upload-artifact with path '{uploadPath}' may expose credentials persisted by checkout in .git/config; set persist-credentials: false on the checkout step";

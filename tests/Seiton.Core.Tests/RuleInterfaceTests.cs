@@ -14039,6 +14039,42 @@ public sealed class RuleInterfaceTests
                               include-hidden-files: true
             """,
             ["upload-artifact with path", "persist-credentials: false"]),
+            // Edge case: persist-credentials expression is treated conservatively as unsafe
+            new RuleCase(
+            "ng-persist-expression",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - uses: actions/checkout@v4
+                          with:
+                              persist-credentials: ${{ inputs.persist_credentials }}
+                        - uses: actions/upload-artifact@v4
+                          with:
+                              name: my-artifact
+                              path: .
+                              include-hidden-files: true
+            """,
+            ["upload-artifact with path '.'", "persist-credentials: false"]),
+            // Edge case: include-hidden-files expression is treated conservatively as potentially true
+            new RuleCase(
+            "ng-include-hidden-files-expression",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - uses: actions/checkout@v4
+                        - uses: actions/upload-artifact@v4
+                          with:
+                              name: my-artifact
+                              path: .
+                              include-hidden-files: ${{ inputs.include_hidden }}
+            """,
+            ["upload-artifact with path '.'", "persist-credentials: false"]),
             // Edge case: persist-credentials: true → still flagged
             new RuleCase(
             "ng-persist-true",
@@ -15238,6 +15274,221 @@ public sealed class RuleInterfaceTests
             """);
 
         using var result = new LintEngine([new ArtipackedRule()]).Check(Encoding.UTF8.GetBytes(yaml), "artipacked-multiline-exclude-git-config.yml");
+        var diagnostics = result.Diagnostics.Where(x => x.RuleId == "artipacked").ToArray();
+
+        await Assert.That(diagnostics).IsEmpty();
+    }
+
+    [Test]
+    public async Task RuleRegression_ArtipackedRule_GitDirectoryExclusionDoesNotSuppressNestedCheckoutPath()
+    {
+        var yaml = NormalizeYaml(
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - uses: actions/checkout@v4
+                          with:
+                              path: repo
+                        - uses: actions/upload-artifact@v4
+                          with:
+                              name: artifact
+                              path: |
+                                  .
+                                  !.git/**
+                              include-hidden-files: true
+            """);
+
+        using var result = new LintEngine([new ArtipackedRule()]).Check(Encoding.UTF8.GetBytes(yaml), "artipacked-exclude-root-git-nested-checkout.yml");
+        var diagnostic = result.Diagnostics.Single(x => x.RuleId == "artipacked");
+
+        await Assert.That(diagnostic.Severity).IsEqualTo(DiagnosticSeverity.Error);
+        await Assert.That(diagnostic.Message).Contains("persist-credentials: false");
+    }
+
+    [Test]
+    public async Task RuleRegression_ArtipackedRule_GitConfigExclusionDoesNotSuppressNestedCheckoutPath()
+    {
+        var yaml = NormalizeYaml(
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - uses: actions/checkout@v4
+                          with:
+                              path: repo
+                        - uses: actions/upload-artifact@v4
+                          with:
+                              name: artifact
+                              path: |
+                                  .
+                                  !.git/config
+                              include-hidden-files: true
+            """);
+
+        using var result = new LintEngine([new ArtipackedRule()]).Check(Encoding.UTF8.GetBytes(yaml), "artipacked-exclude-root-git-config-nested-checkout.yml");
+        var diagnostic = result.Diagnostics.Single(x => x.RuleId == "artipacked");
+
+        await Assert.That(diagnostic.Severity).IsEqualTo(DiagnosticSeverity.Error);
+        await Assert.That(diagnostic.Message).Contains("persist-credentials: false");
+    }
+
+    [Test]
+    public async Task RuleRegression_ArtipackedRule_NestedGitDirectoryExclusionIsSafeForNestedCheckoutPath()
+    {
+        var yaml = NormalizeYaml(
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - uses: actions/checkout@v4
+                          with:
+                              path: repo
+                        - uses: actions/upload-artifact@v4
+                          with:
+                              name: artifact
+                              path: |
+                                  .
+                                  !repo/.git/**
+                              include-hidden-files: true
+            """);
+
+        using var result = new LintEngine([new ArtipackedRule()]).Check(Encoding.UTF8.GetBytes(yaml), "artipacked-exclude-nested-git-directory.yml");
+        var diagnostics = result.Diagnostics.Where(x => x.RuleId == "artipacked").ToArray();
+
+        await Assert.That(diagnostics).IsEmpty();
+    }
+
+    [Test]
+    public async Task RuleRegression_ArtipackedRule_InterleavedNestedCheckoutExclusionsApplyPerCheckout()
+    {
+        var yaml = NormalizeYaml(
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - uses: actions/checkout@v4
+                          with:
+                              path: repo-a
+                        - uses: actions/upload-artifact@v4
+                          with:
+                              name: artifact-a
+                              path: |
+                                  .
+                                  !repo-a/.git/**
+                              include-hidden-files: true
+                        - uses: actions/checkout@v4
+                          with:
+                              path: repo-b
+                        - uses: actions/upload-artifact@v4
+                          with:
+                              name: artifact-b
+                              path: |
+                                  .
+                                  !repo-a/.git/**
+                              include-hidden-files: true
+                        - uses: actions/upload-artifact@v4
+                          with:
+                              name: artifact-c
+                              path: |
+                                  .
+                                  !repo-a/.git/**
+                                  !repo-b/.git/**
+                              include-hidden-files: true
+            """);
+
+        using var result = new LintEngine([new ArtipackedRule()]).Check(Encoding.UTF8.GetBytes(yaml), "artipacked-interleaved-nested-exclusions.yml");
+        var diagnostics = result.Diagnostics.Where(x => x.RuleId == "artipacked").ToArray();
+
+        await Assert.That(diagnostics).HasSingleItem();
+        await Assert.That(diagnostics[0].Severity).IsEqualTo(DiagnosticSeverity.Error);
+        await Assert.That(diagnostics[0].Message).Contains("artifact-b").Or.Contains("persist-credentials: false");
+    }
+
+    [Test]
+    public async Task RuleRegression_ArtipackedRule_DeepNestedGitDirectoryExclusionIsSafe()
+    {
+        var nestedCheckoutPath = string.Join("/", Enumerable.Range(1, 64).Select(index => $"segment-{index:D2}"));
+        var yaml = NormalizeYaml(
+            $$"""
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - uses: actions/checkout@v4
+                          with:
+                              path: {{nestedCheckoutPath}}
+                        - uses: actions/upload-artifact@v4
+                          with:
+                              name: artifact
+                              path: |
+                                  .
+                                  !{{nestedCheckoutPath}}/.git/**
+                              include-hidden-files: true
+            """);
+
+        using var result = new LintEngine([new ArtipackedRule()]).Check(Encoding.UTF8.GetBytes(yaml), "artipacked-deep-nested-git-directory-exclusion.yml");
+        var diagnostics = result.Diagnostics.Where(x => x.RuleId == "artipacked").ToArray();
+
+        await Assert.That(diagnostics).IsEmpty();
+    }
+
+    [Test]
+    public async Task RuleRegression_ArtipackedRule_LegacyGitExclusionDoesNotSuppressV6ParentDirectoryWarning()
+    {
+        var yaml = NormalizeYaml(
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - uses: actions/checkout@v6
+                        - uses: actions/upload-artifact@v4.4
+                          with:
+                              name: artifact
+                              path: |
+                                  ../..
+                                  !.git/**
+            """);
+
+        using var result = new LintEngine([new ArtipackedRule()]).Check(Encoding.UTF8.GetBytes(yaml), "artipacked-v6-parent-with-legacy-exclusion.yml");
+        var diagnostic = result.Diagnostics.Single(x => x.RuleId == "artipacked");
+
+        await Assert.That(diagnostic.Severity).IsEqualTo(DiagnosticSeverity.Warning);
+        await Assert.That(diagnostic.Message).Contains("$RUNNER_TEMP");
+    }
+
+    [Test]
+    public async Task RuleRegression_ArtipackedRule_NestedCheckoutUploadPathWithoutRootLikeExpansionRemainsDeferred()
+    {
+        var yaml = NormalizeYaml(
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - uses: actions/checkout@v4
+                          with:
+                              path: repo
+                        - uses: actions/upload-artifact@v4
+                          with:
+                              name: artifact
+                              path: repo
+                              include-hidden-files: true
+            """);
+
+        using var result = new LintEngine([new ArtipackedRule()]).Check(Encoding.UTF8.GetBytes(yaml), "artipacked-nested-upload-path-deferred.yml");
         var diagnostics = result.Diagnostics.Where(x => x.RuleId == "artipacked").ToArray();
 
         await Assert.That(diagnostics).IsEmpty();
