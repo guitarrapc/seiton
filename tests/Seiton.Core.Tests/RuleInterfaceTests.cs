@@ -15280,6 +15280,34 @@ public sealed class RuleInterfaceTests
     }
 
     [Test]
+    public async Task RuleRegression_ArtipackedRule_BareGitExclusionDoesNotSuppressWarning()
+    {
+        // !.git (bare) does NOT exclude .git/config in @actions/glob — only !.git/** or !.git/config does
+        var yaml = NormalizeYaml(
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - uses: actions/checkout@v4
+                        - uses: actions/upload-artifact@v4
+                          with:
+                              name: artifact
+                              path: |
+                                  .
+                                  !.git
+                              include-hidden-files: true
+            """);
+
+        using var result = new LintEngine([new ArtipackedRule()]).Check(Encoding.UTF8.GetBytes(yaml), "artipacked-bare-git-exclusion.yml");
+        var diagnostic = result.Diagnostics.Single(x => x.RuleId == "artipacked");
+
+        await Assert.That(diagnostic.Severity).IsEqualTo(DiagnosticSeverity.Error);
+        await Assert.That(diagnostic.Message).Contains("persist-credentials: false");
+    }
+
+    [Test]
     public async Task RuleRegression_ArtipackedRule_GitDirectoryExclusionDoesNotSuppressNestedCheckoutPath()
     {
         var yaml = NormalizeYaml(

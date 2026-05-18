@@ -472,17 +472,12 @@ public sealed class ArtipackedRule() : RuleBase(RuleId.Artipacked)
             return false;
         }
 
-        if (segmentCount == 0)
+        if (segmentCount < 2)
         {
             return false;
         }
 
-        if (IsPatternSegment(pattern, offsets[segmentCount - 1], lengths[segmentCount - 1], ".git"u8))
-        {
-            return true;
-        }
-
-        if (segmentCount < 2 || !IsPatternSegment(pattern, offsets[segmentCount - 2], lengths[segmentCount - 2], ".git"u8))
+        if (!IsPatternSegment(pattern, offsets[segmentCount - 2], lengths[segmentCount - 2], ".git"u8))
         {
             return false;
         }
@@ -532,15 +527,10 @@ public sealed class ArtipackedRule() : RuleBase(RuleId.Artipacked)
 
     private static bool MatchesLegacyCredentialExclusionTail(ReadOnlySpan<byte> pattern, Span<int> offsets, Span<int> lengths, int segmentCount, int start)
     {
-        if (start >= segmentCount || !IsPatternSegment(pattern, offsets[start], lengths[start], ".git"u8))
+        var remaining = segmentCount - start;
+        if (remaining < 2 || !IsPatternSegment(pattern, offsets[start], lengths[start], ".git"u8))
         {
             return false;
-        }
-
-        var remaining = segmentCount - start;
-        if (remaining == 1)
-        {
-            return true;
         }
 
         if (remaining != 2)
