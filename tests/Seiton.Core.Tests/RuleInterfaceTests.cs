@@ -15323,6 +15323,31 @@ public sealed class RuleInterfaceTests
     }
 
     [Test]
+    public async Task RuleRegression_ArtipackedRule_UppercaseWorkspacePathIsFlagged()
+    {
+        var yaml = NormalizeYaml(
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - uses: actions/checkout@v4
+                        - uses: actions/upload-artifact@v4
+                          with:
+                              name: artifact
+                              path: ${{ GITHUB.workspace }}
+                              include-hidden-files: true
+            """);
+
+        using var result = new LintEngine([new ArtipackedRule()]).Check(Encoding.UTF8.GetBytes(yaml), "artipacked-uppercase-workspace.yml");
+        var diagnostic = result.Diagnostics.Single(x => x.RuleId == "artipacked");
+
+        await Assert.That(diagnostic.Severity).IsEqualTo(DiagnosticSeverity.Error);
+        await Assert.That(diagnostic.Message).Contains("persist-credentials: false");
+    }
+
+    [Test]
     public async Task RuleRegression_ArtipackedRule_RootFileGlobIsNotFlagged()
     {
         // A narrow root file glob does not recursively sweep the checkout root and
@@ -15349,6 +15374,29 @@ public sealed class RuleInterfaceTests
     }
 
     [Test]
+    public async Task RuleRegression_ArtipackedRule_RootRecursiveGlobWithFilesIsFlagged()
+    {
+        var yaml = "on: push\n"
+            + "jobs:\n"
+            + "  build:\n"
+            + "    runs-on: ubuntu-latest\n"
+            + "    steps:\n"
+            + "      - uses: actions/checkout@v4\n"
+            + "      - uses: actions/upload-artifact@v4\n"
+            + "        with:\n"
+            + "          name: artifact\n"
+            + "          path: |\n"
+            + "            **/*\n"
+            + "          include-hidden-files: true\n";
+
+        using var result = new LintEngine([new ArtipackedRule()]).Check(Encoding.UTF8.GetBytes(yaml), "artipacked-root-recursive-with-files.yml");
+        var diagnostic = result.Diagnostics.Single(x => x.RuleId == "artipacked");
+
+        await Assert.That(diagnostic.Severity).IsEqualTo(DiagnosticSeverity.Error);
+        await Assert.That(diagnostic.Message).Contains("persist-credentials: false");
+    }
+
+    [Test]
     public async Task RuleRegression_ArtipackedRule_WorkspaceRecursiveGlobIsFlagged()
     {
         // Workspace-root recursive glob is equivalent to ./** and should be treated
@@ -15369,6 +15417,31 @@ public sealed class RuleInterfaceTests
             """);
 
         using var result = new LintEngine([new ArtipackedRule()]).Check(Encoding.UTF8.GetBytes(yaml), "artipacked-workspace-recursive-glob.yml");
+        var diagnostic = result.Diagnostics.Single(x => x.RuleId == "artipacked");
+
+        await Assert.That(diagnostic.Severity).IsEqualTo(DiagnosticSeverity.Error);
+        await Assert.That(diagnostic.Message).Contains("persist-credentials: false");
+    }
+
+    [Test]
+    public async Task RuleRegression_ArtipackedRule_CurrentDirectoryRecursiveGlobWithFilesIsFlagged()
+    {
+        var yaml = NormalizeYaml(
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - uses: actions/checkout@v4
+                        - uses: actions/upload-artifact@v4
+                          with:
+                              name: artifact
+                              path: ./**/*
+                              include-hidden-files: true
+            """);
+
+        using var result = new LintEngine([new ArtipackedRule()]).Check(Encoding.UTF8.GetBytes(yaml), "artipacked-current-recursive-with-files.yml");
         var diagnostic = result.Diagnostics.Single(x => x.RuleId == "artipacked");
 
         await Assert.That(diagnostic.Severity).IsEqualTo(DiagnosticSeverity.Error);

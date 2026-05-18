@@ -547,6 +547,7 @@ public sealed class ArtipackedRule() : RuleBase(RuleId.Artipacked)
     {
         dotDotSegments = 0;
         var namedSegments = 0;
+        var hasRootRecursiveWildcard = false;
 
         while (path.Length > 0)
         {
@@ -589,6 +590,15 @@ public sealed class ArtipackedRule() : RuleBase(RuleId.Artipacked)
                     return false;
                 }
 
+                hasRootRecursiveWildcard = true;
+                continue;
+            }
+
+            // Treat `**/*` and `./**/*` as equivalent to root-recursive uploads.
+            // This intentionally stays narrow: named prefixes like `src/**/*` are not
+            // root-like and remain safe.
+            if (hasRootRecursiveWildcard && namedSegments == 0 && IsSingleWildcardSegment(segment))
+            {
                 continue;
             }
 
@@ -606,6 +616,9 @@ public sealed class ArtipackedRule() : RuleBase(RuleId.Artipacked)
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static bool IsRecursiveWildcardSegment(ReadOnlySpan<byte> segment) => segment.SequenceEqual("**"u8);
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private static bool IsSingleWildcardSegment(ReadOnlySpan<byte> segment) => segment.SequenceEqual("*"u8);
 
     private static bool TryClassifyGitHubWorkspaceExpression(ReadOnlySpan<byte> value, out bool exposesParentDirectory)
     {
@@ -651,7 +664,7 @@ public sealed class ArtipackedRule() : RuleBase(RuleId.Artipacked)
 
     private static bool IsGitHubWorkspaceReference(ReadOnlySpan<byte> expression)
     {
-        if (!expression.StartsWith("github"u8))
+        if (!StartsWithAsciiIgnoreCase(expression, "github"u8))
         {
             return false;
         }
@@ -664,7 +677,7 @@ public sealed class ArtipackedRule() : RuleBase(RuleId.Artipacked)
 
         if (expression[0] == (byte)'.')
         {
-            return TrimBytes(expression[1..]).SequenceEqual("workspace"u8);
+            return SequenceEqualAsciiIgnoreCase(TrimBytes(expression[1..]), "workspace"u8);
         }
 
         if (expression[0] != (byte)'[')
@@ -685,7 +698,7 @@ public sealed class ArtipackedRule() : RuleBase(RuleId.Artipacked)
         }
 
         expression = expression[1..];
-        if (!expression.StartsWith("workspace"u8))
+        if (!StartsWithAsciiIgnoreCase(expression, "workspace"u8))
         {
             return false;
         }
@@ -698,6 +711,38 @@ public sealed class ArtipackedRule() : RuleBase(RuleId.Artipacked)
 
         expression = TrimBytes(expression[1..]);
         return expression.Length == 1 && expression[0] == (byte)']';
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private static bool StartsWithAsciiIgnoreCase(ReadOnlySpan<byte> value, ReadOnlySpan<byte> prefix)
+    {
+        return value.Length >= prefix.Length && SequenceEqualAsciiIgnoreCase(value[..prefix.Length], prefix);
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private static bool SequenceEqualAsciiIgnoreCase(ReadOnlySpan<byte> left, ReadOnlySpan<byte> right)
+    {
+        if (left.Length != right.Length)
+        {
+            return false;
+        }
+
+        for (var i = 0; i < left.Length; i++)
+        {
+            var leftByte = left[i];
+            var rightByte = right[i];
+            if (leftByte == rightByte)
+            {
+                continue;
+            }
+
+            if ((leftByte | 0x20) != (rightByte | 0x20))
+            {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     /// <summary>Finds the first path separator (/ or \) in the span, or -1 if not found.</summary>
