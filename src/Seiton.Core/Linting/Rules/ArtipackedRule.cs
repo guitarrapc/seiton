@@ -456,14 +456,46 @@ public sealed class ArtipackedRule() : RuleBase(RuleId.Artipacked)
             return false;
         }
 
-        // Check if the negated pattern targets the runner-temp directory.
+        // Check if the negated pattern excludes runner-temp CONTENTS.
         // e.g. !../../_temp/** explicitly excludes $RUNNER_TEMP content.
-        if (TryClassifyRelativeDirectoryPath(pattern, out _, out var reachesRunnerTemp))
+        // Bare directory exclusions like !../../_temp do NOT exclude files beneath it.
+        return CouldExcludeRunnerTempContents(pattern);
+    }
+
+    private static bool CouldExcludeRunnerTempContents(ReadOnlySpan<byte> pattern)
+    {
+        // Find the first glob character (* ? [). A bare path with no glob
+        // only excludes the directory entry itself, not its contents.
+        var firstGlobIndex = -1;
+        for (var i = 0; i < pattern.Length; i++)
         {
-            return reachesRunnerTemp;
+            if (pattern[i] is (byte)'*' or (byte)'?' or (byte)'[')
+            {
+                firstGlobIndex = i;
+                break;
+            }
         }
 
-        return false;
+        if (firstGlobIndex < 0)
+        {
+            return false;
+        }
+
+        // Strip trailing separators from the directory prefix before the glob.
+        var directoryPrefix = pattern[..firstGlobIndex];
+        var end = directoryPrefix.Length;
+        while (end > 0 && (directoryPrefix[end - 1] == (byte)'/' || directoryPrefix[end - 1] == (byte)'\\'))
+        {
+            end--;
+        }
+
+        directoryPrefix = directoryPrefix[..end];
+        if (directoryPrefix.Length == 0)
+        {
+            return false;
+        }
+
+        return TryClassifyRelativeDirectoryPath(directoryPrefix, out _, out var reachesRunnerTemp) && reachesRunnerTemp;
     }
 
     private static bool CouldExcludeLegacyCredentialPath(ReadOnlySpan<byte> pattern)
@@ -716,15 +748,28 @@ public sealed class ArtipackedRule() : RuleBase(RuleId.Artipacked)
 
             var segmentStart = rawSegmentStart;
             var segmentLength = rawSegmentLength;
-            while (segmentLength > 0 && IsPathTrimByte(path[segmentStart]))
+
+            // Only trim line-level padding: leading whitespace on the first segment,
+            // trailing whitespace on the last segment. Whitespace inside interior
+            // segments is part of the path and must be preserved.
+            var isFirstSegment = rawSegmentStart == 0;
+            var isLastSegment = separatorIndex < 0;
+
+            if (isFirstSegment)
             {
-                segmentStart++;
-                segmentLength--;
+                while (segmentLength > 0 && IsPathTrimByte(path[segmentStart]))
+                {
+                    segmentStart++;
+                    segmentLength--;
+                }
             }
 
-            while (segmentLength > 0 && IsPathTrimByte(path[segmentStart + segmentLength - 1]))
+            if (isLastSegment)
             {
-                segmentLength--;
+                while (segmentLength > 0 && IsPathTrimByte(path[segmentStart + segmentLength - 1]))
+                {
+                    segmentLength--;
+                }
             }
 
             if (segmentLength == 0)

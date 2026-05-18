@@ -15574,6 +15574,34 @@ public sealed class RuleInterfaceTests
     }
 
     [Test]
+    public async Task RuleRegression_ArtipackedRule_BareNegativePatternWithoutGlobDoesNotSuppressV6Warning()
+    {
+        // !../../_temp (without trailing glob) does not exclude files UNDER the directory,
+        // so the v6+ credential exposure warning must NOT be suppressed.
+        var yaml = NormalizeYaml(
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - uses: actions/checkout@v6
+                        - uses: actions/upload-artifact@v4.4
+                          with:
+                              name: artifact
+                              path: |
+                                  ../..
+                                  !../../_temp
+            """);
+
+        using var result = new LintEngine([new ArtipackedRule()]).Check(Encoding.UTF8.GetBytes(yaml), "artipacked-v6-parent-with-bare-temp-exclusion.yml");
+        var diagnostic = result.Diagnostics.Single(x => x.RuleId == "artipacked");
+
+        await Assert.That(diagnostic.Severity).IsEqualTo(DiagnosticSeverity.Warning);
+        await Assert.That(diagnostic.Message).Contains("$RUNNER_TEMP");
+    }
+
+    [Test]
     public async Task RuleRegression_ArtipackedRule_NestedCheckoutUploadPathWithoutRootLikeExpansionRemainsDeferred()
     {
         var yaml = NormalizeYaml(
