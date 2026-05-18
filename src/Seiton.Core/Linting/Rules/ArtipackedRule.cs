@@ -493,15 +493,15 @@ public sealed class ArtipackedRule() : RuleBase(RuleId.Artipacked)
 
     private static bool MatchesNormalizedLegacyCredentialExclusion(ReadOnlySpan<byte> pattern, ReadOnlySpan<byte> checkoutPath)
     {
-            Span<int> patternOffsets = stackalloc int[MaxNormalizedPathSegments];
-            Span<int> patternLengths = stackalloc int[MaxNormalizedPathSegments];
+        Span<int> patternOffsets = stackalloc int[MaxNormalizedPathSegments];
+        Span<int> patternLengths = stackalloc int[MaxNormalizedPathSegments];
         if (!TryNormalizeRelativePathSegments(pattern, patternOffsets, patternLengths, out var patternSegmentCount, allowRecursiveWildcards: true))
         {
             return false;
         }
 
-            Span<int> checkoutOffsets = stackalloc int[MaxNormalizedPathSegments];
-            Span<int> checkoutLengths = stackalloc int[MaxNormalizedPathSegments];
+        Span<int> checkoutOffsets = stackalloc int[MaxNormalizedPathSegments];
+        Span<int> checkoutLengths = stackalloc int[MaxNormalizedPathSegments];
         if (!TryNormalizeRelativePathSegments(checkoutPath, checkoutOffsets, checkoutLengths, out var checkoutSegmentCount, allowRecursiveWildcards: false))
         {
             return false;
@@ -594,17 +594,6 @@ public sealed class ArtipackedRule() : RuleBase(RuleId.Artipacked)
         return true;
     }
 
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    private static bool TryConsumeGitDirectory(ref ReadOnlySpan<byte> pattern)
-    {
-        if (!pattern.StartsWith(".git"u8))
-        {
-            return false;
-        }
-
-        pattern = pattern[4..];
-        return true;
-    }
 
     private static bool TryClassifyDangerousLine(ReadOnlySpan<byte> line, out bool exposesParentDirectory)
     {
