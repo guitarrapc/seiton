@@ -16121,6 +16121,110 @@ public sealed class RuleInterfaceTests
         await Assert.That(diagnostics).IsEmpty();
     }
 
+    [Test]
+    public async Task RuleRegression_ArtipackedRule_ParentDirectoryTempRecursiveGlobIsWarning()
+    {
+        // ../../_temp/** sweeps $RUNNER_TEMP recursively — should be flagged.
+        var yaml = NormalizeYaml(
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - uses: actions/checkout@v6
+                        - uses: actions/upload-artifact@v4.4
+                          with:
+                              name: artifact
+                              path: ../../_temp/**
+            """);
+
+        using var result = new LintEngine([new ArtipackedRule()]).Check(Encoding.UTF8.GetBytes(yaml), "artipacked-parent-temp-recursive-glob.yml");
+        var diagnostic = result.Diagnostics.Single(x => x.RuleId == "artipacked");
+
+        await Assert.That(diagnostic.Severity).IsEqualTo(DiagnosticSeverity.Warning);
+        await Assert.That(diagnostic.Message).Contains("$RUNNER_TEMP");
+    }
+
+    [Test]
+    public async Task RuleRegression_ArtipackedRule_ParentDirectoryTempStarGlobIsWarning()
+    {
+        // ../../_temp/* sweeps immediate children of $RUNNER_TEMP — should be flagged.
+        var yaml = NormalizeYaml(
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - uses: actions/checkout@v6
+                        - uses: actions/upload-artifact@v4.4
+                          with:
+                              name: artifact
+                              path: ../../_temp/*
+            """);
+
+        using var result = new LintEngine([new ArtipackedRule()]).Check(Encoding.UTF8.GetBytes(yaml), "artipacked-parent-temp-star-glob.yml");
+        var diagnostic = result.Diagnostics.Single(x => x.RuleId == "artipacked");
+
+        await Assert.That(diagnostic.Severity).IsEqualTo(DiagnosticSeverity.Warning);
+        await Assert.That(diagnostic.Message).Contains("$RUNNER_TEMP");
+    }
+
+    [Test]
+    public async Task RuleRegression_ArtipackedRule_ParentDirectoryTempRecursiveStarGlobIsWarning()
+    {
+        // ../../_temp/**/* sweeps $RUNNER_TEMP recursively — should be flagged.
+        var yaml = NormalizeYaml(
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - uses: actions/checkout@v6
+                        - uses: actions/upload-artifact@v4.4
+                          with:
+                              name: artifact
+                              path: ../../_temp/**/*
+            """);
+
+        using var result = new LintEngine([new ArtipackedRule()]).Check(Encoding.UTF8.GetBytes(yaml), "artipacked-parent-temp-recursive-star-glob.yml");
+        var diagnostic = result.Diagnostics.Single(x => x.RuleId == "artipacked");
+
+        await Assert.That(diagnostic.Severity).IsEqualTo(DiagnosticSeverity.Warning);
+        await Assert.That(diagnostic.Message).Contains("$RUNNER_TEMP");
+    }
+
+    [Test]
+    public async Task RuleRegression_ArtipackedRule_LeadingRecursiveExclusionSuppressesWithExpressionCheckoutPath()
+    {
+        // !**/.git/** suppresses legacy credential exposure even when checkout
+        // path contains an expression (cannot be statically normalized).
+        var yaml = NormalizeYaml(
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - uses: actions/checkout@v3
+                          with:
+                              path: ${{ matrix.repo_path }}
+                        - uses: actions/upload-artifact@v4.3
+                          with:
+                              name: artifact
+                              path: |
+                                  .
+                                  !**/.git/**
+            """);
+
+        using var result = new LintEngine([new ArtipackedRule()]).Check(Encoding.UTF8.GetBytes(yaml), "artipacked-recursive-excl-expr-path.yml");
+        var diagnostics = result.Diagnostics.Where(x => x.RuleId == "artipacked").ToArray();
+
+        await Assert.That(diagnostics).IsEmpty();
+    }
+
     private static async Task AssertRuleCases(IRule rule, string ruleId, RuleCase[] cases, LintConfig? config = null)
     {
         for (var i = 0; i < cases.Length; i++)

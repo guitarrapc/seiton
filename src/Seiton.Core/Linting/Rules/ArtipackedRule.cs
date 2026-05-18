@@ -505,9 +505,13 @@ public sealed class ArtipackedRule() : RuleBase(RuleId.Artipacked)
 
         Span<int> checkoutOffsets = stackalloc int[MaxNormalizedPathSegments];
         Span<int> checkoutLengths = stackalloc int[MaxNormalizedPathSegments];
-        if (!TryNormalizeRelativePathSegments(checkoutPath, checkoutOffsets, checkoutLengths, out var checkoutSegmentCount, allowRecursiveWildcards: false))
+        var checkoutNormalized = TryNormalizeRelativePathSegments(checkoutPath, checkoutOffsets, checkoutLengths, out var checkoutSegmentCount, allowRecursiveWildcards: false);
+        if (!checkoutNormalized)
         {
-            return false;
+            // checkoutPath contains expressions and cannot be statically normalized.
+            // Leading-recursive patterns (**/.git/**) still suppress because ** absorbs
+            // any prefix. Treat checkout as 0 known segments.
+            checkoutSegmentCount = 0;
         }
 
         var start = 0;
@@ -517,6 +521,12 @@ public sealed class ArtipackedRule() : RuleBase(RuleId.Artipacked)
         }
 
         var hadLeadingRecursiveWildcard = start > 0;
+        if (!checkoutNormalized && !hadLeadingRecursiveWildcard)
+        {
+            // Without a leading **, we cannot match a non-normalizable checkout path.
+            return false;
+        }
+
         var maxConsumedCheckoutSegments = hadLeadingRecursiveWildcard ? checkoutSegmentCount : 0;
 
         for (var consumedCheckoutSegments = 0; consumedCheckoutSegments <= maxConsumedCheckoutSegments; consumedCheckoutSegments++)
@@ -785,6 +795,12 @@ public sealed class ArtipackedRule() : RuleBase(RuleId.Artipacked)
             {
                 if (namedSegments > 0)
                 {
+                    // ../../_temp/** still sweeps $RUNNER_TEMP — don't bail
+                    if (dotDotSegments > 0 && escapedNamedSegments == 1 && escapedFirstNamedSegmentIsRunnerTemp)
+                    {
+                        continue;
+                    }
+
                     return false;
                 }
 
@@ -796,6 +812,12 @@ public sealed class ArtipackedRule() : RuleBase(RuleId.Artipacked)
             // This intentionally stays narrow: named prefixes like `src/**/*` are not
             // root-like and remain safe.
             if (hasRootRecursiveWildcard && namedSegments == 0 && IsSingleWildcardSegment(segment))
+            {
+                continue;
+            }
+
+            // Treat ../../_temp/* and ../../_temp/**/* as sweeping $RUNNER_TEMP
+            if (dotDotSegments > 0 && escapedNamedSegments == 1 && escapedFirstNamedSegmentIsRunnerTemp && IsSingleWildcardSegment(segment))
             {
                 continue;
             }
