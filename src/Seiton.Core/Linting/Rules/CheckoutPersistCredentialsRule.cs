@@ -62,7 +62,7 @@ public sealed class CheckoutPersistCredentialsRule() : RuleBase(RuleId.CheckoutP
 
     private static string BuildMessage(string actionRef)
     {
-        return $"action '{actionRef}' should set with.persist-credentials to false to avoid persisting credentials in .git/config; after changing this, {FixHint}";
+        return $"action '{actionRef}' should set with.persist-credentials to false to avoid leaving credentials accessible to subsequent steps; after changing this, {FixHint}";
     }
 
     private string GetCachedMessage(Utf8Slice usesSlice)

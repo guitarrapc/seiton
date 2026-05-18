@@ -801,7 +801,11 @@ public sealed class ArtipackedRule() : RuleBase(RuleId.Artipacked)
             namedSegments++;
         }
 
-        return namedSegments == 0;
+        // Any unresolved `..` means the path escapes the workspace, even if it later
+        // names a child directory (e.g. `../../_temp`). Such paths can reach $RUNNER_TEMP
+        // on GitHub-hosted runners. Paths that normalize to the current directory (or
+        // recursive wildcard root) are also dangerous.
+        return dotDotSegments > 0 || namedSegments == 0;
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
