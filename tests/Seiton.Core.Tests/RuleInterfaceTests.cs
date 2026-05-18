@@ -15085,7 +15085,7 @@ public sealed class RuleInterfaceTests
     }
 
     [Test]
-    public async Task RuleRegression_ArtipackedRule_UnknownUploadArtifactRef_ExplicitlyDisablingHiddenFilesSuppressesLegacyCase()
+    public async Task RuleRegression_ArtipackedRule_UnknownUploadArtifactRef_RemainsConservativeEvenWhenHiddenFilesDisabled()
     {
         var yaml = NormalizeYaml(
             """
@@ -15103,9 +15103,10 @@ public sealed class RuleInterfaceTests
             """);
 
         using var result = new LintEngine([new ArtipackedRule()]).Check(Encoding.UTF8.GetBytes(yaml), "artipacked-main-hidden-disabled.yml");
-        var diagnostics = result.Diagnostics.Where(x => x.RuleId == "artipacked").ToArray();
+        var diagnostic = result.Diagnostics.Single(x => x.RuleId == "artipacked");
 
-        await Assert.That(diagnostics).IsEmpty();
+        await Assert.That(diagnostic.Severity).IsEqualTo(DiagnosticSeverity.Error);
+        await Assert.That(diagnostic.Message).Contains("persist-credentials: false");
     }
 
     [Test]
@@ -15695,6 +15696,102 @@ public sealed class RuleInterfaceTests
             """);
 
         using var result = new LintEngine([new ArtipackedRule()]).Check(Encoding.UTF8.GetBytes(yaml), "artipacked-root-file-glob.yml");
+        var diagnostics = result.Diagnostics.Where(x => x.RuleId == "artipacked").ToArray();
+
+        await Assert.That(diagnostics).IsEmpty();
+    }
+
+    [Test]
+    public async Task RuleRegression_ArtipackedRule_RootSingleWildcardIsFlagged()
+    {
+        var yaml = NormalizeYaml(
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - uses: actions/checkout@v4
+                        - uses: actions/upload-artifact@v4
+                          with:
+                              name: artifact
+                              path: '*'
+                              include-hidden-files: true
+            """);
+
+        using var result = new LintEngine([new ArtipackedRule()]).Check(Encoding.UTF8.GetBytes(yaml), "artipacked-root-single-wildcard.yml");
+        var diagnostic = result.Diagnostics.Single(x => x.RuleId == "artipacked");
+
+        await Assert.That(diagnostic.Severity).IsEqualTo(DiagnosticSeverity.Error);
+        await Assert.That(diagnostic.Message).Contains("persist-credentials: false");
+    }
+
+    [Test]
+    public async Task RuleRegression_ArtipackedRule_DotSlashSingleWildcardIsFlagged()
+    {
+        var yaml = NormalizeYaml(
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - uses: actions/checkout@v4
+                        - uses: actions/upload-artifact@v4
+                          with:
+                              name: artifact
+                              path: './*'
+                              include-hidden-files: true
+            """);
+
+        using var result = new LintEngine([new ArtipackedRule()]).Check(Encoding.UTF8.GetBytes(yaml), "artipacked-dot-slash-single-wildcard.yml");
+        var diagnostic = result.Diagnostics.Single(x => x.RuleId == "artipacked");
+
+        await Assert.That(diagnostic.Severity).IsEqualTo(DiagnosticSeverity.Error);
+        await Assert.That(diagnostic.Message).Contains("persist-credentials: false");
+    }
+
+    [Test]
+    public async Task RuleRegression_ArtipackedRule_V6SingleParentDirectoryIsSafe()
+    {
+        var yaml = NormalizeYaml(
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - uses: actions/checkout@v6
+                        - uses: actions/upload-artifact@v4.4
+                          with:
+                              name: artifact
+                              path: ..
+            """);
+
+        using var result = new LintEngine([new ArtipackedRule()]).Check(Encoding.UTF8.GetBytes(yaml), "artipacked-v6-single-parent.yml");
+        var diagnostics = result.Diagnostics.Where(x => x.RuleId == "artipacked").ToArray();
+
+        await Assert.That(diagnostics).IsEmpty();
+    }
+
+    [Test]
+    public async Task RuleRegression_ArtipackedRule_V6WorkspaceSingleParentDirectoryIsSafe()
+    {
+        var yaml = NormalizeYaml(
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - uses: actions/checkout@v6
+                        - uses: actions/upload-artifact@v4.4
+                          with:
+                              name: artifact
+                              path: ${{ github.workspace }}/..
+            """);
+
+        using var result = new LintEngine([new ArtipackedRule()]).Check(Encoding.UTF8.GetBytes(yaml), "artipacked-v6-workspace-single-parent.yml");
         var diagnostics = result.Diagnostics.Where(x => x.RuleId == "artipacked").ToArray();
 
         await Assert.That(diagnostics).IsEmpty();

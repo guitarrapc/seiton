@@ -101,7 +101,7 @@ public sealed class ArtipackedRule() : RuleBase(RuleId.Artipacked)
                 }
 
                 var pathValue = Arena.GetStringValue(pathNode);
-                if (!TryClassifyDangerousPath(pathValue, out var exposesParentDirectory, out var excludesLegacyCredentialPath))
+                if (!TryClassifyDangerousPath(pathValue, out var reachesRunnerTemp, out var excludesLegacyCredentialPath))
                 {
                     continue;
                 }
@@ -116,7 +116,7 @@ public sealed class ArtipackedRule() : RuleBase(RuleId.Artipacked)
                 var mayExposeLegacyCredentials = hasUnsafeLegacyCheckout
                                                  && mayIncludeHiddenFiles
                                                  && !legacyCredentialsExcluded;
-                var mayExposeV6PlusCredentials = hasUnsafeV6PlusCheckout && exposesParentDirectory;
+                var mayExposeV6PlusCredentials = hasUnsafeV6PlusCheckout && reachesRunnerTemp;
                 if (!mayExposeLegacyCredentials && !mayExposeV6PlusCredentials)
                 {
                     continue;
@@ -214,7 +214,9 @@ public sealed class ArtipackedRule() : RuleBase(RuleId.Artipacked)
 
         if (!TryExtractMajorAndMinorVersion(usesText, out var majorVersion, out var minorVersion, out var hasMinorVersion))
         {
-            return !hasExplicitIncludeHiddenFiles || MayExplicitlyIncludeHiddenFiles(includeHiddenFilesNode);
+            // An arbitrary branch/tag/SHA may point at older upload-artifact code that does
+            // not support include-hidden-files and still uploads hidden files by default.
+            return true;
         }
 
         if (majorVersion < 4)
@@ -384,10 +386,10 @@ public sealed class ArtipackedRule() : RuleBase(RuleId.Artipacked)
         return digitCount > 1 && text[0] == (byte)'0';
     }
 
-    /// <summary>Checks whether the upload path covers the repository root or parent directories.</summary>
-    internal static bool TryClassifyDangerousPath(ReadOnlySpan<byte> path, out bool exposesParentDirectory, out bool excludesLegacyCredentialPath)
+    /// <summary>Checks whether the upload path covers the repository root or dangerous parent-like directories.</summary>
+    internal static bool TryClassifyDangerousPath(ReadOnlySpan<byte> path, out bool reachesRunnerTemp, out bool excludesLegacyCredentialPath)
     {
-        exposesParentDirectory = false;
+        reachesRunnerTemp = false;
         excludesLegacyCredentialPath = false;
         var hasDangerousLine = false;
 
@@ -408,10 +410,10 @@ public sealed class ArtipackedRule() : RuleBase(RuleId.Artipacked)
                 {
                     excludesLegacyCredentialPath = true;
                 }
-                else if (TryClassifyDangerousLine(line, out var lineExposesParentDirectory))
+                else if (TryClassifyDangerousLine(line, out var lineReachesRunnerTemp))
                 {
                     hasDangerousLine = true;
-                    exposesParentDirectory |= lineExposesParentDirectory;
+                    reachesRunnerTemp |= lineReachesRunnerTemp;
                 }
             }
 
@@ -634,22 +636,21 @@ public sealed class ArtipackedRule() : RuleBase(RuleId.Artipacked)
     }
 
 
-    private static bool TryClassifyDangerousLine(ReadOnlySpan<byte> line, out bool exposesParentDirectory)
+    private static bool TryClassifyDangerousLine(ReadOnlySpan<byte> line, out bool reachesRunnerTemp)
     {
-        exposesParentDirectory = false;
+        reachesRunnerTemp = false;
 
         if (IsCurrentDirectoryPath(line))
         {
             return true;
         }
 
-        if (IsParentDirectoryPath(line))
+        if (IsParentDirectoryPath(line, out reachesRunnerTemp))
         {
-            exposesParentDirectory = true;
             return true;
         }
 
-        if (TryClassifyGitHubWorkspaceExpression(line, out exposesParentDirectory))
+        if (TryClassifyGitHubWorkspaceExpression(line, out reachesRunnerTemp))
         {
             return true;
         }
@@ -660,13 +661,13 @@ public sealed class ArtipackedRule() : RuleBase(RuleId.Artipacked)
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static bool IsCurrentDirectoryPath(ReadOnlySpan<byte> path)
     {
-        return TryClassifyRelativeDirectoryPath(path, out var dotDotSegments) && dotDotSegments == 0;
+        return TryClassifyRelativeDirectoryPath(path, out var dotDotSegments, out _) && dotDotSegments == 0;
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    private static bool IsParentDirectoryPath(ReadOnlySpan<byte> path)
+    private static bool IsParentDirectoryPath(ReadOnlySpan<byte> path, out bool reachesRunnerTemp)
     {
-        return TryClassifyRelativeDirectoryPath(path, out var dotDotSegments) && dotDotSegments >= 1;
+        return TryClassifyRelativeDirectoryPath(path, out var dotDotSegments, out reachesRunnerTemp) && dotDotSegments >= 1;
     }
 
     private static bool TryNormalizeRelativePathSegments(ReadOnlySpan<byte> path, Span<int> offsets, Span<int> lengths, out int count, bool allowRecursiveWildcards)
@@ -756,13 +757,13 @@ public sealed class ArtipackedRule() : RuleBase(RuleId.Artipacked)
         return value is (byte)' ' or (byte)'\t' or (byte)'\r';
     }
 
-    private static bool TryClassifyRelativeDirectoryPath(ReadOnlySpan<byte> path, out int dotDotSegments)
+    private static bool TryClassifyRelativeDirectoryPath(ReadOnlySpan<byte> path, out int dotDotSegments, out bool reachesRunnerTemp)
     {
         dotDotSegments = 0;
+        reachesRunnerTemp = false;
         var namedSegments = 0;
         var escapedNamedSegments = 0;
         var escapedFirstNamedSegmentIsRunnerTemp = false;
-        var hasRootRecursiveWildcard = false;
 
         while (path.Length > 0)
         {
@@ -811,14 +812,13 @@ public sealed class ArtipackedRule() : RuleBase(RuleId.Artipacked)
                     return false;
                 }
 
-                hasRootRecursiveWildcard = true;
                 continue;
             }
 
-            // Treat `**/*` and `./**/*` as equivalent to root-recursive uploads.
-            // This intentionally stays narrow: named prefixes like `src/**/*` are not
-            // root-like and remain safe.
-            if (hasRootRecursiveWildcard && namedSegments == 0 && IsSingleWildcardSegment(segment))
+            // Treat root-level `*`, `./*`, `**/*`, and `./**/*` as equivalent to
+            // root-like uploads. This intentionally stays narrow: named prefixes like
+            // `src/*` and `src/**/*` are not root-like and remain safe.
+            if (namedSegments == 0 && IsSingleWildcardSegment(segment))
             {
                 continue;
             }
@@ -840,11 +840,13 @@ public sealed class ArtipackedRule() : RuleBase(RuleId.Artipacked)
             }
         }
 
+        reachesRunnerTemp = dotDotSegments >= 2
+                           || (dotDotSegments > 0 && escapedNamedSegments == 1 && escapedFirstNamedSegmentIsRunnerTemp);
+
         // Pure parent-directory uploads are dangerous. Separately, on GitHub-hosted
         // runners `$RUNNER_TEMP` commonly sits at a sibling `_temp` directory, so an
         // escaped path that resolves exactly to `_temp` is also treated as dangerous.
-        return namedSegments == 0
-               || (dotDotSegments > 0 && escapedNamedSegments == 1 && escapedFirstNamedSegmentIsRunnerTemp);
+        return namedSegments == 0 || reachesRunnerTemp;
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -859,9 +861,9 @@ public sealed class ArtipackedRule() : RuleBase(RuleId.Artipacked)
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static bool IsSingleWildcardSegment(ReadOnlySpan<byte> segment) => segment.SequenceEqual("*"u8);
 
-    private static bool TryClassifyGitHubWorkspaceExpression(ReadOnlySpan<byte> value, out bool exposesParentDirectory)
+    private static bool TryClassifyGitHubWorkspaceExpression(ReadOnlySpan<byte> value, out bool reachesRunnerTemp)
     {
-        exposesParentDirectory = false;
+        reachesRunnerTemp = false;
 
         var trimmed = TrimBytes(value);
         if (trimmed.Length < 5 || !trimmed.StartsWith("${{"u8))
@@ -897,12 +899,11 @@ public sealed class ArtipackedRule() : RuleBase(RuleId.Artipacked)
             return true;
         }
 
-        if (!TryClassifyRelativeDirectoryPath(suffix, out var suffixDotDotSegments))
+        if (!TryClassifyRelativeDirectoryPath(suffix, out _, out reachesRunnerTemp))
         {
             return false;
         }
 
-        exposesParentDirectory = suffixDotDotSegments >= 1;
         return true;
     }
 
