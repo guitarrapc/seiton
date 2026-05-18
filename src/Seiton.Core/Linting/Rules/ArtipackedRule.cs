@@ -496,30 +496,6 @@ public sealed class ArtipackedRule() : RuleBase(RuleId.Artipacked)
         return true;
     }
 
-    private static bool MatchesLegacyCredentialExclusion(ReadOnlySpan<byte> pattern)
-    {
-        if (!TryConsumeGitDirectory(ref pattern))
-        {
-            return false;
-        }
-
-        if (pattern.Length == 0)
-        {
-            return true;
-        }
-
-        if (pattern[0] != (byte)'/' && pattern[0] != (byte)'\\')
-        {
-            return false;
-        }
-
-        pattern = pattern[1..];
-        return pattern.SequenceEqual("**"u8)
-               || pattern.SequenceEqual("config"u8)
-               || pattern.StartsWith("config/"u8)
-               || pattern.StartsWith("config\\"u8);
-    }
-
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static bool TryConsumeGitDirectory(ref ReadOnlySpan<byte> pattern)
     {
