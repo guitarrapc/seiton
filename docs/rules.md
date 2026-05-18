@@ -1,6 +1,6 @@
 # Rules
 
-This page documents all lint rules included in Seiton.
+This page documents all lint rules included in Seiton. It is the **canonical user-facing reference** for detailed rule behavior, examples, and remediation guidance. Implementation specs (`.github/docs/Seiton_Linter_*.md`) carry only brief summaries and cross-reference this document.
 
 > **Tip:** Run `seiton rules` to see all rules and their effective enabled/disabled status in your terminal. Use `seiton rules --format json` for machine-readable output. See [Usage](usage.md#seiton-rules) for details.
 

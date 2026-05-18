@@ -226,36 +226,38 @@ type LinterOptions struct {
 
 Go runtime behavior must align with `Seiton_Linter_spec.md` §4.4 for the default rule catalog.
 
-| Rule ID | Required Behavior Summary |
+> **Detail policy:** Rule behavior is defined in `Seiton_Linter_spec.md` §4.4. User-facing detail (path lists, examples, remediation) lives in [`docs/rules.md`](../../docs/rules.md). This table only records Go-specific implementation notes.
+
+| Rule ID | Go Implementation Notes |
 |---|---|
-| `job-structure` | Validate core job shape constraints: `uses` is mutually exclusive with `steps`/`runs-on`, and each job requires either reusable-call form (`uses`) or executable form (`runs-on` + `steps`). |
-| `reusable-workflow` | Validate reusable workflow call semantics: `with`/`secrets` require `uses`, reusable-call jobs must reject incompatible execution keys, and local reusable calls should validate caller `with`/`secrets` against called workflow `on.workflow_call` contracts when statically resolvable. |
-| `permissions` | Validate `permissions` value domain: scalar must be `read-all` or `write-all`; scope values must be `read`, `write`, or `none`. |
-| `popular-action-inputs` | Validate known action input names against maintained popular-action metadata and emit diagnostics for unknown inputs. |
-| `outdated-action-runner` | Error when a popular action's `runs.using` runtime is deprecated. The rule is catalog-driven: it looks up the action in the popular-actions generated catalog, reads the `runs.using` value, and checks against a maintained list of deprecated runtimes (`node12`, `node16`). |
-| `unpinned-uses` | Warn when `uses:` references are not pinned to full commit SHA for remote actions/reusable workflows; additionally validate `uses` reference format and local action reference sanity where statically resolvable. |
-| `unpinned-image` | Warn when docker image references (`docker://`, `job.container.image`, `job.services.*.image`) are not pinned by digest (`@sha256:<64-hex>`). |
-| `dangerous-triggers` | Warn when dangerous trigger events are used (built-in dangerous event set plus any additive customization defined by config). |
-| `job-permissions-required` | Warn when a job omits explicit `permissions` configuration. |
-| `needs-graph` | Error on invalid `needs` graph: unknown dependency targets and circular dependencies. Cycle diagnostics report at the `needs` value position that closes the cycle, with the full cycle path in the message. |
-| `shell-name` | Error when configured shell names are outside the supported shell set for workflow/job defaults and `run` steps. |
-| `runner-label` | Warn on unknown GitHub-hosted runner labels in `runs-on` (excluding self-hosted and expression-only cases), using built-in labels plus additive config labels. Error on conflicting OS families among static labels and matrix-expanded expression labels. Bare self-hosted preset OS labels (`linux`, `windows`, `macos`) are recognized for OS family detection. |
-| `runner-no-latest` | Warn when moving GitHub-hosted labels (`ubuntu-latest`, `windows-latest`, `macos-latest`) are used in `runs-on`; prefer explicit version-pinned labels. |
-| `id-naming` | Error when `job.id` or `step.id` contains characters outside allowed identifier set. |
-| `glob-pattern` | Error on invalid event filter configuration, including invalid glob syntax (triple-star, unclosed bracket, reversed range, `*+` sequences), ref-name forbidden characters (`^`, `~`, `:`, space), single-dot and double-dot path segments, unsupported event options/types, and incompatible filter combinations (`branches` vs `branches-ignore`, `tags` vs `tags-ignore`, `paths` vs `paths-ignore`). |
-| `deny-write-all` | Error when workflow/job permissions use `write-all`. |
-| `credentials` | Warn when custom/private registry images in `job.container` or `job.services.*` are used without credentials, except registries treated as public by built-in plus additive config set. Error when `credentials.password` is a hardcoded literal instead of an expression (`${{ ... }}`). |
-| `template-injection` | Error when untrusted `github.event`-origin data is directly interpolated into `run` script sinks or `actions/github-script` `script` input in unsafe ways. `env:` declarations are treated as indirection and are not reported by this rule. |
-| `expr-undefined-var` | Error when expressions reference context roots unavailable in the current scope (for example job scope vs step scope context mismatch). Validates `step.run`, `step.if`, `step.env`, and `step.with` expressions. For `matrix` context, builds strict per-job types from matrix row definitions (including nested object property inference) and flags undefined axis keys. For `steps` context, builds strict per-job types from step IDs and validates forward references. For `needs` context, validates that referenced job IDs are declared in the job's `needs` list. For popular actions with known outputs, builds strict step output types and flags unknown output names. |
-| `run-env-context-direct-use` | Error when `run:` script text directly references `${{ env.* }}`; shell variable expansion must be used instead. |
-| `run-secrets-context-direct-use` | Error when `run:` script text directly references `${{ secrets.* }}`; secret values should be mapped via `env` and referenced as shell variables (`${ENV_NAME}` / `$ENV_NAME` / `$env:ENV_NAME`). |
-| `run-inputs-context-direct-use` | Error when `run:` script text directly references `${{ inputs.* }}` or `${{ github.event.inputs.* }}`; values should be mapped via `env` and referenced as shell variables (`${ENV_NAME}` / `$ENV_NAME` / `$env:ENV_NAME`). |
-| `secrets-whole-context-access` | Error when any expression references the entire `secrets` context as an object (e.g. `${{ toJson(secrets) }}`, `${{ format('{0}', secrets) }}`), rather than accessing a specific secret key (`secrets.MY_KEY`). Exposing the whole secrets object in one expression leaks all secrets simultaneously. |
-| `checkout-persist-credentials` | Warn when `actions/checkout` does not explicitly set `with.persist-credentials: false`; persisting checkout-managed credentials increases secret exposure risk when repository data is reused or uploaded. Legacy checkout versions store credentials in `.git/config`; v6+ stores them under `$RUNNER_TEMP`. |
-| `artipacked` | Detect credential leakage risk when `actions/checkout` (without `persist-credentials: false`) is followed later in the same job by `actions/upload-artifact` uploading a dangerous path (`.`, `..`, `../../_temp`, `../../_temp/**`, `../../_temp/*`, `../../_temp/**/*`, `./**`, `./**/*`, `**`, `**/*`, `${{ github.workspace }}`, `${{ github.workspace }}/**`, `${{ github.workspace }}/**/*`, `${{ github.workspace }}/..`, `${{ github.workspace }}/../../_temp`, and equivalent bracket-form expressions such as `${{ github['workspace'] }}`). Core intent: prevent artifact uploads from sweeping checkout-managed credentials or adjacent sensitive state into artifacts. Current supported scope: normalized equivalents such as `repo/..` and `${{ github.workspace }}/repo/..` are also treated as dangerous when they resolve back to the workspace root, and explicit escaped `_temp` directory paths and their glob variants (e.g. `../../_temp`, `../../_temp/**`, `../../_temp/*`, `${{ github.workspace }}/../../_temp`) are treated as dangerous because they can reach `$RUNNER_TEMP` on GitHub-hosted runners. Workspace-expression suffixes are recognized only when the suffix is empty or begins with `/` or `\`, so concatenations such as `${{ github.workspace }}..` or `!${{ github.workspace }}.git/**` are not treated as workspace-relative paths. Root-like or parent-directory uploads can sweep sensitive checkout state into artifacts; for early pinned `actions/upload-artifact@v4.0` through `@v4.3`, hidden files are included by default, while for `actions/upload-artifact@v4.4+` and floating `@v4`, hidden files are excluded by default. Arbitrary or unrecognized upload-artifact refs (e.g. `@v4-legacy`, `@v4.x`, `@v4.4-legacy`) are treated conservatively as unknown unless `include-hidden-files` is set to a static boolean, in which case that explicit value is respected. Checkout refs that do not parse as semantic versions (for example SHA pins, branch refs, `@v6-legacy`, `@v06`) are also treated conservatively as unknown and assumed to carry both legacy and v6+ risk buckets. As a result, legacy `.git/config` credentials are typically included by default for pinned `v4.0`–`v4.3`, but for `v4.4+`/floating `@v4` they are typically included only when hidden files are uploaded explicitly or hidden-file behavior is not statically known. Explicit exclusion lines such as `!.git/**`, `!.git/config`, explicit nested exclusions such as `!repo/.git/**`, and leading-recursive forms such as `!**/.git/**` suppress the legacy `.git/config` case only when they exclude every reachable `.git/config` location within the current normalized-path depth bound; bare `!.git` never suppresses. Leading-recursive exclusions (`!**/.git/**`) suppress the legacy case even when the checkout `with.path` contains runtime expressions that cannot be statically normalized. Separately, for checkout v6+, parent-directory uploads can still capture `$RUNNER_TEMP` even with hidden files disabled, because `$RUNNER_TEMP` is not itself a hidden path. Deferred scope: `actions/checkout` `with.path` subdirectory correlation is not implemented beyond explicit nested `.git` exclusions, so later uploads of that checkout subdirectory are not diagnosed unless the upload path is otherwise root-like, parent-like, or workspace-like. Error for non-v6+ checkout; warning only for v6+ parent-directory uploads that can reach `$RUNNER_TEMP`. |
-| `workflow-secrets` | Error when workflow-level `env` assigns values from `secrets.*` or `github.token` in workflows with multiple jobs. |
-| `job-secrets` | Error when job-level `env` assigns values from `secrets.*` or `github.token` in jobs with multiple steps. |
-| `action-shell-is-required` | Error when a composite action `run` step omits explicit `shell` declaration (including empty shell values). |
+| `job-structure` | — |
+| `reusable-workflow` | — |
+| `permissions` | — |
+| `popular-action-inputs` | Catalog-driven via generated popular-actions data. |
+| `outdated-action-runner` | Catalog-driven via generated popular-actions data. |
+| `unpinned-uses` | — |
+| `unpinned-image` | — |
+| `dangerous-triggers` | — |
+| `job-permissions-required` | — |
+| `needs-graph` | — |
+| `shell-name` | — |
+| `runner-label` | Uses generated runner-labels data. |
+| `runner-no-latest` | — |
+| `id-naming` | — |
+| `glob-pattern` | — |
+| `deny-write-all` | — |
+| `credentials` | — |
+| `template-injection` | — |
+| `expr-undefined-var` | Builds strict per-job types for matrix (including nested object inference), steps, and needs. Popular-action outputs are catalog-driven. |
+| `run-env-context-direct-use` | — |
+| `run-secrets-context-direct-use` | — |
+| `run-inputs-context-direct-use` | — |
+| `secrets-whole-context-access` | — |
+| `checkout-persist-credentials` | — |
+| `artipacked` | Step-order scan within job. Tracks unsafe legacy/v6+ checkout state and re-evaluates exclusion lines. |
+| `workflow-secrets` | — |
+| `job-secrets` | — |
+| `action-shell-is-required` | — |
 
 
 ### 3.5 Phase 14 Catalog Additions
