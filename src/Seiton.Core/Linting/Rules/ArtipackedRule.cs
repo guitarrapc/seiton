@@ -743,6 +743,8 @@ public sealed class ArtipackedRule() : RuleBase(RuleId.Artipacked)
     {
         dotDotSegments = 0;
         var namedSegments = 0;
+        var escapedNamedSegments = 0;
+        var escapedFirstNamedSegmentIsRunnerTemp = false;
         var hasRootRecursiveWildcard = false;
 
         while (path.Length > 0)
@@ -799,13 +801,21 @@ public sealed class ArtipackedRule() : RuleBase(RuleId.Artipacked)
             }
 
             namedSegments++;
+            if (dotDotSegments > 0)
+            {
+                escapedNamedSegments++;
+                if (escapedNamedSegments == 1)
+                {
+                    escapedFirstNamedSegmentIsRunnerTemp = segment.SequenceEqual("_temp"u8);
+                }
+            }
         }
 
-        // Any unresolved `..` means the path escapes the workspace, even if it later
-        // names a child directory (e.g. `../../_temp`). Such paths can reach $RUNNER_TEMP
-        // on GitHub-hosted runners. Paths that normalize to the current directory (or
-        // recursive wildcard root) are also dangerous.
-        return dotDotSegments > 0 || namedSegments == 0;
+        // Pure parent-directory uploads are dangerous. Separately, on GitHub-hosted
+        // runners `$RUNNER_TEMP` commonly sits at a sibling `_temp` directory, so an
+        // escaped path that resolves exactly to `_temp` is also treated as dangerous.
+        return namedSegments == 0
+               || (dotDotSegments > 0 && escapedNamedSegments == 1 && escapedFirstNamedSegmentIsRunnerTemp);
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]

@@ -16096,6 +16096,31 @@ public sealed class RuleInterfaceTests
         await Assert.That(diagnostic.Message).Contains("$RUNNER_TEMP");
     }
 
+    [Test]
+    public async Task RuleRegression_ArtipackedRule_ParentDirectorySingleFileIsNotFlagged()
+    {
+        // A narrow parent-directory file path is not equivalent to sweeping a parent
+        // directory tree or $RUNNER_TEMP. Keep this deferred rather than warning.
+        var yaml = NormalizeYaml(
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - uses: actions/checkout@v6
+                        - uses: actions/upload-artifact@v4.4
+                          with:
+                              name: artifact
+                              path: ../artifact.txt
+            """);
+
+        using var result = new LintEngine([new ArtipackedRule()]).Check(Encoding.UTF8.GetBytes(yaml), "artipacked-parent-single-file.yml");
+        var diagnostics = result.Diagnostics.Where(x => x.RuleId == "artipacked").ToArray();
+
+        await Assert.That(diagnostics).IsEmpty();
+    }
+
     private static async Task AssertRuleCases(IRule rule, string ruleId, RuleCase[] cases, LintConfig? config = null)
     {
         for (var i = 0; i < cases.Length; i++)
