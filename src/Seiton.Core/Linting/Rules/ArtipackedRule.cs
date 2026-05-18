@@ -101,7 +101,7 @@ public sealed class ArtipackedRule() : RuleBase(RuleId.Artipacked)
                 }
 
                 var pathValue = Arena.GetStringValue(pathNode);
-                if (!TryClassifyDangerousPath(pathValue, out var reachesRunnerTemp, out var excludesLegacyCredentialPath))
+                if (!TryClassifyDangerousPath(pathValue, out var reachesRunnerTemp, out var excludesLegacyCredentialPath, out var excludesRunnerTempPath))
                 {
                     continue;
                 }
@@ -116,7 +116,7 @@ public sealed class ArtipackedRule() : RuleBase(RuleId.Artipacked)
                 var mayExposeLegacyCredentials = hasUnsafeLegacyCheckout
                                                  && mayIncludeHiddenFiles
                                                  && !legacyCredentialsExcluded;
-                var mayExposeV6PlusCredentials = hasUnsafeV6PlusCheckout && reachesRunnerTemp;
+                var mayExposeV6PlusCredentials = hasUnsafeV6PlusCheckout && reachesRunnerTemp && !excludesRunnerTempPath;
                 if (!mayExposeLegacyCredentials && !mayExposeV6PlusCredentials)
                 {
                     continue;
@@ -387,10 +387,11 @@ public sealed class ArtipackedRule() : RuleBase(RuleId.Artipacked)
     }
 
     /// <summary>Checks whether the upload path covers the repository root or dangerous parent-like directories.</summary>
-    internal static bool TryClassifyDangerousPath(ReadOnlySpan<byte> path, out bool reachesRunnerTemp, out bool excludesLegacyCredentialPath)
+    internal static bool TryClassifyDangerousPath(ReadOnlySpan<byte> path, out bool reachesRunnerTemp, out bool excludesLegacyCredentialPath, out bool excludesRunnerTempPath)
     {
         reachesRunnerTemp = false;
         excludesLegacyCredentialPath = false;
+        excludesRunnerTempPath = false;
         var hasDangerousLine = false;
 
         // Handle multiline paths: each line is a separate glob. Scan all lines
@@ -409,6 +410,10 @@ public sealed class ArtipackedRule() : RuleBase(RuleId.Artipacked)
                 if (TryClassifyLegacyCredentialExclusion(line))
                 {
                     excludesLegacyCredentialPath = true;
+                }
+                else if (TryClassifyRunnerTempExclusion(line))
+                {
+                    excludesRunnerTempPath = true;
                 }
                 else if (TryClassifyDangerousLine(line, out var lineReachesRunnerTemp))
                 {
@@ -436,6 +441,29 @@ public sealed class ArtipackedRule() : RuleBase(RuleId.Artipacked)
         }
 
         return CouldExcludeLegacyCredentialPath(TrimBytes(line[1..]));
+    }
+
+    private static bool TryClassifyRunnerTempExclusion(ReadOnlySpan<byte> line)
+    {
+        if (line.Length == 0 || line[0] != (byte)'!')
+        {
+            return false;
+        }
+
+        var pattern = TrimBytes(line[1..]);
+        if (pattern.Length == 0)
+        {
+            return false;
+        }
+
+        // Check if the negated pattern targets the runner-temp directory.
+        // e.g. !../../_temp/** explicitly excludes $RUNNER_TEMP content.
+        if (TryClassifyRelativeDirectoryPath(pattern, out _, out var reachesRunnerTemp))
+        {
+            return reachesRunnerTemp;
+        }
+
+        return false;
     }
 
     private static bool CouldExcludeLegacyCredentialPath(ReadOnlySpan<byte> pattern)
@@ -781,6 +809,14 @@ public sealed class ArtipackedRule() : RuleBase(RuleId.Artipacked)
                 if (namedSegments > 0)
                 {
                     namedSegments--;
+                    if (dotDotSegments > 0 && escapedNamedSegments > 0)
+                    {
+                        escapedNamedSegments--;
+                        if (escapedNamedSegments == 0)
+                        {
+                            escapedFirstNamedSegmentIsRunnerTemp = false;
+                        }
+                    }
                 }
                 else
                 {

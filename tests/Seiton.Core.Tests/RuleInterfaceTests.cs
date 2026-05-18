@@ -15487,7 +15487,8 @@ public sealed class RuleInterfaceTests
 
         await Assert.That(diagnostics).HasSingleItem();
         await Assert.That(diagnostics[0].Severity).IsEqualTo(DiagnosticSeverity.Error);
-        await Assert.That(diagnostics[0].Message).Contains("artifact-b").Or.Contains("persist-credentials: false");
+        // Verify the diagnostic targets artifact-b's path (line 22 = "path: |", content starts line 23)
+        await Assert.That(diagnostics[0].Location.StartLine).IsEqualTo(23);
     }
 
     [Test]
@@ -15543,6 +15544,33 @@ public sealed class RuleInterfaceTests
 
         await Assert.That(diagnostic.Severity).IsEqualTo(DiagnosticSeverity.Warning);
         await Assert.That(diagnostic.Message).Contains("$RUNNER_TEMP");
+    }
+
+    [Test]
+    public async Task RuleRegression_ArtipackedRule_NegativePatternExcludingRunnerTempSuppressesV6Warning()
+    {
+        // !../../_temp/** after ../.. explicitly excludes $RUNNER_TEMP content,
+        // so the v6+ credential exposure warning should be suppressed.
+        var yaml = NormalizeYaml(
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - uses: actions/checkout@v6
+                        - uses: actions/upload-artifact@v4.4
+                          with:
+                              name: artifact
+                              path: |
+                                  ../..
+                                  !../../_temp/**
+            """);
+
+        using var result = new LintEngine([new ArtipackedRule()]).Check(Encoding.UTF8.GetBytes(yaml), "artipacked-v6-parent-with-temp-exclusion.yml");
+        var diagnostics = result.Diagnostics.Where(x => x.RuleId == "artipacked").ToArray();
+
+        await Assert.That(diagnostics).IsEmpty();
     }
 
     [Test]
@@ -16335,6 +16363,33 @@ public sealed class RuleInterfaceTests
             """);
 
         using var result = new LintEngine([new ArtipackedRule()]).Check(Encoding.UTF8.GetBytes(yaml), "artipacked-parent-temp-recursive-star-glob.yml");
+        var diagnostic = result.Diagnostics.Single(x => x.RuleId == "artipacked");
+
+        await Assert.That(diagnostic.Severity).IsEqualTo(DiagnosticSeverity.Warning);
+        await Assert.That(diagnostic.Message).Contains("$RUNNER_TEMP");
+    }
+
+    [Test]
+    public async Task RuleRegression_ArtipackedRule_IntermediateBacktrackToRunnerTempIsDetected()
+    {
+        // ../../foo/../_temp normalizes to ../../_temp — should reach $RUNNER_TEMP.
+        // Regression: the intermediate `foo` segment left escapedNamedSegments stale
+        // so that the subsequent `_temp` was counted as the 2nd escaped segment.
+        var yaml = NormalizeYaml(
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - uses: actions/checkout@v6
+                        - uses: actions/upload-artifact@v4.4
+                          with:
+                              name: artifact
+                              path: ../../foo/../_temp
+            """);
+
+        using var result = new LintEngine([new ArtipackedRule()]).Check(Encoding.UTF8.GetBytes(yaml), "artipacked-parent-backtrack-temp.yml");
         var diagnostic = result.Diagnostics.Single(x => x.RuleId == "artipacked");
 
         await Assert.That(diagnostic.Severity).IsEqualTo(DiagnosticSeverity.Warning);
