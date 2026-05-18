@@ -201,12 +201,22 @@ public sealed class ArtipackedRule() : RuleBase(RuleId.Artipacked)
 
     private bool MayIncludeHiddenFiles(ExecAction actionExec, ReadOnlySpan<byte> usesText, byte[] utf8Yaml)
     {
+        StringNodeId includeHiddenFilesNode = default;
+        var hasExplicitIncludeHiddenFiles = actionExec.Inputs is not null
+            && actionExec.Inputs.Value.TryGetValue(utf8Yaml, "include-hidden-files"u8, out includeHiddenFilesNode);
+
         if (!TryExtractMajorAndMinorVersion(usesText, out var majorVersion, out var minorVersion, out var hasMinorVersion))
+        {
+            return !hasExplicitIncludeHiddenFiles || MayExplicitlyIncludeHiddenFiles(includeHiddenFilesNode);
+        }
+
+        if (majorVersion < 4)
         {
             return true;
         }
 
-        if (majorVersion < 4)
+        // upload-artifact v4.0-v4.3 included hidden files by default (include-hidden-files input did not exist).
+        if (majorVersion == 4 && hasMinorVersion && minorVersion < 4)
         {
             return true;
         }
@@ -215,22 +225,20 @@ public sealed class ArtipackedRule() : RuleBase(RuleId.Artipacked)
         // Newer major versions are treated conservatively as unknown.
         if (majorVersion > 4)
         {
-            return true;
+            return !hasExplicitIncludeHiddenFiles || MayExplicitlyIncludeHiddenFiles(includeHiddenFilesNode);
         }
 
-        // upload-artifact v4.0-v4.3 included hidden files by default (include-hidden-files input did not exist).
         // v4.4+ excludes hidden files by default. @v4 (no minor) is a floating tag pointing to latest v4.x (safe).
-        if (majorVersion == 4 && hasMinorVersion && minorVersion < 4)
-        {
-            return true;
-        }
-
-        if (actionExec.Inputs is null
-            || !actionExec.Inputs.Value.TryGetValue(utf8Yaml, "include-hidden-files"u8, out var includeHiddenFilesNode))
+        if (!hasExplicitIncludeHiddenFiles)
         {
             return false;
         }
 
+        return MayExplicitlyIncludeHiddenFiles(includeHiddenFilesNode);
+    }
+
+    private bool MayExplicitlyIncludeHiddenFiles(StringNodeId includeHiddenFilesNode)
+    {
         if (ExpressionScanHelpers.ContainsExpressionMarker(includeHiddenFilesNode, Arena))
         {
             return true;

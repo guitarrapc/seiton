@@ -15061,6 +15061,54 @@ public sealed class RuleInterfaceTests
     }
 
     [Test]
+    public async Task RuleRegression_ArtipackedRule_UploadArtifactV5_ExplicitlyDisablingHiddenFilesSuppressesLegacyCase()
+    {
+        var yaml = NormalizeYaml(
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - uses: actions/checkout@v4
+                        - uses: actions/upload-artifact@v5
+                          with:
+                              name: artifact
+                              path: .
+                              include-hidden-files: false
+            """);
+
+        using var result = new LintEngine([new ArtipackedRule()]).Check(Encoding.UTF8.GetBytes(yaml), "artipacked-v5-hidden-disabled.yml");
+        var diagnostics = result.Diagnostics.Where(x => x.RuleId == "artipacked").ToArray();
+
+        await Assert.That(diagnostics).IsEmpty();
+    }
+
+    [Test]
+    public async Task RuleRegression_ArtipackedRule_UnknownUploadArtifactRef_ExplicitlyDisablingHiddenFilesSuppressesLegacyCase()
+    {
+        var yaml = NormalizeYaml(
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - uses: actions/checkout@v4
+                        - uses: actions/upload-artifact@main
+                          with:
+                              name: artifact
+                              path: .
+                              include-hidden-files: false
+            """);
+
+        using var result = new LintEngine([new ArtipackedRule()]).Check(Encoding.UTF8.GetBytes(yaml), "artipacked-main-hidden-disabled.yml");
+        var diagnostics = result.Diagnostics.Where(x => x.RuleId == "artipacked").ToArray();
+
+        await Assert.That(diagnostics).IsEmpty();
+    }
+
+    [Test]
     public async Task RuleRegression_ArtipackedRule_BothCheckoutsParentDirNoHiddenIsWarning()
     {
         // When both legacy and v6+ checkout are present but hidden files excluded,
