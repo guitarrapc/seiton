@@ -1,4 +1,5 @@
-﻿using System.Runtime.CompilerServices;
+﻿using System.Buffers;
+using System.Runtime.CompilerServices;
 using Seiton.Core.Generated;
 using Seiton.Core.Parsing;
 using Seiton.Core.Parsing.Ast;
@@ -37,89 +38,109 @@ public sealed class ArtipackedRule() : RuleBase(RuleId.Artipacked)
         var utf8Yaml = Config.Utf8Yaml;
         var hasUnsafeLegacyCheckout = false;
         var hasUnsafeV6PlusCheckout = false;
+        ExecAction[]? unsafeLegacyCheckouts = null;
+        var unsafeLegacyCheckoutCount = 0;
 
-        for (var i = 0; i < steps.Count; i++)
+        try
         {
-            if (steps[i].Exec is not ExecAction actionExec)
+            for (var i = 0; i < steps.Count; i++)
             {
-                continue;
-            }
-
-            var usesText = Arena.GetStringValue(actionExec.Uses);
-            if (!PopularActions.TryGet(usesText, out var actionSpec))
-            {
-                continue;
-            }
-
-            if (actionSpec.Id == PopularActions.ActionId.ActionsCheckout)
-            {
-                if (HasPersistCredentialsFalse(actionExec, utf8Yaml))
+                if (steps[i].Exec is not ExecAction actionExec)
                 {
                     continue;
                 }
 
-                if (TryExtractMajorAndMinorVersion(usesText, out var checkoutMajor, out _, out _))
+                var usesText = Arena.GetStringValue(actionExec.Uses);
+                if (!PopularActions.TryGet(usesText, out var actionSpec))
                 {
-                    if (checkoutMajor >= 6)
+                    continue;
+                }
+
+                if (actionSpec.Id == PopularActions.ActionId.ActionsCheckout)
+                {
+                    if (HasPersistCredentialsFalse(actionExec, utf8Yaml))
                     {
-                        hasUnsafeV6PlusCheckout = true;
+                        continue;
+                    }
+
+                    if (TryExtractMajorAndMinorVersion(usesText, out var checkoutMajor, out _, out _))
+                    {
+                        if (checkoutMajor >= 6)
+                        {
+                            hasUnsafeV6PlusCheckout = true;
+                        }
+                        else
+                        {
+                            hasUnsafeLegacyCheckout = true;
+                            unsafeLegacyCheckouts ??= ArrayPool<ExecAction>.Shared.Rent(steps.Count);
+                            unsafeLegacyCheckouts[unsafeLegacyCheckoutCount++] = actionExec;
+                        }
                     }
                     else
                     {
+                        // Cannot determine version (SHA/branch ref) — conservatively assume both risks
                         hasUnsafeLegacyCheckout = true;
+                        hasUnsafeV6PlusCheckout = true;
+                        unsafeLegacyCheckouts ??= ArrayPool<ExecAction>.Shared.Rent(steps.Count);
+                        unsafeLegacyCheckouts[unsafeLegacyCheckoutCount++] = actionExec;
                     }
+
+                    continue;
+                }
+
+                if (!hasUnsafeLegacyCheckout && !hasUnsafeV6PlusCheckout)
+                {
+                    continue;
+                }
+
+                if (actionSpec.Id != PopularActions.ActionId.ActionsUploadArtifact
+                    || actionExec.Inputs is null
+                    || !actionExec.Inputs.Value.TryGetValue(utf8Yaml, "path"u8, out var pathNode))
+                {
+                    continue;
+                }
+
+                var pathValue = Arena.GetStringValue(pathNode);
+                if (!TryClassifyDangerousPath(pathValue, out var exposesParentDirectory, out var excludesLegacyCredentialPath))
+                {
+                    continue;
+                }
+
+                var mayIncludeHiddenFiles = MayIncludeHiddenFiles(actionExec, usesText, utf8Yaml);
+                var legacyCredentialsExcluded = excludesLegacyCredentialPath
+                                                && AreTrackedLegacyCheckoutsExcludedByUploadPath(
+                                                    pathValue,
+                                                    unsafeLegacyCheckouts!,
+                                                    unsafeLegacyCheckoutCount,
+                                                    utf8Yaml);
+                var mayExposeLegacyCredentials = hasUnsafeLegacyCheckout
+                                                 && mayIncludeHiddenFiles
+                                                 && !legacyCredentialsExcluded;
+                var mayExposeV6PlusCredentials = hasUnsafeV6PlusCheckout && exposesParentDirectory;
+                if (!mayExposeLegacyCredentials && !mayExposeV6PlusCredentials)
+                {
+                    continue;
+                }
+
+                // Error when legacy checkout credentials (.git/config) are actually exposed
+                // (hidden files included); warning otherwise (only v6+ $RUNNER_TEMP concern).
+                var reportAsWarning = !mayExposeLegacyCredentials;
+                var message = GetCachedMessage(Arena.GetStringSlice(pathNode), reportAsWarning, utf8Yaml);
+                if (reportAsWarning)
+                {
+                    AddStepWarning(steps[i], message, GetRange(pathNode));
                 }
                 else
                 {
-                    // Cannot determine version (SHA/branch ref) — conservatively assume both risks
-                    hasUnsafeLegacyCheckout = true;
-                    hasUnsafeV6PlusCheckout = true;
+                    AddStepError(steps[i], message, GetRange(pathNode));
                 }
-
-                continue;
             }
-
-            if (!hasUnsafeLegacyCheckout && !hasUnsafeV6PlusCheckout)
+        }
+        finally
+        {
+            if (unsafeLegacyCheckouts is not null)
             {
-                continue;
-            }
-
-            if (actionSpec.Id != PopularActions.ActionId.ActionsUploadArtifact
-                || actionExec.Inputs is null
-                || !actionExec.Inputs.Value.TryGetValue(utf8Yaml, "path"u8, out var pathNode))
-            {
-                continue;
-            }
-
-            var pathValue = Arena.GetStringValue(pathNode);
-            if (!TryClassifyDangerousPath(pathValue, out var exposesParentDirectory, out var excludesLegacyCredentialPath))
-            {
-                continue;
-            }
-
-            var mayIncludeHiddenFiles = MayIncludeHiddenFiles(actionExec, usesText, utf8Yaml);
-            var legacyCredentialsExcluded = excludesLegacyCredentialPath
-                                            && ArePrecedingLegacyCheckoutsExcludedByUploadPath(steps, i, pathValue, utf8Yaml);
-            var mayExposeLegacyCredentials = hasUnsafeLegacyCheckout
-                                             && mayIncludeHiddenFiles
-                                             && !legacyCredentialsExcluded;
-            var mayExposeV6PlusCredentials = hasUnsafeV6PlusCheckout && exposesParentDirectory;
-            if (!mayExposeLegacyCredentials && !mayExposeV6PlusCredentials)
-            {
-                continue;
-            }
-
-            // Error when legacy checkout credentials (.git/config) are actually exposed
-            // (hidden files included); warning otherwise (only v6+ $RUNNER_TEMP concern).
-            var reportAsWarning = !mayExposeLegacyCredentials;
-            var message = GetCachedMessage(Arena.GetStringSlice(pathNode), reportAsWarning, utf8Yaml);
-            if (reportAsWarning)
-            {
-                AddStepWarning(steps[i], message, GetRange(pathNode));
-            }
-            else
-            {
-                AddStepError(steps[i], message, GetRange(pathNode));
+                ArrayPool<ExecAction>.Shared.Return(unsafeLegacyCheckouts, clearArray: true);
             }
         }
     }
@@ -137,29 +158,15 @@ public sealed class ArtipackedRule() : RuleBase(RuleId.Artipacked)
                && IsBooleanFalse(value);
     }
 
-    private bool ArePrecedingLegacyCheckoutsExcludedByUploadPath(IReadOnlyList<Step> steps, int uploadStepIndex, ReadOnlySpan<byte> uploadPath, byte[] utf8Yaml)
+    private bool AreTrackedLegacyCheckoutsExcludedByUploadPath(
+        ReadOnlySpan<byte> uploadPath,
+        ExecAction[] unsafeLegacyCheckouts,
+        int unsafeLegacyCheckoutCount,
+        byte[] utf8Yaml)
     {
-        for (var i = 0; i < uploadStepIndex; i++)
+        for (var i = 0; i < unsafeLegacyCheckoutCount; i++)
         {
-            if (steps[i].Exec is not ExecAction actionExec)
-            {
-                continue;
-            }
-
-            var usesText = Arena.GetStringValue(actionExec.Uses);
-            if (!PopularActions.TryGet(usesText, out var actionSpec)
-                || actionSpec.Id != PopularActions.ActionId.ActionsCheckout
-                || HasPersistCredentialsFalse(actionExec, utf8Yaml))
-            {
-                continue;
-            }
-
-            if (TryExtractMajorAndMinorVersion(usesText, out var checkoutMajor, out _, out _) && checkoutMajor >= 6)
-            {
-                continue;
-            }
-
-            if (!IsLegacyCheckoutPathExcludedByUploadPath(uploadPath, actionExec, utf8Yaml))
+            if (!IsLegacyCheckoutPathExcludedByUploadPath(uploadPath, unsafeLegacyCheckouts[i], utf8Yaml))
             {
                 return false;
             }

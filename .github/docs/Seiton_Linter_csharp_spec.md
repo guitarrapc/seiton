@@ -281,7 +281,7 @@ The current default rule scope in C# is:
 | `run-inputs-context-direct-use` | — |
 | `secrets-whole-context-access` | Checked in `run:`, `env:`, and `with:` sinks at step and job level. |
 | `checkout-persist-credentials` | — |
-| `artipacked` | Implemented as `VisitJobPost` step-order scan. Tracks unsafe legacy/v6+ checkout state, re-evaluates exclusion lines against preceding checkouts. Uses `LocalActionOutputResolver` for deferred scope. |
+| `artipacked` | Implemented as `VisitJobPost` step-order scan. Tracks unsafe legacy/v6+ checkout state and re-evaluates exclusion lines against tracked legacy checkouts using job-local temporary storage. Deferred scope does not implement checkout `with.path` correlation. |
 | `workflow-secrets` | — |
 | `job-secrets` | — |
 | `action-shell-is-required` | Scoped to action-metadata documents. |
