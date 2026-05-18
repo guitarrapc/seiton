@@ -840,12 +840,19 @@ public sealed class ArtipackedRule() : RuleBase(RuleId.Artipacked)
             }
         }
 
-        reachesRunnerTemp = dotDotSegments >= 2
-                           || (dotDotSegments > 0 && escapedNamedSegments == 1 && escapedFirstNamedSegmentIsRunnerTemp);
+        // On standard GitHub-hosted runners the workspace is at /home/runner/work/owner/repo
+        // and $RUNNER_TEMP is at /home/runner/work/_temp (2 levels above workspace).
+        // "Reaches runner temp" requires EITHER:
+        //   (a) sweeping the work-dir level (2+ parent escapes, no constraining named segment), OR
+        //   (b) explicitly targeting _temp at the correct depth (2+ parent escapes into _temp).
+        // A path like ../../some-dir constrains to a specific non-temp sibling and does NOT
+        // reach runner temp. Similarly, ../_temp is only 1 level up — not the real $RUNNER_TEMP.
+        reachesRunnerTemp = (dotDotSegments >= 2 && namedSegments == 0)
+                           || (dotDotSegments >= 2 && escapedNamedSegments == 1 && escapedFirstNamedSegmentIsRunnerTemp);
 
-        // Pure parent-directory uploads are dangerous. Separately, on GitHub-hosted
-        // runners `$RUNNER_TEMP` commonly sits at a sibling `_temp` directory, so an
-        // escaped path that resolves exactly to `_temp` is also treated as dangerous.
+        // Pure parent-directory uploads (no named segments) are dangerous because they
+        // recursively include the workspace and its .git/config. Paths that reach
+        // $RUNNER_TEMP are also dangerous for v6+ credential storage.
         return namedSegments == 0 || reachesRunnerTemp;
     }
 
