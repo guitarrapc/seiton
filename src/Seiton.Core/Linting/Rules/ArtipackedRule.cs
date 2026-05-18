@@ -92,7 +92,7 @@ public sealed class ArtipackedRule() : RuleBase(RuleId.Artipacked)
 
             var mayIncludeHiddenFiles = MayIncludeHiddenFiles(actionExec, usesText, utf8Yaml);
             var mayExposeLegacyCredentials = hasUnsafeLegacyCheckout && mayIncludeHiddenFiles && !excludesLegacyCredentialPath;
-            var mayExposeV6PlusCredentials = hasUnsafeV6PlusCheckout && (mayIncludeHiddenFiles || exposesParentDirectory);
+            var mayExposeV6PlusCredentials = hasUnsafeV6PlusCheckout && exposesParentDirectory;
             if (!mayExposeLegacyCredentials && !mayExposeV6PlusCredentials)
             {
                 continue;
@@ -134,6 +134,13 @@ public sealed class ArtipackedRule() : RuleBase(RuleId.Artipacked)
         }
 
         if (majorVersion < 4)
+        {
+            return true;
+        }
+
+        // Hidden-file defaults are only modeled for upload-artifact v4.
+        // Newer major versions are treated conservatively as unknown.
+        if (majorVersion > 4)
         {
             return true;
         }
@@ -344,21 +351,107 @@ public sealed class ArtipackedRule() : RuleBase(RuleId.Artipacked)
     private static bool ExcludesLegacyCredentialPath(ReadOnlySpan<byte> pattern)
     {
         pattern = SkipCurrentDirectoryPrefixes(pattern);
-        if (MatchesLegacyCredentialExclusion(pattern))
+
+        if (MatchesNormalizedLegacyCredentialExclusion(pattern))
         {
             return true;
         }
 
-        while (pattern.StartsWith("**/"u8) || pattern.StartsWith("**\\"u8))
+        if (TryStripGitHubWorkspacePrefix(pattern, out var workspaceRelativePattern))
         {
-            pattern = SkipCurrentDirectoryPrefixes(pattern[3..]);
-            if (MatchesLegacyCredentialExclusion(pattern))
+            workspaceRelativePattern = SkipCurrentDirectoryPrefixes(workspaceRelativePattern);
+            if (MatchesNormalizedLegacyCredentialExclusion(workspaceRelativePattern))
             {
                 return true;
             }
         }
 
         return false;
+    }
+
+    private static bool MatchesNormalizedLegacyCredentialExclusion(ReadOnlySpan<byte> pattern)
+    {
+        Span<byte> segments = stackalloc byte[16];
+        var segmentCount = 0;
+
+        while (pattern.Length > 0)
+        {
+            var separatorIndex = FindPathSeparator(pattern);
+            var segment = separatorIndex >= 0 ? pattern[..separatorIndex] : pattern;
+            pattern = separatorIndex >= 0 ? pattern[(separatorIndex + 1)..] : [];
+
+            segment = TrimBytes(segment);
+            if (segment.Length == 0 || segment.SequenceEqual("."u8))
+            {
+                continue;
+            }
+
+            if (segment.SequenceEqual(".."u8))
+            {
+                if (segmentCount == 0)
+                {
+                    return false;
+                }
+
+                segmentCount--;
+                continue;
+            }
+
+            if (ContainsExpressionMarker(segment))
+            {
+                return false;
+            }
+
+            byte segmentKind;
+            if (IsRecursiveWildcardSegment(segment))
+            {
+                segmentKind = 1;
+            }
+            else if (segment.SequenceEqual(".git"u8))
+            {
+                segmentKind = 2;
+            }
+            else if (segment.SequenceEqual("config"u8))
+            {
+                segmentKind = 3;
+            }
+            else
+            {
+                segmentKind = 4;
+            }
+
+            if (segmentCount == segments.Length)
+            {
+                return false;
+            }
+
+            segments[segmentCount++] = segmentKind;
+        }
+
+        var start = 0;
+        while (start < segmentCount && segments[start] == 1)
+        {
+            start++;
+        }
+
+        if (start >= segmentCount || segments[start] != 2)
+        {
+            return false;
+        }
+
+        var remaining = segmentCount - start;
+        if (remaining == 1)
+        {
+            return true;
+        }
+
+        var nextSegment = segments[start + 1];
+        if (nextSegment == 1)
+        {
+            return remaining == 2;
+        }
+
+        return nextSegment == 3 && remaining == 2;
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -370,6 +463,37 @@ public sealed class ArtipackedRule() : RuleBase(RuleId.Artipacked)
         }
 
         return pattern;
+    }
+
+    private static bool TryStripGitHubWorkspacePrefix(ReadOnlySpan<byte> value, out ReadOnlySpan<byte> suffix)
+    {
+        suffix = default;
+
+        var trimmed = TrimBytes(value);
+        if (trimmed.Length < 5 || !trimmed.StartsWith("${{"u8))
+        {
+            return false;
+        }
+
+        var closeIndex = trimmed.IndexOf("}}"u8);
+        if (closeIndex < 0)
+        {
+            return false;
+        }
+
+        var inner = TrimBytes(trimmed.Slice(3, closeIndex - 3));
+        if (!IsGitHubWorkspaceReference(inner))
+        {
+            return false;
+        }
+
+        suffix = TrimBytes(trimmed[(closeIndex + 2)..]);
+        while (suffix.Length > 0 && (suffix[0] == (byte)'/' || suffix[0] == (byte)'\\'))
+        {
+            suffix = suffix[1..];
+        }
+
+        return true;
     }
 
     private static bool MatchesLegacyCredentialExclusion(ReadOnlySpan<byte> pattern)
@@ -446,6 +570,7 @@ public sealed class ArtipackedRule() : RuleBase(RuleId.Artipacked)
     private static bool TryClassifyRelativeDirectoryPath(ReadOnlySpan<byte> path, out int dotDotSegments)
     {
         dotDotSegments = 0;
+        var namedSegments = 0;
 
         while (path.Length > 0)
         {
@@ -460,7 +585,14 @@ public sealed class ArtipackedRule() : RuleBase(RuleId.Artipacked)
 
             if (segment.SequenceEqual(".."u8))
             {
-                dotDotSegments++;
+                if (namedSegments > 0)
+                {
+                    namedSegments--;
+                }
+                else
+                {
+                    dotDotSegments++;
+                }
                 continue;
             }
 
@@ -472,16 +604,22 @@ public sealed class ArtipackedRule() : RuleBase(RuleId.Artipacked)
                 return false;
             }
 
-            // Glob metacharacters can match arbitrary root content, including hidden files under .git.
-            if (ContainsGlobMetacharacters(segment))
+            // Only recursive root globs (`**`) are treated as equivalent to uploading the
+            // current/parent directory. Narrow file globs like `*.txt` are not.
+            if (IsRecursiveWildcardSegment(segment))
             {
+                if (namedSegments > 0)
+                {
+                    return false;
+                }
+
                 continue;
             }
 
-            return false;
+            namedSegments++;
         }
 
-        return true;
+        return namedSegments == 0;
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -491,77 +629,99 @@ public sealed class ArtipackedRule() : RuleBase(RuleId.Artipacked)
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    private static bool ContainsGlobMetacharacters(ReadOnlySpan<byte> segment)
-    {
-        for (var i = 0; i < segment.Length; i++)
-        {
-            var b = segment[i];
-            if (b is (byte)'*' or (byte)'?' or (byte)'[' or (byte)']' or (byte)'{' or (byte)'}')
-            {
-                return true;
-            }
-        }
-
-        return false;
-    }
+    private static bool IsRecursiveWildcardSegment(ReadOnlySpan<byte> segment) => segment.SequenceEqual("**"u8);
 
     private static bool TryClassifyGitHubWorkspaceExpression(ReadOnlySpan<byte> value, out bool exposesParentDirectory)
     {
         exposesParentDirectory = false;
 
-        // Match ${{ github.workspace }} with variable internal whitespace and optional trailing
-        // separator, /., or /.. suffixes. All of these resolve to the workspace or its parent.
-        var trimmed = value;
-
-        while (true)
-        {
-            if (trimmed.Length > 0 && (trimmed[^1] == (byte)'/' || trimmed[^1] == (byte)'\\'))
-            {
-                trimmed = trimmed[..^1];
-                continue;
-            }
-
-            if (trimmed.Length >= 2 && trimmed[^1] == (byte)'.' && (trimmed[^2] == (byte)'/' || trimmed[^2] == (byte)'\\'))
-            {
-                trimmed = trimmed[..^2];
-                continue;
-            }
-
-            // Strip /.. or \.. (parent directory traversal)
-            if (trimmed.Length >= 3 && trimmed[^1] == (byte)'.' && trimmed[^2] == (byte)'.' && (trimmed[^3] == (byte)'/' || trimmed[^3] == (byte)'\\'))
-            {
-                exposesParentDirectory = true;
-                trimmed = trimmed[..^3];
-                continue;
-            }
-
-            break;
-        }
-
-        // Must start with "${{" and end with "}}"
-        if (trimmed.Length < 5)
+        var trimmed = TrimBytes(value);
+        if (trimmed.Length < 5 || !trimmed.StartsWith("${{"u8))
         {
             return false;
         }
 
-        if (trimmed[0] != (byte)'$' || trimmed[1] != (byte)'{' || trimmed[2] != (byte)'{')
+        var closeIndex = trimmed.IndexOf("}}"u8);
+        if (closeIndex < 0)
         {
             return false;
         }
 
-        if (trimmed[^1] != (byte)'}' || trimmed[^2] != (byte)'}')
+        var inner = TrimBytes(trimmed.Slice(3, closeIndex - 3));
+        if (!IsGitHubWorkspaceReference(inner))
         {
             return false;
         }
 
-        // Extract inner content between ${{ and }}
-        var inner = trimmed.Slice(3, trimmed.Length - 5);
+        var suffix = TrimBytes(trimmed[(closeIndex + 2)..]);
+        while (suffix.Length > 0 && (suffix[0] == (byte)'/' || suffix[0] == (byte)'\\'))
+        {
+            suffix = suffix[1..];
+        }
 
-        // Trim whitespace
-        inner = TrimBytes(inner);
+        if (suffix.Length == 0)
+        {
+            return true;
+        }
 
-        // Should be "github.workspace"
-        return inner.SequenceEqual("github.workspace"u8);
+        if (!TryClassifyRelativeDirectoryPath(suffix, out var suffixDotDotSegments))
+        {
+            return false;
+        }
+
+        exposesParentDirectory = suffixDotDotSegments >= 1;
+        return true;
+    }
+
+    private static bool IsGitHubWorkspaceReference(ReadOnlySpan<byte> expression)
+    {
+        if (!expression.StartsWith("github"u8))
+        {
+            return false;
+        }
+
+        expression = TrimBytes(expression[6..]);
+        if (expression.Length == 0)
+        {
+            return false;
+        }
+
+        if (expression[0] == (byte)'.')
+        {
+            return TrimBytes(expression[1..]).SequenceEqual("workspace"u8);
+        }
+
+        if (expression[0] != (byte)'[')
+        {
+            return false;
+        }
+
+        expression = TrimBytes(expression[1..]);
+        if (expression.Length < 3)
+        {
+            return false;
+        }
+
+        var quote = expression[0];
+        if (quote != (byte)'\'' && quote != (byte)'"')
+        {
+            return false;
+        }
+
+        expression = expression[1..];
+        if (!expression.StartsWith("workspace"u8))
+        {
+            return false;
+        }
+
+        expression = expression[9..];
+        if (expression.Length == 0 || expression[0] != quote)
+        {
+            return false;
+        }
+
+        expression = TrimBytes(expression[1..]);
+        return expression.Length == 1 && expression[0] == (byte)']';
     }
 
     /// <summary>Finds the first path separator (/ or \) in the span, or -1 if not found.</summary>

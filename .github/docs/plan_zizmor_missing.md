@@ -401,13 +401,13 @@ zizmor は tree-sitter（bash/pwsh 完全パーサー）を使用しているが
 - **検出対象**: `actions/checkout`（persist-credentials 未設定）と `actions/upload-artifact`（危険パスをアップロード）の組み合わせによる credential 漏洩リスク
 - **ルールID**: `artipacked`
 - **デフォルト**: on
-- **severity**: error（非v6+ checkout + 隠しファイルを含む危険パス＝`.git/config` 露出）、warning（v6+ checkout + 親ディレクトリ upload＝`$RUNNER_TEMP` 到達リスク、または非v6+でも隠しファイル非対象の場合）
+- **severity**: error（非v6+ checkout + 隠しファイルを含む危険パス＝`.git/config` 露出）、warning（v6+ または unknown-version checkout + 親ディレクトリ upload＝`$RUNNER_TEMP` 到達リスク）
 - **検査ノード**: job 内の全 steps を線形スキャン
 - **判定ロジック**:
   1. job 内の steps を順に走査し、`actions/checkout` の使用を検出
   2. `persist-credentials: false` が設定されていない checkout をマーク
   3. 同一 job 内で `actions/upload-artifact` の使用を検出
-  4. upload-artifact の `path` が `.`, `..`, `./**`, `**`, `${{ github.workspace }}`, `${{ github.workspace }}/..` 等の危険パスの場合に報告。ただし `!.git/**` / `!.git/config` のように legacy の `.git/config` を明示除外している場合はその legacy ケースを抑制する
+  4. upload-artifact の `path` が `.`, `..`, `./**`, `**`, `${{ github.workspace }}`, `${{ github.workspace }}/**`, `${{ github.workspace }}/..` 等の危険パスの場合に報告。ただし `!.git/**` / `!.git/config` のように legacy の `.git/config` を明示除外している場合はその legacy ケースを抑制する
   5. checkout v6+ では credential 保存先が `$RUNNER_TEMP` に変わるため severity を下げる。ただし親ディレクトリ upload は hidden-files default off でも `$RUNNER_TEMP` に届きうるため報告する
 - **既存ルールとの関係**: `checkout-persist-credentials` は checkout 単体の検出。`artipacked` は checkout + upload の組み合わせ検出。重複する診断は `artipacked` 側で抑制する設計を検討
 - **パフォーマンス影響**: 低。ステップの線形スキャンのみ
@@ -420,7 +420,7 @@ zizmor は tree-sitter（bash/pwsh 完全パーサー）を使用しているが
 | 1 | checkout（persist-credentials 未設定）+ upload-artifact（path: `.`） | error |
 | 2 | checkout（persist-credentials: false）+ upload-artifact（path: `.`） | OK |
 | 3 | checkout（persist-credentials 未設定）+ upload-artifact（path: `dist/`） | OK（安全パス） |
-| 4 | checkout v6+（persist-credentials 未設定）+ upload-artifact（path: `.`） | warning（severity 低下） |
+| 4 | checkout v6+（persist-credentials 未設定）+ upload-artifact（path: `../..`） | warning（severity 低下） |
 | 5 | checkout のみ（upload-artifact なし） | OK（`checkout-persist-credentials` が別途検出） |
 | 6 | upload-artifact のみ（checkout なし） | OK |
 
@@ -434,10 +434,10 @@ zizmor は tree-sitter（bash/pwsh 完全パーサー）を使用しているが
 **実装メモ**:
 - `ArtipackedRule` は `checkout-persist-credentials` とは独立したルールとして実装（統合しない）
 - `VisitJobPost` では `job.Steps` を順に走査し、unsafe checkout の後に現れる危険な `upload-artifact` のみを報告（upload-before-checkout は報告しない）
-- 危険パス判定: `.`, `..`, `./**`, `**`, `${{ github.workspace }}`, `${{ github.workspace }}/..` などの root / parent / workspace 系パターン（各行を個別チェック）。`!.git/**` / `!.git/config` は legacy `.git/config` 露出を抑制
+- 危険パス判定: `.`, `..`, `./**`, `**`, `${{ github.workspace }}`, `${{ github.workspace }}/**`, `${{ github.workspace }}/..` などの root / parent / workspace 系パターン（各行を個別チェック）。`!.git/**` / `!.git/config` は legacy `.git/config` 露出を抑制
 - checkout バージョン判定: leading zero のないセマンティックバージョン `@vN[.M[.P]]` のみ静的判定。SHA pin や `@v06` のような arbitrary tag は unknown（非 v6+扱い）
 - diagnostic は upload-artifact の `path` 値位置に報告
-- severity: error（非v6+ + 隠しファイル含む＝`.git/config` 露出）、warning（v6+ + 親dir＝`$RUNNER_TEMP` 到達、または非v6+でも隠しファイル非対象）
+- severity: error（非v6+ + 隠しファイル含む＝`.git/config` 露出）、warning（v6+ / unknown-version + 親dir＝`$RUNNER_TEMP` 到達）
 - バージョン ref に任意サフィックス（`@v6-legacy`, `@v4.4-legacy` 等）がある場合は unknown ref として保守的に扱う（非 v6+、unsafe minor version）
 - パッチバージョン（`@v4.6.2`）は受け入れ、メジャー.マイナーとして判定する（`@v4.6.2` → v4.6 → safe）
 

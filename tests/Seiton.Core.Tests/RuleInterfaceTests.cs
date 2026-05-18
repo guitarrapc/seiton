@@ -13910,9 +13910,10 @@ public sealed class RuleInterfaceTests
                               path: dist/
             """,
             []),
-            // Case 4: checkout v6+ (no persist-credentials) + upload-artifact v4 (path: ., include-hidden-files: true) → warning (severity lowered)
+            // Case 4: checkout v6+ (no persist-credentials) + upload-artifact v4 (path: .) is safe.
+            // v6+ credentials live under $RUNNER_TEMP, so current-dir upload does not reach them.
             new RuleCase(
-            "ng-checkout-v6-upload-dot",
+            "ok-checkout-v6-upload-dot-hidden",
             """
             on: push
             jobs:
@@ -13926,9 +13927,9 @@ public sealed class RuleInterfaceTests
                               path: .
                               include-hidden-files: true
             """,
-            ["upload-artifact with path '.'", "v6+"]),
+            []),
             new RuleCase(
-            "ng-checkout-uppercase-v6-upload-dot",
+            "ok-checkout-uppercase-v6-upload-dot-hidden",
             """
             on: push
             jobs:
@@ -13942,7 +13943,7 @@ public sealed class RuleInterfaceTests
                               path: .
                               include-hidden-files: true
             """,
-            ["upload-artifact with path '.'", "v6+"]),
+                        []),
             // Edge case: checkout @v6-legacy should be treated as non-v6+ (arbitrary ref, error not warning)
             new RuleCase(
             "ng-checkout-v6-legacy-upload-dot",
@@ -13960,9 +13961,9 @@ public sealed class RuleInterfaceTests
                               include-hidden-files: true
             """,
             ["upload-artifact with path '.'", "persist-credentials: false"]),
-            // Edge case: checkout @v6.1 is valid semver v6+, should be warning
+            // Edge case: checkout @v6.1 is valid semver v6+, and current-dir upload remains safe.
             new RuleCase(
-            "ng-checkout-v6-1-upload-dot",
+            "ok-checkout-v6-1-upload-dot-hidden",
             """
             on: push
             jobs:
@@ -13976,7 +13977,7 @@ public sealed class RuleInterfaceTests
                               path: .
                               include-hidden-files: true
             """,
-            ["upload-artifact with path '.'", "v6+"]),
+                        []),
             // Case 5: checkout only (no upload-artifact) → OK
             new RuleCase(
             "ok-checkout-only",
@@ -14675,7 +14676,7 @@ public sealed class RuleInterfaceTests
     }
 
     [Test]
-    public async Task RuleRegression_ArtipackedRule_V6PlusUsesWarningSeverity()
+    public async Task RuleRegression_ArtipackedRule_V6PlusCurrentDirWithHiddenFilesIsSafe()
     {
         var yaml = NormalizeYaml(
             """
@@ -14693,9 +14694,9 @@ public sealed class RuleInterfaceTests
             """);
 
         using var result = new LintEngine([new ArtipackedRule()]).Check(Encoding.UTF8.GetBytes(yaml), "artipacked-v6.yml");
-        var diagnostic = result.Diagnostics.Single(x => x.RuleId == "artipacked");
+        var diagnostics = result.Diagnostics.Where(x => x.RuleId == "artipacked").ToArray();
 
-        await Assert.That(diagnostic.Severity).IsEqualTo(DiagnosticSeverity.Warning);
+        await Assert.That(diagnostics).IsEmpty();
     }
 
     [Test]
@@ -14876,6 +14877,32 @@ public sealed class RuleInterfaceTests
     }
 
     [Test]
+    public async Task RuleRegression_ArtipackedRule_QuotedPersistCredentialsFalse()
+    {
+        var yaml = NormalizeYaml(
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - uses: actions/checkout@v4
+                          with:
+                              persist-credentials: 'false'
+                        - uses: actions/upload-artifact@v4
+                          with:
+                              name: artifact
+                              path: .
+                              include-hidden-files: true
+            """);
+
+        using var result = new LintEngine([new ArtipackedRule()]).Check(Encoding.UTF8.GetBytes(yaml), "artipacked-quoted-persist-false.yml");
+        var diagnostics = result.Diagnostics.Where(x => x.RuleId == "artipacked").ToArray();
+
+        await Assert.That(diagnostics).IsEmpty();
+    }
+
+    [Test]
     public async Task RuleRegression_ArtipackedRule_CaseInsensitiveIncludeHiddenFilesTrue()
     {
         var yaml = NormalizeYaml(
@@ -14894,6 +14921,30 @@ public sealed class RuleInterfaceTests
             """);
 
         using var result = new LintEngine([new ArtipackedRule()]).Check(Encoding.UTF8.GetBytes(yaml), "artipacked-case-hidden.yml");
+        var diagnostic = result.Diagnostics.Single(x => x.RuleId == "artipacked");
+
+        await Assert.That(diagnostic.Severity).IsEqualTo(DiagnosticSeverity.Error);
+    }
+
+    [Test]
+    public async Task RuleRegression_ArtipackedRule_QuotedIncludeHiddenFilesTrue()
+    {
+        var yaml = NormalizeYaml(
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - uses: actions/checkout@v4
+                        - uses: actions/upload-artifact@v4
+                          with:
+                              name: artifact
+                              path: .
+                              include-hidden-files: 'true'
+            """);
+
+        using var result = new LintEngine([new ArtipackedRule()]).Check(Encoding.UTF8.GetBytes(yaml), "artipacked-quoted-hidden-true.yml");
         var diagnostic = result.Diagnostics.Single(x => x.RuleId == "artipacked");
 
         await Assert.That(diagnostic.Severity).IsEqualTo(DiagnosticSeverity.Error);
@@ -14945,6 +14996,32 @@ public sealed class RuleInterfaceTests
         var diagnostics = result.Diagnostics.Where(x => x.RuleId == "artipacked").ToArray();
 
         await Assert.That(diagnostics).IsEmpty();
+    }
+
+    [Test]
+    public async Task RuleRegression_ArtipackedRule_UploadArtifactV5_IsConservativeByDefault()
+    {
+        // Only v4 behavior is modeled precisely. Newer major versions are treated
+        // conservatively unless hidden file behavior is explicitly known.
+        var yaml = NormalizeYaml(
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - uses: actions/checkout@v4
+                        - uses: actions/upload-artifact@v5
+                          with:
+                              name: artifact
+                              path: .
+            """);
+
+        using var result = new LintEngine([new ArtipackedRule()]).Check(Encoding.UTF8.GetBytes(yaml), "artipacked-v5.yml");
+        var diagnostic = result.Diagnostics.Single(x => x.RuleId == "artipacked");
+
+        await Assert.That(diagnostic.Severity).IsEqualTo(DiagnosticSeverity.Error);
+        await Assert.That(diagnostic.Message).Contains("persist-credentials: false");
     }
 
     [Test]
@@ -15136,6 +15213,295 @@ public sealed class RuleInterfaceTests
         var diagnostics = result.Diagnostics.Where(x => x.RuleId == "artipacked").ToArray();
 
         await Assert.That(diagnostics).IsEmpty();
+    }
+
+    [Test]
+    public async Task RuleRegression_ArtipackedRule_MultilinePathExcludingGitConfigIsSafe()
+    {
+        // Excluding .git/config directly should also suppress the legacy checkout
+        // credential exposure case.
+        var yaml = NormalizeYaml(
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - uses: actions/checkout@v4
+                        - uses: actions/upload-artifact@v4
+                          with:
+                              name: artifact
+                              path: |
+                                  .
+                                  !.git/config
+                              include-hidden-files: true
+            """);
+
+        using var result = new LintEngine([new ArtipackedRule()]).Check(Encoding.UTF8.GetBytes(yaml), "artipacked-multiline-exclude-git-config.yml");
+        var diagnostics = result.Diagnostics.Where(x => x.RuleId == "artipacked").ToArray();
+
+        await Assert.That(diagnostics).IsEmpty();
+    }
+
+    [Test]
+    public async Task RuleRegression_ArtipackedRule_GitConfigSubpathExclusionIsNotSafe()
+    {
+        var yaml = NormalizeYaml(
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - uses: actions/checkout@v4
+                        - uses: actions/upload-artifact@v4
+                          with:
+                              name: artifact
+                              path: |
+                                  .
+                                  !.git/config/**
+                              include-hidden-files: true
+            """);
+
+        using var result = new LintEngine([new ArtipackedRule()]).Check(Encoding.UTF8.GetBytes(yaml), "artipacked-exclude-git-config-subpath.yml");
+        var diagnostic = result.Diagnostics.Single(x => x.RuleId == "artipacked");
+
+        await Assert.That(diagnostic.Severity).IsEqualTo(DiagnosticSeverity.Error);
+        await Assert.That(diagnostic.Message).Contains("persist-credentials: false");
+    }
+
+    [Test]
+    public async Task RuleRegression_ArtipackedRule_BracketWorkspacePathIsFlagged()
+    {
+        // Bracket-style workspace access is equivalent to github.workspace and should
+        // be treated as a dangerous root-like path.
+        var yaml = NormalizeYaml(
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - uses: actions/checkout@v4
+                        - uses: actions/upload-artifact@v4
+                          with:
+                              name: artifact
+                              path: ${{ github['workspace'] }}
+                              include-hidden-files: true
+            """);
+
+        using var result = new LintEngine([new ArtipackedRule()]).Check(Encoding.UTF8.GetBytes(yaml), "artipacked-bracket-workspace.yml");
+        var diagnostic = result.Diagnostics.Single(x => x.RuleId == "artipacked");
+
+        await Assert.That(diagnostic.Severity).IsEqualTo(DiagnosticSeverity.Error);
+        await Assert.That(diagnostic.Message).Contains("persist-credentials: false");
+    }
+
+    [Test]
+    public async Task RuleRegression_ArtipackedRule_DoubleQuotedBracketWorkspacePathIsFlagged()
+    {
+        var yaml = NormalizeYaml(
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - uses: actions/checkout@v4
+                        - uses: actions/upload-artifact@v4
+                          with:
+                              name: artifact
+                              path: ${{ github['workspace'] }}
+                              include-hidden-files: true
+            """).Replace("github['workspace']", "github[\"workspace\"]", StringComparison.Ordinal);
+
+        using var result = new LintEngine([new ArtipackedRule()]).Check(Encoding.UTF8.GetBytes(yaml), "artipacked-double-quoted-bracket-workspace.yml");
+        var diagnostic = result.Diagnostics.Single(x => x.RuleId == "artipacked");
+
+        await Assert.That(diagnostic.Severity).IsEqualTo(DiagnosticSeverity.Error);
+        await Assert.That(diagnostic.Message).Contains("persist-credentials: false");
+    }
+
+    [Test]
+    public async Task RuleRegression_ArtipackedRule_RootFileGlobIsNotFlagged()
+    {
+        // A narrow root file glob does not recursively sweep the checkout root and
+        // should not be treated like ./** or **.
+        var yaml = NormalizeYaml(
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - uses: actions/checkout@v4
+                        - uses: actions/upload-artifact@v4
+                          with:
+                              name: artifact
+                              path: '*.txt'
+                              include-hidden-files: true
+            """);
+
+        using var result = new LintEngine([new ArtipackedRule()]).Check(Encoding.UTF8.GetBytes(yaml), "artipacked-root-file-glob.yml");
+        var diagnostics = result.Diagnostics.Where(x => x.RuleId == "artipacked").ToArray();
+
+        await Assert.That(diagnostics).IsEmpty();
+    }
+
+    [Test]
+    public async Task RuleRegression_ArtipackedRule_WorkspaceRecursiveGlobIsFlagged()
+    {
+        // Workspace-root recursive glob is equivalent to ./** and should be treated
+        // as a dangerous root-like upload.
+        var yaml = NormalizeYaml(
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - uses: actions/checkout@v4
+                        - uses: actions/upload-artifact@v4
+                          with:
+                              name: artifact
+                              path: ${{ github.workspace }}/**
+                              include-hidden-files: true
+            """);
+
+        using var result = new LintEngine([new ArtipackedRule()]).Check(Encoding.UTF8.GetBytes(yaml), "artipacked-workspace-recursive-glob.yml");
+        var diagnostic = result.Diagnostics.Single(x => x.RuleId == "artipacked");
+
+        await Assert.That(diagnostic.Severity).IsEqualTo(DiagnosticSeverity.Error);
+        await Assert.That(diagnostic.Message).Contains("persist-credentials: false");
+    }
+
+    [Test]
+    public async Task RuleRegression_ArtipackedRule_NormalizedRootPathIsFlagged()
+    {
+        var yaml = NormalizeYaml(
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - uses: actions/checkout@v4
+                        - uses: actions/upload-artifact@v4
+                          with:
+                              name: artifact
+                              path: repo/..
+                              include-hidden-files: true
+            """);
+
+        using var result = new LintEngine([new ArtipackedRule()]).Check(Encoding.UTF8.GetBytes(yaml), "artipacked-normalized-root.yml");
+        var diagnostic = result.Diagnostics.Single(x => x.RuleId == "artipacked");
+
+        await Assert.That(diagnostic.Severity).IsEqualTo(DiagnosticSeverity.Error);
+        await Assert.That(diagnostic.Message).Contains("persist-credentials: false");
+    }
+
+    [Test]
+    public async Task RuleRegression_ArtipackedRule_NormalizedWorkspacePathIsFlagged()
+    {
+        var yaml = NormalizeYaml(
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - uses: actions/checkout@v4
+                        - uses: actions/upload-artifact@v4
+                          with:
+                              name: artifact
+                              path: ${{ github.workspace }}/repo/..
+                              include-hidden-files: true
+            """);
+
+        using var result = new LintEngine([new ArtipackedRule()]).Check(Encoding.UTF8.GetBytes(yaml), "artipacked-normalized-workspace.yml");
+        var diagnostic = result.Diagnostics.Single(x => x.RuleId == "artipacked");
+
+        await Assert.That(diagnostic.Severity).IsEqualTo(DiagnosticSeverity.Error);
+        await Assert.That(diagnostic.Message).Contains("persist-credentials: false");
+    }
+
+    [Test]
+    public async Task RuleRegression_ArtipackedRule_NormalizedRootPathExcludingGitDirectoryIsSafe()
+    {
+        var yaml = NormalizeYaml(
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - uses: actions/checkout@v4
+                        - uses: actions/upload-artifact@v4
+                          with:
+                              name: artifact
+                              path: |
+                                  repo/..
+                                  !repo/../.git/**
+                              include-hidden-files: true
+            """);
+
+        using var result = new LintEngine([new ArtipackedRule()]).Check(Encoding.UTF8.GetBytes(yaml), "artipacked-normalized-root-exclude-git.yml");
+        var diagnostics = result.Diagnostics.Where(x => x.RuleId == "artipacked").ToArray();
+
+        await Assert.That(diagnostics).IsEmpty();
+    }
+
+    [Test]
+    public async Task RuleRegression_ArtipackedRule_NormalizedWorkspacePathExcludingGitConfigIsSafe()
+    {
+        var yaml = NormalizeYaml(
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - uses: actions/checkout@v4
+                        - uses: actions/upload-artifact@v4
+                          with:
+                              name: artifact
+                              path: |
+                                  ${{ github.workspace }}/repo/..
+                                  !${{ github.workspace }}/repo/../.git/config
+                              include-hidden-files: true
+            """);
+
+        using var result = new LintEngine([new ArtipackedRule()]).Check(Encoding.UTF8.GetBytes(yaml), "artipacked-normalized-workspace-exclude-git-config.yml");
+        var diagnostics = result.Diagnostics.Where(x => x.RuleId == "artipacked").ToArray();
+
+        await Assert.That(diagnostics).IsEmpty();
+    }
+
+    [Test]
+    public async Task RuleRegression_ArtipackedRule_NormalizedWorkspaceGitConfigSubpathExclusionIsNotSafe()
+    {
+        var yaml = NormalizeYaml(
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - uses: actions/checkout@v4
+                        - uses: actions/upload-artifact@v4
+                          with:
+                              name: artifact
+                              path: |
+                                  ${{ github.workspace }}/repo/..
+                                  !${{ github.workspace }}/repo/../.git/config/**
+                              include-hidden-files: true
+            """);
+
+        using var result = new LintEngine([new ArtipackedRule()]).Check(Encoding.UTF8.GetBytes(yaml), "artipacked-normalized-workspace-exclude-git-config-subpath.yml");
+        var diagnostic = result.Diagnostics.Single(x => x.RuleId == "artipacked");
+
+        await Assert.That(diagnostic.Severity).IsEqualTo(DiagnosticSeverity.Error);
+        await Assert.That(diagnostic.Message).Contains("persist-credentials: false");
     }
 
     [Test]
