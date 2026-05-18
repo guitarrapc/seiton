@@ -128,17 +128,12 @@ online audit rules（4）:
 - 理由: `.references/dockerfile-pin` / `.references/frizbee` で実用機能が成熟しており、Actions外の供給網ギャップを早期に埋める効果が大きい
 
 2. 残存 zizmor high-value audits（次段）
-- `unsound-condition`
-- `unsound-contains`
 - `github-env`
-- `hardcoded-container-credentials`
-- `unpinned-tools`（新規追加）
-- 理由: exploitability が高い未対応監査を優先。`unpinned-tools` は外部ツールのバージョン固定漏れを検出し、supply chain 攻撃面を減らす。
+- 理由: exploitability が高い未対応監査を優先。
 
-3. trusted publishing / uses policy の運用強化
+3. uses policy の運用強化
 - `forbidden-uses` の allow/deny ポリシー精緻化
-- `use-trusted-publishing` のレジストリ/アクション判定精緻化
-- 理由: 現状は初期実装として有効だが、zizmor 同等レベルの網羅には運用設定と判定ロジックの拡張が必要
+- 理由: 運用設定と判定ロジックの拡張が必要
 
 ### P1（次点）
 
@@ -167,7 +162,6 @@ online audit rules（4）:
 - `misfeature`（非推奨 Actions 機能使用）
 - `superfluous-actions`（ランナー標準機能で代替可能なアクション）
 - `dependabot-execution` / `dependabot-cooldown`（Dependabot 設定検査）
-- `artipacked`（アーティファクトクレデンシャル漏洩）
 - 理由: セキュリティ影響が限定的か、運用導入コストが高い
 
 ---
@@ -178,7 +172,7 @@ online audit rules（4）:
 - ghalint は全 13 ポリシーを完全カバーし、完全上位互換を達成。
 - actionlint は 17 ルール中 15 ルールを同等以上にカバー（残: shellcheck / pyflakes 外部連携のみ）。
 - 競合を完全に上回るには、次の2点が鍵。
-  - 残存 zizmor 監査差分の吸収（P0: 9件未対応 → `unsound-contains` や `github-env` などの高価値監査から段階実装）
+  - 残存 zizmor 監査差分の吸収（P0: 7件未対応 → `github-env` などの高価値監査から段階実装）
   - dockerfile-pin/frizbee級の対象ファイル範囲拡張（P0）
 
 この順で実装すれば、Seitonは「競合機能を包括しつつ、より現代的な統合ツール」という目標に最短で近づく。
@@ -237,9 +231,9 @@ online audit rules（4）:
 
 | 区分 | 件数 | Seiton 状況 |
 |---|---:|---|
-| 直接対応済み | 17 | `cache-poisoning`, `concurrency-limits`, `dangerous-triggers`, `github-app`, `impostor-commit`, `insecure-commands`, `known-vulnerable-actions`, `ref-confusion`, `secrets-inherit`, `secrets-outside-env`, `self-hosted-runner`, `stale-action-refs`, `template-injection`, `unpinned-images`, `unpinned-uses`, `unredacted-secrets`, `concurrency-limits` |
+| 直接対応済み | 22 | `artipacked`, `bot-conditions`, `cache-poisoning`, `concurrency-limits`, `dangerous-triggers`, `github-app`, `hardcoded-container-credentials`, `impostor-commit`, `insecure-commands`, `known-vulnerable-actions`, `ref-confusion`, `secrets-inherit`, `secrets-outside-env`, `self-hosted-runner`, `stale-action-refs`, `template-injection`, `unpinned-images`, `unpinned-tools`, `unpinned-uses`, `unredacted-secrets`, `unsound-condition`, `unsound-contains` |
 | 部分対応 | 7 | `archived-uses`, `excessive-permissions`, `forbidden-uses`, `overprovisioned-secrets`, `ref-version-mismatch`, `undocumented-permissions`, `use-trusted-publishing` |
-| 未対応 | 12 | 高度セキュリティ監査群（残差分） |
+| 未対応 | 7 | 高度セキュリティ監査群（残差分） |
 
 zizmor 監査ID別対応表（実装確認ベース）:
 
@@ -247,7 +241,7 @@ zizmor 監査ID別対応表（実装確認ベース）:
 |---|---|---|
 | `anonymous-definition` | ❌ | 専用監査なし |
 | `archived-uses` | 🟡 | `archived-uses`（静的判定の初期実装） |
-| `artipacked` | ❌ | 専用監査なし |
+| `artipacked` | ✅ | `artipacked` — checkout + upload-artifact のステップ間相関分析 |
 | `bot-conditions` | ✅ | `bot-conditions` |
 | `cache-poisoning` | ✅ | `cache-poisoning` |
 | `concurrency-limits` | ✅ | `concurrency-limits` — ワークフロー/ジョブレベルの concurrency 設定と cancel-in-progress を検査 |
@@ -280,9 +274,9 @@ zizmor 監査ID別対応表（実装確認ベース）:
 | `unredacted-secrets` | ✅ | `unredacted-secrets` |
 | `unsound-condition` | ✅ | `unsound-condition` |
 | `unsound-contains` | ✅ | `unsound-contains` |
-| `use-trusted-publishing` | 🟡 | `use-trusted-publishing`（publish + `id-token: write` 判定の初期実装） |
+| `use-trusted-publishing` | 🟡 | `use-trusted-publishing`（publish コマンド文字列ヒューリスティック + `id-token: write` 判定。NuGet/Cargo 等未対応、uses 判定なし） |
 
-対応率: 29/36（81%）— 残7件未対応。
+対応率: 29/36（81%）— 残7件未対応（うち2件はスコープ外）。
 
 ### 6.4 pinact / dockerfile-pin / frizbee（ルールエンジンではなく変換系）
 
@@ -302,7 +296,6 @@ zizmor 監査ID別対応表（実装確認ベース）:
 
 2. zizmor 残差分（未対応 7件）
 - `github-env` — GITHUB_ENV への危険な書き込み検出
-- `artipacked` — アーティファクトクレデンシャル漏洩
 - `anonymous-definition` — name 未定義のワークフロー/アクション
 - `obfuscation` — 難読化された Actions 機能使用
 - `misfeature` — 非推奨/危険な Actions 機能使用

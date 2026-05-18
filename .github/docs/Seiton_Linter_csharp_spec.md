@@ -251,37 +251,40 @@ Each rule inspects AST nodes in `IPass` callbacks and accumulates diagnostics in
 
 The current default rule scope in C# is:
 
-| Rule ID | Required Behavior Summary |
+> **Detail policy:** Rule behavior is defined in `Seiton_Linter_spec.md` §4.4. User-facing detail (path lists, examples, remediation) lives in [`docs/rules.md`](../../docs/rules.md). This table only records C#-specific implementation notes.
+
+| Rule ID | C# Implementation Notes |
 |---|---|
-| `job-structure` | Validate core job shape constraints: `uses` is mutually exclusive with `steps`/`runs-on`, and each job requires either reusable-call form (`uses`) or executable form (`runs-on` + `steps`). |
-| `reusable-workflow` | Validate reusable workflow call semantics: `with`/`secrets` require `uses`, reusable-call jobs must reject incompatible execution keys, and local reusable calls should validate caller `with`/`secrets` against called workflow `on.workflow_call` contracts when statically resolvable. |
-| `permissions` | Validate `permissions` value domain: scalar must be `read-all` or `write-all`; scope values must be `read`, `write`, or `none`. Valid scalar values (`read-all`, `write-all`) emit a warning recommending explicit per-scope mapping; workflow-level warning additionally suggests moving to job-level permissions. |
-| `popular-action-inputs` | Validate known action input names against maintained popular-action metadata and emit diagnostics for unknown inputs. |
-| `outdated-action-runner` | Error when a popular action's `runs.using` runtime is deprecated. Catalog-driven: looks up the action in `PopularActions` generated catalog, reads `GetRunsUsing()`, and checks against a maintained list of deprecated runtimes (`node12`, `node16`). |
-| `unpinned-uses` | Warn when `uses:` references are not pinned to full commit SHA for remote actions/reusable workflows; additionally validate `uses` reference format and local action reference sanity where statically resolvable. |
-| `unpinned-image` | Warn when docker image references (`docker://`, `job.container.image`, `job.services.*.image`) are not pinned by digest (`@sha256:<64-hex>`). |
-| `dangerous-triggers` | Warn when dangerous trigger events are used (built-in dangerous event set plus any additive customization defined by config). |
-| `job-permissions-required` | Warn when a job omits explicit `permissions` configuration. |
-| `needs-graph` | Error on invalid `needs` graph: unknown dependency targets and circular dependencies. Cycle diagnostics report at the `needs` value position that closes the cycle, with the full cycle path in the message. |
-| `shell-name` | Error when configured shell names are outside the supported shell set for workflow/job defaults and `run` steps. |
-| `runner-label` | Warn on unknown GitHub-hosted runner labels in `runs-on` (excluding self-hosted and expression-only cases), using built-in labels plus additive config labels. Error on conflicting OS families among static labels and matrix-expanded expression labels. Bare self-hosted preset OS labels (`linux`, `windows`, `macos`) are recognized for OS family detection. |
-| `runner-no-latest` | Warn when moving GitHub-hosted labels (`ubuntu-latest`, `windows-latest`, `macos-latest`) are used in `runs-on`; prefer explicit version-pinned labels. |
-| `id-naming` | Error when `job.id` or `step.id` contains characters outside allowed identifier set. |
-| `glob-pattern` | Error on invalid event filter configuration, including invalid glob syntax (triple-star, unclosed bracket, reversed range, `*+` sequences), ref-name forbidden characters (`^`, `~`, `:`, space), single-dot and double-dot path segments, unsupported event options/types, and incompatible filter combinations (`branches` vs `branches-ignore`, `tags` vs `tags-ignore`, `paths` vs `paths-ignore`). |
-| `deny-write-all` | Error when workflow/job permissions use `write-all`. |
-| `credentials` | Warn when custom/private registry images in `job.container` or `job.services.*` are used without credentials, except registries treated as public by built-in plus additive config set. Error when `credentials.password` is a hardcoded literal instead of an expression (`${{ ... }}`). |
-| `template-injection` | Error when untrusted `github.event`-origin data is directly interpolated into `run` script sinks or `actions/github-script` `script` input in unsafe ways. `env:` declarations are treated as indirection and are not reported by this rule. |
-| `unsound-contains` | Detect bypassable `contains()` conditions such as `contains('refs/heads/main refs/heads/develop', github.ref)`. Dot-style and bracket/index-style context references are treated equivalently (for example `github.ref` and `github['ref']`, `env.NAME` and `env['NAME']`). Emit an error when the probed value is user-controllable and an info diagnostic for other context references; recommend exact equality or `contains(fromJSON(...), value)`. |
-| `bot-conditions` | Warn when bot checks rely on spoofable actor contexts: actor-name contexts (`github.actor`, `github.triggering_actor`, `github.event.pull_request.sender.login`) or equivalent mixed dot/index-style references compared against `[bot]` login literals, or actor-ID contexts (`github.actor_id`, `github.event.pull_request.sender.id`) or equivalent mixed dot/index-style references compared against known bot IDs from the generated `BotActors` dataset. Recommend the corresponding trigger-author context such as `github.event.pull_request.user.login` or `github.event.pull_request.user.id`. |
-| `expr-undefined-var` | Error when expressions reference context roots unavailable in the current scope (for example job scope vs step scope context mismatch). Validates `step.run`, `step.if`, `step.env`, and `step.with` expressions. For `matrix` context, builds strict per-job types from matrix row definitions (including nested object property inference, array row detection, and scalar row detection) and flags undefined axis keys. For `steps` context, builds strict per-job types from step IDs and validates forward references. For `needs` context, validates that referenced job IDs are declared in the job's `needs` list. For popular actions with known outputs, builds strict step output types and flags unknown output names. For local actions (`uses: ./...`), resolves `action.yml`/`action.yaml` metadata via `LocalActionOutputResolver` to build strict step output types and flags unknown output property names. For local reusable workflow call jobs (`uses: ./.github/workflows/...` at job level), resolves the called workflow's `on.workflow_call.outputs` via `LocalReusableWorkflowOutputResolver` to build strict needs output types and flags unknown output names. For remote reusable workflow call jobs (`uses: owner/repo/path@ref` at job level), `needs.<job>.outputs.*` is treated as loose (non-strict) because the called workflow's outputs cannot be determined statically without fetching the remote definition. Template type checks (`CheckTemplateType` / `CheckTemplateTypeWithOverrides`) warn when `${{ }}` interpolation evaluates to object (`"[Object]"`), array (`"[Array]"`), or null (empty string); the override-aware variant uses dynamic context types for matrix/inputs/needs/steps so that e.g. `${{ matrix.bar }}` where `bar` is an array axis is correctly flagged. Env mapping type checks (`CheckEnvMappingType`) warn when `env: ${{ expr }}` evaluates to a non-object type (string, number, bool, array, null). Index access type checks (`ValidateIndexAccess` / `ValidateIndexAccessWithOverrides`) error when the index expression type is incompatible with the container type (e.g. boolean index on object, string index on array); the override-aware variant resolves dynamic context types so that e.g. `env[inputs.verbose]` where `verbose` is boolean is correctly flagged. |
-| `run-env-context-direct-use` | Error when `run:` script text directly references `${{ env.* }}`; shell variable expansion must be used instead. |
-| `run-secrets-context-direct-use` | Error when `run:` script text directly references `${{ secrets.* }}`; secret values should be mapped via `env` and referenced as shell variables (`${ENV_NAME}` / `$ENV_NAME` / `$env:ENV_NAME`). |
-| `run-inputs-context-direct-use` | Error when `run:` script text directly references `${{ inputs.* }}` or `${{ github.event.inputs.* }}`; values should be mapped via `env` and referenced as shell variables (`${ENV_NAME}` / `$ENV_NAME` / `$env:ENV_NAME`). |
-| `secrets-whole-context-access` | Error when any expression references the entire `secrets` context as an object (e.g. `${{ toJson(secrets) }}`, `${{ format('{0}', secrets) }}`), rather than accessing a specific secret key (`secrets.MY_KEY`). Checked in `run:`, `env:`, and `with:` sinks at step and job level. |
-| `checkout-persist-credentials` | Warn when `actions/checkout` does not explicitly set `with.persist-credentials: false`; persisting credentials in `.git/config` increases secret exposure risk when repository data is reused or uploaded. |
-| `workflow-secrets` | Error when workflow-level `env` assigns values from `secrets.*` or `github.token` in workflows with multiple jobs. |
-| `job-secrets` | Error when job-level `env` assigns values from `secrets.*` or `github.token` in jobs with multiple steps. |
-| `action-shell-is-required` | Error when a composite action `run` step omits explicit `shell` declaration (including empty shell values). This rule is scoped to action-metadata documents. |
+| `job-structure` | — |
+| `reusable-workflow` | Uses `LocalReusableWorkflowOutputResolver` for local contract validation. |
+| `permissions` | — |
+| `popular-action-inputs` | Catalog-driven via `PopularActions` generated code. Edit-distance uses `EditDistance` helper. |
+| `outdated-action-runner` | Reads `GetRunsUsing()` from `PopularActions` generated catalog. |
+| `unpinned-uses` | — |
+| `unpinned-image` | — |
+| `dangerous-triggers` | — |
+| `job-permissions-required` | Auto-fix uses `supplemental-required-permissions.json`. |
+| `needs-graph` | — |
+| `shell-name` | — |
+| `runner-label` | Uses `RunnerLabels.g.cs` generated data. |
+| `runner-no-latest` | — |
+| `id-naming` | — |
+| `glob-pattern` | — |
+| `deny-write-all` | — |
+| `credentials` | — |
+| `template-injection` | — |
+| `unsound-contains` | — |
+| `bot-conditions` | Uses `BotActors` generated dataset. |
+| `expr-undefined-var` | `CheckTemplateType`/`CheckTemplateTypeWithOverrides` for `${{ }}` type checks. `CheckEnvMappingType` for `env: ${{ expr }}`. `ValidateIndexAccess`/`ValidateIndexAccessWithOverrides` for index type checks. Uses `LocalActionOutputResolver` and `LocalReusableWorkflowOutputResolver`. |
+| `run-env-context-direct-use` | — |
+| `run-secrets-context-direct-use` | — |
+| `run-inputs-context-direct-use` | — |
+| `secrets-whole-context-access` | Checked in `run:`, `env:`, and `with:` sinks at step and job level. |
+| `checkout-persist-credentials` | — |
+| `artipacked` | Implemented as `VisitJobPost` step-order scan. Tracks unsafe legacy/v6+ checkout state and re-evaluates exclusion lines against tracked legacy checkouts using job-local temporary storage. V6+ runner-temp warnings are suppressed only by recursive subtree exclusions (for example `!../../_temp/**` or workspace-prefixed equivalents), not by bare or shallow `_temp` exclusions. Deferred scope does not implement checkout `with.path` correlation. |
+| `workflow-secrets` | — |
+| `job-secrets` | — |
+| `action-shell-is-required` | Scoped to action-metadata documents. |
 
 Scope notes:
 

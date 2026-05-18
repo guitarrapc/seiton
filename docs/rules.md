@@ -1,6 +1,6 @@
 # Rules
 
-This page documents all lint rules included in Seiton.
+This page documents all lint rules included in Seiton. It is the **canonical user-facing reference** for detailed rule behavior, examples, and remediation guidance. Implementation specs (`.github/docs/Seiton_Linter_*.md`) carry only brief summaries and cross-reference this document.
 
 > **Tip:** Run `seiton rules` to see all rules and their effective enabled/disabled status in your terminal. Use `seiton rules --format json` for machine-readable output. See [Usage](usage.md#seiton-rules) for details.
 
@@ -66,6 +66,7 @@ unsound-condition                        yes       local    warning    yes   bot
 unpinned-tools                           yes       local    warning    no    both       default
 unsound-contains                         yes       local    mixed      no    workflow   default
 bot-conditions                           yes       local    warning    no    workflow   default
+artipacked                               yes       local    mixed      no    workflow   default
 known-vulnerable-actions                 no        online   error      no    workflow   opt-in (not configured)
 impostor-commit                          no        online   error      no    workflow   opt-in (not configured)
 ref-confusion                            no        online   error      no    workflow   opt-in (not configured)
@@ -129,6 +130,7 @@ Online rules use the GitHub API. Set GITHUB_TOKEN (or SEITON_GITHUB_TOKEN) to av
 - [insecure-commands](#insecure-commands)
 - [unsound-contains](#unsound-contains)
 - [bot-conditions](#bot-conditions)
+- [artipacked](#artipacked)
 
 ### Permissions & Secrets
 
@@ -998,6 +1000,62 @@ jobs:
 
 ---
 
+### `artipacked`
+
+| Default | Network | Auto-fix |
+|---|---|---|
+| ✓ | — | ✗ |
+
+Detects credential leakage risk when `actions/checkout` (without `persist-credentials: false`) is followed later in the same job by `actions/upload-artifact` uploading a dangerous path. Dangerous paths include repository-root and parent-directory forms such as `.`, `..`, `*`, `./*`, `../../_temp`, `../../_temp/**`, `../../_temp/*`, `../../_temp/**/*`, `./**`, `./**/*`, `**`, `**/*`, `${{ github.workspace }}`, `${{ github.workspace }}/**`, `${{ github.workspace }}/**/*`, `${{ github.workspace }}/..`, and `${{ github.workspace }}/../../_temp`. Equivalent bracket-form expressions such as `${{ github['workspace'] }}` and normalized equivalents such as `repo/..` or `${{ github.workspace }}/repo/..` are treated the same way. Explicit escaped `_temp` directory paths and their glob variants (for example `../../_temp`, `../../_temp/**`, `../../_temp/*`) are also treated as dangerous because they can reach `$RUNNER_TEMP` on GitHub-hosted runners.
+
+**Core intent:** prevent artifact uploads from sweeping checkout-managed credentials or adjacent sensitive state into artifacts.
+
+**Current supported scope:** the rule currently models same-job `actions/checkout` followed by later `actions/upload-artifact`, including root-like, parent-like, and workspace-like path families; bracket-form and normalized workspace-equivalent paths; hidden-file defaults for upload-artifact versions; explicit legacy exclusion globs such as `!.git/**`, `!.git/config`, explicit nested exclusions such as `!repo/.git/**`, and leading-recursive exclusions such as `!**/.git/**` within the current normalized-path depth bound; and the severity split between legacy checkout (`.git/config`) and checkout `v6+` (`$RUNNER_TEMP`). Leading-recursive exclusions (`!**/.git/**`) suppress the legacy case even when the checkout `with.path` contains runtime expressions that cannot be statically normalized. Workspace-expression suffixes are recognized only when the suffix is empty or starts with `/` or `\`, so concatenations such as `${{ github.workspace }}..` or `!${{ github.workspace }}.git/**` are not treated as workspace-relative paths.
+
+**Deferred scope:** the rule does not yet correlate `actions/checkout` `with.path` subdirectories with later artifact uploads. For example, checkout into `path: repo` and a later `upload-artifact` with `path: repo` is not currently diagnosed unless the upload path is otherwise root-like, parent-like, or workspace-like.
+
+  > **Note:** Legacy `actions/checkout` versions (v1-v5) persist a token in `.git/config`, while `actions/checkout@v6+` stores credentials under `$RUNNER_TEMP`. For `actions/upload-artifact`, pinned `v4.0`-`v4.3` releases may still include hidden files by default, while `v4.4+` and floating `@v4` exclude hidden files by default. For unparseable refs such as branch names, SHAs, or arbitrary tags, the rule stays conservative even when `include-hidden-files: false` is present, because that ref may resolve to older upload-artifact code that ignores the input and still includes hidden files by default. That hidden-file behavior mainly protects legacy `.git/config`; it does not protect v6+ credentials when an upload can actually reach `$RUNNER_TEMP`. In practice, `..` or `${{ github.workspace }}/..` remain dangerous for legacy hidden-file uploads, but the v6+ warning is reserved for paths that escape far enough to reach runner temp, such as `../..`, `${{ github.workspace }}/../..`, or explicit `_temp` siblings like `../../_temp`. Explicit exclusion globs such as `!.git/**`, `!.git/config`, `!repo/.git/**`, or `!**/.git/**` suppress the legacy `.git/config` case only when they exclude every reachable `.git/config` location within the current normalized-path depth bound. Bare `!.git` never suppresses. For v6+, suppression requires a recursive runner-temp subtree exclusion such as `!../../_temp/**` or `!${{ github.workspace }}/../../_temp/**`; bare `!../../_temp` or shallow `!../../_temp/*` exclusions are not enough.
+
+**Severity:**
+
+- **error** — checkout (non-v6+) without `persist-credentials: false` + dangerous upload that may include hidden files
+- **warning** — checkout v6+ without `persist-credentials: false` + a parent-directory upload that can reach `$RUNNER_TEMP`
+
+When checkout uses a ref that cannot be parsed as a semantic version, such as a full SHA, branch ref, or arbitrary tag like `@v6-legacy` / `@v06`, the rule conservatively assumes both legacy and v6+ risks apply. Likewise, upload-artifact refs that are not recognized semantic versions, such as `@v4-legacy` or `@v4.x`, are treated conservatively as having unknown hidden-file behavior.
+
+**Example trigger:**
+
+```yaml
+on: push
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/upload-artifact@v4
+        with:
+          name: my-artifact
+          path: .
+          include-hidden-files: true
+```
+
+**Remediation:** Set `persist-credentials: false` on the checkout step, or upload only specific subdirectories:
+
+```yaml
+steps:
+  - uses: actions/checkout@v4
+    with:
+      persist-credentials: false
+  - uses: actions/upload-artifact@v4
+    with:
+      name: my-artifact
+      path: dist/
+```
+
+  > **Note:** This rule is independent of `checkout-persist-credentials`. The latter flags every checkout without `persist-credentials: false`; `artipacked` only fires when a later dangerous upload-artifact path in the same job can actually expose checkout credentials.
+
+---
+
 ### `deprecated-commands`
 
 | Default | Network | Auto-fix |
@@ -1600,7 +1658,9 @@ rules:
 |---|---|---|
 | ✓ | — | △ |
 
-Warns when `actions/checkout` is used without `persist-credentials: false`. Persisting credentials in `.git/config` increases secret exposure risk.
+Warns when `actions/checkout` is used without `persist-credentials: false`.
+
+Legacy `actions/checkout` versions persist credentials in `.git/config`; `actions/checkout@v6+` stores them in a separate file under `$RUNNER_TEMP`. Either way, leaving credentials persisted broadens later-step and artifact exposure.
 
 **Example trigger:**
 
@@ -1610,7 +1670,7 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6  # ERROR: should set persist-credentials to false
+      - uses: actions/checkout@v6  # WARNING: should set persist-credentials to false
 ```
 
 **Remediation:**

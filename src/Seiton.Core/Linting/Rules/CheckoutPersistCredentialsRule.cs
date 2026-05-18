@@ -46,7 +46,7 @@ public sealed class CheckoutPersistCredentialsRule() : RuleBase(RuleId.CheckoutP
         }
 
         var value = Arena.GetStringValue(persistCredentialsNode);
-        if (!ExpressionScanHelpers.ContainsExpressionMarker(persistCredentialsNode, Arena) && value.SequenceEqual("false"u8))
+        if (!ExpressionScanHelpers.ContainsExpressionMarker(persistCredentialsNode, Arena) && IsBooleanFalse(value))
         {
             return;
         }
@@ -62,7 +62,7 @@ public sealed class CheckoutPersistCredentialsRule() : RuleBase(RuleId.CheckoutP
 
     private static string BuildMessage(string actionRef)
     {
-        return $"action '{actionRef}' should set with.persist-credentials to false to avoid persisting credentials in .git/config; after changing this, {FixHint}";
+        return $"action '{actionRef}' should set with.persist-credentials to false to avoid leaving credentials accessible to subsequent steps; after changing this, {FixHint}";
     }
 
     private string GetCachedMessage(Utf8Slice usesSlice)
@@ -349,5 +349,16 @@ public sealed class CheckoutPersistCredentialsRule() : RuleBase(RuleId.CheckoutP
         }
 
         return lineNumber;
+    }
+
+    /// <summary>Case-insensitive YAML boolean false check (false, False, FALSE).</summary>
+    private static bool IsBooleanFalse(ReadOnlySpan<byte> value)
+    {
+        return value.Length == 5
+               && (value[0] | 0x20) == (byte)'f'
+               && (value[1] | 0x20) == (byte)'a'
+               && (value[2] | 0x20) == (byte)'l'
+               && (value[3] | 0x20) == (byte)'s'
+               && (value[4] | 0x20) == (byte)'e';
     }
 }
