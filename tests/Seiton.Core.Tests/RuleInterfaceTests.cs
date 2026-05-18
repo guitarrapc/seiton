@@ -15882,6 +15882,119 @@ public sealed class RuleInterfaceTests
         await Assert.That(diagnostics).IsEmpty();
     }
 
+    [Test]
+    public async Task RuleRegression_ArtipackedRule_WorkspaceSuffixWithoutSeparatorIsNotFlagged()
+    {
+        // ${{ github.workspace }}.. (no separator) is string concatenation, NOT a parent path.
+        // The rule should NOT treat it as ${{ github.workspace }}/.. .
+        var yaml = NormalizeYaml(
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - uses: actions/checkout@v4
+                        - uses: actions/upload-artifact@v4
+                          with:
+                              name: artifact
+                              path: ${{ github.workspace }}..
+                              include-hidden-files: true
+            """);
+
+        using var result = new LintEngine([new ArtipackedRule()]).Check(Encoding.UTF8.GetBytes(yaml), "artipacked-workspace-no-separator.yml");
+        var diagnostics = result.Diagnostics.Where(x => x.RuleId == "artipacked").ToArray();
+
+        await Assert.That(diagnostics).IsEmpty();
+    }
+
+    [Test]
+    public async Task RuleRegression_ArtipackedRule_WorkspaceExclusionWithoutSeparatorDoesNotSuppress()
+    {
+        // !${{ github.workspace }}.git/** (no separator) is not a valid exclusion.
+        // The rule should still flag the upload.
+        var yaml = NormalizeYaml(
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - uses: actions/checkout@v4
+                        - uses: actions/upload-artifact@v4
+                          with:
+                              name: artifact
+                              path: |
+                                  ${{ github.workspace }}
+                                  !${{ github.workspace }}.git/**
+                              include-hidden-files: true
+            """);
+
+        using var result = new LintEngine([new ArtipackedRule()]).Check(Encoding.UTF8.GetBytes(yaml), "artipacked-workspace-exclusion-no-separator.yml");
+        var diagnostic = result.Diagnostics.Single(x => x.RuleId == "artipacked");
+
+        await Assert.That(diagnostic.Severity).IsEqualTo(DiagnosticSeverity.Error);
+        await Assert.That(diagnostic.Message).Contains("persist-credentials: false");
+    }
+
+    [Test]
+    public async Task RuleRegression_ArtipackedRule_RecursiveWildcardExcludesSuppressesNestedCheckout()
+    {
+        // !**/.git/** should suppress the warning for a nested checkout at "repo"
+        // because ** matches any prefix including "repo".
+        var yaml = NormalizeYaml(
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - uses: actions/checkout@v4
+                          with:
+                              path: repo
+                        - uses: actions/upload-artifact@v4
+                          with:
+                              name: artifact
+                              path: |
+                                  .
+                                  !**/.git/**
+                              include-hidden-files: true
+            """);
+
+        using var result = new LintEngine([new ArtipackedRule()]).Check(Encoding.UTF8.GetBytes(yaml), "artipacked-recursive-wildcard-nested-checkout.yml");
+        var diagnostics = result.Diagnostics.Where(x => x.RuleId == "artipacked").ToArray();
+
+        await Assert.That(diagnostics).IsEmpty();
+    }
+
+    [Test]
+    public async Task RuleRegression_ArtipackedRule_RecursiveWildcardExcludesSuppressesRootCheckout()
+    {
+        // !**/.git/** should also suppress the warning for a root checkout (empty path)
+        // because ** can match zero segments.
+        var yaml = NormalizeYaml(
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - uses: actions/checkout@v4
+                        - uses: actions/upload-artifact@v4
+                          with:
+                              name: artifact
+                              path: |
+                                  .
+                                  !**/.git/**
+                              include-hidden-files: true
+            """);
+
+        using var result = new LintEngine([new ArtipackedRule()]).Check(Encoding.UTF8.GetBytes(yaml), "artipacked-recursive-wildcard-root-checkout.yml");
+        var diagnostics = result.Diagnostics.Where(x => x.RuleId == "artipacked").ToArray();
+
+        await Assert.That(diagnostics).IsEmpty();
+    }
+
     private static async Task AssertRuleCases(IRule rule, string ruleId, RuleCase[] cases, LintConfig? config = null)
     {
         for (var i = 0; i < cases.Length; i++)

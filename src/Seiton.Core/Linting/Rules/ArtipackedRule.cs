@@ -508,21 +508,40 @@ public sealed class ArtipackedRule() : RuleBase(RuleId.Artipacked)
             start++;
         }
 
-        if (patternSegmentCount - start < checkoutSegmentCount + 1)
-        {
-            return false;
-        }
+        var hadLeadingRecursiveWildcard = start > 0;
+        var maxConsumedCheckoutSegments = hadLeadingRecursiveWildcard ? checkoutSegmentCount : 0;
 
-        for (var i = 0; i < checkoutSegmentCount; i++)
+        for (var consumedCheckoutSegments = 0; consumedCheckoutSegments <= maxConsumedCheckoutSegments; consumedCheckoutSegments++)
         {
-            if (!pattern.Slice(patternOffsets[start + i], patternLengths[start + i])
-                    .SequenceEqual(checkoutPath.Slice(checkoutOffsets[i], checkoutLengths[i])))
+            var remainingCheckoutSegmentCount = checkoutSegmentCount - consumedCheckoutSegments;
+            if (patternSegmentCount - start < remainingCheckoutSegmentCount + 1)
             {
-                return false;
+                continue;
+            }
+
+            var matchesCheckoutPath = true;
+            for (var i = 0; i < remainingCheckoutSegmentCount; i++)
+            {
+                if (!pattern.Slice(patternOffsets[start + i], patternLengths[start + i])
+                        .SequenceEqual(checkoutPath.Slice(checkoutOffsets[consumedCheckoutSegments + i], checkoutLengths[consumedCheckoutSegments + i])))
+                {
+                    matchesCheckoutPath = false;
+                    break;
+                }
+            }
+
+            if (!matchesCheckoutPath)
+            {
+                continue;
+            }
+
+            if (MatchesLegacyCredentialExclusionTail(pattern, patternOffsets, patternLengths, patternSegmentCount, start + remainingCheckoutSegmentCount))
+            {
+                return true;
             }
         }
 
-        return MatchesLegacyCredentialExclusionTail(pattern, patternOffsets, patternLengths, patternSegmentCount, start + checkoutSegmentCount);
+        return false;
     }
 
     private static bool MatchesLegacyCredentialExclusionTail(ReadOnlySpan<byte> pattern, Span<int> offsets, Span<int> lengths, int segmentCount, int start)
@@ -576,6 +595,11 @@ public sealed class ArtipackedRule() : RuleBase(RuleId.Artipacked)
         }
 
         suffix = TrimBytes(trimmed[(closeIndex + 2)..]);
+        if (suffix.Length > 0 && suffix[0] != (byte)'/' && suffix[0] != (byte)'\\')
+        {
+            return false;
+        }
+
         while (suffix.Length > 0 && (suffix[0] == (byte)'/' || suffix[0] == (byte)'\\'))
         {
             suffix = suffix[1..];
@@ -807,6 +831,11 @@ public sealed class ArtipackedRule() : RuleBase(RuleId.Artipacked)
         }
 
         var suffix = TrimBytes(trimmed[(closeIndex + 2)..]);
+        if (suffix.Length > 0 && suffix[0] != (byte)'/' && suffix[0] != (byte)'\\')
+        {
+            return false;
+        }
+
         while (suffix.Length > 0 && (suffix[0] == (byte)'/' || suffix[0] == (byte)'\\'))
         {
             suffix = suffix[1..];
