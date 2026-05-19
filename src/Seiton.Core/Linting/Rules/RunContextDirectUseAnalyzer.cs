@@ -298,10 +298,11 @@ internal static class RunContextDirectUseAnalyzer
         foreach (var pair in env.Vars.Value)
         {
             var envVar = pair.Value;
-            var envNameIndex = 0;
-            if (!TryReadIdentifier(arena.GetStringValue(envVar.Name), ref envNameIndex, out var candidateVariable)
-                || envNameIndex != arena.GetStringSlice(envVar.Name).Length
-                || !IsSimpleIdentifier(candidateVariable))
+            var nameBytes = arena.GetStringValue(envVar.Name);
+            var nameSliceLength = arena.GetStringSlice(envVar.Name).Length;
+
+            // Span-based identifier validation — avoids string allocation for non-matching entries
+            if (!IsValidIdentifierSpan(nameBytes, nameSliceLength))
             {
                 continue;
             }
@@ -313,7 +314,8 @@ internal static class RunContextDirectUseAnalyzer
                 continue;
             }
 
-            variableName = candidateVariable;
+            // Only allocate the env var name string after confirming value match
+            variableName = Encoding.UTF8.GetString(nameBytes[..nameSliceLength]);
             matches++;
             if (matches > 1)
             {
@@ -322,6 +324,34 @@ internal static class RunContextDirectUseAnalyzer
         }
 
         return matches == 1;
+    }
+
+    /// <summary>
+    /// Validates that the byte span up to <paramref name="length"/> forms a valid identifier
+    /// (starts with letter/underscore, followed by letters/digits/underscores).
+    /// </summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private static bool IsValidIdentifierSpan(ReadOnlySpan<byte> nameBytes, int length)
+    {
+        if (length == 0 || nameBytes.Length < length)
+        {
+            return false;
+        }
+
+        if (!IsIdentifierStart(nameBytes[0]))
+        {
+            return false;
+        }
+
+        for (var i = 1; i < length; i++)
+        {
+            if (!IsIdentifierPart(nameBytes[i]))
+            {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     internal static bool TryResolveShellVariableName(
@@ -640,12 +670,16 @@ internal static class RunContextDirectUseAnalyzer
         AstArena arena, byte[] utf8Yaml, string baseName,
         Env? stepEnv, Env? jobEnv, Env? workflowEnv)
     {
-        var existing = CollectExistingEnvNames(arena, utf8Yaml, stepEnv, jobEnv, workflowEnv);
-        if (!existing.Contains(baseName))
+        // Fast path: span-based comparison avoids HashSet allocation when no conflict exists
+        if (!EnvContainsNameIgnoreCase(arena, baseName, stepEnv)
+            && !EnvContainsNameIgnoreCase(arena, baseName, jobEnv)
+            && !EnvContainsNameIgnoreCase(arena, baseName, workflowEnv))
         {
             return baseName;
         }
 
+        // Conflict found — need full set for numbered suffix search
+        var existing = CollectExistingEnvNames(arena, utf8Yaml, stepEnv, jobEnv, workflowEnv);
         for (var i = 2; i <= 99; i++)
         {
             var candidate = baseName + "_" + i;
@@ -656,6 +690,56 @@ internal static class RunContextDirectUseAnalyzer
         }
 
         return null;
+    }
+
+    /// <summary>
+    /// Checks if any env var in <paramref name="env"/> has a name matching <paramref name="name"/>
+    /// (case-insensitive, pure span comparison, zero allocation).
+    /// </summary>
+    private static bool EnvContainsNameIgnoreCase(AstArena arena, string name, Env? env)
+    {
+        if (env?.Vars is null)
+        {
+            return false;
+        }
+
+        foreach (var pair in env.Vars.Value)
+        {
+            var nameBytes = arena.GetStringValue(pair.Value.Name);
+            if (EqualsUtf8AsciiIgnoreCase(nameBytes, name))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /// <summary>
+    /// Compares UTF-8 bytes against an ASCII string case-insensitively without allocating.
+    /// Assumes both sides contain only ASCII characters.
+    /// </summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private static bool EqualsUtf8AsciiIgnoreCase(ReadOnlySpan<byte> utf8, string ascii)
+    {
+        if (utf8.Length != ascii.Length)
+        {
+            return false;
+        }
+
+        for (var i = 0; i < utf8.Length; i++)
+        {
+            var b = utf8[i];
+            var c = (byte)ascii[i];
+            if (b >= (byte)'A' && b <= (byte)'Z') b = (byte)(b + 32);
+            if (c >= (byte)'A' && c <= (byte)'Z') c = (byte)(c + 32);
+            if (b != c)
+            {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     private static HashSet<string> CollectExistingEnvNames(

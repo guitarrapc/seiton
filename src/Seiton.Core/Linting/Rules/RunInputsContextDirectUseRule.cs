@@ -1,4 +1,4 @@
-using Seiton.Core.Parsing;
+﻿using Seiton.Core.Parsing;
 using Seiton.Core.Parsing.Ast;
 
 using static Seiton.Core.Parsing.SpanHelpers;
@@ -187,25 +187,19 @@ public sealed class RunInputsContextDirectUseRule() : RuleBase(RuleId.RunInputsC
     /// <summary>Converts an input name (e.g. "benchmark-config-path") to an env var name (e.g. "BENCHMARK_CONFIG_PATH").</summary>
     internal static string InputNameToEnvVarName(string inputName)
     {
-        var sb = new System.Text.StringBuilder(inputName.Length);
-        for (var i = 0; i < inputName.Length; i++)
+        return string.Create(inputName.Length, inputName, static (span, name) =>
         {
-            var c = inputName[i];
-            if (c is '-' or '.')
+            for (var i = 0; i < name.Length; i++)
             {
-                sb.Append('_');
+                var c = name[i];
+                span[i] = c switch
+                {
+                    '-' or '.' => '_',
+                    >= 'a' and <= 'z' => (char)(c - 32),
+                    _ => c,
+                };
             }
-            else if (c is >= 'a' and <= 'z')
-            {
-                sb.Append((char)(c - 32));
-            }
-            else
-            {
-                sb.Append(c);
-            }
-        }
-
-        return sb.ToString();
+        });
     }
 
     // Inputs-specific reference parsing
