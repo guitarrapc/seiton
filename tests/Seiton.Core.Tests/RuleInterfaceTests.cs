@@ -12154,6 +12154,34 @@ public sealed class RuleInterfaceTests
     }
 
     [Test]
+    public async Task LintEngine_RunInputsContextDirectUse_Fix_InsertsEnvWithBracketAccess_WhenNoExistingMapping()
+    {
+        var yaml = """
+        on: workflow_dispatch
+        jobs:
+            build:
+                runs-on: ubuntu-latest
+                steps:
+                    - name: Generate Matrix
+                      run: ./tool --config-path "./Repo/${{ inputs['benchmark-config-path'] }}"
+        """;
+
+        var sourceBytes = Encoding.UTF8.GetBytes(yaml);
+        var engine = new LintEngine([new RunInputsContextDirectUseRule()]);
+        using var result = engine.Check(sourceBytes, "run-inputs-fix-bracket.yml", new LintConfig { Fix = new FixConfig { Enabled = true } });
+        var diagnostic = result.Diagnostics.First(x => x.RuleId == "run-inputs-context-direct-use");
+
+        await Assert.That(diagnostic.Fix is not null).IsTrue();
+
+        var fixedBytes = FixEngine.Apply(sourceBytes, diagnostic.Fix!.Value.Edits);
+        var fixedText = Encoding.UTF8.GetString(fixedBytes).Replace("\r\n", "\n", StringComparison.Ordinal);
+
+        // Bracket access with hyphens should produce correct env var name
+        await Assert.That(fixedText.Contains("${BENCHMARK_CONFIG_PATH}", StringComparison.Ordinal)).IsTrue();
+        await Assert.That(fixedText.Contains("BENCHMARK_CONFIG_PATH: ${{ inputs.benchmark-config-path }}", StringComparison.Ordinal)).IsTrue();
+    }
+
+    [Test]
     public async Task LintEngine_RunInputsContextDirectUse_Fix_AppendsToExistingEnv_WhenNoExistingMapping()
     {
         var yaml = """

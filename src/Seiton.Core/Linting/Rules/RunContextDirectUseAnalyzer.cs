@@ -1,4 +1,5 @@
-﻿using Seiton.Core.Parsing;
+﻿using Seiton.Core.Linting.Fixing;
+using Seiton.Core.Parsing;
 using Seiton.Core.Parsing.Ast;
 using System.Runtime.CompilerServices;
 using System.Text;
@@ -561,5 +562,481 @@ internal static class RunContextDirectUseAnalyzer
         }
 
         return insideSingleQuote;
+    }
+
+    // Step Env Insertion Utilities
+
+    /// <summary>
+    /// Builds a <see cref="TextEdit"/> that inserts an <c>env:</c> entry (or appends to existing step env)
+    /// mapping <paramref name="envVarName"/> to <c>${{ expressionString }}</c>.
+    /// </summary>
+    internal static bool TryBuildStepEnvInsertionEdit(
+        AstArena arena, byte[] utf8Yaml, Step step,
+        string envVarName, string expressionString, out TextEdit edit)
+    {
+        edit = default;
+        var lineEnding = FixFormatting.DetectDominantLineEnding(utf8Yaml);
+
+        var runKeyOffset = FindRunKeyOffset(utf8Yaml, step.Exec.Range.Start);
+        if (runKeyOffset < 0)
+        {
+            return false;
+        }
+
+        var runLine = FindLineNumberFromOffset(utf8Yaml, runKeyOffset);
+        if (runLine < 1)
+        {
+            return false;
+        }
+
+        var stepKeyIndent = GetStepKeyIndentation(utf8Yaml, runLine);
+
+        if (step.Env?.Vars is not null && step.Env.Vars.Value.Count > 0)
+        {
+            if (IsFlowStyleEnv(utf8Yaml, step.Env))
+            {
+                return false;
+            }
+
+            var lastEnvLine = FindLastEnvEntryLine(arena, utf8Yaml, step.Env);
+            if (lastEnvLine < 1)
+            {
+                return false;
+            }
+
+            var envKeyLine = FindEnvKeyLine(arena, utf8Yaml, step.Env);
+            var childIndent = envKeyLine >= 0
+                ? FixFormatting.GetLineIndentation(utf8Yaml, envKeyLine)
+                : FixFormatting.GetLineIndentation(utf8Yaml, lastEnvLine);
+            var insertOffset = FindLineEndOffsetIncludingNewLine(utf8Yaml, lastEnvLine);
+            var needsLeadingNewline = insertOffset == utf8Yaml.Length && utf8Yaml.Length > 0 && utf8Yaml[^1] != (byte)'\n';
+            var insertText = (needsLeadingNewline ? lineEnding : "")
+                + childIndent + envVarName + ": ${{ " + expressionString + " }}" + lineEnding;
+            edit = new TextEdit(insertOffset, 0, insertText);
+            return true;
+        }
+
+        // Empty env mapping (env: {}) cannot be extended by insertion
+        if (step.Env is not null)
+        {
+            return false;
+        }
+
+        // No existing env: insert env block after the run value
+        var childIndentUnit = FixFormatting.InferIndentationUnit(utf8Yaml);
+        var envChildIndent = stepKeyIndent + childIndentUnit;
+        var runEndLine = FindRunEndLine(utf8Yaml, runLine, stepKeyIndent);
+        var insertAfterRun = FindLineEndOffsetIncludingNewLine(utf8Yaml, runEndLine);
+        var needsLeadingNewlineForEnvBlock = insertAfterRun == utf8Yaml.Length && utf8Yaml.Length > 0 && utf8Yaml[^1] != (byte)'\n';
+        var envBlock = (needsLeadingNewlineForEnvBlock ? lineEnding : "")
+            + stepKeyIndent + "env:" + lineEnding
+            + envChildIndent + envVarName + ": ${{ " + expressionString + " }}" + lineEnding;
+        edit = new TextEdit(insertAfterRun, 0, envBlock);
+        return true;
+    }
+
+    /// <summary>Deduplicates an env var name against existing env names in the step/job/workflow scope.</summary>
+    internal static string? DeduplicateEnvName(
+        AstArena arena, byte[] utf8Yaml, string baseName,
+        Env? stepEnv, Env? jobEnv, Env? workflowEnv)
+    {
+        var existing = CollectExistingEnvNames(arena, utf8Yaml, stepEnv, jobEnv, workflowEnv);
+        if (!existing.Contains(baseName))
+        {
+            return baseName;
+        }
+
+        for (var i = 2; i <= 99; i++)
+        {
+            var candidate = baseName + "_" + i;
+            if (!existing.Contains(candidate))
+            {
+                return candidate;
+            }
+        }
+
+        return null;
+    }
+
+    private static HashSet<string> CollectExistingEnvNames(
+        AstArena arena, byte[] utf8Yaml,
+        Env? stepEnv, Env? jobEnv, Env? workflowEnv)
+    {
+        var names = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        CollectEnvNames(arena, utf8Yaml, stepEnv, names);
+        CollectEnvNames(arena, utf8Yaml, jobEnv, names);
+        CollectEnvNames(arena, utf8Yaml, workflowEnv, names);
+        return names;
+    }
+
+    private static void CollectEnvNames(AstArena arena, byte[] utf8Yaml, Env? env, HashSet<string> names)
+    {
+        if (env?.Vars is null)
+        {
+            return;
+        }
+
+        foreach (var pair in env.Vars.Value)
+        {
+            var nameBytes = arena.GetStringValue(pair.Value.Name);
+            var nameIndex = 0;
+            if (TryReadIdentifier(nameBytes, ref nameIndex, out var name) && nameIndex == nameBytes.Length)
+            {
+                names.Add(name);
+            }
+        }
+    }
+
+    internal static int FindLastEnvEntryLine(AstArena arena, byte[] utf8Yaml, Env env)
+    {
+        if (env.Vars is null)
+        {
+            return -1;
+        }
+
+        var maxEndOffset = 0;
+        foreach (var pair in env.Vars.Value)
+        {
+            var valueRange = arena.GetStringRange(pair.Value.Value);
+            var endOffset = valueRange.Start + valueRange.Length;
+            if (endOffset > maxEndOffset)
+            {
+                maxEndOffset = endOffset;
+            }
+        }
+
+        if (maxEndOffset <= 0)
+        {
+            return -1;
+        }
+
+        return FindLineNumberFromOffset(utf8Yaml, maxEndOffset - 1);
+    }
+
+    internal static int FindEnvKeyLine(AstArena arena, byte[] utf8Yaml, Env env)
+    {
+        if (env.Vars is null)
+        {
+            return -1;
+        }
+
+        foreach (var pair in env.Vars.Value)
+        {
+            var nameRange = arena.GetStringRange(pair.Value.Name);
+            if (nameRange.Start >= 0)
+            {
+                return FindLineNumberFromOffset(utf8Yaml, nameRange.Start);
+            }
+        }
+
+        return -1;
+    }
+
+    internal static bool IsFlowStyleEnv(byte[] utf8Yaml, Env env)
+    {
+        if (env.Range.Start < 0 || env.Range.Start >= utf8Yaml.Length)
+        {
+            return false;
+        }
+
+        var pos = env.Range.Start;
+        while (pos < utf8Yaml.Length && utf8Yaml[pos] != (byte)'\n')
+        {
+            if (utf8Yaml[pos] == (byte)'{')
+            {
+                return true;
+            }
+
+            pos++;
+        }
+
+        return false;
+    }
+
+    internal static int FindRunKeyOffset(byte[] utf8Yaml, int valueStart)
+    {
+        var pos = Math.Min(valueStart, utf8Yaml.Length);
+        while (pos > 0)
+        {
+            var lineStart = pos - 1;
+            while (lineStart > 0 && utf8Yaml[lineStart - 1] != (byte)'\n')
+            {
+                lineStart--;
+            }
+
+            var i = lineStart;
+            while (i < pos && utf8Yaml[i] == (byte)' ')
+            {
+                i++;
+            }
+
+            if (i + 1 < pos && utf8Yaml[i] == (byte)'-' && utf8Yaml[i + 1] == (byte)' ')
+            {
+                i += 2;
+            }
+
+            if (i + 3 < utf8Yaml.Length
+                && i < valueStart
+                && utf8Yaml[i] == (byte)'r'
+                && utf8Yaml[i + 1] == (byte)'u'
+                && utf8Yaml[i + 2] == (byte)'n'
+                && utf8Yaml[i + 3] == (byte)':')
+            {
+                return i;
+            }
+
+            pos = lineStart;
+        }
+
+        return -1;
+    }
+
+    internal static int FindLineNumberFromOffset(byte[] utf8Yaml, int offset)
+    {
+        if (offset <= 0)
+        {
+            return 1;
+        }
+
+        if (offset > utf8Yaml.Length)
+        {
+            offset = utf8Yaml.Length;
+        }
+
+        var line = 1;
+        for (var i = 0; i < offset; i++)
+        {
+            if (utf8Yaml[i] == (byte)'\n')
+            {
+                line++;
+            }
+        }
+
+        return line;
+    }
+
+    internal static int FindLineStartOffset(byte[] utf8Yaml, int lineNumber)
+    {
+        if (lineNumber <= 1)
+        {
+            return 0;
+        }
+
+        var currentLine = 1;
+        for (var i = 0; i < utf8Yaml.Length; i++)
+        {
+            if (utf8Yaml[i] != (byte)'\n')
+            {
+                continue;
+            }
+
+            currentLine++;
+            if (currentLine == lineNumber)
+            {
+                return i + 1;
+            }
+        }
+
+        return utf8Yaml.Length;
+    }
+
+    internal static int FindLineEndOffsetIncludingNewLine(byte[] utf8Yaml, int lineNumber)
+    {
+        var start = FindLineStartOffset(utf8Yaml, lineNumber);
+        for (var i = start; i < utf8Yaml.Length; i++)
+        {
+            if (utf8Yaml[i] == (byte)'\n')
+            {
+                return i + 1;
+            }
+        }
+
+        return utf8Yaml.Length;
+    }
+
+    internal static string GetStepKeyIndentation(byte[] utf8Yaml, int lineNumber)
+    {
+        var baseIndent = FixFormatting.GetLineIndentation(utf8Yaml, lineNumber);
+        var lineStart = FindLineStartOffset(utf8Yaml, lineNumber);
+        var offset = lineStart + baseIndent.Length;
+        return offset + 1 < utf8Yaml.Length && utf8Yaml[offset] == (byte)'-' && utf8Yaml[offset + 1] == (byte)' '
+            ? baseIndent + "  "
+            : baseIndent;
+    }
+
+    internal static int FindRunEndLine(byte[] utf8Yaml, int runKeyLine, string stepKeyIndent)
+    {
+        var lastContentLine = runKeyLine;
+        var stepKeyIndentLen = stepKeyIndent.Length;
+        var currentLine = runKeyLine;
+        var pos = FindLineStartOffset(utf8Yaml, runKeyLine);
+
+        while (pos < utf8Yaml.Length && utf8Yaml[pos] != (byte)'\n')
+        {
+            pos++;
+        }
+
+        if (pos < utf8Yaml.Length)
+        {
+            pos++;
+        }
+
+        currentLine++;
+
+        while (pos < utf8Yaml.Length)
+        {
+            var lineStart = pos;
+            while (pos < utf8Yaml.Length && utf8Yaml[pos] != (byte)'\n')
+            {
+                pos++;
+            }
+
+            var lineLen = pos - lineStart;
+            if (pos < utf8Yaml.Length)
+            {
+                pos++;
+            }
+
+            var indent = 0;
+            while (indent < lineLen && utf8Yaml[lineStart + indent] == (byte)' ')
+            {
+                indent++;
+            }
+
+            if (indent >= lineLen || (lineLen > 0 && lineStart + indent < utf8Yaml.Length && utf8Yaml[lineStart + indent] == (byte)'\r' && indent + 1 >= lineLen))
+            {
+                lastContentLine = currentLine;
+                currentLine++;
+                continue;
+            }
+
+            if (indent > stepKeyIndentLen)
+            {
+                lastContentLine = currentLine;
+                currentLine++;
+                continue;
+            }
+
+            break;
+        }
+
+        return lastContentLine;
+    }
+
+    /// <summary>
+    /// Reads a GitHub Actions identifier allowing hyphens (e.g. "benchmark-config-path").
+    /// Matches the expression parser's identifier behavior.
+    /// </summary>
+    internal static bool TryReadGitHubIdentifier(ReadOnlySpan<byte> expression, ref int index, out string identifier)
+    {
+        identifier = string.Empty;
+        if (index >= expression.Length)
+        {
+            return false;
+        }
+
+        var b = expression[index];
+        if (!((b >= (byte)'A' && b <= (byte)'Z') || (b >= (byte)'a' && b <= (byte)'z') || b == (byte)'_'))
+        {
+            return false;
+        }
+
+        var start = index;
+        index++;
+        while (index < expression.Length)
+        {
+            b = expression[index];
+            if (!((b >= (byte)'A' && b <= (byte)'Z') || (b >= (byte)'a' && b <= (byte)'z')
+                || (b >= (byte)'0' && b <= (byte)'9') || b == (byte)'_' || b == (byte)'-'))
+            {
+                break;
+            }
+
+            index++;
+        }
+
+        identifier = Encoding.UTF8.GetString(expression[start..index]);
+        return true;
+    }
+
+    /// <summary>
+    /// Like <see cref="TryConsumeMemberOrBracketName"/> but allows hyphens in dot-access identifiers
+    /// and bracket-access quoted names, matching GitHub Actions expression parser behavior.
+    /// </summary>
+    internal static bool TryConsumeGitHubMemberOrBracketName(ReadOnlySpan<byte> expression, ref int index, out string name)
+    {
+        name = string.Empty;
+        if (index >= expression.Length)
+        {
+            return false;
+        }
+
+        if (expression[index] == (byte)'.')
+        {
+            index++;
+            SkipWhiteSpace(expression, ref index);
+            if (!TryReadGitHubIdentifier(expression, ref index, out name))
+            {
+                return false;
+            }
+
+            SkipWhiteSpace(expression, ref index);
+            return index == expression.Length;
+        }
+
+        if (expression[index] != (byte)'[')
+        {
+            return false;
+        }
+
+        index++;
+        SkipWhiteSpace(expression, ref index);
+        if (index >= expression.Length)
+        {
+            return false;
+        }
+
+        var quote = expression[index];
+        if (quote is not ((byte)'\'' or (byte)'"'))
+        {
+            return false;
+        }
+
+        index++;
+        var start = index;
+        while (index < expression.Length && expression[index] != quote)
+        {
+            index++;
+        }
+
+        if (index >= expression.Length)
+        {
+            return false;
+        }
+
+        var nameBytes = expression[start..index];
+        index++;
+        SkipWhiteSpace(expression, ref index);
+        if (index >= expression.Length || expression[index] != (byte)']')
+        {
+            return false;
+        }
+
+        index++;
+        SkipWhiteSpace(expression, ref index);
+        if (index != expression.Length)
+        {
+            return false;
+        }
+
+        // Validate as a GitHub identifier (allows hyphens)
+        var parsedIndex = 0;
+        if (!TryReadGitHubIdentifier(nameBytes, ref parsedIndex, out name) || parsedIndex != nameBytes.Length)
+        {
+            name = string.Empty;
+            return false;
+        }
+
+        return true;
     }
 }
