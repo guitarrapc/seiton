@@ -859,7 +859,7 @@ internal static class RunContextDirectUseAnalyzer
                 i += 2;
             }
 
-            if (i + 3 < utf8Yaml.Length
+            if (i + 3 < pos
                 && i < valueStart
                 && utf8Yaml[i] == (byte)'r'
                 && utf8Yaml[i + 1] == (byte)'u'
