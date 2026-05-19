@@ -699,36 +699,36 @@ jobs:
 |---|---|---|
 | ✓ | — | ✗ |
 
-Warns on risky environment variable naming and usage patterns across workflow, job, and step scopes.
+Validates environment variable names in `env:` blocks follow the portable naming convention `[A-Z_][A-Z0-9_]*`. Reports names that contain lowercase letters, dashes, or start with a digit.
 
 **Example trigger:**
 
 ```yaml
 on: push
 env:
-  github_token: x           # ERROR: not portable (lowercase)
+  foobar: x           # WARNING: not portable (lowercase)
 jobs:
   build:
     runs-on: ubuntu-latest
     steps:
       - env:
-          TOKEN-NAME: x     # ERROR: not portable (contains dash)
-        run: echo ng
+          foo-bar: x     # WARNING: not portable (contains dash)
+        run: echo ng "${foo-bar}"
 ```
 
-**Remediation:**
+**Remediation:** Rename environment variables to use only uppercase letters, digits, and underscores:
 
 ```yaml
 on: push
 env:
-  GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+  FOOBAR: x
 jobs:
   build:
     runs-on: ubuntu-latest
     steps:
       - env:
-          TOKEN_NAME: x
-        run: echo ok
+          FOO_BAR: x
+        run: echo ok "${FOO_BAR}"
 ```
 
 ---
