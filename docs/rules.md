@@ -1183,7 +1183,7 @@ on:
 |---|---|---|
 | ✓ | — | ✗ |
 
-Validates `workflow_call` input default values match their declared types. Also warns when a required input has a default value (the default will never be used).
+Validates `workflow_call` input default values match their declared types. Also reports an error when a required input has a default value (the default will never be used).
 
 **Example trigger:**
 
@@ -1259,7 +1259,7 @@ jobs:
       - uses: ./actions/deploy
         with:
           target: prod
-          unknwon-key: x          # ERROR: unknown input 'unknwon-key'
+          unknown-key: x          # ERROR: unknown input 'unknown-key'
           # (missing 'environment' which is required by action.yml)
 ```
 
