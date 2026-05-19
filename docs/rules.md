@@ -2189,26 +2189,26 @@ Use `seiton fix --enable-pin-network` to automatically resolve and apply SHA pin
 rules:
   unpinned-uses:
     ignore-actions:
-      - "my-org/internal-action"
-      - "my-org/setup-*"
+      - owner: "my-org/internal-action"
+      - owner: "my-org/setup-*"
 ```
 
 Patterns use wildcard matching (`*` = any sequence, `?` = single character) against `owner/repo`.
 
-**Ref-conditional ignore (ignore only specific refs):**
+**Ignore all refs or only specific refs:**
 
 ```yaml
 rules:
   unpinned-uses:
     ignore-actions:
-      # String form: ignore ALL refs from this owner
-      - "my-org/*"
-      # Object form: ignore only @main and @master from this owner
+      # Omit refs to ignore ALL refs from this owner
+      - owner: "my-org/*"
+      # Include refs to ignore only @main and @master from this owner
       - owner: "my-org/*"
         refs: [main, master]
 ```
 
-Object form requires both `owner` (glob pattern) and `refs` (non-empty list of exact ref strings, case-sensitive). This lets you trust default-branch refs from your own org while still warning about arbitrary branch/tag refs from the same owner.
+Each entry is an object with required `owner` (glob pattern) and optional `refs` (non-empty list of exact ref strings, case-sensitive). Omitting `refs` ignores all refs for matching actions. Including `refs` lets you trust default-branch refs from your own org while still warning about arbitrary branch/tag refs from the same owner.
 
 ---
 

@@ -219,7 +219,7 @@ public sealed record RuleConfig
 
 /// <summary>
 /// An ignore-actions entry for the <c>unpinned-uses</c> rule.
-/// When <see cref="Refs"/> is null, all refs are ignored (string-form backward compat).
+/// When <see cref="Refs"/> is null, all refs are ignored.
 /// When non-null, only the listed refs trigger the ignore (ref-conditional).
 /// </summary>
 /// <param name="Pattern">Glob pattern matched against <c>owner/repo</c> (case-insensitive).</param>

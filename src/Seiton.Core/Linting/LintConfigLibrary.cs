@@ -62,9 +62,9 @@ public static class LintConfigLibrary
 
           # unpinned-uses:
           #   ignore-actions:
-          #     - my-org/internal-action
-          #     - my-org/setup-*
           #     - owner: "my-org/*"
+          #     - owner: "my-org/internal-action"
+          #     - owner: "my-org/setup-*"
           #       refs: [main, master]
 
           # overprovisioned-secrets:

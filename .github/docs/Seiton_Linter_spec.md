@@ -532,7 +532,7 @@ rules:
 
   unpinned-uses:
     ignore-actions:
-      - "my-org/*"
+      - owner: "my-org/*"
       - owner: "my-org/*"
         refs: [main, master]
 
@@ -598,11 +598,12 @@ rules:
 
 #### 5.8.8 `unpinned-uses` — `ignore-actions`
 
-- Accepts a mixed list of string and object entries.
-- String entry form: wildcard pattern matched against `owner/repo`, case-insensitive, and suppresses `unpinned-uses` for all refs of matching actions.
-- Object entry form: `{ owner, refs }` where `owner` uses the same wildcard matching as string entries and `refs` is a non-empty list of exact ref strings matched case-sensitively.
+- Accepts a list of object entries.
+- Each entry requires `owner`, a wildcard pattern matched against `owner/repo` case-insensitively.
+- `refs` is optional. When omitted, `unpinned-uses` is suppressed for all refs of matching actions.
+- When `refs` is present, it is a non-empty list of exact ref strings matched case-sensitively.
 - Normalization trims surrounding whitespace; duplicate entries after normalization are ignored. Pattern matching uses ASCII lower-case normalization for `owner/repo`, while `refs` retain original case semantics.
-- Unknown object keys, missing `owner`, empty `owner`, missing `refs`, empty `refs`, or empty ref elements are configuration errors.
+- Unknown object keys, missing `owner`, empty `owner`, empty `refs`, or empty ref elements are configuration errors. Scalar string items are configuration errors.
 
 #### 5.8.9 `overprovisioned-secrets` — `max-step-env-secrets` / `max-job-secrets`
 

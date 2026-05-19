@@ -2393,6 +2393,8 @@ public sealed class RuleInterfaceTests
         var myOrgFirst = warnings.First(w => w.Message.Contains("my-org/action-a", StringComparison.Ordinal));
         await Assert.That(myOrgFirst.Help).IsNotNull();
         await Assert.That(myOrgFirst.Help!).Contains("my-org/*");
+        await Assert.That(myOrgFirst.Help!).Contains("owner:");
+        await Assert.That(myOrgFirst.Help!).DoesNotContain("ignore-actions: [\"my-org/*\"]");
         await Assert.That(myOrgFirst.Help!).Contains("ignore-actions");
 
         // Second occurrence of same owner should NOT have Help (deduplicated)
@@ -2425,6 +2427,8 @@ public sealed class RuleInterfaceTests
         await Assert.That(warnings.Length).IsEqualTo(1);
         await Assert.That(warnings[0].Help).IsNotNull();
         await Assert.That(warnings[0].Help!).Contains("my-org/*");
+        await Assert.That(warnings[0].Help!).Contains("owner:");
+        await Assert.That(warnings[0].Help!).DoesNotContain("ignore-actions: [\"my-org/*\"]");
         await Assert.That(warnings[0].Help!).Contains("ignore-actions");
     }
 
@@ -2632,9 +2636,9 @@ public sealed class RuleInterfaceTests
     }
 
     [Test]
-    public async Task RuleRegression_UnpinnedUsesRule_RefConditionalIgnore_MixedForms()
+    public async Task RuleRegression_UnpinnedUsesRule_RefConditionalIgnore_OwnerOnlyAndRefSpecificEntries()
     {
-        // Mixed: string form (ignore all refs) + object form (ignore only specific refs)
+        // Owner-only entry ignores all refs; ref-specific entry ignores only listed refs.
         var config = new LintConfig
         {
             Rules = new Dictionary<string, RuleConfig>
@@ -2653,7 +2657,7 @@ public sealed class RuleInterfaceTests
         var cases = new[]
         {
             new RuleCase(
-            "ok-string-form-ignores-all-refs",
+            "ok-owner-only-entry-ignores-all-refs",
             """
             on: push
             jobs:
@@ -2664,7 +2668,7 @@ public sealed class RuleInterfaceTests
             """,
             []),
             new RuleCase(
-            "ok-object-form-matching-ref",
+            "ok-ref-specific-entry-matching-ref",
             """
             on: push
             jobs:

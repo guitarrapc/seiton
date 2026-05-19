@@ -824,7 +824,6 @@ internal static class LintConfigYamlParser
         {
             var item = list[i];
 
-            // Object form: { owner: "MyOrg/*", refs: [main, master] }
             if (AsMap(item) is { } map)
             {
                 string? owner = null;
@@ -847,13 +846,13 @@ internal static class LintConfigYamlParser
 
                 if (string.IsNullOrWhiteSpace(owner))
                 {
-                    diagnostics.Add(Diag("ignore-actions object form requires 'owner' key", DomLine, 5, 14, filePath));
+                    diagnostics.Add(Diag("ignore-actions requires 'owner' key", DomLine, 5, 14, filePath));
                     continue;
                 }
 
-                if (refs is null or { Count: 0 })
+                if (refs is { Count: 0 })
                 {
-                    diagnostics.Add(Diag("ignore-actions object form requires non-empty 'refs' list", DomLine, 5, 14, filePath));
+                    diagnostics.Add(Diag("ignore-actions requires non-empty 'refs' list when 'refs' is present", DomLine, 5, 14, filePath));
                     continue;
                 }
 
@@ -861,20 +860,7 @@ internal static class LintConfigYamlParser
                 continue;
             }
 
-            // String form: "MyOrg/*" → ignore all refs
-            var scalar = ScalarToString(item);
-            if (!string.IsNullOrWhiteSpace(scalar))
-            {
-                var pattern = Unquote(scalar);
-                if (!string.IsNullOrWhiteSpace(pattern))
-                {
-                    result.Add(new IgnoreActionRule(pattern));
-                }
-
-                continue;
-            }
-
-            diagnostics.Add(Diag("ignore-actions item must be a string or a mapping with owner and refs", DomLine, 5, 14, filePath));
+            diagnostics.Add(Diag("ignore-actions item must be a mapping with owner and optional refs", DomLine, 5, 14, filePath));
         }
 
         return result.Count > 0 ? result : null;

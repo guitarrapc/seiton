@@ -249,7 +249,7 @@ public sealed class UnpinnedUsesRule() : RuleBase(RuleId.UnpinnedUses)
 
         // First time seeing this owner — cache bytes and build hint
         _lastHintedOwnerBytes = ownerSpan.ToArray();
-        return $"to ignore this owner, add to .github/seiton.yaml: rules: {{ unpinned-uses: {{ ignore-actions: [\"{owner}/*\"] }} }}";
+        return $"to ignore this owner, add to .github/seiton.yaml: rules: {{ unpinned-uses: {{ ignore-actions: [{{ owner: \"{owner}/*\" }}] }} }}";
     }
 
     private string GetUnpinnedStepMessage(Utf8Slice usesSlice, out string decodedUsesText)
@@ -496,13 +496,13 @@ public sealed class UnpinnedUsesRule() : RuleBase(RuleId.UnpinnedUses)
                 continue;
             }
 
-            // String form (Refs is null): ignore all refs
+            // Owner-only entry (Refs is null): ignore all refs
             if (entry.RefsUtf8 is null)
             {
                 return true;
             }
 
-            // Object form: check if action ref matches any configured ref (case-sensitive exact match)
+            // Ref-conditional entry: check if action ref matches any configured ref (case-sensitive exact match)
             for (var j = 0; j < entry.RefsUtf8.Length; j++)
             {
                 if (actionRef.SequenceEqual(entry.RefsUtf8[j]))

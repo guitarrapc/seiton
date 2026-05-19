@@ -17,11 +17,11 @@ foo.yaml:43:59: warning [unpinned-uses] 'MyOrg/Actions/.github/actions/setup-dot
 
 The user wants: "Ignore `@main` refs from my own org, but still warn about external actions."
 
-## Current Mechanisms
+## Previous Mechanisms
 
 | Method | Config | Limitation |
 |---|---|---|
-| `rules.unpinned-uses.ignore-actions` | `["MyOrg/*"]` | Owner-level blanket ignore; no ref distinction |
+| `rules.unpinned-uses.ignore-actions` | blanket owner ignore only | Owner-level blanket ignore; no ref distinction |
 | `exclusions` | file + rules | Too coarse (whole file) or too narrow (one file) |
 | Inline directive | `# seiton: disable-next-line unpinned-uses` | Must add per-occurrence |
 | `fix.pinning.exclude-branches` | `[main, master]` | Only affects `--fix`, not lint warning |
@@ -80,43 +80,42 @@ foo.yaml:43:59: warning [unpinned-uses] 'MyOrg/Actions/.github/actions/setup-dot
 rules:
   unpinned-uses:
     ignore-actions:
-      # Simple string form (existing, unchanged behavior — ignore all refs)
-      - "MyOrg/*"
-
-      # Extended object form (new — ref-conditional ignore)
+      - owner: "MyOrg/*"
       - owner: "MyOrg/*"
         refs: [main, master]
 ```
 
 **Semantics:**
 
-- **String form** (backward compatible): Ignores the action for ALL refs. Matches against `owner/repo`.
-- **Object form** (new): Ignores only when the ref matches one of the listed values. `owner` uses the same glob matching as string form. `refs` is exact string match (no glob).
+- **Object form only**: `owner` is required and matches against `owner/repo` using the existing wildcard semantics.
+- `refs` is optional. When omitted, the entry ignores **all refs** for matching actions.
+- When `refs` is present, it is a non-empty list of exact string matches (no glob) and the ignore applies only to those refs.
 
 **Validation rules:**
 
-- `owner` is required in object form
-- `refs` is required in object form (otherwise use string form)
-- `refs` must be a non-empty list of strings
-- Unknown keys in object form produce a config error
+- `owner` is required
+- `refs` is optional
+- if present, `refs` must be a non-empty list of strings
+- unknown keys produce a config error
+- scalar string items are invalid (object-only schema)
 
 **Implementation notes:**
 
-- Config parser: detect string vs mapping in the `ignore-actions` list
+- Config parser: accept only mapping entries in the `ignore-actions` list
 - Matcher: after extracting `owner/repo` and `ref` from uses value, check:
-  1. If any string pattern matches → ignore
+  1. If any object pattern matches owner and `refs` is omitted → ignore
   2. If any object pattern matches owner AND ref is in refs list → ignore
   3. Otherwise → report diagnostic
-- `fix.pinning.ignore-actions` already has `uses` + `ref` structure; align naming for consistency
+- `fix.pinning.ignore-actions` already has `uses` + `ref` structure, but this rule config keeps `owner` + `refs` because it matches `owner/repo` globs plus optional exact refs
 
-**Migration:** No migration needed. Existing string configs continue to work unchanged.
+**Migration:** Since there are no existing users, switch directly to object-only. Do not preserve string-form compatibility.
 
 ## Priority & Sequencing
 
 | Phase | What | Effort | Impact |
 |---|---|---|---|
 | 1 | Hint in warning message | Small (diagnostic formatting only) | High — eliminates discovery friction |
-| 2 | Ref-conditional ignore-actions | Medium (config schema + matcher) | Medium — precision for security-conscious users |
+| 2 | Ref-conditional ignore-actions (object-only) | Medium (config schema + matcher) | Medium — precision for security-conscious users |
 
 Phase 1 should ship first and independently. Phase 2 can follow in a separate PR.
 
@@ -147,7 +146,7 @@ Phase 1 should ship first and independently. Phase 2 can follow in a separate PR
 - **Hint location:** Uses the existing `Diagnostic.Help` field (already rendered in `DiagnosticFormatter` as `   = help: ...`)
 - **Deduplication:** Two-level cache: fast byte-span check (`_lastHintedOwnerBytes`) for the common repeated-owner case (zero allocation), then `HashSet<string>` (OrdinalIgnoreCase) for multi-owner workflows. Cleared per workflow in `VisitWorkflowPre`.
 - **Scope:** Both step-level and job-level (reusable workflow) unpinned-uses warnings.
-- **Format:** Single-line config snippet: `to ignore this owner, add to .github/seiton.yaml: rules: { unpinned-uses: { ignore-actions: ["<owner>/*"] } }`
+- **Format:** Single-line config snippet: `to ignore this owner, add to .github/seiton.yaml: rules: { unpinned-uses: { ignore-actions: [{ owner: "<owner>/*" }] } }`
 - **Performance:** Owner extraction reuses the already-parsed `actionPath` span from `TryParseRemoteUses`. `BuildOwnerHintOnce` has a zero-allocation fast path for repeated same-owner (the dominant case: all steps use actions from same org). Only the first occurrence per unique owner allocates (owner string + byte cache + hint string). HashSet internal arrays survive `Clear()` across files, avoiding re-allocation.
 
 **Files changed:**
@@ -182,47 +181,58 @@ Phase 1 should ship first and independently. Phase 2 can follow in a separate PR
 
 ### Implementation Summary
 
-**Completed.** The `rules.unpinned-uses.ignore-actions` config now supports both string form (backward compat) and object form with `owner` + `refs` for ref-conditional ignoring.
+**Completed.** The `rules.unpinned-uses.ignore-actions` config now uses an object-only schema with required `owner` and optional `refs` for ref-conditional ignoring.
 
 **Key design decisions:**
 
-- **Config type:** New `IgnoreActionRule(string Pattern, IReadOnlyList<string>? Refs)` record replaces `IReadOnlyList<string>` on `RuleConfig.IgnoreActions`. `Refs == null` means ignore all refs (string form); `Refs` with values means only those exact refs are ignored.
+- **Config type:** New `IgnoreActionRule(string Pattern, IReadOnlyList<string>? Refs)` record replaces `IReadOnlyList<string>` on `RuleConfig.IgnoreActions`. `Refs == null` means ignore all refs for the configured owner pattern; `Refs` with values means only those exact refs are ignored.
 - **YAML naming:** Uses `owner` + `refs` (not `uses` + `ref` like `fix.pinning.ignore-actions`) because the semantics differ: `owner` is a glob matching owner/repo, `refs` is a list of exact strings. This avoids confusion with the single-pattern + single-ref pin remediation format.
 - **Ref matching:** Case-sensitive exact match (matching Git's behavior: branches are case-sensitive on GitHub). The owner/repo glob matching remains case-insensitive (existing behavior).
-- **Internal data structure:** `IgnoreEntry` readonly struct with `byte[] PatternUtf8` (lowercased owner glob) and `byte[][]? RefsUtf8` (pre-encoded ref bytes, null for string-form entries). Zero extra allocation on the hot path when no `ignore-actions` is configured.
+- **Internal data structure:** `IgnoreEntry` readonly struct with `byte[] PatternUtf8` (lowercased owner glob) and `byte[][]? RefsUtf8` (pre-encoded ref bytes, null for owner-only entries). Zero extra allocation on the hot path when no `ignore-actions` is configured.
 - **Matching algorithm:** `MatchAnyIgnoreEntry` iterates entries: if owner pattern matches AND (Refs is null OR any ref matches via `SequenceEqual`), the action is ignored. This is a single loop with early-return, same O(n) as before.
-- **Parsing:** `ParseRuleIgnoreActions` checks `AsMap()` first (object form) then `ScalarToString()` (string form) for each list item. Validation produces Error diagnostics for: missing `owner`, empty `refs`, unknown keys.
+- **Parsing:** `ParseRuleIgnoreActions` accepts only mapping items. Validation produces Error diagnostics for: scalar items, missing `owner`, empty `refs`, unknown keys.
 - **Review fix:** `RuleConfigNormalizer` now normalizes `rules.unpinned-uses.ignore-actions` the same way as other rule-specific config: trims surrounding whitespace, lowercases owner/repo patterns for case-insensitive matching, deduplicates normalized entries, preserves ref case, and rejects empty ref elements. This avoids surprising config behavior such as `refs: ["   "]` silently being accepted.
-- **Backward compat:** Existing string-form YAML configs parse unchanged. Existing test code updated from `string[]` to `IgnoreActionRule[]` (internal API change, not user-facing).
+- **Schema choice:** There are no existing users, so string-form YAML was removed instead of carrying dual-schema compatibility.
 
 **Files changed:**
 
 | File | Change |
 |------|--------|
 | `src/Seiton.Core/Linting/LintConfig.cs` | Added `IgnoreActionRule` record; changed `RuleConfig.IgnoreActions` type from `IReadOnlyList<string>?` to `IReadOnlyList<IgnoreActionRule>?` |
-| `src/Seiton.Core/Linting/LintConfigYamlParser.cs` | Added `ParseRuleIgnoreActions` method handling both string and mapping items |
+| `src/Seiton.Core/Linting/LintConfigYamlParser.cs` | Added `ParseRuleIgnoreActions` method accepting only mapping items with `owner` and optional `refs` |
 | `src/Seiton.Core/Linting/RuleConfigNormalizer.cs` | Added normalization/validation for `rules.unpinned-uses.ignore-actions` (trim, dedup, empty-ref rejection, lowercased owner patterns) |
 | `src/Seiton.Core/Linting/Rules/UnpinnedUsesRule.cs` | Replaced `byte[][] _ignoreActionsUtf8` with `IgnoreEntry[] _ignoreEntries` struct array; `IsIgnoredAction` now takes `actionRef` parameter; added `MatchAnyIgnoreEntry` with ref-conditional logic |
-| `src/Seiton.Core/Linting/LintConfigLibrary.cs` | Updated `seiton init` template to show object form example |
-| `docs/configuration.md` | Documented ref-conditional object form in annotated example and rule-specific options table |
-| `docs/rules.md` | Added ref-conditional example to `unpinned-uses` rule documentation |
+| `src/Seiton.Core/Linting/LintConfigLibrary.cs` | Updated `seiton init` template to show object-only examples |
+| `docs/configuration.md` | Documented object-only `ignore-actions` entries in annotated example and rule-specific options table |
+| `docs/rules.md` | Documented owner-only and ref-conditional `ignore-actions` examples for `unpinned-uses` |
 | `.github/docs/Seiton_Linter_spec.md` | Added `rules.unpinned-uses.ignore-actions` to rule-specific config spec and aligned fix wildcard examples |
 | `.github/docs/Seiton_Linter_csharp_spec.md` | Documented `rules.unpinned-uses.ignore-actions` mapping and normalization semantics |
-| `tests/Seiton.Core.Tests/RuleInterfaceTests.cs` | 5 new tests: matching ref ignored, non-matching ref warns, mixed forms, reusable workflow, case-sensitive ref |
-| `tests/Seiton.Core.Tests/LintConfigLibraryTests.cs` | 7 new tests: object form parsing, mixed form parsing, missing owner error, empty refs error, unknown key error, whitespace-only ref error, normalization/dedup |
+| `tests/Seiton.Core.Tests/RuleInterfaceTests.cs` | 5 new tests: owner-only ignore, matching ref ignored, non-matching ref warns, reusable workflow, case-sensitive ref |
+| `tests/Seiton.Core.Tests/LintConfigLibraryTests.cs` | Added object-only parse/validation tests: string form rejected, owner-only parse, ref-specific parse, missing owner error, empty refs error, unknown key error, whitespace-only ref error, normalization/dedup, template example |
 
-### Benchmark Comparison (Post-review)
+### Benchmark Comparison (Final object-only schema)
 
 | Size | FixEnabled | Mean | Allocated |
 |------|------------|------|-----------|
-| Small | False | 210.4 µs | 8.74 KB |
-| Small | True | 344.0 µs | 10.33 KB |
-| Medium | False | 3,636.7 µs | 69.21 KB |
-| Medium | True | 7,625.8 µs | 83.52 KB |
-| Large | False | 35,075.3 µs | 327.45 KB |
-| Large | True | 86,970.9 µs | 382.42 KB |
+| Small | False | 272.0 µs | 8.76 KB |
+| Small | True | 194.8 µs | 10.21 KB |
+| Medium | False | 3,289.8 µs | 68.95 KB |
+| Medium | True | 5,337.0 µs | 82.45 KB |
+| Large | False | 53,339.7 µs | 327.47 KB |
+| Large | True | 73,068.3 µs | 382.31 KB |
 
-**Analysis:** No regression attributable to the review fix. The only runtime code change after the initial implementation was config normalization in `RuleConfigNormalizer`, which runs during config validation/setup, not inside the per-step/per-job lint hot path. The post-review benchmark still shows the same small/medium allocation profile as the implementation-phase run, and there is no new multi-KB allocation increase in the checked path. The benchmark fixture does not configure `ignore-actions`, so the new matcher still short-circuits at `if (_ignoreEntries.Length == 0) return false;`.
+`LintConfigBenchmark` (final run):
+
+| Method | Complexity | Mean | Allocated |
+|--------|------------|------|-----------|
+| ParseOnly | Minimal | 2.422 µs | 1.27 KB |
+| Validate | Minimal | 3.662 µs | 4.35 KB |
+| ParseOnly | Typical | 30.898 µs | 16.27 KB |
+| Validate | Typical | 32.758 µs | 25.91 KB |
+| ParseOnly | Heavy | 69.981 µs | 49.44 KB |
+| Validate | Heavy | 80.250 µs | 71.60 KB |
+
+**Analysis:** No regression requiring follow-up was observed. The runtime matcher remains the same single-pass owner/ref check, and when `ignore-actions` is not configured it still short-circuits at `if (_ignoreEntries.Length == 0) return false;`. The object-only schema simplification removed scalar-item parsing branches rather than adding new hot-path work. Config parse/validate costs remain in the same microsecond/KB range expected for this benchmark fixture.
 
 ### Open Questions Resolved
 

@@ -375,14 +375,29 @@ public sealed class LintConfigLibraryTests
     }
 
     [Test]
-    public async Task Validate_UnpinnedUsesIgnoreActions_ParseCorrectly()
+    public async Task Validate_UnpinnedUsesIgnoreActions_StringForm_Error()
     {
         var yaml = """
         rules:
           unpinned-uses:
             ignore-actions:
               - guitarrapc/setup-dotnet
-              - my-org/*
+        """;
+
+        var result = LintConfigLibrary.Validate(yaml, "seiton.yaml");
+
+        await Assert.That(result.IsValid).IsFalse();
+        await Assert.That(result.Diagnostics.Any(d => d.Message.Contains("mapping with owner", StringComparison.Ordinal))).IsTrue();
+    }
+
+    [Test]
+    public async Task Validate_UnpinnedUsesIgnoreActions_ObjectForm_OmittedRefs_IgnoresAllRefs()
+    {
+        var yaml = """
+        rules:
+          unpinned-uses:
+            ignore-actions:
+              - owner: "my-org/*"
         """;
 
         var result = LintConfigLibrary.Validate(yaml, "seiton.yaml");
@@ -392,11 +407,9 @@ public sealed class LintConfigLibraryTests
 
         var unpinnedConfig = result.Config!.Rules!["unpinned-uses"];
         await Assert.That(unpinnedConfig.IgnoreActions).IsNotNull();
-        await Assert.That(unpinnedConfig.IgnoreActions!.Count).IsEqualTo(2);
-        await Assert.That(unpinnedConfig.IgnoreActions![0].Pattern).IsEqualTo("guitarrapc/setup-dotnet");
+        await Assert.That(unpinnedConfig.IgnoreActions!.Count).IsEqualTo(1);
+        await Assert.That(unpinnedConfig.IgnoreActions![0].Pattern).IsEqualTo("my-org/*");
         await Assert.That(unpinnedConfig.IgnoreActions![0].Refs).IsNull();
-        await Assert.That(unpinnedConfig.IgnoreActions![1].Pattern).IsEqualTo("my-org/*");
-        await Assert.That(unpinnedConfig.IgnoreActions![1].Refs).IsNull();
     }
 
     [Test]
@@ -426,13 +439,13 @@ public sealed class LintConfigLibraryTests
     }
 
     [Test]
-    public async Task Validate_UnpinnedUsesIgnoreActions_MixedForms_ParseCorrectly()
+    public async Task Validate_UnpinnedUsesIgnoreActions_ObjectForms_ParseCorrectly()
     {
         var yaml = """
         rules:
           unpinned-uses:
             ignore-actions:
-              - "trusted-org/*"
+              - owner: "trusted-org/*"
               - owner: "semi-trusted/*"
                 refs: [main]
         """;
@@ -482,7 +495,7 @@ public sealed class LintConfigLibraryTests
         var result = LintConfigLibrary.Validate(yaml, "seiton.yaml");
 
         await Assert.That(result.IsValid).IsFalse();
-        await Assert.That(result.Diagnostics.Any(d => d.Message.Contains("non-empty 'refs' list", StringComparison.Ordinal))).IsTrue();
+    await Assert.That(result.Diagnostics.Any(d => d.Message.Contains("non-empty 'refs' list", StringComparison.Ordinal))).IsTrue();
     }
 
     [Test]
@@ -1120,4 +1133,14 @@ rules:
         await Assert.That(result.IsValid).IsTrue()
             .Because($"Template uncommented should be valid, but got: {string.Join("; ", result.Diagnostics.Select(d => d.Message))}");
     }
+
+      [Test]
+      public async Task GenerateTemplateYaml_UsesObjectOnlyIgnoreActionsExample()
+      {
+        var yaml = LintConfigLibrary.GenerateTemplateYaml();
+
+        await Assert.That(yaml).Contains("owner: \"my-org/*\"");
+        await Assert.That(yaml).DoesNotContain("- my-org/internal-action");
+        await Assert.That(yaml).DoesNotContain("- my-org/setup-*");
+      }
 }
