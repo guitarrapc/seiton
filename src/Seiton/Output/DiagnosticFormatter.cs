@@ -324,7 +324,7 @@ public static class DiagnosticFormatter
                     DiagnosticSeverity.Warning => "warning",
                     _ => "note",
                 },
-                Message = new SarifMessage { Text = d.Message },
+                Message = new SarifMessage { Text = d.Help is null ? d.Message : $"{d.Message}\n\nHelp: {d.Help}" },
                 Locations =
                 [
                     new SarifLocation

@@ -290,6 +290,63 @@ public sealed class DiagnosticFormatterRichTextTests
         await Assert.That(output).Contains("\"message\":\"json test\"");
     }
 
+    [Test]
+    public async Task Json_Format_IncludesHelpWhenPresent()
+    {
+        var diag = MakeDiagnostic(DiagnosticSeverity.Warning, "test msg", 1, 1, 1, 5, help: "add config snippet");
+
+        var sb = new StringBuilder();
+        using var writer = new StringWriter(sb);
+        DiagnosticFormatter.Write(writer, [diag], OutputFormat.Json, oneline: false, color: false);
+        writer.Flush();
+        var output = sb.ToString();
+
+        await Assert.That(output).Contains("\"help\":\"add config snippet\"");
+    }
+
+    [Test]
+    public async Task Json_Format_OmitsHelpWhenNull()
+    {
+        var diag = MakeDiagnostic(DiagnosticSeverity.Warning, "test msg", 1, 1, 1, 5);
+
+        var sb = new StringBuilder();
+        using var writer = new StringWriter(sb);
+        DiagnosticFormatter.Write(writer, [diag], OutputFormat.Json, oneline: false, color: false);
+        writer.Flush();
+        var output = sb.ToString();
+
+        await Assert.That(output).DoesNotContain("\"help\"");
+    }
+
+    [Test]
+    public async Task Sarif_Format_IncludesHelpInMessage()
+    {
+        var diag = MakeDiagnostic(DiagnosticSeverity.Warning, "unpinned action", 5, 11, 5, 30, help: "to ignore this owner, add config");
+
+        var sb = new StringBuilder();
+        using var writer = new StringWriter(sb);
+        DiagnosticFormatter.Write(writer, [diag], OutputFormat.Sarif, oneline: false, color: false);
+        writer.Flush();
+        var output = sb.ToString();
+
+        await Assert.That(output).Contains("unpinned action\\n\\nHelp: to ignore this owner, add config");
+    }
+
+    [Test]
+    public async Task Sarif_Format_MessageWithoutHelp()
+    {
+        var diag = MakeDiagnostic(DiagnosticSeverity.Error, "plain error", 1, 1, 1, 5);
+
+        var sb = new StringBuilder();
+        using var writer = new StringWriter(sb);
+        DiagnosticFormatter.Write(writer, [diag], OutputFormat.Sarif, oneline: false, color: false);
+        writer.Flush();
+        var output = sb.ToString();
+
+        await Assert.That(output).Contains("\"text\":\"plain error\"");
+        await Assert.That(output).DoesNotContain("Help:");
+    }
+
     // Helpers
     private static Diagnostic MakeDiagnostic(
         DiagnosticSeverity severity,

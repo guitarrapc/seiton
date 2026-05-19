@@ -495,7 +495,7 @@ public sealed class LintConfigLibraryTests
         var result = LintConfigLibrary.Validate(yaml, "seiton.yaml");
 
         await Assert.That(result.IsValid).IsFalse();
-    await Assert.That(result.Diagnostics.Any(d => d.Message.Contains("non-empty 'refs' list", StringComparison.Ordinal))).IsTrue();
+        await Assert.That(result.Diagnostics.Any(d => d.Message.Contains("non-empty 'refs' list", StringComparison.Ordinal))).IsTrue();
     }
 
     [Test]
@@ -1134,13 +1134,13 @@ rules:
             .Because($"Template uncommented should be valid, but got: {string.Join("; ", result.Diagnostics.Select(d => d.Message))}");
     }
 
-      [Test]
-      public async Task GenerateTemplateYaml_UsesObjectOnlyIgnoreActionsExample()
-      {
+    [Test]
+    public async Task GenerateTemplateYaml_UsesObjectOnlyIgnoreActionsExample()
+    {
         var yaml = LintConfigLibrary.GenerateTemplateYaml();
 
         await Assert.That(yaml).Contains("owner: \"my-org/*\"");
         await Assert.That(yaml).DoesNotContain("- my-org/internal-action");
         await Assert.That(yaml).DoesNotContain("- my-org/setup-*");
-      }
+    }
 }
