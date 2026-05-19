@@ -1463,7 +1463,7 @@ jobs:
 
 Errors when `${{ inputs.* }}` or `${{ github.event.inputs.* }}` are directly interpolated inside a `run` script. Inputs may be user-controlled.
 
- Auto-fix reuses an existing unique `env` mapping for the same input when available. Otherwise, for simple expressions, it inserts a step-local `env:` entry and rewrites the script to a shell variable. The env-insertion path intentionally skips compound expressions, no-expand heredocs, shell single-quoted strings, flow-style `env`, and empty `env: {}`; replacement-only reuse of an existing unique mapping may still be offered in those cases.
+ Auto-fix reuses an existing unique `env` mapping for the same input when available. Otherwise, for simple expressions, it inserts a step-local `env:` entry and rewrites the script to a shell variable. No fix is offered for compound expressions, no-expand heredocs, or shell single-quoted strings (contexts where shell expansion is disabled). The env-insertion path additionally skips flow-style `env` and empty `env: {}`; replacement-only reuse of an existing unique mapping may still be offered in those cases.
 
 **Example trigger:**
 

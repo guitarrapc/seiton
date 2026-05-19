@@ -150,7 +150,7 @@ public sealed class RunInputsContextDirectUseRule() : RuleBase(RuleId.RunInputsC
         }
 
         var expressionString = BuildInputsExpressionString(inputName, expression);
-        var envVarName = DeduplicateEnvName(Arena, Config.Utf8Yaml, InputNameToEnvVarName(inputName),
+        var envVarName = DeduplicateEnvName(Arena, InputNameToEnvVarName(inputName),
             step.Env, _currentJob?.Env, _currentWorkflow?.Env);
         if (envVarName is null)
         {

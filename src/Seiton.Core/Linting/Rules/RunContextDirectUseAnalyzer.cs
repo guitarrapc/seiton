@@ -667,7 +667,7 @@ internal static class RunContextDirectUseAnalyzer
 
     /// <summary>Deduplicates an env var name against existing env names in the step/job/workflow scope.</summary>
     internal static string? DeduplicateEnvName(
-        AstArena arena, byte[] utf8Yaml, string baseName,
+        AstArena arena, string baseName,
         Env? stepEnv, Env? jobEnv, Env? workflowEnv)
     {
         // Fast path: span-based comparison avoids HashSet allocation when no conflict exists
@@ -679,7 +679,7 @@ internal static class RunContextDirectUseAnalyzer
         }
 
         // Conflict found — need full set for numbered suffix search
-        var existing = CollectExistingEnvNames(arena, utf8Yaml, stepEnv, jobEnv, workflowEnv);
+        var existing = CollectExistingEnvNames(arena, stepEnv, jobEnv, workflowEnv);
         for (var i = 2; i <= 99; i++)
         {
             var candidate = baseName + "_" + i;
@@ -743,17 +743,17 @@ internal static class RunContextDirectUseAnalyzer
     }
 
     private static HashSet<string> CollectExistingEnvNames(
-        AstArena arena, byte[] utf8Yaml,
+        AstArena arena,
         Env? stepEnv, Env? jobEnv, Env? workflowEnv)
     {
         var names = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        CollectEnvNames(arena, utf8Yaml, stepEnv, names);
-        CollectEnvNames(arena, utf8Yaml, jobEnv, names);
-        CollectEnvNames(arena, utf8Yaml, workflowEnv, names);
+        CollectEnvNames(arena, stepEnv, names);
+        CollectEnvNames(arena, jobEnv, names);
+        CollectEnvNames(arena, workflowEnv, names);
         return names;
     }
 
-    private static void CollectEnvNames(AstArena arena, byte[] utf8Yaml, Env? env, HashSet<string> names)
+    private static void CollectEnvNames(AstArena arena, Env? env, HashSet<string> names)
     {
         if (env?.Vars is null)
         {
