@@ -64,6 +64,8 @@ public static class LintConfigLibrary
           #   ignore-actions:
           #     - my-org/internal-action
           #     - my-org/setup-*
+          #     - owner: "my-org/*"
+          #       refs: [main, master]
 
           # overprovisioned-secrets:
           #   max-step-env-secrets: 5

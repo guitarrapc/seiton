@@ -140,6 +140,9 @@ rules:
     ignore-actions:
       - "my-org/internal-action"
       - "my-org/setup-*"
+      # Ref-conditional: ignore only specific refs (e.g. trust @main from your org)
+      - owner: "my-org/*"
+        refs: [main, master]
 
 # ─── Exclusions ──────────────────────────────────────────────────────────────
 exclusions:
@@ -237,7 +240,7 @@ Some rules accept additional configuration keys. All `extend` lists add to the b
 | `cache-poisoning` | `untrusted-triggers.extend` | Additional trigger events to treat as untrusted. |
 | `unredacted-secrets` | `output-commands.extend` | Additional shell commands to watch for secret printing. |
 | `forbidden-uses` | `deny` / `allow` | Glob patterns for denying or allowing `uses:` references. |
-| `unpinned-uses` | `ignore-actions` | Glob patterns for actions to exclude from SHA-pinning checks. |
+| `unpinned-uses` | `ignore-actions` | Glob patterns (string) or ref-conditional entries (object with `owner` + `refs`) for actions to exclude from SHA-pinning checks. |
 | `overprovisioned-secrets` | `max-step-env-secrets` / `max-job-secrets` | Integer thresholds for secret over-provisioning detection. |
 
 ---

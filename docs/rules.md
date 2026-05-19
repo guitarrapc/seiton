@@ -2195,6 +2195,21 @@ rules:
 
 Patterns use wildcard matching (`*` = any sequence, `?` = single character) against `owner/repo`.
 
+**Ref-conditional ignore (ignore only specific refs):**
+
+```yaml
+rules:
+  unpinned-uses:
+    ignore-actions:
+      # String form: ignore ALL refs from this owner
+      - "my-org/*"
+      # Object form: ignore only @main and @master from this owner
+      - owner: "my-org/*"
+        refs: [main, master]
+```
+
+Object form requires both `owner` (glob pattern) and `refs` (non-empty list of exact ref strings, case-sensitive). This lets you trust default-branch refs from your own org while still warning about arbitrary branch/tag refs from the same owner.
+
 ---
 
 ### `unpinned-image`

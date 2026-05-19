@@ -214,8 +214,17 @@ public sealed record RuleConfig
     public int? MaxJobSecrets { get; init; }
 
     /// <summary>Gets the ignore-actions patterns for <c>unpinned-uses</c>.</summary>
-    public IReadOnlyList<string>? IgnoreActions { get; init; }
+    public IReadOnlyList<IgnoreActionRule>? IgnoreActions { get; init; }
 }
+
+/// <summary>
+/// An ignore-actions entry for the <c>unpinned-uses</c> rule.
+/// When <see cref="Refs"/> is null, all refs are ignored (string-form backward compat).
+/// When non-null, only the listed refs trigger the ignore (ref-conditional).
+/// </summary>
+/// <param name="Pattern">Glob pattern matched against <c>owner/repo</c> (case-insensitive).</param>
+/// <param name="Refs">When null, all refs are ignored. When non-null, only these exact refs are ignored (case-sensitive).</param>
+public sealed record IgnoreActionRule(string Pattern, IReadOnlyList<string>? Refs = null);
 
 /// <summary>A list that extends (appends to) a rule's built-in defaults, matching the YAML <c>extend:</c> key.</summary>
 public sealed record ExtendableList(IReadOnlyList<string> Extend);

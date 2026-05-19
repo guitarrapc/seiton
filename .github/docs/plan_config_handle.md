@@ -175,3 +175,51 @@ Phase 1 should ship first and independently. Phase 2 can follow in a separate PR
 
 1. **Hint frequency:** Implemented as once per owner per workflow run (case-insensitive).
 2. **Structured output:** The `Help` field is already part of the `Diagnostic` record, so JSON/SARIF formatters can include it naturally.
+
+---
+
+## Phase 2 Implementation Results
+
+### Implementation Summary
+
+**Completed.** The `rules.unpinned-uses.ignore-actions` config now supports both string form (backward compat) and object form with `owner` + `refs` for ref-conditional ignoring.
+
+**Key design decisions:**
+
+- **Config type:** New `IgnoreActionRule(string Pattern, IReadOnlyList<string>? Refs)` record replaces `IReadOnlyList<string>` on `RuleConfig.IgnoreActions`. `Refs == null` means ignore all refs (string form); `Refs` with values means only those exact refs are ignored.
+- **YAML naming:** Uses `owner` + `refs` (not `uses` + `ref` like `fix.pinning.ignore-actions`) because the semantics differ: `owner` is a glob matching owner/repo, `refs` is a list of exact strings. This avoids confusion with the single-pattern + single-ref pin remediation format.
+- **Ref matching:** Case-sensitive exact match (matching Git's behavior: branches are case-sensitive on GitHub). The owner/repo glob matching remains case-insensitive (existing behavior).
+- **Internal data structure:** `IgnoreEntry` readonly struct with `byte[] PatternUtf8` (lowercased owner glob) and `byte[][]? RefsUtf8` (pre-encoded ref bytes, null for string-form entries). Zero extra allocation on the hot path when no `ignore-actions` is configured.
+- **Matching algorithm:** `MatchAnyIgnoreEntry` iterates entries: if owner pattern matches AND (Refs is null OR any ref matches via `SequenceEqual`), the action is ignored. This is a single loop with early-return, same O(n) as before.
+- **Parsing:** `ParseRuleIgnoreActions` checks `AsMap()` first (object form) then `ScalarToString()` (string form) for each list item. Validation produces Error diagnostics for: missing `owner`, empty `refs`, unknown keys.
+- **Backward compat:** Existing string-form YAML configs parse unchanged. Existing test code updated from `string[]` to `IgnoreActionRule[]` (internal API change, not user-facing).
+
+**Files changed:**
+
+| File | Change |
+|------|--------|
+| `src/Seiton.Core/Linting/LintConfig.cs` | Added `IgnoreActionRule` record; changed `RuleConfig.IgnoreActions` type from `IReadOnlyList<string>?` to `IReadOnlyList<IgnoreActionRule>?` |
+| `src/Seiton.Core/Linting/LintConfigYamlParser.cs` | Added `ParseRuleIgnoreActions` method handling both string and mapping items |
+| `src/Seiton.Core/Linting/Rules/UnpinnedUsesRule.cs` | Replaced `byte[][] _ignoreActionsUtf8` with `IgnoreEntry[] _ignoreEntries` struct array; `IsIgnoredAction` now takes `actionRef` parameter; added `MatchAnyIgnoreEntry` with ref-conditional logic |
+| `src/Seiton.Core/Linting/LintConfigLibrary.cs` | Updated `seiton init` template to show object form example |
+| `docs/configuration.md` | Documented ref-conditional object form in annotated example and rule-specific options table |
+| `docs/rules.md` | Added ref-conditional example to `unpinned-uses` rule documentation |
+| `tests/Seiton.Core.Tests/RuleInterfaceTests.cs` | 5 new tests: matching ref ignored, non-matching ref warns, mixed forms, reusable workflow, case-sensitive ref |
+| `tests/Seiton.Core.Tests/LintConfigLibraryTests.cs` | 5 new tests: object form parsing, mixed form parsing, missing owner error, empty refs error, unknown key error |
+
+### Benchmark Comparison
+
+| Size | FixEnabled | Baseline Mean | After Mean | Baseline Alloc | After Alloc | Alloc Delta |
+|------|------------|---------------|------------|----------------|-------------|-------------|
+| Small | False | 174.9 µs | 175.2 µs | 8.74 KB | 8.74 KB | 0 |
+| Small | True | 481.6 µs | 177.1 µs | 10.33 KB | 10.19 KB | −0.14 KB |
+| Medium | False | 4,282.6 µs | 3,669.1 µs | 69.61 KB | 69.21 KB | −0.40 KB |
+| Medium | True | 7,207.0 µs | 7,197.4 µs | 83.52 KB | 83.52 KB | 0 |
+| Large | False | 52,577.8 µs | 47,456.1 µs | 366.3 KB | 353.26 KB | −13.04 KB |
+| Large | True | 86,296.1 µs | 84,017.2 µs | 421.14 KB | 440.5 KB | +19.36 KB |
+
+**Analysis:** No allocation regression. The struct-based `IgnoreEntry[]` replaces the previous flat `byte[][]` with no runtime cost increase. All timing/allocation deltas are within ShortRun noise (3 iterations). The benchmark runs without `ignore-actions` configured, so the new code path (`MatchAnyIgnoreEntry`) is never exercised — the guard `if (_ignoreEntries.Length == 0) return false` exits immediately.
+
+### Open Questions Resolved
+
+3. **Phase 2 naming:** Chose `owner` + `refs` (not `uses` + `ref`). Rationale: `owner` semantically describes a glob matching `owner/repo`; `refs` is a plural list of exact strings. This is distinct from `fix.pinning.ignore-actions` which uses `uses` + `ref` (single wildcard patterns). The naming difference makes it clear these are different schemas serving different purposes.

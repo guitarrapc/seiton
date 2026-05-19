@@ -140,6 +140,7 @@ rules:
 | `expr-undefined-var` | `assume-events` | `string[]` | 式評価時に仮定するイベント |
 | `overprovisioned-secrets` | `max-step-env-secrets` | `int` | ステップ単位のシークレット数上限 |
 | `overprovisioned-secrets` | `max-job-secrets` | `int` | ジョブ単位のシークレット数上限 |
+| `unpinned-uses` | `ignore-actions` | `(string \| {owner, refs})[]` | SHA ピンチェック除外。string 形式は全 ref 無視、object 形式 (`owner`: glob, `refs`: 完全一致リスト) は指定 ref のみ無視 |
 
 `extend` リストは **built-in セットに追加**する。置換はしない。
 

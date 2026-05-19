@@ -409,7 +409,7 @@ internal static class LintConfigYamlParser
         IReadOnlyList<string>? assumeEvents = null;
         IReadOnlyList<string>? allow = null;
         IReadOnlyList<string>? deny = null;
-        IReadOnlyList<string>? ignoreActions = null;
+        IReadOnlyList<IgnoreActionRule>? ignoreActions = null;
         int? maxStepEnvSecrets = null;
         int? maxJobSecrets = null;
         var seenKeyFlags = RuleKeyFlags.None;
@@ -474,7 +474,7 @@ internal static class LintConfigYamlParser
                     break;
                 case "ignore-actions":
                     seenKeyFlags |= RuleKeyFlags.IgnoreActions;
-                    ignoreActions = NullIfEmpty(ParseStringList(value, "ignore-actions", diagnostics, filePath));
+                    ignoreActions = ParseRuleIgnoreActions(value, diagnostics, filePath);
                     break;
                 case "max-step-env-secrets":
                     seenKeyFlags |= RuleKeyFlags.MaxStepEnvSecrets;
@@ -801,6 +801,83 @@ internal static class LintConfigYamlParser
             ExcludeTags = excludeTags.Count > 0 ? excludeTags : DefaultExcludeTags,
             IgnoreImages = ignoreImages,
         };
+    }
+
+    private static IReadOnlyList<IgnoreActionRule>? ParseRuleIgnoreActions(
+        object? value,
+        List<Diagnostic> diagnostics,
+        string filePath)
+    {
+        if (AsList(value) is not { } list)
+        {
+            diagnostics.Add(Diag("ignore-actions must be a YAML list", DomLine, 5, 14, filePath));
+            return null;
+        }
+
+        if (list.Count == 0)
+        {
+            return null;
+        }
+
+        var result = new List<IgnoreActionRule>(list.Count);
+        for (var i = 0; i < list.Count; i++)
+        {
+            var item = list[i];
+
+            // Object form: { owner: "MyOrg/*", refs: [main, master] }
+            if (AsMap(item) is { } map)
+            {
+                string? owner = null;
+                IReadOnlyList<string>? refs = null;
+                foreach (var (ik, iv) in map)
+                {
+                    if (ik == "owner")
+                    {
+                        owner = Unquote(ScalarToString(iv));
+                    }
+                    else if (ik == "refs")
+                    {
+                        refs = ParseStringList(iv, "refs", diagnostics, filePath);
+                    }
+                    else
+                    {
+                        diagnostics.Add(Diag($"unknown ignore-actions key '{ik}'", DomLine, 5, ik.Length, filePath));
+                    }
+                }
+
+                if (string.IsNullOrWhiteSpace(owner))
+                {
+                    diagnostics.Add(Diag("ignore-actions object form requires 'owner' key", DomLine, 5, 14, filePath));
+                    continue;
+                }
+
+                if (refs is null or { Count: 0 })
+                {
+                    diagnostics.Add(Diag("ignore-actions object form requires non-empty 'refs' list", DomLine, 5, 14, filePath));
+                    continue;
+                }
+
+                result.Add(new IgnoreActionRule(owner, refs));
+                continue;
+            }
+
+            // String form: "MyOrg/*" → ignore all refs
+            var scalar = ScalarToString(item);
+            if (!string.IsNullOrWhiteSpace(scalar))
+            {
+                var pattern = Unquote(scalar);
+                if (!string.IsNullOrWhiteSpace(pattern))
+                {
+                    result.Add(new IgnoreActionRule(pattern));
+                }
+
+                continue;
+            }
+
+            diagnostics.Add(Diag("ignore-actions item must be a string or a mapping with owner and refs", DomLine, 5, 14, filePath));
+        }
+
+        return result.Count > 0 ? result : null;
     }
 
     private static IReadOnlyList<IgnoreActionEntry> ParseIgnoreActions(

@@ -17,7 +17,7 @@ public sealed class UnpinnedUsesRule() : RuleBase(RuleId.UnpinnedUses)
     private string? _lastUnpinnedStepMessage;
     private string? _lastDecodedUsesText;
 
-    private byte[][] _ignoreActionsUtf8 = [];
+    private IgnoreEntry[] _ignoreEntries = [];
 
     // Track owners for which we have already emitted a help hint (once per owner per workflow).
     // Two-level cache: fast byte-span check for the last owner (hot path), HashSet for multi-owner (rare).
@@ -33,15 +33,27 @@ public sealed class UnpinnedUsesRule() : RuleBase(RuleId.UnpinnedUses)
         var ignoreActions = ruleConfig?.IgnoreActions;
         if (ignoreActions is { Count: > 0 })
         {
-            _ignoreActionsUtf8 = new byte[ignoreActions.Count][];
+            _ignoreEntries = new IgnoreEntry[ignoreActions.Count];
             for (var i = 0; i < ignoreActions.Count; i++)
             {
-                _ignoreActionsUtf8[i] = Encoding.UTF8.GetBytes(ignoreActions[i].ToLowerInvariant());
+                var rule = ignoreActions[i];
+                var patternBytes = Encoding.UTF8.GetBytes(rule.Pattern.ToLowerInvariant());
+                byte[][]? refsBytes = null;
+                if (rule.Refs is { Count: > 0 })
+                {
+                    refsBytes = new byte[rule.Refs.Count][];
+                    for (var j = 0; j < rule.Refs.Count; j++)
+                    {
+                        refsBytes[j] = Encoding.UTF8.GetBytes(rule.Refs[j]);
+                    }
+                }
+
+                _ignoreEntries[i] = new IgnoreEntry(patternBytes, refsBytes);
             }
         }
         else
         {
-            _ignoreActionsUtf8 = [];
+            _ignoreEntries = [];
         }
     }
 
@@ -104,7 +116,7 @@ public sealed class UnpinnedUsesRule() : RuleBase(RuleId.UnpinnedUses)
             return;
         }
 
-        if (IsIgnoredAction(parsedJob.ActionPath))
+        if (IsIgnoredAction(parsedJob.ActionPath, parsedJob.Ref))
         {
             if (Config.Verbose)
             {
@@ -188,7 +200,7 @@ public sealed class UnpinnedUsesRule() : RuleBase(RuleId.UnpinnedUses)
             return;
         }
 
-        if (IsIgnoredAction(parsedStep.ActionPath))
+        if (IsIgnoredAction(parsedStep.ActionPath, parsedStep.Ref))
         {
             if (Config.Verbose)
             {
@@ -425,9 +437,9 @@ public sealed class UnpinnedUsesRule() : RuleBase(RuleId.UnpinnedUses)
         return new string(chars);
     }
 
-    private bool IsIgnoredAction(ReadOnlySpan<byte> actionPath)
+    private bool IsIgnoredAction(ReadOnlySpan<byte> actionPath, ReadOnlySpan<byte> actionRef)
     {
-        if (_ignoreActionsUtf8.Length == 0)
+        if (_ignoreEntries.Length == 0)
         {
             return false;
         }
@@ -463,7 +475,7 @@ public sealed class UnpinnedUsesRule() : RuleBase(RuleId.UnpinnedUses)
                 scratch[o++] = b is >= (byte)'A' and <= (byte)'Z' ? (byte)(b + 32) : b;
             }
 
-            return MatchAnyIgnorePattern(scratch[..need]);
+            return MatchAnyIgnoreEntry(scratch[..need], actionRef);
         }
         finally
         {
@@ -474,16 +486,39 @@ public sealed class UnpinnedUsesRule() : RuleBase(RuleId.UnpinnedUses)
         }
     }
 
-    private bool MatchAnyIgnorePattern(ReadOnlySpan<byte> ownerRepoKeyUtf8)
+    private bool MatchAnyIgnoreEntry(ReadOnlySpan<byte> ownerRepoKeyUtf8, ReadOnlySpan<byte> actionRef)
     {
-        for (var i = 0; i < _ignoreActionsUtf8.Length; i++)
+        for (var i = 0; i < _ignoreEntries.Length; i++)
         {
-            if (WildcardMatchUsesPolicy(ownerRepoKeyUtf8, _ignoreActionsUtf8[i]))
+            ref readonly var entry = ref _ignoreEntries[i];
+            if (!WildcardMatchUsesPolicy(ownerRepoKeyUtf8, entry.PatternUtf8))
+            {
+                continue;
+            }
+
+            // String form (Refs is null): ignore all refs
+            if (entry.RefsUtf8 is null)
             {
                 return true;
+            }
+
+            // Object form: check if action ref matches any configured ref (case-sensitive exact match)
+            for (var j = 0; j < entry.RefsUtf8.Length; j++)
+            {
+                if (actionRef.SequenceEqual(entry.RefsUtf8[j]))
+                {
+                    return true;
+                }
             }
         }
 
         return false;
+    }
+
+    /// <summary>Internal ignore entry: pre-encoded pattern and optional ref constraints.</summary>
+    private readonly struct IgnoreEntry(byte[] patternUtf8, byte[][]? refsUtf8)
+    {
+        public readonly byte[] PatternUtf8 = patternUtf8;
+        public readonly byte[][]? RefsUtf8 = refsUtf8;
     }
 }

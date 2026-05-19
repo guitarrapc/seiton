@@ -2240,7 +2240,7 @@ public sealed class RuleInterfaceTests
             {
                 ["unpinned-uses"] = new RuleConfig
                 {
-                    IgnoreActions = ["guitarrapc/setup-dotnet", "my-org/*"],
+                    IgnoreActions = [new IgnoreActionRule("guitarrapc/setup-dotnet"), new IgnoreActionRule("my-org/*")],
                 },
             },
         };
@@ -2313,7 +2313,7 @@ public sealed class RuleInterfaceTests
             {
                 ["unpinned-uses"] = new RuleConfig
                 {
-                    IgnoreActions = ["guitarrapc/setup-dotnet"],
+                    IgnoreActions = [new IgnoreActionRule("guitarrapc/setup-dotnet")],
                 },
             },
         };
@@ -2345,7 +2345,7 @@ public sealed class RuleInterfaceTests
             {
                 ["unpinned-uses"] = new RuleConfig
                 {
-                    IgnoreActions = ["guitarrapc/setup-dotnet"],
+                    IgnoreActions = [new IgnoreActionRule("guitarrapc/setup-dotnet")],
                 },
             },
         };
@@ -2438,7 +2438,7 @@ public sealed class RuleInterfaceTests
             {
                 ["unpinned-uses"] = new RuleConfig
                 {
-                    IgnoreActions = ["my-org/*"],
+                    IgnoreActions = [new IgnoreActionRule("my-org/*")],
                 },
             },
         };
@@ -2541,6 +2541,237 @@ public sealed class RuleInterfaceTests
         {
             await Assert.That(d.Help).IsNull();
         }
+    }
+
+    [Test]
+    public async Task RuleRegression_UnpinnedUsesRule_RefConditionalIgnore_MatchingRef_Ignored()
+    {
+        // Object form: ignore MyOrg/* only when ref is main or master
+        var config = new LintConfig
+        {
+            Rules = new Dictionary<string, RuleConfig>
+            {
+                ["unpinned-uses"] = new RuleConfig
+                {
+                    IgnoreActions = [new IgnoreActionRule("my-org/*", ["main", "master"])],
+                },
+            },
+        };
+
+        var cases = new[]
+        {
+            new RuleCase(
+            "ok-ref-conditional-main-ignored",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - uses: my-org/action-a@main
+            """,
+            []),
+            new RuleCase(
+            "ok-ref-conditional-master-ignored",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - uses: my-org/action-b@master
+            """,
+            []),
+        };
+
+        await AssertRuleCases(new UnpinnedUsesRule(), "unpinned-uses", cases, config);
+    }
+
+    [Test]
+    public async Task RuleRegression_UnpinnedUsesRule_RefConditionalIgnore_NonMatchingRef_Warns()
+    {
+        // Object form: non-matching ref should still produce warning
+        var config = new LintConfig
+        {
+            Rules = new Dictionary<string, RuleConfig>
+            {
+                ["unpinned-uses"] = new RuleConfig
+                {
+                    IgnoreActions = [new IgnoreActionRule("my-org/*", ["main", "master"])],
+                },
+            },
+        };
+
+        var cases = new[]
+        {
+            new RuleCase(
+            "ng-ref-conditional-v1-warns",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - uses: my-org/action-a@v1
+            """,
+            ["not pinned to a full-length commit SHA"]),
+            new RuleCase(
+            "ng-ref-conditional-develop-warns",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - uses: my-org/action-b@develop
+            """,
+            ["not pinned to a full-length commit SHA"]),
+        };
+
+        await AssertRuleCases(new UnpinnedUsesRule(), "unpinned-uses", cases, config);
+    }
+
+    [Test]
+    public async Task RuleRegression_UnpinnedUsesRule_RefConditionalIgnore_MixedForms()
+    {
+        // Mixed: string form (ignore all refs) + object form (ignore only specific refs)
+        var config = new LintConfig
+        {
+            Rules = new Dictionary<string, RuleConfig>
+            {
+                ["unpinned-uses"] = new RuleConfig
+                {
+                    IgnoreActions =
+                    [
+                        new IgnoreActionRule("trusted-org/*"),           // all refs
+                        new IgnoreActionRule("semi-trusted/*", ["main"]), // only main
+                    ],
+                },
+            },
+        };
+
+        var cases = new[]
+        {
+            new RuleCase(
+            "ok-string-form-ignores-all-refs",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - uses: trusted-org/action@v1
+            """,
+            []),
+            new RuleCase(
+            "ok-object-form-matching-ref",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - uses: semi-trusted/action@main
+            """,
+            []),
+            new RuleCase(
+            "ng-object-form-non-matching-ref",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - uses: semi-trusted/action@v2
+            """,
+            ["not pinned to a full-length commit SHA"]),
+        };
+
+        await AssertRuleCases(new UnpinnedUsesRule(), "unpinned-uses", cases, config);
+    }
+
+    [Test]
+    public async Task RuleRegression_UnpinnedUsesRule_RefConditionalIgnore_ReusableWorkflow()
+    {
+        // Object form with reusable workflow (job-level uses)
+        var config = new LintConfig
+        {
+            Rules = new Dictionary<string, RuleConfig>
+            {
+                ["unpinned-uses"] = new RuleConfig
+                {
+                    IgnoreActions = [new IgnoreActionRule("my-org/*", ["main"])],
+                },
+            },
+        };
+
+        var cases = new[]
+        {
+            new RuleCase(
+            "ok-reusable-workflow-matching-ref-ignored",
+            """
+            on: push
+            jobs:
+                release:
+                    uses: my-org/repo/.github/workflows/reusable.yml@main
+            """,
+            []),
+            new RuleCase(
+            "ng-reusable-workflow-non-matching-ref",
+            """
+            on: push
+            jobs:
+                release:
+                    uses: my-org/repo/.github/workflows/reusable.yml@v1
+            """,
+            ["not pinned to a full-length commit SHA"]),
+        };
+
+        await AssertRuleCases(new UnpinnedUsesRule(), "unpinned-uses", cases, config);
+    }
+
+    [Test]
+    public async Task RuleRegression_UnpinnedUsesRule_RefConditionalIgnore_CaseSensitiveRef()
+    {
+        // Refs are matched case-sensitively
+        var config = new LintConfig
+        {
+            Rules = new Dictionary<string, RuleConfig>
+            {
+                ["unpinned-uses"] = new RuleConfig
+                {
+                    IgnoreActions = [new IgnoreActionRule("my-org/*", ["main"])],
+                },
+            },
+        };
+
+        var cases = new[]
+        {
+            new RuleCase(
+            "ok-exact-case-match-ignored",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - uses: my-org/action@main
+            """,
+            []),
+            new RuleCase(
+            "ng-different-case-warns",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - uses: my-org/action@Main
+            """,
+            ["not pinned to a full-length commit SHA"]),
+        };
+
+        await AssertRuleCases(new UnpinnedUsesRule(), "unpinned-uses", cases, config);
     }
 
     [Test]
