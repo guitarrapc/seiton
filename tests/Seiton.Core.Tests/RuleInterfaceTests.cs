@@ -12011,6 +12011,10 @@ public sealed class RuleInterfaceTests
         var fixedText = Encoding.UTF8.GetString(fixedBytes);
 
         await Assert.That(fixedText.Contains("run: Write-Host \"$env:TARGET\"", StringComparison.Ordinal)).IsTrue();
+
+        // Relint: fixed YAML should not trigger the rule
+        using var relint = engine.Check(fixedBytes, "run-inputs-fix-powershell.yml");
+        await Assert.That(relint.Diagnostics.Any(x => x.RuleId == "run-inputs-context-direct-use")).IsFalse();
     }
 
     [Test]
@@ -12058,6 +12062,284 @@ public sealed class RuleInterfaceTests
 
         await Assert.That(diagnostic.Location.StartLine).IsEqualTo(8);
         await Assert.That(diagnostic.Location.StartColumn).IsEqualTo(23);
+    }
+
+    [Test]
+    public async Task LintEngine_RunInputsContextDirectUse_Fix_InsertsEnvAndReplacesExpression_WhenNoExistingMapping()
+    {
+        var yaml = """
+        on: workflow_dispatch
+        jobs:
+            build:
+                runs-on: ubuntu-latest
+                steps:
+                    - run: echo "${{ inputs.target }}"
+        """;
+
+        var sourceBytes = Encoding.UTF8.GetBytes(yaml);
+        var engine = new LintEngine([new RunInputsContextDirectUseRule()]);
+        using var result = engine.Check(sourceBytes, "run-inputs-fix-no-mapping.yml", new LintConfig { Fix = new FixConfig { Enabled = true } });
+        var diagnostic = result.Diagnostics.First(x => x.RuleId == "run-inputs-context-direct-use");
+
+        await Assert.That(diagnostic.Fix is not null).IsTrue();
+
+        var fixedBytes = FixEngine.Apply(sourceBytes, diagnostic.Fix!.Value.Edits);
+        var fixedText = Encoding.UTF8.GetString(fixedBytes).Replace("\r\n", "\n", StringComparison.Ordinal);
+
+        // Should replace the expression with shell variable
+        await Assert.That(fixedText.Contains("${TARGET}", StringComparison.Ordinal)).IsTrue();
+        // The run line should not contain the direct expression anymore
+        var runLine = fixedText.Split('\n').First(l => l.Contains("run:", StringComparison.Ordinal));
+        await Assert.That(runLine.Contains("${{ inputs.target }}", StringComparison.Ordinal)).IsFalse();
+        // Should insert env mapping
+        await Assert.That(fixedText.Contains("env:", StringComparison.Ordinal)).IsTrue();
+        await Assert.That(fixedText.Contains("TARGET: ${{ inputs.target }}", StringComparison.Ordinal)).IsTrue();
+
+        // Relint should pass
+        using var relint = engine.Check(fixedBytes, "run-inputs-fix-no-mapping.yml");
+        await Assert.That(relint.Diagnostics.Any(x => x.RuleId == "run-inputs-context-direct-use")).IsFalse();
+    }
+
+    [Test]
+    public async Task LintEngine_RunInputsContextDirectUse_Fix_InsertsEnvAndReplacesPowershell_WhenNoExistingMapping()
+    {
+        var yaml = """
+        on: workflow_dispatch
+        jobs:
+            build:
+                runs-on: windows-latest
+                steps:
+                    - shell: pwsh
+                      run: Write-Host "${{ inputs.target }}"
+        """;
+
+        var sourceBytes = Encoding.UTF8.GetBytes(yaml);
+        var engine = new LintEngine([new RunInputsContextDirectUseRule()]);
+        using var result = engine.Check(sourceBytes, "run-inputs-fix-no-mapping-pwsh.yml", new LintConfig { Fix = new FixConfig { Enabled = true } });
+        var diagnostic = result.Diagnostics.First(x => x.RuleId == "run-inputs-context-direct-use");
+
+        await Assert.That(diagnostic.Fix is not null).IsTrue();
+
+        var fixedBytes = FixEngine.Apply(sourceBytes, diagnostic.Fix!.Value.Edits);
+        var fixedText = Encoding.UTF8.GetString(fixedBytes).Replace("\r\n", "\n", StringComparison.Ordinal);
+
+        await Assert.That(fixedText.Contains("$env:TARGET", StringComparison.Ordinal)).IsTrue();
+        var runLine = fixedText.Split('\n').First(l => l.Contains("run:", StringComparison.Ordinal));
+        await Assert.That(runLine.Contains("${{ inputs.target }}", StringComparison.Ordinal)).IsFalse();
+        await Assert.That(fixedText.Contains("TARGET: ${{ inputs.target }}", StringComparison.Ordinal)).IsTrue();
+
+        // Relint: fixed YAML should not trigger the rule
+        using var relint = engine.Check(fixedBytes, "run-inputs-fix-no-mapping-pwsh.yml");
+        await Assert.That(relint.Diagnostics.Any(x => x.RuleId == "run-inputs-context-direct-use")).IsFalse();
+    }
+
+    [Test]
+    public async Task LintEngine_RunInputsContextDirectUse_Fix_InsertsEnvWithHyphenatedName_WhenNoExistingMapping()
+    {
+        var yaml = """
+        on: workflow_dispatch
+        jobs:
+            build:
+                runs-on: ubuntu-latest
+                steps:
+                    - name: Generate Matrix
+                      run: ./tool --config-path "./Repo/${{ inputs.benchmark-config-path }}"
+        """;
+
+        var sourceBytes = Encoding.UTF8.GetBytes(yaml);
+        var engine = new LintEngine([new RunInputsContextDirectUseRule()]);
+        using var result = engine.Check(sourceBytes, "run-inputs-fix-hyphenated.yml", new LintConfig { Fix = new FixConfig { Enabled = true } });
+        var diagnostic = result.Diagnostics.First(x => x.RuleId == "run-inputs-context-direct-use");
+
+        await Assert.That(diagnostic.Fix is not null).IsTrue();
+
+        var fixedBytes = FixEngine.Apply(sourceBytes, diagnostic.Fix!.Value.Edits);
+        var fixedText = Encoding.UTF8.GetString(fixedBytes).Replace("\r\n", "\n", StringComparison.Ordinal);
+
+        // Hyphens in input name should become underscores in env var
+        await Assert.That(fixedText.Contains("${BENCHMARK_CONFIG_PATH}", StringComparison.Ordinal)).IsTrue();
+        await Assert.That(fixedText.Contains("BENCHMARK_CONFIG_PATH: ${{ inputs.benchmark-config-path }}", StringComparison.Ordinal)).IsTrue();
+
+        // Relint: fixed YAML should not trigger the rule
+        using var relint = engine.Check(fixedBytes, "run-inputs-fix-hyphenated.yml");
+        await Assert.That(relint.Diagnostics.Any(x => x.RuleId == "run-inputs-context-direct-use")).IsFalse();
+    }
+
+    [Test]
+    public async Task LintEngine_RunInputsContextDirectUse_Fix_InsertsEnvWithBracketAccess_WhenNoExistingMapping()
+    {
+        var yaml = """
+        on: workflow_dispatch
+        jobs:
+            build:
+                runs-on: ubuntu-latest
+                steps:
+                    - name: Generate Matrix
+                      run: ./tool --config-path "./Repo/${{ inputs['benchmark-config-path'] }}"
+        """;
+
+        var sourceBytes = Encoding.UTF8.GetBytes(yaml);
+        var engine = new LintEngine([new RunInputsContextDirectUseRule()]);
+        using var result = engine.Check(sourceBytes, "run-inputs-fix-bracket.yml", new LintConfig { Fix = new FixConfig { Enabled = true } });
+        var diagnostic = result.Diagnostics.First(x => x.RuleId == "run-inputs-context-direct-use");
+
+        await Assert.That(diagnostic.Fix is not null).IsTrue();
+
+        var fixedBytes = FixEngine.Apply(sourceBytes, diagnostic.Fix!.Value.Edits);
+        var fixedText = Encoding.UTF8.GetString(fixedBytes).Replace("\r\n", "\n", StringComparison.Ordinal);
+
+        // Bracket access with hyphens should produce correct env var name
+        await Assert.That(fixedText.Contains("${BENCHMARK_CONFIG_PATH}", StringComparison.Ordinal)).IsTrue();
+        await Assert.That(fixedText.Contains("BENCHMARK_CONFIG_PATH: ${{ inputs.benchmark-config-path }}", StringComparison.Ordinal)).IsTrue();
+
+        // Relint: fixed YAML should not trigger the rule
+        using var relint = engine.Check(fixedBytes, "run-inputs-fix-bracket.yml");
+        await Assert.That(relint.Diagnostics.Any(x => x.RuleId == "run-inputs-context-direct-use")).IsFalse();
+    }
+
+    [Test]
+    public async Task LintEngine_RunInputsContextDirectUse_Fix_InsertsEnvWithGithubEventBracketAccess_WhenNoExistingMapping()
+    {
+        var yaml = """
+        on: workflow_dispatch
+        jobs:
+            build:
+                runs-on: ubuntu-latest
+                steps:
+                    - name: Generate Matrix
+                      run: ./tool --config-path "./Repo/${{ github.event.inputs['benchmark-config-path'] }}"
+        """;
+
+        var sourceBytes = Encoding.UTF8.GetBytes(yaml);
+        var engine = new LintEngine([new RunInputsContextDirectUseRule()]);
+        using var result = engine.Check(sourceBytes, "run-inputs-fix-github-event-bracket.yml", new LintConfig { Fix = new FixConfig { Enabled = true } });
+        var diagnostic = result.Diagnostics.First(x => x.RuleId == "run-inputs-context-direct-use");
+
+        await Assert.That(diagnostic.Fix is not null).IsTrue();
+
+        var fixedBytes = FixEngine.Apply(sourceBytes, diagnostic.Fix!.Value.Edits);
+        var fixedText = Encoding.UTF8.GetString(fixedBytes).Replace("\r\n", "\n", StringComparison.Ordinal);
+
+        await Assert.That(fixedText.Contains("${BENCHMARK_CONFIG_PATH}", StringComparison.Ordinal)).IsTrue();
+        await Assert.That(fixedText.Contains("BENCHMARK_CONFIG_PATH: ${{ github.event.inputs.benchmark-config-path }}", StringComparison.Ordinal)).IsTrue();
+
+        // Relint: fixed YAML should not trigger the rule
+        using var relint = engine.Check(fixedBytes, "run-inputs-fix-github-event-bracket.yml");
+        await Assert.That(relint.Diagnostics.Any(x => x.RuleId == "run-inputs-context-direct-use")).IsFalse();
+    }
+
+    [Test]
+    public async Task LintEngine_RunInputsContextDirectUse_Fix_AppendsToExistingEnv_WhenNoExistingMapping()
+    {
+        var yaml = """
+        on: workflow_dispatch
+        jobs:
+            build:
+                runs-on: ubuntu-latest
+                steps:
+                    - run: echo "${{ inputs.target }}"
+                      env:
+                        OTHER: value
+        """;
+
+        var sourceBytes = Encoding.UTF8.GetBytes(yaml);
+        var engine = new LintEngine([new RunInputsContextDirectUseRule()]);
+        using var result = engine.Check(sourceBytes, "run-inputs-fix-existing-env.yml", new LintConfig { Fix = new FixConfig { Enabled = true } });
+        var diagnostic = result.Diagnostics.First(x => x.RuleId == "run-inputs-context-direct-use");
+
+        await Assert.That(diagnostic.Fix is not null).IsTrue();
+
+        var fixedBytes = FixEngine.Apply(sourceBytes, diagnostic.Fix!.Value.Edits);
+        var fixedText = Encoding.UTF8.GetString(fixedBytes).Replace("\r\n", "\n", StringComparison.Ordinal);
+
+        await Assert.That(fixedText.Contains("${TARGET}", StringComparison.Ordinal)).IsTrue();
+        await Assert.That(fixedText.Contains("TARGET: ${{ inputs.target }}", StringComparison.Ordinal)).IsTrue();
+        // Existing env should still be present
+        await Assert.That(fixedText.Contains("OTHER: value", StringComparison.Ordinal)).IsTrue();
+
+        // Relint: fixed YAML should not trigger the rule
+        using var relint = engine.Check(fixedBytes, "run-inputs-fix-existing-env.yml");
+        await Assert.That(relint.Diagnostics.Any(x => x.RuleId == "run-inputs-context-direct-use")).IsFalse();
+    }
+
+    [Test]
+    public async Task LintEngine_RunInputsContextDirectUse_Fix_DoesNotAttach_InsideHereDoc()
+    {
+        var yaml = """
+        on: workflow_dispatch
+        jobs:
+            build:
+                runs-on: ubuntu-latest
+                steps:
+                    - run: |
+                        cat << 'EOF'
+                        ${{ inputs.target }}
+                        EOF
+        """;
+
+        using var result = new LintEngine([new RunInputsContextDirectUseRule()])
+            .Check(Encoding.UTF8.GetBytes(yaml), "run-inputs-no-fix-heredoc.yml", new LintConfig { Fix = new FixConfig { Enabled = true } });
+        var diagnostic = result.Diagnostics.First(x => x.RuleId == "run-inputs-context-direct-use");
+
+        await Assert.That(diagnostic.Fix is null).IsTrue();
+    }
+
+    [Test]
+    public async Task LintEngine_RunInputsContextDirectUse_Fix_DoesNotAttach_ForCompositeExpression()
+    {
+        var yaml = """
+        on: workflow_dispatch
+        jobs:
+            build:
+                runs-on: ubuntu-latest
+                steps:
+                    - run: echo "${{ format('{0}', inputs.target) }}"
+        """;
+
+        using var result = new LintEngine([new RunInputsContextDirectUseRule()])
+            .Check(Encoding.UTF8.GetBytes(yaml), "run-inputs-no-fix-composite.yml", new LintConfig { Fix = new FixConfig { Enabled = true } });
+        var diagnostic = result.Diagnostics.First(x => x.RuleId == "run-inputs-context-direct-use");
+
+        await Assert.That(diagnostic.Fix is null).IsTrue();
+    }
+
+    [Test]
+    public async Task LintEngine_RunInputsContextDirectUse_Fix_DoesNotAttach_InsideSingleQuotes()
+    {
+        var yaml = """
+        on: workflow_dispatch
+        jobs:
+            build:
+                runs-on: ubuntu-latest
+                steps:
+                    - run: echo '${{ inputs.target }}'
+        """;
+
+        using var result = new LintEngine([new RunInputsContextDirectUseRule()])
+            .Check(Encoding.UTF8.GetBytes(yaml), "run-inputs-no-fix-single-quotes.yml", new LintConfig { Fix = new FixConfig { Enabled = true } });
+        var diagnostic = result.Diagnostics.First(x => x.RuleId == "run-inputs-context-direct-use");
+
+        await Assert.That(diagnostic.Fix is null).IsTrue();
+    }
+
+    [Test]
+    public async Task LintEngine_RunInputsContextDirectUse_Fix_DoesNotAttach_WithEmptyFlowStyleEnv()
+    {
+        var yaml = """
+        on: workflow_dispatch
+        jobs:
+            build:
+                runs-on: ubuntu-latest
+                steps:
+                    - run: echo "${{ inputs.target }}"
+                      env: {}
+        """;
+
+        using var result = new LintEngine([new RunInputsContextDirectUseRule()])
+            .Check(Encoding.UTF8.GetBytes(yaml), "run-inputs-no-fix-empty-env.yml", new LintConfig { Fix = new FixConfig { Enabled = true } });
+        var diagnostic = result.Diagnostics.First(x => x.RuleId == "run-inputs-context-direct-use");
+
+        await Assert.That(diagnostic.Fix is null).IsTrue();
     }
 
     [Test]

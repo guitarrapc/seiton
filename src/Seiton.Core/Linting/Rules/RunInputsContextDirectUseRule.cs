@@ -117,21 +117,89 @@ public sealed class RunInputsContextDirectUseRule() : RuleBase(RuleId.RunInputsC
             return false;
         }
 
-        if (!TryResolveShellVariableName(Arena, step.Env, _currentJob?.Env, _currentWorkflow?.Env,
-            Config.Utf8Yaml, inputName, TryParseSimpleInputsReference, out var variableName))
+        var absoluteOffset = Arena.GetStringSlice(runNode).Offset + expressionBodyStart - 3;
+
+        if (IsInsideNoExpandHereDoc(Config.Utf8Yaml, absoluteOffset))
         {
             return false;
         }
 
-        var replacement = RunContextDirectUseAnalyzer.IsPowerShell(Arena, step, Config.Utf8Yaml)
-            ? "$env:" + variableName
-            : "${" + variableName + "}";
+        if (IsInsideShellSingleQuotes(Config.Utf8Yaml, absoluteOffset))
+        {
+            return false;
+        }
 
-        var absoluteOffset = Arena.GetStringSlice(runNode).Offset + expressionBodyStart - 3;
+        // Case 1: existing unique env mapping resolves the variable name
+        if (TryResolveShellVariableName(Arena, step.Env, _currentJob?.Env, _currentWorkflow?.Env,
+            Config.Utf8Yaml, inputName, TryParseSimpleInputsReference, out var variableName))
+        {
+            var replacement = RunContextDirectUseAnalyzer.IsPowerShell(Arena, step, Config.Utf8Yaml)
+                ? "$env:" + variableName
+                : "${" + variableName + "}";
+
+            fix = new DiagnosticFix(
+                "replace direct inputs context expansion with mapped shell variable",
+                [new TextEdit(absoluteOffset, expressionLength, replacement)]);
+            return true;
+        }
+
+        // Case 2: no existing mapping — generate env var name and insert env block
+        if (!Config.Fix.Enabled)
+        {
+            return false;
+        }
+
+        var expressionString = BuildInputsExpressionString(inputName, expression);
+        var envVarName = DeduplicateEnvName(Arena, InputNameToEnvVarName(inputName),
+            step.Env, _currentJob?.Env, _currentWorkflow?.Env);
+        if (envVarName is null)
+        {
+            return false;
+        }
+
+        var shellReplacement = RunContextDirectUseAnalyzer.IsPowerShell(Arena, step, Config.Utf8Yaml)
+            ? "$env:" + envVarName
+            : "${" + envVarName + "}";
+
+        if (!TryBuildStepEnvInsertionEdit(Arena, Config.Utf8Yaml, step, envVarName, expressionString, out var insertEdit))
+        {
+            return false;
+        }
+
         fix = new DiagnosticFix(
-            "replace direct inputs context expansion with mapped shell variable",
-            [new TextEdit(absoluteOffset, expressionLength, replacement)]);
+            $"map inputs reference to env variable {envVarName}",
+            [insertEdit, new TextEdit(absoluteOffset, expressionLength, shellReplacement)]);
         return true;
+    }
+
+    /// <summary>Builds the expression string for the env value (e.g. "inputs.target" or "github.event.inputs.target").</summary>
+    private static string BuildInputsExpressionString(string inputName, ReadOnlySpan<byte> expression)
+    {
+        var index = 0;
+        if (TryConsumeGithubEventInputsRoot(expression, ref index))
+        {
+            return "github.event.inputs." + inputName;
+        }
+
+        return "inputs." + inputName;
+    }
+
+    /// <summary>Converts an input name (e.g. "benchmark-config-path") to an env var name (e.g. "BENCHMARK_CONFIG_PATH").</summary>
+    internal static string InputNameToEnvVarName(string inputName)
+    {
+        return string.Create(inputName.Length, inputName, static (span, name) =>
+        {
+            for (var i = 0; i < name.Length; i++)
+            {
+                var c = name[i];
+                span[i] = c switch
+                {
+                    '-' or '.' => '_',
+                    >= 'a' and <= 'z' => (char)(c - 32),
+                    _ => c,
+                };
+            }
+        });
     }
 
     // Inputs-specific reference parsing
@@ -143,7 +211,7 @@ public sealed class RunInputsContextDirectUseRule() : RuleBase(RuleId.RunInputsC
         var index = 0;
         if (TryConsumeSimpleInputsRoot(expression, ref index))
         {
-            return TryConsumeMemberOrBracketName(expression, ref index, out inputName);
+            return TryConsumeGitHubMemberOrBracketName(expression, ref index, out inputName);
         }
 
         index = 0;
@@ -152,7 +220,7 @@ public sealed class RunInputsContextDirectUseRule() : RuleBase(RuleId.RunInputsC
             return false;
         }
 
-        return TryConsumeMemberOrBracketName(expression, ref index, out inputName);
+        return TryConsumeGitHubMemberOrBracketName(expression, ref index, out inputName);
     }
 
     private static bool TryConsumeSimpleInputsRoot(ReadOnlySpan<byte> expression, ref int index)
