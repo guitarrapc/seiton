@@ -115,6 +115,11 @@ Online rules use the GitHub API. Set GITHUB_TOKEN (or SEITON_GITHUB_TOKEN) to av
 - [unsound-condition](#unsound-condition)
 - [concurrency-limits](#concurrency-limits)
 - [deprecated-commands](#deprecated-commands)
+- [dispatch-inputs](#dispatch-inputs)
+- [schedule-event](#schedule-event)
+- [workflow-call-input-default](#workflow-call-input-default)
+- [local-action-inputs](#local-action-inputs)
+- [outdated-action-runner](#outdated-action-runner)
 
 ### Security
 
@@ -682,11 +687,11 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        os: [ubuntu-latest, windows-latest]
-        node: [20]
+        node: [10, 12, 14]
+        os: [ubuntu-latest, macos-latest]
         exclude:
-          - node: 20
-            os: windows-latest
+          - node: 10
+            os: macos-latest
     steps:
       - run: echo ok
 ```
@@ -1085,6 +1090,225 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - run: echo "result=ok" >> "$GITHUB_OUTPUT"
+```
+
+---
+
+### `dispatch-inputs`
+
+| Default | Network | Auto-fix |
+|---|---|---|
+| ✓ | — | ✗ |
+
+Validates `workflow_dispatch` input definitions for structural correctness. Reports excessive input count (max 25), type/option mismatches, invalid defaults, and duplicate options.
+
+**Example trigger:**
+
+```yaml
+on:
+  workflow_dispatch:
+    inputs:
+      env:
+        type: choice
+        # ERROR: choice type must define non-empty options
+      mode:
+        type: string
+        options:            # ERROR: options only valid for 'choice' type
+          - fast
+          - slow
+      count:
+        type: number
+        default: abc        # ERROR: default is not a valid number
+      flag:
+        type: boolean
+        default: yes        # ERROR: boolean default must be 'true' or 'false'
+```
+
+**Remediation:**
+
+```yaml
+on:
+  workflow_dispatch:
+    inputs:
+      env:
+        type: choice
+        options:
+          - staging
+          - production
+      mode:
+        type: string
+        default: fast
+      count:
+        type: number
+        default: 10
+      flag:
+        type: boolean
+        default: true
+```
+
+---
+
+### `schedule-event`
+
+| Default | Network | Auto-fix |
+|---|---|---|
+| ✓ | — | ✗ |
+
+Validates `schedule` cron expressions for syntax correctness, minimum interval enforcement (5 minutes), and timezone validity.
+
+**Example trigger:**
+
+```yaml
+on:
+  schedule:
+    - cron: "* * * * *"           # ERROR: runs too frequently (once per 60 seconds)
+    - cron: "0 0 31 2 *"         # valid syntax but Feb 31 never triggers (no error, but suspicious)
+    - cron: "0 25 * * *"         # ERROR: invalid hour value (0-23)
+```
+
+**Remediation:**
+
+```yaml
+on:
+  schedule:
+    - cron: "*/15 * * * *"       # every 15 minutes (meets 5-min minimum)
+    - cron: "0 9 * * 1-5"        # weekdays at 09:00
+```
+
+---
+
+### `workflow-call-input-default`
+
+| Default | Network | Auto-fix |
+|---|---|---|
+| ✓ | — | ✗ |
+
+Validates `workflow_call` input default values match their declared types. Also warns when a required input has a default value (the default will never be used).
+
+**Example trigger:**
+
+```yaml
+on:
+  workflow_call:
+    inputs:
+      enabled:
+        type: boolean
+        default: yes              # ERROR: boolean default must be 'true' or 'false'
+      retries:
+        type: number
+        default: many             # ERROR: number default is not numeric
+      name:
+        type: string
+        required: true
+        default: foo              # ERROR: required input's default will never be used
+```
+
+**Remediation:**
+
+```yaml
+on:
+  workflow_call:
+    inputs:
+      enabled:
+        type: boolean
+        default: true
+      retries:
+        type: number
+        default: 3
+      name:
+        type: string
+        required: true
+```
+
+---
+
+### `local-action-inputs`
+
+| Default | Network | Auto-fix |
+|---|---|---|
+| ✓ | — | ✗ |
+
+Validates that local/composite action invocations (`uses: ./path`) provide all required inputs and do not pass unknown input keys. Also warns on deprecated inputs. Applies only to workflow files.
+
+**Given the following local action (`./actions/deploy/action.yml`):**
+
+```yaml
+name: Deploy
+description: Deploy to target environment
+inputs:
+  target:
+    description: Deployment target
+    required: true
+  environment:
+    description: Environment name
+    required: true
+  dry-run:
+    description: Skip actual deployment
+    required: false
+    default: "false"
+```
+
+**Example trigger:**
+
+```yaml
+on: push
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: ./actions/deploy
+        with:
+          target: prod
+          unknwon-key: x          # ERROR: unknown input 'unknwon-key'
+          # (missing 'environment' which is required by action.yml)
+```
+
+**Remediation:** Provide all required inputs and remove unknown keys:
+
+```yaml
+on: push
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: ./actions/deploy
+        with:
+          target: prod
+          environment: production
+```
+
+> **Note:** This rule reads the local action's `action.yml` / `action.yaml` from disk. It only works when the workflow file path is available and the action metadata file exists.
+
+---
+
+### `outdated-action-runner`
+
+| Default | Network | Auto-fix |
+|---|---|---|
+| ✓ | — | ✗ |
+
+Errors when a popular action version uses a deprecated Node.js runtime (`node12`, `node16`). These runtimes are no longer supported by GitHub Actions runners.
+
+**Example trigger:**
+
+```yaml
+on: push
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3   # ERROR: runner is too old (node16)
+```
+
+**Remediation:** Update to a newer major version of the action:
+
+```yaml
+on: push
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
 ```
 
 ---
@@ -2180,6 +2404,8 @@ jobs:
     steps:
       - uses: actions/create-github-app-token@v2
         with:
+          app-id: ${{ secrets.APP_ID }}
+          private-key: ${{ secrets.APP_PRIVATE_KEY }}
           repositories: repo-a,repo-b
           permission-contents: read
 ```
