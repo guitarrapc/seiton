@@ -19,6 +19,11 @@ public sealed class UnpinnedUsesRule() : RuleBase(RuleId.UnpinnedUses)
 
     private byte[][] _ignoreActionsUtf8 = [];
 
+    // Track owners for which we have already emitted a help hint (once per owner per workflow).
+    // Two-level cache: fast byte-span check for the last owner (hot path), HashSet for multi-owner (rare).
+    private readonly HashSet<string> _hintedOwners = new(StringComparer.OrdinalIgnoreCase);
+    private byte[]? _lastHintedOwnerBytes;
+
     public override string Name => "Unpinned Uses Rule";
 
     public override void SetConfig(LintConfig config)
@@ -47,6 +52,8 @@ public sealed class UnpinnedUsesRule() : RuleBase(RuleId.UnpinnedUses)
         _lastUnpinnedStepUsesSlice = default;
         _lastUnpinnedStepMessage = null;
         _lastDecodedUsesText = null;
+        _hintedOwners.Clear();
+        _lastHintedOwnerBytes = null;
     }
 
     public override void VisitJobPre(Job job)
@@ -112,7 +119,8 @@ public sealed class UnpinnedUsesRule() : RuleBase(RuleId.UnpinnedUses)
         var usesText = Decode(Arena.GetStringSlice(workflowCall.Uses));
         var url = ActionRefHelpers.BuildGitHubUrl(usesText);
         var urlSuffix = url is not null ? $". see {url}" : "";
-        AddJobWarning(job, $"jobs.'{jobId}'.uses '{usesText}' is not pinned to a full-length commit SHA{urlSuffix} (fixable with --fix --enable-pin-network)", usesRefLocation, PinDiagnosticMetadata.ForUsesRef(usesText));
+        var help = BuildOwnerHintOnce(parsedJob.ActionPath);
+        AddJobWarning(job, $"jobs.'{jobId}'.uses '{usesText}' is not pinned to a full-length commit SHA{urlSuffix} (fixable with --fix --enable-pin-network)", usesRefLocation, PinDiagnosticMetadata.ForUsesRef(usesText), help);
     }
 
     public override void VisitStep(Step step)
@@ -193,7 +201,43 @@ public sealed class UnpinnedUsesRule() : RuleBase(RuleId.UnpinnedUses)
 
         var usesSlice = Arena.GetStringSlice(actionExec.Uses);
         var message = GetUnpinnedStepMessage(usesSlice, out var decodedUsesText);
-        AddStepWarning(step, message, usesRefLocation, PinDiagnosticMetadata.ForUsesRef(decodedUsesText));
+        var help = BuildOwnerHintOnce(parsedStep.ActionPath);
+        AddStepWarning(step, message, usesRefLocation, PinDiagnosticMetadata.ForUsesRef(decodedUsesText), help);
+    }
+
+    /// <summary>
+    /// Returns a config-snippet help hint for the given action path's owner, or null if the owner
+    /// has already been hinted in this workflow run (deduplication).
+    /// Uses a two-level cache: fast byte-span check for the common repeated-owner case,
+    /// then HashSet fallback for multi-owner workflows.
+    /// </summary>
+    private string? BuildOwnerHintOnce(ReadOnlySpan<byte> actionPath)
+    {
+        if (!TryParseOwnerRepoSegments(actionPath, out var ownerSpan, out _))
+        {
+            return null;
+        }
+
+        // Fast path: if the owner bytes match the last-seen owner, skip entirely (zero allocation)
+        if (_lastHintedOwnerBytes is not null
+            && ownerSpan.Length == _lastHintedOwnerBytes.Length
+            && ownerSpan.SequenceEqual(_lastHintedOwnerBytes))
+        {
+            return null;
+        }
+
+        // Slow path: materialize owner string for HashSet check (case-insensitive dedup)
+        var owner = Encoding.ASCII.GetString(ownerSpan);
+        if (!_hintedOwners.Add(owner))
+        {
+            // Already hinted (different case variant) — update last-seen cache to avoid future allocs
+            _lastHintedOwnerBytes = ownerSpan.ToArray();
+            return null;
+        }
+
+        // First time seeing this owner — cache bytes and build hint
+        _lastHintedOwnerBytes = ownerSpan.ToArray();
+        return $"to ignore this owner, add to .github/seiton.yaml: rules: {{ unpinned-uses: {{ ignore-actions: [\"{owner}/*\"] }} }}";
     }
 
     private string GetUnpinnedStepMessage(Utf8Slice usesSlice, out string decodedUsesText)

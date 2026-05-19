@@ -284,6 +284,7 @@ public static class DiagnosticFormatter
                 RuleId = d.RuleId ?? "parse",
                 Message = d.Message,
                 Fixable = d.Fix is not null,
+                Help = d.Help,
             };
         }
 
@@ -390,6 +391,9 @@ internal sealed record JsonDiagnosticEntry
     public required string Message { get; init; }
     [JsonPropertyName("fixable")]
     public required bool Fixable { get; init; }
+    [JsonPropertyName("help")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? Help { get; init; }
 }
 
 // --- SARIF 2.1.0 output models ---
