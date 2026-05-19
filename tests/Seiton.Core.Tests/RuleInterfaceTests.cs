@@ -12280,6 +12280,45 @@ public sealed class RuleInterfaceTests
     }
 
     [Test]
+    public async Task LintEngine_RunInputsContextDirectUse_Fix_DoesNotAttach_InsideSingleQuotes()
+    {
+        var yaml = """
+        on: workflow_dispatch
+        jobs:
+            build:
+                runs-on: ubuntu-latest
+                steps:
+                    - run: echo '${{ inputs.target }}'
+        """;
+
+        using var result = new LintEngine([new RunInputsContextDirectUseRule()])
+            .Check(Encoding.UTF8.GetBytes(yaml), "run-inputs-no-fix-single-quotes.yml", new LintConfig { Fix = new FixConfig { Enabled = true } });
+        var diagnostic = result.Diagnostics.First(x => x.RuleId == "run-inputs-context-direct-use");
+
+        await Assert.That(diagnostic.Fix is null).IsTrue();
+    }
+
+    [Test]
+    public async Task LintEngine_RunInputsContextDirectUse_Fix_DoesNotAttach_WithEmptyFlowStyleEnv()
+    {
+        var yaml = """
+        on: workflow_dispatch
+        jobs:
+            build:
+                runs-on: ubuntu-latest
+                steps:
+                    - run: echo "${{ inputs.target }}"
+                      env: {}
+        """;
+
+        using var result = new LintEngine([new RunInputsContextDirectUseRule()])
+            .Check(Encoding.UTF8.GetBytes(yaml), "run-inputs-no-fix-empty-env.yml", new LintConfig { Fix = new FixConfig { Enabled = true } });
+        var diagnostic = result.Diagnostics.First(x => x.RuleId == "run-inputs-context-direct-use");
+
+        await Assert.That(diagnostic.Fix is null).IsTrue();
+    }
+
+    [Test]
     public async Task LintEngine_DeduplicatesRuleDiagnostics_ByPriority()
     {
         var yaml = """
