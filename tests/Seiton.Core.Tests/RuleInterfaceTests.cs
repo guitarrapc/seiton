@@ -12011,6 +12011,10 @@ public sealed class RuleInterfaceTests
         var fixedText = Encoding.UTF8.GetString(fixedBytes);
 
         await Assert.That(fixedText.Contains("run: Write-Host \"$env:TARGET\"", StringComparison.Ordinal)).IsTrue();
+
+        // Relint: fixed YAML should not trigger the rule
+        using var relint = engine.Check(fixedBytes, "run-inputs-fix-powershell.yml");
+        await Assert.That(relint.Diagnostics.Any(x => x.RuleId == "run-inputs-context-direct-use")).IsFalse();
     }
 
     [Test]
@@ -12123,6 +12127,10 @@ public sealed class RuleInterfaceTests
         var runLine = fixedText.Split('\n').First(l => l.Contains("run:", StringComparison.Ordinal));
         await Assert.That(runLine.Contains("${{ inputs.target }}", StringComparison.Ordinal)).IsFalse();
         await Assert.That(fixedText.Contains("TARGET: ${{ inputs.target }}", StringComparison.Ordinal)).IsTrue();
+
+        // Relint: fixed YAML should not trigger the rule
+        using var relint = engine.Check(fixedBytes, "run-inputs-fix-no-mapping-pwsh.yml");
+        await Assert.That(relint.Diagnostics.Any(x => x.RuleId == "run-inputs-context-direct-use")).IsFalse();
     }
 
     [Test]
@@ -12151,6 +12159,10 @@ public sealed class RuleInterfaceTests
         // Hyphens in input name should become underscores in env var
         await Assert.That(fixedText.Contains("${BENCHMARK_CONFIG_PATH}", StringComparison.Ordinal)).IsTrue();
         await Assert.That(fixedText.Contains("BENCHMARK_CONFIG_PATH: ${{ inputs.benchmark-config-path }}", StringComparison.Ordinal)).IsTrue();
+
+        // Relint: fixed YAML should not trigger the rule
+        using var relint = engine.Check(fixedBytes, "run-inputs-fix-hyphenated.yml");
+        await Assert.That(relint.Diagnostics.Any(x => x.RuleId == "run-inputs-context-direct-use")).IsFalse();
     }
 
     [Test]
@@ -12179,6 +12191,10 @@ public sealed class RuleInterfaceTests
         // Bracket access with hyphens should produce correct env var name
         await Assert.That(fixedText.Contains("${BENCHMARK_CONFIG_PATH}", StringComparison.Ordinal)).IsTrue();
         await Assert.That(fixedText.Contains("BENCHMARK_CONFIG_PATH: ${{ inputs.benchmark-config-path }}", StringComparison.Ordinal)).IsTrue();
+
+        // Relint: fixed YAML should not trigger the rule
+        using var relint = engine.Check(fixedBytes, "run-inputs-fix-bracket.yml");
+        await Assert.That(relint.Diagnostics.Any(x => x.RuleId == "run-inputs-context-direct-use")).IsFalse();
     }
 
     [Test]
@@ -12206,6 +12222,10 @@ public sealed class RuleInterfaceTests
 
         await Assert.That(fixedText.Contains("${BENCHMARK_CONFIG_PATH}", StringComparison.Ordinal)).IsTrue();
         await Assert.That(fixedText.Contains("BENCHMARK_CONFIG_PATH: ${{ github.event.inputs.benchmark-config-path }}", StringComparison.Ordinal)).IsTrue();
+
+        // Relint: fixed YAML should not trigger the rule
+        using var relint = engine.Check(fixedBytes, "run-inputs-fix-github-event-bracket.yml");
+        await Assert.That(relint.Diagnostics.Any(x => x.RuleId == "run-inputs-context-direct-use")).IsFalse();
     }
 
     [Test]
@@ -12236,6 +12256,10 @@ public sealed class RuleInterfaceTests
         await Assert.That(fixedText.Contains("TARGET: ${{ inputs.target }}", StringComparison.Ordinal)).IsTrue();
         // Existing env should still be present
         await Assert.That(fixedText.Contains("OTHER: value", StringComparison.Ordinal)).IsTrue();
+
+        // Relint: fixed YAML should not trigger the rule
+        using var relint = engine.Check(fixedBytes, "run-inputs-fix-existing-env.yml");
+        await Assert.That(relint.Diagnostics.Any(x => x.RuleId == "run-inputs-context-direct-use")).IsFalse();
     }
 
     [Test]
