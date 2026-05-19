@@ -22,6 +22,7 @@ internal static class RuleConfigNormalizer
         var assumeEvents = NormalizeAdditiveValues(config.AssumeEvents, "assume-events entry must not be empty", filePath, diagnostics);
         var allow = NormalizeAdditiveValues(config.Allow, "allow pattern must not be empty", filePath, diagnostics);
         var deny = NormalizeAdditiveValues(config.Deny, "deny pattern must not be empty", filePath, diagnostics);
+        var ignoreActions = NormalizeIgnoreActions(config.IgnoreActions, filePath, diagnostics);
 
         return config with
         {
@@ -33,7 +34,82 @@ internal static class RuleConfigNormalizer
             AssumeEvents = assumeEvents,
             Allow = allow,
             Deny = deny,
+            IgnoreActions = ignoreActions,
         };
+    }
+
+    private static IReadOnlyList<IgnoreActionRule>? NormalizeIgnoreActions(
+        IReadOnlyList<IgnoreActionRule>? values,
+        string filePath,
+        List<Diagnostic> diagnostics)
+    {
+        if (values is null || values.Count == 0)
+        {
+            return null;
+        }
+
+        var normalized = new List<IgnoreActionRule>(values.Count);
+        var seen = new HashSet<string>(StringComparer.Ordinal);
+
+        for (var i = 0; i < values.Count; i++)
+        {
+            var entry = values[i];
+            var trimmedPattern = entry.Pattern?.Trim() ?? string.Empty;
+            if (trimmedPattern.Length == 0)
+            {
+                diagnostics.Add(new Diagnostic(
+                    DiagnosticSeverity.Error,
+                    "ignore-actions pattern must not be empty",
+                    new TextRange(0, 1, 1, 1, 1, 2),
+                    FilePath: filePath));
+                continue;
+            }
+
+            var normalizedPattern = NormalizeAsciiLower(trimmedPattern);
+            if (entry.Refs is null)
+            {
+                if (seen.Add(normalizedPattern))
+                {
+                    normalized.Add(new IgnoreActionRule(normalizedPattern));
+                }
+
+                continue;
+            }
+
+            var normalizedRefs = new List<string>(entry.Refs.Count);
+            var seenRefs = new HashSet<string>(StringComparer.Ordinal);
+            for (var j = 0; j < entry.Refs.Count; j++)
+            {
+                var trimmedRef = entry.Refs[j]?.Trim() ?? string.Empty;
+                if (trimmedRef.Length == 0)
+                {
+                    diagnostics.Add(new Diagnostic(
+                        DiagnosticSeverity.Error,
+                        "ignore-actions ref entries must not be empty",
+                        new TextRange(0, 1, 1, 1, 1, 2),
+                        FilePath: filePath));
+                    continue;
+                }
+
+                if (seenRefs.Add(trimmedRef))
+                {
+                    normalizedRefs.Add(trimmedRef);
+                }
+            }
+
+            if (normalizedRefs.Count == 0)
+            {
+                continue;
+            }
+
+            var dedupKey = string.Concat(normalizedPattern, "\n", string.Join("\n", normalizedRefs));
+            if (seen.Add(dedupKey))
+            {
+                normalized.Add(new IgnoreActionRule(normalizedPattern, normalizedRefs));
+            }
+        }
+
+        return normalized.Count > 0 ? normalized : null;
     }
 
     private static ExtendableList? NormalizeExtendableList(

@@ -504,6 +504,49 @@ public sealed class LintConfigLibraryTests
     }
 
     [Test]
+    public async Task Validate_UnpinnedUsesIgnoreActions_ObjectForm_WhitespaceOnlyRef_Error()
+    {
+        var yaml = """
+        rules:
+          unpinned-uses:
+            ignore-actions:
+              - owner: "my-org/*"
+                refs: ["   "]
+        """;
+
+        var result = LintConfigLibrary.Validate(yaml, "seiton.yaml");
+
+        await Assert.That(result.IsValid).IsFalse();
+        await Assert.That(result.Diagnostics.Any(d => d.Message.Contains("ref entries must not be empty", StringComparison.Ordinal))).IsTrue();
+    }
+
+    [Test]
+    public async Task Validate_UnpinnedUsesIgnoreActions_NormalizesPatternAndRefs()
+    {
+        var yaml = """
+        rules:
+          unpinned-uses:
+            ignore-actions:
+              - owner: " My-Org/* "
+                refs: [" main ", main, " master ", main]
+        """;
+
+        var result = LintConfigLibrary.Validate(yaml, "seiton.yaml");
+
+        await Assert.That(result.IsValid).IsTrue();
+        await Assert.That(result.Config).IsNotNull();
+
+        var unpinnedConfig = result.Config!.Rules!["unpinned-uses"];
+        await Assert.That(unpinnedConfig.IgnoreActions).IsNotNull();
+        await Assert.That(unpinnedConfig.IgnoreActions!.Count).IsEqualTo(1);
+        await Assert.That(unpinnedConfig.IgnoreActions![0].Pattern).IsEqualTo("my-org/*");
+        await Assert.That(unpinnedConfig.IgnoreActions![0].Refs).IsNotNull();
+        await Assert.That(unpinnedConfig.IgnoreActions![0].Refs!.Count).IsEqualTo(2);
+        await Assert.That(unpinnedConfig.IgnoreActions![0].Refs![0]).IsEqualTo("main");
+        await Assert.That(unpinnedConfig.IgnoreActions![0].Refs![1]).IsEqualTo("master");
+    }
+
+    [Test]
     public async Task Validate_Exclusions_NewFieldNames_ParseCorrectly()
     {
         var yaml = """

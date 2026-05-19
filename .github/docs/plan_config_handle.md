@@ -192,6 +192,7 @@ Phase 1 should ship first and independently. Phase 2 can follow in a separate PR
 - **Internal data structure:** `IgnoreEntry` readonly struct with `byte[] PatternUtf8` (lowercased owner glob) and `byte[][]? RefsUtf8` (pre-encoded ref bytes, null for string-form entries). Zero extra allocation on the hot path when no `ignore-actions` is configured.
 - **Matching algorithm:** `MatchAnyIgnoreEntry` iterates entries: if owner pattern matches AND (Refs is null OR any ref matches via `SequenceEqual`), the action is ignored. This is a single loop with early-return, same O(n) as before.
 - **Parsing:** `ParseRuleIgnoreActions` checks `AsMap()` first (object form) then `ScalarToString()` (string form) for each list item. Validation produces Error diagnostics for: missing `owner`, empty `refs`, unknown keys.
+- **Review fix:** `RuleConfigNormalizer` now normalizes `rules.unpinned-uses.ignore-actions` the same way as other rule-specific config: trims surrounding whitespace, lowercases owner/repo patterns for case-insensitive matching, deduplicates normalized entries, preserves ref case, and rejects empty ref elements. This avoids surprising config behavior such as `refs: ["   "]` silently being accepted.
 - **Backward compat:** Existing string-form YAML configs parse unchanged. Existing test code updated from `string[]` to `IgnoreActionRule[]` (internal API change, not user-facing).
 
 **Files changed:**
@@ -200,25 +201,28 @@ Phase 1 should ship first and independently. Phase 2 can follow in a separate PR
 |------|--------|
 | `src/Seiton.Core/Linting/LintConfig.cs` | Added `IgnoreActionRule` record; changed `RuleConfig.IgnoreActions` type from `IReadOnlyList<string>?` to `IReadOnlyList<IgnoreActionRule>?` |
 | `src/Seiton.Core/Linting/LintConfigYamlParser.cs` | Added `ParseRuleIgnoreActions` method handling both string and mapping items |
+| `src/Seiton.Core/Linting/RuleConfigNormalizer.cs` | Added normalization/validation for `rules.unpinned-uses.ignore-actions` (trim, dedup, empty-ref rejection, lowercased owner patterns) |
 | `src/Seiton.Core/Linting/Rules/UnpinnedUsesRule.cs` | Replaced `byte[][] _ignoreActionsUtf8` with `IgnoreEntry[] _ignoreEntries` struct array; `IsIgnoredAction` now takes `actionRef` parameter; added `MatchAnyIgnoreEntry` with ref-conditional logic |
 | `src/Seiton.Core/Linting/LintConfigLibrary.cs` | Updated `seiton init` template to show object form example |
 | `docs/configuration.md` | Documented ref-conditional object form in annotated example and rule-specific options table |
 | `docs/rules.md` | Added ref-conditional example to `unpinned-uses` rule documentation |
+| `.github/docs/Seiton_Linter_spec.md` | Added `rules.unpinned-uses.ignore-actions` to rule-specific config spec and aligned fix wildcard examples |
+| `.github/docs/Seiton_Linter_csharp_spec.md` | Documented `rules.unpinned-uses.ignore-actions` mapping and normalization semantics |
 | `tests/Seiton.Core.Tests/RuleInterfaceTests.cs` | 5 new tests: matching ref ignored, non-matching ref warns, mixed forms, reusable workflow, case-sensitive ref |
-| `tests/Seiton.Core.Tests/LintConfigLibraryTests.cs` | 5 new tests: object form parsing, mixed form parsing, missing owner error, empty refs error, unknown key error |
+| `tests/Seiton.Core.Tests/LintConfigLibraryTests.cs` | 7 new tests: object form parsing, mixed form parsing, missing owner error, empty refs error, unknown key error, whitespace-only ref error, normalization/dedup |
 
-### Benchmark Comparison
+### Benchmark Comparison (Post-review)
 
-| Size | FixEnabled | Baseline Mean | After Mean | Baseline Alloc | After Alloc | Alloc Delta |
-|------|------------|---------------|------------|----------------|-------------|-------------|
-| Small | False | 174.9 µs | 175.2 µs | 8.74 KB | 8.74 KB | 0 |
-| Small | True | 481.6 µs | 177.1 µs | 10.33 KB | 10.19 KB | −0.14 KB |
-| Medium | False | 4,282.6 µs | 3,669.1 µs | 69.61 KB | 69.21 KB | −0.40 KB |
-| Medium | True | 7,207.0 µs | 7,197.4 µs | 83.52 KB | 83.52 KB | 0 |
-| Large | False | 52,577.8 µs | 47,456.1 µs | 366.3 KB | 353.26 KB | −13.04 KB |
-| Large | True | 86,296.1 µs | 84,017.2 µs | 421.14 KB | 440.5 KB | +19.36 KB |
+| Size | FixEnabled | Mean | Allocated |
+|------|------------|------|-----------|
+| Small | False | 210.4 µs | 8.74 KB |
+| Small | True | 344.0 µs | 10.33 KB |
+| Medium | False | 3,636.7 µs | 69.21 KB |
+| Medium | True | 7,625.8 µs | 83.52 KB |
+| Large | False | 35,075.3 µs | 327.45 KB |
+| Large | True | 86,970.9 µs | 382.42 KB |
 
-**Analysis:** No allocation regression. The struct-based `IgnoreEntry[]` replaces the previous flat `byte[][]` with no runtime cost increase. All timing/allocation deltas are within ShortRun noise (3 iterations). The benchmark runs without `ignore-actions` configured, so the new code path (`MatchAnyIgnoreEntry`) is never exercised — the guard `if (_ignoreEntries.Length == 0) return false` exits immediately.
+**Analysis:** No regression attributable to the review fix. The only runtime code change after the initial implementation was config normalization in `RuleConfigNormalizer`, which runs during config validation/setup, not inside the per-step/per-job lint hot path. The post-review benchmark still shows the same small/medium allocation profile as the implementation-phase run, and there is no new multi-KB allocation increase in the checked path. The benchmark fixture does not configure `ignore-actions`, so the new matcher still short-circuits at `if (_ignoreEntries.Length == 0) return false;`.
 
 ### Open Questions Resolved
 

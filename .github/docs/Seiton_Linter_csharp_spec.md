@@ -416,6 +416,7 @@ Additive merge (`effective = built-in U user-extended`) is used for all `extend`
 
 Direct list keys:
 
+- `rules.unpinned-uses.ignore-actions`
 - `rules.forbidden-uses.allow` / `rules.forbidden-uses.deny`
 - `rules.expr-undefined-var.assume-events`
 
@@ -428,6 +429,7 @@ Mapping requirements:
 
 - Use deterministic deduplication after normalization.
 - Normalization uses ASCII lower-case matching for event names, runner labels, and registry hosts.
+- `rules.unpinned-uses.ignore-actions` normalization trims surrounding whitespace, lowercases the `owner/repo` wildcard pattern for case-insensitive matching, preserves ref case, rejects empty ref elements, and deduplicates identical normalized entries.
 - Invalid customization entries are configuration errors.
 - Extension never removes built-in defaults.
 - Unknown rule-specific keys for a given rule ID are configuration errors (validated via `RuleCatalog` field mapping).

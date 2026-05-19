@@ -530,6 +530,12 @@ rules:
       extend:
         - tee
 
+  unpinned-uses:
+    ignore-actions:
+      - "my-org/*"
+      - owner: "my-org/*"
+        refs: [main, master]
+
   forbidden-uses:
     allow:
       - actions/*
@@ -590,7 +596,15 @@ rules:
 - This provides event-type context for expression validation, suppressing false positives for event-specific context roots (e.g. `github.event.inputs` is valid under `workflow_dispatch`).
 - Values are event name strings matching canonical GitHub event naming.
 
-#### 5.8.8 `overprovisioned-secrets` — `max-step-env-secrets` / `max-job-secrets`
+#### 5.8.8 `unpinned-uses` — `ignore-actions`
+
+- Accepts a mixed list of string and object entries.
+- String entry form: wildcard pattern matched against `owner/repo`, case-insensitive, and suppresses `unpinned-uses` for all refs of matching actions.
+- Object entry form: `{ owner, refs }` where `owner` uses the same wildcard matching as string entries and `refs` is a non-empty list of exact ref strings matched case-sensitively.
+- Normalization trims surrounding whitespace; duplicate entries after normalization are ignored. Pattern matching uses ASCII lower-case normalization for `owner/repo`, while `refs` retain original case semantics.
+- Unknown object keys, missing `owner`, empty `owner`, missing `refs`, empty `refs`, or empty ref elements are configuration errors.
+
+#### 5.8.9 `overprovisioned-secrets` — `max-step-env-secrets` / `max-job-secrets`
 
 - `max-step-env-secrets`: Maximum number of `secrets.*` references allowed in a single step `env:` block before a diagnostic is emitted. Default: `5`.
 - `max-job-secrets`: Maximum number of explicit secrets allowed in a single reusable workflow call `secrets:` block before a diagnostic is emitted. Default: `5`.
@@ -695,8 +709,8 @@ fix:
       - main
       - master
     ignore-actions:
-      - uses: "slsa-framework/.*"
-        ref: ".*"
+      - uses: "slsa-framework/*"
+        ref: "*"
 
   images:
     enable-network: true
@@ -993,8 +1007,8 @@ fix:
       - main
       - master
     ignore-actions:
-      - uses: "slsa-framework/.*"
-        ref: ".*"
+      - uses: "slsa-framework/*"
+        ref: "*"
   images:
     enable-network: true
     exclude-images:
@@ -1054,8 +1068,8 @@ fix:
       - main
       - master
     ignore-actions:               # action patterns to skip
-      - uses: "slsa-framework/.*"
-        ref: ".*"
+      - uses: "slsa-framework/*"
+        ref: "*"
 
   images:
     enable-network: true          # enable digest resolution for unpinned-image fixes
@@ -1542,8 +1556,8 @@ fix:
       - main
       - master
     ignore-actions:
-      - uses: "slsa-framework/.*"
-        ref: ".*"
+      - uses: "slsa-framework/*"
+        ref: "*"
 
   images:
     enable-network: true           # must be true to enable OCI digest remediation
