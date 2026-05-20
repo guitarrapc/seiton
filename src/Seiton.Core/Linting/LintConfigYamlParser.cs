@@ -910,7 +910,7 @@ internal static class LintConfigYamlParser
 
                 if (string.IsNullOrWhiteSpace(owner))
                 {
-                    diagnostics.Add(Diag("ignore-actions requires 'owner' key", DomLine, 5, 14, filePath));
+                    diagnostics.Add(Diag("ignore-actions owner must not be empty", DomLine, 5, 14, filePath));
                     continue;
                 }
 

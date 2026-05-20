@@ -509,7 +509,7 @@ public sealed class LintConfigLibraryTests
         var result = LintConfigLibrary.Validate(yaml, "seiton.yaml");
 
         await Assert.That(result.IsValid).IsFalse();
-        await Assert.That(result.Diagnostics.Any(d => d.Message.Contains("requires 'owner' key", StringComparison.Ordinal))).IsTrue();
+        await Assert.That(result.Diagnostics.Any(d => d.Message.Contains("owner must not be empty", StringComparison.Ordinal))).IsTrue();
     }
 
     [Test]
