@@ -828,6 +828,8 @@ internal static class LintConfigYamlParser
             {
                 string? owner = null;
                 IReadOnlyList<string>? refs = null;
+                var refsKeyPresent = false;
+                var refsValueIsList = false;
                 foreach (var (ik, iv) in map)
                 {
                     if (ik == "owner")
@@ -836,6 +838,8 @@ internal static class LintConfigYamlParser
                     }
                     else if (ik == "refs")
                     {
+                        refsKeyPresent = true;
+                        refsValueIsList = AsList(iv) is not null;
                         refs = ParseStringList(iv, "refs", diagnostics, filePath);
                     }
                     else
@@ -850,7 +854,12 @@ internal static class LintConfigYamlParser
                     continue;
                 }
 
-                if (refs is { Count: 0 })
+                if (refsKeyPresent && !refsValueIsList)
+                {
+                    continue;
+                }
+
+                if (refsKeyPresent && refsValueIsList && refs is { Count: 0 })
                 {
                     diagnostics.Add(Diag("ignore-actions requires non-empty 'refs' list when 'refs' is present", DomLine, 5, 14, filePath));
                     continue;

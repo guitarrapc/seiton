@@ -76,6 +76,16 @@ internal static class RuleConfigNormalizer
                 continue;
             }
 
+            if (entry.Refs.Count == 0)
+            {
+                diagnostics.Add(new Diagnostic(
+                    DiagnosticSeverity.Error,
+                    "ignore-actions requires non-empty 'refs' list when 'refs' is present",
+                    new TextRange(0, 1, 1, 1, 1, 2),
+                    FilePath: filePath));
+                continue;
+            }
+
             var normalizedRefs = new List<string>(entry.Refs.Count);
             var seenRefs = new HashSet<string>(StringComparer.Ordinal);
             for (var j = 0; j < entry.Refs.Count; j++)

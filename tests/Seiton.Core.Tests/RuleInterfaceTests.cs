@@ -2499,6 +2499,28 @@ public sealed class RuleInterfaceTests
     }
 
     [Test]
+    public async Task RuleRegression_UnpinnedUsesRule_Help_PreservesUtf8Owner()
+    {
+        var yaml = NormalizeYaml("""
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - uses: äction-org/tool@v1
+            """);
+
+        using var result = new LintEngine([new UnpinnedUsesRule()])
+            .Check(Encoding.UTF8.GetBytes(yaml), "help-utf8-owner-test.yml");
+        var warning = result.Diagnostics
+            .Single(x => x.RuleId == "unpinned-uses" && x.Severity == DiagnosticSeverity.Warning);
+
+        await Assert.That(warning.Help).IsNotNull();
+        await Assert.That(warning.Help!).Contains("äction-org/*");
+        await Assert.That(warning.Help!).DoesNotContain("?ction-org/*");
+    }
+
+    [Test]
     public async Task RuleRegression_UnpinnedUsesRule_Help_NoHint_ShaPinned()
     {
         // SHA-pinned actions produce no warning → no hint

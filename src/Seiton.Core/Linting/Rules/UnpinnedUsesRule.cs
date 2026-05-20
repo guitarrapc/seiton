@@ -239,7 +239,7 @@ public sealed class UnpinnedUsesRule() : RuleBase(RuleId.UnpinnedUses)
         }
 
         // Slow path: materialize owner string for HashSet check (case-insensitive dedup)
-        var owner = Encoding.ASCII.GetString(ownerSpan);
+        var owner = Encoding.UTF8.GetString(ownerSpan);
         if (!_hintedOwners.Add(owner))
         {
             // Already hinted (different case variant) — update last-seen cache to avoid future allocs

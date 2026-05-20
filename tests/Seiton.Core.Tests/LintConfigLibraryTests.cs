@@ -499,6 +499,24 @@ public sealed class LintConfigLibraryTests
     }
 
     [Test]
+    public async Task Validate_UnpinnedUsesIgnoreActions_ObjectForm_RefsNotList_EmitsSingleYamlListError()
+    {
+        var yaml = """
+        rules:
+          unpinned-uses:
+            ignore-actions:
+              - owner: "my-org/*"
+                refs: main
+        """;
+
+        var result = LintConfigLibrary.Validate(yaml, "seiton.yaml");
+
+        await Assert.That(result.IsValid).IsFalse();
+        await Assert.That(result.Diagnostics.Count(d => d.Message.Contains("refs must be a YAML list", StringComparison.Ordinal))).IsEqualTo(1);
+        await Assert.That(result.Diagnostics.Any(d => d.Message.Contains("non-empty 'refs' list", StringComparison.Ordinal))).IsFalse();
+    }
+
+    [Test]
     public async Task Validate_UnpinnedUsesIgnoreActions_ObjectForm_UnknownKey_Error()
     {
         var yaml = """
@@ -558,6 +576,21 @@ public sealed class LintConfigLibraryTests
         await Assert.That(unpinnedConfig.IgnoreActions![0].Refs![0]).IsEqualTo("main");
         await Assert.That(unpinnedConfig.IgnoreActions![0].Refs![1]).IsEqualTo("master");
     }
+
+      [Test]
+      public async Task Normalize_UnpinnedUsesIgnoreActions_ProgrammaticEmptyRefs_EmitsError()
+      {
+        var diagnostics = new List<Diagnostic>();
+        var config = new RuleConfig
+        {
+          IgnoreActions = [new IgnoreActionRule("my-org/*", [])],
+        };
+
+        var normalized = RuleConfigNormalizer.Normalize(config, "seiton.yaml", diagnostics);
+
+        await Assert.That(diagnostics.Any(d => d.Message.Contains("non-empty 'refs' list", StringComparison.Ordinal))).IsTrue();
+        await Assert.That(normalized.IgnoreActions).IsNull();
+      }
 
     [Test]
     public async Task Validate_Exclusions_NewFieldNames_ParseCorrectly()
