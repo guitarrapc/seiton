@@ -2240,7 +2240,7 @@ public sealed class RuleInterfaceTests
             {
                 ["unpinned-uses"] = new RuleConfig
                 {
-                    IgnoreActions = ["guitarrapc/setup-dotnet", "my-org/*"],
+                    IgnoreActions = [new IgnoreActionRule("guitarrapc/setup-dotnet"), new IgnoreActionRule("my-org/*")],
                 },
             },
         };
@@ -2313,7 +2313,7 @@ public sealed class RuleInterfaceTests
             {
                 ["unpinned-uses"] = new RuleConfig
                 {
-                    IgnoreActions = ["guitarrapc/setup-dotnet"],
+                    IgnoreActions = [new IgnoreActionRule("guitarrapc/setup-dotnet")],
                 },
             },
         };
@@ -2345,7 +2345,7 @@ public sealed class RuleInterfaceTests
             {
                 ["unpinned-uses"] = new RuleConfig
                 {
-                    IgnoreActions = ["guitarrapc/setup-dotnet"],
+                    IgnoreActions = [new IgnoreActionRule("guitarrapc/setup-dotnet")],
                 },
             },
         };
@@ -2363,6 +2363,473 @@ public sealed class RuleInterfaceTests
             .Check(Encoding.UTF8.GetBytes(yaml), "no-verbose-test.yml", config);
         var infoDiags = result.Diagnostics.Where(x => x.RuleId == "unpinned-uses" && x.Severity == DiagnosticSeverity.Info).ToArray();
         await Assert.That(infoDiags.Length).IsEqualTo(0);
+    }
+
+    [Test]
+    public async Task RuleRegression_UnpinnedUsesRule_Help_ShowsConfigHint_OncePerOwner()
+    {
+        // Two steps from the same owner should produce only ONE diagnostic with Help set
+        var yaml = NormalizeYaml("""
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - uses: my-org/action-a@v1
+                        - uses: my-org/action-b@v2
+                        - uses: other-org/tool@main
+            """);
+
+        using var result = new LintEngine([new UnpinnedUsesRule()])
+            .Check(Encoding.UTF8.GetBytes(yaml), "help-hint-test.yml");
+        var warnings = result.Diagnostics
+            .Where(x => x.RuleId == "unpinned-uses" && x.Severity == DiagnosticSeverity.Warning)
+            .ToArray();
+
+        // All three should warn (none are pinned to SHA)
+        await Assert.That(warnings.Length).IsEqualTo(3);
+
+        // First occurrence of my-org should have Help with config snippet
+        var myOrgFirst = warnings.First(w => w.Message.Contains("my-org/action-a", StringComparison.Ordinal));
+        await Assert.That(myOrgFirst.Help).IsNotNull();
+        await Assert.That(myOrgFirst.Help!).Contains("my-org/*");
+        await Assert.That(myOrgFirst.Help!).Contains("owner:");
+        await Assert.That(myOrgFirst.Help!).DoesNotContain("ignore-actions: [\"my-org/*\"]");
+        await Assert.That(myOrgFirst.Help!).Contains("ignore-actions");
+
+        // Second occurrence of same owner should NOT have Help (deduplicated)
+        var myOrgSecond = warnings.First(w => w.Message.Contains("my-org/action-b", StringComparison.Ordinal));
+        await Assert.That(myOrgSecond.Help).IsNull();
+
+        // Different owner should have its own Help
+        var otherOrg = warnings.First(w => w.Message.Contains("other-org/tool", StringComparison.Ordinal));
+        await Assert.That(otherOrg.Help).IsNotNull();
+        await Assert.That(otherOrg.Help!).Contains("other-org/*");
+    }
+
+    [Test]
+    public async Task RuleRegression_UnpinnedUsesRule_Help_ShowsConfigHint_ReusableWorkflow()
+    {
+        // Reusable workflow (job-level uses) should also get the Help hint
+        var yaml = NormalizeYaml("""
+            on: push
+            jobs:
+                release:
+                    uses: my-org/repo/.github/workflows/reusable.yml@main
+            """);
+
+        using var result = new LintEngine([new UnpinnedUsesRule()])
+            .Check(Encoding.UTF8.GetBytes(yaml), "help-job-test.yml");
+        var warnings = result.Diagnostics
+            .Where(x => x.RuleId == "unpinned-uses" && x.Severity == DiagnosticSeverity.Warning)
+            .ToArray();
+
+        await Assert.That(warnings.Length).IsEqualTo(1);
+        await Assert.That(warnings[0].Help).IsNotNull();
+        await Assert.That(warnings[0].Help!).Contains("my-org/*");
+        await Assert.That(warnings[0].Help!).Contains("owner:");
+        await Assert.That(warnings[0].Help!).DoesNotContain("ignore-actions: [\"my-org/*\"]");
+        await Assert.That(warnings[0].Help!).Contains("ignore-actions");
+    }
+
+    [Test]
+    public async Task RuleRegression_UnpinnedUsesRule_Help_NoHint_WhenIgnored()
+    {
+        // When the action is already ignored, no warning → no hint needed
+        var config = new LintConfig
+        {
+            Rules = new Dictionary<string, RuleConfig>
+            {
+                ["unpinned-uses"] = new RuleConfig
+                {
+                    IgnoreActions = [new IgnoreActionRule("my-org/*")],
+                },
+            },
+        };
+
+        var yaml = NormalizeYaml("""
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - uses: my-org/action-a@v1
+            """);
+
+        using var result = new LintEngine([new UnpinnedUsesRule()])
+            .Check(Encoding.UTF8.GetBytes(yaml), "help-no-hint-test.yml", config);
+        var warnings = result.Diagnostics
+            .Where(x => x.RuleId == "unpinned-uses" && x.Severity == DiagnosticSeverity.Warning)
+            .ToArray();
+
+        // Should be ignored, no warning at all
+        await Assert.That(warnings.Length).IsEqualTo(0);
+    }
+
+    [Test]
+    public async Task RuleRegression_UnpinnedUsesRule_Help_CaseInsensitiveOwnerDedup()
+    {
+        // Same owner with different case should be deduplicated
+        var yaml = NormalizeYaml("""
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - uses: MyOrg/action-a@v1
+                        - uses: myorg/action-b@v2
+            """);
+
+        using var result = new LintEngine([new UnpinnedUsesRule()])
+            .Check(Encoding.UTF8.GetBytes(yaml), "help-case-test.yml");
+        var warnings = result.Diagnostics
+            .Where(x => x.RuleId == "unpinned-uses" && x.Severity == DiagnosticSeverity.Warning)
+            .ToArray();
+
+        await Assert.That(warnings.Length).IsEqualTo(2);
+
+        // First gets hint
+        var first = warnings.First(w => w.Message.Contains("MyOrg/action-a", StringComparison.Ordinal));
+        await Assert.That(first.Help).IsNotNull();
+        await Assert.That(first.Help!).Contains("MyOrg/*");
+
+        // Second (different case) does NOT get hint — same owner, deduplicated
+        var second = warnings.First(w => w.Message.Contains("myorg/action-b", StringComparison.Ordinal));
+        await Assert.That(second.Help).IsNull();
+    }
+
+    [Test]
+    public async Task RuleRegression_UnpinnedUsesRule_Help_PreservesUtf8Owner()
+    {
+        var yaml = NormalizeYaml("""
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - uses: äction-org/tool@v1
+            """);
+
+        using var result = new LintEngine([new UnpinnedUsesRule()])
+            .Check(Encoding.UTF8.GetBytes(yaml), "help-utf8-owner-test.yml");
+        var warning = result.Diagnostics
+            .Single(x => x.RuleId == "unpinned-uses" && x.Severity == DiagnosticSeverity.Warning);
+
+        await Assert.That(warning.Help).IsNotNull();
+        await Assert.That(warning.Help!).Contains("äction-org/*");
+        await Assert.That(warning.Help!).DoesNotContain("?ction-org/*");
+    }
+
+    [Test]
+    public async Task RuleRegression_UnpinnedUsesRule_IgnoreActions_ProgrammaticConfig_PreservesNonAsciiOwnerCase()
+    {
+        var config = new LintConfig
+        {
+            Rules = new Dictionary<string, RuleConfig>
+            {
+                ["unpinned-uses"] = new RuleConfig
+                {
+                    IgnoreActions = [new IgnoreActionRule("Äction-org/*")],
+                },
+            },
+        };
+
+        var cases = new[]
+        {
+            new RuleCase(
+            "ok-programmatic-nonascii-owner-ignore",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - uses: Äction-org/tool@v1
+            """,
+            []),
+        };
+
+        await AssertRuleCases(new UnpinnedUsesRule(), "unpinned-uses", cases, config);
+    }
+
+    [Test]
+    public async Task RuleRegression_UnpinnedUsesRule_Help_NoHint_ShaPinned()
+    {
+        // SHA-pinned actions produce no warning → no hint
+        var yaml = NormalizeYaml("""
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - uses: actions/checkout@a5ac7e51b41094c92402da3b24376905380afc29
+            """);
+
+        using var result = new LintEngine([new UnpinnedUsesRule()])
+            .Check(Encoding.UTF8.GetBytes(yaml), "help-sha-test.yml");
+        var warnings = result.Diagnostics
+            .Where(x => x.RuleId == "unpinned-uses" && x.Severity == DiagnosticSeverity.Warning)
+            .ToArray();
+
+        await Assert.That(warnings.Length).IsEqualTo(0);
+    }
+
+    [Test]
+    public async Task RuleRegression_UnpinnedUsesRule_Help_NoHint_LocalAndDocker()
+    {
+        // Local and Docker uses should not produce help hints (no owner concept)
+        var yaml = NormalizeYaml("""
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - uses: ./.github/actions/my-action
+                        - uses: docker://alpine:3.18
+            """);
+
+        using var result = new LintEngine([new UnpinnedUsesRule()])
+            .Check(Encoding.UTF8.GetBytes(yaml), "help-local-docker-test.yml");
+        var allDiags = result.Diagnostics
+            .Where(x => x.RuleId == "unpinned-uses")
+            .ToArray();
+
+        // No unpinned-uses warnings for local/docker (local has no @ref, docker has no SHA check here)
+        foreach (var d in allDiags)
+        {
+            await Assert.That(d.Help).IsNull();
+        }
+    }
+
+    [Test]
+    public async Task RuleRegression_UnpinnedUsesRule_RefConditionalIgnore_MatchingRef_Ignored()
+    {
+        // Object form: ignore MyOrg/* only when ref is main or master
+        var config = new LintConfig
+        {
+            Rules = new Dictionary<string, RuleConfig>
+            {
+                ["unpinned-uses"] = new RuleConfig
+                {
+                    IgnoreActions = [new IgnoreActionRule("my-org/*", ["main", "master"])],
+                },
+            },
+        };
+
+        var cases = new[]
+        {
+            new RuleCase(
+            "ok-ref-conditional-main-ignored",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - uses: my-org/action-a@main
+            """,
+            []),
+            new RuleCase(
+            "ok-ref-conditional-master-ignored",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - uses: my-org/action-b@master
+            """,
+            []),
+        };
+
+        await AssertRuleCases(new UnpinnedUsesRule(), "unpinned-uses", cases, config);
+    }
+
+    [Test]
+    public async Task RuleRegression_UnpinnedUsesRule_RefConditionalIgnore_NonMatchingRef_Warns()
+    {
+        // Object form: non-matching ref should still produce warning
+        var config = new LintConfig
+        {
+            Rules = new Dictionary<string, RuleConfig>
+            {
+                ["unpinned-uses"] = new RuleConfig
+                {
+                    IgnoreActions = [new IgnoreActionRule("my-org/*", ["main", "master"])],
+                },
+            },
+        };
+
+        var cases = new[]
+        {
+            new RuleCase(
+            "ng-ref-conditional-v1-warns",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - uses: my-org/action-a@v1
+            """,
+            ["not pinned to a full-length commit SHA"]),
+            new RuleCase(
+            "ng-ref-conditional-develop-warns",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - uses: my-org/action-b@develop
+            """,
+            ["not pinned to a full-length commit SHA"]),
+        };
+
+        await AssertRuleCases(new UnpinnedUsesRule(), "unpinned-uses", cases, config);
+    }
+
+    [Test]
+    public async Task RuleRegression_UnpinnedUsesRule_RefConditionalIgnore_OwnerOnlyAndRefSpecificEntries()
+    {
+        // Owner-only entry ignores all refs; ref-specific entry ignores only listed refs.
+        var config = new LintConfig
+        {
+            Rules = new Dictionary<string, RuleConfig>
+            {
+                ["unpinned-uses"] = new RuleConfig
+                {
+                    IgnoreActions =
+                    [
+                        new IgnoreActionRule("trusted-org/*"),           // all refs
+                        new IgnoreActionRule("semi-trusted/*", ["main"]), // only main
+                    ],
+                },
+            },
+        };
+
+        var cases = new[]
+        {
+            new RuleCase(
+            "ok-owner-only-entry-ignores-all-refs",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - uses: trusted-org/action@v1
+            """,
+            []),
+            new RuleCase(
+            "ok-ref-specific-entry-matching-ref",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - uses: semi-trusted/action@main
+            """,
+            []),
+            new RuleCase(
+            "ng-object-form-non-matching-ref",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - uses: semi-trusted/action@v2
+            """,
+            ["not pinned to a full-length commit SHA"]),
+        };
+
+        await AssertRuleCases(new UnpinnedUsesRule(), "unpinned-uses", cases, config);
+    }
+
+    [Test]
+    public async Task RuleRegression_UnpinnedUsesRule_RefConditionalIgnore_ReusableWorkflow()
+    {
+        // Object form with reusable workflow (job-level uses)
+        var config = new LintConfig
+        {
+            Rules = new Dictionary<string, RuleConfig>
+            {
+                ["unpinned-uses"] = new RuleConfig
+                {
+                    IgnoreActions = [new IgnoreActionRule("my-org/*", ["main"])],
+                },
+            },
+        };
+
+        var cases = new[]
+        {
+            new RuleCase(
+            "ok-reusable-workflow-matching-ref-ignored",
+            """
+            on: push
+            jobs:
+                release:
+                    uses: my-org/repo/.github/workflows/reusable.yml@main
+            """,
+            []),
+            new RuleCase(
+            "ng-reusable-workflow-non-matching-ref",
+            """
+            on: push
+            jobs:
+                release:
+                    uses: my-org/repo/.github/workflows/reusable.yml@v1
+            """,
+            ["not pinned to a full-length commit SHA"]),
+        };
+
+        await AssertRuleCases(new UnpinnedUsesRule(), "unpinned-uses", cases, config);
+    }
+
+    [Test]
+    public async Task RuleRegression_UnpinnedUsesRule_RefConditionalIgnore_CaseSensitiveRef()
+    {
+        // Refs are matched case-sensitively
+        var config = new LintConfig
+        {
+            Rules = new Dictionary<string, RuleConfig>
+            {
+                ["unpinned-uses"] = new RuleConfig
+                {
+                    IgnoreActions = [new IgnoreActionRule("my-org/*", ["main"])],
+                },
+            },
+        };
+
+        var cases = new[]
+        {
+            new RuleCase(
+            "ok-exact-case-match-ignored",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - uses: my-org/action@main
+            """,
+            []),
+            new RuleCase(
+            "ng-different-case-warns",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - uses: my-org/action@Main
+            """,
+            ["not pinned to a full-length commit SHA"]),
+        };
+
+        await AssertRuleCases(new UnpinnedUsesRule(), "unpinned-uses", cases, config);
     }
 
     [Test]

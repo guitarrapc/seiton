@@ -100,6 +100,11 @@ public abstract class RuleBase : IRule
         AddDiagnostic(DiagnosticSeverity.Warning, message, location, fix: null, metadata);
     }
 
+    protected void AddStepWarning(Step step, string message, TextRange location, IReadOnlyDictionary<string, string> metadata, string? help)
+    {
+        AddDiagnostic(DiagnosticSeverity.Warning, message, location, fix: null, metadata, help);
+    }
+
     protected void AddStepInfo(Step step, string message, TextRange location)
     {
         AddDiagnostic(DiagnosticSeverity.Info, message, location);
@@ -145,6 +150,11 @@ public abstract class RuleBase : IRule
         AddDiagnostic(DiagnosticSeverity.Warning, message, location, fix: null, metadata);
     }
 
+    protected void AddJobWarning(Job job, string message, TextRange location, IReadOnlyDictionary<string, string> metadata, string? help)
+    {
+        AddDiagnostic(DiagnosticSeverity.Warning, message, location, fix: null, metadata, help);
+    }
+
     protected void AddEventWarning(Event ev, string message)
     {
         AddDiagnostic(DiagnosticSeverity.Warning, message, BuildEventLocation(ev));
@@ -185,7 +195,8 @@ public abstract class RuleBase : IRule
         string message,
         TextRange location,
         DiagnosticFix? fix = null,
-        IReadOnlyDictionary<string, string>? metadata = null)
+        IReadOnlyDictionary<string, string>? metadata = null,
+        string? help = null)
     {
         diagnostics.Add(new Diagnostic(
             severity,
@@ -194,7 +205,8 @@ public abstract class RuleBase : IRule
             RuleId: Id.ToId(),
             FilePath: Config.FilePath,
             Fix: fix,
-            Metadata: metadata));
+            Metadata: metadata,
+            Help: help));
     }
 
     protected string Decode(Utf8Slice slice)

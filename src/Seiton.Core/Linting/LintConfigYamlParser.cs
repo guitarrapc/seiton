@@ -409,7 +409,7 @@ internal static class LintConfigYamlParser
         IReadOnlyList<string>? assumeEvents = null;
         IReadOnlyList<string>? allow = null;
         IReadOnlyList<string>? deny = null;
-        IReadOnlyList<string>? ignoreActions = null;
+        IReadOnlyList<IgnoreActionRule>? ignoreActions = null;
         int? maxStepEnvSecrets = null;
         int? maxJobSecrets = null;
         var seenKeyFlags = RuleKeyFlags.None;
@@ -474,7 +474,7 @@ internal static class LintConfigYamlParser
                     break;
                 case "ignore-actions":
                     seenKeyFlags |= RuleKeyFlags.IgnoreActions;
-                    ignoreActions = NullIfEmpty(ParseStringList(value, "ignore-actions", diagnostics, filePath));
+                    ignoreActions = ParseRuleIgnoreActions(value, diagnostics, filePath);
                     break;
                 case "max-step-env-secrets":
                     seenKeyFlags |= RuleKeyFlags.MaxStepEnvSecrets;
@@ -564,6 +564,36 @@ internal static class LintConfigYamlParser
         for (var i = 0; i < list.Count; i++)
         {
             result[i] = Unquote(ScalarToString(list[i]));
+        }
+
+        return result;
+    }
+
+    private static IReadOnlyList<string> ParseScalarStringList(
+        object? value,
+        string keyName,
+        List<Diagnostic> diagnostics,
+        string filePath,
+        out bool allEntriesScalar)
+    {
+        allEntriesScalar = true;
+        if (AsList(value) is not { } list)
+        {
+            diagnostics.Add(Diag($"{keyName} must be a YAML list", DomLine, 5, keyName.Length, filePath));
+            return [];
+        }
+
+        var result = new List<string>(list.Count);
+        for (var i = 0; i < list.Count; i++)
+        {
+            if (!IsScalarValue(list[i]))
+            {
+                allEntriesScalar = false;
+                diagnostics.Add(Diag($"{keyName} entries must be scalar values", DomLine, 5, keyName.Length, filePath));
+                continue;
+            }
+
+            result.Add(Unquote(ScalarToString(list[i])));
         }
 
         return result;
@@ -801,6 +831,113 @@ internal static class LintConfigYamlParser
             ExcludeTags = excludeTags.Count > 0 ? excludeTags : DefaultExcludeTags,
             IgnoreImages = ignoreImages,
         };
+    }
+
+    private static IReadOnlyList<IgnoreActionRule>? ParseRuleIgnoreActions(
+        object? value,
+        List<Diagnostic> diagnostics,
+        string filePath)
+    {
+        if (AsList(value) is not { } list)
+        {
+            diagnostics.Add(Diag("ignore-actions must be a YAML list", DomLine, 5, 14, filePath));
+            return null;
+        }
+
+        if (list.Count == 0)
+        {
+            return null;
+        }
+
+        var result = new List<IgnoreActionRule>(list.Count);
+        for (var i = 0; i < list.Count; i++)
+        {
+            var item = list[i];
+
+            if (AsMap(item) is { } map)
+            {
+                string? owner = null;
+                IReadOnlyList<string>? refs = null;
+                var ownerKeyPresent = false;
+                var ownerValueValid = true;
+                var refsKeyPresent = false;
+                var refsValueIsList = false;
+                var refsEntriesValid = true;
+                foreach (var (ik, iv) in map)
+                {
+                    if (ik == "owner")
+                    {
+                        ownerKeyPresent = true;
+                        if (!IsScalarValue(iv))
+                        {
+                            ownerValueValid = false;
+                            diagnostics.Add(Diag("ignore-actions owner must be a scalar value", DomLine, 5, 14, filePath));
+                        }
+                        else
+                        {
+                            owner = Unquote(ScalarToString(iv));
+                        }
+                    }
+                    else if (ik == "refs")
+                    {
+                        refsKeyPresent = true;
+                        refsValueIsList = AsList(iv) is not null;
+                        if (refsValueIsList)
+                        {
+                            refs = ParseScalarStringList(iv, "refs", diagnostics, filePath, out refsEntriesValid);
+                        }
+                        else
+                        {
+                            refs = ParseStringList(iv, "refs", diagnostics, filePath);
+                        }
+                    }
+                    else
+                    {
+                        diagnostics.Add(Diag($"unknown ignore-actions key '{ik}'", DomLine, 5, ik.Length, filePath));
+                    }
+                }
+
+                if (!ownerKeyPresent)
+                {
+                    diagnostics.Add(Diag("ignore-actions requires 'owner' key", DomLine, 5, 14, filePath));
+                    continue;
+                }
+
+                if (!ownerValueValid)
+                {
+                    continue;
+                }
+
+                if (string.IsNullOrWhiteSpace(owner))
+                {
+                    diagnostics.Add(Diag("ignore-actions owner must not be empty", DomLine, 5, 14, filePath));
+                    continue;
+                }
+
+                if (refsKeyPresent && !refsValueIsList)
+                {
+                    continue;
+                }
+
+                if (refsKeyPresent && !refsEntriesValid)
+                {
+                    continue;
+                }
+
+                if (refsKeyPresent && refsValueIsList && refs is { Count: 0 })
+                {
+                    diagnostics.Add(Diag("ignore-actions requires non-empty 'refs' list when 'refs' is present", DomLine, 5, 14, filePath));
+                    continue;
+                }
+
+                result.Add(new IgnoreActionRule(owner, refs));
+                continue;
+            }
+
+            diagnostics.Add(Diag("ignore-actions item must be a mapping with owner and optional refs", DomLine, 5, 14, filePath));
+        }
+
+        return result.Count > 0 ? result : null;
     }
 
     private static IReadOnlyList<IgnoreActionEntry> ParseIgnoreActions(
@@ -1045,6 +1182,17 @@ internal static class LintConfigYamlParser
     {
         return o as List<object?>;
     }
+
+    private static bool IsScalarValue(object? o) => o is null
+        or string
+        or bool
+        or int
+        or long
+        or uint
+        or ulong
+        or double
+        or float
+        or decimal;
 
     private static string ScalarToString(object? o) => o switch
     {

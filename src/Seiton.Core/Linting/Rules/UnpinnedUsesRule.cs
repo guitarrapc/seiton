@@ -5,6 +5,7 @@ using Seiton.Core.Parsing;
 using Seiton.Core.Parsing.Ast;
 
 using static Seiton.Core.Linting.ActionRefHelpers;
+using static Seiton.Core.Parsing.SpanHelpers;
 
 namespace Seiton.Core.Linting.Rules;
 
@@ -17,7 +18,12 @@ public sealed class UnpinnedUsesRule() : RuleBase(RuleId.UnpinnedUses)
     private string? _lastUnpinnedStepMessage;
     private string? _lastDecodedUsesText;
 
-    private byte[][] _ignoreActionsUtf8 = [];
+    private IgnoreEntry[] _ignoreEntries = [];
+
+    // Track owners for which we have already emitted a help hint (once per owner per workflow).
+    // Two-level cache: fast byte-span check for the last owner (hot path), HashSet for multi-owner (rare).
+    private readonly HashSet<string> _hintedOwners = new(StringComparer.OrdinalIgnoreCase);
+    private byte[]? _lastHintedOwnerBytes;
 
     public override string Name => "Unpinned Uses Rule";
 
@@ -28,15 +34,27 @@ public sealed class UnpinnedUsesRule() : RuleBase(RuleId.UnpinnedUses)
         var ignoreActions = ruleConfig?.IgnoreActions;
         if (ignoreActions is { Count: > 0 })
         {
-            _ignoreActionsUtf8 = new byte[ignoreActions.Count][];
+            _ignoreEntries = new IgnoreEntry[ignoreActions.Count];
             for (var i = 0; i < ignoreActions.Count; i++)
             {
-                _ignoreActionsUtf8[i] = Encoding.UTF8.GetBytes(ignoreActions[i].ToLowerInvariant());
+                var rule = ignoreActions[i];
+                var patternBytes = Encoding.UTF8.GetBytes(NormalizeAsciiLower(rule.Pattern));
+                byte[][]? refsBytes = null;
+                if (rule.Refs is { Count: > 0 })
+                {
+                    refsBytes = new byte[rule.Refs.Count][];
+                    for (var j = 0; j < rule.Refs.Count; j++)
+                    {
+                        refsBytes[j] = Encoding.UTF8.GetBytes(rule.Refs[j]);
+                    }
+                }
+
+                _ignoreEntries[i] = new IgnoreEntry(patternBytes, refsBytes);
             }
         }
         else
         {
-            _ignoreActionsUtf8 = [];
+            _ignoreEntries = [];
         }
     }
 
@@ -47,6 +65,8 @@ public sealed class UnpinnedUsesRule() : RuleBase(RuleId.UnpinnedUses)
         _lastUnpinnedStepUsesSlice = default;
         _lastUnpinnedStepMessage = null;
         _lastDecodedUsesText = null;
+        _hintedOwners.Clear();
+        _lastHintedOwnerBytes = null;
     }
 
     public override void VisitJobPre(Job job)
@@ -97,7 +117,7 @@ public sealed class UnpinnedUsesRule() : RuleBase(RuleId.UnpinnedUses)
             return;
         }
 
-        if (IsIgnoredAction(parsedJob.ActionPath))
+        if (IsIgnoredAction(parsedJob.ActionPath, parsedJob.Ref))
         {
             if (Config.Verbose)
             {
@@ -112,7 +132,8 @@ public sealed class UnpinnedUsesRule() : RuleBase(RuleId.UnpinnedUses)
         var usesText = Decode(Arena.GetStringSlice(workflowCall.Uses));
         var url = ActionRefHelpers.BuildGitHubUrl(usesText);
         var urlSuffix = url is not null ? $". see {url}" : "";
-        AddJobWarning(job, $"jobs.'{jobId}'.uses '{usesText}' is not pinned to a full-length commit SHA{urlSuffix} (fixable with --fix --enable-pin-network)", usesRefLocation, PinDiagnosticMetadata.ForUsesRef(usesText));
+        var help = BuildOwnerHintOnce(parsedJob.ActionPath);
+        AddJobWarning(job, $"jobs.'{jobId}'.uses '{usesText}' is not pinned to a full-length commit SHA{urlSuffix} (fixable with --fix --enable-pin-network)", usesRefLocation, PinDiagnosticMetadata.ForUsesRef(usesText), help);
     }
 
     public override void VisitStep(Step step)
@@ -180,7 +201,7 @@ public sealed class UnpinnedUsesRule() : RuleBase(RuleId.UnpinnedUses)
             return;
         }
 
-        if (IsIgnoredAction(parsedStep.ActionPath))
+        if (IsIgnoredAction(parsedStep.ActionPath, parsedStep.Ref))
         {
             if (Config.Verbose)
             {
@@ -193,7 +214,43 @@ public sealed class UnpinnedUsesRule() : RuleBase(RuleId.UnpinnedUses)
 
         var usesSlice = Arena.GetStringSlice(actionExec.Uses);
         var message = GetUnpinnedStepMessage(usesSlice, out var decodedUsesText);
-        AddStepWarning(step, message, usesRefLocation, PinDiagnosticMetadata.ForUsesRef(decodedUsesText));
+        var help = BuildOwnerHintOnce(parsedStep.ActionPath);
+        AddStepWarning(step, message, usesRefLocation, PinDiagnosticMetadata.ForUsesRef(decodedUsesText), help);
+    }
+
+    /// <summary>
+    /// Returns a config-snippet help hint for the given action path's owner, or null if the owner
+    /// has already been hinted in this workflow run (deduplication).
+    /// Uses a two-level cache: fast byte-span check for the common repeated-owner case,
+    /// then HashSet fallback for multi-owner workflows.
+    /// </summary>
+    private string? BuildOwnerHintOnce(ReadOnlySpan<byte> actionPath)
+    {
+        if (!TryParseOwnerRepoSegments(actionPath, out var ownerSpan, out _))
+        {
+            return null;
+        }
+
+        // Fast path: if the owner bytes match the last-seen owner, skip entirely (zero allocation)
+        if (_lastHintedOwnerBytes is not null
+            && ownerSpan.Length == _lastHintedOwnerBytes.Length
+            && ownerSpan.SequenceEqual(_lastHintedOwnerBytes))
+        {
+            return null;
+        }
+
+        // Slow path: materialize owner string for HashSet check (case-insensitive dedup)
+        var owner = Encoding.UTF8.GetString(ownerSpan);
+        if (!_hintedOwners.Add(owner))
+        {
+            // Already hinted (different case variant) — update last-seen cache to avoid future allocs
+            _lastHintedOwnerBytes = ownerSpan.ToArray();
+            return null;
+        }
+
+        // First time seeing this owner — cache bytes and build hint
+        _lastHintedOwnerBytes = ownerSpan.ToArray();
+        return $"to ignore this owner, add to .github/seiton.yaml: rules: {{ unpinned-uses: {{ ignore-actions: [{{ owner: \"{owner}/*\" }}] }} }}";
     }
 
     private string GetUnpinnedStepMessage(Utf8Slice usesSlice, out string decodedUsesText)
@@ -381,9 +438,9 @@ public sealed class UnpinnedUsesRule() : RuleBase(RuleId.UnpinnedUses)
         return new string(chars);
     }
 
-    private bool IsIgnoredAction(ReadOnlySpan<byte> actionPath)
+    private bool IsIgnoredAction(ReadOnlySpan<byte> actionPath, ReadOnlySpan<byte> actionRef)
     {
-        if (_ignoreActionsUtf8.Length == 0)
+        if (_ignoreEntries.Length == 0)
         {
             return false;
         }
@@ -419,7 +476,7 @@ public sealed class UnpinnedUsesRule() : RuleBase(RuleId.UnpinnedUses)
                 scratch[o++] = b is >= (byte)'A' and <= (byte)'Z' ? (byte)(b + 32) : b;
             }
 
-            return MatchAnyIgnorePattern(scratch[..need]);
+            return MatchAnyIgnoreEntry(scratch[..need], actionRef);
         }
         finally
         {
@@ -430,16 +487,39 @@ public sealed class UnpinnedUsesRule() : RuleBase(RuleId.UnpinnedUses)
         }
     }
 
-    private bool MatchAnyIgnorePattern(ReadOnlySpan<byte> ownerRepoKeyUtf8)
+    private bool MatchAnyIgnoreEntry(ReadOnlySpan<byte> ownerRepoKeyUtf8, ReadOnlySpan<byte> actionRef)
     {
-        for (var i = 0; i < _ignoreActionsUtf8.Length; i++)
+        for (var i = 0; i < _ignoreEntries.Length; i++)
         {
-            if (WildcardMatchUsesPolicy(ownerRepoKeyUtf8, _ignoreActionsUtf8[i]))
+            ref readonly var entry = ref _ignoreEntries[i];
+            if (!WildcardMatchUsesPolicy(ownerRepoKeyUtf8, entry.PatternUtf8))
+            {
+                continue;
+            }
+
+            // Owner-only entry (Refs is null): ignore all refs
+            if (entry.RefsUtf8 is null)
             {
                 return true;
+            }
+
+            // Ref-conditional entry: check if action ref matches any configured ref (case-sensitive exact match)
+            for (var j = 0; j < entry.RefsUtf8.Length; j++)
+            {
+                if (actionRef.SequenceEqual(entry.RefsUtf8[j]))
+                {
+                    return true;
+                }
             }
         }
 
         return false;
+    }
+
+    /// <summary>Internal ignore entry: pre-encoded pattern and optional ref constraints.</summary>
+    private readonly struct IgnoreEntry(byte[] patternUtf8, byte[][]? refsUtf8)
+    {
+        public readonly byte[] PatternUtf8 = patternUtf8;
+        public readonly byte[][]? RefsUtf8 = refsUtf8;
     }
 }

@@ -140,6 +140,7 @@ rules:
 | `expr-undefined-var` | `assume-events` | `string[]` | 式評価時に仮定するイベント |
 | `overprovisioned-secrets` | `max-step-env-secrets` | `int` | ステップ単位のシークレット数上限 |
 | `overprovisioned-secrets` | `max-job-secrets` | `int` | ジョブ単位のシークレット数上限 |
+| `unpinned-uses` | `ignore-actions` | `{owner, refs?}[]` | SHA ピンチェック除外。`owner` は glob、`refs` 省略時は全 ref を無視、指定時は完全一致した ref のみ無視 |
 
 `extend` リストは **built-in セットに追加**する。置換はしない。
 

@@ -284,6 +284,7 @@ public static class DiagnosticFormatter
                 RuleId = d.RuleId ?? "parse",
                 Message = d.Message,
                 Fixable = d.Fix is not null,
+                Help = d.Help,
             };
         }
 
@@ -323,7 +324,7 @@ public static class DiagnosticFormatter
                     DiagnosticSeverity.Warning => "warning",
                     _ => "note",
                 },
-                Message = new SarifMessage { Text = d.Message },
+                Message = new SarifMessage { Text = d.Help is null ? d.Message : $"{d.Message}\n\nHelp: {d.Help}" },
                 Locations =
                 [
                     new SarifLocation
@@ -390,6 +391,9 @@ internal sealed record JsonDiagnosticEntry
     public required string Message { get; init; }
     [JsonPropertyName("fixable")]
     public required bool Fixable { get; init; }
+    [JsonPropertyName("help")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? Help { get; init; }
 }
 
 // --- SARIF 2.1.0 output models ---
