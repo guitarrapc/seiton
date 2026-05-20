@@ -51,9 +51,6 @@ if git diff --cached --quiet; then
   exit 0
 fi
 
-git config user.name "github-actions[bot]"
-git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-
 git commit -m "chore(homebrew): bump seiton to ${SEITON_VERSION}
 
 Automated bump for ${GITHUB_REPOSITORY} ${SEITON_TAG}"
