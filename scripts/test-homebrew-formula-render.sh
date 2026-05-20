@@ -8,11 +8,11 @@ RENDER="${ROOT}/scripts/render-homebrew-seiton-formula.sh"
 OUT="$(mktemp)"
 trap 'rm -f "$OUT"' EXIT
 
-bash "$RENDER" "0.9.12" "v0.9.12" "acme/seiton" "$FIX" > "$OUT"
+bash "$RENDER" "0.9.13" "v0.9.13" "acme/seiton" "$FIX" > "$OUT"
 
 grep -q 'aaa1111111111111111111111111111111111111111111111111111111111111' "$OUT"
 grep -q 'seiton-osx-arm64.tar.gz' "$OUT"
-grep -q 'https://github.com/acme/seiton/releases/download/v0.9.12/' "$OUT"
+grep -q 'https://github.com/acme/seiton/releases/download/v0.9.13/' "$OUT"
 
 if command -v ruby >/dev/null 2>&1; then
   ruby -c "$OUT" >/dev/null
