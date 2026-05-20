@@ -482,6 +482,37 @@ public sealed class LintConfigLibraryTests
     }
 
     [Test]
+    public async Task Validate_UnpinnedUsesIgnoreActions_NotList_Error()
+    {
+        var yaml = """
+        rules:
+          unpinned-uses:
+            ignore-actions: "not-a-list"
+        """;
+
+        var result = LintConfigLibrary.Validate(yaml, "seiton.yaml");
+
+        await Assert.That(result.IsValid).IsFalse();
+        await Assert.That(result.Diagnostics.Any(d => d.Message.Contains("ignore-actions must be a YAML list", StringComparison.Ordinal))).IsTrue();
+    }
+
+    [Test]
+    public async Task Validate_UnpinnedUsesIgnoreActions_ObjectForm_EmptyOwner_Error()
+    {
+        var yaml = """
+        rules:
+          unpinned-uses:
+            ignore-actions:
+              - owner: ""
+        """;
+
+        var result = LintConfigLibrary.Validate(yaml, "seiton.yaml");
+
+        await Assert.That(result.IsValid).IsFalse();
+        await Assert.That(result.Diagnostics.Any(d => d.Message.Contains("requires 'owner' key", StringComparison.Ordinal))).IsTrue();
+    }
+
+    [Test]
     public async Task Validate_UnpinnedUsesIgnoreActions_ObjectForm_OwnerNotScalar_Error()
     {
         var yaml = """

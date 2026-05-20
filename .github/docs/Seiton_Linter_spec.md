@@ -603,7 +603,7 @@ rules:
 - `refs` is optional. When omitted, `unpinned-uses` is suppressed for all refs of matching actions.
 - When `refs` is present, it is a non-empty list of exact ref strings matched case-sensitively.
 - Normalization trims surrounding whitespace; duplicate entries after normalization are ignored. Pattern matching uses ASCII lower-case normalization for `owner/repo`, while `refs` retain original case semantics.
-- Unknown object keys, missing `owner`, empty `owner`, empty `refs`, or empty ref elements are configuration errors. Scalar string items are configuration errors.
+- Unknown object keys, missing `owner`, empty `owner`, empty `refs`, empty ref elements, non-scalar `owner` values, or non-scalar `refs` entries are configuration errors. Scalar string items are configuration errors.
 
 #### 5.8.9 `overprovisioned-secrets` — `max-step-env-secrets` / `max-job-secrets`
 
