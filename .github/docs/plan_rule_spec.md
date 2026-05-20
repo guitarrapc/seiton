@@ -94,9 +94,9 @@ Seiton が現在、契約として保証している検知範囲を書く。
 
 方針:
 
-- `Seiton_Linter_spec.md` を source of truth とする
+- `Seiton_Linter_spec.md` を source of truth とする。ただし、細かい実装やエッジケースは表現せずどういうルールかが端的に分かるようにする
 - C# / Go spec は source-of-truth の粒度に合わせる
-- `docs/rules.md` は user-facing に短く整理する
+- `docs/rules.md` は user-facing に短く整理する。長く書かず、ルールの意図と範囲/条件が分かるようにする。また、それぞれの条件が分かるサンプルとRemediationを入れる。
 - 実装変更を伴わない限り、テスト追加は不要
 
 ---
