@@ -5,6 +5,7 @@ using Seiton.Core.Parsing;
 using Seiton.Core.Parsing.Ast;
 
 using static Seiton.Core.Linting.ActionRefHelpers;
+using static Seiton.Core.Parsing.SpanHelpers;
 
 namespace Seiton.Core.Linting.Rules;
 
@@ -37,7 +38,7 @@ public sealed class UnpinnedUsesRule() : RuleBase(RuleId.UnpinnedUses)
             for (var i = 0; i < ignoreActions.Count; i++)
             {
                 var rule = ignoreActions[i];
-                var patternBytes = Encoding.UTF8.GetBytes(rule.Pattern.ToLowerInvariant());
+                var patternBytes = Encoding.UTF8.GetBytes(NormalizeAsciiLower(rule.Pattern));
                 byte[][]? refsBytes = null;
                 if (rule.Refs is { Count: > 0 })
                 {

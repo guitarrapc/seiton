@@ -2521,6 +2521,38 @@ public sealed class RuleInterfaceTests
     }
 
     [Test]
+    public async Task RuleRegression_UnpinnedUsesRule_IgnoreActions_ProgrammaticConfig_PreservesNonAsciiOwnerCase()
+    {
+        var config = new LintConfig
+        {
+            Rules = new Dictionary<string, RuleConfig>
+            {
+                ["unpinned-uses"] = new RuleConfig
+                {
+                    IgnoreActions = [new IgnoreActionRule("Äction-org/*")],
+                },
+            },
+        };
+
+        var cases = new[]
+        {
+            new RuleCase(
+            "ok-programmatic-nonascii-owner-ignore",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - uses: Äction-org/tool@v1
+            """,
+            []),
+        };
+
+        await AssertRuleCases(new UnpinnedUsesRule(), "unpinned-uses", cases, config);
+    }
+
+    [Test]
     public async Task RuleRegression_UnpinnedUsesRule_Help_NoHint_ShaPinned()
     {
         // SHA-pinned actions produce no warning → no hint
