@@ -1011,22 +1011,7 @@ jobs:
 |---|---|---|
 | ✓ | — | ✗ |
 
-Detects credential leakage risk when `actions/checkout` (without `persist-credentials: false`) is followed later in the same job by `actions/upload-artifact` uploading a dangerous path. Dangerous paths include repository-root and parent-directory forms such as `.`, `..`, `*`, `./*`, `../../_temp`, `../../_temp/**`, `../../_temp/*`, `../../_temp/**/*`, `./**`, `./**/*`, `**`, `**/*`, `${{ github.workspace }}`, `${{ github.workspace }}/**`, `${{ github.workspace }}/**/*`, `${{ github.workspace }}/..`, and `${{ github.workspace }}/../../_temp`. Equivalent bracket-form expressions such as `${{ github['workspace'] }}` and normalized equivalents such as `repo/..` or `${{ github.workspace }}/repo/..` are treated the same way. Explicit escaped `_temp` directory paths and their glob variants (for example `../../_temp`, `../../_temp/**`, `../../_temp/*`) are also treated as dangerous because they can reach `$RUNNER_TEMP` on GitHub-hosted runners.
-
-**Core intent:** prevent artifact uploads from sweeping checkout-managed credentials or adjacent sensitive state into artifacts.
-
-**Current supported scope:** the rule currently models same-job `actions/checkout` followed by later `actions/upload-artifact`, including root-like, parent-like, and workspace-like path families; bracket-form and normalized workspace-equivalent paths; hidden-file defaults for upload-artifact versions; explicit legacy exclusion globs such as `!.git/**`, `!.git/config`, explicit nested exclusions such as `!repo/.git/**`, and leading-recursive exclusions such as `!**/.git/**` within the current normalized-path depth bound; and the severity split between legacy checkout (`.git/config`) and checkout `v6+` (`$RUNNER_TEMP`). Leading-recursive exclusions (`!**/.git/**`) suppress the legacy case even when the checkout `with.path` contains runtime expressions that cannot be statically normalized. Workspace-expression suffixes are recognized only when the suffix is empty or starts with `/` or `\`, so concatenations such as `${{ github.workspace }}..` or `!${{ github.workspace }}.git/**` are not treated as workspace-relative paths.
-
-**Deferred scope:** the rule does not yet correlate `actions/checkout` `with.path` subdirectories with later artifact uploads. For example, checkout into `path: repo` and a later `upload-artifact` with `path: repo` is not currently diagnosed unless the upload path is otherwise root-like, parent-like, or workspace-like.
-
-  > **Note:** Legacy `actions/checkout` versions (v1-v5) persist a token in `.git/config`, while `actions/checkout@v6+` stores credentials under `$RUNNER_TEMP`. For `actions/upload-artifact`, pinned `v4.0`-`v4.3` releases may still include hidden files by default, while `v4.4+` and floating `@v4` exclude hidden files by default. For unparseable refs such as branch names, SHAs, or arbitrary tags, the rule stays conservative even when `include-hidden-files: false` is present, because that ref may resolve to older upload-artifact code that ignores the input and still includes hidden files by default. That hidden-file behavior mainly protects legacy `.git/config`; it does not protect v6+ credentials when an upload can actually reach `$RUNNER_TEMP`. In practice, `..` or `${{ github.workspace }}/..` remain dangerous for legacy hidden-file uploads, but the v6+ warning is reserved for paths that escape far enough to reach runner temp, such as `../..`, `${{ github.workspace }}/../..`, or explicit `_temp` siblings like `../../_temp`. Explicit exclusion globs such as `!.git/**`, `!.git/config`, `!repo/.git/**`, or `!**/.git/**` suppress the legacy `.git/config` case only when they exclude every reachable `.git/config` location within the current normalized-path depth bound. Bare `!.git` never suppresses. For v6+, suppression requires a recursive runner-temp subtree exclusion such as `!../../_temp/**` or `!${{ github.workspace }}/../../_temp/**`; bare `!../../_temp` or shallow `!../../_temp/*` exclusions are not enough.
-
-**Severity:**
-
-- **error** — checkout (non-v6+) without `persist-credentials: false` + dangerous upload that may include hidden files
-- **warning** — checkout v6+ without `persist-credentials: false` + a parent-directory upload that can reach `$RUNNER_TEMP`
-
-When checkout uses a ref that cannot be parsed as a semantic version, such as a full SHA, branch ref, or arbitrary tag like `@v6-legacy` / `@v06`, the rule conservatively assumes both legacy and v6+ risks apply. Likewise, upload-artifact refs that are not recognized semantic versions, such as `@v4-legacy` or `@v4.x`, are treated conservatively as having unknown hidden-file behavior.
+Detects credential leakage risk when `actions/checkout` (without `persist-credentials: false`) is followed later in the same job by `actions/upload-artifact` uploading a dangerous path (root-like, parent-directory, or workspace-expression forms).
 
 **Example trigger:**
 
@@ -1057,7 +1042,14 @@ steps:
       path: dist/
 ```
 
-  > **Note:** This rule is independent of `checkout-persist-credentials`. The latter flags every checkout without `persist-credentials: false`; `artipacked` only fires when a later dangerous upload-artifact path in the same job can actually expose checkout credentials.
+**Notes:**
+
+- **Dangerous paths** include `.`, `..`, `*`, `./*`, `./**`, `./**/*`, `**`, `**/*`, `${{ github.workspace }}`, `${{ github.workspace }}/**`, `${{ github.workspace }}/..`, `../../_temp`, and their variants. Bracket-form expressions (`${{ github['workspace'] }}`) and normalized equivalents (`repo/..`) are also recognized. Workspace-expression suffixes are recognized only when the suffix is empty or starts with `/` or `\`.
+- **Severity split:** error for legacy checkout (v1–v5, credentials in `.git/config`) with hidden-file upload risk; warning for checkout v6+ when the upload path can reach `$RUNNER_TEMP` (e.g., `../..`, `../../_temp`).
+- **Hidden-file behavior:** `actions/upload-artifact@v4.4+` excludes hidden files by default. For unparseable refs (branch names, SHAs, arbitrary tags), the rule conservatively assumes hidden-file inclusion.
+- **Exclusion suppression:** legacy case can be suppressed by globs like `!.git/**`, `!.git/config`, `!repo/.git/**`, or `!**/.git/**` when they cover all reachable `.git/config` locations. Bare `!.git` never suppresses. For v6+, suppression requires a recursive runner-temp subtree exclusion (`!../../_temp/**`).
+- **Deferred scope:** checkout `with.path` subdirectory correlation with upload paths is not yet implemented.
+- This rule is independent of `checkout-persist-credentials`. The latter flags every checkout without `persist-credentials: false`; `artipacked` only fires when a later dangerous upload in the same job can expose credentials.
 
 ---
 
@@ -1463,8 +1455,6 @@ jobs:
 
 Errors when `${{ inputs.* }}` or `${{ github.event.inputs.* }}` are directly interpolated inside a `run` script. Inputs may be user-controlled.
 
- Auto-fix reuses an existing unique `env` mapping for the same input when available. Otherwise, for simple expressions, it inserts a step-local `env:` entry and rewrites the script to a shell variable. No fix is offered for compound expressions, no-expand heredocs, or shell single-quoted strings (contexts where shell expansion is disabled). The env-insertion path additionally skips flow-style `env` and empty `env: {}`; replacement-only reuse of an existing unique mapping may still be offered in those cases.
-
 **Example trigger:**
 
 ```yaml
@@ -1498,6 +1488,10 @@ jobs:
           BENCHMARK: ${{ inputs.benchmark }}
         run: echo "$BENCHMARK"
 ```
+
+**Notes:**
+
+Auto-fix reuses an existing unique `env` mapping for the same input when available. Otherwise, for simple expressions, it inserts a step-local `env:` entry and rewrites the script to a shell variable. No fix is offered for compound expressions, no-expand heredocs, or shell single-quoted strings. The env-insertion path additionally skips flow-style `env` and empty `env: {}`.
 
 ---
 
