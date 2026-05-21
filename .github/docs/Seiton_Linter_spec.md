@@ -661,14 +661,14 @@ output:
 
 ### 5.10 Recommended Config File Name and Location
 
-Discovery order (when no explicit `--config` path is provided):
+Discovery order (when neither `--config` nor `SEITON_CONFIG` is set):
 
 1. `.github/seiton.yaml` (primary)
 2. `.github/seiton.yml`
 3. `seiton.yaml`
 4. `seiton.yml`
 
-When `--config <path>` is provided, that file is the sole config source. Prioritizing `.github/` keeps workflow-related policy close to workflow files.
+Explicit-config precedence: `--config <path>` > `SEITON_CONFIG` env var > discovery order. When an explicit path is provided, that file is the sole config source. Prioritizing `.github/` keeps workflow-related policy close to workflow files.
 
 ### 5.11 Configuration Profile Reference
 

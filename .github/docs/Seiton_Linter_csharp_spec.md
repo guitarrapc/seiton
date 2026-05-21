@@ -1,8 +1,8 @@
 # Seiton Linter C# Implementation Specification
 
-> C# implementation specification for the linter contract defined in `Seiton_Linter_spec.md`. This document captures C# runtime structures and behavior for rule execution, exclusion/suppression, and diagnostic output. See `Seiton_Linter_go_spec.md` for the Go target. Both language specs share the same outline; only language-specific content differs. Parser behavior is specified in `Seiton_Parser_spec.md` and `Seiton_Parser_csharp_spec.md`.
+> C# implementation specification for the linter contract defined in `.github/docs/Seiton_Linter_spec.md`. This document captures C# runtime structures and behavior for rule execution, exclusion/suppression, and diagnostic output. See `.github/docs/Seiton_Linter_go_spec.md` for the Go target. Both language specs share the same outline; only language-specific content differs. Parser behavior is specified in `.github/docs/Seiton_Parser_spec.md` and `.github/docs/Seiton_Parser_csharp_spec.md`.
 
-> **Cross-document synchronization rule**: `Seiton_Linter_spec.md` is the source of truth. When this C# spec is updated, also review and update `Seiton_Linter_spec.md` and `Seiton_Linter_go_spec.md` in the same PR/commit scope.
+> **Cross-document synchronization rule**: `.github/docs/Seiton_Linter_spec.md` is the source of truth. When this C# spec is updated, also review and update `.github/docs/Seiton_Linter_spec.md` and `.github/docs/Seiton_Linter_go_spec.md` in the same PR/commit scope.
 
 ---
 
