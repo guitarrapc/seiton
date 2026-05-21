@@ -68,7 +68,7 @@ Linter runtime assumes parser output as structural input and never reparses YAML
 1. Keep parser/linter responsibility boundary strict.
 2. Keep lint output deterministic for identical input/config.
 3. Keep rule/exclusion policy behavior aligned with language-agnostic linter contract.
-4. Keep implementation status synchronized with `.github/docslinter_implementation_csharp_plan.md`.
+4. Keep implementation status synchronized with `.github/docs/linter_implementation_csharp_plan.md`.
 
 ---
 
@@ -87,7 +87,7 @@ Primary types:
 - `RuleStatus`
 - `RuleListResolver`
 
-Current implementation status should be tracked against `.github/docslinter_implementation_csharp_plan.md`.
+Current implementation status should be tracked against `.github/docs/linter_implementation_csharp_plan.md`.
 
 ---
 
@@ -339,7 +339,7 @@ Status contract:
 - `cache-poisoning` / `self-hosted-runner` / `unredacted-secrets` / `secrets-outside-env` are already in the current C# default local rule pack.
 - `matrix` / `env-var` / `deprecated-commands` / `if-cond` are already in the current C# default local rule pack.
 - `archived-uses` / `insecure-commands` / `overprovisioned-secrets` / `forbidden-uses` / `ref-version-mismatch` / `use-trusted-publishing` / `unsound-condition` / `unpinned-tools` are already in the current C# default local rule pack.
-- C# runtime implementation and default-catalog promotion must be synchronized with `.github/docslinter_implementation_csharp_plan.md` and shared-spec catalog updates.
+- C# runtime implementation and default-catalog promotion must be synchronized with `.github/docs/linter_implementation_csharp_plan.md` and shared-spec catalog updates.
 
 ### 3.7 Known Partial Parity Areas (actionlint)
 
@@ -349,7 +349,7 @@ Current C# default local rules are intentionally partial for the following domai
 - `action`: covered by `popular-action-inputs` / `outdated-action-runner` / `unpinned-uses` / `unpinned-tools` / `local-action-inputs` / `expr-undefined-var` (local action outputs). `popular-action-inputs` validates input names against catalog; `outdated-action-runner` flags deprecated `runs.using` runtimes via catalog `GetRunsUsing()`; `unpinned-tools` warns on known setup actions with unpinned `with.version` (action list is data-driven via `data/sources/unpinned-tools/unpinned_tools.json` and code-generated into `UnpinnedToolsActions.g.cs`); `local-action-inputs` validates local action contracts, runner policy, metadata completeness (required `description`, JS `env` prohibition, entry-point file existence, branding forwarding); `expr-undefined-var` resolves local action metadata outputs for strict `steps.<id>.outputs.<name>` validation via `LocalActionOutputResolver`. Still missing full remote-action metadata depth and complete Docker action / uses-format edge-case breadth.
 - `workflow-call`: partially covered by `reusable-workflow` / `deny-inherit-secrets`; still missing called-workflow contract validation (`inputs`/`secrets` required/type/default consistency and caller conformance).
 
-These are tracked as next-step parity-hardening items in `.github/docslinter_implementation_csharp_plan.md`.
+These are tracked as next-step parity-hardening items in `.github/docs/linter_implementation_csharp_plan.md`.
 
 ### 3.8 Rule Catalog Introspection API
 
@@ -782,6 +782,6 @@ public sealed record RemediationResult(
 
 When this document is revised, also review and update:
 
-- `.github/docsSeiton_Linter_spec.md`
-- `.github/docslinter_implementation_csharp_plan.md`
-- `.github/docsSeiton_spec.md` when parser/linter boundary wording changes
+- `.github/docs/Seiton_Linter_spec.md`
+- `.github/docs/linter_implementation_csharp_plan.md`
+- `.github/docs/Seiton_spec.md` when parser/linter boundary wording changes
