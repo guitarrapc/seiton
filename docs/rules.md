@@ -1726,7 +1726,7 @@ jobs:
     env:
       ACTIONS_ALLOW_UNSECURE_COMMANDS: true  # ERROR: insecure commands enabled
     steps:
-      - run: echo ng
+      - run: echo "::set-env name=PATH::$PATH:/usr/local/bin"
 ```
 
 **Remediation:** Remove `ACTIONS_ALLOW_UNSECURE_COMMANDS` and migrate to environment files:
@@ -1980,14 +1980,14 @@ env:
   GITHUB_TOKEN: ${{ github.token }}         # ERROR: exposed to all jobs
   DATADOG_API_KEY: ${{ secrets.DATADOG_API_KEY }}
 jobs:
-  a:
+  test:
     runs-on: ubuntu-24.04
     steps:
-      - run: echo a
-  b:
+      - run: npm test              # does not need secrets
+  deploy:
     runs-on: ubuntu-24.04
     steps:
-      - run: echo b
+      - run: ./deploy.sh           # needs GITHUB_TOKEN
 ```
 
 **Remediation:** Move secret assignments to the minimal job or step scope:
@@ -1995,16 +1995,16 @@ jobs:
 ```yaml
 on: push
 jobs:
-  a:
+  test:
+    runs-on: ubuntu-24.04
+    steps:
+      - run: npm test
+  deploy:
     runs-on: ubuntu-24.04
     steps:
       - env:
           GITHUB_TOKEN: ${{ github.token }}
-        run: echo a
-  b:
-    runs-on: ubuntu-24.04
-    steps:
-      - run: echo b
+        run: ./deploy.sh
 ```
 
 ---
@@ -2027,8 +2027,8 @@ jobs:
     env:
       GITHUB_TOKEN: ${{ github.token }}     # ERROR: exposed to all steps
     steps:
-      - run: echo first
-      - run: echo second
+      - run: npm test               # does not need token
+      - run: ./publish.sh           # needs token
 ```
 
 **Remediation:** Move secret assignments to the specific step that requires them:
@@ -2039,10 +2039,10 @@ jobs:
   build:
     runs-on: ubuntu-24.04
     steps:
+      - run: npm test
       - env:
           GITHUB_TOKEN: ${{ github.token }}
-        run: echo first
-      - run: echo second
+        run: ./publish.sh
 ```
 
 ---
