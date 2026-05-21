@@ -8,6 +8,12 @@ Configuration is **optional**. Running Seiton without a config file works in mos
 
 ## Config File Location
 
+**Precedence** (highest wins):
+
+1. `--config <path>` flag
+2. `SEITON_CONFIG` environment variable
+3. Auto-discovery (below)
+
 Seiton auto-discovers a config file by looking for the following names, starting from the current working directory and walking up parent directories:
 
 1. `.github/seiton.yaml`
@@ -65,14 +71,29 @@ The config file is YAML. All top-level sections are optional. An empty file is v
 
 Unknown top-level keys and unknown rule IDs are reported as configuration errors.
 
+### Error Reporting
+
+Seiton validates configuration before linting begins. Invalid configuration causes a non-zero exit code and diagnostics on stderr:
+
+| Error condition | Example message |
+|---|---|
+| Unknown top-level key | `unknown top-level key '<key>'` |
+| Unknown rule ID | `unknown rule-id '<rule-id>'. Did you mean '<suggested-rule-id>'?` |
+| Invalid severity value | `severity must be one of info, warning, error` |
+| Invalid rule-specific key | `unknown rule option '<key>'` |
+| YAML syntax error | `invalid lint config YAML: <parser message>` |
+
+Use `seiton check --verbose` to confirm which config file was loaded:
+
+```text
+verbose: config: /repo/.github/seiton.yaml
+```
+
+If no config is loaded: `verbose: config: (none, using defaults)`.
+
 ### Loader resource limits
 
-To limit denial-of-service from maliciously large configuration inputs, validation enforces:
-
-- **Maximum UTF‑8 payload size**: `1 048 576` bytes for both `--config` / `ValidateFile` on-disk reads and `LintConfigLibrary.Validate`.
-- **Maximum YAML DOM depth**: **`64`** nested mappings/sequences when building the config parse tree (`lint config YAML exceeds maximum nesting depth`).
-- **Maximum DOM structural units**: **`50 000`** scalar keys/scalar leaves/compound containers while building the DOM (`lint config YAML exceeds maximum structural size`).
-- **`fix.pinning.ignore-actions`** uses **wildcard matching** (`*` = any sequence, `?` = single char) — no regex, no ReDoS risk. **`fix.pinning.exclude-branches`** uses exact string equality (`string.Equals`, ordinal).
+Config files are limited to **1 MB**. Deeply nested or excessively large YAML is rejected with a diagnostic. See [Appendix: Loader Limits](#appendix-loader-limits) for exact thresholds.
 
 ### Annotated Example
 
@@ -230,7 +251,7 @@ rules:
 
 ### Rule-Specific Options
 
-Some rules accept additional configuration keys. All `extend` lists add to the built-in set — they never replace it.
+Some rules accept additional configuration keys. All `extend` lists add to the built-in set — they never replace it. See the [Annotated Example](#annotated-example) for complete YAML examples of each rule's options.
 
 | Rule | Key | Description |
 |---|---|---|
@@ -242,6 +263,27 @@ Some rules accept additional configuration keys. All `extend` lists add to the b
 | `forbidden-uses` | `deny` / `allow` | Glob patterns for denying or allowing `uses:` references. |
 | `unpinned-uses` | `ignore-actions` | Object entries for actions to exclude from SHA-pinning checks. `owner` is required; optional `refs` narrows the ignore to exact refs. |
 | `overprovisioned-secrets` | `max-step-env-secrets` / `max-job-secrets` | Integer thresholds for secret over-provisioning detection. |
+
+The **Key** column uses dot-separated YAML path notation. For example, `events.extend` maps to:
+
+```yaml
+rules:
+  dangerous-triggers:
+    events:
+      extend:
+        - issue_comment
+```
+
+> **Note:** Most `extend` keys accept a flat string list. `unpinned-uses.ignore-actions` is an exception — each entry is an **object** with a required `owner` field and an optional `refs` list:
+>
+> ```yaml
+> rules:
+>   unpinned-uses:
+>     ignore-actions:
+>       - owner: "my-org/internal-action"
+>       - owner: "my-org/*"
+>         refs: [main, master]
+> ```
 
 ---
 
@@ -397,23 +439,12 @@ If this is `null` or omitted, `job-timeout-minutes-required` does not apply an a
 
 ## Tuning for Sample / Demo Repositories
 
-Sample and demo repos often trigger many warnings because they intentionally keep workflows simple. Here are recommended approaches for reducing noise:
+Sample and demo repos often trigger many warnings because they intentionally keep workflows simple. Recommended approach:
 
-### Raise the severity threshold
-
-If warnings are informational and should not block CI, pass `--min-severity error`:
-
-```sh
-seiton check --min-severity error
-```
-
-This exits 0 when only warnings remain.
-
-### Disable noisy rules
-
-Suppress rules that are not relevant for sample code. In your config file:
+1. **Disable noisy rules** in config and use `--min-severity error` in CI:
 
 ```yaml
+# .github/seiton.yaml — demo/sample repo
 rules:
   job-permissions-required:
     enabled: false
@@ -421,89 +452,47 @@ rules:
     enabled: false
   unpinned-uses:
     enabled: false
-```
-
-### Use inline directives sparingly
-
-For individual cases, prefer inline suppression over disabling the rule globally:
-
-```yaml
-# seiton: disable-next-line unpinned-uses
-uses: actions/checkout@v4
-```
-
-### Combine strategies
-
-A typical demo-repo config might look like:
-
-```yaml
-rules:
-  job-timeout-minutes-required:
-    enabled: false
   dangerous-triggers:
     enabled: false
 ```
 
-paired with `--min-severity error` in CI to allow remaining warnings through without failing the build.
+```sh
+# CI step — exits 0 when only warnings remain
+seiton check --min-severity error
+```
+
+2. **Use inline directives** for individual exceptions rather than disabling a rule globally:
+
+```yaml
+on: push
+
+jobs:
+  demo:
+    runs-on: ubuntu-24.04
+    steps:
+      # seiton: disable-next-line unpinned-uses
+      - uses: actions/checkout@v4
+```
 
 ### Network-Assisted SHA Pinning
 
-Auto-pin `uses:` references to commit SHAs by enabling the network:
-
-```yaml
-fix:
-  pinning:
-    enable-network: true
-```
-
-Or use the CLI flag for a one-off run:
+Auto-pin `uses:` references to commit SHAs. Enable via config or CLI flag:
 
 ```sh
 seiton fix --enable-pin-network
 ```
 
-Configure pinning behavior:
-
-```yaml
-fix:
-  pinning:
-    min-age-days: 14           # Only accept commits at least 14 days old.
-    exclude-branches:          # Do not replace branch-style refs.
-      - main
-      - master
-    ignore-actions:            # Skip pinning for actions matching these wildcard patterns.
-      - uses: "slsa-framework/*"
-        ref: "*"
-```
+For persistent configuration, set `fix.pinning.enable-network: true` in the config file (see the [Annotated Example](#annotated-example) for the full `fix.pinning` block).
 
 ### Network-Assisted Image Digest Pinning
 
-Auto-pin container images to `@sha256:<digest>`:
-
-```yaml
-fix:
-  images:
-    enable-network: true
-```
-
-Or use the CLI flag:
+Auto-pin container images to `@sha256:<digest>`. Enable via config or CLI flag:
 
 ```sh
 seiton fix --enable-image-network
 ```
 
-Configure image pinning behavior:
-
-```yaml
-fix:
-  images:
-    exclude-images:
-      - scratch
-    exclude-tags:
-      - latest
-    ignore-images:
-      - "mcr.microsoft.com/**"
-```
+For persistent configuration, set `fix.images.enable-network: true` in the config file (see the [Annotated Example](#annotated-example) for the full `fix.images` block).
 
 ---
 
@@ -590,3 +579,19 @@ This is useful when batch-fixing all instances of a single rule at a time.
 | `network.github.ghes-api-url` | `""` |
 | `network.github.ghes-fallback` | `false` |
 | `output.sort-order` | `location` |
+
+---
+
+## Appendix: Loader Limits
+
+To limit denial-of-service from maliciously large configuration inputs, validation enforces:
+
+| Limit | Value | Diagnostic on violation |
+|---|---|---|
+| Maximum UTF‑8 payload size | 1 048 576 bytes (1 MB) | `seiton configuration exceeds maximum size (1048576 UTF-8 bytes)` or `seiton configuration file exceeds maximum size (1048576 bytes): '<path>'` |
+| Maximum YAML DOM depth | 64 nested levels | `invalid lint config YAML: lint config YAML exceeds maximum nesting depth (64)` |
+| Maximum DOM structural units | 50 000 nodes | `invalid lint config YAML: lint config YAML exceeds maximum structural size (50000 units)` |
+
+Pattern matching notes:
+- `fix.pinning.ignore-actions` uses **wildcard matching** (`*` = any sequence, `?` = single char) — no regex, no ReDoS risk.
+- `fix.pinning.exclude-branches` uses exact string equality (ordinal).
