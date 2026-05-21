@@ -1044,12 +1044,17 @@ steps:
 
 **Notes:**
 
+<details>
+<summary>Edge cases and detection details</summary>
+
 - **Dangerous paths** include `.`, `..`, `*`, `./*`, `./**`, `./**/*`, `**`, `**/*`, `${{ github.workspace }}`, `${{ github.workspace }}/**`, `${{ github.workspace }}/..`, `../../_temp`, and their variants. Bracket-form expressions (`${{ github['workspace'] }}`) and normalized equivalents (`repo/..`) are also recognized. Workspace-expression suffixes are recognized only when the suffix is empty or starts with `/` or `\`.
 - **Severity split:** error for legacy checkout (v1–v5, credentials in `.git/config`) with hidden-file upload risk; warning for checkout v6+ when the upload path can reach `$RUNNER_TEMP` (e.g., `../..`, `../../_temp`).
 - **Hidden-file behavior:** `actions/upload-artifact@v4.4+` excludes hidden files by default. For unparseable refs (branch names, SHAs, arbitrary tags), the rule conservatively assumes hidden-file inclusion.
 - **Exclusion suppression:** legacy case can be suppressed by globs like `!.git/**`, `!.git/config`, `!repo/.git/**`, or `!**/.git/**` when they cover all reachable `.git/config` locations. Bare `!.git` never suppresses. For v6+, suppression requires a recursive runner-temp subtree exclusion (`!../../_temp/**`).
 - **Deferred scope:** checkout `with.path` subdirectory correlation with upload paths is not yet implemented.
 - This rule is independent of `checkout-persist-credentials`. The latter flags every checkout without `persist-credentials: false`; `artipacked` only fires when a later dangerous upload in the same job can expose credentials.
+
+</details>
 
 ---
 
