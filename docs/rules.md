@@ -982,25 +982,37 @@ Warns when a workflow gates privileged behavior on spoofable bot actor contexts 
 **Example trigger:**
 
 ```yaml
-on: pull_request_target  # dangerous trigger intentional: bot checks matter in privileged context
+on: pull_request
 jobs:
   automerge:
     if: ${{ github.actor == 'dependabot[bot]' }}
     runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+      pull-requests: write
     steps:
       - run: gh pr merge --auto --merge "$PR_URL"
+        env:
+          PR_URL: ${{ github.event.pull_request.html_url }}
+          GH_TOKEN: ${{ github.token }}
 ```
 
-**Remediation:** Prefer a context tied to the PR author or other original trigger actor:
+**Remediation:** Prefer a context tied to the PR author rather than the trigger actor:
 
 ```yaml
-on: pull_request_target
+on: pull_request
 jobs:
   automerge:
     if: ${{ github.event.pull_request.user.login == 'dependabot[bot]' }}
     runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+      pull-requests: write
     steps:
       - run: gh pr merge --auto --merge "$PR_URL"
+        env:
+          PR_URL: ${{ github.event.pull_request.html_url }}
+          GH_TOKEN: ${{ github.token }}
 ```
 
   > **Note:** Known bot ID comparisons such as `github.actor_id == '49699333'` and equivalent bracket/index-style forms like `github['ACTOR_ID'] == 49699333` are also flagged. Prefer the corresponding trigger-author context like `github.event.pull_request.user.id`.
