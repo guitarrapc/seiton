@@ -8,6 +8,12 @@ Configuration is **optional**. Running Seiton without a config file works in mos
 
 ## Config File Location
 
+**Precedence** (highest wins):
+
+1. `--config <path>` flag
+2. `SEITON_CONFIG` environment variable
+3. Auto-discovery (below)
+
 Seiton auto-discovers a config file by looking for the following names, starting from the current working directory and walking up parent directories:
 
 1. `.github/seiton.yaml`
@@ -64,6 +70,26 @@ $EDITOR .github/seiton.yaml
 The config file is YAML. All top-level sections are optional. An empty file is valid and behaves identically to running without a config.
 
 Unknown top-level keys and unknown rule IDs are reported as configuration errors.
+
+### Error Reporting
+
+Seiton validates configuration before linting begins. Invalid configuration causes a non-zero exit code and diagnostics on stderr:
+
+| Error condition | Example message |
+|---|---|
+| Unknown top-level key | `unknown config key "rles"; did you mean "rules"?` |
+| Unknown rule ID | `unknown rule "unpinned-action"; did you mean "unpinned-uses"?` |
+| Invalid severity value | `invalid severity "warn" for rule "template-injection"; expected one of: error, warning, info` |
+| Invalid rule-specific key | `unknown key "event" in rule "dangerous-triggers"; did you mean "events"?` |
+| YAML syntax error | `config parse error at line 5: mapping values are not allowed here` |
+
+Use `seiton check --verbose` to confirm which config file was loaded:
+
+```
+config: /repo/.github/seiton.yaml
+```
+
+If no config is loaded: `config: (none, using defaults)`.
 
 ### Loader resource limits
 
@@ -242,6 +268,16 @@ Some rules accept additional configuration keys. All `extend` lists add to the b
 | `forbidden-uses` | `deny` / `allow` | Glob patterns for denying or allowing `uses:` references. |
 | `unpinned-uses` | `ignore-actions` | Object entries for actions to exclude from SHA-pinning checks. `owner` is required; optional `refs` narrows the ignore to exact refs. |
 | `overprovisioned-secrets` | `max-step-env-secrets` / `max-job-secrets` | Integer thresholds for secret over-provisioning detection. |
+
+The **Key** column uses dot-separated YAML path notation. For example, `events.extend` maps to:
+
+```yaml
+rules:
+  dangerous-triggers:
+    events:
+      extend:
+        - issue_comment
+```
 
 ---
 
