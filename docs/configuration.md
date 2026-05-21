@@ -274,6 +274,17 @@ rules:
         - issue_comment
 ```
 
+> **Note:** Most `extend` keys accept a flat string list. `unpinned-uses.ignore-actions` is an exception — each entry is an **object** with a required `owner` field and an optional `refs` list:
+>
+> ```yaml
+> rules:
+>   unpinned-uses:
+>     ignore-actions:
+>       - owner: "my-org/internal-action"
+>       - owner: "my-org/*"
+>         refs: [main, master]
+> ```
+
 ---
 
 ## Exclusions
