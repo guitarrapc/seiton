@@ -77,19 +77,19 @@ Seiton validates configuration before linting begins. Invalid configuration caus
 
 | Error condition | Example message |
 |---|---|
-| Unknown top-level key | `unknown config key "rles"; did you mean "rules"?` |
-| Unknown rule ID | `unknown rule "unpinned-action"; did you mean "unpinned-uses"?` |
-| Invalid severity value | `invalid severity "warn" for rule "template-injection"; expected one of: error, warning, info` |
-| Invalid rule-specific key | `unknown key "event" in rule "dangerous-triggers"; did you mean "events"?` |
-| YAML syntax error | `config parse error at line 5: mapping values are not allowed here` |
+| Unknown top-level key | `unknown top-level key '<key>'` |
+| Unknown rule ID | `unknown rule-id '<rule-id>'. Did you mean '<suggested-rule-id>'?` |
+| Invalid severity value | `severity must be one of info, warning, error` |
+| Invalid rule-specific key | `unknown rule option '<key>'` |
+| YAML syntax error | `invalid lint config YAML: <parser message>` |
 
 Use `seiton check --verbose` to confirm which config file was loaded:
 
-```
-config: /repo/.github/seiton.yaml
+```text
+verbose: config: /repo/.github/seiton.yaml
 ```
 
-If no config is loaded: `config: (none, using defaults)`.
+If no config is loaded: `verbose: config: (none, using defaults)`.
 
 ### Loader resource limits
 
@@ -582,9 +582,9 @@ To limit denial-of-service from maliciously large configuration inputs, validati
 
 | Limit | Value | Diagnostic on violation |
 |---|---|---|
-| Maximum UTF‑8 payload size | 1 048 576 bytes (1 MB) | `config file exceeds maximum size` |
-| Maximum YAML DOM depth | 64 nested levels | `lint config YAML exceeds maximum nesting depth` |
-| Maximum DOM structural units | 50 000 nodes | `lint config YAML exceeds maximum structural size` |
+| Maximum UTF‑8 payload size | 1 048 576 bytes (1 MB) | `seiton configuration exceeds maximum size (1048576 UTF-8 bytes)` or `seiton configuration file exceeds maximum size (1048576 bytes): '<path>'` |
+| Maximum YAML DOM depth | 64 nested levels | `invalid lint config YAML: lint config YAML exceeds maximum nesting depth (64)` |
+| Maximum DOM structural units | 50 000 nodes | `invalid lint config YAML: lint config YAML exceeds maximum structural size (50000 units)` |
 
 Pattern matching notes:
 - `fix.pinning.ignore-actions` uses **wildcard matching** (`*` = any sequence, `?` = single char) — no regex, no ReDoS risk.

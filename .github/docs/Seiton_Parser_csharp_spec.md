@@ -1350,8 +1350,7 @@ Same rules as Go. The `ParseMapping` helper supports case-insensitive mode via `
 ## Appendix A: Seiton Parser Function → C# Mapping
 
 > The "Spec Function" column lists the canonical function names defined in `Seiton_Parser_spec.md` §1–§4.
-> The "C# Signature" column shows the target C# method name.
-> All entries are implemented.
+> The "C# Signature" column shows the closest corresponding implementation seam in C#; some entries are conceptual and are implemented inline within broader helpers under `WorkflowParser.Parse(...)` and related partials rather than as literal one-to-one method names.
 
 ### A.1 Entry Point
 
