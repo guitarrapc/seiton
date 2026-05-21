@@ -659,54 +659,16 @@ output:
   sort-order: location    # location (default) | rule
 ```
 
-Interpretation notes:
-
-- `rules.<rule-id>.enabled` controls rule enable/disable (§5.7).
-- `rules.<rule-id>.severity` overrides diagnostic severity for all diagnostics from that rule (§5.7).
-- Rule-specific keys (e.g. `events.extend`, `public-registries.extend`, `assume-events`) are defined per rule in §5.8.
-- Online rules (`known-vulnerable-actions`, `impostor-commit`, `ref-confusion`, `stale-action-refs`) are default `enabled: false`; setting `enabled: true` activates them and the system automatically requires network access.
-- `fix.defaults.job-timeout-minutes` sets the default `timeout-minutes` value used by `job-timeout-minutes-required` partial auto-fix; null/missing or `<= 0` disables fix attachment.
-- `fix.pinning` configures network-assisted SHA pin remediation for `unpinned-uses`.
-- `fix.images` configures network-assisted digest pin remediation for `unpinned-image`.
-- `network` configures shared network behavior (error handling, timeouts, concurrency, GitHub API settings).
-- `output.sort-order` controls diagnostic output ordering: `location` (default) sorts by source position for file-reading order; `rule` sorts by rule priority for batch-fixing.
-- `exclusions[].file` and optional `exclusions[].jobs` define config-based suppression scope.
-- `exclusions[].rules` accepts one or more semantic rule IDs per §5.1.
-- Inline directives such as `# seiton: disable-next-line ...` are not part of the config file YAML; they are written inside workflow source files and are specified separately in §5.5.
-- Token resolution order (`SEITON_GITHUB_TOKEN` → `GITHUB_TOKEN`) is hardcoded and not configurable.
-
 ### 5.10 Recommended Config File Name and Location
 
-Because Seiton targets GitHub Actions workflow repositories, the recommended config file location is under `.github/`.
+Discovery order (when no explicit `--config` path is provided):
 
-Recommended file path (primary):
-
-- `.github/seiton.yaml`
-
-Accepted alternate file names:
-
-- `.github/seiton.yml`
-- `seiton.yaml`
-- `seiton.yml`
-
-Recommended discovery order (when no explicit config path is provided):
-
-1. `.github/seiton.yaml`
+1. `.github/seiton.yaml` (primary)
 2. `.github/seiton.yml`
 3. `seiton.yaml`
 4. `seiton.yml`
 
-Explicit-config precedence recommendation:
-
-- If runtime/CLI provides an explicit config path option (for example `--config <path>`), that file should be used as the only config source for that lint invocation.
-- If explicit config is not provided, runtimes may use the discovery order above.
-
-Rationale (non-normative):
-
-- actionlint uses `.github/actionlint.yaml` / `.github/actionlint.yml` as repository config locations.
-- zizmor discovers `.github/zizmor.yml` / `.github/zizmor.yaml` before root-level names.
-- ghalint accepts both root-level and `.github/` config names.
-- Prioritizing `.github/` keeps workflow-related policy close to workflow files and avoids ambiguity with other root-level YAML files.
+When `--config <path>` is provided, that file is the sole config source. Prioritizing `.github/` keeps workflow-related policy close to workflow files.
 
 ### 5.11 Configuration Profile Reference
 
@@ -718,17 +680,9 @@ This section describes four canonical usage profiles. Each profile states which 
 
 Config file is absent or empty. No configuration is required.
 
-**Active rules:** All default local-AST rules — the complete §4.4 catalog **except** the four online rules and opt-in local rules (default `enabled: false`).
+**Active rules:** All rules in §4.4 with Default = `✓`. Online rules (Default = `✗`) and opt-in local rules (`concurrency-limits`) require explicit `rules.<id>.enabled: true`.
 
-Specifically, the following are **active** without any config:
-
-`job-structure`, `reusable-workflow`, `permissions`, `popular-action-inputs`, `unpinned-uses`, `unpinned-image`, `dangerous-triggers`, `job-permissions-required`, `needs-graph`, `shell-name`, `runner-label`, `runner-no-latest`, `id-naming`, `glob-pattern`, `dispatch-inputs`, `schedule-event`, `local-action-inputs`, `workflow-call-input-default`, `outdated-action-runner`, `deny-write-all`, `credentials`, `template-injection`, `expr-undefined-var`, `run-env-context-direct-use`, `run-secrets-context-direct-use`, `run-inputs-context-direct-use`, `secrets-whole-context-access`, `checkout-persist-credentials`, `artipacked`, `deny-read-all`, `deny-inherit-secrets`, `job-timeout-minutes-required`, `github-app-token-inputs`, `workflow-secrets`, `job-secrets`, `action-shell-is-required`, `cache-poisoning`, `self-hosted-runner`, `unredacted-secrets`, `secrets-outside-env`, `matrix`, `env-var`, `deprecated-commands`, `if-cond`, `fake-ternary`, `archived-uses`, `insecure-commands`, `overprovisioned-secrets`, `forbidden-uses`, `ref-version-mismatch`, `use-trusted-publishing`, `if-expr-wrapper`, `unsound-condition`, `unpinned-tools`, `unsound-contains`, `bot-conditions`
-
-The following are **not active** (require `rules.<id>.enabled: true`):
-
-`concurrency-limits` (opt-in local rule), `known-vulnerable-actions`, `impostor-commit`, `ref-confusion`, `stale-action-refs` (online rules)
-
-**Auto-fix behavior:** Local-only fixes attach for `deny-write-all`, `deny-read-all`, `job-permissions-required`, `run-env-context-direct-use` (partial), `run-secrets-context-direct-use` (partial), `run-inputs-context-direct-use` (partial), `template-injection` (partial), `popular-action-inputs` (partial), `checkout-persist-credentials` (partial), `job-timeout-minutes-required` (partial). `unpinned-uses` / `unpinned-image` carry pin-network fixes (require `--enable-pin-network` / `--enable-image-network`).
+**Auto-fix behavior:** Local-only fixes attach per §8.4 (rules marked ✓ Fixable or △ Partial). `unpinned-uses` / `unpinned-image` pin-network fixes require explicit opt-in (see Profile 3a).
 
 ---
 
@@ -743,7 +697,7 @@ Minimal config overrides only the settings users want to change. All omitted set
 - Exclude a specific legacy workflow file from certain rules
 - Add custom runner labels or registry hosts
 
-**Example — disable a noisy rule and raise severity on a critical rule:**
+**Example:**
 
 ```yaml
 rules:
@@ -751,40 +705,20 @@ rules:
     enabled: false
   deny-write-all:
     severity: error
-```
-
-Active rules: same as Profile 1 minus `action-shell-is-required`
-
-**Example — suppress rules in a scoped legacy file:**
-
-```yaml
-exclusions:
-  - file: ".github/workflows/legacy-release.yml"
-    rules:
-      - runner-no-latest
-      - job-permissions-required
-```
-
-Active rules: same as Profile 1; `runner-no-latest` and `job-permissions-required` diagnostics are suppressed for that file.
-
-**Example — add custom runner labels and extend dangerous triggers:**
-
-```yaml
-rules:
   runner-label:
     known-hosted-labels:
       extend:
         - ubuntu-24.04-large
-  dangerous-triggers:
-    events:
-      extend:
-        - issue_comment
+exclusions:
+  - file: ".github/workflows/legacy-release.yml"
+    rules:
+      - runner-no-latest
 ```
 
-Active rules: same as Profile 1; `runner-label` now accepts `ubuntu-24.04-large` without diagnostic; `dangerous-triggers` now treats `issue_comment` as dangerous.
+Active rules: same as Profile 1 minus disabled rules; exclusion/suppression applies per §5.3–§5.5.
 
 **Constraints:**
-- All rules (including `deny-write-all` and `deny-read-all`) can be disabled or have their severity overridden via config (§5.7).
+- All rules can be disabled or have their severity overridden via config (§5.7).
 
 ---
 
@@ -794,35 +728,13 @@ Network access must be explicitly opted in. It enables two distinct network-back
 
 **3a — Pin remediation** (`fix.pinning.enable-network: true` and/or `fix.images.enable-network: true`):
 
-Adds auto-fix suggestions to `unpinned-uses` and `unpinned-image` by resolving SHAs and digests at remediation time.
-
-```yaml
-fix:
-  pinning:
-    enable-network: true
-  images:
-    enable-network: true
-```
+Adds auto-fix suggestions to `unpinned-uses` and `unpinned-image` by resolving SHAs and digests at remediation time. Configuration keys are specified in §5.12.
 
 Active rules: same as Profile 1. **Additionally**, `unpinned-uses` and `unpinned-image` now carry auto-fix data.
 
 **3b — Online rules** (`rules.<online-rule-id>.enabled: true`):
 
-Activates the four online rules that require network access to complete their analysis:
-
-```yaml
-rules:
-  known-vulnerable-actions:
-    enabled: true
-  impostor-commit:
-    enabled: true
-  ref-confusion:
-    enabled: true
-  stale-action-refs:
-    enabled: true
-```
-
-Active rules: all of Profile 1 **plus** the four rules that are inactive by default:
+Activates the four online rules that require network access:
 
 | Rule | Requires |
 |---|---|
@@ -831,27 +743,7 @@ Active rules: all of Profile 1 **plus** the four rules that are inactive by defa
 | `ref-confusion` | Branch/tag namespace query via GitHub API |
 | `stale-action-refs` | Release/tag mapping check via GitHub API |
 
-**3a + 3b combined:**
-
-```yaml
-rules:
-  known-vulnerable-actions:
-    enabled: true
-  impostor-commit:
-    enabled: true
-  ref-confusion:
-    enabled: true
-  stale-action-refs:
-    enabled: true
-
-fix:
-  pinning:
-    enable-network: true
-  images:
-    enable-network: true
-```
-
-Active rules: all §4.4 rules are active. `unpinned-uses` and `unpinned-image` carry auto-fixes.
+**3a + 3b combined:** All §4.4 rules active; `unpinned-uses` and `unpinned-image` carry auto-fixes.
 
 ---
 
@@ -859,101 +751,9 @@ Active rules: all §4.4 rules are active. `unpinned-uses` and `unpinned-image` c
 
 All sections are populated. Provides maximum control over every aspect of linting, additive customization, suppression scope, and network-assisted behavior.
 
-**Active rules:** identical to Profile 3a + 3b combined when all online rules are enabled and fix network is on. Active rule set is still determined by `rules.<id>.enabled`, exclusion patterns, and inline directives.
+**Active rules:** identical to Profile 3a + 3b combined when all online rules are enabled and fix network is on. Active rule set is determined by `rules.<id>.enabled`, exclusion patterns, and inline directives.
 
-**Full config example (non-normative):**
-
-```yaml
-rules:
-  # Per-rule severity/enable override. Omitted rules use defaults.
-  job-permissions-required:
-    enabled: false
-  deny-write-all:
-    severity: error            # already error by default; shown for clarity
-  dangerous-triggers:
-    severity: error
-    events:
-      extend:
-        - issue_comment
-  action-shell-is-required:
-    severity: warning
-
-  runner-label:
-    known-hosted-labels:
-      extend:
-        - ubuntu-24.04-large
-  credentials:
-    public-registries:
-      extend:
-        - registry.example.com
-  cache-poisoning:
-    untrusted-triggers:
-      extend:
-        - issue_comment
-  unredacted-secrets:
-    output-commands:
-      extend:
-        - tee
-  forbidden-uses:
-    deny:
-      - some-untrusted-org/*
-  expr-undefined-var:
-    assume-events:
-      - workflow_dispatch
-      - repository_dispatch
-
-  # Online rules
-  known-vulnerable-actions:
-    enabled: true
-  impostor-commit:
-    enabled: true
-  ref-confusion:
-    enabled: true
-  stale-action-refs:
-    enabled: true
-
-exclusions:
-  - file: ".github/workflows/legacy-*.yml"
-    rules:
-      - runner-no-latest
-      - job-permissions-required
-  - file: ".github/workflows/release.yml"
-    jobs:
-      - publish
-    rules:
-      - credentials
-
-fix:
-  defaults:
-    job-timeout-minutes: 15
-  pinning:
-    enable-network: true
-    min-age-days: 14
-    exclude-branches:
-      - main
-      - master
-    ignore-actions:
-      - uses: "slsa-framework/*"
-        ref: "*"
-  images:
-    enable-network: true
-    exclude-images:
-      - scratch
-    exclude-tags:
-      - latest
-
-network:
-  on-error: skip
-  timeout-seconds: 30
-  max-concurrency: 4
-  github:
-    ghes-api-url: ""
-    ghes-fallback: false
-```
-
-**Active rules under this config:**
-
-All §4.4 default rules are enabled (subject to per-rule `enabled: false`) plus all four online rules. `unpinned-uses` and `unpinned-image` carry network-assisted auto-fix data. `job-permissions-required` is disabled. `runner-no-latest` and `job-permissions-required` diagnostics are suppressed for `legacy-*.yml`. `credentials` diagnostics are suppressed for the `publish` job in `release.yml`.
+See §5.9 for a comprehensive non-normative configuration example covering all sections.
 
 ---
 
@@ -962,11 +762,11 @@ All §4.4 default rules are enabled (subject to per-rule `enabled: false`) plus 
 | Profile | Config required | Local-AST rules active | Online rules active | `unpinned-*` carry fixes |
 |---|---|---|---|---|
 | 1 No config | None | All §4.4 local-AST (~48 rules) | ✗ | ✗ |
-| 2 Minimal | Partial (only changed keys) | Same as Profile 1 ± per-rule overrides | ✗ | ✗ |
+| 2 Minimal | Partial (only changed keys) | Same ± per-rule overrides | ✗ | ✗ |
 | 3a Pin remediation | `fix.pinning.enable-network: true` | Same as Profile 1 | ✗ | ✓ |
 | 3b Online rules | `rules.<id>.enabled: true` (4 rules) | Same as Profile 1 | ✓ (4 rules) | ✗ |
 | 3a+3b | Both enabled | Same as Profile 1 | ✓ (4 rules) | ✓ |
-| 4 Full config | All sections populated | Profiles 3a+3b ± per-rule overrides | ✓ (4 rules) | ✓ |
+| 4 Full config | All sections populated | 3a+3b ± per-rule overrides | ✓ (4 rules) | ✓ |
 
 Non-normative guidance for progressive adoption:
 
@@ -1049,13 +849,7 @@ Token resolution:
 
 Configuration parsing enforces resource caps on YAML payloads: **`1 048 576`** UTF-8 bytes total, **`64`** compound nesting depth, and **`50 000`** counted structural units. Oversized payloads fail validation with deterministic error messages. Wildcard pattern matching for `fix.pinning.ignore-actions` must impose a timeout (recommended ≤ 2 s) so pattern evaluation does not stall the process; timed-out patterns are treated as non-matches.
 
-**Governance and observability (configuration path):**
-
-- Prefer **committed** config paths (discovery or `--config` relative to the checkout) so changes are reviewed like application code.
-- **`SEITON_CONFIG` / `--config`** can name **any** absolute path; on shared CI runners, set them only to **trusted** locations (e.g. under the repository root you control). Do not derive the path from untrusted **fork PR** inputs.
-- **Fork pull request** workflows: avoid pointing `SEITON_CONFIG` at a file the PR branch can overwrite; use default discovery (config on the merge target) or no config (defaults).
-- **Consumer repositories** (projects that adopt Seiton, not this Seiton codebase): teams may use **CODEOWNERS** plus branch protection **in their own repo** on `seiton.yaml` paths so broad `exclusions` or disabled security rules require explicit owner review ([About code owners](https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-code-owners)).
-- CLI **`--verbose`**: after a successful config load, Seiton prints **`config: <absolute path>`** or **`config: (none, using defaults)`** on **stderr**.
+**Security note (configuration path):** `SEITON_CONFIG` / `--config` can name any absolute path. On shared CI runners, set them only to trusted locations. For fork pull request workflows, avoid pointing config at a file the PR branch can overwrite; use default discovery or defaults. CLI `--verbose` prints the resolved config path on stderr.
 
 
 ### 5.14 `output` Section Specification
@@ -1114,23 +908,14 @@ This observability data enables CI detection of suppression increases.
 
 ### 6.2 Diagnostic Sort Order
 
-The sort order for rule diagnostics is configurable via the `output.sort-order` configuration key.
+Sort order is configurable via `output.sort-order` (§5.14).
 
-| `sort-order` value | Sort key sequence | Description |
-|---|---|---|
-| `location` (default) | StartLine → StartColumn → RuleId → Message | Groups diagnostics by source position. Easier to follow when reading a file top-to-bottom. |
-| `rule` | RulePriority → Severity → StartLine → StartColumn → Message | Groups diagnostics by rule. Useful for batch-fixing all instances of one rule at a time. |
+| `sort-order` value | Sort key sequence |
+|---|---|
+| `location` (default) | StartLine → StartColumn → RuleId → Message |
+| `rule` | RulePriority → Severity → StartLine → StartColumn → Message |
 
-Default behavior (no config or `sort-order: location`):
-
-- Diagnostics are ordered by their source position (line, column).
-- When multiple diagnostics share the same position, rule ID (lexicographic) breaks the tie.
-- This matches the reading order of the source file and is the most natural output for interactive use.
-
-`sort-order: rule`:
-
-- Diagnostics are ordered by internal rule priority (lower priority numbers first), then severity, then position.
-- This groups all diagnostics from the same rule together, regardless of their source position.
+When multiple diagnostics share the same position under `location` sort, rule ID (lexicographic) breaks the tie. Under `rule` sort, lower priority numbers sort first.
 
 ---
 
@@ -1462,37 +1247,7 @@ Using HEAD for digest resolution is the correct approach (confirmed by both Go a
 
 ### 12.3 Configuration
 
-Network-assisted pin remediation is disabled by default. It must be explicitly enabled via the `fix` section of the Seiton configuration file (§5.12).
-
-```yaml
-fix:
-  pinning:
-    enable-network: true           # must be true to enable Actions SHA remediation
-    min-age-days: 14               # skip pinning tags created fewer than N days ago; 0 = no constraint
-    exclude-branches:
-      - main
-      - master
-    ignore-actions:
-      - uses: "slsa-framework/*"
-        ref: "*"
-
-  images:
-    enable-network: true           # must be true to enable OCI digest remediation
-    exclude-images:
-      - scratch
-    exclude-tags:
-      - latest
-    ignore-images:
-      - "mcr.microsoft.com/**"
-
-network:
-  on-error: skip                   # skip = failures leave diagnostic without fix; fail = abort
-  timeout-seconds: 30
-  max-concurrency: 4
-  github:
-    ghes-api-url: ""               # optional; empty = github.com only
-    ghes-fallback: false           # if true, fall back to github.com when repo not found on GHES
-```
+Network-assisted pin remediation is disabled by default. It must be explicitly enabled via the `fix` section (§5.12) and uses `network` settings (§5.13).
 
 #### 12.3.1 `fix.pinning.enable-network` / `fix.images.enable-network`
 
@@ -1500,17 +1255,7 @@ When `false` (the default), no resolver is instantiated and the corresponding di
 
 #### 12.3.2 Token Resolution
 
-GitHub API token is resolved from environment variables in hardcoded order: `SEITON_GITHUB_TOKEN` → `GITHUB_TOKEN`. The first non-empty value is used. If no variable yields a token, the GitHub API is called unauthenticated (lower rate limit).
-
-This order is not configurable via the config file. Rationale: exposing token env var selection in config creates an attack surface where a malicious repository config redirects token resolution to unintended environment variables.
-
-#### 12.3.3 `network.github.ghes-api-url` and `network.github.ghes-fallback`
-
-Optional support for GitHub Enterprise Server. When `ghes-api-url` is set, the resolver first queries the GHES instance. If `ghes-fallback: true`, repositories not found on GHES are retried against github.com. Matches pinact's `ClientResolver` pattern.
-
-Schema validation rejects non-HTTPS absolute URLs (`http`, `ftp`, etc.), relative-looking strings that do not parse as an absolute HTTPS URI, and URLs with embedded `userinfo`. The accepted value is stored in normalized absolute URI form.
-
-HTTP clients carrying the GitHub Bearer token are built without automatic redirect follow at the socket layer; the handler follows `3xx` only when `Location` resolves to the same origin (scheme + host + port) as the request URL being redirected. Cross-origin redirects are not followed, so credentials are not automatically sent to another origin in response to a redirect.
+Token resolution and network behavior (GHES, timeouts, concurrency, redirect safety) are specified in §5.13 and apply to all network-dependent features including pin remediation.
 
 #### 12.3.4 `fix.pinning.ignore-actions`
 
@@ -1546,10 +1291,6 @@ Glob patterns for images and tags to skip during digest resolution.
 
 - `scratch` is always excluded regardless of configuration (enforced by resolver, matching frizbee's `MergeUserConfig` safety invariant).
 - `latest` is excluded by default (matches frizbee's default `ExcludeTags`). Rationale: pinning `latest` is semantically vacuous — it will drift immediately.
-
-#### 12.3.9 `network.on-error`
-
-When `skip` (the default), resolution failures (network error, auth failure, timeout) leave the diagnostic without a fix rather than causing the remediation call to fail. Callers may inspect which diagnostics received fixes and which did not. When `fail`, any resolution failure causes the remediation call to return an error.
 
 ### 12.4 Resolution Caching
 
