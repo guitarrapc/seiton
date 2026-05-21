@@ -1141,7 +1141,11 @@ Job and step diagnostics use a dotted-path prefix aligned with GitHub Actions wo
 
 #### Principle 6: Unexpected-key messages use dotted-path prefix for location context
 
-Format: `{locationPath} unexpected key "{key}" for "{sectionType}" section. expected one of ...`
+Format: `{locationPath} unexpected key "{key}" for {sectionDescription}. expected one of ...`
+
+Where `{sectionDescription}` is either:
+- `"{sectionType}" section` for named mapping sections (e.g., `"job" section`, `"concurrency" section`)
+- A descriptive phrase that identifies the step execution type (e.g., `step to execute action`, `step to run shell command`)
 
 When there is no location context (workflow-level), the prefix is omitted.
 

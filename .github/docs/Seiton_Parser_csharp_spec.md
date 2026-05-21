@@ -1350,7 +1350,7 @@ Same rules as Go. The `ParseMapping` helper supports case-insensitive mode via `
 ## Appendix A: Seiton Parser Function → C# Mapping
 
 > The "Spec Function" column lists the canonical function names defined in `Seiton_Parser_spec.md` §1–§4.
-> The "C# Implementation location" column points to the closest corresponding code location in C#. Exact method signatures are listed when they exist verbatim; otherwise the entry is a conceptual mapping label for logic implemented inline within broader helpers under `WorkflowParser.Parse(...)` and related partials.
+> The "C# Implementation location" column points to the closest corresponding code location in C#. Exact method signatures are listed when they exist verbatim; otherwise the entry is a conceptual mapping label for logic implemented as private generic helpers or inline within a broader private method (`WorkflowParser.ParseCoreInner`, the central private traversal method). Most workflow-level and structural parse functions listed here are conceptual — the actual implementation uses private generic methods with different signatures.
 
 ### A.1 Entry Point
 
@@ -1443,8 +1443,7 @@ Same rules as Go. The `ParseMapping` helper supports case-insensitive mode via `
 ## Appendix B: Seiton Expression Parser → C# Mapping
 
 > The "Spec Element" column lists the canonical expression parser components defined in `Seiton_Parser_spec.md` §6–§7.
-> The "C# Counterpart" column shows the target C# type or method name.
-> All entries are implemented.
+> The "C# Counterpart" column shows the actual C# type or method name in the `ExpressionParser` nested class.
 
 | Spec Element | C# Counterpart |
 |---|---|

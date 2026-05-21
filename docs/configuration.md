@@ -464,8 +464,9 @@ seiton check --min-severity error
 2. **Use inline directives** for individual exceptions rather than disabling a rule globally:
 
 ```yaml
-# seiton: disable-next-line unpinned-uses
-- uses: actions/checkout@v4
+steps:
+  # seiton: disable-next-line unpinned-uses
+  - uses: actions/checkout@v4
 ```
 
 ### Network-Assisted SHA Pinning
