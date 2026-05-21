@@ -198,7 +198,7 @@ jobs:
 on: push
 jobs:
   reuse:
-    uses: owner/repo/.github/workflows/reuse.yml@main
+    uses: owner/repo/.github/workflows/reuse.yml@a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0 # v1
     steps:                  # ERROR: cannot have both uses and steps
       - run: echo hello
 ```
@@ -209,7 +209,7 @@ jobs:
 on: push
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - run: echo ok
 ```
@@ -230,7 +230,7 @@ Validates reusable workflow call semantics. `with` and `secrets` are only valid 
 on: push
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     with:                   # ERROR: key 'with' requires uses
       target: prod
     steps:
@@ -241,7 +241,7 @@ jobs:
 on: push
 jobs:
   reuse:
-    uses: owner/repo/.github/workflows/reuse.yml@main
+    uses: owner/repo/.github/workflows/reuse.yml@a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0 # v1
     container: node:20      # ERROR: incompatible with uses
 ```
 
@@ -251,7 +251,7 @@ jobs:
 on: push
 jobs:
   reuse:
-    uses: owner/repo/.github/workflows/reuse.yml@main
+    uses: owner/repo/.github/workflows/reuse.yml@a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0 # v1
     with:
       target: prod
 ```
@@ -273,7 +273,7 @@ on: push
 permissions: admin-all              # ERROR: must be 'read-all' or 'write-all'
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - run: echo ng
 ```
@@ -283,7 +283,7 @@ on: push
 permissions: read-all               # WARNING: overly broad; prefer explicit per-scope mapping
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - run: echo ng
 ```
@@ -294,7 +294,7 @@ jobs:
   build:
     permissions:
       contents: admin              # ERROR: must be 'read', 'write', or 'none'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - run: echo ng
 ```
@@ -307,7 +307,7 @@ on: push
 permissions: read-all
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - run: echo ng
 
@@ -318,7 +318,7 @@ jobs:
   build:
     permissions:
       contents: read
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - run: echo ok
 ```
@@ -340,7 +340,7 @@ on: push
 jobs:
   build:
     needs: nonexistent       # ERROR: references unknown job
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - run: echo ng
 ```
@@ -350,12 +350,12 @@ on: push
 jobs:
   a:
     needs: b                 # ERROR: cyclic dependencies detected
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - run: echo a
   b:
     needs: a
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - run: echo b
 ```
@@ -366,12 +366,12 @@ jobs:
 on: push
 jobs:
   setup:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - run: echo setup
   build:
     needs: setup
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - run: echo build
 ```
@@ -392,7 +392,7 @@ Validates shell names in workflow/job defaults and `run` steps. Reports shells o
 on: push
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - run: echo hello
         shell: zsh             # ERROR: invalid shell name
@@ -402,7 +402,7 @@ jobs:
 on: push
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - run: echo hello
         shell: cmd             # ERROR: cmd is not available on ubuntu
@@ -414,7 +414,7 @@ jobs:
 on: push
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - run: echo hello
         shell: bash
@@ -436,7 +436,7 @@ Validates `job.id` and `step.id` values. IDs must use only alphanumeric characte
 on: push
 jobs:
   1build:                   # ERROR: must start with a letter or _
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - run: echo ng
 ```
@@ -445,7 +445,7 @@ jobs:
 on: push
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - id: setup.v1          # ERROR: invalid step ID
         run: echo ng
@@ -457,7 +457,7 @@ jobs:
 on: push
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - id: setup-v1
         run: echo ok
@@ -585,10 +585,11 @@ Validates input names for well-known popular actions. Reports unknown input keys
 on: push
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
+          persist-credentials: false
           fetch-depht: 1      # ERROR: typo; did you mean 'fetch-depth'?
 ```
 
@@ -598,10 +599,11 @@ jobs:
 on: push
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
+          persist-credentials: false
           fetch-depth: 1
 ```
 
@@ -654,7 +656,7 @@ Validates `strategy.matrix` definitions. Reports inconsistent keys, invalid `inc
 ```yaml
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     strategy:
       matrix:
         os: []              # ERROR: axis has no values
@@ -667,14 +669,14 @@ jobs:
 ```yaml
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     strategy:
       matrix:
         node: [10, 12, 14]
-        os: [ubuntu-latest, macos-latest]
+        os: [ubuntu-24.04, macos-14]
         exclude:
           - node: 13        # ERROR: value 13 does not match matrix combinations
-            os: ubuntu-latest
+            os: ubuntu-24.04
     steps:
       - run: echo ng
 ```
@@ -684,14 +686,14 @@ jobs:
 ```yaml
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     strategy:
       matrix:
         node: [10, 12, 14]
-        os: [ubuntu-latest, macos-latest]
+        os: [ubuntu-24.04, macos-14]
         exclude:
           - node: 10
-            os: macos-latest
+            os: macos-14
     steps:
       - run: echo ok
 ```
@@ -714,7 +716,7 @@ env:
   foobar: x           # WARNING: not portable (lowercase)
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - env:
           foo-bar: x     # WARNING: not portable (contains dash)
@@ -729,7 +731,7 @@ env:
   FOOBAR: x
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - env:
           FOO_BAR: x
@@ -752,7 +754,7 @@ Warns on malformed, constant, or unsound `if` conditions. Reports always-true / 
 jobs:
   build:
     if: ${{ false }}        # ERROR: constant expression in condition
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - if: ${{ !false }}   # ERROR: constant expression
         run: echo ng
@@ -768,7 +770,7 @@ jobs:
 jobs:
   build:
     if: ${{ github.ref != '' }}
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - if: ${{ success() }}
         run: echo ok
@@ -791,7 +793,7 @@ jobs:
   build:
     # ERROR: fake ternary pattern
     if: ${{ github.ref_name == 'main' && 'prod' || 'dev' }}
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - if: ${{ inputs.deploy && 'yes' || 'no' }}
         run: echo ng
@@ -803,7 +805,7 @@ jobs:
 jobs:
   build:
     if: ${{ github.ref_name == 'main' }}
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - if: ${{ inputs.deploy }}
         run: echo yes
@@ -825,7 +827,7 @@ Warns when `if:` conditions are missing the `${{ }}` expression wrapper. Auto-fi
 jobs:
   build:
     if: github.ref != 'refs/heads/main'   # WARNING: missing ${{ }} wrapper
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - if: github.event_name == 'push'   # WARNING: missing ${{ }} wrapper
         run: echo ng
@@ -839,7 +841,7 @@ jobs:
 jobs:
   build:
     if: ${{ github.ref != 'refs/heads/main' }}
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - if: ${{ github.event_name == 'push' }}
         run: echo ok
@@ -864,7 +866,7 @@ Warns when `if:` uses a YAML block scalar (`|` or `>`) together with a fenced ex
 ```yaml
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     if: |
       ${{ github.event_name == 'push' }}
     steps:
@@ -876,7 +878,7 @@ jobs:
 ```yaml
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     if: |-
       ${{ github.event_name == 'push' }}
     steps:
@@ -902,7 +904,7 @@ on: push
 # WARNING: workflow does not declare concurrency
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - run: echo ng
 ```
@@ -911,7 +913,7 @@ jobs:
 on: push
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     concurrency: my-group  # WARNING: missing 'cancel-in-progress'
     steps:
       - run: echo ng
@@ -926,7 +928,7 @@ concurrency:
   cancel-in-progress: true
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - run: echo ok
 ```
@@ -948,8 +950,8 @@ Detects `contains()` conditions that treat a plain string like a membership list
 ```yaml
 jobs:
   deploy:
-    if: contains('refs/heads/main refs/heads/develop', github.ref)
-    runs-on: ubuntu-latest
+    if: ${{ contains('refs/heads/main refs/heads/develop', github.ref) }}
+    runs-on: ubuntu-24.04
     steps:
       - run: echo ng
 ```
@@ -959,8 +961,8 @@ jobs:
 ```yaml
 jobs:
   deploy:
-    if: contains(fromJSON('["refs/heads/main","refs/heads/develop"]'), github.ref)
-    runs-on: ubuntu-latest
+    if: ${{ contains(fromJSON('["refs/heads/main","refs/heads/develop"]'), github.ref) }}
+    runs-on: ubuntu-24.04
     steps:
       - run: echo ok
 ```
@@ -980,25 +982,37 @@ Warns when a workflow gates privileged behavior on spoofable bot actor contexts 
 **Example trigger:**
 
 ```yaml
-on: pull_request_target
+on: pull_request
 jobs:
   automerge:
-    if: github.actor == 'dependabot[bot]'
-    runs-on: ubuntu-latest
+    if: ${{ github.actor == 'dependabot[bot]' }}
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+      pull-requests: write
     steps:
       - run: gh pr merge --auto --merge "$PR_URL"
+        env:
+          PR_URL: ${{ github.event.pull_request.html_url }}
+          GH_TOKEN: ${{ github.token }}
 ```
 
-**Remediation:** Prefer a context tied to the PR author or other original trigger actor:
+**Remediation:** Prefer a context tied to the PR author rather than the trigger actor:
 
 ```yaml
-on: pull_request_target
+on: pull_request
 jobs:
   automerge:
-    if: github.event.pull_request.user.login == 'dependabot[bot]'
-    runs-on: ubuntu-latest
+    if: ${{ github.event.pull_request.user.login == 'dependabot[bot]' }}
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+      pull-requests: write
     steps:
       - run: gh pr merge --auto --merge "$PR_URL"
+        env:
+          PR_URL: ${{ github.event.pull_request.html_url }}
+          GH_TOKEN: ${{ github.token }}
 ```
 
   > **Note:** Known bot ID comparisons such as `github.actor_id == '49699333'` and equivalent bracket/index-style forms like `github['ACTOR_ID'] == 49699333` are also flagged. Prefer the corresponding trigger-author context like `github.event.pull_request.user.id`.
@@ -1011,22 +1025,7 @@ jobs:
 |---|---|---|
 | ✓ | — | ✗ |
 
-Detects credential leakage risk when `actions/checkout` (without `persist-credentials: false`) is followed later in the same job by `actions/upload-artifact` uploading a dangerous path. Dangerous paths include repository-root and parent-directory forms such as `.`, `..`, `*`, `./*`, `../../_temp`, `../../_temp/**`, `../../_temp/*`, `../../_temp/**/*`, `./**`, `./**/*`, `**`, `**/*`, `${{ github.workspace }}`, `${{ github.workspace }}/**`, `${{ github.workspace }}/**/*`, `${{ github.workspace }}/..`, and `${{ github.workspace }}/../../_temp`. Equivalent bracket-form expressions such as `${{ github['workspace'] }}` and normalized equivalents such as `repo/..` or `${{ github.workspace }}/repo/..` are treated the same way. Explicit escaped `_temp` directory paths and their glob variants (for example `../../_temp`, `../../_temp/**`, `../../_temp/*`) are also treated as dangerous because they can reach `$RUNNER_TEMP` on GitHub-hosted runners.
-
-**Core intent:** prevent artifact uploads from sweeping checkout-managed credentials or adjacent sensitive state into artifacts.
-
-**Current supported scope:** the rule currently models same-job `actions/checkout` followed by later `actions/upload-artifact`, including root-like, parent-like, and workspace-like path families; bracket-form and normalized workspace-equivalent paths; hidden-file defaults for upload-artifact versions; explicit legacy exclusion globs such as `!.git/**`, `!.git/config`, explicit nested exclusions such as `!repo/.git/**`, and leading-recursive exclusions such as `!**/.git/**` within the current normalized-path depth bound; and the severity split between legacy checkout (`.git/config`) and checkout `v6+` (`$RUNNER_TEMP`). Leading-recursive exclusions (`!**/.git/**`) suppress the legacy case even when the checkout `with.path` contains runtime expressions that cannot be statically normalized. Workspace-expression suffixes are recognized only when the suffix is empty or starts with `/` or `\`, so concatenations such as `${{ github.workspace }}..` or `!${{ github.workspace }}.git/**` are not treated as workspace-relative paths.
-
-**Deferred scope:** the rule does not yet correlate `actions/checkout` `with.path` subdirectories with later artifact uploads. For example, checkout into `path: repo` and a later `upload-artifact` with `path: repo` is not currently diagnosed unless the upload path is otherwise root-like, parent-like, or workspace-like.
-
-  > **Note:** Legacy `actions/checkout` versions (v1-v5) persist a token in `.git/config`, while `actions/checkout@v6+` stores credentials under `$RUNNER_TEMP`. For `actions/upload-artifact`, pinned `v4.0`-`v4.3` releases may still include hidden files by default, while `v4.4+` and floating `@v4` exclude hidden files by default. For unparseable refs such as branch names, SHAs, or arbitrary tags, the rule stays conservative even when `include-hidden-files: false` is present, because that ref may resolve to older upload-artifact code that ignores the input and still includes hidden files by default. That hidden-file behavior mainly protects legacy `.git/config`; it does not protect v6+ credentials when an upload can actually reach `$RUNNER_TEMP`. In practice, `..` or `${{ github.workspace }}/..` remain dangerous for legacy hidden-file uploads, but the v6+ warning is reserved for paths that escape far enough to reach runner temp, such as `../..`, `${{ github.workspace }}/../..`, or explicit `_temp` siblings like `../../_temp`. Explicit exclusion globs such as `!.git/**`, `!.git/config`, `!repo/.git/**`, or `!**/.git/**` suppress the legacy `.git/config` case only when they exclude every reachable `.git/config` location within the current normalized-path depth bound. Bare `!.git` never suppresses. For v6+, suppression requires a recursive runner-temp subtree exclusion such as `!../../_temp/**` or `!${{ github.workspace }}/../../_temp/**`; bare `!../../_temp` or shallow `!../../_temp/*` exclusions are not enough.
-
-**Severity:**
-
-- **error** — checkout (non-v6+) without `persist-credentials: false` + dangerous upload that may include hidden files
-- **warning** — checkout v6+ without `persist-credentials: false` + a parent-directory upload that can reach `$RUNNER_TEMP`
-
-When checkout uses a ref that cannot be parsed as a semantic version, such as a full SHA, branch ref, or arbitrary tag like `@v6-legacy` / `@v06`, the rule conservatively assumes both legacy and v6+ risks apply. Likewise, upload-artifact refs that are not recognized semantic versions, such as `@v4-legacy` or `@v4.x`, are treated conservatively as having unknown hidden-file behavior.
+Detects credential leakage risk when `actions/checkout` (without `persist-credentials: false`) is followed later in the same job by `actions/upload-artifact` uploading a dangerous path (root-like, parent-directory, or workspace-expression forms).
 
 **Example trigger:**
 
@@ -1034,10 +1033,10 @@ When checkout uses a ref that cannot be parsed as a semantic version, such as a 
 on: push
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/upload-artifact@v4
+      - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4
+      - uses: actions/upload-artifact@5d5d22a31266ced268874388b861e4b58bb5c2f3 # v4
         with:
           name: my-artifact
           path: .
@@ -1048,16 +1047,28 @@ jobs:
 
 ```yaml
 steps:
-  - uses: actions/checkout@v4
+  - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4
     with:
       persist-credentials: false
-  - uses: actions/upload-artifact@v4
+  - uses: actions/upload-artifact@5d5d22a31266ced268874388b861e4b58bb5c2f3 # v4
     with:
       name: my-artifact
       path: dist/
 ```
 
-  > **Note:** This rule is independent of `checkout-persist-credentials`. The latter flags every checkout without `persist-credentials: false`; `artipacked` only fires when a later dangerous upload-artifact path in the same job can actually expose checkout credentials.
+**Notes:**
+
+<details>
+<summary>Edge cases and detection details</summary>
+
+- **Dangerous paths** include `.`, `..`, `*`, `./*`, `./**`, `./**/*`, `**`, `**/*`, `${{ github.workspace }}`, `${{ github.workspace }}/**`, `${{ github.workspace }}/..`, `../../_temp`, and their variants. Bracket-form expressions (`${{ github['workspace'] }}`) and normalized equivalents (`repo/..`) are also recognized. Workspace-expression suffixes are recognized only when the suffix is empty or starts with `/` or `\`.
+- **Severity split:** error for legacy checkout (v1–v5, credentials in `.git/config`) with hidden-file upload risk; warning for checkout v6+ when the upload path can reach `$RUNNER_TEMP` (e.g., `../..`, `../../_temp`).
+- **Hidden-file behavior:** `actions/upload-artifact@v4.4+` excludes hidden files by default. For unparseable refs (branch names, SHAs, arbitrary tags), the rule conservatively assumes hidden-file inclusion.
+- **Exclusion suppression:** legacy case can be suppressed by globs like `!.git/**`, `!.git/config`, `!repo/.git/**`, or `!**/.git/**` when they cover all reachable `.git/config` locations. Bare `!.git` never suppresses. For v6+, suppression requires a recursive runner-temp subtree exclusion (`!../../_temp/**`).
+- **Deferred scope:** checkout `with.path` subdirectory correlation with upload paths is not yet implemented.
+- This rule is independent of `checkout-persist-credentials`. The latter flags every checkout without `persist-credentials: false`; `artipacked` only fires when a later dangerous upload in the same job can expose credentials.
+
+</details>
 
 ---
 
@@ -1075,7 +1086,7 @@ Detects deprecated workflow command syntax (`::set-output`, `::save-state`, `::a
 on: push
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - run: echo "::set-output name=digest::$DIGEST"
         # ERROR: workflow command "set-output" was deprecated
@@ -1087,7 +1098,7 @@ jobs:
 on: push
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - run: echo "result=ok" >> "$GITHUB_OUTPUT"
 ```
@@ -1254,7 +1265,7 @@ inputs:
 on: push
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: ./actions/deploy
         with:
@@ -1269,7 +1280,7 @@ jobs:
 on: push
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: ./actions/deploy
         with:
@@ -1295,7 +1306,7 @@ Errors when a popular action version uses a deprecated Node.js runtime (`node12`
 on: push
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v3   # ERROR: runner is too old (node16)
 ```
@@ -1306,7 +1317,7 @@ jobs:
 on: push
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v6
 ```
@@ -1356,23 +1367,38 @@ Warns when high-risk trigger events (`pull_request_target`, `workflow_run`, etc.
 on: pull_request_target    # WARNING: potentially dangerous trigger
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - run: echo ng
 ```
 
-**Remediation:**
+**Remediation:** Restrict the trigger scope, add strict condition guards, or replace with a safer event. Common approaches:
+
+- Switch to `pull_request` (unprivileged fork context) when secrets are not needed
+- Add `if:` conditions (e.g. `github.event.pull_request.head.repo.full_name == github.repository`) to limit execution to trusted sources
+- Isolate privileged work into a separate job gated by an explicit condition
+- Use `on: push` when the workflow only needs to run on commits to the default branch
 
 ```yaml
-on: push
+# Approach A: switch to a safer event
+on: pull_request
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - run: echo ok
 ```
 
-Restrict the trigger scope, add strict `if` condition guards, or replace with a safer event (`pull_request` without `_target`).
+```yaml
+# Approach B: guard with condition on pull_request_target
+on: pull_request_target
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    if: ${{ github.event.pull_request.head.repo.full_name == github.repository }}
+    steps:
+      - run: echo ok
+```
 
 **Configuration — extend the dangerous-events set:**
 
@@ -1400,7 +1426,7 @@ Errors when `${{ env.* }}` is directly interpolated inside a `run` script. Shell
 on: push
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - run: echo "${{ env.VERSION }}"  # ERROR: use $VERSION instead
 ```
@@ -1411,7 +1437,7 @@ jobs:
 on: push
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - run: echo "$VERSION"
 ```
@@ -1434,7 +1460,7 @@ Errors when `${{ secrets.* }}` is directly interpolated inside a `run` script. S
 on: push
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - run: curl -H "Authorization: Bearer ${{ secrets.TOKEN }}"
         # ERROR: use env: indirection
@@ -1446,7 +1472,7 @@ jobs:
 on: push
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - env:
           TOKEN: ${{ secrets.TOKEN }}
@@ -1463,8 +1489,6 @@ jobs:
 
 Errors when `${{ inputs.* }}` or `${{ github.event.inputs.* }}` are directly interpolated inside a `run` script. Inputs may be user-controlled.
 
- Auto-fix reuses an existing unique `env` mapping for the same input when available. Otherwise, for simple expressions, it inserts a step-local `env:` entry and rewrites the script to a shell variable. No fix is offered for compound expressions, no-expand heredocs, or shell single-quoted strings (contexts where shell expansion is disabled). The env-insertion path additionally skips flow-style `env` and empty `env: {}`; replacement-only reuse of an existing unique mapping may still be offered in those cases.
-
 **Example trigger:**
 
 ```yaml
@@ -1476,7 +1500,7 @@ on:
         type: string
 jobs:
   test:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - run: echo "${{ inputs.benchmark }}"   # ERROR: use env: indirection
 ```
@@ -1492,12 +1516,16 @@ on:
         type: string
 jobs:
   test:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - env:
           BENCHMARK: ${{ inputs.benchmark }}
         run: echo "$BENCHMARK"
 ```
+
+**Notes:**
+
+Auto-fix reuses an existing unique `env` mapping for the same input when available. Otherwise, for simple expressions, it inserts a step-local `env:` entry and rewrites the script to a shell variable. No fix is offered for compound expressions, no-expand heredocs, or shell single-quoted strings. The env-insertion path additionally skips flow-style `env` and empty `env: {}`.
 
 ---
 
@@ -1515,7 +1543,7 @@ Errors when an expression references the entire `secrets` context as an object (
 on: push
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - run: echo "${{ toJson(secrets) }}"  # ERROR: exposes all secrets
 ```
@@ -1526,7 +1554,7 @@ jobs:
 on: push
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - env:
           MY_SECRET: ${{ secrets.MY_SECRET }}
@@ -1548,7 +1576,7 @@ Errors when expressions reference context roots unavailable in the current scope
 ```yaml
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     if: ${{ steps.prep.outputs.ok == 'true' }}  # ERROR: "steps" not allowed here
     steps:
       - run: echo ok
@@ -1557,8 +1585,8 @@ jobs:
 ```yaml
 jobs:
   build:
-    runs-on: ubuntu-latest
-    if: ${{ matrix.os == 'ubuntu-latest' }}     # ERROR: "matrix" not allowed here
+    runs-on: ubuntu-24.04
+    if: ${{ matrix.os == 'ubuntu-24.04' }}     # ERROR: "matrix" not allowed here
     steps:
       - run: echo ok
 ```
@@ -1568,7 +1596,7 @@ jobs:
 ```yaml
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     if: ${{ github.ref == 'refs/heads/main' }}
     steps:
       - id: prep
@@ -1593,7 +1621,7 @@ Warns when `actions/cache` is used in workflows that accept untrusted triggers (
 on: pull_request
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/cache@v4       # WARNING: cache on untrusted trigger
         with:
@@ -1601,15 +1629,33 @@ jobs:
           key: npm-${{ runner.os }}
 ```
 
-**Remediation:** Split trusted and untrusted jobs. Namespace cache keys by trust boundary:
+**Remediation:** Prevent attackers from poisoning shared cache entries. Common approaches:
+
+- Move cacheable jobs to trusted triggers only (`push`, `merge_group`)
+- Use `actions/cache/restore` (read-only) on untrusted triggers so forks cannot write entries
+- Namespace cache keys by trust boundary (`pr-${{ github.event.number }}` vs `main-`)
 
 ```yaml
+# Approach A: restrict cache to trusted triggers
 on: push
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/cache@v4
+        with:
+          path: ~/.npm
+          key: npm-${{ runner.os }}
+```
+
+```yaml
+# Approach B: read-only cache on untrusted trigger
+on: pull_request
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/cache/restore@v4
         with:
           path: ~/.npm
           key: npm-${{ runner.os }}
@@ -1646,13 +1692,31 @@ jobs:
       - run: echo ok
 ```
 
-**Remediation:** Route untrusted trigger paths to ephemeral GitHub-hosted runners:
+**Remediation:** Prevent untrusted code from running on persistent infrastructure. Common approaches:
+
+- Route untrusted trigger paths to ephemeral GitHub-hosted runners
+- Restrict triggers so forks cannot reach self-hosted runners (`push` only, or `pull_request` with branch filter for internal repos)
+- Use ephemeral/just-in-time self-hosted runners that are destroyed after each job
+- Gate self-hosted jobs with environment protection rules
 
 ```yaml
+# Approach A: switch to GitHub-hosted runner for untrusted triggers
 on: pull_request
 jobs:
   build:
-    runs-on: ubuntu-latest              # use GitHub-hosted runner
+    runs-on: ubuntu-24.04
+    steps:
+      - run: echo ok
+```
+
+```yaml
+# Approach B: gate self-hosted with environment protection
+on: pull_request_target
+jobs:
+  deploy:
+    runs-on: self-hosted
+    environment: production
+    if: ${{ github.event.pull_request.head.repo.full_name == github.repository }}
     steps:
       - run: echo ok
 ```
@@ -1672,11 +1736,11 @@ Detects unsafe command construction from untrusted inputs in `run` scripts.
 ```yaml
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     env:
       ACTIONS_ALLOW_UNSECURE_COMMANDS: true  # ERROR: insecure commands enabled
     steps:
-      - run: echo ng
+      - run: echo "insecure commands are enabled"
 ```
 
 **Remediation:** Remove `ACTIONS_ALLOW_UNSECURE_COMMANDS` and migrate to environment files:
@@ -1684,9 +1748,9 @@ jobs:
 ```yaml
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
-      - run: echo "MY_VAR=value" >> "$GITHUB_ENV"
+      - run: echo "/usr/local/custom-bin" >> "$GITHUB_PATH"
 ```
 
 ---
@@ -1710,7 +1774,7 @@ on: push
 permissions: write-all             # ERROR: write-all is forbidden
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - run: echo ng
 ```
@@ -1724,7 +1788,7 @@ permissions:
   packages: write
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - run: echo ok
 ```
@@ -1746,7 +1810,7 @@ on: push
 permissions: read-all               # ERROR: read-all is too broad
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - run: echo ng
 ```
@@ -1759,7 +1823,7 @@ permissions:
   contents: read
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - run: echo ok
 ```
@@ -1782,7 +1846,7 @@ When auto-fix is enabled, the fix infers minimum required permission scopes from
 on: push
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     # WARNING: no permissions declared
     steps:
       - run: echo ng
@@ -1794,7 +1858,7 @@ jobs:
 on: push
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     permissions:
       contents: read
     steps:
@@ -1807,7 +1871,7 @@ If the job uses only actions without known permission requirements, `permissions
 on: push
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     permissions: {}
     steps:
       - run: echo ok
@@ -1828,7 +1892,7 @@ Warns when custom or private registry images are used in `job.container` or `job
 ```yaml
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     container:
       image: registry.example.com/team/app:1.0.0  # ERROR: no credentials
     services:
@@ -1841,7 +1905,7 @@ jobs:
 ```yaml
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     container:
       image: example.com/owner/image
       credentials:
@@ -1856,7 +1920,7 @@ jobs:
 ```yaml
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     container:
       image: registry.example.com/team/app:1.0.0
       credentials:
@@ -1894,9 +1958,9 @@ Legacy `actions/checkout` versions persist credentials in `.git/config`; `action
 on: push
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v6  # WARNING: should set persist-credentials to false
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2; WARNING: should set persist-credentials to false
 ```
 
 **Remediation:**
@@ -1905,9 +1969,9 @@ jobs:
 on: push
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           persist-credentials: false
 ```
@@ -1930,14 +1994,14 @@ env:
   GITHUB_TOKEN: ${{ github.token }}         # ERROR: exposed to all jobs
   DATADOG_API_KEY: ${{ secrets.DATADOG_API_KEY }}
 jobs:
-  a:
-    runs-on: ubuntu-latest
+  test:
+    runs-on: ubuntu-24.04
     steps:
-      - run: echo a
-  b:
-    runs-on: ubuntu-latest
+      - run: npm test              # does not need secrets
+  deploy:
+    runs-on: ubuntu-24.04
     steps:
-      - run: echo b
+      - run: ./deploy.sh           # needs GITHUB_TOKEN
 ```
 
 **Remediation:** Move secret assignments to the minimal job or step scope:
@@ -1945,16 +2009,16 @@ jobs:
 ```yaml
 on: push
 jobs:
-  a:
-    runs-on: ubuntu-latest
+  test:
+    runs-on: ubuntu-24.04
+    steps:
+      - run: npm test
+  deploy:
+    runs-on: ubuntu-24.04
     steps:
       - env:
           GITHUB_TOKEN: ${{ github.token }}
-        run: echo a
-  b:
-    runs-on: ubuntu-latest
-    steps:
-      - run: echo b
+        run: ./deploy.sh
 ```
 
 ---
@@ -1973,12 +2037,12 @@ Errors when job-level `env` assigns `secrets.*` or `github.token` values in jobs
 on: push
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     env:
       GITHUB_TOKEN: ${{ github.token }}     # ERROR: exposed to all steps
     steps:
-      - run: echo first
-      - run: echo second
+      - run: npm test               # does not need token
+      - run: ./publish.sh           # needs token
 ```
 
 **Remediation:** Move secret assignments to the specific step that requires them:
@@ -1987,12 +2051,12 @@ jobs:
 on: push
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
+      - run: npm test
       - env:
           GITHUB_TOKEN: ${{ github.token }}
-        run: echo first
-      - run: echo second
+        run: ./publish.sh
 ```
 
 ---
@@ -2011,7 +2075,7 @@ Warns when secret-derived environment variables appear to be printed via output 
 on: push
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     env:
       TOKEN: ${{ secrets.GITHUB_TOKEN }}
     steps:
@@ -2024,7 +2088,7 @@ jobs:
 on: push
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - env:
           TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -2059,7 +2123,7 @@ Warns when `secrets.*` appears in `if` conditions, `uses:` references, or reusab
 on: push
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - if: ${{ secrets.GITHUB_TOKEN != '' }}   # ERROR: secrets in step.if
         run: echo ng
@@ -2071,7 +2135,7 @@ jobs:
 on: push
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - env:
           TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -2095,7 +2159,7 @@ Warns when secrets are mapped at a broader scope (workflow or job) than is requi
 on: push
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - env:
           TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -2113,7 +2177,7 @@ jobs:
 on: push
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - env:
           TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -2139,7 +2203,7 @@ Errors when a reusable workflow call job uses `secrets: inherit`. Full secret in
 on: push
 jobs:
   reuse:
-    uses: owner/repo/.github/workflows/reuse.yml@main
+    uses: owner/repo/.github/workflows/reuse.yml@a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0 # v1
     secrets: inherit          # ERROR: full secret inheritance is forbidden
 ```
 
@@ -2149,7 +2213,7 @@ jobs:
 on: push
 jobs:
   reuse:
-    uses: owner/repo/.github/workflows/reuse.yml@main
+    uses: owner/repo/.github/workflows/reuse.yml@a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0 # v1
     secrets:
       token: ${{ secrets.GITHUB_TOKEN }}
 ```
@@ -2249,7 +2313,7 @@ Warns when known tool-setup actions rely on an unpinned tool version. The list o
 ```yaml
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: aquasecurity/setup-trivy@v0.2.0
 ```
@@ -2257,7 +2321,7 @@ jobs:
 ```yaml
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: aquasecurity/setup-trivy@v0.2.0
         with:
@@ -2269,7 +2333,7 @@ jobs:
 ```yaml
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: aquasecurity/setup-trivy@v0.2.0
         with:
@@ -2293,7 +2357,7 @@ Warns when `uses:` references point to GitHub-archived repositories. Archived re
 ```yaml
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions-rs/toolchain@v1   # WARNING: repository is archived
 ```
@@ -2303,7 +2367,7 @@ jobs:
 ```yaml
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: dtolnay/rust-toolchain@stable
 ```
@@ -2323,7 +2387,7 @@ Warns when a version annotation or comment does not match the resolved commit's 
 ```yaml
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: owner/action-v1@v2.0.0   # ERROR: path hint 'v1' mismatches ref 'v2'
 ```
@@ -2333,7 +2397,7 @@ jobs:
 ```yaml
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: owner/action-v2@v2.1.0
 ```
@@ -2353,7 +2417,7 @@ Errors or warns (per policy) when `uses:` references violate configured allow/de
 ```yaml
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: bad-org/unsafe-action@v1   # ERROR: denied by policy
 ```
@@ -2363,7 +2427,7 @@ jobs:
 ```yaml
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: approved-org/safe-action@v1
 ```
@@ -2394,7 +2458,7 @@ Errors when `actions/create-github-app-token` is invoked without permission-limi
 ```yaml
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       # ERROR: missing permission constraints
       - uses: actions/create-github-app-token@v2
@@ -2403,7 +2467,7 @@ jobs:
 ```yaml
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       # ERROR: owner set without repositories constraint
       - uses: actions/create-github-app-token@v2
@@ -2417,7 +2481,7 @@ jobs:
 ```yaml
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/create-github-app-token@v2
         with:
@@ -2443,7 +2507,7 @@ Errors when executable jobs omit `timeout-minutes`. Prevents runaway jobs from c
 on: push
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     # ERROR: missing timeout-minutes
     steps:
       - run: echo ng
@@ -2455,7 +2519,7 @@ jobs:
 on: push
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
       - run: echo ok
@@ -2479,7 +2543,7 @@ Warns when a publishing or release workflow uses long-lived credentials instead 
 on: push
 jobs:
   publish:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - run: npm publish             # WARNING: no id-token permission
 ```
@@ -2488,7 +2552,7 @@ jobs:
 on: push
 jobs:
   publish:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - run: twine upload dist/*     # WARNING: use trusted publishing
 ```
@@ -2501,7 +2565,7 @@ jobs:
   publish:
     permissions:
       id-token: write
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - run: npm publish
 ```
@@ -2536,7 +2600,7 @@ Errors when `uses:` references resolve to action versions listed in known vulner
 on: push
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/example@v1   # ERROR: known vulnerable version
 ```
@@ -2559,7 +2623,7 @@ Errors when a SHA-pinned `uses:` reference points to a commit that is not reacha
 on: push
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@abc1234567890abc1234567890abc1234567890a
         # ERROR: commit is not reachable in the repository
@@ -2583,7 +2647,7 @@ Errors when a symbolic ref (tag or branch name) in `uses:` is ambiguous — the 
 on: push
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: owner/action@v2      # ERROR: ambiguous ref (tag and branch both exist)
 ```

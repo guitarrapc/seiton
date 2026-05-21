@@ -1,8 +1,8 @@
 # Seiton Linter Go Implementation Specification
 
-> Go implementation specification for the linter contract defined in `Seiton_Linter_spec.md`. This document captures Go runtime structures and behavior for rule execution, exclusion/suppression, and diagnostic output. See `Seiton_Linter_csharp_spec.md` for the C# target. Both language specs share the same outline; only language-specific content differs. Parser behavior is specified in `Seiton_Parser_spec.md` and `Seiton_Parser_go_spec.md`.
+> Go implementation specification for the linter contract defined in `.github/docs/Seiton_Linter_spec.md`. This document captures Go runtime structures and behavior for rule execution, exclusion/suppression, and diagnostic output. See `.github/docs/Seiton_Linter_csharp_spec.md` for the C# target. Both language specs share the same outline; only language-specific content differs. Parser behavior is specified in `.github/docs/Seiton_Parser_spec.md` and `.github/docs/Seiton_Parser_go_spec.md`.
 
-> **Cross-document synchronization rule**: `Seiton_Linter_spec.md` is the source of truth. When this Go spec is updated, also review and update `Seiton_Linter_spec.md`, `Seiton_Linter_csharp_spec.md`, and `linter_implementation_go_plan.md` in the same PR/commit scope.
+> **Cross-document synchronization rule**: `.github/docs/Seiton_Linter_spec.md` is the source of truth. When this Go spec is updated, also review and update `.github/docs/Seiton_Linter_spec.md` and `.github/docs/Seiton_Linter_csharp_spec.md` in the same PR/commit scope.
 
 ---
 
@@ -259,49 +259,7 @@ Go runtime behavior must align with `Seiton_Linter_spec.md` §4.4 for the defaul
 | `job-secrets` | — |
 | `action-shell-is-required` | — |
 
-
-### 3.5 Phase 14 Catalog Additions
-
-The shared rule catalog additionally defines the following Phase 14 rule IDs:
-
-- `known-vulnerable-actions`
-- `impostor-commit`
-- `ref-confusion`
-- `stale-action-refs`
-- `deny-read-all`
-- `deny-inherit-secrets`
-- `job-timeout-minutes-required`
-- `github-app-token-inputs`
-
-Implementation status:
-
-- Shared-spec catalog status is fixed for these IDs.
-- Go runtime mapping for these IDs is planned and should follow the same sequencing as documented in `.github/docslinter_implementation_csharp_plan.md` Phase 14 until Go-specific implementation plan items are added.
-
-### 3.6 Planned High-Priority Candidate Rules
-
-The shared spec (§13) additionally defines the following high-priority candidate rule IDs.
-
-- `cache-poisoning`
-- `self-hosted-runner`
-- `unredacted-secrets`
-- `secrets-outside-env`
-- `matrix`
-- `env-var`
-- `deprecated-commands`
-- `if-cond`
-- `archived-uses`
-- `insecure-commands`
-- `overprovisioned-secrets`
-- `forbidden-uses`
-- `ref-version-mismatch`
-- `use-trusted-publishing`
-
-Status contract:
-
-- These IDs are specification-defined high-priority parity candidates and are not part of the current Go default rule catalog mapping.
-- `archived-uses` / `insecure-commands` / `overprovisioned-secrets` / `forbidden-uses` / `ref-version-mismatch` / `use-trusted-publishing` are tracked as zizmor parity candidates.
-- Go runtime implementation planning for these IDs should be tracked explicitly when Go-side rule implementation work starts.
+> **Note:** The normative rule catalog is defined in `.github/docs/Seiton_Linter_spec.md` §4.4. Rules not yet mapped in Go are tracked in Go-specific implementation work items.
 
 ---
 
@@ -599,5 +557,5 @@ type RemediationResult struct {
 
 When this document is revised, also review and update:
 
-- `.github/docsSeiton_Linter_spec.md`
-- `.github/docsSeiton_spec.md` when parser/linter boundary wording changes
+- `.github/docs/Seiton_Linter_spec.md`
+- `.github/docs/Seiton_spec.md` when parser/linter boundary wording changes

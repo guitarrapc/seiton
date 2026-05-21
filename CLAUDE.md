@@ -179,7 +179,7 @@ Ask which documentation files you need if you're unsure what to read.
 
 ## Specification Document Policy
 
-Spec files live under `.github/docs`. When reading or writing them, follow these rules:
+Spec files live under `.github/docs`. When reading or writing them, follow these rules (see `.github/docs/docs_authoring_guidelines.md` for the full authoring reference):
 
 **What belongs in a spec:**
 - **WHAT** — what the feature or behavior is

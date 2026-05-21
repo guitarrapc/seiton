@@ -43,10 +43,10 @@ High-level behavior:
 7. Sort, deduplicate, and filter diagnostics.
 8. Return final `LintResult`.
 
-Current profile note (C# runtime):
+Document-kind routing:
 
-- If finalized kind is `action-metadata`, the linter traverses the action-metadata AST (`VisitActionMetadataPre` → `runs.steps` via `VisitStep` → `VisitActionMetadataPost`). Rules opt in via `SupportsDocumentKind`; workflow-only rules are skipped for this input kind.
-- Workflow inputs use the workflow traversal sequence in §4.2; action-metadata inputs do not receive `VisitWorkflowPre`/`VisitEvent`/`VisitJobPre`/`VisitJobPost` (no synthetic empty `Workflow` is injected).
+- If finalized kind is `action-metadata`, the linter traverses the action-metadata AST (`VisitActionMetadataPre` → `runs.steps` via `VisitStep` → `VisitActionMetadataPost`). Rules opt in via document-kind declaration; workflow-only rules are skipped for this input kind.
+- Workflow inputs use the workflow traversal sequence in §4.2; action-metadata inputs do not receive `VisitWorkflowPre`/`VisitEvent`/`VisitJobPre`/`VisitJobPost`.
 
 ### 2.1. Multi-File Execution Model
 
@@ -128,14 +128,14 @@ Rules collect diagnostics internally during traversal and return them after trav
 
 ### 4.4 Normative Rule Catalog
 
-The default C# local-AST linter profile must include the following rule IDs.
+All conforming implementations must include the following rule IDs in their default profile.
 
 Column definitions:
 
 - **Default**: `✓` = active with no config (local-AST); `✗` = opt-in only, requires `rules.<id>.enabled: true`.
 - **Network**: `—` = local-AST rule, no network access required; `online` = requires network access, activated by `rules.<id>.enabled: true`.
 
-> **Detail policy:** This table provides implementer-level summaries only. For complete user-facing behavior documentation (path lists, version bucketing, exclusion semantics, examples, remediation), see [`docs/rules.md`](../../docs/rules.md).
+> **Detail policy:** This table provides implementer-level behavior summaries only. For complete user-facing documentation (examples, remediation, edge cases), see [`docs/rules.md`](../../docs/rules.md).
 
 | Rule ID | Default | Network | Required Behavior Summary |
 |---|---|---|---|
@@ -196,8 +196,8 @@ Column definitions:
 | `forbidden-uses` | ✓ | — | Warn/Error when `uses:` references violate configured allow/deny patterns. |
 | `ref-version-mismatch` | ✓ | — | Warn when symbolic ref/version intent mismatches resolved commit lineage. |
 | `use-trusted-publishing` | ✓ | — | Warn when publishing flows do not use trusted publishing/OIDC-based provenance. |
-| `if-expr-wrapper` | ✓ | ✓ (safe cases) | Warn when `if:` is missing `${{ }}` wrapper; auto-fix for single-line scalars. |
-| `unsound-condition` | ✓ | ✓ (safe cases) | Warn when `if:` block scalars with fenced expressions have truthy-making newline chomping; auto-fix to `|-`/`>-`. |
+| `if-expr-wrapper` | ✓ | — | Warn when `if:` is missing `${{ }}` wrapper; auto-fix for single-line scalars. |
+| `unsound-condition` | ✓ | — | Warn when `if:` block scalars with fenced expressions have truthy-making newline chomping; auto-fix to `|-`/`>-`. |
 | `unpinned-tools` | ✓ | — | Warn when known tool-setup actions use an unpinned tool version. Data-driven via `unpinned_tools.json`. |
 | `concurrency-limits` | ✗ | — | Warn when workflows/jobs lack `concurrency` with `cancel-in-progress`. Skips reusable-only workflows. |
 
@@ -208,13 +208,7 @@ Rule set compatibility policy:
 - Removing or renaming a published rule ID is a breaking change and requires explicit migration guidance.
 - `online` rules may be emitted by an opt-in post-lint audit entrypoint instead of the default local AST pass, but they still participate in shared rule-id, priority, suppression, and fixability catalogs.
 
-### 4.5 Rule Guidance (Operational)
-
-This section provides operator-facing guidance for each default rule.
-
-- Scope: practical interpretation of rule intent, expected trigger patterns, remediation direction, and post-fix caution.
-- Relationship to §4.4: §4.4 remains the normative source of rule IDs and required behavior. This section is explanatory and operational.
-- Auto-fix status here follows §8.4 (including partial-fix boundaries).
+### 4.5 Cross-Runtime Design Decisions
 
 #### 4.5.1 Diagnostic Position Policy — `needs-graph` Cycle Detection
 
@@ -227,75 +221,6 @@ This is an intentional divergence from actionlint, which reports at the job key 
 3. **No natural "start"**: A dependency cycle has no inherent starting point. Reporting at the back-edge `needs` value is a deterministic choice tied to DFS traversal order, and it points to a directly editable location.
 
 This policy applies only to cycle diagnostics. Other `needs-graph` diagnostics (unknown targets, duplicates) already report at the `needs` value position.
-
-### 4.6 Known Partial Parity (actionlint)
-
-Seiton’s default rules still do not replicate every actionlint diagnostic, but several former gaps are now covered.
-
-- `events`: in addition to dangerous-trigger detection and glob validation, Seiton validates `on.workflow_dispatch.inputs` schema (`dispatch-inputs`) and `schedule` cron/minimum-interval/timezone constraints (`schedule-event`). Remaining gaps include exhaustive per-webhook activity-type validation, some filter-cross constraints (`branches`/`tags`/`paths` combinations), payload-shape-driven semantics, and workflow_dispatch **call-site** payload validation.
-- `action`: in addition to popular-action input checks and pinning hygiene, Seiton resolves **local** actions statically and validates input contracts, `runs.using` runner policy, metadata completeness (`description` required, `env` forbidden in JavaScript actions, JS entry-point file existence, branding icon/color forwarding) via `local-action-inputs`. For remote popular actions, `outdated-action-runner` uses the generated catalog's `runs.using` metadata to flag deprecated runtimes. The parser also validates action metadata required keys (`description`, `runs`) and parses branding, inputs, and outputs sections. Remaining gaps include full remote-action metadata depth and complete Docker action / uses-format edge-case breadth.
-- `expression`: the expression parser rejects double-quoted string literals (`"..."`) with a targeted diagnostic, since GitHub Actions expressions only support single-quoted strings. Recovery skips to the closing `"` to continue parsing.
-- `workflow-call`: reusable-call job shape, `secrets: inherit` denial, **local** `on.workflow_call` contract checking (`reusable-workflow`), and `on.workflow_call.inputs` default validation (`workflow-call-input-default`) are covered. Remote called-workflow contracts may still be incomplete without checking out the callee repository.
-
-Residual gaps continue to be tracked as parity-hardening work items in the implementation plan.
-
-| Rule ID | Rule Overview | Effective Pattern Examples | Why This Rule Is Needed | Preferred Remediation | Auto-Fix | Residual Risk and Recommended Response |
-|---|---|---|---|---|---|---|
-| `job-structure` | Enforces valid job shape (`uses` vs executable job keys). | Job contains both `uses` and `steps`; executable job missing `runs-on` or `steps`. | Prevents invalid workflow topology and ambiguous execution intent. | Split reusable-call jobs from executable jobs; ensure each executable job has `runs-on` and `steps`. | ✗ | Even after structural repair, re-check permissions and dependency flow (`needs`) for least privilege. |
-| `reusable-workflow` | Validates reusable workflow call semantics and forbidden key combinations. | `with`/`secrets` without `uses`; reusable-call job with `steps`, `container`, `runs-on`, etc. | Avoids invalid call contracts and execution-context confusion. | Add `uses` when passing `with`/`secrets`; remove incompatible execution keys from call jobs. | ✗ | After edits, verify called workflow input/secret contracts and permission inheritance behavior. |
-| `local-action-inputs` | Validates local action metadata contracts when `uses:` points into the repo (`./` / `../`). | Unknown `with:` key; missing required input; deprecated input; `runs.using: node16`; invalid `runs.using` value; missing `description`; `env` in JS action `runs`; missing JS entry-point file (`main`/`pre`/`post`); invalid branding icon/color. | Matches actionlint-style local action checks: inputs, runner policy, metadata completeness, and structural rules on statically resolvable actions. | Align `with:` with `action.yml` inputs; upgrade deprecated runners; fix `runs.using` to `composite`, `docker`, `node20`, or `node24`; add `description`; remove `env` from JS actions; ensure entry-point files exist. | ✗ | Only local paths resolved from the workflow file are checked; remote actions rely on other rules (for example pinning, popular inputs). |
-| `permissions` | Validates permission scalar/scope value domain. Warns on valid scalar values (`read-all`, `write-all`) recommending explicit per-scope mapping; workflow-level warning additionally suggests moving to job-level permissions. | Invalid scalar (`admin-all`), invalid scope value (`contents: admin`), overly broad scalar (`read-all`). | Prevents malformed permission config and silent policy drift. | Move to job-level `permissions:` with explicit per-scope mapping (`contents: read`, etc.) instead of scalar `read-all`/`write-all`. | △ Partial | Valid syntax does not guarantee safe scope. Review actual minimum scopes required by each job. |
-| `popular-action-inputs` | Detects unknown input names for maintained popular actions; suggests closest valid input via Levenshtein distance when within threshold. | Typo input for `actions/checkout` (`fetch-depht` → suggests `fetch-depth`); `node_version` for `actions/setup-node` → suggests `node-version`. | Prevents no-op/ignored inputs and false security assumptions. | Correct input names to action-defined keys; pin action version and re-check release notes if key changed. | △ Partial | Correct spelling alone may not preserve behavior across action major versions; confirm action docs. |
-| `outdated-action-runner` | Flags popular actions whose `runs.using` runtime is deprecated. | `actions/checkout@v2` when catalog entry indicates `node12`. | Deprecated runtimes are removed from GitHub runners, causing action failures. | Update to the latest major version of the action that uses a supported runtime. | ✗ | The deprecated set is maintained manually; new GitHub deprecation announcements require adding the runtime to the list. |
-| `unpinned-uses` | Warns when action/reusable references are not full SHA pinned. | `uses: owner/repo@v4`, `@main`. | Reduces supply-chain risk from mutable refs. | Pin to 40-char commit SHA; retain tag in comment for readability. | ✗ (default), ✓ (network-assisted remediation phase) | SHA pinning still trusts upstream commit. Add provenance controls and update cadence policy. |
-| `unpinned-image` | Warns when container image refs are not digest pinned. | `docker://repo/image:tag`, `container.image: repo/image:latest`. | Prevents mutable-tag drift and image substitution risk. | Pin images with `@sha256:<digest>` for deterministic pulls. | ✗ (default), ✓ (network-assisted remediation phase) | Digest pinning does not validate image trust posture. Add signature/attestation verification policy. |
-| `dangerous-triggers` | Flags high-risk trigger events. | `pull_request_target`, `workflow_run` from untrusted context. | These events often execute with elevated trust boundaries. | Restrict trigger scope, add strict condition guards, or replace with safer events. | ✗ | Trigger hardening is insufficient without command/data sanitization in downstream steps. |
-| `job-permissions-required` | Requires explicit job-level permissions declaration. | Job omits `permissions:`. | Prevents unintended default token scope inheritance. | Add explicit `permissions` mapping per job with least privilege. When auto-fix is enabled, the fix infers minimum required scopes from known popular actions used in the job's steps. | ✓ | Explicit map can still be over-privileged. Review each scope against actual API calls. |
-| `needs-graph` | Validates dependency graph integrity. Cycle diagnostics point to the `needs` value that closes the cycle and include the full cycle path in the message. | Unknown `needs` target, self-cycle, multi-job cycle. | Prevents deadlock/invalid scheduling and unclear execution order. | Fix job IDs, remove cycles, and redesign dependency boundaries. | ✗ | Graph correctness does not ensure artifact safety. Review cross-job data exposure channels. |
-| `shell-name` | Validates shell identifiers in defaults and run steps. | Unsupported shell string (`fish` where unsupported). | Prevents runtime mismatch and script portability issues. | Use supported shell names or adjust script to runtime-supported shell. | ✗ | Supported shell still may differ by runner image. Validate commands on target runner matrix. |
-| `runner-label` | Warns on unknown hosted runner labels; errors on conflicting OS families (static and matrix-expanded). | `runs-on: ubuntu-9999`, mistyped hosted label, `[ubuntu-latest, windows-latest]` OS conflict, or matrix axis values conflicting with static labels. | Prevents queue/runtime failures from invalid labels and catches cross-OS label conflicts. | Use known hosted labels or explicit self-hosted labels intentionally. | ✗ | Known label can still be policy-incompatible (cost/compliance). Align with org runner policy. |
-| `runner-no-latest` | Discourages moving `*-latest` labels. | `ubuntu-latest`, `windows-latest`, `macos-latest`. | Reduces breakage from implicit platform upgrades. | Use explicit versioned labels (for example `ubuntu-24.04`). | ✗ | Version pinning still requires lifecycle updates. Track runner deprecation announcements. |
-| `id-naming` | Enforces safe identifier charset for job/step IDs. | IDs with spaces or symbols outside `[a-zA-Z0-9_-]`. | Avoids reference ambiguity and downstream expression fragility. | Rename IDs to stable slug-style values. | △ Partial | ID rename can break references (`needs`, `steps.<id>`). Update all dependent expressions. |
-| `glob-pattern` | Validates trigger filter glob syntax. | `***`, unmatched `[`/`]` in branch/path filters. | Prevents unintentionally broad/narrow trigger scope. | Correct glob syntax and validate trigger behavior against expected refs/paths. | ✗ | Syntax-correct patterns can still be overly broad. Add tests for expected trigger matrix. |
-| `dispatch-inputs` | Validates `on.workflow_dispatch.inputs` definitions (types, required, defaults, choice options, and input count limits). | More than 25 inputs; `choice` without options; invalid default for boolean/number/choice. | Prevents broken manual workflow runs from malformed dispatch input schema. | Fix `on.workflow_dispatch.inputs` definitions per GitHub’s workflow_dispatch input rules. | ✗ | Call-site `workflow_dispatch` payloads and `repository_dispatch` are out of scope for this rule; expression defaults may still need runtime checks. |
-| `schedule-event` | Validates scheduled workflow cron and timezone hints. | Fewer than five cron fields; invalid ranges; interval under five minutes; dubious timezone string (validated against IANA Time Zone Database identifiers). | Prevents schedules that GitHub rejects or that run too frequently. | Fix cron expression, interval, and timezone per GitHub schedule rules. | ✗ | Cron semantics and DST behavior depend on GitHub’s scheduler; re-verify after edits. |
-| `workflow-call-input-default` | Validates `on.workflow_call.inputs` default values against declared types. | Required input with a default; boolean input defaulting to `"yes"`; number input defaulting to `"abc"`. | Prevents invalid reusable workflow input contracts that cause runtime confusion or silent type mismatch. | Remove default from required inputs; use `true`/`false` for boolean defaults; use numeric literals for number defaults. | ✗ | Expression defaults are skipped from type validation; runtime coercion may still differ from declared type intent. |
-| `deny-write-all` | Rule forbidding `write-all` permissions. | Workflow/job uses `permissions: write-all`. | Enforces hard least-privilege baseline and prevents blanket write grants. | Replace with `read-all` or explicit minimal scopes. | ✓ | Reduced scopes can break required write operations; add explicit targeted scopes where needed. |
-| `credentials` | Warns when private/custom registry images lack credentials config. | `container.image` or `services.*.image` points to private host without `credentials`. | Prevents pull failures and accidental fallback assumptions. | Add proper `credentials` or move to approved public registry. | ✗ | Credential presence is not credential safety. Ensure secret storage, rotation, and least scope. |
-| `template-injection` | Detects unsafe direct interpolation of untrusted event data. | `run` script text directly embeds `github.event.*` user-controlled fields. | Mitigates command/script injection and unsafe template expansion. | Use safe indirection (`env` mapping, strict quoting, validation/sanitization). | △ Partial | Partial auto-fix applies only to `run:` sinks with deterministic paths (no wildcards); `actions/github-script` `script` inputs are not auto-fixed. Fix generates a mechanical env var name (e.g., `GITHUB_EVENT_HEAD_COMMIT_MESSAGE`) and inserts an `env:` mapping. If an existing unique env mapping for the same expression is found, it reuses that variable name. Names are deduplicated with `_2` suffix. **Fix boundary conditions (fix skipped when any apply):** (1) sink is not `run:` (e.g., `actions/github-script`); (2) path contains wildcard (`*`); (3) expression is part of a compound expression (not the whole `${{ }}`); (4) expression is inside a no-expand heredoc body (`<<'EOF'` / `<<"EOF"`); (5) expression is inside shell single quotes (`'...'`) where `${VAR}` would not expand; (6) step env is flow-style (`env: { ... }`); (7) step env exists but is empty (`env: {}`); (8) only one fix per step (multi-pass CLI handles remaining); (9) env var name deduplication exhausted (3 attempts). Sanitization defects may remain; add allowlist validation and escape-by-context patterns. |
-| `expr-undefined-var` | Detects context roots unavailable in current expression scope. | Job-level expression uses `steps.*`; invalid root for that location. | Prevents silent logic errors and brittle condition behavior. | Replace with scope-valid contexts or restructure where data is produced/consumed. | ✗ | Scope-valid expression can still be semantically wrong. Add tests for condition truth tables. |
-| `run-env-context-direct-use` | Disallows `${{ env.* }}` direct expansion inside `run`. | `run: echo "${{ env.VERSION }}"`. | Avoids timing/context confusion and unsafe interpolation style. | Map to shell variables and reference as shell-native syntax. | △ Partial | Auto-fix intentionally skips quoted heredoc bodies (`<<'EOF'`, `<<"EOF"`) where shell variable expansion is disabled; applying `${VAR}` there would silently break output semantics. Variable source may still be untrusted, so apply quoting and input validation in shell commands. |
-| `run-secrets-context-direct-use` | Disallows direct `${{ secrets.* }}` usage inside `run`. | `run: curl -H "Auth: ${{ secrets.TOKEN }}" ...`. | Reduces accidental secret exposure in command rendering/logging paths. | Map secrets into `env` and use shell variables with careful redaction handling. | △ Partial | Partial auto-fix applies only when a unique existing `env` mapping points to the same secret key. Secret can still leak via command args, process lists, or logs; prefer stdin/files where possible. |
- | `run-inputs-context-direct-use` | Disallows direct `${{ inputs.* }}` in `run`. | `run: do-something "${{ inputs.target }}"`. | Inputs may be user-controlled and unsafe in shell context. | Map via `env`, validate/normalize input, then consume as shell variable. | △ Partial | Auto-fix reuses an existing unique `env` mapping when one already points to the same input key. Otherwise, for simple `run:` expressions it can insert a new step-local `env:` entry and rewrite the script to a shell variable. Fix skips ambiguous mappings, compound expressions, no-expand heredocs, and shell single-quoted strings; the insertion fix path also skips flow-style `env` and empty `env: {}`. Validation gaps can still permit injection; use strict allowlists and safe argument passing. |
-| `secrets-whole-context-access` | Detects whole-object access to secrets context. | `${{ toJson(secrets) }}`, `${{ format('{0}', secrets) }}`. | Prevents bulk secret exfiltration through single expression sink. | Replace with explicit key-level access to only required secrets. | ✗ | Key-level access can still leak if routed to unsafe sinks. Review sinks and masking behavior. |
-| `checkout-persist-credentials` | Requires explicit `with.persist-credentials: false` for checkout hardening. | Missing key, `persist-credentials: true`, or non-deterministic expression value. | Prevents leaving checkout-managed credentials available during later workflow steps. Legacy checkout versions persist them in `.git/config`; v6+ stores them under `$RUNNER_TEMP`. | Set `with.persist-credentials: false`; configure explicit auth only where later git operations need it. | △ Partial | After fix, downstream authenticated git operations may fail. For `git push`, configure explicit auth (for example set remote URL with token or use dedicated credential helper step), then validate push path safely. |
-| `artipacked` | Detects dangerous artifact uploads after unsafe checkout in the same job. | `actions/checkout` without `persist-credentials: false` followed by `actions/upload-artifact` with a dangerous path such as `.`, `..`, `*`, `./*`, `./**`, `./**/*`, `**`, `**/*`, `${{ github.workspace }}`, `${{ github.workspace }}/**`, `${{ github.workspace }}/**/*`, or `${{ github.workspace }}/..` (including equivalent bracket-form expressions such as `${{ github['workspace'] }}` and normalized equivalents such as `repo/..` or `${{ github.workspace }}/repo/..`). Workspace-expression suffixes must be empty or start with `/` or `\`, so `${{ github.workspace }}..` is not classified as dangerous. Legacy `.git/config` exposure depends on hidden-file behavior; explicit exclusions such as `!.git/**`, `!.git/config`, `!repo/.git/**`, or `!**/.git/**` can suppress the legacy case when they exclude every reachable `.git/config` location within the current normalized-path depth bound, but bare `!.git` never suppresses. | Core intent: prevent root-like or parent-directory artifact uploads from sweeping checkout-managed credentials or adjacent sensitive state into artifacts. Current supported scope: same-job `actions/checkout` plus later `actions/upload-artifact`, with explicit modeling of dangerous path families, hidden-file defaults, exclusion globs, and the legacy `.git/config` versus v6+ `$RUNNER_TEMP` split. | Set `with.persist-credentials: false` on checkout and restrict artifact uploads to explicit safe directories/files; for `actions/upload-artifact@v4+`, leave hidden files disabled unless they are truly required. | ✗ | With `actions/upload-artifact@v4`, hidden files are excluded by default, so legacy `.git/config` leakage generally requires hidden-file upload or non-default/unknown hidden-file behavior. For unparseable upload-artifact refs (branch names, SHAs, arbitrary tags), hidden-file behavior is always conservatively assumed even when `include-hidden-files: false` is present — the ref may resolve to older code that ignores that input. For parseable newer major versions (e.g. v5+), explicit `include-hidden-files: false` is respected. Parent-directory uploads remain risky for `actions/checkout@v6+` only when the upload path can actually reach `$RUNNER_TEMP` (e.g. `../..`, `../../_temp`); a single `..` does not reach runner temp on standard GitHub-hosted runner layouts. Deferred scope: `actions/checkout` `with.path` subdirectory correlation is not implemented, so later uploads of that checkout subdirectory are not diagnosed unless the upload path is otherwise root-like, parent-like, or workspace-like; however, workspace-root exclusions no longer suppress nested checkout paths and nested suppression is bounded by the current normalized-path depth limit. |
-| `known-vulnerable-actions` | Detects action versions with known vulnerabilities. | `uses: owner/repo@vX` where `vX` is listed in advisory dataset. | Prevents introducing known-compromised versions into CI/CD path. | Upgrade/pin to non-vulnerable commit or fixed release line. | ✗ | Advisory feeds can lag; combine with pinning and provenance verification. |
-| `impostor-commit` | Detects SHA pins that are not valid commits for the referenced repository lineage. | `uses: owner/repo@<sha>` where `<sha>` is not reachable as expected. | Mitigates ghost/impostor commit supply-chain abuse. | Replace with verified commit from trusted tag/release mapping. | ✗ | Network/offline data freshness affects certainty; treat as high-severity policy signal. |
-| `ref-confusion` | Detects ambiguous branch/tag symbolic references in `uses:`. | Same symbolic name exists in both refs/tags and refs/heads. | Prevents ref namespace confusion and unexpected resolution targets. | Use explicit full SHA pin, or enforce ref-namespace disambiguation policy. | ✗ | Ambiguity may be intentional in rare repos; allow explicit suppression with justification. |
-| `stale-action-refs` | Detects stale SHA pins against maintained release/tag mapping. | Pinned SHA no longer corresponds to expected maintained tag line. | Keeps pinned dependencies current while preserving deterministic refs. | Move pin to current approved SHA for intended release family. | ✗ | Aggressive update cadence can cause churn; use policy thresholds/min-age controls. |
-| `deny-read-all` | Forbids `read-all` permissions baseline. | Workflow/job uses `permissions: read-all`. | Enforces strict least privilege and explicit scope declaration. | Replace with explicit scope map (`contents: read` etc.). | ✓ | Over-tightening may break workflows; validate required read scopes explicitly. |
-| `deny-inherit-secrets` | Forbids `secrets: inherit` in reusable workflow calls. | Reusable call job declares `secrets: inherit`. | Prevents broad secret propagation across workflow boundaries. | Map only required secrets explicitly under `secrets:`. | ✗ | Explicit mapping can still overshare; periodically review call-site contracts. |
-| `job-timeout-minutes-required` | Requires timeout on executable jobs. | Job missing `timeout-minutes` and no equivalent policy exception. | Prevents runaway jobs and unexpected runner cost/exhaustion. | Add `timeout-minutes` per job or enforce approved per-step timeout policy. | △ Partial | Partial auto-fix applies only when `LintConfig.DefaultJobTimeoutMinutesForFix` is configured. Timeout values may still be mis-sized; monitor failures and tune thresholds. |
-| `github-app-token-inputs` | Requires scoped inputs for `actions/create-github-app-token`. | `actions/create-github-app-token` without permission limits, or with `owner` but without `repositories`. | Reduces over-broad app token issuance. | Add permission-limiting inputs (`permissions`, `permission-*`), and add `repositories` when `owner` broadens the installation scope. | ✗ | Action interface changes may require metadata updates in rule dataset. |
-| `workflow-secrets` | Restricts workflow-wide env-level secret/token assignment when workflow scope is broad. | Workflow-level `env` includes `${{ secrets.* }}` or `${{ github.token }}` while workflow has multiple jobs. | Prevents secret propagation beyond required execution scope. | Move secret mapping from workflow-level env to job/step minimal scope. | ✗ | Scope reduction can break implicit dependencies; audit each job's required secret contract. |
-| `job-secrets` | Restricts job-wide env-level secret/token assignment when job scope is broad. | Job-level `env` includes `${{ secrets.* }}` or `${{ github.token }}` while job has multiple steps. | Prevents unnecessary intra-job secret propagation. | Move secret mapping from job-level env to step-level minimal scope. | ✗ | Step-level mapping still requires sink review; combine with run/direct-use protections. |
-| `action-shell-is-required` | Requires explicit shell declaration on composite action run steps. | In action metadata, `runs.steps[].run` exists but `shell:` is missing or empty. | Improves execution determinism and shell-behavior clarity. | Declare `shell` explicitly and align script syntax with the selected shell. | ✗ | Explicit shell does not guarantee portability; validate behavior across runner environments. |
-| `cache-poisoning` | Flags cache action usage under untrusted trigger paths. | `actions/cache*` used in workflows triggered by `pull_request`, `pull_request_target`, or `workflow_run`. | Prevents trust-boundary cache contamination that can affect later privileged runs. | Split trusted/untrusted jobs, namespace cache keys by trust boundary, and avoid broad restore-key fallback. | ✗ | Cache hardening must be validated with end-to-end artifact flow tests across jobs and branches. |
-| `self-hosted-runner` | Flags self-hosted execution under untrusted trigger paths. | Job uses `runs-on: self-hosted` while workflow accepts untrusted triggers. | Self-hosted hosts can expose long-lived credentials, filesystem state, and network reachability to attacker-controlled inputs. | Add strict job guards, isolate runner groups, and route untrusted paths to hosted ephemeral runners. | ✗ | Trigger guards alone are insufficient without host lifecycle hardening and credential isolation controls. |
-| `unredacted-secrets` | Detects likely secret emission in logs from secret-derived env vars. | Secret-derived env var is printed by `echo` / `printf` / `Write-Host` / `Write-Output`. | GitHub masking is not guaranteed for transformed or partially derived secret output patterns. | Avoid printing secret material; pass secrets via scoped environment/STDIN and use explicit masking controls where unavoidable. | ✗ | Even masked logs can leak via truncation, transformations, or side channels; review downstream log sinks. |
-| `secrets-outside-env` | Restricts `secrets.*` references to controlled env handoff boundaries. | `secrets.*` appears in `if`, `uses`, or reusable call inputs. | Direct secret injection into control-flow and call-contract sinks expands leak surfaces and complicates auditability. | Move secret access into explicit env mapping at minimal scope where practical, and avoid routing secrets through control-flow or dependency-selection expressions. | ✗ | Env handoff still requires sink review (arguments, process list, artifacts); apply least-exposure patterns. |
-| `matrix` | Validates matrix definitions to prevent invalid include/exclude combinations and accidental fan-out mistakes. | `strategy.matrix` with inconsistent keys, invalid include/exclude payloads, or suspicious expansion shape. | Prevents execution drift and unintended matrix explosion/failure. | Normalize matrix axes and include/exclude rules; test expected expansion set. | ✗ | Matrix semantics can still drift by event/input values; keep fixture-based expansion tests. |
-| `env-var` | Validates environment variable declarations and references for safer portability. | Ambiguous env naming or risky scope usage across workflow/job/step contexts. | Reduces cross-shell ambiguity and accidental variable shadowing mistakes. | Use stable uppercase snake-case names and scope env values minimally. | ✗ | Naming cleanup alone does not secure value handling; combine with quoting and secret rules. |
-| `deprecated-commands` | Detects deprecated workflow command syntax in scripts. | `::set-output`, `::save-state`, `::add-path`, `::set-env` appears in `run` scripts. | Deprecated commands are blocked/unsafe on modern runners. | Replace with `GITHUB_OUTPUT`, `GITHUB_STATE`, `GITHUB_PATH`, `GITHUB_ENV` mechanisms. | ✗ | Migration can break downstream expectations; validate output/state/path behavior. |
-| `if-cond` | Detects malformed or unsound conditional expressions. | Always-true/always-false style `if` expressions or context misuse in `if:` fields. | Prevents dead branches and hidden logic drift. | Rewrite condition with explicit boolean intent and scope-valid contexts. | ✗ | Condition behavior may still vary by event payload shape; add table-driven tests. |
-| `fake-ternary` | Detects `cond && a || b` fake ternary idioms in expressions. | Expression-bearing fields rely on short-circuit ternary emulation. | Prevents coercion pitfalls and unreadable branching logic. | Use explicit branch structure (`if` split, case-style logic) instead. | ✗ | Refactoring can alter edge behavior if truthiness assumptions were implicit. |
-| `archived-uses` | Detects `uses:` references to archived repositories. | Action/workflow dependency points to archived upstream repository. | Archived repositories are higher maintenance/supply-chain risk. | Replace with maintained dependency or governed fork with explicit policy. | ✗ | Fork migration can introduce divergence risk; enforce ownership/update controls. |
-| `insecure-commands` | Detects unsafe command construction from untrusted inputs. | `run` command builds shell fragments via untrusted interpolation. | Mitigates shell injection and command confusion risks. | Move to argument-safe invocation, strict quoting, and allowlist validation. | ✗ | Hardening is shell-specific; validate with multi-shell hostile-input tests. |
-| `overprovisioned-secrets` | Detects broader-than-needed secret exposure scope. | Secrets mapped at workflow/job scope though only small step scope is required. | Enforces least-privilege secret handoff boundaries. | Restrict secret mapping to minimum required execution unit. | ✗ | Scope can regress over time; run periodic secret-usage review checks. |
-| `forbidden-uses` | Enforces policy deny/allow rules for `uses:` references. | `uses:` target matches deny patterns or fails allow policy constraints. | Enforces organization dependency governance and review posture. | Replace with approved references and pin to reviewed commits. | ✗ | Policy churn can cause friction; maintain audited exception process. |
-| `ref-version-mismatch` | Detects mismatch between version intent and pinned lineage. | Version/tag annotation or comment does not match resolved SHA lineage expectation. | Prevents misleading provenance narratives for pinned dependencies. | Align version intent and resolved commit, or update annotation to match reality. | ✗ | Upstream tag/release metadata may still be manipulated; combine with provenance verification. |
-| `use-trusted-publishing` | Detects publishing paths that bypass trusted publishing controls. | Release/publish job relies on long-lived secrets without trusted OIDC/provenance flow. | Strengthens release trust posture and secret minimization. | Adopt trusted publishing flow and remove long-lived publish secrets where possible. | ✗ | Registry ecosystem support differs; keep explicit exceptions with audit trail. |
 
 ---
 
@@ -321,7 +246,7 @@ Default behavior and simplicity requirements:
 - Unknown top-level keys/unknown rule IDs are configuration errors.
 - Empty config file is valid and equivalent to default behavior.
 
-Default values (current C# runtime):
+Default values:
 
 | Setting | Default |
 |---|---|
@@ -734,54 +659,16 @@ output:
   sort-order: location    # location (default) | rule
 ```
 
-Interpretation notes:
-
-- `rules.<rule-id>.enabled` controls rule enable/disable (§5.7).
-- `rules.<rule-id>.severity` overrides diagnostic severity for all diagnostics from that rule (§5.7).
-- Rule-specific keys (e.g. `events.extend`, `public-registries.extend`, `assume-events`) are defined per rule in §5.8.
-- Online rules (`known-vulnerable-actions`, `impostor-commit`, `ref-confusion`, `stale-action-refs`) are default `enabled: false`; setting `enabled: true` activates them and the system automatically requires network access.
-- `fix.defaults.job-timeout-minutes` sets the default `timeout-minutes` value used by `job-timeout-minutes-required` partial auto-fix; null/missing or `<= 0` disables fix attachment.
-- `fix.pinning` configures network-assisted SHA pin remediation for `unpinned-uses`.
-- `fix.images` configures network-assisted digest pin remediation for `unpinned-image`.
-- `network` configures shared network behavior (error handling, timeouts, concurrency, GitHub API settings).
-- `output.sort-order` controls diagnostic output ordering: `location` (default) sorts by source position for file-reading order; `rule` sorts by rule priority for batch-fixing.
-- `exclusions[].file` and optional `exclusions[].jobs` define config-based suppression scope.
-- `exclusions[].rules` accepts one or more semantic rule IDs per §5.1.
-- Inline directives such as `# seiton: disable-next-line ...` are not part of the config file YAML; they are written inside workflow source files and are specified separately in §5.5.
-- Token resolution order (`SEITON_GITHUB_TOKEN` → `GITHUB_TOKEN`) is hardcoded and not configurable.
-
 ### 5.10 Recommended Config File Name and Location
 
-Because Seiton targets GitHub Actions workflow repositories, the recommended config file location is under `.github/`.
+Discovery order (when neither `--config` nor `SEITON_CONFIG` is set):
 
-Recommended file path (primary):
-
-- `.github/seiton.yaml`
-
-Accepted alternate file names:
-
-- `.github/seiton.yml`
-- `seiton.yaml`
-- `seiton.yml`
-
-Recommended discovery order (when no explicit config path is provided):
-
-1. `.github/seiton.yaml`
+1. `.github/seiton.yaml` (primary)
 2. `.github/seiton.yml`
 3. `seiton.yaml`
 4. `seiton.yml`
 
-Explicit-config precedence recommendation:
-
-- If runtime/CLI provides an explicit config path option (for example `--config <path>`), that file should be used as the only config source for that lint invocation.
-- If explicit config is not provided, runtimes may use the discovery order above.
-
-Rationale (non-normative):
-
-- actionlint uses `.github/actionlint.yaml` / `.github/actionlint.yml` as repository config locations.
-- zizmor discovers `.github/zizmor.yml` / `.github/zizmor.yaml` before root-level names.
-- ghalint accepts both root-level and `.github/` config names.
-- Prioritizing `.github/` keeps workflow-related policy close to workflow files and avoids ambiguity with other root-level YAML files.
+Explicit-config precedence: `--config <path>` > `SEITON_CONFIG` env var > discovery order. When an explicit path is provided, that file is the sole config source. Prioritizing `.github/` keeps workflow-related policy close to workflow files.
 
 ### 5.11 Configuration Profile Reference
 
@@ -793,17 +680,9 @@ This section describes four canonical usage profiles. Each profile states which 
 
 Config file is absent or empty. No configuration is required.
 
-**Active rules:** All default local-AST rules — the complete §4.4 catalog **except** the four online rules and opt-in local rules (default `enabled: false`).
+**Active rules:** All rules in §4.4 with Default = `✓`. Online rules (Default = `✗`) and opt-in local rules (`concurrency-limits`) require explicit `rules.<id>.enabled: true`.
 
-Specifically, the following are **active** without any config:
-
-`job-structure`, `reusable-workflow`, `permissions`, `popular-action-inputs`, `unpinned-uses`, `unpinned-image`, `dangerous-triggers`, `job-permissions-required`, `needs-graph`, `shell-name`, `runner-label`, `runner-no-latest`, `id-naming`, `glob-pattern`, `dispatch-inputs`, `schedule-event`, `local-action-inputs`, `workflow-call-input-default`, `outdated-action-runner`, `deny-write-all`, `credentials`, `template-injection`, `expr-undefined-var`, `run-env-context-direct-use`, `run-secrets-context-direct-use`, `run-inputs-context-direct-use`, `secrets-whole-context-access`, `checkout-persist-credentials`, `artipacked`, `deny-read-all`, `deny-inherit-secrets`, `job-timeout-minutes-required`, `github-app-token-inputs`, `workflow-secrets`, `job-secrets`, `action-shell-is-required`, `cache-poisoning`, `self-hosted-runner`, `unredacted-secrets`, `secrets-outside-env`, `matrix`, `env-var`, `deprecated-commands`, `if-cond`, `fake-ternary`, `archived-uses`, `insecure-commands`, `overprovisioned-secrets`, `forbidden-uses`, `ref-version-mismatch`, `use-trusted-publishing`, `if-expr-wrapper`, `unsound-condition`, `unpinned-tools`, `unsound-contains`, `bot-conditions`
-
-The following are **not active** (require `rules.<id>.enabled: true`):
-
-`concurrency-limits` (opt-in local rule), `known-vulnerable-actions`, `impostor-commit`, `ref-confusion`, `stale-action-refs` (online rules)
-
-**Auto-fix behavior:** Local-only fixes attach for `deny-write-all`, `deny-read-all`, `job-permissions-required`, `run-env-context-direct-use` (partial), `run-secrets-context-direct-use` (partial), `run-inputs-context-direct-use` (partial), `template-injection` (partial), `popular-action-inputs` (partial), `checkout-persist-credentials` (partial), `job-timeout-minutes-required` (partial). `unpinned-uses` / `unpinned-image` carry pin-network fixes (require `--enable-pin-network` / `--enable-image-network`).
+**Auto-fix behavior:** Local-only fixes attach per §8.4 (rules marked ✓ Fixable or △ Partial). `unpinned-uses` / `unpinned-image` pin-network fixes require explicit opt-in (see Profile 3a).
 
 ---
 
@@ -818,7 +697,7 @@ Minimal config overrides only the settings users want to change. All omitted set
 - Exclude a specific legacy workflow file from certain rules
 - Add custom runner labels or registry hosts
 
-**Example — disable a noisy rule and raise severity on a critical rule:**
+**Example:**
 
 ```yaml
 rules:
@@ -826,40 +705,20 @@ rules:
     enabled: false
   deny-write-all:
     severity: error
-```
-
-Active rules: same as Profile 1 minus `action-shell-is-required`
-
-**Example — suppress rules in a scoped legacy file:**
-
-```yaml
-exclusions:
-  - file: ".github/workflows/legacy-release.yml"
-    rules:
-      - runner-no-latest
-      - job-permissions-required
-```
-
-Active rules: same as Profile 1; `runner-no-latest` and `job-permissions-required` diagnostics are suppressed for that file.
-
-**Example — add custom runner labels and extend dangerous triggers:**
-
-```yaml
-rules:
   runner-label:
     known-hosted-labels:
       extend:
         - ubuntu-24.04-large
-  dangerous-triggers:
-    events:
-      extend:
-        - issue_comment
+exclusions:
+  - file: ".github/workflows/legacy-release.yml"
+    rules:
+      - runner-no-latest
 ```
 
-Active rules: same as Profile 1; `runner-label` now accepts `ubuntu-24.04-large` without diagnostic; `dangerous-triggers` now treats `issue_comment` as dangerous.
+Active rules: same as Profile 1 minus disabled rules; exclusion/suppression applies per §5.3–§5.5.
 
 **Constraints:**
-- All rules (including `deny-write-all` and `deny-read-all`) can be disabled or have their severity overridden via config (§5.7).
+- All rules can be disabled or have their severity overridden via config (§5.7).
 
 ---
 
@@ -869,35 +728,13 @@ Network access must be explicitly opted in. It enables two distinct network-back
 
 **3a — Pin remediation** (`fix.pinning.enable-network: true` and/or `fix.images.enable-network: true`):
 
-Adds auto-fix suggestions to `unpinned-uses` and `unpinned-image` by resolving SHAs and digests at remediation time.
-
-```yaml
-fix:
-  pinning:
-    enable-network: true
-  images:
-    enable-network: true
-```
+Adds auto-fix suggestions to `unpinned-uses` and `unpinned-image` by resolving SHAs and digests at remediation time. Configuration keys are specified in §5.12.
 
 Active rules: same as Profile 1. **Additionally**, `unpinned-uses` and `unpinned-image` now carry auto-fix data.
 
 **3b — Online rules** (`rules.<online-rule-id>.enabled: true`):
 
-Activates the four online rules that require network access to complete their analysis:
-
-```yaml
-rules:
-  known-vulnerable-actions:
-    enabled: true
-  impostor-commit:
-    enabled: true
-  ref-confusion:
-    enabled: true
-  stale-action-refs:
-    enabled: true
-```
-
-Active rules: all of Profile 1 **plus** the four rules that are inactive by default:
+Activates the four online rules that require network access:
 
 | Rule | Requires |
 |---|---|
@@ -906,27 +743,7 @@ Active rules: all of Profile 1 **plus** the four rules that are inactive by defa
 | `ref-confusion` | Branch/tag namespace query via GitHub API |
 | `stale-action-refs` | Release/tag mapping check via GitHub API |
 
-**3a + 3b combined:**
-
-```yaml
-rules:
-  known-vulnerable-actions:
-    enabled: true
-  impostor-commit:
-    enabled: true
-  ref-confusion:
-    enabled: true
-  stale-action-refs:
-    enabled: true
-
-fix:
-  pinning:
-    enable-network: true
-  images:
-    enable-network: true
-```
-
-Active rules: all §4.4 rules are active. `unpinned-uses` and `unpinned-image` carry auto-fixes.
+**3a + 3b combined:** All §4.4 rules active; `unpinned-uses` and `unpinned-image` carry auto-fixes.
 
 ---
 
@@ -934,101 +751,9 @@ Active rules: all §4.4 rules are active. `unpinned-uses` and `unpinned-image` c
 
 All sections are populated. Provides maximum control over every aspect of linting, additive customization, suppression scope, and network-assisted behavior.
 
-**Active rules:** identical to Profile 3a + 3b combined when all online rules are enabled and fix network is on. Active rule set is still determined by `rules.<id>.enabled`, exclusion patterns, and inline directives.
+**Active rules:** identical to Profile 3a + 3b combined when all online rules are enabled and fix network is on. Active rule set is determined by `rules.<id>.enabled`, exclusion patterns, and inline directives.
 
-**Full config example (non-normative):**
-
-```yaml
-rules:
-  # Per-rule severity/enable override. Omitted rules use defaults.
-  job-permissions-required:
-    enabled: false
-  deny-write-all:
-    severity: error            # already error by default; shown for clarity
-  dangerous-triggers:
-    severity: error
-    events:
-      extend:
-        - issue_comment
-  action-shell-is-required:
-    severity: warning
-
-  runner-label:
-    known-hosted-labels:
-      extend:
-        - ubuntu-24.04-large
-  credentials:
-    public-registries:
-      extend:
-        - registry.example.com
-  cache-poisoning:
-    untrusted-triggers:
-      extend:
-        - issue_comment
-  unredacted-secrets:
-    output-commands:
-      extend:
-        - tee
-  forbidden-uses:
-    deny:
-      - some-untrusted-org/*
-  expr-undefined-var:
-    assume-events:
-      - workflow_dispatch
-      - repository_dispatch
-
-  # Online rules
-  known-vulnerable-actions:
-    enabled: true
-  impostor-commit:
-    enabled: true
-  ref-confusion:
-    enabled: true
-  stale-action-refs:
-    enabled: true
-
-exclusions:
-  - file: ".github/workflows/legacy-*.yml"
-    rules:
-      - runner-no-latest
-      - job-permissions-required
-  - file: ".github/workflows/release.yml"
-    jobs:
-      - publish
-    rules:
-      - credentials
-
-fix:
-  defaults:
-    job-timeout-minutes: 15
-  pinning:
-    enable-network: true
-    min-age-days: 14
-    exclude-branches:
-      - main
-      - master
-    ignore-actions:
-      - uses: "slsa-framework/*"
-        ref: "*"
-  images:
-    enable-network: true
-    exclude-images:
-      - scratch
-    exclude-tags:
-      - latest
-
-network:
-  on-error: skip
-  timeout-seconds: 30
-  max-concurrency: 4
-  github:
-    ghes-api-url: ""
-    ghes-fallback: false
-```
-
-**Active rules under this config:**
-
-All §4.4 default rules are enabled (subject to per-rule `enabled: false`) plus all four online rules. `unpinned-uses` and `unpinned-image` carry network-assisted auto-fix data. `job-permissions-required` is disabled. `runner-no-latest` and `job-permissions-required` diagnostics are suppressed for `legacy-*.yml`. `credentials` diagnostics are suppressed for the `publish` job in `release.yml`.
+See §5.9 for a comprehensive non-normative configuration example covering all sections.
 
 ---
 
@@ -1037,11 +762,11 @@ All §4.4 default rules are enabled (subject to per-rule `enabled: false`) plus 
 | Profile | Config required | Local-AST rules active | Online rules active | `unpinned-*` carry fixes |
 |---|---|---|---|---|
 | 1 No config | None | All §4.4 local-AST (~48 rules) | ✗ | ✗ |
-| 2 Minimal | Partial (only changed keys) | Same as Profile 1 ± per-rule overrides | ✗ | ✗ |
+| 2 Minimal | Partial (only changed keys) | Same ± per-rule overrides | ✗ | ✗ |
 | 3a Pin remediation | `fix.pinning.enable-network: true` | Same as Profile 1 | ✗ | ✓ |
 | 3b Online rules | `rules.<id>.enabled: true` (4 rules) | Same as Profile 1 | ✓ (4 rules) | ✗ |
 | 3a+3b | Both enabled | Same as Profile 1 | ✓ (4 rules) | ✓ |
-| 4 Full config | All sections populated | Profiles 3a+3b ± per-rule overrides | ✓ (4 rules) | ✓ |
+| 4 Full config | All sections populated | 3a+3b ± per-rule overrides | ✓ (4 rules) | ✓ |
 
 Non-normative guidance for progressive adoption:
 
@@ -1083,7 +808,7 @@ fix:
 ```
 
 - `fix.defaults.job-timeout-minutes`: integer or null. When set, `job-timeout-minutes-required` attaches auto-fix with this value. Null/missing or `<= 0` disables fix attachment.
-- `fix.pinning.enable-network`: when `true`, `unpinned-uses` diagnostics may receive network-resolved SHA fix payloads via `PinRemediationEngine`. Default: `false`.
+- `fix.pinning.enable-network`: when `true`, `unpinned-uses` diagnostics may receive network-resolved SHA fix payloads via the pin remediation engine. Default: `false`.
 - `fix.pinning.min-age-days`: minimum age in days before a tag is eligible for SHA pinning. Default: `14`. `0` disables the constraint.
 - `fix.pinning.exclude-branches`: branch names to never pin. Default: `["main", "master"]`.
 - `fix.pinning.ignore-actions`: list of `{uses, ref}` wildcard patterns (`*` matches any sequence, `?` matches single char) to skip during SHA resolution. No regex.
@@ -1110,8 +835,8 @@ network:
   - `skip` (default): resolution failures leave the diagnostic without fix and continue processing.
   - `fail`: any resolution failure causes the operation to return an error immediately.
 - `network.timeout-seconds`: HTTP request timeout in seconds. Default: **`30`**. Accepted range after validation: **`0`–`300`**; larger values emit an error diagnostic and normalize to **`300`**.
-- `network.max-concurrency`: maximum concurrent network operations. When omitted, the effective default is **`min(4, Environment.ProcessorCount)`** (logical processors, minimum **`1`**), so the implicit default never exceeds the cap. Accepted range after validation when set: **`1`**–**`Environment.ProcessorCount`**; larger values emit an error diagnostic and normalize to that cap.
-- `network.github.ghes-api-url`: optional GitHub Enterprise Server API URL. Empty string = github.com only. When set, **must** be an absolute `https` URI; `http`, other schemes, and embedded credentials (`https://user@host/...`) are configuration errors. Stored value is normalized via `Uri.AbsoluteUri`.
+- `network.max-concurrency`: maximum concurrent network operations. When omitted, the effective default is **`min(4, logical processor count)`** (minimum **`1`**), so the implicit default never exceeds the cap. Accepted range after validation when set: **`1`**–**`logical processor count`**; larger values emit an error diagnostic and normalize to that cap.
+- `network.github.ghes-api-url`: optional GitHub Enterprise Server API URL. Empty string = github.com only. When set, **must** be an absolute `https` URI; `http`, other schemes, and embedded credentials (`https://user@host/...`) are configuration errors. Stored value is normalized to absolute URI form.
 - `network.github.ghes-fallback`: when `true` and `ghes-api-url` is set, repositories not found on GHES are retried against github.com. Default: `false`.
 
 HTTP clients that send the GitHub Bearer token use `AllowAutoRedirect = false` at the transport layer and manually follow **same-origin** `3xx` responses only; cross-origin redirects are not followed, so the token is not automatically replayed against a different scheme/host/port after a redirect response.
@@ -1122,15 +847,9 @@ Token resolution:
 - This order is not configurable. If no variable yields a token, API calls are made unauthenticated (lower rate limit).
 - Rationale: exposing token env var selection in config creates an attack surface where a malicious config redirects token resolution to unintended environment variables.
 
-Additionally, **`LintConfigLibrary` / `LintConfigYamlParser`** enforce resource caps on YAML configuration payloads: **`1 048 576`** UTF‑8 bytes total, **`64`** compound nesting depth, and **`50 000`** counted structural units (mapping keys + scalar reads + compounds). Oversized payloads fail validation with deterministic error messages (`seiton configuration … maximum size …` / `lint config YAML exceeds maximum …`). **`fix.pinning.ignore-actions`** compiles **`Regex`** with **`MatchTimeout`** = **`2`** s, and regex-timeouts during branch/ignore evaluations are handled as non-matches/non-exclusions so pinning does not wedge the process. For **`LintConfigYamlParser`** array-backed payloads (normal `Validate` / `ValidateFile` path), the implementation parses from the same **`byte[]`** as **`LintConfig.Utf8Yaml`** without allocating a redundant full-length copy — **fallback** allocates only when **`ReadOnlyMemory<byte>`** is not array-backed.
+Configuration parsing enforces resource caps on YAML payloads: **`1 048 576`** UTF-8 bytes total, **`64`** compound nesting depth, and **`50 000`** counted structural units. Oversized payloads fail validation with deterministic error messages. Wildcard pattern matching for `fix.pinning.ignore-actions` uses deterministic, bounded evaluation under these limits, so pattern evaluation cannot stall the process.
 
-**Governance and observability (configuration path):**
-
-- Prefer **committed** config paths (discovery or `--config` relative to the checkout) so changes are reviewed like application code.
-- **`SEITON_CONFIG` / `--config`** can name **any** absolute path; on shared CI runners, set them only to **trusted** locations (e.g. under the repository root you control). Do not derive the path from untrusted **fork PR** inputs.
-- **Fork pull request** workflows: avoid pointing `SEITON_CONFIG` at a file the PR branch can overwrite; use default discovery (config on the merge target) or no config (defaults).
-- **Consumer repositories** (projects that adopt Seiton, not this Seiton codebase): teams may use **CODEOWNERS** plus branch protection **in their own repo** on `seiton.yaml` paths so broad `exclusions` or disabled security rules require explicit owner review ([About code owners](https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-code-owners)).
-- CLI **`--verbose`**: after a successful config load, Seiton prints **`config: <absolute path>`** or **`config: (none, using defaults)`** on **stderr**.
+**Security note (configuration path):** `SEITON_CONFIG` / `--config` can name any absolute path. On shared CI runners, set them only to trusted locations. For fork pull request workflows, avoid pointing config at a file the PR branch can overwrite; use default discovery or defaults. CLI `--verbose` prints the resolved config path on stderr.
 
 
 ### 5.14 `output` Section Specification
@@ -1189,23 +908,14 @@ This observability data enables CI detection of suppression increases.
 
 ### 6.2 Diagnostic Sort Order
 
-The sort order for rule diagnostics is configurable via the `output.sort-order` configuration key.
+Sort order is configurable via `output.sort-order` (§5.14).
 
-| `sort-order` value | Sort key sequence | Description |
-|---|---|---|
-| `location` (default) | StartLine → StartColumn → RuleId → Message | Groups diagnostics by source position. Easier to follow when reading a file top-to-bottom. |
-| `rule` | RulePriority → Severity → StartLine → StartColumn → Message | Groups diagnostics by rule. Useful for batch-fixing all instances of one rule at a time. |
+| `sort-order` value | Sort key sequence |
+|---|---|
+| `location` (default) | StartLine → StartColumn → RuleId → Message |
+| `rule` | RulePriority → Severity → StartLine → StartColumn → Message |
 
-Default behavior (no config or `sort-order: location`):
-
-- Diagnostics are ordered by their source position (line, column).
-- When multiple diagnostics share the same position, rule ID (lexicographic) breaks the tie.
-- This matches the reading order of the source file and is the most natural output for interactive use.
-
-`sort-order: rule`:
-
-- Diagnostics are ordered by internal rule priority (lower priority numbers first), then severity, then position.
-- This groups all diagnostics from the same rule together, regardless of their source position.
+When multiple diagnostics share the same position under `location` sort, rule ID (lexicographic) breaks the tie. Under `rule` sort, lower priority numbers sort first.
 
 ---
 
@@ -1213,9 +923,10 @@ Default behavior (no config or `sort-order: location`):
 
 When this specification is revised, also review and update:
 
-- `.github/docslinter_implementation_csharp_plan.md`
-- `.github/docsSeiton_spec.md`
-- `.github/docsSeiton_Parser_spec.md` when parser/linter boundary changed
+- `.github/docs/Seiton_Linter_csharp_spec.md`
+- `.github/docs/Seiton_Linter_go_spec.md`
+- `.github/docs/Seiton_spec.md`
+- `.github/docs/Seiton_Parser_spec.md` when parser/linter boundary changed
 
 ---
 
@@ -1512,16 +1223,6 @@ Resolve(imageRef) -> (digest, error)
 
 Implementations must use `HEAD /v2/{repo}/manifests/{reference}` with appropriate `Accept` headers to obtain the digest from the `Docker-Content-Digest` response header. This is rate-limit-friendly: Docker Hub counts `GET /manifests` as a **pull** (charged against the pull-rate quota), whereas `HEAD /manifests` is an **API request** (a separate, more generous quota).
 
-Comparison with `dockerfile-pin`:
-
-| Aspect | dockerfile-pin (Go) | Seiton (C#) |
-|---|---|---|
-| HTTP method | `remote.Head()` via go-containerregistry | `HttpMethod.Head` |
-| Auth handling | `authn.DefaultKeychain` (handles bearer + Basic + credential helpers automatically) | Basic from `~/.docker/config.json`; anonymous bearer challenge via RFC 6750 flow |
-| 404 image not found | `Exists()` returns `false, nil` | `Resolve()` returns `null` |
-| Error caching | Not cached (transient errors retried) | Not cached |
-| Existence check | Separate `Exists(imageRef) -> (bool, error)` method | Not exposed (folded into `Resolve` returning `null`) |
-
 **Bearer token challenge/response flow** (required for Docker Hub official images accessed without stored credentials):
 
 1. Send `HEAD /v2/{repo}/manifests/{ref}` — no auth.
@@ -1541,42 +1242,12 @@ Security constraints on the bearer token flow:
 
 Docker Hub's pull limit (e.g. 100 pulls/6 hours for anonymous users) is charged when a client downloads at least one layer (i.e. performs a `GET /v2/{repo}/blobs/` request). A `HEAD /v2/{repo}/manifests/{ref}` request retrieves only response headers — no manifest body, no layer data — and is not counted as a pull. This is why tools like `dockerfile-pin` and Seiton use HEAD for digest resolution.
 
-**Lesson learned from `dockerfile-pin` comparison:**
-The C# implementation was already using HEAD requests before this comparison was made. The Go reference implementation confirmed this as the correct approach. The key gap identified was the absence of the anonymous bearer token challenge flow, which caused digest resolution to fail silently for Docker Hub official images (e.g. `node:20`, `python:3.12`) when no Docker credentials are configured.
+**Lesson learned:**
+Using HEAD for digest resolution is the correct approach (confirmed across reference implementations). Implementations must also support the anonymous bearer token challenge flow (RFC 6750), because Docker Hub official images (e.g. `node:20`, `python:3.12`) require it when no Docker credentials are configured.
 
 ### 12.3 Configuration
 
-Network-assisted pin remediation is disabled by default. It must be explicitly enabled via the `fix` section of the Seiton configuration file (§5.12).
-
-```yaml
-fix:
-  pinning:
-    enable-network: true           # must be true to enable Actions SHA remediation
-    min-age-days: 14               # skip pinning tags created fewer than N days ago; 0 = no constraint
-    exclude-branches:
-      - main
-      - master
-    ignore-actions:
-      - uses: "slsa-framework/*"
-        ref: "*"
-
-  images:
-    enable-network: true           # must be true to enable OCI digest remediation
-    exclude-images:
-      - scratch
-    exclude-tags:
-      - latest
-    ignore-images:
-      - "mcr.microsoft.com/**"
-
-network:
-  on-error: skip                   # skip = failures leave diagnostic without fix; fail = abort
-  timeout-seconds: 30
-  max-concurrency: 4
-  github:
-    ghes-api-url: ""               # optional; empty = github.com only
-    ghes-fallback: false           # if true, fall back to github.com when repo not found on GHES
-```
+Network-assisted pin remediation is disabled by default. It must be explicitly enabled via the `fix` section (§5.12) and uses `network` settings (§5.13).
 
 #### 12.3.1 `fix.pinning.enable-network` / `fix.images.enable-network`
 
@@ -1584,17 +1255,7 @@ When `false` (the default), no resolver is instantiated and the corresponding di
 
 #### 12.3.2 Token Resolution
 
-GitHub API token is resolved from environment variables in hardcoded order: `SEITON_GITHUB_TOKEN` → `GITHUB_TOKEN`. The first non-empty value is used. If no variable yields a token, the GitHub API is called unauthenticated (lower rate limit).
-
-This order is not configurable via the config file. Rationale: exposing token env var selection in config creates an attack surface where a malicious repository config redirects token resolution to unintended environment variables.
-
-#### 12.3.3 `network.github.ghes-api-url` and `network.github.ghes-fallback`
-
-Optional support for GitHub Enterprise Server. When `ghes-api-url` is set, the resolver first queries the GHES instance. If `ghes-fallback: true`, repositories not found on GHES are retried against github.com. Matches pinact's `ClientResolver` pattern.
-
-Schema validation rejects non-HTTPS absolute URLs (`http`, `ftp`, etc.), relative-looking strings that do not parse as an absolute HTTPS URI, and URLs with embedded `userinfo`. The accepted value is stored as `Uri.AbsoluteUri`.
-
-HTTP clients carrying the GitHub Bearer token are built without automatic redirect follow at the socket layer; the handler follows `3xx` only when `Location` resolves to the same origin (scheme + host + port) as the request URL being redirected. Cross-origin redirects are not followed, so credentials are not automatically sent to another origin in response to a redirect.
+Token resolution and network behavior (GHES, timeouts, concurrency, redirect safety) are specified in §5.13 and apply to all network-dependent features including pin remediation.
 
 #### 12.3.4 `fix.pinning.ignore-actions`
 
@@ -1630,10 +1291,6 @@ Glob patterns for images and tags to skip during digest resolution.
 
 - `scratch` is always excluded regardless of configuration (enforced by resolver, matching frizbee's `MergeUserConfig` safety invariant).
 - `latest` is excluded by default (matches frizbee's default `ExcludeTags`). Rationale: pinning `latest` is semantically vacuous — it will drift immediately.
-
-#### 12.3.9 `network.on-error`
-
-When `skip` (the default), resolution failures (network error, auth failure, timeout) leave the diagnostic without a fix rather than causing the remediation call to fail. Callers may inspect which diagnostics received fixes and which did not. When `fail`, any resolution failure causes the remediation call to return an error.
 
 ### 12.4 Resolution Caching
 
@@ -1693,63 +1350,3 @@ When remediation is run:
 - Callers can count how many `unpinned-uses`/`unpinned-image` diagnostics received fixes vs. were left without fix (skipped or failed).
 - Skip reason (excluded by config) and failure reason (network error) must be distinguishable in the returned result.
 - Resolver implementations should log resolution attempts at debug level and failures at warning level.
-
----
-
-## 13. Extended Rule Guidance
-
-This section provides additional implementation guidance for the extended rule set discovered by competitor re-audit.
-
-Status and scope:
-
-- This section covers already-implemented default rules and rollout guidance for parity in other runtimes.
-- `cache-poisoning`, `self-hosted-runner`, `unredacted-secrets`, and `secrets-outside-env` are already part of the default C# rule catalog in §4.4.
-- `matrix`, `env-var`, `deprecated-commands`, and `if-cond` are already part of the default C# rule catalog in §4.4.
-- `fake-ternary` is part of the current default C# rule catalog.
-- This section remains as implementation guidance for parity across other runtimes and future refinements.
-
-### 13.1 Extended Rule Catalog
-
-| Rule ID | Required Behavior Summary |
-|---|---|
-| `cache-poisoning` | Detect cache usage patterns that allow untrusted input to influence cache keys, restore keys, or cache read/write boundaries in ways that can poison subsequent trusted jobs. |
-| `self-hosted-runner` | Detect unsafe execution patterns on self-hosted runners (for example untrusted trigger paths without sufficient isolation/guarding controls). |
-| `unredacted-secrets` | Detect command or logging patterns where secret values may be emitted without redaction safeguards. |
-| `secrets-outside-env` | Detect secret context references in unsafe sinks outside approved environment-variable handoff patterns. |
-| `matrix` | Detect invalid or unsafe matrix strategy definitions (axis shape, include/exclude consistency, and unsupported key/value patterns) that can cause unintended fan-out or execution failures. |
-| `env-var` | Detect invalid environment variable declarations (naming and mapping quality) that reduce portability or cause runtime ambiguity across shells/runners. |
-| `deprecated-commands` | Detect deprecated workflow command usage in `run` scripts (for example `::set-output`, `::save-state`, `::add-path`, `::set-env`) and require environment-file based alternatives. |
-| `if-cond` | Detect malformed, constant, or unsound `if` conditions that indicate dead branches, always-true gates, or likely expression misuse. |
-| `fake-ternary` | Detect fake ternary idioms such as `cond && 'A' || 'B'` in expression-bearing fields (especially `if`) and prohibit their use in favor of explicit case-style branching. |
-| `archived-uses` | Detect action/reusable workflow references whose upstream repository is archived and treat them as supply-chain maintenance risk requiring explicit replacement or exception handling. |
-| `insecure-commands` | Detect insecure command invocation patterns in `run` scripts (unsafe interpolation, shell metacharacter injection surfaces, and command construction from untrusted expression inputs). |
-| `overprovisioned-secrets` | Detect jobs/steps that receive broader secret sets than required by their declared usage surface and flag least-privilege violations for secret handoff. |
-| `forbidden-uses` | Enforce organization allow/deny policy for `uses:` references (actions and reusable workflows), including wildcard matching and canonical owner/repo normalization. |
-| `ref-version-mismatch` | Detect mismatches between symbolic tag intent and pinned SHA lineage (for example annotated version comments not matching resolved commit ancestry). |
-| `use-trusted-publishing` | Detect package publishing workflows that do not use trusted publishing/OIDC-based provenance paths and require stronger release trust posture. |
-
-### 13.2 Extended Rule Guidance (Operational)
-
-This subsection follows the same operator-facing style as §4.5 and is non-normative guidance for rollout.
-
-| Rule ID | Rule Overview | Preferred Remediation | Auto-Fix | Residual Risk and Recommended Response |
-|---|---|---|---|---|
-| `cache-poisoning` | Prevents cache trust-boundary violations that let untrusted contexts influence artifacts consumed by trusted contexts. | Partition cache scope by trust boundary, harden keys, and avoid broad restore-key fallback in privileged jobs. | ✗ | Cache isolation mistakes can survive syntax fixes; validate with threat-model-driven job separation tests. |
-| `self-hosted-runner` | Flags risky use of self-hosted runners in workflows that process untrusted inputs. | Add strict trigger guards, isolate runner groups, and split trusted/untrusted execution paths. | ✗ | Runner hardening must include host lifecycle, credential isolation, and network egress controls. |
-| `unredacted-secrets` | Detects output paths where secrets may appear in logs without masking protections. | Route secrets through approved secret channels, avoid direct echo/print, and apply explicit masking controls. | ✗ | Redaction is not perfect against transformed values; avoid exposing secret-derived material in logs entirely. |
-| `secrets-outside-env` | Enforces secret handling via controlled handoff patterns instead of direct expression injection into control-flow or dependency-selection sinks. | Move secret use to explicit `env` mapping where practical, and keep secrets out of `if` / `uses` / reusable-call contract expressions. | ✗ | Even with `env` handoff, secrets can leak via arguments/process lists; prefer stdin/file-based passing where possible. |
-| `matrix` | Validates matrix expansion definitions to prevent invalid include/exclude combinations and accidental fan-out mistakes. | Normalize matrix axis definitions, verify include/exclude keys against declared axes, and constrain expansion cardinality where needed. | ✗ | Matrix correctness depends on repository conventions; add CI tests that assert expected job expansion set. |
-| `env-var` | Validates environment variable declaration quality for cross-shell and cross-runner portability. | Use stable uppercase snake-case keys, avoid ambiguous/reserved names, and keep scope minimal (workflow/job/step). | ✗ | Naming correctness does not guarantee safe value handling; combine with secret handling and quoting rules. |
-| `deprecated-commands` | Prevents use of deprecated workflow commands that are blocked or unsafe on modern runners. | Replace command syntax with environment-file mechanisms (`GITHUB_OUTPUT`, `GITHUB_STATE`, `GITHUB_PATH`, `GITHUB_ENV`). | ✗ | Migration can still break downstream consumers; validate output/state/path behavior after conversion. |
-| `if-cond` | Detects unsound conditional expressions that are always true/false or syntactically misuse expression context. | Rewrite conditions with explicit boolean intent and scope-valid context references. | ✗ | Condition semantics can still drift with event payload shape; add table-driven condition tests for key events. |
-| `fake-ternary` | Detects fake ternary expression idioms (`cond && a || b`) that are prone to coercion hazards, readability loss, and branch intent drift. | Replace with explicit case-style branching and boolean-safe flow (for example split steps/jobs with direct `if` predicates or shell `case` in `run`). | ✗ | Expression rewrites can still change behavior at edge cases; keep before/after fixture tests for representative event payloads. |
-| `archived-uses` | Detects `uses:` references that point to archived repositories where security and maintenance signals are degraded. | Replace with actively maintained alternatives or vendor/fork under governed ownership with pinned SHA policy. | ✗ | Fork migration can introduce divergence risk; add ownership and update-SLA controls for forked dependencies. |
-| `insecure-commands` | Detects unsafe shell command composition patterns that can execute untrusted input unexpectedly. | Move to argument-safe invocation, strict quoting/escaping, and explicit allowlist validation for untrusted values. | ✗ | Command hardening is shell-dependent; validate with multi-shell fixtures and hostile payload tests. |
-| `overprovisioned-secrets` | Detects secret distribution broader than necessary at workflow/job/step boundaries. | Narrow secret exposure scope and map only required keys at the minimum execution unit. | ✗ | Minimum scope can drift over time; enforce periodic secret-usage review and contract tests. |
-| `forbidden-uses` | Enforces policy-controlled deny/allow constraints for third-party actions and reusable workflows. | Replace disallowed dependencies with approved references and pin to reviewed commits. | ✗ | Allowlist drift can block urgent security updates; maintain emergency override process with audit trail. |
-| `ref-version-mismatch` | Detects inconsistency between version intent and resolved ref/sha provenance. | Align symbolic version intent and pinned commit lineage, or pin directly with updated provenance annotation. | ✗ | Tag/release metadata can be manipulated upstream; combine with signed provenance verification where possible. |
-| `use-trusted-publishing` | Detects release/publish jobs that bypass trusted publishing controls (OIDC/provenance). | Adopt trusted publishing path and disable long-lived publishing secrets where ecosystem support exists. | ✗ | Trusted publishing coverage varies by registry; keep fallback controls and explicit exception governance. |
-| `if-expr-wrapper` | Detects `if:` conditions missing the `${{ }}` expression wrapper. While GitHub Actions auto-applies the wrapper at runtime, explicit wrapping improves readability and avoids confusion. | Wrap bare expressions in `${{ }}`. | ✓ (safe cases) | Auto-fix for single-line scalars, including quoted single-line scalars, when the value does not already contain `${{` markers. Block scalars and values containing `${{` emit warning without fix. |
-| `unsound-condition` | Detects block-scalar `if:` values where a fenced expression `${{ ... }}` becomes truthy because YAML clip chomping preserves a trailing newline. | Use strip chomping (`|-` / `>-`) or convert the condition to a single-line scalar. | ✓ (safe cases) | Applies to workflow jobs, workflow steps, and composite action steps. Severity stays warning because `if-cond` already reports the same runtime hazard from a correctness perspective. |
-| `unpinned-tools` | Detects known tool-setup actions whose `with.version` input is omitted, set to `latest`, or provided dynamically. | Pin `with.version` to a concrete tool version supported by the repository. | ✗ | Known actions are data-driven via `data/sources/unpinned-tools/unpinned_tools.json` and code-generated into `UnpinnedToolsActions.g.cs`. Current set covers `aquasecurity/setup-trivy`; matching is case-insensitive on `owner/repo` and works in composite action steps too. |
-| `concurrency-limits` | Detects workflows or jobs that lack `concurrency` settings with explicit `cancel-in-progress`. Without concurrency limits, parallel runs can waste resources and cause race conditions. | Add `concurrency` block with `group` and `cancel-in-progress` at workflow or job level. | ✗ | Skips reusable-only workflows (`on: workflow_call` only) and workflow-call jobs (`uses:`). When workflow-level concurrency is set, job-level checks are suppressed. |
