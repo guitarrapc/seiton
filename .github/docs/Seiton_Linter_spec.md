@@ -847,7 +847,7 @@ Token resolution:
 - This order is not configurable. If no variable yields a token, API calls are made unauthenticated (lower rate limit).
 - Rationale: exposing token env var selection in config creates an attack surface where a malicious config redirects token resolution to unintended environment variables.
 
-Configuration parsing enforces resource caps on YAML payloads: **`1 048 576`** UTF-8 bytes total, **`64`** compound nesting depth, and **`50 000`** counted structural units. Oversized payloads fail validation with deterministic error messages. Wildcard pattern matching for `fix.pinning.ignore-actions` must impose a timeout (recommended ≤ 2 s) so pattern evaluation does not stall the process; timed-out patterns are treated as non-matches.
+Configuration parsing enforces resource caps on YAML payloads: **`1 048 576`** UTF-8 bytes total, **`64`** compound nesting depth, and **`50 000`** counted structural units. Oversized payloads fail validation with deterministic error messages. Wildcard pattern matching for `fix.pinning.ignore-actions` uses deterministic, bounded evaluation under these limits, so pattern evaluation cannot stall the process.
 
 **Security note (configuration path):** `SEITON_CONFIG` / `--config` can name any absolute path. On shared CI runners, set them only to trusted locations. For fork pull request workflows, avoid pointing config at a file the PR branch can overwrite; use default discovery or defaults. CLI `--verbose` prints the resolved config path on stderr.
 
