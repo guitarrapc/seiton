@@ -27,7 +27,7 @@ Rules for writing and maintaining specification documents (`.github/docs/`) and 
 
 ### 1.4 Fixability Truth Source
 
-- The authoritative sources for which rules support auto-fix are `docs/rules.md` (user-facing) and the `§8.4 Fixable Rule Catalog` in the shared spec (implementer-facing).
+- Fixability truth is defined in the shared spec `§8.4 Fixable Rule Catalog` (implementer-facing) and reflected in `docs/rules.md` (user-facing).
 - Do not duplicate fixability information in language spec rule tables unless noting a language-specific limitation.
 
 ---
