@@ -589,6 +589,7 @@ jobs:
     steps:
       - uses: actions/checkout@v6
         with:
+          persist-credentials: false
           fetch-depht: 1      # ERROR: typo; did you mean 'fetch-depth'?
 ```
 
@@ -602,6 +603,7 @@ jobs:
     steps:
       - uses: actions/checkout@v6
         with:
+          persist-credentials: false
           fetch-depth: 1
 ```
 
@@ -948,7 +950,7 @@ Detects `contains()` conditions that treat a plain string like a membership list
 ```yaml
 jobs:
   deploy:
-    if: contains('refs/heads/main refs/heads/develop', github.ref)
+    if: ${{ contains('refs/heads/main refs/heads/develop', github.ref) }}
     runs-on: ubuntu-24.04
     steps:
       - run: echo ng
@@ -959,7 +961,7 @@ jobs:
 ```yaml
 jobs:
   deploy:
-    if: contains(fromJSON('["refs/heads/main","refs/heads/develop"]'), github.ref)
+    if: ${{ contains(fromJSON('["refs/heads/main","refs/heads/develop"]'), github.ref) }}
     runs-on: ubuntu-24.04
     steps:
       - run: echo ok
@@ -980,10 +982,10 @@ Warns when a workflow gates privileged behavior on spoofable bot actor contexts 
 **Example trigger:**
 
 ```yaml
-on: pull_request_target
+on: pull_request_target  # dangerous trigger intentional: bot checks matter in privileged context
 jobs:
   automerge:
-    if: github.actor == 'dependabot[bot]'
+    if: ${{ github.actor == 'dependabot[bot]' }}
     runs-on: ubuntu-24.04
     steps:
       - run: gh pr merge --auto --merge "$PR_URL"
@@ -995,7 +997,7 @@ jobs:
 on: pull_request_target
 jobs:
   automerge:
-    if: github.event.pull_request.user.login == 'dependabot[bot]'
+    if: ${{ github.event.pull_request.user.login == 'dependabot[bot]' }}
     runs-on: ubuntu-24.04
     steps:
       - run: gh pr merge --auto --merge "$PR_URL"
@@ -1381,7 +1383,7 @@ on: pull_request_target
 jobs:
   build:
     runs-on: ubuntu-24.04
-    if: github.event.pull_request.head.repo.full_name == github.repository
+    if: ${{ github.event.pull_request.head.repo.full_name == github.repository }}
     steps:
       - run: echo ok
 ```
@@ -1702,7 +1704,7 @@ jobs:
   deploy:
     runs-on: self-hosted
     environment: production
-    if: github.event.pull_request.head.repo.full_name == github.repository
+    if: ${{ github.event.pull_request.head.repo.full_name == github.repository }}
     steps:
       - run: echo ok
 ```
