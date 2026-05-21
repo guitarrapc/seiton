@@ -17,6 +17,8 @@ The base spec (`.github/docs/Seiton_CLI_spec.md`) is well-structured and mostly 
 
 ## Findings
 
+> **Note**: The findings below document the *pre-change* state of the specs — i.e., what was present before the recommended updates were applied. See [Recommended Changes](#recommended-changes-priority-order) for the actions taken, and [Expected Outcome](#expected-outcome-after-changes) for the resulting state.
+
 ### F1. Language specs §6 over-specifies internal details (HIGH)
 
 **C# spec §6.1 CheckCommand** includes:
