@@ -149,6 +149,9 @@ This parser document only assumes the integration boundary from `Seiton_Parser_s
 
 ## 2. AST Definitions (Spec §2)
 
+> For field semantics and constraints, see `Seiton_Parser_spec.md` §2.
+> Only the Go type structure is defined here.
+
 ### 2.1 Primitive Types (Spec §2.6)
 
 ```go
