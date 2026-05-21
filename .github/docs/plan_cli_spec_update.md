@@ -30,7 +30,7 @@ The base spec (`.github/docs/Seiton_CLI_spec.md`) is well-structured and mostly 
 - Full struct definitions (`fileCheckResult`, `ruleActivationMetadata`) with every field
 - `sync.Once or atomic CAS` capture strategy commentary
 
-These are **code-level concerns**, not implementation contracts. Although `docs_authoring_guidelines.md` §1.2 is written for `Seiton_Linter_*` language specs, the same scoping principle applies to CLI language specs: record runtime-specific contracts and implementation notes that affect external behavior or cross-team coordination, not internal field names.
+These are **code-level concerns**, not implementation contracts. Although `.github/docs/docs_authoring_guidelines.md` §1.2 is written for `Seiton_Linter_*` language specs, the same scoping principle applies to CLI language specs: record runtime-specific contracts and implementation notes that affect external behavior or cross-team coordination, not internal field names.
 
 **Guideline**: If something changes and no external caller/test/output is affected, it doesn't belong in the spec.
 
