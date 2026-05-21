@@ -198,7 +198,7 @@ jobs:
 on: push
 jobs:
   reuse:
-    uses: owner/repo/.github/workflows/reuse.yml@main
+    uses: owner/repo/.github/workflows/reuse.yml@a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0 # v1
     steps:                  # ERROR: cannot have both uses and steps
       - run: echo hello
 ```
@@ -209,7 +209,7 @@ jobs:
 on: push
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - run: echo ok
 ```
@@ -230,7 +230,7 @@ Validates reusable workflow call semantics. `with` and `secrets` are only valid 
 on: push
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     with:                   # ERROR: key 'with' requires uses
       target: prod
     steps:
@@ -241,7 +241,7 @@ jobs:
 on: push
 jobs:
   reuse:
-    uses: owner/repo/.github/workflows/reuse.yml@main
+    uses: owner/repo/.github/workflows/reuse.yml@a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0 # v1
     container: node:20      # ERROR: incompatible with uses
 ```
 
@@ -251,7 +251,7 @@ jobs:
 on: push
 jobs:
   reuse:
-    uses: owner/repo/.github/workflows/reuse.yml@main
+    uses: owner/repo/.github/workflows/reuse.yml@a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0 # v1
     with:
       target: prod
 ```
@@ -273,7 +273,7 @@ on: push
 permissions: admin-all              # ERROR: must be 'read-all' or 'write-all'
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - run: echo ng
 ```
@@ -283,7 +283,7 @@ on: push
 permissions: read-all               # WARNING: overly broad; prefer explicit per-scope mapping
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - run: echo ng
 ```
@@ -294,7 +294,7 @@ jobs:
   build:
     permissions:
       contents: admin              # ERROR: must be 'read', 'write', or 'none'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - run: echo ng
 ```
@@ -307,7 +307,7 @@ on: push
 permissions: read-all
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - run: echo ng
 
@@ -318,7 +318,7 @@ jobs:
   build:
     permissions:
       contents: read
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - run: echo ok
 ```
@@ -340,7 +340,7 @@ on: push
 jobs:
   build:
     needs: nonexistent       # ERROR: references unknown job
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - run: echo ng
 ```
@@ -350,12 +350,12 @@ on: push
 jobs:
   a:
     needs: b                 # ERROR: cyclic dependencies detected
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - run: echo a
   b:
     needs: a
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - run: echo b
 ```
@@ -366,12 +366,12 @@ jobs:
 on: push
 jobs:
   setup:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - run: echo setup
   build:
     needs: setup
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - run: echo build
 ```
@@ -392,7 +392,7 @@ Validates shell names in workflow/job defaults and `run` steps. Reports shells o
 on: push
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - run: echo hello
         shell: zsh             # ERROR: invalid shell name
@@ -402,7 +402,7 @@ jobs:
 on: push
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - run: echo hello
         shell: cmd             # ERROR: cmd is not available on ubuntu
@@ -414,7 +414,7 @@ jobs:
 on: push
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - run: echo hello
         shell: bash
@@ -436,7 +436,7 @@ Validates `job.id` and `step.id` values. IDs must use only alphanumeric characte
 on: push
 jobs:
   1build:                   # ERROR: must start with a letter or _
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - run: echo ng
 ```
@@ -445,7 +445,7 @@ jobs:
 on: push
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - id: setup.v1          # ERROR: invalid step ID
         run: echo ng
@@ -457,7 +457,7 @@ jobs:
 on: push
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - id: setup-v1
         run: echo ok
@@ -585,7 +585,7 @@ Validates input names for well-known popular actions. Reports unknown input keys
 on: push
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v6
         with:
@@ -598,7 +598,7 @@ jobs:
 on: push
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v6
         with:
@@ -654,7 +654,7 @@ Validates `strategy.matrix` definitions. Reports inconsistent keys, invalid `inc
 ```yaml
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     strategy:
       matrix:
         os: []              # ERROR: axis has no values
@@ -667,14 +667,14 @@ jobs:
 ```yaml
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     strategy:
       matrix:
         node: [10, 12, 14]
-        os: [ubuntu-latest, macos-latest]
+        os: [ubuntu-24.04, macos-14]
         exclude:
           - node: 13        # ERROR: value 13 does not match matrix combinations
-            os: ubuntu-latest
+            os: ubuntu-24.04
     steps:
       - run: echo ng
 ```
@@ -684,14 +684,14 @@ jobs:
 ```yaml
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     strategy:
       matrix:
         node: [10, 12, 14]
-        os: [ubuntu-latest, macos-latest]
+        os: [ubuntu-24.04, macos-14]
         exclude:
           - node: 10
-            os: macos-latest
+            os: macos-14
     steps:
       - run: echo ok
 ```
@@ -714,7 +714,7 @@ env:
   foobar: x           # WARNING: not portable (lowercase)
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - env:
           foo-bar: x     # WARNING: not portable (contains dash)
@@ -729,7 +729,7 @@ env:
   FOOBAR: x
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - env:
           FOO_BAR: x
@@ -752,7 +752,7 @@ Warns on malformed, constant, or unsound `if` conditions. Reports always-true / 
 jobs:
   build:
     if: ${{ false }}        # ERROR: constant expression in condition
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - if: ${{ !false }}   # ERROR: constant expression
         run: echo ng
@@ -768,7 +768,7 @@ jobs:
 jobs:
   build:
     if: ${{ github.ref != '' }}
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - if: ${{ success() }}
         run: echo ok
@@ -791,7 +791,7 @@ jobs:
   build:
     # ERROR: fake ternary pattern
     if: ${{ github.ref_name == 'main' && 'prod' || 'dev' }}
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - if: ${{ inputs.deploy && 'yes' || 'no' }}
         run: echo ng
@@ -803,7 +803,7 @@ jobs:
 jobs:
   build:
     if: ${{ github.ref_name == 'main' }}
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - if: ${{ inputs.deploy }}
         run: echo yes
@@ -825,7 +825,7 @@ Warns when `if:` conditions are missing the `${{ }}` expression wrapper. Auto-fi
 jobs:
   build:
     if: github.ref != 'refs/heads/main'   # WARNING: missing ${{ }} wrapper
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - if: github.event_name == 'push'   # WARNING: missing ${{ }} wrapper
         run: echo ng
@@ -839,7 +839,7 @@ jobs:
 jobs:
   build:
     if: ${{ github.ref != 'refs/heads/main' }}
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - if: ${{ github.event_name == 'push' }}
         run: echo ok
@@ -864,7 +864,7 @@ Warns when `if:` uses a YAML block scalar (`|` or `>`) together with a fenced ex
 ```yaml
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     if: |
       ${{ github.event_name == 'push' }}
     steps:
@@ -876,7 +876,7 @@ jobs:
 ```yaml
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     if: |-
       ${{ github.event_name == 'push' }}
     steps:
@@ -902,7 +902,7 @@ on: push
 # WARNING: workflow does not declare concurrency
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - run: echo ng
 ```
@@ -911,7 +911,7 @@ jobs:
 on: push
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     concurrency: my-group  # WARNING: missing 'cancel-in-progress'
     steps:
       - run: echo ng
@@ -926,7 +926,7 @@ concurrency:
   cancel-in-progress: true
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - run: echo ok
 ```
@@ -949,7 +949,7 @@ Detects `contains()` conditions that treat a plain string like a membership list
 jobs:
   deploy:
     if: contains('refs/heads/main refs/heads/develop', github.ref)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - run: echo ng
 ```
@@ -960,7 +960,7 @@ jobs:
 jobs:
   deploy:
     if: contains(fromJSON('["refs/heads/main","refs/heads/develop"]'), github.ref)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - run: echo ok
 ```
@@ -984,7 +984,7 @@ on: pull_request_target
 jobs:
   automerge:
     if: github.actor == 'dependabot[bot]'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - run: gh pr merge --auto --merge "$PR_URL"
 ```
@@ -996,7 +996,7 @@ on: pull_request_target
 jobs:
   automerge:
     if: github.event.pull_request.user.login == 'dependabot[bot]'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - run: gh pr merge --auto --merge "$PR_URL"
 ```
@@ -1034,7 +1034,7 @@ When checkout uses a ref that cannot be parsed as a semantic version, such as a 
 on: push
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
       - uses: actions/upload-artifact@v4
@@ -1075,7 +1075,7 @@ Detects deprecated workflow command syntax (`::set-output`, `::save-state`, `::a
 on: push
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - run: echo "::set-output name=digest::$DIGEST"
         # ERROR: workflow command "set-output" was deprecated
@@ -1087,7 +1087,7 @@ jobs:
 on: push
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - run: echo "result=ok" >> "$GITHUB_OUTPUT"
 ```
@@ -1254,7 +1254,7 @@ inputs:
 on: push
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: ./actions/deploy
         with:
@@ -1269,7 +1269,7 @@ jobs:
 on: push
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: ./actions/deploy
         with:
@@ -1295,7 +1295,7 @@ Errors when a popular action version uses a deprecated Node.js runtime (`node12`
 on: push
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v3   # ERROR: runner is too old (node16)
 ```
@@ -1306,7 +1306,7 @@ jobs:
 on: push
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v6
 ```
@@ -1356,7 +1356,7 @@ Warns when high-risk trigger events (`pull_request_target`, `workflow_run`, etc.
 on: pull_request_target    # WARNING: potentially dangerous trigger
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - run: echo ng
 ```
@@ -1367,7 +1367,7 @@ jobs:
 on: push
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - run: echo ok
 ```
@@ -1400,7 +1400,7 @@ Errors when `${{ env.* }}` is directly interpolated inside a `run` script. Shell
 on: push
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - run: echo "${{ env.VERSION }}"  # ERROR: use $VERSION instead
 ```
@@ -1411,7 +1411,7 @@ jobs:
 on: push
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - run: echo "$VERSION"
 ```
@@ -1434,7 +1434,7 @@ Errors when `${{ secrets.* }}` is directly interpolated inside a `run` script. S
 on: push
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - run: curl -H "Authorization: Bearer ${{ secrets.TOKEN }}"
         # ERROR: use env: indirection
@@ -1446,7 +1446,7 @@ jobs:
 on: push
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - env:
           TOKEN: ${{ secrets.TOKEN }}
@@ -1476,7 +1476,7 @@ on:
         type: string
 jobs:
   test:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - run: echo "${{ inputs.benchmark }}"   # ERROR: use env: indirection
 ```
@@ -1492,7 +1492,7 @@ on:
         type: string
 jobs:
   test:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - env:
           BENCHMARK: ${{ inputs.benchmark }}
@@ -1515,7 +1515,7 @@ Errors when an expression references the entire `secrets` context as an object (
 on: push
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - run: echo "${{ toJson(secrets) }}"  # ERROR: exposes all secrets
 ```
@@ -1526,7 +1526,7 @@ jobs:
 on: push
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - env:
           MY_SECRET: ${{ secrets.MY_SECRET }}
@@ -1548,7 +1548,7 @@ Errors when expressions reference context roots unavailable in the current scope
 ```yaml
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     if: ${{ steps.prep.outputs.ok == 'true' }}  # ERROR: "steps" not allowed here
     steps:
       - run: echo ok
@@ -1557,8 +1557,8 @@ jobs:
 ```yaml
 jobs:
   build:
-    runs-on: ubuntu-latest
-    if: ${{ matrix.os == 'ubuntu-latest' }}     # ERROR: "matrix" not allowed here
+    runs-on: ubuntu-24.04
+    if: ${{ matrix.os == 'ubuntu-24.04' }}     # ERROR: "matrix" not allowed here
     steps:
       - run: echo ok
 ```
@@ -1568,7 +1568,7 @@ jobs:
 ```yaml
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     if: ${{ github.ref == 'refs/heads/main' }}
     steps:
       - id: prep
@@ -1593,7 +1593,7 @@ Warns when `actions/cache` is used in workflows that accept untrusted triggers (
 on: pull_request
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/cache@v4       # WARNING: cache on untrusted trigger
         with:
@@ -1607,7 +1607,7 @@ jobs:
 on: push
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/cache@v4
         with:
@@ -1652,7 +1652,7 @@ jobs:
 on: pull_request
 jobs:
   build:
-    runs-on: ubuntu-latest              # use GitHub-hosted runner
+    runs-on: ubuntu-24.04              # use GitHub-hosted runner
     steps:
       - run: echo ok
 ```
@@ -1672,7 +1672,7 @@ Detects unsafe command construction from untrusted inputs in `run` scripts.
 ```yaml
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     env:
       ACTIONS_ALLOW_UNSECURE_COMMANDS: true  # ERROR: insecure commands enabled
     steps:
@@ -1684,7 +1684,7 @@ jobs:
 ```yaml
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - run: echo "MY_VAR=value" >> "$GITHUB_ENV"
 ```
@@ -1710,7 +1710,7 @@ on: push
 permissions: write-all             # ERROR: write-all is forbidden
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - run: echo ng
 ```
@@ -1724,7 +1724,7 @@ permissions:
   packages: write
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - run: echo ok
 ```
@@ -1746,7 +1746,7 @@ on: push
 permissions: read-all               # ERROR: read-all is too broad
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - run: echo ng
 ```
@@ -1759,7 +1759,7 @@ permissions:
   contents: read
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - run: echo ok
 ```
@@ -1782,7 +1782,7 @@ When auto-fix is enabled, the fix infers minimum required permission scopes from
 on: push
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     # WARNING: no permissions declared
     steps:
       - run: echo ng
@@ -1794,7 +1794,7 @@ jobs:
 on: push
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     permissions:
       contents: read
     steps:
@@ -1807,7 +1807,7 @@ If the job uses only actions without known permission requirements, `permissions
 on: push
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     permissions: {}
     steps:
       - run: echo ok
@@ -1828,7 +1828,7 @@ Warns when custom or private registry images are used in `job.container` or `job
 ```yaml
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     container:
       image: registry.example.com/team/app:1.0.0  # ERROR: no credentials
     services:
@@ -1841,7 +1841,7 @@ jobs:
 ```yaml
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     container:
       image: example.com/owner/image
       credentials:
@@ -1856,7 +1856,7 @@ jobs:
 ```yaml
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     container:
       image: registry.example.com/team/app:1.0.0
       credentials:
@@ -1894,7 +1894,7 @@ Legacy `actions/checkout` versions persist credentials in `.git/config`; `action
 on: push
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v6  # WARNING: should set persist-credentials to false
 ```
@@ -1905,7 +1905,7 @@ jobs:
 on: push
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v6
         with:
@@ -1931,11 +1931,11 @@ env:
   DATADOG_API_KEY: ${{ secrets.DATADOG_API_KEY }}
 jobs:
   a:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - run: echo a
   b:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - run: echo b
 ```
@@ -1946,13 +1946,13 @@ jobs:
 on: push
 jobs:
   a:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - env:
           GITHUB_TOKEN: ${{ github.token }}
         run: echo a
   b:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - run: echo b
 ```
@@ -1973,7 +1973,7 @@ Errors when job-level `env` assigns `secrets.*` or `github.token` values in jobs
 on: push
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     env:
       GITHUB_TOKEN: ${{ github.token }}     # ERROR: exposed to all steps
     steps:
@@ -1987,7 +1987,7 @@ jobs:
 on: push
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - env:
           GITHUB_TOKEN: ${{ github.token }}
@@ -2011,7 +2011,7 @@ Warns when secret-derived environment variables appear to be printed via output 
 on: push
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     env:
       TOKEN: ${{ secrets.GITHUB_TOKEN }}
     steps:
@@ -2024,7 +2024,7 @@ jobs:
 on: push
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - env:
           TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -2059,7 +2059,7 @@ Warns when `secrets.*` appears in `if` conditions, `uses:` references, or reusab
 on: push
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - if: ${{ secrets.GITHUB_TOKEN != '' }}   # ERROR: secrets in step.if
         run: echo ng
@@ -2071,7 +2071,7 @@ jobs:
 on: push
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - env:
           TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -2095,7 +2095,7 @@ Warns when secrets are mapped at a broader scope (workflow or job) than is requi
 on: push
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - env:
           TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -2113,7 +2113,7 @@ jobs:
 on: push
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - env:
           TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -2139,7 +2139,7 @@ Errors when a reusable workflow call job uses `secrets: inherit`. Full secret in
 on: push
 jobs:
   reuse:
-    uses: owner/repo/.github/workflows/reuse.yml@main
+    uses: owner/repo/.github/workflows/reuse.yml@a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0 # v1
     secrets: inherit          # ERROR: full secret inheritance is forbidden
 ```
 
@@ -2149,7 +2149,7 @@ jobs:
 on: push
 jobs:
   reuse:
-    uses: owner/repo/.github/workflows/reuse.yml@main
+    uses: owner/repo/.github/workflows/reuse.yml@a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0 # v1
     secrets:
       token: ${{ secrets.GITHUB_TOKEN }}
 ```
@@ -2249,7 +2249,7 @@ Warns when known tool-setup actions rely on an unpinned tool version. The list o
 ```yaml
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: aquasecurity/setup-trivy@v0.2.0
 ```
@@ -2257,7 +2257,7 @@ jobs:
 ```yaml
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: aquasecurity/setup-trivy@v0.2.0
         with:
@@ -2269,7 +2269,7 @@ jobs:
 ```yaml
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: aquasecurity/setup-trivy@v0.2.0
         with:
@@ -2293,7 +2293,7 @@ Warns when `uses:` references point to GitHub-archived repositories. Archived re
 ```yaml
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions-rs/toolchain@v1   # WARNING: repository is archived
 ```
@@ -2303,7 +2303,7 @@ jobs:
 ```yaml
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: dtolnay/rust-toolchain@stable
 ```
@@ -2323,7 +2323,7 @@ Warns when a version annotation or comment does not match the resolved commit's 
 ```yaml
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: owner/action-v1@v2.0.0   # ERROR: path hint 'v1' mismatches ref 'v2'
 ```
@@ -2333,7 +2333,7 @@ jobs:
 ```yaml
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: owner/action-v2@v2.1.0
 ```
@@ -2353,7 +2353,7 @@ Errors or warns (per policy) when `uses:` references violate configured allow/de
 ```yaml
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: bad-org/unsafe-action@v1   # ERROR: denied by policy
 ```
@@ -2363,7 +2363,7 @@ jobs:
 ```yaml
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: approved-org/safe-action@v1
 ```
@@ -2394,7 +2394,7 @@ Errors when `actions/create-github-app-token` is invoked without permission-limi
 ```yaml
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       # ERROR: missing permission constraints
       - uses: actions/create-github-app-token@v2
@@ -2403,7 +2403,7 @@ jobs:
 ```yaml
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       # ERROR: owner set without repositories constraint
       - uses: actions/create-github-app-token@v2
@@ -2417,7 +2417,7 @@ jobs:
 ```yaml
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/create-github-app-token@v2
         with:
@@ -2443,7 +2443,7 @@ Errors when executable jobs omit `timeout-minutes`. Prevents runaway jobs from c
 on: push
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     # ERROR: missing timeout-minutes
     steps:
       - run: echo ng
@@ -2455,7 +2455,7 @@ jobs:
 on: push
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
       - run: echo ok
@@ -2479,7 +2479,7 @@ Warns when a publishing or release workflow uses long-lived credentials instead 
 on: push
 jobs:
   publish:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - run: npm publish             # WARNING: no id-token permission
 ```
@@ -2488,7 +2488,7 @@ jobs:
 on: push
 jobs:
   publish:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - run: twine upload dist/*     # WARNING: use trusted publishing
 ```
@@ -2501,7 +2501,7 @@ jobs:
   publish:
     permissions:
       id-token: write
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - run: npm publish
 ```
@@ -2536,7 +2536,7 @@ Errors when `uses:` references resolve to action versions listed in known vulner
 on: push
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/example@v1   # ERROR: known vulnerable version
 ```
@@ -2559,7 +2559,7 @@ Errors when a SHA-pinned `uses:` reference points to a commit that is not reacha
 on: push
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@abc1234567890abc1234567890abc1234567890a
         # ERROR: commit is not reachable in the repository
@@ -2583,7 +2583,7 @@ Errors when a symbolic ref (tag or branch name) in `uses:` is ambiguous — the 
 on: push
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: owner/action@v2      # ERROR: ambiguous ref (tag and branch both exist)
 ```
