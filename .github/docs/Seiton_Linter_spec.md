@@ -43,10 +43,10 @@ High-level behavior:
 7. Sort, deduplicate, and filter diagnostics.
 8. Return final `LintResult`.
 
-Current profile note (C# runtime):
+Document-kind routing:
 
-- If finalized kind is `action-metadata`, the linter traverses the action-metadata AST (`VisitActionMetadataPre` → `runs.steps` via `VisitStep` → `VisitActionMetadataPost`). Rules opt in via `SupportsDocumentKind`; workflow-only rules are skipped for this input kind.
-- Workflow inputs use the workflow traversal sequence in §4.2; action-metadata inputs do not receive `VisitWorkflowPre`/`VisitEvent`/`VisitJobPre`/`VisitJobPost` (no synthetic empty `Workflow` is injected).
+- If finalized kind is `action-metadata`, the linter traverses the action-metadata AST (`VisitActionMetadataPre` → `runs.steps` via `VisitStep` → `VisitActionMetadataPost`). Rules opt in via document-kind declaration; workflow-only rules are skipped for this input kind.
+- Workflow inputs use the workflow traversal sequence in §4.2; action-metadata inputs do not receive `VisitWorkflowPre`/`VisitEvent`/`VisitJobPre`/`VisitJobPost`.
 
 ### 2.1. Multi-File Execution Model
 
@@ -128,14 +128,14 @@ Rules collect diagnostics internally during traversal and return them after trav
 
 ### 4.4 Normative Rule Catalog
 
-The default C# local-AST linter profile must include the following rule IDs.
+All conforming implementations must include the following rule IDs in their default profile.
 
 Column definitions:
 
 - **Default**: `✓` = active with no config (local-AST); `✗` = opt-in only, requires `rules.<id>.enabled: true`.
 - **Network**: `—` = local-AST rule, no network access required; `online` = requires network access, activated by `rules.<id>.enabled: true`.
 
-> **Detail policy:** This table provides implementer-level summaries only. For complete user-facing behavior documentation (path lists, version bucketing, exclusion semantics, examples, remediation), see [`docs/rules.md`](../../docs/rules.md).
+> **Detail policy:** This table provides implementer-level behavior summaries only. For complete user-facing documentation (examples, remediation, edge cases), see [`docs/rules.md`](../../docs/rules.md).
 
 | Rule ID | Default | Network | Required Behavior Summary |
 |---|---|---|---|
@@ -196,8 +196,8 @@ Column definitions:
 | `forbidden-uses` | ✓ | — | Warn/Error when `uses:` references violate configured allow/deny patterns. |
 | `ref-version-mismatch` | ✓ | — | Warn when symbolic ref/version intent mismatches resolved commit lineage. |
 | `use-trusted-publishing` | ✓ | — | Warn when publishing flows do not use trusted publishing/OIDC-based provenance. |
-| `if-expr-wrapper` | ✓ | ✓ (safe cases) | Warn when `if:` is missing `${{ }}` wrapper; auto-fix for single-line scalars. |
-| `unsound-condition` | ✓ | ✓ (safe cases) | Warn when `if:` block scalars with fenced expressions have truthy-making newline chomping; auto-fix to `|-`/`>-`. |
+| `if-expr-wrapper` | ✓ | — | Warn when `if:` is missing `${{ }}` wrapper; auto-fix for single-line scalars. |
+| `unsound-condition` | ✓ | — | Warn when `if:` block scalars with fenced expressions have truthy-making newline chomping; auto-fix to `|-`/`>-`. |
 | `unpinned-tools` | ✓ | — | Warn when known tool-setup actions use an unpinned tool version. Data-driven via `unpinned_tools.json`. |
 | `concurrency-limits` | ✗ | — | Warn when workflows/jobs lack `concurrency` with `cancel-in-progress`. Skips reusable-only workflows. |
 
@@ -208,13 +208,7 @@ Rule set compatibility policy:
 - Removing or renaming a published rule ID is a breaking change and requires explicit migration guidance.
 - `online` rules may be emitted by an opt-in post-lint audit entrypoint instead of the default local AST pass, but they still participate in shared rule-id, priority, suppression, and fixability catalogs.
 
-### 4.5 Rule Guidance (Operational)
-
-This section provides operator-facing guidance for each default rule.
-
-- Scope: practical interpretation of rule intent, expected trigger patterns, remediation direction, and post-fix caution.
-- Relationship to §4.4: §4.4 remains the normative source of rule IDs and required behavior. This section is explanatory and operational.
-- Auto-fix status here follows §8.4 (including partial-fix boundaries).
+### 4.5 Cross-Runtime Design Decisions
 
 #### 4.5.1 Diagnostic Position Policy — `needs-graph` Cycle Detection
 
