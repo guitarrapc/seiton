@@ -1035,8 +1035,8 @@ jobs:
   build:
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/upload-artifact@v4
+      - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4
+      - uses: actions/upload-artifact@5d5d22a31266ced268874388b861e4b58bb5c2f3 # v4
         with:
           name: my-artifact
           path: .
@@ -1047,10 +1047,10 @@ jobs:
 
 ```yaml
 steps:
-  - uses: actions/checkout@v4
+  - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4
     with:
       persist-credentials: false
-  - uses: actions/upload-artifact@v4
+  - uses: actions/upload-artifact@5d5d22a31266ced268874388b861e4b58bb5c2f3 # v4
     with:
       name: my-artifact
       path: dist/
@@ -1740,7 +1740,7 @@ jobs:
     env:
       ACTIONS_ALLOW_UNSECURE_COMMANDS: true  # ERROR: insecure commands enabled
     steps:
-      - run: echo "::set-env name=PATH::$PATH:/usr/local/bin"
+      - run: echo "::add-path::/usr/local/custom-bin"
 ```
 
 **Remediation:** Remove `ACTIONS_ALLOW_UNSECURE_COMMANDS` and migrate to environment files:
@@ -1750,7 +1750,7 @@ jobs:
   build:
     runs-on: ubuntu-24.04
     steps:
-      - run: echo "MY_VAR=value" >> "$GITHUB_ENV"
+      - run: echo "/usr/local/custom-bin" >> "$GITHUB_PATH"
 ```
 
 ---

@@ -557,6 +557,18 @@ C# implementation notes:
 - Error results (non-skip failures) must not be cached.
 - Resolver implementations are injected by caller — not instantiated by `LintEngine`.
 
+**Comparison with `dockerfile-pin` (Go reference):**
+
+| Aspect | dockerfile-pin (Go) | Seiton (C#) |
+|---|---|---|
+| HTTP method | `remote.Head()` via go-containerregistry | `HttpMethod.Head` |
+| Auth handling | `authn.DefaultKeychain` (handles bearer + Basic + credential helpers automatically) | Basic from `~/.docker/config.json`; anonymous bearer challenge via RFC 6750 flow |
+| 404 image not found | `Exists()` returns `false, nil` | `Resolve()` returns `null` |
+| Error caching | Not cached (transient errors retried) | Not cached |
+| Existence check | Separate `Exists(imageRef) -> (bool, error)` method | Not exposed (folded into `Resolve` returning `null`) |
+
+**Lesson learned:** The C# implementation was already using HEAD requests before this comparison. The key gap identified was the absence of the anonymous bearer token challenge flow, which caused digest resolution to fail silently for Docker Hub official images when no Docker credentials are configured.
+
 #### 4.5.1a `OciImageDigestResolver` — Implementation Constraints
 
 `OciImageDigestResolver` is the concrete `IImageDigestResolver` implementation. Key behavioral guarantees:

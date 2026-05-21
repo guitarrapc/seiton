@@ -246,7 +246,7 @@ Default behavior and simplicity requirements:
 - Unknown top-level keys/unknown rule IDs are configuration errors.
 - Empty config file is valid and equivalent to default behavior.
 
-Default values (current C# runtime):
+Default values:
 
 | Setting | Default |
 |---|---|
@@ -1008,7 +1008,7 @@ fix:
 ```
 
 - `fix.defaults.job-timeout-minutes`: integer or null. When set, `job-timeout-minutes-required` attaches auto-fix with this value. Null/missing or `<= 0` disables fix attachment.
-- `fix.pinning.enable-network`: when `true`, `unpinned-uses` diagnostics may receive network-resolved SHA fix payloads via `PinRemediationEngine`. Default: `false`.
+- `fix.pinning.enable-network`: when `true`, `unpinned-uses` diagnostics may receive network-resolved SHA fix payloads via the pin remediation engine. Default: `false`.
 - `fix.pinning.min-age-days`: minimum age in days before a tag is eligible for SHA pinning. Default: `14`. `0` disables the constraint.
 - `fix.pinning.exclude-branches`: branch names to never pin. Default: `["main", "master"]`.
 - `fix.pinning.ignore-actions`: list of `{uses, ref}` wildcard patterns (`*` matches any sequence, `?` matches single char) to skip during SHA resolution. No regex.
@@ -1035,8 +1035,8 @@ network:
   - `skip` (default): resolution failures leave the diagnostic without fix and continue processing.
   - `fail`: any resolution failure causes the operation to return an error immediately.
 - `network.timeout-seconds`: HTTP request timeout in seconds. Default: **`30`**. Accepted range after validation: **`0`–`300`**; larger values emit an error diagnostic and normalize to **`300`**.
-- `network.max-concurrency`: maximum concurrent network operations. When omitted, the effective default is **`min(4, Environment.ProcessorCount)`** (logical processors, minimum **`1`**), so the implicit default never exceeds the cap. Accepted range after validation when set: **`1`**–**`Environment.ProcessorCount`**; larger values emit an error diagnostic and normalize to that cap.
-- `network.github.ghes-api-url`: optional GitHub Enterprise Server API URL. Empty string = github.com only. When set, **must** be an absolute `https` URI; `http`, other schemes, and embedded credentials (`https://user@host/...`) are configuration errors. Stored value is normalized via `Uri.AbsoluteUri`.
+- `network.max-concurrency`: maximum concurrent network operations. When omitted, the effective default is **`min(4, logical processor count)`** (minimum **`1`**), so the implicit default never exceeds the cap. Accepted range after validation when set: **`1`**–**`logical processor count`**; larger values emit an error diagnostic and normalize to that cap.
+- `network.github.ghes-api-url`: optional GitHub Enterprise Server API URL. Empty string = github.com only. When set, **must** be an absolute `https` URI; `http`, other schemes, and embedded credentials (`https://user@host/...`) are configuration errors. Stored value is normalized to absolute URI form.
 - `network.github.ghes-fallback`: when `true` and `ghes-api-url` is set, repositories not found on GHES are retried against github.com. Default: `false`.
 
 HTTP clients that send the GitHub Bearer token use `AllowAutoRedirect = false` at the transport layer and manually follow **same-origin** `3xx` responses only; cross-origin redirects are not followed, so the token is not automatically replayed against a different scheme/host/port after a redirect response.
@@ -1047,7 +1047,7 @@ Token resolution:
 - This order is not configurable. If no variable yields a token, API calls are made unauthenticated (lower rate limit).
 - Rationale: exposing token env var selection in config creates an attack surface where a malicious config redirects token resolution to unintended environment variables.
 
-Additionally, **`LintConfigLibrary` / `LintConfigYamlParser`** enforce resource caps on YAML configuration payloads: **`1 048 576`** UTF‑8 bytes total, **`64`** compound nesting depth, and **`50 000`** counted structural units (mapping keys + scalar reads + compounds). Oversized payloads fail validation with deterministic error messages (`seiton configuration … maximum size …` / `lint config YAML exceeds maximum …`). **`fix.pinning.ignore-actions`** compiles **`Regex`** with **`MatchTimeout`** = **`2`** s, and regex-timeouts during branch/ignore evaluations are handled as non-matches/non-exclusions so pinning does not wedge the process. For **`LintConfigYamlParser`** array-backed payloads (normal `Validate` / `ValidateFile` path), the implementation parses from the same **`byte[]`** as **`LintConfig.Utf8Yaml`** without allocating a redundant full-length copy — **fallback** allocates only when **`ReadOnlyMemory<byte>`** is not array-backed.
+Configuration parsing enforces resource caps on YAML payloads: **`1 048 576`** UTF-8 bytes total, **`64`** compound nesting depth, and **`50 000`** counted structural units. Oversized payloads fail validation with deterministic error messages. Wildcard pattern matching for `fix.pinning.ignore-actions` must impose a timeout (recommended ≤ 2 s) so pattern evaluation does not stall the process; timed-out patterns are treated as non-matches.
 
 **Governance and observability (configuration path):**
 
@@ -1438,16 +1438,6 @@ Resolve(imageRef) -> (digest, error)
 
 Implementations must use `HEAD /v2/{repo}/manifests/{reference}` with appropriate `Accept` headers to obtain the digest from the `Docker-Content-Digest` response header. This is rate-limit-friendly: Docker Hub counts `GET /manifests` as a **pull** (charged against the pull-rate quota), whereas `HEAD /manifests` is an **API request** (a separate, more generous quota).
 
-Comparison with `dockerfile-pin`:
-
-| Aspect | dockerfile-pin (Go) | Seiton (C#) |
-|---|---|---|
-| HTTP method | `remote.Head()` via go-containerregistry | `HttpMethod.Head` |
-| Auth handling | `authn.DefaultKeychain` (handles bearer + Basic + credential helpers automatically) | Basic from `~/.docker/config.json`; anonymous bearer challenge via RFC 6750 flow |
-| 404 image not found | `Exists()` returns `false, nil` | `Resolve()` returns `null` |
-| Error caching | Not cached (transient errors retried) | Not cached |
-| Existence check | Separate `Exists(imageRef) -> (bool, error)` method | Not exposed (folded into `Resolve` returning `null`) |
-
 **Bearer token challenge/response flow** (required for Docker Hub official images accessed without stored credentials):
 
 1. Send `HEAD /v2/{repo}/manifests/{ref}` — no auth.
@@ -1467,8 +1457,8 @@ Security constraints on the bearer token flow:
 
 Docker Hub's pull limit (e.g. 100 pulls/6 hours for anonymous users) is charged when a client downloads at least one layer (i.e. performs a `GET /v2/{repo}/blobs/` request). A `HEAD /v2/{repo}/manifests/{ref}` request retrieves only response headers — no manifest body, no layer data — and is not counted as a pull. This is why tools like `dockerfile-pin` and Seiton use HEAD for digest resolution.
 
-**Lesson learned from `dockerfile-pin` comparison:**
-The C# implementation was already using HEAD requests before this comparison was made. The Go reference implementation confirmed this as the correct approach. The key gap identified was the absence of the anonymous bearer token challenge flow, which caused digest resolution to fail silently for Docker Hub official images (e.g. `node:20`, `python:3.12`) when no Docker credentials are configured.
+**Lesson learned:**
+Using HEAD for digest resolution is the correct approach (confirmed by both Go and C# implementations). Implementations must also support the anonymous bearer token challenge flow (RFC 6750), because Docker Hub official images (e.g. `node:20`, `python:3.12`) require it when no Docker credentials are configured.
 
 ### 12.3 Configuration
 
@@ -1518,7 +1508,7 @@ This order is not configurable via the config file. Rationale: exposing token en
 
 Optional support for GitHub Enterprise Server. When `ghes-api-url` is set, the resolver first queries the GHES instance. If `ghes-fallback: true`, repositories not found on GHES are retried against github.com. Matches pinact's `ClientResolver` pattern.
 
-Schema validation rejects non-HTTPS absolute URLs (`http`, `ftp`, etc.), relative-looking strings that do not parse as an absolute HTTPS URI, and URLs with embedded `userinfo`. The accepted value is stored as `Uri.AbsoluteUri`.
+Schema validation rejects non-HTTPS absolute URLs (`http`, `ftp`, etc.), relative-looking strings that do not parse as an absolute HTTPS URI, and URLs with embedded `userinfo`. The accepted value is stored in normalized absolute URI form.
 
 HTTP clients carrying the GitHub Bearer token are built without automatic redirect follow at the socket layer; the handler follows `3xx` only when `Location` resolves to the same origin (scheme + host + port) as the request URL being redirected. Cross-origin redirects are not followed, so credentials are not automatically sent to another origin in response to a redirect.
 
