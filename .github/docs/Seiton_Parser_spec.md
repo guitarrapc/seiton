@@ -1141,7 +1141,7 @@ Job and step diagnostics use a dotted-path prefix aligned with GitHub Actions wo
 
 #### Principle 6: Unexpected-key messages use dotted-path prefix for location context
 
-Format: `{locationPath} unexpected key "{key}" for {sectionDescription}. expected one of ...`
+Format: `{locationPath} has unexpected key "{key}" for {sectionDescription}. expected one of ...`
 
 Where `{sectionDescription}` is either:
 - `"{sectionType}" section` for named mapping sections (e.g., `"job" section`, `"concurrency" section`)
@@ -1165,21 +1165,21 @@ Exception: `on.workflow_dispatch.inputs` and `on.workflow_call.secrets` receive 
 - `"runs-on" section is missing in jobs.'build'`
 
 **Step-level examples (Principle 5):**
-- `jobs.'build'.steps[1] unexpected key "shell" for step to execute action. expected one of ...`
+- `jobs.'build'.steps[1] has unexpected key "shell" for step to execute action. expected one of ...`
 - `jobs.'deploy'.steps[3] must run script with "run" section or run action with "uses" section`
 
 **Job-scope unexpected-key (Principle 6):**
-- `jobs.'build' unexpected key "X" for "job" section`
-- `jobs.'deploy'.concurrency unexpected key "X" for "concurrency" section`
-- `jobs.'build'.container.credentials unexpected key "X" for "credentials" section`
-- `jobs.'build'.services.'redis' unexpected key "X" for "services" section`
+- `jobs.'build' has unexpected key "X" for "job" section`
+- `jobs.'deploy'.concurrency has unexpected key "X" for "concurrency" section`
+- `jobs.'build'.container.credentials has unexpected key "X" for "credentials" section`
+- `jobs.'build'.services.'redis' has unexpected key "X" for "services" section`
 
 **Shared helpers** — prefix only at job level:
 - `unexpected key "X" for "concurrency" section` (workflow-level, no prefix)
-- `jobs.'deploy'.concurrency unexpected key "X" for "concurrency" section` (job-level)
+- `jobs.'deploy'.concurrency has unexpected key "X" for "concurrency" section` (job-level)
 
 **Event-scope:**
-- `on.workflow_dispatch.inputs unexpected key "X" for "inputs" section`
+- `on.workflow_dispatch.inputs has unexpected key "X" for "inputs" section`
 
 **Prefix scope table (Principle 6a):**
 

@@ -1350,85 +1350,85 @@ Same rules as Go. The `ParseMapping` helper supports case-insensitive mode via `
 ## Appendix A: Seiton Parser Function → C# Mapping
 
 > The "Spec Function" column lists the canonical function names defined in `Seiton_Parser_spec.md` §1–§4.
-> The "C# Implementation location" column points to the closest corresponding code location in C#. Exact method signatures are listed when they exist verbatim; otherwise the entry is a conceptual mapping label for logic implemented as private generic helpers or inline within a broader private method (`WorkflowParser.ParseCoreInner`, the central private traversal method). Most workflow-level and structural parse functions listed here are conceptual — the actual implementation uses private generic methods with different signatures.
+> The "C# Conceptual counterpart" column points to the closest corresponding code location in C#. Exact method signatures are listed when they exist verbatim; otherwise the entry names the representative helper or dispatch site that owns the behavior.
 
 ### A.1 Entry Point
 
-| Spec Function | C# Implementation location | Spec § |
+| Spec Function | C# Conceptual counterpart | Spec § |
 |---|---|---|
 | `Parse(utf8Yaml, filePath)` | `WorkflowParser.Parse(byte[], string)` | §1.1 |
 
 ### A.2 Workflow-Level Parse Functions
 
-| Spec Function | C# Implementation location | Spec § |
+| Spec Function | C# Conceptual counterpart | Spec § |
 |---|---|---|
-| `ParseWorkflow(utf8Yaml)` | `WorkflowParser.ParseWorkflow(IYamlStreamReader)` | §3.2 |
-| `ParseEvents(node)` | `WorkflowParser.ParseEvents(IYamlStreamReader)` | §3.4 |
-| `ParsePermissions(node)` | `WorkflowParser.ParsePermissions(IYamlStreamReader)` | §3.5 |
-| `ParseEnv(node)` | `WorkflowParser.ParseEnv(IYamlStreamReader)` | §3.6 |
-| `ParseDefaults(node)` | `WorkflowParser.ParseDefaults(IYamlStreamReader)` | §3.7 |
-| `ParseConcurrency(node)` | `WorkflowParser.ParseConcurrency(IYamlStreamReader)` | §3.8 |
-| `ParseJobs(node)` | `WorkflowParser.ParseJobs(IYamlStreamReader)` | §3.9 |
+| `ParseWorkflow(utf8Yaml)` | `WorkflowParser.ParseCoreInner<TReader>(...)` | §3.2 |
+| `ParseEvents(node)` | `WorkflowParser.ParseOnEvents<TReader>(...)` | §3.4 |
+| `ParsePermissions(node)` | `WorkflowParser.ParsePermissionsNode<TReader>(...)` | §3.5 |
+| `ParseEnv(node)` | `WorkflowParser.ParseEnvNode<TReader>(...)` | §3.6 |
+| `ParseDefaults(node)` | `WorkflowParser.ParseDefaultsNode<TReader>(...)` | §3.7 |
+| `ParseConcurrency(node)` | `WorkflowParser.ParseConcurrencyNode<TReader>(...)` | §3.8 |
+| `ParseJobs(node)` | `WorkflowParser.ParseCoreInner<TReader>(...)` root dispatch + `WorkflowParser.ParseJobNode<TReader>(...)` | §3.9 |
 
 ### A.3 Event Parse Functions
 
-| Spec Function | C# Implementation location | Spec § |
+| Spec Function | C# Conceptual counterpart | Spec § |
 |---|---|---|
-| `parseEventWithNoConfig(node)` | `WorkflowParser.ParseEventWithNoConfig(IYamlStreamReader)` | §3.4.1 |
-| `ParseWebhookEvent(name, configNode)` | `WorkflowParser.ParseWebhookEvent(StringNode, IYamlStreamReader)` | §3.4.2 |
-| `parseWebhookEventFilter(name, node)` | `WorkflowParser.ParseWebhookEventFilter(StringNode, IYamlStreamReader)` | §3.4.2 |
-| `ParseScheduleEvent(pos, node)` | `WorkflowParser.ParseScheduleEvent(IYamlStreamReader)` | §3.4 |
-| `ParseWorkflowDispatchEvent(pos, node)` | `WorkflowParser.ParseWorkflowDispatchEvent(IYamlStreamReader)` | §3.4 |
-| `ParseWorkflowCallEvent(pos, node)` | `WorkflowParser.ParseWorkflowCallEvent(IYamlStreamReader)` | §3.4 |
-| `ParseRepositoryDispatchEvent(pos, node)` | `WorkflowParser.ParseRepositoryDispatchEvent(IYamlStreamReader)` | §3.4 |
+| `parseEventWithNoConfig(node)` | `BuildSimpleEvent(...)` and scalar/sequence branches in `WorkflowParser.ParseOnEvents<TReader>(...)` | §3.4.1 |
+| `ParseWebhookEvent(name, configNode)` | `WorkflowParser.ParseWebhookEventWithOptions<TReader>(...)` | §3.4.2 |
+| `parseWebhookEventFilter(name, node)` | Inline filter branches inside `WorkflowParser.ParseWebhookEventWithOptions<TReader>(...)` | §3.4.2 |
+| `ParseScheduleEvent(pos, node)` | `WorkflowParser.ParseScheduleEvent<TReader>(...)` | §3.4 |
+| `ParseWorkflowDispatchEvent(pos, node)` | `WorkflowParser.ParseWorkflowDispatchEvent<TReader>(...)` | §3.4 |
+| `ParseWorkflowCallEvent(pos, node)` | `WorkflowParser.ParseWorkflowCallEvent<TReader>(...)` | §3.4 |
+| `ParseRepositoryDispatchEvent(pos, node)` | `WorkflowParser.ParseRepositoryDispatchEvent<TReader>(...)` | §3.4 |
 
 ### A.4 Job / Step Parse Functions
 
-| Spec Function | C# Implementation location | Spec § |
+| Spec Function | C# Conceptual counterpart | Spec § |
 |---|---|---|
-| `ParseJob(id, node)` | `WorkflowParser.ParseJob(StringNode, IYamlStreamReader)` | §3.10 |
-| `ParseSteps(node)` | `WorkflowParser.ParseSteps(IYamlStreamReader)` | §3.11 |
-| `ParseStep(node)` | `WorkflowParser.ParseStep(IYamlStreamReader)` | §3.12 |
-| `parseStepExecAction(entries, isDocker)` | `WorkflowParser.ParseStepExecAction(…, bool)` | §3.12.1 |
-| `parseStepExecRun(entries)` | `WorkflowParser.ParseStepExecRun(…)` | §3.12.2 |
+| `ParseJob(id, node)` | `WorkflowParser.ParseJobNode<TReader>(...)` | §3.10 |
+| `ParseSteps(node)` | `WorkflowParser.ParseSteps<TReader>(...)` | §3.11 |
+| `ParseStep(node)` | `WorkflowParser.ParseStep<TReader>(...)` | §3.12 |
+| `parseStepExecAction(entries, isDocker)` | Inline assembly in `WorkflowParser.ParseStep<TReader>(...)` | §3.12.1 |
+| `parseStepExecRun(entries)` | Inline assembly in `WorkflowParser.ParseStep<TReader>(...)` | §3.12.2 |
 
 ### A.5 Structural Section Parse Functions
 
-| Spec Function | C# Implementation location | Spec § |
+| Spec Function | C# Conceptual counterpart | Spec § |
 |---|---|---|
-| `ParseRunsOn(node)` | `WorkflowParser.ParseRunsOn(IYamlStreamReader)` | §3.13 |
-| `ParseEnvironment(node)` | `WorkflowParser.ParseEnvironment(IYamlStreamReader)` | §3.14 |
-| `ParseOutputs(node)` | `WorkflowParser.ParseOutputs(IYamlStreamReader)` | §3.10 |
-| `ParseStrategy(node)` | `WorkflowParser.ParseStrategy(IYamlStreamReader)` | §3.15 |
-| `ParseMatrix(node)` | `WorkflowParser.ParseMatrix(IYamlStreamReader)` | §3.15 |
-| `parseMatrixCombinations(sec, node)` | `WorkflowParser.ParseMatrixCombinations(string, IYamlStreamReader)` | §3.15 |
-| `parseRawYAMLValue(node)` | `WorkflowParser.ParseRawYamlValue(IYamlStreamReader)` | §3.15 |
-| `ParseContainer(section, node)` | `WorkflowParser.ParseContainer(string, IYamlStreamReader)` | §3.16 |
-| `ParseServices(node)` | `WorkflowParser.ParseServices(IYamlStreamReader)` | §3.17 |
-| `ParseCredentials(node)` | `WorkflowParser.ParseCredentials(IYamlStreamReader)` | §3.18 |
+| `ParseRunsOn(node)` | `WorkflowParser.ParseRunsOnNode<TReader>(...)` | §3.13 |
+| `ParseEnvironment(node)` | `WorkflowParser.ParseEnvironmentNode<TReader>(...)` | §3.14 |
+| `ParseOutputs(node)` | `WorkflowParser.ParseOutputsNode<TReader>(...)` | §3.10 |
+| `ParseStrategy(node)` | `WorkflowParser.ParseStrategy<TReader>(...)` | §3.15 |
+| `ParseMatrix(node)` | `WorkflowParser.ParseMatrix<TReader>(...)` | §3.15 |
+| `parseMatrixCombinations(sec, node)` | `WorkflowParser.ParseMatrixCombinations<TReader>(...)` | §3.15 |
+| `parseRawYAMLValue(node)` | `WorkflowParser.ParseRawYamlValue<TReader>(...)` | §3.15 |
+| `ParseContainer(section, node)` | `WorkflowParser.ParseContainerLike<TReader>(...)` | §3.16 |
+| `ParseServices(node)` | `WorkflowParser.ParseServices<TReader>(...)` | §3.17 |
+| `ParseCredentials(node)` | `WorkflowParser.ParseCredentials<TReader>(...)` | §3.18 |
 
 ### A.6 Generic Mapping / Collection Helpers
 
-| Spec Function | C# Implementation location | Spec § |
+| Spec Function | C# Conceptual counterpart | Spec § |
 |---|---|---|
-| `ParseMapping(sectionName, allowEmpty, caseSensitive)` | `WorkflowParser.ParseMapping(string, bool, bool)` | §3.3 |
-| `parseStringOrStringSequence(sec, node, allowEmpty, allowElemEmpty)` | `WorkflowParser.ParseStringOrStringSequence(string, IYamlStreamReader, bool, bool)` | §4.7 |
+| `ParseMapping(sectionName, allowEmpty, caseSensitive)` | Inline mapping traversal pattern + `TryRegisterMappingKey(...)` | §3.3 |
+| `parseStringOrStringSequence(sec, node, allowEmpty, allowElemEmpty)` | `WorkflowParser.ParseStringOrStringSequence<TReader>(...)` | §4.7 |
 
 ### A.7 Scalar Helpers
 
-| Spec Function | C# Implementation location | Spec § |
+| Spec Function | C# Conceptual counterpart | Spec § |
 |---|---|---|
-| `parseString(node, allowEmpty)` | `WorkflowParser.ParseString(IYamlStreamReader, bool)` | §4.1 |
-| `parseBool(node)` | `WorkflowParser.ParseBool(IYamlStreamReader)` | §4.2 |
-| `parseInt(node)` | `WorkflowParser.ParseInt(IYamlStreamReader)` | §4.3 |
-| `parseFloat(node)` | `WorkflowParser.ParseFloat(IYamlStreamReader)` | §4.4 |
-| `parseExpression(node, expecting)` | `WorkflowParser.ParseExpression(IYamlStreamReader, string)` | §4.5 |
-| `mayParseExpression(node)` | `WorkflowParser.MayParseExpression(IYamlStreamReader)` | §4.6 |
-| `parseTimeoutMinutes(node)` | `WorkflowParser.ParseTimeoutMinutes(IYamlStreamReader)` | §3.10 |
+| `parseString(node, allowEmpty)` | `WorkflowParser.ParseString<TReader>(...)` | §4.1 |
+| `parseBool(node)` | `WorkflowParser.ParseBool<TReader>(...)` | §4.2 |
+| `parseInt(node)` | `WorkflowParser.ParseInt<TReader>(...)` | §4.3 |
+| `parseFloat(node)` | `WorkflowParser.ParseFloat<TReader>(...)` | §4.4 |
+| `parseExpression(node, expecting)` | `WorkflowParser.ParseExpression<TReader>(...)` | §4.5 |
+| `mayParseExpression(node)` | `WorkflowParser.MayParseExpression<TReader>(...)` | §4.6 |
+| `parseTimeoutMinutes(node)` | Inline `ParseFloat<TReader>(...)` + `> 0` validation in job/step parse sites | §3.10 |
 
 ### A.8 Visitor / Pass
 
-| Spec Function | C# Implementation location | Spec § |
+| Spec Function | C# Conceptual counterpart | Spec § |
 |---|---|---|
 | `Visitor.Visit(workflow)` | `WorkflowVisitor.Visit(Workflow)` | `Seiton_Linter_spec.md` §4.2 |
 | `Pass` interface | `IPass` | `Seiton_Linter_spec.md` §4.1 |
@@ -1436,7 +1436,7 @@ Same rules as Go. The `ParseMapping` helper supports case-insensitive mode via `
 
 ### A.9 Alias Resolution
 
-| Spec Function | C# Implementation location | Spec § |
+| Spec Function | C# Conceptual counterpart | Spec § |
 |---|---|---|
 | `resolveAliases(root)` | Handled by YAML adapter layer (`VYaml`) | §1.1 step 1b |
 
