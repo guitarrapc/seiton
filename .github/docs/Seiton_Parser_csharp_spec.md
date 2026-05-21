@@ -1411,7 +1411,7 @@ Same rules as Go. The `ParseMapping` helper supports case-insensitive mode via `
 
 | Spec Function | C# Conceptual counterpart | Spec § |
 |---|---|---|
-| `ParseMapping(sectionName, allowEmpty, caseSensitive)` | Inline mapping traversal pattern + `TryRegisterMappingKey(...)` | §3.3 |
+| `ParseMapping(sectionName, allowEmpty, caseSensitive)` | Inline mapping traversal pattern + `TryRegisterDynamicKey(...)` | §3.3 |
 | `parseStringOrStringSequence(sec, node, allowEmpty, allowElemEmpty)` | `WorkflowParser.ParseStringOrStringSequence<TReader>(...)` | §4.7 |
 
 ### A.7 Scalar Helpers
