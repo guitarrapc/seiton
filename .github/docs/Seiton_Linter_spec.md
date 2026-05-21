@@ -1243,7 +1243,7 @@ Security constraints on the bearer token flow:
 Docker Hub's pull limit (e.g. 100 pulls/6 hours for anonymous users) is charged when a client downloads at least one layer (i.e. performs a `GET /v2/{repo}/blobs/` request). A `HEAD /v2/{repo}/manifests/{ref}` request retrieves only response headers — no manifest body, no layer data — and is not counted as a pull. This is why tools like `dockerfile-pin` and Seiton use HEAD for digest resolution.
 
 **Lesson learned:**
-Using HEAD for digest resolution is the correct approach (confirmed by both Go and C# implementations). Implementations must also support the anonymous bearer token challenge flow (RFC 6750), because Docker Hub official images (e.g. `node:20`, `python:3.12`) require it when no Docker credentials are configured.
+Using HEAD for digest resolution is the correct approach (confirmed across reference implementations). Implementations must also support the anonymous bearer token challenge flow (RFC 6750), because Docker Hub official images (e.g. `node:20`, `python:3.12`) require it when no Docker credentials are configured.
 
 ### 12.3 Configuration
 
