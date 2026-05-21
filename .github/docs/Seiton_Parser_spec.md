@@ -460,40 +460,15 @@ ParseWebhookEvent(name, configNode):
 
 #### 3.4.2a Unknown Key Suggestion and Auto-Fix
 
-When any key is unknown (not in the section's allowed key set), the parser performs Levenshtein distance matching against the valid key names for that section. This applies to **all** unexpected-key diagnostic sites across the parser, not just webhook/image_version event options.
+When any key is unknown (not in the section's allowed key set), the parser performs case-insensitive distance-based matching against valid key names for that section. This applies to **all** unexpected-key diagnostic sites across the parser.
 
-**Algorithm:**
-1. Compute **case-insensitive** Levenshtein distance between the unknown key and each allowed key for the section (both strings are lowered before character comparison).
-2. Select the closest match if it is within an acceptable distance threshold.
-3. Distance threshold adapts to input length: ≤4 chars → max 1, ≤8 chars → max 2, >8 chars → max 3.
-
-**Diagnostic message format:**
-- When a close match is found: `did you mean "{suggestion}"?` appears **before** the expected key list, and the diagnostic carries a `DiagnosticFix` that replaces the unknown key bytes with the suggested key name.
+**Contract:**
+- When a close match is found: diagnostic includes `did you mean "{suggestion}"?` before the expected key list, and carries a `DiagnosticFix` that replaces the unknown key with the suggested key.
 - When no match is within threshold: plain `expected one of {list}` message with no suggestion or fix.
-- For unknown events with a suggestion, the URL reference is **always included** (not dropped when a suggestion is present).
+- For unknown events with a suggestion, the URL reference is **always included**.
+- Message ordering: `did you mean "{suggestion}"?` always comes before `expected one of {list}`.
 
-**Message ordering:** `did you mean "{suggestion}"?` always comes before `expected one of {list}`.
-
-**Scope:** Suggestion support covers all unexpected-key sites:
-- Workflow/action-metadata top-level keys
-- Event options (webhook, image_version, workflow_call, workflow_dispatch, repository_dispatch, schedule)
-- Job keys (job, runs-on, environment, strategy, snapshot)
-- Step keys (action step, run step, deferred unknown keys)
-- Container/service keys and credentials
-- Defaults and defaults.run keys
-- Concurrency keys
-- Action metadata inputs/outputs/branding/runs keys
-
-**Examples:**
-- `on.push` with key `branch` → suggests `branches` (distance 2, fix attached)
-- `on.push` with key `tags_ignore` → suggests `tags-ignore` (distance 1, fix attached)
-- `on.push` with key `BRANCHES` → suggests `branches` (case-insensitive distance 0, fix attached)
-- `on.push` with key `xyz` → no suggestion (distance too large, no fix)
-- Top-level `NAME` → suggests `name` (case-insensitive distance 0)
-- Job key `default` → suggests `defaults` (distance 1)
-- Unknown event `PUSH` → suggests `push` with URL always included
-
-This is an error-path-only feature; Levenshtein computation does not affect parse performance on valid inputs.
+This is an error-path-only feature; distance computation does not affect parse performance on valid inputs.
 
 #### 3.4.3 Exclusive Filter Validation
 
@@ -919,7 +894,12 @@ The root identifiers of expressions (`github`, `env`, `vars`, `job`, `steps`, `r
 
 #### 7.2.1 Per-Key Context Availability Table
 
-The following table shows the complete per-key availability. Each row is a workflow key position, each column is a context root. ✓ = available, - = not available.
+The complete per-key availability matrix is generated from `data/sources/availability/` and materialized in `Availability.g.cs`. Each workflow key position maps to a dedicated `ExpressionValidationContext` enum value with its own context root array.
+
+Context availability varies by workflow position: workflow-level keys have the fewest roots (3–4), job-level keys progressively gain `strategy`/`matrix`/`needs`/`secrets`, and step-level keys have access to all 11 roots (with `steps.if` being the only exception that excludes `secrets`).
+
+<details>
+<summary>Full availability table (reference)</summary>
 
 **Workflow Level:**
 
@@ -972,6 +952,8 @@ The following table shows the complete per-key availability. Each row is a workf
 | `jobs.<id>.steps.timeout-minutes` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
 | `jobs.<id>.steps.working-directory` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
 
+</details>
+
 #### 7.2.2 Function Availability by Context
 
 | Function | Availability |
@@ -988,8 +970,6 @@ The following table shows the complete per-key availability. Each row is a workf
 - **`jobs.<id>.environment.url`** and **`jobs.<id>.outputs.<out_id>`** have broader access than most job-level keys because they are evaluated after step execution.
 - **Container/service env** keys gain `job`, `runner`, `env` contexts compared to regular job-level keys.
 - **Container/service credentials** keys gain `env` and `secrets` compared to regular job-level keys.
-
-The complete availability data is generated from `data/sources/availability/` and materialized in `Availability.g.cs`. Each workflow key position maps to a dedicated `ExpressionValidationContext` enum value with its own root array.
 
 ### 7.3 Type Validation
 
@@ -1157,75 +1137,59 @@ Events parsed under `on:` must use `on.{eventName}` as the section path:
 
 #### Principle 5: Diagnostic messages use dotted-path format for job and step context
 
-Job and step diagnostics use a dotted-path prefix aligned with GitHub Actions workflow syntax documentation (e.g., `jobs.<job_id>.steps[*]`, `jobs.<job_id>.<key>`), so the user immediately knows which job/step/property is affected.
-
-**Job-level examples:**
-- `jobs.'build'.name must be string` (property validation)
-- `jobs.'deploy'.strategy.max-parallel must be integer` (nested property)
-- `jobs.'test' cannot have both uses and steps` (structural error — space after prefix)
-- `"runs-on" section is missing in jobs.'build'` (missing-section messages)
-
-**Step-level examples:**
-- `jobs.'build'.steps[1] unexpected key "shell" for step to execute action. expected one of ...`
-- `jobs.'deploy'.steps[3] must run script with "run" section or run action with "uses" section`
-- `jobs.'test'.steps[2] element of "steps" section should not be empty. please remove this section if it's unnecessary`
-
-When the job ID is unavailable (e.g., action metadata parsing), the step prefix falls back to `steps[{stepIndex}]`.
+Job and step diagnostics use a dotted-path prefix aligned with GitHub Actions workflow syntax (e.g., `jobs.'build'.steps[1]`), so the user immediately knows which job/step/property is affected. When the job ID is unavailable (e.g., action metadata), the prefix falls back to `steps[{stepIndex}]`.
 
 #### Principle 6: Unexpected-key messages use dotted-path prefix for location context
 
-"Unexpected key" diagnostic messages use a **dotted-path prefix** followed by the original section-type `for` clause. This is consistent with step-level messages (Principle 5) and cleanly separates WHERE (prefix) from WHAT (section type in `for` clause).
+Format: `{locationPath} unexpected key "{key}" for "{sectionType}" section. expected one of ...`
 
-The format is:
-
-```
-{locationPath} unexpected key "{key}" for "{sectionType}" section. expected one of ...
-```
-
-When there is no location context (workflow-level), the prefix is omitted:
-
-```
-unexpected key "{key}" for "{sectionType}" section. expected one of ...
-```
-
-**Job-scope sections** — prefix with `jobs.'<id>'.<section>`:
-- `jobs.'build' unexpected key "X" for "job" section` (job top-level)
-- `jobs.'deploy'.concurrency unexpected key "X" for "concurrency" section` (job concurrency)
-- `jobs.'build'.strategy unexpected key "X" for "strategy" section` (strategy)
-- `jobs.'build'.environment unexpected key "X" for "environment" section` (environment)
-- `jobs.'build'.runs-on unexpected key "X" for "runs-on" section` (runs-on)
-- `jobs.'build'.container unexpected key "X" for "container" section` (container)
-- `jobs.'build'.container.credentials unexpected key "X" for "credentials" section` (container credentials)
-- `jobs.'build'.services.'redis' unexpected key "X" for "services" section` (service)
-- `jobs.'build'.services.'redis'.credentials unexpected key "X" for "credentials" section` (service credentials)
-
-**Shared helpers** (concurrency, defaults) — prefix only at job level:
-- `unexpected key "X" for "concurrency" section` (workflow-level, no prefix)
-- `jobs.'deploy'.concurrency unexpected key "X" for "concurrency" section` (job-level)
-- `expected "run" key for "defaults" section but got "X"` (workflow-level)
-- `jobs.'build'.defaults expected "run" key for "defaults" section but got "X"` (job-level)
-- `jobs.'build'.defaults.run unexpected key "X" for "run" section` (job-level defaults.run)
-
-**Event-scope sections** — prefix with `on.<event>.<section>`:
-- `on.workflow_dispatch.inputs unexpected key "X" for "inputs" section`
-- `on.workflow_call.secrets unexpected key "X" for "secrets" section`
+When there is no location context (workflow-level), the prefix is omitted.
 
 #### Principle 6a: Prefix scope — when location prefixes are NOT added
 
-Dotted-path prefixes are added only when **multiple instances** of the same section type can coexist in a workflow, making the section name alone ambiguous. Structurally unique scopes do not receive a prefix.
+Prefixes are added only when **multiple instances** of the same section type can coexist (jobs, steps). Structurally unique scopes (workflow root, workflow-level defaults/concurrency, event-level) do not receive a prefix.
+
+Exception: `on.workflow_dispatch.inputs` and `on.workflow_call.secrets` receive prefixes because `for "inputs"` / `for "secrets"` alone is ambiguous across events.
+
+<details>
+<summary>Dotted-path message examples (Principles 5–6a)</summary>
+
+**Job-level examples (Principle 5):**
+- `jobs.'build'.name must be string`
+- `jobs.'deploy'.strategy.max-parallel must be integer`
+- `jobs.'test' cannot have both uses and steps`
+- `"runs-on" section is missing in jobs.'build'`
+
+**Step-level examples (Principle 5):**
+- `jobs.'build'.steps[1] unexpected key "shell" for step to execute action. expected one of ...`
+- `jobs.'deploy'.steps[3] must run script with "run" section or run action with "uses" section`
+
+**Job-scope unexpected-key (Principle 6):**
+- `jobs.'build' unexpected key "X" for "job" section`
+- `jobs.'deploy'.concurrency unexpected key "X" for "concurrency" section`
+- `jobs.'build'.container.credentials unexpected key "X" for "credentials" section`
+- `jobs.'build'.services.'redis' unexpected key "X" for "services" section`
+
+**Shared helpers** — prefix only at job level:
+- `unexpected key "X" for "concurrency" section` (workflow-level, no prefix)
+- `jobs.'deploy'.concurrency unexpected key "X" for "concurrency" section` (job-level)
+
+**Event-scope:**
+- `on.workflow_dispatch.inputs unexpected key "X" for "inputs" section`
+
+**Prefix scope table (Principle 6a):**
 
 | Scope | Prefix added? | Reason |
 |---|---|---|
-| Workflow root (`"workflow"` section) | No | Only one workflow root exists per file |
-| Workflow-level `defaults`, `concurrency` | No | Only one workflow-level instance of each |
-| Event-level (`"workflow_call"`, `"workflow_dispatch"`, etc.) | No (*) | Each event name is unique under `on:` |
-| Event sub-sections with existing context (`inputs at workflow_call event`, `outputs at workflow_call event`) | No | The `at {event} event` suffix already provides context |
-| Job-level sections | **Yes** | Multiple jobs can define the same section (concurrency, defaults, strategy, etc.) |
+| Workflow root | No | Only one per file |
+| Workflow-level `defaults`, `concurrency` | No | Only one instance of each |
+| Event-level | No (*) | Each event name is unique under `on:` |
+| Job-level sections | **Yes** | Multiple jobs can define same section |
 | Step-level | **Yes** | Multiple steps exist per job |
 
-(*) Exception: `on.workflow_dispatch.inputs` and `on.workflow_call.secrets` receive prefixes because their `for "inputs"` / `for "secrets"` clause alone does not indicate which event they belong to — other events also have inputs/secrets concepts.
+This is an intentional divergence from actionlint. In compatibility tests, these messages are classified as `LINE_MATCH` (same line, different text).
 
-This design is an intentional divergence from actionlint, which does not use location prefixes. In actionlint compatibility tests, these messages are classified as `LINE_MATCH` (same YAML line, different message text) rather than `MATCH` (identical text). This is the expected classification for design-level message improvements, not a compatibility gap.
+</details>
 
 #### Normative empty-value message table
 
@@ -1434,6 +1398,8 @@ paths, paths-ignore, workflows, inputs, secrets, outputs
 ---
 
 ## 14. YAML Polymorphic Field Handling
+
+> Quick-reference summary. The normative parse algorithms are defined in §3. This table provides a consolidated view of all polymorphic fields.
 
 | Field | Possible forms | Parse strategy |
 |---|---|---|
