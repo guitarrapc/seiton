@@ -1740,7 +1740,7 @@ jobs:
     env:
       ACTIONS_ALLOW_UNSECURE_COMMANDS: true  # ERROR: insecure commands enabled
     steps:
-      - run: echo "::add-path::/usr/local/custom-bin"
+      - run: echo "insecure commands are enabled"
 ```
 
 **Remediation:** Remove `ACTIONS_ALLOW_UNSECURE_COMMANDS` and migrate to environment files:
