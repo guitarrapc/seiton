@@ -1350,17 +1350,17 @@ Same rules as Go. The `ParseMapping` helper supports case-insensitive mode via `
 ## Appendix A: Seiton Parser Function → C# Mapping
 
 > The "Spec Function" column lists the canonical function names defined in `Seiton_Parser_spec.md` §1–§4.
-> The "C# Signature" column shows the closest corresponding implementation seam in C#; some entries are conceptual and are implemented inline within broader helpers under `WorkflowParser.Parse(...)` and related partials rather than as literal one-to-one method names.
+> The "C# Implementation location" column points to the closest corresponding code location in C#. Exact method signatures are listed when they exist verbatim; otherwise the entry is a conceptual mapping label for logic implemented inline within broader helpers under `WorkflowParser.Parse(...)` and related partials.
 
 ### A.1 Entry Point
 
-| Spec Function | C# Signature | Spec § |
+| Spec Function | C# Implementation location | Spec § |
 |---|---|---|
 | `Parse(utf8Yaml, filePath)` | `WorkflowParser.Parse(byte[], string)` | §1.1 |
 
 ### A.2 Workflow-Level Parse Functions
 
-| Spec Function | C# Signature | Spec § |
+| Spec Function | C# Implementation location | Spec § |
 |---|---|---|
 | `ParseWorkflow(utf8Yaml)` | `WorkflowParser.ParseWorkflow(IYamlStreamReader)` | §3.2 |
 | `ParseEvents(node)` | `WorkflowParser.ParseEvents(IYamlStreamReader)` | §3.4 |
@@ -1372,7 +1372,7 @@ Same rules as Go. The `ParseMapping` helper supports case-insensitive mode via `
 
 ### A.3 Event Parse Functions
 
-| Spec Function | C# Signature | Spec § |
+| Spec Function | C# Implementation location | Spec § |
 |---|---|---|
 | `parseEventWithNoConfig(node)` | `WorkflowParser.ParseEventWithNoConfig(IYamlStreamReader)` | §3.4.1 |
 | `ParseWebhookEvent(name, configNode)` | `WorkflowParser.ParseWebhookEvent(StringNode, IYamlStreamReader)` | §3.4.2 |
@@ -1384,7 +1384,7 @@ Same rules as Go. The `ParseMapping` helper supports case-insensitive mode via `
 
 ### A.4 Job / Step Parse Functions
 
-| Spec Function | C# Signature | Spec § |
+| Spec Function | C# Implementation location | Spec § |
 |---|---|---|
 | `ParseJob(id, node)` | `WorkflowParser.ParseJob(StringNode, IYamlStreamReader)` | §3.10 |
 | `ParseSteps(node)` | `WorkflowParser.ParseSteps(IYamlStreamReader)` | §3.11 |
@@ -1394,7 +1394,7 @@ Same rules as Go. The `ParseMapping` helper supports case-insensitive mode via `
 
 ### A.5 Structural Section Parse Functions
 
-| Spec Function | C# Signature | Spec § |
+| Spec Function | C# Implementation location | Spec § |
 |---|---|---|
 | `ParseRunsOn(node)` | `WorkflowParser.ParseRunsOn(IYamlStreamReader)` | §3.13 |
 | `ParseEnvironment(node)` | `WorkflowParser.ParseEnvironment(IYamlStreamReader)` | §3.14 |
@@ -1409,14 +1409,14 @@ Same rules as Go. The `ParseMapping` helper supports case-insensitive mode via `
 
 ### A.6 Generic Mapping / Collection Helpers
 
-| Spec Function | C# Signature | Spec § |
+| Spec Function | C# Implementation location | Spec § |
 |---|---|---|
 | `ParseMapping(sectionName, allowEmpty, caseSensitive)` | `WorkflowParser.ParseMapping(string, bool, bool)` | §3.3 |
 | `parseStringOrStringSequence(sec, node, allowEmpty, allowElemEmpty)` | `WorkflowParser.ParseStringOrStringSequence(string, IYamlStreamReader, bool, bool)` | §4.7 |
 
 ### A.7 Scalar Helpers
 
-| Spec Function | C# Signature | Spec § |
+| Spec Function | C# Implementation location | Spec § |
 |---|---|---|
 | `parseString(node, allowEmpty)` | `WorkflowParser.ParseString(IYamlStreamReader, bool)` | §4.1 |
 | `parseBool(node)` | `WorkflowParser.ParseBool(IYamlStreamReader)` | §4.2 |
@@ -1428,7 +1428,7 @@ Same rules as Go. The `ParseMapping` helper supports case-insensitive mode via `
 
 ### A.8 Visitor / Pass
 
-| Spec Function | C# Signature | Spec § |
+| Spec Function | C# Implementation location | Spec § |
 |---|---|---|
 | `Visitor.Visit(workflow)` | `WorkflowVisitor.Visit(Workflow)` | `Seiton_Linter_spec.md` §4.2 |
 | `Pass` interface | `IPass` | `Seiton_Linter_spec.md` §4.1 |
@@ -1436,7 +1436,7 @@ Same rules as Go. The `ParseMapping` helper supports case-insensitive mode via `
 
 ### A.9 Alias Resolution
 
-| Spec Function | C# Signature | Spec § |
+| Spec Function | C# Implementation location | Spec § |
 |---|---|---|
 | `resolveAliases(root)` | Handled by YAML adapter layer (`VYaml`) | §1.1 step 1b |
 

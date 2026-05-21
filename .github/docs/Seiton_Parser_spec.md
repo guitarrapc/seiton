@@ -896,7 +896,7 @@ The root identifiers of expressions (`github`, `env`, `vars`, `job`, `steps`, `r
 
 The complete per-key availability matrix is generated from `data/sources/availability/` and materialized in `Availability.g.cs`. Each workflow key position maps to a dedicated `ExpressionValidationContext` enum value with its own context root array.
 
-Context availability varies by workflow position: workflow-level keys have the fewest roots (3–4), job-level keys progressively gain `strategy`/`matrix`/`needs`/`secrets`, and step-level expression sites generally have all 11 roots, with `steps.if` excluding `secrets` and some step keys such as `steps.id` / `steps.shell` exposing no expression roots.
+Context availability varies by workflow position: workflow-level keys have the fewest roots (3–4), job-level keys progressively gain `strategy`/`matrix`/`needs`/`secrets`, and common step expression sites such as `steps.run`, `steps.with`, and `steps.env` have all 11 roots. See the full table below for the exact per-key matrix; notable exceptions include `steps.if`, which excludes `secrets`, and keys such as `steps.id` / `steps.shell`, which expose no expression roots.
 
 <details>
 <summary>Full availability table (reference)</summary>
