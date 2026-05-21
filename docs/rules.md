@@ -1353,10 +1353,16 @@ jobs:
       - run: echo ng
 ```
 
-**Remediation:**
+**Remediation:** Restrict the trigger scope, add strict condition guards, or replace with a safer event. Common approaches:
+
+- Switch to `pull_request` (unprivileged fork context) when secrets are not needed
+- Add `if:` conditions (e.g. `github.event.pull_request.head.repo.full_name == github.repository`) to limit execution to trusted sources
+- Isolate privileged work into a separate job gated by an explicit condition
+- Use `on: push` when the workflow only needs to run on commits to the default branch
 
 ```yaml
-on: push
+# Approach A: switch to a safer event
+on: pull_request
 jobs:
   build:
     runs-on: ubuntu-24.04
@@ -1364,7 +1370,16 @@ jobs:
       - run: echo ok
 ```
 
-Restrict the trigger scope, add strict `if` condition guards, or replace with a safer event (`pull_request` without `_target`).
+```yaml
+# Approach B: guard with condition on pull_request_target
+on: pull_request_target
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    steps:
+      - run: echo ok
+```
 
 **Configuration — extend the dangerous-events set:**
 
@@ -1595,15 +1610,33 @@ jobs:
           key: npm-${{ runner.os }}
 ```
 
-**Remediation:** Split trusted and untrusted jobs. Namespace cache keys by trust boundary:
+**Remediation:** Prevent attackers from poisoning shared cache entries. Common approaches:
+
+- Move cacheable jobs to trusted triggers only (`push`, `merge_group`)
+- Use `actions/cache/restore` (read-only) on untrusted triggers so forks cannot write entries
+- Namespace cache keys by trust boundary (`pr-${{ github.event.number }}` vs `main-`)
 
 ```yaml
+# Approach A: restrict cache to trusted triggers
 on: push
 jobs:
   build:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/cache@v4
+        with:
+          path: ~/.npm
+          key: npm-${{ runner.os }}
+```
+
+```yaml
+# Approach B: read-only cache on untrusted trigger
+on: pull_request
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/cache/restore@v4
         with:
           path: ~/.npm
           key: npm-${{ runner.os }}
@@ -1640,13 +1673,31 @@ jobs:
       - run: echo ok
 ```
 
-**Remediation:** Route untrusted trigger paths to ephemeral GitHub-hosted runners:
+**Remediation:** Prevent untrusted code from running on persistent infrastructure. Common approaches:
+
+- Route untrusted trigger paths to ephemeral GitHub-hosted runners
+- Restrict triggers so forks cannot reach self-hosted runners (`push` only, or `pull_request` with branch filter for internal repos)
+- Use ephemeral/just-in-time self-hosted runners that are destroyed after each job
+- Gate self-hosted jobs with environment protection rules
 
 ```yaml
+# Approach A: switch to GitHub-hosted runner for untrusted triggers
 on: pull_request
 jobs:
   build:
-    runs-on: ubuntu-24.04              # use GitHub-hosted runner
+    runs-on: ubuntu-24.04
+    steps:
+      - run: echo ok
+```
+
+```yaml
+# Approach B: gate self-hosted with environment protection
+on: pull_request_target
+jobs:
+  deploy:
+    runs-on: self-hosted
+    environment: production
+    if: github.event.pull_request.head.repo.full_name == github.repository
     steps:
       - run: echo ok
 ```
