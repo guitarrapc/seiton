@@ -259,7 +259,7 @@ Go runtime behavior must align with `Seiton_Linter_spec.md` §4.4 for the defaul
 | `job-secrets` | — |
 | `action-shell-is-required` | — |
 
-> **Note:** The normative rule catalog is defined in `Seiton_Linter_spec.md` §4.4. Rules not yet mapped in Go are tracked in Go-specific implementation work items.
+> **Note:** The normative rule catalog is defined in `.github/docs/Seiton_Linter_spec.md` §4.4. Rules not yet mapped in Go are tracked in Go-specific implementation work items.
 
 ---
 
