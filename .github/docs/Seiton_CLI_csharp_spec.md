@@ -1,8 +1,8 @@
 # Seiton CLI C# Implementation Specification
 
-> C# implementation specification for the CLI contract defined in `Seiton_CLI_spec.md`. This document captures C# runtime structures and behavior for command dispatch, config bridge, output formatting, and NativeAOT constraints. See `Seiton_CLI_go_spec.md` for the Go target. Both language specs share the same outline; only language-specific content differs. Parser and linter behavior are specified in `Seiton_Parser_csharp_spec.md` and `Seiton_Linter_csharp_spec.md`.
+> C# implementation specification for the CLI contract defined in `.github/docs/Seiton_CLI_spec.md`. This document captures C# runtime structures and behavior for command dispatch, config bridge, output formatting, and NativeAOT constraints. See `.github/docs/Seiton_CLI_go_spec.md` for the Go target. Both language specs share the same outline; only language-specific content differs. Parser and linter behavior are specified in `.github/docs/Seiton_Parser_csharp_spec.md` and `.github/docs/Seiton_Linter_csharp_spec.md`.
 
-> **Cross-document synchronization rule**: `Seiton_CLI_spec.md` is the source of truth. When this C# spec is updated, also review and update `Seiton_CLI_spec.md` and `Seiton_CLI_go_spec.md` in the same PR/commit scope.
+> **Cross-document synchronization rule**: `.github/docs/Seiton_CLI_spec.md` is the source of truth. When this C# spec is updated, also review and update `.github/docs/Seiton_CLI_spec.md` and `.github/docs/Seiton_CLI_go_spec.md` in the same PR/commit scope.
 
 ---
 
@@ -10,7 +10,7 @@
 
 ### 0.1 Contract
 
-This document defines the C# implementation contract for CLI behavior under `Seiton_CLI_spec.md`.
+This document defines the C# implementation contract for CLI behavior under `.github/docs/Seiton_CLI_spec.md`.
 
 In scope:
 
@@ -23,7 +23,7 @@ In scope:
 
 Out of scope:
 
-- Core lint/parse logic (see `Seiton_Linter_csharp_spec.md`, `Seiton_Parser_csharp_spec.md`)
+- Core lint/parse logic (see `.github/docs/Seiton_Linter_csharp_spec.md`, `.github/docs/Seiton_Parser_csharp_spec.md`)
 - Rule behavior and rule catalog
 - Generated data pipeline (`Seiton.Update`)
 
@@ -58,7 +58,7 @@ Representative implementation surface:
 1. Keep CLI as thin wrapper — no lint/parse logic in this project.
 2. Keep all JSON serialization AOT-compatible (source-generated `System.Text.Json`).
 3. Keep aggregated diagnostic and summary output deterministic regardless of parallelization; verbose progress lines may interleave.
-4. Keep config resolution aligned with `Seiton_CLI_spec.md` §4 precedence order.
+4. Keep config resolution aligned with `.github/docs/Seiton_CLI_spec.md` §4 precedence order.
 
 ---
 
@@ -161,7 +161,7 @@ Commands are registered via a single `SeitonCli` class with method-per-command:
 
 ### 4.3 Root Command Parameter Mapping
 
-Shared contract reference: `Seiton_CLI_spec.md` §2.
+Shared contract reference: `.github/docs/Seiton_CLI_spec.md` §2.
 
 ```csharp
 [Command("")]
@@ -201,7 +201,7 @@ Fix-only flags (`dryRun`, `check`, `enablePinNetwork`, `enableImageNetwork`) are
 
 ## 5. Config Bridge (`CliConfigBridge`)
 
-Shared contract reference: `Seiton_CLI_spec.md` §4.
+Shared contract reference: `.github/docs/Seiton_CLI_spec.md` §4.
 
 ### 5.1 Resolution Methods
 
@@ -259,7 +259,7 @@ Used in `ResolveColorEnabled`: auto mode disables color when CI is detected or s
 
 ### 6.1 CheckCommand
 
-Shared contract reference: `Seiton_Linter_spec.md` §2.1.
+Shared contract reference: `.github/docs/Seiton_Linter_spec.md` §2.1.
 
 Parallelization:
 
@@ -270,7 +270,7 @@ Parallelization:
 Post-processing and output:
 
 - Post-lint filters (`--ignore`, `--min-severity`) are applied after aggregation.
-- Verbose output format follows `Seiton_CLI_spec.md` §6.4.
+- Verbose output format follows `.github/docs/Seiton_CLI_spec.md` §6.4.
 
 C#-specific design notes:
 
@@ -284,11 +284,11 @@ C#-specific design notes:
 - Stdin (`-`) is explicitly rejected in fix mode (returns `ExitCode.InvalidOptions`).
 - Network remediation (`PinRemediationEngine`) is constructed only when effective pin/image network is enabled.
 - When both `--check` and `--dry-run` are passed, `--check` takes precedence: no diffs are printed and no fixes are applied.
-- Verbose output format follows `Seiton_CLI_spec.md` §6.4.
+- Verbose output format follows `.github/docs/Seiton_CLI_spec.md` §6.4.
 
 ### 6.3 InputDiscovery
 
-Shared contract reference: `Seiton_CLI_spec.md` §5.
+Shared contract reference: `.github/docs/Seiton_CLI_spec.md` §5.
 
 - Auto-discovery: walks parent directories to find `.github/workflows/` (and `.github/actions/` when `includeActions`).
 - Explicit args: expands directories recursively, validates file existence.
@@ -361,6 +361,6 @@ CLI commands accept `TextWriter` parameters for stdout/stderr injection in tests
 
 When this document is revised, review and update:
 
-- `Seiton_CLI_spec.md` — if behavioral changes are introduced via implementation
-- `Seiton_CLI_go_spec.md` — for cross-language consistency
-- `Seiton_Linter_csharp_spec.md` — if `LintConfig` bridge contract changes
+- `.github/docs/Seiton_CLI_spec.md` — if behavioral changes are introduced via implementation
+- `.github/docs/Seiton_CLI_go_spec.md` — for cross-language consistency
+- `.github/docs/Seiton_Linter_csharp_spec.md` — if `LintConfig` bridge contract changes

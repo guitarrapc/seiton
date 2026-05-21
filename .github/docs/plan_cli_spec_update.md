@@ -1,13 +1,13 @@
 # CLI Spec Review: Findings and Recommended Updates
 
-> Review of `Seiton_CLI_spec.md`, `Seiton_CLI_csharp_spec.md`, `Seiton_CLI_go_spec.md`.
+> Review of `.github/docs/Seiton_CLI_spec.md`, `.github/docs/Seiton_CLI_csharp_spec.md`, `.github/docs/Seiton_CLI_go_spec.md`.
 > Scope: appropriateness of content, bloat, consistency, contract vs implementation separation.
 
 ---
 
 ## Summary
 
-The base spec (`Seiton_CLI_spec.md`) is well-structured and mostly appropriate in scope. The language specs (`*_csharp_spec.md`, `*_go_spec.md`) have grown beyond "implementation contract" into "code documentation" territory — particularly in §6 (Command Implementation Details). This creates three problems:
+The base spec (`.github/docs/Seiton_CLI_spec.md`) is well-structured and mostly appropriate in scope. The language specs (`*_csharp_spec.md`, `*_go_spec.md`) have grown beyond "implementation contract" into "code documentation" territory — particularly in §6 (Command Implementation Details). This creates three problems:
 
 1. **Maintenance burden** — internal type names and field layouts change frequently; spec must be updated each time.
 2. **Attention dilution** — readers looking for the behavioral contract get distracted by internal struct definitions and concurrency primitives.
@@ -30,7 +30,7 @@ The base spec (`Seiton_CLI_spec.md`) is well-structured and mostly appropriate i
 - Full struct definitions (`fileCheckResult`, `ruleActivationMetadata`) with every field
 - `sync.Once or atomic CAS` capture strategy commentary
 
-These are **code-level concerns**, not implementation contracts. Per docs_authoring_guidelines §1.2, language specs should record "current runtime-specific contracts and implementation notes" — but implementation *notes* means "decisions that affect external behavior or cross-team coordination", not internal field names.
+These are **code-level concerns**, not implementation contracts. Although `docs_authoring_guidelines.md` §1.2 is written for `Seiton_Linter_*` language specs, the same scoping principle applies to CLI language specs: record runtime-specific contracts and implementation notes that affect external behavior or cross-team coordination, not internal field names.
 
 **Guideline**: If something changes and no external caller/test/output is affected, it doesn't belong in the spec.
 
@@ -44,7 +44,7 @@ Both language specs repeat in §6.1:
 - Network fix hint conditions
 - Per-file timing format
 
-These are **already defined as contract in Seiton_CLI_spec.md §6.4**. Language specs should simply say "follows Seiton_CLI_spec.md §6.4" and only add language-specific deviations (e.g., "uses `TimeProvider` for testability" is a valid C#-specific note, but the format string itself is redundant).
+These are **already defined as contract in `.github/docs/Seiton_CLI_spec.md` §6.4**. Language specs should simply say "follows `.github/docs/Seiton_CLI_spec.md` §6.4" and only add language-specific deviations (e.g., "uses `TimeProvider` for testability" is a valid C#-specific note, but the format string itself is redundant).
 
 ### F3. Go spec §6.1 struct definitions are spec-inappropriate (MEDIUM)
 
@@ -114,7 +114,7 @@ Specifically remove:
 **Action**: In both language specs §6.1, replace repeated verbose output format descriptions with:
 
 ```
-Verbose output format follows `Seiton_CLI_spec.md` §6.4.
+Verbose output format follows `.github/docs/Seiton_CLI_spec.md` §6.4.
 ```
 
 Only add language-specific addenda (e.g., "C# uses `TimeProvider` for testable timing" or "Go uses `time.Now()` directly").
@@ -127,7 +127,7 @@ Only add language-specific addenda (e.g., "C# uses `TimeProvider` for testable t
 
 ### P4. Soften edit-distance thresholds in base spec (LOW)
 
-**Action**: In `Seiton_CLI_spec.md` §2.6, change threshold statement from normative to recommended:
+**Action**: In `.github/docs/Seiton_CLI_spec.md` §2.6, change threshold statement from normative to recommended:
 
 > **Recommended thresholds**: ≤1 for short options (≤4 chars), ≤2 for medium (≤8 chars), ≤3 for long. Implementations may tune these if suggestion quality improves.
 
