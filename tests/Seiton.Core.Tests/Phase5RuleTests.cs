@@ -61,6 +61,61 @@ public sealed class Phase5RuleTests
     }
 
     [Test]
+    public async Task Misfeature_OptInEnabled_WithoutPipInstall_DoesNotReport()
+    {
+        var yaml = """
+        on: push
+        jobs:
+          build:
+            runs-on: ubuntu-24.04
+            steps:
+              - uses: actions/setup-python@v6
+                with:
+                  python-version: '3.13'
+        """;
+
+        var config = new LintConfig
+        {
+            Rules = new Dictionary<string, RuleConfig>
+            {
+                ["misfeature"] = new RuleConfig { Enabled = true },
+            },
+        };
+
+        using var result = new LintEngine().Check(Encoding.UTF8.GetBytes(yaml), "misfeature-no-pip-install.yml", config);
+
+        await Assert.That(result.Diagnostics.Any(x => x.RuleId == "misfeature")).IsFalse();
+    }
+
+    [Test]
+    public async Task Misfeature_OptInEnabled_ActionMetadataCompositeStep_ReportsSetupPythonPipInstall()
+    {
+        var yaml = """
+        name: Demo composite
+        description: Demo composite action
+        runs:
+          using: composite
+          steps:
+            - uses: actions/setup-python@v6
+              with:
+                pip-install: -r requirements.txt
+        """;
+
+        var config = new LintConfig
+        {
+            Rules = new Dictionary<string, RuleConfig>
+            {
+                ["misfeature"] = new RuleConfig { Enabled = true },
+            },
+        };
+
+        using var result = new LintEngine().Check(Encoding.UTF8.GetBytes(yaml), "action.yml", config);
+
+        await Assert.That(result.DocumentKind).IsEqualTo(DocumentKind.ActionMetadata);
+        await Assert.That(result.Diagnostics.Any(x => x.RuleId == "misfeature" && x.Message.Contains("pip-install", StringComparison.Ordinal))).IsTrue();
+    }
+
+    [Test]
     public async Task SuperfluousActions_OptInEnabled_ReportsKnownReplacement()
     {
         var yaml = """
@@ -84,6 +139,57 @@ public sealed class Phase5RuleTests
 
         await Assert.That(result.Diagnostics.Any(x => x.RuleId == "superfluous-actions" && x.Severity == DiagnosticSeverity.Info && x.Message.Contains("softprops/action-gh-release", StringComparison.Ordinal) && x.Message.Contains("gh release create", StringComparison.Ordinal))).IsTrue();
     }
+
+  [Test]
+  public async Task SuperfluousActions_OptInEnabled_UnknownAction_DoesNotReport()
+  {
+    var yaml = """
+    on: push
+    jobs:
+      release:
+      runs-on: ubuntu-24.04
+      steps:
+        - uses: actions/checkout@v5
+    """;
+
+    var config = new LintConfig
+    {
+      Rules = new Dictionary<string, RuleConfig>
+      {
+        ["superfluous-actions"] = new RuleConfig { Enabled = true },
+      },
+    };
+
+    using var result = new LintEngine().Check(Encoding.UTF8.GetBytes(yaml), "superfluous-actions-unknown.yml", config);
+
+    await Assert.That(result.Diagnostics.Any(x => x.RuleId == "superfluous-actions")).IsFalse();
+  }
+
+  [Test]
+  public async Task SuperfluousActions_OptInEnabled_ActionMetadataCompositeStep_ReportsKnownReplacement()
+  {
+    var yaml = """
+    name: Demo composite
+    description: Demo composite action
+    runs:
+      using: composite
+      steps:
+      - uses: softprops/action-gh-release@v2
+    """;
+
+    var config = new LintConfig
+    {
+      Rules = new Dictionary<string, RuleConfig>
+      {
+        ["superfluous-actions"] = new RuleConfig { Enabled = true },
+      },
+    };
+
+    using var result = new LintEngine().Check(Encoding.UTF8.GetBytes(yaml), "action.yml", config);
+
+    await Assert.That(result.DocumentKind).IsEqualTo(DocumentKind.ActionMetadata);
+    await Assert.That(result.Diagnostics.Any(x => x.RuleId == "superfluous-actions" && x.Message.Contains("gh release create", StringComparison.Ordinal))).IsTrue();
+  }
 
     [Test]
     public async Task Phase5Rules_DefaultConfig_DoNotRun()

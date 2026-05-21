@@ -511,6 +511,8 @@ zizmor は tree-sitter（bash/pwsh 完全パーサー）を使用しているが
 - `MisfeatureRule.cs`: `actions/setup-python` + `with.pip-install` を info として報告
 - `SuperfluousActionsRule.cs`: `gh` / `docker` / `jq` 等で代替しやすい wrapper action を静的カタログで検出し、`uses:` 位置に info を報告
 - RuleId / RuleCatalog / RuleIdExtensions / rule descriptor tests を更新し、3ルールを opt-in / severity=info として登録
+- レビューラウンドで `LintEngine` に default-config fast path を追加し、workflow / action-metadata ごとの active rule / disabled opt-in metadata を再利用するようにした
+- レビューラウンドで Phase 5 の negative case と action-metadata case を追加し、opt-in metadata の既定内容も `LintResultMetadataTests` で固定した
 
 **設計上の決定**:
 - 3ルールとも default-off の opt-in とした。低優先度・情報提供系であり、既存ユーザーへのノイズ増加を避けるため
@@ -520,19 +522,19 @@ zizmor は tree-sitter（bash/pwsh 完全パーサー）を使用しているが
 
 **検証状況**:
 - focused tests: `Phase5RuleTests`, `RuleListResolverTests`, `RuleCatalogDescriptorTests` は green
-- `dotnet run --project tests/Seiton.Core.Tests` green（1609/1609 passed）
-- `dotnet test` green（1928/1928 passed）
+- `dotnet run --project tests/Seiton.Core.Tests` green（1613/1613 passed）
+- `dotnet test` green（1932/1932 passed）
 
-**ベンチマーク結果** (`CoreLintBenchmark`, baseline: `BenchmarkDotNet.Artifacts/Seiton.Benchmark.CoreLintBenchmark-20260517-182436.log`, post: 2026-05-22 実行):
+**ベンチマーク結果** (`CoreLintBenchmark`, baseline: `BenchmarkDotNet.Artifacts/Seiton.Benchmark.CoreLintBenchmark-20260517-182436.log`, post-review: 2026-05-22 実行):
 
 | Size | FixEnabled | Baseline Mean | Post Mean | Δ Mean | Baseline Alloc | Post Alloc | Δ Alloc |
 |------|-----------|---------------|-----------|--------|----------------|------------|---------|
-| Small | False | 55.92 μs | 66.44 μs | +18.8% | 8.37 KB | 8.78 KB | +4.9% |
-| Small | True | 61.71 μs | 71.40 μs | +15.7% | 9.82 KB | 10.23 KB | +4.2% |
-| Medium | False | 1,545.51 μs | 1,427.36 μs | -7.6% | 68.56 KB | 68.98 KB | +0.6% |
-| Medium | True | 2,177.36 μs | 1,951.73 μs | -10.4% | 81.92 KB | 82.34 KB | +0.5% |
-| Large | False | 23,550.17 μs | 21,632.34 μs | -8.1% | 327.08 KB | 327.49 KB | +0.1% |
-| Large | True | 37,734.62 μs | 33,472.21 μs | -11.3% | 381.92 KB | 382.34 KB | +0.1% |
+| Small | False | 55.92 μs | 67.77 μs | +21.2% | 8.37 KB | 8.70 KB | +3.9% |
+| Small | True | 61.71 μs | 71.54 μs | +15.9% | 9.82 KB | 10.15 KB | +3.4% |
+| Medium | False | 1,545.51 μs | 1,511.90 μs | -2.2% | 68.56 KB | 68.89 KB | +0.5% |
+| Medium | True | 2,177.36 μs | 2,373.50 μs | +9.0% | 81.92 KB | 82.25 KB | +0.4% |
+| Large | False | 23,550.17 μs | 22,187.60 μs | -5.8% | 327.08 KB | 327.41 KB | +0.1% |
+| Large | True | 37,734.62 μs | 34,206.00 μs | -9.3% | 381.92 KB | 382.25 KB | +0.1% |
 
 **パフォーマンス見込み**:
 - 3ルールとも opt-in のためデフォルト実行パスへの影響は rule activation 判定のみ
@@ -540,9 +542,11 @@ zizmor は tree-sitter（bash/pwsh 完全パーサー）を使用しているが
 - もしベンチマークで劣化が出る場合は、`superfluous-actions` の比較順序を hot action 優先に並べ替えるか、document kind / step kind 早期 return をさらに強化する
 
 **評価**:
-- Medium / Large は改善、Allocation 増加も +0.1%〜+0.6% に収まった。実運用寄りサイズでは性能悪化は確認されない
-- Small は +15%〜19% の悪化が出たが、絶対値では約 10 μs の固定コスト増分であり、追加した opt-in 3ルールぶんの rule activation / disabled-rule metadata の影響が支配的と考えられる
-- 改善策としては、opt-in 既定ルールの disabled metadata snapshot を lazy 化するか、既定構成向けに disabled opt-in rule ID 配列を事前計算して再利用する余地がある
+- レビュー修正で default-config fast path を追加し、fixed-cost allocation は Small で `8.78 KB -> 8.70 KB`、Small/False mean も `66.44 μs -> 66.10 μs` まで低減した
+- 最終 rerun でも Allocation は前回と同じ水準（Small `8.70 KB`, Medium `68.89/82.25 KB`, Large `327.41/382.25 KB`）で安定した。fixed-cost allocation の主因は抑え込めている
+- Medium / Large は baseline 比で概ね改善を維持した一方、`Medium/True` は ShortRun のばらつきで `+9.0%` に振れた。mean の揺れ幅は大きいが allocation は安定しており、実装変更が GC 圧を増やした兆候はない
+- Small は依然として +15%〜21% の悪化が残る。絶対値では `+9.83 μs` / `+11.85 μs` の固定コスト増で、ShortRun のばらつきと lint pipeline 全体の定数項が支配的とみられるが、計画書冒頭の厳格な +3% / allocation 非悪化基準は Small では未達
+- 追加で詰めるなら `LintResult` metadata の disabled-rule snapshot 自体を lazy 化するか、metadata を要求しない CLI fast path を別途設けるのが次の改善候補
 
 ---
 

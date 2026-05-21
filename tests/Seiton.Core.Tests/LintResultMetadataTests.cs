@@ -102,6 +102,9 @@ public sealed class LintResultMetadataTests
 
         var disabledIds = result.DisabledRuleIds.ToArray();
         await Assert.That(disabledIds.Length).IsGreaterThan(0);
+        await Assert.That(disabledIds).Contains("anonymous-definition");
+        await Assert.That(disabledIds).Contains("misfeature");
+        await Assert.That(disabledIds).Contains("superfluous-actions");
     }
 
     [Test]
@@ -115,6 +118,9 @@ public sealed class LintResultMetadataTests
         // DisabledRuleCount should only reflect config/opt-in disabled rules
         var disabledIds = result.DisabledRuleIds.ToArray();
         await Assert.That(disabledIds).DoesNotContain("job-permissions-required");
+        await Assert.That(disabledIds).DoesNotContain("anonymous-definition");
+        await Assert.That(disabledIds).Contains("misfeature");
+        await Assert.That(disabledIds).Contains("superfluous-actions");
     }
 
     [Test]
