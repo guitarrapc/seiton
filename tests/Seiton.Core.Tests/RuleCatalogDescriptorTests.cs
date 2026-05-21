@@ -9,9 +9,9 @@ public sealed class RuleCatalogDescriptorTests
     {
         var descriptors = RuleCatalog.GetAllRuleDescriptors();
 
-        // Total rules: 57 default + 4 online = 61
+        // Total rules: 60 default + 4 online = 64
         // (Syntax is not in the catalog)
-        await Assert.That(descriptors.Count).IsEqualTo(61);
+        await Assert.That(descriptors.Count).IsEqualTo(64);
     }
 
     [Test]
@@ -41,10 +41,22 @@ public sealed class RuleCatalogDescriptorTests
     {
         var descriptors = RuleCatalog.GetAllRuleDescriptors();
         var concurrencyLimits = descriptors.FirstOrDefault(d => d.Id == "concurrency-limits");
+        var anonymousDefinition = descriptors.FirstOrDefault(d => d.Id == "anonymous-definition");
+        var misfeature = descriptors.FirstOrDefault(d => d.Id == "misfeature");
+        var superfluousActions = descriptors.FirstOrDefault(d => d.Id == "superfluous-actions");
 
         await Assert.That(concurrencyLimits.Id).IsNotNull();
         await Assert.That(concurrencyLimits.IsOptIn).IsTrue();
         await Assert.That(concurrencyLimits.IsOnline).IsFalse();
+        await Assert.That(anonymousDefinition.Id).IsNotNull();
+        await Assert.That(anonymousDefinition.IsOptIn).IsTrue();
+        await Assert.That(anonymousDefinition.IsOnline).IsFalse();
+        await Assert.That(misfeature.Id).IsNotNull();
+        await Assert.That(misfeature.IsOptIn).IsTrue();
+        await Assert.That(misfeature.IsOnline).IsFalse();
+        await Assert.That(superfluousActions.Id).IsNotNull();
+        await Assert.That(superfluousActions.IsOptIn).IsTrue();
+        await Assert.That(superfluousActions.IsOnline).IsFalse();
     }
 
     [Test]
@@ -91,12 +103,22 @@ public sealed class RuleCatalogDescriptorTests
     public async Task GetAllRuleDescriptors_EachHasDefaultSeverity()
     {
         var descriptors = RuleCatalog.GetAllRuleDescriptors();
-        var validSeverities = new[] { "error", "warning", "mixed" };
+        var validSeverities = new[] { "error", "warning", "info", "mixed" };
 
         foreach (var d in descriptors)
         {
             await Assert.That(validSeverities).Contains(d.DefaultSeverity);
         }
+    }
+
+    [Test]
+    public async Task GetAllRuleDescriptors_Phase5RulesDefaultSeverityIsInfo()
+    {
+        var descriptors = RuleCatalog.GetAllRuleDescriptors();
+
+        await Assert.That(descriptors.First(d => d.Id == "anonymous-definition").DefaultSeverity).IsEqualTo("info");
+        await Assert.That(descriptors.First(d => d.Id == "misfeature").DefaultSeverity).IsEqualTo("info");
+        await Assert.That(descriptors.First(d => d.Id == "superfluous-actions").DefaultSeverity).IsEqualTo("info");
     }
 
     [Test]

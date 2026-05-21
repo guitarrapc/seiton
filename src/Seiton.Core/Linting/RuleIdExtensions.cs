@@ -71,6 +71,9 @@ internal static class RuleIdExtensions
         RuleId.UnsoundContains => "unsound-contains",
         RuleId.BotConditions => "bot-conditions",
         RuleId.Artipacked => "artipacked",
+        RuleId.AnonymousDefinition => "anonymous-definition",
+        RuleId.Misfeature => "misfeature",
+        RuleId.SuperfluousActions => "superfluous-actions",
         RuleId.Syntax => "syntax",
         _ => throw new ArgumentOutOfRangeException(nameof(id), id, null),
     };

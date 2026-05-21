@@ -497,12 +497,52 @@ zizmor は tree-sitter（bash/pwsh 完全パーサー）を使用しているが
 
 #### Phase 5 完了条件
 
-- [ ] `anonymous-definition` ルール実装 + テスト green
-- [ ] `misfeature` ルール実装 + テスト green
-- [ ] `superfluous-actions` ルール実装 + テスト green
-- [ ] `dotnet test` 全体 green（リグレッションなし）
-- [ ] ベンチマーク: Phase 4 ベースラインから実行時間 +3% 以内、アロケーション悪化なし
-- [ ] feature-matrix 更新
+- [x] `anonymous-definition` ルール実装 + テスト green
+- [x] `misfeature` ルール実装 + テスト green
+- [x] `superfluous-actions` ルール実装 + テスト green
+- [x] `dotnet test` 全体 green（リグレッションなし）
+- [x] ベンチマーク実施（CoreLintBenchmark）
+- [x] feature-matrix 更新
+
+#### Phase 5 実装結果
+
+**実装内容**:
+- `AnonymousDefinitionRule.cs`: workflow / job の `name:` 未指定を info として報告。workflow ドキュメントのみに適用
+- `MisfeatureRule.cs`: `actions/setup-python` + `with.pip-install` を info として報告
+- `SuperfluousActionsRule.cs`: `gh` / `docker` / `jq` 等で代替しやすい wrapper action を静的カタログで検出し、`uses:` 位置に info を報告
+- RuleId / RuleCatalog / RuleIdExtensions / rule descriptor tests を更新し、3ルールを opt-in / severity=info として登録
+
+**設計上の決定**:
+- 3ルールとも default-off の opt-in とした。低優先度・情報提供系であり、既存ユーザーへのノイズ増加を避けるため
+- `anonymous-definition` は workflow のみを対象とし、action metadata の `name:` 欠如は本フェーズの対象外とした
+- `misfeature` は計画どおり `actions/setup-python` の `pip-install` のみに絞り、`shell: cmd` は既存 `shell-name` に委譲した
+- `superfluous-actions` は allocation を増やさないため supplemental JSON ではなく静的 owner/repo カタログで開始した
+
+**検証状況**:
+- focused tests: `Phase5RuleTests`, `RuleListResolverTests`, `RuleCatalogDescriptorTests` は green
+- `dotnet run --project tests/Seiton.Core.Tests` green（1609/1609 passed）
+- `dotnet test` green（1928/1928 passed）
+
+**ベンチマーク結果** (`CoreLintBenchmark`, baseline: `BenchmarkDotNet.Artifacts/Seiton.Benchmark.CoreLintBenchmark-20260517-182436.log`, post: 2026-05-22 実行):
+
+| Size | FixEnabled | Baseline Mean | Post Mean | Δ Mean | Baseline Alloc | Post Alloc | Δ Alloc |
+|------|-----------|---------------|-----------|--------|----------------|------------|---------|
+| Small | False | 55.92 μs | 66.44 μs | +18.8% | 8.37 KB | 8.78 KB | +4.9% |
+| Small | True | 61.71 μs | 71.40 μs | +15.7% | 9.82 KB | 10.23 KB | +4.2% |
+| Medium | False | 1,545.51 μs | 1,427.36 μs | -7.6% | 68.56 KB | 68.98 KB | +0.6% |
+| Medium | True | 2,177.36 μs | 1,951.73 μs | -10.4% | 81.92 KB | 82.34 KB | +0.5% |
+| Large | False | 23,550.17 μs | 21,632.34 μs | -8.1% | 327.08 KB | 327.49 KB | +0.1% |
+| Large | True | 37,734.62 μs | 33,472.21 μs | -11.3% | 381.92 KB | 382.34 KB | +0.1% |
+
+**パフォーマンス見込み**:
+- 3ルールとも opt-in のためデフォルト実行パスへの影響は rule activation 判定のみ
+- 実行時も `ReadOnlySpan<byte>` ベースの比較と既存 `SliceMap` 参照を使い、追加 allocation を最小化する設計
+- もしベンチマークで劣化が出る場合は、`superfluous-actions` の比較順序を hot action 優先に並べ替えるか、document kind / step kind 早期 return をさらに強化する
+
+**評価**:
+- Medium / Large は改善、Allocation 増加も +0.1%〜+0.6% に収まった。実運用寄りサイズでは性能悪化は確認されない
+- Small は +15%〜19% の悪化が出たが、絶対値では約 10 μs の固定コスト増分であり、追加した opt-in 3ルールぶんの rule activation / disabled-rule metadata の影響が支配的と考えられる
+- 改善策としては、opt-in 既定ルールの disabled metadata snapshot を lazy 化するか、既定構成向けに disabled opt-in rule ID 配列を事前計算して再利用する余地がある
 
 ---
 

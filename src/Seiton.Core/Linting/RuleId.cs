@@ -63,6 +63,9 @@ public enum RuleId
     UnsoundContains,
     BotConditions,
     Artipacked,
+    AnonymousDefinition,
+    Misfeature,
+    SuperfluousActions,
 
     // Composite / internal-only (not in RuleCatalog)
     Syntax,

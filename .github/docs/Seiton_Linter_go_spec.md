@@ -75,6 +75,10 @@ Primary types/functions (reference naming may vary by package):
 
 Implementation details should be tracked against language-specific implementation work items.
 
+Current cross-runtime parity note:
+
+- The shared rule catalog includes opt-in informational rules `anonymous-definition`, `misfeature`, and `superfluous-actions` in addition to the existing opt-in local and online rules. Go implementations must preserve the same rule IDs, default-off behavior, and default severity contract from `Seiton_Linter_spec.md` even if implementation work lands later.
+
 ---
 
 ## 2. Entry Point Mapping

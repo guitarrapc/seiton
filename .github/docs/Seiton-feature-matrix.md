@@ -233,13 +233,13 @@ online audit rules（4）:
 |---|---:|---|
 | 直接対応済み | 22 | `artipacked`, `bot-conditions`, `cache-poisoning`, `concurrency-limits`, `dangerous-triggers`, `github-app`, `hardcoded-container-credentials`, `impostor-commit`, `insecure-commands`, `known-vulnerable-actions`, `ref-confusion`, `secrets-inherit`, `secrets-outside-env`, `self-hosted-runner`, `stale-action-refs`, `template-injection`, `unpinned-images`, `unpinned-tools`, `unpinned-uses`, `unredacted-secrets`, `unsound-condition`, `unsound-contains` |
 | 部分対応 | 7 | `archived-uses`, `excessive-permissions`, `forbidden-uses`, `overprovisioned-secrets`, `ref-version-mismatch`, `undocumented-permissions`, `use-trusted-publishing` |
-| 未対応 | 7 | 高度セキュリティ監査群（残差分） |
+| 未対応 | 4 | 高度セキュリティ監査群（残差分） |
 
 zizmor 監査ID別対応表（実装確認ベース）:
 
 | 監査ID | Seiton 対応状況 | 備考 |
 |---|---|---|
-| `anonymous-definition` | ❌ | 専用監査なし |
+| `anonymous-definition` | ✅ | `anonymous-definition`（workflow / job の `name:` 未指定を opt-in info で検出） |
 | `archived-uses` | 🟡 | `archived-uses`（静的判定の初期実装） |
 | `artipacked` | ✅ | `artipacked` — checkout + upload-artifact のステップ間相関分析 |
 | `bot-conditions` | ✅ | `bot-conditions` |
@@ -256,7 +256,7 @@ zizmor 監査ID別対応表（実装確認ベース）:
 | `impostor-commit` | ✅ | online 監査（`rules.impostor-commit.enabled: true` で有効化） |
 | `insecure-commands` | ✅ | `insecure-commands` |
 | `known-vulnerable-actions` | ✅ | online 監査（`rules.known-vulnerable-actions.enabled: true` で有効化） |
-| `misfeature` | ❌ | 専用監査なし |
+| `misfeature` | ✅ | `misfeature`（`actions/setup-python` の `with.pip-install` を opt-in info で検出） |
 | `obfuscation` | ❌ | 専用監査なし |
 | `overprovisioned-secrets` | 🟡 | `overprovisioned-secrets`（step/reusable-call 中心の初期実装） |
 | `ref-confusion` | ✅ | online 監査（`rules.ref-confusion.enabled: true` で有効化） |
@@ -265,7 +265,7 @@ zizmor 監査ID別対応表（実装確認ベース）:
 | `secrets-outside-env` | ✅ | `secrets-outside-env` |
 | `self-hosted-runner` | ✅ | `self-hosted-runner` |
 | `stale-action-refs` | ✅ | online 監査（`rules.stale-action-refs.enabled: true` で有効化） |
-| `superfluous-actions` | ❌ | 専用監査なし |
+| `superfluous-actions` | ✅ | `superfluous-actions`（runner 標準 CLI で代替しやすい action を opt-in info で検出） |
 | `template-injection` | ✅ | `template-injection` |
 | `undocumented-permissions` | 🟡 | `permissions` / `job-permissions-required` で部分対応 |
 | `unpinned-images` | ✅ | `unpinned-image` |
@@ -276,7 +276,7 @@ zizmor 監査ID別対応表（実装確認ベース）:
 | `unsound-contains` | ✅ | `unsound-contains` |
 | `use-trusted-publishing` | 🟡 | `use-trusted-publishing`（publish コマンド文字列ヒューリスティック + `id-token: write` 判定。NuGet/Cargo 等未対応、uses 判定なし） |
 
-対応率: 29/36（81%）— 残7件未対応（うち2件はスコープ外）。
+対応率: 32/36（89%）— 残4件未対応（うち2件はスコープ外）。
 
 ### 6.4 pinact / dockerfile-pin / frizbee（ルールエンジンではなく変換系）
 
