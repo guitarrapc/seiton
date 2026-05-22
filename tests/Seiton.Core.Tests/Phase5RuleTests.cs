@@ -195,6 +195,167 @@ public sealed class Phase5RuleTests
     }
 
     [Test]
+    public async Task AnonymousDefinition_WithNames_DoesNotReport()
+    {
+        var yaml = """
+        name: CI Pipeline
+        on: push
+        jobs:
+          build:
+            name: Build Project
+            runs-on: ubuntu-24.04
+            steps:
+              - run: echo hello
+        """;
+
+        var config = new LintConfig
+        {
+            Rules = new Dictionary<string, RuleConfig>
+            {
+                ["anonymous-definition"] = new RuleConfig { Enabled = true },
+            },
+        };
+
+        using var result = new LintEngine().Check(Encoding.UTF8.GetBytes(yaml), "anonymous-definition-named.yml", config);
+
+        await Assert.That(result.HasFatalError).IsFalse();
+        await Assert.That(result.Diagnostics.Any(x => x.RuleId == "anonymous-definition")).IsFalse();
+    }
+
+    [Test]
+    public async Task AnonymousDefinition_ActionMetadata_DoesNotRun()
+    {
+        var yaml = """
+        description: A test action
+        runs:
+          using: composite
+          steps:
+            - run: echo hello
+              shell: bash
+        """;
+
+        var config = new LintConfig
+        {
+            Rules = new Dictionary<string, RuleConfig>
+            {
+                ["anonymous-definition"] = new RuleConfig { Enabled = true },
+            },
+        };
+
+        using var result = new LintEngine().Check(Encoding.UTF8.GetBytes(yaml), "action.yml", config);
+
+        await Assert.That(result.HasFatalError).IsFalse();
+        await Assert.That(result.DocumentKind).IsEqualTo(DocumentKind.ActionMetadata);
+        await Assert.That(result.Diagnostics.Any(x => x.RuleId == "anonymous-definition")).IsFalse();
+    }
+
+    [Test]
+    public async Task Misfeature_DifferentAction_WithPipInstallKey_DoesNotReport()
+    {
+        var yaml = """
+        on: push
+        jobs:
+          build:
+            runs-on: ubuntu-24.04
+            steps:
+              - uses: some-org/custom-python-action@v1
+                with:
+                  pip-install: -r requirements.txt
+        """;
+
+        var config = new LintConfig
+        {
+            Rules = new Dictionary<string, RuleConfig>
+            {
+                ["misfeature"] = new RuleConfig { Enabled = true },
+            },
+        };
+
+        using var result = new LintEngine().Check(Encoding.UTF8.GetBytes(yaml), "misfeature-different-action.yml", config);
+
+        await Assert.That(result.HasFatalError).IsFalse();
+        await Assert.That(result.Diagnostics.Any(x => x.RuleId == "misfeature")).IsFalse();
+    }
+
+    [Test]
+    public async Task Misfeature_RunStep_DoesNotReport()
+    {
+        var yaml = """
+        on: push
+        jobs:
+          build:
+            runs-on: ubuntu-24.04
+            steps:
+              - run: pip install -r requirements.txt
+        """;
+
+        var config = new LintConfig
+        {
+            Rules = new Dictionary<string, RuleConfig>
+            {
+                ["misfeature"] = new RuleConfig { Enabled = true },
+            },
+        };
+
+        using var result = new LintEngine().Check(Encoding.UTF8.GetBytes(yaml), "misfeature-run-step.yml", config);
+
+        await Assert.That(result.HasFatalError).IsFalse();
+        await Assert.That(result.Diagnostics.Any(x => x.RuleId == "misfeature")).IsFalse();
+    }
+
+    [Test]
+    public async Task SuperfluousActions_RunStep_DoesNotReport()
+    {
+        var yaml = """
+        on: push
+        jobs:
+          release:
+            runs-on: ubuntu-24.04
+            steps:
+              - run: gh release create v1.0.0
+        """;
+
+        var config = new LintConfig
+        {
+            Rules = new Dictionary<string, RuleConfig>
+            {
+                ["superfluous-actions"] = new RuleConfig { Enabled = true },
+            },
+        };
+
+        using var result = new LintEngine().Check(Encoding.UTF8.GetBytes(yaml), "superfluous-actions-run.yml", config);
+
+        await Assert.That(result.HasFatalError).IsFalse();
+        await Assert.That(result.Diagnostics.Any(x => x.RuleId == "superfluous-actions")).IsFalse();
+    }
+
+    [Test]
+    public async Task SuperfluousActions_LocalAction_DoesNotReport()
+    {
+        var yaml = """
+        on: push
+        jobs:
+          release:
+            runs-on: ubuntu-24.04
+            steps:
+              - uses: ./local-action
+        """;
+
+        var config = new LintConfig
+        {
+            Rules = new Dictionary<string, RuleConfig>
+            {
+                ["superfluous-actions"] = new RuleConfig { Enabled = true },
+            },
+        };
+
+        using var result = new LintEngine().Check(Encoding.UTF8.GetBytes(yaml), "superfluous-actions-local.yml", config);
+
+        await Assert.That(result.HasFatalError).IsFalse();
+        await Assert.That(result.Diagnostics.Any(x => x.RuleId == "superfluous-actions")).IsFalse();
+    }
+
+    [Test]
     public async Task Phase5Rules_DefaultConfig_DoNotRun()
     {
         var yaml = """
