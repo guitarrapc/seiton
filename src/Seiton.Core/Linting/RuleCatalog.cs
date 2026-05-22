@@ -254,7 +254,7 @@ internal static class RuleCatalog
             actionMetadataDisabledRuleIds.ToArray());
     }
 
-    /// <summary>Returns the normative default severity for a rule: "error", "warning", or "mixed".</summary>
+    /// <summary>Returns the normative default severity for a rule: "error", "warning", "info", or "mixed".</summary>
     private static string GetDefaultSeverity(RuleId ruleId) => ruleId switch
     {
         RuleId.JobStructure => "error",
