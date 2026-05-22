@@ -28,7 +28,7 @@ For every file it analyzes, Seiton:
 | Security-first rules | Template injection, unpinned actions/images, dangerous triggers, secret misuse, and more. |
 | Correctness checks | Job structure, needs-graph cycles, glob syntax, shell names, ID naming. |
 | Supply-chain hygiene | Unpinned `uses:`, archived actions, known vulnerable actions (online), impostor commits (online). |
-| Auto-fix support | `seiton fix` or `seiton --fix` applies machine-safe remediations in place. |
+| Auto-fix support | `seiton --fix` applies machine-safe remediations in place. |
 | Multiple output formats | `text` (default), `json`, `sarif` (GitHub Advanced Security). |
 | Config file | Optional `.github/seiton.yaml` for rule tuning, exclusions, and network options. |
 | Inline suppression | `# seiton: disable-next-line <rule-id>` directives inside workflow files. |

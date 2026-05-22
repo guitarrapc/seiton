@@ -40,8 +40,8 @@ rules:
 
   # unpinned-uses:
   #   ignore-actions:
-  #     - my-org/internal-action
-  #     - my-org/setup-*
+  #     - owner: "my-org/internal-action"
+  #     - owner: "my-org/setup-*"
 
   # overprovisioned-secrets:
   #   max-step-env-secrets: 5

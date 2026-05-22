@@ -23,7 +23,7 @@ Options:
   --color <ColorMode>          Color mode: auto | always | never. [Default: Auto]
   --no-color                   Disable color output (overrides --color).
   --verbose                    Print progress information to stderr.
-  --fix                        Enable fix mode for the root command (equivalent to the fix subcommand).
+  --fix                        Enable fix mode on the root command.
   --dry-run                    Print unified diff without modifying files (requires --fix).
   --check                      Exit non-zero if fixable diagnostics remain after filtering, without applying fixes (requires --fix).
   --enable-pin-network         Allow network requests to resolve action SHA pins (requires --fix).
@@ -38,7 +38,7 @@ Commands:
   version            Show version and runtime information.
 ```
 
-The examples below clarify the current behavior where fixes are enabled with `--fix` on the root command.
+The examples below clarify the current behavior where fixes are enabled with `--fix` on the root command. There is no separate `fix` subcommand.
 
 ---
 

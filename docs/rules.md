@@ -2277,7 +2277,7 @@ Warns when `uses:` references are not pinned to a full 40-character commit SHA. 
 - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
 ```
 
-Use `seiton fix --enable-pin-network` to automatically resolve and apply SHA pins.
+Use `seiton --fix --enable-pin-network` to automatically resolve and apply SHA pins.
 
 **Configuration — ignore specific actions:**
 
