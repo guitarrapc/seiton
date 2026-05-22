@@ -146,6 +146,29 @@ public sealed class LintResultMetadataTests
     }
 
     [Test]
+    public async Task Check_FatalParseError_ActionPathHint_DoesNotCountWorkflowOnlyDisabledRules()
+    {
+        var engine = new LintEngine();
+        var config = new LintConfig
+        {
+            Rules = new Dictionary<string, RuleConfig>
+            {
+                ["action-shell-is-required"] = new() { Enabled = false },
+                ["anonymous-definition"] = new() { Enabled = false },
+            },
+        };
+
+        using var validResult = engine.Check(MinimalAction, "action.yml", config);
+        using var invalidResult = engine.Check(InvalidAction, "action.yml", config);
+
+        await Assert.That(validResult.DisabledRuleIds.ToArray()).Contains("action-shell-is-required");
+        await Assert.That(validResult.DisabledRuleIds.ToArray()).DoesNotContain("anonymous-definition");
+        await Assert.That(invalidResult.DisabledRuleCount).IsEqualTo(validResult.DisabledRuleCount);
+        await Assert.That(invalidResult.DisabledRuleIds.ToArray()).IsEquivalentTo(validResult.DisabledRuleIds.ToArray());
+        await Assert.That(invalidResult.DisabledRuleIds.ToArray()).DoesNotContain("anonymous-definition");
+    }
+
+    [Test]
     public async Task Check_FatalParseError_PreservesConfigDiagnostics()
     {
         var engine = new LintEngine();

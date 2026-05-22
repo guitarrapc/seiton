@@ -418,13 +418,18 @@ public sealed class LintEngine
         {
             var rule = rules[i];
             var ruleId = rule.Id.ToId() ?? throw new InvalidOperationException($"Rule {rule.Id} must provide a non-null id.");
+            var supportsDocumentKind = rule.SupportsDocumentKind(documentKind);
             if (!IsRuleEnabled(ruleId, normalizedRuleConfig))
             {
-                _disabledRuleIds.Add(ruleId);
+                if (supportsDocumentKind)
+                {
+                    _disabledRuleIds.Add(ruleId);
+                }
+
                 continue;
             }
 
-            if (rule.SupportsDocumentKind(documentKind))
+            if (supportsDocumentKind)
             {
                 activeRuleCount++;
             }
@@ -434,13 +439,18 @@ public sealed class LintEngine
         {
             var onlineRule = _onlineRules[i];
             var ruleId = onlineRule.Id.ToId() ?? throw new InvalidOperationException($"Rule {onlineRule.Id} must provide a non-null id.");
+            var supportsDocumentKind = onlineRule.SupportsDocumentKind(documentKind);
             if (!IsRuleEnabled(ruleId, normalizedRuleConfig))
             {
-                _disabledRuleIds.Add(ruleId);
+                if (supportsDocumentKind)
+                {
+                    _disabledRuleIds.Add(ruleId);
+                }
+
                 continue;
             }
 
-            if (onlineRule.SupportsDocumentKind(documentKind))
+            if (supportsDocumentKind)
             {
                 activeRuleCount++;
             }
