@@ -182,7 +182,6 @@ public static partial class WorkflowParser
         }
         catch (Exception ex) when (ex is not OutOfMemoryException and not OperationCanceledException)
         {
-            localArena?.Dispose();
             arena = null;
             var (startLine, startColumn, startOffset) = TryExtractLineCol(ex.Message);
             var location = new TextRange(
@@ -201,6 +200,13 @@ public static partial class WorkflowParser
             return new ClassifiedParseResult(
                 parseResult,
                 new DocumentKindClassification(pathHintKind, DocumentKind.Unknown, HasHintMismatch: false, IsAmbiguous: false));
+        }
+        finally
+        {
+            // Dispose arena if ownership was NOT transferred to the caller.
+            // On success: localArena is nulled before return, so this is a no-op.
+            // On OOM/OperationCanceledException: the filtered catch doesn't run, but this ensures cleanup.
+            localArena?.Dispose();
         }
     }
 
