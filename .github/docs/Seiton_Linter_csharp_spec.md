@@ -68,6 +68,7 @@ Linter runtime assumes parser output as structural input and never reparses YAML
 1. Keep parser/linter responsibility boundary strict.
 2. Keep lint output deterministic for identical input/config.
 3. Keep rule/exclusion policy behavior aligned with language-agnostic linter contract.
+4. Keep the implemented rule catalog aligned with the rule inclusion policy in `Seiton_Linter_spec.md` §1.1; C# runtime-specific rules must not reintroduce style-only or tool-preference-only checks.
 
 ---
 

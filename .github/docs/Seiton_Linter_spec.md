@@ -18,6 +18,20 @@ In scope:
 - Lint configuration surface
 - Rule diagnostics aggregation and final output processing
 
+### 1.1 Rule Inclusion Policy
+
+The linter rule catalog must stay within Seiton's linting scope. Rule selection uses the following criteria.
+
+- **Keep** rules that detect mistakes, security risks, incompatibilities, spec traps that are easy to misunderstand, or strongly deprecated APIs/features with concrete operational downside.
+- **Allow as opt-in informational** rules only when the downside is still concrete and explainable, even if the rule is advisory rather than correctness-critical.
+- **Exclude** rules whose value primarily depends on naming taste, readability preferences, UI presentation, alternative tool preference, or team/culture-specific style.
+
+Implications:
+
+- Default-on rules should normally satisfy the first category.
+- Opt-in local/online rules may satisfy either the first category or the second category, but not the third.
+- If a rule drifts into the third category, it should be removed rather than kept as a default or opt-in rule.
+
 Out of scope:
 
 - YAML structural parsing algorithms
