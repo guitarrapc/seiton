@@ -1,0 +1,7 @@
+name: Clean Nested Action
+description: Valid nested action for include-actions verification
+runs:
+  using: composite
+  steps:
+    - run: echo ok
+      shell: bash

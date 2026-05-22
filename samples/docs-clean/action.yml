@@ -1,0 +1,7 @@
+name: Clean Sample Action
+description: Valid action for command verification
+runs:
+  using: composite
+  steps:
+    - run: echo ok
+      shell: bash

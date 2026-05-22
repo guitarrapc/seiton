@@ -1,0 +1,3 @@
+rules:
+  runner-no-latest:
+    enabled: false
