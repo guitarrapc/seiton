@@ -26,7 +26,7 @@ internal class SeitonCli
     /// <param name="color">Color mode: auto | always | never.</param>
     /// <param name="noColor">Disable color output (overrides --color).</param>
     /// <param name="verbose">Print progress information to stderr.</param>
-    /// <param name="fix">Enable fix mode for the root command (equivalent to the fix subcommand).</param>
+    /// <param name="fix">Enable fix mode on the root command.</param>
     /// <param name="dryRun">Print unified diff without modifying files (requires --fix).</param>
     /// <param name="check">Exit non-zero if fixable diagnostics remain after filtering, without applying fixes (requires --fix).</param>
     /// <param name="enablePinNetwork">Allow network requests to resolve action SHA pins (requires --fix).</param>
@@ -34,7 +34,6 @@ internal class SeitonCli
     /// <param name="includeActions">When no FILES are provided, include .github/actions/ in auto-discovery.</param>
     [Command("")]
     public async Task Root(
-        [Argument] string[]? files = null,
         string? config = null,
         string stdinFilename = "<stdin>",
         string[]? ignore = null,
@@ -49,7 +48,8 @@ internal class SeitonCli
         bool check = false,
         bool enablePinNetwork = false,
         bool enableImageNetwork = false,
-        bool includeActions = false)
+        bool includeActions = false,
+        [Argument] params string[] files)
     {
         if (!fix && (dryRun || check || enablePinNetwork || enableImageNetwork))
         {
@@ -59,8 +59,8 @@ internal class SeitonCli
         }
 
         var code = fix
-            ? await FixCommand.RunAsync(files ?? [], config, stdinFilename, ignore ?? [], minSeverity, format, oneline, color, noColor, verbose, dryRun, check, enablePinNetwork, enableImageNetwork, includeActions)
-            : CheckCommand.Run(files ?? [], config, stdinFilename, ignore ?? [], minSeverity, format, oneline, color, noColor, verbose, includeActions);
+            ? await FixCommand.RunAsync(files, config, stdinFilename, ignore ?? [], minSeverity, format, oneline, color, noColor, verbose, dryRun, check, enablePinNetwork, enableImageNetwork, includeActions)
+            : CheckCommand.Run(files, config, stdinFilename, ignore ?? [], minSeverity, format, oneline, color, noColor, verbose, includeActions);
 
         if (code != 0) Environment.ExitCode = code;
     }
@@ -78,7 +78,6 @@ internal class SeitonCli
     /// <param name="verbose">Print progress information to stderr.</param>
     /// <param name="includeActions">When no FILES are provided, include .github/actions/ in auto-discovery.</param>
     public void Check(
-        [Argument] string[]? files = null,
         string? config = null,
         string stdinFilename = "<stdin>",
         string[]? ignore = null,
@@ -88,9 +87,10 @@ internal class SeitonCli
         ColorMode color = ColorMode.Auto,
         bool noColor = false,
         bool verbose = false,
-        bool includeActions = false)
+        bool includeActions = false,
+        [Argument] params string[] files)
     {
-        var code = CheckCommand.Run(files ?? [], config, stdinFilename, ignore ?? [], minSeverity, format, oneline, color, noColor, verbose, includeActions);
+        var code = CheckCommand.Run(files, config, stdinFilename, ignore ?? [], minSeverity, format, oneline, color, noColor, verbose, includeActions);
         if (code != 0) Environment.ExitCode = code;
     }
 
