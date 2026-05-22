@@ -180,7 +180,7 @@ public static partial class WorkflowParser
             }
             finally { diagnostics.Dispose(); }
         }
-        catch (Exception ex)
+        catch (Exception ex) when (ex is not OutOfMemoryException and not OperationCanceledException)
         {
             localArena?.Dispose();
             arena = null;
@@ -334,7 +334,7 @@ public static partial class WorkflowParser
         {
             return ParseCoreInner(ref reader, arena, source, parseMode, ref diagnostics, rootSkipMask: 0);
         }
-        catch (Exception ex)
+        catch (Exception ex) when (ex is not OutOfMemoryException and not OperationCanceledException)
         {
             var (line, col, offset) = TryExtractLineCol(ex.Message);
             AddError(ref diagnostics, $"yaml parse failure: {ex.Message}", new TextPosition(offset, line, col));
@@ -358,7 +358,7 @@ public static partial class WorkflowParser
             {
                 result = ParseCoreInner(ref reader, arena, (ReadOnlySpan<byte>)utf8Yaml, ParseMode.Workflow, ref diagnostics, rootSkipMask, jobSkipEntries);
             }
-            catch (Exception ex)
+            catch (Exception ex) when (ex is not OutOfMemoryException and not OperationCanceledException)
             {
                 var (line, col, offset) = TryExtractLineCol(ex.Message);
                 AddError(ref diagnostics, $"yaml parse failure: {ex.Message}", new TextPosition(offset, line, col));

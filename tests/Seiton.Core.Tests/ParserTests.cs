@@ -3966,6 +3966,16 @@ public sealed class ParserTests
         await Assert.That(offset).IsEqualTo(0);
     }
 
+    [Test]
+    public async Task TryExtractLineCol_NoIdx_ReturnsZeroOffset()
+    {
+        // When Idx: is absent (e.g., different exception source), offset defaults to 0
+        var (line, col, offset) = WorkflowParser.TryExtractLineCol("Failed at Line: 3, Col: 7");
+        await Assert.That(line).IsEqualTo(3);
+        await Assert.That(col).IsEqualTo(8);     // Col 0-based → 1-based
+        await Assert.That(offset).IsEqualTo(0);  // No Idx → 0
+    }
+
     // regression: matrix include adds extra keys to the matrix context
     [Test]
     public async Task Parse_MatrixIncludeAddsExtraKeys_ContextIncludesIncludeOnlyKeys()
