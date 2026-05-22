@@ -91,7 +91,7 @@ public sealed class Phase5RuleTests
     public async Task Misfeature_OptInEnabled_ActionMetadataCompositeStep_ReportsSetupPythonPipInstall()
     {
         var yaml = """
-        name: Demo composite
+        name: Python setup helper
         description: Demo composite action
         runs:
           using: composite
@@ -111,6 +111,7 @@ public sealed class Phase5RuleTests
 
         using var result = new LintEngine().Check(Encoding.UTF8.GetBytes(yaml), "action.yml", config);
 
+        await Assert.That(result.HasFatalError).IsFalse();
         await Assert.That(result.DocumentKind).IsEqualTo(DocumentKind.ActionMetadata);
         await Assert.That(result.Diagnostics.Any(x => x.RuleId == "misfeature" && x.Message.Contains("pip-install", StringComparison.Ordinal))).IsTrue();
     }
@@ -140,56 +141,58 @@ public sealed class Phase5RuleTests
         await Assert.That(result.Diagnostics.Any(x => x.RuleId == "superfluous-actions" && x.Severity == DiagnosticSeverity.Info && x.Message.Contains("softprops/action-gh-release", StringComparison.Ordinal) && x.Message.Contains("gh release create", StringComparison.Ordinal))).IsTrue();
     }
 
-  [Test]
-  public async Task SuperfluousActions_OptInEnabled_UnknownAction_DoesNotReport()
-  {
-    var yaml = """
-    on: push
-    jobs:
-      release:
-      runs-on: ubuntu-24.04
-      steps:
-        - uses: actions/checkout@v5
-    """;
-
-    var config = new LintConfig
+    [Test]
+    public async Task SuperfluousActions_OptInEnabled_UnknownAction_DoesNotReport()
     {
-      Rules = new Dictionary<string, RuleConfig>
-      {
-        ["superfluous-actions"] = new RuleConfig { Enabled = true },
-      },
-    };
+        var yaml = """
+        on: push
+        jobs:
+          release:
+            runs-on: ubuntu-24.04
+            steps:
+              - uses: actions/checkout@v5
+        """;
 
-    using var result = new LintEngine().Check(Encoding.UTF8.GetBytes(yaml), "superfluous-actions-unknown.yml", config);
+        var config = new LintConfig
+        {
+            Rules = new Dictionary<string, RuleConfig>
+            {
+                ["superfluous-actions"] = new RuleConfig { Enabled = true },
+            },
+        };
 
-    await Assert.That(result.Diagnostics.Any(x => x.RuleId == "superfluous-actions")).IsFalse();
-  }
+        using var result = new LintEngine().Check(Encoding.UTF8.GetBytes(yaml), "superfluous-actions-unknown.yml", config);
 
-  [Test]
-  public async Task SuperfluousActions_OptInEnabled_ActionMetadataCompositeStep_ReportsKnownReplacement()
-  {
-    var yaml = """
-    name: Demo composite
-    description: Demo composite action
-    runs:
-      using: composite
-      steps:
-      - uses: softprops/action-gh-release@v2
-    """;
+        await Assert.That(result.HasFatalError).IsFalse();
+        await Assert.That(result.Diagnostics.Any(x => x.RuleId == "superfluous-actions")).IsFalse();
+    }
 
-    var config = new LintConfig
+    [Test]
+    public async Task SuperfluousActions_OptInEnabled_ActionMetadataCompositeStep_ReportsKnownReplacement()
     {
-      Rules = new Dictionary<string, RuleConfig>
-      {
-        ["superfluous-actions"] = new RuleConfig { Enabled = true },
-      },
-    };
+        var yaml = """
+        name: Demo composite
+        description: Demo composite action
+        runs:
+          using: composite
+          steps:
+            - uses: softprops/action-gh-release@v2
+        """;
 
-    using var result = new LintEngine().Check(Encoding.UTF8.GetBytes(yaml), "action.yml", config);
+        var config = new LintConfig
+        {
+            Rules = new Dictionary<string, RuleConfig>
+            {
+                ["superfluous-actions"] = new RuleConfig { Enabled = true },
+            },
+        };
 
-    await Assert.That(result.DocumentKind).IsEqualTo(DocumentKind.ActionMetadata);
-    await Assert.That(result.Diagnostics.Any(x => x.RuleId == "superfluous-actions" && x.Message.Contains("gh release create", StringComparison.Ordinal))).IsTrue();
-  }
+        using var result = new LintEngine().Check(Encoding.UTF8.GetBytes(yaml), "action.yml", config);
+
+        await Assert.That(result.HasFatalError).IsFalse();
+        await Assert.That(result.DocumentKind).IsEqualTo(DocumentKind.ActionMetadata);
+        await Assert.That(result.Diagnostics.Any(x => x.RuleId == "superfluous-actions" && x.Message.Contains("softprops/action-gh-release", StringComparison.Ordinal) && x.Message.Contains("gh release create", StringComparison.Ordinal))).IsTrue();
+    }
 
     [Test]
     public async Task Phase5Rules_DefaultConfig_DoNotRun()
