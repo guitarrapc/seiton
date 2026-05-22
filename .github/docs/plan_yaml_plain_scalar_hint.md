@@ -3,6 +3,43 @@
 > 作成日: 2026-05-23
 > 対象: `run:` / `script:` の plain scalar に `: ` が含まれたとき、YAML fatal parse だけで終わる問題に対して、説明的な補助診断を追加するべきかの検討
 
+## 実装結果
+
+> 実装日: 2026-05-23
+> 方針B を P1 まで実装完了
+
+### 実装内容
+
+- `WorkflowParser.PlainScalarHint.cs` (新規): fatal YAML parse 後のヒューリスティック検出ロジック
+- `ParseCore` / `ParseClassified` / `ParseIncremental` の catch ブロックにヒント生成を統合
+- `AddFatalParseError` ヘルパー追加 (Help フィールド対応)
+- Diagnostic の既存 `Help` フィールドを活用 (全出力形式で自動表示)
+
+### ベンチマーク結果 (CoreParsingBenchmark)
+
+ヒントロジックはエラーパスのみで実行されるため、正常パースへの性能影響はゼロ。
+
+| Size | Before (Mean) | After (Mean) | Change | Allocated |
+|------|--------------|-------------|--------|-----------|
+| Small | 45.9 us | 46.4 us | +1.0% (ノイズ) | 3.87 KB = 同一 |
+| Medium | 1,085 us | 1,072 us | -1.2% (ノイズ) | 35.59 KB = 同一 |
+| Large | 19,212 us | 18,862 us | -1.8% (ノイズ) | 180.04 KB = 同一 |
+
+性能変化なし。ヒント検出は catch ブロック内でのみ実行され、通常の成功パスに影響を与えない。
+
+### テスト追加
+
+7 テスト追加 (3 positive + 4 negative):
+- `Parse_PlainScalarColonHint_RunWithColonSpace_ReturnsHint` — `run:` + `: ` → ヒントあり
+- `Parse_PlainScalarColonHint_ScriptWithColonSpace_ReturnsHint` — `script:` + `: ` → ヒントあり
+- `Parse_PlainScalarColonHint_RunWithBareColon_ReturnsHint` — `run: foo: bar` → ヒントあり
+- `Parse_PlainScalarColonHint_SingleQuoted_NoHint` — quoted → ヒントなし (正常パース)
+- `Parse_PlainScalarColonHint_BlockScalar_NoHint` — block scalar → ヒントなし (正常パース)
+- `Parse_PlainScalarColonHint_PlainScalarWithoutColon_NoHint` — `: ` なし → ヒントなし
+- `Parse_PlainScalarColonHint_UnrelatedFatalYaml_NoHint` — 無関係な fatal → ヒントなし
+
+全 1937 テスト通過。
+
 ---
 
 ## 1. 問題設定

@@ -191,10 +191,12 @@ public static partial class WorkflowParser
                 StartColumn: startColumn,
                 EndLine: startLine,
                 EndColumn: startColumn);
+            var help = TryGetPlainScalarColonHint((ReadOnlySpan<byte>)utf8Yaml, startOffset, startLine);
             var diagnostic = new Diagnostic(
                 Severity: DiagnosticSeverity.Error,
                 Message: $"yaml parse failure: {ex.Message}",
                 Location: location,
+                Help: help,
                 FilePath: string.IsNullOrEmpty(filePath) ? null : filePath);
             var parseResult = new ParseResultData(default, default, new DiagnosticList([diagnostic]), HasFatalError: true);
             return new ClassifiedParseResult(
@@ -343,7 +345,8 @@ public static partial class WorkflowParser
         catch (Exception ex) when (ex is not OutOfMemoryException and not OperationCanceledException)
         {
             var (line, col, offset) = TryExtractLineCol(ex.Message);
-            AddError(ref diagnostics, $"yaml parse failure: {ex.Message}", new TextPosition(offset, line, col));
+            var help = TryGetPlainScalarColonHint(source, offset, line);
+            AddFatalParseError(ref diagnostics, $"yaml parse failure: {ex.Message}", new TextPosition(offset, line, col), help);
             return new ParseCoreResult(default, default, hasFatalError: true, arena);
         }
     }
@@ -367,7 +370,8 @@ public static partial class WorkflowParser
             catch (Exception ex) when (ex is not OutOfMemoryException and not OperationCanceledException)
             {
                 var (line, col, offset) = TryExtractLineCol(ex.Message);
-                AddError(ref diagnostics, $"yaml parse failure: {ex.Message}", new TextPosition(offset, line, col));
+                var help = TryGetPlainScalarColonHint((ReadOnlySpan<byte>)utf8Yaml, offset, line);
+                AddFatalParseError(ref diagnostics, $"yaml parse failure: {ex.Message}", new TextPosition(offset, line, col), help);
                 result = new ParseCoreResult(default, default, hasFatalError: true, arena);
             }
 

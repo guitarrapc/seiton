@@ -1053,6 +1053,19 @@ The parser never aborts on a single error. Each parse function:
 | YAML parse failure | Add a fatal `yaml parse failure` diagnostic and preserve any parser diagnostics already emitted earlier in the same file; AST may be partial or null |
 | Duplicate key | error + ignore the later key (first wins) |
 
+#### Fatal Parse Explanatory Hints (C# Implementation)
+
+After a fatal YAML parse, `ParseCore` and `ParseClassified` catch blocks call `TryGetPlainScalarColonHint(source, errorOffset, errorLine)` to detect common authoring mistakes. If a `run:` or `script:` key with a plain scalar value containing `: ` is found near the error position, the diagnostic's `Help` field is populated with an explanatory message.
+
+Implementation: `WorkflowParser.PlainScalarHint.cs` (partial class).
+
+Heuristic conditions (all must be true):
+1. Error line or up to 3 lines above contains `run:` or `script:` as a YAML key
+2. The value after the key starts as a plain scalar (not `'`, `"`, `|`, `>`)
+3. The plain scalar value contains `: ` (colon-space)
+
+Performance: runs only on the error path (no impact on success-path parsing).
+
 ---
 
 ## 6. Expression Parser (Spec §6)

@@ -4913,6 +4913,193 @@ public sealed class ParserTests
         }
     }
 
+    // ─── Plain Scalar Colon Hint Tests ─────────────────────────────────────────
+
+    [Test]
+    public async Task Parse_PlainScalarColonHint_RunWithColonSpace_ReturnsHint()
+    {
+        var yaml = """
+        on: push
+        jobs:
+          test:
+            runs-on: ubuntu-latest
+            steps:
+              - run: echo "Title: ${{ github.event.pull_request.title }}"
+        """u8;
+
+        var result = WorkflowParser.ParseDirect(yaml.ToArray(), "test.yml", out var arena);
+        try
+        {
+            await Assert.That(result.HasFatalError).IsTrue();
+            var fatal = result.Diagnostics.First(d => d.Message.Contains("yaml parse failure", StringComparison.Ordinal));
+            await Assert.That(fatal.Help).IsNotNull();
+            await Assert.That(fatal.Help!).Contains("run:");
+        }
+        finally
+        {
+            arena?.Dispose();
+        }
+    }
+
+    [Test]
+    public async Task Parse_PlainScalarColonHint_ScriptWithColonSpace_ReturnsHint()
+    {
+        var yaml = """
+        on: push
+        jobs:
+          test:
+            runs-on: ubuntu-latest
+            steps:
+              - uses: actions/github-script@v7
+                with:
+                  script: console.log("Status: done")
+        """u8;
+
+        var result = WorkflowParser.ParseDirect(yaml.ToArray(), "test.yml", out var arena);
+        try
+        {
+            await Assert.That(result.HasFatalError).IsTrue();
+            var fatal = result.Diagnostics.First(d => d.Message.Contains("yaml parse failure", StringComparison.Ordinal));
+            await Assert.That(fatal.Help).IsNotNull();
+            await Assert.That(fatal.Help!).Contains("script:");
+        }
+        finally
+        {
+            arena?.Dispose();
+        }
+    }
+
+    [Test]
+    public async Task Parse_PlainScalarColonHint_SingleQuoted_NoHint()
+    {
+        // Single-quoted value with `: ` should not trigger hint (it's valid YAML)
+        var yaml = """
+        on: push
+        jobs:
+          test:
+            runs-on: ubuntu-latest
+            steps:
+              - run: 'echo "Title: value"'
+        """u8;
+
+        var result = WorkflowParser.ParseDirect(yaml.ToArray(), "test.yml", out var arena);
+        try
+        {
+            // Single-quoted scalar should parse successfully (no fatal error)
+            await Assert.That(result.HasFatalError).IsFalse();
+        }
+        finally
+        {
+            arena?.Dispose();
+        }
+    }
+
+    [Test]
+    public async Task Parse_PlainScalarColonHint_BlockScalar_NoHint()
+    {
+        // Block scalar with `: ` inside should not trigger hint (it's valid YAML)
+        var yaml = """
+        on: push
+        jobs:
+          test:
+            runs-on: ubuntu-latest
+            steps:
+              - run: |
+                  echo "Title: ${{ github.event.pull_request.title }}"
+        """u8;
+
+        var result = WorkflowParser.ParseDirect(yaml.ToArray(), "test.yml", out var arena);
+        try
+        {
+            await Assert.That(result.HasFatalError).IsFalse();
+        }
+        finally
+        {
+            arena?.Dispose();
+        }
+    }
+
+    [Test]
+    public async Task Parse_PlainScalarColonHint_PlainScalarWithoutColon_NoHint()
+    {
+        // Plain scalar without `: ` that fails for other reasons should not get hint
+        var yaml = """
+        on: push
+        jobs:
+          test:
+            runs-on: ubuntu-latest
+            steps:
+              - run: echo hello
+                with
+                  bad: yaml
+        """u8;
+
+        var result = WorkflowParser.ParseDirect(yaml.ToArray(), "test.yml", out var arena);
+        try
+        {
+            await Assert.That(result.HasFatalError).IsTrue();
+            var fatal = result.Diagnostics.First(d => d.Message.Contains("yaml parse failure", StringComparison.Ordinal));
+            await Assert.That(fatal.Help).IsNull();
+        }
+        finally
+        {
+            arena?.Dispose();
+        }
+    }
+
+    [Test]
+    public async Task Parse_PlainScalarColonHint_UnrelatedFatalYaml_NoHint()
+    {
+        // Completely unrelated YAML error (bad indentation, no run:/script:)
+        var yaml = """
+        on: push
+        jobs:
+          test:
+            runs-on: ubuntu-latest
+            steps:
+        - run: echo hello
+        """u8;
+
+        var result = WorkflowParser.ParseDirect(yaml.ToArray(), "test.yml", out var arena);
+        try
+        {
+            await Assert.That(result.HasFatalError).IsTrue();
+            var fatal = result.Diagnostics.First(d => d.Message.Contains("yaml parse failure", StringComparison.Ordinal));
+            await Assert.That(fatal.Help).IsNull();
+        }
+        finally
+        {
+            arena?.Dispose();
+        }
+    }
+
+    [Test]
+    public async Task Parse_PlainScalarColonHint_RunWithBareColon_ReturnsHint()
+    {
+        // run: foo: triggers fatal parse - minimal reproduction
+        var yaml = """
+        on: push
+        jobs:
+          linux:
+            runs-on: ubuntu-latest
+            steps:
+              - run: foo: bar
+        """u8;
+
+        var result = WorkflowParser.ParseDirect(yaml.ToArray(), "test.yml", out var arena);
+        try
+        {
+            await Assert.That(result.HasFatalError).IsTrue();
+            var fatal = result.Diagnostics.First(d => d.Message.Contains("yaml parse failure", StringComparison.Ordinal));
+            await Assert.That(fatal.Help).IsNotNull();
+            await Assert.That(fatal.Help!).Contains("run:");
+        }
+        finally
+        {
+            arena?.Dispose();
+        }
+    }
+
     // regression: webhook known-but-disallowed option must include key name in message
     [Test]
     public async Task Parse_WebhookOptionNotAllowed_MessageContainsKeyName()

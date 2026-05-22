@@ -369,6 +369,23 @@ Supported anchor targets:
 | Recursive anchor | Deterministic parse diagnostics (no hang) |
 | Null scalar with anchor (`key: &name`) | Adapter returns empty span; parser reports structural error (e.g. "env must be mapping") |
 
+#### Fatal Parse Explanatory Hints
+
+When a YAML fatal parse occurs, the parser may augment the `yaml parse failure` diagnostic with a `Help` field containing an explanatory hint for common authoring mistakes. This is NOT recovery — the parse still fails fatally and no AST is produced.
+
+Currently supported hint:
+
+| Pattern | Condition | Help message |
+|---|---|---|
+| Plain scalar colon-space in `run:`/`script:` | Error line or nearby lines contain a `run:` or `script:` key whose plain scalar value contains `: ` | Explains that the `: ` is invalid in a plain scalar and suggests quoting or block scalar (`\|`) |
+
+Constraints:
+
+- Hints fire only when all heuristic conditions are met (key match + plain scalar + `: ` presence)
+- Hints do not fire for quoted scalars, block scalars, or values without `: `
+- The fatal parse diagnostic is unchanged; hint is additive via the `Help` field
+- Hint detection scans the error line and up to 3 lines above the error position
+
 ### 3.2 Workflow Top-Level Parse
 
 ```

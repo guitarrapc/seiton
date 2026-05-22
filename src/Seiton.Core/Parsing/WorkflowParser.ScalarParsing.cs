@@ -502,6 +502,19 @@ public static partial class WorkflowParser
         diagnostics.Add(new Diagnostic(DiagnosticSeverity.Error, message, location));
     }
 
+    private static void AddFatalParseError(ref PooledBuffer<Diagnostic> diagnostics, string message, TextPosition mark, string? help)
+    {
+        var location = new TextRange(
+            Start: mark.Position,
+            Length: 0,
+            StartLine: mark.Line,
+            StartColumn: mark.Col,
+            EndLine: mark.Line,
+            EndColumn: mark.Col);
+
+        diagnostics.Add(new Diagnostic(DiagnosticSeverity.Error, message, location, Help: help));
+    }
+
     private static void AddError(ref PooledBuffer<Diagnostic> diagnostics, string message, TextPosition mark, DiagnosticFix? fix)
     {
         var location = new TextRange(
