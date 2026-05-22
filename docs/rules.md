@@ -62,9 +62,9 @@ workflow-call-input-default              yes       local    error      no    bot
 outdated-action-runner                   yes       local    error      no    both       default
 if-expr-wrapper                          yes       local    warning    yes   both       default
 concurrency-limits                       no        local    warning    no    workflow   opt-in (not configured)
-anonymous-definition                    no        local    info       no    workflow   opt-in (not configured)
-misfeature                              no        local    info       no    both       opt-in (not configured)
-superfluous-actions                     no        local    info       no    both       opt-in (not configured)
+anonymous-definition                     no        local    info       no    workflow   opt-in (not configured)
+misfeature                               no        local    info       no    both       opt-in (not configured)
+superfluous-actions                      no        local    info       no    both       opt-in (not configured)
 unsound-condition                        yes       local    warning    yes   both       default
 unpinned-tools                           yes       local    warning    no    both       default
 unsound-contains                         yes       local    mixed      no    workflow   default
