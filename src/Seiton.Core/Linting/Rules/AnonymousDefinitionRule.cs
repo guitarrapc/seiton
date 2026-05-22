@@ -17,7 +17,7 @@ public sealed class AnonymousDefinitionRule() : RuleBase(RuleId.AnonymousDefinit
             return;
         }
 
-        AddWorkflowInfo(workflow, "workflow is missing an explicit name", workflow.Range);
+        AddWorkflowInfo(workflow, "workflow is missing an explicit name", workflow.Range with { End = workflow.Range.Start });
     }
 
     public override void VisitJobPre(Job job)
