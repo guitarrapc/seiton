@@ -511,19 +511,21 @@ zizmor は tree-sitter（bash/pwsh 完全パーサー）を使用しているが
 - `MisfeatureRule.cs`: `actions/setup-python` + `with.pip-install` を info として報告
 - `SuperfluousActionsRule.cs`: `gh` / `docker` / `jq` 等で代替しやすい wrapper action を静的カタログで検出し、`uses:` 位置に info を報告
 - RuleId / RuleCatalog / RuleIdExtensions / rule descriptor tests を更新し、3ルールを opt-in / severity=info として登録
-- レビューラウンドで `LintEngine` に default-config fast path を追加し、workflow / action-metadata ごとの active rule / disabled opt-in metadata を再利用するようにした
+- レビューラウンド後の再設計で、`LintEngine` の per-instance field 追加は取りやめ、既定 rule set に対する active rule / disabled opt-in metadata は `RuleCatalog` の shared static metadata から参照する構成に整理した
 - レビューラウンドで Phase 5 の negative case と action-metadata case を追加し、opt-in metadata の既定内容も `LintResultMetadataTests` で固定した
+- custom `LintEngine` でも `LintResult` metadata が実際のインストール済み rule set を反映するよう、既定 rule set のみ shared metadata を使い、それ以外は lightweight な都度集計にフォールバックする回帰テストを追加した
 
 **設計上の決定**:
 - 3ルールとも default-off の opt-in とした。低優先度・情報提供系であり、既存ユーザーへのノイズ増加を避けるため
 - `anonymous-definition` は workflow のみを対象とし、action metadata の `name:` 欠如は本フェーズの対象外とした
 - `misfeature` は計画どおり `actions/setup-python` の `pip-install` のみに絞り、`shell: cmd` は既存 `shell-name` に委譲した
 - `superfluous-actions` は allocation を増やさないため supplemental JSON ではなく静的 owner/repo カタログで開始した
+- default-config metadata 最適化は `ThreadLocal` な `LintEngine` を太らせないことを優先し、shared static metadata + custom engine fallback の二段構成にした
 
 **検証状況**:
 - focused tests: `Phase5RuleTests`, `RuleListResolverTests`, `RuleCatalogDescriptorTests` は green
 - `dotnet run --project tests/Seiton.Core.Tests` green（1613/1613 passed）
-- `dotnet test` green（1932/1932 passed）
+- `dotnet test` green（1933/1933 passed）
 
 **ベンチマーク結果** (`CoreLintBenchmark`, baseline: `BenchmarkDotNet.Artifacts/Seiton.Benchmark.CoreLintBenchmark-20260517-182436.log`, post-review: 2026-05-22 実行):
 
@@ -542,11 +544,12 @@ zizmor は tree-sitter（bash/pwsh 完全パーサー）を使用しているが
 - もしベンチマークで劣化が出る場合は、`superfluous-actions` の比較順序を hot action 優先に並べ替えるか、document kind / step kind 早期 return をさらに強化する
 
 **評価**:
-- レビュー修正で default-config fast path を追加し、fixed-cost allocation は Small で `8.78 KB -> 8.70 KB`、Small/False mean も `66.44 μs -> 66.10 μs` まで低減した
-- 最終 rerun でも Allocation は前回と同じ水準（Small `8.70 KB`, Medium `68.89/82.25 KB`, Large `327.41/382.25 KB`）で安定した。fixed-cost allocation の主因は抑え込めている
-- Medium / Large は baseline 比で概ね改善を維持した一方、`Medium/True` は ShortRun のばらつきで `+9.0%` に振れた。mean の揺れ幅は大きいが allocation は安定しており、実装変更が GC 圧を増やした兆候はない
-- Small は依然として +15%〜21% の悪化が残る。絶対値では `+9.83 μs` / `+11.85 μs` の固定コスト増で、ShortRun のばらつきと lint pipeline 全体の定数項が支配的とみられるが、計画書冒頭の厳格な +3% / allocation 非悪化基準は Small では未達
-- 追加で詰めるなら `LintResult` metadata の disabled-rule snapshot 自体を lazy 化するか、metadata を要求しない CLI fast path を別途設けるのが次の改善候補
+- field-free refactor 後の rerun でも Allocation は前回と同じ水準（Small `8.70/10.15 KB`, Medium `68.89/82.25 KB`, Large `327.41/382.25 KB`）で変化なしだった
+- mean は post-review rerun 比で `Small/False 67.77 μs -> 64.74 μs`, `Medium/False 1.512 ms -> 1.371 ms`, `Medium/True 2.374 ms -> 1.966 ms`, `Large/True 34.206 ms -> 33.544 ms` と改善し、`Large/False` は `22.188 ms -> 22.272 ms` の誤差範囲、`Small/True` は `71.54 μs -> 72.01 μs` の微増に留まった
+- つまり `LintEngine` を軽量化しても性能は維持され、主要ケースではむしろ改善した。shared static metadata 化で instance field 増加を避けつつ、custom engine metadata の正確性も回帰テストで担保できた
+- baseline 比では Small 系の +3% 制約はなお厳しいが、今回の refactor 自体は post-review 実装からの退行を起こしていない
+- さらに `CI=1` で `CoreLintBenchmark` を DefaultJob で再実行し、ShortRun の Small ノイズを詰めた。結果は `Small/False 64.87 μs`, `Small/True 72.44 μs`, `Medium/False 1.414 ms`, `Medium/True 2.027 ms`, `Large/False 22.132 ms`, `Large/True 33.563 ms` で、Allocation は `8.70/10.15 KB`, `68.89/82.25 KB`, `327.41/382.25 KB` のまま不変だった
+- DefaultJob rerun でも Small の 99.9% CI margin は約 2% まで縮み、field-free refactor が Small ケースでも post-review 実装から退行していないことを、ShortRun より強く確認できた
 
 ---
 

@@ -1,4 +1,5 @@
 ﻿using Seiton.Core.Linting;
+using Seiton.Core.Linting.Rules;
 using Seiton.Core.Parsing;
 
 namespace Seiton.Core.Tests;
@@ -160,5 +161,21 @@ public sealed class LintResultMetadataTests
 
         await Assert.That(result.HasFatalError).IsTrue();
         await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("unknown rule-id 'seiton-lint-rule-008'"))).IsTrue();
+    }
+
+    [Test]
+    public async Task Check_CustomEngine_NoConfig_UsesInstalledRuleSetForDisabledMetadata()
+    {
+        var engine = new LintEngine([new JobStructureRule(), new AnonymousDefinitionRule(), new MisfeatureRule()]);
+
+        using var workflowResult = engine.Check(MinimalWorkflow, ".github/workflows/ci.yml");
+        await Assert.That(workflowResult.ActiveRuleCount).IsEqualTo(1);
+        await Assert.That(workflowResult.DisabledRuleCount).IsEqualTo(2);
+        await Assert.That(workflowResult.DisabledRuleIds.ToArray()).IsEquivalentTo(["anonymous-definition", "misfeature"]);
+
+        using var actionResult = engine.Check(MinimalAction, "action.yml");
+        await Assert.That(actionResult.ActiveRuleCount).IsEqualTo(1);
+        await Assert.That(actionResult.DisabledRuleCount).IsEqualTo(1);
+        await Assert.That(actionResult.DisabledRuleIds.ToArray()).IsEquivalentTo(["misfeature"]);
     }
 }

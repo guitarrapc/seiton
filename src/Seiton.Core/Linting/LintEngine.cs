@@ -27,13 +27,6 @@ public sealed class LintEngine
     private readonly List<SuppressionRecord> _suppressionRecords = new();
     private readonly LintConfig _effectiveConfig = new();
     private readonly List<string> _disabledRuleIds = new(8);
-    private IRule[] _defaultWorkflowRules = [];
-    private IRule[] _defaultActionMetadataRules = [];
-    private IOnlineRule[] _defaultWorkflowOnlineRules = [];
-    private IOnlineRule[] _defaultActionMetadataOnlineRules = [];
-    private string[] _defaultWorkflowDisabledRuleIds = [];
-    private string[] _defaultActionMetadataDisabledRuleIds = [];
-    private bool _defaultActivationCacheValid;
 
     // NormalizeRules reusable collections
     private readonly Dictionary<string, RuleConfig> _normalizedRulesDict = new(StringComparer.Ordinal);
@@ -83,7 +76,6 @@ public sealed class LintEngine
     public void AddRule(IRule rule)
     {
         ArgumentNullException.ThrowIfNull(rule);
-        _defaultActivationCacheValid = false;
         if (rule is IOnlineRule onlineRule)
         {
             _onlineRules.Add(onlineRule);
@@ -267,86 +259,10 @@ public sealed class LintEngine
             config?.Output,
             config?.Verbose ?? false);
         var effectiveConfig = _effectiveConfig;
-
-        if (effectiveConfig.Rules is null || effectiveConfig.Rules.Count == 0)
-        {
-            var (defaultActiveRuleCount, defaultDisabledRuleIdsSnapshot) = ConfigureDefaultRuleActivation(documentKind, effectiveConfig);
-            var defaultDisabledRuleCount = defaultDisabledRuleIdsSnapshot.Length;
-
-            if (_activeRules.Count == 0 && _activeOnlineRules.Count == 0)
-            {
-                return BuildLintResult(parseResult, arena, documentKind, defaultActiveRuleCount, defaultDisabledRuleCount, defaultDisabledRuleIdsSnapshot);
-            }
-
-            if (parseResult.Workflow is not null)
-            {
-                _visitor.Visit(parseResult.Workflow, skipJobs);
-            }
-            else if (parseResult.ActionMetadata is not null)
-            {
-                _visitor.VisitActionMetadata(parseResult.ActionMetadata);
-            }
-
-            return FinalizeRuleDiagnostics(
-                parseResult,
-                arena,
-                documentKind,
-                effectiveConfig.Rules,
-                inlineSuppression,
-                normalizedExclusions,
-                effectiveConfig.Output.SortOrder,
-                defaultActiveRuleCount,
-                defaultDisabledRuleCount,
-                defaultDisabledRuleIdsSnapshot,
-                skipSuppressionSummary: config?.SkipSuppressionSummary == true);
-        }
-
-        _activeRules.Clear();
-        for (var i = 0; i < rules.Count; i++)
-        {
-            var rule = rules[i];
-            var ruleId = rule.Id.ToId() ?? throw new InvalidOperationException($"Rule {rule.Id} must provide a non-null id.");
-            if (!IsRuleEnabled(ruleId, effectiveConfig.Rules))
-            {
-                _disabledRuleIds.Add(ruleId);
-                continue;
-            }
-
-            if (!rule.SupportsDocumentKind(documentKind))
-            {
-                continue;
-            }
-
-            rule.SetConfig(effectiveConfig);
-            _visitor.AddPass(rule);
-            _activeRules.Add(rule);
-        }
-
-        // Activate online rules for visitor traversal (target collection)
-        _activeOnlineRules.Clear();
-        for (var i = 0; i < _onlineRules.Count; i++)
-        {
-            var onlineRule = _onlineRules[i];
-            var ruleId = onlineRule.Id.ToId() ?? throw new InvalidOperationException($"Rule {onlineRule.Id} must provide a non-null id.");
-            if (!IsRuleEnabled(ruleId, effectiveConfig.Rules))
-            {
-                _disabledRuleIds.Add(ruleId);
-                continue;
-            }
-
-            if (!onlineRule.SupportsDocumentKind(documentKind))
-            {
-                continue;
-            }
-
-            onlineRule.SetConfig(effectiveConfig);
-            _visitor.AddPass(onlineRule);
-            _activeOnlineRules.Add(onlineRule);
-        }
-
-        var activeRuleCount = _activeRules.Count + _activeOnlineRules.Count;
-        var disabledRuleCount = _disabledRuleIds.Count;
-        var disabledRuleIdsSnapshot = disabledRuleCount > 0 ? _disabledRuleIds.ToArray() : [];
+        var sharedDisabledRuleIds = effectiveConfig.Rules is null || effectiveConfig.Rules.Count == 0
+            ? GetSharedDefaultDisabledRuleIds(documentKind)
+            : null;
+        var (activeRuleCount, disabledRuleCount, disabledRuleIdsSnapshot) = ConfigureRuleActivation(documentKind, effectiveConfig, effectiveConfig.Rules, sharedDisabledRuleIds);
 
         if (_activeRules.Count == 0 && _activeOnlineRules.Count == 0)
         {
@@ -489,12 +405,10 @@ public sealed class LintEngine
         IReadOnlyDictionary<string, RuleConfig>? normalizedRuleConfig,
         DocumentKind documentKind)
     {
-        if (normalizedRuleConfig is null || normalizedRuleConfig.Count == 0)
+        if ((normalizedRuleConfig is null || normalizedRuleConfig.Count == 0)
+            && RuleCatalog.MatchesDefaultRuleSet(rules, _onlineRules))
         {
-            EnsureDefaultActivationCache();
-            return documentKind == DocumentKind.ActionMetadata
-                ? (_defaultActionMetadataRules.Length + _defaultActionMetadataOnlineRules.Length, _defaultActionMetadataDisabledRuleIds)
-                : (_defaultWorkflowRules.Length + _defaultWorkflowOnlineRules.Length, _defaultWorkflowDisabledRuleIds);
+            return (RuleCatalog.GetDefaultActiveRuleCount(documentKind), RuleCatalog.GetDefaultDisabledRuleIds(documentKind));
         }
 
         _disabledRuleIds.Clear();
@@ -535,200 +449,82 @@ public sealed class LintEngine
         return (activeRuleCount, _disabledRuleIds.Count > 0 ? _disabledRuleIds.ToArray() : []);
     }
 
-    private (int ActiveRuleCount, string[] DisabledRuleIds) ConfigureDefaultRuleActivation(DocumentKind documentKind, LintConfig effectiveConfig)
+    private (int ActiveRuleCount, int DisabledRuleCount, string[] DisabledRuleIds) ConfigureRuleActivation(
+        DocumentKind documentKind,
+        LintConfig effectiveConfig,
+        IReadOnlyDictionary<string, RuleConfig>? effectiveRules,
+        string[]? sharedDisabledRuleIds)
     {
-        EnsureDefaultActivationCache();
-
         _activeRules.Clear();
         _activeOnlineRules.Clear();
+        _disabledRuleIds.Clear();
 
-        var activeRules = documentKind == DocumentKind.ActionMetadata ? _defaultActionMetadataRules : _defaultWorkflowRules;
-        for (var i = 0; i < activeRules.Length; i++)
+        for (var i = 0; i < rules.Count; i++)
         {
-            var rule = activeRules[i];
+            var rule = rules[i];
+            var ruleId = rule.Id.ToId() ?? throw new InvalidOperationException($"Rule {rule.Id} must provide a non-null id.");
+            var supportsDocumentKind = rule.SupportsDocumentKind(documentKind);
+            if (!IsRuleEnabled(ruleId, effectiveRules))
+            {
+                if (sharedDisabledRuleIds is null && supportsDocumentKind)
+                {
+                    _disabledRuleIds.Add(ruleId);
+                }
+
+                continue;
+            }
+
+            if (!supportsDocumentKind)
+            {
+                continue;
+            }
+
             rule.SetConfig(effectiveConfig);
             _visitor.AddPass(rule);
             _activeRules.Add(rule);
         }
 
-        var activeOnlineRules = documentKind == DocumentKind.ActionMetadata ? _defaultActionMetadataOnlineRules : _defaultWorkflowOnlineRules;
-        for (var i = 0; i < activeOnlineRules.Length; i++)
+        for (var i = 0; i < _onlineRules.Count; i++)
         {
-            var onlineRule = activeOnlineRules[i];
+            var onlineRule = _onlineRules[i];
+            var ruleId = onlineRule.Id.ToId() ?? throw new InvalidOperationException($"Rule {onlineRule.Id} must provide a non-null id.");
+            var supportsDocumentKind = onlineRule.SupportsDocumentKind(documentKind);
+            if (!IsRuleEnabled(ruleId, effectiveRules))
+            {
+                if (sharedDisabledRuleIds is null && supportsDocumentKind)
+                {
+                    _disabledRuleIds.Add(ruleId);
+                }
+
+                continue;
+            }
+
+            if (!supportsDocumentKind)
+            {
+                continue;
+            }
+
             onlineRule.SetConfig(effectiveConfig);
             _visitor.AddPass(onlineRule);
             _activeOnlineRules.Add(onlineRule);
         }
 
-        var disabledRuleIds = documentKind == DocumentKind.ActionMetadata ? _defaultActionMetadataDisabledRuleIds : _defaultWorkflowDisabledRuleIds;
-        return (_activeRules.Count + _activeOnlineRules.Count, disabledRuleIds);
+        var activeRuleCount = _activeRules.Count + _activeOnlineRules.Count;
+        if (sharedDisabledRuleIds is not null)
+        {
+            return (activeRuleCount, sharedDisabledRuleIds.Length, sharedDisabledRuleIds);
+        }
+
+        var disabledRuleCount = _disabledRuleIds.Count;
+        return (activeRuleCount, disabledRuleCount, disabledRuleCount > 0 ? _disabledRuleIds.ToArray() : []);
     }
 
-    private void EnsureDefaultActivationCache()
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private string[]? GetSharedDefaultDisabledRuleIds(DocumentKind documentKind)
     {
-        if (_defaultActivationCacheValid)
-        {
-            return;
-        }
-
-        var workflowRuleCount = 0;
-        var actionMetadataRuleCount = 0;
-        var workflowOnlineRuleCount = 0;
-        var actionMetadataOnlineRuleCount = 0;
-        var workflowDisabledRuleCount = 0;
-        var actionMetadataDisabledRuleCount = 0;
-
-        for (var i = 0; i < rules.Count; i++)
-        {
-            var rule = rules[i];
-            var ruleId = rule.Id.ToId() ?? throw new InvalidOperationException($"Rule {rule.Id} must provide a non-null id.");
-            var enabledByDefault = IsRuleEnabled(ruleId, rules: null);
-            var supportsWorkflow = rule.SupportsDocumentKind(DocumentKind.Workflow);
-            var supportsActionMetadata = rule.SupportsDocumentKind(DocumentKind.ActionMetadata);
-
-            if (enabledByDefault)
-            {
-                if (supportsWorkflow)
-                {
-                    workflowRuleCount++;
-                }
-
-                if (supportsActionMetadata)
-                {
-                    actionMetadataRuleCount++;
-                }
-            }
-            else
-            {
-                if (supportsWorkflow)
-                {
-                    workflowDisabledRuleCount++;
-                }
-
-                if (supportsActionMetadata)
-                {
-                    actionMetadataDisabledRuleCount++;
-                }
-            }
-        }
-
-        for (var i = 0; i < _onlineRules.Count; i++)
-        {
-            var onlineRule = _onlineRules[i];
-            var ruleId = onlineRule.Id.ToId() ?? throw new InvalidOperationException($"Rule {onlineRule.Id} must provide a non-null id.");
-            var enabledByDefault = IsRuleEnabled(ruleId, rules: null);
-            var supportsWorkflow = onlineRule.SupportsDocumentKind(DocumentKind.Workflow);
-            var supportsActionMetadata = onlineRule.SupportsDocumentKind(DocumentKind.ActionMetadata);
-
-            if (enabledByDefault)
-            {
-                if (supportsWorkflow)
-                {
-                    workflowOnlineRuleCount++;
-                }
-
-                if (supportsActionMetadata)
-                {
-                    actionMetadataOnlineRuleCount++;
-                }
-            }
-            else
-            {
-                if (supportsWorkflow)
-                {
-                    workflowDisabledRuleCount++;
-                }
-
-                if (supportsActionMetadata)
-                {
-                    actionMetadataDisabledRuleCount++;
-                }
-            }
-        }
-
-        _defaultWorkflowRules = workflowRuleCount == 0 ? [] : new IRule[workflowRuleCount];
-        _defaultActionMetadataRules = actionMetadataRuleCount == 0 ? [] : new IRule[actionMetadataRuleCount];
-        _defaultWorkflowOnlineRules = workflowOnlineRuleCount == 0 ? [] : new IOnlineRule[workflowOnlineRuleCount];
-        _defaultActionMetadataOnlineRules = actionMetadataOnlineRuleCount == 0 ? [] : new IOnlineRule[actionMetadataOnlineRuleCount];
-        _defaultWorkflowDisabledRuleIds = workflowDisabledRuleCount == 0 ? [] : new string[workflowDisabledRuleCount];
-        _defaultActionMetadataDisabledRuleIds = actionMetadataDisabledRuleCount == 0 ? [] : new string[actionMetadataDisabledRuleCount];
-
-        var workflowRuleIndex = 0;
-        var actionMetadataRuleIndex = 0;
-        var workflowOnlineRuleIndex = 0;
-        var actionMetadataOnlineRuleIndex = 0;
-        var workflowDisabledRuleIndex = 0;
-        var actionMetadataDisabledRuleIndex = 0;
-
-        for (var i = 0; i < rules.Count; i++)
-        {
-            var rule = rules[i];
-            var ruleId = rule.Id.ToId() ?? throw new InvalidOperationException($"Rule {rule.Id} must provide a non-null id.");
-            var enabledByDefault = IsRuleEnabled(ruleId, rules: null);
-            var supportsWorkflow = rule.SupportsDocumentKind(DocumentKind.Workflow);
-            var supportsActionMetadata = rule.SupportsDocumentKind(DocumentKind.ActionMetadata);
-
-            if (enabledByDefault)
-            {
-                if (supportsWorkflow)
-                {
-                    _defaultWorkflowRules[workflowRuleIndex++] = rule;
-                }
-
-                if (supportsActionMetadata)
-                {
-                    _defaultActionMetadataRules[actionMetadataRuleIndex++] = rule;
-                }
-            }
-            else
-            {
-                if (supportsWorkflow)
-                {
-                    _defaultWorkflowDisabledRuleIds[workflowDisabledRuleIndex++] = ruleId;
-                }
-
-                if (supportsActionMetadata)
-                {
-                    _defaultActionMetadataDisabledRuleIds[actionMetadataDisabledRuleIndex++] = ruleId;
-                }
-            }
-        }
-
-        for (var i = 0; i < _onlineRules.Count; i++)
-        {
-            var onlineRule = _onlineRules[i];
-            var ruleId = onlineRule.Id.ToId() ?? throw new InvalidOperationException($"Rule {onlineRule.Id} must provide a non-null id.");
-            var enabledByDefault = IsRuleEnabled(ruleId, rules: null);
-            var supportsWorkflow = onlineRule.SupportsDocumentKind(DocumentKind.Workflow);
-            var supportsActionMetadata = onlineRule.SupportsDocumentKind(DocumentKind.ActionMetadata);
-
-            if (enabledByDefault)
-            {
-                if (supportsWorkflow)
-                {
-                    _defaultWorkflowOnlineRules[workflowOnlineRuleIndex++] = onlineRule;
-                }
-
-                if (supportsActionMetadata)
-                {
-                    _defaultActionMetadataOnlineRules[actionMetadataOnlineRuleIndex++] = onlineRule;
-                }
-            }
-            else
-            {
-                if (supportsWorkflow)
-                {
-                    _defaultWorkflowDisabledRuleIds[workflowDisabledRuleIndex++] = ruleId;
-                }
-
-                if (supportsActionMetadata)
-                {
-                    _defaultActionMetadataDisabledRuleIds[actionMetadataDisabledRuleIndex++] = ruleId;
-                }
-            }
-        }
-
-        _defaultActivationCacheValid = true;
+        return RuleCatalog.MatchesDefaultRuleSet(rules, _onlineRules)
+            ? RuleCatalog.GetDefaultDisabledRuleIds(documentKind)
+            : null;
     }
 
     /// <summary>
