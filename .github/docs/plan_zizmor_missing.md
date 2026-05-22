@@ -9,14 +9,14 @@
 
 | 区分 | 件数 |
 |---|---|
-| 完全対応済み | 22 |
+| 完全対応済み | 25 |
 | 部分対応 | 7 |
-| 未対応（実装対象） | 5 |
+| 未対応（実装対象） | 2 |
 | スコープ外 | 2 |
 
-### 1.1 完全対応済み（22 件）
+### 1.1 完全対応済み（25 件）
 
-`artipacked`, `bot-conditions`, `cache-poisoning`, `concurrency-limits`, `dangerous-triggers`, `github-app`, `hardcoded-container-credentials`, `impostor-commit`, `insecure-commands`, `known-vulnerable-actions`, `ref-confusion`, `secrets-inherit`, `secrets-outside-env`, `self-hosted-runner`, `stale-action-refs`, `template-injection`, `unpinned-images`, `unpinned-tools`, `unpinned-uses`, `unredacted-secrets`, `unsound-condition`, `unsound-contains`
+`anonymous-definition`, `artipacked`, `bot-conditions`, `cache-poisoning`, `concurrency-limits`, `dangerous-triggers`, `github-app`, `hardcoded-container-credentials`, `impostor-commit`, `insecure-commands`, `known-vulnerable-actions`, `misfeature`, `ref-confusion`, `secrets-inherit`, `secrets-outside-env`, `self-hosted-runner`, `stale-action-refs`, `superfluous-actions`, `template-injection`, `unpinned-images`, `unpinned-tools`, `unpinned-uses`, `unredacted-secrets`, `unsound-condition`, `unsound-contains`
 
 #### `hardcoded-container-credentials` について
 
@@ -33,15 +33,12 @@ feature-matrix 側も更新済みで、**`credentials` ルールの `ValidateHar
 | `dependabot-cooldown` | Seiton の対象ドキュメントは workflow / action.yml のみ。dependabot.yml はスコープ外 |
 | `dependabot-execution` | 同上 |
 
-### 1.4 未対応・実装対象（5 件）
+### 1.4 未対応・実装対象（2 件）
 
 | # | 監査ID | セキュリティ影響 | 実装複雑度 |
 |---|---|---|---|
 | 1 | `github-env` | 高（RCE 同等） | 高 |
-| 2 | `anonymous-definition` | 低（可読性） | 極低 |
-| 3 | `misfeature` | 低（非推奨パターン） | 低 |
-| 4 | `superfluous-actions` | 低（最適化提案） | 低 |
-| 5 | `obfuscation` | 低（難読化検出） | 高 |
+| 2 | `obfuscation` | 低（難読化検出） | 高 |
 
 `obfuscation` は false positive リスクが高く実装が複雑なため、優先度は最低。将来的に opt-in ルールとして検討。
 
