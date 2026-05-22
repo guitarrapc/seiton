@@ -1050,7 +1050,7 @@ The parser never aborts on a single error. Each parse function:
 | Type mismatch | error + `SkipCurrentNode()` |
 | Missing required key | aggregate error after mapping traversal |
 | Exclusive constraint violation | aggregate error after mapping traversal |
-| YAML parse failure | Convert to `Diagnostic[]`, `Workflow = null` |
+| YAML parse failure | Add a fatal `yaml parse failure` diagnostic and preserve any parser diagnostics already emitted earlier in the same file; AST may be partial or null |
 | Duplicate key | error + ignore the later key (first wins) |
 
 ---
