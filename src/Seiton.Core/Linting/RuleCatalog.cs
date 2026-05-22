@@ -78,7 +78,6 @@ internal static class RuleCatalog
         (RuleId.UnsoundContains, 58, false, static () => new UnsoundContainsRule()),
         (RuleId.BotConditions, 59, false, static () => new BotConditionsRule()),
         (RuleId.Artipacked, 60, false, static () => new ArtipackedRule()),
-        (RuleId.AnonymousDefinition, 61, true, static () => new AnonymousDefinitionRule()),
         (RuleId.Misfeature, 62, true, static () => new MisfeatureRule()),
     ];
 
@@ -317,7 +316,6 @@ internal static class RuleCatalog
         RuleId.UnsoundContains => "mixed",
         RuleId.BotConditions => "warning",
         RuleId.Artipacked => "mixed",
-        RuleId.AnonymousDefinition => "info",
         RuleId.Misfeature => "info",
         _ => throw new ArgumentOutOfRangeException(nameof(ruleId), ruleId, "No default severity defined for this rule."),
     };

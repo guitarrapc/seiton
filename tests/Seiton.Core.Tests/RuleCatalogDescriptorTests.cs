@@ -9,9 +9,9 @@ public sealed class RuleCatalogDescriptorTests
     {
         var descriptors = RuleCatalog.GetAllRuleDescriptors();
 
-        // Total rules: 59 default + 4 online = 63
+        // Total rules: 58 default + 4 online = 62
         // (Syntax is not in the catalog)
-        await Assert.That(descriptors.Count).IsEqualTo(63);
+        await Assert.That(descriptors.Count).IsEqualTo(62);
     }
 
     [Test]
@@ -41,15 +41,11 @@ public sealed class RuleCatalogDescriptorTests
     {
         var descriptors = RuleCatalog.GetAllRuleDescriptors();
         var concurrencyLimits = descriptors.FirstOrDefault(d => d.Id == "concurrency-limits");
-        var anonymousDefinition = descriptors.FirstOrDefault(d => d.Id == "anonymous-definition");
         var misfeature = descriptors.FirstOrDefault(d => d.Id == "misfeature");
 
         await Assert.That(concurrencyLimits.Id).IsNotNull();
         await Assert.That(concurrencyLimits.IsOptIn).IsTrue();
         await Assert.That(concurrencyLimits.IsOnline).IsFalse();
-        await Assert.That(anonymousDefinition.Id).IsNotNull();
-        await Assert.That(anonymousDefinition.IsOptIn).IsTrue();
-        await Assert.That(anonymousDefinition.IsOnline).IsFalse();
         await Assert.That(misfeature.Id).IsNotNull();
         await Assert.That(misfeature.IsOptIn).IsTrue();
         await Assert.That(misfeature.IsOnline).IsFalse();
@@ -112,7 +108,6 @@ public sealed class RuleCatalogDescriptorTests
     {
         var descriptors = RuleCatalog.GetAllRuleDescriptors();
 
-        await Assert.That(descriptors.First(d => d.Id == "anonymous-definition").DefaultSeverity).IsEqualTo("info");
         await Assert.That(descriptors.First(d => d.Id == "misfeature").DefaultSeverity).IsEqualTo("info");
     }
 

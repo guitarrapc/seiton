@@ -235,7 +235,7 @@ Opt-in rules (default off) require `enabled: true`:
 
 ```yaml
 rules:
-  anonymous-definition:
+  misfeature:
     enabled: true
 ```
 

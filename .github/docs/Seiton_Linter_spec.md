@@ -200,7 +200,6 @@ Column definitions:
 | `unsound-condition` | ✓ | — | Warn when `if:` block scalars with fenced expressions have truthy-making newline chomping; auto-fix to `|-`/`>-`. |
 | `unpinned-tools` | ✓ | — | Warn when known tool-setup actions use an unpinned tool version. Data-driven via `unpinned_tools.json`. |
 | `concurrency-limits` | ✗ | — | Warn when workflows/jobs lack `concurrency` with `cancel-in-progress`. Skips reusable-only workflows. |
-| `anonymous-definition` | ✗ | — | Info when a workflow or job omits an explicit `name:` field. Applies to workflow documents only. |
 | `misfeature` | ✗ | — | Info when known discouraged action features are used. Current scope flags `actions/setup-python` with `with.pip-install`. |
 
 Rule set compatibility policy:
@@ -414,7 +413,6 @@ The following table defines the normative default severity for each rule. Implem
 | `unsound-condition` | warning | |
 | `unpinned-tools` | warning | |
 | `concurrency-limits` | warning | opt-in |
-| `anonymous-definition` | info | opt-in |
 | `misfeature` | info | opt-in |
 
 ### 5.8 Rule-Specific Configuration
@@ -684,7 +682,7 @@ This section describes four canonical usage profiles. Each profile states which 
 
 Config file is absent or empty. No configuration is required.
 
-**Active rules:** All rules in §4.4 with Default = `✓`. Online rules (Default = `✗`) and opt-in local rules (`concurrency-limits`, `anonymous-definition`, `misfeature`) require explicit `rules.<id>.enabled: true`.
+**Active rules:** All rules in §4.4 with Default = `✓`. Online rules (Default = `✗`) and opt-in local rules (`concurrency-limits`, `misfeature`) require explicit `rules.<id>.enabled: true`.
 
 **Auto-fix behavior:** Local-only fixes attach per §8.4 (rules marked ✓ Fixable or △ Partial). `unpinned-uses` / `unpinned-image` pin-network fixes require explicit opt-in (see Profile 3a).
 

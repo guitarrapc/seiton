@@ -62,7 +62,6 @@ workflow-call-input-default              yes       local    error      no    bot
 outdated-action-runner                   yes       local    error      no    both       default
 if-expr-wrapper                          yes       local    warning    yes   both       default
 concurrency-limits                       no        local    warning    no    workflow   opt-in (not configured)
-anonymous-definition                     no        local    info       no    workflow   opt-in (not configured)
 misfeature                               no        local    info       no    both       opt-in (not configured)
 unsound-condition                        yes       local    warning    yes   both       default
 unpinned-tools                           yes       local    warning    no    both       default
@@ -116,7 +115,6 @@ Online rules use the GitHub API. Set GITHUB_TOKEN (or SEITON_GITHUB_TOKEN) to av
 - [if-expr-wrapper](#if-expr-wrapper)
 - [unsound-condition](#unsound-condition)
 - [concurrency-limits](#concurrency-limits)
-- [anonymous-definition](#anonymous-definition)
 - [misfeature](#misfeature)
 - [deprecated-commands](#deprecated-commands)
 - [dispatch-inputs](#dispatch-inputs)
@@ -938,40 +936,6 @@ jobs:
 ```
 
 > **Note:** Reusable-only workflows (`on: workflow_call`) and workflow-call jobs (`uses:`) are skipped. When workflow-level concurrency is set, job-level checks are suppressed.
-
----
-
-### `anonymous-definition`
-
-| Default | Network | Auto-fix |
-|---|---|---|
-| ✗ | — | ✗ |
-
-Reports workflows and jobs that omit an explicit `name:`. This is informational only and is intended for teams that want consistently human-readable workflow and job names in the Actions UI.
-
-**Example trigger:**
-
-```yaml
-on: push
-jobs:
-  build:
-    runs-on: ubuntu-24.04
-    steps:
-      - run: echo ng
-```
-
-**Remediation:** Add `name:` at the workflow and job levels:
-
-```yaml
-name: CI
-on: push
-jobs:
-  build:
-    name: Build
-    runs-on: ubuntu-24.04
-    steps:
-      - run: echo ok
-```
 
 ---
 

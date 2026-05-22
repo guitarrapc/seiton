@@ -279,7 +279,6 @@ The current default rule scope in C# is:
 | `secrets-whole-context-access` | Checked in `run:`, `env:`, and `with:` sinks at step and job level. |
 | `checkout-persist-credentials` | — |
 | `artipacked` | Implemented as `VisitJobPost` step-order scan. Tracks unsafe legacy/v6+ checkout state and re-evaluates exclusion lines against tracked legacy checkouts using job-local temporary storage. V6+ runner-temp warnings are suppressed only by recursive subtree exclusions (for example `!../../_temp/**` or workspace-prefixed equivalents), not by bare or shallow `_temp` exclusions. Deferred scope does not implement checkout `with.path` correlation. |
-| `anonymous-definition` | Opt-in info rule. C# implementation checks `Workflow.Name` in `VisitWorkflowPre` and `Job.Name` in `VisitJobPre`. Scoped to workflow documents only. |
 | `misfeature` | Opt-in info rule. Current C# implementation matches `actions/setup-python` and flags `with.pip-install`. |
 | `workflow-secrets` | — |
 | `job-secrets` | — |

@@ -231,7 +231,6 @@ raw YAML
 | `bot-conditions` | High | Regular | `github.actor == 'dependabot[bot]'`等のなりすまし可能な bot チェック |
 | `unsound-condition` | High | Regular | YAML ブロックスカラーで`if:`条件が常に true になるパターン |
 | `unsound-contains` | High/Medium | Regular | `contains(user-context, 'value')`の迂回可能なパターン |
-| `anonymous-definition` | Low/Info | **Pedantic** | `name:`フィールドが未設定のワークフロー/ジョブ |
 | `archived-uses` | Medium | Regular | アーカイブ済みリポジトリのアクション参照 |
 | `concurrency-limits` | Low | **Pedantic** | `cancel-in-progress: true`なし concurrency 設定 |
 | `dependabot-execution` | High | Regular | `insecure-external-code-execution: allow` |

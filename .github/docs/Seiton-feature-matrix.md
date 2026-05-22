@@ -156,7 +156,6 @@ online audit rules（4）:
 - 理由: 効果はあるが安定運用観点で優先度は低め
 
 3. zizmor 低優先度監査の取り込み
-- `anonymous-definition`（名前未定義）
 - `bot-conditions`（スプーフ可能な bot チェック）
 - `obfuscation`（難読化検出）
 - `misfeature`（非推奨 Actions 機能使用）
@@ -238,7 +237,6 @@ zizmor 監査ID別対応表（実装確認ベース）:
 
 | 監査ID | Seiton 対応状況 | 備考 |
 |---|---|---|
-| `anonymous-definition` | ✅ | `anonymous-definition`（workflow / job の `name:` 未指定を opt-in info で検出） |
 | `archived-uses` | 🟡 | `archived-uses`（静的判定の初期実装） |
 | `artipacked` | ✅ | `artipacked` — checkout + upload-artifact のステップ間相関分析 |
 | `bot-conditions` | ✅ | `bot-conditions` |
@@ -292,9 +290,8 @@ zizmor 監査ID別対応表（実装確認ベース）:
 
 1. Dockerfile / compose / 任意YAML image pin 拡張
 
-2. zizmor 残差分（未対応 7件）
+2. zizmor 残差分（未対応 6件）
 - `github-env` — GITHUB_ENV への危険な書き込み検出
-- `anonymous-definition` — name 未定義のワークフロー/アクション
 - `obfuscation` — 難読化された Actions 機能使用
 - `misfeature` — 非推奨/危険な Actions 機能使用
 - `dependabot-execution` / `dependabot-cooldown` — Dependabot 設定検査

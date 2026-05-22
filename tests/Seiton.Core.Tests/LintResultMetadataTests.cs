@@ -103,7 +103,6 @@ public sealed class LintResultMetadataTests
 
         var disabledIds = result.DisabledRuleIds.ToArray();
         await Assert.That(disabledIds.Length).IsGreaterThan(0);
-        await Assert.That(disabledIds).Contains("anonymous-definition");
         await Assert.That(disabledIds).Contains("misfeature");
     }
 
@@ -118,7 +117,6 @@ public sealed class LintResultMetadataTests
         // DisabledRuleCount should only reflect config/opt-in disabled rules
         var disabledIds = result.DisabledRuleIds.ToArray();
         await Assert.That(disabledIds).DoesNotContain("job-permissions-required");
-        await Assert.That(disabledIds).DoesNotContain("anonymous-definition");
         await Assert.That(disabledIds).Contains("misfeature");
     }
 
@@ -152,7 +150,6 @@ public sealed class LintResultMetadataTests
             Rules = new Dictionary<string, RuleConfig>
             {
                 ["action-shell-is-required"] = new() { Enabled = false },
-                ["anonymous-definition"] = new() { Enabled = false },
             },
         };
 
@@ -160,10 +157,8 @@ public sealed class LintResultMetadataTests
         using var invalidResult = engine.Check(InvalidAction, "action.yml", config);
 
         await Assert.That(validResult.DisabledRuleIds.ToArray()).Contains("action-shell-is-required");
-        await Assert.That(validResult.DisabledRuleIds.ToArray()).DoesNotContain("anonymous-definition");
         await Assert.That(invalidResult.DisabledRuleCount).IsEqualTo(validResult.DisabledRuleCount);
         await Assert.That(invalidResult.DisabledRuleIds.ToArray()).IsEquivalentTo(validResult.DisabledRuleIds.ToArray());
-        await Assert.That(invalidResult.DisabledRuleIds.ToArray()).DoesNotContain("anonymous-definition");
     }
 
     [Test]
@@ -187,12 +182,12 @@ public sealed class LintResultMetadataTests
     [Test]
     public async Task Check_CustomEngine_NoConfig_UsesInstalledRuleSetForDisabledMetadata()
     {
-        var engine = new LintEngine([new JobStructureRule(), new AnonymousDefinitionRule(), new MisfeatureRule()]);
+        var engine = new LintEngine([new JobStructureRule(), new MisfeatureRule()]);
 
         using var workflowResult = engine.Check(MinimalWorkflow, ".github/workflows/ci.yml");
         await Assert.That(workflowResult.ActiveRuleCount).IsEqualTo(1);
-        await Assert.That(workflowResult.DisabledRuleCount).IsEqualTo(2);
-        await Assert.That(workflowResult.DisabledRuleIds.ToArray()).IsEquivalentTo(["anonymous-definition", "misfeature"]);
+        await Assert.That(workflowResult.DisabledRuleCount).IsEqualTo(1);
+        await Assert.That(workflowResult.DisabledRuleIds.ToArray()).IsEquivalentTo(["misfeature"]);
 
         using var actionResult = engine.Check(MinimalAction, "action.yml");
         await Assert.That(actionResult.ActiveRuleCount).IsEqualTo(1);
