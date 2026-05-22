@@ -1,4 +1,5 @@
 ﻿using Seiton.Core.Linting;
+using Seiton.Core.Linting.Rules;
 using Seiton.Core.Parsing;
 
 namespace Seiton.Core.Tests;
@@ -102,6 +103,7 @@ public sealed class LintResultMetadataTests
 
         var disabledIds = result.DisabledRuleIds.ToArray();
         await Assert.That(disabledIds.Length).IsGreaterThan(0);
+        await Assert.That(disabledIds).Contains("concurrency-limits");
     }
 
     [Test]
@@ -115,6 +117,7 @@ public sealed class LintResultMetadataTests
         // DisabledRuleCount should only reflect config/opt-in disabled rules
         var disabledIds = result.DisabledRuleIds.ToArray();
         await Assert.That(disabledIds).DoesNotContain("job-permissions-required");
+        await Assert.That(disabledIds).DoesNotContain("concurrency-limits");
     }
 
     [Test]
@@ -139,6 +142,26 @@ public sealed class LintResultMetadataTests
     }
 
     [Test]
+    public async Task Check_FatalParseError_ActionPathHint_DoesNotCountWorkflowOnlyDisabledRules()
+    {
+        var engine = new LintEngine();
+        var config = new LintConfig
+        {
+            Rules = new Dictionary<string, RuleConfig>
+            {
+                ["action-shell-is-required"] = new() { Enabled = false },
+            },
+        };
+
+        using var validResult = engine.Check(MinimalAction, "action.yml", config);
+        using var invalidResult = engine.Check(InvalidAction, "action.yml", config);
+
+        await Assert.That(validResult.DisabledRuleIds.ToArray()).Contains("action-shell-is-required");
+        await Assert.That(invalidResult.DisabledRuleCount).IsEqualTo(validResult.DisabledRuleCount);
+        await Assert.That(invalidResult.DisabledRuleIds.ToArray()).IsEquivalentTo(validResult.DisabledRuleIds.ToArray());
+    }
+
+    [Test]
     public async Task Check_FatalParseError_PreservesConfigDiagnostics()
     {
         var engine = new LintEngine();
@@ -154,5 +177,16 @@ public sealed class LintResultMetadataTests
 
         await Assert.That(result.HasFatalError).IsTrue();
         await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("unknown rule-id 'seiton-lint-rule-008'"))).IsTrue();
+    }
+
+    [Test]
+    public async Task Check_CustomEngine_NoConfig_UsesInstalledRuleSetForDisabledMetadata()
+    {
+        var engine = new LintEngine([new JobStructureRule(), new ConcurrencyLimitsRule()]);
+
+        using var workflowResult = engine.Check(MinimalWorkflow, ".github/workflows/ci.yml");
+        await Assert.That(workflowResult.ActiveRuleCount).IsEqualTo(1);
+        await Assert.That(workflowResult.DisabledRuleCount).IsEqualTo(1);
+        await Assert.That(workflowResult.DisabledRuleIds.ToArray()).IsEquivalentTo(["concurrency-limits"]);
     }
 }

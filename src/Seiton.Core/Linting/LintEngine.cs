@@ -259,53 +259,10 @@ public sealed class LintEngine
             config?.Output,
             config?.Verbose ?? false);
         var effectiveConfig = _effectiveConfig;
-
-        _activeRules.Clear();
-        for (var i = 0; i < rules.Count; i++)
-        {
-            var rule = rules[i];
-            var ruleId = rule.Id.ToId() ?? throw new InvalidOperationException($"Rule {rule.Id} must provide a non-null id.");
-            if (!IsRuleEnabled(ruleId, effectiveConfig.Rules))
-            {
-                _disabledRuleIds.Add(ruleId);
-                continue;
-            }
-
-            if (!rule.SupportsDocumentKind(documentKind))
-            {
-                continue;
-            }
-
-            rule.SetConfig(effectiveConfig);
-            _visitor.AddPass(rule);
-            _activeRules.Add(rule);
-        }
-
-        // Activate online rules for visitor traversal (target collection)
-        _activeOnlineRules.Clear();
-        for (var i = 0; i < _onlineRules.Count; i++)
-        {
-            var onlineRule = _onlineRules[i];
-            var ruleId = onlineRule.Id.ToId() ?? throw new InvalidOperationException($"Rule {onlineRule.Id} must provide a non-null id.");
-            if (!IsRuleEnabled(ruleId, effectiveConfig.Rules))
-            {
-                _disabledRuleIds.Add(ruleId);
-                continue;
-            }
-
-            if (!onlineRule.SupportsDocumentKind(documentKind))
-            {
-                continue;
-            }
-
-            onlineRule.SetConfig(effectiveConfig);
-            _visitor.AddPass(onlineRule);
-            _activeOnlineRules.Add(onlineRule);
-        }
-
-        var activeRuleCount = _activeRules.Count + _activeOnlineRules.Count;
-        var disabledRuleCount = _disabledRuleIds.Count;
-        var disabledRuleIdsSnapshot = disabledRuleCount > 0 ? _disabledRuleIds.ToArray() : [];
+        var sharedDisabledRuleIds = effectiveConfig.Rules is null || effectiveConfig.Rules.Count == 0
+            ? GetSharedDefaultDisabledRuleIds(documentKind)
+            : null;
+        var (activeRuleCount, disabledRuleCount, disabledRuleIdsSnapshot) = ConfigureRuleActivation(documentKind, effectiveConfig, effectiveConfig.Rules, sharedDisabledRuleIds);
 
         if (_activeRules.Count == 0 && _activeOnlineRules.Count == 0)
         {
@@ -321,6 +278,33 @@ public sealed class LintEngine
             _visitor.VisitActionMetadata(parseResult.ActionMetadata);
         }
 
+        return FinalizeRuleDiagnostics(
+            parseResult,
+            arena,
+            documentKind,
+            effectiveConfig.Rules,
+            inlineSuppression,
+            normalizedExclusions,
+            effectiveConfig.Output.SortOrder,
+            activeRuleCount,
+            disabledRuleCount,
+            disabledRuleIdsSnapshot,
+            skipSuppressionSummary: config?.SkipSuppressionSummary == true);
+    }
+
+    private LintResultData FinalizeRuleDiagnostics(
+        ParseResultData parseResult,
+        AstArena? arena,
+        DocumentKind documentKind,
+        IReadOnlyDictionary<string, RuleConfig>? effectiveRules,
+        InlineSuppression inlineSuppression,
+        ExclusionsNormalization normalizedExclusions,
+        DiagnosticSortOrder sortOrder,
+        int activeRuleCount,
+        int disabledRuleCount,
+        string[] disabledRuleIdsSnapshot,
+        bool skipSuppressionSummary)
+    {
         _ruleDiagnostics.Clear();
         for (var i = 0; i < _activeRules.Count; i++)
         {
@@ -328,7 +312,7 @@ public sealed class LintEngine
             for (var j = 0; j < currentRuleDiagnostics.Count; j++)
             {
                 var current = currentRuleDiagnostics[j];
-                if (TryGetSeverityOverride(current.RuleId, effectiveConfig.Rules, out var severityOverride))
+                if (TryGetSeverityOverride(current.RuleId, effectiveRules, out var severityOverride))
                 {
                     current = current with { Severity = severityOverride };
                 }
@@ -337,7 +321,6 @@ public sealed class LintEngine
             }
         }
 
-        var sortOrder = effectiveConfig.Output.SortOrder;
         if (sortOrder == DiagnosticSortOrder.Rule)
         {
             _ruleDiagnostics.Sort(static (x, y) => CompareDiagnosticsByRulePriority(x, y));
@@ -410,7 +393,7 @@ public sealed class LintEngine
             _diagnostics.Sort(static (x, y) => CompareDiagnosticsByLocation(x, y));
         }
 
-        if (config?.SkipSuppressionSummary == true)
+        if (skipSuppressionSummary)
         {
             return BuildLintResult(parseResult, arena, documentKind, activeRuleCount, disabledRuleCount, disabledRuleIdsSnapshot);
         }
@@ -422,6 +405,12 @@ public sealed class LintEngine
         IReadOnlyDictionary<string, RuleConfig>? normalizedRuleConfig,
         DocumentKind documentKind)
     {
+        if ((normalizedRuleConfig is null || normalizedRuleConfig.Count == 0)
+            && RuleCatalog.MatchesDefaultRuleSet(rules, _onlineRules))
+        {
+            return (RuleCatalog.GetDefaultActiveRuleCount(documentKind), RuleCatalog.GetDefaultDisabledRuleIds(documentKind));
+        }
+
         _disabledRuleIds.Clear();
 
         var activeRuleCount = 0;
@@ -429,13 +418,18 @@ public sealed class LintEngine
         {
             var rule = rules[i];
             var ruleId = rule.Id.ToId() ?? throw new InvalidOperationException($"Rule {rule.Id} must provide a non-null id.");
+            var supportsDocumentKind = rule.SupportsDocumentKind(documentKind);
             if (!IsRuleEnabled(ruleId, normalizedRuleConfig))
             {
-                _disabledRuleIds.Add(ruleId);
+                if (supportsDocumentKind)
+                {
+                    _disabledRuleIds.Add(ruleId);
+                }
+
                 continue;
             }
 
-            if (rule.SupportsDocumentKind(documentKind))
+            if (supportsDocumentKind)
             {
                 activeRuleCount++;
             }
@@ -445,19 +439,102 @@ public sealed class LintEngine
         {
             var onlineRule = _onlineRules[i];
             var ruleId = onlineRule.Id.ToId() ?? throw new InvalidOperationException($"Rule {onlineRule.Id} must provide a non-null id.");
+            var supportsDocumentKind = onlineRule.SupportsDocumentKind(documentKind);
             if (!IsRuleEnabled(ruleId, normalizedRuleConfig))
             {
-                _disabledRuleIds.Add(ruleId);
+                if (supportsDocumentKind)
+                {
+                    _disabledRuleIds.Add(ruleId);
+                }
+
                 continue;
             }
 
-            if (onlineRule.SupportsDocumentKind(documentKind))
+            if (supportsDocumentKind)
             {
                 activeRuleCount++;
             }
         }
 
         return (activeRuleCount, _disabledRuleIds.Count > 0 ? _disabledRuleIds.ToArray() : []);
+    }
+
+    private (int ActiveRuleCount, int DisabledRuleCount, string[] DisabledRuleIds) ConfigureRuleActivation(
+        DocumentKind documentKind,
+        LintConfig effectiveConfig,
+        IReadOnlyDictionary<string, RuleConfig>? effectiveRules,
+        string[]? sharedDisabledRuleIds)
+    {
+        _activeRules.Clear();
+        _activeOnlineRules.Clear();
+        _disabledRuleIds.Clear();
+
+        for (var i = 0; i < rules.Count; i++)
+        {
+            var rule = rules[i];
+            var ruleId = rule.Id.ToId() ?? throw new InvalidOperationException($"Rule {rule.Id} must provide a non-null id.");
+            var supportsDocumentKind = rule.SupportsDocumentKind(documentKind);
+            if (!IsRuleEnabled(ruleId, effectiveRules))
+            {
+                if (sharedDisabledRuleIds is null && supportsDocumentKind)
+                {
+                    _disabledRuleIds.Add(ruleId);
+                }
+
+                continue;
+            }
+
+            if (!supportsDocumentKind)
+            {
+                continue;
+            }
+
+            rule.SetConfig(effectiveConfig);
+            _visitor.AddPass(rule);
+            _activeRules.Add(rule);
+        }
+
+        for (var i = 0; i < _onlineRules.Count; i++)
+        {
+            var onlineRule = _onlineRules[i];
+            var ruleId = onlineRule.Id.ToId() ?? throw new InvalidOperationException($"Rule {onlineRule.Id} must provide a non-null id.");
+            var supportsDocumentKind = onlineRule.SupportsDocumentKind(documentKind);
+            if (!IsRuleEnabled(ruleId, effectiveRules))
+            {
+                if (sharedDisabledRuleIds is null && supportsDocumentKind)
+                {
+                    _disabledRuleIds.Add(ruleId);
+                }
+
+                continue;
+            }
+
+            if (!supportsDocumentKind)
+            {
+                continue;
+            }
+
+            onlineRule.SetConfig(effectiveConfig);
+            _visitor.AddPass(onlineRule);
+            _activeOnlineRules.Add(onlineRule);
+        }
+
+        var activeRuleCount = _activeRules.Count + _activeOnlineRules.Count;
+        if (sharedDisabledRuleIds is not null)
+        {
+            return (activeRuleCount, sharedDisabledRuleIds.Length, sharedDisabledRuleIds);
+        }
+
+        var disabledRuleCount = _disabledRuleIds.Count;
+        return (activeRuleCount, disabledRuleCount, disabledRuleCount > 0 ? _disabledRuleIds.ToArray() : []);
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private string[]? GetSharedDefaultDisabledRuleIds(DocumentKind documentKind)
+    {
+        return RuleCatalog.MatchesDefaultRuleSet(rules, _onlineRules)
+            ? RuleCatalog.GetDefaultDisabledRuleIds(documentKind)
+            : null;
     }
 
     /// <summary>

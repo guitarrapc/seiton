@@ -231,7 +231,6 @@ raw YAML
 | `bot-conditions` | High | Regular | `github.actor == 'dependabot[bot]'`等のなりすまし可能な bot チェック |
 | `unsound-condition` | High | Regular | YAML ブロックスカラーで`if:`条件が常に true になるパターン |
 | `unsound-contains` | High/Medium | Regular | `contains(user-context, 'value')`の迂回可能なパターン |
-| `anonymous-definition` | Low/Info | **Pedantic** | `name:`フィールドが未設定のワークフロー/ジョブ |
 | `archived-uses` | Medium | Regular | アーカイブ済みリポジトリのアクション参照 |
 | `concurrency-limits` | Low | **Pedantic** | `cancel-in-progress: true`なし concurrency 設定 |
 | `dependabot-execution` | High | Regular | `insecure-external-code-execution: allow` |
@@ -239,7 +238,6 @@ raw YAML
 | `forbidden-uses` | High | Regular | ユーザー設定の deny リストに一致する`uses:` |
 | `superfluous-actions` | Low | Regular | `gh` CLI で代替できるアクションの使用 |
 | `undocumented-permissions` | Info | **Pedantic** | コメントのない`permissions:`エントリ |
-| `misfeature` | Low | Regular | `shell: cmd`、`pip-install:`等の機能の誤用 |
 | `use-trusted-publishing` | Medium | Regular | PyPI/RubyGems/npm で Trusted Publishing（OIDC）未使用 |
 
 **合計: 30 以上の Audit ルール**

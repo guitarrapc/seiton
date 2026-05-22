@@ -97,6 +97,7 @@ internal static class RuleCatalog
     private static readonly IReadOnlyDictionary<RuleId, RuleKeyFlags> AllowedRuleConfigKeys = BuildAllowedRuleConfigKeys();
 
     private static readonly FrozenDictionary<string, int> PriorityByRuleIdString = BuildPriorityLookup();
+    private static readonly Lazy<DefaultActivationMetadata> CachedDefaultActivationMetadata = new(BuildDefaultActivationMetadata);
 
     /// <summary>Creates a new array of all default (non-online) rule instances.</summary>
     public static IRule[] CreateDefaultRules()
@@ -126,6 +127,48 @@ internal static class RuleCatalog
 
     /// <summary>Returns descriptors for all registered rules (default + online). Result is cached.</summary>
     internal static IReadOnlyList<RuleDescriptor> GetAllRuleDescriptors() => CachedDescriptors.Value;
+
+    internal static bool MatchesDefaultRuleSet(IReadOnlyList<IRule> localRules, IReadOnlyList<IOnlineRule> onlineRules)
+    {
+        if (localRules.Count != DefaultRuleFactories.Length || onlineRules.Count != OnlineRuleFactories.Length)
+        {
+            return false;
+        }
+
+        for (var i = 0; i < DefaultRuleFactories.Length; i++)
+        {
+            if (localRules[i].Id != DefaultRuleFactories[i].Id)
+            {
+                return false;
+            }
+        }
+
+        for (var i = 0; i < OnlineRuleFactories.Length; i++)
+        {
+            if (onlineRules[i].Id != OnlineRuleFactories[i].Id)
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    internal static int GetDefaultActiveRuleCount(Parsing.DocumentKind documentKind)
+    {
+        var metadata = CachedDefaultActivationMetadata.Value;
+        return documentKind == Parsing.DocumentKind.ActionMetadata
+            ? metadata.ActionMetadataActiveRuleCount
+            : metadata.WorkflowActiveRuleCount;
+    }
+
+    internal static string[] GetDefaultDisabledRuleIds(Parsing.DocumentKind documentKind)
+    {
+        var metadata = CachedDefaultActivationMetadata.Value;
+        return documentKind == Parsing.DocumentKind.ActionMetadata
+            ? metadata.ActionMetadataDisabledRuleIds
+            : metadata.WorkflowDisabledRuleIds;
+    }
 
     private static RuleDescriptor[] BuildAllRuleDescriptors()
     {
@@ -164,7 +207,51 @@ internal static class RuleCatalog
         return descriptors;
     }
 
-    /// <summary>Returns the normative default severity for a rule: "error", "warning", or "mixed".</summary>
+    private static DefaultActivationMetadata BuildDefaultActivationMetadata()
+    {
+        var descriptors = GetAllRuleDescriptors();
+        var workflowActiveRuleCount = 0;
+        var actionMetadataActiveRuleCount = 0;
+        var workflowDisabledRuleIds = new List<string>(8);
+        var actionMetadataDisabledRuleIds = new List<string>(8);
+
+        for (var i = 0; i < descriptors.Count; i++)
+        {
+            var descriptor = descriptors[i];
+            if (descriptor.IsOptIn)
+            {
+                if (descriptor.SupportsWorkflow)
+                {
+                    workflowDisabledRuleIds.Add(descriptor.Id);
+                }
+
+                if (descriptor.SupportsAction)
+                {
+                    actionMetadataDisabledRuleIds.Add(descriptor.Id);
+                }
+
+                continue;
+            }
+
+            if (descriptor.SupportsWorkflow)
+            {
+                workflowActiveRuleCount++;
+            }
+
+            if (descriptor.SupportsAction)
+            {
+                actionMetadataActiveRuleCount++;
+            }
+        }
+
+        return new DefaultActivationMetadata(
+            workflowActiveRuleCount,
+            actionMetadataActiveRuleCount,
+            workflowDisabledRuleIds.ToArray(),
+            actionMetadataDisabledRuleIds.ToArray());
+    }
+
+    /// <summary>Returns the normative default severity for a rule: "error", "warning", "info", or "mixed".</summary>
     private static string GetDefaultSeverity(RuleId ruleId) => ruleId switch
     {
         RuleId.JobStructure => "error",
@@ -404,5 +491,11 @@ internal static class RuleCatalog
 
         return map;
     }
+
+    private readonly record struct DefaultActivationMetadata(
+        int WorkflowActiveRuleCount,
+        int ActionMetadataActiveRuleCount,
+        string[] WorkflowDisabledRuleIds,
+        string[] ActionMetadataDisabledRuleIds);
 
 }

@@ -91,12 +91,20 @@ public sealed class RuleCatalogDescriptorTests
     public async Task GetAllRuleDescriptors_EachHasDefaultSeverity()
     {
         var descriptors = RuleCatalog.GetAllRuleDescriptors();
-        var validSeverities = new[] { "error", "warning", "mixed" };
+        var validSeverities = new[] { "error", "warning", "info", "mixed" };
 
         foreach (var d in descriptors)
         {
             await Assert.That(validSeverities).Contains(d.DefaultSeverity);
         }
+    }
+
+    [Test]
+    public async Task GetAllRuleDescriptors_ConcurrencyLimitsDefaultSeverityIsWarning()
+    {
+        var descriptors = RuleCatalog.GetAllRuleDescriptors();
+
+        await Assert.That(descriptors.First(d => d.Id == "concurrency-limits").DefaultSeverity).IsEqualTo("warning");
     }
 
     [Test]

@@ -59,6 +59,7 @@ Linter runtime assumes parser output as structural input and applies rule execut
 2. Keep lint output deterministic for identical input/config.
 3. Keep rule/exclusion policy behavior aligned with language-agnostic linter contract.
 4. Keep language-specific runtime details explicit and testable.
+5. Keep the implemented rule catalog aligned with the rule inclusion policy in `Seiton_Linter_spec.md` §1.1; Go runtime-specific rules must not reintroduce style-only or tool-preference-only checks.
 
 ---
 
@@ -74,6 +75,10 @@ Primary types/functions (reference naming may vary by package):
 - error/diagnostic result model
 
 Implementation details should be tracked against language-specific implementation work items.
+
+Current cross-runtime parity note:
+
+- The shared rule catalog includes opt-in local and online rules. Go implementations must preserve the same rule IDs, default-off behavior, and default severity contract from `Seiton_Linter_spec.md` even if implementation work lands later.
 
 ---
 

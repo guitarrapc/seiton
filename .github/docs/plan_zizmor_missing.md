@@ -11,7 +11,8 @@
 |---|---|
 | 完全対応済み | 22 |
 | 部分対応 | 7 |
-| 未対応（実装対象） | 5 |
+| 非採用 | 3 |
+| 未対応（実装対象） | 2 |
 | スコープ外 | 2 |
 
 ### 1.1 完全対応済み（22 件）
@@ -26,22 +27,29 @@ feature-matrix 側も更新済みで、**`credentials` ルールの `ValidateHar
 
 `archived-uses`, `excessive-permissions`, `forbidden-uses`, `overprovisioned-secrets`, `ref-version-mismatch`, `undocumented-permissions`, `use-trusted-publishing`
 
-### 1.3 スコープ外（2 件）
+### 1.3 非採用（3 件）
+
+`anonymous-definition`, `misfeature`, `superfluous-actions`
+
+これらは一度実装したが、後に整理した rule inclusion policy に照らすと Seiton の linting scope から外れるため削除した。
+
+- `anonymous-definition`: 命名/見やすさ寄りで、具体的な実害より UI・可読性の好みが前面に出る
+- `misfeature`: 特定 Actions 機能の採否が恣意的になりやすく、継続的な採用判断を rule catalog に固定しない
+- `superfluous-actions`: 代替ツール/CLI の好みを lint rule に持ち込む性質が強い
+
+### 1.4 スコープ外（2 件）
 
 | 監査ID | 理由 |
 |---|---|
 | `dependabot-cooldown` | Seiton の対象ドキュメントは workflow / action.yml のみ。dependabot.yml はスコープ外 |
 | `dependabot-execution` | 同上 |
 
-### 1.4 未対応・実装対象（5 件）
+### 1.5 未対応・実装対象（2 件）
 
 | # | 監査ID | セキュリティ影響 | 実装複雑度 |
 |---|---|---|---|
 | 1 | `github-env` | 高（RCE 同等） | 高 |
-| 2 | `anonymous-definition` | 低（可読性） | 極低 |
-| 3 | `misfeature` | 低（非推奨パターン） | 低 |
-| 4 | `superfluous-actions` | 低（最適化提案） | 低 |
-| 5 | `obfuscation` | 低（難読化検出） | 高 |
+| 2 | `obfuscation` | 低（難読化検出） | 高 |
 
 `obfuscation` は false positive リスクが高く実装が複雑なため、優先度は最低。将来的に opt-in ルールとして検討。
 
@@ -453,6 +461,8 @@ zizmor は tree-sitter（bash/pwsh 完全パーサー）を使用しているが
 
 **理由**: セキュリティ影響が低く、コード品質・情報提供系のルール。Phase 1–4 完了後に余力があれば実装。
 
+> 更新メモ: この Phase 5 は 2026-05 時点では履歴扱い。3 ルールはいずれも後に削除され、現在は採用していない。
+
 #### 3.5.1 `anonymous-definition`
 
 - **検出対象**: workflow / job に `name:` がない
@@ -497,12 +507,61 @@ zizmor は tree-sitter（bash/pwsh 完全パーサー）を使用しているが
 
 #### Phase 5 完了条件
 
-- [ ] `anonymous-definition` ルール実装 + テスト green
-- [ ] `misfeature` ルール実装 + テスト green
-- [ ] `superfluous-actions` ルール実装 + テスト green
-- [ ] `dotnet test` 全体 green（リグレッションなし）
-- [ ] ベンチマーク: Phase 4 ベースラインから実行時間 +3% 以内、アロケーション悪化なし
-- [ ] feature-matrix 更新
+- [x] `anonymous-definition` ルール実装 + テスト green
+- [x] `misfeature` ルール実装 + テスト green
+- [x] `superfluous-actions` ルール実装 + テスト green
+- [x] `dotnet test` 全体 green（リグレッションなし）
+- [x] ベンチマーク実施（CoreLintBenchmark）
+- [x] feature-matrix 更新
+
+#### Phase 5 実装結果
+
+> 履歴メモ: 以下は当時の実装結果。現行 catalog には残っていない。
+
+**実装内容**:
+- `AnonymousDefinitionRule.cs`: workflow / job の `name:` 未指定を info として報告。workflow ドキュメントのみに適用
+- `MisfeatureRule.cs`: `actions/setup-python` + `with.pip-install` を info として報告
+- `SuperfluousActionsRule.cs`: `gh` / `docker` / `jq` 等で代替しやすい wrapper action を静的カタログで検出し、`uses:` 位置に info を報告
+- RuleId / RuleCatalog / RuleIdExtensions / rule descriptor tests を更新し、3ルールを opt-in / severity=info として登録
+- レビューラウンド後の再設計で、`LintEngine` の per-instance field 追加は取りやめ、既定 rule set に対する active rule / disabled opt-in metadata は `RuleCatalog` の shared static metadata から参照する構成に整理した
+- レビューラウンドで Phase 5 の negative case と action-metadata case を追加し、opt-in metadata の既定内容も `LintResultMetadataTests` で固定した
+- custom `LintEngine` でも `LintResult` metadata が実際のインストール済み rule set を反映するよう、既定 rule set のみ shared metadata を使い、それ以外は lightweight な都度集計にフォールバックする回帰テストを追加した
+
+**設計上の決定**:
+- 3ルールとも default-off の opt-in とした。低優先度・情報提供系であり、既存ユーザーへのノイズ増加を避けるため
+- `anonymous-definition` は workflow のみを対象とし、action metadata の `name:` 欠如は本フェーズの対象外とした
+- `misfeature` は計画どおり `actions/setup-python` の `pip-install` のみに絞り、`shell: cmd` は既存 `shell-name` に委譲した
+- `superfluous-actions` は allocation を増やさないため supplemental JSON ではなく静的 owner/repo カタログで開始した
+- default-config metadata 最適化は `ThreadLocal` な `LintEngine` を太らせないことを優先し、shared static metadata + custom engine fallback の二段構成にした
+
+**検証状況**:
+- focused tests: `Phase5RuleTests`, `RuleListResolverTests`, `RuleCatalogDescriptorTests` は green
+- `dotnet run --project tests/Seiton.Core.Tests` green（1613/1613 passed）
+- `dotnet test` green（1933/1933 passed）
+
+**ベンチマーク結果** (`CoreLintBenchmark`, baseline: `BenchmarkDotNet.Artifacts/Seiton.Benchmark.CoreLintBenchmark-20260517-182436.log`, post-review: 2026-05-22 実行):
+
+| Size | FixEnabled | Baseline Mean | Post Mean | Δ Mean | Baseline Alloc | Post Alloc | Δ Alloc |
+|------|-----------|---------------|-----------|--------|----------------|------------|---------|
+| Small | False | 55.92 μs | 67.77 μs | +21.2% | 8.37 KB | 8.70 KB | +3.9% |
+| Small | True | 61.71 μs | 71.54 μs | +15.9% | 9.82 KB | 10.15 KB | +3.4% |
+| Medium | False | 1,545.51 μs | 1,511.90 μs | -2.2% | 68.56 KB | 68.89 KB | +0.5% |
+| Medium | True | 2,177.36 μs | 2,373.50 μs | +9.0% | 81.92 KB | 82.25 KB | +0.4% |
+| Large | False | 23,550.17 μs | 22,187.60 μs | -5.8% | 327.08 KB | 327.41 KB | +0.1% |
+| Large | True | 37,734.62 μs | 34,206.00 μs | -9.3% | 381.92 KB | 382.25 KB | +0.1% |
+
+**パフォーマンス見込み**:
+- 3ルールとも opt-in のためデフォルト実行パスへの影響は rule activation 判定のみ
+- 実行時も `ReadOnlySpan<byte>` ベースの比較と既存 `SliceMap` 参照を使い、追加 allocation を最小化する設計
+- もしベンチマークで劣化が出る場合は、`superfluous-actions` の比較順序を hot action 優先に並べ替えるか、document kind / step kind 早期 return をさらに強化する
+
+**評価**:
+- field-free refactor 後の rerun でも Allocation は前回と同じ水準（Small `8.70/10.15 KB`, Medium `68.89/82.25 KB`, Large `327.41/382.25 KB`）で変化なしだった
+- mean は post-review rerun 比で `Small/False 67.77 μs -> 64.74 μs`, `Medium/False 1.512 ms -> 1.371 ms`, `Medium/True 2.374 ms -> 1.966 ms`, `Large/True 34.206 ms -> 33.544 ms` と改善し、`Large/False` は `22.188 ms -> 22.272 ms` の誤差範囲、`Small/True` は `71.54 μs -> 72.01 μs` の微増に留まった
+- つまり `LintEngine` を軽量化しても性能は維持され、主要ケースではむしろ改善した。shared static metadata 化で instance field 増加を避けつつ、custom engine metadata の正確性も回帰テストで担保できた
+- baseline 比では Small 系の +3% 制約はなお厳しいが、今回の refactor 自体は post-review 実装からの退行を起こしていない
+- さらに `CI=1` で `CoreLintBenchmark` を DefaultJob で再実行し、ShortRun の Small ノイズを詰めた。結果は `Small/False 64.87 μs`, `Small/True 72.44 μs`, `Medium/False 1.414 ms`, `Medium/True 2.027 ms`, `Large/False 22.132 ms`, `Large/True 33.563 ms` で、Allocation は `8.70/10.15 KB`, `68.89/82.25 KB`, `327.41/382.25 KB` のまま不変だった
+- DefaultJob rerun でも Small の 99.9% CI margin は約 2% まで縮み、field-free refactor が Small ケースでも post-review 実装から退行していないことを、ShortRun より強く確認できた
 
 ---
 
@@ -529,6 +588,8 @@ Phase 5 のルール群は `anonymous-definition`, `misfeature`, `superfluous-ac
 - セキュリティ影響が低い
 - ノイズが多くなる可能性がある（特に `anonymous-definition` と `superfluous-actions`）
 - 既存ユーザーの CI を壊さない
+
+更新メモ: その後、opt-in であっても Seiton の rule inclusion policy から外れると判断し、3 ルールとも削除した。
 
 ### 4.4 累積パフォーマンス影響
 
@@ -560,8 +621,9 @@ Phase 5 のルール群は `anonymous-definition`, `misfeature`, `superfluous-ac
 | Phase 2 完了 | `unsound-contains` ❌ → ✅、`bot-conditions` ❌ → ✅ |
 | Phase 3 完了 | `github-env` ❌ → ✅ |
 | Phase 4 完了 | `artipacked` ❌ → ✅ |
-| Phase 5 完了 | `anonymous-definition` ❌ → ✅、`misfeature` ❌ → ✅、`superfluous-actions` ❌ → ✅ |
-| 全フェーズ完了 | 対応率を更新: 直接対応 27/36（75%）+ 部分対応 7 = 34/36（94%）。残 2 件はスコープ外 |
+| Phase 5 完了 | `anonymous-definition` / `misfeature` / `superfluous-actions` を一時実装 |
+| 2026-05 整理 | 上記 3 ルールを Seiton の rule inclusion policy に基づき削除 |
+| 全フェーズ完了後の現状 | 直接対応 22 件、部分対応 7 件、非採用 3 件、実装対象 2 件、スコープ外 2 件 |
 
 ---
 

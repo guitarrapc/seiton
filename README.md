@@ -96,6 +96,10 @@ seiton rules
 
 Seiton includes **50+ rules** across four categories. Each rule has a dedicated documentation page with examples, rationale, and configuration options.
 
+Seiton keeps rules that detect mistakes, security risks, incompatibilities, spec traps, or strongly deprecated behavior with concrete downside.
+Opt-in informational rules are accepted only when that downside is still specific and explainable.
+Style-only checks, naming preferences, UI readability preferences, and alternative-tool preferences are out of scope.
+
 > See the [full rules list](docs/rules.md) for a summary table. Click any rule name below for detailed documentation.
 
 ### Correctness

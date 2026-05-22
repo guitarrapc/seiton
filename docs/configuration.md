@@ -235,7 +235,7 @@ Opt-in rules (default off) require `enabled: true`:
 
 ```yaml
 rules:
-  known-vulnerable-actions:
+  concurrency-limits:
     enabled: true
 ```
 
@@ -563,7 +563,7 @@ This is useful when batch-fixing all instances of a single rule at a time.
 
 | Config Key | Default |
 |---|---|
-| `rules.<rule-id>.enabled` | `true` for local rules; `false` for online rules |
+| `rules.<rule-id>.enabled` | `true` for default-on local rules; `false` for online rules and opt-in local rules |
 | `rules.<rule-id>.severity` | Rule-defined default |
 | `exclusions` | (empty) |
 | `fix.defaults.job-timeout-minutes` | `null` (auto-fix disabled) |
