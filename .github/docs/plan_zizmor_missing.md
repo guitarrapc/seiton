@@ -9,14 +9,15 @@
 
 | 区分 | 件数 |
 |---|---|
-| 完全対応済み | 25 |
+| 完全対応済み | 22 |
 | 部分対応 | 7 |
+| 非採用 | 3 |
 | 未対応（実装対象） | 2 |
 | スコープ外 | 2 |
 
-### 1.1 完全対応済み（25 件）
+### 1.1 完全対応済み（22 件）
 
-`anonymous-definition`, `artipacked`, `bot-conditions`, `cache-poisoning`, `concurrency-limits`, `dangerous-triggers`, `github-app`, `hardcoded-container-credentials`, `impostor-commit`, `insecure-commands`, `known-vulnerable-actions`, `misfeature`, `ref-confusion`, `secrets-inherit`, `secrets-outside-env`, `self-hosted-runner`, `stale-action-refs`, `superfluous-actions`, `template-injection`, `unpinned-images`, `unpinned-tools`, `unpinned-uses`, `unredacted-secrets`, `unsound-condition`, `unsound-contains`
+`artipacked`, `bot-conditions`, `cache-poisoning`, `concurrency-limits`, `dangerous-triggers`, `github-app`, `hardcoded-container-credentials`, `impostor-commit`, `insecure-commands`, `known-vulnerable-actions`, `ref-confusion`, `secrets-inherit`, `secrets-outside-env`, `self-hosted-runner`, `stale-action-refs`, `template-injection`, `unpinned-images`, `unpinned-tools`, `unpinned-uses`, `unredacted-secrets`, `unsound-condition`, `unsound-contains`
 
 #### `hardcoded-container-credentials` について
 
@@ -26,14 +27,24 @@ feature-matrix 側も更新済みで、**`credentials` ルールの `ValidateHar
 
 `archived-uses`, `excessive-permissions`, `forbidden-uses`, `overprovisioned-secrets`, `ref-version-mismatch`, `undocumented-permissions`, `use-trusted-publishing`
 
-### 1.3 スコープ外（2 件）
+### 1.3 非採用（3 件）
+
+`anonymous-definition`, `misfeature`, `superfluous-actions`
+
+これらは一度実装したが、後に整理した rule inclusion policy に照らすと Seiton の linting scope から外れるため削除した。
+
+- `anonymous-definition`: 命名/見やすさ寄りで、具体的な実害より UI・可読性の好みが前面に出る
+- `misfeature`: 特定 Actions 機能の採否が恣意的になりやすく、継続的な採用判断を rule catalog に固定しない
+- `superfluous-actions`: 代替ツール/CLI の好みを lint rule に持ち込む性質が強い
+
+### 1.4 スコープ外（2 件）
 
 | 監査ID | 理由 |
 |---|---|
 | `dependabot-cooldown` | Seiton の対象ドキュメントは workflow / action.yml のみ。dependabot.yml はスコープ外 |
 | `dependabot-execution` | 同上 |
 
-### 1.4 未対応・実装対象（2 件）
+### 1.5 未対応・実装対象（2 件）
 
 | # | 監査ID | セキュリティ影響 | 実装複雑度 |
 |---|---|---|---|
@@ -450,6 +461,8 @@ zizmor は tree-sitter（bash/pwsh 完全パーサー）を使用しているが
 
 **理由**: セキュリティ影響が低く、コード品質・情報提供系のルール。Phase 1–4 完了後に余力があれば実装。
 
+> 更新メモ: この Phase 5 は 2026-05 時点では履歴扱い。3 ルールはいずれも後に削除され、現在は採用していない。
+
 #### 3.5.1 `anonymous-definition`
 
 - **検出対象**: workflow / job に `name:` がない
@@ -502,6 +515,8 @@ zizmor は tree-sitter（bash/pwsh 完全パーサー）を使用しているが
 - [x] feature-matrix 更新
 
 #### Phase 5 実装結果
+
+> 履歴メモ: 以下は当時の実装結果。現行 catalog には残っていない。
 
 **実装内容**:
 - `AnonymousDefinitionRule.cs`: workflow / job の `name:` 未指定を info として報告。workflow ドキュメントのみに適用
@@ -574,6 +589,8 @@ Phase 5 のルール群は `anonymous-definition`, `misfeature`, `superfluous-ac
 - ノイズが多くなる可能性がある（特に `anonymous-definition` と `superfluous-actions`）
 - 既存ユーザーの CI を壊さない
 
+更新メモ: その後、opt-in であっても Seiton の rule inclusion policy から外れると判断し、3 ルールとも削除した。
+
 ### 4.4 累積パフォーマンス影響
 
 全フェーズ完了後の累積パフォーマンス影響を以下で管理する:
@@ -604,8 +621,9 @@ Phase 5 のルール群は `anonymous-definition`, `misfeature`, `superfluous-ac
 | Phase 2 完了 | `unsound-contains` ❌ → ✅、`bot-conditions` ❌ → ✅ |
 | Phase 3 完了 | `github-env` ❌ → ✅ |
 | Phase 4 完了 | `artipacked` ❌ → ✅ |
-| Phase 5 完了 | `anonymous-definition` ❌ → ✅、`misfeature` ❌ → ✅、`superfluous-actions` ❌ → ✅ |
-| 全フェーズ完了 | 対応率を更新: 直接対応 27/36（75%）+ 部分対応 7 = 34/36（94%）。残 2 件はスコープ外 |
+| Phase 5 完了 | `anonymous-definition` / `misfeature` / `superfluous-actions` を一時実装 |
+| 2026-05 整理 | 上記 3 ルールを Seiton の rule inclusion policy に基づき削除 |
+| 全フェーズ完了後の現状 | 直接対応 22 件、部分対応 7 件、非採用 3 件、実装対象 2 件、スコープ外 2 件 |
 
 ---
 

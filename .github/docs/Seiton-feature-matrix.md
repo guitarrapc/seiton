@@ -27,13 +27,13 @@
 
 補足:
 - Seiton の Lint/Remediation は GitHub Actions 中心に強い。
-- ルール総数は 56（default local 52 + online audit 4、`RuleCatalog` 基準）まで拡張済み。
+- ルール総数は 61（default local 57 + online audit 4、`RuleCatalog` 基準）。
 - ghalint 全 13 ポリシーを完全カバー（✅ 昇格）。
 - Dockerfile/compose/任意YAML全般まで広げると、dockerfile-pin/frizbee に対して現状は部分的。
 
 ### 2.1 現在の実装済みルール一覧（最新）
 
-default local rules（52）:
+default local rules（57）:
 
 - `job-structure`
 - `reusable-workflow`
@@ -87,6 +87,11 @@ default local rules（52）:
 - `outdated-action-runner`
 - `if-expr-wrapper`
 - `concurrency-limits`
+- `unsound-condition`
+- `unpinned-tools`
+- `unsound-contains`
+- `bot-conditions`
+- `artipacked`
 
 online audit rules（4）:
 
@@ -99,9 +104,10 @@ online audit rules（4）:
 
 ## 3. 機能カテゴリ別判定（採用可否）
 
+実装済み（61 rules: default local 57 + online audit 4）
+
 | 機能カテゴリ | actionlint | ghalint | zizmor | pinact | dockerfile-pin | frizbee | Seiton現状 | 判定 | 採用優先度 |
 |---|---|---|---|---|---|---|---|---|---|
-実装済み（56 rules: default local 52 + online audit 4）
 | セキュリティ監査ルール網羅 | 中 | 中 | 非常に強い（36 audits） | なし | なし | なし | 実装済み（zizmor 監査 17件対応 + 7件部分対応） | 🟡 | P1 |
 | UsesのSHA pin診断 | あり | あり | あり | 主機能 | なし | あり | 実装済み | ✅ | 維持 |
 | Image digest pin診断 | 部分 | 部分 | あり | なし | 主機能 | 主機能 | 実装済み | ✅ | 維持 |
@@ -230,7 +236,9 @@ online audit rules（4）:
 |---|---:|---|
 | 直接対応済み | 22 | `artipacked`, `bot-conditions`, `cache-poisoning`, `concurrency-limits`, `dangerous-triggers`, `github-app`, `hardcoded-container-credentials`, `impostor-commit`, `insecure-commands`, `known-vulnerable-actions`, `ref-confusion`, `secrets-inherit`, `secrets-outside-env`, `self-hosted-runner`, `stale-action-refs`, `template-injection`, `unpinned-images`, `unpinned-tools`, `unpinned-uses`, `unredacted-secrets`, `unsound-condition`, `unsound-contains` |
 | 部分対応 | 7 | `archived-uses`, `excessive-permissions`, `forbidden-uses`, `overprovisioned-secrets`, `ref-version-mismatch`, `undocumented-permissions`, `use-trusted-publishing` |
-| 未対応 | 4 | 高度セキュリティ監査群（残差分） |
+| 未対応 | 2 | `github-env`, `obfuscation` |
+| 非採用 | 3 | `anonymous-definition`, `misfeature`, `superfluous-actions` |
+| スコープ外 | 2 | `dependabot-execution`, `dependabot-cooldown` |
 
 zizmor 監査ID別対応表（実装確認ベース）:
 
@@ -252,7 +260,7 @@ zizmor 監査ID別対応表（実装確認ベース）:
 | `impostor-commit` | ✅ | online 監査（`rules.impostor-commit.enabled: true` で有効化） |
 | `insecure-commands` | ✅ | `insecure-commands` |
 | `known-vulnerable-actions` | ✅ | online 監査（`rules.known-vulnerable-actions.enabled: true` で有効化） |
-| `misfeature` | ❌ | 専用監査なし |
+| `misfeature` | ❌ | 一度 opt-in info rule として実装したが、現在は rule inclusion policy に基づき削除 |
 | `obfuscation` | ❌ | 専用監査なし |
 | `overprovisioned-secrets` | 🟡 | `overprovisioned-secrets`（step/reusable-call 中心の初期実装） |
 | `ref-confusion` | ✅ | online 監査（`rules.ref-confusion.enabled: true` で有効化） |
@@ -261,7 +269,9 @@ zizmor 監査ID別対応表（実装確認ベース）:
 | `secrets-outside-env` | ✅ | `secrets-outside-env` |
 | `self-hosted-runner` | ✅ | `self-hosted-runner` |
 | `stale-action-refs` | ✅ | online 監査（`rules.stale-action-refs.enabled: true` で有効化） |
+| `superfluous-actions` | ❌ | zizmor 比較対象ではあるが、代替ツール選好に寄るため採用しない |
 | `template-injection` | ✅ | `template-injection` |
+| `anonymous-definition` | ❌ | 命名/見やすさ寄りで Seiton の linting scope から外れるため採用しない |
 | `undocumented-permissions` | 🟡 | `permissions` / `job-permissions-required` で部分対応 |
 | `unpinned-images` | ✅ | `unpinned-image` |
 | `unpinned-tools` | ✅ | `unpinned-tools` |
@@ -271,7 +281,7 @@ zizmor 監査ID別対応表（実装確認ベース）:
 | `unsound-contains` | ✅ | `unsound-contains` |
 | `use-trusted-publishing` | 🟡 | `use-trusted-publishing`（publish コマンド文字列ヒューリスティック + `id-token: write` 判定。NuGet/Cargo 等未対応、uses 判定なし） |
 
-対応率: 31/36（86%）— 残5件未対応（うち2件はスコープ外）。
+対応率: 29/36（81%）— 未対応 2 件、非採用 3 件、スコープ外 2 件。
 
 ### 6.4 pinact / dockerfile-pin / frizbee（ルールエンジンではなく変換系）
 
@@ -289,9 +299,16 @@ zizmor 監査ID別対応表（実装確認ベース）:
 
 1. Dockerfile / compose / 任意YAML image pin 拡張
 
-2. zizmor 残差分（未対応 5件）
+2. zizmor 残差分（実装対象 2件）
 - `github-env` — GITHUB_ENV への危険な書き込み検出
 - `obfuscation` — 難読化された Actions 機能使用
+
+非採用:
+- `anonymous-definition` — 命名/見やすさ寄りのため非採用
+- `misfeature` — 恣意的な機能選別になりやすいため非採用
+- `superfluous-actions` — 代替ツール選好に寄るため非採用
+
+スコープ外:
 - `dependabot-execution` / `dependabot-cooldown` — Dependabot 設定検査
 
 ### P1（適用範囲拡張）
