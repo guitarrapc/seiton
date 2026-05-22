@@ -127,6 +127,12 @@ Implementation:
 
 On YAML unmarshal failure, `handleYAMLUnmarshalError` converts `yaml.TypeError` and `yaml.ParserError` into `[]*Error`.
 
+Current cross-runtime note for Spec §3.1 fatal-parse hints:
+
+- The shared parser spec documents optional explanatory `Help` hints for some fatal YAML parse cases.
+- The reviewed C# implementation attaches the `run:`/`script:` plain-scalar colon-space hint.
+- The Go implementation documented here does not currently describe or guarantee that hint payload, so this remains a cross-runtime parity gap until Go adds equivalent behavior.
+
 ### 1.2 Parse Pipeline
 
 ```

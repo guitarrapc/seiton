@@ -1061,8 +1061,9 @@ Implementation: `WorkflowParser.PlainScalarHint.cs` (partial class).
 
 Heuristic conditions (all must be true):
 1. Error line or up to 3 lines above contains `run:` or `script:` as a YAML key
-2. The value after the key starts as a plain scalar (not `'`, `"`, `|`, `>`)
-3. The plain scalar value contains `: ` (colon-space)
+2. YAML node properties (`&anchor`, `!tag`) are skipped before determining the scalar kind
+3. The value after the key starts as a plain scalar (not `'`, `"`, `|`, `>`)
+4. The plain scalar value itself (excluding inline comments) contains `: ` (colon-space)
 
 Performance: runs only on the error path (no impact on success-path parsing).
 

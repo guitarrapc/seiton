@@ -1,4 +1,4 @@
-using System.Runtime.CompilerServices;
+﻿using System.Runtime.CompilerServices;
 
 namespace Seiton.Core.Parsing;
 
@@ -24,11 +24,11 @@ public static partial class WorkflowParser
 
         // Scan back up to 3 lines from the error position to find a candidate `run:` or `script:` line.
         // The error position from VYaml can be on the same line as the key or 1-2 lines after.
-        const int maxLinesBack = 3;
+        const int maxLinesToScan = 4;
         var linesChecked = 0;
         var searchStart = offset;
 
-        while (linesChecked < maxLinesBack && searchStart >= 0)
+        while (linesChecked < maxLinesToScan && searchStart >= 0)
         {
             var lineStart = FindLineStart(source, searchStart);
             var lineEnd = FindLineEnd(source, lineStart);
@@ -42,10 +42,12 @@ public static partial class WorkflowParser
                 if (keyEndOffset >= 0 && keyEndOffset < line.Length)
                 {
                     var valueStart = SkipSpaces(line, keyEndOffset);
+                    valueStart = SkipYamlNodeProperties(line, valueStart);
                     if (valueStart < line.Length && IsPlainScalarStart(line[valueStart]))
                     {
                         // Check if the value portion contains `: ` (colon + space)
-                        var valuePortion = line[valueStart..];
+                        var valueEnd = FindInlineCommentStart(line, valueStart);
+                        var valuePortion = line[valueStart..valueEnd];
                         if (ContainsColonSpace(valuePortion))
                         {
                             return matchedKey.Length == 3
@@ -70,6 +72,9 @@ public static partial class WorkflowParser
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static int FindLineStart(ReadOnlySpan<byte> source, int offset)
     {
+        if (offset > 0 && source[offset] == (byte)'\n')
+            offset--;
+
         for (var i = offset; i >= 0; i--)
         {
             if (source[i] == (byte)'\n')
@@ -146,6 +151,51 @@ public static partial class WorkflowParser
         while (i < span.Length && span[i] == (byte)' ')
             i++;
         return i;
+    }
+
+    /// <summary>
+    /// Skips YAML node properties (`&anchor`, `!tag`) that may appear before the actual scalar token.
+    /// </summary>
+    private static int SkipYamlNodeProperties(ReadOnlySpan<byte> span, int start)
+    {
+        var i = start;
+
+        while (i < span.Length)
+        {
+            if (span[i] == (byte)'&' || span[i] == (byte)'!')
+            {
+                i = SkipNonWhitespaceToken(span, i + 1);
+                i = SkipSpaces(span, i);
+                continue;
+            }
+
+            break;
+        }
+
+        return i;
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private static int SkipNonWhitespaceToken(ReadOnlySpan<byte> span, int start)
+    {
+        var i = start;
+        while (i < span.Length && span[i] != (byte)' ' && span[i] != (byte)'\t' && span[i] != (byte)'\r' && span[i] != (byte)'\n')
+            i++;
+        return i;
+    }
+
+    /// <summary>
+    /// Returns the start of an inline YAML comment (` # comment`) or the end of the line if none exists.
+    /// </summary>
+    private static int FindInlineCommentStart(ReadOnlySpan<byte> span, int start)
+    {
+        for (var i = start + 1; i < span.Length; i++)
+        {
+            if (span[i] == (byte)'#' && (span[i - 1] == (byte)' ' || span[i - 1] == (byte)'\t'))
+                return i;
+        }
+
+        return span.Length;
     }
 
     /// <summary>

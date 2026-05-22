@@ -14,6 +14,7 @@
 - `ParseCore` / `ParseClassified` / `ParseIncremental` の catch ブロックにヒント生成を統合
 - `AddFatalParseError` ヘルパー追加 (Help フィールド対応)
 - Diagnostic の既存 `Help` フィールドを活用 (全出力形式で自動表示)
+- レビュー反映: YAML node property (`&anchor`, `!tag`) をスキップし、inline comment を colon 判定対象から除外
 
 ### ベンチマーク結果 (CoreParsingBenchmark)
 
@@ -21,15 +22,15 @@
 
 | Size | Before (Mean) | After (Mean) | Change | Allocated |
 |------|--------------|-------------|--------|-----------|
-| Small | 45.9 us | 46.4 us | +1.0% (ノイズ) | 3.87 KB = 同一 |
-| Medium | 1,085 us | 1,072 us | -1.2% (ノイズ) | 35.59 KB = 同一 |
-| Large | 19,212 us | 18,862 us | -1.8% (ノイズ) | 180.04 KB = 同一 |
+| Small | 45.9 us | 47.0 us | +2.4% (ノイズ範囲) | 3.87 KB = 同一 |
+| Medium | 1,085 us | 1,085 us | +0.0% (ノイズ範囲) | 35.59 KB = 同一 |
+| Large | 19,212 us | 19,268 us | +0.3% (ノイズ範囲) | 180.04 KB = 同一 |
 
 性能変化なし。ヒント検出は catch ブロック内でのみ実行され、通常の成功パスに影響を与えない。
 
 ### テスト追加
 
-7 テスト追加 (3 positive + 4 negative):
+14 テスト追加 (4 positive + 10 negative):
 - `Parse_PlainScalarColonHint_RunWithColonSpace_ReturnsHint` — `run:` + `: ` → ヒントあり
 - `Parse_PlainScalarColonHint_ScriptWithColonSpace_ReturnsHint` — `script:` + `: ` → ヒントあり
 - `Parse_PlainScalarColonHint_RunWithBareColon_ReturnsHint` — `run: foo: bar` → ヒントあり
@@ -37,8 +38,15 @@
 - `Parse_PlainScalarColonHint_BlockScalar_NoHint` — block scalar → ヒントなし (正常パース)
 - `Parse_PlainScalarColonHint_PlainScalarWithoutColon_NoHint` — `: ` なし → ヒントなし
 - `Parse_PlainScalarColonHint_UnrelatedFatalYaml_NoHint` — 無関係な fatal → ヒントなし
+- `Parse_PlainScalarColonHint_InlineCommentColonSpaceWithUnrelatedFatal_NoHint` — inline comment 中の `: ` → ヒントなし
+- `Parse_PlainScalarColonHint_AnchoredQuotedScalarWithUnrelatedFatal_NoHint` — `&anchor` + quoted → ヒントなし
+- `Parse_PlainScalarColonHint_TaggedQuotedScalarWithUnrelatedFatal_NoHint` — `!!tag` + quoted → ヒントなし
+- `TryGetPlainScalarColonHint_AnchoredQuotedScalar_ReturnsNull` — ヒューリスティック単体: `&anchor` + quoted → null
+- `TryGetPlainScalarColonHint_TaggedQuotedScalar_ReturnsNull` — ヒューリスティック単体: `!!tag` + quoted → null
+- `TryGetPlainScalarColonHint_InlineCommentColonSpace_ReturnsNull` — ヒューリスティック単体: inline comment 中の `: ` → null
+- `TryGetPlainScalarColonHint_RunThreeLinesAboveOffset_ReturnsHint` — ヒューリスティック単体: error line の 3 行上でもヒントあり
 
-全 1937 テスト通過。
+全 1944 テスト通過。
 
 ---
 
