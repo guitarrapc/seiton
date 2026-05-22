@@ -3823,55 +3823,105 @@ public sealed class ParserTests
 
         """u8;
         var result = WorkflowParser.ParseDirect(yaml.ToArray(), "broken.yml", out var arena);
-        await Assert.That(result.HasFatalError).IsTrue();
-        var diag = result.Diagnostics[0];
-        // Should NOT point to 1:1 — the error is deeper in the file
-        await Assert.That(diag.Location.StartLine).IsGreaterThan(1);
+        try
+        {
+            await Assert.That(result.HasFatalError).IsTrue();
+            var diag = result.Diagnostics[0];
+            // Should NOT point to 1:1 — the error is deeper in the file
+            await Assert.That(diag.Location.StartLine).IsGreaterThan(1);
+        }
+        finally
+        {
+            arena?.Dispose();
+        }
     }
 
-        [Test]
-        public async Task Parse_BrokenYaml_AfterEarlierParserDiagnostic_PreservesEarlierDiagnostics()
+    [Test]
+    public async Task Parse_BrokenYaml_AfterEarlierParserDiagnostic_PreservesEarlierDiagnostics()
+    {
+        var yaml = """
+        on:
+            push:
+                branch: main
+        jobs:
+            test:
+                runs-on: ubuntu-latest
+                steps:
+                    - run: echo "Title: ${{ github.event.pull_request.title }}"
+                    - uses: actions/checkout@v6
+        """u8;
+
+        var result = WorkflowParser.ParseDirect(yaml.ToArray(), "test.yml", out var arena);
+        try
         {
-                var yaml = """
-                on:
-                    push:
-                        branch: main
-                jobs:
-                    test:
-                        runs-on: ubuntu-latest
-                        steps:
-                            - run: echo "Title: ${{ github.event.pull_request.title }}"
-                            - uses: actions/checkout@v6
-                """u8;
-
-                var result = WorkflowParser.ParseDirect(yaml.ToArray(), "test.yml", out var arena);
-
-                await Assert.That(result.HasFatalError).IsTrue();
-                await Assert.That(result.Diagnostics.Any(d => d.Message.Contains("unexpected key \"branch\"", StringComparison.Ordinal))).IsTrue();
-                await Assert.That(result.Diagnostics.Any(d => d.Message.Contains("yaml parse failure", StringComparison.OrdinalIgnoreCase))).IsTrue();
+            await Assert.That(result.HasFatalError).IsTrue();
+            await Assert.That(result.Diagnostics.Any(d => d.Message.Contains("unexpected key \"branch\"", StringComparison.Ordinal))).IsTrue();
+            await Assert.That(result.Diagnostics.Any(d => d.Message.Contains("yaml parse failure", StringComparison.OrdinalIgnoreCase))).IsTrue();
         }
-
-        [Test]
-        public async Task Parse_BrokenYaml_FatalParseDoesNotInventMissingSections()
+        finally
         {
-                var yaml = """
-                on:
-                    push:
-                        branch: main
-                jobs:
-                    test:
-                        runs-on: ubuntu-latest
-                        steps:
-                            - run: echo "Title: ${{ github.event.pull_request.title }}"
-                """u8;
-
-                var result = WorkflowParser.ParseDirect(yaml.ToArray(), "test.yml", out var arena);
-
-                await Assert.That(result.HasFatalError).IsTrue();
-                await Assert.That(result.Diagnostics.Any(d => d.Message.Contains("yaml parse failure", StringComparison.OrdinalIgnoreCase))).IsTrue();
-                await Assert.That(result.Diagnostics.Any(d => d.Message.Contains("\"on\" section is missing in workflow", StringComparison.Ordinal))).IsFalse();
-                await Assert.That(result.Diagnostics.Any(d => d.Message.Contains("\"jobs\" section is missing in workflow", StringComparison.Ordinal))).IsFalse();
+            arena?.Dispose();
         }
+    }
+
+    [Test]
+    public async Task Parse_BrokenYaml_FatalParseDoesNotInventMissingSections()
+    {
+        var yaml = """
+        on:
+            push:
+                branch: main
+        jobs:
+            test:
+                runs-on: ubuntu-latest
+                steps:
+                    - run: echo "Title: ${{ github.event.pull_request.title }}"
+        """u8;
+
+        var result = WorkflowParser.ParseDirect(yaml.ToArray(), "test.yml", out var arena);
+        try
+        {
+            await Assert.That(result.HasFatalError).IsTrue();
+            await Assert.That(result.Diagnostics.Any(d => d.Message.Contains("yaml parse failure", StringComparison.OrdinalIgnoreCase))).IsTrue();
+            await Assert.That(result.Diagnostics.Any(d => d.Message.Contains("\"on\" section is missing in workflow", StringComparison.Ordinal))).IsFalse();
+            await Assert.That(result.Diagnostics.Any(d => d.Message.Contains("\"jobs\" section is missing in workflow", StringComparison.Ordinal))).IsFalse();
+        }
+        finally
+        {
+            arena?.Dispose();
+        }
+    }
+
+    [Test]
+    public async Task ParseIncremental_BrokenYaml_PreservesEarlierDiagnostics()
+    {
+        var yaml = """
+        on:
+            push:
+                branch: main
+        jobs:
+            test:
+                runs-on: ubuntu-latest
+                steps:
+                    - run: echo "Title: ${{ github.event.pull_request.title }}"
+                    - uses: actions/checkout@v6
+        """u8;
+
+        var bytes = yaml.ToArray();
+        var arena = AstArena.Rent(bytes);
+        try
+        {
+            var result = WorkflowParser.ParseIncremental(bytes, "test.yml", arena, rootSkipMask: 0);
+
+            await Assert.That(result.HasFatalError).IsTrue();
+            await Assert.That(result.Diagnostics.Any(d => d.Message.Contains("unexpected key \"branch\"", StringComparison.Ordinal))).IsTrue();
+            await Assert.That(result.Diagnostics.Any(d => d.Message.Contains("yaml parse failure", StringComparison.OrdinalIgnoreCase))).IsTrue();
+        }
+        finally
+        {
+            arena.Dispose();
+        }
+    }
 
     // regression: webhook activity type error position uses slice offset (not VYaml mark)
     [Test]
@@ -4839,9 +4889,16 @@ public sealed class ParserTests
         """u8;
 
         var result = WorkflowParser.ParseDirect(yaml.ToArray(), "test.yaml", out var arena);
-        await Assert.That(result.HasFatalError).IsTrue();
-        var diag = result.Diagnostics[0];
-        await Assert.That(diag.Location.StartLine).IsEqualTo(6);
+        try
+        {
+            await Assert.That(result.HasFatalError).IsTrue();
+            var diag = result.Diagnostics[0];
+            await Assert.That(diag.Location.StartLine).IsEqualTo(6);
+        }
+        finally
+        {
+            arena?.Dispose();
+        }
     }
 
     // regression: webhook known-but-disallowed option must include key name in message
