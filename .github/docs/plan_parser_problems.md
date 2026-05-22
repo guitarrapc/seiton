@@ -135,6 +135,17 @@ unused anchor / recursive alias の後処理は adapter の正常終了を前提
 - `"on" section is missing in workflow` は出ない
 - `"jobs" section is missing in workflow` は出ない
 
+### 6.3 incremental parse でも earlier diagnostics を保持するテスト
+
+`ParseIncremental_BrokenYaml_PreservesEarlierDiagnostics`
+
+確認内容:
+
+- `HasFatalError == true`
+- `unexpected key "branch"` が残る
+- `yaml parse failure` も出る
+- direct parse と incremental parse で fatal recovery 方針が一致する
+
 ---
 
 ## 7. 仕様反映
@@ -155,11 +166,15 @@ unused anchor / recursive alias の後処理は adapter の正常終了を前提
 
 ### 8.1 Focused regression tests
 
-- `Parse_BrokenYaml_*` スライス: 4 passed / 0 failed
+- `*BrokenYaml*` スライス: 5 passed / 0 failed
 
 ### 8.2 Core test suite
 
-- `tests/Seiton.Core.Tests`: 1609 passed / 0 failed
+- `tests/Seiton.Core.Tests`: 1610 passed / 0 failed
+
+### 8.2.1 Full solution test suite
+
+- `dotnet test`: 1929 passed / 0 failed
 
 ### 8.3 CLI 実挙動確認
 
@@ -170,9 +185,17 @@ unused anchor / recursive alias の後処理は adapter の正常終了を前提
 
 ### 8.4 Benchmark
 
-- benchmark 自体は完走
-- 少なくとも allocation の増加は見えていない
-- ただし、手元比較に使える parser baseline report は runtime / SDK 条件が揃っておらず、厳密な退行判定には不向き
+- `CoreParsingBenchmark` は完走
+- allocation は Small / Medium / Large のすべてで baseline と同一
+  - Small: 3.87 KB
+  - Medium: 35.59 KB
+  - Large: 180.04 KB
+- latency は ShortRun のばらつきを含むが、少なくとも大きな退行は見えていない
+  - Small: 41.5 us -> 46.0 us
+  - Medium: 1090.7 us -> 1110.5 us
+  - Large: 17749.1 us -> 19365.0 us
+- Small / Large はほぼ 10% 前後の差だが、既存 baseline も分散が大きく、allocation 退行は確認されていない
+- 同一 SDK / runtime / benchmark settings での baseline 再採取は引き続き有用
 
 ---
 
