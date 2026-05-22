@@ -3829,6 +3829,50 @@ public sealed class ParserTests
         await Assert.That(diag.Location.StartLine).IsGreaterThan(1);
     }
 
+        [Test]
+        public async Task Parse_BrokenYaml_AfterEarlierParserDiagnostic_PreservesEarlierDiagnostics()
+        {
+                var yaml = """
+                on:
+                    push:
+                        branch: main
+                jobs:
+                    test:
+                        runs-on: ubuntu-latest
+                        steps:
+                            - run: echo "Title: ${{ github.event.pull_request.title }}"
+                            - uses: actions/checkout@v6
+                """u8;
+
+                var result = WorkflowParser.ParseDirect(yaml.ToArray(), "test.yml", out var arena);
+
+                await Assert.That(result.HasFatalError).IsTrue();
+                await Assert.That(result.Diagnostics.Any(d => d.Message.Contains("unexpected key \"branch\"", StringComparison.Ordinal))).IsTrue();
+                await Assert.That(result.Diagnostics.Any(d => d.Message.Contains("yaml parse failure", StringComparison.OrdinalIgnoreCase))).IsTrue();
+        }
+
+        [Test]
+        public async Task Parse_BrokenYaml_FatalParseDoesNotInventMissingSections()
+        {
+                var yaml = """
+                on:
+                    push:
+                        branch: main
+                jobs:
+                    test:
+                        runs-on: ubuntu-latest
+                        steps:
+                            - run: echo "Title: ${{ github.event.pull_request.title }}"
+                """u8;
+
+                var result = WorkflowParser.ParseDirect(yaml.ToArray(), "test.yml", out var arena);
+
+                await Assert.That(result.HasFatalError).IsTrue();
+                await Assert.That(result.Diagnostics.Any(d => d.Message.Contains("yaml parse failure", StringComparison.OrdinalIgnoreCase))).IsTrue();
+                await Assert.That(result.Diagnostics.Any(d => d.Message.Contains("\"on\" section is missing in workflow", StringComparison.Ordinal))).IsFalse();
+                await Assert.That(result.Diagnostics.Any(d => d.Message.Contains("\"jobs\" section is missing in workflow", StringComparison.Ordinal))).IsFalse();
+        }
+
     // regression: webhook activity type error position uses slice offset (not VYaml mark)
     [Test]
     public async Task Parse_WebhookUnsupportedActivityType_PositionPointsToValue()

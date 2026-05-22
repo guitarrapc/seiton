@@ -85,8 +85,21 @@ public static partial class WorkflowParser
 
         try
         {
-            var hintReader = new VYamlStreamAdapter(utf8Yaml.AsMemory());
-            var hasHints = TryReadRootStructuralHints(ref hintReader, out var hasJobs, out var hasRuns);
+            var hasHints = false;
+            var hasJobs = false;
+            var hasRuns = false;
+            try
+            {
+                var hintReader = new VYamlStreamAdapter(utf8Yaml.AsMemory());
+                hasHints = TryReadRootStructuralHints(ref hintReader, out hasJobs, out hasRuns);
+            }
+            catch
+            {
+                hasHints = false;
+                hasJobs = false;
+                hasRuns = false;
+            }
+
             var finalKind = hasHints
                 ? DocumentKindClassifier.FinalizeKind(pathHintKind, hasJobs, hasRuns, out var ignoredAmbiguous, out var ignoredHintMismatch)
                 : pathHintKind;
@@ -105,25 +118,28 @@ public static partial class WorkflowParser
             {
                 var coreResult = ParseCore(ref parseReader, localArena, utf8Yaml, parseMode, ref diagnostics);
 
-                // Check for unused anchors and recursive aliases after parsing while the adapter is still alive
-                var unusedBuf = threadstaticUnusedAnchorBuf ??= new (string, TextPosition)[32];
-                var unusedAnchors = parseReader.GetUnusedAnchors(unusedBuf);
-                var recursiveBuf = threadstaticRecursiveAliasBuf ??= new (string, TextPosition, TextPosition)[32];
-                var recursiveAliases = parseReader.GetRecursiveAliases(recursiveBuf);
-
-                for (var i = 0; i < unusedAnchors.Length; i++)
+                if (!coreResult.HasFatalError)
                 {
-                    var (name, pos) = unusedAnchors[i];
-                    AddWarning(ref diagnostics, $"anchor \"{name}\" is defined but not used", pos);
-                }
+                    // Check for unused anchors and recursive aliases after parsing while the adapter is still alive
+                    var unusedBuf = threadstaticUnusedAnchorBuf ??= new (string, TextPosition)[32];
+                    var unusedAnchors = parseReader.GetUnusedAnchors(unusedBuf);
+                    var recursiveBuf = threadstaticRecursiveAliasBuf ??= new (string, TextPosition, TextPosition)[32];
+                    var recursiveAliases = parseReader.GetRecursiveAliases(recursiveBuf);
 
-                for (var i = 0; i < recursiveAliases.Length; i++)
-                {
-                    var (name, pos, anchorPos) = recursiveAliases[i];
-                    var message = anchorPos.Line > 0
-                        ? $"recursive alias \"{name}\" is found. anchor was declared at line:{anchorPos.Line}, column:{anchorPos.Column}"
-                        : $"recursive alias \"{name}\" is found";
-                    AddError(ref diagnostics, message, pos);
+                    for (var i = 0; i < unusedAnchors.Length; i++)
+                    {
+                        var (name, pos) = unusedAnchors[i];
+                        AddWarning(ref diagnostics, $"anchor \"{name}\" is defined but not used", pos);
+                    }
+
+                    for (var i = 0; i < recursiveAliases.Length; i++)
+                    {
+                        var (name, pos, anchorPos) = recursiveAliases[i];
+                        var message = anchorPos.Line > 0
+                            ? $"recursive alias \"{name}\" is found. anchor was declared at line:{anchorPos.Line}, column:{anchorPos.Column}"
+                            : $"recursive alias \"{name}\" is found";
+                        AddError(ref diagnostics, message, pos);
+                    }
                 }
 
                 if (isAmbiguous)
@@ -303,7 +319,16 @@ public static partial class WorkflowParser
     private static ParseCoreResult ParseCore<TReader>(ref TReader reader, AstArena arena, ReadOnlySpan<byte> source, ParseMode parseMode, ref PooledBuffer<Diagnostic> diagnostics)
         where TReader : IYamlStreamReader, allows ref struct
     {
-        return ParseCoreInner(ref reader, arena, source, parseMode, ref diagnostics, rootSkipMask: 0);
+        try
+        {
+            return ParseCoreInner(ref reader, arena, source, parseMode, ref diagnostics, rootSkipMask: 0);
+        }
+        catch (Exception ex)
+        {
+            var (line, col) = TryExtractLineCol(ex.Message);
+            AddError(ref diagnostics, $"yaml parse failure: {ex.Message}", new TextPosition(0, line, col));
+            return new ParseCoreResult(default, default, hasFatalError: true, arena);
+        }
     }
 
     /// <summary>
@@ -317,27 +342,40 @@ public static partial class WorkflowParser
         var diagnostics = new PooledBuffer<Diagnostic>(16);
         try
         {
-            var result = ParseCoreInner(ref reader, arena, (ReadOnlySpan<byte>)utf8Yaml, ParseMode.Workflow, ref diagnostics, rootSkipMask, jobSkipEntries);
-
-            // Check for unused anchors and recursive aliases (same as ParseClassified)
-            var unusedBuf = threadstaticUnusedAnchorBuf ??= new (string, TextPosition)[32];
-            var unusedAnchors = reader.GetUnusedAnchors(unusedBuf);
-            var recursiveBuf = threadstaticRecursiveAliasBuf ??= new (string, TextPosition, TextPosition)[32];
-            var recursiveAliases = reader.GetRecursiveAliases(recursiveBuf);
-
-            for (var i = 0; i < unusedAnchors.Length; i++)
+            ParseCoreResult result;
+            try
             {
-                var (name, pos) = unusedAnchors[i];
-                AddWarning(ref diagnostics, $"anchor \"{name}\" is defined but not used", pos);
+                result = ParseCoreInner(ref reader, arena, (ReadOnlySpan<byte>)utf8Yaml, ParseMode.Workflow, ref diagnostics, rootSkipMask, jobSkipEntries);
+            }
+            catch (Exception ex)
+            {
+                var (line, col) = TryExtractLineCol(ex.Message);
+                AddError(ref diagnostics, $"yaml parse failure: {ex.Message}", new TextPosition(0, line, col));
+                result = new ParseCoreResult(default, default, hasFatalError: true, arena);
             }
 
-            for (var i = 0; i < recursiveAliases.Length; i++)
+            if (!result.HasFatalError)
             {
-                var (name, pos, anchorPos) = recursiveAliases[i];
-                var message = anchorPos.Line > 0
-                    ? $"recursive alias \"{name}\" is found. anchor was declared at line:{anchorPos.Line}, column:{anchorPos.Column}"
-                    : $"recursive alias \"{name}\" is found";
-                AddError(ref diagnostics, message, pos);
+                // Check for unused anchors and recursive aliases (same as ParseClassified)
+                var unusedBuf = threadstaticUnusedAnchorBuf ??= new (string, TextPosition)[32];
+                var unusedAnchors = reader.GetUnusedAnchors(unusedBuf);
+                var recursiveBuf = threadstaticRecursiveAliasBuf ??= new (string, TextPosition, TextPosition)[32];
+                var recursiveAliases = reader.GetRecursiveAliases(recursiveBuf);
+
+                for (var i = 0; i < unusedAnchors.Length; i++)
+                {
+                    var (name, pos) = unusedAnchors[i];
+                    AddWarning(ref diagnostics, $"anchor \"{name}\" is defined but not used", pos);
+                }
+
+                for (var i = 0; i < recursiveAliases.Length; i++)
+                {
+                    var (name, pos, anchorPos) = recursiveAliases[i];
+                    var message = anchorPos.Line > 0
+                        ? $"recursive alias \"{name}\" is found. anchor was declared at line:{anchorPos.Line}, column:{anchorPos.Column}"
+                        : $"recursive alias \"{name}\" is found";
+                    AddError(ref diagnostics, message, pos);
+                }
             }
 
             // Stamp file path on all diagnostics

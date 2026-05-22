@@ -801,7 +801,7 @@ The parser uses tag information (`!!str`, `!!bool`, `!!int`, `!!float`, `!!null`
 | Type mismatch | error + SkipCurrentNode |
 | Missing required key | aggregate error after mapping traversal |
 | Exclusive constraint violation | aggregate error after mapping traversal |
-| YAML parse failure (including alias resolution failure in adapter/library) | Convert to `Diagnostic[]`, `Workflow = null` |
+| YAML parse failure (including alias resolution failure in adapter/library) | Add a fatal `yaml parse failure` diagnostic and preserve any parser diagnostics already emitted earlier in the same file; AST may be partial or null |
 | Duplicate key | error + ignore the later key (first wins) |
 
 ---
