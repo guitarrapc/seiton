@@ -32,11 +32,11 @@ public sealed class OptInInformationalLintRuleTests
         await Assert.That(result.Diagnostics.Any(x => x.RuleId == "anonymous-definition" && x.Severity == DiagnosticSeverity.Info && x.Message.Contains("workflow is missing an explicit name", StringComparison.Ordinal))).IsTrue();
         await Assert.That(result.Diagnostics.Any(x => x.RuleId == "anonymous-definition" && x.Severity == DiagnosticSeverity.Info && x.Message.Contains("jobs.'build' is missing an explicit name", StringComparison.Ordinal))).IsTrue();
 
-    var workflowDiagnostic = result.Diagnostics.Single(x => x.RuleId == "anonymous-definition" && x.Message.Contains("workflow is missing an explicit name", StringComparison.Ordinal));
-    await Assert.That(workflowDiagnostic.Location.StartLine).IsEqualTo(1);
-    await Assert.That(workflowDiagnostic.Location.Length).IsEqualTo(0);
-    await Assert.That(workflowDiagnostic.Location.EndLine).IsEqualTo(1);
-    await Assert.That(workflowDiagnostic.Location.StartColumn).IsEqualTo(workflowDiagnostic.Location.EndColumn);
+        var workflowDiagnostic = result.Diagnostics.Single(x => x.RuleId == "anonymous-definition" && x.Message.Contains("workflow is missing an explicit name", StringComparison.Ordinal));
+        await Assert.That(workflowDiagnostic.Location.StartLine).IsEqualTo(1);
+        await Assert.That(workflowDiagnostic.Location.Length).IsEqualTo(0);
+        await Assert.That(workflowDiagnostic.Location.EndLine).IsEqualTo(1);
+        await Assert.That(workflowDiagnostic.Location.StartColumn).IsEqualTo(workflowDiagnostic.Location.EndColumn);
     }
 
     [Test]
