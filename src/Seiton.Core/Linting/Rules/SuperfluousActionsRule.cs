@@ -1,4 +1,5 @@
 ﻿using System.Runtime.CompilerServices;
+using Seiton.Core.Generated;
 using Seiton.Core.Parsing.Ast;
 
 namespace Seiton.Core.Linting.Rules;
@@ -39,69 +40,6 @@ public sealed class SuperfluousActionsRule() : RuleBase(RuleId.SuperfluousAction
             return false;
         }
 
-        if (ownerRepo.SequenceEqual("ncipollo/release-action"u8))
-        {
-            actionName = "ncipollo/release-action";
-            replacement = "gh release create";
-            return true;
-        }
-
-        if (ownerRepo.SequenceEqual("softprops/action-gh-release"u8))
-        {
-            actionName = "softprops/action-gh-release";
-            replacement = "gh release create";
-            return true;
-        }
-
-        if (ownerRepo.SequenceEqual("elgohr/github-release-action"u8))
-        {
-            actionName = "elgohr/Github-Release-Action";
-            replacement = "gh release create";
-            return true;
-        }
-
-        if (ownerRepo.SequenceEqual("dacbd/create-issue-action"u8))
-        {
-            actionName = "dacbd/create-issue-action";
-            replacement = "gh issue create";
-            return true;
-        }
-
-        if (ownerRepo.SequenceEqual("actions-ecosystem/action-add-labels"u8))
-        {
-            actionName = "actions-ecosystem/action-add-labels";
-            replacement = "gh issue edit --add-label";
-            return true;
-        }
-
-        if (ownerRepo.SequenceEqual("actions-ecosystem/action-remove-labels"u8))
-        {
-            actionName = "actions-ecosystem/action-remove-labels";
-            replacement = "gh issue edit --remove-label";
-            return true;
-        }
-
-        if (ownerRepo.SequenceEqual("svenstaro/upload-release-action"u8))
-        {
-            actionName = "svenstaro/upload-release-action";
-            replacement = "gh release create";
-            return true;
-        }
-
-        if (ownerRepo.SequenceEqual("addnab/docker-run-action"u8))
-        {
-            actionName = "addnab/docker-run-action";
-            replacement = "docker run";
-            return true;
-        }
-
-        if (ownerRepo.SequenceEqual("sergeysova/jq-action"u8))
-        {
-            actionName = "sergeysova/jq-action";
-            replacement = "jq";
-            return true;
-        }
-
-        return false;
+        return SuperfluousActions.TryGetReplacement(ownerRepo, out actionName, out replacement);
     }
 }
