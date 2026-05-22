@@ -93,7 +93,7 @@ public static partial class WorkflowParser
                 var hintReader = new VYamlStreamAdapter(utf8Yaml.AsMemory());
                 hasHints = TryReadRootStructuralHints(ref hintReader, out hasJobs, out hasRuns);
             }
-            catch
+            catch (Exception ex) when (ex is not OutOfMemoryException and not OperationCanceledException)
             {
                 hasHints = false;
                 hasJobs = false;
@@ -184,9 +184,9 @@ public static partial class WorkflowParser
         {
             localArena?.Dispose();
             arena = null;
-            var (startLine, startColumn) = TryExtractLineCol(ex.Message);
+            var (startLine, startColumn, startOffset) = TryExtractLineCol(ex.Message);
             var location = new TextRange(
-                Start: 0,
+                Start: startOffset,
                 Length: 0,
                 StartLine: startLine,
                 StartColumn: startColumn,
@@ -205,32 +205,33 @@ public static partial class WorkflowParser
     }
 
     /// <summary>
-    /// Extracts line/col from VYaml exception messages (format: "... at Line: {L}, Col: {C}, Idx: {I}").
-    /// Returns (1, 1) if extraction fails.
+    /// Extracts line/col/offset from VYaml exception messages (format: "... at Line: {L}, Col: {C}, Idx: {I}").
+    /// Returns (1, 1, 0) if extraction fails.
     /// </summary>
-    internal static (int Line, int Column) TryExtractLineCol(string message)
+    internal static (int Line, int Column, int Offset) TryExtractLineCol(string message)
     {
         // VYaml format: "... at Line: 5, Col: 3, Idx: 42"
         const string lineMarker = "Line: ";
         const string colMarker = "Col: ";
+        const string idxMarker = "Idx: ";
 
         var lineIdx = message.LastIndexOf(lineMarker, StringComparison.Ordinal);
         if (lineIdx < 0)
         {
-            return (1, 1);
+            return (1, 1, 0);
         }
 
         var lineStart = lineIdx + lineMarker.Length;
         var lineEnd = message.IndexOf(',', lineStart);
         if (lineEnd < 0)
         {
-            return (1, 1);
+            return (1, 1, 0);
         }
 
         var colIdx = message.IndexOf(colMarker, lineEnd, StringComparison.Ordinal);
         if (colIdx < 0)
         {
-            return (1, 1);
+            return (1, 1, 0);
         }
 
         var colStart = colIdx + colMarker.Length;
@@ -244,10 +245,20 @@ public static partial class WorkflowParser
             && int.TryParse(message.AsSpan(colStart, colEnd - colStart), out var col))
         {
             // VYaml line is 1-based; col is 0-based → convert col to 1-based
-            return (line, col + 1);
+            var offset = 0;
+            var idxIdx = message.IndexOf(idxMarker, colStart, StringComparison.Ordinal);
+            if (idxIdx >= 0)
+            {
+                var idxStart = idxIdx + idxMarker.Length;
+                var idxEnd = message.IndexOf(',', idxStart);
+                if (idxEnd < 0) idxEnd = message.Length;
+                int.TryParse(message.AsSpan(idxStart, idxEnd - idxStart), out offset);
+            }
+
+            return (line, col + 1, offset);
         }
 
-        return (1, 1);
+        return (1, 1, 0);
     }
 
     internal static ParseResultData ParseWithReader<TReader>(ref TReader reader, AstArena arena, ReadOnlySpan<byte> source)
@@ -325,8 +336,8 @@ public static partial class WorkflowParser
         }
         catch (Exception ex)
         {
-            var (line, col) = TryExtractLineCol(ex.Message);
-            AddError(ref diagnostics, $"yaml parse failure: {ex.Message}", new TextPosition(0, line, col));
+            var (line, col, offset) = TryExtractLineCol(ex.Message);
+            AddError(ref diagnostics, $"yaml parse failure: {ex.Message}", new TextPosition(offset, line, col));
             return new ParseCoreResult(default, default, hasFatalError: true, arena);
         }
     }
@@ -349,8 +360,8 @@ public static partial class WorkflowParser
             }
             catch (Exception ex)
             {
-                var (line, col) = TryExtractLineCol(ex.Message);
-                AddError(ref diagnostics, $"yaml parse failure: {ex.Message}", new TextPosition(0, line, col));
+                var (line, col, offset) = TryExtractLineCol(ex.Message);
+                AddError(ref diagnostics, $"yaml parse failure: {ex.Message}", new TextPosition(offset, line, col));
                 result = new ParseCoreResult(default, default, hasFatalError: true, arena);
             }
 

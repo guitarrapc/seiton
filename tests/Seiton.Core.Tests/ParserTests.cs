@@ -3951,17 +3951,19 @@ public sealed class ParserTests
     [Test]
     public async Task TryExtractLineCol_VYamlFormat_ExtractsCorrectPosition()
     {
-        var (line, col) = WorkflowParser.TryExtractLineCol("Failed to parse at Line: 5, Col: 3, Idx: 42");
-        await Assert.That(line).IsEqualTo(5);  // Line is 1-based already
-        await Assert.That(col).IsEqualTo(4);   // Col 0-based → 1-based
+        var (line, col, offset) = WorkflowParser.TryExtractLineCol("Failed to parse at Line: 5, Col: 3, Idx: 42");
+        await Assert.That(line).IsEqualTo(5);    // Line is 1-based already
+        await Assert.That(col).IsEqualTo(4);     // Col 0-based → 1-based
+        await Assert.That(offset).IsEqualTo(42); // Idx is byte offset
     }
 
     [Test]
     public async Task TryExtractLineCol_NoMatch_ReturnsOneOne()
     {
-        var (line, col) = WorkflowParser.TryExtractLineCol("Some random error message");
+        var (line, col, offset) = WorkflowParser.TryExtractLineCol("Some random error message");
         await Assert.That(line).IsEqualTo(1);
         await Assert.That(col).IsEqualTo(1);
+        await Assert.That(offset).IsEqualTo(0);
     }
 
     // regression: matrix include adds extra keys to the matrix context
