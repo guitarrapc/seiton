@@ -993,7 +993,7 @@ jobs:
   test:
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/setup-python@v6
+      - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405
         with:
           pip-install: -r requirements.txt
 ```
@@ -1006,7 +1006,7 @@ jobs:
   test:
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/setup-python@v6
+      - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405
       - run: python -m pip install -r requirements.txt
 ```
 
@@ -1028,7 +1028,7 @@ jobs:
   release:
     runs-on: ubuntu-24.04
     steps:
-      - uses: softprops/action-gh-release@v2
+      - uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65
 ```
 
 **Remediation:** Prefer the built-in CLI directly when it keeps the workflow simpler:

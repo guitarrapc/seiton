@@ -415,9 +415,9 @@ public sealed class RuleInterfaceTests
         await Assert.That(RuleCatalog.GetPriority("unsound-contains")).IsEqualTo(58);
         await Assert.That(RuleCatalog.GetPriority("bot-conditions")).IsEqualTo(59);
         await Assert.That(RuleCatalog.GetPriority("artipacked")).IsEqualTo(60);
-            await Assert.That(RuleCatalog.GetPriority("anonymous-definition")).IsEqualTo(61);
-            await Assert.That(RuleCatalog.GetPriority("misfeature")).IsEqualTo(62);
-            await Assert.That(RuleCatalog.GetPriority("superfluous-actions")).IsEqualTo(63);
+        await Assert.That(RuleCatalog.GetPriority("anonymous-definition")).IsEqualTo(61);
+        await Assert.That(RuleCatalog.GetPriority("misfeature")).IsEqualTo(62);
+        await Assert.That(RuleCatalog.GetPriority("superfluous-actions")).IsEqualTo(63);
         await Assert.That(RuleCatalog.GetPriority("known-vulnerable-actions")).IsEqualTo(29);
         await Assert.That(RuleCatalog.GetPriority("impostor-commit")).IsEqualTo(30);
         await Assert.That(RuleCatalog.GetPriority("ref-confusion")).IsEqualTo(31);
