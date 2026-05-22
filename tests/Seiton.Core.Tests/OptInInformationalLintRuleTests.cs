@@ -1,10 +1,10 @@
-﻿using System.Text;
+using System.Text;
 using Seiton.Core.Linting;
 using Seiton.Core.Parsing;
 
 namespace Seiton.Core.Tests;
 
-public sealed class Phase5RuleTests
+public sealed class OptInInformationalLintRuleTests
 {
     [Test]
     public async Task AnonymousDefinition_OptInEnabled_ReportsMissingWorkflowAndJobNames()
