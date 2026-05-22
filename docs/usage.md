@@ -11,7 +11,7 @@ Usage: [command] [arguments...] [options...] [-h|--help] [--version]
 Lint workflow files by default, or apply fixes when --fix is specified.
 
 Arguments:
-  [0] <string[]?>    Workflow files or directories to lint. Auto-discovers .github/workflows/ if omitted.
+  [0] <string[]>     Workflow files or directories to lint. Auto-discovers .github/workflows/ if omitted.
 
 Options:
   --config <string?>           Path to config file. Auto-discovered from .github/seiton.yaml if omitted. [Default: null]
@@ -64,7 +64,7 @@ seiton .github/workflows/
 Read from stdin with `-`. Use `--stdin-filename` to supply a filename for diagnostic messages:
 
 ```sh
-cat .github/workflows/ci.yml | seiton - --stdin-filename ci.yml
+cat .github/workflows/ci.yml | seiton --stdin-filename ci.yml -
 ```
 
 ---
@@ -254,14 +254,22 @@ When `CI` is set, automatic color detection behaves as `never`.
 
 ### Text (default)
 
-Human-readable output with file path, line, column, severity, rule ID, and message:
+Human-readable output includes the severity/rule header plus a source excerpt:
 
 ```
-.github/workflows/ci.yml:18:7: [error] template-injection: untrusted value 'github.event.pull_request.title' interpolated directly into run script
-.github/workflows/ci.yml:42:5: [warning] unpinned-uses: 'actions/checkout@v6' is not pinned to a full commit SHA
+error[template-injection]: "github.event.pull_request.title" is potentially untrusted. avoid using it directly in inline scripts. instead, pass it through an environment variable. see https://docs.github.com/en/actions/security-for-github-actions/security-guides/security-hardening-for-github-actions#good-practices-for-mitigating-script-injection-attacks for more details
+  --> .github/workflows/ci.yml:7:32
+    |
+   7 |       - run: 'echo "Title: ${{ github.event.pull_request.title }}"'
+    |                                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
 ```
 
-Use `--oneline` to produce one line per diagnostic (useful for `grep`/`awk` pipelines).
+Use `--oneline` to produce one line per diagnostic (useful for `grep`/`awk` pipelines), for example:
+
+```
+.github/workflows/ci.yml:7:32: error [template-injection] "github.event.pull_request.title" is potentially untrusted. avoid using it directly in inline scripts. instead, pass it through an environment variable. see https://docs.github.com/en/actions/security-for-github-actions/security-guides/security-hardening-for-github-actions#good-practices-for-mitigating-script-injection-attacks for more details
+```
 
 ### JSON
 
@@ -275,11 +283,12 @@ seiton --format json
 [
   {
     "file": ".github/workflows/ci.yml",
-    "line": 18,
-    "column": 7,
+    "line": 7,
+    "col": 32,
     "severity": "error",
-    "rule_id": "template-injection",
-    "message": "untrusted value 'github.event.pull_request.title' interpolated directly into run script"
+    "ruleId": "template-injection",
+    "message": "\"github.event.pull_request.title\" is potentially untrusted. avoid using it directly in inline scripts. instead, pass it through an environment variable. see https://docs.github.com/en/actions/security-for-github-actions/security-guides/security-hardening-for-github-actions#good-practices-for-mitigating-script-injection-attacks for more details",
+    "fixable": false
   }
 ]
 ```
@@ -372,16 +381,16 @@ To confirm the image works:
 docker run --rm ghcr.io/guitarrapc/seiton:latest version
 ```
 
-To lint all workflow files in the current repository, mount the repository read-only and pass the repository root path:
+To lint all workflow files in the current repository, mount the repository read-only and set the working directory inside the container to the repository root:
 
 ```sh
-docker run --rm -v "$PWD:/repo:ro" ghcr.io/guitarrapc/seiton:latest /repo
+docker run --rm -v "$PWD:/repo:ro" -w /repo ghcr.io/guitarrapc/seiton:latest
 ```
 
-To lint specific files, pass them as explicit arguments inside the mounted repository:
+To lint a specific file, pass its explicit in-container path:
 
 ```sh
-docker run --rm -v "$PWD:/repo:ro" ghcr.io/guitarrapc/seiton:latest /repo/.github/workflows/ci.yml /repo/action.yml
+docker run --rm -v "$PWD:/repo:ro" ghcr.io/guitarrapc/seiton:latest /repo/.github/workflows/ci.yml
 ```
 
 ---
@@ -459,7 +468,7 @@ jobs:
           persist-credentials: false
 
       - name: Run seiton in Docker
-        run: docker run --rm -v "$PWD:/repo:ro" ghcr.io/guitarrapc/seiton:latest --format sarif /repo > seiton.sarif
+        run: docker run --rm -v "$PWD:/repo:ro" -w /repo ghcr.io/guitarrapc/seiton:latest --format sarif > seiton.sarif
 
       - name: Upload SARIF
         uses: github/codeql-action/upload-sarif@ce28f5bb42d3534e5d0f3a320ca0b28ee32a72d0 # v3

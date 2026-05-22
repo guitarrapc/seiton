@@ -37,14 +37,18 @@ jobs:
           node_version: 18.x
 ```
 
-**Seiton reports errors:**
+**Example `--oneline` output:**
 
 ```
-test.yml:8:7: [error] template-injection: untrusted value 'github.event.pull_request.title' interpolated directly into run script; use env: indirection instead
-test.yml:9:5: [warning] unpinned-uses: 'actions/checkout@v6' is not pinned to a full commit SHA
-test.yml:12:9: [error] popular-action-inputs: input 'node_version' is not defined in action 'actions/setup-node@v4'; did you mean 'node-version'?
-test.yml:9:5: [warning] checkout-persist-credentials: 'actions/checkout' should set 'persist-credentials: false'
-test.yml:6:5: [warning] job-permissions-required: job 'test' does not declare explicit permissions
+D:\github\guitarrapc\seiton\test.yaml:3:5: error [parse] on.pull_request has unexpected key "branch" for "pull_request" section. did you mean "branches"? expected one of "types", "branches", "branches-ignore", "paths", "paths-ignore"
+D:\github\guitarrapc\seiton\test.yaml:6:3: warning [job-permissions-required] jobs.'test' does not have permissions defined; set explicit permissions to follow least-privilege principle
+D:\github\guitarrapc\seiton\test.yaml:6:3: error [job-timeout-minutes-required] jobs.'test' should define timeout-minutes (default is 360 minutes); if not possible, set timeout-minutes on each step instead
+D:\github\guitarrapc\seiton\test.yaml:7:14: warning [runner-no-latest] jobs.'test'.runs-on label 'ubuntu-latest' is a moving latest label; prefer explicit version-pinned runner labels
+D:\github\guitarrapc\seiton\test.yaml:9:32: error [template-injection] "github.event.pull_request.title" is potentially untrusted. avoid using it directly in inline scripts. instead, pass it through an environment variable. see https://docs.github.com/en/actions/security-for-github-actions/security-guides/security-hardening-for-github-actions#good-practices-for-mitigating-script-injection-attacks for more details
+D:\github\guitarrapc\seiton\test.yaml:10:15: warning [checkout-persist-credentials] action 'actions/checkout@v6' should set with.persist-credentials to false to avoid leaving credentials accessible to subsequent steps; after changing this, review later authenticated git commands; for example, git push may require explicit auth setup such as git remote set-url origin ...
+D:\github\guitarrapc\seiton\test.yaml:10:31: warning [unpinned-uses] 'actions/checkout@v6' is not pinned to a full-length commit SHA. see https://github.com/actions/checkout/tree/v6 (fixable with --fix --enable-pin-network)
+D:\github\guitarrapc\seiton\test.yaml:11:33: warning [unpinned-uses] 'actions/setup-node@v4' is not pinned to a full-length commit SHA. see https://github.com/actions/setup-node/tree/v4 (fixable with --fix --enable-pin-network)
+D:\github\guitarrapc\seiton\test.yaml:13:25: warning [popular-action-inputs] unknown input 'node_version' for action 'actions/setup-node@v4'. available inputs are "architecture", "cache", "cache-dependency-path", "check-latest", "mirror", "mirror-token", "node-version", "node-version-file", "package-manager-cache", "registry-url", "scope", "token". did you mean 'node-version'? see https://github.com/actions/setup-node/tree/v4
 ```
 
 ## Quick Start

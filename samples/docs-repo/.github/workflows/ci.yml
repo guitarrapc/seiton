@@ -1,12 +1,11 @@
 on:
-  push:
-    branch: main
+    pull_request:
 jobs:
-  test:
-    runs-on: ubuntu-latest
-    steps:
-      - run: echo "Title: ${{ github.event.pull_request.title }}"
-      - uses: actions/checkout@v6
-      - uses: actions/setup-node@v4
-        with:
-          node_version: 18.x
+    test:
+        runs-on: ubuntu-latest
+        steps:
+            - run: 'echo "Title: ${{ github.event.pull_request.title }}"'
+            - uses: actions/checkout@v6
+            - uses: actions/setup-node@v4
+              with:
+                  node_version: 18.x
