@@ -238,7 +238,6 @@ raw YAML
 | `forbidden-uses` | High | Regular | ユーザー設定の deny リストに一致する`uses:` |
 | `superfluous-actions` | Low | Regular | `gh` CLI で代替できるアクションの使用 |
 | `undocumented-permissions` | Info | **Pedantic** | コメントのない`permissions:`エントリ |
-| `misfeature` | Low | Regular | `shell: cmd`、`pip-install:`等の機能の誤用 |
 | `use-trusted-publishing` | Medium | Regular | PyPI/RubyGems/npm で Trusted Publishing（OIDC）未使用 |
 
 **合計: 30 以上の Audit ルール**

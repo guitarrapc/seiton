@@ -9,9 +9,9 @@ public sealed class RuleCatalogDescriptorTests
     {
         var descriptors = RuleCatalog.GetAllRuleDescriptors();
 
-        // Total rules: 58 default + 4 online = 62
+        // Total rules: 57 default + 4 online = 61
         // (Syntax is not in the catalog)
-        await Assert.That(descriptors.Count).IsEqualTo(62);
+        await Assert.That(descriptors.Count).IsEqualTo(61);
     }
 
     [Test]
@@ -41,14 +41,10 @@ public sealed class RuleCatalogDescriptorTests
     {
         var descriptors = RuleCatalog.GetAllRuleDescriptors();
         var concurrencyLimits = descriptors.FirstOrDefault(d => d.Id == "concurrency-limits");
-        var misfeature = descriptors.FirstOrDefault(d => d.Id == "misfeature");
 
         await Assert.That(concurrencyLimits.Id).IsNotNull();
         await Assert.That(concurrencyLimits.IsOptIn).IsTrue();
         await Assert.That(concurrencyLimits.IsOnline).IsFalse();
-        await Assert.That(misfeature.Id).IsNotNull();
-        await Assert.That(misfeature.IsOptIn).IsTrue();
-        await Assert.That(misfeature.IsOnline).IsFalse();
     }
 
     [Test]
@@ -104,11 +100,11 @@ public sealed class RuleCatalogDescriptorTests
     }
 
     [Test]
-    public async Task GetAllRuleDescriptors_Phase5RulesDefaultSeverityIsInfo()
+    public async Task GetAllRuleDescriptors_ConcurrencyLimitsDefaultSeverityIsWarning()
     {
         var descriptors = RuleCatalog.GetAllRuleDescriptors();
 
-        await Assert.That(descriptors.First(d => d.Id == "misfeature").DefaultSeverity).IsEqualTo("info");
+        await Assert.That(descriptors.First(d => d.Id == "concurrency-limits").DefaultSeverity).IsEqualTo("warning");
     }
 
     [Test]

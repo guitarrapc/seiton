@@ -296,7 +296,7 @@ public sealed class RuleInterfaceTests
     {
         var rules = RuleCatalog.CreateDefaultRules();
 
-        await Assert.That(rules.Length).IsEqualTo(58);
+        await Assert.That(rules.Length).IsEqualTo(57);
         await Assert.That(rules[0].Id).IsEqualTo(RuleId.JobStructure);
         await Assert.That(rules[1].Id).IsEqualTo(RuleId.ReusableWorkflow);
         await Assert.That(rules[2].Id).IsEqualTo(RuleId.Permissions);
@@ -354,7 +354,6 @@ public sealed class RuleInterfaceTests
         await Assert.That(rules[54].Id).IsEqualTo(RuleId.UnsoundContains);
         await Assert.That(rules[55].Id).IsEqualTo(RuleId.BotConditions);
         await Assert.That(rules[56].Id).IsEqualTo(RuleId.Artipacked);
-        await Assert.That(rules[57].Id).IsEqualTo(RuleId.Misfeature);
 
         await Assert.That(RuleCatalog.GetPriority("job-structure")).IsEqualTo(0);
         await Assert.That(RuleCatalog.GetPriority("reusable-workflow")).IsEqualTo(1);
@@ -413,7 +412,6 @@ public sealed class RuleInterfaceTests
         await Assert.That(RuleCatalog.GetPriority("unsound-contains")).IsEqualTo(58);
         await Assert.That(RuleCatalog.GetPriority("bot-conditions")).IsEqualTo(59);
         await Assert.That(RuleCatalog.GetPriority("artipacked")).IsEqualTo(60);
-        await Assert.That(RuleCatalog.GetPriority("misfeature")).IsEqualTo(62);
         await Assert.That(RuleCatalog.GetPriority("known-vulnerable-actions")).IsEqualTo(29);
         await Assert.That(RuleCatalog.GetPriority("impostor-commit")).IsEqualTo(30);
         await Assert.That(RuleCatalog.GetPriority("ref-confusion")).IsEqualTo(31);

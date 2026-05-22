@@ -103,7 +103,7 @@ public sealed class LintResultMetadataTests
 
         var disabledIds = result.DisabledRuleIds.ToArray();
         await Assert.That(disabledIds.Length).IsGreaterThan(0);
-        await Assert.That(disabledIds).Contains("misfeature");
+        await Assert.That(disabledIds).Contains("concurrency-limits");
     }
 
     [Test]
@@ -117,7 +117,7 @@ public sealed class LintResultMetadataTests
         // DisabledRuleCount should only reflect config/opt-in disabled rules
         var disabledIds = result.DisabledRuleIds.ToArray();
         await Assert.That(disabledIds).DoesNotContain("job-permissions-required");
-        await Assert.That(disabledIds).Contains("misfeature");
+        await Assert.That(disabledIds).DoesNotContain("concurrency-limits");
     }
 
     [Test]
@@ -182,16 +182,11 @@ public sealed class LintResultMetadataTests
     [Test]
     public async Task Check_CustomEngine_NoConfig_UsesInstalledRuleSetForDisabledMetadata()
     {
-        var engine = new LintEngine([new JobStructureRule(), new MisfeatureRule()]);
+        var engine = new LintEngine([new JobStructureRule(), new ConcurrencyLimitsRule()]);
 
         using var workflowResult = engine.Check(MinimalWorkflow, ".github/workflows/ci.yml");
         await Assert.That(workflowResult.ActiveRuleCount).IsEqualTo(1);
         await Assert.That(workflowResult.DisabledRuleCount).IsEqualTo(1);
-        await Assert.That(workflowResult.DisabledRuleIds.ToArray()).IsEquivalentTo(["misfeature"]);
-
-        using var actionResult = engine.Check(MinimalAction, "action.yml");
-        await Assert.That(actionResult.ActiveRuleCount).IsEqualTo(1);
-        await Assert.That(actionResult.DisabledRuleCount).IsEqualTo(1);
-        await Assert.That(actionResult.DisabledRuleIds.ToArray()).IsEquivalentTo(["misfeature"]);
+        await Assert.That(workflowResult.DisabledRuleIds.ToArray()).IsEquivalentTo(["concurrency-limits"]);
     }
 }

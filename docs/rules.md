@@ -62,7 +62,6 @@ workflow-call-input-default              yes       local    error      no    bot
 outdated-action-runner                   yes       local    error      no    both       default
 if-expr-wrapper                          yes       local    warning    yes   both       default
 concurrency-limits                       no        local    warning    no    workflow   opt-in (not configured)
-misfeature                               no        local    info       no    both       opt-in (not configured)
 unsound-condition                        yes       local    warning    yes   both       default
 unpinned-tools                           yes       local    warning    no    both       default
 unsound-contains                         yes       local    mixed      no    workflow   default
@@ -115,7 +114,6 @@ Online rules use the GitHub API. Set GITHUB_TOKEN (or SEITON_GITHUB_TOKEN) to av
 - [if-expr-wrapper](#if-expr-wrapper)
 - [unsound-condition](#unsound-condition)
 - [concurrency-limits](#concurrency-limits)
-- [misfeature](#misfeature)
 - [deprecated-commands](#deprecated-commands)
 - [dispatch-inputs](#dispatch-inputs)
 - [schedule-event](#schedule-event)
@@ -936,41 +934,6 @@ jobs:
 ```
 
 > **Note:** Reusable-only workflows (`on: workflow_call`) and workflow-call jobs (`uses:`) are skipped. When workflow-level concurrency is set, job-level checks are suppressed.
-
----
-
-### `misfeature`
-
-| Default | Network | Auto-fix |
-|---|---|---|
-| ✗ | — | ✗ |
-
-Reports supported but discouraged action features. The current implementation flags `actions/setup-python` when it uses the `pip-install` input.
-
-**Example trigger:**
-
-```yaml
-on: push
-jobs:
-  test:
-    runs-on: ubuntu-24.04
-    steps:
-      - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405
-        with:
-          pip-install: -r requirements.txt
-```
-
-**Remediation:** Install dependencies explicitly in a `run:` step or within a virtual environment instead of relying on `pip-install`:
-
-```yaml
-on: push
-jobs:
-  test:
-    runs-on: ubuntu-24.04
-    steps:
-      - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405
-      - run: python -m pip install -r requirements.txt
-```
 
 ---
 

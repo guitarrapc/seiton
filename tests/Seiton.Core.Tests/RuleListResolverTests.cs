@@ -23,10 +23,6 @@ public sealed class RuleListResolverTests
         var concurrencyLimits = statuses.First(s => s.Rule.Id == "concurrency-limits");
         await Assert.That(concurrencyLimits.Enabled).IsFalse();
         await Assert.That(concurrencyLimits.Reason).IsEqualTo("opt-in (not configured)");
-
-        var misfeature = statuses.First(s => s.Rule.Id == "misfeature");
-        await Assert.That(misfeature.Enabled).IsFalse();
-        await Assert.That(misfeature.Reason).IsEqualTo("opt-in (not configured)");
     }
 
     [Test]
@@ -65,18 +61,14 @@ public sealed class RuleListResolverTests
             Rules = new Dictionary<string, RuleConfig>
             {
                 ["concurrency-limits"] = new RuleConfig { Enabled = true },
-                ["misfeature"] = new RuleConfig { Enabled = true },
             }
         };
 
         var statuses = RuleListResolver.Resolve(config);
         var concurrencyLimits = statuses.First(s => s.Rule.Id == "concurrency-limits");
-        var misfeature = statuses.First(s => s.Rule.Id == "misfeature");
 
         await Assert.That(concurrencyLimits.Enabled).IsTrue();
         await Assert.That(concurrencyLimits.Reason).IsEqualTo("config (enabled)");
-        await Assert.That(misfeature.Enabled).IsTrue();
-        await Assert.That(misfeature.Reason).IsEqualTo("config (enabled)");
     }
 
     [Test]
@@ -128,7 +120,7 @@ public sealed class RuleListResolverTests
     {
         var statuses = RuleListResolver.Resolve(null);
 
-        await Assert.That(statuses.Count).IsEqualTo(62);
+        await Assert.That(statuses.Count).IsEqualTo(61);
     }
 
     [Test]

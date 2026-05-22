@@ -158,7 +158,6 @@ online audit rules（4）:
 3. zizmor 低優先度監査の取り込み
 - `bot-conditions`（スプーフ可能な bot チェック）
 - `obfuscation`（難読化検出）
-- `misfeature`（非推奨 Actions 機能使用）
 - `dependabot-execution` / `dependabot-cooldown`（Dependabot 設定検査）
 - 理由: セキュリティ影響が限定的か、運用導入コストが高い
 
@@ -253,7 +252,7 @@ zizmor 監査ID別対応表（実装確認ベース）:
 | `impostor-commit` | ✅ | online 監査（`rules.impostor-commit.enabled: true` で有効化） |
 | `insecure-commands` | ✅ | `insecure-commands` |
 | `known-vulnerable-actions` | ✅ | online 監査（`rules.known-vulnerable-actions.enabled: true` で有効化） |
-| `misfeature` | ✅ | `misfeature`（`actions/setup-python` の `with.pip-install` を opt-in info で検出） |
+| `misfeature` | ❌ | 専用監査なし |
 | `obfuscation` | ❌ | 専用監査なし |
 | `overprovisioned-secrets` | 🟡 | `overprovisioned-secrets`（step/reusable-call 中心の初期実装） |
 | `ref-confusion` | ✅ | online 監査（`rules.ref-confusion.enabled: true` で有効化） |
@@ -272,7 +271,7 @@ zizmor 監査ID別対応表（実装確認ベース）:
 | `unsound-contains` | ✅ | `unsound-contains` |
 | `use-trusted-publishing` | 🟡 | `use-trusted-publishing`（publish コマンド文字列ヒューリスティック + `id-token: write` 判定。NuGet/Cargo 等未対応、uses 判定なし） |
 
-対応率: 32/36（89%）— 残4件未対応（うち2件はスコープ外）。
+対応率: 31/36（86%）— 残5件未対応（うち2件はスコープ外）。
 
 ### 6.4 pinact / dockerfile-pin / frizbee（ルールエンジンではなく変換系）
 
@@ -290,10 +289,9 @@ zizmor 監査ID別対応表（実装確認ベース）:
 
 1. Dockerfile / compose / 任意YAML image pin 拡張
 
-2. zizmor 残差分（未対応 6件）
+2. zizmor 残差分（未対応 5件）
 - `github-env` — GITHUB_ENV への危険な書き込み検出
 - `obfuscation` — 難読化された Actions 機能使用
-- `misfeature` — 非推奨/危険な Actions 機能使用
 - `dependabot-execution` / `dependabot-cooldown` — Dependabot 設定検査
 
 ### P1（適用範囲拡張）

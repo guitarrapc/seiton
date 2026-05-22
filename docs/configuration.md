@@ -235,7 +235,7 @@ Opt-in rules (default off) require `enabled: true`:
 
 ```yaml
 rules:
-  misfeature:
+  concurrency-limits:
     enabled: true
 ```
 
