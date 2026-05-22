@@ -384,13 +384,13 @@ docker run --rm ghcr.io/guitarrapc/seiton:latest version
 To lint all workflow files in the current repository, mount the repository read-only and set the working directory inside the container to the repository root:
 
 ```sh
-docker run --rm -v "$PWD:/repo:ro" -w /repo ghcr.io/guitarrapc/seiton:latest
+docker run --rm -v "$PWD:/repo:ro" ghcr.io/guitarrapc/seiton:latest
 ```
 
 To lint a specific file, pass its explicit in-container path:
 
 ```sh
-docker run --rm -v "$PWD:/repo:ro" ghcr.io/guitarrapc/seiton:latest /repo/.github/workflows/ci.yml
+docker run --rm -v "$PWD:/repo:ro" ghcr.io/guitarrapc/seiton:latest .github/workflows/ci.yml
 ```
 
 ---
@@ -468,7 +468,7 @@ jobs:
           persist-credentials: false
 
       - name: Run seiton in Docker
-        run: docker run --rm -v "$PWD:/repo:ro" -w /repo ghcr.io/guitarrapc/seiton:latest --format sarif > seiton.sarif
+        run: docker run --rm -v "$PWD:/repo:ro" ghcr.io/guitarrapc/seiton:latest --format sarif > seiton.sarif
 
       - name: Upload SARIF
         uses: github/codeql-action/upload-sarif@ce28f5bb42d3534e5d0f3a320ca0b28ee32a72d0 # v3

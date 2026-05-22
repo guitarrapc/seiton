@@ -132,7 +132,7 @@ docker pull ghcr.io/guitarrapc/seiton:v0.9.13
 Lint the workflow files in the current directory:
 
 ```sh
-docker run --rm -v "$PWD:/repo:ro" -w /repo ghcr.io/guitarrapc/seiton:latest
+docker run --rm -v "$PWD:/repo:ro" ghcr.io/guitarrapc/seiton:latest
 ```
 
 The `:ro` mount keeps the repository read-only inside the container.
