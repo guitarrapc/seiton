@@ -202,7 +202,6 @@ Column definitions:
 | `concurrency-limits` | ✗ | — | Warn when workflows/jobs lack `concurrency` with `cancel-in-progress`. Skips reusable-only workflows. |
 | `anonymous-definition` | ✗ | — | Info when a workflow or job omits an explicit `name:` field. Applies to workflow documents only. |
 | `misfeature` | ✗ | — | Info when known discouraged action features are used. Current scope flags `actions/setup-python` with `with.pip-install`. |
-| `superfluous-actions` | ✗ | — | Info when a known wrapper action can usually be replaced with built-in runner tooling such as `gh`, `docker`, or `jq`. |
 
 Rule set compatibility policy:
 
@@ -417,7 +416,6 @@ The following table defines the normative default severity for each rule. Implem
 | `concurrency-limits` | warning | opt-in |
 | `anonymous-definition` | info | opt-in |
 | `misfeature` | info | opt-in |
-| `superfluous-actions` | info | opt-in |
 
 ### 5.8 Rule-Specific Configuration
 
@@ -686,7 +684,7 @@ This section describes four canonical usage profiles. Each profile states which 
 
 Config file is absent or empty. No configuration is required.
 
-**Active rules:** All rules in §4.4 with Default = `✓`. Online rules (Default = `✗`) and opt-in local rules (`concurrency-limits`, `anonymous-definition`, `misfeature`, `superfluous-actions`) require explicit `rules.<id>.enabled: true`.
+**Active rules:** All rules in §4.4 with Default = `✓`. Online rules (Default = `✗`) and opt-in local rules (`concurrency-limits`, `anonymous-definition`, `misfeature`) require explicit `rules.<id>.enabled: true`.
 
 **Auto-fix behavior:** Local-only fixes attach per §8.4 (rules marked ✓ Fixable or △ Partial). `unpinned-uses` / `unpinned-image` pin-network fixes require explicit opt-in (see Profile 3a).
 

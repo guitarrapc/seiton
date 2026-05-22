@@ -691,66 +691,6 @@ app.Add("verify-bot-actors", () =>
     }
 });
 
-app.Add("fetch-superfluous-actions", async () =>
-{
-    var code = await SuperfluousActionsCommands.Fetch(repoRoot);
-    if (code != 0)
-    {
-        Environment.ExitCode = code;
-        throw new InvalidOperationException($"fetch-superfluous-actions failed with code {code}");
-    }
-});
-
-app.Add("fetch-superfluous-actions-sources", async () =>
-{
-    var code = await SuperfluousActionsCommands.FetchSources(repoRoot);
-    if (code != 0)
-    {
-        Environment.ExitCode = code;
-        throw new InvalidOperationException($"fetch-superfluous-actions-sources failed with code {code}");
-    }
-});
-
-app.Add("parse-superfluous-actions-sources", () =>
-{
-    var code = SuperfluousActionsCommands.ParseSources(repoRoot);
-    if (code != 0)
-    {
-        Environment.ExitCode = code;
-        throw new InvalidOperationException($"parse-superfluous-actions-sources failed with code {code}");
-    }
-});
-
-app.Add("merge-superfluous-actions-sources", () =>
-{
-    var code = SuperfluousActionsCommands.MergeSources(repoRoot);
-    if (code != 0)
-    {
-        Environment.ExitCode = code;
-        throw new InvalidOperationException($"merge-superfluous-actions-sources failed with code {code}");
-    }
-});
-
-app.Add("sync-superfluous-actions", () =>
-{
-    var code = SuperfluousActionsCommands.Sync(repoRoot);
-    if (code != 0)
-    {
-        Environment.ExitCode = code;
-        throw new InvalidOperationException($"sync-superfluous-actions failed with code {code}");
-    }
-});
-
-app.Add("verify-superfluous-actions", () =>
-{
-    var code = SuperfluousActionsCommands.Verify(repoRoot);
-    if (code != 0)
-    {
-        Environment.ExitCode = code;
-        throw new InvalidOperationException($"verify-superfluous-actions failed with code {code}");
-    }
-});
-
 app.Add("fetch-expected-keys", async () =>
 {
     var code = await ExpectedKeysCommands.Fetch(repoRoot);
@@ -963,11 +903,6 @@ static async Task<int> RunFetch(string repoRoot, string dataset, bool webhooksEx
         return await EventPayloadTypesCommands.Fetch(repoRoot);
     }
 
-    if (dataset is "superfluous-actions")
-    {
-        return await SuperfluousActionsCommands.Fetch(repoRoot);
-    }
-
     if (dataset is "all")
     {
         var code = await WebhookCommands.Fetch(repoRoot, webhooksExcludeSchemaOnly);
@@ -1031,12 +966,6 @@ static async Task<int> RunFetch(string repoRoot, string dataset, bool webhooksEx
         }
 
         code = await UnpinnedToolsCommands.Fetch(repoRoot);
-        if (code != 0)
-        {
-            return code;
-        }
-
-        code = await SuperfluousActionsCommands.Fetch(repoRoot);
         if (code != 0)
         {
             return code;
@@ -1111,11 +1040,6 @@ static int RunSync(string repoRoot, string dataset)
         return BotActorsCommands.Sync(repoRoot);
     }
 
-    if (dataset is "superfluous-actions")
-    {
-        return SuperfluousActionsCommands.Sync(repoRoot);
-    }
-
     if (dataset is "all")
     {
         var code = WebhookCommands.Sync(repoRoot);
@@ -1185,12 +1109,6 @@ static int RunSync(string repoRoot, string dataset)
         }
 
         code = BotActorsCommands.Sync(repoRoot);
-        if (code != 0)
-        {
-            return code;
-        }
-
-        code = SuperfluousActionsCommands.Sync(repoRoot);
         if (code != 0)
         {
             return code;
@@ -1270,11 +1188,6 @@ static int RunVerify(string repoRoot, string dataset)
         return BotActorsCommands.Verify(repoRoot);
     }
 
-    if (dataset is "superfluous-actions")
-    {
-        return SuperfluousActionsCommands.Verify(repoRoot);
-    }
-
     if (dataset is "all")
     {
         var code = WebhookCommands.Verify(repoRoot);
@@ -1344,12 +1257,6 @@ static int RunVerify(string repoRoot, string dataset)
         }
 
         code = BotActorsCommands.Verify(repoRoot);
-        if (code != 0)
-        {
-            return code;
-        }
-
-        code = SuperfluousActionsCommands.Verify(repoRoot);
         if (code != 0)
         {
             return code;

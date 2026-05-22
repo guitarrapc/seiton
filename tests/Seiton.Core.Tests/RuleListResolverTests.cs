@@ -31,10 +31,6 @@ public sealed class RuleListResolverTests
         var misfeature = statuses.First(s => s.Rule.Id == "misfeature");
         await Assert.That(misfeature.Enabled).IsFalse();
         await Assert.That(misfeature.Reason).IsEqualTo("opt-in (not configured)");
-
-        var superfluousActions = statuses.First(s => s.Rule.Id == "superfluous-actions");
-        await Assert.That(superfluousActions.Enabled).IsFalse();
-        await Assert.That(superfluousActions.Reason).IsEqualTo("opt-in (not configured)");
     }
 
     [Test]
@@ -75,7 +71,6 @@ public sealed class RuleListResolverTests
                 ["concurrency-limits"] = new RuleConfig { Enabled = true },
                 ["anonymous-definition"] = new RuleConfig { Enabled = true },
                 ["misfeature"] = new RuleConfig { Enabled = true },
-                ["superfluous-actions"] = new RuleConfig { Enabled = true },
             }
         };
 
@@ -83,7 +78,6 @@ public sealed class RuleListResolverTests
         var concurrencyLimits = statuses.First(s => s.Rule.Id == "concurrency-limits");
         var anonymousDefinition = statuses.First(s => s.Rule.Id == "anonymous-definition");
         var misfeature = statuses.First(s => s.Rule.Id == "misfeature");
-        var superfluousActions = statuses.First(s => s.Rule.Id == "superfluous-actions");
 
         await Assert.That(concurrencyLimits.Enabled).IsTrue();
         await Assert.That(concurrencyLimits.Reason).IsEqualTo("config (enabled)");
@@ -91,8 +85,6 @@ public sealed class RuleListResolverTests
         await Assert.That(anonymousDefinition.Reason).IsEqualTo("config (enabled)");
         await Assert.That(misfeature.Enabled).IsTrue();
         await Assert.That(misfeature.Reason).IsEqualTo("config (enabled)");
-        await Assert.That(superfluousActions.Enabled).IsTrue();
-        await Assert.That(superfluousActions.Reason).IsEqualTo("config (enabled)");
     }
 
     [Test]
@@ -144,7 +136,7 @@ public sealed class RuleListResolverTests
     {
         var statuses = RuleListResolver.Resolve(null);
 
-        await Assert.That(statuses.Count).IsEqualTo(64);
+        await Assert.That(statuses.Count).IsEqualTo(63);
     }
 
     [Test]

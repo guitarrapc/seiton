@@ -65,7 +65,6 @@ public enum RuleId
     Artipacked,
     AnonymousDefinition,
     Misfeature,
-    SuperfluousActions,
 
     // Composite / internal-only (not in RuleCatalog)
     Syntax,

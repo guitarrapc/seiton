@@ -123,84 +123,6 @@ public sealed class OptInInformationalLintRuleTests
     }
 
     [Test]
-    public async Task SuperfluousActions_OptInEnabled_ReportsKnownReplacement()
-    {
-        var yaml = """
-        on: push
-        jobs:
-          release:
-            runs-on: ubuntu-24.04
-            steps:
-              - uses: softprops/action-gh-release@v2
-        """;
-
-        var config = new LintConfig
-        {
-            Rules = new Dictionary<string, RuleConfig>
-            {
-                ["superfluous-actions"] = new RuleConfig { Enabled = true },
-            },
-        };
-
-        using var result = new LintEngine().Check(Encoding.UTF8.GetBytes(yaml), "superfluous-actions.yml", config);
-
-        await Assert.That(result.Diagnostics.Any(x => x.RuleId == "superfluous-actions" && x.Severity == DiagnosticSeverity.Info && x.Message.Contains("softprops/action-gh-release", StringComparison.Ordinal) && x.Message.Contains("gh release create", StringComparison.Ordinal))).IsTrue();
-    }
-
-    [Test]
-    public async Task SuperfluousActions_OptInEnabled_UnknownAction_DoesNotReport()
-    {
-        var yaml = """
-        on: push
-        jobs:
-          release:
-            runs-on: ubuntu-24.04
-            steps:
-              - uses: actions/checkout@v5
-        """;
-
-        var config = new LintConfig
-        {
-            Rules = new Dictionary<string, RuleConfig>
-            {
-                ["superfluous-actions"] = new RuleConfig { Enabled = true },
-            },
-        };
-
-        using var result = new LintEngine().Check(Encoding.UTF8.GetBytes(yaml), "superfluous-actions-unknown.yml", config);
-
-        await Assert.That(result.HasFatalError).IsFalse();
-        await Assert.That(result.Diagnostics.Any(x => x.RuleId == "superfluous-actions")).IsFalse();
-    }
-
-    [Test]
-    public async Task SuperfluousActions_OptInEnabled_ActionMetadataCompositeStep_ReportsKnownReplacement()
-    {
-        var yaml = """
-        name: Demo composite
-        description: Demo composite action
-        runs:
-          using: composite
-          steps:
-            - uses: softprops/action-gh-release@v2
-        """;
-
-        var config = new LintConfig
-        {
-            Rules = new Dictionary<string, RuleConfig>
-            {
-                ["superfluous-actions"] = new RuleConfig { Enabled = true },
-            },
-        };
-
-        using var result = new LintEngine().Check(Encoding.UTF8.GetBytes(yaml), "action.yml", config);
-
-        await Assert.That(result.HasFatalError).IsFalse();
-        await Assert.That(result.DocumentKind).IsEqualTo(DocumentKind.ActionMetadata);
-        await Assert.That(result.Diagnostics.Any(x => x.RuleId == "superfluous-actions" && x.Message.Contains("softprops/action-gh-release", StringComparison.Ordinal) && x.Message.Contains("gh release create", StringComparison.Ordinal))).IsTrue();
-    }
-
-    [Test]
     public async Task AnonymousDefinition_WithNames_DoesNotReport()
     {
         var yaml = """
@@ -310,58 +232,6 @@ public sealed class OptInInformationalLintRuleTests
     }
 
     [Test]
-    public async Task SuperfluousActions_RunStep_DoesNotReport()
-    {
-        var yaml = """
-        on: push
-        jobs:
-          release:
-            runs-on: ubuntu-24.04
-            steps:
-              - run: gh release create v1.0.0
-        """;
-
-        var config = new LintConfig
-        {
-            Rules = new Dictionary<string, RuleConfig>
-            {
-                ["superfluous-actions"] = new RuleConfig { Enabled = true },
-            },
-        };
-
-        using var result = new LintEngine().Check(Encoding.UTF8.GetBytes(yaml), "superfluous-actions-run.yml", config);
-
-        await Assert.That(result.HasFatalError).IsFalse();
-        await Assert.That(result.Diagnostics.Any(x => x.RuleId == "superfluous-actions")).IsFalse();
-    }
-
-    [Test]
-    public async Task SuperfluousActions_LocalAction_DoesNotReport()
-    {
-        var yaml = """
-        on: push
-        jobs:
-          release:
-            runs-on: ubuntu-24.04
-            steps:
-              - uses: ./local-action
-        """;
-
-        var config = new LintConfig
-        {
-            Rules = new Dictionary<string, RuleConfig>
-            {
-                ["superfluous-actions"] = new RuleConfig { Enabled = true },
-            },
-        };
-
-        using var result = new LintEngine().Check(Encoding.UTF8.GetBytes(yaml), "superfluous-actions-local.yml", config);
-
-        await Assert.That(result.HasFatalError).IsFalse();
-        await Assert.That(result.Diagnostics.Any(x => x.RuleId == "superfluous-actions")).IsFalse();
-    }
-
-    [Test]
     public async Task Phase5Rules_DefaultConfig_DoNotRun()
     {
         var yaml = """
@@ -373,11 +243,10 @@ public sealed class OptInInformationalLintRuleTests
               - uses: actions/setup-python@v6
                 with:
                   pip-install: -r requirements.txt
-              - uses: softprops/action-gh-release@v2
         """;
 
         using var result = new LintEngine().Check(Encoding.UTF8.GetBytes(yaml), "phase5-default-disabled.yml");
 
-        await Assert.That(result.Diagnostics.Any(x => x.RuleId is "anonymous-definition" or "misfeature" or "superfluous-actions")).IsFalse();
+        await Assert.That(result.Diagnostics.Any(x => x.RuleId is "anonymous-definition" or "misfeature")).IsFalse();
     }
 }

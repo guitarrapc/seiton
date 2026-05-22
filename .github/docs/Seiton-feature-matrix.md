@@ -160,7 +160,6 @@ online audit rules（4）:
 - `bot-conditions`（スプーフ可能な bot チェック）
 - `obfuscation`（難読化検出）
 - `misfeature`（非推奨 Actions 機能使用）
-- `superfluous-actions`（ランナー標準機能で代替可能なアクション）
 - `dependabot-execution` / `dependabot-cooldown`（Dependabot 設定検査）
 - 理由: セキュリティ影響が限定的か、運用導入コストが高い
 
@@ -265,7 +264,6 @@ zizmor 監査ID別対応表（実装確認ベース）:
 | `secrets-outside-env` | ✅ | `secrets-outside-env` |
 | `self-hosted-runner` | ✅ | `self-hosted-runner` |
 | `stale-action-refs` | ✅ | online 監査（`rules.stale-action-refs.enabled: true` で有効化） |
-| `superfluous-actions` | ✅ | `superfluous-actions`（runner 標準 CLI で代替しやすい action を opt-in info で検出） |
 | `template-injection` | ✅ | `template-injection` |
 | `undocumented-permissions` | 🟡 | `permissions` / `job-permissions-required` で部分対応 |
 | `unpinned-images` | ✅ | `unpinned-image` |
@@ -299,7 +297,6 @@ zizmor 監査ID別対応表（実装確認ベース）:
 - `anonymous-definition` — name 未定義のワークフロー/アクション
 - `obfuscation` — 難読化された Actions 機能使用
 - `misfeature` — 非推奨/危険な Actions 機能使用
-- `superfluous-actions` — ランナー標準機能で代替可能
 - `dependabot-execution` / `dependabot-cooldown` — Dependabot 設定検査
 
 ### P1（適用範囲拡張）

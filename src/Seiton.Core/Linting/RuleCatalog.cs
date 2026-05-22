@@ -80,7 +80,6 @@ internal static class RuleCatalog
         (RuleId.Artipacked, 60, false, static () => new ArtipackedRule()),
         (RuleId.AnonymousDefinition, 61, true, static () => new AnonymousDefinitionRule()),
         (RuleId.Misfeature, 62, true, static () => new MisfeatureRule()),
-        (RuleId.SuperfluousActions, 63, true, static () => new SuperfluousActionsRule()),
     ];
 
     // Online rules: opt-in only (disabled by default), participate in WorkflowVisitor
@@ -320,7 +319,6 @@ internal static class RuleCatalog
         RuleId.Artipacked => "mixed",
         RuleId.AnonymousDefinition => "info",
         RuleId.Misfeature => "info",
-        RuleId.SuperfluousActions => "info",
         _ => throw new ArgumentOutOfRangeException(nameof(ruleId), ruleId, "No default severity defined for this rule."),
     };
 
