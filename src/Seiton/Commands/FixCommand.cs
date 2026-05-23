@@ -198,13 +198,21 @@ internal static class FixCommand
                 IReadOnlyList<Diagnostic> effectiveDiagnostics = lintDiagnostics;
                 if (check && pinRemediation != null)
                 {
-                    var netStart = verboseLogger.GetTimestamp();
-                    var remResult = await pinRemediation.RemediateAsync(lintDiagnostics, utf8Yaml);
-                    effectiveDiagnostics = remResult.Diagnostics;
-                    if (remResult.ResolvedCount > 0 && verboseLogger.IsEnabled)
+                    try
                     {
-                        var netElapsed = verboseLogger.GetElapsedTime(netStart);
-                        verboseLogger.Log("network", $"resolved {remResult.ResolvedCount} pin(s) for {filePath} in {CheckCommand.FormatMilliseconds(netElapsed)} ms");
+                        var netStart = verboseLogger.GetTimestamp();
+                        var remResult = await pinRemediation.RemediateAsync(lintDiagnostics, utf8Yaml);
+                        effectiveDiagnostics = remResult.Diagnostics;
+                        if (remResult.ResolvedCount > 0 && verboseLogger.IsEnabled)
+                        {
+                            var netElapsed = verboseLogger.GetElapsedTime(netStart);
+                            verboseLogger.Log("network", $"resolved {remResult.ResolvedCount} pin(s) for {filePath} in {CheckCommand.FormatMilliseconds(netElapsed)} ms");
+                        }
+                    }
+                    catch (Exception ex) when (ex is not OperationCanceledException)
+                    {
+                        WriteFixApplicationError(errorWriter, filePath, ex, verbose);
+                        return ExitCode.FatalError;
                     }
                 }
 
@@ -276,7 +284,12 @@ internal static class FixCommand
                     // Local inserts are done, so pin edits target correct offsets.
                     if (pinRemediation != null)
                     {
+                        var beforePin = currentYaml;
                         currentYaml = await ApplyPinRemediationAsync(pinRemediation, engine, currentYaml, filePath, fixEnabledLintConfig, verboseLogger);
+                        if (!currentYaml.AsSpan().SequenceEqual(beforePin))
+                        {
+                            appliedFixes++;
+                        }
                     }
                 }
                 catch (Exception ex) when (ex is not OperationCanceledException)
