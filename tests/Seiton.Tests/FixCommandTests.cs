@@ -607,46 +607,40 @@ public sealed class FixCommandTests
     }
 
     [Test]
-    public async Task Fix_UnexpectedFixEngineError_ReportsGracefully()
+    public async Task Fix_AutoDiscoveredInvalidConfig_IgnoreActionsString_ReportsConfigError()
     {
-        // If somehow FixEngine.Apply throws (e.g., a regression causes overlapping edits
-        // to slip through batch selection), the error must be reported as a structured
-        // message, NOT an unhandled exception with stack trace.
-        // We simulate this by disabling batch selection: craft a workflow where two rules
-        // produce fixes at the exact same offset but use the raw API path.
-        // Since our batch selector now prevents this, we test the safety net by verifying
-        // that even IF an internal error occurs, stderr gets a friendly message.
-        //
-        // This test uses a minimal workflow where the fix succeeds, but asserts that
-        // the general error handling pattern is present by checking that no stack trace
-        // is ever emitted to stderr (the existing tests already verify the fix works).
-        var configPath = CreateConfigFile(
+        var repoDir = Path.Combine(Path.GetTempPath(), "Seiton.Tests", Guid.NewGuid().ToString("N"));
+        var githubDir = Path.Combine(repoDir, ".github");
+        Directory.CreateDirectory(githubDir);
+        var configPath = Path.Combine(githubDir, "seiton.yaml");
+        File.WriteAllText(configPath,
             """
             rules:
-              runner-no-latest:
-                enabled: false
-            fix:
-              defaults:
-                job-timeout-minutes: 15
+              unpinned-uses:
+                ignore-actions:
+                  - guitarrapc/actions
             """);
-        var filePath = CreateWorkflowFile(
+        var filePath = Path.Combine(repoDir, "workflow.yml");
+        File.WriteAllText(filePath,
             """
             on: push
             jobs:
               test:
                 runs-on: ubuntu-24.04
                 steps:
-                  - run: echo hello
+                  - uses: actions/checkout@v4
             """);
 
+        var originalDirectory = Directory.GetCurrentDirectory();
         try
         {
+            Directory.SetCurrentDirectory(repoDir);
             using var sw = new StringWriter();
             using var stderr = new StringWriter();
 
             var exitCode = await FixCommand.RunAsync(
-                [filePath],
-                config: configPath,
+                ["workflow.yml"],
+                config: null,
                 stdinFilename: "stdin.yml",
                 ignore: [],
                 minSeverity: null,
@@ -663,17 +657,55 @@ public sealed class FixCommandTests
                 output: sw,
                 error: stderr);
 
-            var errorOutput = stderr.ToString();
-            // Must NOT contain a raw .NET stack trace under any circumstance
-            await Assert.That(errorOutput).DoesNotContain("System.InvalidOperationException");
-            await Assert.That(errorOutput).DoesNotContain("System.IndexOutOfRangeException");
-            await Assert.That(errorOutput).DoesNotContain("at Seiton.Core.");
+            await Assert.That(exitCode).IsEqualTo(ExitCode.FatalError);
+            await Assert.That(stderr.ToString()).Contains("ignore-actions item must be a mapping with owner and optional refs");
+            await Assert.That(stderr.ToString()).DoesNotContain("System.InvalidOperationException");
+            await Assert.That(stderr.ToString()).DoesNotContain("at Seiton.");
         }
         finally
         {
-            DeleteContainingDirectory(filePath);
-            DeleteContainingDirectory(configPath);
+            Directory.SetCurrentDirectory(originalDirectory);
+            if (Directory.Exists(repoDir))
+                Directory.Delete(repoDir, recursive: true);
         }
+    }
+
+    [Test]
+    public async Task CreateFixApplicationErrorLines_NonVerbose_OmitsStackTrace()
+    {
+        var ex = new InvalidOperationException("overlapping or conflicting edits detected at offset 78");
+
+        var lines = FixCommand.CreateFixApplicationErrorLines("workflow.yml", ex, verbose: false);
+
+        await Assert.That(lines.Count).IsEqualTo(2);
+        await Assert.That(lines[0]).Contains("error: fix failed for workflow.yml");
+        await Assert.That(lines[0]).Contains("offset 78");
+        await Assert.That(lines[1]).Contains("hint:");
+    }
+
+    [Test]
+    public async Task CreateFixApplicationErrorLines_Verbose_IncludesDetailLine()
+    {
+        var ex = new InvalidOperationException("boom");
+        ex.Data["stack"] = "synthetic";
+
+        var lines = FixCommand.CreateFixApplicationErrorLines("workflow.yml", ex, verbose: true);
+
+        await Assert.That(lines.Count).IsEqualTo(3);
+        await Assert.That(lines[2]).StartsWith("detail:");
+    }
+
+    [Test]
+    public async Task CreateFixApplicationErrorLines_UnexpectedException_UsesSameFriendlyFormat()
+    {
+        var ex = new IndexOutOfRangeException("selector bug");
+
+        var lines = FixCommand.CreateFixApplicationErrorLines("workflow.yml", ex, verbose: false);
+
+        await Assert.That(lines.Count).IsEqualTo(2);
+        await Assert.That(lines[0]).Contains("error: fix failed for workflow.yml");
+        await Assert.That(lines[0]).Contains("selector bug");
+        await Assert.That(lines[1]).Contains("Please report this issue");
     }
 
     private static string CreateWorkflowFile(string yaml)

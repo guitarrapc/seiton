@@ -301,9 +301,11 @@ pin remediation を含める場合は、stale offset を避ける必要がある
 
 | ファイル | 変更内容 |
 |---|---|
-| `src/Seiton/Commands/FixCommand.cs` | first pass を conflict-aware iterative loop に置換。`SelectNonConflictingBatch` で同一 offset 競合を検出し、非競合 subset のみ apply。追加レビューで multi-edit diagnostic に対する occupied buffer 長の不足を修正し、diagnostic 数ベースの `List<int>` を exact-size 配列へ置換。Pin remediation を Phase 2 に分離。dry-run は iterative apply + `BuildUnifiedDiffFromBytes` で diff 生成。 |
+| `src/Seiton/Commands/FixCommand.cs` | first pass を conflict-aware iterative loop に置換。`SelectNonConflictingBatch` で同一 offset 競合を検出し、非競合 subset のみ apply。追加レビューで multi-edit diagnostic に対する occupied buffer 長の不足を修正し、diagnostic 数ベースの `List<int>` を exact-size 配列へ置換。Pin remediation を Phase 2 に分離。dry-run は iterative apply + `BuildUnifiedDiffFromBytes` で diff 生成。review follow-up で fix path の safety-net を `InvalidOperationException` 限定から非 cancellation の `Exception` へ広げ、ユーザ向けエラーメッセージ生成を helper 化した。 |
+| `src/Seiton/Commands/ValidateCommand.cs` | `TextWriter` 差し替えを受けられる overload にし、`FixCommand` と同じくテストしやすい CLI command 実装に整理。 |
 | `src/Seiton.Core/Linting/Fixing/FixEngine.cs` | `BuildUnifiedDiffFromBytes` public メソッド追加。`ValidateEdits` の例外メッセージを改善（previous offset/length、batch size を含む）。 |
-| `tests/Seiton.Tests/FixCommandTests.cs` | 4 件の回帰テスト追加（single job conflict、dry-run conflict、multi-job conflict、multi-edit diagnostic + another fix）。 |
+| `tests/Seiton.Tests/FixCommandTests.cs` | 4 件の回帰テスト追加（single job conflict、dry-run conflict、multi-job conflict、multi-edit diagnostic + another fix）。review follow-up で invalid config の auto-discovery ケースと fix error formatting helper の回帰テストを追加。 |
+| `tests/Seiton.Tests/ValidateCommandTests.cs` | invalid config を `validate-config` が parse error として返す回帰テストを追加。 |
 | `src/Seiton.Benchmark/FixApplyBenchmark.cs` | Fix apply パフォーマンスベンチマーク追加（3 シナリオ）。 |
 
 ### 11.2 設計ポイント
@@ -319,9 +321,9 @@ pin remediation を含める場合は、stale offset を避ける必要がある
 
 | Scenario | Mean | Allocated |
 |---|---|---|
-| NoConflict (no conflicts) | 23.37 μs | 10.55 KB |
-| SingleJobConflict (2 rules at same offset) | 38.35 μs | 16.95 KB |
-| MultiJobConflict (5 jobs × 2 conflicts) | 113.66 μs | 39.81 KB |
+| NoConflict (no conflicts) | 23.49 μs | 10.55 KB |
+| SingleJobConflict (2 rules at same offset) | 39.85 μs | 16.95 KB |
+| MultiJobConflict (5 jobs × 2 conflicts) | 112.97 μs | 39.81 KB |
 
 #### CoreLintBenchmark (既存 — 回帰確認)
 
@@ -342,4 +344,4 @@ Allocation は全サイズで完全一致（回帰なし）。Mean の差異は 
 
 ### 11.5 テスト結果
 
-全 1961 テスト パス。回帰なし。
+review follow-up を含めて全 1969 テスト パス。回帰なし。
