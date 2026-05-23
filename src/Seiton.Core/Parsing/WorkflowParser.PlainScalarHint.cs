@@ -14,7 +14,7 @@ public static partial class WorkflowParser
     /// string is acceptable. The heuristic inspects the error line and a few lines above
     /// to detect the <c>run:</c>/<c>script:</c> + plain scalar + colon-space pattern.
     /// </remarks>
-    internal static string? TryGetPlainScalarColonHint(ReadOnlySpan<byte> source, int errorOffset, int errorLine)
+    internal static string? TryGetPlainScalarColonHint(ReadOnlySpan<byte> source, int errorOffset)
     {
         if (source.IsEmpty || errorOffset < 0)
             return null;
@@ -51,8 +51,8 @@ public static partial class WorkflowParser
                         if (ContainsColonSpace(valuePortion))
                         {
                             return matchedKey.Length == 3
-                                ? "the plain scalar value after 'run:' contains ': ' which is invalid in YAML. Quote the value or use a block scalar (|) instead"
-                                : "the plain scalar value after 'script:' contains ': ' which is invalid in YAML. Quote the value or use a block scalar (|) instead";
+                                ? "the plain scalar value after 'run:' contains ': ' which YAML interprets as a mapping separator. Quote the value or use a block scalar (|) instead"
+                                : "the plain scalar value after 'script:' contains ': ' which YAML interprets as a mapping separator. Quote the value or use a block scalar (|) instead";
                         }
                     }
                 }

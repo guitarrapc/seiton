@@ -5213,7 +5213,7 @@ public sealed class ParserTests
     {
         var yaml = "- run: &cmd \"echo Title: ok\"\n"u8;
 
-        var hint = WorkflowParser.TryGetPlainScalarColonHint(yaml, yaml.Length - 2, 1);
+        var hint = WorkflowParser.TryGetPlainScalarColonHint(yaml, yaml.Length - 2);
 
         await Assert.That(hint).IsNull();
     }
@@ -5223,7 +5223,7 @@ public sealed class ParserTests
     {
         var yaml = "- run: !!str \"echo Title: ok\"\n"u8;
 
-        var hint = WorkflowParser.TryGetPlainScalarColonHint(yaml, yaml.Length - 2, 1);
+        var hint = WorkflowParser.TryGetPlainScalarColonHint(yaml, yaml.Length - 2);
 
         await Assert.That(hint).IsNull();
     }
@@ -5233,7 +5233,7 @@ public sealed class ParserTests
     {
         var yaml = "- run: echo hello # reason: retry\n"u8;
 
-        var hint = WorkflowParser.TryGetPlainScalarColonHint(yaml, yaml.Length - 2, 1);
+        var hint = WorkflowParser.TryGetPlainScalarColonHint(yaml, yaml.Length - 2);
 
         await Assert.That(hint).IsNull();
     }
@@ -5243,7 +5243,7 @@ public sealed class ParserTests
     {
         var yaml = "- run: # reason: retry\n"u8;
 
-        var hint = WorkflowParser.TryGetPlainScalarColonHint(yaml, yaml.Length - 2, 1);
+        var hint = WorkflowParser.TryGetPlainScalarColonHint(yaml, yaml.Length - 2);
 
         await Assert.That(hint).IsNull();
     }
@@ -5254,7 +5254,7 @@ public sealed class ParserTests
         // Flow mapping value {cmd: echo} is valid YAML, not a plain scalar — must not hint
         var yaml = "- run: {cmd: echo}\n"u8;
 
-        var hint = WorkflowParser.TryGetPlainScalarColonHint(yaml, yaml.Length - 2, 1);
+        var hint = WorkflowParser.TryGetPlainScalarColonHint(yaml, yaml.Length - 2);
 
         await Assert.That(hint).IsNull();
     }
@@ -5265,7 +5265,7 @@ public sealed class ParserTests
         // Flow sequence value [a: b] is valid YAML, not a plain scalar — must not hint
         var yaml = "- run: [a: b, c: d]\n"u8;
 
-        var hint = WorkflowParser.TryGetPlainScalarColonHint(yaml, yaml.Length - 2, 1);
+        var hint = WorkflowParser.TryGetPlainScalarColonHint(yaml, yaml.Length - 2);
 
         await Assert.That(hint).IsNull();
     }
@@ -5276,26 +5276,26 @@ public sealed class ParserTests
         // Alias *ref is not a plain scalar — must not hint even if rest has `: `
         var yaml = "- run: *cmd_ref\n"u8;
 
-        var hint = WorkflowParser.TryGetPlainScalarColonHint(yaml, yaml.Length - 2, 1);
+        var hint = WorkflowParser.TryGetPlainScalarColonHint(yaml, yaml.Length - 2);
 
         await Assert.That(hint).IsNull();
     }
 
-        [Test]
-        public async Task TryGetPlainScalarColonHint_RunThreeLinesAboveOffset_ReturnsHint()
-        {
-                var yaml = """
-                    - run: echo Title: ok
-                        env:
-                            FOO: bar
-                        with
-                """u8;
+    [Test]
+    public async Task TryGetPlainScalarColonHint_RunThreeLinesAboveOffset_ReturnsHint()
+    {
+        var yaml = """
+            - run: echo Title: ok
+                env:
+                    FOO: bar
+                with
+        """u8;
 
-                var errorOffset = yaml.IndexOf("with"u8) + "with"u8.Length - 1;
-                var hint = WorkflowParser.TryGetPlainScalarColonHint(yaml, errorOffset, 4);
+        var errorOffset = yaml.IndexOf("with"u8) + "with"u8.Length - 1;
+        var hint = WorkflowParser.TryGetPlainScalarColonHint(yaml, errorOffset);
 
-                await Assert.That(hint).IsNotNull();
-        }
+        await Assert.That(hint).IsNotNull();
+    }
 
     [Test]
     public async Task TryGetPlainScalarColonHint_RunFourLinesAboveOffset_ReturnsNull()
@@ -5310,7 +5310,7 @@ public sealed class ParserTests
         """u8;
 
         var errorOffset = yaml.IndexOf("with"u8) + "with"u8.Length - 1;
-        var hint = WorkflowParser.TryGetPlainScalarColonHint(yaml, errorOffset, 5);
+        var hint = WorkflowParser.TryGetPlainScalarColonHint(yaml, errorOffset);
 
         await Assert.That(hint).IsNull();
     }

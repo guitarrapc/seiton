@@ -1055,7 +1055,7 @@ The parser never aborts on a single error. Each parse function:
 
 #### Fatal Parse Explanatory Hints (C# Implementation)
 
-After a fatal YAML parse, `ParseCore` and `ParseClassified` catch blocks call `TryGetPlainScalarColonHint(source, errorOffset, errorLine)` to detect common authoring mistakes. If a `run:` or `script:` key with a plain scalar value containing `: ` is found near the error position, the diagnostic's `Help` field is populated with an explanatory message.
+After a fatal YAML parse, `ParseCore` and `ParseClassified` catch blocks call `TryGetPlainScalarColonHint(source, errorOffset)` to detect common authoring mistakes. If a `run:` or `script:` key with a plain scalar value containing `: ` is found near the error position, the diagnostic's `Help` field is populated with an explanatory message.
 
 Implementation: `WorkflowParser.PlainScalarHint.cs` (partial class).
 

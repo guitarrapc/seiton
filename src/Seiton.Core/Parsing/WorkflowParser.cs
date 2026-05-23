@@ -191,7 +191,7 @@ public static partial class WorkflowParser
                 StartColumn: startColumn,
                 EndLine: startLine,
                 EndColumn: startColumn);
-            var help = TryGetPlainScalarColonHint((ReadOnlySpan<byte>)utf8Yaml, startOffset, startLine);
+            var help = TryGetPlainScalarColonHint((ReadOnlySpan<byte>)utf8Yaml, startOffset);
             var diagnostic = new Diagnostic(
                 Severity: DiagnosticSeverity.Error,
                 Message: $"yaml parse failure: {ex.Message}",
@@ -345,7 +345,7 @@ public static partial class WorkflowParser
         catch (Exception ex) when (ex is not OutOfMemoryException and not OperationCanceledException)
         {
             var (line, col, offset) = TryExtractLineCol(ex.Message);
-            var help = TryGetPlainScalarColonHint(source, offset, line);
+            var help = TryGetPlainScalarColonHint(source, offset);
             AddFatalParseError(ref diagnostics, $"yaml parse failure: {ex.Message}", new TextPosition(offset, line, col), help);
             return new ParseCoreResult(default, default, hasFatalError: true, arena);
         }
@@ -370,7 +370,7 @@ public static partial class WorkflowParser
             catch (Exception ex) when (ex is not OutOfMemoryException and not OperationCanceledException)
             {
                 var (line, col, offset) = TryExtractLineCol(ex.Message);
-                var help = TryGetPlainScalarColonHint((ReadOnlySpan<byte>)utf8Yaml, offset, line);
+                var help = TryGetPlainScalarColonHint((ReadOnlySpan<byte>)utf8Yaml, offset);
                 AddFatalParseError(ref diagnostics, $"yaml parse failure: {ex.Message}", new TextPosition(offset, line, col), help);
                 result = new ParseCoreResult(default, default, hasFatalError: true, arena);
             }
