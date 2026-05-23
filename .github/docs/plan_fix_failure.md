@@ -22,6 +22,21 @@
 
 ユーザー報告では publish 済み `Seiton` で以下が失敗する。
 
+```yaml
+on:
+  pull_request:
+    branch: main
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "title is ${{ github.event.pull_request.title }}"
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v4
+        with:
+          node_version: 18.x
+```
+
 ```text
 seiton --fix --enable-pin-network test.yaml
 ```
@@ -168,6 +183,8 @@ pin remediation を含める場合は、stale offset を避ける必要がある
 ---
 
 ## 7. 実装ステップ
+
+`test.yaml` はテストを設けることでリグレッションを防ぎつつ、red/greenテストで進める。これでテスト用にファイルを用意する必要もなく、実際のユーザーケースに近い形で修正の効果を確認できる。
 
 ### Step 1: 失敗再現テストを先に追加
 
