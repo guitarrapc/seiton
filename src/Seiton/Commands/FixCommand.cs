@@ -397,9 +397,10 @@ internal static class FixCommand
             ];
         }
 
-        // Stack traces contain embedded newlines; prefix each line with "detail:" to keep
-        // the structured error:/hint:/detail: output format intact.
-        var detail = ex.StackTrace ?? ex.ToString();
+        // Exception.ToString() preserves the exception type, message, inner exceptions,
+        // and stack frames. Prefix each line with "detail:" to keep the structured
+        // error:/hint:/detail: output format intact.
+        var detail = ex.ToString();
         var detailLines = detail.Split('\n', StringSplitOptions.RemoveEmptyEntries);
         var result = new string[2 + detailLines.Length];
         result[0] = $"error: fix failed for {filePath}: {ex.Message}";
