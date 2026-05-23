@@ -207,6 +207,7 @@ public static partial class WorkflowParser
     private static bool IsPlainScalarStart(byte b)
     {
         return b != (byte)'\'' && b != (byte)'"' && b != (byte)'|' && b != (byte)'>'
+            && b != (byte)'#'
             && b != (byte)'\n' && b != (byte)'\r';
     }
 

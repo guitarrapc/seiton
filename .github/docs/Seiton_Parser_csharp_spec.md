@@ -1064,6 +1064,7 @@ Heuristic conditions (all must be true):
 2. YAML node properties (`&anchor`, `!tag`) are skipped before determining the scalar kind
 3. The value after the key starts as a plain scalar (not `'`, `"`, `|`, `>`)
 4. The plain scalar value itself (excluding inline comments) contains `: ` (colon-space)
+5. Empty/comment-only values (for example `run: # note`) do not trigger the hint
 
 Performance: runs only on the error path (no impact on success-path parsing).
 

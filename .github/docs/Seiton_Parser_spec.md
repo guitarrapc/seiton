@@ -385,6 +385,7 @@ Constraints:
 - Hints do not fire for quoted scalars, block scalars, or values without `: `
 - YAML node properties before the scalar value (for example `&anchor`, `!tag`) are ignored when deciding whether the value is plain vs quoted/block
 - Inline comments are excluded from the colon-space check; only the scalar value itself is considered
+- Empty/comment-only values such as `run: # note` do not qualify as plain scalars for this hint
 - The fatal parse diagnostic is unchanged; hint is additive via the `Help` field
 - Hint detection scans the error line and up to 3 lines above the error position
 

@@ -5101,6 +5101,33 @@ public sealed class ParserTests
     }
 
     [Test]
+    public async Task Parse_PlainScalarColonHint_EmptyRunValueWithCommentColonSpaceAndUnrelatedFatal_NoHint()
+    {
+        var yaml = """
+        on: push
+        jobs:
+          test:
+            runs-on: ubuntu-latest
+            steps:
+              - run: # reason: retry
+                with
+                  bad: yaml
+        """u8;
+
+        var result = WorkflowParser.ParseDirect(yaml.ToArray(), "test.yml", out var arena);
+        try
+        {
+            await Assert.That(result.HasFatalError).IsTrue();
+            var fatal = result.Diagnostics.First(d => d.Message.Contains("yaml parse failure", StringComparison.Ordinal));
+            await Assert.That(fatal.Help).IsNull();
+        }
+        finally
+        {
+            arena?.Dispose();
+        }
+    }
+
+    [Test]
     public async Task Parse_PlainScalarColonHint_AnchoredQuotedScalarWithUnrelatedFatal_NoHint()
     {
         var yaml = """
@@ -5205,6 +5232,16 @@ public sealed class ParserTests
     public async Task TryGetPlainScalarColonHint_InlineCommentColonSpace_ReturnsNull()
     {
         var yaml = "- run: echo hello # reason: retry\n"u8;
+
+        var hint = WorkflowParser.TryGetPlainScalarColonHint(yaml, yaml.Length - 2, 1);
+
+        await Assert.That(hint).IsNull();
+    }
+
+    [Test]
+    public async Task TryGetPlainScalarColonHint_EmptyValueCommentColonSpace_ReturnsNull()
+    {
+        var yaml = "- run: # reason: retry\n"u8;
 
         var hint = WorkflowParser.TryGetPlainScalarColonHint(yaml, yaml.Length - 2, 1);
 
