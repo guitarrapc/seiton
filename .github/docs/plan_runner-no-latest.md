@@ -129,3 +129,42 @@ private DiagnosticFix? GetFix(string label)
 
 - `fix-mapping` のデフォルト値を Seiton.Update のデータソースから生成する案。ただし GitHub の latest 指し先変更時にリリースが必要になるため、**ユーザー指定のみ** を当面の方針とする。
 - `fix-mapping.extend` パターン (built-in default + ユーザー追加) は現時点では不要。
+
+---
+
+## 実装結果
+
+### 完了日
+
+実装完了。Phase 1–4 すべて完了。
+
+### 変更ファイル
+
+| ファイル | 変更内容 |
+|---|---|
+| `src/Seiton.Core/Linting/LintConfig.cs` | `RuleConfig` に `FixMapping` プロパティ追加 |
+| `src/Seiton.Core/Linting/RuleKeyFlags.cs` | `FixMapping = 1 << 11` フラグ追加 |
+| `src/Seiton.Core/Linting/RuleCatalog.cs` | `RunnerNoLatest` に `FixMapping` フラグ許可 |
+| `src/Seiton.Core/Linting/LintConfigYamlParser.cs` | `fix-mapping` パース + バリデーション |
+| `src/Seiton.Core/Linting/Rules/RunnerNoLatestRule.cs` | 検出拡張 + fix 生成 |
+| `tests/Seiton.Core.Tests/RunnerNoLatestFixMappingTests.cs` | 23 テスト (config/detection/fix) |
+| `docs/rules.md` | ルール説明・fix-mapping 設定例追加 |
+| `docs/configuration.md` | Rule-Specific Options テーブル・例追加 |
+
+### テスト結果
+
+- 新規テスト: 23/23 pass
+- 既存テスト: 1663/1663 pass (regression なし)
+
+### ベンチマーク結果
+
+| Size | FixEnabled | Baseline Mean | Post Mean | Allocated (変化なし) |
+|---|---|---|---|---|
+| Small | False | 55.87 us | 72.59 us | 8.7 KB |
+| Small | True | 60.98 us | 75.88 us | 10.15 KB |
+| Medium | False | 1,182.57 us | 1,429.10 us | 68.89 KB |
+| Medium | True | 1,712.06 us | 2,006.65 us | 82.25 KB |
+| Large | False | 19,072.36 us | 22,397.68 us | 327.41 KB |
+| Large | True | 30,005.30 us | 34,568.42 us | 382.25 KB |
+
+**アロケーション変化: ゼロ** (全シナリオで同一)。時間差は ShortRun (3 iteration) のノイズ範囲内。

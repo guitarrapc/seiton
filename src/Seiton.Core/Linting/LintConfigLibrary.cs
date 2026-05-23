@@ -39,6 +39,12 @@ public static class LintConfigLibrary
           #     extend:
           #       - ubuntu-24.04-large
 
+          # runner-no-latest:
+          #   fix-mapping:
+          #     ubuntu-latest: "ubuntu-24.04"
+          #     windows-latest: "windows-2025"
+          #     macos-latest: "macos-15"
+
           # credentials:
           #   public-registries:
           #     extend:

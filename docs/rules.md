@@ -30,7 +30,7 @@ credentials                              yes       local    mixed      no    bot
 template-injection                       yes       local    error      yes   both       default
 expr-undefined-var                       yes       local    error      no    both       default
 run-env-context-direct-use               yes       local    error      yes   both       default
-runner-no-latest                         yes       local    warning    no    both       default
+runner-no-latest                         yes       local    warning    yes   both       default
 run-secrets-context-direct-use           yes       local    error      yes   both       default
 run-inputs-context-direct-use            yes       local    error      yes   both       default
 secrets-whole-context-access             yes       local    error      no    both       default
@@ -543,9 +543,9 @@ For self-hosted runners, add their labels to `rules.runner-label.known-hosted-la
 
 | Default | Network | Auto-fix |
 |---|---|---|
-| ✓ | — | ✗ |
+| ✓ | — | △ |
 
-Warns when moving `*-latest` runner labels (`ubuntu-latest`, `windows-latest`, `macos-latest`) are used. These labels silently change the underlying runner when GitHub releases a new version.
+Warns when moving `*-latest` runner labels (`ubuntu-latest`, `windows-latest`, `macos-latest`) are used. These labels silently change the underlying runner when GitHub releases a new version. Also detects custom labels configured via `fix-mapping`.
 
 **Example trigger:**
 
@@ -568,6 +568,34 @@ jobs:
     steps:
       - run: echo ok
 ```
+
+**Configuration — fix-mapping:**
+
+Use `fix-mapping` to define label replacement pairs. When configured, `seiton fix` can automatically replace detected labels with their pinned equivalents. The mapping also extends detection to custom (non-built-in) labels.
+
+```yaml
+rules:
+  runner-no-latest:
+    fix-mapping:
+      ubuntu-latest: "ubuntu-24.04"
+      windows-latest: "windows-2025"
+      macos-latest: "macos-15"
+      my-org-runner-latest: "my-org-runner-v2"
+```
+
+Keys are matched **case-insensitively**. Values are the replacement text inserted verbatim.
+
+**Auto-fix example** (with the config above and `seiton fix`):
+
+```yaml
+# Before
+runs-on: ubuntu-latest
+
+# After
+runs-on: ubuntu-24.04
+```
+
+Without `fix-mapping`, the rule still detects built-in `*-latest` labels but cannot auto-fix them.
 
 ---
 

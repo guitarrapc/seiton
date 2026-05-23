@@ -22,4 +22,5 @@ internal enum RuleKeyFlags : ushort
     MaxStepEnvSecrets = 1 << 8,
     MaxJobSecrets = 1 << 9,
     IgnoreActions = 1 << 10,
+    FixMapping = 1 << 11,
 }

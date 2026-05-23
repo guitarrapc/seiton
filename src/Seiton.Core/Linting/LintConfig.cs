@@ -215,6 +215,9 @@ public sealed record RuleConfig
 
     /// <summary>Gets the ignore-actions patterns for <c>unpinned-uses</c>.</summary>
     public IReadOnlyList<IgnoreActionRule>? IgnoreActions { get; init; }
+
+    /// <summary>Gets the fix-mapping dictionary for <c>runner-no-latest</c> (label → pinned version).</summary>
+    public IReadOnlyDictionary<string, string>? FixMapping { get; init; }
 }
 
 /// <summary>
