@@ -52,6 +52,12 @@ test.yaml:12:25: warning [popular-action-inputs] unknown input 'node_version' fo
 3 errors, 6 warnings in 1 file
 ```
 
+**Example of auto-fixed workflow by `seiton --fix --enable-pin-network`:**
+
+```
+TBD
+```
+
 ## Quick Start
 
 Install Seiton using your preferred method. See [Installation](docs/installation.md) for prebuilt binaries, Docker, and build-from-source details.
