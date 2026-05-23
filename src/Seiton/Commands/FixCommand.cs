@@ -182,31 +182,42 @@ internal static class FixCommand
                     }
                 }
 
-                // Apply network-assisted pin remediation: attaches SHA/digest DiagnosticFix values
-                // to unpinned-uses and unpinned-image diagnostics. This runs once per file.
-                IReadOnlyList<Diagnostic> effectiveDiagnostics = lintDiagnostics;
-                if (pinRemediation != null)
+                // Check whether any local diagnostic has a fix, or pin remediation might add one.
+                var hasLocalFix = false;
+                for (var j = 0; j < lintDiagnostics.Length; j++)
                 {
-                    var netStart = verboseLogger.GetTimestamp();
-                    var remResult = await pinRemediation.RemediateAsync(lintDiagnostics, utf8Yaml);
-                    effectiveDiagnostics = remResult.Diagnostics;
-                    if (remResult.ResolvedCount > 0 && verboseLogger.IsEnabled)
+                    if (lintDiagnostics[j].Fix != null)
                     {
-                        var netElapsed = verboseLogger.GetElapsedTime(netStart);
-                        verboseLogger.Log("network", $"resolved {remResult.ResolvedCount} pin(s) for {filePath} in {CheckCommand.FormatMilliseconds(netElapsed)} ms");
-                    }
-                }
-
-                // Check whether any diagnostic (local or pin-remediated) has a fix attached.
-                var hasAnyFix = false;
-                for (var j = 0; j < effectiveDiagnostics.Count; j++)
-                {
-                    if (effectiveDiagnostics[j].Fix != null)
-                    {
-                        hasAnyFix = true;
+                        hasLocalFix = true;
                         break;
                     }
                 }
+
+                // For --check mode: run pin remediation early to report fixable pin diagnostics.
+                // For apply/dry-run: pin remediation runs after local fixes stabilize (Plan B).
+                IReadOnlyList<Diagnostic> effectiveDiagnostics = lintDiagnostics;
+                if (check && pinRemediation != null && HasPinFixableDiagnostics(lintDiagnostics))
+                {
+                    try
+                    {
+                        var netStart = verboseLogger.GetTimestamp();
+                        var remResult = await pinRemediation.RemediateAsync(lintDiagnostics, utf8Yaml);
+                        effectiveDiagnostics = remResult.Diagnostics;
+                        if (remResult.ResolvedCount > 0 && verboseLogger.IsEnabled)
+                        {
+                            var netElapsed = verboseLogger.GetElapsedTime(netStart);
+                            verboseLogger.Log("network", $"resolved {remResult.ResolvedCount} pin(s) for {filePath} in {CheckCommand.FormatMilliseconds(netElapsed)} ms");
+                        }
+                    }
+                    catch (Exception ex) when (ex is not OperationCanceledException)
+                    {
+                        WriteFixApplicationError(errorWriter, filePath, ex, verbose);
+                        return ExitCode.FatalError;
+                    }
+                }
+
+                // Determine if there's any work to do.
+                var hasAnyFix = hasLocalFix || (pinRemediation != null && HasPinFixableDiagnostics(lintDiagnostics));
 
                 if (!hasAnyFix)
                 {
@@ -223,47 +234,72 @@ internal static class FixCommand
 
                 if (dryRun)
                 {
-                    // --dry-run: print diff using all effective (local + pin-remediated) fixes
-                    hasPrintedDiff |= FixEngine.TryWriteUnifiedDiff(outputWriter, utf8Yaml, effectiveDiagnostics, filePath);
-                    allDiagnostics.AddRange(effectiveDiagnostics);
+                    // --dry-run: compute fixed YAML via iterative conflict-safe apply, then diff.
+                    byte[] dryRunYaml;
+                    try
+                    {
+                        dryRunYaml = ApplyFixesIteratively(engine, utf8Yaml, filePath, fixEnabledLintConfig);
+                        if (pinRemediation != null)
+                        {
+                            (dryRunYaml, _) = await ApplyPinRemediationAsync(pinRemediation, engine, dryRunYaml, filePath, fixEnabledLintConfig, verboseLogger);
+                        }
+                    }
+                    catch (Exception ex) when (ex is not OperationCanceledException)
+                    {
+                        WriteFixApplicationError(errorWriter, filePath, ex, verbose);
+                        return ExitCode.FatalError;
+                    }
+
+                    if (!dryRunYaml.AsSpan().SequenceEqual(utf8Yaml))
+                    {
+                        var diff = FixEngine.BuildUnifiedDiffFromBytes(utf8Yaml, dryRunYaml, filePath);
+                        if (diff.Length > 0)
+                        {
+                            outputWriter.Write(diff);
+                            hasPrintedDiff = true;
+                        }
+                    }
+
+                    // Relint the hypothetical fixed YAML to report remaining diagnostics,
+                    // consistent with the normal fix path's final-lint behavior.
+                    using (var dryRunHandle = engine.Check(dryRunYaml, filePath, fixEnabledLintConfig))
+                    {
+                        allDiagnostics.AddRange(dryRunHandle.Diagnostics.AsSpan());
+                    }
+
                     continue;
                 }
 
-                // Apply first fix pass: includes both pin-remediated and local fixes.
+                // Phase 1: Stabilize local fixes via conflict-aware iterative application.
+                // Each pass re-lints the current YAML to get fresh offsets, avoiding conflicts.
                 var currentYaml = utf8Yaml;
                 var appliedFixes = 0;
                 const int maxFixPasses = 8;
 
-                var firstPassYaml = FixEngine.Apply(currentYaml, effectiveDiagnostics);
-                if (!firstPassYaml.AsSpan().SequenceEqual(currentYaml))
+                try
                 {
-                    var firstPassFixCount = 0;
-                    for (var j = 0; j < effectiveDiagnostics.Count; j++)
-                        if (effectiveDiagnostics[j].Fix != null) firstPassFixCount++;
-                    appliedFixes += firstPassFixCount;
-                    currentYaml = firstPassYaml;
+                    currentYaml = ApplyFixesIteratively(engine, currentYaml, filePath, fixEnabledLintConfig, maxFixPasses, ref appliedFixes);
+
+                    // Phase 2: Pin remediation on stabilized YAML (案B).
+                    // Local inserts are done, so pin edits target correct offsets.
+                    if (pinRemediation != null)
+                    {
+                        var (pinYaml, pinCount) = await ApplyPinRemediationAsync(pinRemediation, engine, currentYaml, filePath, fixEnabledLintConfig, verboseLogger);
+                        currentYaml = pinYaml;
+                        appliedFixes += pinCount;
+                    }
+                }
+                catch (Exception ex) when (ex is not OperationCanceledException)
+                {
+                    WriteFixApplicationError(errorWriter, filePath, ex, verbose);
+                    return ExitCode.FatalError;
                 }
 
-                // Subsequent re-check passes: local AST fixes only (pin diagnostics are now
-                // satisfied so they won't reappear). Skip pass 0 since it was already applied above.
+                // Final lint to collect remaining diagnostics.
                 LintResult? currentHandle = null;
                 try
                 {
                     currentHandle = engine.Check(currentYaml, filePath, fixEnabledLintConfig);
-                    for (var pass = 1; pass < maxFixPasses && currentHandle.HasFixableDiagnostics; pass++)
-                    {
-                        var nextYaml = FixEngine.Apply(currentYaml, currentHandle.FixableDiagnostics);
-                        if (nextYaml.AsSpan().SequenceEqual(currentYaml))
-                        {
-                            break;
-                        }
-
-                        appliedFixes += currentHandle.FixableDiagnosticCount;
-                        currentYaml = nextYaml;
-                        currentHandle.Dispose();
-                        currentHandle = engine.Check(currentYaml, filePath, fixEnabledLintConfig);
-                    }
-
                     File.WriteAllBytes(filePath, currentYaml);
                     allDiagnostics.AddRange(currentHandle.Diagnostics.AsSpan());
                 }
@@ -360,6 +396,270 @@ internal static class FixCommand
         logger.Log("config", $"fix.images.enable-network={(effectiveImage ? "true" : "false")} (source: {imageSource})");
     }
 
+    internal static string[] CreateFixApplicationErrorLines(string filePath, Exception ex, bool verbose)
+    {
+        // Normalize message to single line — exception messages can contain newlines
+        // which would break the structured error:/hint:/detail: output format.
+        var message = ex.Message.ReplaceLineEndings(" ");
+
+        if (!verbose)
+        {
+            return
+            [
+                $"error: fix failed for {filePath}: {message}",
+                "hint: this may indicate conflicting lint rules or a bug in fix generation. Please report this issue."
+            ];
+        }
+
+        // Exception.ToString() preserves the exception type, message, inner exceptions,
+        // and stack frames. Prefix each line with "detail:" to keep the structured
+        // error:/hint:/detail: output format intact.
+        var detail = ex.ToString();
+        var detailLines = detail.Split('\n', StringSplitOptions.RemoveEmptyEntries);
+        var result = new string[2 + detailLines.Length];
+        result[0] = $"error: fix failed for {filePath}: {message}";
+        result[1] = "hint: this may indicate conflicting lint rules or a bug in fix generation. Please report this issue.";
+        for (var i = 0; i < detailLines.Length; i++)
+        {
+            result[2 + i] = $"detail: {detailLines[i].TrimEnd()}";
+        }
+
+        return result;
+    }
+
+    private static void WriteFixApplicationError(TextWriter errorWriter, string filePath, Exception ex, bool verbose)
+    {
+        var lines = CreateFixApplicationErrorLines(filePath, ex, verbose);
+        for (var i = 0; i < lines.Length; i++)
+        {
+            errorWriter.WriteLine(lines[i]);
+        }
+    }
+
     private static readonly IReadOnlyDictionary<string, int> EmptySuppressedByRule =
         new Dictionary<string, int>(StringComparer.Ordinal);
+
+    /// <summary>
+    /// Applies local fixes iteratively: each pass re-lints to get fresh offsets,
+    /// avoiding overlapping edit conflicts. Within each pass, selects a non-conflicting
+    /// subset when multiple fixes target the same offset.
+    /// </summary>
+    private static byte[] ApplyFixesIteratively(
+        LintEngine engine,
+        byte[] currentYaml,
+        string filePath,
+        LintConfig fixEnabledLintConfig,
+        int maxPasses,
+        ref int appliedFixes)
+    {
+        for (var pass = 0; pass < maxPasses; pass++)
+        {
+            using var handle = engine.Check(currentYaml, filePath, fixEnabledLintConfig);
+            if (!handle.HasFixableDiagnostics)
+                break;
+
+            var batch = SelectNonConflictingBatch(handle.FixableDiagnostics);
+            var nextYaml = FixEngine.Apply(currentYaml, batch);
+            if (nextYaml.AsSpan().SequenceEqual(currentYaml))
+                break;
+
+            appliedFixes += batch.Length;
+            currentYaml = nextYaml;
+        }
+
+        return currentYaml;
+    }
+
+    /// <summary>
+    /// Overload without appliedFixes counter (for dry-run).
+    /// </summary>
+    private static byte[] ApplyFixesIteratively(
+        LintEngine engine,
+        byte[] currentYaml,
+        string filePath,
+        LintConfig fixEnabledLintConfig,
+        int maxPasses = 8)
+    {
+        var unused = 0;
+        return ApplyFixesIteratively(engine, currentYaml, filePath, fixEnabledLintConfig, maxPasses, ref unused);
+    }
+
+    /// <summary>
+    /// Applies pin remediation on stabilized YAML, then applies the resulting fixes.
+    /// Returns the number of pins actually applied (0 if nothing changed).
+    /// </summary>
+    private static async Task<(byte[] Yaml, int AppliedCount)> ApplyPinRemediationAsync(
+        PinRemediationEngine pinRemediation,
+        LintEngine engine,
+        byte[] currentYaml,
+        string filePath,
+        LintConfig fixEnabledLintConfig,
+        VerboseLogger verboseLogger)
+    {
+        using var handle = engine.Check(currentYaml, filePath, fixEnabledLintConfig);
+        var diagnostics = handle.CopyDiagnostics();
+
+        // Quick pre-scan: skip network remediation entirely when no pin-target diagnostics exist.
+        if (!HasPinFixableDiagnostics(diagnostics))
+        {
+            return (currentYaml, 0);
+        }
+
+        var netStart = verboseLogger.GetTimestamp();
+        var remResult = await pinRemediation.RemediateAsync(diagnostics, currentYaml);
+        if (remResult.ResolvedCount > 0)
+        {
+            if (verboseLogger.IsEnabled)
+            {
+                var netElapsed = verboseLogger.GetElapsedTime(netStart);
+                verboseLogger.Log("network", $"resolved {remResult.ResolvedCount} pin(s) for {filePath} in {CheckCommand.FormatMilliseconds(netElapsed)} ms");
+            }
+
+            // Apply only pin-rule fixes. remResult.Diagnostics may still contain non-pin
+            // diagnostics with fixes (if maxPasses didn't fully converge). Applying those here
+            // would bypass the conflict-aware selection logic. Filter to pin rules only.
+            var pinYaml = FixEngine.Apply(currentYaml, PinFixableDiagnostics(remResult.Diagnostics));
+            if (!pinYaml.AsSpan().SequenceEqual(currentYaml))
+            {
+                return (pinYaml, remResult.ResolvedCount);
+            }
+        }
+
+        return (currentYaml, 0);
+    }
+
+    /// <summary>
+    /// Selects a non-conflicting subset from fixable diagnostics. Diagnostics whose
+    /// edits overlap or share the same offset with an already-selected edit are deferred
+    /// to the next pass. Uses a greedy offset-ordered approach.
+    /// </summary>
+    private static Diagnostic[] SelectNonConflictingBatch(Diagnostic[] fixableDiagnostics)
+    {
+        if (fixableDiagnostics.Length <= 1)
+            return fixableDiagnostics;
+
+        // For each diagnostic, collect all its edit ranges and find the min offset for sorting.
+        // Then process diagnostics in order of their earliest edit offset, selecting those
+        // whose edit ranges don't overlap with already-accepted edits.
+        var diagRanges = new (int minOffset, int diagIndex)[fixableDiagnostics.Length];
+        var totalEditCount = 0;
+        for (var i = 0; i < fixableDiagnostics.Length; i++)
+        {
+            var fix = fixableDiagnostics[i].Fix!.Value;
+            var minOff = int.MaxValue;
+            for (var j = 0; j < fix.Edits.Length; j++)
+            {
+                if (fix.Edits[j].Offset < minOff)
+                {
+                    minOff = fix.Edits[j].Offset;
+                }
+
+                totalEditCount++;
+            }
+
+            diagRanges[i] = (minOff, i);
+        }
+
+        // Stable tie-break by diagIndex ensures deterministic batch selection
+        // when multiple diagnostics share the same minOffset (the conflict scenario).
+        Array.Sort(diagRanges, static (a, b) =>
+        {
+            var cmp = a.minOffset.CompareTo(b.minOffset);
+            return cmp != 0 ? cmp : a.diagIndex.CompareTo(b.diagIndex);
+        });
+
+        // Track occupied ranges (offset, end) from selected diagnostics.
+        var occupiedCount = 0;
+        var occupied = new (int offset, int end)[totalEditCount];
+        var selectedIndices = new int[fixableDiagnostics.Length];
+        var selectedCount = 0;
+
+        for (var i = 0; i < diagRanges.Length; i++)
+        {
+            var diagIdx = diagRanges[i].diagIndex;
+            var fix = fixableDiagnostics[diagIdx].Fix!.Value;
+
+            // Check if any edit of this diagnostic conflicts with occupied ranges.
+            var conflicts = false;
+            for (var j = 0; j < fix.Edits.Length; j++)
+            {
+                var editOffset = fix.Edits[j].Offset;
+                var editEnd = editOffset + fix.Edits[j].Length;
+                // For 0-length inserts, treat end as offset+1 to keep conflict checks
+                // consistent with how occupied ranges are recorded below.
+                if (editEnd == editOffset) editEnd = editOffset + 1;
+
+                for (var k = 0; k < occupiedCount; k++)
+                {
+                    // Overlap: intervals [editOffset, editEnd) and [occupied.offset, occupied.end) intersect.
+                    if (editOffset < occupied[k].end && editEnd > occupied[k].offset)
+                    {
+                        conflicts = true;
+                        break;
+                    }
+                }
+
+                if (conflicts) break;
+            }
+
+            if (!conflicts)
+            {
+                selectedIndices[selectedCount++] = diagIdx;
+                for (var j = 0; j < fix.Edits.Length; j++)
+                {
+                    var editOffset = fix.Edits[j].Offset;
+                    var editEnd = editOffset + fix.Edits[j].Length;
+                    // For 0-length inserts, treat end as offset+1 to prevent same-offset conflicts
+                    if (editEnd == editOffset) editEnd = editOffset + 1;
+                    occupied[occupiedCount++] = (editOffset, editEnd);
+                }
+            }
+        }
+
+        if (selectedCount == fixableDiagnostics.Length)
+            return fixableDiagnostics;
+
+        var result = new Diagnostic[selectedCount];
+        for (var i = 0; i < selectedCount; i++)
+        {
+            result[i] = fixableDiagnostics[selectedIndices[i]];
+        }
+
+        return result;
+    }
+
+    /// <summary>
+    /// Checks if there are diagnostics that pin remediation could resolve
+    /// (unpinned-uses or unpinned-image without an existing fix).
+    /// </summary>
+    private static bool HasPinFixableDiagnostics(IReadOnlyList<Diagnostic> diagnostics)
+    {
+        for (var i = 0; i < diagnostics.Count; i++)
+        {
+            var ruleId = diagnostics[i].RuleId;
+            if (ruleId is "unpinned-uses" or "unpinned-image")
+            {
+                if (diagnostics[i].Fix is null)
+                    return true;
+            }
+        }
+
+        return false;
+    }
+
+    /// <summary>
+    /// Returns only the pin-rule diagnostics (unpinned-uses/unpinned-image) that have a fix attached.
+    /// Used to ensure non-pin diagnostics with fixes don't bypass conflict-aware selection.
+    /// </summary>
+    private static IEnumerable<Diagnostic> PinFixableDiagnostics(IReadOnlyList<Diagnostic> diagnostics)
+    {
+        for (var i = 0; i < diagnostics.Count; i++)
+        {
+            var d = diagnostics[i];
+            if (d.Fix is not null && d.RuleId is "unpinned-uses" or "unpinned-image")
+            {
+                yield return d;
+            }
+        }
+    }
 }

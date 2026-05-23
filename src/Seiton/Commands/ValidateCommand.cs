@@ -6,8 +6,11 @@ namespace Seiton.Commands;
 
 internal static class ValidateCommand
 {
-    public static int Run(string? config)
+    public static int Run(string? config, TextWriter? output = null, TextWriter? error = null)
     {
+        var outputWriter = output ?? Console.Out;
+        var errorWriter = error ?? Console.Error;
+
         string? configPath;
         try
         {
@@ -15,13 +18,13 @@ internal static class ValidateCommand
         }
         catch (FileNotFoundException ex)
         {
-            Console.Error.WriteLine(ex.Message);
+            errorWriter.WriteLine(ex.Message);
             return ExitCode.FatalError;
         }
 
         if (configPath is null)
         {
-            Console.Error.WriteLine("no config file found");
+            errorWriter.WriteLine("no config file found");
             return ExitCode.FatalError;
         }
 
@@ -29,12 +32,12 @@ internal static class ValidateCommand
 
         if (result.Diagnostics.Length > 0)
         {
-            DiagnosticFormatter.Write(Console.Error, result.Diagnostics, OutputFormat.Text, oneline: false, color: false);
+            DiagnosticFormatter.Write(errorWriter, result.Diagnostics, OutputFormat.Text, oneline: false, color: false);
         }
 
         if (result.IsValid)
         {
-            Console.WriteLine($"config valid: {configPath}");
+            outputWriter.WriteLine($"config valid: {configPath}");
             return ExitCode.Success;
         }
 

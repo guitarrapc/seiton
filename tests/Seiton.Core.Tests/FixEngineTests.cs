@@ -77,6 +77,39 @@ public sealed class FixEngineTests
     }
 
     [Test]
+    public async Task Apply_RejectsOverlappingEdits_MessageContainsOffsetAndBatchInfo()
+    {
+        var source = Encoding.UTF8.GetBytes("0123456789");
+        var edits = new[]
+        {
+            new TextEdit(2, 4, "ABCD"),
+            new TextEdit(5, 2, "YZ"),
+        };
+
+        var ex = Assert.Throws<InvalidOperationException>(() => FixEngine.Apply(source, edits));
+        // Message must include the conflicting offset so users/developers can diagnose
+        await Assert.That(ex.Message).Contains("offset 5");
+        // Message must include batch size for context
+        await Assert.That(ex.Message).Contains("2 edits in batch");
+    }
+
+    [Test]
+    public async Task Apply_RejectsConflictingEditsAtSameOffset_MessageContainsContext()
+    {
+        var source = Encoding.UTF8.GetBytes("0123456789");
+        var edits = new[]
+        {
+            new TextEdit(3, 0, "INSERT-A"),
+            new TextEdit(3, 0, "INSERT-B"),
+        };
+
+        var ex = Assert.Throws<InvalidOperationException>(() => FixEngine.Apply(source, edits));
+        // Same-offset (insert at same position) must be reported clearly
+        await Assert.That(ex.Message).Contains("offset 3");
+        await Assert.That(ex.Message).Contains("2 edits in batch");
+    }
+
+    [Test]
     public async Task DetectDominantLineEnding_PrefersCrLfWhenMajority()
     {
         var source = Encoding.UTF8.GetBytes("a\r\nb\r\nc\n");

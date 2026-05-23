@@ -132,7 +132,7 @@ public sealed class FixCommandTests
                 runs-on: ubuntu-latest
                 steps:
                   - if: github.event_name == 'push'
-                    run: echo ok
+                    uses: actions/checkout@v4
             """);
 
         try
@@ -263,6 +263,488 @@ public sealed class FixCommandTests
             DeleteContainingDirectory(filePath);
             DeleteContainingDirectory(configPath);
         }
+    }
+
+    [Test]
+    public async Task Fix_OverlappingInserts_PermissionsAndTimeoutMinutes_DoesNotThrow()
+    {
+        // Regression test: job-permissions-required and job-timeout-minutes-required both
+        // insert at the same byte offset (after runs-on:). Previously this caused
+        // "overlapping or conflicting edits detected at offset ..." exception.
+        var configPath = CreateConfigFile(
+            """
+            rules:
+              runner-no-latest:
+                enabled: false
+            fix:
+              defaults:
+                job-timeout-minutes: 15
+            """);
+        var filePath = CreateWorkflowFile(
+            """
+            on:
+              pull_request:
+                branches: [main]
+            jobs:
+              test:
+                runs-on: ubuntu-24.04
+                steps:
+                  - run: echo "hello"
+            """);
+
+        try
+        {
+            var exitCode = await FixCommand.RunAsync(
+                [filePath],
+                config: configPath,
+                stdinFilename: "stdin.yml",
+                ignore: [],
+                minSeverity: null,
+                format: OutputFormat.Text,
+                oneline: true,
+                color: ColorMode.Never,
+                noColor: true,
+                verbose: false,
+                dryRun: false,
+                check: false,
+                enablePinNetwork: false,
+                enableImageNetwork: false,
+                includeActions: false);
+
+            await Assert.That(exitCode).IsEqualTo(ExitCode.Success);
+
+            var fixedContent = File.ReadAllText(filePath);
+            // Both permissions: and timeout-minutes: must be inserted
+            await Assert.That(fixedContent).Contains("permissions:");
+            await Assert.That(fixedContent).Contains("timeout-minutes: 15");
+            // They must appear before steps:
+            var permIdx = fixedContent.IndexOf("permissions:");
+            var timeoutIdx = fixedContent.IndexOf("timeout-minutes:");
+            var stepsIdx = fixedContent.IndexOf("steps:");
+            await Assert.That(permIdx).IsGreaterThan(-1);
+            await Assert.That(timeoutIdx).IsGreaterThan(-1);
+            await Assert.That(stepsIdx).IsGreaterThan(-1);
+            await Assert.That(permIdx).IsLessThan(stepsIdx);
+            await Assert.That(timeoutIdx).IsLessThan(stepsIdx);
+        }
+        finally
+        {
+            DeleteContainingDirectory(filePath);
+            DeleteContainingDirectory(configPath);
+        }
+    }
+
+    [Test]
+    public async Task Fix_OverlappingInserts_DryRun_DoesNotThrow()
+    {
+        // dry-run should also not throw for overlapping fixes
+        var configPath = CreateConfigFile(
+            """
+            rules:
+              runner-no-latest:
+                enabled: false
+            fix:
+              defaults:
+                job-timeout-minutes: 15
+            """);
+        var filePath = CreateWorkflowFile(
+            """
+            on:
+              pull_request:
+                branches: [main]
+            jobs:
+              test:
+                runs-on: ubuntu-24.04
+                steps:
+                  - run: echo "hello"
+            """);
+
+        try
+        {
+            using var sw = new StringWriter();
+            using var stderr = new StringWriter();
+
+            var exitCode = await FixCommand.RunAsync(
+                [filePath],
+                config: configPath,
+                stdinFilename: "stdin.yml",
+                ignore: [],
+                minSeverity: null,
+                format: OutputFormat.Text,
+                oneline: true,
+                color: ColorMode.Never,
+                noColor: true,
+                verbose: false,
+                dryRun: true,
+                check: false,
+                enablePinNetwork: false,
+                enableImageNetwork: false,
+                includeActions: false,
+                output: sw,
+                error: stderr);
+
+            var output = sw.ToString();
+            // dry-run should produce a diff containing both fixes
+            await Assert.That(output).Contains("permissions:");
+            await Assert.That(output).Contains("timeout-minutes: 15");
+        }
+        finally
+        {
+            DeleteContainingDirectory(filePath);
+            DeleteContainingDirectory(configPath);
+        }
+    }
+
+    [Test]
+    public async Task Fix_MultipleJobs_EachWithOverlappingInserts_FixesAll()
+    {
+        // Multiple jobs each missing permissions and timeout-minutes
+        var configPath = CreateConfigFile(
+            """
+            rules:
+              runner-no-latest:
+                enabled: false
+            fix:
+              defaults:
+                job-timeout-minutes: 30
+            """);
+        var filePath = CreateWorkflowFile(
+            """
+            on: push
+            jobs:
+              build:
+                runs-on: ubuntu-24.04
+                steps:
+                  - run: echo build
+              test:
+                runs-on: ubuntu-24.04
+                steps:
+                  - run: echo test
+            """);
+
+        try
+        {
+            var exitCode = await FixCommand.RunAsync(
+                [filePath],
+                config: configPath,
+                stdinFilename: "stdin.yml",
+                ignore: [],
+                minSeverity: null,
+                format: OutputFormat.Text,
+                oneline: true,
+                color: ColorMode.Never,
+                noColor: true,
+                verbose: false,
+                dryRun: false,
+                check: false,
+                enablePinNetwork: false,
+                enableImageNetwork: false,
+                includeActions: false);
+
+            await Assert.That(exitCode).IsEqualTo(ExitCode.Success);
+
+            var fixedContent = File.ReadAllText(filePath);
+            // Both jobs should have permissions and timeout-minutes
+            var lines = fixedContent.Split('\n');
+            var permCount = lines.Count(l => l.TrimStart().StartsWith("permissions:"));
+            var timeoutCount = lines.Count(l => l.TrimStart().StartsWith("timeout-minutes:"));
+            await Assert.That(permCount).IsGreaterThanOrEqualTo(2);
+            await Assert.That(timeoutCount).IsGreaterThanOrEqualTo(2);
+        }
+        finally
+        {
+            DeleteContainingDirectory(filePath);
+            DeleteContainingDirectory(configPath);
+        }
+    }
+
+    [Test]
+    public async Task Fix_MultiEditDiagnostic_WithAnotherFix_DoesNotOverflowBatchSelection()
+    {
+        var configPath = CreateConfigFile(
+            """
+            rules:
+                runner-no-latest:
+                    enabled: false
+                job-timeout-minutes-required:
+                    enabled: false
+                job-permissions-required:
+                    enabled: false
+            """);
+        var filePath = CreateWorkflowFile(
+            """
+            on: push
+            permissions: write-all
+            jobs:
+                "build job":
+                    runs-on: ubuntu-24.04
+                    steps:
+                        - run: echo build
+                consumer1:
+                    runs-on: ubuntu-24.04
+                    needs: ["build job"]
+                    steps:
+                        - run: echo one
+                consumer2:
+                    runs-on: ubuntu-24.04
+                    needs: ["build job"]
+                    steps:
+                        - run: echo two
+                consumer3:
+                    runs-on: ubuntu-24.04
+                    needs: ["build job"]
+                    steps:
+                        - run: echo three
+                consumer4:
+                    runs-on: ubuntu-24.04
+                    needs: ["build job"]
+                    steps:
+                        - run: echo four
+                consumer5:
+                    runs-on: ubuntu-24.04
+                    needs: ["build job"]
+                    steps:
+                        - run: echo five
+            """);
+
+        try
+        {
+            var exitCode = await FixCommand.RunAsync(
+                [filePath],
+                config: configPath,
+                stdinFilename: "stdin.yml",
+                ignore: [],
+                minSeverity: null,
+                format: OutputFormat.Text,
+                oneline: true,
+                color: ColorMode.Never,
+                noColor: true,
+                verbose: false,
+                dryRun: false,
+                check: false,
+                enablePinNetwork: false,
+                enableImageNetwork: false,
+                includeActions: false);
+
+            await Assert.That(exitCode).IsEqualTo(ExitCode.Success);
+
+            var fixedContent = File.ReadAllText(filePath);
+            await Assert.That(fixedContent).Contains("build-job:");
+            await Assert.That(fixedContent).DoesNotContain("\"build job\":");
+            await Assert.That(fixedContent).Contains("needs: [build-job]");
+            await Assert.That(fixedContent).Contains("permissions: {}");
+        }
+        finally
+        {
+            DeleteContainingDirectory(filePath);
+            DeleteContainingDirectory(configPath);
+        }
+    }
+
+    [Test]
+    public async Task Fix_InvalidConfig_IgnoreActionsString_ReportsConfigError()
+    {
+        // The old ignore-actions format (bare string) is no longer valid.
+        // The CLI must report a structured config error, not an unhandled exception.
+        var configPath = CreateConfigFile(
+            """
+            rules:
+              unpinned-uses:
+                ignore-actions:
+                  - guitarrapc/actions
+            fix:
+              defaults:
+                job-timeout-minutes: 15
+            """);
+        var filePath = CreateWorkflowFile(
+            """
+            on: push
+            jobs:
+              test:
+                runs-on: ubuntu-24.04
+                steps:
+                  - uses: actions/checkout@v4
+            """);
+
+        try
+        {
+            using var sw = new StringWriter();
+            using var stderr = new StringWriter();
+
+            var exitCode = await FixCommand.RunAsync(
+                [filePath],
+                config: configPath,
+                stdinFilename: "stdin.yml",
+                ignore: [],
+                minSeverity: null,
+                format: OutputFormat.Text,
+                oneline: true,
+                color: ColorMode.Never,
+                noColor: true,
+                verbose: false,
+                dryRun: false,
+                check: false,
+                enablePinNetwork: false,
+                enableImageNetwork: false,
+                includeActions: false,
+                output: sw,
+                error: stderr);
+
+            var errorOutput = stderr.ToString();
+            // Must exit with FatalError (not crash with stack trace)
+            await Assert.That(exitCode).IsEqualTo(ExitCode.FatalError);
+            // Error output must mention what's wrong with config
+            await Assert.That(errorOutput).Contains("ignore-actions");
+            // Must NOT contain a raw .NET stack trace
+            await Assert.That(errorOutput).DoesNotContain("System.InvalidOperationException");
+            await Assert.That(errorOutput).DoesNotContain("at Seiton.");
+        }
+        finally
+        {
+            DeleteContainingDirectory(filePath);
+            DeleteContainingDirectory(configPath);
+        }
+    }
+
+    [Test]
+    public async Task Fix_AutoDiscoveredInvalidConfig_IgnoreActionsString_ReportsConfigError()
+    {
+        var repoDir = Path.Combine(Path.GetTempPath(), "Seiton.Tests", Guid.NewGuid().ToString("N"));
+        var githubDir = Path.Combine(repoDir, ".github");
+        Directory.CreateDirectory(githubDir);
+        var configPath = Path.Combine(githubDir, "seiton.yaml");
+        File.WriteAllText(configPath,
+            """
+            rules:
+              unpinned-uses:
+                ignore-actions:
+                  - guitarrapc/actions
+            """);
+        var filePath = Path.Combine(repoDir, "workflow.yml");
+        File.WriteAllText(filePath,
+            """
+            on: push
+            jobs:
+              test:
+                runs-on: ubuntu-24.04
+                steps:
+                  - uses: actions/checkout@v4
+            """);
+
+        var originalDirectory = Directory.GetCurrentDirectory();
+        try
+        {
+            Directory.SetCurrentDirectory(repoDir);
+            using var sw = new StringWriter();
+            using var stderr = new StringWriter();
+
+            var exitCode = await FixCommand.RunAsync(
+                ["workflow.yml"],
+                config: null,
+                stdinFilename: "stdin.yml",
+                ignore: [],
+                minSeverity: null,
+                format: OutputFormat.Text,
+                oneline: true,
+                color: ColorMode.Never,
+                noColor: true,
+                verbose: false,
+                dryRun: false,
+                check: false,
+                enablePinNetwork: false,
+                enableImageNetwork: false,
+                includeActions: false,
+                output: sw,
+                error: stderr);
+
+            await Assert.That(exitCode).IsEqualTo(ExitCode.FatalError);
+            await Assert.That(stderr.ToString()).Contains("ignore-actions item must be a mapping with owner and optional refs");
+            await Assert.That(stderr.ToString()).DoesNotContain("System.InvalidOperationException");
+            await Assert.That(stderr.ToString()).DoesNotContain("at Seiton.");
+        }
+        finally
+        {
+            Directory.SetCurrentDirectory(originalDirectory);
+            if (Directory.Exists(repoDir))
+                Directory.Delete(repoDir, recursive: true);
+        }
+    }
+
+    [Test]
+    public async Task CreateFixApplicationErrorLines_NonVerbose_OmitsStackTrace()
+    {
+        var ex = new InvalidOperationException("overlapping or conflicting edits detected at offset 78");
+
+        var lines = FixCommand.CreateFixApplicationErrorLines("workflow.yml", ex, verbose: false);
+
+        await Assert.That(lines.Length).IsEqualTo(2);
+        await Assert.That(lines[0]).Contains("error: fix failed for workflow.yml");
+        await Assert.That(lines[0]).Contains("offset 78");
+        await Assert.That(lines[1]).Contains("hint:");
+    }
+
+    [Test]
+    public async Task CreateFixApplicationErrorLines_Verbose_IncludesDetailLine()
+    {
+        var ex = new InvalidOperationException("boom");
+
+        var lines = FixCommand.CreateFixApplicationErrorLines("workflow.yml", ex, verbose: true);
+
+        // Never-thrown exception has no StackTrace, falls back to ex.ToString() (single line)
+        await Assert.That(lines.Length).IsGreaterThanOrEqualTo(3);
+        await Assert.That(lines[2]).StartsWith("detail:");
+    }
+
+    [Test]
+    public async Task CreateFixApplicationErrorLines_Verbose_MultiLineStackTrace_PrefixesEachLine()
+    {
+        // Create an exception with a multi-line stack trace via nested call
+        Exception ex;
+        try { ThrowFromNestedCall(); ex = null!; }
+        catch (Exception e) { ex = e; }
+
+        var lines = FixCommand.CreateFixApplicationErrorLines("workflow.yml", ex, verbose: true);
+
+        // Stack trace from nested call has multiple frames; each must be prefixed with "detail:"
+        await Assert.That(lines.Length).IsGreaterThanOrEqualTo(3);
+        for (var i = 2; i < lines.Length; i++)
+        {
+            await Assert.That(lines[i]).StartsWith("detail:");
+        }
+    }
+
+    [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.NoInlining)]
+    private static void ThrowFromNestedCall() => ThrowFromInnerCall();
+
+    [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.NoInlining)]
+    private static void ThrowFromInnerCall() => throw new InvalidOperationException("boom");
+
+    [Test]
+    public async Task CreateFixApplicationErrorLines_UnexpectedException_UsesSameFriendlyFormat()
+    {
+        var ex = new IndexOutOfRangeException("selector bug");
+
+        var lines = FixCommand.CreateFixApplicationErrorLines("workflow.yml", ex, verbose: false);
+
+        await Assert.That(lines.Length).IsEqualTo(2);
+        await Assert.That(lines[0]).Contains("error: fix failed for workflow.yml");
+        await Assert.That(lines[0]).Contains("selector bug");
+        await Assert.That(lines[1]).Contains("Please report this issue");
+    }
+
+    [Test]
+    public async Task CreateFixApplicationErrorLines_MessageWithNewlines_NormalizesToSingleLine()
+    {
+        var ex = new InvalidOperationException("line one\r\nline two\nline three");
+
+        var lines = FixCommand.CreateFixApplicationErrorLines("workflow.yml", ex, verbose: false);
+
+        // The error: line must be a single logical line — no embedded newlines
+        await Assert.That(lines[0]).DoesNotContain("\n");
+        await Assert.That(lines[0]).DoesNotContain("\r");
+        await Assert.That(lines[0]).Contains("line one");
+        await Assert.That(lines[0]).Contains("line two");
+        await Assert.That(lines[0]).Contains("line three");
     }
 
     private static string CreateWorkflowFile(string yaml)
