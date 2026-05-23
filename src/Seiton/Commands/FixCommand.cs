@@ -382,7 +382,6 @@ internal static class FixCommand
 
     internal static string[] CreateFixApplicationErrorLines(string filePath, Exception ex, bool verbose)
     {
-        var detail = ex.StackTrace ?? ex.ToString();
         if (!verbose)
         {
             return
@@ -392,12 +391,19 @@ internal static class FixCommand
             ];
         }
 
-        return
-        [
-            $"error: fix failed for {filePath}: {ex.Message}",
-            "hint: this may indicate conflicting lint rules or a bug in fix generation. Please report this issue.",
-            $"detail: {detail}"
-        ];
+        // Stack traces contain embedded newlines; prefix each line with "detail:" to keep
+        // the structured error:/hint:/detail: output format intact.
+        var detail = ex.StackTrace ?? ex.ToString();
+        var detailLines = detail.Split('\n', StringSplitOptions.RemoveEmptyEntries);
+        var result = new string[2 + detailLines.Length];
+        result[0] = $"error: fix failed for {filePath}: {ex.Message}";
+        result[1] = "hint: this may indicate conflicting lint rules or a bug in fix generation. Please report this issue.";
+        for (var i = 0; i < detailLines.Length; i++)
+        {
+            result[2 + i] = $"detail: {detailLines[i].TrimEnd()}";
+        }
+
+        return result;
     }
 
     private static void WriteFixApplicationError(TextWriter errorWriter, string filePath, Exception ex, bool verbose)
@@ -544,12 +550,14 @@ internal static class FixCommand
             {
                 var editOffset = fix.Edits[j].Offset;
                 var editEnd = editOffset + fix.Edits[j].Length;
+                // For 0-length inserts, treat end as offset+1 to keep conflict checks
+                // consistent with how occupied ranges are recorded below.
+                if (editEnd == editOffset) editEnd = editOffset + 1;
 
                 for (var k = 0; k < occupiedCount; k++)
                 {
-                    // Conflict: same offset, or overlapping range
-                    if (editOffset == occupied[k].offset || editOffset < occupied[k].end ||
-                        (editEnd > occupied[k].offset && editOffset < occupied[k].end))
+                    // Overlap: intervals [editOffset, editEnd) and [occupied.offset, occupied.end) intersect.
+                    if (editOffset < occupied[k].end && editEnd > occupied[k].offset)
                     {
                         conflicts = true;
                         break;

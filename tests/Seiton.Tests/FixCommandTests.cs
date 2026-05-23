@@ -458,88 +458,88 @@ public sealed class FixCommandTests
         }
     }
 
-        [Test]
-        public async Task Fix_MultiEditDiagnostic_WithAnotherFix_DoesNotOverflowBatchSelection()
+    [Test]
+    public async Task Fix_MultiEditDiagnostic_WithAnotherFix_DoesNotOverflowBatchSelection()
+    {
+        var configPath = CreateConfigFile(
+            """
+            rules:
+                runner-no-latest:
+                    enabled: false
+                job-timeout-minutes-required:
+                    enabled: false
+                job-permissions-required:
+                    enabled: false
+            """);
+        var filePath = CreateWorkflowFile(
+            """
+            on: push
+            permissions: write-all
+            jobs:
+                "build job":
+                    runs-on: ubuntu-24.04
+                    steps:
+                        - run: echo build
+                consumer1:
+                    runs-on: ubuntu-24.04
+                    needs: ["build job"]
+                    steps:
+                        - run: echo one
+                consumer2:
+                    runs-on: ubuntu-24.04
+                    needs: ["build job"]
+                    steps:
+                        - run: echo two
+                consumer3:
+                    runs-on: ubuntu-24.04
+                    needs: ["build job"]
+                    steps:
+                        - run: echo three
+                consumer4:
+                    runs-on: ubuntu-24.04
+                    needs: ["build job"]
+                    steps:
+                        - run: echo four
+                consumer5:
+                    runs-on: ubuntu-24.04
+                    needs: ["build job"]
+                    steps:
+                        - run: echo five
+            """);
+
+        try
         {
-                var configPath = CreateConfigFile(
-                        """
-                        rules:
-                            runner-no-latest:
-                                enabled: false
-                            job-timeout-minutes-required:
-                                enabled: false
-                            job-permissions-required:
-                                enabled: false
-                        """);
-                var filePath = CreateWorkflowFile(
-                        """
-                        on: push
-                        permissions: write-all
-                        jobs:
-                            "build job":
-                                runs-on: ubuntu-24.04
-                                steps:
-                                    - run: echo build
-                            consumer1:
-                                runs-on: ubuntu-24.04
-                                needs: ["build job"]
-                                steps:
-                                    - run: echo one
-                            consumer2:
-                                runs-on: ubuntu-24.04
-                                needs: ["build job"]
-                                steps:
-                                    - run: echo two
-                            consumer3:
-                                runs-on: ubuntu-24.04
-                                needs: ["build job"]
-                                steps:
-                                    - run: echo three
-                            consumer4:
-                                runs-on: ubuntu-24.04
-                                needs: ["build job"]
-                                steps:
-                                    - run: echo four
-                            consumer5:
-                                runs-on: ubuntu-24.04
-                                needs: ["build job"]
-                                steps:
-                                    - run: echo five
-                        """);
+            var exitCode = await FixCommand.RunAsync(
+                [filePath],
+                config: configPath,
+                stdinFilename: "stdin.yml",
+                ignore: [],
+                minSeverity: null,
+                format: OutputFormat.Text,
+                oneline: true,
+                color: ColorMode.Never,
+                noColor: true,
+                verbose: false,
+                dryRun: false,
+                check: false,
+                enablePinNetwork: false,
+                enableImageNetwork: false,
+                includeActions: false);
 
-                try
-                {
-                        var exitCode = await FixCommand.RunAsync(
-                                [filePath],
-                                config: configPath,
-                                stdinFilename: "stdin.yml",
-                                ignore: [],
-                                minSeverity: null,
-                                format: OutputFormat.Text,
-                                oneline: true,
-                                color: ColorMode.Never,
-                                noColor: true,
-                                verbose: false,
-                                dryRun: false,
-                                check: false,
-                                enablePinNetwork: false,
-                                enableImageNetwork: false,
-                                includeActions: false);
+            await Assert.That(exitCode).IsEqualTo(ExitCode.Success);
 
-                        await Assert.That(exitCode).IsEqualTo(ExitCode.Success);
-
-                        var fixedContent = File.ReadAllText(filePath);
-                        await Assert.That(fixedContent).Contains("build-job:");
-                        await Assert.That(fixedContent).DoesNotContain("\"build job\":");
-                        await Assert.That(fixedContent).Contains("needs: [build-job]");
-                        await Assert.That(fixedContent).Contains("permissions: {}");
-                }
-                finally
-                {
-                        DeleteContainingDirectory(filePath);
-                        DeleteContainingDirectory(configPath);
-                }
+            var fixedContent = File.ReadAllText(filePath);
+            await Assert.That(fixedContent).Contains("build-job:");
+            await Assert.That(fixedContent).DoesNotContain("\"build job\":");
+            await Assert.That(fixedContent).Contains("needs: [build-job]");
+            await Assert.That(fixedContent).Contains("permissions: {}");
         }
+        finally
+        {
+            DeleteContainingDirectory(filePath);
+            DeleteContainingDirectory(configPath);
+        }
+    }
 
     [Test]
     public async Task Fix_InvalidConfig_IgnoreActionsString_ReportsConfigError()
@@ -687,13 +687,37 @@ public sealed class FixCommandTests
     public async Task CreateFixApplicationErrorLines_Verbose_IncludesDetailLine()
     {
         var ex = new InvalidOperationException("boom");
-        ex.Data["stack"] = "synthetic";
 
         var lines = FixCommand.CreateFixApplicationErrorLines("workflow.yml", ex, verbose: true);
 
-        await Assert.That(lines.Count).IsEqualTo(3);
+        // Never-thrown exception has no StackTrace, falls back to ex.ToString() (single line)
+        await Assert.That(lines.Count).IsGreaterThanOrEqualTo(3);
         await Assert.That(lines[2]).StartsWith("detail:");
     }
+
+    [Test]
+    public async Task CreateFixApplicationErrorLines_Verbose_MultiLineStackTrace_PrefixesEachLine()
+    {
+        // Create an exception with a multi-line stack trace via nested call
+        Exception ex;
+        try { ThrowFromNestedCall(); ex = null!; }
+        catch (Exception e) { ex = e; }
+
+        var lines = FixCommand.CreateFixApplicationErrorLines("workflow.yml", ex, verbose: true);
+
+        // Stack trace from nested call has multiple frames; each must be prefixed with "detail:"
+        await Assert.That(lines.Count).IsGreaterThanOrEqualTo(3);
+        for (var i = 2; i < lines.Length; i++)
+        {
+            await Assert.That(lines[i]).StartsWith("detail:");
+        }
+    }
+
+    [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.NoInlining)]
+    private static void ThrowFromNestedCall() => ThrowFromInnerCall();
+
+    [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.NoInlining)]
+    private static void ThrowFromInnerCall() => throw new InvalidOperationException("boom");
 
     [Test]
     public async Task CreateFixApplicationErrorLines_UnexpectedException_UsesSameFriendlyFormat()

@@ -88,6 +88,7 @@ public class FixApplyBenchmark
             return fixableDiagnostics;
 
         var diagRanges = new (int minOffset, int diagIndex)[fixableDiagnostics.Length];
+        var totalEditCount = 0;
         for (var i = 0; i < fixableDiagnostics.Length; i++)
         {
             var fix = fixableDiagnostics[i].Fix!.Value;
@@ -96,6 +97,7 @@ public class FixApplyBenchmark
             {
                 if (fix.Edits[j].Offset < minOff)
                     minOff = fix.Edits[j].Offset;
+                totalEditCount++;
             }
             diagRanges[i] = (minOff, i);
         }
@@ -103,7 +105,7 @@ public class FixApplyBenchmark
         Array.Sort(diagRanges, static (a, b) => a.minOffset.CompareTo(b.minOffset));
 
         var occupiedCount = 0;
-        var occupied = new (int offset, int end)[fixableDiagnostics.Length * 2];
+        var occupied = new (int offset, int end)[totalEditCount];
         var selected = new List<int>(fixableDiagnostics.Length);
 
         for (var i = 0; i < diagRanges.Length; i++)
@@ -116,11 +118,11 @@ public class FixApplyBenchmark
             {
                 var editOffset = fix.Edits[j].Offset;
                 var editEnd = editOffset + fix.Edits[j].Length;
+                if (editEnd == editOffset) editEnd = editOffset + 1;
 
                 for (var k = 0; k < occupiedCount; k++)
                 {
-                    if (editOffset == occupied[k].offset || editOffset < occupied[k].end ||
-                        (editEnd > occupied[k].offset && editOffset < occupied[k].end))
+                    if (editOffset < occupied[k].end && editEnd > occupied[k].offset)
                     {
                         conflicts = true;
                         break;
