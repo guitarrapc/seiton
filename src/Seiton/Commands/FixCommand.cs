@@ -515,9 +515,10 @@ internal static class FixCommand
                 verboseLogger.Log("network", $"resolved {remResult.ResolvedCount} pin(s) for {filePath} in {CheckCommand.FormatMilliseconds(netElapsed)} ms");
             }
 
-            // Apply pin fixes — these should not conflict since they target different offsets
-            // (action refs are at distinct positions in the YAML).
-            var pinYaml = FixEngine.Apply(currentYaml, remResult.Diagnostics);
+            // Apply only pin-rule fixes. remResult.Diagnostics may still contain non-pin
+            // diagnostics with fixes (if maxPasses didn't fully converge). Applying those here
+            // would bypass the conflict-aware selection logic. Filter to pin rules only.
+            var pinYaml = FixEngine.Apply(currentYaml, PinFixableDiagnostics(remResult.Diagnostics));
             if (!pinYaml.AsSpan().SequenceEqual(currentYaml))
             {
                 return (pinYaml, remResult.ResolvedCount);
@@ -644,5 +645,21 @@ internal static class FixCommand
         }
 
         return false;
+    }
+
+    /// <summary>
+    /// Returns only the pin-rule diagnostics (unpinned-uses/unpinned-image) that have a fix attached.
+    /// Used to ensure non-pin diagnostics with fixes don't bypass conflict-aware selection.
+    /// </summary>
+    private static IEnumerable<Diagnostic> PinFixableDiagnostics(IReadOnlyList<Diagnostic> diagnostics)
+    {
+        for (var i = 0; i < diagnostics.Count; i++)
+        {
+            var d = diagnostics[i];
+            if (d.Fix is not null && d.RuleId is "unpinned-uses" or "unpinned-image")
+            {
+                yield return d;
+            }
+        }
     }
 }
