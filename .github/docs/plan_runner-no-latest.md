@@ -28,13 +28,12 @@ rules:
 |---|---|---|
 | built-in ラベル、mapping あり | Yes | Yes (mapping の値で置換) |
 | built-in ラベル、mapping なし | Yes | No |
-| mapping にのみ存在するラベル (self-hosted 等) | Yes | Yes |
+| mapping にのみ存在するラベル (self-hosted 等) | Yes | Yes (mapping の値で置換) |
 | mapping にないラベル、built-in でもない | No | No |
 
 - **部分 mapping**: `fix-mapping` に `ubuntu-latest` だけ書いた場合、`ubuntu-latest` のみ fix 付き。`windows-latest` / `macos-latest` は従来どおり warn のみ。
 - **検出拡張**: `fix-mapping` に書いたキーは built-in でなくても検出対象に追加される。
-- **null 値**: mapping のキーに対して値が `null` (YAML の `key:` 値なし) → 検出するが fix は付けない。
-- **空文字禁止**: キー・値ともに空文字列 (`""`, `''`) は config バリデーションエラーとする。空白のみも不可。
+- **空文字/null 禁止**: キー・値ともに空文字列 (`""`, `''`)、空白のみ、`null` (YAML の `key:` 値なし) は config バリデーションエラーとする。
 
 ### Config バリデーション
 
@@ -42,7 +41,7 @@ rules:
 |---|---|
 | キーが空文字/空白のみ | config エラー (load 時に diagnostic) |
 | 値が空文字/空白のみ | config エラー (load 時に diagnostic) |
-| 値が `null` | 有効 (検出のみ、fix なし) |
+| 値が `null` | config エラー (load 時に diagnostic) |
 | 重複キー | YAML の仕様上、後勝ち。特別処理しない |
 
 ### 大文字小文字
@@ -51,8 +50,8 @@ rules:
 
 ## 課題点
 
-1. **LintConfig の拡張**: 現在 `RuleConfig` に `Dictionary<string, string?>` 型のフィールドがない。`fix-mapping` 用に新しいプロパティまたは汎用 dictionary 型を追加する必要がある。
-2. **Config デシリアライズ**: `fix-mapping` の YAML mapping を `Dictionary<string, string?>` にデシリアライズする。null 値を許容しつつ空文字を拒否するバリデーションが必要。
+1. **LintConfig の拡張**: 現在 `RuleConfig` に `Dictionary<string, string>` 型のフィールドがない。`fix-mapping` 用に新しいプロパティまたは汎用 dictionary 型を追加する必要がある。
+2. **Config デシリアライズ**: `fix-mapping` の YAML mapping を `Dictionary<string, string>` にデシリアライズする。null 値・空文字ともに拒否するバリデーションが必要。
 3. **DiagnosticFix の生成**: 現在 `RunnerNoLatestRule` は `DiagnosticFix` を返していない。mapping から fix を生成するロジックを追加する。
 4. **検出対象の拡張**: `IsLatestHostedRunnerLabel()` を config-aware にする。built-in 3 ラベル + mapping キーの和集合を検出対象とする。
 5. **テスト**: mapping あり/なし/部分指定/null 値/空文字拒否/case-insensitive のすべてをカバーする。
@@ -64,14 +63,14 @@ rules:
 
 ```csharp
 // LintConfig.cs - RuleConfig に追加
-public IReadOnlyDictionary<string, string?>? FixMapping { get; init; }
+public IReadOnlyDictionary<string, string>? FixMapping { get; init; }
 ```
 
 ### Config デシリアライズ (ConfigLoader)
 
-- `fix-mapping` キーを検出したら `Dictionary<string, string?>` としてパース。
+- `fix-mapping` キーを検出したら `Dictionary<string, string>` としてパース。
 - 各エントリのキー: `string.IsNullOrWhiteSpace()` チェック → エラー。
-- 各エントリの値: `null` は許容。非 null の場合 `string.IsNullOrWhiteSpace()` チェック → エラー。
+- 各エントリの値: `null` または `string.IsNullOrWhiteSpace()` チェック → エラー。
 
 ### RunnerNoLatestRule の変更
 
@@ -86,7 +85,7 @@ private bool IsTargetLabel(string label)
 // Fix の生成
 private DiagnosticFix? GetFix(string label)
 {
-    if (_fixMapping.TryGetValue(label, out var pinned) && pinned is not null)
+    if (_fixMapping.TryGetValue(label, out var pinned))
         return new DiagnosticFix(...); // label → pinned に置換
     return null;
 }
@@ -104,7 +103,7 @@ private DiagnosticFix? GetFix(string label)
 1. `RuleConfig` に `FixMapping` プロパティを追加。
 2. `ConfigLoader` で `fix-mapping` キーのデシリアライズ + バリデーション (空文字拒否)。
 3. バリデーションエラー時の diagnostic メッセージ。
-4. テスト: valid config / invalid config (空キー、空値) / null 値 / 未指定。
+4. テスト: valid config / invalid config (空キー、空値、null値) / 未指定。
 
 ### Phase 2: 検出拡張 (Priority: High)
 
@@ -117,8 +116,8 @@ private DiagnosticFix? GetFix(string label)
 
 1. mapping に値があるラベルに対して `DiagnosticFix` を返す。
 2. 部分 mapping (一部のみ指定) で、指定ありのみ fix 付き、なしは warn のみ。
-3. null 値 → fix なし。
-4. テスト: fix あり / fix なし (mapping 未指定) / fix なし (null 値) / 部分 mapping。
+3. 部分 mapping (一部のみ指定) で、指定ありのみ fix 付き、なしは warn のみ。
+4. テスト: fix あり / fix なし (mapping 未指定) / 部分 mapping。
 
 ### Phase 4: ドキュメント (Priority: Medium)
 
