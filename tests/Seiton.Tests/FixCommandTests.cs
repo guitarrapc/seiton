@@ -732,6 +732,21 @@ public sealed class FixCommandTests
         await Assert.That(lines[1]).Contains("Please report this issue");
     }
 
+    [Test]
+    public async Task CreateFixApplicationErrorLines_MessageWithNewlines_NormalizesToSingleLine()
+    {
+        var ex = new InvalidOperationException("line one\r\nline two\nline three");
+
+        var lines = FixCommand.CreateFixApplicationErrorLines("workflow.yml", ex, verbose: false);
+
+        // The error: line must be a single logical line — no embedded newlines
+        await Assert.That(lines[0]).DoesNotContain("\n");
+        await Assert.That(lines[0]).DoesNotContain("\r");
+        await Assert.That(lines[0]).Contains("line one");
+        await Assert.That(lines[0]).Contains("line two");
+        await Assert.That(lines[0]).Contains("line three");
+    }
+
     private static string CreateWorkflowFile(string yaml)
     {
         var dir = Path.Combine(Path.GetTempPath(), "Seiton.Tests", Guid.NewGuid().ToString("N"));

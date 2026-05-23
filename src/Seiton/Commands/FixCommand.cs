@@ -196,7 +196,7 @@ internal static class FixCommand
                 // For --check mode: run pin remediation early to report fixable pin diagnostics.
                 // For apply/dry-run: pin remediation runs after local fixes stabilize (Plan B).
                 IReadOnlyList<Diagnostic> effectiveDiagnostics = lintDiagnostics;
-                if (check && pinRemediation != null)
+                if (check && pinRemediation != null && HasPinFixableDiagnostics(lintDiagnostics))
                 {
                     try
                     {
@@ -241,7 +241,7 @@ internal static class FixCommand
                         dryRunYaml = ApplyFixesIteratively(engine, utf8Yaml, filePath, fixEnabledLintConfig);
                         if (pinRemediation != null)
                         {
-                            dryRunYaml = await ApplyPinRemediationAsync(pinRemediation, engine, dryRunYaml, filePath, fixEnabledLintConfig, verboseLogger);
+                            (dryRunYaml, _) = await ApplyPinRemediationAsync(pinRemediation, engine, dryRunYaml, filePath, fixEnabledLintConfig, verboseLogger);
                         }
                     }
                     catch (Exception ex) when (ex is not OperationCanceledException)
@@ -284,12 +284,9 @@ internal static class FixCommand
                     // Local inserts are done, so pin edits target correct offsets.
                     if (pinRemediation != null)
                     {
-                        var beforePin = currentYaml;
-                        currentYaml = await ApplyPinRemediationAsync(pinRemediation, engine, currentYaml, filePath, fixEnabledLintConfig, verboseLogger);
-                        if (!currentYaml.AsSpan().SequenceEqual(beforePin))
-                        {
-                            appliedFixes++;
-                        }
+                        var (pinYaml, pinCount) = await ApplyPinRemediationAsync(pinRemediation, engine, currentYaml, filePath, fixEnabledLintConfig, verboseLogger);
+                        currentYaml = pinYaml;
+                        appliedFixes += pinCount;
                     }
                 }
                 catch (Exception ex) when (ex is not OperationCanceledException)
@@ -401,11 +398,15 @@ internal static class FixCommand
 
     internal static string[] CreateFixApplicationErrorLines(string filePath, Exception ex, bool verbose)
     {
+        // Normalize message to single line — exception messages can contain newlines
+        // which would break the structured error:/hint:/detail: output format.
+        var message = ex.Message.ReplaceLineEndings(" ");
+
         if (!verbose)
         {
             return
             [
-                $"error: fix failed for {filePath}: {ex.Message}",
+                $"error: fix failed for {filePath}: {message}",
                 "hint: this may indicate conflicting lint rules or a bug in fix generation. Please report this issue."
             ];
         }
@@ -416,7 +417,7 @@ internal static class FixCommand
         var detail = ex.ToString();
         var detailLines = detail.Split('\n', StringSplitOptions.RemoveEmptyEntries);
         var result = new string[2 + detailLines.Length];
-        result[0] = $"error: fix failed for {filePath}: {ex.Message}";
+        result[0] = $"error: fix failed for {filePath}: {message}";
         result[1] = "hint: this may indicate conflicting lint rules or a bug in fix generation. Please report this issue.";
         for (var i = 0; i < detailLines.Length; i++)
         {
@@ -485,8 +486,9 @@ internal static class FixCommand
 
     /// <summary>
     /// Applies pin remediation on stabilized YAML, then applies the resulting fixes.
+    /// Returns the number of pins actually applied (0 if nothing changed).
     /// </summary>
-    private static async Task<byte[]> ApplyPinRemediationAsync(
+    private static async Task<(byte[] Yaml, int AppliedCount)> ApplyPinRemediationAsync(
         PinRemediationEngine pinRemediation,
         LintEngine engine,
         byte[] currentYaml,
@@ -496,6 +498,12 @@ internal static class FixCommand
     {
         using var handle = engine.Check(currentYaml, filePath, fixEnabledLintConfig);
         var diagnostics = handle.CopyDiagnostics();
+
+        // Quick pre-scan: skip network remediation entirely when no pin-target diagnostics exist.
+        if (!HasPinFixableDiagnostics(diagnostics))
+        {
+            return (currentYaml, 0);
+        }
 
         var netStart = verboseLogger.GetTimestamp();
         var remResult = await pinRemediation.RemediateAsync(diagnostics, currentYaml);
@@ -512,11 +520,11 @@ internal static class FixCommand
             var pinYaml = FixEngine.Apply(currentYaml, remResult.Diagnostics);
             if (!pinYaml.AsSpan().SequenceEqual(currentYaml))
             {
-                currentYaml = pinYaml;
+                return (pinYaml, remResult.ResolvedCount);
             }
         }
 
-        return currentYaml;
+        return (currentYaml, 0);
     }
 
     /// <summary>
