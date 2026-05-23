@@ -199,8 +199,8 @@ public static partial class WorkflowParser
     }
 
     /// <summary>
-    /// Checks if a byte is a valid start for a YAML plain scalar (not a quoted or block indicator).
-    /// Returns true if NOT one of: ' " | &gt;
+    /// Checks if a byte is a valid start for a YAML plain scalar (not a quoted, block, flow, alias, or comment indicator).
+    /// Returns true if NOT one of: ' " | &gt; # [ { *
     /// Also returns false for empty/newline which indicates no value.
     /// </summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -208,6 +208,7 @@ public static partial class WorkflowParser
     {
         return b != (byte)'\'' && b != (byte)'"' && b != (byte)'|' && b != (byte)'>'
             && b != (byte)'#'
+            && b != (byte)'[' && b != (byte)'{' && b != (byte)'*'
             && b != (byte)'\n' && b != (byte)'\r';
     }
 

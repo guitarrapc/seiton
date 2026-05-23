@@ -16,6 +16,7 @@
 - Diagnostic の既存 `Help` フィールドを活用 (全出力形式で自動表示)
 - レビュー反映: YAML node property (`&anchor`, `!tag`) をスキップし、inline comment を colon 判定対象から除外
 - レビュー反映: `run: # reason: ...` のような empty/comment-only value ではヒントを出さないよう修正
+- レビュー反映: YAML flow indicator (`[`, `{`) および alias indicator (`*`) を plain scalar 判定から除外
 
 ### ベンチマーク結果 (CoreParsingBenchmark)
 
@@ -23,15 +24,15 @@
 
 | Size | Before (Mean) | After (Mean) | Change | Allocated |
 |------|--------------|-------------|--------|-----------|
-| Small | 45.9 us | 46.7 us | +1.7% (ノイズ範囲) | 3.87 KB = 同一 |
-| Medium | 1,085 us | 1,021 us | -5.9% (ノイズ範囲) | 35.59 KB = 同一 |
-| Large | 19,212 us | 18,352 us | -4.5% (ノイズ範囲) | 180.04 KB = 同一 |
+| Small | 45.9 us | 45.9 us | +0.0% (ノイズ範囲) | 3.87 KB = 同一 |
+| Medium | 1,085 us | 1,025 us | -5.5% (ノイズ範囲) | 35.59 KB = 同一 |
+| Large | 19,212 us | 18,438 us | -4.0% (ノイズ範囲) | 180.04 KB = 同一 |
 
 性能変化なし。ヒント検出は catch ブロック内でのみ実行され、通常の成功パスに影響を与えない。
 
 ### テスト追加
 
-16 テスト追加 (4 positive + 12 negative):
+20 テスト追加 (5 positive + 15 negative):
 - `Parse_PlainScalarColonHint_RunWithColonSpace_ReturnsHint` — `run:` + `: ` → ヒントあり
 - `Parse_PlainScalarColonHint_ScriptWithColonSpace_ReturnsHint` — `script:` + `: ` → ヒントあり
 - `Parse_PlainScalarColonHint_RunWithBareColon_ReturnsHint` — `run: foo: bar` → ヒントあり
@@ -47,9 +48,13 @@
 - `TryGetPlainScalarColonHint_TaggedQuotedScalar_ReturnsNull` — ヒューリスティック単体: `!!tag` + quoted → null
 - `TryGetPlainScalarColonHint_InlineCommentColonSpace_ReturnsNull` — ヒューリスティック単体: inline comment 中の `: ` → null
 - `TryGetPlainScalarColonHint_EmptyValueCommentColonSpace_ReturnsNull` — ヒューリスティック単体: empty/comment-only value → null
+- `TryGetPlainScalarColonHint_FlowMappingValue_ReturnsNull` — ヒューリスティック単体: flow mapping `{cmd: echo}` → null
+- `TryGetPlainScalarColonHint_FlowSequenceValue_ReturnsNull` — ヒューリスティック単体: flow sequence `[a: b]` → null
+- `TryGetPlainScalarColonHint_AliasValue_ReturnsNull` — ヒューリスティック単体: alias `*ref` → null
+- `TryGetPlainScalarColonHint_RunFourLinesAboveOffset_ReturnsNull` — ヒューリスティック単体: 4 行上 → null (scan window 外)
 - `TryGetPlainScalarColonHint_RunThreeLinesAboveOffset_ReturnsHint` — ヒューリスティック単体: error line の 3 行上でもヒントあり
 
-全 1946 テスト通過。
+全 1950 テスト通過。
 
 ---
 

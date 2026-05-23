@@ -5248,6 +5248,39 @@ public sealed class ParserTests
         await Assert.That(hint).IsNull();
     }
 
+    [Test]
+    public async Task TryGetPlainScalarColonHint_FlowMappingValue_ReturnsNull()
+    {
+        // Flow mapping value {cmd: echo} is valid YAML, not a plain scalar — must not hint
+        var yaml = "- run: {cmd: echo}\n"u8;
+
+        var hint = WorkflowParser.TryGetPlainScalarColonHint(yaml, yaml.Length - 2, 1);
+
+        await Assert.That(hint).IsNull();
+    }
+
+    [Test]
+    public async Task TryGetPlainScalarColonHint_FlowSequenceValue_ReturnsNull()
+    {
+        // Flow sequence value [a: b] is valid YAML, not a plain scalar — must not hint
+        var yaml = "- run: [a: b, c: d]\n"u8;
+
+        var hint = WorkflowParser.TryGetPlainScalarColonHint(yaml, yaml.Length - 2, 1);
+
+        await Assert.That(hint).IsNull();
+    }
+
+    [Test]
+    public async Task TryGetPlainScalarColonHint_AliasValue_ReturnsNull()
+    {
+        // Alias *ref is not a plain scalar — must not hint even if rest has `: `
+        var yaml = "- run: *cmd_ref\n"u8;
+
+        var hint = WorkflowParser.TryGetPlainScalarColonHint(yaml, yaml.Length - 2, 1);
+
+        await Assert.That(hint).IsNull();
+    }
+
         [Test]
         public async Task TryGetPlainScalarColonHint_RunThreeLinesAboveOffset_ReturnsHint()
         {
@@ -5263,6 +5296,24 @@ public sealed class ParserTests
 
                 await Assert.That(hint).IsNotNull();
         }
+
+    [Test]
+    public async Task TryGetPlainScalarColonHint_RunFourLinesAboveOffset_ReturnsNull()
+    {
+        // run: is 4 lines above the error — outside the 3-line scan window
+        var yaml = """
+            - run: echo Title: ok
+                env:
+                    FOO: bar
+                    BAZ: qux
+                with
+        """u8;
+
+        var errorOffset = yaml.IndexOf("with"u8) + "with"u8.Length - 1;
+        var hint = WorkflowParser.TryGetPlainScalarColonHint(yaml, errorOffset, 5);
+
+        await Assert.That(hint).IsNull();
+    }
 
     // regression: webhook known-but-disallowed option must include key name in message
     [Test]
