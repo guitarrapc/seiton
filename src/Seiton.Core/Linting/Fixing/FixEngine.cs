@@ -138,6 +138,24 @@ public static class FixEngine
         return true;
     }
 
+    /// <summary>Builds a unified diff string from pre-computed original and updated YAML bytes.</summary>
+    public static string BuildUnifiedDiffFromBytes(
+        byte[] originalUtf8Yaml,
+        byte[] updatedUtf8Yaml,
+        string filePath,
+        int contextLines = 2)
+    {
+        ArgumentNullException.ThrowIfNull(originalUtf8Yaml);
+        ArgumentNullException.ThrowIfNull(updatedUtf8Yaml);
+        ArgumentException.ThrowIfNullOrEmpty(filePath);
+        if (contextLines < 0)
+        {
+            throw new ArgumentOutOfRangeException(nameof(contextLines), "contextLines must be non-negative");
+        }
+
+        return BuildUnifiedDiffCore(originalUtf8Yaml, updatedUtf8Yaml, filePath, contextLines);
+    }
+
     /// <summary>Writes a unified diff to <paramref name="writer"/> by applying fixes from the given diagnostics.</summary>
     public static void WriteUnifiedDiff(
         TextWriter writer,
@@ -328,7 +346,11 @@ public static class FixEngine
             {
                 if (edit.Offset < previousEnd || edit.Offset == previousOffset)
                 {
-                    throw new InvalidOperationException($"overlapping or conflicting edits detected at offset {edit.Offset}");
+                    throw new InvalidOperationException(
+                        $"overlapping or conflicting edits detected at offset {edit.Offset} " +
+                        $"(previous edit at offset {previousOffset} with length {previousEnd - previousOffset}, " +
+                        $"current edit at offset {edit.Offset} with length {edit.Length}; " +
+                        $"total {edits.Count} edits in batch)");
                 }
             }
 

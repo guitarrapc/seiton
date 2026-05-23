@@ -265,6 +265,199 @@ public sealed class FixCommandTests
         }
     }
 
+    [Test]
+    public async Task Fix_OverlappingInserts_PermissionsAndTimeoutMinutes_DoesNotThrow()
+    {
+        // Regression test: job-permissions-required and job-timeout-minutes-required both
+        // insert at the same byte offset (after runs-on:). Previously this caused
+        // "overlapping or conflicting edits detected at offset ..." exception.
+        var configPath = CreateConfigFile(
+            """
+            rules:
+              runner-no-latest:
+                enabled: false
+            fix:
+              defaults:
+                job-timeout-minutes: 15
+            """);
+        var filePath = CreateWorkflowFile(
+            """
+            on:
+              pull_request:
+                branches: [main]
+            jobs:
+              test:
+                runs-on: ubuntu-24.04
+                steps:
+                  - run: echo "hello"
+            """);
+
+        try
+        {
+            var exitCode = await FixCommand.RunAsync(
+                [filePath],
+                config: configPath,
+                stdinFilename: "stdin.yml",
+                ignore: [],
+                minSeverity: null,
+                format: OutputFormat.Text,
+                oneline: true,
+                color: ColorMode.Never,
+                noColor: true,
+                verbose: false,
+                dryRun: false,
+                check: false,
+                enablePinNetwork: false,
+                enableImageNetwork: false,
+                includeActions: false);
+
+            await Assert.That(exitCode).IsEqualTo(ExitCode.Success);
+
+            var fixedContent = File.ReadAllText(filePath);
+            // Both permissions: and timeout-minutes: must be inserted
+            await Assert.That(fixedContent).Contains("permissions:");
+            await Assert.That(fixedContent).Contains("timeout-minutes: 15");
+            // They must appear before steps:
+            var permIdx = fixedContent.IndexOf("permissions:");
+            var timeoutIdx = fixedContent.IndexOf("timeout-minutes:");
+            var stepsIdx = fixedContent.IndexOf("steps:");
+            await Assert.That(permIdx).IsGreaterThan(-1);
+            await Assert.That(timeoutIdx).IsGreaterThan(-1);
+            await Assert.That(stepsIdx).IsGreaterThan(-1);
+            await Assert.That(permIdx).IsLessThan(stepsIdx);
+            await Assert.That(timeoutIdx).IsLessThan(stepsIdx);
+        }
+        finally
+        {
+            DeleteContainingDirectory(filePath);
+            DeleteContainingDirectory(configPath);
+        }
+    }
+
+    [Test]
+    public async Task Fix_OverlappingInserts_DryRun_DoesNotThrow()
+    {
+        // dry-run should also not throw for overlapping fixes
+        var configPath = CreateConfigFile(
+            """
+            rules:
+              runner-no-latest:
+                enabled: false
+            fix:
+              defaults:
+                job-timeout-minutes: 15
+            """);
+        var filePath = CreateWorkflowFile(
+            """
+            on:
+              pull_request:
+                branches: [main]
+            jobs:
+              test:
+                runs-on: ubuntu-24.04
+                steps:
+                  - run: echo "hello"
+            """);
+
+        try
+        {
+            using var sw = new StringWriter();
+            using var stderr = new StringWriter();
+
+            var exitCode = await FixCommand.RunAsync(
+                [filePath],
+                config: configPath,
+                stdinFilename: "stdin.yml",
+                ignore: [],
+                minSeverity: null,
+                format: OutputFormat.Text,
+                oneline: true,
+                color: ColorMode.Never,
+                noColor: true,
+                verbose: false,
+                dryRun: true,
+                check: false,
+                enablePinNetwork: false,
+                enableImageNetwork: false,
+                includeActions: false,
+                output: sw,
+                error: stderr);
+
+            var output = sw.ToString();
+            // dry-run should produce a diff containing both fixes
+            await Assert.That(output).Contains("permissions:");
+            await Assert.That(output).Contains("timeout-minutes: 15");
+        }
+        finally
+        {
+            DeleteContainingDirectory(filePath);
+            DeleteContainingDirectory(configPath);
+        }
+    }
+
+    [Test]
+    public async Task Fix_MultipleJobs_EachWithOverlappingInserts_FixesAll()
+    {
+        // Multiple jobs each missing permissions and timeout-minutes
+        var configPath = CreateConfigFile(
+            """
+            rules:
+              runner-no-latest:
+                enabled: false
+            fix:
+              defaults:
+                job-timeout-minutes: 30
+            """);
+        var filePath = CreateWorkflowFile(
+            """
+            on: push
+            jobs:
+              build:
+                runs-on: ubuntu-24.04
+                steps:
+                  - run: echo build
+              test:
+                runs-on: ubuntu-24.04
+                steps:
+                  - run: echo test
+            """);
+
+        try
+        {
+            var exitCode = await FixCommand.RunAsync(
+                [filePath],
+                config: configPath,
+                stdinFilename: "stdin.yml",
+                ignore: [],
+                minSeverity: null,
+                format: OutputFormat.Text,
+                oneline: true,
+                color: ColorMode.Never,
+                noColor: true,
+                verbose: false,
+                dryRun: false,
+                check: false,
+                enablePinNetwork: false,
+                enableImageNetwork: false,
+                includeActions: false);
+
+            await Assert.That(exitCode).IsEqualTo(ExitCode.Success);
+
+            var fixedContent = File.ReadAllText(filePath);
+            // Both jobs should have permissions and timeout-minutes
+            var lines = fixedContent.Split('\n');
+            var permCount = lines.Count(l => l.TrimStart().StartsWith("permissions:"));
+            var timeoutCount = lines.Count(l => l.TrimStart().StartsWith("timeout-minutes:"));
+            await Assert.That(permCount).IsGreaterThanOrEqualTo(2);
+            await Assert.That(timeoutCount).IsGreaterThanOrEqualTo(2);
+        }
+        finally
+        {
+            DeleteContainingDirectory(filePath);
+            DeleteContainingDirectory(configPath);
+        }
+    }
+
     private static string CreateWorkflowFile(string yaml)
     {
         var dir = Path.Combine(Path.GetTempPath(), "Seiton.Tests", Guid.NewGuid().ToString("N"));
