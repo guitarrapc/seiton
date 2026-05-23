@@ -1,305 +1,588 @@
-# Expression Validation の Parser/Linter 境界見直し — 調査結果と対応計画
+# Expression Validation の Parser/Linter 境界見直し — 調査分析結果と優先度付きフェーズ実装計画
 
 > 作成日: 2026-05-23
-> 対象: expression availability / type validation を parser に置く現行設計を維持するか、linter に寄せ直すかの検討
+> 対象: expression validation の parser/linter 境界を将来公開 API・独自 rule 実装・性能要件まで含めて再定義する
+> 結論: 長期方針は A ではなく、 refined C を採る
 
 ---
 
-## 1. 問題設定
+## 1. この文書の目的
 
-Seiton の現行仕様では、parser が次を担当している。
+この文書は、expression validation の責務を parser と linter のどちらが持つべきかを再整理し、以後の実装を進めるための判断材料と段階的な計画をまとめたものである。
 
-- expression の構文解析
-- context availability validation
-- function availability validation
-- type inference の基盤提供
-- 一部の property access validation
+本タスクでは、単に現行実装を説明するだけでは足りない。次の観点まで含めて整合する必要がある。
 
-一方で linter 側にも expression を前提にした rule 群が多数ある。
+- Seiton を parser/linter ライブラリとして公開したときの API 一貫性
+- custom rule を実装する利用者にとっての拡張しやすさ
+- parser 単体利用時の価値
+- spec/test/implementation の同期しやすさ
+- parser/linter 双方の速度と allocation の継続的改善
 
-- `expr-undefined-var`
-- `template-injection`
-- `run-env-context-direct-use`
-- `run-secrets-context-direct-use`
-- `run-inputs-context-direct-use`
-- `if-cond`, `fake-ternary`, `unsound-contains` など
+特に性能面では、単に退行を避けるだけでなく、各フェーズで現状よりよい実装を狙う。
 
-このため、責務境界がやや重なって見える。
-
-特に `github`, `matrix`, `needs`, `secrets` など GitHub Actions の意味論に近い情報を parser がどこまで持つべきかが論点になる。
+- 速度改善を追う
+- allocation 改善を追う
+- 少なくともメモリ悪化は許容しない
 
 ---
 
-## 2. 現状整理
+## 2. 結論
 
-### 2.1 現行仕様上の位置づけ
+### 2.1 採用方針
 
-現行 spec では parser 側に expression semantic analysis が明確に含まれている。
+長期的に望ましいのは、現行維持の **A** ではなく、責務を明確に再分離した **refined C** である。
 
-- `Seiton_spec.md`: parser が `Expression parsing and semantic typing data` を所有
-- `Seiton_Parser_spec.md`: expression parser grammar, built-in functions, context availability matrix, function availability まで規定
-- `Seiton_Linter_spec.md`: linter は parser output を消費し、fatal parse なら parser diagnostics を返して打ち切る
+ただし、ここで言う C は単なる「semantic validation を linter に寄せる」という一般論ではない。実際には次の設計方針を含む。
 
-したがって、**現行設計は一応一貫している**。
+- parser は YAML + expression front-end として責務を持つ
+- linter は GitHub Actions 文脈を解釈する semantic phase として責務を持つ
+- parser は linter が再利用できる expression artifact を返す方向に進む
+- linter はその artifact と workflow AST を使って availability / property / type / policy を評価する
 
-### 2.2 実装上の位置づけ
+### 2.2 A を採らない理由
 
-実装でも parser が inline expression parse/validate を行っている。
+A は短期互換性では有利だが、将来にわたって次の問題を固定化する。
 
-- `WorkflowParser.ExpressionIntegration.cs`
-- `ExpressionParser.cs`
-- `ExpressionSemanticAnalyzer.cs`
-- `DynamicContextTypeBuilder.cs`
+- parser spec が GitHub Actions domain knowledge を抱え続ける
+- parser diagnostics と linter diagnostics の重複前提が残る
+- suppression / severity / enable-disable の境界が曖昧なままになる
+- custom rule 作者が expression を再 parse / 再解釈しやすい構造にならない
+- parser/linter の公開 API 説明が直感に反する
 
-一方で linter は parser が残した string / expression 情報を使って、rule ごとの semantic/policy 診断を追加している。
+### 2.3 refined C を採る理由
 
-### 2.3 現状の利点
+refined C は次の点で最も整合的である。
 
-- parser 完了時点で expression の構文・基礎意味論がある程度検証済み
-- AST 利用者が parser 単体でも expression diagnostics を得られる
-- linter の前提が単純になる
-
-### 2.4 現状の違和感
-
-- availability/type は YAML 構文ではなく GitHub Actions の意味論に近い
-- parser と linter の双方が expression semantics を扱っており、役割が二重に見えやすい
-- parser spec が GitHub Actions domain knowledge を多く抱え込みやすい
-
----
-
-## 3. 選択肢
-
-### 選択肢 A — 現行維持
-
-parser が expression syntax + semantic validation を引き続き保持する。
-
-利点:
-
-- 既存実装と spec を大きく変えなくてよい
-- parser 単体利用でも value が高い
-- linter は parser diagnostics をそのまま扱える
-
-欠点:
-
-- GitHub domain knowledge が parser に集まり続ける
-- rule-based な制御や suppression との境界が不明瞭
-- parser/linter の責務説明が直感に反しやすい
-
-### 選択肢 B — 完全移管
-
-expression syntax も availability/type もすべて linter 側に移す。
-
-利点:
-
-- parser が純粋な YAML/AST builder に近づく
-
-欠点:
-
-- linter が expression parser を内包することになり責務が重い
-- parser 単体利用価値が大きく下がる
-- 実装移行コストが高い
-- parser/linter 双方の API と spec を大きく壊す
-
-### 選択肢 C — ハイブリッド再分離
-
-parser は expression syntax と AST 構築に集中し、availability/type/property など GitHub Actions 意味論は linter に寄せる。
-
-利点:
-
-- parser と linter の責務説明が最も自然
-- semantic diagnostics を rule/config/severity/suppression に乗せやすい
-- parser spec の肥大化を抑えられる
-
-欠点:
-
-- 段階的移行が必要
-- parser diagnostics と linter diagnostics の再配分が必要
-- 既存ルールとの責務整理に時間がかかる
-
----
-
-## 4. 推奨方針
-
-**推奨は選択肢 C（ハイブリッド再分離）**。
-
-具体的な線引きは次のとおり。
-
-### parser に残すもの
-
-- `${{ ... }}` の境界検出
-- expression syntax parse
-- expression AST 構築
-- token/range 付与
-- expression 自体の純粋な構文エラー
-
-### linter に寄せるもの
-
-- root context availability (`github`, `needs`, `matrix`, `secrets`, `inputs` など)
-- function availability (`hashFiles`, `success`, `failure`, `always`, `cancelled` など)
-- type suitability
-- dynamic property existence / strictness
-- GitHub domain semantics を伴う availability/type diagnostics
-
-この線引きだと、次の説明が成立する。
-
-- parser は「何が書かれているか」を読む
+- parser は「何が書かれているか」を返す
 - linter は「GitHub Actions 上で妥当か」を判定する
-
-これは直感にも合う。
-
----
-
-## 5. 判断理由
-
-### 5.1 GitHub context 情報は YAML 構文ではない
-
-`github.event`, `matrix`, `needs`, `hashFiles()` の使用可否は YAML syntax ではなく GitHub Actions の runtime/authoring semantics である。
-
-そのため parser より linter に近い。
-
-### 5.2 Rule-configurable であるべき性質に近い
-
-availability/type diagnostics は、少なくとも将来的には次と相性がよい。
-
-- severity override
-- rule enable/disable
-- suppression
-- document-kind / position ごとの運用ポリシー差
-
-これは linter の契約と整合的。
-
-### 5.3 Parser spec の肥大化を防げる
-
-現行 parser spec は expression grammar だけでなく、availability matrix や function availability まで抱えている。
-
-これを続けると parser spec が GitHub Actions domain spec に近づきすぎる。
-
-### 5.4 Parser 単体価値は維持できる
-
-syntax parse と expression AST 構築を parser に残せば、parser 単体利用の価値はまだ高い。
-
-完全移管ほどの破壊はない。
+- parser-only consumer には syntax / AST / expression IR の価値が残る
+- semantic diagnostics は config / suppression / severity override と自然に結び付く
+- custom rule は parser 由来の構造化データを利用できる
+- 将来の public API 設計が単純になる
 
 ---
 
-## 6. 優先度別の対応策
+## 3. 調査分析結果
 
-### P0 — 現状棚卸し
+### 3.1 現行仕様は一貫しているが、境界は過密である
 
-- parser が出している expression-related diagnostics を一覧化
-- linter rule 側で expression semantics を見ている箇所を一覧化
-- parser/linter の重複領域を表形式で整理
+現行 spec では parser 側に expression semantic analysis が明示的に含まれている。そのため、現行設計は仕様上は一貫している。
 
-最低限整理すべき分類:
+一方で、その一貫性は「責務分離として自然か」とは別問題である。現行の parser は expression syntax だけでなく、GitHub Actions 固有の availability / function restriction / dynamic context / type diagnostics の一部まで担っており、linter も同じ問題領域を別解像度で扱っている。
+
+結果として、現在は「仕様上は一貫」「設計上は重複」という状態になっている。
+
+### 3.2 現行実装では parser/linter の二重評価が制度化されている
+
+現行実装の実態は次のとおりである。
+
+- parser は scalar parse 中に expression を inline parse / validate する
+- linter は rule 実行中に expression を再 parse し、より文脈依存な validation を行う
+- dynamic context は lint 時点で workflow/job/step 情報から override される
+- parser/linter の診断重複を dedup 前提で処理している
+
+つまり、重複は偶発的なものではなく、現行仕様と実装の両方で前提化されている。
+
+### 3.3 現行の利点
+
+現行設計にも実利はある。
+
+- parser 単体で expression diagnostics がある程度得られる
+- linter は parser が expression を見つけてくれる前提で組める
+- syntax error と基礎 semantic error を parser で早期に返せる
+
+この利点は捨てるべきではない。したがって、B のような全面移管は採らない。
+
+### 3.4 現行の問題点
+
+現行の主な問題点は次のとおりである。
+
+1. parser が GitHub Actions 文脈依存の意味論を抱えすぎている
+2. parser と linter が同一領域を違う粒度で診ている
+3. dynamic context 解決が lint phase 依存なのに、parser spec 側に semantic 責務が厚く残っている
+4. custom rule 観点では expression artifact が parser 成果物として十分に露出していない
+5. linter 側で expression 再 parse / 再評価が多く、設計と性能の両面で非対称がある
+
+---
+
+## 4. parser/linter の重複領域整理
+
+### 4.1 診断カテゴリ別の現状整理
+
+| カテゴリ | 現在 parser | 現在 linter | 重複度 | 将来の主担当 |
+|---|---|---|---|---|
+| syntax-only | 担当 | 一部 rule が parse 結果を前提に消費 | 低 | parser |
+| built-in function existence / arity / overload | 担当 | 一部 rule が型推論目的で再利用 | 中 | parser |
+| root context availability | 担当 | `expr-undefined-var` でも担当 | 高 | linter |
+| function availability by workflow position | 担当 | `expr-undefined-var` でも担当 | 高 | linter |
+| dynamic property existence | 一部担当 | `expr-undefined-var` が strict override で担当 | 高 | linter |
+| type suitability for workflow site | 一部担当 | `expr-undefined-var` が workflow site aware に担当 | 高 | linter |
+| operator local type validity | 担当 | `expr-undefined-var` が override-aware に再評価 | 高 | 原則 parser、必要に応じて linter 補完 |
+| security / policy semantics | 非担当 | 各 rule が担当 | 低 | linter |
+
+### 4.2 重複の本質
+
+重複の本質は「parser が syntax 以上の semantic を持っていること」ではなく、**GitHub Actions 文脈がないと正確に判定できない問題を parser 側にも置いていること** にある。
+
+特に次は linter 側が自然である。
+
+- その式が書かれている workflow position
+- matrix / needs / steps / inputs の具体的 shape
+- local action / local reusable workflow から得られる出力情報
+- config / suppression / severity override との結び付き
+
+---
+
+## 5. 現在の仕様で考慮不足な点
+
+### 5.1 parser が linter に何を渡すかの契約が弱い
+
+現状の spec は parser が expression parsing と semantic typing data を所有すると書いているが、将来の public API / custom rule 目線では「何が parser 成果物として再利用可能なのか」が十分に定義されていない。
+
+今後は次の観点を spec に明示する必要がある。
+
+- expression occurrence がどの YAML site に属するか
+- expression AST / IR を parser 成果物として扱うか
+- linter が expression を再 parse せずに済む contract を持てるか
+- parser-only consumer が expression 情報をどう参照できるか
+
+### 5.2 syntax と semantic の境界では粗すぎる
+
+今回の再分離では、単純に「syntax は parser、semantic は linter」と切るのは粗すぎる。
+
+実際には次のように分けるべきである。
+
+- expression language 自体に属する妥当性: parser
+- GitHub Actions workflow position / dynamic context に依存する妥当性: linter
+
+この分離でないと、parser から too much を削りすぎるか、逆に linter が過剰に parser の仕事を背負う。
+
+### 5.3 custom rule 実装者向け contract が不足している
+
+将来ライブラリとして公開するなら、custom rule 作者が欲しいのは次である。
+
+- typed workflow AST
+- expression occurrence / expression AST
+- site metadata
+- rule から参照できる semantic model
+
+単に `StringNodeId` を decode できるだけでは十分ではない。custom rule が毎回 expression を再検出 / 再 parse / 再解釈する設計は、拡張性・性能の両方で不利である。
+
+### 5.4 parser-only consumer の期待値整理が必要
+
+parser-only consumer にどこまでの価値を保証するかを決める必要がある。
+
+今後の契約としては、parser-only consumer には少なくとも次を保証するのが妥当である。
+
+- YAML structural diagnostics
+- expression syntax diagnostics
+- expression AST / occurrence metadata
+- expression-language intrinsic validation
+
+一方で、GitHub Actions 文脈依存の availability/property/type は parser-only consumer の責務から外してよい。
+
+---
+
+## 6. 目標アーキテクチャ
+
+### 6.1 parser が構築すべきもの
+
+parser は最終的に次を構築する層として整理する。
+
+1. YAML AST
+2. expression occurrence index
+3. expression AST / IR
+4. source range / token / site metadata
+5. expression-language intrinsic diagnostics
+
+ここでいう expression-language intrinsic diagnostics は次を含む。
+
+- expression syntax error
+- unknown function
+- function arity mismatch
+- function overload mismatch
+- expression grammar 上の局所的な不整合
+- workflow position に依存しない operator-level validation
+
+### 6.2 linter が構築・評価すべきもの
+
+linter は parser 成果物と workflow AST を受け取り、次を担当する。
+
+1. workflow-aware semantic model 構築
+2. dynamic context resolution
+3. context availability validation
+4. function availability validation by workflow position
+5. dynamic property strictness
+6. workflow site aware type suitability
+7. security / policy rule
+8. suppression / severity / enable-disable / config
+
+### 6.3 shared analyzer + rule facade を採る
+
+実装方式は、現時点では **shared analyzer + rule facade** が最も妥当である。
+
+- analyzer は linter 層に置く
+- analyzer は workflow-aware semantic model を入力に取る
+- rule は analyzer 結果を diagnostics として surface する facade になる
+- config / suppression / severity は rule 経由で扱う
+
+これにより、rule catalog を不必要に肥大化させず、かつ rule contract に自然に載せられる。
+
+### 6.4 将来の公開 API の方向性
+
+将来的に Seiton.Core を library として整える場合、少なくとも次の方向性を取る。
+
+- parser API は reusable である
+- linter API は pre-parsed result を受けられる方向に寄せる
+- custom rule は parser 成果物と semantic model を利用できる
+- parser / linter を façade API で束ねても、内部 contract は分離されたままである
+
+---
+
+## 7. A と refined C の比較
+
+| 観点 | A: 現行維持 | refined C |
+|---|---|---|
+| 短期互換 | 最も高い | 中程度 |
+| parser 単体価値 | 高いが責務過剰 | 高いまま整理可能 |
+| linter の自然さ | 低い | 高い |
+| suppression / severity との整合 | 低い | 高い |
+| custom rule 実装しやすさ | 低い | 高い |
+| public API の説明しやすさ | 低い | 高い |
+| spec の保守性 | 低い | 高い |
+| parser 側 domain knowledge 蓄積 | 継続する | 抑制できる |
+| 実装移行コスト | 小さい | 中程度 |
+| 長期最適性 | 低い | 高い |
+
+結論として、短期安定性は A が優位だが、長期の API / 拡張性 / 仕様保守性では refined C が明確に優位である。
+
+---
+
+## 8. 実装に先立つ基本方針
+
+### 8.1 spec-first で進める
+
+今後の進め方は、**仕様更新作業から先に進める**。
+
+理由は次のとおりである。
+
+- parser/linter boundary を実装だけ先に動かすと downstream spec が崩れる
+- parser-only consumer と lint consumer の contract が曖昧なままになる
+- public API / custom rule contract を後付けにすると設計の辻褄合わせになる
+
+したがって、まず contract を spec で固定し、その後の実装はその contract を満たすように進める。
+
+### 8.2 red-first test を実装フェーズの原則にする
+
+実装フェーズは **red-first test** を原則にする。
+
+各 PR / 各フェーズでは、次の順序を守る。
+
+1. 先に failing test を書く
+2. 境界変更の意図を test で固定する
+3. 最小実装で green にする
+4. 関連する focused benchmark / allocation check を回す
+5. 必要なら spec/doc を同一スコープで更新する
+
+### 8.3 性能方針
+
+本計画に基づく実装では、性能制約を常時適用する。
+
+- parser success path で新たな string materialization を増やさない
+- parser/linter の hot path に新しい `List<T>` / `new T[]` / growth path を持ち込まない
+- expression artifact 導入時も zero-copy / pooled / per-run cache を前提に設計する
+- rule 側の expression 利用は再 parse を減らす方向に寄せる
+- benchmark で allocation 悪化が出る案は不採用とする
+
+特に **allocation 悪化は不許可** とする。速度改善だけを理由に heap pressure が増える設計は採らない。
+
+---
+
+## 9. 優先度付きフェーズ実装計画
+
+## Phase 0 — 調査結果の contract 化
+
+### 目的
+
+境界再定義の結論を spec 上で固定し、今後の実装のブレを防ぐ。
+
+### このフェーズで行うこと
+
+1. `Seiton_spec.md` の責務表を refined C に合わせて更新する
+2. `Seiton_Parser_spec.md` に parser-owned / linter-owned の再定義を反映する
+3. `Seiton_Linter_spec.md` に expression semantic validation の owning responsibility を明記する
+4. `Seiton_Parser_csharp_spec.md` / `Seiton_Parser_go_spec.md` / `Seiton_Linter_csharp_spec.md` / `Seiton_Linter_go_spec.md` を同期する
+5. implementation plan 文書も boundary 再定義に合わせて更新する
+
+### このフェーズでまだやらないこと
+
+- production code の責務移管
+- diagnostics の実際の移動
+- public API 破壊的変更
+
+### 完了条件
+
+- refined C が spec 上で明文化されている
+- parser/linter の責務説明が一文で説明できる
+- downstream spec との矛盾がない
+
+### 性能条件
+
+- spec-only change のため benchmark 変更なし
+- 次フェーズ以降の性能 acceptance criteria を文書化する
+
+---
+
+## Phase 1 — 現状棚卸しと移行単位の固定
+
+### 目的
+
+責務移管を一括で行わず、診断カテゴリ単位に切り分けて実装可能な単位に分解する。
+
+### このフェーズで行うこと
+
+1. parser が出している expression 関連診断を分類する
+2. linter rule が出している expression 関連診断を分類する
+3. parser/linter 重複領域を診断カテゴリ表として確定する
+4. 各カテゴリについて「parser に残す / linter に移す / 二段階残置」の判断を明示する
+5. 移行順序を低リスク順に固定する
+
+### 最低限固定するカテゴリ
 
 1. syntax-only
-2. context availability
-3. function availability
-4. property existence
-5. type suitability
-6. security/policy rule
+2. built-in function validity
+3. context availability
+4. function availability by position
+5. dynamic property existence
+6. workflow site aware type suitability
+7. security / policy rule
 
-完了条件:
+### 完了条件
 
-- 各診断カテゴリの現所属と移管候補が見える
+- 各カテゴリの owner と移行順序が表で見える
+- どのカテゴリを parser に残すかが曖昧でない
 
-### P1 — Spec 上の責務再定義
+### 性能条件
 
-- `Seiton_spec.md` の責務表を更新
-- `Seiton_Parser_spec.md` から GitHub domain semantics を段階的に薄くする方針を書く
-- `Seiton_Linter_spec.md` に expression semantic validation の owning responsibility を追加する
-
-この段階ではまだ実装を移さず、**将来の移行先を spec で固定する**。
-
-完了条件:
-
-- parser/linter 境界が spec 上で説明可能になる
-
-### P2 — 実装の段階移行
-
-- parser 側 validation を syntax-centered に限定
-- availability/type/property diagnostics を linter 側 rule または shared lint-phase validator に移す
-- 既存 diagnostic messages / ranges / severity をなるべく維持する
-
-このフェーズは破壊範囲が大きいため、1 PR に詰め込まない。
-
-完了条件:
-
-- parser 単体は syntax/AST に集中
-- semantic diagnostics は linter 側から出る
-
-### P3 — Config / suppression の最適化
-
-- `expr-undefined-var` との責務重複を再整理
-- 将来的に availability/type を rule として完全に config/suppression 対象にするか検討
-- parser diagnostics から linter diagnostics に移ることで UX が悪化しないか確認
-
-完了条件:
-
-- semantic diagnostics の運用ポリシーが linter contract に収まる
+- まだ挙動変更はしない
+- ただし現状 benchmark baseline と allocation baseline を採取し、以後の gate に使う
 
 ---
 
-## 7. 実装方式候補
+## Phase 2 — red-first test / benchmark gate の先行整備
 
-### 方式 1 — 専用 lint-phase validator
+### 目的
 
-rule ではなく、linter pass 前の shared semantic validator を置く。
+以後の責務移管を、仕様準拠と性能制約の両面で安全に進められるようにする。
 
-利点:
+### このフェーズで行うこと
 
-- parser から linter への移管はしやすい
-- rule catalog をむやみに増やさずに済む
+1. expression boundary 用の regression test 群をカテゴリ別に整備する
+2. parser-only expectation と lint expectation を分けて固定する
+3. duplicate diagnostics / replacement behavior を test で固定する
+4. benchmark の比較手順をフェーズごとに明文化する
+5. parser / lint hot path に関する allocation guard を review checklist に組み込む
 
-欠点:
+### test 原則
 
-- linter なのに rule でない責務が増える
+- 各実装 PR は red-first で開始する
+- one category at a time で移す
+- false positive / false negative の両方を test する
+- security-sensitive rule では negative test 数が positive test 数以上であることを守る
 
-### 方式 2 — 既存 rule に統合
+### benchmark 原則
 
-`expr-undefined-var` を拡張して availability/property/type の主体にする。
+- parser 関連変更では parser benchmark を比較する
+- linter 関連変更では lint benchmark を比較する
+- Mean と Allocated の両方を比較する
+- Allocated が悪化した案は採用しない
 
-利点:
+### 完了条件
 
-- ルールとして扱いやすい
-- config/suppression に自然に乗る
-
-欠点:
-
-- rule の責務が大きくなりやすい
-
-### 方式 3 — shared analyzer + rule facade
-
-共通 analyzer は linter 層に置き、rule はその結果を診断化する facade とする。
-
-利点:
-
-- analyzer の再利用性が高い
-- rule/config との両立がしやすい
-
-欠点:
-
-- 設計レイヤが 1 つ増える
-
-**推奨は方式 3**。
+- 境界移管 PR を安全に進める test/benchmark gate が揃っている
 
 ---
 
-## 8. 互換性リスク
+## Phase 3 — parser 成果物の再利用性向上
 
-このタスクは parser/linter 境界に触れるため、次のリスクがある。
+### 目的
 
-- parser-only consumer の診断セットが変わる
-- fatal parse 後の short-circuit 条件との兼ね合いが変わる
-- diagnostic category / wording / ordering が変わる可能性がある
-- benchmark 上、parser は軽くなり linter は重くなる可能性がある
+linter や custom rule が expression を再 parse しなくてもよい方向に、parser の成果物 contract を強化する。
 
-したがって、P1 で spec を先に固定し、P2 は別 PR に分けるべき。
+### このフェーズで行うこと
+
+1. expression occurrence / site metadata の扱いを整理する
+2. expression AST / IR を parser 成果物として再利用できる形を検討・導入する
+3. linter が parser 成果物を受け取って評価できる内部 contract を整える
+4. 将来 public API として公開可能な surface を設計する
+
+### このフェーズの設計原則
+
+- success path で余分な allocation を増やさない
+- expression artifact は zero-copy / pooled 前提で持つ
+- parser 側で linter 専用の heavyweight object graph を毎回構築しない
+- current hot path より heap pressure を増やさない
+
+### 完了条件
+
+- linter 側が parser 成果物を使う migration path を持つ
+- custom rule / public API へ展開可能な内部 contract が見える
 
 ---
 
-## 9. この task の推奨結論
+## Phase 4 — lint semantic analyzer 導入
 
-長期的には、**expression syntax は parser、GitHub Actions 意味論としての availability/type/property validation は linter** に置くのが最も自然である。
+### 目的
 
-現行設計は仕様上は一貫しているが、責務境界としてはやや parser 側に寄りすぎている。したがって、今後の改善方針は「全面撤去」ではなく、**parser から linter への段階的な責務再分配** を採るのが妥当である。
+GitHub Actions 文脈依存の semantic validation を linter 層へ寄せるための shared analyzer を整備する。
+
+### このフェーズで行うこと
+
+1. workflow-aware semantic model を linter 層に導入する
+2. dynamic context resolution を analyzer 側に集約する
+3. context availability / function availability / dynamic property / site aware type check を analyzer で扱えるようにする
+4. rule facade が analyzer 結果を diagnostics 化する形に整える
+
+### 実装原則
+
+- per-run cache を活用する
+- 既存の content-hash based expression parse cache は維持または削減する方向に使う
+- per-job / per-step の override 配列や辞書は再利用する
+- `new T[]` / `List<T>` の増加を避ける
+
+### 完了条件
+
+- linter 側に semantic ownership の受け皿ができる
+- rule facade から利用できる
+
+### 性能条件
+
+- lint benchmark で allocation 改善または同等
+- parser benchmark に悪影響がない
+
+---
+
+## Phase 5 — 責務の段階移管
+
+### 目的
+
+GitHub Actions 文脈依存の validation を parser から linter に一括ではなくカテゴリ単位で移す。
+
+### 推奨移行順
+
+1. root context availability
+2. function availability by workflow position
+3. dynamic property existence / strictness
+4. workflow site aware type suitability
+
+### 各 PR で守ること
+
+1. 対象カテゴリの failing test を先に書く
+2. parser / linter どちらが owner かを spec と test で固定する
+3. 既存 diagnostic wording / location / severity は可能な限り維持する
+4. benchmark と allocation を比較する
+5. parser 側の不要な validation を削除する前に linter 側の受け皿を green にする
+
+### 完了条件
+
+- parser は syntax / front-end / intrinsic validation に集中している
+- GitHub Actions 文脈依存 semantic diagnostics は linter から出る
+
+### 性能条件
+
+- parser は current baseline 以上の allocation を出さない
+- linter は増えた仕事量に対しても total allocation を抑制する
+- total parse+lint として現状比で少なくとも同等、できれば改善を目指す
+
+---
+
+## Phase 6 — 公開 API / custom rule 向けの仕上げ
+
+### 目的
+
+Seiton.Core を parser/linter library として出したときに、利用者が自然に使える contract を整える。
+
+### このフェーズで行うこと
+
+1. pre-parsed result を linter に渡せる surface の整理
+2. custom rule が expression artifact と semantic model を利用できる contract の整備
+3. façade API の説明と下位 contract の責務分離を docs に反映
+4. parser-only / linter-only / combined use case を docs で説明する
+
+### 完了条件
+
+- parser/linter を個別にも組み合わせでも説明できる
+- custom rule の実装体験が「AST を読んで自前で全部やり直す」状態ではなくなる
+
+---
+
+## 10. フェーズ横断の性能・品質ゲート
+
+### 10.1 共通品質ゲート
+
+すべての実装フェーズで次を満たす。
+
+1. red-first test で開始する
+2. focused test を先に通す
+3. full test suite を通す
+4. benchmark を比較する
+5. spec/doc と implementation を同期する
+
+### 10.2 parser 側の禁止事項
+
+- success path で新しい string decode を増やさない
+- hot path に `List<T>` / `Dictionary<TKey, TValue>` growth を増やさない
+- per-node allocation を増やさない
+- linter 向け convenience のために parser が heavyweight object を毎回構築しない
+
+### 10.3 linter 側の禁止事項
+
+- rule ごとの expression 再 parse を増やす
+- shared cache で済む計算を rule ごとに重複させる
+- per-job / per-step で新しい heap allocation を増やす
+- parser から移した責務の分だけ無制限に allocation を増やす
+
+### 10.4 benchmark gate
+
+原則として、各フェーズで次を確認する。
+
+- parser 変更: parser benchmark
+- linter 変更: lint benchmark
+- Mean 比較
+- Allocated 比較
+
+判定原則:
+
+- Allocated が悪化した場合は原則差し戻し
+- Mean が悪化した場合は改善案を優先検討
+- 両方改善できる実装を優先採用
+
+---
+
+## 11. この計画で明示的に避けること
+
+1. spec を更新せずにコードだけで責務移管すること
+2. expression semantic を一括で parser から剥がすこと
+3. parser-only consumer の価値を考えずに linter へ全面移管すること
+4. custom rule 利用者の視点を後回しにすること
+5. 速度改善だけを理由に allocation を悪化させること
+6. 互換性リスクの大きい変更を 1 PR に詰め込むこと
+
+---
+
+## 12. 最終的な判断
+
+本件の長期方針は、**A ではなく refined C** である。
+
+ただし、その実行は「semantic validation を linter に寄せる」とだけ書けば済む話ではない。実際には、次の順で進めるべきである。
+
+1. まず spec を更新して boundary を固定する
+2. つぎに棚卸しと red-first test / benchmark gate を整える
+3. parser 成果物の再利用性を高める
+4. linter 側に shared semantic analyzer を導入する
+5. 診断カテゴリごとに責務を段階移管する
+6. 最後に public API / custom rule contract を仕上げる
+
+この順序なら、parser/linter の説明が自然になり、library としても rule 拡張基盤としても整合が取りやすい。さらに、性能改善と allocation 抑制を各フェーズの acceptance criteria に組み込める。
+
+したがって、今後は **仕様更新先行 + red-first test ベース + allocation 悪化不許可** を基本原則として、この計画に沿って進める。
