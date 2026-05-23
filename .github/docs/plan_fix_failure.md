@@ -312,7 +312,7 @@ pin remediation を含める場合は、stale offset を避ける必要がある
 
 1. **SelectNonConflictingBatch**: greedy offset-ordered selection。全 diagnostic を最小 offset 順にソートし、先着 diagnostic を選択。競合する diagnostic は次 pass へ繰り越し。occupied range は total edit count から exact-size 配列を確保して管理。
 2. **Iterative relint loop**: 最大 8 pass。各 pass で relint → batch selection → apply。同一 YAML が返れば収束として停止。
-3. **Pin remediation phase**: local fix 安定化後に実行。stabilized YAML に対して relint + `HasPinFixableDiagnostics` pre-scan + `RemediateAsync` → apply。pre-scan により pin-target diagnostic がない場合は network 呼び出しを完全にスキップ。戻り値は `(byte[] Yaml, int AppliedCount)` タプルで、`ResolvedCount` を正確に報告。
+3. **Pin remediation phase**: local fix 安定化後に実行。stabilized YAML に対して relint + `HasPinFixableDiagnostics` pre-scan + `RemediateAsync` → apply。pre-scan により pin-target diagnostic がない場合は network 呼び出しを完全にスキップ。戻り値は `(byte[] Yaml, int AppliedCount)` タプルで、`ResolvedCount` を正確に報告。apply 時は `PinFixableDiagnostics` フィルタにより pin-rule diagnostic のみを適用し、非 pin の残存 fix が conflict-aware ロジックを迂回しないことを保証。
 4. **dry-run**: iterative apply + pin phase で最終 YAML を計算し、original との diff を生成。`FixEngine.BuildUnifiedDiffFromBytes` で直接 byte[] 間 diff。
 
 ### 11.3 ベンチマーク結果
