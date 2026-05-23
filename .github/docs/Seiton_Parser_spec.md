@@ -381,6 +381,7 @@ Currently supported hint:
 
 Constraints:
 
+- Hints fire only when the parser has a reliable fatal position from the YAML library (for C# VYaml integration, parseable `Line:`, `Col:`, and `Idx:` markers)
 - Hints fire only when all heuristic conditions are met (key match + plain scalar + `: ` presence)
 - Hints do not fire for quoted scalars, block scalars, or values without `: `
 - YAML node properties before the scalar value (for example `&anchor`, `!tag`) are ignored when deciding whether the value is plain vs quoted/block

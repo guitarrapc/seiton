@@ -17,6 +17,8 @@
 - レビュー反映: YAML node property (`&anchor`, `!tag`) をスキップし、inline comment を colon 判定対象から除外
 - レビュー反映: `run: # reason: ...` のような empty/comment-only value ではヒントを出さないよう修正
 - レビュー反映: YAML flow indicator (`[`, `{`) および alias indicator (`*`) を plain scalar 判定から除外
+- レビュー反映: `run:` / `script:` 後や node property 後の horizontal whitespace として tab (`\t`) も許容
+- レビュー反映: VYaml 例外メッセージに parse 可能な `Line:` / `Col:` / `Idx:` がある場合のみヒント生成を許可
 
 ### ベンチマーク結果 (CoreParsingBenchmark)
 
@@ -32,7 +34,7 @@
 
 ### テスト追加
 
-20 テスト追加 (5 positive + 15 negative):
+27 テスト追加:
 - `Parse_PlainScalarColonHint_RunWithColonSpace_ReturnsHint` — `run:` + `: ` → ヒントあり
 - `Parse_PlainScalarColonHint_ScriptWithColonSpace_ReturnsHint` — `script:` + `: ` → ヒントあり
 - `Parse_PlainScalarColonHint_RunWithBareColon_ReturnsHint` — `run: foo: bar` → ヒントあり
@@ -51,10 +53,17 @@
 - `TryGetPlainScalarColonHint_FlowMappingValue_ReturnsNull` — ヒューリスティック単体: flow mapping `{cmd: echo}` → null
 - `TryGetPlainScalarColonHint_FlowSequenceValue_ReturnsNull` — ヒューリスティック単体: flow sequence `[a: b]` → null
 - `TryGetPlainScalarColonHint_AliasValue_ReturnsNull` — ヒューリスティック単体: alias `*ref` → null
+- `TryGetPlainScalarColonHint_TabAfterColon_QuotedScalar_ReturnsNull` — ヒューリスティック単体: tab + quoted → null
+- `TryGetPlainScalarColonHint_TabAfterColon_PlainScalar_ReturnsHint` — ヒューリスティック単体: tab + plain scalar + `: ` → hint
+- `TryGetPlainScalarColonHint_OffsetZeroAtFileStart_ReturnsHint` — ヒューリスティック単体: offset 0 だと先頭 `run:` を拾えることを確認（caller 側 gating の根拠）
 - `TryGetPlainScalarColonHint_RunFourLinesAboveOffset_ReturnsNull` — ヒューリスティック単体: 4 行上 → null (scan window 外)
 - `TryGetPlainScalarColonHint_RunThreeLinesAboveOffset_ReturnsHint` — ヒューリスティック単体: error line の 3 行上でもヒントあり
+- `HasReliableVYamlPosition_VYamlFormat_ReturnsTrue` — `Line:` / `Col:` / `Idx:` 完備かつ parse 可能 → true
+- `HasReliableVYamlPosition_NoIdx_ReturnsFalse` — `Idx:` 欠如 → false
+- `HasReliableVYamlPosition_InvalidIdx_ReturnsFalse` — `Idx:` が parse 不可 → false
+- `HasReliableVYamlPosition_NoMarkers_ReturnsFalse` — marker 不在 → false
 
-全 1950 テスト通過。
+全 1957 テスト通過。
 
 ---
 

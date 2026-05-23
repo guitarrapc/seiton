@@ -3976,6 +3976,38 @@ public sealed class ParserTests
         await Assert.That(offset).IsEqualTo(0);  // No Idx → 0
     }
 
+    [Test]
+    public async Task HasReliableVYamlPosition_VYamlFormat_ReturnsTrue()
+    {
+        var reliable = WorkflowParser.HasReliableVYamlPosition("Failed to parse at Line: 5, Col: 3, Idx: 42");
+
+        await Assert.That(reliable).IsTrue();
+    }
+
+    [Test]
+    public async Task HasReliableVYamlPosition_NoIdx_ReturnsFalse()
+    {
+        var reliable = WorkflowParser.HasReliableVYamlPosition("Failed at Line: 3, Col: 7");
+
+        await Assert.That(reliable).IsFalse();
+    }
+
+    [Test]
+    public async Task HasReliableVYamlPosition_InvalidIdx_ReturnsFalse()
+    {
+        var reliable = WorkflowParser.HasReliableVYamlPosition("Failed to parse at Line: 5, Col: 3, Idx: nope");
+
+        await Assert.That(reliable).IsFalse();
+    }
+
+    [Test]
+    public async Task HasReliableVYamlPosition_NoMarkers_ReturnsFalse()
+    {
+        var reliable = WorkflowParser.HasReliableVYamlPosition("Some random error message");
+
+        await Assert.That(reliable).IsFalse();
+    }
+
     // regression: matrix include adds extra keys to the matrix context
     [Test]
     public async Task Parse_MatrixIncludeAddsExtraKeys_ContextIncludesIncludeOnlyKeys()
@@ -5290,6 +5322,17 @@ public sealed class ParserTests
         var hint = WorkflowParser.TryGetPlainScalarColonHint(yaml, yaml.Length - 2);
 
         await Assert.That(hint).IsNotNull();
+    }
+
+    [Test]
+    public async Task TryGetPlainScalarColonHint_OffsetZeroAtFileStart_ReturnsHint()
+    {
+        // This proves callers must gate hint generation on reliable parser offsets.
+        var yaml = "- run: echo Title: ok\nwith\n"u8;
+
+        var hint = WorkflowParser.TryGetPlainScalarColonHint(yaml, 0);
+
+        await Assert.That(hint).Contains("run:");
     }
 
     [Test]

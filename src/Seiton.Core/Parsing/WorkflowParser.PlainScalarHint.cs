@@ -4,6 +4,9 @@ namespace Seiton.Core.Parsing;
 
 public static partial class WorkflowParser
 {
+    private const string RunPlainScalarColonHint = "the plain scalar value after 'run:' contains ': ' which YAML interprets as a mapping separator. Quote the value or use a block scalar (|) instead";
+    private const string ScriptPlainScalarColonHint = "the plain scalar value after 'script:' contains ': ' which YAML interprets as a mapping separator. Quote the value or use a block scalar (|) instead";
+
     /// <summary>
     /// After a fatal YAML parse, heuristically checks whether the failure is caused by
     /// a plain scalar in <c>run:</c> or <c>script:</c> containing <c>: </c> (colon-space).
@@ -50,9 +53,7 @@ public static partial class WorkflowParser
                         var valuePortion = line[valueStart..valueEnd];
                         if (ContainsColonSpace(valuePortion))
                         {
-                            return matchedKey.Length == 3
-                                ? "the plain scalar value after 'run:' contains ': ' which YAML interprets as a mapping separator. Quote the value or use a block scalar (|) instead"
-                                : "the plain scalar value after 'script:' contains ': ' which YAML interprets as a mapping separator. Quote the value or use a block scalar (|) instead";
+                            return GetPlainScalarColonHint(matchedKey);
                         }
                     }
                 }
@@ -64,6 +65,12 @@ public static partial class WorkflowParser
         }
 
         return null;
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private static string GetPlainScalarColonHint(string key)
+    {
+        return key == "run" ? RunPlainScalarColonHint : ScriptPlainScalarColonHint;
     }
 
     /// <summary>

@@ -1055,16 +1055,18 @@ The parser never aborts on a single error. Each parse function:
 
 #### Fatal Parse Explanatory Hints (C# Implementation)
 
-After a fatal YAML parse, `ParseCore` and `ParseClassified` catch blocks call `TryGetPlainScalarColonHint(source, errorOffset)` to detect common authoring mistakes. If a `run:` or `script:` key with a plain scalar value containing `: ` is found near the error position, the diagnostic's `Help` field is populated with an explanatory message.
+After a fatal YAML parse, `ParseCore`, `ParseClassified`, and `ParseIncremental` catch blocks first require a reliable VYaml position in the exception message (`Line:`, `Col:`, and parseable `Idx:` markers), then call `TryGetPlainScalarColonHint(source, errorOffset)` to detect common authoring mistakes. If a `run:` or `script:` key with a plain scalar value containing `: ` is found near the error position, the diagnostic's `Help` field is populated with an explanatory message.
 
 Implementation: `WorkflowParser.PlainScalarHint.cs` (partial class).
 
 Heuristic conditions (all must be true):
-1. Error line or up to 3 lines above contains `run:` or `script:` as a YAML key
-2. YAML node properties (`&anchor`, `!tag`) are skipped before determining the scalar kind
-3. The value after the key starts as a plain scalar (not `'`, `"`, `|`, `>`, `#`, `[`, `{`, `*`)
-4. The plain scalar value itself (excluding inline comments) contains `: ` (colon-space)
-5. Empty/comment-only values (for example `run: # note`) do not trigger the hint
+1. Exception message contains reliable VYaml position markers (`Line:`, `Col:`, `Idx:`) and `Idx:` parses successfully
+2. Error line or up to 3 lines above contains `run:` or `script:` as a YAML key
+3. YAML node properties (`&anchor`, `!tag`) are skipped before determining the scalar kind
+4. Horizontal whitespace after the key or node property may be spaces or tabs
+5. The value after the key starts as a plain scalar (not `'`, `"`, `|`, `>`, `#`, `[`, `{`, `*`)
+6. The plain scalar value itself (excluding inline comments) contains `: ` (colon-space)
+7. Empty/comment-only values (for example `run: # note`) do not trigger the hint
 
 Performance: runs only on the error path (no impact on success-path parsing).
 
