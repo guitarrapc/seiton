@@ -252,7 +252,13 @@ internal static class FixCommand
                         }
                     }
 
-                    allDiagnostics.AddRange(effectiveDiagnostics);
+                    // Relint the hypothetical fixed YAML to report remaining diagnostics,
+                    // consistent with the normal fix path's final-lint behavior.
+                    using (var dryRunHandle = engine.Check(dryRunYaml, filePath, fixEnabledLintConfig))
+                    {
+                        allDiagnostics.AddRange(dryRunHandle.Diagnostics.AsSpan());
+                    }
+
                     continue;
                 }
 
@@ -531,7 +537,13 @@ internal static class FixCommand
             diagRanges[i] = (minOff, i);
         }
 
-        Array.Sort(diagRanges, static (a, b) => a.minOffset.CompareTo(b.minOffset));
+        // Stable tie-break by diagIndex ensures deterministic batch selection
+        // when multiple diagnostics share the same minOffset (the conflict scenario).
+        Array.Sort(diagRanges, static (a, b) =>
+        {
+            var cmp = a.minOffset.CompareTo(b.minOffset);
+            return cmp != 0 ? cmp : a.diagIndex.CompareTo(b.diagIndex);
+        });
 
         // Track occupied ranges (offset, end) from selected diagnostics.
         var occupiedCount = 0;

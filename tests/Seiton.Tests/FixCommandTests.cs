@@ -132,7 +132,7 @@ public sealed class FixCommandTests
                 runs-on: ubuntu-latest
                 steps:
                   - if: github.event_name == 'push'
-                    run: echo ok
+                    uses: actions/checkout@v4
             """);
 
         try
@@ -677,7 +677,7 @@ public sealed class FixCommandTests
 
         var lines = FixCommand.CreateFixApplicationErrorLines("workflow.yml", ex, verbose: false);
 
-        await Assert.That(lines.Count).IsEqualTo(2);
+        await Assert.That(lines.Length).IsEqualTo(2);
         await Assert.That(lines[0]).Contains("error: fix failed for workflow.yml");
         await Assert.That(lines[0]).Contains("offset 78");
         await Assert.That(lines[1]).Contains("hint:");
@@ -691,7 +691,7 @@ public sealed class FixCommandTests
         var lines = FixCommand.CreateFixApplicationErrorLines("workflow.yml", ex, verbose: true);
 
         // Never-thrown exception has no StackTrace, falls back to ex.ToString() (single line)
-        await Assert.That(lines.Count).IsGreaterThanOrEqualTo(3);
+        await Assert.That(lines.Length).IsGreaterThanOrEqualTo(3);
         await Assert.That(lines[2]).StartsWith("detail:");
     }
 
@@ -706,7 +706,7 @@ public sealed class FixCommandTests
         var lines = FixCommand.CreateFixApplicationErrorLines("workflow.yml", ex, verbose: true);
 
         // Stack trace from nested call has multiple frames; each must be prefixed with "detail:"
-        await Assert.That(lines.Count).IsGreaterThanOrEqualTo(3);
+        await Assert.That(lines.Length).IsGreaterThanOrEqualTo(3);
         for (var i = 2; i < lines.Length; i++)
         {
             await Assert.That(lines[i]).StartsWith("detail:");
@@ -726,7 +726,7 @@ public sealed class FixCommandTests
 
         var lines = FixCommand.CreateFixApplicationErrorLines("workflow.yml", ex, verbose: false);
 
-        await Assert.That(lines.Count).IsEqualTo(2);
+        await Assert.That(lines.Length).IsEqualTo(2);
         await Assert.That(lines[0]).Contains("error: fix failed for workflow.yml");
         await Assert.That(lines[0]).Contains("selector bug");
         await Assert.That(lines[1]).Contains("Please report this issue");

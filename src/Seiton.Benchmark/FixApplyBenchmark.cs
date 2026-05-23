@@ -102,7 +102,11 @@ public class FixApplyBenchmark
             diagRanges[i] = (minOff, i);
         }
 
-        Array.Sort(diagRanges, static (a, b) => a.minOffset.CompareTo(b.minOffset));
+        Array.Sort(diagRanges, static (a, b) =>
+        {
+            var cmp = a.minOffset.CompareTo(b.minOffset);
+            return cmp != 0 ? cmp : a.diagIndex.CompareTo(b.diagIndex);
+        });
 
         var occupiedCount = 0;
         var occupied = new (int offset, int end)[totalEditCount];
