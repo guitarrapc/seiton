@@ -227,10 +227,19 @@ internal static class FixCommand
                 if (dryRun)
                 {
                     // --dry-run: compute fixed YAML via iterative conflict-safe apply, then diff.
-                    var dryRunYaml = ApplyFixesIteratively(engine, utf8Yaml, filePath, fixEnabledLintConfig);
-                    if (pinRemediation != null)
+                    byte[] dryRunYaml;
+                    try
                     {
-                        dryRunYaml = await ApplyPinRemediationAsync(pinRemediation, engine, dryRunYaml, filePath, fixEnabledLintConfig, verboseLogger);
+                        dryRunYaml = ApplyFixesIteratively(engine, utf8Yaml, filePath, fixEnabledLintConfig);
+                        if (pinRemediation != null)
+                        {
+                            dryRunYaml = await ApplyPinRemediationAsync(pinRemediation, engine, dryRunYaml, filePath, fixEnabledLintConfig, verboseLogger);
+                        }
+                    }
+                    catch (InvalidOperationException ex)
+                    {
+                        WriteFixApplicationError(errorWriter, filePath, ex, verbose);
+                        return ExitCode.FatalError;
                     }
 
                     if (!dryRunYaml.AsSpan().SequenceEqual(utf8Yaml))
@@ -253,13 +262,21 @@ internal static class FixCommand
                 var appliedFixes = 0;
                 const int maxFixPasses = 8;
 
-                currentYaml = ApplyFixesIteratively(engine, currentYaml, filePath, fixEnabledLintConfig, maxFixPasses, ref appliedFixes);
-
-                // Phase 2: Pin remediation on stabilized YAML (案B).
-                // Local inserts are done, so pin edits target correct offsets.
-                if (pinRemediation != null)
+                try
                 {
-                    currentYaml = await ApplyPinRemediationAsync(pinRemediation, engine, currentYaml, filePath, fixEnabledLintConfig, verboseLogger);
+                    currentYaml = ApplyFixesIteratively(engine, currentYaml, filePath, fixEnabledLintConfig, maxFixPasses, ref appliedFixes);
+
+                    // Phase 2: Pin remediation on stabilized YAML (案B).
+                    // Local inserts are done, so pin edits target correct offsets.
+                    if (pinRemediation != null)
+                    {
+                        currentYaml = await ApplyPinRemediationAsync(pinRemediation, engine, currentYaml, filePath, fixEnabledLintConfig, verboseLogger);
+                    }
+                }
+                catch (InvalidOperationException ex)
+                {
+                    WriteFixApplicationError(errorWriter, filePath, ex, verbose);
+                    return ExitCode.FatalError;
                 }
 
                 // Final lint to collect remaining diagnostics.
@@ -361,6 +378,16 @@ internal static class FixCommand
         var effectiveImage = enableImageNetwork || (imagesConfig?.EnableNetwork ?? false);
         var imageSource = enableImageNetwork ? "--enable-image-network" : imagesConfig?.HasEnableNetwork == true ? "config" : "default";
         logger.Log("config", $"fix.images.enable-network={(effectiveImage ? "true" : "false")} (source: {imageSource})");
+    }
+
+    private static void WriteFixApplicationError(TextWriter errorWriter, string filePath, InvalidOperationException ex, bool verbose)
+    {
+        errorWriter.WriteLine($"error: fix failed for {filePath}: {ex.Message}");
+        errorWriter.WriteLine("hint: this may indicate conflicting lint rules or a bug in fix generation. Please report this issue.");
+        if (verbose)
+        {
+            errorWriter.WriteLine($"detail: {ex.StackTrace}");
+        }
     }
 
     private static readonly IReadOnlyDictionary<string, int> EmptySuppressedByRule =
