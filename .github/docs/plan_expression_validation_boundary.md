@@ -26,9 +26,57 @@
 
 ---
 
-## 2. 結論
+## 2. 比較対象の定義
 
-### 2.1 採用方針
+この文書では、expression validation の境界案として A、B、C、refined C を比較する。後続の比較が前提なしに見えないよう、ここで各案の意味を明示する。
+
+### 2.1 A — 現行維持
+
+A は、現在の parser/linter 境界を基本的に維持する案である。
+
+- parser が expression syntax を parse する
+- parser が context availability / function availability / type validation / property validation の一部も担う
+- linter は parser diagnostics を受け取りつつ、rule ごとの文脈依存診断を追加する
+
+この案では、parser は expression front-end に留まらず、GitHub Actions 文脈に踏み込んだ semantic validation も継続して担当する。
+
+### 2.2 B — 完全移管
+
+B は、expression syntax を含めて expression validation 全体を linter 側へ全面移管する案である。
+
+- parser は YAML structural parse と AST 構築に集中する
+- expression parse 自体も linter 側が担う、または linter 側の phase に従属させる
+- parser 単体では expression diagnostics を基本的に持たない
+
+この案は責務分離は明快だが、parser 単体価値を大きく下げ、linter に expression front-end まで抱え込ませるため、本計画では採らない。
+
+### 2.3 C — ハイブリッド再分離
+
+C は、expression syntax と GitHub Actions 文脈依存 semantics を分け、parser と linter の責務を再配分する案である。
+
+- parser は expression syntax parse と AST 構築に集中する
+- linter は availability / property / type などの GitHub Actions 文脈依存 validation を担う
+- parser-only consumer の価値を保ちながら、semantic diagnostics を linter contract に寄せる
+
+ただし、このままでは「parser がどの expression artifact を構築して linter に渡すか」が十分に具体化されていない。
+
+### 2.4 refined C — 本計画で採る具体案
+
+refined C は、上の C を実装計画に落とし込める粒度まで具体化した案である。
+
+- parser は YAML + expression front-end として振る舞う
+- parser は expression occurrence、expression AST / IR、site metadata など、linter や custom rule が再利用できる成果物を持つ方向に進む
+- parser は expression-language intrinsic validation を担う
+- linter は workflow-aware semantic model を構築し、GitHub Actions 文脈依存 validation を担う
+- semantic diagnostics は rule/config/suppression/severity の世界に収める
+
+つまり refined C は、単なる「semantic を linter に寄せる案」ではなく、**parser が何を作り、linter が何を評価し、library / custom rule が何を使えるか** まで含めて定義した具体案である。
+
+---
+
+## 3. 結論
+
+### 3.1 採用方針
 
 長期的に望ましいのは、現行維持の **A** ではなく、責務を明確に再分離した **refined C** である。
 
@@ -39,7 +87,7 @@
 - parser は linter が再利用できる expression artifact を返す方向に進む
 - linter はその artifact と workflow AST を使って availability / property / type / policy を評価する
 
-### 2.2 A を採らない理由
+### 3.2 A を採らない理由
 
 A は短期互換性では有利だが、将来にわたって次の問題を固定化する。
 
@@ -49,7 +97,7 @@ A は短期互換性では有利だが、将来にわたって次の問題を固
 - custom rule 作者が expression を再 parse / 再解釈しやすい構造にならない
 - parser/linter の公開 API 説明が直感に反する
 
-### 2.3 refined C を採る理由
+### 3.3 refined C を採る理由
 
 refined C は次の点で最も整合的である。
 
@@ -62,9 +110,9 @@ refined C は次の点で最も整合的である。
 
 ---
 
-## 3. 調査分析結果
+## 4. 調査分析結果
 
-### 3.1 現行仕様は一貫しているが、境界は過密である
+### 4.1 現行仕様は一貫しているが、境界は過密である
 
 現行 spec では parser 側に expression semantic analysis が明示的に含まれている。そのため、現行設計は仕様上は一貫している。
 
@@ -72,7 +120,7 @@ refined C は次の点で最も整合的である。
 
 結果として、現在は「仕様上は一貫」「設計上は重複」という状態になっている。
 
-### 3.2 現行実装では parser/linter の二重評価が制度化されている
+### 4.2 現行実装では parser/linter の二重評価が制度化されている
 
 現行実装の実態は次のとおりである。
 
@@ -83,7 +131,7 @@ refined C は次の点で最も整合的である。
 
 つまり、重複は偶発的なものではなく、現行仕様と実装の両方で前提化されている。
 
-### 3.3 現行の利点
+### 4.3 現行の利点
 
 現行設計にも実利はある。
 
@@ -93,7 +141,7 @@ refined C は次の点で最も整合的である。
 
 この利点は捨てるべきではない。したがって、B のような全面移管は採らない。
 
-### 3.4 現行の問題点
+### 4.4 現行の問題点
 
 現行の主な問題点は次のとおりである。
 
@@ -105,9 +153,9 @@ refined C は次の点で最も整合的である。
 
 ---
 
-## 4. parser/linter の重複領域整理
+## 5. parser/linter の重複領域整理
 
-### 4.1 診断カテゴリ別の現状整理
+### 5.1 診断カテゴリ別の現状整理
 
 | カテゴリ | 現在 parser | 現在 linter | 重複度 | 将来の主担当 |
 |---|---|---|---|---|
@@ -120,7 +168,7 @@ refined C は次の点で最も整合的である。
 | operator local type validity | 担当 | `expr-undefined-var` が override-aware に再評価 | 高 | 原則 parser、必要に応じて linter 補完 |
 | security / policy semantics | 非担当 | 各 rule が担当 | 低 | linter |
 
-### 4.2 重複の本質
+### 5.2 重複の本質
 
 重複の本質は「parser が syntax 以上の semantic を持っていること」ではなく、**GitHub Actions 文脈がないと正確に判定できない問題を parser 側にも置いていること** にある。
 
@@ -133,9 +181,9 @@ refined C は次の点で最も整合的である。
 
 ---
 
-## 5. 現在の仕様で考慮不足な点
+## 6. 現在の仕様で考慮不足な点
 
-### 5.1 parser が linter に何を渡すかの契約が弱い
+### 6.1 parser が linter に何を渡すかの契約が弱い
 
 現状の spec は parser が expression parsing と semantic typing data を所有すると書いているが、将来の public API / custom rule 目線では「何が parser 成果物として再利用可能なのか」が十分に定義されていない。
 
@@ -146,7 +194,7 @@ refined C は次の点で最も整合的である。
 - linter が expression を再 parse せずに済む contract を持てるか
 - parser-only consumer が expression 情報をどう参照できるか
 
-### 5.2 syntax と semantic の境界では粗すぎる
+### 6.2 syntax と semantic の境界では粗すぎる
 
 今回の再分離では、単純に「syntax は parser、semantic は linter」と切るのは粗すぎる。
 
@@ -157,7 +205,7 @@ refined C は次の点で最も整合的である。
 
 この分離でないと、parser から too much を削りすぎるか、逆に linter が過剰に parser の仕事を背負う。
 
-### 5.3 custom rule 実装者向け contract が不足している
+### 6.3 custom rule 実装者向け contract が不足している
 
 将来ライブラリとして公開するなら、custom rule 作者が欲しいのは次である。
 
@@ -168,7 +216,7 @@ refined C は次の点で最も整合的である。
 
 単に `StringNodeId` を decode できるだけでは十分ではない。custom rule が毎回 expression を再検出 / 再 parse / 再解釈する設計は、拡張性・性能の両方で不利である。
 
-### 5.4 parser-only consumer の期待値整理が必要
+### 6.4 parser-only consumer の期待値整理が必要
 
 parser-only consumer にどこまでの価値を保証するかを決める必要がある。
 
@@ -183,9 +231,9 @@ parser-only consumer にどこまでの価値を保証するかを決める必�
 
 ---
 
-## 6. 目標アーキテクチャ
+## 7. 目標アーキテクチャ
 
-### 6.1 parser が構築すべきもの
+### 7.1 parser が構築すべきもの
 
 parser は最終的に次を構築する層として整理する。
 
@@ -204,7 +252,7 @@ parser は最終的に次を構築する層として整理する。
 - expression grammar 上の局所的な不整合
 - workflow position に依存しない operator-level validation
 
-### 6.2 linter が構築・評価すべきもの
+### 7.2 linter が構築・評価すべきもの
 
 linter は parser 成果物と workflow AST を受け取り、次を担当する。
 
@@ -217,7 +265,7 @@ linter は parser 成果物と workflow AST を受け取り、次を担当する
 7. security / policy rule
 8. suppression / severity / enable-disable / config
 
-### 6.3 shared analyzer + rule facade を採る
+### 7.3 shared analyzer + rule facade を採る
 
 実装方式は、現時点では **shared analyzer + rule facade** が最も妥当である。
 
@@ -228,7 +276,7 @@ linter は parser 成果物と workflow AST を受け取り、次を担当する
 
 これにより、rule catalog を不必要に肥大化させず、かつ rule contract に自然に載せられる。
 
-### 6.4 将来の公開 API の方向性
+### 7.4 将来の公開 API の方向性
 
 将来的に Seiton.Core を library として整える場合、少なくとも次の方向性を取る。
 
@@ -239,7 +287,7 @@ linter は parser 成果物と workflow AST を受け取り、次を担当する
 
 ---
 
-## 7. A と refined C の比較
+## 8. A と refined C の比較
 
 | 観点 | A: 現行維持 | refined C |
 |---|---|---|
@@ -258,9 +306,9 @@ linter は parser 成果物と workflow AST を受け取り、次を担当する
 
 ---
 
-## 8. 実装に先立つ基本方針
+## 9. 実装に先立つ基本方針
 
-### 8.1 spec-first で進める
+### 9.1 spec-first で進める
 
 今後の進め方は、**仕様更新作業から先に進める**。
 
@@ -272,7 +320,7 @@ linter は parser 成果物と workflow AST を受け取り、次を担当する
 
 したがって、まず contract を spec で固定し、その後の実装はその contract を満たすように進める。
 
-### 8.2 red-first test を実装フェーズの原則にする
+### 9.2 red-first test を実装フェーズの原則にする
 
 実装フェーズは **red-first test** を原則にする。
 
@@ -284,7 +332,7 @@ linter は parser 成果物と workflow AST を受け取り、次を担当する
 4. 関連する focused benchmark / allocation check を回す
 5. 必要なら spec/doc を同一スコープで更新する
 
-### 8.3 性能方針
+### 9.3 性能方針
 
 本計画に基づく実装では、性能制約を常時適用する。
 
@@ -298,7 +346,7 @@ linter は parser 成果物と workflow AST を受け取り、次を担当する
 
 ---
 
-## 9. 優先度付きフェーズ実装計画
+## 10. 優先度付きフェーズ実装計画
 
 ## Phase 0 — 調査結果の contract 化
 
@@ -516,9 +564,9 @@ Seiton.Core を parser/linter library として出したときに、利用者が
 
 ---
 
-## 10. フェーズ横断の性能・品質ゲート
+## 11. フェーズ横断の性能・品質ゲート
 
-### 10.1 共通品質ゲート
+### 11.1 共通品質ゲート
 
 すべての実装フェーズで次を満たす。
 
@@ -528,21 +576,21 @@ Seiton.Core を parser/linter library として出したときに、利用者が
 4. benchmark を比較する
 5. spec/doc と implementation を同期する
 
-### 10.2 parser 側の禁止事項
+### 11.2 parser 側の禁止事項
 
 - success path で新しい string decode を増やさない
 - hot path に `List<T>` / `Dictionary<TKey, TValue>` growth を増やさない
 - per-node allocation を増やさない
 - linter 向け convenience のために parser が heavyweight object を毎回構築しない
 
-### 10.3 linter 側の禁止事項
+### 11.3 linter 側の禁止事項
 
 - rule ごとの expression 再 parse を増やす
 - shared cache で済む計算を rule ごとに重複させる
 - per-job / per-step で新しい heap allocation を増やす
 - parser から移した責務の分だけ無制限に allocation を増やす
 
-### 10.4 benchmark gate
+### 11.4 benchmark gate
 
 原則として、各フェーズで次を確認する。
 
@@ -559,7 +607,7 @@ Seiton.Core を parser/linter library として出したときに、利用者が
 
 ---
 
-## 11. この計画で明示的に避けること
+## 12. この計画で明示的に避けること
 
 1. spec を更新せずにコードだけで責務移管すること
 2. expression semantic を一括で parser から剥がすこと
@@ -570,7 +618,7 @@ Seiton.Core を parser/linter library として出したときに、利用者が
 
 ---
 
-## 12. 最終的な判断
+## 13. 最終的な判断
 
 本件の長期方針は、**A ではなく refined C** である。
 
