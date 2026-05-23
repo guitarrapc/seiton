@@ -191,10 +191,14 @@ public static partial class WorkflowParser
                 StartColumn: startColumn,
                 EndLine: startLine,
                 EndColumn: startColumn);
+            var help = HasReliableVYamlPosition(ex.Message)
+                ? TryGetPlainScalarColonHint((ReadOnlySpan<byte>)utf8Yaml, startOffset)
+                : null;
             var diagnostic = new Diagnostic(
                 Severity: DiagnosticSeverity.Error,
                 Message: $"yaml parse failure: {ex.Message}",
                 Location: location,
+                Help: help,
                 FilePath: string.IsNullOrEmpty(filePath) ? null : filePath);
             var parseResult = new ParseResultData(default, default, new DiagnosticList([diagnostic]), HasFatalError: true);
             return new ClassifiedParseResult(
@@ -265,6 +269,56 @@ public static partial class WorkflowParser
         }
 
         return (1, 1, 0);
+    }
+
+    internal static bool HasReliableVYamlPosition(string message)
+    {
+        const string lineMarker = "Line: ";
+        const string colMarker = "Col: ";
+        const string idxMarker = "Idx: ";
+
+        var lineIdx = message.LastIndexOf(lineMarker, StringComparison.Ordinal);
+        if (lineIdx < 0)
+        {
+            return false;
+        }
+
+        var lineStart = lineIdx + lineMarker.Length;
+        var lineEnd = message.IndexOf(',', lineStart);
+        if (lineEnd < 0)
+        {
+            return false;
+        }
+
+        var colIdx = message.IndexOf(colMarker, lineEnd, StringComparison.Ordinal);
+        if (colIdx < 0)
+        {
+            return false;
+        }
+
+        var colStart = colIdx + colMarker.Length;
+        var colEnd = message.IndexOf(',', colStart);
+        if (colEnd < 0)
+        {
+            return false;
+        }
+
+        var idxIdx = message.IndexOf(idxMarker, colEnd, StringComparison.Ordinal);
+        if (idxIdx < 0)
+        {
+            return false;
+        }
+
+        var idxStart = idxIdx + idxMarker.Length;
+        var idxEnd = message.IndexOf(',', idxStart);
+        if (idxEnd < 0)
+        {
+            idxEnd = message.Length;
+        }
+
+        return int.TryParse(message.AsSpan(lineStart, lineEnd - lineStart), out _)
+            && int.TryParse(message.AsSpan(colStart, colEnd - colStart), out _)
+            && int.TryParse(message.AsSpan(idxStart, idxEnd - idxStart), out _);
     }
 
     internal static ParseResultData ParseWithReader<TReader>(ref TReader reader, AstArena arena, ReadOnlySpan<byte> source)
@@ -343,7 +397,10 @@ public static partial class WorkflowParser
         catch (Exception ex) when (ex is not OutOfMemoryException and not OperationCanceledException)
         {
             var (line, col, offset) = TryExtractLineCol(ex.Message);
-            AddError(ref diagnostics, $"yaml parse failure: {ex.Message}", new TextPosition(offset, line, col));
+            var help = HasReliableVYamlPosition(ex.Message)
+                ? TryGetPlainScalarColonHint(source, offset)
+                : null;
+            AddFatalParseError(ref diagnostics, $"yaml parse failure: {ex.Message}", new TextPosition(offset, line, col), help);
             return new ParseCoreResult(default, default, hasFatalError: true, arena);
         }
     }
@@ -367,7 +424,10 @@ public static partial class WorkflowParser
             catch (Exception ex) when (ex is not OutOfMemoryException and not OperationCanceledException)
             {
                 var (line, col, offset) = TryExtractLineCol(ex.Message);
-                AddError(ref diagnostics, $"yaml parse failure: {ex.Message}", new TextPosition(offset, line, col));
+                var help = HasReliableVYamlPosition(ex.Message)
+                    ? TryGetPlainScalarColonHint((ReadOnlySpan<byte>)utf8Yaml, offset)
+                    : null;
+                AddFatalParseError(ref diagnostics, $"yaml parse failure: {ex.Message}", new TextPosition(offset, line, col), help);
                 result = new ParseCoreResult(default, default, hasFatalError: true, arena);
             }
 

@@ -478,3 +478,32 @@ jobs:
 | `1` | One or more warnings, errors, or fixable diagnostics found. |
 | `2` | Invalid command-line options. |
 | `3` | Fatal error (for example config parse failure or unreadable file). |
+
+---
+
+## Troubleshooting
+
+### YAML parse error on `run:` steps containing `: `
+
+A common mistake in GitHub Actions workflows is writing a `run:` value that contains a colon followed by a space (`: `). YAML interprets this as a mapping value indicator, causing a fatal parse error.
+
+**Broken:**
+
+```yaml
+- run: echo "Title: ${{ github.event.pull_request.title }}"
+```
+
+**Fix — use a block scalar:**
+
+```yaml
+- run: |
+    echo "Title: ${{ github.event.pull_request.title }}"
+```
+
+**Fix — use quotes:**
+
+```yaml
+- run: 'echo "Title: ${{ github.event.pull_request.title }}"'
+```
+
+Seiton reports an explanatory hint alongside the YAML parse error to help identify this issue.

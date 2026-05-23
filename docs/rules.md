@@ -1339,7 +1339,8 @@ Detects unsafe direct interpolation of untrusted `github.event`-origin data into
 **Example trigger:**
 
 ```yaml
-- run: echo "PR title: ${{ github.event.pull_request.title }}"
+- run: |
+    echo "PR title: ${{ github.event.pull_request.title }}"
   # ERROR: pull_request.title is user-controlled
 ```
 
@@ -1348,7 +1349,8 @@ Detects unsafe direct interpolation of untrusted `github.event`-origin data into
 ```yaml
 - env:
     PR_TITLE: ${{ github.event.pull_request.title }}
-  run: echo "PR title: $PR_TITLE"
+  run: |
+    echo "PR title: $PR_TITLE"
 ```
 
 ---
@@ -1462,7 +1464,8 @@ jobs:
   build:
     runs-on: ubuntu-24.04
     steps:
-      - run: curl -H "Authorization: Bearer ${{ secrets.TOKEN }}"
+      - run: |
+          curl -H "Authorization: Bearer ${{ secrets.TOKEN }}"
         # ERROR: use env: indirection
 ```
 
@@ -1476,7 +1479,8 @@ jobs:
     steps:
       - env:
           TOKEN: ${{ secrets.TOKEN }}
-        run: curl -H "Authorization: Bearer $TOKEN"
+        run: |
+          curl -H "Authorization: Bearer $TOKEN"
 ```
 
 ---

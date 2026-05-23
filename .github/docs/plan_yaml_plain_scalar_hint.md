@@ -3,6 +3,68 @@
 > 作成日: 2026-05-23
 > 対象: `run:` / `script:` の plain scalar に `: ` が含まれたとき、YAML fatal parse だけで終わる問題に対して、説明的な補助診断を追加するべきかの検討
 
+## 実装結果
+
+> 実装日: 2026-05-23
+> 方針B を P1 まで実装完了
+
+### 実装内容
+
+- `WorkflowParser.PlainScalarHint.cs` (新規): fatal YAML parse 後のヒューリスティック検出ロジック
+- `ParseCore` / `ParseClassified` / `ParseIncremental` の catch ブロックにヒント生成を統合
+- `AddFatalParseError` ヘルパー追加 (Help フィールド対応)
+- Diagnostic の既存 `Help` フィールドを活用 (全出力形式で自動表示)
+- レビュー反映: YAML node property (`&anchor`, `!tag`) をスキップし、inline comment を colon 判定対象から除外
+- レビュー反映: `run: # reason: ...` のような empty/comment-only value ではヒントを出さないよう修正
+- レビュー反映: YAML flow indicator (`[`, `{`) および alias indicator (`*`) を plain scalar 判定から除外
+- レビュー反映: `run:` / `script:` 後や node property 後の horizontal whitespace として tab (`\t`) も許容
+- レビュー反映: VYaml 例外メッセージに parse 可能な `Line:` / `Col:` / `Idx:` がある場合のみヒント生成を許可
+
+### ベンチマーク結果 (CoreParsingBenchmark)
+
+ヒントロジックはエラーパスのみで実行されるため、正常パースへの性能影響はゼロ。
+
+| Size | Before (Mean) | After (Mean) | Change | Allocated |
+|------|--------------|-------------|--------|-----------|
+| Small | 45.9 us | 45.9 us | +0.0% (ノイズ範囲) | 3.87 KB = 同一 |
+| Medium | 1,085 us | 1,025 us | -5.5% (ノイズ範囲) | 35.59 KB = 同一 |
+| Large | 19,212 us | 18,438 us | -4.0% (ノイズ範囲) | 180.04 KB = 同一 |
+
+性能変化なし。ヒント検出は catch ブロック内でのみ実行され、通常の成功パスに影響を与えない。
+
+### テスト追加
+
+27 テスト追加:
+- `Parse_PlainScalarColonHint_RunWithColonSpace_ReturnsHint` — `run:` + `: ` → ヒントあり
+- `Parse_PlainScalarColonHint_ScriptWithColonSpace_ReturnsHint` — `script:` + `: ` → ヒントあり
+- `Parse_PlainScalarColonHint_RunWithBareColon_ReturnsHint` — `run: foo: bar` → ヒントあり
+- `Parse_PlainScalarColonHint_SingleQuoted_NoHint` — quoted → ヒントなし (正常パース)
+- `Parse_PlainScalarColonHint_BlockScalar_NoHint` — block scalar → ヒントなし (正常パース)
+- `Parse_PlainScalarColonHint_PlainScalarWithoutColon_NoHint` — `: ` なし → ヒントなし
+- `Parse_PlainScalarColonHint_UnrelatedFatalYaml_NoHint` — 無関係な fatal → ヒントなし
+- `Parse_PlainScalarColonHint_InlineCommentColonSpaceWithUnrelatedFatal_NoHint` — inline comment 中の `: ` → ヒントなし
+- `Parse_PlainScalarColonHint_EmptyRunValueWithCommentColonSpaceAndUnrelatedFatal_NoHint` — empty/comment-only value → ヒントなし
+- `Parse_PlainScalarColonHint_AnchoredQuotedScalarWithUnrelatedFatal_NoHint` — `&anchor` + quoted → ヒントなし
+- `Parse_PlainScalarColonHint_TaggedQuotedScalarWithUnrelatedFatal_NoHint` — `!!tag` + quoted → ヒントなし
+- `TryGetPlainScalarColonHint_AnchoredQuotedScalar_ReturnsNull` — ヒューリスティック単体: `&anchor` + quoted → null
+- `TryGetPlainScalarColonHint_TaggedQuotedScalar_ReturnsNull` — ヒューリスティック単体: `!!tag` + quoted → null
+- `TryGetPlainScalarColonHint_InlineCommentColonSpace_ReturnsNull` — ヒューリスティック単体: inline comment 中の `: ` → null
+- `TryGetPlainScalarColonHint_EmptyValueCommentColonSpace_ReturnsNull` — ヒューリスティック単体: empty/comment-only value → null
+- `TryGetPlainScalarColonHint_FlowMappingValue_ReturnsNull` — ヒューリスティック単体: flow mapping `{cmd: echo}` → null
+- `TryGetPlainScalarColonHint_FlowSequenceValue_ReturnsNull` — ヒューリスティック単体: flow sequence `[a: b]` → null
+- `TryGetPlainScalarColonHint_AliasValue_ReturnsNull` — ヒューリスティック単体: alias `*ref` → null
+- `TryGetPlainScalarColonHint_TabAfterColon_QuotedScalar_ReturnsNull` — ヒューリスティック単体: tab + quoted → null
+- `TryGetPlainScalarColonHint_TabAfterColon_PlainScalar_ReturnsHint` — ヒューリスティック単体: tab + plain scalar + `: ` → hint
+- `TryGetPlainScalarColonHint_OffsetZeroAtFileStart_ReturnsHint` — ヒューリスティック単体: offset 0 だと先頭 `run:` を拾えることを確認（caller 側 gating の根拠）
+- `TryGetPlainScalarColonHint_RunFourLinesAboveOffset_ReturnsNull` — ヒューリスティック単体: 4 行上 → null (scan window 外)
+- `TryGetPlainScalarColonHint_RunThreeLinesAboveOffset_ReturnsHint` — ヒューリスティック単体: error line の 3 行上でもヒントあり
+- `HasReliableVYamlPosition_VYamlFormat_ReturnsTrue` — `Line:` / `Col:` / `Idx:` 完備かつ parse 可能 → true
+- `HasReliableVYamlPosition_NoIdx_ReturnsFalse` — `Idx:` 欠如 → false
+- `HasReliableVYamlPosition_InvalidIdx_ReturnsFalse` — `Idx:` が parse 不可 → false
+- `HasReliableVYamlPosition_NoMarkers_ReturnsFalse` — marker 不在 → false
+
+全 1957 テスト通過。
+
 ---
 
 ## 1. 問題設定
@@ -198,6 +260,31 @@ Seiton の契約としては、fatal YAML error を fatal YAML error のまま�
 完了条件:
 
 - 誤判定率とユーザー価値のバランスが取れると判断できた場合のみ拡張する
+
+#### P3 評価結果 (2026-05-23)
+
+**結論: 現時点では拡張しない。**
+
+調査対象と判定:
+
+| Key | ユーザー価値 | 誤判定リスク | 判定 |
+|---|---|---|---|
+| `name:` (workflow/job/step) | 低〜中 | 中 | 見送り |
+| `description:` (action metadata) | 低 | 中〜高 | 見送り |
+| `with:<input>:` (mapping values) | 低 | 高 | 見送り |
+| `env:<var>:` (mapping values) | 低 | 高 | 見送り |
+
+根拠:
+
+1. **`run:` / `script:` は他のキーと本質的に異なる**。これらは長いフリーフォーム文字列（シェルコマンド・スクリプト本文）を plain scalar で受け取る唯一のキーであり、`: ` を含む確率が著しく高い（`echo "Title: x"`, `curl -H "Authorization: Bearer ..."` 等）。
+2. **`name:` / `description:`** は短いテキストが主で、`: ` を含む実例がテストフィクスチャや実ワークフローで確認できなかった。ヒントの precision を保てない。
+3. **`with:` / `env:`** は mapping コンテナ。値は個々の子キー配下にあるため、親キーレベルのヒューリスティックでは対象行を特定できない。任意キー名へのマッチングは複雑さと誤判定を大幅に増やす。
+4. **フィクスチャ・実証データの欠如**: actionlint 互換テストや Seiton フィクスチャ 1950+ 件に non-run/script の colon-space fatal 例が存在しない。実際のユーザー問題として顕在化していない。
+
+再評価トリガー: 以下のいずれかが発生した場合に再検討する。
+
+- Issue / Playground feedback で `name:` 等の colon-space 問題が複数報告される
+- `run:` / `script:` ヒントの false-positive 率がゼロに近いことが定量的に確認でき、余裕がある
 
 ---
 

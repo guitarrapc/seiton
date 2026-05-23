@@ -28,7 +28,7 @@ jobs:
   test:
     runs-on: ubuntu-latest
     steps:
-      - run: echo "Title: ${{ github.event.pull_request.title }}"
+      - run: echo "${{ github.event.pull_request.title }}"
       - uses: actions/checkout@v6
       - uses: actions/setup-node@v4
         with:
