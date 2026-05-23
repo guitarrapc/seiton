@@ -301,7 +301,7 @@ pin remediation を含める場合は、stale offset を避ける必要がある
 
 | ファイル | 変更内容 |
 |---|---|
-| `src/Seiton/Commands/FixCommand.cs` | first pass を conflict-aware iterative loop に置換。`SelectNonConflictingBatch` で同一 offset 競合を検出し、非競合 subset のみ apply。追加レビューで multi-edit diagnostic に対する occupied buffer 長の不足を修正し、diagnostic 数ベースの `List<int>` を exact-size 配列へ置換。Pin remediation を Phase 2 に分離。dry-run は iterative apply + `BuildUnifiedDiffFromBytes` で diff 生成。review follow-up で fix path の safety-net を `InvalidOperationException` 限定から非 cancellation の `Exception` へ広げ、ユーザ向けエラーメッセージ生成を helper 化した。 |
+| `src/Seiton/Commands/FixCommand.cs` | first pass を conflict-aware iterative loop に置換。`SelectNonConflictingBatch` で同一 offset 競合を検出し、非競合 subset のみ apply。追加レビューで multi-edit diagnostic に対する occupied buffer 長の不足を修正し、diagnostic 数ベースの `List<int>` を exact-size 配列へ置換。Pin remediation を Phase 2 に分離。dry-run は iterative apply + `BuildUnifiedDiffFromBytes` で diff 生成。review follow-up で fix path の safety-net を `InvalidOperationException` 限定から非 cancellation の `Exception` へ広げ、ユーザ向けエラーメッセージ生成を helper 化した。さらに: (1) `ex.Message` に改行が含まれる場合に `error:` 行が壊れる問題を `ReplaceLineEndings(" ")` で正規化、(2) `ApplyPinRemediationAsync` に `HasPinFixableDiagnostics` pre-scan を追加し pin-target diagnostic がない場合の不要な network orchestration を回避、(3) 戻り値を `(byte[] Yaml, int AppliedCount)` タプルに変更し `appliedFixes` に正確な `ResolvedCount` を加算（binary yes/no ではなく実数）、(4) `--check` パスにも同様の pre-scan guard を追加。 |
 | `src/Seiton/Commands/ValidateCommand.cs` | `TextWriter` 差し替えを受けられる overload にし、`FixCommand` と同じくテストしやすい CLI command 実装に整理。 |
 | `src/Seiton.Core/Linting/Fixing/FixEngine.cs` | `BuildUnifiedDiffFromBytes` public メソッド追加。`ValidateEdits` の例外メッセージを改善（previous offset/length、batch size を含む）。 |
 | `tests/Seiton.Tests/FixCommandTests.cs` | 4 件の回帰テスト追加（single job conflict、dry-run conflict、multi-job conflict、multi-edit diagnostic + another fix）。review follow-up で invalid config の auto-discovery ケースと fix error formatting helper の回帰テストを追加。 |
@@ -312,7 +312,7 @@ pin remediation を含める場合は、stale offset を避ける必要がある
 
 1. **SelectNonConflictingBatch**: greedy offset-ordered selection。全 diagnostic を最小 offset 順にソートし、先着 diagnostic を選択。競合する diagnostic は次 pass へ繰り越し。occupied range は total edit count から exact-size 配列を確保して管理。
 2. **Iterative relint loop**: 最大 8 pass。各 pass で relint → batch selection → apply。同一 YAML が返れば収束として停止。
-3. **Pin remediation phase**: local fix 安定化後に実行。stabilized YAML に対して relint + `RemediateAsync` → apply。
+3. **Pin remediation phase**: local fix 安定化後に実行。stabilized YAML に対して relint + `HasPinFixableDiagnostics` pre-scan + `RemediateAsync` → apply。pre-scan により pin-target diagnostic がない場合は network 呼び出しを完全にスキップ。戻り値は `(byte[] Yaml, int AppliedCount)` タプルで、`ResolvedCount` を正確に報告。
 4. **dry-run**: iterative apply + pin phase で最終 YAML を計算し、original との diff を生成。`FixEngine.BuildUnifiedDiffFromBytes` で直接 byte[] 間 diff。
 
 ### 11.3 ベンチマーク結果
@@ -344,4 +344,4 @@ Allocation は全サイズで完全一致（回帰なし）。Mean の差異は 
 
 ### 11.5 テスト結果
 
-review follow-up を含めて全 1969 テスト パス。回帰なし。
+review follow-up を含めて全 1971 テスト パス。回帰なし。
