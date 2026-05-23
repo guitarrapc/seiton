@@ -252,6 +252,31 @@ Seiton の契約としては、fatal YAML error を fatal YAML error のまま�
 
 - 誤判定率とユーザー価値のバランスが取れると判断できた場合のみ拡張する
 
+#### P3 評価結果 (2026-05-23)
+
+**結論: 現時点では拡張しない。**
+
+調査対象と判定:
+
+| Key | ユーザー価値 | 誤判定リスク | 判定 |
+|---|---|---|---|
+| `name:` (workflow/job/step) | 低〜中 | 中 | 見送り |
+| `description:` (action metadata) | 低 | 中〜高 | 見送り |
+| `with:<input>:` (mapping values) | 低 | 高 | 見送り |
+| `env:<var>:` (mapping values) | 低 | 高 | 見送り |
+
+根拠:
+
+1. **`run:` / `script:` は他のキーと本質的に異なる**。これらは長いフリーフォーム文字列（シェルコマンド・スクリプト本文）を plain scalar で受け取る唯一のキーであり、`: ` を含む確率が著しく高い（`echo "Title: x"`, `curl -H "Authorization: Bearer ..."` 等）。
+2. **`name:` / `description:`** は短いテキストが主で、`: ` を含む実例がテストフィクスチャや実ワークフローで確認できなかった。ヒントの precision を保てない。
+3. **`with:` / `env:`** は mapping コンテナ。値は個々の子キー配下にあるため、親キーレベルのヒューリスティックでは対象行を特定できない。任意キー名へのマッチングは複雑さと誤判定を大幅に増やす。
+4. **フィクスチャ・実証データの欠如**: actionlint 互換テストや Seiton フィクスチャ 1950+ 件に non-run/script の colon-space fatal 例が存在しない。実際のユーザー問題として顕在化していない。
+
+再評価トリガー: 以下のいずれかが発生した場合に再検討する。
+
+- Issue / Playground feedback で `name:` 等の colon-space 問題が複数報告される
+- `run:` / `script:` ヒントの false-positive 率がゼロに近いことが定量的に確認でき、余裕がある
+
 ---
 
 ## 7. 想定テスト観点
