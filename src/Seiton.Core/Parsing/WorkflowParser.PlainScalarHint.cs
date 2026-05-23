@@ -142,13 +142,13 @@ public static partial class WorkflowParser
     }
 
     /// <summary>
-    /// Skips space characters from the given position.
+    /// Skips space and tab characters from the given position.
     /// </summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static int SkipSpaces(ReadOnlySpan<byte> span, int start)
     {
         var i = start;
-        while (i < span.Length && span[i] == (byte)' ')
+        while (i < span.Length && (span[i] == (byte)' ' || span[i] == (byte)'\t'))
             i++;
         return i;
     }

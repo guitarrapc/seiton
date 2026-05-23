@@ -5271,6 +5271,28 @@ public sealed class ParserTests
     }
 
     [Test]
+    public async Task TryGetPlainScalarColonHint_TabAfterColon_QuotedScalar_ReturnsNull()
+    {
+        // Tab between colon and quoted scalar — must not hint (quoted value is valid)
+        var yaml = "- run:\t\"echo Title: ok\"\n"u8;
+
+        var hint = WorkflowParser.TryGetPlainScalarColonHint(yaml, yaml.Length - 2);
+
+        await Assert.That(hint).IsNull();
+    }
+
+    [Test]
+    public async Task TryGetPlainScalarColonHint_TabAfterColon_PlainScalar_ReturnsHint()
+    {
+        // Tab between colon and plain scalar with `: ` — should hint
+        var yaml = "- run:\techo Title: ok\n"u8;
+
+        var hint = WorkflowParser.TryGetPlainScalarColonHint(yaml, yaml.Length - 2);
+
+        await Assert.That(hint).IsNotNull();
+    }
+
+    [Test]
     public async Task TryGetPlainScalarColonHint_AliasValue_ReturnsNull()
     {
         // Alias *ref is not a plain scalar — must not hint even if rest has `: `
