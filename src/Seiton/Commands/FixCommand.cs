@@ -461,6 +461,7 @@ internal static class FixCommand
         // Then process diagnostics in order of their earliest edit offset, selecting those
         // whose edit ranges don't overlap with already-accepted edits.
         var diagRanges = new (int minOffset, int diagIndex)[fixableDiagnostics.Length];
+        var totalEditCount = 0;
         for (var i = 0; i < fixableDiagnostics.Length; i++)
         {
             var fix = fixableDiagnostics[i].Fix!.Value;
@@ -468,8 +469,13 @@ internal static class FixCommand
             for (var j = 0; j < fix.Edits.Length; j++)
             {
                 if (fix.Edits[j].Offset < minOff)
+                {
                     minOff = fix.Edits[j].Offset;
+                }
+
+                totalEditCount++;
             }
+
             diagRanges[i] = (minOff, i);
         }
 
@@ -477,8 +483,9 @@ internal static class FixCommand
 
         // Track occupied ranges (offset, end) from selected diagnostics.
         var occupiedCount = 0;
-        var occupied = new (int offset, int end)[fixableDiagnostics.Length * 2]; // generous upper bound
-        var selected = new List<int>(fixableDiagnostics.Length);
+        var occupied = new (int offset, int end)[totalEditCount];
+        var selectedIndices = new int[fixableDiagnostics.Length];
+        var selectedCount = 0;
 
         for (var i = 0; i < diagRanges.Length; i++)
         {
@@ -508,7 +515,7 @@ internal static class FixCommand
 
             if (!conflicts)
             {
-                selected.Add(diagIdx);
+                selectedIndices[selectedCount++] = diagIdx;
                 for (var j = 0; j < fix.Edits.Length; j++)
                 {
                     var editOffset = fix.Edits[j].Offset;
@@ -520,12 +527,14 @@ internal static class FixCommand
             }
         }
 
-        if (selected.Count == fixableDiagnostics.Length)
+        if (selectedCount == fixableDiagnostics.Length)
             return fixableDiagnostics;
 
-        var result = new Diagnostic[selected.Count];
-        for (var i = 0; i < selected.Count; i++)
-            result[i] = fixableDiagnostics[selected[i]];
+        var result = new Diagnostic[selectedCount];
+        for (var i = 0; i < selectedCount; i++)
+        {
+            result[i] = fixableDiagnostics[selectedIndices[i]];
+        }
 
         return result;
     }

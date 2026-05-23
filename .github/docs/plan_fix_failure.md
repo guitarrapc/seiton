@@ -301,14 +301,14 @@ pin remediation を含める場合は、stale offset を避ける必要がある
 
 | ファイル | 変更内容 |
 |---|---|
-| `src/Seiton/Commands/FixCommand.cs` | first pass を conflict-aware iterative loop に置換。`SelectNonConflictingBatch` で同一 offset 競合を検出し、非競合 subset のみ apply。Pin remediation を Phase 2 に分離。dry-run は iterative apply + `BuildUnifiedDiffFromBytes` で diff 生成。 |
+| `src/Seiton/Commands/FixCommand.cs` | first pass を conflict-aware iterative loop に置換。`SelectNonConflictingBatch` で同一 offset 競合を検出し、非競合 subset のみ apply。追加レビューで multi-edit diagnostic に対する occupied buffer 長の不足を修正し、diagnostic 数ベースの `List<int>` を exact-size 配列へ置換。Pin remediation を Phase 2 に分離。dry-run は iterative apply + `BuildUnifiedDiffFromBytes` で diff 生成。 |
 | `src/Seiton.Core/Linting/Fixing/FixEngine.cs` | `BuildUnifiedDiffFromBytes` public メソッド追加。`ValidateEdits` の例外メッセージを改善（previous offset/length、batch size を含む）。 |
-| `tests/Seiton.Tests/FixCommandTests.cs` | 3 件の回帰テスト追加（single job conflict、dry-run conflict、multi-job conflict）。 |
+| `tests/Seiton.Tests/FixCommandTests.cs` | 4 件の回帰テスト追加（single job conflict、dry-run conflict、multi-job conflict、multi-edit diagnostic + another fix）。 |
 | `src/Seiton.Benchmark/FixApplyBenchmark.cs` | Fix apply パフォーマンスベンチマーク追加（3 シナリオ）。 |
 
 ### 11.2 設計ポイント
 
-1. **SelectNonConflictingBatch**: greedy offset-ordered selection。全 edit を offset 順にソートし、先着 diagnostic を選択。競合する diagnostic は次 pass へ繰り越し。
+1. **SelectNonConflictingBatch**: greedy offset-ordered selection。全 diagnostic を最小 offset 順にソートし、先着 diagnostic を選択。競合する diagnostic は次 pass へ繰り越し。occupied range は total edit count から exact-size 配列を確保して管理。
 2. **Iterative relint loop**: 最大 8 pass。各 pass で relint → batch selection → apply。同一 YAML が返れば収束として停止。
 3. **Pin remediation phase**: local fix 安定化後に実行。stabilized YAML に対して relint + `RemediateAsync` → apply。
 4. **dry-run**: iterative apply + pin phase で最終 YAML を計算し、original との diff を生成。`FixEngine.BuildUnifiedDiffFromBytes` で直接 byte[] 間 diff。
@@ -319,9 +319,9 @@ pin remediation を含める場合は、stale offset を避ける必要がある
 
 | Scenario | Mean | Allocated |
 |---|---|---|
-| NoConflict (no conflicts) | 24.27 μs | 10.55 KB |
-| SingleJobConflict (2 rules at same offset) | 39.66 μs | 16.95 KB |
-| MultiJobConflict (5 jobs × 2 conflicts) | 115.14 μs | 39.81 KB |
+| NoConflict (no conflicts) | 23.37 μs | 10.55 KB |
+| SingleJobConflict (2 rules at same offset) | 38.35 μs | 16.95 KB |
+| MultiJobConflict (5 jobs × 2 conflicts) | 113.66 μs | 39.81 KB |
 
 #### CoreLintBenchmark (既存 — 回帰確認)
 
@@ -337,8 +337,9 @@ Allocation は全サイズで完全一致（回帰なし）。Mean の差異は 
 
 - **conflict なしの場合**: 1 pass で完了。追加コストは `SelectNonConflictingBatch` の O(n log n) sort + O(n²) conflict check だが、n は通常 1-10 程度なので無視できる。
 - **conflict ありの場合**: 追加 relint pass が発生。SingleJobConflict では 2 pass（1 diagnostic ずつ）。relint コストが支配的だが、fix 操作自体が低頻度（1 ファイルにつき 1 回）なので問題なし。
+- **follow-up selector fix**: occupied range と selected index を exact-size 配列に変更したことで、multi-edit diagnostic が混在するケースでも `IndexOutOfRangeException` が発生しない。Mean / Allocated は悪化せず、NoConflict と conflict case の両方で微改善した。
 - **CoreLintBenchmark 回帰なし**: `FixEngine` / `LintEngine.Check` のホットパスには変更なし。変更はすべて `FixCommand` orchestration 層。
 
 ### 11.5 テスト結果
 
-全 1960 テスト パス。回帰なし。
+全 1961 テスト パス。回帰なし。

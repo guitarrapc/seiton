@@ -458,6 +458,89 @@ public sealed class FixCommandTests
         }
     }
 
+        [Test]
+        public async Task Fix_MultiEditDiagnostic_WithAnotherFix_DoesNotOverflowBatchSelection()
+        {
+                var configPath = CreateConfigFile(
+                        """
+                        rules:
+                            runner-no-latest:
+                                enabled: false
+                            job-timeout-minutes-required:
+                                enabled: false
+                            job-permissions-required:
+                                enabled: false
+                        """);
+                var filePath = CreateWorkflowFile(
+                        """
+                        on: push
+                        permissions: write-all
+                        jobs:
+                            "build job":
+                                runs-on: ubuntu-24.04
+                                steps:
+                                    - run: echo build
+                            consumer1:
+                                runs-on: ubuntu-24.04
+                                needs: ["build job"]
+                                steps:
+                                    - run: echo one
+                            consumer2:
+                                runs-on: ubuntu-24.04
+                                needs: ["build job"]
+                                steps:
+                                    - run: echo two
+                            consumer3:
+                                runs-on: ubuntu-24.04
+                                needs: ["build job"]
+                                steps:
+                                    - run: echo three
+                            consumer4:
+                                runs-on: ubuntu-24.04
+                                needs: ["build job"]
+                                steps:
+                                    - run: echo four
+                            consumer5:
+                                runs-on: ubuntu-24.04
+                                needs: ["build job"]
+                                steps:
+                                    - run: echo five
+                        """);
+
+                try
+                {
+                        var exitCode = await FixCommand.RunAsync(
+                                [filePath],
+                                config: configPath,
+                                stdinFilename: "stdin.yml",
+                                ignore: [],
+                                minSeverity: null,
+                                format: OutputFormat.Text,
+                                oneline: true,
+                                color: ColorMode.Never,
+                                noColor: true,
+                                verbose: false,
+                                dryRun: false,
+                                check: false,
+                                enablePinNetwork: false,
+                                enableImageNetwork: false,
+                                includeActions: false);
+
+                        await Assert.That(exitCode).IsEqualTo(ExitCode.Success);
+
+                        var fixedContent = File.ReadAllText(filePath);
+                        await Assert.That(fixedContent).Contains("build-job:");
+                        await Assert.That(fixedContent).DoesNotContain("\"build job\":");
+                        await Assert.That(fixedContent).Contains("needs: [build-job]");
+                        await Assert.That(fixedContent).Contains("permissions: {}");
+                }
+                finally
+                {
+                        DeleteContainingDirectory(filePath);
+                        DeleteContainingDirectory(configPath);
+                }
+        }
+
     private static string CreateWorkflowFile(string yaml)
     {
         var dir = Path.Combine(Path.GetTempPath(), "Seiton.Tests", Guid.NewGuid().ToString("N"));
