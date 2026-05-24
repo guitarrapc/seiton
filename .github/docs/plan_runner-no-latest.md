@@ -153,14 +153,15 @@ private DiagnosticFix? GetFix(string label)
 
 ### テスト結果
 
-- 新規テスト: 24/24 pass
-- 既存テスト: 1664/1664 pass (regression なし)
+- 新規テスト: 26/26 pass
+- 既存テスト: 1666/1666 pass (regression なし)
 
 ### レビューで追加修正した点
 
 - `RunnerNoLatestRule` の custom `fix-mapping` 検出で per-label `Encoding.UTF8.GetString(...)` を行っていたため、`SetConfig()` 時に UTF-8 byte 配列を前計算し、実行時は ASCII case-insensitive byte 比較のみで判定するように修正。
 - `fix-mapping` の key/value を parser が黙って `Trim()` していたため、設定値をそのまま使う直感とズレていた。空/空白-only の拒否は維持しつつ、非空の値は verbatim で保持するよう修正。
 - `.github/docs/Seiton_config_spec.md`, `.github/docs/Seiton_Linter_spec.md`, `README.md` の記述を実装に同期。
+- `AsciiEqualsIgnoreCase` が `left` 側のみ ASCII lower していたバグを修正。Config キーが大文字 (e.g. `My-Org-Runner-Latest`) で workflow ラベルが小文字の場合にマッチしない問題を解消。両側を lower するよう修正し、テスト 2 件追加。
 
 ### ベンチマーク結果
 

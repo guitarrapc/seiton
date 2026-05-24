@@ -298,6 +298,31 @@ public sealed class RunnerNoLatestFixMappingTests
     }
 
     [Test]
+    public async Task Detection_CaseInsensitive_ConfigKeyUppercase_WorkflowLabelLowercase()
+    {
+        // Config key is uppercase, workflow label is lowercase → should still match
+        var yaml = """
+        on: push
+        jobs:
+          build:
+            runs-on: my-org-runner-latest
+            steps:
+              - run: echo ng
+        """;
+
+        var config = BuildConfigWithFixMapping(new Dictionary<string, string>
+        {
+            ["My-Org-Runner-Latest"] = "my-org-runner-v2"
+        });
+
+        var result = LintWithConfig(yaml, config);
+        var diagnostics = result.Diagnostics.Where(d => d.RuleId == "runner-no-latest").ToArray();
+
+        await Assert.That(diagnostics.Length).IsEqualTo(1);
+        result.Dispose();
+    }
+
+    [Test]
     public async Task Detection_CaseInsensitive_FixMappingKey()
     {
         var yaml = """
@@ -567,6 +592,33 @@ public sealed class RunnerNoLatestFixMappingTests
         await Assert.That(diagnostics.Length).IsEqualTo(1);
         await Assert.That(diagnostics[0].Fix).IsNotNull();
         await Assert.That(diagnostics[0].Fix!.Value.Edits[0].NewText).IsEqualTo("ubuntu-24.04");
+        result.Dispose();
+    }
+
+    [Test]
+    public async Task Fix_CaseInsensitive_ConfigKeyUppercase_FixGenerated()
+    {
+        // Config key is mixed-case, workflow label is lowercase → fix should still be generated
+        var yaml = """
+        on: push
+        jobs:
+          build:
+            runs-on: my-org-runner-latest
+            steps:
+              - run: echo ng
+        """;
+
+        var config = BuildConfigWithFixMapping(new Dictionary<string, string>
+        {
+            ["My-Org-Runner-Latest"] = "my-org-runner-v2"
+        }, fixEnabled: true);
+
+        var result = LintWithConfig(yaml, config);
+        var diagnostics = result.Diagnostics.Where(d => d.RuleId == "runner-no-latest").ToArray();
+
+        await Assert.That(diagnostics.Length).IsEqualTo(1);
+        await Assert.That(diagnostics[0].Fix).IsNotNull();
+        await Assert.That(diagnostics[0].Fix!.Value.Edits[0].NewText).IsEqualTo("my-org-runner-v2");
         result.Dispose();
     }
 

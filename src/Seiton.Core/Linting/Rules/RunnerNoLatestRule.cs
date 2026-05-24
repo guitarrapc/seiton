@@ -197,10 +197,15 @@ public sealed class RunnerNoLatestRule() : RuleBase(RuleId.RunnerNoLatest)
                 continue;
             }
 
-            // ASCII lower
+            // ASCII lower both sides
             if (l >= (byte)'A' && l <= (byte)'Z')
             {
                 l = (byte)(l + 32);
+            }
+
+            if (r >= (byte)'A' && r <= (byte)'Z')
+            {
+                r = (byte)(r + 32);
             }
 
             if (l != r)
