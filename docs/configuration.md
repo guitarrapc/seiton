@@ -597,7 +597,7 @@ This is useful when batch-fixing all instances of a single rule at a time.
 | `fix.images.exclude-tags` | `latest` |
 | `network.on-error` | `skip` |
 | `network.timeout-seconds` | `30` (`0`–`300` enforced; excess rejected + clamped) |
-| `network.max-concurrency` | `min(4, logical processors)` | Same rules as **`max-concurrency`** above (**`1`**–logical processor count for explicit values; excess rejected + clamped). |
+| `network.max-concurrency` | `min(4, logical processors)` — same rules as **`max-concurrency`** above (`1`–logical processor count; excess rejected + clamped) |
 | `network.github.ghes-api-url` | `""` |
 | `network.github.ghes-fallback` | `false` |
 | `output.sort-order` | `location` |

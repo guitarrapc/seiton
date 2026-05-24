@@ -235,7 +235,7 @@ These flags are valid only when `--fix` is enabled on the root command.
 
 ## Environment Variables
 
-All CLI flags can alternatively be set via environment variables. A flag always takes precedence over its corresponding environment variable.
+The following environment variables are recognized. A flag always takes precedence over its corresponding environment variable.
 
 | Environment Variable | Equivalent | Description |
 |---|---|---|

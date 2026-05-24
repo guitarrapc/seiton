@@ -160,4 +160,13 @@ public sealed class RuleCatalogDescriptorTests
 
         await Assert.That(unpinnedUses.SupportsAutoFix).IsTrue();
     }
+
+    [Test]
+    public async Task GetAllRuleDescriptors_RunnerNoLatestSupportsAutoFix()
+    {
+        var descriptors = RuleCatalog.GetAllRuleDescriptors();
+        var runnerNoLatest = descriptors.First(d => d.Id == "runner-no-latest");
+
+        await Assert.That(runnerNoLatest.SupportsAutoFix).IsTrue();
+    }
 }

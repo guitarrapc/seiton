@@ -16,8 +16,7 @@ app.Run(args);
 internal class SeitonCli
 {
     /// <summary>Lint workflow files by default, or apply fixes when --fix is specified.</summary>
-    /// <param name="files">Workflow files or directories to lint. Auto-discovers .github/workflows/ if omitted.</param>
-    /// <param name="config">Path to config file. Auto-discovered from .github/seiton.yaml if omitted.</param>
+    /// <param name="config">-c, Path to config file. Auto-discovered from .github/seiton.yaml if omitted.</param>
     /// <param name="stdinFilename">Filename used when reading from stdin (-).</param>
     /// <param name="ignore">Substring patterns for messages to ignore (case-insensitive).</param>
     /// <param name="minSeverity">Minimum severity to report: error | warning | info.</param>
@@ -32,6 +31,7 @@ internal class SeitonCli
     /// <param name="enablePinNetwork">Allow network requests to resolve action SHA pins (requires --fix).</param>
     /// <param name="enableImageNetwork">Allow network requests to resolve container image digests (requires --fix).</param>
     /// <param name="includeActions">When no FILES are provided, include .github/actions/ in auto-discovery.</param>
+    /// <param name="files">Workflow files or directories to lint. Auto-discovers .github/workflows/ if omitted.</param>
     [Command("")]
     public async Task Root(
         string? config = null,
@@ -66,8 +66,7 @@ internal class SeitonCli
     }
 
     /// <summary>Lint workflow files.</summary>
-    /// <param name="files">Workflow files or directories to lint. Auto-discovers .github/workflows/ if omitted.</param>
-    /// <param name="config">Path to config file. Auto-discovered from .github/seiton.yaml if omitted.</param>
+    /// <param name="config">-c, Path to config file. Auto-discovered from .github/seiton.yaml if omitted.</param>
     /// <param name="stdinFilename">Filename used when reading from stdin (-).</param>
     /// <param name="ignore">Substring patterns for messages to ignore (case-insensitive).</param>
     /// <param name="minSeverity">Minimum severity to report: error | warning | info.</param>
@@ -77,6 +76,7 @@ internal class SeitonCli
     /// <param name="noColor">Disable color output (overrides --color).</param>
     /// <param name="verbose">Print progress information to stderr.</param>
     /// <param name="includeActions">When no FILES are provided, include .github/actions/ in auto-discovery.</param>
+    /// <param name="files">Workflow files or directories to lint. Auto-discovers .github/workflows/ if omitted.</param>
     public void Check(
         string? config = null,
         string stdinFilename = "<stdin>",
@@ -105,7 +105,7 @@ internal class SeitonCli
     }
 
     /// <summary>Validate the seiton config file.</summary>
-    /// <param name="config">Path to the config file to validate. Auto-discovered if omitted.</param>
+    /// <param name="config">-c, Path to the config file to validate. Auto-discovered if omitted.</param>
     [Command("validate-config")]
     public void ValidateConfig(string? config = null)
     {
@@ -114,7 +114,7 @@ internal class SeitonCli
     }
 
     /// <summary>List all available lint rules and their effective status.</summary>
-    /// <param name="config">Path to config file. Auto-discovered from .github/seiton.yaml if omitted.</param>
+    /// <param name="config">-c, Path to config file. Auto-discovered from .github/seiton.yaml if omitted.</param>
     /// <param name="format">Output format: text | json.</param>
     public void Rules(string? config = null, OutputFormat format = OutputFormat.Text)
     {

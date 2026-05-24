@@ -37,7 +37,7 @@ jobs:
           node_version: 18.x
 ```
 
-**Example `--oneline` output** (`seiton --oneline samples/readme`):
+**Example `--oneline` output** (`seiton --oneline -c samples/readme/.github/seiton.yaml samples/readme/.github/workflows/test.yaml`):
 
 ```
 test.yaml:3:5: error [parse] on.pull_request has unexpected key "branch" for "pull_request" section. did you mean "branches"? expected one of "types", "branches", "branches-ignore", "paths", "paths-ignore"
@@ -52,7 +52,7 @@ test.yaml:12:25: warning [popular-action-inputs] unknown input 'node_version' fo
 3 errors, 6 warnings in 1 file
 ```
 
-**Example of auto-fixed workflow** (`seiton --fix --enable-pin-network samples/readme`):
+**Example of auto-fixed workflow** (`seiton --fix --enable-pin-network -c samples/readme/.github/seiton.yaml samples/readme/.github/workflows/test.yaml`):
 
 Bunch of errors and warnings are fixed, following best practices and pinning the actions to specific SHAs:
 
@@ -151,15 +151,7 @@ If you prefer a direct download instead of a package manager, use the release ar
 | [Usage](docs/usage.md) | Commands, flags, environment variables, output formats, CI examples, and exit codes. |
 | [Rules](docs/rules.md) | Canonical rule reference with behavior, examples, remediation, and configuration notes. |
 | [Configuration](docs/configuration.md) | Config file discovery, schema, exclusions, fix settings, and network options. |
-| [Overview](docs/index.md) | Product overview and comparison with actionlint, zizmor, ghalint, frizbee, and pinact. |
-
-## Rule Coverage
-
-Seiton ships 50+ rules across correctness, security, permissions/secrets, and supply-chain hygiene. The README intentionally keeps this summary short; use [Rules](docs/rules.md) for the canonical catalog and `seiton rules` to inspect the effective enabled/disabled state in your environment.
-
-## Tool Positioning
-
-Seiton is best used as the main GitHub Actions linter when you want both detection and remediation. If you specifically need `shellcheck` or `pyflakes` integration, add actionlint alongside it. For broader comparison and trade-offs, see [Overview](docs/index.md#comparison-with-other-tools).
+| [Overview](docs/index.md) | Product overview and [comparison with other tools](docs/index.md#comparison-with-other-tools). |
 
 ## License
 
