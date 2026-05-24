@@ -28,9 +28,12 @@ The Seiton Parser Go implementation provides:
 2. **Alias resolution** pre-pass on the `yaml.Node` tree
 3. **Hand-written recursive descent parser** converting `yaml.Node` into a typed AST
 4. **Expression parser** (separate recursive descent parser for `${{ }}` expressions)
-5. **Expression semantic analyzer** with type inference and context validation
-6. **Generated data** for webhooks, context availability, and popular actions
-7. **Input document-kind classification** (workflow vs action metadata) using path-hint candidate + structure-confirm finalization
+5. **Expression-language intrinsic validation** (function existence, arity, operator-local type checks)
+6. **Expression semantic analyzer** with type inference and context validation (transitional: context-dependent checks will migrate to linter)
+7. **Generated data** for webhooks, context availability, and popular actions
+8. **Input document-kind classification** (workflow vs action metadata) using path-hint candidate + structure-confirm finalization
+
+> **Boundary note**: Under the refined expression validation boundary (`Seiton_spec.md` §3), the parser owns expression-language intrinsic validation. GitHub Actions context-dependent validation (context availability, function availability by position, dynamic properties, site-aware types) is owned by the linter. The current Go implementation still performs both; context-dependent checks will migrate to the linter in future phases.
 
 Linter-side runtime details are specified in `Seiton_Linter_go_spec.md`.
 

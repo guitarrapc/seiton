@@ -33,6 +33,9 @@ The Seiton Linter C# implementation provides:
 3. Rule pack orchestration via `RuleCatalog`
 4. Deterministic diagnostics post-processing (sort/dedup/filter)
 5. Exclusion/suppression application and observability output (contract-driven)
+6. GitHub Actions context-dependent expression semantic validation (via `ExprUndefinedVarRule` and expression semantic analyzer)
+
+> **Boundary note**: Under the refined expression validation boundary (`Seiton_spec.md` §3), the linter owns GitHub Actions context-dependent expression validation: context availability, function availability by workflow position, dynamic property existence, and workflow-site-aware type suitability. The parser provides expression artifacts that the linter consumes without re-parsing.
 
 ### 0.3 Structure
 

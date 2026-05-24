@@ -76,10 +76,23 @@ Document-kind routing:
 
 ## 3. Parser/Linter Boundary
 
-- Parser owns AST construction and parser diagnostics.
-- Linter owns rule execution and rule-originated diagnostics.
-- Linter must consume parser output and must not re-implement YAML structural parsing.
+- Parser owns AST construction, expression syntax parsing, and expression-language intrinsic validation (function existence, arity, operator-local type checks).
+- Linter owns rule execution, rule-originated diagnostics, and GitHub Actions context-dependent expression semantic validation.
+- Linter must consume parser output and must not re-implement YAML structural parsing or expression syntax parsing.
 - Rule suppression/exclusion is a linter concern and is specified in this document.
+
+### 3.1 Expression Semantic Validation Ownership
+
+The linter owns the following expression semantic checks via dedicated rules (primarily `expr-undefined-var`):
+
+- Context availability validation by workflow position (which root contexts are valid at each YAML key)
+- Function availability validation by workflow position (e.g., `hashFiles` at step-level only, status functions in `if:` only)
+- Dynamic property existence and strictness (matrix, steps, needs, inputs)
+- Workflow-site-aware type suitability (override-aware type inference)
+
+The parser provides expression artifacts (AST, occurrence metadata, site information) that the linter consumes without re-parsing. The parser also provides expression-language intrinsic diagnostics (syntax errors, unknown functions, arity mismatches, operator-local type errors) that are independent of workflow context.
+
+> **Transitional note**: The current implementation performs context-dependent checks in both the parser and the linter (with deduplication). Future phases will migrate context-dependent validation exclusively to the linter while preserving identical diagnostic behavior.
 
 ---
 
