@@ -197,7 +197,7 @@ dangerous-triggers:
 
 #### 変更対象ファイル（推定）
 
-- `src/Seiton.Core/Linting/Config/` 配下の config model / deserializer
+- `src/Seiton.Core/Linting/` 配下の config model / deserializer
 - rule-specific option の読み取りロジック
 
 #### 実装内容
