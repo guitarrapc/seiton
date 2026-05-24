@@ -537,7 +537,7 @@ jobs:
       - run: echo ok
 ```
 
-For self-hosted runners, add their labels to `rules.runner-label.known-hosted-labels.extend` in [configuration](configuration.md).
+For self-hosted runners, add their labels to `rules.runner-label.known-hosted-labels` in [configuration](configuration.md).
 
 ---
 

@@ -486,33 +486,33 @@ rules:
     max-job-secrets: 5
 ```
 
-#### 5.8.1 `dangerous-triggers` — `events.extend`
+#### 5.8.1 `dangerous-triggers` — `events`
 
 - Allows users to add event names treated as dangerous by the `dangerous-triggers` rule.
 - Matching uses normalized event names (ASCII lower-case); configuration values should use canonical GitHub event naming.
 - If a configured event is present in workflow `on`, rule emits the same diagnostic/severity behavior as built-in dangerous events.
 
-#### 5.8.2 `runner-label` — `known-hosted-labels.extend`
+#### 5.8.2 `runner-label` — `known-hosted-labels`
 
 - Allows users to add runner labels treated as known GitHub-hosted labels for `runner-label` rule evaluation.
 - Matching uses normalized label values (ASCII lower-case).
 - Labels added here suppress only `runner-label` unknown-label diagnostics; they do not alter parsing or execution semantics.
 
-#### 5.8.3 `credentials` — `public-registries.extend`
+#### 5.8.3 `credentials` — `public-registries`
 
 - Allows users to add registry hosts treated as public/credential-optional by the `credentials` rule.
 - Entry unit is registry host (`host` or `host:port`), without scheme and path.
 - Matching uses normalized host values (ASCII lower-case).
 - When image registry host matches this merged public-registry set, missing credentials does not produce `credentials` diagnostics.
 
-#### 5.8.4 `cache-poisoning` / `self-hosted-runner` — `untrusted-triggers.extend`
+#### 5.8.4 `cache-poisoning` / `self-hosted-runner` — `untrusted-triggers`
 
 - Allows users to add trigger event names treated as untrusted for `cache-poisoning` and/or `self-hosted-runner` evaluation.
-- Each rule has its own independent `untrusted-triggers.extend` list; users set them separately to control which rule is affected.
+- Each rule has its own independent `untrusted-triggers` list; users set them separately to control which rule is affected.
 - Matching uses normalized event names (ASCII lower-case).
 - Extended trigger names never replace the built-in untrusted trigger set.
 
-#### 5.8.5 `unredacted-secrets` — `output-commands.extend`
+#### 5.8.5 `unredacted-secrets` — `output-commands`
 
 - Allows users to add command names treated as output sinks by `unredacted-secrets`.
 - Matching uses normalized command names (ASCII lower-case).

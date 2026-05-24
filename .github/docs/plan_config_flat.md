@@ -93,7 +93,7 @@ forbidden-uses:
 
 | `extend` が提供していた価値 | フラット化後の代替手段 |
 |---|---|
-| 「これは追加操作である」という型レベルの表現 | ドキュメント + `seiton init` コメントで `# adds to built-in set` と明記 |
+| 「これは追加操作である」という型レベルの表現 | ドキュメントで additive であることを明記 |
 | 将来 `replace` を足す拡張ポイント | **不要と判断**（§1.3.5 参照） |
 | 旧 `additional...` prefix からの改善 | キー名自体が意味を持つ（`events`, `known-hosted-labels`）ため問題なし |
 
@@ -103,7 +103,7 @@ forbidden-uses:
 |---|---|
 | replace モードが将来必要か？ | No — セキュリティルールの built-in を消すユースケースは想定不要。消したい場合は `enabled: false` でルール自体を無効化するのが正しい手段 |
 | 仮にユーザーが replace と誤解しても害があるか？ | No — built-in が消えないので検出が増える（安全方向に倒れる） |
-| 構造で additive を表現する必要があるか？ | No — ドキュメントと init コメントで十分。他ツール（ESLint, Ruff, clippy）もドキュメントベースで追加/置換を区別しており、構造的区別は一般的ではない |
+| 構造で additive を表現する必要があるか？ | No — ドキュメントで十分。他ツール（ESLint, Ruff, clippy）もドキュメントベースで追加/置換を区別しており、構造的区別は一般的ではない |
 | `extend` を残した場合のコスト | YAML 1段深い、学習コスト、「なぜこれだけ違うのか」という FAQ 発生 |
 
 ### 1.4 決定
@@ -247,7 +247,7 @@ dotnet test
 #### 実装内容
 
 1. init コマンドが出力するテンプレート YAML を更新
-2. コメントに "adds to built-in set" の説明を追加
+2. additive であることの説明はテンプレートではなくドキュメントに集約する
 
 #### 検証
 
@@ -403,4 +403,5 @@ Allocated 増加: **0 bytes**（モデル変更が hot path に影響しない�
 2. **パーサー**: `ParseExtendableList()` → `ParseAdditiveList()` に改名。旧 `extend` mapping 検出時に移行エラーを発行
 3. **ルール**: 6 ルールの config アクセスを `.Events?.Extend` → `.Events` に簡素化
 4. **テンプレート**: `seiton init` が flat 構文を生成（インラインコメント `# adds to built-in set` は冗長なため削除、`docs/configuration.md` に記載済み）
+6. **ベンチマーク入力**: `ConfigYamlBuilder` も flat 構文・単数 `file` キー・wildcard パターンに更新し、ベンチマークが現行ユーザー入力を測るよう修正
 5. **ドキュメント**: `configuration.md`, `rules.md`, `Seiton_config_spec.md`, `Seiton_Linter_spec.md` すべて新構文に統一
