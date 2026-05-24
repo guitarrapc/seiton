@@ -140,7 +140,6 @@ rules:
       - registry.example.com
       - mirror.example.net:5000
 
-
   # Extend the trigger set that cache-poisoning considers untrusted.
   cache-poisoning:
     untrusted-triggers:
