@@ -72,6 +72,8 @@ impostor-commit                          no        online   error      no    wor
 ref-confusion                            no        online   error      no    workflow   opt-in (not configured)
 stale-action-refs                        no        online   warning    no    workflow   opt-in (not configured)
 
+61 rules total (56 enabled, 5 disabled)
+
 To enable an opt-in rule, add to .github/seiton.yaml:
   rules:
     <rule-id>:

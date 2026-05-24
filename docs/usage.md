@@ -155,6 +155,9 @@ template-injection                       yes       local    error      yes   bot
 unpinned-uses                            yes       local    mixed      yes   both       default
 concurrency-limits                       no        local    warning    no    workflow   opt-in (not configured)
 known-vulnerable-actions                 no        online   error      no    workflow   opt-in (not configured)
+...reducted for brevity...
+
+61 rules total (56 enabled, 5 disabled)
 
 To enable an opt-in rule, add to .github/seiton.yaml:
   rules:
