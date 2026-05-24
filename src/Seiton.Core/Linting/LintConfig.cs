@@ -25,6 +25,9 @@ public sealed class LintConfig
     /// <summary>Pre-parsed expression artifacts from the parser. When set, <see cref="ParseExpression"/> consults this before re-parsing.</summary>
     internal ExpressionArtifactStore? ExpressionArtifacts { get; set; }
 
+    /// <summary>Shared expression semantic model for context/function availability checks. Rules access this to avoid duplicating logic.</summary>
+    internal ExpressionSemanticModel SemanticModel { get; } = new();
+
     private Dictionary<long, ExpressionCacheEntry>? _expressionCache;
     private int[]? _lineStarts;
     private long _sourceContentHash;
