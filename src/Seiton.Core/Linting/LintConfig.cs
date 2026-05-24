@@ -22,6 +22,9 @@ public sealed class LintConfig
     /// <summary>Gets the file path of the document being linted.</summary>
     public string? FilePath { get; set; }
 
+    /// <summary>Pre-parsed expression artifacts from the parser. When set, <see cref="ParseExpression"/> consults this before re-parsing.</summary>
+    internal ExpressionArtifactStore? ExpressionArtifacts { get; set; }
+
     private Dictionary<long, ExpressionCacheEntry>? _expressionCache;
     private int[]? _lineStarts;
     private long _sourceContentHash;
@@ -35,6 +38,7 @@ public sealed class LintConfig
     /// <summary>
     /// Parses an expression with content-based deduplication. Expressions with identical
     /// byte content share the same parse result, even across different source documents.
+    /// When parser expression artifacts are available, consults them first to avoid re-parsing.
     /// </summary>
     public ExpressionParseResult ParseExpression(ReadOnlySpan<byte> expression)
     {
@@ -44,6 +48,13 @@ public sealed class LintConfig
         }
 
         var key = ComputeContentHash(expression);
+
+        // Check parser artifact store first (zero re-parse when available)
+        if (ExpressionArtifacts is not null && Utf8Yaml is not null
+            && ExpressionArtifacts.TryGet(key, expression, Utf8Yaml, out var artifactResult))
+        {
+            return artifactResult;
+        }
 
         _expressionCache ??= new();
         if (_expressionCache.TryGetValue(key, out var entry))
@@ -148,7 +159,8 @@ public sealed class LintConfig
         FixConfig? fix,
         NetworkConfig? network,
         OutputConfig? output,
-        bool verbose = false)
+        bool verbose = false,
+        ExpressionArtifactStore? expressionArtifacts = null)
     {
         var contentHash = ComputeContentHash(utf8Yaml);
         var sameContent = contentHash == _sourceContentHash
@@ -159,6 +171,7 @@ public sealed class LintConfig
         Utf8Yaml = utf8Yaml;
         Arena = arena;
         FilePath = filePath;
+        ExpressionArtifacts = expressionArtifacts;
         _rules = rules;
         _fix = fix ?? DefaultFix;
         _network = network ?? DefaultNetwork;

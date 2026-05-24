@@ -257,7 +257,8 @@ public sealed class LintEngine
             config?.Fix,
             config?.Network,
             config?.Output,
-            config?.Verbose ?? false);
+            config?.Verbose ?? false,
+            parseResult.ExpressionArtifacts);
         var effectiveConfig = _effectiveConfig;
         var sharedDisabledRuleIds = effectiveConfig.Rules is null || effectiveConfig.Rules.Count == 0
             ? GetSharedDefaultDisabledRuleIds(documentKind)
