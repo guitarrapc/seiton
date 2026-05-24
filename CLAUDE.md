@@ -1,5 +1,34 @@
 # Seiton - Project Instructions
 
+## Working Principles
+
+### Think Before Coding
+
+Don't assume. Don't hide confusion. Surface tradeoffs.
+
+- State assumptions explicitly. If uncertain, ask.
+- If multiple interpretations exist, present them — don't pick silently.
+- If a simpler approach exists, say so. Push back when warranted.
+- If something is unclear, stop. Name what's confusing. Ask.
+
+### Minimal & Surgical Changes
+
+Minimum code that solves the problem. Touch only what you must.
+
+- No features, abstractions, or error handling beyond what was asked.
+- Don't "improve" adjacent code, comments, or formatting. Match existing style.
+- Remove only imports/variables/functions that YOUR changes made unused.
+- Every changed line should trace directly to the user's request.
+
+### Goal-Driven Execution
+
+Define success criteria. Loop until verified.
+
+- "Add validation" → "Write tests for invalid inputs, then make them pass"
+- "Fix the bug" → "Write a test that reproduces it, then make it pass"
+
+For multi-step tasks, state a brief plan with verification per step.
+
 ## What is this project?
 
 Seiton is a C# tool that parses and lints GitHub Actions documents (workflow files and action metadata files).
