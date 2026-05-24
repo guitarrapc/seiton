@@ -1,6 +1,0 @@
-name: My composite
-description: Demo action.yml
-runs:
-  using: composite
-  steps:
-    - run: echo hello world
