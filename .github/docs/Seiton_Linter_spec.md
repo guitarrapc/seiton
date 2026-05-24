@@ -442,26 +442,26 @@ Non-normative example configuration shape:
 ```yaml
 rules:
   dangerous-triggers:
-    events:                        # adds to built-in set
+    events:
       - issue_comment
       - pull_request_review_comment
 
   runner-label:
-    known-hosted-labels:           # adds to built-in set
+    known-hosted-labels:
       - ubuntu-24.04-arm
       - windows-2025-vs2026
 
   credentials:
-    public-registries:             # adds to built-in set
+    public-registries:
       - registry.example.com
       - mirror.example.net:5000
 
   cache-poisoning:
-    untrusted-triggers:            # adds to built-in set
+    untrusted-triggers:
       - issue_comment
 
   unredacted-secrets:
-    output-commands:               # adds to built-in set
+    output-commands:
       - tee
 
   unpinned-uses:

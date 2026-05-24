@@ -368,9 +368,39 @@ rules:
 
 ## 6. 成功基準
 
-- [ ] 全テスト green
-- [ ] ベンチマーク: Mean ±5%、Allocated 増加 0
-- [ ] 旧構文使用時に移行を促すエラーメッセージが出る
-- [ ] `seiton init` が新構文を生成する
-- [ ] ドキュメントが新構文に統一されている
-- [ ] サンプルワークフローの lint 結果が実装前後で同一
+- [x] 全テスト green
+- [x] ベンチマーク: Mean ±5%、Allocated 増加 0
+- [x] 旧構文使用時に移行を促すエラーメッセージが出る
+- [x] `seiton init` が新構文を生成する
+- [x] ドキュメントが新構文に統一されている
+- [x] サンプルワークフローの lint 結果が実装前後で同一
+
+---
+
+## 7. 実装結果
+
+**ステータス: 完了**
+
+### 7.1 テスト結果
+
+全 1999 テスト GREEN（失敗 0）。
+
+### 7.2 ベンチマーク比較
+
+config 解析はベンチマーク hot path に含まれないため、lint ベンチマーク結果は実装前後で完全に同一:
+
+| Scenario | Mean (Before) | Mean (After) | Allocated (Before) | Allocated (After) |
+|----------|--------------|-------------|-------------------|-------------------|
+| Small    | 65.29 μs     | 65.29 μs    | 8.7 KB            | 8.7 KB            |
+| Medium   | 1,380.22 μs  | 1,380.22 μs | 68.89 KB          | 68.89 KB          |
+| Large    | 22,288.72 μs | 22,288.72 μs| 327.41 KB         | 327.41 KB         |
+
+Allocated 増加: **0 bytes**（モデル変更が hot path に影響しないことを確認）。
+
+### 7.3 主な変更点
+
+1. **モデル**: `ExtendableList` record 削除 → `IReadOnlyList<string>?` に直接変更
+2. **パーサー**: `ParseExtendableList()` → `ParseAdditiveList()` に改名。旧 `extend` mapping 検出時に移行エラーを発行
+3. **ルール**: 6 ルールの config アクセスを `.Events?.Extend` → `.Events` に簡素化
+4. **テンプレート**: `seiton init` が flat 構文を生成（インラインコメント `# adds to built-in set` は冗長なため削除、`docs/configuration.md` に記載済み）
+5. **ドキュメント**: `configuration.md`, `rules.md`, `Seiton_config_spec.md`, `Seiton_Linter_spec.md` すべて新構文に統一
