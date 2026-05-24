@@ -41,7 +41,7 @@ seiton
 - **Prefer** a committed file (`.github/seiton.yaml` or discovery) so policy changes go through normal review.
 - **`SEITON_CONFIG`** and **`--config`** select **any** path on disk. On **shared runners**, only set them to paths you trust (typically under the checked-out repository). Do not pass PR-provided or untrusted strings as the path.
 - **Fork pull request** jobs often run with an untrusted merge ref. Avoid `SEITON_CONFIG` pointing at a path writable by that ref; rely on discovery from the base branch checkout or omit a config file to use defaults.
-- **Observation**: with **`seiton check --verbose`** or **`seiton fix --verbose`**, Seiton prints **`config: …`** (absolute resolved path) or **`config: (none, using defaults)`** to stderr immediately after loading the config.
+- **Observation**: with **`seiton check --verbose`** or **`seiton --fix --verbose`**, Seiton prints **`config: …`** (absolute resolved path) or **`config: (none, using defaults)`** to stderr immediately after loading the config.
 
 **Governance in *your* repository** (when you adopt Seiton): treat `seiton.yaml` like security policy — wide `exclusions` or disabling online rules can blunt detection. Teams often add rules under **CODEOWNERS** plus branch protection (**require review from Code Owners**) for paths such as `.github/seiton.yaml` and root `seiton.yaml`. See GitHub’s [About code owners](https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-code-owners).
 
@@ -150,11 +150,23 @@ rules:
       extend:
         - issue_comment
 
+  # Extend the trigger set that self-hosted-runner considers untrusted.
+  self-hosted-runner:
+    untrusted-triggers:
+      extend:
+        - issue_comment
+
   # Extend output commands that unredacted-secrets watches for secret printing.
   unredacted-secrets:
     output-commands:
       extend:
         - tee
+
+  # Assume additional events when evaluating event-scoped expressions.
+  expr-undefined-var:
+    assume-events:
+      - workflow_dispatch
+      - workflow_call
 
   # Deny specific uses references.
   forbidden-uses:
@@ -267,7 +279,9 @@ Some rules accept additional configuration keys. All `extend` lists add to the b
 | `runner-no-latest` | `fix-mapping` | Map of label → replacement pairs for auto-fix and custom detection. |
 | `credentials` | `public-registries.extend` | Additional container registries to treat as public. |
 | `cache-poisoning` | `untrusted-triggers.extend` | Additional trigger events to treat as untrusted. |
+| `self-hosted-runner` | `untrusted-triggers.extend` | Additional trigger events to treat as untrusted for self-hosted runner checks. |
 | `unredacted-secrets` | `output-commands.extend` | Additional shell commands to watch for secret printing. |
+| `expr-undefined-var` | `assume-events` | Additional event names to assume when evaluating event-scoped expressions. |
 | `forbidden-uses` | `deny` / `allow` | Glob patterns for denying or allowing `uses:` references. |
 | `unpinned-uses` | `ignore-actions` | Object entries for actions to exclude from SHA-pinning checks. `owner` is required; optional `refs` narrows the ignore to exact refs. |
 | `overprovisioned-secrets` | `max-step-env-secrets` / `max-job-secrets` | Integer thresholds for secret over-provisioning detection. |
@@ -429,7 +443,7 @@ Inline directives take precedence over config-file exclusions.
 
 ## Fix Configuration
 
-`seiton fix` (or `seiton --fix`) applies auto-fixes. The `fix` section controls behavior for network-assisted fixes.
+`seiton --fix` applies auto-fixes. The `fix` section controls behavior for network-assisted fixes.
 
 ### Auto-fix for `job-timeout-minutes-required`
 
@@ -487,7 +501,7 @@ jobs:
 Auto-pin `uses:` references to commit SHAs. Enable via config or CLI flag:
 
 ```sh
-seiton fix --enable-pin-network
+seiton --fix --enable-pin-network
 ```
 
 For persistent configuration, set `fix.pinning.enable-network: true` in the config file (see the [Annotated Example](#annotated-example) for the full `fix.pinning` block).
@@ -497,7 +511,7 @@ For persistent configuration, set `fix.pinning.enable-network: true` in the conf
 Auto-pin container images to `@sha256:<digest>`. Enable via config or CLI flag:
 
 ```sh
-seiton fix --enable-image-network
+seiton --fix --enable-image-network
 ```
 
 For persistent configuration, set `fix.images.enable-network: true` in the config file (see the [Annotated Example](#annotated-example) for the full `fix.images` block).
@@ -583,7 +597,7 @@ This is useful when batch-fixing all instances of a single rule at a time.
 | `fix.images.exclude-tags` | `latest` |
 | `network.on-error` | `skip` |
 | `network.timeout-seconds` | `30` (`0`–`300` enforced; excess rejected + clamped) |
-| `network.max-concurrency` | `min(4, logical processors)` | Same rules as **`max-concurrency`** above (**`1`**–logical processor count for explicit values; excess rejected + clamped). |
+| `network.max-concurrency` | `min(4, logical processors)` — same rules as **`max-concurrency`** above (`1`–logical processor count; excess rejected + clamped) |
 | `network.github.ghes-api-url` | `""` |
 | `network.github.ghes-fallback` | `false` |
 | `output.sort-order` | `location` |

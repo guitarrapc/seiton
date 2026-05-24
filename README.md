@@ -2,6 +2,8 @@
 
 [![build](https://github.com/guitarrapc/seiton/actions/workflows/build.yaml/badge.svg)](https://github.com/guitarrapc/seiton/actions/workflows/build.yaml)
 
+[Installation](docs/installation.md) | [Usage](docs/usage.md) | [Rules](docs/rules.md) | [Configuration](docs/configuration.md) | [Overview](docs/index.md) | [Playground](https://guitarrapc.github.io/seiton/)
+
 **Seiton** is a security-focused linter & fixer for [GitHub Actions](https://github.com/features/actions) workflow files and action metadata files.
 It catches security issues, policy violations, and mistakes before they reach production — then optionally fixes them. Try it out in the [playground](https://guitarrapc.github.io/seiton/).
 
@@ -10,7 +12,7 @@ Features:
 - **Security-first rules** — template injection, unpinned actions/images, dangerous triggers, secret misuse, and more.
 - **Correctness checks** — job structure, needs-graph cycles, glob syntax, shell names, ID naming, expression type-checking.
 - **Supply-chain hygiene** — unpinned `uses:`, archived actions, known vulnerable actions (online), impostor commits (online).
-- **Auto-fix support** — `seiton fix` or `seiton --fix` applies machine-safe remediations in place (including network-assisted SHA/digest pinning).
+- **Auto-fix support** — `seiton --fix` applies machine-safe remediations in place (including network-assisted SHA/digest pinning).
 - **Multiple output formats** — `text` (default), `json`, `sarif` (GitHub Advanced Security).
 - **Config file** — optional `.github/seiton.yaml` for rule tuning, exclusions, and network options.
 - **Inline suppression** — `# seiton: disable-next-line <rule-id>` directives inside workflow files.
@@ -18,41 +20,93 @@ Features:
 
 You can check various benchmark patterns at [GitHub Actions/Benchmark](https://github.com/guitarrapc/seiton/actions/runs/26144683540).
 
-**Example of broken workflow:**
+**Example of broken workflow** ([`samples/readme`](samples/readme/.github/workflows/test.yaml)):
 
 ```yaml
 on:
-  push:
+  pull_request:
     branch: main
 jobs:
   test:
     runs-on: ubuntu-latest
     steps:
-      - run: echo "${{ github.event.pull_request.title }}"
+      - run: echo "title is ${{ github.event.pull_request.title }}"
       - uses: actions/checkout@v6
       - uses: actions/setup-node@v4
         with:
           node_version: 18.x
 ```
 
-**Seiton reports errors:**
+**Example `--oneline` output** (`seiton --oneline -c samples/readme/.github/seiton.yaml samples/readme/.github/workflows/test.yaml`):
 
 ```
-test.yml:8:7: [error] template-injection: untrusted value 'github.event.pull_request.title' interpolated directly into run script; use env: indirection instead
-test.yml:9:5: [warning] unpinned-uses: 'actions/checkout@v6' is not pinned to a full commit SHA
-test.yml:12:9: [error] popular-action-inputs: input 'node_version' is not defined in action 'actions/setup-node@v4'; did you mean 'node-version'?
-test.yml:9:5: [warning] checkout-persist-credentials: 'actions/checkout' should set 'persist-credentials: false'
-test.yml:6:5: [warning] job-permissions-required: job 'test' does not declare explicit permissions
+test.yaml:3:5: error [parse] on.pull_request has unexpected key "branch" for "pull_request" section. did you mean "branches"? expected one of "types", "branches", "branches-ignore", "paths", "paths-ignore"
+test.yaml:5:3: warning [job-permissions-required] jobs.'test' does not have permissions defined; set explicit permissions to follow least-privilege principle
+test.yaml:5:3: error [job-timeout-minutes-required] jobs.'test' should define timeout-minutes (default is 360 minutes); if not possible, set timeout-minutes on each step instead
+test.yaml:6:14: warning [runner-no-latest] jobs.'test'.runs-on label 'ubuntu-latest' is a moving latest label; prefer explicit version-pinned runner labels
+test.yaml:8:33: error [template-injection] "github.event.pull_request.title" is potentially untrusted. avoid using it directly in inline scripts. instead, pass it through an environment variable. see https://docs.github.com/en/actions/security-for-github-actions/security-guides/security-hardening-for-github-actions#good-practices-for-mitigating-script-injection-attacks for more details
+test.yaml:9:15: warning [checkout-persist-credentials] action 'actions/checkout@v6' should set with.persist-credentials to false to avoid leaving credentials accessible to subsequent steps; after changing this, review later authenticated git commands; for example, git push may require explicit auth setup such as git remote set-url origin ...
+test.yaml:9:31: warning [unpinned-uses] 'actions/checkout@v6' is not pinned to a full-length commit SHA. see https://github.com/actions/checkout/tree/v6 (fixable with --fix --enable-pin-network)
+test.yaml:10:33: warning [unpinned-uses] 'actions/setup-node@v4' is not pinned to a full-length commit SHA. see https://github.com/actions/setup-node/tree/v4 (fixable with --fix --enable-pin-network)
+test.yaml:12:25: warning [popular-action-inputs] unknown input 'node_version' for action 'actions/setup-node@v4'. available inputs are "architecture", "cache", "cache-dependency-path", "check-latest", "mirror", "mirror-token", "node-version", "node-version-file", "package-manager-cache", "registry-url", "scope", "token". did you mean 'node-version'? see https://github.com/actions/setup-node/tree/v4
+3 errors, 6 warnings in 1 file
 ```
+
+**Example of auto-fixed workflow** (`seiton --fix --enable-pin-network -c samples/readme/.github/seiton.yaml samples/readme/.github/workflows/test.yaml`):
+
+Bunch of errors and warnings are fixed, following best practices and pinning the actions to specific SHAs:
+
+```yaml
+on:
+  pull_request:
+    branches: main
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - run: echo "title is ${GITHUB_EVENT_PULL_REQUEST_TITLE}"
+        env:
+          GITHUB_EVENT_PULL_REQUEST_TITLE: ${{ github.event.pull_request.title }}
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 18.x
+```
+
+Remaining issues require config to resolve.
+
+```shell
+test.yaml:5:3: error [job-timeout-minutes-required] jobs.'test' should define timeout-minutes (default is 360 minutes); if not possible, set timeout-minutes on each step instead
+test.yaml:6:14: warning [runner-no-latest] jobs.'test'.runs-on label 'ubuntu-latest' is a moving latest label; prefer explicit version-pinned runner labels
+```
+
+**Fully resolved with config tuning:**
+
+Generate a starter config with `seiton init`, then customize ([`samples/readme/.github/seiton.yaml`](samples/readme/.github/seiton.yaml)):
+
+```yaml
+# .github/seiton.yaml
+rules:
+  runner-no-latest:
+    fix-mapping:
+      ubuntu-latest: "ubuntu-24.04"
+fix:
+  defaults:
+    job-timeout-minutes: 30
+```
+
+After `seiton --fix --enable-pin-network` with this config, all diagnostics are resolved — `runs-on` becomes `ubuntu-24.04` and `timeout-minutes: 30` is inserted.
+
 
 ## Quick Start
 
-Install or download Seiton (see [Installation](docs/installation.md) for all options):
+Install Seiton using your preferred method. See [Installation](docs/installation.md) for prebuilt binaries, Docker, and build-from-source details.
 
 ```sh
-# Download script (macOS/Linux, downloads to the current directory)
-curl -fsSL https://raw.githubusercontent.com/guitarrapc/seiton/main/scripts/download.sh | bash
-
 # Homebrew (macOS/Linux)
 brew tap guitarrapc/seiton https://github.com/guitarrapc/seiton
 brew install seiton
@@ -62,9 +116,7 @@ scoop bucket add guitarrapc https://github.com/guitarrapc/scoop-bucket
 scoop install seiton
 ```
 
-If you used the download script, run `./seiton` in the commands below from the download directory, or move the binary into your `PATH`. For other platforms, download a prebuilt archive from the [releases page](https://github.com/guitarrapc/seiton/releases) and add `seiton` to your `PATH` (see [Installation](docs/installation.md)).
-
-Run it:
+Then run it:
 
 ```sh
 # Lint all workflow files in the current repository
@@ -83,122 +135,23 @@ seiton --fix
 seiton rules
 ```
 
-## Documents
+To generate a starter config file:
 
-| Page | Description |
+```sh
+seiton init
+```
+
+If you prefer a direct download instead of a package manager, use the release archive or the download script described in [Installation](docs/installation.md).
+
+## Documentation
+
+| Page | What it covers |
 |---|---|
-| [Installation](docs/installation.md) | How to install Seiton on Windows, macOS, and Linux. |
-| [Usage](docs/usage.md) | Commands, flags, environment variables, CI integration. |
-| [Rules](docs/rules.md) | Full list of all lint rules with examples and remediation guidance. |
-| [Configuration](docs/configuration.md) | Config file format, rule tuning, exclusions, and network options. |
-
-## Rules
-
-Seiton includes **50+ rules** across four categories. Each rule has a dedicated documentation page with examples, rationale, and configuration options.
-
-Seiton keeps rules that detect mistakes, security risks, incompatibilities, spec traps, or strongly deprecated behavior with concrete downside.
-Opt-in informational rules are accepted only when that downside is still specific and explainable.
-Style-only checks, naming preferences, UI readability preferences, and alternative-tool preferences are out of scope.
-
-> See the [full rules list](docs/rules.md) for a summary table. Click any rule name below for detailed documentation.
-
-### Correctness
-
-| Rule | Default | Auto-fix | Description |
-|---|---|---|---|
-| [job-structure](docs/rules.md#job-structure) | ✓ | ✗ | `uses` is mutually exclusive with `steps`/`runs-on` |
-| [reusable-workflow](docs/rules.md#reusable-workflow) | ✓ | ✗ | Reusable workflow call semantics |
-| [permissions](docs/rules.md#permissions) | ✓ | ✗ | Invalid permission scope values |
-| [needs-graph](docs/rules.md#needs-graph) | ✓ | ✗ | Unknown dependency targets and cycles |
-| [shell-name](docs/rules.md#shell-name) | ✓ | ✗ | Unsupported shell names |
-| [id-naming](docs/rules.md#id-naming) | ✓ | ✗ | Invalid characters in job/step IDs |
-| [glob-pattern](docs/rules.md#glob-pattern) | ✓ | ✗ | Invalid glob syntax and filter conflicts |
-| [runner-label](docs/rules.md#runner-label) | ✓ | ✗ | Unknown GitHub-hosted runner labels |
-| [runner-no-latest](docs/rules.md#runner-no-latest) | ✓ | △ | Moving `*-latest` runner labels |
-| [popular-action-inputs](docs/rules.md#popular-action-inputs) | ✓ | △ | Typos in popular action input names |
-| [outdated-action-runner](docs/rules.md#outdated-action-runner) | ✓ | ✗ | Deprecated action `runs.using` runtimes |
-| [local-action-inputs](docs/rules.md#local-action-inputs) | ✓ | ✗ | Local action metadata contract validation |
-| [action-shell-is-required](docs/rules.md#action-shell-is-required) | ✓ | ✗ | Missing `shell` in composite action `run` steps |
-| [matrix](docs/rules.md#matrix) | ✓ | ✗ | Invalid matrix definitions |
-| [env-var](docs/rules.md#env-var) | ✓ | ✗ | Risky environment variable patterns |
-| [if-cond](docs/rules.md#if-cond) | ✓ | ✗ | Constant or unsound `if` conditions |
-| [fake-ternary](docs/rules.md#fake-ternary) | ✓ | ✗ | `cond && a \|\| b` fake ternary idioms |
-| [unsound-condition](docs/rules.md#unsound-condition) | ✓ | △ | Block-scalar `if:` conditions that become truthy because of trailing newline |
-| [concurrency-limits](docs/rules.md#concurrency-limits) | ✗ | ✗ | Missing concurrency settings with `cancel-in-progress` |
-| [deprecated-commands](docs/rules.md#deprecated-commands) | ✓ | ✗ | Deprecated workflow commands |
-| [dispatch-inputs](docs/rules.md#dispatch-inputs) | ✓ | ✗ | Invalid `workflow_dispatch` input definitions |
-| [schedule-event](docs/rules.md#schedule-event) | ✓ | ✗ | Invalid schedule cron/timezone |
-| [workflow-call-input-default](docs/rules.md#workflow-call-input-default) | ✓ | ✗ | Invalid `workflow_call` input defaults |
-
-### Security
-
-| Rule | Default | Auto-fix | Description |
-|---|---|---|---|
-| [template-injection](docs/rules.md#template-injection) | ✓ | △ | Untrusted data in `run` scripts |
-| [dangerous-triggers](docs/rules.md#dangerous-triggers) | ✓ | ✗ | High-risk trigger events |
-| [unsound-contains](docs/rules.md#unsound-contains) | ✓ | ✗ | Bypassable `contains()` checks in conditions |
-| [bot-conditions](docs/rules.md#bot-conditions) | ✓ | ✗ | Spoofable bot actor checks |
-| [run-env-context-direct-use](docs/rules.md#run-env-context-direct-use) | ✓ | △ | `${{ env.* }}` in `run` scripts |
-| [run-secrets-context-direct-use](docs/rules.md#run-secrets-context-direct-use) | ✓ | △ | `${{ secrets.* }}` in `run` scripts |
-| [run-inputs-context-direct-use](docs/rules.md#run-inputs-context-direct-use) | ✓ | △ | `${{ inputs.* }}` in `run` scripts |
-| [secrets-whole-context-access](docs/rules.md#secrets-whole-context-access) | ✓ | ✗ | `toJson(secrets)` whole-context leaks |
-| [expr-undefined-var](docs/rules.md#expr-undefined-var) | ✓ | ✗ | Out-of-scope context references |
-| [cache-poisoning](docs/rules.md#cache-poisoning) | ✓ | ✗ | Cache usage with untrusted triggers |
-| [self-hosted-runner](docs/rules.md#self-hosted-runner) | ✓ | ✗ | Self-hosted runners with untrusted triggers |
-| [insecure-commands](docs/rules.md#insecure-commands) | ✓ | ✗ | Unsafe command construction |
-
-### Permissions & Secrets
-
-| Rule | Default | Auto-fix | Description |
-|---|---|---|---|
-| [deny-write-all](docs/rules.md#deny-write-all) | ✓ | ✓ | `write-all` permissions |
-| [deny-read-all](docs/rules.md#deny-read-all) | ✓ | ✓ | `read-all` permissions |
-| [job-permissions-required](docs/rules.md#job-permissions-required) | ✓ | ✓ | Missing job-level permissions |
-| [credentials](docs/rules.md#credentials) | ✓ | ✗ | Missing container registry credentials |
-| [checkout-persist-credentials](docs/rules.md#checkout-persist-credentials) | ✓ | △ | `actions/checkout` persist-credentials |
-| [artipacked](docs/rules.md#artipacked) | ✓ | ✗ | Checkout + dangerous upload-artifact credential leak |
-| [workflow-secrets](docs/rules.md#workflow-secrets) | ✓ | ✗ | Workflow-level secret assignments |
-| [job-secrets](docs/rules.md#job-secrets) | ✓ | ✗ | Job-level secret assignments |
-| [unredacted-secrets](docs/rules.md#unredacted-secrets) | ✓ | ✗ | Printing secret-derived values |
-| [secrets-outside-env](docs/rules.md#secrets-outside-env) | ✓ | ✗ | Secrets outside `env:` context |
-| [overprovisioned-secrets](docs/rules.md#overprovisioned-secrets) | ✓ | ✗ | Broad-scoped secret mappings |
-| [deny-inherit-secrets](docs/rules.md#deny-inherit-secrets) | ✓ | ✗ | `secrets: inherit` in reusable calls |
-
-### Supply Chain
-
-| Rule | Default | Auto-fix | Description |
-|---|---|---|---|
-| [unpinned-uses](docs/rules.md#unpinned-uses) | ✓ | △ | Actions not pinned to commit SHA |
-| [unpinned-image](docs/rules.md#unpinned-image) | ✓ | △ | Images not pinned by digest |
-| [unpinned-tools](docs/rules.md#unpinned-tools) | ✓ | ✗ | Tool setup actions with unpinned external tool version |
-| [archived-uses](docs/rules.md#archived-uses) | ✓ | ✗ | Archived repository references |
-| [ref-version-mismatch](docs/rules.md#ref-version-mismatch) | ✓ | ✗ | Version annotation mismatch |
-| [forbidden-uses](docs/rules.md#forbidden-uses) | ✓ | ✗ | Policy-denied action references |
-| [github-app-token-inputs](docs/rules.md#github-app-token-inputs) | ✓ | ✗ | Unprivileged GitHub App token inputs |
-| [job-timeout-minutes-required](docs/rules.md#job-timeout-minutes-required) | ✓ | △ | Missing job timeout |
-| [use-trusted-publishing](docs/rules.md#use-trusted-publishing) | ✓ | ✗ | Long-lived publish credentials |
-
-### Online (opt-in)
-
-| Rule | Default | Auto-fix | Description |
-|---|---|---|---|
-| [known-vulnerable-actions](docs/rules.md#known-vulnerable-actions) | ✗ | ✗ | Known vulnerability advisory matches |
-| [impostor-commit](docs/rules.md#impostor-commit) | ✗ | ✗ | Ghost/impostor commit detection |
-| [ref-confusion](docs/rules.md#ref-confusion) | ✗ | ✗ | Tag/branch name ambiguity |
-| [stale-action-refs](docs/rules.md#stale-action-refs) | ✗ | ✗ | Outdated SHA pins |
-
-## Comparison with Other Tools
-
-| Tool | Category | Primary Goal |
-|---|---|---|
-| **Seiton** | Lint + Fix | Static analysis (security + correctness) with integrated auto-fix |
-| [actionlint](https://github.com/rhysd/actionlint) | Lint | Syntax and type correctness of workflow files |
-| [zizmor](https://github.com/zizmorcore/zizmor) | Lint | Security-focused static analysis |
-| [ghalint](https://github.com/suzuki-shunsuke/ghalint) | Lint | Security policy compliance (focused rule set) |
-| [frizbee](https://github.com/stacklok/frizbee) | Pin / Update | Replace action/image tags with SHA checksums |
-| [pinact](https://github.com/suzuki-shunsuke/pinact) | Pin / Update | Pin and update action versions; verify version annotations |
-
-See the [full comparison](docs/index.md#comparison-with-other-tools) for detailed feature-by-feature analysis.
+| [Installation](docs/installation.md) | Package managers, prebuilt binaries, Docker, attestation verification, and building from source. |
+| [Usage](docs/usage.md) | Commands, flags, environment variables, output formats, CI examples, and exit codes. |
+| [Rules](docs/rules.md) | Canonical rule reference with behavior, examples, remediation, and configuration notes. |
+| [Configuration](docs/configuration.md) | Config file discovery, schema, exclusions, fix settings, and network options. |
+| [Overview](docs/index.md) | Product overview and [comparison with other tools](docs/index.md#comparison-with-other-tools). |
 
 ## License
 

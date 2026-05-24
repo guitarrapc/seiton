@@ -28,7 +28,7 @@ For every file it analyzes, Seiton:
 | Security-first rules | Template injection, unpinned actions/images, dangerous triggers, secret misuse, and more. |
 | Correctness checks | Job structure, needs-graph cycles, glob syntax, shell names, ID naming. |
 | Supply-chain hygiene | Unpinned `uses:`, archived actions, known vulnerable actions (online), impostor commits (online). |
-| Auto-fix support | `seiton fix` or `seiton --fix` applies machine-safe remediations in place. |
+| Auto-fix support | `seiton --fix` applies machine-safe remediations in place. |
 | Multiple output formats | `text` (default), `json`, `sarif` (GitHub Advanced Security). |
 | Config file | Optional `.github/seiton.yaml` for rule tuning, exclusions, and network options. |
 | Inline suppression | `# seiton: disable-next-line <rule-id>` directives inside workflow files. |
@@ -55,12 +55,13 @@ seiton --fix
 seiton rules
 ```
 
-Example output:
+Example `--oneline` output:
 
 ```
-.github/workflows/ci.yml:18:7: [error] template-injection: untrusted value 'github.event.pull_request.title' interpolated directly into run script; use env: indirection instead
-.github/workflows/ci.yml:42:5: [warning] unpinned-uses: 'actions/checkout@v6' is not pinned to a full commit SHA
-.github/workflows/ci.yml:55:5: [warning] job-permissions-required: job 'build' does not declare explicit permissions
+.github/workflows/ci.yml:4:5: error [job-timeout-minutes-required] jobs.'test' should define timeout-minutes (default is 360 minutes); if not possible, set timeout-minutes on each step instead
+.github/workflows/ci.yml:7:38: error [template-injection] "github.event.pull_request.title" is potentially untrusted. avoid using it directly in inline scripts. instead, pass it through an environment variable. see https://docs.github.com/en/actions/security-for-github-actions/security-guides/security-hardening-for-github-actions#good-practices-for-mitigating-script-injection-attacks for more details
+.github/workflows/ci.yml:8:37: warning [unpinned-uses] 'actions/checkout@v6' is not pinned to a full-length commit SHA. see https://github.com/actions/checkout/tree/v6 (fixable with --fix --enable-pin-network)
+.github/workflows/ci.yml:11:33: warning [popular-action-inputs] unknown input 'node_version' for action 'actions/setup-node@v4'. available inputs are "architecture", "cache", "cache-dependency-path", "check-latest", "mirror", "mirror-token", "node-version", "node-version-file", "package-manager-cache", "registry-url", "scope", "token". did you mean 'node-version'? see https://github.com/actions/setup-node/tree/v4
 ```
 
 ---

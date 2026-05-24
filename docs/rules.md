@@ -72,6 +72,8 @@ impostor-commit                          no        online   error      no    wor
 ref-confusion                            no        online   error      no    workflow   opt-in (not configured)
 stale-action-refs                        no        online   warning    no    workflow   opt-in (not configured)
 
+61 rules total (56 enabled, 5 disabled)
+
 To enable an opt-in rule, add to .github/seiton.yaml:
   rules:
     <rule-id>:
@@ -571,9 +573,10 @@ jobs:
 
 **Configuration — fix-mapping:**
 
-Use `fix-mapping` to define label replacement pairs. When configured, `seiton fix` can automatically replace detected labels with their pinned equivalents. The mapping also extends detection to custom (non-built-in) labels.
+Use `fix-mapping` to define label replacement pairs. When configured, `seiton --fix` can automatically replace detected labels with their pinned equivalents. The mapping also extends detection to custom (non-built-in) labels.
 
 ```yaml
+# seiton.yaml
 rules:
   runner-no-latest:
     fix-mapping:
@@ -585,7 +588,7 @@ rules:
 
 Keys are matched **case-insensitively**. Values are the replacement text inserted verbatim.
 
-**Auto-fix example** (with the config above and `seiton fix`):
+**Auto-fix example** (with the config above and `seiton --fix`):
 
 ```yaml
 # Before
@@ -1433,6 +1436,7 @@ jobs:
 **Configuration — extend the dangerous-events set:**
 
 ```yaml
+# seiton.yaml
 rules:
   dangerous-triggers:
     events:
@@ -1696,6 +1700,7 @@ jobs:
 **Configuration — extend untrusted triggers:**
 
 ```yaml
+# seiton.yaml
 rules:
   cache-poisoning:
     untrusted-triggers:
@@ -1965,6 +1970,7 @@ jobs:
 **Configuration — extend public registries:**
 
 ```yaml
+# seiton.yaml
 rules:
   credentials:
     public-registries:
@@ -2132,6 +2138,7 @@ jobs:
 **Configuration — extend output commands:**
 
 ```yaml
+# seiton.yaml
 rules:
   unredacted-secrets:
     output-commands:
@@ -2277,11 +2284,12 @@ Warns when `uses:` references are not pinned to a full 40-character commit SHA. 
 - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
 ```
 
-Use `seiton fix --enable-pin-network` to automatically resolve and apply SHA pins.
+Use `seiton --fix --enable-pin-network` to automatically resolve and apply SHA pins.
 
 **Configuration — ignore specific actions:**
 
 ```yaml
+# seiton.yaml
 rules:
   unpinned-uses:
     ignore-actions:
@@ -2294,6 +2302,7 @@ Patterns use wildcard matching (`*` = any sequence, `?` = single character) agai
 **Ignore all refs or only specific refs:**
 
 ```yaml
+# seiton.yaml
 rules:
   unpinned-uses:
     ignore-actions:
@@ -2467,6 +2476,7 @@ jobs:
 **Configuration:**
 
 ```yaml
+# seiton.yaml
 rules:
   forbidden-uses:
     deny:
@@ -2609,6 +2619,7 @@ jobs:
 These rules require a GitHub API token and network access. Enable them manually:
 
 ```yaml
+# seiton.yaml
 rules:
   known-vulnerable-actions:
     enabled: true

@@ -2,9 +2,6 @@
 # Preferred location: .github/seiton.yaml
 
 rules:
-  unpinned-uses:
-    ignore-actions:
-      - owner: guitarrapc/actions
   # Example: override a rule's behavior.
   # dangerous-triggers:
   #   severity: warning
@@ -16,12 +13,6 @@ rules:
   #   known-hosted-labels:
   #     extend:
   #       - ubuntu-24.04-large
-
-  # runner-no-latest:
-  #   fix-mapping:
-  #     ubuntu-latest: "ubuntu-24.04"
-  #     windows-latest: "windows-2025"
-  #     macos-latest: "macos-15"
 
   # credentials:
   #   public-registries:
@@ -80,17 +71,18 @@ exclusions:
 
 fix:
   defaults:
-    job-timeout-minutes: 15
+    # job-timeout-minutes: 15
   pinning:
-    enable-network: true
-    min-age-days: 7
-    exclude-branches:
-      - main
+    # enable-network: false
+    # min-age-days: 14
+    # exclude-branches:
+    #   - main
+    #   - master
     # ignore-actions:
     #   - uses: "slsa-framework/*"
     #     ref: "*"
   images:
-    enable-network: true
+    # enable-network: false
     # exclude-images:
     #   - scratch
     # exclude-tags:

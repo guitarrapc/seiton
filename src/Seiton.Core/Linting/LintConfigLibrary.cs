@@ -113,6 +113,7 @@ public static class LintConfigLibrary
             #   - uses: "slsa-framework/*"
             #     ref: "*"
           images:
+            # enable-network: false
             # exclude-images:
             #   - scratch
             # exclude-tags:

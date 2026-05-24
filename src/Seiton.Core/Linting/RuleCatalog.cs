@@ -336,6 +336,7 @@ internal static class RuleCatalog
         RuleId.JobTimeoutMinutesRequired => true,
         RuleId.IfExprWrapper => true,
         RuleId.UnsoundCondition => true,
+        RuleId.RunnerNoLatest => true,
         _ => false,
     };
 
