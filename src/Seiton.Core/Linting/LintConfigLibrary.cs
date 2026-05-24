@@ -31,13 +31,11 @@ public static class LintConfigLibrary
           # dangerous-triggers:
           #   severity: warning
           #   events:
-          #     extend:
-          #       - issue_comment
+          #     - issue_comment
 
           # runner-label:
           #   known-hosted-labels:
-          #     extend:
-          #       - ubuntu-24.04-large
+          #     - ubuntu-24.04-large
 
           # runner-no-latest:
           #   fix-mapping:
@@ -47,18 +45,15 @@ public static class LintConfigLibrary
 
           # credentials:
           #   public-registries:
-          #     extend:
-          #       - ghcr.io
+          #     - ghcr.io
 
           # cache-poisoning:
           #   untrusted-triggers:
-          #     extend:
-          #       - issue_comment
+          #     - issue_comment
 
           # unredacted-secrets:
           #   output-commands:
-          #     extend:
-          #       - tee
+          #     - tee
 
           # forbidden-uses:
           #   allow:
@@ -131,6 +126,7 @@ public static class LintConfigLibrary
 
         output:
           # sort-order: location    # location (default) | rule
+
         """;
     }
 

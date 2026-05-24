@@ -537,7 +537,7 @@ jobs:
       - run: echo ok
 ```
 
-For self-hosted runners, add their labels to `rules.runner-label.known-hosted-labels.extend` in [configuration](configuration.md).
+For self-hosted runners, add their labels to `rules.runner-label.known-hosted-labels` in [configuration](configuration.md).
 
 ---
 
@@ -1440,8 +1440,7 @@ jobs:
 rules:
   dangerous-triggers:
     events:
-      extend:
-        - issue_comment
+      - issue_comment
 ```
 
 ---
@@ -1704,8 +1703,7 @@ jobs:
 rules:
   cache-poisoning:
     untrusted-triggers:
-      extend:
-        - issue_comment
+      - issue_comment
 ```
 
 ---
@@ -1974,8 +1972,7 @@ jobs:
 rules:
   credentials:
     public-registries:
-      extend:
-        - registry.example.com
+      - registry.example.com
 ```
 
 ---
@@ -2142,8 +2139,7 @@ jobs:
 rules:
   unredacted-secrets:
     output-commands:
-      extend:
-        - tee
+      - tee
 ```
 
 ---

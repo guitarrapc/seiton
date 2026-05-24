@@ -22,7 +22,7 @@ public sealed class UnredactedSecretsRule() : RuleBase(RuleId.UnredactedSecrets)
     public override void SetConfig(LintConfig config)
     {
         base.SetConfig(config);
-        additionalOutputCommands = config.GetRuleConfig(Id)?.OutputCommands?.Extend is { Count: > 0 } commands
+        additionalOutputCommands = config.GetRuleConfig(Id)?.OutputCommands is { Count: > 0 } commands
             ? BuildNormalizedSet(commands)
             : [];
     }

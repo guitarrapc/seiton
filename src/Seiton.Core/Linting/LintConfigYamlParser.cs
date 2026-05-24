@@ -402,11 +402,11 @@ internal static class LintConfigYamlParser
 
         var enabled = true;
         DiagnosticSeverity? severity = null;
-        ExtendableList? events = null;
-        ExtendableList? knownHostedLabels = null;
-        ExtendableList? publicRegistries = null;
-        ExtendableList? untrustedTriggers = null;
-        ExtendableList? outputCommands = null;
+        IReadOnlyList<string>? events = null;
+        IReadOnlyList<string>? knownHostedLabels = null;
+        IReadOnlyList<string>? publicRegistries = null;
+        IReadOnlyList<string>? untrustedTriggers = null;
+        IReadOnlyList<string>? outputCommands = null;
         IReadOnlyList<string>? assumeEvents = null;
         IReadOnlyList<string>? allow = null;
         IReadOnlyList<string>? deny = null;
@@ -444,23 +444,23 @@ internal static class LintConfigYamlParser
                     break;
                 case "events":
                     seenKeyFlags |= RuleKeyFlags.Events;
-                    events = ToExtendableList(ParseExtendableList(value, diagnostics, filePath));
+                    events = NullIfEmpty(ParseAdditiveList(value, "events", diagnostics, filePath));
                     break;
                 case "known-hosted-labels":
                     seenKeyFlags |= RuleKeyFlags.KnownHostedLabels;
-                    knownHostedLabels = ToExtendableList(ParseExtendableList(value, diagnostics, filePath));
+                    knownHostedLabels = NullIfEmpty(ParseAdditiveList(value, "known-hosted-labels", diagnostics, filePath));
                     break;
                 case "public-registries":
                     seenKeyFlags |= RuleKeyFlags.PublicRegistries;
-                    publicRegistries = ToExtendableList(ParseExtendableList(value, diagnostics, filePath));
+                    publicRegistries = NullIfEmpty(ParseAdditiveList(value, "public-registries", diagnostics, filePath));
                     break;
                 case "untrusted-triggers":
                     seenKeyFlags |= RuleKeyFlags.UntrustedTriggers;
-                    untrustedTriggers = ToExtendableList(ParseExtendableList(value, diagnostics, filePath));
+                    untrustedTriggers = NullIfEmpty(ParseAdditiveList(value, "untrusted-triggers", diagnostics, filePath));
                     break;
                 case "output-commands":
                     seenKeyFlags |= RuleKeyFlags.OutputCommands;
-                    outputCommands = ToExtendableList(ParseExtendableList(value, diagnostics, filePath));
+                    outputCommands = NullIfEmpty(ParseAdditiveList(value, "output-commands", diagnostics, filePath));
                     break;
                 case "assume-events":
                     seenKeyFlags |= RuleKeyFlags.AssumeEvents;
@@ -538,21 +538,15 @@ internal static class LintConfigYamlParser
         }
     }
 
-    private static IReadOnlyList<string> ParseExtendableList(object? value, List<Diagnostic> diagnostics, string filePath)
+    private static IReadOnlyList<string> ParseAdditiveList(object? value, string keyName, List<Diagnostic> diagnostics, string filePath)
     {
-        if (AsMap(value) is not { } map)
+        if (AsMap(value) is { } map && map.ContainsKey("extend"))
         {
-            diagnostics.Add(Diag("extend key must be properly indented", DomLine, 5, 1, filePath));
+            diagnostics.Add(Diag($"'{keyName}' expects a list, not a mapping. If migrating from an older config, remove the 'extend' key and place items directly under '{keyName}'.", DomLine, 5, keyName.Length, filePath));
             return [];
         }
 
-        if (!map.TryGetValue("extend", out var extObj))
-        {
-            diagnostics.Add(Diag("expected 'extend' key", DomLine, 5, 6, filePath));
-            return [];
-        }
-
-        return ParseStringList(extObj, "extend", diagnostics, filePath);
+        return ParseStringList(value, keyName, diagnostics, filePath);
     }
 
     private static IReadOnlyList<string> ParseStringList(
@@ -604,11 +598,6 @@ internal static class LintConfigYamlParser
         }
 
         return result;
-    }
-
-    private static ExtendableList? ToExtendableList(IReadOnlyList<string> values)
-    {
-        return values.Count > 0 ? new ExtendableList(values) : null;
     }
 
     private static IReadOnlyList<string>? NullIfEmpty(IReadOnlyList<string> values)

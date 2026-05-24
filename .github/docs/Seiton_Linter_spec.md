@@ -432,7 +432,7 @@ The following table defines the normative default severity for each rule. Implem
 Selected rules accept rule-specific configuration keys within the `rules.<rule-id>` section, in addition to the shared `enabled` / `severity` keys.
 
 - Rule-specific keys are defined per rule ID. Unknown keys for a given rule ID are configuration errors.
-- Where a rule accepts an `extend` list, merge behavior is set union (`effective = built-in U user-extended`) with deterministic deduplication.
+- Where a rule accepts an additive list, merge behavior is set union (`effective = built-in U user-provided`) with deterministic deduplication.
 - Duplicate entries after normalization are ignored.
 - Invalid entries must produce configuration error with enough location/context for users to fix input.
 - Extension never removes built-in defaults.
@@ -443,31 +443,26 @@ Non-normative example configuration shape:
 rules:
   dangerous-triggers:
     events:
-      extend:
-        - issue_comment
-        - pull_request_review_comment
+      - issue_comment
+      - pull_request_review_comment
 
   runner-label:
     known-hosted-labels:
-      extend:
-        - ubuntu-24.04-arm
-        - windows-2025-vs2026
+      - ubuntu-24.04-arm
+      - windows-2025-vs2026
 
   credentials:
     public-registries:
-      extend:
-        - registry.example.com
-        - mirror.example.net:5000
+      - registry.example.com
+      - mirror.example.net:5000
 
   cache-poisoning:
     untrusted-triggers:
-      extend:
-        - issue_comment
+      - issue_comment
 
   unredacted-secrets:
     output-commands:
-      extend:
-        - tee
+      - tee
 
   unpinned-uses:
     ignore-actions:
@@ -491,33 +486,33 @@ rules:
     max-job-secrets: 5
 ```
 
-#### 5.8.1 `dangerous-triggers` — `events.extend`
+#### 5.8.1 `dangerous-triggers` — `events`
 
 - Allows users to add event names treated as dangerous by the `dangerous-triggers` rule.
 - Matching uses normalized event names (ASCII lower-case); configuration values should use canonical GitHub event naming.
 - If a configured event is present in workflow `on`, rule emits the same diagnostic/severity behavior as built-in dangerous events.
 
-#### 5.8.2 `runner-label` — `known-hosted-labels.extend`
+#### 5.8.2 `runner-label` — `known-hosted-labels`
 
 - Allows users to add runner labels treated as known GitHub-hosted labels for `runner-label` rule evaluation.
 - Matching uses normalized label values (ASCII lower-case).
 - Labels added here suppress only `runner-label` unknown-label diagnostics; they do not alter parsing or execution semantics.
 
-#### 5.8.3 `credentials` — `public-registries.extend`
+#### 5.8.3 `credentials` — `public-registries`
 
 - Allows users to add registry hosts treated as public/credential-optional by the `credentials` rule.
 - Entry unit is registry host (`host` or `host:port`), without scheme and path.
 - Matching uses normalized host values (ASCII lower-case).
 - When image registry host matches this merged public-registry set, missing credentials does not produce `credentials` diagnostics.
 
-#### 5.8.4 `cache-poisoning` / `self-hosted-runner` — `untrusted-triggers.extend`
+#### 5.8.4 `cache-poisoning` / `self-hosted-runner` — `untrusted-triggers`
 
 - Allows users to add trigger event names treated as untrusted for `cache-poisoning` and/or `self-hosted-runner` evaluation.
-- Each rule has its own independent `untrusted-triggers.extend` list; users set them separately to control which rule is affected.
+- Each rule has its own independent `untrusted-triggers` list; users set them separately to control which rule is affected.
 - Matching uses normalized event names (ASCII lower-case).
 - Extended trigger names never replace the built-in untrusted trigger set.
 
-#### 5.8.5 `unredacted-secrets` — `output-commands.extend`
+#### 5.8.5 `unredacted-secrets` — `output-commands`
 
 - Allows users to add command names treated as output sinks by `unredacted-secrets`.
 - Matching uses normalized command names (ASCII lower-case).
@@ -574,34 +569,29 @@ rules:
   dangerous-triggers:
     severity: error
     events:
-      extend:
-        - issue_comment
-        - pull_request_review_comment
+      - issue_comment
+      - pull_request_review_comment
 
   shell-name:
     severity: warning
 
   runner-label:
     known-hosted-labels:
-      extend:
-        - custom-large
-        - ubuntu-24.04-arm
+      - custom-large
+      - ubuntu-24.04-arm
 
   credentials:
     public-registries:
-      extend:
-        - registry.example.com
-        - mirror.example.net:5000
+      - registry.example.com
+      - mirror.example.net:5000
 
   cache-poisoning:
     untrusted-triggers:
-      extend:
-        - issue_comment
+      - issue_comment
 
   unredacted-secrets:
     output-commands:
-      extend:
-        - tee
+      - tee
 
   forbidden-uses:
     deny:
@@ -721,8 +711,7 @@ rules:
     severity: error
   runner-label:
     known-hosted-labels:
-      extend:
-        - ubuntu-24.04-large
+      - ubuntu-24.04-large
 exclusions:
   - file: ".github/workflows/legacy-release.yml"
     rules:

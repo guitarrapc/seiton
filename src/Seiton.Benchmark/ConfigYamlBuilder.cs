@@ -33,24 +33,19 @@ internal static class ConfigYamlBuilder
               dangerous-triggers:
                 severity: error
                 events:
-                  extend:
-                    - issue_comment
+                  - issue_comment
               runner-label:
                 known-hosted-labels:
-                  extend:
-                    - ubuntu-24.04-large
+                  - ubuntu-24.04-large
               credentials:
                 public-registries:
-                  extend:
-                    - registry.example.com
+                  - registry.example.com
               cache-poisoning:
                 untrusted-triggers:
-                  extend:
-                    - issue_comment
+                  - issue_comment
               unredacted-secrets:
                 output-commands:
-                  extend:
-                    - tee
+                  - tee
               forbidden-uses:
                 deny:
                   - some-untrusted-org/*
@@ -60,11 +55,11 @@ internal static class ConfigYamlBuilder
                   - repository_dispatch
 
             exclusions:
-              - files: ".github/workflows/legacy-*.yml"
+              - file: ".github/workflows/legacy-*.yml"
                 rules:
                   - runner-no-latest
                   - job-permissions-required
-              - files: ".github/workflows/release.yml"
+              - file: ".github/workflows/release.yml"
                 jobs:
                   - publish
                 rules:
@@ -80,8 +75,8 @@ internal static class ConfigYamlBuilder
                   - main
                   - master
                 ignore-actions:
-                  - uses: "slsa-framework/.*"
-                    ref: ".*"
+                  - uses: "slsa-framework/*"
+                    ref: "*"
               images:
                 enable-network: true
                 exclude-images:
@@ -118,34 +113,29 @@ internal static class ConfigYamlBuilder
         sb.AppendLine("  dangerous-triggers:");
         sb.AppendLine("    severity: warning");
         sb.AppendLine("    events:");
-        sb.AppendLine("      extend:");
-        sb.AppendLine("        - issue_comment");
-        sb.AppendLine("        - pull_request_target");
-        sb.AppendLine("        - workflow_run");
+        sb.AppendLine("      - issue_comment");
+        sb.AppendLine("      - pull_request_target");
+        sb.AppendLine("      - workflow_run");
         sb.AppendLine("  runner-label:");
         sb.AppendLine("    known-hosted-labels:");
-        sb.AppendLine("      extend:");
-        sb.AppendLine("        - ubuntu-24.04-large");
-        sb.AppendLine("        - windows-2025-large");
-        sb.AppendLine("        - macos-15-xlarge");
+        sb.AppendLine("      - ubuntu-24.04-large");
+        sb.AppendLine("      - windows-2025-large");
+        sb.AppendLine("      - macos-15-xlarge");
         sb.AppendLine("  credentials:");
         sb.AppendLine("    public-registries:");
-        sb.AppendLine("      extend:");
-        sb.AppendLine("        - registry.example.com");
-        sb.AppendLine("        - ghcr.io");
-        sb.AppendLine("        - docker.io");
+        sb.AppendLine("      - registry.example.com");
+        sb.AppendLine("      - ghcr.io");
+        sb.AppendLine("      - docker.io");
         sb.AppendLine("  cache-poisoning:");
         sb.AppendLine("    untrusted-triggers:");
-        sb.AppendLine("      extend:");
-        sb.AppendLine("        - issue_comment");
-        sb.AppendLine("        - pull_request_target");
+        sb.AppendLine("      - issue_comment");
+        sb.AppendLine("      - pull_request_target");
         sb.AppendLine("  self-hosted-runner:");
         sb.AppendLine("    severity: warning");
         sb.AppendLine("  unredacted-secrets:");
         sb.AppendLine("    output-commands:");
-        sb.AppendLine("      extend:");
-        sb.AppendLine("        - tee");
-        sb.AppendLine("        - set-output");
+        sb.AppendLine("      - tee");
+        sb.AppendLine("      - set-output");
         sb.AppendLine("  forbidden-uses:");
         sb.AppendLine("    allow:");
         sb.AppendLine("      - actions/*");
@@ -169,18 +159,18 @@ internal static class ConfigYamlBuilder
         // exclusions section
         sb.AppendLine();
         sb.AppendLine("exclusions:");
-        sb.AppendLine("  - files: \".github/workflows/legacy-*.yml\"");
+        sb.AppendLine("  - file: \".github/workflows/legacy-*.yml\"");
         sb.AppendLine("    rules:");
         sb.AppendLine("      - runner-no-latest");
         sb.AppendLine("      - job-permissions-required");
-        sb.AppendLine("  - files: \".github/workflows/release.yml\"");
+        sb.AppendLine("  - file: \".github/workflows/release.yml\"");
         sb.AppendLine("    jobs:");
         sb.AppendLine("      - publish");
         sb.AppendLine("    rules:");
         sb.AppendLine("      - credentials");
         for (var i = 0; i < extraExclusions; i++)
         {
-            sb.Append("  - files: \".github/workflows/gen-").Append(i).AppendLine(".yml\"");
+          sb.Append("  - file: \".github/workflows/gen-").Append(i).AppendLine(".yml\"");
             sb.AppendLine("    rules:");
             sb.AppendLine("      - runner-no-latest");
         }
@@ -198,10 +188,10 @@ internal static class ConfigYamlBuilder
         sb.AppendLine("      - master");
         sb.AppendLine("      - release");
         sb.AppendLine("    ignore-actions:");
-        sb.AppendLine("      - uses: \"slsa-framework/.*\"");
-        sb.AppendLine("        ref: \".*\"");
-        sb.AppendLine("      - uses: \"actions/.*\"");
-        sb.AppendLine("        ref: \"v[0-9]+\"");
+        sb.AppendLine("      - uses: \"slsa-framework/*\"");
+        sb.AppendLine("        ref: \"*\"");
+        sb.AppendLine("      - uses: \"actions/*\"");
+        sb.AppendLine("        ref: \"v*\"");
         sb.AppendLine("  images:");
         sb.AppendLine("    enable-network: true");
         sb.AppendLine("    exclude-images:");

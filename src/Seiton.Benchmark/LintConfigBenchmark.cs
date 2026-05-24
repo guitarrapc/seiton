@@ -38,6 +38,15 @@ public class LintConfigBenchmark
             _ => ConfigYamlBuilder.BuildMinimal(),
         };
         _configUtf8 = Encoding.UTF8.GetBytes(_configText);
+
+        // Guard: fail fast if benchmark input is invalid against current schema.
+        var validation = LintConfigLibrary.Validate(_configText, FilePath);
+        if (validation.Diagnostics.Length > 0)
+        {
+            var msgs = string.Join("; ", validation.Diagnostics.Select(d => d.Message));
+            throw new InvalidOperationException(
+                $"Benchmark config '{Complexity}' has schema errors — update ConfigYamlBuilder: {msgs}");
+        }
     }
 
     [Benchmark(Baseline = true, Description = "LintConfigYamlParser.Parse (parse only)")]

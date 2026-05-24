@@ -347,14 +347,14 @@ Shared contract reference:
 
 C# implementation must support rule-specific configuration within `rules.<rule-id>` entries. Each rule accepts the shared `Enabled` / `Severity` keys plus rule-specific keys.
 
-Additive merge (`effective = built-in U user-extended`) is used for all `extend` lists:
+Additive merge (`effective = built-in U user-extended`) is used for all additive list keys:
 
-- `rules.dangerous-triggers.events.extend`
-- `rules.runner-label.known-hosted-labels.extend`
-- `rules.credentials.public-registries.extend`
-- `rules.cache-poisoning.untrusted-triggers.extend`
-- `rules.self-hosted-runner.untrusted-triggers.extend`
-- `rules.unredacted-secrets.output-commands.extend`
+- `rules.dangerous-triggers.events`
+- `rules.runner-label.known-hosted-labels`
+- `rules.credentials.public-registries`
+- `rules.cache-poisoning.untrusted-triggers`
+- `rules.self-hosted-runner.untrusted-triggers`
+- `rules.unredacted-secrets.output-commands`
 
 Direct list keys:
 

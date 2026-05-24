@@ -1,4 +1,4 @@
-﻿using System.Text;
+using System.Text;
 using Seiton.Core.Linting;
 using Seiton.Core.Linting.Rules;
 using Seiton.Core.Parsing;
@@ -186,7 +186,7 @@ public sealed class VerboseRuleDiagnosticsTests
             {
                 ["credentials"] = new RuleConfig
                 {
-                    PublicRegistries = new ExtendableList(["myregistry.example.com"]),
+                    PublicRegistries = (string[])["myregistry.example.com"],
                 },
             },
         };
@@ -224,7 +224,7 @@ public sealed class VerboseRuleDiagnosticsTests
             {
                 ["runner-label"] = new RuleConfig
                 {
-                    KnownHostedLabels = new ExtendableList(["my-custom-runner"]),
+                    KnownHostedLabels = (string[])["my-custom-runner"],
                 },
             },
         };
@@ -258,7 +258,7 @@ public sealed class VerboseRuleDiagnosticsTests
             {
                 ["runner-label"] = new RuleConfig
                 {
-                    KnownHostedLabels = new ExtendableList(["my-custom-runner"]),
+                    KnownHostedLabels = (string[])["my-custom-runner"],
                 },
             },
         };
@@ -317,7 +317,7 @@ public sealed class VerboseRuleDiagnosticsTests
             {
                 ["runner-label"] = new RuleConfig
                 {
-                    KnownHostedLabels = new ExtendableList(["my-custom-runner"]),
+                    KnownHostedLabels = (string[])["my-custom-runner"],
                 },
             },
         };
@@ -354,7 +354,7 @@ public sealed class VerboseRuleDiagnosticsTests
             {
                 ["runner-label"] = new RuleConfig
                 {
-                    KnownHostedLabels = new ExtendableList(["my-custom-runner"]),
+                    KnownHostedLabels = (string[])["my-custom-runner"],
                 },
             },
         };
@@ -392,7 +392,7 @@ public sealed class VerboseRuleDiagnosticsTests
             {
                 ["runner-label"] = new RuleConfig
                 {
-                    KnownHostedLabels = new ExtendableList(["my-custom-runner", "my-custom-runner-2"]),
+                    KnownHostedLabels = (string[])["my-custom-runner", "my-custom-runner-2"],
                 },
             },
         };
@@ -425,7 +425,7 @@ public sealed class VerboseRuleDiagnosticsTests
             {
                 ["runner-label"] = new RuleConfig
                 {
-                    KnownHostedLabels = new ExtendableList(["my-custom-runner", "my-custom-runner-2"]),
+                    KnownHostedLabels = (string[])["my-custom-runner", "my-custom-runner-2"],
                 },
             },
         };
