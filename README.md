@@ -77,18 +77,19 @@ jobs:
           node-version: 18.x
 ```
 
-Remaining issues after auto-fixes are typically cannot best value without configs.
+Remaining issues require config to resolve.
 
 ```shell
 test.yaml:5:3: error [job-timeout-minutes-required] jobs.'test' should define timeout-minutes (default is 360 minutes); if not possible, set timeout-minutes on each step instead
 test.yaml:6:14: warning [runner-no-latest] jobs.'test'.runs-on label 'ubuntu-latest' is a moving latest label; prefer explicit version-pinned runner labels
 ```
 
-**Fix whole errors and warnings with config tuning and additional flags:**
+**Fully resolved with config tuning:**
 
-Prepare following config file `.github/seiton.yaml` to set job timeout and make `ubuntu-24.04` as default runner.
+Generate a starter config with `seiton init`, then customize.
 
 ```yaml
+# .github/seiton.yaml
 rules:
   runner-no-latest:
     fix-mapping:
@@ -98,27 +99,7 @@ fix:
     job-timeout-minutes: 30
 ```
 
-```yaml
-on:
-  pull_request:
-    branches: main
-jobs:
-  test:
-    runs-on: ubuntu-24.04
-    timeout-minutes: 30
-    permissions:
-      contents: read
-    steps:
-      - run: echo "title is ${GITHUB_EVENT_PULL_REQUEST_TITLE}"
-        env:
-          GITHUB_EVENT_PULL_REQUEST_TITLE: ${{ github.event.pull_request.title }}
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
-        with:
-          persist-credentials: false
-      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
-        with:
-          node-version: 18.x
-```
+After `seiton --fix --enable-pin-network` with this config, all diagnostics are resolved — `runs-on` becomes `ubuntu-24.04` and `timeout-minutes: 30` is inserted.
 
 
 ## Quick Start
