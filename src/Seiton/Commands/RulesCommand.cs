@@ -81,6 +81,15 @@ internal static class RulesCommand
             writer.WriteLine($"{s.Rule.Id,-40} {enabled,-9} {type,-8} {severity,-10} {fix,-5} {document,-10} {s.Reason}");
         }
 
+        // Summary
+        var enabledCount = 0;
+        for (var j = 0; j < statuses.Count; j++)
+        {
+            if (statuses[j].Enabled) enabledCount++;
+        }
+        writer.WriteLine();
+        writer.WriteLine($"{statuses.Count} rules total ({enabledCount} enabled, {statuses.Count - enabledCount} disabled)");
+
         // Footer: explain how to enable opt-in rules
         writer.WriteLine();
         writer.WriteLine("To enable an opt-in rule, add to .github/seiton.yaml:");
