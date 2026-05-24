@@ -381,8 +381,8 @@ Official container images are published to GHCR for `linux/amd64` and `linux/arm
 Available tags include:
 
 - `ghcr.io/guitarrapc/seiton:latest`
-- `ghcr.io/guitarrapc/seiton:0.9.13`
-- `ghcr.io/guitarrapc/seiton:v0.9.13`
+- `ghcr.io/guitarrapc/seiton:0.9.14`
+- `ghcr.io/guitarrapc/seiton:v0.9.14`
 
 To confirm the image works:
 
