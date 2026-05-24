@@ -405,15 +405,106 @@ linter は parser 成果物と workflow AST を受け取り、次を担当する
 6. workflow site aware type suitability
 7. security / policy rule
 
+### 棚卸し結果 — 診断カテゴリ表
+
+#### Parser 側 (ExpressionSemanticAnalyzer + ExpressionParser)
+
+| カテゴリ | 診断メッセージパターン | メソッド | 将来 owner |
+|---|---|---|---|
+| syntax-only | unexpected token at position {pos} | ExpressionParser.Parse | **parser** |
+| syntax-only | operator '!' requires an operand | ExpressionParser.ParseUnary | **parser** |
+| syntax-only | unexpected end of expression | ExpressionParser.ParsePrimary | **parser** |
+| syntax-only | missing closing ')' | ExpressionParser.ParsePrimary | **parser** |
+| syntax-only | got unexpected character '"'; only single quotes are available | ExpressionParser.ParsePrimary | **parser** |
+| syntax-only | member name is missing after '.' | ExpressionParser.ParsePrimary | **parser** |
+| syntax-only | missing closing ']' after wildcard index | ExpressionParser.ParsePrimary | **parser** |
+| syntax-only | missing closing ']' in index access | ExpressionParser.ParsePrimary | **parser** |
+| syntax-only | expected ',' or ')' in function call | ExpressionParser.ParsePrimary | **parser** |
+| syntax-only | index expression is missing | ExpressionParser.ParseIndexExpression | **parser** |
+| syntax-only | unterminated string literal | ExpressionParser.ParseStringLiteral | **parser** |
+| syntax-only | operator '{op}' requires both operands | ExpressionParser.AddBinary | **parser** |
+| function-intrinsic | unknown expression function: {name} | ValidateFunctionCall | **parser** |
+| function-intrinsic | function '{name}' expects {n} argument(s), but got {argCount} | ValidateFunctionCall | **parser** |
+| function-intrinsic | function '{name}' expects {min}-{max} argument(s), but got {argCount} | ValidateFunctionCall | **parser** |
+| function-intrinsic | argument {index} should be {expectedType}, but got {actualType} | ValidateFunctionCall | **parser** |
+| function-intrinsic | format placeholder '{{{i}}}' requires argument {i+1}... | ValidateFormatPlaceholders | **parser** |
+| function-intrinsic | format string does not contain placeholder {i}; remove argument... | ValidateFormatPlaceholders | **parser** |
+| function-intrinsic | fromJSON() argument is not valid JSON: {msg} | ValidateFromJsonLiteral | **parser** |
+| operator-local | {leftType} value cannot be compared to {rightType} value with '{op}' | ValidateCompareOp | **parser** |
+| operator-local | operator '!' does not support {type} type | ValidateUnaryOp | **parser** |
+| operator-local | receiver of '.*' must be an object or array, but got {type} | ValidateWildcardAccess | **parser** |
+| operator-local | index of array must be number, but got {type} | ValidateIndexAccess | **parser** |
+| operator-local | index of object must be string, but got {type} | ValidateIndexAccess | **parser** |
+| dynamic-property | property "{prop}" is not defined in {contextLabel}... | ValidatePropertyAccess | **linter** (transitional: parser) |
+| dynamic-property | receiver of object dereference "{prop}" must be type of object but got "{type}" | ValidatePropertyAccess | **linter** (transitional: parser) |
+| dynamic-property | configuration variable name '{name}' must not start with 'GITHUB_' | ValidateVarsNamingConvention | **parser** |
+| dynamic-property | configuration variable name '{name}' contains invalid characters | ValidateVarsNamingConvention | **parser** |
+| type-suitability | {type} value in ${{ }} will be converted to string "[Object]" | CheckTypeForTemplate | **linter** (transitional: parser) |
+| type-suitability | array value in ${{ }} will be converted to string "[Array]" | CheckTypeForTemplate | **linter** (transitional: parser) |
+| type-suitability | null value in ${{ }} will be converted to empty string | CheckTypeForTemplate | **linter** (transitional: parser) |
+| type-suitability | {type} value cannot be expanded as mapping for "env:" section | CheckEnvMappingType | **linter** (transitional: parser) |
+| type-suitability | type of expression at "runs-on" must be string or array but found type "{type}" | CheckRunsOnType | **linter** (transitional: parser) |
+| type-suitability | type of expression at "{sectionName}" must be object but found type {type} | CheckExpectedObjectType | **linter** (transitional: parser) |
+
+#### Linter 側 (ExprUndefinedVarRule)
+
+| カテゴリ | 診断メッセージパターン | メソッド | 将来 owner |
+|---|---|---|---|
+| context-availability | context "{rootName}" is not allowed here. available contexts are... | VisitExpressionNode | **linter** |
+| context-availability | context "{rootName}" is not allowed here. undefined context... | VisitExpressionNode | **linter** |
+| function-availability | function "{funcName}" is not allowed here... only available in "if" conditions | VisitExpressionNode | **linter** |
+| function-availability | function "hashFiles" is not allowed here... only available in step-level | VisitExpressionNode | **linter** |
+| dynamic-property | property "{prop}" is not defined in {contextLabel}... | ValidatePropertyAccessWithOverrides | **linter** |
+| dynamic-property | receiver of object dereference "{prop}" must be type of object... | ValidatePropertyAccessWithOverrides | **linter** |
+| type-suitability | {type} value in ${{ }} will be converted to string "[Object]" | CheckTemplateTypeWithOverrides | **linter** |
+| type-suitability | array/null template conversions | CheckTemplateTypeWithOverrides | **linter** |
+| type-suitability | {type} cannot be expanded as mapping for "env:" | CheckEnvMappingType | **linter** |
+| type-suitability | type of expression at "runs-on" must be string or array... | CheckRunsOnType | **linter** |
+| type-suitability | type of expression at "{section}" must be object... | CheckExpectedObjectType | **linter** |
+| operator-with-overrides | index of array must be number, but got {type} | ValidateIndexAccessWithOverrides | **linter** |
+| operator-with-overrides | index of object must be string, but got {type} | ValidateIndexAccessWithOverrides | **linter** |
+| operator-with-overrides | {left} value cannot be compared to {right} with '{op}' | ValidateCompareOpWithOverrides | **linter** |
+| operator-with-overrides | {ordinal} argument of function call is not assignable... | ValidateFunctionCallWithOverrides | **linter** |
+
+#### 重複整理と移行判断まとめ
+
+| カテゴリ | Parser に残す | Linter に移す | 重複度 | 移行順 |
+|---|---|---|---|---|
+| syntax-only | ✓ | - | なし | - (不動) |
+| function-intrinsic (existence/arity) | ✓ | - | なし | - (不動) |
+| operator-local (static type) | ✓ | - | 低 | - (不動) |
+| vars naming convention | ✓ | - | なし | - (不動) |
+| context-availability | - | ✓ (既に linter 専任) | なし | - (完了) |
+| function-availability | - | ✓ (既に linter 専任) | なし | - (完了) |
+| dynamic-property existence | 二段階残置 → linter | ✓ | 高 | 1st |
+| type-suitability | 二段階残置 → linter | ✓ | 高 | 2nd |
+| operator-with-overrides | 二段階残置 → linter | ✓ | 高 | 3rd |
+
+**重要な発見**: context-availability と function-availability は既に parser 側で発行されておらず linter 専任である。実質的に移行が必要なのは dynamic-property / type-suitability / operator-with-overrides の 3 カテゴリのみ。
+
+### Benchmark Baseline (Phase 1 時点)
+
+| Benchmark | Size | Mean | Allocated |
+|---|---|---|---|
+| WorkflowParser.Parse | Small | 42.883 us | 3.87 KB |
+| WorkflowParser.Parse | Medium | 1,000.764 us | 35.59 KB |
+| WorkflowParser.Parse | Large | 15,876.122 us | 180.04 KB |
+| ExpressionExtractor | Small | 3.749 us | 2.92 KB |
+| ExpressionExtractor | Medium | 44.919 us | 30.64 KB |
+| ExpressionExtractor | Large | 214.319 us | 143.04 KB |
+| LintEngine.Check (no fix) | Small | 54.79 us | 8.7 KB |
+| LintEngine.Check (no fix) | Medium | 1,229.32 us | 68.89 KB |
+| LintEngine.Check (no fix) | Large | 19,033.07 us | 327.41 KB |
+| LintEngine.Check (fix) | Small | 60.30 us | 10.15 KB |
+| LintEngine.Check (fix) | Medium | 1,683.93 us | 82.25 KB |
+| LintEngine.Check (fix) | Large | 28,201.26 us | 382.25 KB |
+
+環境: .NET 10.0.8, AMD Ryzen 9 7950X3D, Windows 11
+
 ### 完了条件
 
-- 各カテゴリの owner と移行順序が表で見える
-- どのカテゴリを parser に残すかが曖昧でない
-
-### 性能条件
-
-- まだ挙動変更はしない
-- ただし現状 benchmark baseline と allocation baseline を採取し、以後の gate に使う
+- 各カテゴリの owner と移行順序が表で見える ✓
+- どのカテゴリを parser に残すかが曖昧でない ✓
 
 ---
 
