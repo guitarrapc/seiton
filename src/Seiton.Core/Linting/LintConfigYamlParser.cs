@@ -985,7 +985,7 @@ internal static class LintConfigYamlParser
                 continue;
             }
 
-            result[key.Trim()] = valStr.Trim();
+            result[key] = valStr;
         }
 
         return result.Count > 0 ? result : null;

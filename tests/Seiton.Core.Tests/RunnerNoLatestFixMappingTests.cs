@@ -74,6 +74,24 @@ public sealed class RunnerNoLatestFixMappingTests
     }
 
     [Test]
+    public async Task Config_FixMapping_Value_PreservesVerbatimText()
+    {
+        var yaml = """
+        rules:
+          runner-no-latest:
+            fix-mapping:
+              ubuntu-latest: " ubuntu-24.04 "
+        """;
+
+        var result = LintConfigLibrary.Validate(yaml, "seiton.yaml");
+
+        await Assert.That(result.IsValid).IsTrue();
+        var ruleConfig = result.Config!.Rules!["runner-no-latest"];
+        await Assert.That(ruleConfig.FixMapping).IsNotNull();
+        await Assert.That(ruleConfig.FixMapping!["ubuntu-latest"]).IsEqualTo(" ubuntu-24.04 ");
+    }
+
+    [Test]
     public async Task Config_FixMapping_EmptyKey_ProducesError()
     {
         var yaml = """

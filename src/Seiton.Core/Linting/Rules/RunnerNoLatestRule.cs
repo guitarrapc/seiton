@@ -1,4 +1,5 @@
-﻿using System.Text;
+﻿using System.Runtime.CompilerServices;
+using System.Text;
 using Seiton.Core.Generated;
 using Seiton.Core.Parsing;
 using Seiton.Core.Parsing.Ast;
@@ -11,11 +12,27 @@ public sealed class RunnerNoLatestRule() : RuleBase(RuleId.RunnerNoLatest)
     public override string Name => "Runner No Latest Rule";
 
     private IReadOnlyDictionary<string, string>? _fixMapping;
+    private (byte[] KeyUtf8, string Value)[]? _fixMappingEntries;
 
     public override void SetConfig(LintConfig config)
     {
         base.SetConfig(config);
         _fixMapping = config.GetRuleConfig(RuleId.RunnerNoLatest)?.FixMapping;
+
+        if (_fixMapping is null || _fixMapping.Count == 0)
+        {
+            _fixMappingEntries = null;
+            return;
+        }
+
+        var entries = new (byte[] KeyUtf8, string Value)[_fixMapping.Count];
+        var index = 0;
+        foreach (var pair in _fixMapping)
+        {
+            entries[index++] = (Encoding.UTF8.GetBytes(pair.Key), pair.Value);
+        }
+
+        _fixMappingEntries = entries;
     }
 
     public override void VisitJobPre(Job job)
@@ -46,17 +63,18 @@ public sealed class RunnerNoLatestRule() : RuleBase(RuleId.RunnerNoLatest)
                 continue;
             }
 
-            var labelText = Decode(Arena.GetStringSlice(label));
             var location = Arena.GetStringRange(label);
 
             DiagnosticFix? fix = null;
-            if (Config.Fix.Enabled && _fixMapping is not null && TryGetFixValue(labelText, out var pinned))
+            if (Config.Fix.Enabled && TryGetFixValue(labelUtf8, out var pinned))
             {
                 var slice = Arena.GetStringSlice(label);
                 fix = new DiagnosticFix(
                     $"pin runner label to '{pinned}'",
                     [new TextEdit(slice.Offset, slice.Length, pinned)]);
             }
+
+            var labelText = Decode(Arena.GetStringSlice(label));
 
             if (fix.HasValue)
             {
@@ -80,25 +98,27 @@ public sealed class RunnerNoLatestRule() : RuleBase(RuleId.RunnerNoLatest)
             return true;
         }
 
-        // Check fix-mapping keys (case-insensitive)
-        if (_fixMapping is not null)
-        {
-            var labelStr = Encoding.UTF8.GetString(labelUtf8);
-            return _fixMapping.ContainsKey(labelStr);
-        }
-
-        return false;
+        return TryGetFixValue(labelUtf8, out _);
     }
 
     /// <summary>
-    /// Tries to get the fix replacement value for the given label text (case-insensitive).
+    /// Tries to get the fix replacement value for the given label bytes (ASCII case-insensitive).
     /// </summary>
-    private bool TryGetFixValue(string labelText, out string pinned)
+    private bool TryGetFixValue(ReadOnlySpan<byte> labelUtf8, out string pinned)
     {
-        if (_fixMapping is not null && _fixMapping.TryGetValue(labelText, out var value))
+        if (_fixMappingEntries is not null)
         {
-            pinned = value;
-            return true;
+            for (var i = 0; i < _fixMappingEntries.Length; i++)
+            {
+                var entry = _fixMappingEntries[i];
+                if (!AsciiEqualsIgnoreCase(labelUtf8, entry.KeyUtf8))
+                {
+                    continue;
+                }
+
+                pinned = entry.Value;
+                return true;
+            }
         }
 
         pinned = string.Empty;
@@ -160,6 +180,7 @@ public sealed class RunnerNoLatestRule() : RuleBase(RuleId.RunnerNoLatest)
         return false;
     }
 
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static bool AsciiEqualsIgnoreCase(ReadOnlySpan<byte> left, ReadOnlySpan<byte> right)
     {
         if (left.Length != right.Length)

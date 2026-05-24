@@ -166,7 +166,7 @@ Column definitions:
 | `needs-graph` | ✓ | — | Error on invalid `needs` graph: unknown targets and circular dependencies. Reports full cycle path (see §4.5). |
 | `shell-name` | ✓ | — | Error when shell names are outside the supported set for workflow/job defaults and `run` steps. |
 | `runner-label` | ✓ | — | Warn on unknown runner labels; error on conflicting OS families (including matrix-expanded labels). Recognizes bare self-hosted preset labels. |
-| `runner-no-latest` | ✓ | — | Warn when moving `-latest` runner labels are used; prefer version-pinned labels. |
+| `runner-no-latest` | ✓ | — | Warn when moving `-latest` runner labels are used; prefer version-pinned labels. Built-in hosted labels are always detected, and `rules.runner-no-latest.fix-mapping` may add custom labels and attach replacement fixes. |
 | `id-naming` | ✓ | — | Error when `job.id` or `step.id` contains invalid identifier characters. |
 | `glob-pattern` | ✓ | — | Error on invalid event filter configuration: glob syntax errors, ref-name forbidden chars, path segment issues, unsupported options, and incompatible filter combinations. |
 | `dispatch-inputs` | ✓ | — | Validate `on.workflow_dispatch.inputs` schema: types, required flags, choice options/defaults, boolean/number literals, duplicates, and max count. |
@@ -1040,7 +1040,7 @@ The following table classifies each default rule by fix feasibility.
 | `needs-graph` | ✗ Not auto-fixable | Unknown dependency target or cycle requires user to determine correct dependency. |
 | `shell-name` | ✗ Not auto-fixable | Correct shell name is ambiguous; user must select. |
 | `runner-label` | ✗ Not auto-fixable | Closest known label may be suggested but apply is ambiguous. |
-| `runner-no-latest` | ✗ Not auto-fixable | Replacing `*-latest` with a concrete runner version requires repository policy/compatibility intent. |
+| `runner-no-latest` | △ Partial | Built-in `*-latest` labels remain warn-only by default. When `rules.runner-no-latest.fix-mapping` provides a replacement for the matched label, attach a scalar replacement fix using that mapped value; labels without a mapping remain no-fix. |
 | `id-naming` | △ Partial | For job IDs with invalid characters, auto-fix converts to kebab-case (underscores become `-` alongside other normalization) and updates `needs:` string references that match the old job ID under ASCII case-insensitive comparison, within the same workflow—unless the slug would duplicate another job id in that workflow under the same ASCII case-insensitive comparison (then no fix). Expression references (e.g. `needs.<id>.outputs`) are not updated automatically. |
 | `glob-pattern` | ✗ Not auto-fixable | Glob correction requires understanding user intent. |
 | `credentials` | ✗ Not auto-fixable | Adding credentials requires secrets names that are not known to linter. |

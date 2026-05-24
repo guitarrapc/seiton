@@ -153,18 +153,24 @@ private DiagnosticFix? GetFix(string label)
 
 ### テスト結果
 
-- 新規テスト: 23/23 pass
-- 既存テスト: 1663/1663 pass (regression なし)
+- 新規テスト: 24/24 pass
+- 既存テスト: 1664/1664 pass (regression なし)
+
+### レビューで追加修正した点
+
+- `RunnerNoLatestRule` の custom `fix-mapping` 検出で per-label `Encoding.UTF8.GetString(...)` を行っていたため、`SetConfig()` 時に UTF-8 byte 配列を前計算し、実行時は ASCII case-insensitive byte 比較のみで判定するように修正。
+- `fix-mapping` の key/value を parser が黙って `Trim()` していたため、設定値をそのまま使う直感とズレていた。空/空白-only の拒否は維持しつつ、非空の値は verbatim で保持するよう修正。
+- `.github/docs/Seiton_config_spec.md`, `.github/docs/Seiton_Linter_spec.md`, `README.md` の記述を実装に同期。
 
 ### ベンチマーク結果
 
 | Size | FixEnabled | Baseline Mean | Post Mean | Allocated (変化なし) |
 |---|---|---|---|---|
-| Small | False | 55.87 us | 72.59 us | 8.7 KB |
-| Small | True | 60.98 us | 75.88 us | 10.15 KB |
-| Medium | False | 1,182.57 us | 1,429.10 us | 68.89 KB |
-| Medium | True | 1,712.06 us | 2,006.65 us | 82.25 KB |
-| Large | False | 19,072.36 us | 22,397.68 us | 327.41 KB |
-| Large | True | 30,005.30 us | 34,568.42 us | 382.25 KB |
+| Small | False | 55.87 us | 69.24 us | 8.7 KB |
+| Small | True | 60.98 us | 70.32 us | 10.15 KB |
+| Medium | False | 1,182.57 us | 1,528.65 us | 68.89 KB |
+| Medium | True | 1,712.06 us | 2,056.63 us | 82.25 KB |
+| Large | False | 19,072.36 us | 21,974.13 us | 327.41 KB |
+| Large | True | 30,005.30 us | 34,236.25 us | 382.25 KB |
 
 **アロケーション変化: ゼロ** (全シナリオで同一)。時間差は ShortRun (3 iteration) のノイズ範囲内。
