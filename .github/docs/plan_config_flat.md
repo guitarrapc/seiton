@@ -148,7 +148,7 @@ dangerous-triggers:
 
 移行支援:
 - 旧構文を検出した場合、設定エラーメッセージで新構文を提示する
-  - 例: `unknown rule option 'extend' under 'events'. Use 'events' directly as a list. See migration guide.`
+  - 例: `'events' expects a list, not a mapping. Remove the 'extend' key and put the list directly under 'events'.`
 - `seiton init` が生成するテンプレートを新構文に更新する
 
 ---
