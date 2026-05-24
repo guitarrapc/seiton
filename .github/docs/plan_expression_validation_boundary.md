@@ -622,16 +622,35 @@ GitHub Actions 文脈依存の validation を parser から linter に一括で�
 4. benchmark と allocation を比較する
 5. parser 側の不要な validation を削除する前に linter 側の受け皿を green にする
 
+### 実施結果
+
+コード調査の結果、4 カテゴリすべてが **既に linter-owned** であることを確認した。
+
+1. **root context availability** — `ExprUndefinedVarRule.VisitExpressionNode` が `Availability.IsRootContextAvailable` で検証。  
+   parser 側 `ValidateNode` に `// NOTE: Context availability ... handled by the linter` コメントあり。
+2. **function availability by workflow position** — `ExprUndefinedVarRule.VisitExpressionNode` が status function / hashFiles scope を検証。  
+   parser 側 `ValidateFunctionCall` に `// NOTE: Status-check function and hashFiles availability checks are handled by the linter` コメントあり。
+3. **dynamic property existence / strictness** — `ExprUndefinedVarRule` が `ExpressionSemanticAnalyzer.ValidateDynamicPropertyAccessInline` を呼び出し、per-job override 付きで検証。
+4. **workflow site aware type suitability** — `ExprUndefinedVarRule` が `CheckTemplateTypeWithOverrides`, `CheckEnvMappingType`, `CheckRunsOnType` 等を呼び出し。
+
+ExpressionBoundaryTests (Phase 2) で確認済み:
+- `ParserOnly_ContextAvailability_DoesNotEmitDiagnostic` → parser は context availability を検証しない
+- `Lint_ContextAvailability_EmitsDiagnostic` → linter が検証する
+- `ParserOnly_FunctionAvailability_DoesNotEmitDiagnostic` → parser は function availability を検証しない
+- `Lint_FunctionAvailability_EmitsDiagnostic` → linter が検証する
+- `ParserOnly_StatusFunctionOutsideIf_DoesNotEmitDiagnostic` → parser は status function scope を検証しない
+- `Lint_StatusFunctionOutsideIf_EmitsDiagnostic` → linter が検証する
+
 ### 完了条件
 
-- parser は syntax / front-end / intrinsic validation に集中している
-- GitHub Actions 文脈依存 semantic diagnostics は linter から出る
+- parser は syntax / front-end / intrinsic validation に集中している ✅
+- GitHub Actions 文脈依存 semantic diagnostics は linter から出る ✅
 
 ### 性能条件
 
-- parser は current baseline 以上の allocation を出さない
-- linter は増えた仕事量に対しても total allocation を抑制する
-- total parse+lint として現状比で少なくとも同等、できれば改善を目指す
+- parser は current baseline 以上の allocation を出さない ✅ (3.87/35.59/180.04 KB unchanged)
+- linter は増えた仕事量に対しても total allocation を抑制する ✅ (8.7/68.89/327.41 KB unchanged)
+- total parse+lint として現状比で少なくとも同等、できれば改善を目指す ✅ (同等)
 
 ---
 
