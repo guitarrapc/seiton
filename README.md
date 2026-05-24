@@ -89,15 +89,37 @@ test.yaml:6:14: warning [runner-no-latest] jobs.'test'.runs-on label 'ubuntu-lat
 Prepare following config file `.github/seiton.yaml` to set job timeout and make `ubuntu-24.04` as default runner.
 
 ```yaml
+rules:
+  runner-no-latest:
+    fix-mapping:
+      ubuntu-latest: "ubuntu-24.04"
 fix:
   defaults:
-    job-timeout-minutes: 15
-  pinning:
-    enable-network: true
-    min-age-days: 7
-    exclude-branches:
-      - main
+    job-timeout-minutes: 30
 ```
+
+```yaml
+on:
+  pull_request:
+    branches: main
+jobs:
+  test:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    steps:
+      - run: echo "title is ${GITHUB_EVENT_PULL_REQUEST_TITLE}"
+        env:
+          GITHUB_EVENT_PULL_REQUEST_TITLE: ${{ github.event.pull_request.title }}
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 18.x
+```
+
 
 ## Quick Start
 

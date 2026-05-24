@@ -17,6 +17,12 @@ rules:
   #     extend:
   #       - ubuntu-24.04-large
 
+  # runner-no-latest:
+  #   fix-mapping:
+  #     ubuntu-latest: "ubuntu-24.04"
+  #     windows-latest: "windows-2025"
+  #     macos-latest: "macos-15"
+
   # credentials:
   #   public-registries:
   #     extend:
@@ -40,8 +46,10 @@ rules:
 
   # unpinned-uses:
   #   ignore-actions:
+  #     - owner: "my-org/*"
   #     - owner: "my-org/internal-action"
   #     - owner: "my-org/setup-*"
+  #       refs: [main, master]
 
   # overprovisioned-secrets:
   #   max-step-env-secrets: 5
@@ -98,4 +106,5 @@ network:
   #   ghes-api-url: ""
   #   ghes-fallback: false
 
-output: # sort-order: location    # location (default) | rule
+output:
+  # sort-order: location    # location (default) | rule
