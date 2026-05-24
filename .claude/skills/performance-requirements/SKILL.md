@@ -73,6 +73,9 @@ else
 
 Lint rules execute per-workflow, per-job, or per-step and are called hundreds of times for large workflows (e.g. 20 jobs × 12 steps = 240 steps). Apply the following patterns when writing or modifying lint rules.
 
+- Lint rules may use `string` for convenience, but prefer Span-based APIs for key checks and value comparisons in hot paths.
+- If a rule is expensive, make it opt-in (only runs when explicitly enabled) rather than always-on.
+
 ### 5. Per-Run Shared Caching
 
 The `LintConfig` object is shared across all rules for a single `LintEngine.Check()` call. Use it as the caching layer for expensive computed results that are invariant within one lint run.

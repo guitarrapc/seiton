@@ -39,3 +39,5 @@ dotnet run -c Release
 # Or specify the project file:
 dotnet run -c Release --project YourProjectName.csproj
 ```
+
+use `sandbox/DotnetFiles/Sample.cs` for template.

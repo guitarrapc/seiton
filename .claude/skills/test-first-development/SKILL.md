@@ -91,7 +91,7 @@ If the implementation changes observable behavior or adds new functionality, upd
 
 ### Framework
 
-This project uses **TUnit**. Use `--treenode-filter` for targeted runs. Do NOT use `dotnet test --filter`.
+**This project uses TUnit. Always use `--treenode-filter` — do NOT use `dotnet test --filter` (that is xUnit/MSTest syntax and will not work).**
 
 ```shell
 # Run all tests in a class
@@ -101,6 +101,16 @@ dotnet test --project tests/Seiton.Core.Tests --treenode-filter /*/*/ParserTests
 dotnet test --project tests/Seiton.Core.Tests --treenode-filter /*/*/ParserTests/Parse_MinimalWorkflow*
 ```
 
+More examples:
+
+```shell
+# Run all tests in ExpressionTests
+dotnet test --project tests/Seiton.Core.Tests --treenode-filter /*/*/ExpressionTests/*
+
+# Run a single method by prefix match
+dotnet test --project tests/Seiton.Core.Tests --treenode-filter /*/*/ExpressionTests/InferType_GitHubRetentionDays*
+```
+
 ### Fixture Patterns
 
 - **Inline YAML**: Use raw string literals for small, self-contained test cases.
@@ -108,6 +118,8 @@ dotnet test --project tests/Seiton.Core.Tests --treenode-filter /*/*/ParserTests
   - Valid inputs: `ok/` directory or `ok-*` prefix
   - Invalid inputs: `err/` directory or `ng-*` prefix
   - Expected output: `.out` files paired with `.yaml` files
+
+**Line endings**: `tests/Seiton.Core.Tests/fixtures` are stored with LF line endings (`.gitattributes`). Actionlint compat tests normalize YAML newlines when loading fixtures so a Windows checkout with `core.autocrlf` does not shift byte indexes in golden `.out` / `.seiton.out` expectations.
 
 ### Assertions
 
