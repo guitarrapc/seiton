@@ -20,7 +20,7 @@ Features:
 
 You can check various benchmark patterns at [GitHub Actions/Benchmark](https://github.com/guitarrapc/seiton/actions/runs/26144683540).
 
-**Example of broken workflow:**
+**Example of broken workflow** ([`samples/readme`](samples/readme/.github/workflows/test.yaml)):
 
 ```yaml
 on:
@@ -37,7 +37,7 @@ jobs:
           node_version: 18.x
 ```
 
-**Example `--oneline` output:**
+**Example `--oneline` output** (`seiton --oneline samples/readme`):
 
 ```
 test.yaml:3:5: error [parse] on.pull_request has unexpected key "branch" for "pull_request" section. did you mean "branches"? expected one of "types", "branches", "branches-ignore", "paths", "paths-ignore"
@@ -52,7 +52,7 @@ test.yaml:12:25: warning [popular-action-inputs] unknown input 'node_version' fo
 3 errors, 6 warnings in 1 file
 ```
 
-**Example of auto-fixed workflow by `seiton --fix --enable-pin-network`:**
+**Example of auto-fixed workflow** (`seiton --fix --enable-pin-network samples/readme`):
 
 Bunch of errors and warnings are fixed, following best practices and pinning the actions to specific SHAs:
 
@@ -86,7 +86,7 @@ test.yaml:6:14: warning [runner-no-latest] jobs.'test'.runs-on label 'ubuntu-lat
 
 **Fully resolved with config tuning:**
 
-Generate a starter config with `seiton init`, then customize.
+Generate a starter config with `seiton init`, then customize ([`samples/readme/.github/seiton.yaml`](samples/readme/.github/seiton.yaml)):
 
 ```yaml
 # .github/seiton.yaml
