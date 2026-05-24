@@ -42,7 +42,7 @@
 | `audit` トップレベルキー | **不採用** | online rule の有効化は `rules.<rule-id>.enabled: true` で統一。別セクションは二重管理になる |
 | `network.fail-open` | **`network.on-error: skip \| fail` を採用** | fail-open/fail-closed はセキュリティ用語として曖昧。明示的な列挙値のほうが意図が伝わる |
 | `exclusions[].files` → `exclusions[].file` | **スカラー（単一 glob）を採用** | 単数形が型と一致し誤解を防ぐ。複数パターンは複数エントリで表現 |
-| `extend` キーワード | **不採用（廃止）** | 内部概念（built-in セットの存在）をユーザーに漏出させていた。フラットリストに変更し、ドキュメントで additive であることを明記する方式に移行。詳細は `plan_config_flat.md` 参照 |
+| `extend` キーワード | **不採用（廃止）** | 内部概念（built-in セットの存在）をユーザーに漏出させていた。フラットリストに変更し、ドキュメントで additive であることを明記する方式に移行。 |
 
 ---
 

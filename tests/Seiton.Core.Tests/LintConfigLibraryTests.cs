@@ -1040,6 +1040,32 @@ public sealed class LintConfigLibraryTests
     }
 
     [Test]
+    [Arguments("dangerous-triggers", "events")]
+    [Arguments("runner-label", "known-hosted-labels")]
+    [Arguments("credentials", "public-registries")]
+    [Arguments("cache-poisoning", "untrusted-triggers")]
+    [Arguments("self-hosted-runner", "untrusted-triggers")]
+    [Arguments("unredacted-secrets", "output-commands")]
+    public async Task Validate_OldExtendSyntax_EmitsMigrationDiagnostic(string ruleId, string keyName)
+    {
+        var yaml = $"""
+        rules:
+          {ruleId}:
+            {keyName}:
+              extend:
+                - some-value
+        """;
+
+        var result = LintConfigLibrary.Validate(yaml, "seiton.yaml");
+
+        await Assert.That(result.IsValid).IsFalse();
+        await Assert.That(result.Diagnostics.Any(d =>
+            d.Severity == DiagnosticSeverity.Error
+            && d.Message.Contains($"'{keyName}' expects a list, not a mapping", StringComparison.Ordinal)
+            && d.Message.Contains("remove the 'extend' key", StringComparison.Ordinal))).IsTrue();
+    }
+
+    [Test]
     public async Task Validate_Network_TimeoutSeconds_OverMaximum_ReturnsError_AndCaps()
     {
         var yaml = """

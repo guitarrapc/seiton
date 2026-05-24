@@ -33,7 +33,7 @@ forbidden-uses:
 
 #### 1.3.1 `extend` 採用の経緯と設計意図
 
-`Seiton_config_spec.md` §1.3 のトレードオフ表に以下の記録がある:
+`.github/docs/Seiton_config_spec.md` §1.3 のトレードオフ表に以下の記録がある:
 
 > | `extend` キーワード | **採用** | built-in 値との関係が明確。最終集合宣言より実用的 |
 
@@ -404,4 +404,4 @@ Allocated 増加: **0 bytes**（モデル変更が hot path に影響しない�
 3. **ルール**: 6 ルールの config アクセスを `.Events?.Extend` → `.Events` に簡素化
 4. **テンプレート**: `seiton init` が flat 構文を生成（インラインコメント `# adds to built-in set` は冗長なため削除、`docs/configuration.md` に記載済み）
 6. **ベンチマーク入力**: `ConfigYamlBuilder` も flat 構文・単数 `file` キー・wildcard パターンに更新し、ベンチマークが現行ユーザー入力を測るよう修正
-5. **ドキュメント**: `configuration.md`, `rules.md`, `Seiton_config_spec.md`, `Seiton_Linter_spec.md` すべて新構文に統一
+5. **ドキュメント**: `docs/configuration.md`, `docs/rules.md`, `.github/docs/Seiton_config_spec.md`, `.github/docs/Seiton_Linter_spec.md` すべて新構文に統一
