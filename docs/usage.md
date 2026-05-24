@@ -105,6 +105,12 @@ Use `--check` to exit non-zero if any fixable diagnostic remains after filtering
 seiton --fix --check
 ```
 
+Use `--enable-pin-network` to allow network requests for resolving action SHA pins, and `--enable-image-network` for container image digest resolution. These are disabled by default to avoid unexpected network access.
+
+```sh
+seiton --fix --enable-pin-network --enable-image-network
+```
+
 ### seiton init
 
 Generate a starter config file at `.github/seiton.yaml`:
