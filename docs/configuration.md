@@ -107,6 +107,13 @@ rules:
   runner-no-latest:
     enabled: false
 
+  # Or configure fix-mapping for auto-fix support.
+  # runner-no-latest:
+  #   fix-mapping:
+  #     ubuntu-latest: "ubuntu-24.04"
+  #     windows-latest: "windows-2025"
+  #     macos-latest: "macos-15"
+
   # Override a rule's severity.
   checkout-persist-credentials:
     severity: warning
@@ -257,6 +264,7 @@ Some rules accept additional configuration keys. All `extend` lists add to the b
 |---|---|---|
 | `dangerous-triggers` | `events.extend` | Additional trigger event names to treat as dangerous. |
 | `runner-label` | `known-hosted-labels.extend` | Additional GitHub-hosted runner labels to treat as known. |
+| `runner-no-latest` | `fix-mapping` | Map of label → replacement pairs for auto-fix and custom detection. |
 | `credentials` | `public-registries.extend` | Additional container registries to treat as public. |
 | `cache-poisoning` | `untrusted-triggers.extend` | Additional trigger events to treat as untrusted. |
 | `unredacted-secrets` | `output-commands.extend` | Additional shell commands to watch for secret printing. |

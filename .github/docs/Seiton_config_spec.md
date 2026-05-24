@@ -91,6 +91,13 @@ rules:
       extend:
         - ubuntu-24.04-arm
 
+  # rule-specific: -latest runner 置換マッピング
+  runner-no-latest:
+    fix-mapping:
+      ubuntu-latest: ubuntu-24.04
+      windows-latest: windows-2025
+      macos-latest: macos-15
+
   # rule-specific: 公開レジストリ拡張
   credentials:
     public-registries:
@@ -133,6 +140,7 @@ rules:
 |---|---|---|---|
 | `dangerous-triggers` | `events.extend` | `string[]` | 危険トリガーイベントの追加 |
 | `runner-label` | `known-hosted-labels.extend` | `string[]` | 既知ランナーラベルの追加 |
+| `runner-no-latest` | `fix-mapping` | `map[string]string` | 検出対象に追加する runner label と auto-fix 時の置換先ラベルの対応。キーは ASCII 大文字小文字を無視して照合し、値はそのまま置換テキストとして使う |
 | `credentials` | `public-registries.extend` | `string[]` | 公開レジストリの追加 |
 | `cache-poisoning` | `untrusted-triggers.extend` | `string[]` | 信頼できないトリガーの追加 |
 | `unredacted-secrets` | `output-commands.extend` | `string[]` | 監視対象出力コマンドの追加 |

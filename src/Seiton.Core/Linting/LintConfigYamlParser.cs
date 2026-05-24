@@ -66,6 +66,7 @@ internal static class LintConfigYamlParser
         (RuleKeyFlags.MaxStepEnvSecrets, "max-step-env-secrets"),
         (RuleKeyFlags.MaxJobSecrets, "max-job-secrets"),
         (RuleKeyFlags.IgnoreActions, "ignore-actions"),
+        (RuleKeyFlags.FixMapping, "fix-mapping"),
     ];
 
     /// <summary>Parses lint configuration YAML bytes into a <see cref="LintConfigParseResult"/>.</summary>
@@ -412,6 +413,7 @@ internal static class LintConfigYamlParser
         IReadOnlyList<IgnoreActionRule>? ignoreActions = null;
         int? maxStepEnvSecrets = null;
         int? maxJobSecrets = null;
+        IReadOnlyDictionary<string, string>? fixMapping = null;
         var seenKeyFlags = RuleKeyFlags.None;
 
         foreach (var (key, value) in body)
@@ -500,6 +502,10 @@ internal static class LintConfigYamlParser
                     }
 
                     break;
+                case "fix-mapping":
+                    seenKeyFlags |= RuleKeyFlags.FixMapping;
+                    fixMapping = ParseFixMapping(value, diagnostics, filePath);
+                    break;
                 default:
                     diagnostics.Add(Diag($"unknown rule option '{key}'", DomLine, 5, key.Length, filePath));
                     break;
@@ -523,6 +529,7 @@ internal static class LintConfigYamlParser
             IgnoreActions = ignoreActions,
             MaxStepEnvSecrets = maxStepEnvSecrets,
             MaxJobSecrets = maxJobSecrets,
+            FixMapping = fixMapping,
         };
 
         if (!rules.TryAdd(ruleId, config))
@@ -935,6 +942,50 @@ internal static class LintConfigYamlParser
             }
 
             diagnostics.Add(Diag("ignore-actions item must be a mapping with owner and optional refs", DomLine, 5, 14, filePath));
+        }
+
+        return result.Count > 0 ? result : null;
+    }
+
+    private static IReadOnlyDictionary<string, string>? ParseFixMapping(
+        object? value,
+        List<Diagnostic> diagnostics,
+        string filePath)
+    {
+        if (AsMap(value) is not { } map)
+        {
+            diagnostics.Add(Diag("fix-mapping must be a YAML mapping", DomLine, 5, 11, filePath));
+            return null;
+        }
+
+        if (map.Count == 0)
+        {
+            return null;
+        }
+
+        var result = new Dictionary<string, string>(map.Count, StringComparer.OrdinalIgnoreCase);
+        foreach (var (key, val) in map)
+        {
+            if (string.IsNullOrWhiteSpace(key))
+            {
+                diagnostics.Add(Diag("fix-mapping key must not be empty or whitespace", DomLine, 5, 11, filePath));
+                continue;
+            }
+
+            if (val is null)
+            {
+                diagnostics.Add(Diag($"fix-mapping value for key '{key}' must not be null", DomLine, 5, 11, filePath));
+                continue;
+            }
+
+            var valStr = ScalarToString(val);
+            if (string.IsNullOrWhiteSpace(valStr))
+            {
+                diagnostics.Add(Diag($"fix-mapping value for key '{key}' must not be empty or whitespace", DomLine, 5, 11, filePath));
+                continue;
+            }
+
+            result[key] = valStr;
         }
 
         return result.Count > 0 ? result : null;

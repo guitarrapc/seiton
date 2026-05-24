@@ -114,7 +114,7 @@ Style-only checks, naming preferences, UI readability preferences, and alternati
 | [id-naming](docs/rules.md#id-naming) | ✓ | ✗ | Invalid characters in job/step IDs |
 | [glob-pattern](docs/rules.md#glob-pattern) | ✓ | ✗ | Invalid glob syntax and filter conflicts |
 | [runner-label](docs/rules.md#runner-label) | ✓ | ✗ | Unknown GitHub-hosted runner labels |
-| [runner-no-latest](docs/rules.md#runner-no-latest) | ✓ | ✗ | Moving `*-latest` runner labels |
+| [runner-no-latest](docs/rules.md#runner-no-latest) | ✓ | △ | Moving `*-latest` runner labels |
 | [popular-action-inputs](docs/rules.md#popular-action-inputs) | ✓ | △ | Typos in popular action input names |
 | [outdated-action-runner](docs/rules.md#outdated-action-runner) | ✓ | ✗ | Deprecated action `runs.using` runtimes |
 | [local-action-inputs](docs/rules.md#local-action-inputs) | ✓ | ✗ | Local action metadata contract validation |
