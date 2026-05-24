@@ -667,10 +667,20 @@ Seiton.Core を parser/linter library として出したときに、利用者が
 3. façade API の説明と下位 contract の責務分離を docs に反映
 4. parser-only / linter-only / combined use case を docs で説明する
 
+### 実施結果
+
+1. **`LintEngine.Check(ParseResult, byte[], string, LintConfig?)`** — 公開 API として追加。  
+   呼び出し元が `WorkflowParser.Parse` で先行 parse した結果を linter に渡せる。
+2. **`ExpressionSemanticModel`** — `LintConfig.SemanticModel` 経由で custom rule からアクセス可能。  
+   context availability / function availability / diagnostic formatting を提供。
+3. **`ExpressionArtifactStore`** — `ParseResultData.ExpressionArtifacts` 経由で parser→linter artifact 共有。  
+   `LintConfig.ParseExpression` が artifact store を content-hash cache より先に参照。
+4. **PublicApiContractTests** — parser-only / linter-only / combined の 3 use case を 6 test で検証。
+
 ### 完了条件
 
-- parser/linter を個別にも組み合わせでも説明できる
-- custom rule の実装体験が「AST を読んで自前で全部やり直す」状態ではなくなる
+- parser/linter を個別にも組み合わせでも説明できる ✅
+- custom rule の実装体験が「AST を読んで自前で全部やり直す」状態ではなくなる ✅
 
 ---
 

@@ -93,6 +93,29 @@ public sealed class LintEngine
         return Check(utf8Yaml, filePath, config: null);
     }
 
+    /// <summary>
+    /// Lints a pre-parsed workflow using an existing <see cref="ParseResult"/>.
+    /// Use this to avoid re-parsing when you need both parse-only analysis and linting,
+    /// or when implementing parser-only / linter-only / combined pipelines.
+    /// </summary>
+    /// <param name="parseResult">
+    /// A parse result obtained from <see cref="WorkflowParser.Parse(byte[], string)"/>.
+    /// The parse result must not be disposed. Ownership remains with the caller.
+    /// </param>
+    /// <param name="utf8Yaml">The original UTF-8 YAML bytes (must be the same bytes used for parsing).</param>
+    /// <param name="filePath">File path for diagnostic messages and document kind hinting.</param>
+    /// <param name="config">Optional lint configuration.</param>
+    /// <returns>A lint result. Dispose when done reading diagnostics.</returns>
+    public LintResult Check(ParseResult parseResult, byte[] utf8Yaml, string filePath, LintConfig? config = null)
+    {
+        ArgumentNullException.ThrowIfNull(parseResult);
+        ArgumentNullException.ThrowIfNull(utf8Yaml);
+        ArgumentException.ThrowIfNullOrEmpty(filePath);
+
+        var data = CheckWithParseResult(utf8Yaml, filePath, config, parseResult.Data, parseResult.Arena);
+        return new LintResult(data, arena: null); // caller owns ParseResult's arena
+    }
+
     /// <summary>Parses and lints the given YAML, applying the optional <paramref name="config"/>.</summary>
     /// <remarks>
     /// <para>
