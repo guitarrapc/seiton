@@ -442,32 +442,27 @@ Non-normative example configuration shape:
 ```yaml
 rules:
   dangerous-triggers:
-    events:
-      extend:
-        - issue_comment
-        - pull_request_review_comment
+    events:                        # adds to built-in set
+      - issue_comment
+      - pull_request_review_comment
 
   runner-label:
-    known-hosted-labels:
-      extend:
-        - ubuntu-24.04-arm
-        - windows-2025-vs2026
+    known-hosted-labels:           # adds to built-in set
+      - ubuntu-24.04-arm
+      - windows-2025-vs2026
 
   credentials:
-    public-registries:
-      extend:
-        - registry.example.com
-        - mirror.example.net:5000
+    public-registries:             # adds to built-in set
+      - registry.example.com
+      - mirror.example.net:5000
 
   cache-poisoning:
-    untrusted-triggers:
-      extend:
-        - issue_comment
+    untrusted-triggers:            # adds to built-in set
+      - issue_comment
 
   unredacted-secrets:
-    output-commands:
-      extend:
-        - tee
+    output-commands:               # adds to built-in set
+      - tee
 
   unpinned-uses:
     ignore-actions:
@@ -574,34 +569,29 @@ rules:
   dangerous-triggers:
     severity: error
     events:
-      extend:
-        - issue_comment
-        - pull_request_review_comment
+      - issue_comment
+      - pull_request_review_comment
 
   shell-name:
     severity: warning
 
   runner-label:
     known-hosted-labels:
-      extend:
-        - custom-large
-        - ubuntu-24.04-arm
+      - custom-large
+      - ubuntu-24.04-arm
 
   credentials:
     public-registries:
-      extend:
-        - registry.example.com
-        - mirror.example.net:5000
+      - registry.example.com
+      - mirror.example.net:5000
 
   cache-poisoning:
     untrusted-triggers:
-      extend:
-        - issue_comment
+      - issue_comment
 
   unredacted-secrets:
     output-commands:
-      extend:
-        - tee
+      - tee
 
   forbidden-uses:
     deny:
@@ -721,8 +711,7 @@ rules:
     severity: error
   runner-label:
     known-hosted-labels:
-      extend:
-        - ubuntu-24.04-large
+      - ubuntu-24.04-large
 exclusions:
   - file: ".github/workflows/legacy-release.yml"
     rules:

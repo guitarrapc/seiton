@@ -1,4 +1,4 @@
-﻿using Seiton.Core.Parsing;
+using Seiton.Core.Parsing;
 
 using static Seiton.Core.Parsing.SpanHelpers;
 
@@ -14,11 +14,11 @@ internal static class RuleConfigNormalizer
     /// </summary>
     public static RuleConfig Normalize(RuleConfig config, string filePath, List<Diagnostic> diagnostics)
     {
-        var events = NormalizeExtendableList(config.Events, "events extend entry must not be empty", filePath, diagnostics);
-        var knownHostedLabels = NormalizeExtendableList(config.KnownHostedLabels, "known-hosted-labels extend entry must not be empty", filePath, diagnostics);
-        var publicRegistries = NormalizeRegistryExtendableList(config.PublicRegistries, filePath, diagnostics);
-        var untrustedTriggers = NormalizeExtendableList(config.UntrustedTriggers, "untrusted-triggers extend entry must not be empty", filePath, diagnostics);
-        var outputCommands = NormalizeExtendableList(config.OutputCommands, "output-commands extend entry must not be empty", filePath, diagnostics);
+        var events = NormalizeAdditiveList(config.Events, "events entry must not be empty", filePath, diagnostics);
+        var knownHostedLabels = NormalizeAdditiveList(config.KnownHostedLabels, "known-hosted-labels entry must not be empty", filePath, diagnostics);
+        var publicRegistries = NormalizeRegistryList(config.PublicRegistries, filePath, diagnostics);
+        var untrustedTriggers = NormalizeAdditiveList(config.UntrustedTriggers, "untrusted-triggers entry must not be empty", filePath, diagnostics);
+        var outputCommands = NormalizeAdditiveList(config.OutputCommands, "output-commands entry must not be empty", filePath, diagnostics);
         var assumeEvents = NormalizeAdditiveValues(config.AssumeEvents, "assume-events entry must not be empty", filePath, diagnostics);
         var allow = NormalizeAdditiveValues(config.Allow, "allow pattern must not be empty", filePath, diagnostics);
         var deny = NormalizeAdditiveValues(config.Deny, "deny pattern must not be empty", filePath, diagnostics);
@@ -122,8 +122,8 @@ internal static class RuleConfigNormalizer
         return normalized.Count > 0 ? normalized : null;
     }
 
-    private static ExtendableList? NormalizeExtendableList(
-        ExtendableList? list,
+    private static IReadOnlyList<string>? NormalizeAdditiveList(
+        IReadOnlyList<string>? list,
         string emptyMessage,
         string filePath,
         List<Diagnostic> diagnostics)
@@ -133,12 +133,12 @@ internal static class RuleConfigNormalizer
             return null;
         }
 
-        var values = NormalizeAdditiveValues(list.Extend, emptyMessage, filePath, diagnostics);
-        return values is { Count: > 0 } ? new ExtendableList(values) : null;
+        var values = NormalizeAdditiveValues(list, emptyMessage, filePath, diagnostics);
+        return values is { Count: > 0 } ? values : null;
     }
 
-    private static ExtendableList? NormalizeRegistryExtendableList(
-        ExtendableList? list,
+    private static IReadOnlyList<string>? NormalizeRegistryList(
+        IReadOnlyList<string>? list,
         string filePath,
         List<Diagnostic> diagnostics)
     {
@@ -147,8 +147,8 @@ internal static class RuleConfigNormalizer
             return null;
         }
 
-        var values = NormalizeRegistryHosts(list.Extend, filePath, diagnostics);
-        return values is { Count: > 0 } ? new ExtendableList(values) : null;
+        var values = NormalizeRegistryHosts(list, filePath, diagnostics);
+        return values is { Count: > 0 } ? values : null;
     }
 
     private static IReadOnlyList<string>? NormalizeAdditiveValues(

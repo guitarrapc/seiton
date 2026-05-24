@@ -125,42 +125,36 @@ rules:
   # Extend the built-in dangerous-trigger event set.
   dangerous-triggers:
     events:
-      extend:
-        - issue_comment
-        - pull_request_review_comment
+      - issue_comment
+      - pull_request_review_comment
 
   # Add self-hosted runner labels that Seiton should treat as known.
   runner-label:
     known-hosted-labels:
-      extend:
-        - ubuntu-24.04-arm
-        - windows-2025-vs2026
+      - ubuntu-24.04-arm
+      - windows-2025-vs2026
 
   # Treat additional registries as public (no credentials required).
   credentials:
     public-registries:
-      extend:
-        - registry.example.com
-        - mirror.example.net:5000
+      - registry.example.com
+      - mirror.example.net:5000
 
 
   # Extend the trigger set that cache-poisoning considers untrusted.
   cache-poisoning:
     untrusted-triggers:
-      extend:
-        - issue_comment
+      - issue_comment
 
   # Extend the trigger set that self-hosted-runner considers untrusted.
   self-hosted-runner:
     untrusted-triggers:
-      extend:
-        - issue_comment
+      - issue_comment
 
   # Extend output commands that unredacted-secrets watches for secret printing.
   unredacted-secrets:
     output-commands:
-      extend:
-        - tee
+      - tee
 
   # Assume additional events when evaluating event-scoped expressions.
   expr-undefined-var:
@@ -274,29 +268,28 @@ Some rules accept additional configuration keys. All `extend` lists add to the b
 
 | Rule | Key | Description |
 |---|---|---|
-| `dangerous-triggers` | `events.extend` | Additional trigger event names to treat as dangerous. |
-| `runner-label` | `known-hosted-labels.extend` | Additional GitHub-hosted runner labels to treat as known. |
+| `dangerous-triggers` | `events` | Additional trigger event names to treat as dangerous (appended to built-in set). |
+| `runner-label` | `known-hosted-labels` | Additional GitHub-hosted runner labels to treat as known (appended to built-in set). |
 | `runner-no-latest` | `fix-mapping` | Map of label → replacement pairs for auto-fix and custom detection. |
-| `credentials` | `public-registries.extend` | Additional container registries to treat as public. |
-| `cache-poisoning` | `untrusted-triggers.extend` | Additional trigger events to treat as untrusted. |
-| `self-hosted-runner` | `untrusted-triggers.extend` | Additional trigger events to treat as untrusted for self-hosted runner checks. |
-| `unredacted-secrets` | `output-commands.extend` | Additional shell commands to watch for secret printing. |
+| `credentials` | `public-registries` | Additional container registries to treat as public (appended to built-in set). |
+| `cache-poisoning` | `untrusted-triggers` | Additional trigger events to treat as untrusted (appended to built-in set). |
+| `self-hosted-runner` | `untrusted-triggers` | Additional trigger events to treat as untrusted for self-hosted runner checks (appended to built-in set). |
+| `unredacted-secrets` | `output-commands` | Additional shell commands to watch for secret printing (appended to built-in set). |
 | `expr-undefined-var` | `assume-events` | Additional event names to assume when evaluating event-scoped expressions. |
 | `forbidden-uses` | `deny` / `allow` | Glob patterns for denying or allowing `uses:` references. |
 | `unpinned-uses` | `ignore-actions` | Object entries for actions to exclude from SHA-pinning checks. `owner` is required; optional `refs` narrows the ignore to exact refs. |
 | `overprovisioned-secrets` | `max-step-env-secrets` / `max-job-secrets` | Integer thresholds for secret over-provisioning detection. |
 
-The **Key** column uses dot-separated YAML path notation. For example, `events.extend` maps to:
+The **Key** column shows the YAML key name directly under the rule. For example, `events` maps to:
 
 ```yaml
 rules:
   dangerous-triggers:
     events:
-      extend:
-        - issue_comment
+      - issue_comment
 ```
 
-> **Note:** Most `extend` keys accept a flat string list. `unpinned-uses.ignore-actions` is an exception — each entry is an **object** with a required `owner` field and an optional `refs` list:
+> **Note:** Values in list keys like `events`, `known-hosted-labels`, etc. are **appended to built-in defaults** — they do not replace the built-in set. `unpinned-uses.ignore-actions` is special — each entry is an **object** with a required `owner` field and an optional `refs` list:
 >
 > ```yaml
 > rules:

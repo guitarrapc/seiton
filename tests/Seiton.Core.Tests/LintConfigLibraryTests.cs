@@ -62,25 +62,20 @@ public sealed class LintConfigLibraryTests
             enabled: true
             severity: warning
             events:
-              extend:
-                - Workflow_Run
-                - workflow_run
+              - Workflow_Run
+              - workflow_run
           runner-label:
             known-hosted-labels:
-              extend:
-                - Ubuntu-24.04-Large
+              - Ubuntu-24.04-Large
           credentials:
             public-registries:
-              extend:
-                - GHCR.IO
+              - GHCR.IO
           cache-poisoning:
             untrusted-triggers:
-              extend:
-                - Issue_Comment
+              - Issue_Comment
           unredacted-secrets:
             output-commands:
-              extend:
-                - tee
+              - tee
         exclusions:
           -
             file: .github/workflows/legacy-*.yml
@@ -96,22 +91,22 @@ public sealed class LintConfigLibraryTests
         await Assert.That(result.Config!.Rules).ContainsKey("dangerous-triggers");
         var dtConfig = result.Config.Rules!["dangerous-triggers"];
         await Assert.That(dtConfig.Events).IsNotNull();
-        await Assert.That(dtConfig.Events!.Extend).HasSingleItem();
-        await Assert.That(dtConfig.Events.Extend[0]).IsEqualTo("workflow_run");
+        await Assert.That(dtConfig.Events!).HasSingleItem();
+        await Assert.That(dtConfig.Events![0]).IsEqualTo("workflow_run");
 
         var credConfig = result.Config.Rules["credentials"];
         await Assert.That(credConfig.PublicRegistries).IsNotNull();
-        await Assert.That(credConfig.PublicRegistries!.Extend[0]).IsEqualTo("ghcr.io");
+        await Assert.That(credConfig.PublicRegistries![0]).IsEqualTo("ghcr.io");
 
         var cpConfig = result.Config.Rules["cache-poisoning"];
         await Assert.That(cpConfig.UntrustedTriggers).IsNotNull();
-        await Assert.That(cpConfig.UntrustedTriggers!.Extend).HasSingleItem();
-        await Assert.That(cpConfig.UntrustedTriggers.Extend[0]).IsEqualTo("issue_comment");
+        await Assert.That(cpConfig.UntrustedTriggers!).HasSingleItem();
+        await Assert.That(cpConfig.UntrustedTriggers![0]).IsEqualTo("issue_comment");
 
         var usConfig = result.Config.Rules["unredacted-secrets"];
         await Assert.That(usConfig.OutputCommands).IsNotNull();
-        await Assert.That(usConfig.OutputCommands!.Extend).HasSingleItem();
-        await Assert.That(usConfig.OutputCommands.Extend[0]).IsEqualTo("tee");
+        await Assert.That(usConfig.OutputCommands!).HasSingleItem();
+        await Assert.That(usConfig.OutputCommands![0]).IsEqualTo("tee");
     }
 
     [Test]
@@ -136,8 +131,7 @@ public sealed class LintConfigLibraryTests
         rules:
           credentials:
             public-registries:
-              extend:
-                - https://ghcr.io
+              - https://ghcr.io
         """;
 
         var result = LintConfigLibrary.Validate(yaml, "seiton.yaml");
@@ -807,8 +801,7 @@ public sealed class LintConfigLibraryTests
         rules:
           runner-label:
             events:
-              extend:
-                - issue_comment
+              - issue_comment
         """;
 
         var result = LintConfigLibrary.Validate(yaml, "seiton.yaml");
@@ -824,28 +817,22 @@ public sealed class LintConfigLibraryTests
         rules:
           dangerous-triggers:
             events:
-              extend:
-                - issue_comment
+              - issue_comment
           runner-label:
             known-hosted-labels:
-              extend:
-                - ubuntu-24.04-large
+              - ubuntu-24.04-large
           credentials:
             public-registries:
-              extend:
-                - ghcr.io
+              - ghcr.io
           cache-poisoning:
             untrusted-triggers:
-              extend:
-                - issue_comment
+              - issue_comment
           self-hosted-runner:
             untrusted-triggers:
-              extend:
-                - issue_comment
+              - issue_comment
           unredacted-secrets:
             output-commands:
-              extend:
-                - tee
+              - tee
           expr-undefined-var:
             assume-events:
               - workflow_dispatch
@@ -874,24 +861,19 @@ public sealed class LintConfigLibraryTests
           dangerous-triggers:
             severity: error
             events:
-              extend:
-                - issue_comment
+              - issue_comment
           runner-label:
             known-hosted-labels:
-              extend:
-                - ubuntu-24.04-large
+              - ubuntu-24.04-large
           credentials:
             public-registries:
-              extend:
-                - registry.example.com
+              - registry.example.com
           cache-poisoning:
             untrusted-triggers:
-              extend:
-                - issue_comment
+              - issue_comment
           unredacted-secrets:
             output-commands:
-              extend:
-                - tee
+              - tee
           forbidden-uses:
             deny:
               - some-untrusted-org/*
@@ -950,11 +932,11 @@ public sealed class LintConfigLibraryTests
         // rules
         await Assert.That(result.Config!.Rules!["job-permissions-required"].Enabled).IsFalse();
         await Assert.That(result.Config.Rules["deny-write-all"].Severity).IsEqualTo(DiagnosticSeverity.Error);
-        await Assert.That(result.Config.Rules["dangerous-triggers"].Events!.Extend[0]).IsEqualTo("issue_comment");
-        await Assert.That(result.Config.Rules["runner-label"].KnownHostedLabels!.Extend[0]).IsEqualTo("ubuntu-24.04-large");
-        await Assert.That(result.Config.Rules["credentials"].PublicRegistries!.Extend[0]).IsEqualTo("registry.example.com");
-        await Assert.That(result.Config.Rules["cache-poisoning"].UntrustedTriggers!.Extend[0]).IsEqualTo("issue_comment");
-        await Assert.That(result.Config.Rules["unredacted-secrets"].OutputCommands!.Extend[0]).IsEqualTo("tee");
+        await Assert.That(result.Config.Rules["dangerous-triggers"].Events![0]).IsEqualTo("issue_comment");
+        await Assert.That(result.Config.Rules["runner-label"].KnownHostedLabels![0]).IsEqualTo("ubuntu-24.04-large");
+        await Assert.That(result.Config.Rules["credentials"].PublicRegistries![0]).IsEqualTo("registry.example.com");
+        await Assert.That(result.Config.Rules["cache-poisoning"].UntrustedTriggers![0]).IsEqualTo("issue_comment");
+        await Assert.That(result.Config.Rules["unredacted-secrets"].OutputCommands![0]).IsEqualTo("tee");
         await Assert.That(result.Config.Rules["forbidden-uses"].Deny![0]).IsEqualTo("some-untrusted-org/*");
         await Assert.That(result.Config.Rules["expr-undefined-var"].AssumeEvents!.Count).IsEqualTo(2);
         await Assert.That(result.Config.Rules["known-vulnerable-actions"].Enabled).IsTrue();
@@ -999,8 +981,7 @@ public sealed class LintConfigLibraryTests
         rules:
           runner-label:
             events:
-              extend:
-                - issue_comment
+              - issue_comment
             deny:
               - some-org/*
         """;
@@ -1018,8 +999,7 @@ public sealed class LintConfigLibraryTests
         rules:
           dangerous-triggers:
             events:
-              extend:
-                - issue_comment
+              - issue_comment
           forbidden-uses:
             allow:
               - actions/*
@@ -1034,7 +1014,7 @@ public sealed class LintConfigLibraryTests
 
         var dangerous = result.Config!.Rules!["dangerous-triggers"];
         await Assert.That(dangerous.Events).IsNotNull();
-        await Assert.That(dangerous.Events!.Extend[0]).IsEqualTo("issue_comment");
+        await Assert.That(dangerous.Events![0]).IsEqualTo("issue_comment");
 
         var forbidden = result.Config.Rules["forbidden-uses"];
         await Assert.That(forbidden.Allow).IsNotNull();
@@ -1181,10 +1161,9 @@ public sealed class LintConfigLibraryTests
 rules:
   credentials:
     public-registries:
-      extend:
 """);
         sb.Append(Environment.NewLine);
-        var linePrefix = Environment.NewLine + "        - ";
+        var linePrefix = Environment.NewLine + "      - ";
         for (var i = 0; i < itemCount; i++)
         {
             sb.Append(linePrefix).Append('z');

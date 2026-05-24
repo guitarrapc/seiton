@@ -17,7 +17,7 @@ public sealed class RunnerLabelRule() : RuleBase(RuleId.RunnerLabel)
     public override void SetConfig(LintConfig config)
     {
         base.SetConfig(config);
-        additionalKnownHostedLabels = config.GetRuleConfig(Id)?.KnownHostedLabels?.Extend is { Count: > 0 } labels
+        additionalKnownHostedLabels = config.GetRuleConfig(Id)?.KnownHostedLabels is { Count: > 0 } labels
             ? BuildNormalizedSet(labels)
             : [];
     }

@@ -190,16 +190,16 @@ public sealed record RuleConfig
     /// <summary>Gets the user-specified severity override, if any.</summary>
     public DiagnosticSeverity? Severity { get; init; }
 
-    /// <summary>Gets the extendable event list for <c>dangerous-triggers</c>.</summary>
-    public ExtendableList? Events { get; init; }
-    /// <summary>Gets the extendable label list for <c>runner-label</c>.</summary>
-    public ExtendableList? KnownHostedLabels { get; init; }
-    /// <summary>Gets the extendable registry list for <c>credentials</c>.</summary>
-    public ExtendableList? PublicRegistries { get; init; }
-    /// <summary>Gets the extendable trigger list for <c>cache-poisoning</c>.</summary>
-    public ExtendableList? UntrustedTriggers { get; init; }
-    /// <summary>Gets the extendable output command list for <c>unredacted-secrets</c>.</summary>
-    public ExtendableList? OutputCommands { get; init; }
+    /// <summary>Gets the additional event list for <c>dangerous-triggers</c> (appended to built-in set).</summary>
+    public IReadOnlyList<string>? Events { get; init; }
+    /// <summary>Gets the additional label list for <c>runner-label</c> (appended to built-in set).</summary>
+    public IReadOnlyList<string>? KnownHostedLabels { get; init; }
+    /// <summary>Gets the additional registry list for <c>credentials</c> (appended to built-in set).</summary>
+    public IReadOnlyList<string>? PublicRegistries { get; init; }
+    /// <summary>Gets the additional trigger list for <c>cache-poisoning</c> and <c>self-hosted-runner</c> (appended to built-in set).</summary>
+    public IReadOnlyList<string>? UntrustedTriggers { get; init; }
+    /// <summary>Gets the additional output command list for <c>unredacted-secrets</c> (appended to built-in set).</summary>
+    public IReadOnlyList<string>? OutputCommands { get; init; }
 
     /// <summary>Gets the assume-events list for <c>expr-undefined-var</c>.</summary>
     public IReadOnlyList<string>? AssumeEvents { get; init; }
@@ -229,8 +229,7 @@ public sealed record RuleConfig
 /// <param name="Refs">When null, all refs are ignored. When non-null, only these exact refs are ignored (case-sensitive).</param>
 public sealed record IgnoreActionRule(string Pattern, IReadOnlyList<string>? Refs = null);
 
-/// <summary>A list that extends (appends to) a rule's built-in defaults, matching the YAML <c>extend:</c> key.</summary>
-public sealed record ExtendableList(IReadOnlyList<string> Extend);
+
 
 /// <summary>An exclusion entry that suppresses rules for matching files/jobs.</summary>
 /// <remarks>

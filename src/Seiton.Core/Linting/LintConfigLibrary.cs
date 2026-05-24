@@ -30,14 +30,12 @@ public static class LintConfigLibrary
           # Example: override a rule's behavior.
           # dangerous-triggers:
           #   severity: warning
-          #   events:
-          #     extend:
-          #       - issue_comment
+          #   events:                        # adds to built-in set
+          #     - issue_comment
 
           # runner-label:
-          #   known-hosted-labels:
-          #     extend:
-          #       - ubuntu-24.04-large
+          #   known-hosted-labels:           # adds to built-in set
+          #     - ubuntu-24.04-large
 
           # runner-no-latest:
           #   fix-mapping:
@@ -46,19 +44,16 @@ public static class LintConfigLibrary
           #     macos-latest: "macos-15"
 
           # credentials:
-          #   public-registries:
-          #     extend:
-          #       - ghcr.io
+          #   public-registries:             # adds to built-in set
+          #     - ghcr.io
 
           # cache-poisoning:
-          #   untrusted-triggers:
-          #     extend:
-          #       - issue_comment
+          #   untrusted-triggers:            # adds to built-in set
+          #     - issue_comment
 
           # unredacted-secrets:
-          #   output-commands:
-          #     extend:
-          #       - tee
+          #   output-commands:               # adds to built-in set
+          #     - tee
 
           # forbidden-uses:
           #   allow:

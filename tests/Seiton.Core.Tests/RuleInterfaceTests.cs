@@ -13549,11 +13549,11 @@ public sealed class RuleInterfaceTests
         {
             Rules = new Dictionary<string, RuleConfig>
             {
-                ["dangerous-triggers"] = new RuleConfig { Events = new ExtendableList(["issue_comment", "pull_request_review_comment"]) },
-                ["runner-label"] = new RuleConfig { KnownHostedLabels = new ExtendableList(["ubuntu-24.04-arm", "windows-2025-vs2026"]) },
-                ["credentials"] = new RuleConfig { PublicRegistries = new ExtendableList(["registry.example.com", "mirror.example.net:5000"]) },
-                ["cache-poisoning"] = new RuleConfig { UntrustedTriggers = new ExtendableList(["issue_comment"]) },
-                ["unredacted-secrets"] = new RuleConfig { OutputCommands = new ExtendableList(["tee"]) },
+                ["dangerous-triggers"] = new RuleConfig { Events = (string[])["issue_comment", "pull_request_review_comment"] },
+                ["runner-label"] = new RuleConfig { KnownHostedLabels = (string[])["ubuntu-24.04-arm", "windows-2025-vs2026"] },
+                ["credentials"] = new RuleConfig { PublicRegistries = (string[])["registry.example.com", "mirror.example.net:5000"] },
+                ["cache-poisoning"] = new RuleConfig { UntrustedTriggers = (string[])["issue_comment"] },
+                ["unredacted-secrets"] = new RuleConfig { OutputCommands = (string[])["tee"] },
             },
         };
 
@@ -13561,15 +13561,15 @@ public sealed class RuleInterfaceTests
 
         await Assert.That(rule.LastConfig is not null).IsTrue();
         var dtRule = rule.LastConfig!.GetRuleConfig("dangerous-triggers");
-        await Assert.That(dtRule?.Events?.Extend).IsEquivalentTo(new[] { "issue_comment", "pull_request_review_comment" });
+        await Assert.That(dtRule?.Events).IsEquivalentTo(new[] { "issue_comment", "pull_request_review_comment" });
         var rlRule = rule.LastConfig.GetRuleConfig("runner-label");
-        await Assert.That(rlRule?.KnownHostedLabels?.Extend).IsEquivalentTo(new[] { "ubuntu-24.04-arm", "windows-2025-vs2026" });
+        await Assert.That(rlRule?.KnownHostedLabels).IsEquivalentTo(new[] { "ubuntu-24.04-arm", "windows-2025-vs2026" });
         var crRule = rule.LastConfig.GetRuleConfig("credentials");
-        await Assert.That(crRule?.PublicRegistries?.Extend).IsEquivalentTo(new[] { "registry.example.com", "mirror.example.net:5000" });
+        await Assert.That(crRule?.PublicRegistries).IsEquivalentTo(new[] { "registry.example.com", "mirror.example.net:5000" });
         var cpRule = rule.LastConfig.GetRuleConfig("cache-poisoning");
-        await Assert.That(cpRule?.UntrustedTriggers?.Extend).IsEquivalentTo(new[] { "issue_comment" });
+        await Assert.That(cpRule?.UntrustedTriggers).IsEquivalentTo(new[] { "issue_comment" });
         var usRule = rule.LastConfig.GetRuleConfig("unredacted-secrets");
-        await Assert.That(usRule?.OutputCommands?.Extend).IsEquivalentTo(new[] { "tee" });
+        await Assert.That(usRule?.OutputCommands).IsEquivalentTo(new[] { "tee" });
     }
 
     [Test]
@@ -13609,22 +13609,22 @@ public sealed class RuleInterfaceTests
         {
             Rules = new Dictionary<string, RuleConfig>
             {
-                ["dangerous-triggers"] = new RuleConfig { Events = new ExtendableList(["Issue_Comment", "issue_comment"]) },
-                ["runner-label"] = new RuleConfig { KnownHostedLabels = new ExtendableList(["Custom-Large", "custom-large"]) },
-                ["credentials"] = new RuleConfig { PublicRegistries = new ExtendableList(["Registry.Example.Com", "registry.example.com"]) },
-                ["cache-poisoning"] = new RuleConfig { UntrustedTriggers = new ExtendableList(["Issue_Comment", "issue_comment"]) },
-                ["unredacted-secrets"] = new RuleConfig { OutputCommands = new ExtendableList(["TEE", "tee"]) },
+                ["dangerous-triggers"] = new RuleConfig { Events = (string[])["Issue_Comment", "issue_comment"] },
+                ["runner-label"] = new RuleConfig { KnownHostedLabels = (string[])["Custom-Large", "custom-large"] },
+                ["credentials"] = new RuleConfig { PublicRegistries = (string[])["Registry.Example.Com", "registry.example.com"] },
+                ["cache-poisoning"] = new RuleConfig { UntrustedTriggers = (string[])["Issue_Comment", "issue_comment"] },
+                ["unredacted-secrets"] = new RuleConfig { OutputCommands = (string[])["TEE", "tee"] },
             },
         };
 
         using var _ = new LintEngine([rule]).Check(Encoding.UTF8.GetBytes(yaml), "additive-customization-normalized.yml", config);
 
         await Assert.That(rule.LastConfig is not null).IsTrue();
-        await Assert.That(rule.LastConfig!.GetRuleConfig("dangerous-triggers")?.Events?.Extend).IsEquivalentTo(new[] { "issue_comment" });
-        await Assert.That(rule.LastConfig.GetRuleConfig("runner-label")?.KnownHostedLabels?.Extend).IsEquivalentTo(new[] { "custom-large" });
-        await Assert.That(rule.LastConfig.GetRuleConfig("credentials")?.PublicRegistries?.Extend).IsEquivalentTo(new[] { "registry.example.com" });
-        await Assert.That(rule.LastConfig.GetRuleConfig("cache-poisoning")?.UntrustedTriggers?.Extend).IsEquivalentTo(new[] { "issue_comment" });
-        await Assert.That(rule.LastConfig.GetRuleConfig("unredacted-secrets")?.OutputCommands?.Extend).IsEquivalentTo(new[] { "tee" });
+        await Assert.That(rule.LastConfig!.GetRuleConfig("dangerous-triggers")?.Events).IsEquivalentTo(new[] { "issue_comment" });
+        await Assert.That(rule.LastConfig.GetRuleConfig("runner-label")?.KnownHostedLabels).IsEquivalentTo(new[] { "custom-large" });
+        await Assert.That(rule.LastConfig.GetRuleConfig("credentials")?.PublicRegistries).IsEquivalentTo(new[] { "registry.example.com" });
+        await Assert.That(rule.LastConfig.GetRuleConfig("cache-poisoning")?.UntrustedTriggers).IsEquivalentTo(new[] { "issue_comment" });
+        await Assert.That(rule.LastConfig.GetRuleConfig("unredacted-secrets")?.OutputCommands).IsEquivalentTo(new[] { "tee" });
     }
 
     [Test]
@@ -13644,7 +13644,7 @@ public sealed class RuleInterfaceTests
         {
             Rules = new Dictionary<string, RuleConfig>
             {
-                ["dangerous-triggers"] = new RuleConfig { Events = new ExtendableList(["issue_comment"]) },
+                ["dangerous-triggers"] = new RuleConfig { Events = (string[])["issue_comment"] },
             },
         };
 
@@ -13677,7 +13677,7 @@ public sealed class RuleInterfaceTests
             {
                 Rules = new Dictionary<string, RuleConfig>
                 {
-                    ["cache-poisoning"] = new RuleConfig { UntrustedTriggers = new ExtendableList(["issue_comment"]) },
+                    ["cache-poisoning"] = new RuleConfig { UntrustedTriggers = (string[])["issue_comment"] },
                 },
             });
 
@@ -13706,7 +13706,7 @@ public sealed class RuleInterfaceTests
             {
                 Rules = new Dictionary<string, RuleConfig>
                 {
-                    ["self-hosted-runner"] = new RuleConfig { UntrustedTriggers = new ExtendableList(["issue_comment"]) },
+                    ["self-hosted-runner"] = new RuleConfig { UntrustedTriggers = (string[])["issue_comment"] },
                 },
             });
 
@@ -13737,7 +13737,7 @@ public sealed class RuleInterfaceTests
             {
                 Rules = new Dictionary<string, RuleConfig>
                 {
-                    ["unredacted-secrets"] = new RuleConfig { OutputCommands = new ExtendableList(["tee"]) },
+                    ["unredacted-secrets"] = new RuleConfig { OutputCommands = (string[])["tee"] },
                 },
             });
 
@@ -13767,7 +13767,7 @@ public sealed class RuleInterfaceTests
             {
                 Rules = new Dictionary<string, RuleConfig>
                 {
-                    ["runner-label"] = new RuleConfig { KnownHostedLabels = new ExtendableList(["custom-large"]) },
+                    ["runner-label"] = new RuleConfig { KnownHostedLabels = (string[])["custom-large"] },
                 },
             });
 
@@ -13798,7 +13798,7 @@ public sealed class RuleInterfaceTests
             {
                 Rules = new Dictionary<string, RuleConfig>
                 {
-                    ["credentials"] = new RuleConfig { PublicRegistries = new ExtendableList(["registry.example.com"]) },
+                    ["credentials"] = new RuleConfig { PublicRegistries = (string[])["registry.example.com"] },
                 },
             });
 
@@ -13822,22 +13822,22 @@ public sealed class RuleInterfaceTests
         {
             Rules = new Dictionary<string, RuleConfig>
             {
-                ["dangerous-triggers"] = new RuleConfig { Events = new ExtendableList(["   "]) },
-                ["runner-label"] = new RuleConfig { KnownHostedLabels = new ExtendableList([""]) },
-                ["credentials"] = new RuleConfig { PublicRegistries = new ExtendableList(["https://registry.example.com/team/app"]) },
-                ["cache-poisoning"] = new RuleConfig { UntrustedTriggers = new ExtendableList([""]) },
-                ["unredacted-secrets"] = new RuleConfig { OutputCommands = new ExtendableList(["   "]) },
+                ["dangerous-triggers"] = new RuleConfig { Events = (string[])["   "] },
+                ["runner-label"] = new RuleConfig { KnownHostedLabels = (string[])[""] },
+                ["credentials"] = new RuleConfig { PublicRegistries = (string[])["https://registry.example.com/team/app"] },
+                ["cache-poisoning"] = new RuleConfig { UntrustedTriggers = (string[])[""] },
+                ["unredacted-secrets"] = new RuleConfig { OutputCommands = (string[])["   "] },
                 ["forbidden-uses"] = new RuleConfig { Allow = ["   "], Deny = ["   "] },
             },
         };
 
         using var result = new LintEngine([new ConfigCaptureRule()]).Check(Encoding.UTF8.GetBytes(yaml), "additive-customization-invalid.yml", config);
 
-        await Assert.That(result.Diagnostics.Any(x => x.RuleId is null && x.Message.Contains("events extend entry must not be empty", StringComparison.Ordinal))).IsTrue();
-        await Assert.That(result.Diagnostics.Any(x => x.RuleId is null && x.Message.Contains("known-hosted-labels extend entry must not be empty", StringComparison.Ordinal))).IsTrue();
+        await Assert.That(result.Diagnostics.Any(x => x.RuleId is null && x.Message.Contains("events entry must not be empty", StringComparison.Ordinal))).IsTrue();
+        await Assert.That(result.Diagnostics.Any(x => x.RuleId is null && x.Message.Contains("known-hosted-labels entry must not be empty", StringComparison.Ordinal))).IsTrue();
         await Assert.That(result.Diagnostics.Any(x => x.RuleId is null && x.Message.Contains("credentials additional public registry host 'https://registry.example.com/team/app' is invalid", StringComparison.Ordinal))).IsTrue();
-        await Assert.That(result.Diagnostics.Any(x => x.RuleId is null && x.Message.Contains("untrusted-triggers extend entry must not be empty", StringComparison.Ordinal))).IsTrue();
-        await Assert.That(result.Diagnostics.Any(x => x.RuleId is null && x.Message.Contains("output-commands extend entry must not be empty", StringComparison.Ordinal))).IsTrue();
+        await Assert.That(result.Diagnostics.Any(x => x.RuleId is null && x.Message.Contains("untrusted-triggers entry must not be empty", StringComparison.Ordinal))).IsTrue();
+        await Assert.That(result.Diagnostics.Any(x => x.RuleId is null && x.Message.Contains("output-commands entry must not be empty", StringComparison.Ordinal))).IsTrue();
         await Assert.That(result.Diagnostics.Any(x => x.RuleId is null && x.Message.Contains("allow pattern must not be empty", StringComparison.Ordinal))).IsTrue();
         await Assert.That(result.Diagnostics.Any(x => x.RuleId is null && x.Message.Contains("deny pattern must not be empty", StringComparison.Ordinal))).IsTrue();
     }
@@ -18884,7 +18884,7 @@ public sealed class RuleInterfaceTests
             {
                 Rules = new Dictionary<string, RuleConfig>
                 {
-                    ["runner-label"] = new RuleConfig { KnownHostedLabels = new ExtendableList(["my-custom-runner", "team-gpu"]) },
+                    ["runner-label"] = new RuleConfig { KnownHostedLabels = (string[])["my-custom-runner", "team-gpu"] },
                 },
             });
 

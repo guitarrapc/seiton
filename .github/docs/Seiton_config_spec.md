@@ -29,7 +29,7 @@
 | **ユーザーの思考単位で切る** | rule-id、exclusions、fix、network を軸にする | U-1 |
 | **ルールに効く設定はルールの近くに** | rule-specific options を `rules.<rule-id>` 配下に配置 | U-3 |
 | **日常設定と高度設定を分離** | `rules` / `exclusions` が主、`network` は詳細設定 | U-5 |
-| **「何をしたいか」で命名** | `events.extend`、`known-hosted-labels.extend` など目的語 | U-2, U-6 |
+| **「何をしたいか」で命名** | `events`、`known-hosted-labels` など目的語をキー名に直接使用 | U-2, U-6 |
 | **同種の設定はまとめる** | ネットワーク系は `network` に集約 | U-4 |
 | **命名規則を統一** | 全キー kebab-case | U-7 |
 | **内部概念は隠す** | `analysis`、`audit` は独立キーにせず既存構造に統合 | U-2 |
@@ -42,7 +42,7 @@
 | `audit` トップレベルキー | **不採用** | online rule の有効化は `rules.<rule-id>.enabled: true` で統一。別セクションは二重管理になる |
 | `network.fail-open` | **`network.on-error: skip \| fail` を採用** | fail-open/fail-closed はセキュリティ用語として曖昧。明示的な列挙値のほうが意図が伝わる |
 | `exclusions[].files` → `exclusions[].file` | **スカラー（単一 glob）を採用** | 単数形が型と一致し誤解を防ぐ。複数パターンは複数エントリで表現 |
-| `extend` キーワード | **採用** | built-in 値との関係が明確。最終集合宣言より実用的 |
+| `extend` キーワード | **不採用（廃止）** | 内部概念（built-in セットの存在）をユーザーに漏出させていた。フラットリストに変更し、ドキュメントで additive であることを明記する方式に移行。詳細は `plan_config_flat.md` 参照 |
 
 ---
 
@@ -78,18 +78,16 @@ rules:
   known-vulnerable-actions:
     enabled: true
 
-  # rule-specific: イベント拡張
+  # rule-specific: イベント拡張 (adds to built-in set)
   dangerous-triggers:
     severity: error
     events:
-      extend:
-        - issue_comment
+      - issue_comment
 
-  # rule-specific: ランナーラベル拡張
+  # rule-specific: ランナーラベル拡張 (adds to built-in set)
   runner-label:
     known-hosted-labels:
-      extend:
-        - ubuntu-24.04-arm
+      - ubuntu-24.04-arm
 
   # rule-specific: -latest runner 置換マッピング
   runner-no-latest:
@@ -98,23 +96,20 @@ rules:
       windows-latest: windows-2025
       macos-latest: macos-15
 
-  # rule-specific: 公開レジストリ拡張
+  # rule-specific: 公開レジストリ拡張 (adds to built-in set)
   credentials:
     public-registries:
-      extend:
-        - registry.example.com
+      - registry.example.com
 
-  # rule-specific: untrusted trigger 拡張
+  # rule-specific: untrusted trigger 拡張 (adds to built-in set)
   cache-poisoning:
     untrusted-triggers:
-      extend:
-        - issue_comment
+      - issue_comment
 
-  # rule-specific: 出力コマンド拡張
+  # rule-specific: 出力コマンド拡張 (adds to built-in set)
   unredacted-secrets:
     output-commands:
-      extend:
-        - tee
+      - tee
 
   # rule-specific: uses 参照の deny/allow
   forbidden-uses:
@@ -138,19 +133,19 @@ rules:
 
 | Rule | Key | 型 | 説明 |
 |---|---|---|---|
-| `dangerous-triggers` | `events.extend` | `string[]` | 危険トリガーイベントの追加 |
-| `runner-label` | `known-hosted-labels.extend` | `string[]` | 既知ランナーラベルの追加 |
+| `dangerous-triggers` | `events` | `string[]` | 危険トリガーイベントの追加 (built-in に追加) |
+| `runner-label` | `known-hosted-labels` | `string[]` | 既知ランナーラベルの追加 (built-in に追加) |
 | `runner-no-latest` | `fix-mapping` | `map[string]string` | 検出対象に追加する runner label と auto-fix 時の置換先ラベルの対応。キーは ASCII 大文字小文字を無視して照合し、値はそのまま置換テキストとして使う |
-| `credentials` | `public-registries.extend` | `string[]` | 公開レジストリの追加 |
-| `cache-poisoning` | `untrusted-triggers.extend` | `string[]` | 信頼できないトリガーの追加 |
-| `unredacted-secrets` | `output-commands.extend` | `string[]` | 監視対象出力コマンドの追加 |
+| `credentials` | `public-registries` | `string[]` | 公開レジストリの追加 (built-in に追加) |
+| `cache-poisoning` | `untrusted-triggers` | `string[]` | 信頼できないトリガーの追加 (built-in に追加) |
+| `unredacted-secrets` | `output-commands` | `string[]` | 監視対象出力コマンドの追加 (built-in に追加) |
 | `forbidden-uses` | `deny` / `allow` | `string[]` | `uses:` 参照の拒否/許可 wildcard パターン |
 | `expr-undefined-var` | `assume-events` | `string[]` | 式評価時に仮定するイベント |
 | `overprovisioned-secrets` | `max-step-env-secrets` | `int` | ステップ単位のシークレット数上限 |
 | `overprovisioned-secrets` | `max-job-secrets` | `int` | ジョブ単位のシークレット数上限 |
 | `unpinned-uses` | `ignore-actions` | `{owner, refs?}[]` | SHA ピンチェック除外。`owner` は glob、`refs` 省略時は全 ref を無視、指定時は完全一致した ref のみ無視 |
 
-`extend` リストは **built-in セットに追加**する。置換はしない。
+リスト型の rule-specific options は **built-in セットに追加**する。置換はしない。
 
 ### 2.3 `exclusions`
 
