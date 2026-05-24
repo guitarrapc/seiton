@@ -14,7 +14,7 @@ Arguments:
   [0] <string[]>     Workflow files or directories to lint. Auto-discovers .github/workflows/ if omitted.
 
 Options:
-  --config <string?>           Path to config file. Auto-discovered from .github/seiton.yaml if omitted. [Default: null]
+  -c, --config <string?>       Path to config file. Auto-discovered from .github/seiton.yaml if omitted. [Default: null]
   --stdin-filename <string>    Filename used when reading from stdin (-). [Default: @"<stdin>"]
   --ignore <string[]?>         Substring patterns for messages to ignore (case-insensitive). [Default: null]
   --min-severity <string?>     Minimum severity to report: error | warning | info. [Default: null]
