@@ -264,7 +264,7 @@ rules:
 
 ### Rule-Specific Options
 
-Some rules accept additional configuration keys. All `extend` lists add to the built-in set — they never replace it. See the [Annotated Example](#annotated-example) for complete YAML examples of each rule's options.
+Some rules accept additional configuration keys. All additive list keys append to the built-in set — they never replace it. See the [Annotated Example](#annotated-example) for complete YAML examples of each rule's options.
 
 | Rule | Key | Description |
 |---|---|---|

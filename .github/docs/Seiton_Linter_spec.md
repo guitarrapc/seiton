@@ -432,7 +432,7 @@ The following table defines the normative default severity for each rule. Implem
 Selected rules accept rule-specific configuration keys within the `rules.<rule-id>` section, in addition to the shared `enabled` / `severity` keys.
 
 - Rule-specific keys are defined per rule ID. Unknown keys for a given rule ID are configuration errors.
-- Where a rule accepts an `extend` list, merge behavior is set union (`effective = built-in U user-extended`) with deterministic deduplication.
+- Where a rule accepts an additive list, merge behavior is set union (`effective = built-in U user-provided`) with deterministic deduplication.
 - Duplicate entries after normalization are ignored.
 - Invalid entries must produce configuration error with enough location/context for users to fix input.
 - Extension never removes built-in defaults.
