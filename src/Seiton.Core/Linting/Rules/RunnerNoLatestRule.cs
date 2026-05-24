@@ -58,7 +58,11 @@ public sealed class RunnerNoLatestRule() : RuleBase(RuleId.RunnerNoLatest)
             }
 
             var labelUtf8 = Arena.GetStringValue(label);
-            if (!IsTargetLabel(labelUtf8))
+
+            // Single lookup: check built-in first, then fix-mapping (avoids double scan)
+            var isBuiltIn = IsBuiltInLatestLabel(labelUtf8);
+            var hasMappingValue = TryGetFixValue(labelUtf8, out var pinned);
+            if (!isBuiltIn && !hasMappingValue)
             {
                 continue;
             }
@@ -66,7 +70,7 @@ public sealed class RunnerNoLatestRule() : RuleBase(RuleId.RunnerNoLatest)
             var location = Arena.GetStringRange(label);
 
             DiagnosticFix? fix = null;
-            if (Config.Fix.Enabled && TryGetFixValue(labelUtf8, out var pinned))
+            if (Config.Fix.Enabled && hasMappingValue)
             {
                 var slice = Arena.GetStringSlice(label);
                 fix = new DiagnosticFix(
@@ -85,20 +89,6 @@ public sealed class RunnerNoLatestRule() : RuleBase(RuleId.RunnerNoLatest)
                 AddJobWarning(job, $"jobs.'{jobId}'.runs-on label '{labelText}' is a moving latest label; prefer explicit version-pinned runner labels", location);
             }
         }
-    }
-
-    /// <summary>
-    /// Determines whether the label is a detection target: built-in latest labels OR labels in fix-mapping.
-    /// Uses ASCII case-insensitive comparison.
-    /// </summary>
-    private bool IsTargetLabel(ReadOnlySpan<byte> labelUtf8)
-    {
-        if (IsBuiltInLatestLabel(labelUtf8))
-        {
-            return true;
-        }
-
-        return TryGetFixValue(labelUtf8, out _);
     }
 
     /// <summary>

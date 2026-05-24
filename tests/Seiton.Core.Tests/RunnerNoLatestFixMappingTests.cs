@@ -168,7 +168,7 @@ public sealed class RunnerNoLatestFixMappingTests
         rules:
           runner-no-latest:
             fix-mapping:
-              ubuntu-latest:
+              ubuntu-latest: null
         """;
 
         var result = LintConfigLibrary.Validate(yaml, "seiton.yaml");
@@ -250,12 +250,12 @@ public sealed class RunnerNoLatestFixMappingTests
             ["my-org-runner-latest"] = "my-org-runner-v2"
         });
 
-        var result = LintWithConfig(yaml, config);
+        using var result = LintWithConfig(yaml, config);
         var diagnostics = result.Diagnostics.Where(d => d.RuleId == "runner-no-latest").ToArray();
 
         await Assert.That(diagnostics.Length).IsEqualTo(1);
         await Assert.That(diagnostics[0].Message).Contains("my-org-runner-latest");
-        result.Dispose();
+
     }
 
     [Test]
@@ -271,11 +271,11 @@ public sealed class RunnerNoLatestFixMappingTests
         """;
 
         // No fix-mapping or empty fix-mapping for this label
-        var result = LintWithConfig(yaml, config: null);
+        using var result = LintWithConfig(yaml, config: null);
         var diagnostics = result.Diagnostics.Where(d => d.RuleId == "runner-no-latest").ToArray();
 
         await Assert.That(diagnostics.Length).IsEqualTo(0);
-        result.Dispose();
+
     }
 
     [Test]
@@ -290,11 +290,11 @@ public sealed class RunnerNoLatestFixMappingTests
               - run: echo ng
         """;
 
-        var result = LintWithConfig(yaml, config: null);
+        using var result = LintWithConfig(yaml, config: null);
         var diagnostics = result.Diagnostics.Where(d => d.RuleId == "runner-no-latest").ToArray();
 
         await Assert.That(diagnostics.Length).IsEqualTo(1);
-        result.Dispose();
+
     }
 
     [Test]
@@ -315,11 +315,11 @@ public sealed class RunnerNoLatestFixMappingTests
             ["My-Org-Runner-Latest"] = "my-org-runner-v2"
         });
 
-        var result = LintWithConfig(yaml, config);
+        using var result = LintWithConfig(yaml, config);
         var diagnostics = result.Diagnostics.Where(d => d.RuleId == "runner-no-latest").ToArray();
 
         await Assert.That(diagnostics.Length).IsEqualTo(1);
-        result.Dispose();
+
     }
 
     [Test]
@@ -339,11 +339,11 @@ public sealed class RunnerNoLatestFixMappingTests
             ["my-org-runner-latest"] = "my-org-runner-v2"
         });
 
-        var result = LintWithConfig(yaml, config);
+        using var result = LintWithConfig(yaml, config);
         var diagnostics = result.Diagnostics.Where(d => d.RuleId == "runner-no-latest").ToArray();
 
         await Assert.That(diagnostics.Length).IsEqualTo(1);
-        result.Dispose();
+
     }
 
     [Test]
@@ -363,11 +363,11 @@ public sealed class RunnerNoLatestFixMappingTests
             ["ubuntu-latest"] = "ubuntu-24.04"
         });
 
-        var result = LintWithConfig(yaml, config);
+        using var result = LintWithConfig(yaml, config);
         var diagnostics = result.Diagnostics.Where(d => d.RuleId == "runner-no-latest").ToArray();
 
         await Assert.That(diagnostics.Length).IsEqualTo(0);
-        result.Dispose();
+
     }
 
     [Test]
@@ -387,11 +387,11 @@ public sealed class RunnerNoLatestFixMappingTests
             ["ubuntu-latest"] = "ubuntu-24.04"
         });
 
-        var result = LintWithConfig(yaml, config);
+        using var result = LintWithConfig(yaml, config);
         var diagnostics = result.Diagnostics.Where(d => d.RuleId == "runner-no-latest").ToArray();
 
         await Assert.That(diagnostics.Length).IsEqualTo(0);
-        result.Dispose();
+
     }
 
     [Test]
@@ -411,11 +411,11 @@ public sealed class RunnerNoLatestFixMappingTests
             ["ubuntu-latest"] = "ubuntu-24.04"
         });
 
-        var result = LintWithConfig(yaml, config);
+        using var result = LintWithConfig(yaml, config);
         var diagnostics = result.Diagnostics.Where(d => d.RuleId == "runner-no-latest").ToArray();
 
         await Assert.That(diagnostics.Length).IsEqualTo(0);
-        result.Dispose();
+
     }
 
     #endregion
@@ -439,7 +439,7 @@ public sealed class RunnerNoLatestFixMappingTests
             ["ubuntu-latest"] = "ubuntu-24.04"
         }, fixEnabled: true);
 
-        var result = LintWithConfig(yaml, config);
+        using var result = LintWithConfig(yaml, config);
         var diagnostics = result.Diagnostics.Where(d => d.RuleId == "runner-no-latest").ToArray();
 
         await Assert.That(diagnostics.Length).IsEqualTo(1);
@@ -452,7 +452,7 @@ public sealed class RunnerNoLatestFixMappingTests
         var originalText = Encoding.UTF8.GetString(utf8Yaml.AsSpan(edit.Offset, edit.Length));
         await Assert.That(originalText).IsEqualTo("ubuntu-latest");
         await Assert.That(edit.NewText).IsEqualTo("ubuntu-24.04");
-        result.Dispose();
+
     }
 
     [Test]
@@ -473,12 +473,12 @@ public sealed class RunnerNoLatestFixMappingTests
             Fix = new FixConfig { Enabled = true },
         };
 
-        var result = LintWithConfig(yaml, config);
+        using var result = LintWithConfig(yaml, config);
         var diagnostics = result.Diagnostics.Where(d => d.RuleId == "runner-no-latest").ToArray();
 
         await Assert.That(diagnostics.Length).IsEqualTo(1);
         await Assert.That(diagnostics[0].Fix).IsNull();
-        result.Dispose();
+
     }
 
     [Test]
@@ -503,7 +503,7 @@ public sealed class RunnerNoLatestFixMappingTests
             ["ubuntu-latest"] = "ubuntu-24.04"
         }, fixEnabled: true);
 
-        var result = LintWithConfig(yaml, config);
+        using var result = LintWithConfig(yaml, config);
         var diagnostics = result.Diagnostics
             .Where(d => d.RuleId == "runner-no-latest")
             .OrderBy(d => d.Location.StartLine)
@@ -515,7 +515,7 @@ public sealed class RunnerNoLatestFixMappingTests
         await Assert.That(diagnostics[0].Fix!.Value.Edits[0].NewText).IsEqualTo("ubuntu-24.04");
         // windows-latest has no fix
         await Assert.That(diagnostics[1].Fix).IsNull();
-        result.Dispose();
+
     }
 
     [Test]
@@ -535,13 +535,13 @@ public sealed class RunnerNoLatestFixMappingTests
             ["my-org-runner-latest"] = "my-org-runner-v2"
         }, fixEnabled: true);
 
-        var result = LintWithConfig(yaml, config);
+        using var result = LintWithConfig(yaml, config);
         var diagnostics = result.Diagnostics.Where(d => d.RuleId == "runner-no-latest").ToArray();
 
         await Assert.That(diagnostics.Length).IsEqualTo(1);
         await Assert.That(diagnostics[0].Fix).IsNotNull();
         await Assert.That(diagnostics[0].Fix!.Value.Edits[0].NewText).IsEqualTo("my-org-runner-v2");
-        result.Dispose();
+
     }
 
     [Test]
@@ -561,12 +561,12 @@ public sealed class RunnerNoLatestFixMappingTests
             ["ubuntu-latest"] = "ubuntu-24.04"
         }, fixEnabled: false);
 
-        var result = LintWithConfig(yaml, config);
+        using var result = LintWithConfig(yaml, config);
         var diagnostics = result.Diagnostics.Where(d => d.RuleId == "runner-no-latest").ToArray();
 
         await Assert.That(diagnostics.Length).IsEqualTo(1);
         await Assert.That(diagnostics[0].Fix).IsNull();
-        result.Dispose();
+
     }
 
     [Test]
@@ -586,13 +586,13 @@ public sealed class RunnerNoLatestFixMappingTests
             ["ubuntu-latest"] = "ubuntu-24.04"
         }, fixEnabled: true);
 
-        var result = LintWithConfig(yaml, config);
+        using var result = LintWithConfig(yaml, config);
         var diagnostics = result.Diagnostics.Where(d => d.RuleId == "runner-no-latest").ToArray();
 
         await Assert.That(diagnostics.Length).IsEqualTo(1);
         await Assert.That(diagnostics[0].Fix).IsNotNull();
         await Assert.That(diagnostics[0].Fix!.Value.Edits[0].NewText).IsEqualTo("ubuntu-24.04");
-        result.Dispose();
+
     }
 
     [Test]
@@ -613,13 +613,13 @@ public sealed class RunnerNoLatestFixMappingTests
             ["My-Org-Runner-Latest"] = "my-org-runner-v2"
         }, fixEnabled: true);
 
-        var result = LintWithConfig(yaml, config);
+        using var result = LintWithConfig(yaml, config);
         var diagnostics = result.Diagnostics.Where(d => d.RuleId == "runner-no-latest").ToArray();
 
         await Assert.That(diagnostics.Length).IsEqualTo(1);
         await Assert.That(diagnostics[0].Fix).IsNotNull();
         await Assert.That(diagnostics[0].Fix!.Value.Edits[0].NewText).IsEqualTo("my-org-runner-v2");
-        result.Dispose();
+
     }
 
     [Test]
@@ -640,12 +640,12 @@ public sealed class RunnerNoLatestFixMappingTests
             ["windows-latest"] = "windows-2025"
         }, fixEnabled: true);
 
-        var result = LintWithConfig(yaml, config);
+        using var result = LintWithConfig(yaml, config);
         var diagnostics = result.Diagnostics.Where(d => d.RuleId == "runner-no-latest").ToArray();
 
         await Assert.That(diagnostics.Length).IsEqualTo(2);
         await Assert.That(diagnostics.All(d => d.Fix is not null)).IsTrue();
-        result.Dispose();
+
     }
 
     #endregion
