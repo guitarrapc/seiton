@@ -29,6 +29,7 @@ public sealed class ExprUndefinedVarRule() : RuleBase(RuleId.ExprUndefinedVar)
     private readonly (byte[] NameUtf8, ExprType Type)[] _jobScopeOverrides = new (byte[], ExprType)[5];
     private readonly (byte[] NameUtf8, ExprType Type)[] _stepScopeOverrides = new (byte[], ExprType)[6];
     private bool _hasOverrides;
+    private static readonly (byte[] NameUtf8, ExprType Type)[] _emptyOverrides = [];
     private readonly List<Diagnostic> _propertyDiagnostics = new();
     // Per-job state for incremental step override building
     private IReadOnlyList<Step>? _currentJobSteps;
@@ -587,13 +588,10 @@ public sealed class ExprUndefinedVarRule() : RuleBase(RuleId.ExprUndefinedVar)
             report,
             target);
 
-        // also validate property access against dynamic context types
-        if (!_hasOverrides)
-        {
-            return;
-        }
-
-        var overrides = Availability.IsStepLevel(context) ? _stepScopeOverrides : _jobScopeOverrides;
+        // Validate property access against context types (with dynamic overrides when available)
+        var overrides = _hasOverrides
+            ? (Availability.IsStepLevel(context) ? _stepScopeOverrides : _jobScopeOverrides)
+            : _emptyOverrides;
 
         var propertyDiagnostics = _propertyDiagnostics;
         propertyDiagnostics.Clear();
@@ -692,13 +690,14 @@ public sealed class ExprUndefinedVarRule() : RuleBase(RuleId.ExprUndefinedVar)
         if (node.Kind == ExpressionNodeKind.Identifier && IsContextRootIdentifier(nodeId, parentId, nodes))
         {
             var rootName = node.Token.AsSpan(expression);
-            if (!Availability.IsRootContextAvailable(context, rootName))
+            var model = Config.SemanticModel;
+            if (!model.IsContextAvailable(context, rootName))
             {
                 var rootNameText = Encoding.UTF8.GetString(rootName);
                 var scopeText = FormatScopeName(context);
-                if (IsBuiltinContext(rootName))
+                if (model.IsBuiltinContext(rootName))
                 {
-                    var availableText = Availability.FormatAvailableContexts(context);
+                    var availableText = model.FormatAvailableContexts(context);
                     report(
                         this,
                         $"context \"{rootNameText}\" is not allowed here. {availableText}. called in {scopeText}",
@@ -723,10 +722,10 @@ public sealed class ExprUndefinedVarRule() : RuleBase(RuleId.ExprUndefinedVar)
             if (callee.Kind == ExpressionNodeKind.Identifier)
             {
                 var funcName = callee.Token.AsSpan(expression);
+                var model = Config.SemanticModel;
 
                 // Status check functions: only in if conditions
-                var isIfContext = context is ExpressionValidationContext.JobIf or ExpressionValidationContext.StepIf or ExpressionValidationContext.JobSnapshotIf;
-                if (!isIfContext && IsStatusCheckFunction(funcName))
+                if (!model.IsIfContext(context) && model.IsStatusCheckFunction(funcName))
                 {
                     var funcNameText = Encoding.UTF8.GetString(funcName);
                     var scopeText = FormatScopeName(context);
@@ -738,7 +737,7 @@ public sealed class ExprUndefinedVarRule() : RuleBase(RuleId.ExprUndefinedVar)
                 }
 
                 // hashFiles: only at step level (not job.if)
-                if (IsHashFilesFunction(funcName) && !Availability.IsStepLevel(context))
+                if (model.IsHashFilesFunction(funcName) && !model.IsStepLevel(context))
                 {
                     var scopeText = FormatScopeName(context);
                     report(
@@ -1120,32 +1119,6 @@ public sealed class ExprUndefinedVarRule() : RuleBase(RuleId.ExprUndefinedVar)
     {
         if (!node.HasValue) return;
         CheckNode(Arena.GetIntExpression(node), context, report, target);
-    }
-
-    private static bool IsStatusCheckFunction(ReadOnlySpan<byte> nameUtf8)
-    {
-        return EqualsAsciiIgnoreCase(nameUtf8, "success"u8)
-            || EqualsAsciiIgnoreCase(nameUtf8, "failure"u8)
-            || EqualsAsciiIgnoreCase(nameUtf8, "cancelled"u8)
-            || EqualsAsciiIgnoreCase(nameUtf8, "always"u8);
-    }
-
-    private static bool IsHashFilesFunction(ReadOnlySpan<byte> nameUtf8)
-    {
-        return EqualsAsciiIgnoreCase(nameUtf8, "hashfiles"u8);
-    }
-
-    private static bool IsBuiltinContext(ReadOnlySpan<byte> nameUtf8)
-    {
-        var builtins = Generated.ContextTypes.BuiltinContextTypes;
-        for (var i = 0; i < builtins.Length; i++)
-        {
-            if (EqualsAsciiIgnoreCase(nameUtf8, builtins[i].NameUtf8))
-            {
-                return true;
-            }
-        }
-        return false;
     }
 
     private static string FormatScopeName(ExpressionValidationContext context) => context switch

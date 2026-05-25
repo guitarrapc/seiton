@@ -502,8 +502,9 @@ public sealed class ExpressionTests
     }
 
     [Test]
-    public async Task ParseAndValidate_UnknownGithubProperty_ReportsDiagnostic()
+    public async Task ParseAndValidate_UnknownGithubProperty_DoesNotReportDiagnostic()
     {
+        // Property access validation is linter-owned (not parser intrinsic)
         var expression = "github.typo_field"u8;
         var parseResult = ExpressionParser.Parse(expression);
 
@@ -513,7 +514,7 @@ public sealed class ExpressionTests
             new TextRange(0, expression.Length, 1, 1, 1, expression.Length),
             ExpressionValidationContext.StepRun);
 
-        await Assert.That(diagnostics.Any(x => x.Message.Contains("property \"typo_field\" is not defined in \"github\" context", StringComparison.Ordinal))).IsTrue();
+        await Assert.That(diagnostics.Any(x => x.Message.Contains("property \"typo_field\" is not defined", StringComparison.Ordinal))).IsFalse();
     }
 
     [Test]
@@ -1599,7 +1600,7 @@ public sealed class ExpressionTests
     [Test]
     public async Task ParseAndValidate_FromJsonObjectIndexUndefinedProperty_ReportsDiagnostic()
     {
-        // fromJSON('{"win":"...", "linux":"..."}')['mac'] — 'mac' is not defined
+        // fromJSON('{"win":"...", "linux":"..."}')['mac'] — 'mac' is not defined (operator-local)
         var expression = "fromJson('{\"win\":\"windows-latest\",\"linux\":\"ubuntu-latest\"}')['mac']"u8;
         var parseResult = ExpressionParser.Parse(expression);
 
@@ -1630,9 +1631,9 @@ public sealed class ExpressionTests
     }
 
     [Test]
-    public async Task ParseAndValidate_FromJsonObjectMemberUndefinedProperty_ReportsDiagnostic()
+    public async Task ParseAndValidate_FromJsonObjectMemberUndefinedProperty_DoesNotReportDiagnostic()
     {
-        // fromJSON('{"enabled":true}').disabled — 'disabled' is not defined
+        // Property access validation is linter-owned (not parser intrinsic)
         var expression = "fromJson('{\"enabled\":true}').disabled"u8;
         var parseResult = ExpressionParser.Parse(expression);
 
@@ -1642,7 +1643,7 @@ public sealed class ExpressionTests
             new TextRange(0, expression.Length, 1, 1, 1, expression.Length),
             ExpressionValidationContext.StepRun);
 
-        await Assert.That(diagnostics.Any(x => x.Message.Contains("property \"disabled\" is not defined", StringComparison.Ordinal))).IsTrue();
+        await Assert.That(diagnostics.Any(x => x.Message.Contains("property \"disabled\" is not defined", StringComparison.Ordinal))).IsFalse();
     }
 
     [Test]

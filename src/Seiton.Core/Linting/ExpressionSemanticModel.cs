@@ -1,4 +1,4 @@
-using Seiton.Core.Generated;
+﻿using Seiton.Core.Generated;
 using Seiton.Core.Parsing;
 using Seiton.Core.Parsing.Ast;
 
@@ -28,48 +28,67 @@ internal sealed class ExpressionSemanticModel
     }
 
     /// <summary>
-    /// Checks whether a function is available in the given workflow position.
-    /// Returns a diagnostic message if the function is restricted, or null if allowed.
+    /// Checks whether the given name is a known built-in context (github, env, vars, etc.).
     /// </summary>
-    internal string? CheckFunctionAvailability(ExpressionValidationContext context, ReadOnlySpan<byte> funcName)
+    internal bool IsBuiltinContext(ReadOnlySpan<byte> rootName)
     {
-        // Status check functions: only in if conditions
-        var isIfContext = context is ExpressionValidationContext.JobIf
-            or ExpressionValidationContext.StepIf
-            or ExpressionValidationContext.JobSnapshotIf;
-
-        if (!isIfContext && IsStatusCheckFunction(funcName))
-        {
-            var funcNameText = System.Text.Encoding.UTF8.GetString(funcName);
-            var scopeText = Availability.GetLintCategoryText(context);
-            return $"function \"{funcNameText}\" is not allowed here. \"{funcNameText}\" is only available in \"if\" conditions of jobs and steps. called in {scopeText}";
-        }
-
-        // hashFiles: only at step level
-        if (IsHashFilesFunction(funcName) && !Availability.IsStepLevel(context))
-        {
-            var scopeText = Availability.GetLintCategoryText(context);
-            return $"function \"hashFiles\" is not allowed here. \"hashFiles\" is only available in step-level expressions. called in {scopeText}";
-        }
-
-        return null;
+        return rootName.SequenceEqual("github"u8)
+            || rootName.SequenceEqual("env"u8)
+            || rootName.SequenceEqual("vars"u8)
+            || rootName.SequenceEqual("job"u8)
+            || rootName.SequenceEqual("jobs"u8)
+            || rootName.SequenceEqual("steps"u8)
+            || rootName.SequenceEqual("runner"u8)
+            || rootName.SequenceEqual("secrets"u8)
+            || rootName.SequenceEqual("strategy"u8)
+            || rootName.SequenceEqual("matrix"u8)
+            || rootName.SequenceEqual("needs"u8)
+            || rootName.SequenceEqual("inputs"u8);
     }
 
     /// <summary>
-    /// Formats a context-not-available diagnostic message for a given root context.
+    /// Checks whether the given function name is a status check function (success, failure, cancelled, always).
     /// </summary>
-    internal string FormatContextNotAvailable(ExpressionValidationContext context, ReadOnlySpan<byte> rootName)
+    internal bool IsStatusCheckFunction(ReadOnlySpan<byte> funcName)
     {
-        var rootNameText = System.Text.Encoding.UTF8.GetString(rootName);
-        var scopeText = Availability.GetLintCategoryText(context);
+        return SpanHelpers.EqualsAsciiIgnoreCase(funcName, "success"u8)
+            || SpanHelpers.EqualsAsciiIgnoreCase(funcName, "failure"u8)
+            || SpanHelpers.EqualsAsciiIgnoreCase(funcName, "cancelled"u8)
+            || SpanHelpers.EqualsAsciiIgnoreCase(funcName, "always"u8);
+    }
 
-        if (IsBuiltinContext(rootName))
-        {
-            var availableText = Availability.FormatAvailableContexts(context);
-            return $"context \"{rootNameText}\" is not allowed here. {availableText}. called in {scopeText}";
-        }
+    /// <summary>
+    /// Checks whether the given function name is hashFiles.
+    /// </summary>
+    internal bool IsHashFilesFunction(ReadOnlySpan<byte> funcName)
+    {
+        return SpanHelpers.EqualsAsciiIgnoreCase(funcName, "hashfiles"u8);
+    }
 
-        return $"context \"{rootNameText}\" is not allowed here. undefined context \"{rootNameText}\". called in {scopeText}";
+    /// <summary>
+    /// Checks whether the given context is at step level (where hashFiles is available).
+    /// </summary>
+    internal bool IsStepLevel(ExpressionValidationContext context)
+    {
+        return Availability.IsStepLevel(context);
+    }
+
+    /// <summary>
+    /// Checks whether the given context is an "if" condition (where status functions are available).
+    /// </summary>
+    internal bool IsIfContext(ExpressionValidationContext context)
+    {
+        return context is ExpressionValidationContext.JobIf
+            or ExpressionValidationContext.StepIf
+            or ExpressionValidationContext.JobSnapshotIf;
+    }
+
+    /// <summary>
+    /// Formats the available contexts for a diagnostic message.
+    /// </summary>
+    internal string FormatAvailableContexts(ExpressionValidationContext context)
+    {
+        return Availability.FormatAvailableContexts(context);
     }
 
     /// <summary>
@@ -77,7 +96,7 @@ internal sealed class ExpressionSemanticModel
     /// </summary>
     internal void PrepareForWorkflow()
     {
-        // Currently stateless at workflow level — reserved for future Phase 5 migration
+        // Currently stateless at workflow level — reserved for future use
         // when dynamic context overrides are centralized here.
     }
 
@@ -92,33 +111,4 @@ internal sealed class ExpressionSemanticModel
 
     /// <summary>Gets the current expression evaluation context.</summary>
     internal ExpressionValidationContext CurrentContext => _currentContext;
-
-    private static bool IsStatusCheckFunction(ReadOnlySpan<byte> name)
-    {
-        return name.SequenceEqual("success"u8)
-            || name.SequenceEqual("failure"u8)
-            || name.SequenceEqual("cancelled"u8)
-            || name.SequenceEqual("always"u8);
-    }
-
-    private static bool IsHashFilesFunction(ReadOnlySpan<byte> name)
-    {
-        return name.SequenceEqual("hashFiles"u8);
-    }
-
-    private static bool IsBuiltinContext(ReadOnlySpan<byte> name)
-    {
-        return name.SequenceEqual("github"u8)
-            || name.SequenceEqual("env"u8)
-            || name.SequenceEqual("vars"u8)
-            || name.SequenceEqual("job"u8)
-            || name.SequenceEqual("jobs"u8)
-            || name.SequenceEqual("steps"u8)
-            || name.SequenceEqual("runner"u8)
-            || name.SequenceEqual("secrets"u8)
-            || name.SequenceEqual("strategy"u8)
-            || name.SequenceEqual("matrix"u8)
-            || name.SequenceEqual("needs"u8)
-            || name.SequenceEqual("inputs"u8);
-    }
 }

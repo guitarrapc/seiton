@@ -435,8 +435,8 @@ linter は parser 成果物と workflow AST を受け取り、次を担当する
 | operator-local | receiver of '.*' must be an object or array, but got {type} | ValidateWildcardAccess | **parser** |
 | operator-local | index of array must be number, but got {type} | ValidateIndexAccess | **parser** |
 | operator-local | index of object must be string, but got {type} | ValidateIndexAccess | **parser** |
-| dynamic-property | property "{prop}" is not defined in {contextLabel}... | ValidatePropertyAccess | **linter** (transitional: parser) |
-| dynamic-property | receiver of object dereference "{prop}" must be type of object but got "{type}" | ValidatePropertyAccess | **linter** (transitional: parser) |
+| operator-local | receiver of object dereference "{prop}" must be type of object but got "string" | ValidateMemberAccessType | **parser** |
+| dynamic-property | property "{prop}" is not defined in {contextLabel}... | ValidatePropertyAccessWithOverrides | **linter** |
 | dynamic-property | configuration variable name '{name}' must not start with 'GITHUB_' | ValidateVarsNamingConvention | **parser** |
 | dynamic-property | configuration variable name '{name}' contains invalid characters | ValidateVarsNamingConvention | **parser** |
 | type-suitability | {type} value in ${{ }} will be converted to string "[Object]" | CheckTypeForTemplate | **linter** (transitional: parser) |
@@ -624,14 +624,34 @@ GitHub Actions 文脈依存の validation を parser から linter に一括で�
 
 ### 実施結果
 
-コード調査の結果、4 カテゴリすべてが **既に linter-owned** であることを確認した。
+Phase 5 で実施した具体的変更:
 
-1. **root context availability** — `ExprUndefinedVarRule.VisitExpressionNode` が `Availability.IsRootContextAvailable` で検証。  
-   parser 側 `ValidateNode` に `// NOTE: Context availability ... handled by the linter` コメントあり。
-2. **function availability by workflow position** — `ExprUndefinedVarRule.VisitExpressionNode` が status function / hashFiles scope を検証。  
-   parser 側 `ValidateFunctionCall` に `// NOTE: Status-check function and hashFiles availability checks are handled by the linter` コメントあり。
-3. **dynamic property existence / strictness** — `ExprUndefinedVarRule` が `ExpressionSemanticAnalyzer.ValidateDynamicPropertyAccessInline` を呼び出し、per-job override 付きで検証。
-4. **workflow site aware type suitability** — `ExprUndefinedVarRule` が `CheckTemplateTypeWithOverrides`, `CheckEnvMappingType`, `CheckRunsOnType` 等を呼び出し。
+#### 1. root context availability — 変更なし（既に linter-owned）
+- `ExprUndefinedVarRule.VisitExpressionNode` → `Config.SemanticModel.IsContextAvailable` で検証。
+- parser 側は Phase 2 以前から `// NOTE: Context availability ... handled by the linter` コメントで明示的に無効化済み。
+
+#### 2. function availability by workflow position — ExpressionSemanticModel 経由に変更
+- `ExprUndefinedVarRule.VisitExpressionNode` が `Config.SemanticModel.IsStatusCheckFunction` / `IsIfContext` / `IsHashFilesFunction` / `IsStepLevel` を使用。
+- rule 内のローカル重複 (`IsStatusCheckFunction`, `IsHashFilesFunction`, `IsBuiltinContext`) を削除、model に委譲。
+- `ExpressionSemanticModel` の比較を `SpanHelpers.EqualsAsciiIgnoreCase` に修正（case-insensitive、`hashfiles` 等を正しく検出）。
+
+#### 3. dynamic property existence / strictness — parser→linter 移行を実施
+- parser: `ValidateNode` の `MemberAccess` case から `ValidatePropertyAccess` 呼び出しを削除。
+- parser: 新規 `ValidateMemberAccessType` を追加 — string dereference（型不整合）のみ検証。property-not-found は検証しない。
+- parser: `ValidateIndexAccess` の strict object property check は operator-local として残留（linter とは dedup で共存）。
+- linter: `ExprUndefinedVarRule` の property validation を `_hasOverrides` gate 廃止、常時実行に変更。override なしの場合は `_emptyOverrides`（空配列）を渡し、`InferIdentifierTypeWithOverrides` → `TryGetBuiltinContextType` fallthrough で static type を取得。
+- `ValidateDynamicPropertyAccessInline` の early-return 条件を `contextOverrides is null || contextOverrides.Length == 0` → `contextOverrides is null` に修正。
+
+#### 4. ExpressionSemanticModel API 刷新
+- 旧: `CheckFunctionAvailability(context, funcName)` / `FormatContextNotAvailable(context, rootName)` — 書式付きメッセージを返す。
+- 新: check primitives（`IsContextAvailable`, `IsBuiltinContext`, `IsStatusCheckFunction`, `IsHashFilesFunction`, `IsStepLevel`, `IsIfContext`）+ `FormatAvailableContexts`。
+- rule 側が `FormatScopeName` で backward-compatible なメッセージを組み立てる。
+
+#### テスト更新
+- `ExpressionSemanticModelTests` — 新 API に合わせて全面書き換え（17 tests pass）。
+- `ExpressionTests` — `ParseAndValidate_UnknownGithubProperty` / `FromJsonObjectMemberUndefinedProperty` を parser がプロパティ診断を出さないことを確認するテストに変更。`FromJsonObjectIndexUndefinedProperty` は operator-local として parser が引き続き検証。
+- `ExpressionBoundaryTests` — 既存テストがそのまま pass。
+- `ActionlintCompatTests` — `special_function_availability` snapshot が case-insensitive 修正後に pass。
 
 ExpressionBoundaryTests (Phase 2) で確認済み:
 - `ParserOnly_ContextAvailability_DoesNotEmitDiagnostic` → parser は context availability を検証しない
@@ -669,11 +689,11 @@ Seiton.Core を parser/linter library として出したときに、利用者が
 
 ### 実施結果
 
-1. **`LintEngine.Check(ParseResult, byte[], string, LintConfig?)`** — 公開 API として追加。  
+1. **`LintEngine.Check(ParseResult, byte[], string, LintConfig?)`** — 公開 API として追加。
    呼び出し元が `WorkflowParser.Parse` で先行 parse した結果を linter に渡せる。
-2. **`ExpressionSemanticModel`** — `LintConfig.SemanticModel` 経由で custom rule からアクセス可能。  
+2. **`ExpressionSemanticModel`** — `LintConfig.SemanticModel` 経由で custom rule からアクセス可能。
    context availability / function availability / diagnostic formatting を提供。
-3. **`ExpressionArtifactStore`** — `ParseResultData.ExpressionArtifacts` 経由で parser→linter artifact 共有。  
+3. **`ExpressionArtifactStore`** — `ParseResultData.ExpressionArtifacts` 経由で parser→linter artifact 共有。
    `LintConfig.ParseExpression` が artifact store を content-hash cache より先に参照。
 4. **PublicApiContractTests** — parser-only / linter-only / combined の 3 use case を 6 test で検証。
 
