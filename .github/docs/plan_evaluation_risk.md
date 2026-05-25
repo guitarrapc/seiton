@@ -116,9 +116,25 @@
 ### P1: RuleInterfaceTests.cs partial 分割
 
 - `RuleInterfaceTests` を `partial class` に変更
-- ルール毎のテストメソッドを個別ファイルに移動（例: `RuleInterfaceTests.UnpinnedUses.cs`）
+- ルール毎のテストメソッドを個別ファイルに移動（例: `RuleInterfaceTests.UnpinnedUsesRule.cs`）
 - ファイル命名規則: `RuleInterfaceTests.{RuleNamePascalCase}.cs`
 - テスト内容の変更なし（移動のみ）
+
+#### 実装結果
+
+62 partial class ファイルに分割完了。全 2071 テスト合格、リグレッションなし。
+
+| ファイル | 内容 | メソッド数 |
+|---|---|---|
+| `RuleInterfaceTests.cs` | インフラ/ヘルパー (RuleCatalog, LintConfig, Parser 等) | 15 |
+| `RuleInterfaceTests.LintEngine.cs` | LintEngine_* (エンジン動作テスト) | 149 |
+| `RuleInterfaceTests.Suppression.cs` | DisableNextLine/DisableJob/ConfigExclusion | 31 |
+| `RuleInterfaceTests.{RuleName}.cs` × 59 | ルール毎の回帰テスト + 動作テスト | 229 |
+
+主要ファイル例:
+- `RuleInterfaceTests.ArtipackedRule.cs` (73 tests)
+- `RuleInterfaceTests.ExprUndefinedVarRule.cs` (34 tests)
+- `RuleInterfaceTests.UnpinnedUsesRule.cs` (18 tests)
 
 ### P2: CA2000 analyzer 有効化
 
