@@ -60,7 +60,7 @@ If you already use [GitHub CLI](https://cli.github.com/), you can download and v
 Example for Linux x64:
 
 ```sh
-version=v0.9.14
+version=v0.9.15
 asset=seiton-linux-amd64.tar.gz
 gh release download -R guitarrapc/seiton "$version" -p "$asset"
 tar xzf "$asset"
@@ -91,10 +91,10 @@ The script auto-detects your OS and architecture, downloads the latest release, 
 
 This script is also suitable for CI shell steps. On GitHub Actions, it writes the `executable` step output when `GITHUB_OUTPUT` is available.
 
-When you need to download a specific version, pass `--version`. The following example downloads `0.9.14`:
+When you need to download a specific version, pass `--version`. The following example downloads `0.9.15`:
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/guitarrapc/seiton/main/scripts/download.sh | bash -s -- --version 0.9.14
+curl -fsSL https://raw.githubusercontent.com/guitarrapc/seiton/main/scripts/download.sh | bash -s -- --version 0.9.15
 ```
 
 When you need to place the binary in an existing directory, pass `--dir`:
@@ -108,7 +108,7 @@ You can also combine both options:
 
 ```sh
 mkdir -p ./bin
-curl -fsSL https://raw.githubusercontent.com/guitarrapc/seiton/main/scripts/download.sh | bash -s -- --version 0.9.14 --dir ./bin
+curl -fsSL https://raw.githubusercontent.com/guitarrapc/seiton/main/scripts/download.sh | bash -s -- --version 0.9.15 --dir ./bin
 ```
 
 If the binary is not in your `PATH`, run it with a relative path such as `./seiton version`, or move it to a directory that is already on your `PATH`.
@@ -125,8 +125,8 @@ Official multi-architecture container images are published to GHCR for `linux/am
 
 ```sh
 docker pull ghcr.io/guitarrapc/seiton:latest
-docker pull ghcr.io/guitarrapc/seiton:0.9.14
-docker pull ghcr.io/guitarrapc/seiton:v0.9.14
+docker pull ghcr.io/guitarrapc/seiton:0.9.15
+docker pull ghcr.io/guitarrapc/seiton:v0.9.15
 ```
 
 Lint the workflow files in the current directory:
@@ -191,7 +191,7 @@ seiton version
 Example output:
 
 ```text
-seiton 0.9.14
+seiton 0.9.15
 built with .NET 10.0.8, win-x64
 ```
 
