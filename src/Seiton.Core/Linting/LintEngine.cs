@@ -190,21 +190,11 @@ public sealed class LintEngine
     /// Used by Playground incremental parsing (D-5b) where parsing is done externally.
     /// Infers <see cref="DocumentKind"/> from the parse result content.
     /// </summary>
-    internal LintResultData CheckWithParseResult(byte[] utf8Yaml, string filePath, LintConfig? config, ParseResultData parseResult, AstArena? arena)
-    {
-        ArgumentNullException.ThrowIfNull(utf8Yaml);
-        ArgumentException.ThrowIfNullOrEmpty(filePath);
-
-        var kind = parseResult.ActionMetadata is not null ? DocumentKind.ActionMetadata : DocumentKind.Workflow;
-        return CheckCore(utf8Yaml, filePath, config, parseResult, arena, kind);
-    }
-
-    /// <summary>
-    /// Lints a pre-parsed <see cref="ParseResultData"/> with optional job skipping (D-5d).
-    /// When <paramref name="skipJobs"/>[i] is true, lint rules are not run on that job
-    /// (its diagnostics are expected to be supplied from a cache by the caller).
-    /// </summary>
-    internal LintResultData CheckWithParseResult(byte[] utf8Yaml, string filePath, LintConfig? config, ParseResultData parseResult, AstArena? arena, bool[]? skipJobs)
+    /// <param name="skipJobs">
+    /// Optional job-skipping mask (D-5d). When <paramref name="skipJobs"/>[i] is true, lint rules
+    /// are not run on that job (its diagnostics are expected to be supplied from a cache by the caller).
+    /// </param>
+    internal LintResultData CheckWithParseResult(byte[] utf8Yaml, string filePath, LintConfig? config, ParseResultData parseResult, AstArena? arena, bool[]? skipJobs = null)
     {
         ArgumentNullException.ThrowIfNull(utf8Yaml);
         ArgumentException.ThrowIfNullOrEmpty(filePath);
