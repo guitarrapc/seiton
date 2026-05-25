@@ -91,11 +91,12 @@ public sealed class ExpressionSemanticModel
 
     /// <summary>
     /// Prepares per-workflow state. Call once at workflow visit start.
+    /// Resets accumulated state (e.g. current context) to prevent stale data when
+    /// the same <see cref="LintConfig"/> instance is reused across runs.
     /// </summary>
     public void PrepareForWorkflow()
     {
-        // Currently stateless at workflow level — reserved for future use
-        // when dynamic context overrides are centralized here.
+        _currentContext = default;
     }
 
     /// <summary>

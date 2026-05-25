@@ -33,10 +33,10 @@ internal sealed class ExpressionArtifactStore
 
     internal int Count => _artifacts.Count;
 
-    internal void Add(long contentHash, ExpressionArtifact artifact)
+    internal void Add(ExpressionArtifact artifact)
     {
         // First occurrence wins (same expression body may appear multiple times)
-        _artifacts.TryAdd(contentHash, artifact);
+        _artifacts.TryAdd(artifact.ContentHash, artifact);
     }
 
     /// <summary>

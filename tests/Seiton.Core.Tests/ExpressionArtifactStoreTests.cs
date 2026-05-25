@@ -22,7 +22,7 @@ public sealed class ExpressionArtifactStoreTests
         var parseResult = ExpressionParser.Parse(expressionBody);
         var contentHash = ComputeExpressionHash(expressionBody);
 
-        store.Add(contentHash, new ExpressionArtifact(contentHash, location, ExpressionValidationContext.StepRun, parseResult));
+        store.Add(new ExpressionArtifact(contentHash, location, ExpressionValidationContext.StepRun, parseResult));
 
         // Verify retrieval
         var found = store.TryGet(contentHash, expressionBody, yaml, out var retrieved);
@@ -43,7 +43,7 @@ public sealed class ExpressionArtifactStoreTests
         var parseResult = ExpressionParser.Parse(expressionBody);
         var contentHash = ComputeExpressionHash(expressionBody);
 
-        store.Add(contentHash, new ExpressionArtifact(contentHash, location, ExpressionValidationContext.StepRun, parseResult));
+        store.Add(new ExpressionArtifact(contentHash, location, ExpressionValidationContext.StepRun, parseResult));
 
         // Try to get with different expression bytes but same hash (simulated)
         var differentExpr = "github.ref"u8;
@@ -60,7 +60,7 @@ public sealed class ExpressionArtifactStoreTests
         var expr = "github.sha"u8;
         var hash = ComputeExpressionHash(expr);
         var parseResult = ExpressionParser.Parse(expr);
-        store.Add(hash, new ExpressionArtifact(hash, default, ExpressionValidationContext.StepRun, parseResult));
+        store.Add(new ExpressionArtifact(hash, default, ExpressionValidationContext.StepRun, parseResult));
 
         await Assert.That(store.Count).IsEqualTo(1);
     }
@@ -77,7 +77,7 @@ public sealed class ExpressionArtifactStoreTests
         var location = new TextRange(bodyOffset, expressionBody.Length, 6, 22, 6, 32);
         var parseResult = ExpressionParser.Parse(expressionBody);
         var contentHash = ComputeExpressionHash(expressionBody);
-        store.Add(contentHash, new ExpressionArtifact(contentHash, location, ExpressionValidationContext.StepRun, parseResult));
+        store.Add(new ExpressionArtifact(contentHash, location, ExpressionValidationContext.StepRun, parseResult));
 
         // Wire store into LintConfig
         var config = new LintConfig { Utf8Yaml = yaml, ExpressionArtifacts = store };
@@ -125,7 +125,7 @@ public sealed class ExpressionArtifactStoreTests
         // Location that exceeds source length
         var outOfBoundsLocation = new TextRange(100, 10, 1, 1, 1, 11);
         var parseResult = ExpressionParser.Parse(expressionBody);
-        store.Add(contentHash, new ExpressionArtifact(contentHash, outOfBoundsLocation, ExpressionValidationContext.StepRun, parseResult));
+        store.Add(new ExpressionArtifact(contentHash, outOfBoundsLocation, ExpressionValidationContext.StepRun, parseResult));
 
         // Should return false instead of throwing
         var found = store.TryGet(contentHash, expressionBody, yaml, out _);
@@ -143,7 +143,7 @@ public sealed class ExpressionArtifactStoreTests
 
         var invalidLocation = new TextRange(-1, 1, 1, 1, 1, 2);
         var parseResult = ExpressionParser.Parse(expressionBody);
-        store.Add(contentHash, new ExpressionArtifact(contentHash, invalidLocation, ExpressionValidationContext.StepRun, parseResult));
+        store.Add(new ExpressionArtifact(contentHash, invalidLocation, ExpressionValidationContext.StepRun, parseResult));
 
         var found = store.TryGet(contentHash, expressionBody, yaml, out _);
         await Assert.That(found).IsFalse();
@@ -160,7 +160,7 @@ public sealed class ExpressionArtifactStoreTests
 
         var invalidLocation = new TextRange(0, -1, 1, 1, 1, 1);
         var parseResult = ExpressionParser.Parse(expressionBody);
-        store.Add(contentHash, new ExpressionArtifact(contentHash, invalidLocation, ExpressionValidationContext.StepRun, parseResult));
+        store.Add(new ExpressionArtifact(contentHash, invalidLocation, ExpressionValidationContext.StepRun, parseResult));
 
         var found = store.TryGet(contentHash, expressionBody, yaml, out _);
         await Assert.That(found).IsFalse();

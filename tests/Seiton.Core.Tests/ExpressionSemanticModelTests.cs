@@ -145,6 +145,17 @@ public sealed class ExpressionSemanticModelTests
         await Assert.That(model.CurrentContext).IsEqualTo(ExpressionValidationContext.StepIf);
     }
 
+    [Test]
+    public async Task SemanticModel_PrepareForWorkflow_ResetsCurrentContext()
+    {
+        var model = new ExpressionSemanticModel();
+        model.SetContext(ExpressionValidationContext.StepRun);
+        await Assert.That(model.CurrentContext).IsEqualTo(ExpressionValidationContext.StepRun);
+
+        model.PrepareForWorkflow();
+        await Assert.That(model.CurrentContext).IsEqualTo(default(ExpressionValidationContext));
+    }
+
     // --- Equivalence-class tests ---
 
     [Test]
