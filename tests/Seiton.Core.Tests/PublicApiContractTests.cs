@@ -111,6 +111,58 @@ public sealed class PublicApiContractTests
     }
 
     [Test]
+    public async Task ParseResult_ThenLint_FatalActionMetadataParse_PreservesActionDocumentKind()
+    {
+        var yaml = "name: test\nruns: [\n"u8.ToArray();
+
+        using var combinedResult = new LintEngine().Check(yaml, "action.yml");
+        using var parseResult = WorkflowParser.Parse(yaml, "action.yml");
+        using var lintResult = new LintEngine().Check(parseResult, yaml, "action.yml");
+
+        await Assert.That(combinedResult.DocumentKind).IsEqualTo(DocumentKind.ActionMetadata);
+        await Assert.That(lintResult.DocumentKind).IsEqualTo(combinedResult.DocumentKind);
+    }
+
+    [Test]
+    public async Task ParseResult_ThenLint_WorkflowParse_PreservesWorkflowDocumentKind()
+    {
+        var yaml = "on: push\njobs:\n  build:\n    runs-on: ubuntu-latest\n    steps:\n      - run: echo hi\n"u8.ToArray();
+
+        using var combinedResult = new LintEngine().Check(yaml, ".github/workflows/ci.yml");
+        using var parseResult = WorkflowParser.Parse(yaml, ".github/workflows/ci.yml");
+        using var lintResult = new LintEngine().Check(parseResult, yaml, ".github/workflows/ci.yml");
+
+        await Assert.That(combinedResult.DocumentKind).IsEqualTo(DocumentKind.Workflow);
+        await Assert.That(lintResult.DocumentKind).IsEqualTo(combinedResult.DocumentKind);
+    }
+
+    [Test]
+    public async Task ParseResult_ThenLint_ActionMetadataParse_PreservesActionDocumentKind()
+    {
+        var yaml = "name: test\ndescription: test\nruns:\n  using: node20\n  main: index.js\n"u8.ToArray();
+
+        using var combinedResult = new LintEngine().Check(yaml, "action.yml");
+        using var parseResult = WorkflowParser.Parse(yaml, "action.yml");
+        using var lintResult = new LintEngine().Check(parseResult, yaml, "action.yml");
+
+        await Assert.That(combinedResult.DocumentKind).IsEqualTo(DocumentKind.ActionMetadata);
+        await Assert.That(lintResult.DocumentKind).IsEqualTo(combinedResult.DocumentKind);
+    }
+
+    [Test]
+    public async Task ParseResult_ThenLint_FatalParseWithoutHint_PreservesUnknownDocumentKind()
+    {
+        var yaml = "name: test\nruns: [\n"u8.ToArray();
+
+        using var combinedResult = new LintEngine().Check(yaml, "broken.yml");
+        using var parseResult = WorkflowParser.Parse(yaml, "broken.yml");
+        using var lintResult = new LintEngine().Check(parseResult, yaml, "broken.yml");
+
+        await Assert.That(combinedResult.DocumentKind).IsEqualTo(DocumentKind.Unknown);
+        await Assert.That(lintResult.DocumentKind).IsEqualTo(combinedResult.DocumentKind);
+    }
+
+    [Test]
     public async Task ParseResult_ThenLint_DisposingLintResult_DoesNotDisposeParseResult()
     {
         var yaml = "on: push\njobs:\n  build:\n    runs-on: ubuntu-latest\n    steps:\n      - run: echo hello\n"u8.ToArray();

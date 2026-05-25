@@ -370,9 +370,16 @@ linter は parser 成果物と workflow AST を受け取り、次を担当する
 
 ### 完了条件
 
-- refined C が spec 上で明文化されている
-- parser/linter の責務説明が一文で説明できる
-- downstream spec との矛盾がない
+- refined C が spec 上で明文化されている ✅
+- parser/linter の責務説明が一文で説明できる ✅
+- downstream spec との矛盾がない ✅
+
+### 実施結果
+
+1. **責務表の更新** — `Seiton_spec.md` の parser/linter boundary を refined C に更新。
+2. **parser spec 同期** — `Seiton_Parser_spec.md` / `Seiton_Parser_csharp_spec.md` / `Seiton_Parser_go_spec.md` の boundary note と preamble を同期。
+3. **linter spec 同期** — `Seiton_Linter_spec.md` / `Seiton_Linter_csharp_spec.md` / `Seiton_Linter_go_spec.md` に linter-owned semantic validation を明記。
+4. **実装計画同期** — 本計画書自体を source of truth として各 Phase の contract に展開。
 
 ### 性能条件
 
@@ -476,11 +483,11 @@ linter は parser 成果物と workflow AST を受け取り、次を担当する
 | vars naming convention | ✓ | - | なし | - (不動) |
 | context-availability | - | ✓ (既に linter 専任) | なし | - (完了) |
 | function-availability | - | ✓ (既に linter 専任) | なし | - (完了) |
-| dynamic-property existence | 二段階残置 → linter | ✓ | 高 | 1st |
+| dynamic-property existence | IndexAccess strict check のみ (operator-local) | ✓ (MemberAccess existence は完了) | 低 | - (完了) |
 | type-suitability | - | ✓ (既に linter 専任) | なし | - (完了) |
-| operator-with-overrides | 二段階残置 → linter | ✓ | 高 | 3rd |
+| operator-with-overrides | static operator-local は parser | ✓ (override-aware 補完は既に linter 専任) | 低 | - (完了) |
 
-**重要な発見**: context-availability と function-availability は既に parser 側で発行されておらず linter 専任である。実質的に移行が必要なのは dynamic-property / type-suitability / operator-with-overrides の 3 カテゴリのみ。
+**重要な発見**: context-availability / function-availability / type-suitability は既に linter 専任であり、operator-with-overrides も override-aware 補完として既に linter 側に収まっていた。実装上の責務移管が必要だったのは dynamic-property existence / strictness の parser `MemberAccess` 側のみで、Phase 5 で完了した。
 
 ### Benchmark Baseline (Phase 1 時点)
 
@@ -538,7 +545,14 @@ linter は parser 成果物と workflow AST を受け取り、次を担当する
 
 ### 完了条件
 
-- 境界移管 PR を安全に進める test/benchmark gate が揃っている
+- 境界移管 PR を安全に進める test/benchmark gate が揃っている ✅
+
+### 実施結果
+
+1. **`ExpressionBoundaryTests`** — parser-owned / linter-owned の境界を 19 tests で固定。
+2. **expectation 分離** — parser-only expectation と lint expectation を別 test として明示。
+3. **benchmark gate 明文化** — Phase ごとに parser/lint benchmark を比較する運用を本計画書に反映。
+4. **allocation review 観点** — hot path での allocation guard を review checklist として明示。
 
 ---
 
@@ -609,7 +623,7 @@ GitHub Actions 文脈依存の semantic validation を linter 層へ寄せるた
    check primitives: `IsContextAvailable`, `IsBuiltinContext`, `IsStatusCheckFunction`, `IsHashFilesFunction`, `IsStepLevel`, `IsIfContext`, `FormatAvailableContexts`。
 2. **`LintConfig.SemanticModel`** — rule から `Config.SemanticModel` 経由でアクセス可能。
 3. **`ExprUndefinedVarRule` の model 利用** — `VisitExpressionNode` が `Config.SemanticModel` を使用して context/function availability を検証。rule 内のローカル重複メソッドを削除。
-4. **`ExpressionSemanticModelTests`** — 19 tests で全 API を検証（case-insensitive 含む）。
+4. **`ExpressionSemanticModelTests`** — 21 tests で全 API を検証（case-insensitive 含む）。
 
 ### 性能条件
 
@@ -665,12 +679,12 @@ Phase 5 で実施した具体的変更:
 - rule 側が `FormatScopeName` で backward-compatible なメッセージを組み立てる。
 
 #### テスト更新
-- `ExpressionSemanticModelTests` — 新 API に合わせて全面書き換え（17 tests pass）。
+- `ExpressionSemanticModelTests` — 新 API に合わせて全面書き換え、現行 21 tests が pass。
 - `ExpressionTests` — `ParseAndValidate_UnknownGithubProperty` / `FromJsonObjectMemberUndefinedProperty` を parser がプロパティ診断を出さないことを確認するテストに変更。`FromJsonObjectIndexUndefinedProperty` は operator-local として parser が引き続き検証。
 - `ExpressionBoundaryTests` — 既存テストがそのまま pass。
 - `ActionlintCompatTests` — `special_function_availability` snapshot が case-insensitive 修正後に pass。
 
-#### 4. workflow site aware type suitability — 確認（既に linter-only）
+#### 5. workflow site aware type suitability — 確認（既に linter-only）
 - `CheckTemplateType` / `CheckTemplateTypeWithOverrides` / `CheckEnvMappingType` / `CheckRunsOnType` / `CheckExpectedObjectType` は `ExpressionSemanticAnalyzer.cs` に定義されているが、呼び出し元は全て `ExprUndefinedVarRule`（linter 層）のみ。
 - parser（`WorkflowParser.cs` / `ExpressionParser.cs`）は一切これらを呼ばない。
 - `CheckTemplateType` を `public` → `internal` に変更（外部 consumer が parser API 経由でアクセスする必要なし）。
@@ -722,7 +736,7 @@ Seiton.Core を parser/linter library として出したときに、利用者が
    context availability / function availability / diagnostic formatting を提供。
 3. **`ExpressionArtifactStore`** — `ParseResultData.ExpressionArtifacts` 経由で parser→linter artifact 共有。
    `LintConfig.ParseExpression` が artifact store を content-hash cache より先に参照。
-4. **PublicApiContractTests** — parser-only / linter-only / combined の 3 use case を 6 test で検証。
+4. **`PublicApiContractTests`** — parser-only / linter-only / combined の 3 use caseに加え、pre-parsed lint の document-kind preservation を含む 12 tests で検証。
 
 ### 完了条件
 

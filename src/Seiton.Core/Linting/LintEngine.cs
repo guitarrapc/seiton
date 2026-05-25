@@ -103,7 +103,11 @@ public sealed class LintEngine
     /// The parse result must not be disposed. Ownership remains with the caller.
     /// </param>
     /// <param name="utf8Yaml">The original UTF-8 YAML bytes (must be the same bytes used for parsing).</param>
-    /// <param name="filePath">File path for diagnostic messages and document kind hinting.</param>
+    /// <param name="filePath">
+    /// File path for diagnostic messages and document kind hinting.
+    /// When <paramref name="parseResult"/> has no workflow/action AST (for example after a fatal parse error),
+    /// the path hint is used to preserve <see cref="LintResult.DocumentKind"/> metadata.
+    /// </param>
     /// <param name="config">Optional lint configuration.</param>
     /// <returns>A lint result. Dispose when done reading diagnostics.</returns>
     public LintResult Check(ParseResult parseResult, byte[] utf8Yaml, string filePath, LintConfig? config = null)
@@ -199,8 +203,23 @@ public sealed class LintEngine
         ArgumentNullException.ThrowIfNull(utf8Yaml);
         ArgumentException.ThrowIfNullOrEmpty(filePath);
 
-        var kind = parseResult.ActionMetadata is not null ? DocumentKind.ActionMetadata : DocumentKind.Workflow;
+        var kind = InferDocumentKindForPreParsedResult(parseResult, filePath);
         return CheckCore(utf8Yaml, filePath, config, parseResult, arena, kind, skipJobs);
+    }
+
+    private static DocumentKind InferDocumentKindForPreParsedResult(ParseResultData parseResult, string filePath)
+    {
+        if (parseResult.ActionMetadata is not null)
+        {
+            return DocumentKind.ActionMetadata;
+        }
+
+        if (parseResult.Workflow is not null)
+        {
+            return DocumentKind.Workflow;
+        }
+
+        return DocumentKindClassifier.GetPathHintKind(filePath);
     }
 
     private LintResultData CheckCore(byte[] utf8Yaml, string filePath, LintConfig? config, ParseResultData parseResult, AstArena? arena, DocumentKind documentKind, bool[]? skipJobs = null)
