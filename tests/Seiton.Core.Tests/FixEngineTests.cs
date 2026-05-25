@@ -110,6 +110,53 @@ public sealed class FixEngineTests
     }
 
     [Test]
+    public async Task Apply_PartiallyOverlappingReplacements_Throws()
+    {
+        // Edit A covers [2,6), Edit B covers [4,8) — partial overlap
+        var source = Encoding.UTF8.GetBytes("0123456789");
+        var edits = new[]
+        {
+            new TextEdit(2, 4, "AAAA"),
+            new TextEdit(4, 4, "BBBB"),
+        };
+
+        await Assert.That(() => FixEngine.Apply(source, edits)).Throws<InvalidOperationException>();
+    }
+
+    [Test]
+    public async Task Apply_AdjacentEdits_DoNotConflict()
+    {
+        // Edit A covers [0,3), Edit B covers [3,3) — adjacent, not overlapping
+        var source = Encoding.UTF8.GetBytes("0123456789");
+        var edits = new[]
+        {
+            new TextEdit(0, 3, "AAA"),
+            new TextEdit(3, 3, "BBB"),
+        };
+
+        var result = FixEngine.Apply(source, edits);
+
+        await Assert.That(Encoding.UTF8.GetString(result)).IsEqualTo("AAABBB6789");
+    }
+
+    [Test]
+    public async Task Apply_ThreeEditsAtDifferentPositions_AllAppliedInOrder()
+    {
+        // Verify that multiple non-overlapping edits given in any order are applied correctly
+        var source = Encoding.UTF8.GetBytes("0123456789ABCDEF");
+        var edits = new[]
+        {
+            new TextEdit(10, 2, "XX"),  // middle
+            new TextEdit(0, 2, "YY"),   // start
+            new TextEdit(14, 2, "ZZ"),  // end
+        };
+
+        var result = FixEngine.Apply(source, edits);
+
+        await Assert.That(Encoding.UTF8.GetString(result)).IsEqualTo("YY23456789XXCDZZ");
+    }
+
+    [Test]
     public async Task DetectDominantLineEnding_PrefersCrLfWhenMajority()
     {
         var source = Encoding.UTF8.GetBytes("a\r\nb\r\nc\n");

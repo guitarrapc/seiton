@@ -156,4 +156,30 @@
 
 - 同一テキスト範囲に 2 つの fix を持つ診断を生成するテストケース作成
 - FixCommand が先頭の fix のみ適用し、重複範囲をスキップする動作を検証
-- 後方→前方の適用順序が保証されていることを検証
+- 適用順序が保証されていることを検証（ascending offset + buffer reconstruction）
+
+#### 実装結果
+
+`SelectNonConflictingBatch` を `internal` に変更し、直接ユニットテストを追加。全テスト合格。
+
+**FixBatchSelectionTests.cs** (新規 9 テスト):
+
+| テスト | 検証内容 |
+|---|---|
+| `SingleDiagnostic_ReturnsAsIs` | 単一診断は無条件で選択 |
+| `NonOverlapping_ReturnsAll` | 非重複は全選択 |
+| `OverlappingRanges_SelectsFirstByOffset` | 重複時は最小 offset が勝つ |
+| `SameOffsetInserts_SelectsFirstByIndex` | 同一 offset insert は先頭 index が勝つ |
+| `PartialOverlap_DefersConflicting` | 部分重複は deferred、非重複は選択 |
+| `InputOrderIndependent_LowestOffsetAlwaysWins` | 入力順に依存しない決定的選択 |
+| `MultiEditDiagnostic_ConflictsOnAnyEdit` | 複数 edit の1つでも重複すれば除外 |
+| `MultiEditDiagnostic_ConflictsOnSecondEdit` | 2番目 edit との重複も検出 |
+| `AdjacentEdits_DoNotConflict` | 隣接(boundary)は競合しない |
+
+**FixEngineTests.cs** (追加 3 テスト):
+
+| テスト | 検証内容 |
+|---|---|
+| `Apply_PartiallyOverlappingReplacements_Throws` | 部分重複 replacement は例外 |
+| `Apply_AdjacentEdits_DoNotConflict` | 隣接 edit は正常適用 |
+| `Apply_ThreeEditsAtDifferentPositions_AllAppliedInOrder` | 任意順の3 edit が正しく適用 |
