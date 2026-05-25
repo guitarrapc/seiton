@@ -105,6 +105,16 @@ public sealed class ExpressionSemanticModelTests
     }
 
     [Test]
+    public async Task IsBuiltinContext_CaseInsensitive_ReturnsTrue()
+    {
+        var model = new ExpressionSemanticModel();
+        await Assert.That(model.IsBuiltinContext("GITHUB"u8)).IsTrue();
+        await Assert.That(model.IsBuiltinContext("Steps"u8)).IsTrue();
+        await Assert.That(model.IsBuiltinContext("MATRIX"u8)).IsTrue();
+        await Assert.That(model.IsBuiltinContext("Env"u8)).IsTrue();
+    }
+
+    [Test]
     public async Task IsBuiltinContext_Unknown_ReturnsFalse()
     {
         var model = new ExpressionSemanticModel();

@@ -29,21 +29,20 @@ internal sealed class ExpressionSemanticModel
 
     /// <summary>
     /// Checks whether the given name is a known built-in context (github, env, vars, etc.).
+    /// Uses case-insensitive comparison and the generated <see cref="ContextTypes.BuiltinContextTypes"/> list.
     /// </summary>
     internal bool IsBuiltinContext(ReadOnlySpan<byte> rootName)
     {
-        return rootName.SequenceEqual("github"u8)
-            || rootName.SequenceEqual("env"u8)
-            || rootName.SequenceEqual("vars"u8)
-            || rootName.SequenceEqual("job"u8)
-            || rootName.SequenceEqual("jobs"u8)
-            || rootName.SequenceEqual("steps"u8)
-            || rootName.SequenceEqual("runner"u8)
-            || rootName.SequenceEqual("secrets"u8)
-            || rootName.SequenceEqual("strategy"u8)
-            || rootName.SequenceEqual("matrix"u8)
-            || rootName.SequenceEqual("needs"u8)
-            || rootName.SequenceEqual("inputs"u8);
+        var builtins = ContextTypes.BuiltinContextTypes;
+        for (var i = 0; i < builtins.Length; i++)
+        {
+            if (SpanHelpers.EqualsAsciiIgnoreCase(rootName, builtins[i].NameUtf8))
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /// <summary>

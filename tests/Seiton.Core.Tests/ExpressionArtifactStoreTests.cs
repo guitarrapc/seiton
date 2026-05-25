@@ -113,6 +113,25 @@ public sealed class ExpressionArtifactStoreTests
         arena?.Dispose();
     }
 
+    [Test]
+    public async Task Store_TryGet_ReturnsFalse_WhenLocationExceedsSourceBounds()
+    {
+        var yaml = "short"u8.ToArray();
+
+        var store = new ExpressionArtifactStore(4);
+        var expressionBody = "github.sha"u8;
+        var contentHash = ComputeExpressionHash(expressionBody);
+
+        // Location that exceeds source length
+        var outOfBoundsLocation = new TextRange(100, 10, 1, 1, 1, 11);
+        var parseResult = ExpressionParser.Parse(expressionBody);
+        store.Add(contentHash, new ExpressionArtifact(contentHash, outOfBoundsLocation, ExpressionValidationContext.StepRun, parseResult));
+
+        // Should return false instead of throwing
+        var found = store.TryGet(contentHash, expressionBody, yaml, out _);
+        await Assert.That(found).IsFalse();
+    }
+
     private static long ComputeExpressionHash(ReadOnlySpan<byte> expression)
     {
         return (long)XxHash64.Hash(expression);

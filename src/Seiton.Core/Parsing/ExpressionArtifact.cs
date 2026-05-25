@@ -45,8 +45,17 @@ internal sealed class ExpressionArtifactStore
     {
         if (_artifacts.TryGetValue(contentHash, out var artifact))
         {
+            // Bounds guard: verify the stored location is within source
+            var start = artifact.Location.Start;
+            var length = artifact.Location.Length;
+            if ((uint)start + (uint)length > (uint)source.Length)
+            {
+                result = default;
+                return false;
+            }
+
             // Collision guard: verify the expression bytes match
-            var storedSpan = source.AsSpan(artifact.Location.Start, artifact.Location.Length);
+            var storedSpan = source.AsSpan(start, length);
             if (expression.SequenceEqual(storedSpan))
             {
                 result = artifact.ParseResult;
