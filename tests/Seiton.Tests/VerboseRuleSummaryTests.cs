@@ -1,6 +1,5 @@
 ﻿using Seiton.Cli;
 using Seiton.Commands;
-using Seiton.Core.Linting;
 using Seiton.Core.Parsing;
 
 namespace Seiton.Tests;

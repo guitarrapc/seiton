@@ -170,7 +170,7 @@ internal static class ConfigYamlBuilder
         sb.AppendLine("      - credentials");
         for (var i = 0; i < extraExclusions; i++)
         {
-          sb.Append("  - file: \".github/workflows/gen-").Append(i).AppendLine(".yml\"");
+            sb.Append("  - file: \".github/workflows/gen-").Append(i).AppendLine(".yml\"");
             sb.AppendLine("    rules:");
             sb.AppendLine("      - runner-no-latest");
         }

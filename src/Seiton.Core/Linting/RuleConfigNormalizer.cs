@@ -1,4 +1,4 @@
-using Seiton.Core.Parsing;
+﻿using Seiton.Core.Parsing;
 
 using static Seiton.Core.Parsing.SpanHelpers;
 
