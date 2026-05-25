@@ -931,7 +931,7 @@ public sealed partial class RuleInterfaceTests
         await Assert.That(diagnostic.Fix is not null).IsTrue();
         await Assert.That(diagnostic.Message.Contains("git remote set-url origin", StringComparison.Ordinal)).IsTrue();
 
-        var revalidated = FixEngine.ApplyAndRelint(engine, sourceBytes, "checkout-persist-fix-insert-with.yml", [diagnostic]);
+        using var revalidated = FixEngine.ApplyAndRelint(engine, sourceBytes, "checkout-persist-fix-insert-with.yml", [diagnostic]);
         var fixedText = Encoding.UTF8.GetString(revalidated.UpdatedUtf8Yaml).Replace("\r\n", "\n", StringComparison.Ordinal);
 
         var withIndex = fixedText.IndexOf("with:", StringComparison.Ordinal);
@@ -962,7 +962,7 @@ public sealed partial class RuleInterfaceTests
 
         await Assert.That(diagnostic.Fix is not null).IsTrue();
 
-        var revalidated = FixEngine.ApplyAndRelint(engine, sourceBytes, "checkout-persist-fix-existing-with.yml", [diagnostic]);
+        using var revalidated = FixEngine.ApplyAndRelint(engine, sourceBytes, "checkout-persist-fix-existing-with.yml", [diagnostic]);
         var fixedText = Encoding.UTF8.GetString(revalidated.UpdatedUtf8Yaml).Replace("\r\n", "\n", StringComparison.Ordinal);
 
         var persistIndex = fixedText.IndexOf("persist-credentials: false", StringComparison.Ordinal);
@@ -994,7 +994,7 @@ public sealed partial class RuleInterfaceTests
         await Assert.That(diagnostic.Fix is not null).IsTrue();
         await Assert.That(diagnostic.Fix!.Value.Description.Contains("git push", StringComparison.Ordinal)).IsTrue();
 
-        var revalidated = FixEngine.ApplyAndRelint(engine, sourceBytes, "checkout-persist-fix-replace.yml", [diagnostic]);
+        using var revalidated = FixEngine.ApplyAndRelint(engine, sourceBytes, "checkout-persist-fix-replace.yml", [diagnostic]);
         var fixedText = Encoding.UTF8.GetString(revalidated.UpdatedUtf8Yaml).Replace("\r\n", "\n", StringComparison.Ordinal);
 
         await Assert.That(fixedText.Contains("persist-credentials: false", StringComparison.Ordinal)).IsTrue();
@@ -1177,7 +1177,7 @@ public sealed partial class RuleInterfaceTests
 
         await Assert.That(diagnostic.Fix).IsNotNull();
 
-        var revalidated = FixEngine.ApplyAndRelint(engine, sourceBytes, "id-naming-fix.yml", [diagnostic]);
+        using var revalidated = FixEngine.ApplyAndRelint(engine, sourceBytes, "id-naming-fix.yml", [diagnostic]);
         var fixedText = Encoding.UTF8.GetString(revalidated.UpdatedUtf8Yaml);
 
         await Assert.That(fixedText).Contains("bad-id:");
@@ -1211,7 +1211,7 @@ public sealed partial class RuleInterfaceTests
 
         await Assert.That(diagnostic.Fix).IsNotNull();
 
-        var revalidated = FixEngine.ApplyAndRelint(engine, sourceBytes, "id-naming-needs-fix.yml", [diagnostic]);
+        using var revalidated = FixEngine.ApplyAndRelint(engine, sourceBytes, "id-naming-needs-fix.yml", [diagnostic]);
         var fixedText = Encoding.UTF8.GetString(revalidated.UpdatedUtf8Yaml);
 
         await Assert.That(fixedText).Contains("build-job:");
@@ -1251,7 +1251,7 @@ public sealed partial class RuleInterfaceTests
 
         await Assert.That(diagnostic.Fix).IsNotNull();
 
-        var revalidated = FixEngine.ApplyAndRelint(engine, sourceBytes, "id-naming-needs-seq-fix.yml", [diagnostic]);
+        using var revalidated = FixEngine.ApplyAndRelint(engine, sourceBytes, "id-naming-needs-seq-fix.yml", [diagnostic]);
         var fixedText = Encoding.UTF8.GetString(revalidated.UpdatedUtf8Yaml);
 
         await Assert.That(fixedText).Contains("build-job:");
@@ -1291,7 +1291,7 @@ public sealed partial class RuleInterfaceTests
 
         await Assert.That(diagnostic.Fix).IsNotNull();
 
-        var revalidated = FixEngine.ApplyAndRelint(engine, sourceBytes, "id-naming-needs-seq-fix-case-insensitive.yml", [diagnostic]);
+        using var revalidated = FixEngine.ApplyAndRelint(engine, sourceBytes, "id-naming-needs-seq-fix-case-insensitive.yml", [diagnostic]);
         var fixedText = Encoding.UTF8.GetString(revalidated.UpdatedUtf8Yaml);
 
         await Assert.That(fixedText).Contains("build-job:");
@@ -1378,7 +1378,7 @@ public sealed partial class RuleInterfaceTests
 
         await Assert.That(diagnostic.Fix).IsNotNull();
 
-        var revalidated = FixEngine.ApplyAndRelint(engine, sourceBytes, "id-naming-underscore-kebab.yml", [diagnostic]);
+        using var revalidated = FixEngine.ApplyAndRelint(engine, sourceBytes, "id-naming-underscore-kebab.yml", [diagnostic]);
         var fixedText = Encoding.UTF8.GetString(revalidated.UpdatedUtf8Yaml);
 
         await Assert.That(fixedText).Contains("foo-bar-baz:");
@@ -1406,7 +1406,7 @@ public sealed partial class RuleInterfaceTests
 
         await Assert.That(diagnostic.Fix is not null).IsTrue();
 
-        var revalidated = FixEngine.ApplyAndRelint(engine, sourceBytes, "deny-write-all-fix.yml", [diagnostic]);
+        using var revalidated = FixEngine.ApplyAndRelint(engine, sourceBytes, "deny-write-all-fix.yml", [diagnostic]);
         var fixedText = Encoding.UTF8.GetString(revalidated.UpdatedUtf8Yaml);
 
         // Workflow-level write-all should be fixed to {} (drop permissions), not read-all
@@ -1435,7 +1435,7 @@ public sealed partial class RuleInterfaceTests
 
         await Assert.That(diagnostic.Fix is not null).IsTrue();
 
-        var revalidated = FixEngine.ApplyAndRelint(engine, sourceBytes, "deny-write-all-job-fix.yml", [diagnostic]);
+        using var revalidated = FixEngine.ApplyAndRelint(engine, sourceBytes, "deny-write-all-job-fix.yml", [diagnostic]);
         var fixedText = Encoding.UTF8.GetString(revalidated.UpdatedUtf8Yaml);
 
         // Job-level write-all should be fixed to {} (drop permissions)
@@ -1464,7 +1464,7 @@ public sealed partial class RuleInterfaceTests
 
         await Assert.That(diagnostic.Fix is not null).IsTrue();
 
-        var revalidated = FixEngine.ApplyAndRelint(engine, sourceBytes, "deny-read-all-fix.yml", [diagnostic]);
+        using var revalidated = FixEngine.ApplyAndRelint(engine, sourceBytes, "deny-read-all-fix.yml", [diagnostic]);
         var fixedText = Encoding.UTF8.GetString(revalidated.UpdatedUtf8Yaml);
 
         // Workflow-level read-all should be fixed to {}
@@ -1492,7 +1492,7 @@ public sealed partial class RuleInterfaceTests
 
         await Assert.That(diagnostic.Fix is not null).IsTrue();
 
-        var revalidated = FixEngine.ApplyAndRelint(engine, sourceBytes, "deny-read-all-job-fix.yml", [diagnostic]);
+        using var revalidated = FixEngine.ApplyAndRelint(engine, sourceBytes, "deny-read-all-job-fix.yml", [diagnostic]);
         var fixedText = Encoding.UTF8.GetString(revalidated.UpdatedUtf8Yaml);
 
         // Job-level read-all should be fixed to {} (drop permissions)
@@ -1525,7 +1525,7 @@ public sealed partial class RuleInterfaceTests
 
         await Assert.That(diagnostic.Fix is not null).IsTrue();
 
-        var revalidated = FixEngine.ApplyAndRelint(engine, sourceBytes, "job-timeout-minutes-required-fix.yml", [diagnostic], config);
+        using var revalidated = FixEngine.ApplyAndRelint(engine, sourceBytes, "job-timeout-minutes-required-fix.yml", [diagnostic], config);
         var fixedText = Encoding.UTF8.GetString(revalidated.UpdatedUtf8Yaml).Replace("\r\n", "\n", StringComparison.Ordinal);
 
         await Assert.That(fixedText.Contains("timeout-minutes: 15", StringComparison.Ordinal)).IsTrue();
@@ -1596,7 +1596,7 @@ public sealed partial class RuleInterfaceTests
 
         await Assert.That(diagnostic.Fix is not null).IsTrue();
 
-        var revalidated = FixEngine.ApplyAndRelint(engine, sourceBytes, "job-permissions-required-fix-runs-on.yml", [diagnostic]);
+        using var revalidated = FixEngine.ApplyAndRelint(engine, sourceBytes, "job-permissions-required-fix-runs-on.yml", [diagnostic]);
         var fixedText = Encoding.UTF8.GetString(revalidated.UpdatedUtf8Yaml).Replace("\r\n", "\n", StringComparison.Ordinal);
 
         var runsOnIndex = fixedText.IndexOf("runs-on: ubuntu-latest", StringComparison.Ordinal);
@@ -1843,7 +1843,7 @@ public sealed partial class RuleInterfaceTests
 
         await Assert.That(diagnostic.Fix is not null).IsTrue();
 
-        var revalidated = FixEngine.ApplyAndRelint(engine, sourceBytes, "run-env-fix-posix.yml", [diagnostic]);
+        using var revalidated = FixEngine.ApplyAndRelint(engine, sourceBytes, "run-env-fix-posix.yml", [diagnostic]);
         var fixedText = Encoding.UTF8.GetString(revalidated.UpdatedUtf8Yaml);
 
         await Assert.That(fixedText.Contains("${VERSION}", StringComparison.Ordinal)).IsTrue();

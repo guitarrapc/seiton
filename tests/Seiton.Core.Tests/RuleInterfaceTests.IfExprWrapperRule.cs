@@ -200,7 +200,7 @@ public sealed partial class RuleInterfaceTests
         await Assert.That(diagnostic.Fix is not null).IsTrue();
         await Assert.That(diagnostic.Fix!.Value.Description).Contains("${{");
 
-        var revalidated = FixEngine.ApplyAndRelint(engine, sourceBytes, "if-expr-wrapper-fix.yml", [diagnostic]);
+        using var revalidated = FixEngine.ApplyAndRelint(engine, sourceBytes, "if-expr-wrapper-fix.yml", [diagnostic]);
         var fixedText = Encoding.UTF8.GetString(revalidated.UpdatedUtf8Yaml).Replace("\r\n", "\n", StringComparison.Ordinal);
 
         await Assert.That(fixedText).Contains("${{ github.event_name == 'push' }}");
@@ -263,7 +263,7 @@ public sealed partial class RuleInterfaceTests
 
         await Assert.That(diagnostic.Fix is not null).IsTrue();
         // Apply fix and verify the result doesn't have leftover quotes around ${{ }}
-        var revalidated = FixEngine.ApplyAndRelint(engine, sourceBytes, "test.yaml", [diagnostic]);
+        using var revalidated = FixEngine.ApplyAndRelint(engine, sourceBytes, "test.yaml", [diagnostic]);
         var fixedText = Encoding.UTF8.GetString(revalidated.UpdatedUtf8Yaml).Replace("\r\n", "\n", StringComparison.Ordinal);
 
         await Assert.That(fixedText).Contains("${{ github.event_name == 'push' }}");

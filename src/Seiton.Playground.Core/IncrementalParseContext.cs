@@ -1095,9 +1095,7 @@ public sealed class IncrementalParseContext
         _lintEngine ??= new LintEngine();
 
         // Parse incrementally (D-5b/5c)
-#pragma warning disable CA2000 // ParseResult with ownsArena:false — arena lifecycle managed by this context
-        var parseResult = ParseIncrementally(utf8Yaml, filePath);
-#pragma warning restore CA2000
+        using var parseResult = ParseIncrementally(utf8Yaml, filePath);
 
         // Build skip mask from reused jobs + cached diagnostics
         var jobCount = parseResult.Workflow?.Jobs.Count ?? 0;

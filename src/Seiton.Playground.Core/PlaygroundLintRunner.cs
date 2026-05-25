@@ -100,9 +100,7 @@ public static class PlaygroundLintRunner
             else
             {
                 // D-5b/5c: Use incremental parse to skip unchanged root sections and jobs
-#pragma warning disable CA2000 // ParseResult with ownsArena:false — arena lifecycle managed by IncrementalParseContext
-                var parseResult = IncrementalCtx.ParseIncrementally(utf8Yaml, filePath);
-#pragma warning restore CA2000
+                using var parseResult = IncrementalCtx.ParseIncrementally(utf8Yaml, filePath);
 
                 // D-5d: Build skip mask — reused jobs with cached diagnostics skip lint
                 var jobCount = parseResult.Workflow?.Jobs.Count ?? 0;

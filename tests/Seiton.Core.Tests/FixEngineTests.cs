@@ -287,7 +287,7 @@ public sealed class FixEngineTests
         var engine = new LintEngine([new DenyWriteAllRule()]);
         using var before = engine.Check(source, "revalidate-deny.yml");
 
-        var revalidated = FixEngine.ApplyAndRelint(engine, source, "revalidate-deny.yml", before.FixableDiagnostics);
+        using var revalidated = FixEngine.ApplyAndRelint(engine, source, "revalidate-deny.yml", before.FixableDiagnostics);
 
         await Assert.That(revalidated.Before.Diagnostics.Any(x => x.RuleId == "deny-write-all")).IsTrue();
         await Assert.That(revalidated.After.Diagnostics.Any(x => x.RuleId == "deny-write-all")).IsFalse();
@@ -349,7 +349,7 @@ public sealed class FixEngineTests
         var engine = new LintEngine([new DenyWriteAllRule()]);
         using var before = engine.Check(source, "revalidate-expected-pass.yml");
 
-        var revalidated = FixEngine.ApplyAndRelint(
+        using var revalidated = FixEngine.ApplyAndRelint(
                 engine,
                 source,
                 "revalidate-expected-pass.yml",

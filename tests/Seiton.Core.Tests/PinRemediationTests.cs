@@ -114,7 +114,7 @@ public sealed class PinRemediationTests
             new FixPinningConfig { EnableNetwork = true }, new FixImagesConfig { EnableNetwork = true }, new NetworkConfig());
 
         var remediation = await remediationEngine.RemediateAsync(lintResult.Diagnostics, source);
-        var revalidated = FixEngine.ApplyAndRelint(
+        using var revalidated = FixEngine.ApplyAndRelint(
             lintEngine,
             source,
             "pin-remediation-revalidate.yml",

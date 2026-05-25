@@ -6,7 +6,6 @@ namespace Seiton.Core.Tests;
 
 public sealed partial class RuleInterfaceTests
 {
-
     [Test]
     public async Task RuleRegression_UnsoundConditionRule_TableDriven()
     {
@@ -52,58 +51,6 @@ public sealed partial class RuleInterfaceTests
 
         await AssertRuleCases(new UnsoundConditionRule(), "unsound-condition", cases);
     }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 
