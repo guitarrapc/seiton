@@ -1095,7 +1095,7 @@ public sealed class IncrementalParseContext
         _lintEngine ??= new LintEngine();
 
         // Parse incrementally (D-5b/5c)
-        var parseResult = ParseIncrementally(utf8Yaml, filePath);
+        using var parseResult = ParseIncrementally(utf8Yaml, filePath);
 
         // Build skip mask from reused jobs + cached diagnostics
         var jobCount = parseResult.Workflow?.Jobs.Count ?? 0;

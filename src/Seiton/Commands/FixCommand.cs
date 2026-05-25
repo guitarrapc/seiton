@@ -533,7 +533,7 @@ internal static class FixCommand
     /// edits overlap or share the same offset with an already-selected edit are deferred
     /// to the next pass. Uses a greedy offset-ordered approach.
     /// </summary>
-    private static Diagnostic[] SelectNonConflictingBatch(Diagnostic[] fixableDiagnostics)
+    internal static Diagnostic[] SelectNonConflictingBatch(Diagnostic[] fixableDiagnostics)
     {
         if (fixableDiagnostics.Length <= 1)
             return fixableDiagnostics;

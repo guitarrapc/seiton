@@ -72,6 +72,8 @@ dotnet_diagnostic.CA2016.severity = warning
 dotnet_diagnostic.CA1805.severity = warning
 # CA1834: Consider using 'StringBuilder.Append(char)' when applicable
 dotnet_diagnostic.CA1834.severity = warning
+# CA2000: Dispose objects before losing scope
+dotnet_diagnostic.CA2000.severity = warning
 # CS0618: 'member' is obsolete: 'text'
 dotnet_diagnostic.CS0618.severity = error
 
@@ -130,3 +132,11 @@ dotnet_diagnostic.IDE0090.severity = none # Simplify new expression
 dotnet_diagnostic.xUnit3003.severity = none # It should include a public constructor for source information.
 dotnet_diagnostic.TUnit0301.severity = error # Consider using concrete types instead of tuples.
 dotnet_diagnostic.TUnitAssertions0005.severity = error # should not be used with a constant value
+
+# =================
+# Test Projects
+# =================
+[tests/**/*.cs]
+# CA2000: Tests use 'out var arena' and short-lived IDisposable patterns where
+# disposal is managed by test infrastructure or irrelevant for test scope.
+dotnet_diagnostic.CA2000.severity = none

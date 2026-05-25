@@ -100,7 +100,7 @@ public static class PlaygroundLintRunner
             else
             {
                 // D-5b/5c: Use incremental parse to skip unchanged root sections and jobs
-                var parseResult = IncrementalCtx.ParseIncrementally(utf8Yaml, filePath);
+                using var parseResult = IncrementalCtx.ParseIncrementally(utf8Yaml, filePath);
 
                 // D-5d: Build skip mask — reused jobs with cached diagnostics skip lint
                 var jobCount = parseResult.Workflow?.Jobs.Count ?? 0;
