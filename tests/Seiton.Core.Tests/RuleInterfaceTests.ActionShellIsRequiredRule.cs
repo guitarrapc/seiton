@@ -1,28 +1,62 @@
-﻿using Seiton.Core.Linting.Rules;
+﻿using System.Text;
+using Seiton.Core.Linting;
+using Seiton.Core.Linting.Rules;
+using Seiton.Core.Parsing;
 
 namespace Seiton.Core.Tests;
 
 public sealed partial class RuleInterfaceTests
 {
+    [Test]
+    public async Task RuleRegression_ActionShellIsRequiredRule_ActionMetadataRunWithoutShell_ReportsDiagnostic()
+    {
+        var yaml = NormalizeYaml(
+            """
+            name: Sample action
+            runs:
+                using: composite
+                steps:
+                    - run: echo hello
+            """);
+
+        using var result = new LintEngine([new ActionShellIsRequiredRule()])
+            .Check(Encoding.UTF8.GetBytes(yaml), "action.yml");
+        var diagnostics = result.Diagnostics.Where(x => x.RuleId == "action-shell-is-required").ToArray();
+
+        await Assert.That(result.DocumentKind).IsEqualTo(DocumentKind.ActionMetadata);
+        await Assert.That(diagnostics).Count().IsEqualTo(1);
+        await Assert.That(diagnostics[0].Message).IsEqualTo("shell is required if run is set");
+        await Assert.That(diagnostics[0].Location.StartLine).IsEqualTo(5);
+    }
 
     [Test]
-    public async Task RuleRegression_ActionShellIsRequiredRule_TableDriven()
+    public async Task RuleRegression_ActionShellIsRequiredRule_ActionMetadataRunWithShell_HasNoDiagnostic()
+    {
+        var yaml = NormalizeYaml(
+            """
+            name: Sample action
+            runs:
+                using: composite
+                steps:
+                    - run: echo hello
+                      shell: bash
+            """);
+
+        using var result = new LintEngine([new ActionShellIsRequiredRule()])
+            .Check(Encoding.UTF8.GetBytes(yaml), ".github/actions/sample/action.yml");
+        var diagnostics = result.Diagnostics.Where(x => x.RuleId == "action-shell-is-required").ToArray();
+
+        await Assert.That(result.DocumentKind).IsEqualTo(DocumentKind.ActionMetadata);
+        await Assert.That(diagnostics).IsEmpty();
+    }
+
+    [Test]
+    public async Task RuleRegression_ActionShellIsRequiredRule_WorkflowInputs_NoDiagnostics()
     {
         var cases = new[]
         {
             new RuleCase(
-                        "ok-action-run-with-shell",
-                        """
-                        name: Sample action
-                        runs:
-                            using: composite
-                            steps:
-                                - run: echo hello
-                                    shell: bash
-                        """,
-                        []),
-                        new RuleCase(
-                        "ok-run-with-shell",
+                "ok-run-with-shell",
             """
             on: push
             jobs:
@@ -34,7 +68,7 @@ public sealed partial class RuleInterfaceTests
             """,
             []),
             new RuleCase(
-            "ok-action-step-no-run",
+            "ok-workflow-step-no-run",
             """
             on: push
             jobs:
