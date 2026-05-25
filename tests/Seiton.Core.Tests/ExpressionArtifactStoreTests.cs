@@ -166,6 +166,47 @@ public sealed class ExpressionArtifactStoreTests
         await Assert.That(found).IsFalse();
     }
 
+    [Test]
+    public async Task Store_TryGet_ReturnsFalse_WhenHashNotPresent()
+    {
+        var yaml = "on: push\njobs:\n  build:\n    runs-on: ubuntu-latest\n    steps:\n      - run: echo hi\n"u8.ToArray();
+
+        var store = new ExpressionArtifactStore(4);
+        var expressionBody = "github.sha"u8;
+        var absentHash = 9999L;
+
+        var found = store.TryGet(absentHash, expressionBody, yaml, out _);
+        await Assert.That(found).IsFalse();
+    }
+
+    [Test]
+    public async Task Store_Add_DuplicateHash_FirstWins()
+    {
+        var yaml = "on: push\njobs:\n  build:\n    runs-on: ubuntu-latest\n    steps:\n      - run: echo ${{ github.sha }}\n"u8.ToArray();
+
+        var store = new ExpressionArtifactStore(4);
+        var expressionBody = "github.sha"u8;
+        var bodyOffset = yaml.AsSpan().IndexOf(expressionBody);
+        var contentHash = ComputeExpressionHash(expressionBody);
+
+        var parseResult1 = ExpressionParser.Parse(expressionBody);
+        var location1 = new TextRange(bodyOffset, expressionBody.Length, 6, 22, 6, 32);
+        store.Add(new ExpressionArtifact(contentHash, location1, ExpressionValidationContext.StepRun, parseResult1));
+
+        // Add again with same hash but a different context — first should win
+        var location2 = new TextRange(bodyOffset, expressionBody.Length, 6, 22, 6, 32);
+        store.Add(new ExpressionArtifact(contentHash, location2, ExpressionValidationContext.JobIf, parseResult1));
+
+        // Gather all span-based results before any await
+        var count = store.Count;
+        var found = store.TryGet(contentHash, expressionBody, yaml, out var retrieved);
+        var nodesLength = retrieved.Nodes.Length;
+
+        await Assert.That(count).IsEqualTo(1);
+        await Assert.That(found).IsTrue();
+        await Assert.That(nodesLength).IsEqualTo(parseResult1.Nodes.Length);
+    }
+
     private static long ComputeExpressionHash(ReadOnlySpan<byte> expression)
     {
         return (long)XxHash64.Hash(expression);

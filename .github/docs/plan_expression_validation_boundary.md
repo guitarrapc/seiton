@@ -584,8 +584,9 @@ linter や custom rule が expression を再 parse しなくてもよい方向�
 ### 実施結果
 
 1. **`ExpressionArtifact` / `ExpressionArtifactStore`** — `src/Seiton.Core/Parsing/ExpressionArtifact.cs` に導入。
-   content-hash ベースで expression parse 結果を保持し、linter が再 parse なしに参照可能。
-2. **`ParseResultData.ExpressionArtifacts`** — parser の parse 結果に artifact store を格納。
+   content-hash ベースで expression parse 結果を保持する store として導入。linter は store が添付された場合に再 parse なしで参照できる。
+2. **`ParseResultData.ExpressionArtifacts`** — parser の parse 結果に optional な artifact store hook を追加。
+   現時点の production parser はまだこの hook を自動 populate しない。
 3. **`LintConfig.ExpressionArtifacts`** — linter 側で artifact store を受け取る property を追加。
    `LintConfig.ParseExpression` が artifact store を content-hash cache より先に参照する fast path を提供。
 4. **`ExpressionArtifactStoreTests`** — store の add/lookup/miss/capacity と不正 range fallback を 9 tests で検証。
@@ -734,8 +735,8 @@ Seiton.Core を parser/linter library として出したときに、利用者が
    呼び出し元が `WorkflowParser.Parse` で先行 parse した結果を linter に渡せる。
 2. **`ExpressionSemanticModel`** — `LintConfig.SemanticModel` 経由で custom rule からアクセス可能。
    context availability / function availability / diagnostic formatting を提供。
-3. **`ExpressionArtifactStore`** — `ParseResultData.ExpressionArtifacts` 経由で parser→linter artifact 共有。
-   `LintConfig.ParseExpression` が artifact store を content-hash cache より先に参照。
+3. **`ExpressionArtifactStore`** — `ParseResultData.ExpressionArtifacts` 経由の parser→linter 共有 hook を追加。
+   `LintConfig.ParseExpression` は artifact store が添付されている場合に content-hash cache より先に参照し、未添付時は既存 cache にフォールバックする。
 4. **`PublicApiContractTests`** — parser-only / linter-only / combined の 3 use caseに加え、pre-parsed lint の document-kind preservation を含む 12 tests で検証。
 
 ### 完了条件

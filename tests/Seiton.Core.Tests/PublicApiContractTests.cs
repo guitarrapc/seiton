@@ -84,15 +84,28 @@ public sealed class PublicApiContractTests
     }
 
     [Test]
-    public async Task ParseResult_WithConfig_RespectsRuleSettings()
+    public async Task ParseResult_WithConfig_DisablingRule_SuppressesDiagnostics()
     {
         var yaml = "on: push\njobs:\n  build:\n    runs-on: ubuntu-latest\n    steps:\n      - run: echo ${{ unknownFunc() }}\n"u8.ToArray();
 
         using var parseResult = WorkflowParser.Parse(yaml, "api.yml");
 
-        // Lint with default config
-        using var lintResult = new LintEngine().Check(parseResult, yaml, "api.yml", config: null);
-        await Assert.That(lintResult.Diagnostics.Length).IsGreaterThan(0);
+        // Lint with default config — should produce diagnostics
+        using var defaultResult = new LintEngine().Check(parseResult, yaml, "api.yml", config: null);
+        var baseCount = defaultResult.Diagnostics.Length;
+        await Assert.That(baseCount).IsGreaterThan(0);
+
+        // Lint with job-timeout rule disabled — should have fewer diagnostics
+        var config = new LintConfig
+        {
+            Rules = new Dictionary<string, RuleConfig>
+            {
+                ["job-timeout-minutes-required"] = new RuleConfig { Enabled = false },
+            },
+        };
+        using var parseResult2 = WorkflowParser.Parse(yaml, "api.yml");
+        using var configResult = new LintEngine().Check(parseResult2, yaml, "api.yml", config: config);
+        await Assert.That(configResult.Diagnostics.Length).IsLessThan(baseCount);
     }
 
     [Test]

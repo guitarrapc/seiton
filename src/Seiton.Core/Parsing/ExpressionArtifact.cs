@@ -1,7 +1,7 @@
 ﻿namespace Seiton.Core.Parsing;
 
 /// <summary>
-/// A pre-parsed expression artifact produced by the parser during YAML parsing.
+/// A pre-parsed expression artifact associated with an expression occurrence.
 /// Pairs an expression occurrence location with its cached parse result so downstream
 /// consumers (linter, custom rules) can avoid re-parsing.
 /// </summary>
@@ -12,13 +12,15 @@ internal readonly record struct ExpressionArtifact(
     ExpressionParseResult ParseResult);
 
 /// <summary>
-/// Stores pre-parsed expression artifacts produced by the parser.
+/// Stores pre-parsed expression artifacts for downstream reuse.
 /// Keyed by content hash (xxHash64) with the same algorithm used by <see cref="Linting.LintConfig"/>.
 /// </summary>
 /// <remarks>
-/// This store is opt-in: the parser only populates it when expression artifacts are requested.
-/// When not populated, linter falls back to its existing content-hash cache.
-/// The store is populated during parsing via <see cref="Add"/> and treated as immutable afterward.
+/// This store is an optional integration hook for pre-parsed expression artifacts.
+/// The current production parser does not populate it automatically; when absent, the linter falls back
+/// to its existing content-hash cache.
+/// If a caller or future parser path populates the store via <see cref="Add"/>, treat it as immutable
+/// after population completes.
 /// It is safe to share across rules for concurrent reads only after parsing completes;
 /// concurrent reads and writes are not supported.
 /// </remarks>

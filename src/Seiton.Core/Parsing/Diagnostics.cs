@@ -44,9 +44,9 @@ internal readonly record struct ParseResultData(
     bool HasFatalError)
 {
     /// <summary>
-    /// Pre-parsed expression artifacts produced during parsing.
-    /// Populated only when the parser is invoked with artifact storage enabled.
-    /// When present, the linter can consume these instead of re-parsing expressions.
+    /// Optional pre-parsed expression artifact store.
+    /// The current production parser leaves this unset; when a caller attaches a populated store,
+    /// the linter can consume it instead of re-parsing expressions.
     /// </summary>
     internal ExpressionArtifactStore? ExpressionArtifacts { get; init; }
 }

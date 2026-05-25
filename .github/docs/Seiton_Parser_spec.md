@@ -1094,7 +1094,7 @@ Integration between parser and linter is fixed as follows.
 - Linter consumes `ParseResult` from parser as its sole structural input.
 - Parser remains reusable without rule execution.
 - Rule-originated diagnostics may set `RuleId`; parser-originated diagnostics do not require `RuleId`.
-- Parser provides expression artifacts (occurrence metadata, expression AST, site information) that the linter and custom rules can consume without re-parsing expressions.
+- Parser output reserves an optional expression-artifact hook (occurrence metadata, expression AST, site information) that the linter and custom rules can consume without re-parsing expressions when present. When the hook is absent, downstream consumers fall back to their existing expression parse caches.
 
 Detailed linter runtime behavior is defined in `Seiton_Linter_spec.md`.
 

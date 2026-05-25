@@ -76,7 +76,7 @@ Boundary policy:
 - Linter must consume parser outputs instead of reparsing workflow structure.
 - Rule suppression/exclusion belongs to linter contract, not parser contract.
 - Expression validation is split by domain: the parser owns expression-language intrinsic checks (syntax, function signatures, operator-local type validity); the linter owns GitHub Actions context-dependent checks (context availability, function availability by workflow position, dynamic property existence, workflow-site-aware type suitability).
-- The parser provides structured expression artifacts (AST, occurrence metadata, site information) that the linter consumes without re-parsing expressions.
+- The parser/linter boundary reserves an optional structured expression-artifact hook (AST, occurrence metadata, site information). When such artifacts are attached to parser output, the linter consumes them without re-parsing expressions; otherwise it falls back to its existing expression parse cache.
 
 ---
 
