@@ -29,7 +29,7 @@ The Seiton Parser Go implementation provides:
 3. **Hand-written recursive descent parser** converting `yaml.Node` into a typed AST
 4. **Expression parser** (separate recursive descent parser for `${{ }}` expressions)
 5. **Expression-language intrinsic validation** (function existence, arity, operator-local type checks)
-6. **Expression semantic analyzer** with type inference and context validation (transitional: context-dependent checks will migrate to linter)
+6. **Expression semantic analyzer** with type inference and context validation (transitional: Go implementation still performs context-dependent checks in parser)
 7. **Generated data** for webhooks, context availability, and popular actions
 8. **Input document-kind classification** (workflow vs action metadata) using path-hint candidate + structure-confirm finalization
 

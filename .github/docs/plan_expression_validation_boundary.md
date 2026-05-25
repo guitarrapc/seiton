@@ -439,12 +439,12 @@ linter は parser 成果物と workflow AST を受け取り、次を担当する
 | dynamic-property | property "{prop}" is not defined in {contextLabel}... | ValidatePropertyAccessWithOverrides | **linter** |
 | dynamic-property | configuration variable name '{name}' must not start with 'GITHUB_' | ValidateVarsNamingConvention | **parser** |
 | dynamic-property | configuration variable name '{name}' contains invalid characters | ValidateVarsNamingConvention | **parser** |
-| type-suitability | {type} value in ${{ }} will be converted to string "[Object]" | CheckTypeForTemplate | **linter** (transitional: parser) |
-| type-suitability | array value in ${{ }} will be converted to string "[Array]" | CheckTypeForTemplate | **linter** (transitional: parser) |
-| type-suitability | null value in ${{ }} will be converted to empty string | CheckTypeForTemplate | **linter** (transitional: parser) |
-| type-suitability | {type} value cannot be expanded as mapping for "env:" section | CheckEnvMappingType | **linter** (transitional: parser) |
-| type-suitability | type of expression at "runs-on" must be string or array but found type "{type}" | CheckRunsOnType | **linter** (transitional: parser) |
-| type-suitability | type of expression at "{sectionName}" must be object but found type {type} | CheckExpectedObjectType | **linter** (transitional: parser) |
+| type-suitability | {type} value in ${{ }} will be converted to string "[Object]" | CheckTypeForTemplate | **linter** |
+| type-suitability | array value in ${{ }} will be converted to string "[Array]" | CheckTypeForTemplate | **linter** |
+| type-suitability | null value in ${{ }} will be converted to empty string | CheckTypeForTemplate | **linter** |
+| type-suitability | {type} value cannot be expanded as mapping for "env:" section | CheckEnvMappingType | **linter** |
+| type-suitability | type of expression at "runs-on" must be string or array but found type "{type}" | CheckRunsOnType | **linter** |
+| type-suitability | type of expression at "{sectionName}" must be object but found type {type} | CheckExpectedObjectType | **linter** |
 
 #### Linter 側 (ExprUndefinedVarRule)
 
@@ -477,7 +477,7 @@ linter は parser 成果物と workflow AST を受け取り、次を担当する
 | context-availability | - | ✓ (既に linter 専任) | なし | - (完了) |
 | function-availability | - | ✓ (既に linter 専任) | なし | - (完了) |
 | dynamic-property existence | 二段階残置 → linter | ✓ | 高 | 1st |
-| type-suitability | 二段階残置 → linter | ✓ | 高 | 2nd |
+| type-suitability | - | ✓ (既に linter 専任) | なし | - (完了) |
 | operator-with-overrides | 二段階残置 → linter | ✓ | 高 | 3rd |
 
 **重要な発見**: context-availability と function-availability は既に parser 側で発行されておらず linter 専任である。実質的に移行が必要なのは dynamic-property / type-suitability / operator-with-overrides の 3 カテゴリのみ。
@@ -564,8 +564,17 @@ linter や custom rule が expression を再 parse しなくてもよい方向�
 
 ### 完了条件
 
-- linter 側が parser 成果物を使う migration path を持つ
-- custom rule / public API へ展開可能な内部 contract が見える
+- linter 側が parser 成果物を使う migration path を持つ ✅
+- custom rule / public API へ展開可能な内部 contract が見える ✅
+
+### 実施結果
+
+1. **`ExpressionArtifact` / `ExpressionArtifactStore`** — `src/Seiton.Core/Parsing/ExpressionArtifact.cs` に導入。
+   content-hash ベースで expression parse 結果を保持し、linter が再 parse なしに参照可能。
+2. **`ParseResultData.ExpressionArtifacts`** — parser の parse 結果に artifact store を格納。
+3. **`LintConfig.ExpressionArtifacts`** — linter 側で artifact store を受け取る property を追加。
+   `LintConfig.ParseExpression` が artifact store を content-hash cache より先に参照する fast path を提供。
+4. **`ExpressionArtifactStoreTests`** — store の add/lookup/miss/capacity を 4 test で検証。
 
 ---
 
@@ -591,13 +600,21 @@ GitHub Actions 文脈依存の semantic validation を linter 層へ寄せるた
 
 ### 完了条件
 
-- linter 側に semantic ownership の受け皿ができる
-- rule facade から利用できる
+- linter 側に semantic ownership の受け皿ができる ✅
+- rule facade から利用できる ✅
+
+### 実施結果
+
+1. **`ExpressionSemanticModel`** — `src/Seiton.Core/Linting/ExpressionSemanticModel.cs` に導入（120 行）。
+   check primitives: `IsContextAvailable`, `IsBuiltinContext`, `IsStatusCheckFunction`, `IsHashFilesFunction`, `IsStepLevel`, `IsIfContext`, `FormatAvailableContexts`。
+2. **`LintConfig.SemanticModel`** — rule から `Config.SemanticModel` 経由でアクセス可能。
+3. **`ExprUndefinedVarRule` の model 利用** — `VisitExpressionNode` が `Config.SemanticModel` を使用して context/function availability を検証。rule 内のローカル重複メソッドを削除。
+4. **`ExpressionSemanticModelTests`** — 19 tests で全 API を検証（case-insensitive 含む）。
 
 ### 性能条件
 
-- lint benchmark で allocation 改善または同等
-- parser benchmark に悪影響がない
+- lint benchmark で allocation 改善または同等 ✅ (327.41 KB unchanged)
+- parser benchmark に悪影響がない ✅
 
 ---
 
@@ -652,6 +669,16 @@ Phase 5 で実施した具体的変更:
 - `ExpressionTests` — `ParseAndValidate_UnknownGithubProperty` / `FromJsonObjectMemberUndefinedProperty` を parser がプロパティ診断を出さないことを確認するテストに変更。`FromJsonObjectIndexUndefinedProperty` は operator-local として parser が引き続き検証。
 - `ExpressionBoundaryTests` — 既存テストがそのまま pass。
 - `ActionlintCompatTests` — `special_function_availability` snapshot が case-insensitive 修正後に pass。
+
+#### 4. workflow site aware type suitability — 確認（既に linter-only）
+- `CheckTemplateType` / `CheckTemplateTypeWithOverrides` / `CheckEnvMappingType` / `CheckRunsOnType` / `CheckExpectedObjectType` は `ExpressionSemanticAnalyzer.cs` に定義されているが、呼び出し元は全て `ExprUndefinedVarRule`（linter 層）のみ。
+- parser（`WorkflowParser.cs` / `ExpressionParser.cs`）は一切これらを呼ばない。
+- `CheckTemplateType` を `public` → `internal` に変更（外部 consumer が parser API 経由でアクセスする必要なし）。
+- ExpressionBoundaryTests に type-suitability 境界テストを追加:
+  - `ParserOnly_ObjectTemplateType_DoesNotEmitDiagnostic` → parser は [Object] 変換警告を出さない
+  - `Lint_ObjectTemplateType_EmitsDiagnostic` → linter が検出する
+  - `ParserOnly_EnvMappingNonObject_DoesNotEmitDiagnostic` → parser は env mapping 型エラーを出さない
+  - `Lint_EnvMappingNonObject_EmitsDiagnostic` → linter が検出する
 
 ExpressionBoundaryTests (Phase 2) で確認済み:
 - `ParserOnly_ContextAvailability_DoesNotEmitDiagnostic` → parser は context availability を検証しない

@@ -92,7 +92,7 @@ The linter owns the following expression semantic checks via dedicated rules (pr
 
 The parser provides expression artifacts (AST, occurrence metadata, site information) that the linter consumes without re-parsing. The parser also provides expression-language intrinsic diagnostics (syntax errors, unknown functions, arity mismatches, operator-local type errors) that are independent of workflow context.
 
-> **Transitional note**: The current implementation performs context-dependent checks in both the parser and the linter (with deduplication). Future phases will migrate context-dependent validation exclusively to the linter while preserving identical diagnostic behavior.
+> **Implementation note**: Context-dependent expression validation (context availability, function availability, dynamic property, type suitability) is performed exclusively by the linter. The parser emits only expression-language intrinsic diagnostics. Deduplication handles any overlap in operator-local checks that both layers may emit.
 
 ---
 

@@ -111,7 +111,7 @@ public static class ExpressionSemanticAnalyzer
     /// Object/array/null types do not produce meaningful string output when interpolated.
     /// Returns the diagnostic if a problem is detected, or null otherwise.
     /// </summary>
-    public static Diagnostic? CheckTemplateType(
+    internal static Diagnostic? CheckTemplateType(
         ExpressionParseResult parseResult,
         ReadOnlySpan<byte> expressionUtf8,
         TextRange expressionLocation)

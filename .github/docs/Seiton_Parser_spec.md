@@ -897,7 +897,7 @@ The expression AST is traversed using the `VisitExprNode(node, parent, entering)
 > - **Parser-owned (expression-language intrinsic)**: Function existence, arity/overload matching, operator-local type validity — these do not depend on workflow position or dynamic context. The parser emits diagnostics for these unconditionally.
 > - **Linter-owned (GitHub Actions context-dependent)**: Context availability, function availability by workflow position, dynamic property existence, workflow-site-aware type suitability — these depend on the workflow AST and dynamic context resolution. The linter owns these diagnostics via `ExprUndefinedVarRule` and related rules.
 >
-> The current implementation performs both categories within the parser (§7.2–§7.6), with the linter re-evaluating context-dependent checks using override-aware type inference. This is the transitional state; future phases will migrate context-dependent validation fully to the linter layer while preserving identical diagnostic behavior.
+> The current C# implementation reflects this boundary: the parser emits only expression-language intrinsic diagnostics (§7.1–§7.3), while the linter performs all context-dependent checks using override-aware type inference. Deduplication handles operator-local overlap where both layers may emit equivalent diagnostics.
 
 ### 7.1 Built-in Function Signatures
 
@@ -1085,7 +1085,7 @@ The following are intentionally outside this document and are specified in `Seit
   - Dynamic property existence and strictness (matrix, steps, needs, inputs)
   - Workflow-site-aware type suitability
 
-> **Transitional note**: The current implementation still performs context-dependent checks within the parser (§7.2–§7.6). These diagnostics are duplicated and overridden by the linter's `ExprUndefinedVarRule`. Future phases will migrate context-dependent validation to the linter while preserving diagnostic parity.
+> **Implementation note**: Context-dependent expression checks are performed exclusively by the linter's `ExprUndefinedVarRule`. The parser emits only expression-language intrinsic diagnostics. Operator-local type checks (compare, index, member-access type) may overlap between parser and linter; deduplication eliminates duplicates in the final output.
 
 ### 8.3 Integration Contract
 

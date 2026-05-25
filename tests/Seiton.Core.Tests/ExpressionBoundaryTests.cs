@@ -140,6 +140,54 @@ public sealed class ExpressionBoundaryTests
         await Assert.That(result.Diagnostics.Any(d => d.Message.Contains("is not allowed here", StringComparison.Ordinal))).IsTrue();
     }
 
+    // --- Type-suitability: parser does NOT emit these diagnostics (linter-owned) ---
+
+    [Test]
+    public async Task ParserOnly_ObjectTemplateType_DoesNotEmitDiagnostic()
+    {
+        // fromJson returning object in ${{ }} - parser should NOT warn about [Object] conversion
+        var yaml = "on: push\njobs:\n  build:\n    runs-on: ubuntu-latest\n    steps:\n      - run: echo ${{ fromJson('{\"a\":1}') }}\n"u8.ToArray();
+
+        var result = WorkflowParser.ParseDirect(yaml, "boundary.yml", out var arena);
+
+        await Assert.That(result.Diagnostics.Any(d => d.Message.Contains("[Object]", StringComparison.Ordinal))).IsFalse();
+        arena?.Dispose();
+    }
+
+    [Test]
+    public async Task Lint_ObjectTemplateType_EmitsDiagnostic()
+    {
+        // fromJson returning object in ${{ }} - linter MUST warn
+        var yaml = "on: push\njobs:\n  build:\n    runs-on: ubuntu-latest\n    steps:\n      - run: echo ${{ fromJson('{\"a\":1}') }}\n"u8.ToArray();
+
+        using var result = new LintEngine().Check(yaml, "boundary.yml");
+
+        await Assert.That(result.Diagnostics.Any(d => d.Message.Contains("[Object]", StringComparison.Ordinal))).IsTrue();
+    }
+
+    [Test]
+    public async Task ParserOnly_EnvMappingNonObject_DoesNotEmitDiagnostic()
+    {
+        // string literal in env: ${{ }} - parser should NOT warn about non-object env
+        var yaml = "on: push\njobs:\n  build:\n    runs-on: ubuntu-latest\n    env: ${{ 'hello' }}\n    steps:\n      - run: echo hi\n"u8.ToArray();
+
+        var result = WorkflowParser.ParseDirect(yaml, "boundary.yml", out var arena);
+
+        await Assert.That(result.Diagnostics.Any(d => d.Message.Contains("env:", StringComparison.Ordinal) && d.Message.Contains("mapping", StringComparison.Ordinal))).IsFalse();
+        arena?.Dispose();
+    }
+
+    [Test]
+    public async Task Lint_EnvMappingNonObject_EmitsDiagnostic()
+    {
+        // string literal in env: ${{ }} - linter MUST warn
+        var yaml = "on: push\njobs:\n  build:\n    runs-on: ubuntu-latest\n    env: ${{ 'hello' }}\n    steps:\n      - run: echo hi\n"u8.ToArray();
+
+        using var result = new LintEngine().Check(yaml, "boundary.yml");
+
+        await Assert.That(result.Diagnostics.Any(d => d.Message.Contains("mapping", StringComparison.Ordinal))).IsTrue();
+    }
+
     // --- Deduplication: lint result must not contain duplicate diagnostics ---
 
     [Test]
