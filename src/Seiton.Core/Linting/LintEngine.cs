@@ -100,7 +100,9 @@ public sealed class LintEngine
     /// </summary>
     /// <param name="parseResult">
     /// A parse result obtained from <see cref="WorkflowParser.Parse(byte[], string)"/>.
-    /// The parse result must not be disposed. Ownership remains with the caller.
+    /// Ownership remains with the caller. Keep <paramref name="parseResult"/> alive and undisposed
+    /// until you are finished reading from and disposing the returned <see cref="LintResult"/>,
+    /// because the lint result borrows the parse result's arena for string/AST resolution.
     /// </param>
     /// <param name="utf8Yaml">The original UTF-8 YAML bytes (must be the same bytes used for parsing).</param>
     /// <param name="filePath">

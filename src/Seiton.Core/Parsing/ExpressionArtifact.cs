@@ -48,7 +48,7 @@ internal sealed class ExpressionArtifactStore
             // Bounds guard: verify the stored location is within source
             var start = artifact.Location.Start;
             var length = artifact.Location.Length;
-            if ((uint)start + (uint)length > (uint)source.Length)
+            if (start < 0 || length < 0 || start > source.Length || length > source.Length - start)
             {
                 result = default;
                 return false;

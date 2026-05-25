@@ -132,6 +132,40 @@ public sealed class ExpressionArtifactStoreTests
         await Assert.That(found).IsFalse();
     }
 
+    [Test]
+    public async Task Store_TryGet_ReturnsFalse_WhenLocationStartIsNegative()
+    {
+        var yaml = "short"u8.ToArray();
+
+        var store = new ExpressionArtifactStore(4);
+        var expressionBody = "github.sha"u8;
+        var contentHash = ComputeExpressionHash(expressionBody);
+
+        var invalidLocation = new TextRange(-1, 1, 1, 1, 1, 2);
+        var parseResult = ExpressionParser.Parse(expressionBody);
+        store.Add(contentHash, new ExpressionArtifact(contentHash, invalidLocation, ExpressionValidationContext.StepRun, parseResult));
+
+        var found = store.TryGet(contentHash, expressionBody, yaml, out _);
+        await Assert.That(found).IsFalse();
+    }
+
+    [Test]
+    public async Task Store_TryGet_ReturnsFalse_WhenLocationLengthIsNegative()
+    {
+        var yaml = "short"u8.ToArray();
+
+        var store = new ExpressionArtifactStore(4);
+        var expressionBody = "github.sha"u8;
+        var contentHash = ComputeExpressionHash(expressionBody);
+
+        var invalidLocation = new TextRange(0, -1, 1, 1, 1, 1);
+        var parseResult = ExpressionParser.Parse(expressionBody);
+        store.Add(contentHash, new ExpressionArtifact(contentHash, invalidLocation, ExpressionValidationContext.StepRun, parseResult));
+
+        var found = store.TryGet(contentHash, expressionBody, yaml, out _);
+        await Assert.That(found).IsFalse();
+    }
+
     private static long ComputeExpressionHash(ReadOnlySpan<byte> expression)
     {
         return (long)XxHash64.Hash(expression);

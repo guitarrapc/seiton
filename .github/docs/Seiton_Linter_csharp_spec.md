@@ -138,7 +138,9 @@ public sealed class LintEngine
 	{
 		// Uses existing ParseResult without re-parsing.
 		// Document kind is inferred from AST content; falls back to file-path hint
-		// when AST is absent (fatal parse). Caller retains ParseResult ownership.
+        // when AST is absent (fatal parse). Caller retains ParseResult ownership
+        // and must keep it alive until the returned LintResult is disposed,
+        // because LintResult borrows the parse arena for string/AST resolution.
 	}
 }
 ```

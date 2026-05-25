@@ -588,7 +588,7 @@ linter や custom rule が expression を再 parse しなくてもよい方向�
 2. **`ParseResultData.ExpressionArtifacts`** — parser の parse 結果に artifact store を格納。
 3. **`LintConfig.ExpressionArtifacts`** — linter 側で artifact store を受け取る property を追加。
    `LintConfig.ParseExpression` が artifact store を content-hash cache より先に参照する fast path を提供。
-4. **`ExpressionArtifactStoreTests`** — store の add/lookup/miss/capacity を 4 test で検証。
+4. **`ExpressionArtifactStoreTests`** — store の add/lookup/miss/capacity と不正 range fallback を 9 tests で検証。
 
 ---
 
