@@ -406,9 +406,50 @@ docker run --rm -v "$PWD:/repo:ro" ghcr.io/guitarrapc/seiton:latest .github/work
 
 ## GitHub Actions
 
-Preparing `seiton` with the download script from [Installation](installation.md#download-script) is recommended for shell-based CI setup. On GitHub Actions the script writes the absolute downloaded binary path to the `executable` step output, so later steps can invoke it directly. Please ensure `shell: bash` is set for steps running the download script, since Windows runners default to `pwsh`.
+For GitHub Actions, the Docker image is the simplest way to get started. It avoids a separate download step, does not depend on `bash`, and keeps the job setup minimal. If you prefer a shell-based setup without Docker, use the download script from [Installation](installation.md#download-script).
 
-### Using SARIF (recommended for public repos and GitHub Enterprise with Advanced Security)
+### Simplest setup: Docker with SARIF
+
+This is the shortest setup for public repositories and GitHub Enterprise installations with Advanced Security enabled.
+
+```yaml
+name: Lint GitHub Actions
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions: {}
+
+jobs:
+  seiton:
+    permissions:
+      security-events: write
+      contents: read
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - name: Run seiton in Docker
+        run: docker run --rm -v "$PWD:/repo:ro" ghcr.io/guitarrapc/seiton:v0.9.14 --format sarif > seiton.sarif
+
+      - name: Upload SARIF
+        uses: github/codeql-action/upload-sarif@ce28f5bb42d3534e5d0f3a320ca0b28ee32a72d0 # v3
+        if: always()
+        with:
+          sarif_file: seiton.sarif
+```
+
+Use this when you want the least amount of setup. Prefer the download script instead if your environment does not allow Docker or if you want to run the native binary directly in shell steps.
+
+### Shell-based setup: download script
+
+The download script is a good fit when you do not want to depend on Docker. On GitHub Actions it writes the absolute downloaded binary path to the `executable` step output, so later steps can invoke it directly. Ensure `shell: bash` is set for steps running the script, since Windows runners default to `pwsh`.
 
 ```yaml
 name: Lint GitHub Actions
@@ -450,41 +491,6 @@ jobs:
 ```
 
 - If you need a specific version or download directory, pass `--version` and `--dir` to the script as described in [Installation](installation.md#download-script).
-
-To use the Docker image on GitHub Actions:
-
-```yaml
-name: Lint GitHub Actions
-
-on:
-  push:
-    branches: [main]
-  pull_request:
-    branches: [main]
-
-permissions: {}
-
-jobs:
-  seiton:
-    permissions:
-      security-events: write
-      contents: read
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    steps:
-      - uses: actions/checkout@v6
-        with:
-          persist-credentials: false
-
-      - name: Run seiton in Docker
-        run: docker run --rm -v "$PWD:/repo:ro" ghcr.io/guitarrapc/seiton:latest --format sarif > seiton.sarif
-
-      - name: Upload SARIF
-        uses: github/codeql-action/upload-sarif@ce28f5bb42d3534e5d0f3a320ca0b28ee32a72d0 # v3
-        if: always()
-        with:
-          sarif_file: seiton.sarif
-```
 
 ---
 
