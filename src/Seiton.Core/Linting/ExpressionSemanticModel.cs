@@ -11,7 +11,8 @@ namespace Seiton.Core.Linting;
 /// <remarks>
 /// Lifetime: one instance per <see cref="LintConfig"/>, reset per lint run via
 /// <see cref="PrepareForWorkflow"/>. Rules access it via <see cref="LintConfig.SemanticModel"/>.
-/// The model does NOT allocate per expression — it caches per-workflow/per-job state.
+/// The model does NOT allocate per expression — it provides stateless lookup helpers
+/// and tracks current evaluation context for incremental rule evaluation.
 /// </remarks>
 public sealed class ExpressionSemanticModel
 {

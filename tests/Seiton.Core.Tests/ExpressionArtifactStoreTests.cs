@@ -17,7 +17,7 @@ public sealed class ExpressionArtifactStoreTests
         // Simulate parser populating the artifact store
         var store = new ExpressionArtifactStore(4);
         var expressionBody = "github.sha"u8;
-        var bodyOffset = System.Text.Encoding.UTF8.GetString(yaml).IndexOf("github.sha", StringComparison.Ordinal);
+        var bodyOffset = yaml.AsSpan().IndexOf(expressionBody);
         var location = new TextRange(bodyOffset, expressionBody.Length, 6, 22, 6, 32);
         var parseResult = ExpressionParser.Parse(expressionBody);
         var contentHash = ComputeExpressionHash(expressionBody);
@@ -38,7 +38,7 @@ public sealed class ExpressionArtifactStoreTests
 
         var store = new ExpressionArtifactStore(4);
         var expressionBody = "github.sha"u8;
-        var bodyOffset = System.Text.Encoding.UTF8.GetString(yaml).IndexOf("github.sha", StringComparison.Ordinal);
+        var bodyOffset = yaml.AsSpan().IndexOf(expressionBody);
         var location = new TextRange(bodyOffset, expressionBody.Length, 6, 22, 6, 32);
         var parseResult = ExpressionParser.Parse(expressionBody);
         var contentHash = ComputeExpressionHash(expressionBody);
@@ -73,7 +73,7 @@ public sealed class ExpressionArtifactStoreTests
         // Create store with pre-parsed result
         var store = new ExpressionArtifactStore(4);
         var expressionBody = "github.sha"u8;
-        var bodyOffset = System.Text.Encoding.UTF8.GetString(yaml).IndexOf("github.sha", StringComparison.Ordinal);
+        var bodyOffset = yaml.AsSpan().IndexOf(expressionBody);
         var location = new TextRange(bodyOffset, expressionBody.Length, 6, 22, 6, 32);
         var parseResult = ExpressionParser.Parse(expressionBody);
         var contentHash = ComputeExpressionHash(expressionBody);
