@@ -102,7 +102,8 @@ Check(utf8Yaml, filePath) -> LintResult
 
 C# mapping:
 
-- `LintEngine.Check(byte[] utf8Yaml, string filePath)`
+- `LintEngine.Check(byte[] utf8Yaml, string filePath)` — parse-and-lint in one call
+- `LintEngine.Check(ParseResult parseResult, byte[] utf8Yaml, string filePath, LintConfig? config = null)` — lint a pre-parsed result without re-parsing
 
 Normative behavior follows `Seiton_Linter_spec.md` for:
 
@@ -131,6 +132,13 @@ public sealed class LintEngine
 		// 3. WorkflowVisitor.Visit(workflow)
 		// 4. Collect diagnostics from each Rule
 		// 5. FilterErrors -> Sort + Dedup -> Output
+	}
+
+	public LintResult Check(ParseResult parseResult, byte[] utf8Yaml, string filePath, LintConfig? config = null)
+	{
+		// Uses existing ParseResult without re-parsing.
+		// Document kind is inferred from AST content; falls back to file-path hint
+		// when AST is absent (fatal parse). Caller retains ParseResult ownership.
 	}
 }
 ```
