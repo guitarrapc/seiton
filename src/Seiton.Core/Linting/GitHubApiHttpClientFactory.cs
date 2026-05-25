@@ -18,7 +18,9 @@ public static class GitHubApiHttpClientFactory
             AutomaticDecompression = System.Net.DecompressionMethods.All,
         };
 
+#pragma warning disable CA2000 // Handler ownership is transferred to HttpClient via disposeHandler: true
         var redirect = new SameOriginRedirectHandler { InnerHandler = sockets };
+#pragma warning restore CA2000
         return new HttpClient(redirect, disposeHandler: true);
     }
 }

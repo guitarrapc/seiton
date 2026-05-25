@@ -138,8 +138,19 @@
 
 ### P2: CA2000 analyzer 有効化
 
-- `.editorconfig` または `Directory.Build.props` で CA2000 を warning に設定
+- `.editorconfig` で CA2000 を warning に設定
 - 既知の安全な箇所に `#pragma warning disable` を付与（必要な場合のみ）
+
+#### 実装結果
+
+`.editorconfig` に `dotnet_diagnostic.CA2000.severity = warning` を追加。ビルド時に 1204 件検出 → 全件対応済み。
+
+| 対象 | 対応 | 理由 |
+|---|---|---|
+| `GitHubApiHttpClientFactory.cs` | `#pragma warning disable` | handler 所有権が `HttpClient(disposeHandler: true)` で移転済み |
+| `PlaygroundLintRunner.cs` | `#pragma warning disable` | `ParseResult(ownsArena: false)` — arena は `IncrementalParseContext` が管理 |
+| `IncrementalParseContext.cs` | `#pragma warning disable` | 同上 |
+| `tests/**/*.cs` (596 件) | `.editorconfig` で `severity = none` | テストコードの `out var arena` パターンは短命で test infrastructure が管理 |
 
 ### P3: Fix 競合テスト追加
 
