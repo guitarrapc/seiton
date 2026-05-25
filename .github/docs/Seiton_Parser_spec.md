@@ -892,6 +892,13 @@ The expression AST is traversed using the `VisitExprNode(node, parent, entering)
 
 ## 7. Expression Semantic Analysis
 
+> **Ownership boundary note**: This section documents expression semantic analysis that the parser performs. Under the refined boundary (see `Seiton_spec.md` §3), semantic checks are split into two categories:
+>
+> - **Parser-owned (expression-language intrinsic)**: Function existence, arity/overload matching, operator-local type validity — these do not depend on workflow position or dynamic context. The parser emits diagnostics for these unconditionally.
+> - **Linter-owned (GitHub Actions context-dependent)**: Context availability, function availability by workflow position, dynamic property existence, workflow-site-aware type suitability — these depend on the workflow AST and dynamic context resolution. The linter owns these diagnostics via `ExprUndefinedVarRule` and related rules.
+>
+> The current C# implementation reflects this boundary: the parser emits only expression-language intrinsic diagnostics (§7.1–§7.3), while the linter performs all context-dependent checks using override-aware type inference. Deduplication handles operator-local overlap where both layers may emit equivalent diagnostics.
+
 ### 7.1 Built-in Function Signatures
 
 | Function | Parameters | Return | Variadic |
@@ -1058,7 +1065,12 @@ The parser contract in this document includes:
 - YAML event interpretation
 - AST node construction
 - Parser diagnostics
-- Expression parsing and semantic validation
+- Expression syntax parsing and AST construction
+- Expression-language intrinsic validation:
+  - Built-in function existence (unknown function detection)
+  - Function arity and overload matching
+  - Operator-local type validity (comparison, logical-not, wildcard, index)
+  - `vars` naming convention
 
 ### 8.2 Linter-Owned Contract
 
@@ -1067,6 +1079,13 @@ The following are intentionally outside this document and are specified in `Seit
 - Rule/pass callback interfaces
 - Rule traversal order
 - Rule configuration and final diagnostic filtering
+- GitHub Actions context-dependent expression validation:
+  - Context availability by workflow position
+  - Function availability by workflow position (e.g., `hashFiles` step-only, status functions `if`-only)
+  - Dynamic property existence and strictness (matrix, steps, needs, inputs)
+  - Workflow-site-aware type suitability
+
+> **Implementation note**: Context-dependent expression checks are performed exclusively by the linter's `ExprUndefinedVarRule`. The parser emits only expression-language intrinsic diagnostics. Operator-local type checks (compare, index, member-access type) may overlap between parser and linter; deduplication eliminates duplicates in the final output.
 
 ### 8.3 Integration Contract
 
@@ -1075,6 +1094,7 @@ Integration between parser and linter is fixed as follows.
 - Linter consumes `ParseResult` from parser as its sole structural input.
 - Parser remains reusable without rule execution.
 - Rule-originated diagnostics may set `RuleId`; parser-originated diagnostics do not require `RuleId`.
+- Parser output reserves an optional expression-artifact hook (occurrence metadata, expression AST, site information) that the linter and custom rules can consume without re-parsing expressions when present. When the hook is absent, downstream consumers fall back to their existing expression parse caches.
 
 Detailed linter runtime behavior is defined in `Seiton_Linter_spec.md`.
 

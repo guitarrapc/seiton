@@ -73,9 +73,12 @@ The Seiton Parser C# implementation provides:
 2. Alias resolution responsibility delegated to YAML adapter/library boundary
 3. Hand-written recursive descent parser that builds typed AST
 4. Expression parser for `${{ }}` grammar
-5. Expression semantic analyzer with context/type validation
-6. Generated metadata usage (webhooks, availability, popular actions)
-7. Input document-kind classification (workflow vs action metadata) using path-hint candidate + structure-confirm finalization
+5. Expression-language intrinsic validation (function existence, arity, operator-local type checks)
+6. Expression semantic analyzer with operator-local type validation and type inference utilities (context-dependent checks are linter-owned)
+7. Generated metadata usage (webhooks, availability, popular actions)
+8. Input document-kind classification (workflow vs action metadata) using path-hint candidate + structure-confirm finalization
+
+> **Boundary note**: Under the refined expression validation boundary (`Seiton_spec.md` §3), the parser owns expression-language intrinsic validation. GitHub Actions context-dependent validation (context availability, function availability by position, dynamic properties, site-aware types) is owned by the linter. The C# implementation reflects this boundary: the parser produces only intrinsic diagnostics, while the linter performs all context-dependent checks via `ExprUndefinedVarRule` and `ExpressionSemanticModel`.
 
 Linter-side runtime details are specified in `Seiton_Linter_csharp_spec.md`.
 

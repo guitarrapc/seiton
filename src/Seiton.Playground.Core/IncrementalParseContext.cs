@@ -212,7 +212,7 @@ public sealed class IncrementalParseContext
     /// <summary>Whether a previous parse result has been recorded.</summary>
     public bool HasPrevious => _previousSource is not null;
 
-    /// <summary>The arena that owns the current parse result's pooled data. For use with <see cref="Core.Linting.LintEngine.CheckWithParseResult(byte[], string, Core.Linting.LintConfig?, Core.Parsing.ParseResultData, Core.Parsing.AstArena?)"/>.</summary>
+    /// <summary>The arena that owns the current parse result's pooled data. Used by the incremental lint path when reusing a previous parse result.</summary>
     internal AstArena? Arena => _previousArena;
 
     /// <summary>The current section registry (valid only when <see cref="HasPrevious"/> is true).</summary>

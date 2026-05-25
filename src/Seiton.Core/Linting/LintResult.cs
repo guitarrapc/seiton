@@ -11,12 +11,14 @@ namespace Seiton.Core.Linting;
 public sealed class LintResult : IDisposable
 {
     private AstArena? _arena;
+    private readonly bool _ownsArena;
     private bool _disposed;
 
-    internal LintResult(LintResultData data, AstArena? arena)
+    internal LintResult(LintResultData data, AstArena? arena, bool ownsArena = true)
     {
         Data = data;
         _arena = arena;
+        _ownsArena = ownsArena;
     }
 
     /// <summary>Gets the underlying lint result data for internal consumers.</summary>
@@ -251,7 +253,11 @@ public sealed class LintResult : IDisposable
             return;
         }
 
-        _arena?.Dispose();
+        if (_ownsArena)
+        {
+            _arena?.Dispose();
+        }
+
         _arena = null;
         _disposed = true;
     }

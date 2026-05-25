@@ -62,7 +62,9 @@ Path hints are not final truth. If structure conflicts with hint, structure wins
 |---|---|---|
 | YAML structural validation | Owns | - |
 | Workflow AST construction | Owns | Consumes |
-| Expression parsing and semantic typing data | Owns | Consumes |
+| Expression syntax parsing and AST construction | Owns | Consumes |
+| Expression-language intrinsic validation (function existence, arity, operator-local type checks) | Owns | Consumes |
+| GitHub Actions context-dependent semantic validation (availability, dynamic properties, workflow-site types) | Provides data | Owns |
 | Rule traversal hooks and rule execution model | - | Owns |
 | Rule configuration (enable/disable/severity/exclusion) | - | Owns |
 | Diagnostic aggregation from rules | - | Owns |
@@ -73,6 +75,8 @@ Boundary policy:
 - Parser must remain reusable without rule execution.
 - Linter must consume parser outputs instead of reparsing workflow structure.
 - Rule suppression/exclusion belongs to linter contract, not parser contract.
+- Expression validation is split by domain: the parser owns expression-language intrinsic checks (syntax, function signatures, operator-local type validity); the linter owns GitHub Actions context-dependent checks (context availability, function availability by workflow position, dynamic property existence, workflow-site-aware type suitability).
+- The parser/linter boundary reserves an optional structured expression-artifact hook (AST, occurrence metadata, site information). When such artifacts are attached to parser output, the linter consumes them without re-parsing expressions; otherwise it falls back to its existing expression parse cache.
 
 ---
 

@@ -41,4 +41,12 @@ internal readonly record struct ParseResultData(
     Workflow? Workflow,
     ActionMetadata? ActionMetadata,
     DiagnosticList Diagnostics,
-    bool HasFatalError);
+    bool HasFatalError)
+{
+    /// <summary>
+    /// Optional pre-parsed expression artifact store.
+    /// The current production parser leaves this unset; when a caller attaches a populated store,
+    /// the linter can consume it instead of re-parsing expressions.
+    /// </summary>
+    internal ExpressionArtifactStore? ExpressionArtifacts { get; init; }
+}

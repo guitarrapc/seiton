@@ -1,0 +1,73 @@
+﻿namespace Seiton.Core.Parsing;
+
+/// <summary>
+/// A pre-parsed expression artifact associated with an expression occurrence.
+/// Pairs an expression occurrence location with its cached parse result so downstream
+/// consumers (linter, custom rules) can avoid re-parsing.
+/// </summary>
+internal readonly record struct ExpressionArtifact(
+    long ContentHash,
+    TextRange Location,
+    ExpressionValidationContext Context,
+    ExpressionParseResult ParseResult);
+
+/// <summary>
+/// Stores pre-parsed expression artifacts for downstream reuse.
+/// Keyed by content hash (xxHash64) with the same algorithm used by <see cref="Linting.LintConfig"/>.
+/// </summary>
+/// <remarks>
+/// This store is an optional integration hook for pre-parsed expression artifacts.
+/// The current production parser does not populate it automatically; when absent, the linter falls back
+/// to its existing content-hash cache.
+/// If a caller or future parser path populates the store via <see cref="Add"/>, treat it as immutable
+/// after population completes.
+/// It is safe to share across rules for concurrent reads only after parsing completes;
+/// concurrent reads and writes are not supported.
+/// </remarks>
+internal sealed class ExpressionArtifactStore
+{
+    private readonly Dictionary<long, ExpressionArtifact> _artifacts;
+
+    internal ExpressionArtifactStore(int capacity)
+    {
+        _artifacts = new Dictionary<long, ExpressionArtifact>(capacity);
+    }
+
+    internal int Count => _artifacts.Count;
+
+    internal void Add(ExpressionArtifact artifact)
+    {
+        // First occurrence wins (same expression body may appear multiple times)
+        _artifacts.TryAdd(artifact.ContentHash, artifact);
+    }
+
+    /// <summary>
+    /// Attempts to retrieve a pre-parsed expression result by content hash.
+    /// Returns <c>true</c> if found and the stored bytes match <paramref name="expression"/>.
+    /// </summary>
+    internal bool TryGet(long contentHash, ReadOnlySpan<byte> expression, byte[] source, out ExpressionParseResult result)
+    {
+        if (_artifacts.TryGetValue(contentHash, out var artifact))
+        {
+            // Bounds guard: verify the stored location is within source
+            var start = artifact.Location.Start;
+            var length = artifact.Location.Length;
+            if (start < 0 || length < 0 || start > source.Length || length > source.Length - start)
+            {
+                result = default;
+                return false;
+            }
+
+            // Collision guard: verify the expression bytes match
+            var storedSpan = source.AsSpan(start, length);
+            if (expression.SequenceEqual(storedSpan))
+            {
+                result = artifact.ParseResult;
+                return true;
+            }
+        }
+
+        result = default;
+        return false;
+    }
+}

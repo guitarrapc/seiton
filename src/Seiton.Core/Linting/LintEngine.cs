@@ -93,6 +93,46 @@ public sealed class LintEngine
         return Check(utf8Yaml, filePath, config: null);
     }
 
+    /// <summary>
+    /// Lints a pre-parsed workflow using an existing <see cref="ParseResult"/>.
+    /// Use this to avoid re-parsing when you need both parse-only analysis and linting,
+    /// or when implementing parser-only / linter-only / combined pipelines.
+    /// </summary>
+    /// <param name="parseResult">
+    /// A parse result obtained from <see cref="WorkflowParser.Parse(byte[], string)"/>.
+    /// Ownership remains with the caller. Keep <paramref name="parseResult"/> alive and undisposed
+    /// until you are finished reading from and disposing the returned <see cref="LintResult"/>,
+    /// because the lint result borrows the parse result's arena for string/AST resolution.
+    /// </param>
+    /// <param name="utf8Yaml">The original UTF-8 YAML bytes (must be the same bytes used for parsing).</param>
+    /// <param name="filePath">
+    /// File path for diagnostic messages and document kind hinting.
+    /// When <paramref name="parseResult"/> has no workflow/action AST (for example after a fatal parse error),
+    /// the path hint is used to preserve <see cref="LintResult.DocumentKind"/> metadata.
+    /// </param>
+    /// <param name="config">Optional lint configuration.</param>
+    /// <returns>A lint result. Dispose when done reading diagnostics.</returns>
+    public LintResult Check(ParseResult parseResult, byte[] utf8Yaml, string filePath, LintConfig? config = null)
+    {
+        ArgumentNullException.ThrowIfNull(parseResult);
+        ArgumentNullException.ThrowIfNull(utf8Yaml);
+        ArgumentException.ThrowIfNullOrEmpty(filePath);
+
+        // Fail fast when caller passes different bytes than what was parsed.
+        // The arena stores a reference to the original source — reference equality is O(1).
+        var arena = parseResult.Arena;
+        if (!ReferenceEquals(utf8Yaml, arena.Source))
+        {
+            throw new ArgumentException(
+                "utf8Yaml must be the same array instance that was passed to WorkflowParser.Parse. " +
+                "Passing different bytes causes inconsistent expression artifacts, fix offsets, and line starts.",
+                nameof(utf8Yaml));
+        }
+
+        var data = CheckWithParseResult(utf8Yaml, filePath, config, parseResult.Data, arena);
+        return new LintResult(data, arena, ownsArena: false); // caller owns ParseResult's arena
+    }
+
     /// <summary>Parses and lints the given YAML, applying the optional <paramref name="config"/>.</summary>
     /// <remarks>
     /// <para>
@@ -167,27 +207,32 @@ public sealed class LintEngine
     /// Used by Playground incremental parsing (D-5b) where parsing is done externally.
     /// Infers <see cref="DocumentKind"/> from the parse result content.
     /// </summary>
-    internal LintResultData CheckWithParseResult(byte[] utf8Yaml, string filePath, LintConfig? config, ParseResultData parseResult, AstArena? arena)
+    /// <param name="skipJobs">
+    /// Optional job-skipping mask (D-5d). When <paramref name="skipJobs"/>[i] is true, lint rules
+    /// are not run on that job (its diagnostics are expected to be supplied from a cache by the caller).
+    /// </param>
+    internal LintResultData CheckWithParseResult(byte[] utf8Yaml, string filePath, LintConfig? config, ParseResultData parseResult, AstArena? arena, bool[]? skipJobs = null)
     {
         ArgumentNullException.ThrowIfNull(utf8Yaml);
         ArgumentException.ThrowIfNullOrEmpty(filePath);
 
-        var kind = parseResult.ActionMetadata is not null ? DocumentKind.ActionMetadata : DocumentKind.Workflow;
-        return CheckCore(utf8Yaml, filePath, config, parseResult, arena, kind);
+        var kind = InferDocumentKindForPreParsedResult(parseResult, filePath);
+        return CheckCore(utf8Yaml, filePath, config, parseResult, arena, kind, skipJobs);
     }
 
-    /// <summary>
-    /// Lints a pre-parsed <see cref="ParseResultData"/> with optional job skipping (D-5d).
-    /// When <paramref name="skipJobs"/>[i] is true, lint rules are not run on that job
-    /// (its diagnostics are expected to be supplied from a cache by the caller).
-    /// </summary>
-    internal LintResultData CheckWithParseResult(byte[] utf8Yaml, string filePath, LintConfig? config, ParseResultData parseResult, AstArena? arena, bool[]? skipJobs)
+    private static DocumentKind InferDocumentKindForPreParsedResult(ParseResultData parseResult, string filePath)
     {
-        ArgumentNullException.ThrowIfNull(utf8Yaml);
-        ArgumentException.ThrowIfNullOrEmpty(filePath);
+        if (parseResult.ActionMetadata is not null)
+        {
+            return DocumentKind.ActionMetadata;
+        }
 
-        var kind = parseResult.ActionMetadata is not null ? DocumentKind.ActionMetadata : DocumentKind.Workflow;
-        return CheckCore(utf8Yaml, filePath, config, parseResult, arena, kind, skipJobs);
+        if (parseResult.Workflow is not null)
+        {
+            return DocumentKind.Workflow;
+        }
+
+        return DocumentKindClassifier.GetPathHintKind(filePath);
     }
 
     private LintResultData CheckCore(byte[] utf8Yaml, string filePath, LintConfig? config, ParseResultData parseResult, AstArena? arena, DocumentKind documentKind, bool[]? skipJobs = null)
@@ -257,7 +302,8 @@ public sealed class LintEngine
             config?.Fix,
             config?.Network,
             config?.Output,
-            config?.Verbose ?? false);
+            config?.Verbose ?? false,
+            parseResult.ExpressionArtifacts);
         var effectiveConfig = _effectiveConfig;
         var sharedDisabledRuleIds = effectiveConfig.Rules is null || effectiveConfig.Rules.Count == 0
             ? GetSharedDefaultDisabledRuleIds(documentKind)

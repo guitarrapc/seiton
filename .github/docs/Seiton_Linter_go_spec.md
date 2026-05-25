@@ -33,6 +33,9 @@ The Seiton Linter Go implementation provides:
 3. Deterministic diagnostics post-processing
 4. Config/inline suppression integration per contract
 5. Concurrent repository/file lint execution model (implementation-dependent)
+6. GitHub Actions context-dependent expression semantic validation (via `expr-undefined-var` rule and expression semantic analysis)
+
+> **Boundary note**: Under the refined expression validation boundary (`Seiton_spec.md` §3), the linter owns GitHub Actions context-dependent expression validation: context availability, function availability by workflow position, dynamic property existence, and workflow-site-aware type suitability. The integration contract exposes an optional expression-artifact hook; when attached, the linter consumes those artifacts without re-parsing, and otherwise falls back to its existing expression parse cache.
 
 ### 0.3 Structure
 

@@ -111,7 +111,7 @@ public static class ExpressionSemanticAnalyzer
     /// Object/array/null types do not produce meaningful string output when interpolated.
     /// Returns the diagnostic if a problem is detected, or null otherwise.
     /// </summary>
-    public static Diagnostic? CheckTemplateType(
+    internal static Diagnostic? CheckTemplateType(
         ExpressionParseResult parseResult,
         ReadOnlySpan<byte> expressionUtf8,
         TextRange expressionLocation)
@@ -385,7 +385,10 @@ public static class ExpressionSemanticAnalyzer
                 break;
             case ExpressionNodeKind.MemberAccess:
                 ValidateNode(node.Left, nodeId, nodes, arguments, expressionUtf8, expressionLocation, context, allowStatusCheckFunctions, diagnostics);
-                ValidatePropertyAccess(node, nodes, arguments, expressionUtf8, expressionLocation, diagnostics);
+                // Type-suitability: accessing .property on a string is always an error (operator-local).
+                // Property-not-found validation is handled by the linter
+                // (ExprUndefinedVarRule via ValidateDynamicPropertyAccessInline).
+                ValidateMemberAccessType(node, nodes, arguments, expressionUtf8, expressionLocation, diagnostics);
                 break;
             case ExpressionNodeKind.WildcardAccess:
                 ValidateNode(node.Left, nodeId, nodes, arguments, expressionUtf8, expressionLocation, context, allowStatusCheckFunctions, diagnostics);
@@ -1304,7 +1307,11 @@ public static class ExpressionSemanticAnalyzer
 
     private static bool IsAsciiDigit(byte c) => c >= (byte)'0' && c <= (byte)'9';
 
-    private static void ValidatePropertyAccess(
+    /// <summary>
+    /// Validates type-suitability for member access: accessing .property on a string value is an error.
+    /// Does NOT check property-not-found (that is linter-owned).
+    /// </summary>
+    private static void ValidateMemberAccessType(
         ExpressionNode node,
         ReadOnlySpan<ExpressionNode> nodes,
         ReadOnlySpan<int> arguments,
@@ -1313,31 +1320,12 @@ public static class ExpressionSemanticAnalyzer
         List<Diagnostic> diagnostics)
     {
         var leftType = InferTypeSpan(node.Left, nodes, arguments, expressionUtf8);
-
-        // String dereference: accessing .property on a string value is an error
         if (leftType is StringExprType)
         {
             var propName = Encoding.UTF8.GetString(node.Token.AsSpan(expressionUtf8));
             diagnostics.Add(new Diagnostic(
                 DiagnosticSeverity.Error,
                 $"receiver of object dereference \"{propName}\" must be type of object but got \"string\"",
-                expressionLocation));
-            return;
-        }
-
-        if (leftType is not ObjectExprType { Strict: true } strictObj)
-        {
-            return;
-        }
-
-        var propNameSpan = node.Token.AsSpan(expressionUtf8);
-        if (!strictObj.TryGetProperty(propNameSpan, out _))
-        {
-            var propNameText = Encoding.UTF8.GetString(propNameSpan);
-            var rootName = GetChainRootName(node.Left, nodes, expressionUtf8);
-            diagnostics.Add(new Diagnostic(
-                DiagnosticSeverity.Error,
-                FormatUndefinedPropertyMessage(propNameText, strictObj, rootName),
                 expressionLocation));
         }
     }
@@ -1471,7 +1459,7 @@ public static class ExpressionSemanticAnalyzer
         (byte[] NameUtf8, ExprType Type)[] contextOverrides,
         List<Diagnostic> diagnostics)
     {
-        if (!parseResult.HasRoot || contextOverrides is null || contextOverrides.Length == 0)
+        if (!parseResult.HasRoot || contextOverrides is null)
         {
             return;
         }
