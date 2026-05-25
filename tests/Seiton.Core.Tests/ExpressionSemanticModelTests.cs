@@ -1,4 +1,4 @@
-using Seiton.Core.Linting;
+﻿using Seiton.Core.Linting;
 using Seiton.Core.Parsing;
 
 namespace Seiton.Core.Tests;
@@ -100,5 +100,60 @@ public sealed class ExpressionSemanticModelTests
         var model = new ExpressionSemanticModel();
         model.SetContext(ExpressionValidationContext.StepIf);
         await Assert.That(model.CurrentContext).IsEqualTo(ExpressionValidationContext.StepIf);
+    }
+
+    // --- Additional equivalence-class tests ---
+
+    [Test]
+    public async Task CheckFunctionAvailability_HashFilesAtStepIf_ReturnsNull()
+    {
+        // StepIf is step-level, so hashFiles should be allowed
+        var model = new ExpressionSemanticModel();
+        var result = model.CheckFunctionAvailability(ExpressionValidationContext.StepIf, "hashFiles"u8);
+        await Assert.That(result).IsNull();
+    }
+
+    [Test]
+    public async Task CheckFunctionAvailability_RegularFunction_AlwaysReturnsNull()
+    {
+        // A non-status, non-hashFiles function should never be restricted
+        var model = new ExpressionSemanticModel();
+        await Assert.That(model.CheckFunctionAvailability(ExpressionValidationContext.StepRun, "contains"u8)).IsNull();
+        await Assert.That(model.CheckFunctionAvailability(ExpressionValidationContext.JobIf, "contains"u8)).IsNull();
+        await Assert.That(model.CheckFunctionAvailability(ExpressionValidationContext.Env, "contains"u8)).IsNull();
+    }
+
+    [Test]
+    public async Task CheckFunctionAvailability_FailureOutsideIf_ReturnsDiagnostic()
+    {
+        var model = new ExpressionSemanticModel();
+        var result = model.CheckFunctionAvailability(ExpressionValidationContext.StepRun, "failure"u8);
+        await Assert.That(result).IsNotNull();
+        await Assert.That(result!.Contains("failure", StringComparison.Ordinal)).IsTrue();
+    }
+
+    [Test]
+    public async Task CheckFunctionAvailability_CancelledInJobIf_ReturnsNull()
+    {
+        var model = new ExpressionSemanticModel();
+        var result = model.CheckFunctionAvailability(ExpressionValidationContext.JobIf, "cancelled"u8);
+        await Assert.That(result).IsNull();
+    }
+
+    [Test]
+    public async Task IsContextAvailable_NeedsInJobIf_ReturnsTrue()
+    {
+        var model = new ExpressionSemanticModel();
+        var result = model.IsContextAvailable(ExpressionValidationContext.JobIf, "needs"u8);
+        await Assert.That(result).IsTrue();
+    }
+
+    [Test]
+    public async Task IsContextAvailable_NeedsInWorkflowEnv_ReturnsFalse()
+    {
+        // "needs" is not available at workflow-level env
+        var model = new ExpressionSemanticModel();
+        var result = model.IsContextAvailable(ExpressionValidationContext.Env, "needs"u8);
+        await Assert.That(result).IsFalse();
     }
 }

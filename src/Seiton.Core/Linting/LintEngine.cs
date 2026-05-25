@@ -113,7 +113,7 @@ public sealed class LintEngine
         ArgumentException.ThrowIfNullOrEmpty(filePath);
 
         var data = CheckWithParseResult(utf8Yaml, filePath, config, parseResult.Data, parseResult.Arena);
-        return new LintResult(data, arena: null); // caller owns ParseResult's arena
+        return new LintResult(data, parseResult.Arena, ownsArena: false); // caller owns ParseResult's arena
     }
 
     /// <summary>Parses and lints the given YAML, applying the optional <paramref name="config"/>.</summary>

@@ -1,4 +1,4 @@
-using Seiton.Core.Linting;
+﻿using Seiton.Core.Linting;
 using Seiton.Core.Parsing;
 
 namespace Seiton.Core.Tests;
@@ -93,5 +93,38 @@ public sealed class PublicApiContractTests
         // Lint with default config
         using var lintResult = new LintEngine().Check(parseResult, yaml, "api.yml", config: null);
         await Assert.That(lintResult.Diagnostics.Length).IsGreaterThan(0);
+    }
+
+    [Test]
+    public async Task ParseResult_ThenLint_CanResolveStringsFromLintResult()
+    {
+        var yaml = "on: push\njobs:\n  build:\n    runs-on: ubuntu-latest\n    steps:\n      - run: echo hello\n"u8.ToArray();
+
+        using var parseResult = WorkflowParser.Parse(yaml, "api.yml");
+        using var lintResult = new LintEngine().Check(parseResult, yaml, "api.yml");
+
+        // LintResult must be able to resolve strings through the borrowed arena
+        await Assert.That(lintResult.Workflow).IsNotNull();
+        var job = lintResult.Workflow!.Jobs.Values().First();
+        var runsOn = lintResult.GetString(job.RunsOn!.Labels![0]);
+        await Assert.That(runsOn).IsEqualTo("ubuntu-latest");
+    }
+
+    [Test]
+    public async Task ParseResult_ThenLint_DisposingLintResult_DoesNotDisposeParseResult()
+    {
+        var yaml = "on: push\njobs:\n  build:\n    runs-on: ubuntu-latest\n    steps:\n      - run: echo hello\n"u8.ToArray();
+
+        using var parseResult = WorkflowParser.Parse(yaml, "api.yml");
+
+        // Lint and immediately dispose the lint result
+        var lintResult = new LintEngine().Check(parseResult, yaml, "api.yml");
+        lintResult.Dispose();
+
+        // ParseResult must still be usable (arena not disposed)
+        await Assert.That(parseResult.Workflow).IsNotNull();
+        var job = parseResult.Workflow!.Jobs.Values().First();
+        var runsOn = parseResult.GetString(job.RunsOn!.Labels![0]);
+        await Assert.That(runsOn).IsEqualTo("ubuntu-latest");
     }
 }

@@ -16,8 +16,8 @@ internal readonly record struct ExpressionArtifact(
 /// Keyed by content hash (xxHash64) with the same algorithm used by <see cref="Linting.LintConfig"/>.
 /// </summary>
 /// <remarks>
-/// This store is opt-in: the parser only populates it when <see cref="ParseOptions.StoreExpressionArtifacts"/>
-/// is set. When not populated, linter falls back to its existing content-hash cache.
+/// This store is opt-in: the parser only populates it when expression artifacts are requested.
+/// When not populated, linter falls back to its existing content-hash cache.
 /// The store is immutable after parsing completes and safe to share across rules.
 /// </remarks>
 internal sealed class ExpressionArtifactStore
