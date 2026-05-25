@@ -89,6 +89,8 @@ seiton check [FILES...] [FLAGS]
 
 To apply auto-fixes, use the root command with `--fix`.
 
+> **Docker:** `--fix` requires a writable mount (omit `:ro`). `--dry-run` and `--check` work with `:ro`.
+
 ```sh
 seiton --fix [FILES...] [FLAGS]
 ```
@@ -390,17 +392,25 @@ To confirm the image works:
 docker run --rm ghcr.io/guitarrapc/seiton:latest version
 ```
 
-To lint all workflow files in the current repository, mount the repository read-only and set the working directory inside the container to the repository root:
+Lint all workflow files (read-only mount):
 
 ```sh
 docker run --rm -v "$PWD:/repo:ro" ghcr.io/guitarrapc/seiton:latest
 ```
 
-To lint a specific file, pass its explicit in-container path:
+Lint a specific file:
 
 ```sh
 docker run --rm -v "$PWD:/repo:ro" ghcr.io/guitarrapc/seiton:latest .github/workflows/ci.yml
 ```
+
+Apply fixes (omit `:ro` — writable mount is required):
+
+```sh
+docker run --rm -v "$PWD:/repo" ghcr.io/guitarrapc/seiton:latest --fix
+```
+
+> `--fix --dry-run` and `--fix --check` do not write files, so `:ro` is fine for those.
 
 ---
 
@@ -410,7 +420,7 @@ For GitHub Actions, the Docker image is the simplest way to get started. It avoi
 
 ### Simplest setup: Docker with SARIF
 
-This is the shortest setup for public repositories and GitHub Enterprise installations with Advanced Security enabled.
+Lint-only (read-only mount). For in-place `--fix`, use the download script or omit `:ro`.
 
 ```yaml
 name: Lint GitHub Actions

@@ -135,7 +135,13 @@ Lint the workflow files in the current directory:
 docker run --rm -v "$PWD:/repo:ro" ghcr.io/guitarrapc/seiton:latest
 ```
 
-The `:ro` mount keeps the repository read-only inside the container.
+The `:ro` mount is for lint-only runs. To apply fixes with `--fix`, omit `:ro`:
+
+```sh
+docker run --rm -v "$PWD:/repo" ghcr.io/guitarrapc/seiton:latest --fix
+```
+
+> `--dry-run` and `--check` do not write files, so `:ro` works for those.
 
 ---
 
