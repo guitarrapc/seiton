@@ -118,8 +118,19 @@ public sealed class LintEngine
         ArgumentNullException.ThrowIfNull(utf8Yaml);
         ArgumentException.ThrowIfNullOrEmpty(filePath);
 
-        var data = CheckWithParseResult(utf8Yaml, filePath, config, parseResult.Data, parseResult.Arena);
-        return new LintResult(data, parseResult.Arena, ownsArena: false); // caller owns ParseResult's arena
+        // Fail fast when caller passes different bytes than what was parsed.
+        // The arena stores a reference to the original source — reference equality is O(1).
+        var arena = parseResult.Arena;
+        if (!ReferenceEquals(utf8Yaml, arena.Source))
+        {
+            throw new ArgumentException(
+                "utf8Yaml must be the same array instance that was passed to WorkflowParser.Parse. " +
+                "Passing different bytes causes inconsistent expression artifacts, fix offsets, and line starts.",
+                nameof(utf8Yaml));
+        }
+
+        var data = CheckWithParseResult(utf8Yaml, filePath, config, parseResult.Data, arena);
+        return new LintResult(data, arena, ownsArena: false); // caller owns ParseResult's arena
     }
 
     /// <summary>Parses and lints the given YAML, applying the optional <paramref name="config"/>.</summary>

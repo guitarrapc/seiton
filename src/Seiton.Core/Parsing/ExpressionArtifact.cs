@@ -18,7 +18,9 @@ internal readonly record struct ExpressionArtifact(
 /// <remarks>
 /// This store is opt-in: the parser only populates it when expression artifacts are requested.
 /// When not populated, linter falls back to its existing content-hash cache.
-/// The store is immutable after parsing completes and safe to share across rules.
+/// The store is populated during parsing via <see cref="Add"/> and treated as immutable afterward.
+/// It is safe to share across rules for concurrent reads only after parsing completes;
+/// concurrent reads and writes are not supported.
 /// </remarks>
 internal sealed class ExpressionArtifactStore
 {

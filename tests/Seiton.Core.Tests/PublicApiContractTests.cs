@@ -179,4 +179,19 @@ public sealed class PublicApiContractTests
         var runsOn = parseResult.GetString(job.RunsOn!.Labels![0]);
         await Assert.That(runsOn).IsEqualTo("ubuntu-latest");
     }
+
+    [Test]
+    public async Task Check_WithParseResult_ThrowsWhenBytesDoNotMatchSource()
+    {
+        var yaml = "on: push\njobs:\n  build:\n    runs-on: ubuntu-latest\n    steps:\n      - run: echo hello\n"u8.ToArray();
+        using var parseResult = WorkflowParser.Parse(yaml, "mismatch.yml");
+
+        // A different array with the same content — reference equality fails
+        var differentBytes = yaml.ToArray();
+
+        await Assert.That(() =>
+        {
+            using var _ = new LintEngine().Check(parseResult, differentBytes, "mismatch.yml");
+        }).Throws<ArgumentException>();
+    }
 }
