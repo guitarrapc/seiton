@@ -4,7 +4,6 @@ namespace Seiton.Core.Tests;
 
 public sealed partial class RuleInterfaceTests
 {
-
     [Test]
     public async Task RuleRegression_UnsoundContainsRule_TableDriven()
     {
