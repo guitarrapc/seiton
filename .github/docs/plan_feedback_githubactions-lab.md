@@ -378,7 +378,9 @@ dotnet run -c Release
 
 #### 6a: fix モードのサマリ順序を反転
 
-fix モードでは fix summary を先に、remain summary を後に出力する。因果関係が自然に読める順序にする。
+採用: B. before/after 統合形式を採用する。
+
+A. fix モードでは fix summary を先に、remain summary を後に出力する。因果関係が自然に読める順序にする。
 
 **Before:**
 ```
@@ -396,12 +398,13 @@ Fixed 78 issues in 19 files
 4 errors, 16 warnings remain in 9 files (20 issues remaining)
 ```
 
-または before/after 統合形式:
+B. または before/after 統合形式:
+
 ```
 Checked 123 files: 82 errors, 16 warnings found
 Fixed 78 issues in 19 files
   ...
-4 errors, 16 warnings remain (20 issues in 9 files)
+4 errors, 16 warnings remain in 9 files (20 issues)
 ```
 
 #### 6b: ファイル一覧のテーブル表示
@@ -515,6 +518,8 @@ verbose: total: 123 file(s) checked in 62.7 ms
 - ルールは件数降順ソート (現状と同じ)
 
 #### 6e: `--format json` の stdout 純粋性保証
+
+採用: `--format json` 時は stdout に JSON 以外を一切出力しない。verbose出力は stderrか確認する。
 
 - `--format json` 時は stdout に JSON 以外を一切出力しない
 - `--fix --dry-run` 時の unified diff は JSON envelope 内に含めるか、stderr に移動する
