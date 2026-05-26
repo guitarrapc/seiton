@@ -350,3 +350,118 @@ dotnet run -c Release
 判定基準:
 - Mean: ±5% 以内
 - Allocated: 増加なし (0 byte 増)
+
+---
+
+## Phase 6: [Medium] CLI サマリー出力の改善
+
+### 問題
+
+`--fix` / `--dry-run` / 通常モードのサマリー出力に以下の UX 問題がある:
+
+1. **fix モードでサマリ行の位置が不自然**: 「4 errors, 16 warnings in 123 files」(fix 後の残存数) が fix 詳細より先に表示され、文脈がない
+2. **ファイル一覧が読みにくい**: ファイル名の長さがバラバラでカラムが揃わず、一覧性が低い
+3. **2つのサマリ行の関連性が不明**: 「X errors, Y warnings in N files」と「Fixed M issues in K files (R remaining)」の数値関係 (before/after/delta) が読み解けない
+4. **`--verbose` のルール別サマリが1行に詰め込まれている**: カンマ区切りで全ルールが1行に並び、視認性が低い
+5. **`--format json` で非 JSON テキストが stdout に混入する可能性**: `--fix --dry-run` 時の unified diff が stdout に出力され、JSON パースを壊す
+
+### 現状の出力フロー
+
+- **Check パス**: diagnostics (stdout) → summary (stderr) → verbose timing (stderr)
+- **Fix パス**: diff (stdout, dry-run時) → diagnostics (stdout) → summary (stderr, per-file breakdown なし) → fix summary (stderr) → hint (stderr)
+
+サマリ関連コード:
+- `CheckCommand.WriteSummary` — 「X errors, Y warnings in N files」+ per-file breakdown + per-rule breakdown
+- `FixCommand.WriteFixSummary` — per-file fixed/remaining + 合計行
+
+### 修正方針
+
+#### 6a: fix モードのサマリ順序を反転
+
+fix モードでは fix summary を先に、remain summary を後に出力する。因果関係が自然に読める順序にする。
+
+**Before:**
+```
+4 errors, 16 warnings in 123 files
+  file.yaml: fixed 16, remaining 0
+  ...
+Fixed 78 issues in 19 files (20 remaining)
+```
+
+**After:**
+```
+Fixed 78 issues in 19 files
+  file.yaml: fixed 16, remaining 0
+  ...
+4 errors, 16 warnings remain in 9 files (20 issues remaining)
+```
+
+または before/after 統合形式:
+```
+Checked 123 files: 82 errors, 16 warnings found
+Fixed 78 issues in 19 files
+  ...
+4 errors, 16 warnings remain (20 issues in 9 files)
+```
+
+#### 6b: ファイル一覧のカラム整列
+
+ファイル名と数値をカラム整列する。remaining 0 のファイルは省略するか、畳んで表示する。
+
+**Option A — カラム整列:**
+```
+  File                                  Fixed  Remaining
+  _reusable-dump-context.yaml              16          0
+  agentics-maintenance.yml                 10          1
+```
+
+**Option B — remaining 0 省略 (推奨):**
+```
+Fixed 78 issues in 19 files (fully fixed)
+9 files have remaining issues:
+  matrix-secret.yaml              3 remaining
+  auto-dump-context.yaml          2 remaining
+  ...
+```
+
+#### 6c: before/after/fixed の関連性を明示
+
+2つのサマリ行を統合サマリブロックにまとめ、数値の関係を一目で把握できるようにする。
+
+#### 6d: `--verbose` ルール別サマリの縦整列
+
+カンマ区切り1行 → 縦並びカラム整列:
+```
+  Rule                              Count
+  run-env-context-direct-use           28
+  if-expr-wrapper                      16
+  ...
+```
+
+#### 6e: `--format json` の stdout 純粋性保証
+
+- `--format json` 時は stdout に JSON 以外を一切出力しない
+- `--fix --dry-run` 時の unified diff は JSON envelope 内に含めるか、stderr に移動する
+- サマリ/hint は stderr のみ (現状は stderr だが、diff が stdout に出る問題を修正)
+
+### 影響範囲
+
+- `src/Seiton/Commands/CheckCommand.cs` — `WriteSummary`, `WritePerFileBreakdown`, `WritePerRuleBreakdown`
+- `src/Seiton/Commands/FixCommand.cs` — `WriteFixSummary`, サマリ出力順序の呼び出し箇所
+- `src/Seiton/Output/DiagnosticFormatter.cs` — JSON モード時の diff 出力制御
+
+### 優先度
+
+| サブタスク | 優先度 | 理由 |
+|---|---|---|
+| 6e: `--format json` stdout 純粋性 | 高 | 機械パース不能は致命的 |
+| 6a: fix モードのサマリ順序反転 | 高 | 自然な読み順 |
+| 6c: before/after/fixed 統合サマリ | 中 | 数値の関連を明示 |
+| 6b: ファイル一覧の整列/省略 | 中 | 視認性改善 |
+| 6d: verbose ルール別を縦整列 | 低 | 見やすさ向上だが影響小 |
+
+### 依存関係
+
+- Phase 1-5 と独立して着手可能
+- 6a/6b/6c は同一ブロック (サマリ出力) の変更のため、まとめて実装するのが望ましい
+- 6e は独立して先行実装可能
