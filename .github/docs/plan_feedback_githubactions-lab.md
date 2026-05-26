@@ -1,6 +1,6 @@
 # 修正プラン: githubactions-lab フィードバック対応
 
-> 対象フィードバック: `.github/docs/githubactions-lab_feedback_seiton.md`
+> 対象フィードバック: `.github/docs/feedback_seiton_githubactions-lab.md`
 > 検証リポジトリ: `.references/githubactions-lab` (master と同期済み)
 
 ---
