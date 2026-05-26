@@ -59,3 +59,7 @@ To allow more than one `pending` job or workflow run to wait in the same concurr
 * `single` (default): At most one job or workflow run can be `pending` in the concurrency group. When a new job or workflow run is queued, any existing `pending` job or workflow run in the same group is canceled and replaced.
 * `max`: Up to 100 jobs or workflow runs can be `pending` in the concurrency group. When the queue is full, any additional jobs or workflow runs are canceled.
 ```
+
+---
+
+`seiton` を実行したときに、総数のサマリーは出るのですがルールごとのサマリー件数は出ません。ファイル名はいらないと思うんですが、ルール毎の検出サマリって出したほうがいいと思いますかね?
