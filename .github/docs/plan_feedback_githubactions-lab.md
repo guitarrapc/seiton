@@ -102,7 +102,7 @@ dotnet run --project src/Seiton -- --oneline -c seiton.yaml .references/githubac
 
 ---
 
-## Phase 3: [High] ヒアドキュメント内の false positive 抑制
+## Phase 3: [High] ヒアドキュメント内の false positive 抑制 ✅
 
 ### 問題
 
@@ -120,35 +120,44 @@ dotnet run --project src/Seiton -- --oneline -c seiton.yaml .references/githubac
 - `RunInputsContextDirectUseRule`
 - `RunSecretsContextDirectUseRule`
 
-### テスト計画
+### 実装結果
 
-- **Red テスト**: `<< 'EOF'` ヒアドキュメント内の `${{ env.* }}` で診断が出ないことを検証
-- **Red テスト**: `<< EOF` (クォートなし) ヒアドキュメント内では通常通り検出されることを検証
-- 既存テスト `DoesNotAttachFix_InsideSingleQuotedHereDoc` を修正: fix が null ではなく、diagnostic 自体が出ないことに変更
+**変更ファイル**:
+- `src/Seiton.Core/Linting/Rules/RunEnvContextDirectUseRule.cs`: `CheckRunNode` 内で `IsInsideNoExpandHereDoc` が true の場合 `continue` して診断をスキップ
+- `src/Seiton.Core/Linting/Rules/RunInputsContextDirectUseRule.cs`: 同上
+- `src/Seiton.Core/Linting/Rules/RunSecretsContextDirectUseRule.cs`: 同上
+- `tests/Seiton.Core.Tests/RuleInterfaceTests.LintEngine.cs`: 5 テスト (3 新規 + 2 既存更新)
 
-### 検証手順
+**テスト** (すべて GREEN):
+1. `LintEngine_RunEnvContextDirectUse_NoDiagnostic_InsideSingleQuotedHereDoc` — `<< 'EOF'` で診断なし
+2. `LintEngine_RunEnvContextDirectUse_StillDetects_InsideUnquotedHereDoc` — `<< EOF` で通常通り検出
+3. `LintEngine_RunInputsContextDirectUse_NoDiagnostic_InsideSingleQuotedHereDoc` — inputs ルールも同様に抑制
+4. `LintEngine_RunSecretsContextDirectUse_NoDiagnostic_InsideSingleQuotedHereDoc` — secrets ルールも同様に抑制
+5. `LintEngine_RunInputsContextDirectUse_Fix_DoesNotAttach_InsideHereDoc` — 既存テスト更新 (diagnostic 自体が出ないことに変更)
 
+**動作確認**:
 ```shell
-# 1. テスト先行 (Red)
-dotnet test --filter "HereDoc"
-
-# 2. 実装後 (Green)
-dotnet test --filter "HereDoc"
-
-# 3. .references/githubactions-lab で動作確認
 dotnet run --project src/Seiton -- --oneline .references/githubactions-lab/.github/workflows/crlf-checker.yaml
-# 出力: 0 issues in 1 file
+# 出力: 0 issues in 1 file ✅
 
 dotnet run --project src/Seiton -- --oneline .references/githubactions-lab/.github/workflows/dotnet-lint.yaml
-# 出力: 0 issues in 1 file
-
-# 4. リグレッション確認
-dotnet test
-
-# 5. ベンチマーク確認
-cd src/Seiton.Benchmark
-dotnet run -c Release
+# 出力: 0 issues in 1 file ✅
 ```
+
+**ベンチマーク** (CoreLintBenchmark):
+
+| Size | FixEnabled | Mean | Allocated | Ratio | Alloc Ratio |
+|------|-----------|------|-----------|-------|-------------|
+| Small | False | 188 μs | 8.7 KB | 1.00 | 1.00 |
+| Small | True | 300 μs | 10.15 KB | 1.00 | 1.00 |
+| Medium | False | 3,409 μs | 69.17 KB | 1.00 | 1.00 |
+| Medium | True | 5,359 μs | 82.94 KB | 1.01 | 1.00 |
+| Large | False | 49,790 μs | 350.64 KB | 1.00 | 1.00 |
+| Large | True | 73,790 μs | 421.11 KB | 1.00 | 1.00 |
+
+**性能影響: なし** (Ratio=1.00〜1.01, AllocRatio=1.00)
+- heredoc チェックは `IsInsideNoExpandHereDoc` を expression が見つかった後にのみ呼び出し
+- `IsInsideNoExpandHereDoc` は UTF-8 バイト配列のスキャンで完結し、追加アロケーションなし
 
 ---
 

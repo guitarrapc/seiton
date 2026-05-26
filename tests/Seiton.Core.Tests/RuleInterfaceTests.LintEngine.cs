@@ -1988,8 +1988,10 @@ public sealed partial class RuleInterfaceTests
     }
 
     [Test]
-    public async Task LintEngine_RunEnvContextDirectUse_DoesNotAttachFix_InsideSingleQuotedHereDoc()
+    public async Task LintEngine_RunEnvContextDirectUse_NoDiagnostic_InsideSingleQuotedHereDoc()
     {
+        // Single-quoted heredoc (<<'EOF') does not expand shell variables,
+        // so ${{ env.* }} is the only way to insert values - not a false positive
         var yaml = """
         on: push
         jobs:
@@ -2003,10 +2005,78 @@ public sealed partial class RuleInterfaceTests
         """;
 
         using var result = new LintEngine([new RunEnvContextDirectUseRule()])
-            .Check(Encoding.UTF8.GetBytes(yaml), "run-env-no-fix-heredoc.yml");
-        var diagnostic = result.Diagnostics.First(x => x.RuleId == "run-env-context-direct-use");
+            .Check(Encoding.UTF8.GetBytes(yaml), "run-env-no-diag-heredoc.yml");
 
-        await Assert.That(diagnostic.Fix is null).IsTrue();
+        await Assert.That(result.Diagnostics.Where(x => x.RuleId == "run-env-context-direct-use")).IsEmpty();
+    }
+
+    [Test]
+    public async Task LintEngine_RunEnvContextDirectUse_StillDetects_InsideUnquotedHereDoc()
+    {
+        // Unquoted heredoc (<<EOF) DOES expand shell variables,
+        // so ${{ env.* }} should still be flagged
+        var yaml = """
+        on: push
+        jobs:
+            build:
+                runs-on: ubuntu-latest
+                steps:
+                    - run: |
+                        cat << EOF > pr_comment.md
+                          Workflow [${{ env.GITHUB_ACTIONS_RUN_URL }}) found CRLF files.
+                        EOF
+        """;
+
+        using var result = new LintEngine([new RunEnvContextDirectUseRule()])
+            .Check(Encoding.UTF8.GetBytes(yaml), "run-env-detect-unquoted-heredoc.yml");
+
+        await Assert.That(result.Diagnostics.Where(x => x.RuleId == "run-env-context-direct-use")).IsNotEmpty();
+    }
+
+    [Test]
+    public async Task LintEngine_RunInputsContextDirectUse_NoDiagnostic_InsideSingleQuotedHereDoc()
+    {
+        var yaml = """
+        on:
+            workflow_dispatch:
+                inputs:
+                    name:
+                        type: string
+        jobs:
+            build:
+                runs-on: ubuntu-latest
+                steps:
+                    - run: |
+                        cat << 'EOF' > output.md
+                          Input: ${{ inputs.name }}
+                        EOF
+        """;
+
+        using var result = new LintEngine([new RunInputsContextDirectUseRule()])
+            .Check(Encoding.UTF8.GetBytes(yaml), "run-inputs-no-diag-heredoc.yml");
+
+        await Assert.That(result.Diagnostics.Where(x => x.RuleId == "run-inputs-context-direct-use")).IsEmpty();
+    }
+
+    [Test]
+    public async Task LintEngine_RunSecretsContextDirectUse_NoDiagnostic_InsideSingleQuotedHereDoc()
+    {
+        var yaml = """
+        on: push
+        jobs:
+            build:
+                runs-on: ubuntu-latest
+                steps:
+                    - run: |
+                        cat << 'EOF' > config.yml
+                          token: ${{ secrets.GITHUB_TOKEN }}
+                        EOF
+        """;
+
+        using var result = new LintEngine([new RunSecretsContextDirectUseRule()])
+            .Check(Encoding.UTF8.GetBytes(yaml), "run-secrets-no-diag-heredoc.yml");
+
+        await Assert.That(result.Diagnostics.Where(x => x.RuleId == "run-secrets-context-direct-use")).IsEmpty();
     }
 
     [Test]
@@ -2374,6 +2444,7 @@ public sealed partial class RuleInterfaceTests
     [Test]
     public async Task LintEngine_RunInputsContextDirectUse_Fix_DoesNotAttach_InsideHereDoc()
     {
+        // Single-quoted heredoc suppresses the entire diagnostic (not just the fix)
         var yaml = """
         on: workflow_dispatch
         jobs:
@@ -2388,9 +2459,8 @@ public sealed partial class RuleInterfaceTests
 
         using var result = new LintEngine([new RunInputsContextDirectUseRule()])
             .Check(Encoding.UTF8.GetBytes(yaml), "run-inputs-no-fix-heredoc.yml", new LintConfig { Fix = new FixConfig { Enabled = true } });
-        var diagnostic = result.Diagnostics.First(x => x.RuleId == "run-inputs-context-direct-use");
 
-        await Assert.That(diagnostic.Fix is null).IsTrue();
+        await Assert.That(result.Diagnostics.Where(x => x.RuleId == "run-inputs-context-direct-use")).IsEmpty();
     }
 
     [Test]

@@ -84,6 +84,13 @@ public sealed class RunInputsContextDirectUseRule() : RuleBase(RuleId.RunInputsC
                 continue;
             }
 
+            // Skip detection inside no-expand heredoc (<<'EOF') where shell variables don't expand
+            var absoluteOffset = Arena.GetStringSlice(runNode).Offset + bodyStart - 3;
+            if (IsInsideNoExpandHereDoc(Config.Utf8Yaml, absoluteOffset))
+            {
+                continue;
+            }
+
             if (TryBuildFix(step, runNode, expression, bodyStart, nextSearchStart - (bodyStart - 3), out var fix))
             {
                 AddStepError(
