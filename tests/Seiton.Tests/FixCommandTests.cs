@@ -747,6 +747,207 @@ public sealed class FixCommandTests
         await Assert.That(lines[0]).Contains("line three");
     }
 
+    // === Fix Summary Tests ===
+
+    [Test]
+    public async Task Fix_Summary_ShowsFixedCountAndRemaining()
+    {
+        // Workflow with fixable issue (if-expr-wrapper) and non-fixable issue (job-timeout-minutes-required)
+        var configPath = CreateConfigFile(
+            """
+            rules:
+              runner-no-latest:
+                enabled: false
+              job-permissions-required:
+                enabled: false
+            """);
+        var filePath = CreateWorkflowFile(
+            """
+            on: push
+            jobs:
+              build:
+                runs-on: ubuntu-24.04
+                steps:
+                  - if: github.event_name == 'push'
+                    run: echo ok
+            """);
+
+        try
+        {
+            using var sw = new StringWriter();
+            using var stderr = new StringWriter();
+
+            await FixCommand.RunAsync(
+                [filePath],
+                config: configPath,
+                stdinFilename: "stdin.yml",
+                ignore: [],
+                minSeverity: null,
+                format: OutputFormat.Text,
+                oneline: true,
+                color: ColorMode.Never,
+                noColor: true,
+                verbose: false,
+                dryRun: false,
+                check: false,
+                enablePinNetwork: false,
+                enableImageNetwork: false,
+                includeActions: false,
+                output: sw,
+                error: stderr);
+
+            var errorOutput = stderr.ToString();
+            // Must contain "Fixed" summary line
+            await Assert.That(errorOutput).Contains("Fixed");
+            // Must show remaining count
+            await Assert.That(errorOutput).Contains("remaining");
+        }
+        finally
+        {
+            DeleteContainingDirectory(filePath);
+            DeleteContainingDirectory(configPath);
+        }
+    }
+
+    [Test]
+    public async Task Fix_Summary_NotShown_WhenNoFixesApplied()
+    {
+        // Workflow with no fixable issues
+        var configPath = CreateConfigFile(
+            """
+            rules:
+              runner-no-latest:
+                enabled: false
+              job-permissions-required:
+                enabled: false
+              if-expr-wrapper:
+                enabled: false
+              job-timeout-minutes-required:
+                enabled: false
+            """);
+        var filePath = CreateWorkflowFile(
+            """
+            on: push
+            jobs:
+              build:
+                runs-on: ubuntu-24.04
+                timeout-minutes: 10
+                permissions:
+                  contents: read
+                steps:
+                  - run: echo ok
+            """);
+
+        try
+        {
+            using var sw = new StringWriter();
+            using var stderr = new StringWriter();
+
+            await FixCommand.RunAsync(
+                [filePath],
+                config: configPath,
+                stdinFilename: "stdin.yml",
+                ignore: [],
+                minSeverity: null,
+                format: OutputFormat.Text,
+                oneline: true,
+                color: ColorMode.Never,
+                noColor: true,
+                verbose: false,
+                dryRun: false,
+                check: false,
+                enablePinNetwork: false,
+                enableImageNetwork: false,
+                includeActions: false,
+                output: sw,
+                error: stderr);
+
+            var errorOutput = stderr.ToString();
+            // Must NOT contain "Fixed" summary line
+            await Assert.That(errorOutput).DoesNotContain("Fixed");
+        }
+        finally
+        {
+            DeleteContainingDirectory(filePath);
+            DeleteContainingDirectory(configPath);
+        }
+    }
+
+    [Test]
+    public async Task Fix_Summary_MultipleFiles_ShowsPerFileDetail()
+    {
+        var configPath = CreateConfigFile(
+            """
+            rules:
+              runner-no-latest:
+                enabled: false
+              job-permissions-required:
+                enabled: false
+            """);
+
+        // Create two workflow files, both fixable
+        var dir = Path.Combine(Path.GetTempPath(), "Seiton.Tests", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(dir);
+        var filePath1 = Path.Combine(dir, "workflow1.yml");
+        var filePath2 = Path.Combine(dir, "workflow2.yml");
+        File.WriteAllText(filePath1, """
+            on: push
+            jobs:
+              build:
+                runs-on: ubuntu-24.04
+                steps:
+                  - if: github.event_name == 'push'
+                    run: echo ok
+            """);
+        File.WriteAllText(filePath2, """
+            on: push
+            jobs:
+              test:
+                runs-on: ubuntu-24.04
+                steps:
+                  - if: github.ref == 'refs/heads/main'
+                    run: echo test
+            """);
+
+        try
+        {
+            using var sw = new StringWriter();
+            using var stderr = new StringWriter();
+
+            await FixCommand.RunAsync(
+                [filePath1, filePath2],
+                config: configPath,
+                stdinFilename: "stdin.yml",
+                ignore: [],
+                minSeverity: null,
+                format: OutputFormat.Text,
+                oneline: true,
+                color: ColorMode.Never,
+                noColor: true,
+                verbose: false,
+                dryRun: false,
+                check: false,
+                enablePinNetwork: false,
+                enableImageNetwork: false,
+                includeActions: false,
+                output: sw,
+                error: stderr);
+
+            var errorOutput = stderr.ToString();
+            // Must contain per-file details
+            await Assert.That(errorOutput).Contains("workflow1.yml");
+            await Assert.That(errorOutput).Contains("workflow2.yml");
+            await Assert.That(errorOutput).Contains("fixed");
+            // Must contain total summary
+            await Assert.That(errorOutput).Contains("Fixed");
+        }
+        finally
+        {
+            DeleteContainingDirectory(filePath1);
+            DeleteContainingDirectory(configPath);
+        }
+    }
+
     private static string CreateWorkflowFile(string yaml)
     {
         var dir = Path.Combine(Path.GetTempPath(), "Seiton.Tests", Guid.NewGuid().ToString("N"));

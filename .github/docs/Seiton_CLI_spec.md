@@ -483,6 +483,18 @@ hint: use --min-severity error to treat warnings as non-blocking in CI
 
 In `--fix` mode, when network-assisted flags are not enabled but relevant diagnostics exist (`unpinned-uses` or `unpinned-image`), a hint is emitted suggesting the appropriate `--enable-pin-network` / `--enable-image-network` flags.
 
+In `--fix` mode (not `--dry-run`, not `--check`), when at least one fix is applied, a fix summary is emitted to stderr after the standard diagnostic summary:
+
+```
+  <filename>: fixed <N>, remaining <M>
+  <filename>: fixed <N>, remaining <M>
+Fixed <total> issue(s) in <file-count> file(s) (<remaining> remaining)
+```
+
+- Per-file lines show only files where fixes were applied (files with 0 fixes are omitted).
+- `remaining` is the count of diagnostics still present for that file after ignore/severity filters.
+- When no fixes are applied (all diagnostics are unfixable), the fix summary is not emitted.
+
 ---
 
 ## 7. Exit Codes

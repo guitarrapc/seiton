@@ -161,7 +161,7 @@ dotnet run --project src/Seiton -- --oneline .references/githubactions-lab/.gith
 
 ---
 
-## Phase 4: [Medium] --fix 適用時の修正サマリー表示
+## Phase 4: [Medium] --fix 適用時の修正サマリー表示 ✅
 
 ### 問題
 
@@ -169,52 +169,57 @@ dotnet run --project src/Seiton -- --oneline .references/githubactions-lab/.gith
 
 ### 修正方針
 
-`CheckCommand` (または `FixEngine` 呼び出し後) で、修正が適用された**ファイルごとの詳細**と合計サマリーを表示する。
+`FixCommand.RunAsync` のファイルループ内で per-file fix count を収集し、全ファイル処理後に `WriteFixSummary` でサマリーを stderr に出力。
 
 出力例:
 ```
-  .github/workflows/setenv-script.yaml: fixed 4, remaining 0
-  .github/workflows/crlf-checker.yaml: fixed 1, remaining 2
-Fixed 5 issues in 2 files (2 remaining)
+  setenv-script.yaml: fixed 4, remaining 0
+  matrix-secret.yaml: fixed 1, remaining 3
+Fixed 5 issues in 2 files (3 remaining)
 ```
 
-表示要件:
-- 修正されたファイルパス (入力パスからの相対パス表示)
-- ファイルごとの修正数 (`fixed N`)
-- ファイルごとの未修正残数 (`remaining M`) — fix が適用されなかった diagnostic 数
-- 全体サマリー行: 合計修正数、対象ファイル数、全体の残存 issue 数
-- 修正なし (0 fixes) の場合はファイル詳細を出さず、通常の diagnostic 出力のみ
+### 実装結果
 
-### テスト計画
+**変更ファイル**:
+- `src/Seiton/Commands/FixCommand.cs`: `WriteFixSummary` メソッド追加、fix ループ内で per-file count を `fixedFiles` リストに収集
+- `tests/Seiton.Tests/FixCommandTests.cs`: 3 テスト追加
 
-- **Red テスト**: `--fix` モードで修正が適用された場合、ファイルパスと修正数/残数が標準出力に含まれることを検証
-- **Red テスト**: 複数ファイルで修正が適用された場合、各ファイルが個別に表示されることを検証
-- **Red テスト**: 修正なし (0 fixes) の場合はサマリー行が出ないことを検証
+**テスト** (すべて GREEN):
+1. `Fix_Summary_ShowsFixedCountAndRemaining` — fix 適用時に "Fixed" と "remaining" が stderr に表示
+2. `Fix_Summary_NotShown_WhenNoFixesApplied` — fix なし時はサマリー非表示
+3. `Fix_Summary_MultipleFiles_ShowsPerFileDetail` — 複数ファイルで各ファイル名が個別表示
 
-### 検証手順
+**設計ポイント**:
+- `fixedFiles` は lazy 初期化 (`List<(string, int)>?`) で、fix が 0 件の場合はアロケーションなし
+- `remainingByFile` は `CollectionsMarshal.GetValueRefOrAddDefault` で O(1) ダブルルックアップ回避
+- サマリーは全ファイル処理 + ignore/severity フィルタ適用後に出力するため、表示内容がユーザーに見える残存 diagnostic と一致
+- `--dry-run` / `--check` モードではサマリー非表示 (fix 未適用のため)
+- ファイル名は `Path.GetFileName()` で表示 (フルパスは冗長)
 
+**動作確認**:
 ```shell
-# 1. テスト先行 (Red)
-dotnet test --filter "FixSummary"
-
-# 2. 実装後 (Green)
-dotnet test --filter "FixSummary"
-
-# 3. .references/githubactions-lab で動作確認
-git -C .references/githubactions-lab checkout -- .
-dotnet run --project src/Seiton -- --fix .references/githubactions-lab/.github/workflows/setenv-script.yaml
-# ファイルパス、修正数、残数が表示されること
-
-dotnet run --project src/Seiton -- --fix .references/githubactions-lab/.github/workflows/
-# 複数ファイルのサマリーが表示されること
-
-# 4. リグレッション確認
-dotnet test
-
-# 5. ベンチマーク確認
-cd src/Seiton.Benchmark
-dotnet run -c Release
+dotnet run --project src/Seiton -- --fix --oneline .references/githubactions-lab/.github/workflows/
+# 出力例:
+#   _reusable-dump-context.yaml: fixed 16, remaining 0
+#   setenv-script.yaml: fixed 4, remaining 0
+#   ...
+# Fixed 78 issues in 19 files (6 remaining)
 ```
+
+**ベンチマーク** (CoreLintBenchmark):
+
+| Size | FixEnabled | Mean | Allocated | Ratio | Alloc Ratio |
+|------|-----------|------|-----------|-------|-------------|
+| Small | False | 188 μs | 8.7 KB | 1.00 | 1.00 |
+| Small | True | 300 μs | 10.15 KB | 1.00 | 1.00 |
+| Medium | False | 3,409 μs | 69.17 KB | 1.00 | 1.00 |
+| Medium | True | 3,439 μs | 82.94 KB | 1.01 | 1.00 |
+| Large | False | 37,307 μs | 341.93 KB | 1.02 | 1.00 |
+| Large | True | 65,767 μs | 440.47 KB | 1.01 | 1.00 |
+
+**性能影響: なし** (Ratio=1.00〜1.02, AllocRatio=1.00)
+- 変更は CLI レイヤー (`FixCommand`) のみ。CoreLintBenchmark が測定する `LintEngine.Check` パスには影響なし
+- `WriteFixSummary` はファイルループ完了後に 1 回だけ呼ばれ、最小限の string formatting のみ
 
 ---
 

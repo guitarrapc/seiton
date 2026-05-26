@@ -133,6 +133,10 @@ internal static class FixCommand
             var actionRuleSummaryLogged = false;
             var totalStart = verboseLogger.GetTimestamp();
 
+            // Track per-file fix counts for the fix summary.
+            // Key: filePath, Value: number of fixes applied.
+            List<(string FilePath, int FixedCount)>? fixedFiles = null;
+
             // Fix command always builds fixes; enable fix construction for all Check() calls.
             var fixEnabledLintConfig = new LintConfig
             {
@@ -312,6 +316,12 @@ internal static class FixCommand
                 {
                     verboseLogger.LogFile(filePath, $"applied {appliedFixes} fix(es)");
                 }
+
+                if (appliedFixes > 0)
+                {
+                    fixedFiles ??= new List<(string, int)>();
+                    fixedFiles.Add((filePath, appliedFixes));
+                }
             }
 
             // Apply ignore patterns
@@ -350,6 +360,12 @@ internal static class FixCommand
             }
 
             CheckCommand.WriteSummary(errorWriter, allDiagnostics, resolvedFiles.Length, verbose, showExitHint: minSeverity is null);
+
+            // Write fix summary after standard diagnostic summary
+            if (fixedFiles is { Count: > 0 })
+            {
+                WriteFixSummary(errorWriter, fixedFiles, allDiagnostics);
+            }
 
             if (verboseLogger.IsEnabled)
                 CheckCommand.WriteTotalTiming(verboseLogger, resolvedFiles.Length, verboseLogger.GetElapsedTime(totalStart), "fixed");
@@ -434,6 +450,45 @@ internal static class FixCommand
         {
             errorWriter.WriteLine(lines[i]);
         }
+    }
+
+    internal static void WriteFixSummary(
+        TextWriter writer,
+        List<(string FilePath, int FixedCount)> fixedFiles,
+        List<Diagnostic> remainingDiagnostics)
+    {
+        // Compute per-file remaining counts from the filtered diagnostics list.
+        // Use a dictionary keyed by file path for O(1) lookup.
+        Dictionary<string, int>? remainingByFile = null;
+        for (var i = 0; i < remainingDiagnostics.Count; i++)
+        {
+            var file = remainingDiagnostics[i].FilePath;
+            if (file is null) continue;
+            remainingByFile ??= new Dictionary<string, int>(StringComparer.Ordinal);
+            ref var count = ref System.Runtime.InteropServices.CollectionsMarshal.GetValueRefOrAddDefault(remainingByFile, file, out _);
+            count++;
+        }
+
+        // Per-file detail lines
+        var totalFixed = 0;
+        var totalRemaining = 0;
+        for (var i = 0; i < fixedFiles.Count; i++)
+        {
+            var (filePath, fixedCount) = fixedFiles[i];
+            var remaining = 0;
+            remainingByFile?.TryGetValue(filePath, out remaining);
+
+            // Display file name only (not full path) for readability
+            var displayName = Path.GetFileName(filePath);
+            writer.WriteLine($"  {displayName}: fixed {fixedCount}, remaining {remaining}");
+
+            totalFixed += fixedCount;
+            totalRemaining += remaining;
+        }
+
+        // Total summary line
+        var fileWord = fixedFiles.Count == 1 ? "file" : "files";
+        writer.WriteLine($"Fixed {totalFixed} {(totalFixed == 1 ? "issue" : "issues")} in {fixedFiles.Count} {fileWord} ({totalRemaining} remaining)");
     }
 
     private static readonly IReadOnlyDictionary<string, int> EmptySuppressedByRule =
