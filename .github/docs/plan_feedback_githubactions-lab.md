@@ -5,7 +5,7 @@
 
 ---
 
-## Phase 1: [Critical] PowerShell defaults.run.shell 解決の修正
+## Phase 1: [Critical] PowerShell defaults.run.shell 解決の修正 ✅ 完了
 
 ### 問題
 
@@ -19,39 +19,38 @@
 - `RunSecretsContextDirectUseRule` — `IsPowerShell(Arena, step, ...)` を呼んでいる
 - `TemplateInjectionRule` — `IsPowerShell(Arena, step, ...)` を呼んでいる
 
-### 修正方針
+### 実装内容
 
-1. `RunContextDirectUseAnalyzer` に `ResolveEffectiveShell` メソッドを追加。解決順序: step.Shell → job.Defaults.Run.Shell → workflow.Defaults.Run.Shell
-2. 各ルールが `VisitJobPre` / `VisitWorkflowPre` で現在の Job/Workflow を保持し、`IsPowerShell` の呼び出し時にフォールバック可能にする
-3. `RunEnvContextDirectUseRule` は現在 `_currentJob` を持っていないため、追加が必要
+1. `RunContextDirectUseAnalyzer` に `IsPowerShellWithDefaults(arena, step, job?, workflow?, utf8Yaml)` メソッドを追加
+   - 解決順序: step.Shell → job.Defaults.Run.Shell → workflow.Defaults.Run.Shell
+   - 各レベルで expression (動的値) をスキップする安全性チェック付き
+2. `RunEnvContextDirectUseRule` に `_currentWorkflow` / `_currentJob` フィールドを追加し、`VisitWorkflowPre`/`VisitJobPre` で追跡
+3. 全4ルール (`RunEnv`, `RunInputs`, `RunSecrets`, `TemplateInjection`) で `IsPowerShell` → `IsPowerShellWithDefaults` に更新
 
-### テスト計画
+### テスト結果
 
-- **Red テスト**: `defaults.run.shell: pwsh` のジョブ内ステップで `${{ env.VAR }}` → `$env:VAR` に修正されることを検証
-- **Red テスト**: workflow-level `defaults.run.shell: pwsh` でも同様に動作することを検証
-- **Red テスト**: step-level `shell: bash` が defaults `pwsh` をオーバーライドし `${VAR}` になることを検証
+- `LintEngine_RunEnvContextDirectUse_Fix_UsesJobDefaultsShellForPowerShell` ✅
+- `LintEngine_RunEnvContextDirectUse_Fix_UsesWorkflowDefaultsShellForPowerShell` ✅
+- `LintEngine_RunEnvContextDirectUse_Fix_StepShellOverridesJobDefaults` ✅
+- 全 1748 Core テスト合格、リグレッションなし
 
-### 検証手順
+### ベンチマーク結果
 
-```shell
-# 1. テスト先行 (Red)
-dotnet test --filter "RunEnvContextDirectUse"
-
-# 2. 実装後 (Green)
-dotnet test --filter "RunEnvContextDirectUse"
-
-# 3. .references/githubactions-lab で動作確認
-dotnet run --project src/Seiton -- --fix --dry-run .references/githubactions-lab/.github/workflows/setenv-script.yaml
-# pwsh ジョブのステップが $env:BRANCH_NAME に修正されること
-
-# 4. リグレッション確認
-dotnet test
-
-# 5. ベンチマーク確認
-cd src/Seiton.Benchmark
-dotnet run -c Release
-# LintBenchmark の Mean / Allocated が既存ベースラインから劣化しないこと
 ```
+CoreLintBenchmark (BenchmarkDotNet v0.15.8, .NET 10.0.3)
+| Size   | FixEnabled | Mean        | Allocated | Ratio | Alloc Ratio |
+|--------|------------|-------------|-----------|-------|-------------|
+| Small  | False      | 188.8 μs   | 8.7 KB    | 1.01  | 1.00        |
+| Small  | True       | 300.0 μs   | 10.15 KB  | 1.00  | 1.00        |
+| Medium | False      | 3,409.2 μs | 69.17 KB  | 1.01  | 1.00        |
+| Medium | True       | 5,587.6 μs | 82.8 KB   | 1.00  | 1.00        |
+| Large  | False      | 63,857 μs  | 353.22 KB | 1.00  | 1.00        |
+| Large  | True       | 95,371 μs  | 440.47 KB | 1.00  | 1.00        |
+```
+
+**性能影響: なし** (Ratio=1.00, AllocRatio=1.00)
+- `IsPowerShellWithDefaults` は fix パスでのみ呼ばれ、追加コストは null チェック 2 回 + HasValue チェック 2 回のみ
+- 新規メモリ割り当てなし
 
 ---
 
