@@ -1988,6 +1988,93 @@ public sealed partial class RuleInterfaceTests
     }
 
     [Test]
+    public async Task LintEngine_RunEnvContextDirectUse_Help_ShownForCompositeExpression()
+    {
+        // When TryParseSimpleContextReference fails (composite expression), Help should hint env-block approach
+        var yaml = """
+        on: push
+        jobs:
+            build:
+                runs-on: ubuntu-latest
+                steps:
+                    - run: echo "${{ env.TAG_VALUE || 'fallback' }}"
+        """;
+
+        using var result = new LintEngine([new RunEnvContextDirectUseRule()])
+            .Check(Encoding.UTF8.GetBytes(yaml), "run-env-help-composite.yml");
+        var diagnostic = result.Diagnostics.First(x => x.RuleId == "run-env-context-direct-use");
+
+        await Assert.That(diagnostic.Help).IsNotNull();
+        await Assert.That(diagnostic.Help!).Contains("env:");
+    }
+
+    [Test]
+    public async Task LintEngine_RunEnvContextDirectUse_Help_NotShownForSimpleExpression()
+    {
+        // Simple env.VAR reference should NOT have help (it has a fix instead)
+        var yaml = """
+        on: push
+        jobs:
+            build:
+                runs-on: ubuntu-latest
+                env:
+                    VERSION: "1.0"
+                steps:
+                    - run: echo "${{ env.VERSION }}"
+        """;
+
+        using var result = new LintEngine([new RunEnvContextDirectUseRule()])
+            .Check(Encoding.UTF8.GetBytes(yaml), "run-env-no-help-simple.yml");
+        var diagnostic = result.Diagnostics.First(x => x.RuleId == "run-env-context-direct-use");
+
+        await Assert.That(diagnostic.Help).IsNull();
+    }
+
+    [Test]
+    public async Task LintEngine_RunInputsContextDirectUse_Help_ShownForCompositeExpression()
+    {
+        var yaml = """
+        on:
+            workflow_dispatch:
+                inputs:
+                    tag:
+                        type: string
+        jobs:
+            build:
+                runs-on: ubuntu-latest
+                steps:
+                    - run: echo "${{ inputs.tag || 'v1.0.0' }}"
+        """;
+
+        using var result = new LintEngine([new RunInputsContextDirectUseRule()])
+            .Check(Encoding.UTF8.GetBytes(yaml), "run-inputs-help-composite.yml");
+        var diagnostic = result.Diagnostics.First(x => x.RuleId == "run-inputs-context-direct-use");
+
+        await Assert.That(diagnostic.Help).IsNotNull();
+        await Assert.That(diagnostic.Help!).Contains("env:");
+    }
+
+    [Test]
+    public async Task LintEngine_RunSecretsContextDirectUse_Help_ShownForCompositeExpression()
+    {
+        var yaml = """
+        on: push
+        jobs:
+            build:
+                runs-on: ubuntu-latest
+                steps:
+                    - run: echo "${{ secrets.TOKEN || secrets.FALLBACK_TOKEN }}"
+        """;
+
+        using var result = new LintEngine([new RunSecretsContextDirectUseRule()])
+            .Check(Encoding.UTF8.GetBytes(yaml), "run-secrets-help-composite.yml");
+        var diagnostic = result.Diagnostics.First(x => x.RuleId == "run-secrets-context-direct-use");
+
+        await Assert.That(diagnostic.Help).IsNotNull();
+        await Assert.That(diagnostic.Help!).Contains("env:");
+    }
+
+    [Test]
     public async Task LintEngine_RunEnvContextDirectUse_NoDiagnostic_InsideSingleQuotedHereDoc()
     {
         // Single-quoted heredoc (<<'EOF') does not expand shell variables,

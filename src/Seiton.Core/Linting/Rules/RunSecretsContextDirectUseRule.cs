@@ -105,7 +105,8 @@ public sealed class RunSecretsContextDirectUseRule() : RuleBase(RuleId.RunSecret
                 AddStepError(
                     step,
                     "run script must not reference ${{ secrets.* }} directly; map secrets to env and use shell variables instead (e.g. ${TOKEN}, $TOKEN, or $env:TOKEN)",
-                    location);
+                    location,
+                    "consider moving the entire expression to an env: block and referencing the shell variable instead");
             }
 
             return;

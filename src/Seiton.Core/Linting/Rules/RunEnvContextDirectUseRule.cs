@@ -105,7 +105,8 @@ public sealed class RunEnvContextDirectUseRule() : RuleBase(RuleId.RunEnvContext
                 AddStepError(
                     step,
                     "run script must not reference ${{ env.* }} directly; use shell variables instead (e.g. $NAME or $env:NAME)",
-                    location);
+                    location,
+                    "consider moving the entire expression to an env: block and referencing the shell variable instead");
             }
 
             return;

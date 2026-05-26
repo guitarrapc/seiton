@@ -104,7 +104,8 @@ public sealed class RunInputsContextDirectUseRule() : RuleBase(RuleId.RunInputsC
                 AddStepError(
                     step,
                     "run script must not reference ${{ inputs.* }} or ${{ github.event.inputs.* }} directly; map inputs to env and use shell variables instead (e.g. ${NAME}, $NAME, or $env:NAME)",
-                    location);
+                    location,
+                    "consider moving the entire expression to an env: block and referencing the shell variable instead");
             }
 
             return;

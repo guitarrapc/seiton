@@ -223,7 +223,7 @@ dotnet run --project src/Seiton -- --fix --oneline .references/githubactions-lab
 
 ---
 
-## Phase 5: [Low] 式フォールバックのヘルプメッセージ改善
+## Phase 5: [Low] 式フォールバックのヘルプメッセージ改善 ✅
 
 ### 問題
 
@@ -237,30 +237,51 @@ fix が付与されないケース (TryParseSimpleContextReference が false) �
 
 検出自体は正当 (env に式ごと移動する解決策がある) なので、false positive としてスキップはしない。
 
-### テスト計画
+### 実装結果
 
-- **Red テスト**: 複合式の env 参照で diagnostic の Help フィールドにヒントが含まれることを検証
+**変更ファイル**:
+- `src/Seiton.Core/Linting/RuleBase.cs`: `AddStepError(Step, string, TextRange, string help)` オーバーロード追加
+- `src/Seiton.Core/Linting/Rules/RunEnvContextDirectUseRule.cs`: else ブランチで help 付き `AddStepError` を呼び出し
+- `src/Seiton.Core/Linting/Rules/RunInputsContextDirectUseRule.cs`: 同上
+- `src/Seiton.Core/Linting/Rules/RunSecretsContextDirectUseRule.cs`: 同上
+- `tests/Seiton.Core.Tests/RuleInterfaceTests.LintEngine.cs`: 4 テスト追加
+- `docs/rules.md`: 各ルールに help メッセージの説明追加
+- `.github/docs/Seiton_Linter_spec.md`: fix テーブルに compound expression の help 記載
 
-### 検証手順
+**テスト** (すべて GREEN):
+1. `LintEngine_RunEnvContextDirectUse_Help_ShownForCompositeExpression` — 複合式で Help フィールドに "env:" を含むヒント
+2. `LintEngine_RunEnvContextDirectUse_Help_NotShownForSimpleExpression` — 単純式 (fix あり) では Help が null
+3. `LintEngine_RunInputsContextDirectUse_Help_ShownForCompositeExpression` — inputs ルールも同様
+4. `LintEngine_RunSecretsContextDirectUse_Help_ShownForCompositeExpression` — secrets ルールも同様
 
+**設計ポイント**:
+- help 文字列はコンパイル時定数リテラル — 追加ヒープアロケーションなし
+- `AddStepError` は `string help` オーバーロードを追加 (既存 `DiagnosticFix fix` オーバーロードとは型が異なり曖昧性なし)
+- 3 ルールすべてで同一の help 文字列を使用 (一貫した UX)
+- secrets/inputs ルールでは env マッピングがない場合も help を表示 (ユーザーへのガイダンスとして適切)
+
+**動作確認**:
 ```shell
-# 1. テスト先行 (Red)
-dotnet test --filter "RunEnvContextDirectUse"
-
-# 2. 実装後 (Green)
-dotnet test --filter "RunEnvContextDirectUse"
-
-# 3. .references/githubactions-lab で動作確認
 dotnet run --project src/Seiton -- .references/githubactions-lab/.github/workflows/create-release.yaml
-# Help メッセージが表示されること
-
-# 4. リグレッション確認
-dotnet test
-
-# 5. ベンチマーク確認
-cd src/Seiton.Benchmark
-dotnet run -c Release
+# 出力:
+# error[run-inputs-context-direct-use]: run script must not reference ...
+#    = help: consider moving the entire expression to an env: block and referencing the shell variable instead
 ```
+
+**ベンチマーク** (CoreLintBenchmark):
+
+| Size | FixEnabled | Mean | Allocated | Ratio | Alloc Ratio |
+|------|-----------|------|-----------|-------|-------------|
+| Small | False | 338 μs | 8.85 KB | 1.02 | 1.00 |
+| Small | True | 404 μs | 10.3 KB | 1.03 | 1.00 |
+| Medium | False | 5,928 μs | 70.13 KB | 1.00 | 1.00 |
+| Medium | True | 6,994 μs | 83.49 KB | 1.01 | 1.00 |
+| Large | False | 36,556 μs | 327.41 KB | 1.00 | 1.00 |
+| Large | True | 51,187 μs | 382.25 KB | 1.00 | 1.00 |
+
+**性能影響: なし** (Ratio=1.00〜1.03, AllocRatio=1.00)
+- help 文字列は .NET string intern リテラルでアロケーション不要
+- 条件分岐は既存の if/else の else ブランチに追加引数を渡すのみ
 
 ---
 
