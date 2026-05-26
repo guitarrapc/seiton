@@ -54,7 +54,7 @@ CoreLintBenchmark (BenchmarkDotNet v0.15.8, .NET 10.0.3)
 
 ---
 
-## Phase 2: [High] ファイル除外が parse エラーに適用されない問題
+## Phase 2: [High] ファイル除外が parse エラーに適用されない問題 ✅
 
 ### 問題
 
@@ -64,38 +64,40 @@ CoreLintBenchmark (BenchmarkDotNet v0.15.8, .NET 10.0.3)
 
 ### 修正方針
 
-**Option A** (推奨): ファイルレベル除外 (rules 指定なし) のとき、パース自体をスキップして空の LintResult を返す。
-- メリット: パース処理自体が不要になりパフォーマンス向上
-- 実装箇所: `LintEngine.Check` のエントリポイント直後に除外判定を追加
+**Option A** (推奨・採用): ファイルレベル除外 (rules 指定なし) のとき、`CheckCore` 冒頭で早期リターンし空の LintResult を返す。
+- メリット: パース診断の収集もルール実行も完全にスキップ。パフォーマンス劣化なし。
+- 実装箇所: `LintEngine.CheckCore` 冒頭に `IsFileFullyExcluded` チェック追加
 
-**Option B**: パーサー診断を `_diagnostics` に追加する際に除外フィルタを適用する。
-- RuleId が null の場合でもファイルパスベースで除外判定
+### 実装結果
 
-### テスト計画
+**変更ファイル**:
+- `src/Seiton.Core/Linting/LintEngine.cs`: `IsFileFullyExcluded` static メソッド追加 + `CheckCore` 冒頭で早期リターン
+- `tests/Seiton.Core.Tests/RuleInterfaceTests.LintEngine.cs`: 4 テスト追加 + 1 テスト更新
 
-- **Red テスト**: ファイル全体除外の設定で、対象ファイルの parse エラーが LintResult に含まれないことを検証
-- **Red テスト**: ルール指定ありの部分除外では parse エラーは抑制されないことを検証 (parse は特定ルールではないため)
+**追加テスト** (すべて GREEN):
+1. `FileLevelExclusion_SuppressesParseErrors` — ファイルレベル除外がパースエラーを抑制
+2. `RuleSpecificExclusion_DoesNotSuppressParseErrors` — ルール指定除外はパースエラーを抑制しない
+3. `FileLevelWithJobs_DoesNotSuppressParseErrors` — ジョブスコープ付き除外はパースエラーを抑制しない
+4. `FileLevelExclusion_NonMatchingFile_DoesNotSuppressParseErrors` — パターン不一致時は抑制しない
 
-### 検証手順
+**既存テスト更新**:
+- `NullRules_SuppressesAllDiagnostics`: 早期リターンにより `SuppressionSummary` が空になるため、アサーション更新
 
+**ベンチマーク** (CoreLintBenchmark):
+
+| Size | FixEnabled | Ratio | AllocRatio |
+|------|-----------|-------|------------|
+| Small | False | 1.01 | 1.00 |
+| Small | True | 1.00 | 1.00 |
+| Medium | False | 1.01 | 1.00 |
+| Medium | True | 1.00 | 1.00 |
+| Large | False | 1.00 | 1.00 |
+| Large | True | 1.00 | 1.00 |
+
+**動作確認**:
 ```shell
-# 1. テスト先行 (Red)
-dotnet test --filter "Exclusion"
-
-# 2. 実装後 (Green)
-dotnet test --filter "Exclusion"
-
-# 3. .references/githubactions-lab で動作確認
-# seiton.yaml に exclusion を設定して parse エラーが消えることを確認
-dotnet run --project src/Seiton -- --oneline -c .references/githubactions-lab/.github/seiton.yaml .references/githubactions-lab/.github/workflows/monthly-oss-repo-status.lock.yml
-# 出力: 0 issues in 0 files (ファイル自体がスキップされる)
-
-# 4. リグレッション確認
-dotnet test
-
-# 5. ベンチマーク確認
-cd src/Seiton.Benchmark
-dotnet run -c Release
+dotnet run --project src/Seiton -- --oneline -c seiton.yaml .references/githubactions-lab/.github/workflows/monthly-oss-repo-status.lock.yml
+# 出力: 0 issues in 1 file ✅
 ```
 
 ---

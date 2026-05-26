@@ -2855,10 +2855,8 @@ public sealed partial class RuleInterfaceTests
 
         using var result = new LintEngine().Check(Encoding.UTF8.GetBytes(yaml), "workflows/main.yml", config);
 
-        // All diagnostics should be suppressed (file-level exclusion with no rule filter)
+        // File-level exclusion (Rules: null, no Jobs) short-circuits before rule execution
         await Assert.That(result.Diagnostics).IsEmpty();
-        await Assert.That(result.SuppressionSummary.TotalSuppressed).IsGreaterThanOrEqualTo(2);
-        await Assert.That(result.SuppressionSummary.Records.All(x => x.Source == SuppressionSource.ConfigFile)).IsTrue();
     }
 
     [Test]
@@ -4460,5 +4458,122 @@ public sealed partial class RuleInterfaceTests
             await Assert.That(currLine).IsGreaterThanOrEqualTo(prevLine)
                 .Because($"Diagnostic at index {i} (line {currLine}: {curr.Message}) should not appear before diagnostic at index {i - 1} (line {prevLine}: {prev.Message})");
         }
+    }
+
+    [Test]
+    public async Task LintEngine_ConfigExclusion_FileLevelExclusion_SuppressesParseErrors()
+    {
+        // YAML with parse errors (invalid syntax)
+        var yaml = """
+        on: push
+        jobs:
+            build:
+                runs-on: ubuntu-latest
+                steps:
+                    - uses: actions/checkout@v4
+                      with:
+                        invalid_yaml: [unclosed
+        """u8.ToArray();
+
+        var config = new LintConfig
+        {
+            Exclusions =
+            [
+                new LintExclusion("**/*.yml", Rules: null),
+            ],
+        };
+
+        using var result = new LintEngine().Check(yaml, "workflows/broken.yml", config);
+
+        // File-level exclusion (Rules: null, no Jobs) should suppress ALL diagnostics including parse errors
+        await Assert.That(result.Diagnostics).IsEmpty();
+    }
+
+    [Test]
+    public async Task LintEngine_ConfigExclusion_RuleSpecificExclusion_DoesNotSuppressParseErrors()
+    {
+        // YAML with parse errors (invalid syntax)
+        var yaml = """
+        on: push
+        jobs:
+            build:
+                runs-on: ubuntu-latest
+                steps:
+                    - uses: actions/checkout@v4
+                      with:
+                        invalid_yaml: [unclosed
+        """u8.ToArray();
+
+        var config = new LintConfig
+        {
+            Exclusions =
+            [
+                new LintExclusion("**/*.yml", Rules: ["job-permissions-required"]),
+            ],
+        };
+
+        using var result = new LintEngine().Check(yaml, "workflows/broken.yml", config);
+
+        // Rule-specific exclusion should NOT suppress parse errors (parse errors have no RuleId)
+        await Assert.That(result.Diagnostics).IsNotEmpty();
+    }
+
+    [Test]
+    public async Task LintEngine_ConfigExclusion_FileLevelWithJobs_DoesNotSuppressParseErrors()
+    {
+        // YAML with parse errors - file-level exclusion with Jobs specified should not short-circuit
+        // because job-scoped exclusion requires parse to determine job boundaries
+        var yaml = """
+        on: push
+        jobs:
+            build:
+                runs-on: ubuntu-latest
+                steps:
+                    - uses: actions/checkout@v4
+                      with:
+                        invalid_yaml: [unclosed
+        """u8.ToArray();
+
+        var config = new LintConfig
+        {
+            Exclusions =
+            [
+                new LintExclusion("**/*.yml", Rules: null, Jobs: ["build"]),
+            ],
+        };
+
+        using var result = new LintEngine().Check(yaml, "workflows/broken.yml", config);
+
+        // Job-scoped exclusion cannot suppress parse errors (job scope requires successful parse)
+        await Assert.That(result.Diagnostics).IsNotEmpty();
+    }
+
+    [Test]
+    public async Task LintEngine_ConfigExclusion_FileLevelExclusion_NonMatchingFile_DoesNotSuppressParseErrors()
+    {
+        // YAML with parse errors - file-level exclusion for different file pattern
+        var yaml = """
+        on: push
+        jobs:
+            build:
+                runs-on: ubuntu-latest
+                steps:
+                    - uses: actions/checkout@v4
+                      with:
+                        invalid_yaml: [unclosed
+        """u8.ToArray();
+
+        var config = new LintConfig
+        {
+            Exclusions =
+            [
+                new LintExclusion("**/other.yml", Rules: null),
+            ],
+        };
+
+        using var result = new LintEngine().Check(yaml, "workflows/broken.yml", config);
+
+        // Non-matching file-level exclusion should NOT suppress parse errors
+        await Assert.That(result.Diagnostics).IsNotEmpty();
     }
 }

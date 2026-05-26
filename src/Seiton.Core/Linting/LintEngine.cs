@@ -240,6 +240,21 @@ public sealed class LintEngine
         var normalizedRules = NormalizeRules(config?.Rules, filePath);
         _disabledRuleIds.Clear();
 
+        // File-level exclusion (Rules: null, Jobs: null) short-circuits before any diagnostics.
+        // This ensures parse errors are suppressed for fully-excluded files.
+        if (IsFileFullyExcluded(config?.Exclusions, filePath))
+        {
+            var (ruleCount, disabledIds) = GetRuleActivationMetadataForDocumentKind(normalizedRules.Rules, documentKind);
+            return new LintResultData(parseResult, default)
+            {
+                SuppressionSummary = SuppressionSummary.Empty,
+                DocumentKind = documentKind,
+                ActiveRuleCount = ruleCount,
+                DisabledRuleCount = disabledIds.Length,
+                DisabledRuleIds = disabledIds,
+            };
+        }
+
         if (parseResult.HasFatalError || (parseResult.Workflow is null && parseResult.ActionMetadata is null))
         {
             DiagnosticList diagnostics = parseResult.Diagnostics;
@@ -1293,6 +1308,43 @@ public sealed class LintEngine
         _configDiagnostics.Clear();
         RuleNormalizer.NormalizeRuleEntries(rules, filePath, _configDiagnostics, _normalizedRulesDict);
         return new RulesNormalization(_normalizedRulesDict, _configDiagnostics);
+    }
+
+    /// <summary>
+    /// Checks whether the file is fully excluded by a file-level exclusion (Rules: null, Jobs: null).
+    /// This is a lightweight pre-check that avoids processing parse diagnostics and running rules.
+    /// </summary>
+    private static bool IsFileFullyExcluded(IReadOnlyList<LintExclusion>? exclusions, string filePath)
+    {
+        if (exclusions is null || exclusions.Count == 0)
+        {
+            return false;
+        }
+
+        var normalizedFilePath = NormalizePath(filePath);
+
+        for (var i = 0; i < exclusions.Count; i++)
+        {
+            var exclusion = exclusions[i];
+            // Only file-level exclusions: Rules must be null (all rules) and Jobs must be null/empty
+            if (exclusion.Rules is not null || (exclusion.Jobs is not null && exclusion.Jobs.Count > 0))
+            {
+                continue;
+            }
+
+            if (string.IsNullOrWhiteSpace(exclusion.File))
+            {
+                continue;
+            }
+
+            var normalizedPattern = NormalizeExclusionPattern(exclusion.File);
+            if (GlobMatch(normalizedPattern, normalizedFilePath))
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private ExclusionsNormalization NormalizeExclusions(IReadOnlyList<LintExclusion>? exclusions, string filePath, Parsing.Ast.Workflow workflow, byte[] utf8Yaml, AstArena arena)
