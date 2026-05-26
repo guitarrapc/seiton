@@ -948,6 +948,190 @@ public sealed class FixCommandTests
         }
     }
 
+    // === Fix Summary in Dry-Run / Check Mode Tests ===
+
+    [Test]
+    public async Task Fix_Summary_DryRun_ShowsSummary()
+    {
+        // Workflow with fixable issue (if-expr-wrapper)
+        var configPath = CreateConfigFile(
+            """
+            rules:
+              runner-no-latest:
+                enabled: false
+              job-permissions-required:
+                enabled: false
+            """);
+        var filePath = CreateWorkflowFile(
+            """
+            on: push
+            jobs:
+              build:
+                runs-on: ubuntu-24.04
+                steps:
+                  - if: github.event_name == 'push'
+                    run: echo ok
+            """);
+
+        try
+        {
+            using var sw = new StringWriter();
+            using var stderr = new StringWriter();
+
+            await FixCommand.RunAsync(
+                [filePath],
+                config: configPath,
+                stdinFilename: "stdin.yml",
+                ignore: [],
+                minSeverity: null,
+                format: OutputFormat.Text,
+                oneline: true,
+                color: ColorMode.Never,
+                noColor: true,
+                verbose: false,
+                dryRun: true,
+                check: false,
+                enablePinNetwork: false,
+                enableImageNetwork: false,
+                includeActions: false,
+                output: sw,
+                error: stderr);
+
+            var errorOutput = stderr.ToString();
+            // Must contain "Would fix" summary line in dry-run mode
+            await Assert.That(errorOutput).Contains("Would fix");
+            await Assert.That(errorOutput).Contains("remaining");
+        }
+        finally
+        {
+            DeleteContainingDirectory(filePath);
+            DeleteContainingDirectory(configPath);
+        }
+    }
+
+    [Test]
+    public async Task Fix_Summary_Check_ShowsSummary()
+    {
+        // Workflow with fixable issue (if-expr-wrapper)
+        var configPath = CreateConfigFile(
+            """
+            rules:
+              runner-no-latest:
+                enabled: false
+              job-permissions-required:
+                enabled: false
+            """);
+        var filePath = CreateWorkflowFile(
+            """
+            on: push
+            jobs:
+              build:
+                runs-on: ubuntu-24.04
+                steps:
+                  - if: github.event_name == 'push'
+                    run: echo ok
+            """);
+
+        try
+        {
+            using var sw = new StringWriter();
+            using var stderr = new StringWriter();
+
+            await FixCommand.RunAsync(
+                [filePath],
+                config: configPath,
+                stdinFilename: "stdin.yml",
+                ignore: [],
+                minSeverity: null,
+                format: OutputFormat.Text,
+                oneline: true,
+                color: ColorMode.Never,
+                noColor: true,
+                verbose: false,
+                dryRun: false,
+                check: true,
+                enablePinNetwork: false,
+                enableImageNetwork: false,
+                includeActions: false,
+                output: sw,
+                error: stderr);
+
+            var errorOutput = stderr.ToString();
+            // Must contain fixable summary line in check mode
+            await Assert.That(errorOutput).Contains("fixable");
+        }
+        finally
+        {
+            DeleteContainingDirectory(filePath);
+            DeleteContainingDirectory(configPath);
+        }
+    }
+
+    [Test]
+    public async Task Fix_Summary_DryRun_NotShown_WhenNoFixesApplied()
+    {
+        // Workflow with no fixable issues
+        var configPath = CreateConfigFile(
+            """
+            rules:
+              runner-no-latest:
+                enabled: false
+              job-permissions-required:
+                enabled: false
+              if-expr-wrapper:
+                enabled: false
+              job-timeout-minutes-required:
+                enabled: false
+            """);
+        var filePath = CreateWorkflowFile(
+            """
+            on: push
+            jobs:
+              build:
+                runs-on: ubuntu-24.04
+                timeout-minutes: 10
+                permissions:
+                  contents: read
+                steps:
+                  - run: echo ok
+            """);
+
+        try
+        {
+            using var sw = new StringWriter();
+            using var stderr = new StringWriter();
+
+            await FixCommand.RunAsync(
+                [filePath],
+                config: configPath,
+                stdinFilename: "stdin.yml",
+                ignore: [],
+                minSeverity: null,
+                format: OutputFormat.Text,
+                oneline: true,
+                color: ColorMode.Never,
+                noColor: true,
+                verbose: false,
+                dryRun: true,
+                check: false,
+                enablePinNetwork: false,
+                enableImageNetwork: false,
+                includeActions: false,
+                output: sw,
+                error: stderr);
+
+            var errorOutput = stderr.ToString();
+            // Must NOT contain fix summary when nothing is fixable
+            await Assert.That(errorOutput).DoesNotContain("Would fix");
+            await Assert.That(errorOutput).DoesNotContain("fixable");
+        }
+        finally
+        {
+            DeleteContainingDirectory(filePath);
+            DeleteContainingDirectory(configPath);
+        }
+    }
+
     private static string CreateWorkflowFile(string yaml)
     {
         var dir = Path.Combine(Path.GetTempPath(), "Seiton.Tests", Guid.NewGuid().ToString("N"));

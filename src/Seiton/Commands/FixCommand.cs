@@ -231,7 +231,21 @@ internal static class FixCommand
 
                 if (check)
                 {
-                    // --check: report fixable but don't apply
+                    // --check: report fixable but don't apply.
+                    // Count fixable diagnostics for the summary.
+                    var fixableCount = 0;
+                    for (var j = 0; j < effectiveDiagnostics.Count; j++)
+                    {
+                        if (effectiveDiagnostics[j].Fix != null)
+                            fixableCount++;
+                    }
+
+                    if (fixableCount > 0)
+                    {
+                        fixedFiles ??= new List<(string, int)>();
+                        fixedFiles.Add((filePath, fixableCount));
+                    }
+
                     allDiagnostics.AddRange(effectiveDiagnostics);
                     continue;
                 }
@@ -240,12 +254,15 @@ internal static class FixCommand
                 {
                     // --dry-run: compute fixed YAML via iterative conflict-safe apply, then diff.
                     byte[] dryRunYaml;
+                    var dryRunApplied = 0;
                     try
                     {
-                        dryRunYaml = ApplyFixesIteratively(engine, utf8Yaml, filePath, fixEnabledLintConfig);
+                        dryRunYaml = ApplyFixesIteratively(engine, utf8Yaml, filePath, fixEnabledLintConfig, 8, ref dryRunApplied);
                         if (pinRemediation != null)
                         {
-                            (dryRunYaml, _) = await ApplyPinRemediationAsync(pinRemediation, engine, dryRunYaml, filePath, fixEnabledLintConfig, verboseLogger);
+                            var (pinYaml, pinCount) = await ApplyPinRemediationAsync(pinRemediation, engine, dryRunYaml, filePath, fixEnabledLintConfig, verboseLogger);
+                            dryRunYaml = pinYaml;
+                            dryRunApplied += pinCount;
                         }
                     }
                     catch (Exception ex) when (ex is not OperationCanceledException)
@@ -269,6 +286,12 @@ internal static class FixCommand
                     using (var dryRunHandle = engine.Check(dryRunYaml, filePath, fixEnabledLintConfig))
                     {
                         allDiagnostics.AddRange(dryRunHandle.Diagnostics.AsSpan());
+                    }
+
+                    if (dryRunApplied > 0)
+                    {
+                        fixedFiles ??= new List<(string, int)>();
+                        fixedFiles.Add((filePath, dryRunApplied));
                     }
 
                     continue;
@@ -364,7 +387,10 @@ internal static class FixCommand
             // Write fix summary after standard diagnostic summary
             if (fixedFiles is { Count: > 0 })
             {
-                WriteFixSummary(errorWriter, fixedFiles, allDiagnostics);
+                var summaryMode = check ? FixSummaryMode.Check
+                    : dryRun ? FixSummaryMode.DryRun
+                    : FixSummaryMode.Applied;
+                WriteFixSummary(errorWriter, fixedFiles, allDiagnostics, summaryMode);
             }
 
             if (verboseLogger.IsEnabled)
@@ -452,10 +478,13 @@ internal static class FixCommand
         }
     }
 
+    internal enum FixSummaryMode { Applied, DryRun, Check }
+
     internal static void WriteFixSummary(
         TextWriter writer,
         List<(string FilePath, int FixedCount)> fixedFiles,
-        List<Diagnostic> remainingDiagnostics)
+        List<Diagnostic> remainingDiagnostics,
+        FixSummaryMode mode = FixSummaryMode.Applied)
     {
         // Compute per-file remaining counts from the filtered diagnostics list.
         // Use a dictionary keyed by file path for O(1) lookup.
@@ -469,6 +498,14 @@ internal static class FixCommand
             count++;
         }
 
+        // Mode-specific verbs
+        var perFileVerb = mode switch
+        {
+            FixSummaryMode.DryRun => "would fix",
+            FixSummaryMode.Check => "fixable",
+            _ => "fixed",
+        };
+
         // Per-file detail lines
         var totalFixed = 0;
         var totalRemaining = 0;
@@ -478,9 +515,14 @@ internal static class FixCommand
             var remaining = 0;
             remainingByFile?.TryGetValue(filePath, out remaining);
 
+            // In check mode, allDiagnostics includes fixable issues (they weren't applied).
+            // Subtract fixable count to show only non-fixable "remaining" issues.
+            if (mode == FixSummaryMode.Check)
+                remaining = Math.Max(0, remaining - fixedCount);
+
             // Display file name only (not full path) for readability
             var displayName = Path.GetFileName(filePath);
-            writer.WriteLine($"  {displayName}: fixed {fixedCount}, remaining {remaining}");
+            writer.WriteLine($"  {displayName}: {perFileVerb} {fixedCount}, remaining {remaining}");
 
             totalFixed += fixedCount;
             totalRemaining += remaining;
@@ -488,7 +530,15 @@ internal static class FixCommand
 
         // Total summary line
         var fileWord = fixedFiles.Count == 1 ? "file" : "files";
-        writer.WriteLine($"Fixed {totalFixed} {(totalFixed == 1 ? "issue" : "issues")} in {fixedFiles.Count} {fileWord} ({totalRemaining} remaining)");
+        if (mode == FixSummaryMode.Check)
+        {
+            writer.WriteLine($"{totalFixed} {(totalFixed == 1 ? "issue" : "issues")} fixable in {fixedFiles.Count} {fileWord} ({totalRemaining} remaining)");
+        }
+        else
+        {
+            var totalVerb = mode == FixSummaryMode.DryRun ? "Would fix" : "Fixed";
+            writer.WriteLine($"{totalVerb} {totalFixed} {(totalFixed == 1 ? "issue" : "issues")} in {fixedFiles.Count} {fileWord} ({totalRemaining} remaining)");
+        }
     }
 
     private static readonly IReadOnlyDictionary<string, int> EmptySuppressedByRule =
