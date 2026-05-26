@@ -47,3 +47,15 @@ seitonを実行するとGitHub Actions Workflow/Actionsの適切でない設定�
 ---
 
 PRを作るので、タイトルとPR Body、ベンチマークを英語でほしいです。マークダウンとして貼り付けられる形で出力してください。
+
+
+---
+
+concurrencyにqueueキーが許可されるべきですが定義にないためparseエラーになるようです。https://docs.github.com/en/actions/how-tos/write-workflows/choose-when-workflows-run/control-workflow-concurrency.md
+
+```
+To allow more than one `pending` job or workflow run to wait in the same concurrency group, use the optional `queue` property. The `queue` property accepts the following values:
+
+* `single` (default): At most one job or workflow run can be `pending` in the concurrency group. When a new job or workflow run is queued, any existing `pending` job or workflow run in the same group is canceled and replaced.
+* `max`: Up to 100 jobs or workflow runs can be `pending` in the concurrency group. When the queue is full, any additional jobs or workflow runs are canceled.
+```
