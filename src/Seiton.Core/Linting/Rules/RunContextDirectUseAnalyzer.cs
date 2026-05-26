@@ -41,16 +41,6 @@ internal static class RunContextDirectUseAnalyzer
 
     // Shell Detection
 
-    internal static bool IsPowerShell(AstArena arena, Step step, byte[] utf8Yaml)
-    {
-        if (step.Exec is not ExecRun run || !run.Shell.HasValue || arena.GetStringExpression(run.Shell).HasValue)
-        {
-            return false;
-        }
-
-        return IsPowerShell(arena, run.Shell, utf8Yaml);
-    }
-
     /// <summary>
     /// Resolves effective shell with fallback: step.Shell → job.Defaults.Run.Shell → workflow.Defaults.Run.Shell.
     /// </summary>
