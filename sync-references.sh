@@ -19,6 +19,7 @@ repo_specs=(
   "AdnaneKhan/Gato-X"
   "Cysharp/ConsoleAppFramework"
   "guitarrapc/githubactions-lab"
+  "Cysharp/Actions"
 )
 
 for spec in "${repo_specs[@]}"; do
