@@ -1132,6 +1132,90 @@ public sealed class FixCommandTests
         }
     }
 
+    [Test]
+    public async Task Fix_Summary_DryRun_IncludesUnfixedFilesWithRemaining()
+    {
+        // Two files: one with fixable issues, one with only non-fixable issues.
+        // The summary should include BOTH files — the unfixed file as "would fix 0, remaining N".
+        var configPath = CreateConfigFile(
+            """
+            rules:
+              runner-no-latest:
+                enabled: false
+              job-permissions-required:
+                enabled: false
+            """);
+
+        var dir = Path.Combine(Path.GetTempPath(), "Seiton.Tests", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(dir);
+
+        // File 1: has fixable issue (if-expr-wrapper)
+        var filePath1 = Path.Combine(dir, "fixable.yml");
+        File.WriteAllText(filePath1, """
+            on: push
+            jobs:
+              build:
+                runs-on: ubuntu-24.04
+                timeout-minutes: 10
+                steps:
+                  - if: github.event_name == 'push'
+                    run: echo ok
+            """);
+
+        // File 2: has only non-fixable issue (job-timeout-minutes-required — no auto-fix)
+        var filePath2 = Path.Combine(dir, "unfixable.yml");
+        File.WriteAllText(filePath2, """
+            on: push
+            jobs:
+              build:
+                runs-on: ubuntu-24.04
+                steps:
+                  - run: echo ok
+            """);
+
+        try
+        {
+            using var sw = new StringWriter();
+            using var stderr = new StringWriter();
+
+            await FixCommand.RunAsync(
+                [filePath1, filePath2],
+                config: configPath,
+                stdinFilename: "stdin.yml",
+                ignore: [],
+                minSeverity: null,
+                format: OutputFormat.Text,
+                oneline: true,
+                color: ColorMode.Never,
+                noColor: true,
+                verbose: false,
+                dryRun: true,
+                check: false,
+                enablePinNetwork: false,
+                enableImageNetwork: false,
+                includeActions: false,
+                output: sw,
+                error: stderr);
+
+            var errorOutput = stderr.ToString();
+            // Fix summary should show the fixable file
+            await Assert.That(errorOutput).Contains("fixable.yml");
+            // Fix summary should ALSO show the unfixable file with its remaining count
+            await Assert.That(errorOutput).Contains("unfixable.yml");
+            await Assert.That(errorOutput).Contains("remaining");
+            // Total remaining should reflect the unfixed file's issues
+            var totalLine = errorOutput.Split('\n').FirstOrDefault(l => l.StartsWith("Would fix"));
+            await Assert.That(totalLine).IsNotNull();
+            // The remaining count in the total line should be > 0 (because unfixable.yml has issues)
+            await Assert.That(totalLine!).DoesNotContain("(0 remaining)");
+        }
+        finally
+        {
+            DeleteContainingDirectory(filePath1);
+            DeleteContainingDirectory(configPath);
+        }
+    }
+
     private static string CreateWorkflowFile(string yaml)
     {
         var dir = Path.Combine(Path.GetTempPath(), "Seiton.Tests", Guid.NewGuid().ToString("N"));

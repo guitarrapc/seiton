@@ -382,7 +382,7 @@ internal static class FixCommand
                     CheckCommand.CreateAggregatedSuppressionSummary(totalSuppressed, suppressionCounts));
             }
 
-            CheckCommand.WriteSummary(errorWriter, allDiagnostics, resolvedFiles.Length, verbose, showExitHint: minSeverity is null);
+            CheckCommand.WriteSummary(errorWriter, allDiagnostics, resolvedFiles.Length, verbose, showExitHint: minSeverity is null, showPerFile: false);
 
             // Write fix summary after standard diagnostic summary
             if (fixedFiles is { Count: > 0 })
@@ -506,7 +506,12 @@ internal static class FixCommand
             _ => "fixed",
         };
 
-        // Per-file detail lines
+        // Build a set of files that had fixes for fast lookup
+        var fixedFileSet = new HashSet<string>(fixedFiles.Count, StringComparer.Ordinal);
+        for (var i = 0; i < fixedFiles.Count; i++)
+            fixedFileSet.Add(fixedFiles[i].FilePath);
+
+        // Per-file detail lines for files that had fixes
         var totalFixed = 0;
         var totalRemaining = 0;
         for (var i = 0; i < fixedFiles.Count; i++)
@@ -528,16 +533,45 @@ internal static class FixCommand
             totalRemaining += remaining;
         }
 
+        // Per-file detail lines for files with remaining diagnostics but NO fixes
+        if (remainingByFile is not null)
+        {
+            // Collect unfixed files, sort by remaining count descending then by name
+            var unfixedFiles = new List<(string FilePath, int Remaining)>();
+            foreach (var kvp in remainingByFile)
+            {
+                if (!fixedFileSet.Contains(kvp.Key))
+                    unfixedFiles.Add((kvp.Key, kvp.Value));
+            }
+
+            if (unfixedFiles.Count > 0)
+            {
+                unfixedFiles.Sort((a, b) =>
+                {
+                    var byCount = b.Remaining.CompareTo(a.Remaining);
+                    return byCount != 0 ? byCount : string.Compare(Path.GetFileName(a.FilePath), Path.GetFileName(b.FilePath), StringComparison.Ordinal);
+                });
+
+                for (var i = 0; i < unfixedFiles.Count; i++)
+                {
+                    var displayName = Path.GetFileName(unfixedFiles[i].FilePath);
+                    writer.WriteLine($"  {displayName}: {perFileVerb} 0, remaining {unfixedFiles[i].Remaining}");
+                    totalRemaining += unfixedFiles[i].Remaining;
+                }
+            }
+        }
+
         // Total summary line
-        var fileWord = fixedFiles.Count == 1 ? "file" : "files";
+        var totalFiles = fixedFiles.Count;
+        var fileWord = totalFiles == 1 ? "file" : "files";
         if (mode == FixSummaryMode.Check)
         {
-            writer.WriteLine($"{totalFixed} {(totalFixed == 1 ? "issue" : "issues")} fixable in {fixedFiles.Count} {fileWord} ({totalRemaining} remaining)");
+            writer.WriteLine($"{totalFixed} {(totalFixed == 1 ? "issue" : "issues")} fixable in {totalFiles} {fileWord} ({totalRemaining} remaining)");
         }
         else
         {
             var totalVerb = mode == FixSummaryMode.DryRun ? "Would fix" : "Fixed";
-            writer.WriteLine($"{totalVerb} {totalFixed} {(totalFixed == 1 ? "issue" : "issues")} in {fixedFiles.Count} {fileWord} ({totalRemaining} remaining)");
+            writer.WriteLine($"{totalVerb} {totalFixed} {(totalFixed == 1 ? "issue" : "issues")} in {totalFiles} {fileWord} ({totalRemaining} remaining)");
         }
     }
 

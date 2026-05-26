@@ -249,10 +249,10 @@ internal static class CheckCommand
         return HasActionableDiagnostics(allDiagnostics) ? ExitCode.LintIssuesFound : ExitCode.Success;
     }
 
-    internal static void WriteSummary(List<Diagnostic> diagnostics, int fileCount, bool verbose = false, bool showExitHint = false)
-        => WriteSummary(Console.Error, diagnostics, fileCount, verbose, showExitHint);
+    internal static void WriteSummary(List<Diagnostic> diagnostics, int fileCount, bool verbose = false, bool showExitHint = false, bool showPerFile = true)
+        => WriteSummary(Console.Error, diagnostics, fileCount, verbose, showExitHint, showPerFile);
 
-    internal static void WriteSummary(TextWriter writer, List<Diagnostic> diagnostics, int fileCount, bool verbose = false, bool showExitHint = false)
+    internal static void WriteSummary(TextWriter writer, List<Diagnostic> diagnostics, int fileCount, bool verbose = false, bool showExitHint = false, bool showPerFile = true)
     {
         var errors = 0;
         var warnings = 0;
@@ -277,6 +277,11 @@ internal static class CheckCommand
         else
             writer.WriteLine($"{parts} in {fileCount} {(fileCount == 1 ? "file" : "files")}");
 
+        if (showPerFile && diagnostics.Count > 0)
+        {
+            WritePerFileBreakdown(writer, diagnostics);
+        }
+
         if (verbose && diagnostics.Count > 0)
         {
             WritePerRuleBreakdown(writer, diagnostics);
@@ -286,6 +291,52 @@ internal static class CheckCommand
         if (showExitHint && errors == 0 && warnings > 0)
         {
             writer.WriteLine("hint: use --min-severity error to treat warnings as non-blocking in CI");
+        }
+    }
+
+    private static void WritePerFileBreakdown(TextWriter writer, List<Diagnostic> diagnostics)
+    {
+        // Count per file: errors, warnings, infos. Skip diagnostics without FilePath.
+        var fileCounts = new Dictionary<string, (int Errors, int Warnings, int Infos)>(StringComparer.Ordinal);
+        for (var i = 0; i < diagnostics.Count; i++)
+        {
+            var filePath = diagnostics[i].FilePath;
+            if (filePath is null) continue;
+            ref var counts = ref CollectionsMarshal.GetValueRefOrAddDefault(fileCounts, filePath, out _);
+            switch (diagnostics[i].Severity)
+            {
+                case DiagnosticSeverity.Error: counts.Errors++; break;
+                case DiagnosticSeverity.Warning: counts.Warnings++; break;
+                default: counts.Infos++; break;
+            }
+        }
+
+        if (fileCounts.Count == 0) return;
+
+        // Sort by total count descending, then by file name for determinism
+        var sorted = new List<KeyValuePair<string, (int Errors, int Warnings, int Infos)>>(fileCounts);
+        sorted.Sort((a, b) =>
+        {
+            var totalA = a.Value.Errors + a.Value.Warnings + a.Value.Infos;
+            var totalB = b.Value.Errors + b.Value.Warnings + b.Value.Infos;
+            var byCount = totalB.CompareTo(totalA);
+            return byCount != 0 ? byCount : string.Compare(Path.GetFileName(a.Key), Path.GetFileName(b.Key), StringComparison.Ordinal);
+        });
+
+        for (var i = 0; i < sorted.Count; i++)
+        {
+            var (filePath, (errors, warnings, infos)) = sorted[i];
+            var displayName = Path.GetFileName(filePath);
+
+            var parts = new System.Text.StringBuilder();
+            parts.Append("  ");
+            parts.Append(displayName);
+            parts.Append(": ");
+            var hasPart = false;
+            if (errors > 0) { parts.Append(errors == 1 ? "1 error" : $"{errors} errors"); hasPart = true; }
+            if (warnings > 0) { if (hasPart) parts.Append(", "); parts.Append(warnings == 1 ? "1 warning" : $"{warnings} warnings"); hasPart = true; }
+            if (infos > 0) { if (hasPart) parts.Append(", "); parts.Append(infos == 1 ? "1 info" : $"{infos} infos"); }
+            writer.WriteLine(parts.ToString());
         }
     }
 
