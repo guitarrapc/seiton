@@ -404,39 +404,115 @@ Fixed 78 issues in 19 files
 4 errors, 16 warnings remain (20 issues in 9 files)
 ```
 
-#### 6b: ファイル一覧のカラム整列
+#### 6b: ファイル一覧のテーブル表示
 
-ファイル名と数値をカラム整列する。remaining 0 のファイルは省略するか、畳んで表示する。
+マークダウン風のテーブル形式で出力する。表タイトルで「何の一覧か」を明示し、ファイル名・数値が自然に揃う。
 
-**Option A — カラム整列:**
+**--fix モードの出力想定:**
 ```
-  File                                  Fixed  Remaining
-  _reusable-dump-context.yaml              16          0
-  agentics-maintenance.yml                 10          1
+Fixed 78 issues in 19 files (20 remaining)
+
+| File                              | Fixed | Remaining |
+|-----------------------------------|------:|----------:|
+| _reusable-dump-context.yaml       |    16 |         0 |
+| agentics-maintenance.yml          |    10 |         1 |
+| monthly-oss-repo-status.lock.yml  |    16 |         1 |
+| default-shell.yaml                |     6 |         0 |
+| gitops-k8s-manifest.yaml          |     5 |         0 |
+| matrix-secret.yaml                |     1 |         3 |
+| ...(省略)...                       |       |           |
 ```
 
-**Option B — remaining 0 省略 (推奨):**
+**--dry-run モードの出力想定:**
 ```
-Fixed 78 issues in 19 files (fully fixed)
-9 files have remaining issues:
-  matrix-secret.yaml              3 remaining
-  auto-dump-context.yaml          2 remaining
-  ...
+Would fix 78 issues in 19 files (20 remaining)
+
+| File                              | Would Fix | Remaining |
+|-----------------------------------|----------:|----------:|
+| _reusable-dump-context.yaml       |        16 |         0 |
+| agentics-maintenance.yml          |        10 |         1 |
+| ...(省略)...                       |           |           |
 ```
+
+**通常モード (check) の出力想定:**
+```
+46 errors, 39 warnings in 123 files
+
+| File                              | Errors | Warnings |
+|-----------------------------------|-------:|---------:|
+| monthly-oss-repo-status.lock.yml  |      5 |       18 |
+| agentics-maintenance.yml          |     10 |        1 |
+| _reusable-dump-context.yaml       |      8 |        0 |
+| default-shell.yaml                |      4 |        0 |
+| ...(省略)...                       |        |          |
+```
+
+**設計ポイント**:
+- カラム幅はファイル名の最大長に合わせて動的計算
+- 数値は右寄せ (`|------:|`)
+- 0 のセルは `0` を表示 (空欄にしない — grep/集計しやすさ優先)
+- remaining 0 のファイルも表示する (省略すると fix の全体像が見えない)
+- ヘッダーの動詞はモードに応じて変更: `Fixed` / `Would Fix` / `Fixable` / `Errors` / `Warnings`
 
 #### 6c: before/after/fixed の関連性を明示
 
 2つのサマリ行を統合サマリブロックにまとめ、数値の関係を一目で把握できるようにする。
 
-#### 6d: `--verbose` ルール別サマリの縦整列
+#### 6d: `--verbose` ルール別サマリのテーブル表示
 
-カンマ区切り1行 → 縦並びカラム整列:
+カンマ区切り1行 → マークダウン風テーブル。表タイトルで「ルール別集計」であることを明示する。
+
+**通常モードの出力想定:**
 ```
-  Rule                              Count
-  run-env-context-direct-use           28
-  if-expr-wrapper                      16
-  ...
+46 errors, 39 warnings in 123 files
+
+| File                              | Errors | Warnings |
+|-----------------------------------|-------:|---------:|
+| monthly-oss-repo-status.lock.yml  |      5 |       18 |
+| ...(省略)...                       |        |          |
+
+| Rule                            | Count |
+|---------------------------------|------:|
+| run-env-context-direct-use      |    28 |
+| if-expr-wrapper                 |    16 |
+| job-timeout-minutes-required    |    12 |
+| bot-conditions                  |     4 |
+| unpinned-image                  |     4 |
+| dangerous-triggers              |     3 |
+| env-var                         |     3 |
+| if-cond                         |     3 |
+| run-inputs-context-direct-use   |     3 |
+| runner-no-latest                |     3 |
+| unredacted-secrets              |     3 |
+| deny-inherit-secrets            |     1 |
+| run-secrets-context-direct-use  |     1 |
+
+verbose: total: 123 file(s) checked in 62.7 ms
 ```
+
+**--fix モードの出力想定:**
+```
+Fixed 78 issues in 19 files (20 remaining)
+
+| File                              | Fixed | Remaining |
+|-----------------------------------|------:|----------:|
+| ...(省略)...                       |       |           |
+
+| Rule                            | Remaining |
+|---------------------------------|----------:|
+| run-env-context-direct-use      |         4 |
+| if-expr-wrapper                 |         3 |
+| ...(省略)...                     |           |
+
+verbose: total: 123 file(s) checked in 62.7 ms
+```
+
+**設計ポイント**:
+- ファイル別テーブルとルール別テーブルは空行1行で区切る
+- ルール別テーブルは `--verbose` 時のみ表示 (現状と同じ条件)
+- ルール別テーブルのカラムはモードで変更: 通常 `Count` / fix `Remaining`
+- verbose timing 行はテーブル外に従来通り表示
+- ルールは件数降順ソート (現状と同じ)
 
 #### 6e: `--format json` の stdout 純粋性保証
 
