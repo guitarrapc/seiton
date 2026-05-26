@@ -133,7 +133,7 @@ public sealed class RunInputsContextDirectUseRule() : RuleBase(RuleId.RunInputsC
         if (TryResolveShellVariableName(Arena, step.Env, _currentJob?.Env, _currentWorkflow?.Env,
             Config.Utf8Yaml, inputName, TryParseSimpleInputsReference, out var variableName))
         {
-            var replacement = RunContextDirectUseAnalyzer.IsPowerShell(Arena, step, Config.Utf8Yaml)
+            var replacement = RunContextDirectUseAnalyzer.IsPowerShellWithDefaults(Arena, step, _currentJob, _currentWorkflow, Config.Utf8Yaml)
                 ? "$env:" + variableName
                 : "${" + variableName + "}";
 
@@ -157,7 +157,7 @@ public sealed class RunInputsContextDirectUseRule() : RuleBase(RuleId.RunInputsC
             return false;
         }
 
-        var shellReplacement = RunContextDirectUseAnalyzer.IsPowerShell(Arena, step, Config.Utf8Yaml)
+        var shellReplacement = RunContextDirectUseAnalyzer.IsPowerShellWithDefaults(Arena, step, _currentJob, _currentWorkflow, Config.Utf8Yaml)
             ? "$env:" + envVarName
             : "${" + envVarName + "}";
 

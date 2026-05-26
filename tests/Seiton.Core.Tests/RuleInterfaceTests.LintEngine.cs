@@ -1881,6 +1881,94 @@ public sealed partial class RuleInterfaceTests
     }
 
     [Test]
+    public async Task LintEngine_RunEnvContextDirectUse_Fix_UsesJobDefaultsShellForPowerShell()
+    {
+        var yaml = """
+        on: push
+        jobs:
+            build:
+                runs-on: windows-latest
+                defaults:
+                    run:
+                        shell: pwsh
+                steps:
+                    - run: Write-Host "${{ env.VERSION }}"
+        """;
+
+        var sourceBytes = Encoding.UTF8.GetBytes(yaml);
+        var engine = new LintEngine([new RunEnvContextDirectUseRule()]);
+        using var result = engine.Check(sourceBytes, "run-env-fix-job-defaults-pwsh.yml");
+        var diagnostic = result.Diagnostics.First(x => x.RuleId == "run-env-context-direct-use");
+
+        await Assert.That(diagnostic.Fix is not null).IsTrue();
+
+        var fixedBytes = FixEngine.Apply(sourceBytes, diagnostic.Fix!.Value.Edits);
+        var fixedText = Encoding.UTF8.GetString(fixedBytes);
+
+        await Assert.That(fixedText.Contains("$env:VERSION", StringComparison.Ordinal)).IsTrue();
+        await Assert.That(fixedText.Contains("${VERSION}", StringComparison.Ordinal)).IsFalse();
+    }
+
+    [Test]
+    public async Task LintEngine_RunEnvContextDirectUse_Fix_UsesWorkflowDefaultsShellForPowerShell()
+    {
+        var yaml = """
+        on: push
+        defaults:
+            run:
+                shell: pwsh
+        jobs:
+            build:
+                runs-on: windows-latest
+                steps:
+                    - run: Write-Host "${{ env.VERSION }}"
+        """;
+
+        var sourceBytes = Encoding.UTF8.GetBytes(yaml);
+        var engine = new LintEngine([new RunEnvContextDirectUseRule()]);
+        using var result = engine.Check(sourceBytes, "run-env-fix-workflow-defaults-pwsh.yml");
+        var diagnostic = result.Diagnostics.First(x => x.RuleId == "run-env-context-direct-use");
+
+        await Assert.That(diagnostic.Fix is not null).IsTrue();
+
+        var fixedBytes = FixEngine.Apply(sourceBytes, diagnostic.Fix!.Value.Edits);
+        var fixedText = Encoding.UTF8.GetString(fixedBytes);
+
+        await Assert.That(fixedText.Contains("$env:VERSION", StringComparison.Ordinal)).IsTrue();
+        await Assert.That(fixedText.Contains("${VERSION}", StringComparison.Ordinal)).IsFalse();
+    }
+
+    [Test]
+    public async Task LintEngine_RunEnvContextDirectUse_Fix_StepShellOverridesJobDefaults()
+    {
+        var yaml = """
+        on: push
+        jobs:
+            build:
+                runs-on: windows-latest
+                defaults:
+                    run:
+                        shell: pwsh
+                steps:
+                    - shell: bash
+                      run: echo "${{ env.VERSION }}"
+        """;
+
+        var sourceBytes = Encoding.UTF8.GetBytes(yaml);
+        var engine = new LintEngine([new RunEnvContextDirectUseRule()]);
+        using var result = engine.Check(sourceBytes, "run-env-fix-step-overrides-defaults.yml");
+        var diagnostic = result.Diagnostics.First(x => x.RuleId == "run-env-context-direct-use");
+
+        await Assert.That(diagnostic.Fix is not null).IsTrue();
+
+        var fixedBytes = FixEngine.Apply(sourceBytes, diagnostic.Fix!.Value.Edits);
+        var fixedText = Encoding.UTF8.GetString(fixedBytes);
+
+        await Assert.That(fixedText.Contains("${VERSION}", StringComparison.Ordinal)).IsTrue();
+        await Assert.That(fixedText.Contains("$env:VERSION", StringComparison.Ordinal)).IsFalse();
+    }
+
+    [Test]
     public async Task LintEngine_RunEnvContextDirectUse_DoesNotAttachFix_ForCompositeExpression()
     {
         var yaml = """

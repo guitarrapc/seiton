@@ -51,6 +51,32 @@ internal static class RunContextDirectUseAnalyzer
         return IsPowerShell(arena, run.Shell, utf8Yaml);
     }
 
+    /// <summary>
+    /// Resolves effective shell with fallback: step.Shell → job.Defaults.Run.Shell → workflow.Defaults.Run.Shell.
+    /// </summary>
+    internal static bool IsPowerShellWithDefaults(AstArena arena, Step step, Job? currentJob, Workflow? currentWorkflow, byte[] utf8Yaml)
+    {
+        // Priority 1: step-level shell
+        if (step.Exec is ExecRun run && run.Shell.HasValue && !arena.GetStringExpression(run.Shell).HasValue)
+        {
+            return IsPowerShell(arena, run.Shell, utf8Yaml);
+        }
+
+        // Priority 2: job defaults
+        if (currentJob?.Defaults?.Run.Shell is { HasValue: true } jobShell && !arena.GetStringExpression(jobShell).HasValue)
+        {
+            return IsPowerShell(arena, jobShell, utf8Yaml);
+        }
+
+        // Priority 3: workflow defaults
+        if (currentWorkflow?.Defaults?.Run.Shell is { HasValue: true } wfShell && !arena.GetStringExpression(wfShell).HasValue)
+        {
+            return IsPowerShell(arena, wfShell, utf8Yaml);
+        }
+
+        return false;
+    }
+
     internal static bool IsPowerShell(AstArena arena, StringNodeId shellNode, byte[] utf8Yaml)
     {
         if (!shellNode.HasValue || arena.GetStringExpression(shellNode).HasValue)

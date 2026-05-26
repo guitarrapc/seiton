@@ -412,7 +412,7 @@ public sealed class TemplateInjectionRule() : RuleBase(RuleId.TemplateInjection)
         if (TryFindExistingEnvMapping(step, pathString, out var existingVarName))
         {
             // Only need to replace the expression with the shell variable reference
-            var replacement = IsPowerShell(Arena, step, Config.Utf8Yaml)
+            var replacement = IsPowerShellWithDefaults(Arena, step, _currentJob, _currentWorkflow, Config.Utf8Yaml)
                 ? "$env:" + existingVarName
                 : "${" + existingVarName + "}";
 
@@ -431,7 +431,7 @@ public sealed class TemplateInjectionRule() : RuleBase(RuleId.TemplateInjection)
         }
 
         // Build shell variable replacement
-        var shellReplacement = IsPowerShell(Arena, step, Config.Utf8Yaml)
+        var shellReplacement = IsPowerShellWithDefaults(Arena, step, _currentJob, _currentWorkflow, Config.Utf8Yaml)
             ? "$env:" + envVarName
             : "${" + envVarName + "}";
 

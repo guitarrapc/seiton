@@ -10,7 +10,33 @@ namespace Seiton.Core.Linting.Rules;
 /// <summary>Flags direct use of <c>env.*</c> context in <c>run:</c> scripts where shell environment variables should be used instead.</summary>
 public sealed class RunEnvContextDirectUseRule() : RuleBase(RuleId.RunEnvContextDirectUse)
 {
+    private Workflow? _currentWorkflow;
+    private Job? _currentJob;
+
     public override string Name => "Run Env Context Direct Use Rule";
+
+    public override void VisitWorkflowPre(Workflow workflow)
+    {
+        base.VisitWorkflowPre(workflow);
+        _currentWorkflow = workflow;
+        _currentJob = null;
+    }
+
+    public override void VisitWorkflowPost(Workflow workflow)
+    {
+        _currentWorkflow = null;
+        _currentJob = null;
+    }
+
+    public override void VisitJobPre(Job job)
+    {
+        _currentJob = job;
+    }
+
+    public override void VisitJobPost(Job job)
+    {
+        _currentJob = null;
+    }
 
     public override void VisitStep(Step step)
     {
@@ -59,7 +85,7 @@ public sealed class RunEnvContextDirectUseRule() : RuleBase(RuleId.RunEnvContext
                 continue;
             }
 
-            if (TryBuildFix(run, runNode, expression, bodyStart, nextSearchStart - (bodyStart - 3), out var fix))
+            if (TryBuildFix(step, runNode, expression, bodyStart, nextSearchStart - (bodyStart - 3), out var fix))
             {
                 AddStepError(
                     step,
@@ -79,7 +105,7 @@ public sealed class RunEnvContextDirectUseRule() : RuleBase(RuleId.RunEnvContext
         }
     }
 
-    private bool TryBuildFix(ExecRun run, StringNodeId runNode, ReadOnlySpan<byte> expression, int expressionBodyStart, int expressionLength, out DiagnosticFix fix)
+    private bool TryBuildFix(Step step, StringNodeId runNode, ReadOnlySpan<byte> expression, int expressionBodyStart, int expressionLength, out DiagnosticFix fix)
     {
         fix = default;
         if (Config.Utf8Yaml is null)
@@ -98,7 +124,7 @@ public sealed class RunEnvContextDirectUseRule() : RuleBase(RuleId.RunEnvContext
             return false;
         }
 
-        var replacement = RunContextDirectUseAnalyzer.IsPowerShell(Arena, run.Shell, Config.Utf8Yaml)
+        var replacement = RunContextDirectUseAnalyzer.IsPowerShellWithDefaults(Arena, step, _currentJob, _currentWorkflow, Config.Utf8Yaml)
             ? "$env:" + variableName
             : "${" + variableName + "}";
 

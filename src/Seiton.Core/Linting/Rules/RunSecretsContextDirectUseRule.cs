@@ -126,7 +126,7 @@ public sealed class RunSecretsContextDirectUseRule() : RuleBase(RuleId.RunSecret
             return false;
         }
 
-        var replacement = RunContextDirectUseAnalyzer.IsPowerShell(Arena, step, Config.Utf8Yaml)
+        var replacement = RunContextDirectUseAnalyzer.IsPowerShellWithDefaults(Arena, step, _currentJob, _currentWorkflow, Config.Utf8Yaml)
             ? "$env:" + variableName
             : "${" + variableName + "}";
 
