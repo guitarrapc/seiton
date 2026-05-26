@@ -193,7 +193,7 @@ Fixed 5 issues in 2 files (3 remaining)
 - `fixedFiles` は lazy 初期化 (`List<(string, int)>?`) で、fix が 0 件の場合はアロケーションなし
 - `remainingByFile` は `CollectionsMarshal.GetValueRefOrAddDefault` で O(1) ダブルルックアップ回避
 - サマリーは全ファイル処理 + ignore/severity フィルタ適用後に出力するため、表示内容がユーザーに見える残存 diagnostic と一致
-- `--dry-run` / `--check` モードではサマリー非表示 (fix 未適用のため)
+- `--dry-run` / `--check` モードでもモードに応じた動詞でサマリー表示 (Phase 4b で追加)
 - ファイル名は `Path.GetFileName()` で表示 (フルパスは冗長)
 
 **動作確認**:
@@ -220,6 +220,34 @@ dotnet run --project src/Seiton -- --fix --oneline .references/githubactions-lab
 **性能影響: なし** (Ratio=1.00〜1.02, AllocRatio=1.00)
 - 変更は CLI レイヤー (`FixCommand`) のみ。CoreLintBenchmark が測定する `LintEngine.Check` パスには影響なし
 - `WriteFixSummary` はファイルループ完了後に 1 回だけ呼ばれ、最小限の string formatting のみ
+
+### Phase 4b: --dry-run / --check モードでもサマリー表示 ✅
+
+**問題**: `--dry-run` や `--check` モードでは修正サマリーが表示されず、どのファイルでどれくらいの問題が修正可能かが不明瞭。
+
+**修正内容**:
+- `--dry-run`: `ApplyFixesIteratively` の ref counter 版を使用して実際の修正件数を追跡。出力: `Would fix N issues in M files (K remaining)`
+- `--check`: fixable diagnostics (`.Fix != null`) をファイル単位でカウント。出力: `N issues fixable in M files (K remaining)`
+- `WriteFixSummary` に `FixSummaryMode` enum を追加し、モードに応じた動詞を使い分け
+- check モードでは `remaining` 計算時に fixable 件数を差し引き (allDiagnostics に fixable が含まれるため)
+
+**テスト** (すべて GREEN):
+1. `Fix_Summary_DryRun_ShowsSummary` — dry-run で "Would fix" サマリー表示
+2. `Fix_Summary_Check_ShowsSummary` — check で "fixable" サマリー表示
+3. `Fix_Summary_DryRun_NotShown_WhenNoFixesApplied` — dry-run で修正なし時はサマリー非表示
+
+**動作確認**:
+```shell
+# --dry-run
+#   setenv-script.yaml: would fix 4, remaining 0
+# Would fix 4 issues in 1 file (0 remaining)
+
+# --check
+#   setenv-script.yaml: fixable 4, remaining 0
+# 4 issues fixable in 1 file (0 remaining)
+```
+
+**ベンチマーク**: CLI レイヤーのみの変更。CoreLintBenchmark に影響なし (Ratio=1.00, AllocRatio=1.00)。
 
 ---
 
