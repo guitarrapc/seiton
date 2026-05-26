@@ -1216,6 +1216,204 @@ public sealed class FixCommandTests
         }
     }
 
+    [Test]
+    public async Task Fix_DryRun_JsonFormat_StdoutContainsOnlyValidJson()
+    {
+        // When --format json --dry-run is used, stdout must contain only valid JSON.
+        // The unified diff must NOT appear on stdout (it should go to stderr or be suppressed).
+        var configPath = CreateConfigFile(
+            """
+            rules:
+                runner-no-latest:
+                    enabled: false
+                job-timeout-minutes-required:
+                    enabled: false
+                job-permissions-required:
+                    enabled: false
+            """);
+        var filePath = CreateWorkflowFile(
+            """
+            on: push
+            jobs:
+              build:
+                runs-on: ubuntu-latest
+                steps:
+                  - if: github.event_name == 'push'
+                    uses: actions/checkout@v4
+            """);
+
+        try
+        {
+            using var stdout = new StringWriter();
+            using var stderr = new StringWriter();
+
+            await FixCommand.RunAsync(
+                [filePath],
+                config: configPath,
+                stdinFilename: "stdin.yml",
+                ignore: [],
+                minSeverity: null,
+                format: OutputFormat.Json,
+                oneline: false,
+                color: ColorMode.Never,
+                noColor: true,
+                verbose: false,
+                dryRun: true,
+                check: false,
+                enablePinNetwork: false,
+                enableImageNetwork: false,
+                includeActions: false,
+                output: stdout,
+                error: stderr);
+
+            var output = stdout.ToString().Trim();
+
+            // stdout must be valid JSON (either empty or a JSON array)
+            if (output.Length > 0)
+            {
+                await Assert.That(output).StartsWith("[");
+                await Assert.That(output).EndsWith("]");
+                // Must not contain diff markers
+                await Assert.That(output).DoesNotContain("---");
+                await Assert.That(output).DoesNotContain("+++");
+                await Assert.That(output).DoesNotContain("@@");
+            }
+
+            // The diff (if any) should appear on stderr, not stdout
+            var errorOutput = stderr.ToString();
+            // stderr may contain diff and/or summary — that's fine
+        }
+        finally
+        {
+            DeleteContainingDirectory(filePath);
+            DeleteContainingDirectory(configPath);
+        }
+    }
+
+    [Test]
+    public async Task Fix_DryRun_JsonFormat_DiffAppearsOnStderr()
+    {
+        // Verify that when --format json --dry-run produces a diff, it goes to stderr
+        var configPath = CreateConfigFile(
+            """
+            rules:
+                runner-no-latest:
+                    enabled: false
+                job-timeout-minutes-required:
+                    enabled: false
+                job-permissions-required:
+                    enabled: false
+            """);
+        var filePath = CreateWorkflowFile(
+            """
+            on: push
+            jobs:
+              build:
+                runs-on: ubuntu-latest
+                steps:
+                  - if: github.event_name == 'push'
+                    uses: actions/checkout@v4
+            """);
+
+        try
+        {
+            using var stdout = new StringWriter();
+            using var stderr = new StringWriter();
+
+            await FixCommand.RunAsync(
+                [filePath],
+                config: configPath,
+                stdinFilename: "stdin.yml",
+                ignore: [],
+                minSeverity: null,
+                format: OutputFormat.Json,
+                oneline: false,
+                color: ColorMode.Never,
+                noColor: true,
+                verbose: false,
+                dryRun: true,
+                check: false,
+                enablePinNetwork: false,
+                enableImageNetwork: false,
+                includeActions: false,
+                output: stdout,
+                error: stderr);
+
+            var errorOutput = stderr.ToString();
+
+            // The diff should be in stderr (since format is json, stdout must be pure JSON)
+            await Assert.That(errorOutput).Contains("---");
+            await Assert.That(errorOutput).Contains("+++");
+        }
+        finally
+        {
+            DeleteContainingDirectory(filePath);
+            DeleteContainingDirectory(configPath);
+        }
+    }
+
+    [Test]
+    public async Task Fix_DryRun_TextFormat_DiffStillAppearsOnStdout()
+    {
+        // When format is text, diff should still appear on stdout (existing behavior preserved)
+        var configPath = CreateConfigFile(
+            """
+            rules:
+                runner-no-latest:
+                    enabled: false
+                job-timeout-minutes-required:
+                    enabled: false
+                job-permissions-required:
+                    enabled: false
+            """);
+        var filePath = CreateWorkflowFile(
+            """
+            on: push
+            jobs:
+              build:
+                runs-on: ubuntu-latest
+                steps:
+                  - if: github.event_name == 'push'
+                    uses: actions/checkout@v4
+            """);
+
+        try
+        {
+            using var stdout = new StringWriter();
+            using var stderr = new StringWriter();
+
+            await FixCommand.RunAsync(
+                [filePath],
+                config: configPath,
+                stdinFilename: "stdin.yml",
+                ignore: [],
+                minSeverity: null,
+                format: OutputFormat.Text,
+                oneline: true,
+                color: ColorMode.Never,
+                noColor: true,
+                verbose: false,
+                dryRun: true,
+                check: false,
+                enablePinNetwork: false,
+                enableImageNetwork: false,
+                includeActions: false,
+                output: stdout,
+                error: stderr);
+
+            var output = stdout.ToString();
+
+            // For text format, diff must remain on stdout (existing behavior)
+            await Assert.That(output).Contains("---");
+            await Assert.That(output).Contains("+++");
+        }
+        finally
+        {
+            DeleteContainingDirectory(filePath);
+            DeleteContainingDirectory(configPath);
+        }
+    }
+
     private static string CreateWorkflowFile(string yaml)
     {
         var dir = Path.Combine(Path.GetTempPath(), "Seiton.Tests", Guid.NewGuid().ToString("N"));

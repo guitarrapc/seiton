@@ -517,13 +517,55 @@ verbose: total: 123 file(s) checked in 62.7 ms
 - verbose timing 行はテーブル外に従来通り表示
 - ルールは件数降順ソート (現状と同じ)
 
-#### 6e: `--format json` の stdout 純粋性保証
+#### 6e: `--format json` の stdout 純粋性保証 ✅
 
 採用: `--format json` 時は stdout に JSON 以外を一切出力しない。verbose出力は stderrか確認する。
 
 - `--format json` 時は stdout に JSON 以外を一切出力しない
-- `--fix --dry-run` 時の unified diff は JSON envelope 内に含めるか、stderr に移動する
-- サマリ/hint は stderr のみ (現状は stderr だが、diff が stdout に出る問題を修正)
+- `--fix --dry-run` 時の unified diff は stderr に移動する
+- サマリ/hint は stderr のみ (現状から変更なし)
+- verbose 出力は stderr (VerboseLogger は errorWriter で初期化 — 確認済み、変更不要)
+
+### 6e 実装結果
+
+**変更ファイル**:
+- `src/Seiton/Commands/FixCommand.cs`: diff 出力先を format に応じて `outputWriter` / `errorWriter` に分岐、blank-line separator を text format 時のみに限定
+- `tests/Seiton.Tests/FixCommandTests.cs`: 3 テスト追加
+
+**変更内容** (2行のみ):
+1. `var diffWriter = resolvedFormat == OutputFormat.Text ? outputWriter : errorWriter;` — diff の出力先を format で分岐
+2. `if (hasPrintedDiff && resolvedFormat == OutputFormat.Text)` — blank-line separator を text format 時のみ
+
+**テスト** (すべて GREEN):
+1. `Fix_DryRun_JsonFormat_StdoutContainsOnlyValidJson` — JSON format 時に stdout が純粋な JSON
+2. `Fix_DryRun_JsonFormat_DiffAppearsOnStderr` — JSON format 時に diff が stderr に出力される
+3. `Fix_DryRun_TextFormat_DiffStillAppearsOnStdout` — text format の既存動作が保持される
+
+**動作確認**:
+```shell
+# JSON format: stdout は純粋な JSON のみ
+dotnet run --project src/Seiton -- --format json --fix --dry-run .references/githubactions-lab/.github/workflows/matrix-secret.yaml 2>$null
+# 出力: [{"file":"...","line":10,...}] ✅ (diff なし、JSON のみ)
+
+# Text format: 既存動作変更なし
+dotnet run --project src/Seiton -- --fix --dry-run .references/githubactions-lab/.github/workflows/setup-dotnet.yaml
+# 出力: diff + diagnostics on stdout ✅
+```
+
+**ベンチマーク** (CoreLintBenchmark):
+
+| Size | FixEnabled | Mean | Allocated | Ratio | Alloc Ratio |
+|------|-----------|------|-----------|-------|-------------|
+| Small | False | 55.46 μs | 8.7 KB | 1.00 | 1.00 |
+| Small | True | 63.76 μs | 10.15 KB | 1.00 | 1.00 |
+| Medium | False | 1,244 μs | 68.89 KB | 1.00 | 1.00 |
+| Medium | True | 1,740 μs | 82.25 KB | 1.00 | 1.00 |
+| Large | False | 19,421 μs | 327.41 KB | 1.00 | 1.00 |
+| Large | True | 28,794 μs | 382.25 KB | 1.00 | 1.00 |
+
+**性能影響: なし** (Ratio=1.00, AllocRatio=1.00)
+- 変更は CLI レイヤー (`FixCommand`) のみ。Core ベンチマークに影響なし
+- 追加コストは enum 比較 1 回 (分岐予測で吸収)
 
 ### 影響範囲
 

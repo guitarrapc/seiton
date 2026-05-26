@@ -276,7 +276,10 @@ internal static class FixCommand
                         var diff = FixEngine.BuildUnifiedDiffFromBytes(utf8Yaml, dryRunYaml, filePath);
                         if (diff.Length > 0)
                         {
-                            outputWriter.Write(diff);
+                            // When output format is non-text (json/sarif), diff goes to stderr
+                            // to keep stdout as pure machine-parseable output.
+                            var diffWriter = resolvedFormat == OutputFormat.Text ? outputWriter : errorWriter;
+                            diffWriter.Write(diff);
                             hasPrintedDiff = true;
                         }
                     }
@@ -370,7 +373,7 @@ internal static class FixCommand
             // Output remaining diagnostics
             if (allDiagnostics.Count > 0)
             {
-                if (hasPrintedDiff)
+                if (hasPrintedDiff && resolvedFormat == OutputFormat.Text)
                     outputWriter.WriteLine();
                 DiagnosticFormatter.Write(outputWriter, allDiagnostics, resolvedFormat, oneline, colorEnabled);
             }
