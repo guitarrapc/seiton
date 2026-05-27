@@ -486,12 +486,13 @@ In `--fix` mode, when network-assisted flags are not enabled but relevant diagno
 In `--fix` mode (not `--dry-run`, not `--check`), when at least one fix is applied, a fix summary is emitted to stderr before the remaining diagnostic summary:
 
 ```
-Fixed <total> issue(s) in <file-count> file(s) (<remaining> remaining)
+Fixed <fixed> of <found> issue(s) in <file-count> file(s) (<remaining> remaining)
   <filename>: fixed <N>, remaining <M>
   <filename>: fixed <N>, remaining <M>
 <errors> error(s), <warnings> warning(s) remain in <affected-files> file(s)
 ```
 
+- The total summary line shows the relationship `found = fixed + remaining` explicitly ("Fixed X of Y issues").
 - The total summary line appears first, followed by per-file detail lines.
 - Per-file lines show only files where fixes were applied (files with 0 fixes are omitted from the fixed list, but unfixed files with remaining diagnostics are shown with "fixed 0, remaining M").
 - `remaining` is the count of diagnostics still present for that file after ignore/severity filters.

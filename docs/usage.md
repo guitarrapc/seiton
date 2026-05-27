@@ -116,7 +116,7 @@ seiton --fix --enable-pin-network --enable-image-network
 After fixes are applied, a summary is printed to stderr showing per-file fix counts and remaining issues:
 
 ```
-Fixed 6 issues in 2 files (1 remaining)
+Fixed 6 of 7 issues in 2 files (1 remaining)
   ci.yml: fixed 4, remaining 0
   release.yml: fixed 2, remaining 1
 1 error remain in 1 file

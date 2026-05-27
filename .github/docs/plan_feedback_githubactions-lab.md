@@ -512,9 +512,16 @@ Would fix 78 issues in 19 files (20 remaining)
 - remaining 0 のファイルも表示する (省略すると fix の全体像が見えない)
 - ヘッダーの動詞はモードに応じて変更: `Fixed` / `Would Fix` / `Fixable` / `Errors` / `Warnings`
 
-#### 6c: before/after/fixed の関連性を明示
+#### 6c: before/after/fixed の関連性を明示 ✅
 
-2つのサマリ行を統合サマリブロックにまとめ、数値の関係を一目で把握できるようにする。
+fix サマリの total 行に "of N" を追加し、found = fixed + remaining の関係を一目で把握できるようにした。
+
+**実装内容:**
+- `WriteFixSummary`: total 行のフォーマットを `"Fixed X of Y issues in M files (R remaining)"` に変更
+- `totalFound = totalFixed + totalRemaining` で計算 (追加コスト = 整数加算1回)
+- 全モード (Applied / DryRun / Check) で "of N" を表示
+- テスト4件追加: `Fix_Summary_ShowsFoundCount_InTotalLine`, `Fix_Summary_FoundCount_EqualsFixedPlusRemaining`, `Fix_Summary_DryRun_ShowsFoundCount`, `Fix_Summary_Check_ShowsFoundCount`
+- Benchmark: Ratio=1.00, AllocRatio=1.00 (影響なし)
 
 #### 6d: `--verbose` ルール別サマリのテーブル表示
 

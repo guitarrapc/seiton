@@ -1681,6 +1681,254 @@ public sealed class FixCommandTests
         }
     }
 
+    // === Fix Summary Relationship Tests (6c: before/after/fixed relationship) ===
+
+    [Test]
+    public async Task Fix_Summary_ShowsFoundCount_InTotalLine()
+    {
+        // When fixes are applied, the total line should show "Fixed X of Y issues"
+        // where Y = X + remaining, making the relationship explicit.
+        var configPath = CreateConfigFile(
+            """
+            rules:
+              runner-no-latest:
+                enabled: false
+              job-permissions-required:
+                enabled: false
+            """);
+        var filePath = CreateWorkflowFile(
+            """
+            on: push
+            jobs:
+              build:
+                runs-on: ubuntu-24.04
+                steps:
+                  - if: github.event_name == 'push'
+                    run: echo ok
+            """);
+
+        try
+        {
+            using var sw = new StringWriter();
+            using var stderr = new StringWriter();
+
+            await FixCommand.RunAsync(
+                [filePath],
+                config: configPath,
+                stdinFilename: "stdin.yml",
+                ignore: [],
+                minSeverity: null,
+                format: OutputFormat.Text,
+                oneline: true,
+                color: ColorMode.Never,
+                noColor: true,
+                verbose: false,
+                dryRun: false,
+                check: false,
+                enablePinNetwork: false,
+                enableImageNetwork: false,
+                includeActions: false,
+                output: sw,
+                error: stderr);
+
+            var errorOutput = stderr.ToString();
+            // Total line must contain "of" to show relationship (e.g., "Fixed 1 of 2 issues")
+            var totalLine = errorOutput.Split('\n').FirstOrDefault(l => l.StartsWith("Fixed"));
+            await Assert.That(totalLine).IsNotNull();
+            await Assert.That(totalLine!).Contains(" of ");
+        }
+        finally
+        {
+            DeleteContainingDirectory(filePath);
+            DeleteContainingDirectory(configPath);
+        }
+    }
+
+    [Test]
+    public async Task Fix_Summary_FoundCount_EqualsFixedPlusRemaining()
+    {
+        // The "of N" in the total line should equal fixed + remaining.
+        var configPath = CreateConfigFile(
+            """
+            rules:
+              runner-no-latest:
+                enabled: false
+              job-permissions-required:
+                enabled: false
+            """);
+        var filePath = CreateWorkflowFile(
+            """
+            on: push
+            jobs:
+              build:
+                runs-on: ubuntu-24.04
+                steps:
+                  - if: github.event_name == 'push'
+                    run: echo ok
+            """);
+
+        try
+        {
+            using var sw = new StringWriter();
+            using var stderr = new StringWriter();
+
+            await FixCommand.RunAsync(
+                [filePath],
+                config: configPath,
+                stdinFilename: "stdin.yml",
+                ignore: [],
+                minSeverity: null,
+                format: OutputFormat.Text,
+                oneline: true,
+                color: ColorMode.Never,
+                noColor: true,
+                verbose: false,
+                dryRun: false,
+                check: false,
+                enablePinNetwork: false,
+                enableImageNetwork: false,
+                includeActions: false,
+                output: sw,
+                error: stderr);
+
+            var errorOutput = stderr.ToString();
+            var totalLine = errorOutput.Split('\n').FirstOrDefault(l => l.StartsWith("Fixed"));
+            await Assert.That(totalLine).IsNotNull();
+
+            // Parse "Fixed X of Y issues in Z files (W remaining)"
+            var match = System.Text.RegularExpressions.Regex.Match(totalLine!, @"Fixed (\d+) of (\d+) issues? in \d+ files? \((\d+) remaining\)");
+            await Assert.That(match.Success).IsTrue();
+
+            var fixedCount = int.Parse(match.Groups[1].Value);
+            var foundCount = int.Parse(match.Groups[2].Value);
+            var remainingCount = int.Parse(match.Groups[3].Value);
+            await Assert.That(foundCount).IsEqualTo(fixedCount + remainingCount);
+        }
+        finally
+        {
+            DeleteContainingDirectory(filePath);
+            DeleteContainingDirectory(configPath);
+        }
+    }
+
+    [Test]
+    public async Task Fix_Summary_DryRun_ShowsFoundCount()
+    {
+        // Dry-run mode should also show "Would fix X of Y issues"
+        var configPath = CreateConfigFile(
+            """
+            rules:
+              runner-no-latest:
+                enabled: false
+              job-permissions-required:
+                enabled: false
+            """);
+        var filePath = CreateWorkflowFile(
+            """
+            on: push
+            jobs:
+              build:
+                runs-on: ubuntu-24.04
+                steps:
+                  - if: github.event_name == 'push'
+                    run: echo ok
+            """);
+
+        try
+        {
+            using var sw = new StringWriter();
+            using var stderr = new StringWriter();
+
+            await FixCommand.RunAsync(
+                [filePath],
+                config: configPath,
+                stdinFilename: "stdin.yml",
+                ignore: [],
+                minSeverity: null,
+                format: OutputFormat.Text,
+                oneline: true,
+                color: ColorMode.Never,
+                noColor: true,
+                verbose: false,
+                dryRun: true,
+                check: false,
+                enablePinNetwork: false,
+                enableImageNetwork: false,
+                includeActions: false,
+                output: sw,
+                error: stderr);
+
+            var errorOutput = stderr.ToString();
+            var totalLine = errorOutput.Split('\n').FirstOrDefault(l => l.StartsWith("Would fix"));
+            await Assert.That(totalLine).IsNotNull();
+            await Assert.That(totalLine!).Contains(" of ");
+        }
+        finally
+        {
+            DeleteContainingDirectory(filePath);
+            DeleteContainingDirectory(configPath);
+        }
+    }
+
+    [Test]
+    public async Task Fix_Summary_Check_ShowsFoundCount()
+    {
+        // Check mode should also show "X of Y issues fixable"
+        var configPath = CreateConfigFile(
+            """
+            rules:
+              runner-no-latest:
+                enabled: false
+              job-permissions-required:
+                enabled: false
+            """);
+        var filePath = CreateWorkflowFile(
+            """
+            on: push
+            jobs:
+              build:
+                runs-on: ubuntu-24.04
+                steps:
+                  - if: github.event_name == 'push'
+                    run: echo ok
+            """);
+
+        try
+        {
+            using var sw = new StringWriter();
+            using var stderr = new StringWriter();
+
+            await FixCommand.RunAsync(
+                [filePath],
+                config: configPath,
+                stdinFilename: "stdin.yml",
+                ignore: [],
+                minSeverity: null,
+                format: OutputFormat.Text,
+                oneline: true,
+                color: ColorMode.Never,
+                noColor: true,
+                verbose: false,
+                dryRun: false,
+                check: true,
+                enablePinNetwork: false,
+                enableImageNetwork: false,
+                includeActions: false,
+                output: sw,
+                error: stderr);
+
+            var errorOutput = stderr.ToString();
+            // Check mode: "X of Y issues fixable in Z files (W remaining)"
+            await Assert.That(errorOutput).Contains(" of ");
+            await Assert.That(errorOutput).Contains("fixable");
+        }
+        finally
+        {
+            DeleteContainingDirectory(filePath);
+            DeleteContainingDirectory(configPath);
+        }
+    }
+
     private static string CreateWorkflowFile(string yaml)
     {
         var dir = Path.Combine(Path.GetTempPath(), "Seiton.Tests", Guid.NewGuid().ToString("N"));

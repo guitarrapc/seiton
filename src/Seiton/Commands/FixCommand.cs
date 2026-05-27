@@ -546,16 +546,17 @@ internal static class FixCommand
         }
 
         // Total summary line FIRST (action taken / overview)
+        var totalFound = totalFixed + totalRemaining;
         var totalFiles = fixedFiles.Count;
         var fileWord = totalFiles == 1 ? "file" : "files";
         if (mode == FixSummaryMode.Check)
         {
-            writer.WriteLine($"{totalFixed} {(totalFixed == 1 ? "issue" : "issues")} fixable in {totalFiles} {fileWord} ({totalRemaining} remaining)");
+            writer.WriteLine($"{totalFixed} of {totalFound} {(totalFound == 1 ? "issue" : "issues")} fixable in {totalFiles} {fileWord} ({totalRemaining} remaining)");
         }
         else
         {
             var totalVerb = mode == FixSummaryMode.DryRun ? "Would fix" : "Fixed";
-            writer.WriteLine($"{totalVerb} {totalFixed} {(totalFixed == 1 ? "issue" : "issues")} in {totalFiles} {fileWord} ({totalRemaining} remaining)");
+            writer.WriteLine($"{totalVerb} {totalFixed} of {totalFound} {(totalFound == 1 ? "issue" : "issues")} in {totalFiles} {fileWord} ({totalRemaining} remaining)");
         }
 
         // Per-file detail lines for files that had fixes
