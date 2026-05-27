@@ -72,3 +72,7 @@ seuton skill も用意する。
 ---
 
 Playgroundに警告レベルを表示する。
+
+---
+
+Playgroundでコンフィグを設定できるようにする。Playgroundにseiton.yamlに相当するコンフィグを設定できるeditorペインを用意する。そこで、default timeout-minutesやenable-pin-network、no-runner-latestのマッピングを初期状態で設定しておいて、ユーザーが変更できるようにする。変更したコンフィグは、Playgroundでseitonを実行するときに反映されるようにする。これで、Fixでまとめて直る様子が確認できるようになる。
