@@ -100,13 +100,21 @@ public sealed class RunEnvContextDirectUseRule() : RuleBase(RuleId.RunEnvContext
                     location,
                     fix);
             }
-            else
+            else if (!TryParseSimpleContextReference(expression, "env"u8, out _))
             {
+                // Composite expression (e.g. "${{ env.FOO }}-suffix") — suggest env: block mapping
                 AddStepError(
                     step,
                     "run script must not reference ${{ env.* }} directly; use shell variables instead (e.g. $NAME or $env:NAME)",
                     location,
                     "consider moving the entire expression to an env: block and referencing the shell variable instead");
+            }
+            else
+            {
+                AddStepError(
+                    step,
+                    "run script must not reference ${{ env.* }} directly; use shell variables instead (e.g. $NAME or $env:NAME)",
+                    location);
             }
 
             return;

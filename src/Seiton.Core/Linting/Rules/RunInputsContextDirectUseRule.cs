@@ -99,13 +99,21 @@ public sealed class RunInputsContextDirectUseRule() : RuleBase(RuleId.RunInputsC
                     location,
                     fix);
             }
-            else
+            else if (!TryParseSimpleInputsReference(expression, out _))
             {
+                // Composite expression — suggest env: block mapping
                 AddStepError(
                     step,
                     "run script must not reference ${{ inputs.* }} or ${{ github.event.inputs.* }} directly; map inputs to env and use shell variables instead (e.g. ${NAME}, $NAME, or $env:NAME)",
                     location,
                     "consider moving the entire expression to an env: block and referencing the shell variable instead");
+            }
+            else
+            {
+                AddStepError(
+                    step,
+                    "run script must not reference ${{ inputs.* }} or ${{ github.event.inputs.* }} directly; map inputs to env and use shell variables instead (e.g. ${NAME}, $NAME, or $env:NAME)",
+                    location);
             }
 
             return;

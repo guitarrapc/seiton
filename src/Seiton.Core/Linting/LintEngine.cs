@@ -257,11 +257,11 @@ public sealed class LintEngine
                 }
             }
 
-            // Normalize exclusions only when both arena and parsed workflow are available.
-            // If parsing failed (Workflow is null), job IDs cannot be validated reliably,
-            // so skip normalization to avoid false "unknown job-id" diagnostics.
-            var exclusionNormResult = arena is not null && parseResult.Workflow is not null
-                ? NormalizeExclusions(config?.Exclusions, filePath, parseResult.Workflow, utf8Yaml, arena)
+            // Always normalize exclusions when arena is available — this validates rule IDs
+            // and file patterns even when the workflow failed to parse.
+            // Job-ID validation is skipped internally when no jobs are known.
+            var exclusionNormResult = arena is not null
+                ? NormalizeExclusions(config?.Exclusions, filePath, parseResult.Workflow ?? EmptyWorkflowForSuppression, utf8Yaml, arena)
                 : ExclusionsNormalization.Empty;
 
             var configDiagnosticCount = ruleConfigDiagCount + exclusionNormResult.ConfigurationDiagnostics.Length;
@@ -1433,7 +1433,7 @@ public sealed class LintEngine
                 normalizedRuleIds = ruleIds;
             }
 
-            if (exclusion.Jobs is not null)
+            if (exclusion.Jobs is not null && !knownJobIdSlices.IsEmpty)
             {
                 for (var j = 0; j < exclusion.Jobs.Count; j++)
                 {

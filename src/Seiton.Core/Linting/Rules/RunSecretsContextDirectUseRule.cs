@@ -100,13 +100,21 @@ public sealed class RunSecretsContextDirectUseRule() : RuleBase(RuleId.RunSecret
                     location,
                     fix);
             }
-            else
+            else if (!TryParseSimpleContextReference(expression, "secrets"u8, out _))
             {
+                // Composite expression (e.g. "${{ secrets.TOKEN }}-suffix") — suggest env: block mapping
                 AddStepError(
                     step,
                     "run script must not reference ${{ secrets.* }} directly; map secrets to env and use shell variables instead (e.g. ${TOKEN}, $TOKEN, or $env:TOKEN)",
                     location,
                     "consider moving the entire expression to an env: block and referencing the shell variable instead");
+            }
+            else
+            {
+                AddStepError(
+                    step,
+                    "run script must not reference ${{ secrets.* }} directly; map secrets to env and use shell variables instead (e.g. ${TOKEN}, $TOKEN, or $env:TOKEN)",
+                    location);
             }
 
             return;
