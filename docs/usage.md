@@ -117,8 +117,11 @@ After fixes are applied, a summary is printed to stderr showing per-file fix cou
 
 ```
 Fixed 6 of 7 issues in 2 files (1 remaining)
-  ci.yml: fixed 4, remaining 0
-  release.yml: fixed 2, remaining 1
+
+| File        | Fixed | Remaining |
+|-------------|------:|----------:|
+| ci.yml      |     4 |         0 |
+| release.yml |     2 |         1 |
 1 error remain in 1 file
 ```
 

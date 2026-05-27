@@ -345,20 +345,66 @@ internal static class CheckCommand
             return byCount != 0 ? byCount : string.Compare(Path.GetFileName(a.Key), Path.GetFileName(b.Key), StringComparison.Ordinal);
         });
 
+        // Compute column widths for table formatting
+        var maxFileLen = 4; // "File".Length
         for (var i = 0; i < sorted.Count; i++)
         {
-            var (filePath, (errors, warnings, infos)) = sorted[i];
+            var name = Path.GetFileName(sorted[i].Key);
+            if (name.Length > maxFileLen)
+                maxFileLen = name.Length;
+        }
+
+        var maxErrorLen = 6; // "Errors".Length
+        var maxWarnLen = 8; // "Warnings".Length
+        for (var i = 0; i < sorted.Count; i++)
+        {
+            var errDigits = CountDigits(sorted[i].Value.Errors);
+            var warnDigits = CountDigits(sorted[i].Value.Warnings);
+            if (errDigits > maxErrorLen) maxErrorLen = errDigits;
+            if (warnDigits > maxWarnLen) maxWarnLen = warnDigits;
+        }
+
+        // Write table with blank line separator before it
+        writer.WriteLine();
+
+        // Header row
+        writer.Write("| File");
+        writer.Write(new string(' ', maxFileLen - 4));
+        writer.Write(" | ");
+        writer.Write("Errors");
+        writer.Write(new string(' ', maxErrorLen - 6));
+        writer.Write(" | ");
+        writer.Write("Warnings");
+        writer.Write(new string(' ', maxWarnLen - 8));
+        writer.WriteLine(" |");
+
+        // Separator row (right-aligned numeric columns)
+        writer.Write('|');
+        writer.Write(new string('-', maxFileLen + 2));
+        writer.Write('|');
+        writer.Write(new string('-', maxErrorLen + 1));
+        writer.Write(":|");
+        writer.Write(new string('-', maxWarnLen + 1));
+        writer.WriteLine(":|");
+
+        // Data rows
+        for (var i = 0; i < sorted.Count; i++)
+        {
+            var (filePath, (errors, warnings, _)) = sorted[i];
             var displayName = Path.GetFileName(filePath);
 
-            var parts = new System.Text.StringBuilder();
-            parts.Append("  ");
-            parts.Append(displayName);
-            parts.Append(": ");
-            var hasPart = false;
-            if (errors > 0) { parts.Append(errors == 1 ? "1 error" : $"{errors} errors"); hasPart = true; }
-            if (warnings > 0) { if (hasPart) parts.Append(", "); parts.Append(warnings == 1 ? "1 warning" : $"{warnings} warnings"); hasPart = true; }
-            if (infos > 0) { if (hasPart) parts.Append(", "); parts.Append(infos == 1 ? "1 info" : $"{infos} infos"); }
-            writer.WriteLine(parts.ToString());
+            writer.Write("| ");
+            writer.Write(displayName);
+            writer.Write(new string(' ', maxFileLen - displayName.Length));
+            writer.Write(" | ");
+            var errStr = errors.ToString();
+            writer.Write(new string(' ', maxErrorLen - errStr.Length));
+            writer.Write(errStr);
+            writer.Write(" | ");
+            var warnStr = warnings.ToString();
+            writer.Write(new string(' ', maxWarnLen - warnStr.Length));
+            writer.Write(warnStr);
+            writer.WriteLine(" |");
         }
     }
 
@@ -438,7 +484,7 @@ internal static class CheckCommand
         }
     }
 
-    private static int CountDigits(int value)
+    internal static int CountDigits(int value)
     {
         if (value < 10) return 1;
         if (value < 100) return 2;

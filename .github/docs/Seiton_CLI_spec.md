@@ -435,6 +435,20 @@ When no diagnostics exist: `0 issues in <N> file(s)`.
 
 Zero-count categories are omitted (e.g. `1 error in 3 files` when warnings and infos are zero).
 
+When at least one diagnostic has a file path, a per-file breakdown is emitted as a markdown-style table, separated from the summary line by a blank line:
+
+```
+| File          | Errors | Warnings |
+|---------------|-------:|---------:|
+| ci.yml        |      3 |        2 |
+| release.yml   |      1 |        0 |
+```
+
+- Column widths are dynamically computed from the longest file name.
+- Numeric columns are right-aligned.
+- Zero values are displayed explicitly (not omitted).
+- Files are sorted by total issue count descending, then by file name lexicographically.
+
 In `--verbose` mode with at least one diagnostic, a per-rule breakdown is emitted as a markdown-style table, separated from the preceding output by a blank line:
 
 ```
@@ -493,14 +507,23 @@ In `--fix` mode (not `--dry-run`, not `--check`), when at least one fix is appli
 
 ```
 Fixed <fixed> of <found> issue(s) in <file-count> file(s) (<remaining> remaining)
-  <filename>: fixed <N>, remaining <M>
-  <filename>: fixed <N>, remaining <M>
+
+| File        | Fixed | Remaining |
+|-------------|------:|----------:|
+| ci.yml      |     4 |         0 |
+| release.yml |     2 |         1 |
 <errors> error(s), <warnings> warning(s) remain in <affected-files> file(s)
 ```
 
+In `--dry-run` mode, the table header uses "Would Fix" instead of "Fixed". In `--check` mode, the header uses "Fixable".
+
 - The total summary line shows the relationship `found = fixed + remaining` explicitly ("Fixed X of Y issues").
-- The total summary line appears first, followed by per-file detail lines.
-- Per-file lines show only files where fixes were applied (files with 0 fixes are omitted from the fixed list, but unfixed files with remaining diagnostics are shown with "fixed 0, remaining M").
+- The total summary line appears first, followed by the per-file detail table.
+- Column widths are dynamically computed from the longest file name.
+- Numeric columns are right-aligned.
+- Zero values are displayed explicitly (not omitted).
+- Files are sorted by total count (fixed + remaining) descending, then by file name lexicographically.
+- Per-file rows include all files that had fixes applied, plus unfixed files with remaining diagnostics (shown with fixed 0).
 - `remaining` is the count of diagnostics still present for that file after ignore/severity filters.
 - The "remain" summary line shows the severity breakdown of remaining diagnostics and the count of affected files.
 - When no fixes are applied (all diagnostics are unfixable), the fix summary is not emitted and the standard diagnostic summary is used instead.

@@ -934,10 +934,10 @@ public sealed class FixCommandTests
                 error: stderr);
 
             var errorOutput = stderr.ToString();
-            // Must contain per-file details
-            await Assert.That(errorOutput).Contains("workflow1.yml");
-            await Assert.That(errorOutput).Contains("workflow2.yml");
-            await Assert.That(errorOutput).Contains("fixed");
+            // Must contain per-file details in table format
+            await Assert.That(errorOutput).Contains("| workflow1.yml");
+            await Assert.That(errorOutput).Contains("| workflow2.yml");
+            await Assert.That(errorOutput).Contains("| Fixed");
             // Must contain total summary
             await Assert.That(errorOutput).Contains("Fixed");
         }
@@ -1668,8 +1668,8 @@ public sealed class FixCommandTests
 
             // Total line: "Fixed N issues in M files"
             var totalLineIndex = Array.FindIndex(lines, l => l.StartsWith("Fixed"));
-            // Per-file detail: starts with "  " (indented)
-            var perFileIndex = Array.FindIndex(lines, l => l.TrimStart().StartsWith("workflow.yml:") && l.Contains("fixed"));
+            // Per-file detail: table row starting with "| " and containing the file name
+            var perFileIndex = Array.FindIndex(lines, l => l.Contains("| workflow.yml") || (l.Contains("workflow") && l.TrimStart().StartsWith('|')));
 
             await Assert.That(totalLineIndex).IsGreaterThanOrEqualTo(0);
             await Assert.That(perFileIndex).IsGreaterThan(totalLineIndex);

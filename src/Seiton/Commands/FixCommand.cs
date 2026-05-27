@@ -508,14 +508,6 @@ internal static class FixCommand
             count++;
         }
 
-        // Mode-specific verbs
-        var perFileVerb = mode switch
-        {
-            FixSummaryMode.DryRun => "would fix",
-            FixSummaryMode.Check => "fixable",
-            _ => "fixed",
-        };
-
         // Build a set of files that had fixes for fast lookup
         var fixedFileSet = new HashSet<string>(fixedFiles.Count, StringComparer.Ordinal);
         for (var i = 0; i < fixedFiles.Count; i++)
@@ -559,7 +551,9 @@ internal static class FixCommand
             writer.WriteLine($"{totalVerb} {totalFixed} of {totalFound} {(totalFound == 1 ? "issue" : "issues")} in {totalFiles} {fileWord} ({totalRemaining} remaining)");
         }
 
-        // Per-file detail lines for files that had fixes
+        // Per-file detail as table
+        // Build combined list of all files (fixed + unfixed with remaining)
+        var allFileEntries = new List<(string FilePath, int Fixed, int Remaining)>(fixedFiles.Count);
         for (var i = 0; i < fixedFiles.Count; i++)
         {
             var (filePath, fixedCount) = fixedFiles[i];
@@ -571,36 +565,96 @@ internal static class FixCommand
             if (mode == FixSummaryMode.Check)
                 remaining = Math.Max(0, remaining - fixedCount);
 
-            // Display file name only (not full path) for readability
-            var displayName = Path.GetFileName(filePath);
-            writer.WriteLine($"  {displayName}: {perFileVerb} {fixedCount}, remaining {remaining}");
+            allFileEntries.Add((filePath, fixedCount, remaining));
         }
 
-        // Per-file detail lines for files with remaining diagnostics but NO fixes
+        // Add unfixed files with remaining diagnostics
         if (remainingByFile is not null)
         {
-            // Collect unfixed files, sort by remaining count descending then by name
-            var unfixedFiles = new List<(string FilePath, int Remaining)>();
             foreach (var kvp in remainingByFile)
             {
                 if (!fixedFileSet.Contains(kvp.Key))
-                    unfixedFiles.Add((kvp.Key, kvp.Value));
+                    allFileEntries.Add((kvp.Key, 0, kvp.Value));
             }
+        }
 
-            if (unfixedFiles.Count > 0)
-            {
-                unfixedFiles.Sort((a, b) =>
-                {
-                    var byCount = b.Remaining.CompareTo(a.Remaining);
-                    return byCount != 0 ? byCount : string.Compare(Path.GetFileName(a.FilePath), Path.GetFileName(b.FilePath), StringComparison.Ordinal);
-                });
+        if (allFileEntries.Count == 0) return;
 
-                for (var i = 0; i < unfixedFiles.Count; i++)
-                {
-                    var displayName = Path.GetFileName(unfixedFiles[i].FilePath);
-                    writer.WriteLine($"  {displayName}: {perFileVerb} 0, remaining {unfixedFiles[i].Remaining}");
-                }
-            }
+        // Sort by total count (fixed + remaining) descending, then by file name for determinism
+        allFileEntries.Sort((a, b) =>
+        {
+            var totalA = a.Fixed + a.Remaining;
+            var totalB = b.Fixed + b.Remaining;
+            var byCount = totalB.CompareTo(totalA);
+            return byCount != 0 ? byCount : string.Compare(Path.GetFileName(a.FilePath), Path.GetFileName(b.FilePath), StringComparison.Ordinal);
+        });
+
+        // Mode-specific column header for the "fixed" column
+        var fixColumnHeader = mode switch
+        {
+            FixSummaryMode.DryRun => "Would Fix",
+            FixSummaryMode.Check => "Fixable",
+            _ => "Fixed",
+        };
+        var fixHeaderLen = fixColumnHeader.Length;
+        const string remainingHeader = "Remaining";
+        var remainHeaderLen = remainingHeader.Length;
+
+        // Compute column widths
+        var maxFileLen = 4; // "File".Length
+        var maxFixLen = fixHeaderLen;
+        var maxRemainLen = remainHeaderLen;
+        for (var i = 0; i < allFileEntries.Count; i++)
+        {
+            var name = Path.GetFileName(allFileEntries[i].FilePath);
+            if (name.Length > maxFileLen) maxFileLen = name.Length;
+            var fixDigits = CheckCommand.CountDigits(allFileEntries[i].Fixed);
+            var remDigits = CheckCommand.CountDigits(allFileEntries[i].Remaining);
+            if (fixDigits > maxFixLen) maxFixLen = fixDigits;
+            if (remDigits > maxRemainLen) maxRemainLen = remDigits;
+        }
+
+        // Write table with blank line separator
+        writer.WriteLine();
+
+        // Header row
+        writer.Write("| File");
+        writer.Write(new string(' ', maxFileLen - 4));
+        writer.Write(" | ");
+        writer.Write(fixColumnHeader);
+        writer.Write(new string(' ', maxFixLen - fixHeaderLen));
+        writer.Write(" | ");
+        writer.Write(remainingHeader);
+        writer.Write(new string(' ', maxRemainLen - remainHeaderLen));
+        writer.WriteLine(" |");
+
+        // Separator row (right-aligned numeric columns)
+        writer.Write('|');
+        writer.Write(new string('-', maxFileLen + 2));
+        writer.Write('|');
+        writer.Write(new string('-', maxFixLen + 1));
+        writer.Write(":|");
+        writer.Write(new string('-', maxRemainLen + 1));
+        writer.WriteLine(":|");
+
+        // Data rows
+        for (var i = 0; i < allFileEntries.Count; i++)
+        {
+            var (filePath, fixedCount, remaining) = allFileEntries[i];
+            var displayName = Path.GetFileName(filePath);
+
+            writer.Write("| ");
+            writer.Write(displayName);
+            writer.Write(new string(' ', maxFileLen - displayName.Length));
+            writer.Write(" | ");
+            var fixStr = fixedCount.ToString();
+            writer.Write(new string(' ', maxFixLen - fixStr.Length));
+            writer.Write(fixStr);
+            writer.Write(" | ");
+            var remStr = remaining.ToString();
+            writer.Write(new string(' ', maxRemainLen - remStr.Length));
+            writer.Write(remStr);
+            writer.WriteLine(" |");
         }
     }
 

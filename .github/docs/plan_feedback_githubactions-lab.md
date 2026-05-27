@@ -462,7 +462,7 @@ dotnet run --project src/Seiton -- --fix --dry-run --oneline -c samples/readme/.
 - `WriteFixSummary` での `fixedFiles` 2回イテレーションは O(N) だが N は小さい (< 100)
 - `isRemainMode` での `HashSet<string>` は出力パスで1回のみアロケーション (negligible)
 
-#### 6b: ファイル一覧のテーブル表示
+#### 6b: ファイル一覧のテーブル表示 ✅
 
 マークダウン風のテーブル形式で出力する。表タイトルで「何の一覧か」を明示し、ファイル名・数値が自然に揃う。
 
@@ -511,6 +511,44 @@ Would fix 78 issues in 19 files (20 remaining)
 - 0 のセルは `0` を表示 (空欄にしない — grep/集計しやすさ優先)
 - remaining 0 のファイルも表示する (省略すると fix の全体像が見えない)
 - ヘッダーの動詞はモードに応じて変更: `Fixed` / `Would Fix` / `Fixable` / `Errors` / `Warnings`
+
+**実装結果:**
+
+変更ファイル:
+- `src/Seiton/Commands/CheckCommand.cs`: `WritePerFileBreakdown` を markdown テーブル形式に書き換え、`CountDigits` を `internal` に変更
+- `src/Seiton/Commands/FixCommand.cs`: `WriteFixSummary` のファイル詳細出力を markdown テーブル形式に変更
+- `tests/Seiton.Tests/WriteSummaryTests.cs`: 10 テスト追加/更新 (check/fix/dry-run/check モードのテーブル検証)
+- `tests/Seiton.Tests/FixCommandTests.cs`: 2 テスト更新 (旧フォーマット → テーブルフォーマットへの assertion 修正)
+- `.github/docs/Seiton_CLI_spec.md`: per-file breakdown + fix summary セクションをテーブル形式で更新
+- `docs/usage.md`: fix モードのサマリ出力例をテーブル形式に更新
+
+**テスト** (すべて GREEN — 154 テスト通過):
+1. `WriteSummary_PerFileBreakdown_UsesTableFormat` — `| File`, `| Errors`, `| Warnings`, `|---` の存在確認
+2. `WriteSummary_PerFileBreakdown_NumbersRightAligned` — `---:|` の存在確認
+3. `WriteSummary_PerFileBreakdown_SortedByCountDescending_TableFormat` — IndexOf で順序確認
+4. `WriteSummary_PerFileBreakdown_ShowsZeroValues` — 0 が表示されること確認
+5. `WriteSummary_PerFileBreakdown_SeparatedByBlankLine` — テーブル前の空行確認
+6. `WriteFixSummary_PerFileDetail_UsesTableFormat` — `| File`, `| Fixed`, `| Remaining` の存在確認
+7. `WriteFixSummary_DryRun_UsesWouldFixHeader` — `| Would Fix` ヘッダー確認
+8. `WriteFixSummary_Check_UsesFixableHeader` — `| Fixable` ヘッダー確認
+9. `WriteFixSummary_PerFileDetail_ShowsZeroRemaining` — 0 remaining 表示確認
+10. `WriteFixSummary_PerFileDetail_NumbersRightAligned` — `---:|` 確認
+
+**ベンチマーク** (CoreLintBenchmark):
+
+| Size | FixEnabled | Mean | Allocated | Ratio | Alloc Ratio |
+|------|-----------|------|-----------|-------|-------------|
+| Small | False | 164 μs | 8.7 KB | 1.02 | 1.00 |
+| Small | True | 328 μs | 10.29 KB | 1.00 | 1.00 |
+| Medium | False | 2,182 μs | 68.89 KB | 1.00 | 1.00 |
+| Medium | True | 8,772 μs | 82.39 KB | 1.00 | 1.00 |
+| Large | False | 39,925 μs | 327.41 KB | 1.00 | 1.00 |
+| Large | True | 51,607 μs | 382.25 KB | 1.00 | 1.00 |
+
+**性能影響: なし** (Ratio=1.00, AllocRatio=1.00)
+- 変更は CLI 出力パス (`CheckCommand`, `FixCommand`) のみ。CoreLintBenchmark が測定する `LintEngine.Check` パスには影響なし
+- `WritePerFileBreakdown` は既存の `Dictionary` + `Sort` ロジックを維持、出力部分のみテーブル形式に変更
+- `WriteFixSummary` は既存の `List` 結合ロジックを `allFileEntries` リストに統合し、1回のテーブル出力ループに変更 (コードの重複も削減)
 
 #### 6c: before/after/fixed の関連性を明示 ✅
 
