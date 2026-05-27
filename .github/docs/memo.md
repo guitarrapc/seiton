@@ -63,3 +63,12 @@ To allow more than one `pending` job or workflow run to wait in the same concurr
 ---
 
 `seiton` を実行したときに、総数のサマリーは出るのですがルールごとのサマリー件数は出ません。ファイル名はいらないと思うんですが、ルール毎の検出サマリって出したほうがいいと思いますかね?
+
+---
+
+
+seuton skill も用意する。
+
+---
+
+Playgroundに警告レベルを表示する。
