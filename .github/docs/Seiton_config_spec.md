@@ -149,7 +149,7 @@ rules:
 
 ### 2.3 `exclusions`
 
-ファイル・ジョブ単位でルール診断を抑制する。
+ファイル・ジョブ単位で診断を抑制する。`file` 単独指定だけは特別扱いで、ファイル全体の workflow 診断（parse error を含む）を抑制する。設定診断は常に抑制しない。
 
 ```yaml
 exclusions:
@@ -172,10 +172,14 @@ exclusions:
 | `jobs` | `string[]` | No | 対象ジョブ ID（`job.id`）。省略時はファイル全体に適用 |
 
 **加算方式（progressive narrowing）**:
-- `file` のみ → ファイル全体を検査から除外
+- `file` のみ → ファイル全体の workflow 診断を抑制（parse error を含む）
 - `file` + `jobs` → 指定ジョブを全ルールから除外
 - `file` + `rules` → ファイル全体で指定ルールのみ除外
 - `file` + `jobs` + `rules` → 指定ジョブで指定ルールのみ除外
+
+補足:
+- `file` のみの exclusion でも、`rules` / `exclusions` 正規化中に発生した設定診断は返す。
+- `file` + `rules` / `jobs` では parse error は抑制しない。
 
 `rules: []`（明示的空リスト）は no-op（除外効果なし）。省略と空リストは意味が異なる。
 

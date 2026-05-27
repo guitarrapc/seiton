@@ -320,6 +320,9 @@ Configuration file may define file-targeted exclusion entries with path globs.
 - Glob matching is case-sensitive.
 - Glob base is repository root (workspace root containing the analyzed file).
 - Exclusion entries may include optional `jobs` condition (see §5.4).
+- An exclusion entry with `file` only (both `rules` and `jobs` omitted) suppresses the entire file's workflow diagnostics, including parser diagnostics.
+- Exclusion entries that specify `rules` and/or `jobs` suppress only matching rule diagnostics; parser diagnostics remain visible.
+- Configuration diagnostics raised while normalizing `rules` or `exclusions` are never suppressed, even when a file-level exclusion matches.
 
 ### 5.4 Job-Level Exclusion (Configuration)
 
