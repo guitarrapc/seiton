@@ -232,20 +232,8 @@ internal static class FixCommand
                 if (check)
                 {
                     // --check: report fixable but don't apply.
-                    // Count fixable diagnostics for the summary.
-                    var fixableCount = 0;
-                    for (var j = 0; j < effectiveDiagnostics.Count; j++)
-                    {
-                        if (effectiveDiagnostics[j].Fix != null)
-                            fixableCount++;
-                    }
-
-                    if (fixableCount > 0)
-                    {
-                        fixedFiles ??= new List<(string, int)>();
-                        fixedFiles.Add((filePath, fixableCount));
-                    }
-
+                    // Summary entries are built after ignore/min-severity filters so the
+                    // reported fixable counts match the diagnostics the user actually sees.
                     allDiagnostics.AddRange(effectiveDiagnostics);
                     continue;
                 }
@@ -370,6 +358,11 @@ internal static class FixCommand
                     allDiagnostics.RemoveAll(d => d.Severity < threshold.Value);
             }
 
+            if (check)
+            {
+                fixedFiles = CreateCheckSummaryEntries(allDiagnostics);
+            }
+
             // Output remaining diagnostics
             if (allDiagnostics.Count > 0)
             {
@@ -430,6 +423,35 @@ internal static class FixCommand
             githubHttpClient?.Dispose();
             ociHttpClient?.Dispose();
         }
+    }
+
+    private static List<(string FilePath, int Fixed)>? CreateCheckSummaryEntries(List<Diagnostic> diagnostics)
+    {
+        Dictionary<string, int>? fixableByFile = null;
+        for (var i = 0; i < diagnostics.Count; i++)
+        {
+            if (diagnostics[i].Fix is null || diagnostics[i].FilePath is not { } filePath)
+            {
+                continue;
+            }
+
+            fixableByFile ??= new Dictionary<string, int>(StringComparer.Ordinal);
+            ref var count = ref System.Runtime.InteropServices.CollectionsMarshal.GetValueRefOrAddDefault(fixableByFile, filePath, out _);
+            count++;
+        }
+
+        if (fixableByFile is null || fixableByFile.Count == 0)
+        {
+            return null;
+        }
+
+        var entries = new List<(string FilePath, int Fixed)>(fixableByFile.Count);
+        foreach (var kvp in fixableByFile)
+        {
+            entries.Add((kvp.Key, kvp.Value));
+        }
+
+        return entries;
     }
 
     internal static void WriteEffectiveNetworkConfig(

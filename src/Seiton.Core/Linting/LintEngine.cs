@@ -240,12 +240,25 @@ public sealed class LintEngine
         var normalizedRules = NormalizeRules(config?.Rules, filePath);
         _disabledRuleIds.Clear();
 
-        // File-level exclusion (Rules: null, Jobs: null) short-circuits before any diagnostics.
-        // This ensures parse errors are suppressed for fully-excluded files.
+        // File-level exclusion (Rules: null, Jobs: null) short-circuits workflow diagnostics.
+        // Parse errors remain suppressed for fully-excluded files, but rule configuration
+        // diagnostics produced while normalizing rules must still be reported.
         if (IsFileFullyExcluded(config?.Exclusions, filePath))
         {
+            DiagnosticList diagnostics = default;
+            if (normalizedRules.ConfigurationDiagnostics.Count > 0)
+            {
+                var configurationDiagnostics = new Diagnostic[normalizedRules.ConfigurationDiagnostics.Count];
+                for (var i = 0; i < normalizedRules.ConfigurationDiagnostics.Count; i++)
+                {
+                    configurationDiagnostics[i] = normalizedRules.ConfigurationDiagnostics[i];
+                }
+
+                diagnostics = new DiagnosticList(configurationDiagnostics);
+            }
+
             var (ruleCount, disabledIds) = GetRuleActivationMetadataForDocumentKind(normalizedRules.Rules, documentKind);
-            return new LintResultData(parseResult, default)
+            return new LintResultData(parseResult, diagnostics)
             {
                 SuppressionSummary = SuppressionSummary.Empty,
                 DocumentKind = documentKind,

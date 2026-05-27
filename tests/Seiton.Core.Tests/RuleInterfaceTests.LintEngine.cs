@@ -2002,6 +2002,41 @@ public sealed partial class RuleInterfaceTests
     }
 
     [Test]
+    public async Task LintEngine_RunEnvContextDirectUse_Fix_ExpressionJobDefaultsShell_DoesNotUseWorkflowDefaultsShell()
+    {
+        var yaml = """
+        on: push
+        defaults:
+            run:
+                shell: pwsh
+        jobs:
+            build:
+                runs-on: windows-latest
+                strategy:
+                    matrix:
+                        shell: [bash]
+                defaults:
+                    run:
+                        shell: ${{ matrix.shell }}
+                steps:
+                    - run: echo "${{ env.VERSION }}"
+        """;
+
+        var sourceBytes = Encoding.UTF8.GetBytes(yaml);
+        var engine = new LintEngine([new RunEnvContextDirectUseRule()]);
+        using var result = engine.Check(sourceBytes, "run-env-fix-expression-job-defaults-shell.yml");
+        var diagnostic = result.Diagnostics.First(x => x.RuleId == "run-env-context-direct-use");
+
+        await Assert.That(diagnostic.Fix is not null).IsTrue();
+
+        var fixedBytes = FixEngine.Apply(sourceBytes, diagnostic.Fix!.Value.Edits);
+        var fixedText = Encoding.UTF8.GetString(fixedBytes);
+
+        await Assert.That(fixedText.Contains("${VERSION}", StringComparison.Ordinal)).IsTrue();
+        await Assert.That(fixedText.Contains("$env:VERSION", StringComparison.Ordinal)).IsFalse();
+    }
+
+    [Test]
     public async Task LintEngine_RunEnvContextDirectUse_DoesNotAttachFix_ForCompositeExpression()
     {
         var yaml = """
@@ -3216,6 +3251,37 @@ public sealed partial class RuleInterfaceTests
         await Assert.That(configError.Message.Length).IsGreaterThan(0);
         await Assert.That(configError.Message.Contains("Did you mean 'job-permissions-required'", StringComparison.Ordinal)).IsTrue();
         await Assert.That(configError.Severity).IsEqualTo(DiagnosticSeverity.Error);
+    }
+
+    [Test]
+    public async Task LintEngine_ConfigExclusion_FileLevelExclusion_PreservesRuleConfigurationDiagnostics()
+    {
+        var yaml = """
+        on: push
+        jobs:
+            build:
+                runs-on: ubuntu-latest
+                steps:
+                    - run: echo one
+        """;
+
+        var config = new LintConfig
+        {
+            Rules = new Dictionary<string, RuleConfig>
+            {
+                ["job-permissions-requred"] = new RuleConfig { Enabled = false },
+            },
+            Exclusions =
+            [
+                new LintExclusion("**/*.yml", Rules: null),
+            ],
+        };
+
+        using var result = new LintEngine().Check(Encoding.UTF8.GetBytes(yaml), "workflows/main.yml", config);
+
+        await Assert.That(result.Diagnostics).HasSingleItem();
+        await Assert.That(result.Diagnostics[0].RuleId).IsNull();
+        await Assert.That(result.Diagnostics[0].Message.Contains("unknown rule-id", StringComparison.Ordinal)).IsTrue();
     }
 
     [Test]
