@@ -447,6 +447,7 @@ When at least one diagnostic has a file path, a per-file breakdown is emitted as
 - Column widths are dynamically computed from the longest file name.
 - Numeric columns are right-aligned.
 - Zero values are displayed explicitly (not omitted).
+- When at least one info diagnostic exists in the per-file breakdown, an `Infos` column is also emitted.
 - Files are sorted by total issue count descending, then by file name lexicographically.
 
 In `--verbose` mode with at least one diagnostic, a per-rule breakdown is emitted as a markdown-style table, separated from the preceding output by a blank line:

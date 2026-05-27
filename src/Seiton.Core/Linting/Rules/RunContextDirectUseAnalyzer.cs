@@ -47,8 +47,13 @@ internal static class RunContextDirectUseAnalyzer
     internal static bool IsPowerShellWithDefaults(AstArena arena, Step step, Job? currentJob, Workflow? currentWorkflow, byte[] utf8Yaml)
     {
         // Priority 1: step-level shell
-        if (step.Exec is ExecRun run && run.Shell.HasValue && !arena.GetStringExpression(run.Shell).HasValue)
+        if (step.Exec is ExecRun run && run.Shell.HasValue)
         {
+            if (arena.GetStringExpression(run.Shell).HasValue)
+            {
+                return false;
+            }
+
             return IsPowerShell(arena, run.Shell, utf8Yaml);
         }
 
@@ -440,6 +445,14 @@ internal static class RunContextDirectUseAnalyzer
             {
                 var top = hereDocs[hereDocCount - 1];
                 var candidate = line;
+                var yamlIndent = 0;
+                while (yamlIndent < candidate.Length && yamlIndent < top.ContentIndentLength
+                    && (candidate[yamlIndent] == (byte)' ' || candidate[yamlIndent] == (byte)'\t'))
+                {
+                    yamlIndent++;
+                }
+
+                candidate = candidate[yamlIndent..];
                 if (top.StripTabs)
                 {
                     var trimIndex = 0;
@@ -533,14 +546,20 @@ internal static class RunContextDirectUseAnalyzer
                 return false;
             }
 
-            state = new HereDocState(lineStartInSource + start, i - start, stripTabs);
+            var contentIndentLength = 0;
+            while (contentIndentLength < line.Length && (line[contentIndentLength] == (byte)' ' || line[contentIndentLength] == (byte)'\t'))
+            {
+                contentIndentLength++;
+            }
+
+            state = new HereDocState(lineStartInSource + start, i - start, stripTabs, contentIndentLength);
             return true;
         }
 
         return false;
     }
 
-    internal readonly record struct HereDocState(int TerminatorOffset, int TerminatorLength, bool StripTabs);
+    internal readonly record struct HereDocState(int TerminatorOffset, int TerminatorLength, bool StripTabs, int ContentIndentLength);
 
     // Single-Quote Detection
 

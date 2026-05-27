@@ -1969,6 +1969,39 @@ public sealed partial class RuleInterfaceTests
     }
 
     [Test]
+    public async Task LintEngine_RunEnvContextDirectUse_Fix_ExpressionStepShell_DoesNotUseDefaultsShell()
+    {
+        var yaml = """
+        on: push
+        jobs:
+            build:
+                runs-on: windows-latest
+                defaults:
+                    run:
+                        shell: pwsh
+                strategy:
+                    matrix:
+                        shell: [bash]
+                steps:
+                    - shell: ${{ matrix.shell }}
+                      run: echo "${{ env.VERSION }}"
+        """;
+
+        var sourceBytes = Encoding.UTF8.GetBytes(yaml);
+        var engine = new LintEngine([new RunEnvContextDirectUseRule()]);
+        using var result = engine.Check(sourceBytes, "run-env-fix-expression-shell-overrides-defaults.yml");
+        var diagnostic = result.Diagnostics.First(x => x.RuleId == "run-env-context-direct-use");
+
+        await Assert.That(diagnostic.Fix is not null).IsTrue();
+
+        var fixedBytes = FixEngine.Apply(sourceBytes, diagnostic.Fix!.Value.Edits);
+        var fixedText = Encoding.UTF8.GetString(fixedBytes);
+
+        await Assert.That(fixedText.Contains("${VERSION}", StringComparison.Ordinal)).IsTrue();
+        await Assert.That(fixedText.Contains("$env:VERSION", StringComparison.Ordinal)).IsFalse();
+    }
+
+    [Test]
     public async Task LintEngine_RunEnvContextDirectUse_DoesNotAttachFix_ForCompositeExpression()
     {
         var yaml = """
@@ -2164,6 +2197,77 @@ public sealed partial class RuleInterfaceTests
             .Check(Encoding.UTF8.GetBytes(yaml), "run-secrets-no-diag-heredoc.yml");
 
         await Assert.That(result.Diagnostics.Where(x => x.RuleId == "run-secrets-context-direct-use")).IsEmpty();
+    }
+
+    [Test]
+    public async Task LintEngine_RunEnvContextDirectUse_Detects_AfterIndentedHereDocTerminator()
+    {
+        var yaml = """
+        on: push
+        jobs:
+            build:
+                runs-on: ubuntu-latest
+                steps:
+                    - run: |
+                        cat << 'EOF' > pr_comment.md
+                          inside ${{ env.IGNORED }}
+                        EOF
+                        echo ${{ env.DETECT_ME }}
+        """;
+
+        using var result = new LintEngine([new RunEnvContextDirectUseRule()])
+            .Check(Encoding.UTF8.GetBytes(yaml), "run-env-detect-after-heredoc-terminator.yml");
+
+        await Assert.That(result.Diagnostics.Where(x => x.RuleId == "run-env-context-direct-use")).Count().IsEqualTo(1);
+        await Assert.That(result.Diagnostics.First(x => x.RuleId == "run-env-context-direct-use").Message).Contains("${{ env.* }}");
+    }
+
+    [Test]
+    public async Task LintEngine_RunInputsContextDirectUse_Detects_AfterIndentedHereDocTerminator()
+    {
+        var yaml = """
+        on:
+            workflow_dispatch:
+                inputs:
+                    name:
+                        type: string
+        jobs:
+            build:
+                runs-on: ubuntu-latest
+                steps:
+                    - run: |
+                        cat << 'EOF' > output.md
+                          inside ${{ inputs.name }}
+                        EOF
+                        echo ${{ inputs.name }}
+        """;
+
+        using var result = new LintEngine([new RunInputsContextDirectUseRule()])
+            .Check(Encoding.UTF8.GetBytes(yaml), "run-inputs-detect-after-heredoc-terminator.yml");
+
+        await Assert.That(result.Diagnostics.Where(x => x.RuleId == "run-inputs-context-direct-use")).Count().IsEqualTo(1);
+    }
+
+    [Test]
+    public async Task LintEngine_RunSecretsContextDirectUse_Detects_AfterIndentedHereDocTerminator()
+    {
+        var yaml = """
+        on: push
+        jobs:
+            build:
+                runs-on: ubuntu-latest
+                steps:
+                    - run: |
+                        cat << 'EOF' > config.yml
+                          inside ${{ secrets.GITHUB_TOKEN }}
+                        EOF
+                        echo ${{ secrets.GITHUB_TOKEN }}
+        """;
+
+        using var result = new LintEngine([new RunSecretsContextDirectUseRule()])
+            .Check(Encoding.UTF8.GetBytes(yaml), "run-secrets-detect-after-heredoc-terminator.yml");
+
+        await Assert.That(result.Diagnostics.Where(x => x.RuleId == "run-secrets-context-direct-use")).Count().IsEqualTo(1);
     }
 
     [Test]

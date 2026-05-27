@@ -356,12 +356,17 @@ internal static class CheckCommand
 
         var maxErrorLen = 6; // "Errors".Length
         var maxWarnLen = 8; // "Warnings".Length
+        var hasInfos = false;
+        var maxInfoLen = 5; // "Infos".Length
         for (var i = 0; i < sorted.Count; i++)
         {
             var errDigits = CountDigits(sorted[i].Value.Errors);
             var warnDigits = CountDigits(sorted[i].Value.Warnings);
+            var infoDigits = CountDigits(sorted[i].Value.Infos);
             if (errDigits > maxErrorLen) maxErrorLen = errDigits;
             if (warnDigits > maxWarnLen) maxWarnLen = warnDigits;
+            if (infoDigits > maxInfoLen) maxInfoLen = infoDigits;
+            hasInfos |= sorted[i].Value.Infos > 0;
         }
 
         // Write table with blank line separator before it
@@ -376,6 +381,12 @@ internal static class CheckCommand
         writer.Write(" | ");
         writer.Write("Warnings");
         writer.Write(new string(' ', maxWarnLen - 8));
+        if (hasInfos)
+        {
+            writer.Write(" | ");
+            writer.Write("Infos");
+            writer.Write(new string(' ', maxInfoLen - 5));
+        }
         writer.WriteLine(" |");
 
         // Separator row (right-aligned numeric columns)
@@ -385,12 +396,18 @@ internal static class CheckCommand
         writer.Write(new string('-', maxErrorLen + 1));
         writer.Write(":|");
         writer.Write(new string('-', maxWarnLen + 1));
-        writer.WriteLine(":|");
+        writer.Write(":|");
+        if (hasInfos)
+        {
+            writer.Write(new string('-', maxInfoLen + 1));
+            writer.Write(":|");
+        }
+        writer.WriteLine();
 
         // Data rows
         for (var i = 0; i < sorted.Count; i++)
         {
-            var (filePath, (errors, warnings, _)) = sorted[i];
+            var (filePath, (errors, warnings, infos)) = sorted[i];
             var displayName = Path.GetFileName(filePath);
 
             writer.Write("| ");
@@ -404,6 +421,13 @@ internal static class CheckCommand
             var warnStr = warnings.ToString();
             writer.Write(new string(' ', maxWarnLen - warnStr.Length));
             writer.Write(warnStr);
+            if (hasInfos)
+            {
+                writer.Write(" | ");
+                var infoStr = infos.ToString();
+                writer.Write(new string(' ', maxInfoLen - infoStr.Length));
+                writer.Write(infoStr);
+            }
             writer.WriteLine(" |");
         }
     }

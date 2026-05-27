@@ -1206,6 +1206,7 @@ public sealed class FixCommandTests
             // Total remaining should reflect the unfixed file's issues
             var totalLine = errorOutput.Split('\n').FirstOrDefault(l => l.StartsWith("Would fix"));
             await Assert.That(totalLine).IsNotNull();
+            await Assert.That(totalLine!).Contains("in 2 files");
             // The remaining count in the total line should be > 0 (because unfixable.yml has issues)
             await Assert.That(totalLine!).DoesNotContain("(0 remaining)");
         }

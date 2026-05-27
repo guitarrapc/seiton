@@ -494,6 +494,26 @@ public sealed class WriteSummaryTests
     }
 
     [Test]
+    public async Task WriteSummary_PerFileBreakdown_ShowsInfosColumn_WhenInfosPresent()
+    {
+        var diagnostics = new List<Diagnostic>
+        {
+            new(DiagnosticSeverity.Info, "msg", new TextRange(0, 1, 1, 1, 1, 2), RuleId: "rule-a", FilePath: "/repo/info-only.yml"),
+            new(DiagnosticSeverity.Warning, "msg", new TextRange(0, 1, 2, 1, 2, 2), RuleId: "rule-b", FilePath: "/repo/warn.yml"),
+        };
+
+        using var sw = new StringWriter();
+        CheckCommand.WriteSummary(sw, diagnostics, 2, verbose: false);
+        var output = sw.ToString();
+
+        await Assert.That(output).Contains("| Infos");
+        await Assert.That(output).Contains("| info-only.yml");
+        var infoLine = output.Split('\n').FirstOrDefault(l => l.Contains("info-only.yml"));
+        await Assert.That(infoLine).IsNotNull();
+        await Assert.That(infoLine!).Contains("|      0 |        0 |     1 |");
+    }
+
+    [Test]
     public async Task WriteSummary_PerFileBreakdown_SeparatedByBlankLine()
     {
         var diagnostics = new List<Diagnostic>

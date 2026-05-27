@@ -537,20 +537,6 @@ internal static class FixCommand
             }
         }
 
-        // Total summary line FIRST (action taken / overview)
-        var totalFound = totalFixed + totalRemaining;
-        var totalFiles = fixedFiles.Count;
-        var fileWord = totalFiles == 1 ? "file" : "files";
-        if (mode == FixSummaryMode.Check)
-        {
-            writer.WriteLine($"{totalFixed} of {totalFound} {(totalFound == 1 ? "issue" : "issues")} fixable in {totalFiles} {fileWord} ({totalRemaining} remaining)");
-        }
-        else
-        {
-            var totalVerb = mode == FixSummaryMode.DryRun ? "Would fix" : "Fixed";
-            writer.WriteLine($"{totalVerb} {totalFixed} of {totalFound} {(totalFound == 1 ? "issue" : "issues")} in {totalFiles} {fileWord} ({totalRemaining} remaining)");
-        }
-
         // Per-file detail as table
         // Build combined list of all files (fixed + unfixed with remaining)
         var allFileEntries = new List<(string FilePath, int Fixed, int Remaining)>(fixedFiles.Count);
@@ -579,6 +565,20 @@ internal static class FixCommand
         }
 
         if (allFileEntries.Count == 0) return;
+
+        // Total summary line FIRST (action taken / overview)
+        var totalFound = totalFixed + totalRemaining;
+        var totalFiles = allFileEntries.Count;
+        var fileWord = totalFiles == 1 ? "file" : "files";
+        if (mode == FixSummaryMode.Check)
+        {
+            writer.WriteLine($"{totalFixed} of {totalFound} {(totalFound == 1 ? "issue" : "issues")} fixable in {totalFiles} {fileWord} ({totalRemaining} remaining)");
+        }
+        else
+        {
+            var totalVerb = mode == FixSummaryMode.DryRun ? "Would fix" : "Fixed";
+            writer.WriteLine($"{totalVerb} {totalFixed} of {totalFound} {(totalFound == 1 ? "issue" : "issues")} in {totalFiles} {fileWord} ({totalRemaining} remaining)");
+        }
 
         // Sort by total count (fixed + remaining) descending, then by file name for determinism
         allFileEntries.Sort((a, b) =>
