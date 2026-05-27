@@ -303,21 +303,25 @@ rules:
 
 ## Exclusions
 
-Exclusions suppress **rule diagnostics** for specific files, jobs, or rule combinations. Parser errors and configuration errors are never suppressed by exclusions. Fields are additive (progressive narrowing):
+Exclusions suppress diagnostics for specific files, jobs, or rule combinations. Behavior depends on scope:
 
-- **`file` only** → suppress all rule diagnostics for the entire file
+- **`file` only** → suppress all workflow diagnostics for the entire file
 - **`file` + `jobs`** → suppress all rule diagnostics for specified jobs only
 - **`file` + `rules`** → suppress specified rule diagnostics for the whole file
 - **`file` + `jobs` + `rules`** → suppress specified rule diagnostics for specified jobs
 
+> **Note:** When only `file` is specified (no `rules` or `jobs`), parse errors are also suppressed. When `rules` or `jobs` are present, parse errors are still reported. Configuration diagnostics (e.g. unknown rule IDs, invalid exclusion patterns) are never suppressed, even for fully excluded files.
+
 ### File-Level Exclusion (all rules)
 
-Suppress all rule diagnostics for a file:
+Suppress all workflow diagnostics for a file:
 
 ```yaml
 exclusions:
   - file: ".github/workflows/generated.yml"
 ```
+
+This is the broadest exclusion form. When `rules` and `jobs` are both omitted, Seiton short-circuits linting for matching files and suppresses parser diagnostics too. Configuration diagnostics produced while loading the config still appear.
 
 ### File-Level Exclusion (specific rules)
 

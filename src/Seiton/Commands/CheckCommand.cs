@@ -249,10 +249,10 @@ internal static class CheckCommand
         return HasActionableDiagnostics(allDiagnostics) ? ExitCode.LintIssuesFound : ExitCode.Success;
     }
 
-    internal static void WriteSummary(List<Diagnostic> diagnostics, int fileCount, bool verbose = false, bool showExitHint = false)
-        => WriteSummary(Console.Error, diagnostics, fileCount, verbose, showExitHint);
+    internal static void WriteSummary(List<Diagnostic> diagnostics, int fileCount, bool verbose = false, bool showExitHint = false, bool showPerFile = true)
+        => WriteSummary(Console.Error, diagnostics, fileCount, verbose, showExitHint, showPerFile);
 
-    internal static void WriteSummary(TextWriter writer, List<Diagnostic> diagnostics, int fileCount, bool verbose = false, bool showExitHint = false)
+    internal static void WriteSummary(TextWriter writer, List<Diagnostic> diagnostics, int fileCount, bool verbose = false, bool showExitHint = false, bool showPerFile = true, bool isRemainMode = false)
     {
         var errors = 0;
         var warnings = 0;
@@ -272,14 +272,45 @@ internal static class CheckCommand
         if (warnings > 0) { if (parts.Length > 0) parts.Append(", "); parts.Append(warnings == 1 ? "1 warning" : $"{warnings} warnings"); }
         if (infos > 0) { if (parts.Length > 0) parts.Append(", "); parts.Append(infos == 1 ? "1 info" : $"{infos} infos"); }
 
-        if (parts.Length == 0)
-            writer.WriteLine($"0 issues in {fileCount} {(fileCount == 1 ? "file" : "files")}");
+        if (isRemainMode)
+        {
+            // In fix mode, use "remain" wording to clarify these are post-fix residual issues.
+            // Count files that actually have remaining diagnostics (not total files checked).
+            var filesWithIssues = 0;
+            HashSet<string>? seen = null;
+            for (var i = 0; i < diagnostics.Count; i++)
+            {
+                var file = diagnostics[i].FilePath;
+                if (file is null) continue;
+                seen ??= new HashSet<string>(StringComparer.Ordinal);
+                if (seen.Add(file)) filesWithIssues++;
+            }
+
+            if (parts.Length == 0)
+                writer.WriteLine("0 issues remain");
+            else
+            {
+                var total = errors + warnings + infos;
+                var verb = total == 1 ? "remains" : "remain";
+                writer.WriteLine($"{parts} {verb} in {filesWithIssues} {(filesWithIssues == 1 ? "file" : "files")}");
+            }
+        }
         else
-            writer.WriteLine($"{parts} in {fileCount} {(fileCount == 1 ? "file" : "files")}");
+        {
+            if (parts.Length == 0)
+                writer.WriteLine($"0 issues in {fileCount} {(fileCount == 1 ? "file" : "files")}");
+            else
+                writer.WriteLine($"{parts} in {fileCount} {(fileCount == 1 ? "file" : "files")}");
+        }
+
+        if (showPerFile && diagnostics.Count > 0)
+        {
+            WritePerFileBreakdown(writer, diagnostics);
+        }
 
         if (verbose && diagnostics.Count > 0)
         {
-            WritePerRuleBreakdown(writer, diagnostics);
+            WritePerRuleBreakdown(writer, diagnostics, isRemainMode);
         }
 
         // Show hint when warnings cause non-zero exit but no errors exist
@@ -289,7 +320,123 @@ internal static class CheckCommand
         }
     }
 
-    private static void WritePerRuleBreakdown(TextWriter writer, List<Diagnostic> diagnostics)
+    private static void WritePerFileBreakdown(TextWriter writer, List<Diagnostic> diagnostics)
+    {
+        // Count per file: errors, warnings, infos. Skip diagnostics without FilePath.
+        var fileCounts = new Dictionary<string, (int Errors, int Warnings, int Infos)>(StringComparer.Ordinal);
+        for (var i = 0; i < diagnostics.Count; i++)
+        {
+            var filePath = diagnostics[i].FilePath;
+            if (filePath is null) continue;
+            ref var counts = ref CollectionsMarshal.GetValueRefOrAddDefault(fileCounts, filePath, out _);
+            switch (diagnostics[i].Severity)
+            {
+                case DiagnosticSeverity.Error: counts.Errors++; break;
+                case DiagnosticSeverity.Warning: counts.Warnings++; break;
+                default: counts.Infos++; break;
+            }
+        }
+
+        if (fileCounts.Count == 0) return;
+
+        // Sort by total count descending, then by file name for determinism
+        var sorted = new List<KeyValuePair<string, (int Errors, int Warnings, int Infos)>>(fileCounts);
+        sorted.Sort((a, b) =>
+        {
+            var totalA = a.Value.Errors + a.Value.Warnings + a.Value.Infos;
+            var totalB = b.Value.Errors + b.Value.Warnings + b.Value.Infos;
+            var byCount = totalB.CompareTo(totalA);
+            return byCount != 0 ? byCount : string.Compare(Path.GetFileName(a.Key), Path.GetFileName(b.Key), StringComparison.Ordinal);
+        });
+
+        // Compute column widths for table formatting
+        var maxFileLen = 4; // "File".Length
+        for (var i = 0; i < sorted.Count; i++)
+        {
+            var name = Path.GetFileName(sorted[i].Key);
+            if (name.Length > maxFileLen)
+                maxFileLen = name.Length;
+        }
+
+        var maxErrorLen = 6; // "Errors".Length
+        var maxWarnLen = 8; // "Warnings".Length
+        var hasInfos = false;
+        var maxInfoLen = 5; // "Infos".Length
+        for (var i = 0; i < sorted.Count; i++)
+        {
+            var errDigits = CountDigits(sorted[i].Value.Errors);
+            var warnDigits = CountDigits(sorted[i].Value.Warnings);
+            var infoDigits = CountDigits(sorted[i].Value.Infos);
+            if (errDigits > maxErrorLen) maxErrorLen = errDigits;
+            if (warnDigits > maxWarnLen) maxWarnLen = warnDigits;
+            if (infoDigits > maxInfoLen) maxInfoLen = infoDigits;
+            hasInfos |= sorted[i].Value.Infos > 0;
+        }
+
+        // Write table with blank line separator before it
+        writer.WriteLine();
+
+        // Header row
+        writer.Write("| File");
+        writer.Write(new string(' ', maxFileLen - 4));
+        writer.Write(" | ");
+        writer.Write("Errors");
+        writer.Write(new string(' ', maxErrorLen - 6));
+        writer.Write(" | ");
+        writer.Write("Warnings");
+        writer.Write(new string(' ', maxWarnLen - 8));
+        if (hasInfos)
+        {
+            writer.Write(" | ");
+            writer.Write("Infos");
+            writer.Write(new string(' ', maxInfoLen - 5));
+        }
+        writer.WriteLine(" |");
+
+        // Separator row (right-aligned numeric columns)
+        writer.Write('|');
+        writer.Write(new string('-', maxFileLen + 2));
+        writer.Write('|');
+        writer.Write(new string('-', maxErrorLen + 1));
+        writer.Write(":|");
+        writer.Write(new string('-', maxWarnLen + 1));
+        writer.Write(":|");
+        if (hasInfos)
+        {
+            writer.Write(new string('-', maxInfoLen + 1));
+            writer.Write(":|");
+        }
+        writer.WriteLine();
+
+        // Data rows
+        for (var i = 0; i < sorted.Count; i++)
+        {
+            var (filePath, (errors, warnings, infos)) = sorted[i];
+            var displayName = Path.GetFileName(filePath);
+
+            writer.Write("| ");
+            writer.Write(displayName);
+            writer.Write(new string(' ', maxFileLen - displayName.Length));
+            writer.Write(" | ");
+            var errStr = errors.ToString();
+            writer.Write(new string(' ', maxErrorLen - errStr.Length));
+            writer.Write(errStr);
+            writer.Write(" | ");
+            var warnStr = warnings.ToString();
+            writer.Write(new string(' ', maxWarnLen - warnStr.Length));
+            writer.Write(warnStr);
+            if (hasInfos)
+            {
+                writer.Write(" | ");
+                var infoStr = infos.ToString();
+                writer.Write(new string(' ', maxInfoLen - infoStr.Length));
+                writer.Write(infoStr);
+            }
+            writer.WriteLine(" |");
+        }
+    }
+
+    private static void WritePerRuleBreakdown(TextWriter writer, List<Diagnostic> diagnostics, bool isRemainMode = false)
     {
         // Count per rule, excluding null RuleId (parser diagnostics)
         var ruleCounts = new Dictionary<string, int>(StringComparer.Ordinal);
@@ -313,17 +460,65 @@ internal static class CheckCommand
             return byCount != 0 ? byCount : string.Compare(a.Key, b.Key, StringComparison.Ordinal);
         });
 
-        var sb = new System.Text.StringBuilder();
-        sb.Append("  ");
+        // Column header depends on mode
+        var countHeader = isRemainMode ? "Remaining" : "Count";
+        var countHeaderLen = countHeader.Length;
+
+        // Compute column widths for table formatting
+        var maxRuleLen = 4; // "Rule".Length
         for (var i = 0; i < sorted.Count; i++)
         {
-            if (i > 0) sb.Append(", ");
-            sb.Append(sorted[i].Key);
-            sb.Append(": ");
-            sb.Append(sorted[i].Value);
+            if (sorted[i].Key.Length > maxRuleLen)
+                maxRuleLen = sorted[i].Key.Length;
         }
 
-        writer.WriteLine(sb.ToString());
+        var maxCountLen = countHeaderLen;
+        for (var i = 0; i < sorted.Count; i++)
+        {
+            var digits = CountDigits(sorted[i].Value);
+            if (digits > maxCountLen)
+                maxCountLen = digits;
+        }
+
+        // Write table with blank line separator before it
+        writer.WriteLine();
+        writer.Write("| Rule");
+        writer.Write(new string(' ', maxRuleLen - 4));
+        writer.Write(" | ");
+        writer.Write(countHeader);
+        writer.Write(new string(' ', maxCountLen - countHeaderLen));
+        writer.WriteLine(" |");
+
+        // Separator row (right-aligned count column)
+        writer.Write('|');
+        writer.Write(new string('-', maxRuleLen + 2));
+        writer.Write('|');
+        writer.Write(new string('-', maxCountLen + 1));
+        writer.WriteLine(":|");
+
+        // Data rows
+        for (var i = 0; i < sorted.Count; i++)
+        {
+            var rule = sorted[i].Key;
+            var count = sorted[i].Value;
+            writer.Write("| ");
+            writer.Write(rule);
+            writer.Write(new string(' ', maxRuleLen - rule.Length));
+            writer.Write(" | ");
+            var countStr = count.ToString();
+            writer.Write(new string(' ', maxCountLen - countStr.Length));
+            writer.Write(countStr);
+            writer.WriteLine(" |");
+        }
+    }
+
+    internal static int CountDigits(int value)
+    {
+        if (value < 10) return 1;
+        if (value < 100) return 2;
+        if (value < 1000) return 3;
+        if (value < 10000) return 4;
+        return value.ToString().Length;
     }
 
     internal static void WriteNetworkFixHint(TextWriter writer, List<Diagnostic> diagnostics, bool enablePinNetwork, bool enableImageNetwork)

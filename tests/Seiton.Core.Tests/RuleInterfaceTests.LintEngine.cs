@@ -1881,6 +1881,182 @@ public sealed partial class RuleInterfaceTests
     }
 
     [Test]
+    public async Task LintEngine_RunEnvContextDirectUse_Fix_UsesJobDefaultsShellForPowerShell()
+    {
+        var yaml = """
+        on: push
+        jobs:
+            build:
+                runs-on: windows-latest
+                defaults:
+                    run:
+                        shell: pwsh
+                steps:
+                    - run: Write-Host "${{ env.VERSION }}"
+        """;
+
+        var sourceBytes = Encoding.UTF8.GetBytes(yaml);
+        var engine = new LintEngine([new RunEnvContextDirectUseRule()]);
+        using var result = engine.Check(sourceBytes, "run-env-fix-job-defaults-pwsh.yml");
+        var diagnostic = result.Diagnostics.First(x => x.RuleId == "run-env-context-direct-use");
+
+        await Assert.That(diagnostic.Fix is not null).IsTrue();
+
+        var fixedBytes = FixEngine.Apply(sourceBytes, diagnostic.Fix!.Value.Edits);
+        var fixedText = Encoding.UTF8.GetString(fixedBytes);
+
+        await Assert.That(fixedText.Contains("$env:VERSION", StringComparison.Ordinal)).IsTrue();
+        await Assert.That(fixedText.Contains("${VERSION}", StringComparison.Ordinal)).IsFalse();
+    }
+
+    [Test]
+    public async Task LintEngine_RunEnvContextDirectUse_Fix_UsesWorkflowDefaultsShellForPowerShell()
+    {
+        var yaml = """
+        on: push
+        defaults:
+            run:
+                shell: pwsh
+        jobs:
+            build:
+                runs-on: windows-latest
+                steps:
+                    - run: Write-Host "${{ env.VERSION }}"
+        """;
+
+        var sourceBytes = Encoding.UTF8.GetBytes(yaml);
+        var engine = new LintEngine([new RunEnvContextDirectUseRule()]);
+        using var result = engine.Check(sourceBytes, "run-env-fix-workflow-defaults-pwsh.yml");
+        var diagnostic = result.Diagnostics.First(x => x.RuleId == "run-env-context-direct-use");
+
+        await Assert.That(diagnostic.Fix is not null).IsTrue();
+
+        var fixedBytes = FixEngine.Apply(sourceBytes, diagnostic.Fix!.Value.Edits);
+        var fixedText = Encoding.UTF8.GetString(fixedBytes);
+
+        await Assert.That(fixedText.Contains("$env:VERSION", StringComparison.Ordinal)).IsTrue();
+        await Assert.That(fixedText.Contains("${VERSION}", StringComparison.Ordinal)).IsFalse();
+    }
+
+    [Test]
+    public async Task LintEngine_RunEnvContextDirectUse_Fix_StepShellOverridesJobDefaults()
+    {
+        var yaml = """
+        on: push
+        jobs:
+            build:
+                runs-on: windows-latest
+                defaults:
+                    run:
+                        shell: pwsh
+                steps:
+                    - shell: bash
+                      run: echo "${{ env.VERSION }}"
+        """;
+
+        var sourceBytes = Encoding.UTF8.GetBytes(yaml);
+        var engine = new LintEngine([new RunEnvContextDirectUseRule()]);
+        using var result = engine.Check(sourceBytes, "run-env-fix-step-overrides-defaults.yml");
+        var diagnostic = result.Diagnostics.First(x => x.RuleId == "run-env-context-direct-use");
+
+        await Assert.That(diagnostic.Fix is not null).IsTrue();
+
+        var fixedBytes = FixEngine.Apply(sourceBytes, diagnostic.Fix!.Value.Edits);
+        var fixedText = Encoding.UTF8.GetString(fixedBytes);
+
+        await Assert.That(fixedText.Contains("${VERSION}", StringComparison.Ordinal)).IsTrue();
+        await Assert.That(fixedText.Contains("$env:VERSION", StringComparison.Ordinal)).IsFalse();
+    }
+
+    [Test]
+    public async Task LintEngine_RunEnvContextDirectUse_Fix_ExpressionStepShell_DoesNotAttachFix()
+    {
+        var yaml = """
+        on: push
+        jobs:
+            build:
+                runs-on: windows-latest
+                defaults:
+                    run:
+                        shell: pwsh
+                strategy:
+                    matrix:
+                        shell: [bash]
+                steps:
+                    - shell: ${{ matrix.shell }}
+                      run: echo "${{ env.VERSION }}"
+        """;
+
+        var sourceBytes = Encoding.UTF8.GetBytes(yaml);
+        var engine = new LintEngine([new RunEnvContextDirectUseRule()]);
+        using var result = engine.Check(sourceBytes, "run-env-fix-expression-shell-overrides-defaults.yml");
+        var diagnostic = result.Diagnostics.First(x => x.RuleId == "run-env-context-direct-use");
+
+        // Dynamic shell (expression) → cannot safely determine fix syntax; no fix attached
+        await Assert.That(diagnostic.Fix).IsNull();
+        // Help text should not be shown for simple references with expression shell
+        await Assert.That(diagnostic.Help).IsNull();
+    }
+
+    [Test]
+    public async Task LintEngine_RunEnvContextDirectUse_Fix_ExpressionJobDefaultsShell_DoesNotAttachFix()
+    {
+        var yaml = """
+        on: push
+        defaults:
+            run:
+                shell: pwsh
+        jobs:
+            build:
+                runs-on: windows-latest
+                strategy:
+                    matrix:
+                        shell: [bash]
+                defaults:
+                    run:
+                        shell: ${{ matrix.shell }}
+                steps:
+                    - run: echo "${{ env.VERSION }}"
+        """;
+
+        var sourceBytes = Encoding.UTF8.GetBytes(yaml);
+        var engine = new LintEngine([new RunEnvContextDirectUseRule()]);
+        using var result = engine.Check(sourceBytes, "run-env-fix-expression-job-defaults-shell.yml");
+        var diagnostic = result.Diagnostics.First(x => x.RuleId == "run-env-context-direct-use");
+
+        // Dynamic shell (expression) → cannot safely determine fix syntax; no fix attached
+        await Assert.That(diagnostic.Fix).IsNull();
+        // Help text should not be shown for simple references with expression shell
+        await Assert.That(diagnostic.Help).IsNull();
+    }
+
+    [Test]
+    public async Task LintEngine_RunEnvContextDirectUse_Fix_ExpressionWorkflowDefaultsShell_DoesNotAttachFix()
+    {
+        var yaml = """
+        on: push
+        defaults:
+            run:
+                shell: ${{ inputs.shell }}
+        jobs:
+            build:
+                runs-on: ubuntu-latest
+                steps:
+                    - run: echo "${{ env.VERSION }}"
+        """;
+
+        var sourceBytes = Encoding.UTF8.GetBytes(yaml);
+        var engine = new LintEngine([new RunEnvContextDirectUseRule()]);
+        using var result = engine.Check(sourceBytes, "run-env-fix-expression-wf-defaults.yml");
+        var diagnostic = result.Diagnostics.First(x => x.RuleId == "run-env-context-direct-use");
+
+        // Dynamic shell (expression) → cannot safely determine fix syntax; no fix attached
+        await Assert.That(diagnostic.Fix).IsNull();
+        // Help text should not be shown for simple references with expression shell
+        await Assert.That(diagnostic.Help).IsNull();
+    }
+
+    [Test]
     public async Task LintEngine_RunEnvContextDirectUse_DoesNotAttachFix_ForCompositeExpression()
     {
         var yaml = """
@@ -1900,8 +2076,97 @@ public sealed partial class RuleInterfaceTests
     }
 
     [Test]
-    public async Task LintEngine_RunEnvContextDirectUse_DoesNotAttachFix_InsideSingleQuotedHereDoc()
+    public async Task LintEngine_RunEnvContextDirectUse_Help_ShownForCompositeExpression()
     {
+        // When TryParseSimpleContextReference fails (composite expression), Help should hint env-block approach
+        var yaml = """
+        on: push
+        jobs:
+            build:
+                runs-on: ubuntu-latest
+                steps:
+                    - run: echo "${{ env.TAG_VALUE || 'fallback' }}"
+        """;
+
+        using var result = new LintEngine([new RunEnvContextDirectUseRule()])
+            .Check(Encoding.UTF8.GetBytes(yaml), "run-env-help-composite.yml");
+        var diagnostic = result.Diagnostics.First(x => x.RuleId == "run-env-context-direct-use");
+
+        await Assert.That(diagnostic.Help).IsNotNull();
+        await Assert.That(diagnostic.Help!).Contains("env:");
+    }
+
+    [Test]
+    public async Task LintEngine_RunEnvContextDirectUse_Help_NotShownForSimpleExpression()
+    {
+        // Simple env.VAR reference should NOT have help (it has a fix instead)
+        var yaml = """
+        on: push
+        jobs:
+            build:
+                runs-on: ubuntu-latest
+                env:
+                    VERSION: "1.0"
+                steps:
+                    - run: echo "${{ env.VERSION }}"
+        """;
+
+        using var result = new LintEngine([new RunEnvContextDirectUseRule()])
+            .Check(Encoding.UTF8.GetBytes(yaml), "run-env-no-help-simple.yml");
+        var diagnostic = result.Diagnostics.First(x => x.RuleId == "run-env-context-direct-use");
+
+        await Assert.That(diagnostic.Help).IsNull();
+    }
+
+    [Test]
+    public async Task LintEngine_RunInputsContextDirectUse_Help_ShownForCompositeExpression()
+    {
+        var yaml = """
+        on:
+            workflow_dispatch:
+                inputs:
+                    tag:
+                        type: string
+        jobs:
+            build:
+                runs-on: ubuntu-latest
+                steps:
+                    - run: echo "${{ inputs.tag || 'v1.0.0' }}"
+        """;
+
+        using var result = new LintEngine([new RunInputsContextDirectUseRule()])
+            .Check(Encoding.UTF8.GetBytes(yaml), "run-inputs-help-composite.yml");
+        var diagnostic = result.Diagnostics.First(x => x.RuleId == "run-inputs-context-direct-use");
+
+        await Assert.That(diagnostic.Help).IsNotNull();
+        await Assert.That(diagnostic.Help!).Contains("env:");
+    }
+
+    [Test]
+    public async Task LintEngine_RunSecretsContextDirectUse_Help_ShownForCompositeExpression()
+    {
+        var yaml = """
+        on: push
+        jobs:
+            build:
+                runs-on: ubuntu-latest
+                steps:
+                    - run: echo "${{ secrets.TOKEN || secrets.FALLBACK_TOKEN }}"
+        """;
+
+        using var result = new LintEngine([new RunSecretsContextDirectUseRule()])
+            .Check(Encoding.UTF8.GetBytes(yaml), "run-secrets-help-composite.yml");
+        var diagnostic = result.Diagnostics.First(x => x.RuleId == "run-secrets-context-direct-use");
+
+        await Assert.That(diagnostic.Help).IsNotNull();
+        await Assert.That(diagnostic.Help!).Contains("env:");
+    }
+
+    [Test]
+    public async Task LintEngine_RunEnvContextDirectUse_NoDiagnostic_InsideSingleQuotedHereDoc()
+    {
+        // Single-quoted heredoc (<<'EOF') does not expand shell variables,
+        // so ${{ env.* }} is the only way to insert values - not a false positive
         var yaml = """
         on: push
         jobs:
@@ -1915,10 +2180,149 @@ public sealed partial class RuleInterfaceTests
         """;
 
         using var result = new LintEngine([new RunEnvContextDirectUseRule()])
-            .Check(Encoding.UTF8.GetBytes(yaml), "run-env-no-fix-heredoc.yml");
-        var diagnostic = result.Diagnostics.First(x => x.RuleId == "run-env-context-direct-use");
+            .Check(Encoding.UTF8.GetBytes(yaml), "run-env-no-diag-heredoc.yml");
 
-        await Assert.That(diagnostic.Fix is null).IsTrue();
+        await Assert.That(result.Diagnostics.Where(x => x.RuleId == "run-env-context-direct-use")).IsEmpty();
+    }
+
+    [Test]
+    public async Task LintEngine_RunEnvContextDirectUse_StillDetects_InsideUnquotedHereDoc()
+    {
+        // Unquoted heredoc (<<EOF) DOES expand shell variables,
+        // so ${{ env.* }} should still be flagged
+        var yaml = """
+        on: push
+        jobs:
+            build:
+                runs-on: ubuntu-latest
+                steps:
+                    - run: |
+                        cat << EOF > pr_comment.md
+                          Workflow [${{ env.GITHUB_ACTIONS_RUN_URL }}) found CRLF files.
+                        EOF
+        """;
+
+        using var result = new LintEngine([new RunEnvContextDirectUseRule()])
+            .Check(Encoding.UTF8.GetBytes(yaml), "run-env-detect-unquoted-heredoc.yml");
+
+        await Assert.That(result.Diagnostics.Where(x => x.RuleId == "run-env-context-direct-use")).IsNotEmpty();
+    }
+
+    [Test]
+    public async Task LintEngine_RunInputsContextDirectUse_NoDiagnostic_InsideSingleQuotedHereDoc()
+    {
+        var yaml = """
+        on:
+            workflow_dispatch:
+                inputs:
+                    name:
+                        type: string
+        jobs:
+            build:
+                runs-on: ubuntu-latest
+                steps:
+                    - run: |
+                        cat << 'EOF' > output.md
+                          Input: ${{ inputs.name }}
+                        EOF
+        """;
+
+        using var result = new LintEngine([new RunInputsContextDirectUseRule()])
+            .Check(Encoding.UTF8.GetBytes(yaml), "run-inputs-no-diag-heredoc.yml");
+
+        await Assert.That(result.Diagnostics.Where(x => x.RuleId == "run-inputs-context-direct-use")).IsEmpty();
+    }
+
+    [Test]
+    public async Task LintEngine_RunSecretsContextDirectUse_NoDiagnostic_InsideSingleQuotedHereDoc()
+    {
+        var yaml = """
+        on: push
+        jobs:
+            build:
+                runs-on: ubuntu-latest
+                steps:
+                    - run: |
+                        cat << 'EOF' > config.yml
+                          token: ${{ secrets.GITHUB_TOKEN }}
+                        EOF
+        """;
+
+        using var result = new LintEngine([new RunSecretsContextDirectUseRule()])
+            .Check(Encoding.UTF8.GetBytes(yaml), "run-secrets-no-diag-heredoc.yml");
+
+        await Assert.That(result.Diagnostics.Where(x => x.RuleId == "run-secrets-context-direct-use")).IsEmpty();
+    }
+
+    [Test]
+    public async Task LintEngine_RunEnvContextDirectUse_Detects_AfterIndentedHereDocTerminator()
+    {
+        var yaml = """
+        on: push
+        jobs:
+            build:
+                runs-on: ubuntu-latest
+                steps:
+                    - run: |
+                        cat << 'EOF' > pr_comment.md
+                          inside ${{ env.IGNORED }}
+                        EOF
+                        echo ${{ env.DETECT_ME }}
+        """;
+
+        using var result = new LintEngine([new RunEnvContextDirectUseRule()])
+            .Check(Encoding.UTF8.GetBytes(yaml), "run-env-detect-after-heredoc-terminator.yml");
+
+        await Assert.That(result.Diagnostics.Where(x => x.RuleId == "run-env-context-direct-use")).Count().IsEqualTo(1);
+        await Assert.That(result.Diagnostics.First(x => x.RuleId == "run-env-context-direct-use").Message).Contains("${{ env.* }}");
+    }
+
+    [Test]
+    public async Task LintEngine_RunInputsContextDirectUse_Detects_AfterIndentedHereDocTerminator()
+    {
+        var yaml = """
+        on:
+            workflow_dispatch:
+                inputs:
+                    name:
+                        type: string
+        jobs:
+            build:
+                runs-on: ubuntu-latest
+                steps:
+                    - run: |
+                        cat << 'EOF' > output.md
+                          inside ${{ inputs.name }}
+                        EOF
+                        echo ${{ inputs.name }}
+        """;
+
+        using var result = new LintEngine([new RunInputsContextDirectUseRule()])
+            .Check(Encoding.UTF8.GetBytes(yaml), "run-inputs-detect-after-heredoc-terminator.yml");
+
+        await Assert.That(result.Diagnostics.Where(x => x.RuleId == "run-inputs-context-direct-use")).Count().IsEqualTo(1);
+    }
+
+    [Test]
+    public async Task LintEngine_RunSecretsContextDirectUse_Detects_AfterIndentedHereDocTerminator()
+    {
+        var yaml = """
+        on: push
+        jobs:
+            build:
+                runs-on: ubuntu-latest
+                steps:
+                    - run: |
+                        cat << 'EOF' > config.yml
+                          inside ${{ secrets.GITHUB_TOKEN }}
+                        EOF
+                        echo ${{ secrets.GITHUB_TOKEN }}
+        """;
+
+        using var result = new LintEngine([new RunSecretsContextDirectUseRule()])
+            .Check(Encoding.UTF8.GetBytes(yaml), "run-secrets-detect-after-heredoc-terminator.yml");
+
+        await Assert.That(result.Diagnostics.Where(x => x.RuleId == "run-secrets-context-direct-use")).Count().IsEqualTo(1);
     }
 
     [Test]
@@ -2007,6 +2411,29 @@ public sealed partial class RuleInterfaceTests
     }
 
     [Test]
+    public async Task LintEngine_RunSecretsContextDirectUse_DoesNotAttachFix_ExpressionShell()
+    {
+        var yaml = """
+        on: push
+        jobs:
+            build:
+                runs-on: ubuntu-latest
+                env:
+                    TOKEN: ${{ secrets.MY_TOKEN }}
+                steps:
+                    - shell: ${{ matrix.shell }}
+                      run: echo "${{ secrets.MY_TOKEN }}"
+        """;
+
+        using var result = new LintEngine([new RunSecretsContextDirectUseRule()])
+            .Check(Encoding.UTF8.GetBytes(yaml), "run-secrets-no-fix-expression-shell.yml");
+        var diagnostic = result.Diagnostics.First(x => x.RuleId == "run-secrets-context-direct-use");
+
+        // Dynamic shell (expression) → cannot safely determine fix syntax; no fix attached
+        await Assert.That(diagnostic.Fix is null).IsTrue();
+    }
+
+    [Test]
     public async Task LintEngine_RunInputsContextDirectUse_Fix_ReplacesSimpleReferenceWithMappedVariable()
     {
         var yaml = """
@@ -2057,6 +2484,29 @@ public sealed partial class RuleInterfaceTests
             .Check(Encoding.UTF8.GetBytes(yaml), "run-inputs-no-fix-ambiguous.yml");
         var diagnostic = result.Diagnostics.First(x => x.RuleId == "run-inputs-context-direct-use");
 
+        await Assert.That(diagnostic.Fix is null).IsTrue();
+    }
+
+    [Test]
+    public async Task LintEngine_RunInputsContextDirectUse_DoesNotAttachFix_ExpressionShell()
+    {
+        var yaml = """
+        on: workflow_dispatch
+        jobs:
+            build:
+                runs-on: ubuntu-latest
+                env:
+                    TARGET: ${{ inputs.target }}
+                steps:
+                    - shell: ${{ inputs.shell }}
+                      run: echo "${{ inputs.target }}"
+        """;
+
+        using var result = new LintEngine([new RunInputsContextDirectUseRule()])
+            .Check(Encoding.UTF8.GetBytes(yaml), "run-inputs-no-fix-expression-shell.yml");
+        var diagnostic = result.Diagnostics.First(x => x.RuleId == "run-inputs-context-direct-use");
+
+        // Dynamic shell (expression) → cannot safely determine fix syntax; no fix attached
         await Assert.That(diagnostic.Fix is null).IsTrue();
     }
 
@@ -2286,6 +2736,7 @@ public sealed partial class RuleInterfaceTests
     [Test]
     public async Task LintEngine_RunInputsContextDirectUse_Fix_DoesNotAttach_InsideHereDoc()
     {
+        // Single-quoted heredoc suppresses the entire diagnostic (not just the fix)
         var yaml = """
         on: workflow_dispatch
         jobs:
@@ -2300,9 +2751,8 @@ public sealed partial class RuleInterfaceTests
 
         using var result = new LintEngine([new RunInputsContextDirectUseRule()])
             .Check(Encoding.UTF8.GetBytes(yaml), "run-inputs-no-fix-heredoc.yml", new LintConfig { Fix = new FixConfig { Enabled = true } });
-        var diagnostic = result.Diagnostics.First(x => x.RuleId == "run-inputs-context-direct-use");
 
-        await Assert.That(diagnostic.Fix is null).IsTrue();
+        await Assert.That(result.Diagnostics.Where(x => x.RuleId == "run-inputs-context-direct-use")).IsEmpty();
     }
 
     [Test]
@@ -2767,10 +3217,8 @@ public sealed partial class RuleInterfaceTests
 
         using var result = new LintEngine().Check(Encoding.UTF8.GetBytes(yaml), "workflows/main.yml", config);
 
-        // All diagnostics should be suppressed (file-level exclusion with no rule filter)
+        // File-level exclusion (Rules: null, no Jobs) short-circuits before rule execution
         await Assert.That(result.Diagnostics).IsEmpty();
-        await Assert.That(result.SuppressionSummary.TotalSuppressed).IsGreaterThanOrEqualTo(2);
-        await Assert.That(result.SuppressionSummary.Records.All(x => x.Source == SuppressionSource.ConfigFile)).IsTrue();
     }
 
     [Test]
@@ -2872,6 +3320,37 @@ public sealed partial class RuleInterfaceTests
     }
 
     [Test]
+    public async Task LintEngine_ConfigExclusion_FileLevelExclusion_PreservesRuleConfigurationDiagnostics()
+    {
+        var yaml = """
+        on: push
+        jobs:
+            build:
+                runs-on: ubuntu-latest
+                steps:
+                    - run: echo one
+        """;
+
+        var config = new LintConfig
+        {
+            Rules = new Dictionary<string, RuleConfig>
+            {
+                ["job-permissions-requred"] = new RuleConfig { Enabled = false },
+            },
+            Exclusions =
+            [
+                new LintExclusion("**/*.yml", Rules: null),
+            ],
+        };
+
+        using var result = new LintEngine().Check(Encoding.UTF8.GetBytes(yaml), "workflows/main.yml", config);
+
+        await Assert.That(result.Diagnostics).HasSingleItem();
+        await Assert.That(result.Diagnostics[0].RuleId).IsNull();
+        await Assert.That(result.Diagnostics[0].Message.Contains("unknown rule-id", StringComparison.Ordinal)).IsTrue();
+    }
+
+    [Test]
     public async Task LintEngine_ConfigExclusion_UnknownJobId_ReportsConfigurationError()
     {
         var yaml = """
@@ -2898,6 +3377,40 @@ public sealed partial class RuleInterfaceTests
 
         await Assert.That(configError.Message.Length).IsGreaterThan(0);
         await Assert.That(configError.Severity).IsEqualTo(DiagnosticSeverity.Error);
+    }
+
+    [Test]
+    public async Task LintEngine_ConfigExclusion_FileLevelExclusion_ParseError_SkipsJobIdValidation()
+    {
+        // When a file is fully excluded AND has parse errors (Workflow is null),
+        // job-ID validation in other exclusion entries must be skipped to avoid false positives.
+        var yaml = """
+        on: push
+        jobs:
+            build:
+                runs-on: ubuntu-latest
+                steps:
+                    - uses: actions/checkout@v4
+                      with:
+                        invalid_yaml: [unclosed
+        """u8.ToArray();
+
+        var config = new LintConfig
+        {
+            Exclusions =
+            [
+                new LintExclusion("**/*.yml", Rules: null),
+                new LintExclusion("**/*.yml", ["job-permissions-required"], Jobs: ["build"]),
+            ],
+        };
+
+        using var result = new LintEngine().Check(yaml, "workflows/broken.yml", config);
+
+        // Should NOT produce false "unknown job-id" diagnostics
+        var jobIdError = result.Diagnostics.FirstOrDefault(x =>
+            x.RuleId is null
+            && x.Message.Contains("unknown job-id", StringComparison.Ordinal));
+        await Assert.That(jobIdError).IsDefault();
     }
 
     [Test]
@@ -3745,6 +4258,54 @@ public sealed partial class RuleInterfaceTests
     }
 
     [Test]
+    public async Task LintEngine_TemplateInjection_NoFix_ExpressionShell()
+    {
+        var yaml = """
+        on: pull_request
+        jobs:
+            build:
+                runs-on: ubuntu-latest
+                steps:
+                    - shell: ${{ matrix.shell }}
+                      run: echo "${{ github.head_ref }}"
+        """;
+
+        var sourceBytes = Encoding.UTF8.GetBytes(yaml);
+        var engine = new LintEngine([new TemplateInjectionRule()]);
+        using var result = engine.Check(sourceBytes, "template-injection-no-fix-expression-shell.yml",
+            new LintConfig { Fix = new FixConfig { Enabled = true } });
+        var diagnostic = result.Diagnostics.First(x => x.RuleId == "template-injection");
+
+        // Dynamic shell (expression) → cannot safely determine fix syntax; no fix attached
+        await Assert.That(diagnostic.Fix is null).IsTrue();
+    }
+
+    [Test]
+    public async Task LintEngine_TemplateInjection_NoFix_ExpressionJobDefaultsShell()
+    {
+        var yaml = """
+        on: pull_request
+        jobs:
+            build:
+                runs-on: ubuntu-latest
+                defaults:
+                    run:
+                        shell: ${{ matrix.shell }}
+                steps:
+                    - run: echo "${{ github.head_ref }}"
+        """;
+
+        var sourceBytes = Encoding.UTF8.GetBytes(yaml);
+        var engine = new LintEngine([new TemplateInjectionRule()]);
+        using var result = engine.Check(sourceBytes, "template-injection-no-fix-expression-job-defaults.yml",
+            new LintConfig { Fix = new FixConfig { Enabled = true } });
+        var diagnostic = result.Diagnostics.First(x => x.RuleId == "template-injection");
+
+        // Dynamic shell from job defaults → cannot safely determine fix syntax; no fix attached
+        await Assert.That(diagnostic.Fix is null).IsTrue();
+    }
+
+    [Test]
     public async Task LintEngine_TemplateInjection_Fix_GithubHeadRef()
     {
         var yaml = """
@@ -4372,5 +4933,125 @@ public sealed partial class RuleInterfaceTests
             await Assert.That(currLine).IsGreaterThanOrEqualTo(prevLine)
                 .Because($"Diagnostic at index {i} (line {currLine}: {curr.Message}) should not appear before diagnostic at index {i - 1} (line {prevLine}: {prev.Message})");
         }
+    }
+
+    [Test]
+    public async Task LintEngine_ConfigExclusion_FileLevelExclusion_SuppressesParseErrors()
+    {
+        // YAML with parse errors (invalid syntax)
+        var yaml = """
+        on: push
+        jobs:
+            build:
+                runs-on: ubuntu-latest
+                steps:
+                    - uses: actions/checkout@v4
+                      with:
+                        invalid_yaml: [unclosed
+        """u8.ToArray();
+
+        var config = new LintConfig
+        {
+            Exclusions =
+            [
+                new LintExclusion("**/*.yml", Rules: null),
+            ],
+        };
+
+        using var result = new LintEngine().Check(yaml, "workflows/broken.yml", config);
+
+        // File-level exclusion (Rules: null, no Jobs) should suppress ALL diagnostics including parse errors
+        await Assert.That(result.Diagnostics).IsEmpty();
+        // ParseDiagnostics and HasFatalError must also be suppressed — not leaked through LintResult
+        await Assert.That(result.ParseDiagnostics).IsEmpty();
+        await Assert.That(result.HasFatalError).IsFalse();
+    }
+
+    [Test]
+    public async Task LintEngine_ConfigExclusion_RuleSpecificExclusion_DoesNotSuppressParseErrors()
+    {
+        // YAML with parse errors (invalid syntax)
+        var yaml = """
+        on: push
+        jobs:
+            build:
+                runs-on: ubuntu-latest
+                steps:
+                    - uses: actions/checkout@v4
+                      with:
+                        invalid_yaml: [unclosed
+        """u8.ToArray();
+
+        var config = new LintConfig
+        {
+            Exclusions =
+            [
+                new LintExclusion("**/*.yml", Rules: ["job-permissions-required"]),
+            ],
+        };
+
+        using var result = new LintEngine().Check(yaml, "workflows/broken.yml", config);
+
+        // Rule-specific exclusion should NOT suppress parse errors (parse errors have no RuleId)
+        await Assert.That(result.Diagnostics).IsNotEmpty();
+    }
+
+    [Test]
+    public async Task LintEngine_ConfigExclusion_FileLevelWithJobs_DoesNotSuppressParseErrors()
+    {
+        // YAML with parse errors - file-level exclusion with Jobs specified should not short-circuit
+        // because job-scoped exclusion requires parse to determine job boundaries
+        var yaml = """
+        on: push
+        jobs:
+            build:
+                runs-on: ubuntu-latest
+                steps:
+                    - uses: actions/checkout@v4
+                      with:
+                        invalid_yaml: [unclosed
+        """u8.ToArray();
+
+        var config = new LintConfig
+        {
+            Exclusions =
+            [
+                new LintExclusion("**/*.yml", Rules: null, Jobs: ["build"]),
+            ],
+        };
+
+        using var result = new LintEngine().Check(yaml, "workflows/broken.yml", config);
+
+        // Job-scoped exclusion cannot suppress parse errors (job scope requires successful parse)
+        await Assert.That(result.Diagnostics).IsNotEmpty();
+    }
+
+    [Test]
+    public async Task LintEngine_ConfigExclusion_FileLevelExclusion_NonMatchingFile_DoesNotSuppressParseErrors()
+    {
+        // YAML with parse errors - file-level exclusion for different file pattern
+        var yaml = """
+        on: push
+        jobs:
+            build:
+                runs-on: ubuntu-latest
+                steps:
+                    - uses: actions/checkout@v4
+                      with:
+                        invalid_yaml: [unclosed
+        """u8.ToArray();
+
+        var config = new LintConfig
+        {
+            Exclusions =
+            [
+                new LintExclusion("**/other.yml", Rules: null),
+            ],
+        };
+
+        using var result = new LintEngine().Check(yaml, "workflows/broken.yml", config);
+
+        // Non-matching file-level exclusion should NOT suppress parse errors
+        await Assert.That(result.Diagnostics).IsNotEmpty();
     }
 }

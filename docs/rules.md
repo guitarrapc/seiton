@@ -1477,6 +1477,8 @@ jobs:
 
 Replace `${{ env.VAR }}` with `$VAR` (bash/sh) or `$env:VAR` (PowerShell).
 
+For compound expressions (e.g. `${{ env.TAG || 'fallback' }}`), no auto-fix is available. A help message suggests moving the entire expression to an `env:` block and referencing the shell variable instead.
+
 ---
 
 ### `run-secrets-context-direct-use`
@@ -1513,6 +1515,8 @@ jobs:
         run: |
           curl -H "Authorization: Bearer $TOKEN"
 ```
+
+Auto-fix replaces simple `${{ secrets.KEY }}` when an existing `env` mapping exists. For compound expressions, no fix is offered; a help message suggests moving the expression to an `env:` block.
 
 ---
 
@@ -1560,7 +1564,7 @@ jobs:
 
 **Notes:**
 
-Auto-fix reuses an existing unique `env` mapping for the same input when available. Otherwise, for simple expressions, it inserts a step-local `env:` entry and rewrites the script to a shell variable. No fix is offered for compound expressions, no-expand heredocs, or shell single-quoted strings. The env-insertion path additionally skips flow-style `env` and empty `env: {}`.
+Auto-fix reuses an existing unique `env` mapping for the same input when available. Otherwise, for simple expressions, it inserts a step-local `env:` entry and rewrites the script to a shell variable. No fix is offered for compound expressions, no-expand heredocs, or shell single-quoted strings; a help message suggests moving the entire expression to an `env:` block. The env-insertion path additionally skips flow-style `env` and empty `env: {}`.
 
 ---
 

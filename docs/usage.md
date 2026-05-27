@@ -113,6 +113,18 @@ Use `--enable-pin-network` to allow network requests for resolving action SHA pi
 seiton --fix --enable-pin-network --enable-image-network
 ```
 
+After fixes are applied, a summary is printed to stderr showing per-file fix counts and remaining issues:
+
+```
+Fixed 6 of 7 issues in 2 files (1 remaining)
+
+| File        | Fixed | Remaining |
+|-------------|------:|----------:|
+| ci.yml      |     4 |         0 |
+| release.yml |     2 |         1 |
+1 error remains in 1 file
+```
+
 ### seiton init
 
 Generate a starter config file at `.github/seiton.yaml`:

@@ -85,6 +85,13 @@ public sealed class RunSecretsContextDirectUseRule() : RuleBase(RuleId.RunSecret
                 continue;
             }
 
+            // Skip detection inside no-expand heredoc (<<'EOF') where shell variables don't expand
+            var absoluteOffset = Arena.GetStringSlice(runNode).Offset + bodyStart - 3;
+            if (IsInsideNoExpandHereDoc(Config.Utf8Yaml, absoluteOffset))
+            {
+                continue;
+            }
+
             if (TryBuildFix(step, runNode, expression, bodyStart, nextSearchStart - (bodyStart - 3), out var fix))
             {
                 AddStepError(
@@ -92,6 +99,15 @@ public sealed class RunSecretsContextDirectUseRule() : RuleBase(RuleId.RunSecret
                     "run script must not reference ${{ secrets.* }} directly; map secrets to env and use shell variables instead (e.g. ${TOKEN}, $TOKEN, or $env:TOKEN)",
                     location,
                     fix);
+            }
+            else if (!TryParseSimpleContextReference(expression, "secrets"u8, out _))
+            {
+                // Composite expression (e.g. "${{ secrets.TOKEN }}-suffix") — suggest env: block mapping
+                AddStepError(
+                    step,
+                    "run script must not reference ${{ secrets.* }} directly; map secrets to env and use shell variables instead (e.g. ${TOKEN}, $TOKEN, or $env:TOKEN)",
+                    location,
+                    "consider moving the entire expression to an env: block and referencing the shell variable instead");
             }
             else
             {
@@ -126,7 +142,13 @@ public sealed class RunSecretsContextDirectUseRule() : RuleBase(RuleId.RunSecret
             return false;
         }
 
-        var replacement = RunContextDirectUseAnalyzer.IsPowerShell(Arena, step, Config.Utf8Yaml)
+        var isPowerShell = RunContextDirectUseAnalyzer.IsPowerShellWithDefaults(Arena, step, _currentJob, _currentWorkflow, Config.Utf8Yaml);
+        if (isPowerShell is null)
+        {
+            return false;
+        }
+
+        var replacement = isPowerShell.Value
             ? "$env:" + variableName
             : "${" + variableName + "}";
 

@@ -84,6 +84,13 @@ public sealed class RunInputsContextDirectUseRule() : RuleBase(RuleId.RunInputsC
                 continue;
             }
 
+            // Skip detection inside no-expand heredoc (<<'EOF') where shell variables don't expand
+            var absoluteOffset = Arena.GetStringSlice(runNode).Offset + bodyStart - 3;
+            if (IsInsideNoExpandHereDoc(Config.Utf8Yaml, absoluteOffset))
+            {
+                continue;
+            }
+
             if (TryBuildFix(step, runNode, expression, bodyStart, nextSearchStart - (bodyStart - 3), out var fix))
             {
                 AddStepError(
@@ -91,6 +98,15 @@ public sealed class RunInputsContextDirectUseRule() : RuleBase(RuleId.RunInputsC
                     "run script must not reference ${{ inputs.* }} or ${{ github.event.inputs.* }} directly; map inputs to env and use shell variables instead (e.g. ${NAME}, $NAME, or $env:NAME)",
                     location,
                     fix);
+            }
+            else if (!TryParseSimpleInputsReference(expression, out _))
+            {
+                // Composite expression — suggest env: block mapping
+                AddStepError(
+                    step,
+                    "run script must not reference ${{ inputs.* }} or ${{ github.event.inputs.* }} directly; map inputs to env and use shell variables instead (e.g. ${NAME}, $NAME, or $env:NAME)",
+                    location,
+                    "consider moving the entire expression to an env: block and referencing the shell variable instead");
             }
             else
             {
@@ -133,7 +149,13 @@ public sealed class RunInputsContextDirectUseRule() : RuleBase(RuleId.RunInputsC
         if (TryResolveShellVariableName(Arena, step.Env, _currentJob?.Env, _currentWorkflow?.Env,
             Config.Utf8Yaml, inputName, TryParseSimpleInputsReference, out var variableName))
         {
-            var replacement = RunContextDirectUseAnalyzer.IsPowerShell(Arena, step, Config.Utf8Yaml)
+            var isPowerShell = RunContextDirectUseAnalyzer.IsPowerShellWithDefaults(Arena, step, _currentJob, _currentWorkflow, Config.Utf8Yaml);
+            if (isPowerShell is null)
+            {
+                return false;
+            }
+
+            var replacement = isPowerShell.Value
                 ? "$env:" + variableName
                 : "${" + variableName + "}";
 
@@ -157,7 +179,13 @@ public sealed class RunInputsContextDirectUseRule() : RuleBase(RuleId.RunInputsC
             return false;
         }
 
-        var shellReplacement = RunContextDirectUseAnalyzer.IsPowerShell(Arena, step, Config.Utf8Yaml)
+        var isPowerShell2 = RunContextDirectUseAnalyzer.IsPowerShellWithDefaults(Arena, step, _currentJob, _currentWorkflow, Config.Utf8Yaml);
+        if (isPowerShell2 is null)
+        {
+            return false;
+        }
+
+        var shellReplacement = isPowerShell2.Value
             ? "$env:" + envVarName
             : "${" + envVarName + "}";
 

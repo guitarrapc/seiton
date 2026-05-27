@@ -41,19 +41,52 @@ internal static class RunContextDirectUseAnalyzer
 
     // Shell Detection
 
-    internal static bool IsPowerShell(AstArena arena, Step step, byte[] utf8Yaml)
+    /// <summary>
+    /// Resolves effective shell with fallback: step.Shell → job.Defaults.Run.Shell → workflow.Defaults.Run.Shell.
+    /// Returns <c>true</c> for PowerShell, <c>false</c> for POSIX shells, or <c>null</c> when the shell
+    /// is expression-valued (dynamic) and the correct fix syntax cannot be determined at lint time.
+    /// </summary>
+    internal static bool? IsPowerShellWithDefaults(AstArena arena, Step step, Job? currentJob, Workflow? currentWorkflow, byte[] utf8Yaml)
     {
-        if (step.Exec is not ExecRun run || !run.Shell.HasValue || arena.GetStringExpression(run.Shell).HasValue)
+        // Priority 1: step-level shell
+        if (step.Exec is ExecRun run && run.Shell.HasValue)
         {
-            return false;
+            if (ContainsExpressionMarker(run.Shell, arena))
+            {
+                return null;
+            }
+
+            return IsPowerShell(arena, run.Shell, utf8Yaml);
         }
 
-        return IsPowerShell(arena, run.Shell, utf8Yaml);
+        // Priority 2: job defaults
+        if (currentJob?.Defaults?.Run.Shell is { HasValue: true } jobShell)
+        {
+            if (ContainsExpressionMarker(jobShell, arena))
+            {
+                return null;
+            }
+
+            return IsPowerShell(arena, jobShell, utf8Yaml);
+        }
+
+        // Priority 3: workflow defaults
+        if (currentWorkflow?.Defaults?.Run.Shell is { HasValue: true } wfShell)
+        {
+            if (ContainsExpressionMarker(wfShell, arena))
+            {
+                return null;
+            }
+
+            return IsPowerShell(arena, wfShell, utf8Yaml);
+        }
+
+        return false;
     }
 
     internal static bool IsPowerShell(AstArena arena, StringNodeId shellNode, byte[] utf8Yaml)
     {
-        if (!shellNode.HasValue || arena.GetStringExpression(shellNode).HasValue)
+        if (!shellNode.HasValue || ContainsExpressionMarker(shellNode, arena))
         {
             return false;
         }
@@ -424,6 +457,14 @@ internal static class RunContextDirectUseAnalyzer
             {
                 var top = hereDocs[hereDocCount - 1];
                 var candidate = line;
+                var yamlIndent = 0;
+                while (yamlIndent < candidate.Length && yamlIndent < top.ContentIndentLength
+                    && (candidate[yamlIndent] == (byte)' ' || candidate[yamlIndent] == (byte)'\t'))
+                {
+                    yamlIndent++;
+                }
+
+                candidate = candidate[yamlIndent..];
                 if (top.StripTabs)
                 {
                     var trimIndex = 0;
@@ -517,14 +558,20 @@ internal static class RunContextDirectUseAnalyzer
                 return false;
             }
 
-            state = new HereDocState(lineStartInSource + start, i - start, stripTabs);
+            var contentIndentLength = 0;
+            while (contentIndentLength < line.Length && (line[contentIndentLength] == (byte)' ' || line[contentIndentLength] == (byte)'\t'))
+            {
+                contentIndentLength++;
+            }
+
+            state = new HereDocState(lineStartInSource + start, i - start, stripTabs, contentIndentLength);
             return true;
         }
 
         return false;
     }
 
-    internal readonly record struct HereDocState(int TerminatorOffset, int TerminatorLength, bool StripTabs);
+    internal readonly record struct HereDocState(int TerminatorOffset, int TerminatorLength, bool StripTabs, int ContentIndentLength);
 
     // Single-Quote Detection
 

@@ -133,6 +133,10 @@ internal static class FixCommand
             var actionRuleSummaryLogged = false;
             var totalStart = verboseLogger.GetTimestamp();
 
+            // Track per-file fix counts for the fix summary.
+            // Key: filePath, Value: number of fixes applied.
+            List<(string FilePath, int FixedCount)>? fixedFiles = null;
+
             // Fix command always builds fixes; enable fix construction for all Check() calls.
             var fixEnabledLintConfig = new LintConfig
             {
@@ -227,7 +231,9 @@ internal static class FixCommand
 
                 if (check)
                 {
-                    // --check: report fixable but don't apply
+                    // --check: report fixable but don't apply.
+                    // Summary entries are built after ignore/min-severity filters so the
+                    // reported fixable counts match the diagnostics the user actually sees.
                     allDiagnostics.AddRange(effectiveDiagnostics);
                     continue;
                 }
@@ -236,12 +242,15 @@ internal static class FixCommand
                 {
                     // --dry-run: compute fixed YAML via iterative conflict-safe apply, then diff.
                     byte[] dryRunYaml;
+                    var dryRunApplied = 0;
                     try
                     {
-                        dryRunYaml = ApplyFixesIteratively(engine, utf8Yaml, filePath, fixEnabledLintConfig);
+                        dryRunYaml = ApplyFixesIteratively(engine, utf8Yaml, filePath, fixEnabledLintConfig, 8, ref dryRunApplied);
                         if (pinRemediation != null)
                         {
-                            (dryRunYaml, _) = await ApplyPinRemediationAsync(pinRemediation, engine, dryRunYaml, filePath, fixEnabledLintConfig, verboseLogger);
+                            var (pinYaml, pinCount) = await ApplyPinRemediationAsync(pinRemediation, engine, dryRunYaml, filePath, fixEnabledLintConfig, verboseLogger);
+                            dryRunYaml = pinYaml;
+                            dryRunApplied += pinCount;
                         }
                     }
                     catch (Exception ex) when (ex is not OperationCanceledException)
@@ -255,7 +264,10 @@ internal static class FixCommand
                         var diff = FixEngine.BuildUnifiedDiffFromBytes(utf8Yaml, dryRunYaml, filePath);
                         if (diff.Length > 0)
                         {
-                            outputWriter.Write(diff);
+                            // When output format is non-text (json/sarif), diff goes to stderr
+                            // to keep stdout as pure machine-parseable output.
+                            var diffWriter = resolvedFormat == OutputFormat.Text ? outputWriter : errorWriter;
+                            diffWriter.Write(diff);
                             hasPrintedDiff = true;
                         }
                     }
@@ -265,6 +277,12 @@ internal static class FixCommand
                     using (var dryRunHandle = engine.Check(dryRunYaml, filePath, fixEnabledLintConfig))
                     {
                         allDiagnostics.AddRange(dryRunHandle.Diagnostics.AsSpan());
+                    }
+
+                    if (dryRunApplied > 0)
+                    {
+                        fixedFiles ??= new List<(string, int)>();
+                        fixedFiles.Add((filePath, dryRunApplied));
                     }
 
                     continue;
@@ -312,6 +330,12 @@ internal static class FixCommand
                 {
                     verboseLogger.LogFile(filePath, $"applied {appliedFixes} fix(es)");
                 }
+
+                if (appliedFixes > 0)
+                {
+                    fixedFiles ??= new List<(string, int)>();
+                    fixedFiles.Add((filePath, appliedFixes));
+                }
             }
 
             // Apply ignore patterns
@@ -334,10 +358,15 @@ internal static class FixCommand
                     allDiagnostics.RemoveAll(d => d.Severity < threshold.Value);
             }
 
+            if (check)
+            {
+                fixedFiles = CreateCheckSummaryEntries(allDiagnostics);
+            }
+
             // Output remaining diagnostics
             if (allDiagnostics.Count > 0)
             {
-                if (hasPrintedDiff)
+                if (hasPrintedDiff && resolvedFormat == OutputFormat.Text)
                     outputWriter.WriteLine();
                 DiagnosticFormatter.Write(outputWriter, allDiagnostics, resolvedFormat, oneline, colorEnabled);
             }
@@ -349,7 +378,23 @@ internal static class FixCommand
                     CheckCommand.CreateAggregatedSuppressionSummary(totalSuppressed, suppressionCounts));
             }
 
-            CheckCommand.WriteSummary(errorWriter, allDiagnostics, resolvedFiles.Length, verbose, showExitHint: minSeverity is null);
+            // Write fix summary FIRST (what was done), then remaining summary (what's left).
+            // This order is more intuitive: action taken → consequences.
+            if (fixedFiles is { Count: > 0 })
+            {
+                var summaryMode = check ? FixSummaryMode.Check
+                    : dryRun ? FixSummaryMode.DryRun
+                    : FixSummaryMode.Applied;
+                WriteFixSummary(errorWriter, fixedFiles, allDiagnostics, summaryMode);
+                // Use "remain" wording only for applied/dry-run (where fixes were/would be applied).
+                // In check mode, nothing was changed so "remain" is misleading.
+                var useRemainMode = !check;
+                CheckCommand.WriteSummary(errorWriter, allDiagnostics, resolvedFiles.Length, verbose, showExitHint: minSeverity is null, showPerFile: false, isRemainMode: useRemainMode);
+            }
+            else
+            {
+                CheckCommand.WriteSummary(errorWriter, allDiagnostics, resolvedFiles.Length, verbose, showExitHint: minSeverity is null, showPerFile: false);
+            }
 
             if (verboseLogger.IsEnabled)
                 CheckCommand.WriteTotalTiming(verboseLogger, resolvedFiles.Length, verboseLogger.GetElapsedTime(totalStart), "fixed");
@@ -378,6 +423,35 @@ internal static class FixCommand
             githubHttpClient?.Dispose();
             ociHttpClient?.Dispose();
         }
+    }
+
+    private static List<(string FilePath, int Fixed)>? CreateCheckSummaryEntries(List<Diagnostic> diagnostics)
+    {
+        Dictionary<string, int>? fixableByFile = null;
+        for (var i = 0; i < diagnostics.Count; i++)
+        {
+            if (diagnostics[i].Fix is null || diagnostics[i].FilePath is not { } filePath)
+            {
+                continue;
+            }
+
+            fixableByFile ??= new Dictionary<string, int>(StringComparer.Ordinal);
+            ref var count = ref System.Runtime.InteropServices.CollectionsMarshal.GetValueRefOrAddDefault(fixableByFile, filePath, out _);
+            count++;
+        }
+
+        if (fixableByFile is null || fixableByFile.Count == 0)
+        {
+            return null;
+        }
+
+        var entries = new List<(string FilePath, int Fixed)>(fixableByFile.Count);
+        foreach (var kvp in fixableByFile)
+        {
+            entries.Add((kvp.Key, kvp.Value));
+        }
+
+        return entries;
     }
 
     internal static void WriteEffectiveNetworkConfig(
@@ -433,6 +507,176 @@ internal static class FixCommand
         for (var i = 0; i < lines.Length; i++)
         {
             errorWriter.WriteLine(lines[i]);
+        }
+    }
+
+    internal enum FixSummaryMode { Applied, DryRun, Check }
+
+    internal static void WriteFixSummary(
+        TextWriter writer,
+        List<(string FilePath, int FixedCount)> fixedFiles,
+        List<Diagnostic> remainingDiagnostics,
+        FixSummaryMode mode = FixSummaryMode.Applied)
+    {
+        // Compute per-file remaining counts from the filtered diagnostics list.
+        // Use a dictionary keyed by file path for O(1) lookup.
+        Dictionary<string, int>? remainingByFile = null;
+        for (var i = 0; i < remainingDiagnostics.Count; i++)
+        {
+            var file = remainingDiagnostics[i].FilePath;
+            if (file is null) continue;
+            remainingByFile ??= new Dictionary<string, int>(StringComparer.Ordinal);
+            ref var count = ref System.Runtime.InteropServices.CollectionsMarshal.GetValueRefOrAddDefault(remainingByFile, file, out _);
+            count++;
+        }
+
+        // Build a set of files that had fixes for fast lookup
+        var fixedFileSet = new HashSet<string>(fixedFiles.Count, StringComparer.Ordinal);
+        for (var i = 0; i < fixedFiles.Count; i++)
+            fixedFileSet.Add(fixedFiles[i].FilePath);
+
+        // Pre-compute totals for the summary line (which now goes first).
+        var totalFixed = 0;
+        var totalRemaining = 0;
+        for (var i = 0; i < fixedFiles.Count; i++)
+        {
+            var (filePath, fixedCount) = fixedFiles[i];
+            var remaining = 0;
+            remainingByFile?.TryGetValue(filePath, out remaining);
+            if (mode == FixSummaryMode.Check)
+                remaining = Math.Max(0, remaining - fixedCount);
+            totalFixed += fixedCount;
+            totalRemaining += remaining;
+        }
+
+        // Also count remaining from unfixed files
+        if (remainingByFile is not null)
+        {
+            foreach (var kvp in remainingByFile)
+            {
+                if (!fixedFileSet.Contains(kvp.Key))
+                    totalRemaining += kvp.Value;
+            }
+        }
+
+        // Per-file detail as table
+        // Build combined list of all files (fixed + unfixed with remaining)
+        var allFileEntries = new List<(string FilePath, int Fixed, int Remaining)>(fixedFiles.Count);
+        for (var i = 0; i < fixedFiles.Count; i++)
+        {
+            var (filePath, fixedCount) = fixedFiles[i];
+            var remaining = 0;
+            remainingByFile?.TryGetValue(filePath, out remaining);
+
+            // In check mode, allDiagnostics includes fixable issues (they weren't applied).
+            // Subtract fixable count to show only non-fixable "remaining" issues.
+            if (mode == FixSummaryMode.Check)
+                remaining = Math.Max(0, remaining - fixedCount);
+
+            allFileEntries.Add((filePath, fixedCount, remaining));
+        }
+
+        // Add unfixed files with remaining diagnostics
+        if (remainingByFile is not null)
+        {
+            foreach (var kvp in remainingByFile)
+            {
+                if (!fixedFileSet.Contains(kvp.Key))
+                    allFileEntries.Add((kvp.Key, 0, kvp.Value));
+            }
+        }
+
+        if (allFileEntries.Count == 0) return;
+
+        // Total summary line FIRST (action taken / overview)
+        var totalFound = totalFixed + totalRemaining;
+        var totalFiles = allFileEntries.Count;
+        var fileWord = totalFiles == 1 ? "file" : "files";
+        if (mode == FixSummaryMode.Check)
+        {
+            writer.WriteLine($"{totalFixed} of {totalFound} {(totalFound == 1 ? "issue" : "issues")} fixable in {totalFiles} {fileWord} ({totalRemaining} remaining)");
+        }
+        else
+        {
+            var totalVerb = mode == FixSummaryMode.DryRun ? "Would fix" : "Fixed";
+            writer.WriteLine($"{totalVerb} {totalFixed} of {totalFound} {(totalFound == 1 ? "issue" : "issues")} in {totalFiles} {fileWord} ({totalRemaining} remaining)");
+        }
+
+        // Sort by total count (fixed + remaining) descending, then by file name for determinism
+        allFileEntries.Sort((a, b) =>
+        {
+            var totalA = a.Fixed + a.Remaining;
+            var totalB = b.Fixed + b.Remaining;
+            var byCount = totalB.CompareTo(totalA);
+            return byCount != 0 ? byCount : string.Compare(Path.GetFileName(a.FilePath), Path.GetFileName(b.FilePath), StringComparison.Ordinal);
+        });
+
+        // Mode-specific column header for the "fixed" column
+        var fixColumnHeader = mode switch
+        {
+            FixSummaryMode.DryRun => "Would Fix",
+            FixSummaryMode.Check => "Fixable",
+            _ => "Fixed",
+        };
+        var fixHeaderLen = fixColumnHeader.Length;
+        const string remainingHeader = "Remaining";
+        var remainHeaderLen = remainingHeader.Length;
+
+        // Compute column widths
+        var maxFileLen = 4; // "File".Length
+        var maxFixLen = fixHeaderLen;
+        var maxRemainLen = remainHeaderLen;
+        for (var i = 0; i < allFileEntries.Count; i++)
+        {
+            var name = Path.GetFileName(allFileEntries[i].FilePath);
+            if (name.Length > maxFileLen) maxFileLen = name.Length;
+            var fixDigits = CheckCommand.CountDigits(allFileEntries[i].Fixed);
+            var remDigits = CheckCommand.CountDigits(allFileEntries[i].Remaining);
+            if (fixDigits > maxFixLen) maxFixLen = fixDigits;
+            if (remDigits > maxRemainLen) maxRemainLen = remDigits;
+        }
+
+        // Write table with blank line separator
+        writer.WriteLine();
+
+        // Header row
+        writer.Write("| File");
+        writer.Write(new string(' ', maxFileLen - 4));
+        writer.Write(" | ");
+        writer.Write(fixColumnHeader);
+        writer.Write(new string(' ', maxFixLen - fixHeaderLen));
+        writer.Write(" | ");
+        writer.Write(remainingHeader);
+        writer.Write(new string(' ', maxRemainLen - remainHeaderLen));
+        writer.WriteLine(" |");
+
+        // Separator row (right-aligned numeric columns)
+        writer.Write('|');
+        writer.Write(new string('-', maxFileLen + 2));
+        writer.Write('|');
+        writer.Write(new string('-', maxFixLen + 1));
+        writer.Write(":|");
+        writer.Write(new string('-', maxRemainLen + 1));
+        writer.WriteLine(":|");
+
+        // Data rows
+        for (var i = 0; i < allFileEntries.Count; i++)
+        {
+            var (filePath, fixedCount, remaining) = allFileEntries[i];
+            var displayName = Path.GetFileName(filePath);
+
+            writer.Write("| ");
+            writer.Write(displayName);
+            writer.Write(new string(' ', maxFileLen - displayName.Length));
+            writer.Write(" | ");
+            var fixStr = fixedCount.ToString();
+            writer.Write(new string(' ', maxFixLen - fixStr.Length));
+            writer.Write(fixStr);
+            writer.Write(" | ");
+            var remStr = remaining.ToString();
+            writer.Write(new string(' ', maxRemainLen - remStr.Length));
+            writer.Write(remStr);
+            writer.WriteLine(" |");
         }
     }
 

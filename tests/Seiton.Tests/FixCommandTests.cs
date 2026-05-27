@@ -59,6 +59,64 @@ public sealed class FixCommandTests
     }
 
     [Test]
+    public async Task FixCheck_MinSeverityError_DoesNotShowSummaryForFilteredFixableWarnings()
+    {
+        var configPath = CreateConfigFile(
+            """
+            rules:
+              runner-no-latest:
+                enabled: false
+              job-timeout-minutes-required:
+                enabled: false
+              job-permissions-required:
+                enabled: false
+            """);
+        var filePath = CreateWorkflowFile(
+            """
+            on: push
+            jobs:
+              build:
+                runs-on: ubuntu-latest
+                steps:
+                  - if: github.event_name == 'push'
+                    run: echo ok
+            """);
+
+        try
+        {
+            using var sw = new StringWriter();
+            using var stderr = new StringWriter();
+
+            var exitCode = await FixCommand.RunAsync(
+                [filePath],
+                config: configPath,
+                stdinFilename: "stdin.yml",
+                ignore: [],
+                minSeverity: "error",
+                format: OutputFormat.Text,
+                oneline: true,
+                color: ColorMode.Never,
+                noColor: true,
+                verbose: false,
+                dryRun: false,
+                check: true,
+                enablePinNetwork: false,
+                enableImageNetwork: false,
+                includeActions: false,
+                output: sw,
+                error: stderr);
+
+            await Assert.That(exitCode).IsEqualTo(ExitCode.Success);
+            await Assert.That(stderr.ToString().Contains("fixable", StringComparison.Ordinal)).IsFalse();
+        }
+        finally
+        {
+            DeleteContainingDirectory(filePath);
+            DeleteContainingDirectory(configPath);
+        }
+    }
+
+    [Test]
     public async Task FixCheck_WithoutMinSeverity_FailsForFixableWarnings()
     {
         var configPath = CreateConfigFile(
@@ -165,7 +223,7 @@ public sealed class FixCommandTests
             // The output must contain a diff (starts with ---) and a diagnostic (warning [...])
             await Assert.That(output).Contains("---");
             await Assert.That(output).Contains("warning [");
-            await Assert.That(errorOutput).Contains("1 warning in 1 file");
+            await Assert.That(errorOutput).Contains("1 warning remains in 1 file");
 
             // There must be a blank line (two consecutive newlines) between the diff block and the diagnostic
             // The diff ends with a context line, and then a blank line should appear before the diagnostic.
@@ -745,6 +803,1189 @@ public sealed class FixCommandTests
         await Assert.That(lines[0]).Contains("line one");
         await Assert.That(lines[0]).Contains("line two");
         await Assert.That(lines[0]).Contains("line three");
+    }
+
+    // === Fix Summary Tests ===
+
+    [Test]
+    public async Task Fix_Summary_ShowsFixedCountAndRemaining()
+    {
+        // Workflow with fixable issue (if-expr-wrapper) and non-fixable issue (job-timeout-minutes-required)
+        var configPath = CreateConfigFile(
+            """
+            rules:
+              runner-no-latest:
+                enabled: false
+              job-permissions-required:
+                enabled: false
+            """);
+        var filePath = CreateWorkflowFile(
+            """
+            on: push
+            jobs:
+              build:
+                runs-on: ubuntu-24.04
+                steps:
+                  - if: github.event_name == 'push'
+                    run: echo ok
+            """);
+
+        try
+        {
+            using var sw = new StringWriter();
+            using var stderr = new StringWriter();
+
+            await FixCommand.RunAsync(
+                [filePath],
+                config: configPath,
+                stdinFilename: "stdin.yml",
+                ignore: [],
+                minSeverity: null,
+                format: OutputFormat.Text,
+                oneline: true,
+                color: ColorMode.Never,
+                noColor: true,
+                verbose: false,
+                dryRun: false,
+                check: false,
+                enablePinNetwork: false,
+                enableImageNetwork: false,
+                includeActions: false,
+                output: sw,
+                error: stderr);
+
+            var errorOutput = stderr.ToString();
+            // Must contain "Fixed" summary line
+            await Assert.That(errorOutput).Contains("Fixed");
+            // Must show remaining count
+            await Assert.That(errorOutput).Contains("remaining");
+        }
+        finally
+        {
+            DeleteContainingDirectory(filePath);
+            DeleteContainingDirectory(configPath);
+        }
+    }
+
+    [Test]
+    public async Task Fix_Summary_NotShown_WhenNoFixesApplied()
+    {
+        // Workflow with no fixable issues
+        var configPath = CreateConfigFile(
+            """
+            rules:
+              runner-no-latest:
+                enabled: false
+              job-permissions-required:
+                enabled: false
+              if-expr-wrapper:
+                enabled: false
+              job-timeout-minutes-required:
+                enabled: false
+            """);
+        var filePath = CreateWorkflowFile(
+            """
+            on: push
+            jobs:
+              build:
+                runs-on: ubuntu-24.04
+                timeout-minutes: 10
+                permissions:
+                  contents: read
+                steps:
+                  - run: echo ok
+            """);
+
+        try
+        {
+            using var sw = new StringWriter();
+            using var stderr = new StringWriter();
+
+            await FixCommand.RunAsync(
+                [filePath],
+                config: configPath,
+                stdinFilename: "stdin.yml",
+                ignore: [],
+                minSeverity: null,
+                format: OutputFormat.Text,
+                oneline: true,
+                color: ColorMode.Never,
+                noColor: true,
+                verbose: false,
+                dryRun: false,
+                check: false,
+                enablePinNetwork: false,
+                enableImageNetwork: false,
+                includeActions: false,
+                output: sw,
+                error: stderr);
+
+            var errorOutput = stderr.ToString();
+            // Must NOT contain "Fixed" summary line
+            await Assert.That(errorOutput).DoesNotContain("Fixed");
+        }
+        finally
+        {
+            DeleteContainingDirectory(filePath);
+            DeleteContainingDirectory(configPath);
+        }
+    }
+
+    [Test]
+    public async Task Fix_Summary_MultipleFiles_ShowsPerFileDetail()
+    {
+        var configPath = CreateConfigFile(
+            """
+            rules:
+              runner-no-latest:
+                enabled: false
+              job-permissions-required:
+                enabled: false
+            """);
+
+        // Create two workflow files, both fixable
+        var dir = Path.Combine(Path.GetTempPath(), "Seiton.Tests", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(dir);
+        var filePath1 = Path.Combine(dir, "workflow1.yml");
+        var filePath2 = Path.Combine(dir, "workflow2.yml");
+        File.WriteAllText(filePath1, """
+            on: push
+            jobs:
+              build:
+                runs-on: ubuntu-24.04
+                steps:
+                  - if: github.event_name == 'push'
+                    run: echo ok
+            """);
+        File.WriteAllText(filePath2, """
+            on: push
+            jobs:
+              test:
+                runs-on: ubuntu-24.04
+                steps:
+                  - if: github.ref == 'refs/heads/main'
+                    run: echo test
+            """);
+
+        try
+        {
+            using var sw = new StringWriter();
+            using var stderr = new StringWriter();
+
+            await FixCommand.RunAsync(
+                [filePath1, filePath2],
+                config: configPath,
+                stdinFilename: "stdin.yml",
+                ignore: [],
+                minSeverity: null,
+                format: OutputFormat.Text,
+                oneline: true,
+                color: ColorMode.Never,
+                noColor: true,
+                verbose: false,
+                dryRun: false,
+                check: false,
+                enablePinNetwork: false,
+                enableImageNetwork: false,
+                includeActions: false,
+                output: sw,
+                error: stderr);
+
+            var errorOutput = stderr.ToString();
+            // Must contain per-file details in table format
+            await Assert.That(errorOutput).Contains("| workflow1.yml");
+            await Assert.That(errorOutput).Contains("| workflow2.yml");
+            await Assert.That(errorOutput).Contains("| Fixed");
+            // Must contain total summary
+            await Assert.That(errorOutput).Contains("Fixed");
+        }
+        finally
+        {
+            DeleteContainingDirectory(filePath1);
+            DeleteContainingDirectory(configPath);
+        }
+    }
+
+    // === Fix Summary in Dry-Run / Check Mode Tests ===
+
+    [Test]
+    public async Task Fix_Summary_DryRun_ShowsSummary()
+    {
+        // Workflow with fixable issue (if-expr-wrapper)
+        var configPath = CreateConfigFile(
+            """
+            rules:
+              runner-no-latest:
+                enabled: false
+              job-permissions-required:
+                enabled: false
+            """);
+        var filePath = CreateWorkflowFile(
+            """
+            on: push
+            jobs:
+              build:
+                runs-on: ubuntu-24.04
+                steps:
+                  - if: github.event_name == 'push'
+                    run: echo ok
+            """);
+
+        try
+        {
+            using var sw = new StringWriter();
+            using var stderr = new StringWriter();
+
+            await FixCommand.RunAsync(
+                [filePath],
+                config: configPath,
+                stdinFilename: "stdin.yml",
+                ignore: [],
+                minSeverity: null,
+                format: OutputFormat.Text,
+                oneline: true,
+                color: ColorMode.Never,
+                noColor: true,
+                verbose: false,
+                dryRun: true,
+                check: false,
+                enablePinNetwork: false,
+                enableImageNetwork: false,
+                includeActions: false,
+                output: sw,
+                error: stderr);
+
+            var errorOutput = stderr.ToString();
+            // Must contain "Would fix" summary line in dry-run mode
+            await Assert.That(errorOutput).Contains("Would fix");
+            await Assert.That(errorOutput).Contains("remaining");
+        }
+        finally
+        {
+            DeleteContainingDirectory(filePath);
+            DeleteContainingDirectory(configPath);
+        }
+    }
+
+    [Test]
+    public async Task Fix_Summary_Check_ShowsSummary()
+    {
+        // Workflow with fixable issue (if-expr-wrapper)
+        var configPath = CreateConfigFile(
+            """
+            rules:
+              runner-no-latest:
+                enabled: false
+              job-permissions-required:
+                enabled: false
+            """);
+        var filePath = CreateWorkflowFile(
+            """
+            on: push
+            jobs:
+              build:
+                runs-on: ubuntu-24.04
+                steps:
+                  - if: github.event_name == 'push'
+                    run: echo ok
+            """);
+
+        try
+        {
+            using var sw = new StringWriter();
+            using var stderr = new StringWriter();
+
+            await FixCommand.RunAsync(
+                [filePath],
+                config: configPath,
+                stdinFilename: "stdin.yml",
+                ignore: [],
+                minSeverity: null,
+                format: OutputFormat.Text,
+                oneline: true,
+                color: ColorMode.Never,
+                noColor: true,
+                verbose: false,
+                dryRun: false,
+                check: true,
+                enablePinNetwork: false,
+                enableImageNetwork: false,
+                includeActions: false,
+                output: sw,
+                error: stderr);
+
+            var errorOutput = stderr.ToString();
+            // Must contain fixable summary line in check mode
+            await Assert.That(errorOutput).Contains("fixable");
+        }
+        finally
+        {
+            DeleteContainingDirectory(filePath);
+            DeleteContainingDirectory(configPath);
+        }
+    }
+
+    [Test]
+    public async Task Fix_Summary_DryRun_NotShown_WhenNoFixesApplied()
+    {
+        // Workflow with no fixable issues
+        var configPath = CreateConfigFile(
+            """
+            rules:
+              runner-no-latest:
+                enabled: false
+              job-permissions-required:
+                enabled: false
+              if-expr-wrapper:
+                enabled: false
+              job-timeout-minutes-required:
+                enabled: false
+            """);
+        var filePath = CreateWorkflowFile(
+            """
+            on: push
+            jobs:
+              build:
+                runs-on: ubuntu-24.04
+                timeout-minutes: 10
+                permissions:
+                  contents: read
+                steps:
+                  - run: echo ok
+            """);
+
+        try
+        {
+            using var sw = new StringWriter();
+            using var stderr = new StringWriter();
+
+            await FixCommand.RunAsync(
+                [filePath],
+                config: configPath,
+                stdinFilename: "stdin.yml",
+                ignore: [],
+                minSeverity: null,
+                format: OutputFormat.Text,
+                oneline: true,
+                color: ColorMode.Never,
+                noColor: true,
+                verbose: false,
+                dryRun: true,
+                check: false,
+                enablePinNetwork: false,
+                enableImageNetwork: false,
+                includeActions: false,
+                output: sw,
+                error: stderr);
+
+            var errorOutput = stderr.ToString();
+            // Must NOT contain fix summary when nothing is fixable
+            await Assert.That(errorOutput).DoesNotContain("Would fix");
+            await Assert.That(errorOutput).DoesNotContain("fixable");
+        }
+        finally
+        {
+            DeleteContainingDirectory(filePath);
+            DeleteContainingDirectory(configPath);
+        }
+    }
+
+    [Test]
+    public async Task Fix_Summary_DryRun_IncludesUnfixedFilesWithRemaining()
+    {
+        // Two files: one with fixable issues, one with only non-fixable issues.
+        // The summary should include BOTH files — the unfixed file as "would fix 0, remaining N".
+        var configPath = CreateConfigFile(
+            """
+            rules:
+              runner-no-latest:
+                enabled: false
+              job-permissions-required:
+                enabled: false
+            """);
+
+        var dir = Path.Combine(Path.GetTempPath(), "Seiton.Tests", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(dir);
+
+        // File 1: has fixable issue (if-expr-wrapper)
+        var filePath1 = Path.Combine(dir, "fixable.yml");
+        File.WriteAllText(filePath1, """
+            on: push
+            jobs:
+              build:
+                runs-on: ubuntu-24.04
+                timeout-minutes: 10
+                steps:
+                  - if: github.event_name == 'push'
+                    run: echo ok
+            """);
+
+        // File 2: has only non-fixable issue (job-timeout-minutes-required — no auto-fix)
+        var filePath2 = Path.Combine(dir, "unfixable.yml");
+        File.WriteAllText(filePath2, """
+            on: push
+            jobs:
+              build:
+                runs-on: ubuntu-24.04
+                steps:
+                  - run: echo ok
+            """);
+
+        try
+        {
+            using var sw = new StringWriter();
+            using var stderr = new StringWriter();
+
+            await FixCommand.RunAsync(
+                [filePath1, filePath2],
+                config: configPath,
+                stdinFilename: "stdin.yml",
+                ignore: [],
+                minSeverity: null,
+                format: OutputFormat.Text,
+                oneline: true,
+                color: ColorMode.Never,
+                noColor: true,
+                verbose: false,
+                dryRun: true,
+                check: false,
+                enablePinNetwork: false,
+                enableImageNetwork: false,
+                includeActions: false,
+                output: sw,
+                error: stderr);
+
+            var errorOutput = stderr.ToString();
+            // Fix summary should show the fixable file
+            await Assert.That(errorOutput).Contains("fixable.yml");
+            // Fix summary should ALSO show the unfixable file with its remaining count
+            await Assert.That(errorOutput).Contains("unfixable.yml");
+            await Assert.That(errorOutput).Contains("remaining");
+            // Total remaining should reflect the unfixed file's issues
+            var totalLine = errorOutput.Split('\n').FirstOrDefault(l => l.StartsWith("Would fix"));
+            await Assert.That(totalLine).IsNotNull();
+            await Assert.That(totalLine!).Contains("in 2 files");
+            // The remaining count in the total line should be > 0 (because unfixable.yml has issues)
+            await Assert.That(totalLine!).DoesNotContain("(0 remaining)");
+        }
+        finally
+        {
+            DeleteContainingDirectory(filePath1);
+            DeleteContainingDirectory(configPath);
+        }
+    }
+
+    [Test]
+    public async Task Fix_DryRun_JsonFormat_StdoutContainsOnlyValidJson()
+    {
+        // When --format json --dry-run is used, stdout must contain only valid JSON.
+        // The unified diff must NOT appear on stdout (it should go to stderr or be suppressed).
+        var configPath = CreateConfigFile(
+            """
+            rules:
+                runner-no-latest:
+                    enabled: false
+                job-timeout-minutes-required:
+                    enabled: false
+                job-permissions-required:
+                    enabled: false
+            """);
+        var filePath = CreateWorkflowFile(
+            """
+            on: push
+            jobs:
+              build:
+                runs-on: ubuntu-latest
+                steps:
+                  - if: github.event_name == 'push'
+                    uses: actions/checkout@v4
+            """);
+
+        try
+        {
+            using var stdout = new StringWriter();
+            using var stderr = new StringWriter();
+
+            await FixCommand.RunAsync(
+                [filePath],
+                config: configPath,
+                stdinFilename: "stdin.yml",
+                ignore: [],
+                minSeverity: null,
+                format: OutputFormat.Json,
+                oneline: false,
+                color: ColorMode.Never,
+                noColor: true,
+                verbose: false,
+                dryRun: true,
+                check: false,
+                enablePinNetwork: false,
+                enableImageNetwork: false,
+                includeActions: false,
+                output: stdout,
+                error: stderr);
+
+            var output = stdout.ToString().Trim();
+
+            // stdout must be valid JSON (either empty or a JSON array)
+            if (output.Length > 0)
+            {
+                await Assert.That(output).StartsWith("[");
+                await Assert.That(output).EndsWith("]");
+                // Must not contain diff markers
+                await Assert.That(output).DoesNotContain("---");
+                await Assert.That(output).DoesNotContain("+++");
+                await Assert.That(output).DoesNotContain("@@");
+            }
+
+            // The diff (if any) should appear on stderr, not stdout
+            var errorOutput = stderr.ToString();
+            // stderr may contain diff and/or summary — that's fine
+        }
+        finally
+        {
+            DeleteContainingDirectory(filePath);
+            DeleteContainingDirectory(configPath);
+        }
+    }
+
+    [Test]
+    public async Task Fix_DryRun_JsonFormat_DiffAppearsOnStderr()
+    {
+        // Verify that when --format json --dry-run produces a diff, it goes to stderr
+        var configPath = CreateConfigFile(
+            """
+            rules:
+                runner-no-latest:
+                    enabled: false
+                job-timeout-minutes-required:
+                    enabled: false
+                job-permissions-required:
+                    enabled: false
+            """);
+        var filePath = CreateWorkflowFile(
+            """
+            on: push
+            jobs:
+              build:
+                runs-on: ubuntu-latest
+                steps:
+                  - if: github.event_name == 'push'
+                    uses: actions/checkout@v4
+            """);
+
+        try
+        {
+            using var stdout = new StringWriter();
+            using var stderr = new StringWriter();
+
+            await FixCommand.RunAsync(
+                [filePath],
+                config: configPath,
+                stdinFilename: "stdin.yml",
+                ignore: [],
+                minSeverity: null,
+                format: OutputFormat.Json,
+                oneline: false,
+                color: ColorMode.Never,
+                noColor: true,
+                verbose: false,
+                dryRun: true,
+                check: false,
+                enablePinNetwork: false,
+                enableImageNetwork: false,
+                includeActions: false,
+                output: stdout,
+                error: stderr);
+
+            var errorOutput = stderr.ToString();
+
+            // The diff should be in stderr (since format is json, stdout must be pure JSON)
+            await Assert.That(errorOutput).Contains("---");
+            await Assert.That(errorOutput).Contains("+++");
+        }
+        finally
+        {
+            DeleteContainingDirectory(filePath);
+            DeleteContainingDirectory(configPath);
+        }
+    }
+
+    [Test]
+    public async Task Fix_DryRun_TextFormat_DiffStillAppearsOnStdout()
+    {
+        // When format is text, diff should still appear on stdout (existing behavior preserved)
+        var configPath = CreateConfigFile(
+            """
+            rules:
+                runner-no-latest:
+                    enabled: false
+                job-timeout-minutes-required:
+                    enabled: false
+                job-permissions-required:
+                    enabled: false
+            """);
+        var filePath = CreateWorkflowFile(
+            """
+            on: push
+            jobs:
+              build:
+                runs-on: ubuntu-latest
+                steps:
+                  - if: github.event_name == 'push'
+                    uses: actions/checkout@v4
+            """);
+
+        try
+        {
+            using var stdout = new StringWriter();
+            using var stderr = new StringWriter();
+
+            await FixCommand.RunAsync(
+                [filePath],
+                config: configPath,
+                stdinFilename: "stdin.yml",
+                ignore: [],
+                minSeverity: null,
+                format: OutputFormat.Text,
+                oneline: true,
+                color: ColorMode.Never,
+                noColor: true,
+                verbose: false,
+                dryRun: true,
+                check: false,
+                enablePinNetwork: false,
+                enableImageNetwork: false,
+                includeActions: false,
+                output: stdout,
+                error: stderr);
+
+            var output = stdout.ToString();
+
+            // For text format, diff must remain on stdout (existing behavior)
+            await Assert.That(output).Contains("---");
+            await Assert.That(output).Contains("+++");
+        }
+        finally
+        {
+            DeleteContainingDirectory(filePath);
+            DeleteContainingDirectory(configPath);
+        }
+    }
+
+    // === Fix Summary Order Tests (6a: fix summary before remain summary) ===
+
+    [Test]
+    public async Task Fix_Summary_Order_FixSummaryAppearsBeforeRemainSummary()
+    {
+        // Workflow with both fixable and non-fixable issues.
+        // Verify fix summary (e.g. "Fixed N issues") appears BEFORE the remaining diagnostic summary.
+        var configPath = CreateConfigFile(
+            """
+            rules:
+              runner-no-latest:
+                enabled: false
+              job-permissions-required:
+                enabled: false
+            """);
+        var filePath = CreateWorkflowFile(
+            """
+            on: push
+            jobs:
+              build:
+                runs-on: ubuntu-24.04
+                steps:
+                  - if: github.event_name == 'push'
+                    run: echo ok
+            """);
+
+        try
+        {
+            using var sw = new StringWriter();
+            using var stderr = new StringWriter();
+
+            await FixCommand.RunAsync(
+                [filePath],
+                config: configPath,
+                stdinFilename: "stdin.yml",
+                ignore: [],
+                minSeverity: null,
+                format: OutputFormat.Text,
+                oneline: true,
+                color: ColorMode.Never,
+                noColor: true,
+                verbose: false,
+                dryRun: false,
+                check: false,
+                enablePinNetwork: false,
+                enableImageNetwork: false,
+                includeActions: false,
+                output: sw,
+                error: stderr);
+
+            var errorOutput = stderr.ToString();
+            var lines = errorOutput.Split('\n', StringSplitOptions.RemoveEmptyEntries);
+
+            // Find the "Fixed" total line and the "remain" summary line.
+            // The remain summary line uses "remain in" (not "(N remaining)" in the fix total).
+            var fixedLineIndex = Array.FindIndex(lines, l => l.StartsWith("Fixed"));
+            var remainLineIndex = Array.FindIndex(lines, l => (l.Contains("remain in") || l.Contains("remains in")) && !l.StartsWith("Fixed") && !l.TrimStart().StartsWith("workflow"));
+
+            // Fix summary must appear BEFORE remaining summary
+            await Assert.That(fixedLineIndex).IsGreaterThanOrEqualTo(0);
+            await Assert.That(remainLineIndex).IsGreaterThan(fixedLineIndex);
+        }
+        finally
+        {
+            DeleteContainingDirectory(filePath);
+            DeleteContainingDirectory(configPath);
+        }
+    }
+
+    [Test]
+    public async Task Fix_Summary_Order_RemainSummaryUsesRemainWording()
+    {
+        // Verify the remaining diagnostic summary uses "remain" wording in fix mode.
+        var configPath = CreateConfigFile(
+            """
+            rules:
+              runner-no-latest:
+                enabled: false
+              job-permissions-required:
+                enabled: false
+            """);
+        var filePath = CreateWorkflowFile(
+            """
+            on: push
+            jobs:
+              build:
+                runs-on: ubuntu-24.04
+                steps:
+                  - if: github.event_name == 'push'
+                    run: echo ok
+            """);
+
+        try
+        {
+            using var sw = new StringWriter();
+            using var stderr = new StringWriter();
+
+            await FixCommand.RunAsync(
+                [filePath],
+                config: configPath,
+                stdinFilename: "stdin.yml",
+                ignore: [],
+                minSeverity: null,
+                format: OutputFormat.Text,
+                oneline: true,
+                color: ColorMode.Never,
+                noColor: true,
+                verbose: false,
+                dryRun: false,
+                check: false,
+                enablePinNetwork: false,
+                enableImageNetwork: false,
+                includeActions: false,
+                output: sw,
+                error: stderr);
+
+            var errorOutput = stderr.ToString();
+            // The remaining summary must use "remain" wording (not just "in N files")
+            await Assert.That(errorOutput).Contains("remain");
+            // Should NOT use the old format "N errors, M warnings in N files" without "remain"
+            // (The fix summary per-file lines use "remaining" which is fine)
+            var lines = errorOutput.Split('\n', StringSplitOptions.RemoveEmptyEntries);
+            var diagnosticSummaryLine = lines.FirstOrDefault(l =>
+                (l.Contains("error") || l.Contains("warning")) && l.Contains("in") && l.Contains("file") && !l.Contains(":"));
+            if (diagnosticSummaryLine is not null)
+            {
+                await Assert.That(diagnosticSummaryLine).Contains("remain");
+            }
+        }
+        finally
+        {
+            DeleteContainingDirectory(filePath);
+            DeleteContainingDirectory(configPath);
+        }
+    }
+
+    [Test]
+    public async Task Fix_Summary_Order_DryRun_FixSummaryAppearsBeforeRemainSummary()
+    {
+        // Same test for dry-run mode
+        var configPath = CreateConfigFile(
+            """
+            rules:
+              runner-no-latest:
+                enabled: false
+              job-permissions-required:
+                enabled: false
+            """);
+        var filePath = CreateWorkflowFile(
+            """
+            on: push
+            jobs:
+              build:
+                runs-on: ubuntu-24.04
+                steps:
+                  - if: github.event_name == 'push'
+                    run: echo ok
+            """);
+
+        try
+        {
+            using var sw = new StringWriter();
+            using var stderr = new StringWriter();
+
+            await FixCommand.RunAsync(
+                [filePath],
+                config: configPath,
+                stdinFilename: "stdin.yml",
+                ignore: [],
+                minSeverity: null,
+                format: OutputFormat.Text,
+                oneline: true,
+                color: ColorMode.Never,
+                noColor: true,
+                verbose: false,
+                dryRun: true,
+                check: false,
+                enablePinNetwork: false,
+                enableImageNetwork: false,
+                includeActions: false,
+                output: sw,
+                error: stderr);
+
+            var errorOutput = stderr.ToString();
+            var lines = errorOutput.Split('\n', StringSplitOptions.RemoveEmptyEntries);
+
+            // Find the "Would fix" total line and the "remain" line
+            var fixedLineIndex = Array.FindIndex(lines, l => l.StartsWith("Would fix"));
+            var remainLineIndex = Array.FindIndex(lines, l =>
+                (l.Contains("error") || l.Contains("warning") || l.Contains("0 issues")) && l.Contains("remain"));
+
+            await Assert.That(fixedLineIndex).IsGreaterThanOrEqualTo(0);
+            await Assert.That(remainLineIndex).IsGreaterThan(fixedLineIndex);
+        }
+        finally
+        {
+            DeleteContainingDirectory(filePath);
+            DeleteContainingDirectory(configPath);
+        }
+    }
+
+    [Test]
+    public async Task Fix_Summary_Order_TotalLineAppearsBeforePerFileDetails()
+    {
+        // Verify the fix summary total line ("Fixed N issues in M files")
+        // appears BEFORE per-file detail lines ("  file.yaml: fixed N, remaining M")
+        var configPath = CreateConfigFile(
+            """
+            rules:
+              runner-no-latest:
+                enabled: false
+              job-permissions-required:
+                enabled: false
+            """);
+        var filePath = CreateWorkflowFile(
+            """
+            on: push
+            jobs:
+              build:
+                runs-on: ubuntu-24.04
+                steps:
+                  - if: github.event_name == 'push'
+                    run: echo ok
+            """);
+
+        try
+        {
+            using var sw = new StringWriter();
+            using var stderr = new StringWriter();
+
+            await FixCommand.RunAsync(
+                [filePath],
+                config: configPath,
+                stdinFilename: "stdin.yml",
+                ignore: [],
+                minSeverity: null,
+                format: OutputFormat.Text,
+                oneline: true,
+                color: ColorMode.Never,
+                noColor: true,
+                verbose: false,
+                dryRun: false,
+                check: false,
+                enablePinNetwork: false,
+                enableImageNetwork: false,
+                includeActions: false,
+                output: sw,
+                error: stderr);
+
+            var errorOutput = stderr.ToString();
+            var lines = errorOutput.Split('\n', StringSplitOptions.RemoveEmptyEntries);
+
+            // Total line: "Fixed N issues in M files"
+            var totalLineIndex = Array.FindIndex(lines, l => l.StartsWith("Fixed"));
+            // Per-file detail: table row starting with "| " and containing the file name
+            var perFileIndex = Array.FindIndex(lines, l => l.Contains("| workflow.yml") || (l.Contains("workflow") && l.TrimStart().StartsWith('|')));
+
+            await Assert.That(totalLineIndex).IsGreaterThanOrEqualTo(0);
+            await Assert.That(perFileIndex).IsGreaterThan(totalLineIndex);
+        }
+        finally
+        {
+            DeleteContainingDirectory(filePath);
+            DeleteContainingDirectory(configPath);
+        }
+    }
+
+    // === Fix Summary Relationship Tests (6c: before/after/fixed relationship) ===
+
+    [Test]
+    public async Task Fix_Summary_ShowsFoundCount_InTotalLine()
+    {
+        // When fixes are applied, the total line should show "Fixed X of Y issues"
+        // where Y = X + remaining, making the relationship explicit.
+        var configPath = CreateConfigFile(
+            """
+            rules:
+              runner-no-latest:
+                enabled: false
+              job-permissions-required:
+                enabled: false
+            """);
+        var filePath = CreateWorkflowFile(
+            """
+            on: push
+            jobs:
+              build:
+                runs-on: ubuntu-24.04
+                steps:
+                  - if: github.event_name == 'push'
+                    run: echo ok
+            """);
+
+        try
+        {
+            using var sw = new StringWriter();
+            using var stderr = new StringWriter();
+
+            await FixCommand.RunAsync(
+                [filePath],
+                config: configPath,
+                stdinFilename: "stdin.yml",
+                ignore: [],
+                minSeverity: null,
+                format: OutputFormat.Text,
+                oneline: true,
+                color: ColorMode.Never,
+                noColor: true,
+                verbose: false,
+                dryRun: false,
+                check: false,
+                enablePinNetwork: false,
+                enableImageNetwork: false,
+                includeActions: false,
+                output: sw,
+                error: stderr);
+
+            var errorOutput = stderr.ToString();
+            // Total line must contain "of" to show relationship (e.g., "Fixed 1 of 2 issues")
+            var totalLine = errorOutput.Split('\n').FirstOrDefault(l => l.StartsWith("Fixed"));
+            await Assert.That(totalLine).IsNotNull();
+            await Assert.That(totalLine!).Contains(" of ");
+        }
+        finally
+        {
+            DeleteContainingDirectory(filePath);
+            DeleteContainingDirectory(configPath);
+        }
+    }
+
+    [Test]
+    public async Task Fix_Summary_FoundCount_EqualsFixedPlusRemaining()
+    {
+        // The "of N" in the total line should equal fixed + remaining.
+        var configPath = CreateConfigFile(
+            """
+            rules:
+              runner-no-latest:
+                enabled: false
+              job-permissions-required:
+                enabled: false
+            """);
+        var filePath = CreateWorkflowFile(
+            """
+            on: push
+            jobs:
+              build:
+                runs-on: ubuntu-24.04
+                steps:
+                  - if: github.event_name == 'push'
+                    run: echo ok
+            """);
+
+        try
+        {
+            using var sw = new StringWriter();
+            using var stderr = new StringWriter();
+
+            await FixCommand.RunAsync(
+                [filePath],
+                config: configPath,
+                stdinFilename: "stdin.yml",
+                ignore: [],
+                minSeverity: null,
+                format: OutputFormat.Text,
+                oneline: true,
+                color: ColorMode.Never,
+                noColor: true,
+                verbose: false,
+                dryRun: false,
+                check: false,
+                enablePinNetwork: false,
+                enableImageNetwork: false,
+                includeActions: false,
+                output: sw,
+                error: stderr);
+
+            var errorOutput = stderr.ToString();
+            var totalLine = errorOutput.Split('\n').FirstOrDefault(l => l.StartsWith("Fixed"));
+            await Assert.That(totalLine).IsNotNull();
+
+            // Parse "Fixed X of Y issues in Z files (W remaining)"
+            var match = System.Text.RegularExpressions.Regex.Match(totalLine!, @"Fixed (\d+) of (\d+) issues? in \d+ files? \((\d+) remaining\)");
+            await Assert.That(match.Success).IsTrue();
+
+            var fixedCount = int.Parse(match.Groups[1].Value);
+            var foundCount = int.Parse(match.Groups[2].Value);
+            var remainingCount = int.Parse(match.Groups[3].Value);
+            await Assert.That(foundCount).IsEqualTo(fixedCount + remainingCount);
+        }
+        finally
+        {
+            DeleteContainingDirectory(filePath);
+            DeleteContainingDirectory(configPath);
+        }
+    }
+
+    [Test]
+    public async Task Fix_Summary_DryRun_ShowsFoundCount()
+    {
+        // Dry-run mode should also show "Would fix X of Y issues"
+        var configPath = CreateConfigFile(
+            """
+            rules:
+              runner-no-latest:
+                enabled: false
+              job-permissions-required:
+                enabled: false
+            """);
+        var filePath = CreateWorkflowFile(
+            """
+            on: push
+            jobs:
+              build:
+                runs-on: ubuntu-24.04
+                steps:
+                  - if: github.event_name == 'push'
+                    run: echo ok
+            """);
+
+        try
+        {
+            using var sw = new StringWriter();
+            using var stderr = new StringWriter();
+
+            await FixCommand.RunAsync(
+                [filePath],
+                config: configPath,
+                stdinFilename: "stdin.yml",
+                ignore: [],
+                minSeverity: null,
+                format: OutputFormat.Text,
+                oneline: true,
+                color: ColorMode.Never,
+                noColor: true,
+                verbose: false,
+                dryRun: true,
+                check: false,
+                enablePinNetwork: false,
+                enableImageNetwork: false,
+                includeActions: false,
+                output: sw,
+                error: stderr);
+
+            var errorOutput = stderr.ToString();
+            var totalLine = errorOutput.Split('\n').FirstOrDefault(l => l.StartsWith("Would fix"));
+            await Assert.That(totalLine).IsNotNull();
+            await Assert.That(totalLine!).Contains(" of ");
+        }
+        finally
+        {
+            DeleteContainingDirectory(filePath);
+            DeleteContainingDirectory(configPath);
+        }
+    }
+
+    [Test]
+    public async Task Fix_Summary_Check_ShowsFoundCount()
+    {
+        // Check mode should also show "X of Y issues fixable"
+        var configPath = CreateConfigFile(
+            """
+            rules:
+              runner-no-latest:
+                enabled: false
+              job-permissions-required:
+                enabled: false
+            """);
+        var filePath = CreateWorkflowFile(
+            """
+            on: push
+            jobs:
+              build:
+                runs-on: ubuntu-24.04
+                steps:
+                  - if: github.event_name == 'push'
+                    run: echo ok
+            """);
+
+        try
+        {
+            using var sw = new StringWriter();
+            using var stderr = new StringWriter();
+
+            await FixCommand.RunAsync(
+                [filePath],
+                config: configPath,
+                stdinFilename: "stdin.yml",
+                ignore: [],
+                minSeverity: null,
+                format: OutputFormat.Text,
+                oneline: true,
+                color: ColorMode.Never,
+                noColor: true,
+                verbose: false,
+                dryRun: false,
+                check: true,
+                enablePinNetwork: false,
+                enableImageNetwork: false,
+                includeActions: false,
+                output: sw,
+                error: stderr);
+
+            var errorOutput = stderr.ToString();
+            // Check mode: "X of Y issues fixable in Z files (W remaining)"
+            await Assert.That(errorOutput).Contains(" of ");
+            await Assert.That(errorOutput).Contains("fixable");
+        }
+        finally
+        {
+            DeleteContainingDirectory(filePath);
+            DeleteContainingDirectory(configPath);
+        }
     }
 
     private static string CreateWorkflowFile(string yaml)

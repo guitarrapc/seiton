@@ -435,13 +435,34 @@ When no diagnostics exist: `0 issues in <N> file(s)`.
 
 Zero-count categories are omitted (e.g. `1 error in 3 files` when warnings and infos are zero).
 
-In `--verbose` mode with at least one diagnostic, a per-rule breakdown is appended:
+When at least one diagnostic has a file path, a per-file breakdown is emitted as a markdown-style table, separated from the summary line by a blank line:
 
 ```
-  <rule-id>: <count>, <rule-id>: <count>, ...
+| File          | Errors | Warnings |
+|---------------|-------:|---------:|
+| ci.yml        |      3 |        2 |
+| release.yml   |      1 |        0 |
 ```
 
-Rules are sorted by count descending, then by rule ID lexicographically.
+- Column widths are dynamically computed from the longest file name.
+- Numeric columns are right-aligned.
+- Zero values are displayed explicitly (not omitted).
+- When at least one info diagnostic exists in the per-file breakdown, an `Infos` column is also emitted.
+- Files are sorted by total issue count descending, then by file name lexicographically.
+
+In `--verbose` mode with at least one diagnostic, a per-rule breakdown is emitted as a markdown-style table, separated from the preceding output by a blank line:
+
+```
+| Rule          | Count |
+|---------------|------:|
+| unpinned-uses |     3 |
+| template-injection |  2 |
+```
+
+- In normal check mode, the count column is labeled "Count".
+- In fix/dry-run mode (when `isRemainMode` is true), the count column is labeled "Remaining" to reflect these are post-fix residual diagnostics.
+- Column widths are dynamically computed to align values.
+- Rules are sorted by count descending, then by rule ID lexicographically.
 
 In `--verbose` mode, rule activation metadata is emitted once per document kind seen in the run:
 
@@ -482,6 +503,32 @@ hint: use --min-severity error to treat warnings as non-blocking in CI
 ```
 
 In `--fix` mode, when network-assisted flags are not enabled but relevant diagnostics exist (`unpinned-uses` or `unpinned-image`), a hint is emitted suggesting the appropriate `--enable-pin-network` / `--enable-image-network` flags.
+
+In `--fix` mode (not `--dry-run`, not `--check`), when at least one fix is applied, a fix summary is emitted to stderr before the remaining diagnostic summary:
+
+```
+Fixed <fixed> of <found> issue(s) in <file-count> file(s) (<remaining> remaining)
+
+| File        | Fixed | Remaining |
+|-------------|------:|----------:|
+| ci.yml      |     4 |         0 |
+| release.yml |     2 |         1 |
+<errors> error(s), <warnings> warning(s) remain in <affected-files> file(s)
+```
+
+In `--dry-run` mode, the table header uses "Would Fix" instead of "Fixed". In `--check` mode, the header uses "Fixable".
+
+- The total summary line shows the relationship `found = fixed + remaining` explicitly ("Fixed X of Y issues").
+- The total summary line appears first, followed by the per-file detail table.
+- Column widths are dynamically computed from the longest file name.
+- Numeric columns are right-aligned.
+- Zero values are displayed explicitly (not omitted).
+- Files are sorted by total count (fixed + remaining) descending, then by file name lexicographically.
+- Per-file rows include all files that had fixes applied, plus unfixed files with remaining diagnostics (shown with fixed 0).
+- `remaining` is the count of diagnostics still present for that file after ignore/severity filters.
+- The "remain" summary line shows the severity breakdown of remaining diagnostics and the count of affected files.
+- When no fixes are applied (all diagnostics are unfixable), the fix summary is not emitted and the standard diagnostic summary is used instead.
+- In `--check` mode, the remaining diagnostic summary uses standard wording ("in N files") rather than "remain" because no fixes were applied.
 
 ---
 

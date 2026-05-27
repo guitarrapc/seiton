@@ -320,6 +320,9 @@ Configuration file may define file-targeted exclusion entries with path globs.
 - Glob matching is case-sensitive.
 - Glob base is repository root (workspace root containing the analyzed file).
 - Exclusion entries may include optional `jobs` condition (see §5.4).
+- An exclusion entry with `file` only (both `rules` and `jobs` omitted) suppresses the entire file's workflow diagnostics, including parser diagnostics.
+- Exclusion entries that specify `rules` and/or `jobs` suppress only matching rule diagnostics; parser diagnostics remain visible.
+- Configuration diagnostics raised while normalizing `rules` or `exclusions` are never suppressed, even when a file-level exclusion matches.
 
 ### 5.4 Job-Level Exclusion (Configuration)
 
@@ -1030,7 +1033,7 @@ The following table classifies each default rule by fix feasibility.
 | Rule ID | Fix Feasibility | Fix Description |
 |---|---|---|
 | `deny-write-all` | ✓ Fixable | Replace `write-all` scalar with `read-all` in the permissions node. |
-| `run-env-context-direct-use` | △ Partial fixable | Replace `${{ env.VAR }}` with `$VAR` (or `${VAR}` for POSIX shells) inside `run:` text, except inside quoted heredoc bodies where expansion semantics differ. |
+| `run-env-context-direct-use` | △ Partial fixable | Replace `${{ env.VAR }}` with `$VAR` (or `${VAR}` for POSIX shells) inside `run:` text, except inside quoted heredoc bodies where expansion semantics differ. Compound expressions emit a help hint instead of a fix. |
 | `job-permissions-required` | ✓ Fixable | Insert `permissions:` as a new key immediately after `runs-on:` (or after `uses:` for reusable workflow jobs, or after job id key if both are absent). When the job's steps reference popular actions with known permission requirements (from supplemental-required-permissions.json), the fix inserts the merged minimum required scopes (e.g., `contents: read` for `actions/checkout`). When no known action requirements are found, the fix inserts `permissions: {}`. |
 | `unpinned-uses` | ✗ Not auto-fixable | Requires resolving current SHA for the referenced action/workflow at fix time (external I/O). |
 | `unpinned-image` | ✗ Not auto-fixable | Requires resolving current digest for the referenced image at fix time (external I/O). |
@@ -1048,8 +1051,8 @@ The following table classifies each default rule by fix feasibility.
 | `credentials` | ✗ Not auto-fixable | Adding credentials requires secrets names that are not known to linter. |
 | `template-injection` | △ Partial | For `run:` script sinks with deterministic paths, auto-fix generates env var indirection (new env mapping + shell variable reference). Skips `actions/github-script` `script` inputs, heredoc no-expand bodies, and shell single-quoted strings. One fix per step per pass (multi-pass handles remaining). |
 | `expr-undefined-var` | ✗ Not auto-fixable | Correct context variable cannot be inferred automatically. |
-| `run-secrets-context-direct-use` | △ Partial | Replace simple `${{ secrets.KEY }}` / `${{ secrets['KEY'] }}` in `run:` only when exactly one existing `env` variable maps to the same secret key; ambiguous/no-mapping cases remain no-fix. |
-| `run-inputs-context-direct-use` | △ Partial | Replace simple `${{ inputs.KEY }}` / `${{ github.event.inputs.KEY }}` (and bracket forms) in `run:` by reusing an existing unique `env` mapping when present; otherwise insert a new step-local `env:` entry and rewrite to the generated shell variable. No fix is offered for ambiguous mappings, compound expressions, no-expand heredocs, or shell single-quoted strings; the insertion path additionally skips flow-style `env` and empty `env: {}` but replacement-only reuse may still be offered in those cases. |
+| `run-secrets-context-direct-use` | △ Partial | Replace simple `${{ secrets.KEY }}` / `${{ secrets['KEY'] }}` in `run:` only when exactly one existing `env` variable maps to the same secret key; ambiguous/no-mapping cases remain no-fix. Compound expressions emit a help hint instead of a fix. |
+| `run-inputs-context-direct-use` | △ Partial | Replace simple `${{ inputs.KEY }}` / `${{ github.event.inputs.KEY }}` (and bracket forms) in `run:` by reusing an existing unique `env` mapping when present; otherwise insert a new step-local `env:` entry and rewrite to the generated shell variable. No fix is offered for ambiguous mappings, compound expressions, no-expand heredocs, or shell single-quoted strings; compound expressions emit a help hint instead. The insertion path additionally skips flow-style `env` and empty `env: {}` but replacement-only reuse may still be offered in those cases. |
 | `secrets-whole-context-access` | ✗ Not auto-fixable | Correct remediation (refactoring to specific key access) requires user intent about which secrets are needed. |
 | `checkout-persist-credentials` | △ Partial | For deterministic cases, insert or replace `with.persist-credentials: false`. Expression-valued cases remain no-fix. Review downstream authenticated git commands such as `git push`, which may need explicit auth setup (for example `git remote set-url origin ...`). |
 | `artipacked` | ✗ Not auto-fixable | Safe remediation depends on whether the user intends to change checkout auth behavior, artifact scope, or hidden-file upload behavior. |

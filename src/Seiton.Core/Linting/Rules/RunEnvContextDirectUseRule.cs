@@ -10,7 +10,33 @@ namespace Seiton.Core.Linting.Rules;
 /// <summary>Flags direct use of <c>env.*</c> context in <c>run:</c> scripts where shell environment variables should be used instead.</summary>
 public sealed class RunEnvContextDirectUseRule() : RuleBase(RuleId.RunEnvContextDirectUse)
 {
+    private Workflow? _currentWorkflow;
+    private Job? _currentJob;
+
     public override string Name => "Run Env Context Direct Use Rule";
+
+    public override void VisitWorkflowPre(Workflow workflow)
+    {
+        base.VisitWorkflowPre(workflow);
+        _currentWorkflow = workflow;
+        _currentJob = null;
+    }
+
+    public override void VisitWorkflowPost(Workflow workflow)
+    {
+        _currentWorkflow = null;
+        _currentJob = null;
+    }
+
+    public override void VisitJobPre(Job job)
+    {
+        _currentJob = job;
+    }
+
+    public override void VisitJobPost(Job job)
+    {
+        _currentJob = null;
+    }
 
     public override void VisitStep(Step step)
     {
@@ -59,13 +85,29 @@ public sealed class RunEnvContextDirectUseRule() : RuleBase(RuleId.RunEnvContext
                 continue;
             }
 
-            if (TryBuildFix(run, runNode, expression, bodyStart, nextSearchStart - (bodyStart - 3), out var fix))
+            // Skip detection inside no-expand heredoc (<<'EOF') where shell variables don't expand
+            var absoluteOffset = Arena.GetStringSlice(runNode).Offset + bodyStart - 3;
+            if (IsInsideNoExpandHereDoc(Config.Utf8Yaml, absoluteOffset))
+            {
+                continue;
+            }
+
+            if (TryBuildFix(step, runNode, expression, bodyStart, nextSearchStart - (bodyStart - 3), out var fix))
             {
                 AddStepError(
                     step,
                     "run script must not reference ${{ env.* }} directly; use shell variables instead (e.g. $NAME or $env:NAME)",
                     location,
                     fix);
+            }
+            else if (!TryParseSimpleContextReference(expression, "env"u8, out _))
+            {
+                // Composite expression (e.g. "${{ env.FOO }}-suffix") — suggest env: block mapping
+                AddStepError(
+                    step,
+                    "run script must not reference ${{ env.* }} directly; use shell variables instead (e.g. $NAME or $env:NAME)",
+                    location,
+                    "consider moving the entire expression to an env: block and referencing the shell variable instead");
             }
             else
             {
@@ -79,7 +121,7 @@ public sealed class RunEnvContextDirectUseRule() : RuleBase(RuleId.RunEnvContext
         }
     }
 
-    private bool TryBuildFix(ExecRun run, StringNodeId runNode, ReadOnlySpan<byte> expression, int expressionBodyStart, int expressionLength, out DiagnosticFix fix)
+    private bool TryBuildFix(Step step, StringNodeId runNode, ReadOnlySpan<byte> expression, int expressionBodyStart, int expressionLength, out DiagnosticFix fix)
     {
         fix = default;
         if (Config.Utf8Yaml is null)
@@ -98,7 +140,13 @@ public sealed class RunEnvContextDirectUseRule() : RuleBase(RuleId.RunEnvContext
             return false;
         }
 
-        var replacement = RunContextDirectUseAnalyzer.IsPowerShell(Arena, run.Shell, Config.Utf8Yaml)
+        var isPowerShell = RunContextDirectUseAnalyzer.IsPowerShellWithDefaults(Arena, step, _currentJob, _currentWorkflow, Config.Utf8Yaml);
+        if (isPowerShell is null)
+        {
+            return false;
+        }
+
+        var replacement = isPowerShell.Value
             ? "$env:" + variableName
             : "${" + variableName + "}";
 

@@ -240,6 +240,66 @@ public sealed class LintEngine
         var normalizedRules = NormalizeRules(config?.Rules, filePath);
         _disabledRuleIds.Clear();
 
+        // File-level exclusion (Rules: null, Jobs: null) short-circuits workflow diagnostics.
+        // Parse errors remain suppressed for fully-excluded files, but configuration
+        // diagnostics produced while normalizing rules and exclusions must still be reported.
+        if (IsFileFullyExcluded(config?.Exclusions, filePath))
+        {
+            // Snapshot rule config diagnostics before NormalizeExclusions clears the shared buffer.
+            var ruleConfigDiagCount = normalizedRules.ConfigurationDiagnostics.Count;
+            Diagnostic[]? ruleConfigDiags = null;
+            if (ruleConfigDiagCount > 0)
+            {
+                ruleConfigDiags = new Diagnostic[ruleConfigDiagCount];
+                for (var i = 0; i < ruleConfigDiagCount; i++)
+                {
+                    ruleConfigDiags[i] = normalizedRules.ConfigurationDiagnostics[i];
+                }
+            }
+
+            // Always normalize exclusions when arena is available — this validates rule IDs
+            // and file patterns even when the workflow failed to parse.
+            // Job-ID validation is skipped internally when no jobs are known.
+            var exclusionNormResult = arena is not null
+                ? NormalizeExclusions(config?.Exclusions, filePath, parseResult.Workflow ?? EmptyWorkflowForSuppression, utf8Yaml, arena)
+                : ExclusionsNormalization.Empty;
+
+            var configDiagnosticCount = ruleConfigDiagCount + exclusionNormResult.ConfigurationDiagnostics.Length;
+
+            DiagnosticList diagnostics = default;
+            if (configDiagnosticCount > 0)
+            {
+                var configurationDiagnostics = new Diagnostic[configDiagnosticCount];
+                var diagnosticIndex = 0;
+                if (ruleConfigDiags is not null)
+                {
+                    for (var i = 0; i < ruleConfigDiags.Length; i++)
+                    {
+                        configurationDiagnostics[diagnosticIndex++] = ruleConfigDiags[i];
+                    }
+                }
+                for (var i = 0; i < exclusionNormResult.ConfigurationDiagnostics.Length; i++)
+                {
+                    configurationDiagnostics[diagnosticIndex++] = exclusionNormResult.ConfigurationDiagnostics[i];
+                }
+
+                diagnostics = new DiagnosticList(configurationDiagnostics);
+            }
+
+            var (ruleCount, disabledIds) = GetRuleActivationMetadataForDocumentKind(normalizedRules.Rules, documentKind);
+            // Suppress parse diagnostics and fatal flag for fully-excluded files.
+            // ParseDiagnostics/HasFatalError must not leak suppressed parse state.
+            var suppressedParseResult = parseResult with { Diagnostics = default, HasFatalError = false };
+            return new LintResultData(suppressedParseResult, diagnostics)
+            {
+                SuppressionSummary = SuppressionSummary.Empty,
+                DocumentKind = documentKind,
+                ActiveRuleCount = ruleCount,
+                DisabledRuleCount = disabledIds.Length,
+                DisabledRuleIds = disabledIds,
+            };
+        }
+
         if (parseResult.HasFatalError || (parseResult.Workflow is null && parseResult.ActionMetadata is null))
         {
             DiagnosticList diagnostics = parseResult.Diagnostics;
@@ -1295,6 +1355,43 @@ public sealed class LintEngine
         return new RulesNormalization(_normalizedRulesDict, _configDiagnostics);
     }
 
+    /// <summary>
+    /// Checks whether the file is fully excluded by a file-level exclusion (Rules: null, Jobs: null).
+    /// This is a lightweight pre-check that avoids processing parse diagnostics and running rules.
+    /// </summary>
+    private static bool IsFileFullyExcluded(IReadOnlyList<LintExclusion>? exclusions, string filePath)
+    {
+        if (exclusions is null || exclusions.Count == 0)
+        {
+            return false;
+        }
+
+        var normalizedFilePath = NormalizePath(filePath);
+
+        for (var i = 0; i < exclusions.Count; i++)
+        {
+            var exclusion = exclusions[i];
+            // Only file-level exclusions: Rules must be null (all rules) and Jobs must be null/empty
+            if (exclusion.Rules is not null || (exclusion.Jobs is not null && exclusion.Jobs.Count > 0))
+            {
+                continue;
+            }
+
+            if (string.IsNullOrWhiteSpace(exclusion.File))
+            {
+                continue;
+            }
+
+            var normalizedPattern = NormalizeExclusionPattern(exclusion.File);
+            if (GlobMatch(normalizedPattern, normalizedFilePath))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
     private ExclusionsNormalization NormalizeExclusions(IReadOnlyList<LintExclusion>? exclusions, string filePath, Parsing.Ast.Workflow workflow, byte[] utf8Yaml, AstArena arena)
     {
         var normalizedFilePath = NormalizePath(filePath);
@@ -1339,7 +1436,7 @@ public sealed class LintEngine
                 normalizedRuleIds = ruleIds;
             }
 
-            if (exclusion.Jobs is not null)
+            if (exclusion.Jobs is not null && !knownJobIdSlices.IsEmpty)
             {
                 for (var j = 0; j < exclusion.Jobs.Count; j++)
                 {
