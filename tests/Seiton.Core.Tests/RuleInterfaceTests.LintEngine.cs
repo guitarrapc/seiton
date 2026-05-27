@@ -1994,6 +1994,8 @@ public sealed partial class RuleInterfaceTests
 
         // Dynamic shell (expression) → cannot safely determine fix syntax; no fix attached
         await Assert.That(diagnostic.Fix).IsNull();
+        // Help text should not be shown for simple references with expression shell
+        await Assert.That(diagnostic.Help).IsNull();
     }
 
     [Test]
@@ -2024,6 +2026,8 @@ public sealed partial class RuleInterfaceTests
 
         // Dynamic shell (expression) → cannot safely determine fix syntax; no fix attached
         await Assert.That(diagnostic.Fix).IsNull();
+        // Help text should not be shown for simple references with expression shell
+        await Assert.That(diagnostic.Help).IsNull();
     }
 
     [Test]
@@ -2048,6 +2052,8 @@ public sealed partial class RuleInterfaceTests
 
         // Dynamic shell (expression) → cannot safely determine fix syntax; no fix attached
         await Assert.That(diagnostic.Fix).IsNull();
+        // Help text should not be shown for simple references with expression shell
+        await Assert.That(diagnostic.Help).IsNull();
     }
 
     [Test]
@@ -3371,6 +3377,40 @@ public sealed partial class RuleInterfaceTests
 
         await Assert.That(configError.Message.Length).IsGreaterThan(0);
         await Assert.That(configError.Severity).IsEqualTo(DiagnosticSeverity.Error);
+    }
+
+    [Test]
+    public async Task LintEngine_ConfigExclusion_FileLevelExclusion_ParseError_SkipsJobIdValidation()
+    {
+        // When a file is fully excluded AND has parse errors (Workflow is null),
+        // job-ID validation in other exclusion entries must be skipped to avoid false positives.
+        var yaml = """
+        on: push
+        jobs:
+            build:
+                runs-on: ubuntu-latest
+                steps:
+                    - uses: actions/checkout@v4
+                      with:
+                        invalid_yaml: [unclosed
+        """u8.ToArray();
+
+        var config = new LintConfig
+        {
+            Exclusions =
+            [
+                new LintExclusion("**/*.yml", Rules: null),
+                new LintExclusion("**/*.yml", ["job-permissions-required"], Jobs: ["build"]),
+            ],
+        };
+
+        using var result = new LintEngine().Check(yaml, "workflows/broken.yml", config);
+
+        // Should NOT produce false "unknown job-id" diagnostics
+        var jobIdError = result.Diagnostics.FirstOrDefault(x =>
+            x.RuleId is null
+            && x.Message.Contains("unknown job-id", StringComparison.Ordinal));
+        await Assert.That(jobIdError).IsDefault();
     }
 
     [Test]
@@ -4922,6 +4962,9 @@ public sealed partial class RuleInterfaceTests
 
         // File-level exclusion (Rules: null, no Jobs) should suppress ALL diagnostics including parse errors
         await Assert.That(result.Diagnostics).IsEmpty();
+        // ParseDiagnostics and HasFatalError must also be suppressed — not leaked through LintResult
+        await Assert.That(result.ParseDiagnostics).IsEmpty();
+        await Assert.That(result.HasFatalError).IsFalse();
     }
 
     [Test]

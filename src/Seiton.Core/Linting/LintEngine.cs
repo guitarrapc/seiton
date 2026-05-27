@@ -287,7 +287,10 @@ public sealed class LintEngine
             }
 
             var (ruleCount, disabledIds) = GetRuleActivationMetadataForDocumentKind(normalizedRules.Rules, documentKind);
-            return new LintResultData(parseResult, diagnostics)
+            // Suppress parse diagnostics and fatal flag for fully-excluded files.
+            // ParseDiagnostics/HasFatalError must not leak suppressed parse state.
+            var suppressedParseResult = parseResult with { Diagnostics = default, HasFatalError = false };
+            return new LintResultData(suppressedParseResult, diagnostics)
             {
                 SuppressionSummary = SuppressionSummary.Empty,
                 DocumentKind = documentKind,
