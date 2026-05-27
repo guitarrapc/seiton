@@ -223,7 +223,7 @@ public sealed class FixCommandTests
             // The output must contain a diff (starts with ---) and a diagnostic (warning [...])
             await Assert.That(output).Contains("---");
             await Assert.That(output).Contains("warning [");
-            await Assert.That(errorOutput).Contains("1 warning remain in 1 file");
+            await Assert.That(errorOutput).Contains("1 warning remains in 1 file");
 
             // There must be a blank line (two consecutive newlines) between the diff block and the diagnostic
             // The diff ends with a context line, and then a blank line should appear before the diagnostic.
@@ -1529,7 +1529,7 @@ public sealed class FixCommandTests
             // Find the "Fixed" total line and the "remain" summary line.
             // The remain summary line uses "remain in" (not "(N remaining)" in the fix total).
             var fixedLineIndex = Array.FindIndex(lines, l => l.StartsWith("Fixed"));
-            var remainLineIndex = Array.FindIndex(lines, l => l.Contains("remain in") && !l.StartsWith("Fixed") && !l.TrimStart().StartsWith("workflow"));
+            var remainLineIndex = Array.FindIndex(lines, l => (l.Contains("remain in") || l.Contains("remains in")) && !l.StartsWith("Fixed") && !l.TrimStart().StartsWith("workflow"));
 
             // Fix summary must appear BEFORE remaining summary
             await Assert.That(fixedLineIndex).IsGreaterThanOrEqualTo(0);

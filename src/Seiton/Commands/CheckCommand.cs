@@ -289,7 +289,11 @@ internal static class CheckCommand
             if (parts.Length == 0)
                 writer.WriteLine("0 issues remain");
             else
-                writer.WriteLine($"{parts} remain in {filesWithIssues} {(filesWithIssues == 1 ? "file" : "files")}");
+            {
+                var total = errors + warnings + infos;
+                var verb = total == 1 ? "remains" : "remain";
+                writer.WriteLine($"{parts} {verb} in {filesWithIssues} {(filesWithIssues == 1 ? "file" : "files")}");
+            }
         }
         else
         {

@@ -58,14 +58,24 @@ internal static class RunContextDirectUseAnalyzer
         }
 
         // Priority 2: job defaults
-        if (currentJob?.Defaults?.Run.Shell is { HasValue: true } jobShell && !arena.GetStringExpression(jobShell).HasValue)
+        if (currentJob?.Defaults?.Run.Shell is { HasValue: true } jobShell)
         {
+            if (arena.GetStringExpression(jobShell).HasValue)
+            {
+                return false;
+            }
+
             return IsPowerShell(arena, jobShell, utf8Yaml);
         }
 
         // Priority 3: workflow defaults
-        if (currentWorkflow?.Defaults?.Run.Shell is { HasValue: true } wfShell && !arena.GetStringExpression(wfShell).HasValue)
+        if (currentWorkflow?.Defaults?.Run.Shell is { HasValue: true } wfShell)
         {
+            if (arena.GetStringExpression(wfShell).HasValue)
+            {
+                return false;
+            }
+
             return IsPowerShell(arena, wfShell, utf8Yaml);
         }
 

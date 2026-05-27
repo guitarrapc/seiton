@@ -401,6 +401,38 @@ public sealed class WriteSummaryTests
         await Assert.That(output).DoesNotContain("| Remaining");
     }
 
+    [Test]
+    public async Task WriteSummary_RemainMode_SingularIssue_UsesRemainsVerb()
+    {
+        var diagnostics = new List<Diagnostic>
+        {
+            new(DiagnosticSeverity.Warning, "msg", new TextRange(0, 1, 1, 1, 1, 2), RuleId: "unpinned-uses", FilePath: "/repo/workflow1.yml"),
+        };
+
+        using var sw = new StringWriter();
+        CheckCommand.WriteSummary(sw, diagnostics, 1, verbose: false, isRemainMode: true);
+        var output = sw.ToString();
+
+        await Assert.That(output).Contains("1 warning remains in 1 file");
+    }
+
+    [Test]
+    public async Task WriteSummary_RemainMode_PluralIssues_UsesRemainVerb()
+    {
+        var diagnostics = new List<Diagnostic>
+        {
+            new(DiagnosticSeverity.Warning, "msg", new TextRange(0, 1, 1, 1, 1, 2), RuleId: "unpinned-uses", FilePath: "/repo/workflow1.yml"),
+            new(DiagnosticSeverity.Error, "msg", new TextRange(0, 1, 2, 1, 2, 2), RuleId: "template-injection", FilePath: "/repo/workflow1.yml"),
+        };
+
+        using var sw = new StringWriter();
+        CheckCommand.WriteSummary(sw, diagnostics, 2, verbose: false, isRemainMode: true);
+        var output = sw.ToString();
+
+        await Assert.That(output).Contains("remain in 1 file");
+        await Assert.That(output).DoesNotContain("remains");
+    }
+
     // === Per-File Breakdown Table Format Tests (6b) ===
 
     [Test]
