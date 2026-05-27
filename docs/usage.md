@@ -122,7 +122,7 @@ Fixed 6 of 7 issues in 2 files (1 remaining)
 |-------------|------:|----------:|
 | ci.yml      |     4 |         0 |
 | release.yml |     2 |         1 |
-1 error remain in 1 file
+1 error remains in 1 file
 ```
 
 ### seiton init
