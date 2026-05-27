@@ -435,13 +435,19 @@ When no diagnostics exist: `0 issues in <N> file(s)`.
 
 Zero-count categories are omitted (e.g. `1 error in 3 files` when warnings and infos are zero).
 
-In `--verbose` mode with at least one diagnostic, a per-rule breakdown is appended:
+In `--verbose` mode with at least one diagnostic, a per-rule breakdown is emitted as a markdown-style table, separated from the preceding output by a blank line:
 
 ```
-  <rule-id>: <count>, <rule-id>: <count>, ...
+| Rule          | Count |
+|---------------|------:|
+| unpinned-uses |     3 |
+| template-injection |  2 |
 ```
 
-Rules are sorted by count descending, then by rule ID lexicographically.
+- In normal check mode, the count column is labeled "Count".
+- In fix/dry-run mode (when `isRemainMode` is true), the count column is labeled "Remaining" to reflect these are post-fix residual diagnostics.
+- Column widths are dynamically computed to align values.
+- Rules are sorted by count descending, then by rule ID lexicographically.
 
 In `--verbose` mode, rule activation metadata is emitted once per document kind seen in the run:
 

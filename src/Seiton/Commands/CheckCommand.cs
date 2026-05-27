@@ -306,7 +306,7 @@ internal static class CheckCommand
 
         if (verbose && diagnostics.Count > 0)
         {
-            WritePerRuleBreakdown(writer, diagnostics);
+            WritePerRuleBreakdown(writer, diagnostics, isRemainMode);
         }
 
         // Show hint when warnings cause non-zero exit but no errors exist
@@ -362,7 +362,7 @@ internal static class CheckCommand
         }
     }
 
-    private static void WritePerRuleBreakdown(TextWriter writer, List<Diagnostic> diagnostics)
+    private static void WritePerRuleBreakdown(TextWriter writer, List<Diagnostic> diagnostics, bool isRemainMode = false)
     {
         // Count per rule, excluding null RuleId (parser diagnostics)
         var ruleCounts = new Dictionary<string, int>(StringComparer.Ordinal);
@@ -386,17 +386,65 @@ internal static class CheckCommand
             return byCount != 0 ? byCount : string.Compare(a.Key, b.Key, StringComparison.Ordinal);
         });
 
-        var sb = new System.Text.StringBuilder();
-        sb.Append("  ");
+        // Column header depends on mode
+        var countHeader = isRemainMode ? "Remaining" : "Count";
+        var countHeaderLen = countHeader.Length;
+
+        // Compute column widths for table formatting
+        var maxRuleLen = 4; // "Rule".Length
         for (var i = 0; i < sorted.Count; i++)
         {
-            if (i > 0) sb.Append(", ");
-            sb.Append(sorted[i].Key);
-            sb.Append(": ");
-            sb.Append(sorted[i].Value);
+            if (sorted[i].Key.Length > maxRuleLen)
+                maxRuleLen = sorted[i].Key.Length;
         }
 
-        writer.WriteLine(sb.ToString());
+        var maxCountLen = countHeaderLen;
+        for (var i = 0; i < sorted.Count; i++)
+        {
+            var digits = CountDigits(sorted[i].Value);
+            if (digits > maxCountLen)
+                maxCountLen = digits;
+        }
+
+        // Write table with blank line separator before it
+        writer.WriteLine();
+        writer.Write("| Rule");
+        writer.Write(new string(' ', maxRuleLen - 4));
+        writer.Write(" | ");
+        writer.Write(countHeader);
+        writer.Write(new string(' ', maxCountLen - countHeaderLen));
+        writer.WriteLine(" |");
+
+        // Separator row (right-aligned count column)
+        writer.Write('|');
+        writer.Write(new string('-', maxRuleLen + 2));
+        writer.Write('|');
+        writer.Write(new string('-', maxCountLen + 1));
+        writer.WriteLine(":|");
+
+        // Data rows
+        for (var i = 0; i < sorted.Count; i++)
+        {
+            var rule = sorted[i].Key;
+            var count = sorted[i].Value;
+            writer.Write("| ");
+            writer.Write(rule);
+            writer.Write(new string(' ', maxRuleLen - rule.Length));
+            writer.Write(" | ");
+            var countStr = count.ToString();
+            writer.Write(new string(' ', maxCountLen - countStr.Length));
+            writer.Write(countStr);
+            writer.WriteLine(" |");
+        }
+    }
+
+    private static int CountDigits(int value)
+    {
+        if (value < 10) return 1;
+        if (value < 100) return 2;
+        if (value < 1000) return 3;
+        if (value < 10000) return 4;
+        return value.ToString().Length;
     }
 
     internal static void WriteNetworkFixHint(TextWriter writer, List<Diagnostic> diagnostics, bool enablePinNetwork, bool enableImageNetwork)

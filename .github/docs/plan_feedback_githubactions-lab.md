@@ -523,9 +523,34 @@ fix サマリの total 行に "of N" を追加し、found = fixed + remaining �
 - テスト4件追加: `Fix_Summary_ShowsFoundCount_InTotalLine`, `Fix_Summary_FoundCount_EqualsFixedPlusRemaining`, `Fix_Summary_DryRun_ShowsFoundCount`, `Fix_Summary_Check_ShowsFoundCount`
 - Benchmark: Ratio=1.00, AllocRatio=1.00 (影響なし)
 
-#### 6d: `--verbose` ルール別サマリのテーブル表示
+#### 6d: `--verbose` ルール別サマリのテーブル表示 ✅
 
 カンマ区切り1行 → マークダウン風テーブル。表タイトルで「ルール別集計」であることを明示する。
+
+**実装内容:**
+- `WritePerRuleBreakdown`: カンマ区切り1行をマークダウン風テーブルに変更
+- カラム幅は動的計算 (ルール名最大長 + カウント桁数)
+- 数値は右寄せ (`|---:|`)
+- モードに応じたヘッダー: 通常 `Count` / fix `Remaining`
+- ルールは件数降順ソート (変更なし)
+- テーブルの前に空行1行 (ファイル別テーブルとの区切り)
+- テスト6件追加/更新: table format, right-alignment, sort order, blank line separator, Remaining header, Count header
+- Benchmark: Ratio=1.00, AllocRatio=1.00 (CLI 出力パスのみの変更、LintEngine には影響なし)
+
+**出力例 (通常モード):**
+```
+| Rule                         | Count |
+|------------------------------|------:|
+| unpinned-uses                |     2 |
+| template-injection           |     1 |
+```
+
+**出力例 (fix モード):**
+```
+| Rule          | Remaining |
+|---------------|----------:|
+| unpinned-uses |         2 |
+```
 
 **通常モードの出力想定:**
 ```
