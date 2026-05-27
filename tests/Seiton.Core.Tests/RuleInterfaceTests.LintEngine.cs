@@ -1969,7 +1969,7 @@ public sealed partial class RuleInterfaceTests
     }
 
     [Test]
-    public async Task LintEngine_RunEnvContextDirectUse_Fix_ExpressionStepShell_DoesNotUseDefaultsShell()
+    public async Task LintEngine_RunEnvContextDirectUse_Fix_ExpressionStepShell_DoesNotAttachFix()
     {
         var yaml = """
         on: push
@@ -1992,17 +1992,12 @@ public sealed partial class RuleInterfaceTests
         using var result = engine.Check(sourceBytes, "run-env-fix-expression-shell-overrides-defaults.yml");
         var diagnostic = result.Diagnostics.First(x => x.RuleId == "run-env-context-direct-use");
 
-        await Assert.That(diagnostic.Fix is not null).IsTrue();
-
-        var fixedBytes = FixEngine.Apply(sourceBytes, diagnostic.Fix!.Value.Edits);
-        var fixedText = Encoding.UTF8.GetString(fixedBytes);
-
-        await Assert.That(fixedText.Contains("${VERSION}", StringComparison.Ordinal)).IsTrue();
-        await Assert.That(fixedText.Contains("$env:VERSION", StringComparison.Ordinal)).IsFalse();
+        // Dynamic shell (expression) → cannot safely determine fix syntax; no fix attached
+        await Assert.That(diagnostic.Fix).IsNull();
     }
 
     [Test]
-    public async Task LintEngine_RunEnvContextDirectUse_Fix_ExpressionJobDefaultsShell_DoesNotUseWorkflowDefaultsShell()
+    public async Task LintEngine_RunEnvContextDirectUse_Fix_ExpressionJobDefaultsShell_DoesNotAttachFix()
     {
         var yaml = """
         on: push
@@ -2027,13 +2022,32 @@ public sealed partial class RuleInterfaceTests
         using var result = engine.Check(sourceBytes, "run-env-fix-expression-job-defaults-shell.yml");
         var diagnostic = result.Diagnostics.First(x => x.RuleId == "run-env-context-direct-use");
 
-        await Assert.That(diagnostic.Fix is not null).IsTrue();
+        // Dynamic shell (expression) → cannot safely determine fix syntax; no fix attached
+        await Assert.That(diagnostic.Fix).IsNull();
+    }
 
-        var fixedBytes = FixEngine.Apply(sourceBytes, diagnostic.Fix!.Value.Edits);
-        var fixedText = Encoding.UTF8.GetString(fixedBytes);
+    [Test]
+    public async Task LintEngine_RunEnvContextDirectUse_Fix_ExpressionWorkflowDefaultsShell_DoesNotAttachFix()
+    {
+        var yaml = """
+        on: push
+        defaults:
+            run:
+                shell: ${{ inputs.shell }}
+        jobs:
+            build:
+                runs-on: ubuntu-latest
+                steps:
+                    - run: echo "${{ env.VERSION }}"
+        """;
 
-        await Assert.That(fixedText.Contains("${VERSION}", StringComparison.Ordinal)).IsTrue();
-        await Assert.That(fixedText.Contains("$env:VERSION", StringComparison.Ordinal)).IsFalse();
+        var sourceBytes = Encoding.UTF8.GetBytes(yaml);
+        var engine = new LintEngine([new RunEnvContextDirectUseRule()]);
+        using var result = engine.Check(sourceBytes, "run-env-fix-expression-wf-defaults.yml");
+        var diagnostic = result.Diagnostics.First(x => x.RuleId == "run-env-context-direct-use");
+
+        // Dynamic shell (expression) → cannot safely determine fix syntax; no fix attached
+        await Assert.That(diagnostic.Fix).IsNull();
     }
 
     [Test]
@@ -2391,6 +2405,29 @@ public sealed partial class RuleInterfaceTests
     }
 
     [Test]
+    public async Task LintEngine_RunSecretsContextDirectUse_DoesNotAttachFix_ExpressionShell()
+    {
+        var yaml = """
+        on: push
+        jobs:
+            build:
+                runs-on: ubuntu-latest
+                env:
+                    TOKEN: ${{ secrets.MY_TOKEN }}
+                steps:
+                    - shell: ${{ matrix.shell }}
+                      run: echo "${{ secrets.MY_TOKEN }}"
+        """;
+
+        using var result = new LintEngine([new RunSecretsContextDirectUseRule()])
+            .Check(Encoding.UTF8.GetBytes(yaml), "run-secrets-no-fix-expression-shell.yml");
+        var diagnostic = result.Diagnostics.First(x => x.RuleId == "run-secrets-context-direct-use");
+
+        // Dynamic shell (expression) → cannot safely determine fix syntax; no fix attached
+        await Assert.That(diagnostic.Fix is null).IsTrue();
+    }
+
+    [Test]
     public async Task LintEngine_RunInputsContextDirectUse_Fix_ReplacesSimpleReferenceWithMappedVariable()
     {
         var yaml = """
@@ -2441,6 +2478,29 @@ public sealed partial class RuleInterfaceTests
             .Check(Encoding.UTF8.GetBytes(yaml), "run-inputs-no-fix-ambiguous.yml");
         var diagnostic = result.Diagnostics.First(x => x.RuleId == "run-inputs-context-direct-use");
 
+        await Assert.That(diagnostic.Fix is null).IsTrue();
+    }
+
+    [Test]
+    public async Task LintEngine_RunInputsContextDirectUse_DoesNotAttachFix_ExpressionShell()
+    {
+        var yaml = """
+        on: workflow_dispatch
+        jobs:
+            build:
+                runs-on: ubuntu-latest
+                env:
+                    TARGET: ${{ inputs.target }}
+                steps:
+                    - shell: ${{ inputs.shell }}
+                      run: echo "${{ inputs.target }}"
+        """;
+
+        using var result = new LintEngine([new RunInputsContextDirectUseRule()])
+            .Check(Encoding.UTF8.GetBytes(yaml), "run-inputs-no-fix-expression-shell.yml");
+        var diagnostic = result.Diagnostics.First(x => x.RuleId == "run-inputs-context-direct-use");
+
+        // Dynamic shell (expression) → cannot safely determine fix syntax; no fix attached
         await Assert.That(diagnostic.Fix is null).IsTrue();
     }
 
@@ -4154,6 +4214,54 @@ public sealed partial class RuleInterfaceTests
         var diagnostic = result.Diagnostics.First(x => x.RuleId == "template-injection");
 
         // Wildcard paths can't generate a deterministic env var name
+        await Assert.That(diagnostic.Fix is null).IsTrue();
+    }
+
+    [Test]
+    public async Task LintEngine_TemplateInjection_NoFix_ExpressionShell()
+    {
+        var yaml = """
+        on: pull_request
+        jobs:
+            build:
+                runs-on: ubuntu-latest
+                steps:
+                    - shell: ${{ matrix.shell }}
+                      run: echo "${{ github.head_ref }}"
+        """;
+
+        var sourceBytes = Encoding.UTF8.GetBytes(yaml);
+        var engine = new LintEngine([new TemplateInjectionRule()]);
+        using var result = engine.Check(sourceBytes, "template-injection-no-fix-expression-shell.yml",
+            new LintConfig { Fix = new FixConfig { Enabled = true } });
+        var diagnostic = result.Diagnostics.First(x => x.RuleId == "template-injection");
+
+        // Dynamic shell (expression) → cannot safely determine fix syntax; no fix attached
+        await Assert.That(diagnostic.Fix is null).IsTrue();
+    }
+
+    [Test]
+    public async Task LintEngine_TemplateInjection_NoFix_ExpressionJobDefaultsShell()
+    {
+        var yaml = """
+        on: pull_request
+        jobs:
+            build:
+                runs-on: ubuntu-latest
+                defaults:
+                    run:
+                        shell: ${{ matrix.shell }}
+                steps:
+                    - run: echo "${{ github.head_ref }}"
+        """;
+
+        var sourceBytes = Encoding.UTF8.GetBytes(yaml);
+        var engine = new LintEngine([new TemplateInjectionRule()]);
+        using var result = engine.Check(sourceBytes, "template-injection-no-fix-expression-job-defaults.yml",
+            new LintConfig { Fix = new FixConfig { Enabled = true } });
+        var diagnostic = result.Diagnostics.First(x => x.RuleId == "template-injection");
+
+        // Dynamic shell from job defaults → cannot safely determine fix syntax; no fix attached
         await Assert.That(diagnostic.Fix is null).IsTrue();
     }
 

@@ -43,15 +43,17 @@ internal static class RunContextDirectUseAnalyzer
 
     /// <summary>
     /// Resolves effective shell with fallback: step.Shell → job.Defaults.Run.Shell → workflow.Defaults.Run.Shell.
+    /// Returns <c>true</c> for PowerShell, <c>false</c> for POSIX shells, or <c>null</c> when the shell
+    /// is expression-valued (dynamic) and the correct fix syntax cannot be determined at lint time.
     /// </summary>
-    internal static bool IsPowerShellWithDefaults(AstArena arena, Step step, Job? currentJob, Workflow? currentWorkflow, byte[] utf8Yaml)
+    internal static bool? IsPowerShellWithDefaults(AstArena arena, Step step, Job? currentJob, Workflow? currentWorkflow, byte[] utf8Yaml)
     {
         // Priority 1: step-level shell
         if (step.Exec is ExecRun run && run.Shell.HasValue)
         {
-            if (arena.GetStringExpression(run.Shell).HasValue)
+            if (ContainsExpressionMarker(run.Shell, arena))
             {
-                return false;
+                return null;
             }
 
             return IsPowerShell(arena, run.Shell, utf8Yaml);
@@ -60,9 +62,9 @@ internal static class RunContextDirectUseAnalyzer
         // Priority 2: job defaults
         if (currentJob?.Defaults?.Run.Shell is { HasValue: true } jobShell)
         {
-            if (arena.GetStringExpression(jobShell).HasValue)
+            if (ContainsExpressionMarker(jobShell, arena))
             {
-                return false;
+                return null;
             }
 
             return IsPowerShell(arena, jobShell, utf8Yaml);
@@ -71,9 +73,9 @@ internal static class RunContextDirectUseAnalyzer
         // Priority 3: workflow defaults
         if (currentWorkflow?.Defaults?.Run.Shell is { HasValue: true } wfShell)
         {
-            if (arena.GetStringExpression(wfShell).HasValue)
+            if (ContainsExpressionMarker(wfShell, arena))
             {
-                return false;
+                return null;
             }
 
             return IsPowerShell(arena, wfShell, utf8Yaml);
@@ -84,7 +86,7 @@ internal static class RunContextDirectUseAnalyzer
 
     internal static bool IsPowerShell(AstArena arena, StringNodeId shellNode, byte[] utf8Yaml)
     {
-        if (!shellNode.HasValue || arena.GetStringExpression(shellNode).HasValue)
+        if (!shellNode.HasValue || ContainsExpressionMarker(shellNode, arena))
         {
             return false;
         }

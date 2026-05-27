@@ -23,9 +23,12 @@
 
 1. `RunContextDirectUseAnalyzer` に `IsPowerShellWithDefaults(arena, step, job?, workflow?, utf8Yaml)` メソッドを追加
    - 解決順序: step.Shell → job.Defaults.Run.Shell → workflow.Defaults.Run.Shell
-   - 各レベルで expression (動的値) をスキップする安全性チェック付き
+   - 各レベルで expression (動的値) を検出すると `null` を返し、fix 生成を抑制する
+   - 検出方法: `ContainsExpressionMarker(node, arena)` (`${{` マーカーの有無をバイト列で判定)
+   - 戻り値: `true` = PowerShell, `false` = POSIX, `null` = 動的 (fix 不可)
 2. `RunEnvContextDirectUseRule` に `_currentWorkflow` / `_currentJob` フィールドを追加し、`VisitWorkflowPre`/`VisitJobPre` で追跡
 3. 全4ルール (`RunEnv`, `RunInputs`, `RunSecrets`, `TemplateInjection`) で `IsPowerShell` → `IsPowerShellWithDefaults` に更新
+4. 各ルールの `TryBuildFix` 内で `isPowerShell is null` の場合は `return false` (fix 非生成、診断は出力)
 
 ### テスト結果
 

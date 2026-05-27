@@ -241,17 +241,46 @@ public sealed class LintEngine
         _disabledRuleIds.Clear();
 
         // File-level exclusion (Rules: null, Jobs: null) short-circuits workflow diagnostics.
-        // Parse errors remain suppressed for fully-excluded files, but rule configuration
-        // diagnostics produced while normalizing rules must still be reported.
+        // Parse errors remain suppressed for fully-excluded files, but configuration
+        // diagnostics produced while normalizing rules and exclusions must still be reported.
         if (IsFileFullyExcluded(config?.Exclusions, filePath))
         {
-            DiagnosticList diagnostics = default;
-            if (normalizedRules.ConfigurationDiagnostics.Count > 0)
+            // Snapshot rule config diagnostics before NormalizeExclusions clears the shared buffer.
+            var ruleConfigDiagCount = normalizedRules.ConfigurationDiagnostics.Count;
+            Diagnostic[]? ruleConfigDiags = null;
+            if (ruleConfigDiagCount > 0)
             {
-                var configurationDiagnostics = new Diagnostic[normalizedRules.ConfigurationDiagnostics.Count];
-                for (var i = 0; i < normalizedRules.ConfigurationDiagnostics.Count; i++)
+                ruleConfigDiags = new Diagnostic[ruleConfigDiagCount];
+                for (var i = 0; i < ruleConfigDiagCount; i++)
                 {
-                    configurationDiagnostics[i] = normalizedRules.ConfigurationDiagnostics[i];
+                    ruleConfigDiags[i] = normalizedRules.ConfigurationDiagnostics[i];
+                }
+            }
+
+            // Normalize exclusions to surface invalid patterns/rule IDs even for excluded files.
+            // Use empty workflow when arena is unavailable (job-ID validation is skipped).
+            var exclusionWorkflow = parseResult.Workflow ?? EmptyWorkflowForSuppression;
+            var exclusionNormResult = arena is not null
+                ? NormalizeExclusions(config?.Exclusions, filePath, exclusionWorkflow, utf8Yaml, arena)
+                : ExclusionsNormalization.Empty;
+
+            var configDiagnosticCount = ruleConfigDiagCount + exclusionNormResult.ConfigurationDiagnostics.Length;
+
+            DiagnosticList diagnostics = default;
+            if (configDiagnosticCount > 0)
+            {
+                var configurationDiagnostics = new Diagnostic[configDiagnosticCount];
+                var diagnosticIndex = 0;
+                if (ruleConfigDiags is not null)
+                {
+                    for (var i = 0; i < ruleConfigDiags.Length; i++)
+                    {
+                        configurationDiagnostics[diagnosticIndex++] = ruleConfigDiags[i];
+                    }
+                }
+                for (var i = 0; i < exclusionNormResult.ConfigurationDiagnostics.Length; i++)
+                {
+                    configurationDiagnostics[diagnosticIndex++] = exclusionNormResult.ConfigurationDiagnostics[i];
                 }
 
                 diagnostics = new DiagnosticList(configurationDiagnostics);
