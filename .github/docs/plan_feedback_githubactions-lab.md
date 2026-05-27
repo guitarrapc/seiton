@@ -376,7 +376,7 @@ dotnet run -c Release
 
 ### 修正方針
 
-#### 6a: fix モードのサマリ順序を反転
+#### 6a: fix モードのサマリ順序を反転 ✅
 
 採用: B. before/after 統合形式を採用する。
 
@@ -392,20 +392,75 @@ Fixed 78 issues in 19 files (20 remaining)
 
 **After:**
 ```
-Fixed 78 issues in 19 files
+Fixed 78 issues in 19 files (20 remaining)
   file.yaml: fixed 16, remaining 0
   ...
-4 errors, 16 warnings remain in 9 files (20 issues remaining)
+4 errors, 16 warnings remain in 9 files
 ```
 
-B. または before/after 統合形式:
+B. before/after 統合形式 (実装済み):
 
 ```
-Checked 123 files: 82 errors, 16 warnings found
-Fixed 78 issues in 19 files
+Fixed 78 issues in 19 files (20 remaining)
+  file.yaml: fixed 16, remaining 0
   ...
-4 errors, 16 warnings remain in 9 files (20 issues)
+4 errors, 16 warnings remain in 9 files
 ```
+
+**実装結果:**
+
+変更ファイル:
+- `src/Seiton/Commands/FixCommand.cs`: `WriteFixSummary` のトータル行を先頭に移動 + `RunAsync` でサマリ出力順序を反転
+- `src/Seiton/Commands/CheckCommand.cs`: `WriteSummary` に `isRemainMode` パラメータ追加
+- `tests/Seiton.Tests/FixCommandTests.cs`: 4テスト追加 + 1テスト更新
+
+**テスト** (すべて GREEN):
+1. `Fix_Summary_Order_FixSummaryAppearsBeforeRemainSummary` — fix サマリが remain サマリより先に表示
+2. `Fix_Summary_Order_RemainSummaryUsesRemainWording` — remaining サマリが "remain" ワーディング使用
+3. `Fix_Summary_Order_DryRun_FixSummaryAppearsBeforeRemainSummary` — dry-run でも同様の順序
+4. `Fix_Summary_Order_TotalLineAppearsBeforePerFileDetails` — トータル行がファイル詳細より先
+
+**設計ポイント**:
+- `isRemainMode` は applied/dry-run のみ有効。check モードは何も適用されないため通常フォーマットを使用
+- "remain" モードでのファイル数は、remaining diagnostic がある実ファイル数を表示 (全チェックファイル数ではない)
+- `WriteFixSummary` はトータル行を先頭に出力し、その後にファイル詳細を出力 (行動 → 詳細 の自然な順序)
+- `fixedFiles` を2回イテレーション (トータル計算 + ファイル詳細) — 通常 < 100 エントリのため許容
+
+**動作確認:**
+```shell
+# --fix --dry-run
+dotnet run --project src/Seiton -- --fix --dry-run --oneline -c samples/readme/.github/seiton.yaml samples/readme/.github/workflows/test.yaml
+# 出力:
+#   Would fix 7 issues in 1 file (2 remaining)
+#     test.yaml: would fix 7, remaining 2
+#   2 warnings remain in 1 file
+
+# --fix --check (通常フォーマット使用 — "remain" なし)
+#   7 issues fixable in 1 file (2 remaining)
+#     test.yaml: fixable 7, remaining 2
+#   3 errors, 6 warnings in 1 file
+
+# --fix (all fixed)
+#   Fixed 1 issue in 1 file (0 remaining)
+#     test.yml: fixed 1, remaining 0
+#   0 issues remain
+```
+
+**ベンチマーク** (CoreLintBenchmark):
+
+| Size | FixEnabled | Mean | Allocated | Ratio | Alloc Ratio |
+|------|-----------|------|-----------|-------|-------------|
+| Small | False | - | 8.7 KB | 1.00 | 1.00 |
+| Small | True | - | 10.15 KB | 1.00 | 1.00 |
+| Medium | False | - | 69.17 KB | 1.00 | 1.00 |
+| Medium | True | 4,125 μs | 82.25 KB | 1.00 | 1.00 |
+| Large | False | 43,669 μs | 327.41 KB | 1.00 | 1.00 |
+| Large | True | 65,250 μs | 382.25 KB | 1.00 | 1.00 |
+
+**性能影響: なし** (Ratio=1.00, AllocRatio=1.00)
+- 変更は CLI レイヤー (`FixCommand`, `CheckCommand`) のみ。CoreLintBenchmark が測定する `LintEngine.Check` パスには影響なし
+- `WriteFixSummary` での `fixedFiles` 2回イテレーションは O(N) だが N は小さい (< 100)
+- `isRemainMode` での `HashSet<string>` は出力パスで1回のみアロケーション (negligible)
 
 #### 6b: ファイル一覧のテーブル表示
 

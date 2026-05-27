@@ -252,7 +252,7 @@ internal static class CheckCommand
     internal static void WriteSummary(List<Diagnostic> diagnostics, int fileCount, bool verbose = false, bool showExitHint = false, bool showPerFile = true)
         => WriteSummary(Console.Error, diagnostics, fileCount, verbose, showExitHint, showPerFile);
 
-    internal static void WriteSummary(TextWriter writer, List<Diagnostic> diagnostics, int fileCount, bool verbose = false, bool showExitHint = false, bool showPerFile = true)
+    internal static void WriteSummary(TextWriter writer, List<Diagnostic> diagnostics, int fileCount, bool verbose = false, bool showExitHint = false, bool showPerFile = true, bool isRemainMode = false)
     {
         var errors = 0;
         var warnings = 0;
@@ -272,10 +272,32 @@ internal static class CheckCommand
         if (warnings > 0) { if (parts.Length > 0) parts.Append(", "); parts.Append(warnings == 1 ? "1 warning" : $"{warnings} warnings"); }
         if (infos > 0) { if (parts.Length > 0) parts.Append(", "); parts.Append(infos == 1 ? "1 info" : $"{infos} infos"); }
 
-        if (parts.Length == 0)
-            writer.WriteLine($"0 issues in {fileCount} {(fileCount == 1 ? "file" : "files")}");
+        if (isRemainMode)
+        {
+            // In fix mode, use "remain" wording to clarify these are post-fix residual issues.
+            // Count files that actually have remaining diagnostics (not total files checked).
+            var filesWithIssues = 0;
+            HashSet<string>? seen = null;
+            for (var i = 0; i < diagnostics.Count; i++)
+            {
+                var file = diagnostics[i].FilePath;
+                if (file is null) continue;
+                seen ??= new HashSet<string>(StringComparer.Ordinal);
+                if (seen.Add(file)) filesWithIssues++;
+            }
+
+            if (parts.Length == 0)
+                writer.WriteLine("0 issues remain");
+            else
+                writer.WriteLine($"{parts} remain in {filesWithIssues} {(filesWithIssues == 1 ? "file" : "files")}");
+        }
         else
-            writer.WriteLine($"{parts} in {fileCount} {(fileCount == 1 ? "file" : "files")}");
+        {
+            if (parts.Length == 0)
+                writer.WriteLine($"0 issues in {fileCount} {(fileCount == 1 ? "file" : "files")}");
+            else
+                writer.WriteLine($"{parts} in {fileCount} {(fileCount == 1 ? "file" : "files")}");
+        }
 
         if (showPerFile && diagnostics.Count > 0)
         {

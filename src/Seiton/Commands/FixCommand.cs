@@ -385,15 +385,22 @@ internal static class FixCommand
                     CheckCommand.CreateAggregatedSuppressionSummary(totalSuppressed, suppressionCounts));
             }
 
-            CheckCommand.WriteSummary(errorWriter, allDiagnostics, resolvedFiles.Length, verbose, showExitHint: minSeverity is null, showPerFile: false);
-
-            // Write fix summary after standard diagnostic summary
+            // Write fix summary FIRST (what was done), then remaining summary (what's left).
+            // This order is more intuitive: action taken → consequences.
             if (fixedFiles is { Count: > 0 })
             {
                 var summaryMode = check ? FixSummaryMode.Check
                     : dryRun ? FixSummaryMode.DryRun
                     : FixSummaryMode.Applied;
                 WriteFixSummary(errorWriter, fixedFiles, allDiagnostics, summaryMode);
+                // Use "remain" wording only for applied/dry-run (where fixes were/would be applied).
+                // In check mode, nothing was changed so "remain" is misleading.
+                var useRemainMode = !check;
+                CheckCommand.WriteSummary(errorWriter, allDiagnostics, resolvedFiles.Length, verbose, showExitHint: minSeverity is null, showPerFile: false, isRemainMode: useRemainMode);
+            }
+            else
+            {
+                CheckCommand.WriteSummary(errorWriter, allDiagnostics, resolvedFiles.Length, verbose, showExitHint: minSeverity is null, showPerFile: false);
             }
 
             if (verboseLogger.IsEnabled)
@@ -514,9 +521,44 @@ internal static class FixCommand
         for (var i = 0; i < fixedFiles.Count; i++)
             fixedFileSet.Add(fixedFiles[i].FilePath);
 
-        // Per-file detail lines for files that had fixes
+        // Pre-compute totals for the summary line (which now goes first).
         var totalFixed = 0;
         var totalRemaining = 0;
+        for (var i = 0; i < fixedFiles.Count; i++)
+        {
+            var (filePath, fixedCount) = fixedFiles[i];
+            var remaining = 0;
+            remainingByFile?.TryGetValue(filePath, out remaining);
+            if (mode == FixSummaryMode.Check)
+                remaining = Math.Max(0, remaining - fixedCount);
+            totalFixed += fixedCount;
+            totalRemaining += remaining;
+        }
+
+        // Also count remaining from unfixed files
+        if (remainingByFile is not null)
+        {
+            foreach (var kvp in remainingByFile)
+            {
+                if (!fixedFileSet.Contains(kvp.Key))
+                    totalRemaining += kvp.Value;
+            }
+        }
+
+        // Total summary line FIRST (action taken / overview)
+        var totalFiles = fixedFiles.Count;
+        var fileWord = totalFiles == 1 ? "file" : "files";
+        if (mode == FixSummaryMode.Check)
+        {
+            writer.WriteLine($"{totalFixed} {(totalFixed == 1 ? "issue" : "issues")} fixable in {totalFiles} {fileWord} ({totalRemaining} remaining)");
+        }
+        else
+        {
+            var totalVerb = mode == FixSummaryMode.DryRun ? "Would fix" : "Fixed";
+            writer.WriteLine($"{totalVerb} {totalFixed} {(totalFixed == 1 ? "issue" : "issues")} in {totalFiles} {fileWord} ({totalRemaining} remaining)");
+        }
+
+        // Per-file detail lines for files that had fixes
         for (var i = 0; i < fixedFiles.Count; i++)
         {
             var (filePath, fixedCount) = fixedFiles[i];
@@ -531,9 +573,6 @@ internal static class FixCommand
             // Display file name only (not full path) for readability
             var displayName = Path.GetFileName(filePath);
             writer.WriteLine($"  {displayName}: {perFileVerb} {fixedCount}, remaining {remaining}");
-
-            totalFixed += fixedCount;
-            totalRemaining += remaining;
         }
 
         // Per-file detail lines for files with remaining diagnostics but NO fixes
@@ -559,22 +598,8 @@ internal static class FixCommand
                 {
                     var displayName = Path.GetFileName(unfixedFiles[i].FilePath);
                     writer.WriteLine($"  {displayName}: {perFileVerb} 0, remaining {unfixedFiles[i].Remaining}");
-                    totalRemaining += unfixedFiles[i].Remaining;
                 }
             }
-        }
-
-        // Total summary line
-        var totalFiles = fixedFiles.Count;
-        var fileWord = totalFiles == 1 ? "file" : "files";
-        if (mode == FixSummaryMode.Check)
-        {
-            writer.WriteLine($"{totalFixed} {(totalFixed == 1 ? "issue" : "issues")} fixable in {totalFiles} {fileWord} ({totalRemaining} remaining)");
-        }
-        else
-        {
-            var totalVerb = mode == FixSummaryMode.DryRun ? "Would fix" : "Fixed";
-            writer.WriteLine($"{totalVerb} {totalFixed} {(totalFixed == 1 ? "issue" : "issues")} in {totalFiles} {fileWord} ({totalRemaining} remaining)");
         }
     }
 

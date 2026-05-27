@@ -165,7 +165,7 @@ public sealed class FixCommandTests
             // The output must contain a diff (starts with ---) and a diagnostic (warning [...])
             await Assert.That(output).Contains("---");
             await Assert.That(output).Contains("warning [");
-            await Assert.That(errorOutput).Contains("1 warning in 1 file");
+            await Assert.That(errorOutput).Contains("1 warning remain in 1 file");
 
             // There must be a blank line (two consecutive newlines) between the diff block and the diagnostic
             // The diff ends with a context line, and then a blank line should appear before the diagnostic.
@@ -1406,6 +1406,273 @@ public sealed class FixCommandTests
             // For text format, diff must remain on stdout (existing behavior)
             await Assert.That(output).Contains("---");
             await Assert.That(output).Contains("+++");
+        }
+        finally
+        {
+            DeleteContainingDirectory(filePath);
+            DeleteContainingDirectory(configPath);
+        }
+    }
+
+    // === Fix Summary Order Tests (6a: fix summary before remain summary) ===
+
+    [Test]
+    public async Task Fix_Summary_Order_FixSummaryAppearsBeforeRemainSummary()
+    {
+        // Workflow with both fixable and non-fixable issues.
+        // Verify fix summary (e.g. "Fixed N issues") appears BEFORE the remaining diagnostic summary.
+        var configPath = CreateConfigFile(
+            """
+            rules:
+              runner-no-latest:
+                enabled: false
+              job-permissions-required:
+                enabled: false
+            """);
+        var filePath = CreateWorkflowFile(
+            """
+            on: push
+            jobs:
+              build:
+                runs-on: ubuntu-24.04
+                steps:
+                  - if: github.event_name == 'push'
+                    run: echo ok
+            """);
+
+        try
+        {
+            using var sw = new StringWriter();
+            using var stderr = new StringWriter();
+
+            await FixCommand.RunAsync(
+                [filePath],
+                config: configPath,
+                stdinFilename: "stdin.yml",
+                ignore: [],
+                minSeverity: null,
+                format: OutputFormat.Text,
+                oneline: true,
+                color: ColorMode.Never,
+                noColor: true,
+                verbose: false,
+                dryRun: false,
+                check: false,
+                enablePinNetwork: false,
+                enableImageNetwork: false,
+                includeActions: false,
+                output: sw,
+                error: stderr);
+
+            var errorOutput = stderr.ToString();
+            var lines = errorOutput.Split('\n', StringSplitOptions.RemoveEmptyEntries);
+
+            // Find the "Fixed" total line and the "remain" summary line.
+            // The remain summary line uses "remain in" (not "(N remaining)" in the fix total).
+            var fixedLineIndex = Array.FindIndex(lines, l => l.StartsWith("Fixed"));
+            var remainLineIndex = Array.FindIndex(lines, l => l.Contains("remain in") && !l.StartsWith("Fixed") && !l.TrimStart().StartsWith("workflow"));
+
+            // Fix summary must appear BEFORE remaining summary
+            await Assert.That(fixedLineIndex).IsGreaterThanOrEqualTo(0);
+            await Assert.That(remainLineIndex).IsGreaterThan(fixedLineIndex);
+        }
+        finally
+        {
+            DeleteContainingDirectory(filePath);
+            DeleteContainingDirectory(configPath);
+        }
+    }
+
+    [Test]
+    public async Task Fix_Summary_Order_RemainSummaryUsesRemainWording()
+    {
+        // Verify the remaining diagnostic summary uses "remain" wording in fix mode.
+        var configPath = CreateConfigFile(
+            """
+            rules:
+              runner-no-latest:
+                enabled: false
+              job-permissions-required:
+                enabled: false
+            """);
+        var filePath = CreateWorkflowFile(
+            """
+            on: push
+            jobs:
+              build:
+                runs-on: ubuntu-24.04
+                steps:
+                  - if: github.event_name == 'push'
+                    run: echo ok
+            """);
+
+        try
+        {
+            using var sw = new StringWriter();
+            using var stderr = new StringWriter();
+
+            await FixCommand.RunAsync(
+                [filePath],
+                config: configPath,
+                stdinFilename: "stdin.yml",
+                ignore: [],
+                minSeverity: null,
+                format: OutputFormat.Text,
+                oneline: true,
+                color: ColorMode.Never,
+                noColor: true,
+                verbose: false,
+                dryRun: false,
+                check: false,
+                enablePinNetwork: false,
+                enableImageNetwork: false,
+                includeActions: false,
+                output: sw,
+                error: stderr);
+
+            var errorOutput = stderr.ToString();
+            // The remaining summary must use "remain" wording (not just "in N files")
+            await Assert.That(errorOutput).Contains("remain");
+            // Should NOT use the old format "N errors, M warnings in N files" without "remain"
+            // (The fix summary per-file lines use "remaining" which is fine)
+            var lines = errorOutput.Split('\n', StringSplitOptions.RemoveEmptyEntries);
+            var diagnosticSummaryLine = lines.FirstOrDefault(l =>
+                (l.Contains("error") || l.Contains("warning")) && l.Contains("in") && l.Contains("file") && !l.Contains(":"));
+            if (diagnosticSummaryLine is not null)
+            {
+                await Assert.That(diagnosticSummaryLine).Contains("remain");
+            }
+        }
+        finally
+        {
+            DeleteContainingDirectory(filePath);
+            DeleteContainingDirectory(configPath);
+        }
+    }
+
+    [Test]
+    public async Task Fix_Summary_Order_DryRun_FixSummaryAppearsBeforeRemainSummary()
+    {
+        // Same test for dry-run mode
+        var configPath = CreateConfigFile(
+            """
+            rules:
+              runner-no-latest:
+                enabled: false
+              job-permissions-required:
+                enabled: false
+            """);
+        var filePath = CreateWorkflowFile(
+            """
+            on: push
+            jobs:
+              build:
+                runs-on: ubuntu-24.04
+                steps:
+                  - if: github.event_name == 'push'
+                    run: echo ok
+            """);
+
+        try
+        {
+            using var sw = new StringWriter();
+            using var stderr = new StringWriter();
+
+            await FixCommand.RunAsync(
+                [filePath],
+                config: configPath,
+                stdinFilename: "stdin.yml",
+                ignore: [],
+                minSeverity: null,
+                format: OutputFormat.Text,
+                oneline: true,
+                color: ColorMode.Never,
+                noColor: true,
+                verbose: false,
+                dryRun: true,
+                check: false,
+                enablePinNetwork: false,
+                enableImageNetwork: false,
+                includeActions: false,
+                output: sw,
+                error: stderr);
+
+            var errorOutput = stderr.ToString();
+            var lines = errorOutput.Split('\n', StringSplitOptions.RemoveEmptyEntries);
+
+            // Find the "Would fix" total line and the "remain" line
+            var fixedLineIndex = Array.FindIndex(lines, l => l.StartsWith("Would fix"));
+            var remainLineIndex = Array.FindIndex(lines, l =>
+                (l.Contains("error") || l.Contains("warning") || l.Contains("0 issues")) && l.Contains("remain"));
+
+            await Assert.That(fixedLineIndex).IsGreaterThanOrEqualTo(0);
+            await Assert.That(remainLineIndex).IsGreaterThan(fixedLineIndex);
+        }
+        finally
+        {
+            DeleteContainingDirectory(filePath);
+            DeleteContainingDirectory(configPath);
+        }
+    }
+
+    [Test]
+    public async Task Fix_Summary_Order_TotalLineAppearsBeforePerFileDetails()
+    {
+        // Verify the fix summary total line ("Fixed N issues in M files")
+        // appears BEFORE per-file detail lines ("  file.yaml: fixed N, remaining M")
+        var configPath = CreateConfigFile(
+            """
+            rules:
+              runner-no-latest:
+                enabled: false
+              job-permissions-required:
+                enabled: false
+            """);
+        var filePath = CreateWorkflowFile(
+            """
+            on: push
+            jobs:
+              build:
+                runs-on: ubuntu-24.04
+                steps:
+                  - if: github.event_name == 'push'
+                    run: echo ok
+            """);
+
+        try
+        {
+            using var sw = new StringWriter();
+            using var stderr = new StringWriter();
+
+            await FixCommand.RunAsync(
+                [filePath],
+                config: configPath,
+                stdinFilename: "stdin.yml",
+                ignore: [],
+                minSeverity: null,
+                format: OutputFormat.Text,
+                oneline: true,
+                color: ColorMode.Never,
+                noColor: true,
+                verbose: false,
+                dryRun: false,
+                check: false,
+                enablePinNetwork: false,
+                enableImageNetwork: false,
+                includeActions: false,
+                output: sw,
+                error: stderr);
+
+            var errorOutput = stderr.ToString();
+            var lines = errorOutput.Split('\n', StringSplitOptions.RemoveEmptyEntries);
+
+            // Total line: "Fixed N issues in M files"
+            var totalLineIndex = Array.FindIndex(lines, l => l.StartsWith("Fixed"));
+            // Per-file detail: starts with "  " (indented)
+            var perFileIndex = Array.FindIndex(lines, l => l.TrimStart().StartsWith("workflow.yml:") && l.Contains("fixed"));
+
+            await Assert.That(totalLineIndex).IsGreaterThanOrEqualTo(0);
+            await Assert.That(perFileIndex).IsGreaterThan(totalLineIndex);
         }
         finally
         {

@@ -483,17 +483,21 @@ hint: use --min-severity error to treat warnings as non-blocking in CI
 
 In `--fix` mode, when network-assisted flags are not enabled but relevant diagnostics exist (`unpinned-uses` or `unpinned-image`), a hint is emitted suggesting the appropriate `--enable-pin-network` / `--enable-image-network` flags.
 
-In `--fix` mode (not `--dry-run`, not `--check`), when at least one fix is applied, a fix summary is emitted to stderr after the standard diagnostic summary:
+In `--fix` mode (not `--dry-run`, not `--check`), when at least one fix is applied, a fix summary is emitted to stderr before the remaining diagnostic summary:
 
 ```
-  <filename>: fixed <N>, remaining <M>
-  <filename>: fixed <N>, remaining <M>
 Fixed <total> issue(s) in <file-count> file(s) (<remaining> remaining)
+  <filename>: fixed <N>, remaining <M>
+  <filename>: fixed <N>, remaining <M>
+<errors> error(s), <warnings> warning(s) remain in <affected-files> file(s)
 ```
 
-- Per-file lines show only files where fixes were applied (files with 0 fixes are omitted).
+- The total summary line appears first, followed by per-file detail lines.
+- Per-file lines show only files where fixes were applied (files with 0 fixes are omitted from the fixed list, but unfixed files with remaining diagnostics are shown with "fixed 0, remaining M").
 - `remaining` is the count of diagnostics still present for that file after ignore/severity filters.
-- When no fixes are applied (all diagnostics are unfixable), the fix summary is not emitted.
+- The "remain" summary line shows the severity breakdown of remaining diagnostics and the count of affected files.
+- When no fixes are applied (all diagnostics are unfixable), the fix summary is not emitted and the standard diagnostic summary is used instead.
+- In `--check` mode, the remaining diagnostic summary uses standard wording ("in N files") rather than "remain" because no fixes were applied.
 
 ---
 
