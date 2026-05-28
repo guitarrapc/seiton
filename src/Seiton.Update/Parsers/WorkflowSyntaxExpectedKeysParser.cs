@@ -82,7 +82,7 @@ internal sealed partial class WorkflowSyntaxExpectedKeysParser
     /// </summary>
     private static readonly List<ExpectedKeySection> AdditionalSections =
     [
-        new("concurrency", "Expected keys for concurrency section", ["cancel-in-progress", "group"]),
+        new("concurrency", "Expected keys for concurrency section", ["cancel-in-progress", "group", "queue"]),
         new("environment", "Expected keys for jobs.<job_id>.environment", ["deployment", "name", "url"]),
         new("schedule-entry", "Expected keys for on.schedule entry", ["cron", "timezone"]),
         new("webhook-event-option", "Expected keys for on.<event_name> options", ["branches", "branches-ignore", "paths", "paths-ignore", "tags", "tags-ignore", "types", "workflows"]),

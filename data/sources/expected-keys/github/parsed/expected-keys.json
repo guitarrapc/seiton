@@ -27,7 +27,8 @@
       "description": "Expected keys for concurrency section",
       "keys": [
         "cancel-in-progress",
-        "group"
+        "group",
+        "queue"
       ]
     },
     {

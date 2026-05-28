@@ -2808,4 +2808,112 @@ public sealed partial class RuleInterfaceTests
 
         await AssertRuleCases(new ExprUndefinedVarRule(), "expr-undefined-var", cases);
     }
+
+    [Test]
+    public async Task RuleRegression_ExprUndefinedVarRule_ConcurrencyQueue_TableDriven()
+    {
+        var cases = new[]
+        {
+            // Workflow-level concurrency.queue with valid context → OK
+            new RuleCase(
+            "ok-workflow-concurrency-queue-uses-github-context",
+            """
+            on: push
+            concurrency:
+                group: deploy-${{ github.ref }}
+                queue: ${{ github.event_name == 'push' && 'max' || 'single' }}
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - run: echo ok
+            """,
+            []),
+            // Job-level concurrency.queue with valid context → OK
+            new RuleCase(
+            "ok-job-concurrency-queue-uses-github-context",
+            """
+            on: push
+            jobs:
+                deploy:
+                    runs-on: ubuntu-latest
+                    concurrency:
+                        group: deploy-${{ github.ref }}
+                        queue: ${{ github.event_name == 'push' && 'max' || 'single' }}
+                    steps:
+                        - run: echo deploy
+            """,
+            []),
+            // Job-level concurrency.queue with inputs context under workflow_call → OK
+            new RuleCase(
+            "ok-job-concurrency-queue-uses-inputs",
+            """
+            on:
+                workflow_call:
+                    inputs:
+                        queue_mode:
+                            type: string
+            jobs:
+                deploy:
+                    runs-on: ubuntu-latest
+                    concurrency:
+                        group: deploy
+                        queue: ${{ inputs.queue_mode }}
+                    steps:
+                        - run: echo deploy
+            """,
+            []),
+            // Workflow-level concurrency.queue with unavailable context → ERROR
+            new RuleCase(
+            "ng-workflow-concurrency-queue-uses-steps-context",
+            """
+            on: push
+            concurrency:
+                group: deploy-${{ github.ref }}
+                queue: ${{ steps.prep.outputs.mode }}
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - run: echo ok
+            """,
+            ["context \"steps\" is not allowed here"]),
+            // Job-level concurrency.queue with unavailable context → ERROR
+            new RuleCase(
+            "ng-job-concurrency-queue-uses-steps-context",
+            """
+            on: push
+            jobs:
+                deploy:
+                    runs-on: ubuntu-latest
+                    concurrency:
+                        group: deploy
+                        queue: ${{ steps.prep.outputs.mode }}
+                    steps:
+                        - run: echo deploy
+            """,
+            ["context \"steps\" is not allowed here"]),
+            // Job-level concurrency.queue with undefined inputs property → ERROR
+            new RuleCase(
+            "ng-job-concurrency-queue-uses-undefined-input",
+            """
+            on:
+                workflow_call:
+                    inputs:
+                        environment:
+                            type: string
+            jobs:
+                deploy:
+                    runs-on: ubuntu-latest
+                    concurrency:
+                        group: deploy
+                        queue: ${{ inputs.missing_input }}
+                    steps:
+                        - run: echo deploy
+            """,
+            ["property \"missing_input\" is not defined in \"inputs\" context"]),
+        };
+
+        await AssertRuleCases(new ExprUndefinedVarRule(), "expr-undefined-var", cases);
+    }
 }

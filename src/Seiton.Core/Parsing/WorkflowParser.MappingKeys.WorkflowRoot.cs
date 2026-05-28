@@ -130,16 +130,18 @@ public static partial class WorkflowParser
     {
         Group = 0,
         CancelInProgress = 1,
+        Queue = 2,
     }
 
     private readonly struct ConcurrencyKeyTable : IUtf8OrderedKeyTable
     {
-        public static int KeyCount => 2;
+        public static int KeyCount => 3;
 
         public static ReadOnlySpan<byte> Utf8Key(int ordinal) => ordinal switch
         {
             0 => "group"u8,
             1 => "cancel-in-progress"u8,
+            2 => "queue"u8,
             _ => ReadOnlySpan<byte>.Empty,
         };
     }

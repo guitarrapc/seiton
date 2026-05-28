@@ -8,7 +8,7 @@ test.yaml:22:9: on.workflow_call.outputs has unexpected key "invalid_key" for "o
 test.yaml:23:5: on.workflow_call has unexpected key "invalid_key" for "workflow_call" section. expected one of "inputs", "outputs", "secrets" [syntax-check]
 test.yaml:27:5: defaults.run has unexpected key "invalid_key" for "run" section. expected one of "shell", "working-directory" [syntax-check]
 test.yaml:28:3: defaults has unexpected key "invalid_key" for "defaults" section. expected "run" [syntax-check]
-test.yaml:32:3: concurrency has unexpected key "invalid_key" for "concurrency" section. expected one of "cancel-in-progress", "group" [syntax-check]
+test.yaml:32:3: concurrency has unexpected key "invalid_key" for "concurrency" section. expected one of "cancel-in-progress", "group", "queue" [syntax-check]
 test.yaml:38:7: jobs.'test'.environment has unexpected key "invalid_key" for "environment" section. expected one of "deployment", "name", "url" [syntax-check]
 test.yaml:40:7: jobs.'test'.strategy has unexpected key "invalid_key" for "strategy" section. expected one of "fail-fast", "matrix", "max-parallel" [syntax-check]
 test.yaml:46:9: jobs.'test'.container.credentials has unexpected key "invalid_key" for "credentials" section. expected one of "password", "username" [syntax-check]

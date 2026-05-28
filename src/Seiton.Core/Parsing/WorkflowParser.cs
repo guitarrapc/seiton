@@ -1263,6 +1263,7 @@ public static partial class WorkflowParser
 
         StringNodeId groupNode = default;
         BoolNodeId cancelInProgressNode = default;
+        StringNodeId queueNode = default;
         ulong seen = 0;
         var mappingMark = reader.CurrentStart;
         var range = BuildScalarLocation(mappingMark, 1);
@@ -1295,7 +1296,13 @@ public static partial class WorkflowParser
                 var ck = (ConcurrencyMappingKey)concurrencyKeyOrdinal;
                 if (!TrySetBit(ref seen, concurrencyKeyOrdinal))
                 {
-                    var dupName = ck == ConcurrencyMappingKey.Group ? "group" : "cancel-in-progress";
+                    var dupName = ck switch
+                    {
+                        ConcurrencyMappingKey.Group => "group",
+                        ConcurrencyMappingKey.CancelInProgress => "cancel-in-progress",
+                        ConcurrencyMappingKey.Queue => "queue",
+                        _ => "unknown",
+                    };
                     AddError(ref diagnostics, $"concurrency contains duplicate key: {dupName}", innerKeyMark);
                     if (!reader.End)
                     {
@@ -1312,6 +1319,9 @@ public static partial class WorkflowParser
                         continue;
                     case ConcurrencyMappingKey.CancelInProgress:
                         cancelInProgressNode = ParseBoolOrExpression(ref reader, arena, ref diagnostics, expressionContext, "workflow concurrency.cancel-in-progress must be bool or expression");
+                        continue;
+                    case ConcurrencyMappingKey.Queue:
+                        queueNode = ParseConcurrencyQueue(ref reader, arena, ref diagnostics, expressionContext, sectionContext);
                         continue;
                     default:
                         if (!reader.End)
@@ -1355,8 +1365,52 @@ public static partial class WorkflowParser
         {
             Group = groupNode,
             CancelInProgress = cancelInProgressNode,
+            Queue = queueNode,
             Range = range,
         };
+    }
+
+    private static StringNodeId ParseConcurrencyQueue<TReader>(ref TReader reader, AstArena arena, ref PooledBuffer<Diagnostic> diagnostics, ExpressionValidationContext context, string sectionContext)
+        where TReader : IYamlStreamReader, allows ref struct
+    {
+        if (reader.End)
+        {
+            return default;
+        }
+
+        var queuePrefix = sectionContext.Length > 0
+            ? $"{sectionContext}.concurrency.queue"
+            : "workflow concurrency.queue";
+
+        var hasExpression = reader.CurrentKind == YamlEventKind.Scalar
+            && ExpressionScanHelpers.ContainsExpressionMarker(reader.GetScalarUtf8());
+
+        var node = ParseStringAndValidateExpression(
+            ref reader,
+            arena,
+            ref diagnostics,
+            context,
+            $"{queuePrefix} must be string",
+            parseWholeValueIfNoEmbedded: false);
+
+        if (!node.HasValue || hasExpression)
+        {
+            return node;
+        }
+
+        var queueValue = arena.GetStringValue(node);
+        if (queueValue.SequenceEqual("single"u8) || queueValue.SequenceEqual("max"u8))
+        {
+            return node;
+        }
+
+        var queueRange = arena.GetStringRange(node);
+        var queueText = Encoding.UTF8.GetString(queueValue);
+        AddError(
+            ref diagnostics,
+            $"{queuePrefix} '{queueText}' is invalid; must be one of single, max",
+            new TextPosition(queueRange.Start, queueRange.StartLine, queueRange.StartColumn));
+        return node;
     }
 
     private static BoolNodeId ParseBoolOrExpression<TReader>(ref TReader reader, AstArena arena, ref PooledBuffer<Diagnostic> diagnostics, ExpressionValidationContext context, string errorMessage)
