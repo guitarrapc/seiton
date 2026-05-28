@@ -212,7 +212,7 @@ public abstract class RuleBase : IRule
         // Guarantee: Diagnostic.Message is always single-line.
         // Rules may embed YAML scalar content containing newlines (block scalars);
         // collapsing here ensures clean output regardless of per-rule handling.
-        if (message.Contains('\n'))
+        if (message.AsSpan().IndexOfAny('\r', '\n') >= 0)
         {
             message = CollapseNewlines(message);
         }

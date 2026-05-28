@@ -23,6 +23,8 @@ public sealed partial class RuleInterfaceTests
             "on: push\njobs:\n  j:\n    if: |\n      needs.a.result != 'skipped' &&\n      needs.b.result != 'skipped'\n    runs-on: ubuntu-latest\n    steps:\n      - run: echo ok\n",
             // Single-line folded
             "on: push\njobs:\n  j:\n    runs-on: ubuntu-latest\n    steps:\n      - if: >\n          github.event_name == 'push'\n        run: echo ok\n",
+            // Short folded scalar (fold point within 32-byte anchor window)
+            "on: push\njobs:\n  j:\n    if: >\n      a ||\n      b\n    runs-on: ubuntu-latest\n    steps:\n      - run: echo ok\n",
         };
 
         var rules = new IRule[] { new IfExprWrapperRule() };

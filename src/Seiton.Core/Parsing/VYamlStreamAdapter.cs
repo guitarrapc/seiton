@@ -352,6 +352,15 @@ internal ref struct VYamlStreamAdapter : IYamlStreamReader
                 return new Utf8Slice(foldedStart, foldedLength);
             }
 
+            // Brute-force scan: when anchor-based resolution fails (fold point within
+            // anchor window makes anchor unmatchable), scan forward from cursor trying
+            // TryMeasureSourceLength at each candidate matching the first byte.
+            if (utf8.Length > 0 && TryBruteForceScan(utf8, source, out var bfStart, out var bfLength))
+            {
+                _scalarSliceCursor = bfStart + bfLength;
+                return new Utf8Slice(bfStart, bfLength);
+            }
+
             var mark = _parser.CurrentMark;
             var maxStart = source.Length - utf8.Length;
             if (maxStart < 0)
@@ -437,6 +446,31 @@ internal ref struct VYamlStreamAdapter : IYamlStreamReader
             }
 
             relativeStart += next + 1;
+        }
+
+        return false;
+    }
+
+    private bool TryBruteForceScan(ReadOnlySpan<byte> utf8, ReadOnlySpan<byte> source, out int start, out int length)
+    {
+        start = 0;
+        length = 0;
+
+        var firstByte = utf8[0];
+        var searchStart = _scalarSliceCursor;
+        if (searchStart < 0) searchStart = 0;
+
+        for (var pos = searchStart; pos <= source.Length - utf8.Length; pos++)
+        {
+            if (source[pos] != firstByte) continue;
+            if (IsInsideYamlComment(source, pos)) continue;
+
+            var lineIndentWidth = CountLineIndent(source, pos);
+            if (TryMeasureSourceLength(pos, utf8, lineIndentWidth, out length))
+            {
+                start = pos;
+                return true;
+            }
         }
 
         return false;

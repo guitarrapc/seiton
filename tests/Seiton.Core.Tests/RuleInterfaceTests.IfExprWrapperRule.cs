@@ -417,4 +417,20 @@ public sealed partial class RuleInterfaceTests
         await Assert.That(diagnostics[0].Message).DoesNotContain("\n");
         await Assert.That(diagnostics[0].Message).DoesNotContain("\r");
     }
+
+    [Test]
+    public async Task IfExprWrapperRule_FoldedBlockScalar_ShortCondition_NoAutoFix()
+    {
+        // Short folded scalar where fold point is within first 32 bytes of normalized value.
+        // Tests brute-force scan fallback when anchor-based resolution fails.
+        var yaml = "on: push\njobs:\n  j:\n    if: >\n      a ||\n      b\n    runs-on: ubuntu-latest\n    steps:\n      - run: echo ok\n";
+        using var result = new LintEngine([new IfExprWrapperRule()]).Check(
+            Encoding.UTF8.GetBytes(yaml), "test.yaml");
+        var diagnostics = result.Diagnostics.Where(d => d.RuleId == "if-expr-wrapper").ToArray();
+
+        await Assert.That(diagnostics).Count().IsGreaterThanOrEqualTo(1);
+        await Assert.That(diagnostics[0].Fix is null).IsTrue();
+        await Assert.That(diagnostics[0].Message).DoesNotContain("\n");
+        await Assert.That(diagnostics[0].Message).DoesNotContain("\r");
+    }
 }

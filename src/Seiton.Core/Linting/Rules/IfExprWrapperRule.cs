@@ -118,14 +118,14 @@ public sealed class IfExprWrapperRule() : RuleBase(RuleId.IfExprWrapper)
     /// <summary>Determines whether auto-fix is safe for this condition.</summary>
     private static bool CanOfferAutoFix(ReadOnlySpan<byte> raw, bool containsMarker)
     {
-        // Block scalars (trailing \n) — fix would break YAML structure
-        if (raw.Length > 0 && raw[raw.Length - 1] == (byte)'\n')
+        // Block scalars (trailing newline) — fix would break YAML structure
+        if (raw.Length > 0 && raw[raw.Length - 1] is (byte)'\n' or (byte)'\r')
         {
             return false;
         }
 
-        // Multi-line source content (internal \n) — block scalar, fix would break structure
-        if (raw.IndexOf((byte)'\n') >= 0)
+        // Multi-line source content (internal newline) — block scalar, fix would break structure
+        if (raw.IndexOfAny((byte)'\n', (byte)'\r') >= 0)
         {
             return false;
         }
@@ -188,7 +188,7 @@ public sealed class IfExprWrapperRule() : RuleBase(RuleId.IfExprWrapper)
         var rawText = System.Text.Encoding.UTF8.GetString(rawSpan);
 
         // Collapse internal newline+whitespace runs to single space for readable diagnostics
-        if (rawText.Contains('\n'))
+        if (rawText.AsSpan().IndexOfAny('\r', '\n') >= 0)
         {
             rawText = CollapseInternalWhitespace(rawText);
         }
