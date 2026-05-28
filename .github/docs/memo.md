@@ -1,14 +1,3 @@
-seitonを実行するとGitHub Actions Workflow/Actionsの適切でない設定を検出します。seitonの動作を確認、改善するためこのリポジトリでの検出をフィードバックします。使い勝手が素直か、ログから状況が把握しやすいかで評価してください。実行経過とフィードバック内容をまとめて、feedback_seiton.md にまとめてください。
-
-以下の流れでseitonを実行してください。
-- seitonで実行できます。seiton --helpでヘルプを出せます。seiton verisonでバージョンが分かります。seiton --fixで修正が可能です。seiton --fix --enable-pin-network --enable-image-network でネットワーク有効で修正がかかります。
-- 本リポジトリでseitonを実行して、出力押される結果から適切な検出か、不適切な検出じゃないかをハンドリングしてほしいです。自動修正で直る具体からも使い勝手を評価してほしいです。
-- Agentic Workflowは生成結果をいじれないため、基本的に除外すべきと考えられます。seiton configで除外してください。
-- seiton cliのヘルプからコンフィグを調整して検出すべきでないものを除外してください。
-- seitonで検出、コンフィグの調整をしたら反復的に最終的に好ましい状況になるまで繰り返してください。
-
----
-
 がよさそうですね。
 
 ここまでの調査、分析、議論と優先度付実装方針を.github/docs/plan_config_flat.md に出力してください。
@@ -48,6 +37,16 @@ seitonを実行するとGitHub Actions Workflow/Actionsの適切でない設定�
 
 PRを作るので、タイトルとPR Body、ベンチマークを英語でほしいです。マークダウンとして貼り付けられる形で出力してください。
 
+---
+
+seitonを実行するとGitHub Actions Workflow/Actionsの適切でない設定を検出します。seitonの動作を確認、改善するためこのリポジトリでの検出をフィードバックします。使い勝手が素直か、ログから状況が把握しやすいかで評価してください。実行経過とフィードバック内容をまとめて、feedback_seiton.md にまとめてください。
+
+以下の流れでseitonを実行してください。
+- seitonで実行できます。seiton --helpでヘルプを出せます。seiton verisonでバージョンが分かります。seiton --fixで修正が可能です。seiton --fix --enable-pin-network --enable-image-network でネットワーク有効で修正がかかります。
+- 本リポジトリでseitonを実行して、出力押される結果から適切な検出か、不適切な検出じゃないかをハンドリングしてほしいです。自動修正で直る具体からも使い勝手を評価してほしいです。
+- Agentic Workflowは生成結果をいじれないため、基本的に除外すべきと考えられます。seiton configで除外してください。
+- seiton cliのヘルプからコンフィグを調整して検出すべきでないものを除外してください。
+- seitonで検出、コンフィグの調整をしたら反復的に最終的に好ましい状況になるまで繰り返してください。
 
 ---
 
