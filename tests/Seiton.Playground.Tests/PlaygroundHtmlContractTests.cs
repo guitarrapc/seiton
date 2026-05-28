@@ -171,6 +171,22 @@ public sealed class PlaygroundHtmlContractTests
         await Assert.That(js).Contains("diag.severity");
     }
 
+    [Test]
+    public async Task Stylesheet_DefinesGutterMarkerInfoClass()
+    {
+        var path = Path.Combine(RepoPaths.FindRepoRoot(), "src", "Seiton.Playground", "wwwroot", "style.css");
+        var css = await File.ReadAllTextAsync(path);
+        await Assert.That(css).Contains(".gutter-marker--info");
+    }
+
+    [Test]
+    public async Task MainJs_GutterMarker_DistinguishesInfoFromWarning()
+    {
+        var path = Path.Combine(RepoPaths.FindRepoRoot(), "src", "Seiton.Playground", "wwwroot", "main.js");
+        var js = await File.ReadAllTextAsync(path);
+        await Assert.That(js).Contains("gutter-marker--info");
+    }
+
     private static async Task<string> ReadSourceIndexHtmlAsync()
     {
         var path = Path.Combine(RepoPaths.FindRepoRoot(), "src", "Seiton.Playground", "wwwroot", "index.html");

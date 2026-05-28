@@ -946,7 +946,11 @@ function renderResults(diagnostics) {
     const lineIndex = Math.max(0, (diag.line ?? 1) - 1);
     const marker = document.createElement('div');
     marker.className =
-      diag.severity === 'Error' ? 'gutter-marker gutter-marker--error' : 'gutter-marker gutter-marker--warning';
+      diag.severity === 'Error'
+        ? 'gutter-marker gutter-marker--error'
+        : diag.severity === 'Info'
+          ? 'gutter-marker gutter-marker--info'
+          : 'gutter-marker gutter-marker--warning';
     marker.textContent = '●';
     editor.setGutterMarker(lineIndex, 'error-marker', marker);
   }

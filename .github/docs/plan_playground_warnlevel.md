@@ -164,6 +164,24 @@ After implementation, update `Seiton_Playground_spec.md` § 4.1 Feature Catalog:
 4. **5rem severity column width**: Sufficient for "WARNING" text (longest label) without wasting space.
 5. **Defensive fallback**: `(diag.severity || 'error').toLowerCase()` handles null/undefined gracefully.
 
+---
+
+## Phase 2 Implementation Result
+
+### Changes Made
+
+| File | Change |
+|------|--------|
+| `src/Seiton.Playground/wwwroot/main.js` | Changed gutter marker className from binary (Error/else) to ternary (Error/Info/else) |
+| `src/Seiton.Playground/wwwroot/style.css` | Added `.gutter-marker--info { color: var(--info); }` |
+| `tests/.../PlaygroundHtmlContractTests.cs` | Added 2 contract tests: `.gutter-marker--info` CSS class, `gutter-marker--info` in main.js |
+| `.github/docs/Seiton_Playground_spec.md` | Updated § 4.1 (Gutter markers: Info = blue) and § 4.4 (added `--info` to custom properties list) |
+
+### Design Decisions
+
+1. **Ternary conditional**: Error first (most severe), then Info check, Warning as default fallback. Keeps Warning as the safe default for any unexpected severity value.
+2. **No performance impact**: Same number of DOM operations; only one additional string comparison for non-Error diagnostics.
+
 ### Performance
 
 - **C# backend**: No changes → zero performance impact. PlaygroundLintBenchmark confirmed unchanged results.

@@ -482,6 +482,10 @@ a.version-badge:focus-visible {
   color: var(--warning);
 }
 
+.gutter-marker--info {
+  color: var(--info);
+}
+
 #controls {
   display: flex;
   flex-direction: column;
