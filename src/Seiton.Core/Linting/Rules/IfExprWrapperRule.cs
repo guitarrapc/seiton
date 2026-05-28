@@ -187,12 +187,6 @@ public sealed class IfExprWrapperRule() : RuleBase(RuleId.IfExprWrapper)
 
         var rawText = System.Text.Encoding.UTF8.GetString(rawSpan);
 
-        // Collapse internal newline+whitespace runs to single space for readable diagnostics
-        if (rawText.AsSpan().IndexOfAny('\r', '\n') >= 0)
-        {
-            rawText = CollapseInternalWhitespace(rawText);
-        }
-
         var message = containsMarker
             ? $"if: condition \"{rawText}\" is not properly wrapped in ${{{{ }}}}; use a single ${{{{ expression }}}}"
             : $"if: condition \"{rawText}\" is missing ${{{{ }}}} wrapper; expressions should be wrapped in ${{{{ }}}}";
@@ -213,44 +207,5 @@ public sealed class IfExprWrapperRule() : RuleBase(RuleId.IfExprWrapper)
             || raw.SequenceEqual("failure()"u8)
             || raw.SequenceEqual("cancelled()"u8)
             || raw.SequenceEqual("success()"u8);
-    }
-
-    /// <summary>Collapses sequences containing at least one newline into a single space.</summary>
-    private static string CollapseInternalWhitespace(string text)
-    {
-        var sb = new System.Text.StringBuilder(text.Length);
-        var i = 0;
-        while (i < text.Length)
-        {
-            var ch = text[i];
-            if (ch == '\r' || ch == '\n')
-            {
-                // Trim trailing whitespace before the newline
-                while (sb.Length > 0 && sb[sb.Length - 1] is ' ' or '\t')
-                {
-                    sb.Length--;
-                }
-
-                i++;
-                // Skip remaining whitespace in the run
-                while (i < text.Length && text[i] is '\r' or '\n' or ' ' or '\t')
-                {
-                    i++;
-                }
-
-                // Insert single space separator (not at start or end)
-                if (sb.Length > 0 && i < text.Length)
-                {
-                    sb.Append(' ');
-                }
-            }
-            else
-            {
-                sb.Append(ch);
-                i++;
-            }
-        }
-
-        return sb.ToString();
     }
 }
