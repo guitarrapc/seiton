@@ -141,3 +141,39 @@ After implementation, update `Seiton_Playground_spec.md` § 4.1 Feature Catalog:
 - No performance concern — chip creation is O(n) where n = number of diagnostics (already iterating)
 - Existing `--danger` / `--warning` CSS variables reused; only `--info` is new
 - Both light and dark themes need `--info` defined
+
+---
+
+## Phase 1 Implementation Result
+
+### Changes Made
+
+| File | Change |
+|------|--------|
+| `src/Seiton.Playground/wwwroot/main.js` | Added severity chip `<td>` between position and message columns in `renderResults()` |
+| `src/Seiton.Playground/wwwroot/style.css` | Added `--info` variable (3 theme scopes), `--sev-*-bg`/`--sev-*-fg` variables (3×3), `.severity-chip` base + modifier classes, `td:nth-child(2)` width |
+| `tests/.../PlaygroundHtmlContractTests.cs` | Added 3 contract tests: severity chip CSS, `--info` variable, main.js severity chip creation |
+| `tests/.../PlaygroundLintRunnerTests.cs` | Added `RunToJson_SeverityValues_AreValidStrings` test |
+| `.github/docs/Seiton_Playground_spec.md` | Updated § 4.1 Feature Catalog (Results table, Gutter markers) |
+
+### Design Decisions
+
+1. **Translucent background + colored text**: Matches VS Code Problems panel pattern. Text uses the severity color (`--danger`/`--warning`/`--info`) on a 12–20% opacity version of that color as background. Works in both light and dark themes without contrast issues.
+2. **Per-theme CSS variables** (`--sev-error-bg`, `--sev-error-fg`, etc.): Avoids `color-mix()` compatibility concerns. Each theme defines exact rgba values.
+3. **Column order**: Position → Severity → Message. Reads naturally left-to-right: WHERE → HOW BAD → WHAT.
+4. **5rem severity column width**: Sufficient for "WARNING" text (longest label) without wasting space.
+5. **Defensive fallback**: `(diag.severity || 'error').toLowerCase()` handles null/undefined gracefully.
+
+### Performance
+
+- **C# backend**: No changes → zero performance impact. PlaygroundLintBenchmark confirmed unchanged results.
+- **JS frontend**: One additional `createElement('td')` + `createElement('span')` per diagnostic row. Negligible for typical counts (< 50 diagnostics). No extra WASM calls, no extra JSON parsing.
+- **CSS**: Three new class selectors per row evaluated by the browser CSS engine — negligible compared to CodeMirror's rendering overhead.
+
+| Benchmark | Mean (Small) | Mean (Large) | Allocated (Small) | Allocated (Large) |
+|-----------|-------------|-------------|-------------------|-------------------|
+| NoChange | 108 ns | 114 ns | 0 B | 0 B |
+| PartialChange | 1.18 ms | 3.92 ms | 136 KB | 382 KB |
+| FullChange | 258 µs | 1.38 ms | 51 KB | 170 KB |
+
+No regression vs baseline (change is JS-only, benchmark measures C# path).

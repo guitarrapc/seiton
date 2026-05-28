@@ -25,6 +25,13 @@
   --link-visited: #caaef0;
   --danger: #ff5370;
   --warning: #ffcb6b;
+  --info: #82aaff;
+  --sev-error-bg: rgba(255, 83, 112, 0.2);
+  --sev-error-fg: #ff5370;
+  --sev-warning-bg: rgba(255, 203, 107, 0.2);
+  --sev-warning-fg: #ffcb6b;
+  --sev-info-bg: rgba(130, 170, 255, 0.2);
+  --sev-info-fg: #82aaff;
   --tagline-fg: #90a4ae;
   --version-badge-fg: #b8d4ff;
   --version-badge-bg: rgba(130, 170, 255, 0.14);
@@ -84,6 +91,13 @@
     --danger: #b71c1c;
     /* Deep orange — 4.5:1+ on light gutter vs pale amber; stays visually separate from error red. */
     --warning: #bf360c;
+    --info: #1565c0;
+    --sev-error-bg: rgba(183, 28, 28, 0.12);
+    --sev-error-fg: #b71c1c;
+    --sev-warning-bg: rgba(191, 54, 12, 0.12);
+    --sev-warning-fg: #bf360c;
+    --sev-info-bg: rgba(21, 101, 192, 0.12);
+    --sev-info-fg: #1565c0;
     --tagline-fg: #5a6d7e;
     --version-badge-fg: #0d47a1;
     --version-badge-bg: rgba(21, 101, 192, 0.12);
@@ -143,6 +157,13 @@
   --danger: #b71c1c;
   /* Deep orange (not amber) — 4.5:1+ on light gutter (--editor-gutter-bg) while staying distinct from --danger red. */
   --warning: #bf360c;
+  --info: #1565c0;
+  --sev-error-bg: rgba(183, 28, 28, 0.12);
+  --sev-error-fg: #b71c1c;
+  --sev-warning-bg: rgba(191, 54, 12, 0.12);
+  --sev-warning-fg: #bf360c;
+  --sev-info-bg: rgba(21, 101, 192, 0.12);
+  --sev-info-fg: #1565c0;
   --tagline-fg: #5a6d7e;
   --version-badge-fg: #0d47a1;
   --version-badge-bg: rgba(21, 101, 192, 0.12);
@@ -816,6 +837,11 @@ a.version-badge:focus-visible {
   vertical-align: top;
 }
 
+.result-table td:nth-child(2) {
+  width: 5rem;
+  vertical-align: top;
+}
+
 .result-table tbody tr:last-child td {
   border-bottom: none;
 }
@@ -857,6 +883,20 @@ a.version-badge:focus-visible {
   border-radius: 3px;
   font-size: 0.72rem;
 }
+
+.severity-chip {
+  display: inline-block;
+  padding: 0.1rem 0.45rem;
+  border-radius: 3px;
+  font-size: 0.72rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+}
+.severity-chip--error { background: var(--sev-error-bg); color: var(--sev-error-fg); }
+.severity-chip--warning { background: var(--sev-warning-bg); color: var(--sev-warning-fg); }
+.severity-chip--info { background: var(--sev-info-bg); color: var(--sev-info-fg); }
 
 .notification {
   margin: 0.5rem 0.65rem;

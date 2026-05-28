@@ -917,6 +917,13 @@ function renderResults(diagnostics) {
     posCell.appendChild(posTag);
     row.appendChild(posCell);
 
+    const sevCell = document.createElement('td');
+    const sevTag = document.createElement('span');
+    sevTag.className = `severity-chip severity-chip--${(diag.severity || 'error').toLowerCase()}`;
+    sevTag.textContent = diag.severity || 'Error';
+    sevCell.appendChild(sevTag);
+    row.appendChild(sevCell);
+
     const descCell = document.createElement('td');
     appendTextLinkifyingUrls(descCell, diag.message ?? '');
     if (diag.fixable) {
