@@ -343,6 +343,15 @@ internal ref struct VYamlStreamAdapter : IYamlStreamReader
 
         if (start < 0)
         {
+            // Last resort before mark fallback: try normalized-slice resolution for folded
+            // block scalars with strip chomping (>-) where normalized value has no \n but
+            // source does (fold points produce spaces in normalized, newlines in source).
+            if (utf8.Length > 0 && TryResolveNormalizedSlice(utf8, out var foldedStart, out var foldedLength))
+            {
+                _scalarSliceCursor = foldedStart + foldedLength;
+                return new Utf8Slice(foldedStart, foldedLength);
+            }
+
             var mark = _parser.CurrentMark;
             var maxStart = source.Length - utf8.Length;
             if (maxStart < 0)
@@ -529,6 +538,36 @@ internal ref struct VYamlStreamAdapter : IYamlStreamReader
 
             if (source[sourceIndex] != valueByte)
             {
+                // Folded block scalar: space in normalized value corresponds to \n + indent in source
+                if (valueByte == (byte)' '
+                    && (source[sourceIndex] == (byte)'\n' || source[sourceIndex] == (byte)'\r'))
+                {
+                    // Skip CRLF or LF
+                    if (source[sourceIndex] == (byte)'\r'
+                        && sourceIndex + 1 < source.Length
+                        && source[sourceIndex + 1] == (byte)'\n')
+                    {
+                        sourceIndex += 2;
+                    }
+                    else
+                    {
+                        sourceIndex++;
+                    }
+
+                    // Skip indentation
+                    var skipped = 0;
+                    while (skipped < lineIndentWidth
+                        && sourceIndex < source.Length
+                        && (source[sourceIndex] == (byte)' ' || source[sourceIndex] == (byte)'\t'))
+                    {
+                        sourceIndex++;
+                        skipped++;
+                    }
+
+                    atLineStart = false;
+                    continue;
+                }
+
                 return false;
             }
 

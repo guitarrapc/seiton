@@ -124,6 +124,12 @@ public sealed class IfExprWrapperRule() : RuleBase(RuleId.IfExprWrapper)
             return false;
         }
 
+        // Multi-line source content (internal \n) — block scalar, fix would break structure
+        if (raw.IndexOf((byte)'\n') >= 0)
+        {
+            return false;
+        }
+
         // Contains ${{ marker but isn't a clean wrapper — fix would nest markers
         if (containsMarker)
         {
@@ -180,6 +186,13 @@ public sealed class IfExprWrapperRule() : RuleBase(RuleId.IfExprWrapper)
         }
 
         var rawText = System.Text.Encoding.UTF8.GetString(rawSpan);
+
+        // Collapse internal newline+whitespace runs to single space for readable diagnostics
+        if (rawText.Contains('\n'))
+        {
+            rawText = CollapseInternalWhitespace(rawText);
+        }
+
         var message = containsMarker
             ? $"if: condition \"{rawText}\" is not properly wrapped in ${{{{ }}}}; use a single ${{{{ expression }}}}"
             : $"if: condition \"{rawText}\" is missing ${{{{ }}}} wrapper; expressions should be wrapped in ${{{{ }}}}";
@@ -200,5 +213,33 @@ public sealed class IfExprWrapperRule() : RuleBase(RuleId.IfExprWrapper)
             || raw.SequenceEqual("failure()"u8)
             || raw.SequenceEqual("cancelled()"u8)
             || raw.SequenceEqual("success()"u8);
+    }
+
+    /// <summary>Collapses sequences containing at least one newline into a single space.</summary>
+    private static string CollapseInternalWhitespace(string text)
+    {
+        var sb = new System.Text.StringBuilder(text.Length);
+        var i = 0;
+        while (i < text.Length)
+        {
+            var ch = text[i];
+            if (ch == '\r' || ch == '\n')
+            {
+                sb.Append(' ');
+                i++;
+                // Skip remaining whitespace in the run
+                while (i < text.Length && text[i] is '\r' or '\n' or ' ' or '\t')
+                {
+                    i++;
+                }
+            }
+            else
+            {
+                sb.Append(ch);
+                i++;
+            }
+        }
+
+        return sb.ToString();
     }
 }

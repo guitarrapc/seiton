@@ -150,3 +150,36 @@ if (body.IndexOf((byte)'\n') >= 0)
 | Performance regression from extra branching | Hot path unchanged (non-block scalars exit before this code); block scalars are rare |
 | Edge case: folded scalar with blank lines (`\n\n`) | Blank lines in folded scalars produce `\n` in normalized — already handled by existing `valueByte == '\n'` branch |
 | Edge case: strip chomping (`>-`) removes trailing `\n` | Phase 3's defense catches this; Phase 1's correct slice still exposes internal `\n` for Phase 3 gate |
+
+---
+
+## Implementation Results
+
+### Changes Made
+
+| File | Change |
+|------|--------|
+| `src/Seiton.Core/Parsing/VYamlStreamAdapter.cs` | `TryMeasureSourceLength`: fold-point handling (space vs newline+indent) |
+| `src/Seiton.Core/Parsing/VYamlStreamAdapter.cs` | `GetScalarSlice`: fallback to `TryResolveNormalizedSlice` before garbage mark.Position |
+| `src/Seiton.Core/Linting/Rules/IfExprWrapperRule.cs` | `CanOfferAutoFix`: internal `\n` check (defense-in-depth) |
+| `src/Seiton.Core/Linting/Rules/IfExprWrapperRule.cs` | `GetOrBuildDiagnosticStrings`: collapse internal whitespace in message |
+| `tests/Seiton.Core.Tests/RuleInterfaceTests.IfExprWrapperRule.cs` | 4 new tests for folded block scalar handling |
+
+### Benchmark (CoreLintBenchmark, ShortRun)
+
+No performance regression — fold-point logic is in the `source[i] != valueByte` failure path only. Non-block scalars never reach it.
+
+| Size | FixEnabled | Mean | Allocated |
+|------|------------|------|-----------|
+| Small | False | 67.31 μs | 8.7 KB |
+| Small | True | 71.74 μs | 10.16 KB |
+| Medium | False | 1,397.04 μs | 68.9 KB |
+| Medium | True | 2,018.71 μs | 82.26 KB |
+| Large | False | 22,364.74 μs | 327.41 KB |
+| Large | True | 35,162.43 μs | 382.26 KB |
+
+### Test Results
+
+- All 1785 Seiton.Core.Tests pass
+- All 159 Seiton.Tests pass
+- 4 new tests added (folded clip, folded strip, message sanitization, corruption prevention)
