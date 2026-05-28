@@ -50,17 +50,6 @@ seitonを実行するとGitHub Actions Workflow/Actionsの適切でない設定�
 
 ---
 
-concurrencyにqueueキーが許可されるべきですが定義にないためparseエラーになるようです。https://docs.github.com/en/actions/how-tos/write-workflows/choose-when-workflows-run/control-workflow-concurrency.md
-
-```
-To allow more than one `pending` job or workflow run to wait in the same concurrency group, use the optional `queue` property. The `queue` property accepts the following values:
-
-* `single` (default): At most one job or workflow run can be `pending` in the concurrency group. When a new job or workflow run is queued, any existing `pending` job or workflow run in the same group is canceled and replaced.
-* `max`: Up to 100 jobs or workflow runs can be `pending` in the concurrency group. When the queue is full, any additional jobs or workflow runs are canceled.
-```
-
----
-
 `seiton` を実行したときに、総数のサマリーは出るのですがルールごとのサマリー件数は出ません。ファイル名はいらないと思うんですが、ルール毎の検出サマリって出したほうがいいと思いますかね?
 
 ---
@@ -75,3 +64,74 @@ Playgroundに警告レベルを表示する。
 ---
 
 Playgroundでコンフィグを設定できるようにする。Playgroundにseiton.yamlに相当するコンフィグを設定できるeditorペインを用意する。そこで、default timeout-minutesやenable-pin-network、no-runner-latestのマッピングを初期状態で設定しておいて、ユーザーが変更できるようにする。変更したコンフィグは、Playgroundでseitonを実行するときに反映されるようにする。これで、Fixでまとめて直る様子が確認できるようになる。
+
+---
+
+元のyamlに改行が含まれていると、seitonの出力でも改行付きで出してしまうようです。
+
+```
+D:\github\guitarrapc\githubactions-lab\.github\workflows\monthly-oss-repo-status.lock.yml:925:13: warning [if-expr-wrapper] if: condition " ubuntu-slim
+    permissions:
+      contents: read
+      issues: write
+    concurrency:
+      group: "gh-aw-conclusion-monthly-oss-repo-status"
+      cancel-in-progres" is missing ${{ }} wrapper; expressions should be wrapped in ${{ }}
+```
+
+
+---
+
+
+seiton --fix で以下が壊れているようです。
+
+```
+  conclusion:
+    needs:
+      - activation
+      - agent
+      - detection
+      - safe_outputs
+    if: >
+      always() && (needs.agent.result != 'skipped' || needs.activation.outputs.lockdown_check_failed == 'true' ||
+      needs.activation.outputs.stale_lock_file_failed == 'true')
+    runs-on: ubuntu-slim
+    permissions:
+      contents: read
+      issues: write
+    concurrency:
+      group: "gh-aw-conclusion-monthly-oss-repo-status"
+      cancel-in-progress: false
+      queue: max
+    outputs:
+      incomplete_count: ${{ steps.report_incomplete.outputs.incomplete_count }}
+      noop_message: ${{ steps.noop.outputs.noop_message }}
+      tools_reported: ${{ steps.missing_tool.outputs.tools_reported }}
+      total_count: ${{ steps.missing_tool.outputs.total_count }}
+```
+
+
+```
+  conclusion:
+    needs:
+      - activation
+      - agent
+      - detection
+      - safe_outputs
+    if: >
+      always() && (needs.agent.result != 'skipped' || needs.activation.outputs.lockdown_check_failed == 'true' ||
+      needs.activation.outputs.stale_lock_file_failed == 'true')
+    runs-on:${{  ubuntu-slim
+    permissions:
+      contents: read
+      issues: write
+    concurrency:
+      group: "gh-aw-conclusion-monthly-oss-repo-status"
+      cancel-in-progres }}s: false
+      queue: max
+    outputs:
+      incomplete_count: ${{ steps.report_incomplete.outputs.incomplete_count }}
+      noop_message: ${{ steps.noop.outputs.noop_message }}
+      tools_reported: ${{ steps.missing_tool.outputs.tools_reported }}
+      total_count: ${{ steps.missing_tool.outputs.total_count }}
+```
