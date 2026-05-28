@@ -45,7 +45,7 @@ seitonを実行するとGitHub Actions Workflow/Actionsの適切でない設定�
 - seitonで実行できます。seiton --helpでヘルプを出せます。seiton verisonでバージョンが分かります。seiton --fixで修正が可能です。seiton --fix --enable-pin-network --enable-image-network でネットワーク有効で修正がかかります。
 - 本リポジトリでseitonを実行して、出力押される結果から適切な検出か、不適切な検出じゃないかをハンドリングしてほしいです。自動修正で直る具体からも使い勝手を評価してほしいです。
 - Agentic Workflowは生成結果をいじれないため、基本的に除外すべきと考えられます。seiton configで除外してください。
-- seiton cliのヘルプからコンフィグを調整して検出すべきでないものを除外してください。
+- seiton cliの検知結果にあるヘルプメッセージからコンフィグを調整して検出すべきでないものを除外してください。
 - seitonで検出、コンフィグの調整をしたら反復的に最終的に好ましい状況になるまで繰り返してください。
 
 ---
