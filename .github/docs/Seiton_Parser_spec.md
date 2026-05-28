@@ -270,7 +270,7 @@ WorkflowCallEventOutput: `Name`, `Description?`, `Value` (required)
 
 - **scalar form**: group name only
 - **mapping form**: `group` (required), `cancel-in-progress?`, `queue?`
-- `queue` literal values are `single` or `max`; expression-bearing string values are also accepted and are validated only for expression syntax at parse time.
+- `queue` literal values are `single` or `max`; expression-bearing string values are also accepted and are validated at parse time for expression syntax and expression semantic/context-property rules. Only the literal `single`/`max` domain check is skipped for expression-bearing strings.
 
 ### 2.11 Environment
 

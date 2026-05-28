@@ -94,6 +94,8 @@ public sealed class ExprUndefinedVarRule() : RuleBase(RuleId.ExprUndefinedVar)
         {
             CheckNode(concurrency.Group, ExpressionValidationContext.Concurrency, static (rule, message, location, w) =>
                 rule.AddWorkflowError(w, message, location), workflow);
+            CheckNode(concurrency.Queue, ExpressionValidationContext.Concurrency, static (rule, message, location, w) =>
+                rule.AddWorkflowError(w, message, location), workflow);
         }
 
         if (workflow.Defaults?.Run is { } defaultsRun)
@@ -313,6 +315,8 @@ public sealed class ExprUndefinedVarRule() : RuleBase(RuleId.ExprUndefinedVar)
         if (job.Concurrency is { } jobConcurrency)
         {
             CheckNode(jobConcurrency.Group, ExpressionValidationContext.JobConcurrency, static (rule, message, location, targetJob) =>
+                rule.AddJobError(targetJob, message, location), job);
+            CheckNode(jobConcurrency.Queue, ExpressionValidationContext.JobConcurrency, static (rule, message, location, targetJob) =>
                 rule.AddJobError(targetJob, message, location), job);
         }
 
