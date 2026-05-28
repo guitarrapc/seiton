@@ -1321,7 +1321,7 @@ public static partial class WorkflowParser
                         cancelInProgressNode = ParseBoolOrExpression(ref reader, arena, ref diagnostics, expressionContext, "workflow concurrency.cancel-in-progress must be bool or expression");
                         continue;
                     case ConcurrencyMappingKey.Queue:
-                        queueNode = ParseStringAndValidateExpression(ref reader, arena, ref diagnostics, expressionContext, "workflow concurrency.queue must be string", parseWholeValueIfNoEmbedded: false);
+                        queueNode = ParseConcurrencyQueue(ref reader, arena, ref diagnostics, expressionContext);
                         continue;
                     default:
                         if (!reader.End)
@@ -1368,6 +1368,45 @@ public static partial class WorkflowParser
             Queue = queueNode,
             Range = range,
         };
+    }
+
+    private static StringNodeId ParseConcurrencyQueue<TReader>(ref TReader reader, AstArena arena, ref PooledBuffer<Diagnostic> diagnostics, ExpressionValidationContext context)
+        where TReader : IYamlStreamReader, allows ref struct
+    {
+        if (reader.End)
+        {
+            return default;
+        }
+
+        var hasExpression = reader.CurrentKind == YamlEventKind.Scalar
+            && ExpressionScanHelpers.ContainsExpressionMarker(reader.GetScalarUtf8());
+
+        var node = ParseStringAndValidateExpression(
+            ref reader,
+            arena,
+            ref diagnostics,
+            context,
+            "workflow concurrency.queue must be string",
+            parseWholeValueIfNoEmbedded: false);
+
+        if (!node.HasValue || hasExpression)
+        {
+            return node;
+        }
+
+        var queueValue = arena.GetStringValue(node);
+        if (queueValue.SequenceEqual("single"u8) || queueValue.SequenceEqual("max"u8))
+        {
+            return node;
+        }
+
+        var queueRange = arena.GetStringRange(node);
+        var queueText = Encoding.UTF8.GetString(queueValue);
+        AddError(
+            ref diagnostics,
+            $"workflow concurrency.queue '{queueText}' is invalid; must be one of single, max",
+            new TextPosition(queueRange.Start, queueRange.StartLine, queueRange.StartColumn));
+        return node;
     }
 
     private static BoolNodeId ParseBoolOrExpression<TReader>(ref TReader reader, AstArena arena, ref PooledBuffer<Diagnostic> diagnostics, ExpressionValidationContext context, string errorMessage)

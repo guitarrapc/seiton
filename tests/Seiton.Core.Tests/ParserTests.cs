@@ -1932,6 +1932,41 @@ public sealed class ParserTests
     }
 
     [Test]
+    public async Task Parse_ConcurrencyWithQueueExpression_PopulatesAst()
+    {
+        var yaml = NormalizeEol("""
+        on: push
+        concurrency:
+            group: deploy-${{ github.ref }}
+            queue: ${{ github.ref_name }}
+        jobs: {}
+        """);
+
+        var result = WorkflowParser.ParseDirect(Encoding.UTF8.GetBytes(yaml), "concurrency-queue-expression.yml", out var arena);
+
+        await Assert.That(result.HasFatalError).IsFalse();
+        await Assert.That(result.Diagnostics).IsEmpty();
+        await Assert.That(result.Workflow!.Concurrency is not null).IsTrue();
+        await Assert.That(result.Workflow.Concurrency!.Queue.HasValue).IsTrue();
+    }
+
+    [Test]
+    public async Task Parse_ConcurrencyWithInvalidQueueLiteral_ReportsError()
+    {
+        var yaml = NormalizeEol("""
+        on: push
+        concurrency:
+            group: deploy-${{ github.ref }}
+            queue: typo
+        jobs: {}
+        """);
+
+        var result = WorkflowParser.ParseDirect(Encoding.UTF8.GetBytes(yaml), "concurrency-queue-invalid.yml", out var arena);
+
+        await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("workflow concurrency.queue 'typo' is invalid; must be one of single, max", StringComparison.Ordinal))).IsTrue();
+    }
+
+    [Test]
     public async Task Parse_ConcurrencyWithoutQueue_QueueIsEmpty()
     {
         var yaml = NormalizeEol("""

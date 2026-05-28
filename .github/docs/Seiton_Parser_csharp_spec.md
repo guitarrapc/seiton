@@ -720,6 +720,8 @@ public sealed class Concurrency
     public TextRange Range { get; init; }
 }
 
+Implementation note: `Queue` accepts literal values `single` and `max`. When the scalar contains expression markers, the parser preserves the string node and validates only expression syntax.
+
 public sealed class Environment
 {
     public StringNode Name { get; init; }
@@ -931,6 +933,8 @@ private Concurrency? ParseConcurrency(IYamlStreamReader reader)   // Spec §3.8
 private Environment? ParseEnvironment(IYamlStreamReader reader)   // Spec §3.14
 private IReadOnlyDictionary<Utf8String, StringNode>? ParseOutputs(IYamlStreamReader reader) // Spec §3.10
 ```
+
+Implementation note (Spec §3.8 sync): `concurrency.queue` accepts literal `single` / `max` and reports a parser diagnostic for any other plain literal value. Expression-bearing strings are preserved and only expression syntax is validated.
 
 ### 3.6 Job Parse (Spec §3.9–§3.10)
 

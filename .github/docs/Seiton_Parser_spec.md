@@ -270,6 +270,7 @@ WorkflowCallEventOutput: `Name`, `Description?`, `Value` (required)
 
 - **scalar form**: group name only
 - **mapping form**: `group` (required), `cancel-in-progress?`, `queue?`
+- `queue` literal values are `single` or `max`; expression-bearing string values are also accepted and are validated only for expression syntax at parse time.
 
 ### 2.11 Environment
 
@@ -543,6 +544,7 @@ ParseConcurrency(node):
   if Mapping:
     "group" -> parseString
     "cancel-in-progress" -> parseBool
+    "queue" -> parseString; if plain literal, value must be `single` or `max`
     other -> unexpectedKey
   group is nil -> error
 ```

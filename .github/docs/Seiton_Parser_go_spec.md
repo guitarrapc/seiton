@@ -461,6 +461,8 @@ type Concurrency struct {
     Pos              *Pos
 }
 
+Implementation note: `Queue` accepts literal values `single` and `max`. When the scalar contains expression markers, the parser preserves the string node and validates only expression syntax.
+
 // Environment (Spec §2.11)
 type Environment struct {
     Name       *String
@@ -758,6 +760,7 @@ func (p *parser) parseOutputs(n *yaml.Node) map[string]*Output
 
 Implementation note (2026-04-15 sync):
 - `defaults` requires `run` and `concurrency` requires `group`; both are parser-level structural diagnostics in the shared spec rather than later semantic checks.
+- `concurrency.queue` accepts literal `single` / `max` and reports a parser diagnostic for any other plain literal value. Expression-bearing strings are preserved and only expression syntax is validated.
 
 ### 3.6 Job Parse (Spec §3.9–§3.10)
 
