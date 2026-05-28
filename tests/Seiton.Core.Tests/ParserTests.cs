@@ -2010,6 +2010,47 @@ public sealed class ParserTests
     }
 
     [Test]
+    public async Task Parse_JobConcurrencyWithInvalidQueueLiteral_UsesDottedPathFormat()
+    {
+        var yaml = NormalizeEol("""
+        on: push
+        jobs:
+            deploy:
+                runs-on: ubuntu-latest
+                concurrency:
+                    group: deploy
+                    queue: typo
+                steps:
+                    - run: echo deploy
+        """);
+
+        var result = WorkflowParser.ParseDirect(Encoding.UTF8.GetBytes(yaml), "job-concurrency-queue-invalid.yml", out var arena);
+
+        await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("jobs.'deploy'.concurrency.queue 'typo' is invalid; must be one of single, max", StringComparison.Ordinal))).IsTrue();
+    }
+
+    [Test]
+    public async Task Parse_JobConcurrencyQueueInvalidType_UsesDottedPathFormat()
+    {
+        var yaml = NormalizeEol("""
+        on: push
+        jobs:
+            deploy:
+                runs-on: ubuntu-latest
+                concurrency:
+                    group: deploy
+                    queue:
+                        nested: nope
+                steps:
+                    - run: echo deploy
+        """);
+
+        var result = WorkflowParser.ParseDirect(Encoding.UTF8.GetBytes(yaml), "job-concurrency-queue-type-invalid.yml", out var arena);
+
+        await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("jobs.'deploy'.concurrency.queue must be string", StringComparison.Ordinal))).IsTrue();
+    }
+
+    [Test]
     public async Task Parse_ConcurrencyQueueOnly_MissingGroup_ReportsError()
     {
         var yaml = NormalizeEol("""

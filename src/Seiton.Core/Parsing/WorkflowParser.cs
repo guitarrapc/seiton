@@ -1321,7 +1321,7 @@ public static partial class WorkflowParser
                         cancelInProgressNode = ParseBoolOrExpression(ref reader, arena, ref diagnostics, expressionContext, "workflow concurrency.cancel-in-progress must be bool or expression");
                         continue;
                     case ConcurrencyMappingKey.Queue:
-                        queueNode = ParseConcurrencyQueue(ref reader, arena, ref diagnostics, expressionContext);
+                        queueNode = ParseConcurrencyQueue(ref reader, arena, ref diagnostics, expressionContext, sectionContext);
                         continue;
                     default:
                         if (!reader.End)
@@ -1370,13 +1370,17 @@ public static partial class WorkflowParser
         };
     }
 
-    private static StringNodeId ParseConcurrencyQueue<TReader>(ref TReader reader, AstArena arena, ref PooledBuffer<Diagnostic> diagnostics, ExpressionValidationContext context)
+    private static StringNodeId ParseConcurrencyQueue<TReader>(ref TReader reader, AstArena arena, ref PooledBuffer<Diagnostic> diagnostics, ExpressionValidationContext context, string sectionContext)
         where TReader : IYamlStreamReader, allows ref struct
     {
         if (reader.End)
         {
             return default;
         }
+
+        var queuePrefix = sectionContext.Length > 0
+            ? $"{sectionContext}.concurrency.queue"
+            : "workflow concurrency.queue";
 
         var hasExpression = reader.CurrentKind == YamlEventKind.Scalar
             && ExpressionScanHelpers.ContainsExpressionMarker(reader.GetScalarUtf8());
@@ -1386,7 +1390,7 @@ public static partial class WorkflowParser
             arena,
             ref diagnostics,
             context,
-            "workflow concurrency.queue must be string",
+            $"{queuePrefix} must be string",
             parseWholeValueIfNoEmbedded: false);
 
         if (!node.HasValue || hasExpression)
@@ -1404,7 +1408,7 @@ public static partial class WorkflowParser
         var queueText = Encoding.UTF8.GetString(queueValue);
         AddError(
             ref diagnostics,
-            $"workflow concurrency.queue '{queueText}' is invalid; must be one of single, max",
+            $"{queuePrefix} '{queueText}' is invalid; must be one of single, max",
             new TextPosition(queueRange.Start, queueRange.StartLine, queueRange.StartColumn));
         return node;
     }
