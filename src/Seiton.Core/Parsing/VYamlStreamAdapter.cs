@@ -343,6 +343,24 @@ internal ref struct VYamlStreamAdapter : IYamlStreamReader
 
         if (start < 0)
         {
+            // Last resort before mark fallback: try normalized-slice resolution for folded
+            // block scalars with strip chomping (>-) where normalized value has no \n but
+            // source does (fold points produce spaces in normalized, newlines in source).
+            if (utf8.Length > 0 && TryResolveNormalizedSlice(utf8, out var foldedStart, out var foldedLength))
+            {
+                _scalarSliceCursor = foldedStart + foldedLength;
+                return new Utf8Slice(foldedStart, foldedLength);
+            }
+
+            // Brute-force scan: when anchor-based resolution fails (fold point within
+            // anchor window makes anchor unmatchable), scan forward from cursor trying
+            // TryMeasureSourceLength at each candidate matching the first byte.
+            if (utf8.Length > 0 && TryBruteForceScan(utf8, source, out var bfStart, out var bfLength))
+            {
+                _scalarSliceCursor = bfStart + bfLength;
+                return new Utf8Slice(bfStart, bfLength);
+            }
+
             var mark = _parser.CurrentMark;
             var maxStart = source.Length - utf8.Length;
             if (maxStart < 0)
@@ -428,6 +446,31 @@ internal ref struct VYamlStreamAdapter : IYamlStreamReader
             }
 
             relativeStart += next + 1;
+        }
+
+        return false;
+    }
+
+    private bool TryBruteForceScan(ReadOnlySpan<byte> utf8, ReadOnlySpan<byte> source, out int start, out int length)
+    {
+        start = 0;
+        length = 0;
+
+        var firstByte = utf8[0];
+        var searchStart = _scalarSliceCursor;
+        if (searchStart < 0) searchStart = 0;
+
+        for (var pos = searchStart; pos <= source.Length - utf8.Length; pos++)
+        {
+            if (source[pos] != firstByte) continue;
+            if (IsInsideYamlComment(source, pos)) continue;
+
+            var lineIndentWidth = CountLineIndent(source, pos);
+            if (TryMeasureSourceLength(pos, utf8, lineIndentWidth, out length))
+            {
+                start = pos;
+                return true;
+            }
         }
 
         return false;
@@ -529,6 +572,36 @@ internal ref struct VYamlStreamAdapter : IYamlStreamReader
 
             if (source[sourceIndex] != valueByte)
             {
+                // Folded block scalar: space in normalized value corresponds to \n + indent in source
+                if (valueByte == (byte)' '
+                    && (source[sourceIndex] == (byte)'\n' || source[sourceIndex] == (byte)'\r'))
+                {
+                    // Skip CRLF or LF
+                    if (source[sourceIndex] == (byte)'\r'
+                        && sourceIndex + 1 < source.Length
+                        && source[sourceIndex + 1] == (byte)'\n')
+                    {
+                        sourceIndex += 2;
+                    }
+                    else
+                    {
+                        sourceIndex++;
+                    }
+
+                    // Skip indentation
+                    var skipped = 0;
+                    while (skipped < lineIndentWidth
+                        && sourceIndex < source.Length
+                        && (source[sourceIndex] == (byte)' ' || source[sourceIndex] == (byte)'\t'))
+                    {
+                        sourceIndex++;
+                        skipped++;
+                    }
+
+                    atLineStart = false;
+                    continue;
+                }
+
                 return false;
             }
 

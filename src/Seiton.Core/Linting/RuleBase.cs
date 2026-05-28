@@ -1,4 +1,5 @@
-﻿using System.Text;
+﻿using System.Buffers;
+using System.Text;
 using Seiton.Core.Parsing;
 using Seiton.Core.Parsing.Ast;
 
@@ -208,6 +209,14 @@ public abstract class RuleBase : IRule
         IReadOnlyDictionary<string, string>? metadata = null,
         string? help = null)
     {
+        // Guarantee: Diagnostic.Message is always single-line.
+        // Rules may embed YAML scalar content containing newlines (block scalars);
+        // collapsing here ensures clean output regardless of per-rule handling.
+        if (message.AsSpan().IndexOfAny('\r', '\n') >= 0)
+        {
+            message = CollapseNewlines(message);
+        }
+
         diagnostics.Add(new Diagnostic(
             severity,
             message,
@@ -315,5 +324,68 @@ public abstract class RuleBase : IRule
     private protected static bool HasNodeValue(StringNodeId node, AstArena arena)
     {
         return node.HasValue && arena.GetStringSlice(node).Length > 0;
+    }
+
+    /// <summary>
+    /// Collapses CR/LF and surrounding whitespace into a single space.
+    /// Called only when <see cref="AddDiagnostic"/> detects a newline in the message.
+    /// </summary>
+    private static string CollapseNewlines(string text)
+    {
+        const int MaxStackAlloc = 512;
+        if (text.Length <= MaxStackAlloc)
+        {
+            Span<char> buffer = stackalloc char[text.Length];
+            var written = CollapseNewlinesCore(text, buffer);
+            return new string(buffer[..written]);
+        }
+
+        var rented = ArrayPool<char>.Shared.Rent(text.Length);
+        try
+        {
+            var written = CollapseNewlinesCore(text, rented.AsSpan(0, text.Length));
+            return new string(rented, 0, written);
+        }
+        finally
+        {
+            ArrayPool<char>.Shared.Return(rented);
+        }
+    }
+
+    private static int CollapseNewlinesCore(string text, Span<char> buffer)
+    {
+        var written = 0;
+        var i = 0;
+        while (i < text.Length)
+        {
+            var ch = text[i];
+            if (ch is '\r' or '\n')
+            {
+                // Trim trailing whitespace before the newline.
+                while (written > 0 && buffer[written - 1] is ' ' or '\t')
+                {
+                    written--;
+                }
+
+                // Skip contiguous newline + whitespace.
+                while (i < text.Length && (text[i] is '\r' or '\n' or ' ' or '\t'))
+                {
+                    i++;
+                }
+
+                // Insert single space separator (not at start or end).
+                if (written > 0 && i < text.Length)
+                {
+                    buffer[written++] = ' ';
+                }
+            }
+            else
+            {
+                buffer[written++] = ch;
+                i++;
+            }
+        }
+
+        return written;
     }
 }
