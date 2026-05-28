@@ -894,9 +894,21 @@ a.version-badge:focus-visible {
   letter-spacing: 0.02em;
   white-space: nowrap;
 }
-.severity-chip--error { background: var(--sev-error-bg); color: var(--sev-error-fg); }
-.severity-chip--warning { background: var(--sev-warning-bg); color: var(--sev-warning-fg); }
-.severity-chip--info { background: var(--sev-info-bg); color: var(--sev-info-fg); }
+
+.severity-chip--error {
+  background: var(--sev-error-bg);
+  color: var(--sev-error-fg);
+}
+
+.severity-chip--warning {
+  background: var(--sev-warning-bg);
+  color: var(--sev-warning-fg);
+}
+
+.severity-chip--info {
+  background: var(--sev-info-bg);
+  color: var(--sev-info-fg);
+}
 
 .notification {
   margin: 0.5rem 0.65rem;
