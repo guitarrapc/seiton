@@ -227,6 +227,23 @@ public sealed partial class RuleInterfaceTests
 
 
     [Test]
+    public async Task IfExprWrapperRule_LiteralBlockScalar_MultiLine_MessageDoesNotContainNewline()
+    {
+        // Multi-line literal block scalar `|` with 2+ content lines — message must be single-line
+        var yaml = "on: push\njobs:\n  build:\n    if: |\n      needs.a.result != 'skipped' &&\n      needs.b.result != 'skipped'\n    runs-on: ubuntu-latest\n    steps:\n      - run: echo ok\n";
+        using var result = new LintEngine([new IfExprWrapperRule()]).Check(
+            Encoding.UTF8.GetBytes(yaml), "test.yaml");
+        var diagnostics = result.Diagnostics.Where(d => d.RuleId == "if-expr-wrapper").ToArray();
+
+        await Assert.That(diagnostics).Count().IsGreaterThanOrEqualTo(1);
+        await Assert.That(diagnostics[0].Message).DoesNotContain("\n");
+        // Both lines must appear (collapsed into one)
+        await Assert.That(diagnostics[0].Message).Contains("needs.a.result");
+        await Assert.That(diagnostics[0].Message).Contains("needs.b.result");
+    }
+
+
+    [Test]
     public async Task IfExprWrapperRule_BlockScalar_NoAutoFix()
     {
         // Block scalar `if: |\n  expr\n` must NOT offer auto-fix (trailing \n is structural)

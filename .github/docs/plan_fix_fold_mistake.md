@@ -163,7 +163,7 @@ if (body.IndexOf((byte)'\n') >= 0)
 | `src/Seiton.Core/Parsing/VYamlStreamAdapter.cs` | `GetScalarSlice`: fallback to `TryResolveNormalizedSlice` before garbage mark.Position |
 | `src/Seiton.Core/Linting/Rules/IfExprWrapperRule.cs` | `CanOfferAutoFix`: internal `\n` check (defense-in-depth) |
 | `src/Seiton.Core/Linting/Rules/IfExprWrapperRule.cs` | `GetOrBuildDiagnosticStrings`: collapse internal whitespace in message |
-| `tests/Seiton.Core.Tests/RuleInterfaceTests.IfExprWrapperRule.cs` | 4 new tests for folded block scalar handling |
+| `tests/Seiton.Core.Tests/RuleInterfaceTests.IfExprWrapperRule.cs` | 6 new tests for folded/literal block scalar handling |
 
 ### Benchmark (CoreLintBenchmark, ShortRun)
 
@@ -180,6 +180,19 @@ No performance regression — fold-point logic is in the `source[i] != valueByte
 
 ### Test Results
 
-- All 1785 Seiton.Core.Tests pass
+- All 1787 Seiton.Core.Tests pass
 - All 159 Seiton.Tests pass
-- 4 new tests added (folded clip, folded strip, message sanitization, corruption prevention)
+- 6 new tests added (folded clip, folded strip, folded CRLF, message sanitization, literal multi-line message, corruption prevention)
+
+### Phase 2 Performance Analysis
+
+**`CollapseInternalWhitespace` design:**
+- Guard: `rawText.Contains('\n')` — O(n) SIMD-accelerated scan, fast-path returns false for single-line scalars (99%+ of cases)
+- Allocations: Zero on common path. `StringBuilder(text.Length)` only on rare block-scalar diagnostic path
+- Algorithm: Single O(n) pass, no regex, pre-allocated capacity prevents resizing
+- Impact: Zero measurable impact on benchmark (identical allocation numbers)
+
+**Why no regression**: The message sanitization code executes ONLY when:
+1. A diagnostic is emitted (not hot path)
+2. The raw value string contains `\n` (block scalars only)
+3. Both conditions are rare — typical workflows use plain or quoted scalars for `if:`
