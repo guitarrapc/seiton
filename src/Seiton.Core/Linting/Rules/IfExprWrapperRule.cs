@@ -225,12 +225,23 @@ public sealed class IfExprWrapperRule() : RuleBase(RuleId.IfExprWrapper)
             var ch = text[i];
             if (ch == '\r' || ch == '\n')
             {
-                sb.Append(' ');
+                // Trim trailing whitespace before the newline
+                while (sb.Length > 0 && sb[sb.Length - 1] is ' ' or '\t')
+                {
+                    sb.Length--;
+                }
+
                 i++;
                 // Skip remaining whitespace in the run
                 while (i < text.Length && text[i] is '\r' or '\n' or ' ' or '\t')
                 {
                     i++;
+                }
+
+                // Insert single space separator (not at start or end)
+                if (sb.Length > 0 && i < text.Length)
+                {
+                    sb.Append(' ');
                 }
             }
             else

@@ -362,7 +362,7 @@ public abstract class RuleBase : IRule
             if (ch is '\r' or '\n')
             {
                 // Trim trailing whitespace before the newline.
-                while (written > 0 && buffer[written - 1] == ' ')
+                while (written > 0 && buffer[written - 1] is ' ' or '\t')
                 {
                     written--;
                 }
