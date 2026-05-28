@@ -25,6 +25,13 @@
   --link-visited: #caaef0;
   --danger: #ff5370;
   --warning: #ffcb6b;
+  --info: #82aaff;
+  --sev-error-bg: rgba(255, 83, 112, 0.2);
+  --sev-error-fg: #ff5370;
+  --sev-warning-bg: rgba(255, 203, 107, 0.2);
+  --sev-warning-fg: #ffcb6b;
+  --sev-info-bg: rgba(130, 170, 255, 0.2);
+  --sev-info-fg: #82aaff;
   --tagline-fg: #90a4ae;
   --version-badge-fg: #b8d4ff;
   --version-badge-bg: rgba(130, 170, 255, 0.14);
@@ -82,8 +89,15 @@
     --accent: #1545f0;
     --link-visited: #6a1b9a;
     --danger: #b71c1c;
-    /* Deep orange — 4.5:1+ on light gutter vs pale amber; stays visually separate from error red. */
-    --warning: #bf360c;
+    /* Dark amber — 4.86:1 on white, clearly distinct hue from --danger red. */
+    --warning: #9a6700;
+    --info: #1565c0;
+    --sev-error-bg: rgba(183, 28, 28, 0.12);
+    --sev-error-fg: #b71c1c;
+    --sev-warning-bg: rgba(154, 103, 0, 0.12);
+    --sev-warning-fg: #9a6700;
+    --sev-info-bg: rgba(21, 101, 192, 0.12);
+    --sev-info-fg: #1565c0;
     --tagline-fg: #5a6d7e;
     --version-badge-fg: #0d47a1;
     --version-badge-bg: rgba(21, 101, 192, 0.12);
@@ -141,8 +155,15 @@
   --accent: #1545f0;
   --link-visited: #6a1b9a;
   --danger: #b71c1c;
-  /* Deep orange (not amber) — 4.5:1+ on light gutter (--editor-gutter-bg) while staying distinct from --danger red. */
-  --warning: #bf360c;
+  /* Dark amber — 4.86:1 on white, clearly distinct hue from --danger red. */
+  --warning: #9a6700;
+  --info: #1565c0;
+  --sev-error-bg: rgba(183, 28, 28, 0.12);
+  --sev-error-fg: #b71c1c;
+  --sev-warning-bg: rgba(154, 103, 0, 0.12);
+  --sev-warning-fg: #9a6700;
+  --sev-info-bg: rgba(21, 101, 192, 0.12);
+  --sev-info-fg: #1565c0;
   --tagline-fg: #5a6d7e;
   --version-badge-fg: #0d47a1;
   --version-badge-bg: rgba(21, 101, 192, 0.12);
@@ -459,6 +480,10 @@ a.version-badge:focus-visible {
 
 .gutter-marker--warning {
   color: var(--warning);
+}
+
+.gutter-marker--info {
+  color: var(--info);
 }
 
 #controls {
@@ -816,12 +841,29 @@ a.version-badge:focus-visible {
   vertical-align: top;
 }
 
+.result-table td:nth-child(2) {
+  width: 5rem;
+  vertical-align: top;
+}
+
 .result-table tbody tr:last-child td {
   border-bottom: none;
 }
 
 .results-column .notification {
   font-size: 16px;
+}
+
+.result-table tbody tr[data-severity='error'] {
+  border-left: 3px solid var(--danger);
+}
+
+.result-table tbody tr[data-severity='warning'] {
+  border-left: 3px solid var(--warning);
+}
+
+.result-table tbody tr[data-severity='info'] {
+  border-left: 3px solid var(--info);
 }
 
 .result-table tbody tr:hover {
@@ -856,6 +898,32 @@ a.version-badge:focus-visible {
   color: var(--fix-chip-fg);
   border-radius: 3px;
   font-size: 0.72rem;
+}
+
+.severity-chip {
+  display: inline-block;
+  padding: 0.1rem 0.45rem;
+  border-radius: 3px;
+  font-size: 0.72rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+}
+
+.severity-chip--error {
+  background: var(--sev-error-bg);
+  color: var(--sev-error-fg);
+}
+
+.severity-chip--warning {
+  background: var(--sev-warning-bg);
+  color: var(--sev-warning-fg);
+}
+
+.severity-chip--info {
+  background: var(--sev-info-bg);
+  color: var(--sev-info-fg);
 }
 
 .notification {

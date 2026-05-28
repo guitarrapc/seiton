@@ -135,8 +135,8 @@ Detection pattern: catch errors matching `"runtime already exited"` from WASM in
 |---|---|
 | YAML editor | CodeMirror 5 with yaml mode, auto-grow (`viewportMargin: Infinity`), line numbers, active line highlight |
 | Real-time lint | Debounce 300ms, immediate on paste, staleness check |
-| Results table | Position chip + message + ruleId chip + fixable chip per diagnostic |
-| Gutter markers | Error = red (`--danger`), Warning/Info = yellow (`--warning`), CSS class-based |
+| Results table | Position chip + severity chip (Error/Warning/Info color-coded) + message + ruleId chip + fixable chip per diagnostic; left-border tint by severity (`data-severity` attribute) |
+| Gutter markers | Error = red (`--danger`), Warning = yellow (`--warning`), Info = blue (`--info`), CSS class-based |
 | Row click jump | Clicking a diagnostic row moves editor cursor to that position |
 | Loading indicator | "Loading WebAssembly binary..." shown until WASM runtime is ready |
 | File type selector | `workflow` (`.github/workflows/test.yml`) / `action.yml` |
@@ -180,7 +180,7 @@ Detection pattern: catch errors matching `"runtime already exited"` from WASM in
 - **Persistence**: `localStorage` key `seiton-playground-color-mode` (`light`/`dark` stored; `system` removes key)
 - **FOUC prevention**: inline `<script>` in `<head>` (before CSS) reads storage and sets `data-theme` + `meta[name=color-scheme]`
 - **CodeMirror themes**: dark = `material-darker`, light = `default`. System mode tracks OS `change` event.
-- **Gutter markers**: use `var(--danger)` / `var(--warning)` CSS custom properties
+- **Gutter markers**: use `var(--danger)` / `var(--warning)` / `var(--info)` CSS custom properties
 
 ### 4.5 OGP and Twitter Card Metadata
 

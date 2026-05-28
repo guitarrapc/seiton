@@ -903,6 +903,7 @@ function renderResults(diagnostics) {
 
   for (const diag of diagnostics) {
     const row = document.createElement('tr');
+    row.dataset.severity = (diag.severity || 'error').toLowerCase();
     row.addEventListener('click', () => {
       const line = Math.max(0, (diag.line ?? 1) - 1);
       const ch = Math.max(0, (diag.column ?? 1) - 1);
@@ -916,6 +917,13 @@ function renderResults(diagnostics) {
     posTag.textContent = `line:${diag.line}, col:${diag.column}`;
     posCell.appendChild(posTag);
     row.appendChild(posCell);
+
+    const sevCell = document.createElement('td');
+    const sevTag = document.createElement('span');
+    sevTag.className = `severity-chip severity-chip--${(diag.severity || 'error').toLowerCase()}`;
+    sevTag.textContent = diag.severity || 'Error';
+    sevCell.appendChild(sevTag);
+    row.appendChild(sevCell);
 
     const descCell = document.createElement('td');
     appendTextLinkifyingUrls(descCell, diag.message ?? '');
@@ -939,7 +947,11 @@ function renderResults(diagnostics) {
     const lineIndex = Math.max(0, (diag.line ?? 1) - 1);
     const marker = document.createElement('div');
     marker.className =
-      diag.severity === 'Error' ? 'gutter-marker gutter-marker--error' : 'gutter-marker gutter-marker--warning';
+      diag.severity === 'Error'
+        ? 'gutter-marker gutter-marker--error'
+        : diag.severity === 'Info'
+          ? 'gutter-marker gutter-marker--info'
+          : 'gutter-marker gutter-marker--warning';
     marker.textContent = '●';
     editor.setGutterMarker(lineIndex, 'error-marker', marker);
   }

@@ -109,6 +109,29 @@ public sealed class PlaygroundLintRunnerTests
     }
 
     [Test]
+    public async Task RunToJson_SeverityValues_AreValidStrings()
+    {
+        var yaml = """
+            on: push
+            permissions: write-all
+            jobs:
+              build:
+                runs-on: ubuntu-latest
+                steps:
+                  - run: echo ok
+            """;
+
+        var json = PlaygroundLintRunner.RunToJsonUtf8(yaml, ".github/workflows/ci.yml");
+        using var doc = JsonDocument.Parse(json);
+        var validSeverities = new HashSet<string> { "Error", "Warning", "Info" };
+        foreach (var el in doc.RootElement.EnumerateArray())
+        {
+            await Assert.That(el.TryGetProperty("severity", out var sev)).IsTrue();
+            await Assert.That(validSeverities.Contains(sev.GetString()!)).IsTrue();
+        }
+    }
+
+    [Test]
     public async Task RunToJson_DenyWriteAll_IncludesFixableDiagnostic()
     {
         var yaml = """

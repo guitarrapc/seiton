@@ -143,6 +143,70 @@ public sealed class PlaygroundHtmlContractTests
         await Assert.That(normalized).Contains("align-items: center");
     }
 
+    [Test]
+    public async Task Stylesheet_DefinesSeverityChipClassesForAllLevels()
+    {
+        var path = Path.Combine(RepoPaths.FindRepoRoot(), "src", "Seiton.Playground", "wwwroot", "style.css");
+        var css = await File.ReadAllTextAsync(path);
+        await Assert.That(css).Contains(".severity-chip");
+        await Assert.That(css).Contains(".severity-chip--error");
+        await Assert.That(css).Contains(".severity-chip--warning");
+        await Assert.That(css).Contains(".severity-chip--info");
+    }
+
+    [Test]
+    public async Task Stylesheet_DefinesInfoCssVariable()
+    {
+        var path = Path.Combine(RepoPaths.FindRepoRoot(), "src", "Seiton.Playground", "wwwroot", "style.css");
+        var css = await File.ReadAllTextAsync(path);
+        await Assert.That(css).Contains("--info:");
+    }
+
+    [Test]
+    public async Task MainJs_RenderResults_CreatesSeverityChipElements()
+    {
+        var path = Path.Combine(RepoPaths.FindRepoRoot(), "src", "Seiton.Playground", "wwwroot", "main.js");
+        var js = await File.ReadAllTextAsync(path);
+        await Assert.That(js).Contains("severity-chip");
+        await Assert.That(js).Contains("diag.severity");
+    }
+
+    [Test]
+    public async Task Stylesheet_DefinesGutterMarkerInfoClass()
+    {
+        var path = Path.Combine(RepoPaths.FindRepoRoot(), "src", "Seiton.Playground", "wwwroot", "style.css");
+        var css = await File.ReadAllTextAsync(path);
+        await Assert.That(css).Contains(".gutter-marker--info");
+    }
+
+    [Test]
+    public async Task MainJs_GutterMarker_DistinguishesInfoFromWarning()
+    {
+        var path = Path.Combine(RepoPaths.FindRepoRoot(), "src", "Seiton.Playground", "wwwroot", "main.js");
+        var js = await File.ReadAllTextAsync(path);
+        await Assert.That(js).Contains("gutter-marker--info");
+    }
+
+    [Test]
+    public async Task Stylesheet_DefinesRowSeverityBorderStyles()
+    {
+        var path = Path.Combine(RepoPaths.FindRepoRoot(), "src", "Seiton.Playground", "wwwroot", "style.css");
+        var css = await File.ReadAllTextAsync(path);
+        await Assert.That(css).Contains("[data-severity=");
+        await Assert.That(css).Contains("error");
+        await Assert.That(css).Contains("warning");
+        await Assert.That(css).Contains("info");
+        await Assert.That(css).Contains("border-left:");
+    }
+
+    [Test]
+    public async Task MainJs_RenderResults_SetsDataSeverityOnRows()
+    {
+        var path = Path.Combine(RepoPaths.FindRepoRoot(), "src", "Seiton.Playground", "wwwroot", "main.js");
+        var js = await File.ReadAllTextAsync(path);
+        await Assert.That(js).Contains("dataset.severity");
+    }
+
     private static async Task<string> ReadSourceIndexHtmlAsync()
     {
         var path = Path.Combine(RepoPaths.FindRepoRoot(), "src", "Seiton.Playground", "wwwroot", "index.html");
