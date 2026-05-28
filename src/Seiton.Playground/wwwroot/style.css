@@ -854,6 +854,18 @@ a.version-badge:focus-visible {
   font-size: 16px;
 }
 
+.result-table tbody tr[data-severity='error'] {
+  border-left: 3px solid var(--danger);
+}
+
+.result-table tbody tr[data-severity='warning'] {
+  border-left: 3px solid var(--warning);
+}
+
+.result-table tbody tr[data-severity='info'] {
+  border-left: 3px solid var(--info);
+}
+
 .result-table tbody tr:hover {
   background: var(--result-row-hover);
 }

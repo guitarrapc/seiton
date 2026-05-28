@@ -7,9 +7,9 @@
 | Aspect | Status |
 |--------|--------|
 | Severity in diagnostic JSON | ✅ Always present (`"Error"`, `"Warning"`, `"Info"`) |
-| Gutter markers | ✅ Color-coded (Error=red, Warning/Info=amber) |
-| Result table rows | ❌ No severity indicator — all rows look identical |
-| Info vs Warning distinction | ❌ Both rendered as amber in gutter; indistinguishable |
+| Gutter markers | ✅ Color-coded (Error=red, Warning=yellow, Info=blue) |
+| Result table rows | ✅ Severity chip + left-border tint by severity |
+| Info vs Warning distinction | ✅ Distinct colors in gutter, chip, and border |
 
 ### Data Flow
 
@@ -195,3 +195,29 @@ After implementation, update `Seiton_Playground_spec.md` § 4.1 Feature Catalog:
 | FullChange | 258 µs | 1.38 ms | 51 KB | 170 KB |
 
 No regression vs baseline (change is JS-only, benchmark measures C# path).
+
+---
+
+## Phase 3 Implementation Result
+
+### Changes Made
+
+| File | Change |
+|------|--------|
+| `src/Seiton.Playground/wwwroot/main.js` | Added `row.dataset.severity = (diag.severity || 'error').toLowerCase()` after row creation |
+| `src/Seiton.Playground/wwwroot/style.css` | Added `.result-table tbody tr[data-severity='error/warning/info']` left-border rules |
+| `tests/.../PlaygroundHtmlContractTests.cs` | Added 2 contract tests: `data-severity` CSS selectors + `border-left:`, `dataset.severity` in main.js |
+| `.github/docs/Seiton_Playground_spec.md` | Updated § 4.1 Results table description |
+
+### Design Decisions
+
+1. **Left-border (not background tint)**: A 3px colored left-border provides a scanability cue without reducing text readability. Background tints risk contrast issues in light/dark themes; a border avoids that entirely.
+2. **`data-severity` attribute**: Standard HTML5 dataset API. Enables CSS-only styling without extra class management. Also serves as a hook for future scripting or testing.
+3. **Defensive fallback**: `(diag.severity || 'error').toLowerCase()` — consistent with severity chip code. Unknown severities fall through to no border match (safe).
+4. **Selector specificity**: `.result-table tbody tr[data-severity='...']` is specific enough to avoid conflicts with `.result-table tbody tr:hover` background.
+
+### Performance
+
+- **C# backend**: No changes → zero performance impact.
+- **JS frontend**: One additional `dataset.severity` property assignment per row. This is a single DOM attribute write — negligible.
+- **CSS**: Three attribute selectors scoped to `.result-table tbody tr` — evaluated only for diagnostic rows (typically < 50). No performance concern.

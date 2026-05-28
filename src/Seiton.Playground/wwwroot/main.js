@@ -903,6 +903,7 @@ function renderResults(diagnostics) {
 
   for (const diag of diagnostics) {
     const row = document.createElement('tr');
+    row.dataset.severity = (diag.severity || 'error').toLowerCase();
     row.addEventListener('click', () => {
       const line = Math.max(0, (diag.line ?? 1) - 1);
       const ch = Math.max(0, (diag.column ?? 1) - 1);

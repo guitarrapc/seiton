@@ -135,7 +135,7 @@ Detection pattern: catch errors matching `"runtime already exited"` from WASM in
 |---|---|
 | YAML editor | CodeMirror 5 with yaml mode, auto-grow (`viewportMargin: Infinity`), line numbers, active line highlight |
 | Real-time lint | Debounce 300ms, immediate on paste, staleness check |
-| Results table | Position chip + severity chip (Error/Warning/Info color-coded) + message + ruleId chip + fixable chip per diagnostic |
+| Results table | Position chip + severity chip (Error/Warning/Info color-coded) + message + ruleId chip + fixable chip per diagnostic; left-border tint by severity (`data-severity` attribute) |
 | Gutter markers | Error = red (`--danger`), Warning = yellow (`--warning`), Info = blue (`--info`), CSS class-based |
 | Row click jump | Clicking a diagnostic row moves editor cursor to that position |
 | Loading indicator | "Loading WebAssembly binary..." shown until WASM runtime is ready |
