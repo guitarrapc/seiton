@@ -4,7 +4,7 @@
 
 - リポジトリ: `.references/actions` (`Cysharp/Actions`)
 - 実行時点の commit: `1cd753a`
-- seiton: `0.9.15`
+- seiton: `0.9.16`
 
 ## 実行経過
 
