@@ -357,27 +357,16 @@ public sealed partial class RuleInterfaceTests
     [Test]
     public async Task IfExprWrapperRule_FoldedBlockScalar_FixDoesNotCorruptFile()
     {
-        // Regression: folded block scalar fix must not corrupt adjacent YAML keys
+        // Regression: folded block scalar fix must not be offered (would corrupt adjacent YAML keys)
         var yaml = "on: push\njobs:\n  conclusion:\n    needs:\n      - activation\n    if: >\n      always() && (needs.activation.result != 'skipped' ||\n      needs.activation.outputs.failed == 'true')\n    runs-on: ubuntu-slim\n    permissions:\n      contents: read\n    steps:\n      - run: echo ok\n";
         var sourceBytes = Encoding.UTF8.GetBytes(yaml);
         var engine = new LintEngine([new IfExprWrapperRule()]);
         using var result = engine.Check(sourceBytes, "test.yaml", new LintConfig { Fix = new FixConfig { Enabled = true } });
         var diagnostics = result.Diagnostics.Where(d => d.RuleId == "if-expr-wrapper").ToArray();
 
-        // Even if a diagnostic is found, fix must not corrupt the file
-        if (diagnostics.Length > 0 && diagnostics[0].Fix is not null)
-        {
-            using var revalidated = FixEngine.ApplyAndRelint(engine, sourceBytes, "test.yaml", [diagnostics[0]]);
-            var fixedText = Encoding.UTF8.GetString(revalidated.UpdatedUtf8Yaml);
-            // Must not insert ${{ into runs-on or other keys
-            await Assert.That(fixedText).DoesNotContain("runs-on:${{");
-            await Assert.That(fixedText).DoesNotContain("cancel-in-progres }}");
-        }
-        else
-        {
-            // No fix offered = correct behavior for block scalar
-            await Assert.That(diagnostics.Length == 0 || diagnostics[0].Fix is null).IsTrue();
-        }
+        await Assert.That(diagnostics).Count().IsGreaterThanOrEqualTo(1);
+        // Block scalar must NOT offer auto-fix — doing so would corrupt runs-on: and other keys
+        await Assert.That(diagnostics[0].Fix is null).IsTrue();
     }
 
 
@@ -394,5 +383,21 @@ public sealed partial class RuleInterfaceTests
         await Assert.That(diagnostics).Count().IsGreaterThanOrEqualTo(1);
         // Even with strip chomping (no trailing \n), multi-line block scalar must not offer fix
         await Assert.That(diagnostics[0].Fix is null).IsTrue();
+    }
+
+
+    [Test]
+    public async Task IfExprWrapperRule_FoldedBlockScalar_Crlf_NoAutoFix()
+    {
+        // Folded block scalar with CRLF line endings must NOT offer auto-fix
+        var yaml = "on: push\r\njobs:\r\n  build:\r\n    if: >\r\n      always() && (needs.a.result != 'skipped' ||\r\n      needs.b.result != 'skipped')\r\n    runs-on: ubuntu-latest\r\n    steps:\r\n      - run: echo ok\r\n";
+        using var result = new LintEngine([new IfExprWrapperRule()]).Check(
+            Encoding.UTF8.GetBytes(yaml), "test.yaml");
+        var diagnostics = result.Diagnostics.Where(d => d.RuleId == "if-expr-wrapper").ToArray();
+
+        await Assert.That(diagnostics).Count().IsGreaterThanOrEqualTo(1);
+        await Assert.That(diagnostics[0].Fix is null).IsTrue();
+        await Assert.That(diagnostics[0].Message).DoesNotContain("\n");
+        await Assert.That(diagnostics[0].Message).DoesNotContain("\r");
     }
 }
