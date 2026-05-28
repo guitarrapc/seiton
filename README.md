@@ -18,7 +18,7 @@ Features:
 - **Inline suppression** — `# seiton: disable-next-line <rule-id>` directives inside workflow files.
 - **NativeAOT binary** — single-file executable; no .NET runtime required at deployment.
 
-You can check various benchmark patterns at [GitHub Actions/Benchmark](https://github.com/guitarrapc/seiton/actions/runs/26365828038).
+You can check various benchmark patterns at [GitHub Actions/Benchmark](https://github.com/guitarrapc/seiton/actions/runs/26594333777).
 
 **Example of broken workflow** ([`samples/readme`](samples/readme/.github/workflows/test.yaml)):
 
