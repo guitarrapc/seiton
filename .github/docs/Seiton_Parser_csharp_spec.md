@@ -716,6 +716,7 @@ public sealed class Concurrency
 {
     public StringNode Group { get; init; }
     public BoolNode? CancelInProgress { get; init; }
+    public StringNode? Queue { get; init; }
     public TextRange Range { get; init; }
 }
 

@@ -1263,6 +1263,7 @@ public static partial class WorkflowParser
 
         StringNodeId groupNode = default;
         BoolNodeId cancelInProgressNode = default;
+        StringNodeId queueNode = default;
         ulong seen = 0;
         var mappingMark = reader.CurrentStart;
         var range = BuildScalarLocation(mappingMark, 1);
@@ -1295,7 +1296,13 @@ public static partial class WorkflowParser
                 var ck = (ConcurrencyMappingKey)concurrencyKeyOrdinal;
                 if (!TrySetBit(ref seen, concurrencyKeyOrdinal))
                 {
-                    var dupName = ck == ConcurrencyMappingKey.Group ? "group" : "cancel-in-progress";
+                    var dupName = ck switch
+                    {
+                        ConcurrencyMappingKey.Group => "group",
+                        ConcurrencyMappingKey.CancelInProgress => "cancel-in-progress",
+                        ConcurrencyMappingKey.Queue => "queue",
+                        _ => "unknown",
+                    };
                     AddError(ref diagnostics, $"concurrency contains duplicate key: {dupName}", innerKeyMark);
                     if (!reader.End)
                     {
@@ -1312,6 +1319,9 @@ public static partial class WorkflowParser
                         continue;
                     case ConcurrencyMappingKey.CancelInProgress:
                         cancelInProgressNode = ParseBoolOrExpression(ref reader, arena, ref diagnostics, expressionContext, "workflow concurrency.cancel-in-progress must be bool or expression");
+                        continue;
+                    case ConcurrencyMappingKey.Queue:
+                        queueNode = ParseStringAndValidateExpression(ref reader, arena, ref diagnostics, expressionContext, "workflow concurrency.queue must be string", parseWholeValueIfNoEmbedded: false);
                         continue;
                     default:
                         if (!reader.End)
@@ -1355,6 +1365,7 @@ public static partial class WorkflowParser
         {
             Group = groupNode,
             CancelInProgress = cancelInProgressNode,
+            Queue = queueNode,
             Range = range,
         };
     }

@@ -457,6 +457,7 @@ type Defaults struct {
 type Concurrency struct {
     Group            *String
     CancelInProgress *Bool
+    Queue            *String
     Pos              *Pos
 }
 

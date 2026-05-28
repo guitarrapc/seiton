@@ -65,6 +65,8 @@ public sealed class Concurrency
 
     public BoolNodeId CancelInProgress { get; init; }
 
+    public StringNodeId Queue { get; init; }
+
     public TextRange Range { get; init; }
 }
 

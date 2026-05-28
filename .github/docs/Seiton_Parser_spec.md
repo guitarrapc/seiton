@@ -269,7 +269,7 @@ WorkflowCallEventOutput: `Name`, `Description?`, `Value` (required)
 ### 2.10 Concurrency
 
 - **scalar form**: group name only
-- **mapping form**: `group` (required), `cancel-in-progress?`
+- **mapping form**: `group` (required), `cancel-in-progress?`, `queue?`
 
 ### 2.11 Environment
 

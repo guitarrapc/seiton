@@ -1887,6 +1887,109 @@ public sealed class ParserTests
     }
 
     [Test]
+    public async Task Parse_ConcurrencyWithQueue_PopulatesAst()
+    {
+        var yaml = NormalizeEol("""
+        on: push
+        concurrency:
+            group: ci-${{ github.ref }}
+            cancel-in-progress: true
+            queue: single
+        jobs: {}
+        """);
+
+        var result = WorkflowParser.ParseDirect(Encoding.UTF8.GetBytes(yaml), "concurrency-queue.yml", out var arena);
+
+        await Assert.That(result.HasFatalError).IsFalse();
+        await Assert.That(result.Diagnostics).IsEmpty();
+        await Assert.That(result.Workflow!.Concurrency is not null).IsTrue();
+        await Assert.That(arena!.GetStringValue(result.Workflow.Concurrency!.Group).Length).IsGreaterThan(0);
+        await Assert.That(arena!.GetBoolValue(result.Workflow.Concurrency.CancelInProgress)).IsTrue();
+        await Assert.That(result.Workflow.Concurrency.Queue.HasValue).IsTrue();
+        await Assert.That(Encoding.UTF8.GetString(arena!.GetStringValue(result.Workflow.Concurrency.Queue))).IsEqualTo("single");
+    }
+
+    [Test]
+    public async Task Parse_ConcurrencyWithQueueMax_PopulatesAst()
+    {
+        var yaml = NormalizeEol("""
+        on: push
+        concurrency:
+            group: deploy-${{ github.ref }}
+            queue: max
+        jobs: {}
+        """);
+
+        var result = WorkflowParser.ParseDirect(Encoding.UTF8.GetBytes(yaml), "concurrency-queue-max.yml", out var arena);
+
+        await Assert.That(result.HasFatalError).IsFalse();
+        await Assert.That(result.Diagnostics).IsEmpty();
+        await Assert.That(result.Workflow!.Concurrency is not null).IsTrue();
+        await Assert.That(result.Workflow.Concurrency!.Queue.HasValue).IsTrue();
+        await Assert.That(Encoding.UTF8.GetString(arena!.GetStringValue(result.Workflow.Concurrency.Queue))).IsEqualTo("max");
+        // cancel-in-progress should be unset when omitted
+        await Assert.That(result.Workflow.Concurrency.CancelInProgress.HasValue).IsFalse();
+    }
+
+    [Test]
+    public async Task Parse_ConcurrencyWithoutQueue_QueueIsEmpty()
+    {
+        var yaml = NormalizeEol("""
+        on: push
+        concurrency:
+            group: ci-${{ github.ref }}
+            cancel-in-progress: false
+        jobs: {}
+        """);
+
+        var result = WorkflowParser.ParseDirect(Encoding.UTF8.GetBytes(yaml), "concurrency-no-queue.yml", out var arena);
+
+        await Assert.That(result.HasFatalError).IsFalse();
+        await Assert.That(result.Diagnostics).IsEmpty();
+        await Assert.That(result.Workflow!.Concurrency is not null).IsTrue();
+        await Assert.That(result.Workflow.Concurrency!.Queue.HasValue).IsFalse();
+    }
+
+    [Test]
+    public async Task Parse_JobConcurrencyWithQueue_PopulatesAst()
+    {
+        var yaml = NormalizeEol("""
+        on: push
+        jobs:
+            deploy:
+                runs-on: ubuntu-latest
+                concurrency:
+                    group: deploy
+                    queue: max
+                steps:
+                    - run: echo deploy
+        """);
+
+        var result = WorkflowParser.ParseDirect(Encoding.UTF8.GetBytes(yaml), "job-concurrency-queue.yml", out var arena);
+
+        await Assert.That(result.HasFatalError).IsFalse();
+        await Assert.That(result.Diagnostics).IsEmpty();
+        var job = result.Workflow!.Jobs.Values().First();
+        await Assert.That(job.Concurrency is not null).IsTrue();
+        await Assert.That(Encoding.UTF8.GetString(arena!.GetStringValue(job.Concurrency!.Queue))).IsEqualTo("max");
+    }
+
+    [Test]
+    public async Task Parse_ConcurrencyQueueOnly_MissingGroup_ReportsError()
+    {
+        var yaml = NormalizeEol("""
+        on: push
+        concurrency:
+            queue: single
+        jobs: {}
+        """);
+
+        var result = WorkflowParser.ParseDirect(Encoding.UTF8.GetBytes(yaml), "concurrency-queue-no-group.yml", out var arena);
+
+        await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("\"concurrency\" section is missing group name", StringComparison.Ordinal))).IsTrue();
+    }
+
+    [Test]
     public async Task Parse_OnRepositoryDispatch_PopulatesEventAst()
     {
         var yaml = NormalizeEol("""
