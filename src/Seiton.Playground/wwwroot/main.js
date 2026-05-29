@@ -528,6 +528,9 @@ configToggleBtn.addEventListener('click', () => {
 configTemplateSelect.addEventListener('change', () => {
   const key = configTemplateSelect.value;
   if (!key || !CONFIG_TEMPLATES[key]) {
+    // "none" selected — clear config editor
+    configEditor.setValue('');
+    configEditor.refresh();
     return;
   }
   // Expand panel if collapsed
@@ -538,8 +541,6 @@ configTemplateSelect.addEventListener('change', () => {
   }
   configEditor.setValue(CONFIG_TEMPLATES[key]);
   configEditor.refresh();
-  // Reset select to placeholder so the same template can be re-selected
-  configTemplateSelect.value = '';
 });
 
 configEditor.on('change', () => {

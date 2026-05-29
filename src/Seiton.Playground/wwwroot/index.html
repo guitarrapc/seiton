@@ -140,21 +140,21 @@
           Apply all fixes
         </button>
         <div id="editor"></div>
-        <div id="config-panel" class="config-panel config-panel--collapsed">
+        <div id="config-panel" class="config-panel">
           <div class="config-panel__header">
-            <button id="config-toggle-btn" type="button" class="config-panel__toggle" aria-expanded="false"
+            <button id="config-toggle-btn" type="button" class="config-panel__toggle" aria-expanded="true"
               aria-controls="config-editor-wrap" title="Toggle lint configuration editor">
               <span class="config-panel__toggle-icon" aria-hidden="true">&#9654;</span>
               Config
             </button>
             <select id="config-template-select" class="config-panel__template-select" title="Load a config template">
-              <option value="">template...</option>
+              <option value="">none</option>
               <option value="timeoutAndLatest">timeout + latest mapping</option>
               <option value="fullFix">full fix (network pinning)</option>
               <option value="exclusions">rule exclusions</option>
             </select>
           </div>
-          <div id="config-editor-wrap" class="config-panel__body" hidden>
+          <div id="config-editor-wrap" class="config-panel__body">
             <div id="config-editor"></div>
             <div id="config-resize-handle" class="config-panel__resize-handle" title="Drag to resize"></div>
             <div id="config-diagnostics" class="config-diagnostics" hidden></div>

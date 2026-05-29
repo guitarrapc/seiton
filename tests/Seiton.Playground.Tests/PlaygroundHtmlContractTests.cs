@@ -222,7 +222,7 @@ public sealed class PlaygroundHtmlContractTests
     public async Task IndexTemplate_ConfigToggle_HasAriaExpandedAndControls()
     {
         var html = await ReadSourceIndexHtmlAsync();
-        await Assert.That(html).Contains("aria-expanded=\"false\"", StringComparison.Ordinal);
+        await Assert.That(html).Contains("aria-expanded=\"true\"", StringComparison.Ordinal);
         await Assert.That(html).Contains("aria-controls=\"config-editor-wrap\"", StringComparison.Ordinal);
     }
 
