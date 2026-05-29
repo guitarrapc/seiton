@@ -370,6 +370,32 @@ public sealed partial class RuleInterfaceTests
                         - run: echo test
             """,
             []),
+            // Phase 3: workflow_dispatch only → no PR context → suppress
+            new RuleCase(
+            "ok-workflow-dispatch-only-actor-eq-suppressed",
+            """
+            on: workflow_dispatch
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    if: github.actor == 'dependabot[bot]'
+                    steps:
+                        - run: echo test
+            """,
+            []),
+            // Phase 3: pull_request_target provides PR context → warning fires
+            new RuleCase(
+            "warning-pr-target-actor-eq",
+            """
+            on: pull_request_target
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    if: github.actor == 'dependabot[bot]'
+                    steps:
+                        - run: echo test
+            """,
+            ["spoofable context"]),
         };
 
         await AssertRuleCases(new BotConditionsRule(), "bot-conditions", cases);
