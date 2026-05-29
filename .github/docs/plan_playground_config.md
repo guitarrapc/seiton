@@ -365,3 +365,74 @@ exclusions:
 | 6-6 | Run full `dotnet test` — all pass |
 
 **Exit criteria**: Templates load into config editor, trigger lint with new config, all tests pass.
+
+---
+
+## Phase 7: Network-Based Fix Resolution in Playground
+
+**Goal**: When the user's config has `fix.pinning.enable-network: true` (or `fix.images.enable-network: true`), the Playground's "Apply all fixes" button resolves commit SHAs and image digests via the browser's `fetch()` — same as the CLI but without authentication.
+
+### Investigation Results
+
+| Finding | Detail |
+|---|---|
+| WASM HttpClient | .NET WASM `HttpClient` → browser `fetch()`. Works for CORS-allowed origins. |
+| GitHub API CORS | `api.github.com` returns `Access-Control-Allow-Origin: *` for public endpoints. |
+| OCI registries | `ghcr.io`, Docker Hub token endpoints are CORS-friendly. Other registries may not be. |
+| Rate limit (no auth) | GitHub: 60 requests/hour per IP. Sufficient for occasional playground use. |
+| Existing classes | `PinRemediationEngine`, `GitHubActionShaResolver`, `OciImageDigestResolver` — all reusable. |
+| HttpClient injection | Manual construction in `FixCommand.cs`; same pattern can be used in Playground. |
+| In-memory cache | `ConcurrentDictionary` per resolver, per-run. In Playground, persists across fix invocations (static lifetime). |
+| Concurrency | `SemaphoreSlim` + `TimeoutSeconds` + `OnError: Skip` mode available. |
+| No auth in Playground | No `GITHUB_TOKEN` available in browser. Unauthenticated only. |
+| CollectAutoApplicableFixes | Currently doesn't filter `unpinned-uses`/`unpinned-image` but those diagnostics have no `Fix` attached without `PinRemediationEngine` invocation. |
+
+### Architecture Decision
+
+- **ApplyAllFixes becomes async**: Pin remediation requires HTTP calls. The existing synchronous `ApplyAllFixes` must become `ApplyAllFixesAsync` (or a separate `ApplyAllFixesWithNetworkAsync` path).
+- **JS side**: `applyFixesBtn` click handler becomes async; shows spinner/busy state during network resolution.
+- **Graceful degradation**: On network failure (CORS block, rate limit, timeout), individual pins are skipped with a toast notification. Non-network fixes still apply.
+- **Config-gated**: Network resolution only runs when `ActiveConfig.Fix.Pinning.EnableNetwork` or `ActiveConfig.Fix.Images.EnableNetwork` is `true`. Otherwise, behavior is unchanged (fully offline).
+- **Resolver lifetime**: Static/long-lived in `PlaygroundLintRunner` — the in-memory cache benefits repeated fix applications within the same session.
+
+### Constraints & Limitations
+
+| Constraint | Mitigation |
+|---|---|
+| 60 req/hr (unauthenticated) | Show rate-limit toast; cache resolved SHAs across invocations |
+| CORS blocks on non-GitHub registries | `OnError: Skip` — gracefully skip that image, apply other fixes |
+| No GHES support | Only public `api.github.com`; GHES config ignored in Playground |
+| Slow network in browser | Timeout (10s default); show progress indicator; user can cancel |
+| `SameOriginRedirectHandler` | Still needed to prevent hypothetical token leakage (even though no token in Playground, keep for consistency) |
+
+### Implementation Steps
+
+| Step | Action |
+|---|---|
+| 7-1 | Add `[JSExport] public static async Task<byte[]> ApplyAllFixesAsync(string yaml, string filePath)` to `LintInterop.cs` |
+| 7-2 | In `PlaygroundLintRunner`, add `ApplyAllFixesWithNetworkAsync` that invokes `PinRemediationEngine.RemediateAsync` when config enables network |
+| 7-3 | Create static `HttpClient` instances (GitHub API + OCI) with appropriate handlers, long-lived in `PlaygroundLintRunner` |
+| 7-4 | Create static resolver instances (`GitHubActionShaResolver`, `OciImageDigestResolver`) with in-memory cache |
+| 7-5 | Wire `PinRemediationEngine` to attach `Fix` to `unpinned-uses`/`unpinned-image` diagnostics before applying fixes |
+| 7-6 | JS: Make `applyFixesBtn` click handler async; call `ApplyAllFixesAsync` instead of `ApplyAllFixes` |
+| 7-7 | JS: Show busy state on button during async fix (disable button, change text to "Applying fixes…") |
+| 7-8 | JS: On partial failure, show toast with count of skipped pins |
+| 7-9 | Update `fullFix` template comment (remove "playground runs offline" note, keep "no auth = rate limited" note) |
+| 7-10 | Add tests: mock HttpClient → verify SHA resolution in Playground path |
+| 7-11 | Add tests: network failure → graceful skip, non-network fixes still applied |
+| 7-12 | Add Playwright test: fullFix template + Apply fixes → verify SHA appears in editor |
+| 7-13 | Update About section text and button tooltip to reflect conditional network access |
+| 7-14 | Run full `dotnet test` — all pass |
+
+### Performance Considerations
+
+- **First fix application with network**: ~1–3s (GitHub API round-trips). Subsequent: ~0ms (cached SHAs).
+- **No allocation regression for offline path**: When `EnableNetwork = false`, no HttpClient or resolver is touched.
+- **Cache persistence**: Resolver caches live as long as the page (static fields). Re-resolving same action across multiple "Apply fixes" clicks is free.
+
+### Exit Criteria
+
+- `enable-network: true` in config → "Apply all fixes" resolves SHAs from GitHub API and pins uses.
+- Rate limit / network error → toast notification, other fixes still applied.
+- `enable-network: false` (or absent) → fully offline, no behavior change from current.
+- All existing tests pass; new tests cover both success and failure paths.
