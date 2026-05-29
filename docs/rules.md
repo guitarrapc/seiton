@@ -65,7 +65,7 @@ concurrency-limits                       no        local    warning    no    wor
 unsound-condition                        yes       local    warning    yes   both       default
 unpinned-tools                           yes       local    warning    no    both       default
 unsound-contains                         yes       local    mixed      no    workflow   default
-bot-conditions                           yes       local    warning    no    workflow   default
+bot-conditions                           yes       local    mixed      no    workflow   default
 artipacked                               yes       local    mixed      no    workflow   default
 known-vulnerable-actions                 no        online   error      no    workflow   opt-in (not configured)
 impostor-commit                          no        online   error      no    workflow   opt-in (not configured)
@@ -1009,6 +1009,13 @@ jobs:
 | ✓ | — | ✗ |
 
 Warns when a workflow gates privileged behavior on spoofable bot actor contexts such as `github.actor`, `github['actor']`, `github.triggering_actor`, `github.event.pull_request.sender.login`, `github.event['pull_request'].sender['login']`, `github.actor_id`, or `github['event']['pull_request']['sender']['id']`.
+
+**Severity:**
+
+- **warning** — equality checks (`==`): grants privileges to a bot identity that can be spoofed.
+- **info** — inequality checks (`!=`): exclusion pattern with lower risk (attacker gains only normal processing).
+
+**Suppression:** When a spoofable context comparison is AND-conjoined with a non-spoofable trigger-author context (`github.event.pull_request.user.login` or `github.event.pull_request.user.id`) checking the same literal value, the diagnostic is suppressed entirely.
 
 **Example trigger:**
 

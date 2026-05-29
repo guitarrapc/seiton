@@ -12,6 +12,7 @@ namespace Seiton.Core.Linting.Rules;
 public sealed class BotConditionsRule() : RuleBase(RuleId.BotConditions)
 {
     private const string WarningMessage = "bot actor check uses spoofable context; prefer github.event.pull_request.user.login, github.event.pull_request.user.id, or another trigger-author context";
+    private const string InfoMessage = "bot exclusion check uses spoofable context; consider github.event.pull_request.user.login or github.event.pull_request.user.id if available for this trigger";
     // Spoofable contexts
     private static ReadOnlySpan<byte> Actor => "actor"u8;
     private static ReadOnlySpan<byte> TriggeringActor => "triggering_actor"u8;
@@ -23,6 +24,9 @@ public sealed class BotConditionsRule() : RuleBase(RuleId.BotConditions)
     private static ReadOnlySpan<byte> Sender => "sender"u8;
     private static ReadOnlySpan<byte> Login => "login"u8;
     private static ReadOnlySpan<byte> UserId => "id"u8;
+
+    // Non-spoofable contexts (trigger-author): github.event.pull_request.user.login/id
+    private static ReadOnlySpan<byte> User => "user"u8;
 
     // Known bot suffixes
     private static ReadOnlySpan<byte> BotSuffix => "[bot]"u8;
@@ -118,12 +122,42 @@ public sealed class BotConditionsRule() : RuleBase(RuleId.BotConditions)
                 continue;
             }
 
-            // Check pattern: spoofable_context == 'bot_name' or 'bot_name' == spoofable_context
-            if (IsBotComparison(leftId, rightId, nodes, exprBytes) ||
-                IsBotComparison(rightId, leftId, nodes, exprBytes))
+            // Determine which side is the spoofable context and which is the literal
+            int literalId;
+            if (IsBotComparison(leftId, rightId, nodes, exprBytes))
             {
-                var diagRange = Arena.GetStringRange(condition);
+                literalId = rightId;
+            }
+            else if (IsBotComparison(rightId, leftId, nodes, exprBytes))
+            {
+                literalId = leftId;
+            }
+            else
+            {
+                continue;
+            }
 
+            // Phase 1: If the same expression has a non-spoofable context check with the same literal, suppress
+            if (HasNonSpoofableConjunction(literalId, nodes, exprBytes))
+            {
+                continue;
+            }
+
+            // Phase 2: != (exclusion pattern) emits info; == (privilege grant) emits warning
+            var diagRange = Arena.GetStringRange(condition);
+            if (node.Operator == ExpressionOperator.NotEqual)
+            {
+                if (job is not null)
+                {
+                    AddJobInfo(job, InfoMessage, diagRange);
+                }
+                else if (step is not null)
+                {
+                    AddStepInfo(step, InfoMessage, diagRange);
+                }
+            }
+            else
+            {
                 if (job is not null)
                 {
                     AddJobWarning(job, WarningMessage, diagRange);
@@ -134,6 +168,81 @@ public sealed class BotConditionsRule() : RuleBase(RuleId.BotConditions)
                 }
             }
         }
+    }
+
+    /// <summary>
+    /// Phase 1: Checks if the expression contains a non-spoofable context (trigger-author)
+    /// comparison with the same literal value, indicating the spoofable check is mitigated.
+    /// </summary>
+    private static bool HasNonSpoofableConjunction(int spoofableLiteralId, ExpressionNode[] nodes, ReadOnlySpan<byte> exprBytes)
+    {
+        var spoofableLiteral = nodes[spoofableLiteralId];
+
+        for (var i = 0; i < nodes.Length; i++)
+        {
+            var node = nodes[i];
+            if (node.Kind != ExpressionNodeKind.Binary || node.Operator != ExpressionOperator.Equal)
+            {
+                continue;
+            }
+
+            var leftId = node.Left;
+            var rightId = node.Right;
+
+            if (leftId < 0 || leftId >= nodes.Length || rightId < 0 || rightId >= nodes.Length)
+            {
+                continue;
+            }
+
+            // Check: non-spoofable context == same_literal (either order)
+            if (IsNonSpoofableBotComparison(leftId, rightId, spoofableLiteral, nodes, exprBytes) ||
+                IsNonSpoofableBotComparison(rightId, leftId, spoofableLiteral, nodes, exprBytes))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /// <summary>
+    /// Checks if contextNodeId is a non-spoofable trigger-author context and literalNodeId
+    /// matches the same literal value as the spoofable comparison.
+    /// </summary>
+    private static bool IsNonSpoofableBotComparison(int contextNodeId, int literalNodeId, ExpressionNode spoofableLiteral, ExpressionNode[] nodes, ReadOnlySpan<byte> exprBytes)
+    {
+        if (!IsNonSpoofableContext(contextNodeId, nodes, exprBytes))
+        {
+            return false;
+        }
+
+        var literalNode = nodes[literalNodeId];
+
+        // Both must be the same kind of literal
+        if (literalNode.Kind != spoofableLiteral.Kind)
+        {
+            return false;
+        }
+
+        // Compare literal values byte-by-byte
+        var literalSpan = literalNode.Token.AsSpan(exprBytes);
+        var spoofableSpan = spoofableLiteral.Token.AsSpan(exprBytes);
+        return literalSpan.SequenceEqual(spoofableSpan);
+    }
+
+    /// <summary>
+    /// Checks if a node is a non-spoofable trigger-author context:
+    /// github.event.pull_request.user.login or github.event.pull_request.user.id
+    /// </summary>
+    private static bool IsNonSpoofableContext(int nodeId, ExpressionNode[] nodes, ReadOnlySpan<byte> exprBytes)
+    {
+        if (nodeId < 0 || nodeId >= nodes.Length)
+        {
+            return false;
+        }
+
+        return MatchesGitHubPath(nodeId, nodes, exprBytes, Event, PullRequest, User, Login)
+            || MatchesGitHubPath(nodeId, nodes, exprBytes, Event, PullRequest, User, UserId);
     }
 
     /// <summary>
