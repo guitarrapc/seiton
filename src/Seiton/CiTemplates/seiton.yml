@@ -26,15 +26,10 @@ jobs:
     steps:
       - uses: actions/checkout@v6
         with:
-          persistent-credentials: false
-
-      - name: Install seiton
-        run: |
-          curl -sSfL https://github.com/guitarrapc/seiton/releases/latest/download/seiton-linux-x64.tar.gz | tar xz
-          sudo mv seiton /usr/local/bin/
+          persist-credentials: false
 
       - name: Run seiton
-        run: seiton --format sarif --include-actions > results.sarif
+        run: docker run --rm -v "$PWD:/repo:ro" ghcr.io/guitarrapc/seiton:latest --format sarif --include-actions > results.sarif
 
       - name: Upload SARIF
         if: always()
