@@ -249,6 +249,38 @@ public sealed class PlaygroundHtmlContractTests
         await Assert.That(js).Contains("renderConfigDiagnostics");
     }
 
+    [Test]
+    public async Task IndexTemplate_HasConfigTemplateSelect()
+    {
+        var html = await ReadSourceIndexHtmlAsync();
+        await Assert.That(html).Contains("id=\"config-template-select\"", StringComparison.Ordinal);
+        await Assert.That(html).Contains("value=\"timeoutAndLatest\"", StringComparison.Ordinal);
+        await Assert.That(html).Contains("value=\"fullFix\"", StringComparison.Ordinal);
+        await Assert.That(html).Contains("value=\"exclusions\"", StringComparison.Ordinal);
+    }
+
+    [Test]
+    public async Task MainJs_ConfigTemplates_HasAllTemplateKeys()
+    {
+        var path = Path.Combine(RepoPaths.FindRepoRoot(), "src", "Seiton.Playground", "wwwroot", "main.js");
+        var js = await File.ReadAllTextAsync(path);
+        await Assert.That(js).Contains("CONFIG_TEMPLATES");
+        await Assert.That(js).Contains("timeoutAndLatest:");
+        await Assert.That(js).Contains("fullFix:");
+        await Assert.That(js).Contains("exclusions:");
+        await Assert.That(js).Contains("job-timeout-minutes: 15");
+        await Assert.That(js).Contains("enable-network: true");
+    }
+
+    [Test]
+    public async Task Stylesheet_DefinesConfigTemplateSelectClass()
+    {
+        var path = Path.Combine(RepoPaths.FindRepoRoot(), "src", "Seiton.Playground", "wwwroot", "style.css");
+        var css = await File.ReadAllTextAsync(path);
+        await Assert.That(css).Contains(".config-panel__template-select");
+        await Assert.That(css).Contains(".config-panel__header");
+    }
+
     private static async Task<string> ReadSourceIndexHtmlAsync()
     {
         var path = Path.Combine(RepoPaths.FindRepoRoot(), "src", "Seiton.Playground", "wwwroot", "index.html");

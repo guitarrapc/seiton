@@ -275,3 +275,86 @@ dotnet test
 | `tests/Seiton.Playground.Tests/PlaygroundLintRunnerTests.cs` | 11 new SetConfig tests |
 | `tests/Seiton.Playground.Tests/PlaygroundHtmlContractTests.cs` | 4 new landmark tests |
 | `tests/Seiton.Playground.Tests/PlaygroundUiLayoutTests.cs` | Fixed `#editor-wrap .CodeMirror` → `#editor > .CodeMirror` locator |
+
+---
+
+## Phase 6: Config Templates
+
+**Goal**: Provide built-in config template presets that users can load into the config editor with one click, lowering the barrier to customization.
+
+### Template Patterns
+
+| Template | Key | Use Case |
+|---|---|---|
+| Timeout + Latest Mapping | `timeoutAndLatest` | Teams that want explicit runner versions and a default timeout for auto-fix |
+| Full Fix (Network Pinning) | `fullFix` | Teams that also want SHA pinning and image digest pinning via network |
+| Rule Exclusions | `exclusions` | Teams that want to suppress noisy rules for generated/legacy workflows |
+
+### Template Content
+
+**1. Timeout + Latest Mapping** (`timeoutAndLatest`)
+```yaml
+fix:
+  defaults:
+    job-timeout-minutes: 15
+
+rules:
+  runner-no-latest:
+    fix-mapping:
+      ubuntu-latest: "ubuntu-24.04"
+      windows-latest: "windows-2025"
+      macos-latest: "macos-15"
+```
+
+**2. Full Fix — Network Pinning** (`fullFix`)
+```yaml
+fix:
+  defaults:
+    job-timeout-minutes: 15
+  pinning:
+    enable-network: true
+    min-age-days: 14
+  images:
+    enable-network: true
+
+rules:
+  runner-no-latest:
+    fix-mapping:
+      ubuntu-latest: "ubuntu-24.04"
+      windows-latest: "windows-2025"
+      macos-latest: "macos-15"
+```
+
+**3. Rule Exclusions** (`exclusions`)
+```yaml
+rules:
+  job-timeout-minutes-required:
+    enabled: false
+  unpinned-uses:
+    enabled: false
+
+exclusions:
+  - file: ".github/workflows/generated-*.yml"
+    rules:
+      - runner-no-latest
+```
+
+### UI
+
+- Add `<select id="config-template-select">` inside the config panel header (beside the toggle button)
+- First option is empty placeholder ("template...")
+- On selection: load template into config editor, reset select to placeholder
+- Template load triggers the existing 500ms debounce → `setConfig()` flow
+
+### Implementation Steps
+
+| Step | Action |
+|---|---|
+| 6-1 | Add `CONFIG_TEMPLATES` object to `main.js` with template strings |
+| 6-2 | Add `<select id="config-template-select">` to `index.html` in config panel header |
+| 6-3 | Add event listener: on change, setValue on configEditor, reset select |
+| 6-4 | Add CSS for template select alignment |
+| 6-5 | Add contract tests for `#config-template-select` landmark |
+| 6-6 | Run full `dotnet test` — all pass |
+
+**Exit criteria**: Templates load into config editor, trigger lint with new config, all tests pass.

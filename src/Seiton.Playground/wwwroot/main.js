@@ -463,6 +463,49 @@ const configPanel = document.getElementById('config-panel');
 const configToggleBtn = document.getElementById('config-toggle-btn');
 const configEditorWrap = document.getElementById('config-editor-wrap');
 const configDiagnosticsEl = document.getElementById('config-diagnostics');
+const configTemplateSelect = document.getElementById('config-template-select');
+
+/** Built-in config templates for quick setup. */
+const CONFIG_TEMPLATES = {
+  timeoutAndLatest: `fix:
+  defaults:
+    job-timeout-minutes: 15
+
+rules:
+  runner-no-latest:
+    fix-mapping:
+      ubuntu-latest: "ubuntu-24.04"
+      windows-latest: "windows-2025"
+      macos-latest: "macos-15"
+`,
+  fullFix: `fix:
+  defaults:
+    job-timeout-minutes: 15
+  pinning:
+    enable-network: true
+    min-age-days: 14
+  images:
+    enable-network: true
+
+rules:
+  runner-no-latest:
+    fix-mapping:
+      ubuntu-latest: "ubuntu-24.04"
+      windows-latest: "windows-2025"
+      macos-latest: "macos-15"
+`,
+  exclusions: `rules:
+  job-timeout-minutes-required:
+    enabled: false
+  unpinned-uses:
+    enabled: false
+
+exclusions:
+  - file: ".github/workflows/generated-*.yml"
+    rules:
+      - runner-no-latest
+`,
+};
 
 const configEditor = CodeMirror(document.getElementById('config-editor'), {
   mode: 'yaml',
@@ -482,6 +525,23 @@ configToggleBtn.addEventListener('click', () => {
   if (!collapsed) {
     configEditor.refresh();
   }
+});
+
+configTemplateSelect.addEventListener('change', () => {
+  const key = configTemplateSelect.value;
+  if (!key || !CONFIG_TEMPLATES[key]) {
+    return;
+  }
+  // Expand panel if collapsed
+  if (configPanel.classList.contains('config-panel--collapsed')) {
+    configPanel.classList.remove('config-panel--collapsed');
+    configToggleBtn.setAttribute('aria-expanded', 'true');
+    configEditorWrap.hidden = false;
+  }
+  configEditor.setValue(CONFIG_TEMPLATES[key]);
+  configEditor.refresh();
+  // Reset select to placeholder so the same template can be re-selected
+  configTemplateSelect.value = '';
 });
 
 configEditor.on('change', () => {

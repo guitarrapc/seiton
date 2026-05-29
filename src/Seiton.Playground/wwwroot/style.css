@@ -1141,11 +1141,16 @@ footer a {
   background: var(--editor-surface);
 }
 
+.config-panel__header {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
 .config-panel__toggle {
   display: flex;
   align-items: center;
   gap: 0.4rem;
-  width: 100%;
   padding: 0.4rem 0.75rem;
   border: none;
   background: transparent;
@@ -1167,6 +1172,21 @@ footer a {
 
 .config-panel:not(.config-panel--collapsed) .config-panel__toggle-icon {
   transform: rotate(90deg);
+}
+
+.config-panel__template-select {
+  font-size: 0.78rem;
+  padding: 0.2rem 0.4rem;
+  border: 1px solid var(--border-default);
+  border-radius: 3px;
+  background: var(--editor-surface);
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.config-panel__template-select:hover {
+  color: var(--text);
+  border-color: var(--accent);
 }
 
 .config-panel__body {
