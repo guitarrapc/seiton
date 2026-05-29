@@ -438,7 +438,7 @@ Exit codes:
 
 ---
 
-### Phase 5: 拡張 (Priority: Low) — 将来対応
+### Phase 5: 拡張 (Priority: Low)
 
 **目標**: cursor 対応や `--ci` など横展開。
 
