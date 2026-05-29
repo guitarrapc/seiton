@@ -545,3 +545,111 @@ Full suite: 2198 tests passed, 0 failed.
 - [x] 1-5: Program.cs 配線
 - [x] 1-6: 基本テスト (8 cases, all green)
 - [x] 1-7: NativeAOT 検証
+
+---
+
+## 14. Phase 2 実装結果
+
+### 14.1 実装サマリ
+
+Phase 2 (References 充実) を完了。agent が参照できる詳細リファレンスファイルを追加。
+
+#### 作成ファイル
+
+| File | 役割 |
+|------|------|
+| `src/Seiton/Skills/references/rules.md` | 全 61 ルールの ID・severity・fix 対応・scope・カテゴリ分類 |
+| `src/Seiton/Skills/references/fix-mode.md` | fix コマンド・フラグ・exit code・network 要件 |
+| `src/Seiton/Skills/references/configuration.md` | seiton.yaml の全スキーマと common patterns |
+
+#### 変更ファイル
+
+| File | 変更内容 |
+|------|----------|
+| `src/Seiton/Skills/SKILL.md` | 末尾に References セクション追加 |
+| `tests/Seiton.Tests/InstallCommandTests.cs` | `Run_Skills_DeploysReferenceFiles` テスト追加 |
+
+### 14.2 テスト結果
+
+| テストケース | 結果 |
+|---|---|
+| `Run_Skills_DeploysReferenceFiles` | ✅ Pass |
+
+Full suite: 2199 tests passed, 0 failed.
+
+### 14.3 パフォーマンス
+
+- **実行特性**: コンテンツ追加のみ（4 ファイル, 合計 ~12KB）
+- **ベンチマーク**: 不要（parser/linter コード変更なし）
+- **既存ベンチマークへの影響**: なし
+
+### 14.4 設計判断
+
+- `.csproj` 変更不要 — 既存の `Skills\**\*` glob が `references/` を自動包含
+- NativeAOT 安全 — EmbeddedResource のみ（リフレクションなし）
+- コンテンツは `seiton rules` 出力と `docs/configuration.md` から正確に作成
+
+### 14.5 Phase 2 完了状態
+
+- [x] 2-1: rules.md 作成 (61 rules, categories, opt-in/severity/fix)
+- [x] 2-2: fix-mode.md 作成 (commands, flags, exit codes, network)
+- [x] 2-3: configuration.md 作成 (full schema, common patterns)
+- [x] 2-4: テスト追加 (references/ deployment verified)
+
+---
+
+## 15. Phase 3 実装結果
+
+### 15.1 実装サマリ
+
+Phase 3 (マルチターゲット: copilot 対応) を完了。`--target copilot` で `.github/instructions/seiton/` へ全ファイルを展開する機能のテスト強化と UX 検証を実施。
+
+**注**: copilot 出力先ロジック (3-1) とテスト (3-2) は Phase 1 で先行実装済み。Phase 3 では、包括的テスト追加とコンテンツ適合性評価 (3-3) を実施。
+
+#### 変更ファイル
+
+| File | 変更内容 |
+|------|----------|
+| `tests/Seiton.Tests/InstallCommandTests.cs` | `Run_Skills_CopilotTarget_CreatesSkillFiles` を拡充（references 検証追加）、`Run_Skills_CopilotTarget_ExistingWithForce_Overwrites` 追加 |
+
+### 15.2 テスト結果
+
+| テストケース | 結果 |
+|---|---|
+| `Run_Skills_CopilotTarget_CreatesSkillFiles` (拡充) | ✅ Pass |
+| `Run_Skills_CopilotTarget_ExistingWithForce_Overwrites` (新規) | ✅ Pass |
+
+Full suite: 2200 tests passed, 0 failed.
+
+### 15.3 パフォーマンス
+
+- **実行特性**: テスト追加のみ、プロダクションコード変更なし
+- **ベンチマーク**: 不要（parser/linter コード変更なし）
+- **既存ベンチマークへの影響**: なし
+
+### 15.4 UX レビュー結果
+
+| 項目 | 評価 | 理由 |
+|------|------|------|
+| `--target copilot` の直感性 | ✅ Good | プラットフォーム名と一致 |
+| 出力パス `.github/instructions/seiton/` | ✅ Good | Copilot custom instructions の標準位置 |
+| 出力メッセージ "Skills installed" | ✅ Good | 概念は "skills" で統一（Playwright 方式と一致） |
+| エラーメッセージ | ✅ Good | `"unknown target: X. Use 'claude' or 'copilot'."` — actionable |
+| `--force` 動作 | ✅ Good | claude/copilot 両方で同一動作 |
+
+### 15.5 コンテンツ適合性評価 (3-3)
+
+| 評価項目 | 結果 | 理由 |
+|----------|------|------|
+| Copilot が frontmatter を認識するか | ✅ 問題なし | `name`/`description` は Copilot に無視される（エラーにならない） |
+| `applyTo` 追加は必要か | ❌ 不要 | 汎用 instructions として常時利用可能。file-scoped にする必要なし |
+| コンテンツ分岐が必要か | ❌ 不要 | Markdown コンテンツはプラットフォーム非依存 |
+| Playwright 方式との整合性 | ✅ 一致 | 同一コンテンツを全ターゲットに配布 |
+
+**結論**: コンテンツ分岐は不要。同一の EmbeddedResource を両ターゲットに展開する現行方式が最適。
+
+### 15.6 Phase 3 完了状態
+
+- [x] 3-1: copilot 出力先ロジック (Phase 1 で先行実装済み)
+- [x] 3-2: テスト (Phase 1 で基本実装 + Phase 3 で拡充)
+- [x] 3-3: copilot 向けコンテンツ調整 (評価完了: 分岐不要)

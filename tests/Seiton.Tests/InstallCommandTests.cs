@@ -135,8 +135,43 @@ public sealed class InstallCommandTests
 
             await Assert.That(exitCode).IsEqualTo(ExitCode.Success);
 
-            var skillPath = Path.Combine(dir, ".github", "instructions", "seiton", "SKILL.md");
-            await Assert.That(File.Exists(skillPath)).IsTrue();
+            var baseDir = Path.Combine(dir, ".github", "instructions", "seiton");
+            await Assert.That(File.Exists(Path.Combine(baseDir, "SKILL.md"))).IsTrue();
+            await Assert.That(File.Exists(Path.Combine(baseDir, "references", "rules.md"))).IsTrue();
+            await Assert.That(File.Exists(Path.Combine(baseDir, "references", "fix-mode.md"))).IsTrue();
+            await Assert.That(File.Exists(Path.Combine(baseDir, "references", "configuration.md"))).IsTrue();
+
+            // Verify output message references the correct path
+            var output = stdout.ToString();
+            await Assert.That(output).Contains(".github");
+            await Assert.That(output).Contains("instructions");
+        }
+        finally
+        {
+            DeleteDirectory(dir);
+        }
+    }
+
+    [Test]
+    public async Task Run_Skills_CopilotTarget_ExistingWithForce_Overwrites()
+    {
+        var dir = CreateTempDir();
+        try
+        {
+            var skillDir = Path.Combine(dir, ".github", "instructions", "seiton");
+            Directory.CreateDirectory(skillDir);
+            File.WriteAllText(Path.Combine(skillDir, "SKILL.md"), "old copilot content");
+
+            using var stdout = new StringWriter();
+            using var stderr = new StringWriter();
+
+            var exitCode = InstallCommand.Run(skills: true, target: "copilot", output: null, force: true, baseDirectory: dir, stdout, stderr);
+
+            await Assert.That(exitCode).IsEqualTo(ExitCode.Success);
+
+            var content = File.ReadAllText(Path.Combine(skillDir, "SKILL.md"));
+            await Assert.That(content).Contains("name: seiton");
+            await Assert.That(content).DoesNotContain("old copilot content");
         }
         finally
         {
