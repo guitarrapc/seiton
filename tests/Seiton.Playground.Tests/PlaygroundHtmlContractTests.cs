@@ -207,6 +207,48 @@ public sealed class PlaygroundHtmlContractTests
         await Assert.That(js).Contains("dataset.severity");
     }
 
+    [Test]
+    public async Task IndexTemplate_HasConfigPanelLandmarks()
+    {
+        var html = await ReadSourceIndexHtmlAsync();
+        await Assert.That(html).Contains("id=\"config-panel\"", StringComparison.Ordinal);
+        await Assert.That(html).Contains("id=\"config-editor\"", StringComparison.Ordinal);
+        await Assert.That(html).Contains("id=\"config-toggle-btn\"", StringComparison.Ordinal);
+        await Assert.That(html).Contains("id=\"config-editor-wrap\"", StringComparison.Ordinal);
+        await Assert.That(html).Contains("id=\"config-diagnostics\"", StringComparison.Ordinal);
+    }
+
+    [Test]
+    public async Task IndexTemplate_ConfigToggle_HasAriaExpandedAndControls()
+    {
+        var html = await ReadSourceIndexHtmlAsync();
+        await Assert.That(html).Contains("aria-expanded=\"false\"", StringComparison.Ordinal);
+        await Assert.That(html).Contains("aria-controls=\"config-editor-wrap\"", StringComparison.Ordinal);
+    }
+
+    [Test]
+    public async Task Stylesheet_DefinesConfigPanelClasses()
+    {
+        var path = Path.Combine(RepoPaths.FindRepoRoot(), "src", "Seiton.Playground", "wwwroot", "style.css");
+        var css = await File.ReadAllTextAsync(path);
+        await Assert.That(css).Contains(".config-panel");
+        await Assert.That(css).Contains(".config-panel--collapsed");
+        await Assert.That(css).Contains(".config-panel__toggle");
+        await Assert.That(css).Contains(".config-panel__body");
+        await Assert.That(css).Contains(".config-diagnostics");
+    }
+
+    [Test]
+    public async Task MainJs_ConfigEditor_HasDebounceAndSetConfigCall()
+    {
+        var path = Path.Combine(RepoPaths.FindRepoRoot(), "src", "Seiton.Playground", "wwwroot", "main.js");
+        var js = await File.ReadAllTextAsync(path);
+        await Assert.That(js).Contains("CONFIG_DEBOUNCE_MS");
+        await Assert.That(js).Contains("setConfig(");
+        await Assert.That(js).Contains("configEditor");
+        await Assert.That(js).Contains("renderConfigDiagnostics");
+    }
+
     private static async Task<string> ReadSourceIndexHtmlAsync()
     {
         var path = Path.Combine(RepoPaths.FindRepoRoot(), "src", "Seiton.Playground", "wwwroot", "index.html");

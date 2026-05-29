@@ -1134,3 +1134,61 @@ footer a {
 .theme-cycle-btn[data-theme-mode='dark'] .theme-cycle-btn__svg--dark {
   display: block;
 }
+
+/* ─── Config Panel ─── */
+.config-panel {
+  border-top: 1px solid var(--border-pane);
+  background: var(--editor-surface);
+}
+
+.config-panel__toggle {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  width: 100%;
+  padding: 0.4rem 0.75rem;
+  border: none;
+  background: transparent;
+  color: var(--muted);
+  font-size: 0.82rem;
+  cursor: pointer;
+  text-align: left;
+}
+
+.config-panel__toggle:hover {
+  color: var(--text);
+}
+
+.config-panel__toggle-icon {
+  display: inline-block;
+  font-size: 0.65rem;
+  transition: transform 0.15s ease;
+}
+
+.config-panel:not(.config-panel--collapsed) .config-panel__toggle-icon {
+  transform: rotate(90deg);
+}
+
+.config-panel__body {
+  padding: 0;
+}
+
+#config-editor .CodeMirror {
+  height: 160px;
+  font-size: 0.85rem;
+  border-top: 1px solid var(--border-pane);
+}
+
+.config-diagnostics {
+  padding: 0.35rem 0.75rem;
+  font-size: 0.78rem;
+  color: var(--danger);
+  background: var(--notification-error-bg);
+  border-top: 1px solid var(--border-pane);
+  max-height: 5rem;
+  overflow-y: auto;
+}
+
+.config-diagnostics:empty {
+  display: none;
+}

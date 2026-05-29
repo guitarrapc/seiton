@@ -79,6 +79,25 @@ public static partial class LintInterop
     }
 
     /// <summary>
+    /// Sets the lint configuration from YAML text (same format as <c>seiton.yaml</c>).
+    /// Parsed config is cached with XxHash64 content hashing to avoid re-parse on cosmetic edits.
+    /// </summary>
+    /// <param name="configYaml">Config YAML text. Null/empty resets to default.</param>
+    /// <returns>UTF-8 JSON byte array: empty array <c>[]</c> on success, diagnostic array on validation errors.</returns>
+    [JSExport]
+    public static byte[] SetConfig(string? configYaml)
+    {
+        try
+        {
+            return PlaygroundLintRunner.SetConfig(configYaml);
+        }
+        catch (Exception ex)
+        {
+            return SerializeInternalError(ex);
+        }
+    }
+
+    /// <summary>
     /// Reports an automatic-fix failure to the browser console without allowing the
     /// exception to cross the WASM interop boundary.
     /// </summary>

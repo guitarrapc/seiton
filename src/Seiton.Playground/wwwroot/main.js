@@ -424,6 +424,7 @@ const editor = CodeMirror(document.getElementById('editor'), {
 function syncEditorTheme() {
   editor.setOption('theme', getCodeMirrorTheme());
   editor.refresh();
+  syncConfigEditorTheme();
 }
 
 playgroundColorSchemeDarkQuery().addEventListener('change', () => {
@@ -456,6 +457,63 @@ if (themeCycleBtn) {
 }
 updateThemeCycleButton();
 
+/* ─── Config Editor ─── */
+const CONFIG_DEBOUNCE_MS = 500;
+const configPanel = document.getElementById('config-panel');
+const configToggleBtn = document.getElementById('config-toggle-btn');
+const configEditorWrap = document.getElementById('config-editor-wrap');
+const configDiagnosticsEl = document.getElementById('config-diagnostics');
+
+const configEditor = CodeMirror(document.getElementById('config-editor'), {
+  mode: 'yaml',
+  theme: getCodeMirrorTheme(),
+  lineNumbers: true,
+  lineWrapping: true,
+  viewportMargin: Infinity,
+  value: '',
+});
+
+let configDebounceId = null;
+
+configToggleBtn.addEventListener('click', () => {
+  const collapsed = configPanel.classList.toggle('config-panel--collapsed');
+  configToggleBtn.setAttribute('aria-expanded', String(!collapsed));
+  configEditorWrap.hidden = collapsed;
+  if (!collapsed) {
+    configEditor.refresh();
+  }
+});
+
+configEditor.on('change', () => {
+  if (configDebounceId !== null) {
+    clearTimeout(configDebounceId);
+  }
+  configDebounceId = setTimeout(() => {
+    configDebounceId = null;
+    const yaml = configEditor.getValue();
+    const diags = setConfig(yaml);
+    renderConfigDiagnostics(diags);
+  }, CONFIG_DEBOUNCE_MS);
+});
+
+function renderConfigDiagnostics(diagnostics) {
+  if (!diagnostics || diagnostics.length === 0) {
+    configDiagnosticsEl.hidden = true;
+    configDiagnosticsEl.textContent = '';
+    return;
+  }
+  configDiagnosticsEl.hidden = false;
+  configDiagnosticsEl.textContent = diagnostics
+    .map(d => d.message || d.Message || '')
+    .filter(Boolean)
+    .join('\n');
+}
+
+function syncConfigEditorTheme() {
+  configEditor.setOption('theme', getCodeMirrorTheme());
+  configEditor.refresh();
+}
+
 const DEBOUNCE_MS = 300;
 const utf8Decoder = new TextDecoder();
 let debounceId = null;
@@ -466,12 +524,16 @@ let sizingRaf = null;
  * Concurrency & staleness control for lint execution.
  * - lintInProgress: true while RunLint is executing (prevents re-entry)
  * - lintPendingRetry: set to true if a change occurred while lint was in progress; triggers re-lint on completion
- * - lastLintedSource / lastLintedFilePath: track previous lint inputs to skip redundant lint for identical content
+ * - lastLintedSource / lastLintedFilePath / lastConfigVersion: track previous lint inputs to skip redundant lint for identical content
  */
 let lintInProgress = false;
 let lintPendingRetry = false;
 let lastLintedSource = '';
 let lastLintedFilePath = '';
+
+/** Monotonically incremented on each successful SetConfig call; included in staleness check. */
+let configVersion = 0;
+let lastConfigVersion = 0;
 
 editor.on('change', (_cm, changeObj) => {
   if (sizingRaf === null) {
@@ -834,8 +896,8 @@ function runLint() {
   const source = editor.getValue();
   const filePath = getSelectedFilePath();
 
-  // Staleness check: skip if content + filePath are identical to last successful lint.
-  if (source === lastLintedSource && filePath === lastLintedFilePath) {
+  // Staleness check: skip if content + filePath + config are identical to last successful lint.
+  if (source === lastLintedSource && filePath === lastLintedFilePath && configVersion === lastConfigVersion) {
     return;
   }
 
@@ -853,6 +915,7 @@ function runLint() {
     if (!isInternalError) {
       lastLintedSource = source;
       lastLintedFilePath = filePath;
+      lastConfigVersion = configVersion;
     }
     renderResults(diagnostics);
   } catch (err) {
@@ -876,6 +939,36 @@ function runLint() {
       debounceId = null;
       runLint();
     }, DEBOUNCE_MS);
+  }
+}
+
+/**
+ * Sends config YAML to the WASM SetConfig export. On success, increments configVersion
+ * and triggers re-lint. Returns parsed diagnostics array (empty on success).
+ * @param {string} configYaml
+ * @returns {Array} config diagnostics (empty array on success)
+ */
+function setConfig(configYaml) {
+  if (!runtimeAlive || !runtimeReady || !exports) {
+    return [];
+  }
+  try {
+    const utf8Bytes = exports.Seiton.Playground.LintInterop.SetConfig(configYaml);
+    const json = utf8Decoder.decode(utf8Bytes);
+    const diagnostics = JSON.parse(json);
+    if (diagnostics.length === 0) {
+      // Success: config updated, invalidate staleness and trigger re-lint
+      configVersion++;
+      runLint();
+    }
+    return diagnostics;
+  } catch (err) {
+    if (isRuntimeDeadError(err)) {
+      handleRuntimeDeath();
+      return [];
+    }
+    showToast(err?.message ?? String(err), 'error');
+    return [];
   }
 }
 

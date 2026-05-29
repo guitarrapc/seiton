@@ -55,7 +55,24 @@ public static class PlaygroundLintRunner
     /// <summary>Incremental parse context for D-5b root section reuse. Guarded by <see cref="EngineGate"/>.</summary>
     private static readonly IncrementalParseContext IncrementalCtx = new();
 
-    /// <summary>Cached last input source string for identity-based short circuit. Guarded by <see cref="EngineGate"/>.</summary>
+    // ─── Config Content-Hash Caching ───
+
+    /// <summary>Default config used when no user config is set.</summary>
+    private static readonly LintConfig DefaultConfig = LintWithFixMetadata;
+
+    /// <summary>XxHash64 of normalized config content. Zero when no user config is set.</summary>
+    private static ulong _configHash;
+
+    /// <summary>Last successfully parsed user config. Null means use <see cref="DefaultConfig"/>.</summary>
+    private static LintConfig? _cachedConfig;
+
+    /// <summary>Shared empty JSON array literal <c>[]</c>.</summary>
+    private static readonly byte[] EmptyJsonArray = "[]"u8.ToArray();
+
+    /// <summary>Last SetConfig diagnostic result (cached for hash-hit zero-alloc return).</summary>
+    private static byte[] _cachedConfigDiag = EmptyJsonArray;
+
+    // ─── Identity-based short circuit ───
     private static string? _lastYamlSource;
 
     /// <summary>Cached last file path for identity-based short circuit. Guarded by <see cref="EngineGate"/>.</summary>
@@ -63,6 +80,129 @@ public static class PlaygroundLintRunner
 
     /// <summary>Cached last JSON output for identity-based short circuit. Guarded by <see cref="EngineGate"/>.</summary>
     private static byte[]? _lastJsonOutput;
+
+    /// <summary>Gets the active lint config (user config if set, otherwise default).</summary>
+    private static LintConfig ActiveConfig => _cachedConfig ?? DefaultConfig;
+
+    /// <summary>
+    /// Sets the lint configuration from YAML text. Uses content-hash caching (XxHash64) to
+    /// skip re-parse when the normalized config content has not meaningfully changed.
+    /// </summary>
+    /// <param name="configYaml">
+    /// Config YAML text (same format as <c>seiton.yaml</c>).
+    /// Null, empty, or whitespace-only resets to default config.
+    /// </param>
+    /// <returns>
+    /// UTF-8 JSON byte array of config diagnostics. Empty array <c>[]</c> on success.
+    /// On validation errors, returns diagnostic array; previous valid config is retained.
+    /// </returns>
+    public static byte[] SetConfig(string? configYaml)
+    {
+        lock (EngineGate)
+        {
+            // Null/empty/whitespace: reset to default
+            if (string.IsNullOrWhiteSpace(configYaml))
+            {
+                _cachedConfig = null;
+                _configHash = 0;
+                _cachedConfigDiag = EmptyJsonArray;
+                InvalidateLintCache();
+                return EmptyJsonArray;
+            }
+
+            // Normalize: strip trailing whitespace per line, remove blank lines
+            var normalized = NormalizeConfigForHash(configYaml);
+
+            // Compute XxHash64
+            var byteCount = Encoding.UTF8.GetByteCount(normalized);
+            byte[]? rented = null;
+            Span<byte> utf8Span = byteCount <= 1024
+                ? stackalloc byte[byteCount]
+                : (rented = System.Buffers.ArrayPool<byte>.Shared.Rent(byteCount)).AsSpan(0, byteCount);
+            try
+            {
+                Encoding.UTF8.GetBytes(normalized, utf8Span);
+                var hash = XxHash64.Hash(utf8Span);
+
+                // Hash-hit: return cached result (zero allocation)
+                if (hash == _configHash && _configHash != 0)
+                {
+                    return _cachedConfigDiag;
+                }
+
+                // Hash-miss: parse config
+                var validation = LintConfigLibrary.Validate(configYaml, "seiton.yaml");
+
+                if (validation.Diagnostics.Length == 0)
+                {
+                    // Success: update cache
+                    _cachedConfig = validation.Config;
+                    _configHash = hash;
+                    _cachedConfigDiag = EmptyJsonArray;
+                    InvalidateLintCache();
+                    return EmptyJsonArray;
+                }
+
+                // Validation errors: keep previous config, serialize diagnostics
+                var diagBytes = SerializeConfigDiagnostics(validation.Diagnostics);
+                // Do NOT update _configHash — allows retry with same content after fixing
+                _cachedConfigDiag = diagBytes;
+                return diagBytes;
+            }
+            finally
+            {
+                if (rented is not null)
+                {
+                    System.Buffers.ArrayPool<byte>.Shared.Return(rented);
+                }
+            }
+        }
+    }
+
+    /// <summary>
+    /// Normalizes config YAML for hash stability: strips trailing whitespace per line,
+    /// removes blank lines, joins with \n.
+    /// </summary>
+    private static string NormalizeConfigForHash(string configYaml)
+    {
+        var lines = configYaml.Split('\n');
+        var sb = new StringBuilder(configYaml.Length);
+        var first = true;
+        for (var i = 0; i < lines.Length; i++)
+        {
+            var trimmed = lines[i].TrimEnd();
+            if (trimmed.Length == 0)
+            {
+                continue;
+            }
+            if (!first)
+            {
+                sb.Append('\n');
+            }
+            sb.Append(trimmed);
+            first = false;
+        }
+        return sb.ToString();
+    }
+
+    /// <summary>Serializes config validation diagnostics to UTF-8 JSON.</summary>
+    private static byte[] SerializeConfigDiagnostics(Diagnostic[] diagnostics)
+    {
+        var buffer = new ArrayBufferWriter<byte>(256);
+        using (var writer = new Utf8JsonWriter(buffer, CamelCaseWriterOptions))
+        {
+            WriteDiagnosticsArray(writer, diagnostics.AsSpan());
+        }
+        return buffer.WrittenSpan.ToArray();
+    }
+
+    /// <summary>Invalidates identity-based lint cache so next RunToJsonUtf8 re-lints.</summary>
+    private static void InvalidateLintCache()
+    {
+        _lastYamlSource = null;
+        _lastFilePath = null;
+        _lastJsonOutput = null;
+    }
 
     /// <summary>
     /// Parses and lints <paramref name="yamlSource"/> and returns a UTF-8 JSON byte array of diagnostics.
@@ -90,11 +230,13 @@ public static class PlaygroundLintRunner
             ReadOnlySpan<Diagnostic> diagnosticsToSerialize;
             AstArena? ownedArena = null;
 
+            var config = ActiveConfig;
+
             // Action metadata files (action.yml) require classified parsing — not incremental.
             if (DocumentKindClassifier.GetPathHintKind(filePath) == DocumentKind.ActionMetadata)
             {
                 var classifiedResult = WorkflowParser.ParseClassified(utf8Yaml, filePath, out ownedArena);
-                var lintResult = Engine.CheckWithParseResult(utf8Yaml, filePath, LintWithFixMetadata, classifiedResult.ParseResult, ownedArena);
+                var lintResult = Engine.CheckWithParseResult(utf8Yaml, filePath, config, classifiedResult.ParseResult, ownedArena);
                 diagnosticsToSerialize = lintResult.Diagnostics.AsSpan();
             }
             else
@@ -107,7 +249,7 @@ public static class PlaygroundLintRunner
                 var skipJobs = IncrementalCtx.BuildSkipJobs(jobCount, parseResult.Workflow);
 
                 // Lint with optional job skipping
-                var lintResult = Engine.CheckWithParseResult(utf8Yaml, filePath, LintWithFixMetadata, parseResult.Data, IncrementalCtx.Arena, skipJobs);
+                var lintResult = Engine.CheckWithParseResult(utf8Yaml, filePath, config, parseResult.Data, IncrementalCtx.Arena, skipJobs);
 
                 // Merge fresh diagnostics with cached diagnostics for skipped jobs
                 diagnosticsToSerialize = IncrementalCtx.MergeDiagnosticsWithCache(lintResult.Diagnostics, skipJobs);
@@ -196,7 +338,7 @@ public static class PlaygroundLintRunner
         {
             lock (EngineGate)
             {
-                using var result = Engine.Check(current, filePath, LintWithFixMetadata);
+                using var result = Engine.Check(current, filePath, ActiveConfig);
                 if (!result.HasFixableDiagnostics)
                 {
                     return Encoding.UTF8.GetString(current);
