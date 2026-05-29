@@ -21,7 +21,7 @@ seiton install --skills [--target claude|copilot] [--output PATH] [--force]
 | Flag | Short | Type | Default | Description |
 |---|---|---|---|---|
 | `--skills` | | `bool` | `false` | Install agent skill files to the workspace. |
-| `--target` | `-t` | `claude\|copilot` | `claude` | Target agent platform. `claude` → `.claude/skills/seiton/`, `copilot` → `.github/copilot-instructions.md` or `.github/instructions/`. |
+| `--target` | `-t` | `claude\|copilot` | `claude` | Target agent platform. `claude` → `.claude/skills/seiton/`, `copilot` → `.github/instructions/`. |
 | `--output` | `-o` | `string` | (platform default) | Override the output directory path. |
 | `--force` | `-f` | `bool` | `false` | Overwrite existing skill files. |
 
@@ -376,3 +376,96 @@ Exit codes:
 6. テストを作成・実行（Red → Green）
 7. CLI spec ドキュメントを更新
 8. `dotnet build` + `dotnet test` で全体検証
+
+---
+
+## 12. 優先度付き実装フェーズ
+
+### Phase 1: MVP (Priority: High) — 最小限動くものを出す
+
+**目標**: `seiton install --skills` で SKILL.md が展開できる状態にする。
+
+| # | タスク | 成果物 | 完了条件 |
+|---|---|---|---|
+| 1-1 | SKILL.md を作成 | `src/Seiton/Skills/SKILL.md` | seiton のコマンド一覧・出力の読み方・推奨ワークフローが記載されている |
+| 1-2 | EmbeddedResource 設定 | `Seiton.csproj` 変更 | `dotnet build` で SKILL.md がアセンブリに埋め込まれる |
+| 1-3 | SkillResources ヘルパー | `SkillResources.cs` | 埋め込みリソースを列挙・読み出しできる |
+| 1-4 | InstallCommand 実装 | `InstallCommand.cs` | `--skills` で `.claude/skills/seiton/` に展開、`--force` 対応 |
+| 1-5 | Program.cs 配線 | `Program.cs` 変更 | `seiton install --skills` が動作する |
+| 1-6 | 基本テスト | `InstallCommandTests.cs` | テストケース #1, #3, #4, #6 が Green |
+| 1-7 | NativeAOT 検証 | — | `dotnet publish -c Release` が成功し、リソース読み出しが動く |
+
+**Phase 1 完了 = リリース可能な最小機能**
+
+---
+
+### Phase 2: References 充実 (Priority: Medium) — コンテンツ拡充
+
+**目標**: agent が実際に有用な指示を得られるだけの reference を揃える。
+
+| # | タスク | 成果物 | 完了条件 |
+|---|---|---|---|
+| 2-1 | rules.md 作成 | `src/Seiton/Skills/references/rules.md` | 全ルールの ID・概要・修正例が記載されている |
+| 2-2 | fix-mode.md 作成 | `src/Seiton/Skills/references/fix-mode.md` | `--fix`, `--dry-run`, `--check`, network flags の使い分けが記載 |
+| 2-3 | configuration.md 作成 | `src/Seiton/Skills/references/configuration.md` | seiton.yaml の全設定項目と記述例 |
+| 2-4 | テスト追加 | テストケース #7 追加 | references/ 配下が全て展開されることを検証 |
+
+---
+
+### Phase 3: マルチターゲット (Priority: Medium) — copilot 対応
+
+**目標**: `--target copilot` で GitHub Copilot 向けにも展開できるようにする。
+
+| # | タスク | 成果物 | 完了条件 |
+|---|---|---|---|
+| 3-1 | copilot 出力先ロジック | `InstallCommand.cs` 変更 | `--target copilot` で `.github/instructions/seiton/` に出力 |
+| 3-2 | テスト追加 | テストケース #2, #5 追加 | copilot target と unknown target のテストが Green |
+| 3-3 | copilot 向けコンテンツ調整 | 必要に応じてコンテンツ分岐 | copilot instructions 形式で有用な出力になっている |
+
+---
+
+### Phase 4: ドキュメント・CI (Priority: Low) — 仕上げ
+
+**目標**: spec 更新と継続的なコンテンツ鮮度保証。
+
+| # | タスク | 成果物 | 完了条件 |
+|---|---|---|---|
+| 4-1 | CLI spec 更新 | `Seiton_CLI_spec.md` §1.7 追加 | install コマンドの仕様が spec に記載 |
+| 4-2 | C# spec 更新 | `Seiton_CLI_csharp_spec.md` 追記 | 実装詳細が spec に記載 |
+| 4-3 | コンテンツ同期 CI | GitHub Actions workflow | `seiton rules --format json` と `references/rules.md` の差分検出 |
+| 4-4 | README 更新 | `README.md` | install --skills の使い方を記載 |
+
+---
+
+### Phase 5: 拡張 (Priority: Low) — 将来対応
+
+**目標**: cursor 対応や `--ci` など横展開。
+
+| # | タスク | 優先度 | 備考 |
+|---|---|---|---|
+| 5-1 | `--target cursor` 対応 | Low | `.cursor/rules/seiton/` への展開 |
+| 5-2 | `seiton install --ci` | Low | CI workflow テンプレート配布 |
+| 5-3 | `--output` カスタムパス | Low | 任意パスへの展開 (Phase 1 で実装しておいてもよい) |
+| 5-4 | `seiton install --config` | Low | `init` の alias として |
+
+---
+
+### フェーズ間の依存関係
+
+```mermaid
+graph LR
+    P1[Phase 1: MVP] --> P2[Phase 2: References]
+    P1 --> P3[Phase 3: Multi-target]
+    P2 --> P4[Phase 4: Docs/CI]
+    P3 --> P4
+    P4 --> P5[Phase 5: Extensions]
+```
+
+### 判断基準
+
+| 判断ポイント | 推奨 |
+|---|---|
+| Phase 1 だけでリリースしてよいか？ | **Yes** — SKILL.md 単体でも agent に十分有用 |
+| Phase 2 と Phase 3 の順序は？ | コンテンツ (Phase 2) を先にする方が、単一ターゲットでも価値が高い |
+| Phase 4 の CI 同期は必須か？ | No — 手動更新で十分な規模。ルール数が 30+ になったら検討 |
+| Phase 5 をいつやるか？ | ユーザーからの要望が来てから |
