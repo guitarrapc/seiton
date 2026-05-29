@@ -94,7 +94,7 @@ public sealed class InstallCommandTests
             var exitCode = InstallCommand.Run(skills: false, target: "claude", output: null, force: false, ci: false, baseDirectory: dir, stdout, stderr);
 
             await Assert.That(exitCode).IsEqualTo(ExitCode.Success);
-            await Assert.That(stdout.ToString()).Contains("seiton install --skills");
+            await Assert.That(stdout.ToString()).Contains("--output PATH");
         }
         finally
         {

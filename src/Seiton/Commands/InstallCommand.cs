@@ -12,7 +12,7 @@ internal static class InstallCommand
 
         if (!skills && !ci)
         {
-            outWriter.WriteLine("Usage: seiton install --skills [--target claude|copilot|cursor] [--ci] [--force]");
+            outWriter.WriteLine("Usage: seiton install --skills [--target claude|copilot|cursor] [--ci] [--output PATH] [--force]");
             return ExitCode.Success;
         }
 

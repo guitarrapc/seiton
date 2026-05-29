@@ -13,7 +13,7 @@ copilotcli_skill_investigation.mdの設計を受けて、 seiton CLI (C# / Nativ
 ### 1.1 コマンド構文
 
 ```bash
-seiton install --skills [--target claude|copilot] [--output PATH] [--force]
+seiton install --skills [--target claude|copilot|cursor] [--ci] [--output PATH] [--force]
 ```
 
 ### 1.2 フラグ定義
@@ -21,9 +21,10 @@ seiton install --skills [--target claude|copilot] [--output PATH] [--force]
 | Flag | Short | Type | Default | Description |
 |---|---|---|---|---|
 | `--skills` | | `bool` | `false` | Install agent skill files to the workspace. |
-| `--target` | `-t` | `claude\|copilot` | `claude` | Target agent platform. `claude` → `.claude/skills/seiton/`, `copilot` → `.github/instructions/`. |
-| `--output` | `-o` | `string` | (platform default) | Override the output directory path. |
-| `--force` | `-f` | `bool` | `false` | Overwrite existing skill files. |
+| `--ci` | | `bool` | `false` | Install a CI workflow template to `.github/workflows/seiton.yml`. |
+| `--target` | `-t` | `claude\|copilot\|cursor` | `claude` | Target agent platform. `claude` → `.claude/skills/seiton/`, `copilot` → `.github/instructions/seiton/`, `cursor` → `.cursor/rules/seiton/`. |
+| `--output` | `-o` | `string` | (platform default) | Override the output path (skills directory or CI workflow file, depending on flags). |
+| `--force` | `-f` | `bool` | `false` | Overwrite existing files. |
 
 ### 1.3 動作仕様
 
