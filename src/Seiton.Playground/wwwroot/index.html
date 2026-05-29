@@ -136,7 +136,7 @@
     <section id="linter">
       <div id="editor-wrap" class="split-pane">
         <button id="apply-fixes-btn" type="button" class="apply-fixes-fab" hidden
-          title="Apply every fix suggested in the diagnostics. Playground fixes run offline, it skips network-dependent pinning/digest remediation.">
+          title="Apply every fix suggested in the diagnostics. When enable-network is set in config, resolves action SHAs and image digests via GitHub API (unauthenticated, 60 req/hr).">
           Apply all fixes
         </button>
         <div id="editor"></div>
@@ -198,10 +198,8 @@
           through another backend.
         </li>
         <li>
-          <strong>Apply all fixes</strong> runs locally; remediations that need network lookups (for example
-          some
-          pinning
-          or digest updates) are skipped. See the button tooltip for more details.
+          <strong>Apply all fixes</strong> runs locally for most fixes. When <code>enable-network: true</code>
+          is set in config, SHA/digest pinning resolves via the GitHub API (unauthenticated, 60 requests/hour limit).
         </li>
         <li>
           Behavior matches the bundled Seiton build. A version badge appears in the header, which reflects

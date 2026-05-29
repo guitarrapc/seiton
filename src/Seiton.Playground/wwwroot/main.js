@@ -476,8 +476,8 @@ rules:
   checkout-persist-credentials:
     severity: warning
 `,
-  fullFix: `# NOTE: enable-network requires CLI (seiton --fix).
-# The playground runs offline — SHA/digest pinning is skipped here.
+  fullFix: `# NOTE: enable-network uses the GitHub API (unauthenticated, 60 req/hr limit).
+# SHA/digest pinning is resolved via api.github.com when "Apply fixes" is clicked.
 fix:
   defaults:
     job-timeout-minutes: 15
@@ -721,20 +721,29 @@ permalinkBtn.addEventListener('click', () => {
   }
 });
 
-applyFixesBtn.addEventListener('click', () => {
+applyFixesBtn.addEventListener('click', async () => {
   if (!runtimeAlive || !runtimeReady || !exports) return;
+  const original = editor.getValue();
+  const filePath = getSelectedFilePath();
+
+  // Disable button and show busy state
+  applyFixesBtn.disabled = true;
+  const originalText = applyFixesBtn.textContent;
+  applyFixesBtn.textContent = 'Fixing\u2026';
+
   try {
-    const original = editor.getValue();
-    const yaml = exports.Seiton.Playground.LintInterop.ApplyAllFixes(
+    const jsonStr = await exports.Seiton.Playground.LintInterop.ApplyAllFixesWithNetworkAsync(
       original,
-      getSelectedFilePath(),
+      filePath,
     );
+    const result = JSON.parse(jsonStr);
+    const yaml = result.yaml;
+
     if (yaml === original) {
-      // Fix pass returned unchanged YAML — either an error occurred
-      // (logged to console.error by C#) or no fixes were applicable.
       showToast('No changes were made. Either no auto-applicable fixes were available or fix application failed (see browser console).', 'info');
       return;
     }
+
     editor.setValue(yaml);
     editor.refresh();
     applyFixesBtn.hidden = true;
@@ -742,12 +751,24 @@ applyFixesBtn.addEventListener('click', () => {
     lastLintedSource = '';
     lastLintedFilePath = '';
     runLint();
+
+    // Show toast with resolution stats if network fixes were attempted
+    if (result.resolved > 0 || result.failed > 0) {
+      const parts = [];
+      if (result.resolved > 0) parts.push(`${result.resolved} pinned`);
+      if (result.failed > 0) parts.push(`${result.failed} failed`);
+      if (result.skipped > 0) parts.push(`${result.skipped} skipped`);
+      showToast(`Fixes applied. Network: ${parts.join(', ')}.`, result.failed > 0 ? 'error' : 'success');
+    }
   } catch (e) {
     if (isRuntimeDeadError(e)) {
       handleRuntimeDeath();
       return;
     }
     showToast(e?.message ?? String(e), 'error');
+  } finally {
+    applyFixesBtn.disabled = false;
+    applyFixesBtn.textContent = originalText;
   }
 });
 

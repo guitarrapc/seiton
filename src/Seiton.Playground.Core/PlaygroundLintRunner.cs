@@ -3,6 +3,7 @@ using System.Text;
 using System.Text.Json;
 using Seiton.Core.Linting;
 using Seiton.Core.Linting.Fixing;
+using Seiton.Core.Linting.PinRemediation;
 using Seiton.Core.Parsing;
 
 namespace Seiton.Playground;
@@ -83,6 +84,14 @@ public static class PlaygroundLintRunner
 
     /// <summary>Gets the active lint config (user config if set, otherwise default).</summary>
     private static LintConfig ActiveConfig => _cachedConfig ?? DefaultConfig;
+
+    // ─── Resolver Overrides (internal for testability) ───
+
+    /// <summary>Override for action SHA resolver. Used in tests; production uses <see cref="DefaultActionShaResolver"/>.</summary>
+    internal static IActionShaResolver? ActionShaResolverOverride;
+
+    /// <summary>Override for image digest resolver. Used in tests; production uses <see cref="DefaultImageDigestResolver"/>.</summary>
+    internal static IImageDigestResolver? ImageDigestResolverOverride;
 
     /// <summary>
     /// Sets the lint configuration from YAML text. Uses content-hash caching (XxHash64) to
@@ -374,6 +383,136 @@ public static class PlaygroundLintRunner
         return Encoding.UTF8.GetString(current);
     }
 
+    /// <summary>
+    /// Applies all fixes including network-based pin remediation (SHA/digest resolution).
+    /// First applies offline fixes (synchronously), then resolves and applies pin fixes via network.
+    /// </summary>
+    public static async Task<AsyncFixResult> ApplyAllFixesAsync(
+        string yamlSource, string filePath, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(yamlSource);
+        ArgumentException.ThrowIfNullOrEmpty(filePath);
+
+        // Phase 1: Apply all offline fixes first (same as sync path)
+        var afterOffline = ApplyAllFixes(yamlSource, filePath);
+
+        // Phase 2: Network-based pin remediation
+        var config = ActiveConfig;
+        var pinningEnabled = config.Fix.Pinning.EnableNetwork;
+        var imagesEnabled = config.Fix.Images.EnableNetwork;
+
+        if (!pinningEnabled && !imagesEnabled)
+        {
+            return new AsyncFixResult(afterOffline, ResolvedCount: 0, SkippedCount: 0, FailedCount: 0);
+        }
+
+        // Lint the offline-fixed YAML to get remaining diagnostics (including unpinned-uses/unpinned-image)
+        var utf8Yaml = Encoding.UTF8.GetBytes(afterOffline);
+        Diagnostic[] diagnostics;
+        lock (EngineGate)
+        {
+            using var lintResult = Engine.Check(utf8Yaml, filePath, config);
+            diagnostics = lintResult.Diagnostics.ToArray();
+        }
+
+        // Filter to only pin-eligible diagnostics
+        var pinDiagnostics = diagnostics
+            .Where(d => d.RuleId is "unpinned-uses" or "unpinned-image")
+            .ToArray();
+
+        if (pinDiagnostics.Length == 0)
+        {
+            return new AsyncFixResult(afterOffline, ResolvedCount: 0, SkippedCount: 0, FailedCount: 0);
+        }
+
+        // Create PinRemediationEngine with resolvers
+        var actionResolver = ActionShaResolverOverride ?? DefaultActionShaResolver;
+        var imageResolver = ImageDigestResolverOverride ?? DefaultImageDigestResolver;
+
+        var engine = new PinRemediationEngine(
+            pinningEnabled ? actionResolver : null,
+            imagesEnabled ? imageResolver : null,
+            config.Fix.Pinning,
+            config.Fix.Images,
+            config.Network);
+
+        // Remediate: resolve SHAs/digests and attach fixes
+        var remediationResult = await engine.RemediateAsync(pinDiagnostics, utf8Yaml, cancellationToken);
+
+        // Apply all pin fixes in a single batch pass. All offsets reference the same
+        // utf8Yaml source, so applying them one-by-one would shift offsets and corrupt later edits.
+        var current = utf8Yaml;
+        var fixablePinDiags = remediationResult.Diagnostics
+            .Where(d => d.Fix is not null)
+            .ToArray();
+
+        if (fixablePinDiags.Length > 0)
+        {
+            current = FixEngine.Apply(current, fixablePinDiags);
+        }
+
+        var finalYaml = Encoding.UTF8.GetString(current);
+        return new AsyncFixResult(
+            finalYaml,
+            remediationResult.ResolvedCount,
+            remediationResult.SkippedCount,
+            remediationResult.FailedCount);
+    }
+
+    // ─── Default Resolvers (lazy-initialized, long-lived for caching) ───
+
+    private static HttpClient? _githubHttpClient;
+    private static GitHubActionShaResolver? _defaultActionShaResolver;
+
+    private static IActionShaResolver? DefaultActionShaResolver
+    {
+        get
+        {
+            if (_defaultActionShaResolver is not null)
+                return _defaultActionShaResolver;
+
+            _githubHttpClient ??= CreatePlaygroundHttpClient("api.github.com");
+            _defaultActionShaResolver = new GitHubActionShaResolver(
+                _githubHttpClient,
+                new FixPinningConfig { EnableNetwork = true },
+                new GitHubNetworkConfig());
+            return _defaultActionShaResolver;
+        }
+    }
+
+    private static HttpClient? _ociHttpClient;
+    private static OciImageDigestResolver? _defaultImageDigestResolver;
+
+    private static IImageDigestResolver? DefaultImageDigestResolver
+    {
+        get
+        {
+            if (_defaultImageDigestResolver is not null)
+                return _defaultImageDigestResolver;
+
+            _ociHttpClient ??= CreatePlaygroundHttpClient(null);
+            _defaultImageDigestResolver = new OciImageDigestResolver(
+                _ociHttpClient,
+                new FixImagesConfig { EnableNetwork = true });
+            return _defaultImageDigestResolver;
+        }
+    }
+
+    /// <summary>
+    /// Creates an HttpClient suitable for WASM (no SocketsHttpHandler — browser handles CORS/redirects).
+    /// </summary>
+    private static HttpClient CreatePlaygroundHttpClient(string? baseAddress)
+    {
+        var client = new HttpClient();
+        if (baseAddress is not null)
+        {
+            client.BaseAddress = new Uri($"https://{baseAddress}");
+        }
+        client.DefaultRequestHeaders.UserAgent.ParseAdd("seiton-playground/1.0");
+        client.Timeout = TimeSpan.FromSeconds(10);
+        return client;
+    }
+
     private static Diagnostic[] CollectAutoApplicableFixes(Diagnostic[] fixables)
     {
         if (fixables.Length == 0)
@@ -443,3 +582,6 @@ public static class PlaygroundLintRunner
         return buf;
     }
 }
+
+/// <summary>Result of async fix application including network-based pin remediation.</summary>
+public readonly record struct AsyncFixResult(string Yaml, int ResolvedCount, int SkippedCount, int FailedCount);
