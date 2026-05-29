@@ -1194,9 +1194,12 @@ footer a {
 }
 
 #config-editor .CodeMirror {
-  height: 160px;
+  min-height: 80px;
+  max-height: 260px;
+  height: auto;
   font-size: 0.85rem;
   border-top: 1px solid var(--border-pane);
+  overflow-y: auto;
 }
 
 .config-diagnostics {

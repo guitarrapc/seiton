@@ -480,7 +480,9 @@ rules:
   checkout-persist-credentials:
     severity: warning
 `,
-  fullFix: `fix:
+  fullFix: `# NOTE: enable-network requires CLI (seiton --fix).
+# The playground runs offline — SHA/digest pinning is skipped here.
+fix:
   defaults:
     job-timeout-minutes: 15
   pinning:
@@ -495,16 +497,19 @@ rules:
       ubuntu-latest: "ubuntu-24.04"
       windows-latest: "windows-2025"
       macos-latest: "macos-15"
+  checkout-persist-credentials:
+    severity: warning
 `,
-  exclusions: `exclusions:
-  - file: ".github/workflows/ci.yml"
-    jobs:
-      - build
+  exclusions: `rules:
+  checkout-persist-credentials:
+    severity: warning
+  job-permissions-required:
+    enabled: false
+
+exclusions:
+  - file: ".github/workflows/test.yml"
     rules:
       - job-timeout-minutes-required
-  - file: ".github/workflows/release-*.yml"
-    rules:
-      - unpinned-uses
       - runner-no-latest
 `,
 };

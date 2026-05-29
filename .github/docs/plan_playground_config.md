@@ -310,6 +310,8 @@ rules:
 
 **2. Full Fix — Network Pinning** (`fullFix`)
 ```yaml
+# NOTE: enable-network requires CLI (seiton --fix).
+# The playground runs offline — SHA/digest pinning is skipped here.
 fix:
   defaults:
     job-timeout-minutes: 15
@@ -325,19 +327,22 @@ rules:
       ubuntu-latest: "ubuntu-24.04"
       windows-latest: "windows-2025"
       macos-latest: "macos-15"
+  checkout-persist-credentials:
+    severity: warning
 ```
 
 **3. Rule Exclusions** (`exclusions`)
 ```yaml
+rules:
+  checkout-persist-credentials:
+    severity: warning
+  job-permissions-required:
+    enabled: false
+
 exclusions:
-  - file: ".github/workflows/ci.yml"
-    jobs:
-      - build
+  - file: ".github/workflows/test.yml"
     rules:
       - job-timeout-minutes-required
-  - file: ".github/workflows/release-*.yml"
-    rules:
-      - unpinned-uses
       - runner-no-latest
 ```
 
