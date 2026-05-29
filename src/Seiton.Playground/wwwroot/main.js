@@ -473,8 +473,6 @@ rules:
       ubuntu-latest: "ubuntu-24.04"
       windows-latest: "windows-2025"
       macos-latest: "macos-15"
-  checkout-persist-credentials:
-    severity: warning
 `,
   fullFix: `# NOTE: enable-network uses the GitHub API (unauthenticated, 60 req/hr limit).
 # SHA/digest pinning is resolved via api.github.com when "Apply fixes" is clicked.
@@ -493,8 +491,6 @@ rules:
       ubuntu-latest: "ubuntu-24.04"
       windows-latest: "windows-2025"
       macos-latest: "macos-15"
-  checkout-persist-credentials:
-    severity: warning
 `,
   exclusions: `rules:
   checkout-persist-credentials:

@@ -304,8 +304,6 @@ rules:
       ubuntu-latest: "ubuntu-24.04"
       windows-latest: "windows-2025"
       macos-latest: "macos-15"
-  checkout-persist-credentials:
-    severity: warning
 ```
 
 **2. Full Fix — Network Pinning** (`fullFix`)
@@ -327,8 +325,6 @@ rules:
       ubuntu-latest: "ubuntu-24.04"
       windows-latest: "windows-2025"
       macos-latest: "macos-15"
-  checkout-persist-credentials:
-    severity: warning
 ```
 
 **3. Rule Exclusions** (`exclusions`)
