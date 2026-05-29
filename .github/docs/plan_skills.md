@@ -469,3 +469,78 @@ graph LR
 | Phase 2 と Phase 3 の順序は？ | コンテンツ (Phase 2) を先にする方が、単一ターゲットでも価値が高い |
 | Phase 4 の CI 同期は必須か？ | No — 手動更新で十分な規模。ルール数が 30+ になったら検討 |
 | Phase 5 をいつやるか？ | ユーザーからの要望が来てから |
+
+---
+
+## 13. Phase 1 実装結果
+
+### 13.1 実装サマリ
+
+Phase 1 (MVP) を完了。`seiton install --skills` でエージェント向け SKILL.md をワークスペースに展開する機能を実装。
+
+#### 作成ファイル
+
+| File | 役割 |
+|------|------|
+| `src/Seiton/Skills/SKILL.md` | 配布用 skill コンテンツ (EmbeddedResource) |
+| `src/Seiton/Commands/InstallCommand.cs` | install コマンドロジック |
+| `src/Seiton/Commands/SkillResources.cs` | 埋め込みリソース読み出しヘルパー |
+| `tests/Seiton.Tests/InstallCommandTests.cs` | 8 テストケース |
+
+#### 変更ファイル
+
+| File | 変更内容 |
+|------|----------|
+| `src/Seiton/Seiton.csproj` | `EmbeddedResource Include="Skills\**\*"` 追加 |
+| `src/Seiton/Program.cs` | `Install(...)` メソッド追加 |
+| `src/Seiton/Cli/CliOptionSuggester.cs` | `--skills`, `--target` を known options に追加 |
+
+### 13.2 テスト結果
+
+| テストケース | 結果 |
+|---|---|
+| `Run_Skills_DefaultTarget_CreatesSkillFiles` | ✅ Pass |
+| `Run_Skills_ExistingDirectory_WithoutForce_ReturnsFatalError` | ✅ Pass |
+| `Run_Skills_ExistingDirectory_WithForce_OverwritesSuccessfully` | ✅ Pass |
+| `Run_WithoutSkills_ShowsUsage` | ✅ Pass |
+| `Run_Skills_UnknownTarget_ReturnsInvalidOptions` | ✅ Pass |
+| `Run_Skills_CopilotTarget_CreatesSkillFiles` | ✅ Pass |
+| `Run_Skills_OutputsInstalledFilePaths` | ✅ Pass |
+| `Run_Skills_CustomOutput_CreatesAtSpecifiedPath` | ✅ Pass |
+
+Full suite: 2198 tests passed, 0 failed.
+
+### 13.3 パフォーマンス
+
+このコマンドは CLI ファイル書き出し操作であり、パーサー/リンターのホットパスではない。
+
+- **実行特性**: I/O bound (EmbeddedResource 読み出し + ファイル書き込み)
+- **メモリ**: SKILL.md 1 ファイル (~3KB) のみ。List のアロケーションは 1 回。
+- **ベンチマーク**: 不要（parser/linter コード変更なし。`Seiton.Core/Parsing/` および `Seiton.Core/Linting/` に変更なし）
+- **既存ベンチマークへの影響**: なし（CLI プロジェクトのコード追加のみで、Core ライブラリは未変更）
+
+### 13.4 NativeAOT 検証
+
+- `dotnet publish src/Seiton -c Release` 成功
+- 生成バイナリで `seiton install --skills` / `seiton install --skills --target copilot` 動作確認済み
+- `Assembly.GetManifestResourceStream()` は NativeAOT で正常動作
+
+### 13.5 レビュー指摘と対応
+
+| # | 指摘 | 対応 |
+|---|---|---|
+| 1 | 出力のエモジが plan にあるが既存 CLI スタイルと合わない | 既存スタイルに合わせエモジなしで実装 |
+| 2 | copilot target は Phase 3 だが実装は trivial | コード自体は Phase 1 に含め、テストも追加 |
+| 3 | `--output` は Phase 5 だが trivial | Phase 1 で実装済み、テスト追加 |
+| 4 | ConsoleAppFramework が default 値を `@"claude"` と表示 | フレームワーク仕様。機能的には問題なし |
+| 5 | CliOptionSuggester に `--skills`, `--target` 未追加 | 追加済み |
+
+### 13.6 Phase 1 完了状態
+
+- [x] 1-1: SKILL.md 作成
+- [x] 1-2: EmbeddedResource 設定
+- [x] 1-3: SkillResources ヘルパー
+- [x] 1-4: InstallCommand 実装
+- [x] 1-5: Program.cs 配線
+- [x] 1-6: 基本テスト (8 cases, all green)
+- [x] 1-7: NativeAOT 検証
