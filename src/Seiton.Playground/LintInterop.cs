@@ -79,6 +79,50 @@ public static partial class LintInterop
     }
 
     /// <summary>
+    /// Applies automatic fixes including network-based pin remediation (SHA/digest resolution).
+    /// Returns a JSON string: <c>{"yaml":"...","resolved":N,"skipped":N,"failed":N}</c>.
+    /// Falls back to offline-only fixes on any unhandled error.
+    /// </summary>
+    [JSExport]
+    public static async Task<string> ApplyAllFixesWithNetworkAsync(string? yamlSource, string? filePath)
+    {
+        try
+        {
+            var path = string.IsNullOrWhiteSpace(filePath)
+                ? ".github/workflows/test.yml"
+                : filePath.Trim();
+            var result = await PlaygroundLintRunner.ApplyAllFixesAsync(yamlSource ?? string.Empty, path);
+            return SerializeAsyncFixResult(result);
+        }
+        catch (Exception ex)
+        {
+            // On failure, fall back to sync offline-only fixes and report error.
+            ReportApplyAllFixesError(ex);
+            var fallbackYaml = ApplyAllFixes(yamlSource, filePath);
+            return SerializeAsyncFixResult(new AsyncFixResult(fallbackYaml, 0, 0, 0));
+        }
+    }
+
+    /// <summary>
+    /// Sets the lint configuration from YAML text (same format as <c>seiton.yaml</c>).
+    /// Parsed config is cached with XxHash64 content hashing to avoid re-parse on cosmetic edits.
+    /// </summary>
+    /// <param name="configYaml">Config YAML text. Null/empty resets to default.</param>
+    /// <returns>UTF-8 JSON byte array: empty array <c>[]</c> on success, diagnostic array on validation errors.</returns>
+    [JSExport]
+    public static byte[] SetConfig(string? configYaml)
+    {
+        try
+        {
+            return PlaygroundLintRunner.SetConfig(configYaml);
+        }
+        catch (Exception ex)
+        {
+            return SerializeInternalError(ex);
+        }
+    }
+
+    /// <summary>
     /// Reports an automatic-fix failure to the browser console without allowing the
     /// exception to cross the WASM interop boundary.
     /// </summary>
@@ -120,5 +164,24 @@ public static partial class LintInterop
         }
 
         return buffer.WrittenSpan.ToArray();
+    }
+
+    /// <summary>
+    /// Serializes an <see cref="AsyncFixResult"/> as a JSON string for the JS side to decode.
+    /// </summary>
+    private static string SerializeAsyncFixResult(AsyncFixResult result)
+    {
+        var buffer = new ArrayBufferWriter<byte>(result.Yaml.Length + 64);
+        using (var writer = new Utf8JsonWriter(buffer))
+        {
+            writer.WriteStartObject();
+            writer.WriteString("yaml"u8, result.Yaml);
+            writer.WriteNumber("resolved"u8, result.ResolvedCount);
+            writer.WriteNumber("skipped"u8, result.SkippedCount);
+            writer.WriteNumber("failed"u8, result.FailedCount);
+            writer.WriteEndObject();
+        }
+
+        return System.Text.Encoding.UTF8.GetString(buffer.WrittenSpan);
     }
 }

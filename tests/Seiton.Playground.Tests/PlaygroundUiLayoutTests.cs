@@ -260,7 +260,7 @@ public sealed class PlaygroundUiLayoutTests
         var infoToast = page.Locator("#toast-stack .toast--info");
         await infoToast.WaitForAsync(new LocatorWaitForOptions { Timeout = 10_000 });
 
-        await page.Locator("#editor-wrap .CodeMirror").ClickAsync();
+        await page.Locator("#editor > .CodeMirror").ClickAsync();
         await page.EvaluateAsync(
             "() => document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))");
 

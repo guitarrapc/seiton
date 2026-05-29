@@ -83,6 +83,12 @@ public static partial class LintInterop
     [JSExport]
     public static string ApplyAllFixes(string? yamlSource, string? filePath);
 
+    [JSExport]
+    public static Task<string> ApplyAllFixesWithNetworkAsync(string? yamlSource, string? filePath);
+
+    [JSExport]
+    public static byte[] SetConfig(string? configYaml);
+
     [JSImport("globalThis.console.error")]
     private static partial void ConsoleError(string message);
 }
@@ -92,6 +98,8 @@ public static partial class LintInterop
 |---|---|---|
 | `RunLint` | `byte[]` (UTF-8 JSON) | JS receives `Uint8Array`, decodes with `TextDecoder`. Avoids string marshalling copy. |
 | `ApplyAllFixes` | `string` | Fixed YAML text. Returns original source on error (prevents editor corruption). |
+| `ApplyAllFixesWithNetworkAsync` | `Task<string>` | JSON string: `{"yaml":"...","resolved":N,"skipped":N,"failed":N}`. Async for network I/O. Falls back to offline-only fixes on error. |
+| `SetConfig` | `byte[]` (UTF-8 JSON) | Config diagnostic array. Empty array `[]` on success; previous valid config retained on error. |
 | `GetProductVersion` | `string` | For version badge display. |
 
 **Critical invariant**: Every `[JSExport]` method body is wrapped in `try/catch(Exception)`. The Mono WASM runtime aborts (`exit 1`) on any unhandled exception crossing the interop boundary, and cannot be restarted without a full page reload.
@@ -143,6 +151,7 @@ public static class PlaygroundLintRunner
 
     public static byte[] RunToJsonUtf8(string yamlSource, string filePath);
     public static string ApplyAllFixes(string yamlSource, string filePath);
+    public static byte[] SetConfig(string configYaml);
 }
 ```
 
@@ -154,6 +163,45 @@ Key implementation details:
 - **Double buffer**: Alternating `_utf8BufA`/`_utf8BufB` for UTF-8 encoding prevents overwriting the buffer that `IncrementalParseContext` holds as previous source.
 - **Identity-based short circuit**: If `yamlSource` (by reference) and `filePath` are identical to the last call, returns cached JSON output immediately.
 - **Byte-level cache reuse**: When serialized JSON bytes are content-equal to the previous result, the prior `byte[]` instance is reused (avoids allocation for unchanged output).
+
+### 2.1.1 Config Content-Hash Caching
+
+`LintConfigYamlParser.Parse()` allocates internally (VYaml reader state, dictionaries, lists). To avoid unnecessary GC pressure on the WASM heap, `PlaygroundLintRunner` caches the parsed `LintConfig` and only re-parses when config content has meaningfully changed.
+
+**Cached state:**
+
+```csharp
+private static ulong _configHash;          // XxHash64 of normalized config
+private static LintConfig? _cachedConfig;   // last successfully parsed config
+private static byte[] _cachedConfigDiag;    // last SetConfig diagnostic result (JSON)
+```
+
+**SetConfig algorithm:**
+
+1. If input is null/empty/whitespace-only: reset to default config, clear hash, return `[]`
+2. Normalize the input (strip trailing whitespace per line, remove blank lines)
+3. Compute XxHash64 of the normalized UTF-8 bytes
+4. If hash matches `_configHash`: return `_cachedConfigDiag` immediately (zero allocation)
+5. Call `LintConfigLibrary.Validate(configYaml, "seiton.yaml")`
+6. On success: update `_cachedConfig`, `_configHash`, `_cachedConfigDiag = []`
+7. On validation errors: keep previous `_cachedConfig`, serialize diagnostics to `_cachedConfigDiag`, update `_configHash = hash` (repeated invalid input is a cache hit, avoids re-parsing)
+
+**Normalization procedure** (for hash stability across cosmetic edits):
+
+```
+Input: "rules:\n  runner-no-latest: warn\n\n  # comment\n"
+  → Split on '\n'
+  → TrimEnd() each line
+  → Remove empty lines
+  → Join with '\n'
+Result: "rules:\n  runner-no-latest: warn\n  # comment"
+```
+
+**Integration with RunToJsonUtf8 / ApplyAllFixes:**
+
+- Both methods use `_cachedConfig ?? DefaultConfig` when invoking `LintEngine.Check()`
+- The `DefaultConfig` is the same hardcoded config currently used (Fix enabled, Network default, Output default, SkipSuppressionSummary=true)
+- Config change does NOT invalidate the incremental parse cache (`IncrementalParseContext`) — config affects rule evaluation, not YAML structure
 
 ### 2.2 Incremental Parse (D-5b)
 
@@ -380,6 +428,14 @@ wwwroot/
 ### 6.2 LintEngine Reuse Is Mandatory
 
 The WASM heap is constrained. Creating a new `LintEngine` per keystroke allocates 50+ rule objects, causing excessive GC pressure. The static engine instance is reused; `Check()` clears internal state at the start of each invocation.
+
+### 6.4 Config Re-Parse Avoidance via Content Hash
+
+**Problem**: `LintConfigYamlParser.Parse()` allocates dictionaries, lists, and VYaml reader state. Calling it on every lint (which fires on every keystroke in the YAML editor) would add ~1–2 KB allocation per invocation unnecessarily, since config rarely changes.
+
+**Mitigation**: Cache the parsed `LintConfig` alongside an XxHash64 hash of the normalized config YAML. `SetConfig` is called only when the config editor content changes (JS-side debounce), and the WASM side additionally skips re-parse if the normalized hash matches. This provides two layers of protection:
+1. JS debounce prevents rapid `SetConfig` calls during typing
+2. WASM hash check prevents re-parse when edits are purely cosmetic (whitespace/blank lines)
 
 ### 6.3 Double Buffer for UTF-8 Source Preservation
 

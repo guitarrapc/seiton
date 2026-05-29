@@ -719,7 +719,7 @@ a.version-badge:focus-visible {
 }
 
 #editor {
-  flex: 1 1 auto;
+  flex: 1 0 auto;
   width: 100%;
   min-height: 200px;
   display: flex;
@@ -727,11 +727,11 @@ a.version-badge:focus-visible {
   background: var(--editor-surface);
 }
 
-#editor-wrap .CodeMirror {
+#editor-wrap>#editor>.CodeMirror {
   height: auto;
 }
 
-#editor-wrap .CodeMirror-scroll {
+#editor-wrap>#editor>.CodeMirror .CodeMirror-scroll {
   overflow-x: auto !important;
   overflow-y: visible !important;
   height: auto !important;
@@ -946,7 +946,6 @@ a.version-badge:focus-visible {
 }
 
 .playground-about {
-  flex-shrink: 0;
   border-top: 1px solid var(--border-pane);
   background: var(--bg);
   padding: 1.25rem 1.5rem 1.35rem;
@@ -1133,4 +1132,100 @@ footer a {
 .theme-cycle-btn[data-theme-mode='light'] .theme-cycle-btn__svg--light,
 .theme-cycle-btn[data-theme-mode='dark'] .theme-cycle-btn__svg--dark {
   display: block;
+}
+
+/* ─── Config Panel ─── */
+.config-panel {
+  border-top: 1px solid var(--border-pane);
+  background: var(--editor-surface);
+}
+
+.config-panel__header {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.config-panel__toggle {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.4rem 0.75rem;
+  border: none;
+  background: transparent;
+  color: var(--muted);
+  font-size: 0.82rem;
+  cursor: pointer;
+  text-align: left;
+}
+
+.config-panel__toggle:hover {
+  color: var(--text);
+}
+
+.config-panel__toggle-icon {
+  display: inline-block;
+  font-size: 0.65rem;
+  transition: transform 0.15s ease;
+}
+
+.config-panel:not(.config-panel--collapsed) .config-panel__toggle-icon {
+  transform: rotate(90deg);
+}
+
+.config-panel__template-select {
+  font-size: 0.78rem;
+  padding: 0.2rem 0.4rem;
+  border: 1px solid var(--border-default);
+  border-radius: 3px;
+  background: var(--editor-surface);
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.config-panel__template-select:hover {
+  color: var(--text);
+  border-color: var(--accent);
+}
+
+.config-panel__body {
+  padding: 0;
+}
+
+#config-editor .CodeMirror {
+  height: 260px;
+  font-size: 0.85rem;
+  border-top: 1px solid var(--border-pane);
+}
+
+@media (max-width: 880px) {
+  #config-editor .CodeMirror {
+    height: 360px;
+  }
+}
+
+.config-panel__resize-handle {
+  height: 5px;
+  background: var(--border-pane);
+  cursor: ns-resize;
+  transition: background 0.15s ease;
+}
+
+.config-panel__resize-handle:hover,
+.config-panel__resize-handle--active {
+  background: var(--accent);
+}
+
+.config-diagnostics {
+  padding: 0.35rem 0.75rem;
+  font-size: 0.78rem;
+  color: var(--danger);
+  background: var(--notification-error-bg);
+  border-top: 1px solid var(--border-pane);
+  max-height: 5rem;
+  overflow-y: auto;
+}
+
+.config-diagnostics:empty {
+  display: none;
 }

@@ -3,6 +3,7 @@ using System.Text;
 using System.Text.Json;
 using Seiton.Core.Linting;
 using Seiton.Core.Linting.Fixing;
+using Seiton.Core.Linting.PinRemediation;
 using Seiton.Core.Parsing;
 
 namespace Seiton.Playground;
@@ -55,7 +56,24 @@ public static class PlaygroundLintRunner
     /// <summary>Incremental parse context for D-5b root section reuse. Guarded by <see cref="EngineGate"/>.</summary>
     private static readonly IncrementalParseContext IncrementalCtx = new();
 
-    /// <summary>Cached last input source string for identity-based short circuit. Guarded by <see cref="EngineGate"/>.</summary>
+    // ─── Config Content-Hash Caching ───
+
+    /// <summary>Default config used when no user config is set.</summary>
+    private static readonly LintConfig DefaultConfig = LintWithFixMetadata;
+
+    /// <summary>XxHash64 of normalized config content. Zero when no user config is set.</summary>
+    private static ulong _configHash;
+
+    /// <summary>Last successfully parsed user config. Null means use <see cref="DefaultConfig"/>.</summary>
+    private static LintConfig? _cachedConfig;
+
+    /// <summary>Shared empty JSON array literal <c>[]</c>.</summary>
+    private static readonly byte[] EmptyJsonArray = "[]"u8.ToArray();
+
+    /// <summary>Last SetConfig diagnostic result (cached for hash-hit zero-alloc return).</summary>
+    private static byte[] _cachedConfigDiag = EmptyJsonArray;
+
+    // ─── Identity-based short circuit ───
     private static string? _lastYamlSource;
 
     /// <summary>Cached last file path for identity-based short circuit. Guarded by <see cref="EngineGate"/>.</summary>
@@ -63,6 +81,157 @@ public static class PlaygroundLintRunner
 
     /// <summary>Cached last JSON output for identity-based short circuit. Guarded by <see cref="EngineGate"/>.</summary>
     private static byte[]? _lastJsonOutput;
+
+    /// <summary>Gets the active lint config (user config if set, otherwise default).</summary>
+    private static LintConfig ActiveConfig => _cachedConfig ?? DefaultConfig;
+
+    // ─── Resolver Overrides (internal for testability) ───
+
+    /// <summary>Override for action SHA resolver. Used in tests; production uses <see cref="DefaultActionShaResolver"/>.</summary>
+    internal static IActionShaResolver? ActionShaResolverOverride;
+
+    /// <summary>Override for image digest resolver. Used in tests; production uses <see cref="DefaultImageDigestResolver"/>.</summary>
+    internal static IImageDigestResolver? ImageDigestResolverOverride;
+
+    /// <summary>
+    /// Sets the lint configuration from YAML text. Uses content-hash caching (XxHash64) to
+    /// skip re-parse when the normalized config content has not meaningfully changed.
+    /// </summary>
+    /// <param name="configYaml">
+    /// Config YAML text (same format as <c>seiton.yaml</c>).
+    /// Null, empty, or whitespace-only resets to default config.
+    /// </param>
+    /// <returns>
+    /// UTF-8 JSON byte array of config diagnostics. Empty array <c>[]</c> on success.
+    /// On validation errors, returns diagnostic array; previous valid config is retained.
+    /// </returns>
+    public static byte[] SetConfig(string? configYaml)
+    {
+        lock (EngineGate)
+        {
+            // Null/empty/whitespace: reset to default
+            if (string.IsNullOrWhiteSpace(configYaml))
+            {
+                _cachedConfig = null;
+                _configHash = 0;
+                _cachedConfigDiag = EmptyJsonArray;
+                InvalidateLintCache();
+                return EmptyJsonArray;
+            }
+
+            // Normalize: strip trailing whitespace per line, remove blank lines
+            var normalized = NormalizeConfigForHash(configYaml);
+
+            // Compute XxHash64
+            var byteCount = Encoding.UTF8.GetByteCount(normalized);
+            byte[]? rented = null;
+            Span<byte> utf8Span = byteCount <= 1024
+                ? stackalloc byte[byteCount]
+                : (rented = System.Buffers.ArrayPool<byte>.Shared.Rent(byteCount)).AsSpan(0, byteCount);
+            try
+            {
+                Encoding.UTF8.GetBytes(normalized, utf8Span);
+                var hash = XxHash64.Hash(utf8Span);
+
+                // Hash-hit: return cached diagnostics bytes (skips config parse)
+                if (hash == _configHash && _configHash != 0)
+                {
+                    return _cachedConfigDiag;
+                }
+
+                // Hash-miss: parse config
+                var validation = LintConfigLibrary.Validate(configYaml, ".github/seiton.yaml");
+
+                if (validation.Diagnostics.Length == 0)
+                {
+                    // Success: update cache.
+                    // The playground always needs Fix.Enabled=true (so rules build DiagnosticFix objects
+                    // for "Apply all fixes") and SkipSuppressionSummary=true. Force these regardless of
+                    // what the user wrote, since these are playground-intrinsic behaviors.
+                    var parsed = validation.Config!;
+                    var playgroundConfig = new LintConfig
+                    {
+                        Utf8Yaml = parsed.Utf8Yaml,
+                        FilePath = parsed.FilePath,
+                        Rules = parsed.Rules,
+                        Exclusions = parsed.Exclusions,
+                        Fix = parsed.Fix with { Enabled = true },
+                        Network = parsed.Network,
+                        Output = parsed.Output,
+                        SkipSuppressionSummary = true,
+                    };
+                    _cachedConfig = playgroundConfig;
+                    _configHash = hash;
+                    _cachedConfigDiag = EmptyJsonArray;
+                    InvalidateLintCache();
+                    return EmptyJsonArray;
+                }
+
+                // Validation errors: keep previous config, serialize diagnostics
+                var diagBytes = SerializeConfigDiagnostics(validation.Diagnostics);
+                // Update _configHash so repeated calls with the same invalid content are cache hits
+                // (avoids re-parsing the same broken config on every keystroke).
+                _configHash = hash;
+                _cachedConfigDiag = diagBytes;
+                return diagBytes;
+            }
+            finally
+            {
+                if (rented is not null)
+                {
+                    System.Buffers.ArrayPool<byte>.Shared.Return(rented);
+                }
+            }
+        }
+    }
+
+    /// <summary>
+    /// Normalizes config YAML for hash stability: strips trailing whitespace per line,
+    /// removes blank lines, joins with \n.
+    /// </summary>
+    private static string NormalizeConfigForHash(string configYaml)
+    {
+        var lines = configYaml.Split('\n');
+        var sb = new StringBuilder(configYaml.Length);
+        var first = true;
+        for (var i = 0; i < lines.Length; i++)
+        {
+            var trimmed = lines[i].TrimEnd();
+            if (trimmed.Length == 0)
+            {
+                continue;
+            }
+            if (!first)
+            {
+                sb.Append('\n');
+            }
+            sb.Append(trimmed);
+            first = false;
+        }
+        return sb.ToString();
+    }
+
+    /// <summary>Serializes config validation diagnostics to UTF-8 JSON.</summary>
+    private static byte[] SerializeConfigDiagnostics(Diagnostic[] diagnostics)
+    {
+        var buffer = new ArrayBufferWriter<byte>(256);
+        using (var writer = new Utf8JsonWriter(buffer, CamelCaseWriterOptions))
+        {
+            WriteDiagnosticsArray(writer, diagnostics.AsSpan());
+        }
+        return buffer.WrittenSpan.ToArray();
+    }
+
+    /// <summary>Invalidates identity-based lint cache so next RunToJsonUtf8 re-lints.</summary>
+    private static void InvalidateLintCache()
+    {
+        _lastYamlSource = null;
+        _lastFilePath = null;
+        _lastJsonOutput = null;
+        _defaultActionShaResolver = null;
+        _defaultImageDigestResolver = null;
+        IncrementalCtx.InvalidateLintDiagnosticCache();
+    }
 
     /// <summary>
     /// Parses and lints <paramref name="yamlSource"/> and returns a UTF-8 JSON byte array of diagnostics.
@@ -90,11 +259,13 @@ public static class PlaygroundLintRunner
             ReadOnlySpan<Diagnostic> diagnosticsToSerialize;
             AstArena? ownedArena = null;
 
+            var config = ActiveConfig;
+
             // Action metadata files (action.yml) require classified parsing — not incremental.
             if (DocumentKindClassifier.GetPathHintKind(filePath) == DocumentKind.ActionMetadata)
             {
                 var classifiedResult = WorkflowParser.ParseClassified(utf8Yaml, filePath, out ownedArena);
-                var lintResult = Engine.CheckWithParseResult(utf8Yaml, filePath, LintWithFixMetadata, classifiedResult.ParseResult, ownedArena);
+                var lintResult = Engine.CheckWithParseResult(utf8Yaml, filePath, config, classifiedResult.ParseResult, ownedArena);
                 diagnosticsToSerialize = lintResult.Diagnostics.AsSpan();
             }
             else
@@ -107,7 +278,7 @@ public static class PlaygroundLintRunner
                 var skipJobs = IncrementalCtx.BuildSkipJobs(jobCount, parseResult.Workflow);
 
                 // Lint with optional job skipping
-                var lintResult = Engine.CheckWithParseResult(utf8Yaml, filePath, LintWithFixMetadata, parseResult.Data, IncrementalCtx.Arena, skipJobs);
+                var lintResult = Engine.CheckWithParseResult(utf8Yaml, filePath, config, parseResult.Data, IncrementalCtx.Arena, skipJobs);
 
                 // Merge fresh diagnostics with cached diagnostics for skipped jobs
                 diagnosticsToSerialize = IncrementalCtx.MergeDiagnosticsWithCache(lintResult.Diagnostics, skipJobs);
@@ -196,7 +367,7 @@ public static class PlaygroundLintRunner
         {
             lock (EngineGate)
             {
-                using var result = Engine.Check(current, filePath, LintWithFixMetadata);
+                using var result = Engine.Check(current, filePath, ActiveConfig);
                 if (!result.HasFixableDiagnostics)
                 {
                     return Encoding.UTF8.GetString(current);
@@ -215,6 +386,154 @@ public static class PlaygroundLintRunner
         }
 
         return Encoding.UTF8.GetString(current);
+    }
+
+    /// <summary>
+    /// Applies all fixes including network-based pin remediation (SHA/digest resolution).
+    /// First applies offline fixes (synchronously), then resolves and applies pin fixes via network.
+    /// </summary>
+    public static async Task<AsyncFixResult> ApplyAllFixesAsync(
+        string yamlSource, string filePath, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(yamlSource);
+        ArgumentException.ThrowIfNullOrEmpty(filePath);
+
+        // Phase 1: Apply all offline fixes first (same as sync path)
+        var afterOffline = ApplyAllFixes(yamlSource, filePath);
+
+        // Phase 2: Network-based pin remediation
+        LintConfig config;
+        bool pinningEnabled;
+        bool imagesEnabled;
+        lock (EngineGate)
+        {
+            config = ActiveConfig;
+            pinningEnabled = config.Fix.Pinning.EnableNetwork;
+            imagesEnabled = config.Fix.Images.EnableNetwork;
+        }
+
+        if (!pinningEnabled && !imagesEnabled)
+        {
+            return new AsyncFixResult(afterOffline, ResolvedCount: 0, SkippedCount: 0, FailedCount: 0);
+        }
+
+        // Lint the offline-fixed YAML to get remaining diagnostics (including unpinned-uses/unpinned-image)
+        var utf8Yaml = Encoding.UTF8.GetBytes(afterOffline);
+        Diagnostic[] diagnostics;
+        lock (EngineGate)
+        {
+            using var lintResult = Engine.Check(utf8Yaml, filePath, config);
+            diagnostics = lintResult.Diagnostics.ToArray();
+        }
+
+        // Filter to only pin-eligible diagnostics for the enabled resolver(s).
+        // Only include diagnostics whose resolver is actually enabled — avoids inflating
+        // SkippedCount with diagnostics for a feature the user didn't enable.
+        var pinDiagnostics = FilterPinEligibleDiagnostics(diagnostics, pinningEnabled, imagesEnabled);
+
+        if (pinDiagnostics.Length == 0)
+        {
+            return new AsyncFixResult(afterOffline, ResolvedCount: 0, SkippedCount: 0, FailedCount: 0);
+        }
+
+        // Create PinRemediationEngine with resolvers
+        var actionResolver = ActionShaResolverOverride ?? DefaultActionShaResolver;
+        var imageResolver = ImageDigestResolverOverride ?? DefaultImageDigestResolver;
+
+        var engine = new PinRemediationEngine(
+            pinningEnabled ? actionResolver : null,
+            imagesEnabled ? imageResolver : null,
+            config.Fix.Pinning,
+            config.Fix.Images,
+            config.Network);
+
+        // Remediate: resolve SHAs/digests and attach fixes
+        var remediationResult = await engine.RemediateAsync(pinDiagnostics, utf8Yaml, cancellationToken);
+
+        // Apply all pin fixes in a single batch pass. All offsets reference the same
+        // utf8Yaml source, so applying them one-by-one would shift offsets and corrupt later edits.
+        var current = utf8Yaml;
+        var fixablePinDiags = CollectFixableDiagnostics(remediationResult.Diagnostics);
+
+        if (fixablePinDiags.Length > 0)
+        {
+            current = FixEngine.Apply(current, fixablePinDiags);
+        }
+
+        var finalYaml = Encoding.UTF8.GetString(current);
+        return new AsyncFixResult(
+            finalYaml,
+            remediationResult.ResolvedCount,
+            remediationResult.SkippedCount,
+            remediationResult.FailedCount);
+    }
+
+    // ─── Default Resolvers (lazy-initialized, long-lived for caching) ───
+
+    private static HttpClient? _githubHttpClient;
+    private static GitHubActionShaResolver? _defaultActionShaResolver;
+
+    private static IActionShaResolver? DefaultActionShaResolver
+    {
+        get
+        {
+            if (_defaultActionShaResolver is not null)
+                return _defaultActionShaResolver;
+
+            lock (EngineGate)
+            {
+                if (_defaultActionShaResolver is not null)
+                    return _defaultActionShaResolver;
+
+                _githubHttpClient ??= CreatePlaygroundHttpClient("api.github.com");
+                var cfg = ActiveConfig;
+                _defaultActionShaResolver = new GitHubActionShaResolver(
+                    _githubHttpClient,
+                    cfg.Fix.Pinning,
+                    cfg.Network.GitHub);
+                return _defaultActionShaResolver;
+            }
+        }
+    }
+
+    private static HttpClient? _ociHttpClient;
+    private static OciImageDigestResolver? _defaultImageDigestResolver;
+
+    private static IImageDigestResolver? DefaultImageDigestResolver
+    {
+        get
+        {
+            if (_defaultImageDigestResolver is not null)
+                return _defaultImageDigestResolver;
+
+            lock (EngineGate)
+            {
+                if (_defaultImageDigestResolver is not null)
+                    return _defaultImageDigestResolver;
+
+                _ociHttpClient ??= CreatePlaygroundHttpClient(null);
+                var cfg = ActiveConfig;
+                _defaultImageDigestResolver = new OciImageDigestResolver(
+                    _ociHttpClient,
+                    cfg.Fix.Images);
+                return _defaultImageDigestResolver;
+            }
+        }
+    }
+
+    /// <summary>
+    /// Creates an HttpClient suitable for WASM (no SocketsHttpHandler — browser handles CORS/redirects).
+    /// </summary>
+    private static HttpClient CreatePlaygroundHttpClient(string? baseAddress)
+    {
+        var client = new HttpClient();
+        if (baseAddress is not null)
+        {
+            client.BaseAddress = new Uri($"https://{baseAddress}");
+        }
+        client.DefaultRequestHeaders.UserAgent.ParseAdd("seiton-playground/1.0");
+        client.Timeout = System.Threading.Timeout.InfiniteTimeSpan;
+        return client;
     }
 
     private static Diagnostic[] CollectAutoApplicableFixes(Diagnostic[] fixables)
@@ -236,6 +555,45 @@ public static class PlaygroundLintRunner
             list.Add(d);
         }
 
+        return list.Count == 0 ? [] : list.ToArray();
+    }
+
+    /// <summary>
+    /// Filters diagnostics to only pin-eligible ones based on which resolvers are enabled.
+    /// Avoids LINQ allocation by using a loop with pre-sized list.
+    /// </summary>
+    private static Diagnostic[] FilterPinEligibleDiagnostics(Diagnostic[] diagnostics, bool pinningEnabled, bool imagesEnabled)
+    {
+        var list = new List<Diagnostic>(diagnostics.Length);
+        for (var i = 0; i < diagnostics.Length; i++)
+        {
+            var d = diagnostics[i];
+            if (pinningEnabled && d.RuleId == "unpinned-uses")
+            {
+                list.Add(d);
+            }
+            else if (imagesEnabled && d.RuleId == "unpinned-image")
+            {
+                list.Add(d);
+            }
+        }
+        return list.Count == 0 ? [] : list.ToArray();
+    }
+
+    /// <summary>
+    /// Collects diagnostics that have a fix attached (post-remediation).
+    /// Avoids LINQ allocation by using a loop.
+    /// </summary>
+    private static Diagnostic[] CollectFixableDiagnostics(IReadOnlyList<Diagnostic> diagnostics)
+    {
+        var list = new List<Diagnostic>(diagnostics.Count);
+        for (var i = 0; i < diagnostics.Count; i++)
+        {
+            if (diagnostics[i].Fix is not null)
+            {
+                list.Add(diagnostics[i]);
+            }
+        }
         return list.Count == 0 ? [] : list.ToArray();
     }
 
@@ -286,3 +644,6 @@ public static class PlaygroundLintRunner
         return buf;
     }
 }
+
+/// <summary>Result of async fix application including network-based pin remediation.</summary>
+public readonly record struct AsyncFixResult(string Yaml, int ResolvedCount, int SkippedCount, int FailedCount);

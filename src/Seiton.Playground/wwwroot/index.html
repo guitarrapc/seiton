@@ -136,10 +136,30 @@
     <section id="linter">
       <div id="editor-wrap" class="split-pane">
         <button id="apply-fixes-btn" type="button" class="apply-fixes-fab" hidden
-          title="Apply every fix suggested in the diagnostics. Playground fixes run offline, it skips network-dependent pinning/digest remediation.">
+          title="Apply every fix suggested in the diagnostics. When enable-network is set in config, resolves action SHAs via GitHub API (unauthenticated, 60 req/hr) and image digests via OCI registries.">
           Apply all fixes
         </button>
         <div id="editor"></div>
+        <div id="config-panel" class="config-panel">
+          <div class="config-panel__header">
+            <button id="config-toggle-btn" type="button" class="config-panel__toggle" aria-expanded="true"
+              aria-controls="config-editor-wrap" title="Toggle lint configuration editor">
+              <span class="config-panel__toggle-icon" aria-hidden="true">&#9654;</span>
+              Config
+            </button>
+            <select id="config-template-select" class="config-panel__template-select" title="Load a config template">
+              <option value="">none</option>
+              <option value="timeoutAndLatest">timeout + latest mapping</option>
+              <option value="fullFix">full fix (network pinning)</option>
+              <option value="exclusions">rule exclusions</option>
+            </select>
+          </div>
+          <div id="config-editor-wrap" class="config-panel__body">
+            <div id="config-editor"></div>
+            <div id="config-resize-handle" class="config-panel__resize-handle" title="Drag to resize"></div>
+            <div id="config-diagnostics" class="config-diagnostics" hidden></div>
+          </div>
+        </div>
       </div>
       <div class="split-pane results-column">
         <div id="loading" class="notification">Loading WebAssembly binary...</div>
@@ -155,31 +175,36 @@
     <div class="playground-about__body">
       <p>
         The seiton playground is a static page: after the WASM runtime loads, it parses and lints GitHub
-        Actions workflow and action metadata YAML <strong>in your browser</strong>. Your YAML is not uploaded to a
+        Actions workflow and action metadata YAML <strong>in your browser</strong>. Your YAML is not uploaded to
+        a
         server for analysis.
       </p>
       <p>
-        You can edit YAML in the editor, load built-in samples, open a document from a URL you enter (your browser
-        requests that URL directly), or use Share to store the document in the page URL. Very large snippets may exceed
+        You can edit YAML in the editor, load built-in samples, open a document from a URL you enter (your
+        browser
+        requests that URL directly), or use Share to store the document in the page URL. Very large snippets may
+        exceed
         browser URL length limits when sharing.
       </p>
       <p>There are practical limits to what the playground can do:</p>
       <ul>
         <li>
-          It performs static checks only—it does not run workflows, actions, or <code>run:</code> steps on GitHub’s
+          It performs static checks only—it does not run workflows, actions, or <code>run:</code> steps on
+          GitHub’s
           infrastructure.
         </li>
         <li>
-          <strong>Fetch by URL</strong> only contacts the host you specify; the playground does not proxy your YAML
+          <strong>Fetch by URL</strong> only contacts the host you specify; the playground does not proxy your
+          YAML
           through another backend.
         </li>
         <li>
-          <strong>Apply all fixes</strong> runs locally; remediations that need network lookups (for example some
-          pinning
-          or digest updates) are skipped. See the button tooltip for more details.
+          <strong>Apply all fixes</strong> runs locally for most fixes. When <code>enable-network: true</code>
+          is set in config, SHA/digest pinning resolves via the GitHub API (unauthenticated, 60 requests/hour limit).
         </li>
         <li>
-          Behavior matches the bundled Seiton build. A version badge appears in the header, which reflects this
+          Behavior matches the bundled Seiton build. A version badge appears in the header, which reflects
+          this
           deployment.
         </li>
       </ul>

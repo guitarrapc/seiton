@@ -41,17 +41,13 @@ on:
 
 jobs:
   test:
-    strategy:
-      matrix:
-        os: [macos-latest, linux-latest]
-    runs-on: \${{ matrix.os }}
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
       - uses: actions/cache@v4
         with:
           path: ~/.npm
-          key: \${{ matrix.platform }}-node-\${{ hashFiles('**/package-lock.json') }}
-        if: \${{ github.repository.permissions.admin == true }}
+          key: ubuntu-node-\${{ hashFiles('**/package-lock.json') }}
       - run: npm install && npm test
 `,
   minimal:
@@ -424,6 +420,7 @@ const editor = CodeMirror(document.getElementById('editor'), {
 function syncEditorTheme() {
   editor.setOption('theme', getCodeMirrorTheme());
   editor.refresh();
+  syncConfigEditorTheme();
 }
 
 playgroundColorSchemeDarkQuery().addEventListener('change', () => {
@@ -456,6 +453,159 @@ if (themeCycleBtn) {
 }
 updateThemeCycleButton();
 
+/* ─── Config Editor ─── */
+const CONFIG_DEBOUNCE_MS = 500;
+const configPanel = document.getElementById('config-panel');
+const configToggleBtn = document.getElementById('config-toggle-btn');
+const configEditorWrap = document.getElementById('config-editor-wrap');
+const configDiagnosticsEl = document.getElementById('config-diagnostics');
+const configTemplateSelect = document.getElementById('config-template-select');
+
+/** Built-in config templates for quick setup. */
+const CONFIG_TEMPLATES = {
+  timeoutAndLatest: `fix:
+  defaults:
+    job-timeout-minutes: 15
+
+rules:
+  runner-no-latest:
+    fix-mapping:
+      ubuntu-latest: "ubuntu-24.04"
+      windows-latest: "windows-2025"
+      macos-latest: "macos-15"
+`,
+  fullFix: `# NOTE: enable-network uses the GitHub API (unauthenticated, 60 req/hr limit).
+# SHA/digest pinning is resolved via api.github.com when "Apply fixes" is clicked.
+fix:
+  defaults:
+    job-timeout-minutes: 15
+  pinning:
+    enable-network: true
+    min-age-days: 14
+  images:
+    enable-network: true
+
+rules:
+  runner-no-latest:
+    fix-mapping:
+      ubuntu-latest: "ubuntu-24.04"
+      windows-latest: "windows-2025"
+      macos-latest: "macos-15"
+`,
+  exclusions: `rules:
+  checkout-persist-credentials:
+    severity: warning
+  job-permissions-required:
+    enabled: false
+
+exclusions:
+  - file: ".github/workflows/test.yml"
+    rules:
+      - job-timeout-minutes-required
+      - runner-no-latest
+`,
+};
+
+const configEditor = CodeMirror(document.getElementById('config-editor'), {
+  mode: 'yaml',
+  theme: getCodeMirrorTheme(),
+  lineNumbers: true,
+  lineWrapping: true,
+  value: '',
+});
+
+let configDebounceId = null;
+
+configToggleBtn.addEventListener('click', () => {
+  const collapsed = configPanel.classList.toggle('config-panel--collapsed');
+  configToggleBtn.setAttribute('aria-expanded', String(!collapsed));
+  configEditorWrap.hidden = collapsed;
+  if (!collapsed) {
+    configEditor.refresh();
+  }
+});
+
+configTemplateSelect.addEventListener('change', () => {
+  const key = configTemplateSelect.value;
+  if (!key || !CONFIG_TEMPLATES[key]) {
+    // "none" selected — clear config editor
+    configEditor.setValue('');
+    configEditor.refresh();
+    return;
+  }
+  // Expand panel if collapsed
+  if (configPanel.classList.contains('config-panel--collapsed')) {
+    configPanel.classList.remove('config-panel--collapsed');
+    configToggleBtn.setAttribute('aria-expanded', 'true');
+    configEditorWrap.hidden = false;
+  }
+  configEditor.setValue(CONFIG_TEMPLATES[key]);
+  configEditor.refresh();
+});
+
+configEditor.on('change', () => {
+  if (configDebounceId !== null) {
+    clearTimeout(configDebounceId);
+  }
+  configDebounceId = setTimeout(() => {
+    configDebounceId = null;
+    const yaml = configEditor.getValue();
+    const diags = setConfig(yaml);
+    renderConfigDiagnostics(diags);
+  }, CONFIG_DEBOUNCE_MS);
+});
+
+// ─── Config editor resize handle ───
+(function initConfigResize() {
+  const handle = document.getElementById('config-resize-handle');
+  const cmEl = document.querySelector('#config-editor .CodeMirror');
+  if (!handle || !cmEl) return;
+
+  let startY = 0;
+  let startH = 0;
+
+  function onPointerMove(e) {
+    const newH = Math.max(80, startH + (e.clientY - startY));
+    cmEl.style.height = newH + 'px';
+    configEditor.refresh();
+  }
+
+  function cleanupResize() {
+    handle.classList.remove('config-panel__resize-handle--active');
+    document.removeEventListener('pointermove', onPointerMove);
+    document.removeEventListener('pointerup', cleanupResize);
+    document.removeEventListener('pointercancel', cleanupResize);
+  }
+
+  handle.addEventListener('pointerdown', (e) => {
+    e.preventDefault();
+    startY = e.clientY;
+    startH = cmEl.offsetHeight;
+    handle.classList.add('config-panel__resize-handle--active');
+    document.addEventListener('pointermove', onPointerMove);
+    document.addEventListener('pointerup', cleanupResize);
+    document.addEventListener('pointercancel', cleanupResize);
+  });
+})();
+
+function renderConfigDiagnostics(diagnostics) {
+  if (!diagnostics || diagnostics.length === 0) {
+    configDiagnosticsEl.hidden = true;
+    configDiagnosticsEl.textContent = '';
+    return;
+  }
+  configDiagnosticsEl.hidden = false;
+  configDiagnosticsEl.textContent = diagnostics
+    .map(d => d.message || d.Message || '')
+    .filter(Boolean)
+    .join('\n');
+}
+
+function syncConfigEditorTheme() {
+  configEditor.setOption('theme', getCodeMirrorTheme());
+  configEditor.refresh();
+}
+
 const DEBOUNCE_MS = 300;
 const utf8Decoder = new TextDecoder();
 let debounceId = null;
@@ -466,12 +616,16 @@ let sizingRaf = null;
  * Concurrency & staleness control for lint execution.
  * - lintInProgress: true while RunLint is executing (prevents re-entry)
  * - lintPendingRetry: set to true if a change occurred while lint was in progress; triggers re-lint on completion
- * - lastLintedSource / lastLintedFilePath: track previous lint inputs to skip redundant lint for identical content
+ * - lastLintedSource / lastLintedFilePath / lastConfigVersion: track previous lint inputs to skip redundant lint for identical content
  */
 let lintInProgress = false;
 let lintPendingRetry = false;
 let lastLintedSource = '';
 let lastLintedFilePath = '';
+
+/** Monotonically incremented on each successful SetConfig call; included in staleness check. */
+let configVersion = 0;
+let lastConfigVersion = 0;
 
 editor.on('change', (_cm, changeObj) => {
   if (sizingRaf === null) {
@@ -597,20 +751,29 @@ permalinkBtn.addEventListener('click', () => {
   }
 });
 
-applyFixesBtn.addEventListener('click', () => {
+applyFixesBtn.addEventListener('click', async () => {
   if (!runtimeAlive || !runtimeReady || !exports) return;
+  const original = editor.getValue();
+  const filePath = getSelectedFilePath();
+
+  // Disable button and show busy state
+  applyFixesBtn.disabled = true;
+  const originalText = applyFixesBtn.textContent;
+  applyFixesBtn.textContent = 'Fixing\u2026';
+
   try {
-    const original = editor.getValue();
-    const yaml = exports.Seiton.Playground.LintInterop.ApplyAllFixes(
+    const jsonStr = await exports.Seiton.Playground.LintInterop.ApplyAllFixesWithNetworkAsync(
       original,
-      getSelectedFilePath(),
+      filePath,
     );
+    const result = JSON.parse(jsonStr);
+    const yaml = result.yaml;
+
     if (yaml === original) {
-      // Fix pass returned unchanged YAML — either an error occurred
-      // (logged to console.error by C#) or no fixes were applicable.
       showToast('No changes were made. Either no auto-applicable fixes were available or fix application failed (see browser console).', 'info');
       return;
     }
+
     editor.setValue(yaml);
     editor.refresh();
     applyFixesBtn.hidden = true;
@@ -618,12 +781,24 @@ applyFixesBtn.addEventListener('click', () => {
     lastLintedSource = '';
     lastLintedFilePath = '';
     runLint();
+
+    // Show toast with resolution stats if network fixes were attempted
+    if (result.resolved > 0 || result.failed > 0) {
+      const parts = [];
+      if (result.resolved > 0) parts.push(`${result.resolved} pinned`);
+      if (result.failed > 0) parts.push(`${result.failed} failed`);
+      if (result.skipped > 0) parts.push(`${result.skipped} skipped`);
+      showToast(`Fixes applied. Network: ${parts.join(', ')}.`, result.failed > 0 ? 'error' : 'success');
+    }
   } catch (e) {
     if (isRuntimeDeadError(e)) {
       handleRuntimeDeath();
       return;
     }
     showToast(e?.message ?? String(e), 'error');
+  } finally {
+    applyFixesBtn.disabled = false;
+    applyFixesBtn.textContent = originalText;
   }
 });
 
@@ -834,8 +1009,8 @@ function runLint() {
   const source = editor.getValue();
   const filePath = getSelectedFilePath();
 
-  // Staleness check: skip if content + filePath are identical to last successful lint.
-  if (source === lastLintedSource && filePath === lastLintedFilePath) {
+  // Staleness check: skip if content + filePath + config are identical to last successful lint.
+  if (source === lastLintedSource && filePath === lastLintedFilePath && configVersion === lastConfigVersion) {
     return;
   }
 
@@ -853,6 +1028,7 @@ function runLint() {
     if (!isInternalError) {
       lastLintedSource = source;
       lastLintedFilePath = filePath;
+      lastConfigVersion = configVersion;
     }
     renderResults(diagnostics);
   } catch (err) {
@@ -876,6 +1052,36 @@ function runLint() {
       debounceId = null;
       runLint();
     }, DEBOUNCE_MS);
+  }
+}
+
+/**
+ * Sends config YAML to the WASM SetConfig export. On success, increments configVersion
+ * and triggers re-lint. Returns parsed diagnostics array (empty on success).
+ * @param {string} configYaml
+ * @returns {Array} config diagnostics (empty array on success)
+ */
+function setConfig(configYaml) {
+  if (!runtimeAlive || !runtimeReady || !exports) {
+    return [];
+  }
+  try {
+    const utf8Bytes = exports.Seiton.Playground.LintInterop.SetConfig(configYaml);
+    const json = utf8Decoder.decode(utf8Bytes);
+    const diagnostics = JSON.parse(json);
+    if (diagnostics.length === 0) {
+      // Success: config updated, invalidate staleness and trigger re-lint
+      configVersion++;
+      runLint();
+    }
+    return diagnostics;
+  } catch (err) {
+    if (isRuntimeDeadError(err)) {
+      handleRuntimeDeath();
+      return [];
+    }
+    showToast(err?.message ?? String(err), 'error');
+    return [];
   }
 }
 

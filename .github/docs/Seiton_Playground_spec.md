@@ -62,7 +62,17 @@ Exported functions callable from JavaScript:
 |---|---|---|---|
 | `RunLint` | `(yamlSource: string, filePath: string)` | UTF-8 JSON byte array | Diagnostic result array |
 | `ApplyAllFixes` | `(yamlSource: string, filePath: string)` | `string` | Fixed YAML (original text on error) |
+| `ApplyAllFixesWithNetworkAsync` | `(yamlSource: string, filePath: string)` | `Promise<string>` | JSON: `{"yaml":"...","resolved":N,"skipped":N,"failed":N}` |
+| `SetConfig` | `(configYaml: string)` | UTF-8 JSON byte array | Config diagnostic array (empty = success) |
 | `GetProductVersion` | none | `string` | Build version string |
+
+#### 2.3.1 SetConfig Behavior
+
+- Parses `configYaml` as a seiton configuration (same format as `.github/seiton.yaml`)
+- On success: stores the parsed `LintConfig` for subsequent `RunLint`/`ApplyAllFixes` calls; returns empty JSON array `[]`
+- On parse/validation errors: returns diagnostic array (same schema as `RunLint`); previous valid config is retained
+- Empty or whitespace-only input: resets to default config (no overrides)
+- Uses content-hash caching to skip re-parse when config content has not meaningfully changed (see §3.4)
 
 ### 2.4 Diagnostic JSON Schema
 
@@ -90,6 +100,7 @@ Exported functions callable from JavaScript:
 - WASM exported functions must never propagate unhandled exceptions across the interop boundary. An unhandled exception causes the WASM runtime to abort irreversibly.
 - `RunLint`: on internal error, returns a single-element diagnostic array with `ruleId: "internal-error"`, message prefixed with `[internal error]`, position `(1,1)`, severity `Error`, `fixable: false`.
 - `ApplyAllFixes`: on error, logs to browser console and returns the original input text unchanged.
+- `SetConfig`: on internal error, returns single-element diagnostic array (same as `RunLint` error format); previous valid config is retained.
 - `GetProductVersion`: on error, returns `"unknown"`.
 
 ---
@@ -104,9 +115,9 @@ Exported functions callable from JavaScript:
 | Paste bypass | Lint executes immediately on paste (no debounce) |
 | Re-entry guard | `lintInProgress` flag prevents concurrent lint invocations |
 | Pending retry | If content changes during lint execution, a debounced re-lint is scheduled after completion |
-| Staleness check | Lint is skipped when `(source, filePath)` pair is identical to the last successful lint |
+| Staleness check | Lint is skipped when `(source, filePath, configVersion)` triple is identical to the last successful lint |
 | Staleness non-update | Internal-error results do not update the staleness cache (allows retry on next keystroke) |
-| Staleness invalidation | File-type change, fix application, and URL fetch clear the staleness cache |
+| Staleness invalidation | File-type change, fix application, URL fetch, and config change clear the staleness cache |
 
 ### 3.2 Runtime Death Detection
 
@@ -120,10 +131,48 @@ Detection pattern: catch errors matching `"runtime already exited"` from WASM in
 
 ### 3.3 Apply All Fixes
 
-- Calls `ApplyAllFixes(source, filePath)` via WASM export
+- Calls `ApplyAllFixesWithNetworkAsync(source, filePath)` via WASM export
 - If returned YAML differs from input: update editor, invalidate staleness, re-lint
 - If unchanged: show informational toast (no fix was applicable or an error occurred)
-- Network-dependent fixes (pinning, digest resolution) are unavailable in WASM and are skipped
+- Network-dependent fixes (pinning via GitHub API, image digest resolution via OCI registries) require `enable-network` in the config; when enabled, resolves SHAs and digests concurrently before applying fixes
+- Uses the currently active config (last successful `SetConfig` result)
+
+### 3.4 Config Content-Hash Caching
+
+`LintConfigYamlParser.Parse()` allocates internally (VYaml reader, dictionaries, lists). Re-parsing on every lint call would add unnecessary GC pressure on the constrained WASM heap. The WASM side caches the parsed config and only re-parses when meaningful content changes.
+
+#### 3.4.1 Normalization Before Hashing
+
+Before computing the content hash, the config YAML string is normalized:
+
+1. Split into lines
+2. Strip trailing whitespace from each line
+3. Remove lines that are empty after stripping (blank lines)
+4. Join remaining lines with `\n`
+
+This ensures cosmetic edits (adding/removing blank lines, trailing spaces) do not trigger re-parse.
+
+#### 3.4.2 Hash and Cache Strategy
+
+| Step | Action |
+|---|---|
+| 1 | Normalize the incoming `configYaml` string |
+| 2 | Compute XxHash64 of the normalized UTF-8 bytes |
+| 3 | Compare hash to the previously cached hash |
+| 4a | Hash matches → return cached diagnostics (skip parse entirely) |
+| 4b | Hash differs → parse via `LintConfigLibrary.Validate()`, store new hash + parsed config + diagnostics |
+
+#### 3.4.3 Cache Invalidation
+
+- The config cache has exactly one slot (single-document playground)
+- Empty/whitespace-only input resets to default config and clears the cache slot
+- The cached config is retained across lint calls until explicitly changed via `SetConfig`
+
+#### 3.4.4 Interaction with Lint Staleness
+
+- JS side tracks a `configVersion` counter (incremented on each successful `SetConfig`)
+- When config changes: JS invalidates `lastLintedSource` / `lastLintedFilePath` staleness cache and triggers re-lint
+- The staleness triple becomes `(source, filePath, configVersion)` — any component change triggers re-lint
 
 ---
 
@@ -134,6 +183,7 @@ Detection pattern: catch errors matching `"runtime already exited"` from WASM in
 | Feature | Description |
 |---|---|
 | YAML editor | CodeMirror 5 with yaml mode, auto-grow (`viewportMargin: Infinity`), line numbers, active line highlight |
+| Config editor | CodeMirror 5 with yaml mode, collapsible panel below YAML editor; edits debounced 500ms before `SetConfig` call |
 | Real-time lint | Debounce 300ms, immediate on paste, staleness check |
 | Results table | Position chip + severity chip (Error/Warning/Info color-coded) + message + ruleId chip + fixable chip per diagnostic; left-border tint by severity (`data-severity` attribute) |
 | Gutter markers | Error = red (`--danger`), Warning = yellow (`--warning`), Info = blue (`--info`), CSS class-based |
@@ -224,7 +274,7 @@ Detection pattern: catch errors matching `"runtime already exited"` from WASM in
     <div #toast-stack aria-live="polite">
     <main>
       <section #linter>
-        editor pane (#editor-wrap > #editor + #apply-fixes-btn)
+        editor pane (#editor-wrap > #editor + #apply-fixes-btn + #config-panel)
         results pane (.results-column > #loading + #lint-result + #success-msg)
       </section>
     </main>
@@ -242,7 +292,7 @@ Detection pattern: catch errors matching `"runtime already exited"` from WASM in
 |---|---|
 | ≤ 639.98px | Controls row horizontal scroll, grid collapse to single column |
 | ≤ 880px | Reduced padding, narrower layout |
-| Desktop | Two-column grid: editor (left) + results (right, sticky with independent scroll, max 100dvh) |
+| Desktop | Two-column grid: editor (left, YAML editor + collapsible config panel stacked vertically) + results (right, sticky with independent scroll, max 100dvh) |
 
 ### 4.8 External Dependencies (CDN)
 

@@ -60,6 +60,7 @@ func main() {
     window := js.Global()
     window.Set("runSeitonLint", js.FuncOf(runLint))
     window.Set("applySeitonFixes", js.FuncOf(applyAllFixes))
+    window.Set("setSeitonConfig", js.FuncOf(setConfig))
     window.Set("getSeitonVersion", js.FuncOf(getVersion))
 
     // Keep runtime alive
@@ -73,6 +74,7 @@ func main() {
 |---|---|---|---|
 | `runSeitonLint` | `runLint` | `args[0]`: yamlSource (string), `args[1]`: filePath (string) | Calls `window.onLintCompleted(diagnosticsArray)` |
 | `applySeitonFixes` | `applyAllFixes` | `args[0]`: yamlSource (string), `args[1]`: filePath (string) | Calls `window.onFixesCompleted(fixedYaml)` |
+| `setSeitonConfig` | `setConfig` | `args[0]`: configYaml (string) | Calls `window.onConfigCompleted(diagnosticsArray)` |
 | `getSeitonVersion` | `getVersion` | none | Returns `js.ValueOf(version)` directly |
 
 ### 1.3 Function Signatures
@@ -182,6 +184,42 @@ If incremental parsing is implemented for Go (per `Seiton_Parser_go_spec.md`), t
 - Reuse section hashes for unchanged root keys
 
 If not implemented, full parse on every invocation (acceptable for Go WASM given single-binary size advantage).
+
+### 2.4 Config Content-Hash Caching
+
+Config parsing allocates (YAML reader state, maps, slices). To avoid unnecessary allocation on every lint call, the Go implementation caches the parsed config alongside an XXH64 hash of the normalized config string.
+
+**Package-level state:**
+
+```go
+var (
+    cachedConfigHash uint64
+    cachedConfig     *LintConfig
+    cachedConfigDiag []Diagnostic
+)
+```
+
+**setConfig algorithm:**
+
+1. If input is empty/whitespace-only: reset to default config, clear hash, call `window.onConfigCompleted([])`
+2. Normalize the input (strip trailing whitespace per line, remove blank lines)
+3. Compute XXH64 of the normalized bytes
+4. If hash matches `cachedConfigHash`: call callback with `cachedConfigDiag` immediately (skip parse)
+5. Parse config via `ValidateConfig(configYaml, "seiton.yaml")`
+6. On success: update `cachedConfig`, `cachedConfigHash`, `cachedConfigDiag = []`
+7. On validation errors: keep previous `cachedConfig`, serialize diagnostics to `cachedConfigDiag`, update `cachedConfigHash = hash` (repeated invalid input is a cache hit, avoids re-parsing)
+
+**Normalization** (identical to C# spec §2.1.1):
+
+- Split on `\n`
+- TrimRight each line (whitespace)
+- Remove empty lines
+- Join with `\n`
+
+**Integration with `runLint`/`applyAllFixes`:**
+
+- Both use `cachedConfig` (or default) when invoking the lint engine
+- Config change does NOT invalidate incremental parse context (config affects rule evaluation, not YAML structure)
 
 ---
 
