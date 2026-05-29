@@ -41,17 +41,13 @@ on:
 
 jobs:
   test:
-    strategy:
-      matrix:
-        os: [macos-latest, linux-latest]
-    runs-on: \${{ matrix.os }}
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
       - uses: actions/cache@v4
         with:
           path: ~/.npm
-          key: \${{ matrix.platform }}-node-\${{ hashFiles('**/package-lock.json') }}
-        if: \${{ github.repository.permissions.admin == true }}
+          key: ubuntu-node-\${{ hashFiles('**/package-lock.json') }}
       - run: npm install && npm test
 `,
   minimal:
