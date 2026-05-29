@@ -43,6 +43,12 @@ internal static class InstallCommand
             return ExitCode.InvalidOptions;
         }
 
+        if (File.Exists(destDir))
+        {
+            errWriter.WriteLine($"skill path exists and is a file: {destDir}");
+            return ExitCode.FatalError;
+        }
+
         if (Directory.Exists(destDir) && !force)
         {
             errWriter.WriteLine($"skill directory already exists: {destDir}");
@@ -83,6 +89,12 @@ internal static class InstallCommand
         var destPath = output is not null
             ? Path.GetFullPath(output, cwd)
             : Path.Combine(cwd, DefaultCiWorkflowPath.Replace('/', Path.DirectorySeparatorChar));
+
+        if (Directory.Exists(destPath))
+        {
+            errWriter.WriteLine($"workflow path is a directory: {destPath}");
+            return ExitCode.FatalError;
+        }
 
         if (File.Exists(destPath) && !force)
         {

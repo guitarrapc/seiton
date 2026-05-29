@@ -103,6 +103,56 @@ public sealed class InstallCommandTests
     }
 
     [Test]
+    public async Task Run_Skills_DestDirIsFile_ReturnsFatalError()
+    {
+        var dir = CreateTempDir();
+        try
+        {
+            // Create a file where the skill directory should be
+            var skillDir = Path.Combine(dir, ".claude", "skills", "seiton");
+            var parentDir = Path.GetDirectoryName(skillDir)!;
+            Directory.CreateDirectory(parentDir);
+            File.WriteAllText(skillDir, "i am a file");
+
+            using var stdout = new StringWriter();
+            using var stderr = new StringWriter();
+
+            var exitCode = InstallCommand.Run(skills: true, target: "claude", output: null, force: false, ci: false, baseDirectory: dir, stdout, stderr);
+
+            await Assert.That(exitCode).IsEqualTo(ExitCode.FatalError);
+            await Assert.That(stderr.ToString()).Contains("is a file");
+        }
+        finally
+        {
+            DeleteDirectory(dir);
+        }
+    }
+
+    [Test]
+    public async Task Run_Ci_DestPathIsDirectory_ReturnsFatalError()
+    {
+        var dir = CreateTempDir();
+        try
+        {
+            // Create a directory where the workflow file should be
+            var workflowPath = Path.Combine(dir, ".github", "workflows", "seiton.yml");
+            Directory.CreateDirectory(workflowPath);
+
+            using var stdout = new StringWriter();
+            using var stderr = new StringWriter();
+
+            var exitCode = InstallCommand.Run(skills: false, target: "claude", output: null, force: false, ci: true, baseDirectory: dir, stdout, stderr);
+
+            await Assert.That(exitCode).IsEqualTo(ExitCode.FatalError);
+            await Assert.That(stderr.ToString()).Contains("is a directory");
+        }
+        finally
+        {
+            DeleteDirectory(dir);
+        }
+    }
+
+    [Test]
     public async Task Run_Skills_UnknownTarget_ReturnsInvalidOptions()
     {
         var dir = CreateTempDir();

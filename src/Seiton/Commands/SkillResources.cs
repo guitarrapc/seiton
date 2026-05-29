@@ -16,9 +16,8 @@ internal static class SkillResources
             if (!name.StartsWith(Prefix, StringComparison.Ordinal))
                 continue;
 
-            using var stream = ThisAssembly.GetManifestResourceStream(name);
-            if (stream is null)
-                continue;
+            using var stream = ThisAssembly.GetManifestResourceStream(name)
+                ?? throw new InvalidOperationException($"embedded resource stream not found: {name}");
 
             using var reader = new StreamReader(stream);
             var relativePath = name[Prefix.Length..];

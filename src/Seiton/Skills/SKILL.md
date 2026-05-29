@@ -33,6 +33,7 @@ seiton --fix --enable-pin-network --enable-image-network
 | `seiton --fix --dry-run` | Preview fixes as unified diff |
 | `seiton --fix --check` | Exit non-zero if fixable issues exist |
 | `seiton init` | Generate starter config at `.github/seiton.yaml` |
+| `seiton install` | Install agent skill files and CI workflow templates |
 | `seiton rules` | List all lint rules and their status |
 | `seiton validate-config` | Validate the config file |
 | `seiton version` | Show version info |
