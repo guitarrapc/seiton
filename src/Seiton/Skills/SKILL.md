@@ -87,6 +87,24 @@ error[rule-id]: message
 
 ## Best Practices
 
+### Fix first, exclude only when necessary
+
+When a diagnostic is reported, follow this decision flow:
+
+1. **Can `--fix` resolve it?** → Run `seiton --fix` (or `--fix --dry-run` to preview).
+   Most issues have auto-fix support. Fix them rather than suppressing.
+2. **Is it a genuine issue without auto-fix?** → Fix it manually in the workflow file.
+3. **Is the violation intentional?** (demo file, legacy constraint, deliberate pattern)
+   → Add an `exclusions` entry scoped to that file/job.
+4. **Does the rule conflict with the repository's permanent policy?**
+   (e.g., "we always use `-latest` runners") → `rules: <rule-id>: enabled: false`.
+
+**Exclusions are for exceptions, not for avoiding fixes.** If a diagnostic has a fix
+available, apply the fix. Reserve `exclusions` for:
+- Auto-generated / uneditable files (see below)
+- Intentional bad-practice demos or test fixtures
+- Temporary constraints where a specific file cannot comply yet
+
 ### Exclude auto-generated and uneditable workflows
 
 Some workflow files should not be linted because they are generated or uneditable:
