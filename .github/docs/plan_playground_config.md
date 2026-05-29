@@ -1,0 +1,234 @@
+# Plan: Playground Config Editor (SetConfig)
+
+## Summary
+
+Add a `SetConfig` WASM export and config editor UI to the Playground, allowing users to customize lint behavior (rule enable/disable, severity, fix defaults like `job-timeout-minutes`, `runner-no-latest` fix-mapping, etc.) without leaving the browser.
+
+**Key insight**: `LintConfigYamlParser.Parse()` allocates internally (VYaml reader state, dictionaries, lists). To avoid GC pressure on the constrained WASM heap, the parsed config is cached with an XxHash64 content hash. Cosmetic edits (trailing whitespace, blank lines) are normalized away before hashing so they don't trigger re-parse.
+
+---
+
+## Investigation Findings
+
+### Current State
+
+1. `PlaygroundLintRunner` uses a **hardcoded static `LintConfig`** (`LintWithFixMetadata`) — Fix enabled, Network default, Output default, SkipSuppressionSummary=true.
+2. `RunToJsonUtf8` staleness check uses `(yamlSource, filePath)` only — no config dimension.
+3. `ApplyAllFixes` also uses the hardcoded config.
+4. `LintConfigLibrary.Validate(string yamlText, string filePath)` already exists and returns `LintConfigValidationResult` with parsed `LintConfig` + diagnostics.
+5. The Playground UI has a single CodeMirror editor + results pane in a 2-column grid.
+6. `IncrementalParseContext` caches per-job diagnostics — config change does NOT invalidate this cache because config affects rule evaluation, not YAML structure.
+
+### Performance Constraints
+
+- WASM heap is limited; avoid per-keystroke allocations.
+- `LintConfigYamlParser.Parse()` allocates ~1–2 KB per call (VYaml reader, dictionaries, lists).
+- Config changes are infrequent vs. YAML edits (separate debounce: 500ms for config vs. 300ms for YAML).
+- XxHash64 of normalized config (~100–500 bytes) is negligible cost.
+
+### Architecture Decision
+
+- **WASM side**: New `SetConfig(string configYaml) → byte[]` export. Returns config diagnostic JSON (empty `[]` on success).
+- **JS side**: Separate `configVersion` counter for staleness. Config editor debounced at 500ms before calling `SetConfig`.
+- **Cache**: Single-slot XxHash64 cache — skip re-parse when normalized content hash matches.
+
+---
+
+## Prioritized Implementation Phases
+
+### Phase 0: Baseline Benchmark & Test Snapshot
+
+**Goal**: Establish before-state for comparison.
+
+| Step | Action |
+|---|---|
+| 0-1 | Run existing `LintConfigBenchmark` and record mean/allocated |
+| 0-2 | Run `dotnet test --filter "Playground"` — all tests must pass |
+| 0-3 | Run full `dotnet test` — record pass count as baseline |
+
+**Exit criteria**: Baseline numbers recorded. No code changes.
+
+---
+
+### Phase 1: `PlaygroundLintRunner.SetConfig` (Core Logic)
+
+**Goal**: Add `SetConfig` method with content-hash caching. No UI changes yet.
+
+| Step | Action |
+|---|---|
+| 1-1 | Add failing tests for `SetConfig` behavior: empty input resets, valid config parses, invalid config returns diagnostics, hash-hit skips re-parse, cosmetic edits don't trigger re-parse |
+| 1-2 | Implement `SetConfig` in `PlaygroundLintRunner`: normalization → XxHash64 → cache check → `LintConfigLibrary.Validate()` |
+| 1-3 | Add `_cachedConfig` static field; update `RunToJsonUtf8` and `ApplyAllFixes` to use `_cachedConfig ?? LintWithFixMetadata` |
+| 1-4 | Add test: config with `runner-no-latest` disabled → diagnostic suppressed; reset → diagnostic returns |
+| 1-5 | Run `dotnet test --filter "Playground"` — all pass |
+| 1-6 | Run `LintConfigBenchmark` — no regression in existing benchmarks |
+
+**Performance requirement**:
+- `SetConfig` with hash-hit: **zero allocation** (returns cached `byte[]`).
+- `SetConfig` with hash-miss: allocation allowed (parse is inherently allocating), but result is cached.
+- `RunToJsonUtf8` / `ApplyAllFixes`: no additional allocation beyond current baseline (config lookup is a field read).
+
+**Exit criteria**: Tests green, benchmark shows no regression in `RunToJsonUtf8` path.
+
+---
+
+### Phase 2: WASM Interop (`LintInterop.SetConfig`)
+
+**Goal**: Expose `SetConfig` as `[JSExport]` with error handling.
+
+| Step | Action |
+|---|---|
+| 2-1 | Add `[JSExport] public static byte[] SetConfig(string? configYaml)` to `LintInterop.cs` |
+| 2-2 | Wrap in try/catch — on exception, return internal-error diagnostic JSON (same pattern as `RunLint`) |
+| 2-3 | Add test: null input → returns `[]`; exception scenario → returns error diagnostic |
+| 2-4 | Run `dotnet test` — all pass |
+| 2-5 | Build `Seiton.Playground` in Release mode — verify no trimming warnings |
+
+**Exit criteria**: WASM project builds, interop method compiles, tests pass.
+
+---
+
+### Phase 3: JS Staleness & Config Version
+
+**Goal**: Extend `main.js` staleness check to include config dimension.
+
+| Step | Action |
+|---|---|
+| 3-1 | Add `let configVersion = 0` and `let lastConfigVersion = 0` to staleness state |
+| 3-2 | Modify staleness check: `source === lastLintedSource && filePath === lastLintedFilePath && configVersion === lastConfigVersion` |
+| 3-3 | Add `setConfig(configYaml)` JS function: calls WASM `SetConfig`, increments `configVersion` on success, invalidates staleness, triggers re-lint |
+| 3-4 | Add Playwright test: config change triggers re-lint with different diagnostics |
+| 3-5 | Run `dotnet test --filter "Playground"` — all pass |
+
+**Exit criteria**: Config change invalidates staleness and triggers re-lint. Existing Playwright tests still pass.
+
+---
+
+### Phase 4: Config Editor UI
+
+**Goal**: Add collapsible config editor panel in the left column.
+
+| Step | Action |
+|---|---|
+| 4-1 | Add `#config-panel` section to `index.html` below `#editor-wrap`, with toggle button and CodeMirror textarea |
+| 4-2 | Add CSS for collapsible panel (`.config-panel`, `.config-panel--collapsed`) |
+| 4-3 | Initialize second CodeMirror instance with yaml mode, smaller height, 500ms debounce |
+| 4-4 | On config editor change (debounced): call `setConfig(configEditor.getValue())` |
+| 4-5 | Display config diagnostics inline below config editor (not in main results pane) |
+| 4-6 | Add `PlaygroundHtmlContractTests` for new HTML landmarks (`#config-panel`, `#config-editor`) |
+| 4-7 | Add Playwright test: config panel toggle, config edit triggers re-lint |
+| 4-8 | Run full `dotnet test` — all pass |
+
+**Exit criteria**: Config editor visible, edits apply to lint, no layout regression.
+
+---
+
+### Phase 5: Final Verification
+
+**Goal**: Confirm no performance regression end-to-end.
+
+| Step | Action |
+|---|---|
+| 5-1 | Run `LintConfigBenchmark` — compare to Phase 0 baseline |
+| 5-2 | Run full `dotnet test` — all pass, count matches baseline |
+| 5-3 | Run `dotnet publish` in Release — verify binary size delta is minimal |
+| 5-4 | Manual smoke test in browser: edit YAML → diagnostics update; edit config → diagnostics change; apply fixes with custom config |
+
+**Exit criteria**: No performance regression. All tests pass. Spec documents already updated.
+
+---
+
+## Benchmark Strategy
+
+### Before/After Comparison
+
+| Benchmark | What it measures | Acceptable delta |
+|---|---|---|
+| `LintConfigBenchmark` | Config parse time + allocation | Existing scenarios: 0% regression |
+| `PlaygroundLintRunner.RunToJsonUtf8` (new) | Lint with default config | Mean: ≤ +2%; Allocated: ≤ +0 bytes |
+| `PlaygroundLintRunner.RunToJsonUtf8` with cached config (new) | Lint after `SetConfig` | Mean: ≤ +2%; Allocated: ≤ +0 bytes vs. default |
+| `PlaygroundLintRunner.SetConfig` hash-hit (new) | Cached config lookup | Mean: < 1μs; Allocated: 0 bytes |
+| `PlaygroundLintRunner.SetConfig` hash-miss (new) | Full config parse | Mean: < 500μs; Allocated: bounded by VYaml |
+
+### How to Run
+
+```shell
+# Phase 0: Record baseline
+cd src/Seiton.Benchmark
+dotnet run -c Release -- --filter "LintConfig"
+
+# Phase 1+: Compare
+dotnet run -c Release -- --filter "LintConfig"
+# → compare Mean and Allocated columns to baseline
+```
+
+### New Benchmark Class (added in Phase 1)
+
+```csharp
+[MemoryDiagnoser]
+public class PlaygroundConfigBenchmark
+{
+    // SetConfig with hash-hit (should be ~0 alloc)
+    // SetConfig with hash-miss (parse cost)
+    // RunToJsonUtf8 with custom config vs. default
+}
+```
+
+---
+
+## Test Strategy
+
+### Regression Guard
+
+```shell
+# Before any code change (Phase 0)
+dotnet test > baseline_test_results.txt
+
+# After each phase
+dotnet test
+# → must match baseline pass count (new tests add to count, none fail)
+```
+
+### New Test Categories
+
+| Phase | Test file | Coverage |
+|---|---|---|
+| 1 | `PlaygroundLintRunnerTests.cs` | `SetConfig` behavior: reset, valid, invalid, hash-hit, hash-miss, cosmetic edits |
+| 1 | `PlaygroundLintRunnerTests.cs` | `RunToJsonUtf8` with custom config produces different diagnostics |
+| 2 | `PlaygroundLintRunnerTests.cs` | Null/exception handling in interop layer |
+| 3 | `PlaygroundUiLayoutTests.cs` | Config change triggers re-lint (Playwright) |
+| 4 | `PlaygroundHtmlContractTests.cs` | HTML landmarks for config panel |
+| 4 | `PlaygroundUiLayoutTests.cs` | Config panel collapse/expand, config edit flow |
+
+### Equivalence Classes for SetConfig
+
+| Input class | Expected behavior |
+|---|---|
+| `null` | Reset to default, return `[]` |
+| `""` (empty) | Reset to default, return `[]` |
+| `"   \n  \n"` (whitespace only) | Reset to default, return `[]` |
+| Valid config YAML | Parse, cache, return `[]` |
+| Invalid config YAML (unknown rule) | Return diagnostics, retain previous config |
+| Same content as cached (hash-hit) | Return cached diagnostics, skip parse |
+| Cosmetic edit (add blank line) | Hash matches after normalization → skip parse |
+| Different meaningful content (hash-miss) | Re-parse, update cache |
+
+---
+
+## Spec Documents (Already Updated)
+
+- `.github/docs/Seiton_Playground_spec.md` — §2.3.1, §3.1, §3.3, §3.4, §4.1
+- `.github/docs/Seiton_Playground_csharp_spec.md` — §1.1, §2.1.1, §6.4
+- `.github/docs/Seiton_Playground_go_spec.md` — §1.1, §1.2, §2.4
+
+---
+
+## Risk & Mitigation
+
+| Risk | Mitigation |
+|---|---|
+| Config parse per keystroke adds GC pressure | 500ms JS debounce + XxHash64 cache (zero alloc on hash-hit) |
+| Stale lint results after config change | `configVersion` in staleness triple forces re-lint |
+| WASM runtime crash from SetConfig exception | try/catch in `[JSExport]`, return error diagnostic |
+| Layout regression on narrow viewport | Config panel collapses to zero height; Playwright test verifies |
+| Incremental parse cache serves wrong diagnostics after config change | Config does NOT affect parse structure; per-job diagnostic cache is invalidated by triggering full re-lint (staleness cleared) |
