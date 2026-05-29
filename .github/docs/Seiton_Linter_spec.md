@@ -405,6 +405,8 @@ The following table defines the normative default severity for each rule. Implem
 | `deny-write-all` | error | |
 | `credentials` | mixed | warning (missing credentials), error (plaintext password) |
 | `template-injection` | error | |
+| `unsound-contains` | mixed | error (user-controllable values), info (other contexts) |
+| `bot-conditions` | mixed | warning (equality checks), info (inequality/exclusion checks). Suppressed entirely when AND-conjoined with non-spoofable trigger-author context. |
 | `expr-undefined-var` | error | |
 | `run-env-context-direct-use` | error | |
 | `run-secrets-context-direct-use` | error | |

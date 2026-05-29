@@ -99,6 +99,7 @@ public sealed class BotConditionsRule() : RuleBase(RuleId.BotConditions)
     private void ScanForBotConditions(ExpressionParseResult result, ReadOnlySpan<byte> exprBytes, Job? job, Step? step, StringNodeId condition)
     {
         var nodes = result.Nodes;
+        var hasOr = HasOrOperator(nodes);
 
         for (var i = 0; i < nodes.Length; i++)
         {
@@ -140,7 +141,7 @@ public sealed class BotConditionsRule() : RuleBase(RuleId.BotConditions)
             // Phase 1: If the same expression has a non-spoofable context check with the same literal
             // AND-conjoined, suppress. Skip suppression when OR operators exist (non-spoofable
             // check on the other side of OR does not mitigate the spoofable branch).
-            if (!HasOrOperator(nodes) && HasNonSpoofableConjunction(literalId, nodes, exprBytes))
+            if (!hasOr && HasNonSpoofableConjunction(literalId, nodes, exprBytes))
             {
                 continue;
             }

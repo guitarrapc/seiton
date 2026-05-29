@@ -78,6 +78,8 @@ CheckCondition → pre-filter (bot suffix/ID) → parse expression → ScanForBo
 **判定ロジック**:
 ```
 spoofable comparison が検出された場合:
+  if (式内に OR 演算子が存在する):
+    → 抑制しない (OR の反対側の non-spoofable チェックは緩和にならない)
   同一 expression 内の全 Binary(==) ノードを走査
   if (いずれかが non-spoofable context path で、かつ同じ literal 値を持つ):
     → 抑制 (diagnostic 発行しない)
