@@ -2,7 +2,7 @@
 
 ## 概要
 
-- **バージョン**: seiton 0.9.16 (built with .NET 10.0.8, win-x64)
+- **バージョン**: seiton 0.9.17 (built with .NET 10.0.8, win-x64)
 - **対象リポジトリ**: guitarrapc/githubactions-lab (GitHub Actions の研究・テスト用ラボリポジトリ)
 - **ワークフロー数**: 123 ファイル
 - **初回検出**: 45 errors, 38 warnings (83 issues)
