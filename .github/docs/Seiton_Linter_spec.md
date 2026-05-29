@@ -189,7 +189,7 @@ Column definitions:
 | `credentials` | ✓ | — | Warn on missing credentials for private registry images; error when `credentials.password` is a hardcoded literal. |
 | `template-injection` | ✓ | — | Error when untrusted `github.event`-origin data is interpolated into `run`/`script` sinks. `env:` indirection is not flagged. |
 | `unsound-contains` | ✓ | — | Detect bypassable `contains()` conditions (space-separated string lists). Error for user-controllable values; info for other contexts. Dot/bracket styles treated equivalently. |
-| `bot-conditions` | ✓ | — | Warn when bot checks rely on spoofable actor contexts (name or ID). Recommend trigger-author contexts instead. Uses generated `BotActors` dataset. |
+| `bot-conditions` | ✓ | — | Warn (==) or info (!=) when bot checks rely on spoofable actor contexts (name or ID). Suppressed when a non-spoofable trigger-author context (`github.event.pull_request.user.login`/`.id`) comparison with the same literal is AND-conjoined. Also suppressed entirely when no workflow trigger provides PR context (e.g. push-only, schedule-only). Uses generated `BotActors` dataset. |
 | `expr-undefined-var` | ✓ | — | Error when expressions reference unavailable context roots. Builds strict per-job types for `matrix`, `steps`, `needs`, popular-action outputs, local action outputs, and local reusable workflow outputs. Remote reusable workflows treated as loose. |
 | `run-env-context-direct-use` | ✓ | — | Error when `run:` directly references `${{ env.* }}`; shell variable expansion required. |
 | `run-secrets-context-direct-use` | ✓ | — | Error when `run:` directly references `${{ secrets.* }}`; must map via `env`. |
@@ -405,6 +405,8 @@ The following table defines the normative default severity for each rule. Implem
 | `deny-write-all` | error | |
 | `credentials` | mixed | warning (missing credentials), error (plaintext password) |
 | `template-injection` | error | |
+| `unsound-contains` | mixed | error (user-controllable values), info (other contexts) |
+| `bot-conditions` | mixed | warning (equality checks), info (inequality/exclusion checks). Suppressed entirely when AND-conjoined with non-spoofable trigger-author context, or when no workflow trigger provides PR context. |
 | `expr-undefined-var` | error | |
 | `run-env-context-direct-use` | error | |
 | `run-secrets-context-direct-use` | error | |

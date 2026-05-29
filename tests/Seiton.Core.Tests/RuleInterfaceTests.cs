@@ -870,7 +870,7 @@ public sealed partial class RuleInterfaceTests
                 "bot-conditions",
                 new BotConditionsRule(),
                 """
-                on: push
+                on: pull_request
                 jobs:
                     build:
                         runs-on: ubuntu-latest
