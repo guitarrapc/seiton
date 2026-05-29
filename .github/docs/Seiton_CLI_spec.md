@@ -121,20 +121,26 @@ The exact content of each placeholder is implementation-defined. Examples:
 Install agent skill files and other workspace assets.
 
 ```
-seiton install --skills [--target claude|copilot] [--output PATH] [--force]
+seiton install --skills [--target claude|copilot|cursor] [--ci] [--output PATH] [--force]
 ```
 
-- `--skills`: Install agent skill files to the workspace. Required; without it the command prints usage help and exits 0.
-- `--target`: Target agent platform (`claude` or `copilot`). Defaults to `claude`.
+- `--skills`: Install agent skill files to the workspace.
+- `--ci`: Install a CI workflow template to `.github/workflows/seiton.yml`.
+- `--target`: Target agent platform (`claude`, `copilot`, or `cursor`). Defaults to `claude`. Applies only to `--skills`.
   - `claude` → `.claude/skills/seiton/`
   - `copilot` → `.github/instructions/seiton/`
-- `--output`: Override the output directory path. When specified, `--target` path logic is ignored.
-- `--force`: Overwrite existing skill files if the destination directory already exists.
+  - `cursor` → `.cursor/rules/seiton/`
+- `--output`: Override the output path. For `--skills`, overrides the destination directory. For `--ci`, overrides the workflow file path.
+- `--force`: Overwrite existing files if the destination already exists.
 
-Skill files are embedded in the CLI binary and copied to the workspace on install. No network access is required.
+When neither `--skills` nor `--ci` is specified, the command prints usage help and exits 0.
+
+Both `--skills` and `--ci` can be specified together; each asset is installed independently.
+
+Skill files and CI templates are embedded in the CLI binary and copied to the workspace on install. No network access is required.
 
 Exit codes:
-- `0`: Success (files installed) or help displayed (when `--skills` is omitted).
+- `0`: Success (files installed) or help displayed (when no action flag is given).
 - `2`: Invalid options (unknown `--target` value).
 - `3`: Fatal error (destination already exists without `--force`, or I/O failure).
 

@@ -27,6 +27,7 @@ internal static class CliOptionSuggester
         "--force",
         "--skills",
         "--target",
+        "--ci",
     ];
 
     private static readonly int MaxNormalizedOptionLength = ComputeMaxNormalizedLength();

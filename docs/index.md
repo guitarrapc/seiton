@@ -33,7 +33,7 @@ For every file it analyzes, Seiton:
 | Config file | Optional `.github/seiton.yaml` for rule tuning, exclusions, and network options. |
 | Inline suppression | `# seiton: disable-next-line <rule-id>` directives inside workflow files. |
 | NativeAOT binary | Single-file executable; no .NET runtime required at deployment. |
-| Agent skill install | `seiton install --skills` deploys agent instructions for Claude Code, GitHub Copilot, etc. |
+| Agent skill install | `seiton install --skills` deploys agent instructions for Claude Code, GitHub Copilot, Cursor, etc. |
 
 ---
 

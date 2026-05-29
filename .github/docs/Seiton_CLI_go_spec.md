@@ -191,7 +191,7 @@ Subcommand detection: If the first non-flag argument matches a known subcommand 
 | `seiton validate-config` | `cmd.runValidateConfig()` | `--config` flag |
 | `seiton rules` | `cmd.runRules()` | `--config`, `--format` flags |
 | `seiton version` | `cmd.runVersion()` | No flags |
-| `seiton install` | `cmd.runInstall()` | `--skills`, `--target`, `--output`, `--force` flags |
+| `seiton install` | `cmd.runInstall()` | `--skills`, `--target`, `--output`, `--force`, `--ci` flags |
 
 ---
 

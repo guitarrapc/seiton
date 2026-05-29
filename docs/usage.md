@@ -215,7 +215,7 @@ seiton version
 
 ### seiton install
 
-Install agent skill files for coding agents (Claude Code, GitHub Copilot, etc.) into the workspace:
+Install agent skill files for coding agents (Claude Code, GitHub Copilot, Cursor, etc.) into the workspace:
 
 ```sh
 seiton install --skills
@@ -229,6 +229,9 @@ seiton install --skills --target claude
 
 # GitHub Copilot
 seiton install --skills --target copilot
+
+# Cursor
+seiton install --skills --target cursor
 ```
 
 Override the output directory:
@@ -243,7 +246,19 @@ Overwrite existing skill files:
 seiton install --skills --force
 ```
 
-Installed files include a `SKILL.md` (agent instruction manifest) and `references/` directory with detailed rule, fix-mode, and configuration documentation that agents can consult.
+Install a CI workflow template (`.github/workflows/seiton.yml`):
+
+```sh
+seiton install --ci
+```
+
+Install both skill files and CI workflow at once:
+
+```sh
+seiton install --skills --ci
+```
+
+Installed skill files include a `SKILL.md` (agent instruction manifest) and `references/` directory with detailed rule, fix-mode, and configuration documentation that agents can consult. The CI workflow template runs seiton on pull requests and uploads SARIF results to GitHub Advanced Security.
 
 ---
 

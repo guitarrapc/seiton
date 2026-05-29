@@ -26,6 +26,7 @@
 
   <ItemGroup>
     <EmbeddedResource Include="Skills\**\*" LogicalName="Skills/%(RecursiveDir)%(Filename)%(Extension)" />
+    <EmbeddedResource Include="CiTemplates\**\*" LogicalName="CiTemplates/%(RecursiveDir)%(Filename)%(Extension)" />
   </ItemGroup>
 
 </Project>

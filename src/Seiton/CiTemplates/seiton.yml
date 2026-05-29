@@ -1,0 +1,44 @@
+name: Seiton Lint
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/**"
+      - ".github/actions/**"
+      - "action.yml"
+      - "action.yaml"
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/**"
+      - ".github/actions/**"
+      - "action.yml"
+      - "action.yaml"
+
+permissions:
+  contents: read
+  security-events: write
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persistent-credentials: false
+
+      - name: Install seiton
+        run: |
+          curl -sSfL https://github.com/guitarrapc/seiton/releases/latest/download/seiton-linux-x64.tar.gz | tar xz
+          sudo mv seiton /usr/local/bin/
+
+      - name: Run seiton
+        run: seiton --format sarif --include-actions > results.sarif
+
+      - name: Upload SARIF
+        if: always()
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: results.sarif
+          category: seiton

@@ -130,12 +130,13 @@ internal class SeitonCli
 
     /// <summary>Install skill files for coding agents into the workspace.</summary>
     /// <param name="skills">Install agent skill files.</param>
-    /// <param name="target">-t, Target agent platform: claude | copilot.</param>
+    /// <param name="target">-t, Target agent platform: claude | copilot | cursor.</param>
     /// <param name="output">-o, Override the output directory path.</param>
     /// <param name="force">-f, Overwrite existing skill files.</param>
-    public void Install(bool skills = false, string target = "claude", string? output = null, bool force = false)
+    /// <param name="ci">Install CI workflow template.</param>
+    public void Install(bool skills = false, string target = "claude", string? output = null, bool force = false, bool ci = false)
     {
-        var code = InstallCommand.Run(skills, target, output, force);
+        var code = InstallCommand.Run(skills, target, output, force, ci);
         if (code != 0) Environment.ExitCode = code;
     }
 }

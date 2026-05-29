@@ -13,7 +13,7 @@ public sealed class InstallCommandTests
             using var stdout = new StringWriter();
             using var stderr = new StringWriter();
 
-            var exitCode = InstallCommand.Run(skills: true, target: "claude", output: null, force: false, baseDirectory: dir, stdout, stderr);
+            var exitCode = InstallCommand.Run(skills: true, target: "claude", output: null, force: false, ci: false, baseDirectory: dir, stdout, stderr);
 
             await Assert.That(exitCode).IsEqualTo(ExitCode.Success);
 
@@ -43,7 +43,7 @@ public sealed class InstallCommandTests
             using var stdout = new StringWriter();
             using var stderr = new StringWriter();
 
-            var exitCode = InstallCommand.Run(skills: true, target: "claude", output: null, force: false, baseDirectory: dir, stdout, stderr);
+            var exitCode = InstallCommand.Run(skills: true, target: "claude", output: null, force: false, ci: false, baseDirectory: dir, stdout, stderr);
 
             await Assert.That(exitCode).IsEqualTo(ExitCode.FatalError);
             await Assert.That(stderr.ToString()).Contains("already exists");
@@ -68,7 +68,7 @@ public sealed class InstallCommandTests
             using var stdout = new StringWriter();
             using var stderr = new StringWriter();
 
-            var exitCode = InstallCommand.Run(skills: true, target: "claude", output: null, force: true, baseDirectory: dir, stdout, stderr);
+            var exitCode = InstallCommand.Run(skills: true, target: "claude", output: null, force: true, ci: false, baseDirectory: dir, stdout, stderr);
 
             await Assert.That(exitCode).IsEqualTo(ExitCode.Success);
 
@@ -91,7 +91,7 @@ public sealed class InstallCommandTests
             using var stdout = new StringWriter();
             using var stderr = new StringWriter();
 
-            var exitCode = InstallCommand.Run(skills: false, target: "claude", output: null, force: false, baseDirectory: dir, stdout, stderr);
+            var exitCode = InstallCommand.Run(skills: false, target: "claude", output: null, force: false, ci: false, baseDirectory: dir, stdout, stderr);
 
             await Assert.That(exitCode).IsEqualTo(ExitCode.Success);
             await Assert.That(stdout.ToString()).Contains("seiton install --skills");
@@ -111,7 +111,7 @@ public sealed class InstallCommandTests
             using var stdout = new StringWriter();
             using var stderr = new StringWriter();
 
-            var exitCode = InstallCommand.Run(skills: true, target: "unknown", output: null, force: false, baseDirectory: dir, stdout, stderr);
+            var exitCode = InstallCommand.Run(skills: true, target: "unknown", output: null, force: false, ci: false, baseDirectory: dir, stdout, stderr);
 
             await Assert.That(exitCode).IsEqualTo(ExitCode.InvalidOptions);
             await Assert.That(stderr.ToString()).Contains("unknown target");
@@ -131,7 +131,7 @@ public sealed class InstallCommandTests
             using var stdout = new StringWriter();
             using var stderr = new StringWriter();
 
-            var exitCode = InstallCommand.Run(skills: true, target: "copilot", output: null, force: false, baseDirectory: dir, stdout, stderr);
+            var exitCode = InstallCommand.Run(skills: true, target: "copilot", output: null, force: false, ci: false, baseDirectory: dir, stdout, stderr);
 
             await Assert.That(exitCode).IsEqualTo(ExitCode.Success);
 
@@ -165,7 +165,7 @@ public sealed class InstallCommandTests
             using var stdout = new StringWriter();
             using var stderr = new StringWriter();
 
-            var exitCode = InstallCommand.Run(skills: true, target: "copilot", output: null, force: true, baseDirectory: dir, stdout, stderr);
+            var exitCode = InstallCommand.Run(skills: true, target: "copilot", output: null, force: true, ci: false, baseDirectory: dir, stdout, stderr);
 
             await Assert.That(exitCode).IsEqualTo(ExitCode.Success);
 
@@ -188,11 +188,40 @@ public sealed class InstallCommandTests
             using var stdout = new StringWriter();
             using var stderr = new StringWriter();
 
-            var exitCode = InstallCommand.Run(skills: true, target: "claude", output: null, force: false, baseDirectory: dir, stdout, stderr);
+            var exitCode = InstallCommand.Run(skills: true, target: "claude", output: null, force: false, ci: false, baseDirectory: dir, stdout, stderr);
 
             await Assert.That(exitCode).IsEqualTo(ExitCode.Success);
             var output = stdout.ToString();
             await Assert.That(output).Contains("SKILL.md");
+        }
+        finally
+        {
+            DeleteDirectory(dir);
+        }
+    }
+
+    [Test]
+    public async Task Run_Skills_CursorTarget_CreatesSkillFiles()
+    {
+        var dir = CreateTempDir();
+        try
+        {
+            using var stdout = new StringWriter();
+            using var stderr = new StringWriter();
+
+            var exitCode = InstallCommand.Run(skills: true, target: "cursor", output: null, force: false, ci: false, baseDirectory: dir, stdout, stderr);
+
+            await Assert.That(exitCode).IsEqualTo(ExitCode.Success);
+
+            var baseDir = Path.Combine(dir, ".cursor", "rules", "seiton");
+            await Assert.That(File.Exists(Path.Combine(baseDir, "SKILL.md"))).IsTrue();
+            await Assert.That(File.Exists(Path.Combine(baseDir, "references", "rules.md"))).IsTrue();
+            await Assert.That(File.Exists(Path.Combine(baseDir, "references", "fix-mode.md"))).IsTrue();
+            await Assert.That(File.Exists(Path.Combine(baseDir, "references", "configuration.md"))).IsTrue();
+
+            var output = stdout.ToString();
+            await Assert.That(output).Contains(".cursor");
+            await Assert.That(output).Contains("rules");
         }
         finally
         {
@@ -210,7 +239,7 @@ public sealed class InstallCommandTests
             using var stdout = new StringWriter();
             using var stderr = new StringWriter();
 
-            var exitCode = InstallCommand.Run(skills: true, target: "claude", output: customPath, force: false, baseDirectory: dir, stdout, stderr);
+            var exitCode = InstallCommand.Run(skills: true, target: "claude", output: customPath, force: false, ci: false, baseDirectory: dir, stdout, stderr);
 
             await Assert.That(exitCode).IsEqualTo(ExitCode.Success);
             await Assert.That(File.Exists(Path.Combine(customPath, "SKILL.md"))).IsTrue();
@@ -230,7 +259,7 @@ public sealed class InstallCommandTests
             using var stdout = new StringWriter();
             using var stderr = new StringWriter();
 
-            var exitCode = InstallCommand.Run(skills: true, target: "claude", output: null, force: false, baseDirectory: dir, stdout, stderr);
+            var exitCode = InstallCommand.Run(skills: true, target: "claude", output: null, force: false, ci: false, baseDirectory: dir, stdout, stderr);
 
             await Assert.That(exitCode).IsEqualTo(ExitCode.Success);
 
@@ -250,6 +279,134 @@ public sealed class InstallCommandTests
 
             var configContent = File.ReadAllText(Path.Combine(refsDir, "configuration.md"));
             await Assert.That(configContent).Contains("seiton.yaml");
+        }
+        finally
+        {
+            DeleteDirectory(dir);
+        }
+    }
+
+    [Test]
+    public async Task Run_Ci_CreatesWorkflowFile()
+    {
+        var dir = CreateTempDir();
+        try
+        {
+            using var stdout = new StringWriter();
+            using var stderr = new StringWriter();
+
+            var exitCode = InstallCommand.Run(skills: false, target: "claude", output: null, force: false, ci: true, baseDirectory: dir, stdout, stderr);
+
+            await Assert.That(exitCode).IsEqualTo(ExitCode.Success);
+
+            var workflowPath = Path.Combine(dir, ".github", "workflows", "seiton.yml");
+            await Assert.That(File.Exists(workflowPath)).IsTrue();
+
+            var content = File.ReadAllText(workflowPath);
+            await Assert.That(content).Contains("seiton");
+            await Assert.That(content).Contains("pull_request");
+        }
+        finally
+        {
+            DeleteDirectory(dir);
+        }
+    }
+
+    [Test]
+    public async Task Run_Ci_ExistingFile_WithoutForce_ReturnsFatalError()
+    {
+        var dir = CreateTempDir();
+        try
+        {
+            var workflowDir = Path.Combine(dir, ".github", "workflows");
+            Directory.CreateDirectory(workflowDir);
+            File.WriteAllText(Path.Combine(workflowDir, "seiton.yml"), "existing");
+
+            using var stdout = new StringWriter();
+            using var stderr = new StringWriter();
+
+            var exitCode = InstallCommand.Run(skills: false, target: "claude", output: null, force: false, ci: true, baseDirectory: dir, stdout, stderr);
+
+            await Assert.That(exitCode).IsEqualTo(ExitCode.FatalError);
+            await Assert.That(stderr.ToString()).Contains("already exists");
+        }
+        finally
+        {
+            DeleteDirectory(dir);
+        }
+    }
+
+    [Test]
+    public async Task Run_Ci_ExistingFile_WithForce_Overwrites()
+    {
+        var dir = CreateTempDir();
+        try
+        {
+            var workflowDir = Path.Combine(dir, ".github", "workflows");
+            Directory.CreateDirectory(workflowDir);
+            File.WriteAllText(Path.Combine(workflowDir, "seiton.yml"), "old content");
+
+            using var stdout = new StringWriter();
+            using var stderr = new StringWriter();
+
+            var exitCode = InstallCommand.Run(skills: false, target: "claude", output: null, force: true, ci: true, baseDirectory: dir, stdout, stderr);
+
+            await Assert.That(exitCode).IsEqualTo(ExitCode.Success);
+
+            var content = File.ReadAllText(Path.Combine(workflowDir, "seiton.yml"));
+            await Assert.That(content).Contains("seiton");
+            await Assert.That(content).DoesNotContain("old content");
+        }
+        finally
+        {
+            DeleteDirectory(dir);
+        }
+    }
+
+    [Test]
+    public async Task Run_Ci_CustomOutput_CreatesAtSpecifiedPath()
+    {
+        var dir = CreateTempDir();
+        var customPath = Path.Combine(dir, "custom", "ci.yml");
+        try
+        {
+            using var stdout = new StringWriter();
+            using var stderr = new StringWriter();
+
+            var exitCode = InstallCommand.Run(skills: false, target: "claude", output: customPath, force: false, ci: true, baseDirectory: dir, stdout, stderr);
+
+            await Assert.That(exitCode).IsEqualTo(ExitCode.Success);
+            await Assert.That(File.Exists(customPath)).IsTrue();
+
+            var content = File.ReadAllText(customPath);
+            await Assert.That(content).Contains("seiton");
+        }
+        finally
+        {
+            DeleteDirectory(dir);
+        }
+    }
+
+    [Test]
+    public async Task Run_SkillsAndCi_BothInstalled()
+    {
+        var dir = CreateTempDir();
+        try
+        {
+            using var stdout = new StringWriter();
+            using var stderr = new StringWriter();
+
+            var exitCode = InstallCommand.Run(skills: true, target: "claude", output: null, force: false, ci: true, baseDirectory: dir, stdout, stderr);
+
+            await Assert.That(exitCode).IsEqualTo(ExitCode.Success);
+
+            // Skills installed
+            var skillPath = Path.Combine(dir, ".claude", "skills", "seiton", "SKILL.md");
+            await Assert.That(File.Exists(skillPath)).IsTrue();
+
+            // CI workflow installed
+            var workflowPath = Path.Combine(dir, ".github", "workflows", "seiton.yml");
+            await Assert.That(File.Exists(workflowPath)).IsTrue();
         }
         finally
         {

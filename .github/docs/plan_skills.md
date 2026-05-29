@@ -722,3 +722,78 @@ Full suite: 2200 tests passed, 0 failed (ドキュメント変更のためコー
 - [x] 4-3: コンテンツ同期 CI (評価完了: 不要と判断)
 - [x] 4-4: README 更新
 - [x] 4-5: docs/ 更新 (usage.md, index.md, installation.md)
+
+---
+
+## 17. Phase 5 実装結果
+
+### 17.1 実装サマリ
+
+Phase 5 (拡張) を完了。`--target cursor` 対応、`seiton install --ci` CI ワークフローテンプレート配布、`--output` カスタムパス (Phase 1 で実装済み確認) の 3 タスク。
+
+#### 変更ファイル
+
+| File | 変更内容 |
+|------|----------|
+| `src/Seiton/Commands/InstallCommand.cs` | `--ci` 対応追加、`cursor` ターゲット追加、`InstallSkills`/`InstallCi` に分離 |
+| `src/Seiton/Commands/CiWorkflowResources.cs` | 新規: CI テンプレート読み出しヘルパー |
+| `src/Seiton/CiTemplates/seiton.yml` | 新規: CI workflow テンプレート (SARIF 出力、GitHub Advanced Security 連携) |
+| `src/Seiton/Seiton.csproj` | `CiTemplates` を EmbeddedResource に追加 |
+| `src/Seiton/Program.cs` | `Install()` に `ci` パラメータ追加、`--target` doc comment 更新 |
+| `src/Seiton/Cli/CliOptionSuggester.cs` | `--ci` を known options に追加 |
+| `tests/Seiton.Tests/InstallCommandTests.cs` | cursor target テスト + CI テスト 5 件追加 (計 16 テスト) |
+| `.github/docs/Seiton_CLI_spec.md` | §1.7 に `--ci`、`--target cursor` 追加 |
+| `.github/docs/Seiton_CLI_csharp_spec.md` | §4.4 mapping と §6.6 に `ci` パラメータ、`CiWorkflowResources` 追加 |
+| `.github/docs/Seiton_CLI_go_spec.md` | §4.4 mapping に `--ci` 追加 |
+| `README.md` | cursor と `--ci` の使い方追加 |
+| `docs/usage.md` | cursor ターゲット、`--ci` セクション追加 |
+| `docs/index.md` | Agent skill install 説明に Cursor 追加 |
+
+### 17.2 テスト結果
+
+Full suite: 2206 tests passed, 0 failed.
+
+新規テスト:
+| テストケース | 結果 |
+|---|---|
+| `Run_Skills_CursorTarget_CreatesSkillFiles` | ✅ Pass |
+| `Run_Ci_CreatesWorkflowFile` | ✅ Pass |
+| `Run_Ci_ExistingFile_WithoutForce_ReturnsFatalError` | ✅ Pass |
+| `Run_Ci_ExistingFile_WithForce_Overwrites` | ✅ Pass |
+| `Run_Ci_CustomOutput_CreatesAtSpecifiedPath` | ✅ Pass |
+| `Run_SkillsAndCi_BothInstalled` | ✅ Pass |
+
+### 17.3 パフォーマンス
+
+- **実行特性**: CLI ファイル書き出し操作。パーサー/リンターのホットパスではない。
+- **ベンチマーク**: 不要（`Seiton.Core/Parsing/` および `Seiton.Core/Linting/` に変更なし）
+- **性能影響**: なし。EmbeddedResource 読み出し + ファイル書き込みのみ。
+
+### 17.4 UX レビュー結果
+
+| 項目 | 評価 | 理由 |
+|------|------|------|
+| `--target cursor` の直感性 | ✅ Good | プラットフォーム名と一致、`.cursor/rules/` は Cursor 標準パス |
+| `--ci` フラグの直感性 | ✅ Good | "CI ワークフローのインストール" を端的に表現 |
+| 両フラグ併用 (`--skills --ci`) | ✅ Good | 独立した資産を一度にインストール可能 |
+| `--output` のセマンティクス | ⚠️ Acceptable | `--skills`+`--ci` 併用時は skills にのみ適用。ドキュメントで明記済み |
+| CI テンプレートの内容 | ✅ Good | SARIF + GitHub Advanced Security 連携、適切な permissions |
+| エラーメッセージ | ✅ Good | `"Use 'claude', 'copilot', or 'cursor'."` — actionable |
+
+### 17.5 レビュー指摘と対応
+
+| # | 指摘 | 対応 |
+|---|---|---|
+| 1 | CI テンプレートに `security-events: write` 権限不足 | 追加済み (SARIF upload に必要) |
+| 2 | `Run_WithoutSkills_ShowsUsage` と `Run_NoFlags_ShowsUsage` が重複 | 後者を削除 |
+
+### 17.6 5-3 (`--output` カスタムパス) の判断
+
+Phase 1 で既に実装済み。`ResolveSkillDestination` と `InstallCi` の両方が `--output` をサポート。
+テスト `Run_Skills_CustomOutput_CreatesAtSpecifiedPath` と `Run_Ci_CustomOutput_CreatesAtSpecifiedPath` で検証済み。
+
+### 17.7 Phase 5 完了状態
+
+- [x] 5-1: `--target cursor` 対応 (`.cursor/rules/seiton/` への展開)
+- [x] 5-2: `seiton install --ci` (CI workflow テンプレート配布)
+- [x] 5-3: `--output` カスタムパス (Phase 1 で実装済み、テスト確認済み)
