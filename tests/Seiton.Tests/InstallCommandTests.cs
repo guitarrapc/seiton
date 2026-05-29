@@ -186,6 +186,42 @@ public sealed class InstallCommandTests
         }
     }
 
+    [Test]
+    public async Task Run_Skills_DeploysReferenceFiles()
+    {
+        var dir = CreateTempDir();
+        try
+        {
+            using var stdout = new StringWriter();
+            using var stderr = new StringWriter();
+
+            var exitCode = InstallCommand.Run(skills: true, target: "claude", output: null, force: false, baseDirectory: dir, stdout, stderr);
+
+            await Assert.That(exitCode).IsEqualTo(ExitCode.Success);
+
+            var refsDir = Path.Combine(dir, ".claude", "skills", "seiton", "references");
+            await Assert.That(Directory.Exists(refsDir)).IsTrue();
+            await Assert.That(File.Exists(Path.Combine(refsDir, "rules.md"))).IsTrue();
+            await Assert.That(File.Exists(Path.Combine(refsDir, "fix-mode.md"))).IsTrue();
+            await Assert.That(File.Exists(Path.Combine(refsDir, "configuration.md"))).IsTrue();
+
+            // Verify content is meaningful (not empty)
+            var rulesContent = File.ReadAllText(Path.Combine(refsDir, "rules.md"));
+            await Assert.That(rulesContent).Contains("template-injection");
+            await Assert.That(rulesContent).Contains("unpinned-uses");
+
+            var fixContent = File.ReadAllText(Path.Combine(refsDir, "fix-mode.md"));
+            await Assert.That(fixContent).Contains("--dry-run");
+
+            var configContent = File.ReadAllText(Path.Combine(refsDir, "configuration.md"));
+            await Assert.That(configContent).Contains("seiton.yaml");
+        }
+        finally
+        {
+            DeleteDirectory(dir);
+        }
+    }
+
     private static string CreateTempDir()
     {
         var dir = Path.Combine(Path.GetTempPath(), "Seiton.Tests", Guid.NewGuid().ToString("N"));

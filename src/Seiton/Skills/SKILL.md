@@ -97,3 +97,9 @@ seiton init
 - **Unknown option**: seiton suggests the closest valid option with a `Did you mean` hint
 - **Too many warnings**: Use `--min-severity error` to focus on errors only
 - **CI integration**: Use `--format sarif` for GitHub Code Scanning upload
+
+## References
+
+- `references/rules.md` — All rule IDs, severities, fix support, and categories
+- `references/fix-mode.md` — Auto-fix commands, flags, and configuration
+- `references/configuration.md` — Full seiton.yaml schema and common patterns
