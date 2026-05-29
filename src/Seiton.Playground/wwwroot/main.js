@@ -515,7 +515,6 @@ const configEditor = CodeMirror(document.getElementById('config-editor'), {
   theme: getCodeMirrorTheme(),
   lineNumbers: true,
   lineWrapping: true,
-  viewportMargin: Infinity,
   value: '',
 });
 

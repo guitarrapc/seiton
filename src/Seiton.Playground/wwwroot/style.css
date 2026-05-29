@@ -727,11 +727,11 @@ a.version-badge:focus-visible {
   background: var(--editor-surface);
 }
 
-#editor-wrap .CodeMirror {
+#editor-wrap>#editor>.CodeMirror {
   height: auto;
 }
 
-#editor-wrap .CodeMirror-scroll {
+#editor-wrap>#editor>.CodeMirror .CodeMirror-scroll {
   overflow-x: auto !important;
   overflow-y: visible !important;
   height: auto !important;
@@ -1194,12 +1194,9 @@ footer a {
 }
 
 #config-editor .CodeMirror {
-  min-height: 80px;
-  max-height: 260px;
-  height: auto;
+  height: 260px;
   font-size: 0.85rem;
   border-top: 1px solid var(--border-pane);
-  overflow-y: auto;
 }
 
 .config-diagnostics {
