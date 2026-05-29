@@ -1199,6 +1199,18 @@ footer a {
   border-top: 1px solid var(--border-pane);
 }
 
+.config-panel__resize-handle {
+  height: 5px;
+  background: var(--border-pane);
+  cursor: ns-resize;
+  transition: background 0.15s ease;
+}
+
+.config-panel__resize-handle:hover,
+.config-panel__resize-handle--active {
+  background: var(--accent);
+}
+
 .config-diagnostics {
   padding: 0.35rem 0.75rem;
   font-size: 0.78rem;

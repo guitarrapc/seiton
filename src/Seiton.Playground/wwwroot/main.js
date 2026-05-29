@@ -558,6 +558,37 @@ configEditor.on('change', () => {
   }, CONFIG_DEBOUNCE_MS);
 });
 
+// ─── Config editor resize handle ───
+(function initConfigResize() {
+  const handle = document.getElementById('config-resize-handle');
+  const cmEl = document.querySelector('#config-editor .CodeMirror');
+  if (!handle || !cmEl) return;
+
+  let startY = 0;
+  let startH = 0;
+
+  function onPointerMove(e) {
+    const newH = Math.max(80, startH + (e.clientY - startY));
+    cmEl.style.height = newH + 'px';
+    configEditor.refresh();
+  }
+
+  function onPointerUp() {
+    handle.classList.remove('config-panel__resize-handle--active');
+    document.removeEventListener('pointermove', onPointerMove);
+    document.removeEventListener('pointerup', onPointerUp);
+  }
+
+  handle.addEventListener('pointerdown', (e) => {
+    e.preventDefault();
+    startY = e.clientY;
+    startH = cmEl.offsetHeight;
+    handle.classList.add('config-panel__resize-handle--active');
+    document.addEventListener('pointermove', onPointerMove);
+    document.addEventListener('pointerup', onPointerUp);
+  });
+})();
+
 function renderConfigDiagnostics(diagnostics) {
   if (!diagnostics || diagnostics.length === 0) {
     configDiagnosticsEl.hidden = true;
