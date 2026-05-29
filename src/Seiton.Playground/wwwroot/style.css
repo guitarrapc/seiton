@@ -719,7 +719,7 @@ a.version-badge:focus-visible {
 }
 
 #editor {
-  flex: 1 1 auto;
+  flex: 1 0 auto;
   width: 100%;
   min-height: 200px;
   display: flex;
