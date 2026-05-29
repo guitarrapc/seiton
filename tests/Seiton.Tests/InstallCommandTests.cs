@@ -414,6 +414,33 @@ public sealed class InstallCommandTests
         }
     }
 
+    [Test]
+    public async Task Run_SkillsAndCi_WithOutput_OutputAppliesToSkillsOnly()
+    {
+        var dir = CreateTempDir();
+        var customSkillPath = Path.Combine(dir, "custom", "skills");
+        try
+        {
+            using var stdout = new StringWriter();
+            using var stderr = new StringWriter();
+
+            var exitCode = InstallCommand.Run(skills: true, target: "claude", output: customSkillPath, force: false, ci: true, baseDirectory: dir, stdout, stderr);
+
+            await Assert.That(exitCode).IsEqualTo(ExitCode.Success);
+
+            // Skills installed at custom path
+            await Assert.That(File.Exists(Path.Combine(customSkillPath, "SKILL.md"))).IsTrue();
+
+            // CI workflow installed at default path (not custom)
+            var workflowPath = Path.Combine(dir, ".github", "workflows", "seiton.yml");
+            await Assert.That(File.Exists(workflowPath)).IsTrue();
+        }
+        finally
+        {
+            DeleteDirectory(dir);
+        }
+    }
+
     private static string CreateTempDir()
     {
         var dir = Path.Combine(Path.GetTempPath(), "Seiton.Tests", Guid.NewGuid().ToString("N"));

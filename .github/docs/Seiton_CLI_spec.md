@@ -130,7 +130,7 @@ seiton install --skills [--target claude|copilot|cursor] [--ci] [--output PATH] 
   - `claude` → `.claude/skills/seiton/`
   - `copilot` → `.github/instructions/seiton/`
   - `cursor` → `.cursor/rules/seiton/`
-- `--output`: Override the output path. For `--skills`, overrides the destination directory. For `--ci`, overrides the workflow file path.
+- `--output`: Override the output path. When only `--skills` is active, overrides the skill destination directory. When only `--ci` is active, overrides the workflow file path. When both `--skills` and `--ci` are active, `--output` applies to `--skills` only; `--ci` uses the default path.
 - `--force`: Overwrite existing files if the destination already exists.
 
 When neither `--skills` nor `--ci` is specified, the command prints usage help and exits 0.
