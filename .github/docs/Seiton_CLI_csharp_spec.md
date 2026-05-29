@@ -196,6 +196,7 @@ Fix-only flags (`dryRun`, `check`, `enablePinNetwork`, `enableImageNetwork`) are
 | `seiton validate-config` | `ValidateConfig(...)` | `[Command("validate-config")]`; `config` parameter |
 | `seiton rules` | `Rules(...)` | `config`, `format` parameters |
 | `seiton version` | `Version()` | No parameters |
+| `seiton install` | `Install(...)` | `skills`, `target`, `output`, `force` parameters |
 
 ---
 
@@ -306,6 +307,17 @@ Shared contract reference: `.github/docs/Seiton_CLI_spec.md` §5.
 - Maintains static `HashSet<string>` of known long options.
 - Normalized comparison: strips `-` characters, case-insensitive.
 - Builds `Try: seiton ...` command hint preserving original argument order.
+
+### 6.6 InstallCommand
+
+Shared contract reference: `.github/docs/Seiton_CLI_spec.md` §1.7.
+
+- Synchronous (`int` return); no async I/O needed.
+- Skill files are embedded as `EmbeddedResource` with logical names prefixed `Skills/`.
+- `SkillResources.GetAllSkillFiles()` reads all embedded resources matching the `Skills/` prefix, returns sorted `List<(string RelativePath, string Content)>`.
+- `ResolveDestination(target, output, cwd)` maps target name to output path; returns `null` for unknown targets.
+- File write loop creates subdirectories as needed (`Directory.CreateDirectory`).
+- Accepts optional `baseDirectory`, `stdout`, `stderr` parameters for testability.
 
 ---
 

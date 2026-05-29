@@ -213,6 +213,38 @@ Print the version, build metadata, and target platform:
 seiton version
 ```
 
+### seiton install
+
+Install agent skill files for coding agents (Claude Code, GitHub Copilot, etc.) into the workspace:
+
+```sh
+seiton install --skills
+```
+
+Install for a specific target platform:
+
+```sh
+# Claude Code (default)
+seiton install --skills --target claude
+
+# GitHub Copilot
+seiton install --skills --target copilot
+```
+
+Override the output directory:
+
+```sh
+seiton install --skills --output path/to/custom/dir
+```
+
+Overwrite existing skill files:
+
+```sh
+seiton install --skills --force
+```
+
+Installed files include a `SKILL.md` (agent instruction manifest) and `references/` directory with detailed rule, fix-mode, and configuration documentation that agents can consult.
+
 ---
 
 ## Flags

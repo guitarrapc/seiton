@@ -116,6 +116,28 @@ The exact content of each placeholder is implementation-defined. Examples:
 - `built with .NET 10.0.0, win-x64` (C# NativeAOT build)
 - `built with go1.24.0, linux/amd64` (Go build)
 
+### 1.7 `seiton install`
+
+Install agent skill files and other workspace assets.
+
+```
+seiton install --skills [--target claude|copilot] [--output PATH] [--force]
+```
+
+- `--skills`: Install agent skill files to the workspace. Required; without it the command prints usage help and exits 0.
+- `--target`: Target agent platform (`claude` or `copilot`). Defaults to `claude`.
+  - `claude` → `.claude/skills/seiton/`
+  - `copilot` → `.github/instructions/seiton/`
+- `--output`: Override the output directory path. When specified, `--target` path logic is ignored.
+- `--force`: Overwrite existing skill files if the destination directory already exists.
+
+Skill files are embedded in the CLI binary and copied to the workspace on install. No network access is required.
+
+Exit codes:
+- `0`: Success (files installed) or help displayed (when `--skills` is omitted).
+- `2`: Invalid options (unknown `--target` value).
+- `3`: Fatal error (destination already exists without `--force`, or I/O failure).
+
 ---
 
 ## 2. Flags

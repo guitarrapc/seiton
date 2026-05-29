@@ -141,6 +141,16 @@ To generate a starter config file:
 seiton init
 ```
 
+To install agent skill files (for Claude Code, GitHub Copilot, etc.):
+
+```sh
+# Install for Claude Code (default)
+seiton install --skills
+
+# Install for GitHub Copilot
+seiton install --skills --target copilot
+```
+
 If you prefer a direct download instead of a package manager, use the release archive or the download script described in [Installation](docs/installation.md).
 
 ## Documentation

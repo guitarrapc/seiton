@@ -652,3 +652,73 @@ Full suite: 2200 tests passed, 0 failed.
 - [x] 3-1: copilot 出力先ロジック (Phase 1 で先行実装済み)
 - [x] 3-2: テスト (Phase 1 で基本実装 + Phase 3 で拡充)
 - [x] 3-3: copilot 向けコンテンツ調整 (評価完了: 分岐不要)
+
+---
+
+## 16. Phase 4 実装結果
+
+### 16.1 実装サマリ
+
+Phase 4 (ドキュメント・CI) を完了。CLI spec、C# spec、Go spec、README、ユーザードキュメントに `install` コマンドの仕様を追記。
+
+#### 変更ファイル
+
+| File | 変更内容 |
+|------|----------|
+| `.github/docs/Seiton_CLI_spec.md` | §1.7 `seiton install` 追加 |
+| `.github/docs/Seiton_CLI_csharp_spec.md` | §4.4 subcommand mapping に install 追加、§6.6 InstallCommand 実装詳細追加 |
+| `.github/docs/Seiton_CLI_go_spec.md` | §4.3 subcommand detection に install 追加、§4.4 mapping に install 行追加 |
+| `README.md` | Quick Start に `seiton install --skills` の使い方追加 |
+| `docs/usage.md` | `### seiton install` セクション追加（全フラグ説明） |
+| `docs/index.md` | Key Features テーブルに Agent skill install 追加 |
+| `docs/installation.md` | Next Steps に agent integration 追加 |
+
+### 16.2 パフォーマンス
+
+- **実行特性**: ドキュメント変更のみ。`src/` 変更なし。
+- **ベンチマーク**: 不要（parser/linter コード変更なし）
+- **既存ベンチマークへの影響**: なし
+
+### 16.3 テスト結果
+
+Full suite: 2200 tests passed, 0 failed (ドキュメント変更のためコード影響なし)。
+
+### 16.4 Spec 整合性検証
+
+| 検証項目 | 結果 |
+|----------|------|
+| CLI spec §1.7 ↔ 実装の exit code | ✅ 一致 (0/2/3) |
+| CLI spec §1.7 ↔ 実装のフラグ名 | ✅ 一致 (`--skills`, `--target`, `--output`, `--force`) |
+| C# spec §4.4 ↔ Program.cs の Install メソッド | ✅ 一致 |
+| C# spec §6.6 ↔ InstallCommand.cs 実装 | ✅ 一致 |
+| Go spec §4.4 ↔ CLI spec §1.7 | ✅ 一致 (将来の Go 実装向け placeholder) |
+| README ↔ CLI spec | ✅ 一致 (コマンド例が spec のフラグと整合) |
+| docs/usage.md ↔ CLI spec | ✅ 一致 |
+
+### 16.5 レビュー指摘と対応
+
+| # | 指摘 | 対応 |
+|---|---|---|
+| 1 | Go spec の subcommand detection テキストに `install` 未記載 | 追記済み |
+| 2 | Go spec §4.4 mapping テーブルに `install` 未記載 | 追記済み |
+
+### 16.6 4-3 (CI コンテンツ同期) の判断
+
+プラン §12 の判断基準に従い、CI ワークフローは**作成しない**。
+
+理由:
+- ルール数 61 (30+ だが更新頻度は低い)
+- `references/rules.md` の更新は新ルール追加時に手動で十分
+- CI 同期の ROI は現時点では低い
+
+将来の再評価トリガー:
+- ルール数が 100+ になった場合
+- `references/rules.md` の乖離が実際に発生した場合
+
+### 16.7 Phase 4 完了状態
+
+- [x] 4-1: CLI spec 更新 (§1.7 追加)
+- [x] 4-2: C# spec 更新 (§4.4, §6.6 追加)
+- [x] 4-3: コンテンツ同期 CI (評価完了: 不要と判断)
+- [x] 4-4: README 更新
+- [x] 4-5: docs/ 更新 (usage.md, index.md, installation.md)
