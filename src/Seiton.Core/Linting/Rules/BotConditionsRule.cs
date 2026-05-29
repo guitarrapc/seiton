@@ -249,6 +249,22 @@ public sealed class BotConditionsRule() : RuleBase(RuleId.BotConditions)
                 continue;
             }
 
+            // Skip negated comparisons: !(x == y) is NOT a mitigation
+            var isNegated = false;
+            for (var j = 0; j < nodes.Length; j++)
+            {
+                if (nodes[j].Kind == ExpressionNodeKind.Unary && nodes[j].Operator == ExpressionOperator.Not && nodes[j].Left == i)
+                {
+                    isNegated = true;
+                    break;
+                }
+            }
+
+            if (isNegated)
+            {
+                continue;
+            }
+
             var leftId = node.Left;
             var rightId = node.Right;
 

@@ -1010,15 +1010,6 @@ jobs:
 
 Warns when a workflow gates privileged behavior on spoofable bot actor contexts such as `github.actor`, `github['actor']`, `github.triggering_actor`, `github.event.pull_request.sender.login`, `github.event['pull_request'].sender['login']`, `github.actor_id`, or `github['event']['pull_request']['sender']['id']`.
 
-**Severity:**
-
-- **warning** — equality checks (`==`): grants privileges to a bot identity that can be spoofed.
-- **info** — inequality checks (`!=`): exclusion pattern with lower risk (attacker gains only normal processing).
-
-**Suppression:** The diagnostic is suppressed entirely when:
-- A spoofable context comparison is AND-conjoined with a non-spoofable trigger-author context (`github.event.pull_request.user.login` or `github.event.pull_request.user.id`) checking the same literal value.
-- No workflow trigger provides PR context (e.g. `on: push` only, `on: schedule` only). In these cases, `github.actor` is the only available means for bot detection and suggesting a PR-based alternative would be misleading.
-
 **Example trigger:**
 
 ```yaml
@@ -1055,7 +1046,15 @@ jobs:
           GH_TOKEN: ${{ github.token }}
 ```
 
-  > **Note:** Known bot ID comparisons such as `github.actor_id == '49699333'` and equivalent bracket/index-style forms like `github['ACTOR_ID'] == 49699333` are also flagged. Prefer the corresponding trigger-author context like `github.event.pull_request.user.id`.
+**Notes:**
+
+- **Severity:**
+  - **warning** — equality checks (`==`): grants privileges to a bot identity that can be spoofed.
+  - **info** — inequality checks (`!=`): exclusion pattern with lower risk (attacker gains only normal processing).
+- **Suppression:** The diagnostic is suppressed entirely when:
+  - A spoofable context comparison is AND-conjoined with a non-spoofable trigger-author context (`github.event.pull_request.user.login` or `github.event.pull_request.user.id`) checking the same literal value.
+  - No workflow trigger provides PR context (e.g. `on: push` only, `on: schedule` only). In these cases, `github.actor` is the only available means for bot detection and suggesting a PR-based alternative would be misleading.
+- Known bot ID comparisons such as `github.actor_id == '49699333'` and equivalent bracket/index-style forms like `github['ACTOR_ID'] == 49699333` are also flagged. Prefer the corresponding trigger-author context like `github.event.pull_request.user.id`.
 
 ---
 

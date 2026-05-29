@@ -396,6 +396,19 @@ public sealed partial class RuleInterfaceTests
                         - run: echo test
             """,
             ["spoofable context"]),
+            // Phase 1: negated non-spoofable context should NOT suppress (the non-spoofable check is inverted)
+            new RuleCase(
+            "warning-negated-nonspoofable-not-suppressed",
+            """
+            on: pull_request
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    if: github.actor == 'dependabot[bot]' && !(github.event.pull_request.user.login == 'dependabot[bot]')
+                    steps:
+                        - run: echo test
+            """,
+            ["spoofable context"]),
         };
 
         await AssertRuleCases(new BotConditionsRule(), "bot-conditions", cases);

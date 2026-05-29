@@ -313,7 +313,7 @@ internal static class RuleCatalog
         RuleId.UnsoundCondition => "warning",
         RuleId.UnpinnedTools => "warning",
         RuleId.UnsoundContains => "mixed",
-        RuleId.BotConditions => "warning",
+        RuleId.BotConditions => "mixed",
         RuleId.Artipacked => "mixed",
         _ => throw new ArgumentOutOfRangeException(nameof(ruleId), ruleId, "No default severity defined for this rule."),
     };
