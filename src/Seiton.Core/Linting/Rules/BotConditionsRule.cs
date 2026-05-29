@@ -137,8 +137,10 @@ public sealed class BotConditionsRule() : RuleBase(RuleId.BotConditions)
                 continue;
             }
 
-            // Phase 1: If the same expression has a non-spoofable context check with the same literal, suppress
-            if (HasNonSpoofableConjunction(literalId, nodes, exprBytes))
+            // Phase 1: If the same expression has a non-spoofable context check with the same literal
+            // AND-conjoined, suppress. Skip suppression when OR operators exist (non-spoofable
+            // check on the other side of OR does not mitigate the spoofable branch).
+            if (!HasOrOperator(nodes) && HasNonSpoofableConjunction(literalId, nodes, exprBytes))
             {
                 continue;
             }
@@ -168,6 +170,23 @@ public sealed class BotConditionsRule() : RuleBase(RuleId.BotConditions)
                 }
             }
         }
+    }
+
+    /// <summary>
+    /// Returns true if the expression contains any OR operator, making flat conjunction
+    /// scanning unsafe (a non-spoofable check on the other side of OR does not mitigate).
+    /// </summary>
+    private static bool HasOrOperator(ExpressionNode[] nodes)
+    {
+        for (var i = 0; i < nodes.Length; i++)
+        {
+            if (nodes[i].Kind == ExpressionNodeKind.Binary && nodes[i].Operator == ExpressionOperator.Or)
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /// <summary>

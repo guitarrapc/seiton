@@ -255,6 +255,95 @@ public sealed partial class RuleInterfaceTests
                           run: echo test
             """,
             []),
+            // OR does NOT suppress: non-spoofable on the other side of OR does not mitigate
+            new RuleCase(
+            "warning-actor-or-user-login-not-conjoined",
+            """
+            on: pull_request
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    if: github.actor == 'dependabot[bot]' || github.event.pull_request.user.login == 'dependabot[bot]'
+                    steps:
+                        - run: echo test
+            """,
+            ["spoofable context"]),
+            // != with AND conjunction: fully mitigated, suppress entirely
+            new RuleCase(
+            "ok-actor-ne-with-user-login-conjunction",
+            """
+            on: pull_request
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    if: github.actor != 'dependabot[bot]' && github.event.pull_request.user.login == 'dependabot[bot]'
+                    steps:
+                        - run: echo test
+            """,
+            []),
+            // Non-bot actor comparisons should never flag
+            new RuleCase(
+            "ok-actor-equals-non-bot-user",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    if: github.actor == 'octocat'
+                    steps:
+                        - run: echo test
+            """,
+            []),
+            new RuleCase(
+            "ok-triggering-actor-equals-non-bot",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    if: github.triggering_actor == 'my-service-account'
+                    steps:
+                        - run: echo test
+            """,
+            []),
+            // Non-spoofable context alone should never flag
+            new RuleCase(
+            "ok-user-login-equals-bot",
+            """
+            on: pull_request
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    if: github.event.pull_request.user.login == 'dependabot[bot]'
+                    steps:
+                        - run: echo test
+            """,
+            []),
+            new RuleCase(
+            "ok-user-id-equals-known-bot-id",
+            """
+            on: pull_request
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    if: github.event.pull_request.user.id == '49699333'
+                    steps:
+                        - run: echo test
+            """,
+            []),
+            // Index-style non-spoofable context should not flag
+            new RuleCase(
+            "ok-index-user-login-equals-bot",
+            """
+            on: pull_request
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    if: github['event']['pull_request']['user']['login'] == 'dependabot[bot]'
+                    steps:
+                        - run: echo test
+            """,
+            []),
         };
 
         await AssertRuleCases(new BotConditionsRule(), "bot-conditions", cases);
