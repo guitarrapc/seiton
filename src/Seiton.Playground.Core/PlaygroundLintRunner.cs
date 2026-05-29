@@ -228,6 +228,8 @@ public static class PlaygroundLintRunner
         _lastYamlSource = null;
         _lastFilePath = null;
         _lastJsonOutput = null;
+        _defaultActionShaResolver = null;
+        _defaultImageDigestResolver = null;
         IncrementalCtx.InvalidateLintDiagnosticCache();
     }
 
@@ -478,12 +480,19 @@ public static class PlaygroundLintRunner
             if (_defaultActionShaResolver is not null)
                 return _defaultActionShaResolver;
 
-            _githubHttpClient ??= CreatePlaygroundHttpClient("api.github.com");
-            _defaultActionShaResolver = new GitHubActionShaResolver(
-                _githubHttpClient,
-                new FixPinningConfig { EnableNetwork = true },
-                new GitHubNetworkConfig());
-            return _defaultActionShaResolver;
+            lock (EngineGate)
+            {
+                if (_defaultActionShaResolver is not null)
+                    return _defaultActionShaResolver;
+
+                _githubHttpClient ??= CreatePlaygroundHttpClient("api.github.com");
+                var cfg = ActiveConfig;
+                _defaultActionShaResolver = new GitHubActionShaResolver(
+                    _githubHttpClient,
+                    cfg.Fix.Pinning,
+                    cfg.Network.GitHub);
+                return _defaultActionShaResolver;
+            }
         }
     }
 
@@ -497,11 +506,18 @@ public static class PlaygroundLintRunner
             if (_defaultImageDigestResolver is not null)
                 return _defaultImageDigestResolver;
 
-            _ociHttpClient ??= CreatePlaygroundHttpClient(null);
-            _defaultImageDigestResolver = new OciImageDigestResolver(
-                _ociHttpClient,
-                new FixImagesConfig { EnableNetwork = true });
-            return _defaultImageDigestResolver;
+            lock (EngineGate)
+            {
+                if (_defaultImageDigestResolver is not null)
+                    return _defaultImageDigestResolver;
+
+                _ociHttpClient ??= CreatePlaygroundHttpClient(null);
+                var cfg = ActiveConfig;
+                _defaultImageDigestResolver = new OciImageDigestResolver(
+                    _ociHttpClient,
+                    cfg.Fix.Images);
+                return _defaultImageDigestResolver;
+            }
         }
     }
 
@@ -516,7 +532,7 @@ public static class PlaygroundLintRunner
             client.BaseAddress = new Uri($"https://{baseAddress}");
         }
         client.DefaultRequestHeaders.UserAgent.ParseAdd("seiton-playground/1.0");
-        client.Timeout = TimeSpan.FromSeconds(10);
+        client.Timeout = System.Threading.Timeout.InfiniteTimeSpan;
         return client;
     }
 
