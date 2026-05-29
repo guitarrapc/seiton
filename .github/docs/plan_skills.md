@@ -434,6 +434,7 @@ Exit codes:
 | 4-2 | C# spec 更新 | `Seiton_CLI_csharp_spec.md` 追記 | 実装詳細が spec に記載 |
 | 4-3 | コンテンツ同期 CI | GitHub Actions workflow | `seiton rules --format json` と `references/rules.md` の差分検出 |
 | 4-4 | README 更新 | `README.md` | install --skills の使い方を記載 |
+| 4-5 | docs/ 更新 | `docs/` 配下のドキュメント。usage.md、index.md, installation.md | install --skills の使い方や詳細を記載 |
 
 ---
 
