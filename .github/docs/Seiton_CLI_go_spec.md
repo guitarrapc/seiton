@@ -179,7 +179,7 @@ func (cmd *Command) Main(args []string) int {
 }
 ```
 
-Subcommand detection: If the first non-flag argument matches a known subcommand name (`check`, `init`, `validate-config`, `rules`, `version`), dispatch to that subcommand's handler. Otherwise treat all non-flag arguments as file paths for the root (check/fix) command.
+Subcommand detection: If the first non-flag argument matches a known subcommand name (`check`, `init`, `validate-config`, `rules`, `version`, `install`), dispatch to that subcommand's handler. Otherwise treat all non-flag arguments as file paths for the root (check/fix) command.
 
 ### 4.4 Subcommand Mapping
 
@@ -191,6 +191,7 @@ Subcommand detection: If the first non-flag argument matches a known subcommand 
 | `seiton validate-config` | `cmd.runValidateConfig()` | `--config` flag |
 | `seiton rules` | `cmd.runRules()` | `--config`, `--format` flags |
 | `seiton version` | `cmd.runVersion()` | No flags |
+| `seiton install` | `cmd.runInstall()` | `--skills`, `--target`, `--output`, `--force`, `--ci` flags |
 
 ---
 

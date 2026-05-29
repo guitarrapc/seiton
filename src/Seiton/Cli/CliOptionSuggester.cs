@@ -25,6 +25,9 @@ internal static class CliOptionSuggester
         "--include-actions",
         "--output",
         "--force",
+        "--skills",
+        "--target",
+        "--ci",
     ];
 
     private static readonly int MaxNormalizedOptionLength = ComputeMaxNormalizedLength();
@@ -39,6 +42,7 @@ internal static class CliOptionSuggester
         "--format",
         "--color",
         "--output",
+        "--target",
     ];
 
     public static bool TryWriteSuggestionsForUnknownOptions(string[] args, TextWriter errorWriter)

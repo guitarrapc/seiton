@@ -116,6 +116,34 @@ The exact content of each placeholder is implementation-defined. Examples:
 - `built with .NET 10.0.0, win-x64` (C# NativeAOT build)
 - `built with go1.24.0, linux/amd64` (Go build)
 
+### 1.7 `seiton install`
+
+Install agent skill files and other workspace assets.
+
+```
+seiton install --skills [--target claude|copilot|cursor] [--ci] [--output PATH] [--force]
+```
+
+- `--skills`: Install agent skill files to the workspace.
+- `--ci`: Install a CI workflow template to `.github/workflows/seiton.yml`.
+- `--target`: Target agent platform (`claude`, `copilot`, or `cursor`). Defaults to `claude`. Applies only to `--skills`.
+  - `claude` → `.claude/skills/seiton/`
+  - `copilot` → `.github/instructions/seiton/`
+  - `cursor` → `.cursor/rules/seiton/`
+- `--output`: Override the output path. When only `--skills` is active, overrides the skill destination directory. When only `--ci` is active, overrides the workflow file path. When both `--skills` and `--ci` are active, `--output` applies to `--skills` only; `--ci` uses the default path.
+- `--force`: Overwrite existing files if the destination already exists.
+
+When neither `--skills` nor `--ci` is specified, the command prints usage help and exits 0.
+
+Both `--skills` and `--ci` can be specified together; each asset is installed independently.
+
+Skill files and CI templates are embedded in the CLI binary and copied to the workspace on install. No network access is required.
+
+Exit codes:
+- `0`: Success (files installed) or help displayed (when no action flag is given).
+- `2`: Invalid options (unknown `--target` value).
+- `3`: Fatal error (destination already exists without `--force`, or I/O failure).
+
 ---
 
 ## 2. Flags

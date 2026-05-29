@@ -213,6 +213,53 @@ Print the version, build metadata, and target platform:
 seiton version
 ```
 
+### seiton install
+
+Install agent skill files for coding agents (Claude Code, GitHub Copilot, Cursor, etc.) into the workspace:
+
+```sh
+seiton install --skills
+```
+
+Install for a specific target platform:
+
+```sh
+# Claude Code (default)
+seiton install --skills --target claude
+
+# GitHub Copilot
+seiton install --skills --target copilot
+
+# Cursor
+seiton install --skills --target cursor
+```
+
+Override the output directory:
+
+```sh
+seiton install --skills --output path/to/custom/dir
+```
+
+Overwrite existing skill files:
+
+```sh
+seiton install --skills --force
+```
+
+Install a CI workflow template (`.github/workflows/seiton.yml`):
+
+```sh
+seiton install --ci
+```
+
+Install both skill files and CI workflow at once:
+
+```sh
+seiton install --skills --ci
+```
+
+Installed skill files include a `SKILL.md` (agent instruction manifest) and `references/` directory with detailed rule, fix-mode, and configuration documentation that agents can consult. The CI workflow template runs seiton on pull requests and uploads SARIF results to GitHub code scanning.
+
 ---
 
 ## Flags
@@ -401,25 +448,25 @@ Available tags include:
 To confirm the image works:
 
 ```sh
-docker run --rm ghcr.io/guitarrapc/seiton:latest version
+docker run --rm ghcr.io/guitarrapc/seiton:v0.9.16 version
 ```
 
 Lint all workflow files (read-only mount):
 
 ```sh
-docker run --rm -v "$PWD:/repo:ro" ghcr.io/guitarrapc/seiton:latest
+docker run --rm -v "$PWD:/repo:ro" ghcr.io/guitarrapc/seiton:v0.9.16
 ```
 
 Lint a specific file:
 
 ```sh
-docker run --rm -v "$PWD:/repo:ro" ghcr.io/guitarrapc/seiton:latest .github/workflows/ci.yml
+docker run --rm -v "$PWD:/repo:ro" ghcr.io/guitarrapc/seiton:v0.9.16 .github/workflows/ci.yml
 ```
 
 Apply fixes (omit `:ro` — writable mount is required):
 
 ```sh
-docker run --rm -v "$PWD:/repo" ghcr.io/guitarrapc/seiton:latest --fix
+docker run --rm -v "$PWD:/repo" ghcr.io/guitarrapc/seiton:v0.9.16 --fix
 ```
 
 > `--fix --dry-run` and `--fix --check` do not write files, so `:ro` is fine for those.

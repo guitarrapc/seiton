@@ -201,3 +201,4 @@ built with .NET 10.0.8, win-x64
 
 - [Usage](usage.md) — Learn how to run Seiton and integrate it into your workflow.
 - [Configuration](configuration.md) — Configure rule behavior and exclusions.
+- **Agent integration** — Run `seiton install --skills` to install skill files for coding agents (Claude Code, GitHub Copilot, Cursor).
