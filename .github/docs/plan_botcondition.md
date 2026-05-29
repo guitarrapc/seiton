@@ -120,13 +120,15 @@ spoofable comparison が検出された場合:
 - `github.triggering_actor != 'renovate[bot]'` → info
 - 既存テストの期待値更新
 
-### Phase 3 (将来): event type 考慮
-
-**優先度: Low** — 実装複雑度が高く、Phase 1+2 で主要 FP は解消される。
+### Phase 3: event type 考慮 ✅ 実装済み
 
 `on: push` のみのワークフローでは `github.event.pull_request` が null であるため `github.actor` が唯一の手段。イベント情報と条件位置を紐づけて、代替手段がないケースを完全に抑制する。
 
-Phase 1+2 の効果を計測した後に要否を判断する。
+**実装内容:**
+- `VisitWorkflowPre` で `workflow.On` を走査し、PR コンテキストを提供するイベント (`pull_request`, `pull_request_target`, `pull_request_review`, `pull_request_review_comment`) の有無を判定
+- PR イベントが存在しない場合: `==` / `!=` ともに完全抑制 (ユーザーに代替手段がないため)
+- PR イベントが存在する場合: Phase 1+2 の挙動を維持 (warning/info)
+- ゼロアロケーション、ベンチマーク影響なし
 
 ---
 
@@ -142,7 +144,7 @@ Phase 1+2 の効果を計測した後に要否を判断する。
 
 | ファイル | 変更内容 |
 |---|---|
-| `src/Seiton.Core/Linting/Rules/BotConditionsRule.cs` | Phase 1: AND 結合検知ロジック追加、Phase 2: `!=` 時 info emission |
+| `src/Seiton.Core/Linting/Rules/BotConditionsRule.cs` | Phase 1: AND 結合検知ロジック追加、Phase 2: `!=` 時 info emission、Phase 3: `VisitWorkflowPre` + `HasPullRequestEvent` による event-type 抑制 |
 | `tests/Seiton.Core.Tests/RuleInterfaceTests.BotConditionsRule.cs` | 新規テストケース追加 + 既存テスト期待値更新 |
 
 ---

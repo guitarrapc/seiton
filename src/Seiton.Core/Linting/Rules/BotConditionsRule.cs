@@ -31,9 +31,18 @@ public sealed class BotConditionsRule() : RuleBase(RuleId.BotConditions)
     // Known bot suffixes
     private static ReadOnlySpan<byte> BotSuffix => "[bot]"u8;
 
+    // Phase 3: whether any trigger provides github.event.pull_request context
+    private bool _hasPrEvent;
+
     public override string Name => "Bot Conditions Rule";
 
     public override bool SupportsDocumentKind(DocumentKind documentKind) => documentKind == DocumentKind.Workflow;
+
+    public override void VisitWorkflowPre(Workflow workflow)
+    {
+        base.VisitWorkflowPre(workflow);
+        _hasPrEvent = HasPullRequestEvent(workflow);
+    }
 
     public override void VisitJobPre(Job job)
     {
@@ -147,6 +156,13 @@ public sealed class BotConditionsRule() : RuleBase(RuleId.BotConditions)
             }
 
             // Phase 2: != (exclusion pattern) emits info; == (privilege grant) emits warning
+            // Phase 3: When no PR event provides an alternative, suppress entirely
+            //          (github.actor is the only available means for bot detection)
+            if (!_hasPrEvent)
+            {
+                continue;
+            }
+
             var diagRange = Arena.GetStringRange(condition);
             if (node.Operator == ExpressionOperator.NotEqual)
             {
@@ -182,6 +198,33 @@ public sealed class BotConditionsRule() : RuleBase(RuleId.BotConditions)
         for (var i = 0; i < nodes.Length; i++)
         {
             if (nodes[i].Kind == ExpressionNodeKind.Binary && nodes[i].Operator == ExpressionOperator.Or)
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /// <summary>
+    /// Phase 3: Returns true if any workflow trigger provides github.event.pull_request context.
+    /// Events: pull_request, pull_request_target, pull_request_review, pull_request_review_comment.
+    /// </summary>
+    private bool HasPullRequestEvent(Workflow workflow)
+    {
+        for (var i = 0; i < workflow.On.Count; i++)
+        {
+            if (workflow.On[i] is not WebhookEvent webhook)
+            {
+                continue;
+            }
+
+            var hook = Arena.GetStringValue(webhook.Hook);
+            if (WebhookTypes.TryGet(hook, out _, out var spec)
+                && spec.Id is WebhookTypes.EventId.PullRequest
+                    or WebhookTypes.EventId.PullRequestTarget
+                    or WebhookTypes.EventId.PullRequestReview
+                    or WebhookTypes.EventId.PullRequestReviewComment)
             {
                 return true;
             }

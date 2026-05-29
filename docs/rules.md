@@ -1015,7 +1015,9 @@ Warns when a workflow gates privileged behavior on spoofable bot actor contexts 
 - **warning** — equality checks (`==`): grants privileges to a bot identity that can be spoofed.
 - **info** — inequality checks (`!=`): exclusion pattern with lower risk (attacker gains only normal processing).
 
-**Suppression:** When a spoofable context comparison is AND-conjoined with a non-spoofable trigger-author context (`github.event.pull_request.user.login` or `github.event.pull_request.user.id`) checking the same literal value, the diagnostic is suppressed entirely.
+**Suppression:** The diagnostic is suppressed entirely when:
+- A spoofable context comparison is AND-conjoined with a non-spoofable trigger-author context (`github.event.pull_request.user.login` or `github.event.pull_request.user.id`) checking the same literal value.
+- No workflow trigger provides PR context (e.g. `on: push` only, `on: schedule` only). In these cases, `github.actor` is the only available means for bot detection and suggesting a PR-based alternative would be misleading.
 
 **Example trigger:**
 
