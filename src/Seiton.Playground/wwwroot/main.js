@@ -477,6 +477,8 @@ rules:
       ubuntu-latest: "ubuntu-24.04"
       windows-latest: "windows-2025"
       macos-latest: "macos-15"
+  checkout-persist-credentials:
+    severity: warning
 `,
   fullFix: `fix:
   defaults:
@@ -494,15 +496,15 @@ rules:
       windows-latest: "windows-2025"
       macos-latest: "macos-15"
 `,
-  exclusions: `rules:
-  job-timeout-minutes-required:
-    enabled: false
-  unpinned-uses:
-    enabled: false
-
-exclusions:
-  - file: ".github/workflows/generated-*.yml"
+  exclusions: `exclusions:
+  - file: ".github/workflows/ci.yml"
+    jobs:
+      - build
     rules:
+      - job-timeout-minutes-required
+  - file: ".github/workflows/release-*.yml"
+    rules:
+      - unpinned-uses
       - runner-no-latest
 `,
 };

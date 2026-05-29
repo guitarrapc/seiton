@@ -304,6 +304,8 @@ rules:
       ubuntu-latest: "ubuntu-24.04"
       windows-latest: "windows-2025"
       macos-latest: "macos-15"
+  checkout-persist-credentials:
+    severity: warning
 ```
 
 **2. Full Fix — Network Pinning** (`fullFix`)
@@ -327,15 +329,15 @@ rules:
 
 **3. Rule Exclusions** (`exclusions`)
 ```yaml
-rules:
-  job-timeout-minutes-required:
-    enabled: false
-  unpinned-uses:
-    enabled: false
-
 exclusions:
-  - file: ".github/workflows/generated-*.yml"
+  - file: ".github/workflows/ci.yml"
+    jobs:
+      - build
     rules:
+      - job-timeout-minutes-required
+  - file: ".github/workflows/release-*.yml"
+    rules:
+      - unpinned-uses
       - runner-no-latest
 ```
 
