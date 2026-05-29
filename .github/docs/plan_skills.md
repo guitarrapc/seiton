@@ -447,7 +447,6 @@ Exit codes:
 | 5-1 | `--target cursor` 対応 | Low | `.cursor/rules/seiton/` への展開 |
 | 5-2 | `seiton install --ci` | Low | CI workflow テンプレート配布 |
 | 5-3 | `--output` カスタムパス | Low | 任意パスへの展開 (Phase 1 で実装しておいてもよい) |
-| 5-4 | `seiton install --config` | Low | `init` の alias として |
 
 ---
 
