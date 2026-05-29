@@ -448,25 +448,25 @@ Available tags include:
 To confirm the image works:
 
 ```sh
-docker run --rm ghcr.io/guitarrapc/seiton:latest version
+docker run --rm ghcr.io/guitarrapc/seiton:v0.9.16 version
 ```
 
 Lint all workflow files (read-only mount):
 
 ```sh
-docker run --rm -v "$PWD:/repo:ro" ghcr.io/guitarrapc/seiton:latest
+docker run --rm -v "$PWD:/repo:ro" ghcr.io/guitarrapc/seiton:v0.9.16
 ```
 
 Lint a specific file:
 
 ```sh
-docker run --rm -v "$PWD:/repo:ro" ghcr.io/guitarrapc/seiton:latest .github/workflows/ci.yml
+docker run --rm -v "$PWD:/repo:ro" ghcr.io/guitarrapc/seiton:v0.9.16 .github/workflows/ci.yml
 ```
 
 Apply fixes (omit `:ro` — writable mount is required):
 
 ```sh
-docker run --rm -v "$PWD:/repo" ghcr.io/guitarrapc/seiton:latest --fix
+docker run --rm -v "$PWD:/repo" ghcr.io/guitarrapc/seiton:v0.9.16 --fix
 ```
 
 > `--fix --dry-run` and `--fix --check` do not write files, so `:ro` is fine for those.
