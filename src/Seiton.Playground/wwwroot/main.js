@@ -60,9 +60,11 @@ jobs:
     branches: [main]
 jobs:
   test:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
     steps:
       - run: echo "hello"
+        if: contains('push', github.event_name)
       - uses: actions/checkout@v4
 `,
   fixPermissions:
