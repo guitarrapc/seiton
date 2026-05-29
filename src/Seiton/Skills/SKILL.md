@@ -43,8 +43,8 @@ seiton --fix --enable-pin-network --enable-image-network
 | Flag | Description |
 |------|-------------|
 | `--config PATH` | Explicit config file path |
-| `--format text\|json\|sarif` | Output format |
-| `--min-severity error\|warning\|info` | Filter by severity |
+| `--format text, json, sarif` | Output format |
+| `--min-severity error, warning, info` | Filter by severity |
 | `--ignore PATTERN` | Suppress diagnostics matching pattern |
 | `--oneline` | One diagnostic per line |
 | `--verbose` | Show progress and timing info |
