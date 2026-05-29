@@ -494,4 +494,61 @@ public sealed class PlaygroundLintRunnerTests
         // Cleanup
         PlaygroundLintRunner.SetConfig(null);
     }
+
+    [Test]
+    [NotInParallel(ConfigLockKey)]
+    public async Task SetConfig_ValidAfterInvalid_ReturnsEmptyNotStaleDiagnostics()
+    {
+        // Regression: set valid config A → set invalid config B → re-submit valid A.
+        // Previously, the hash was not updated on validation errors, so re-submitting A
+        // would hit the cache and incorrectly return B's error diagnostics.
+        const string validConfig = """
+            rules:
+              runner-no-latest:
+                severity: warning
+            """;
+        const string invalidConfig = """
+            rules:
+              nonexistent-rule-xyz: deny
+            """;
+
+        // Set valid config A
+        var firstResult = PlaygroundLintRunner.SetConfig(validConfig);
+        using var firstDoc = JsonDocument.Parse(firstResult);
+        await Assert.That(firstDoc.RootElement.GetArrayLength()).IsEqualTo(0);
+
+        // Set invalid config B
+        var invalidResult = PlaygroundLintRunner.SetConfig(invalidConfig);
+        using var invalidDoc = JsonDocument.Parse(invalidResult);
+        await Assert.That(invalidDoc.RootElement.GetArrayLength()).IsGreaterThan(0);
+
+        // Re-submit valid config A — must return [] (not B's error diagnostics)
+        var secondResult = PlaygroundLintRunner.SetConfig(validConfig);
+        using var secondDoc = JsonDocument.Parse(secondResult);
+        await Assert.That(secondDoc.RootElement.GetArrayLength()).IsEqualTo(0);
+
+        // Cleanup
+        PlaygroundLintRunner.SetConfig(null);
+    }
+
+    [Test]
+    [NotInParallel(ConfigLockKey)]
+    public async Task SetConfig_InvalidHashHit_ReturnsCachedDiagnosticsWithoutReparse()
+    {
+        // Regression: repeated submission of the same invalid config should be a cache hit
+        // (hash is now updated on validation errors too).
+        const string invalidConfig = """
+            rules:
+              nonexistent-rule-xyz: deny
+            """;
+
+        var first = PlaygroundLintRunner.SetConfig(invalidConfig);
+        var second = PlaygroundLintRunner.SetConfig(invalidConfig);
+
+        // Same reference returned on hash-hit (zero allocation)
+        await Assert.That(ReferenceEquals(first, second)).IsTrue();
+
+        // Cleanup
+        PlaygroundLintRunner.SetConfig(null);
+    }
 }

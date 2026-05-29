@@ -308,8 +308,8 @@ rules:
 
 **2. Full Fix — Network Pinning** (`fullFix`)
 ```yaml
-# NOTE: enable-network requires CLI (seiton --fix).
-# The playground runs offline — SHA/digest pinning is skipped here.
+# NOTE: enable-network uses the GitHub API (unauthenticated, 60 req/hr limit).
+# In the playground, SHA/digest pinning is resolved via api.github.com when "Apply fixes" is clicked.
 fix:
   defaults:
     job-timeout-minutes: 15

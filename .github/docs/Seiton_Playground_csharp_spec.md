@@ -84,6 +84,9 @@ public static partial class LintInterop
     public static string ApplyAllFixes(string? yamlSource, string? filePath);
 
     [JSExport]
+    public static Task<string> ApplyAllFixesWithNetworkAsync(string? yamlSource, string? filePath);
+
+    [JSExport]
     public static byte[] SetConfig(string? configYaml);
 
     [JSImport("globalThis.console.error")]
@@ -95,6 +98,7 @@ public static partial class LintInterop
 |---|---|---|
 | `RunLint` | `byte[]` (UTF-8 JSON) | JS receives `Uint8Array`, decodes with `TextDecoder`. Avoids string marshalling copy. |
 | `ApplyAllFixes` | `string` | Fixed YAML text. Returns original source on error (prevents editor corruption). |
+| `ApplyAllFixesWithNetworkAsync` | `Task<string>` | JSON string: `{"yaml":"...","resolved":N,"skipped":N,"failed":N}`. Async for network I/O. Falls back to offline-only fixes on error. |
 | `SetConfig` | `byte[]` (UTF-8 JSON) | Config diagnostic array. Empty array `[]` on success; previous valid config retained on error. |
 | `GetProductVersion` | `string` | For version badge display. |
 

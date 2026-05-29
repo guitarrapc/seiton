@@ -570,10 +570,11 @@ configEditor.on('change', () => {
     configEditor.refresh();
   }
 
-  function onPointerUp() {
+  function cleanupResize() {
     handle.classList.remove('config-panel__resize-handle--active');
     document.removeEventListener('pointermove', onPointerMove);
-    document.removeEventListener('pointerup', onPointerUp);
+    document.removeEventListener('pointerup', cleanupResize);
+    document.removeEventListener('pointercancel', cleanupResize);
   }
 
   handle.addEventListener('pointerdown', (e) => {
@@ -582,7 +583,8 @@ configEditor.on('change', () => {
     startH = cmEl.offsetHeight;
     handle.classList.add('config-panel__resize-handle--active');
     document.addEventListener('pointermove', onPointerMove);
-    document.addEventListener('pointerup', onPointerUp);
+    document.addEventListener('pointerup', cleanupResize);
+    document.addEventListener('pointercancel', cleanupResize);
   });
 })();
 

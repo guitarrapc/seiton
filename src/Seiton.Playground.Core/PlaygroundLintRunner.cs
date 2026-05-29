@@ -169,7 +169,9 @@ public static class PlaygroundLintRunner
 
                 // Validation errors: keep previous config, serialize diagnostics
                 var diagBytes = SerializeConfigDiagnostics(validation.Diagnostics);
-                // Do NOT update _configHash — allows retry with same content after fixing
+                // Update _configHash so repeated calls with the same invalid content are cache hits
+                // (avoids re-parsing the same broken config on every keystroke).
+                _configHash = hash;
                 _cachedConfigDiag = diagBytes;
                 return diagBytes;
             }
@@ -226,6 +228,7 @@ public static class PlaygroundLintRunner
         _lastYamlSource = null;
         _lastFilePath = null;
         _lastJsonOutput = null;
+        IncrementalCtx.InvalidateLintDiagnosticCache();
     }
 
     /// <summary>
@@ -397,9 +400,15 @@ public static class PlaygroundLintRunner
         var afterOffline = ApplyAllFixes(yamlSource, filePath);
 
         // Phase 2: Network-based pin remediation
-        var config = ActiveConfig;
-        var pinningEnabled = config.Fix.Pinning.EnableNetwork;
-        var imagesEnabled = config.Fix.Images.EnableNetwork;
+        LintConfig config;
+        bool pinningEnabled;
+        bool imagesEnabled;
+        lock (EngineGate)
+        {
+            config = ActiveConfig;
+            pinningEnabled = config.Fix.Pinning.EnableNetwork;
+            imagesEnabled = config.Fix.Images.EnableNetwork;
+        }
 
         if (!pinningEnabled && !imagesEnabled)
         {

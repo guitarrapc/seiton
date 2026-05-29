@@ -967,6 +967,18 @@ public sealed class IncrementalParseContext
     private ArrayBufferWriter<byte>? _jsonBuffer;
 
     /// <summary>
+    /// Invalidates per-job lint diagnostic cache without affecting parse state.
+    /// Call when lint config changes so that cached diagnostics (produced under the old config)
+    /// are not reused for jobs whose YAML didn't change.
+    /// Must be called under the same lock that guards <see cref="ParseIncrementally"/>.
+    /// </summary>
+    internal void InvalidateLintDiagnosticCache()
+    {
+        _cachedJobDiagnostics = null;
+        _lastReusedJobs = null;
+    }
+
+    /// <summary>
     /// Builds a <c>skipJobs</c> array indicating which jobs can skip linting because
     /// they were reused (D-5c) and have cached diagnostics from the previous lint run.
     /// Returns <c>null</c> if no jobs can be skipped.
