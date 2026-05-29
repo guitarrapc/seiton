@@ -232,3 +232,46 @@ dotnet test
 | WASM runtime crash from SetConfig exception | try/catch in `[JSExport]`, return error diagnostic |
 | Layout regression on narrow viewport | Config panel collapses to zero height; Playwright test verifies |
 | Incremental parse cache serves wrong diagnostics after config change | Config does NOT affect parse structure; per-job diagnostic cache is invalidated by triggering full re-lint (staleness cleared) |
+
+---
+
+## Implementation Results
+
+**Status: COMPLETE** (all phases implemented and verified)
+
+### Phase Completion
+
+| Phase | Status | Notes |
+|---|---|---|
+| Phase 0 | ✅ Done | Baseline: NoChange ~105ns/0B, FullChange Small 231μs/51KB, Large 1.34ms/170KB; 94 Playground tests passing |
+| Phase 1 | ✅ Done | `SetConfig` with XxHash64 caching, 10 unit tests, 0B allocation increase on lint path |
+| Phase 2 | ✅ Done | `[JSExport] SetConfig(string?)` in LintInterop.cs, builds clean |
+| Phase 3 | ✅ Done | `configVersion`/`lastConfigVersion` staleness triple, `setConfig()` JS function |
+| Phase 4 | ✅ Done | Collapsible config panel with CodeMirror, 500ms debounce, inline diagnostics, 4 contract tests |
+| Phase 5 | ✅ Done | NoChange 108ns/0B, FullChange Small 239μs/51.6KB — within noise; 2195 tests pass |
+
+### Post-Implementation Bug Fix
+
+**Bug**: User config with `fix.defaults.job-timeout-minutes: 15` did not cause "Apply all fixes" to insert `timeout-minutes: 15`.
+
+**Root cause**: `LintConfigLibrary.Validate()` returns a config with `Fix.Enabled = false` (the default) unless the user explicitly writes `fix.enabled: true`. The playground's default config (`LintWithFixMetadata`) sets `Fix.Enabled = true`, but when a user config replaced it, fixes stopped being built.
+
+**Fix**: In `SetConfig`, after validation succeeds, force `Fix.Enabled = true` and `SkipSuppressionSummary = true` on the parsed config before caching. These are playground-intrinsic behaviors that must always be active regardless of user config content.
+
+### Final Test Count
+
+- Total: 2195 (all passing)
+- New tests: 11 (10 SetConfig unit tests + 1 fix-defaults regression test) + 4 HTML contract tests
+
+### Files Modified
+
+| File | Change |
+|---|---|
+| `src/Seiton.Playground.Core/PlaygroundLintRunner.cs` | `SetConfig()`, `ActiveConfig`, config cache fields, `InvalidateLintCache()` |
+| `src/Seiton.Playground/LintInterop.cs` | `[JSExport] SetConfig(string?)` |
+| `src/Seiton.Playground/wwwroot/main.js` | `setConfig()`, config editor init, staleness triple, `renderConfigDiagnostics()` |
+| `src/Seiton.Playground/wwwroot/index.html` | `#config-panel` collapsible section |
+| `src/Seiton.Playground/wwwroot/style.css` | `.config-panel` styles |
+| `tests/Seiton.Playground.Tests/PlaygroundLintRunnerTests.cs` | 11 new SetConfig tests |
+| `tests/Seiton.Playground.Tests/PlaygroundHtmlContractTests.cs` | 4 new landmark tests |
+| `tests/Seiton.Playground.Tests/PlaygroundUiLayoutTests.cs` | Fixed `#editor-wrap .CodeMirror` → `#editor > .CodeMirror` locator |

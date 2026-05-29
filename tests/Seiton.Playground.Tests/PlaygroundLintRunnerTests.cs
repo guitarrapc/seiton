@@ -462,4 +462,36 @@ public sealed class PlaygroundLintRunnerTests
         // Cleanup
         PlaygroundLintRunner.SetConfig(null);
     }
+
+    [Test]
+    [NotInParallel(ConfigLockKey)]
+    public async Task SetConfig_FixDefaults_AppliedByApplyAllFixes()
+    {
+        // Workflow missing timeout-minutes — triggers job-timeout-minutes-required diagnostic
+        const string yaml = """
+            on: push
+            jobs:
+              build:
+                runs-on: ubuntu-latest
+                steps:
+                  - run: echo ok
+            """;
+
+        // Set config with fix.defaults.job-timeout-minutes: 15
+        const string config = """
+            fix:
+              defaults:
+                job-timeout-minutes: 15
+            """;
+        var setResult = PlaygroundLintRunner.SetConfig(config);
+        using var setDoc = JsonDocument.Parse(setResult);
+        await Assert.That(setDoc.RootElement.GetArrayLength()).IsEqualTo(0);
+
+        // Apply fixes — should insert timeout-minutes: 15
+        var fixedYaml = PlaygroundLintRunner.ApplyAllFixes(new string(yaml.AsSpan()), ".github/workflows/ci.yml");
+        await Assert.That(fixedYaml).Contains("timeout-minutes: 15");
+
+        // Cleanup
+        PlaygroundLintRunner.SetConfig(null);
+    }
 }

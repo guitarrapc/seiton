@@ -135,8 +135,23 @@ public static class PlaygroundLintRunner
 
                 if (validation.Diagnostics.Length == 0)
                 {
-                    // Success: update cache
-                    _cachedConfig = validation.Config;
+                    // Success: update cache.
+                    // The playground always needs Fix.Enabled=true (so rules build DiagnosticFix objects
+                    // for "Apply all fixes") and SkipSuppressionSummary=true. Force these regardless of
+                    // what the user wrote, since these are playground-intrinsic behaviors.
+                    var parsed = validation.Config!;
+                    var playgroundConfig = new LintConfig
+                    {
+                        Utf8Yaml = parsed.Utf8Yaml,
+                        FilePath = parsed.FilePath,
+                        Rules = parsed.Rules,
+                        Exclusions = parsed.Exclusions,
+                        Fix = parsed.Fix with { Enabled = true },
+                        Network = parsed.Network,
+                        Output = parsed.Output,
+                        SkipSuppressionSummary = true,
+                    };
+                    _cachedConfig = playgroundConfig;
                     _configHash = hash;
                     _cachedConfigDiag = EmptyJsonArray;
                     InvalidateLintCache();
