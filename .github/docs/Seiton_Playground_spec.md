@@ -134,7 +134,7 @@ Detection pattern: catch errors matching `"runtime already exited"` from WASM in
 - Calls `ApplyAllFixes(source, filePath)` via WASM export
 - If returned YAML differs from input: update editor, invalidate staleness, re-lint
 - If unchanged: show informational toast (no fix was applicable or an error occurred)
-- Network-dependent fixes (pinning, digest resolution) are unavailable in WASM and are skipped
+- Network-dependent fixes (pinning via GitHub API, image digest resolution via OCI registries) require `enable-network` in the config; when enabled, `ApplyAllFixesWithNetworkAsync` resolves SHAs and digests concurrently before applying fixes
 - Uses the currently active config (last successful `SetConfig` result)
 
 ### 3.4 Config Content-Hash Caching

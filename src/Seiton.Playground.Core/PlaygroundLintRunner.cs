@@ -424,10 +424,10 @@ public static class PlaygroundLintRunner
             diagnostics = lintResult.Diagnostics.ToArray();
         }
 
-        // Filter to only pin-eligible diagnostics
-        var pinDiagnostics = diagnostics
-            .Where(d => d.RuleId is "unpinned-uses" or "unpinned-image")
-            .ToArray();
+        // Filter to only pin-eligible diagnostics for the enabled resolver(s).
+        // Only include diagnostics whose resolver is actually enabled — avoids inflating
+        // SkippedCount with diagnostics for a feature the user didn't enable.
+        var pinDiagnostics = FilterPinEligibleDiagnostics(diagnostics, pinningEnabled, imagesEnabled);
 
         if (pinDiagnostics.Length == 0)
         {
@@ -451,9 +451,7 @@ public static class PlaygroundLintRunner
         // Apply all pin fixes in a single batch pass. All offsets reference the same
         // utf8Yaml source, so applying them one-by-one would shift offsets and corrupt later edits.
         var current = utf8Yaml;
-        var fixablePinDiags = remediationResult.Diagnostics
-            .Where(d => d.Fix is not null)
-            .ToArray();
+        var fixablePinDiags = CollectFixableDiagnostics(remediationResult.Diagnostics);
 
         if (fixablePinDiags.Length > 0)
         {
@@ -541,6 +539,45 @@ public static class PlaygroundLintRunner
             list.Add(d);
         }
 
+        return list.Count == 0 ? [] : list.ToArray();
+    }
+
+    /// <summary>
+    /// Filters diagnostics to only pin-eligible ones based on which resolvers are enabled.
+    /// Avoids LINQ allocation by using a loop with pre-sized list.
+    /// </summary>
+    private static Diagnostic[] FilterPinEligibleDiagnostics(Diagnostic[] diagnostics, bool pinningEnabled, bool imagesEnabled)
+    {
+        var list = new List<Diagnostic>(diagnostics.Length);
+        for (var i = 0; i < diagnostics.Length; i++)
+        {
+            var d = diagnostics[i];
+            if (pinningEnabled && d.RuleId == "unpinned-uses")
+            {
+                list.Add(d);
+            }
+            else if (imagesEnabled && d.RuleId == "unpinned-image")
+            {
+                list.Add(d);
+            }
+        }
+        return list.Count == 0 ? [] : list.ToArray();
+    }
+
+    /// <summary>
+    /// Collects diagnostics that have a fix attached (post-remediation).
+    /// Avoids LINQ allocation by using a loop.
+    /// </summary>
+    private static Diagnostic[] CollectFixableDiagnostics(IReadOnlyList<Diagnostic> diagnostics)
+    {
+        var list = new List<Diagnostic>(diagnostics.Count);
+        for (var i = 0; i < diagnostics.Count; i++)
+        {
+            if (diagnostics[i].Fix is not null)
+            {
+                list.Add(diagnostics[i]);
+            }
+        }
         return list.Count == 0 ? [] : list.ToArray();
     }
 

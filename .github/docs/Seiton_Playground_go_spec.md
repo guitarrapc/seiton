@@ -207,7 +207,7 @@ var (
 4. If hash matches `cachedConfigHash`: call callback with `cachedConfigDiag` immediately (skip parse)
 5. Parse config via `ValidateConfig(configYaml, "seiton.yaml")`
 6. On success: update `cachedConfig`, `cachedConfigHash`, `cachedConfigDiag = []`
-7. On validation errors: keep previous `cachedConfig`, serialize diagnostics to `cachedConfigDiag`, do NOT update hash
+7. On validation errors: keep previous `cachedConfig`, serialize diagnostics to `cachedConfigDiag`, update `cachedConfigHash = hash` (repeated invalid input is a cache hit, avoids re-parsing)
 
 **Normalization** (identical to C# spec §2.1.1):
 

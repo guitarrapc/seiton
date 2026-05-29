@@ -184,7 +184,7 @@ private static byte[] _cachedConfigDiag;    // last SetConfig diagnostic result 
 4. If hash matches `_configHash`: return `_cachedConfigDiag` immediately (zero allocation)
 5. Call `LintConfigLibrary.Validate(configYaml, "seiton.yaml")`
 6. On success: update `_cachedConfig`, `_configHash`, `_cachedConfigDiag = []`
-7. On validation errors: keep previous `_cachedConfig`, serialize diagnostics to `_cachedConfigDiag`, do NOT update hash (allows retry with same content after fixing)
+7. On validation errors: keep previous `_cachedConfig`, serialize diagnostics to `_cachedConfigDiag`, update `_configHash = hash` (repeated invalid input is a cache hit, avoids re-parsing)
 
 **Normalization procedure** (for hash stability across cosmetic edits):
 
