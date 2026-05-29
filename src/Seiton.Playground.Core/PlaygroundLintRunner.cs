@@ -133,14 +133,14 @@ public static class PlaygroundLintRunner
                 Encoding.UTF8.GetBytes(normalized, utf8Span);
                 var hash = XxHash64.Hash(utf8Span);
 
-                // Hash-hit: return cached result (zero allocation)
+                // Hash-hit: return cached diagnostics bytes (skips config parse)
                 if (hash == _configHash && _configHash != 0)
                 {
                     return _cachedConfigDiag;
                 }
 
                 // Hash-miss: parse config
-                var validation = LintConfigLibrary.Validate(configYaml, "seiton.yaml");
+                var validation = LintConfigLibrary.Validate(configYaml, ".github/seiton.yaml");
 
                 if (validation.Diagnostics.Length == 0)
                 {

@@ -115,7 +115,7 @@ Exported functions callable from JavaScript:
 | Paste bypass | Lint executes immediately on paste (no debounce) |
 | Re-entry guard | `lintInProgress` flag prevents concurrent lint invocations |
 | Pending retry | If content changes during lint execution, a debounced re-lint is scheduled after completion |
-| Staleness check | Lint is skipped when `(source, filePath, configHash)` triple is identical to the last successful lint |
+| Staleness check | Lint is skipped when `(source, filePath, configVersion)` triple is identical to the last successful lint |
 | Staleness non-update | Internal-error results do not update the staleness cache (allows retry on next keystroke) |
 | Staleness invalidation | File-type change, fix application, URL fetch, and config change clear the staleness cache |
 
@@ -131,10 +131,10 @@ Detection pattern: catch errors matching `"runtime already exited"` from WASM in
 
 ### 3.3 Apply All Fixes
 
-- Calls `ApplyAllFixes(source, filePath)` via WASM export
+- Calls `ApplyAllFixesWithNetworkAsync(source, filePath)` via WASM export
 - If returned YAML differs from input: update editor, invalidate staleness, re-lint
 - If unchanged: show informational toast (no fix was applicable or an error occurred)
-- Network-dependent fixes (pinning via GitHub API, image digest resolution via OCI registries) require `enable-network` in the config; when enabled, `ApplyAllFixesWithNetworkAsync` resolves SHAs and digests concurrently before applying fixes
+- Network-dependent fixes (pinning via GitHub API, image digest resolution via OCI registries) require `enable-network` in the config; when enabled, resolves SHAs and digests concurrently before applying fixes
 - Uses the currently active config (last successful `SetConfig` result)
 
 ### 3.4 Config Content-Hash Caching
@@ -170,7 +170,7 @@ This ensures cosmetic edits (adding/removing blank lines, trailing spaces) do no
 
 #### 3.4.4 Interaction with Lint Staleness
 
-- JS side tracks a `lastConfigHash` (or version counter incremented on each successful `SetConfig`)
+- JS side tracks a `configVersion` counter (incremented on each successful `SetConfig`)
 - When config changes: JS invalidates `lastLintedSource` / `lastLintedFilePath` staleness cache and triggers re-lint
 - The staleness triple becomes `(source, filePath, configVersion)` — any component change triggers re-lint
 

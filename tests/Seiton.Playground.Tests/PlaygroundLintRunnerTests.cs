@@ -303,7 +303,7 @@ public sealed class PlaygroundLintRunnerTests
         var first = PlaygroundLintRunner.SetConfig(config);
         var second = PlaygroundLintRunner.SetConfig(config);
 
-        // Same reference returned on hash-hit (zero allocation)
+        // Same reference returned on hash-hit (no new diagnostics buffer allocated)
         await Assert.That(ReferenceEquals(first, second)).IsTrue();
 
         // Cleanup
@@ -545,7 +545,7 @@ public sealed class PlaygroundLintRunnerTests
         var first = PlaygroundLintRunner.SetConfig(invalidConfig);
         var second = PlaygroundLintRunner.SetConfig(invalidConfig);
 
-        // Same reference returned on hash-hit (zero allocation)
+        // Same reference returned on hash-hit (no new diagnostics buffer allocated)
         await Assert.That(ReferenceEquals(first, second)).IsTrue();
 
         // Cleanup
