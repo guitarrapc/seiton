@@ -946,7 +946,6 @@ a.version-badge:focus-visible {
 }
 
 .playground-about {
-  flex-shrink: 0;
   border-top: 1px solid var(--border-pane);
   background: var(--bg);
   padding: 1.25rem 1.5rem 1.35rem;
@@ -1197,6 +1196,12 @@ footer a {
   height: 260px;
   font-size: 0.85rem;
   border-top: 1px solid var(--border-pane);
+}
+
+@media (max-width: 880px) {
+  #config-editor .CodeMirror {
+    height: 360px;
+  }
 }
 
 .config-panel__resize-handle {
