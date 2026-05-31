@@ -83,6 +83,13 @@ public sealed class BotConditionsRule() : RuleBase(RuleId.BotConditions)
             return;
         }
 
+        // Workflow-level suppression is decided once in VisitWorkflowPre.
+        // If diagnostics are not actionable for this trigger set, skip parsing entirely.
+        if (!_emitBotConditionDiagnostics)
+        {
+            return;
+        }
+
         // Extract the expression body
         ReadOnlySpan<byte> exprBody;
         if (!ExpressionScanHelpers.TryExtractExpressionBody(raw, out var extracted))
