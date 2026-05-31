@@ -1,6 +1,7 @@
 ﻿using Seiton.Cli;
 using Seiton.Commands;
 using Seiton.Core.Linting;
+using Seiton.Core.Parsing;
 
 namespace Seiton.Tests;
 
@@ -266,5 +267,25 @@ public sealed class VerbosePhase1Tests
         {
             Directory.Delete(tempDir, recursive: true);
         }
+    }
+
+    [Test]
+    public async Task GetSlotDocumentKind_VerboseSummary_PreservesDocumentKind()
+    {
+        using var sw = new StringWriter();
+        var logger = VerboseLogger.Create(VerboseLevel.Summary, sw);
+        var kind = CheckCommand.GetSlotDocumentKind(logger, DocumentKind.Workflow);
+
+        await Assert.That(kind).IsEqualTo(DocumentKind.Workflow);
+    }
+
+    [Test]
+    public async Task GetSlotDocumentKind_VerboseDisabled_ReturnsUnknown()
+    {
+        using var sw = new StringWriter();
+        var logger = VerboseLogger.Create(VerboseLevel.Off, sw);
+        var kind = CheckCommand.GetSlotDocumentKind(logger, DocumentKind.Workflow);
+
+        await Assert.That(kind).IsEqualTo(DocumentKind.Unknown);
     }
 }

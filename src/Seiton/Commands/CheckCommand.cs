@@ -206,7 +206,7 @@ internal static class CheckCommand
                         result.CopyDiagnostics(), filePath,
                         sourceMap is not null ? utf8Yaml : null,
                         result.SuppressionSummary,
-                        verboseLogger.LogFileProgress ? result.DocumentKind : default,
+                        GetSlotDocumentKind(verboseLogger, result.DocumentKind),
                         verboseLogger.LogFileProgress ? fileElapsed : default,
                         isExcluded);
                 });
@@ -757,6 +757,9 @@ internal static class CheckCommand
         suffix.Append(')');
         return summaryLine + suffix;
     }
+
+    internal static DocumentKind GetSlotDocumentKind(VerboseLogger logger, DocumentKind documentKind)
+        => logger.IsEnabled ? documentKind : default;
 
     private static DiagnosticSeverity? ParseSeverity(string value)
     {
