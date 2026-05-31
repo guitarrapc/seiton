@@ -185,6 +185,21 @@ exclusions:
 
 **注意**: `file` はスカラー値（単一パターン）。複数パターンが必要な場合は複数エントリで記述する。
 
+`validate-config` 時、正規化後に同一 `file` + 同一 `jobs` スコープの exclusion が複数ある場合、info 診断を出す（例: `exclusion for '.github/workflows/ci.yml' appears 2 times; consider merging rules into one entry`）。自動マージはしない。
+
+### 2.3.1 `discovery`
+
+ファイル探索の挙動を制御する。
+
+```yaml
+discovery:
+  skip-agentic-workflows: true
+```
+
+| Key | 型 | デフォルト | 説明 |
+|---|---|---|---|
+| `skip-agentic-workflows` | `bool` | `false` | `true` のとき、先頭 ~10 行に `# gh-aw-metadata:` を含む workflow を lint 対象から除外（opt-in）。CLI `--skip-agentic-workflows` で上書き可能。 |
+
 ### 2.4 `fix`
 
 auto-fix（`seiton fix`）の挙動を制御する。

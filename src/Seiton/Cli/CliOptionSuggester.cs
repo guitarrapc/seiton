@@ -17,6 +17,7 @@ internal static class CliOptionSuggester
         "--color",
         "--no-color",
         "--verbose",
+        "--skip-agentic-workflows",
         "--fix",
         "--dry-run",
         "--check",

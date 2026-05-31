@@ -1,4 +1,5 @@
-﻿using Seiton.Core.Parsing;
+﻿using System.Text;
+using Seiton.Core.Parsing;
 using Seiton.Core.Parsing.Ast;
 
 using static Seiton.Core.Parsing.SpanHelpers;
@@ -130,7 +131,7 @@ public sealed class RunInputsContextDirectUseRule() : RuleBase(RuleId.RunInputsC
 
         if (!TryParseSimpleInputsReference(expression, out var inputName))
         {
-            return false;
+            return TryBuildCompoundExpressionFix(step, runNode, expression, expressionBodyStart, expressionLength, out fix);
         }
 
         var absoluteOffset = Arena.GetStringSlice(runNode).Offset + expressionBodyStart - 3;
@@ -198,6 +199,191 @@ public sealed class RunInputsContextDirectUseRule() : RuleBase(RuleId.RunInputsC
             $"map inputs reference to env variable {envVarName}",
             [insertEdit, new TextEdit(absoluteOffset, expressionLength, shellReplacement)]);
         return true;
+    }
+
+    private bool TryBuildCompoundExpressionFix(Step step, StringNodeId runNode, ReadOnlySpan<byte> expression, int expressionBodyStart, int expressionLength, out DiagnosticFix fix)
+    {
+        fix = default;
+        if (Config.Utf8Yaml is null || !Config.Fix.Enabled)
+        {
+            return false;
+        }
+
+        var absoluteOffset = Arena.GetStringSlice(runNode).Offset + expressionBodyStart - 3;
+
+        if (IsInsideNoExpandHereDoc(Config.Utf8Yaml, absoluteOffset)
+            || IsInsideShellSingleQuotes(Config.Utf8Yaml, absoluteOffset))
+        {
+            return false;
+        }
+
+        var expressionString = Encoding.UTF8.GetString(expression);
+        var envBaseName = TryExtractFirstInputsName(expression, out var firstInputName)
+            ? InputNameToEnvVarName(firstInputName)
+            : "INPUT_VALUE";
+        var envVarName = DeduplicateEnvName(Arena, envBaseName,
+            step.Env, _currentJob?.Env, _currentWorkflow?.Env);
+        if (envVarName is null)
+        {
+            return false;
+        }
+
+        var isPowerShell = RunContextDirectUseAnalyzer.IsPowerShellWithDefaults(Arena, step, _currentJob, _currentWorkflow, Config.Utf8Yaml);
+        if (isPowerShell is null)
+        {
+            return false;
+        }
+
+        var shellReplacement = isPowerShell.Value
+            ? "$env:" + envVarName
+            : "${" + envVarName + "}";
+
+        if (!TryBuildStepEnvInsertionEdit(Arena, Config.Utf8Yaml, step, envVarName, expressionString, out var insertEdit))
+        {
+            return false;
+        }
+
+        fix = new DiagnosticFix(
+            $"map compound inputs expression to env variable {envVarName}",
+            [insertEdit, new TextEdit(absoluteOffset, expressionLength, shellReplacement)]);
+        return true;
+    }
+
+    private bool TryExtractFirstInputsName(ReadOnlySpan<byte> expression, out string inputName)
+    {
+        inputName = string.Empty;
+        var parseResult = Config.ParseExpression(expression);
+        if (!parseResult.HasRoot || parseResult.Diagnostics.Length > 0)
+        {
+            return false;
+        }
+
+        return TryExtractFirstInputsNameFromAst(
+            parseResult.RootNode,
+            parentId: -1,
+            parseResult.Nodes,
+            parseResult.Arguments,
+            expression,
+            out inputName);
+    }
+
+    private static bool TryExtractFirstInputsNameFromAst(
+        int nodeId,
+        int parentId,
+        ExpressionNode[] nodes,
+        int[] arguments,
+        ReadOnlySpan<byte> expression,
+        out string inputName)
+    {
+        inputName = string.Empty;
+        if (nodeId < 0 || nodeId >= nodes.Length)
+        {
+            return false;
+        }
+
+        var node = nodes[nodeId];
+        if (node.Kind is ExpressionNodeKind.MemberAccess or ExpressionNodeKind.IndexAccess or ExpressionNodeKind.WildcardAccess)
+        {
+            if (IsSimpleInputsMember(node, nodes, expression, out inputName)
+                || IsGithubEventInputsMember(node, nodes, expression, out inputName))
+            {
+                return true;
+            }
+        }
+
+        switch (node.Kind)
+        {
+            case ExpressionNodeKind.Unary:
+                return TryExtractFirstInputsNameFromAst(node.Left, nodeId, nodes, arguments, expression, out inputName);
+            case ExpressionNodeKind.Binary:
+                return TryExtractFirstInputsNameFromAst(node.Left, nodeId, nodes, arguments, expression, out inputName)
+                    || TryExtractFirstInputsNameFromAst(node.Right, nodeId, nodes, arguments, expression, out inputName);
+            case ExpressionNodeKind.MemberAccess:
+            case ExpressionNodeKind.WildcardAccess:
+            case ExpressionNodeKind.IndexAccess:
+                return TryExtractFirstInputsNameFromAst(node.Left, nodeId, nodes, arguments, expression, out inputName);
+            case ExpressionNodeKind.FunctionCall:
+                if (TryExtractFirstInputsNameFromAst(node.Left, nodeId, nodes, arguments, expression, out inputName))
+                {
+                    return true;
+                }
+
+                for (var i = 0; i < node.ArgCount; i++)
+                {
+                    var argIndex = node.ArgStart + i;
+                    if (argIndex < 0 || argIndex >= arguments.Length)
+                    {
+                        continue;
+                    }
+
+                    if (TryExtractFirstInputsNameFromAst(arguments[argIndex], nodeId, nodes, arguments, expression, out inputName))
+                    {
+                        return true;
+                    }
+                }
+
+                return false;
+            default:
+                return false;
+        }
+    }
+
+    private static bool IsSimpleInputsMember(
+        ExpressionNode node,
+        ExpressionNode[] nodes,
+        ReadOnlySpan<byte> expression,
+        out string inputName)
+    {
+        inputName = string.Empty;
+        if (node.Kind != ExpressionNodeKind.MemberAccess)
+        {
+            return false;
+        }
+
+        if (!IsIdentifierNode(node.Left, nodes, expression, "inputs"u8))
+        {
+            return false;
+        }
+
+        return TryGetMemberName(node, expression, out inputName);
+    }
+
+    private static bool IsGithubEventInputsMember(
+        ExpressionNode node,
+        ExpressionNode[] nodes,
+        ReadOnlySpan<byte> expression,
+        out string inputName)
+    {
+        inputName = string.Empty;
+        if (node.Kind != ExpressionNodeKind.MemberAccess)
+        {
+            return false;
+        }
+
+        if (!IsGithubEventInputsChain(node.Left, nodes, expression))
+        {
+            return false;
+        }
+
+        return TryGetMemberName(node, expression, out inputName);
+    }
+
+    private static bool TryGetMemberName(ExpressionNode node, ReadOnlySpan<byte> expression, out string inputName)
+    {
+        inputName = string.Empty;
+        if (node.Kind != ExpressionNodeKind.MemberAccess)
+        {
+            return false;
+        }
+
+        var nameBytes = node.Token.AsSpan(expression);
+        if (nameBytes.Length == 0)
+        {
+            return false;
+        }
+
+        inputName = Encoding.UTF8.GetString(nameBytes);
+        return inputName.Length > 0;
     }
 
     /// <summary>Builds the expression string for the env value (e.g. "inputs.target" or "github.event.inputs.target").</summary>

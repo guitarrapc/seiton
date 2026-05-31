@@ -755,6 +755,42 @@ public sealed class LintConfigLibraryTests
     }
 
     [Test]
+    public async Task Validate_Exclusions_DuplicateFileAndJobsScope_EmitsInfoDiagnostic()
+    {
+        var yaml = """
+        exclusions:
+          - file: .github/workflows/matrix-secret.yaml
+            rules:
+              - template-injection
+          - file: .github/workflows/matrix-secret.yaml
+            rules:
+              - unpinned-uses
+        """;
+
+        var result = LintConfigLibrary.Validate(yaml, "seiton.yaml");
+
+        await Assert.That(result.IsValid).IsTrue();
+        await Assert.That(result.Diagnostics.Any(d =>
+            d.Severity == DiagnosticSeverity.Info
+            && d.Message.Contains("appears 2 times", StringComparison.Ordinal)
+            && d.Message.Contains("matrix-secret.yaml", StringComparison.Ordinal))).IsTrue();
+    }
+
+    [Test]
+    public async Task Validate_Discovery_SkipAgenticWorkflows_ParsesCorrectly()
+    {
+        var yaml = """
+        discovery:
+          skip-agentic-workflows: true
+        """;
+
+        var result = LintConfigLibrary.Validate(yaml, "seiton.yaml");
+
+        await Assert.That(result.IsValid).IsTrue();
+        await Assert.That(result.Config!.Discovery.SkipAgenticWorkflows).IsTrue();
+    }
+
+    [Test]
     public async Task Validate_Exclusions_FileAndJobs_NoRules_ExcludesAllRulesForJobs()
     {
         // file + jobs without rules → exclude all rules for those jobs

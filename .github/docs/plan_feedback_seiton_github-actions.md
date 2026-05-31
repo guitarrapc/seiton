@@ -329,7 +329,7 @@ githubactions-lab での運用は、初回 83 issues → コンフィグ調整 +
 - verbose モードでの mixed-trigger 抑制通知（P2 以降で検討可）
 - `rules.bot-conditions.ignore-patterns`（混合抑制で大半解消のため不要）
 
-### フェーズ 2 — P2: CLI / config UX
+### フェーズ 2 — P2: CLI / config UX ✅ 完了
 
 | タスク | 依存 |
 |--------|------|
@@ -338,6 +338,35 @@ githubactions-lab での運用は、初回 83 issues → コンフィグ調整 +
 | verbose レベル分け | 破壊的変更方針の決定 |
 | Agentic Workflow opt-in スキップ | discovery 設計 |
 | run-inputs 複合式 fix | test-first（red-green） |
+
+#### 実装内容
+
+- **サマリー拡張**: stderr サマリー行に `(N excluded, M suppressed)` を付加（0 のカテゴリは省略）。
+- **verbose レベル分け**: `-v`/`--verbose` = summary、`-vv` = per-file（従来の checking + timing）。
+- **重複 exclusion 警告**: `validate-config` で同一 `file`+`jobs` スコープの重複に info diagnostic。
+- **Agentic Workflow opt-in**: `discovery.skip-agentic-workflows` + `--skip-agentic-workflows`。
+- **run-inputs 複合式 fix**: compound 式を `env:` に移動（例: `inputs.tag || 'v1.0.0'`）。
+
+#### ベンチマーク（CoreLintBenchmark, ShortRun, フェーズ 1 後 → フェーズ 2 後）
+
+| Size | FixEnabled | Mean (phase 1) | Mean (phase 2) | Δ Mean | Allocated |
+|------|------------|----------------|----------------|--------|-----------|
+| Small | False | 72.89 us | 67.56 us | −7.3% | 8.7 KB → 8.7 KB |
+| Small | True | 70.23 us | 73.77 us | +5.0% | 10.16 KB → 10.16 KB |
+| Medium | False | 1,389 us | 1,391 us | +0.1% | 68.9 KB → 68.9 KB |
+| Medium | True | 1,999 us | 1,956 us | −2.2% | 82.26 KB → 82.26 KB |
+| Large | False | 21,666 us | 22,190 us | +2.4% | 327.41 KB → 327.41 KB |
+| Large | True | 31,921 us | 32,206 us | +0.9% | 382.26 KB → 382.26 KB |
+
+**性能評価**: Allocated 不変。Mean は全ケース +10% 以内（最大 +5.0%）。
+
+#### レビュー指摘と対応
+
+| 指摘 | 対応 |
+|------|------|
+| `-vv` framework 未知オプション | `FilterArgsForFramework` で除去 |
+| suppression が verbose 時のみ | 常時集計してサマリー suffix に反映 |
+| summary レベルで per-file 出力 | `LogFileProgress` は `-vv` のみ |
 
 ### フェーズ 3 — P3: 低コスト polish
 
@@ -355,11 +384,11 @@ githubactions-lab での運用は、初回 83 issues → コンフィグ調整 +
 実装完了後、spec-document-policy に従い以下を同期する。
 
 - [x] `Seiton_Linter_spec.md` — `bot-conditions` 抑制条件
-- [ ] `Seiton_CLI_spec.md` — verbose レベル、oneline サマリー、skip-agentic、show-diff
-- [ ] `Seiton_config_spec.md` — 重複 exclusion 警告、discovery.skip-agentic-workflows
+- [x] `Seiton_CLI_spec.md` — verbose レベル、oneline サマリー、skip-agentic
+- [x] `Seiton_config_spec.md` — 重複 exclusion 警告、discovery.skip-agentic-workflows
 - [x] `docs/rules.md` — bot-conditions Notes
-- [ ] `docs/configuration.md` — エラーメッセージ、exclusions 例
-- [ ] `docs/usage.md` — verbose / fix ワークフロー
+- [ ] `docs/configuration.md` — エラーメッセージ、exclusions 例（P3）
+- [ ] `docs/usage.md` — verbose / fix ワークフロー（P3）
 
 ---
 

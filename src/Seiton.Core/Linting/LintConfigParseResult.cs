@@ -9,4 +9,5 @@ internal readonly record struct LintConfigParseResult(
     FixConfig Fix,
     NetworkConfig Network,
     OutputConfig Output,
+    DiscoveryConfig Discovery,
     Diagnostic[] Diagnostics);

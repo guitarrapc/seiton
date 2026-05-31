@@ -90,6 +90,7 @@ internal static class LintConfigYamlParser
                 new FixConfig(),
                 new NetworkConfig(),
                 new OutputConfig(),
+                new DiscoveryConfig(),
                 [d]);
         }
 
@@ -300,7 +301,8 @@ internal static class LintConfigYamlParser
                 && !string.Equals(key, "exclusions", StringComparison.Ordinal)
                 && !string.Equals(key, "fix", StringComparison.Ordinal)
                 && !string.Equals(key, "network", StringComparison.Ordinal)
-                && !string.Equals(key, "output", StringComparison.Ordinal))
+                && !string.Equals(key, "output", StringComparison.Ordinal)
+                && !string.Equals(key, "discovery", StringComparison.Ordinal))
             {
                 diagnostics.Add(Diag(
                     $"unknown top-level key '{key}'",
@@ -384,7 +386,20 @@ internal static class LintConfigYamlParser
             }
         }
 
-        return new LintConfigParseResult(rules, exclusions, fix, network, output, diagnostics.ToArray());
+        var discovery = new DiscoveryConfig();
+        if (root.TryGetValue("discovery", out var discoveryObj) && discoveryObj is not null)
+        {
+            if (AsMap(discoveryObj) is not { } discoveryMap)
+            {
+                diagnostics.Add(Diag("discovery must be a mapping section", DomLine, 1, 9, filePath));
+            }
+            else
+            {
+                discovery = ParseDiscovery(discoveryMap, diagnostics, filePath);
+            }
+        }
+
+        return new LintConfigParseResult(rules, exclusions, fix, network, output, discovery, diagnostics.ToArray());
     }
 
     private static void AddRule(
@@ -1162,6 +1177,34 @@ internal static class LintConfigYamlParser
         }
 
         return new OutputConfig { SortOrder = sortOrder };
+    }
+
+    private static DiscoveryConfig ParseDiscovery(Dictionary<string, object?> map, List<Diagnostic> diagnostics, string filePath)
+    {
+        var skipAgenticWorkflows = false;
+
+        foreach (var (key, value) in map)
+        {
+            switch (key)
+            {
+                case "skip-agentic-workflows":
+                    if (value is bool boolValue)
+                    {
+                        skipAgenticWorkflows = boolValue;
+                    }
+                    else
+                    {
+                        diagnostics.Add(Diag("discovery.skip-agentic-workflows must be a boolean", DomLine, 3, 23, filePath));
+                    }
+
+                    break;
+                default:
+                    diagnostics.Add(Diag($"unknown discovery key '{key}'", DomLine, 3, key.Length, filePath));
+                    break;
+            }
+        }
+
+        return new DiscoveryConfig { SkipAgenticWorkflows = skipAgenticWorkflows };
     }
 
     private static void AddExclusion(

@@ -6,6 +6,25 @@ namespace Seiton.Tests;
 public sealed class WriteSummaryTests
 {
     [Test]
+    public async Task WriteSummary_WithMetadata_AppendsExcludedAndSuppressedCounts()
+    {
+        using var sw = new StringWriter();
+        CheckCommand.WriteSummary(sw, [], fileCount: 123, metadata: new CheckCommand.CheckSummaryMetadata(ExcludedCount: 2, SuppressedCount: 15));
+
+        await Assert.That(sw.ToString().TrimEnd())
+            .IsEqualTo("0 issues in 123 files (2 excluded, 15 suppressed)");
+    }
+
+    [Test]
+    public async Task WriteSummary_WithMetadata_OmitsZeroCategories()
+    {
+        using var sw = new StringWriter();
+        CheckCommand.WriteSummary(sw, [], fileCount: 5, metadata: new CheckCommand.CheckSummaryMetadata(SuppressedCount: 3));
+
+        await Assert.That(sw.ToString().TrimEnd()).IsEqualTo("0 issues in 5 files (3 suppressed)");
+    }
+
+    [Test]
     public async Task WriteSummary_Verbose_ShowsPerRuleBreakdown()
     {
         var diagnostics = new List<Diagnostic>

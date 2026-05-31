@@ -208,7 +208,7 @@ public sealed class VerbosePhase1Tests
             using var sw = new StringWriter();
             var logger = VerboseLogger.Create(verbose: true, sw);
 
-            _ = InputDiscovery.ResolveFiles([], includeActions: false, logger, tempDir);
+            _ = InputDiscovery.ResolveFiles([], includeActions: false, logger, startDirectory: tempDir);
 
             var output = sw.ToString();
             await Assert.That(output).Contains($"verbose: discovery: searching from {tempDir}");
@@ -234,7 +234,7 @@ public sealed class VerbosePhase1Tests
             using var sw = new StringWriter();
             var logger = VerboseLogger.Create(verbose: true, sw);
 
-            _ = InputDiscovery.ResolveFiles([testFile], includeActions: false, logger, tempDir);
+            _ = InputDiscovery.ResolveFiles([testFile], includeActions: false, logger, startDirectory: tempDir);
 
             await Assert.That(sw.ToString().TrimEnd())
                 .IsEqualTo("verbose: discovery: 1 file(s) from explicit args");
@@ -258,7 +258,7 @@ public sealed class VerbosePhase1Tests
             using var sw = new StringWriter();
             var logger = VerboseLogger.Create(verbose: false, sw);
 
-            _ = InputDiscovery.ResolveFiles([], includeActions: false, logger, tempDir);
+            _ = InputDiscovery.ResolveFiles([], includeActions: false, logger, startDirectory: tempDir);
 
             await Assert.That(sw.ToString()).IsEqualTo("");
         }

@@ -195,7 +195,18 @@ Operational rule:
 | `--oneline` | | `bool` | `false` | Emit one diagnostic per line (text format only). |
 | `--color` | | `auto\|always\|never` | `auto` | Color output control. `auto` enables color when stdout is not a TTY or CI is detected. |
 | `--no-color` | | `bool` | `false` | Alias for `--color=never`. |
-| `--verbose` | | `bool` | `false` | Enable verbose progress output to stderr. |
+| `--verbose` | `-v` | `bool` | `false` | Enable summary-level verbose output to stderr (config, discovery, rules, timing, suppression totals). |
+| `--skip-agentic-workflows` | | `bool` | `false` | Skip workflow files whose first lines contain `# gh-aw-metadata:` (Agentic Workflow). Also configurable via `discovery.skip-agentic-workflows`. |
+
+**Verbose levels** (parsed from raw argv before framework binding):
+
+| Invocation | Level | stderr output |
+|---|---|---|
+| (default) | off | none |
+| `-v` / `--verbose` | summary | config path, discovery counts, rules enabled/disabled, total timing, suppression aggregate |
+| `-vv` | files | summary level **plus** per-file `checking`/`fixing`, per-file timing, per-file fix counts |
+
+`-vv` is stripped from argv before the CLI framework parses options so it does not conflict with `-v`.
 
 ### 2.6 Unknown Option Suggestions
 
@@ -461,7 +472,16 @@ After diagnostics are emitted to stdout, a summary line is always written to std
 
 When no diagnostics exist: `0 issues in <N> file(s)`.
 
-Zero-count categories are omitted (e.g. `1 error in 3 files` when warnings and infos are zero).
+When files were fully excluded (file-level exclusion with parse/lint skipped) or diagnostics were suppressed via config/inline directives, optional suffixes are appended (zero categories omitted):
+
+```
+0 issues in 123 files (2 excluded, 15 suppressed)
+```
+
+- `excluded` — files matched by a file-level exclusion (`rules` omitted, no `jobs` scope) where parse/lint was skipped.
+- `suppressed` — diagnostics suppressed during lint via exclusions or inline directives (`SuppressionSummary.TotalSuppressed`).
+
+Zero-count categories are omitted (e.g. `0 issues in 123 files` when both counts are zero).
 
 When at least one diagnostic has a file path, a per-file breakdown is emitted as a markdown-style table, separated from the summary line by a blank line:
 
@@ -478,7 +498,7 @@ When at least one diagnostic has a file path, a per-file breakdown is emitted as
 - When at least one info diagnostic exists in the per-file breakdown, an `Infos` column is also emitted.
 - Files are sorted by total issue count descending, then by file name lexicographically.
 
-In `--verbose` mode with at least one diagnostic, a per-rule breakdown is emitted as a markdown-style table, separated from the preceding output by a blank line:
+In `-v` / `--verbose` mode with at least one diagnostic, a per-rule breakdown is emitted as a markdown-style table, separated from the preceding output by a blank line:
 
 ```
 | Rule          | Count |
@@ -492,7 +512,7 @@ In `--verbose` mode with at least one diagnostic, a per-rule breakdown is emitte
 - Column widths are dynamically computed to align values.
 - Rules are sorted by count descending, then by rule ID lexicographically.
 
-In `--verbose` mode, rule activation metadata is emitted once per document kind seen in the run:
+In `-v` / `--verbose` mode, rule activation metadata is emitted once per document kind seen in the run:
 
 ```
 verbose: rules: <N> enabled, <M> disabled (workflow)
@@ -502,7 +522,7 @@ verbose: rules: disabled: <id1>, <id2>, ...   (only when M > 0)
 
 `DisabledRuleCount` and `DisabledRuleIds` reflect config/opt-in disabled rules only. The `(workflow)` / `(action)` suffix is included because `ActiveRuleCount` varies by document kind.
 
-Per-file timing summary consolidates document kind, elapsed time, diagnostic count, and suppressed count:
+Per-file timing summary (only at `-vv`) consolidates document kind, elapsed time, diagnostic count, and suppressed count:
 
 ```
 verbose: <filepath>: workflow, 1.2 ms, 5 diagnostics, 2 suppressed
@@ -522,7 +542,9 @@ In fix mode, network timing is emitted per file when pins are resolved:
 verbose: network: resolved 3 pin(s) for <filepath> in 320.0 ms
 ```
 
-In parallel verbose mode, `verbose: checking <filepath>...` is best-effort progress output and may appear interleaved rather than in input order. Diagnostic output and summary output remain deterministic.
+In parallel `-vv` mode, `verbose: checking <filepath>...` is best-effort progress output and may appear interleaved rather than in input order. Diagnostic output and summary output remain deterministic.
+
+At `-v` (summary level), per-file `checking`/`fixing` lines are **not** emitted.
 
 When no `--min-severity` is explicitly set, errors are zero, and warnings are non-zero, a hint line is emitted:
 

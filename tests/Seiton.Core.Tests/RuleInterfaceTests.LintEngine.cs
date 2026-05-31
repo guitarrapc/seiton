@@ -2768,10 +2768,43 @@ public sealed partial class RuleInterfaceTests
         """;
 
         using var result = new LintEngine([new RunInputsContextDirectUseRule()])
-            .Check(Encoding.UTF8.GetBytes(yaml), "run-inputs-no-fix-composite.yml", new LintConfig { Fix = new FixConfig { Enabled = true } });
+            .Check(Encoding.UTF8.GetBytes(yaml), "run-inputs-fix-composite-format.yml", new LintConfig { Fix = new FixConfig { Enabled = true } });
         var diagnostic = result.Diagnostics.First(x => x.RuleId == "run-inputs-context-direct-use");
 
-        await Assert.That(diagnostic.Fix is null).IsTrue();
+        await Assert.That(diagnostic.Fix is not null).IsTrue();
+    }
+
+    [Test]
+    public async Task LintEngine_RunInputsContextDirectUse_Fix_CompoundOrExpression_MovesWholeExpressionToEnv()
+    {
+        var yaml = """
+        on:
+            workflow_dispatch:
+                inputs:
+                    tag:
+                        type: string
+        jobs:
+            build:
+                runs-on: ubuntu-latest
+                steps:
+                    - run: echo "${{ inputs.tag || 'v1.0.0' }}"
+        """;
+
+        var sourceBytes = Encoding.UTF8.GetBytes(yaml);
+        var engine = new LintEngine([new RunInputsContextDirectUseRule()]);
+        using var result = engine.Check(sourceBytes, "run-inputs-fix-compound-or.yml", new LintConfig { Fix = new FixConfig { Enabled = true } });
+        var diagnostic = result.Diagnostics.First(x => x.RuleId == "run-inputs-context-direct-use");
+
+        await Assert.That(diagnostic.Fix is not null).IsTrue();
+
+        var fixedBytes = FixEngine.Apply(sourceBytes, diagnostic.Fix!.Value.Edits);
+        var fixedText = Encoding.UTF8.GetString(fixedBytes).Replace("\r\n", "\n", StringComparison.Ordinal);
+
+        await Assert.That(fixedText.Contains("TAG: ${{ inputs.tag || 'v1.0.0' }}", StringComparison.Ordinal)).IsTrue();
+        await Assert.That(fixedText.Contains("${TAG}", StringComparison.Ordinal)).IsTrue();
+
+        using var relint = engine.Check(fixedBytes, "run-inputs-fix-compound-or.yml");
+        await Assert.That(relint.Diagnostics.Any(x => x.RuleId == "run-inputs-context-direct-use")).IsFalse();
     }
 
     [Test]
