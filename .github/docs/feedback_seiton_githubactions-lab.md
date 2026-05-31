@@ -532,6 +532,43 @@ CI で「本当に 123 ファイル全部チェックされたか? 除外で見�
 0 issues in 123 files (2 excluded, 15 suppressed)
 ```
 
+
+### 8. **`--fix` のドライランとの差分がない**:
+
+`--fix` 実行時にどのファイルが変わったか diff を出すオプション(`--fix --show-diff` など)があると便利
+
+
+### 9. **config の `exclude` vs `exclusions` キー名**
+
+直感的には `exclude` を試したくなる。エラーメッセージ `unknown top-level key 'exclude'` に `Did you mean 'exclusions'?` があるとさらに親切
+
+
+### 10. **`bot-conditions` が複数トリガーのワークフローで誤検出する**:
+
+   検出メッセージ:
+   ```
+   info[bot-conditions]: bot exclusion check uses spoofable context;
+   consider github.event.pull_request.user.login or github.event.pull_request.user.id if available for this trigger
+   ```
+
+   検出対象 (4件):
+   - `auto-doc.yaml` — トリガー: `workflow_dispatch`, `pull_request`, `push`
+   - `auto-dump-context.yaml` — トリガー: `issues`, `issue_comment`, `push`, `pull_request`, `pull_request_target`, `release`, `schedule`, `workflow_dispatch`
+   - `create-release.yaml` — トリガー: `push` (tags), `pull_request`, `workflow_dispatch`
+   - `prevent-file-change2.yaml` — トリガー: `pull_request_target`
+
+   **disable にした理由**:
+   - `github.event.pull_request.user.login` は `pull_request` / `pull_request_target` トリガーでのみ使える。`push`, `workflow_dispatch`, `schedule` 等では null になる
+   - 複数トリガーを持つワークフロー (4件中3件) では、全トリガーで動作する bot 除外として `github.actor` が実質的に唯一の選択肢
+   - `prevent-file-change2.yaml` のみ `pull_request_target` 単独トリガーで `.user.login` への修正が可能だが、他と一貫性を保つため同じパターンを使用
+   - dependabot 除外における `github.actor` の spoofability は実質的なセキュリティリスクにならない（第三者が actor 名を偽装できるわけではない）
+
+   **seiton への改善提案**:
+   - `on:` に `pull_request` / `pull_request_target` 以外のトリガーが含まれるワークフローでは、`github.event.pull_request.user.login` への代替が不可能なため検出を抑制すべき
+   - または help メッセージを「このワークフローは複数トリガーを持つため `github.actor` が妥当です」に変える
+   - `pull_request` / `pull_request_target` 単独トリガーの場合のみ検出すれば、actionable な指摘になる
+
+
 ### ログからの状況把握
 
 | 項目 | 評価 |
