@@ -383,7 +383,36 @@ public sealed partial class RuleInterfaceTests
                         - run: echo test
             """,
             []),
-            // Phase 3: pull_request_target provides PR context → warning fires
+            // Mixed triggers: non-PR event present → suppress (github.actor is cross-trigger choice)
+            new RuleCase(
+            "ok-mixed-push-pr-actor-ne-suppressed",
+            """
+            on: [push, pull_request]
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    if: github.actor != 'dependabot[bot]'
+                    steps:
+                        - run: echo test
+            """,
+            []),
+            new RuleCase(
+            "ok-mixed-schedule-pr-suppressed",
+            """
+            on:
+                pull_request:
+                    branches: [main]
+                schedule:
+                    - cron: '0 0 * * *'
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    if: github.actor == 'dependabot[bot]'
+                    steps:
+                        - run: echo test
+            """,
+            []),
+            // PR-only triggers: actionable diagnostics remain
             new RuleCase(
             "warning-pr-target-actor-eq",
             """
@@ -530,9 +559,9 @@ public sealed partial class RuleInterfaceTests
     }
 
     [Test]
-    public async Task BotConditionsRule_MixedEvents_Equal_StaysWarning()
+    public async Task BotConditionsRule_MixedEvents_Equal_Suppressed()
     {
-        // on: [push, pull_request] → PR context IS available → stays warning
+        // on: [push, pull_request] → mixed triggers → github.actor is the only cross-trigger option
         var yaml = """
             on: [push, pull_request]
             jobs:
@@ -548,14 +577,13 @@ public sealed partial class RuleInterfaceTests
         var botDiags = result.Diagnostics
             .Where(x => x.RuleId == "bot-conditions")
             .ToArray();
-        await Assert.That(botDiags.Length).IsEqualTo(1);
-        await Assert.That(botDiags[0].Severity).IsEqualTo(DiagnosticSeverity.Warning);
+        await Assert.That(botDiags.Length).IsEqualTo(0);
     }
 
     [Test]
-    public async Task BotConditionsRule_MixedEvents_NotEqual_StaysInfo()
+    public async Task BotConditionsRule_MixedEvents_NotEqual_Suppressed()
     {
-        // on: [push, pull_request] → PR context IS available → != stays info
+        // on: [push, pull_request] → mixed triggers → != also suppressed (not actionable)
         var yaml = """
             on: [push, pull_request]
             jobs:
@@ -568,6 +596,48 @@ public sealed partial class RuleInterfaceTests
 
         using var result = new LintEngine([new BotConditionsRule()])
             .Check(Encoding.UTF8.GetBytes(yaml), "bot-mixed-ne-test.yml");
+        var botDiags = result.Diagnostics
+            .Where(x => x.RuleId == "bot-conditions")
+            .ToArray();
+        await Assert.That(botDiags.Length).IsEqualTo(0);
+    }
+
+    [Test]
+    public async Task BotConditionsRule_MixedPullRequestAndWorkflowDispatch_Suppressed()
+    {
+        var yaml = """
+            on: [pull_request, workflow_dispatch]
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    if: github.actor != 'dependabot[bot]'
+                    steps:
+                        - run: echo test
+            """.Replace("\r\n", "\n");
+
+        using var result = new LintEngine([new BotConditionsRule()])
+            .Check(Encoding.UTF8.GetBytes(yaml), "bot-mixed-pr-wd-test.yml");
+        var botDiags = result.Diagnostics
+            .Where(x => x.RuleId == "bot-conditions")
+            .ToArray();
+        await Assert.That(botDiags.Length).IsEqualTo(0);
+    }
+
+    [Test]
+    public async Task BotConditionsRule_PullRequestOnlyEvents_NotEqual_EmitsInfo()
+    {
+        var yaml = """
+            on: [pull_request, pull_request_target]
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    if: github.actor != 'dependabot[bot]'
+                    steps:
+                        - run: echo test
+            """.Replace("\r\n", "\n");
+
+        using var result = new LintEngine([new BotConditionsRule()])
+            .Check(Encoding.UTF8.GetBytes(yaml), "bot-pr-only-mix-test.yml");
         var botDiags = result.Diagnostics
             .Where(x => x.RuleId == "bot-conditions")
             .ToArray();
