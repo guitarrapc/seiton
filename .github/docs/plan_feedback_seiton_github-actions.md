@@ -282,13 +282,52 @@ githubactions-lab での運用は、初回 83 issues → コンフィグ調整 +
 
 ## 実装フェーズ
 
-### フェーズ 1 — P1: bot-conditions 混合トリガー抑制
+### フェーズ 1 — P1: bot-conditions 混合トリガー抑制 ✅ 完了
 
 | タスク | 検証 |
 |--------|------|
 | 混合トリガー判定 + 抑制ロジック | unit tests 更新 |
-| spec / docs 同期 | `dotnet test` 全通 |
+| spec / docs 同期 | `dotnet test` 全通 (2237 tests) |
 | githubactions-lab 再実行 | `bot-conditions` 4 件が解消（または PR-only のみ残る） |
+
+#### 実装内容
+
+- `BotConditionsRule.ShouldEmitBotConditionDiagnostics`: ワークフローの `on:` を 1 パス走査し、PR 系 webhook が **1 つ以上** かつ非 PR トリガー（`push`, `schedule`, `workflow_dispatch`, `workflow_call` 等）が **0** の場合のみ diagnostic を emit。
+- 混合トリガー（例: `[push, pull_request]`）および PR 系以外のみのトリガーでは `github.actor` が cross-trigger の実用手段のため **完全抑制**。
+- PR-only（`pull_request` / `pull_request_target` / `pull_request_review` / `pull_request_review_comment` のみ）では従来どおり `==` → warning、`!=` → info。
+
+#### 変更ファイル
+
+- `src/Seiton.Core/Linting/Rules/BotConditionsRule.cs`
+- `tests/Seiton.Core.Tests/RuleInterfaceTests.BotConditionsRule.cs`
+- `.github/docs/Seiton_Linter_spec.md`, `docs/rules.md`
+
+#### ベンチマーク（CoreLintBenchmark, ShortRun, 実装前 → 後）
+
+| Size | FixEnabled | Mean (before) | Mean (after) | Δ Mean | Allocated |
+|------|------------|---------------|--------------|--------|-----------|
+| Small | False | 70.80 us | 72.89 us | +3.0% | 8.7 KB → 8.7 KB |
+| Small | True | 79.85 us | 70.23 us | −12.1% | 10.16 KB → 10.16 KB |
+| Medium | False | 1,829 us | 1,389 us | −24.1% | 68.9 KB → 68.9 KB |
+| Medium | True | 2,070 us | 1,999 us | −3.4% | 82.26 KB → 82.26 KB |
+| Large | False | 23,088 us | 21,666 us | −6.1% | 327.41 KB → 327.41 KB |
+| Large | True | 34,218 us | 31,921 us | −6.7% | 382.26 KB → 382.26 KB |
+
+**性能評価**: 全ケースで Allocated は不変。Mean は Small/False のみ +3.0%（+10% 閾値以内）。その他は改善または ShortRun のばらつき範囲。トリガー判定は `VisitWorkflowPre` で 1 回のみ実行され、条件チェック per `if:` に追加コストはなし（抑制時は expression parse 前に return する既存 fast-path を維持）。
+
+#### レビュー指摘と対応
+
+| 指摘 | 対応 |
+|------|------|
+| 未知 webhook 名の扱い | `WebhookTypes.TryGet` 失敗時は non-PR 扱い（保守的に抑制） |
+| verbose 抑制通知 | フェーズ 1 では見送り（通常出力 silent、プランどおり） |
+| `HasPullRequestEvent` 重複 | `ShouldEmitBotConditionDiagnostics` に統合し削除 |
+| PR-only 複数 PR イベント | `[pull_request, pull_request_target]` は引き続き emit（テスト追加） |
+
+#### 見送り（本フェーズ）
+
+- verbose モードでの mixed-trigger 抑制通知（P2 以降で検討可）
+- `rules.bot-conditions.ignore-patterns`（混合抑制で大半解消のため不要）
 
 ### フェーズ 2 — P2: CLI / config UX
 
@@ -315,10 +354,10 @@ githubactions-lab での運用は、初回 83 issues → コンフィグ調整 +
 
 実装完了後、spec-document-policy に従い以下を同期する。
 
-- [ ] `Seiton_Linter_spec.md` — `bot-conditions` 抑制条件、fix 表（run-inputs compound）
+- [x] `Seiton_Linter_spec.md` — `bot-conditions` 抑制条件
 - [ ] `Seiton_CLI_spec.md` — verbose レベル、oneline サマリー、skip-agentic、show-diff
 - [ ] `Seiton_config_spec.md` — 重複 exclusion 警告、discovery.skip-agentic-workflows
-- [ ] `docs/rules.md` — bot-conditions Notes
+- [x] `docs/rules.md` — bot-conditions Notes
 - [ ] `docs/configuration.md` — エラーメッセージ、exclusions 例
 - [ ] `docs/usage.md` — verbose / fix ワークフロー
 

@@ -31,8 +31,8 @@ public sealed class BotConditionsRule() : RuleBase(RuleId.BotConditions)
     // Known bot suffixes
     private static ReadOnlySpan<byte> BotSuffix => "[bot]"u8;
 
-    // Phase 3: whether any trigger provides github.event.pull_request context
-    private bool _hasPrEvent;
+    // Phase 3: whether bot-condition diagnostics are actionable for this workflow's triggers
+    private bool _emitBotConditionDiagnostics;
 
     public override string Name => "Bot Conditions Rule";
 
@@ -41,7 +41,7 @@ public sealed class BotConditionsRule() : RuleBase(RuleId.BotConditions)
     public override void VisitWorkflowPre(Workflow workflow)
     {
         base.VisitWorkflowPre(workflow);
-        _hasPrEvent = HasPullRequestEvent(workflow);
+        _emitBotConditionDiagnostics = ShouldEmitBotConditionDiagnostics(workflow);
     }
 
     public override void VisitJobPre(Job job)
@@ -156,9 +156,9 @@ public sealed class BotConditionsRule() : RuleBase(RuleId.BotConditions)
             }
 
             // Phase 2: != (exclusion pattern) emits info; == (privilege grant) emits warning
-            // Phase 3: When no PR event provides an alternative, suppress entirely
-            //          (github.actor is the only available means for bot detection)
-            if (!_hasPrEvent)
+            // Phase 3: Suppress when triggers are not PR-only (no PR context, or mixed triggers
+            //          where github.actor is the only cross-trigger bot check).
+            if (!_emitBotConditionDiagnostics)
             {
                 continue;
             }
@@ -207,31 +207,46 @@ public sealed class BotConditionsRule() : RuleBase(RuleId.BotConditions)
     }
 
     /// <summary>
-    /// Phase 3: Returns true if any workflow trigger provides github.event.pull_request context.
-    /// Events: pull_request, pull_request_target, pull_request_review, pull_request_review_comment.
+    /// Returns true when the workflow triggers are PR-only, making
+    /// <c>github.event.pull_request.user.login</c> a viable alternative to spoofable actor contexts.
+    /// Mixed or non-PR triggers suppress diagnostics because <c>github.actor</c> is often the only
+    /// cross-trigger bot check.
     /// </summary>
-    private bool HasPullRequestEvent(Workflow workflow)
+    private bool ShouldEmitBotConditionDiagnostics(Workflow workflow)
     {
+        var hasPrEvent = false;
+        var hasNonPrTrigger = false;
+
         for (var i = 0; i < workflow.On.Count; i++)
         {
-            if (workflow.On[i] is not WebhookEvent webhook)
+            switch (workflow.On[i])
             {
-                continue;
-            }
+                case WebhookEvent webhook:
+                    var hook = Arena.GetStringValue(webhook.Hook);
+                    if (WebhookTypes.TryGet(hook, out _, out var spec) && IsPullRequestWebhook(spec.Id))
+                    {
+                        hasPrEvent = true;
+                    }
+                    else
+                    {
+                        hasNonPrTrigger = true;
+                    }
 
-            var hook = Arena.GetStringValue(webhook.Hook);
-            if (WebhookTypes.TryGet(hook, out _, out var spec)
-                && spec.Id is WebhookTypes.EventId.PullRequest
-                    or WebhookTypes.EventId.PullRequestTarget
-                    or WebhookTypes.EventId.PullRequestReview
-                    or WebhookTypes.EventId.PullRequestReviewComment)
-            {
-                return true;
+                    break;
+                default:
+                    hasNonPrTrigger = true;
+                    break;
             }
         }
 
-        return false;
+        return hasPrEvent && !hasNonPrTrigger;
     }
+
+    private static bool IsPullRequestWebhook(WebhookTypes.EventId eventId) =>
+        eventId is WebhookTypes.EventId.PullRequest
+            or WebhookTypes.EventId.PullRequestTarget
+            or WebhookTypes.EventId.PullRequestReview
+            or WebhookTypes.EventId.PullRequestReviewComment;
 
     /// <summary>
     /// Phase 1: Checks if the expression contains a non-spoofable context (trigger-author)
