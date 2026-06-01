@@ -738,6 +738,11 @@ internal static class CheckCommand
         logger.Log("total", $"{fileCount} file(s) {verb} in {FormatMilliseconds(elapsed)} ms");
     }
 
+    internal static void WriteFixTotalTiming(VerboseLogger logger, int processedFileCount, int modifiedFileCount, TimeSpan elapsed)
+    {
+        logger.Log("total", $"{processedFileCount} file(s) processed, {modifiedFileCount} modified in {FormatMilliseconds(elapsed)} ms");
+    }
+
     internal static string FormatMilliseconds(TimeSpan elapsed)
     {
         return elapsed.TotalMilliseconds.ToString("F1", CultureInfo.InvariantCulture);

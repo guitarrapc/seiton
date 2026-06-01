@@ -128,15 +128,38 @@ public sealed class VerboseTimingTests
     }
 
     [Test]
-    public async Task WriteTotalTiming_Fix_EmitsFixedVerb()
+    public async Task WriteFixTotalTiming_ProcessedWithoutModification_EmitsBothCounts()
     {
         using var sw = new StringWriter();
         var logger = VerboseLogger.Create(verbose: true, sw);
 
-        CheckCommand.WriteTotalTiming(logger, fileCount: 1, TimeSpan.FromMilliseconds(450.0), "fixed");
+        CheckCommand.WriteFixTotalTiming(logger, processedFileCount: 1, modifiedFileCount: 0, TimeSpan.FromMilliseconds(450.0));
 
         await Assert.That(sw.ToString().TrimEnd())
-            .IsEqualTo("verbose: total: 1 file(s) fixed in 450.0 ms");
+            .IsEqualTo("verbose: total: 1 file(s) processed, 0 modified in 450.0 ms");
+    }
+
+    [Test]
+    public async Task WriteFixTotalTiming_ProcessedWithModification_EmitsBothCounts()
+    {
+        using var sw = new StringWriter();
+        var logger = VerboseLogger.Create(verbose: true, sw);
+
+        CheckCommand.WriteFixTotalTiming(logger, processedFileCount: 3, modifiedFileCount: 2, TimeSpan.FromMilliseconds(120.5));
+
+        await Assert.That(sw.ToString().TrimEnd())
+            .IsEqualTo("verbose: total: 3 file(s) processed, 2 modified in 120.5 ms");
+    }
+
+    [Test]
+    public async Task WriteFixTotalTiming_VerboseDisabled_EmitsNothing()
+    {
+        using var sw = new StringWriter();
+        var logger = VerboseLogger.Create(verbose: false, sw);
+
+        CheckCommand.WriteFixTotalTiming(logger, processedFileCount: 1, modifiedFileCount: 0, TimeSpan.FromMilliseconds(450.0));
+
+        await Assert.That(sw.ToString()).IsEqualTo("");
     }
 
     [Test]

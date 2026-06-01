@@ -225,6 +225,41 @@
 
 **完了条件**: `_post-release.yaml` 相当で「処理 1 ファイル・変更 0」のとき verbose が `0 file(s) modified`（または同等）を示し、fix summary と矛盾しない。
 
+#### フェーズ A 実装結果（2026-06-01）
+
+**実装内容**
+
+| 項目 | 変更 |
+|---|---|
+| verbose total 行 | `WriteFixTotalTiming` を追加。`N file(s) processed, M modified in X ms` 形式に変更（`M` は YAML バイト列が変わったファイル数） |
+| fix summary 登録 | `fixedFiles` は内容変更があったファイルのみ登録（`SequenceEqual` ベース） |
+| ファイル書き込み | 内容が同一のとき `File.WriteAllBytes` をスキップ（mtime 更新も防止） |
+| 変更ゼロ hint | `WriteNoFilesModifiedHint` を追加。fix 試行あり・変更 0 のとき stderr に理由行を出力 |
+| 仕様 | `Seiton_CLI_spec.md` §6 verbose / fix summary 節を更新 |
+
+**レビュー指摘と対応**
+
+| 指摘 | 対応 |
+|---|---|
+| `WriteTotalTiming(..., "fixed")` が処理ファイル数を「fixed」と誤表示 | `WriteFixTotalTiming` で processed / modified を分離 |
+| fix summary と diff の不一致 | 内容変更ベースの登録に統一 |
+| 変更なしでも disk write される | byte 比較後に write をスキップ |
+| fixable 残存時の理由が不明 | hint 行で fix 試行数と fixable 残数を明示 |
+| テスト不足 | `VerboseTimingTests` / `FixCommandTests` に 9 件追加 |
+
+**ベンチマーク（FixApplyBenchmark — fix 適用ループ、CLI 変更の間接指標）**
+
+| Scenario | Before Mean | After Mean | Δ | Before Alloc | After Alloc | Δ |
+|---|---:|---:|---:|---:|---:|---:|
+| NoConflict | 23.61 us | 20.84 us | −12% | 10.57 KB | 10.57 KB | 0% |
+| SingleJobConflict | 40.48 us | 36.15 us | −11% | 16.95 KB | 16.95 KB | 0% |
+| MultiJobConflict | 115.32 us | 101.03 us | −12% | 39.72 KB | 39.72 KB | 0% |
+
+- **解釈**: 今回の変更は `FixCommand` の CLI 層（ログ・I/O ガード）のみで、`FixEngine` / lint ループは未変更。ベンチマーク差分は計測誤差範囲と判断。
+- **実際の性能効果**: 内容変更なしの `--fix` 実行時に `File.WriteAllBytes` を省略するため、該当ケースでは disk I/O と mtime 更新を回避（Cysharp フィードバックの「diff 空なのに fixed 表示」シナリオに該当）。
+
+**テスト**: `Seiton.Tests` 213 passed、`Seiton.Core.Tests` 1815 passed。
+
 ---
 
 ### フェーズ B — ドキュメント・発見性（P1–P2）

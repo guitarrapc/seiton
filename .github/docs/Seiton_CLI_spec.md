@@ -535,8 +535,19 @@ Total timing is emitted at the end:
 
 ```
 verbose: total: 3 file(s) checked in 4.5 ms
-verbose: total: 3 file(s) fixed in 450.0 ms
+verbose: total: 3 file(s) processed, 2 modified in 450.0 ms
 ```
+
+In fix mode, the total line reports **processed** (input files handled) and **modified** (files whose YAML bytes changed) separately. These counts can differ when fixable issues remain but no content change was produced.
+
+When fix mode runs on at least one file with fixable issues but produces no content changes, a hint is emitted:
+
+```
+hint: no files modified (<N> file(s) processed; <M> fixable issue(s) remain)
+hint: no files would be modified (<N> file(s) processed; <M> fixable issue(s) remain)   # --dry-run
+```
+
+When no fixable issues were attempted, this hint is not emitted.
 
 In fix mode, network timing is emitted per file when pins are resolved:
 
@@ -580,6 +591,7 @@ In `--dry-run` mode, the table header uses "Would Fix" instead of "Fixed". In `-
 - `remaining` is the count of diagnostics still present for that file after ignore/severity filters.
 - The "remain" summary line shows the severity breakdown of remaining diagnostics and the count of affected files.
 - When no fixes are applied (all diagnostics are unfixable), the fix summary is not emitted and the standard diagnostic summary is used instead.
+- When fixes are attempted but no file content changes, the fix summary is not emitted; a `hint: no files modified` (or `would be modified` in `--dry-run`) line explains the outcome.
 - In `--check` mode, the remaining diagnostic summary uses standard wording ("in N files") rather than "remain" because no fixes were applied.
 
 ---
