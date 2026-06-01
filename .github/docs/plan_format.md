@@ -269,18 +269,56 @@ cd src/Seiton.Benchmark && dotnet run -c Release -- -f "*CoreLint*" "*CoreParsin
 - `DiagnosticFormatter` または `GitHubActionsDiagnosticFormatter` でファイル単位グループ化
 - `CheckCommand` / `FixCommand` の stdout 分岐
 
-### フェーズ 3 — Step Summary（Red → Green）
+### フェーズ 3 — Step Summary（Red → Green）✅ 完了
 
-**テスト**（`GITHUB_STEP_SUMMARY` を temp ファイルに向ける）:
+**実施日**: 2026-06-02
 
-- 追記内容に `## Seiton` と件数行・表が含まれる
-- 既存内容があるファイルでは先頭に空行が入る
-- env 未設定時は stderr のみ（既存 `WriteSummaryTests` を拡張）
+#### テスト（Red → Green）
 
-**実装**:
+| テスト | 結果 |
+|---|---|
+| `WriteSummary_GitHubActions_WithStepSummary_AppendsHeadingAndCounts` | Pass |
+| `WriteSummary_GitHubActions_WithExistingSummaryContent_PrependsBlankLine` | Pass |
+| `WriteSummary_GitHubActions_WithoutStepSummary_WritesToStderr` | Pass |
+| `WriteSummary_GitHubActions_HintOnlyOnStderr` | Pass |
+| `WriteSummary_TextFormat_WithStepSummaryEnv_WritesToStderrOnly` | Pass |
+| `WriteFixSummaryAndSummary_GitHubActions_SingleHeadingInStepSummary` | Pass |
+| `Seiton.Tests` 全体 | **264/264 Pass**（コードレビュー後） |
 
-- `WriteSummary` の Markdown 生成を共通化し、stderr / step summary の両方から利用
-- step summary 書き込みは UTF-8、改行は `\n`（GHA 推奨）
+#### 実装概要
+
+- `GitHubStepSummaryWriter` — `GITHUB_STEP_SUMMARY` への UTF-8 追記、`## Seiton` は実行 1 回につき 1 回、既存内容があるときは先頭に空行、本文は `ReplaceLineEndings("\n")` で GHA 推奨の LF に統一
+- `CheckCommand.WriteSummary` — `WriteSummaryContent` を共通化。`github-actions` + 書き込み可能な env → job summary、それ以外は stderr（`hint:` は常に stderr）
+- `FixCommand.WriteFixSummary` — 同様に job summary / stderr 分岐。fix 後の remain summary と **1 つの `## Seiton` ブロック**に連結
+- `CheckCommand.Run` / `FixCommand.Run` 開始時に `GitHubStepSummaryWriter.Reset()`
+- `StepSummaryOutputBenchmark` を新設（summary パス比較用）
+
+#### ベンチマーク
+
+**DiagnosticOutputBenchmark**（formatter パス — フェーズ 1 比較）
+
+| Count | フェーズ 1 Mean | フェーズ 3 Mean | 変化 | Allocated |
+|---|---:|---:|---:|---|
+| F1 | 245.8 μs | 233.7 μs | **−4.9%** | 117.5 KB（同一） |
+| F10 | 2,418.8 μs | 2,396.0 μs | **−0.9%** | 1136.94 KB（同一） |
+
+診断フォーマット経路に Step Summary 変更は含まれないため、Mean/Allocated は許容内で変化なし相当。
+
+**StepSummaryOutputBenchmark**（新規 — 1 回の summary 出力）
+
+| Method | Mean | Allocated | 備考 |
+|---|---:|---:|---|
+| stderr (`text`) | 10.30 μs | 2.19 KB | ベースライン |
+| step summary (`github-actions`) | 364.33 μs | 9.57 KB | 約 35× Mean、約 4.4× Alloc |
+
+step summary パスは **CI 1 ジョブあたり 1〜2 回**のコールドパス（ファイル追記 + `StringBuilder` バッファ）。lint/formatter ホットパスには影響しない。遅延の主因は `FileStream` 追記と中間バッファ化。改善策（必要時のみ）: `StringWriter` を介さず `StreamWriter` に直接書く、または `stackalloc` / 固定バッファで小さな summary を避ける。
+
+#### フェーズ 3 レビュー
+
+- **API**: ユーザー向けフラグ変更なし。GHA + `github-actions` では summary が Job Summary に出てログ stderr がすっきりする。`text` / `json` / `sarif` は env があっても stderr のみ（直感的）。
+- **仕様**: `Seiton_CLI_spec.md` §6.4 / §6.5 と一致。レビューで **LF 統一**（`StreamWriter.NewLine = "\n"` + 本文正規化）を追加し、Windows ローカル検証でも spec の改行要件を満たすようにした。
+- **性能**: ホットパス（DiagnosticOutput）不変。summary 追記は許容されるコールドパスコスト。
+- **コードレビューでの修正**: (1) `WriteFixSummary` の引数順を `FixSummaryMode` → `OutputFormat` にし既存テストとの互換を維持。(2) CRLF → LF で既存 summary 追記テストが Windows で失敗していた問題を修正。(3) **書き込み不可パス**（§6.5.2）で `IOException` を捕捉し stderr にフォールバック（従来は未処理例外）。(4) 等価クラス追加分: 書き込み不可・空白 env・`json`+env・Job Summary への metadata 追記。
 
 ### フェーズ 4 — 仕様書・ユーザードキュメント
 
@@ -352,6 +390,12 @@ dotnet test
 - **性能**: DiagnosticOutput F1 −6%、F10 −8.6%（誤差範囲）。Allocated 不変。
 - **テスト**: `CliConfigBridgeTests` +6、`OutputFormatParserTests` +2、`RulesCommandTests` +1。
 - **仕様差分**: なし。フェーズ 2 で formatter の `::group::` を実装予定。
+
+### フェーズ 3
+
+- **性能**: DiagnosticOutput はフェーズ 1 比 ±5% 以内・Allocated 不変。Step summary 追記は ~364 μs/回（コールドパス、ホットパス外）。
+- **テスト**: `WriteSummaryTests` に GitHub Actions step summary 系 6 件追加。
+- **仕様差分**: なし（LF 正規化は §6.5.2 の GHA 推奨に沿った実装詳細）。
 
 ### フェーズ 2 以降（テンプレート）
 

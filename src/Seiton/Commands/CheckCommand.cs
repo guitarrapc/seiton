@@ -30,6 +30,7 @@ internal static class CheckCommand
         bool skipAgenticWorkflows = false)
     {
         var resolvedFormat = CliConfigBridge.ResolveOutputFormat(format);
+        GitHubStepSummaryWriter.Reset();
         var colorEnabled = CliConfigBridge.ResolveColorEnabled(color, noColor);
 
         // Resolve config
@@ -290,7 +291,7 @@ internal static class CheckCommand
         }
 
         var summaryMetadata = new CheckSummaryMetadata(excludedCount, totalSuppressed);
-        WriteSummary(allDiagnostics, resolvedFiles.Length, verboseLevel >= VerboseLevel.Summary, showExitHint: minSeverity is null, metadata: summaryMetadata);
+        WriteSummary(allDiagnostics, resolvedFiles.Length, resolvedFormat, verboseLevel >= VerboseLevel.Summary, showExitHint: minSeverity is null, metadata: summaryMetadata);
         if (ShouldShowInitHint(configResolution, resolvedFormat, allDiagnostics))
         {
             var shouldSuggestIncludeActions = ShouldSuggestIncludeActions(
@@ -340,14 +341,28 @@ internal static class CheckCommand
         };
     }
 
-    internal static void WriteSummary(List<Diagnostic> diagnostics, int fileCount, bool verbose = false, bool showExitHint = false, bool showPerFile = true, CheckSummaryMetadata metadata = default, bool isRemainMode = false)
-        => WriteSummary(Console.Error, diagnostics, fileCount, verbose, showExitHint, showPerFile, metadata, isRemainMode);
+    internal static void WriteSummary(List<Diagnostic> diagnostics, int fileCount, OutputFormat format = OutputFormat.Text, bool verbose = false, bool showExitHint = false, bool showPerFile = true, CheckSummaryMetadata metadata = default, bool isRemainMode = false)
+        => WriteSummary(Console.Error, diagnostics, fileCount, format, verbose, showExitHint, showPerFile, metadata, isRemainMode);
 
-    internal static void WriteSummary(TextWriter writer, List<Diagnostic> diagnostics, int fileCount, bool verbose = false, bool showExitHint = false, bool showPerFile = true, CheckSummaryMetadata metadata = default, bool isRemainMode = false)
+    internal static void WriteSummary(TextWriter writer, List<Diagnostic> diagnostics, int fileCount, OutputFormat format = OutputFormat.Text, bool verbose = false, bool showExitHint = false, bool showPerFile = true, CheckSummaryMetadata metadata = default, bool isRemainMode = false)
     {
-        var errors = 0;
-        var warnings = 0;
-        var infos = 0;
+        CountSeverityTotals(diagnostics, out var errors, out var warnings, out var infos);
+
+        if (!GitHubStepSummaryWriter.TryAppend(format, jobSummary =>
+                WriteSummaryContent(jobSummary, diagnostics, fileCount, verbose, showPerFile, metadata, isRemainMode, errors, warnings, infos)))
+        {
+            WriteSummaryContent(writer, diagnostics, fileCount, verbose, showPerFile, metadata, isRemainMode, errors, warnings, infos);
+        }
+
+        if (showExitHint && errors == 0 && warnings > 0)
+            writer.WriteLine("hint: use --min-severity error to treat warnings as non-blocking in CI");
+    }
+
+    private static void CountSeverityTotals(List<Diagnostic> diagnostics, out int errors, out int warnings, out int infos)
+    {
+        errors = 0;
+        warnings = 0;
+        infos = 0;
         for (var i = 0; i < diagnostics.Count; i++)
         {
             switch (diagnostics[i].Severity)
@@ -357,7 +372,20 @@ internal static class CheckCommand
                 default: infos++; break;
             }
         }
+    }
 
+    private static void WriteSummaryContent(
+        TextWriter writer,
+        List<Diagnostic> diagnostics,
+        int fileCount,
+        bool verbose,
+        bool showPerFile,
+        CheckSummaryMetadata metadata,
+        bool isRemainMode,
+        int errors,
+        int warnings,
+        int infos)
+    {
         var parts = new System.Text.StringBuilder();
         if (errors > 0) parts.Append(errors == 1 ? "1 error" : $"{errors} errors");
         if (warnings > 0) { if (parts.Length > 0) parts.Append(", "); parts.Append(warnings == 1 ? "1 warning" : $"{warnings} warnings"); }
@@ -402,12 +430,6 @@ internal static class CheckCommand
         if (verbose && diagnostics.Count > 0)
         {
             WritePerRuleBreakdown(writer, diagnostics, isRemainMode);
-        }
-
-        // Show hint when warnings cause non-zero exit but no errors exist
-        if (showExitHint && errors == 0 && warnings > 0)
-        {
-            writer.WriteLine("hint: use --min-severity error to treat warnings as non-blocking in CI");
         }
     }
 
