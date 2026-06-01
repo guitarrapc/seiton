@@ -44,7 +44,7 @@
 |:---:|---|---|
 | P1 | `--verbose` 時に「どのディレクトリから config を発見したか」を stderr に出力する（例: `config: /path/to/parent/.github/seiton.yaml (discovered from /path/to/.references/actions, walked up 2 level(s))`） | 現状は config パスのみで、親採用の理由が分かりにくい |
 | P1 | `docs/configuration.md` と skill の configuration リファレンスに「参照リポジトリ／サブディレクトリ実行時は `-c` 明示または対象側に config を置く」節を追加 | フィードバック通り `seiton init` + `-c` で解決できるが、初見では気づきにくい |
-| P2 | config 探索の停止条件を検討（例: git リポジトリ root、または `--config-discovery=local` で CWD のみ） | 破壊的変更になりうるため、verbose 改善とドキュメントを先行 |
+| P2 | config 探索の停止条件を検討（例: git リポジトリ root、または `--config-discovery=local` で CWD のみ） | 破壊的変更は受け入れるので実装 & ドキュメントとSkill更新 |
 
 **対応しない（現時点）**
 
