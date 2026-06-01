@@ -881,6 +881,29 @@ public sealed class LintConfigLibraryTests
     }
 
     [Test]
+    public async Task Validate_Exclusions_SameScopeWithMixedPathSeparators_EmitsDuplicateDiagnostic()
+    {
+        var yaml = """
+        exclusions:
+          - file: .github\workflows\ci.yml
+            rules:
+              - template-injection
+          - file: .github/workflows/ci.yml
+            rules:
+              - unpinned-uses
+        """;
+
+        var result = LintConfigLibrary.Validate(yaml, "seiton.yaml");
+
+        await Assert.That(result.IsValid).IsTrue();
+        var duplicateDiagnostics = result.Diagnostics.Where(d =>
+            d.Severity == DiagnosticSeverity.Info
+            && d.Message.Contains("appears 2 times", StringComparison.Ordinal)
+            && d.Message.Contains("ci.yml", StringComparison.Ordinal)).ToArray();
+        await Assert.That(duplicateDiagnostics).HasSingleItem();
+    }
+
+    [Test]
     public async Task Validate_Discovery_SkipAgenticWorkflows_ParsesCorrectly()
     {
         var yaml = """

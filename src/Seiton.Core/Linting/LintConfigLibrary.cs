@@ -342,10 +342,11 @@ public static class LintConfigLibrary
             }
 
             var filePattern = exclusion.File.Trim();
-            var scopeKey = BuildExclusionScopeKey(filePattern, jobs);
+            var normalizedFilePattern = ActionRefHelpers.NormalizePath(filePattern);
+            var scopeKey = BuildExclusionScopeKey(normalizedFilePattern, jobs);
             scopeCounts.TryGetValue(scopeKey, out var seenCount);
             scopeCounts[scopeKey] = seenCount + 1;
-            scopeFilePatterns.TryAdd(scopeKey, filePattern);
+            scopeFilePatterns.TryAdd(scopeKey, normalizedFilePattern);
 
             normalized.Add(new LintExclusion(filePattern, resolvedRules, jobs.Count > 0 ? jobs : null));
         }

@@ -5,7 +5,7 @@ using Seiton.Output;
 
 var frameworkArgs = CliVerboseParser.FilterArgsForFramework(args);
 CliVerboseParser.SetRawArgs(args);
-if (CliOptionSuggester.TryWriteSuggestionsForUnknownOptions(frameworkArgs, Console.Error))
+if (CliOptionSuggester.TryWriteSuggestionsForUnknownOptions(args, Console.Error))
 {
     Environment.ExitCode = ExitCode.InvalidOptions;
     return;

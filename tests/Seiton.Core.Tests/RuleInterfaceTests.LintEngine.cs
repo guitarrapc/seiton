@@ -2756,7 +2756,7 @@ public sealed partial class RuleInterfaceTests
     }
 
     [Test]
-    public async Task LintEngine_RunInputsContextDirectUse_Fix_DoesNotAttach_ForCompositeExpression()
+    public async Task LintEngine_RunInputsContextDirectUse_Fix_Attaches_ForCompositeFormatExpression()
     {
         var yaml = """
         on: workflow_dispatch
