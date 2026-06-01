@@ -131,7 +131,7 @@ seiton install --skills [--target claude|copilot|cursor] [--ci] [--output PATH] 
 ```
 
 - `--skills`: Install agent skill files to the workspace.
-- `--ci`: Install a CI workflow template to `.github/workflows/seiton.yml`.
+- `--ci`: Install a CI workflow template to `.github/workflows/seiton.yml`. The template runs Seiton in Docker on `ubuntu-24.04` with `GITHUB_ACTIONS` and `GITHUB_STEP_SUMMARY` so the default **`github-actions`** output (rich stdout + job summary) applies without an explicit `--format` flag. An optional **commented** `code-scanning` job shows `--format sarif` and `upload-sarif` for GitHub Code Scanning adopters.
 - `--target`: Target agent platform (`claude`, `copilot`, or `cursor`). Defaults to `claude`. Applies only to `--skills`.
   - `claude` → `.claude/skills/seiton/`
   - `copilot` → `.github/instructions/seiton/`

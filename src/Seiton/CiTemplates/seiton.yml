@@ -17,7 +17,6 @@ on:
 
 permissions:
   contents: read
-  security-events: write
 
 jobs:
   lint:
@@ -28,12 +27,43 @@ jobs:
         with:
           persist-credentials: false
 
+      # Default on GitHub Actions: --format github-actions (rich stdout + job summary).
+      # Pin the image tag (e.g. :v0.9.18) instead of :latest for reproducible CI.
       - name: Run seiton
-        run: docker run --rm -v "$PWD:/repo:ro" ghcr.io/guitarrapc/seiton:0.9.18 --format sarif --include-actions > results.sarif
+        run: |
+          docker run --rm \
+            -v "$PWD:/repo:ro" \
+            -e GITHUB_ACTIONS \
+            -e GITHUB_STEP_SUMMARY \
+            ghcr.io/guitarrapc/seiton:latest \
+            --include-actions
 
-      - name: Upload SARIF
-        if: always()
-        uses: github/codeql-action/upload-sarif@03e4368ac7daa2bd82b3e85262f3bf87ee112f57 # v3.36.0
-        with:
-          sarif_file: results.sarif
-          category: seiton
+  # Optional: GitHub Code Scanning (SARIF). Uncomment this job and add workflow permissions:
+  #   permissions:
+  #     contents: read
+  #     security-events: write
+  #
+  # code-scanning:
+  #   runs-on: ubuntu-24.04
+  #   timeout-minutes: 5
+  #   permissions:
+  #     contents: read
+  #     security-events: write
+  #   steps:
+  #     - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+  #       with:
+  #         persist-credentials: false
+  #
+  #     - name: Run seiton (SARIF)
+  #       run: |
+  #         docker run --rm \
+  #           -v "$PWD:/repo:ro" \
+  #           ghcr.io/guitarrapc/seiton:latest \
+  #           --format sarif --include-actions > results.sarif
+  #
+  #     - name: Upload SARIF
+  #       if: always()
+  #       uses: github/codeql-action/upload-sarif@03e4368ac7daa2bd82b3e85262f3bf87ee112f57 # v3.36.0
+  #       with:
+  #         sarif_file: results.sarif
+  #         category: seiton

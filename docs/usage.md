@@ -289,7 +289,7 @@ Install both skill files and CI workflow at once:
 seiton install --skills --ci
 ```
 
-Installed skill files include a `SKILL.md` (agent instruction manifest) and `references/` directory with detailed rule, fix-mode, and configuration documentation that agents can consult. The CI workflow template runs seiton on pull requests and uploads SARIF results to GitHub code scanning.
+Installed skill files include a `SKILL.md` (agent instruction manifest) and `references/` directory with detailed rule, fix-mode, and configuration documentation that agents can consult. The CI workflow template runs Seiton in Docker on pull requests and pushes with the default **`github-actions`** output (job log + job summary). A commented optional job shows how to enable SARIF upload for GitHub Code Scanning.
 
 ---
 

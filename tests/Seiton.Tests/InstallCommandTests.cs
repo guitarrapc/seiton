@@ -491,6 +491,42 @@ public sealed class InstallCommandTests
         }
     }
 
+    [Test]
+    public async Task Run_Ci_Template_ActiveJob_UsesGitHubActionsDefault()
+    {
+        var content = CiWorkflowResources.GetWorkflowTemplate();
+        await Assert.That(content).IsNotNull();
+
+        var activeContent = string.Join('\n', content!.Split('\n').Where(line => !line.TrimStart().StartsWith('#')));
+        await Assert.That(activeContent).Contains("GITHUB_ACTIONS");
+        await Assert.That(activeContent).Contains("GITHUB_STEP_SUMMARY");
+        await Assert.That(activeContent).DoesNotContain("--format sarif");
+    }
+
+    [Test]
+    public async Task Run_Ci_Template_IncludesOptionalSarifJobExample()
+    {
+        var content = CiWorkflowResources.GetWorkflowTemplate();
+        await Assert.That(content).IsNotNull();
+        await Assert.That(content).Contains("code-scanning");
+        await Assert.That(content).Contains("upload-sarif");
+        await Assert.That(content).Contains("--format sarif");
+    }
+
+    [Test]
+    public async Task Run_Ci_Template_DefaultPermissions_AreLintOnly()
+    {
+        var content = CiWorkflowResources.GetWorkflowTemplate();
+        await Assert.That(content).IsNotNull();
+
+        var activeLines = content!.Split('\n')
+            .Where(line => !line.TrimStart().StartsWith('#'))
+            .ToArray();
+
+        await Assert.That(string.Join('\n', activeLines)).Contains("contents: read");
+        await Assert.That(string.Join('\n', activeLines)).DoesNotContain("security-events: write");
+    }
+
     private static string CreateTempDir()
     {
         var dir = Path.Combine(Path.GetTempPath(), "Seiton.Tests", Guid.NewGuid().ToString("N"));

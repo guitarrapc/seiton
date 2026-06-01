@@ -335,7 +335,7 @@ Shared contract reference: `.github/docs/Seiton_CLI_spec.md` §1.7.
 - Synchronous (`int` return); no async I/O needed.
 - Supports two install modes: `--skills` (agent skill files) and `--ci` (CI workflow template). Both can be specified together.
 - Skill files are embedded as `EmbeddedResource` with logical names prefixed `Skills/`.
-- CI workflow template is embedded as `EmbeddedResource` with logical name `CiTemplates/seiton.yml`.
+- CI workflow template is embedded as `EmbeddedResource` with logical name `CiTemplates/seiton.yml`. Default installed workflow: Docker lint job with `GITHUB_ACTIONS` / `GITHUB_STEP_SUMMARY` (implicit `github-actions` format); optional commented SARIF / `upload-sarif` job for Code Scanning.
 - `SkillResources.GetAllSkillFiles()` reads all embedded resources matching the `Skills/` prefix, returns sorted `List<(string RelativePath, string Content)>`.
 - `CiWorkflowResources.GetWorkflowTemplate()` reads the single CI template resource.
 - `ResolveSkillDestination(target, output, cwd)` maps target name (`claude`, `copilot`, `cursor`) to output path; returns `null` for unknown targets.

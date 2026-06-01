@@ -358,9 +358,35 @@ step summary パスは **CI 1 ジョブあたり 1〜2 回**のコールドパ�
 - **API 記述**: GHA では `seiton` のみで Job summary が得られること、Docker は `GITHUB_STEP_SUMMARY` を渡すことを明記。
 - **仕様差分**: §6.5.1 を現状実装に合わせた（以前は phase 2 先行記述でユーザーを誤解させうる状態だった）。
 
-### フェーズ 5 — CI テンプレート（任意・後続）
+### フェーズ 5 — CI テンプレート（Red → Green）✅ 完了
 
-`seiton install --ci` の埋め込みワークフロー例に、SARIF 例に加え **デフォルトで `github-actions` が効く** シンプル例をコメントまたは別 job で記載（実装タイミングは別 PR 可）。
+**実施日**: 2026-06-02
+
+#### テスト（Red → Green）
+
+| テスト | 結果 |
+|---|---|
+| `InstallCommandTests.Run_Ci_Template_ActiveJob_UsesGitHubActionsDefault` | Pass |
+| `InstallCommandTests.Run_Ci_Template_IncludesOptionalSarifJobExample` | Pass |
+| `InstallCommandTests.Run_Ci_Template_DefaultPermissions_AreLintOnly` | Pass |
+| `InstallCommandTests` 全体 | **22/22 Pass** |
+| `Seiton.Tests` 全体 | **268/268 Pass** |
+
+#### 実装概要
+
+- `CiTemplates/seiton.yml` — 既定 `lint` job: Docker + `GITHUB_ACTIONS` + `GITHUB_STEP_SUMMARY` + `--include-actions`（`--format` 省略で `github-actions`）
+- コメントアウトされた `code-scanning` job — SARIF 生成 + `upload-sarif`（Code Scanning 向け）
+- workflow `permissions` は `contents: read` のみ（SARIF job はコメント内で `security-events: write` を案内）
+
+#### ベンチマーク
+
+`src/` のホットパス変更なし（埋め込み YAML のみ）。**DiagnosticOutputBenchmark** F1 234.8 μs / F10 2429.4 μs、Allocated 不変（フェーズ 4 レビュー後と同等、±10% 内）。
+
+#### フェーズ 5 レビュー
+
+- **API**: `seiton install --ci` の CLI 変更なし。生成される workflow が GHA デフォルト形式と一致。
+- **仕様**: `Seiton_CLI_spec.md` §1.7 を更新。
+- **ユーザーファースト**: 有効な job はフラグなしのシンプル lint。SARIF はコメント例で任意採用。
 
 ---
 
@@ -433,6 +459,12 @@ dotnet test
 - **性能**: 変更なし（ドキュメントのみ）。
 - **テスト**: 追加なし。`Seiton.Tests` 264 Pass。
 - **仕様差分**: §6.5.1 を shipping 状態に修正。`::group::` は plan phase 2 参照。
+
+### フェーズ 5
+
+- **性能**: 変更なし（埋め込みテンプレートのみ）。
+- **テスト**: `InstallCommandTests` +3（CI テンプレート内容）。
+- **仕様差分**: §1.7 にテンプレートの既定/任意 SARIF を追記。
 
 ### フェーズ 2 以降（テンプレート）
 
