@@ -296,21 +296,17 @@ internal static class LintConfigYamlParser
 
         foreach (var key in root.Keys)
         {
-            if (key is not null
-                && !string.Equals(key, "rules", StringComparison.Ordinal)
-                && !string.Equals(key, "exclusions", StringComparison.Ordinal)
-                && !string.Equals(key, "fix", StringComparison.Ordinal)
-                && !string.Equals(key, "network", StringComparison.Ordinal)
-                && !string.Equals(key, "output", StringComparison.Ordinal)
-                && !string.Equals(key, "discovery", StringComparison.Ordinal))
+            if (key is null || ConfigTopLevelKeys.IsKnownKey(key))
             {
-                diagnostics.Add(Diag(
-                    ConfigTopLevelKeys.BuildUnknownKeyMessage(key),
-                    DomLine,
-                    1,
-                    key.Length,
-                    filePath));
+                continue;
             }
+
+            diagnostics.Add(Diag(
+                ConfigTopLevelKeys.BuildUnknownKeyMessage(key),
+                DomLine,
+                1,
+                key.Length,
+                filePath));
         }
 
         if (root.TryGetValue("rules", out var rulesObj) && rulesObj is not null)

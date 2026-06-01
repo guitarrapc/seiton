@@ -21,6 +21,18 @@ internal static class ConfigTopLevelKeys
             : $"unknown top-level key '{key}'. Did you mean '{suggested}'?";
     }
 
+    /// <summary>Returns true when the key is a supported top-level lint config section.</summary>
+    public static bool IsKnownKey(string key) => key switch
+    {
+        "rules" => true,
+        "exclusions" => true,
+        "fix" => true,
+        "network" => true,
+        "output" => true,
+        "discovery" => true,
+        _ => false,
+    };
+
     private static string? SuggestTopLevelKey(string key)
     {
         if (string.IsNullOrWhiteSpace(key))

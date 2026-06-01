@@ -1170,6 +1170,25 @@ public sealed class LintConfigLibraryTests
     }
 
     [Test]
+    public async Task Validate_KnownTopLevelKeys_DoNotEmitUnknownKeyDiagnostics()
+    {
+        var yaml = """
+        rules: {}
+        exclusions: []
+        fix: {}
+        network: {}
+        output: {}
+        discovery:
+          skip-agentic-workflows: true
+        """;
+
+        var result = LintConfigLibrary.Validate(yaml, "seiton.yaml");
+
+        await Assert.That(result.IsValid).IsTrue();
+        await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("unknown top-level key", StringComparison.Ordinal))).IsFalse();
+    }
+
+    [Test]
     public async Task GenerateTemplateYaml_IncludesExclusionExamples()
     {
         var yaml = LintConfigLibrary.GenerateTemplateYaml();
