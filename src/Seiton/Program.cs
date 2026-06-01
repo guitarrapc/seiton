@@ -26,7 +26,7 @@ internal class SeitonCli
     /// <param name="oneline">Print each diagnostic on a single line.</param>
     /// <param name="color">Color mode: auto | always | never.</param>
     /// <param name="noColor">Disable color output (overrides --color).</param>
-    /// <param name="verbose">-v, Print progress information to stderr (-v / --verbose).</param>
+    /// <param name="verbose">-v, Print progress information to stderr. Use -vv for more detailed output.</param>
     /// <param name="skipAgenticWorkflows">Skip Agentic Workflow files (with # gh-aw-metadata: header).</param>
     /// <param name="fix">Enable fix mode on the root command.</param>
     /// <param name="dryRun">Print unified diff without modifying files (requires --fix).</param>
