@@ -25,6 +25,7 @@ Options:
   --verbose                    Print progress information to stderr.
   --fix                        Enable fix mode on the root command.
   --dry-run                    Print unified diff without modifying files (requires --fix).
+  --show-diff                  Apply fixes and print unified diff (requires --fix; --dry-run takes precedence).
   --check                      Exit non-zero if fixable diagnostics remain after filtering, without applying fixes (requires --fix).
   --enable-pin-network         Allow network requests to resolve action SHA pins (requires --fix).
   --enable-image-network       Allow network requests to resolve container image digests (requires --fix).
@@ -100,6 +101,14 @@ Use `--dry-run` to preview diffs without modifying files:
 ```sh
 seiton --fix --dry-run
 ```
+
+Recommended workflow: run `--fix --dry-run` first to review changes, then apply with `--fix`. To apply fixes and print the diff in one step (e.g. local development), use `--show-diff`:
+
+```sh
+seiton --fix --show-diff
+```
+
+When both `--dry-run` and `--show-diff` are given, `--dry-run` takes precedence (files are not modified).
 
 Use `--check` to exit non-zero if any fixable diagnostic remains after filtering (for example, after `--min-severity`) without applying fixes:
 
@@ -287,6 +296,7 @@ These flags are valid only when `--fix` is enabled on the root command.
 | Flag | Type | Default | Description |
 |---|---|---|---|
 | `--dry-run` | `bool` | `false` | Print unified diffs to stdout without modifying files. |
+| `--show-diff` | `bool` | `false` | Apply fixes and print unified diffs to stdout. Ignored when `--dry-run` or `--check` is active. |
 | `--check` | `bool` | `false` | Exit non-zero if fixable diagnostics remain after filtering; do not apply fixes. |
 | `--enable-pin-network` | `bool` | `false` | Enable network access for action SHA pinning resolution. |
 | `--enable-image-network` | `bool` | `false` | Enable network access for container image digest resolution. |

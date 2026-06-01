@@ -17,6 +17,7 @@ public sealed class LintConfigLibraryTests
         await Assert.That(yaml.Contains("fix:", StringComparison.Ordinal)).IsTrue();
         await Assert.That(yaml.Contains("network:", StringComparison.Ordinal)).IsTrue();
         await Assert.That(yaml.Contains("output:", StringComparison.Ordinal)).IsTrue();
+        await Assert.That(yaml.Contains("discovery:", StringComparison.Ordinal)).IsTrue();
 
         var rulesLine = lines.FirstOrDefault(x => x.Trim() == "rules:");
         var fixLine = lines.FirstOrDefault(x => x.Trim() == "fix:");
@@ -1135,6 +1136,68 @@ public sealed class LintConfigLibraryTests
 
         await Assert.That(result.IsValid).IsFalse();
         await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("unknown top-level key 'additiveCustomization'", StringComparison.Ordinal))).IsTrue();
+        await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("Did you mean", StringComparison.Ordinal))).IsFalse();
+    }
+
+    [Test]
+    public async Task Validate_UnknownTopLevelKey_Exclude_SuggestsExclusions()
+    {
+        var yaml = """
+        exclude:
+          - file: workflow.yml
+        """;
+
+        var result = LintConfigLibrary.Validate(yaml, "seiton.yaml");
+
+        await Assert.That(result.IsValid).IsFalse();
+        await Assert.That(result.Diagnostics.Any(x =>
+            x.Message == "unknown top-level key 'exclude'. Did you mean 'exclusions'?")).IsTrue();
+    }
+
+    [Test]
+    public async Task Validate_UnknownTopLevelKey_Exclusion_SuggestsExclusions()
+    {
+        var yaml = """
+        exclusion:
+          - file: workflow.yml
+        """;
+
+        var result = LintConfigLibrary.Validate(yaml, "seiton.yaml");
+
+        await Assert.That(result.IsValid).IsFalse();
+        await Assert.That(result.Diagnostics.Any(x =>
+            x.Message == "unknown top-level key 'exclusion'. Did you mean 'exclusions'?")).IsTrue();
+    }
+
+    [Test]
+    public async Task Validate_KnownTopLevelKeys_DoNotEmitUnknownKeyDiagnostics()
+    {
+        var yaml = """
+        rules: {}
+        exclusions: []
+        fix: {}
+        network: {}
+        output: {}
+        discovery:
+          skip-agentic-workflows: true
+        """;
+
+        var result = LintConfigLibrary.Validate(yaml, "seiton.yaml");
+
+        await Assert.That(result.IsValid).IsTrue();
+        await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("unknown top-level key", StringComparison.Ordinal))).IsFalse();
+    }
+
+    [Test]
+    public async Task GenerateTemplateYaml_IncludesExclusionExamples()
+    {
+        var yaml = LintConfigLibrary.GenerateTemplateYaml();
+
+        await Assert.That(yaml.Contains("run-env-context-direct-use", StringComparison.Ordinal)).IsTrue();
+        await Assert.That(yaml.Contains("unpinned-image", StringComparison.Ordinal)).IsTrue();
+        await Assert.That(yaml.Contains("agentics-maintenance.yml", StringComparison.Ordinal)).IsTrue();
+        await Assert.That(yaml.Contains("*.lock.yml", StringComparison.Ordinal)).IsTrue();
+        await Assert.That(yaml.Contains("skip-agentic-workflows", StringComparison.Ordinal)).IsTrue();
     }
 
     [Test]

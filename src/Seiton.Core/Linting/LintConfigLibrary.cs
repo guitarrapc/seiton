@@ -87,13 +87,25 @@ public static class LintConfigLibrary
           #   enabled: true
 
         exclusions:
+          # Glob + jobs scope: exclude rules for specific jobs only
           # - file: .github/workflows/legacy-*.yml
           #   rules:
           #     - runner-no-latest
           #   jobs:
           #     - legacy
-          # File-only exclusion (excludes entire file from rule checks):
+          # One file, multiple rules (entire file, no jobs scope):
+          # - file: .github/workflows/demo.yml
+          #   rules:
+          #     - run-env-context-direct-use
+          #     - unpinned-image
+          # File-only exclusion (skips lint for the entire file):
           # - file: .github/workflows/generated.yml
+          # Agentic Workflow files (# gh-aw-metadata: header or *.lock.yml):
+          # - file: .github/workflows/agentics-maintenance.yml
+          # - file: .github/workflows/*.lock.yml
+
+        discovery:
+          # skip-agentic-workflows: true   # opt-in: skip files with # gh-aw-metadata:
 
         fix:
           defaults:

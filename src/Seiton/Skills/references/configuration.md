@@ -183,7 +183,7 @@ seiton check --verbose
 
 | Condition | Message |
 |-----------|---------|
-| Unknown top-level key | `unknown top-level key '<key>'` |
+| Unknown top-level key | `unknown top-level key '<key>'` or `unknown top-level key '<key>'. Did you mean '<suggested-key>'?` |
 | Unknown rule ID | `unknown rule-id '<id>'. Did you mean '<suggestion>'?` |
 | Invalid severity | `severity must be one of info, warning, error` |
 | Invalid rule option | `unknown rule option '<key>'` |

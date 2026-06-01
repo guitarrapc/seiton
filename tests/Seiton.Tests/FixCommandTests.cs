@@ -1989,6 +1989,132 @@ public sealed class FixCommandTests
         }
     }
 
+    [Test]
+    public async Task Fix_ShowDiff_PrintsUnifiedDiffWhenApplying()
+    {
+        var configPath = CreateConfigFile(
+            """
+            rules:
+              runner-no-latest:
+                enabled: false
+            fix:
+              defaults:
+                job-timeout-minutes: 15
+            """);
+        var filePath = CreateWorkflowFile(
+            """
+            on:
+              pull_request:
+                branches: [main]
+            jobs:
+              test:
+                runs-on: ubuntu-24.04
+                steps:
+                  - run: echo "hello"
+            """);
+
+        try
+        {
+            using var sw = new StringWriter();
+            using var stderr = new StringWriter();
+
+            var exitCode = await FixCommand.RunAsync(
+                [filePath],
+                config: configPath,
+                stdinFilename: "stdin.yml",
+                ignore: [],
+                minSeverity: null,
+                format: OutputFormat.Text,
+                oneline: true,
+                color: ColorMode.Never,
+                noColor: true,
+                verboseLevel: VerboseLevel.Off,
+                dryRun: false,
+                check: false,
+                showDiff: true,
+                enablePinNetwork: false,
+                enableImageNetwork: false,
+                includeActions: false,
+                output: sw,
+                error: stderr);
+
+            await Assert.That(exitCode).IsEqualTo(ExitCode.Success);
+
+            var output = sw.ToString();
+            await Assert.That(output).Contains("permissions:");
+            await Assert.That(output).Contains("timeout-minutes: 15");
+
+            var fixedContent = File.ReadAllText(filePath);
+            await Assert.That(fixedContent).Contains("permissions:");
+            await Assert.That(fixedContent).Contains("timeout-minutes: 15");
+        }
+        finally
+        {
+            DeleteContainingDirectory(filePath);
+            DeleteContainingDirectory(configPath);
+        }
+    }
+
+    [Test]
+    public async Task Fix_ShowDiffAndDryRun_DryRunTakesPrecedence()
+    {
+        var configPath = CreateConfigFile(
+            """
+            rules:
+              runner-no-latest:
+                enabled: false
+            fix:
+              defaults:
+                job-timeout-minutes: 15
+            """);
+        var originalYaml = """
+            on:
+              pull_request:
+                branches: [main]
+            jobs:
+              test:
+                runs-on: ubuntu-24.04
+                steps:
+                  - run: echo "hello"
+            """;
+        var filePath = CreateWorkflowFile(originalYaml);
+
+        try
+        {
+            using var sw = new StringWriter();
+            using var stderr = new StringWriter();
+
+            var exitCode = await FixCommand.RunAsync(
+                [filePath],
+                config: configPath,
+                stdinFilename: "stdin.yml",
+                ignore: [],
+                minSeverity: null,
+                format: OutputFormat.Text,
+                oneline: true,
+                color: ColorMode.Never,
+                noColor: true,
+                verboseLevel: VerboseLevel.Off,
+                dryRun: true,
+                check: false,
+                showDiff: true,
+                enablePinNetwork: false,
+                enableImageNetwork: false,
+                includeActions: false,
+                output: sw,
+                error: stderr);
+
+            await Assert.That(exitCode).IsEqualTo(ExitCode.Success);
+            await Assert.That(sw.ToString()).Contains("timeout-minutes: 15");
+            await Assert.That(File.ReadAllText(filePath)).IsEqualTo(originalYaml);
+        }
+        finally
+        {
+            DeleteContainingDirectory(filePath);
+            DeleteContainingDirectory(configPath);
+        }
+    }
+
     private static string CreateWorkflowFile(string yaml)
     {
         var dir = Path.Combine(Path.GetTempPath(), "Seiton.Tests", Guid.NewGuid().ToString("N"));

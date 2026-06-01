@@ -44,6 +44,7 @@ Lint one or more GitHub Actions YAML files (workflow files and action metadata f
 When `--fix` is specified, the root command switches to fix mode: runs lint, then applies all available fix payloads to the source files in place.
 
 - If `--dry-run` is given, prints unified diffs to stdout without modifying files.
+- If `--show-diff` is given (with `--fix` and without `--dry-run` or `--check`), applies fixes and also prints unified diffs to stdout (same format as `--dry-run`). When both `--dry-run` and `--show-diff` are given, `--dry-run` takes precedence.
 - If `--check` is given, exits with a non-zero code when any fixable diagnostic exists (does not apply fixes). When both `--check` and `--dry-run` are given, `--check` takes precedence (no diffs are printed, no fixes are applied).
 - Network-assisted pin remediation is activated when `fix.pinning.enable-network: true` or `fix.images.enable-network: true` is set in config (or via `--enable-pin-network` / `--enable-image-network` flags).
 
@@ -171,13 +172,14 @@ All flags apply to the default root command unless otherwise noted.
 | Flag | Short | Type | Default | Description |
 |---|---|---|---|---|
 | `--dry-run` | | `bool` | `false` | Print unified diffs to stdout; do not modify files. |
+| `--show-diff` | | `bool` | `false` | Apply fixes and print unified diffs to stdout (same format as `--dry-run`). Ignored when `--dry-run` or `--check` is active. |
 | `--check` | | `bool` | `false` | Exit non-zero if fixable diagnostics remain after filtering; do not apply fixes. |
 | `--enable-pin-network` | | `bool` | `false` | Force-enable network access for action SHA resolution. When omitted, the effective value comes from `fix.pinning.enable-network` in config. |
 | `--enable-image-network` | | `bool` | `false` | Force-enable network access for container image digest resolution. When omitted, the effective value comes from `fix.images.enable-network` in config. |
 
 Operational rule:
 
-- `--dry-run`, `--check`, `--enable-pin-network`, and `--enable-image-network` are valid only when `--fix` is active.
+- `--dry-run`, `--show-diff`, `--check`, `--enable-pin-network`, and `--enable-image-network` are valid only when `--fix` is active.
 - Network-assisted remediation is active when **either** the CLI flag is passed **or** the corresponding config key is `true`. The CLI flag is a force-enable override — it cannot disable a config-enabled setting.
 
 ### 2.4 Init Flags (init subcommand)

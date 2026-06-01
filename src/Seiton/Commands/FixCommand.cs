@@ -27,6 +27,7 @@ internal static class FixCommand
         bool enableImageNetwork,
         bool includeActions,
         bool skipAgenticWorkflows = false,
+        bool showDiff = false,
         TextWriter? output = null,
         TextWriter? error = null)
     {
@@ -279,15 +280,7 @@ internal static class FixCommand
 
                     if (!dryRunYaml.AsSpan().SequenceEqual(utf8Yaml))
                     {
-                        var diff = FixEngine.BuildUnifiedDiffFromBytes(utf8Yaml, dryRunYaml, filePath);
-                        if (diff.Length > 0)
-                        {
-                            // When output format is non-text (json/sarif), diff goes to stderr
-                            // to keep stdout as pure machine-parseable output.
-                            var diffWriter = resolvedFormat == OutputFormat.Text ? outputWriter : errorWriter;
-                            diffWriter.Write(diff);
-                            hasPrintedDiff = true;
-                        }
+                        TryWriteFixDiff(utf8Yaml, dryRunYaml, filePath, resolvedFormat, outputWriter, errorWriter, ref hasPrintedDiff);
                     }
 
                     // Relint the hypothetical fixed YAML to report remaining diagnostics,
@@ -337,6 +330,10 @@ internal static class FixCommand
                 {
                     currentHandle = engine.Check(currentYaml, filePath, fixEnabledLintConfig);
                     File.WriteAllBytes(filePath, currentYaml);
+                    if (showDiff)
+                    {
+                        TryWriteFixDiff(utf8Yaml, currentYaml, filePath, resolvedFormat, outputWriter, errorWriter, ref hasPrintedDiff);
+                    }
                     allDiagnostics.AddRange(currentHandle.Diagnostics.AsSpan());
                 }
                 finally
@@ -703,6 +700,33 @@ internal static class FixCommand
 
     private static readonly IReadOnlyDictionary<string, int> EmptySuppressedByRule =
         new Dictionary<string, int>(StringComparer.Ordinal);
+
+    private static void TryWriteFixDiff(
+        byte[] originalYaml,
+        byte[] fixedYaml,
+        string filePath,
+        OutputFormat resolvedFormat,
+        TextWriter outputWriter,
+        TextWriter errorWriter,
+        ref bool hasPrintedDiff)
+    {
+        if (fixedYaml.AsSpan().SequenceEqual(originalYaml))
+        {
+            return;
+        }
+
+        var diff = FixEngine.BuildUnifiedDiffFromBytes(originalYaml, fixedYaml, filePath);
+        if (diff.Length == 0)
+        {
+            return;
+        }
+
+        // When output format is non-text (json/sarif), diff goes to stderr
+        // to keep stdout as pure machine-parseable output.
+        var diffWriter = resolvedFormat == OutputFormat.Text ? outputWriter : errorWriter;
+        diffWriter.Write(diff);
+        hasPrintedDiff = true;
+    }
 
     /// <summary>
     /// Applies local fixes iteratively: each pass re-lints to get fresh offsets,

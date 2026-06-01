@@ -30,6 +30,7 @@ internal class SeitonCli
     /// <param name="skipAgenticWorkflows">Skip Agentic Workflow files (with # gh-aw-metadata: header).</param>
     /// <param name="fix">Enable fix mode on the root command.</param>
     /// <param name="dryRun">Print unified diff without modifying files (requires --fix).</param>
+    /// <param name="showDiff">Print unified diff after applying fixes (requires --fix; --dry-run takes precedence).</param>
     /// <param name="check">Exit non-zero if fixable diagnostics remain after filtering, without applying fixes (requires --fix).</param>
     /// <param name="enablePinNetwork">Allow network requests to resolve action SHA pins (requires --fix).</param>
     /// <param name="enableImageNetwork">Allow network requests to resolve container image digests (requires --fix).</param>
@@ -49,22 +50,23 @@ internal class SeitonCli
         bool skipAgenticWorkflows = false,
         bool fix = false,
         bool dryRun = false,
+        bool showDiff = false,
         bool check = false,
         bool enablePinNetwork = false,
         bool enableImageNetwork = false,
         bool includeActions = false,
         [Argument] params string[] files)
     {
-        if (!fix && (dryRun || check || enablePinNetwork || enableImageNetwork))
+        if (!fix && (dryRun || showDiff || check || enablePinNetwork || enableImageNetwork))
         {
-            Console.Error.WriteLine("--dry-run, --check, --enable-pin-network, and --enable-image-network require --fix on the root command");
+            Console.Error.WriteLine("--dry-run, --show-diff, --check, --enable-pin-network, and --enable-image-network require --fix on the root command");
             Environment.ExitCode = ExitCode.InvalidOptions;
             return;
         }
 
         var verboseLevel = CliVerboseParser.Resolve(verbose);
         var code = fix
-            ? await FixCommand.RunAsync(files, config, stdinFilename, ignore ?? [], minSeverity, format, oneline, color, noColor, verboseLevel, dryRun, check, enablePinNetwork, enableImageNetwork, includeActions, skipAgenticWorkflows)
+            ? await FixCommand.RunAsync(files, config, stdinFilename, ignore ?? [], minSeverity, format, oneline, color, noColor, verboseLevel, dryRun, check, enablePinNetwork, enableImageNetwork, includeActions, skipAgenticWorkflows, showDiff)
             : CheckCommand.Run(files, config, stdinFilename, ignore ?? [], minSeverity, format, oneline, color, noColor, verboseLevel, includeActions, skipAgenticWorkflows);
 
         if (code != 0) Environment.ExitCode = code;

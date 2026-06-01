@@ -20,6 +20,7 @@ internal static class CliOptionSuggester
         "--skip-agentic-workflows",
         "--fix",
         "--dry-run",
+        "--show-diff",
         "--check",
         "--enable-pin-network",
         "--enable-image-network",

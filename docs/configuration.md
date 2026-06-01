@@ -77,7 +77,7 @@ Seiton validates configuration before linting begins. Invalid configuration caus
 
 | Error condition | Example message |
 |---|---|
-| Unknown top-level key | `unknown top-level key '<key>'` |
+| Unknown top-level key | `unknown top-level key '<key>'` or `unknown top-level key '<key>'. Did you mean '<suggested-key>'?` |
 | Unknown rule ID | `unknown rule-id '<rule-id>'. Did you mean '<suggested-rule-id>'?` |
 | Invalid severity value | `severity must be one of info, warning, error` |
 | Invalid rule-specific key | `unknown rule option '<key>'` |

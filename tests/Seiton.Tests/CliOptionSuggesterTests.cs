@@ -53,4 +53,16 @@ public sealed class CliOptionSuggesterTests
         await Assert.That(message.Contains("Did you mean '--verbose'?", StringComparison.Ordinal)).IsTrue();
         await Assert.That(message.Contains("Try: seiton check -vv --verbose", StringComparison.Ordinal)).IsTrue();
     }
+
+    [Test]
+    public async Task TryWriteSuggestionsForUnknownOptions_ShowDiffTypo_SuggestsKnownOption()
+    {
+        using var error = new StringWriter();
+
+        var wrote = CliOptionSuggester.TryWriteSuggestionsForUnknownOptions(["--show-dif"], error);
+        var message = error.ToString();
+
+        await Assert.That(wrote).IsTrue();
+        await Assert.That(message.Contains("Did you mean '--show-diff'?", StringComparison.Ordinal)).IsTrue();
+    }
 }
