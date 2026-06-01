@@ -185,7 +185,7 @@ exclusions:
 
 **注意**: `file` はスカラー値（単一パターン）。複数パターンが必要な場合は複数エントリで記述する。
 
-`validate-config` 時、正規化後に同一 `file` + 同一 `jobs` スコープの exclusion が複数ある場合、info 診断を出す（例: `exclusion for '.github/workflows/ci.yml' appears 2 times; consider merging rules into one entry`）。自動マージはしない。
+`validate-config` 時、正規化後に同一 `file` + 同一 `jobs` スコープの exclusion が複数ある場合、スコープごとに info 診断を **1 件** 出す（例: `exclusion for '.github/workflows/ci.yml' appears 2 times; consider merging rules into one entry`）。3 件以上重複しても診断は 1 件（最終件数を表示）。自動マージはしない。
 
 ### 2.3.1 `discovery`
 

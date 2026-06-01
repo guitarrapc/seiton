@@ -152,7 +152,6 @@ public sealed class LintConfig
     private static readonly FixConfig DefaultFix = new();
     private static readonly NetworkConfig DefaultNetwork = new();
     private static readonly OutputConfig DefaultOutput = new();
-    private static readonly DiscoveryConfig DefaultDiscovery = new();
 
     /// <summary>
     /// Resets per-call state and updates properties for a new lint run.

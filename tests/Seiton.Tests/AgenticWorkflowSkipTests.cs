@@ -13,6 +13,33 @@ public sealed class AgenticWorkflowSkipTests
     }
 
     [Test]
+    public async Task AgenticWorkflowDetector_HasMetadataInPrefix_DetectsMarkerWithLeadingWhitespace()
+    {
+        var content = "  \t# gh-aw-metadata: {}\n"u8.ToArray();
+        await Assert.That(AgenticWorkflowDetector.HasMetadataInPrefix(content)).IsTrue();
+    }
+
+    [Test]
+    public async Task AgenticWorkflowDetector_HasMetadataInPrefix_EmptyContent_ReturnsFalse()
+    {
+        await Assert.That(AgenticWorkflowDetector.HasMetadataInPrefix([])).IsFalse();
+    }
+
+    [Test]
+    public async Task AgenticWorkflowDetector_HasMetadataInPrefix_NoMarker_ReturnsFalse()
+    {
+        var content = "name: CI\non: push\n"u8.ToArray();
+        await Assert.That(AgenticWorkflowDetector.HasMetadataInPrefix(content)).IsFalse();
+    }
+
+    [Test]
+    public async Task AgenticWorkflowDetector_HasMetadataInPrefix_SimilarCommentWithoutMarker_ReturnsFalse()
+    {
+        var content = "# gh-aw-metadata\nname: test\n"u8.ToArray();
+        await Assert.That(AgenticWorkflowDetector.HasMetadataInPrefix(content)).IsFalse();
+    }
+
+    [Test]
     public async Task AgenticWorkflowDetector_HasMetadataInPrefix_IgnoresAfterTenthLine()
     {
         var lines = Enumerable.Repeat("# comment\n", 10).Append("# gh-aw-metadata: {}\n");

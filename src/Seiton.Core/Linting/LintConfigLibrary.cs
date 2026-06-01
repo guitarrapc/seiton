@@ -286,6 +286,7 @@ public static class LintConfigLibrary
         var normalized = new List<LintExclusion>(exclusions.Count);
         var diagnostics = new List<Diagnostic>();
         var scopeCounts = new Dictionary<string, int>(StringComparer.Ordinal);
+        var scopeFilePatterns = new Dictionary<string, string>(StringComparer.Ordinal);
 
         for (var i = 0; i < exclusions.Count; i++)
         {
@@ -344,16 +345,24 @@ public static class LintConfigLibrary
             var scopeKey = BuildExclusionScopeKey(filePattern, jobs);
             scopeCounts.TryGetValue(scopeKey, out var seenCount);
             scopeCounts[scopeKey] = seenCount + 1;
-            if (seenCount >= 1)
-            {
-                diagnostics.Add(new Diagnostic(
-                    DiagnosticSeverity.Info,
-                    $"exclusion for '{filePattern}' appears {seenCount + 1} times; consider merging rules into one entry",
-                    new TextRange(0, 1, 1, 1, 1, 2),
-                    FilePath: filePath));
-            }
+            scopeFilePatterns.TryAdd(scopeKey, filePattern);
 
             normalized.Add(new LintExclusion(filePattern, resolvedRules, jobs.Count > 0 ? jobs : null));
+        }
+
+        foreach (var (scopeKey, count) in scopeCounts)
+        {
+            if (count <= 1)
+            {
+                continue;
+            }
+
+            var filePattern = scopeFilePatterns[scopeKey];
+            diagnostics.Add(new Diagnostic(
+                DiagnosticSeverity.Info,
+                $"exclusion for '{filePattern}' appears {count} times; consider merging rules into one entry",
+                new TextRange(0, 1, 1, 1, 1, 2),
+                FilePath: filePath));
         }
 
         return new NormalizedExclusions(normalized, diagnostics.ToArray());

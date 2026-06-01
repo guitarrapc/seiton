@@ -770,10 +770,114 @@ public sealed class LintConfigLibraryTests
         var result = LintConfigLibrary.Validate(yaml, "seiton.yaml");
 
         await Assert.That(result.IsValid).IsTrue();
+        var duplicateDiagnostics = result.Diagnostics.Where(d =>
+            d.Severity == DiagnosticSeverity.Info
+            && d.Message.Contains("appears", StringComparison.Ordinal)
+            && d.Message.Contains("matrix-secret.yaml", StringComparison.Ordinal)).ToArray();
+        await Assert.That(duplicateDiagnostics).HasSingleItem();
+        await Assert.That(duplicateDiagnostics[0].Message.Contains("appears 2 times", StringComparison.Ordinal)).IsTrue();
+    }
+
+    [Test]
+    public async Task Validate_Exclusions_TripleDuplicateScope_EmitsSingleInfoDiagnostic()
+    {
+        var yaml = """
+        exclusions:
+          - file: .github/workflows/ci.yml
+            rules:
+              - template-injection
+          - file: .github/workflows/ci.yml
+            rules:
+              - unpinned-uses
+          - file: .github/workflows/ci.yml
+            rules:
+              - credentials
+        """;
+
+        var result = LintConfigLibrary.Validate(yaml, "seiton.yaml");
+
+        await Assert.That(result.IsValid).IsTrue();
+        var duplicateDiagnostics = result.Diagnostics.Where(d =>
+            d.Severity == DiagnosticSeverity.Info
+            && d.Message.Contains("appears", StringComparison.Ordinal)
+            && d.Message.Contains("ci.yml", StringComparison.Ordinal)).ToArray();
+        await Assert.That(duplicateDiagnostics).HasSingleItem();
+        await Assert.That(duplicateDiagnostics[0].Message.Contains("appears 3 times", StringComparison.Ordinal)).IsTrue();
+    }
+
+    [Test]
+    public async Task Validate_Exclusions_UniqueScopes_EmitsNoDuplicateDiagnostic()
+    {
+        var yaml = """
+        exclusions:
+          - file: .github/workflows/ci.yml
+            rules:
+              - template-injection
+          - file: .github/workflows/release.yml
+            rules:
+              - unpinned-uses
+        """;
+
+        var result = LintConfigLibrary.Validate(yaml, "seiton.yaml");
+
+        await Assert.That(result.IsValid).IsTrue();
         await Assert.That(result.Diagnostics.Any(d =>
             d.Severity == DiagnosticSeverity.Info
+            && d.Message.Contains("appears", StringComparison.Ordinal))).IsFalse();
+    }
+
+    [Test]
+    public async Task Validate_Exclusions_SameFileDifferentJobsScopes_EmitsNoDuplicateDiagnostic()
+    {
+        var yaml = """
+        exclusions:
+          - file: .github/workflows/ci.yml
+            jobs:
+              - build
+            rules:
+              - template-injection
+          - file: .github/workflows/ci.yml
+            jobs:
+              - deploy
+            rules:
+              - unpinned-uses
+        """;
+
+        var result = LintConfigLibrary.Validate(yaml, "seiton.yaml");
+
+        await Assert.That(result.IsValid).IsTrue();
+        await Assert.That(result.Diagnostics.Any(d =>
+            d.Severity == DiagnosticSeverity.Info
+            && d.Message.Contains("appears", StringComparison.Ordinal))).IsFalse();
+    }
+
+    [Test]
+    public async Task Validate_Exclusions_SameFileSameJobsDifferentOrder_EmitsDuplicateDiagnostic()
+    {
+        var yaml = """
+        exclusions:
+          - file: .github/workflows/ci.yml
+            jobs:
+              - build
+              - deploy
+            rules:
+              - template-injection
+          - file: .github/workflows/ci.yml
+            jobs:
+              - deploy
+              - build
+            rules:
+              - unpinned-uses
+        """;
+
+        var result = LintConfigLibrary.Validate(yaml, "seiton.yaml");
+
+        await Assert.That(result.IsValid).IsTrue();
+        var duplicateDiagnostics = result.Diagnostics.Where(d =>
+            d.Severity == DiagnosticSeverity.Info
             && d.Message.Contains("appears 2 times", StringComparison.Ordinal)
-            && d.Message.Contains("matrix-secret.yaml", StringComparison.Ordinal))).IsTrue();
+            && d.Message.Contains("ci.yml", StringComparison.Ordinal)).ToArray();
+        await Assert.That(duplicateDiagnostics).HasSingleItem();
     }
 
     [Test]
