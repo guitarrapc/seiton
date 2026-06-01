@@ -368,7 +368,7 @@ githubactions-lab での運用は、初回 83 issues → コンフィグ調整 +
 | suppression が verbose 時のみ | 常時集計してサマリー suffix に反映 |
 | summary レベルで per-file 出力 | `LogFileProgress` は `-vv` のみ |
 
-### フェーズ 3 — P3: 低コスト polish
+### フェーズ 3 — P3: 低コスト polish ✅ 完了
 
 | タスク |
 |--------|
@@ -376,6 +376,51 @@ githubactions-lab での運用は、初回 83 issues → コンフィグ調整 +
 | config typo `Did you mean` |
 | `--show-diff`（任意） |
 | usage / SKILL ドキュメント更新 |
+
+#### 実装内容
+
+- **init テンプレ**: `exclusions:` に 1 ファイル × 複数ルール、Agentic Workflow（`*.lock.yml`）、`discovery.skip-agentic-workflows` のコメント例を追加。
+- **config typo ヒント**: 未知 top-level key に Levenshtein 距離（max 5、6 候補のみ）で `Did you mean 'exclusions'?` を付与（`exclude`, `exclusion` 等）。
+- **`--show-diff`**: `--fix` 適用後に dry-run と同形式の unified diff を stdout に出力。`--dry-run` / `--check` 併用時は従来どおり dry-run / check を優先。
+- **ドキュメント**: `Seiton_CLI_spec.md`, `docs/configuration.md`, `docs/usage.md`, SKILL / fix-mode 参照を同期。
+
+#### 変更ファイル
+
+- `src/Seiton.Core/Linting/ConfigTopLevelKeys.cs`（新規）
+- `src/Seiton.Core/Linting/LintConfigYamlParser.cs`
+- `src/Seiton.Core/Linting/LintConfigLibrary.cs`
+- `src/Seiton/Commands/FixCommand.cs`, `src/Seiton/Program.cs`, `src/Seiton/Cli/CliOptionSuggester.cs`
+- `tests/Seiton.Core.Tests/LintConfigLibraryTests.cs`
+- `tests/Seiton.Tests/FixCommandTests.cs`, `tests/Seiton.Tests/CliOptionSuggesterTests.cs`
+- 仕様・ドキュメント（上記）
+
+#### ベンチマーク（LintConfigBenchmark, ShortRun, フェーズ 2 後 → フェーズ 3 後）
+
+| Complexity | Benchmark | Mean (phase 2*) | Mean (phase 3) | Δ Mean | Allocated |
+|------------|-----------|-----------------|----------------|--------|-----------|
+| Minimal | Parse | ~943 ns† | 943.7 ns | — | 1.3 KB |
+| Minimal | Validate | ~1,588 ns† | 1,587.9 ns | — | 4.46 KB |
+| Typical | Parse | — | 15,375 ns | — | 14.09 KB |
+| Typical | Validate | — | 17,965 ns | — | 24.2 KB |
+| Heavy | Parse | — | 39,279 ns | — | 30.51 KB |
+| Heavy | Validate | — | 44,709 ns | — | 55.68 KB |
+
+\* フェーズ 2 後の LintConfig 専用ベースライン未計測。実装前スナップショット（Typical Parse 14,025 ns / Validate 16,477 ns、Heavy Parse 34,965 ns / Validate 41,250 ns）と比較しても ShortRun ばらつき範囲内。
+
+**性能評価**: 有効 config の parse/validate ホットパスに変更なし（typo 提案は未知 key の error path のみ）。`--show-diff` は opt-in で default fix パスは `if (showDiff)` 1 分岐のみ。Allocated 不変。
+
+#### レビュー指摘と対応
+
+| 指摘 | 対応 |
+|------|------|
+| `exclude` は Levenshtein 閾値 2 では距離 5 で不一致 | top-level key 専用に maxDistance=5（6 候補のみ、error path） |
+| `showDiff` optional 引数の位置 | required 引数の後（`skipAgenticWorkflows` 以降）に移動 |
+| dry-run と show-diff の diff 重複 | `TryWriteFixDiff` に共通化、dry-run 優先をテストで固定 |
+| init テンプレに discovery 例不足 | `discovery.skip-agentic-workflows` コメントを追加 |
+
+#### テスト
+
+- `dotnet test` — Seiton.Core.Tests / Seiton.Tests 全通（2269+）。Playground E2E は環境タイムアウト 7 件（本変更と無関係）。
 
 ---
 
@@ -387,8 +432,8 @@ githubactions-lab での運用は、初回 83 issues → コンフィグ調整 +
 - [x] `Seiton_CLI_spec.md` — verbose レベル、oneline サマリー、skip-agentic
 - [x] `Seiton_config_spec.md` — 重複 exclusion 警告、discovery.skip-agentic-workflows
 - [x] `docs/rules.md` — bot-conditions Notes
-- [ ] `docs/configuration.md` — エラーメッセージ、exclusions 例（P3）
-- [ ] `docs/usage.md` — verbose / fix ワークフロー（P3）
+- [x] `docs/configuration.md` — エラーメッセージ、exclusions 例（P3）
+- [x] `docs/usage.md` — verbose / fix ワークフロー（P3）
 
 ---
 

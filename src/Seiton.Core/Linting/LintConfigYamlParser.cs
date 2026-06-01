@@ -305,7 +305,7 @@ internal static class LintConfigYamlParser
                 && !string.Equals(key, "discovery", StringComparison.Ordinal))
             {
                 diagnostics.Add(Diag(
-                    $"unknown top-level key '{key}'",
+                    ConfigTopLevelKeys.BuildUnknownKeyMessage(key),
                     DomLine,
                     1,
                     key.Length,
