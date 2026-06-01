@@ -152,16 +152,70 @@ warning[unpinned-uses]: ...
 
 test-first-development（`.claude/skills/test-first-development/SKILL.md`）に従う。各フェーズ完了時に **同一コマンドでテストを再実行**し、リグレッションがないことを確認する。
 
-### フェーズ 0 — ベースライン
+### フェーズ 0 — ベースライン ✅ 完了
 
-実装前に記録する:
+**実施日**: 2026-06-02  
+**コミット**: （フェーズ 0 コミット後に SHA を追記）
+
+#### 実施内容
+
+1. `DiagnosticOutputBenchmark` を追加（`github-actions` 実装前後の formatter 比較用。`Seiton.Benchmark` → `Seiton` 参照を追加）。
+2. テスト・ベンチマークを実行し、数値を記録。
 
 ```shell
 dotnet test
-cd src/Seiton.Benchmark && dotnet run -c Release
+dotnet test --project tests/Seiton.Tests
+cd src/Seiton.Benchmark && dotnet run -c Release -- -f "*CoreLint*" "*CoreParsing*" "*DiagnosticOutput*"
 ```
 
-`BenchmarkDotNet.Artifacts/results/` の直近レポートをベースラインとする（CLI 出力変更は lint パスに触れないため、Core ベンチは据え置き想定。フォーマッタ専用の軽量テストで十分なら新規ベンチは不要）。
+レポート（ローカル、gitignore 対象）: `src/Seiton.Benchmark/BenchmarkDotNet.Artifacts/results/*-report-default.md`  
+環境: Windows 11, AMD Ryzen 9 7950X3D, .NET 10.0.8, BenchmarkDotNet ShortRun（`CI` 未設定時）。
+
+#### テスト結果
+
+| プロジェクト | 結果 | 件数 |
+|---|---|---|
+| `Seiton.Core.Tests` | Passed | （ソリューション合算に含む） |
+| `Seiton.Tests` | Passed | 243 / 243 |
+| `Seiton.Update.Tests` | Passed | （ソリューション合算に含む） |
+| `Seiton.Playground.Tests` | **Failed 7** | 2316 succeeded, 7 failed（本フェーズの変更とは無関係。Playground UI テスト。フェーズ 1 以降も CLI 変更のリグレッション判定は `Seiton.Tests` + `Seiton.Core.Tests` を主とする） |
+| **合計** | 2323 tests, 7 failed |  |
+
+#### ベンチマーク基準値（Mean / Allocated）
+
+**CoreLintBenchmark** — parse + lint（変更監視用）
+
+| Size | FixEnabled | Mean | Allocated |
+|---|---|---:|---:|
+| Small | false | 63.25 μs | 8.7 KB |
+| Small | true | 72.58 μs | 10.16 KB |
+| Medium | false | 1,388.97 μs | 68.9 KB |
+| Medium | true | 2,008.84 μs | 82.26 KB |
+| Large | false | 21,075.57 μs | 327.41 KB |
+| Large | true | 31,627.99 μs | 382.26 KB |
+
+**CoreParsingBenchmark** — parser（変更監視用）
+
+| Size | Method | Mean | Allocated |
+|---|---|---:|---:|
+| Small | WorkflowParser.Parse | 46.676 μs | 3.88 KB |
+| Medium | WorkflowParser.Parse | 1,123.578 μs | 35.59 KB |
+| Large | WorkflowParser.Parse | 18,368.841 μs | 180.05 KB |
+
+**DiagnosticOutputBenchmark** — `DiagnosticFormatter` text rich（**本機能の主比較対象**）
+
+| Count | ファイル数 | Mean | Allocated | 備考 |
+|---|---|---:|---:|---|
+| F1 | 1 | 225.9 μs | 117.5 KB | Medium ワークフロー 1 件 lint 後の全診断をフォーマット |
+| F10 | 10 | 2,237.1 μs | 1136.94 KB | 同上 × 10 |
+
+フェーズ 2–3 完了時は上記 **DiagnosticOutputBenchmark** を必ず再実行し、Mean / Allocated が **+10% 以内**であること。CoreLint / CoreParsing は formatter-only 変更なら変化なしが期待。
+
+#### フェーズ 0 レビュー
+
+- **API**: 本フェーズはベンチ追加のみ。ユーザー向け CLI 変更なし。
+- **仕様**: `plan_format.md` / `Seiton_CLI_spec.md` との差分なし。
+- **性能**: ベンチ追加による Core パスへの影響なし（別プロセス・別ベンチクラス）。
 
 ### フェーズ 1 — 形式解決（Red → Green）
 
@@ -262,7 +316,15 @@ dotnet test
 
 ## 実装後記録（テンプレート）
 
-実装 PR では以下を埋める:
+各フェーズ完了時に以下を追記する。
+
+### フェーズ 0
+
+- **性能**: 上記ベースラインを確立。`DiagnosticOutputBenchmark` を新設（従来 formatter 専用ベンチなし）。CoreLint / CoreParsing は lint パス監視用。変化なし（新規計測のみ）。
+- **テスト**: 新規テストなし。`Seiton.Tests` 243 件パス。Playground 7 失敗は既知・別系統。
+- **仕様差分**: なし。
+
+### フェーズ 1 以降（テンプレート）
 
 - **性能**: ベースライン比較結果（Mean / Allocated）。変化があれば理由と対策。
 - **テスト**: 追加したテストクラス・メソッド一覧。

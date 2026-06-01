@@ -11,6 +11,7 @@
   <ItemGroup>
     <ProjectReference Include="..\Seiton.Core\Seiton.Core.csproj" />
     <ProjectReference Include="..\Seiton.Playground.Core\Seiton.Playground.Core.csproj" />
+    <ProjectReference Include="..\Seiton\Seiton.csproj" />
   </ItemGroup>
 
 </Project>
