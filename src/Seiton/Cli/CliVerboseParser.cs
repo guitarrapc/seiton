@@ -50,6 +50,15 @@ internal static class CliVerboseParser
         var filtered = new List<string>(args.Length);
         for (var i = 0; i < args.Length; i++)
         {
+            if (args[i] == "--")
+            {
+                for (; i < args.Length; i++)
+                {
+                    filtered.Add(args[i]);
+                }
+                break;
+            }
+
             if (args[i] == "-vv")
             {
                 continue;
@@ -91,6 +100,11 @@ internal static class CliVerboseParser
     {
         for (var i = 0; i < args.Length; i++)
         {
+            if (args[i] == "--")
+            {
+                break;
+            }
+
             if (args[i] == "-vv")
             {
                 return true;

@@ -128,7 +128,14 @@ internal static class CheckCommand
                 using var result = engine.Check(utf8Yaml, filePath, lintConfig);
                 allDiagnostics.AddRange(result.Diagnostics.AsSpan());
                 sourceMap?.TryAdd(filePath, utf8Yaml);
-                AccumulateSuppression(result.SuppressionSummary, ref totalSuppressed, ref suppressedByRule);
+                if (verboseLogger.IsEnabled)
+                {
+                    AccumulateSuppression(result.SuppressionSummary, ref totalSuppressed, ref suppressedByRule);
+                }
+                else
+                {
+                    totalSuppressed += result.SuppressionSummary.TotalSuppressed;
+                }
 
                 if (verboseLogger.IsEnabled)
                 {
@@ -223,7 +230,14 @@ internal static class CheckCommand
                     excludedCount++;
                 }
 
-                AccumulateSuppression(slots[i].SuppressionSummary, ref totalSuppressed, ref suppressedByRule);
+                if (verboseLogger.IsEnabled)
+                {
+                    AccumulateSuppression(slots[i].SuppressionSummary, ref totalSuppressed, ref suppressedByRule);
+                }
+                else
+                {
+                    totalSuppressed += slots[i].SuppressionSummary.TotalSuppressed;
+                }
 
                 if (verboseLogger.IsEnabled)
                 {

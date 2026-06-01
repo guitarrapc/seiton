@@ -178,7 +178,14 @@ internal static class FixCommand
                 {
                     using var handle = engine.Check(utf8Yaml, filePath, fixEnabledLintConfig);
                     lintDiagnostics = handle.CopyDiagnostics();
-                    CheckCommand.AccumulateSuppression(handle.SuppressionSummary, ref totalSuppressed, ref suppressedByRule);
+                    if (verboseLogger.IsEnabled)
+                    {
+                        CheckCommand.AccumulateSuppression(handle.SuppressionSummary, ref totalSuppressed, ref suppressedByRule);
+                    }
+                    else
+                    {
+                        totalSuppressed += handle.SuppressionSummary.TotalSuppressed;
+                    }
 
                     if (verboseLogger.IsEnabled)
                     {
