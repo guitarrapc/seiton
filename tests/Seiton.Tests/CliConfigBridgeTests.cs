@@ -1,10 +1,170 @@
 using Seiton.Config;
+using Seiton.Output;
 
 namespace Seiton.Tests;
 
 [NotInParallel("ProcessState")]
 public sealed class CliConfigBridgeTests
 {
+    [Test]
+    public async Task ResolveOutputFormat_GitHubActionsEnv_ReturnsGitHubActions()
+    {
+        var originalFormat = Environment.GetEnvironmentVariable("SEITON_FORMAT");
+        var originalGha = Environment.GetEnvironmentVariable("GITHUB_ACTIONS");
+        try
+        {
+            Environment.SetEnvironmentVariable("SEITON_FORMAT", "github-actions");
+            Environment.SetEnvironmentVariable("GITHUB_ACTIONS", null);
+
+            var resolved = CliConfigBridge.ResolveOutputFormat(OutputFormat.Text);
+
+            await Assert.That(resolved).IsEqualTo(OutputFormat.GitHubActions);
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable("SEITON_FORMAT", originalFormat);
+            Environment.SetEnvironmentVariable("GITHUB_ACTIONS", originalGha);
+        }
+    }
+
+    [Test]
+    public async Task ResolveOutputFormat_GitHubActionsEnvUnset_DefaultText()
+    {
+        var originalFormat = Environment.GetEnvironmentVariable("SEITON_FORMAT");
+        var originalGha = Environment.GetEnvironmentVariable("GITHUB_ACTIONS");
+        try
+        {
+            Environment.SetEnvironmentVariable("SEITON_FORMAT", null);
+            Environment.SetEnvironmentVariable("GITHUB_ACTIONS", null);
+
+            var resolved = CliConfigBridge.ResolveOutputFormat(OutputFormat.Text);
+
+            await Assert.That(resolved).IsEqualTo(OutputFormat.Text);
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable("SEITON_FORMAT", originalFormat);
+            Environment.SetEnvironmentVariable("GITHUB_ACTIONS", originalGha);
+        }
+    }
+
+    [Test]
+    public async Task ResolveOutputFormat_GitHubActionsRunner_DefaultGitHubActions()
+    {
+        var originalFormat = Environment.GetEnvironmentVariable("SEITON_FORMAT");
+        var originalGha = Environment.GetEnvironmentVariable("GITHUB_ACTIONS");
+        try
+        {
+            Environment.SetEnvironmentVariable("SEITON_FORMAT", null);
+            Environment.SetEnvironmentVariable("GITHUB_ACTIONS", "true");
+
+            var resolved = CliConfigBridge.ResolveOutputFormat(OutputFormat.Text);
+
+            await Assert.That(resolved).IsEqualTo(OutputFormat.GitHubActions);
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable("SEITON_FORMAT", originalFormat);
+            Environment.SetEnvironmentVariable("GITHUB_ACTIONS", originalGha);
+        }
+    }
+
+    [Test]
+    public async Task ResolveOutputFormat_ExplicitJson_IgnoresGitHubActionsEnv()
+    {
+        var originalGha = Environment.GetEnvironmentVariable("GITHUB_ACTIONS");
+        try
+        {
+            Environment.SetEnvironmentVariable("GITHUB_ACTIONS", "true");
+
+            var resolved = CliConfigBridge.ResolveOutputFormat(OutputFormat.Json);
+
+            await Assert.That(resolved).IsEqualTo(OutputFormat.Json);
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable("GITHUB_ACTIONS", originalGha);
+        }
+    }
+
+    [Test]
+    public async Task ResolveOutputFormat_SeatonFormatText_OnGitHubActionsRunner_ReturnsText()
+    {
+        var originalFormat = Environment.GetEnvironmentVariable("SEITON_FORMAT");
+        var originalGha = Environment.GetEnvironmentVariable("GITHUB_ACTIONS");
+        try
+        {
+            Environment.SetEnvironmentVariable("SEITON_FORMAT", "text");
+            Environment.SetEnvironmentVariable("GITHUB_ACTIONS", "true");
+
+            var resolved = CliConfigBridge.ResolveOutputFormat(OutputFormat.Text);
+
+            await Assert.That(resolved).IsEqualTo(OutputFormat.Text);
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable("SEITON_FORMAT", originalFormat);
+            Environment.SetEnvironmentVariable("GITHUB_ACTIONS", originalGha);
+        }
+    }
+
+    [Test]
+    public async Task ResolveOutputFormat_ExplicitTextFlag_OnGitHubActionsRunner_ReturnsText()
+    {
+        var originalGha = Environment.GetEnvironmentVariable("GITHUB_ACTIONS");
+        try
+        {
+            Environment.SetEnvironmentVariable("GITHUB_ACTIONS", "true");
+
+            var resolved = CliConfigBridge.ResolveOutputFormat(OutputFormat.Text, formatExplicitlySet: true);
+
+            await Assert.That(resolved).IsEqualTo(OutputFormat.Text);
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable("GITHUB_ACTIONS", originalGha);
+        }
+    }
+
+    [Test]
+    public async Task ResolveOutputFormat_ExplicitGitHubActionsFlag_ReturnsGitHubActions()
+    {
+        var originalGha = Environment.GetEnvironmentVariable("GITHUB_ACTIONS");
+        try
+        {
+            Environment.SetEnvironmentVariable("GITHUB_ACTIONS", null);
+
+            var resolved = CliConfigBridge.ResolveOutputFormat(OutputFormat.GitHubActions);
+
+            await Assert.That(resolved).IsEqualTo(OutputFormat.GitHubActions);
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable("GITHUB_ACTIONS", originalGha);
+        }
+    }
+
+    [Test]
+    public async Task ResolveOutputFormat_AutoDefaultDisabled_OnGitHubActionsRunner_ReturnsText()
+    {
+        var originalFormat = Environment.GetEnvironmentVariable("SEITON_FORMAT");
+        var originalGha = Environment.GetEnvironmentVariable("GITHUB_ACTIONS");
+        try
+        {
+            Environment.SetEnvironmentVariable("SEITON_FORMAT", null);
+            Environment.SetEnvironmentVariable("GITHUB_ACTIONS", "true");
+
+            var resolved = CliConfigBridge.ResolveOutputFormat(OutputFormat.Text, allowGitHubActionsAutoDefault: false);
+
+            await Assert.That(resolved).IsEqualTo(OutputFormat.Text);
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable("SEITON_FORMAT", originalFormat);
+            Environment.SetEnvironmentVariable("GITHUB_ACTIONS", originalGha);
+        }
+    }
+
     [Test]
     public async Task DiscoverConfigPath_FoundInCurrentDirectory_ReportsZeroLevelsWalked()
     {

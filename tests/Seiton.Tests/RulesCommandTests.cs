@@ -78,8 +78,50 @@ public sealed class RulesCommandTests
             error: stderr);
 
         await Assert.That(exitCode).IsEqualTo(ExitCode.InvalidOptions);
-        await Assert.That(stderr.ToString()).Contains("SARIF output is not supported");
+        await Assert.That(stderr.ToString()).Contains("SARIF");
         await Assert.That(stdout.ToString()).IsEqualTo(string.Empty);
+    }
+
+    [Test]
+    public async Task Run_GitHubActionsFormat_WritesErrorToInjectedWriter()
+    {
+        using var stdout = new StringWriter();
+        using var stderr = new StringWriter();
+
+        var exitCode = RulesCommand.Run(
+            config: null,
+            format: OutputFormat.GitHubActions,
+            output: stdout,
+            error: stderr);
+
+        await Assert.That(exitCode).IsEqualTo(ExitCode.InvalidOptions);
+        await Assert.That(stderr.ToString()).Contains("github-actions");
+        await Assert.That(stdout.ToString()).IsEqualTo(string.Empty);
+    }
+
+    [Test]
+    public async Task Run_TextFormat_OnGitHubActionsRunner_RemainsTextAndSucceeds()
+    {
+        var originalGha = Environment.GetEnvironmentVariable("GITHUB_ACTIONS");
+        using var stdout = new StringWriter();
+        using var stderr = new StringWriter();
+        try
+        {
+            Environment.SetEnvironmentVariable("GITHUB_ACTIONS", "true");
+
+            var exitCode = RulesCommand.Run(
+                config: null,
+                format: OutputFormat.Text,
+                output: stdout,
+                error: stderr);
+
+            await Assert.That(exitCode).IsEqualTo(ExitCode.Success);
+            await Assert.That(stdout.ToString()).Contains("rules total");
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable("GITHUB_ACTIONS", originalGha);
+        }
     }
 
     [Test]

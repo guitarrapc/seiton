@@ -18,7 +18,7 @@ Options:
   --stdin-filename <string>    Filename used when reading from stdin (-). [Default: @"<stdin>"]
   --ignore <string[]?>         Substring patterns for messages to ignore (case-insensitive). [Default: null]
   --min-severity <string?>     Minimum severity to report: error | warning | info. [Default: null]
-  --format <OutputFormat>      Output format: text | json | sarif. [Default: Text]
+  --format <OutputFormat>      Output format: text | json | sarif | github-actions. [Default: Text; github-actions on GHA]
   --oneline                    Print each diagnostic on a single line.
   --color <ColorMode>          Color mode: auto | always | never. [Default: Auto]
   --no-color                   Disable color output (overrides --color).
@@ -289,7 +289,7 @@ Install both skill files and CI workflow at once:
 seiton install --skills --ci
 ```
 
-Installed skill files include a `SKILL.md` (agent instruction manifest) and `references/` directory with detailed rule, fix-mode, and configuration documentation that agents can consult. The CI workflow template runs seiton on pull requests and uploads SARIF results to GitHub code scanning.
+Installed skill files include a `SKILL.md` (agent instruction manifest) and `references/` directory with detailed rule, fix-mode, and configuration documentation that agents can consult. The CI workflow template runs Seiton in Docker on pull requests and pushes with the default **`github-actions`** output (job log + job summary). A commented optional job shows how to enable SARIF upload for GitHub Code Scanning.
 
 ---
 
@@ -327,8 +327,8 @@ These flags are valid only when `--fix` is enabled on the root command.
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
-| `--format` | `text\|json\|sarif` | `text` | Output format for diagnostics. |
-| `--oneline` | `bool` | `false` | Emit one diagnostic per line (text format only). |
+| `--format` | `text\|json\|sarif\|github-actions` | `text` (see below) | Output format for diagnostics. |
+| `--oneline` | `bool` | `false` | Emit one diagnostic per line (`text` format only). |
 | `--color` | `auto\|always\|never` | `auto` | Color output control. |
 | `--no-color` | `bool` | `false` | Alias for `--color=never`. |
 | `--verbose` | `bool` | `false` | Enable verbose progress output to stderr. |
@@ -342,7 +342,7 @@ The following environment variables are recognized. A flag always takes preceden
 | Environment Variable | Equivalent | Description |
 |---|---|---|
 | `SEITON_CONFIG` | `--config` | Config file path. |
-| `SEITON_FORMAT` | `--format` | Output format (`text`, `json`, `sarif`). |
+| `SEITON_FORMAT` | `--format` | Output format (`text`, `json`, `sarif`, `github-actions`). |
 | `SEITON_NO_COLOR` | `--no-color` | Any non-empty value disables color. |
 | `NO_COLOR` | `--no-color` | Standard `NO_COLOR` convention (fallback). |
 | `SEITON_GITHUB_TOKEN` | (internal) | GitHub API token for online rules and network-assisted remediation. Takes priority over `GITHUB_TOKEN`. |
@@ -350,11 +350,43 @@ The following environment variables are recognized. A flag always takes preceden
 
 When `CI` is set, automatic color detection behaves as `never`.
 
+When `GITHUB_ACTIONS` is set and you do not pass an explicit `--format` (or `SEITON_FORMAT`), the default output format is **`github-actions`** instead of `text`. Other CI systems keep `text`. Use `--format text` to force the classic flat log on GitHub Actions.
+
 ---
 
 ## Output Formats
 
-### Text (default)
+### GitHub Actions (`github-actions`)
+
+Optimized for [GitHub Actions](https://docs.github.com/en/actions): readable diagnostics on stdout and a Markdown block on the job summary tab. This is the **default on GitHub Actions runners** when `--format` is omitted.
+
+**Job log (stdout)** — same rich layout as **text** (snippets and help lines). Color is off. Per-file log folding via `::group::` is planned; see `.github/docs/plan_format.md` phase 2.
+
+**Job summary** — when `GITHUB_STEP_SUMMARY` points to a **writable** file (normal on `ubuntu-latest` and other GitHub-hosted runners), Seiton **appends** UTF-8 Markdown with LF line endings:
+
+- A `## Seiton` heading once per process run (fix + check summaries share one block).
+- The same count lines and tables as the stderr summary (§6.4 in `Seiton_CLI_spec.md`), including metadata suffixes such as `(N excluded, M suppressed)` when applicable.
+- A blank line before the block when the summary file already has content (does not overwrite other tools’ summaries).
+
+If the variable is unset, blank, or not writable, the full summary is written to **stderr** instead (same content as local `text`, without the `## Seiton` heading).
+
+**stderr** — progress (`--verbose`), configuration errors, init hints, and all `hint:` lines stay on stderr. They are never copied into the job summary.
+
+`--oneline` is not supported with this format (exit code `2`).
+
+`text`, `json`, and `sarif` **ignore** `GITHUB_STEP_SUMMARY` and always print the summary on stderr.
+
+```yaml
+# Simplest CI step — no --format flag needed on GitHub Actions
+- name: Run seiton
+  run: seiton
+```
+
+Force classic flat output: `seiton --format text`.
+
+See `.github/docs/Seiton_CLI_spec.md` §6.5 and `.github/docs/plan_format.md` for the full contract.
+
+### Text (default locally)
 
 Human-readable output includes the severity/rule header plus a source excerpt:
 
@@ -520,7 +552,26 @@ docker run --rm -v "$PWD:/repo" ghcr.io/guitarrapc/seiton:v0.9.18 --fix
 
 For GitHub Actions, the Docker image is the simplest way to get started. It avoids a separate download step, does not depend on `bash`, and keeps the job setup minimal. If you prefer a shell-based setup without Docker, use the download script from [Installation](installation.md#download-script).
 
-### Simplest setup: Docker with SARIF
+### Simplest setup: native binary or Docker (job summary + GHA default format)
+
+On GitHub Actions, `seiton` defaults to `--format github-actions`: rich diagnostics on stdout and a Markdown summary on the run page (`GITHUB_STEP_SUMMARY`). No extra flags are required.
+
+```yaml
+- name: Run seiton
+  run: ${{ steps.get-seiton.outputs.executable }}
+  shell: bash
+```
+
+Docker on a GitHub-hosted runner also picks up `GITHUB_ACTIONS` when the job sets it (default for `runs-on: ubuntu-latest`):
+
+```yaml
+- name: Run seiton in Docker
+  run: docker run --rm -v "$PWD:/repo:ro" -e GITHUB_ACTIONS -e GITHUB_STEP_SUMMARY ghcr.io/guitarrapc/seiton:latest
+```
+
+Pass `-e GITHUB_STEP_SUMMARY` so the container can write the job summary (the host path is forwarded via the env var GitHub sets on the runner).
+
+### Code Scanning: Docker with SARIF
 
 Lint-only (read-only mount). For in-place `--fix`, use the download script or omit `:ro`.
 

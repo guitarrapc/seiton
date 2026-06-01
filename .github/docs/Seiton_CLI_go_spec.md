@@ -34,7 +34,7 @@ The Seiton CLI Go implementation provides:
 1. Static binary CLI wrapper over the `seiton` core package
 2. Standard library `flag`-based command dispatch (no framework dependency)
 3. Config bridge translating CLI flags/env vars into linter config
-4. Multi-format diagnostic output (text/json/SARIF) via `encoding/json`
+4. Multi-format diagnostic output (text/json/SARIF/github-actions) via `encoding/json` and text formatters
 5. Parallel multi-file linting with deterministic aggregated output ordering
 6. Pre-dispatch unknown option detection with edit-distance suggestions
 
@@ -87,7 +87,7 @@ check.go                 # seiton check / root lint orchestration
 fix.go                   # seiton --fix orchestration
 input_discovery.go       # File discovery logic
 config_bridge.go         # CLI flags → LintConfig translation
-output.go                # text / json / sarif formatters
+output.go                # text / json / sarif / github-actions formatters
 option_suggester.go      # Unknown option detection and suggestion
 exit_code.go             # Exit code constants
 ```
@@ -143,7 +143,7 @@ type Command struct {
     StdinFilename      string
     Ignore             []string
     MinSeverity        string
-    Format             string // "text", "json", "sarif"
+    Format             string // "text", "json", "sarif", "github-actions"
     Oneline            bool
     Color              string // "auto", "always", "never"
     NoColor            bool
@@ -206,8 +206,9 @@ Shared contract reference: `.github/docs/Seiton_CLI_spec.md` §4.
 // Returns ("", nil) when no config found. Returns ("", err) when explicit path missing.
 func resolveConfigPath(explicit string) (string, error)
 
-// resolveOutputFormat returns the effective format from flag and SEITON_FORMAT env.
-func resolveOutputFormat(flagFormat string) string
+// resolveOutputFormat returns the effective format from flag, SEITON_FORMAT env, and optional GITHUB_ACTIONS auto-default.
+// When allowGitHubActionsAutoDefault is false (seiton rules), GITHUB_ACTIONS must not switch format away from text.
+func resolveOutputFormat(flagFormat string, allowGitHubActionsAutoDefault bool) string
 
 // resolveColorEnabled returns whether color output is active.
 // Precedence: --no-color → SEITON_NO_COLOR → NO_COLOR → --color → auto (TTY + CI).
@@ -376,7 +377,18 @@ type sarifRun struct {
 
 Rule metadata in `tool.driver.rules` contains only `id`.
 
-### 7.4 Exit Code Constants
+### 7.4 `github-actions` Output
+
+Shared contract: `.github/docs/Seiton_CLI_spec.md` §6.5.
+
+| Piece | Go implementation target |
+|---|---|
+| `resolveOutputFormat` | Flag (unless default `text`) → `SEITON_FORMAT` → optional `GITHUB_ACTIONS` → `text`. `allowGitHubActionsAutoDefault == false` for `seiton rules`. |
+| Diagnostics | Same rich text as `text` on stdout; no color; no `::group::` until phase 2 in `plan_format.md`. |
+| Job summary | Append §6.4 Markdown to `GITHUB_STEP_SUMMARY` when set and writable; `## Seiton` once per run; LF; fall back to stderr on I/O error. |
+| Hints | Always stderr; never job summary. |
+
+### 7.5 Exit Code Constants
 
 ```go
 const (

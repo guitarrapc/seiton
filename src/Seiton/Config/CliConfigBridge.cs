@@ -154,23 +154,33 @@ public static class CliConfigBridge
     }
 
     /// <summary>
-    /// Resolve output format from flag and SEITON_FORMAT env var.
+    /// Resolve output format from flag, <c>SEITON_FORMAT</c>, and <c>GITHUB_ACTIONS</c> auto-default.
+    /// When <paramref name="formatExplicitlySet"/> is true and the flag is <see cref="OutputFormat.Text"/>,
+    /// the CLI default is not upgraded on GitHub Actions (per §3.1.1).
     /// </summary>
-    public static OutputFormat ResolveOutputFormat(OutputFormat flagFormat)
+    public static OutputFormat ResolveOutputFormat(
+        OutputFormat flagFormat,
+        bool formatExplicitlySet = false,
+        bool allowGitHubActionsAutoDefault = true)
     {
         if (flagFormat != OutputFormat.Text)
             return flagFormat;
 
-        var envFormat = Environment.GetEnvironmentVariable("SEITON_FORMAT");
-        if (string.IsNullOrEmpty(envFormat))
+        if (formatExplicitlySet)
             return OutputFormat.Text;
 
-        return envFormat.ToLowerInvariant() switch
+        var envFormat = Environment.GetEnvironmentVariable("SEITON_FORMAT");
+        if (!string.IsNullOrEmpty(envFormat))
         {
-            "json" => OutputFormat.Json,
-            "sarif" => OutputFormat.Sarif,
-            _ => OutputFormat.Text,
-        };
+            return OutputFormatParser.TryParse(envFormat, out var fromEnv)
+                ? fromEnv
+                : OutputFormat.Text;
+        }
+
+        if (allowGitHubActionsAutoDefault && !string.IsNullOrEmpty(Environment.GetEnvironmentVariable("GITHUB_ACTIONS")))
+            return OutputFormat.GitHubActions;
+
+        return OutputFormat.Text;
     }
 
     private static bool IsCi() => !string.IsNullOrEmpty(Environment.GetEnvironmentVariable("CI"));

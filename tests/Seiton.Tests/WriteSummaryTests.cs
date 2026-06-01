@@ -942,4 +942,272 @@ public sealed class WriteSummaryTests
         await Assert.That(fewIndex).IsGreaterThanOrEqualTo(0);
         await Assert.That(manyIndex).IsLessThan(fewIndex);
     }
+
+    [Test]
+    [NotInParallel("ProcessState")]
+    public async Task WriteSummary_GitHubActions_WithStepSummary_AppendsHeadingAndCounts()
+    {
+        var summaryPath = Path.Combine(CreateTempDirectory(), "summary.md");
+        var original = Environment.GetEnvironmentVariable("GITHUB_STEP_SUMMARY");
+        try
+        {
+            Environment.SetEnvironmentVariable("GITHUB_STEP_SUMMARY", summaryPath);
+            GitHubStepSummaryWriter.Reset();
+
+            var diagnostics = new List<Diagnostic>
+            {
+                new(DiagnosticSeverity.Error, "msg", new TextRange(0, 1, 1, 1, 1, 2), RuleId: "rule-a", FilePath: "/repo/ci.yml"),
+                new(DiagnosticSeverity.Warning, "msg", new TextRange(0, 1, 2, 1, 2, 2), RuleId: "rule-b", FilePath: "/repo/ci.yml"),
+            };
+
+            using var stderr = new StringWriter();
+            CheckCommand.WriteSummary(stderr, diagnostics, fileCount: 2, OutputFormat.GitHubActions, showPerFile: true);
+
+            var summary = await File.ReadAllTextAsync(summaryPath);
+            await Assert.That(summary).Contains("## Seiton");
+            await Assert.That(summary).Contains("1 error, 1 warning in 2 files");
+            await Assert.That(summary).Contains("| ci.yml");
+            await Assert.That(stderr.ToString()).IsEqualTo(string.Empty);
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable("GITHUB_STEP_SUMMARY", original);
+        }
+    }
+
+    [Test]
+    [NotInParallel("ProcessState")]
+    public async Task WriteSummary_GitHubActions_WithExistingSummaryContent_PrependsBlankLine()
+    {
+        var summaryPath = Path.Combine(CreateTempDirectory(), "summary.md");
+        await File.WriteAllTextAsync(summaryPath, "## Other tool\n\nprior content\n");
+        var original = Environment.GetEnvironmentVariable("GITHUB_STEP_SUMMARY");
+        try
+        {
+            Environment.SetEnvironmentVariable("GITHUB_STEP_SUMMARY", summaryPath);
+            GitHubStepSummaryWriter.Reset();
+
+            using var stderr = new StringWriter();
+            CheckCommand.WriteSummary(stderr, [], fileCount: 1, OutputFormat.GitHubActions);
+
+            var summary = await File.ReadAllTextAsync(summaryPath);
+            await Assert.That(summary).Contains("## Other tool");
+            await Assert.That(summary).Contains("prior content");
+            await Assert.That(summary).Contains("## Seiton");
+            var priorIndex = summary.IndexOf("prior content", StringComparison.Ordinal);
+            var seitonIndex = summary.IndexOf("## Seiton", StringComparison.Ordinal);
+            await Assert.That(seitonIndex).IsGreaterThan(priorIndex);
+            await Assert.That(summary.ReplaceLineEndings("\n")).Contains("\n\n## Seiton");
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable("GITHUB_STEP_SUMMARY", original);
+        }
+    }
+
+    [Test]
+    [NotInParallel("ProcessState")]
+    public async Task WriteSummary_GitHubActions_WithoutStepSummary_WritesToStderr()
+    {
+        var original = Environment.GetEnvironmentVariable("GITHUB_STEP_SUMMARY");
+        try
+        {
+            Environment.SetEnvironmentVariable("GITHUB_STEP_SUMMARY", null);
+            GitHubStepSummaryWriter.Reset();
+
+            using var stderr = new StringWriter();
+            CheckCommand.WriteSummary(stderr, [], fileCount: 3, OutputFormat.GitHubActions);
+
+            await Assert.That(stderr.ToString().TrimEnd()).IsEqualTo("0 issues in 3 files");
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable("GITHUB_STEP_SUMMARY", original);
+        }
+    }
+
+    [Test]
+    [NotInParallel("ProcessState")]
+    public async Task WriteSummary_GitHubActions_HintOnlyOnStderr()
+    {
+        var summaryPath = Path.Combine(CreateTempDirectory(), "summary.md");
+        var original = Environment.GetEnvironmentVariable("GITHUB_STEP_SUMMARY");
+        try
+        {
+            Environment.SetEnvironmentVariable("GITHUB_STEP_SUMMARY", summaryPath);
+            GitHubStepSummaryWriter.Reset();
+
+            var diagnostics = new List<Diagnostic>
+            {
+                new(DiagnosticSeverity.Warning, "msg", new TextRange(0, 1, 1, 1, 1, 2), RuleId: "rule-a", FilePath: "/repo/ci.yml"),
+            };
+
+            using var stderr = new StringWriter();
+            CheckCommand.WriteSummary(stderr, diagnostics, fileCount: 1, OutputFormat.GitHubActions, showExitHint: true);
+
+            var stderrText = stderr.ToString();
+            await Assert.That(stderrText).Contains("hint: use --min-severity error");
+
+            var summary = await File.ReadAllTextAsync(summaryPath);
+            await Assert.That(summary).DoesNotContain("hint:");
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable("GITHUB_STEP_SUMMARY", original);
+        }
+    }
+
+    [Test]
+    [NotInParallel("ProcessState")]
+    public async Task WriteSummary_TextFormat_WithStepSummaryEnv_WritesToStderrOnly()
+    {
+        var summaryPath = Path.Combine(CreateTempDirectory(), "summary.md");
+        var original = Environment.GetEnvironmentVariable("GITHUB_STEP_SUMMARY");
+        try
+        {
+            Environment.SetEnvironmentVariable("GITHUB_STEP_SUMMARY", summaryPath);
+            GitHubStepSummaryWriter.Reset();
+
+            using var stderr = new StringWriter();
+            CheckCommand.WriteSummary(stderr, [], fileCount: 2, OutputFormat.Text);
+
+            await Assert.That(stderr.ToString().TrimEnd()).IsEqualTo("0 issues in 2 files");
+            await Assert.That(File.Exists(summaryPath)).IsFalse();
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable("GITHUB_STEP_SUMMARY", original);
+        }
+    }
+
+    [Test]
+    [NotInParallel("ProcessState")]
+    public async Task WriteSummary_GitHubActions_UnwritablePath_FallsBackToStderr()
+    {
+        var original = Environment.GetEnvironmentVariable("GITHUB_STEP_SUMMARY");
+        try
+        {
+            // A directory path is set but not appendable as a file — mirrors unreadable summary paths in CI.
+            Environment.SetEnvironmentVariable("GITHUB_STEP_SUMMARY", CreateTempDirectory());
+            GitHubStepSummaryWriter.Reset();
+
+            using var stderr = new StringWriter();
+            CheckCommand.WriteSummary(stderr, [], fileCount: 2, OutputFormat.GitHubActions);
+
+            await Assert.That(stderr.ToString().TrimEnd()).IsEqualTo("0 issues in 2 files");
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable("GITHUB_STEP_SUMMARY", original);
+        }
+    }
+
+    [Test]
+    [NotInParallel("ProcessState")]
+    public async Task WriteSummary_GitHubActions_WhitespaceEnv_FallsBackToStderr()
+    {
+        var original = Environment.GetEnvironmentVariable("GITHUB_STEP_SUMMARY");
+        try
+        {
+            Environment.SetEnvironmentVariable("GITHUB_STEP_SUMMARY", "   ");
+            GitHubStepSummaryWriter.Reset();
+
+            using var stderr = new StringWriter();
+            CheckCommand.WriteSummary(stderr, [], fileCount: 1, OutputFormat.GitHubActions);
+
+            await Assert.That(stderr.ToString().TrimEnd()).IsEqualTo("0 issues in 1 file");
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable("GITHUB_STEP_SUMMARY", original);
+        }
+    }
+
+    [Test]
+    [NotInParallel("ProcessState")]
+    public async Task WriteSummary_JsonFormat_WithStepSummaryEnv_WritesToStderrOnly()
+    {
+        var summaryPath = Path.Combine(CreateTempDirectory(), "summary.md");
+        var original = Environment.GetEnvironmentVariable("GITHUB_STEP_SUMMARY");
+        try
+        {
+            Environment.SetEnvironmentVariable("GITHUB_STEP_SUMMARY", summaryPath);
+            GitHubStepSummaryWriter.Reset();
+
+            using var stderr = new StringWriter();
+            CheckCommand.WriteSummary(stderr, [], fileCount: 4, OutputFormat.Json);
+
+            await Assert.That(stderr.ToString().TrimEnd()).IsEqualTo("0 issues in 4 files");
+            await Assert.That(File.Exists(summaryPath)).IsFalse();
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable("GITHUB_STEP_SUMMARY", original);
+        }
+    }
+
+    [Test]
+    [NotInParallel("ProcessState")]
+    public async Task WriteSummary_GitHubActions_WithStepSummary_IncludesMetadata()
+    {
+        var summaryPath = Path.Combine(CreateTempDirectory(), "summary.md");
+        var original = Environment.GetEnvironmentVariable("GITHUB_STEP_SUMMARY");
+        try
+        {
+            Environment.SetEnvironmentVariable("GITHUB_STEP_SUMMARY", summaryPath);
+            GitHubStepSummaryWriter.Reset();
+
+            using var stderr = new StringWriter();
+            CheckCommand.WriteSummary(
+                stderr,
+                [],
+                fileCount: 10,
+                OutputFormat.GitHubActions,
+                metadata: new CheckCommand.CheckSummaryMetadata(ExcludedCount: 1, SuppressedCount: 2));
+
+            var summary = await File.ReadAllTextAsync(summaryPath);
+            await Assert.That(summary).Contains("0 issues in 10 files (1 excluded, 2 suppressed)");
+            await Assert.That(stderr.ToString()).IsEqualTo(string.Empty);
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable("GITHUB_STEP_SUMMARY", original);
+        }
+    }
+
+    [Test]
+    [NotInParallel("ProcessState")]
+    public async Task WriteFixSummaryAndSummary_GitHubActions_SingleHeadingInStepSummary()
+    {
+        var summaryPath = Path.Combine(CreateTempDirectory(), "summary.md");
+        var original = Environment.GetEnvironmentVariable("GITHUB_STEP_SUMMARY");
+        try
+        {
+            Environment.SetEnvironmentVariable("GITHUB_STEP_SUMMARY", summaryPath);
+            GitHubStepSummaryWriter.Reset();
+
+            var fixedFiles = new List<(string FilePath, int FixedCount)>
+            {
+                ("/repo/ci.yml", 2),
+            };
+            var remainingDiagnostics = new List<Diagnostic>
+            {
+                new(DiagnosticSeverity.Warning, "msg", new TextRange(0, 1, 1, 1, 1, 2), RuleId: "rule-a", FilePath: "/repo/ci.yml"),
+            };
+
+            using var stderr = new StringWriter();
+            FixCommand.WriteFixSummary(stderr, fixedFiles, remainingDiagnostics, FixCommand.FixSummaryMode.Applied, OutputFormat.GitHubActions);
+            CheckCommand.WriteSummary(stderr, remainingDiagnostics, fileCount: 1, OutputFormat.GitHubActions, showPerFile: false, isRemainMode: true);
+
+            var summary = await File.ReadAllTextAsync(summaryPath);
+            await Assert.That(summary.Split("## Seiton", StringSplitOptions.None).Length - 1).IsEqualTo(1);
+            await Assert.That(summary).Contains("Fixed 2 of");
+            await Assert.That(summary).Contains("1 warning remains in 1 file");
+            await Assert.That(stderr.ToString()).IsEqualTo(string.Empty);
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable("GITHUB_STEP_SUMMARY", original);
+        }
+    }
 }

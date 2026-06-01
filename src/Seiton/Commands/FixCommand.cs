@@ -28,12 +28,14 @@ internal static class FixCommand
         bool includeActions,
         bool skipAgenticWorkflows = false,
         bool showDiff = false,
+        bool formatExplicitlySet = false,
         TextWriter? output = null,
         TextWriter? error = null)
     {
         var outputWriter = output ?? Console.Out;
         var errorWriter = error ?? Console.Error;
-        var resolvedFormat = CliConfigBridge.ResolveOutputFormat(format);
+        var resolvedFormat = CliConfigBridge.ResolveOutputFormat(format, formatExplicitlySet);
+        GitHubStepSummaryWriter.Reset();
         var colorEnabled = CliConfigBridge.ResolveColorEnabled(color, noColor);
 
         // Resolve config
@@ -411,17 +413,17 @@ internal static class FixCommand
                 var summaryMode = check ? FixSummaryMode.Check
                     : dryRun ? FixSummaryMode.DryRun
                     : FixSummaryMode.Applied;
-                WriteFixSummary(errorWriter, fixedFiles, allDiagnostics, summaryMode);
+                WriteFixSummary(errorWriter, fixedFiles, allDiagnostics, summaryMode, resolvedFormat);
                 // Use "remain" wording only for applied/dry-run (where fixes were/would be applied).
                 // In check mode, nothing was changed so "remain" is misleading.
                 var useRemainMode = !check;
-                CheckCommand.WriteSummary(errorWriter, allDiagnostics, resolvedFiles.Length, showVerboseSummary, showExitHint: minSeverity is null, showPerFile: false, metadata: summaryMetadata, isRemainMode: useRemainMode);
+                CheckCommand.WriteSummary(errorWriter, allDiagnostics, resolvedFiles.Length, resolvedFormat, showVerboseSummary, showExitHint: minSeverity is null, showPerFile: false, metadata: summaryMetadata, isRemainMode: useRemainMode);
             }
             
             // Output remaining diagnostics
             if (allDiagnostics.Count > 0)
             {
-                if (hasPrintedDiff && resolvedFormat == OutputFormat.Text)
+                if (hasPrintedDiff && resolvedFormat.UsesRichTextOutput())
                     outputWriter.WriteLine();
                 DiagnosticFormatter.Write(outputWriter, allDiagnostics, resolvedFormat, oneline, colorEnabled);
             }
@@ -431,12 +433,12 @@ internal static class FixCommand
                 if (fixedFiles is { Count: > 0 } && check)
                 {
                     var summaryMode = FixSummaryMode.Check;
-                    WriteFixSummary(errorWriter, fixedFiles, allDiagnostics, summaryMode);
-                    CheckCommand.WriteSummary(errorWriter, allDiagnostics, resolvedFiles.Length, showVerboseSummary, showExitHint: minSeverity is null, showPerFile: false, metadata: summaryMetadata, isRemainMode: false);
+                    WriteFixSummary(errorWriter, fixedFiles, allDiagnostics, summaryMode, resolvedFormat);
+                    CheckCommand.WriteSummary(errorWriter, allDiagnostics, resolvedFiles.Length, resolvedFormat, showVerboseSummary, showExitHint: minSeverity is null, showPerFile: false, metadata: summaryMetadata, isRemainMode: false);
                 }
                 else
                 {
-                    CheckCommand.WriteSummary(errorWriter, allDiagnostics, resolvedFiles.Length, showVerboseSummary, showExitHint: minSeverity is null, showPerFile: false, metadata: summaryMetadata);
+                    CheckCommand.WriteSummary(errorWriter, allDiagnostics, resolvedFiles.Length, resolvedFormat, showVerboseSummary, showExitHint: minSeverity is null, showPerFile: false, metadata: summaryMetadata);
                 }
             }
 
@@ -589,7 +591,23 @@ internal static class FixCommand
         TextWriter writer,
         List<(string FilePath, int FixedCount)> fixedFiles,
         List<Diagnostic> remainingDiagnostics,
-        FixSummaryMode mode = FixSummaryMode.Applied)
+        FixSummaryMode mode = FixSummaryMode.Applied,
+        OutputFormat format = OutputFormat.Text)
+    {
+        if (GitHubStepSummaryWriter.TryAppend(format, jobSummary =>
+                WriteFixSummaryContent(jobSummary, fixedFiles, remainingDiagnostics, mode)))
+        {
+            return;
+        }
+
+        WriteFixSummaryContent(writer, fixedFiles, remainingDiagnostics, mode);
+    }
+
+    private static void WriteFixSummaryContent(
+        TextWriter writer,
+        List<(string FilePath, int FixedCount)> fixedFiles,
+        List<Diagnostic> remainingDiagnostics,
+        FixSummaryMode mode)
     {
         // Compute per-file remaining counts from the filtered diagnostics list.
         // Use a dictionary keyed by file path for O(1) lookup.
@@ -778,7 +796,7 @@ internal static class FixCommand
 
         // When output format is non-text (json/sarif), diff goes to stderr
         // to keep stdout as pure machine-parseable output.
-        var diffWriter = resolvedFormat == OutputFormat.Text ? outputWriter : errorWriter;
+        var diffWriter = resolvedFormat.UsesRichTextOutput() ? outputWriter : errorWriter;
         diffWriter.Write(diff);
         hasPrintedDiff = true;
     }

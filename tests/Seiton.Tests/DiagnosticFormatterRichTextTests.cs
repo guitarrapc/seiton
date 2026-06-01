@@ -347,6 +347,21 @@ public sealed class DiagnosticFormatterRichTextTests
         await Assert.That(output).DoesNotContain("Help:");
     }
 
+    [Test]
+    public async Task GitHubActions_Format_DoesNotEmitAnsi_WhenColorRequested()
+    {
+        var diag = MakeDiagnostic(DiagnosticSeverity.Error, "plain error", 1, 1, 1, 5);
+
+        var sb = new StringBuilder();
+        using var writer = new StringWriter(sb);
+        DiagnosticFormatter.Write(writer, [diag], OutputFormat.GitHubActions, oneline: false, color: true);
+        writer.Flush();
+        var output = sb.ToString();
+
+        await Assert.That(output).Contains("error[test-rule]: plain error");
+        await Assert.That(output).DoesNotContain("\u001b[");
+    }
+
     // Helpers
     private static Diagnostic MakeDiagnostic(
         DiagnosticSeverity severity,
