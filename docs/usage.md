@@ -517,31 +517,31 @@ Official container images are published to GHCR for `linux/amd64` and `linux/arm
 Available tags include:
 
 - `ghcr.io/guitarrapc/seiton:latest`
-- `ghcr.io/guitarrapc/seiton:0.9.18`
-- `ghcr.io/guitarrapc/seiton:v0.9.18`
+- `ghcr.io/guitarrapc/seiton:0.9.19`
+- `ghcr.io/guitarrapc/seiton:v0.9.19`
 
 To confirm the image works:
 
 ```sh
-docker run --rm ghcr.io/guitarrapc/seiton:v0.9.18 version
+docker run --rm ghcr.io/guitarrapc/seiton:v0.9.19 version
 ```
 
 Lint all workflow files (read-only mount):
 
 ```sh
-docker run --rm -v "$PWD:/repo:ro" ghcr.io/guitarrapc/seiton:v0.9.18
+docker run --rm -v "$PWD:/repo:ro" ghcr.io/guitarrapc/seiton:v0.9.19
 ```
 
 Lint a specific file:
 
 ```sh
-docker run --rm -v "$PWD:/repo:ro" ghcr.io/guitarrapc/seiton:v0.9.18 .github/workflows/ci.yml
+docker run --rm -v "$PWD:/repo:ro" ghcr.io/guitarrapc/seiton:v0.9.19 .github/workflows/ci.yml
 ```
 
 Apply fixes (omit `:ro` — writable mount is required):
 
 ```sh
-docker run --rm -v "$PWD:/repo" ghcr.io/guitarrapc/seiton:v0.9.18 --fix
+docker run --rm -v "$PWD:/repo" ghcr.io/guitarrapc/seiton:v0.9.19 --fix
 ```
 
 > `--fix --dry-run` and `--fix --check` do not write files, so `:ro` is fine for those.
@@ -599,7 +599,7 @@ jobs:
           persist-credentials: false
 
       - name: Run seiton in Docker
-        run: docker run --rm -v "$PWD:/repo:ro" ghcr.io/guitarrapc/seiton:v0.9.18 --format sarif > seiton.sarif
+        run: docker run --rm -v "$PWD:/repo:ro" ghcr.io/guitarrapc/seiton:v0.9.19 --format sarif > seiton.sarif
 
       - name: Upload SARIF
         uses: github/codeql-action/upload-sarif@ce28f5bb42d3534e5d0f3a320ca0b28ee32a72d0 # v3
