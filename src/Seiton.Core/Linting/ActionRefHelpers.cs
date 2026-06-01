@@ -526,21 +526,21 @@ internal static class ActionRefHelpers
         return NormalizePath(workflowDirectory);
     }
 
-    internal static bool TryGetRepositoryRoot(string workflowFilePath, out string repositoryRoot)
+    internal static bool TryGetRepositoryRoot(string filePath, out string repositoryRoot)
     {
-        var normalizedWorkflowPath = NormalizePath(workflowFilePath);
-        const string marker = "/.github/workflows/";
-        var index = normalizedWorkflowPath.LastIndexOf(marker, StringComparison.OrdinalIgnoreCase);
+        var normalizedPath = NormalizePath(filePath);
+        const string marker = "/.github/";
+        var index = normalizedPath.LastIndexOf(marker, StringComparison.OrdinalIgnoreCase);
         if (index >= 0)
         {
-            repositoryRoot = NormalizeRootPrefix(normalizedWorkflowPath[..index]);
+            repositoryRoot = NormalizeRootPrefix(normalizedPath[..index]);
             return true;
         }
 
-        const string markerAtEnd = "/.github/workflows";
-        if (normalizedWorkflowPath.EndsWith(markerAtEnd, StringComparison.OrdinalIgnoreCase))
+        const string markerAtEnd = "/.github";
+        if (normalizedPath.EndsWith(markerAtEnd, StringComparison.OrdinalIgnoreCase))
         {
-            repositoryRoot = NormalizeRootPrefix(normalizedWorkflowPath[..^markerAtEnd.Length]);
+            repositoryRoot = NormalizeRootPrefix(normalizedPath[..^markerAtEnd.Length]);
             return true;
         }
 

@@ -267,11 +267,11 @@ The current default rule scope in C# is:
 | Rule ID | C# Implementation Notes |
 |---|---|
 | `job-structure` | — |
-| `reusable-workflow` | Uses `LocalReusableWorkflowOutputResolver` for local contract validation. |
+| `reusable-workflow` | Uses `LocalReusableWorkflowOutputResolver` and `ActionRefHelpers.ResolveLocalReferenceBaseDirectory` for local contract validation. |
 | `permissions` | — |
 | `popular-action-inputs` | Catalog-driven via `PopularActions` generated code. Edit-distance uses `EditDistance` helper. |
 | `outdated-action-runner` | Reads `GetRunsUsing()` from `PopularActions` generated catalog. |
-| `unpinned-uses` | — |
+| `unpinned-uses` | Local action existence checks use `ActionRefHelpers.ResolveLocalReferenceBaseDirectory` / `NormalizeFullPath` (repository root when the analyzed file is under `.github/`). |
 | `unpinned-image` | — |
 | `dangerous-triggers` | — |
 | `job-permissions-required` | Auto-fix uses `supplemental-required-permissions.json`. |
@@ -295,6 +295,7 @@ The current default rule scope in C# is:
 | `artipacked` | Implemented as `VisitJobPost` step-order scan. Tracks unsafe legacy/v6+ checkout state and re-evaluates exclusion lines against tracked legacy checkouts using job-local temporary storage. V6+ runner-temp warnings are suppressed only by recursive subtree exclusions (for example `!../../_temp/**` or workspace-prefixed equivalents), not by bare or shallow `_temp` exclusions. Deferred scope does not implement checkout `with.path` correlation. |
 | `workflow-secrets` | — |
 | `job-secrets` | — |
+| `local-action-inputs` | Local action metadata resolution uses `ActionRefHelpers` (repository-root policy when references start with `./.github/`). |
 | `action-shell-is-required` | Scoped to action-metadata documents. |
 
 Scope notes:

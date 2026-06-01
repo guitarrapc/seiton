@@ -249,6 +249,14 @@ This is an intentional divergence from actionlint, which reports at the job key 
 
 This policy applies only to cycle diagnostics. Other `needs-graph` diagnostics (unknown targets, duplicates) already report at the `needs` value position.
 
+#### 4.5.2 Local Reference Path Resolution
+
+**Design decision**: When a linted file path contains `/.github/` and a local `uses:` reference begins with `./.github/`, path resolution uses the repository root (the directory immediately above `/.github/`) as the base directory.
+
+This applies regardless of whether the analyzed file lives under `.github/workflows/` or `.github/actions/` (composite action metadata). References that do not start with `./.github/` resolve relative to the analyzed file's directory (standard relative-path semantics).
+
+Rules that perform filesystem-backed local resolution (`unpinned-uses`, `reusable-workflow`, `local-action-inputs`, and resolvers that depend on the same helper) share this base-directory policy.
+
 ---
 
 ## 5. Lint Configuration Contract

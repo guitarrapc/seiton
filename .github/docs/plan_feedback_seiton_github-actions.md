@@ -215,14 +215,55 @@ composite action（`.github/actions/git-push/action.yaml`）を `--include-actio
 
 ## 実装フェーズ
 
-### フェーズ 1 — P0 バグ修正（必須）
+### フェーズ 1 — P0 バグ修正（必須） ✅ 完了
 
-| タスク | 対象 |
-|--------|------|
-| repo root 解決の拡張 | `ActionRefHelpers.TryGetRepositoryRoot` |
-| 重複コード統合 | `UnpinnedUsesRule`, `ReusableWorkflowRule`, `LocalActionInputsRule` |
-| 回帰テスト | `ActionRefHelpersTests`, `RuleInterfaceTests.UnpinnedUsesRule` |
-| 実地確認 | `.references/githubactions-lab` + `--include-actions` |
+| タスク | 対象 | 状態 |
+|--------|------|------|
+| repo root 解決の拡張 | `ActionRefHelpers.TryGetRepositoryRoot` | ✅ |
+| 重複コード統合 | `UnpinnedUsesRule`, `ReusableWorkflowRule`, `LocalActionInputsRule` | ✅ |
+| 回帰テスト | `ActionRefHelpersTests`, `RuleInterfaceTests.UnpinnedUsesRule` | ✅ |
+| 実地確認 | `.references/githubactions-lab` + `--include-actions` | ✅ |
+| ベンチマーク | `ActionRefParseBenchmark.TryGetRepositoryRoot_*` | ✅ 追加 |
+
+#### 実装内容
+
+1. **`ActionRefHelpers.TryGetRepositoryRoot`**: マーカーを `/.github/workflows/` 限定から **`/.github/`** 一般化。`.github/workflows/` と `.github/actions/` の両方（および `.github/` 配下の任意ファイル）から repo root を導出。
+2. **DRY 統合**: 3 ルール内の重複 `TryGetRepositoryRoot` / `ResolveLocalReferenceBaseDirectory` / `TrimCurrentDirectoryPrefix` を削除し、`ActionRefHelpers.ResolveLocalReferenceBaseDirectory` + `NormalizeFullPath` に統一。
+3. **テスト追加** (7 件):
+   - `ActionRefHelpersTests`: workflow / composite action path からの root 解決、 sibling local action 解決、非 `.github/` 相対 path はファイル directory 基準
+   - `RuleRegression_UnpinnedUsesRule_CompositeActionSiblingLocalReference_NoPathDoesNotExistWarning`: git-push → signed-commit パターンの統合テスト
+4. **仕様更新**: `Seiton_Linter_spec.md` §4.5.2、`Seiton_Linter_csharp_spec.md` 実装メモ
+
+#### ベンチマーク結果（ShortRun, win-x64, .NET 10.0.8）
+
+| メソッド | 修正前 Mean | 修正後 Mean | 変化 | Allocated (前→後) |
+|----------|------------:|------------:|-----:|------------------:|
+| `TryGetRepositoryRoot (workflow path)` | 100.0 ns | 105.0 ns | +5% | 328 B → 328 B |
+| `TryGetRepositoryRoot (composite action path)` | 164.7 ns ※ | 101.1 ns | **−39%** | 208 B → 344 B |
+
+※ 修正前は composite action path で root 解決に失敗し、2 回の marker 探索後に false を返していた。
+
+**性能評価:**
+
+- **workflow path (+5%)**: 許容範囲内（±10% 閾値以内）。`/.github/workflows/` 専用 marker 2 回探索から `/.github/` 1 回 `LastIndexOf` に変更したが、短い path では JIT/GC ノイズが支配的。実質同等。
+- **composite action path (−39%)**: 修正前は root 解決失敗 → 呼び出し側が誤った base directory で `Directory.Exists` まで進む。修正後は 1 回の `LastIndexOf` で正しく root を返すため、**失敗パスより高速**。
+- **Allocated (composite +136 B)**: 修正前は早期 false return で root 文字列を materialize しなかった。修正後は `NormalizeRootPrefix` による root 文字列生成が発生。lint 1 回あたりの local action 参照数は通常少数のため、実運用上の影響は negligible。
+
+**CoreLintBenchmark**: Small/Medium/Large いずれも Ratio ≈ 1.00、Allocated 変化なし（lint 全体への影響なし）。
+
+#### レビュー指摘と対応
+
+| 指摘 | 対応 |
+|------|------|
+| 3 ルールに同一ロジックが重複 | `ActionRefHelpers` に統一 |
+| `/.github/actions/` だけ追加すると将来 `.github/` 配下の新カテゴリで再発 | `/.github/` 一般 marker に一般化（§4.5.2 に明記） |
+| 非 `.github/` 相対 path の equivalence class 不足 | `ResolveLocalReferenceBaseDirectory_NonGithubRelativePath_UsesFileDirectory` を追加 |
+| `Seiton_Linter_csharp_spec.md` で `action-shell-is-required` 行を誤削除 | 復元し `local-action-inputs` を別行追加 |
+
+#### ユーザーファースト API 確認
+
+- **変更なし**: CLI フラグ・config スキーマ・診断メッセージ形式は不変
+- **動作改善のみ**: composite action を `--include-actions` で lint した際、`./.github/actions/*` 参照が workflow lint 時と同じ repo-root 基準で解決される（ユーザー期待と GitHub Actions の実動作に一致）
 
 ### フェーズ 2 — P1 UX（推奨）
 
