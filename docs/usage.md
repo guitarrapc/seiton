@@ -50,6 +50,12 @@ With no arguments, `seiton` discovers and lints all `*.yml` / `*.yaml` files und
 seiton
 ```
 
+To lint composite actions under `.github/actions/` as well, pass `--include-actions` explicitly:
+
+```sh
+seiton --include-actions
+```
+
 Pass explicit file paths to lint specific files:
 
 ```sh
@@ -222,6 +228,12 @@ Validate the resolved config file. Useful in CI jobs that maintain `.github/seit
 
 ```sh
 seiton validate-config
+```
+
+Use `--verbose` to inspect config resolution and quick validation stats (parse time, enabled rules, exclusions):
+
+```sh
+seiton validate-config --verbose
 ```
 
 ### seiton version

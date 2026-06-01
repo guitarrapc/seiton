@@ -193,7 +193,7 @@ Fix-only flags (`dryRun`, `check`, `enablePinNetwork`, `enableImageNetwork`) are
 | `seiton` (root) | `Root(...)` | `[Command("")]`; dispatches to `CheckCommand` or `FixCommand` |
 | `seiton check` | `Check(...)` | Same parameters as root minus fix flags |
 | `seiton init` | `Init(...)` | `output`, `force` parameters |
-| `seiton validate-config` | `ValidateConfig(...)` | `[Command("validate-config")]`; `config` parameter |
+| `seiton validate-config` | `ValidateConfig(...)` | `[Command("validate-config")]`; `config`, `verbose` parameters |
 | `seiton rules` | `Rules(...)` | `config`, `format` parameters |
 | `seiton version` | `Version()` | No parameters |
 | `seiton install` | `Install(...)` | `skills`, `target`, `output`, `force`, `ci` parameters |

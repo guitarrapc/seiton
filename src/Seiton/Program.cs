@@ -26,7 +26,7 @@ internal class SeitonCli
     /// <param name="oneline">Print each diagnostic on a single line.</param>
     /// <param name="color">Color mode: auto | always | never.</param>
     /// <param name="noColor">Disable color output (overrides --color).</param>
-    /// <param name="verbose">Print progress information to stderr (-v / --verbose).</param>
+    /// <param name="verbose">-v, Print progress information to stderr (-v / --verbose).</param>
     /// <param name="skipAgenticWorkflows">Skip Agentic Workflow files (with # gh-aw-metadata: header).</param>
     /// <param name="fix">Enable fix mode on the root command.</param>
     /// <param name="dryRun">Print unified diff without modifying files (requires --fix).</param>
@@ -81,7 +81,7 @@ internal class SeitonCli
     /// <param name="oneline">Print each diagnostic on a single line.</param>
     /// <param name="color">Color mode: auto | always | never.</param>
     /// <param name="noColor">Disable color output (overrides --color).</param>
-    /// <param name="verbose">Print progress information to stderr (-v / --verbose).</param>
+    /// <param name="verbose">-v, Print progress information to stderr (-v / --verbose).</param>
     /// <param name="skipAgenticWorkflows">Skip Agentic Workflow files (with # gh-aw-metadata: header).</param>
     /// <param name="includeActions">When no FILES are provided, include .github/actions/ in auto-discovery.</param>
     /// <param name="files">Workflow files or directories to lint. Auto-discovers .github/workflows/ if omitted.</param>
@@ -116,10 +116,12 @@ internal class SeitonCli
 
     /// <summary>Validate the seiton config file. Run after init and before production linting.</summary>
     /// <param name="config">-c, Path to the config file to validate. Auto-discovered if omitted.</param>
+    /// <param name="verbose">-v, Print config resolution and validation summary to stderr (-v / --verbose).</param>
     [Command("validate-config")]
-    public void ValidateConfig(string? config = null)
+    public void ValidateConfig(string? config = null, bool verbose = false)
     {
-        var code = ValidateCommand.Run(config);
+        var verboseLevel = CliVerboseParser.Resolve(verbose);
+        var code = ValidateCommand.Run(config, verboseLevel);
         if (code != 0) Environment.ExitCode = code;
     }
 

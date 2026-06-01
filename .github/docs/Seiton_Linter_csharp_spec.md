@@ -157,6 +157,17 @@ C# implementation:
 - Each worker calls `CopyDiagnostics()` to create caller-owned diagnostic copies that survive engine reuse.
 - Sequential fast path: when `resolvedFiles.Length <= 1`, input is stdin, or `Environment.ProcessorCount <= 1`, a single `LintEngine` is used without `Parallel.For`.
 
+### 2.2 CLI UX Mapping (Phase 2)
+
+- `CheckCommand` maps JSON `fixable` semantics to fix-mode eligibility by enabling fix evaluation for `--format json` lint runs (without applying edits).
+- `FixCommand` emits summary before residual diagnostics for apply/dry-run mode; `--fix --check` keeps diagnostics-first behavior.
+- `JobTimeoutMinutesRequiredRule` emits `Help` when `fix.defaults.job-timeout-minutes` is missing so users can enable conditional auto-fix explicitly.
+- Verbose mode includes excluded-file observability:
+  - `--verbose`: count + preview list
+  - `-vv`: full excluded path list
+- No-config + high-volume lint output in text mode emits an init hint (`seiton init`) to improve first-run guidance.
+- When the hint is shown and `.github/actions/` exists in the current/ancestor tree while `--include-actions` is off, `CheckCommand` additionally suggests `--include-actions`.
+
 ---
 
 ## 3. Pass/Rule Mapping
@@ -267,11 +278,11 @@ The current default rule scope in C# is:
 | Rule ID | C# Implementation Notes |
 |---|---|
 | `job-structure` | — |
-| `reusable-workflow` | Uses `LocalReusableWorkflowOutputResolver` for local contract validation. |
+| `reusable-workflow` | Uses `LocalReusableWorkflowOutputResolver` and `ActionRefHelpers.ResolveLocalReferenceBaseDirectory` for local contract validation. |
 | `permissions` | — |
 | `popular-action-inputs` | Catalog-driven via `PopularActions` generated code. Edit-distance uses `EditDistance` helper. |
 | `outdated-action-runner` | Reads `GetRunsUsing()` from `PopularActions` generated catalog. |
-| `unpinned-uses` | — |
+| `unpinned-uses` | Local action existence checks use `ActionRefHelpers.ResolveLocalReferenceBaseDirectory` / `NormalizeFullPath` (repository root when the analyzed file is under `.github/`). |
 | `unpinned-image` | — |
 | `dangerous-triggers` | — |
 | `job-permissions-required` | Auto-fix uses `supplemental-required-permissions.json`. |
@@ -295,6 +306,7 @@ The current default rule scope in C# is:
 | `artipacked` | Implemented as `VisitJobPost` step-order scan. Tracks unsafe legacy/v6+ checkout state and re-evaluates exclusion lines against tracked legacy checkouts using job-local temporary storage. V6+ runner-temp warnings are suppressed only by recursive subtree exclusions (for example `!../../_temp/**` or workspace-prefixed equivalents), not by bare or shallow `_temp` exclusions. Deferred scope does not implement checkout `with.path` correlation. |
 | `workflow-secrets` | — |
 | `job-secrets` | — |
+| `local-action-inputs` | Local action metadata resolution uses `ActionRefHelpers` (repository-root policy when references start with `./.github/`). |
 | `action-shell-is-required` | Scoped to action-metadata documents. |
 
 Scope notes:

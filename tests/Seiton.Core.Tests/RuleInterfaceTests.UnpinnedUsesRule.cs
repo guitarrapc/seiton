@@ -771,4 +771,56 @@ public sealed partial class RuleInterfaceTests
 
         }
     }
+
+    [Test]
+    public async Task RuleRegression_UnpinnedUsesRule_CompositeActionSiblingLocalReference_NoPathDoesNotExistWarning()
+    {
+        var rootDir = Path.Combine(Path.GetTempPath(), "seiton-unpinned-composite-" + Guid.NewGuid().ToString("N", System.Globalization.CultureInfo.InvariantCulture));
+        var gitPushDir = Path.Combine(rootDir, ".github", "actions", "git-push");
+        var signedCommitDir = Path.Combine(rootDir, ".github", "actions", "signed-commit");
+        Directory.CreateDirectory(gitPushDir);
+        Directory.CreateDirectory(signedCommitDir);
+
+        var gitPushActionPath = Path.Combine(gitPushDir, "action.yaml");
+        var signedCommitActionPath = Path.Combine(signedCommitDir, "action.yaml");
+
+        try
+        {
+            File.WriteAllText(signedCommitActionPath, NormalizeYaml("""
+            name: Signed Commit
+            description: Signs commits
+            runs:
+              using: composite
+              steps:
+                - run: echo ok
+                  shell: bash
+            """), Encoding.UTF8);
+
+            File.WriteAllText(gitPushActionPath, NormalizeYaml("""
+            name: Git Push
+            description: Push changes
+            runs:
+              using: composite
+              steps:
+                - uses: ./.github/actions/signed-commit
+            """), Encoding.UTF8);
+
+            using var result = new LintEngine([new UnpinnedUsesRule()])
+                .Check(File.ReadAllBytes(gitPushActionPath), gitPushActionPath);
+
+            var pathWarnings = result.Diagnostics
+                .Where(x => x.RuleId == "unpinned-uses"
+                    && x.Message.Contains("does not exist", StringComparison.Ordinal))
+                .ToArray();
+
+            await Assert.That(pathWarnings.Length).IsEqualTo(0);
+        }
+        finally
+        {
+            if (Directory.Exists(rootDir))
+            {
+                Directory.Delete(rootDir, recursive: true);
+            }
+        }
+    }
 }

@@ -410,22 +410,19 @@ public sealed class LocalActionInputsRule() : RuleBase(RuleId.LocalActionInputs)
         }
 
         var usesStr = DecodeAscii(uses); // Keep forward slashes for display
-        var relativePath = usesStr.Replace('/', Path.DirectorySeparatorChar);
-        var baseDirectory = ResolveLocalReferenceBaseDirectory(Config.FilePath!, relativePath);
+        var baseDirectory = ActionRefHelpers.ResolveLocalReferenceBaseDirectory(Config.FilePath!, usesStr);
         if (string.IsNullOrEmpty(baseDirectory))
         {
             return false;
         }
 
-        string resolvedPath;
-        try
-        {
-            resolvedPath = Path.GetFullPath(Path.Combine(baseDirectory, TrimCurrentDirectoryPrefix(relativePath)));
-        }
-        catch
+        var normalizedResolvedPath = ActionRefHelpers.NormalizeFullPath(baseDirectory, usesStr);
+        if (normalizedResolvedPath is null)
         {
             return false;
         }
+
+        var resolvedPath = normalizedResolvedPath;
 
         if (File.Exists(resolvedPath))
         {
@@ -459,55 +456,6 @@ public sealed class LocalActionInputsRule() : RuleBase(RuleId.LocalActionInputs)
         }
 
         return false;
-    }
-
-    private static string ResolveLocalReferenceBaseDirectory(string workflowFilePath, string localPath)
-    {
-        var workflowDirectory = Path.GetDirectoryName(workflowFilePath);
-        if (string.IsNullOrEmpty(workflowDirectory))
-        {
-            return string.Empty;
-        }
-
-        if (localPath.StartsWith($".{Path.DirectorySeparatorChar}.github{Path.DirectorySeparatorChar}", StringComparison.Ordinal)
-            && TryGetRepositoryRoot(workflowFilePath, out var repositoryRoot))
-        {
-            return repositoryRoot;
-        }
-
-        return workflowDirectory;
-    }
-
-    private static bool TryGetRepositoryRoot(string workflowFilePath, out string repositoryRoot)
-    {
-        var separator = Path.DirectorySeparatorChar;
-        var marker = $"{separator}.github{separator}workflows{separator}";
-        var index = workflowFilePath.LastIndexOf(marker, StringComparison.OrdinalIgnoreCase);
-        if (index >= 0)
-        {
-            repositoryRoot = workflowFilePath[..index];
-            return true;
-        }
-
-        var markerAtEnd = $"{separator}.github{separator}workflows";
-        if (workflowFilePath.EndsWith(markerAtEnd, StringComparison.OrdinalIgnoreCase))
-        {
-            repositoryRoot = workflowFilePath[..^markerAtEnd.Length];
-            return true;
-        }
-
-        repositoryRoot = string.Empty;
-        return false;
-    }
-
-    private static string TrimCurrentDirectoryPrefix(string path)
-    {
-        if (path.StartsWith($".{Path.DirectorySeparatorChar}", StringComparison.Ordinal))
-        {
-            return path[2..];
-        }
-
-        return path;
     }
 
     private static string DecodeAscii(ReadOnlySpan<byte> utf8)

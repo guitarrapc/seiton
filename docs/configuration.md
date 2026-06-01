@@ -75,7 +75,7 @@ verbose: config: (none, using defaults) (searched from /cwd, walked up N level(s
 For a new repository, use this three-step flow:
 
 1. **`seiton init`** — create `.github/seiton.yaml` with commented defaults.
-2. **`seiton validate-config`** — confirm YAML and rule IDs are valid.
+2. **`seiton validate-config --verbose`** — confirm YAML/rule IDs and inspect parse summary (config path, parse time, enabled rules, exclusions).
 3. **`seiton --verbose`** — run lint once and confirm the resolved config path on stderr.
 
 See [Common configuration recipes](#common-configuration-recipes) below for patterns that reduce noise in large action monorepos.
@@ -110,8 +110,14 @@ $EDITOR .github/seiton.yaml
 Then validate and confirm discovery:
 
 ```sh
-seiton validate-config
+seiton validate-config --verbose
 seiton --verbose
+```
+
+If your repository also contains composite actions under `.github/actions/`, lint them explicitly:
+
+```sh
+seiton --include-actions --verbose
 ```
 
 ---

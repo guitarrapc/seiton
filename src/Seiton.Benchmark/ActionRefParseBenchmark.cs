@@ -14,6 +14,8 @@ public class ActionRefParseBenchmark
 {
     private byte[] _simple = [];
     private byte[] _subPath = [];
+    private string _workflowPath = "";
+    private string _compositeActionPath = "";
     private const string SimpleUses = "actions/checkout@v4";
     private const string SubPathUses = "acme/widgets/.github/actions/build/action.yml@v2";
 
@@ -22,6 +24,9 @@ public class ActionRefParseBenchmark
     {
         _simple = Encoding.UTF8.GetBytes(SimpleUses);
         _subPath = Encoding.UTF8.GetBytes(SubPathUses);
+        var repositoryRoot = Path.Combine(Path.GetTempPath(), "seiton-bench-repo");
+        _workflowPath = Path.Combine(repositoryRoot, ".github", "workflows", "caller.yml");
+        _compositeActionPath = Path.Combine(repositoryRoot, ".github", "actions", "git-push", "action.yaml");
     }
 
     [Benchmark(Baseline = true, Description = "TryParseRemoteUses (short uses)")]
@@ -64,5 +69,23 @@ public class ActionRefParseBenchmark
     public bool ParseActionReference_String()
     {
         return ActionRefHelpers.TryParseActionReference(SimpleUses, out _, out _, out _);
+    }
+
+    [Benchmark(Description = "TryGetRepositoryRoot (workflow path)")]
+    public bool TryGetRepositoryRoot_WorkflowPath()
+    {
+        return ActionRefHelpers.TryGetRepositoryRoot(_workflowPath, out _);
+    }
+
+    [Benchmark(Description = "TryGetRepositoryRoot (composite action path)")]
+    public bool TryGetRepositoryRoot_CompositeActionPath()
+    {
+        return ActionRefHelpers.TryGetRepositoryRoot(_compositeActionPath, out _);
+    }
+
+    [Benchmark(Description = "ResolveLocalReferenceBaseDirectory (composite action path)")]
+    public string ResolveLocalReferenceBaseDirectory_CompositeActionPath()
+    {
+        return ActionRefHelpers.ResolveLocalReferenceBaseDirectory(_compositeActionPath, "./.github/actions/signed-commit");
     }
 }

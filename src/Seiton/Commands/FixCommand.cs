@@ -132,6 +132,7 @@ internal static class FixCommand
             var totalSuppressed = 0;
             Dictionary<string, int>? suppressedByRule = null;
             var excludedCount = 0;
+            List<string>? excludedFiles = verboseLogger.IsEnabled ? [] : null;
             var workflowRuleSummaryLogged = false;
             var actionRuleSummaryLogged = false;
             var totalStart = verboseLogger.GetTimestamp();
@@ -166,6 +167,7 @@ internal static class FixCommand
                 if (ExclusionMatcher.IsFileFullyExcluded(lintConfig?.Exclusions, filePath))
                 {
                     excludedCount++;
+                    excludedFiles?.Add(filePath);
                 }
 
                 if (verboseLogger.LogFileProgress)
@@ -388,27 +390,23 @@ internal static class FixCommand
                 fixedFiles = CreateCheckSummaryEntries(allDiagnostics);
             }
 
-            // Output remaining diagnostics
-            if (allDiagnostics.Count > 0)
-            {
-                if (hasPrintedDiff && resolvedFormat == OutputFormat.Text)
-                    outputWriter.WriteLine();
-                DiagnosticFormatter.Write(outputWriter, allDiagnostics, resolvedFormat, oneline, colorEnabled);
-            }
-
             if (totalSuppressed > 0 && verboseLogger.IsEnabled)
             {
                 var suppressionCounts = suppressedByRule ?? EmptySuppressedByRule;
                 CheckCommand.WriteSuppressionSummary(verboseLogger,
                     CheckCommand.CreateAggregatedSuppressionSummary(totalSuppressed, suppressionCounts));
             }
+            if (verboseLogger.IsEnabled && excludedFiles is { Count: > 0 })
+            {
+                CheckCommand.WriteExcludedSummary(verboseLogger, excludedFiles, showAll: verboseLevel >= VerboseLevel.Files);
+            }
 
             var summaryMetadata = new CheckCommand.CheckSummaryMetadata(excludedCount, totalSuppressed);
             var showVerboseSummary = verboseLevel >= VerboseLevel.Summary;
 
-            // Write fix summary FIRST (what was done), then remaining summary (what's left).
-            // This order is more intuitive: action taken → consequences.
-            if (fixedFiles is { Count: > 0 })
+            // In apply/dry-run mode, write fix summary first so combined streams read
+            // as: "what changed" -> "what remains". Keep check mode diagnostic-first.
+            if (!check && fixedFiles is { Count: > 0 })
             {
                 var summaryMode = check ? FixSummaryMode.Check
                     : dryRun ? FixSummaryMode.DryRun
@@ -419,9 +417,27 @@ internal static class FixCommand
                 var useRemainMode = !check;
                 CheckCommand.WriteSummary(errorWriter, allDiagnostics, resolvedFiles.Length, showVerboseSummary, showExitHint: minSeverity is null, showPerFile: false, metadata: summaryMetadata, isRemainMode: useRemainMode);
             }
-            else
+            
+            // Output remaining diagnostics
+            if (allDiagnostics.Count > 0)
             {
-                CheckCommand.WriteSummary(errorWriter, allDiagnostics, resolvedFiles.Length, showVerboseSummary, showExitHint: minSeverity is null, showPerFile: false, metadata: summaryMetadata);
+                if (hasPrintedDiff && resolvedFormat == OutputFormat.Text)
+                    outputWriter.WriteLine();
+                DiagnosticFormatter.Write(outputWriter, allDiagnostics, resolvedFormat, oneline, colorEnabled);
+            }
+
+            if (check || fixedFiles is not { Count: > 0 })
+            {
+                if (fixedFiles is { Count: > 0 } && check)
+                {
+                    var summaryMode = FixSummaryMode.Check;
+                    WriteFixSummary(errorWriter, fixedFiles, allDiagnostics, summaryMode);
+                    CheckCommand.WriteSummary(errorWriter, allDiagnostics, resolvedFiles.Length, showVerboseSummary, showExitHint: minSeverity is null, showPerFile: false, metadata: summaryMetadata, isRemainMode: false);
+                }
+                else
+                {
+                    CheckCommand.WriteSummary(errorWriter, allDiagnostics, resolvedFiles.Length, showVerboseSummary, showExitHint: minSeverity is null, showPerFile: false, metadata: summaryMetadata);
+                }
             }
 
             if (verboseLogger.IsEnabled)
