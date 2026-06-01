@@ -18,8 +18,11 @@ public static class DiagnosticFormatter
         switch (format)
         {
             case OutputFormat.Text:
-            case OutputFormat.GitHubActions:
                 WriteText(writer, diagnostics, oneline, color, sourceMap);
+                break;
+            case OutputFormat.GitHubActions:
+                // GitHub Actions format should always be plain text without ANSI escapes.
+                WriteText(writer, diagnostics, oneline, color: false, sourceMap);
                 break;
             case OutputFormat.Json:
                 WriteJson(writer, diagnostics);
