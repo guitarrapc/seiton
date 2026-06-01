@@ -1,10 +1,171 @@
 ﻿using Seiton.Commands;
+using Seiton.Config;
 using Seiton.Core.Parsing;
+using Seiton.Output;
 
 namespace Seiton.Tests;
 
 public sealed class WriteSummaryTests
 {
+    [Test]
+    public async Task ShouldShowInitHint_NoConfigAndManyActionableDiagnostics_ReturnsTrue()
+    {
+        var diagnostics = new List<Diagnostic>(capacity: 25);
+        for (var i = 0; i < 25; i++)
+        {
+            diagnostics.Add(new Diagnostic(
+                DiagnosticSeverity.Warning,
+                "msg",
+                new TextRange(0, 1, 1, 1, 1, 2),
+                RuleId: "rule-a",
+                FilePath: "/repo/workflow.yml"));
+        }
+
+        var configResolution = new ConfigPathResolution(
+            Path: null,
+            Source: ConfigPathSource.None,
+            DiscoveryStartDirectory: "/repo",
+            DiscoveryLevelsWalked: 0);
+
+        var shouldShow = CheckCommand.ShouldShowInitHint(configResolution, OutputFormat.Text, diagnostics);
+        await Assert.That(shouldShow).IsTrue();
+    }
+
+    [Test]
+    public async Task ShouldShowInitHint_JsonOutput_ReturnsFalse()
+    {
+        var diagnostics = new List<Diagnostic>
+        {
+            new(DiagnosticSeverity.Warning, "msg", new TextRange(0, 1, 1, 1, 1, 2), RuleId: "rule-a", FilePath: "/repo/workflow.yml"),
+        };
+        var configResolution = new ConfigPathResolution(
+            Path: null,
+            Source: ConfigPathSource.None,
+            DiscoveryStartDirectory: "/repo",
+            DiscoveryLevelsWalked: 0);
+
+        var shouldShow = CheckCommand.ShouldShowInitHint(configResolution, OutputFormat.Json, diagnostics);
+        await Assert.That(shouldShow).IsFalse();
+    }
+
+    [Test]
+    public async Task ShouldShowInitHint_ConfigExists_ReturnsFalse()
+    {
+        var diagnostics = new List<Diagnostic>(capacity: 30);
+        for (var i = 0; i < 30; i++)
+        {
+            diagnostics.Add(new Diagnostic(
+                DiagnosticSeverity.Warning,
+                "msg",
+                new TextRange(0, 1, 1, 1, 1, 2),
+                RuleId: "rule-a",
+                FilePath: "/repo/workflow.yml"));
+        }
+
+        var configResolution = new ConfigPathResolution(
+            Path: "/repo/.github/seiton.yaml",
+            Source: ConfigPathSource.Discovery,
+            DiscoveryStartDirectory: "/repo",
+            DiscoveryLevelsWalked: 0);
+
+        var shouldShow = CheckCommand.ShouldShowInitHint(configResolution, OutputFormat.Text, diagnostics);
+        await Assert.That(shouldShow).IsFalse();
+    }
+
+    [Test]
+    public async Task ShouldShowInitHint_BelowThreshold_ReturnsFalse()
+    {
+        var diagnostics = new List<Diagnostic>(capacity: 19);
+        for (var i = 0; i < 19; i++)
+        {
+            diagnostics.Add(new Diagnostic(
+                DiagnosticSeverity.Warning,
+                "msg",
+                new TextRange(0, 1, 1, 1, 1, 2),
+                RuleId: "rule-a",
+                FilePath: "/repo/workflow.yml"));
+        }
+
+        var configResolution = new ConfigPathResolution(
+            Path: null,
+            Source: ConfigPathSource.None,
+            DiscoveryStartDirectory: "/repo",
+            DiscoveryLevelsWalked: 0);
+
+        var shouldShow = CheckCommand.ShouldShowInitHint(configResolution, OutputFormat.Text, diagnostics);
+        await Assert.That(shouldShow).IsFalse();
+    }
+
+    [Test]
+    [NotInParallel("ProcessState")]
+    public async Task ShouldShowInitHint_CiEnvironment_ReturnsFalse()
+    {
+        var diagnostics = new List<Diagnostic>(capacity: 25);
+        for (var i = 0; i < 25; i++)
+        {
+            diagnostics.Add(new Diagnostic(
+                DiagnosticSeverity.Warning,
+                "msg",
+                new TextRange(0, 1, 1, 1, 1, 2),
+                RuleId: "rule-a",
+                FilePath: "/repo/workflow.yml"));
+        }
+
+        var configResolution = new ConfigPathResolution(
+            Path: null,
+            Source: ConfigPathSource.None,
+            DiscoveryStartDirectory: "/repo",
+            DiscoveryLevelsWalked: 0);
+
+        var previousCi = Environment.GetEnvironmentVariable("CI");
+        try
+        {
+            Environment.SetEnvironmentVariable("CI", "true");
+            var shouldShow = CheckCommand.ShouldShowInitHint(configResolution, OutputFormat.Text, diagnostics);
+            await Assert.That(shouldShow).IsFalse();
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable("CI", previousCi);
+        }
+    }
+
+    [Test]
+    public async Task CreateCheckLintConfig_JsonWithoutConfig_EnablesFix()
+    {
+        var config = CheckCommand.CreateCheckLintConfig(null, OutputFormat.Json);
+        await Assert.That(config).IsNotNull();
+        await Assert.That(config!.Fix.Enabled).IsTrue();
+    }
+
+    [Test]
+    public async Task CreateCheckLintConfig_TextWithoutConfig_ReturnsNull()
+    {
+        var config = CheckCommand.CreateCheckLintConfig(null, OutputFormat.Text);
+        await Assert.That(config).IsNull();
+    }
+
+    [Test]
+    public async Task CreateCheckLintConfig_JsonWithExistingConfig_PreservesRuleSettingsAndEnablesFix()
+    {
+        var original = new Seiton.Core.Linting.LintConfig
+        {
+            Rules = new Dictionary<string, Seiton.Core.Linting.RuleConfig>(StringComparer.Ordinal)
+            {
+                ["runner-no-latest"] = new Seiton.Core.Linting.RuleConfig { Enabled = false },
+            },
+            Fix = new Seiton.Core.Linting.FixConfig { Enabled = false },
+            Verbose = true,
+        };
+
+        var config = CheckCommand.CreateCheckLintConfig(original, OutputFormat.Json);
+        await Assert.That(config).IsNotNull();
+        await Assert.That(config!.Fix.Enabled).IsTrue();
+        await Assert.That(config.Rules).IsNotNull();
+        await Assert.That(config.Rules!["runner-no-latest"].Enabled).IsFalse();
+        await Assert.That(config.Verbose).IsTrue();
+    }
+
     [Test]
     public async Task WriteSummary_WithMetadata_AppendsExcludedAndSuppressedCounts()
     {

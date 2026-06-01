@@ -265,15 +265,60 @@ composite action（`.github/actions/git-push/action.yaml`）を `--include-actio
 - **変更なし**: CLI フラグ・config スキーマ・診断メッセージ形式は不変
 - **動作改善のみ**: composite action を `--include-actions` で lint した際、`./.github/actions/*` 参照が workflow lint 時と同じ repo-root 基準で解決される（ユーザー期待と GitHub Actions の実動作に一致）
 
-### フェーズ 2 — P1 UX（推奨）
+### フェーズ 2 — P1 UX（推奨） ✅ 完了
 
-| タスク | 対象 |
-|--------|------|
-| JSON fixable 意味変更 | `DiagnosticFormatter`, 条件付き fix ルール |
-| dry-run 出力順 | `FixCommand` |
-| job-timeout help | `JobTimeoutMinutesRequiredRule` |
-| excluded ファイル一覧 | `CheckCommand`, `FixCommand`, `VerboseLogger` |
-| init hint | `CheckCommand.WriteSummary` 付近 |
+| タスク | 対象 | 状態 |
+|--------|------|------|
+| JSON fixable 意味変更 | `CheckCommand`, `DiagnosticFormatter` | ✅ |
+| dry-run 出力順 | `FixCommand` | ✅ |
+| job-timeout help | `JobTimeoutMinutesRequiredRule` | ✅ |
+| excluded ファイル一覧 | `CheckCommand`, `FixCommand`, `VerboseLogger` | ✅ |
+| init hint | `CheckCommand.WriteSummary` 付近 | ✅ |
+
+#### 実装内容
+
+1. **JSON `fixable` の意味を `--fix` 実行可否に寄せて統一**  
+   `check --format json` 時は lint 用 config を fix-enabled で評価し、`run-inputs-context-direct-use` の Case 2（env 挿入が必要なケース）でも `fixable: true` になるようにした。  
+   （テスト: `Check_JsonFormat_RunInputsContextDirectUse_Case2ReportsFixableTrue`）
+2. **dry-run/apply の出力順を修正**  
+   `FixCommand` で（summary → remaining diagnostics）の順に統一。`--fix --check` は従来どおり diagnostics-first を維持。
+3. **`job-timeout-minutes-required` に config 誘導 help を追加**  
+   `fix.defaults.job-timeout-minutes` 未設定で fix を添付できないとき、`.github/seiton.yaml` の設定例を `Help` に出すようにした。
+4. **verbose で excluded ファイル名を可視化**  
+   `CheckCommand` / `FixCommand` で fully-excluded ファイルを収集し、`verbose: excluded:` を出力。  
+   `--verbose` は件数+プレビュー、`-vv` は全件 path を出力。
+5. **初回体験の `seiton init` ヒントを追加**  
+   config 未検出 + Text 出力 + 非 CI + actionable diagnostics 20 件以上の場合、summary 後に 1 行ヒントを表示。
+
+#### テスト
+
+- 追加/更新テスト:
+  - `tests/Seiton.Tests/CheckCommandTests.cs`
+  - `tests/Seiton.Tests/FixCommandTests.cs`
+  - `tests/Seiton.Tests/WriteSummaryTests.cs`
+  - `tests/Seiton.Tests/VerbosePhase1Tests.cs`
+  - `tests/Seiton.Core.Tests/RuleInterfaceTests.LintEngine.cs`
+- 実行結果:
+  - `dotnet test --project tests/Seiton.Core.Tests` ✅ (1822 passed)
+  - `dotnet test --project tests/Seiton.Tests` ✅ (233 passed)
+  - `dotnet test` は Playground UI レイアウト系のタイムアウトで失敗（今回変更箇所とは独立）
+
+#### ベンチマーク結果（ShortRun, win-x64, .NET 10.0.8）
+
+- 実行: `src/Seiton.Benchmark` で `dotnet run -c Release -- --filter *CoreLintBenchmark*`
+- 結果:
+  - `CoreLintBenchmark` は `Ratio = 1.00`（Small/Medium/Large, `FixEnabled` true/false）で、lint コア性能の回帰なし
+  - 変更は主に CLI 出力制御と help/verbose 追加であり、コア lint 経路の実測値に有意な劣化は確認されなかった
+
+#### レビュー指摘と対応
+
+| 指摘 | 対応 |
+|------|------|
+| JSON `fixable` が `--fix --dry-run` と一致しない | JSON 出力時のみ fix-enabled lint 評価に変更 |
+| dry-run の summary/diagnostics 順が読みにくい | apply/dry-run で summary-first に統一（check は維持） |
+| `job-timeout-minutes-required` の config 誘導不足 | `Help` に `fix.defaults.job-timeout-minutes` を明示 |
+| excluded が件数しか見えない | verbose で excluded ファイル一覧を出力 |
+| 初回実行時の導線不足 | high-volume + no-config 条件で `seiton init` ヒント追加 |
 
 ### フェーズ 3 — P2 ドキュメント・CLI 拡張
 

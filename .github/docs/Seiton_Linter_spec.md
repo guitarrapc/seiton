@@ -1163,7 +1163,17 @@ When a lint result includes diagnostics with fixes, the caller must be able to:
 
 Fix application is a separate operation from linting and must not mutate the `LintResult` or the original source bytes.
 
-### 10.1 Dry-Run Diff Preview
+### 10.1 JSON `fixable` Semantics
+
+For JSON diagnostics output, `fixable` must represent **"fix-applicable when running with `--fix` under the same effective configuration"** rather than only "this diagnostic currently carries `DiagnosticFix` in check mode".
+
+- `fixable = true` when the diagnostic already carries `DiagnosticFix`.
+- `fixable = true` when the rule is fix-applicable in fix mode and all rule-specific prerequisites are satisfied under the current config/flags.
+- `fixable = false` when prerequisites are missing (for example, required config defaults are unset, or network-assisted pin remediation is disabled for pinning rules).
+
+This keeps machine-readable JSON aligned with user-observed behavior in `--fix` / `--fix --dry-run`.
+
+### 10.2 Dry-Run Diff Preview
 
 Dry-run preview is an output-only operation for fix review.
 
@@ -1172,6 +1182,7 @@ Dry-run preview is an output-only operation for fix review.
 - Preview scope should be limited to changed hunks, not full-file dump.
 - Implementations should include configurable nearby context lines around each change (recommended default: 1-3 lines).
 - Output target is runtime-defined (for example standard output in CLI mode), but behavior must remain deterministic for identical inputs.
+- CLI implementations should present fix summary before residual diagnostics in apply/dry-run mode to preserve "what changed" -> "what remains" reading order.
 
 ---
 

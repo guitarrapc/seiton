@@ -157,6 +157,16 @@ C# implementation:
 - Each worker calls `CopyDiagnostics()` to create caller-owned diagnostic copies that survive engine reuse.
 - Sequential fast path: when `resolvedFiles.Length <= 1`, input is stdin, or `Environment.ProcessorCount <= 1`, a single `LintEngine` is used without `Parallel.For`.
 
+### 2.2 CLI UX Mapping (Phase 2)
+
+- `CheckCommand` maps JSON `fixable` semantics to fix-mode eligibility by enabling fix evaluation for `--format json` lint runs (without applying edits).
+- `FixCommand` emits summary before residual diagnostics for apply/dry-run mode; `--fix --check` keeps diagnostics-first behavior.
+- `JobTimeoutMinutesRequiredRule` emits `Help` when `fix.defaults.job-timeout-minutes` is missing so users can enable conditional auto-fix explicitly.
+- Verbose mode includes excluded-file observability:
+  - `--verbose`: count + preview list
+  - `-vv`: full excluded path list
+- No-config + high-volume lint output in text mode emits an init hint (`seiton init`) to improve first-run guidance.
+
 ---
 
 ## 3. Pass/Rule Mapping

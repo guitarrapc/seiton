@@ -79,12 +79,15 @@ internal static class CheckCommand
             return ExitCode.Success;
         }
 
+        var lintRunConfig = CreateCheckLintConfig(lintConfig, resolvedFormat);
+
         // Lint files
         var allDiagnostics = new List<Diagnostic>();
         Dictionary<string, byte[]>? sourceMap = resolvedFormat == OutputFormat.Text && !oneline ? new() : null;
         var totalSuppressed = 0;
         Dictionary<string, int>? suppressedByRule = null;
         var excludedCount = 0;
+        List<string>? excludedFiles = verboseLogger.IsEnabled ? [] : null;
 
         var hasStdin = files.Contains("-");
         var workflowRuleSummaryLogged = false;
@@ -116,6 +119,7 @@ internal static class CheckCommand
                 if (filePath != "-" && ExclusionMatcher.IsFileFullyExcluded(lintConfig?.Exclusions, filePath))
                 {
                     excludedCount++;
+                    excludedFiles?.Add(filePath);
                 }
 
                 if (verboseLogger.LogFileProgress)
@@ -124,7 +128,7 @@ internal static class CheckCommand
                 }
 
                 var fileStart = verboseLogger.GetTimestamp();
-                using var result = engine.Check(utf8Yaml, filePath, lintConfig);
+                using var result = engine.Check(utf8Yaml, filePath, lintRunConfig);
                 allDiagnostics.AddRange(result.Diagnostics.AsSpan());
                 sourceMap?.TryAdd(filePath, utf8Yaml);
                 if (verboseLogger.IsEnabled)
@@ -181,7 +185,7 @@ internal static class CheckCommand
 
                     var fileStart = verboseLogger.GetTimestamp();
                     var engine = engines.Value!;
-                    using var result = engine.Check(utf8Yaml, filePath, lintConfig);
+                    using var result = engine.Check(utf8Yaml, filePath, lintRunConfig);
                     var fileElapsed = verboseLogger.LogFileProgress ? verboseLogger.GetElapsedTime(fileStart) : default;
                     var isExcluded = ExclusionMatcher.IsFileFullyExcluded(lintConfig?.Exclusions, filePath);
 
@@ -227,6 +231,7 @@ internal static class CheckCommand
                 if (slots[i].IsFullyExcluded)
                 {
                     excludedCount++;
+                    excludedFiles?.Add(slots[i].FilePath);
                 }
 
                 if (verboseLogger.IsEnabled)
@@ -279,14 +284,57 @@ internal static class CheckCommand
             WriteSuppressionSummary(verboseLogger,
                 CreateAggregatedSuppressionSummary(totalSuppressed, suppressedByRule ?? EmptySuppressedByRule));
         }
+        if (verboseLogger.IsEnabled && excludedFiles is { Count: > 0 })
+        {
+            WriteExcludedSummary(verboseLogger, excludedFiles, showAll: verboseLevel >= VerboseLevel.Files);
+        }
 
         var summaryMetadata = new CheckSummaryMetadata(excludedCount, totalSuppressed);
         WriteSummary(allDiagnostics, resolvedFiles.Length, verboseLevel >= VerboseLevel.Summary, showExitHint: minSeverity is null, metadata: summaryMetadata);
+        if (ShouldShowInitHint(configResolution, resolvedFormat, allDiagnostics))
+        {
+            WriteInitHint(Console.Error);
+        }
 
         if (verboseLogger.IsEnabled)
             WriteTotalTiming(verboseLogger, resolvedFiles.Length, verboseLogger.GetElapsedTime(totalStart));
 
         return HasActionableDiagnostics(allDiagnostics) ? ExitCode.LintIssuesFound : ExitCode.Success;
+    }
+
+    internal static LintConfig? CreateCheckLintConfig(LintConfig? lintConfig, OutputFormat format)
+    {
+        if (format != OutputFormat.Json)
+        {
+            return lintConfig;
+        }
+
+        if (lintConfig is null)
+        {
+            return new LintConfig
+            {
+                Fix = new FixConfig { Enabled = true },
+                Network = new NetworkConfig(),
+                Output = new OutputConfig(),
+            };
+        }
+
+        if (lintConfig.Fix.Enabled)
+        {
+            return lintConfig;
+        }
+
+        return new LintConfig
+        {
+            Rules = lintConfig.Rules,
+            Exclusions = lintConfig.Exclusions,
+            Fix = lintConfig.Fix with { Enabled = true },
+            Network = lintConfig.Network,
+            Output = lintConfig.Output,
+            Discovery = lintConfig.Discovery,
+            SkipSuppressionSummary = lintConfig.SkipSuppressionSummary,
+            Verbose = lintConfig.Verbose,
+        };
     }
 
     internal static void WriteSummary(List<Diagnostic> diagnostics, int fileCount, bool verbose = false, bool showExitHint = false, bool showPerFile = true, CheckSummaryMetadata metadata = default, bool isRemainMode = false)
@@ -651,6 +699,48 @@ internal static class CheckCommand
         logger.Log("suppressed", sb.ToString());
     }
 
+    internal static void WriteExcludedSummary(VerboseLogger logger, IReadOnlyList<string> excludedFiles, bool showAll)
+    {
+        if (excludedFiles.Count == 0)
+        {
+            return;
+        }
+
+        if (showAll)
+        {
+            for (var i = 0; i < excludedFiles.Count; i++)
+            {
+                logger.Log("excluded", excludedFiles[i]);
+            }
+
+            return;
+        }
+
+        var maxPreview = 5;
+        var previewCount = Math.Min(maxPreview, excludedFiles.Count);
+        var sb = new System.Text.StringBuilder();
+        sb.Append(excludedFiles.Count);
+        sb.Append(" file(s): ");
+        for (var i = 0; i < previewCount; i++)
+        {
+            if (i > 0)
+            {
+                sb.Append(", ");
+            }
+
+            sb.Append(excludedFiles[i]);
+        }
+
+        if (excludedFiles.Count > previewCount)
+        {
+            sb.Append(", ... (+");
+            sb.Append(excludedFiles.Count - previewCount);
+            sb.Append(" more; use -vv to show all)");
+        }
+
+        logger.Log("excluded", sb.ToString());
+    }
+
     internal static SuppressionSummary CreateAggregatedSuppressionSummary(int totalSuppressed, IReadOnlyDictionary<string, int> suppressedByRule)
     {
         // Aggregate summaries intentionally preserve only merged counts. Individual
@@ -782,6 +872,30 @@ internal static class CheckCommand
         return summaryLine + suffix;
     }
 
+    internal static bool ShouldShowInitHint(ConfigPathResolution configResolution, OutputFormat format, IReadOnlyList<Diagnostic> diagnostics)
+    {
+        if (configResolution.Path is not null || format != OutputFormat.Text || IsCi())
+        {
+            return false;
+        }
+
+        var actionable = 0;
+        for (var i = 0; i < diagnostics.Count; i++)
+        {
+            if (diagnostics[i].Severity >= DiagnosticSeverity.Warning)
+            {
+                actionable++;
+            }
+        }
+
+        return actionable >= 20;
+    }
+
+    internal static void WriteInitHint(TextWriter writer)
+    {
+        writer.WriteLine("hint: many issues detected with default config; run 'seiton init' to create .github/seiton.yaml and customize exclusions");
+    }
+
     internal static DocumentKind GetSlotDocumentKind(VerboseLogger logger, DocumentKind documentKind)
         => logger.IsEnabled ? documentKind : default;
 
@@ -795,6 +909,8 @@ internal static class CheckCommand
             _ => null,
         };
     }
+
+    private static bool IsCi() => !string.IsNullOrEmpty(Environment.GetEnvironmentVariable("CI"));
 }
 
 /// <summary>Lightweight result slot for parallel check. Holds caller-owned diagnostic copy.</summary>

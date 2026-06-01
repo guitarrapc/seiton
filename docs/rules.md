@@ -2577,6 +2577,7 @@ jobs:
 ```
 
 Auto-fix is available when `fix.defaults.job-timeout-minutes` is set in [configuration](configuration.md).
+When this default is not configured, diagnostics include a help hint showing the exact config key to add.
 
 ---
 

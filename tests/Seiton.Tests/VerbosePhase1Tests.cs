@@ -270,6 +270,41 @@ public sealed class VerbosePhase1Tests
     }
 
     [Test]
+    public async Task WriteExcludedSummary_SummaryLevel_EmitsCountAndSample()
+    {
+        using var sw = new StringWriter();
+        var logger = VerboseLogger.Create(VerboseLevel.Summary, sw);
+
+        CheckCommand.WriteExcludedSummary(logger, [
+            "/repo/.github/workflows/generated-1.yml",
+            "/repo/.github/workflows/generated-2.yml",
+            "/repo/.github/workflows/generated-3.yml",
+        ], showAll: false);
+
+        var output = sw.ToString();
+        await Assert.That(output).Contains("verbose: excluded: 3 file(s):");
+        await Assert.That(output).Contains("generated-1.yml");
+    }
+
+    [Test]
+    public async Task WriteExcludedSummary_FilesLevel_EmitsEveryFilePath()
+    {
+        using var sw = new StringWriter();
+        var logger = VerboseLogger.Create(VerboseLevel.Files, sw);
+
+        CheckCommand.WriteExcludedSummary(logger, [
+            "/repo/.github/workflows/generated-1.yml",
+            "/repo/.github/workflows/generated-2.yml",
+        ], showAll: true);
+
+        var lines = sw.ToString()
+            .Split(Environment.NewLine, StringSplitOptions.RemoveEmptyEntries);
+        await Assert.That(lines).Count().IsEqualTo(2);
+        await Assert.That(lines[0]).Contains("generated-1.yml");
+        await Assert.That(lines[1]).Contains("generated-2.yml");
+    }
+
+    [Test]
     public async Task GetSlotDocumentKind_VerboseSummary_PreservesDocumentKind()
     {
         using var sw = new StringWriter();

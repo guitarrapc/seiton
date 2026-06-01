@@ -1550,6 +1550,8 @@ public sealed partial class RuleInterfaceTests
         var diagnostic = result.Diagnostics.First(x => x.RuleId == "job-timeout-minutes-required");
 
         await Assert.That(diagnostic.Fix is null).IsTrue();
+        await Assert.That(diagnostic.Help).IsNotNull();
+        await Assert.That(diagnostic.Help!).Contains("fix.defaults.job-timeout-minutes");
     }
 
     [Test]

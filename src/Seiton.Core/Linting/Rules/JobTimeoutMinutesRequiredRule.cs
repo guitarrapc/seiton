@@ -36,7 +36,11 @@ public sealed class JobTimeoutMinutesRequiredRule() : RuleBase(RuleId.JobTimeout
             return;
         }
 
-        AddJobError(job, message, BuildJobLocation(job));
+        AddJobError(
+            job,
+            message,
+            BuildJobLocation(job),
+            "to enable auto-fix, set fix.defaults.job-timeout-minutes in .github/seiton.yaml (example: 15)");
     }
 
     private static bool IsExecutableJob(Job job)

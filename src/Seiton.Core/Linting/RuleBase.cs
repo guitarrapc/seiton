@@ -201,6 +201,11 @@ public abstract class RuleBase : IRule
         AddDiagnostic(DiagnosticSeverity.Error, message, location, fix);
     }
 
+    protected void AddJobError(Job job, string message, TextRange location, string help)
+    {
+        AddDiagnostic(DiagnosticSeverity.Error, message, location, help: help);
+    }
+
     private void AddDiagnostic(
         DiagnosticSeverity severity,
         string message,

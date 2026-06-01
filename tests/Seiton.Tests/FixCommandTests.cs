@@ -1680,6 +1680,66 @@ public sealed class FixCommandTests
     }
 
     [Test]
+    public async Task Fix_DryRun_CombinedStream_WouldFixSummaryAppearsBeforeDiagnostics()
+    {
+        var configPath = CreateConfigFile(
+            """
+            rules:
+              runner-no-latest:
+                enabled: false
+              job-permissions-required:
+                enabled: false
+            """);
+        var filePath = CreateWorkflowFile(
+            """
+            on: push
+            jobs:
+              build:
+                runs-on: ubuntu-24.04
+                steps:
+                  - if: github.event_name == 'push'
+                    run: echo ok
+            """);
+
+        try
+        {
+            using var combined = new StringWriter();
+
+            await FixCommand.RunAsync(
+                [filePath],
+                config: configPath,
+                stdinFilename: "stdin.yml",
+                ignore: [],
+                minSeverity: null,
+                format: OutputFormat.Text,
+                oneline: true,
+                color: ColorMode.Never,
+                noColor: true,
+                verboseLevel: VerboseLevel.Off,
+                dryRun: true,
+                check: false,
+                enablePinNetwork: false,
+                enableImageNetwork: false,
+                includeActions: false,
+                output: combined,
+                error: combined);
+
+            var output = combined.ToString();
+            var wouldFixIndex = output.IndexOf("Would fix", StringComparison.Ordinal);
+            var diagIndex = output.IndexOf(": error [", StringComparison.Ordinal);
+
+            await Assert.That(wouldFixIndex).IsGreaterThanOrEqualTo(0);
+            await Assert.That(diagIndex).IsGreaterThanOrEqualTo(0);
+            await Assert.That(wouldFixIndex).IsLessThan(diagIndex);
+        }
+        finally
+        {
+            DeleteContainingDirectory(filePath);
+            DeleteContainingDirectory(configPath);
+        }
+    }
+
+    [Test]
     public async Task Fix_Summary_Order_TotalLineAppearsBeforePerFileDetails()
     {
         // Verify the fix summary total line ("Fixed N issues in M files")
