@@ -8,6 +8,7 @@ namespace Seiton.Tests;
 public sealed class WriteSummaryTests
 {
     [Test]
+    [NotInParallel("ProcessState")]
     public async Task ShouldShowInitHint_NoConfigAndManyActionableDiagnostics_ReturnsTrue()
     {
         var diagnostics = new List<Diagnostic>(capacity: 25);
@@ -27,8 +28,17 @@ public sealed class WriteSummaryTests
             DiscoveryStartDirectory: "/repo",
             DiscoveryLevelsWalked: 0);
 
-        var shouldShow = CheckCommand.ShouldShowInitHint(configResolution, OutputFormat.Text, diagnostics);
-        await Assert.That(shouldShow).IsTrue();
+        var previousCi = Environment.GetEnvironmentVariable("CI");
+        try
+        {
+            Environment.SetEnvironmentVariable("CI", null);
+            var shouldShow = CheckCommand.ShouldShowInitHint(configResolution, OutputFormat.Text, diagnostics);
+            await Assert.That(shouldShow).IsTrue();
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable("CI", previousCi);
+        }
     }
 
     [Test]
