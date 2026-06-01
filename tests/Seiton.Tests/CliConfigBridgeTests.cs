@@ -127,6 +127,27 @@ public sealed class CliConfigBridgeTests
     }
 
     [Test]
+    public async Task ResolveOutputFormat_AutoDefaultDisabled_OnGitHubActionsRunner_ReturnsText()
+    {
+        var originalFormat = Environment.GetEnvironmentVariable("SEITON_FORMAT");
+        var originalGha = Environment.GetEnvironmentVariable("GITHUB_ACTIONS");
+        try
+        {
+            Environment.SetEnvironmentVariable("SEITON_FORMAT", null);
+            Environment.SetEnvironmentVariable("GITHUB_ACTIONS", "true");
+
+            var resolved = CliConfigBridge.ResolveOutputFormat(OutputFormat.Text, allowGitHubActionsAutoDefault: false);
+
+            await Assert.That(resolved).IsEqualTo(OutputFormat.Text);
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable("SEITON_FORMAT", originalFormat);
+            Environment.SetEnvironmentVariable("GITHUB_ACTIONS", originalGha);
+        }
+    }
+
+    [Test]
     public async Task DiscoverConfigPath_FoundInCurrentDirectory_ReportsZeroLevelsWalked()
     {
         var root = CreateTempDir();

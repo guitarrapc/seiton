@@ -100,6 +100,31 @@ public sealed class RulesCommandTests
     }
 
     [Test]
+    public async Task Run_TextFormat_OnGitHubActionsRunner_RemainsTextAndSucceeds()
+    {
+        var originalGha = Environment.GetEnvironmentVariable("GITHUB_ACTIONS");
+        using var stdout = new StringWriter();
+        using var stderr = new StringWriter();
+        try
+        {
+            Environment.SetEnvironmentVariable("GITHUB_ACTIONS", "true");
+
+            var exitCode = RulesCommand.Run(
+                config: null,
+                format: OutputFormat.Text,
+                output: stdout,
+                error: stderr);
+
+            await Assert.That(exitCode).IsEqualTo(ExitCode.Success);
+            await Assert.That(stdout.ToString()).Contains("rules total");
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable("GITHUB_ACTIONS", originalGha);
+        }
+    }
+
+    [Test]
     public async Task Run_NonExistentConfig_WritesErrorToInjectedWriter()
     {
         using var stdout = new StringWriter();

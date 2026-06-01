@@ -243,16 +243,17 @@ cd src/Seiton.Benchmark && dotnet run -c Release -- -f "*CoreLint*" "*CoreParsin
 
 | Count | フェーズ 0 Mean | フェーズ 1 Mean | 変化 | Allocated |
 |---|---:|---:|---:|---|
-| F1 | 225.9 μs | 212.4 μs | **−6.0%** | 117.5 KB（同一） |
-| F10 | 2,237.1 μs | 2,044.2 μs | **−8.6%** | 1136.94 KB（同一） |
+| F1 | 225.9 μs | 245.8 μs | **+8.8%** | 117.5 KB（同一） |
+| F10 | 2,237.1 μs | 2,418.8 μs | **+8.1%** | 1136.94 KB（同一） |
 
-変化は ShortRun の誤差範囲内。formatter 分岐が `Text` と共有されただけで、lint パスは未変更。
+変化は ShortRun の揺らぎを含むが、Mean/Allocated ともに許容閾値（+10%）内。formatter 分岐以外の lint パス変更はなし。
 
 #### フェーズ 1 レビュー
 
 - **API**: GHA 上で `seiton` のみ → 内部的に `GitHubActions`（ログはフェーズ 2 まで text 相当）。`--format github-actions` / `SEITON_FORMAT=github-actions` / `--format text` で明示制御可能。
 - **仕様**: `Seiton_CLI_spec.md` §3.1.1 / §6.5 と一致。
 - **性能**: +10% 以内、Allocated 不変。
+- **コードレビューでの修正**: `seiton rules` は GHA でも自動 `github-actions` へ切り替えないよう修正（`allowGitHubActionsAutoDefault: false`）。ユーザーが `seiton rules` をそのまま実行して失敗しないようにした。
 
 ### フェーズ 2 — グループ付き診断出力（Red → Green）
 

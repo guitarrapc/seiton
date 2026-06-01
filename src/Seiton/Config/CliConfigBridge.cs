@@ -156,7 +156,7 @@ public static class CliConfigBridge
     /// <summary>
     /// Resolve output format from flag, <c>SEITON_FORMAT</c>, and <c>GITHUB_ACTIONS</c> auto-default.
     /// </summary>
-    public static OutputFormat ResolveOutputFormat(OutputFormat flagFormat)
+    public static OutputFormat ResolveOutputFormat(OutputFormat flagFormat, bool allowGitHubActionsAutoDefault = true)
     {
         if (flagFormat != OutputFormat.Text)
             return flagFormat;
@@ -169,7 +169,7 @@ public static class CliConfigBridge
                 : OutputFormat.Text;
         }
 
-        if (!string.IsNullOrEmpty(Environment.GetEnvironmentVariable("GITHUB_ACTIONS")))
+        if (allowGitHubActionsAutoDefault && !string.IsNullOrEmpty(Environment.GetEnvironmentVariable("GITHUB_ACTIONS")))
             return OutputFormat.GitHubActions;
 
         return OutputFormat.Text;
