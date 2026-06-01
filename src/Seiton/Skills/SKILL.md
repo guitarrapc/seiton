@@ -44,7 +44,7 @@ seiton --fix --enable-pin-network --enable-image-network
 | Flag | Description |
 |------|-------------|
 | `--config PATH` | Explicit config file path |
-| `--format text, json, sarif, github-actions` | Output format (`github-actions` default on GHA) |
+| `--format text, json, sarif, github-actions` | Output format (`github-actions` default on GHA when flag omitted) |
 | `--min-severity error, warning, info` | Filter by severity |
 | `--ignore PATTERN` | Suppress diagnostics matching pattern |
 | `--oneline` | One diagnostic per line |
@@ -54,6 +54,20 @@ seiton --fix --enable-pin-network --enable-image-network
 | `--enable-image-network` | Resolve image digests via network (fix mode) |
 
 ## Output Format
+
+### GitHub Actions (`github-actions`)
+
+Default on GitHub Actions runners when `--format` is omitted (`GITHUB_ACTIONS` set). Use plain `seiton` in workflow steps.
+
+- **stdout** — rich diagnostics (same layout as `text`; per-file `::group::` folding is planned).
+- **Job summary** — appends Markdown to `GITHUB_STEP_SUMMARY` when writable (`## Seiton`, counts, tables). Pass `-e GITHUB_STEP_SUMMARY` in Docker.
+- **stderr** — verbose progress, config errors, and `hint:` lines only (never duplicated into the summary).
+
+Force local-style flat output on GHA: `seiton --format text`. For Code Scanning use `--format sarif` (separate from job summary).
+
+`seiton rules` accepts only `text` or `json` (not `github-actions` / `sarif`).
+
+### Rich text (`text`, default locally)
 
 Default rich text output shows:
 
@@ -183,7 +197,7 @@ seiton --verbose    # confirm resolved config on stderr
 - **Config errors**: Run `seiton validate-config` to check configuration
 - **Unknown option**: seiton suggests the closest valid option with a `Did you mean` hint
 - **Too many warnings**: Use `--min-severity error` to focus on errors only
-- **CI integration (GHA)**: Default `github-actions` groups logs and writes the job summary; use `--format sarif` for Code Scanning upload
+- **CI integration (GHA)**: Default `github-actions` writes the job summary and rich stdout; use `--format sarif` for Code Scanning upload. Docker: `-e GITHUB_ACTIONS -e GITHUB_STEP_SUMMARY`
 
 ## References
 

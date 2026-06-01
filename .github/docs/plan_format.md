@@ -320,12 +320,43 @@ step summary パスは **CI 1 ジョブあたり 1〜2 回**のコールドパ�
 - **性能**: ホットパス（DiagnosticOutput）不変。summary 追記は許容されるコールドパスコスト。
 - **コードレビューでの修正**: (1) `WriteFixSummary` の引数順を `FixSummaryMode` → `OutputFormat` にし既存テストとの互換を維持。(2) CRLF → LF で既存 summary 追記テストが Windows で失敗していた問題を修正。(3) **書き込み不可パス**（§6.5.2）で `IOException` を捕捉し stderr にフォールバック（従来は未処理例外）。(4) 等価クラス追加分: 書き込み不可・空白 env・`json`+env・Job Summary への metadata 追記。
 
-### フェーズ 4 — 仕様書・ユーザードキュメント
+### フェーズ 4 — 仕様書・ユーザードキュメント ✅ 完了
 
-- `.github/docs/Seiton_CLI_spec.md` §6.5、§3.1、フラグ表、§8 例
-- `Seiton_CLI_csharp_spec.md` / `Seiton_CLI_go_spec.md` の列挙・解決順
-- `docs/usage.md`、`docs/index.md`、`README.md`
-- `.claude/skills/seiton/SKILL.md`（存在すれば）
+**実施日**: 2026-06-02
+
+#### 更新ファイル
+
+| ドキュメント | 内容 |
+|---|---|
+| `Seiton_CLI_spec.md` | §6.5.1 を**現行実装**に合わせて修正（stdout は §6.1.1 相当、`::group::` は phase 2 予定として明記）。§8 例・`seiton rules` exit 2 文言 |
+| `Seiton_CLI_csharp_spec.md` | `OutputFormatParser`, `GitHubStepSummaryWriter`, `ResolveOutputFormat(allowGitHubActionsAutoDefault)`, §7.4 |
+| `Seiton_CLI_go_spec.md` | `resolveOutputFormat` シグネチャ、§7.4 ターゲット表 |
+| `docs/usage.md` | GHA 形式・Job summary・Docker env・他形式は env 無視 |
+| `docs/index.md` / `README.md` | 機能説明を「job summary + rich stdout」に整合 |
+| `.claude/skills/seiton/SKILL.md` + `src/Seiton/Skills/SKILL.md` | GHA 出力セクション（install 同梱 skill と同期） |
+
+#### 仕様と実装の整合
+
+- ユーザードキュメントから **未実装の `::group::`** 表現を削除し、§6.5.1 / usage に「phase 2 予定」と記載。
+- Job summary（phase 3 実装済み）を GHA 利用の主訴求として統一。
+
+#### ベンチマーク（src 変更なし）
+
+| ベンチ | Mean | Allocated | 備考 |
+|---|---:|---:|---|
+| DiagnosticOutput F1 | 230.4 μs | 117.5 KB | フェーズ 3 レビュー後と同等（±10% 内） |
+| DiagnosticOutput F10 | 2288.5 μs | 1136.94 KB | 同上 |
+
+ドキュメントのみのため性能変化なし。
+
+#### テスト
+
+`Seiton.Tests` **264/264** Pass（コード変更なし）。
+
+#### フェーズ 4 レビュー
+
+- **API 記述**: GHA では `seiton` のみで Job summary が得られること、Docker は `GITHUB_STEP_SUMMARY` を渡すことを明記。
+- **仕様差分**: §6.5.1 を現状実装に合わせた（以前は phase 2 先行記述でユーザーを誤解させうる状態だった）。
 
 ### フェーズ 5 — CI テンプレート（任意・後続）
 
@@ -396,6 +427,12 @@ dotnet test
 - **性能**: DiagnosticOutput はフェーズ 1 比 ±5% 以内・Allocated 不変。Step summary 追記は ~364 μs/回（コールドパス、ホットパス外）。
 - **テスト**: `WriteSummaryTests` に GitHub Actions step summary 系 6 件追加。
 - **仕様差分**: なし（LF 正規化は §6.5.2 の GHA 推奨に沿った実装詳細）。
+
+### フェーズ 4
+
+- **性能**: 変更なし（ドキュメントのみ）。
+- **テスト**: 追加なし。`Seiton.Tests` 264 Pass。
+- **仕様差分**: §6.5.1 を shipping 状態に修正。`::group::` は plan phase 2 参照。
 
 ### フェーズ 2 以降（テンプレート）
 

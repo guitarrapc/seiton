@@ -29,7 +29,7 @@ For every file it analyzes, Seiton:
 | Correctness checks | Job structure, needs-graph cycles, glob syntax, shell names, ID naming. |
 | Supply-chain hygiene | Unpinned `uses:`, archived actions, known vulnerable actions (online), impostor commits (online). |
 | Auto-fix support | `seiton --fix` applies machine-safe remediations in place. |
-| Multiple output formats | `text` (default locally), `github-actions` (default on GitHub Actions), `json`, `sarif` (GitHub Advanced Security). |
+| Multiple output formats | `text` (default locally), `github-actions` (default on GitHub Actions: job summary + rich stdout), `json`, `sarif` (GitHub Advanced Security). |
 | Config file | Optional `.github/seiton.yaml` for rule tuning, exclusions, and network options. |
 | Inline suppression | `# seiton: disable-next-line <rule-id>` directives inside workflow files. |
 | NativeAOT binary | Single-file executable; no .NET runtime required at deployment. |
@@ -49,7 +49,7 @@ seiton .github/workflows/ci.yml action.yml
 # See all issues as JSON
 seiton --format json
 
-# On GitHub Actions, omit --format for grouped logs + job summary (github-actions)
+# On GitHub Actions, omit --format (job summary + default GHA output)
 seiton
 
 # Apply auto-fixes

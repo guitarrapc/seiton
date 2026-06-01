@@ -103,7 +103,7 @@ Resolves configuration (if available) and reports each rule's status:
 
 Exit codes:
 - `0`: Success (rule list printed).
-- `2`: Invalid options (e.g. `--format sarif`).
+- `2`: Invalid options (e.g. `--format sarif` or `--format github-actions`).
 - `3`: Fatal error (e.g. config file not found or validation failure).
 
 ### 1.6 `seiton version`
@@ -496,20 +496,14 @@ Human-readable output optimized for [GitHub Actions](https://docs.github.com/en/
 
 #### 6.5.1 Job log (stdout)
 
-Diagnostics are grouped per file using [workflow commands](https://docs.github.com/en/actions/using-workflows/workflow-commands-for-github-actions#grouping-log-lines):
+Diagnostics are written to **stdout** using the same rich text structure as §6.1.1 (severity/rule header, source excerpt, help lines). Files with diagnostics appear in diagnostic-list order; there is no extra per-file wrapper in the current release.
 
-```
-::group::<file-path>
-<rich text diagnostic block(s) for this file — same structure as §6.1.1>
-::endgroup::
-```
-
-- A group is emitted only for files with at least one diagnostic after filtering.
-- Groups appear in the order each file path first appears in the diagnostic list.
 - Color is never emitted for this format.
 - `--oneline` is not supported; specifying it with `github-actions` returns exit code `2`.
 
-When no diagnostics are emitted, no group lines are written to stdout.
+When no diagnostics are emitted, stdout carries no diagnostic lines (same as `text`).
+
+> **Planned enhancement** (`plan_format.md` phase 2): wrap each file’s diagnostics in `::group::<file-path>` … `::endgroup::` [workflow commands](https://docs.github.com/en/actions/using-workflows/workflow-commands-for-github-actions#grouping-log-lines) so the Actions job log can collapse by file.
 
 #### 6.5.2 Job summary (`GITHUB_STEP_SUMMARY`)
 
@@ -712,7 +706,7 @@ seiton --format json
 seiton --format sarif > results.sarif
 
 # On GitHub Actions (GITHUB_ACTIONS=true), default format is github-actions:
-# grouped job log + job summary markdown. Force flat text if needed:
+# rich stdout + job summary markdown (GITHUB_STEP_SUMMARY). Force flat text if needed:
 seiton --format text
 
 # Apply auto-fixes in place

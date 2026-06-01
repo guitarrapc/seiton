@@ -96,8 +96,10 @@ src/
       ValidateCommand.cs      # seiton validate-config
       VersionCommand.cs       # seiton version
     Output/
-      DiagnosticFormatter.cs  # text / json / sarif / github-actions formatters
+      DiagnosticFormatter.cs  # text / json / sarif; GitHubActions uses WriteText today
+      GitHubStepSummaryWriter.cs  # GITHUB_STEP_SUMMARY append (github-actions only)
       OutputFormat.cs         # OutputFormat enum (includes GitHubActions)
+      OutputFormatParser.cs   # Parses --format string (supports github-actions hyphen)
       ColorMode.cs            # ColorMode enum
     Config/
       CliConfigBridge.cs      # CLI flags → LintConfig translation
@@ -171,7 +173,7 @@ public async Task Root(
     string stdinFilename = "<stdin>",
     string[]? ignore = null,
     string? minSeverity = null,
-    OutputFormat format = OutputFormat.Text,
+    string format = "text",  // parsed via OutputFormatParser (hyphenated github-actions)
     bool oneline = false,
     ColorMode color = ColorMode.Auto,
     bool noColor = false,
@@ -213,7 +215,8 @@ public static class CliConfigBridge
     public static ConfigPathResolution ResolveConfigPath(string? explicitConfigPath);
 
     // Output format: flag → SEITON_FORMAT env → GITHUB_ACTIONS auto (GitHubActions) → default (Text)
-    public static OutputFormat ResolveOutputFormat(OutputFormat flagFormat);
+    // allowGitHubActionsAutoDefault: false for seiton rules (stays text on GHA)
+    public static OutputFormat ResolveOutputFormat(OutputFormat flagFormat, bool allowGitHubActionsAutoDefault = true);
 
     // Color: --no-color → SEITON_NO_COLOR → NO_COLOR → --color → auto (TTY + CI)
     public static bool ResolveColorEnabled(ColorMode colorFlag, bool noColorFlag);
@@ -361,7 +364,21 @@ SARIF 2.1.0 is emitted via an object graph serialized with source-generated `Sys
 
 Source bytes for snippet rendering are retained in a `Dictionary<string, byte[]>` source map (only allocated when text format without `--oneline` is active). Line extraction and caret positioning use byte offsets.
 
-### 7.4 Exit Code Constants
+### 7.4 `github-actions` Output
+
+Shared contract: `.github/docs/Seiton_CLI_spec.md` §6.5.
+
+| Component | Behavior |
+|---|---|
+| `OutputFormatParser` | Maps CLI strings `text`, `json`, `sarif`, `github-actions` to `OutputFormat`. Invalid values → exit `2` with stderr message. |
+| `CliConfigBridge.ResolveOutputFormat` | Precedence: parsed flag (unless built-in default `text`) → `SEITON_FORMAT` → optional `GITHUB_ACTIONS` auto-default → `Text`. |
+| `DiagnosticFormatter` | `GitHubActions` uses `WriteText` with `color: false` (no `::group::` yet; see `plan_format.md` phase 2). |
+| `GitHubStepSummaryWriter` | When format is `GitHubActions` and `GITHUB_STEP_SUMMARY` is a writable path, appends §6.4 Markdown (`## Seiton` once per run, LF, UTF-8 no BOM). `IOException` / `UnauthorizedAccessException` → fall back to stderr. `Reset()` at start of `CheckCommand.Run` / `FixCommand.Run`. |
+| `CheckCommand.WriteSummary` / `FixCommand.WriteFixSummary` | Build summary via shared content writers; route to step summary or stderr per §6.4 table. `hint:` lines always use the stderr `TextWriter`. |
+
+`Program.cs` binds `--format` as `string` (not enum) so Cocona can accept `github-actions`.
+
+### 7.5 Exit Code Constants
 
 ```csharp
 internal static class ExitCode

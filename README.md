@@ -13,7 +13,7 @@ Features:
 - **Correctness checks** — job structure, needs-graph cycles, glob syntax, shell names, ID naming, expression type-checking.
 - **Supply-chain hygiene** — unpinned `uses:`, archived actions, known vulnerable actions (online), impostor commits (online).
 - **Auto-fix support** — `seiton --fix` applies machine-safe remediations in place (including network-assisted SHA/digest pinning).
-- **Multiple output formats** — `text` (default locally), `github-actions` (default on GitHub Actions: grouped logs + job summary), `json`, `sarif` (GitHub Advanced Security).
+- **Multiple output formats** — `text` (default locally), `github-actions` (default on GitHub Actions: job summary Markdown + rich stdout), `json`, `sarif` (GitHub Advanced Security).
 - **Config file** — optional `.github/seiton.yaml` for rule tuning, exclusions, and network options.
 - **Inline suppression** — `# seiton: disable-next-line <rule-id>` directives inside workflow files.
 - **NativeAOT binary** — single-file executable; no .NET runtime required at deployment.

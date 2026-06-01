@@ -358,28 +358,23 @@ When `GITHUB_ACTIONS` is set and you do not pass an explicit `--format` (or `SEI
 
 ### GitHub Actions (`github-actions`)
 
-Optimized for [GitHub Actions](https://docs.github.com/en/actions) job logs and the job summary tab. This is the **default on GitHub Actions runners** when `--format` is omitted.
+Optimized for [GitHub Actions](https://docs.github.com/en/actions): readable diagnostics on stdout and a Markdown block on the job summary tab. This is the **default on GitHub Actions runners** when `--format` is omitted.
 
-**Job log (stdout)** — diagnostics are wrapped per file using workflow commands:
+**Job log (stdout)** — same rich layout as **text** (snippets and help lines). Color is off. Per-file log folding via `::group::` is planned; see `.github/docs/plan_format.md` phase 2.
 
-```
-::group::.github/workflows/ci.yml
-error[template-injection]: ...
-  --> .github/workflows/ci.yml:7:32
-     |
-   7 |       - run: ...
-     |              ^^^
-     |
-::endgroup::
-```
+**Job summary** — when `GITHUB_STEP_SUMMARY` points to a **writable** file (normal on `ubuntu-latest` and other GitHub-hosted runners), Seiton **appends** UTF-8 Markdown with LF line endings:
 
-Only files with at least one diagnostic get a group. The diagnostic body matches the rich **text** format (snippets and help lines).
+- A `## Seiton` heading once per process run (fix + check summaries share one block).
+- The same count lines and tables as the stderr summary (§6.4 in `Seiton_CLI_spec.md`), including metadata suffixes such as `(N excluded, M suppressed)` when applicable.
+- A blank line before the block when the summary file already has content (does not overwrite other tools’ summaries).
 
-**Job summary** — when `GITHUB_STEP_SUMMARY` is set (normal on `ubuntu-latest` and other GitHub-hosted runners), Seiton **appends** a Markdown block (`## Seiton`, issue counts, per-file table, and verbose rule tables when `-v` is used). If the variable is unset (local runs, some containers), the same summary goes to **stderr** instead.
+If the variable is unset, blank, or not writable, the full summary is written to **stderr** instead (same content as local `text`, without the `## Seiton` heading).
 
-**stderr** — progress (`--verbose`), configuration errors, and `hint:` lines stay on stderr. They are not duplicated into the job summary.
+**stderr** — progress (`--verbose`), configuration errors, init hints, and all `hint:` lines stay on stderr. They are never copied into the job summary.
 
 `--oneline` is not supported with this format (exit code `2`).
+
+`text`, `json`, and `sarif` **ignore** `GITHUB_STEP_SUMMARY` and always print the summary on stderr.
 
 ```yaml
 # Simplest CI step — no --format flag needed on GitHub Actions
@@ -557,9 +552,9 @@ docker run --rm -v "$PWD:/repo" ghcr.io/guitarrapc/seiton:v0.9.18 --fix
 
 For GitHub Actions, the Docker image is the simplest way to get started. It avoids a separate download step, does not depend on `bash`, and keeps the job setup minimal. If you prefer a shell-based setup without Docker, use the download script from [Installation](installation.md#download-script).
 
-### Simplest setup: native binary or Docker (grouped log + job summary)
+### Simplest setup: native binary or Docker (job summary + GHA default format)
 
-On GitHub Actions, `seiton` defaults to `--format github-actions`: collapsible per-file groups in the job log and a Markdown summary on the run page. No extra flags are required.
+On GitHub Actions, `seiton` defaults to `--format github-actions`: rich diagnostics on stdout and a Markdown summary on the run page (`GITHUB_STEP_SUMMARY`). No extra flags are required.
 
 ```yaml
 - name: Run seiton
