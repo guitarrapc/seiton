@@ -3,6 +3,8 @@ using Seiton.Commands;
 using Seiton.Cli;
 using Seiton.Output;
 
+var frameworkArgs = CliVerboseParser.FilterArgsForFramework(args);
+CliVerboseParser.SetRawArgs(args);
 if (CliOptionSuggester.TryWriteSuggestionsForUnknownOptions(args, Console.Error))
 {
     Environment.ExitCode = ExitCode.InvalidOptions;
@@ -11,7 +13,7 @@ if (CliOptionSuggester.TryWriteSuggestionsForUnknownOptions(args, Console.Error)
 
 var app = ConsoleApp.Create();
 app.Add<SeitonCli>();
-app.Run(args);
+app.Run(frameworkArgs);
 
 internal class SeitonCli
 {
@@ -24,7 +26,8 @@ internal class SeitonCli
     /// <param name="oneline">Print each diagnostic on a single line.</param>
     /// <param name="color">Color mode: auto | always | never.</param>
     /// <param name="noColor">Disable color output (overrides --color).</param>
-    /// <param name="verbose">Print progress information to stderr.</param>
+    /// <param name="verbose">Print progress information to stderr (-v / --verbose).</param>
+    /// <param name="skipAgenticWorkflows">Skip Agentic Workflow files (with # gh-aw-metadata: header).</param>
     /// <param name="fix">Enable fix mode on the root command.</param>
     /// <param name="dryRun">Print unified diff without modifying files (requires --fix).</param>
     /// <param name="check">Exit non-zero if fixable diagnostics remain after filtering, without applying fixes (requires --fix).</param>
@@ -43,6 +46,7 @@ internal class SeitonCli
         ColorMode color = ColorMode.Auto,
         bool noColor = false,
         bool verbose = false,
+        bool skipAgenticWorkflows = false,
         bool fix = false,
         bool dryRun = false,
         bool check = false,
@@ -58,9 +62,10 @@ internal class SeitonCli
             return;
         }
 
+        var verboseLevel = CliVerboseParser.Resolve(verbose);
         var code = fix
-            ? await FixCommand.RunAsync(files, config, stdinFilename, ignore ?? [], minSeverity, format, oneline, color, noColor, verbose, dryRun, check, enablePinNetwork, enableImageNetwork, includeActions)
-            : CheckCommand.Run(files, config, stdinFilename, ignore ?? [], minSeverity, format, oneline, color, noColor, verbose, includeActions);
+            ? await FixCommand.RunAsync(files, config, stdinFilename, ignore ?? [], minSeverity, format, oneline, color, noColor, verboseLevel, dryRun, check, enablePinNetwork, enableImageNetwork, includeActions, skipAgenticWorkflows)
+            : CheckCommand.Run(files, config, stdinFilename, ignore ?? [], minSeverity, format, oneline, color, noColor, verboseLevel, includeActions, skipAgenticWorkflows);
 
         if (code != 0) Environment.ExitCode = code;
     }
@@ -74,7 +79,8 @@ internal class SeitonCli
     /// <param name="oneline">Print each diagnostic on a single line.</param>
     /// <param name="color">Color mode: auto | always | never.</param>
     /// <param name="noColor">Disable color output (overrides --color).</param>
-    /// <param name="verbose">Print progress information to stderr.</param>
+    /// <param name="verbose">Print progress information to stderr (-v / --verbose).</param>
+    /// <param name="skipAgenticWorkflows">Skip Agentic Workflow files (with # gh-aw-metadata: header).</param>
     /// <param name="includeActions">When no FILES are provided, include .github/actions/ in auto-discovery.</param>
     /// <param name="files">Workflow files or directories to lint. Auto-discovers .github/workflows/ if omitted.</param>
     public void Check(
@@ -87,10 +93,12 @@ internal class SeitonCli
         ColorMode color = ColorMode.Auto,
         bool noColor = false,
         bool verbose = false,
+        bool skipAgenticWorkflows = false,
         bool includeActions = false,
         [Argument] params string[] files)
     {
-        var code = CheckCommand.Run(files, config, stdinFilename, ignore ?? [], minSeverity, format, oneline, color, noColor, verbose, includeActions);
+        var verboseLevel = CliVerboseParser.Resolve(verbose);
+        var code = CheckCommand.Run(files, config, stdinFilename, ignore ?? [], minSeverity, format, oneline, color, noColor, verboseLevel, includeActions, skipAgenticWorkflows);
         if (code != 0) Environment.ExitCode = code;
     }
 

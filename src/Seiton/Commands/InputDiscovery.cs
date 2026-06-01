@@ -7,21 +7,56 @@ internal static class InputDiscovery
     /// <summary>
     /// Discover files from given arguments, or auto-discover from .github/workflows/.
     /// </summary>
-    public static string[] ResolveFiles(string[] files, bool includeActions, VerboseLogger verboseLogger, string? startDirectory = null)
+    public static string[] ResolveFiles(
+        string[] files,
+        bool includeActions,
+        VerboseLogger verboseLogger,
+        bool skipAgenticWorkflows = false,
+        string? startDirectory = null)
     {
         var startDir = startDirectory ?? Environment.CurrentDirectory;
 
+        string[] resolved;
         if (files.Length > 0)
         {
-            var result = ExpandFileArgs(files);
+            resolved = ExpandFileArgs(files);
             if (verboseLogger.IsEnabled)
             {
-                verboseLogger.Log("discovery", $"{result.Length} file(s) from explicit args");
+                verboseLogger.Log("discovery", $"{resolved.Length} file(s) from explicit args");
             }
-            return result;
+        }
+        else
+        {
+            resolved = DiscoverFiles(includeActions, verboseLogger, startDir);
         }
 
-        return DiscoverFiles(includeActions, verboseLogger, startDir);
+        if (!skipAgenticWorkflows || resolved.Length == 0)
+        {
+            return resolved;
+        }
+
+        return FilterAgenticWorkflows(resolved, verboseLogger);
+    }
+
+    private static string[] FilterAgenticWorkflows(string[] files, VerboseLogger verboseLogger)
+    {
+        var kept = new List<string>(files.Length);
+        for (var i = 0; i < files.Length; i++)
+        {
+            var filePath = files[i];
+            if (filePath == "-" || !AgenticWorkflowDetector.IsAgenticWorkflowFile(filePath))
+            {
+                kept.Add(filePath);
+                continue;
+            }
+
+            if (verboseLogger.IsEnabled)
+            {
+                verboseLogger.Log("discovery", $"skipped {filePath} (agentic workflow)");
+            }
+        }
+
+        return [.. kept];
     }
 
     private static string[] DiscoverFiles(bool includeActions, VerboseLogger verboseLogger, string startDir)

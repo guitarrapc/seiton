@@ -1,6 +1,7 @@
 ﻿using Seiton.Cli;
 using Seiton.Commands;
 using Seiton.Core.Linting;
+using Seiton.Core.Parsing;
 
 namespace Seiton.Tests;
 
@@ -208,7 +209,7 @@ public sealed class VerbosePhase1Tests
             using var sw = new StringWriter();
             var logger = VerboseLogger.Create(verbose: true, sw);
 
-            _ = InputDiscovery.ResolveFiles([], includeActions: false, logger, tempDir);
+            _ = InputDiscovery.ResolveFiles([], includeActions: false, logger, startDirectory: tempDir);
 
             var output = sw.ToString();
             await Assert.That(output).Contains($"verbose: discovery: searching from {tempDir}");
@@ -234,7 +235,7 @@ public sealed class VerbosePhase1Tests
             using var sw = new StringWriter();
             var logger = VerboseLogger.Create(verbose: true, sw);
 
-            _ = InputDiscovery.ResolveFiles([testFile], includeActions: false, logger, tempDir);
+            _ = InputDiscovery.ResolveFiles([testFile], includeActions: false, logger, startDirectory: tempDir);
 
             await Assert.That(sw.ToString().TrimEnd())
                 .IsEqualTo("verbose: discovery: 1 file(s) from explicit args");
@@ -258,7 +259,7 @@ public sealed class VerbosePhase1Tests
             using var sw = new StringWriter();
             var logger = VerboseLogger.Create(verbose: false, sw);
 
-            _ = InputDiscovery.ResolveFiles([], includeActions: false, logger, tempDir);
+            _ = InputDiscovery.ResolveFiles([], includeActions: false, logger, startDirectory: tempDir);
 
             await Assert.That(sw.ToString()).IsEqualTo("");
         }
@@ -266,5 +267,25 @@ public sealed class VerbosePhase1Tests
         {
             Directory.Delete(tempDir, recursive: true);
         }
+    }
+
+    [Test]
+    public async Task GetSlotDocumentKind_VerboseSummary_PreservesDocumentKind()
+    {
+        using var sw = new StringWriter();
+        var logger = VerboseLogger.Create(VerboseLevel.Summary, sw);
+        var kind = CheckCommand.GetSlotDocumentKind(logger, DocumentKind.Workflow);
+
+        await Assert.That(kind).IsEqualTo(DocumentKind.Workflow);
+    }
+
+    [Test]
+    public async Task GetSlotDocumentKind_VerboseDisabled_ReturnsUnknown()
+    {
+        using var sw = new StringWriter();
+        var logger = VerboseLogger.Create(VerboseLevel.Off, sw);
+        var kind = CheckCommand.GetSlotDocumentKind(logger, DocumentKind.Workflow);
+
+        await Assert.That(kind).IsEqualTo(DocumentKind.Unknown);
     }
 }

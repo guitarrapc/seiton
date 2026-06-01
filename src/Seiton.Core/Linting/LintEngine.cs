@@ -243,7 +243,7 @@ public sealed class LintEngine
         // File-level exclusion (Rules: null, Jobs: null) short-circuits workflow diagnostics.
         // Parse errors remain suppressed for fully-excluded files, but configuration
         // diagnostics produced while normalizing rules and exclusions must still be reported.
-        if (IsFileFullyExcluded(config?.Exclusions, filePath))
+        if (ExclusionMatcher.IsFileFullyExcluded(config?.Exclusions, filePath))
         {
             // Snapshot rule config diagnostics before NormalizeExclusions clears the shared buffer.
             var ruleConfigDiagCount = normalizedRules.ConfigurationDiagnostics.Count;
@@ -1353,43 +1353,6 @@ public sealed class LintEngine
         _configDiagnostics.Clear();
         RuleNormalizer.NormalizeRuleEntries(rules, filePath, _configDiagnostics, _normalizedRulesDict);
         return new RulesNormalization(_normalizedRulesDict, _configDiagnostics);
-    }
-
-    /// <summary>
-    /// Checks whether the file is fully excluded by a file-level exclusion (Rules: null, Jobs: null).
-    /// This is a lightweight pre-check that avoids processing parse diagnostics and running rules.
-    /// </summary>
-    private static bool IsFileFullyExcluded(IReadOnlyList<LintExclusion>? exclusions, string filePath)
-    {
-        if (exclusions is null || exclusions.Count == 0)
-        {
-            return false;
-        }
-
-        var normalizedFilePath = NormalizePath(filePath);
-
-        for (var i = 0; i < exclusions.Count; i++)
-        {
-            var exclusion = exclusions[i];
-            // Only file-level exclusions: Rules must be null (all rules) and Jobs must be null/empty
-            if (exclusion.Rules is not null || (exclusion.Jobs is not null && exclusion.Jobs.Count > 0))
-            {
-                continue;
-            }
-
-            if (string.IsNullOrWhiteSpace(exclusion.File))
-            {
-                continue;
-            }
-
-            var normalizedPattern = NormalizeExclusionPattern(exclusion.File);
-            if (GlobMatch(normalizedPattern, normalizedFilePath))
-            {
-                return true;
-            }
-        }
-
-        return false;
     }
 
     private ExclusionsNormalization NormalizeExclusions(IReadOnlyList<LintExclusion>? exclusions, string filePath, Parsing.Ast.Workflow workflow, byte[] utf8Yaml, AstArena arena)

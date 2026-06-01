@@ -10,6 +10,8 @@ namespace Seiton.Commands;
 
 internal static class CheckCommand
 {
+    internal readonly record struct CheckSummaryMetadata(int ExcludedCount = 0, int SuppressedCount = 0);
+
     private static readonly IReadOnlyDictionary<string, int> EmptySuppressedByRule =
         new Dictionary<string, int>(0, StringComparer.Ordinal);
 
@@ -23,8 +25,9 @@ internal static class CheckCommand
         bool oneline,
         ColorMode color,
         bool noColor,
-        bool verbose,
-        bool includeActions)
+        VerboseLevel verboseLevel,
+        bool includeActions,
+        bool skipAgenticWorkflows = false)
     {
         var resolvedFormat = CliConfigBridge.ResolveOutputFormat(format);
         var colorEnabled = CliConfigBridge.ResolveColorEnabled(color, noColor);
@@ -45,9 +48,10 @@ internal static class CheckCommand
         if (HasConfigErrors(configDiags, resolvedFormat, colorEnabled, oneline))
             return ExitCode.FatalError;
 
-        var verboseLogger = VerboseLogger.Create(verbose, Console.Error);
+        var skipAgentic = skipAgenticWorkflows || lintConfig?.Discovery.SkipAgenticWorkflows == true;
+        var verboseLogger = VerboseLogger.Create(verboseLevel, Console.Error);
 
-        if (verbose)
+        if (verboseLevel >= VerboseLevel.Summary)
         {
             lintConfig ??= new LintConfig();
             lintConfig.Verbose = true;
@@ -62,7 +66,7 @@ internal static class CheckCommand
         string[] resolvedFiles;
         try
         {
-            resolvedFiles = InputDiscovery.ResolveFiles(files, includeActions, verboseLogger);
+            resolvedFiles = InputDiscovery.ResolveFiles(files, includeActions, verboseLogger, skipAgentic);
         }
         catch (FileNotFoundException ex)
         {
@@ -81,6 +85,7 @@ internal static class CheckCommand
         Dictionary<string, byte[]>? sourceMap = resolvedFormat == OutputFormat.Text && !oneline ? new() : null;
         var totalSuppressed = 0;
         Dictionary<string, int>? suppressedByRule = null;
+        var excludedCount = 0;
 
         var hasStdin = files.Contains("-");
         var workflowRuleSummaryLogged = false;
@@ -109,7 +114,12 @@ internal static class CheckCommand
                     utf8Yaml = File.ReadAllBytes(filePath);
                 }
 
-                if (verboseLogger.IsEnabled)
+                if (filePath != "-" && ExclusionMatcher.IsFileFullyExcluded(lintConfig?.Exclusions, filePath))
+                {
+                    excludedCount++;
+                }
+
+                if (verboseLogger.LogFileProgress)
                 {
                     verboseLogger.Log($"checking {filePath}...");
                 }
@@ -118,6 +128,14 @@ internal static class CheckCommand
                 using var result = engine.Check(utf8Yaml, filePath, lintConfig);
                 allDiagnostics.AddRange(result.Diagnostics.AsSpan());
                 sourceMap?.TryAdd(filePath, utf8Yaml);
+                if (verboseLogger.IsEnabled)
+                {
+                    AccumulateSuppression(result.SuppressionSummary, ref totalSuppressed, ref suppressedByRule);
+                }
+                else
+                {
+                    totalSuppressed += result.SuppressionSummary.TotalSuppressed;
+                }
 
                 if (verboseLogger.IsEnabled)
                 {
@@ -127,10 +145,13 @@ internal static class CheckCommand
                         WriteRuleSummary(verboseLogger, result.ActiveRuleCount, result.DisabledRuleCount, result.DisabledRuleIds, result.DocumentKind);
                         MarkRuleSummaryLogged(result.DocumentKind, ref workflowRuleSummaryLogged, ref actionRuleSummaryLogged);
                     }
+                }
+
+                if (verboseLogger.LogFileProgress)
+                {
                     var fileElapsed = verboseLogger.GetElapsedTime(fileStart);
                     var suppressedCount = result.SuppressionSummary.TotalSuppressed;
                     WriteFileTimingSummary(verboseLogger, filePath, result.DocumentKind, fileElapsed, result.DiagnosticCount, suppressedCount);
-                    AccumulateSuppression(result.SuppressionSummary, ref totalSuppressed, ref suppressedByRule);
                 }
             }
         }
@@ -153,7 +174,7 @@ internal static class CheckCommand
                     var filePath = resolvedFiles[i];
                     var utf8Yaml = File.ReadAllBytes(filePath);
 
-                    if (verboseLogger.IsEnabled)
+                    if (verboseLogger.LogFileProgress)
                     {
                         // Progress visibility matters more than ordering for this line in parallel mode.
                         verboseLogger.Log($"checking {filePath}...");
@@ -162,7 +183,8 @@ internal static class CheckCommand
                     var fileStart = verboseLogger.GetTimestamp();
                     var engine = engines.Value!;
                     using var result = engine.Check(utf8Yaml, filePath, lintConfig);
-                    var fileElapsed = verboseLogger.IsEnabled ? verboseLogger.GetElapsedTime(fileStart) : default;
+                    var fileElapsed = verboseLogger.LogFileProgress ? verboseLogger.GetElapsedTime(fileStart) : default;
+                    var isExcluded = ExclusionMatcher.IsFileFullyExcluded(lintConfig?.Exclusions, filePath);
 
                     // Capture rule metadata only once per DocumentKind to avoid N string[] allocations.
                     if (verboseLogger.IsEnabled && result.DocumentKind != DocumentKind.Unknown)
@@ -190,9 +212,10 @@ internal static class CheckCommand
                     slots[i] = new FileCheckResult(
                         result.CopyDiagnostics(), filePath,
                         sourceMap is not null ? utf8Yaml : null,
-                        verboseLogger.IsEnabled ? result.SuppressionSummary : default,
-                        verboseLogger.IsEnabled ? result.DocumentKind : default,
-                        verboseLogger.IsEnabled ? fileElapsed : default);
+                        result.SuppressionSummary,
+                        GetSlotDocumentKind(verboseLogger, result.DocumentKind),
+                        verboseLogger.LogFileProgress ? fileElapsed : default,
+                        isExcluded);
                 });
 
             // Aggregate in input order for stable output
@@ -201,6 +224,20 @@ internal static class CheckCommand
                 allDiagnostics.AddRange(slots[i].Diagnostics.AsSpan());
                 if (sourceMap is not null && slots[i].Utf8Yaml is { } yaml)
                     sourceMap.TryAdd(slots[i].FilePath, yaml);
+
+                if (slots[i].IsFullyExcluded)
+                {
+                    excludedCount++;
+                }
+
+                if (verboseLogger.IsEnabled)
+                {
+                    AccumulateSuppression(slots[i].SuppressionSummary, ref totalSuppressed, ref suppressedByRule);
+                }
+                else
+                {
+                    totalSuppressed += slots[i].SuppressionSummary.TotalSuppressed;
+                }
 
                 if (verboseLogger.IsEnabled)
                 {
@@ -211,8 +248,11 @@ internal static class CheckCommand
                         WriteRuleSummary(verboseLogger, meta.ActiveRuleCount, meta.DisabledRuleCount, meta.DisabledRuleIds, slots[i].DocumentKind);
                         MarkRuleSummaryLogged(slots[i].DocumentKind, ref workflowRuleSummaryLogged, ref actionRuleSummaryLogged);
                     }
+                }
+
+                if (verboseLogger.LogFileProgress)
+                {
                     WriteFileTimingSummary(verboseLogger, slots[i].FilePath, slots[i].DocumentKind, slots[i].FileElapsed, slots[i].FileDiagnosticCount, slots[i].FileSuppressedCount);
-                    AccumulateSuppression(slots[i].SuppressionSummary, ref totalSuppressed, ref suppressedByRule);
                 }
             }
         }
@@ -235,13 +275,14 @@ internal static class CheckCommand
         if (allDiagnostics.Count > 0)
             DiagnosticFormatter.Write(Console.Out, allDiagnostics, resolvedFormat, oneline, colorEnabled, sourceMap);
 
-        if (totalSuppressed > 0)
+        if (totalSuppressed > 0 && verboseLogger.IsEnabled)
         {
             WriteSuppressionSummary(verboseLogger,
                 CreateAggregatedSuppressionSummary(totalSuppressed, suppressedByRule ?? EmptySuppressedByRule));
         }
 
-        WriteSummary(allDiagnostics, resolvedFiles.Length, verbose, showExitHint: minSeverity is null);
+        var summaryMetadata = new CheckSummaryMetadata(excludedCount, totalSuppressed);
+        WriteSummary(allDiagnostics, resolvedFiles.Length, verboseLevel >= VerboseLevel.Summary, showExitHint: minSeverity is null, metadata: summaryMetadata);
 
         if (verboseLogger.IsEnabled)
             WriteTotalTiming(verboseLogger, resolvedFiles.Length, verboseLogger.GetElapsedTime(totalStart));
@@ -249,10 +290,10 @@ internal static class CheckCommand
         return HasActionableDiagnostics(allDiagnostics) ? ExitCode.LintIssuesFound : ExitCode.Success;
     }
 
-    internal static void WriteSummary(List<Diagnostic> diagnostics, int fileCount, bool verbose = false, bool showExitHint = false, bool showPerFile = true)
-        => WriteSummary(Console.Error, diagnostics, fileCount, verbose, showExitHint, showPerFile);
+    internal static void WriteSummary(List<Diagnostic> diagnostics, int fileCount, bool verbose = false, bool showExitHint = false, bool showPerFile = true, CheckSummaryMetadata metadata = default, bool isRemainMode = false)
+        => WriteSummary(Console.Error, diagnostics, fileCount, verbose, showExitHint, showPerFile, metadata, isRemainMode);
 
-    internal static void WriteSummary(TextWriter writer, List<Diagnostic> diagnostics, int fileCount, bool verbose = false, bool showExitHint = false, bool showPerFile = true, bool isRemainMode = false)
+    internal static void WriteSummary(TextWriter writer, List<Diagnostic> diagnostics, int fileCount, bool verbose = false, bool showExitHint = false, bool showPerFile = true, CheckSummaryMetadata metadata = default, bool isRemainMode = false)
     {
         var errors = 0;
         var warnings = 0;
@@ -287,20 +328,20 @@ internal static class CheckCommand
             }
 
             if (parts.Length == 0)
-                writer.WriteLine("0 issues remain");
+                writer.WriteLine(AppendSummaryMetadata("0 issues remain", metadata));
             else
             {
                 var total = errors + warnings + infos;
                 var verb = total == 1 ? "remains" : "remain";
-                writer.WriteLine($"{parts} {verb} in {filesWithIssues} {(filesWithIssues == 1 ? "file" : "files")}");
+                writer.WriteLine(AppendSummaryMetadata($"{parts} {verb} in {filesWithIssues} {(filesWithIssues == 1 ? "file" : "files")}", metadata));
             }
         }
         else
         {
             if (parts.Length == 0)
-                writer.WriteLine($"0 issues in {fileCount} {(fileCount == 1 ? "file" : "files")}");
+                writer.WriteLine(AppendSummaryMetadata($"0 issues in {fileCount} {(fileCount == 1 ? "file" : "files")}", metadata));
             else
-                writer.WriteLine($"{parts} in {fileCount} {(fileCount == 1 ? "file" : "files")}");
+                writer.WriteLine(AppendSummaryMetadata($"{parts} in {fileCount} {(fileCount == 1 ? "file" : "files")}", metadata));
         }
 
         if (showPerFile && diagnostics.Count > 0)
@@ -702,6 +743,38 @@ internal static class CheckCommand
         return elapsed.TotalMilliseconds.ToString("F1", CultureInfo.InvariantCulture);
     }
 
+    internal static string AppendSummaryMetadata(string summaryLine, CheckSummaryMetadata metadata)
+    {
+        if (metadata.ExcludedCount <= 0 && metadata.SuppressedCount <= 0)
+        {
+            return summaryLine;
+        }
+
+        var suffix = new System.Text.StringBuilder(" (");
+        if (metadata.ExcludedCount > 0)
+        {
+            suffix.Append(metadata.ExcludedCount);
+            suffix.Append(" excluded");
+        }
+
+        if (metadata.SuppressedCount > 0)
+        {
+            if (metadata.ExcludedCount > 0)
+            {
+                suffix.Append(", ");
+            }
+
+            suffix.Append(metadata.SuppressedCount);
+            suffix.Append(" suppressed");
+        }
+
+        suffix.Append(')');
+        return summaryLine + suffix;
+    }
+
+    internal static DocumentKind GetSlotDocumentKind(VerboseLogger logger, DocumentKind documentKind)
+        => logger.IsEnabled ? documentKind : default;
+
     private static DiagnosticSeverity? ParseSeverity(string value)
     {
         return value.ToLowerInvariant() switch
@@ -723,11 +796,12 @@ internal readonly struct FileCheckResult
     public readonly SuppressionSummary SuppressionSummary;
     public readonly DocumentKind DocumentKind;
     public readonly TimeSpan FileElapsed;
+    public readonly bool IsFullyExcluded;
     public int FileDiagnosticCount => Diagnostics.Length;
     public int FileSuppressedCount => SuppressionSummary.TotalSuppressed;
 
     public FileCheckResult(OwnedDiagnostics diagnostics, string filePath, byte[]? utf8Yaml, SuppressionSummary suppressionSummary = default,
-        DocumentKind documentKind = default, TimeSpan fileElapsed = default)
+        DocumentKind documentKind = default, TimeSpan fileElapsed = default, bool isFullyExcluded = false)
     {
         Diagnostics = diagnostics;
         FilePath = filePath;
@@ -735,6 +809,7 @@ internal readonly struct FileCheckResult
         SuppressionSummary = suppressionSummary;
         DocumentKind = documentKind;
         FileElapsed = fileElapsed;
+        IsFullyExcluded = isFullyExcluded;
     }
 }
 

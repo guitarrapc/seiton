@@ -1,7 +1,7 @@
 ﻿namespace Seiton.Cli;
 
 /// <summary>
-/// Writes verbose diagnostic output to stderr when <c>--verbose</c> is enabled.
+/// Writes verbose diagnostic output to stderr when verbose mode is enabled.
 /// All output uses a <c>verbose: </c> prefix for grep-ability.
 /// Use <see cref="Create"/> to obtain an instance; when verbose is disabled,
 /// all methods are no-ops with zero formatting overhead.
@@ -9,32 +9,49 @@
 internal sealed class VerboseLogger
 {
     /// <summary>A no-op logger that produces no output.</summary>
-    public static readonly VerboseLogger Null = new(null, null);
+    public static readonly VerboseLogger Null = new(null, null, VerboseLevel.Off);
 
     private readonly TextWriter? _writer;
     private readonly TimeProvider? _timeProvider;
+    private readonly VerboseLevel _level;
 
-    private VerboseLogger(TextWriter? writer, TimeProvider? timeProvider)
+    private VerboseLogger(TextWriter? writer, TimeProvider? timeProvider, VerboseLevel level)
     {
         _writer = writer;
         _timeProvider = timeProvider;
+        _level = level;
     }
 
-    /// <summary>Gets whether verbose logging is active.</summary>
+    /// <summary>Gets whether any verbose logging is active.</summary>
     public bool IsEnabled => _writer is not null;
+
+    /// <summary>Gets whether per-file progress lines should be emitted.</summary>
+    public bool LogFileProgress => _level >= VerboseLevel.Files;
 
     /// <summary>
     /// Creates a <see cref="VerboseLogger"/> that writes to <paramref name="stderr"/>
-    /// when <paramref name="verbose"/> is <c>true</c>, or a no-op logger otherwise.
+    /// when <paramref name="verbose"/> is <c>true</c> (summary level), or a no-op logger otherwise.
     /// </summary>
     public static VerboseLogger Create(bool verbose, TextWriter stderr)
-        => verbose ? new VerboseLogger(stderr, TimeProvider.System) : Null;
+        => Create(verbose ? VerboseLevel.Summary : VerboseLevel.Off, stderr);
 
     /// <summary>
     /// Creates a <see cref="VerboseLogger"/> with an explicit <see cref="TimeProvider"/> (for testing).
     /// </summary>
     public static VerboseLogger Create(bool verbose, TextWriter stderr, TimeProvider timeProvider)
-        => verbose ? new VerboseLogger(stderr, timeProvider) : Null;
+        => Create(verbose ? VerboseLevel.Summary : VerboseLevel.Off, stderr, timeProvider);
+
+    /// <summary>
+    /// Creates a <see cref="VerboseLogger"/> for the requested <paramref name="level"/>.
+    /// </summary>
+    public static VerboseLogger Create(VerboseLevel level, TextWriter stderr)
+        => level == VerboseLevel.Off ? Null : new VerboseLogger(stderr, TimeProvider.System, level);
+
+    /// <summary>
+    /// Creates a <see cref="VerboseLogger"/> with an explicit <see cref="TimeProvider"/> (for testing).
+    /// </summary>
+    public static VerboseLogger Create(VerboseLevel level, TextWriter stderr, TimeProvider timeProvider)
+        => level == VerboseLevel.Off ? Null : new VerboseLogger(stderr, timeProvider, level);
 
     /// <summary>
     /// Returns a timestamp for measuring elapsed time.

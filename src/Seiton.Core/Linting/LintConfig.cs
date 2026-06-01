@@ -129,6 +129,10 @@ public sealed class LintConfig
     public OutputConfig Output { get => _output; init => _output = value; }
     private OutputConfig _output = new();
 
+    /// <summary>Gets the discovery configuration section.</summary>
+    public DiscoveryConfig Discovery { get => _discovery; init => _discovery = value; }
+    private DiscoveryConfig _discovery = new();
+
     /// <summary>
     /// When <c>true</c>, the <see cref="LintResult.SuppressionSummary"/> is set to
     /// <see cref="SuppressionSummary.Empty"/> even when diagnostics are suppressed.
@@ -355,6 +359,16 @@ public sealed record GitHubNetworkConfig
     public string? GhesApiUrl { get; init; }
     /// <summary>Gets whether to fall back to the public GitHub API when GHES fails.</summary>
     public bool GhesFallback { get; init; }
+}
+
+/// <summary>Configuration for the <c>discovery:</c> section controlling file discovery behavior.</summary>
+public sealed record DiscoveryConfig
+{
+    /// <summary>
+    /// When <c>true</c>, workflow files whose first lines contain <c># gh-aw-metadata:</c>
+    /// are excluded from lint discovery.
+    /// </summary>
+    public bool SkipAgenticWorkflows { get; init; }
 }
 
 /// <summary>Configuration for the <c>output:</c> section controlling diagnostic output behavior.</summary>

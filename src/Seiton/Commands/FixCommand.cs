@@ -20,12 +20,13 @@ internal static class FixCommand
         bool oneline,
         ColorMode color,
         bool noColor,
-        bool verbose,
+        VerboseLevel verboseLevel,
         bool dryRun,
         bool check,
         bool enablePinNetwork,
         bool enableImageNetwork,
         bool includeActions,
+        bool skipAgenticWorkflows = false,
         TextWriter? output = null,
         TextWriter? error = null)
     {
@@ -50,9 +51,10 @@ internal static class FixCommand
         if (CheckCommand.HasConfigErrors(configDiags, resolvedFormat, colorEnabled, oneline, errorWriter))
             return ExitCode.FatalError;
 
-        var verboseLogger = VerboseLogger.Create(verbose, errorWriter);
+        var skipAgentic = skipAgenticWorkflows || lintConfig?.Discovery.SkipAgenticWorkflows == true;
+        var verboseLogger = VerboseLogger.Create(verboseLevel, errorWriter);
 
-        if (verbose)
+        if (verboseLevel >= VerboseLevel.Summary)
         {
             lintConfig ??= new LintConfig();
             lintConfig.Verbose = true;
@@ -67,7 +69,7 @@ internal static class FixCommand
         string[] resolvedFiles;
         try
         {
-            resolvedFiles = InputDiscovery.ResolveFiles(files, includeActions, verboseLogger);
+            resolvedFiles = InputDiscovery.ResolveFiles(files, includeActions, verboseLogger, skipAgentic);
         }
         catch (FileNotFoundException ex)
         {
@@ -129,6 +131,7 @@ internal static class FixCommand
             var hasPrintedDiff = false;
             var totalSuppressed = 0;
             Dictionary<string, int>? suppressedByRule = null;
+            var excludedCount = 0;
             var workflowRuleSummaryLogged = false;
             var actionRuleSummaryLogged = false;
             var totalStart = verboseLogger.GetTimestamp();
@@ -158,7 +161,12 @@ internal static class FixCommand
 
                 var utf8Yaml = File.ReadAllBytes(filePath);
 
-                if (verboseLogger.IsEnabled)
+                if (ExclusionMatcher.IsFileFullyExcluded(lintConfig?.Exclusions, filePath))
+                {
+                    excludedCount++;
+                }
+
+                if (verboseLogger.LogFileProgress)
                 {
                     verboseLogger.Log($"fixing {filePath}...");
                 }
@@ -170,6 +178,14 @@ internal static class FixCommand
                 {
                     using var handle = engine.Check(utf8Yaml, filePath, fixEnabledLintConfig);
                     lintDiagnostics = handle.CopyDiagnostics();
+                    if (verboseLogger.IsEnabled)
+                    {
+                        CheckCommand.AccumulateSuppression(handle.SuppressionSummary, ref totalSuppressed, ref suppressedByRule);
+                    }
+                    else
+                    {
+                        totalSuppressed += handle.SuppressionSummary.TotalSuppressed;
+                    }
 
                     if (verboseLogger.IsEnabled)
                     {
@@ -179,10 +195,12 @@ internal static class FixCommand
                             CheckCommand.WriteRuleSummary(verboseLogger, handle.ActiveRuleCount, handle.DisabledRuleCount, handle.DisabledRuleIds, handle.DocumentKind);
                             CheckCommand.MarkRuleSummaryLogged(handle.DocumentKind, ref workflowRuleSummaryLogged, ref actionRuleSummaryLogged);
                         }
+                    }
+
+                    if (verboseLogger.LogFileProgress)
+                    {
                         var fileElapsed = verboseLogger.GetElapsedTime(fileStart);
                         CheckCommand.WriteFileTimingSummary(verboseLogger, filePath, handle.DocumentKind, fileElapsed, handle.DiagnosticCount, handle.SuppressionSummary.TotalSuppressed);
-
-                        CheckCommand.AccumulateSuppression(handle.SuppressionSummary, ref totalSuppressed, ref suppressedByRule);
                     }
                 }
 
@@ -215,7 +233,7 @@ internal static class FixCommand
                     }
                     catch (Exception ex) when (ex is not OperationCanceledException)
                     {
-                        WriteFixApplicationError(errorWriter, filePath, ex, verbose);
+                        WriteFixApplicationError(errorWriter, filePath, ex, verboseLevel >= VerboseLevel.Summary);
                         return ExitCode.FatalError;
                     }
                 }
@@ -255,7 +273,7 @@ internal static class FixCommand
                     }
                     catch (Exception ex) when (ex is not OperationCanceledException)
                     {
-                        WriteFixApplicationError(errorWriter, filePath, ex, verbose);
+                        WriteFixApplicationError(errorWriter, filePath, ex, verboseLevel >= VerboseLevel.Summary);
                         return ExitCode.FatalError;
                     }
 
@@ -309,7 +327,7 @@ internal static class FixCommand
                 }
                 catch (Exception ex) when (ex is not OperationCanceledException)
                 {
-                    WriteFixApplicationError(errorWriter, filePath, ex, verbose);
+                    WriteFixApplicationError(errorWriter, filePath, ex, verboseLevel >= VerboseLevel.Summary);
                     return ExitCode.FatalError;
                 }
 
@@ -326,7 +344,7 @@ internal static class FixCommand
                     currentHandle?.Dispose();
                 }
 
-                if (verboseLogger.IsEnabled && appliedFixes > 0)
+                if (verboseLogger.LogFileProgress && appliedFixes > 0)
                 {
                     verboseLogger.LogFile(filePath, $"applied {appliedFixes} fix(es)");
                 }
@@ -371,12 +389,15 @@ internal static class FixCommand
                 DiagnosticFormatter.Write(outputWriter, allDiagnostics, resolvedFormat, oneline, colorEnabled);
             }
 
-            if (totalSuppressed > 0)
+            if (totalSuppressed > 0 && verboseLogger.IsEnabled)
             {
                 var suppressionCounts = suppressedByRule ?? EmptySuppressedByRule;
                 CheckCommand.WriteSuppressionSummary(verboseLogger,
                     CheckCommand.CreateAggregatedSuppressionSummary(totalSuppressed, suppressionCounts));
             }
+
+            var summaryMetadata = new CheckCommand.CheckSummaryMetadata(excludedCount, totalSuppressed);
+            var showVerboseSummary = verboseLevel >= VerboseLevel.Summary;
 
             // Write fix summary FIRST (what was done), then remaining summary (what's left).
             // This order is more intuitive: action taken → consequences.
@@ -389,11 +410,11 @@ internal static class FixCommand
                 // Use "remain" wording only for applied/dry-run (where fixes were/would be applied).
                 // In check mode, nothing was changed so "remain" is misleading.
                 var useRemainMode = !check;
-                CheckCommand.WriteSummary(errorWriter, allDiagnostics, resolvedFiles.Length, verbose, showExitHint: minSeverity is null, showPerFile: false, isRemainMode: useRemainMode);
+                CheckCommand.WriteSummary(errorWriter, allDiagnostics, resolvedFiles.Length, showVerboseSummary, showExitHint: minSeverity is null, showPerFile: false, metadata: summaryMetadata, isRemainMode: useRemainMode);
             }
             else
             {
-                CheckCommand.WriteSummary(errorWriter, allDiagnostics, resolvedFiles.Length, verbose, showExitHint: minSeverity is null, showPerFile: false);
+                CheckCommand.WriteSummary(errorWriter, allDiagnostics, resolvedFiles.Length, showVerboseSummary, showExitHint: minSeverity is null, showPerFile: false, metadata: summaryMetadata);
             }
 
             if (verboseLogger.IsEnabled)
