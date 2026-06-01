@@ -421,7 +421,7 @@ internal static class FixCommand
             // Output remaining diagnostics
             if (allDiagnostics.Count > 0)
             {
-                if (hasPrintedDiff && resolvedFormat == OutputFormat.Text)
+                if (hasPrintedDiff && resolvedFormat.UsesRichTextOutput())
                     outputWriter.WriteLine();
                 DiagnosticFormatter.Write(outputWriter, allDiagnostics, resolvedFormat, oneline, colorEnabled);
             }
@@ -778,7 +778,7 @@ internal static class FixCommand
 
         // When output format is non-text (json/sarif), diff goes to stderr
         // to keep stdout as pure machine-parseable output.
-        var diffWriter = resolvedFormat == OutputFormat.Text ? outputWriter : errorWriter;
+        var diffWriter = resolvedFormat.UsesRichTextOutput() ? outputWriter : errorWriter;
         diffWriter.Write(diff);
         hasPrintedDiff = true;
     }

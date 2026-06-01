@@ -78,7 +78,24 @@ public sealed class RulesCommandTests
             error: stderr);
 
         await Assert.That(exitCode).IsEqualTo(ExitCode.InvalidOptions);
-        await Assert.That(stderr.ToString()).Contains("SARIF output is not supported");
+        await Assert.That(stderr.ToString()).Contains("SARIF");
+        await Assert.That(stdout.ToString()).IsEqualTo(string.Empty);
+    }
+
+    [Test]
+    public async Task Run_GitHubActionsFormat_WritesErrorToInjectedWriter()
+    {
+        using var stdout = new StringWriter();
+        using var stderr = new StringWriter();
+
+        var exitCode = RulesCommand.Run(
+            config: null,
+            format: OutputFormat.GitHubActions,
+            output: stdout,
+            error: stderr);
+
+        await Assert.That(exitCode).IsEqualTo(ExitCode.InvalidOptions);
+        await Assert.That(stderr.ToString()).Contains("github-actions");
         await Assert.That(stdout.ToString()).IsEqualTo(string.Empty);
     }
 

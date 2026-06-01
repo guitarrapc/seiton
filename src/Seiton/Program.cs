@@ -22,7 +22,7 @@ internal class SeitonCli
     /// <param name="stdinFilename">Filename used when reading from stdin (-).</param>
     /// <param name="ignore">Substring patterns for messages to ignore (case-insensitive).</param>
     /// <param name="minSeverity">Minimum severity to report: error | warning | info.</param>
-    /// <param name="format">Output format: text | json | sarif.</param>
+    /// <param name="format">Output format: text | json | sarif | github-actions.</param>
     /// <param name="oneline">Print each diagnostic on a single line.</param>
     /// <param name="color">Color mode: auto | always | never.</param>
     /// <param name="noColor">Disable color output (overrides --color).</param>
@@ -42,7 +42,7 @@ internal class SeitonCli
         string stdinFilename = "<stdin>",
         string[]? ignore = null,
         string? minSeverity = null,
-        OutputFormat format = OutputFormat.Text,
+        string format = "text",
         bool oneline = false,
         ColorMode color = ColorMode.Auto,
         bool noColor = false,
@@ -64,10 +64,17 @@ internal class SeitonCli
             return;
         }
 
+        if (!OutputFormatParser.TryParse(format, out var outputFormat))
+        {
+            Console.Error.WriteLine("Invalid --format. Valid values: text, json, sarif, github-actions");
+            Environment.ExitCode = ExitCode.InvalidOptions;
+            return;
+        }
+
         var verboseLevel = CliVerboseParser.Resolve(verbose);
         var code = fix
-            ? await FixCommand.RunAsync(files, config, stdinFilename, ignore ?? [], minSeverity, format, oneline, color, noColor, verboseLevel, dryRun, check, enablePinNetwork, enableImageNetwork, includeActions, skipAgenticWorkflows, showDiff)
-            : CheckCommand.Run(files, config, stdinFilename, ignore ?? [], minSeverity, format, oneline, color, noColor, verboseLevel, includeActions, skipAgenticWorkflows);
+            ? await FixCommand.RunAsync(files, config, stdinFilename, ignore ?? [], minSeverity, outputFormat, oneline, color, noColor, verboseLevel, dryRun, check, enablePinNetwork, enableImageNetwork, includeActions, skipAgenticWorkflows, showDiff)
+            : CheckCommand.Run(files, config, stdinFilename, ignore ?? [], minSeverity, outputFormat, oneline, color, noColor, verboseLevel, includeActions, skipAgenticWorkflows);
 
         if (code != 0) Environment.ExitCode = code;
     }
@@ -77,7 +84,7 @@ internal class SeitonCli
     /// <param name="stdinFilename">Filename used when reading from stdin (-).</param>
     /// <param name="ignore">Substring patterns for messages to ignore (case-insensitive).</param>
     /// <param name="minSeverity">Minimum severity to report: error | warning | info.</param>
-    /// <param name="format">Output format: text | json | sarif.</param>
+    /// <param name="format">Output format: text | json | sarif | github-actions.</param>
     /// <param name="oneline">Print each diagnostic on a single line.</param>
     /// <param name="color">Color mode: auto | always | never.</param>
     /// <param name="noColor">Disable color output (overrides --color).</param>
@@ -90,7 +97,7 @@ internal class SeitonCli
         string stdinFilename = "<stdin>",
         string[]? ignore = null,
         string? minSeverity = null,
-        OutputFormat format = OutputFormat.Text,
+        string format = "text",
         bool oneline = false,
         ColorMode color = ColorMode.Auto,
         bool noColor = false,
@@ -99,8 +106,15 @@ internal class SeitonCli
         bool includeActions = false,
         [Argument] params string[] files)
     {
+        if (!OutputFormatParser.TryParse(format, out var outputFormat))
+        {
+            Console.Error.WriteLine("Invalid --format. Valid values: text, json, sarif, github-actions");
+            Environment.ExitCode = ExitCode.InvalidOptions;
+            return;
+        }
+
         var verboseLevel = CliVerboseParser.Resolve(verbose);
-        var code = CheckCommand.Run(files, config, stdinFilename, ignore ?? [], minSeverity, format, oneline, color, noColor, verboseLevel, includeActions, skipAgenticWorkflows);
+        var code = CheckCommand.Run(files, config, stdinFilename, ignore ?? [], minSeverity, outputFormat, oneline, color, noColor, verboseLevel, includeActions, skipAgenticWorkflows);
         if (code != 0) Environment.ExitCode = code;
     }
 
@@ -128,9 +142,16 @@ internal class SeitonCli
     /// <summary>List all available lint rules and their effective status.</summary>
     /// <param name="config">-c, Path to config file. Auto-discovered from .github/seiton.yaml if omitted.</param>
     /// <param name="format">Output format: text | json.</param>
-    public void Rules(string? config = null, OutputFormat format = OutputFormat.Text)
+    public void Rules(string? config = null, string format = "text")
     {
-        var code = RulesCommand.Run(config, format);
+        if (!OutputFormatParser.TryParse(format, out var outputFormat))
+        {
+            Console.Error.WriteLine("Invalid --format. Valid values: text, json");
+            Environment.ExitCode = ExitCode.InvalidOptions;
+            return;
+        }
+
+        var code = RulesCommand.Run(config, outputFormat);
         if (code != 0) Environment.ExitCode = code;
     }
 

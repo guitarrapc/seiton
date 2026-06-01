@@ -18,6 +18,7 @@ public static class DiagnosticFormatter
         switch (format)
         {
             case OutputFormat.Text:
+            case OutputFormat.GitHubActions:
                 WriteText(writer, diagnostics, oneline, color, sourceMap);
                 break;
             case OutputFormat.Json:

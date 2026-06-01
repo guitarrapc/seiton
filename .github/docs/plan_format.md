@@ -217,20 +217,42 @@ cd src/Seiton.Benchmark && dotnet run -c Release -- -f "*CoreLint*" "*CoreParsin
 - **仕様**: `plan_format.md` / `Seiton_CLI_spec.md` との差分なし。
 - **性能**: ベンチ追加による Core パスへの影響なし（別プロセス・別ベンチクラス）。
 
-### フェーズ 1 — 形式解決（Red → Green）
+### フェーズ 1 — 形式解決（Red → Green）✅ 完了
 
-**テスト（先に失敗させる）**:
+**実施日**: 2026-06-02
 
-- `ResolveOutputFormat`: `GITHUB_ACTIONS=true` + フラグ default → `GitHubActions`
-- `GITHUB_ACTIONS` 未設定 → `Text`
-- フラグ `json` → `Json`（自動切り替えしない）
-- `SEITON_FORMAT=github-actions` → `GitHubActions`
+#### テスト（Red → Green）
 
-**実装**:
+| テスト | 結果 |
+|---|---|
+| `CliConfigBridgeTests.ResolveOutputFormat_*` (6) | Pass |
+| `OutputFormatParserTests` (2) | Pass |
+| `RulesCommandTests.Run_GitHubActionsFormat_*` | Pass |
+| `Seiton.Tests` 全体 | **252/252 Pass** |
 
-- `OutputFormat` に `GitHubActions` を追加
-- `CliConfigBridge.ResolveOutputFormat` を拡張
-- `Program` / Cocona の `--format` ヘルプ文字列更新
+#### 実装概要
+
+- `OutputFormat.GitHubActions` を追加
+- `OutputFormatParser` — CLI / env 向け `github-actions` などをパース（Cocona の enum はハイフン非対応のため `--format` は `string` + 手動パース）
+- `CliConfigBridge.ResolveOutputFormat` — `SEITON_FORMAT` → `GITHUB_ACTIONS` 自動デフォルト
+- `Program` — `--format` を `string` 化、無効値は exit `2`
+- `RulesCommand` — `github-actions` / SARIF は exit `2`
+- **暫定**: `DiagnosticFormatter` は `GitHubActions` を `Text` と同じ rich 出力（`::group::` はフェーズ 2）
+
+#### ベンチマーク（DiagnosticOutputBenchmark）
+
+| Count | フェーズ 0 Mean | フェーズ 1 Mean | 変化 | Allocated |
+|---|---:|---:|---:|---|
+| F1 | 225.9 μs | 212.4 μs | **−6.0%** | 117.5 KB（同一） |
+| F10 | 2,237.1 μs | 2,044.2 μs | **−8.6%** | 1136.94 KB（同一） |
+
+変化は ShortRun の誤差範囲内。formatter 分岐が `Text` と共有されただけで、lint パスは未変更。
+
+#### フェーズ 1 レビュー
+
+- **API**: GHA 上で `seiton` のみ → 内部的に `GitHubActions`（ログはフェーズ 2 まで text 相当）。`--format github-actions` / `SEITON_FORMAT=github-actions` / `--format text` で明示制御可能。
+- **仕様**: `Seiton_CLI_spec.md` §3.1.1 / §6.5 と一致。
+- **性能**: +10% 以内、Allocated 不変。
 
 ### フェーズ 2 — グループ付き診断出力（Red → Green）
 
@@ -324,7 +346,13 @@ dotnet test
 - **テスト**: 新規テストなし。`Seiton.Tests` 243 件パス。Playground 7 失敗は既知・別系統。
 - **仕様差分**: なし。
 
-### フェーズ 1 以降（テンプレート）
+### フェーズ 1
+
+- **性能**: DiagnosticOutput F1 −6%、F10 −8.6%（誤差範囲）。Allocated 不変。
+- **テスト**: `CliConfigBridgeTests` +6、`OutputFormatParserTests` +2、`RulesCommandTests` +1。
+- **仕様差分**: なし。フェーズ 2 で formatter の `::group::` を実装予定。
+
+### フェーズ 2 以降（テンプレート）
 
 - **性能**: ベースライン比較結果（Mean / Allocated）。変化があれば理由と対策。
 - **テスト**: 追加したテストクラス・メソッド一覧。

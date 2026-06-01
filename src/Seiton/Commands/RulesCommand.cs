@@ -14,9 +14,9 @@ internal static class RulesCommand
     internal static int Run(string? config, OutputFormat format, TextWriter output, TextWriter error)
     {
         var resolvedFormat = CliConfigBridge.ResolveOutputFormat(format);
-        if (resolvedFormat == OutputFormat.Sarif)
+        if (resolvedFormat is OutputFormat.Sarif or OutputFormat.GitHubActions)
         {
-            error.WriteLine("SARIF output is not supported for 'seiton rules'. Use --format text or --format json.");
+            error.WriteLine("SARIF and github-actions output are not supported for 'seiton rules'. Use --format text or --format json.");
             return ExitCode.InvalidOptions;
         }
 

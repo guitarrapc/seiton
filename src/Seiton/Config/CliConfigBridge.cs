@@ -154,7 +154,7 @@ public static class CliConfigBridge
     }
 
     /// <summary>
-    /// Resolve output format from flag and SEITON_FORMAT env var.
+    /// Resolve output format from flag, <c>SEITON_FORMAT</c>, and <c>GITHUB_ACTIONS</c> auto-default.
     /// </summary>
     public static OutputFormat ResolveOutputFormat(OutputFormat flagFormat)
     {
@@ -162,15 +162,17 @@ public static class CliConfigBridge
             return flagFormat;
 
         var envFormat = Environment.GetEnvironmentVariable("SEITON_FORMAT");
-        if (string.IsNullOrEmpty(envFormat))
-            return OutputFormat.Text;
-
-        return envFormat.ToLowerInvariant() switch
+        if (!string.IsNullOrEmpty(envFormat))
         {
-            "json" => OutputFormat.Json,
-            "sarif" => OutputFormat.Sarif,
-            _ => OutputFormat.Text,
-        };
+            return OutputFormatParser.TryParse(envFormat, out var fromEnv)
+                ? fromEnv
+                : OutputFormat.Text;
+        }
+
+        if (!string.IsNullOrEmpty(Environment.GetEnvironmentVariable("GITHUB_ACTIONS")))
+            return OutputFormat.GitHubActions;
+
+        return OutputFormat.Text;
     }
 
     private static bool IsCi() => !string.IsNullOrEmpty(Environment.GetEnvironmentVariable("CI"));

@@ -83,7 +83,7 @@ internal static class CheckCommand
 
         // Lint files
         var allDiagnostics = new List<Diagnostic>();
-        Dictionary<string, byte[]>? sourceMap = resolvedFormat == OutputFormat.Text && !oneline ? new() : null;
+        Dictionary<string, byte[]>? sourceMap = resolvedFormat.UsesRichTextOutput() && !oneline ? new() : null;
         var totalSuppressed = 0;
         Dictionary<string, int>? suppressedByRule = null;
         var excludedCount = 0;
@@ -877,7 +877,7 @@ internal static class CheckCommand
 
     internal static bool ShouldShowInitHint(ConfigPathResolution configResolution, OutputFormat format, IReadOnlyList<Diagnostic> diagnostics)
     {
-        if (configResolution.Path is not null || format != OutputFormat.Text || IsCi())
+        if (configResolution.Path is not null || !format.UsesRichTextOutput() || IsCi())
         {
             return false;
         }
