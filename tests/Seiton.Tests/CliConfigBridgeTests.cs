@@ -2,6 +2,7 @@ using Seiton.Config;
 
 namespace Seiton.Tests;
 
+[NotInParallel("ProcessState")]
 public sealed class CliConfigBridgeTests
 {
     [Test]

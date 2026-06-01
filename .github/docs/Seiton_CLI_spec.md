@@ -545,9 +545,10 @@ Total timing is emitted at the end:
 ```
 verbose: total: 3 file(s) checked in 4.5 ms
 verbose: total: 3 file(s) processed, 2 modified in 450.0 ms
+verbose: total: 3 file(s) processed, 2 would be modified in 450.0 ms   # --dry-run
 ```
 
-In fix mode, the total line reports **processed** (input files handled) and **modified** (files whose YAML bytes changed) separately. These counts can differ when fixable issues remain but no content change was produced.
+In fix mode, the total line reports **processed** (input files handled) and **modified** (files whose YAML bytes changed) separately. These counts can differ when fixable issues remain but no content change was produced. In `--dry-run` mode, the modified count uses **would be modified** instead of **modified**.
 
 When fix mode runs on at least one file with fixable issues but produces no content changes, a hint is emitted:
 

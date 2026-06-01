@@ -140,6 +140,18 @@ public sealed class VerboseTimingTests
     }
 
     [Test]
+    public async Task WriteFixTotalTiming_DryRun_EmitsWouldBeModified()
+    {
+        using var sw = new StringWriter();
+        var logger = VerboseLogger.Create(verbose: true, sw);
+
+        CheckCommand.WriteFixTotalTiming(logger, processedFileCount: 2, modifiedFileCount: 1, TimeSpan.FromMilliseconds(90.0), dryRun: true);
+
+        await Assert.That(sw.ToString().TrimEnd())
+            .IsEqualTo("verbose: total: 2 file(s) processed, 1 would be modified in 90.0 ms");
+    }
+
+    [Test]
     public async Task WriteFixTotalTiming_ProcessedWithModification_EmitsBothCounts()
     {
         using var sw = new StringWriter();

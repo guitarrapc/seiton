@@ -53,7 +53,7 @@ public static class CliConfigBridge
             }
 
             if (normalizedBoundary is not null
-                && string.Equals(current, normalizedBoundary, StringComparison.OrdinalIgnoreCase))
+                && PathsEqual(current, normalizedBoundary))
             {
                 break;
             }
@@ -174,4 +174,9 @@ public static class CliConfigBridge
     }
 
     private static bool IsCi() => !string.IsNullOrEmpty(Environment.GetEnvironmentVariable("CI"));
+
+    private static bool PathsEqual(string left, string right)
+        => string.Equals(left, right, OperatingSystem.IsWindows()
+            ? StringComparison.OrdinalIgnoreCase
+            : StringComparison.Ordinal);
 }

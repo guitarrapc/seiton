@@ -737,9 +737,15 @@ internal static class CheckCommand
         logger.Log("total", $"{fileCount} file(s) {verb} in {FormatMilliseconds(elapsed)} ms");
     }
 
-    internal static void WriteFixTotalTiming(VerboseLogger logger, int processedFileCount, int modifiedFileCount, TimeSpan elapsed)
+    internal static void WriteFixTotalTiming(
+        VerboseLogger logger,
+        int processedFileCount,
+        int modifiedFileCount,
+        TimeSpan elapsed,
+        bool dryRun = false)
     {
-        logger.Log("total", $"{processedFileCount} file(s) processed, {modifiedFileCount} modified in {FormatMilliseconds(elapsed)} ms");
+        var modifiedVerb = dryRun ? "would be modified" : "modified";
+        logger.Log("total", $"{processedFileCount} file(s) processed, {modifiedFileCount} {modifiedVerb} in {FormatMilliseconds(elapsed)} ms");
     }
 
     internal static string FormatMilliseconds(TimeSpan elapsed)

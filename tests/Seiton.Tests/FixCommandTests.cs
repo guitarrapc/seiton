@@ -691,8 +691,10 @@ public sealed class FixCommandTests
             """);
 
         var originalDirectory = Directory.GetCurrentDirectory();
+        var originalConfig = Environment.GetEnvironmentVariable("SEITON_CONFIG");
         try
         {
+            Environment.SetEnvironmentVariable("SEITON_CONFIG", null);
             Directory.SetCurrentDirectory(repoDir);
             using var sw = new StringWriter();
             using var stderr = new StringWriter();
@@ -723,6 +725,7 @@ public sealed class FixCommandTests
         }
         finally
         {
+            Environment.SetEnvironmentVariable("SEITON_CONFIG", originalConfig);
             Directory.SetCurrentDirectory(originalDirectory);
             if (Directory.Exists(repoDir))
                 Directory.Delete(repoDir, recursive: true);
@@ -2241,6 +2244,70 @@ public sealed class FixCommandTests
     }
 
     [Test]
+    public async Task Fix_Verbose_DryRun_AppliesLocalFix_EmitsWouldBeModifiedTotal()
+    {
+        var configPath = CreateConfigFile(
+            """
+            rules:
+              runner-no-latest:
+                enabled: true
+                fix-mapping:
+                  ubuntu-latest: "ubuntu-24.04"
+              job-timeout-minutes-required:
+                enabled: false
+              job-permissions-required:
+                enabled: false
+            """);
+        var filePath = CreateWorkflowFile(
+            """
+            on: push
+            jobs:
+              build:
+                runs-on: ubuntu-latest
+                permissions:
+                  contents: read
+                timeout-minutes: 15
+                steps:
+                  - run: echo ok
+            """);
+        var originalContent = File.ReadAllText(filePath);
+
+        try
+        {
+            using var sw = new StringWriter();
+            using var stderr = new StringWriter();
+
+            var exitCode = await FixCommand.RunAsync(
+                [filePath],
+                config: configPath,
+                stdinFilename: "stdin.yml",
+                ignore: [],
+                minSeverity: null,
+                format: OutputFormat.Text,
+                oneline: true,
+                color: ColorMode.Never,
+                noColor: true,
+                verboseLevel: VerboseLevel.Summary,
+                dryRun: true,
+                check: false,
+                enablePinNetwork: false,
+                enableImageNetwork: false,
+                includeActions: false,
+                output: sw,
+                error: stderr);
+
+            await Assert.That(exitCode).IsEqualTo(ExitCode.Success);
+            await Assert.That(stderr.ToString()).Contains("verbose: total: 1 file(s) processed, 1 would be modified");
+            await Assert.That(File.ReadAllText(filePath)).IsEqualTo(originalContent);
+        }
+        finally
+        {
+            DeleteContainingDirectory(filePath);
+            DeleteContainingDirectory(configPath);
+        }
+    }
+
+    [Test]
     public async Task Fix_UnchangedContent_DoesNotRewriteFileTimestamp()
     {
         var configPath = CreateConfigFile(
@@ -2268,6 +2335,7 @@ public sealed class FixCommandTests
 
         try
         {
+            File.SetLastWriteTimeUtc(filePath, DateTime.UtcNow.AddMinutes(-5));
             var lastWriteUtcBefore = File.GetLastWriteTimeUtc(filePath);
 
             using var sw = new StringWriter();

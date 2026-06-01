@@ -425,7 +425,12 @@ internal static class FixCommand
             }
 
             if (verboseLogger.IsEnabled)
-                CheckCommand.WriteFixTotalTiming(verboseLogger, resolvedFiles.Length, modifiedFileCount, verboseLogger.GetElapsedTime(totalStart));
+                CheckCommand.WriteFixTotalTiming(
+                    verboseLogger,
+                    resolvedFiles.Length,
+                    modifiedFileCount,
+                    verboseLogger.GetElapsedTime(totalStart),
+                    dryRun: dryRun);
 
             var fixableRemainingCount = 0;
             for (var i = 0; i < allDiagnostics.Count; i++)
