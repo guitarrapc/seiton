@@ -2463,6 +2463,21 @@ public sealed class FixCommandTests
         await Assert.That(sw.ToString()).IsEqualTo("");
     }
 
+    [Test]
+    public async Task WriteFixSummary_AllowsZeroFixedCount_WhenFixCountIsUnknown()
+    {
+        using var sw = new StringWriter();
+        var fixedFiles = new List<(string FilePath, int FixedCount)> { ("workflow.yml", 0) };
+        var remainingDiagnostics = new List<Seiton.Core.Parsing.Diagnostic>();
+
+        FixCommand.WriteFixSummary(sw, fixedFiles, remainingDiagnostics, FixCommand.FixSummaryMode.Applied);
+
+        var output = sw.ToString();
+        await Assert.That(output).Contains("Fixed 0 of 0 issues in 1 file (0 remaining)");
+        await Assert.That(output).Contains("| workflow.yml");
+        await Assert.That(output).Contains("|     0 |");
+    }
+
     private static string CreateWorkflowFile(string yaml)
     {
         var dir = Path.Combine(Path.GetTempPath(), "Seiton.Tests", Guid.NewGuid().ToString("N"));

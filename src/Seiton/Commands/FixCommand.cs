@@ -286,7 +286,7 @@ internal static class FixCommand
                         TryWriteFixDiff(utf8Yaml, dryRunYaml, filePath, resolvedFormat, outputWriter, errorWriter, ref hasPrintedDiff);
                         modifiedFileCount++;
                         fixedFiles ??= new List<(string, int)>();
-                        fixedFiles.Add((filePath, dryRunApplied > 0 ? dryRunApplied : 1));
+                        fixedFiles.Add((filePath, dryRunApplied));
                     }
 
                     // Relint the hypothetical fixed YAML to report remaining diagnostics,
@@ -359,7 +359,7 @@ internal static class FixCommand
                 if (applyContentChanged)
                 {
                     fixedFiles ??= new List<(string, int)>();
-                    fixedFiles.Add((filePath, appliedFixes > 0 ? appliedFixes : 1));
+                    fixedFiles.Add((filePath, appliedFixes));
                 }
             }
 

@@ -553,8 +553,10 @@ In fix mode, the total line reports **processed** (input files handled) and **mo
 When fix mode runs on at least one file with fixable issues but produces no content changes, a hint is emitted:
 
 ```
-hint: no files modified (<N> file(s) processed; <M> fixable issue(s) remain)
-hint: no files would be modified (<N> file(s) processed; <M> fixable issue(s) remain)   # --dry-run
+hint: no files modified (1 file processed; 1 fixable issue remains)
+hint: no files modified (2 files processed; 3 fixable issues remain)
+hint: no files would be modified (1 file processed; 1 fixable issue remains)   # --dry-run
+hint: no files would be modified (2 files processed; 3 fixable issues remain)   # --dry-run
 ```
 
 When no fixable issues were attempted, this hint is not emitted.
