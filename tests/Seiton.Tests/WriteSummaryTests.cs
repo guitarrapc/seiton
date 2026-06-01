@@ -167,6 +167,53 @@ public sealed class WriteSummaryTests
     }
 
     [Test]
+    public async Task ShouldSuggestIncludeActions_ActionsDirectoryExistsAndFlagOff_ReturnsTrue()
+    {
+        var root = CreateTempDirectory();
+        try
+        {
+            Directory.CreateDirectory(Path.Combine(root, ".github", "actions", "my-action"));
+            var shouldSuggest = CheckCommand.ShouldSuggestIncludeActions(includeActions: false, discoveryStartDirectory: root);
+            await Assert.That(shouldSuggest).IsTrue();
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
+    [Test]
+    public async Task ShouldSuggestIncludeActions_FlagOn_ReturnsFalse()
+    {
+        var root = CreateTempDirectory();
+        try
+        {
+            Directory.CreateDirectory(Path.Combine(root, ".github", "actions"));
+            var shouldSuggest = CheckCommand.ShouldSuggestIncludeActions(includeActions: true, discoveryStartDirectory: root);
+            await Assert.That(shouldSuggest).IsFalse();
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
+    [Test]
+    public async Task WriteInitHint_WhenIncludeActionsSuggested_ContainsFlagHint()
+    {
+        using var sw = new StringWriter();
+        CheckCommand.WriteInitHint(sw, suggestIncludeActions: true);
+        await Assert.That(sw.ToString()).Contains("--include-actions");
+    }
+
+    private static string CreateTempDirectory()
+    {
+        var path = Path.Combine(Path.GetTempPath(), "Seiton.Tests", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(path);
+        return path;
+    }
+
+    [Test]
     public async Task WriteSummary_WithMetadata_AppendsExcludedAndSuppressedCounts()
     {
         using var sw = new StringWriter();

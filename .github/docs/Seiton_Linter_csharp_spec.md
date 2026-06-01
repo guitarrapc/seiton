@@ -166,6 +166,7 @@ C# implementation:
   - `--verbose`: count + preview list
   - `-vv`: full excluded path list
 - No-config + high-volume lint output in text mode emits an init hint (`seiton init`) to improve first-run guidance.
+- When the hint is shown and `.github/actions/` exists in the current/ancestor tree while `--include-actions` is off, `CheckCommand` additionally suggests `--include-actions`.
 
 ---
 

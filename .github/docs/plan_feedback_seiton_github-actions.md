@@ -320,12 +320,56 @@ composite action（`.github/actions/git-push/action.yaml`）を `--include-actio
 | excluded が件数しか見えない | verbose で excluded ファイル一覧を出力 |
 | 初回実行時の導線不足 | high-volume + no-config 条件で `seiton init` ヒント追加 |
 
-### フェーズ 3 — P2 ドキュメント・CLI 拡張
+### フェーズ 3 — P2 ドキュメント・CLI 拡張 ✅ 完了
 
-| タスク | 対象 |
-|--------|------|
-| validate-config --verbose | `Program.cs`, `ValidateCommand` |
-| usage ドキュメント | `docs/usage.md`, `docs/configuration.md` |
+| タスク | 対象 | 状態 |
+|--------|------|------|
+| validate-config --verbose | `Program.cs`, `ValidateCommand` | ✅ |
+| usage ドキュメント | `docs/usage.md`, `docs/configuration.md` | ✅ |
+| init hint + include-actions 導線 | `CheckCommand`, `WriteSummaryTests` | ✅ |
+
+#### 実装内容
+
+1. **`validate-config --verbose` を正式サポート**
+   `SeitonCli.ValidateConfig` に `verbose` 引数を追加し、`CliVerboseParser.Resolve` を通して `ValidateCommand` に `VerboseLevel` を渡すようにした。
+2. **`ValidateCommand` の verbose 出力を拡張**
+   `verbose: config / parse / rules / exclusions` を stderr に出力。  
+   - config: 解決元（`--config` / discovery / env）と path  
+   - parse: validate 所要時間（ms）  
+   - rules: 有効ルール数（effective）  
+   - exclusions: config の exclusion エントリ件数
+3. **`seiton init` ヒントを actions リポジトリ向けに補強**
+   no-config + high-volume の init hint が出る条件で、`.github/actions/` が存在し `--include-actions` 未指定なら、追加で `--include-actions` を提案するようにした。
+4. **ドキュメント更新**
+   `docs/usage.md` / `docs/configuration.md` に `--include-actions` 導線と `validate-config --verbose` を追記。
+
+#### テスト
+
+- 追加/更新テスト:
+  - `tests/Seiton.Tests/ValidateCommandTests.cs`
+  - `tests/Seiton.Tests/WriteSummaryTests.cs`
+- 実行結果:
+  - `dotnet test --project tests/Seiton.Tests --treenode-filter "/*/*/ValidateCommandTests/*"` ✅
+  - `dotnet test --project tests/Seiton.Tests --treenode-filter "/*/*/WriteSummaryTests/ShouldSuggestIncludeActions_*"` ✅
+  - `dotnet test --project tests/Seiton.Tests --treenode-filter "/*/*/WriteSummaryTests/WriteInitHint_WhenIncludeActionsSuggested_ContainsFlagHint"` ✅
+  - `dotnet test --project tests/Seiton.Core.Tests` ✅
+  - `dotnet test --project tests/Seiton.Tests` ✅
+
+#### ベンチマーク結果（ShortRun, win-x64, .NET 10.0.8）
+
+- 実行: `src/Seiton.Benchmark` で `dotnet run -c Release -- --filter *CoreLintBenchmark*`
+- 結果:
+  - `CoreLintBenchmark` の `Ratio` は各ケースで ≈ 1.00
+  - `Alloc Ratio` も 1.00
+  - 今回変更（validate-config の verbose と hint 条件分岐）は lint コア実行パスへの回帰を示さない
+
+#### レビュー指摘と対応
+
+| 指摘 | 対応 |
+|------|------|
+| `validate-config` で `--verbose` が使えない | `Program.cs` と `ValidateCommand` で verbose 対応を追加 |
+| composite action 導線が弱い | init hint 条件時に `--include-actions` 提案を追加 |
+| 判定ロジック（hint条件）の否定ケース不足 | `WriteSummaryTests` に等価クラス（true/false）を追加 |
 
 ---
 
@@ -336,7 +380,9 @@ composite action（`.github/actions/git-push/action.yaml`）を `--include-actio
 | ドキュメント | 更新内容 |
 |--------------|----------|
 | `Seiton_Linter_spec.md` | JSON `fixable` の意味、local path 解決の repo root 判定（actions 配下を含む） |
-| `Seiton_Linter_csharp_spec.md` | `ActionRefHelpers` 統一、fix eligibility 判定の実装メモ |
+| `Seiton_Linter_csharp_spec.md` | `ActionRefHelpers` 統一、fix eligibility 判定の実装メモ、init hint + `--include-actions` 提案条件 |
+| `Seiton_CLI_spec.md` | `validate-config --verbose` の stderr contract（config/parse/rules/exclusions） |
+| `Seiton_CLI_csharp_spec.md` | `ValidateConfig` メソッドの `verbose` パラメータ対応 |
 | `docs/rules.md` | 条件付き auto-fix の config 前提（job-timeout 等）を Notes に追記 |
 
 ---

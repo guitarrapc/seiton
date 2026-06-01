@@ -74,6 +74,11 @@ Parse and validate the resolved config file.
 - If no config file is found (neither explicit nor discovered), exits with code 3 (fatal error).
 - If the config file exists but has validation errors, reports them and exits with code 1.
 - If valid, prints a success message and exits with code 0.
+- `--verbose` is supported and emits to stderr:
+  - resolved config source/path (`verbose: config: ...`)
+  - parse elapsed time (`verbose: parse: ... ms`)
+  - effective enabled-rule count (`verbose: rules: ... enabled`)
+  - configured exclusion entry count (`verbose: exclusions: ... entry(s)`)
 
 Useful in CI jobs that maintain `.github/seiton.yaml` to catch configuration drift before lint runs.
 

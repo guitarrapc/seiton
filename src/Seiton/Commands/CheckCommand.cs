@@ -293,7 +293,10 @@ internal static class CheckCommand
         WriteSummary(allDiagnostics, resolvedFiles.Length, verboseLevel >= VerboseLevel.Summary, showExitHint: minSeverity is null, metadata: summaryMetadata);
         if (ShouldShowInitHint(configResolution, resolvedFormat, allDiagnostics))
         {
-            WriteInitHint(Console.Error);
+            var shouldSuggestIncludeActions = ShouldSuggestIncludeActions(
+                includeActions,
+                configResolution.DiscoveryStartDirectory ?? Environment.CurrentDirectory);
+            WriteInitHint(Console.Error, suggestIncludeActions: shouldSuggestIncludeActions);
         }
 
         if (verboseLogger.IsEnabled)
@@ -891,9 +894,23 @@ internal static class CheckCommand
         return actionable >= 20;
     }
 
-    internal static void WriteInitHint(TextWriter writer)
+    internal static void WriteInitHint(TextWriter writer, bool suggestIncludeActions = false)
     {
         writer.WriteLine("hint: many issues detected with default config; run 'seiton init' to create .github/seiton.yaml and customize exclusions");
+        if (suggestIncludeActions)
+        {
+            writer.WriteLine("hint: this repository contains .github/actions; re-run with '--include-actions' to lint composite actions too");
+        }
+    }
+
+    internal static bool ShouldSuggestIncludeActions(bool includeActions, string? discoveryStartDirectory)
+    {
+        if (includeActions || string.IsNullOrWhiteSpace(discoveryStartDirectory))
+        {
+            return false;
+        }
+
+        return HasGitHubActionsDirectoryInAncestors(discoveryStartDirectory);
     }
 
     internal static DocumentKind GetSlotDocumentKind(VerboseLogger logger, DocumentKind documentKind)
@@ -911,6 +928,26 @@ internal static class CheckCommand
     }
 
     private static bool IsCi() => !string.IsNullOrEmpty(Environment.GetEnvironmentVariable("CI"));
+
+    private static bool HasGitHubActionsDirectoryInAncestors(string startDirectory)
+    {
+        var current = Path.GetFullPath(startDirectory);
+        while (true)
+        {
+            if (Directory.Exists(Path.Combine(current, ".github", "actions")))
+            {
+                return true;
+            }
+
+            var parent = Directory.GetParent(current);
+            if (parent is null)
+            {
+                return false;
+            }
+
+            current = parent.FullName;
+        }
+    }
 }
 
 /// <summary>Lightweight result slot for parallel check. Holds caller-owned diagnostic copy.</summary>
