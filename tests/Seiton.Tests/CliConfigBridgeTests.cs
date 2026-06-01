@@ -95,6 +95,54 @@ public sealed class CliConfigBridgeTests
     }
 
     [Test]
+    public async Task ResolveConfigPath_EnvironmentVariable_ReportsEnvironmentSource()
+    {
+        var root = CreateTempDir();
+        var configPath = Path.Combine(root, "env-config.yaml");
+        var originalEnv = Environment.GetEnvironmentVariable("SEITON_CONFIG");
+        try
+        {
+            File.WriteAllText(configPath, "rules: {}\n");
+            Environment.SetEnvironmentVariable("SEITON_CONFIG", configPath);
+
+            var resolution = CliConfigBridge.ResolveConfigPath(explicitConfigPath: null);
+
+            await Assert.That(resolution.Path).IsEqualTo(configPath);
+            await Assert.That(resolution.Source).IsEqualTo(ConfigPathSource.EnvironmentVariable);
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable("SEITON_CONFIG", originalEnv);
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
+    [Test]
+    public async Task ResolveConfigPath_ExplicitFlag_TakesPrecedenceOverEnvironmentVariable()
+    {
+        var root = CreateTempDir();
+        var explicitPath = Path.Combine(root, "explicit.yaml");
+        var envPath = Path.Combine(root, "env.yaml");
+        var originalEnv = Environment.GetEnvironmentVariable("SEITON_CONFIG");
+        try
+        {
+            File.WriteAllText(explicitPath, "rules: {}\n");
+            File.WriteAllText(envPath, "rules: {}\n");
+            Environment.SetEnvironmentVariable("SEITON_CONFIG", envPath);
+
+            var resolution = CliConfigBridge.ResolveConfigPath(explicitPath);
+
+            await Assert.That(resolution.Path).IsEqualTo(explicitPath);
+            await Assert.That(resolution.Source).IsEqualTo(ConfigPathSource.ExplicitFlag);
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable("SEITON_CONFIG", originalEnv);
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
+    [Test]
     public async Task FormatVerboseMessage_Discovery_IncludesStartDirectoryAndLevelsWalked()
     {
         var start = Path.Combine("C:", "repo", "nested");
@@ -137,6 +185,32 @@ public sealed class CliConfigBridgeTests
         var message = resolution.FormatVerboseMessage();
 
         await Assert.That(message).IsEqualTo($"{Path.GetFullPath(config)} (from --config)");
+    }
+
+    [Test]
+    public async Task FormatVerboseMessage_EnvironmentVariable_IncludesSourceHint()
+    {
+        var config = Path.Combine("C:", "repo", ".github", "seiton.yaml");
+        var resolution = new ConfigPathResolution(config, ConfigPathSource.EnvironmentVariable);
+
+        var message = resolution.FormatVerboseMessage();
+
+        await Assert.That(message).IsEqualTo($"{Path.GetFullPath(config)} (from SEITON_CONFIG)");
+    }
+
+    [Test]
+    public async Task FormatVerboseMessage_DiscoveryWithoutStartDirectory_DoesNotThrow()
+    {
+        var config = Path.Combine("C:", "repo", ".github", "seiton.yaml");
+        var resolution = new ConfigPathResolution(
+            config,
+            ConfigPathSource.Discovery,
+            DiscoveryStartDirectory: null,
+            DiscoveryLevelsWalked: 2);
+
+        var message = resolution.FormatVerboseMessage();
+
+        await Assert.That(message).IsEqualTo($"{Path.GetFullPath(config)} (discovered, walked up 2 level(s))");
     }
 
     private static string CreateTempDir()

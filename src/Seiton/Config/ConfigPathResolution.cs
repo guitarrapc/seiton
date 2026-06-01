@@ -29,7 +29,9 @@ public readonly record struct ConfigPathResolution(
             ConfigPathSource.ExplicitFlag => $"{fullPath} (from --config)",
             ConfigPathSource.EnvironmentVariable => $"{fullPath} (from SEITON_CONFIG)",
             ConfigPathSource.Discovery =>
-                $"{fullPath} (discovered from {System.IO.Path.GetFullPath(DiscoveryStartDirectory!)}, walked up {DiscoveryLevelsWalked} level(s))",
+                DiscoveryStartDirectory is null
+                    ? $"{fullPath} (discovered, walked up {DiscoveryLevelsWalked} level(s))"
+                    : $"{fullPath} (discovered from {System.IO.Path.GetFullPath(DiscoveryStartDirectory)}, walked up {DiscoveryLevelsWalked} level(s))",
             _ => fullPath,
         };
     }
