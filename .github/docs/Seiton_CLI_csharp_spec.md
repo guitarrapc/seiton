@@ -210,7 +210,7 @@ Shared contract reference: `.github/docs/Seiton_CLI_spec.md` §4.
 public static class CliConfigBridge
 {
     // Config path: flag → SEITON_CONFIG env → directory walk discovery
-    public static string? ResolveConfigPath(string? explicitConfigPath);
+    public static ConfigPathResolution ResolveConfigPath(string? explicitConfigPath);
 
     // Output format: flag → SEITON_FORMAT env → default (Text)
     public static OutputFormat ResolveOutputFormat(OutputFormat flagFormat);
@@ -224,19 +224,36 @@ public static class CliConfigBridge
 }
 ```
 
+`ConfigPathResolution.FormatVerboseMessage()` produces stderr lines such as `discovered from …, walked up N level(s)` and `(from --config)`.
+
 ### 5.2 Config Discovery Walk
 
 Discovery calls `LintConfigLibrary.FindRecommendedConfigPath(directory)` at each level:
 
 ```csharp
-var current = Environment.CurrentDirectory;
+return DiscoverConfigPath(Environment.CurrentDirectory);
+
+internal static ConfigPathResolution DiscoverConfigPath(
+    string discoveryStartDirectory,
+    string? discoveryBoundary = null);
+```
+
+The walk loop (production passes `discoveryBoundary: null`):
+
+```csharp
+var discoveryStart = Path.GetFullPath(discoveryStartDirectory);
+var current = discoveryStart;
+var levelsWalked = 0;
 while (current is not null)
 {
     var discovered = LintConfigLibrary.FindRecommendedConfigPath(current);
-    if (discovered is not null) return discovered;
+    if (discovered is not null)
+        return new ConfigPathResolution(discovered, Discovery, discoveryStart, levelsWalked);
+    if (discoveryBoundary reached) break;
     current = Directory.GetParent(current)?.FullName;
+    levelsWalked++;
 }
-return null;
+return new ConfigPathResolution(null, None, discoveryStart, levelsWalked);
 ```
 
 Probe order per directory (defined in `LintConfigLibrary.RecommendedRelativePaths`):

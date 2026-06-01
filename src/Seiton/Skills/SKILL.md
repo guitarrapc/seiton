@@ -168,12 +168,14 @@ actionable issues remain. Don't try to get to zero diagnostics on the first pass
 
 ## Configuration
 
-Config is auto-discovered from `.github/seiton.yaml` (or `.github/seiton.yml`, `seiton.yaml`, `seiton.yml`).
+Config is auto-discovered from `.github/seiton.yaml` (or `.github/seiton.yml`, `seiton.yaml`, `seiton.yml`). Discovery walks up parent directories — in nested clones use `-c` explicitly.
 
-Generate a starter config:
+Setup flow:
 
 ```bash
 seiton init
+seiton validate-config
+seiton --verbose    # confirm resolved config on stderr
 ```
 
 ## Troubleshooting

@@ -33,10 +33,10 @@ internal static class CheckCommand
         var colorEnabled = CliConfigBridge.ResolveColorEnabled(color, noColor);
 
         // Resolve config
-        string? configPath;
+        ConfigPathResolution configResolution;
         try
         {
-            configPath = CliConfigBridge.ResolveConfigPath(config);
+            configResolution = CliConfigBridge.ResolveConfigPath(config);
         }
         catch (FileNotFoundException ex)
         {
@@ -44,6 +44,7 @@ internal static class CheckCommand
             return ExitCode.FatalError;
         }
 
+        var configPath = configResolution.Path;
         var (lintConfig, configDiags) = CliConfigBridge.LoadConfig(configPath, enablePinNetwork: false, enableImageNetwork: false);
         if (HasConfigErrors(configDiags, resolvedFormat, colorEnabled, oneline))
             return ExitCode.FatalError;
@@ -58,9 +59,7 @@ internal static class CheckCommand
         }
 
         if (verboseLogger.IsEnabled)
-        {
-            verboseLogger.Log("config", configPath is not null ? Path.GetFullPath(configPath) : "(none, using defaults)");
-        }
+            verboseLogger.Log("config", configResolution.FormatVerboseMessage());
 
         // Resolve input files
         string[] resolvedFiles;
@@ -736,6 +735,17 @@ internal static class CheckCommand
     internal static void WriteTotalTiming(VerboseLogger logger, int fileCount, TimeSpan elapsed, string verb = "checked")
     {
         logger.Log("total", $"{fileCount} file(s) {verb} in {FormatMilliseconds(elapsed)} ms");
+    }
+
+    internal static void WriteFixTotalTiming(
+        VerboseLogger logger,
+        int processedFileCount,
+        int modifiedFileCount,
+        TimeSpan elapsed,
+        bool dryRun = false)
+    {
+        var modifiedVerb = dryRun ? "would be modified" : "modified";
+        logger.Log("total", $"{processedFileCount} file(s) processed, {modifiedFileCount} {modifiedVerb} in {FormatMilliseconds(elapsed)} ms");
     }
 
     internal static string FormatMilliseconds(TimeSpan elapsed)

@@ -142,6 +142,16 @@ Generate a starter config file at `.github/seiton.yaml`:
 seiton init
 ```
 
+**Recommended setup flow** for a new repository:
+
+```sh
+seiton init                      # 1. create .github/seiton.yaml
+seiton validate-config           # 2. validate YAML and rule IDs
+seiton --verbose                 # 3. lint and confirm config on stderr
+```
+
+In a **nested clone** inside a monorepo, pass `-c` explicitly so the parent repo's config is not picked up — see [Configuration: Nested repositories](configuration.md#nested-repositories-and-monorepos).
+
 Specify a custom output path:
 
 ```sh
@@ -353,10 +363,21 @@ Use `--oneline` to produce one line per diagnostic (useful for `grep`/`awk` pipe
 
 ### JSON
 
-Structured JSON array for programmatic consumption:
+Structured JSON array for programmatic consumption. **Diagnostics are written to stdout only.** Summary lines (`N errors, M warnings in K file(s)`) and all `--verbose` progress go to **stderr**, so piping stdout yields valid JSON.
 
 ```sh
+# Bash: diagnostics only
+seiton --format json 2>/dev/null
+
+# Bash: keep summary on the terminal
 seiton --format json
+```
+
+**PowerShell** merges stderr into the success stream by default, which breaks `ConvertFrom-Json`. Redirect stderr away from the pipeline:
+
+```powershell
+# Diagnostics only (valid JSON array)
+$diagnostics = seiton --format json 2>$null | ConvertFrom-Json
 ```
 
 ```json

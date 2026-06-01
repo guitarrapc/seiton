@@ -37,10 +37,10 @@ internal static class FixCommand
         var colorEnabled = CliConfigBridge.ResolveColorEnabled(color, noColor);
 
         // Resolve config
-        string? configPath;
+        ConfigPathResolution configResolution;
         try
         {
-            configPath = CliConfigBridge.ResolveConfigPath(config);
+            configResolution = CliConfigBridge.ResolveConfigPath(config);
         }
         catch (FileNotFoundException ex)
         {
@@ -48,6 +48,7 @@ internal static class FixCommand
             return ExitCode.FatalError;
         }
 
+        var configPath = configResolution.Path;
         var (lintConfig, configDiags) = CliConfigBridge.LoadConfig(configPath, enablePinNetwork, enableImageNetwork);
         if (CheckCommand.HasConfigErrors(configDiags, resolvedFormat, colorEnabled, oneline, errorWriter))
             return ExitCode.FatalError;
@@ -62,9 +63,7 @@ internal static class FixCommand
         }
 
         if (verboseLogger.IsEnabled)
-        {
-            verboseLogger.Log("config", configPath is not null ? Path.GetFullPath(configPath) : "(none, using defaults)");
-        }
+            verboseLogger.Log("config", configResolution.FormatVerboseMessage());
 
         // Resolve input files
         string[] resolvedFiles;
@@ -136,6 +135,8 @@ internal static class FixCommand
             var workflowRuleSummaryLogged = false;
             var actionRuleSummaryLogged = false;
             var totalStart = verboseLogger.GetTimestamp();
+            var modifiedFileCount = 0;
+            var fixAttemptedFileCount = 0;
 
             // Track per-file fix counts for the fix summary.
             // Key: filePath, Value: number of fixes applied.
@@ -259,6 +260,7 @@ internal static class FixCommand
 
                 if (dryRun)
                 {
+                    fixAttemptedFileCount++;
                     // --dry-run: compute fixed YAML via iterative conflict-safe apply, then diff.
                     byte[] dryRunYaml;
                     var dryRunApplied = 0;
@@ -278,9 +280,13 @@ internal static class FixCommand
                         return ExitCode.FatalError;
                     }
 
-                    if (!dryRunYaml.AsSpan().SequenceEqual(utf8Yaml))
+                    var dryRunContentChanged = !dryRunYaml.AsSpan().SequenceEqual(utf8Yaml);
+                    if (dryRunContentChanged)
                     {
                         TryWriteFixDiff(utf8Yaml, dryRunYaml, filePath, resolvedFormat, outputWriter, errorWriter, ref hasPrintedDiff);
+                        modifiedFileCount++;
+                        fixedFiles ??= new List<(string, int)>();
+                        fixedFiles.Add((filePath, dryRunApplied));
                     }
 
                     // Relint the hypothetical fixed YAML to report remaining diagnostics,
@@ -290,14 +296,10 @@ internal static class FixCommand
                         allDiagnostics.AddRange(dryRunHandle.Diagnostics.AsSpan());
                     }
 
-                    if (dryRunApplied > 0)
-                    {
-                        fixedFiles ??= new List<(string, int)>();
-                        fixedFiles.Add((filePath, dryRunApplied));
-                    }
-
                     continue;
                 }
+
+                fixAttemptedFileCount++;
 
                 // Phase 1: Stabilize local fixes via conflict-aware iterative application.
                 // Each pass re-lints the current YAML to get fresh offsets, avoiding conflicts.
@@ -326,14 +328,22 @@ internal static class FixCommand
 
                 // Final lint to collect remaining diagnostics.
                 LintResult? currentHandle = null;
+                var applyContentChanged = false;
                 try
                 {
                     currentHandle = engine.Check(currentYaml, filePath, fixEnabledLintConfig);
-                    File.WriteAllBytes(filePath, currentYaml);
-                    if (showDiff)
+                    applyContentChanged = !currentYaml.AsSpan().SequenceEqual(utf8Yaml);
+                    if (applyContentChanged)
+                    {
+                        File.WriteAllBytes(filePath, currentYaml);
+                        modifiedFileCount++;
+                    }
+
+                    if (showDiff && applyContentChanged)
                     {
                         TryWriteFixDiff(utf8Yaml, currentYaml, filePath, resolvedFormat, outputWriter, errorWriter, ref hasPrintedDiff);
                     }
+
                     allDiagnostics.AddRange(currentHandle.Diagnostics.AsSpan());
                 }
                 finally
@@ -346,7 +356,7 @@ internal static class FixCommand
                     verboseLogger.LogFile(filePath, $"applied {appliedFixes} fix(es)");
                 }
 
-                if (appliedFixes > 0)
+                if (applyContentChanged)
                 {
                     fixedFiles ??= new List<(string, int)>();
                     fixedFiles.Add((filePath, appliedFixes));
@@ -415,23 +425,32 @@ internal static class FixCommand
             }
 
             if (verboseLogger.IsEnabled)
-                CheckCommand.WriteTotalTiming(verboseLogger, resolvedFiles.Length, verboseLogger.GetElapsedTime(totalStart), "fixed");
+                CheckCommand.WriteFixTotalTiming(
+                    verboseLogger,
+                    resolvedFiles.Length,
+                    modifiedFileCount,
+                    verboseLogger.GetElapsedTime(totalStart),
+                    dryRun: dryRun);
 
-            // Hint about network flags when unfixed pin diagnostics remain
-            if (allDiagnostics.Count > 0)
-                CheckCommand.WriteNetworkFixHint(errorWriter, allDiagnostics, effectivePinNetwork, effectiveImageNetwork);
-
-            var hasFixableAfterFilters = false;
+            var fixableRemainingCount = 0;
             for (var i = 0; i < allDiagnostics.Count; i++)
             {
                 if (allDiagnostics[i].Fix is null)
                     continue;
 
-                hasFixableAfterFilters = true;
-                break;
+                fixableRemainingCount++;
             }
 
-            if (check && hasFixableAfterFilters)
+            if (!check && fixAttemptedFileCount > 0 && modifiedFileCount == 0)
+            {
+                WriteNoFilesModifiedHint(errorWriter, fixAttemptedFileCount, fixableRemainingCount, dryRun);
+            }
+
+            // Hint about network flags when unfixed pin diagnostics remain
+            if (allDiagnostics.Count > 0)
+                CheckCommand.WriteNetworkFixHint(errorWriter, allDiagnostics, effectivePinNetwork, effectiveImageNetwork);
+
+            if (check && fixableRemainingCount > 0)
                 return ExitCode.LintIssuesFound;
 
             return CheckCommand.HasActionableDiagnostics(allDiagnostics) ? ExitCode.LintIssuesFound : ExitCode.Success;
@@ -529,6 +548,26 @@ internal static class FixCommand
     }
 
     internal enum FixSummaryMode { Applied, DryRun, Check }
+
+    internal static void WriteNoFilesModifiedHint(TextWriter writer, int fixAttemptedFileCount, int fixableRemainingCount, bool dryRun)
+    {
+        if (fixAttemptedFileCount <= 0)
+        {
+            return;
+        }
+
+        var verb = dryRun ? "would be modified" : "modified";
+        var fileWord = fixAttemptedFileCount == 1 ? "file" : "files";
+        if (fixableRemainingCount > 0)
+        {
+            var issueWord = fixableRemainingCount == 1 ? "issue" : "issues";
+            var issueVerb = fixableRemainingCount == 1 ? "remains" : "remain";
+            writer.WriteLine($"hint: no files {verb} ({fixAttemptedFileCount} {fileWord} processed; {fixableRemainingCount} fixable {issueWord} {issueVerb})");
+            return;
+        }
+
+        writer.WriteLine($"hint: no files {verb} ({fixAttemptedFileCount} {fileWord} processed)");
+    }
 
     internal static void WriteFixSummary(
         TextWriter writer,

@@ -139,7 +139,11 @@ To generate a starter config file:
 
 ```sh
 seiton init
+seiton validate-config
+seiton --verbose
 ```
+
+The three-step flow creates, validates, and confirms config discovery before tuning rules. See [Configuration](docs/configuration.md) for nested-repo guidance and common recipes.
 
 To install agent skill files (for Claude Code, GitHub Copilot, Cursor, etc.):
 

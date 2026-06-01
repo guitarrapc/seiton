@@ -666,6 +666,7 @@ public sealed class FixCommandTests
     }
 
     [Test]
+    [NotInParallel("ProcessState")]
     public async Task Fix_AutoDiscoveredInvalidConfig_IgnoreActionsString_ReportsConfigError()
     {
         var repoDir = Path.Combine(Path.GetTempPath(), "Seiton.Tests", Guid.NewGuid().ToString("N"));
@@ -691,8 +692,10 @@ public sealed class FixCommandTests
             """);
 
         var originalDirectory = Directory.GetCurrentDirectory();
+        var originalConfig = Environment.GetEnvironmentVariable("SEITON_CONFIG");
         try
         {
+            Environment.SetEnvironmentVariable("SEITON_CONFIG", null);
             Directory.SetCurrentDirectory(repoDir);
             using var sw = new StringWriter();
             using var stderr = new StringWriter();
@@ -723,6 +726,7 @@ public sealed class FixCommandTests
         }
         finally
         {
+            Environment.SetEnvironmentVariable("SEITON_CONFIG", originalConfig);
             Directory.SetCurrentDirectory(originalDirectory);
             if (Directory.Exists(repoDir))
                 Directory.Delete(repoDir, recursive: true);
@@ -2113,6 +2117,366 @@ public sealed class FixCommandTests
             DeleteContainingDirectory(filePath);
             DeleteContainingDirectory(configPath);
         }
+    }
+
+    [Test]
+    public async Task Fix_Verbose_NoFixableIssues_EmitsProcessedZeroModified()
+    {
+        var configPath = CreateConfigFile(
+            """
+            rules:
+              runner-no-latest:
+                enabled: false
+              job-timeout-minutes-required:
+                enabled: false
+              job-permissions-required:
+                enabled: false
+            """);
+        var filePath = CreateWorkflowFile(
+            """
+            on: push
+            jobs:
+              build:
+                runs-on: ubuntu-24.04
+                permissions:
+                  contents: read
+                timeout-minutes: 15
+                steps:
+                  - run: echo ok
+            """);
+
+        try
+        {
+            using var sw = new StringWriter();
+            using var stderr = new StringWriter();
+
+            var exitCode = await FixCommand.RunAsync(
+                [filePath],
+                config: configPath,
+                stdinFilename: "stdin.yml",
+                ignore: [],
+                minSeverity: null,
+                format: OutputFormat.Text,
+                oneline: true,
+                color: ColorMode.Never,
+                noColor: true,
+                verboseLevel: VerboseLevel.Summary,
+                dryRun: false,
+                check: false,
+                enablePinNetwork: false,
+                enableImageNetwork: false,
+                includeActions: false,
+                output: sw,
+                error: stderr);
+
+            await Assert.That(exitCode).IsEqualTo(ExitCode.Success);
+            await Assert.That(stderr.ToString()).Contains("verbose: total: 1 file(s) processed, 0 modified");
+            await Assert.That(stderr.ToString().Contains("Fixed ", StringComparison.Ordinal)).IsFalse();
+        }
+        finally
+        {
+            DeleteContainingDirectory(filePath);
+            DeleteContainingDirectory(configPath);
+        }
+    }
+
+    [Test]
+    public async Task Fix_Verbose_AppliesLocalFix_EmitsOneModified()
+    {
+        var configPath = CreateConfigFile(
+            """
+            rules:
+              runner-no-latest:
+                enabled: true
+                fix-mapping:
+                  ubuntu-latest: "ubuntu-24.04"
+              job-timeout-minutes-required:
+                enabled: false
+              job-permissions-required:
+                enabled: false
+            """);
+        var filePath = CreateWorkflowFile(
+            """
+            on: push
+            jobs:
+              build:
+                runs-on: ubuntu-latest
+                permissions:
+                  contents: read
+                timeout-minutes: 15
+                steps:
+                  - run: echo ok
+            """);
+
+        try
+        {
+            using var sw = new StringWriter();
+            using var stderr = new StringWriter();
+
+            var exitCode = await FixCommand.RunAsync(
+                [filePath],
+                config: configPath,
+                stdinFilename: "stdin.yml",
+                ignore: [],
+                minSeverity: null,
+                format: OutputFormat.Text,
+                oneline: true,
+                color: ColorMode.Never,
+                noColor: true,
+                verboseLevel: VerboseLevel.Summary,
+                dryRun: false,
+                check: false,
+                enablePinNetwork: false,
+                enableImageNetwork: false,
+                includeActions: false,
+                output: sw,
+                error: stderr);
+
+            await Assert.That(exitCode).IsEqualTo(ExitCode.Success);
+            await Assert.That(stderr.ToString()).Contains("verbose: total: 1 file(s) processed, 1 modified");
+            await Assert.That(stderr.ToString()).Contains("Fixed ");
+            await Assert.That(File.ReadAllText(filePath)).Contains("ubuntu-24.04");
+        }
+        finally
+        {
+            DeleteContainingDirectory(filePath);
+            DeleteContainingDirectory(configPath);
+        }
+    }
+
+    [Test]
+    public async Task Fix_Verbose_DryRun_AppliesLocalFix_EmitsWouldBeModifiedTotal()
+    {
+        var configPath = CreateConfigFile(
+            """
+            rules:
+              runner-no-latest:
+                enabled: true
+                fix-mapping:
+                  ubuntu-latest: "ubuntu-24.04"
+              job-timeout-minutes-required:
+                enabled: false
+              job-permissions-required:
+                enabled: false
+            """);
+        var filePath = CreateWorkflowFile(
+            """
+            on: push
+            jobs:
+              build:
+                runs-on: ubuntu-latest
+                permissions:
+                  contents: read
+                timeout-minutes: 15
+                steps:
+                  - run: echo ok
+            """);
+        var originalContent = File.ReadAllText(filePath);
+
+        try
+        {
+            using var sw = new StringWriter();
+            using var stderr = new StringWriter();
+
+            var exitCode = await FixCommand.RunAsync(
+                [filePath],
+                config: configPath,
+                stdinFilename: "stdin.yml",
+                ignore: [],
+                minSeverity: null,
+                format: OutputFormat.Text,
+                oneline: true,
+                color: ColorMode.Never,
+                noColor: true,
+                verboseLevel: VerboseLevel.Summary,
+                dryRun: true,
+                check: false,
+                enablePinNetwork: false,
+                enableImageNetwork: false,
+                includeActions: false,
+                output: sw,
+                error: stderr);
+
+            await Assert.That(exitCode).IsEqualTo(ExitCode.Success);
+            await Assert.That(stderr.ToString()).Contains("verbose: total: 1 file(s) processed, 1 would be modified");
+            await Assert.That(File.ReadAllText(filePath)).IsEqualTo(originalContent);
+        }
+        finally
+        {
+            DeleteContainingDirectory(filePath);
+            DeleteContainingDirectory(configPath);
+        }
+    }
+
+    [Test]
+    public async Task Fix_UnchangedContent_DoesNotRewriteFileTimestamp()
+    {
+        var configPath = CreateConfigFile(
+            """
+            rules:
+              runner-no-latest:
+                enabled: false
+              job-timeout-minutes-required:
+                enabled: false
+              job-permissions-required:
+                enabled: false
+            """);
+        var filePath = CreateWorkflowFile(
+            """
+            on: push
+            jobs:
+              build:
+                runs-on: ubuntu-24.04
+                permissions:
+                  contents: read
+                timeout-minutes: 15
+                steps:
+                  - run: echo ok
+            """);
+
+        try
+        {
+            File.SetLastWriteTimeUtc(filePath, DateTime.UtcNow.AddMinutes(-5));
+            var lastWriteUtcBefore = File.GetLastWriteTimeUtc(filePath);
+
+            using var sw = new StringWriter();
+            using var stderr = new StringWriter();
+
+            var exitCode = await FixCommand.RunAsync(
+                [filePath],
+                config: configPath,
+                stdinFilename: "stdin.yml",
+                ignore: [],
+                minSeverity: null,
+                format: OutputFormat.Text,
+                oneline: true,
+                color: ColorMode.Never,
+                noColor: true,
+                verboseLevel: VerboseLevel.Off,
+                dryRun: false,
+                check: false,
+                enablePinNetwork: false,
+                enableImageNetwork: false,
+                includeActions: false,
+                output: sw,
+                error: stderr);
+
+            await Assert.That(exitCode).IsEqualTo(ExitCode.Success);
+            await Assert.That(File.GetLastWriteTimeUtc(filePath)).IsEqualTo(lastWriteUtcBefore);
+        }
+        finally
+        {
+            DeleteContainingDirectory(filePath);
+            DeleteContainingDirectory(configPath);
+        }
+    }
+
+    [Test]
+    public async Task Fix_DryRun_NoFixableIssues_NoModificationHint()
+    {
+        var configPath = CreateConfigFile(
+            """
+            rules:
+              runner-no-latest:
+                enabled: false
+              job-timeout-minutes-required:
+                enabled: false
+              job-permissions-required:
+                enabled: false
+            """);
+        var filePath = CreateWorkflowFile(
+            """
+            on: push
+            jobs:
+              build:
+                runs-on: ubuntu-24.04
+                permissions:
+                  contents: read
+                timeout-minutes: 15
+                steps:
+                  - run: echo ok
+            """);
+
+        try
+        {
+            using var sw = new StringWriter();
+            using var stderr = new StringWriter();
+
+            var exitCode = await FixCommand.RunAsync(
+                [filePath],
+                config: configPath,
+                stdinFilename: "stdin.yml",
+                ignore: [],
+                minSeverity: null,
+                format: OutputFormat.Text,
+                oneline: true,
+                color: ColorMode.Never,
+                noColor: true,
+                verboseLevel: VerboseLevel.Off,
+                dryRun: true,
+                check: false,
+                enablePinNetwork: false,
+                enableImageNetwork: false,
+                includeActions: false,
+                output: sw,
+                error: stderr);
+
+            await Assert.That(exitCode).IsEqualTo(ExitCode.Success);
+            await Assert.That(stderr.ToString().Contains("would be modified", StringComparison.Ordinal)).IsFalse();
+            await Assert.That(stderr.ToString().Contains("Would fix", StringComparison.Ordinal)).IsFalse();
+        }
+        finally
+        {
+            DeleteContainingDirectory(filePath);
+            DeleteContainingDirectory(configPath);
+        }
+    }
+
+    [Test]
+    public async Task WriteNoFilesModifiedHint_DryRunWithFixableRemaining_EmitsExpectedLine()
+    {
+        using var sw = new StringWriter();
+
+        FixCommand.WriteNoFilesModifiedHint(sw, fixAttemptedFileCount: 1, fixableRemainingCount: 3, dryRun: true);
+
+        await Assert.That(sw.ToString().TrimEnd())
+            .IsEqualTo("hint: no files would be modified (1 file processed; 3 fixable issues remain)");
+    }
+
+    [Test]
+    public async Task WriteNoFilesModifiedHint_AppliedWithFixableRemaining_EmitsExpectedLine()
+    {
+        using var sw = new StringWriter();
+
+        FixCommand.WriteNoFilesModifiedHint(sw, fixAttemptedFileCount: 1, fixableRemainingCount: 1, dryRun: false);
+
+        await Assert.That(sw.ToString().TrimEnd())
+            .IsEqualTo("hint: no files modified (1 file processed; 1 fixable issue remains)");
+    }
+
+    [Test]
+    public async Task WriteNoFilesModifiedHint_NoFixAttempted_EmitsNothing()
+    {
+        using var sw = new StringWriter();
+
+        FixCommand.WriteNoFilesModifiedHint(sw, fixAttemptedFileCount: 0, fixableRemainingCount: 0, dryRun: false);
+
+        await Assert.That(sw.ToString()).IsEqualTo("");
+    }
+
+    [Test]
+    public async Task WriteFixSummary_AllowsZeroFixedCount_WhenFixCountIsUnknown()
+    {
+        using var sw = new StringWriter();
+        var fixedFiles = new List<(string FilePath, int FixedCount)> { ("workflow.yml", 0) };
+        var remainingDiagnostics = new List<Seiton.Core.Parsing.Diagnostic>();
+
+        FixCommand.WriteFixSummary(sw, fixedFiles, remainingDiagnostics, FixCommand.FixSummaryMode.Applied);
+
+        var output = sw.ToString();
+        await Assert.That(output).Contains("Fixed 0 of 0 issues in 1 file (0 remaining)");
+        await Assert.That(output).Contains("| workflow.yml");
+        await Assert.That(output).Contains("|     0 |");
     }
 
     private static string CreateWorkflowFile(string yaml)
