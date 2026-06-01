@@ -666,6 +666,7 @@ public sealed class FixCommandTests
     }
 
     [Test]
+    [NotInParallel("ProcessState")]
     public async Task Fix_AutoDiscoveredInvalidConfig_IgnoreActionsString_ReportsConfigError()
     {
         var repoDir = Path.Combine(Path.GetTempPath(), "Seiton.Tests", Guid.NewGuid().ToString("N"));
