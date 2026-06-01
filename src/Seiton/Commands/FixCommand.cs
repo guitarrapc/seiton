@@ -37,10 +37,10 @@ internal static class FixCommand
         var colorEnabled = CliConfigBridge.ResolveColorEnabled(color, noColor);
 
         // Resolve config
-        string? configPath;
+        ConfigPathResolution configResolution;
         try
         {
-            configPath = CliConfigBridge.ResolveConfigPath(config);
+            configResolution = CliConfigBridge.ResolveConfigPath(config);
         }
         catch (FileNotFoundException ex)
         {
@@ -48,6 +48,7 @@ internal static class FixCommand
             return ExitCode.FatalError;
         }
 
+        var configPath = configResolution.Path;
         var (lintConfig, configDiags) = CliConfigBridge.LoadConfig(configPath, enablePinNetwork, enableImageNetwork);
         if (CheckCommand.HasConfigErrors(configDiags, resolvedFormat, colorEnabled, oneline, errorWriter))
             return ExitCode.FatalError;
@@ -62,9 +63,7 @@ internal static class FixCommand
         }
 
         if (verboseLogger.IsEnabled)
-        {
-            verboseLogger.Log("config", configPath is not null ? Path.GetFullPath(configPath) : "(none, using defaults)");
-        }
+            verboseLogger.Log("config", configResolution.FormatVerboseMessage());
 
         // Resolve input files
         string[] resolvedFiles;

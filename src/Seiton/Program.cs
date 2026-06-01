@@ -105,7 +105,7 @@ internal class SeitonCli
     }
 
 
-    /// <summary>Generate a starter seiton config file.</summary>
+    /// <summary>Generate a starter seiton config file. Typical flow: init, then validate-config, then lint with --verbose to confirm discovery.</summary>
     /// <param name="output">Path to write the config file to.</param>
     /// <param name="force">Overwrite the file if it already exists.</param>
     public void Init(string output = ".github/seiton.yaml", bool force = false)
@@ -114,7 +114,7 @@ internal class SeitonCli
         if (code != 0) Environment.ExitCode = code;
     }
 
-    /// <summary>Validate the seiton config file.</summary>
+    /// <summary>Validate the seiton config file. Run after init and before production linting.</summary>
     /// <param name="config">-c, Path to the config file to validate. Auto-discovered if omitted.</param>
     [Command("validate-config")]
     public void ValidateConfig(string? config = null)

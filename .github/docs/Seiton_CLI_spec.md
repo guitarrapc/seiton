@@ -286,6 +286,15 @@ This ensures users can always override config-file defaults at the command line 
    - `seiton.yml`
 3. If no config file is found, use built-in defaults.
 
+In `-v` / `--verbose` mode, the resolved config is logged to stderr:
+
+```
+verbose: config: /repo/.github/seiton.yaml (discovered from /repo/nested, walked up 1 level(s))
+verbose: config: /repo/.github/seiton.yaml (from --config)
+verbose: config: /repo/.github/seiton.yaml (from SEITON_CONFIG)
+verbose: config: (none, using defaults) (searched from /repo/nested, walked up 3 level(s))
+```
+
 An empty config file is valid and equivalent to built-in defaults.
 
 Operational clarification:
@@ -438,7 +447,7 @@ Color coding (when color is enabled):
 
 ### 6.2 `json`
 
-JSON array to stdout. Each element is one diagnostic.
+JSON array to stdout. Each element is one diagnostic. Summary lines and `--verbose` output go to stderr — pipe stdout only for valid JSON (for example `seiton --format json 2>/dev/null` in Bash, or `2>$null` in PowerShell before `ConvertFrom-Json`).
 
 Schema (non-normative):
 

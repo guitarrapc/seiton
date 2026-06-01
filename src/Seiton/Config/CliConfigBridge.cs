@@ -7,37 +7,66 @@ public static class CliConfigBridge
 {
     /// <summary>
     /// Resolve the config file path using precedence: explicit flag > env var > discovery.
-    /// Returns null if no config file exists (valid: use defaults).
+    /// Returns a resolution with a null path when no config file exists (valid: use defaults).
     /// Throws if an explicit path was given but the file does not exist.
     /// </summary>
-    public static string? ResolveConfigPath(string? explicitConfigPath)
+    public static ConfigPathResolution ResolveConfigPath(string? explicitConfigPath)
     {
-        // 1. Explicit flag or SEITON_CONFIG env var
-        var configPath = explicitConfigPath
-            ?? Environment.GetEnvironmentVariable("SEITON_CONFIG");
-
-        if (!string.IsNullOrEmpty(configPath))
+        if (!string.IsNullOrEmpty(explicitConfigPath))
         {
-            if (!File.Exists(configPath))
-                throw new FileNotFoundException($"config file not found: {configPath}", configPath);
-            return configPath;
+            if (!File.Exists(explicitConfigPath))
+                throw new FileNotFoundException($"config file not found: {explicitConfigPath}", explicitConfigPath);
+            return new ConfigPathResolution(explicitConfigPath, ConfigPathSource.ExplicitFlag);
         }
 
-        // 2. Discovery from current directory and parents
-        var current = Environment.CurrentDirectory;
+        var envConfigPath = Environment.GetEnvironmentVariable("SEITON_CONFIG");
+        if (!string.IsNullOrEmpty(envConfigPath))
+        {
+            if (!File.Exists(envConfigPath))
+                throw new FileNotFoundException($"config file not found: {envConfigPath}", envConfigPath);
+            return new ConfigPathResolution(envConfigPath, ConfigPathSource.EnvironmentVariable);
+        }
+
+        return DiscoverConfigPath(Environment.CurrentDirectory);
+    }
+
+    internal static ConfigPathResolution DiscoverConfigPath(
+        string discoveryStartDirectory,
+        string? discoveryBoundary = null)
+    {
+        var discoveryStart = Path.GetFullPath(discoveryStartDirectory);
+        string? normalizedBoundary = discoveryBoundary is null
+            ? null
+            : Path.GetFullPath(discoveryBoundary);
+        var current = discoveryStart;
+        var levelsWalked = 0;
         while (current is not null)
         {
             var discovered = LintConfigLibrary.FindRecommendedConfigPath(current);
             if (discovered is not null)
             {
-                return discovered;
+                return new ConfigPathResolution(
+                    discovered,
+                    ConfigPathSource.Discovery,
+                    discoveryStart,
+                    levelsWalked);
+            }
+
+            if (normalizedBoundary is not null
+                && string.Equals(current, normalizedBoundary, StringComparison.OrdinalIgnoreCase))
+            {
+                break;
             }
 
             var parent = Directory.GetParent(current);
-            current = parent?.FullName;
+            if (parent is null)
+                break;
+
+            current = parent.FullName;
+            levelsWalked++;
         }
 
-        return null;
+        return new ConfigPathResolution(null, ConfigPathSource.None, discoveryStart, levelsWalked);
     }
 
     /// <summary>

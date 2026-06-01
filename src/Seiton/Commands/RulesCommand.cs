@@ -22,16 +22,18 @@ internal static class RulesCommand
 
         LintConfig? lintConfig = null;
 
-        string? configPath;
+        ConfigPathResolution configResolution;
         try
         {
-            configPath = CliConfigBridge.ResolveConfigPath(config);
+            configResolution = CliConfigBridge.ResolveConfigPath(config);
         }
         catch (FileNotFoundException ex)
         {
             error.WriteLine(ex.Message);
             return ExitCode.FatalError;
         }
+
+        var configPath = configResolution.Path;
 
         if (configPath is not null)
         {

@@ -11,16 +11,18 @@ internal static class ValidateCommand
         var outputWriter = output ?? Console.Out;
         var errorWriter = error ?? Console.Error;
 
-        string? configPath;
+        ConfigPathResolution configResolution;
         try
         {
-            configPath = CliConfigBridge.ResolveConfigPath(config);
+            configResolution = CliConfigBridge.ResolveConfigPath(config);
         }
         catch (FileNotFoundException ex)
         {
             errorWriter.WriteLine(ex.Message);
             return ExitCode.FatalError;
         }
+
+        var configPath = configResolution.Path;
 
         if (configPath is null)
         {

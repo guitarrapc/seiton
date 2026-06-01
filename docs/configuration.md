@@ -27,6 +27,8 @@ To specify a config file explicitly:
 
 ```sh
 seiton --config path/to/seiton.yaml
+# short form
+seiton -c path/to/seiton.yaml
 ```
 
 or via environment variable:
@@ -36,12 +38,54 @@ export SEITON_CONFIG=path/to/seiton.yaml
 seiton
 ```
 
+### Nested repositories and monorepos
+
+Seiton discovers config by walking **up** from the current working directory through parent folders. In a nested clone or subdirectory (for example `.nested/subrepo` inside a parent repo), that walk can pick up the **parent** repository's `.github/seiton.yaml` instead of a config you intended for the nested tree.
+
+**Recommended workflow for a nested repo:**
+
+```sh
+cd .references/actions
+
+# 1. Create a config in the nested repo
+seiton init --output .github/seiton.yaml
+
+# 2. Validate it
+seiton validate-config -c .github/seiton.yaml
+
+# 3. Lint with an explicit path (or set SEITON_CONFIG)
+seiton -c .github/seiton.yaml --verbose
+```
+
+Use `-c` / `SEITON_CONFIG` whenever the nested repo should not inherit the parent's policy. With `--verbose`, Seiton prints how config was resolved, including parent discovery:
+
+```text
+verbose: config: /parent/.github/seiton.yaml (discovered from /parent/.references/actions, walked up 2 level(s))
+verbose: config: /nested/.github/seiton.yaml (from --config)
+```
+
+When no config is found after the walk:
+
+```text
+verbose: config: (none, using defaults) (searched from /cwd, walked up N level(s))
+```
+
+### Config setup workflow
+
+For a new repository, use this three-step flow:
+
+1. **`seiton init`** — create `.github/seiton.yaml` with commented defaults.
+2. **`seiton validate-config`** — confirm YAML and rule IDs are valid.
+3. **`seiton --verbose`** — run lint once and confirm the resolved config path on stderr.
+
+See [Common configuration recipes](#common-configuration-recipes) below for patterns that reduce noise in large action monorepos.
+
 ### Trust, `SEITON_CONFIG`, and CI
 
 - **Prefer** a committed file (`.github/seiton.yaml` or discovery) so policy changes go through normal review.
 - **`SEITON_CONFIG`** and **`--config`** select **any** path on disk. On **shared runners**, only set them to paths you trust (typically under the checked-out repository). Do not pass PR-provided or untrusted strings as the path.
 - **Fork pull request** jobs often run with an untrusted merge ref. Avoid `SEITON_CONFIG` pointing at a path writable by that ref; rely on discovery from the base branch checkout or omit a config file to use defaults.
-- **Observation**: with **`seiton check --verbose`** or **`seiton --fix --verbose`**, Seiton prints **`config: …`** (absolute resolved path) or **`config: (none, using defaults)`** to stderr immediately after loading the config.
+- **Observation**: with **`seiton check --verbose`** or **`seiton --fix --verbose`**, Seiton prints the resolved config path and how it was chosen to stderr immediately after loading the config. Discovery includes the starting directory and how many parent levels were walked; explicit `-c` / `SEITON_CONFIG` paths include their source.
 
 **Governance in *your* repository** (when you adopt Seiton): treat `seiton.yaml` like security policy — wide `exclusions` or disabling online rules can blunt detection. Teams often add rules under **CODEOWNERS** plus branch protection (**require review from Code Owners**) for paths such as `.github/seiton.yaml` and root `seiton.yaml`. See GitHub’s [About code owners](https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-code-owners).
 
@@ -62,6 +106,70 @@ Edit it with your preferences:
 ```sh
 $EDITOR .github/seiton.yaml
 ```
+
+Then validate and confirm discovery:
+
+```sh
+seiton validate-config
+seiton --verbose
+```
+
+---
+
+## Common configuration recipes
+
+These patterns reduce noise in large action/workflow monorepos while keeping security signal on production paths. They mirror adjustments that proved useful when linting [Cysharp/Actions](https://github.com/Cysharp/Actions)-scale repositories.
+
+### Ignore self-hosted org actions (`unpinned-uses`)
+
+When a repository heavily reuses its own actions at `@main`, pin enforcement can dominate the report. Ignore your org's actions while keeping checks on third-party references:
+
+```yaml
+rules:
+  unpinned-uses:
+    ignore-actions:
+      - owner: "my-org/*"
+```
+
+Optional `refs` narrows the ignore to specific refs (for example only `main`).
+
+### Exclude internal test workflows (`_test-*`)
+
+Test harness workflows often trigger rules (`bot-conditions`, `deny-inherit-secrets`, etc.) that are not relevant to production review. Exclude them by glob:
+
+```yaml
+exclusions:
+  - file: .github/workflows/_test-*.yaml
+```
+
+Use a consistent naming convention so exclusions stay predictable.
+
+### Wrapper action: `checkout-persist-credentials`
+
+A composite checkout wrapper may pass `inputs.persist-credentials` through to `actions/checkout`. Requiring `false` on the wrapper is often impractical. Suppress the rule for that file only:
+
+```yaml
+exclusions:
+  - file: .github/actions/checkout/action.yaml
+    rules:
+      - checkout-persist-credentials
+```
+
+### Combined example
+
+```yaml
+rules:
+  unpinned-uses:
+    ignore-actions:
+      - owner: "my-org/*"
+exclusions:
+  - file: .github/workflows/_test-*.yaml
+  - file: .github/actions/checkout/action.yaml
+    rules:
+      - checkout-persist-credentials
+```
+
+After editing, run `seiton validate-config` then `seiton --verbose` to confirm the file is loaded.
 
 ---
 
@@ -86,10 +194,10 @@ Seiton validates configuration before linting begins. Invalid configuration caus
 Use `seiton check --verbose` to confirm which config file was loaded:
 
 ```text
-verbose: config: /repo/.github/seiton.yaml
+verbose: config: /repo/.github/seiton.yaml (discovered from /repo, walked up 0 level(s))
+verbose: config: /repo/.github/seiton.yaml (from --config)
+verbose: config: (none, using defaults) (searched from /repo, walked up 3 level(s))
 ```
-
-If no config is loaded: `verbose: config: (none, using defaults)`.
 
 ### Loader resource limits
 

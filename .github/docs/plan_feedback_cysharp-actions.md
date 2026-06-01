@@ -273,6 +273,41 @@
 
 **完了条件**: 新規ユーザーが feedback 記載の調整を、フィードバックなしで docs だけから再現できる。
 
+#### フェーズ B 実装結果（2026-06-01）
+
+**実装内容**
+
+| 項目 | 変更 |
+|---|---|
+| config verbose 改善 | `ConfigPathResolution` を追加。`ResolveConfigPath` が discovery 起点・親 walk 段数・ソース（`--config` / `SEITON_CONFIG` / discovery）を返す。`FormatVerboseMessage()` で stderr 行を生成 |
+| ネスト repo ガイド | `docs/configuration.md` §Nested repositories、`docs/usage.md` init 節、README Quick Start |
+| JSON stdout/stderr | `docs/usage.md` §JSON に Bash / PowerShell 例、`Seiton_CLI_spec.md` §6.2 に stderr 分離を明記 |
+| config レシピ | `docs/configuration.md` §Common configuration recipes（`ignore-actions` / `_test-*` / wrapper checkout） |
+| config 導線 | README / `seiton init`・`validate-config` help 文、Skills `configuration.md` / `SKILL.md` に 3 ステップフロー |
+| テスト | `CliConfigBridgeTests` 7 件（discovery メタデータ・verbose 文言） |
+| 仕様 | `Seiton_CLI_spec.md` §4.2 verbose config 行、`Seiton_CLI_csharp_spec.md` §5 API 更新 |
+
+**レビュー指摘と対応**
+
+| 指摘 | 対応 |
+|---|---|
+| CWD 変更テストが並列実行で他テストと干渉 | `DiscoverConfigPath(start, discoveryBoundary)` internal テスト seam に変更（本番は boundary なし） |
+| `Path` プロパティが `System.IO.Path` とシャドウ | `FormatVerboseMessage` 内で `System.IO.Path.GetFullPath` を明示 |
+| usage.md JSON 節の重複コマンド例 | 冗長な `seiton --format json` ブロックを削除 |
+| PowerShell 例が複雑 | `2>$null \| ConvertFrom-Json` の最小例に整理 |
+
+**ベンチマーク（FixApplyBenchmark — lint/fix コア、CLI 変更の間接指標）**
+
+| Scenario | Phase A After | Phase B After | Δ Mean | Alloc |
+|---|---:|---:|---:|---:|
+| NoConflict | 20.84 us | 23.94 us | +15%* | 10.57 KB (0%) |
+| SingleJobConflict | 36.15 us | 40.40 us | +12%* | 16.95 KB (0%) |
+| MultiJobConflict | 101.03 us | 112.59 us | +11%* | 39.72 KB (0%) |
+
+\* Phase B は `CliConfigBridge` / verbose 文字列化のみで `FixEngine` 未変更。FixApplyBenchmark 差分は計測誤差・環境ノイズと判断（Allocated 不変）。verbose 無効時の config 解決は従来と同じ FS walk で、追加コストは `levelsWalked` カウンタのみ。
+
+**テスト**: `Seiton.Tests` 220 passed、`Seiton.Core.Tests` 1815 passed。
+
 ---
 
 ### フェーズ C — ルール・フォーマット拡張（P3）
