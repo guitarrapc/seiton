@@ -44,7 +44,7 @@ seiton --fix --enable-pin-network --enable-image-network
 | Flag | Description |
 |------|-------------|
 | `--config PATH` | Explicit config file path |
-| `--format text, json, sarif` | Output format |
+| `--format text, json, sarif, github-actions` | Output format (`github-actions` default on GHA) |
 | `--min-severity error, warning, info` | Filter by severity |
 | `--ignore PATTERN` | Suppress diagnostics matching pattern |
 | `--oneline` | One diagnostic per line |
@@ -183,7 +183,7 @@ seiton --verbose    # confirm resolved config on stderr
 - **Config errors**: Run `seiton validate-config` to check configuration
 - **Unknown option**: seiton suggests the closest valid option with a `Did you mean` hint
 - **Too many warnings**: Use `--min-severity error` to focus on errors only
-- **CI integration**: Use `--format sarif` for GitHub Code Scanning upload
+- **CI integration (GHA)**: Default `github-actions` groups logs and writes the job summary; use `--format sarif` for Code Scanning upload
 
 ## References
 

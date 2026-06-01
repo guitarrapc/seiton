@@ -91,7 +91,7 @@ seiton rules [--config PATH] [--format text|json]
 ```
 
 - `--config`: Explicit config file path. Auto-discovered if omitted.
-- `--format`: Output format (`text` or `json`). Defaults to `text`. Also resolved from `SEITON_FORMAT` env var. SARIF is not supported and returns exit code 2.
+- `--format`: Output format (`text` or `json`). Defaults to `text`. Also resolved from `SEITON_FORMAT` env var. `sarif` and `github-actions` are not supported and return exit code 2.
 
 Resolves configuration (if available) and reports each rule's status:
 - Whether it is enabled or disabled
@@ -198,7 +198,7 @@ Operational rule:
 
 | Flag | Short | Type | Default | Description |
 |---|---|---|---|---|
-| `--format` | | `text\|json\|sarif` | `text` | Output format for diagnostics. |
+| `--format` | | `text\|json\|sarif\|github-actions` | `text` (see §3.1.1) | Output format for diagnostics. |
 | `--oneline` | | `bool` | `false` | Emit one diagnostic per line (text format only). |
 | `--color` | | `auto\|always\|never` | `auto` | Color output control. `auto` enables color when stdout is not a TTY or CI is detected. |
 | `--no-color` | | `bool` | `false` | Alias for `--color=never`. |
@@ -247,7 +247,7 @@ Certain CLI flags have environment variable equivalents (listed below). When bot
 | Environment Variable | Equivalent Flag | Notes |
 |---|---|---|
 | `SEITON_CONFIG` | `--config` | Config file path. |
-| `SEITON_FORMAT` | `--format` | Output format (`text`, `json`, `sarif`). |
+| `SEITON_FORMAT` | `--format` | Output format (`text`, `json`, `sarif`, `github-actions`). |
 | `SEITON_NO_COLOR` | `--no-color` | Any non-empty value disables color. |
 | `NO_COLOR` | `--no-color` | Standard `NO_COLOR` convention honored as fallback after `SEITON_NO_COLOR`. |
 | `SEITON_GITHUB_TOKEN` | (internal) | GitHub API token for network-assisted operations. Checked before `GITHUB_TOKEN`. Hardcoded resolution order; not configurable via config file. |
@@ -261,6 +261,18 @@ When the `CI` environment variable is set to any non-empty value (e.g. `CI=true`
 
 - `--color` defaults to `never` unless explicitly overridden.
 - Verbose progress output is suppressed unless `--verbose` is explicitly set.
+
+#### 3.1.1 GitHub Actions Default Output Format
+
+When **all** of the following hold:
+
+1. The effective `--format` from the CLI flag is the built-in default (`text`) — not `json`, `sarif`, or `github-actions` from an explicit flag.
+2. `SEITON_FORMAT` does not override the format (or resolves to `text`).
+3. `GITHUB_ACTIONS` is set to any non-empty value.
+
+Then the effective output format for `check` and root lint/fix invocations is **`github-actions`** instead of `text`.
+
+This targets GitHub Actions runners only. Other CI systems that set `CI` but not `GITHUB_ACTIONS` keep `text` as the default. Users can force flat logs with `--format text` or `SEITON_FORMAT=text`.
 
 ---
 
@@ -478,9 +490,58 @@ Each diagnostic maps to a SARIF `result` under a `run` with tool identity `seito
 
 Rule metadata (`id`) is emitted per-rule in `tool.driver.rules`.
 
-### 6.4 Summary Output (stderr)
+### 6.5 `github-actions`
 
-After diagnostics are emitted to stdout, a summary line is always written to stderr:
+Human-readable output optimized for [GitHub Actions](https://docs.github.com/en/actions) job logs and the job summary tab. Intended as the default on GitHub Actions runners (§3.1.1).
+
+#### 6.5.1 Job log (stdout)
+
+Diagnostics are grouped per file using [workflow commands](https://docs.github.com/en/actions/using-workflows/workflow-commands-for-github-actions#grouping-log-lines):
+
+```
+::group::<file-path>
+<rich text diagnostic block(s) for this file — same structure as §6.1.1>
+::endgroup::
+```
+
+- A group is emitted only for files with at least one diagnostic after filtering.
+- Groups appear in the order each file path first appears in the diagnostic list.
+- Color is never emitted for this format.
+- `--oneline` is not supported; specifying it with `github-actions` returns exit code `2`.
+
+When no diagnostics are emitted, no group lines are written to stdout.
+
+#### 6.5.2 Job summary (`GITHUB_STEP_SUMMARY`)
+
+After diagnostics, summary content (§6.4) is written as GitHub Flavored Markdown:
+
+- When `GITHUB_STEP_SUMMARY` is set to a writable file path, the summary is **appended** to that file (with a leading blank line if the file already has content).
+- The block starts with a `## Seiton` heading, followed by the same summary lines and markdown tables as §6.4 (counts, per-file breakdown, verbose per-rule breakdown, fix-mode tables).
+- `hint:` lines from §6.4 are **not** copied to the job summary; they remain on stderr only.
+
+When `GITHUB_STEP_SUMMARY` is unset or not writable, the full §6.4 summary is written to **stderr** only (same as `text` / `json` / `sarif`).
+
+#### 6.5.3 stderr
+
+Progress (`--verbose`), configuration errors, init hints, fix diffs (when format is non-text for diff routing), and `hint:` lines follow the same rules as other formats. Only the §6.4 summary block moves to the job summary file when available.
+
+#### 6.5.4 Unsupported commands
+
+`seiton rules` does not support `github-actions` (exit code `2`, same as SARIF).
+
+### 6.4 Summary Output (stderr or job summary)
+
+After diagnostics are emitted to stdout, a summary block (this section) is always produced.
+
+| Format | `GITHUB_STEP_SUMMARY` | Summary destination |
+|---|---|---|
+| `github-actions` | set and writable | Append full summary block (§6.5.2) |
+| `github-actions` | unset or not writable | stderr |
+| `text`, `json`, `sarif` | (ignored) | stderr |
+
+`hint:` lines defined in this section are never written to the job summary; they go to stderr in all formats.
+
+When written to stderr, a summary line is always emitted:
 
 ```
 <N> errors, <N> warnings, <N> infos in <N> file(s)
@@ -650,6 +711,10 @@ seiton --format json
 # Output SARIF for GitHub Code Scanning
 seiton --format sarif > results.sarif
 
+# On GitHub Actions (GITHUB_ACTIONS=true), default format is github-actions:
+# grouped job log + job summary markdown. Force flat text if needed:
+seiton --format text
+
 # Apply auto-fixes in place
 seiton --fix
 
@@ -688,6 +753,7 @@ seiton validate-config --config .github/seiton.yaml
 
 When this document is revised, review and update:
 
+- `plan_format.md` — implementation plan for `github-actions` output (when §6.5 changes)
 - `Seiton_CLI_csharp_spec.md` — C# implementation spec
 - `Seiton_CLI_go_spec.md` — Go implementation spec
 - `Seiton_Linter_spec.md` — if config bridge contract or discovery order changes

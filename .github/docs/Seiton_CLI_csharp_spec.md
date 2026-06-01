@@ -96,8 +96,8 @@ src/
       ValidateCommand.cs      # seiton validate-config
       VersionCommand.cs       # seiton version
     Output/
-      DiagnosticFormatter.cs  # text / json / sarif formatters
-      OutputFormat.cs         # OutputFormat enum
+      DiagnosticFormatter.cs  # text / json / sarif / github-actions formatters
+      OutputFormat.cs         # OutputFormat enum (includes GitHubActions)
       ColorMode.cs            # ColorMode enum
     Config/
       CliConfigBridge.cs      # CLI flags → LintConfig translation
@@ -212,7 +212,7 @@ public static class CliConfigBridge
     // Config path: flag → SEITON_CONFIG env → directory walk discovery
     public static ConfigPathResolution ResolveConfigPath(string? explicitConfigPath);
 
-    // Output format: flag → SEITON_FORMAT env → default (Text)
+    // Output format: flag → SEITON_FORMAT env → GITHUB_ACTIONS auto (GitHubActions) → default (Text)
     public static OutputFormat ResolveOutputFormat(OutputFormat flagFormat);
 
     // Color: --no-color → SEITON_NO_COLOR → NO_COLOR → --color → auto (TTY + CI)

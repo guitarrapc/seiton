@@ -87,7 +87,7 @@ check.go                 # seiton check / root lint orchestration
 fix.go                   # seiton --fix orchestration
 input_discovery.go       # File discovery logic
 config_bridge.go         # CLI flags → LintConfig translation
-output.go                # text / json / sarif formatters
+output.go                # text / json / sarif / github-actions formatters
 option_suggester.go      # Unknown option detection and suggestion
 exit_code.go             # Exit code constants
 ```
@@ -143,7 +143,7 @@ type Command struct {
     StdinFilename      string
     Ignore             []string
     MinSeverity        string
-    Format             string // "text", "json", "sarif"
+    Format             string // "text", "json", "sarif", "github-actions"
     Oneline            bool
     Color              string // "auto", "always", "never"
     NoColor            bool
@@ -206,7 +206,7 @@ Shared contract reference: `.github/docs/Seiton_CLI_spec.md` §4.
 // Returns ("", nil) when no config found. Returns ("", err) when explicit path missing.
 func resolveConfigPath(explicit string) (string, error)
 
-// resolveOutputFormat returns the effective format from flag and SEITON_FORMAT env.
+// resolveOutputFormat returns the effective format from flag, SEITON_FORMAT env, and GITHUB_ACTIONS auto-default.
 func resolveOutputFormat(flagFormat string) string
 
 // resolveColorEnabled returns whether color output is active.
