@@ -214,9 +214,15 @@ public static class CliConfigBridge
     // Config path: flag → SEITON_CONFIG env → directory walk discovery
     public static ConfigPathResolution ResolveConfigPath(string? explicitConfigPath);
 
-    // Output format: flag → SEITON_FORMAT env → GITHUB_ACTIONS auto (GitHubActions) → default (Text)
+    // Output format: explicit non-text flag → explicit --format text → SEITON_FORMAT env → GITHUB_ACTIONS auto (GitHubActions) → default (Text)
     // allowGitHubActionsAutoDefault: false for seiton rules (stays text on GHA)
-    public static OutputFormat ResolveOutputFormat(OutputFormat flagFormat, bool allowGitHubActionsAutoDefault = true);
+    public static OutputFormat ResolveOutputFormat(
+        OutputFormat flagFormat,
+        bool formatExplicitlySet = false,
+        bool allowGitHubActionsAutoDefault = true);
+
+// `CliFormatArgs.WasFormatSpecified(rawArgv)` — true when `--format` / `-f` appears before `--`
+// Program passes this from `CliVerboseParser.GetRawArgs()` into check/fix handlers.
 
     // Color: --no-color → SEITON_NO_COLOR → NO_COLOR → --color → auto (TTY + CI)
     public static bool ResolveColorEnabled(ColorMode colorFlag, bool noColorFlag);

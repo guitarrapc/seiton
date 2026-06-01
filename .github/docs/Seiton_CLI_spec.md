@@ -266,7 +266,7 @@ When the `CI` environment variable is set to any non-empty value (e.g. `CI=true`
 
 When **all** of the following hold:
 
-1. The effective `--format` from the CLI flag is the built-in default (`text`) — not `json`, `sarif`, or `github-actions` from an explicit flag.
+1. The user did not pass `--format` / `-f` on the CLI (the built-in default `text` applies). An explicit `--format text` or `-f text` counts as user-specified and keeps `text` on GitHub Actions runners.
 2. `SEITON_FORMAT` does not override the format (or resolves to `text`).
 3. `GITHUB_ACTIONS` is set to any non-empty value.
 
@@ -490,39 +490,6 @@ Each diagnostic maps to a SARIF `result` under a `run` with tool identity `seito
 
 Rule metadata (`id`) is emitted per-rule in `tool.driver.rules`.
 
-### 6.5 `github-actions`
-
-Human-readable output optimized for [GitHub Actions](https://docs.github.com/en/actions) job logs and the job summary tab. Intended as the default on GitHub Actions runners (§3.1.1).
-
-#### 6.5.1 Job log (stdout)
-
-Diagnostics are written to **stdout** using the same rich text structure as §6.1.1 (severity/rule header, source excerpt, help lines). Files with diagnostics appear in diagnostic-list order; there is no extra per-file wrapper in the current release.
-
-- Color is never emitted for this format.
-- `--oneline` is not supported; specifying it with `github-actions` returns exit code `2`.
-
-When no diagnostics are emitted, stdout carries no diagnostic lines (same as `text`).
-
-> **Planned enhancement** (`plan_format.md` phase 2): wrap each file’s diagnostics in `::group::<file-path>` … `::endgroup::` [workflow commands](https://docs.github.com/en/actions/using-workflows/workflow-commands-for-github-actions#grouping-log-lines) so the Actions job log can collapse by file.
-
-#### 6.5.2 Job summary (`GITHUB_STEP_SUMMARY`)
-
-After diagnostics, summary content (§6.4) is written as GitHub Flavored Markdown:
-
-- When `GITHUB_STEP_SUMMARY` is set to a writable file path, the summary is **appended** to that file (with a leading blank line if the file already has content).
-- The block starts with a `## Seiton` heading, followed by the same summary lines and markdown tables as §6.4 (counts, per-file breakdown, verbose per-rule breakdown, fix-mode tables).
-- `hint:` lines from §6.4 are **not** copied to the job summary; they remain on stderr only.
-
-When `GITHUB_STEP_SUMMARY` is unset or not writable, the full §6.4 summary is written to **stderr** only (same as `text` / `json` / `sarif`).
-
-#### 6.5.3 stderr
-
-Progress (`--verbose`), configuration errors, init hints, fix diffs (when format is non-text for diff routing), and `hint:` lines follow the same rules as other formats. Only the §6.4 summary block moves to the job summary file when available.
-
-#### 6.5.4 Unsupported commands
-
-`seiton rules` does not support `github-actions` (exit code `2`, same as SARIF).
-
 ### 6.4 Summary Output (stderr or job summary)
 
 After diagnostics are emitted to stdout, a summary block (this section) is always produced.
@@ -665,6 +632,40 @@ In `--dry-run` mode, the table header uses "Would Fix" instead of "Fixed". In `-
 - When no fixes are applied (all diagnostics are unfixable), the fix summary is not emitted and the standard diagnostic summary is used instead.
 - When fixes are attempted but no file content changes, the fix summary is not emitted; a `hint: no files modified` (or `would be modified` in `--dry-run`) line explains the outcome.
 - In `--check` mode, the remaining diagnostic summary uses standard wording ("in N files") rather than "remain" because no fixes were applied.
+- When the effective format is `github-actions` and the job summary file is writable, fix summaries and remain summaries are appended there instead of stderr (see §6.5.2).
+
+### 6.5 `github-actions`
+
+Human-readable output optimized for [GitHub Actions](https://docs.github.com/en/actions) job logs and the job summary tab. Intended as the default on GitHub Actions runners (§3.1.1).
+
+#### 6.5.1 Job log (stdout)
+
+Diagnostics are written to **stdout** using the same rich text structure as §6.1.1 (severity/rule header, source excerpt, help lines). Files with diagnostics appear in diagnostic-list order; there is no extra per-file wrapper in the current release.
+
+- Color is never emitted for this format.
+- `--oneline` is not supported; specifying it with `github-actions` returns exit code `2`.
+
+When no diagnostics are emitted, stdout carries no diagnostic lines (same as `text`).
+
+> **Planned enhancement** (`plan_format.md` phase 2): wrap each file’s diagnostics in `::group::<file-path>` … `::endgroup::` [workflow commands](https://docs.github.com/en/actions/using-workflows/workflow-commands-for-github-actions#grouping-log-lines) so the Actions job log can collapse by file.
+
+#### 6.5.2 Job summary (`GITHUB_STEP_SUMMARY`)
+
+After diagnostics, summary content (§6.4) is written as GitHub Flavored Markdown:
+
+- When `GITHUB_STEP_SUMMARY` is set to a writable file path, the summary is **appended** to that file (with a leading blank line if the file already has content).
+- The block starts with a `## Seiton` heading, followed by the same summary lines and markdown tables as §6.4 (counts, per-file breakdown, verbose per-rule breakdown, fix-mode tables).
+- `hint:` lines from §6.4 are **not** copied to the job summary; they remain on stderr only.
+
+When `GITHUB_STEP_SUMMARY` is unset or not writable, the full §6.4 summary is written to **stderr** only (same as `text` / `json` / `sarif`).
+
+#### 6.5.3 stderr
+
+Progress (`--verbose`), configuration errors, init hints, fix diffs (when format is non-text for diff routing), and `hint:` lines follow the same rules as other formats. Only the §6.4 summary block moves to the job summary file when available.
+
+#### 6.5.4 Unsupported commands
+
+`seiton rules` does not support `github-actions` (exit code `2`, same as SARIF).
 
 ---
 

@@ -109,6 +109,24 @@ public sealed class CliConfigBridgeTests
     }
 
     [Test]
+    public async Task ResolveOutputFormat_ExplicitTextFlag_OnGitHubActionsRunner_ReturnsText()
+    {
+        var originalGha = Environment.GetEnvironmentVariable("GITHUB_ACTIONS");
+        try
+        {
+            Environment.SetEnvironmentVariable("GITHUB_ACTIONS", "true");
+
+            var resolved = CliConfigBridge.ResolveOutputFormat(OutputFormat.Text, formatExplicitlySet: true);
+
+            await Assert.That(resolved).IsEqualTo(OutputFormat.Text);
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable("GITHUB_ACTIONS", originalGha);
+        }
+    }
+
+    [Test]
     public async Task ResolveOutputFormat_ExplicitGitHubActionsFlag_ReturnsGitHubActions()
     {
         var originalGha = Environment.GetEnvironmentVariable("GITHUB_ACTIONS");

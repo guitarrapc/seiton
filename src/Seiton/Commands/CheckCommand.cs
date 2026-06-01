@@ -27,9 +27,10 @@ internal static class CheckCommand
         bool noColor,
         VerboseLevel verboseLevel,
         bool includeActions,
-        bool skipAgenticWorkflows = false)
+        bool skipAgenticWorkflows = false,
+        bool formatExplicitlySet = false)
     {
-        var resolvedFormat = CliConfigBridge.ResolveOutputFormat(format);
+        var resolvedFormat = CliConfigBridge.ResolveOutputFormat(format, formatExplicitlySet);
         GitHubStepSummaryWriter.Reset();
         var colorEnabled = CliConfigBridge.ResolveColorEnabled(color, noColor);
 

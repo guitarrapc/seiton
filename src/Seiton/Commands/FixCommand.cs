@@ -28,12 +28,13 @@ internal static class FixCommand
         bool includeActions,
         bool skipAgenticWorkflows = false,
         bool showDiff = false,
+        bool formatExplicitlySet = false,
         TextWriter? output = null,
         TextWriter? error = null)
     {
         var outputWriter = output ?? Console.Out;
         var errorWriter = error ?? Console.Error;
-        var resolvedFormat = CliConfigBridge.ResolveOutputFormat(format);
+        var resolvedFormat = CliConfigBridge.ResolveOutputFormat(format, formatExplicitlySet);
         GitHubStepSummaryWriter.Reset();
         var colorEnabled = CliConfigBridge.ResolveColorEnabled(color, noColor);
 

@@ -72,9 +72,10 @@ internal class SeitonCli
         }
 
         var verboseLevel = CliVerboseParser.Resolve(verbose);
+        var formatExplicitlySet = CliFormatArgs.WasFormatSpecified(CliVerboseParser.GetRawArgs());
         var code = fix
-            ? await FixCommand.RunAsync(files, config, stdinFilename, ignore ?? [], minSeverity, outputFormat, oneline, color, noColor, verboseLevel, dryRun, check, enablePinNetwork, enableImageNetwork, includeActions, skipAgenticWorkflows, showDiff)
-            : CheckCommand.Run(files, config, stdinFilename, ignore ?? [], minSeverity, outputFormat, oneline, color, noColor, verboseLevel, includeActions, skipAgenticWorkflows);
+            ? await FixCommand.RunAsync(files, config, stdinFilename, ignore ?? [], minSeverity, outputFormat, oneline, color, noColor, verboseLevel, dryRun, check, enablePinNetwork, enableImageNetwork, includeActions, skipAgenticWorkflows, showDiff, formatExplicitlySet)
+            : CheckCommand.Run(files, config, stdinFilename, ignore ?? [], minSeverity, outputFormat, oneline, color, noColor, verboseLevel, includeActions, skipAgenticWorkflows, formatExplicitlySet);
 
         if (code != 0) Environment.ExitCode = code;
     }
@@ -114,7 +115,8 @@ internal class SeitonCli
         }
 
         var verboseLevel = CliVerboseParser.Resolve(verbose);
-        var code = CheckCommand.Run(files, config, stdinFilename, ignore ?? [], minSeverity, outputFormat, oneline, color, noColor, verboseLevel, includeActions, skipAgenticWorkflows);
+        var formatExplicitlySet = CliFormatArgs.WasFormatSpecified(CliVerboseParser.GetRawArgs());
+        var code = CheckCommand.Run(files, config, stdinFilename, ignore ?? [], minSeverity, outputFormat, oneline, color, noColor, verboseLevel, includeActions, skipAgenticWorkflows, formatExplicitlySet);
         if (code != 0) Environment.ExitCode = code;
     }
 

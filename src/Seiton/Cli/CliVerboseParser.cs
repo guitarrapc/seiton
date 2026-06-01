@@ -94,6 +94,9 @@ internal static class CliVerboseParser
     /// <summary>Stores the original CLI args for verbose-level resolution in command handlers.</summary>
     public static void SetRawArgs(string[] args) => _rawArgs = args;
 
+    /// <summary>Returns argv stored by <see cref="SetRawArgs"/>, or an empty array when unset.</summary>
+    public static string[] GetRawArgs() => _rawArgs ?? [];
+
     private static string[]? _rawArgs;
 
     private static bool ContainsFrameworkFilteredFlag(string[] args)
