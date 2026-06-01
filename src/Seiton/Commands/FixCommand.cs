@@ -557,7 +557,8 @@ internal static class FixCommand
         if (fixableRemainingCount > 0)
         {
             var issueWord = fixableRemainingCount == 1 ? "issue" : "issues";
-            writer.WriteLine($"hint: no files {verb} ({fixAttemptedFileCount} {fileWord} processed; {fixableRemainingCount} fixable {issueWord} remain)");
+            var issueVerb = fixableRemainingCount == 1 ? "remains" : "remain";
+            writer.WriteLine($"hint: no files {verb} ({fixAttemptedFileCount} {fileWord} processed; {fixableRemainingCount} fixable {issueWord} {issueVerb})");
             return;
         }
 

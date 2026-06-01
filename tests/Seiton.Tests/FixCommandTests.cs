@@ -2382,7 +2382,7 @@ public sealed class FixCommandTests
         FixCommand.WriteNoFilesModifiedHint(sw, fixAttemptedFileCount: 1, fixableRemainingCount: 1, dryRun: false);
 
         await Assert.That(sw.ToString().TrimEnd())
-            .IsEqualTo("hint: no files modified (1 file processed; 1 fixable issue remain)");
+            .IsEqualTo("hint: no files modified (1 file processed; 1 fixable issue remains)");
     }
 
     [Test]
