@@ -87,4 +87,16 @@ public sealed class ActionRefHelpersTests
 
         await Assert.That(baseDirectory).IsEqualTo(ActionRefHelpers.NormalizePath(Path.GetDirectoryName(actionPath)!));
     }
+
+    [Test]
+    public async Task ResolveLocalReferenceBaseDirectory_GithubRelativePathWithoutGithubSegment_UsesFileDirectory()
+    {
+        var root = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N"));
+        var sourceFilePath = Path.Combine(root, "scripts", "lint-target.yaml");
+        var fileDirectory = ActionRefHelpers.NormalizePath(Path.GetDirectoryName(sourceFilePath)!);
+
+        var baseDirectory = ActionRefHelpers.ResolveLocalReferenceBaseDirectory(sourceFilePath, "./.github/actions/signed-commit");
+
+        await Assert.That(baseDirectory).IsEqualTo(fileDirectory);
+    }
 }
