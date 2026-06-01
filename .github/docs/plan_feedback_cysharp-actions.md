@@ -312,6 +312,8 @@
 
 ### フェーズ C — ルール・フォーマット拡張（P3）
 
+no need. skip implementation.
+
 **WHY**: 品質向上だが、Cysharp/Actions フィードバックの blocking ではない。
 
 1. `checkout-persist-credentials` の passthrough 式検出（optional suppression）
