@@ -342,10 +342,15 @@ public sealed class DiagnosticFormatterRichTextTests
         using var writer = new StringWriter(sb);
         DiagnosticFormatter.Write(writer, [diag], OutputFormat.Sarif, oneline: false, color: false);
         writer.Flush();
-        var output = sb.ToString();
+        using var doc = JsonDocument.Parse(sb.ToString());
+        var text = doc.RootElement
+            .GetProperty("runs")[0]
+            .GetProperty("results")[0]
+            .GetProperty("message")
+            .GetProperty("text")
+            .GetString();
 
-        await Assert.That(output).Contains("\"text\":\"plain error\"");
-        await Assert.That(output).DoesNotContain("Help:");
+        await Assert.That(text).IsEqualTo("plain error");
     }
 
     [Test]
@@ -585,6 +590,21 @@ public sealed class DiagnosticFormatterRichTextTests
         var schema = doc.RootElement.GetProperty("$schema").GetString();
 
         await Assert.That(schema).IsEqualTo("https://docs.oasis-open.org/sarif/sarif/v2.1.0/errata01/os/schemas/sarif-schema-2.1.0.json");
+    }
+
+    [Test]
+    public async Task Sarif_Format_IsPrettyPrinted()
+    {
+        var diag = MakeDiagnostic(DiagnosticSeverity.Warning, "pretty", 1, 1, 1, 3);
+
+        var sb = new StringBuilder();
+        using var writer = new StringWriter(sb);
+        DiagnosticFormatter.Write(writer, [diag], OutputFormat.Sarif, oneline: false, color: false);
+        writer.Flush();
+        var output = sb.ToString().ReplaceLineEndings("\n");
+
+        await Assert.That(output).Contains("\n  \"$schema\": ");
+        await Assert.That(output).Contains("\n  \"runs\": [\n    {\n      \"tool\": {");
     }
 
     [Test]

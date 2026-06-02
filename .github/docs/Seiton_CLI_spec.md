@@ -489,6 +489,7 @@ Schema (non-normative):
 ### 6.3 `sarif`
 
 SARIF 2.1.0 JSON output to stdout. Suitable for GitHub Code Scanning upload.
+Output is pretty-printed JSON (indented) for readability in code review and issue sharing.
 
 `$schema` uses the official OASIS SARIF 2.1.0 schema URL:
 

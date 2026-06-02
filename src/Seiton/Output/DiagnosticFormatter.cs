@@ -450,7 +450,7 @@ public static class DiagnosticFormatter
         }
 
         using var buffer = new PooledByteBufferWriter(Math.Max(1024, diagnostics.Count * 192));
-        using var json = new Utf8JsonWriter(buffer, new JsonWriterOptions { SkipValidation = true });
+        using var json = new Utf8JsonWriter(buffer, new JsonWriterOptions { SkipValidation = true, Indented = true });
 
         json.WriteStartObject();
         json.WriteString("version", "2.1.0");
