@@ -358,31 +358,19 @@ When `GITHUB_ACTIONS` is set and you do not pass an explicit `--format` (or `SEI
 
 ### GitHub Actions (`github-actions`)
 
-Optimized for [GitHub Actions](https://docs.github.com/en/actions): readable diagnostics on stdout and a Markdown block on the job summary tab. This is the **default on GitHub Actions runners** when `--format` is omitted.
+Optimized for [GitHub Actions](https://docs.github.com/en/actions): diagnostics are printed in a CI-friendly log format, and a Markdown summary is written to the job summary tab when `GITHUB_STEP_SUMMARY` is writable.
 
-**Job log (stdout)** — same rich layout as **text** (snippets and help lines). Color is off. Per-file log folding via `::group::`.
+This is the **default format on GitHub Actions** when `--format` (or `SEITON_FORMAT`) is not specified.
 
-**Job summary** — when `GITHUB_STEP_SUMMARY` points to a **writable** file (normal on `ubuntu-latest` and other GitHub-hosted runners), Seiton **appends** UTF-8 Markdown with LF line endings:
+If `GITHUB_STEP_SUMMARY` is unavailable or not writable, the summary is printed to stderr instead.
 
-- A `## Seiton` heading once per process run (fix + check summaries share one block).
-- The same count lines and tables as the stderr summary (§6.4 in `Seiton_CLI_spec.md`), including metadata suffixes such as `(N excluded, M suppressed)` when applicable.
-- A blank line before the block when the summary file already has content (does not overwrite other tools’ summaries).
-
-If the variable is unset, blank, or not writable, the full summary is written to **stderr** instead (same content as local `text`, without the `## Seiton` heading).
-
-**stderr** — progress (`--verbose`), configuration errors, init hints, and all `hint:` lines stay on stderr. They are never copied into the job summary.
-
-`--oneline` is not supported with this format (exit code `2`).
-
-`text`, `json`, and `sarif` **ignore** `GITHUB_STEP_SUMMARY` and always print the summary on stderr.
+`--oneline` is not supported with this format (exit code `2`). Use `--format text` to force classic flat output.
 
 ```yaml
 # Simplest CI step — no --format flag needed on GitHub Actions
 - name: Run seiton
   run: seiton
 ```
-
-Force classic flat output: `seiton --format text`.
 
 See `.github/docs/Seiton_CLI_spec.md` §6.5 for the full contract.
 
