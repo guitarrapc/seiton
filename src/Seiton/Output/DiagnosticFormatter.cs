@@ -1,7 +1,6 @@
 ﻿using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
-using System.Reflection;
 using Seiton.Core.Parsing;
 
 namespace Seiton.Output;
@@ -11,7 +10,7 @@ public static class DiagnosticFormatter
     private const string UnknownSarifFileUri = "file:///unknown";
     private const string SarifRuleHelpUri = "https://github.com/guitarrapc/seiton/blob/main/docs/usage.md";
 
-    private static readonly string SarifDriverVersion = ResolveSarifDriverVersion();
+    private static readonly string SarifDriverVersion = ToolVersionResolver.ResolveFromAssembly(typeof(DiagnosticFormatter).Assembly);
 
     public static void Write(
         TextWriter writer,
@@ -566,18 +565,6 @@ public static class DiagnosticFormatter
         return true;
     }
 
-    private static string ResolveSarifDriverVersion()
-    {
-        var version = typeof(DiagnosticFormatter).Assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion
-            ?? typeof(DiagnosticFormatter).Assembly.GetName().Version?.ToString()
-            ?? "0.0.0";
-
-        var plusIndex = version.IndexOf('+');
-        if (plusIndex >= 0)
-            version = version[..plusIndex];
-
-        return version;
-    }
 }
 
 // --- JSON output models ---
