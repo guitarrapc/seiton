@@ -1,6 +1,6 @@
-namespace Seiton.Output;
+﻿using System.Text.Json.Serialization;
 
-using System.Text.Json.Serialization;
+namespace Seiton.Output;
 
 /// <summary>
 /// Resolves internal file paths to user-facing relative display paths and SARIF artifact locations.

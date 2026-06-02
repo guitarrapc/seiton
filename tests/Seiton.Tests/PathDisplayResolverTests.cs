@@ -1,5 +1,4 @@
-using Seiton.Output;
-using System.Text.Json;
+﻿using Seiton.Output;
 
 namespace Seiton.Tests;
 
