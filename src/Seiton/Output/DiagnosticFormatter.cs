@@ -672,7 +672,9 @@ internal sealed class PooledByteBufferWriter : IBufferWriter<byte>, IDisposable
 
     private void EnsureCapacity(int sizeHint)
     {
-        if (sizeHint < 1)
+        if (sizeHint < 0)
+            throw new ArgumentOutOfRangeException(nameof(sizeHint));
+        if (sizeHint == 0)
             sizeHint = 1;
 
         var available = _buffer.Length - _index;
