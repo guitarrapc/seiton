@@ -219,9 +219,12 @@ Review Round 2:
 1. `runs[].tool.driver.rules[]` に `helpUri` を追加。
 2. `helpUri` は共通の usage ガイド URL を指す。
   - `https://github.com/guitarrapc/seiton/blob/main/docs/usage.md`
+3. SARIF の `$schema` URL を OASIS 公式 URL に統一。
+  - `https://docs.oasis-open.org/sarif/sarif/v2.1.0/errata01/os/schemas/sarif-schema-2.1.0.json`
 
 追加テスト（Red -> Green）:
 - `Sarif_Format_Rules_IncludeHelpUriMetadata`
+- `Sarif_Format_UsesOfficialOasisSchemaUrl`
 
 検証結果:
 - 追加テスト: 失敗を確認後、実装後に成功。

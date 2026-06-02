@@ -456,6 +456,22 @@ public sealed class DiagnosticFormatterRichTextTests
     }
 
     [Test]
+    public async Task Sarif_Format_UsesOfficialOasisSchemaUrl()
+    {
+        var diag = MakeDiagnostic(DiagnosticSeverity.Warning, "schema test", 1, 1, 1, 3);
+
+        var sb = new StringBuilder();
+        using var writer = new StringWriter(sb);
+        DiagnosticFormatter.Write(writer, [diag], OutputFormat.Sarif, oneline: false, color: false);
+        writer.Flush();
+
+        using var doc = JsonDocument.Parse(sb.ToString());
+        var schema = doc.RootElement.GetProperty("$schema").GetString();
+
+        await Assert.That(schema).IsEqualTo("https://docs.oasis-open.org/sarif/sarif/v2.1.0/errata01/os/schemas/sarif-schema-2.1.0.json");
+    }
+
+    [Test]
     public async Task GitHubActions_Format_DoesNotEmitAnsi_WhenColorRequested()
     {
         var diag = MakeDiagnostic(DiagnosticSeverity.Error, "plain error", 1, 1, 1, 5);

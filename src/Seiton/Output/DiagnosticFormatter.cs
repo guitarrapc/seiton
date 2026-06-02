@@ -597,7 +597,7 @@ internal sealed record SarifLog
     [JsonPropertyName("version")]
     public string Version { get; init; } = "2.1.0";
     [JsonPropertyName("$schema")]
-    public string Schema { get; init; } = "https://raw.githubusercontent.com/oasis-tcs/sarif-spec/main/sarif-2.1/schema/sarif-schema-2.1.0.json";
+    public string Schema { get; init; } = "https://docs.oasis-open.org/sarif/sarif/v2.1.0/errata01/os/schemas/sarif-schema-2.1.0.json";
     [JsonPropertyName("runs")]
     public required SarifRun[] Runs { get; init; }
 }

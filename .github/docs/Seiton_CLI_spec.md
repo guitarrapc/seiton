@@ -486,6 +486,10 @@ Schema (non-normative):
 
 SARIF 2.1.0 JSON output to stdout. Suitable for GitHub Code Scanning upload.
 
+`$schema` uses the official OASIS SARIF 2.1.0 schema URL:
+
+- `https://docs.oasis-open.org/sarif/sarif/v2.1.0/errata01/os/schemas/sarif-schema-2.1.0.json`
+
 Each diagnostic maps to a SARIF `result` under a `run` with tool identity `seiton`.
 
 `runs[].results[].locations[].physicalLocation.artifactLocation.uri` is emitted as a valid URI reference:
