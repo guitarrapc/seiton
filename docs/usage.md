@@ -11,21 +11,22 @@ Usage: [command] [arguments...] [options...] [-h|--help] [--version]
 Lint workflow files by default, or apply fixes when --fix is specified.
 
 Arguments:
-  [0] <string[]>     Workflow files or directories to lint. Auto-discovers .github/workflows/ if omitted.
+  [0] <string[]>    Workflow files or directories to lint. Auto-discovers .github/workflows/ if omitted.
 
 Options:
   -c, --config <string?>       Path to config file. Auto-discovered from .github/seiton.yaml if omitted. [Default: null]
   --stdin-filename <string>    Filename used when reading from stdin (-). [Default: @"<stdin>"]
   --ignore <string[]?>         Substring patterns for messages to ignore (case-insensitive). [Default: null]
   --min-severity <string?>     Minimum severity to report: error | warning | info. [Default: null]
-  --format <OutputFormat>      Output format: text | json | sarif | github-actions. [Default: Text; github-actions on GHA]
+  --format <string>            Output format: text | json | sarif | github-actions. [Default: @"text"]
   --oneline                    Print each diagnostic on a single line.
   --color <ColorMode>          Color mode: auto | always | never. [Default: Auto]
   --no-color                   Disable color output (overrides --color).
-  --verbose                    Print progress information to stderr.
+  -v, --verbose                Print progress information to stderr. Use -vv for more detailed output.
+  --skip-agentic-workflows     Skip Agentic Workflow files (with # gh-aw-metadata: header).
   --fix                        Enable fix mode on the root command.
   --dry-run                    Print unified diff without modifying files (requires --fix).
-  --show-diff                  Apply fixes and print unified diff (requires --fix; --dry-run takes precedence).
+  --show-diff                  Print unified diff after applying fixes (requires --fix; --dry-run takes precedence).
   --check                      Exit non-zero if fixable diagnostics remain after filtering, without applying fixes (requires --fix).
   --enable-pin-network         Allow network requests to resolve action SHA pins (requires --fix).
   --enable-image-network       Allow network requests to resolve container image digests (requires --fix).
@@ -33,9 +34,10 @@ Options:
 
 Commands:
   check              Lint workflow files.
-  init               Generate a starter seiton config file.
+  init               Generate a starter seiton config file. Typical flow: init, then validate-config, then lint with --verbose to confirm discovery.
+  install            Install agent skill files and/or a CI workflow template into the workspace.
   rules              List all available lint rules and their effective status.
-  validate-config    Validate the seiton config file.
+  validate-config    Validate the seiton config file. Run after init and before production linting.
   version            Show version and runtime information.
 ```
 
