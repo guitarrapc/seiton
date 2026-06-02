@@ -244,3 +244,44 @@ SARIF:
 - `--format text|json|github-actions|sarif` の診断出力に含まれるファイルパスは、プロセス作業ディレクトリからの**相対パス**（`/` 区切り）に変更。
 - 絶対パス前提のログパーサーは相対パス対応が必要。
 - SARIF は相対 artifact を含む場合に `uriBaseId` / `originalUriBaseIds` が追加。`file:///C:/...` 形式のみを期待する連携は `%WORKING_DIR%` 解決へ移行。
+
+---
+
+## 追加パフォーマンス見直し（2026-06-03）
+
+### ブロッキングポイント評価（戻り値/シリアライズ契約変更）
+
+- **大きなブロッキングはなし**。`PathDisplayResolver` は `Output` 層内で閉じており、外部 API への波及は限定的。
+- ただし、`TextWriter` ベース出力という前提があるため、完全ゼロアロケーション（中間文字列ゼロ）には構造的制約がある。
+- SARIF の完全ストリーム化（`Utf8JsonWriter` 直書き）も試行可能だが、実測では現行ワークロードで Allocated 改善が得られないケースがあり、採用判断はベンチ優先で行う。
+
+### 実装計画（追加）
+
+1. `PathDisplayResolver` の不要再生成を削減（`Replace` 回避、既存キャッシュ再利用）
+2. `DiagnosticFormatter` 側で連続同一 `FilePath` の局所キャッシュを追加し、resolver 呼び出し回数を削減
+3. SARIF のストリーム直書きを試験実装し、ベンチ比較で優位性が出るか検証
+4. 退行が出る場合は即時ロールバックし、最小アロケーションの安定版を採用
+
+### 実装結果（追加）
+
+- 採用:
+  - `PathDisplayResolver.NormalizeToForwardSlashes` は `\\` 非含有時に同一参照を返す
+  - `DiagnosticFormatter` で format ごとの直前ファイルキャッシュを導入
+  - `originalUriBaseIds` は相対 artifact がある場合のみ生成
+- 不採用:
+  - SARIF `Utf8JsonWriter` 直書き案は、現行ベンチで Allocated/Mean 改善が安定しなかったためロールバック
+
+### 追加ベンチ（直近2回比較）
+
+比較対象:
+- 変更前: `agent-tools/1edee36e-b0f3-4d45-9972-407f64d263ae.txt`
+- 変更後: `agent-tools/8104ec26-7e5d-42a7-9445-8e8a0e2de130.txt`
+
+主要差分:
+- `github-actions oneline` F10 Mean: `114.03 us -> 109.42 us`（改善）
+- `sarif` F10 Mean: `467.87 us -> 448.76 us`（改善）
+- `sarif` Allocated: `1329.38 KB -> 1329.42 KB`（誤差範囲で同等）
+
+結論:
+- 現時点の最適解は「**契約互換を維持しつつ、局所キャッシュと不要変換削減で極小アロケーション化**」。
+- 完全ゼロアロケーション化は `TextWriter` 契約のままでは限界があるため、将来は `IBufferWriter<byte>`/`Utf8JsonWriter` 直結 API を別経路で導入するのが次段。
