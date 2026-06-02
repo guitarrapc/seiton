@@ -1,4 +1,4 @@
-namespace Seiton.Commands;
+﻿namespace Seiton.Commands;
 
 internal static class AgenticWorkflowDetector
 {

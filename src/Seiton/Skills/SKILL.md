@@ -59,7 +59,7 @@ seiton --fix --enable-pin-network --enable-image-network
 
 Default on GitHub Actions runners when `--format` is omitted (`GITHUB_ACTIONS` set). Use plain `seiton` in workflow steps.
 
-- **stdout** — rich diagnostics (same layout as `text`; per-file `::group::` folding is planned).
+- **stdout** — diagnostics grouped per file with `::group::` / `::endgroup::`; body is rich text by default or one-line with `--oneline`.
 - **Job summary** — appends Markdown to `GITHUB_STEP_SUMMARY` when writable (`## Seiton`, counts, tables). Pass `-e GITHUB_STEP_SUMMARY` in Docker.
 - **stderr** — verbose progress, config errors, and `hint:` lines only (never duplicated into the summary).
 

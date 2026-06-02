@@ -1,4 +1,4 @@
-namespace Seiton.Output;
+﻿namespace Seiton.Output;
 
 /// <summary>Parses user-facing format names (CLI and <c>SEITON_FORMAT</c>).</summary>
 public static class OutputFormatParser

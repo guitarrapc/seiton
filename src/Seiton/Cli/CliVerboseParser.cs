@@ -1,4 +1,4 @@
-namespace Seiton.Cli;
+﻿namespace Seiton.Cli;
 
 /// <summary>Parses verbose flags from raw CLI arguments before framework binding.</summary>
 internal static class CliVerboseParser

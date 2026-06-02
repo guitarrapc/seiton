@@ -362,6 +362,108 @@ public sealed class DiagnosticFormatterRichTextTests
         await Assert.That(output).DoesNotContain("\u001b[");
     }
 
+    [Test]
+    public async Task GitHubActions_Format_Oneline_EmitsGroupedDiagnosticsPerFile()
+    {
+        var diagnostics = new[]
+        {
+            MakeDiagnostic(DiagnosticSeverity.Error, "first", 1, 1, 1, 5, filePath: "a.yml"),
+            MakeDiagnostic(DiagnosticSeverity.Warning, "second", 2, 1, 2, 4, filePath: "a.yml"),
+            MakeDiagnostic(DiagnosticSeverity.Warning, "third", 3, 1, 3, 4, filePath: "b.yml"),
+        };
+
+        var sb = new StringBuilder();
+        using var writer = new StringWriter(sb);
+        DiagnosticFormatter.Write(writer, diagnostics, OutputFormat.GitHubActions, oneline: true, color: false);
+        writer.Flush();
+        var output = sb.ToString();
+
+        await Assert.That(output).Contains("::group::a.yml");
+        await Assert.That(output).Contains("::group::b.yml");
+        await Assert.That(output).Contains("::endgroup::");
+        await Assert.That(output).Contains("a.yml:1:1: error [test-rule] first");
+        await Assert.That(output).Contains("a.yml:2:1: warning [test-rule] second");
+        await Assert.That(output).Contains("b.yml:3:1: warning [test-rule] third");
+    }
+
+    [Test]
+    public async Task GitHubActions_Format_Rich_EmitsGroupedDiagnosticsPerFile()
+    {
+        var diagnostics = new[]
+        {
+            MakeDiagnostic(DiagnosticSeverity.Error, "first", 1, 1, 1, 5, filePath: "a.yml"),
+            MakeDiagnostic(DiagnosticSeverity.Warning, "second", 2, 1, 2, 4, filePath: "b.yml"),
+        };
+
+        var sb = new StringBuilder();
+        using var writer = new StringWriter(sb);
+        DiagnosticFormatter.Write(writer, diagnostics, OutputFormat.GitHubActions, oneline: false, color: false);
+        writer.Flush();
+        var output = sb.ToString();
+
+        await Assert.That(output).Contains("::group::a.yml");
+        await Assert.That(output).Contains("::group::b.yml");
+        await Assert.That(output).Contains("error[test-rule]: first");
+        await Assert.That(output).Contains("warning[test-rule]: second");
+    }
+
+    [Test]
+    public async Task GitHubActions_Format_GroupTitle_EscapesWorkflowCommandSpecialCharacters()
+    {
+        var filePath = "a%25\r\nb.yml";
+        var diagnostics = new[]
+        {
+            MakeDiagnostic(DiagnosticSeverity.Warning, "first", 1, 1, 1, 5, filePath: filePath),
+        };
+
+        var sb = new StringBuilder();
+        using var writer = new StringWriter(sb);
+        DiagnosticFormatter.Write(writer, diagnostics, OutputFormat.GitHubActions, oneline: true, color: false);
+        writer.Flush();
+        var output = sb.ToString();
+
+        await Assert.That(output).Contains("::group::a%2525%0D%0Ab.yml");
+        await Assert.That(output).DoesNotContain("::group::a%25\r\nb.yml");
+    }
+
+    [Test]
+    public async Task GitHubActions_Format_Oneline_EscapesFilePathControlCharacters()
+    {
+        var filePath = "a\r\n::warning::owned";
+        var diagnostics = new[]
+        {
+            MakeDiagnostic(DiagnosticSeverity.Warning, "first", 1, 1, 1, 5, filePath: filePath),
+        };
+
+        var sb = new StringBuilder();
+        using var writer = new StringWriter(sb);
+        DiagnosticFormatter.Write(writer, diagnostics, OutputFormat.GitHubActions, oneline: true, color: false);
+        writer.Flush();
+        var output = sb.ToString();
+
+        await Assert.That(output).Contains("a%0D%0A::warning::owned:1:1: warning [test-rule] first");
+        await Assert.That(output).DoesNotContain("a\r\n::warning::owned:1:1: warning [test-rule] first");
+    }
+
+    [Test]
+    public async Task GitHubActions_Format_Rich_EscapesFilePathControlCharactersInLocationLine()
+    {
+        var filePath = "a\r\n::warning::owned";
+        var diagnostics = new[]
+        {
+            MakeDiagnostic(DiagnosticSeverity.Warning, "first", 1, 1, 1, 5, filePath: filePath),
+        };
+
+        var sb = new StringBuilder();
+        using var writer = new StringWriter(sb);
+        DiagnosticFormatter.Write(writer, diagnostics, OutputFormat.GitHubActions, oneline: false, color: false);
+        writer.Flush();
+        var output = sb.ToString();
+
+        await Assert.That(output).Contains("--> a%0D%0A::warning::owned:1:1");
+        await Assert.That(output).DoesNotContain("--> a\r\n::warning::owned:1:1");
+    }
+
     // Helpers
     private static Diagnostic MakeDiagnostic(
         DiagnosticSeverity severity,
@@ -385,6 +487,7 @@ public sealed class DiagnosticFormatterRichTextTests
         Diagnostic diagnostic,
         bool oneline = false,
         bool color = false,
+        OutputFormat format = OutputFormat.Text,
         Dictionary<string, byte[]>? sourceMap = null)
     {
         var sb = new StringBuilder();
@@ -392,7 +495,7 @@ public sealed class DiagnosticFormatterRichTextTests
         DiagnosticFormatter.Write(
             writer,
             [diagnostic],
-            OutputFormat.Text,
+            format,
             oneline,
             color,
             sourceMap);

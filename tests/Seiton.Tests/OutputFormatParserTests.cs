@@ -1,4 +1,4 @@
-using Seiton.Output;
+﻿using Seiton.Output;
 
 namespace Seiton.Tests;
 

@@ -1,4 +1,4 @@
-using Seiton.Core.Linting;
+﻿using Seiton.Core.Linting;
 
 namespace Seiton.Core.Tests;
 

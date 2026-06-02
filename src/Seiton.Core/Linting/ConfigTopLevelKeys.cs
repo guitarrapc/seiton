@@ -1,4 +1,4 @@
-namespace Seiton.Core.Linting;
+﻿namespace Seiton.Core.Linting;
 /// <summary>Known top-level lint-config keys and typo suggestions for unknown keys.</summary>
 internal static class ConfigTopLevelKeys
 {

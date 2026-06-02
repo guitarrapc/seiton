@@ -22,7 +22,7 @@ public static class DiagnosticFormatter
                 break;
             case OutputFormat.GitHubActions:
                 // GitHub Actions format should always be plain text without ANSI escapes.
-                WriteText(writer, diagnostics, oneline, color: false, sourceMap);
+                WriteGitHubActions(writer, diagnostics, oneline, sourceMap);
                 break;
             case OutputFormat.Json:
                 WriteJson(writer, diagnostics);
@@ -33,54 +33,138 @@ public static class DiagnosticFormatter
         }
     }
 
+    private static void WriteGitHubActions(
+        TextWriter writer,
+        IReadOnlyList<Diagnostic> diagnostics,
+        bool oneline,
+        IReadOnlyDictionary<string, byte[]>? sourceMap)
+    {
+        if (diagnostics.Count == 0)
+        {
+            return;
+        }
+
+        string? currentGroupFile = null;
+        string? currentGroupDisplay = null;
+
+        for (var i = 0; i < diagnostics.Count; i++)
+        {
+            var d = diagnostics[i];
+            var file = d.FilePath ?? "<unknown>";
+
+            if (!string.Equals(currentGroupFile, file, StringComparison.Ordinal))
+            {
+                if (currentGroupFile is not null)
+                {
+                    writer.WriteLine("::endgroup::");
+                }
+
+                currentGroupDisplay = EscapeGitHubCommandValue(file);
+                writer.Write("::group::");
+                writer.WriteLine(currentGroupDisplay);
+                currentGroupFile = file;
+            }
+
+            WriteTextDiagnostic(writer, d, file, currentGroupDisplay ?? file, oneline, color: false, sourceMap);
+        }
+
+        writer.WriteLine("::endgroup::");
+    }
+
     private static void WriteText(TextWriter writer, IReadOnlyList<Diagnostic> diagnostics, bool oneline, bool color, IReadOnlyDictionary<string, byte[]>? sourceMap)
     {
         for (var i = 0; i < diagnostics.Count; i++)
         {
             var d = diagnostics[i];
             var file = d.FilePath ?? "<unknown>";
-            var line = d.Location.StartLine;
-            var col = d.Location.StartColumn;
-            var severity = d.Severity.ToString().ToLowerInvariant();
-            var ruleId = d.RuleId ?? "parse";
+            WriteTextDiagnostic(writer, d, file, file, oneline, color, sourceMap);
+        }
+    }
 
-            if (oneline)
+    private static string EscapeGitHubCommandValue(string value)
+    {
+        var firstEscapedIndex = value.AsSpan().IndexOfAny('%', '\r', '\n');
+        if (firstEscapedIndex < 0)
+        {
+            return value;
+        }
+
+        var builder = new StringBuilder(value.Length + 8);
+        builder.Append(value, 0, firstEscapedIndex);
+
+        for (var i = firstEscapedIndex; i < value.Length; i++)
+        {
+            switch (value[i])
             {
-                // Compact single-line format
-                if (color)
-                {
-                    var severityColor = d.Severity switch
-                    {
-                        DiagnosticSeverity.Error => "\x1b[31m",   // red
-                        DiagnosticSeverity.Warning => "\x1b[33m", // yellow
-                        _ => "\x1b[36m",                          // cyan
-                    };
-                    const string reset = "\x1b[0m";
-                    const string bold = "\x1b[1m";
-                    const string dim = "\x1b[2m";
+                case '%':
+                    builder.Append("%25");
+                    break;
+                case '\r':
+                    builder.Append("%0D");
+                    break;
+                case '\n':
+                    builder.Append("%0A");
+                    break;
+                default:
+                    builder.Append(value[i]);
+                    break;
+            }
+        }
 
-                    writer.Write($"{bold}{file}:{line}:{col}:{reset} ");
-                    writer.Write($"{severityColor}{severity}{reset} ");
-                    writer.Write($"{dim}[{ruleId}]{reset} ");
-                    writer.WriteLine(d.Message);
-                }
-                else
+        return builder.ToString();
+    }
+
+    private static void WriteTextDiagnostic(
+        TextWriter writer,
+        Diagnostic d,
+        string fileKey,
+        string fileDisplay,
+        bool oneline,
+        bool color,
+        IReadOnlyDictionary<string, byte[]>? sourceMap)
+    {
+        var line = d.Location.StartLine;
+        var col = d.Location.StartColumn;
+        var severity = d.Severity.ToString().ToLowerInvariant();
+        var ruleId = d.RuleId ?? "parse";
+
+        if (oneline)
+        {
+            // Compact single-line format
+            if (color)
+            {
+                var severityColor = d.Severity switch
                 {
-                    writer.WriteLine($"{file}:{line}:{col}: {severity} [{ruleId}] {d.Message}");
-                }
+                    DiagnosticSeverity.Error => "\x1b[31m",   // red
+                    DiagnosticSeverity.Warning => "\x1b[33m", // yellow
+                    _ => "\x1b[36m",                          // cyan
+                };
+                const string reset = "\x1b[0m";
+                const string bold = "\x1b[1m";
+                const string dim = "\x1b[2m";
+
+                writer.Write($"{bold}{fileDisplay}:{line}:{col}:{reset} ");
+                writer.Write($"{severityColor}{severity}{reset} ");
+                writer.Write($"{dim}[{ruleId}]{reset} ");
+                writer.WriteLine(d.Message);
             }
             else
             {
-                // Rich multi-line format (Rust-style)
-                WriteRichDiagnostic(writer, d, file, line, col, severity, ruleId, color, sourceMap);
+                writer.WriteLine($"{fileDisplay}:{line}:{col}: {severity} [{ruleId}] {d.Message}");
             }
+
+            return;
         }
+
+        // Rich multi-line format (Rust-style)
+        WriteRichDiagnostic(writer, d, fileKey, fileDisplay, line, col, severity, ruleId, color, sourceMap);
     }
 
     private static void WriteRichDiagnostic(
         TextWriter writer,
         Diagnostic d,
-        string file,
+        string sourceFileKey,
+        string displayFile,
         int line,
         int col,
         string severity,
@@ -106,10 +190,10 @@ public static class DiagnosticFormatter
             writer.WriteLine();
 
             // Location arrow: --> file:line:col
-            writer.WriteLine($"  {blue}-->{reset} {file}:{line}:{col}");
+            writer.WriteLine($"  {blue}-->{reset} {displayFile}:{line}:{col}");
 
             // Source snippet
-            WriteSourceSnippet(writer, d, file, sourceMap, color, severityColor, blue, reset, bold, dim);
+            WriteSourceSnippet(writer, d, sourceFileKey, sourceMap, color, severityColor, blue, reset, bold, dim);
 
             // Help text
             if (d.Help is not null)
@@ -123,10 +207,10 @@ public static class DiagnosticFormatter
             writer.WriteLine($"{severity}[{ruleId}]: {d.Message}");
 
             // Location arrow: --> file:line:col
-            writer.WriteLine($"  --> {file}:{line}:{col}");
+            writer.WriteLine($"  --> {displayFile}:{line}:{col}");
 
             // Source snippet
-            WriteSourceSnippet(writer, d, file, sourceMap, color, null, null, null, null, null);
+            WriteSourceSnippet(writer, d, sourceFileKey, sourceMap, color, null, null, null, null, null);
 
             // Help text
             if (d.Help is not null)

@@ -1,4 +1,4 @@
-namespace Seiton.Cli;
+﻿namespace Seiton.Cli;
 
 /// <summary>Detects whether the user passed <c>--format</c> on the CLI (vs the built-in default).</summary>
 internal static class CliFormatArgs

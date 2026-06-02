@@ -1,5 +1,4 @@
-﻿using Seiton.Core.Linting;
-using Seiton.Core.Linting.PinRemediation;
+﻿using Seiton.Core.Linting.PinRemediation;
 
 namespace Seiton.Playground.Tests;
 
