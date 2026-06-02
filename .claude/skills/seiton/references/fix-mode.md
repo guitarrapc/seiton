@@ -8,6 +8,9 @@ Auto-fix workflows, flags, and behavior for rules that support automatic remedia
 # Preview fixes as unified diff (no file changes)
 seiton --fix --dry-run
 
+# Apply fixes and show unified diff
+seiton --fix --show-diff
+
 # Apply fixes in place
 seiton --fix
 
@@ -30,6 +33,7 @@ seiton --fix --enable-pin-network --enable-image-network
 |------|-------------|
 | `--fix` | Enable fix mode (required for all fix operations) |
 | `--dry-run` | Show unified diff without writing files |
+| `--show-diff` | Apply fixes and show unified diff (ignored when `--dry-run` or `--check` is active) |
 | `--check` | Exit code 1 if any fixable issues exist (no file writes) |
 | `--enable-pin-network` | Resolve action commit SHAs via GitHub API |
 | `--enable-image-network` | Resolve container image digests via registry API |

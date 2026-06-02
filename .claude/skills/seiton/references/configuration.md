@@ -15,6 +15,39 @@ Seiton searches for config in this order (first found wins):
 
 No config file is required. All defaults are safe.
 
+## Nested repositories
+
+Discovery walks **up** parent directories from the current working directory. In a nested clone, the parent repo's `.github/seiton.yaml` may be used unintentionally.
+
+```bash
+cd .references/actions
+seiton init --output .github/seiton.yaml
+seiton validate-config -c .github/seiton.yaml
+seiton -c .github/seiton.yaml --verbose
+```
+
+## Config setup workflow
+
+```bash
+seiton init                 # 1. create config
+seiton validate-config      # 2. validate
+seiton --verbose            # 3. confirm loaded path on stderr
+```
+
+## Common recipes (large action monorepos)
+
+```yaml
+rules:
+  unpinned-uses:
+    ignore-actions:
+      - owner: "my-org/*"
+exclusions:
+  - file: .github/workflows/_test-*.yaml
+  - file: .github/actions/checkout/action.yaml
+    rules:
+      - checkout-persist-credentials
+```
+
 ## Generate Starter Config
 
 ```bash
@@ -176,14 +209,15 @@ seiton validate-config
 
 # Show which config file is loaded
 seiton check --verbose
-# Prints: verbose: config: /path/to/.github/seiton.yaml
+# Prints: verbose: config: /path/to/.github/seiton.yaml (discovered from /cwd, walked up N level(s))
+# Or: verbose: config: /path (from --config)
 ```
 
 ## Error Messages
 
 | Condition | Message |
 |-----------|---------|
-| Unknown top-level key | `unknown top-level key '<key>'` |
+| Unknown top-level key | `unknown top-level key '<key>'` or `unknown top-level key '<key>'. Did you mean '<suggested-key>'?` |
 | Unknown rule ID | `unknown rule-id '<id>'. Did you mean '<suggestion>'?` |
 | Invalid severity | `severity must be one of info, warning, error` |
 | Invalid rule option | `unknown rule option '<key>'` |

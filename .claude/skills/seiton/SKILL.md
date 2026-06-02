@@ -31,6 +31,7 @@ seiton --fix --enable-pin-network --enable-image-network
 | `seiton check` | Explicit lint (same as default) |
 | `seiton --fix` | Apply auto-fixes in place |
 | `seiton --fix --dry-run` | Preview fixes as unified diff |
+| `seiton --fix --show-diff` | Apply fixes and print unified diff |
 | `seiton --fix --check` | Exit non-zero if fixable issues exist |
 | `seiton init` | Generate starter config at `.github/seiton.yaml` |
 | `seiton install` | Install agent skill files and CI workflow templates |
@@ -96,7 +97,7 @@ error[rule-id]: message
 3. Configure exclusions for intentional patterns (see Best Practices below)
 4. Re-run `seiton` and repeat steps 2–3 until only actionable issues remain
 5. Run `seiton --fix --dry-run` to preview available auto-fixes
-6. Run `seiton --fix` to apply fixes
+6. Run `seiton --fix` to apply fixes (or `seiton --fix --show-diff` to apply and print the diff)
 7. For pinning: `seiton --fix --enable-pin-network --enable-image-network`
 
 ## Best Practices
@@ -181,12 +182,14 @@ actionable issues remain. Don't try to get to zero diagnostics on the first pass
 
 ## Configuration
 
-Config is auto-discovered from `.github/seiton.yaml` (or `.github/seiton.yml`, `seiton.yaml`, `seiton.yml`).
+Config is auto-discovered from `.github/seiton.yaml` (or `.github/seiton.yml`, `seiton.yaml`, `seiton.yml`). Discovery walks up parent directories — in nested clones use `-c` explicitly.
 
-Generate a starter config:
+Setup flow:
 
 ```bash
 seiton init
+seiton validate-config
+seiton --verbose    # confirm resolved config on stderr
 ```
 
 ## Troubleshooting
