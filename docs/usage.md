@@ -276,7 +276,7 @@ seiton install --skills --output path/to/custom/dir
 > Tip: install to your user profile directory to use the skill as a user-level skill (shared across repositories on the same machine).
 
 ```sh
-seiton install --skills --output "$HOME/.Claude/Skills/seiton"
+seiton install --skills --output "$HOME/.claude/skills/seiton"
 ```
 
 Overwrite existing skill files:
