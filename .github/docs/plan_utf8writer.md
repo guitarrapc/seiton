@@ -49,6 +49,33 @@
 - `text` / `github-actions` / `sarif` / `json` の `Allocated` と `Mean` を基準値化。
 - 受け入れ基準: 以後のフェーズで allocation regressions を比較可能にする。
 
+### フェーズ 0 実装（完了）
+
+- `DiagnosticOutputBenchmark.WriteJson` を追加。既存 4 フォーマットと同一の `GlobalSetup`（LintEngine で実 diagnostic 生成）を共有。
+- 計測条件: `Job.ShortRun`（ローカル）、`MemoryDiagnoser` 有効。
+
+#### 基準値（フェーズ 0 計測時点、ShortRun）
+
+| Format | Count | Mean | Allocated |
+|---|---|---|---|
+| text rich (baseline) | F1 | 218.6 us | 118.93 KB |
+| github-actions rich | F1 | 212.2 us | 118.93 KB |
+| github-actions oneline | F1 | 12.4 us | 86.24 KB |
+| sarif | F1 | 60.1 us | 126.16 KB |
+| **json** | F1 | **32.2 us** | **99.83 KB** |
+| text rich (baseline) | F10 | 2.30 ms | 1140.67 KB |
+| github-actions rich | F10 | 2.39 ms | 1156.37 KB |
+| github-actions oneline | F10 | 118.6 us | 703.99 KB |
+| sarif | F10 | 685.5 us | 1070.68 KB |
+| **json** | F10 | **542.8 us** | **947.6 KB** |
+
+#### フェーズ 0 レビュー
+
+| 指摘 | 対応 |
+|---|---|
+| json 以外のフォーマット基準値も同一ベンチで取得すべき | 既存 4 ベンチと同一 Run で再計測し上表に記載 |
+| F10 で json が Gen2 を発生（249 KB Gen2） | 現行 `JsonSerializer.Serialize` + 中間配列が原因。フェーズ 1 で改善対象 |
+
 ## フェーズ 1: `json` の UTF-8 writer 化
 
 - `DiagnosticFormatter.WriteJson` を `Utf8JsonWriter` ベースへ置換。

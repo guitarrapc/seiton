@@ -6,7 +6,8 @@ using System.Text;
 namespace Seiton.Benchmark;
 
 /// <summary>
-/// Baseline for CLI diagnostic formatting (text rich output). Compare after github-actions format changes.
+/// Baseline for CLI diagnostic formatting across output formats (text, github-actions, sarif, json).
+/// Compare Mean and Allocated after output-path optimizations.
 /// </summary>
 [MemoryDiagnoser]
 [RankColumn]
@@ -84,6 +85,15 @@ public class DiagnosticOutputBenchmark
         var sb = new StringBuilder(capacity: 16_384);
         using var writer = new StringWriter(sb);
         DiagnosticFormatter.Write(writer, _diagnostics, OutputFormat.Sarif, oneline: false, color: false, _sourceMap);
+        return sb.Length;
+    }
+
+    [Benchmark(Description = "DiagnosticFormatter json")]
+    public int WriteJson()
+    {
+        var sb = new StringBuilder(capacity: 16_384);
+        using var writer = new StringWriter(sb);
+        DiagnosticFormatter.Write(writer, _diagnostics, OutputFormat.Json, oneline: false, color: false, _sourceMap);
         return sb.Length;
     }
 }
