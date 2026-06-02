@@ -45,12 +45,12 @@ public static class DiagnosticFormatter
         }
 
         string? currentGroupFile = null;
+        string? currentGroupDisplay = null;
 
         for (var i = 0; i < diagnostics.Count; i++)
         {
             var d = diagnostics[i];
             var file = d.FilePath ?? "<unknown>";
-            var fileDisplay = EscapeGitHubCommandValue(file);
 
             if (!string.Equals(currentGroupFile, file, StringComparison.Ordinal))
             {
@@ -59,12 +59,13 @@ public static class DiagnosticFormatter
                     writer.WriteLine("::endgroup::");
                 }
 
+                currentGroupDisplay = EscapeGitHubCommandValue(file);
                 writer.Write("::group::");
-                writer.WriteLine(fileDisplay);
+                writer.WriteLine(currentGroupDisplay);
                 currentGroupFile = file;
             }
 
-            WriteTextDiagnostic(writer, d, file, fileDisplay, oneline, color: false, sourceMap);
+            WriteTextDiagnostic(writer, d, file, currentGroupDisplay ?? file, oneline, color: false, sourceMap);
         }
 
         writer.WriteLine("::endgroup::");

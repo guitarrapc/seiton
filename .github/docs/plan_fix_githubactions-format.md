@@ -319,3 +319,24 @@
 - spec/doc sync: C# / Go CLI 実装仕様にも表示 path escape を反映
 
 今回スコープで新たな未対応指摘はなし。
+
+## PRレビュー指摘への対応（追加ラウンド3）
+
+### 指摘（Low）
+
+- 内容: GitHub Actions 出力で同一ファイル内の各 diagnostic ごとに escape を再計算しており、無駄な処理がある
+- 判定: **妥当**（採用）
+- 対応:
+  - `WriteGitHubActions` で group 単位に `currentGroupDisplay` をキャッシュ
+  - file が切り替わったときのみ `EscapeGitHubCommandValue` を実行
+  - `WriteTextDiagnostic` にはキャッシュ済み `fileDisplay` を渡す
+
+### 検証
+
+- 関連テスト（github-actions formatter / check command）: 通過
+- 全体テスト: 変更範囲は通過、既知の `Seiton.Update.Tests` 2件のみ失敗（無関係）
+- ベンチマーク（`DiagnosticOutputBenchmark`）再実行:
+  - `github-actions oneline` は引き続き rich より低コスト
+  - rich/oneline いずれも回ごとの揺れはあるが、今回最適化で機能退行なし
+
+追加ラウンド3時点で、今回コメント起点の未対応事項はなし。
