@@ -354,6 +354,43 @@ public sealed class DiagnosticFormatterRichTextTests
     }
 
     [Test]
+    public async Task Json_Format_Severity_UsesExpectedLowercaseLabels()
+    {
+        var diagnostics = new[]
+        {
+            MakeDiagnostic((DiagnosticSeverity)0, "info msg", 1, 1, 1, 2, filePath: "info.yml"),
+            MakeDiagnostic((DiagnosticSeverity)1, "warning msg", 2, 1, 2, 2, filePath: "warning.yml"),
+            MakeDiagnostic((DiagnosticSeverity)2, "error msg", 3, 1, 3, 2, filePath: "error.yml"),
+        };
+
+        var sb = new StringBuilder();
+        using var writer = new StringWriter(sb);
+        DiagnosticFormatter.Write(writer, diagnostics, OutputFormat.Json, oneline: false, color: false);
+        writer.Flush();
+
+        using var doc = JsonDocument.Parse(sb.ToString());
+        var entries = doc.RootElement;
+        await Assert.That(entries[0].GetProperty("severity").GetString()).IsEqualTo("info");
+        await Assert.That(entries[1].GetProperty("severity").GetString()).IsEqualTo("warning");
+        await Assert.That(entries[2].GetProperty("severity").GetString()).IsEqualTo("error");
+    }
+
+    [Test]
+    public async Task Json_Format_Severity_OutOfRangeEnum_UsesFallbackString()
+    {
+        var diag = MakeDiagnostic((DiagnosticSeverity)999, "unknown severity", 1, 1, 1, 2);
+
+        var sb = new StringBuilder();
+        using var writer = new StringWriter(sb);
+        DiagnosticFormatter.Write(writer, [diag], OutputFormat.Json, oneline: false, color: false);
+        writer.Flush();
+
+        using var doc = JsonDocument.Parse(sb.ToString());
+        var severity = doc.RootElement[0].GetProperty("severity").GetString();
+        await Assert.That(severity).IsEqualTo("999");
+    }
+
+    [Test]
     public async Task Json_Format_EmptyDiagnostics_EmitsEmptyArray()
     {
         var sb = new StringBuilder();
