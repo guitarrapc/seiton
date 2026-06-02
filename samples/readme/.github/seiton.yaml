@@ -1,7 +1,0 @@
-rules:
-  runner-no-latest:
-    fix-mapping:
-      ubuntu-latest: "ubuntu-24.04"
-fix:
-  defaults:
-    job-timeout-minutes: 30
