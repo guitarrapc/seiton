@@ -366,7 +366,7 @@ Diagnostics are wrapped per file with `::group::` / `::endgroup::` so logs are f
 
 If `GITHUB_STEP_SUMMARY` is unavailable or not writable, the summary is printed to stderr instead.
 
-`--oneline` is supported with this format and changes only the diagnostic body style (one line per diagnostic).
+Use `--format text` to force classic flat output on CI.
 
 ```yaml
 # Simplest CI step — no --format flag needed on GitHub Actions
