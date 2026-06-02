@@ -76,4 +76,13 @@ public class DiagnosticOutputBenchmark
         DiagnosticFormatter.Write(writer, _diagnostics, OutputFormat.GitHubActions, oneline: true, color: false, _sourceMap);
         return sb.Length;
     }
+
+    [Benchmark(Description = "DiagnosticFormatter sarif")]
+    public int WriteSarif()
+    {
+        var sb = new StringBuilder(capacity: 16_384);
+        using var writer = new StringWriter(sb);
+        DiagnosticFormatter.Write(writer, _diagnostics, OutputFormat.Sarif, oneline: false, color: false, _sourceMap);
+        return sb.Length;
+    }
 }

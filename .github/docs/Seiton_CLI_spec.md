@@ -486,9 +486,23 @@ Schema (non-normative):
 
 SARIF 2.1.0 JSON output to stdout. Suitable for GitHub Code Scanning upload.
 
+`$schema` uses the official OASIS SARIF 2.1.0 schema URL:
+
+- `https://docs.oasis-open.org/sarif/sarif/v2.1.0/errata01/os/schemas/sarif-schema-2.1.0.json`
+
 Each diagnostic maps to a SARIF `result` under a `run` with tool identity `seiton`.
 
-Rule metadata (`id`) is emitted per-rule in `tool.driver.rules`.
+`runs[].results[].locations[].physicalLocation.artifactLocation.uri` is emitted as a valid URI reference:
+
+- Absolute filesystem paths are emitted as `file:///...` URIs.
+- Relative paths are emitted as URI-safe relative references (slash-separated, percent-encoded when needed).
+- Unknown paths are emitted as `file:///unknown`.
+
+Rule metadata (`id`, `helpUri`) is emitted per-rule in `tool.driver.rules`.
+
+`runs[].tool.driver.rules[].helpUri` points to rule-specific documentation anchors in `docs/rules.md` using the rule id (`.../docs/rules.md#<rule-id>`). For parser-origin diagnostics (`ruleId = parse`), `helpUri` falls back to the general usage guide (`.../docs/usage.md`).
+
+`runs[].tool.driver.version` is always emitted, sourced from assembly informational version (with build metadata suffix trimmed when present).
 
 ### 6.4 Summary Output (stderr or job summary)
 

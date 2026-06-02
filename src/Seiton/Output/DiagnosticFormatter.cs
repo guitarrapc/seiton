@@ -7,6 +7,12 @@ namespace Seiton.Output;
 
 public static class DiagnosticFormatter
 {
+    private const string UnknownSarifFileUri = "file:///unknown";
+    private const string SarifGeneralHelpUri = "https://github.com/guitarrapc/seiton/blob/main/docs/usage.md";
+    private const string SarifRuleHelpUriPrefix = "https://github.com/guitarrapc/seiton/blob/main/docs/rules.md#";
+
+    private static readonly string SarifDriverVersion = ToolVersionResolver.ResolveFromAssembly(typeof(DiagnosticFormatter).Assembly);
+
     public static void Write(
         TextWriter writer,
         IReadOnlyList<Diagnostic> diagnostics,
@@ -394,7 +400,11 @@ public static class DiagnosticFormatter
         var rules = new SarifRule[ruleSet.Count];
         foreach (var (id, idx) in ruleSet)
         {
-            rules[idx] = new SarifRule { Id = id };
+            rules[idx] = new SarifRule
+            {
+                Id = id,
+                HelpUri = BuildSarifRuleHelpUri(id),
+            };
         }
 
         var results = new SarifResult[diagnostics.Count];
@@ -421,7 +431,7 @@ public static class DiagnosticFormatter
                         {
                             ArtifactLocation = new SarifArtifactLocation
                             {
-                                Uri = d.FilePath ?? "<unknown>",
+                                Uri = ToSarifArtifactUri(d.FilePath),
                             },
                             Region = new SarifRegion
                             {
@@ -447,6 +457,7 @@ public static class DiagnosticFormatter
                         Driver = new SarifDriver
                         {
                             Name = "seiton",
+                            Version = SarifDriverVersion,
                             InformationUri = "https://github.com/guitarrapc/seiton",
                             Rules = rules,
                         },
@@ -459,6 +470,110 @@ public static class DiagnosticFormatter
         writer.Write(JsonSerializer.Serialize(sarif, SeitonJsonContext.Default.SarifLog));
         writer.WriteLine();
     }
+
+    private static string ToSarifArtifactUri(string? filePath)
+    {
+        if (string.IsNullOrWhiteSpace(filePath) || string.Equals(filePath, "<unknown>", StringComparison.Ordinal))
+            return UnknownSarifFileUri;
+
+        if (LooksLikeWindowsDrivePath(filePath) || Path.IsPathRooted(filePath))
+            return new Uri(Path.GetFullPath(filePath), UriKind.Absolute).AbsoluteUri;
+
+        if (IsSafeRelativeUriPath(filePath))
+            return filePath;
+
+        if (LooksLikeAbsoluteUri(filePath) && Uri.TryCreate(filePath, UriKind.Absolute, out var absoluteUri))
+            return absoluteUri.AbsoluteUri;
+
+        return EncodeRelativePathForUri(filePath);
+    }
+
+    private static bool LooksLikeWindowsDrivePath(string path)
+    {
+        if (path.Length < 3)
+            return false;
+
+        return char.IsLetter(path[0])
+            && path[1] == ':'
+            && (path[2] == '\\' || path[2] == '/');
+    }
+
+    private static string EncodeRelativePathForUri(string path)
+    {
+        var normalized = path.Replace('\\', '/');
+        var segments = normalized.Split('/');
+        for (var i = 0; i < segments.Length; i++)
+        {
+            var segment = segments[i];
+            if (segment.Length == 0 || segment == "." || segment == "..")
+                continue;
+
+            segments[i] = Uri.EscapeDataString(segment);
+        }
+
+        return string.Join('/', segments);
+    }
+
+    private static string BuildSarifRuleHelpUri(string ruleId)
+    {
+        if (string.Equals(ruleId, "parse", StringComparison.Ordinal))
+            return SarifGeneralHelpUri;
+
+        return string.Concat(SarifRuleHelpUriPrefix, ruleId);
+    }
+
+    private static bool IsSafeRelativeUriPath(string path)
+    {
+        for (var i = 0; i < path.Length; i++)
+        {
+            var c = path[i];
+            if (c is >= 'a' and <= 'z')
+                continue;
+            if (c is >= 'A' and <= 'Z')
+                continue;
+            if (c is >= '0' and <= '9')
+                continue;
+
+            switch (c)
+            {
+                case '/':
+                case '.':
+                case '-':
+                case '_':
+                case '~':
+                    continue;
+                default:
+                    return false;
+            }
+        }
+
+        return true;
+    }
+
+    private static bool LooksLikeAbsoluteUri(string path)
+    {
+        var colonIndex = path.IndexOf(':');
+        if (colonIndex <= 1)
+            return false;
+
+        for (var i = 0; i < colonIndex; i++)
+        {
+            var c = path[i];
+            if (c is >= 'a' and <= 'z')
+                continue;
+            if (c is >= 'A' and <= 'Z')
+                continue;
+            if (c is >= '0' and <= '9')
+                continue;
+            if (c is '+' or '-' or '.')
+                continue;
+
+            return false;
+        }
+
+        return true;
+    }
+
 }
 
 // --- JSON output models ---
@@ -491,7 +606,7 @@ internal sealed record SarifLog
     [JsonPropertyName("version")]
     public string Version { get; init; } = "2.1.0";
     [JsonPropertyName("$schema")]
-    public string Schema { get; init; } = "https://raw.githubusercontent.com/oasis-tcs/sarif-spec/main/sarif-2.1/schema/sarif-schema-2.1.0.json";
+    public string Schema { get; init; } = "https://docs.oasis-open.org/sarif/sarif/v2.1.0/errata01/os/schemas/sarif-schema-2.1.0.json";
     [JsonPropertyName("runs")]
     public required SarifRun[] Runs { get; init; }
 }
@@ -514,6 +629,8 @@ internal sealed record SarifDriver
 {
     [JsonPropertyName("name")]
     public required string Name { get; init; }
+    [JsonPropertyName("version")]
+    public required string Version { get; init; }
     [JsonPropertyName("informationUri")]
     public required string InformationUri { get; init; }
     [JsonPropertyName("rules")]
@@ -524,6 +641,8 @@ internal sealed record SarifRule
 {
     [JsonPropertyName("id")]
     public required string Id { get; init; }
+    [JsonPropertyName("helpUri")]
+    public required string HelpUri { get; init; }
 }
 
 internal sealed record SarifResult
