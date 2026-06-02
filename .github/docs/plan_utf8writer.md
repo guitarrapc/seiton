@@ -2,52 +2,38 @@
 
 ## 背景
 
-`sarif` 出力は `Utf8JsonWriter + IBufferWriter<byte>` 化済みだが、現状の CLI 出力経路は `TextWriter` 中心であり、`text/json/github-actions` のアロケーション最小化余地が残っている。
+Diagnostic 出力の UTF-8 化計画。フェーズ 0〜4 完了。CLI 診断出力は `IBufferWriter<byte>` 一本化済み。
 
-本書は、現行実装を調査した上で「どこまで `IBufferWriter<byte>` 化すると実効的にアロケーション削減できるか」を整理し、段階的な実装方針を示す。
+本書は調査時点の現状整理と段階的実装方針、各フェーズの計測・レビュー記録を残す。
 
-## 調査結果（現状）
+## 調査結果（実装前）と完了後
 
 ### 1) 出力の共通入口
 
-現在
+| | 実装前 | 完了後（フェーズ 3） |
+|---|---|---|
+| フォーマット入口 | `DiagnosticFormatter.Write(TextWriter, ...)` | `DiagnosticFormatter.Write(IBufferWriter<byte>, ...)` |
+| CLI stdout | `Console.Out` を `TextWriter` として渡す | `WriteToStandardOutput`（バッファ → UTF-8 stdout / `Console.SetOut` 時は TextWriter デコード） |
+| テスト・注入 | `StringWriter` 注入 | `WriteToTextWriter` または `ArrayBufferWriter` + `Write` |
 
-- 入口は `src/Seiton/Output/DiagnosticFormatter.cs` の `DiagnosticFormatter.Write(TextWriter, ...)`。
-- `CheckCommand` / `FixCommand` は `Console.Out` を `TextWriter` として渡している。
-- テストも `StringWriter` 注入前提で組まれている（`tests/Seiton.Tests/DiagnosticFormatterRichTextTests.cs`）。
+### 2) フォーマット別（実装前 → 完了後）
 
-変更後
+| フォーマット | 実装前 | 完了後 |
+|---|---|---|
+| `sarif` | `Utf8JsonWriter` 後に UTF-16 デコードして `TextWriter` | 呼び出し側 `IBufferWriter` に直接書き込み |
+| `json` | `JsonDiagnosticEntry[]` + `JsonSerializer.Serialize` → `string` | `Utf8JsonWriter` 直接書き込み（DTO 配列なし） |
+| `text` / `github-actions` | 補間文字列・`new string(...)`・`StringBuilder` 依存 | `Utf8Writer` による UTF-8 直書き + 文字列生成削減（フェーズ 2） |
 
-- 入口は `src/Seiton/Output/DiagnosticFormatter.cs` の `DiagnosticFormatter.Write(IBufferWriter<byte>, ...)`。
-- CLI は `WriteToStandardOutput`（バッファ → UTF-8 stdout / `Console.SetOut` リダイレクト時は TextWriter デコード）。
-- テスト・FixCommand 注入は `WriteToTextWriter` または `ArrayBufferWriter` + `Write`（`tests/Seiton.Tests/DiagnosticFormatterRichTextTests.cs`）。
+### 3) `IBufferWriter<byte>` 化の実効性（調査時の判断 → 実測結果）
 
-### 2) フォーマット別の実装とアロケーション特性
-
-- `sarif`:
-  - 既に `Utf8JsonWriter` + `PooledByteBufferWriter`（`IBufferWriter<byte>`）実装。
-  - ただし最終的に `WriteUtf8ToTextWriter()` で UTF-16 へデコードして `TextWriter` に書くため、出力末端は still text パス。
-- `json`:
-  - `JsonDiagnosticEntry[]` を作成し `JsonSerializer.Serialize(...)` で `string` 化して `TextWriter.Write`。
-  - 配列確保 + JSON 文字列生成の二重アロケーションが入る。
-- `text` / `github-actions`:
-  - 補間文字列、`new string(...)`（ガター/キャレット/パディング）、`StringBuilder`（エスケープ）依存が多い。
-  - `Diagnostic.Message` や `RuleId` は `string` を保持しており、UTF-8 直書きにしても根本の文字列生成が消えるわけではない。
-
-### 3) `IBufferWriter<byte>` 化の実効性
-
-- `json` は効果が高い（中間 `string` と DTO 配列を外せる）。
-- `text` / `github-actions` は「完全 UTF-8 化」の工数に対し削減効果が限定的。
-  - 主なアロケーション源は「文字列構築」であり、「最終書き込み先の型」ではないため。
-- したがって、`text` / `github-actions` は first priority を「文字列生成削減」に置き、`IBufferWriter<byte>` は段階的導入が妥当。
+- `json` は効果が高い（中間 `string` と DTO 配列を外せる）→ **フェーズ 1 で F10 Alloc -99% を確認**。
+- `text` / `github-actions` は文字列構築が主なアロケーション源 → **フェーズ 2 で string-side 最適化、フェーズ 3 で UTF-8 経路統一**。
+- 段階導入方針（json → string-side → IBufferWriter 一本化）は計画どおり実施済み。
 
 ## 結論（対応可否）
 
-- 対応は **可能**。
-- ただし、最大効果はフォーマット別に異なるため、以下を推奨:
-  1. `json` を先に UTF-8 writer 化（高ROI）
-  2. `text` / `github-actions` は先に string-side 最適化
-  3. 最後に共通 UTF-8 出力経路を導入（必要に応じて）
+- 対応は **完了**。
+- 推奨順序（json → text/github-actions 最適化 → 共通 UTF-8 経路）はフェーズ 0〜3 で実施済み。仕様同期はフェーズ 4。
 
 ## 対応方針（実装フェーズ）
 
@@ -257,11 +243,23 @@
 | `FlushToStandardOutput` の分岐テスト不足 | `DiagnosticFormatterFlushTests` で StringWriter / カスタム TextWriter / 空 span を追加 |
 | `IBufferWriter` と `WriteToTextWriter` の同値性 | 全フォーマット向け `Write_Buffer_MatchesTextWriterAdapter_*` を追加 |
 
-## フェーズ 4: 仕様・ドキュメント同期
+## フェーズ 4: 仕様・ドキュメント同期（完了）
 
-- 実装完了後、必要に応じて以下を更新:
-  - `.github/docs/Seiton_CLI_csharp_spec.md`（出力実装詳細）
-  - `.github/docs/Seiton_CLI_spec.md`（挙動変更がある場合のみ）
+### 変更内容
+
+- **`Seiton_CLI_csharp_spec.md`**
+  - §0.3 / §2: `Utf8Writer.cs` を追加。`DiagnosticFormatter` の責務を `Write(IBufferWriter<byte>, ...)` に更新。
+  - §7: 出力 API レイヤー表（`Write` / `WriteToStandardOutput` / `WriteToTextWriter`）、`FlushToStandardOutput` の分岐、`Render` ヘルパーパターンを追記。
+  - §8: 診断出力テストの 3 パターン（`ArrayBufferWriter`、`WriteToTextWriter`、`Console.SetOut`）と同値性テストを追記。
+- **`Seiton_CLI_spec.md`**: ユーザー可視の出力契約（§6）は不変のため更新なし。
+- **`plan_utf8writer.md`**: 背景・調査結果を完了後表記に整理。本節を追加。
+
+### レビュー
+
+| 観点 | 結果 |
+|---|---|
+| 言語中立 spec との整合 | `Seiton_CLI_spec.md` §6 の WHAT（出力形式・フィールド・パス表示）は実装と一致。HOW は C# spec に集約 |
+| 実装 spec の網羅 | §7 がフェーズ 3 完了時点の API を反映。§8 がレビューで追加したテストパターンを反映 |
 
 ## リスクと対策
 
@@ -274,5 +272,5 @@
 
 ## 実施判断
 
-- 現時点で着手するなら、**フェーズ 1（json UTF-8 writer 化）までは即対応推奨**。
-- `text/github-actions` の全面 `IBufferWriter<byte>` 化は、フェーズ 2 の計測結果を見て継続判断するのが最小リスク。
+- **フェーズ 0〜4 完了。** Diagnostic 出力 UTF-8 化は本計画のスコープ内で完了。
+- 今後の追加最適化（例: `ExtractLines` の string 配列削減）は別タスクとして計測ベースで判断する。
