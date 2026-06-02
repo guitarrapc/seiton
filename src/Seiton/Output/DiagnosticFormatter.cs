@@ -22,7 +22,7 @@ public static class DiagnosticFormatter
                 break;
             case OutputFormat.GitHubActions:
                 // GitHub Actions format should always be plain text without ANSI escapes.
-                WriteText(writer, diagnostics, oneline, color: false, sourceMap);
+                WriteGitHubActions(writer, diagnostics, oneline, sourceMap);
                 break;
             case OutputFormat.Json:
                 WriteJson(writer, diagnostics);
@@ -31,6 +31,42 @@ public static class DiagnosticFormatter
                 WriteSarif(writer, diagnostics);
                 break;
         }
+    }
+
+    private static void WriteGitHubActions(
+        TextWriter writer,
+        IReadOnlyList<Diagnostic> diagnostics,
+        bool oneline,
+        IReadOnlyDictionary<string, byte[]>? sourceMap)
+    {
+        if (diagnostics.Count == 0)
+        {
+            return;
+        }
+
+        string? currentGroupFile = null;
+
+        for (var i = 0; i < diagnostics.Count; i++)
+        {
+            var d = diagnostics[i];
+            var file = d.FilePath ?? "<unknown>";
+
+            if (!string.Equals(currentGroupFile, file, StringComparison.Ordinal))
+            {
+                if (currentGroupFile is not null)
+                {
+                    writer.WriteLine("::endgroup::");
+                }
+
+                writer.Write("::group::");
+                writer.WriteLine(file);
+                currentGroupFile = file;
+            }
+
+            WriteTextDiagnostic(writer, d, file, oneline, color: false, sourceMap);
+        }
+
+        writer.WriteLine("::endgroup::");
     }
 
     private static void WriteText(TextWriter writer, IReadOnlyList<Diagnostic> diagnostics, bool oneline, bool color, IReadOnlyDictionary<string, byte[]>? sourceMap)
@@ -75,6 +111,51 @@ public static class DiagnosticFormatter
                 WriteRichDiagnostic(writer, d, file, line, col, severity, ruleId, color, sourceMap);
             }
         }
+    }
+
+    private static void WriteTextDiagnostic(
+        TextWriter writer,
+        Diagnostic d,
+        string file,
+        bool oneline,
+        bool color,
+        IReadOnlyDictionary<string, byte[]>? sourceMap)
+    {
+        var line = d.Location.StartLine;
+        var col = d.Location.StartColumn;
+        var severity = d.Severity.ToString().ToLowerInvariant();
+        var ruleId = d.RuleId ?? "parse";
+
+        if (oneline)
+        {
+            // Compact single-line format
+            if (color)
+            {
+                var severityColor = d.Severity switch
+                {
+                    DiagnosticSeverity.Error => "\x1b[31m",   // red
+                    DiagnosticSeverity.Warning => "\x1b[33m", // yellow
+                    _ => "\x1b[36m",                          // cyan
+                };
+                const string reset = "\x1b[0m";
+                const string bold = "\x1b[1m";
+                const string dim = "\x1b[2m";
+
+                writer.Write($"{bold}{file}:{line}:{col}:{reset} ");
+                writer.Write($"{severityColor}{severity}{reset} ");
+                writer.Write($"{dim}[{ruleId}]{reset} ");
+                writer.WriteLine(d.Message);
+            }
+            else
+            {
+                writer.WriteLine($"{file}:{line}:{col}: {severity} [{ruleId}] {d.Message}");
+            }
+
+            return;
+        }
+
+        // Rich multi-line format (Rust-style)
+        WriteRichDiagnostic(writer, d, file, line, col, severity, ruleId, color, sourceMap);
     }
 
     private static void WriteRichDiagnostic(
