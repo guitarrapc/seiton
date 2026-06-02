@@ -16,9 +16,9 @@ public sealed class CheckCommandTests
       on: push
       jobs:
         build:
-        runs-on: ubuntu-latest
-        steps:
-          - run: echo hi
+          runs-on: ubuntu-latest
+          steps:
+            - run: echo hi
       """);
 
         var originalOut = Console.Out;

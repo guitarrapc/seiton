@@ -407,6 +407,25 @@ public sealed class DiagnosticFormatterRichTextTests
         await Assert.That(output).Contains("warning[test-rule]: second");
     }
 
+    [Test]
+    public async Task GitHubActions_Format_GroupTitle_EscapesWorkflowCommandSpecialCharacters()
+    {
+        var filePath = "a%25\r\nb.yml";
+        var diagnostics = new[]
+        {
+            MakeDiagnostic(DiagnosticSeverity.Warning, "first", 1, 1, 1, 5, filePath: filePath),
+        };
+
+        var sb = new StringBuilder();
+        using var writer = new StringWriter(sb);
+        DiagnosticFormatter.Write(writer, diagnostics, OutputFormat.GitHubActions, oneline: true, color: false);
+        writer.Flush();
+        var output = sb.ToString();
+
+        await Assert.That(output).Contains("::group::a%2525%0D%0Ab.yml");
+        await Assert.That(output).DoesNotContain("::group::a%25\r\nb.yml");
+    }
+
     // Helpers
     private static Diagnostic MakeDiagnostic(
         DiagnosticSeverity severity,

@@ -231,3 +231,56 @@
 - 指摘2: github-actions 専用の性能測定軸が不足
 - 対応2: benchmark に `github-actions rich/oneline` を追加
 - 再レビュー: 仕様・実装・テストの整合を確認
+
+---
+
+## PRレビュー指摘への対応（追加ラウンド）
+
+### 指摘1（High）
+
+- 内容: `::group::` タイトルで `%` / CR / LF を escape しないと workflow command injection の余地がある
+- 判定: **妥当**（採用）
+- 対応:
+  - `EscapeGitHubCommandValue` を導入し、group タイトルに適用
+  - `% -> %25`, `\r -> %0D`, `\n -> %0A`
+  - 通常ケースで不要な割当を避けるため、対象文字未含有時は元文字列を返す fast path を実装
+- テスト:
+  - `GitHubActions_Format_GroupTitle_EscapesWorkflowCommandSpecialCharacters`
+  - Red（失敗）→ Green（成功）を確認
+
+### 指摘2（Medium）
+
+- 内容: `CheckCommandTests` の YAML インデントが不正で、期待診断が不安定
+- 判定: **妥当**（採用）
+- 対応:
+  - `runs-on` / `steps` を `build:` 配下へ正しくインデント
+  - 期待は「warningを含む oneline grouped 出力」へ維持
+
+### 指摘3（Low）
+
+- 内容: `WriteTextDiagnostic` と `WriteText` のロジック重複が保守リスク
+- 判定: **妥当**（採用）
+- 対応:
+  - `WriteText` から `WriteTextDiagnostic` を再利用する構造へ統一
+  - `text` / `github-actions` の整形ロジックを一元化
+
+## 等価クラス観点の確認（今回の分類/判定ロジック）
+
+今回の判定ロジックは「groupタイトルのescape要否」。
+
+- クラスA: escape対象文字を含まない（false）
+  - 既存 grouped 出力テスト（`a.yml` など）でカバー
+- クラスB: escape対象文字を含む（true）
+  - 追加 escaping テスト（`%`, CR, LF 含有）でカバー
+
+両クラスを最低1件以上で確認済み。
+
+## 追加ラウンド後の結果
+
+- 関連テスト（formatter + command）は通過
+- `dotnet test` 全体は今回変更と無関係の `Seiton.Update.Tests` 2件のみ失敗（既知）
+- ベンチマーク再実行済み（`DiagnosticOutputBenchmark`）
+  - `github-actions rich` と `text rich` の Alloc はほぼ同等（+約1%）
+  - `github-actions oneline` は引き続き rich より低コスト
+
+追加ラウンド時点で、今回スコープのレビュー指摘に対する未対応事項はなし。
