@@ -466,7 +466,7 @@ public sealed class DiagnosticFormatterRichTextTests
             .GetProperty("physicalLocation")
             .GetProperty("artifactLocation");
 
-        await Assert.That(location.GetProperty("uri").GetString()).IsEqualTo("<stdin>");
+        await Assert.That(location.GetProperty("uri").GetString()).IsEqualTo(PathDisplayResolver.StdinSarifUri);
         await Assert.That(location.TryGetProperty("uriBaseId", out _)).IsFalse();
         await Assert.That(run.TryGetProperty("originalUriBaseIds", out _)).IsFalse();
     }

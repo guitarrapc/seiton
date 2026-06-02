@@ -497,13 +497,13 @@ Output is pretty-printed JSON (indented) for readability in code review and issu
 
 Each diagnostic maps to a SARIF `result` under a `run` with tool identity `seiton`.
 
-`runs[].results[].locations[].physicalLocation.artifactLocation.uri` is emitted as a valid URI reference:
+`runs[].results[].locations[].physicalLocation.artifactLocation.uri` is emitted as a URI reference (slash-separated, percent-encoded when needed):
 
 - When the file path can be expressed relative to the process working directory, `uri` is a URI-safe relative reference (slash-separated, percent-encoded when needed) and `uriBaseId` is `%WORKING_DIR%`.
 - When at least one relative artifact is emitted, `runs[].originalUriBaseIds["%WORKING_DIR%"].uri` carries the absolute `file:///...` URI of the working directory (with trailing slash), allowing SARIF consumers to resolve relative artifact URIs.
 - Cross-drive or otherwise non-relativeizable filesystem paths fall back to absolute `file:///...` URIs without `uriBaseId`.
 - Unknown paths (null, empty, whitespace, or the literal `<unknown>` sentinel) are emitted as `file:///unknown`.
-- Sentinel paths such as `<stdin>` and `-` are emitted as literal URI strings without `uriBaseId` and do not trigger `originalUriBaseIds`.
+- The stdin sentinel (`<stdin>`) is emitted as a URI-safe percent-encoded reference (for example `%3Cstdin%3E`) without `uriBaseId` and does not trigger `originalUriBaseIds`. The `-` sentinel is emitted literally.
 - URI-like strings that are not valid absolute URIs are emitted literally without `uriBaseId`.
 - Invalid filesystem paths that cannot be normalized fall back to `file:///unknown` (SARIF) rather than aborting output generation.
 

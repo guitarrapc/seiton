@@ -9,6 +9,7 @@ namespace Seiton.Output;
 internal sealed class PathDisplayResolver
 {
     internal const string UnknownSarifFileUri = "file:///unknown";
+    internal const string StdinSarifUri = "%3Cstdin%3E";
     public const string SarifWorkingDirectoryBaseId = "%WORKING_DIR%";
 
     private readonly string _baseDirectory;
@@ -59,7 +60,10 @@ internal sealed class PathDisplayResolver
         if (IsUnknownPath(filePath))
             return new SarifArtifactLocation { Uri = UnknownSarifFileUri };
 
-        if (IsPassthroughPath(filePath))
+        if (string.Equals(filePath, "<stdin>", StringComparison.Ordinal))
+            return new SarifArtifactLocation { Uri = StdinSarifUri };
+
+        if (string.Equals(filePath, "-", StringComparison.Ordinal))
             return new SarifArtifactLocation { Uri = filePath };
 
         if (LooksLikeAbsoluteUri(filePath))
