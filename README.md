@@ -20,7 +20,36 @@ Features:
 
 You can check various benchmark patterns at [GitHub Actions/Benchmark](https://github.com/guitarrapc/seiton/actions/runs/26594333777).
 
-**Example of broken workflow** ([`samples/readme`](samples/readme/.github/workflows/test.yaml)):
+## Example: Fixing broken workflow
+
+<details><summary>Using LLM with skills</summary>
+
+Install the agent skill files for your preferred agent (Claude Code, GitHub Copilot, Cursor, etc.).
+
+```sh
+seiton install --skills
+```
+
+Then ask your agent to fix the workflow file with `/seiton` command.
+
+```text
+/seiton
+Lint and fix github workflows issues in `samples/readme/` with Seiton. The workflow file has various issues, such as unpinned actions, unsafe inline expressions, and policy violations. Please run Seiton with appropriate flags/config to fix these issues, and explain the changes you made.
+```
+
+</details>
+
+<details><summary>Manually</summary>
+
+This example shows the full flow in 4 steps: lint, auto-fix, tune config, done.
+
+```sh
+cd samples/readme/
+```
+
+**Step1. Start with a broken workflow**
+
+Sample file: [`samples/readme/.github/workflows/test.yaml`](samples/readme/.github/workflows/test.yaml)
 
 ```yaml
 on:
@@ -37,9 +66,15 @@ jobs:
           node_version: 18.x
 ```
 
-**Example `--oneline` output** (`seiton --oneline -c samples/readme/.github/seiton.yaml samples/readme/.github/workflows/test.yaml`):
+**Step2. Lint it**
 
+```sh
+seiton --oneline
 ```
+
+Output shows 3 errors and 6 warnings
+
+```sh
 test.yaml:3:5: error [parse] on.pull_request has unexpected key "branch" for "pull_request" section. did you mean "branches"? expected one of "types", "branches", "branches-ignore", "paths", "paths-ignore"
 test.yaml:5:3: warning [job-permissions-required] jobs.'test' does not have permissions defined; set explicit permissions to follow least-privilege principle
 test.yaml:5:3: error [job-timeout-minutes-required] jobs.'test' should define timeout-minutes (default is 360 minutes); if not possible, set timeout-minutes on each step instead
@@ -50,11 +85,25 @@ test.yaml:9:31: warning [unpinned-uses] 'actions/checkout@v6' is not pinned to a
 test.yaml:10:33: warning [unpinned-uses] 'actions/setup-node@v4' is not pinned to a full-length commit SHA. see https://github.com/actions/setup-node/tree/v4 (fixable with --fix --enable-pin-network)
 test.yaml:12:25: warning [popular-action-inputs] unknown input 'node_version' for action 'actions/setup-node@v4'. available inputs are "architecture", "cache", "cache-dependency-path", "check-latest", "mirror", "mirror-token", "node-version", "node-version-file", "package-manager-cache", "registry-url", "scope", "token". did you mean 'node-version'? see https://github.com/actions/setup-node/tree/v4
 3 errors, 6 warnings in 1 file
+
+| File      | Errors | Warnings |
+|-----------|-------:|---------:|
+| test.yaml |      3 |        6 |
 ```
 
-**Example of auto-fixed workflow** (`seiton --fix --enable-pin-network -c samples/readme/.github/seiton.yaml samples/readme/.github/workflows/test.yaml`):
+**Step3. Apply safe auto-fixes**
 
-Bunch of errors and warnings are fixed, following best practices and pinning the actions to specific SHAs:
+```sh
+seiton --fix --enable-pin-network
+```
+
+Auto-fix updates include:
+
+- `branch` -> `branches`
+- unsafe inline expression -> env var indirection
+- action refs pinned to full commit SHAs
+- `persist-credentials: false` added to checkout
+- `node_version` -> `node-version`
 
 ```yaml
 on:
@@ -77,16 +126,19 @@ jobs:
           node-version: 18.x
 ```
 
-Remaining issues require config to resolve.
+At this point, only policy-level settings remain:
 
-```shell
+```text
 test.yaml:5:3: error [job-timeout-minutes-required] jobs.'test' should define timeout-minutes (default is 360 minutes); if not possible, set timeout-minutes on each step instead
 test.yaml:6:14: warning [runner-no-latest] jobs.'test'.runs-on label 'ubuntu-latest' is a moving latest label; prefer explicit version-pinned runner labels
+| File      | Errors | Warnings |
+|-----------|-------:|---------:|
+| test.yaml |      1 |        1 |
 ```
 
-**Fully resolved with config tuning:**
+**Step4. Tune config to resolve the remaining two diagnostics**
 
-Generate a starter config with `seiton init`, then customize ([`samples/readme/.github/seiton.yaml`](samples/readme/.github/seiton.yaml)):
+Generate a starter config with `seiton init`, then customize [`samples/readme/.github/seiton.yaml`](samples/readme/.github/seiton.yaml):
 
 ```yaml
 # .github/seiton.yaml
@@ -99,8 +151,14 @@ fix:
     job-timeout-minutes: 30
 ```
 
-After `seiton --fix --enable-pin-network` with this config, all diagnostics are resolved — `runs-on` becomes `ubuntu-24.04` and `timeout-minutes: 30` is inserted.
+Run seiton again, and all diagnostics are resolved.
 
+```shell
+$ seiton --fix --enable-pin-network
+0 issues in 1 file
+```
+
+</details>
 
 ## Quick Start
 
