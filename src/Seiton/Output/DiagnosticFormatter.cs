@@ -8,7 +8,8 @@ namespace Seiton.Output;
 public static class DiagnosticFormatter
 {
     private const string UnknownSarifFileUri = "file:///unknown";
-    private const string SarifRuleHelpUri = "https://github.com/guitarrapc/seiton/blob/main/docs/usage.md";
+    private const string SarifGeneralHelpUri = "https://github.com/guitarrapc/seiton/blob/main/docs/usage.md";
+    private const string SarifRuleHelpUriPrefix = "https://github.com/guitarrapc/seiton/blob/main/docs/rules.md#";
 
     private static readonly string SarifDriverVersion = ToolVersionResolver.ResolveFromAssembly(typeof(DiagnosticFormatter).Assembly);
 
@@ -402,7 +403,7 @@ public static class DiagnosticFormatter
             rules[idx] = new SarifRule
             {
                 Id = id,
-                HelpUri = SarifRuleHelpUri,
+                HelpUri = BuildSarifRuleHelpUri(id),
             };
         }
 
@@ -511,6 +512,14 @@ public static class DiagnosticFormatter
         }
 
         return string.Join('/', segments);
+    }
+
+    private static string BuildSarifRuleHelpUri(string ruleId)
+    {
+        if (string.Equals(ruleId, "parse", StringComparison.Ordinal))
+            return SarifGeneralHelpUri;
+
+        return string.Concat(SarifRuleHelpUriPrefix, ruleId);
     }
 
     private static bool IsSafeRelativeUriPath(string path)

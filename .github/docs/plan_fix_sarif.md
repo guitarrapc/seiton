@@ -217,14 +217,16 @@ Review Round 2:
 
 実装内容:
 1. `runs[].tool.driver.rules[]` に `helpUri` を追加。
-2. `helpUri` は共通の usage ガイド URL を指す。
-  - `https://github.com/guitarrapc/seiton/blob/main/docs/usage.md`
+2. `helpUri` は rule id アンカー付き URL を指す。
+  - `https://github.com/guitarrapc/seiton/blob/main/docs/rules.md#<rule-id>`
+  - `ruleId = parse` の場合は `https://github.com/guitarrapc/seiton/blob/main/docs/usage.md` へフォールバック
 3. SARIF の `$schema` URL を OASIS 公式 URL に統一。
   - `https://docs.oasis-open.org/sarif/sarif/v2.1.0/errata01/os/schemas/sarif-schema-2.1.0.json`
 
 追加テスト（Red -> Green）:
 - `Sarif_Format_Rules_IncludeHelpUriMetadata`
 - `Sarif_Format_UsesOfficialOasisSchemaUrl`
+- `Sarif_Format_ParseRule_UsesGeneralUsageHelpUri`
 
 検証結果:
 - 追加テスト: 失敗を確認後、実装後に成功。
@@ -237,29 +239,29 @@ Review Round 2:
 - 対象: `DiagnosticOutputBenchmark.WriteSarif`
 - Count パラメータ: `F1`, `F10`
 
-変更前（Phase 2 実装前）:
-- F1: Mean 87.206 us, Allocated 143.26 KB
-- F10: Mean 1,188.90 us, Allocated 1,528.46 KB
+変更前（ルールアンカー実装前）:
+- F1: Mean 77.187 us, Allocated 144.39 KB
+- F10: Mean 1,006.46 us, Allocated 1,529.17 KB
 
-変更後（Phase 2 実装後）:
-- F1: Mean 71.377 us, Allocated 144.43 KB
-- F10: Mean 1,299.31 us, Allocated 1,533.07 KB
+変更後（ルールアンカー実装後）:
+- F1: Mean 79.101 us, Allocated 145.45 KB
+- F10: Mean 1,000.45 us, Allocated 1,539.31 KB
 
 差分評価:
-- F1 Mean: -18.15%（改善）
-- F10 Mean: +9.28%（許容範囲、閾値 +10% 以内）
-- F1 Allocated: +0.82%（許容範囲）
-- F10 Allocated: +0.30%（許容範囲）
+- F1 Mean: +2.48%（許容範囲、閾値 +10% 以内）
+- F10 Mean: -0.60%（改善）
+- F1 Allocated: +0.73%（許容範囲）
+- F10 Allocated: +0.66%（許容範囲）
 
 考察:
-- `helpUri` 追加によりシリアライズ対象データが増えるため、F10 側で処理時間・割り当てとも微増。
-- ただし増分は閾値内で、SARIF2004 解消の効果を優先できる範囲。
+- `helpUri` を固定URLから rule id アンカー付き URL へ切り替えたことで、URL文字列長と組み立てコストがわずかに増加。
+- ただし全指標で +10% 閾値内に収まり、ルール個別ドキュメントへ直接遷移できる UX 改善を優先できる範囲。
 
 ## 14. Phase 2 API/仕様整合レビュー
 
 ユーザーファースト API 観点:
 - CLI 入力 API には変更なし（既存ユーザー影響なし）。
-- SARIF 消費者はルール情報から usage ガイドへ直接遷移でき、トリアージしやすくなる。
+- SARIF 消費者はルール情報から該当ルール節へ直接遷移でき、トリアージしやすくなる。
 
 仕様整合:
 - `.github/docs/Seiton_CLI_spec.md` に `rules[].helpUri` の挙動を追記済み。

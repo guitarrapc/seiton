@@ -449,10 +449,33 @@ public sealed class DiagnosticFormatterRichTextTests
 
         foreach (var rule in rules.EnumerateArray())
         {
+            var id = rule.GetProperty("id").GetString();
             var hasHelpUri = rule.TryGetProperty("helpUri", out var helpUriElement);
             await Assert.That(hasHelpUri).IsTrue();
-            await Assert.That(helpUriElement.GetString()).Contains("/docs/usage.md");
+            await Assert.That(helpUriElement.GetString()).IsEqualTo($"https://github.com/guitarrapc/seiton/blob/main/docs/rules.md#{id}");
         }
+    }
+
+    [Test]
+    public async Task Sarif_Format_ParseRule_UsesGeneralUsageHelpUri()
+    {
+        var diag = MakeDiagnostic(DiagnosticSeverity.Error, "parse error", 1, 1, 1, 1, ruleId: null);
+
+        var sb = new StringBuilder();
+        using var writer = new StringWriter(sb);
+        DiagnosticFormatter.Write(writer, [diag], OutputFormat.Sarif, oneline: false, color: false);
+        writer.Flush();
+
+        using var doc = JsonDocument.Parse(sb.ToString());
+        var helpUri = doc.RootElement
+            .GetProperty("runs")[0]
+            .GetProperty("tool")
+            .GetProperty("driver")
+            .GetProperty("rules")[0]
+            .GetProperty("helpUri")
+            .GetString();
+
+        await Assert.That(helpUri).IsEqualTo("https://github.com/guitarrapc/seiton/blob/main/docs/usage.md");
     }
 
     [Test]
