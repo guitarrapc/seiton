@@ -358,20 +358,38 @@ When `GITHUB_ACTIONS` is set and you do not pass an explicit `--format` (or `SEI
 
 ### GitHub Actions (`github-actions`)
 
-Optimized for [GitHub Actions](https://docs.github.com/en/actions): diagnostics are printed in a CI-friendly log format, and a Markdown summary is written to the job summary tab when `GITHUB_STEP_SUMMARY` is writable.
+Optimized for [GitHub Actions](https://docs.github.com/en/actions): diagnostics are wrapped per file with `::group::` / `::endgroup::` so logs are foldable by file, and a Markdown summary is written to the job summary tab when `GITHUB_STEP_SUMMARY` is writable. This is the **default format on GitHub Actions** when `--format` (or `SEITON_FORMAT`) is not specified.
 
-This is the **default format on GitHub Actions** when `--format` (or `SEITON_FORMAT`) is not specified.
-
-Diagnostics are wrapped per file with `::group::` / `::endgroup::` so logs are foldable by file.
-
-If `GITHUB_STEP_SUMMARY` is unavailable or not writable, the summary is printed to stderr instead.
-
-Use `--format text` to force classic flat output on CI.
+If `GITHUB_STEP_SUMMARY` is unavailable or not writable, the summary is printed to stderr instead. Use `--format text` to force classic flat output on CI.
 
 ```yaml
 # Simplest CI step — no --format flag needed on GitHub Actions
 - name: Run seiton
   run: seiton
+```
+
+Example stdout (job log):
+
+```text
+::group::.github/workflows/ci.yml
+warning[runner-no-latest]: jobs.'build'.runs-on label 'ubuntu-latest' is a moving latest label; prefer explicit version-pinned runner labels
+  --> .github/workflows/ci.yml:6:14
+    |
+   6 |     runs-on: ubuntu-latest
+    |              ^^^^^^^^^^^^
+    |
+::endgroup::
+```
+
+Example job summary (`GITHUB_STEP_SUMMARY`):
+
+```markdown
+## Seiton
+1 warning in 1 file
+
+| File   | Warnings |
+|--------|---------:|
+| ci.yml |        1 |
 ```
 
 See `.github/docs/Seiton_CLI_spec.md` §6.5 for the full contract.
