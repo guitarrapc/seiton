@@ -77,7 +77,7 @@
 
 ## 対応案
 
-## 案A（推奨）: デフォルト相対 + 明示的切替オプション
+## 案A: デフォルト相対 + 明示的切替オプション
 
 新規 CLI オプション（例）:
 
@@ -115,38 +115,48 @@ SARIF:
 
 - ユーザーが求める「共有しやすさ」をデフォルトで改善できない
 
-## 案C: 出力フォーマット別に固定方針
+## 案C: デフォルト相対 + オプションなし（破壊的変更許容）
 
-- `text`/`github-actions` は相対、`sarif` は絶対維持 など
+- すべての出力形式（`text` / `github-actions` / `json` / `sarif`）で、既定のファイルパス表現を相対化する
+- `--path-style` のような切替オプションは追加しない
+- 既存の absolute path 前提利用は breaking change として受け入れる
+
+長所:
+
+- UX が単純（常に「共有しやすい表示」）
+- 仕様と実装の分岐が増えず、保守しやすい
+- ユーザー意図（Issue 共有性向上、情報露出低減）を最短で満たせる
 
 短所:
 
-- 学習コストが高く、挙動が直感的でない
-- 仕様説明が複雑化
+- absolute path を期待する既存連携（スクリプト/ログ解析）への互換性影響がある
+- リリースノートとマイグレーション案内が必須
 
-## 推奨方針
+## 採用方針
 
-- **案A** を推奨。
-- 初期リリースではデフォルトを `auto` にし、移行リスクを抑える。
-- repo 外や相対化不能ケースは absolute フォールバックを許容し、壊れないことを優先する。
+- **案Cを採用**する。
+- 出力パスはデフォルト相対へ統一し、切替オプションは導入しない。
+- 互換性影響は breaking change として明示し、リリースノートで移行案を案内する。
 
-## 実装ステップ（案A）
+## 実装案（案C）
 
-1. `Output` 層に `PathStyle` 概念と `PathDisplayResolver` を追加
-2. `DiagnosticFormatter.Write(...)` に path 解決コンテキスト（style + base directory）を渡す
-3. `text` / `github-actions` / `json` の `file` 表示を resolver 経由へ変更
-4. `sarif` は relative URI + `uriBaseId` + `originalUriBaseIds` 対応
-5. CLI オプション `--path-style` を追加し、`Seiton_CLI_spec.md` / `Seiton_CLI_csharp_spec.md` 更新
-6. `docs/usage.md` に「Issue 共有しやすい相対パス出力」説明を追加
+1. `Output` 層に `PathDisplayResolver`（新規）を追加し、`Environment.CurrentDirectory` 基準で表示用パスを相対化する
+2. `DiagnosticFormatter.Write(...)` で `Diagnostic.FilePath` の直接表示をやめ、resolver 経由の表示値を使用する
+3. `text` / `github-actions` / `json` のパス表現を同一ルールで相対化する
+4. `sarif` は `artifactLocation.uri` を相対 URI で出力し、`uriBaseId` と `runs[].originalUriBaseIds` を付与して解決互換性を担保する
+5. 相対化不能ケース（例: 無効パス、`<unknown>`、URI入力）は既存フォールバックを維持する（`file:///unknown` 等）
+6. CLI インターフェースには変更を入れない（新規オプション追加なし）
+7. `.github/docs/Seiton_CLI_spec.md` / `.github/docs/Seiton_CLI_csharp_spec.md` / `docs/usage.md` を「相対が既定」の契約へ更新する
+8. 変更告知として、リリースノートに breaking change（絶対パス前提連携への影響）と移行ガイドを記載する
 
 ## テスト観点
 
 - 既存テスト更新:
   - `tests/Seiton.Tests/DiagnosticFormatterRichTextTests.cs`
-    - `Sarif_Format_WindowsAbsolutePath_EmitsFileUri` など absolute 前提ケースの改訂
+    - `Sarif_Format_WindowsAbsolutePath_EmitsFileUri` など absolute 前提ケースを relative 前提へ改訂
 - 追加テスト:
   - `text/json/github-actions` で relative 出力されること
-  - repo 外パスがフォールバックされること
+  - repo 外パスが `../` を含む相対、または既定フォールバックで安定すること
   - Windows ドライブ跨ぎ時の挙動
   - `sarif` の `uriBaseId` と `originalUriBaseIds` の整合
 
@@ -162,11 +172,11 @@ SARIF:
 
 ## 未決定事項（要合意）
 
-- デフォルト値を `auto` にするか `absolute` 維持にするか
-- 相対化基準を `cwd` 固定にするか、将来 `--path-base` を導入するか
-- `sarif` で `uriBaseId` を必須にするか（推奨は付与）
+- 相対化基準を `cwd` 固定にするか（本案では固定前提）
+- Windows でドライブ跨ぎ時に `absolute` フォールバックを許可するか
+- `sarif` で `uriBaseId` / `originalUriBaseIds` を常時出力するか（推奨は常時）
 
 ---
 
 以上より、**相対パス化は妥当かつ実装可能**。  
-実運用互換性を重視するなら、`--path-style` で切替可能にした上で `auto` 運用へ寄せるのが最も安全。
+本計画では **案C（デフォルト相対・オプションなし・breaking change許容）を採用**し、仕様・実装・ドキュメントを一括で更新する。
