@@ -425,7 +425,10 @@ internal static class FixCommand
             {
                 if (hasPrintedDiff && resolvedFormat.UsesRichTextOutput())
                     outputWriter.WriteLine();
-                DiagnosticFormatter.Write(outputWriter, allDiagnostics, resolvedFormat, oneline, colorEnabled);
+                if (output is null)
+                    DiagnosticFormatter.WriteToStandardOutput(allDiagnostics, resolvedFormat, oneline, colorEnabled);
+                else
+                    DiagnosticFormatter.WriteToTextWriter(outputWriter, allDiagnostics, resolvedFormat, oneline, colorEnabled);
             }
 
             if (check || fixedFiles is not { Count: > 0 })

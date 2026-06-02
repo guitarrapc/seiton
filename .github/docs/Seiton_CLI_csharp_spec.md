@@ -353,9 +353,21 @@ Shared contract reference: `.github/docs/Seiton_CLI_spec.md` §1.7.
 
 ## 7. Output Implementation
 
+All diagnostic formats share a single formatter entry point:
+
+```csharp
+DiagnosticFormatter.Write(IBufferWriter<byte> output, ...);
+```
+
+`Utf8Writer` (ref struct) encodes text/github-actions output as UTF-8 bytes. `json`/`sarif` use `Utf8JsonWriter` on the same buffer (no intermediate UTF-16 string).
+
+CLI stdout uses `DiagnosticFormatter.WriteToStandardOutput(...)`, which buffers via `PooledByteBufferWriter` and flushes raw UTF-8 to `Console.OpenStandardOutput()`. When `Console.Out` is redirected (tests via `Console.SetOut(StringWriter)`), flush decodes to the redirected `TextWriter` instead.
+
+Tests and FixCommand injection use `WriteToTextWriter(TextWriter, ...)` (decode-only adapter) or write directly to `ArrayBufferWriter<byte>` and decode with `Encoding.UTF8.GetString`.
+
 ### 7.1 JSON Output
 
-Diagnostic `--format json` is emitted via `Utf8JsonWriter` over `PooledByteBufferWriter` (`IBufferWriter<byte>`, `ArrayPool<byte>` backed), then decoded to the caller-supplied `TextWriter`. This avoids intermediate DTO arrays and `JsonSerializer.Serialize` string materialization while keeping the public `DiagnosticFormatter.Write(TextWriter, ...)` API unchanged.
+Diagnostic `--format json` is emitted via `Utf8JsonWriter` directly onto the caller-supplied `IBufferWriter<byte>`. This avoids intermediate DTO arrays, `JsonSerializer.Serialize` string materialization, and UTF-16 decode on the hot path.
 
 Schema matches `.github/docs/Seiton_CLI_spec.md` §6.2 (`file`, `line`, `col`, `severity`, `ruleId`, `message`, `fixable`, optional `help` when non-null). Property names use UTF-8 literals; `help` is omitted when null.
 
@@ -374,7 +386,7 @@ File paths are relativized at output time by `PathDisplayResolver` (working-dire
 
 ### 7.3 Rich Text Output
 
-Source bytes for snippet rendering are retained in a `Dictionary<string, byte[]>` source map (only allocated when text format without `--oneline` is active). Line extraction uses byte offsets; gutter/caret padding is written directly to the `TextWriter` via `WriteRepeatedChar` / `WritePaddedDecimal` without intermediate `new string(...)` or interpolated strings.
+Source bytes for snippet rendering are retained in a `Dictionary<string, byte[]>` source map (only allocated when text format without `--oneline` is active). Line extraction uses byte offsets; gutter/caret padding is written via `Utf8Writer.WriteRepeated` / `WritePaddedDecimal` without intermediate `new string(...)` or interpolated strings.
 
 `github-actions` reuses the text diagnostic writer (`WriteTextDiagnostic`) with `color: false`. Per-file group titles escape `%`, `\r`, `\n` once via `EscapeGitHubCommandValue` (stackalloc for paths ≤512 chars); diagnostic bodies reuse the same escaped value with a leading `.` neutralizer when the path starts with `::`.
 

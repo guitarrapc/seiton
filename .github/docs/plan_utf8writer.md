@@ -187,11 +187,63 @@
 | 新規テスト不要（挙動不変の最適化） | 既存 2398 テスト + DiagnosticFormatterRichTextTests で回帰確認 |
 | 仕様書 §7.3 が実装詳細を未記載 | `Seiton_CLI_csharp_spec.md` §7.3 を更新 |
 
-## フェーズ 3: UTF-8 出力経路の導入（任意/効果確認後）
+## フェーズ 3: UTF-8 出力経路の導入（`IBufferWriter<byte>` 一本化）
 
-- 内部に `Utf8OutputSink` 相当の抽象を導入し、`TextWriter` と `IBufferWriter<byte>` の二系統を選択可能にする。
-- `CheckCommand` / `FixCommand` では machine-format（少なくとも `json/sarif`）時に UTF-8 直接出力を使えるようにする。
-- テスト性維持のため、既存 `TextWriter` 経路は残す（既存テスト破壊回避）。
+- ~~内部に `Utf8OutputSink` 相当の抽象を導入し、`TextWriter` と `IBufferWriter<byte>` の二系統を選択可能にする。~~
+- `DiagnosticFormatter` の出力 API を `IBufferWriter<byte>` に一本化。`Utf8Writer`（ref struct）が UTF-8 書き込みを担当。
+- CLI は `WriteToStandardOutput` でバッファ → stdout へ UTF-8 直書き。テスト/注入は `WriteToTextWriter`（デコードのみ）または `ArrayBufferWriter` + `Write`。
+- `json`/`sarif` は中間バッファコピーなしで呼び出し側 `IBufferWriter` に直接書き込み。
+
+### フェーズ 3 実装（完了）
+
+#### 変更内容
+
+- **`Utf8Writer`**（`src/Seiton/Output/Utf8Writer.cs`）: `IBufferWriter<byte>` 向け UTF-8 出力ヘルパー。`Write`/`WriteLine`/`WriteInt`/`WriteRepeated`/`WritePaddedDecimal`、stdout/stderr フラッシュ、TextWriter デコードアダプタを提供。
+- **`DiagnosticFormatter.Write(IBufferWriter<byte>, ...)`** を唯一のフォーマット実装入口に。`TextWriter` 直書き経路を削除。
+- **`WriteToStandardOutput`**: CLI 用。`PooledByteBufferWriter` → `FlushToStandardOutput`（`StreamWriter` なら raw UTF-8、それ以外は `WriteToTextWriter` で `Console.SetOut` リダイレクト対応）。
+- **`WriteToTextWriter`**: FixCommand 注入・ValidateCommand エラー出力用の薄いデコードアダプタ（フォーマットロジックは共有しない）。
+- **テスト**: `Render` ヘルパーを `ArrayBufferWriter` + `Write` に変更。`Write_Buffer_MatchesTextWriterAdapter_OnelineError` で両経路の同値性を検証。
+- **ベンチマーク**: `StringWriter`/`StringBuilder` を排除し `PooledByteBufferWriter` に直接計測（フォーマッタ本体の割当を反映）。
+
+#### API レビュー
+
+| 観点 | 結果 |
+|---|---|
+| 二系統の保守性 | フォーマットは `IBufferWriter` のみ。CLI/テスト用フラッシュは `WriteToStandardOutput` / `WriteToTextWriter` の2メソッド（デコードのみ、ロジック非重複） |
+| 命名 | `Utf8OutputSink` は不採用 → **`Utf8Writer`**（TextWriter と対になる UTF-8 側の名前） |
+| テスト性 | `ArrayBufferWriter<byte>` + `Encoding.UTF8.GetString` でブラックボックステスト可能 |
+
+#### 性能変化（DiagnosticOutputBenchmark, ShortRun, フェーズ 2 完了時点との比較）
+
+ベンチマーク計測対象を「StringWriter キャプチャ込み」から「`PooledByteBufferWriter` 直書き」に変更したため、Allocated はフォーマッタ本体の値を反映（Phase 2 数値との直接比較は計測条件が異なる点に注意）。
+
+| Format | Count | Metric | フェーズ 2 末 | フェーズ 3 | 変化 | 判定 |
+|---|---|---|---|---|---|---|
+| text rich | F1 | Allocated | 56.34 KB | 8.35 KB | **-85%** | 改善（計測条件変更含む） |
+| text rich | F10 | Allocated | 514.73 KB | 72.67 KB | **-86%** | 改善 |
+| text rich | F10 | Mean | 2193.6 us | 2344.1 us | +6.9% | 許容 |
+| json | F1 | Allocated | 49.48 KB | 1.66 KB | **-97%** | 改善（中間コピー削除） |
+| json | F10 | Allocated | 442.11 KB | 3.9 KB | **-99%** | 改善 |
+| json | F10 | Mean | 345.7 us | 288.8 us | **-16%** | 改善 |
+| sarif | F10 | Allocated | 1070.68 KB | 11.53 KB | **-99%** | 改善 |
+| github-actions oneline | F1 | Allocated | 49.45 KB | 1.46 KB | **-97%** | 改善 |
+
+**改善理由**
+
+- フォーマッタ出力が最初から UTF-8 バッファ上で完結（`json`/`sarif` の二重バッファ + UTF-16 デコード削除）。
+- ベンチマークが StringWriter キャプチャのオーバーヘッドを除外し、実際の CLI 経路（buffer → stdout bytes）に近づいた。
+
+**Mean 微増（text rich F10 +6.9%）**
+
+- UTF-8 エンコードの per-field コスト。Allocated 大幅削減とトレードオフ。許容範囲内。
+
+#### フェーズ 3 レビュー
+
+| 指摘 | 対応 |
+|---|---|
+| `Console.SetOut` が `OpenStandardOutput` をバイパス | `FlushToStandardOutput` で `StreamWriter` 以外は TextWriter 経由にフォールバック |
+| 二系統 API の保守性 | フォーマットは `Write(IBufferWriter)` のみに統一 |
+| 仕様書が TextWriter 前提 | `Seiton_CLI_csharp_spec.md` §7 を更新 |
 
 ## フェーズ 4: 仕様・ドキュメント同期
 
@@ -206,7 +258,7 @@
 - 工数過多リスク（text/github-actions 全面 UTF-8 化）:
   - 対策: ROI が高い `json` から段階実施し、ベンチで効果確認後に次段階判断。
 - テスト注入性低下リスク:
-  - 対策: `TextWriter` API を維持しつつ内部実装を差し替える。
+  - 対策: フォーマットは `IBufferWriter<byte>` に統一。CLI は `WriteToStandardOutput`、テスト/FixCommand 注入は `WriteToTextWriter` または `ArrayBufferWriter` で担保。
 
 ## 実施判断
 

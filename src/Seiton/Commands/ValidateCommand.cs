@@ -69,7 +69,7 @@ internal static class ValidateCommand
 
         if (result.Diagnostics.Length > 0)
         {
-            DiagnosticFormatter.Write(errorWriter, result.Diagnostics, OutputFormat.Text, oneline: false, color: false);
+            DiagnosticFormatter.WriteToTextWriter(errorWriter, result.Diagnostics, OutputFormat.Text, oneline: false, color: false);
         }
 
         if (result.IsValid)

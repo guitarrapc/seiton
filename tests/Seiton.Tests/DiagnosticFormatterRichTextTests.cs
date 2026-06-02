@@ -1,11 +1,28 @@
 ﻿using Seiton.Core.Parsing;
 using Seiton.Output;
+using System.Buffers;
+using System.Text;
 using System.Text.Json;
 
 namespace Seiton.Tests;
 
 public sealed class DiagnosticFormatterRichTextTests
 {
+    [Test]
+    public async Task Write_Buffer_MatchesTextWriterAdapter_OnelineError()
+    {
+        var diag = MakeDiagnostic(DiagnosticSeverity.Error, "buffer path", 4, 2, 4, 8);
+        var buffer = new ArrayBufferWriter<byte>();
+        DiagnosticFormatter.Write(buffer, [diag], OutputFormat.Text, oneline: true, color: false);
+
+        var sb = new StringBuilder();
+        using var writer = new StringWriter(sb);
+        DiagnosticFormatter.WriteToTextWriter(writer, [diag], OutputFormat.Text, oneline: true, color: false);
+        writer.Flush();
+
+        await Assert.That(Encoding.UTF8.GetString(buffer.WrittenSpan)).IsEqualTo(sb.ToString());
+    }
+
     // --oneline format
 
     [Test]
@@ -46,7 +63,7 @@ public sealed class DiagnosticFormatterRichTextTests
 
         var sb = new StringBuilder();
         using var writer = new StringWriter(sb);
-        DiagnosticFormatter.Write(writer, diagnostics, OutputFormat.Text, oneline: true, color: false);
+        DiagnosticFormatter.WriteToTextWriter(writer, diagnostics, OutputFormat.Text, oneline: true, color: false);
         writer.Flush();
         var lines = sb.ToString().ReplaceLineEndings("\n").Split('\n', StringSplitOptions.RemoveEmptyEntries);
 
@@ -265,7 +282,7 @@ public sealed class DiagnosticFormatterRichTextTests
 
         var sb = new StringBuilder();
         using var writer = new StringWriter(sb);
-        DiagnosticFormatter.Write(writer, diagnostics, OutputFormat.Text, oneline: false, color: false, sourceMap);
+        DiagnosticFormatter.WriteToTextWriter(writer, diagnostics, OutputFormat.Text, oneline: false, color: false, sourceMap);
         writer.Flush();
         var output = sb.ToString();
 
@@ -283,7 +300,7 @@ public sealed class DiagnosticFormatterRichTextTests
 
         var sb = new StringBuilder();
         using var writer = new StringWriter(sb);
-        DiagnosticFormatter.Write(writer, [diag], OutputFormat.Json, oneline: false, color: false, sourceMap);
+        DiagnosticFormatter.WriteToTextWriter(writer, [diag], OutputFormat.Json, oneline: false, color: false, sourceMap);
         writer.Flush();
         var output = sb.ToString();
 
@@ -298,7 +315,7 @@ public sealed class DiagnosticFormatterRichTextTests
 
         var sb = new StringBuilder();
         using var writer = new StringWriter(sb);
-        DiagnosticFormatter.Write(writer, [diag], OutputFormat.Json, oneline: false, color: false);
+        DiagnosticFormatter.WriteToTextWriter(writer, [diag], OutputFormat.Json, oneline: false, color: false);
         writer.Flush();
         var output = sb.ToString();
 
@@ -312,7 +329,7 @@ public sealed class DiagnosticFormatterRichTextTests
 
         var sb = new StringBuilder();
         using var writer = new StringWriter(sb);
-        DiagnosticFormatter.Write(writer, [diag], OutputFormat.Json, oneline: false, color: false);
+        DiagnosticFormatter.WriteToTextWriter(writer, [diag], OutputFormat.Json, oneline: false, color: false);
         writer.Flush();
         var output = sb.ToString();
 
@@ -334,7 +351,7 @@ public sealed class DiagnosticFormatterRichTextTests
 
         var sb = new StringBuilder();
         using var writer = new StringWriter(sb);
-        DiagnosticFormatter.Write(writer, [diag], OutputFormat.Json, oneline: false, color: false);
+        DiagnosticFormatter.WriteToTextWriter(writer, [diag], OutputFormat.Json, oneline: false, color: false);
         writer.Flush();
 
         using var doc = JsonDocument.Parse(sb.ToString());
@@ -365,7 +382,7 @@ public sealed class DiagnosticFormatterRichTextTests
 
         var sb = new StringBuilder();
         using var writer = new StringWriter(sb);
-        DiagnosticFormatter.Write(writer, diagnostics, OutputFormat.Json, oneline: false, color: false);
+        DiagnosticFormatter.WriteToTextWriter(writer, diagnostics, OutputFormat.Json, oneline: false, color: false);
         writer.Flush();
 
         using var doc = JsonDocument.Parse(sb.ToString());
@@ -382,7 +399,7 @@ public sealed class DiagnosticFormatterRichTextTests
 
         var sb = new StringBuilder();
         using var writer = new StringWriter(sb);
-        DiagnosticFormatter.Write(writer, [diag], OutputFormat.Json, oneline: false, color: false);
+        DiagnosticFormatter.WriteToTextWriter(writer, [diag], OutputFormat.Json, oneline: false, color: false);
         writer.Flush();
 
         using var doc = JsonDocument.Parse(sb.ToString());
@@ -395,7 +412,7 @@ public sealed class DiagnosticFormatterRichTextTests
     {
         var sb = new StringBuilder();
         using var writer = new StringWriter(sb);
-        DiagnosticFormatter.Write(writer, [], OutputFormat.Json, oneline: false, color: false);
+        DiagnosticFormatter.WriteToTextWriter(writer, [], OutputFormat.Json, oneline: false, color: false);
         writer.Flush();
 
         await Assert.That(sb.ToString()).IsEqualTo("[]" + Environment.NewLine);
@@ -408,7 +425,7 @@ public sealed class DiagnosticFormatterRichTextTests
 
         var sb = new StringBuilder();
         using var writer = new StringWriter(sb);
-        DiagnosticFormatter.Write(writer, [diag], OutputFormat.Sarif, oneline: false, color: false);
+        DiagnosticFormatter.WriteToTextWriter(writer, [diag], OutputFormat.Sarif, oneline: false, color: false);
         writer.Flush();
         var output = sb.ToString();
 
@@ -422,7 +439,7 @@ public sealed class DiagnosticFormatterRichTextTests
 
         var sb = new StringBuilder();
         using var writer = new StringWriter(sb);
-        DiagnosticFormatter.Write(writer, [diag], OutputFormat.Sarif, oneline: false, color: false);
+        DiagnosticFormatter.WriteToTextWriter(writer, [diag], OutputFormat.Sarif, oneline: false, color: false);
         writer.Flush();
         using var doc = JsonDocument.Parse(sb.ToString());
         var text = doc.RootElement
@@ -457,7 +474,7 @@ public sealed class DiagnosticFormatterRichTextTests
 
             var sb = new StringBuilder();
             using var writer = new StringWriter(sb);
-            DiagnosticFormatter.Write(writer, [diag], OutputFormat.Sarif, oneline: false, color: false, sourceMap: null, pathBaseDirectory: baseDir);
+            DiagnosticFormatter.WriteToTextWriter(writer, [diag], OutputFormat.Sarif, oneline: false, color: false, sourceMap: null, pathBaseDirectory: baseDir);
             writer.Flush();
 
             using var doc = JsonDocument.Parse(sb.ToString());
@@ -490,7 +507,7 @@ public sealed class DiagnosticFormatterRichTextTests
     {
         var sb = new StringBuilder();
         using var writer = new StringWriter(sb);
-        DiagnosticFormatter.Write(
+        DiagnosticFormatter.WriteToTextWriter(
             writer,
             [
                 MakeDiagnostic(DiagnosticSeverity.Warning, "empty path", 1, 1, 1, 3, filePath: ""),
@@ -514,7 +531,7 @@ public sealed class DiagnosticFormatterRichTextTests
 
         var sb = new StringBuilder();
         using var writer = new StringWriter(sb);
-        DiagnosticFormatter.Write(writer, [diag], OutputFormat.Sarif, oneline: false, color: false);
+        DiagnosticFormatter.WriteToTextWriter(writer, [diag], OutputFormat.Sarif, oneline: false, color: false);
         writer.Flush();
 
         using var doc = JsonDocument.Parse(sb.ToString());
@@ -537,7 +554,7 @@ public sealed class DiagnosticFormatterRichTextTests
 
         var sb = new StringBuilder();
         using var writer = new StringWriter(sb);
-        DiagnosticFormatter.Write(writer, [diag], OutputFormat.Sarif, oneline: false, color: false);
+        DiagnosticFormatter.WriteToTextWriter(writer, [diag], OutputFormat.Sarif, oneline: false, color: false);
         writer.Flush();
 
         using var doc = JsonDocument.Parse(sb.ToString());
@@ -567,7 +584,7 @@ public sealed class DiagnosticFormatterRichTextTests
 
         var sb = new StringBuilder();
         using var writer = new StringWriter(sb);
-        DiagnosticFormatter.Write(writer, [diag], OutputFormat.Sarif, oneline: false, color: false);
+        DiagnosticFormatter.WriteToTextWriter(writer, [diag], OutputFormat.Sarif, oneline: false, color: false);
         writer.Flush();
 
         using var doc = JsonDocument.Parse(sb.ToString());
@@ -590,7 +607,7 @@ public sealed class DiagnosticFormatterRichTextTests
 
             var sb = new StringBuilder();
             using var writer = new StringWriter(sb);
-            DiagnosticFormatter.Write(writer, [diag], OutputFormat.Json, oneline: false, color: false, sourceMap: null, pathBaseDirectory: baseDir);
+            DiagnosticFormatter.WriteToTextWriter(writer, [diag], OutputFormat.Json, oneline: false, color: false, sourceMap: null, pathBaseDirectory: baseDir);
             writer.Flush();
 
             await Assert.That(sb.ToString()).Contains("\"file\":\".github/workflows/ci.yml\"");
@@ -616,7 +633,7 @@ public sealed class DiagnosticFormatterRichTextTests
 
             var sb = new StringBuilder();
             using var writer = new StringWriter(sb);
-            DiagnosticFormatter.Write(writer, [diag], OutputFormat.Text, oneline: true, color: false, sourceMap: null, pathBaseDirectory: baseDir);
+            DiagnosticFormatter.WriteToTextWriter(writer, [diag], OutputFormat.Text, oneline: true, color: false, sourceMap: null, pathBaseDirectory: baseDir);
             writer.Flush();
 
             await Assert.That(sb.ToString().TrimEnd()).IsEqualTo("workflow.yml:1:1: warning [test-rule] relative path");
@@ -634,7 +651,7 @@ public sealed class DiagnosticFormatterRichTextTests
 
         var sb = new StringBuilder();
         using var writer = new StringWriter(sb);
-        DiagnosticFormatter.Write(writer, [diag], OutputFormat.Sarif, oneline: false, color: false);
+        DiagnosticFormatter.WriteToTextWriter(writer, [diag], OutputFormat.Sarif, oneline: false, color: false);
         writer.Flush();
 
         using var doc = JsonDocument.Parse(sb.ToString());
@@ -660,7 +677,7 @@ public sealed class DiagnosticFormatterRichTextTests
 
         var sb = new StringBuilder();
         using var writer = new StringWriter(sb);
-        DiagnosticFormatter.Write(writer, diagnostics, OutputFormat.Sarif, oneline: false, color: false);
+        DiagnosticFormatter.WriteToTextWriter(writer, diagnostics, OutputFormat.Sarif, oneline: false, color: false);
         writer.Flush();
 
         using var doc = JsonDocument.Parse(sb.ToString());
@@ -688,7 +705,7 @@ public sealed class DiagnosticFormatterRichTextTests
 
         var sb = new StringBuilder();
         using var writer = new StringWriter(sb);
-        DiagnosticFormatter.Write(writer, [diag], OutputFormat.Sarif, oneline: false, color: false);
+        DiagnosticFormatter.WriteToTextWriter(writer, [diag], OutputFormat.Sarif, oneline: false, color: false);
         writer.Flush();
 
         using var doc = JsonDocument.Parse(sb.ToString());
@@ -710,7 +727,7 @@ public sealed class DiagnosticFormatterRichTextTests
 
         var sb = new StringBuilder();
         using var writer = new StringWriter(sb);
-        DiagnosticFormatter.Write(writer, [diag], OutputFormat.Sarif, oneline: false, color: false);
+        DiagnosticFormatter.WriteToTextWriter(writer, [diag], OutputFormat.Sarif, oneline: false, color: false);
         writer.Flush();
 
         using var doc = JsonDocument.Parse(sb.ToString());
@@ -726,7 +743,7 @@ public sealed class DiagnosticFormatterRichTextTests
 
         var sb = new StringBuilder();
         using var writer = new StringWriter(sb);
-        DiagnosticFormatter.Write(writer, [diag], OutputFormat.Sarif, oneline: false, color: false);
+        DiagnosticFormatter.WriteToTextWriter(writer, [diag], OutputFormat.Sarif, oneline: false, color: false);
         writer.Flush();
         var output = sb.ToString().ReplaceLineEndings("\n");
 
@@ -741,7 +758,7 @@ public sealed class DiagnosticFormatterRichTextTests
 
         var sb = new StringBuilder();
         using var writer = new StringWriter(sb);
-        DiagnosticFormatter.Write(writer, [diag], OutputFormat.GitHubActions, oneline: false, color: true);
+        DiagnosticFormatter.WriteToTextWriter(writer, [diag], OutputFormat.GitHubActions, oneline: false, color: true);
         writer.Flush();
         var output = sb.ToString();
 
@@ -761,7 +778,7 @@ public sealed class DiagnosticFormatterRichTextTests
 
         var sb = new StringBuilder();
         using var writer = new StringWriter(sb);
-        DiagnosticFormatter.Write(writer, diagnostics, OutputFormat.GitHubActions, oneline: true, color: false);
+        DiagnosticFormatter.WriteToTextWriter(writer, diagnostics, OutputFormat.GitHubActions, oneline: true, color: false);
         writer.Flush();
         var output = sb.ToString();
 
@@ -784,7 +801,7 @@ public sealed class DiagnosticFormatterRichTextTests
 
         var sb = new StringBuilder();
         using var writer = new StringWriter(sb);
-        DiagnosticFormatter.Write(writer, diagnostics, OutputFormat.GitHubActions, oneline: false, color: false);
+        DiagnosticFormatter.WriteToTextWriter(writer, diagnostics, OutputFormat.GitHubActions, oneline: false, color: false);
         writer.Flush();
         var output = sb.ToString();
 
@@ -805,7 +822,7 @@ public sealed class DiagnosticFormatterRichTextTests
 
         var sb = new StringBuilder();
         using var writer = new StringWriter(sb);
-        DiagnosticFormatter.Write(writer, diagnostics, OutputFormat.GitHubActions, oneline: true, color: false);
+        DiagnosticFormatter.WriteToTextWriter(writer, diagnostics, OutputFormat.GitHubActions, oneline: true, color: false);
         writer.Flush();
         var output = sb.ToString();
 
@@ -826,7 +843,7 @@ public sealed class DiagnosticFormatterRichTextTests
 
         var sb = new StringBuilder();
         using var writer = new StringWriter(sb);
-        DiagnosticFormatter.Write(writer, diagnostics, OutputFormat.GitHubActions, oneline: true, color: false);
+        DiagnosticFormatter.WriteToTextWriter(writer, diagnostics, OutputFormat.GitHubActions, oneline: true, color: false);
         writer.Flush();
         var output = sb.ToString();
 
@@ -845,7 +862,7 @@ public sealed class DiagnosticFormatterRichTextTests
 
         var sb = new StringBuilder();
         using var writer = new StringWriter(sb);
-        DiagnosticFormatter.Write(writer, diagnostics, OutputFormat.GitHubActions, oneline: false, color: false);
+        DiagnosticFormatter.WriteToTextWriter(writer, diagnostics, OutputFormat.GitHubActions, oneline: false, color: false);
         writer.Flush();
         var output = sb.ToString();
 
@@ -863,7 +880,7 @@ public sealed class DiagnosticFormatterRichTextTests
 
         var sb = new StringBuilder();
         using var writer = new StringWriter(sb);
-        DiagnosticFormatter.Write(writer, diagnostics, OutputFormat.GitHubActions, oneline: true, color: false);
+        DiagnosticFormatter.WriteToTextWriter(writer, diagnostics, OutputFormat.GitHubActions, oneline: true, color: false);
         writer.Flush();
         var output = sb.ToString();
 
@@ -897,16 +914,14 @@ public sealed class DiagnosticFormatterRichTextTests
         OutputFormat format = OutputFormat.Text,
         Dictionary<string, byte[]>? sourceMap = null)
     {
-        var sb = new StringBuilder();
-        using var writer = new StringWriter(sb);
+        var buffer = new ArrayBufferWriter<byte>();
         DiagnosticFormatter.Write(
-            writer,
+            buffer,
             [diagnostic],
             format,
             oneline,
             color,
             sourceMap);
-        writer.Flush();
-        return sb.ToString();
+        return Encoding.UTF8.GetString(buffer.WrittenSpan);
     }
 }

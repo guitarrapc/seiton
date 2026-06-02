@@ -19,6 +19,84 @@ public static class DiagnosticFormatter
     private static readonly JsonWriterOptions JsonDiagnosticWriterOptions = new() { SkipValidation = true, Indented = false };
 
     public static void Write(
+        IBufferWriter<byte> output,
+        IReadOnlyList<Diagnostic> diagnostics,
+        OutputFormat format,
+        bool oneline,
+        bool color,
+        IReadOnlyDictionary<string, byte[]>? sourceMap = null)
+    {
+        Write(output, diagnostics, format, oneline, color, sourceMap, pathBaseDirectory: null);
+    }
+
+    internal static void Write(
+        IBufferWriter<byte> output,
+        IReadOnlyList<Diagnostic> diagnostics,
+        OutputFormat format,
+        bool oneline,
+        bool color,
+        IReadOnlyDictionary<string, byte[]>? sourceMap,
+        string? pathBaseDirectory)
+    {
+        var writer = new Utf8Writer(output);
+        switch (format)
+        {
+            case OutputFormat.Text:
+                WriteText(writer, diagnostics, oneline, color, sourceMap, pathBaseDirectory);
+                break;
+            case OutputFormat.GitHubActions:
+                WriteGitHubActions(writer, diagnostics, oneline, sourceMap, pathBaseDirectory);
+                break;
+            case OutputFormat.Json:
+                WriteJson(output, writer, diagnostics, pathBaseDirectory);
+                break;
+            case OutputFormat.Sarif:
+                WriteSarif(output, writer, diagnostics, pathBaseDirectory);
+                break;
+        }
+    }
+
+    public static void WriteToStandardOutput(
+        IReadOnlyList<Diagnostic> diagnostics,
+        OutputFormat format,
+        bool oneline,
+        bool color,
+        IReadOnlyDictionary<string, byte[]>? sourceMap = null)
+    {
+        WriteToStandardOutput(diagnostics, format, oneline, color, sourceMap, pathBaseDirectory: null);
+    }
+
+    internal static void WriteToStandardOutput(
+        IReadOnlyList<Diagnostic> diagnostics,
+        OutputFormat format,
+        bool oneline,
+        bool color,
+        IReadOnlyDictionary<string, byte[]>? sourceMap,
+        string? pathBaseDirectory)
+    {
+        using var buffer = new PooledByteBufferWriter(EstimateInitialCapacity(diagnostics));
+        Write(buffer, diagnostics, format, oneline, color, sourceMap, pathBaseDirectory);
+        FlushToStandardOutput(buffer.WrittenSpan);
+    }
+
+    internal static void FlushToStandardOutput(ReadOnlySpan<byte> utf8)
+    {
+        if (utf8.IsEmpty)
+        {
+            return;
+        }
+
+        // Process console uses StreamWriter; test redirects (StringWriter) need TextWriter decode.
+        if (Console.Out is not StreamWriter)
+        {
+            Utf8Writer.WriteToTextWriter(Console.Out, utf8);
+            return;
+        }
+
+        Utf8Writer.WriteToStandardOutput(utf8);
+    }
+
+    public static void WriteToTextWriter(
         TextWriter writer,
         IReadOnlyList<Diagnostic> diagnostics,
         OutputFormat format,
@@ -26,10 +104,10 @@ public static class DiagnosticFormatter
         bool color,
         IReadOnlyDictionary<string, byte[]>? sourceMap = null)
     {
-        Write(writer, diagnostics, format, oneline, color, sourceMap, pathBaseDirectory: null);
+        WriteToTextWriter(writer, diagnostics, format, oneline, color, sourceMap, pathBaseDirectory: null);
     }
 
-    internal static void Write(
+    internal static void WriteToTextWriter(
         TextWriter writer,
         IReadOnlyList<Diagnostic> diagnostics,
         OutputFormat format,
@@ -38,26 +116,16 @@ public static class DiagnosticFormatter
         IReadOnlyDictionary<string, byte[]>? sourceMap,
         string? pathBaseDirectory)
     {
-        switch (format)
-        {
-            case OutputFormat.Text:
-                WriteText(writer, diagnostics, oneline, color, sourceMap, pathBaseDirectory);
-                break;
-            case OutputFormat.GitHubActions:
-                // GitHub Actions format should always be plain text without ANSI escapes.
-                WriteGitHubActions(writer, diagnostics, oneline, sourceMap, pathBaseDirectory);
-                break;
-            case OutputFormat.Json:
-                WriteJson(writer, diagnostics, pathBaseDirectory);
-                break;
-            case OutputFormat.Sarif:
-                WriteSarif(writer, diagnostics, pathBaseDirectory);
-                break;
-        }
+        using var buffer = new PooledByteBufferWriter(EstimateInitialCapacity(diagnostics));
+        Write(buffer, diagnostics, format, oneline, color, sourceMap, pathBaseDirectory);
+        Utf8Writer.WriteToTextWriter(writer, buffer.WrittenSpan);
     }
 
+    private static int EstimateInitialCapacity(IReadOnlyList<Diagnostic> diagnostics)
+        => Math.Max(256, diagnostics.Count * 128);
+
     private static void WriteGitHubActions(
-        TextWriter writer,
+        Utf8Writer writer,
         IReadOnlyList<Diagnostic> diagnostics,
         bool oneline,
         IReadOnlyDictionary<string, byte[]>? sourceMap,
@@ -70,7 +138,6 @@ public static class DiagnosticFormatter
 
         var pathResolver = new PathDisplayResolver(pathBaseDirectory);
         string? currentGroupFile = null;
-        string? currentGroupDisplay = null;
         string currentLineDisplay = "<unknown>";
 
         for (var i = 0; i < diagnostics.Count; i++)
@@ -82,27 +149,29 @@ public static class DiagnosticFormatter
             {
                 if (currentGroupFile is not null)
                 {
-                    writer.WriteLine("::endgroup::");
+                    writer.WriteUtf8("::endgroup::");
+                    writer.WriteNewLine();
                 }
 
                 var fileDisplay = pathResolver.GetDisplayPath(d.FilePath);
                 var escaped = EscapeGitHubCommandValue(fileDisplay);
-                currentGroupDisplay = escaped;
                 currentLineDisplay = escaped.StartsWith("::", StringComparison.Ordinal)
                     ? string.Concat(".", escaped)
                     : escaped;
-                writer.Write("::group::");
-                writer.WriteLine(currentGroupDisplay);
+                writer.WriteUtf8("::group::");
+                writer.WriteUtf8(escaped);
+                writer.WriteNewLine();
                 currentGroupFile = fileKey;
             }
 
             WriteTextDiagnostic(writer, d, fileKey, currentLineDisplay, oneline, color: false, sourceMap);
         }
 
-        writer.WriteLine("::endgroup::");
+        writer.WriteUtf8("::endgroup::");
+        writer.WriteNewLine();
     }
 
-    private static void WriteText(TextWriter writer, IReadOnlyList<Diagnostic> diagnostics, bool oneline, bool color, IReadOnlyDictionary<string, byte[]>? sourceMap, string? pathBaseDirectory)
+    private static void WriteText(Utf8Writer writer, IReadOnlyList<Diagnostic> diagnostics, bool oneline, bool color, IReadOnlyDictionary<string, byte[]>? sourceMap, string? pathBaseDirectory)
     {
         var pathResolver = new PathDisplayResolver(pathBaseDirectory);
         string? previousFileKey = null;
@@ -127,7 +196,6 @@ public static class DiagnosticFormatter
     }
 
     private const int GitHubEscapeStackLimit = 512;
-    private const int RepeatedCharStackLimit = 128;
 
     private static string EscapeGitHubCommandValue(string value)
     {
@@ -202,7 +270,7 @@ public static class DiagnosticFormatter
     }
 
     private static void WriteTextDiagnostic(
-        TextWriter writer,
+        Utf8Writer writer,
         Diagnostic d,
         string fileKey,
         string fileDisplay,
@@ -226,7 +294,7 @@ public static class DiagnosticFormatter
     }
 
     private static void WriteOnelineDiagnostic(
-        TextWriter writer,
+        Utf8Writer writer,
         Diagnostic d,
         string fileDisplay,
         int line,
@@ -284,7 +352,7 @@ public static class DiagnosticFormatter
     }
 
     private static void WriteRichDiagnostic(
-        TextWriter writer,
+        Utf8Writer writer,
         Diagnostic d,
         string sourceFileKey,
         string displayFile,
@@ -386,7 +454,7 @@ public static class DiagnosticFormatter
     }
 
     private static void WriteSourceSnippet(
-        TextWriter writer,
+        Utf8Writer writer,
         Diagnostic d,
         string file,
         IReadOnlyDictionary<string, byte[]>? sourceMap,
@@ -445,9 +513,9 @@ public static class DiagnosticFormatter
             WriteRepeatedChar(writer, ' ', safeStart - 1);
             if (color)
             {
-                writer.Write(severityColor);
+                writer.Write(severityColor!);
                 WriteRepeatedChar(writer, '^', caretLen);
-                writer.Write(reset);
+                writer.Write(reset!);
             }
             else
             {
@@ -474,10 +542,10 @@ public static class DiagnosticFormatter
             writer.Write("| ");
             if (color)
             {
-                writer.Write(severityColor);
+                writer.Write(severityColor!);
                 writer.Write("|_");
                 WriteRepeatedChar(writer, '^', closingCaretLen);
-                writer.Write(reset);
+                writer.Write(reset!);
             }
             else
             {
@@ -491,21 +559,21 @@ public static class DiagnosticFormatter
         WriteGutterSeparator(writer, lineNumWidth);
     }
 
-    private static void WriteGutterSeparator(TextWriter writer, int lineNumWidth)
+    private static void WriteGutterSeparator(Utf8Writer writer, int lineNumWidth)
     {
         writer.Write("   ");
         WriteRepeatedChar(writer, ' ', lineNumWidth);
         writer.WriteLine('|');
     }
 
-    private static void WriteGutterLine(TextWriter writer, int lineNum, int width, string sourceLine, bool color, string? blue, string? reset)
+    private static void WriteGutterLine(Utf8Writer writer, int lineNum, int width, string sourceLine, bool color, string? blue, string? reset)
     {
         writer.Write("   ");
         if (color)
         {
-            writer.Write(blue);
+            writer.Write(blue!);
             WritePaddedDecimal(writer, lineNum, width);
-            writer.Write(reset);
+            writer.Write(reset!);
         }
         else
         {
@@ -516,14 +584,14 @@ public static class DiagnosticFormatter
         writer.WriteLine(sourceLine);
     }
 
-    private static void WriteGutterLineWithPrefix(TextWriter writer, int lineNum, int width, string prefix, string sourceLine, bool color, string? blue, string? reset)
+    private static void WriteGutterLineWithPrefix(Utf8Writer writer, int lineNum, int width, string prefix, string sourceLine, bool color, string? blue, string? reset)
     {
         writer.Write("   ");
         if (color)
         {
-            writer.Write(blue);
+            writer.Write(blue!);
             WritePaddedDecimal(writer, lineNum, width);
-            writer.Write(reset);
+            writer.Write(reset!);
         }
         else
         {
@@ -536,41 +604,11 @@ public static class DiagnosticFormatter
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    private static void WriteRepeatedChar(TextWriter writer, char c, int count)
-    {
-        if (count <= 0)
-        {
-            return;
-        }
+    private static void WriteRepeatedChar(Utf8Writer writer, char c, int count)
+        => writer.WriteRepeated((byte)c, count);
 
-        if (count <= RepeatedCharStackLimit)
-        {
-            Span<char> buffer = stackalloc char[count];
-            buffer.Fill(c);
-            writer.Write(buffer);
-            return;
-        }
-
-        var rented = ArrayPool<char>.Shared.Rent(count);
-        try
-        {
-            rented.AsSpan(0, count).Fill(c);
-            writer.Write(rented, 0, count);
-        }
-        finally
-        {
-            ArrayPool<char>.Shared.Return(rented);
-        }
-    }
-
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    private static void WritePaddedDecimal(TextWriter writer, int value, int minWidth)
-    {
-        Span<char> buffer = stackalloc char[16];
-        value.TryFormat(buffer, out var written);
-        WriteRepeatedChar(writer, ' ', minWidth - written);
-        writer.Write(buffer[..written]);
-    }
+    private static void WritePaddedDecimal(Utf8Writer writer, int value, int minWidth)
+        => writer.WritePaddedDecimal(value, minWidth);
 
     private static string[] ExtractLines(byte[] utf8, int startLine, int endLine)
     {
@@ -608,11 +646,10 @@ public static class DiagnosticFormatter
         return results;
     }
 
-    private static void WriteJson(TextWriter writer, IReadOnlyList<Diagnostic> diagnostics, string? pathBaseDirectory)
+    private static void WriteJson(IBufferWriter<byte> output, Utf8Writer writer, IReadOnlyList<Diagnostic> diagnostics, string? pathBaseDirectory)
     {
         var pathResolver = new PathDisplayResolver(pathBaseDirectory);
-        using var buffer = new PooledByteBufferWriter(Math.Max(256, diagnostics.Count * 128));
-        using var json = new Utf8JsonWriter(buffer, JsonDiagnosticWriterOptions);
+        using var json = new Utf8JsonWriter(output, JsonDiagnosticWriterOptions);
 
         json.WriteStartArray();
         string? previousFileKey = null;
@@ -650,8 +687,7 @@ public static class DiagnosticFormatter
         json.WriteEndArray();
         json.Flush();
 
-        WriteUtf8ToTextWriter(writer, buffer.WrittenSpan);
-        writer.WriteLine();
+        writer.WriteNewLine();
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -663,7 +699,7 @@ public static class DiagnosticFormatter
             : severity.ToString().ToLowerInvariant();
     }
 
-    private static void WriteSarif(TextWriter writer, IReadOnlyList<Diagnostic> diagnostics, string? pathBaseDirectory)
+    private static void WriteSarif(IBufferWriter<byte> output, Utf8Writer writer, IReadOnlyList<Diagnostic> diagnostics, string? pathBaseDirectory)
     {
         var pathResolver = new PathDisplayResolver(pathBaseDirectory);
         // Collect unique rule IDs
@@ -681,8 +717,7 @@ public static class DiagnosticFormatter
             rules[idx] = id;
         }
 
-        using var buffer = new PooledByteBufferWriter(Math.Max(1024, diagnostics.Count * 192));
-        using var json = new Utf8JsonWriter(buffer, new JsonWriterOptions { SkipValidation = true, Indented = true });
+        using var json = new Utf8JsonWriter(output, new JsonWriterOptions { SkipValidation = true, Indented = true });
 
         json.WriteStartObject();
         json.WriteString("version", "2.1.0");
@@ -781,36 +816,7 @@ public static class DiagnosticFormatter
         json.WriteEndObject();
         json.Flush();
 
-        WriteUtf8ToTextWriter(writer, buffer.WrittenSpan);
-        writer.WriteLine();
-    }
-
-    private static void WriteUtf8ToTextWriter(TextWriter writer, ReadOnlySpan<byte> utf8)
-    {
-        if (utf8.Length == 0)
-        {
-            return;
-        }
-
-        var charCount = Encoding.UTF8.GetCharCount(utf8);
-        if (charCount <= 2048)
-        {
-            Span<char> chars = stackalloc char[charCount];
-            var written = Encoding.UTF8.GetChars(utf8, chars);
-            writer.Write(chars[..written]);
-            return;
-        }
-
-        var rented = ArrayPool<char>.Shared.Rent(charCount);
-        try
-        {
-            var written = Encoding.UTF8.GetChars(utf8, rented);
-            writer.Write(rented, 0, written);
-        }
-        finally
-        {
-            ArrayPool<char>.Shared.Return(rented);
-        }
+        writer.WriteNewLine();
     }
 
     private static string BuildSarifRuleHelpUri(string ruleId)

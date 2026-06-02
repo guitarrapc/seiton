@@ -279,7 +279,7 @@ internal static class CheckCommand
 
         // Output
         if (allDiagnostics.Count > 0)
-            DiagnosticFormatter.Write(Console.Out, allDiagnostics, resolvedFormat, oneline, colorEnabled, sourceMap);
+            DiagnosticFormatter.WriteToStandardOutput(allDiagnostics, resolvedFormat, oneline, colorEnabled, sourceMap);
 
         if (totalSuppressed > 0 && verboseLogger.IsEnabled)
         {
@@ -686,7 +686,7 @@ internal static class CheckCommand
 
         if (hasError)
         {
-            DiagnosticFormatter.Write(error, configDiags, format, oneline, color);
+            DiagnosticFormatter.WriteToTextWriter(error, configDiags, format, oneline, color);
         }
 
         return hasError;

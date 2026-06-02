@@ -55,54 +55,48 @@ public class DiagnosticOutputBenchmark
     [Benchmark(Baseline = true, Description = "DiagnosticFormatter text rich")]
     public int WriteTextRich()
     {
-        var sb = new StringBuilder(capacity: 16_384);
-        using var writer = new StringWriter(sb);
-        DiagnosticFormatter.Write(writer, _diagnostics, OutputFormat.Text, oneline: false, color: false, _sourceMap);
-        return sb.Length;
+        using var buffer = new PooledByteBufferWriter(16_384);
+        DiagnosticFormatter.Write(buffer, _diagnostics, OutputFormat.Text, oneline: false, color: false, _sourceMap);
+        return buffer.WrittenSpan.Length;
     }
 
     [Benchmark(Description = "DiagnosticFormatter github-actions rich")]
     public int WriteGitHubActionsRich()
     {
-        var sb = new StringBuilder(capacity: 16_384);
-        using var writer = new StringWriter(sb);
-        DiagnosticFormatter.Write(writer, _diagnostics, OutputFormat.GitHubActions, oneline: false, color: false, _sourceMap);
-        return sb.Length;
+        using var buffer = new PooledByteBufferWriter(16_384);
+        DiagnosticFormatter.Write(buffer, _diagnostics, OutputFormat.GitHubActions, oneline: false, color: false, _sourceMap);
+        return buffer.WrittenSpan.Length;
     }
 
     [Benchmark(Description = "DiagnosticFormatter github-actions oneline")]
     public int WriteGitHubActionsOneline()
     {
-        var sb = new StringBuilder(capacity: 16_384);
-        using var writer = new StringWriter(sb);
-        DiagnosticFormatter.Write(writer, _diagnostics, OutputFormat.GitHubActions, oneline: true, color: false, _sourceMap);
-        return sb.Length;
+        using var buffer = new PooledByteBufferWriter(16_384);
+        DiagnosticFormatter.Write(buffer, _diagnostics, OutputFormat.GitHubActions, oneline: true, color: false, _sourceMap);
+        return buffer.WrittenSpan.Length;
     }
 
     [Benchmark(Description = "DiagnosticFormatter text oneline")]
     public int WriteTextOneline()
     {
-        var sb = new StringBuilder(capacity: 16_384);
-        using var writer = new StringWriter(sb);
-        DiagnosticFormatter.Write(writer, _diagnostics, OutputFormat.Text, oneline: true, color: false, _sourceMap);
-        return sb.Length;
+        using var buffer = new PooledByteBufferWriter(16_384);
+        DiagnosticFormatter.Write(buffer, _diagnostics, OutputFormat.Text, oneline: true, color: false, _sourceMap);
+        return buffer.WrittenSpan.Length;
     }
 
     [Benchmark(Description = "DiagnosticFormatter sarif")]
     public int WriteSarif()
     {
-        var sb = new StringBuilder(capacity: 16_384);
-        using var writer = new StringWriter(sb);
-        DiagnosticFormatter.Write(writer, _diagnostics, OutputFormat.Sarif, oneline: false, color: false, _sourceMap);
-        return sb.Length;
+        using var buffer = new PooledByteBufferWriter(16_384);
+        DiagnosticFormatter.Write(buffer, _diagnostics, OutputFormat.Sarif, oneline: false, color: false, _sourceMap);
+        return buffer.WrittenSpan.Length;
     }
 
     [Benchmark(Description = "DiagnosticFormatter json")]
     public int WriteJson()
     {
-        var sb = new StringBuilder(capacity: 16_384);
-        using var writer = new StringWriter(sb);
-        DiagnosticFormatter.Write(writer, _diagnostics, OutputFormat.Json, oneline: false, color: false, _sourceMap);
-        return sb.Length;
+        using var buffer = new PooledByteBufferWriter(16_384);
+        DiagnosticFormatter.Write(buffer, _diagnostics, OutputFormat.Json, oneline: false, color: false, _sourceMap);
+        return buffer.WrittenSpan.Length;
     }
 }
