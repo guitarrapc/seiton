@@ -284,3 +284,38 @@
   - `github-actions oneline` は引き続き rich より低コスト
 
 追加ラウンド時点で、今回スコープのレビュー指摘に対する未対応事項はなし。
+
+## PRレビュー指摘への対応（追加ラウンド2）
+
+### 指摘1（Medium）
+
+- 内容: oneline 出力で file path をそのまま出すと CR/LF 混入時に複数行化し、workflow command injection の余地が残る
+- 判定: **妥当**（採用）
+- 対応:
+  - GitHub Actions 出力時は group タイトルだけでなく diagnostic body の file path 表示も同一 escape（`%`, `\r`, `\n`）を適用
+  - ただし source snippet の参照キーは生の file path を維持（sourceMap lookup 互換を保持）
+
+### 指摘2（Medium）
+
+- 内容: rich 出力の location 行（`--> file:line:col`）でも同様に CR/LF 混入対策が必要
+- 判定: **妥当**（採用）
+- 対応:
+  - `WriteTextDiagnostic` / `WriteRichDiagnostic` に `fileKey`（lookup用）と `fileDisplay`（表示用）を分離導入
+  - GitHub Actions 経路では `fileDisplay` に escape 済み文字列を渡す
+
+## 追加テスト（Red/Green）
+
+- `GitHubActions_Format_Oneline_EscapesFilePathControlCharacters`
+  - Red: 失敗確認（生の CR/LF を含む行が出る）
+  - Green: 成功（`%0D` / `%0A` 表示に正規化）
+- `GitHubActions_Format_Rich_EscapesFilePathControlCharactersInLocationLine`
+  - Green: location 行で escaped path を確認
+
+## 追加ラウンド2後の評価
+
+- correctness: 指摘2件はどちらも再現し、最小修正で解消
+- performance: `EscapeGitHubCommandValue` は対象文字未含有時に元文字列を返す fast path を保持
+- API usability: 呼び出し側の利用方法は変わらず、CI ログ上の表示安全性のみ向上
+- spec/doc sync: C# / Go CLI 実装仕様にも表示 path escape を反映
+
+今回スコープで新たな未対応指摘はなし。
