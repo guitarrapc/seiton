@@ -479,7 +479,6 @@ public static class DiagnosticFormatter
         json.WriteStartArray("results");
         string? previousFilePath = null;
         SarifArtifactLocation? previousArtifactLocation = null;
-        var hasRelativeArtifacts = false;
         for (var i = 0; i < diagnostics.Count; i++)
         {
             var d = diagnostics[i];
@@ -495,8 +494,6 @@ public static class DiagnosticFormatter
                 previousFilePath = d.FilePath;
                 previousArtifactLocation = artifactLocation;
             }
-            hasRelativeArtifacts |= artifactLocation.UriBaseId is not null;
-
             json.WriteStartObject();
             json.WriteString("ruleId", ruleId);
             json.WriteNumber("ruleIndex", ruleSet[ruleId]);
@@ -535,11 +532,13 @@ public static class DiagnosticFormatter
         }
         json.WriteEndArray();
 
-        if (hasRelativeArtifacts && pathResolver.SarifBaseUri is { } sarifBaseUri)
+        var originalUriBaseIds = pathResolver.CreateOriginalUriBaseIds();
+        if (originalUriBaseIds is not null
+            && originalUriBaseIds.TryGetValue(PathDisplayResolver.SarifWorkingDirectoryBaseId, out var workingDirectoryBase))
         {
             json.WriteStartObject("originalUriBaseIds");
             json.WriteStartObject(PathDisplayResolver.SarifWorkingDirectoryBaseId);
-            json.WriteString("uri", sarifBaseUri);
+            json.WriteString("uri", workingDirectoryBase.Uri);
             json.WriteEndObject();
             json.WriteEndObject();
         }
@@ -613,105 +612,9 @@ internal sealed record JsonDiagnosticEntry
     public string? Help { get; init; }
 }
 
-// --- SARIF 2.1.0 output models ---
-
-internal sealed record SarifLog
-{
-    [JsonPropertyName("version")]
-    public string Version { get; init; } = "2.1.0";
-    [JsonPropertyName("$schema")]
-    public string Schema { get; init; } = "https://docs.oasis-open.org/sarif/sarif/v2.1.0/errata01/os/schemas/sarif-schema-2.1.0.json";
-    [JsonPropertyName("runs")]
-    public required SarifRun[] Runs { get; init; }
-}
-
-internal sealed record SarifRun
-{
-    [JsonPropertyName("tool")]
-    public required SarifTool Tool { get; init; }
-    [JsonPropertyName("originalUriBaseIds")]
-    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
-    public Dictionary<string, SarifArtifactLocation>? OriginalUriBaseIds { get; init; }
-    [JsonPropertyName("results")]
-    public required SarifResult[] Results { get; init; }
-}
-
-internal sealed record SarifTool
-{
-    [JsonPropertyName("driver")]
-    public required SarifDriver Driver { get; init; }
-}
-
-internal sealed record SarifDriver
-{
-    [JsonPropertyName("name")]
-    public required string Name { get; init; }
-    [JsonPropertyName("version")]
-    public required string Version { get; init; }
-    [JsonPropertyName("informationUri")]
-    public required string InformationUri { get; init; }
-    [JsonPropertyName("rules")]
-    public required SarifRule[] Rules { get; init; }
-}
-
-internal sealed record SarifRule
-{
-    [JsonPropertyName("id")]
-    public required string Id { get; init; }
-    [JsonPropertyName("helpUri")]
-    public required string HelpUri { get; init; }
-}
-
-internal sealed record SarifResult
-{
-    [JsonPropertyName("ruleId")]
-    public required string RuleId { get; init; }
-    [JsonPropertyName("ruleIndex")]
-    public required int RuleIndex { get; init; }
-    [JsonPropertyName("level")]
-    public required string Level { get; init; }
-    [JsonPropertyName("message")]
-    public required SarifMessage Message { get; init; }
-    [JsonPropertyName("locations")]
-    public required SarifLocation[] Locations { get; init; }
-}
-
-internal sealed record SarifMessage
-{
-    [JsonPropertyName("text")]
-    public required string Text { get; init; }
-}
-
-internal sealed record SarifLocation
-{
-    [JsonPropertyName("physicalLocation")]
-    public required SarifPhysicalLocation PhysicalLocation { get; init; }
-}
-
-internal sealed record SarifPhysicalLocation
-{
-    [JsonPropertyName("artifactLocation")]
-    public required SarifArtifactLocation ArtifactLocation { get; init; }
-    [JsonPropertyName("region")]
-    public required SarifRegion Region { get; init; }
-}
-
-internal sealed record SarifRegion
-{
-    [JsonPropertyName("startLine")]
-    public required int StartLine { get; init; }
-    [JsonPropertyName("startColumn")]
-    public required int StartColumn { get; init; }
-    [JsonPropertyName("endLine")]
-    public required int EndLine { get; init; }
-    [JsonPropertyName("endColumn")]
-    public required int EndColumn { get; init; }
-}
-
 // --- Source-generated JSON context for NativeAOT ---
 
 [JsonSerializable(typeof(JsonDiagnosticEntry[]))]
-[JsonSerializable(typeof(SarifLog))]
 [JsonSerializable(typeof(Commands.RuleStatusJsonEntry[]))]
 [JsonSourceGenerationOptions(
     WriteIndented = false,
@@ -737,6 +640,7 @@ internal sealed class PooledByteBufferWriter : IBufferWriter<byte>, IDisposable
 
     public void Advance(int count)
     {
+        ThrowIfDisposed();
         if ((uint)count > (uint)(_buffer.Length - _index))
             throw new ArgumentOutOfRangeException(nameof(count));
         _index += count;
@@ -744,12 +648,14 @@ internal sealed class PooledByteBufferWriter : IBufferWriter<byte>, IDisposable
 
     public Memory<byte> GetMemory(int sizeHint = 0)
     {
+        ThrowIfDisposed();
         EnsureCapacity(sizeHint);
         return _buffer.AsMemory(_index);
     }
 
     public Span<byte> GetSpan(int sizeHint = 0)
     {
+        ThrowIfDisposed();
         EnsureCapacity(sizeHint);
         return _buffer.AsSpan(_index);
     }
@@ -769,6 +675,12 @@ internal sealed class PooledByteBufferWriter : IBufferWriter<byte>, IDisposable
         _buffer.AsSpan(0, _index).CopyTo(newBuffer);
         ArrayPool<byte>.Shared.Return(_buffer);
         _buffer = newBuffer;
+    }
+
+    private void ThrowIfDisposed()
+    {
+        if (_disposed)
+            throw new ObjectDisposedException(nameof(PooledByteBufferWriter));
     }
 
     public void Dispose()
