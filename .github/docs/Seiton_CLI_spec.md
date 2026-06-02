@@ -382,6 +382,8 @@ Human-readable diagnostic output to stdout. Rich multi-line format (Rust-style) 
 
 Each diagnostic is rendered as a multi-line block showing the problem header, source location arrow, source snippet with underline caret, and optional help text.
 
+File paths in diagnostic output are **relative to the process working directory** at output time, using forward slashes (for example `.github/workflows/build.yml`). Both absolute and relative path inputs are normalized against the working directory before relativization. This keeps logs and copied output shareable without machine-specific absolute paths. Paths that cannot be expressed relative to the working directory (for example cross-drive paths on Windows) fall back to an absolute path. Null, empty, or whitespace file paths are displayed as `<unknown>`. Other sentinel paths such as `<stdin>` are preserved as-is.
+
 ```
 error[job-permissions-required]: job "build" omits explicit permissions declaration
   --> .github/workflows/build.yml:12:5
@@ -466,6 +468,8 @@ Color coding (when color is enabled):
 
 JSON array to stdout. Each element is one diagnostic. Summary lines and `--verbose` output go to stderr — pipe stdout only for valid JSON (for example `seiton --format json 2>/dev/null` in Bash, or `2>$null` in PowerShell before `ConvertFrom-Json`).
 
+The `file` field uses the same relative-path rules as §6.1.1 (working-directory-relative, forward slashes, absolute fallback when relativeization is impossible).
+
 Schema (non-normative):
 
 ```json
@@ -485,6 +489,7 @@ Schema (non-normative):
 ### 6.3 `sarif`
 
 SARIF 2.1.0 JSON output to stdout. Suitable for GitHub Code Scanning upload.
+Output is pretty-printed JSON (indented) for readability in code review and issue sharing.
 
 `$schema` uses the official OASIS SARIF 2.1.0 schema URL:
 
@@ -492,11 +497,15 @@ SARIF 2.1.0 JSON output to stdout. Suitable for GitHub Code Scanning upload.
 
 Each diagnostic maps to a SARIF `result` under a `run` with tool identity `seiton`.
 
-`runs[].results[].locations[].physicalLocation.artifactLocation.uri` is emitted as a valid URI reference:
+`runs[].results[].locations[].physicalLocation.artifactLocation.uri` is emitted as a URI reference (slash-separated, percent-encoded when needed):
 
-- Absolute filesystem paths are emitted as `file:///...` URIs.
-- Relative paths are emitted as URI-safe relative references (slash-separated, percent-encoded when needed).
-- Unknown paths are emitted as `file:///unknown`.
+- When the file path can be expressed relative to the process working directory, `uri` is a URI-safe relative reference (slash-separated, percent-encoded when needed) and `uriBaseId` is `%WORKING_DIR%`.
+- When at least one relative artifact is emitted, `runs[].originalUriBaseIds["%WORKING_DIR%"].uri` carries the absolute `file:///...` URI of the working directory (with trailing slash), allowing SARIF consumers to resolve relative artifact URIs.
+- Cross-drive or otherwise non-relativeizable filesystem paths fall back to absolute `file:///...` URIs without `uriBaseId`.
+- Unknown paths (null, empty, whitespace, or the literal `<unknown>` sentinel) are emitted as `file:///unknown`.
+- The stdin sentinel (`<stdin>`) is emitted as a URI-safe percent-encoded reference (for example `%3Cstdin%3E`) without `uriBaseId` and does not trigger `originalUriBaseIds`. The `-` sentinel is emitted literally.
+- URI-like strings that are not valid absolute URIs are emitted literally without `uriBaseId`.
+- Invalid filesystem paths that cannot be normalized fall back to `file:///unknown` (SARIF) rather than aborting output generation.
 
 Rule metadata (`id`, `helpUri`) is emitted per-rule in `tool.driver.rules`.
 
@@ -662,7 +671,7 @@ Diagnostics are written to **stdout** in file groups using GitHub workflow-comma
 ::endgroup::
 ```
 
-Within each group, diagnostics use the same rich text structure as §6.1.1 (severity/rule header, source excerpt, help lines), or one-line form when `--oneline` is set.
+Within each group, diagnostics use the same rich text structure as §6.1.1 (severity/rule header, source excerpt, help lines), or one-line form when `--oneline` is set. File paths in diagnostic bodies follow the same relative-path rules as §6.1.1. Group titles (`::group::...`) percent-encode `%`, `\r`, and `\n` per GitHub workflow-command rules so folding markers remain valid; diagnostic bodies also escape `%`, `\r`, and `\n`, and neutralize a leading `::` to prevent workflow-command injection.
 
 - Color is never emitted for this format.
 - `--oneline` is supported and changes only the diagnostic body format (group wrapping behavior is unchanged).

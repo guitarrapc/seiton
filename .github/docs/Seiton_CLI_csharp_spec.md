@@ -51,6 +51,7 @@ Representative implementation surface:
 | `src/Seiton/Commands/ExitCode.cs` | Exit code constants |
 | `src/Seiton/Config/CliConfigBridge.cs` | Config resolution, env var reading, flag override application |
 | `src/Seiton/Output/DiagnosticFormatter.cs` | Text/JSON/SARIF formatting |
+| `src/Seiton/Output/PathDisplayResolver.cs` | Working-directory-relative path display + SARIF artifact resolution |
 | `src/Seiton/Cli/CliOptionSuggester.cs` | Unknown option detection and suggestion |
 
 ### 0.4 Design
@@ -364,7 +365,9 @@ internal partial class SeitonJsonContext : JsonSerializerContext { }
 
 ### 7.2 SARIF Output
 
-SARIF 2.1.0 is emitted via an object graph serialized with source-generated `System.Text.Json` (`JsonSerializer` + `JsonSerializerContext`). No external SARIF library is used, maintaining AOT compatibility and minimal dependencies.
+SARIF 2.1.0 is emitted via `Utf8JsonWriter` over an `IBufferWriter<byte>` (`PooledByteBufferWriter`, `ArrayPool<byte>` backed). Output is pretty-printed (`Indented = true`) for readability while remaining AOT-compatible and dependency-light.
+
+File paths are relativized at output time by `PathDisplayResolver` (working-directory-relative, forward slashes). Both absolute and relative path inputs are normalized against the working directory before relativization. Null, empty, whitespace, or literal `<unknown>` file paths are displayed as `<unknown>` and emitted in SARIF as `file:///unknown`. SARIF results use relative `artifactLocation.uri` with `uriBaseId = %WORKING_DIR%`; when relative artifacts are present, a matching `runs[].originalUriBaseIds` entry is emitted. Cross-drive or non-relativeizable paths fall back to absolute `file:///...` URIs. The stdin sentinel (`<stdin>`) is displayed literally and emitted in SARIF as a URI-safe percent-encoded reference (for example `%3Cstdin%3E`) without `uriBaseId`; the `-` sentinel is emitted literally without `uriBaseId`. Invalid URI-like strings are emitted literally without `uriBaseId`. Filesystem normalization failures fall back to `file:///unknown` without aborting output.
 
 ### 7.3 Rich Text Output
 
@@ -378,7 +381,7 @@ Shared contract: `.github/docs/Seiton_CLI_spec.md` §6.5.
 |---|---|
 | `OutputFormatParser` | Maps CLI strings `text`, `json`, `sarif`, `github-actions` to `OutputFormat`. Invalid values → exit `2` with stderr message. |
 | `CliConfigBridge.ResolveOutputFormat` | Precedence: parsed flag (unless built-in default `text`) → `SEITON_FORMAT` → optional `GITHUB_ACTIONS` auto-default → `Text`. |
-| `DiagnosticFormatter` | `GitHubActions` writes diagnostics in per-file `::group::...::endgroup::` blocks with `color: false`; group titles and displayed file paths escape `%`, `\r`, `\n` per workflow-command rules (raw path is still used for source-map lookup). |
+| `DiagnosticFormatter` | `GitHubActions` writes diagnostics in per-file `::group::...::endgroup::` blocks with `color: false`; group titles escape `%`, `\r`, `\n` per workflow-command rules, and diagnostic bodies also escape `%`, `\r`, `\n` plus neutralize leading `::` to prevent workflow-command injection (raw path is still used for source-map lookup). |
 | `GitHubStepSummaryWriter` | When format is `GitHubActions` and `GITHUB_STEP_SUMMARY` is a writable path, appends §6.4 Markdown (`## Seiton` once per run, LF, UTF-8 no BOM). `IOException` / `UnauthorizedAccessException` → fall back to stderr. `Reset()` at start of `CheckCommand.Run` / `FixCommand.Run`. |
 | `CheckCommand.WriteSummary` / `FixCommand.WriteFixSummary` | Build summary via shared content writers; route to step summary or stderr per §6.4 table. `hint:` lines always use the stderr `TextWriter`. |
 

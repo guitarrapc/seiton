@@ -37,7 +37,8 @@ public class DiagnosticOutputBenchmark
         {
             var yaml = WorkflowYamlBuilder.Build(jobCount: 6, stepsPerJob: 8, nameSuffix: $"-fmt{i}");
             var bytes = Encoding.UTF8.GetBytes(yaml);
-            var path = $".github/workflows/bench-fmt-{i}.yml";
+            var relativePath = $".github/workflows/bench-fmt-{i}.yml";
+            var path = Path.GetFullPath(relativePath);
             _sourceMap[path] = bytes;
 
             using var result = engine.Check(bytes, path, new LintConfig { Utf8Yaml = bytes, FilePath = path });

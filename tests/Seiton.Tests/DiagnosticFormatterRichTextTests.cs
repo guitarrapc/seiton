@@ -342,41 +342,87 @@ public sealed class DiagnosticFormatterRichTextTests
         using var writer = new StringWriter(sb);
         DiagnosticFormatter.Write(writer, [diag], OutputFormat.Sarif, oneline: false, color: false);
         writer.Flush();
-        var output = sb.ToString();
+        using var doc = JsonDocument.Parse(sb.ToString());
+        var text = doc.RootElement
+            .GetProperty("runs")[0]
+            .GetProperty("results")[0]
+            .GetProperty("message")
+            .GetProperty("text")
+            .GetString();
 
-        await Assert.That(output).Contains("\"text\":\"plain error\"");
-        await Assert.That(output).DoesNotContain("Help:");
+        await Assert.That(text).IsEqualTo("plain error");
     }
 
     [Test]
-    public async Task Sarif_Format_WindowsAbsolutePath_EmitsFileUri()
+    public async Task Sarif_Format_WindowsAbsolutePath_EmitsRelativeUriWithBaseId()
     {
-        var diag = MakeDiagnostic(
-            DiagnosticSeverity.Warning,
-            "uri test",
-            2,
-            3,
-            2,
-            8,
-            filePath: @"C:\work\repo\.github\workflows\ci with space.yml");
+        var baseDir = Path.Combine(Path.GetTempPath(), "seiton-sarif-test-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(baseDir);
+        try
+        {
+            var target = Path.Combine(baseDir, ".github", "workflows", "ci with space.yml");
+            Directory.CreateDirectory(Path.GetDirectoryName(target)!);
+            await File.WriteAllTextAsync(target, "on: push\n");
 
+            var diag = MakeDiagnostic(
+                DiagnosticSeverity.Warning,
+                "uri test",
+                2,
+                3,
+                2,
+                8,
+                filePath: target);
+
+            var sb = new StringBuilder();
+            using var writer = new StringWriter(sb);
+            DiagnosticFormatter.Write(writer, [diag], OutputFormat.Sarif, oneline: false, color: false, sourceMap: null, pathBaseDirectory: baseDir);
+            writer.Flush();
+
+            using var doc = JsonDocument.Parse(sb.ToString());
+            var location = doc.RootElement
+                .GetProperty("runs")[0]
+                .GetProperty("results")[0]
+                .GetProperty("locations")[0]
+                .GetProperty("physicalLocation")
+                .GetProperty("artifactLocation");
+
+            var uri = location.GetProperty("uri").GetString();
+            var uriBaseId = location.GetProperty("uriBaseId").GetString();
+
+            await Assert.That(uri).IsEqualTo(".github/workflows/ci%20with%20space.yml");
+            await Assert.That(uriBaseId).IsEqualTo(PathDisplayResolver.SarifWorkingDirectoryBaseId);
+
+            var originalUriBaseIds = doc.RootElement
+                .GetProperty("runs")[0]
+                .GetProperty("originalUriBaseIds");
+            await Assert.That(originalUriBaseIds.TryGetProperty(PathDisplayResolver.SarifWorkingDirectoryBaseId, out _)).IsTrue();
+        }
+        finally
+        {
+            Directory.Delete(baseDir, recursive: true);
+        }
+    }
+
+    [Test]
+    public async Task Json_Format_EmptyOrWhitespaceFilePath_UsesUnknownSentinel()
+    {
         var sb = new StringBuilder();
         using var writer = new StringWriter(sb);
-        DiagnosticFormatter.Write(writer, [diag], OutputFormat.Sarif, oneline: false, color: false);
+        DiagnosticFormatter.Write(
+            writer,
+            [
+                MakeDiagnostic(DiagnosticSeverity.Warning, "empty path", 1, 1, 1, 3, filePath: ""),
+                MakeDiagnostic(DiagnosticSeverity.Warning, "whitespace path", 2, 1, 1, 3, filePath: "   "),
+            ],
+            OutputFormat.Json,
+            oneline: false,
+            color: false);
         writer.Flush();
 
         using var doc = JsonDocument.Parse(sb.ToString());
-        var uri = doc.RootElement
-            .GetProperty("runs")[0]
-            .GetProperty("results")[0]
-            .GetProperty("locations")[0]
-            .GetProperty("physicalLocation")
-            .GetProperty("artifactLocation")
-            .GetProperty("uri")
-            .GetString();
-
-        await Assert.That(uri).StartsWith("file:///");
-        await Assert.That(uri).Contains("ci%20with%20space.yml");
+        var entries = doc.RootElement;
+        await Assert.That(entries[0].GetProperty("file").GetString()).IsEqualTo("<unknown>");
+        await Assert.That(entries[1].GetProperty("file").GetString()).IsEqualTo("<unknown>");
     }
 
     [Test]
@@ -400,6 +446,103 @@ public sealed class DiagnosticFormatterRichTextTests
             .GetString();
 
         await Assert.That(uri).IsEqualTo("file:///unknown");
+    }
+
+    [Test]
+    public async Task Sarif_Format_StdinSentinel_DoesNotEmitOriginalUriBaseIds()
+    {
+        var diag = MakeDiagnostic(DiagnosticSeverity.Warning, "stdin path", 1, 1, 1, 3, filePath: "<stdin>");
+
+        var sb = new StringBuilder();
+        using var writer = new StringWriter(sb);
+        DiagnosticFormatter.Write(writer, [diag], OutputFormat.Sarif, oneline: false, color: false);
+        writer.Flush();
+
+        using var doc = JsonDocument.Parse(sb.ToString());
+        var run = doc.RootElement.GetProperty("runs")[0];
+        var location = run
+            .GetProperty("results")[0]
+            .GetProperty("locations")[0]
+            .GetProperty("physicalLocation")
+            .GetProperty("artifactLocation");
+
+        await Assert.That(location.GetProperty("uri").GetString()).IsEqualTo(PathDisplayResolver.StdinSarifUri);
+        await Assert.That(location.TryGetProperty("uriBaseId", out _)).IsFalse();
+        await Assert.That(run.TryGetProperty("originalUriBaseIds", out _)).IsFalse();
+    }
+
+    [Test]
+    public async Task Sarif_Format_AbsoluteUriInput_DoesNotEmitOriginalUriBaseIds()
+    {
+        var diag = MakeDiagnostic(
+            DiagnosticSeverity.Warning,
+            "remote source",
+            1,
+            1,
+            1,
+            3,
+            filePath: "https://example.com/repo/.github/workflows/ci.yml");
+
+        var sb = new StringBuilder();
+        using var writer = new StringWriter(sb);
+        DiagnosticFormatter.Write(writer, [diag], OutputFormat.Sarif, oneline: false, color: false);
+        writer.Flush();
+
+        using var doc = JsonDocument.Parse(sb.ToString());
+        var run = doc.RootElement.GetProperty("runs")[0];
+        await Assert.That(run.TryGetProperty("originalUriBaseIds", out _)).IsFalse();
+    }
+
+    [Test]
+    public async Task Json_Format_AbsolutePath_EmitsRelativeDisplayPath()
+    {
+        var baseDir = Path.Combine(Path.GetTempPath(), "seiton-json-test-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(baseDir);
+        try
+        {
+            var target = Path.Combine(baseDir, ".github", "workflows", "ci.yml");
+            Directory.CreateDirectory(Path.GetDirectoryName(target)!);
+            await File.WriteAllTextAsync(target, "on: push\n");
+
+            var diag = MakeDiagnostic(DiagnosticSeverity.Error, "json test", 1, 1, 1, 5, filePath: target);
+
+            var sb = new StringBuilder();
+            using var writer = new StringWriter(sb);
+            DiagnosticFormatter.Write(writer, [diag], OutputFormat.Json, oneline: false, color: false, sourceMap: null, pathBaseDirectory: baseDir);
+            writer.Flush();
+
+            await Assert.That(sb.ToString()).Contains("\"file\":\".github/workflows/ci.yml\"");
+            await Assert.That(sb.ToString()).DoesNotContain(Path.GetFullPath(target));
+        }
+        finally
+        {
+            Directory.Delete(baseDir, recursive: true);
+        }
+    }
+
+    [Test]
+    public async Task Text_Oneline_AbsolutePath_EmitsRelativeDisplayPath()
+    {
+        var baseDir = Path.Combine(Path.GetTempPath(), "seiton-text-test-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(baseDir);
+        try
+        {
+            var target = Path.Combine(baseDir, "workflow.yml");
+            await File.WriteAllTextAsync(target, "on: push\n");
+
+            var diag = MakeDiagnostic(DiagnosticSeverity.Warning, "relative path", 1, 1, 1, 5, filePath: target);
+
+            var sb = new StringBuilder();
+            using var writer = new StringWriter(sb);
+            DiagnosticFormatter.Write(writer, [diag], OutputFormat.Text, oneline: true, color: false, sourceMap: null, pathBaseDirectory: baseDir);
+            writer.Flush();
+
+            await Assert.That(sb.ToString().TrimEnd()).IsEqualTo("workflow.yml:1:1: warning [test-rule] relative path");
+        }
+        finally
+        {
+            Directory.Delete(baseDir, recursive: true);
+        }
     }
 
     [Test]
@@ -495,6 +638,21 @@ public sealed class DiagnosticFormatterRichTextTests
     }
 
     [Test]
+    public async Task Sarif_Format_IsPrettyPrinted()
+    {
+        var diag = MakeDiagnostic(DiagnosticSeverity.Warning, "pretty", 1, 1, 1, 3);
+
+        var sb = new StringBuilder();
+        using var writer = new StringWriter(sb);
+        DiagnosticFormatter.Write(writer, [diag], OutputFormat.Sarif, oneline: false, color: false);
+        writer.Flush();
+        var output = sb.ToString().ReplaceLineEndings("\n");
+
+        await Assert.That(output).Contains("\n  \"$schema\": ");
+        await Assert.That(output).Contains("\n  \"runs\": [\n    {\n      \"tool\": {");
+    }
+
+    [Test]
     public async Task GitHubActions_Format_DoesNotEmitAnsi_WhenColorRequested()
     {
         var diag = MakeDiagnostic(DiagnosticSeverity.Error, "plain error", 1, 1, 1, 5);
@@ -571,10 +729,12 @@ public sealed class DiagnosticFormatterRichTextTests
 
         await Assert.That(output).Contains("::group::a%2525%0D%0Ab.yml");
         await Assert.That(output).DoesNotContain("::group::a%25\r\nb.yml");
+        await Assert.That(output).Contains("a%2525%0D%0Ab.yml:1:1: warning [test-rule] first");
+        await Assert.That(output).DoesNotContain("a%25\r\nb.yml:1:1: warning [test-rule] first");
     }
 
     [Test]
-    public async Task GitHubActions_Format_Oneline_EscapesFilePathControlCharacters()
+    public async Task GitHubActions_Format_Oneline_EscapesFilePathControlCharactersInDiagnosticBody()
     {
         var filePath = "a\r\n::warning::owned";
         var diagnostics = new[]
@@ -609,6 +769,24 @@ public sealed class DiagnosticFormatterRichTextTests
 
         await Assert.That(output).Contains("--> a%0D%0A::warning::owned:1:1");
         await Assert.That(output).DoesNotContain("--> a\r\n::warning::owned:1:1");
+    }
+
+    [Test]
+    public async Task GitHubActions_Format_Oneline_LeadingWorkflowCommandPrefix_IsNeutralized()
+    {
+        var diagnostics = new[]
+        {
+            MakeDiagnostic(DiagnosticSeverity.Warning, "first", 1, 1, 1, 5, filePath: "::warning::owned"),
+        };
+
+        var sb = new StringBuilder();
+        using var writer = new StringWriter(sb);
+        DiagnosticFormatter.Write(writer, diagnostics, OutputFormat.GitHubActions, oneline: true, color: false);
+        writer.Flush();
+        var output = sb.ToString();
+
+        await Assert.That(output).Contains(".::warning::owned:1:1: warning [test-rule] first");
+        await Assert.That(output).DoesNotContain("\n::warning::owned:1:1: warning [test-rule] first");
     }
 
     // Helpers
