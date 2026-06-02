@@ -268,20 +268,30 @@ SARIF:
   - `PathDisplayResolver.NormalizeToForwardSlashes` は `\\` 非含有時に同一参照を返す
   - `DiagnosticFormatter` で format ごとの直前ファイルキャッシュを導入
   - `originalUriBaseIds` は相対 artifact がある場合のみ生成
-- 不採用:
-  - SARIF `Utf8JsonWriter` 直書き案は、現行ベンチで Allocated/Mean 改善が安定しなかったためロールバック
+- 採用（追加）:
+  - SARIF は `IBufferWriter<byte>` + `Utf8JsonWriter` で直列化する経路へ変更
+  - `ArrayBufferWriter<byte>` ではなく `ArrayPool<byte>` を使う `PooledByteBufferWriter` を導入し、バッファ再利用を明示化
+  - UTF-8 -> `TextWriter` 変換は `stackalloc` / `ArrayPool<char>` で実施し、大きな一時 `string` 生成を回避
 
 ### 追加ベンチ（直近2回比較）
 
 比較対象:
 - 変更前: `agent-tools/1edee36e-b0f3-4d45-9972-407f64d263ae.txt`
 - 変更後: `agent-tools/8104ec26-7e5d-42a7-9445-8e8a0e2de130.txt`
+- `IBufferWriter<byte>`/`Utf8JsonWriter` 導入後: `agent-tools/6fd67ca5-de1d-452e-8a04-bc016a363656.txt`
 
 主要差分:
 - `github-actions oneline` F10 Mean: `114.03 us -> 109.42 us`（改善）
 - `sarif` F10 Mean: `467.87 us -> 448.76 us`（改善）
 - `sarif` Allocated: `1329.38 KB -> 1329.42 KB`（誤差範囲で同等）
 
+`IBufferWriter<byte>`/`Utf8JsonWriter` 導入後（`8104...` 比）:
+- `sarif` F1 Mean: `41.08 us -> 48.58 us`（+18%）
+- `sarif` F1 Allocated: `153.05 KB -> 79.92 KB`（-48%）
+- `sarif` F10 Mean: `448.76 us -> 507.77 us`（+13%）
+- `sarif` F10 Allocated: `1329.42 KB -> 617.65 KB`（-54%）
+
 結論:
-- 現時点の最適解は「**契約互換を維持しつつ、局所キャッシュと不要変換削減で極小アロケーション化**」。
-- 完全ゼロアロケーション化は `TextWriter` 契約のままでは限界があるため、将来は `IBufferWriter<byte>`/`Utf8JsonWriter` 直結 API を別経路で導入するのが次段。
+- ユーザー要求どおり `IBufferWriter<byte>`/`Utf8JsonWriter` は導入済み。
+- 現状は「**CPU（Mean）を一部犠牲にして、SARIF の割り当て量を大幅削減**」というトレードオフになっている。
+- `TextWriter` 契約のままでも allocation は大きく圧縮できたが、さらなる Mean 改善には UTF-8 バイトを直接下流へ流せる出力契約（`Stream`/`IBufferWriter<byte>` 直結）の併設が有効。

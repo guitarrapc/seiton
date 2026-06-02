@@ -1,6 +1,7 @@
 ﻿using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using System.Buffers;
 using Seiton.Core.Parsing;
 
 namespace Seiton.Output;
@@ -442,19 +443,43 @@ public static class DiagnosticFormatter
                 ruleSet[ruleId] = ruleSet.Count;
         }
 
-        var rules = new SarifRule[ruleSet.Count];
+        var rules = new string[ruleSet.Count];
         foreach (var (id, idx) in ruleSet)
         {
-            rules[idx] = new SarifRule
-            {
-                Id = id,
-                HelpUri = BuildSarifRuleHelpUri(id),
-            };
+            rules[idx] = id;
         }
 
-        var results = new SarifResult[diagnostics.Count];
+        using var buffer = new PooledByteBufferWriter(Math.Max(1024, diagnostics.Count * 192));
+        using var json = new Utf8JsonWriter(buffer, new JsonWriterOptions { SkipValidation = true });
+
+        json.WriteStartObject();
+        json.WriteString("version", "2.1.0");
+        json.WriteString("$schema", "https://docs.oasis-open.org/sarif/sarif/v2.1.0/errata01/os/schemas/sarif-schema-2.1.0.json");
+        json.WriteStartArray("runs");
+        json.WriteStartObject();
+
+        json.WriteStartObject("tool");
+        json.WriteStartObject("driver");
+        json.WriteString("name", "seiton");
+        json.WriteString("version", SarifDriverVersion);
+        json.WriteString("informationUri", "https://github.com/guitarrapc/seiton");
+        json.WriteStartArray("rules");
+        for (var i = 0; i < rules.Length; i++)
+        {
+            var id = rules[i];
+            json.WriteStartObject();
+            json.WriteString("id", id);
+            json.WriteString("helpUri", BuildSarifRuleHelpUri(id));
+            json.WriteEndObject();
+        }
+        json.WriteEndArray();
+        json.WriteEndObject();
+        json.WriteEndObject();
+
+        json.WriteStartArray("results");
         string? previousFilePath = null;
         SarifArtifactLocation? previousArtifactLocation = null;
+        var hasRelativeArtifacts = false;
         for (var i = 0; i < diagnostics.Count; i++)
         {
             var d = diagnostics[i];
@@ -470,61 +495,90 @@ public static class DiagnosticFormatter
                 previousFilePath = d.FilePath;
                 previousArtifactLocation = artifactLocation;
             }
-            results[i] = new SarifResult
+            hasRelativeArtifacts |= artifactLocation.UriBaseId is not null;
+
+            json.WriteStartObject();
+            json.WriteString("ruleId", ruleId);
+            json.WriteNumber("ruleIndex", ruleSet[ruleId]);
+            json.WriteString("level", d.Severity switch
             {
-                RuleId = ruleId,
-                RuleIndex = ruleSet[ruleId],
-                Level = d.Severity switch
-                {
-                    DiagnosticSeverity.Error => "error",
-                    DiagnosticSeverity.Warning => "warning",
-                    _ => "note",
-                },
-                Message = new SarifMessage { Text = d.Help is null ? d.Message : $"{d.Message}\n\nHelp: {d.Help}" },
-                Locations =
-                [
-                    new SarifLocation
-                    {
-                        PhysicalLocation = new SarifPhysicalLocation
-                        {
-                            ArtifactLocation = artifactLocation,
-                            Region = new SarifRegion
-                            {
-                                StartLine = d.Location.StartLine,
-                                StartColumn = d.Location.StartColumn,
-                                EndLine = d.Location.EndLine,
-                                EndColumn = d.Location.EndColumn,
-                            },
-                        },
-                    },
-                ],
-            };
+                DiagnosticSeverity.Error => "error",
+                DiagnosticSeverity.Warning => "warning",
+                _ => "note",
+            });
+
+            json.WriteStartObject("message");
+            json.WriteString("text", d.Help is null ? d.Message : $"{d.Message}\n\nHelp: {d.Help}");
+            json.WriteEndObject();
+
+            json.WriteStartArray("locations");
+            json.WriteStartObject();
+            json.WriteStartObject("physicalLocation");
+            json.WriteStartObject("artifactLocation");
+            json.WriteString("uri", artifactLocation.Uri);
+            if (artifactLocation.UriBaseId is not null)
+            {
+                json.WriteString("uriBaseId", artifactLocation.UriBaseId);
+            }
+            json.WriteEndObject();
+
+            json.WriteStartObject("region");
+            json.WriteNumber("startLine", d.Location.StartLine);
+            json.WriteNumber("startColumn", d.Location.StartColumn);
+            json.WriteNumber("endLine", d.Location.EndLine);
+            json.WriteNumber("endColumn", d.Location.EndColumn);
+            json.WriteEndObject();
+            json.WriteEndObject();
+            json.WriteEndObject();
+            json.WriteEndArray();
+            json.WriteEndObject();
+        }
+        json.WriteEndArray();
+
+        if (hasRelativeArtifacts && pathResolver.SarifBaseUri is { } sarifBaseUri)
+        {
+            json.WriteStartObject("originalUriBaseIds");
+            json.WriteStartObject(PathDisplayResolver.SarifWorkingDirectoryBaseId);
+            json.WriteString("uri", sarifBaseUri);
+            json.WriteEndObject();
+            json.WriteEndObject();
         }
 
-        var sarif = new SarifLog
-        {
-            Runs =
-            [
-                new SarifRun
-                {
-                    Tool = new SarifTool
-                    {
-                        Driver = new SarifDriver
-                        {
-                            Name = "seiton",
-                            Version = SarifDriverVersion,
-                            InformationUri = "https://github.com/guitarrapc/seiton",
-                            Rules = rules,
-                        },
-                    },
-                    OriginalUriBaseIds = pathResolver.CreateOriginalUriBaseIds(),
-                    Results = results,
-                },
-            ],
-        };
+        json.WriteEndObject();
+        json.WriteEndArray();
+        json.WriteEndObject();
+        json.Flush();
 
-        writer.Write(JsonSerializer.Serialize(sarif, SeitonJsonContext.Default.SarifLog));
+        WriteUtf8ToTextWriter(writer, buffer.WrittenSpan);
         writer.WriteLine();
+    }
+
+    private static void WriteUtf8ToTextWriter(TextWriter writer, ReadOnlySpan<byte> utf8)
+    {
+        if (utf8.Length == 0)
+        {
+            return;
+        }
+
+        var charCount = Encoding.UTF8.GetCharCount(utf8);
+        if (charCount <= 2048)
+        {
+            Span<char> chars = stackalloc char[charCount];
+            var written = Encoding.UTF8.GetChars(utf8, chars);
+            writer.Write(chars[..written]);
+            return;
+        }
+
+        var rented = ArrayPool<char>.Shared.Rent(charCount);
+        try
+        {
+            var written = Encoding.UTF8.GetChars(utf8, rented);
+            writer.Write(rented, 0, written);
+        }
+        finally
+        {
+            ArrayPool<char>.Shared.Return(rented);
+        }
     }
 
     private static string BuildSarifRuleHelpUri(string ruleId)
@@ -665,4 +719,66 @@ internal sealed record SarifRegion
     DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull)]
 internal partial class SeitonJsonContext : JsonSerializerContext
 {
+}
+
+internal sealed class PooledByteBufferWriter : IBufferWriter<byte>, IDisposable
+{
+    private byte[] _buffer;
+    private int _index;
+    private bool _disposed;
+
+    public PooledByteBufferWriter(int initialCapacity)
+    {
+        _buffer = ArrayPool<byte>.Shared.Rent(Math.Max(256, initialCapacity));
+        _index = 0;
+    }
+
+    public ReadOnlySpan<byte> WrittenSpan => _buffer.AsSpan(0, _index);
+
+    public void Advance(int count)
+    {
+        if ((uint)count > (uint)(_buffer.Length - _index))
+            throw new ArgumentOutOfRangeException(nameof(count));
+        _index += count;
+    }
+
+    public Memory<byte> GetMemory(int sizeHint = 0)
+    {
+        EnsureCapacity(sizeHint);
+        return _buffer.AsMemory(_index);
+    }
+
+    public Span<byte> GetSpan(int sizeHint = 0)
+    {
+        EnsureCapacity(sizeHint);
+        return _buffer.AsSpan(_index);
+    }
+
+    private void EnsureCapacity(int sizeHint)
+    {
+        if (sizeHint < 1)
+            sizeHint = 1;
+
+        var available = _buffer.Length - _index;
+        if (available >= sizeHint)
+            return;
+
+        var growBy = Math.Max(sizeHint, _buffer.Length);
+        var newSize = checked(_buffer.Length + growBy);
+        var newBuffer = ArrayPool<byte>.Shared.Rent(newSize);
+        _buffer.AsSpan(0, _index).CopyTo(newBuffer);
+        ArrayPool<byte>.Shared.Return(_buffer);
+        _buffer = newBuffer;
+    }
+
+    public void Dispose()
+    {
+        if (_disposed)
+            return;
+
+        ArrayPool<byte>.Shared.Return(_buffer);
+        _buffer = Array.Empty<byte>();
+        _index = 0;
+        _disposed = true;
+    }
 }
