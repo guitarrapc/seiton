@@ -43,10 +43,6 @@ Lint and fix github workflows issues in `samples/readme/` with Seiton. The workf
 
 This example shows the full flow in 4 steps: lint, auto-fix, tune config, done.
 
-```sh
-cd samples/readme/
-```
-
 **Step1. Start with a broken workflow**
 
 Sample file: [`samples/readme/.github/workflows/test.yaml`](samples/readme/.github/workflows/test.yaml)
@@ -69,7 +65,7 @@ jobs:
 **Step2. Lint it**
 
 ```sh
-seiton --oneline
+seiton --oneline -c samples/readme/.github/seiton.yaml samples/readme/.github/workflows/test.yaml
 ```
 
 Output shows 3 errors and 6 warnings
@@ -94,7 +90,7 @@ test.yaml:12:25: warning [popular-action-inputs] unknown input 'node_version' fo
 **Step3. Apply safe auto-fixes**
 
 ```sh
-seiton --fix --enable-pin-network
+seiton --fix --enable-pin-network -c samples/readme/.github/seiton.yaml samples/readme/.github/workflows/test.yaml
 ```
 
 Auto-fix updates include:
@@ -138,7 +134,13 @@ test.yaml:6:14: warning [runner-no-latest] jobs.'test'.runs-on label 'ubuntu-lat
 
 **Step4. Tune config to resolve the remaining two diagnostics**
 
-Generate a starter config with `seiton init`, then customize [`samples/readme/.github/seiton.yaml`](samples/readme/.github/seiton.yaml):
+Generate a starter config with `seiton init`.
+
+```shell
+seiton init -c samples/readme/.github/seiton.yaml
+```
+
+Then customize [`samples/readme/.github/seiton.yaml`](samples/readme/.github/seiton.yaml):
 
 ```yaml
 # .github/seiton.yaml
@@ -154,8 +156,7 @@ fix:
 Run seiton again, and all diagnostics are resolved.
 
 ```shell
-$ seiton --fix --enable-pin-network
-0 issues in 1 file
+seiton --fix --enable-pin-network -c samples/readme/.github/seiton.yaml samples/readme/.github/workflows/test.yaml
 ```
 
 </details>
