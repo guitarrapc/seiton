@@ -91,6 +91,28 @@ public sealed class PathDisplayResolverTests
     }
 
     [Test]
+    public async Task ResolveSarifArtifactLocation_StdinSentinel_EmitsLiteralUriWithoutBaseId()
+    {
+        var resolver = new PathDisplayResolver(Environment.CurrentDirectory);
+        var location = resolver.ResolveSarifArtifactLocation("<stdin>");
+
+        await Assert.That(location.Uri).IsEqualTo("<stdin>");
+        await Assert.That(location.UriBaseId).IsNull();
+        await Assert.That(resolver.CreateOriginalUriBaseIds()).IsNull();
+    }
+
+    [Test]
+    public async Task ResolveSarifArtifactLocation_HyphenSentinel_EmitsLiteralUriWithoutBaseId()
+    {
+        var resolver = new PathDisplayResolver(Environment.CurrentDirectory);
+        var location = resolver.ResolveSarifArtifactLocation("-");
+
+        await Assert.That(location.Uri).IsEqualTo("-");
+        await Assert.That(location.UriBaseId).IsNull();
+        await Assert.That(resolver.CreateOriginalUriBaseIds()).IsNull();
+    }
+
+    [Test]
     public async Task CreateOriginalUriBaseIds_NoRelativeArtifacts_ReturnsNull()
     {
         var resolver = new PathDisplayResolver(Environment.CurrentDirectory);

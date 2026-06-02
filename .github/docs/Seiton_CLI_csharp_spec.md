@@ -367,7 +367,7 @@ internal partial class SeitonJsonContext : JsonSerializerContext { }
 
 SARIF 2.1.0 is emitted via `Utf8JsonWriter` over an `IBufferWriter<byte>` (`PooledByteBufferWriter`, `ArrayPool<byte>` backed). Output is pretty-printed (`Indented = true`) for readability while remaining AOT-compatible and dependency-light.
 
-File paths are relativized at output time by `PathDisplayResolver` (working-directory-relative, forward slashes). SARIF results use relative `artifactLocation.uri` with `uriBaseId = %WORKING_DIR%`; when relative artifacts are present, a matching `runs[].originalUriBaseIds` entry is emitted. Cross-drive or non-relativeizable paths fall back to absolute `file:///...` URIs.
+File paths are relativized at output time by `PathDisplayResolver` (working-directory-relative, forward slashes). SARIF results use relative `artifactLocation.uri` with `uriBaseId = %WORKING_DIR%`; when relative artifacts are present, a matching `runs[].originalUriBaseIds` entry is emitted. Cross-drive or non-relativeizable paths fall back to absolute `file:///...` URIs. Sentinel paths (`<stdin>`, `-`) are emitted literally without `uriBaseId`.
 
 ### 7.3 Rich Text Output
 

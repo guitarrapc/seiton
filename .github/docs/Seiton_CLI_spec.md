@@ -503,6 +503,7 @@ Each diagnostic maps to a SARIF `result` under a `run` with tool identity `seito
 - When at least one relative artifact is emitted, `runs[].originalUriBaseIds["%WORKING_DIR%"].uri` carries the absolute `file:///...` URI of the working directory (with trailing slash), allowing SARIF consumers to resolve relative artifact URIs.
 - Cross-drive or otherwise non-relativeizable filesystem paths fall back to absolute `file:///...` URIs without `uriBaseId`.
 - Unknown paths are emitted as `file:///unknown`.
+- Sentinel paths such as `<stdin>` and `-` are emitted as literal URI strings without `uriBaseId` and do not trigger `originalUriBaseIds`.
 
 Rule metadata (`id`, `helpUri`) is emitted per-rule in `tool.driver.rules`.
 

@@ -427,6 +427,29 @@ public sealed class DiagnosticFormatterRichTextTests
     }
 
     [Test]
+    public async Task Sarif_Format_StdinSentinel_DoesNotEmitOriginalUriBaseIds()
+    {
+        var diag = MakeDiagnostic(DiagnosticSeverity.Warning, "stdin path", 1, 1, 1, 3, filePath: "<stdin>");
+
+        var sb = new StringBuilder();
+        using var writer = new StringWriter(sb);
+        DiagnosticFormatter.Write(writer, [diag], OutputFormat.Sarif, oneline: false, color: false);
+        writer.Flush();
+
+        using var doc = JsonDocument.Parse(sb.ToString());
+        var run = doc.RootElement.GetProperty("runs")[0];
+        var location = run
+            .GetProperty("results")[0]
+            .GetProperty("locations")[0]
+            .GetProperty("physicalLocation")
+            .GetProperty("artifactLocation");
+
+        await Assert.That(location.GetProperty("uri").GetString()).IsEqualTo("<stdin>");
+        await Assert.That(location.TryGetProperty("uriBaseId", out _)).IsFalse();
+        await Assert.That(run.TryGetProperty("originalUriBaseIds", out _)).IsFalse();
+    }
+
+    [Test]
     public async Task Sarif_Format_AbsoluteUriInput_DoesNotEmitOriginalUriBaseIds()
     {
         var diag = MakeDiagnostic(

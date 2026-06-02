@@ -59,12 +59,7 @@ internal sealed class PathDisplayResolver
             return new SarifArtifactLocation { Uri = UnknownSarifFileUri };
 
         if (IsPassthroughPath(filePath))
-        {
-            var passthroughUri = IsSafeRelativeUriPath(filePath)
-                ? filePath
-                : EncodeRelativePathForUri(filePath);
-            return CreateRelativeSarifLocation(passthroughUri);
-        }
+            return new SarifArtifactLocation { Uri = filePath };
 
         if (LooksLikeAbsoluteUri(filePath) && Uri.TryCreate(filePath, UriKind.Absolute, out var absoluteUri))
             return new SarifArtifactLocation { Uri = absoluteUri.AbsoluteUri };
