@@ -434,7 +434,7 @@ seiton --format json | ConvertFrom-Json
 
 ### SARIF
 
-[SARIF](https://sarifweb.azurewebsites.net/) output for GitHub Advanced Security code scanning:
+[SARIF 2.1](https://sarifweb.azurewebsites.net/) output for GitHub Advanced Security code scanning:
 
 ```sh
 seiton --format sarif > seiton.sarif
