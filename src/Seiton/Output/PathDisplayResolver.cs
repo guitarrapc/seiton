@@ -61,16 +61,41 @@ internal sealed class PathDisplayResolver
         if (IsPassthroughPath(filePath))
             return new SarifArtifactLocation { Uri = filePath };
 
-        if (LooksLikeAbsoluteUri(filePath) && Uri.TryCreate(filePath, UriKind.Absolute, out var absoluteUri))
-            return new SarifArtifactLocation { Uri = absoluteUri.AbsoluteUri };
+        if (LooksLikeAbsoluteUri(filePath))
+        {
+            if (Uri.TryCreate(filePath, UriKind.Absolute, out var absoluteUri))
+                return new SarifArtifactLocation { Uri = absoluteUri.AbsoluteUri };
 
-        var fullPath = Path.GetFullPath(filePath);
-        var relative = Path.GetRelativePath(_baseDirectory, fullPath);
-        if (RequiresAbsoluteFallback(relative))
-            return new SarifArtifactLocation { Uri = new Uri(fullPath, UriKind.Absolute).AbsoluteUri };
+            return new SarifArtifactLocation { Uri = filePath };
+        }
 
-        var relativeUri = ToSarifRelativeUri(relative);
-        return CreateRelativeSarifLocation(relativeUri);
+        if (!TryResolveFilesystemSarifLocation(filePath, out var location))
+            return new SarifArtifactLocation { Uri = UnknownSarifFileUri };
+
+        return location;
+    }
+
+    private bool TryResolveFilesystemSarifLocation(string filePath, out SarifArtifactLocation location)
+    {
+        try
+        {
+            var fullPath = Path.GetFullPath(filePath);
+            var relative = Path.GetRelativePath(_baseDirectory, fullPath);
+            if (RequiresAbsoluteFallback(relative))
+            {
+                location = new SarifArtifactLocation { Uri = new Uri(fullPath, UriKind.Absolute).AbsoluteUri };
+                return true;
+            }
+
+            var relativeUri = ToSarifRelativeUri(relative);
+            location = CreateRelativeSarifLocation(relativeUri);
+            return true;
+        }
+        catch (Exception ex) when (ex is ArgumentException or NotSupportedException or PathTooLongException or IOException)
+        {
+            location = default!;
+            return false;
+        }
     }
 
     public Dictionary<string, SarifArtifactLocation>? CreateOriginalUriBaseIds()
@@ -106,12 +131,19 @@ internal sealed class PathDisplayResolver
         if (!Path.IsPathRooted(filePath) && !LooksLikeWindowsDrivePath(filePath))
             return NormalizeToForwardSlashes(filePath);
 
-        var fullPath = Path.GetFullPath(filePath);
-        var relative = Path.GetRelativePath(_baseDirectory, fullPath);
-        if (RequiresAbsoluteFallback(relative))
-            return NormalizeToForwardSlashes(fullPath);
+        try
+        {
+            var fullPath = Path.GetFullPath(filePath);
+            var relative = Path.GetRelativePath(_baseDirectory, fullPath);
+            if (RequiresAbsoluteFallback(relative))
+                return NormalizeToForwardSlashes(fullPath);
 
-        return NormalizeToForwardSlashes(relative);
+            return NormalizeToForwardSlashes(relative);
+        }
+        catch (Exception ex) when (ex is ArgumentException or NotSupportedException or PathTooLongException or IOException)
+        {
+            return NormalizeToForwardSlashes(filePath);
+        }
     }
 
     private static bool IsPassthroughPath(string filePath) =>

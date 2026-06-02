@@ -135,6 +135,46 @@ public sealed class PathDisplayResolverTests
     }
 
     [Test]
+    public async Task ResolveSarifArtifactLocation_UriLikeButInvalid_DoesNotAddBaseId()
+    {
+        var resolver = new PathDisplayResolver(Environment.CurrentDirectory);
+        var location = resolver.ResolveSarifArtifactLocation("http:not-a-uri");
+
+        await Assert.That(location.Uri).IsEqualTo("http:not-a-uri");
+        await Assert.That(location.UriBaseId).IsNull();
+        await Assert.That(resolver.CreateOriginalUriBaseIds()).IsNull();
+    }
+
+    [Test]
+    public async Task ResolveSarifArtifactLocation_InvalidFilesystemPath_DoesNotThrow()
+    {
+        if (!OperatingSystem.IsWindows())
+            return;
+
+        var resolver = new PathDisplayResolver(Environment.CurrentDirectory);
+        var location = resolver.ResolveSarifArtifactLocation("D:\\a\u0000b");
+
+        await Assert.That(location.Uri).IsEqualTo(PathDisplayResolver.UnknownSarifFileUri);
+        await Assert.That(location.UriBaseId).IsNull();
+    }
+
+    [Test]
+    public async Task GetDisplayPath_InvalidFilesystemPath_DoesNotThrow()
+    {
+        if (!OperatingSystem.IsWindows())
+            return;
+
+        var invalidPath = "D:\\a\u0000b";
+        var resolver = new PathDisplayResolver(Environment.CurrentDirectory);
+        var display = resolver.GetDisplayPath(invalidPath);
+
+        await Assert.That(display).IsEqualTo(NormalizeExpectedDisplayPath(invalidPath));
+    }
+
+    private static string NormalizeExpectedDisplayPath(string path) =>
+        path.AsSpan().IndexOf('\\') >= 0 ? path.Replace('\\', '/') : path;
+
+    [Test]
     public async Task GetDisplayPath_CachesRepeatedLookups()
     {
         var baseDir = Path.Combine(Path.GetTempPath(), "seiton-path-test-" + Guid.NewGuid().ToString("N"));

@@ -504,6 +504,8 @@ Each diagnostic maps to a SARIF `result` under a `run` with tool identity `seito
 - Cross-drive or otherwise non-relativeizable filesystem paths fall back to absolute `file:///...` URIs without `uriBaseId`.
 - Unknown paths are emitted as `file:///unknown`.
 - Sentinel paths such as `<stdin>` and `-` are emitted as literal URI strings without `uriBaseId` and do not trigger `originalUriBaseIds`.
+- URI-like strings that are not valid absolute URIs are emitted literally without `uriBaseId`.
+- Invalid filesystem paths that cannot be normalized fall back to `file:///unknown` (SARIF) rather than aborting output generation.
 
 Rule metadata (`id`, `helpUri`) is emitted per-rule in `tool.driver.rules`.
 
