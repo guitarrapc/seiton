@@ -140,3 +140,73 @@
 - P0 項目（SARIF1002/SARIF2005）の修正方針が合意されている。
 - 実装時にそのまま着手できるテスト観点と受け入れ条件が明記されている。
 - P2 項目（SARIF2004）の扱いが「今回は見送り」として明文化されている。
+
+## 8. Phase 1 実装結果（2026-06-02）
+
+実装ステータス:
+- 完了（SARIF1002/SARIF2005 対応）
+
+実装内容:
+1. SARIF の `artifactLocation.uri` を URI 正規化する実装を追加。
+  - 絶対パス: `file:///...`
+  - 相対パス: URI-safe な相対参照
+  - 不明パス: `file:///unknown`
+2. SARIF の `runs[].tool.driver.version` を追加。
+  - 取得元は assembly informational version
+  - `+metadata` はトリム
+3. SARIF ベンチマーク項目を追加。
+  - `DiagnosticOutputBenchmark.WriteSarif`
+
+追加テスト（Red -> Green）:
+- `Sarif_Format_WindowsAbsolutePath_EmitsFileUri`
+- `Sarif_Format_UnknownPath_UsesSafeFileUri`
+- `Sarif_Format_Driver_IncludesVersionMetadata`
+
+検証結果:
+- 追加テスト: 失敗を確認後、実装後に成功。
+- フルテスト: `dotnet test` で全件成功（2363 passed, 0 failed）。
+
+## 9. ベンチマーク結果（変更前後比較）
+
+測定条件:
+- BenchmarkDotNet ShortRun
+- 対象: `DiagnosticOutputBenchmark.WriteSarif`
+- Count パラメータ: `F1`, `F10`
+
+変更前（baseline: HEAD~1 + 同一ベンチハーネス）:
+- F1: Mean 90.276 us, Allocated 143.17 KB
+- F10: Mean 1,141.39 us, Allocated 1,533.92 KB
+
+変更後（current）:
+- F1: Mean 90.094 us, Allocated 143.26 KB
+- F10: Mean 1,164.80 us, Allocated 1,528.03 KB
+
+差分評価:
+- F1 Mean: -0.20%（改善）
+- F10 Mean: +2.05%（許容範囲、閾値 +10% 以内）
+- F1 Allocated: +0.06%（ほぼ同等）
+- F10 Allocated: -0.38%（改善）
+
+考察:
+- 初回実装では相対パスの URI エンコード処理が重く、F10 で +10% 超の劣化を確認。
+- その後、一般的な安全相対パスをそのまま返す高速経路を追加し、劣化を +2.05% まで低減。
+
+## 10. API/仕様整合レビュー
+
+ユーザーファースト API 観点:
+- CLI の利用方法は変更なし（`--format sarif` のまま）。
+- 出力品質のみ改善し、利用者は追加設定なしで validator 準拠の SARIF を得られる。
+- `driver.version` 追加により、ログ比較時の可観測性が向上。
+
+仕様整合:
+- 実装変更に合わせて `.github/docs/Seiton_CLI_spec.md` の SARIF 仕様を更新済み。
+
+## 11. フェーズ内レビュー反復記録
+
+Review Round 1:
+- 指摘: SARIF URI 正規化の初期実装でパフォーマンス劣化（F10 Mean が +10% 超）。
+- 対応: 安全相対パスの高速経路、絶対 URI 判定の軽量化を追加。
+
+Review Round 2:
+- 再評価: ベンチ差分が閾値内（+2.05%）に収束、テスト全件成功。
+- 追加指摘: なし。

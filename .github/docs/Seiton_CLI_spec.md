@@ -488,7 +488,15 @@ SARIF 2.1.0 JSON output to stdout. Suitable for GitHub Code Scanning upload.
 
 Each diagnostic maps to a SARIF `result` under a `run` with tool identity `seiton`.
 
+`runs[].results[].locations[].physicalLocation.artifactLocation.uri` is emitted as a valid URI reference:
+
+- Absolute filesystem paths are emitted as `file:///...` URIs.
+- Relative paths are emitted as URI-safe relative references (slash-separated, percent-encoded when needed).
+- Unknown paths are emitted as `file:///unknown`.
+
 Rule metadata (`id`) is emitted per-rule in `tool.driver.rules`.
+
+`runs[].tool.driver.version` is always emitted, sourced from assembly informational version (with build metadata suffix trimmed when present).
 
 ### 6.4 Summary Output (stderr or job summary)
 

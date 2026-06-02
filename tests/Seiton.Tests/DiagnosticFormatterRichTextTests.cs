@@ -1,5 +1,6 @@
 ﻿using Seiton.Core.Parsing;
 using Seiton.Output;
+using System.Text.Json;
 
 namespace Seiton.Tests;
 
@@ -345,6 +346,82 @@ public sealed class DiagnosticFormatterRichTextTests
 
         await Assert.That(output).Contains("\"text\":\"plain error\"");
         await Assert.That(output).DoesNotContain("Help:");
+    }
+
+    [Test]
+    public async Task Sarif_Format_WindowsAbsolutePath_EmitsFileUri()
+    {
+        var diag = MakeDiagnostic(
+            DiagnosticSeverity.Warning,
+            "uri test",
+            2,
+            3,
+            2,
+            8,
+            filePath: @"C:\work\repo\.github\workflows\ci with space.yml");
+
+        var sb = new StringBuilder();
+        using var writer = new StringWriter(sb);
+        DiagnosticFormatter.Write(writer, [diag], OutputFormat.Sarif, oneline: false, color: false);
+        writer.Flush();
+
+        using var doc = JsonDocument.Parse(sb.ToString());
+        var uri = doc.RootElement
+            .GetProperty("runs")[0]
+            .GetProperty("results")[0]
+            .GetProperty("locations")[0]
+            .GetProperty("physicalLocation")
+            .GetProperty("artifactLocation")
+            .GetProperty("uri")
+            .GetString();
+
+        await Assert.That(uri).StartsWith("file:///");
+        await Assert.That(uri).Contains("ci%20with%20space.yml");
+    }
+
+    [Test]
+    public async Task Sarif_Format_UnknownPath_UsesSafeFileUri()
+    {
+        var diag = MakeDiagnostic(DiagnosticSeverity.Warning, "unknown path", 1, 1, 1, 3, filePath: null);
+
+        var sb = new StringBuilder();
+        using var writer = new StringWriter(sb);
+        DiagnosticFormatter.Write(writer, [diag], OutputFormat.Sarif, oneline: false, color: false);
+        writer.Flush();
+
+        using var doc = JsonDocument.Parse(sb.ToString());
+        var uri = doc.RootElement
+            .GetProperty("runs")[0]
+            .GetProperty("results")[0]
+            .GetProperty("locations")[0]
+            .GetProperty("physicalLocation")
+            .GetProperty("artifactLocation")
+            .GetProperty("uri")
+            .GetString();
+
+        await Assert.That(uri).IsEqualTo("file:///unknown");
+    }
+
+    [Test]
+    public async Task Sarif_Format_Driver_IncludesVersionMetadata()
+    {
+        var diag = MakeDiagnostic(DiagnosticSeverity.Warning, "version test", 1, 1, 1, 5);
+
+        var sb = new StringBuilder();
+        using var writer = new StringWriter(sb);
+        DiagnosticFormatter.Write(writer, [diag], OutputFormat.Sarif, oneline: false, color: false);
+        writer.Flush();
+
+        using var doc = JsonDocument.Parse(sb.ToString());
+        var driver = doc.RootElement
+            .GetProperty("runs")[0]
+            .GetProperty("tool")
+            .GetProperty("driver");
+
+        var hasVersion = driver.TryGetProperty("version", out var versionElement);
+        await Assert.That(hasVersion).IsTrue();
+        await Assert.That(versionElement.GetString()).IsNotNull();
+        await Assert.That(versionElement.GetString()).IsNotEqualTo(string.Empty);
     }
 
     [Test]
