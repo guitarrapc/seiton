@@ -1,4 +1,4 @@
-using Seiton.Commands;
+﻿using Seiton.Commands;
 using Seiton.Core.Linting;
 using Seiton.Core.Parsing;
 using Seiton.Output;

@@ -1,4 +1,4 @@
-namespace Seiton.Config;
+﻿namespace Seiton.Config;
 
 public enum ConfigPathSource
 {

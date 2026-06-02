@@ -1,4 +1,4 @@
-namespace Seiton.Cli;
+﻿namespace Seiton.Cli;
 
 /// <summary>Controls how much progress information is written to stderr.</summary>
 internal enum VerboseLevel

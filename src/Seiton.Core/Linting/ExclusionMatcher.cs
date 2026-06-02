@@ -1,4 +1,4 @@
-using static Seiton.Core.Linting.ActionRefHelpers;
+﻿using static Seiton.Core.Linting.ActionRefHelpers;
 
 namespace Seiton.Core.Linting;
 

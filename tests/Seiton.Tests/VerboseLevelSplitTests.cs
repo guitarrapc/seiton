@@ -1,5 +1,4 @@
-using Seiton.Cli;
-using Seiton.Commands;
+﻿using Seiton.Cli;
 
 namespace Seiton.Tests;
 

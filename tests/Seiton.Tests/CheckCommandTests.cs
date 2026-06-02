@@ -7,12 +7,12 @@ namespace Seiton.Tests;
 
 public sealed class CheckCommandTests
 {
-  [Test]
-  [NotInParallel("Console")]
-  public async Task Check_GitHubActionsOneline_EmitsGroupedOutputAndDoesNotReturnInvalidOptions()
-  {
-    var filePath = CreateWorkflowFile(
-      """
+    [Test]
+    [NotInParallel("Console")]
+    public async Task Check_GitHubActionsOneline_EmitsGroupedOutputAndDoesNotReturnInvalidOptions()
+    {
+        var filePath = CreateWorkflowFile(
+          """
       on: push
       jobs:
         build:
@@ -21,45 +21,45 @@ public sealed class CheckCommandTests
           - run: echo hi
       """);
 
-    var originalOut = Console.Out;
-    var originalErr = Console.Error;
-    using var stdout = new StringWriter();
-    using var stderr = new StringWriter();
+        var originalOut = Console.Out;
+        var originalErr = Console.Error;
+        using var stdout = new StringWriter();
+        using var stderr = new StringWriter();
 
-    try
-    {
+        try
+        {
 #pragma warning disable TUnit0055
-      Console.SetOut(stdout);
-      Console.SetError(stderr);
+            Console.SetOut(stdout);
+            Console.SetError(stderr);
 #pragma warning restore TUnit0055
 
-      var code = CheckCommand.Run(
-        [filePath],
-        config: null,
-        stdinFilename: "stdin.yml",
-        ignore: [],
-        minSeverity: null,
-        format: OutputFormat.GitHubActions,
-        oneline: true,
-        color: ColorMode.Never,
-        noColor: true,
-        verboseLevel: VerboseLevel.Off,
-        includeActions: false);
+            var code = CheckCommand.Run(
+              [filePath],
+              config: null,
+              stdinFilename: "stdin.yml",
+              ignore: [],
+              minSeverity: null,
+              format: OutputFormat.GitHubActions,
+              oneline: true,
+              color: ColorMode.Never,
+              noColor: true,
+              verboseLevel: VerboseLevel.Off,
+              includeActions: false);
 
-      await Assert.That(code).IsEqualTo(ExitCode.LintIssuesFound);
-      await Assert.That(stdout.ToString()).Contains("::group::");
-      await Assert.That(stdout.ToString()).Contains("::endgroup::");
-      await Assert.That(stdout.ToString()).Contains(": warning [");
-    }
-    finally
-    {
+            await Assert.That(code).IsEqualTo(ExitCode.LintIssuesFound);
+            await Assert.That(stdout.ToString()).Contains("::group::");
+            await Assert.That(stdout.ToString()).Contains("::endgroup::");
+            await Assert.That(stdout.ToString()).Contains(": warning [");
+        }
+        finally
+        {
 #pragma warning disable TUnit0055
-      Console.SetOut(originalOut);
-      Console.SetError(originalErr);
+            Console.SetOut(originalOut);
+            Console.SetError(originalErr);
 #pragma warning restore TUnit0055
-      DeleteContainingDirectory(filePath);
+            DeleteContainingDirectory(filePath);
+        }
     }
-  }
 
     [Test]
     [NotInParallel("Console")]
