@@ -86,8 +86,11 @@ public static class DiagnosticFormatter
                 }
 
                 var fileDisplay = pathResolver.GetDisplayPath(d.FilePath);
-                currentGroupDisplay = EscapeGitHubCommandValue(fileDisplay);
-                currentLineDisplay = EscapeGitHubDiagnosticBodyFileDisplay(fileDisplay);
+                var escaped = EscapeGitHubCommandValue(fileDisplay);
+                currentGroupDisplay = escaped;
+                currentLineDisplay = escaped.StartsWith("::", StringComparison.Ordinal)
+                    ? string.Concat(".", escaped)
+                    : escaped;
                 writer.Write("::group::");
                 writer.WriteLine(currentGroupDisplay);
                 currentGroupFile = fileKey;
@@ -123,18 +126,62 @@ public static class DiagnosticFormatter
         }
     }
 
+    private const int GitHubEscapeStackLimit = 512;
+    private const int RepeatedCharStackLimit = 128;
+
     private static string EscapeGitHubCommandValue(string value)
     {
-        var firstEscapedIndex = value.AsSpan().IndexOfAny('%', '\r', '\n');
+        var span = value.AsSpan();
+        var firstEscapedIndex = span.IndexOfAny('%', '\r', '\n');
         if (firstEscapedIndex < 0)
         {
             return value;
         }
 
+        if (value.Length <= GitHubEscapeStackLimit)
+        {
+            Span<char> buffer = stackalloc char[value.Length * 3];
+            var written = WriteGitHubEscapedChars(span, buffer);
+            return buffer[..written].ToString();
+        }
+
         var builder = new StringBuilder(value.Length + 8);
         builder.Append(value, 0, firstEscapedIndex);
+        AppendGitHubEscapedChars(span[firstEscapedIndex..], builder);
+        return builder.ToString();
+    }
 
-        for (var i = firstEscapedIndex; i < value.Length; i++)
+    private static int WriteGitHubEscapedChars(ReadOnlySpan<char> value, Span<char> destination)
+    {
+        var written = 0;
+        for (var i = 0; i < value.Length; i++)
+        {
+            switch (value[i])
+            {
+                case '%':
+                    "%25".AsSpan().CopyTo(destination[written..]);
+                    written += 3;
+                    break;
+                case '\r':
+                    "%0D".AsSpan().CopyTo(destination[written..]);
+                    written += 3;
+                    break;
+                case '\n':
+                    "%0A".AsSpan().CopyTo(destination[written..]);
+                    written += 3;
+                    break;
+                default:
+                    destination[written++] = value[i];
+                    break;
+            }
+        }
+
+        return written;
+    }
+
+    private static void AppendGitHubEscapedChars(ReadOnlySpan<char> value, StringBuilder builder)
+    {
+        for (var i = 0; i < value.Length; i++)
         {
             switch (value[i])
             {
@@ -152,16 +199,6 @@ public static class DiagnosticFormatter
                     break;
             }
         }
-
-        return builder.ToString();
-    }
-
-    private static string EscapeGitHubDiagnosticBodyFileDisplay(string fileDisplay)
-    {
-        var escaped = EscapeGitHubCommandValue(fileDisplay);
-        return escaped.StartsWith("::", StringComparison.Ordinal)
-            ? "." + escaped
-            : escaped;
     }
 
     private static void WriteTextDiagnostic(
@@ -175,39 +212,75 @@ public static class DiagnosticFormatter
     {
         var line = d.Location.StartLine;
         var col = d.Location.StartColumn;
-        var severity = d.Severity.ToString().ToLowerInvariant();
+        var severity = GetSeverityLowerString(d.Severity);
         var ruleId = d.RuleId ?? "parse";
 
         if (oneline)
         {
-            // Compact single-line format
-            if (color)
-            {
-                var severityColor = d.Severity switch
-                {
-                    DiagnosticSeverity.Error => "\x1b[31m",   // red
-                    DiagnosticSeverity.Warning => "\x1b[33m", // yellow
-                    _ => "\x1b[36m",                          // cyan
-                };
-                const string reset = "\x1b[0m";
-                const string bold = "\x1b[1m";
-                const string dim = "\x1b[2m";
-
-                writer.Write($"{bold}{fileDisplay}:{line}:{col}:{reset} ");
-                writer.Write($"{severityColor}{severity}{reset} ");
-                writer.Write($"{dim}[{ruleId}]{reset} ");
-                writer.WriteLine(d.Message);
-            }
-            else
-            {
-                writer.WriteLine($"{fileDisplay}:{line}:{col}: {severity} [{ruleId}] {d.Message}");
-            }
-
+            WriteOnelineDiagnostic(writer, d, fileDisplay, line, col, severity, ruleId, color);
             return;
         }
 
         // Rich multi-line format (Rust-style)
         WriteRichDiagnostic(writer, d, fileKey, fileDisplay, line, col, severity, ruleId, color, sourceMap);
+    }
+
+    private static void WriteOnelineDiagnostic(
+        TextWriter writer,
+        Diagnostic d,
+        string fileDisplay,
+        int line,
+        int col,
+        string severity,
+        string ruleId,
+        bool color)
+    {
+        if (color)
+        {
+            var severityColor = d.Severity switch
+            {
+                DiagnosticSeverity.Error => "\x1b[31m",
+                DiagnosticSeverity.Warning => "\x1b[33m",
+                _ => "\x1b[36m",
+            };
+            const string reset = "\x1b[0m";
+            const string bold = "\x1b[1m";
+            const string dim = "\x1b[2m";
+
+            writer.Write(bold);
+            writer.Write(fileDisplay);
+            writer.Write(':');
+            writer.Write(line);
+            writer.Write(':');
+            writer.Write(col);
+            writer.Write(':');
+            writer.Write(reset);
+            writer.Write(' ');
+            writer.Write(severityColor);
+            writer.Write(severity);
+            writer.Write(reset);
+            writer.Write(' ');
+            writer.Write(dim);
+            writer.Write('[');
+            writer.Write(ruleId);
+            writer.Write(']');
+            writer.Write(reset);
+            writer.Write(' ');
+            writer.WriteLine(d.Message);
+            return;
+        }
+
+        writer.Write(fileDisplay);
+        writer.Write(':');
+        writer.Write(line);
+        writer.Write(':');
+        writer.Write(col);
+        writer.Write(": ");
+        writer.Write(severity);
+        writer.Write(" [");
+        writer.Write(ruleId);
+        writer.Write("] ");
+        writer.WriteLine(d.Message);
     }
 
     private static void WriteRichDiagnostic(
@@ -236,35 +309,77 @@ public static class DiagnosticFormatter
             const string blue = "\x1b[34m";
 
             // Header: error[rule-id]: message
-            writer.Write($"{severityColor}{bold}{severity}[{ruleId}]{reset}{bold}: {d.Message}{reset}");
+            writer.Write(severityColor);
+            writer.Write(bold);
+            writer.Write(severity);
+            writer.Write('[');
+            writer.Write(ruleId);
+            writer.Write(']');
+            writer.Write(reset);
+            writer.Write(bold);
+            writer.Write(": ");
+            writer.Write(d.Message);
+            writer.Write(reset);
             writer.WriteLine();
 
             // Location arrow: --> file:line:col
-            writer.WriteLine($"  {blue}-->{reset} {displayFile}:{line}:{col}");
+            writer.Write("  ");
+            writer.Write(blue);
+            writer.Write("-->");
+            writer.Write(reset);
+            writer.Write(' ');
+            writer.Write(displayFile);
+            writer.Write(':');
+            writer.Write(line);
+            writer.Write(':');
+            writer.WriteLine(col);
 
             // Source snippet
             WriteSourceSnippet(writer, d, sourceFileKey, sourceMap, color, severityColor, blue, reset, bold, dim);
 
             // Help text
             if (d.Help is not null)
-                writer.WriteLine($"   {dim}={reset} {bold}help{reset}: {d.Help}");
+            {
+                writer.Write("   ");
+                writer.Write(dim);
+                writer.Write('=');
+                writer.Write(reset);
+                writer.Write(' ');
+                writer.Write(bold);
+                writer.Write("help");
+                writer.Write(reset);
+                writer.Write(": ");
+                writer.WriteLine(d.Help);
+            }
 
             writer.WriteLine();
         }
         else
         {
             // Header: error[rule-id]: message
-            writer.WriteLine($"{severity}[{ruleId}]: {d.Message}");
+            writer.Write(severity);
+            writer.Write('[');
+            writer.Write(ruleId);
+            writer.Write("]: ");
+            writer.WriteLine(d.Message);
 
             // Location arrow: --> file:line:col
-            writer.WriteLine($"  --> {displayFile}:{line}:{col}");
+            writer.Write("  --> ");
+            writer.Write(displayFile);
+            writer.Write(':');
+            writer.Write(line);
+            writer.Write(':');
+            writer.WriteLine(col);
 
             // Source snippet
             WriteSourceSnippet(writer, d, sourceFileKey, sourceMap, color, null, null, null, null, null);
 
             // Help text
             if (d.Help is not null)
-                writer.WriteLine($"   = help: {d.Help}");
+            {
+                writer.Write("   = help: ");
+                writer.WriteLine(d.Help);
+            }
 
             writer.WriteLine();
         }
@@ -310,9 +425,8 @@ public static class DiagnosticFormatter
         }
 
         var lineNumWidth = endLine.ToString().Length;
-        var gutterPad = new string(' ', lineNumWidth);
 
-        writer.WriteLine($"   {gutterPad}|");
+        WriteGutterSeparator(writer, lineNumWidth);
 
         if (startLine == endLine)
         {
@@ -323,14 +437,24 @@ public static class DiagnosticFormatter
             // Underline caret: columns are 1-based
             var safeStart = Math.Max(1, startCol);
             var safeEnd = endCol > safeStart ? endCol : safeStart + 1;
-            var leadingSpaces = new string(' ', safeStart - 1);
             var caretLen = Math.Max(1, safeEnd - safeStart);
-            var carets = new string('^', caretLen);
 
+            writer.Write("   ");
+            WriteRepeatedChar(writer, ' ', lineNumWidth);
+            writer.Write("| ");
+            WriteRepeatedChar(writer, ' ', safeStart - 1);
             if (color)
-                writer.WriteLine($"   {gutterPad}| {leadingSpaces}{severityColor}{carets}{reset}");
+            {
+                writer.Write(severityColor);
+                WriteRepeatedChar(writer, '^', caretLen);
+                writer.Write(reset);
+            }
             else
-                writer.WriteLine($"   {gutterPad}| {leadingSpaces}{carets}");
+            {
+                WriteRepeatedChar(writer, '^', caretLen);
+            }
+
+            writer.WriteLine();
         }
         else
         {
@@ -342,33 +466,110 @@ public static class DiagnosticFormatter
                 var prefix = li == 0 ? "/ " : "| ";
                 WriteGutterLineWithPrefix(writer, ln, lineNumWidth, prefix, sourceLine, color, blue, reset);
             }
+
             // Closing underline
-            var closingCarets = new string('^', Math.Max(1, endCol - 1));
+            var closingCaretLen = Math.Max(1, endCol - 1);
+            writer.Write("   ");
+            WriteRepeatedChar(writer, ' ', lineNumWidth);
+            writer.Write("| ");
             if (color)
-                writer.WriteLine($"   {gutterPad}| {severityColor}|_{closingCarets}{reset}");
+            {
+                writer.Write(severityColor);
+                writer.Write("|_");
+                WriteRepeatedChar(writer, '^', closingCaretLen);
+                writer.Write(reset);
+            }
             else
-                writer.WriteLine($"   {gutterPad}| |_{closingCarets}");
+            {
+                writer.Write("|_");
+                WriteRepeatedChar(writer, '^', closingCaretLen);
+            }
+
+            writer.WriteLine();
         }
 
-        writer.WriteLine($"   {gutterPad}|");
+        WriteGutterSeparator(writer, lineNumWidth);
+    }
+
+    private static void WriteGutterSeparator(TextWriter writer, int lineNumWidth)
+    {
+        writer.Write("   ");
+        WriteRepeatedChar(writer, ' ', lineNumWidth);
+        writer.WriteLine('|');
     }
 
     private static void WriteGutterLine(TextWriter writer, int lineNum, int width, string sourceLine, bool color, string? blue, string? reset)
     {
-        var lineStr = lineNum.ToString().PadLeft(width);
+        writer.Write("   ");
         if (color)
-            writer.WriteLine($"   {blue}{lineStr}{reset} | {sourceLine}");
+        {
+            writer.Write(blue);
+            WritePaddedDecimal(writer, lineNum, width);
+            writer.Write(reset);
+        }
         else
-            writer.WriteLine($"   {lineStr} | {sourceLine}");
+        {
+            WritePaddedDecimal(writer, lineNum, width);
+        }
+
+        writer.Write(" | ");
+        writer.WriteLine(sourceLine);
     }
 
     private static void WriteGutterLineWithPrefix(TextWriter writer, int lineNum, int width, string prefix, string sourceLine, bool color, string? blue, string? reset)
     {
-        var lineStr = lineNum.ToString().PadLeft(width);
+        writer.Write("   ");
         if (color)
-            writer.WriteLine($"   {blue}{lineStr}{reset} |{prefix}{sourceLine}");
+        {
+            writer.Write(blue);
+            WritePaddedDecimal(writer, lineNum, width);
+            writer.Write(reset);
+        }
         else
-            writer.WriteLine($"   {lineStr} |{prefix}{sourceLine}");
+        {
+            WritePaddedDecimal(writer, lineNum, width);
+        }
+
+        writer.Write(" |");
+        writer.Write(prefix);
+        writer.WriteLine(sourceLine);
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private static void WriteRepeatedChar(TextWriter writer, char c, int count)
+    {
+        if (count <= 0)
+        {
+            return;
+        }
+
+        if (count <= RepeatedCharStackLimit)
+        {
+            Span<char> buffer = stackalloc char[count];
+            buffer.Fill(c);
+            writer.Write(buffer);
+            return;
+        }
+
+        var rented = ArrayPool<char>.Shared.Rent(count);
+        try
+        {
+            rented.AsSpan(0, count).Fill(c);
+            writer.Write(rented, 0, count);
+        }
+        finally
+        {
+            ArrayPool<char>.Shared.Return(rented);
+        }
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private static void WritePaddedDecimal(TextWriter writer, int value, int minWidth)
+    {
+        Span<char> buffer = stackalloc char[16];
+        value.TryFormat(buffer, out var written);
+        WriteRepeatedChar(writer, ' ', minWidth - written);
+        writer.Write(buffer[..written]);
     }
 
     private static string[] ExtractLines(byte[] utf8, int startLine, int endLine)

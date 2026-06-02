@@ -374,7 +374,9 @@ File paths are relativized at output time by `PathDisplayResolver` (working-dire
 
 ### 7.3 Rich Text Output
 
-Source bytes for snippet rendering are retained in a `Dictionary<string, byte[]>` source map (only allocated when text format without `--oneline` is active). Line extraction and caret positioning use byte offsets.
+Source bytes for snippet rendering are retained in a `Dictionary<string, byte[]>` source map (only allocated when text format without `--oneline` is active). Line extraction uses byte offsets; gutter/caret padding is written directly to the `TextWriter` via `WriteRepeatedChar` / `WritePaddedDecimal` without intermediate `new string(...)` or interpolated strings.
+
+`github-actions` reuses the text diagnostic writer (`WriteTextDiagnostic`) with `color: false`. Per-file group titles escape `%`, `\r`, `\n` once via `EscapeGitHubCommandValue` (stackalloc for paths ≤512 chars); diagnostic bodies reuse the same escaped value with a leading `.` neutralizer when the path starts with `::`.
 
 ### 7.4 `github-actions` Output
 

@@ -79,6 +79,15 @@ public class DiagnosticOutputBenchmark
         return sb.Length;
     }
 
+    [Benchmark(Description = "DiagnosticFormatter text oneline")]
+    public int WriteTextOneline()
+    {
+        var sb = new StringBuilder(capacity: 16_384);
+        using var writer = new StringWriter(sb);
+        DiagnosticFormatter.Write(writer, _diagnostics, OutputFormat.Text, oneline: true, color: false, _sourceMap);
+        return sb.Length;
+    }
+
     [Benchmark(Description = "DiagnosticFormatter sarif")]
     public int WriteSarif()
     {

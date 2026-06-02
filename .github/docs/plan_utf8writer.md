@@ -139,6 +139,54 @@
   - GitHub command escape の一時 `StringBuilder` 発生を最小化
 - 期待効果: 人間可読フォーマットでの実メモリ削減を低リスクで獲得。
 
+### フェーズ 2 実装（完了）
+
+#### 変更内容
+
+- **補間文字列 → `Write` 連結**: `WriteOnelineDiagnostic`, `WriteRichDiagnostic`, `WriteGutterLine` 系で `$"..."` を排除。
+- **パディング/キャレット**: `new string(' ', n)` / `new string('^', n)` を `WriteRepeatedChar`（`stackalloc` ≤128、`ArrayPool` フォールバック）に置換。
+- **行番号**: `PadLeft` 中間文字列を `WritePaddedDecimal`（`TryFormat` + スペース直書き）に置換。
+- **severity**: text 出力でも `GetSeverityLowerString` 静的テーブルを再利用。
+- **GitHub escape**:
+  - 512 文字以下は `stackalloc` バッファ + 1 回 `ToString`（`StringBuilder` 回避）。
+  - `WriteGitHubActions` で escape を 1 回だけ実行し、`group` タイトルと diagnostic body 用表示を共有（従来は二重 escape）。
+- 公開 API・出力契約は不変。既存 `DiagnosticFormatterRichTextTests` が回帰テストとして機能。
+
+#### 性能変化（DiagnosticOutputBenchmark, ShortRun, フェーズ 2 着手前基準値との比較）
+
+| Format | Count | Metric | 着手前 | フェーズ 2 | 変化 | 判定 |
+|---|---|---|---|---|---|---|
+| text rich | F1 | Mean | 231.6 us | 235.8 us | +1.8% | 許容 |
+| text rich | F1 | Allocated | 118.93 KB | 56.34 KB | **-53%** | 改善 |
+| github-actions rich | F1 | Mean | 231.5 us | 221.3 us | **-4%** | 改善 |
+| github-actions rich | F1 | Allocated | 118.93 KB | 56.34 KB | **-53%** | 改善 |
+| github-actions oneline | F1 | Mean | 12.9 us | 6.6 us | **-49%** | 改善 |
+| github-actions oneline | F1 | Allocated | 86.24 KB | 49.45 KB | **-43%** | 改善 |
+| text rich | F10 | Mean | 2281.9 us | 2193.6 us | **-3.9%** | 改善 |
+| text rich | F10 | Allocated | 1140.67 KB | 514.73 KB | **-55%** | 改善 |
+| github-actions rich | F10 | Mean | 2378.2 us | 2196.7 us | **-7.6%** | 改善 |
+| github-actions rich | F10 | Allocated | 1156.37 KB | 530.42 KB | **-54%** | 改善 |
+| github-actions oneline | F10 | Mean | 114.0 us | 58.1 us | **-49%** | 改善 |
+| github-actions oneline | F10 | Allocated | 703.99 KB | 336.02 KB | **-52%** | 改善 |
+
+**改善理由**
+
+- リッチ出力の gutter/caret 行ごとに発生していた `new string(...)` と補間文字列の中間 `string` を排除。
+- GitHub Actions の per-file escape を 1 回に集約（二重 escape 解消）。
+- 小さな escape 結果は `stackalloc` で構築し `StringBuilder` 確保を回避。
+
+**Mean がほぼ横ばい/微増のケース（F1 text rich +1.8%）**
+
+- `Write` 連鎖の呼び出し回数増加が小件数では相殺。F10 では source snippet 最適化の効果が支配的に Mean も改善。
+
+#### フェーズ 2 レビュー
+
+| 指摘 | 対応 |
+|---|---|
+| GitHub Actions で同一パスの二重 escape | 1 回 escape + 表示用派生に修正 |
+| 新規テスト不要（挙動不変の最適化） | 既存 2398 テスト + DiagnosticFormatterRichTextTests で回帰確認 |
+| 仕様書 §7.3 が実装詳細を未記載 | `Seiton_CLI_csharp_spec.md` §7.3 を更新 |
+
 ## フェーズ 3: UTF-8 出力経路の導入（任意/効果確認後）
 
 - 内部に `Utf8OutputSink` 相当の抽象を導入し、`TextWriter` と `IBufferWriter<byte>` の二系統を選択可能にする。
