@@ -1,6 +1,4 @@
-﻿using System.Reflection;
-
-namespace Seiton.Tests;
+﻿namespace Seiton.Tests;
 
 public sealed class ToolVersionResolverTests
 {
