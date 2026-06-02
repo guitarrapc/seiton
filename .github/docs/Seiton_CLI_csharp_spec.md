@@ -381,7 +381,7 @@ Shared contract: `.github/docs/Seiton_CLI_spec.md` §6.5.
 |---|---|
 | `OutputFormatParser` | Maps CLI strings `text`, `json`, `sarif`, `github-actions` to `OutputFormat`. Invalid values → exit `2` with stderr message. |
 | `CliConfigBridge.ResolveOutputFormat` | Precedence: parsed flag (unless built-in default `text`) → `SEITON_FORMAT` → optional `GITHUB_ACTIONS` auto-default → `Text`. |
-| `DiagnosticFormatter` | `GitHubActions` writes diagnostics in per-file `::group::...::endgroup::` blocks with `color: false`; group titles escape `%`, `\r`, `\n` per workflow-command rules while diagnostic bodies use the unescaped display path (raw path is still used for source-map lookup). |
+| `DiagnosticFormatter` | `GitHubActions` writes diagnostics in per-file `::group::...::endgroup::` blocks with `color: false`; group titles escape `%`, `\r`, `\n` per workflow-command rules, and diagnostic bodies also escape `%`, `\r`, `\n` plus neutralize leading `::` to prevent workflow-command injection (raw path is still used for source-map lookup). |
 | `GitHubStepSummaryWriter` | When format is `GitHubActions` and `GITHUB_STEP_SUMMARY` is a writable path, appends §6.4 Markdown (`## Seiton` once per run, LF, UTF-8 no BOM). `IOException` / `UnauthorizedAccessException` → fall back to stderr. `Reset()` at start of `CheckCommand.Run` / `FixCommand.Run`. |
 | `CheckCommand.WriteSummary` / `FixCommand.WriteFixSummary` | Build summary via shared content writers; route to step summary or stderr per §6.4 table. `hint:` lines always use the stderr `TextWriter`. |
 

@@ -729,12 +729,12 @@ public sealed class DiagnosticFormatterRichTextTests
 
         await Assert.That(output).Contains("::group::a%2525%0D%0Ab.yml");
         await Assert.That(output).DoesNotContain("::group::a%25\r\nb.yml");
-        await Assert.That(output).Contains("a%25\r\nb.yml:1:1: warning [test-rule] first");
-        await Assert.That(output).DoesNotContain("a%2525%0D%0Ab.yml:1:1: warning [test-rule] first");
+        await Assert.That(output).Contains("a%2525%0D%0Ab.yml:1:1: warning [test-rule] first");
+        await Assert.That(output).DoesNotContain("a%25\r\nb.yml:1:1: warning [test-rule] first");
     }
 
     [Test]
-    public async Task GitHubActions_Format_Oneline_DisplaysUnescapedFilePathInDiagnosticBody()
+    public async Task GitHubActions_Format_Oneline_EscapesFilePathControlCharactersInDiagnosticBody()
     {
         var filePath = "a\r\n::warning::owned";
         var diagnostics = new[]
@@ -748,12 +748,12 @@ public sealed class DiagnosticFormatterRichTextTests
         writer.Flush();
         var output = sb.ToString();
 
-        await Assert.That(output).Contains("a\r\n::warning::owned:1:1: warning [test-rule] first");
-        await Assert.That(output).DoesNotContain("a%0D%0A::warning::owned:1:1: warning [test-rule] first");
+        await Assert.That(output).Contains("a%0D%0A::warning::owned:1:1: warning [test-rule] first");
+        await Assert.That(output).DoesNotContain("a\r\n::warning::owned:1:1: warning [test-rule] first");
     }
 
     [Test]
-    public async Task GitHubActions_Format_Rich_DisplaysUnescapedFilePathInLocationLine()
+    public async Task GitHubActions_Format_Rich_EscapesFilePathControlCharactersInLocationLine()
     {
         var filePath = "a\r\n::warning::owned";
         var diagnostics = new[]
@@ -767,8 +767,26 @@ public sealed class DiagnosticFormatterRichTextTests
         writer.Flush();
         var output = sb.ToString();
 
-        await Assert.That(output).Contains("--> a\r\n::warning::owned:1:1");
-        await Assert.That(output).DoesNotContain("--> a%0D%0A::warning::owned:1:1");
+        await Assert.That(output).Contains("--> a%0D%0A::warning::owned:1:1");
+        await Assert.That(output).DoesNotContain("--> a\r\n::warning::owned:1:1");
+    }
+
+    [Test]
+    public async Task GitHubActions_Format_Oneline_LeadingWorkflowCommandPrefix_IsNeutralized()
+    {
+        var diagnostics = new[]
+        {
+            MakeDiagnostic(DiagnosticSeverity.Warning, "first", 1, 1, 1, 5, filePath: "::warning::owned"),
+        };
+
+        var sb = new StringBuilder();
+        using var writer = new StringWriter(sb);
+        DiagnosticFormatter.Write(writer, diagnostics, OutputFormat.GitHubActions, oneline: true, color: false);
+        writer.Flush();
+        var output = sb.ToString();
+
+        await Assert.That(output).Contains(".::warning::owned:1:1: warning [test-rule] first");
+        await Assert.That(output).DoesNotContain("\n::warning::owned:1:1: warning [test-rule] first");
     }
 
     // Helpers

@@ -82,7 +82,7 @@ public static class DiagnosticFormatter
 
                 var fileDisplay = pathResolver.GetDisplayPath(d.FilePath);
                 currentGroupDisplay = EscapeGitHubCommandValue(fileDisplay);
-                currentLineDisplay = fileDisplay;
+                currentLineDisplay = EscapeGitHubDiagnosticBodyFileDisplay(fileDisplay);
                 writer.Write("::group::");
                 writer.WriteLine(currentGroupDisplay);
                 currentGroupFile = fileKey;
@@ -149,6 +149,14 @@ public static class DiagnosticFormatter
         }
 
         return builder.ToString();
+    }
+
+    private static string EscapeGitHubDiagnosticBodyFileDisplay(string fileDisplay)
+    {
+        var escaped = EscapeGitHubCommandValue(fileDisplay);
+        return escaped.StartsWith("::", StringComparison.Ordinal)
+            ? "." + escaped
+            : escaped;
     }
 
     private static void WriteTextDiagnostic(
