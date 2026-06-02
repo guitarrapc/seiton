@@ -4,7 +4,7 @@ namespace Seiton.Core.Tests;
 
 public sealed class EditDistanceTests
 {
-    // === Basic cases ===
+    //  Basic cases
 
     [Test]
     public async Task ComputeIgnoreCase_BothEmpty_ReturnsZero()
@@ -55,7 +55,7 @@ public sealed class EditDistanceTests
         await Assert.That(result).IsEqualTo(0);
     }
 
-    // === Known distances (real GitHub Actions typos) ===
+    // Known distances (real GitHub Actions typos)
 
     [Test]
     public async Task ComputeIgnoreCase_TokenTransposition_ReturnsTwo()
@@ -104,7 +104,7 @@ public sealed class EditDistanceTests
         await Assert.That(result).IsEqualTo(3);
     }
 
-    // === maxDistance overload tests ===
+    //  maxDistance overload tests
 
     [Test]
     public async Task ComputeIgnoreCase_WithMaxDistance_ReturnsExactWhenWithinThreshold()
@@ -160,7 +160,7 @@ public sealed class EditDistanceTests
         await Assert.That(result).IsEqualTo(0);
     }
 
-    // === Symmetry ===
+    //  Symmetry
 
     [Test]
     public async Task ComputeIgnoreCase_IsSymmetric()
@@ -178,7 +178,7 @@ public sealed class EditDistanceTests
         await Assert.That(ab).IsEqualTo(ba);
     }
 
-    // === Consistency between overloads ===
+    //  Consistency between overloads
 
     [Test]
     public async Task ComputeIgnoreCase_WithLargeMaxDistance_MatchesUnbounded()
@@ -213,7 +213,7 @@ public sealed class EditDistanceTests
         await Assert.That(bounded).IsEqualTo(1);
     }
 
-    // === Real-world scenario: "did you mean?" with multiple candidates ===
+    //  Real-world scenario: "did you mean?" with multiple candidates
 
     [Test]
     public async Task ComputeIgnoreCase_FindClosestCandidate_WorksCorrectly()
@@ -239,7 +239,7 @@ public sealed class EditDistanceTests
         await Assert.That(bestDistance).IsEqualTo(1);
     }
 
-    // === Edge cases ===
+    //  Edge cases
 
     [Test]
     public async Task ComputeIgnoreCase_SingleChar_Same()
@@ -262,7 +262,7 @@ public sealed class EditDistanceTests
         await Assert.That(result).IsEqualTo(1);
     }
 
-    // === Banded DP correctness: verify maxDistance overload matches unbounded for various distances ===
+    //  Banded DP correctness: verify maxDistance overload matches unbounded for various distances
 
     [Test]
     [Arguments("kitten", "sitting", 3)]      // distance = 3
@@ -287,7 +287,7 @@ public sealed class EditDistanceTests
         await Assert.That(result).IsEqualTo(maxDist + 1);
     }
 
-    // === Negative maxDistance throws ===
+    //  Negative maxDistance throws
 
     [Test]
     public async Task ComputeIgnoreCase_WithNegativeMaxDistance_ThrowsArgumentOutOfRange()

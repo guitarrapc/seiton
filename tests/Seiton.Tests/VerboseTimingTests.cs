@@ -7,7 +7,7 @@ namespace Seiton.Tests;
 
 public sealed class VerboseTimingTests
 {
-    // === TimeProvider integration ===
+    //  TimeProvider integration
 
     [Test]
     public async Task VerboseLogger_GetTimestamp_DelegatesToTimeProvider()
@@ -48,7 +48,7 @@ public sealed class VerboseTimingTests
         await Assert.That(t).IsEqualTo(0L);
     }
 
-    // === Per-file timing summary ===
+    //  Per-file timing summary
 
     [Test]
     public async Task WriteFileTimingSummary_EmitsKindTimingDiagsSuppressed()
@@ -101,7 +101,7 @@ public sealed class VerboseTimingTests
             .IsEqualTo("verbose: big.yml: workflow, 1234.5 ms, 100 diagnostics, 10 suppressed");
     }
 
-    // === Total timing summary ===
+    //  Total timing summary
 
     [Test]
     public async Task WriteTotalTiming_Check_EmitsCheckedVerb()
@@ -213,7 +213,7 @@ public sealed class VerboseTimingTests
         await Assert.That(lines[1]).IsEqualTo("verbose: total: 3 file(s) checked in 15.7 ms");
     }
 
-    // === Network timing ===
+    //  Network timing
 
     [Test]
     public async Task NetworkTiming_EmitsResolvedPinsWithElapsed()

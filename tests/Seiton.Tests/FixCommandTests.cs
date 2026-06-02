@@ -821,7 +821,7 @@ public sealed class FixCommandTests
         await Assert.That(lines[0]).Contains("line three");
     }
 
-    // === Fix Summary Tests ===
+    // Fix Summary Tests
 
     [Test]
     public async Task Fix_Summary_ShowsFixedCountAndRemaining()
@@ -1025,7 +1025,7 @@ public sealed class FixCommandTests
         }
     }
 
-    // === Fix Summary in Dry-Run / Check Mode Tests ===
+    //  Fix Summary in Dry-Run / Check Mode Tests
 
     [Test]
     public async Task Fix_Summary_DryRun_ShowsSummary()
@@ -1497,7 +1497,7 @@ public sealed class FixCommandTests
         }
     }
 
-    // === Fix Summary Order Tests (6a: fix summary before remain summary) ===
+    //  Fix Summary Order Tests (6a: fix summary before remain summary)
 
     [Test]
     public async Task Fix_Summary_Order_FixSummaryAppearsBeforeRemainSummary()
@@ -1829,7 +1829,7 @@ public sealed class FixCommandTests
         }
     }
 
-    // === Fix Summary Relationship Tests (6c: before/after/fixed relationship) ===
+    //  Fix Summary Relationship Tests (6c: before/after/fixed relationship)
 
     [Test]
     public async Task Fix_Summary_ShowsFoundCount_InTotalLine()

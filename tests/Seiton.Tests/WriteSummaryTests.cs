@@ -367,7 +367,7 @@ public sealed class WriteSummaryTests
         await Assert.That(output).DoesNotContain("--min-severity");
     }
 
-    // === Per-File Breakdown Tests ===
+    //  Per-File Breakdown Tests
 
     [Test]
     public async Task WriteSummary_ShowsPerFileBreakdown_ByDefault()
@@ -506,7 +506,7 @@ public sealed class WriteSummaryTests
         await Assert.That(output).IsEqualTo("");
     }
 
-    // === Per-Rule Breakdown Table Format Tests (6d) ===
+    //  Per-Rule Breakdown Table Format Tests (6d)
 
     [Test]
     public async Task WriteSummary_Verbose_PerRuleBreakdown_UsesTableFormat()
@@ -670,7 +670,7 @@ public sealed class WriteSummaryTests
         await Assert.That(output).DoesNotContain("remains");
     }
 
-    // === Per-File Breakdown Table Format Tests (6b) ===
+    //  Per-File Breakdown Table Format Tests (6b)
 
     [Test]
     public async Task WriteSummary_PerFileBreakdown_UsesTableFormat()

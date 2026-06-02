@@ -6,7 +6,7 @@ namespace Seiton.Tests;
 
 public sealed class VerboseRuleSummaryTests
 {
-    // === Rule Summary Logging Tests ===
+    //  Rule Summary Logging Tests
 
     [Test]
     public async Task WriteRuleSummary_EmitsEnabledAndDisabledCounts()
@@ -72,7 +72,7 @@ public sealed class VerboseRuleSummaryTests
         await Assert.That(sw.ToString()).IsEqualTo("");
     }
 
-    // === Document Kind Logging Tests ===
+    //  Document Kind Logging Tests
 
     [Test]
     public async Task LogFile_DocumentKind_Workflow()

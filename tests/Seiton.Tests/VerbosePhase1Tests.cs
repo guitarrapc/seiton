@@ -7,7 +7,7 @@ namespace Seiton.Tests;
 
 public sealed class VerbosePhase1Tests
 {
-    // === Suppression Summary Tests ===
+    //  Suppression Summary Tests
 
     [Test]
     public async Task WriteSuppressionSummary_WithSuppressions_EmitsFormattedLine()
@@ -124,7 +124,7 @@ public sealed class VerbosePhase1Tests
         await Assert.That(suppressedByRule).IsNull();
     }
 
-    // === Effective Network Config Tests ===
+    //  Effective Network Config Tests
 
     [Test]
     public async Task WriteEffectiveNetworkConfig_CliOverride_ShowsCliSource()
@@ -194,7 +194,7 @@ public sealed class VerbosePhase1Tests
         await Assert.That(lines[1]).IsEqualTo("verbose: config: fix.images.enable-network=false (source: config)");
     }
 
-    // === Discovery Logging Tests ===
+    //  Discovery Logging Tests
 
     [Test]
     public async Task ResolveFiles_AutoDiscovery_LogsSearchPathAndFoundDir()

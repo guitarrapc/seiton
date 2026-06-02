@@ -116,9 +116,7 @@ public sealed class VerboseRuleDiagnosticsTests
         await Assert.That(infoDiags.Length).IsEqualTo(0);
     }
 
-    // ==========================================================================
     // CredentialsRule — public registries stay silent to avoid verbose noise
-    // ==========================================================================
 
     [Test]
     public async Task CredentialsRule_PublicRegistry_Verbose_EmitsNoInfo()
@@ -208,9 +206,7 @@ public sealed class VerboseRuleDiagnosticsTests
         await Assert.That(infoDiags.Length).IsEqualTo(0);
     }
 
-    // ==========================================================================
     // RunnerLabelRule — verbose info when additional-known-hosted label matches
-    // ==========================================================================
 
     [Test]
     public async Task RunnerLabelRule_AdditionalKnownLabel_Verbose_EmitsInfo()

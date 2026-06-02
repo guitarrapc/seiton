@@ -7490,7 +7490,7 @@ public sealed class ParserTests
         await Assert.That(requiresLabelsDiag.Message).IsNull();
     }
 
-    // ==================== DiagnosticFix for Levenshtein suggestions ====================
+    // DiagnosticFix for Levenshtein suggestions
 
     [Test]
     public async Task Parse_WorkflowTopLevel_Fix_WhenSuggestionFound()
