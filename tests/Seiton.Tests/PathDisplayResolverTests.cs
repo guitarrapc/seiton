@@ -80,6 +80,49 @@ public sealed class PathDisplayResolverTests
     }
 
     [Test]
+    public async Task ResolveSarifArtifactLocation_RelativePath_ResolvesAgainstBaseDirectory()
+    {
+        var baseDir = Path.Combine(Path.GetTempPath(), "seiton-path-test-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(baseDir);
+        try
+        {
+            var target = Path.Combine(baseDir, "workflow.yml");
+            await File.WriteAllTextAsync(target, "on: push\n");
+
+            var resolver = new PathDisplayResolver(baseDir);
+            var location = resolver.ResolveSarifArtifactLocation("workflow.yml");
+
+            await Assert.That(location.Uri).IsEqualTo("workflow.yml");
+            await Assert.That(location.UriBaseId).IsEqualTo(PathDisplayResolver.SarifWorkingDirectoryBaseId);
+        }
+        finally
+        {
+            Directory.Delete(baseDir, recursive: true);
+        }
+    }
+
+    [Test]
+    public async Task GetDisplayPath_RelativeWithParentSegment_CanonicalizesAgainstBaseDirectory()
+    {
+        var baseDir = Path.Combine(Path.GetTempPath(), "seiton-path-test-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(baseDir);
+        try
+        {
+            var target = Path.Combine(baseDir, "workflow.yml");
+            await File.WriteAllTextAsync(target, "on: push\n");
+
+            var resolver = new PathDisplayResolver(baseDir);
+            var display = resolver.GetDisplayPath(Path.Combine("subdir", "..", "workflow.yml"));
+
+            await Assert.That(display).IsEqualTo("workflow.yml");
+        }
+        finally
+        {
+            Directory.Delete(baseDir, recursive: true);
+        }
+    }
+
+    [Test]
     public async Task ResolveSarifArtifactLocation_UnknownPath_UsesSafeFileUri()
     {
         var resolver = new PathDisplayResolver(Environment.CurrentDirectory);

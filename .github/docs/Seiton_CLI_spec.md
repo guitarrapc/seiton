@@ -382,7 +382,7 @@ Human-readable diagnostic output to stdout. Rich multi-line format (Rust-style) 
 
 Each diagnostic is rendered as a multi-line block showing the problem header, source location arrow, source snippet with underline caret, and optional help text.
 
-File paths in diagnostic output are **relative to the process working directory** at output time, using forward slashes (for example `.github/workflows/build.yml`). This keeps logs and copied output shareable without machine-specific absolute paths. Paths that cannot be expressed relative to the working directory (for example cross-drive paths on Windows) fall back to an absolute path. Sentinel paths such as `<stdin>` and `<unknown>` are preserved as-is.
+File paths in diagnostic output are **relative to the process working directory** at output time, using forward slashes (for example `.github/workflows/build.yml`). Both absolute and relative path inputs are normalized against the working directory before relativization. This keeps logs and copied output shareable without machine-specific absolute paths. Paths that cannot be expressed relative to the working directory (for example cross-drive paths on Windows) fall back to an absolute path. Sentinel paths such as `<stdin>` and `<unknown>` are preserved as-is.
 
 ```
 error[job-permissions-required]: job "build" omits explicit permissions declaration

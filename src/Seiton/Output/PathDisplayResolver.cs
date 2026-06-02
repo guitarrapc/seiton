@@ -79,7 +79,7 @@ internal sealed class PathDisplayResolver
     {
         try
         {
-            var fullPath = Path.GetFullPath(filePath);
+            var fullPath = GetFullPathFromBase(filePath);
             var relative = Path.GetRelativePath(_baseDirectory, fullPath);
             if (RequiresAbsoluteFallback(relative))
             {
@@ -128,12 +128,9 @@ internal sealed class PathDisplayResolver
         if (LooksLikeAbsoluteUri(filePath))
             return filePath;
 
-        if (!Path.IsPathRooted(filePath) && !LooksLikeWindowsDrivePath(filePath))
-            return NormalizeToForwardSlashes(filePath);
-
         try
         {
-            var fullPath = Path.GetFullPath(filePath);
+            var fullPath = GetFullPathFromBase(filePath);
             var relative = Path.GetRelativePath(_baseDirectory, fullPath);
             if (RequiresAbsoluteFallback(relative))
                 return NormalizeToForwardSlashes(fullPath);
@@ -145,6 +142,9 @@ internal sealed class PathDisplayResolver
             return NormalizeToForwardSlashes(filePath);
         }
     }
+
+    private string GetFullPathFromBase(string filePath) =>
+        Path.GetFullPath(filePath, _baseDirectory);
 
     private static bool IsPassthroughPath(string filePath) =>
         string.Equals(filePath, "<stdin>", StringComparison.Ordinal)
