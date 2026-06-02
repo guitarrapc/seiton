@@ -82,7 +82,7 @@ public static class DiagnosticFormatter
 
                 var fileDisplay = pathResolver.GetDisplayPath(d.FilePath);
                 currentGroupDisplay = EscapeGitHubCommandValue(fileDisplay);
-                currentLineDisplay = currentGroupDisplay;
+                currentLineDisplay = fileDisplay;
                 writer.Write("::group::");
                 writer.WriteLine(currentGroupDisplay);
                 currentGroupFile = fileKey;

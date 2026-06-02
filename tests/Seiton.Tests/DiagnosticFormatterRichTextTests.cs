@@ -729,10 +729,12 @@ public sealed class DiagnosticFormatterRichTextTests
 
         await Assert.That(output).Contains("::group::a%2525%0D%0Ab.yml");
         await Assert.That(output).DoesNotContain("::group::a%25\r\nb.yml");
+        await Assert.That(output).Contains("a%25\r\nb.yml:1:1: warning [test-rule] first");
+        await Assert.That(output).DoesNotContain("a%2525%0D%0Ab.yml:1:1: warning [test-rule] first");
     }
 
     [Test]
-    public async Task GitHubActions_Format_Oneline_EscapesFilePathControlCharacters()
+    public async Task GitHubActions_Format_Oneline_DisplaysUnescapedFilePathInDiagnosticBody()
     {
         var filePath = "a\r\n::warning::owned";
         var diagnostics = new[]
@@ -746,12 +748,12 @@ public sealed class DiagnosticFormatterRichTextTests
         writer.Flush();
         var output = sb.ToString();
 
-        await Assert.That(output).Contains("a%0D%0A::warning::owned:1:1: warning [test-rule] first");
-        await Assert.That(output).DoesNotContain("a\r\n::warning::owned:1:1: warning [test-rule] first");
+        await Assert.That(output).Contains("a\r\n::warning::owned:1:1: warning [test-rule] first");
+        await Assert.That(output).DoesNotContain("a%0D%0A::warning::owned:1:1: warning [test-rule] first");
     }
 
     [Test]
-    public async Task GitHubActions_Format_Rich_EscapesFilePathControlCharactersInLocationLine()
+    public async Task GitHubActions_Format_Rich_DisplaysUnescapedFilePathInLocationLine()
     {
         var filePath = "a\r\n::warning::owned";
         var diagnostics = new[]
@@ -765,8 +767,8 @@ public sealed class DiagnosticFormatterRichTextTests
         writer.Flush();
         var output = sb.ToString();
 
-        await Assert.That(output).Contains("--> a%0D%0A::warning::owned:1:1");
-        await Assert.That(output).DoesNotContain("--> a\r\n::warning::owned:1:1");
+        await Assert.That(output).Contains("--> a\r\n::warning::owned:1:1");
+        await Assert.That(output).DoesNotContain("--> a%0D%0A::warning::owned:1:1");
     }
 
     // Helpers

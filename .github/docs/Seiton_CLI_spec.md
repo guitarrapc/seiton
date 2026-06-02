@@ -671,7 +671,7 @@ Diagnostics are written to **stdout** in file groups using GitHub workflow-comma
 ::endgroup::
 ```
 
-Within each group, diagnostics use the same rich text structure as §6.1.1 (severity/rule header, source excerpt, help lines), or one-line form when `--oneline` is set. File paths in group titles and diagnostic bodies follow the same relative-path rules as §6.1.1.
+Within each group, diagnostics use the same rich text structure as §6.1.1 (severity/rule header, source excerpt, help lines), or one-line form when `--oneline` is set. File paths in diagnostic bodies follow the same relative-path rules as §6.1.1. Group titles (`::group::...`) percent-encode `%`, `\r`, and `\n` per GitHub workflow-command rules so folding markers remain valid; diagnostic bodies use the unescaped display path.
 
 - Color is never emitted for this format.
 - `--oneline` is supported and changes only the diagnostic body format (group wrapping behavior is unchanged).

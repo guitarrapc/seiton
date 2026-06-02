@@ -200,7 +200,7 @@ internal sealed class PathDisplayResolver
 
     internal static string EncodeRelativePathForUri(string path)
     {
-        var normalized = path.Replace('\\', '/');
+        var normalized = NormalizeToForwardSlashes(path);
         var segments = normalized.Split('/');
         for (var i = 0; i < segments.Length; i++)
         {
