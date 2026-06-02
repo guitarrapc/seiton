@@ -22,19 +22,25 @@ You can check various benchmark patterns at [GitHub Actions/Benchmark](https://g
 
 ## Example: Fixing broken workflow
 
+Seiton can be used with AI agents (Claude Code, GitHub Copilot, Cursor, etc.) or manually. Here's an example of the manual flow.
+
 <details><summary>Using LLM with skills</summary>
 
-Install the agent skill files for your preferred agent (Claude Code, GitHub Copilot, Cursor, etc.).
+Install the agent skill files for your preferred agent.
 
 ```sh
+# Default: Install for Claude Code
 seiton install --skills
+
+# Install for GitHub Copilot
+seiton install --skills --target copilot
 ```
 
-Then ask your agent to fix the workflow file with `/seiton` command.
+Then ask your agent to fix the workflow file with `/seiton` command. For example, following prompt can be used.
 
 ```text
 /seiton
-Lint and fix github workflows issues in `samples/readme/` with Seiton. The workflow file has various issues, such as unpinned actions, unsafe inline expressions, and policy violations. Please run Seiton with appropriate flags/config to fix these issues, and explain the changes you made.
+Lint and fix github workflows issuee with Seiton. The workflow file has various issues, such as unpinned actions, unsafe inline expressions, and policy violations. Please run Seiton with appropriate flags/config to fix these issues, and explain the changes you made.
 ```
 
 </details>
