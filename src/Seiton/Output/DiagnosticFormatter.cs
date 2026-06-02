@@ -7,7 +7,6 @@ namespace Seiton.Output;
 
 public static class DiagnosticFormatter
 {
-    private const string UnknownSarifFileUri = "file:///unknown";
     private const string SarifGeneralHelpUri = "https://github.com/guitarrapc/seiton/blob/main/docs/usage.md";
     private const string SarifRuleHelpUriPrefix = "https://github.com/guitarrapc/seiton/blob/main/docs/rules.md#";
 
@@ -21,20 +20,32 @@ public static class DiagnosticFormatter
         bool color,
         IReadOnlyDictionary<string, byte[]>? sourceMap = null)
     {
+        Write(writer, diagnostics, format, oneline, color, sourceMap, pathBaseDirectory: null);
+    }
+
+    internal static void Write(
+        TextWriter writer,
+        IReadOnlyList<Diagnostic> diagnostics,
+        OutputFormat format,
+        bool oneline,
+        bool color,
+        IReadOnlyDictionary<string, byte[]>? sourceMap,
+        string? pathBaseDirectory)
+    {
         switch (format)
         {
             case OutputFormat.Text:
-                WriteText(writer, diagnostics, oneline, color, sourceMap);
+                WriteText(writer, diagnostics, oneline, color, sourceMap, pathBaseDirectory);
                 break;
             case OutputFormat.GitHubActions:
                 // GitHub Actions format should always be plain text without ANSI escapes.
-                WriteGitHubActions(writer, diagnostics, oneline, sourceMap);
+                WriteGitHubActions(writer, diagnostics, oneline, sourceMap, pathBaseDirectory);
                 break;
             case OutputFormat.Json:
-                WriteJson(writer, diagnostics);
+                WriteJson(writer, diagnostics, pathBaseDirectory);
                 break;
             case OutputFormat.Sarif:
-                WriteSarif(writer, diagnostics);
+                WriteSarif(writer, diagnostics, pathBaseDirectory);
                 break;
         }
     }
@@ -43,47 +54,66 @@ public static class DiagnosticFormatter
         TextWriter writer,
         IReadOnlyList<Diagnostic> diagnostics,
         bool oneline,
-        IReadOnlyDictionary<string, byte[]>? sourceMap)
+        IReadOnlyDictionary<string, byte[]>? sourceMap,
+        string? pathBaseDirectory)
     {
         if (diagnostics.Count == 0)
         {
             return;
         }
 
+        var pathResolver = new PathDisplayResolver(pathBaseDirectory);
         string? currentGroupFile = null;
         string? currentGroupDisplay = null;
+        string currentLineDisplay = "<unknown>";
 
         for (var i = 0; i < diagnostics.Count; i++)
         {
             var d = diagnostics[i];
-            var file = d.FilePath ?? "<unknown>";
+            var fileKey = d.FilePath ?? "<unknown>";
 
-            if (!string.Equals(currentGroupFile, file, StringComparison.Ordinal))
+            if (!string.Equals(currentGroupFile, fileKey, StringComparison.Ordinal))
             {
                 if (currentGroupFile is not null)
                 {
                     writer.WriteLine("::endgroup::");
                 }
 
-                currentGroupDisplay = EscapeGitHubCommandValue(file);
+                var fileDisplay = pathResolver.GetDisplayPath(d.FilePath);
+                currentGroupDisplay = EscapeGitHubCommandValue(fileDisplay);
+                currentLineDisplay = currentGroupDisplay;
                 writer.Write("::group::");
                 writer.WriteLine(currentGroupDisplay);
-                currentGroupFile = file;
+                currentGroupFile = fileKey;
             }
 
-            WriteTextDiagnostic(writer, d, file, currentGroupDisplay ?? file, oneline, color: false, sourceMap);
+            WriteTextDiagnostic(writer, d, fileKey, currentLineDisplay, oneline, color: false, sourceMap);
         }
 
         writer.WriteLine("::endgroup::");
     }
 
-    private static void WriteText(TextWriter writer, IReadOnlyList<Diagnostic> diagnostics, bool oneline, bool color, IReadOnlyDictionary<string, byte[]>? sourceMap)
+    private static void WriteText(TextWriter writer, IReadOnlyList<Diagnostic> diagnostics, bool oneline, bool color, IReadOnlyDictionary<string, byte[]>? sourceMap, string? pathBaseDirectory)
     {
+        var pathResolver = new PathDisplayResolver(pathBaseDirectory);
+        string? previousFilePath = null;
+        string previousDisplayPath = "<unknown>";
         for (var i = 0; i < diagnostics.Count; i++)
         {
             var d = diagnostics[i];
-            var file = d.FilePath ?? "<unknown>";
-            WriteTextDiagnostic(writer, d, file, file, oneline, color, sourceMap);
+            var fileKey = d.FilePath ?? "<unknown>";
+            string fileDisplay;
+            if (string.Equals(previousFilePath, d.FilePath, StringComparison.Ordinal))
+            {
+                fileDisplay = previousDisplayPath;
+            }
+            else
+            {
+                fileDisplay = pathResolver.GetDisplayPath(d.FilePath);
+                previousFilePath = d.FilePath;
+                previousDisplayPath = fileDisplay;
+            }
+            WriteTextDiagnostic(writer, d, fileKey, fileDisplay, oneline, color, sourceMap);
         }
     }
 
@@ -363,15 +393,29 @@ public static class DiagnosticFormatter
         return results;
     }
 
-    private static void WriteJson(TextWriter writer, IReadOnlyList<Diagnostic> diagnostics)
+    private static void WriteJson(TextWriter writer, IReadOnlyList<Diagnostic> diagnostics, string? pathBaseDirectory)
     {
+        var pathResolver = new PathDisplayResolver(pathBaseDirectory);
+        string? previousFilePath = null;
+        string previousDisplayPath = "<unknown>";
         var entries = new JsonDiagnosticEntry[diagnostics.Count];
         for (var i = 0; i < diagnostics.Count; i++)
         {
             var d = diagnostics[i];
+            string fileDisplay;
+            if (string.Equals(previousFilePath, d.FilePath, StringComparison.Ordinal))
+            {
+                fileDisplay = previousDisplayPath;
+            }
+            else
+            {
+                fileDisplay = pathResolver.GetDisplayPath(d.FilePath);
+                previousFilePath = d.FilePath;
+                previousDisplayPath = fileDisplay;
+            }
             entries[i] = new JsonDiagnosticEntry
             {
-                File = d.FilePath ?? "<unknown>",
+                File = fileDisplay,
                 Line = d.Location.StartLine,
                 Col = d.Location.StartColumn,
                 Severity = d.Severity.ToString().ToLowerInvariant(),
@@ -386,8 +430,9 @@ public static class DiagnosticFormatter
         writer.WriteLine();
     }
 
-    private static void WriteSarif(TextWriter writer, IReadOnlyList<Diagnostic> diagnostics)
+    private static void WriteSarif(TextWriter writer, IReadOnlyList<Diagnostic> diagnostics, string? pathBaseDirectory)
     {
+        var pathResolver = new PathDisplayResolver(pathBaseDirectory);
         // Collect unique rule IDs
         var ruleSet = new Dictionary<string, int>(StringComparer.Ordinal);
         for (var i = 0; i < diagnostics.Count; i++)
@@ -408,10 +453,23 @@ public static class DiagnosticFormatter
         }
 
         var results = new SarifResult[diagnostics.Count];
+        string? previousFilePath = null;
+        SarifArtifactLocation? previousArtifactLocation = null;
         for (var i = 0; i < diagnostics.Count; i++)
         {
             var d = diagnostics[i];
             var ruleId = d.RuleId ?? "parse";
+            SarifArtifactLocation artifactLocation;
+            if (string.Equals(previousFilePath, d.FilePath, StringComparison.Ordinal) && previousArtifactLocation is not null)
+            {
+                artifactLocation = previousArtifactLocation;
+            }
+            else
+            {
+                artifactLocation = pathResolver.ResolveSarifArtifactLocation(d.FilePath);
+                previousFilePath = d.FilePath;
+                previousArtifactLocation = artifactLocation;
+            }
             results[i] = new SarifResult
             {
                 RuleId = ruleId,
@@ -429,10 +487,7 @@ public static class DiagnosticFormatter
                     {
                         PhysicalLocation = new SarifPhysicalLocation
                         {
-                            ArtifactLocation = new SarifArtifactLocation
-                            {
-                                Uri = ToSarifArtifactUri(d.FilePath),
-                            },
+                            ArtifactLocation = artifactLocation,
                             Region = new SarifRegion
                             {
                                 StartLine = d.Location.StartLine,
@@ -462,6 +517,7 @@ public static class DiagnosticFormatter
                             Rules = rules,
                         },
                     },
+                    OriginalUriBaseIds = pathResolver.CreateOriginalUriBaseIds(),
                     Results = results,
                 },
             ],
@@ -471,49 +527,6 @@ public static class DiagnosticFormatter
         writer.WriteLine();
     }
 
-    private static string ToSarifArtifactUri(string? filePath)
-    {
-        if (string.IsNullOrWhiteSpace(filePath) || string.Equals(filePath, "<unknown>", StringComparison.Ordinal))
-            return UnknownSarifFileUri;
-
-        if (LooksLikeWindowsDrivePath(filePath) || Path.IsPathRooted(filePath))
-            return new Uri(Path.GetFullPath(filePath), UriKind.Absolute).AbsoluteUri;
-
-        if (IsSafeRelativeUriPath(filePath))
-            return filePath;
-
-        if (LooksLikeAbsoluteUri(filePath) && Uri.TryCreate(filePath, UriKind.Absolute, out var absoluteUri))
-            return absoluteUri.AbsoluteUri;
-
-        return EncodeRelativePathForUri(filePath);
-    }
-
-    private static bool LooksLikeWindowsDrivePath(string path)
-    {
-        if (path.Length < 3)
-            return false;
-
-        return char.IsLetter(path[0])
-            && path[1] == ':'
-            && (path[2] == '\\' || path[2] == '/');
-    }
-
-    private static string EncodeRelativePathForUri(string path)
-    {
-        var normalized = path.Replace('\\', '/');
-        var segments = normalized.Split('/');
-        for (var i = 0; i < segments.Length; i++)
-        {
-            var segment = segments[i];
-            if (segment.Length == 0 || segment == "." || segment == "..")
-                continue;
-
-            segments[i] = Uri.EscapeDataString(segment);
-        }
-
-        return string.Join('/', segments);
-    }
-
     private static string BuildSarifRuleHelpUri(string ruleId)
     {
         if (string.Equals(ruleId, "parse", StringComparison.Ordinal))
@@ -521,59 +534,6 @@ public static class DiagnosticFormatter
 
         return string.Concat(SarifRuleHelpUriPrefix, ruleId);
     }
-
-    private static bool IsSafeRelativeUriPath(string path)
-    {
-        for (var i = 0; i < path.Length; i++)
-        {
-            var c = path[i];
-            if (c is >= 'a' and <= 'z')
-                continue;
-            if (c is >= 'A' and <= 'Z')
-                continue;
-            if (c is >= '0' and <= '9')
-                continue;
-
-            switch (c)
-            {
-                case '/':
-                case '.':
-                case '-':
-                case '_':
-                case '~':
-                    continue;
-                default:
-                    return false;
-            }
-        }
-
-        return true;
-    }
-
-    private static bool LooksLikeAbsoluteUri(string path)
-    {
-        var colonIndex = path.IndexOf(':');
-        if (colonIndex <= 1)
-            return false;
-
-        for (var i = 0; i < colonIndex; i++)
-        {
-            var c = path[i];
-            if (c is >= 'a' and <= 'z')
-                continue;
-            if (c is >= 'A' and <= 'Z')
-                continue;
-            if (c is >= '0' and <= '9')
-                continue;
-            if (c is '+' or '-' or '.')
-                continue;
-
-            return false;
-        }
-
-        return true;
-    }
-
 }
 
 // --- JSON output models ---
@@ -615,6 +575,9 @@ internal sealed record SarifRun
 {
     [JsonPropertyName("tool")]
     public required SarifTool Tool { get; init; }
+    [JsonPropertyName("originalUriBaseIds")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public Dictionary<string, SarifArtifactLocation>? OriginalUriBaseIds { get; init; }
     [JsonPropertyName("results")]
     public required SarifResult[] Results { get; init; }
 }
@@ -677,12 +640,6 @@ internal sealed record SarifPhysicalLocation
     public required SarifArtifactLocation ArtifactLocation { get; init; }
     [JsonPropertyName("region")]
     public required SarifRegion Region { get; init; }
-}
-
-internal sealed record SarifArtifactLocation
-{
-    [JsonPropertyName("uri")]
-    public required string Uri { get; init; }
 }
 
 internal sealed record SarifRegion

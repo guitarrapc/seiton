@@ -51,6 +51,7 @@ Representative implementation surface:
 | `src/Seiton/Commands/ExitCode.cs` | Exit code constants |
 | `src/Seiton/Config/CliConfigBridge.cs` | Config resolution, env var reading, flag override application |
 | `src/Seiton/Output/DiagnosticFormatter.cs` | Text/JSON/SARIF formatting |
+| `src/Seiton/Output/PathDisplayResolver.cs` | Working-directory-relative path display + SARIF artifact resolution |
 | `src/Seiton/Cli/CliOptionSuggester.cs` | Unknown option detection and suggestion |
 
 ### 0.4 Design
@@ -365,6 +366,8 @@ internal partial class SeitonJsonContext : JsonSerializerContext { }
 ### 7.2 SARIF Output
 
 SARIF 2.1.0 is emitted via an object graph serialized with source-generated `System.Text.Json` (`JsonSerializer` + `JsonSerializerContext`). No external SARIF library is used, maintaining AOT compatibility and minimal dependencies.
+
+File paths are relativized at output time by `PathDisplayResolver` (working-directory-relative, forward slashes). SARIF results use relative `artifactLocation.uri` with `uriBaseId = %WORKING_DIR%`; when relative artifacts are present, a matching `runs[].originalUriBaseIds` entry is emitted. Cross-drive or non-relativeizable paths fall back to absolute `file:///...` URIs.
 
 ### 7.3 Rich Text Output
 

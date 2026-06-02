@@ -349,34 +349,53 @@ public sealed class DiagnosticFormatterRichTextTests
     }
 
     [Test]
-    public async Task Sarif_Format_WindowsAbsolutePath_EmitsFileUri()
+    public async Task Sarif_Format_WindowsAbsolutePath_EmitsRelativeUriWithBaseId()
     {
-        var diag = MakeDiagnostic(
-            DiagnosticSeverity.Warning,
-            "uri test",
-            2,
-            3,
-            2,
-            8,
-            filePath: @"C:\work\repo\.github\workflows\ci with space.yml");
+        var baseDir = Path.Combine(Path.GetTempPath(), "seiton-sarif-test-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(baseDir);
+        try
+        {
+            var target = Path.Combine(baseDir, ".github", "workflows", "ci with space.yml");
+            Directory.CreateDirectory(Path.GetDirectoryName(target)!);
+            await File.WriteAllTextAsync(target, "on: push\n");
 
-        var sb = new StringBuilder();
-        using var writer = new StringWriter(sb);
-        DiagnosticFormatter.Write(writer, [diag], OutputFormat.Sarif, oneline: false, color: false);
-        writer.Flush();
+            var diag = MakeDiagnostic(
+                DiagnosticSeverity.Warning,
+                "uri test",
+                2,
+                3,
+                2,
+                8,
+                filePath: target);
 
-        using var doc = JsonDocument.Parse(sb.ToString());
-        var uri = doc.RootElement
-            .GetProperty("runs")[0]
-            .GetProperty("results")[0]
-            .GetProperty("locations")[0]
-            .GetProperty("physicalLocation")
-            .GetProperty("artifactLocation")
-            .GetProperty("uri")
-            .GetString();
+            var sb = new StringBuilder();
+            using var writer = new StringWriter(sb);
+            DiagnosticFormatter.Write(writer, [diag], OutputFormat.Sarif, oneline: false, color: false, sourceMap: null, pathBaseDirectory: baseDir);
+            writer.Flush();
 
-        await Assert.That(uri).StartsWith("file:///");
-        await Assert.That(uri).Contains("ci%20with%20space.yml");
+            using var doc = JsonDocument.Parse(sb.ToString());
+            var location = doc.RootElement
+                .GetProperty("runs")[0]
+                .GetProperty("results")[0]
+                .GetProperty("locations")[0]
+                .GetProperty("physicalLocation")
+                .GetProperty("artifactLocation");
+
+            var uri = location.GetProperty("uri").GetString();
+            var uriBaseId = location.GetProperty("uriBaseId").GetString();
+
+            await Assert.That(uri).IsEqualTo(".github/workflows/ci%20with%20space.yml");
+            await Assert.That(uriBaseId).IsEqualTo(PathDisplayResolver.SarifWorkingDirectoryBaseId);
+
+            var originalUriBaseIds = doc.RootElement
+                .GetProperty("runs")[0]
+                .GetProperty("originalUriBaseIds");
+            await Assert.That(originalUriBaseIds.TryGetProperty(PathDisplayResolver.SarifWorkingDirectoryBaseId, out _)).IsTrue();
+        }
+        finally
+        {
+            Directory.Delete(baseDir, recursive: true);
+        }
     }
 
     [Test]
@@ -400,6 +419,80 @@ public sealed class DiagnosticFormatterRichTextTests
             .GetString();
 
         await Assert.That(uri).IsEqualTo("file:///unknown");
+    }
+
+    [Test]
+    public async Task Sarif_Format_AbsoluteUriInput_DoesNotEmitOriginalUriBaseIds()
+    {
+        var diag = MakeDiagnostic(
+            DiagnosticSeverity.Warning,
+            "remote source",
+            1,
+            1,
+            1,
+            3,
+            filePath: "https://example.com/repo/.github/workflows/ci.yml");
+
+        var sb = new StringBuilder();
+        using var writer = new StringWriter(sb);
+        DiagnosticFormatter.Write(writer, [diag], OutputFormat.Sarif, oneline: false, color: false);
+        writer.Flush();
+
+        using var doc = JsonDocument.Parse(sb.ToString());
+        var run = doc.RootElement.GetProperty("runs")[0];
+        await Assert.That(run.TryGetProperty("originalUriBaseIds", out _)).IsFalse();
+    }
+
+    [Test]
+    public async Task Json_Format_AbsolutePath_EmitsRelativeDisplayPath()
+    {
+        var baseDir = Path.Combine(Path.GetTempPath(), "seiton-json-test-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(baseDir);
+        try
+        {
+            var target = Path.Combine(baseDir, ".github", "workflows", "ci.yml");
+            Directory.CreateDirectory(Path.GetDirectoryName(target)!);
+            await File.WriteAllTextAsync(target, "on: push\n");
+
+            var diag = MakeDiagnostic(DiagnosticSeverity.Error, "json test", 1, 1, 1, 5, filePath: target);
+
+            var sb = new StringBuilder();
+            using var writer = new StringWriter(sb);
+            DiagnosticFormatter.Write(writer, [diag], OutputFormat.Json, oneline: false, color: false, sourceMap: null, pathBaseDirectory: baseDir);
+            writer.Flush();
+
+            await Assert.That(sb.ToString()).Contains("\"file\":\".github/workflows/ci.yml\"");
+            await Assert.That(sb.ToString()).DoesNotContain(Path.GetFullPath(target));
+        }
+        finally
+        {
+            Directory.Delete(baseDir, recursive: true);
+        }
+    }
+
+    [Test]
+    public async Task Text_Oneline_AbsolutePath_EmitsRelativeDisplayPath()
+    {
+        var baseDir = Path.Combine(Path.GetTempPath(), "seiton-text-test-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(baseDir);
+        try
+        {
+            var target = Path.Combine(baseDir, "workflow.yml");
+            await File.WriteAllTextAsync(target, "on: push\n");
+
+            var diag = MakeDiagnostic(DiagnosticSeverity.Warning, "relative path", 1, 1, 1, 5, filePath: target);
+
+            var sb = new StringBuilder();
+            using var writer = new StringWriter(sb);
+            DiagnosticFormatter.Write(writer, [diag], OutputFormat.Text, oneline: true, color: false, sourceMap: null, pathBaseDirectory: baseDir);
+            writer.Flush();
+
+            await Assert.That(sb.ToString().TrimEnd()).IsEqualTo("workflow.yml:1:1: warning [test-rule] relative path");
+        }
+        finally
+        {
+            Directory.Delete(baseDir, recursive: true);
+        }
     }
 
     [Test]

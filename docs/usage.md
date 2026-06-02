@@ -454,7 +454,7 @@ seiton --format json | ConvertFrom-Json
 
 ### SARIF
 
-[SARIF 2.1](https://sarifweb.azurewebsites.net/) output for GitHub Advanced Security code scanning:
+[SARIF 2.1](https://sarifweb.azurewebsites.net/) output for GitHub Advanced Security code scanning. File paths in results are relative to the working directory (with `%WORKING_DIR%` / `originalUriBaseIds` for resolution), making SARIF files easier to share in issues and reviews.
 
 ```sh
 seiton --format sarif > seiton.sarif

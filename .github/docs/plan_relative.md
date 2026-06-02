@@ -174,9 +174,73 @@ SARIF:
 
 - 相対化基準を `cwd` 固定にするか（本案では固定前提）
 - Windows でドライブ跨ぎ時に `absolute` フォールバックを許可するか
-- `sarif` で `uriBaseId` / `originalUriBaseIds` を常時出力するか（推奨は常時）
+- `sarif` で `uriBaseId` / `originalUriBaseIds` を相対URIがある場合のみ出力するか（実装は相対URIありの場合のみ）
 
 ---
 
 以上より、**相対パス化は妥当かつ実装可能**。  
 本計画では **案C（デフォルト相対・オプションなし・breaking change許容）を採用**し、仕様・実装・ドキュメントを一括で更新する。
+
+---
+
+## 実装結果（案C）
+
+### 実装内容
+
+| 変更 | 内容 |
+|---|---|
+| `src/Seiton/Output/PathDisplayResolver.cs` | 新規。`Environment.CurrentDirectory` 基準で表示パスを相対化。SARIF 用に `uriBaseId` / `originalUriBaseIds` を生成。パスごとのキャッシュで同一ファイルの反復 lookup を抑制 |
+| `src/Seiton/Output/DiagnosticFormatter.cs` | `text` / `json` / `github-actions` / `sarif` すべて resolver 経由で表示。内部 `FilePath`（絶対）は source map lookup 用キーとして維持 |
+| `tests/Seiton.Tests/PathDisplayResolverTests.cs` | 相対化・SARIF base ID・キャッシュの単体テスト |
+| `tests/Seiton.Tests/DiagnosticFormatterRichTextTests.cs` | SARIF / JSON / text の相対パス出力テストを追加・更新 |
+| `src/Seiton.Benchmark/DiagnosticOutputBenchmark.cs` | 実運用に合わせ診断 `FilePath` を絶対パスに変更 |
+| 仕様・ドキュメント | `Seiton_CLI_spec.md` §6.1–6.3、`Seiton_CLI_csharp_spec.md` §7.2、`docs/usage.md` を更新 |
+
+### API / UX レビュー
+
+- **ユーザーファースト**: CLI に新オプションなし。出力は常に repo 相対パス（`/.github/workflows/...`）で、Issue 共有にそのまま使える。
+- **内部整合**: lint エンジンは引き続き絶対パスで動作。相対化は出力層のみ。
+- **SARIF 互換**: 相対 artifact がある場合は `%WORKING_DIR%` + `originalUriBaseIds` を付与し、Code Scanning 等が絶対 URI を復元可能。
+- **フォールバック**: ドライブ跨ぎなど相対化不能時は従来どおり絶対 URI / 絶対パスを出力（壊れない）。
+- **スコープ外（意図的）**: `--verbose` の per-file 進捗行は絶対パスのまま（デバッグ用途）。summary テーブルは従来どおりファイル名のみ。
+
+### セルフレビューと対応
+
+| 指摘 | 対応 |
+|---|---|
+| Windows テストで `Environment.CurrentDirectory` 変更がディレクトリ削除と競合 | `DiagnosticFormatter.Write` に `pathBaseDirectory` テスト用パラメータを追加（CLI 非公開） |
+| SARIF 出力の同一ファイル反復解決コスト | `_displayCache` / `_sarifCache` でパス単位キャッシュ |
+| `DiagnosticFormatter.Write` の public API がテスト用途引数で肥大化 | public 署名は既存維持し、`pathBaseDirectory` は internal overload に分離 |
+| `originalUriBaseIds` が不要ケースでも常時生成される | 相対 artifact が1件以上ある場合のみ生成するよう変更 |
+| 診断ループ内で同一ファイルの表示解決を毎回実行していた | `DiagnosticFormatter` 側でも直前ファイルキャッシュ（text/json/sarif/github-actions）を追加し resolver 呼び出しを削減 |
+| `\\` を含まないパスでも `Replace('\\','/')` で文字列を再生成していた | `IndexOf('\\')` で分岐し、変換不要なら同一参照を返す |
+| 仕様書が旧「絶対 URI 既定」と矛盾 | `Seiton_CLI_spec.md` 等を案C契約に同期 |
+
+### ベンチマーク（DiagnosticOutputBenchmark）
+
+ベンチマークは実装後に診断 `FilePath` を**絶対パス**に変更したため、SARIF/oneline の Before は「もともと相対パス入力」、After は「本番同等の絶対パス入力 + 相対化処理」を計測している。厳密な Before/After 比較は text/github-actions rich（処理構造が近い）と Allocated を主に参照する。
+
+| Benchmark | Count | Before Mean | After Mean | Δ Mean | Before Alloc | After Alloc | Δ Alloc |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| text rich | F1 | 216.7 µs | 239.3 µs | +10% | 117.5 KB | 118.9 KB | +1% |
+| text rich | F10 | 2,130 µs | 2,281 µs | +7% | 1,137 KB | 1,141 KB | +0.4% |
+| github-actions rich | F1 | 206.0 µs | 229.9 µs | +12% | 117.5 KB | 118.9 KB | +1% |
+| github-actions rich | F10 | 2,079 µs | 2,421 µs | +16% | 1,153 KB | 1,156 KB | +0.3% |
+| github-actions oneline | F1 | 9.8 µs | 13.2 µs | +34%* | 84.8 KB | 86.2 KB | +2% |
+| github-actions oneline | F10 | 93.5 µs | 128.8 µs | +38%* | 700 KB | 704 KB | +0.6% |
+| sarif | F1 | 35.2 µs | 44.1 µs | +25%* | 145 KB | 153 KB | +6% |
+| sarif | F10 | 414 µs | 483 µs | +17%* | 1,273 KB | 1,329 KB | +4% |
+
+\* Before 側はベンチマーク入力が相対パスだったため、相対化コストが含まれていない。実運用上は「絶対パス入力 → 相対パス出力」が新規コストであり、Allocated 増分はおおむね +10% 以内。
+
+**性能評価**:
+
+- **Allocated**: 全ケース +10% 以内。相対化・SARIF メタデータ追加に対して許容範囲。
+- **Mean**: rich text 形式は +7〜16%（ノイズと絶対パス入力化の影響が混在）。oneline/SARIF の Mean 増は主にベンチマーク入力変更によるもの。キャッシュ導入後 SARIF F10 は 827 µs → 483 µs（直前計測では 470 µs）に改善し、非キャッシュ版より大幅に低い。
+- **改善策（将来）**: ベンチマークを「絶対パス入力・相対パス出力」で Before も取り直す。必要なら `Write()` 内で `PathDisplayResolver` を 1 回だけ生成して各 writer に渡す（現状は format ごとに 1 回）。
+
+### Breaking change 告知（リリースノート用）
+
+- `--format text|json|github-actions|sarif` の診断出力に含まれるファイルパスは、プロセス作業ディレクトリからの**相対パス**（`/` 区切り）に変更。
+- 絶対パス前提のログパーサーは相対パス対応が必要。
+- SARIF は相対 artifact を含む場合に `uriBaseId` / `originalUriBaseIds` が追加。`file:///C:/...` 形式のみを期待する連携は `%WORKING_DIR%` 解決へ移行。
