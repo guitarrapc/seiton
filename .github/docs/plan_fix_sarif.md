@@ -10,12 +10,12 @@
 |---|---:|---|---|---|
 | SARIF1002 | 80 | 修正する | P0 | `artifactLocation.uri` を RFC 3986 準拠 URI にする |
 | SARIF2005 | 1 | 修正する | P0 | `tool.driver` にバージョン情報を追加する |
-| SARIF2004 | 1 | 今回は見送り（意図的維持） | P2 | `tool.driver.rules` は当面維持。将来メタデータ拡張時に再評価 |
+| SARIF2004 | 1 | 修正する（Phase 2 で対応） | P2 | `tool.driver.rules` に `helpUri` を追加して実情報を持たせる |
 
 理由:
 - SARIF1002 は仕様違反であり、Code Scanning 連携先で解釈差異が出るリスクが高い。
 - SARIF2005 はツール同定性に直結し、ログ比較・トリアージ品質に影響する。
-- SARIF2004 は最適化提案（advisory）であり、現時点で機能不全は起こさない。
+- SARIF2004 は最適化提案（advisory）だが、低コスト対応が可能なため Phase 2 で解消する。
 
 ## 2. 現状分析
 
@@ -67,19 +67,18 @@
 - Validator の SARIF2005 が 0 件になる。
 - ログ比較時にツールバージョンが識別できる。
 
-### 3.3 SARIF2004 (P2, 今回見送り)
+### 3.3 SARIF2004 (P2, 修正)
 
 問題:
 - `tool.driver.rules` が `id` のみで、冗長配列の可能性として警告されている。
 
 判断:
 - これは仕様違反ではなく最適化提案。
-- `ruleId`/`ruleIndex` の参照先として `rules` を保持する設計は妥当。
-- 将来、`shortDescription` / `helpUri` などを追加すれば警告は自然に解消できる。
+- ただし `helpUri` を固定 URL で付与すれば、低コストで「id 以外の情報」を持たせられる。
 
 今回の方針:
-- 直近リリースでは変更しない（ノイズ削減より互換性と安定性を優先）。
-- 別タスクで「ルールメタデータ拡張」を検討する。
+- `tool.driver.rules[].helpUri` に `docs/usage.md` の URL を付与する。
+- ルールごとの詳細メタデータ（`shortDescription` など）はコスト対効果の観点で見送る。
 
 ## 4. 実施プラン（未実装）
 
@@ -95,14 +94,14 @@
 4. 既存テストを含めて回帰確認。
 5. SARIF Validator 再実行で 1002/2005 が解消されたことを確認。
 
-### Phase 2 (P2): 最適化見直し（任意）
+### Phase 2 (P2): 最適化見直し
 
 対象:
 - SARIF2004
 
 計画:
-1. `rules` 維持時に付与できるメタデータ（説明・ドキュメント URL）を棚卸し。
-2. コストに見合うなら `rules` を拡張、見合わなければ現状維持を明文化。
+1. `rules` 維持時に付与できる最小メタデータを棚卸し。
+2. `helpUri`（`usage.md`）を追加し、SARIF2004 の指摘を解消する。
 
 ## 5. テスト・検証計画
 
@@ -119,7 +118,7 @@
 期待結果:
 - SARIF1002: 80 -> 0
 - SARIF2005: 1 -> 0
-- SARIF2004: 1 -> 1（意図的に維持）
+- SARIF2004: 1 -> 0
 
 ## 6. 影響範囲とリスク
 
@@ -139,7 +138,7 @@
 
 - P0 項目（SARIF1002/SARIF2005）の修正方針が合意されている。
 - 実装時にそのまま着手できるテスト観点と受け入れ条件が明記されている。
-- P2 項目（SARIF2004）の扱いが「今回は見送り」として明文化されている。
+- P2 項目（SARIF2004）の修正方針が明文化されている。
 
 ## 8. Phase 1 実装結果（2026-06-02）
 
@@ -209,4 +208,65 @@ Review Round 1:
 
 Review Round 2:
 - 再評価: ベンチ差分が閾値内（+2.05%）に収束、テスト全件成功。
+- 追加指摘: なし。
+
+## 12. Phase 2 実装結果（2026-06-02）
+
+実装ステータス:
+- 完了（SARIF2004 対応）
+
+実装内容:
+1. `runs[].tool.driver.rules[]` に `helpUri` を追加。
+2. `helpUri` は共通の usage ガイド URL を指す。
+  - `https://github.com/guitarrapc/seiton/blob/main/docs/usage.md`
+
+追加テスト（Red -> Green）:
+- `Sarif_Format_Rules_IncludeHelpUriMetadata`
+
+検証結果:
+- 追加テスト: 失敗を確認後、実装後に成功。
+- フルテスト: `dotnet test` で全件成功（2364 passed, 0 failed）。
+
+## 13. Phase 2 ベンチマーク結果（変更前後比較）
+
+測定条件:
+- BenchmarkDotNet ShortRun
+- 対象: `DiagnosticOutputBenchmark.WriteSarif`
+- Count パラメータ: `F1`, `F10`
+
+変更前（Phase 2 実装前）:
+- F1: Mean 87.206 us, Allocated 143.26 KB
+- F10: Mean 1,188.90 us, Allocated 1,528.46 KB
+
+変更後（Phase 2 実装後）:
+- F1: Mean 71.377 us, Allocated 144.43 KB
+- F10: Mean 1,299.31 us, Allocated 1,533.07 KB
+
+差分評価:
+- F1 Mean: -18.15%（改善）
+- F10 Mean: +9.28%（許容範囲、閾値 +10% 以内）
+- F1 Allocated: +0.82%（許容範囲）
+- F10 Allocated: +0.30%（許容範囲）
+
+考察:
+- `helpUri` 追加によりシリアライズ対象データが増えるため、F10 側で処理時間・割り当てとも微増。
+- ただし増分は閾値内で、SARIF2004 解消の効果を優先できる範囲。
+
+## 14. Phase 2 API/仕様整合レビュー
+
+ユーザーファースト API 観点:
+- CLI 入力 API には変更なし（既存ユーザー影響なし）。
+- SARIF 消費者はルール情報から usage ガイドへ直接遷移でき、トリアージしやすくなる。
+
+仕様整合:
+- `.github/docs/Seiton_CLI_spec.md` に `rules[].helpUri` の挙動を追記済み。
+
+## 15. Phase 2 フェーズ内レビュー反復記録
+
+Review Round 1:
+- 指摘: `rules` が id のみだと SARIF2004 が継続する。
+- 対応: `helpUri` を最小追加して「id 以外の情報」を付与。
+
+Review Round 2:
+- 再評価: テスト全件成功、ベンチ差分は閾値内。
 - 追加指摘: なし。

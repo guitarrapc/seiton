@@ -494,7 +494,9 @@ Each diagnostic maps to a SARIF `result` under a `run` with tool identity `seito
 - Relative paths are emitted as URI-safe relative references (slash-separated, percent-encoded when needed).
 - Unknown paths are emitted as `file:///unknown`.
 
-Rule metadata (`id`) is emitted per-rule in `tool.driver.rules`.
+Rule metadata (`id`, `helpUri`) is emitted per-rule in `tool.driver.rules`.
+
+`runs[].tool.driver.rules[].helpUri` points to the usage guide (`https://github.com/guitarrapc/seiton/blob/main/docs/usage.md`) to provide stable rule reference context in SARIF consumers.
 
 `runs[].tool.driver.version` is always emitted, sourced from assembly informational version (with build metadata suffix trimmed when present).
 

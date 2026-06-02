@@ -9,6 +9,7 @@ namespace Seiton.Output;
 public static class DiagnosticFormatter
 {
     private const string UnknownSarifFileUri = "file:///unknown";
+    private const string SarifRuleHelpUri = "https://github.com/guitarrapc/seiton/blob/main/docs/usage.md";
 
     private static readonly string SarifDriverVersion = ResolveSarifDriverVersion();
 
@@ -399,7 +400,11 @@ public static class DiagnosticFormatter
         var rules = new SarifRule[ruleSet.Count];
         foreach (var (id, idx) in ruleSet)
         {
-            rules[idx] = new SarifRule { Id = id };
+            rules[idx] = new SarifRule
+            {
+                Id = id,
+                HelpUri = SarifRuleHelpUri,
+            };
         }
 
         var results = new SarifResult[diagnostics.Count];
@@ -640,6 +645,8 @@ internal sealed record SarifRule
 {
     [JsonPropertyName("id")]
     public required string Id { get; init; }
+    [JsonPropertyName("helpUri")]
+    public required string HelpUri { get; init; }
 }
 
 internal sealed record SarifResult

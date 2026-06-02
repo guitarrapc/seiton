@@ -425,6 +425,37 @@ public sealed class DiagnosticFormatterRichTextTests
     }
 
     [Test]
+    public async Task Sarif_Format_Rules_IncludeHelpUriMetadata()
+    {
+        var diagnostics = new[]
+        {
+            MakeDiagnostic(DiagnosticSeverity.Warning, "first", 1, 1, 1, 5, ruleId: "runner-no-latest"),
+            MakeDiagnostic(DiagnosticSeverity.Error, "second", 2, 1, 2, 5, ruleId: "unpinned-uses"),
+        };
+
+        var sb = new StringBuilder();
+        using var writer = new StringWriter(sb);
+        DiagnosticFormatter.Write(writer, diagnostics, OutputFormat.Sarif, oneline: false, color: false);
+        writer.Flush();
+
+        using var doc = JsonDocument.Parse(sb.ToString());
+        var rules = doc.RootElement
+            .GetProperty("runs")[0]
+            .GetProperty("tool")
+            .GetProperty("driver")
+            .GetProperty("rules");
+
+        await Assert.That(rules.GetArrayLength()).IsEqualTo(2);
+
+        foreach (var rule in rules.EnumerateArray())
+        {
+            var hasHelpUri = rule.TryGetProperty("helpUri", out var helpUriElement);
+            await Assert.That(hasHelpUri).IsTrue();
+            await Assert.That(helpUriElement.GetString()).Contains("/docs/usage.md");
+        }
+    }
+
+    [Test]
     public async Task GitHubActions_Format_DoesNotEmitAnsi_WhenColorRequested()
     {
         var diag = MakeDiagnostic(DiagnosticSeverity.Error, "plain error", 1, 1, 1, 5);
