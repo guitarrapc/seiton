@@ -11,7 +11,7 @@ namespace Seiton.Core.Tests;
 /// </summary>
 public sealed class RunnerNoLatestFixMappingTests
 {
-    #region Phase 1: Config Parsing and Validation
+    #region Config Parsing and Validation
 
     [Test]
     public async Task Config_FixMapping_ValidMapping_ParsesCorrectly()
@@ -197,7 +197,7 @@ public sealed class RunnerNoLatestFixMappingTests
 
     #endregion
 
-    #region Phase 2: Detection Extension
+    #region Detection Extension
 
     [Test]
     public async Task Detection_BuiltInLabels_DetectedWithoutConfig()
@@ -420,7 +420,7 @@ public sealed class RunnerNoLatestFixMappingTests
 
     #endregion
 
-    #region Phase 3: Fix Generation
+    #region Fix Generation
 
     [Test]
     public async Task Fix_WithMapping_GeneratesFixForMatchedLabel()

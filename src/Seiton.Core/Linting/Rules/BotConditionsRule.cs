@@ -31,7 +31,7 @@ public sealed class BotConditionsRule() : RuleBase(RuleId.BotConditions)
     // Known bot suffixes
     private static ReadOnlySpan<byte> BotSuffix => "[bot]"u8;
 
-    // Phase 3: whether bot-condition diagnostics are actionable for this workflow's triggers
+    // whether bot-condition diagnostics are actionable for this workflow's triggers
     private bool _emitBotConditionDiagnostics;
 
     public override string Name => "Bot Conditions Rule";
@@ -154,7 +154,7 @@ public sealed class BotConditionsRule() : RuleBase(RuleId.BotConditions)
                 continue;
             }
 
-            // Phase 1: If the same expression has a non-spoofable context check with the same literal
+            // If the same expression has a non-spoofable context check with the same literal
             // AND-conjoined, suppress. Skip suppression when OR operators exist (non-spoofable
             // check on the other side of OR does not mitigate the spoofable branch).
             if (!hasOr && HasNonSpoofableConjunction(literalId, nodes, exprBytes))
@@ -162,9 +162,8 @@ public sealed class BotConditionsRule() : RuleBase(RuleId.BotConditions)
                 continue;
             }
 
-            // Phase 2: != (exclusion pattern) emits info; == (privilege grant) emits warning
-            // Phase 3: Suppress when triggers are not PR-only (no PR context, or mixed triggers
-            //          where github.actor is the only cross-trigger bot check).
+            // != (exclusion pattern) emits info; == (privilege grant) emits warning
+            // Suppress when triggers are not PR-only (no PR context, or mixed triggers where github.actor is the only cross-trigger bot check).
             if (!_emitBotConditionDiagnostics)
             {
                 continue;
@@ -256,7 +255,7 @@ public sealed class BotConditionsRule() : RuleBase(RuleId.BotConditions)
             or WebhookTypes.EventId.PullRequestReviewComment;
 
     /// <summary>
-    /// Phase 1: Checks if the expression contains a non-spoofable context (trigger-author)
+    /// Checks if the expression contains a non-spoofable context (trigger-author)
     /// comparison with the same literal value, indicating the spoofable check is mitigated.
     /// </summary>
     private static bool HasNonSpoofableConjunction(int spoofableLiteralId, ExpressionNode[] nodes, ReadOnlySpan<byte> exprBytes)

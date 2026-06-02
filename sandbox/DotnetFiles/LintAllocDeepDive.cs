@@ -15,7 +15,7 @@ var filePath = "bench.yml";
 Console.WriteLine($"YAML size: {bytes.Length:N0} bytes, {yaml.Split('\n').Length} lines");
 Console.WriteLine();
 
-// === Phase 1: Measure VYaml via VYaml.Parser directly ===
+// Measure VYaml via VYaml.Parser directly ===
 // Warm up
 for (int i = 0; i < 3; i++)
 {
@@ -34,7 +34,7 @@ var before = GC.GetTotalAllocatedBytes(precise: true);
 var vyamlAlloc = GC.GetTotalAllocatedBytes(precise: true) - before;
 Console.WriteLine($"[1] VYaml raw read-all: {vyamlAlloc:N0} bytes");
 
-// === Phase 2: Parse only (arena reused from warm-up) ===
+// Parse only (arena reused from warm-up) ===
 // Warm up parser (populates ThreadStatic arena)
 var warmup = WorkflowParser.Parse(bytes, filePath);
 warmup.Arena?.Dispose();
@@ -48,7 +48,7 @@ var parseAlloc = GC.GetTotalAllocatedBytes(precise: true) - before;
 Console.WriteLine($"[2] WorkflowParser.Parse (arena reused): {parseAlloc:N0} bytes");
 parseResult.Arena?.Dispose();
 
-// === Phase 3: Full lint (engine reused, config reused, arena reused from prior Dispose) ===
+// Full lint (engine reused, config reused, arena reused from prior Dispose) ===
 var engine = new LintEngine();
 var lintConfig = new LintConfig
 {
@@ -74,10 +74,10 @@ Console.WriteLine($"[3] LintEngine.Check (full parse+lint): {lintAlloc:N0} bytes
 Console.WriteLine($"    Diagnostics count: {lintResult.Diagnostics.Length}");
 lintResult.ParseResult.Arena?.Dispose();
 
-// === Phase 4: Lint-only (subtract parse) ===
+// Lint-only (subtract parse) ===
 Console.WriteLine($"\n[4] Lint-only estimate: {lintAlloc - parseAlloc:N0} bytes (full - parse)");
 
-// === Phase 5: Breakdown of lint diagnostic strings ===
+// Breakdown of lint diagnostic strings ===
 Console.WriteLine($"\n=== Diagnostic string cost ===");
 // Re-run without dispose to inspect diagnostics
 var result2 = engine.Check(bytes, filePath, lintConfig);
@@ -109,7 +109,7 @@ foreach (var kv in ruleIds.OrderByDescending(x => x.Value))
 }
 result2.ParseResult.Arena?.Dispose();
 
-// === Phase 6: Expression cache analysis ===
+// Expression cache analysis ===
 Console.WriteLine($"\n=== Expression cache analysis ===");
 // The lintConfig's expression cache is populated from prior runs
 // Count unique expressions in the fixture
@@ -134,7 +134,7 @@ Console.WriteLine($"  Total ${{{{ }}}} occurrences: {exprCount}");
 Console.WriteLine($"  Unique expressions: {uniqueExprs.Count}");
 foreach (var e in uniqueExprs) Console.WriteLine($"    \"{e}\"");
 
-// === Phase 7: VYaml double-read cost ===
+// VYaml double-read cost ===
 Console.WriteLine($"\n=== VYaml double-read overhead ===");
 // ParseClassified creates TWO YamlParsers
 GC.Collect(2, GCCollectionMode.Forced, true, true);
@@ -151,7 +151,7 @@ Console.WriteLine($"  Hint reader (partial read): {hintAlloc:N0} bytes");
 Console.WriteLine($"  Full reader (parse): {vyamlAlloc:N0} bytes");
 Console.WriteLine($"  Total VYaml cost per parse: ~{hintAlloc + vyamlAlloc:N0} bytes");
 
-// === Phase 8: Per-rule lint cost estimation ===
+// Per-rule lint cost estimation ===
 Console.WriteLine($"\n=== Per-rule lint cost (isolated) ===");
 // Run with only one rule at a time to estimate each rule's contribution
 var allRuleNames = new[] {

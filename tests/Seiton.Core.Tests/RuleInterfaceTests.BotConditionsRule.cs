@@ -194,7 +194,7 @@ public sealed partial class RuleInterfaceTests
                         - run: echo test
             """,
             ["spoofable context", "pull_request.user.login"]),
-            // --- Phase 1: AND conjunction with non-spoofable context suppresses diagnostic ---
+            // AND conjunction with non-spoofable context suppresses diagnostic ---
             new RuleCase(
             "ok-actor-with-user-login-conjunction",
             """
@@ -344,7 +344,7 @@ public sealed partial class RuleInterfaceTests
                         - run: echo test
             """,
             []),
-            // Phase 3: push-only workflow suppresses != entirely (no alternative, no risk)
+            // push-only workflow suppresses != entirely (no alternative, no risk)
             new RuleCase(
             "ok-push-only-actor-ne-suppressed",
             """
@@ -357,7 +357,7 @@ public sealed partial class RuleInterfaceTests
                         - run: echo test
             """,
             []),
-            // Phase 3: push-only workflow suppresses triggering_actor != entirely
+            // push-only workflow suppresses triggering_actor != entirely
             new RuleCase(
             "ok-push-only-triggering-actor-ne-suppressed",
             """
@@ -370,7 +370,7 @@ public sealed partial class RuleInterfaceTests
                         - run: echo test
             """,
             []),
-            // Phase 3: workflow_dispatch only → no PR context → suppress
+            // workflow_dispatch only → no PR context → suppress
             new RuleCase(
             "ok-workflow-dispatch-only-actor-eq-suppressed",
             """
@@ -425,7 +425,7 @@ public sealed partial class RuleInterfaceTests
                         - run: echo test
             """,
             ["spoofable context"]),
-            // Phase 1: negated non-spoofable context should NOT suppress (the non-spoofable check is inverted)
+            // negated non-spoofable context should NOT suppress (the non-spoofable check is inverted)
             new RuleCase(
             "warning-negated-nonspoofable-not-suppressed",
             """
@@ -443,7 +443,7 @@ public sealed partial class RuleInterfaceTests
         await AssertRuleCases(new BotConditionsRule(), "bot-conditions", cases);
     }
 
-    // --- Phase 2: != operator emits info severity instead of warning ---
+    // != operator emits info severity instead of warning ---
     [Test]
     public async Task BotConditionsRule_NotEqual_EmitsInfoSeverity()
     {
@@ -511,7 +511,7 @@ public sealed partial class RuleInterfaceTests
         await Assert.That(botDiags[0].Severity).IsEqualTo(DiagnosticSeverity.Info);
     }
 
-    // --- Phase 3: event-type awareness (non-PR events suppress/downgrade) ---
+    // event-type awareness (non-PR events suppress/downgrade) ---
 
     [Test]
     public async Task BotConditionsRule_PushOnly_Equal_Suppressed()

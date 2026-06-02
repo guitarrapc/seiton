@@ -157,7 +157,7 @@ C# implementation:
 - Each worker calls `CopyDiagnostics()` to create caller-owned diagnostic copies that survive engine reuse.
 - Sequential fast path: when `resolvedFiles.Length <= 1`, input is stdin, or `Environment.ProcessorCount <= 1`, a single `LintEngine` is used without `Parallel.For`.
 
-### 2.2 CLI UX Mapping (Phase 2)
+### 2.2 CLI UX Mapping
 
 - `CheckCommand` maps JSON `fixable` semantics to fix-mode eligibility by enabling fix evaluation for `--format json` lint runs (without applying edits).
 - `FixCommand` emits summary before residual diagnostics for apply/dry-run mode; `--fix --check` keeps diagnostics-first behavior.

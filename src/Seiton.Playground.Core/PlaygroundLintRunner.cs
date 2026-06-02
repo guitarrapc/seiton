@@ -398,10 +398,10 @@ public static class PlaygroundLintRunner
         ArgumentNullException.ThrowIfNull(yamlSource);
         ArgumentException.ThrowIfNullOrEmpty(filePath);
 
-        // Phase 1: Apply all offline fixes first (same as sync path)
+        // Apply all offline fixes first (same as sync path)
         var afterOffline = ApplyAllFixes(yamlSource, filePath);
 
-        // Phase 2: Network-based pin remediation
+        // Network-based pin remediation
         LintConfig config;
         bool pinningEnabled;
         bool imagesEnabled;

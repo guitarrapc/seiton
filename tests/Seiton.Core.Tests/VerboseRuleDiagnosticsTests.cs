@@ -5,7 +5,7 @@ using Seiton.Core.Parsing;
 
 namespace Seiton.Core.Tests;
 
-/// <summary>Phase 4: Verbose diagnostics expansion for rules that skip/ignore items based on config patterns.</summary>
+/// <summary>Verbose diagnostics expansion for rules that skip/ignore items based on config patterns.</summary>
 public sealed class VerboseRuleDiagnosticsTests
 {
     private static string NormalizeYaml(string yaml)
@@ -13,9 +13,7 @@ public sealed class VerboseRuleDiagnosticsTests
         return yaml.Replace("\r\n", "\n");
     }
 
-    // ==========================================================================
     // ForbiddenUsesRule — verbose info when allow pattern matches
-    // ==========================================================================
 
     [Test]
     public async Task ForbiddenUsesRule_AllowPattern_Verbose_EmitsInfo()

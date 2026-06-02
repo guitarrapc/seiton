@@ -305,7 +305,7 @@ internal static class FixCommand
 
                 fixAttemptedFileCount++;
 
-                // Phase 1: Stabilize local fixes via conflict-aware iterative application.
+                // Stabilize local fixes via conflict-aware iterative application.
                 // Each pass re-lints the current YAML to get fresh offsets, avoiding conflicts.
                 var currentYaml = utf8Yaml;
                 var appliedFixes = 0;
@@ -315,7 +315,7 @@ internal static class FixCommand
                 {
                     currentYaml = ApplyFixesIteratively(engine, currentYaml, filePath, fixEnabledLintConfig, maxFixPasses, ref appliedFixes);
 
-                    // Phase 2: Pin remediation on stabilized YAML (案B).
+                    // Pin remediation on stabilized YAML (案B).
                     // Local inserts are done, so pin edits target correct offsets.
                     if (pinRemediation != null)
                     {
@@ -419,7 +419,7 @@ internal static class FixCommand
                 var useRemainMode = !check;
                 CheckCommand.WriteSummary(errorWriter, allDiagnostics, resolvedFiles.Length, resolvedFormat, showVerboseSummary, showExitHint: minSeverity is null, showPerFile: false, metadata: summaryMetadata, isRemainMode: useRemainMode);
             }
-            
+
             // Output remaining diagnostics
             if (allDiagnostics.Count > 0)
             {
