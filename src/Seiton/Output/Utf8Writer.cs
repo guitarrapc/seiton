@@ -11,6 +11,7 @@ namespace Seiton.Output;
 internal ref struct Utf8Writer
 {
     private const int RepeatedByteStackLimit = 128;
+    private const int StackUtf8Limit = 512;
 
     private static readonly byte[] PlatformNewLine = Encoding.UTF8.GetBytes(Environment.NewLine);
 
@@ -19,16 +20,24 @@ internal ref struct Utf8Writer
     public Utf8Writer(IBufferWriter<byte> destination) => _destination = destination;
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public void WriteLiteral(ReadOnlySpan<byte> utf8)
-    {
-        if (utf8.IsEmpty)
-        {
-            return;
-        }
+    public void WriteLiteral(ReadOnlySpan<byte> utf8) => WriteLiteralCore(_destination, utf8);
 
-        var span = _destination.GetSpan(utf8.Length);
-        utf8.CopyTo(span);
-        _destination.Advance(utf8.Length);
+    private static void WriteLiteralCore(IBufferWriter<byte> destination, ReadOnlySpan<byte> utf8)
+    {
+        var offset = 0;
+        while (offset < utf8.Length)
+        {
+            var span = destination.GetSpan(Math.Min(utf8.Length - offset, 4096));
+            if (span.IsEmpty)
+            {
+                throw new InvalidOperationException("IBufferWriter returned an empty span.");
+            }
+
+            var chunk = Math.Min(span.Length, utf8.Length - offset);
+            utf8.Slice(offset, chunk).CopyTo(span);
+            destination.Advance(chunk);
+            offset += chunk;
+        }
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -40,9 +49,25 @@ internal ref struct Utf8Writer
         }
 
         var maxByteCount = Encoding.UTF8.GetMaxByteCount(chars.Length);
-        var span = _destination.GetSpan(maxByteCount);
-        var written = Encoding.UTF8.GetBytes(chars, span);
-        _destination.Advance(written);
+        if (maxByteCount <= StackUtf8Limit)
+        {
+            Span<byte> scratch = stackalloc byte[StackUtf8Limit];
+            var written = Encoding.UTF8.GetBytes(chars, scratch);
+            WriteLiteralCore(_destination, scratch[..written]);
+            return;
+        }
+
+        var byteCount = Encoding.UTF8.GetByteCount(chars);
+        var rented = ArrayPool<byte>.Shared.Rent(byteCount);
+        try
+        {
+            var written = Encoding.UTF8.GetBytes(chars, rented.AsSpan(0, byteCount));
+            WriteLiteral(rented.AsSpan(0, written));
+        }
+        finally
+        {
+            ArrayPool<byte>.Shared.Return(rented);
+        }
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -52,7 +77,12 @@ internal ref struct Utf8Writer
     public void Write(string value) => WriteUtf8(value);
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public void Write(char value) => WriteByte((byte)value);
+    public void Write(char value)
+    {
+        Span<byte> scratch = stackalloc byte[4];
+        var written = Encoding.UTF8.GetBytes([value], scratch);
+        WriteLiteralCore(_destination, scratch[..written]);
+    }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public void Write(int value) => WriteInt(value);
@@ -90,10 +120,11 @@ internal ref struct Utf8Writer
         Span<byte> buffer = stackalloc byte[16];
         if (Utf8Formatter.TryFormat(value, buffer, out var written))
         {
-            var span = _destination.GetSpan(written);
-            buffer[..written].CopyTo(span);
-            _destination.Advance(written);
+            WriteLiteralCore(_destination, buffer[..written]);
+            return;
         }
+
+        WriteUtf8(value.ToString());
     }
 
     public void WriteRepeated(byte value, int count)
@@ -103,25 +134,19 @@ internal ref struct Utf8Writer
             return;
         }
 
-        if (count <= RepeatedByteStackLimit)
+        var remaining = count;
+        while (remaining > 0)
         {
-            var span = _destination.GetSpan(count);
-            span[..count].Fill(value);
-            _destination.Advance(count);
-            return;
-        }
+            var span = _destination.GetSpan(Math.Min(remaining, RepeatedByteStackLimit));
+            if (span.IsEmpty)
+            {
+                throw new InvalidOperationException("IBufferWriter returned an empty span.");
+            }
 
-        var rented = ArrayPool<byte>.Shared.Rent(count);
-        try
-        {
-            rented.AsSpan(0, count).Fill(value);
-            var span = _destination.GetSpan(count);
-            rented.AsSpan(0, count).CopyTo(span);
-            _destination.Advance(count);
-        }
-        finally
-        {
-            ArrayPool<byte>.Shared.Return(rented);
+            var chunk = Math.Min(span.Length, remaining);
+            span[..chunk].Fill(value);
+            _destination.Advance(chunk);
+            remaining -= chunk;
         }
     }
 
@@ -135,9 +160,7 @@ internal ref struct Utf8Writer
         }
 
         WriteRepeated((byte)' ', minWidth - written);
-        var span = _destination.GetSpan(written);
-        buffer[..written].CopyTo(span);
-        _destination.Advance(written);
+        WriteLiteralCore(_destination, buffer[..written]);
     }
 
     public static void WriteToStandardOutput(ReadOnlySpan<byte> utf8)

@@ -10,9 +10,17 @@
 
 ### 1) 出力の共通入口
 
+現在
+
 - 入口は `src/Seiton/Output/DiagnosticFormatter.cs` の `DiagnosticFormatter.Write(TextWriter, ...)`。
 - `CheckCommand` / `FixCommand` は `Console.Out` を `TextWriter` として渡している。
 - テストも `StringWriter` 注入前提で組まれている（`tests/Seiton.Tests/DiagnosticFormatterRichTextTests.cs`）。
+
+変更後
+
+- 入口は `src/Seiton/Output/DiagnosticFormatter.cs` の `DiagnosticFormatter.Write(IBufferWriter<byte>, ...)`。
+- CLI は `WriteToStandardOutput`（バッファ → UTF-8 stdout / `Console.SetOut` リダイレクト時は TextWriter デコード）。
+- テスト・FixCommand 注入は `WriteToTextWriter` または `ArrayBufferWriter` + `Write`（`tests/Seiton.Tests/DiagnosticFormatterRichTextTests.cs`）。
 
 ### 2) フォーマット別の実装とアロケーション特性
 
@@ -244,6 +252,10 @@
 | `Console.SetOut` が `OpenStandardOutput` をバイパス | `FlushToStandardOutput` で `StreamWriter` 以外は TextWriter 経由にフォールバック |
 | 二系統 API の保守性 | フォーマットは `Write(IBufferWriter)` のみに統一 |
 | 仕様書が TextWriter 前提 | `Seiton_CLI_csharp_spec.md` §7 を更新 |
+| `Utf8Writer` が `GetSpan` の部分返却に非対応 | `WriteLiteralCore` を chunked copy に変更。`WriteUtf8`/`WriteRepeated` も同様 |
+| `Write(char)` が ASCII 以外を切り捨て | UTF-8 エンコードに修正 |
+| `FlushToStandardOutput` の分岐テスト不足 | `DiagnosticFormatterFlushTests` で StringWriter / カスタム TextWriter / 空 span を追加 |
+| `IBufferWriter` と `WriteToTextWriter` の同値性 | 全フォーマット向け `Write_Buffer_MatchesTextWriterAdapter_*` を追加 |
 
 ## フェーズ 4: 仕様・ドキュメント同期
 

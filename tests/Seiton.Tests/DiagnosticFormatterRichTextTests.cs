@@ -10,14 +10,29 @@ public sealed class DiagnosticFormatterRichTextTests
 {
     [Test]
     public async Task Write_Buffer_MatchesTextWriterAdapter_OnelineError()
+        => await AssertBufferMatchesTextWriterAdapter(OutputFormat.Text, oneline: true, color: false);
+
+    [Test]
+    public async Task Write_Buffer_MatchesTextWriterAdapter_Json()
+        => await AssertBufferMatchesTextWriterAdapter(OutputFormat.Json, oneline: false, color: false);
+
+    [Test]
+    public async Task Write_Buffer_MatchesTextWriterAdapter_Sarif()
+        => await AssertBufferMatchesTextWriterAdapter(OutputFormat.Sarif, oneline: false, color: false);
+
+    [Test]
+    public async Task Write_Buffer_MatchesTextWriterAdapter_GitHubActionsOneline()
+        => await AssertBufferMatchesTextWriterAdapter(OutputFormat.GitHubActions, oneline: true, color: false);
+
+    private static async Task AssertBufferMatchesTextWriterAdapter(OutputFormat format, bool oneline, bool color)
     {
         var diag = MakeDiagnostic(DiagnosticSeverity.Error, "buffer path", 4, 2, 4, 8);
         var buffer = new ArrayBufferWriter<byte>();
-        DiagnosticFormatter.Write(buffer, [diag], OutputFormat.Text, oneline: true, color: false);
+        DiagnosticFormatter.Write(buffer, [diag], format, oneline, color);
 
         var sb = new StringBuilder();
         using var writer = new StringWriter(sb);
-        DiagnosticFormatter.WriteToTextWriter(writer, [diag], OutputFormat.Text, oneline: true, color: false);
+        DiagnosticFormatter.WriteToTextWriter(writer, [diag], format, oneline, color);
         writer.Flush();
 
         await Assert.That(Encoding.UTF8.GetString(buffer.WrittenSpan)).IsEqualTo(sb.ToString());
