@@ -199,7 +199,7 @@ Operational rule:
 | Flag | Short | Type | Default | Description |
 |---|---|---|---|---|
 | `--format` | | `text\|json\|sarif\|github-actions` | `text` (see §3.1.1) | Output format for diagnostics. |
-| `--oneline` | | `bool` | `false` | Emit one diagnostic per line (text format only). |
+| `--oneline` | | `bool` | `false` | Emit one diagnostic per line (`text` and `github-actions`). |
 | `--color` | | `auto\|always\|never` | `auto` | Color output control. `auto` enables color when stdout is not a TTY or CI is detected. |
 | `--no-color` | | `bool` | `false` | Alias for `--color=never`. |
 | `--verbose` | `-v` | `bool` | `false` | Enable summary-level verbose output to stderr (config, discovery, rules, timing, suppression totals). |
@@ -640,10 +640,18 @@ Human-readable output optimized for [GitHub Actions](https://docs.github.com/en/
 
 #### 6.5.1 Job log (stdout)
 
-Diagnostics are written to **stdout** using the same rich text structure as §6.1.1 (severity/rule header, source excerpt, help lines). Files with diagnostics appear in diagnostic-list order; there is no extra per-file wrapper in the current release.
+Diagnostics are written to **stdout** in file groups using GitHub workflow-command folding markers:
+
+```text
+::group::<file>
+<diagnostics for file>
+::endgroup::
+```
+
+Within each group, diagnostics use the same rich text structure as §6.1.1 (severity/rule header, source excerpt, help lines), or one-line form when `--oneline` is set.
 
 - Color is never emitted for this format.
-- `--oneline` is not supported; specifying it with `github-actions` returns exit code `2`.
+- `--oneline` is supported and changes only the diagnostic body format (group wrapping behavior is unchanged).
 
 When no diagnostics are emitted, stdout carries no diagnostic lines (same as `text`).
 

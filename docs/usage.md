@@ -328,7 +328,7 @@ These flags are valid only when `--fix` is enabled on the root command.
 | Flag | Type | Default | Description |
 |---|---|---|---|
 | `--format` | `text\|json\|sarif\|github-actions` | `text` (see below) | Output format for diagnostics. |
-| `--oneline` | `bool` | `false` | Emit one diagnostic per line (`text` format only). |
+| `--oneline` | `bool` | `false` | Emit one diagnostic per line (`text` and `github-actions`). |
 | `--color` | `auto\|always\|never` | `auto` | Color output control. |
 | `--no-color` | `bool` | `false` | Alias for `--color=never`. |
 | `--verbose` | `bool` | `false` | Enable verbose progress output to stderr. |
@@ -362,9 +362,11 @@ Optimized for [GitHub Actions](https://docs.github.com/en/actions): diagnostics 
 
 This is the **default format on GitHub Actions** when `--format` (or `SEITON_FORMAT`) is not specified.
 
+Diagnostics are wrapped per file with `::group::` / `::endgroup::` so logs are foldable by file.
+
 If `GITHUB_STEP_SUMMARY` is unavailable or not writable, the summary is printed to stderr instead.
 
-`--oneline` is not supported with this format (exit code `2`). Use `--format text` to force classic flat output.
+`--oneline` is supported with this format and changes only the diagnostic body style (one line per diagnostic).
 
 ```yaml
 # Simplest CI step — no --format flag needed on GitHub Actions
