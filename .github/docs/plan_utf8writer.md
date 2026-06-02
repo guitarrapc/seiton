@@ -85,6 +85,52 @@
   - 改行・プロパティ名・null 出力条件（`help`）は現行と同一。
 - 期待効果: `json` 出力の主要な heap allocation 削減。
 
+### フェーズ 1 実装（完了）
+
+#### 変更内容
+
+- `WriteJson`: `JsonDiagnosticEntry[]` + `JsonSerializer.Serialize` を削除。`PooledByteBufferWriter` + `Utf8JsonWriter`（compact, `SkipValidation = true`）で diagnostic 配列を直接書き出し、既存 `WriteUtf8ToTextWriter` で `TextWriter` に渡す（SARIF と同経路）。
+- `JsonDiagnosticEntry` 型と `SeitonJsonContext` の diagnostic 用 `[JsonSerializable]` を削除（`rules --format json` 用 `RuleStatusJsonEntry[]` のみ残す）。
+- severity 文字列: 静的 `SeverityLowerStrings` テーブル + `GetSeverityLowerString`（`ToString().ToLowerInvariant()` の per-call 回避）。
+- プロパティ名: UTF-8 リテラル（`"file"u8` 等）でエンコード済みバイト列を再利用。
+- 回帰テスト追加: `Json_Format_EmitsExpectedFields`, `Json_Format_EmptyDiagnostics_EmitsEmptyArray`。
+
+#### API レビュー
+
+| 観点 | 結果 |
+|---|---|
+| 公開 API 変更なし | `DiagnosticFormatter.Write(TextWriter, ...)` を維持。CLI / テストの注入パターン不変 |
+| 出力契約 | §6.2 スキーマ準拠。`help` null 時省略、`ruleId` null → `"parse"` |
+| 内部抽象の露出 | 新規 public 型なし。`PooledByteBufferWriter` は既存 internal 型を SARIF と共有 |
+
+#### 性能変化（DiagnosticOutputBenchmark, ShortRun, フェーズ 0 基準値との比較）
+
+| Count | Metric | フェーズ 0 | フェーズ 1 | 変化 | 判定 |
+|---|---|---|---|---|---|
+| F1 | Mean | 32.2 us | 33.6 us | +4% | 許容（±10% 以内、計測誤差域） |
+| F1 | Allocated | 99.83 KB | 49.48 KB | **-50%** | 改善 |
+| F10 | Mean | 542.8 us | 334.9 us | **-38%** | 改善 |
+| F10 | Allocated | 947.6 KB | 442.1 KB | **-53%** | 改善 |
+
+**改善理由**
+
+- 中間 `JsonDiagnosticEntry[]` 配列と各要素の record  materialization を排除。
+- `JsonSerializer.Serialize` による中間 `string` 生成を排除（UTF-8 バッファ → `TextWriter` デコードのみ）。
+- F10 で Gen2 249 KB → 111 KB に低下（大規模 diagnostic セットでの LOH/GC 圧力低減）。
+
+**F1 Mean が微増した理由**
+
+- 小件数では `Utf8JsonWriter` の per-field 呼び出しオーバーヘッドが Serialize 一本化より僅かに大きい可能性。F10 ではストリーム書き込みの優位性が支配的。
+- 許容範囲内。さらなる Mean 改善が必要ならフェーズ 3（stdout への UTF-8 直接出力で UTF-16 デコード回避）を検討。
+
+#### フェーズ 1 レビュー
+
+| 指摘 | 対応 |
+|---|---|
+| 出力互換の回帰リスク | 既存 JSON テスト 7 件 + 新規 2 件、全 2396 テスト pass |
+| `Seiton_CLI_csharp_spec.md` §7.1 が旧実装（source-gen diagnostic JSON）を記載 | §0.2/§0.4/§7.1 を Utf8JsonWriter 実装に更新 |
+| `JsonDiagnosticEntry` 削除後の dead code | `SeitonJsonContext` を rules 用に縮小済み |
+
 ## フェーズ 2: `text` / `github-actions` の string-side 最適化
 
 - 先に `IBufferWriter<byte>` へ寄せず、以下を優先:

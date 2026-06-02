@@ -320,6 +320,51 @@ public sealed class DiagnosticFormatterRichTextTests
     }
 
     [Test]
+    public async Task Json_Format_EmitsExpectedFields()
+    {
+        var diag = MakeDiagnostic(
+            DiagnosticSeverity.Error,
+            "job omits permissions",
+            12,
+            5,
+            12,
+            40,
+            ruleId: "job-permissions-required",
+            filePath: ".github/workflows/build.yml");
+
+        var sb = new StringBuilder();
+        using var writer = new StringWriter(sb);
+        DiagnosticFormatter.Write(writer, [diag], OutputFormat.Json, oneline: false, color: false);
+        writer.Flush();
+
+        using var doc = JsonDocument.Parse(sb.ToString());
+        var root = doc.RootElement;
+        await Assert.That(root.ValueKind).IsEqualTo(JsonValueKind.Array);
+        await Assert.That(root.GetArrayLength()).IsEqualTo(1);
+
+        var entry = root[0];
+        await Assert.That(entry.GetProperty("file").GetString()).IsEqualTo(".github/workflows/build.yml");
+        await Assert.That(entry.GetProperty("line").GetInt32()).IsEqualTo(12);
+        await Assert.That(entry.GetProperty("col").GetInt32()).IsEqualTo(5);
+        await Assert.That(entry.GetProperty("severity").GetString()).IsEqualTo("error");
+        await Assert.That(entry.GetProperty("ruleId").GetString()).IsEqualTo("job-permissions-required");
+        await Assert.That(entry.GetProperty("message").GetString()).IsEqualTo("job omits permissions");
+        await Assert.That(entry.GetProperty("fixable").GetBoolean()).IsEqualTo(false);
+        await Assert.That(entry.TryGetProperty("help", out _)).IsEqualTo(false);
+    }
+
+    [Test]
+    public async Task Json_Format_EmptyDiagnostics_EmitsEmptyArray()
+    {
+        var sb = new StringBuilder();
+        using var writer = new StringWriter(sb);
+        DiagnosticFormatter.Write(writer, [], OutputFormat.Json, oneline: false, color: false);
+        writer.Flush();
+
+        await Assert.That(sb.ToString()).IsEqualTo("[]" + Environment.NewLine);
+    }
+
+    [Test]
     public async Task Sarif_Format_IncludesHelpInMessage()
     {
         var diag = MakeDiagnostic(DiagnosticSeverity.Warning, "unpinned action", 5, 11, 5, 30, help: "to ignore this owner, add config");

@@ -2,6 +2,7 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using System.Buffers;
+using System.Runtime.CompilerServices;
 using Seiton.Core.Parsing;
 
 namespace Seiton.Output;
@@ -12,6 +13,10 @@ public static class DiagnosticFormatter
     private const string SarifRuleHelpUriPrefix = "https://github.com/guitarrapc/seiton/blob/main/docs/rules.md#";
 
     private static readonly string SarifDriverVersion = ToolVersionResolver.ResolveFromAssembly(typeof(DiagnosticFormatter).Assembly);
+
+    private static readonly string[] SeverityLowerStrings = ["info", "warning", "error"];
+
+    private static readonly JsonWriterOptions JsonDiagnosticWriterOptions = new() { SkipValidation = true, Indented = false };
 
     public static void Write(
         TextWriter writer,
@@ -405,9 +410,12 @@ public static class DiagnosticFormatter
     private static void WriteJson(TextWriter writer, IReadOnlyList<Diagnostic> diagnostics, string? pathBaseDirectory)
     {
         var pathResolver = new PathDisplayResolver(pathBaseDirectory);
+        using var buffer = new PooledByteBufferWriter(Math.Max(256, diagnostics.Count * 128));
+        using var json = new Utf8JsonWriter(buffer, JsonDiagnosticWriterOptions);
+
+        json.WriteStartArray();
         string? previousFileKey = null;
         string previousDisplayPath = "<unknown>";
-        var entries = new JsonDiagnosticEntry[diagnostics.Count];
         for (var i = 0; i < diagnostics.Count; i++)
         {
             var d = diagnostics[i];
@@ -423,21 +431,35 @@ public static class DiagnosticFormatter
                 previousFileKey = fileKey;
                 previousDisplayPath = fileDisplay;
             }
-            entries[i] = new JsonDiagnosticEntry
-            {
-                File = fileDisplay,
-                Line = d.Location.StartLine,
-                Col = d.Location.StartColumn,
-                Severity = d.Severity.ToString().ToLowerInvariant(),
-                RuleId = d.RuleId ?? "parse",
-                Message = d.Message,
-                Fixable = d.Fix is not null,
-                Help = d.Help,
-            };
-        }
 
-        writer.Write(JsonSerializer.Serialize(entries, SeitonJsonContext.Default.JsonDiagnosticEntryArray));
+            json.WriteStartObject();
+            json.WriteString("file"u8, fileDisplay);
+            json.WriteNumber("line"u8, d.Location.StartLine);
+            json.WriteNumber("col"u8, d.Location.StartColumn);
+            json.WriteString("severity"u8, GetSeverityLowerString(d.Severity));
+            json.WriteString("ruleId"u8, d.RuleId ?? "parse");
+            json.WriteString("message"u8, d.Message);
+            json.WriteBoolean("fixable"u8, d.Fix is not null);
+            if (d.Help is not null)
+            {
+                json.WriteString("help"u8, d.Help);
+            }
+            json.WriteEndObject();
+        }
+        json.WriteEndArray();
+        json.Flush();
+
+        WriteUtf8ToTextWriter(writer, buffer.WrittenSpan);
         writer.WriteLine();
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private static string GetSeverityLowerString(DiagnosticSeverity severity)
+    {
+        var index = (int)severity;
+        return (uint)index < (uint)SeverityLowerStrings.Length
+            ? SeverityLowerStrings[index]
+            : severity.ToString().ToLowerInvariant();
     }
 
     private static void WriteSarif(TextWriter writer, IReadOnlyList<Diagnostic> diagnostics, string? pathBaseDirectory)
@@ -599,32 +621,8 @@ public static class DiagnosticFormatter
     }
 }
 
-// --- JSON output models ---
+// --- Source-generated JSON context for NativeAOT (rules command) ---
 
-internal sealed record JsonDiagnosticEntry
-{
-    [JsonPropertyName("file")]
-    public required string File { get; init; }
-    [JsonPropertyName("line")]
-    public required int Line { get; init; }
-    [JsonPropertyName("col")]
-    public required int Col { get; init; }
-    [JsonPropertyName("severity")]
-    public required string Severity { get; init; }
-    [JsonPropertyName("ruleId")]
-    public required string RuleId { get; init; }
-    [JsonPropertyName("message")]
-    public required string Message { get; init; }
-    [JsonPropertyName("fixable")]
-    public required bool Fixable { get; init; }
-    [JsonPropertyName("help")]
-    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
-    public string? Help { get; init; }
-}
-
-// --- Source-generated JSON context for NativeAOT ---
-
-[JsonSerializable(typeof(JsonDiagnosticEntry[]))]
 [JsonSerializable(typeof(Commands.RuleStatusJsonEntry[]))]
 [JsonSourceGenerationOptions(
     WriteIndented = false,

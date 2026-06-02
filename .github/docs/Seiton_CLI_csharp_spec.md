@@ -34,7 +34,7 @@ The Seiton CLI C# implementation provides:
 1. NativeAOT-compatible thin CLI wrapper over `Seiton.Core`
 2. ConsoleAppFramework source-generated command dispatch
 3. Config bridge translating CLI flags/env vars into `LintConfig`
-4. Multi-format diagnostic output (text/json/SARIF) via source-generated JSON serialization
+4. Multi-format diagnostic output (text/json/SARIF/github-actions); `json` and `sarif` use `Utf8JsonWriter`, `rules --format json` uses source-generated `System.Text.Json`
 5. Parallel multi-file linting with deterministic aggregated output ordering
 6. Pre-framework unknown option detection with edit-distance suggestions
 
@@ -57,7 +57,7 @@ Representative implementation surface:
 ### 0.4 Design
 
 1. Keep CLI as thin wrapper — no lint/parse logic in this project.
-2. Keep all JSON serialization AOT-compatible (source-generated `System.Text.Json`).
+2. Keep JSON output AOT-compatible: diagnostic `json`/`sarif` via `Utf8JsonWriter`; `rules --format json` via source-generated `System.Text.Json`.
 3. Keep aggregated diagnostic and summary output deterministic regardless of parallelization; verbose progress lines may interleave.
 4. Keep config resolution aligned with `.github/docs/Seiton_CLI_spec.md` §4 precedence order.
 
@@ -355,10 +355,13 @@ Shared contract reference: `.github/docs/Seiton_CLI_spec.md` §1.7.
 
 ### 7.1 JSON Output
 
-Uses source-generated `System.Text.Json` for AOT compatibility:
+Diagnostic `--format json` is emitted via `Utf8JsonWriter` over `PooledByteBufferWriter` (`IBufferWriter<byte>`, `ArrayPool<byte>` backed), then decoded to the caller-supplied `TextWriter`. This avoids intermediate DTO arrays and `JsonSerializer.Serialize` string materialization while keeping the public `DiagnosticFormatter.Write(TextWriter, ...)` API unchanged.
+
+Schema matches `.github/docs/Seiton_CLI_spec.md` §6.2 (`file`, `line`, `col`, `severity`, `ruleId`, `message`, `fixable`, optional `help` when non-null). Property names use UTF-8 literals; `help` is omitted when null.
+
+`seiton rules --format json` still uses source-generated serialization:
 
 ```csharp
-[JsonSerializable(typeof(DiagnosticJsonEntry[]))]
 [JsonSerializable(typeof(RuleStatusJsonEntry[]))]
 internal partial class SeitonJsonContext : JsonSerializerContext { }
 ```
