@@ -2,7 +2,7 @@
 
 > C# implementation specification for the parser contract defined in `Seiton_Parser_spec.md`. This document captures C# runtime structures and targeting C# with zero-allocation / high-performance design. See `Seiton_Parser_go_spec.md` for the Go target. Both language specs share the same outline; only language-specific content differs. Linter behavior is specified in `Seiton_Linter_spec.md` and `Seiton_Linter_csharp_spec.md`.
 
-> **Cross-document synchronization rule**: `Seiton_Parser_spec.md` is the source of truth. When this C# spec is updated, also review and update `Seiton_Parser_spec.md`, `Seiton_Parser_go_spec.md`, and `parser_implementation_csharp_plan.md` in the same PR/commit scope.
+> **Cross-document synchronization rule**: `Seiton_Parser_spec.md` is the source of truth. When this C# spec is updated, also review and update `Seiton_Parser_spec.md` and `Seiton_Parser_go_spec.md` in the same PR/commit scope.
 
 ---
 

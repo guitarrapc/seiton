@@ -175,7 +175,7 @@ public sealed class LintEngineThreadSafetyTests
     // --- P2: Per-thread isolation pattern tests ---
 
     /// <summary>
-    /// Validates the slot-based parallel result collection pattern (plan §5.2).
+    /// Validates the slot-based parallel result collection pattern.
     /// Each slot stores CopyDiagnostics output; after Parallel.For completes,
     /// all slots are aggregated in input order. Verifies output-order stability.
     /// </summary>

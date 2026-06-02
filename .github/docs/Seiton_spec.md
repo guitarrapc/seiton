@@ -111,16 +111,9 @@ Responsibilities that belong exclusively to each component:
 - Update pipeline: `.github/docs/Seiton_Update_spec.md`
 - Playground: `.github/docs/Seiton_Playground_spec.md`
 
-Implementation plans:
-
-- Parser plan (C#): `.github/docs/Seiton_Parser_implementation_csharp_plan.md`
-- Linter plan (C#): `.github/docs/Seiton_Linter_implementation_csharp_plan.md`
-
 ---
 
 ## 5. Cross-Document Consistency Rule
 
-- Parser contract changes must update parser companion docs and parser implementation plan in the same change scope.
-- Linter contract changes must update linter implementation plan in the same change scope.
 - If a change affects parser/linter boundary, update this overview document together with both component specs.
 - Language-specific companion specs must keep chapter-0 template numbering aligned as `0.1 Contract`, `0.2 Overview`, `0.3 Structure`, `0.4 Model`, `0.5 Design` (parser may name `0.4` as `YAML/Alias`).

@@ -322,7 +322,6 @@ zizmor 監査ID別対応表（実装確認ベース）:
 ## 8. 参照ドキュメント
 
 - .github/docs/Seiton_Linter_spec.md
-- .github/docs/linter_implementation_csharp_plan.md
 - .github/docs/competitor-actionlint-structure-details.md
 - .github/docs/competitor-ghalint-structure-details.md
 - .github/docs/competitor-zizmor-structure-details.md

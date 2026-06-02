@@ -384,7 +384,7 @@ Shared contract: `.github/docs/Seiton_CLI_spec.md` §6.5.
 | Piece | Go implementation target |
 |---|---|
 | `resolveOutputFormat` | Flag (unless default `text`) → `SEITON_FORMAT` → optional `GITHUB_ACTIONS` → `text`. `allowGitHubActionsAutoDefault == false` for `seiton rules`. |
-| Diagnostics | Same rich text as `text` on stdout; no color; no `::group::` until phase 2 in `plan_format.md`. |
+| Diagnostics | Same rich text as `text` on stdout; no color; no `::group::`. |
 | Job summary | Append §6.4 Markdown to `GITHUB_STEP_SUMMARY` when set and writable; `## Seiton` once per run; LF; fall back to stderr on I/O error. |
 | Hints | Always stderr; never job summary. |
 

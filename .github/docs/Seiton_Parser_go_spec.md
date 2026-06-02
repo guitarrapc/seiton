@@ -2,7 +2,7 @@
 
 > Go implementation specification for the parser contract defined in `Seiton_Parser_spec.md`. This document captures Go runtime structures and behavior for parsing, AST construction, and expression analysis. See `Seiton_Parser_csharp_spec.md` for the C# target. Both language specs share the same outline; only language-specific content differs. Linter behavior is specified in `Seiton_Linter_spec.md` and `Seiton_Linter_csharp_spec.md`.
 
-> **Cross-document synchronization rule**: `Seiton_Parser_spec.md` is the source of truth. When this Go spec is updated, also review and update `Seiton_Parser_spec.md`, `Seiton_Parser_csharp_spec.md`, and `parser_implementation_go_plan.md` in the same PR/commit scope.
+> **Cross-document synchronization rule**: `Seiton_Parser_spec.md` is the source of truth. When this Go spec is updated, also review and update `Seiton_Parser_spec.md` and `Seiton_Parser_csharp_spec.md` in the same PR/commit scope.
 
 ---
 

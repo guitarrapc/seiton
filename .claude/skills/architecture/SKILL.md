@@ -16,11 +16,10 @@ It is intentionally implementation-oriented so contributors can quickly answer:
 
 To understand the rationale behind design decisions, see the related specs:
 
-- `.github/docsarchitecture_spec_csharp.md`
-- `.github/docsSeiton_Parser_spec.md` — パーサー仕様（言語非依存）
-- `.github/docsSeiton_Parser_csharp_spec.md` — C# 実装仕様
-- `.github/docsparser_implementation_csharp_plan.md` — C# 実装計画
-- `.github/docsarchitecture_spec_performance.md`
+- `.github/docs/architecture_spec_csharp.md`
+- `.github/docs/Seiton_Parser_spec.md` — パーサー仕様（言語非依存）
+- `.github/docs/Seiton_Parser_csharp_spec.md` — C# 実装仕様
+- `.github/docs/architecture_spec_performance.md`
 
 ## Core Design Principles
 

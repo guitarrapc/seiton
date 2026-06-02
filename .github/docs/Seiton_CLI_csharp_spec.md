@@ -378,7 +378,7 @@ Shared contract: `.github/docs/Seiton_CLI_spec.md` §6.5.
 |---|---|
 | `OutputFormatParser` | Maps CLI strings `text`, `json`, `sarif`, `github-actions` to `OutputFormat`. Invalid values → exit `2` with stderr message. |
 | `CliConfigBridge.ResolveOutputFormat` | Precedence: parsed flag (unless built-in default `text`) → `SEITON_FORMAT` → optional `GITHUB_ACTIONS` auto-default → `Text`. |
-| `DiagnosticFormatter` | `GitHubActions` uses `WriteText` with `color: false` (no `::group::` yet; see `plan_format.md` phase 2). |
+| `DiagnosticFormatter` | `GitHubActions` uses `WriteText` with `color: false`. |
 | `GitHubStepSummaryWriter` | When format is `GitHubActions` and `GITHUB_STEP_SUMMARY` is a writable path, appends §6.4 Markdown (`## Seiton` once per run, LF, UTF-8 no BOM). `IOException` / `UnauthorizedAccessException` → fall back to stderr. `Reset()` at start of `CheckCommand.Run` / `FixCommand.Run`. |
 | `CheckCommand.WriteSummary` / `FixCommand.WriteFixSummary` | Build summary via shared content writers; route to step summary or stderr per §6.4 table. `hint:` lines always use the stderr `TextWriter`. |
 

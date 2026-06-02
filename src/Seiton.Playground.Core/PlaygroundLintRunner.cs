@@ -16,7 +16,7 @@ namespace Seiton.Playground;
 /// <see cref="Seiton.Core.Linting.RuleBase"/> clears its diagnostics in <c>VisitWorkflowPre</c> /
 /// <c>VisitActionMetadataPre</c>, so reuse is safe.
 /// Creating a <b>new</b> engine per call would allocate 50+ rule objects every keystroke,
-/// enormously increasing GC pressure in the constrained WASM heap (see plan_playground_crush.md).
+/// enormously increasing GC pressure in the constrained WASM heap.
 /// </para>
 /// </summary>
 public static class PlaygroundLintRunner

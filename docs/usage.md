@@ -360,7 +360,7 @@ When `GITHUB_ACTIONS` is set and you do not pass an explicit `--format` (or `SEI
 
 Optimized for [GitHub Actions](https://docs.github.com/en/actions): readable diagnostics on stdout and a Markdown block on the job summary tab. This is the **default on GitHub Actions runners** when `--format` is omitted.
 
-**Job log (stdout)** — same rich layout as **text** (snippets and help lines). Color is off. Per-file log folding via `::group::` is planned; see `.github/docs/plan_format.md` phase 2.
+**Job log (stdout)** — same rich layout as **text** (snippets and help lines). Color is off. Per-file log folding via `::group::`.
 
 **Job summary** — when `GITHUB_STEP_SUMMARY` points to a **writable** file (normal on `ubuntu-latest` and other GitHub-hosted runners), Seiton **appends** UTF-8 Markdown with LF line endings:
 
@@ -384,7 +384,7 @@ If the variable is unset, blank, or not writable, the full summary is written to
 
 Force classic flat output: `seiton --format text`.
 
-See `.github/docs/Seiton_CLI_spec.md` §6.5 and `.github/docs/plan_format.md` for the full contract.
+See `.github/docs/Seiton_CLI_spec.md` §6.5 for the full contract.
 
 ### Text (default locally)
 

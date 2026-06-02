@@ -13,7 +13,6 @@
     <File Path=".github/docs/Seiton_Parser_csharp_spec.md" />
     <File Path=".github/docs/Seiton_Parser_go_spec.md" />
     <File Path=".github/docs/Seiton_Parser_spec.md" />
-    <File Path=".github/docs/updater_implementation_plan.md" />
   </Folder>
   <Folder Name="/src/">
     <Project Path="src/Seiton/Seiton.csproj" />

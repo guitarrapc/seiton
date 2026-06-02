@@ -647,8 +647,6 @@ Diagnostics are written to **stdout** using the same rich text structure as §6.
 
 When no diagnostics are emitted, stdout carries no diagnostic lines (same as `text`).
 
-> **Planned enhancement** (`plan_format.md` phase 2): wrap each file’s diagnostics in `::group::<file-path>` … `::endgroup::` [workflow commands](https://docs.github.com/en/actions/using-workflows/workflow-commands-for-github-actions#grouping-log-lines) so the Actions job log can collapse by file.
-
 #### 6.5.2 Job summary (`GITHUB_STEP_SUMMARY`)
 
 After diagnostics, summary content (§6.4) is written as GitHub Flavored Markdown:
@@ -748,7 +746,6 @@ seiton validate-config --config .github/seiton.yaml
 
 When this document is revised, review and update:
 
-- `plan_format.md` — implementation plan for `github-actions` output (when §6.5 changes)
 - `Seiton_CLI_csharp_spec.md` — C# implementation spec
 - `Seiton_CLI_go_spec.md` — Go implementation spec
 - `Seiton_Linter_spec.md` — if config bridge contract or discovery order changes
