@@ -382,7 +382,7 @@ Human-readable diagnostic output to stdout. Rich multi-line format (Rust-style) 
 
 Each diagnostic is rendered as a multi-line block showing the problem header, source location arrow, source snippet with underline caret, and optional help text.
 
-File paths in diagnostic output are **relative to the process working directory** at output time, using forward slashes (for example `.github/workflows/build.yml`). Both absolute and relative path inputs are normalized against the working directory before relativization. This keeps logs and copied output shareable without machine-specific absolute paths. Paths that cannot be expressed relative to the working directory (for example cross-drive paths on Windows) fall back to an absolute path. Sentinel paths such as `<stdin>` and `<unknown>` are preserved as-is.
+File paths in diagnostic output are **relative to the process working directory** at output time, using forward slashes (for example `.github/workflows/build.yml`). Both absolute and relative path inputs are normalized against the working directory before relativization. This keeps logs and copied output shareable without machine-specific absolute paths. Paths that cannot be expressed relative to the working directory (for example cross-drive paths on Windows) fall back to an absolute path. Null, empty, or whitespace file paths are displayed as `<unknown>`. Other sentinel paths such as `<stdin>` are preserved as-is.
 
 ```
 error[job-permissions-required]: job "build" omits explicit permissions declaration
@@ -502,7 +502,7 @@ Each diagnostic maps to a SARIF `result` under a `run` with tool identity `seito
 - When the file path can be expressed relative to the process working directory, `uri` is a URI-safe relative reference (slash-separated, percent-encoded when needed) and `uriBaseId` is `%WORKING_DIR%`.
 - When at least one relative artifact is emitted, `runs[].originalUriBaseIds["%WORKING_DIR%"].uri` carries the absolute `file:///...` URI of the working directory (with trailing slash), allowing SARIF consumers to resolve relative artifact URIs.
 - Cross-drive or otherwise non-relativeizable filesystem paths fall back to absolute `file:///...` URIs without `uriBaseId`.
-- Unknown paths are emitted as `file:///unknown`.
+- Unknown paths (null, empty, whitespace, or the literal `<unknown>` sentinel) are emitted as `file:///unknown`.
 - Sentinel paths such as `<stdin>` and `-` are emitted as literal URI strings without `uriBaseId` and do not trigger `originalUriBaseIds`.
 - URI-like strings that are not valid absolute URIs are emitted literally without `uriBaseId`.
 - Invalid filesystem paths that cannot be normalized fall back to `file:///unknown` (SARIF) rather than aborting output generation.

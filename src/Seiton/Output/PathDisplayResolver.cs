@@ -1,4 +1,5 @@
-﻿using System.Text.Json.Serialization;
+﻿using System.Diagnostics.CodeAnalysis;
+using System.Text.Json.Serialization;
 
 namespace Seiton.Output;
 
@@ -27,7 +28,7 @@ internal sealed class PathDisplayResolver
 
     public string GetDisplayPath(string? filePath)
     {
-        if (filePath is null)
+        if (IsUnknownPath(filePath))
             return "<unknown>";
 
         if (IsPassthroughPath(filePath))
@@ -55,7 +56,7 @@ internal sealed class PathDisplayResolver
 
     private SarifArtifactLocation ResolveSarifArtifactLocationCore(string? filePath)
     {
-        if (string.IsNullOrWhiteSpace(filePath) || string.Equals(filePath, "<unknown>", StringComparison.Ordinal))
+        if (IsUnknownPath(filePath))
             return new SarifArtifactLocation { Uri = UnknownSarifFileUri };
 
         if (IsPassthroughPath(filePath))
@@ -145,6 +146,12 @@ internal sealed class PathDisplayResolver
 
     private string GetFullPathFromBase(string filePath) =>
         Path.GetFullPath(filePath, _baseDirectory);
+
+    internal static string NormalizeFileKey(string? filePath) =>
+        IsUnknownPath(filePath) ? "<unknown>" : filePath!;
+
+    private static bool IsUnknownPath([NotNullWhen(false)] string? filePath) =>
+        string.IsNullOrWhiteSpace(filePath) || string.Equals(filePath, "<unknown>", StringComparison.Ordinal);
 
     private static bool IsPassthroughPath(string filePath) =>
         string.Equals(filePath, "<stdin>", StringComparison.Ordinal)

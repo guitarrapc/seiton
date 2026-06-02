@@ -404,6 +404,28 @@ public sealed class DiagnosticFormatterRichTextTests
     }
 
     [Test]
+    public async Task Json_Format_EmptyOrWhitespaceFilePath_UsesUnknownSentinel()
+    {
+        var sb = new StringBuilder();
+        using var writer = new StringWriter(sb);
+        DiagnosticFormatter.Write(
+            writer,
+            [
+                MakeDiagnostic(DiagnosticSeverity.Warning, "empty path", 1, 1, 1, 3, filePath: ""),
+                MakeDiagnostic(DiagnosticSeverity.Warning, "whitespace path", 2, 1, 1, 3, filePath: "   "),
+            ],
+            OutputFormat.Json,
+            oneline: false,
+            color: false);
+        writer.Flush();
+
+        using var doc = JsonDocument.Parse(sb.ToString());
+        var entries = doc.RootElement;
+        await Assert.That(entries[0].GetProperty("file").GetString()).IsEqualTo("<unknown>");
+        await Assert.That(entries[1].GetProperty("file").GetString()).IsEqualTo("<unknown>");
+    }
+
+    [Test]
     public async Task Sarif_Format_UnknownPath_UsesSafeFileUri()
     {
         var diag = MakeDiagnostic(DiagnosticSeverity.Warning, "unknown path", 1, 1, 1, 3, filePath: null);

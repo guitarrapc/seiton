@@ -51,6 +51,8 @@ public sealed class PathDisplayResolverTests
 
         await Assert.That(resolver.GetDisplayPath(null)).IsEqualTo("<unknown>");
         await Assert.That(resolver.GetDisplayPath("<unknown>")).IsEqualTo("<unknown>");
+        await Assert.That(resolver.GetDisplayPath("")).IsEqualTo("<unknown>");
+        await Assert.That(resolver.GetDisplayPath("   ")).IsEqualTo("<unknown>");
         await Assert.That(resolver.GetDisplayPath("<stdin>")).IsEqualTo("<stdin>");
     }
 
@@ -130,6 +132,15 @@ public sealed class PathDisplayResolverTests
 
         await Assert.That(location.Uri).IsEqualTo("file:///unknown");
         await Assert.That(location.UriBaseId).IsNull();
+    }
+
+    [Test]
+    public async Task ResolveSarifArtifactLocation_EmptyOrWhitespace_UsesSafeFileUri()
+    {
+        var resolver = new PathDisplayResolver(Environment.CurrentDirectory);
+
+        await Assert.That(resolver.ResolveSarifArtifactLocation("").Uri).IsEqualTo(PathDisplayResolver.UnknownSarifFileUri);
+        await Assert.That(resolver.ResolveSarifArtifactLocation("   ").Uri).IsEqualTo(PathDisplayResolver.UnknownSarifFileUri);
     }
 
     [Test]

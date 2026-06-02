@@ -71,7 +71,7 @@ public static class DiagnosticFormatter
         for (var i = 0; i < diagnostics.Count; i++)
         {
             var d = diagnostics[i];
-            var fileKey = d.FilePath ?? "<unknown>";
+            var fileKey = PathDisplayResolver.NormalizeFileKey(d.FilePath);
 
             if (!string.Equals(currentGroupFile, fileKey, StringComparison.Ordinal))
             {
@@ -97,21 +97,21 @@ public static class DiagnosticFormatter
     private static void WriteText(TextWriter writer, IReadOnlyList<Diagnostic> diagnostics, bool oneline, bool color, IReadOnlyDictionary<string, byte[]>? sourceMap, string? pathBaseDirectory)
     {
         var pathResolver = new PathDisplayResolver(pathBaseDirectory);
-        string? previousFilePath = null;
+        string? previousFileKey = null;
         string previousDisplayPath = "<unknown>";
         for (var i = 0; i < diagnostics.Count; i++)
         {
             var d = diagnostics[i];
-            var fileKey = d.FilePath ?? "<unknown>";
+            var fileKey = PathDisplayResolver.NormalizeFileKey(d.FilePath);
             string fileDisplay;
-            if (string.Equals(previousFilePath, d.FilePath, StringComparison.Ordinal))
+            if (string.Equals(previousFileKey, fileKey, StringComparison.Ordinal))
             {
                 fileDisplay = previousDisplayPath;
             }
             else
             {
                 fileDisplay = pathResolver.GetDisplayPath(d.FilePath);
-                previousFilePath = d.FilePath;
+                previousFileKey = fileKey;
                 previousDisplayPath = fileDisplay;
             }
             WriteTextDiagnostic(writer, d, fileKey, fileDisplay, oneline, color, sourceMap);
@@ -397,21 +397,22 @@ public static class DiagnosticFormatter
     private static void WriteJson(TextWriter writer, IReadOnlyList<Diagnostic> diagnostics, string? pathBaseDirectory)
     {
         var pathResolver = new PathDisplayResolver(pathBaseDirectory);
-        string? previousFilePath = null;
+        string? previousFileKey = null;
         string previousDisplayPath = "<unknown>";
         var entries = new JsonDiagnosticEntry[diagnostics.Count];
         for (var i = 0; i < diagnostics.Count; i++)
         {
             var d = diagnostics[i];
+            var fileKey = PathDisplayResolver.NormalizeFileKey(d.FilePath);
             string fileDisplay;
-            if (string.Equals(previousFilePath, d.FilePath, StringComparison.Ordinal))
+            if (string.Equals(previousFileKey, fileKey, StringComparison.Ordinal))
             {
                 fileDisplay = previousDisplayPath;
             }
             else
             {
                 fileDisplay = pathResolver.GetDisplayPath(d.FilePath);
-                previousFilePath = d.FilePath;
+                previousFileKey = fileKey;
                 previousDisplayPath = fileDisplay;
             }
             entries[i] = new JsonDiagnosticEntry
@@ -477,21 +478,22 @@ public static class DiagnosticFormatter
         json.WriteEndObject();
 
         json.WriteStartArray("results");
-        string? previousFilePath = null;
+        string? previousFileKey = null;
         SarifArtifactLocation? previousArtifactLocation = null;
         for (var i = 0; i < diagnostics.Count; i++)
         {
             var d = diagnostics[i];
             var ruleId = d.RuleId ?? "parse";
+            var fileKey = PathDisplayResolver.NormalizeFileKey(d.FilePath);
             SarifArtifactLocation artifactLocation;
-            if (string.Equals(previousFilePath, d.FilePath, StringComparison.Ordinal) && previousArtifactLocation is not null)
+            if (string.Equals(previousFileKey, fileKey, StringComparison.Ordinal) && previousArtifactLocation is not null)
             {
                 artifactLocation = previousArtifactLocation;
             }
             else
             {
                 artifactLocation = pathResolver.ResolveSarifArtifactLocation(d.FilePath);
-                previousFilePath = d.FilePath;
+                previousFileKey = fileKey;
                 previousArtifactLocation = artifactLocation;
             }
             json.WriteStartObject();
