@@ -413,11 +413,9 @@ seiton --format json 2>/dev/null
 seiton --format json
 ```
 
-**PowerShell** merges stderr into the success stream by default, which breaks `ConvertFrom-Json`. Redirect stderr away from the pipeline:
-
+**PowerShell** Can pass to `ConvertFrom-Json` directly.
 ```powershell
-# Diagnostics only (valid JSON array)
-$diagnostics = seiton --format json 2>$null | ConvertFrom-Json
+seiton --format json | ConvertFrom-Json
 ```
 
 ```json
