@@ -6,6 +6,7 @@ namespace Seiton.Playground.Tests;
 /// Fast structural checks against source <c>wwwroot</c> assets (no browser, no publish).
 /// Fingerprint placeholders in <c>index.html</c> must stay intact so MSBuild can rewrite URLs.
 /// </summary>
+[NotInParallel(PlaygroundTestParallelism.AssemblyLockKey)]
 public sealed class PlaygroundHtmlContractTests
 {
     [Test]

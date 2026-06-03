@@ -212,6 +212,43 @@ public sealed class IncrementalParseContext
     /// <summary>Whether a previous parse result has been recorded.</summary>
     public bool HasPrevious => _previousSource is not null;
 
+    /// <summary>
+    /// Releases arenas and clears incremental state between tests (shared <see cref="PlaygroundLintRunner"/> context).
+    /// </summary>
+    internal void ResetForTests()
+    {
+        _previousSource = null;
+        _previousSourceLength = 0;
+        _previousFilePath = null;
+        _previousWorkflow = null;
+        _previousDiagnostics = default;
+        _previousHasFatalError = false;
+        _registry = default;
+        _baseStringCount = 0;
+        _baseBoolCount = 0;
+        _baseIntCount = 0;
+        _baseFloatCount = 0;
+        _fullParseStringCount = 0;
+        _fullParseBoolCount = 0;
+        _fullParseIntCount = 0;
+        _fullParseFloatCount = 0;
+        _cachedJobDiagnostics = null;
+        _lastReusedJobs = null;
+
+        if (_retainedArenas is { Count: > 0 })
+        {
+            foreach (var arena in _retainedArenas)
+            {
+                arena.Dispose();
+            }
+
+            _retainedArenas.Clear();
+        }
+
+        _previousArena?.Dispose();
+        _previousArena = null;
+    }
+
     /// <summary>The arena that owns the current parse result's pooled data. Used by the incremental lint path when reusing a previous parse result.</summary>
     internal AstArena? Arena => _previousArena;
 

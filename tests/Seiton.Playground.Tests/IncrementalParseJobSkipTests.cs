@@ -7,6 +7,7 @@ namespace Seiton.Playground.Tests;
 /// Tests for D-5c: Job-level selective skip.
 /// When individual jobs are unchanged between incremental calls, their AST nodes are reused.
 /// </summary>
+[NotInParallel(PlaygroundTestParallelism.AssemblyLockKey)]
 public sealed class IncrementalParseJobSkipTests
 {
     private const string FilePath = ".github/workflows/ci.yml";

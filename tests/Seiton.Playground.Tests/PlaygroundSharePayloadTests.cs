@@ -2,6 +2,7 @@ using Seiton.Playground;
 
 namespace Seiton.Playground.Tests;
 
+[NotInParallel(PlaygroundTestParallelism.AssemblyLockKey)]
 public sealed class PlaygroundSharePayloadTests
 {
     private const string SampleYaml = "on: push\njobs:\n  test:\n    runs-on: ubuntu-latest\n";

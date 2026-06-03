@@ -23,8 +23,18 @@ public sealed class PlaygroundUiTestHostTests
         }
 
         var second = await PlaygroundUiTestHost.GetOrCreateAsync();
-        await Assert.That(second.PublishRoot).IsNotEqualTo(root);
-        await Assert.That(Directory.Exists(root)).IsFalse();
+        if (first.DeletePublishRootOnShutdown)
+        {
+            // Temp publish mode: shutdown deletes the old root and next startup uses a new one.
+            await Assert.That(second.PublishRoot).IsNotEqualTo(root);
+            await Assert.That(Directory.Exists(root)).IsFalse();
+        }
+        else
+        {
+            // Pre-published mode (CI): shutdown must keep artifacts and restart from the same root.
+            await Assert.That(second.PublishRoot).IsEqualTo(root);
+            await Assert.That(Directory.Exists(root)).IsTrue();
+        }
 
         await PlaygroundUiTestHost.ShutdownAsync();
     }

@@ -23,9 +23,9 @@ internal enum PlaygroundWasmPublishMode
 internal static class PlaygroundUiTestHost
 {
     /// <summary>
-    /// Shared with browser UI tests so nothing mutates the cached host in parallel with Playwright runs.
+    /// Shared with all playground tests — see <see cref="PlaygroundTestParallelism.AssemblyLockKey"/>.
     /// </summary>
-    internal const string ParallelLockKey = "seiton-playground-ui-static-host";
+    internal const string ParallelLockKey = PlaygroundTestParallelism.AssemblyLockKey;
 
     private static readonly SemaphoreSlim Gate = new(1, 1);
     private static HostState? s_debugState;
@@ -46,7 +46,12 @@ internal static class PlaygroundUiTestHost
         };
     }
 
-    public sealed record HostState(string BaseUrl, string WwwRootPath, string PublishRoot, WebApplication App);
+    public sealed record HostState(
+        string BaseUrl,
+        string WwwRootPath,
+        string PublishRoot,
+        WebApplication App,
+        bool DeletePublishRootOnShutdown = true);
 
     public static Task<HostState> GetOrCreateAsync(CancellationToken cancellationToken = default)
         => GetOrCreateAsync(PlaygroundWasmPublishMode.DebugFast, cancellationToken);
@@ -174,7 +179,11 @@ internal static class PlaygroundUiTestHost
             // ignore
         }
 
-        await TryDeletePublishRootAsync(state.PublishRoot, cancellationToken);
+        if (state.DeletePublishRootOnShutdown)
+        {
+            await TryDeletePublishRootAsync(state.PublishRoot, cancellationToken);
+        }
+
         return null;
     }
 
@@ -224,6 +233,15 @@ internal static class PlaygroundUiTestHost
         PlaygroundWasmPublishMode mode,
         CancellationToken cancellationToken)
     {
+        // Only one WASM host mode at a time — holding Debug + Release AOT doubles disk and Kestrel RSS.
+        await ShutdownOtherModeAsync(mode, cancellationToken);
+
+        var prePublished = await TryCreateFromPrePublishedAsync(mode, cancellationToken);
+        if (prePublished is not null)
+        {
+            return prePublished;
+        }
+
         var root = RepoPaths.FindRepoRoot();
         // Bump suffix when Playground WASM bits change so cached hosts are not stale.
         var suffix = mode == PlaygroundWasmPublishMode.ReleaseAot ? "aot-v6" : "dbg";
@@ -293,5 +311,72 @@ internal static class PlaygroundUiTestHost
         var baseUrl = urlBase + "/";
 
         return new HostState(baseUrl, wwwroot, publishDir, app);
+    }
+
+    /// <summary>
+    /// When CI (or a local script) pre-publishes the playground, skip in-test <c>dotnet publish</c>
+    /// (saves tens of GB peak RAM during WASM AOT inside the test process).
+    /// </summary>
+    private static async Task<HostState?> TryCreateFromPrePublishedAsync(
+        PlaygroundWasmPublishMode mode,
+        CancellationToken cancellationToken)
+    {
+        var envName = mode == PlaygroundWasmPublishMode.ReleaseAot
+            ? "SEITON_PLAYGROUND_PUBLISH_DIR_RELEASE"
+            : "SEITON_PLAYGROUND_PUBLISH_DIR_DEBUG";
+        var publishDir = Environment.GetEnvironmentVariable(envName);
+        if (string.IsNullOrWhiteSpace(publishDir) || !Directory.Exists(publishDir))
+        {
+            return null;
+        }
+
+        publishDir = Path.GetFullPath(publishDir);
+        var wwwroot = Path.Combine(publishDir, "wwwroot");
+        if (!File.Exists(Path.Combine(wwwroot, "index.html")))
+        {
+            throw new InvalidOperationException(
+                $"Pre-published playground missing index.html under '{wwwroot}' (env {envName}).");
+        }
+
+        var manifestPath = Path.Combine(publishDir, "Seiton.Playground.staticwebassets.endpoints.json");
+        if (!File.Exists(manifestPath))
+        {
+            throw new InvalidOperationException(
+                $"Pre-published playground missing static assets manifest: '{manifestPath}'.");
+        }
+
+        var builder = WebApplication.CreateBuilder(new WebApplicationOptions
+        {
+            ContentRootPath = publishDir,
+            WebRootPath = wwwroot,
+            ApplicationName = typeof(PlaygroundUiTestHost).Assembly.FullName,
+            Args = Array.Empty<string>(),
+        });
+        builder.WebHost.UseUrls("http://127.0.0.1:0");
+
+        var app = builder.Build();
+        app.MapStaticAssets(manifestPath);
+        app.MapFallbackToFile("index.html");
+
+        await app.StartAsync(cancellationToken);
+        var addresses = app.Services.GetRequiredService<IServer>().Features
+            .Get<IServerAddressesFeature>()!.Addresses;
+        var urlBase = addresses.First(u => u.StartsWith("http://", StringComparison.Ordinal)).TrimEnd('/');
+        var baseUrl = urlBase + "/";
+
+        // PublishRoot equals publishDir; ShutdownAsync will not delete pre-published trees.
+        return new HostState(baseUrl, wwwroot, publishDir, app, DeletePublishRootOnShutdown: false);
+    }
+
+    private static async Task ShutdownOtherModeAsync(PlaygroundWasmPublishMode mode, CancellationToken cancellationToken)
+    {
+        if (mode == PlaygroundWasmPublishMode.DebugFast)
+        {
+            s_releaseAotState = await ShutdownSlotAsync(s_releaseAotState, cancellationToken);
+        }
+        else
+        {
+            s_debugState = await ShutdownSlotAsync(s_debugState, cancellationToken);
+        }
     }
 }

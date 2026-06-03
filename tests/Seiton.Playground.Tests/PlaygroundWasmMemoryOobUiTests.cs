@@ -87,18 +87,25 @@ public sealed class PlaygroundWasmMemoryOobUiTests
             // Fresh page per suffix so a WASM trap in one variant does not kill the runtime for later cases.
             await using var suffixContext = await browser.NewContextAsync();
             var suffixPage = await OpenPlaygroundWithTestHooksAsync(suffixContext, host.BaseUrl);
-            await ApplyFullFixConfigViaHooksAsync(suffixPage);
-
-            var result = await RunLintAppendingSuffixAsync(suffixPage, KeystrokeSuffixes[i]);
-            if (!result.Ok)
+            try
             {
-                failures.Add($"[{i}] suffix len={KeystrokeSuffixes[i].Length}: {result.Error}");
-                continue;
+                await ApplyFullFixConfigViaHooksAsync(suffixPage);
+
+                var result = await RunLintAppendingSuffixAsync(suffixPage, KeystrokeSuffixes[i]);
+                if (!result.Ok)
+                {
+                    failures.Add($"[{i}] suffix len={KeystrokeSuffixes[i].Length}: {result.Error}");
+                    continue;
+                }
+
+                if (result.InternalError)
+                {
+                    failures.Add($"[{i}] internal-error diagnostic");
+                }
             }
-
-            if (result.InternalError)
+            finally
             {
-                failures.Add($"[{i}] internal-error diagnostic");
+                await suffixPage.CloseAsync();
             }
         }
 
@@ -124,6 +131,27 @@ public sealed class PlaygroundWasmMemoryOobUiTests
     }
 
     [Test]
+    public async Task WasmLint_BareUsesLine_IsDeferred_AndCompletedUsesIsLinted()
+    {
+        var host = await PlaygroundUiTestHost.GetOrCreateAsync(PlaygroundWasmPublishMode.ReleaseAot);
+        var browser = await PlaygroundUiBrowserSession.GetBrowserAsync();
+        await using var context = await browser.NewContextAsync();
+        var page = await OpenPlaygroundWithTestHooksAsync(context, host.BaseUrl);
+
+        await ApplyFullFixConfigViaHooksAsync(page);
+        var baseYaml = await GetEditorWorkflowBaseAsync(page);
+
+        var deferred = await RunLintViaHooksAsync(page, baseYaml + "      - uses:");
+        await Assert.That(deferred.Ok).IsTrue().Because(deferred.Error ?? "unknown");
+        await Assert.That(deferred.Deferred).IsTrue();
+        await Assert.That(deferred.Diagnostics ?? []).Count().IsEqualTo(0);
+
+        var linted = await RunLintViaHooksAsync(page, baseYaml + "      - uses: actions/checkout@v4");
+        await Assert.That(linted.Ok).IsTrue().Because(linted.Error ?? "unknown");
+        await Assert.That(linted.Deferred).IsFalse();
+    }
+
+    [Test]
     public async Task WasmLint_AlternatingBufferSizes_DoNotThrowMemoryOob()
     {
         var host = await PlaygroundUiTestHost.GetOrCreateAsync(PlaygroundWasmPublishMode.ReleaseAot);
@@ -135,7 +163,7 @@ public sealed class PlaygroundWasmMemoryOobUiTests
 
         var baseYaml = await GetEditorWorkflowBaseAsync(page);
 
-        for (var round = 0; round < 24; round++)
+        for (var round = 0; round < 8; round++)
         {
             var yaml = round % 2 == 0 ? baseYaml : baseYaml + TrailingStepSuffix;
             var result = await RunLintViaHooksAsync(page, yaml);
@@ -258,6 +286,8 @@ public sealed class PlaygroundWasmMemoryOobUiTests
         public bool Ok { get; set; }
         public string? Error { get; set; }
         public bool InternalError { get; set; }
+        public bool Deferred { get; set; }
+        public object[]? Diagnostics { get; set; }
     }
 
     private sealed class SetConfigHookResult

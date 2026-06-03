@@ -6,7 +6,7 @@ namespace Seiton.Playground.Tests;
 /// Tests for <see cref="PlaygroundLintRunner.ApplyAllFixesAsync"/> — the network-based
 /// pin remediation path in the Playground.
 /// </summary>
-[NotInParallel("PlaygroundConfig")]
+[NotInParallel(PlaygroundTestParallelism.AssemblyLockKey)]
 public sealed class PlaygroundLintRunnerAsyncFixTests : IDisposable
 {
 

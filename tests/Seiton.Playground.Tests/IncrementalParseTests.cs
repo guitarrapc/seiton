@@ -3,6 +3,7 @@ using Seiton.Core.Parsing;
 
 namespace Seiton.Playground.Tests;
 
+[NotInParallel(PlaygroundTestParallelism.AssemblyLockKey)]
 public sealed class IncrementalParseTests
 {
     private const string FilePath = ".github/workflows/ci.yml";

@@ -1123,6 +1123,10 @@ function runLint() {
     return;
   }
 
+  if (shouldDeferWasmLintForIncompleteUses(source)) {
+    return;
+  }
+
   lintInProgress = true;
   lintPendingRetry = false;
 
@@ -1279,6 +1283,15 @@ function getSelectedFilePath() {
 }
 
 /**
+ * Bare trailing `- uses:` (no action ref yet) can trap Mono WASM AOT — defer lint until the line is complete.
+ * @param {string} source
+ * @returns {boolean}
+ */
+function shouldDeferWasmLintForIncompleteUses(source) {
+  return /(?:^|\n)[ \t]*- uses:\s*$/m.test(source);
+}
+
+/**
  * Runs lint without updating editor UI. Used by Playwright when <c>?seitonTestHooks=1</c>.
  * @param {string} source
  * @param {string} [filePath]
@@ -1287,6 +1300,9 @@ function getSelectedFilePath() {
 function runLintForTest(source, filePath) {
   if (!runtimeAlive || !runtimeReady || !exports) {
     return { ok: false, error: 'runtime not ready' };
+  }
+  if (shouldDeferWasmLintForIncompleteUses(source)) {
+    return { ok: true, diagnostics: [], deferred: true };
   }
   try {
     const path = filePath ?? getSelectedFilePath();
