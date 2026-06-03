@@ -13,136 +13,6 @@ public sealed class PlaygroundUiLayoutTests
 
     private static readonly Regex _mainScriptSrc = new(@"src=""main(\.[^""]+ )?\.js""", RegexOptions.IgnoreCase | RegexOptions.Compiled, TimeSpan.FromSeconds(1));
 
-    private static readonly SemaphoreSlim s_browserGate = new(1, 1);
-    /// <summary>Released by <see cref="DisposePlaywrightSessionAsync"/> or <see cref="TryDisposePlaywrightSessionOnProcessExit"/>.</summary>
-    private static IPlaywright? s_playwright;
-    /// <summary>Released by <see cref="DisposePlaywrightSessionAsync"/> or <see cref="TryDisposePlaywrightSessionOnProcessExit"/>.</summary>
-    private static IBrowser? s_browser;
-
-    static PlaygroundUiLayoutTests()
-    {
-        AppDomain.CurrentDomain.ProcessExit += (_, _) =>
-        {
-            try
-            {
-                TryDisposePlaywrightSessionOnProcessExit();
-            }
-            catch
-            {
-                // best effort
-            }
-        };
-    }
-
-    /// <summary>
-    /// Process exit must not block on <see cref="s_browserGate"/> if another thread is in
-    /// <see cref="GetBrowserAsync"/> (e.g. launching Chromium).
-    /// </summary>
-    private static void TryDisposePlaywrightSessionOnProcessExit()
-    {
-        if (!s_browserGate.Wait(TimeSpan.FromSeconds(1)))
-        {
-            return;
-        }
-
-        IBrowser? browser;
-        IPlaywright? playwright;
-        try
-        {
-            browser = s_browser;
-            playwright = s_playwright;
-            s_browser = null;
-            s_playwright = null;
-        }
-        finally
-        {
-            s_browserGate.Release();
-        }
-
-        if (browser is not null)
-        {
-            try
-            {
-                if (browser.IsConnected)
-                {
-                    browser.CloseAsync().GetAwaiter().GetResult();
-                }
-            }
-            catch
-            {
-                // driver may already be closing
-            }
-
-            try
-            {
-                browser.DisposeAsync().GetAwaiter().GetResult();
-            }
-            catch
-            {
-                // best effort
-            }
-        }
-
-        if (playwright is not null)
-        {
-            try
-            {
-                playwright.Dispose();
-            }
-            catch
-            {
-                // best effort
-            }
-        }
-    }
-
-    private static async Task<IBrowser> GetBrowserAsync()
-    {
-        if (s_browser is not null)
-        {
-            return s_browser;
-        }
-
-        await s_browserGate.WaitAsync();
-        try
-        {
-            if (s_browser is not null)
-            {
-                return s_browser;
-            }
-
-            IPlaywright? playwrightLocal = null;
-            try
-            {
-                playwrightLocal = await Playwright.CreateAsync();
-                var browser = await playwrightLocal.Chromium.LaunchAsync(
-                    new BrowserTypeLaunchOptions { Headless = true });
-                s_playwright = playwrightLocal;
-                s_browser = browser;
-                playwrightLocal = null;
-                return browser;
-            }
-            finally
-            {
-                if (playwrightLocal is not null)
-                {
-                    try
-                    {
-                        playwrightLocal.Dispose();
-                    }
-                    catch
-                    {
-                        // best effort — launch failed after CreateAsync
-                    }
-                }
-            }
-        }
-        finally
-        {
-            s_browserGate.Release();
-        }
-    }
-
     [Test]
     public async Task PublishedIndex_ResolvesStylesheetAndMainScript()
     {
@@ -158,7 +28,9 @@ public sealed class PlaygroundUiLayoutTests
 
         // Structural checks (avoid pinning full SVG path d= — brittle on harmless icon tweaks).
         await Assert.That(Regex.IsMatch(html, @"id\s*=\s*""permalink-btn""[\s\S]*?<svg\b", RegexOptions.IgnoreCase, TimeSpan.FromSeconds(2))).IsTrue();
-        await Assert.That(html).Contains("copy link to clipboard", StringComparison.OrdinalIgnoreCase);
+        await Assert.That(html).Contains(
+            "workflow YAML and config in URL hash",
+            StringComparison.OrdinalIgnoreCase);
         await Assert.That(Regex.IsMatch(html, @"id\s*=\s*""fetch-btn""[\s\S]*?<svg\b", RegexOptions.IgnoreCase, TimeSpan.FromSeconds(2))).IsTrue();
         await Assert.That(html).Contains(
             "Fetch and lint YAML — enter a URL first",
@@ -166,9 +38,9 @@ public sealed class PlaygroundUiLayoutTests
         await Assert.That(html).Contains("id=\"toast-stack\"", StringComparison.Ordinal);
     }
 
-    private static async Task GotoPlaygroundAndWaitForLinterGridAsync(IPage page, string baseUrl)
+    internal static async Task GotoPlaygroundAndWaitForLinterGridAsync(IPage page, string url)
     {
-        await page.GotoAsync(baseUrl, new PageGotoOptions
+        await page.GotoAsync(url, new PageGotoOptions
         {
             WaitUntil = WaitUntilState.DOMContentLoaded,
             Timeout = 120_000,
@@ -198,7 +70,7 @@ public sealed class PlaygroundUiLayoutTests
         try
         {
             var host = await PlaygroundUiTestHost.GetOrCreateAsync();
-            var browser = await GetBrowserAsync();
+            var browser = await PlaygroundUiBrowserSession.GetBrowserAsync();
             await using var context = await browser.NewContextAsync(new BrowserNewContextOptions
             {
                 ViewportSize = new ViewportSize { Width = 900, Height = 720 },
@@ -242,7 +114,7 @@ public sealed class PlaygroundUiLayoutTests
     public async Task Toast_Escape_WithFocusOutsideStack_DismissesTopToast()
     {
         var host = await PlaygroundUiTestHost.GetOrCreateAsync();
-        var browser = await GetBrowserAsync();
+        var browser = await PlaygroundUiBrowserSession.GetBrowserAsync();
         await using var context = await browser.NewContextAsync(new BrowserNewContextOptions
         {
             ViewportSize = new ViewportSize { Width = 900, Height = 720 },
@@ -276,7 +148,7 @@ public sealed class PlaygroundUiLayoutTests
     public async Task FetchUrl_SingleLabelHost_KeepsFetchButtonDisabled()
     {
         var host = await PlaygroundUiTestHost.GetOrCreateAsync();
-        var browser = await GetBrowserAsync();
+        var browser = await PlaygroundUiBrowserSession.GetBrowserAsync();
         await using var context = await browser.NewContextAsync(new BrowserNewContextOptions
         {
             ViewportSize = new ViewportSize { Width = 900, Height = 720 },
@@ -293,7 +165,7 @@ public sealed class PlaygroundUiLayoutTests
     public async Task FetchUrl_MultiLabelHttpsHost_EnablesFetchButton()
     {
         var host = await PlaygroundUiTestHost.GetOrCreateAsync();
-        var browser = await GetBrowserAsync();
+        var browser = await PlaygroundUiBrowserSession.GetBrowserAsync();
         await using var context = await browser.NewContextAsync(new BrowserNewContextOptions
         {
             ViewportSize = new ViewportSize { Width = 900, Height = 720 },
@@ -310,7 +182,7 @@ public sealed class PlaygroundUiLayoutTests
     public async Task Layout_WideViewport_UsesTwoColumnGridForLinterSection()
     {
         var host = await PlaygroundUiTestHost.GetOrCreateAsync();
-        var browser = await GetBrowserAsync();
+        var browser = await PlaygroundUiBrowserSession.GetBrowserAsync();
         await using var context = await browser.NewContextAsync(new BrowserNewContextOptions
         {
             ViewportSize = new ViewportSize { Width = 1280, Height = 720 },
@@ -339,7 +211,7 @@ public sealed class PlaygroundUiLayoutTests
     public async Task Layout_NarrowViewport_StacksLinterColumns()
     {
         var host = await PlaygroundUiTestHost.GetOrCreateAsync();
-        var browser = await GetBrowserAsync();
+        var browser = await PlaygroundUiBrowserSession.GetBrowserAsync();
         await using var context = await browser.NewContextAsync(new BrowserNewContextOptions
         {
             ViewportSize = new ViewportSize { Width = 600, Height = 720 },
@@ -358,42 +230,6 @@ public sealed class PlaygroundUiLayoutTests
         await Assert.That((double)Math.Abs(editorBox.X - resultsBox.X)).IsLessThanOrEqualTo(24.0);
     }
 
-    /// <summary>
-    /// Called once per assembly from <see cref="PlaygroundUiTestAssemblyHooks"/>; process exit uses
-    /// <see cref="TryDisposePlaywrightSessionOnProcessExit"/> so teardown does not wait indefinitely on <see cref="s_browserGate"/>.
-    /// </summary>
-    internal static async Task DisposePlaywrightSessionAsync()
-    {
-        await s_browserGate.WaitAsync();
-        try
-        {
-            if (s_browser is not null)
-            {
-                try
-                {
-                    if (s_browser.IsConnected)
-                    {
-                        await s_browser.CloseAsync();
-                    }
-                }
-                catch
-                {
-                    // ignore — driver may already be closing
-                }
-
-                await s_browser.DisposeAsync();
-                s_browser = null;
-            }
-
-            if (s_playwright is not null)
-            {
-                s_playwright.Dispose();
-                s_playwright = null;
-            }
-        }
-        finally
-        {
-            s_browserGate.Release();
-        }
-    }
+    /// <summary>Forwarded to <see cref="PlaygroundUiBrowserSession"/> for assembly teardown tests.</summary>
+    internal static Task DisposePlaywrightSessionAsync() => PlaygroundUiBrowserSession.DisposeAsync();
 }

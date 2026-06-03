@@ -191,7 +191,7 @@ This ensures cosmetic edits (adding/removing blank lines, trailing spaces) do no
 | Loading indicator | "Loading WebAssembly binary..." shown until WASM runtime is ready |
 | File type selector | `workflow` (`.github/workflows/test.yml`) / `action.yml` |
 | Sample selector | Built-in YAML snippets: default, simple, minimal, fixPermissions, matrix, actionComposite. `actionComposite` auto-switches file type to `action.yml`; others switch to workflow. |
-| Permalink (share) | pako deflate → Base64 → URL hash → clipboard copy (execCommand fallback + Clipboard API) |
+| Permalink (share) | v2: JSON `{v:2,y,c?,p?}` → pako zlib deflate → base64url hash; restores YAML + config + file path on load. v1 legacy: raw YAML deflate + standard base64 (config empty). P2: if URL/hash too long, retry YAML-only; else clipboard bundle. See §4.9. |
 | URL fetch | Fetch remote YAML by URL with validation and GitHub blob→raw conversion |
 | Toast notifications | Dismiss button + Escape key (capture phase), auto-dismiss with configurable duration |
 | Apply all fixes | Offline autofix with priority ordering (network fixes skipped) |
@@ -303,6 +303,20 @@ This ensures cosmetic edits (adding/removing blank lines, trailing spaces) do no
 | pako | 2.1.0 | Permalink deflate/inflate (ESM import) | — |
 
 CSS resources use non-blocking loading pattern (`media="print"` + `onload` swap + `<noscript>` fallback).
+
+### 4.9 Share URL Payload (v2)
+
+| Item | Value |
+|---|---|
+| Codec module | `share-payload.js` (browser); `PlaygroundSharePayload` in `Seiton.Playground.Core` (tests/benchmarks; must stay in sync) |
+| v2 JSON keys | `v` (2), `y` (workflow YAML), optional `c` (config), optional `p` (file path) |
+| Compression | pako / zlib deflate |
+| v2 encoding | base64url (no `+` `/` padding) |
+| v1 legacy decode | standard base64 + raw YAML bytes (no JSON wrapper) |
+| Limits | hash ≤ 16384 chars; full URL ≤ 8192 chars |
+| P2 fallback order | full v2 → YAML-only v2 → clipboard text bundle (no URL update) |
+| Restore on load | YAML → editor; config → config panel + `SetConfig` after WASM ready; path → file selector when option exists |
+| Decode failure | Toast + default sample YAML |
 
 ---
 

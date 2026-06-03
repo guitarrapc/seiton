@@ -2,14 +2,14 @@
 
 /// <summary>
 /// Ensures published playground host and Playwright browser are released after this assembly finishes.
-/// Playwright also registers <see cref="AppDomain.ProcessExit"/> in <see cref="PlaygroundUiLayoutTests"/> as a fallback.
+/// Playwright also registers <see cref="AppDomain.ProcessExit"/> in <see cref="PlaygroundUiBrowserSession"/> as a fallback.
 /// </summary>
 public static class PlaygroundUiTestAssemblyHooks
 {
     [After(Assembly)]
     public static async Task TeardownPlaygroundUiSessionAsync()
     {
-        await PlaygroundUiLayoutTests.DisposePlaywrightSessionAsync();
+        await PlaygroundUiBrowserSession.DisposeAsync();
         await PlaygroundUiTestHost.ShutdownAsync();
     }
 }

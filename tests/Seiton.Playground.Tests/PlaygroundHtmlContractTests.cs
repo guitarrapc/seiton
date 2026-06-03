@@ -260,6 +260,57 @@ public sealed class PlaygroundHtmlContractTests
     }
 
     [Test]
+    public async Task IndexTemplate_PermalinkButton_StatesYamlAndConfigInShareUrl()
+    {
+        var html = await ReadSourceIndexHtmlAsync();
+        const string expected =
+            "Share — copy link with workflow YAML and config in URL hash";
+        await Assert.That(html).Contains($"id=\"permalink-btn\"", StringComparison.Ordinal);
+        await Assert.That(html).Contains($"title=\"{expected}\"", StringComparison.Ordinal);
+        await Assert.That(html).Contains($"aria-label=\"{expected}\"", StringComparison.Ordinal);
+    }
+
+    [Test]
+    public async Task IndexTemplate_AboutPlayground_StatesShareIncludesConfigWithFallback()
+    {
+        var html = await ReadSourceIndexHtmlAsync();
+        await Assert.That(html).Contains("workflow YAML and lint config", StringComparison.Ordinal);
+        await Assert.That(html).Contains("workflow YAML only", StringComparison.Ordinal);
+        await Assert.That(html).Contains("clipboard", StringComparison.Ordinal);
+    }
+
+    [Test]
+    public async Task IndexTemplate_ConfigPanel_StatesConfigIncludedInShareWhenUrlFits()
+    {
+        var html = await ReadSourceIndexHtmlAsync();
+        await Assert.That(html).Contains(
+            "title=\"Toggle lint configuration editor. Included in Share links when the URL is not too long.\"",
+            StringComparison.Ordinal);
+    }
+
+    [Test]
+    public async Task MainJs_ImportsSharePayloadModule()
+    {
+        var path = Path.Combine(RepoPaths.FindRepoRoot(), "src", "Seiton.Playground", "wwwroot", "main.js");
+        var js = await File.ReadAllTextAsync(path);
+        await Assert.That(js).Contains("from './share-payload.js'");
+        await Assert.That(js).Contains("encodeShareState");
+        await Assert.That(js).Contains("decodeShareHash");
+        await Assert.That(js).Contains("formatClipboardBundle");
+    }
+
+    [Test]
+    public async Task SharePayloadModule_DefinesV2CodecAndLimits()
+    {
+        var path = Path.Combine(RepoPaths.FindRepoRoot(), "src", "Seiton.Playground", "wwwroot", "share-payload.js");
+        var js = await File.ReadAllTextAsync(path);
+        await Assert.That(js).Contains("SHARE_PAYLOAD_VERSION = 2");
+        await Assert.That(js).Contains("MAX_SHARE_HASH_LENGTH");
+        await Assert.That(js).Contains("encodeShareState");
+        await Assert.That(js).Contains("encodeYamlOnlyShare");
+    }
+
+    [Test]
     public async Task MainJs_ConfigTemplates_HasAllTemplateKeys()
     {
         var path = Path.Combine(RepoPaths.FindRepoRoot(), "src", "Seiton.Playground", "wwwroot", "main.js");
