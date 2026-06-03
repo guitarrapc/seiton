@@ -485,78 +485,95 @@ public static class DiagnosticFormatter
         }
         if (endLine < startLine) endLine = startLine;
 
-        var lines = ExtractLines(sourceBytes, startLine, endLine);
-        if (lines.Length == 0)
+        var lineCount = endLine - startLine + 1;
+        var sourceSpan = sourceBytes.AsSpan();
+        LineSlice[]? rentedSlices = null;
+        var lineSlices = lineCount <= MaxStackLineSlices
+            ? stackalloc LineSlice[lineCount]
+            : (rentedSlices = ArrayPool<LineSlice>.Shared.Rent(lineCount)).AsSpan(0, lineCount);
+        try
         {
-            writer.WriteLine("   |");
-            return;
-        }
+            ExtractLineSlices(sourceSpan, startLine, endLine, lineSlices);
 
-        var lineNumWidth = endLine.ToString().Length;
+            var lineNumWidth = endLine.ToString().Length;
 
-        WriteGutterSeparator(writer, lineNumWidth);
+            WriteGutterSeparator(writer, lineNumWidth);
 
-        if (startLine == endLine)
-        {
-            // Single-line span
-            var sourceLine = lines[0];
-            WriteGutterLine(writer, startLine, lineNumWidth, sourceLine, color, blue, reset);
-
-            // Underline caret: columns are 1-based
-            var safeStart = Math.Max(1, startCol);
-            var safeEnd = endCol > safeStart ? endCol : safeStart + 1;
-            var caretLen = Math.Max(1, safeEnd - safeStart);
-
-            writer.Write("   ");
-            WriteRepeatedChar(writer, ' ', lineNumWidth);
-            writer.Write("| ");
-            WriteRepeatedChar(writer, ' ', safeStart - 1);
-            if (color)
+            if (startLine == endLine)
             {
-                writer.Write(severityColor!);
-                WriteRepeatedChar(writer, '^', caretLen);
-                writer.Write(reset!);
+                // Single-line span
+                WriteGutterLine(writer, startLine, lineNumWidth, lineSlices[0].AsSpan(sourceSpan), color, blue, reset);
+
+                // Underline caret: columns are 1-based
+                var safeStart = Math.Max(1, startCol);
+                var safeEnd = endCol > safeStart ? endCol : safeStart + 1;
+                var caretLen = Math.Max(1, safeEnd - safeStart);
+
+                writer.Write("   ");
+                WriteRepeatedChar(writer, ' ', lineNumWidth);
+                writer.Write("| ");
+                WriteRepeatedChar(writer, ' ', safeStart - 1);
+                if (color)
+                {
+                    writer.Write(severityColor!);
+                    WriteRepeatedChar(writer, '^', caretLen);
+                    writer.Write(reset!);
+                }
+                else
+                {
+                    WriteRepeatedChar(writer, '^', caretLen);
+                }
+
+                writer.WriteLine();
             }
             else
             {
-                WriteRepeatedChar(writer, '^', caretLen);
+                // Multi-line span: show opening line with /  and closing line with \___^
+                for (var li = 0; li < lineSlices.Length; li++)
+                {
+                    var ln = startLine + li;
+                    var prefix = li == 0 ? "/ " : "| ";
+                    WriteGutterLineWithPrefix(
+                        writer,
+                        ln,
+                        lineNumWidth,
+                        prefix,
+                        lineSlices[li].AsSpan(sourceSpan),
+                        color,
+                        blue,
+                        reset);
+                }
+
+                // Closing underline
+                var closingCaretLen = Math.Max(1, endCol - 1);
+                writer.Write("   ");
+                WriteRepeatedChar(writer, ' ', lineNumWidth);
+                writer.Write("| ");
+                if (color)
+                {
+                    writer.Write(severityColor!);
+                    writer.Write("|_");
+                    WriteRepeatedChar(writer, '^', closingCaretLen);
+                    writer.Write(reset!);
+                }
+                else
+                {
+                    writer.Write("|_");
+                    WriteRepeatedChar(writer, '^', closingCaretLen);
+                }
+
+                writer.WriteLine();
             }
 
-            writer.WriteLine();
+            WriteGutterSeparator(writer, lineNumWidth);
         }
-        else
+        finally
         {
-            // Multi-line span: show opening line with /  and closing line with \___^
-            for (var li = 0; li < lines.Length; li++)
+            if (rentedSlices is not null)
             {
-                var ln = startLine + li;
-                var sourceLine = lines[li];
-                var prefix = li == 0 ? "/ " : "| ";
-                WriteGutterLineWithPrefix(writer, ln, lineNumWidth, prefix, sourceLine, color, blue, reset);
+                ArrayPool<LineSlice>.Shared.Return(rentedSlices);
             }
-
-            // Closing underline
-            var closingCaretLen = Math.Max(1, endCol - 1);
-            writer.Write("   ");
-            WriteRepeatedChar(writer, ' ', lineNumWidth);
-            writer.Write("| ");
-            if (color)
-            {
-                writer.Write(severityColor!);
-                writer.Write("|_");
-                WriteRepeatedChar(writer, '^', closingCaretLen);
-                writer.Write(reset!);
-            }
-            else
-            {
-                writer.Write("|_");
-                WriteRepeatedChar(writer, '^', closingCaretLen);
-            }
-
-            writer.WriteLine();
         }
-
-        WriteGutterSeparator(writer, lineNumWidth);
     }
 
     private static void WriteGutterSeparator(Utf8Writer writer, int lineNumWidth)
@@ -566,7 +583,7 @@ public static class DiagnosticFormatter
         writer.WriteLine('|');
     }
 
-    private static void WriteGutterLine(Utf8Writer writer, int lineNum, int width, string sourceLine, bool color, string? blue, string? reset)
+    private static void WriteGutterLine(Utf8Writer writer, int lineNum, int width, ReadOnlySpan<byte> sourceLine, bool color, string? blue, string? reset)
     {
         writer.Write("   ");
         if (color)
@@ -581,10 +598,19 @@ public static class DiagnosticFormatter
         }
 
         writer.Write(" | ");
-        writer.WriteLine(sourceLine);
+        writer.WriteLiteral(sourceLine);
+        writer.WriteNewLine();
     }
 
-    private static void WriteGutterLineWithPrefix(Utf8Writer writer, int lineNum, int width, string prefix, string sourceLine, bool color, string? blue, string? reset)
+    private static void WriteGutterLineWithPrefix(
+        Utf8Writer writer,
+        int lineNum,
+        int width,
+        string prefix,
+        ReadOnlySpan<byte> sourceLine,
+        bool color,
+        string? blue,
+        string? reset)
     {
         writer.Write("   ");
         if (color)
@@ -600,7 +626,8 @@ public static class DiagnosticFormatter
 
         writer.Write(" |");
         writer.Write(prefix);
-        writer.WriteLine(sourceLine);
+        writer.WriteLiteral(sourceLine);
+        writer.WriteNewLine();
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -610,9 +637,15 @@ public static class DiagnosticFormatter
     private static void WritePaddedDecimal(Utf8Writer writer, int value, int minWidth)
         => writer.WritePaddedDecimal(value, minWidth);
 
-    private static string[] ExtractLines(byte[] utf8, int startLine, int endLine)
+    private const int MaxStackLineSlices = 16;
+
+    private readonly record struct LineSlice(int Start, int Length)
     {
-        var results = new string[endLine - startLine + 1];
+        public ReadOnlySpan<byte> AsSpan(ReadOnlySpan<byte> source) => source.Slice(Start, Length);
+    }
+
+    private static void ExtractLineSlices(ReadOnlySpan<byte> utf8, int startLine, int endLine, Span<LineSlice> results)
+    {
         var currentLine = 1;
         var lineStart = 0;
         var resultIdx = 0;
@@ -626,24 +659,29 @@ public static class DiagnosticFormatter
             {
                 if (currentLine >= startLine && currentLine <= endLine)
                 {
-                    // Strip trailing \r if present
                     var len = i - lineStart;
                     if (len > 0 && utf8[lineStart + len - 1] == (byte)'\r')
+                    {
                         len--;
-                    results[resultIdx++] = Encoding.UTF8.GetString(utf8, lineStart, len);
+                    }
+
+                    results[resultIdx++] = new LineSlice(lineStart, len);
                 }
+
                 if (resultIdx == results.Length)
+                {
                     break;
+                }
+
                 currentLine++;
                 lineStart = i + 1;
             }
         }
 
-        // Fill any unfilled slots (file shorter than expected)
         for (var j = resultIdx; j < results.Length; j++)
-            results[j] = "";
-
-        return results;
+        {
+            results[j] = default;
+        }
     }
 
     private static void WriteJson(IBufferWriter<byte> output, Utf8Writer writer, IReadOnlyList<Diagnostic> diagnostics, string? pathBaseDirectory)
