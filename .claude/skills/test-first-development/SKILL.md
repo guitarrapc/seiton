@@ -1,6 +1,6 @@
 ---
 name: test-first-development
-description: Mandatory test-first workflow for all implementation, modification, and bug fix tasks in this project. Covers red-green test cycle, regression tests, benchmark verification, spec updates, and equivalence-class coverage for classification/decision logic. Applies whenever code under src/ is added or changed.
+description: Mandatory test-first workflow for all implementation, modification, and bug fix tasks in this project. Covers red-green test cycle, regression tests, benchmark verification, spec updates, equivalence-class coverage, and Playground (WASM/UI) test constraints. Applies whenever code under src/ is added or changed.
 ---
 
 # Test-First Development
@@ -81,6 +81,97 @@ If the implementation changes observable behavior or adds new functionality, upd
 
 - Parser changes → `Seiton_Parser_spec.md`, `Seiton_Parser_csharp_spec.md`
 - Linter changes → `Seiton_Linter_spec.md`, `Seiton_Linter_csharp_spec.md`
+- Playground changes → `Seiton_Playground_spec.md`, `Seiton_Playground_csharp_spec.md`
+
+## Playground tests (`tests/Seiton.Playground.Tests`)
+
+Playground changes touch **Core logic** (`src/Seiton.Playground.Core`), **WASM host** (`src/Seiton.Playground`), and **browser UI** (`wwwroot/`). Use the **cheapest test layer that can fail first**, then add broader coverage.
+
+### Test layers (run in this order when bisecting)
+
+| Layer | When to use | Examples |
+|-------|-------------|----------|
+| **Fast / no browser** | Logic, JSON, share payload, HTML contract | `PlaygroundLintRunnerTests`, `PlaygroundSharePayloadTests`, `PlaygroundHtmlContractTests` |
+| **Incremental parse/lint** | `IncrementalParseContext`, D-5b/c/d | `IncrementalParseTests`, `IncrementalLintCacheTests` |
+| **Desktop WASM repro** | Bug is WASM/AOT-specific but avoid Playwright | `PlaygroundWasmMemoryOobDesktopTests` — calls `PlaygroundLintRunner` on CoreCLR |
+| **Browser + published WASM** | Real Mono WASM, Release+AOT bundle, UI hooks | `PlaygroundUiLayoutTests`, `PlaygroundWasmMemoryOobUiTests` — needs Playwright + `PlaygroundUiTestHost` |
+
+**Rule**: Add or extend **`PlaygroundWasmMemoryOobDesktopTests` (or `PlaygroundLintRunnerTests`) before** adding Playwright tests. Desktop green + browser red narrows the problem to WASM/interop/JS.
+
+### Running Playground tests (TUnit)
+
+Project: `tests/Seiton.Playground.Tests`. Use `--project` and `--treenode-filter` (never `--filter`).
+
+```shell
+# Entire playground assembly (slow if UI tests publish WASM in-process)
+dotnet test --project tests/Seiton.Playground.Tests --maximum-parallel-tests 1
+
+# Single class (preferred for red-green)
+dotnet test --project tests/Seiton.Playground.Tests --treenode-filter /*/*/PlaygroundLintRunnerTests/*
+
+# Single method
+dotnet test --project tests/Seiton.Playground.Tests --treenode-filter /*/*/PlaygroundLintRunnerTests/RunToJson_ValidMinimalWorkflow*
+```
+
+**Prerequisites for UI tests**: `dotnet workload install wasm-tools`, Playwright Chromium (`pwsh tests/Seiton.Playground.Tests/bin/Release/net10.0/playwright.ps1 install chromium` after build).
+
+### Memory and parallelism (mandatory on dev machines)
+
+Playground tests share **static** `PlaygroundLintRunner` / `PlaygroundUiTestHost` and can trigger **in-test `dotnet publish` (WASM AOT)** — peak RAM can reach **tens of GB**. All classes use `[NotInParallel(PlaygroundTestParallelism.AssemblyLockKey)]`; do not remove without updating `.github/docs/plan_memory.md`.
+
+**Local / CI-safe run** — pre-publish and point the test host at artifacts (same as `.github/workflows/build.yaml`):
+
+```shell
+dotnet publish src/Seiton.Playground/Seiton.Playground.csproj -c Debug -o publish/playground-dbg/ \
+  -p:RunAOTCompilation=false -p:PublishTrimmed=false -p:PlaygroundSoftFingerprint=true
+dotnet publish src/Seiton.Playground/Seiton.Playground.csproj -c Release -o publish/playground-aot/ \
+  -p:RunAOTCompilation=true -p:PublishTrimmed=true -p:PlaygroundSoftFingerprint=true
+
+export SEITON_PLAYGROUND_PUBLISH_DIR_DEBUG="$(pwd)/publish/playground-dbg"
+export SEITON_PLAYGROUND_PUBLISH_DIR_RELEASE="$(pwd)/publish/playground-aot"
+
+dotnet test --project tests/Seiton.Playground.Tests --maximum-parallel-tests 1
+```
+
+(PowerShell: set `$env:SEITON_PLAYGROUND_PUBLISH_DIR_DEBUG` / `_RELEASE` instead of `export`.)
+
+Without these env vars, the first UI test that needs `PlaygroundWasmPublishMode.ReleaseAot` runs **AOT publish inside the test process** — avoid that during routine red-green loops.
+
+Further context: `.github/docs/plan_memory.md`.
+
+### Playground-specific red-green patterns
+
+| Change | First failing test to write | Notes |
+|--------|----------------------------|-------|
+| `PlaygroundLintRunner` / config cache | `PlaygroundLintRunnerTests` | Config-mutating tests use `[NotInParallel(ConfigLockKey)]` on methods |
+| Incremental parse | `IncrementalParseTests` or `IncrementalParseContextTests` | New `IncrementalParseContext` per test unless testing shared runner |
+| WASM OOB / incomplete YAML while typing | `PlaygroundWasmMemoryOobDesktopTests` then `PlaygroundWasmMemoryOobUiTests` | Bare trailing `- uses:` may trap AOT WASM; UI defers lint in `main.js` |
+| `wwwroot` UI behavior | `PlaygroundHtmlContractTests` or `PlaygroundUiLayoutTests` | Layout tests use `PlaygroundWasmPublishMode.DebugFast` unless production bundle is required |
+| Browser-only hooks | `?seitonTestHooks=1` + `__SEITON_PLAYGROUND_TEST__` | See `PlaygroundWasmMemoryOobUiTests` |
+
+**Browser test host modes**:
+
+- `PlaygroundUiTestHost.GetOrCreateAsync()` → Debug, fast iteration (layout tests).
+- `GetOrCreateAsync(PlaygroundWasmPublishMode.ReleaseAot)` → matches GitHub Pages; use only when WASM/AOT behavior is under test.
+
+When adding Playwright tests: prefer **new browser context per scenario** that can kill WASM; call `page.CloseAsync()` when reusing a shared browser session. Avoid unbounded loops of `runLint` on one page (WASM heap may grow up to `EmccMaximumHeapSize`).
+
+### Benchmarks (Playground hot path)
+
+When changing `PlaygroundLintRunner` or incremental playground paths:
+
+```shell
+cd src/Seiton.Benchmark
+dotnet run -c Release --filter "*PlaygroundLintBenchmark*"
+```
+
+Same +10% Mean / Allocated rule as core benchmarks.
+
+### New Playground test classes
+
+- Add `[NotInParallel(PlaygroundTestParallelism.AssemblyLockKey)]` on every new test class in this assembly.
+- Do not introduce a second parallel lock key unless config isolation truly requires it (`ConfigLockKey` on individual methods is fine).
+- Assembly hooks reset shared state: `PlaygroundUiTestAssemblyHooks` → `PlaygroundLintRunner.ResetSharedStateForTests()`.
 
 ## Test Conventions
 
