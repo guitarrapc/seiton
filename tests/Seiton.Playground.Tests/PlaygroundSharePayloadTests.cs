@@ -22,7 +22,7 @@ public sealed class PlaygroundSharePayloadTests
     }
 
     [Test]
-    public async Task EncodeDecode_V2WithEmptyConfig_OmitsConfigKey()
+    public async Task EncodeDecode_V2WithEmptyConfig_RestoresEmptyConfig()
     {
         var state = new PlaygroundSharePayload.State(SampleYaml, "", SamplePath);
         var hash = PlaygroundSharePayload.Encode(state);
