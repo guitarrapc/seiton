@@ -7,7 +7,7 @@ There are several ways to install or download Seiton.
 1. [Homebrew](#homebrew)
 1. [Scoop](#scoop)
 1. [Prebuilt Binaries](#prebuilt-binaries)
-1. [Download Script](#download-script)
+1. [GitHub Actions](#github-actions)
 1. [Docker](#docker)
 1. [Build from Source](#build-from-source)
 1. [Verify the Installation](#verify-the-installation)
@@ -79,43 +79,25 @@ gh attestation verify -R guitarrapc/seiton seiton-linux-amd64.tar.gz
 
 ---
 
-## Download Script
+## GitHub Actions
 
-To download Seiton with one command, the download script is available. This is the fastest way to fetch a verified binary on macOS or Linux without using a package manager or modifying your system directories.
+Use the [`guitarrapc/setup-seiton`](https://github.com/guitarrapc/setup-seiton) action to install the native binary in a workflow. The action adds `seiton` to `PATH`, so later steps can invoke it directly.
 
-```sh
-curl -fsSL https://raw.githubusercontent.com/guitarrapc/seiton/main/scripts/download.sh | bash
+```yaml
+- uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+- uses: guitarrapc/setup-seiton@v1
+- run: seiton
 ```
 
-The script auto-detects your OS and architecture, downloads the latest release, verifies the SHA-256 checksum, extracts the binary to the current directory by default, and never uses `sudo`. If `gh` is available, it also attempts SLSA attestation verification.
+Install a specific version:
 
-This script is also suitable for CI shell steps. On GitHub Actions, it writes the `executable` step output when `GITHUB_OUTPUT` is available.
-
-When you need to download a specific version, pass `--version`. The following example downloads `0.9.19`:
-
-```sh
-curl -fsSL https://raw.githubusercontent.com/guitarrapc/seiton/main/scripts/download.sh | bash -s -- --version 0.9.19
+```yaml
+- uses: guitarrapc/setup-seiton@v1
+  with:
+    seiton-version: 0.9.19
 ```
 
-When you need to place the binary in an existing directory, pass `--dir`:
-
-```sh
-mkdir -p ./bin
-curl -fsSL https://raw.githubusercontent.com/guitarrapc/seiton/main/scripts/download.sh | bash -s -- --dir ./bin
-```
-
-You can also combine both options:
-
-```sh
-mkdir -p ./bin
-curl -fsSL https://raw.githubusercontent.com/guitarrapc/seiton/main/scripts/download.sh | bash -s -- --version 0.9.19 --dir ./bin
-```
-
-If the binary is not in your `PATH`, run it with a relative path such as `./seiton version`, or move it to a directory that is already on your `PATH`.
-
-### On GitHub Actions
-
-See [usage](usage.md#github-actions) for how to use the download script in GitHub Actions.
+See [usage](usage.md#github-actions) for full CI examples, including Docker and SARIF upload.
 
 ---
 

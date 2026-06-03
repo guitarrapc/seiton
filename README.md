@@ -169,7 +169,7 @@ seiton --fix --enable-pin-network -c samples/readme/.github/seiton.yaml samples/
 
 ## Quick Start
 
-Install Seiton using your preferred method. See [Installation](docs/installation.md) for prebuilt binaries, Docker, and build-from-source details.
+Install Seiton using your preferred method. See [Installation](docs/installation.md) for prebuilt binaries, Docker, and build-from-source details. If you prefer a direct download instead of a package manager, use a release archive from the [GitHub Releases page](https://github.com/guitarrapc/seiton/releases).
 
 ```sh
 # Homebrew (macOS/Linux)
@@ -225,8 +225,6 @@ seiton install --skills --target cursor
 # Install CI workflow template
 seiton install --ci
 ```
-
-If you prefer a direct download instead of a package manager, use the release archive or the download script described in [Installation](docs/installation.md).
 
 ## Documentation
 
