@@ -159,7 +159,7 @@ public sealed class PlaygroundUiLayoutTests
         // Structural checks (avoid pinning full SVG path d= — brittle on harmless icon tweaks).
         await Assert.That(Regex.IsMatch(html, @"id\s*=\s*""permalink-btn""[\s\S]*?<svg\b", RegexOptions.IgnoreCase, TimeSpan.FromSeconds(2))).IsTrue();
         await Assert.That(html).Contains(
-            "workflow YAML in URL hash (config not included)",
+            "workflow YAML and config in URL hash",
             StringComparison.OrdinalIgnoreCase);
         await Assert.That(Regex.IsMatch(html, @"id\s*=\s*""fetch-btn""[\s\S]*?<svg\b", RegexOptions.IgnoreCase, TimeSpan.FromSeconds(2))).IsTrue();
         await Assert.That(html).Contains(

@@ -1,7 +1,13 @@
 /* global CodeMirror */
 
-import { deflate, inflate } from 'https://cdn.jsdelivr.net/npm/pako@2.1.0/+esm';
 import { dotnet } from './_framework/dotnet.js';
+import {
+  decodeShareHash,
+  encodeShareState,
+  encodeYamlOnlyShare,
+  formatClipboardBundle,
+  isShareWithinLimits,
+} from './share-payload.js';
 
 /** Built-in snippets (classification depends on Document selector). */
 const SAMPLES = {
@@ -194,7 +200,10 @@ const toastStack = document.getElementById('toast-stack');
 const fileSelect = document.getElementById('filetype-select');
 const sampleSelect = document.getElementById('sample-select');
 const permalinkBtn = document.getElementById('permalink-btn');
-const permalinkShareTitle = 'Share — copy link; workflow YAML in URL hash (config not included)';
+const permalinkShareTitle =
+  'Share — copy link with workflow YAML and config in URL hash';
+const permalinkYamlOnlyCopied =
+  'Link copied (workflow YAML only — config omitted because URL was too long)';
 const permalinkDoneCopied = 'Link copied to clipboard';
 const permalinkDoneNoClipboard = 'URL updated — copy from address bar if clipboard was blocked';
 const applyFixesBtn = document.getElementById('apply-fixes-btn');
@@ -399,6 +408,49 @@ function markUrlControlsReady() {
   document.body?.setAttribute('data-url-controls-ready', 'true');
 }
 
+/**
+ * @returns {{ state?: import('./share-payload.js').ShareState, error?: string }}
+ */
+function readShareFromLocationHash() {
+  const raw = window.location.hash;
+  if (!raw || raw.length <= 1) {
+    return {};
+  }
+  const decoded = decodeShareHash(raw.slice(1));
+  if (!decoded.ok) {
+    return { error: decoded.error };
+  }
+  return { state: decoded.state };
+}
+
+const shareFromUrl = readShareFromLocationHash();
+
+function getInitialEditorYaml() {
+  if (shareFromUrl.state) {
+    return shareFromUrl.state.yaml;
+  }
+  return SAMPLES.default;
+}
+
+function getInitialConfigYaml() {
+  return shareFromUrl.state?.config ?? '';
+}
+
+/**
+ * @param {import('./share-payload.js').ShareState} state
+ */
+function applyShareFilePathToSelect(state) {
+  if (!fileSelect || !state?.filePath) {
+    return;
+  }
+  for (const opt of fileSelect.options) {
+    if (opt.value === state.filePath) {
+      fileSelect.value = state.filePath;
+      return;
+    }
+  }
+}
+
 const editor = CodeMirror(document.getElementById('editor'), {
   mode: 'yaml',
   theme: getCodeMirrorTheme(),
@@ -414,8 +466,10 @@ const editor = CodeMirror(document.getElementById('editor'), {
       cm.execCommand(cm.somethingSelected() ? 'indentMore' : 'insertSoftTab');
     },
   },
-  value: getDefaultSource(),
+  value: getInitialEditorYaml(),
 });
+
+applyShareFilePathToSelect(shareFromUrl.state);
 
 function syncEditorTheme() {
   editor.setOption('theme', getCodeMirrorTheme());
@@ -511,7 +565,7 @@ const configEditor = CodeMirror(document.getElementById('config-editor'), {
   theme: getCodeMirrorTheme(),
   lineNumbers: true,
   lineWrapping: true,
-  value: '',
+  value: getInitialConfigYaml(),
 });
 
 let configDebounceId = null;
@@ -722,30 +776,93 @@ function schedulePermalinkFeedback(copied) {
   }, 1800);
 }
 
-permalinkBtn.addEventListener('click', () => {
+/**
+ * @param {string} hashSegment
+ * @returns {string}
+ */
+function buildShareUrlFromHash(hashSegment) {
+  return `${location.pathname}${location.search}#${hashSegment}`;
+}
+
+/**
+ * @param {string} fullUrl
+ * @param {boolean} copied
+ * @param {'full'|'yaml-only'} [mode]
+ */
+function finishShareCopy(fullUrl, copied, mode = 'full') {
+  if (mode === 'yaml-only') {
+    permalinkBtn.title = permalinkYamlOnlyCopied;
+    permalinkBtn.setAttribute('aria-label', permalinkYamlOnlyCopied);
+    showToast(permalinkYamlOnlyCopied, copied ? 'success' : 'info');
+    window.setTimeout(() => {
+      permalinkBtn.title = permalinkShareTitle;
+      permalinkBtn.setAttribute('aria-label', permalinkShareTitle);
+    }, 3200);
+    return;
+  }
+  schedulePermalinkFeedback(copied);
+}
+
+/**
+ * @param {string} text
+ * @returns {Promise<boolean>}
+ */
+async function copyTextToClipboard(text) {
+  if (tryClipboardCopyViaTextArea(text)) {
+    return true;
+  }
+  const w = navigator.clipboard?.writeText;
+  if (!w) {
+    return false;
+  }
   try {
-    const src = new TextEncoder().encode(editor.getValue());
-    const compressed = deflate(src, { level: 9 });
-    const b64 = uint8ToBase64(compressed);
-    const url = `${location.pathname}${location.search}#${b64}`;
+    await w.call(navigator.clipboard, text);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+permalinkBtn.addEventListener('click', async () => {
+  try {
+    const shareState = {
+      yaml: editor.getValue(),
+      config: configEditor.getValue(),
+      filePath: getSelectedFilePath(),
+    };
+    let hash = encodeShareState(shareState);
+    let shareMode = 'full';
+    let url = buildShareUrlFromHash(hash);
+    let fullUrl = `${location.origin}${url}`;
+
+    if (!isShareWithinLimits(hash, fullUrl)) {
+      hash = encodeYamlOnlyShare(shareState.yaml, shareState.filePath);
+      shareMode = 'yaml-only';
+      url = buildShareUrlFromHash(hash);
+      fullUrl = `${location.origin}${url}`;
+    }
+
+    if (!isShareWithinLimits(hash, fullUrl)) {
+      const bundle = formatClipboardBundle(
+        shareState.yaml,
+        shareState.config,
+        shareState.filePath,
+      );
+      const copied = await copyTextToClipboard(bundle);
+      showToast(
+        copied
+          ? 'URL too long for sharing. Workflow and config copied to clipboard instead.'
+          : 'URL too long for sharing. Copy workflow and config manually from the editors.',
+        copied ? 'success' : 'info',
+        8000,
+      );
+      return;
+    }
+
     history.replaceState(null, '', url);
-    const fullUrl = location.href;
-    if (tryClipboardCopyViaTextArea(fullUrl)) {
-      schedulePermalinkFeedback(true);
-      return;
-    }
-    const w = navigator.clipboard?.writeText;
-    if (w) {
-      w.call(navigator.clipboard, fullUrl)
-        .then(() => {
-          schedulePermalinkFeedback(true);
-        })
-        .catch(() => {
-          schedulePermalinkFeedback(false);
-        });
-      return;
-    }
-    schedulePermalinkFeedback(false);
+    fullUrl = location.href;
+    const copied = await copyTextToClipboard(fullUrl);
+    finishShareCopy(fullUrl, copied, shareMode);
   } catch (e) {
     showToast(e?.message ?? String(e), 'error');
   }
@@ -898,16 +1015,6 @@ function normalizeGitHubBlobToRaw(input) {
     }
   }
   return u.href;
-}
-
-function uint8ToBase64(buf) {
-  let binary = '';
-  const chunk = 0x8000;
-  for (let i = 0; i < buf.length; i += chunk) {
-    const sub = buf.subarray(i, i + chunk);
-    binary += String.fromCharCode.apply(null, sub);
-  }
-  return btoa(binary);
 }
 
 /** Typical https? URLs in prose (excluding spaces and angle brackets / parens in path edge cases). */
@@ -1169,29 +1276,34 @@ function getSelectedFilePath() {
   return fileSelect ? fileSelect.value : '.github/workflows/test.yml';
 }
 
-function getDefaultSource() {
-  if (window.location.hash && window.location.hash.length > 1) {
-    try {
-      const b64 = window.location.hash.slice(1);
-      const binary = atob(b64);
-      const compressed = new Uint8Array(binary.length);
-      for (let i = 0; i < binary.length; i++) {
-        compressed[i] = binary.charCodeAt(i);
-      }
-      const decompressed = inflate(compressed);
-      return new TextDecoder().decode(decompressed);
-    } catch {
-      /* ignore */
-    }
-  }
-
-  return SAMPLES.default;
-}
-
 void initializeRuntime();
+
+function applyShareConfigAfterRuntimeReady() {
+  const cfg = shareFromUrl.state?.config ?? '';
+  if (!cfg.length) {
+    return;
+  }
+  if (configPanel.classList.contains('config-panel--collapsed')) {
+    configPanel.classList.remove('config-panel--collapsed');
+    configToggleBtn.setAttribute('aria-expanded', 'true');
+    configEditorWrap.hidden = false;
+  }
+  configEditor.setValue(cfg);
+  configEditor.refresh();
+  const diags = setConfig(cfg);
+  renderConfigDiagnostics(diags);
+}
 
 async function initializeRuntime() {
   try {
+    if (shareFromUrl.error) {
+      showToast(
+        `Could not restore from URL: ${shareFromUrl.error}. Showing default sample.`,
+        'info',
+        6000,
+      );
+    }
+
     const runtime = await dotnet
       .withApplicationArguments('playground')
       .create();
@@ -1201,6 +1313,7 @@ async function initializeRuntime() {
     runtimeReady = true;
     syncVersionBadge();
     loading.style.display = 'none';
+    applyShareConfigAfterRuntimeReady();
     runLint();
     requestAnimationFrame(() => {
       editor.refresh();
