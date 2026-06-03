@@ -2,6 +2,7 @@
 
 namespace Seiton.Playground.Tests;
 
+[NotInParallel(PlaygroundTestParallelism.AssemblyLockKey)]
 public sealed class IncrementalParseContextTests
 {
     [Test]

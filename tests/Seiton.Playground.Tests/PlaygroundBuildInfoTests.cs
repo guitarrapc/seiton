@@ -1,5 +1,6 @@
 ﻿namespace Seiton.Playground.Tests;
 
+[NotInParallel(PlaygroundTestParallelism.AssemblyLockKey)]
 public sealed class PlaygroundBuildInfoTests
 {
     [Test]

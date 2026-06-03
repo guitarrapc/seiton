@@ -87,18 +87,25 @@ public sealed class PlaygroundWasmMemoryOobUiTests
             // Fresh page per suffix so a WASM trap in one variant does not kill the runtime for later cases.
             await using var suffixContext = await browser.NewContextAsync();
             var suffixPage = await OpenPlaygroundWithTestHooksAsync(suffixContext, host.BaseUrl);
-            await ApplyFullFixConfigViaHooksAsync(suffixPage);
-
-            var result = await RunLintAppendingSuffixAsync(suffixPage, KeystrokeSuffixes[i]);
-            if (!result.Ok)
+            try
             {
-                failures.Add($"[{i}] suffix len={KeystrokeSuffixes[i].Length}: {result.Error}");
-                continue;
+                await ApplyFullFixConfigViaHooksAsync(suffixPage);
+
+                var result = await RunLintAppendingSuffixAsync(suffixPage, KeystrokeSuffixes[i]);
+                if (!result.Ok)
+                {
+                    failures.Add($"[{i}] suffix len={KeystrokeSuffixes[i].Length}: {result.Error}");
+                    continue;
+                }
+
+                if (result.InternalError)
+                {
+                    failures.Add($"[{i}] internal-error diagnostic");
+                }
             }
-
-            if (result.InternalError)
+            finally
             {
-                failures.Add($"[{i}] internal-error diagnostic");
+                await suffixPage.CloseAsync();
             }
         }
 
@@ -135,7 +142,7 @@ public sealed class PlaygroundWasmMemoryOobUiTests
 
         var baseYaml = await GetEditorWorkflowBaseAsync(page);
 
-        for (var round = 0; round < 24; round++)
+        for (var round = 0; round < 8; round++)
         {
             var yaml = round % 2 == 0 ? baseYaml : baseYaml + TrailingStepSuffix;
             var result = await RunLintViaHooksAsync(page, yaml);

@@ -7,6 +7,7 @@ namespace Seiton.Playground.Tests;
 /// When a job is unchanged (reused via D-5c), its lint diagnostics from the previous run
 /// are reused without re-running lint rules on that job.
 /// </summary>
+[NotInParallel(PlaygroundTestParallelism.AssemblyLockKey)]
 public sealed class IncrementalLintCacheTests
 {
     private const string FilePath = ".github/workflows/ci.yml";

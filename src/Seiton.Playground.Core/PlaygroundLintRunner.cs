@@ -85,6 +85,21 @@ public static class PlaygroundLintRunner
     /// <summary>Gets the active lint config (user config if set, otherwise default).</summary>
     private static LintConfig ActiveConfig => _cachedConfig ?? DefaultConfig;
 
+    /// <summary>Clears shared caches and incremental parse state between playground tests.</summary>
+    internal static void ResetSharedStateForTests()
+    {
+        lock (EngineGate)
+        {
+            _cachedConfig = null;
+            _configHash = 0;
+            _cachedConfigDiag = EmptyJsonArray;
+            InvalidateLintCache();
+            IncrementalCtx.ResetForTests();
+            ActionShaResolverOverride = null;
+            ImageDigestResolverOverride = null;
+        }
+    }
+
     // ─── Resolver Overrides (internal for testability) ───
 
     /// <summary>Override for action SHA resolver. Used in tests; production uses <see cref="DefaultActionShaResolver"/>.</summary>

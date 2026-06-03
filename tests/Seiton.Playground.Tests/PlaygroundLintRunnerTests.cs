@@ -3,6 +3,7 @@ using System.Text.Json;
 
 namespace Seiton.Playground.Tests;
 
+[NotInParallel(PlaygroundTestParallelism.AssemblyLockKey)]
 public sealed class PlaygroundLintRunnerTests
 {
     /// <summary>

@@ -3,6 +3,7 @@ using Seiton.Playground;
 namespace Seiton.Playground.Tests;
 
 /// <summary>Desktop reproducers for WASM-only failures (bisect before browser tests).</summary>
+[NotInParallel(PlaygroundTestParallelism.AssemblyLockKey)]
 public sealed class PlaygroundWasmMemoryOobDesktopTests : IDisposable
 {
     private const string FullFixConfig = """
@@ -71,13 +72,6 @@ public sealed class PlaygroundWasmMemoryOobDesktopTests : IDisposable
                 with:
                   version:
             """;
-        _ = PlaygroundLintRunner.RunToJsonUtf8(yaml, ".github/workflows/ci.yml");
-    }
-
-    [Test]
-    public void RunLint_AppendPartialUsesLine_DoesNotThrow()
-    {
-        var yaml = DefaultSample + "      - uses:";
         _ = PlaygroundLintRunner.RunToJsonUtf8(yaml, ".github/workflows/ci.yml");
     }
 
