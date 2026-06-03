@@ -35,7 +35,7 @@ Playground の Permanent URL は、現在 **editor の YAML本文のみ** を UR
 **メリット**: ランタイム挙動を変えず、文言のみで認知齟齬を解消。
 **デメリット**: 根本的な共有再現性は改善しない（P1 で対応）。
 
-### P1: URL 共有フォーマットの拡張（推奨）
+### P1: URL 共有フォーマットの拡張（推奨） — **実装済み**
 
 **目的**: URL だけで YAML + config の再現を可能にする。
 **推奨方式**:
@@ -54,7 +54,7 @@ Playground の Permanent URL は、現在 **editor の YAML本文のみ** を UR
 - URL 長の増加（特に YAML + config が大きい場合）。
 - URL 長超過時のフォールバック（P2）とセットで設計推奨。
 
-### P2: URL 長超過のフォールバック（中優先）
+### P2: URL 長超過のフォールバック（中優先） — **実装済み**
 
 **目的**: 大きな入力でも共有失敗を減らす。
 **案**:
@@ -159,3 +159,72 @@ dotnet test --project tests/Seiton.Playground.Tests --treenode-filter "/*/*/Play
 | Config トグルから「Toggle」説明が消える | `Toggle lint configuration editor.` を残し、Share 非含有を追記 |
 | `usage.md` に Playground 記載がなかった | 「Playground (browser)」節を追加 |
 | 文言の二重管理（HTML と main.js） | 契約テストで両方を検証（既存パターンに合わせる） |
+
+# Playground P1/P2 実装プラン
+
+## スコープ
+
+- **P1**: v2 共有ペイロード（YAML + config + filePath）を URL hash に格納し、読み込み時に復元。v1（YAML のみ・標準 base64）後方互換。
+- **P2**: URL / hash 長超過時に YAML-only リンクへフォールバック、それでも長い場合はクリップボードへバンドルコピー。
+
+## 実装内容
+
+| 領域 | 変更 |
+|---|---|
+| `PlaygroundSharePayload.cs` | zlib + JSON v2 コーデック（Core、テスト・ベンチマーク用） |
+| `share-payload.js` | ブラウザ用同一アルゴリズム |
+| `main.js` | Share / 初期化復元 / P2 フォールバック |
+| `index.html` | Share・About・config ツールチップ更新 |
+| `PlaygroundSharePayloadTests` | ユニットテスト 8 件 |
+| `PlaygroundShareRestoreUiTests` | Playwright: v2 復元・v1 互換 |
+| `PlaygroundSharePayloadBenchmark` | Encode/Decode 性能 |
+| 仕様・`docs/usage.md` | §4.9 / Playground 節 |
+
+## ユーザーファースト API（レビュー）
+
+| 操作 | 挙動 |
+|---|---|
+| Share（通常） | YAML + config + path を URL に含めてコピー |
+| Share（長い） | トーストで YAML-only に切り替えたことを明示 |
+| Share（極端に長い） | URL は更新せず、編集内容をクリップボードへ |
+| リンクを開く | エディタ・config・path を自動復元（v1 は YAML のみ） |
+| 壊れた hash | トースト + デフォルトサンプル（クラッシュしない） |
+
+## ベンチマーク
+
+`PlaygroundSharePayloadBenchmark`（Release, 2026-06-04）:
+
+| Method | Mean | Allocated |
+|---|---|---|
+| Encode_Small | 8.2 µs | 2.38 KB |
+| Encode_Large | 195.7 µs | 102.58 KB |
+| Decode_Small | 12.6 µs | 4.68 KB |
+| Decode_Large | 219.2 µs | 206.9 KB |
+
+**性能判定**: 新規コードパスは Share クリック・初回 hash 復元時のみ。lint/WASM（`PlaygroundLintBenchmark`）は不変。
+**理由**: 小ペイロードは ~10 µs 台でユーザー操作に対して無視できる。大ペイロードは large.yaml 級で ~200 µs — 依然インタラクティブ。
+
+**低下時の改善策**: `Decode_Large` の Gen0/Allocated が高め（JSON + inflate バッファ）。改善するなら `ArrayPool` で deflate バッファ再利用、または deflate level 9→6。URL 超過時は encode を段階的に試す（現状どおり）ことで無駄な full encode を避けられる。
+
+## テスト
+
+```shell
+dotnet test --project tests/Seiton.Playground.Tests --treenode-filter "/*/*/PlaygroundSharePayloadTests/*"
+dotnet test --project tests/Seiton.Playground.Tests --treenode-filter "/*/*/PlaygroundShareRestoreUiTests/*"
+dotnet test
+```
+
+## レビュー指摘と対応
+
+| 指摘 | 対応 |
+|---|---|
+| C# と JS のドリフト | 同一 JSON 形状・短キー・zlib；Playwright が C# 生成 hash を JS で復元 |
+| P0 文言と矛盾 | Share / About を v2 + フォールバック説明に更新 |
+| config 復元タイミング | WASM `SetConfig` 準備後に `applyShareConfigAfterRuntimeReady` |
+| 破損 hash | `TryDecode` false 時トースト（P3 の一部を先行実装） |
+
+## コミット方針
+
+1. `feat(playground): add v2 share payload codec (Core + share-payload.js)`
+2. `feat(playground): restore YAML/config from Share URL; P2 length fallback`
+3. `docs(playground): P1/P2 spec, usage, and plan`

@@ -691,9 +691,11 @@ The [seiton playground](https://guitarrapc.github.io/seiton/) runs linting in yo
 
 ### Sharing a link (Share button)
 
-Share copies a URL whose hash contains the **workflow YAML from the editor only** (compressed). It does **not** include the **lint config** from the config panel below the editor. Anyone who opens your link sees the same workflow text but starts with an empty config unless they add one.
+Share copies a URL whose hash contains a compressed **v2 payload**: workflow YAML, lint config (when non-empty), and the selected virtual file path. Opening the link restores all three in the playground.
 
-To reproduce lint results that depend on custom rules or `fix:` settings, recipients must paste the same config manually or use a project `.github/seiton.yaml` locally with the CLI.
+**Older links** that only encoded workflow YAML (v1) still open correctly; config stays empty for those URLs.
+
+**URL length limits:** If the full URL would exceed browser limits (~8 KB total, ~16 KB hash), Share tries again with **workflow YAML only** and shows a toast. If it is still too long, Share copies a **text bundle** (workflow + config + path) to the clipboard instead of updating the URL.
 
 ---
 
