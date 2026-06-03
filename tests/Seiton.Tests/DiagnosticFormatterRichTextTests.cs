@@ -283,17 +283,19 @@ public sealed class DiagnosticFormatterRichTextTests
     [Test]
     public async Task Rich_SourceSnippet_MultiLineSpan_OverStackLimit_UsesPooledPath()
     {
-        // 20-line span exceeds MaxStackLineSlices(16) and must use ArrayPool path.
-        var lines = Enumerable.Range(1, 20).Select(i => $"line-{i:00}");
+        // Use a sufficiently large span so this remains a pooled-path test
+        // even if the internal stack threshold changes.
+        const int lineCount = 256;
+        var lines = Enumerable.Range(1, lineCount).Select(i => $"line-{i:000}");
         var source = Encoding.UTF8.GetBytes(string.Join('\n', lines) + "\n");
         var sourceMap = new Dictionary<string, byte[]> { ["ci.yml"] = source };
 
-        var diag = MakeDiagnostic(DiagnosticSeverity.Error, "pooled span", 1, 1, 20, 7, filePath: "ci.yml");
+        var diag = MakeDiagnostic(DiagnosticSeverity.Error, "pooled span", 1, 1, lineCount, 7, filePath: "ci.yml");
         var output = Render(diag, sourceMap: sourceMap);
 
-        await Assert.That(output).Contains("line-01");
-        await Assert.That(output).Contains("line-20");
-        await Assert.That(output).Contains("20 |");
+        await Assert.That(output).Contains("line-001");
+        await Assert.That(output).Contains("line-256");
+        await Assert.That(output).Contains("256 |");
     }
 
     // Rich format — blank line between diagnostics

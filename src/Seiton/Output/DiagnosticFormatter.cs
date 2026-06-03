@@ -494,11 +494,6 @@ public static class DiagnosticFormatter
         try
         {
             ExtractLineSlices(sourceSpan, startLine, endLine, lineSlices);
-            if (lineSlices.Length == 0)
-            {
-                writer.WriteLine("   |");
-                return;
-            }
 
             var lineNumWidth = endLine.ToString().Length;
 
