@@ -28,75 +28,65 @@ Conclusion:
 
 ### 2) `ExtractLines` string-array reduction
 
-**Status: Not implemented yet, but implementable.**
+**Status: Implemented (done).**
 
-Current behavior in `DiagnosticFormatter`:
+## Implementation (ExtractLines / LineSlice)
 
-- `ExtractLines(byte[] utf8, int startLine, int endLine)` allocates:
-  - `string[]` of target lines
-  - one `string` per extracted line via `Encoding.UTF8.GetString(...)`
-- Rich-text snippet rendering then writes those strings.
+### Changes
 
-Allocation impact:
+- Replaced `ExtractLines` (`string[]` + per-line `Encoding.UTF8.GetString`) with `ExtractLineSlices` (`LineSlice` start/length metadata).
+- Rich-text gutter rendering writes snippet lines via `Utf8Writer.WriteLiteral` over source bytes (no per-line `string`).
+- `lineCount <= 16`: `stackalloc LineSlice[]`; larger spans rent from `ArrayPool<LineSlice>`.
+- Public API unchanged; output strings unchanged.
 
-- This path is inside rich diagnostic rendering (`WriteSourceSnippet`), i.e. hot when many diagnostics include source snippets.
-- Existing benchmarks already improved greatly, but this remains a residual allocation source.
+### API review
 
-Feasibility:
+| Aspect | Result |
+|---|---|
+| User-facing API | No change (`DiagnosticFormatter.Write`, CLI flags, output format) |
+| Internal API | `LineSlice` is private to `DiagnosticFormatter`; callers unaffected |
+| Testability | Existing `DiagnosticFormatterRichTextTests` snippet equivalence classes pass (2410 tests) |
 
-- High. The formatter already writes UTF-8 bytes via `Utf8Writer`, so snippet lines can be emitted directly from source bytes without converting each line to `string`.
+### Performance (`DiagnosticOutputBenchmark`, ShortRun, vs pre-change baseline)
 
-## Proposed Direction
+| Format | Count | Metric | Before | After | Change | Verdict |
+|---|---|---|---|---|---|---|
+| text rich | F1 | Mean | 239.7 µs | 226.5 µs | **−5.5%** | Improved |
+| text rich | F1 | Allocated | 8.35 KB | 1.65 KB | **−80%** | Improved |
+| text rich | F10 | Mean | 2329.7 µs | 2316.5 µs | −0.6% | OK |
+| text rich | F10 | Allocated | 72.67 KB | 5.64 KB | **−92%** | Improved |
+| github-actions rich | F1 | Allocated | 8.35 KB | 1.65 KB | **−80%** | Improved (shared snippet path) |
+| github-actions rich | F10 | Allocated | 72.67 KB | 5.70 KB | **−92%** | Improved |
 
-### Goal
+**Why allocation improved**
 
-Reduce snippet-path allocations by removing `string[]` and per-line string materialization in `ExtractLines`.
+- Removed `string[]` for each snippet extraction.
+- Removed one heap `string` per displayed source line (`GetString` on every line in range).
+- Snippet bytes are copied once into the output buffer via `WriteLiteral` instead of decode-then-re-encode.
 
-### Candidate approach (recommended)
+**Why mean improved slightly (F1) or stayed flat (F10)**
 
-Replace `ExtractLines` output from `string[]` to byte-range metadata:
+- Less GC pressure from fewer short-lived strings.
+- Single-pass newline scan unchanged; added work is cheap span slicing vs UTF-16 string materialization.
 
-- Introduce a small value-type slice descriptor (e.g. `LineSlice { Start, Length }`).
-- Parse newline boundaries once and collect slices for `[startLine..endLine]`.
-- Keep CR trimming behavior (`\r\n` -> strip trailing `\r`).
-- Update gutter writers to emit source lines with `Utf8Writer.WriteLiteral(sourceBytes.AsSpan(start, length))`.
-- Keep existing caret and gutter formatting behavior unchanged.
+**If mean had regressed**
 
-Expected benefit:
+- Mitigation would be to reduce `endLine.ToString().Length` allocations (pre-existing) or cache line-index tables per file in `sourceMap` for repeated diagnostics on the same file.
 
-- Remove `string[]` allocation.
-- Remove per-line `Encoding.UTF8.GetString(...)` allocations.
-- Keep user-visible output contract unchanged (same line content and formatting).
+### Review (post-implementation)
 
-## Risks and Mitigations
+| Finding | Action |
+|---|---|
+| Snippet output parity | Covered by existing rich-text tests (single/multi-line, CRLF, missing map, line beyond file) |
+| `stackalloc` / `ArrayPool` split at 16 lines | Matches typical diagnostic spans; pool only for unusually wide ranges |
+| Spec drift | `Seiton_CLI_csharp_spec.md` §7.3 updated to describe byte-slice snippet extraction |
 
-- **Risk: subtle output drift in snippet rendering**
-  - Mitigation: golden string tests on rich text output (single-line span, multi-line span, CRLF source, missing source map).
-- **Risk: line/column/caret regressions**
-  - Mitigation: branch-coverage tests for single-line and multi-line ranges, including edge clamping paths.
-- **Risk: performance tradeoff not guaranteed for tiny inputs**
-  - Mitigation: benchmark before/after and accept only if allocation improves and mean regression stays within project threshold.
+## Implementation Decision (final)
 
-## Validation Plan
-
-1. Add/adjust tests first (red/green):
-   - Rich text snippet parity tests for representative diagnostics.
-   - Equivalence classes for source snippet extraction:
-     - single-line span
-     - multi-line span
-     - CRLF file
-     - source shorter than requested line range
-     - no source map
-2. Run full test suite.
-3. Run `DiagnosticOutputBenchmark` and compare with current baseline.
-4. Update specs/documents only if externally observable behavior changes.
-
-## Implementation Decision
-
-- **Diagnostic UTF-8 migration:** complete (no further action required).
-- **`ExtractLines` allocation reduction:** implement as a follow-up optimization task.
-- Priority recommendation: **Medium** (worth doing, but not blocker because major migration is already done).
+- **Diagnostic UTF-8 migration:** complete (no further action).
+- **`ExtractLines` allocation reduction:** complete.
+- Future optional work: per-file line-index cache in `sourceMap` if profiling shows repeated full-file scans dominate.
 
 ---
 
-やったー: The core UTF-8 migration is already finished. Next win is focused cleanup of snippet-path allocations.
+Snippet rendering no longer materializes per-line strings; rich text formatting keeps the same output with much lower allocation.
