@@ -18,7 +18,7 @@ public static class PlaygroundSharePayload
     /// <summary>Max hash segment length (# excluded) before P2 fallback.</summary>
     public const int MaxHashLength = 16_384;
 
-    /// <summary>Max full URL length (path + query + hash) before P2 fallback.</summary>
+    /// <summary>Max full URL length (scheme + host + path + query + hash) before P2 fallback.</summary>
     public const int MaxUrlLength = 8_192;
 
     /// <summary>Share payload state restored from URL hash.</summary>
