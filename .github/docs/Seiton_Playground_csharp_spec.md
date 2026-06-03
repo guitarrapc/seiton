@@ -49,6 +49,7 @@ References:
 
 1. Separate `Seiton.Playground` (WASM host) from `Seiton.Playground.Core` (logic) so core logic can be unit-tested without a WASM environment.
 2. Reuse a single static `LintEngine` instance to amortize rule setup cost and avoid GC pressure on the constrained WASM heap.
+3. In the browser, `PlaygroundLintRunner` disables incremental parse/job-cache reuse (`UseIncrementalLint` is false when `OperatingSystem.IsBrowser()` is true at call time). Static initialization runs before the WASM host is ready, so the flag must not be captured in a static field initializer.
 3. All `[JSExport]` methods catch exceptions internally — unhandled exceptions crossing the interop boundary abort the Mono WASM runtime irreversibly.
 4. Use `Utf8JsonWriter` (not `JsonSerializer` with reflection) for zero-allocation diagnostic serialization in the hot path.
 

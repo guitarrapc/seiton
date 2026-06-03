@@ -10,6 +10,16 @@ namespace Seiton.Playground.Tests;
 /// <summary>
 /// Publishes the Blazor WASM project once and serves <c>wwwroot</c> over loopback HTTP for UI tests.
 /// </summary>
+/// <summary>WASM publish profile for locally hosted Playground UI tests.</summary>
+internal enum PlaygroundWasmPublishMode
+{
+    /// <summary>Debug, no trim, no AOT — fast iteration for layout tests.</summary>
+    DebugFast,
+
+    /// <summary>Release + trim + AOT — matches GitHub Pages production bundle.</summary>
+    ReleaseAot,
+}
+
 internal static class PlaygroundUiTestHost
 {
     /// <summary>
@@ -18,7 +28,8 @@ internal static class PlaygroundUiTestHost
     internal const string ParallelLockKey = "seiton-playground-ui-static-host";
 
     private static readonly SemaphoreSlim Gate = new(1, 1);
-    private static HostState? s_state;
+    private static HostState? s_debugState;
+    private static HostState? s_releaseAotState;
 
     static PlaygroundUiTestHost()
     {
@@ -37,21 +48,50 @@ internal static class PlaygroundUiTestHost
 
     public sealed record HostState(string BaseUrl, string WwwRootPath, string PublishRoot, WebApplication App);
 
-    public static async Task<HostState> GetOrCreateAsync(CancellationToken cancellationToken = default)
+    public static Task<HostState> GetOrCreateAsync(CancellationToken cancellationToken = default)
+        => GetOrCreateAsync(PlaygroundWasmPublishMode.DebugFast, cancellationToken);
+
+    public static async Task<HostState> GetOrCreateAsync(
+        PlaygroundWasmPublishMode mode,
+        CancellationToken cancellationToken = default)
     {
-        if (s_state is not null)
+        var existing = GetCachedState(mode);
+        if (existing is not null)
         {
-            return s_state;
+            return existing;
         }
 
         await Gate.WaitAsync(cancellationToken);
         try
         {
-            return s_state ??= await CreateAsync(cancellationToken);
+            existing = GetCachedState(mode);
+            if (existing is not null)
+            {
+                return existing;
+            }
+
+            var created = await CreateAsync(mode, cancellationToken);
+            SetCachedState(mode, created);
+            return created;
         }
         finally
         {
             Gate.Release();
+        }
+    }
+
+    private static HostState? GetCachedState(PlaygroundWasmPublishMode mode)
+        => mode == PlaygroundWasmPublishMode.ReleaseAot ? s_releaseAotState : s_debugState;
+
+    private static void SetCachedState(PlaygroundWasmPublishMode mode, HostState state)
+    {
+        if (mode == PlaygroundWasmPublishMode.ReleaseAot)
+        {
+            s_releaseAotState = state;
+        }
+        else
+        {
+            s_debugState = state;
         }
     }
 
@@ -104,13 +144,17 @@ internal static class PlaygroundUiTestHost
 
     private static async Task ShutdownCoreAsync(CancellationToken cancellationToken)
     {
-        var state = s_state;
+        s_debugState = await ShutdownSlotAsync(s_debugState, cancellationToken);
+        s_releaseAotState = await ShutdownSlotAsync(s_releaseAotState, cancellationToken);
+    }
+
+    private static async Task<HostState?> ShutdownSlotAsync(HostState? slot, CancellationToken cancellationToken)
+    {
+        var state = slot;
         if (state is null)
         {
-            return;
+            return null;
         }
-
-        s_state = null;
 
         try
         {
@@ -131,6 +175,7 @@ internal static class PlaygroundUiTestHost
         }
 
         await TryDeletePublishRootAsync(state.PublishRoot, cancellationToken);
+        return null;
     }
 
     /// <summary>
@@ -175,17 +220,24 @@ internal static class PlaygroundUiTestHost
         }
     }
 
-    private static async Task<HostState> CreateAsync(CancellationToken cancellationToken)
+    private static async Task<HostState> CreateAsync(
+        PlaygroundWasmPublishMode mode,
+        CancellationToken cancellationToken)
     {
         var root = RepoPaths.FindRepoRoot();
-        var publishDir = Path.Combine(Path.GetTempPath(), "seiton-playground-ui-" + Guid.NewGuid().ToString("n"));
+        // Bump suffix when Playground WASM bits change so cached hosts are not stale.
+        var suffix = mode == PlaygroundWasmPublishMode.ReleaseAot ? "aot-v6" : "dbg";
+        var publishDir = Path.Combine(Path.GetTempPath(), $"seiton-playground-ui-{suffix}-" + Guid.NewGuid().ToString("n"));
         Directory.CreateDirectory(publishDir);
 
         var csproj = Path.Combine(root, "src", "Seiton.Playground", "Seiton.Playground.csproj");
+        var publishArgs = mode == PlaygroundWasmPublishMode.ReleaseAot
+            ? $"publish \"{csproj}\" -c Release -o \"{publishDir}\" -v q -p:RunAOTCompilation=true -p:PublishTrimmed=true -p:PlaygroundSoftFingerprint=true"
+            : $"publish \"{csproj}\" -c Debug -o \"{publishDir}\" -v q -p:RunAOTCompilation=false -p:PublishTrimmed=false -p:PlaygroundSoftFingerprint=true";
         var psi = new ProcessStartInfo
         {
             FileName = "dotnet",
-            Arguments = $"publish \"{csproj}\" -c Debug -o \"{publishDir}\" -v q -p:RunAOTCompilation=false -p:PublishTrimmed=false -p:PlaygroundSoftFingerprint=true",
+            Arguments = publishArgs,
             RedirectStandardOutput = true,
             RedirectStandardError = true,
             UseShellExecute = false,
