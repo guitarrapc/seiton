@@ -260,6 +260,46 @@ public sealed class PlaygroundHtmlContractTests
     }
 
     [Test]
+    public async Task IndexTemplate_PermalinkButton_StatesYamlOnlyConfigNotIncludedInShareUrl()
+    {
+        var html = await ReadSourceIndexHtmlAsync();
+        const string expected =
+            "Share — copy link; workflow YAML in URL hash (config not included)";
+        await Assert.That(html).Contains($"id=\"permalink-btn\"", StringComparison.Ordinal);
+        await Assert.That(html).Contains($"title=\"{expected}\"", StringComparison.Ordinal);
+        await Assert.That(html).Contains($"aria-label=\"{expected}\"", StringComparison.Ordinal);
+        await Assert.That(html.Contains("YAML is stored in URL hash", StringComparison.Ordinal)).IsFalse();
+    }
+
+    [Test]
+    public async Task IndexTemplate_AboutPlayground_StatesConfigNotIncludedInShareUrl()
+    {
+        var html = await ReadSourceIndexHtmlAsync();
+        await Assert.That(html).Contains("<strong>workflow YAML</strong> in the page URL", StringComparison.Ordinal);
+        await Assert.That(html).Contains("<strong>Lint config is not shared</strong>", StringComparison.Ordinal);
+        await Assert.That(html.Contains("store the document in the page URL", StringComparison.Ordinal)).IsFalse();
+    }
+
+    [Test]
+    public async Task IndexTemplate_ConfigPanel_StatesConfigNotIncludedInShareUrl()
+    {
+        var html = await ReadSourceIndexHtmlAsync();
+        await Assert.That(html).Contains(
+            "title=\"Toggle lint configuration editor. Config is not included when you Share a link.\"",
+            StringComparison.Ordinal);
+    }
+
+    [Test]
+    public async Task MainJs_PermalinkShareTitle_StatesYamlOnlyConfigNotIncluded()
+    {
+        var path = Path.Combine(RepoPaths.FindRepoRoot(), "src", "Seiton.Playground", "wwwroot", "main.js");
+        var js = await File.ReadAllTextAsync(path);
+        await Assert.That(js).Contains(
+            "Share — copy link; workflow YAML in URL hash (config not included)");
+        await Assert.That(js.Contains("YAML is stored in URL hash", StringComparison.Ordinal)).IsFalse();
+    }
+
+    [Test]
     public async Task MainJs_ConfigTemplates_HasAllTemplateKeys()
     {
         var path = Path.Combine(RepoPaths.FindRepoRoot(), "src", "Seiton.Playground", "wwwroot", "main.js");

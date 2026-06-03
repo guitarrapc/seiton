@@ -89,8 +89,8 @@
     <div id="controls">
       <div class="controls-row controls-row--primary">
         <button id="permalink-btn" type="button" class="toolbar-icon-btn"
-          title="Share — copy link to clipboard; YAML is stored in URL hash"
-          aria-label="Share — copy link to clipboard; YAML is stored in URL hash">
+          title="Share — copy link; workflow YAML in URL hash (config not included)"
+          aria-label="Share — copy link; workflow YAML in URL hash (config not included)">
           <svg class="toolbar-icon-btn__svg" fill="currentColor" viewBox="0 0 24 24" width="24" height="24"
             xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
             <path fill="currentColor"
@@ -143,7 +143,8 @@
         <div id="config-panel" class="config-panel">
           <div class="config-panel__header">
             <button id="config-toggle-btn" type="button" class="config-panel__toggle" aria-expanded="true"
-              aria-controls="config-editor-wrap" title="Toggle lint configuration editor">
+              aria-controls="config-editor-wrap"
+              title="Toggle lint configuration editor. Config is not included when you Share a link.">
               <span class="config-panel__toggle-icon" aria-hidden="true">&#9654;</span>
               Config
             </button>
@@ -182,9 +183,9 @@
       <p>
         You can edit YAML in the editor, load built-in samples, open a document from a URL you enter (your
         browser
-        requests that URL directly), or use Share to store the document in the page URL. Very large snippets may
-        exceed
-        browser URL length limits when sharing.
+        requests that URL directly), or use Share to store <strong>workflow YAML</strong> in the page URL.
+        <strong>Lint config is not shared</strong> — recipients open the link with an empty config panel unless they
+        paste or type config themselves. Very large snippets may exceed browser URL length limits when sharing.
       </p>
       <p>There are practical limits to what the playground can do:</p>
       <ul>

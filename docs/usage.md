@@ -685,6 +685,18 @@ jobs:
 
 ---
 
+## Playground (browser)
+
+The [seiton playground](https://guitarrapc.github.io/seiton/) runs linting in your browser via WebAssembly. Your workflow YAML is not uploaded to a server for analysis.
+
+### Sharing a link (Share button)
+
+Share copies a URL whose hash contains the **workflow YAML from the editor only** (compressed). It does **not** include the **lint config** from the config panel below the editor. Anyone who opens your link sees the same workflow text but starts with an empty config unless they add one.
+
+To reproduce lint results that depend on custom rules or `fix:` settings, recipients must paste the same config manually or use a project `.github/seiton.yaml` locally with the CLI.
+
+---
+
 ## Troubleshooting
 
 ### YAML parse error on `run:` steps containing `: `

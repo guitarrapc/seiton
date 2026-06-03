@@ -191,7 +191,7 @@ This ensures cosmetic edits (adding/removing blank lines, trailing spaces) do no
 | Loading indicator | "Loading WebAssembly binary..." shown until WASM runtime is ready |
 | File type selector | `workflow` (`.github/workflows/test.yml`) / `action.yml` |
 | Sample selector | Built-in YAML snippets: default, simple, minimal, fixPermissions, matrix, actionComposite. `actionComposite` auto-switches file type to `action.yml`; others switch to workflow. |
-| Permalink (share) | pako deflate → Base64 → URL hash → clipboard copy (execCommand fallback + Clipboard API) |
+| Permalink (share) | pako deflate → Base64 → URL hash (**workflow YAML only**; config editor content is **not** included) → clipboard copy (execCommand fallback + Clipboard API). Share control and config panel tooltips state this explicitly. |
 | URL fetch | Fetch remote YAML by URL with validation and GitHub blob→raw conversion |
 | Toast notifications | Dismiss button + Escape key (capture phase), auto-dismiss with configurable duration |
 | Apply all fixes | Offline autofix with priority ordering (network fixes skipped) |
