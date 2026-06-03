@@ -34,7 +34,7 @@ The Seiton CLI C# implementation provides:
 1. NativeAOT-compatible thin CLI wrapper over `Seiton.Core`
 2. ConsoleAppFramework source-generated command dispatch
 3. Config bridge translating CLI flags/env vars into `LintConfig`
-4. Multi-format diagnostic output (text/json/SARIF) via source-generated JSON serialization
+4. Multi-format diagnostic output (text/json/SARIF/github-actions); `json` and `sarif` use `Utf8JsonWriter`, `rules --format json` uses source-generated `System.Text.Json`
 5. Parallel multi-file linting with deterministic aggregated output ordering
 6. Pre-framework unknown option detection with edit-distance suggestions
 
@@ -50,16 +50,18 @@ Representative implementation surface:
 | `src/Seiton/Commands/InputDiscovery.cs` | File discovery (auto + explicit expansion) |
 | `src/Seiton/Commands/ExitCode.cs` | Exit code constants |
 | `src/Seiton/Config/CliConfigBridge.cs` | Config resolution, env var reading, flag override application |
-| `src/Seiton/Output/DiagnosticFormatter.cs` | Text/JSON/SARIF formatting |
+| `src/Seiton/Output/DiagnosticFormatter.cs` | Diagnostic formatting (`Write(IBufferWriter<byte>, ...)`) |
+| `src/Seiton/Output/Utf8Writer.cs` | UTF-8 output helper over `IBufferWriter<byte>`; stdout/stderr flush adapters |
 | `src/Seiton/Output/PathDisplayResolver.cs` | Working-directory-relative path display + SARIF artifact resolution |
 | `src/Seiton/Cli/CliOptionSuggester.cs` | Unknown option detection and suggestion |
 
 ### 0.4 Design
 
 1. Keep CLI as thin wrapper — no lint/parse logic in this project.
-2. Keep all JSON serialization AOT-compatible (source-generated `System.Text.Json`).
-3. Keep aggregated diagnostic and summary output deterministic regardless of parallelization; verbose progress lines may interleave.
-4. Keep config resolution aligned with `.github/docs/Seiton_CLI_spec.md` §4 precedence order.
+2. Keep JSON output AOT-compatible: diagnostic `json`/`sarif` via `Utf8JsonWriter` on `IBufferWriter<byte>`; `rules --format json` via source-generated `System.Text.Json`.
+3. Keep diagnostic formatting on a single `DiagnosticFormatter.Write(IBufferWriter<byte>, ...)` entry; CLI uses `WriteToStandardOutput`, tests use `ArrayBufferWriter` or `WriteToTextWriter`.
+4. Keep aggregated diagnostic and summary output deterministic regardless of parallelization; verbose progress lines may interleave.
+5. Keep config resolution aligned with `.github/docs/Seiton_CLI_spec.md` §4 precedence order.
 
 ---
 
@@ -97,7 +99,8 @@ src/
       ValidateCommand.cs      # seiton validate-config
       VersionCommand.cs       # seiton version
     Output/
-      DiagnosticFormatter.cs  # text / json / sarif; GitHubActions uses WriteText today
+      DiagnosticFormatter.cs  # Write(IBufferWriter<byte>, ...); PooledByteBufferWriter for CLI buffer
+      Utf8Writer.cs           # ref struct UTF-8 writer; WriteToStandardOutput / WriteToTextWriter adapters
       GitHubStepSummaryWriter.cs  # GITHUB_STEP_SUMMARY append (github-actions only)
       OutputFormat.cs         # OutputFormat enum (includes GitHubActions)
       OutputFormatParser.cs   # Parses --format string (supports github-actions hyphen)
@@ -353,12 +356,35 @@ Shared contract reference: `.github/docs/Seiton_CLI_spec.md` §1.7.
 
 ## 7. Output Implementation
 
-### 7.1 JSON Output
-
-Uses source-generated `System.Text.Json` for AOT compatibility:
+All diagnostic formats share a single formatter entry point:
 
 ```csharp
-[JsonSerializable(typeof(DiagnosticJsonEntry[]))]
+DiagnosticFormatter.Write(IBufferWriter<byte> output, ...);
+```
+
+Higher-level adapters wrap `Write` for callers that do not supply their own buffer:
+
+| Method | Caller | Behavior |
+|---|---|---|
+| `WriteToStandardOutput(...)` | `CheckCommand`, `FixCommand` (when `output` is null) | `PooledByteBufferWriter` → `Write` → `FlushToStandardOutput` |
+| `WriteToTextWriter(TextWriter, ...)` | `FixCommand` injection, `ValidateCommand` config errors | `PooledByteBufferWriter` → `Write` → UTF-8 decode to the supplied `TextWriter` |
+| `Write(...)` | Benchmarks, unit tests | Format directly into caller-owned `IBufferWriter<byte>` (e.g. `ArrayBufferWriter<byte>`) |
+
+`Utf8Writer` (ref struct) encodes text/github-actions fields as UTF-8 bytes. `json`/`sarif` use `Utf8JsonWriter` on the same buffer (no intermediate UTF-16 string).
+
+`FlushToStandardOutput` writes raw UTF-8 via `Console.OpenStandardOutput()` when `Console.Out` is the process `StreamWriter`. When stdout is redirected to a non-`StreamWriter` (tests via `Console.SetOut(StringWriter)`), output is decoded to the redirected `TextWriter` instead so captured text matches production content.
+
+Tests and FixCommand injection use `WriteToTextWriter(TextWriter, ...)` (decode-only adapter) or write directly to `ArrayBufferWriter<byte>` and decode with `Encoding.UTF8.GetString`. `DiagnosticFormatterRichTextTests.Render` uses the latter pattern.
+
+### 7.1 JSON Output
+
+Diagnostic `--format json` is emitted via `Utf8JsonWriter` directly onto the caller-supplied `IBufferWriter<byte>`. This avoids intermediate DTO arrays, `JsonSerializer.Serialize` string materialization, and UTF-16 decode on the hot path.
+
+Schema matches `.github/docs/Seiton_CLI_spec.md` §6.2 (`file`, `line`, `col`, `severity`, `ruleId`, `message`, `fixable`, optional `help` when non-null). Property names use UTF-8 literals; `help` is omitted when null.
+
+`seiton rules --format json` still uses source-generated serialization:
+
+```csharp
 [JsonSerializable(typeof(RuleStatusJsonEntry[]))]
 internal partial class SeitonJsonContext : JsonSerializerContext { }
 ```
@@ -371,7 +397,9 @@ File paths are relativized at output time by `PathDisplayResolver` (working-dire
 
 ### 7.3 Rich Text Output
 
-Source bytes for snippet rendering are retained in a `Dictionary<string, byte[]>` source map (only allocated when text format without `--oneline` is active). Line extraction and caret positioning use byte offsets.
+Source bytes for snippet rendering are retained in a `Dictionary<string, byte[]>` source map (only allocated when text format without `--oneline` is active). Line extraction uses byte offsets; gutter/caret padding is written via `Utf8Writer.WriteRepeated` / `WritePaddedDecimal` without intermediate `new string(...)` or interpolated strings.
+
+`github-actions` reuses the text diagnostic writer (`WriteTextDiagnostic`) with `color: false`. Per-file group titles escape `%`, `\r`, `\n` once via `EscapeGitHubCommandValue` (stackalloc for paths ≤512 chars); diagnostic bodies reuse the same escaped value with a leading `.` neutralizer when the path starts with `::`.
 
 ### 7.4 `github-actions` Output
 
@@ -412,6 +440,16 @@ The CLI project exposes internals to `Seiton.Tests` via:
 ```
 
 CLI commands accept `TextWriter` parameters for stdout/stderr injection in tests (e.g., `FixCommand.RunAsync(..., output, error)`).
+
+Diagnostic output tests use three patterns, depending on what is under test:
+
+| Pattern | Example | Use when |
+|---|---|---|
+| `ArrayBufferWriter<byte>` + `DiagnosticFormatter.Write` | `DiagnosticFormatterRichTextTests.Render` | Asserting formatted content without console or decode adapters |
+| `WriteToTextWriter(StringWriter, ...)` | Most `DiagnosticFormatterRichTextTests` | Comparing full formatted strings via `StringWriter` |
+| `WriteToStandardOutput` + `Console.SetOut(StringWriter)` | `DiagnosticFormatterFlushTests`, `CheckCommandTests` | Exercising CLI stdout flush and redirect behavior |
+
+`Write_Buffer_MatchesTextWriterAdapter_*` tests verify that the buffer path and `WriteToTextWriter` adapter produce identical output for every diagnostic format.
 
 ---
 
