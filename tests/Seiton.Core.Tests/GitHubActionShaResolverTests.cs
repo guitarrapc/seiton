@@ -274,6 +274,42 @@ public sealed class GitHubActionShaResolverTests
     }
 
     [Test]
+    public async Task ResolveAsync_Throws_WhenTagAndBranchReferencesAreMissing()
+    {
+        var handler = new StubHttpMessageHandler();
+        handler.AddStatus(
+            "https://api.github.com/repos/guitarrapc/setup-seiton/git/ref/tags/v1",
+            HttpStatusCode.NotFound);
+        handler.AddStatus(
+            "https://api.github.com/repos/guitarrapc/setup-seiton/git/ref/heads/v1",
+            HttpStatusCode.NotFound);
+
+        var resolver = CreateResolver(handler, new FixPinningConfig { MinAgeDays = 0 });
+
+        await Assert.That(async () => await resolver.ResolveAsync("guitarrapc", "setup-seiton", "v1"))
+            .Throws<InvalidOperationException>();
+        await Assert.That(handler.RequestedUris).Contains("https://api.github.com/repos/guitarrapc/setup-seiton/git/ref/tags/v1");
+        await Assert.That(handler.RequestedUris).Contains("https://api.github.com/repos/guitarrapc/setup-seiton/git/ref/heads/v1");
+    }
+
+    [Test]
+    public async Task ResolveAsync_DoesNotFallbackToBranch_WhenTagLookupFailsWithNon404()
+    {
+        var handler = new StubHttpMessageHandler();
+        handler.AddStatus(
+            "https://api.github.com/repos/guitarrapc/setup-seiton/git/ref/tags/v1",
+            HttpStatusCode.Forbidden);
+
+        var resolver = CreateResolver(handler, new FixPinningConfig { MinAgeDays = 0 });
+
+        await Assert.That(async () => await resolver.ResolveAsync("guitarrapc", "setup-seiton", "v1"))
+            .Throws<InvalidOperationException>();
+        await Assert.That(handler.RequestedUris).Contains("https://api.github.com/repos/guitarrapc/setup-seiton/git/ref/tags/v1");
+        await Assert.That(handler.RequestedUris.Count(uri => uri == "https://api.github.com/repos/guitarrapc/setup-seiton/git/ref/heads/v1"))
+            .IsEqualTo(0);
+    }
+
+    [Test]
     public async Task ResolveAsync_SelectsOlderEligibleReleaseCandidate_WhenNewestReleaseIsTooNew()
     {
         var recentDate = DateTimeOffset.UtcNow.AddDays(-1).ToString("o");
