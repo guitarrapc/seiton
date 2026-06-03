@@ -7,6 +7,7 @@ REFERENCES_DIR="${ROOT_DIR}/.references"
 mkdir -p "${REFERENCES_DIR}"
 
 repo_specs=(
+  "guitarrapc/setup-seiton"
   "rhysd/actionlint"
   "rhysd/actionlint|actionlint-gh-pages|gh-pages"
   "suzuki-shunsuke/ghalint"
