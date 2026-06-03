@@ -142,7 +142,7 @@ public sealed class IdNamingRule() : RuleBase(RuleId.IdNaming)
                     continue;
                 }
 
-                for (var i = 0; i < job.Needs.Length; i++)
+                for (var i = 0; i < job.Needs.Count; i++)
                 {
                     var needsNode = job.Needs[i];
                     if (!needsNode.HasValue)

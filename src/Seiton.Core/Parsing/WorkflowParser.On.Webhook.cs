@@ -24,14 +24,14 @@ public static partial class WorkflowParser
         TextPosition pathsMark = default;
         TextPosition pathsIgnoreMark = default;
 
-        StringNodeId[]? types = null;
+        IReadOnlyList<StringNodeId>? types = null;
         WebhookEventFilter? branches = null;
         WebhookEventFilter? branchesIgnore = null;
         WebhookEventFilter? tags = null;
         WebhookEventFilter? tagsIgnore = null;
         WebhookEventFilter? paths = null;
         WebhookEventFilter? pathsIgnore = null;
-        StringNodeId[]? workflows = null;
+        IReadOnlyList<StringNodeId>? workflows = null;
         ulong seen = 0;
 
         reader.Read(); // consume MappingStart
@@ -107,7 +107,7 @@ public static partial class WorkflowParser
                         var brSeqMark = reader.CurrentStart;
                         var brValues = ParseStringOrStringSequence(ref reader, arena, ref diagnostics, out var brErr, out var brMark);
                         if (brErr) AddError(ref diagnostics, $"on.{eventInfo.Name}.branches must be string or array of strings", brMark);
-                        else if (brValues.Length == 0) AddError(ref diagnostics, "\"branches\" section should not be empty", brSeqMark);
+                        else if (brValues.Count == 0) AddError(ref diagnostics, "\"branches\" section should not be empty", brSeqMark);
                         branches = new WebhookEventFilter { Name = branchesNameNode, Values = brValues };
                         continue;
                     case OnWebhookEventOptionMappingKey.BranchesIgnore:
@@ -160,7 +160,7 @@ public static partial class WorkflowParser
                         var wSeqMark = reader.CurrentStart;
                         workflows = ParseStringOrStringSequence(ref reader, arena, ref diagnostics, out var wErr, out var wMark);
                         if (wErr) AddError(ref diagnostics, $"on.{eventInfo.Name}.workflows must be string or array of strings", wMark);
-                        else if (workflows is { Length: 0 }) AddError(ref diagnostics, "\"workflows\" section should not be empty", wSeqMark);
+                        else if (workflows is { Count: 0 }) AddError(ref diagnostics, "\"workflows\" section should not be empty", wSeqMark);
                         continue;
                     default:
                         if (!reader.End) { reader.SkipCurrentNode(); }
@@ -215,7 +215,7 @@ public static partial class WorkflowParser
         };
     }
 
-    private static StringNodeId[] ParseOnTypesNodes<TReader>(ref TReader reader, AstArena arena, ref PooledBuffer<Diagnostic> diagnostics, in OnEventInfo eventInfo)
+    private static ArenaList<StringNodeId> ParseOnTypesNodes<TReader>(ref TReader reader, AstArena arena, ref PooledBuffer<Diagnostic> diagnostics, in OnEventInfo eventInfo)
         where TReader : IYamlStreamReader, allows ref struct
     {
         if (reader.CurrentKind == YamlEventKind.Scalar)
@@ -230,14 +230,14 @@ public static partial class WorkflowParser
 
             var node = arena.AddString(slice, reader.IsScalarQuoted(), BuildScalarLocation(mark, valueUtf8.Length));
             reader.Read();
-            return [node];
+            return ArenaListOfOne(node, arena);
         }
 
         if (reader.CurrentKind != YamlEventKind.SequenceStart)
         {
             AddError(ref diagnostics, $"on.{eventInfo.Name}.types must be string or array of strings", reader.CurrentStart);
             reader.SkipCurrentNode();
-            return [];
+            return default;
         }
 
         var typesSeqMark = reader.CurrentStart;
@@ -273,24 +273,24 @@ public static partial class WorkflowParser
                 AddError(ref diagnostics, "\"types\" section should not be empty", typesSeqMark);
             }
 
-            return list.ToArray();
+            return DetachArenaList(ref list, arena);
         }
         finally { list.Dispose(); }
     }
 
-    private static StringNodeId[] ParseStringSequence<TReader>(ref TReader reader, AstArena arena, ref PooledBuffer<Diagnostic> diagnostics, string errorMessage, bool allowEmpty = false, bool allowElemEmpty = false, string? emptyMessage = null, string? emptyElementMessage = null)
+    private static ArenaList<StringNodeId> ParseStringSequence<TReader>(ref TReader reader, AstArena arena, ref PooledBuffer<Diagnostic> diagnostics, string errorMessage, bool allowEmpty = false, bool allowElemEmpty = false, string? emptyMessage = null, string? emptyElementMessage = null)
         where TReader : IYamlStreamReader, allows ref struct
     {
         if (reader.End)
         {
-            return [];
+            return default;
         }
 
         if (reader.CurrentKind != YamlEventKind.SequenceStart)
         {
             AddError(ref diagnostics, errorMessage, reader.CurrentStart);
             reader.SkipCurrentNode();
-            return [];
+            return default;
         }
 
         var seqMark = reader.CurrentStart;
@@ -323,7 +323,7 @@ public static partial class WorkflowParser
                 AddError(ref diagnostics, emptyMessage ?? errorMessage, seqMark);
             }
 
-            return list.ToArray();
+            return DetachArenaList(ref list, arena);
         }
         finally { list.Dispose(); }
     }

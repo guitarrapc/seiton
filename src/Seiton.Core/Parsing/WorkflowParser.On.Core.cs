@@ -8,7 +8,7 @@ namespace Seiton.Core.Parsing;
 
 public static partial class WorkflowParser
 {
-    private static Event[] ParseOnEvents<TReader>(ref TReader reader, AstArena arena, ref PooledBuffer<Diagnostic> diagnostics, ReadOnlySpan<byte> source)
+    private static ArenaList<Event> ParseOnEvents<TReader>(ref TReader reader, AstArena arena, ref PooledBuffer<Diagnostic> diagnostics, ReadOnlySpan<byte> source)
         where TReader : IYamlStreamReader, allows ref struct
     {
         if (reader.CurrentKind == YamlEventKind.Scalar)
@@ -26,9 +26,9 @@ public static partial class WorkflowParser
             if (eventInfo.IsKnown && eventInfo.Spec.Id == WebhookTypes.EventId.Schedule)
             {
                 AddError(ref diagnostics, "schedule event must be configured with mapping", eventMark);
-                return [];
+                return default;
             }
-            return [BuildSimpleEvent(arena, in eventInfo, nameNode)];
+            return ArenaListOfOne(BuildSimpleEvent(arena, in eventInfo, nameNode), arena);
         }
 
         if (reader.CurrentKind == YamlEventKind.SequenceStart)
@@ -65,7 +65,7 @@ public static partial class WorkflowParser
                 }
 
                 if (reader.CurrentKind == YamlEventKind.SequenceEnd) { reader.Read(); }
-                return events.ToArray();
+                return DetachArenaList(ref events, arena);
             }
             finally { events.Dispose(); }
         }
@@ -153,14 +153,14 @@ public static partial class WorkflowParser
                 }
 
                 if (reader.CurrentKind == YamlEventKind.MappingEnd) { reader.Read(); }
-                return events.ToArray();
+                return DetachArenaList(ref events, arena);
             }
             finally { events.Dispose(); }
         }
 
         AddError(ref diagnostics, "on must be string, sequence, or mapping", reader.CurrentStart);
         reader.SkipCurrentNode();
-        return [];
+        return default;
     }
 
     private static Event BuildSimpleEvent(AstArena arena, in OnEventInfo eventInfo, StringNodeId nameNode)

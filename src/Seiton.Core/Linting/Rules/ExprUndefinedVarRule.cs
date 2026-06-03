@@ -301,7 +301,7 @@ public sealed class ExprUndefinedVarRule() : RuleBase(RuleId.ExprUndefinedVar)
                 rule.AddJobError(targetJob, message, location), job, isRunsOnLabels: true);
             if (runsOn.Labels is { } labels)
             {
-                for (var li = 0; li < labels.Length; li++)
+                for (var li = 0; li < labels.Count; li++)
                 {
                     CheckNode(labels[li], ExpressionValidationContext.JobRunsOn, static (rule, message, location, targetJob) =>
                         rule.AddJobError(targetJob, message, location), job, isRunsOnLabels: true);

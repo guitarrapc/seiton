@@ -601,7 +601,7 @@ public static partial class WorkflowParser
         StringNodeId postIf = default;
         StringNodeId image = default;
         StringNodeId entrypoint = default;
-        StringNodeId[]? args = null;
+        IReadOnlyList<StringNodeId>? args = null;
         Env? env = null;
         IReadOnlyList<Step>? steps = null;
         ulong seen = 0;
@@ -768,7 +768,7 @@ public static partial class WorkflowParser
         };
     }
 
-    private static StringNodeId[]? ParseActionRunsArgs<TReader>(ref TReader reader, AstArena arena, ref PooledBuffer<Diagnostic> diagnostics)
+    private static IReadOnlyList<StringNodeId>? ParseActionRunsArgs<TReader>(ref TReader reader, AstArena arena, ref PooledBuffer<Diagnostic> diagnostics)
         where TReader : IYamlStreamReader, allows ref struct
     {
         if (reader.CurrentKind == YamlEventKind.SequenceStart)
@@ -791,7 +791,7 @@ public static partial class WorkflowParser
                     reader.Read();
                 }
 
-                return list.ToArray();
+                return DetachArenaList(ref list, arena);
             }
             finally { list.Dispose(); }
         }
@@ -799,7 +799,7 @@ public static partial class WorkflowParser
         if (reader.CurrentKind == YamlEventKind.Scalar)
         {
             var single = ParseString(ref reader, arena, ref diagnostics, "action runs args must be string or array");
-            return !single.HasValue ? null : [single];
+            return !single.HasValue ? null : ArenaListOfOne(single, arena);
         }
 
         AddError(ref diagnostics, "action runs args must be string or array", reader.CurrentStart);

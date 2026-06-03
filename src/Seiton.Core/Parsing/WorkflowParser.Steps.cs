@@ -52,7 +52,7 @@ public static partial class WorkflowParser
             : $"steps[{stepIndex}]";
     }
 
-    private static Step[] ParseSteps<TReader>(ref TReader reader, AstArena arena, ref PooledBuffer<Diagnostic> diagnostics, ReadOnlySpan<byte> source, Utf8Slice jobId)
+    private static ArenaList<Step> ParseSteps<TReader>(ref TReader reader, AstArena arena, ref PooledBuffer<Diagnostic> diagnostics, ReadOnlySpan<byte> source, Utf8Slice jobId)
         where TReader : IYamlStreamReader, allows ref struct
     {
         var steps = new PooledBuffer<Step>(8);
@@ -76,7 +76,7 @@ public static partial class WorkflowParser
                 reader.Read();
             }
 
-            return steps.ToArray();
+            return DetachArenaList(ref steps, arena);
         }
         finally { steps.Dispose(); }
     }

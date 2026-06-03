@@ -155,7 +155,7 @@ public static partial class WorkflowParser
         BoolNodeId required = default;
         StringNodeId defaultValue = default;
         DispatchInputType type = DispatchInputType.None;
-        StringNodeId[]? options = null;
+        IReadOnlyList<StringNodeId>? options = null;
         ulong seen = 0;
 
         if (reader.CurrentKind != YamlEventKind.MappingStart)
@@ -233,7 +233,7 @@ public static partial class WorkflowParser
                             options = ParseStringOrStringSequence(ref reader, arena, ref diagnostics, out var optErr, out var optMark, allowElemEmpty: true);
                             if (optErr)
                                 AddError(ref diagnostics, "on.workflow_dispatch input options must be string or array of strings", optMark);
-                            else if (options is { Length: 0 })
+                            else if (options is { Count: 0 })
                                 AddError(ref diagnostics, "\"options\" section should not be empty", optSeqMark);
                             continue;
                         }

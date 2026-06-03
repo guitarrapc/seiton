@@ -1025,7 +1025,7 @@ public sealed class IncrementalParseContext
             var jobs = workflow.Jobs.Entries;
             for (var i = 0; i < jobCount && i < jobs.Length; i++)
             {
-                if (_skipJobsBuf[i] && jobs[i].Value?.Needs is { Length: > 0 })
+                if (_skipJobsBuf[i] && jobs[i].Value?.Needs is { Count: > 0 })
                 {
                     _skipJobsBuf[i] = false;
                 }

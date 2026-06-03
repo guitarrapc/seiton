@@ -49,7 +49,7 @@ public sealed class RunnerNoLatestRule() : RuleBase(RuleId.RunnerNoLatest)
         }
 
         var jobId = Decode(Arena.GetStringSlice(job.Id));
-        for (var i = 0; i < runsOn.Labels.Length; i++)
+        for (var i = 0; i < runsOn.Labels.Count; i++)
         {
             var label = runsOn.Labels[i];
             if (Arena.GetStringExpression(label).HasValue)
@@ -115,14 +115,14 @@ public sealed class RunnerNoLatestRule() : RuleBase(RuleId.RunnerNoLatest)
         return false;
     }
 
-    private bool ContainsSelfHostedLabel(StringNodeId[] labels)
+    private bool ContainsSelfHostedLabel(IReadOnlyList<StringNodeId> labels)
     {
         if (Config.Utf8Yaml is null)
         {
             return false;
         }
 
-        for (var i = 0; i < labels.Length; i++)
+        for (var i = 0; i < labels.Count; i++)
         {
             var label = labels[i];
             if (Arena.GetStringExpression(label).HasValue)

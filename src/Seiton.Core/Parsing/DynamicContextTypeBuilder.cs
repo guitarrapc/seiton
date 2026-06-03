@@ -601,20 +601,21 @@ internal static class DynamicContextTypeBuilder
     /// (so any <c>needs.X</c> reference is flagged as undefined).
     /// </summary>
     internal static (byte[] NameUtf8, ExprType Type) BuildNeedsOverride(
-        StringNodeId[]? needs,
+        IReadOnlyList<StringNodeId>? needs,
         SliceMap<Job> allJobs,
         AstArena arena,
         byte[]? utf8Yaml,
         Func<ReadOnlyMemory<byte>, string[]?>? localReusableOutputResolver = null)
     {
-        if (needs is null || needs.Length == 0)
+        if (needs is null || needs.Count == 0)
         {
             // Job has no needs: — return strict empty so any `needs.X` is flagged as undefined
             return (NeedsKeyUtf8, ExprType.Object(strict: true));
         }
 
-        var props = new Dictionary<Utf8String, ExprType>(needs.Length);
-        for (var i = 0; i < needs.Length; i++)
+        var needsCount = needs.Count;
+        var props = new Dictionary<Utf8String, ExprType>(needsCount);
+        for (var i = 0; i < needsCount; i++)
         {
             var needSlice = arena.GetStringSlice(needs[i]);
             var needIdBytes = needSlice.AsSpan(utf8Yaml);
@@ -653,19 +654,20 @@ internal static class DynamicContextTypeBuilder
     /// </remarks>
     internal static (byte[] NameUtf8, ExprType Type) BuildNeedsOverrideInto(
         Dictionary<Utf8String, ExprType> reusableProps,
-        StringNodeId[]? needs,
+        IReadOnlyList<StringNodeId>? needs,
         SliceMap<Job> allJobs,
         AstArena arena,
         byte[]? utf8Yaml,
         Func<ReadOnlyMemory<byte>, string[]?>? localReusableOutputResolver = null)
     {
         reusableProps.Clear();
-        if (needs is null || needs.Length == 0)
+        if (needs is null || needs.Count == 0)
         {
             return (NeedsKeyUtf8, ExprType.Object(reusableProps, strict: true));
         }
 
-        for (var i = 0; i < needs.Length; i++)
+        var count = needs.Count;
+        for (var i = 0; i < count; i++)
         {
             var needSlice = arena.GetStringSlice(needs[i]);
             var needIdBytes = needSlice.AsSpan(utf8Yaml);

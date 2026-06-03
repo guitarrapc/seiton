@@ -17,7 +17,7 @@ public static partial class WorkflowParser
             return new RepositoryDispatchEvent { EventName = nameNode, Types = null, Range = arena.GetStringRange(nameNode) };
         }
 
-        StringNodeId[]? types = null;
+        IReadOnlyList<StringNodeId>? types = null;
         ulong seen = 0;
         reader.Read(); // consume MappingStart
         while (!reader.End && reader.CurrentKind != YamlEventKind.MappingEnd)

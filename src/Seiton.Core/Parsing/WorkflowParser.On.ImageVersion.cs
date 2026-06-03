@@ -19,8 +19,8 @@ public static partial class WorkflowParser
             return new ImageVersionEvent { EventName = nameNode, Names = null, Versions = null, Range = arena.GetStringRange(nameNode) };
         }
 
-        StringNodeId[]? names = null;
-        StringNodeId[]? versions = null;
+        IReadOnlyList<StringNodeId>? names = null;
+        IReadOnlyList<StringNodeId>? versions = null;
         ulong seen = 0;
         reader.Read(); // consume MappingStart
         while (!reader.End && reader.CurrentKind != YamlEventKind.MappingEnd)

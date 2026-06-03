@@ -176,8 +176,8 @@ public static partial class WorkflowParser
         StringNodeId image = default;
         Credentials? credentials = null;
         Env? env = null;
-        StringNodeId[]? ports = null;
-        StringNodeId[]? volumes = null;
+        IReadOnlyList<StringNodeId>? ports = null;
+        IReadOnlyList<StringNodeId>? volumes = null;
         StringNodeId options = default;
         StringNodeId entrypoint = default;
         StringNodeId command = default;

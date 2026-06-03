@@ -13,7 +13,7 @@ public sealed class WebhookEvent : Event
 {
     public StringNodeId Hook { get; init; }
 
-    public StringNodeId[]? Types { get; init; }
+    public IReadOnlyList<StringNodeId>? Types { get; init; }
 
     public WebhookEventFilter? Branches { get; init; }
 
@@ -27,7 +27,7 @@ public sealed class WebhookEvent : Event
 
     public WebhookEventFilter? PathsIgnore { get; init; }
 
-    public StringNodeId[]? Workflows { get; init; }
+    public IReadOnlyList<StringNodeId>? Workflows { get; init; }
 }
 
 /// <summary>A branch/path/tag filter within a webhook event.</summary>
@@ -35,7 +35,7 @@ public sealed class WebhookEventFilter
 {
     public StringNodeId Name { get; init; }
 
-    public StringNodeId[] Values { get; init; } = [];
+    public IReadOnlyList<StringNodeId> Values { get; init; } = [];
 }
 
 /// <summary>A <c>schedule:</c> event containing cron entries.</summary>
@@ -73,7 +73,7 @@ public sealed class DispatchInput
 
     public DispatchInputType Type { get; init; }
 
-    public StringNodeId[]? Options { get; init; }
+    public IReadOnlyList<StringNodeId>? Options { get; init; }
 
     public TextRange Range { get; init; }
 }
@@ -153,13 +153,13 @@ public readonly struct WorkflowCallEventOutput
 /// <summary>A <c>repository_dispatch:</c> event with optional activity types.</summary>
 public sealed class RepositoryDispatchEvent : Event
 {
-    public StringNodeId[]? Types { get; init; }
+    public IReadOnlyList<StringNodeId>? Types { get; init; }
 }
 
 /// <summary>An image version event (e.g. container image update triggers).</summary>
 public sealed class ImageVersionEvent : Event
 {
-    public StringNodeId[]? Names { get; init; }
+    public IReadOnlyList<StringNodeId>? Names { get; init; }
 
-    public StringNodeId[]? Versions { get; init; }
+    public IReadOnlyList<StringNodeId>? Versions { get; init; }
 }

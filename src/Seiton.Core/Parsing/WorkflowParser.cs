@@ -511,7 +511,7 @@ public static partial class WorkflowParser
         var hasOn = false;
         var hasJobs = false;
         var lastRootKeyMark = new TextPosition(0, 1, 1);
-        Event[] onEvents = [];
+        ArenaList<Event> onEvents = default;
         SliceMap<Job> jobs = default;
         ulong seen = 0;
         StringNodeId actionDescription = default;

@@ -85,7 +85,7 @@ public sealed class Environment
 /// <summary>The <c>runs-on:</c> specification for job runner selection.</summary>
 public sealed class Runner
 {
-    public StringNodeId[]? Labels { get; init; }
+    public IReadOnlyList<StringNodeId>? Labels { get; init; }
 
     public StringNodeId LabelsExpr { get; init; }
 
@@ -172,9 +172,9 @@ public sealed class Container
 
     public Env? Env { get; init; }
 
-    public StringNodeId[]? Ports { get; init; }
+    public IReadOnlyList<StringNodeId>? Ports { get; init; }
 
-    public StringNodeId[]? Volumes { get; init; }
+    public IReadOnlyList<StringNodeId>? Volumes { get; init; }
 
     public StringNodeId Options { get; init; }
 
