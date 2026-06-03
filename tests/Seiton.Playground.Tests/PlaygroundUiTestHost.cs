@@ -233,14 +233,14 @@ internal static class PlaygroundUiTestHost
         PlaygroundWasmPublishMode mode,
         CancellationToken cancellationToken)
     {
+        // Only one WASM host mode at a time — holding Debug + Release AOT doubles disk and Kestrel RSS.
+        await ShutdownOtherModeAsync(mode, cancellationToken);
+
         var prePublished = await TryCreateFromPrePublishedAsync(mode, cancellationToken);
         if (prePublished is not null)
         {
             return prePublished;
         }
-
-        // Only one WASM host mode at a time — holding Debug + Release AOT doubles disk and Kestrel RSS.
-        await ShutdownOtherModeAsync(mode, cancellationToken);
 
         var root = RepoPaths.FindRepoRoot();
         // Bump suffix when Playground WASM bits change so cached hosts are not stale.

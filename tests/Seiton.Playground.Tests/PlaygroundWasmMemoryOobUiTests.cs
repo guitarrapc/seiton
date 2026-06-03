@@ -131,6 +131,27 @@ public sealed class PlaygroundWasmMemoryOobUiTests
     }
 
     [Test]
+    public async Task WasmLint_BareUsesLine_IsDeferred_AndCompletedUsesIsLinted()
+    {
+        var host = await PlaygroundUiTestHost.GetOrCreateAsync(PlaygroundWasmPublishMode.ReleaseAot);
+        var browser = await PlaygroundUiBrowserSession.GetBrowserAsync();
+        await using var context = await browser.NewContextAsync();
+        var page = await OpenPlaygroundWithTestHooksAsync(context, host.BaseUrl);
+
+        await ApplyFullFixConfigViaHooksAsync(page);
+        var baseYaml = await GetEditorWorkflowBaseAsync(page);
+
+        var deferred = await RunLintViaHooksAsync(page, baseYaml + "      - uses:");
+        await Assert.That(deferred.Ok).IsTrue().Because(deferred.Error ?? "unknown");
+        await Assert.That(deferred.Deferred).IsTrue();
+        await Assert.That(deferred.Diagnostics ?? []).Count().IsEqualTo(0);
+
+        var linted = await RunLintViaHooksAsync(page, baseYaml + "      - uses: actions/checkout@v4");
+        await Assert.That(linted.Ok).IsTrue().Because(linted.Error ?? "unknown");
+        await Assert.That(linted.Deferred).IsFalse();
+    }
+
+    [Test]
     public async Task WasmLint_AlternatingBufferSizes_DoNotThrowMemoryOob()
     {
         var host = await PlaygroundUiTestHost.GetOrCreateAsync(PlaygroundWasmPublishMode.ReleaseAot);
@@ -265,6 +286,8 @@ public sealed class PlaygroundWasmMemoryOobUiTests
         public bool Ok { get; set; }
         public string? Error { get; set; }
         public bool InternalError { get; set; }
+        public bool Deferred { get; set; }
+        public object[]? Diagnostics { get; set; }
     }
 
     private sealed class SetConfigHookResult
