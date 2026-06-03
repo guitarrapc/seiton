@@ -1278,6 +1278,55 @@ function getSelectedFilePath() {
   return fileSelect ? fileSelect.value : '.github/workflows/test.yml';
 }
 
+/**
+ * Runs lint without updating editor UI. Used by Playwright when <c>?seitonTestHooks=1</c>.
+ * @param {string} source
+ * @param {string} [filePath]
+ * @returns {{ ok: boolean, error?: string, diagnostics?: unknown[], internalError?: boolean }}
+ */
+function runLintForTest(source, filePath) {
+  if (!runtimeAlive || !runtimeReady || !exports) {
+    return { ok: false, error: 'runtime not ready' };
+  }
+  try {
+    const path = filePath ?? getSelectedFilePath();
+    const utf8Bytes = exports.Seiton.Playground.LintInterop.RunLint(source, path);
+    const json = utf8Decoder.decode(utf8Bytes);
+    const diagnostics = JSON.parse(json);
+    const internalError =
+      diagnostics.length === 1 && diagnostics[0].ruleId === 'internal-error';
+    return { ok: true, diagnostics, internalError };
+  } catch (err) {
+    if (isRuntimeDeadError(err)) {
+      handleRuntimeDeath();
+    }
+    return { ok: false, error: String(err?.message ?? err) };
+  }
+}
+
+/**
+ * Exposes lint/config entry points for browser tests (<c>?seitonTestHooks=1</c> only).
+ */
+function installTestHooksIfRequested() {
+  try {
+    const params = new URLSearchParams(globalThis.location?.search ?? '');
+    if (params.get('seitonTestHooks') !== '1') {
+      return;
+    }
+    globalThis.__SEITON_PLAYGROUND_TEST__ = {
+      runLint: (source, filePath) => runLintForTest(source, filePath),
+      setConfig: (configYaml) => {
+        const diags = setConfig(configYaml ?? '');
+        return { diagnostics: diags };
+      },
+      getRuntimeAlive: () => runtimeAlive,
+      getRuntimeFlags: () => exports?.Seiton?.Playground?.LintInterop?.GetRuntimeFlags?.() ?? '',
+    };
+  } catch {
+    /* ignore */
+  }
+}
+
 void initializeRuntime();
 
 function applyShareConfigAfterRuntimeReady() {
@@ -1312,6 +1361,7 @@ async function initializeRuntime() {
     exports = await runtime.getAssemblyExports(config.mainAssemblyName);
     await runtime.runMain();
     runtimeReady = true;
+    installTestHooksIfRequested();
     syncVersionBadge();
     loading.style.display = 'none';
     applyShareConfigAfterRuntimeReady();

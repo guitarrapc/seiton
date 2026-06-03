@@ -19,6 +19,20 @@ public static partial class LintInterop
     /// <summary>
     /// User-facing build version (same trimming as the seiton CLI). Exposed to the page script after WASM starts.
     /// </summary>
+    /// <summary>Test/diagnostic hook: browser runtime flags (Playwright bisect).</summary>
+    [JSExport]
+    public static string GetRuntimeFlags()
+    {
+        try
+        {
+            return $"IsBrowser={OperatingSystem.IsBrowser()}";
+        }
+        catch
+        {
+            return "IsBrowser=unknown";
+        }
+    }
+
     [JSExport]
     public static string GetProductVersion()
     {

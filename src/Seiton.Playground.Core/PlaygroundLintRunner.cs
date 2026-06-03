@@ -94,6 +94,13 @@ public static class PlaygroundLintRunner
     internal static IImageDigestResolver? ImageDigestResolverOverride;
 
     /// <summary>
+    /// When false, <see cref="RunToJsonUtf8"/> uses full parse+lint (no incremental job cache).
+    /// Disabled in the browser: incremental reuse can retain stale spans across edits and trap in WASM AOT.
+    /// Must be evaluated per call — <see cref="OperatingSystem.IsBrowser"/> is false during static type init in WASM.
+    /// </summary>
+    private static bool UseIncrementalLint => !OperatingSystem.IsBrowser();
+
+    /// <summary>
     /// Sets the lint configuration from YAML text. Uses content-hash caching (XxHash64) to
     /// skip re-parse when the normalized config content has not meaningfully changed.
     /// </summary>
@@ -268,7 +275,7 @@ public static class PlaygroundLintRunner
                 var lintResult = Engine.CheckWithParseResult(utf8Yaml, filePath, config, classifiedResult.ParseResult, ownedArena);
                 diagnosticsToSerialize = lintResult.Diagnostics.AsSpan();
             }
-            else
+            else if (UseIncrementalLint)
             {
                 // D-5b/5c: Use incremental parse to skip unchanged root sections and jobs
                 using var parseResult = IncrementalCtx.ParseIncrementally(utf8Yaml, filePath);
@@ -282,6 +289,11 @@ public static class PlaygroundLintRunner
 
                 // Merge fresh diagnostics with cached diagnostics for skipped jobs
                 diagnosticsToSerialize = IncrementalCtx.MergeDiagnosticsWithCache(lintResult.Diagnostics, skipJobs);
+            }
+            else
+            {
+                using var lintResult = Engine.Check(utf8Yaml, filePath, config);
+                diagnosticsToSerialize = lintResult.Diagnostics.AsSpan();
             }
 
             JsonBuffer.Clear();
