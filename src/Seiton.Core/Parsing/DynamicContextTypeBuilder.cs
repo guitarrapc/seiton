@@ -613,8 +613,9 @@ internal static class DynamicContextTypeBuilder
             return (NeedsKeyUtf8, ExprType.Object(strict: true));
         }
 
-        var props = new Dictionary<Utf8String, ExprType>(needs.Count);
-        for (var i = 0; i < needs.Count; i++)
+        var needsCount = needs.Count;
+        var props = new Dictionary<Utf8String, ExprType>(needsCount);
+        for (var i = 0; i < needsCount; i++)
         {
             var needSlice = arena.GetStringSlice(needs[i]);
             var needIdBytes = needSlice.AsSpan(utf8Yaml);
