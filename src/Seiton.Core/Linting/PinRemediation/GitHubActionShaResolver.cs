@@ -385,7 +385,39 @@ public sealed class GitHubActionShaResolver(HttpClient httpClient, FixPinningCon
         string token,
         CancellationToken cancellationToken)
     {
-        var refPath = $"repos/{owner}/{repo}/git/ref/tags/{Uri.EscapeDataString(refStr)}";
+        var escapedRef = Uri.EscapeDataString(refStr);
+        var tagRefPath = $"repos/{owner}/{repo}/git/ref/tags/{escapedRef}";
+        var refResult = await TryResolveFromGitRefPathAsync(apiBaseUri, owner, repo, tagRefPath, token, cancellationToken);
+        if (refResult.Success)
+        {
+            return refResult;
+        }
+
+        // Branch fallback: tags-only resolution fails for refs like "v1" when the repository
+        // uses a moving branch alias instead of creating a "v1" tag.
+        if (refResult.StatusCode == HttpStatusCode.NotFound)
+        {
+            var branchRefPath = $"repos/{owner}/{repo}/git/ref/heads/{escapedRef}";
+            var branchResult = await TryResolveFromGitRefPathAsync(apiBaseUri, owner, repo, branchRefPath, token, cancellationToken);
+            if (branchResult.Success)
+            {
+                return branchResult;
+            }
+
+            return branchResult;
+        }
+
+        return refResult;
+    }
+
+    private async Task<ResolveAttemptResult> TryResolveFromGitRefPathAsync(
+        Uri apiBaseUri,
+        string owner,
+        string repo,
+        string refPath,
+        string token,
+        CancellationToken cancellationToken)
+    {
         using var refResponse = await SendGetAsync(apiBaseUri, refPath, token, cancellationToken);
         if (!refResponse.IsSuccessStatusCode)
         {
@@ -394,8 +426,7 @@ public sealed class GitHubActionShaResolver(HttpClient httpClient, FixPinningCon
 
         await using var refStream = await refResponse.Content.ReadAsStreamAsync(cancellationToken);
         using var refDocument = await JsonDocument.ParseAsync(refStream, cancellationToken: cancellationToken);
-        var root = refDocument.RootElement;
-        var objectNode = root.GetProperty("object");
+        var objectNode = refDocument.RootElement.GetProperty("object");
         var objectType = objectNode.GetProperty("type").GetString();
         var objectSha = objectNode.GetProperty("sha").GetString();
 

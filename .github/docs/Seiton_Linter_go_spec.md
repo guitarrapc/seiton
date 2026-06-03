@@ -448,6 +448,7 @@ Go implementation notes:
 - Implementations must be concurrency-safe and cache successful resolutions in-process.
 - Error results (non-skip failures) must not be cached.
 - Resolver implementations are injected by caller — not held by `Linter`.
+- Action ref resolution order is tag-first (`refs/tags/{ref}`), then branch fallback (`refs/heads/{ref}`) when tag is not found.
 
 #### 4.5.2 Remediation Entry Point
 
@@ -539,6 +540,7 @@ Safety invariants:
 - `scratch` is always appended to `ExcludeImages` even if omitted from user config (enforced in construction).
 - `EnableNetwork: false` prevents any network call; `Remediate` must return input diagnostics unchanged.
 - Token resolution order is hardcoded as a code-internal constant: `["SEITON_GITHUB_TOKEN", "GITHUB_TOKEN"]`. This value is not exposed in config to prevent config-injection attacks.
+- `FixPinningConfig.MinAgeDays = 0` disables age filtering only; tag-first and branch-fallback ref resolution still applies.
 
 #### 4.5.4 Fix Format
 

@@ -582,6 +582,7 @@ C# implementation notes:
 - Implementations must cache successful resolutions in-process for the duration of a single `RemediateAsync` call.
 - Error results (non-skip failures) must not be cached.
 - Resolver implementations are injected by caller — not instantiated by `LintEngine`.
+- `GitHubActionShaResolver` resolves refs in order: `refs/tags/{ref}` first, then `refs/heads/{ref}` fallback when tag is not found.
 
 **Comparison with `dockerfile-pin` (Go reference):**
 
@@ -717,6 +718,7 @@ Safety invariants:
 - `scratch` must always be in `ExcludeImages` (enforced at construction, matching §12.3.8).
 - `EnableNetwork: false` (the default) prevents resolver construction — `PinRemediationEngine` with `EnableNetwork: false` must not make any network calls even if resolver implementations are injected.
 - Token resolution order is hardcoded as a code-internal constant: `["SEITON_GITHUB_TOKEN", "GITHUB_TOKEN"]`. This value is not exposed in config to prevent config-injection attacks.
+- `FixPinningConfig.MinAgeDays = 0` disables age filtering only; ref resolution still follows tag-first and branch-fallback lookup.
 
 #### 4.5.4 Fix Format
 

@@ -1325,6 +1325,16 @@ Current implementation behavior:
 
 When the requested ref is not version-like, resolver keeps direct ref resolution and applies age gate to that resolved target.
 
+Ref resolution order for `IActionShaResolver`:
+
+1. Attempt `refs/tags/{ref}` first.
+2. If tag lookup returns not found, attempt `refs/heads/{ref}` as branch fallback.
+3. If neither exists, resolution fails according to `network.on-error`.
+
+Rationale:
+- GitHub Actions ecosystem commonly uses moving branch aliases such as `v1`.
+- Without branch fallback, `min-age-days: 0` still cannot pin `owner/repo@v1` when `v1` is a branch but not a tag.
+
 #### 12.3.8 `fix.images.exclude-images` and `fix.images.exclude-tags`
 
 Glob patterns for images and tags to skip during digest resolution.

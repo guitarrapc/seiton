@@ -1,4 +1,4 @@
-# setup-seiton `@v1` が pinning されない件の調査と対応計画
+# setup-seiton `@v1` が pinning されない件の調査・実装計画
 
 ## 目的
 
@@ -20,55 +20,113 @@
   - ref が `v1` のような version family と解釈できる場合、`SelectBestEligibleTagAsync()` で同系列タグ候補（`v1.*`）を列挙し、`min-age-days` 未満を除外する。
   - 今回はタグがすべて当日作成のため、既定 `14` 日で候補が空になり `(null, null)` を返し、fix が skip される。
 
-## 差分の本質
+## 差分の本質（再整理）
 
 1. **branch 解決戦略の差**
    - pinact: `--branch-to-tag` に明示一致させると branch をタグへ変換して pin 可能。
    - seiton: ref 文字列が version family と解釈可能ならタグ候補探索を行うが、branch 専用の opt-in 機構はない。
-2. **既定クールダウンの差**
+2. **既定クールダウンの差（補助要因）**
    - pinact: `--min-age` 既定 0（実質無効）。
    - seiton: `fix.pinning.min-age-days` 既定 14（有効）。
    - `setup-seiton` のように新規タグ直後は seiton が意図的に skip しやすい。
-3. **今回の直接原因**
-   - `@v1` 自体が branch であることよりも、`min-age-days: 14` で `v1.*` 候補が全除外された点が支配的。
+3. **今回の直接原因（確定）**
+   - `fix.pinning.min-age-days=0` でも `@v1` が失敗することを確認。
+   - 原因は `GitHubActionShaResolver` が SHA 解決で `git/ref/tags/{ref}` のみ参照し、`refs/heads/{ref}` への fallback を持たないため。
+   - そのため、`v1` が branch で存在しても解決できない。
 
-## 優先度付き対応プラン
+## 優先度付き対応プラン（更新）
 
-### P0（即時回避・運用）
+### P0（実装対象・最優先）
 
-- 利用側設定で `fix.pinning.min-age-days` を一時的に `0`（または 1 未満に相当する運用）へ変更する。
-  - 目的: リリース直後タグでも pinning を成立させる。
-  - 影響: 新鮮すぎるタグを拾うリスクは上がる。
-- あるいは、対象行を当面 SHA 指定に変更して運用する（手動 pin）。
+- `GitHubActionShaResolver` に branch fallback を実装する。
+  - 仕様: tag 解決失敗（特に 404）時、`git/ref/heads/{ref}` を試す。
+  - 目的: `@v1` のような branch ref を `min-age-days=0` でも確実に pin 可能にする。
+  - 互換性: 既存 tag ref の挙動は維持。
 
-### P1（短期改善・UX）
+### P1（テスト強化）
 
-- `unpinned-uses` の fix skip 理由を明示する診断改善:
-  - 例: 「`v1` は解決候補があるが `min-age-days=14` により全候補が除外された」。
-  - 期待効果: 「なぜ pin されないか」の可観測性を上げ、設定調整の判断を容易にする。
+- `GitHubActionShaResolverTests` に branch fallback の失敗再現テストを追加し、Red→Green で実装する。
+- 既存の min-age 系テストと共存する形で、分岐網羅（tag 成功 / tag 404→branch 成功 / 両方失敗）を担保する。
 
-### P2（中期改善・pinact との整合）
+### P2（UX/API改善）
 
-- seiton に branch→tag 変換の明示的 opt-in（pinact の `--branch-to-tag` 相当）を導入する。
-  - 例: `fix.pinning.branch-to-tag` に regex リストを追加。
-  - 既定は無効（現状互換）にし、利用者が `^v[0-9]+$` 等を指定可能にする。
-  - 変換時は stable 優先・候補なし時 prerelease 許容の方針を選択可能にする。
+- 必要に応じて branch→latest-tag 変換の opt-in（pinact `--branch-to-tag` 相当）を検討する。
+- ただし今回フェーズでは「branch ref を SHA へ解決できること」を優先し、設定面の追加は行わない。
 
-### P3（仕様明文化）
+### P3（仕様/ドキュメント同期）
 
-- `.github/docs` と `docs/configuration.md` に以下を明記:
-  - `min-age-days` 既定 14 の意図と副作用（新タグ直後に pin skip）。
-  - `@v1` のような ref が branch / tag で曖昧な場合の解決方針。
-  - branch を pin 対象にしたい場合の推奨設定（P2 実装後はその設定を正式案内）。
+- `.github/docs` と `docs/configuration.md` に、ref 解決順（tag 優先、branch fallback）を明記する。
+- 実装と仕様に差分があれば、実装または仕様を一致させる。
 
-## 推奨実行順
+## 実装フェーズ（TDD + 性能確認 + レビュー反復）
 
-1. P0 を適用して現場 unblock。
-2. P1 でデバッグ性を先に改善（実装コスト小・効果大）。
-3. P2 を設計/実装して pinact 相当の運用移行を可能にする。
-4. P3 で仕様とドキュメントを同期。
+1. **Phase 1 (Red)**: branch fallback 未実装を示すテストを追加して失敗確認。
+2. **Phase 2 (Green)**: `GitHubActionShaResolver` に最小変更で branch fallback を実装。
+3. **Phase 3 (Verify)**: 追加テスト + 関連テスト + `dotnet test` 全体実行。
+4. **Phase 4 (Benchmark)**: lint 系ベンチマークを実施し、変更前後を比較。
+5. **Phase 5 (Review Loop)**: 各フェーズで自己レビュー（正確性・性能・API直感性・仕様整合）を実施し、指摘がなくなるまで反復。
+6. **Phase 6 (Commit)**: フェーズ完了ごとにコミットする。
+
+## ユーザーファースト API 観点
+
+- 既存設定で直感的に動くことを優先し、`min-age-days=0` で branch ref が自然に pin される体験を実現する。
+- 新規設定を増やさず、既存ユーザーの認知負荷を上げない。
+- エラーメッセージ/失敗時挙動は従来互換を維持する。
 
 ## 補足（今回入力例への適用）
 
 - `uses: guitarrapc/setup-seiton@v1` + `seiton-version: v0.9.19` のケースは、`seiton-version` の値とは独立に `uses` ref 解決側で skip される。
 - `@0f877ad... # v1.0.1` は既に SHA pin されており、今回の未 pin 問題の対象外。
+
+## 実装結果（Phase 1-6）
+
+### Phase 1 (Red): 失敗テスト追加
+
+- `GitHubActionShaResolverTests` に以下を追加:
+  - `ResolveAsync_FallsBackToBranchReference_WhenTagReferenceIsMissing_AndMinAgeDaysIsZero`
+- 失敗確認:
+  - `git/ref/tags/v1` が 404 の場合に `InvalidOperationException` となり、branch fallback が無いことを確認。
+
+### Phase 2 (Green): branch fallback 実装
+
+- `GitHubActionShaResolver` を変更:
+  - 既存の `git/ref/tags/{ref}` 解決を維持。
+  - tag 解決が 404 の場合のみ `git/ref/heads/{ref}` を試行。
+  - 成功時は既存と同形式で `(sha, ref comment)` を返却。
+- 実装は最小差分に限定し、既存の annotated tag 展開ロジックは再利用。
+
+### Phase 3 (Verify): テスト実行
+
+- 追加テスト: pass
+- `GitHubActionShaResolverTests` 全体: pass（12/12）
+- `dotnet test` 全体:
+  - `Seiton.Core.Tests`, `Seiton.Tests`, `Seiton.Update.Tests` は pass
+  - `Seiton.Playground.Tests` で Playwright UI timeout/asset 系の既存失敗あり（今回変更箇所外）
+
+### Phase 4 (Benchmark): 変更前後比較
+
+- 対象: `CoreLintBenchmark`（`HEAD~1` vs 実装後）
+- 結果（代表）:
+  - Large / Fix=true: `33.916 ms -> 33.958 ms`（+0.12%）
+  - Large / Fix=false: `22.425 ms -> 22.903 ms`（+2.13%）
+  - Medium / Fix=false: `1.513 ms -> 1.571 ms`（+3.83%）
+  - Allocated: 全ケースで変化なし（Alloc Ratio 1.00）
+- 評価:
+  - 主要ケースで +10% 以内、割当増加なし。
+  - 変更はネットワーク解決経路の分岐追加であり、lint hot-path への影響は実質なし。
+
+### Phase 5 (Review Loop): 指摘と対応
+
+- 指摘1: `min-age=0` 時の branch 未解決（根本原因）
+  - 対応: tag 404 時の branch fallback を追加（解消）
+- 指摘2: API 体験（ユーザーファースト）
+  - 対応: 新設定を増やさず既存設定のまま `@v1` が直感的に解決される挙動へ改善
+- 指摘3: 性能劣化リスク
+  - 対応: 404 時のみ追加 API 呼び出しとし、通常 tag 成功パスのコスト増を抑制
+
+### Phase 6 (Commit)
+
+- フェーズ完了ごとにコミット運用とし、本変更では:
+  - テスト追加（Red）
+  - 実装＋ドキュメント更新（Green/Verify/Benchmark）
+  をそれぞれコミット対象とする。
