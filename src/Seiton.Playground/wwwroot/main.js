@@ -790,9 +790,12 @@ function buildShareUrlFromHash(hashSegment) {
  */
 function finishShareCopy(copied, mode = 'full') {
   if (mode === 'yaml-only') {
-    permalinkBtn.title = permalinkYamlOnlyCopied;
-    permalinkBtn.setAttribute('aria-label', permalinkYamlOnlyCopied);
-    showToast(permalinkYamlOnlyCopied, copied ? 'success' : 'info');
+    const msg = copied
+      ? permalinkYamlOnlyCopied
+      : `${permalinkDoneNoClipboard} (workflow YAML only — config omitted because URL was too long)`;
+    permalinkBtn.title = msg;
+    permalinkBtn.setAttribute('aria-label', msg);
+    showToast(msg, copied ? 'success' : 'info');
     window.setTimeout(() => {
       permalinkBtn.title = permalinkShareTitle;
       permalinkBtn.setAttribute('aria-label', permalinkShareTitle);
