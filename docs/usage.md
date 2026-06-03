@@ -590,7 +590,7 @@ Docker on a hosted runner also picks up `GITHUB_ACTIONS` when the job sets it (d
 
 ```yaml
 - name: Run seiton in Docker
-  run: docker run --rm -v "$PWD:/repo:ro" -e GITHUB_ACTIONS ghcr.io/guitarrapc/seiton:latest --format github-actions
+  run: docker run --rm -v "$PWD:/repo:ro" -e GITHUB_ACTIONS -e GITHUB_STEP_SUMMARY ghcr.io/guitarrapc/seiton:latest --format github-actions
 ```
 
 
