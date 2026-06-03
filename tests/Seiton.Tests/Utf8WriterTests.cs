@@ -60,24 +60,11 @@ public sealed class Utf8WriterTests
 
         public void Advance(int count) => _inner.Advance(count);
 
-        public Memory<byte> GetMemory(int sizeHint = 0)
-        {
-            var span = GetSpan(sizeHint);
-            if (span.IsEmpty)
-            {
-                return Memory<byte>.Empty;
-            }
-
-            if (_memoryScratch.Length < span.Length)
-            {
-                _memoryScratch = new byte[span.Length];
-            }
-
-            span.CopyTo(_memoryScratch);
-            return _memoryScratch.AsMemory(0, span.Length);
-        }
-
-        private byte[] _memoryScratch = [];
+public Memory<byte> GetMemory(int sizeHint = 0)
+{
+    var memory = _inner.GetMemory(Math.Max(sizeHint, maxChunkSize));
+    return memory[..Math.Min(memory.Length, maxChunkSize)];
+}
 
         public Span<byte> GetSpan(int sizeHint = 0)
         {
