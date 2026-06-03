@@ -48,3 +48,85 @@ seitonを実行するとGitHub Actions Workflow/Actionsの適切でない設定�
 - 本リポジトリでseitonを実行して、出力される結果から適切な検出か、不適切な検出かをハンドリングしてほしいです。自動修正で直る具体例からも使い勝手を評価してほしいです。
 - seitonで検出、コンフィグの調整をしたら反復的に最終的に好ましい状況になるまで繰り返してください。
 - configでactionやimageのpinningを有効、デフォルトタイムアウトを設定、latestランナーのマッピングを設定することで、より適切な自動修正が可能になります。
+
+
+---
+
+以下はseitonではpinningされません。しかしpinactだと、v1.0.2に解決されます。pinningggninnipのロジックが違うようなので調べて。pinactは.references/pinact に参考実装があります。
+
+```
+      - uses: guitarrapc/setup-seiton@v1
+        with:
+          seiton-version: v0.9.19
+```
+
+```
+      - uses: guitarrapc/setup-seiton@0f877adfd3890a2333b954ab9a43d45c4b48e456 # v1.0.1
+        with:
+          seiton-version: v0.9.19
+```
+
+---
+
+
+以下の workflowが `setup-seiton` をバージョン指定しているのですが、seiton --fix --enable-pin-network で直りません。これは min-ago-daysが14で当日リリースしたからです。
+さて、なんでpinされなかったのかがメッセージから分からなかったので、わかるようにしたいです。
+
+```
+name: cysharp actions lint
+
+# Instructions:
+# * The worktflow to lint Cysharp public repositories' workflows and actions.
+# * If any errors are found, "fix each repository" or "ignore error" by `seiton --fix -c ../Actions/.github/seiton.yaml`.
+# * ignore error: ignore config is located in Cysharp/Actions repository. Add ignore to .github/seiton.yaml.
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "0 1 * * WED" # every wednesday 10:00 +9(JST)
+
+jobs:
+  pre:
+    permissions:
+      contents: read
+    runs-on: ubuntu-24.04
+    timeout-minutes: 3
+    outputs:
+      repositories: ${{ steps.list.outputs.repositories }}
+    steps:
+      # gh repo list Cysharp --visibility public --no-archived --json name
+      - name: List non-archived OSS Repository names as json array
+        id: list
+        run: echo "repositories=$(gh repo list Cysharp --visibility public --no-archived --json name --jq 'sort_by(.name | ascii_downcase) | .[].name' | jq -R -s -c 'split("\n")[:-1]')" | tee -a "$GITHUB_OUTPUT"
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Try json parse (Should output as Array)
+        run: echo "${{ fromJson(steps.list.outputs.repositories) }}"
+
+  lint:
+    needs: [pre]
+    strategy:
+      fail-fast: false
+      matrix:
+        repository: ${{ fromJson(needs.pre.outputs.repositories) }}
+    permissions:
+      contents: read
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
+        with:
+          persist-credentials: false
+      - uses: guitarrapc/setup-seiton@v1.0.0
+        with:
+          seiton-version: v0.9.19
+      - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
+        with:
+          persist-credentials: false
+          repository: "cysharp/${{ matrix.repository }}"
+          path: ${{ matrix.repository }}
+      # github workflows/action's Static Checker
+      - name: Run seiton
+        run: seiton --include-actions -color -oneline --config-file ../.github/seiton.yaml
+        working-directory: ${{ matrix.repository }}
+```
