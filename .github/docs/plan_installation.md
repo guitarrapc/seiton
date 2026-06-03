@@ -16,9 +16,9 @@
 | Docker (GHCR) | ✅ | ✅ Release ワークフローで linux/amd64・arm64 を push |
 | mise | ❌ | ❌ 見送り（実績不足でレジストリ登録不可） |
 | aqua | ❌ | ❌ 見送り（実績不足で aqua-registry 登録不可） |
-| ダウンロード用スクリプト（curl \| sh 等） | ✅ | ✅ `scripts/download.sh`（main ブランチ） |
+| ダウンロード用スクリプト（curl \| sh 等） | ❌ | ❌ 廃止（[`guitarrapc/setup-seiton`](https://github.com/guitarrapc/setup-seiton) に置き換え） |
 | GitHub CLI (`gh release download`) | ✅ | ✅ ドキュメントのみ（release workflow の SLSA attestation をそのまま利用） |
-| GitHub Action | ❌ | ❌ `guitarrapc/seiton-action` リポ未作成 |
+| GitHub Action (`guitarrapc/setup-seiton`) | ✅ | ✅ [`guitarrapc/setup-seiton`](https://github.com/guitarrapc/setup-seiton) 公開済み |
 | dotnet tool (NuGet) | ❌ | ❌ NuGet パッケージ未公開 |
 
 ### リリースアセット名（現行 release.yaml）
@@ -46,41 +46,21 @@ checksums-sha256.txt
 
 ---
 
-### フェーズ 0 — ダウンロードスクリプト — 完了
+### フェーズ 0 — ダウンロードスクリプト — 廃止
 
-**WHY**: `curl | bash` ワンライナーは CI やローカルセットアップで最も手軽。勝手にシステム領域へ配置せず、チェックサム検証を内蔵した download-only スクリプトにする。
+**WHY**: `curl | bash` ワンライナーは CI やローカルセットアップで手軽だったが、GitHub Actions では専用 Action の方が簡潔で保守しやすい。
 
-#### 実装
+#### 経緯
 
-- [`scripts/download.sh`](../../scripts/download.sh) を main ブランチに配置。
-- 機能:
-  - プラットフォーム自動判別（`uname -s` → `linux`/`osx`/`win`、`uname -m` → `amd64`/`arm64`）
-  - デフォルトで最新リリースを取得（`--version` でバージョン指定可）
-  - デフォルトでカレントディレクトリに展開（`--dir` で既存ディレクトリ指定可）
-  - `checksums-sha256.txt` による SHA-256 検証
-  - `gh` CLI が利用可能な場合は SLSA build provenance 検証も実行（ベストエフォート）
-  - `sudo` を使わず、PATH 変更も自動で行わない
-- セキュリティ考慮:
-  - `set -euo pipefail` で安全に失敗
-  - `curl --proto '=https' --tlsv1.2` で TLS を強制
-  - tmpdir + EXIT trap で一時ファイルを確実に削除
-  - JSON パース不要（`/releases/latest` エンドポイントを利用）
+- 当初 `scripts/download.sh` を main ブランチに配置し、プラットフォーム自動判別・チェックサム検証・SLSA attestation 検証を提供していた。
+- [`guitarrapc/setup-seiton`](https://github.com/guitarrapc/setup-seiton) を公開したため、GitHub Actions 向けセットアップは Action に一本化。`scripts/download.sh` は削除。
 
-#### 利用方法
+#### 後継
 
-```sh
-# 最新版をカレントディレクトリへダウンロード
-curl -fsSL https://raw.githubusercontent.com/guitarrapc/seiton/main/scripts/download.sh | bash
+- **GitHub Actions**: [`guitarrapc/setup-seiton@v1`](https://github.com/guitarrapc/setup-seiton) — リリースバイナリを取得し `PATH` に追加。
+- **ローカル / その他 CI**: Homebrew / Scoop / Prebuilt Binaries / Docker / `gh release download` を利用。
 
-# バージョン指定
-curl -fsSL https://raw.githubusercontent.com/guitarrapc/seiton/main/scripts/download.sh | bash -s -- --version 1.0.0
-
-# 既存ディレクトリ指定
-mkdir -p ./bin
-curl -fsSL https://raw.githubusercontent.com/guitarrapc/seiton/main/scripts/download.sh | bash -s -- --dir ./bin
-```
-
-**完了条件**: 上記ワンライナーで Linux/macOS に seiton バイナリをダウンロードでき、チェックサム検証が通る。
+**完了条件**: `docs/installation.md` と `docs/usage.md` が setup-seiton を参照し、download.sh への言及がない。
 
 ---
 
@@ -206,11 +186,11 @@ curl -fsSL https://raw.githubusercontent.com/guitarrapc/seiton/main/scripts/down
 
 ---
 
-### フェーズ 8 — GitHub Action (オプション)
+### フェーズ 8 — GitHub Action — 完了
 
-**WHY**: GitHub Actions ワークフロー内で seiton を直接ステップとして使えると利便性が高い。ただし本ツールの主用途が GitHub Actions YAML の lint であることを考えると、CI で走らせるニーズは高い。
+**WHY**: GitHub Actions ワークフロー内で seiton を直接ステップとして使えると利便性が高い。本ツールの主用途が GitHub Actions YAML の lint であるため、CI で走らせるニーズは高い。
 
-**方針: 別リポジトリ (`guitarrapc/seiton-action`) で管理する。**
+**方針: 別リポジトリ (`guitarrapc/setup-seiton`) で管理する。**
 
 同一リポジトリに `action.yml` を置く案もあるが、以下の理由から別リポとする:
 
@@ -219,26 +199,30 @@ curl -fsSL https://raw.githubusercontent.com/guitarrapc/seiton/main/scripts/down
 - **seiton 自身との混乱回避**: seiton は `action.yml` を lint するツールなので、ルートに実際の `action.yml` があると開発時に紛らわしい。
 - **業界標準**: ツール系 Action の一般的なパターン（`reviewdog/action-*` 等）と合致する。
 
-#### 8-1. seiton-action リポジトリの作成
+#### 8-1. setup-seiton リポジトリ
 
-- `guitarrapc/seiton-action` リポジトリを作成。
-- `action.yml` を配置。Composite action として実装:
-  - `scripts/download.sh` を利用して該当 OS の seiton バイナリを取得・検証。
-  - `seiton` コマンドを実行。
+- [`guitarrapc/setup-seiton`](https://github.com/guitarrapc/setup-seiton) リポジトリを作成・公開済み。
+- Node.js action として実装:
+  - GitHub Releases から該当 OS/アーキテクチャの seiton バイナリを取得。
+  - インストール先を `PATH` に追加。
 - 入力パラメータ:
-  - `version`: インストールするバージョン（デフォルト `latest`）。
-  - `args`: seiton に渡す追加引数。
+  - `seiton-version`: インストールするバージョン（デフォルト `latest`）。
+  - `github-token`: Releases API 用トークン（デフォルト `${{ github.token }}`）。
+- 出力:
+  - `seiton-version`: インストールされたバージョン。
+  - `seiton-path`: バイナリを含む `PATH` 追加ディレクトリ。
 - タグ運用: リリース時に `v1.0.0` タグを打ち、`v1` floating tag を追従させる。
 
 #### 8-2. リリース連動
 
-- seiton 本体のリリース時に seiton-action 側のデフォルトバージョンを更新する（手動 or workflow_dispatch）。
+- seiton 本体のリリース時に setup-seiton 側のデフォルトバージョン（`latest` 解決先）が自動的に追従する（Action 側で latest を解決）。
 
 #### 8-3. ドキュメント
 
+- `docs/installation.md` に GitHub Actions セクションを追加。
 - `docs/usage.md` に GitHub Actions での利用例を追記。
 
-**完了条件**: ワークフロー内で `uses: guitarrapc/seiton-action@v1` として利用できる。
+**完了条件**: ワークフロー内で `uses: guitarrapc/setup-seiton@v1` として利用できる。
 
 ---
 
@@ -285,7 +269,7 @@ curl -fsSL https://raw.githubusercontent.com/guitarrapc/seiton/main/scripts/down
 ## フェーズ間の依存関係
 
 ```
-フェーズ 0 (download.sh) ← 独立（完了）
+フェーズ 0 (download.sh) ← 廃止（setup-seiton に置き換え）
 フェーズ 1 (docs / アセット名)
   ├── フェーズ 2 (Homebrew) ← 独立
   ├── フェーズ 3 (Scoop)    ← 独立（完了）
@@ -293,7 +277,7 @@ curl -fsSL https://raw.githubusercontent.com/guitarrapc/seiton/main/scripts/down
   ├── フェーズ 5 (mise)     ← 見送り
   ├── フェーズ 6 (aqua)     ← 見送り
   ├── フェーズ 7 (Winget)   ← 見送り
-  ├── フェーズ 8 (GitHub Action) ← 独立（別リポ seiton-action）
+  ├── フェーズ 8 (GitHub Action) ← 完了（別リポ setup-seiton）
   └── フェーズ 9 (dotnet tool) ← 独立（NuGet、審査不要）
 ```
 
@@ -306,4 +290,4 @@ curl -fsSL https://raw.githubusercontent.com/guitarrapc/seiton/main/scripts/down
 | Homebrew Formula のアーキテクチャ分岐の複雑さ | macOS x64/arm64、Linux x64/arm64 の 4 パターン | `Hardware::CPU` ガードで分岐する標準パターンを採用 |
 | Docker マルチアーキ manifest のビルド時間 | CI 時間増加 | publish ジョブのバイナリを流用し、Docker ビルド自体は COPY のみで高速 |
 | リリースアセット名変更の可能性 | 全チャネルの URL が壊れる | アセット名を変更する場合はすべてのチャネル（Formula, bucket, docs, 利用例 YAML）を同時更新する |
-| mise / aqua / Winget 登録の前提条件 | 利用実績がないと審査・登録が通らない | 十分な実績を得た段階で再検討。それまでは download.sh / Homebrew / Scoop / Docker でカバー |
+| mise / aqua / Winget 登録の前提条件 | 利用実績がないと審査・登録が通らない | 十分な実績を得た段階で再検討。それまでは setup-seiton / Homebrew / Scoop / Docker でカバー |

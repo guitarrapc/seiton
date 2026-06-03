@@ -564,30 +564,80 @@ docker run --rm -v "$PWD:/repo" ghcr.io/guitarrapc/seiton:v0.9.19 --fix
 
 ## GitHub Actions
 
-For GitHub Actions, the Docker image is the simplest way to get started. It avoids a separate download step, does not depend on `bash`, and keeps the job setup minimal. If you prefer a shell-based setup without Docker, use the download script from [Installation](installation.md#download-script).
-
-### Simplest setup: native binary or Docker (job summary + GHA default format)
-
 On GitHub Actions, `seiton` defaults to `--format github-actions`: rich diagnostics on stdout and a Markdown summary on the run page (`GITHUB_STEP_SUMMARY`). No extra flags are required.
 
+The simplest native setup is [`guitarrapc/setup-seiton`](https://github.com/guitarrapc/setup-seiton). It installs the release binary and adds it to `PATH`. Alternatively, use the Docker image when you want a containerized run without a separate install step.
+
+### Simplest setup: setup-seiton (job summary + GHA default format)
+
 ```yaml
-- name: Run seiton
-  run: ${{ steps.get-seiton.outputs.executable }}
-  shell: bash
+- uses: actions/checkout@v6
+- uses: guitarrapc/setup-seiton@v1
+- run: seiton
 ```
 
-Docker on a GitHub-hosted runner also picks up `GITHUB_ACTIONS` when the job sets it (default for `runs-on: ubuntu-latest`):
+Pin a specific version:
+
+```yaml
+- uses: guitarrapc/setup-seiton@v1
+  with:
+    seiton-version: 0.9.19
+```
+
+### Docker
+
+Docker on a hosted runner also picks up `GITHUB_ACTIONS` when the job sets it (default for `runs-on: ubuntu-latest`). Pass `-e GITHUB_STEP_SUMMARY` to write the job summary.
 
 ```yaml
 - name: Run seiton in Docker
-  run: docker run --rm -v "$PWD:/repo:ro" -e GITHUB_ACTIONS -e GITHUB_STEP_SUMMARY ghcr.io/guitarrapc/seiton:latest
+  run: docker run --rm -v "$PWD:/repo:ro" -e GITHUB_ACTIONS -e GITHUB_STEP_SUMMARY ghcr.io/guitarrapc/seiton:latest --format github-actions
 ```
 
-Pass `-e GITHUB_STEP_SUMMARY` so the container can write the job summary (the host path is forwarded via the env var GitHub sets on the runner).
+
+### Code Scanning: setup-seiton with SARIF
+
+```yaml
+name: Lint GitHub Actions
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions: {}
+
+jobs:
+  seiton:
+    permissions:
+      security-events: write
+      contents: read
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+
+      - uses: guitarrapc/setup-seiton@v1
+        with:
+          seiton-version: 0.9.19
+
+      - name: Run seiton
+        run: seiton --format sarif > seiton.sarif
+
+      - name: Upload SARIF
+        uses: github/codeql-action/upload-sarif@ce28f5bb42d3534e5d0f3a320ca0b28ee32a72d0 # v3
+        if: always()
+        with:
+          sarif_file: seiton.sarif
+```
+
+For in-place `--fix`, run the native binary from `setup-seiton` or use a writable Docker mount (omit `:ro`).
 
 ### Code Scanning: Docker with SARIF
 
-Lint-only (read-only mount). For in-place `--fix`, use the download script or omit `:ro`.
+Use this when you want the least amount of setup and Docker is available. Lint-only (read-only mount).
 
 ```yaml
 name: Lint GitHub Actions
@@ -621,53 +671,6 @@ jobs:
         with:
           sarif_file: seiton.sarif
 ```
-
-Use this when you want the least amount of setup. Prefer the download script instead if your environment does not allow Docker or if you want to run the native binary directly in shell steps.
-
-### Shell-based setup: download script
-
-The download script is a good fit when you do not want to depend on Docker. On GitHub Actions it writes the absolute downloaded binary path to the `executable` step output, so later steps can invoke it directly. Ensure `shell: bash` is set for steps running the script, since Windows runners default to `pwsh`.
-
-```yaml
-name: Lint GitHub Actions
-
-on:
-  push:
-    branches: [main]
-  pull_request:
-    branches: [main]
-
-permissions: {}
-
-jobs:
-  seiton:
-    permissions:
-      security-events: write
-      contents: read
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    steps:
-      - uses: actions/checkout@v6
-        with:
-          persist-credentials: false
-
-      - name: Download seiton
-        id: get-seiton
-        run: curl -fsSL https://raw.githubusercontent.com/guitarrapc/seiton/main/scripts/download.sh | bash
-        shell: bash
-
-      - name: Run seiton
-        run: ${{ steps.get-seiton.outputs.executable }} --format sarif > seiton.sarif
-        shell: bash
-
-      - name: Upload SARIF
-        uses: github/codeql-action/upload-sarif@ce28f5bb42d3534e5d0f3a320ca0b28ee32a72d0 # v3
-        if: always()
-        with:
-          sarif_file: seiton.sarif
-```
-
-- If you need a specific version or download directory, pass `--version` and `--dir` to the script as described in [Installation](installation.md#download-script).
 
 ---
 
