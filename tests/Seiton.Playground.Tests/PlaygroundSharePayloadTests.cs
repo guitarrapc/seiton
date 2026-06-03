@@ -100,4 +100,26 @@ public sealed class PlaygroundSharePayloadTests
         var hash = PlaygroundSharePayload.Encode(new PlaygroundSharePayload.State("on: push\n", "", SamplePath));
         await Assert.That(PlaygroundSharePayload.IsHashWithinLimits(hash)).IsTrue();
     }
+
+    [Test]
+    public async Task IsWithinShareLimits_HashOverLimit_ReturnsFalse()
+    {
+        var over = new string('a', PlaygroundSharePayload.MaxHashLength + 1);
+        await Assert.That(PlaygroundSharePayload.IsHashWithinLimits(over)).IsFalse();
+    }
+
+    [Test]
+    public async Task IsWithinShareLimits_UrlOverLimit_ReturnsFalse()
+    {
+        var over = $"https://example.invalid/#{new string('a', PlaygroundSharePayload.MaxUrlLength)}";
+        await Assert.That(PlaygroundSharePayload.IsUrlWithinLimits(over)).IsFalse();
+    }
+
+    [Test]
+    public async Task TryDecode_V2BlankPath_FallsBackToDefaultPath()
+    {
+        var hash = PlaygroundSharePayload.Encode(new PlaygroundSharePayload.State(SampleYaml, SampleConfig, "  "));
+        await Assert.That(PlaygroundSharePayload.TryDecode(hash, out var decoded, out _)).IsTrue();
+        await Assert.That(decoded!.FilePath).IsEqualTo(PlaygroundSharePayload.DefaultFilePath);
+    }
 }

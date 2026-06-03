@@ -785,11 +785,10 @@ function buildShareUrlFromHash(hashSegment) {
 }
 
 /**
- * @param {string} fullUrl
  * @param {boolean} copied
  * @param {'full'|'yaml-only'} [mode]
  */
-function finishShareCopy(fullUrl, copied, mode = 'full') {
+function finishShareCopy(copied, mode = 'full') {
   if (mode === 'yaml-only') {
     permalinkBtn.title = permalinkYamlOnlyCopied;
     permalinkBtn.setAttribute('aria-label', permalinkYamlOnlyCopied);
@@ -862,7 +861,7 @@ permalinkBtn.addEventListener('click', async () => {
     history.replaceState(null, '', url);
     fullUrl = location.href;
     const copied = await copyTextToClipboard(fullUrl);
-    finishShareCopy(fullUrl, copied, shareMode);
+    finishShareCopy(copied, shareMode);
   } catch (e) {
     showToast(e?.message ?? String(e), 'error');
   }
@@ -1288,8 +1287,7 @@ function applyShareConfigAfterRuntimeReady() {
     configToggleBtn.setAttribute('aria-expanded', 'true');
     configEditorWrap.hidden = false;
   }
-  configEditor.setValue(cfg);
-  configEditor.refresh();
+  // Config editor is pre-seeded from URL at construction time; only apply to WASM here.
   const diags = setConfig(cfg);
   renderConfigDiagnostics(diags);
 }

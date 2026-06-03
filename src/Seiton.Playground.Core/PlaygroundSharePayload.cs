@@ -10,7 +10,9 @@ namespace Seiton.Playground;
 /// </summary>
 public static class PlaygroundSharePayload
 {
+    /// <summary>Current share payload version.</summary>
     public const int PayloadVersion = 2;
+    /// <summary>Default virtual file path for workflow documents.</summary>
     public const string DefaultFilePath = ".github/workflows/test.yml";
 
     /// <summary>Max hash segment length (# excluded) before P2 fallback.</summary>
@@ -19,8 +21,13 @@ public static class PlaygroundSharePayload
     /// <summary>Max full URL length (path + query + hash) before P2 fallback.</summary>
     public const int MaxUrlLength = 8_192;
 
+    /// <summary>Share payload state restored from URL hash.</summary>
+    /// <param name="Yaml">Workflow YAML document.</param>
+    /// <param name="Config">Optional playground config YAML.</param>
+    /// <param name="FilePath">Selected virtual file path.</param>
     public sealed record State(string Yaml, string Config, string FilePath);
 
+    /// <summary>Encodes v2 share payload (JSON + zlib + base64url).</summary>
     public static string Encode(State state)
     {
         ArgumentNullException.ThrowIfNull(state);
@@ -50,6 +57,7 @@ public static class PlaygroundSharePayload
         return CompressToHashSegment(stream.ToArray());
     }
 
+    /// <summary>Encodes YAML-only v2 share payload (config omitted).</summary>
     public static string EncodeYamlOnly(string yaml, string? filePath = null)
     {
         var path = string.IsNullOrWhiteSpace(filePath) ? DefaultFilePath : filePath.Trim();
@@ -63,6 +71,10 @@ public static class PlaygroundSharePayload
         return CompressToLegacyHashSegment(bytes);
     }
 
+    /// <summary>
+    /// Decodes a share hash segment (v2 preferred, v1 legacy fallback).
+    /// Returns <see langword="false"/> only when the hash cannot be decoded/decompressed.
+    /// </summary>
     public static bool TryDecode(string hashSegment, out State? state, out string? error)
     {
         state = null;
@@ -105,12 +117,15 @@ public static class PlaygroundSharePayload
         return true;
     }
 
+    /// <summary>Returns true when the hash segment is below the P2 fallback threshold.</summary>
     public static bool IsHashWithinLimits(string hashSegment)
         => hashSegment.Length <= MaxHashLength;
 
+    /// <summary>Returns true when the full URL is below the P2 fallback threshold.</summary>
     public static bool IsUrlWithinLimits(string url)
         => url.Length <= MaxUrlLength;
 
+    /// <summary>Builds clipboard fallback text containing workflow/config payloads.</summary>
     public static string FormatClipboardBundle(string yaml, string config, string filePath)
     {
         var path = string.IsNullOrWhiteSpace(filePath) ? DefaultFilePath : filePath.Trim();
@@ -213,9 +228,9 @@ public static class PlaygroundSharePayload
         return output.ToArray();
     }
 
-    private static byte[] Inflate(ReadOnlySpan<byte> compressed)
+    private static byte[] Inflate(byte[] compressed)
     {
-        using var input = new MemoryStream(compressed.ToArray());
+        using var input = new MemoryStream(compressed, writable: false);
         using var inflate = new ZLibStream(input, CompressionMode.Decompress);
         using var output = new MemoryStream();
         inflate.CopyTo(output);

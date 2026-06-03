@@ -33,7 +33,7 @@ public sealed class PlaygroundShareRestoreUiTests
         var hash = PlaygroundSharePayload.Encode(
             new PlaygroundSharePayload.State(ShareYaml, ShareConfig, ".github/workflows/test.yml"));
 
-        await using var browser = await GetBrowserAsync();
+        var browser = await GetBrowserAsync();
         await using var context = await browser.NewContextAsync();
         var page = await context.NewPageAsync();
 
@@ -69,7 +69,7 @@ public sealed class PlaygroundShareRestoreUiTests
         var host = await PlaygroundUiTestHost.GetOrCreateAsync();
         var hash = PlaygroundSharePayload.EncodeLegacyYamlOnly(ShareYaml);
 
-        await using var browser = await GetBrowserAsync();
+        var browser = await GetBrowserAsync();
         await using var context = await browser.NewContextAsync();
         var page = await context.NewPageAsync();
 
