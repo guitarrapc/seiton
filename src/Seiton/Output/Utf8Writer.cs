@@ -80,7 +80,9 @@ internal ref struct Utf8Writer
     public void Write(char value)
     {
         Span<byte> scratch = stackalloc byte[4];
-        var written = Encoding.UTF8.GetBytes([value], scratch);
+        Span<char> chars = stackalloc char[1];
+        chars[0] = value;
+        var written = Encoding.UTF8.GetBytes(chars, scratch);
         WriteLiteralCore(_destination, scratch[..written]);
     }
 
