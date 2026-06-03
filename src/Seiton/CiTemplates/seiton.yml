@@ -28,7 +28,7 @@ jobs:
           persist-credentials: false
 
       # Default on GitHub Actions: --format github-actions (rich stdout + job summary).
-      # Pin the image tag (e.g. :v0.9.19) instead of :latest for reproducible CI.
+      # Pin the image tag (e.g. :v0.9.20) instead of :latest for reproducible CI.
       - name: Run seiton
         run: |
           docker run --rm \
