@@ -1,7 +1,10 @@
 using BenchmarkDotNet.Columns;
 using BenchmarkDotNet.Configs;
 using BenchmarkDotNet.Diagnosers;
+using BenchmarkDotNet.Jobs;
+using BenchmarkDotNet.Parameters;
 using BenchmarkDotNet.Reports;
+using BenchmarkDotNet.Toolchains.InProcess.Emit;
 using Seiton.Core.Linting;
 using System.Text;
 
@@ -11,6 +14,7 @@ internal sealed class PeakMemoryBenchmarkConfig : ManualConfig
 {
     public PeakMemoryBenchmarkConfig()
     {
+        AddJob(Job.ShortRun.WithToolchain(InProcessEmitToolchain.Instance));
         AddColumn(new PeakHeapColumn());
         AddDiagnoser(MemoryDiagnoser.Default);
         HideColumns("Mean", "Error", "StdDev", "Ratio", "RatioSD", "Rank", "Gen0", "Gen1", "Gen2", "Allocated", "Alloc Ratio");
@@ -43,14 +47,53 @@ internal sealed class PeakHeapColumn : IColumn
 
     private static string Format(Summary summary, BenchmarkCase benchmarkCase)
     {
-        var report = summary.Reports.FirstOrDefault(r => r.BenchmarkCase.Equals(benchmarkCase));
-        if (report?.ResultStatistics is not { } stats)
+        if (!PeakHeapRecorder.TryGet(benchmarkCase, out var peakBytes))
         {
             return "NA";
         }
 
-        return stats.Mean.ToString("N0");
+        return peakBytes.ToString("N0");
     }
+}
+
+internal static class PeakHeapRecorder
+{
+    private static readonly object Gate = new();
+    private static readonly Dictionary<string, long> Values = [];
+
+    public static void Record(string methodName, object? countValue, long peakBytes)
+    {
+        var key = BuildKey(methodName, countValue);
+        lock (Gate)
+        {
+            if (Values.TryGetValue(key, out var current))
+            {
+                if (peakBytes > current)
+                {
+                    Values[key] = peakBytes;
+                }
+            }
+            else
+            {
+                Values[key] = peakBytes;
+            }
+        }
+    }
+
+    public static bool TryGet(BenchmarkCase benchmarkCase, out long peakBytes)
+    {
+        var countParam = benchmarkCase.Parameters?.Items
+            .FirstOrDefault(static p => p.Name == nameof(MultiFileLintPeakMemoryBenchmark.Count));
+        var countValue = countParam?.Value;
+        var key = BuildKey(benchmarkCase.Descriptor.WorkloadMethod.Name, countValue);
+        lock (Gate)
+        {
+            return Values.TryGetValue(key, out peakBytes);
+        }
+    }
+
+    private static string BuildKey(string methodName, object? countValue) =>
+        $"{methodName}:{countValue?.ToString() ?? "NA"}";
 }
 
 /// <summary>
@@ -107,7 +150,9 @@ public class MultiFileLintPeakMemoryBenchmark
     {
         MultiFileLintHarness.CheckSequential(_yamlFiles, _filePaths, _sampler);
         _sampler.Record();
-        return _sampler.PeakDeltaBytes;
+        var peakBytes = _sampler.PeakDeltaBytes;
+        PeakHeapRecorder.Record(nameof(SequentialPeakHeapDeltaBytes), Count, peakBytes);
+        return peakBytes;
     }
 
     /// <summary>Peak live heap delta for parallel lint (bytes above pre-run baseline).</summary>
@@ -116,6 +161,8 @@ public class MultiFileLintPeakMemoryBenchmark
     {
         MultiFileLintHarness.CheckParallel(_yamlFiles, _filePaths, _sampler);
         _sampler.Record();
-        return _sampler.PeakDeltaBytes;
+        var peakBytes = _sampler.PeakDeltaBytes;
+        PeakHeapRecorder.Record(nameof(ParallelPeakHeapDeltaBytes), Count, peakBytes);
+        return peakBytes;
     }
 }

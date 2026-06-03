@@ -75,12 +75,12 @@
 
 | Method | Count | PeakHeap (bytes) |
 |---|---|---:|
-| Parallel | F1 | 6,717,133 (~6.4 MB) |
-| Sequential | F1 | 6,532,833 (~6.2 MB) |
-| Parallel | F10 | 9,194,400 (~8.8 MB) |
-| Sequential | F10 | 65,121,967 (~62 MB) |
-| Parallel | F50 | 25,981,067 (~24.8 MB) |
-| Sequential | F50 | 207,340,767 (~198 MB) |
+| Parallel | F1 | 370,384 (~0.35 MB) |
+| Sequential | F1 | 596,648 (~0.57 MB) |
+| Parallel | F10 | 2,513,080 (~2.4 MB) |
+| Sequential | F10 | 1,118,176 (~1.1 MB) |
+| Parallel | F50 | 7,434,392 (~7.1 MB) |
+| Sequential | F50 | 3,838,048 (~3.7 MB) |
 
 ### 性能変化の解釈
 
@@ -97,18 +97,18 @@
 
 | 観点 | 結果 | 理由 |
 |---|---|---|
-| Parallel F10 → F50 | PeakHeap 9.2 MB → 26.0 MB（**2.8x**） | ファイル数 5 倍に対し sub-linear。ThreadLocal engine + arena 再利用により同時実行数で頭打ち |
-| Parallel F50 vs Allocated F50 | PeakHeap ~26 MB vs Allocated ~5.3 MB | 指標の意味が異なる（常駐ピーク vs 累積確保） |
-| Sequential F50 PeakHeap ~198 MB | F1 の ~30x | 単一 `LintEngine` が high-water mark を保持。累積 allocation と同様にファイル数に依存 |
+| Parallel F10 → F50 | PeakHeap 2.4 MB → 7.1 MB（**3.0x**） | ファイル数 5 倍に対し sub-linear。ThreadLocal engine 分の同時保持分が主に効く |
+| Parallel F50 vs Allocated F50 | PeakHeap ~7.1 MB vs Allocated ~5.3 MB | 指標の意味が異なる（常駐ピーク vs 累積確保） |
+| Sequential F50 PeakHeap ~3.7 MB | Parallel F50 より小さい | 単一 engine の逐次処理では同時 live heap が増えにくく、並列時の同時実行分の方がピークに効く |
 
-**結論:** ユーザーの「並列時の常駐上限はコア数付近」という理解は、**Parallel + PeakHeap 指標**で確認できる。`Allocated` だけを見ると誤解が生じる。
+**結論:** `Allocated`（累積）と `PeakHeap`（同時 live heap）は別指標であり、混同すると誤解が生じる。今回の実測では、PeakHeap は並列実行時の同時 live heap で主に増加する。
 
 ### レビュー指摘と対応
 
 | 指摘 | 対応 |
 |---|---|
 | `GC.GetGCMemoryInfo().HeapSizeBytes` ではピークを捕捉できない | `GC.GetTotalMemory` に変更 |
-| BDN が `long` 戻り値を `Mean ms` と誤表示 | `PeakHeapColumn` + `PeakMemoryBenchmarkConfig` で bytes 列を追加 |
+| `PeakHeapColumn` が `ResultStatistics.Mean`（時間）を bytes として誤表示していた | `PeakHeapRecorder` で benchmark 戻り値の peak bytes を列へ表示するよう修正 |
 | `IterationSetup` 内 GC を計測対象に含めていた | GC compact を `IterationSetup` に分離し、lint 本体のみ計測 |
 | 計測コードを Seiton.Core に置いていた | `RetainedMemoryProbe` / `MultiFileLintHarness` を Seiton.Benchmark に移動 |
 

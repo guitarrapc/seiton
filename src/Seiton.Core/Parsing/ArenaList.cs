@@ -4,29 +4,16 @@ using System.Runtime.CompilerServices;
 namespace Seiton.Core.Parsing;
 
 /// <summary>
-/// A read-only list backed by a pooled array registered with <see cref="AstArena"/>.
-/// Avoids per-parse <c>List&lt;T&gt;.ToArray()</c> allocations while keeping
-/// <see cref="IReadOnlyList{T}"/> compatibility for AST consumers.
+/// A read-only list backed by an array (typically pooled and registered with <see cref="AstArena"/>).
+/// Avoids per-parse <c>ToArray()</c> copies while keeping <see cref="IReadOnlyList{T}"/> compatibility.
 /// </summary>
-public readonly struct ArenaList<T> : IReadOnlyList<T>
+internal readonly struct ArenaList<T> : IReadOnlyList<T>
 {
     private readonly T[]? _array;
     private readonly int _count;
 
-    public static ArenaList<T> Create(ReadOnlySpan<T> items)
-    {
-        if (items.Length == 0)
-        {
-            return default;
-        }
-
-        var array = new T[items.Length];
-        items.CopyTo(array);
-        return new ArenaList<T>(array, items.Length);
-    }
-
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public ArenaList(T[] array, int count)
+    internal ArenaList(T[] array, int count)
     {
         _array = array;
         _count = count;
