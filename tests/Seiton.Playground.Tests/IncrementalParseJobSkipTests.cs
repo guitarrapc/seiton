@@ -85,7 +85,7 @@ public sealed class IncrementalParseJobSkipTests
         // deploy job is reused — verify its needs and step resolve correctly
         var deployJob = result2.Workflow!.Jobs.Entries[1].Value;
         await Assert.That(deployJob.Needs).IsNotNull();
-        await Assert.That(deployJob.Needs!.Length).IsEqualTo(1);
+        await Assert.That(deployJob.Needs!.Count).IsEqualTo(1);
 
         // The deploy step should still resolve
         var step = deployJob.Steps![0];

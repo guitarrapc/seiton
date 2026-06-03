@@ -205,8 +205,8 @@ public static partial class WorkflowParser
 
         var mappingStart = reader.CurrentStart;
         var range = BuildScalarLocation(mappingStart, 1);
-        MatrixCombinations[]? include = null;
-        MatrixCombinations[]? exclude = null;
+        IReadOnlyList<MatrixCombinations>? include = null;
+        IReadOnlyList<MatrixCombinations>? exclude = null;
         var rowBuffer = new PooledBuffer<SliceMap<MatrixRow>.Entry>(8);
         try
         {
@@ -274,7 +274,7 @@ public static partial class WorkflowParser
                     }
                     var incExcSeqMark = reader.CurrentStart;
                     var combos = ParseMatrixCombinations(ref reader, arena, ref diagnostics, source, jobId, incExcKeyText);
-                    if (combos.Length > 0 && combos[0].Entries is { Count: 0 } && combos[0].Expression == default)
+                    if (combos.Count > 0 && combos[0].Entries is { Count: 0 } && combos[0].Expression == default)
                     {
                         AddError(ref diagnostics, $"\"{incExcKeyText}\" section should not be empty", incExcSeqMark);
                     }
@@ -357,7 +357,7 @@ public static partial class WorkflowParser
         finally { rowBuffer.Dispose(); }
     }
 
-    private static MatrixCombinations[] ParseMatrixCombinations<TReader>(ref TReader reader, AstArena arena, ref PooledBuffer<Diagnostic> diagnostics, ReadOnlySpan<byte> source, Utf8Slice jobId, string section)
+    private static ArenaList<MatrixCombinations> ParseMatrixCombinations<TReader>(ref TReader reader, AstArena arena, ref PooledBuffer<Diagnostic> diagnostics, ReadOnlySpan<byte> source, Utf8Slice jobId, string section)
         where TReader : IYamlStreamReader, allows ref struct
     {
         if (reader.CurrentKind == YamlEventKind.Scalar)
@@ -369,21 +369,20 @@ public static partial class WorkflowParser
                 out var mcMark,
                 parseWholeValueIfNoEmbedded: false);
             if (mcErr) AddError(ref diagnostics, $"jobs.'{DecodeUtf8(source, jobId)}'.strategy.matrix.{section} must be array or string", mcMark);
-            return
-            [
+            return ArenaListOfOne(
                 new MatrixCombinations
                 {
                     Expression = expr,
                     Entries = null,
-                }
-            ];
+                },
+                arena);
         }
 
         if (reader.CurrentKind != YamlEventKind.SequenceStart)
         {
             AddError(ref diagnostics, $"jobs.'{DecodeUtf8(source, jobId)}'.strategy.matrix.{section} must be array or string", reader.CurrentStart);
             reader.SkipCurrentNode();
-            return [];
+            return default;
         }
 
         var entries = new PooledBuffer<SliceMap<RawYamlValue>>(4);
@@ -407,13 +406,12 @@ public static partial class WorkflowParser
                 reader.Read();
             }
 
-            return
-            [
+            return ArenaListOfOne(
                 new MatrixCombinations
                 {
-                    Entries = entries.ToArray(),
-                }
-            ];
+                    Entries = DetachArenaList(ref entries, arena),
+                },
+                arena);
         }
         finally { entries.Dispose(); }
     }
@@ -442,7 +440,7 @@ public static partial class WorkflowParser
                 reader.Read();
             }
 
-            return values.ToArray();
+            return DetachArenaList(ref values, arena);
         }
         finally { values.Dispose(); }
     }

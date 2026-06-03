@@ -17,7 +17,7 @@ public static partial class WorkflowParser
             return new WorkflowCallEvent { EventName = nameNode, Inputs = null, Secrets = null, Outputs = null, Range = arena.GetStringRange(nameNode) };
         }
 
-        WorkflowCallEventInput[]? inputs = null;
+        IReadOnlyList<WorkflowCallEventInput>? inputs = null;
         SliceMap<WorkflowCallEventSecret>? secrets = null;
         SliceMap<WorkflowCallEventOutput>? outputs = null;
         ulong seen = 0;
@@ -114,7 +114,7 @@ public static partial class WorkflowParser
         };
     }
 
-    private static WorkflowCallEventInput[]? ParseWorkflowCallInputs<TReader>(ref TReader reader, AstArena arena, ref PooledBuffer<Diagnostic> diagnostics, ReadOnlySpan<byte> source)
+    private static IReadOnlyList<WorkflowCallEventInput>? ParseWorkflowCallInputs<TReader>(ref TReader reader, AstArena arena, ref PooledBuffer<Diagnostic> diagnostics, ReadOnlySpan<byte> source)
         where TReader : IYamlStreamReader, allows ref struct
     {
         if (reader.CurrentKind != YamlEventKind.MappingStart)
@@ -180,7 +180,7 @@ public static partial class WorkflowParser
                 reader.Read();
             }
 
-            return list.ToArray();
+            return DetachArenaList(ref list, arena);
         }
         finally { list.Dispose(); }
     }

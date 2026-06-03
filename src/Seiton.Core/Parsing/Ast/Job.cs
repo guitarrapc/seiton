@@ -19,7 +19,7 @@ public sealed class Job
 
     public StringNodeId Name { get; set; }
 
-    public StringNodeId[]? Needs { get; set; }
+    public IReadOnlyList<StringNodeId>? Needs { get; set; }
 
     public Runner? RunsOn { get; set; }
 

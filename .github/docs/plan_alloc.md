@@ -121,13 +121,73 @@
 
 ---
 
-## 今後の対応（フェーズ B 以降）
+## フェーズ B 実装: per-file allocation 削減（完了）
 
-### B. per-file allocation を減らす（構造改善）
+### 実装内容
 
-1. `WorkflowParser.*` の `List<T>.ToArray()` を `PooledBuffer<T>` + arena 登録方式に置換
-2. AST ノードの `T[]` を `(T[] buffer, int length)` 型へ段階的再設計
-3. `SliceMap` 同様、配列バッファのライフサイクルを arena に統合
+| コンポーネント | 役割 |
+|---|---|
+| `ArenaList<T>` | `ArrayPool` 配列 + count の `IReadOnlyList<T>` ビュー（`DiagnosticList` と同型パターン） |
+| `DetachArenaList` / `ArenaListOfOne` | `PooledBuffer<T>` を arena 登録済み配列へ移譲（`ToArray()` コピー回避） |
+| パーサ hot path | `ParseSteps`, `ParseOnEvents`, `ParseStringOrStringSequence`, matrix include/exclude, workflow_call inputs, action runs args など |
+| AST 公開型 | `StringNodeId[]` 等を `IReadOnlyList<StringNodeId>` に統一（仕様 `Seiton_Parser_csharp_spec.md` §3 と整合） |
+
+**意図:** ファイルごとに `PooledBuffer` → `ToArray()` で確定配列を二重確保していた経路を、`DetachArray()` + `arena.RegisterSliceMapBuffer` の単一バッファに統合する。
+
+### API 設計（ユーザーファースト）
+
+- AST のコレクションは **`IReadOnlyList<T>` + `Count`** — 仕様書・既存テスト（`ParserTests` の `Options.Count` 等）と同じ。
+- `ArenaList<T>` はパーサ内部の実装詳細。呼び出し側は `IReadOnlyList` 経由でインデクサ / `Count` を使う（`Length` は配列専用なので廃止）。
+- 挙動変更なし（診断・AST 形状は同一）。差分はメモリ確保経路のみ。
+
+### ベンチマーク結果（実装後、Windows / Ryzen 9 7950X3D / .NET 10.0.8 / ShortRun）
+
+比較対象: フェーズ A 直後（同一マシン・同一 `ShortRun`）。
+
+#### MultiFileLintBenchmark（累積 allocation + スループット）
+
+| Method | Count | Mean (A) | Mean (B) | Allocated (A) | Allocated (B) |
+|---|---|---:|---:|---:|---:|
+| Parallel | F1 | 1.475 ms | 1.470 ms | 127 KB | 127 KB |
+| Sequential | F1 | 1.525 ms | 1.425 ms | 125 KB | 125 KB |
+| Parallel | F10 | 2.808 ms | 2.814 ms | 1255 KB | 1251 KB |
+| Sequential | F10 | 14.057 ms | 14.598 ms | 775 KB | 771 KB |
+| Parallel | F50 | 10.424 ms | 10.434 ms | 5312 KB | 5302 KB |
+| Sequential | F50 | 69.041 ms | 74.082 ms | 3662 KB | 3643 KB |
+
+#### CoreParsingBenchmark（単一ワークフロー parse + lint）
+
+| Size | Parse Mean | Parse Allocated |
+|---|---:|---:|
+| Small | 49.0 us | 3.84 KB |
+| Medium | 1.15 ms | 35.21 KB |
+| Large | 18.4 ms | 178.16 KB |
+
+（フェーズ A 時点の CoreParsing 数値は ShortRun 未記録のため、B を新 baseline とする。）
+
+### 性能変化の解釈
+
+| 指標 | 変化 | 理由 |
+|---|---|---|
+| MultiFileLint **Allocated** F50 Parallel | **−0.2%**（5312 → 5302 KB） | `ToArray()` コピー削減は有効だが、累積 allocation の大半は YAML 読取・式解析・lint・`ArrayPool` 初回 Rent 等が占める。ベンチ fixture が matrix/steps 多めでないと係数低下は小さく見える |
+| MultiFileLint **Mean** | ±7% 以内（ShortRun 誤差） | ホットパスは同一。Sequential F50 Mean +7% は CI 誤差域 |
+| CoreParsing **Allocated** | 単ファイルあたり数 KB 規模 | 1 回の parse ではコピー削減 1 回分のみ。BDN は操作あたり累積を報告 |
+
+**結論:** 構造目標（arena ライフサイクルへの統合・二重配列排除）は達成。`MultiFileLintBenchmark` の線形 `Allocated` 係数は **わずかに低下** したが、根本的な「ファイル数に比例」性は、lint/YAML 側の allocation が支配的なため残る。ピーク常駐の確認は引き続きフェーズ A の `MultiFileLintPeakMemoryBenchmark` を使う。
+
+**改善策（Allocated 係数をさらに下げる場合）:** 式パーサ戻り値の `ToArray()`、診断バッファ、VYaml アダプタ等の非 AST 経路を同様に arena / pooled ビュー化（フェーズ C 以降）。
+
+### レビュー指摘と対応
+
+| 指摘 | 対応 |
+|---|---|
+| `ArenaList` の `[CollectionBuilder]` が非ジェリック参照でビルド失敗 | 属性削除（パーサは `DetachArenaList` のみ使用） |
+| `IReadOnlyList` に `.Length` が残存 | パーサ・lint・テストを `.Count` に統一 |
+| 仕様は `IReadOnlyList`、実装が `StringNodeId[]` | AST を仕様どおり `IReadOnlyList<StringNodeId>` に揃えた |
+
+---
+
+## 今後の対応（フェーズ C 以降）
 
 ### C. 並列実行時オーバーヘッドの抑制
 
@@ -137,4 +197,4 @@ CLI 実運用で `ThreadLocal<LintEngine>` 初期化コストが問題になる�
 
 - 現状の `Allocated` 線形増加は「リーク」ではなく、**累積 allocation 指標の性質 + per-file 配列生成設計**で説明できる。
 - **フェーズ A 完了:** 計測を分離し、Parallel peak heap が file count に対して sub-linear であることをベンチ + テストで確認した。
-- 根本的な `Allocated` 係数低減は **フェーズ B**（`ToArray()` 削減）で対応する。
+- **フェーズ B 完了:** パーサ AST 構築の `ToArray()` を `ArenaList` + arena 登録に置換。`MultiFileLintBenchmark` の F50 Parallel 累積 allocation は約 **0.2% 減**（構造改善は達成、係数の大半は非 AST 経路）。

@@ -49,7 +49,7 @@ public static partial class WorkflowParser
                 AddError(ref diagnostics, "\"schedule\" section should not be empty", seqMark);
             }
 
-            return new ScheduledEvent { EventName = nameNode, Schedules = schedules.ToArray(), Range = arena.GetStringRange(nameNode) };
+            return new ScheduledEvent { EventName = nameNode, Schedules = DetachArenaList(ref schedules, arena), Range = arena.GetStringRange(nameNode) };
         }
         finally { schedules.Dispose(); }
     }

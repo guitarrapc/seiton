@@ -73,14 +73,14 @@ public sealed class GlobPatternRule() : RuleBase(RuleId.GlobPattern)
         ValidateValues(reportError, filter.Values, kind);
     }
 
-    private void ValidateValues(Action<string, TextRange> reportError, StringNodeId[]? values, FilterKind kind)
+    private void ValidateValues(Action<string, TextRange> reportError, IReadOnlyList<StringNodeId>? values, FilterKind kind)
     {
         if (values is null)
         {
             return;
         }
 
-        for (var i = 0; i < values.Length; i++)
+        for (var i = 0; i < values.Count; i++)
         {
             var valueNode = values[i];
             var pattern = Arena.GetStringValue(valueNode);

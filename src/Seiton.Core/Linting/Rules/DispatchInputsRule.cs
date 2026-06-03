@@ -29,7 +29,7 @@ public sealed class DispatchInputsRule() : RuleBase(RuleId.DispatchInputs)
 
     private void ValidateInput(WorkflowDispatchEvent dispatch, DispatchInput input)
     {
-        var hasOptions = input.Options is not null && input.Options.Length > 0;
+        var hasOptions = input.Options is not null && input.Options.Count > 0;
 
         if (input.Type == DispatchInputType.Choice)
         {
@@ -87,7 +87,7 @@ public sealed class DispatchInputsRule() : RuleBase(RuleId.DispatchInputs)
             return;
         }
 
-        for (var i = 0; i < input.Options.Length; i++)
+        for (var i = 0; i < input.Options.Count; i++)
         {
             var current = input.Options[i];
             if (IsExpressionOrInterpolation(current))
@@ -125,7 +125,7 @@ public sealed class DispatchInputsRule() : RuleBase(RuleId.DispatchInputs)
         }
 
         var defaultValue = Arena.GetStringValue(input.Default);
-        for (var i = 0; i < input.Options.Length; i++)
+        for (var i = 0; i < input.Options.Count; i++)
         {
             var optionNode = input.Options[i];
             if (IsExpressionOrInterpolation(optionNode))

@@ -23,7 +23,7 @@ public sealed class NeedsGraphRule() : RuleBase(RuleId.NeedsGraph)
             return;
         }
 
-        for (var i = 0; i < job.Needs.Length; i++)
+        for (var i = 0; i < job.Needs.Count; i++)
         {
             var need = job.Needs[i];
             var needSpan = Arena.GetStringValue(need);
@@ -95,7 +95,7 @@ public sealed class NeedsGraphRule() : RuleBase(RuleId.NeedsGraph)
 
                 var needs = currentJob.Needs;
 
-                if (needs is null || ni >= needs.Length)
+                if (needs is null || ni >= needs.Count)
                 {
                     stack.Pop();
                     color[currentKey] = 2;

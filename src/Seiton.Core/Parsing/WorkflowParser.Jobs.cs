@@ -125,7 +125,7 @@ public static partial class WorkflowParser
         where TReader : IYamlStreamReader, allows ref struct
     {
         StringNodeId nameNode = default;
-        StringNodeId[]? needsNode = null;
+        IReadOnlyList<StringNodeId>? needsNode = null;
         Runner? runsOnNode = null;
         Permissions? permissionsNode = null;
         Seiton.Core.Parsing.Ast.Environment? environmentNode = null;
@@ -135,7 +135,7 @@ public static partial class WorkflowParser
         Defaults? defaultsNode = null;
         StringNodeId ifNode = default;
         TextPosition ifKeyMark = default;
-        Step[]? stepsNode = null;
+        IReadOnlyList<Step>? stepsNode = null;
         FloatNodeId timeoutMinutesNode = default;
         Strategy? strategyNode = null;
         BoolNodeId continueOnErrorNode = default;
@@ -234,7 +234,7 @@ public static partial class WorkflowParser
                             var needsSeqMark = reader.CurrentStart;
                             needsNode = ParseStringOrStringSequence(ref reader, arena, ref diagnostics, out var needsErr, out var needsMark);
                             if (needsErr) AddError(ref diagnostics, $"jobs.'{DecodeUtf8(source, jobId)}'.needs must be string or array of strings", needsMark);
-                            else if (needsNode is { Length: 0 }) AddError(ref diagnostics, "\"needs\" section should not be empty", needsSeqMark);
+                            else if (needsNode is { Count: 0 }) AddError(ref diagnostics, "\"needs\" section should not be empty", needsSeqMark);
                         }
 
                         break;
@@ -790,7 +790,7 @@ public static partial class WorkflowParser
 
         if (reader.CurrentKind == YamlEventKind.MappingStart)
         {
-            StringNodeId[]? labels = null;
+            IReadOnlyList<StringNodeId>? labels = null;
             StringNodeId labelsExpr = default;
             StringNodeId group = default;
             ulong seen = 0;
@@ -855,7 +855,7 @@ public static partial class WorkflowParser
                                         labels = ParseStringOrStringSequence(ref reader, arena, ref diagnostics, out var lblErr1, out var lblMark1);
                                         if (lblErr1)
                                         {
-                                            if (labels.Length > 0)
+                                            if (labels.Count > 0)
                                                 AddError(ref diagnostics, RunsOnEmptyLabelMessage, lblMark1);
                                             else
                                                 AddError(ref diagnostics, $"{section}.labels must be string, array, or expression", lblMark1);
@@ -870,7 +870,7 @@ public static partial class WorkflowParser
                                     {
                                         AddError(ref diagnostics, $"{section}.labels must be string, array, or expression", lblMark2);
                                     }
-                                    else if (labels.Length == 0)
+                                    else if (labels.Count == 0)
                                     {
                                         AddError(ref diagnostics, LabelsSectionEmptyMessage, lblSeqMark);
                                     }
@@ -932,7 +932,7 @@ public static partial class WorkflowParser
                 Labels = labels,
                 LabelsExpr = labelsExpr,
                 Group = group,
-                Range = labelsExpr.HasValue ? arena.GetStringRange(labelsExpr) : group.HasValue ? arena.GetStringRange(group) : (labels is { Length: > 0 } ? arena.GetStringRange(labels[0]) : default),
+                Range = labelsExpr.HasValue ? arena.GetStringRange(labelsExpr) : group.HasValue ? arena.GetStringRange(group) : (labels is { Count: > 0 } ? arena.GetStringRange(labels[0]) : default),
             };
         }
 
@@ -961,14 +961,14 @@ public static partial class WorkflowParser
             else
                 AddError(ref diagnostics, $"{section} must be string, sequence, or mapping", lblFbMark);
         }
-        else if (labelsFallback.Length == 0)
+        else if (labelsFallback.Count == 0)
         {
             AddError(ref diagnostics, RunsOnSectionEmptyMessage, fbSeqMark);
         }
         return new Runner
         {
             Labels = labelsFallback,
-            Range = labelsFallback.Length > 0 ? arena.GetStringRange(labelsFallback[0]) : default,
+            Range = labelsFallback.Count > 0 ? arena.GetStringRange(labelsFallback[0]) : default,
         };
     }
 

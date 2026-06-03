@@ -130,7 +130,7 @@ public sealed class ShellNameRule() : RuleBase(RuleId.ShellName)
         }
 
         OsFamily resolved = OsFamily.Unknown;
-        for (var i = 0; i < runsOn.Labels.Length; i++)
+        for (var i = 0; i < runsOn.Labels.Count; i++)
         {
             var label = runsOn.Labels[i];
             if (Arena.GetStringExpression(label).HasValue)

@@ -2136,8 +2136,8 @@ public sealed class ParserTests
             await Assert.That(result.Workflow!.On.Count).IsEqualTo(1);
             await Assert.That(result.Workflow.On[0]).IsTypeOf<ImageVersionEvent>();
             var evt = (ImageVersionEvent)result.Workflow.On[0];
-            await Assert.That(evt.Names?.Length ?? 0).IsEqualTo(c.ExpectedNames);
-            await Assert.That(evt.Versions?.Length ?? 0).IsEqualTo(c.ExpectedVersions);
+            await Assert.That(evt.Names?.Count ?? 0).IsEqualTo(c.ExpectedNames);
+            await Assert.That(evt.Versions?.Count ?? 0).IsEqualTo(c.ExpectedVersions);
             await Assert.That(result.Diagnostics).IsEmpty();
         }
     }
@@ -2648,7 +2648,7 @@ public sealed class ParserTests
         var prEvent = events[1];
         await Assert.That(pushEvent.Paths).IsNotNull();
         await Assert.That(prEvent.Paths).IsNotNull();
-        await Assert.That(pushEvent.Paths!.Values.Length).IsEqualTo(prEvent.Paths!.Values.Length);
+        await Assert.That(pushEvent.Paths!.Values.Count).IsEqualTo(prEvent.Paths!.Values.Count);
     }
 
     [Test]
@@ -4864,9 +4864,9 @@ public sealed class ParserTests
 
         var imageVersionEvent = (ImageVersionEvent)workflow.On.First(static e => e is ImageVersionEvent);
         await Assert.That(imageVersionEvent.Names is not null).IsTrue();
-        await Assert.That(imageVersionEvent.Names!.Length).IsEqualTo(1);
+        await Assert.That(imageVersionEvent.Names!.Count).IsEqualTo(1);
         await Assert.That(imageVersionEvent.Versions is not null).IsTrue();
-        await Assert.That(imageVersionEvent.Versions!.Length).IsEqualTo(1);
+        await Assert.That(imageVersionEvent.Versions!.Count).IsEqualTo(1);
 
         var buildKey = Utf8String.FromLowerAscii("build"u8);
         var callKey = Utf8String.FromLowerAscii("call"u8);
@@ -8031,7 +8031,7 @@ public sealed class ParserTests
         await Assert.That(result.HasFatalError).IsFalse();
         var testJob = result.Workflow!.Jobs.Get(bytes, "test"u8);
         await Assert.That(testJob.Needs).IsNotNull();
-        await Assert.That(testJob.Needs!.Length).IsEqualTo(1);
+        await Assert.That(testJob.Needs!.Count).IsEqualTo(1);
         await Assert.That(arena!.GetStringValue(testJob.Needs[0]).ToArray()).IsEquivalentTo("build"u8.ToArray());
         arena?.Dispose();
     }
@@ -8063,7 +8063,7 @@ public sealed class ParserTests
         await Assert.That(result.HasFatalError).IsFalse();
         var deployJob = result.Workflow!.Jobs.Get(bytes, "deploy"u8);
         await Assert.That(deployJob.Needs).IsNotNull();
-        await Assert.That(deployJob.Needs!.Length).IsEqualTo(2);
+        await Assert.That(deployJob.Needs!.Count).IsEqualTo(2);
         arena?.Dispose();
     }
 

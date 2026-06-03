@@ -36,7 +36,7 @@ public sealed class SelfHostedRunnerRule() : RuleBase(RuleId.SelfHostedRunner)
         }
 
         var labels = job.RunsOn.Labels;
-        for (var i = 0; i < labels.Length; i++)
+        for (var i = 0; i < labels.Count; i++)
         {
             var label = labels[i];
             if (Arena.GetStringExpression(label).HasValue)

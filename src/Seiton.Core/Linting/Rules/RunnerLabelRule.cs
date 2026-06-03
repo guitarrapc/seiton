@@ -59,7 +59,7 @@ public sealed class RunnerLabelRule() : RuleBase(RuleId.RunnerLabel)
 
         var loggedAdditionalKnownHostedLabel = false;
 
-        for (var i = 0; i < runsOn.Labels.Length; i++)
+        for (var i = 0; i < runsOn.Labels.Count; i++)
         {
             var label = runsOn.Labels[i];
             if (ExpressionScanHelpers.ContainsExpressionMarker(label, Arena))
@@ -94,12 +94,12 @@ public sealed class RunnerLabelRule() : RuleBase(RuleId.RunnerLabel)
     /// Reports ALL conflicts (not just the first) and returns the combined OS family bitmask
     /// and the first OS label for use in matrix conflict messages.
     /// </summary>
-    private (byte SeenOsFamilies, StringNodeId FirstOsLabel) DetectOsFamilyConflicts(Job job, string jobId, StringNodeId[] labels)
+    private (byte SeenOsFamilies, StringNodeId FirstOsLabel) DetectOsFamilyConflicts(Job job, string jobId, IReadOnlyList<StringNodeId> labels)
     {
         byte seenOsFamilies = 0; // bit 0=linux, 1=windows, 2=macos
         var firstOsLabel = default(StringNodeId);
 
-        for (var i = 0; i < labels.Length; i++)
+        for (var i = 0; i < labels.Count; i++)
         {
             var label = labels[i];
             if (ExpressionScanHelpers.ContainsExpressionMarker(label, Arena))
@@ -139,7 +139,7 @@ public sealed class RunnerLabelRule() : RuleBase(RuleId.RunnerLabel)
     /// When runs-on is a list containing both static labels and <c>${{ matrix.AXIS }}</c> expressions,
     /// resolves the matrix axis values and checks each for OS family conflicts with the static labels.
     /// </summary>
-    private void DetectMatrixLabelOsConflicts(Job job, string jobId, StringNodeId[] labels, byte staticOsFamily, StringNodeId firstOsLabel)
+    private void DetectMatrixLabelOsConflicts(Job job, string jobId, IReadOnlyList<StringNodeId> labels, byte staticOsFamily, StringNodeId firstOsLabel)
     {
         var matrix = job.Strategy?.Matrix;
         if (matrix is null || matrix.Expression.HasValue || matrix.Rows is null)
@@ -149,7 +149,7 @@ public sealed class RunnerLabelRule() : RuleBase(RuleId.RunnerLabel)
 
         var firstOsLabelText = Decode(Arena.GetStringSlice(firstOsLabel));
 
-        for (var i = 0; i < labels.Length; i++)
+        for (var i = 0; i < labels.Count; i++)
         {
             var label = labels[i];
             if (!ExpressionScanHelpers.ContainsExpressionMarker(label, Arena))
@@ -274,14 +274,14 @@ public sealed class RunnerLabelRule() : RuleBase(RuleId.RunnerLabel)
         return true;
     }
 
-    private bool ContainsSelfHostedLabel(StringNodeId[] labels)
+    private bool ContainsSelfHostedLabel(IReadOnlyList<StringNodeId> labels)
     {
         if (Config.Utf8Yaml is null)
         {
             return false;
         }
 
-        for (var i = 0; i < labels.Length; i++)
+        for (var i = 0; i < labels.Count; i++)
         {
             var label = labels[i];
             var labelUtf8 = Arena.GetStringValue(label);

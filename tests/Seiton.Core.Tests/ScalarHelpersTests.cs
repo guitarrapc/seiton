@@ -132,7 +132,7 @@ public sealed class ScalarHelpersTests
 
         var nodes = WorkflowParser.ParseStringOrStringSequence(ref reader, arena, ref diagnostics, "expected sequence");
 
-        await Assert.That(nodes.Length).IsEqualTo(2);
+        await Assert.That(nodes.Count).IsEqualTo(2);
         await Assert.That(diagnostics.Count).IsEqualTo(0);
         diagnostics.Dispose();
     }
@@ -158,7 +158,7 @@ public sealed class ScalarHelpersTests
         var nodes = WorkflowParser.ParseStringOrStringSequence(ref reader, arena, ref diagnostics, "expected sequence");
 
         // Error recovery: valid entries after the empty one must be collected
-        await Assert.That(nodes.Length).IsEqualTo(2);
+        await Assert.That(nodes.Count).IsEqualTo(2);
         await Assert.That(diagnostics.Count).IsEqualTo(1);
         await Assert.That(diagnostics.AsSpan()[0].Message).IsEqualTo("expected sequence");
         diagnostics.Dispose();
@@ -186,7 +186,7 @@ public sealed class ScalarHelpersTests
         // Only one error should be reported
         await Assert.That(diagnostics.Count).IsEqualTo(1);
         // Valid entry after errors must be collected
-        await Assert.That(nodes.Length).IsEqualTo(1);
+        await Assert.That(nodes.Count).IsEqualTo(1);
         diagnostics.Dispose();
     }
 

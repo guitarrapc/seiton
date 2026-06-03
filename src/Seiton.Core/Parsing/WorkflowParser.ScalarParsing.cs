@@ -103,7 +103,7 @@ public static partial class WorkflowParser
         return node;
     }
 
-    internal static StringNodeId[] ParseStringOrStringSequence<TReader>(ref TReader reader, AstArena arena, ref PooledBuffer<Diagnostic> diagnostics, string errorMessage, bool allowEmpty = false, bool allowElemEmpty = false)
+    internal static ArenaList<StringNodeId> ParseStringOrStringSequence<TReader>(ref TReader reader, AstArena arena, ref PooledBuffer<Diagnostic> diagnostics, string errorMessage, bool allowEmpty = false, bool allowElemEmpty = false)
         where TReader : IYamlStreamReader, allows ref struct
     {
         var nodes = ParseStringOrStringSequence(ref reader, arena, ref diagnostics, out var needsError, out var errorMark, allowEmpty, allowElemEmpty);
@@ -111,7 +111,7 @@ public static partial class WorkflowParser
         return nodes;
     }
 
-    internal static StringNodeId[] ParseStringOrStringSequence<TReader>(ref TReader reader, AstArena arena, ref PooledBuffer<Diagnostic> diagnostics, out bool needsError, out TextPosition errorMark, bool allowEmpty = false, bool allowElemEmpty = false, string? emptyElementMessage = null)
+    internal static ArenaList<StringNodeId> ParseStringOrStringSequence<TReader>(ref TReader reader, AstArena arena, ref PooledBuffer<Diagnostic> diagnostics, out bool needsError, out TextPosition errorMark, bool allowEmpty = false, bool allowElemEmpty = false, string? emptyElementMessage = null)
         where TReader : IYamlStreamReader, allows ref struct
     {
         needsError = false;
@@ -119,13 +119,13 @@ public static partial class WorkflowParser
 
         if (reader.End)
         {
-            return [];
+            return default;
         }
 
         if (reader.CurrentKind == YamlEventKind.Scalar)
         {
             var single = ParseString(ref reader, arena, out needsError, out errorMark, allowEmpty);
-            return !single.HasValue ? [] : [single];
+            return !single.HasValue ? default : ArenaListOfOne(single, arena);
         }
 
         if (reader.CurrentKind != YamlEventKind.SequenceStart)
@@ -133,7 +133,7 @@ public static partial class WorkflowParser
             needsError = true;
             errorMark = reader.CurrentStart;
             reader.SkipCurrentNode();
-            return [];
+            return default;
         }
 
         var list = new PooledBuffer<StringNodeId>(4);
@@ -171,7 +171,7 @@ public static partial class WorkflowParser
                 reader.Read();
             }
 
-            return list.ToArray();
+            return DetachArenaList(ref list, arena);
         }
         finally { list.Dispose(); }
     }
