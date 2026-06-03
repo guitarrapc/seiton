@@ -247,6 +247,33 @@ public sealed class GitHubActionShaResolverTests
     }
 
     [Test]
+    public async Task ResolveAsync_FallsBackToBranchReference_WhenTagReferenceIsMissing_AndMinAgeDaysIsZero()
+    {
+        var handler = new StubHttpMessageHandler();
+        handler.AddStatus(
+            "https://api.github.com/repos/guitarrapc/setup-seiton/git/ref/tags/v1",
+            HttpStatusCode.NotFound);
+        handler.AddJson(
+            "https://api.github.com/repos/guitarrapc/setup-seiton/git/ref/heads/v1",
+            """
+            {
+              "object": {
+                "type": "commit",
+                "sha": "0f877adfd3890a2333b954ab9a43d45c4b48e456"
+              }
+            }
+            """);
+
+        var resolver = CreateResolver(handler, new FixPinningConfig { MinAgeDays = 0 });
+        var (sha, tagComment) = await resolver.ResolveAsync("guitarrapc", "setup-seiton", "v1");
+
+        await Assert.That(sha).IsEqualTo("0f877adfd3890a2333b954ab9a43d45c4b48e456");
+        await Assert.That(tagComment).IsEqualTo("v1");
+        await Assert.That(handler.RequestedUris).Contains("https://api.github.com/repos/guitarrapc/setup-seiton/git/ref/tags/v1");
+        await Assert.That(handler.RequestedUris).Contains("https://api.github.com/repos/guitarrapc/setup-seiton/git/ref/heads/v1");
+    }
+
+    [Test]
     public async Task ResolveAsync_SelectsOlderEligibleReleaseCandidate_WhenNewestReleaseIsTooNew()
     {
         var recentDate = DateTimeOffset.UtcNow.AddDays(-1).ToString("o");
