@@ -552,13 +552,18 @@ C# implementation mapping for network-assisted pin remediation.
 public interface IActionShaResolver
 {
     /// <summary>
-    /// Resolves owner/repo@ref to (sha40, originalRef).
-    /// Returns null for both when the ref is excluded by configuration.
+    /// Resolves owner/repo@ref to a resolution record.
+    /// Skipped resolutions return null SHA/tag and may include SkipReason.
     /// </summary>
-    Task<(string? Sha, string? TagComment)> ResolveAsync(
+    Task<ActionShaResolution> ResolveAsync(
         string owner, string repo, string refStr,
         CancellationToken cancellationToken = default);
 }
+
+public readonly record struct ActionShaResolution(
+    string? Sha,
+    string? TagComment,
+    string? SkipReason = null);
 
 /// <summary>
 /// Resolves an OCI image reference to a pinned digest.
@@ -578,11 +583,13 @@ public interface IImageDigestResolver
 C# implementation notes:
 
 - Both interfaces are `async`; resolution may perform network I/O.
-- `null` return indicates configuration-based skip (not an error) **or** 404 image-not-found (also not an error — callers should not generate a fix for nonexistent images).
+- `IActionShaResolver` expresses skip via `ActionShaResolution` (`Sha`/`TagComment` null, optional `SkipReason`).
+- `IImageDigestResolver` returning `null` indicates configuration-based skip (not an error) **or** 404 image-not-found (also not an error — callers should not generate a fix for nonexistent images).
 - Implementations must cache successful resolutions in-process for the duration of a single `RemediateAsync` call.
 - Error results (non-skip failures) must not be cached.
 - Resolver implementations are injected by caller — not instantiated by `LintEngine`.
 - `GitHubActionShaResolver` resolves refs in order: `refs/tags/{ref}` first, then `refs/heads/{ref}` fallback when tag is not found.
+- When a uses-ref is skipped (for example min-age gate), resolver may set `ActionShaResolution.SkipReason`; remediation appends this to diagnostic help so users can understand why `--fix --enable-pin-network` did not pin.
 
 **Comparison with `dockerfile-pin` (Go reference):**
 

@@ -18,7 +18,7 @@ public sealed class GitHubActionShaResolver(HttpClient httpClient, FixPinningCon
     private readonly string[] _excludeBranches = ToExcludeBranchArray(pinningConfig.ExcludeBranches);
     private readonly CompiledIgnoreActionEntry[] _compiledIgnoreActions = CompileIgnoreActions(pinningConfig.IgnoreActions);
 
-    public async Task<(string? Sha, string? TagComment)> ResolveAsync(
+    public async Task<ActionShaResolution> ResolveAsync(
         string owner,
         string repo,
         string refStr,
@@ -26,13 +26,13 @@ public sealed class GitHubActionShaResolver(HttpClient httpClient, FixPinningCon
     {
         if (ShouldSkip(owner, repo, refStr))
         {
-            return (null, null);
+            return ActionShaResolution.Skipped($"pinning skipped by fix.pinning exclude settings for '{owner}/{repo}@{refStr}'");
         }
 
         var cacheKey = string.Concat(owner, "/", repo, "@", refStr);
         if (_successCache.TryGetValue(cacheKey, out var cached))
         {
-            return (cached.Sha, cached.TagComment);
+            return ActionShaResolution.Resolved(cached.Sha, cached.TagComment);
         }
 
         var token = ResolveToken();
@@ -43,7 +43,8 @@ public sealed class GitHubActionShaResolver(HttpClient httpClient, FixPinningCon
             var selectedTag = await SelectBestEligibleTagAsync(owner, repo, family, token, cancellationToken);
             if (string.IsNullOrWhiteSpace(selectedTag))
             {
-                return (null, null);
+                return ActionShaResolution.Skipped(
+                    $"pinning skipped: no eligible tag satisfies fix.pinning.min-age-days={_pinningConfig.MinAgeDays} for '{owner}/{repo}@{refStr}'");
             }
 
             resolvedRef = selectedTag;
@@ -57,14 +58,15 @@ public sealed class GitHubActionShaResolver(HttpClient httpClient, FixPinningCon
                 var age = DateTimeOffset.UtcNow - result.TagDate.Value;
                 if (age.TotalDays < _pinningConfig.MinAgeDays)
                 {
-                    return (null, null);
+                    return ActionShaResolution.Skipped(
+                        $"pinning skipped: resolved ref '{resolvedRef}' is younger than fix.pinning.min-age-days={_pinningConfig.MinAgeDays} for '{owner}/{repo}@{refStr}'");
                 }
             }
         }
 
         var cacheValue = new CachedResolution(result.Sha!, resolvedRef);
         _successCache.TryAdd(cacheKey, cacheValue);
-        return (cacheValue.Sha, cacheValue.TagComment);
+        return ActionShaResolution.Resolved(cacheValue.Sha, cacheValue.TagComment);
     }
 
     private async Task<string?> SelectBestEligibleTagAsync(

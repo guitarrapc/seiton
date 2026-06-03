@@ -63,7 +63,7 @@ public sealed class PinRemediationEngineTests
         {
             if (repo == "checkout")
             {
-                return Task.FromResult<(string?, string?)>(("0123456789abcdef0123456789abcdef01234567", "v4"));
+                return Task.FromResult(ActionShaResolution.Resolved("0123456789abcdef0123456789abcdef01234567", "v4"));
             }
             throw new InvalidOperationException("resolver failure");
         });
@@ -115,10 +115,74 @@ public sealed class PinRemediationEngineTests
             .Throws<InvalidOperationException>();
     }
 
-    private sealed class DelegateActionShaResolver(
-        Func<string, string, string, CancellationToken, Task<(string?, string?)>> impl) : IActionShaResolver
+    [Test]
+    public async Task RemediateAsync_AttachesSkipReasonToHelp_WhenUsesResolutionIsSkipped()
     {
-        public Task<(string? Sha, string? TagComment)> ResolveAsync(string owner, string repo, string refStr, CancellationToken cancellationToken = default)
+        var source = Encoding.UTF8.GetBytes("steps:\n  - uses: guitarrapc/setup-seiton@v1.0.0\n");
+        var diagnostics = new[]
+        {
+            new Diagnostic(
+                DiagnosticSeverity.Warning,
+                "'guitarrapc/setup-seiton@v1.0.0' is not pinned to a full-length commit SHA",
+                new TextRange(0, source.Length, 1, 1, 2, 45),
+                RuleId: "unpinned-uses",
+                Metadata: PinDiagnosticMetadata.ForUsesRef("guitarrapc/setup-seiton@v1.0.0")),
+        };
+
+        var actionResolver = new DelegateActionShaResolver((_, _, _, _) =>
+            Task.FromResult(ActionShaResolution.Skipped("pinning skipped: no eligible tag satisfies fix.pinning.min-age-days=14")));
+
+        var engine = new PinRemediationEngine(
+            actionResolver,
+            null,
+            new FixPinningConfig { EnableNetwork = true, MinAgeDays = 14 },
+            new FixImagesConfig(),
+            new NetworkConfig());
+
+        var result = await engine.RemediateAsync(diagnostics, source);
+
+        await Assert.That(result.ResolvedCount).IsEqualTo(0);
+        await Assert.That(result.SkippedCount).IsEqualTo(1);
+        await Assert.That(result.Diagnostics[0].Fix.HasValue).IsEqualTo(false);
+        await Assert.That(result.Diagnostics[0].Help).IsEqualTo("pinning skipped: no eligible tag satisfies fix.pinning.min-age-days=14");
+    }
+
+    [Test]
+    public async Task RemediateAsync_AppendsSkipReasonToExistingHelp_WhenHelpAlreadyExists()
+    {
+        var source = Encoding.UTF8.GetBytes("steps:\n  - uses: guitarrapc/setup-seiton@v1.0.0\n");
+        var diagnostics = new[]
+        {
+            new Diagnostic(
+                DiagnosticSeverity.Warning,
+                "'guitarrapc/setup-seiton@v1.0.0' is not pinned to a full-length commit SHA",
+                new TextRange(0, source.Length, 1, 1, 2, 45),
+                RuleId: "unpinned-uses",
+                Help: "fixable with --fix --enable-pin-network",
+                Metadata: PinDiagnosticMetadata.ForUsesRef("guitarrapc/setup-seiton@v1.0.0")),
+        };
+
+        var actionResolver = new DelegateActionShaResolver((_, _, _, _) =>
+            Task.FromResult(ActionShaResolution.Skipped("pinning skipped: no eligible tag satisfies fix.pinning.min-age-days=14")));
+
+        var engine = new PinRemediationEngine(
+            actionResolver,
+            null,
+            new FixPinningConfig { EnableNetwork = true, MinAgeDays = 14 },
+            new FixImagesConfig(),
+            new NetworkConfig());
+
+        var result = await engine.RemediateAsync(diagnostics, source);
+
+        await Assert.That(result.SkippedCount).IsEqualTo(1);
+        await Assert.That(result.Diagnostics[0].Help)
+            .IsEqualTo("fixable with --fix --enable-pin-network\npinning skipped: no eligible tag satisfies fix.pinning.min-age-days=14");
+    }
+
+    private sealed class DelegateActionShaResolver(
+        Func<string, string, string, CancellationToken, Task<ActionShaResolution>> impl) : IActionShaResolver
+    {
+        public Task<ActionShaResolution> ResolveAsync(string owner, string repo, string refStr, CancellationToken cancellationToken = default)
             => impl(owner, repo, refStr, cancellationToken);
     }
 

@@ -123,6 +123,9 @@
   - 対応: 新設定を増やさず既存設定のまま `@v1` が直感的に解決される挙動へ改善
 - 指摘3: 性能劣化リスク
   - 対応: 404 時のみ追加 API 呼び出しとし、通常 tag 成功パスのコスト増を抑制
+- 指摘4: min-age skip 時に利用者が理由を把握できない
+  - 対応: `IActionShaResolver` に skip 理由を返すモデルを追加し、`PinRemediationEngine` で `Diagnostic.Help` に反映
+  - 詳細記録: `.github/docs/plan_pinning.md`
 
 ### Phase 6 (Commit)
 
@@ -130,3 +133,55 @@
   - テスト追加（Red）
   - 実装＋ドキュメント更新（Green/Verify/Benchmark）
   をそれぞれコミット対象とする。
+
+# min-age-days により pin されない理由表示の調査・対応
+
+## 背景
+
+`seiton --fix --enable-pin-network` 実行時、`guitarrapc/setup-seiton@v1.0.0` が当日リリース直後で `fix.pinning.min-age-days: 14` により skip されたが、利用者には「なぜ pin されなかったか」が分からなかった。
+
+## 調査結果
+
+- `GitHubActionShaResolver` は min-age 条件で候補なしの場合、`(null, null)` を返すだけで理由文字列を返していない。
+- `PinRemediationEngine` は `sha/tag` が `null` のとき「skip」としてカウントするが、診断メッセージや `help` へ理由を反映していない。
+- そのため CLI 出力では「fix されなかった事実」は分かるが、「なぜ skip されたか（例: min-age gate）」が分からない。
+
+## 対応方針（ユーザーファースト）
+
+1. `IActionShaResolver` の戻り値を `ActionShaResolution` に拡張し、skip 理由 (`SkipReason`) を運べるようにする。
+2. `GitHubActionShaResolver` で min-age により skip された場合、明示的な理由文を `SkipReason` に設定する。
+3. `PinRemediationEngine` で uses 解決が skip のとき、`SkipReason` を `Diagnostic.Help` に追記する。
+4. 既存挙動（fix 成功時の修正内容、失敗カウント、network off 時の挙動）は維持する。
+
+## TDD 実施
+
+- Red:
+  - `RemediateAsync_AttachesSkipReasonToHelp_WhenUsesResolutionIsSkipped`
+  - `RemediateAsync_AppendsSkipReasonToExistingHelp_WhenHelpAlreadyExists`
+- Green:
+  - `ActionShaResolution` を追加
+  - `IActionShaResolver` / `GitHubActionShaResolver` / `PinRemediationEngine` を更新
+- 等価クラス観点（分類ロジック）:
+  - `GitHubActionShaResolverTests` で既存の分岐網羅を維持（tag成功 / tag404→branch成功 / tag404→branch失敗 / tag非404失敗）
+
+## 仕様同期
+
+- 更新:
+  - `.github/docs/Seiton_Linter_spec.md`
+  - `.github/docs/Seiton_Linter_csharp_spec.md`
+- 反映内容:
+  - skip 理由を `help` に表示する仕様
+  - C# 実装の `IActionShaResolver` 戻り値モデルの更新
+
+## 検証結果
+
+- テスト:
+  - `PinRemediationEngineTests`: pass
+  - `GitHubActionShaResolverTests`: pass
+  - `PinRemediationContractsTests`: pass
+  - `PlaygroundLintRunnerAsyncFixTests` の対象テスト: pass
+  - `dotnet test` 全体は既存の `Seiton.Playground.Tests` 7件（Playwright timeout/asset）で失敗（今回変更箇所外）
+- ベンチマーク:
+  - `CoreLintBenchmark` 実施
+  - `Allocated` は全ケースで `Alloc Ratio = 1.00`
+  - `Ratio` は `1.00 ~ 1.01` 程度で +10% しきい値内

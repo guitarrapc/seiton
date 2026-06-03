@@ -135,13 +135,19 @@ public sealed class PinRemediationEngine(
             return new RemediationOutcome(diagnostic, Resolved: false, Skipped: false, Failed: true);
         }
 
-        var (sha, tagComment) = await _actionShaResolver.ResolveAsync(owner, repo, currentRef, cancellationToken);
-        if (sha is null || tagComment is null)
+        var resolution = await _actionShaResolver.ResolveAsync(owner, repo, currentRef, cancellationToken);
+        if (resolution.Sha is null || resolution.TagComment is null)
         {
+            if (!string.IsNullOrWhiteSpace(resolution.SkipReason))
+            {
+                var help = AppendHelp(diagnostic.Help, resolution.SkipReason);
+                return new RemediationOutcome(diagnostic with { Help = help }, Resolved: false, Skipped: true, Failed: false);
+            }
+
             return new RemediationOutcome(diagnostic, Resolved: false, Skipped: true, Failed: false);
         }
 
-        var fix = PinFixFormatter.BuildActionsShaFix(diagnostic, sha, tagComment, utf8Yaml);
+        var fix = PinFixFormatter.BuildActionsShaFix(diagnostic, resolution.Sha, resolution.TagComment, utf8Yaml);
         if (fix is null)
         {
             return new RemediationOutcome(diagnostic, Resolved: false, Skipped: false, Failed: true);
@@ -181,4 +187,19 @@ public sealed class PinRemediationEngine(
     }
 
     private readonly record struct RemediationOutcome(Diagnostic Diagnostic, bool Resolved, bool Skipped, bool Failed);
+
+    private static string AppendHelp(string? originalHelp, string skipReason)
+    {
+        if (string.IsNullOrWhiteSpace(originalHelp))
+        {
+            return skipReason;
+        }
+
+        if (string.Equals(originalHelp, skipReason, StringComparison.Ordinal))
+        {
+            return originalHelp;
+        }
+
+        return string.Concat(originalHelp, "\n", skipReason);
+    }
 }
