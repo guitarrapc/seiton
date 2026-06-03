@@ -52,7 +52,7 @@ internal sealed class PeakHeapColumn : IColumn
             return "NA";
         }
 
-        return peakBytes.ToString("N0");
+        return peakBytes.ToString(System.Globalization.CultureInfo.InvariantCulture);
     }
 }
 
