@@ -1,5 +1,4 @@
-using System.Buffers;
-using System.Text;
+﻿using System.Buffers;
 using Seiton.Output;
 
 namespace Seiton.Tests;
@@ -60,11 +59,11 @@ public sealed class Utf8WriterTests
 
         public void Advance(int count) => _inner.Advance(count);
 
-public Memory<byte> GetMemory(int sizeHint = 0)
-{
-    var memory = _inner.GetMemory(Math.Max(sizeHint, maxChunkSize));
-    return memory[..Math.Min(memory.Length, maxChunkSize)];
-}
+        public Memory<byte> GetMemory(int sizeHint = 0)
+        {
+            var memory = _inner.GetMemory(Math.Max(sizeHint, maxChunkSize));
+            return memory[..Math.Min(memory.Length, maxChunkSize)];
+        }
 
         public Span<byte> GetSpan(int sizeHint = 0)
         {

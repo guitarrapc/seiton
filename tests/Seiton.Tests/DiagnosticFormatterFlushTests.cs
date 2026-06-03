@@ -1,5 +1,4 @@
-using System.Text;
-using Seiton.Core.Parsing;
+﻿using Seiton.Core.Parsing;
 using Seiton.Output;
 
 namespace Seiton.Tests;

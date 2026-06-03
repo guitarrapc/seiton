@@ -1,7 +1,6 @@
 ﻿using Seiton.Core.Parsing;
 using Seiton.Output;
 using System.Buffers;
-using System.Text;
 using System.Text.Json;
 
 namespace Seiton.Tests;
