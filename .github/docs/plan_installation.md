@@ -52,7 +52,7 @@ checksums-sha256.txt
 
 #### 経緯
 
-- 当初 [`scripts/download.sh`](../../scripts/download.sh) を main ブランチに配置し、プラットフォーム自動判別・チェックサム検証・SLSA attestation 検証を提供していた。
+- 当初 `scripts/download.sh` を main ブランチに配置し、プラットフォーム自動判別・チェックサム検証・SLSA attestation 検証を提供していた。
 - [`guitarrapc/setup-seiton`](https://github.com/guitarrapc/setup-seiton) を公開したため、GitHub Actions 向けセットアップは Action に一本化。`scripts/download.sh` は削除。
 
 #### 後継
