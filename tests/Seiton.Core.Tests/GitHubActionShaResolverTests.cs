@@ -24,10 +24,10 @@ public sealed class GitHubActionShaResolverTests
 
         var resolver = CreateResolver(handler, new FixPinningConfig { MinAgeDays = 0 });
 
-        var (sha, tagComment) = await resolver.ResolveAsync("actions", "checkout", "v4");
+        var resolution = await resolver.ResolveAsync("actions", "checkout", "v4");
 
-        await Assert.That(sha).IsEqualTo("0123456789abcdef0123456789abcdef01234567");
-        await Assert.That(tagComment).IsEqualTo("v4");
+        await Assert.That(resolution.Sha).IsEqualTo("0123456789abcdef0123456789abcdef01234567");
+        await Assert.That(resolution.TagComment).IsEqualTo("v4");
     }
 
     [Test]
@@ -57,10 +57,10 @@ public sealed class GitHubActionShaResolverTests
 
         var resolver = CreateResolver(handler, new FixPinningConfig { MinAgeDays = 0 });
 
-        var (sha, tagComment) = await resolver.ResolveAsync("actions", "cache", "v3.3.1");
+        var resolution = await resolver.ResolveAsync("actions", "cache", "v3.3.1");
 
-        await Assert.That(sha).IsEqualTo("fedcba9876543210fedcba9876543210fedcba98");
-        await Assert.That(tagComment).IsEqualTo("v3.3.1");
+        await Assert.That(resolution.Sha).IsEqualTo("fedcba9876543210fedcba9876543210fedcba98");
+        await Assert.That(resolution.TagComment).IsEqualTo("v3.3.1");
     }
 
     [Test]
@@ -88,9 +88,9 @@ public sealed class GitHubActionShaResolverTests
                 GhesFallback = true,
             });
 
-        var (sha, _) = await resolver.ResolveAsync("actions", "setup-go", "v5");
+        var resolution = await resolver.ResolveAsync("actions", "setup-go", "v5");
 
-        await Assert.That(sha).IsEqualTo("1111111111111111111111111111111111111111");
+        await Assert.That(resolution.Sha).IsEqualTo("1111111111111111111111111111111111111111");
         await Assert.That(handler.RequestedUris).Contains("https://ghes.example.com/api/v3/repos/actions/setup-go/git/ref/tags/v5");
         await Assert.That(handler.RequestedUris).Contains("https://api.github.com/repos/actions/setup-go/git/ref/tags/v5");
     }
@@ -112,8 +112,10 @@ public sealed class GitHubActionShaResolverTests
 
         await Assert.That(skippedBranch.Sha).IsNull();
         await Assert.That(skippedBranch.TagComment).IsNull();
+        await Assert.That(skippedBranch.SkipReason).Contains("exclude settings");
         await Assert.That(skippedAction.Sha).IsNull();
         await Assert.That(skippedAction.TagComment).IsNull();
+        await Assert.That(skippedAction.SkipReason).Contains("exclude settings");
         await Assert.That(handler.RequestedUris).IsEmpty();
     }
 
@@ -135,10 +137,11 @@ public sealed class GitHubActionShaResolverTests
         handler.AddJson("https://api.github.com/repos/actions/checkout/tags?per_page=100", "[]");
 
         var resolver = CreateResolver(handler, new FixPinningConfig { MinAgeDays = 14 });
-        var (sha, tagComment) = await resolver.ResolveAsync("actions", "checkout", "v4");
+        var resolution = await resolver.ResolveAsync("actions", "checkout", "v4");
 
-        await Assert.That(sha).IsNull();
-        await Assert.That(tagComment).IsNull();
+        await Assert.That(resolution.Sha).IsNull();
+        await Assert.That(resolution.TagComment).IsNull();
+        await Assert.That(resolution.SkipReason).Contains("min-age-days=14");
     }
 
     [Test]
@@ -159,10 +162,10 @@ public sealed class GitHubActionShaResolverTests
         handler.AddJson("https://api.github.com/repos/actions/cache/tags?per_page=100", "[]");
 
         var resolver = CreateResolver(handler, new FixPinningConfig { MinAgeDays = 14 });
-        var (sha, tagComment) = await resolver.ResolveAsync("actions", "cache", "v3.3.1");
+        var resolution = await resolver.ResolveAsync("actions", "cache", "v3.3.1");
 
-        await Assert.That(sha).IsNull();
-        await Assert.That(tagComment).IsNull();
+        await Assert.That(resolution.Sha).IsNull();
+        await Assert.That(resolution.TagComment).IsNull();
     }
 
     [Test]
@@ -205,10 +208,10 @@ public sealed class GitHubActionShaResolverTests
             """);
 
         var resolver = CreateResolver(handler, new FixPinningConfig { MinAgeDays = 14 });
-        var (sha, tagComment) = await resolver.ResolveAsync("actions", "checkout", "v4");
+        var resolution = await resolver.ResolveAsync("actions", "checkout", "v4");
 
-        await Assert.That(sha).IsEqualTo("0123456789abcdef0123456789abcdef01234567");
-        await Assert.That(tagComment).IsEqualTo("v4");
+        await Assert.That(resolution.Sha).IsEqualTo("0123456789abcdef0123456789abcdef01234567");
+        await Assert.That(resolution.TagComment).IsEqualTo("v4");
     }
 
     [Test]
@@ -240,10 +243,73 @@ public sealed class GitHubActionShaResolverTests
             """);
 
         var resolver = CreateResolver(handler, new FixPinningConfig { MinAgeDays = 0 });
-        var (sha, tagComment) = await resolver.ResolveAsync("actions", "checkout", "v4");
+        var resolution = await resolver.ResolveAsync("actions", "checkout", "v4");
 
-        await Assert.That(sha).IsEqualTo("0123456789abcdef0123456789abcdef01234567");
-        await Assert.That(tagComment).IsEqualTo("v4");
+        await Assert.That(resolution.Sha).IsEqualTo("0123456789abcdef0123456789abcdef01234567");
+        await Assert.That(resolution.TagComment).IsEqualTo("v4");
+    }
+
+    [Test]
+    public async Task ResolveAsync_FallsBackToBranchReference_WhenTagReferenceIsMissing_AndMinAgeDaysIsZero()
+    {
+        var handler = new StubHttpMessageHandler();
+        handler.AddStatus(
+            "https://api.github.com/repos/guitarrapc/setup-seiton/git/ref/tags/v1",
+            HttpStatusCode.NotFound);
+        handler.AddJson(
+            "https://api.github.com/repos/guitarrapc/setup-seiton/git/ref/heads/v1",
+            """
+            {
+              "object": {
+                "type": "commit",
+                "sha": "0f877adfd3890a2333b954ab9a43d45c4b48e456"
+              }
+            }
+            """);
+
+        var resolver = CreateResolver(handler, new FixPinningConfig { MinAgeDays = 0 });
+        var resolution = await resolver.ResolveAsync("guitarrapc", "setup-seiton", "v1");
+
+        await Assert.That(resolution.Sha).IsEqualTo("0f877adfd3890a2333b954ab9a43d45c4b48e456");
+        await Assert.That(resolution.TagComment).IsEqualTo("v1");
+        await Assert.That(handler.RequestedUris).Contains("https://api.github.com/repos/guitarrapc/setup-seiton/git/ref/tags/v1");
+        await Assert.That(handler.RequestedUris).Contains("https://api.github.com/repos/guitarrapc/setup-seiton/git/ref/heads/v1");
+    }
+
+    [Test]
+    public async Task ResolveAsync_Throws_WhenTagAndBranchReferencesAreMissing()
+    {
+        var handler = new StubHttpMessageHandler();
+        handler.AddStatus(
+            "https://api.github.com/repos/guitarrapc/setup-seiton/git/ref/tags/v1",
+            HttpStatusCode.NotFound);
+        handler.AddStatus(
+            "https://api.github.com/repos/guitarrapc/setup-seiton/git/ref/heads/v1",
+            HttpStatusCode.NotFound);
+
+        var resolver = CreateResolver(handler, new FixPinningConfig { MinAgeDays = 0 });
+
+        await Assert.That(async () => await resolver.ResolveAsync("guitarrapc", "setup-seiton", "v1"))
+            .Throws<InvalidOperationException>();
+        await Assert.That(handler.RequestedUris).Contains("https://api.github.com/repos/guitarrapc/setup-seiton/git/ref/tags/v1");
+        await Assert.That(handler.RequestedUris).Contains("https://api.github.com/repos/guitarrapc/setup-seiton/git/ref/heads/v1");
+    }
+
+    [Test]
+    public async Task ResolveAsync_DoesNotFallbackToBranch_WhenTagLookupFailsWithNon404()
+    {
+        var handler = new StubHttpMessageHandler();
+        handler.AddStatus(
+            "https://api.github.com/repos/guitarrapc/setup-seiton/git/ref/tags/v1",
+            HttpStatusCode.Forbidden);
+
+        var resolver = CreateResolver(handler, new FixPinningConfig { MinAgeDays = 0 });
+
+        await Assert.That(async () => await resolver.ResolveAsync("guitarrapc", "setup-seiton", "v1"))
+            .Throws<InvalidOperationException>();
+        await Assert.That(handler.RequestedUris).Contains("https://api.github.com/repos/guitarrapc/setup-seiton/git/ref/tags/v1");
+        await Assert.That(handler.RequestedUris.Count(uri => uri == "https://api.github.com/repos/guitarrapc/setup-seiton/git/ref/heads/v1"))
+            .IsEqualTo(0);
     }
 
     [Test]
@@ -278,10 +344,10 @@ public sealed class GitHubActionShaResolverTests
             """);
 
         var resolver = CreateResolver(handler, new FixPinningConfig { MinAgeDays = 14 });
-        var (sha, tagComment) = await resolver.ResolveAsync("actions", "checkout", "v4");
+        var resolution = await resolver.ResolveAsync("actions", "checkout", "v4");
 
-        await Assert.That(sha).IsEqualTo("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa");
-        await Assert.That(tagComment).IsEqualTo("v4.1.0");
+        await Assert.That(resolution.Sha).IsEqualTo("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa");
+        await Assert.That(resolution.TagComment).IsEqualTo("v4.1.0");
         await Assert.That(handler.RequestedUris).Contains("https://api.github.com/repos/actions/checkout/git/ref/tags/v4.1.0");
         await Assert.That(handler.RequestedUris.Count(uri => uri == "https://api.github.com/repos/actions/checkout/git/ref/tags/v4.2.0"))
           .IsEqualTo(0);
@@ -355,10 +421,10 @@ public sealed class GitHubActionShaResolverTests
             """);
 
         var resolver = CreateResolver(handler, new FixPinningConfig { MinAgeDays = 14 });
-        var (sha, tagComment) = await resolver.ResolveAsync("actions", "checkout", "v4");
+        var resolution = await resolver.ResolveAsync("actions", "checkout", "v4");
 
-        await Assert.That(sha).IsEqualTo("dddddddddddddddddddddddddddddddddddddddd");
-        await Assert.That(tagComment).IsEqualTo("v4.1.0");
+        await Assert.That(resolution.Sha).IsEqualTo("dddddddddddddddddddddddddddddddddddddddd");
+        await Assert.That(resolution.TagComment).IsEqualTo("v4.1.0");
     }
 
     [Test]

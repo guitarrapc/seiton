@@ -255,17 +255,17 @@ public sealed class PlaygroundLintRunnerAsyncFixTests : IDisposable
 
     private sealed class FakeActionShaResolver(string sha, string tagComment) : IActionShaResolver
     {
-        public Task<(string? Sha, string? TagComment)> ResolveAsync(
+        public Task<ActionShaResolution> ResolveAsync(
             string owner, string repo, string refStr, CancellationToken cancellationToken = default)
         {
             cancellationToken.ThrowIfCancellationRequested();
-            return Task.FromResult<(string?, string?)>((sha, tagComment));
+            return Task.FromResult(ActionShaResolution.Resolved(sha, tagComment));
         }
     }
 
     private sealed class FailingActionShaResolver : IActionShaResolver
     {
-        public Task<(string? Sha, string? TagComment)> ResolveAsync(
+        public Task<ActionShaResolution> ResolveAsync(
             string owner, string repo, string refStr, CancellationToken cancellationToken = default)
         {
             throw new HttpRequestException("Simulated network failure");
@@ -274,26 +274,26 @@ public sealed class PlaygroundLintRunnerAsyncFixTests : IDisposable
 
     private sealed class BlockingActionShaResolver : IActionShaResolver
     {
-        public async Task<(string? Sha, string? TagComment)> ResolveAsync(
+        public async Task<ActionShaResolution> ResolveAsync(
             string owner, string repo, string refStr, CancellationToken cancellationToken = default)
         {
             await Task.Delay(Timeout.Infinite, cancellationToken);
-            return (null, null);
+            return ActionShaResolution.Skipped("cancelled");
         }
     }
 
     private sealed class MultiFakeActionShaResolver(Dictionary<string, (string sha, string comment)> resolutions) : IActionShaResolver
     {
-        public Task<(string? Sha, string? TagComment)> ResolveAsync(
+        public Task<ActionShaResolution> ResolveAsync(
             string owner, string repo, string refStr, CancellationToken cancellationToken = default)
         {
             cancellationToken.ThrowIfCancellationRequested();
             var key = $"{owner}/{repo}";
             if (resolutions.TryGetValue(key, out var result))
             {
-                return Task.FromResult<(string?, string?)>((result.sha, result.comment));
+                return Task.FromResult(ActionShaResolution.Resolved(result.sha, result.comment));
             }
-            return Task.FromResult<(string?, string?)>((null, null));
+            return Task.FromResult(ActionShaResolution.Skipped($"missing resolver fixture for '{key}@{refStr}'"));
         }
     }
 }

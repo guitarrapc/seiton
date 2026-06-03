@@ -19,7 +19,7 @@ public sealed class PinRemediationTests
         using var lintResult = lintEngine.Check(source, "pin-remediation-success.yml");
 
         var engine = new PinRemediationEngine(
-            new DelegateActionShaResolver((_, _, _, _) => Task.FromResult<(string?, string?)>((ActionSha, "v4"))),
+            new DelegateActionShaResolver((_, _, _, _) => Task.FromResult(ActionShaResolution.Resolved(ActionSha, "v4"))),
             new DelegateImageDigestResolver((_, _) => Task.FromResult<string?>(ImageDigest)),
             new FixPinningConfig { EnableNetwork = true }, new FixImagesConfig { EnableNetwork = true }, new NetworkConfig());
 
@@ -45,7 +45,7 @@ public sealed class PinRemediationTests
             new DelegateActionShaResolver((_, _, _, _) =>
             {
                 actionCalls++;
-                return Task.FromResult<(string?, string?)>((ActionSha, "v4"));
+                return Task.FromResult(ActionShaResolution.Resolved(ActionSha, "v4"));
             }),
             new DelegateImageDigestResolver((_, _) =>
             {
@@ -109,7 +109,7 @@ public sealed class PinRemediationTests
         using var lintResult = lintEngine.Check(source, "pin-remediation-revalidate.yml");
 
         var remediationEngine = new PinRemediationEngine(
-            new DelegateActionShaResolver((_, _, _, _) => Task.FromResult<(string?, string?)>((ActionSha, "v4"))),
+            new DelegateActionShaResolver((_, _, _, _) => Task.FromResult(ActionShaResolution.Resolved(ActionSha, "v4"))),
             new DelegateImageDigestResolver((_, _) => Task.FromResult<string?>(ImageDigest)),
             new FixPinningConfig { EnableNetwork = true }, new FixImagesConfig { EnableNetwork = true }, new NetworkConfig());
 
@@ -153,9 +153,9 @@ public sealed class PinRemediationTests
     }
 
     private sealed class DelegateActionShaResolver(
-        Func<string, string, string, CancellationToken, Task<(string?, string?)>> impl) : IActionShaResolver
+        Func<string, string, string, CancellationToken, Task<ActionShaResolution>> impl) : IActionShaResolver
     {
-        public Task<(string? Sha, string? TagComment)> ResolveAsync(string owner, string repo, string refStr, CancellationToken cancellationToken = default)
+        public Task<ActionShaResolution> ResolveAsync(string owner, string repo, string refStr, CancellationToken cancellationToken = default)
             => impl(owner, repo, refStr, cancellationToken);
     }
 

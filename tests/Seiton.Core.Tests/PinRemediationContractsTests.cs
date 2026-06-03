@@ -6,14 +6,14 @@ namespace Seiton.Core.Tests;
 public sealed class PinRemediationContractsTests
 {
     [Test]
-    public async Task IActionShaResolver_MockImplementationCompilesAndReturnsTuple()
+    public async Task IActionShaResolver_MockImplementationCompilesAndReturnsResolution()
     {
         IActionShaResolver resolver = new FakeActionShaResolver();
 
-        var (sha, tagComment) = await resolver.ResolveAsync("actions", "checkout", "v4");
+        var resolution = await resolver.ResolveAsync("actions", "checkout", "v4");
 
-        await Assert.That(sha).IsEqualTo("0123456789abcdef0123456789abcdef01234567");
-        await Assert.That(tagComment).IsEqualTo("v4");
+        await Assert.That(resolution.Sha).IsEqualTo("0123456789abcdef0123456789abcdef01234567");
+        await Assert.That(resolution.TagComment).IsEqualTo("v4");
     }
 
     [Test]
@@ -43,9 +43,9 @@ public sealed class PinRemediationContractsTests
 
     private sealed class FakeActionShaResolver : IActionShaResolver
     {
-        public Task<(string? Sha, string? TagComment)> ResolveAsync(string owner, string repo, string refStr, CancellationToken cancellationToken = default)
+        public Task<ActionShaResolution> ResolveAsync(string owner, string repo, string refStr, CancellationToken cancellationToken = default)
         {
-            return Task.FromResult<(string? Sha, string? TagComment)>(("0123456789abcdef0123456789abcdef01234567", refStr));
+            return Task.FromResult(ActionShaResolution.Resolved("0123456789abcdef0123456789abcdef01234567", refStr));
         }
     }
 

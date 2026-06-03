@@ -1,4 +1,4 @@
-﻿# Seiton Linter Specification
+# Seiton Linter Specification
 
 > This document is language-neutral — it specifies WHAT the Linter does, not HOW a specific implementation achieves it. Defines the linter contract for rule execution, lint configuration, and diagnostic processing. For C#-specific implementation details, see `Seiton_Linter_csharp_spec.md`, For Go-specific implementation details, see `Seiton_Linter_go_spec.md`. Parser and linter behavior are specified in `Seiton_Parser_spec.md` and `Seiton_Linter_spec.md`.
 
@@ -1324,6 +1324,16 @@ Current implementation behavior:
 5. If no eligible candidate exists, remediation returns skip (no fix).
 
 When the requested ref is not version-like, resolver keeps direct ref resolution and applies age gate to that resolved target.
+
+Ref resolution order for `IActionShaResolver`:
+
+1. Attempt `refs/tags/{ref}` first.
+2. If tag lookup returns not found, attempt `refs/heads/{ref}` as branch fallback.
+3. If neither exists, resolution fails according to `network.on-error`.
+
+Rationale:
+- GitHub Actions ecosystem commonly uses moving branch aliases such as `v1`.
+- Without branch fallback, `min-age-days: 0` still cannot pin `owner/repo@v1` when `v1` is a branch but not a tag.
 
 #### 12.3.8 `fix.images.exclude-images` and `fix.images.exclude-tags`
 

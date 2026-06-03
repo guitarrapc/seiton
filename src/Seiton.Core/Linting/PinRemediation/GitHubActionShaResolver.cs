@@ -18,7 +18,7 @@ public sealed class GitHubActionShaResolver(HttpClient httpClient, FixPinningCon
     private readonly string[] _excludeBranches = ToExcludeBranchArray(pinningConfig.ExcludeBranches);
     private readonly CompiledIgnoreActionEntry[] _compiledIgnoreActions = CompileIgnoreActions(pinningConfig.IgnoreActions);
 
-    public async Task<(string? Sha, string? TagComment)> ResolveAsync(
+    public async Task<ActionShaResolution> ResolveAsync(
         string owner,
         string repo,
         string refStr,
@@ -26,13 +26,13 @@ public sealed class GitHubActionShaResolver(HttpClient httpClient, FixPinningCon
     {
         if (ShouldSkip(owner, repo, refStr))
         {
-            return (null, null);
+            return ActionShaResolution.Skipped($"pinning skipped by fix.pinning exclude settings for '{owner}/{repo}@{refStr}'");
         }
 
         var cacheKey = string.Concat(owner, "/", repo, "@", refStr);
         if (_successCache.TryGetValue(cacheKey, out var cached))
         {
-            return (cached.Sha, cached.TagComment);
+            return ActionShaResolution.Resolved(cached.Sha, cached.TagComment);
         }
 
         var token = ResolveToken();
@@ -43,7 +43,8 @@ public sealed class GitHubActionShaResolver(HttpClient httpClient, FixPinningCon
             var selectedTag = await SelectBestEligibleTagAsync(owner, repo, family, token, cancellationToken);
             if (string.IsNullOrWhiteSpace(selectedTag))
             {
-                return (null, null);
+                return ActionShaResolution.Skipped(
+                    $"pinning skipped: no eligible tag satisfies fix.pinning.min-age-days={_pinningConfig.MinAgeDays} for '{owner}/{repo}@{refStr}'");
             }
 
             resolvedRef = selectedTag;
@@ -57,14 +58,15 @@ public sealed class GitHubActionShaResolver(HttpClient httpClient, FixPinningCon
                 var age = DateTimeOffset.UtcNow - result.TagDate.Value;
                 if (age.TotalDays < _pinningConfig.MinAgeDays)
                 {
-                    return (null, null);
+                    return ActionShaResolution.Skipped(
+                        $"pinning skipped: resolved ref '{resolvedRef}' is younger than fix.pinning.min-age-days={_pinningConfig.MinAgeDays} for '{owner}/{repo}@{refStr}'");
                 }
             }
         }
 
         var cacheValue = new CachedResolution(result.Sha!, resolvedRef);
         _successCache.TryAdd(cacheKey, cacheValue);
-        return (cacheValue.Sha, cacheValue.TagComment);
+        return ActionShaResolution.Resolved(cacheValue.Sha, cacheValue.TagComment);
     }
 
     private async Task<string?> SelectBestEligibleTagAsync(
@@ -385,7 +387,39 @@ public sealed class GitHubActionShaResolver(HttpClient httpClient, FixPinningCon
         string token,
         CancellationToken cancellationToken)
     {
-        var refPath = $"repos/{owner}/{repo}/git/ref/tags/{Uri.EscapeDataString(refStr)}";
+        var escapedRef = Uri.EscapeDataString(refStr);
+        var tagRefPath = $"repos/{owner}/{repo}/git/ref/tags/{escapedRef}";
+        var refResult = await TryResolveFromGitRefPathAsync(apiBaseUri, owner, repo, tagRefPath, token, cancellationToken);
+        if (refResult.Success)
+        {
+            return refResult;
+        }
+
+        // Branch fallback: tags-only resolution fails for refs like "v1" when the repository
+        // uses a moving branch alias instead of creating a "v1" tag.
+        if (refResult.StatusCode == HttpStatusCode.NotFound)
+        {
+            var branchRefPath = $"repos/{owner}/{repo}/git/ref/heads/{escapedRef}";
+            var branchResult = await TryResolveFromGitRefPathAsync(apiBaseUri, owner, repo, branchRefPath, token, cancellationToken);
+            if (branchResult.Success)
+            {
+                return branchResult;
+            }
+
+            return branchResult;
+        }
+
+        return refResult;
+    }
+
+    private async Task<ResolveAttemptResult> TryResolveFromGitRefPathAsync(
+        Uri apiBaseUri,
+        string owner,
+        string repo,
+        string refPath,
+        string token,
+        CancellationToken cancellationToken)
+    {
         using var refResponse = await SendGetAsync(apiBaseUri, refPath, token, cancellationToken);
         if (!refResponse.IsSuccessStatusCode)
         {
@@ -394,8 +428,7 @@ public sealed class GitHubActionShaResolver(HttpClient httpClient, FixPinningCon
 
         await using var refStream = await refResponse.Content.ReadAsStreamAsync(cancellationToken);
         using var refDocument = await JsonDocument.ParseAsync(refStream, cancellationToken: cancellationToken);
-        var root = refDocument.RootElement;
-        var objectNode = root.GetProperty("object");
+        var objectNode = refDocument.RootElement.GetProperty("object");
         var objectType = objectNode.GetProperty("type").GetString();
         var objectSha = objectNode.GetProperty("sha").GetString();
 
