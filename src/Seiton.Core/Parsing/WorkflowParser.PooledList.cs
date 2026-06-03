@@ -15,6 +15,11 @@ public static partial class WorkflowParser
         }
 
         var (array, count) = buffer.DetachArray();
+        if (RuntimeHelpers.IsReferenceOrContainsReferences<T>() && count < array.Length)
+        {
+            Array.Clear(array, count, array.Length - count);
+        }
+
         arena.RegisterSliceMapBuffer(array);
         return new ArenaList<T>(array, count);
     }
@@ -24,6 +29,11 @@ public static partial class WorkflowParser
     {
         var array = ArrayPool<T>.Shared.Rent(1);
         array[0] = item;
+        if (RuntimeHelpers.IsReferenceOrContainsReferences<T>() && array.Length > 1)
+        {
+            Array.Clear(array, 1, array.Length - 1);
+        }
+
         arena.RegisterSliceMapBuffer(array);
         return new ArenaList<T>(array, 1);
     }
