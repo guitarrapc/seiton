@@ -280,6 +280,22 @@ public sealed class DiagnosticFormatterRichTextTests
         await Assert.That(output).DoesNotContain("\r\r");
     }
 
+    [Test]
+    public async Task Rich_SourceSnippet_MultiLineSpan_OverStackLimit_UsesPooledPath()
+    {
+        // 20-line span exceeds MaxStackLineSlices(16) and must use ArrayPool path.
+        var lines = Enumerable.Range(1, 20).Select(i => $"line-{i:00}");
+        var source = Encoding.UTF8.GetBytes(string.Join('\n', lines) + "\n");
+        var sourceMap = new Dictionary<string, byte[]> { ["ci.yml"] = source };
+
+        var diag = MakeDiagnostic(DiagnosticSeverity.Error, "pooled span", 1, 1, 20, 7, filePath: "ci.yml");
+        var output = Render(diag, sourceMap: sourceMap);
+
+        await Assert.That(output).Contains("line-01");
+        await Assert.That(output).Contains("line-20");
+        await Assert.That(output).Contains("20 |");
+    }
+
     // Rich format — blank line between diagnostics
 
     [Test]
