@@ -4,7 +4,8 @@ using System.Text;
 namespace Seiton.Benchmark;
 
 /// <summary>
-/// Measures multi-file lint throughput for sequential vs parallel execution.
+/// Measures multi-file lint throughput and cumulative allocation for sequential vs parallel execution.
+/// For peak live heap (retained memory), use <see cref="MultiFileLintPeakMemoryBenchmark"/>.
 /// Used as baseline (P0) and comparison target (P4) for parallel check implementation.
 /// </summary>
 [MemoryDiagnoser]
@@ -45,38 +46,11 @@ public class MultiFileLintBenchmark
 
     /// <summary>Sequential path: single engine, for loop (current implementation equivalent)</summary>
     [Benchmark(Baseline = true, Description = "Sequential (for loop)")]
-    public int CheckSequential()
-    {
-        var engine = new LintEngine();
-        var total = 0;
-        for (var i = 0; i < _yamlFiles.Length; i++)
-        {
-            var result = engine.CheckDirect(_yamlFiles[i], _filePaths[i], out var arena);
-            total += result.Diagnostics.Length;
-            arena?.Dispose();
-        }
-        return total;
-    }
+    public int CheckSequential() =>
+        MultiFileLintHarness.CheckSequential(_yamlFiles, _filePaths);
 
     /// <summary>Parallel path: ThreadLocal + Parallel.For (post-parallelization target)</summary>
     [Benchmark(Description = "Parallel (ThreadLocal)")]
-    public int CheckParallel()
-    {
-        using var engines = new ThreadLocal<LintEngine>(
-            static () => new LintEngine(), trackAllValues: false);
-        var slots = new int[_yamlFiles.Length];
-
-        Parallel.For(0, _yamlFiles.Length,
-            new ParallelOptions { MaxDegreeOfParallelism = Environment.ProcessorCount },
-            i =>
-            {
-                var result = engines.Value!.CheckDirect(_yamlFiles[i], _filePaths[i], out var arena);
-                slots[i] = result.Diagnostics.Length;
-                arena?.Dispose();
-            });
-
-        var total = 0;
-        for (var i = 0; i < slots.Length; i++) total += slots[i];
-        return total;
-    }
+    public int CheckParallel() =>
+        MultiFileLintHarness.CheckParallel(_yamlFiles, _filePaths);
 }

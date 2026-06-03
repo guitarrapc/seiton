@@ -44,11 +44,10 @@
 
 | コンポーネント | 役割 |
 |---|---|
-| `RetainedMemoryProbe` | 実行中の live heap ピークを計測（`GC.GetTotalMemory` + `PeakSampler`） |
-| `MultiFileLintHarness` | Sequential / Parallel の multi-file lint ループを共通化 |
+| `RetainedMemoryProbe` | 実行中の live heap ピークを計測（**Seiton.Benchmark 内**） |
+| `MultiFileLintHarness` | Sequential / Parallel の multi-file lint ループ（**Seiton.Benchmark 内**） |
 | `MultiFileLintBenchmark` | 従来どおり **スループット + 累積 `Allocated`** を計測 |
 | `MultiFileLintPeakMemoryBenchmark` | **`PeakHeap` 列（bytes）** でピーク常駐 heap delta を計測 |
-| `RetainedMemoryProbeTests` | プローブの正当性 + parallel peak の sub-linear 性を検証 |
 | `benchmark.yaml` | `*MultiFileLintPeakMemoryBenchmark*` フィルタを追加 |
 
 ### API 設計（ユーザーファースト）
@@ -56,7 +55,7 @@
 - **2 つのベンチを用途で分離** — 混在させない。
   - スループット / 累積 allocation → `MultiFileLintBenchmark`
   - ピーク常駐 heap → `MultiFileLintPeakMemoryBenchmark`
-- **`RetainedMemoryProbe` / `MultiFileLintHarness` は internal** — ベンチとテストの共有実装。CLI ユーザー向け API は変更なし。
+- **`RetainedMemoryProbe` / `MultiFileLintHarness` は Seiton.Benchmark 専用** — 計測とベンチシナリオ配線。Seiton.Core には含めない。
 - **`PeakHeap` 列** — BDN の `Mean`（時間）と混同しないよう、専用カラムで bytes を表示。
 
 ### ベンチマーク結果（実装後、Windows / Ryzen 9 7950X3D / .NET 10.0.8 / ShortRun）
@@ -110,16 +109,15 @@
 |---|---|
 | `GC.GetGCMemoryInfo().HeapSizeBytes` ではピークを捕捉できない | `GC.GetTotalMemory` に変更 |
 | BDN が `long` 戻り値を `Mean ms` と誤表示 | `PeakHeapColumn` + `PeakMemoryBenchmarkConfig` で bytes 列を追加 |
-| メモリテストが並列実行で flaky | `[NotInParallel("RetainedMemory")]` + sub-linear 判定を F10→F50 比較に変更 |
 | `IterationSetup` 内 GC を計測対象に含めていた | GC compact を `IterationSetup` に分離し、lint 本体のみ計測 |
+| 計測コードを Seiton.Core に置いていた | `RetainedMemoryProbe` / `MultiFileLintHarness` を Seiton.Benchmark に移動 |
 
 ### CI ゲート方針（提案）
 
 | ベンチ | 用途 | ゲート |
 |---|---|---|
 | `MultiFileLintBenchmark` | スループット / 累積 allocation 回帰 | Mean ±10%, Allocated ±10% |
-| `MultiFileLintPeakMemoryBenchmark` | 常駐 heap 上限 | Parallel F50/F10 PeakHeap < 3.75x（= 5x linear x 0.75） |
-| `RetainedMemoryProbeTests` | 上記の自動検証 | `dotnet test` で常時実行 |
+| `MultiFileLintPeakMemoryBenchmark` | 常駐 heap 上限 | Parallel F50/F10 PeakHeap < 3.75x（= 5x linear x 0.75）。ベンチ結果を手動/CI で確認 |
 
 ---
 
