@@ -413,6 +413,144 @@ rules:
 >         refs: [main, master]
 > ```
 
+### Rule-Specific Options
+
+<a id="runner-labelknown-hosted-labels"></a>
+#### `runner-label.known-hosted-labels`
+
+Additional GitHub-hosted runner labels treated as known by `runner-label` (additive, case-insensitive normalization).
+
+```yaml
+rules:
+  runner-label:
+    known-hosted-labels:
+      - my-org-runner-v2
+```
+
+<a id="runner-no-latestfix-mapping"></a>
+#### `runner-no-latest.fix-mapping`
+
+Label replacement map (`source -> pinned`) used by `runner-no-latest` detection and auto-fix.
+
+```yaml
+rules:
+  runner-no-latest:
+    fix-mapping:
+      ubuntu-latest: "ubuntu-24.04"
+      windows-latest: "windows-2025"
+      macos-latest: "macos-15"
+      my-org-runner-latest: "my-org-runner-v2"
+```
+
+<a id="dangerous-triggersevents"></a>
+#### `dangerous-triggers.events`
+
+Additional trigger event names treated as dangerous by `dangerous-triggers` (additive set).
+
+```yaml
+rules:
+  dangerous-triggers:
+    events:
+      - issue_comment
+```
+
+<a id="expr-undefined-varassume-events"></a>
+#### `expr-undefined-var.assume-events`
+
+Use this when expression validation needs to assume additional trigger events for context resolution (especially `inputs.*` availability).
+
+```yaml
+rules:
+  expr-undefined-var:
+    assume-events:
+      - workflow_dispatch
+      - workflow_call
+```
+
+Behavior:
+
+- Entries are additive and case-insensitive.
+- `workflow_dispatch` / `workflow_call` assumptions allow `inputs.*` to be treated as runtime-available even when the current workflow trigger set is mixed or cannot be narrowed statically.
+- This is intended to reduce false positives in `expr-undefined-var` for event-dependent expressions.
+
+<a id="cache-poisoninguntrusted-triggers"></a>
+#### `cache-poisoning.untrusted-triggers`
+
+Additional trigger event names treated as untrusted by `cache-poisoning` (additive set).
+
+```yaml
+rules:
+  cache-poisoning:
+    untrusted-triggers:
+      - issue_comment
+```
+
+<a id="self-hosted-runneruntrusted-triggers"></a>
+#### `self-hosted-runner.untrusted-triggers`
+
+Additional trigger event names treated as untrusted by `self-hosted-runner` (additive set).
+
+```yaml
+rules:
+  self-hosted-runner:
+    untrusted-triggers:
+      - issue_comment
+```
+
+<a id="credentialspublic-registries"></a>
+#### `credentials.public-registries`
+
+Additional registry hosts treated as public/credential-optional by `credentials` (additive set).
+
+```yaml
+rules:
+  credentials:
+    public-registries:
+      - registry.example.com
+      - mirror.example.net:5000
+```
+
+<a id="unredacted-secretsoutput-commands"></a>
+#### `unredacted-secrets.output-commands`
+
+Additional shell commands watched as output sinks by `unredacted-secrets` (additive set).
+
+```yaml
+rules:
+  unredacted-secrets:
+    output-commands:
+      - tee
+```
+
+<a id="unpinned-usesignore-actions"></a>
+#### `unpinned-uses.ignore-actions`
+
+Action ignore entries for `unpinned-uses` (`owner` glob required, optional `refs` exact-match list).
+
+```yaml
+rules:
+  unpinned-uses:
+    ignore-actions:
+      - owner: "my-org/internal-action"
+      - owner: "my-org/setup-*"
+      - owner: "my-org/*"
+        refs: [main, master]
+```
+
+<a id="forbidden-usesdeny--allow"></a>
+#### `forbidden-uses.deny` / `forbidden-uses.allow`
+
+Wildcard policy patterns controlling denied and explicitly allowed `uses:` references for `forbidden-uses`.
+
+```yaml
+rules:
+  forbidden-uses:
+    deny:
+      - "deprecated-org/*"
+    allow:
+      - "approved-org/*"
+```
+
 ---
 
 ## Exclusions

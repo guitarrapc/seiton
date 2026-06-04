@@ -773,7 +773,10 @@ internal static class DynamicContextTypeBuilder
     /// Builds the inputs context type override for a workflow.
     /// Returns a strict object keyed by input names when workflow_call or workflow_dispatch inputs are defined.
     /// </summary>
-    internal static (byte[] NameUtf8, ExprType Type) BuildInputsOverride(IReadOnlyList<Event> on, byte[]? utf8Yaml = null)
+    internal static (byte[] NameUtf8, ExprType Type) BuildInputsOverride(
+        IReadOnlyList<Event> on,
+        IReadOnlyList<string>? assumeEvents = null,
+        byte[]? utf8Yaml = null)
     {
         for (var i = 0; i < on.Count; i++)
         {
@@ -788,6 +791,12 @@ internal static class DynamicContextTypeBuilder
             {
                 return (InputsKeyUtf8, BuildWorkflowDispatchInputsType(dispatchInputs, utf8Yaml));
             }
+        }
+
+        if (HasAnyAssumedInputsEvent(assumeEvents))
+        {
+            // Assume those trigger modes provide runtime inputs, but schema is unknown in config.
+            return (InputsKeyUtf8, looseDynamic);
         }
 
         // No inputs defined — return strict empty so that any inputs.X is flagged as undefined.
@@ -850,6 +859,26 @@ internal static class DynamicContextTypeBuilder
         }
 
         return ExprType.Object(props, strict: true);
+    }
+
+    private static bool HasAnyAssumedInputsEvent(IReadOnlyList<string>? assumeEvents)
+    {
+        if (assumeEvents is null)
+        {
+            return false;
+        }
+
+        for (var i = 0; i < assumeEvents.Count; i++)
+        {
+            var ev = assumeEvents[i];
+            if (ev.Equals("workflow_dispatch", StringComparison.OrdinalIgnoreCase)
+                || ev.Equals("workflow_call", StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /// <summary>

@@ -561,17 +561,10 @@ jobs:
       - run: echo ok
 ```
 
-**Configuration — fix-mapping:**
+**Configuration:**
 
-For self-hosted runners, add their labels to `rules.runner-label.known-hosted-labels` in [configuration](configuration.md).
-
-```yaml
-# seiton.yaml
-rules:
-  runner-label:
-    known-hosted-labels:
-      - my-org-runner-v2
-```
+- `known-hosted-labels`: Add runner labels that should be treated as known GitHub-hosted labels (reduces unknown-label false positives).
+- See: [configuration.md#runner-labelknown-hosted-labels](configuration.md#runner-labelknown-hosted-labels)
 
 ---
 
@@ -613,34 +606,10 @@ jobs:
 - After pinning, verify tool/runtime compatibility on the new fixed image.
 - For custom/self-hosted labels, ensure the replacement label exists in the runner fleet.
 
-**Configuration — fix-mapping:**
+**Configuration:**
 
-Use `fix-mapping` to define label replacement pairs. When configured, `seiton --fix` can automatically replace detected labels with their pinned equivalents. The mapping also extends detection to custom (non-built-in) labels.
-
-```yaml
-# seiton.yaml
-rules:
-  runner-no-latest:
-    fix-mapping:
-      ubuntu-latest: "ubuntu-24.04"
-      windows-latest: "windows-2025"
-      macos-latest: "macos-15"
-      my-org-runner-latest: "my-org-runner-v2"
-```
-
-Keys are matched **case-insensitively**. Values are the replacement text inserted verbatim.
-
-**Auto-fix example** (with the config above and `seiton --fix`):
-
-```yaml
-# Before
-runs-on: ubuntu-latest
-
-# After
-runs-on: ubuntu-24.04
-```
-
-Without `fix-mapping`, the rule still detects built-in `*-latest` labels but cannot auto-fix them.
+- `fix-mapping`: Define a label replacement map (`source -> pinned`) used by detection and `seiton --fix` rewrite targets.
+- See: [configuration.md#runner-no-latestfix-mapping](configuration.md#runner-no-latestfix-mapping)
 
 ---
 
@@ -1562,15 +1531,10 @@ jobs:
 - Conditional guards reduce risk but do not fully remove trust-boundary complexity; keep privileged operations isolated.
 - Re-test approval/deploy flows after trigger changes to confirm expected execution paths.
 
-**Configuration — extend the dangerous-events set:**
+**Configuration:**
 
-```yaml
-# seiton.yaml
-rules:
-  dangerous-triggers:
-    events:
-      - issue_comment
-```
+- `events`: Add trigger event names treated as dangerous for this rule (additive to built-in defaults).
+- See: [configuration.md#dangerous-triggersevents](configuration.md#dangerous-triggersevents)
 
 ---
 
@@ -1815,7 +1779,8 @@ jobs:
 
 **Configuration:**
 
-TODO
+- `assume-events`: Assume additional trigger events during expression validation to reduce event-context false positives.
+- See: [configuration.md#expr-undefined-varassume-events](configuration.md#expr-undefined-varassume-events)
 
 ---
 
@@ -1881,17 +1846,10 @@ jobs:
 - Namespace cache keys so PR and protected-branch keys cannot collide.
 - Confirm cache hit-rate and performance after segmentation to avoid accidental regressions.
 
-**Configuration — extend untrusted triggers:**
+**Configuration:**
 
-Add additional triggers considered untrusted for this rule.
-
-```yaml
-# seiton.yaml
-rules:
-  cache-poisoning:
-    untrusted-triggers:
-      - issue_comment
-```
+- `untrusted-triggers`: Add trigger events treated as untrusted by this rule (additive to built-in defaults).
+- See: [configuration.md#cache-poisoninguntrusted-triggers](configuration.md#cache-poisoninguntrusted-triggers)
 
 ---
 
@@ -1951,17 +1909,10 @@ jobs:
 - `if` guards are defense-in-depth, not a substitute for strong runner isolation.
 - For unavoidable self-hosted use, combine trigger restrictions with ephemeral runner lifecycle controls.
 
-**Configuration — extend untrusted triggers:**
+**Configuration:**
 
-Add additional triggers considered untrusted.
-
-```yaml
-# seiton.yaml
-rules:
-   self-hosted-runner:
-    untrusted-triggers:
-      - issue_comment
-```
+- `untrusted-triggers`: Add trigger events treated as untrusted by this rule (additive to built-in defaults).
+- See: [configuration.md#self-hosted-runneruntrusted-triggers](configuration.md#self-hosted-runneruntrusted-triggers)
 
 ---
 
@@ -2205,15 +2156,10 @@ jobs:
       - run: echo ok
 ```
 
-**Configuration — extend public registries:**
+**Configuration:**
 
-```yaml
-# seiton.yaml
-rules:
-  credentials:
-    public-registries:
-      - registry.example.com
-```
+- `public-registries`: Add registry hosts treated as public / credential-optional (additive to built-in defaults).
+- See: [configuration.md#credentialspublic-registries](configuration.md#credentialspublic-registries)
 
 ---
 
@@ -2404,17 +2350,10 @@ jobs:
 - Avoid printing transformed/partial secret values, not only raw secret strings.
 - If debugging is required, log presence/length/state flags instead of values.
 
-**Configuration — extend output commands:**
+**Configuration:**
 
-Add additional output commands to the detection set.
-
-```yaml
-# seiton.yaml
-rules:
-  unredacted-secrets:
-    output-commands:
-      - tee
-```
+- `output-commands`: Add commands watched as output sinks for secret-printing detection (additive to built-in defaults).
+- See: [configuration.md#unredacted-secretsoutput-commands](configuration.md#unredacted-secretsoutput-commands)
 
 ---
 
@@ -2588,25 +2527,10 @@ Use `seiton --fix --enable-pin-network` to automatically resolve and apply SHA p
 - Verify resolved SHAs match the intended release line and policy before merge.
 - Keep exceptions explicit via `ignore-actions` so mutable-ref usage remains auditable.
 
-**Configuration — ignore specific actions:**
+**Configuration:**
 
-Add specific actions or entire owner namespaces to the ignore list when mutable refs are acceptable for certain trusted dependencies. Patterns use wildcard matching (`*` = any sequence, `?` = single character) against `owner/repo`.
-
-```yaml
-# seiton.yaml
-rules:
-  unpinned-uses:
-    ignore-actions:
-      - owner: "my-org/internal-action"
-      - owner: "my-org/setup-*"
-      # Omit refs to ignore ALL refs from this owner
-      - owner: "my-org/*"
-      # Include refs to ignore only @main and @master from this owner
-      - owner: "my-org/*"
-        refs: [main, master]
-```
-
-Each entry is an object with required `owner` (glob pattern) and optional `refs` (non-empty list of exact ref strings, case-sensitive). Omitting `refs` ignores all refs for matching actions. Including `refs` lets you trust default-branch refs from your own org while still warning about arbitrary branch/tag refs from the same owner.
+- `ignore-actions`: Define action patterns excluded from SHA-pinning checks (`owner` required, `refs` optional).
+- See: [configuration.md#unpinned-usesignore-actions](configuration.md#unpinned-usesignore-actions)
 
 ---
 
@@ -2784,17 +2708,8 @@ jobs:
 
 **Configuration:**
 
-Add allow and deny patterns to control which actions are acceptable in your workflows. Patterns use wildcard matching (`*` = any sequence, `?` = single character) against `owner/repo`.
-
-```yaml
-# seiton.yaml
-rules:
-  forbidden-uses:
-    deny:
-      - "deprecated-org/*"
-    allow:
-      - "approved-org/*"
-```
+- `deny` / `allow`: Define wildcard policy patterns for disallowed and explicitly allowed `uses:` references.
+- See: [configuration.md#forbidden-usesdeny--allow](configuration.md#forbidden-usesdeny--allow)
 
 ---
 
