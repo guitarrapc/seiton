@@ -354,7 +354,7 @@ main {
   text-align: center;
 }
 
-@media (min-width: 1240px) {
+@media (min-width: 840px) {
   #header-bar header {
     grid-column: 2;
     grid-row: 1;
@@ -399,7 +399,8 @@ main {
 
 #header-bar h1 {
   margin: 0;
-  font-size: clamp(1.5rem, 2.4vw + 0.75rem, 2.35rem);
+  /* Fixed on narrow viewports so the version badge stays on the same row. */
+  font-size: 1.5rem;
   font-weight: 700;
   letter-spacing: -0.035em;
   line-height: 1.15;
@@ -414,6 +415,25 @@ main {
   height: 32px;
   flex-shrink: 0;
   background: url('icon-dark.svg') no-repeat center / contain;
+}
+
+@media (min-width: 840px) {
+  #header-bar h1 {
+    font-size: clamp(2rem, 0.9rem + 1.65vw, 2.85rem);
+  }
+
+  .site-logo {
+    width: clamp(36px, 1.65rem + 0.45vw, 44px);
+    height: clamp(36px, 1.65rem + 0.45vw, 44px);
+  }
+
+  .site-title-row {
+    gap: 0.55rem 1rem;
+  }
+
+  .version-badge {
+    font-size: clamp(0.82rem, 0.72rem + 0.28vw, 1rem);
+  }
 }
 
 :root[data-theme="light"] .site-logo {
@@ -572,9 +592,21 @@ a.version-badge:focus-visible {
   }
 }
 
+@media (max-width: 839.98px) {
+  .site-title-row {
+    flex-wrap: nowrap;
+    gap: 0.35rem 0.55rem;
+  }
+}
+
 @media (max-width: 639.98px) {
   #header-bar {
     padding: 1rem 0.65rem;
+  }
+
+  .version-badge {
+    font-size: 0.72rem;
+    padding: 0.24em 0.62em;
   }
 
   .controls-row--meta {
