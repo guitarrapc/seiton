@@ -43,9 +43,42 @@
 
 ### Phase 0 — テンプレート・同期ルール（1 PR）
 
-- [ ] `docs_authoring_guidelines.md` §2.1 を上記テンプレートに更新
-- [ ] `docs/rules.md` 冒頭に「各ルールの読み方」（Summary / Why / Remediation / When fixing）を 1 段落追加
-- [ ] 診断文言を持つルール一覧を機械的に洗い出し（`FixHint` / `DiagnosticFix` / 定数 `Message`）→ Phase 1 のチェックリスト化
+- [x] `docs_authoring_guidelines.md` §2.1 を上記テンプレートに更新
+- [x] `docs/rules.md` 冒頭に「各ルールの読み方」（Summary / Why / Remediation / When fixing）を 1 段落追加
+- [x] 診断文言を持つルール一覧を機械的に洗い出し（`FixHint` / `DiagnosticFix` / 定数 `Message`）→ Phase 1 のチェックリスト化
+
+#### Phase 0 実施結果: 診断文言ソース抽出（機械抽出）
+
+抽出コマンド:
+
+```shell
+rg "FixHint|DiagnosticFix\(|Message\s*=|WarningMessage|ErrorMessage|InfoMessage|DiagnosticMessage" src/Seiton.Core/Linting/Rules --files-with-matches
+rg "DiagnosticFix\(" src/Seiton.Core/Linting/Rules --files-with-matches
+```
+
+抽出結果（重複除外済み、Phase 1 チェック対象）:
+
+- [ ] `artipacked`
+- [ ] `bot-conditions`
+- [ ] `checkout-persist-credentials`
+- [ ] `deny-read-all`
+- [ ] `deny-write-all`
+- [ ] `forbidden-uses`
+- [ ] `id-naming`
+- [ ] `if-expr-wrapper`
+- [ ] `job-permissions-required`
+- [ ] `job-timeout-minutes-required`
+- [ ] `matrix`
+- [ ] `popular-action-inputs`
+- [ ] `run-env-context-direct-use`
+- [ ] `run-inputs-context-direct-use`
+- [ ] `run-secrets-context-direct-use`
+- [ ] `runner-no-latest`
+- [ ] `secrets-whole-context-access`
+- [ ] `template-injection`
+- [ ] `unpinned-uses`
+- [ ] `unsound-condition`
+- [ ] `unsound-contains`
 
 ### Phase 1 — 高リスク・auto-fix あり（優先）
 

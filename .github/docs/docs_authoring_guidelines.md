@@ -39,10 +39,12 @@ Rules for writing and maintaining specification documents (`.github/docs/`) and 
 Every rule section follows this order:
 
 1. **Summary** — one sentence: what the rule detects.
-2. **Example trigger** — minimal YAML that fires the rule.
-3. **Remediation** — how to fix, with code example(s).
-4. **Notes** (optional) — edge cases, auto-fix limitations, advanced details.
-5. **Configuration** (optional) — rule-specific config keys.
+2. **Why** — 2-4 sentences describing the risk, motivation, and operational impact.
+3. **Example trigger** — minimal YAML that fires the rule.
+4. **Remediation** — how to fix, with code example(s).
+5. **When fixing** — 1-5 bullets of side effects, auto-fix limits, and follow-up checks.
+6. **Notes** (optional) — edge cases, auto-fix limitations, advanced details.
+7. **Configuration** (optional) — rule-specific config keys.
 
 ### 2.2 Example Purity
 
@@ -65,6 +67,8 @@ Every rule section follows this order:
 - Show the **recommended** approach first.
 - For policy/security rules with multiple valid fixes, list approaches as a bullet summary before code examples. Label each code block (e.g., `# Approach A: ...`).
 - Never present a single example as the "only correct answer" unless the fix is truly singular (e.g., `persist-credentials: false`).
+- Keep diagnostics concise; move long caveats to **When fixing**.
+- If a rule has an implementation-level fix hint (e.g., `FixHint` / `DiagnosticFix` description), copy the same key caution sentence into the first **When fixing** bullet.
 
 ### 2.5 Long Sections
 
