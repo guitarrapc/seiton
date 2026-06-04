@@ -1,4 +1,6 @@
-﻿using Seiton.Core.Linting.Rules;
+﻿using System.Text;
+using Seiton.Core.Linting;
+using Seiton.Core.Linting.Rules;
 
 namespace Seiton.Core.Tests;
 
@@ -102,5 +104,26 @@ public sealed partial class RuleInterfaceTests
         };
 
         await AssertRuleCases(new CheckoutPersistCredentialsRule(), "checkout-persist-credentials", cases);
+    }
+
+    [Test]
+    public async Task RuleRegression_CheckoutPersistCredentials_Message_UsesConcreteAuthRecoveryExamples()
+    {
+        const string yaml = """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - uses: actions/checkout@v4
+            """;
+
+        using var result = new LintEngine([new CheckoutPersistCredentialsRule()])
+            .Check(Encoding.UTF8.GetBytes(yaml), "test.yaml");
+
+        var diag = result.Diagnostics.First(d => d.RuleId == "checkout-persist-credentials");
+        await Assert.That(diag.Message.Contains("git remote set-url origin <url>", StringComparison.Ordinal)).IsTrue();
+        await Assert.That(diag.Message.Contains("gh auth setup-git", StringComparison.Ordinal)).IsTrue();
+        await Assert.That(diag.Message.Contains("...", StringComparison.Ordinal)).IsFalse();
     }
 }

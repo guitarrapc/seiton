@@ -524,12 +524,31 @@ public sealed class PlaygroundLintRunnerTests
     [NotInParallel(ConfigLockKey)]
     public async Task SetConfig_InvalidConfig_RetainsPreviousValidConfig()
     {
+        PlaygroundLintRunner.ResetSharedStateForTests();
+        PlaygroundLintRunner.ForceUseIncrementalLintForTests = false;
+
+        const string yaml = """
+            on: push
+            jobs:
+              build:
+                runs-on: ubuntu-latest
+                steps:
+                  - run: echo ok
+            """;
+
         const string validConfig = """
             rules:
               runner-no-latest:
                 enabled: false
             """;
-        PlaygroundLintRunner.SetConfig(validConfig);
+        var validResult = PlaygroundLintRunner.SetConfig(validConfig);
+        using (var validDoc = JsonDocument.Parse(validResult))
+        {
+            await Assert.That(validDoc.RootElement.GetArrayLength()).IsEqualTo(0);
+        }
+
+        await Assert.That(ContainsRunnerNoLatestDiagnostic(
+            PlaygroundLintRunner.RunToJsonUtf8(new string(yaml.AsSpan()), ".github/workflows/ci.yml"))).IsFalse();
 
         // Now set an invalid config
         const string invalidConfig = """
@@ -540,30 +559,11 @@ public sealed class PlaygroundLintRunnerTests
         using var doc = JsonDocument.Parse(result);
         await Assert.That(doc.RootElement.GetArrayLength()).IsGreaterThan(0);
 
-        // Verify the previous valid config is still active (runner-no-latest disabled)
-        const string yaml = """
-            on: push
-            jobs:
-              build:
-                runs-on: ubuntu-latest
-                steps:
-                  - run: echo ok
-            """;
-        var lintResult = PlaygroundLintRunner.RunToJsonUtf8(new string(yaml.AsSpan()), ".github/workflows/ci.yml");
-        using var lintDoc = JsonDocument.Parse(lintResult);
-        var hasRunnerNoLatest = false;
-        foreach (var el in lintDoc.RootElement.EnumerateArray())
-        {
-            if (el.TryGetProperty("ruleId", out var rid) && rid.GetString() == "runner-no-latest")
-            {
-                hasRunnerNoLatest = true;
-                break;
-            }
-        }
         // Previous config (runner-no-latest: false) should still be active
-        await Assert.That(hasRunnerNoLatest).IsFalse();
+        await Assert.That(ContainsRunnerNoLatestDiagnostic(
+            PlaygroundLintRunner.RunToJsonUtf8(new string(yaml.AsSpan()), ".github/workflows/ci.yml"))).IsFalse();
 
-        // Cleanup
+        PlaygroundLintRunner.ForceUseIncrementalLintForTests = null;
         PlaygroundLintRunner.SetConfig(null);
     }
 
@@ -687,5 +687,19 @@ public sealed class PlaygroundLintRunnerTests
         await Assert.That(column.GetInt32()).IsGreaterThan(0);
         await Assert.That(string.IsNullOrWhiteSpace(message.GetString())).IsFalse();
         await Assert.That(new HashSet<string> { "Error", "Warning", "Info" }.Contains(severity.GetString()!)).IsTrue();
+    }
+
+    private static bool ContainsRunnerNoLatestDiagnostic(byte[] lintJson)
+    {
+        using var lintDoc = JsonDocument.Parse(lintJson);
+        foreach (var el in lintDoc.RootElement.EnumerateArray())
+        {
+            if (el.TryGetProperty("ruleId", out var rid) && rid.GetString() == "runner-no-latest")
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 }

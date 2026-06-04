@@ -157,8 +157,10 @@ public static class PlaygroundLintRunner
                 Encoding.UTF8.GetBytes(normalized, utf8Span);
                 var hash = XxHash64.Hash(utf8Span);
 
-                // Hash-hit: return cached diagnostics bytes (skips config parse)
-                if (hash == _configHash && _configHash != 0)
+                // Hash-hit: return cached diagnostics bytes (skips config parse).
+                // If hash matches but user config was cleared without resetting the hash, re-parse.
+                if (hash == _configHash && _configHash != 0
+                    && (_cachedConfig is not null || _cachedConfigDiag.Length > 0))
                 {
                     return _cachedConfigDiag;
                 }
@@ -166,7 +168,7 @@ public static class PlaygroundLintRunner
                 // Hash-miss: parse config
                 var validation = LintConfigLibrary.Validate(configYaml, ".github/seiton.yaml");
 
-                if (validation.Diagnostics.Length == 0)
+                if (validation.IsValid)
                 {
                     // Success: update cache.
                     // The playground always needs Fix.Enabled=true (so rules build DiagnosticFix objects
@@ -197,6 +199,9 @@ public static class PlaygroundLintRunner
                 // (avoids re-parsing the same broken config on every keystroke).
                 _configHash = hash;
                 _cachedConfigDiag = diagBytes;
+                // Config content is unchanged, but drop lint caches so the next RunLint cannot
+                // reuse per-job diagnostics produced under a prior config (D-5d).
+                InvalidateLintCache();
                 return diagBytes;
             }
             finally

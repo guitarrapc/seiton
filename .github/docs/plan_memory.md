@@ -1,11 +1,11 @@
 # Playground メモリ枯渇・WASM OOB 調査メモ
 
-> 作成: 2026-06-04  
+> 作成: 2026-06-04
 > 対象: `tests/Seiton.Playground.Tests`、ブラウザ Playground（`src/Seiton.Playground`）
 
 ## 要約
 
-Playground テスト実行で **128GB RAM が枯渇**し、OS が強制シャットダウンする事象は、単一の小さなリークというより **複数の高ピーク要因が TUnit の並列実行と重なった結果**と判断した。本 PR では再発を抑えるガードを入れた。  
+Playground テスト実行で **128GB RAM が枯渇**し、OS が強制シャットダウンする事象は、単一の小さなリークというより **複数の高ピーク要因が TUnit の並列実行と重なった結果**と判断した。本 PR では再発を抑えるガードを入れた。
 別件として、編集中の **`      - uses:` だけ**（アクション ref 未入力）で **Release+AOT WASM が `memory access out of bounds` またはランタイム死亡**する問題があり、UI 側で該当入力中は WASM lint を延期する。
 
 ---
@@ -122,7 +122,7 @@ dotnet test tests/Seiton.Playground.Tests/Seiton.Playground.Tests.csproj -c Rele
 
 1. Release+AOT で Playground をホスト（または https://guitarrapc.github.io/seiton/ の本番相当ビルド）。
 2. デフォルトサンプル workflow の末尾に、行を追加しながら `      - uses:` で止める（ref 未入力）。
-3. 300ms debounce 後に `RunLint` が走ると、コンソール / トーストに `memory access out of bounds`、以降「ランタイムがクラッシュしました」。
+3. 500ms debounce 後に `RunLint` が走ると、コンソール / トーストに `memory access out of bounds`、以降「ランタイムがクラッシュしました」。
 
 **デスクトップのみの切り分け**:
 

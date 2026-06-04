@@ -173,6 +173,30 @@ public sealed class PlaygroundHtmlContractTests
     }
 
     [Test]
+    public async Task MainJs_RenderResults_SupportsCollapsibleDiagnosticMessages()
+    {
+        var path = Path.Combine(RepoPaths.FindRepoRoot(), "src", "Seiton.Playground", "wwwroot", "main.js");
+        var js = await File.ReadAllTextAsync(path);
+        await Assert.That(js).Contains("appendDiagnosticDescriptionCell");
+        await Assert.That(js).Contains("shouldCollapseDiagMessage");
+        await Assert.That(js).Contains("maybeAttachDiagMessageToggle");
+        await Assert.That(js).Contains("countRenderedDiagMessageLines");
+        await Assert.That(js).Contains("diag-message--collapsed");
+        await Assert.That(js).Contains("diag-message-toggle");
+        await Assert.That(js).Contains("DIAG_MESSAGE_COLLAPSE_MIN_CHARS");
+    }
+
+    [Test]
+    public async Task Stylesheet_DefinesCollapsibleDiagnosticMessageClasses()
+    {
+        var path = Path.Combine(RepoPaths.FindRepoRoot(), "src", "Seiton.Playground", "wwwroot", "style.css");
+        var css = await File.ReadAllTextAsync(path);
+        await Assert.That(css).Contains(".diag-message--collapsed");
+        await Assert.That(css).Contains(".diag-message-toggle");
+        await Assert.That(css).Contains("-webkit-line-clamp: 3");
+    }
+
+    [Test]
     public async Task Stylesheet_DefinesGutterMarkerInfoClass()
     {
         var path = Path.Combine(RepoPaths.FindRepoRoot(), "src", "Seiton.Playground", "wwwroot", "style.css");

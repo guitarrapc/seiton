@@ -224,6 +224,153 @@ public sealed class PlaygroundUiLayoutTests
     }
 
     [Test]
+    public async Task DiagnosticsTable_LongMessage_CanExpandAndCollapse()
+    {
+        var host = await PlaygroundUiTestHost.GetOrCreateAsync();
+        var browser = await PlaygroundUiBrowserSession.GetBrowserAsync();
+        await using var context = await browser.NewContextAsync(new BrowserNewContextOptions
+        {
+            ViewportSize = new ViewportSize { Width = 900, Height = 720 },
+        });
+        var page = await context.NewPageAsync();
+        await page.GotoAsync($"{host.BaseUrl.TrimEnd('/')}/?seitonTestHooks=1", new PageGotoOptions
+        {
+            WaitUntil = WaitUntilState.DOMContentLoaded,
+            Timeout = 120_000,
+        });
+
+        await page.WaitForFunctionAsync(
+            "() => typeof globalThis.__SEITON_PLAYGROUND_TEST__?.renderDiagnostics === 'function'",
+            arg: null,
+            new PageWaitForFunctionOptions { Timeout = 30_000 });
+
+        await page.EvaluateAsync(
+            """
+            () => globalThis.__SEITON_PLAYGROUND_TEST__.renderDiagnostics([{
+              line: 1,
+              column: 1,
+              severity: 'Error',
+              ruleId: 'long-msg-test',
+              message: 'A'.repeat(220),
+            }])
+            """);
+
+        var toggle = page.Locator(".diag-message-toggle");
+        await toggle.WaitForAsync(new LocatorWaitForOptions { Timeout = 5000 });
+        await Assert.That(await toggle.CountAsync()).IsEqualTo(1);
+        await Assert.That(await page.Locator(".diag-message--collapsed").CountAsync()).IsEqualTo(1);
+        await Assert.That(await toggle.TextContentAsync()).IsEqualTo("Show more");
+
+        await toggle.ClickAsync();
+        await Assert.That(await page.Locator(".diag-message--collapsed").CountAsync()).IsEqualTo(0);
+        await Assert.That(await toggle.TextContentAsync()).IsEqualTo("Show less");
+
+        await toggle.ClickAsync();
+        await Assert.That(await page.Locator(".diag-message--collapsed").CountAsync()).IsEqualTo(1);
+    }
+
+    [Test]
+    public async Task DiagnosticsTable_LongUrlMessage_NarrowViewport_ShowsExpandToggle()
+    {
+        const string message =
+            "character '\\' is invalid for branch and tag names. only special characters [, ?, +, *, \\, ! can be escaped with \\. "
+            + "see `man git-check-ref-format` for more details. note that regular expression is unavailable. "
+            + "note: filter pattern syntax is explained at https://docs.github.com/en/actions/using-workflows/workflow-syntax-for-github-actions#filter-pattern-cheat-sheet";
+
+        var host = await PlaygroundUiTestHost.GetOrCreateAsync();
+        var browser = await PlaygroundUiBrowserSession.GetBrowserAsync();
+        await using var context = await browser.NewContextAsync(new BrowserNewContextOptions
+        {
+            ViewportSize = new ViewportSize { Width = 600, Height = 720 },
+        });
+        var page = await context.NewPageAsync();
+        await page.GotoAsync($"{host.BaseUrl.TrimEnd('/')}/?seitonTestHooks=1", new PageGotoOptions
+        {
+            WaitUntil = WaitUntilState.DOMContentLoaded,
+            Timeout = 120_000,
+        });
+
+        await page.WaitForFunctionAsync(
+            "() => typeof globalThis.__SEITON_PLAYGROUND_TEST__?.renderDiagnostics === 'function'",
+            arg: null,
+            new PageWaitForFunctionOptions { Timeout = 30_000 });
+
+        await page.EvaluateAsync(
+            """
+            (msg) => globalThis.__SEITON_PLAYGROUND_TEST__.renderDiagnostics([{
+              line: 1,
+              column: 1,
+              severity: 'Warning',
+              ruleId: 'long-url-msg-test',
+              message: msg,
+            }])
+            """,
+            message);
+
+        var toggle = page.Locator(".diag-message-toggle");
+        await toggle.WaitForAsync(new LocatorWaitForOptions { Timeout = 5000 });
+        await Assert.That(await toggle.CountAsync()).IsEqualTo(1);
+    }
+
+    [Test]
+    public async Task DiagnosticsTable_ShortMessage_NoExpandToggleWhenFullyVisible()
+    {
+        // Keep short enough to stay within three rendered lines in the results column (900px still uses a 2-column linter grid).
+        const string message =
+            "on.push has unexpected key \"branch\" for \"push\" section. did you mean \"branches\"?";
+
+        var host = await PlaygroundUiTestHost.GetOrCreateAsync();
+        var browser = await PlaygroundUiBrowserSession.GetBrowserAsync();
+        await using var context = await browser.NewContextAsync(new BrowserNewContextOptions
+        {
+            ViewportSize = new ViewportSize { Width = 1280, Height = 720 },
+        });
+        var page = await context.NewPageAsync();
+        await page.GotoAsync($"{host.BaseUrl.TrimEnd('/')}/?seitonTestHooks=1", new PageGotoOptions
+        {
+            WaitUntil = WaitUntilState.DOMContentLoaded,
+            Timeout = 120_000,
+        });
+
+        await page.WaitForFunctionAsync(
+            "() => typeof globalThis.__SEITON_PLAYGROUND_TEST__?.renderDiagnostics === 'function'",
+            arg: null,
+            new PageWaitForFunctionOptions { Timeout = 30_000 });
+
+        await page.EvaluateAsync(
+            """
+            (msg) => globalThis.__SEITON_PLAYGROUND_TEST__.renderDiagnostics([{
+              line: 1,
+              column: 1,
+              severity: 'Error',
+              ruleId: 'short-msg-test',
+              message: msg,
+            }])
+            """,
+            message);
+
+        await page.EvaluateAsync(
+            "() => new Promise((r) => globalThis.requestAnimationFrame(() => globalThis.requestAnimationFrame(r)))");
+
+        var renderedLines = await page.EvaluateAsync<int>(
+            """
+            () => {
+              const msg = document.querySelector('.diag-message');
+              if (!msg) return 0;
+              const range = document.createRange();
+              range.selectNodeContents(msg);
+              const tops = new Set();
+              for (const rect of range.getClientRects()) {
+                tops.add(Math.round(rect.top));
+              }
+              return tops.size;
+            }
+            """);
+        await Assert.That(renderedLines).IsLessThanOrEqualTo(3);
+        await Assert.That(await page.Locator(".diag-message-toggle").CountAsync()).IsEqualTo(0);
+    }
+
+    [Test]
     public async Task DiagnosticsTable_RendersPositiveLineColumnAndMessage()
     {
         var host = await PlaygroundUiTestHost.GetOrCreateAsync();
