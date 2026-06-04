@@ -188,6 +188,8 @@ Online rules use the GitHub API. Set GITHUB_TOKEN (or SEITON_GITHUB_TOKEN) to av
 
 Validates core job shape. `uses` (reusable workflow call) is mutually exclusive with `steps` and `runs-on`. Each job must be either a reusable-call form (`uses`) or an executable form (`runs-on` + `steps`).
 
+**Why:** Invalid job shape causes workflow parse/runtime failures and makes execution intent ambiguous for reviewers.
+
 **Example trigger:**
 
 ```yaml
@@ -227,6 +229,8 @@ jobs:
 | ✓ | — | ✗ |
 
 Validates reusable workflow call semantics. `with` and `secrets` are only valid under a `uses` job. Reusable-call jobs must not contain incompatible execution keys (`steps`, `container`, `services`, etc.).
+
+**Why:** Reusable-call contract violations fail late at runtime and can silently bypass intended inputs/secrets wiring.
 
 **Example trigger:**
 
@@ -269,6 +273,8 @@ jobs:
 | ✓ | — | ✗ |
 
 Validates `permissions` values. Scalar must be `read-all` or `write-all`. Per-scope values must be `read`, `write`, or `none`. Even when valid, scalar permissions (`read-all`, `write-all`) emit a warning because explicit per-scope mapping is preferred.
+
+**Why:** Strict permission value validation prevents invalid tokens and nudges workflows toward explicit least-privilege declarations.
 
 **Example trigger:**
 
@@ -337,6 +343,8 @@ jobs:
 
 Validates the job dependency graph. Errors on unknown dependency targets and circular dependencies.
 
+**Why:** Broken dependency graphs create deadlocks or incorrect execution order, leading to partial or unreliable CI results.
+
 **Example trigger:**
 
 ```yaml
@@ -389,6 +397,8 @@ jobs:
 | ✓ | — | ✗ |
 
 Validates shell names in workflow/job defaults and `run` steps. Reports shells outside the supported set for the target platform.
+
+**Why:** Unsupported shell declarations fail at execution time and can silently diverge behavior across runner platforms.
 
 **Example trigger:**
 
@@ -485,6 +495,8 @@ jobs:
 
 Validates glob syntax in event trigger filters. Reports invalid patterns and incompatible filter combinations (`branches` vs `branches-ignore`, `paths` vs `paths-ignore`, `tags` vs `tags-ignore`).
 
+**Why:** Invalid trigger filters cause workflows to run too often or not at all, which can break release and protection pipelines.
+
 **Example trigger:**
 
 ```yaml
@@ -515,6 +527,8 @@ on:
 | ✓ | — | ✗ |
 
 Warns on unknown GitHub-hosted runner labels in `runs-on`. Self-hosted labels and expression-only values are excluded.
+
+**Why:** Unknown or conflicting runner labels lead to scheduling failures or platform mismatches that destabilize CI.
 
 **Example trigger:**
 
@@ -674,6 +688,8 @@ jobs:
 
 Requires an explicit `shell` declaration on composite action `run` steps. Applies only to action-metadata files.
 
+**Why:** Composite actions must be explicit about shell semantics to stay portable across caller workflows and runner OSes.
+
 **Example trigger (action.yml):**
 
 ```yaml
@@ -707,6 +723,8 @@ runs:
 | ✓ | — | ✗ |
 
 Validates `strategy.matrix` definitions. Reports inconsistent keys, invalid `include`/`exclude` shapes, and suspicious expansion patterns.
+
+**Why:** Matrix shape errors can explode combinations, skip intended targets, or fail jobs unpredictably.
 
 **Example trigger:**
 
@@ -765,6 +783,8 @@ jobs:
 
 Validates environment variable names in `env:` blocks follow the portable naming convention `[A-Z_][A-Z0-9_]*`. Reports names that contain lowercase letters, dashes, or start with a digit.
 
+**Why:** Portable env naming avoids shell-specific parsing differences and reduces subtle cross-platform failures.
+
 **Example trigger:**
 
 ```yaml
@@ -805,6 +825,8 @@ jobs:
 
 Warns on malformed, constant, or unsound `if` conditions. Reports always-true / always-false conditions and context misuse.
 
+**Why:** Unsound conditions weaken workflow control-flow guarantees and can unintentionally run or skip privileged steps.
+
 **Example trigger:**
 
 ```yaml
@@ -842,6 +864,8 @@ jobs:
 | ✓ | — | ✗ |
 
 Warns when `cond && a || b` fake ternary idioms are used in expression-bearing fields. This pattern has different semantics from a true ternary when `a` is falsy.
+
+**Why:** Fake ternary patterns are easy to misread and produce incorrect branches when the middle value can be falsy.
 
 **Example trigger:**
 
@@ -968,6 +992,8 @@ Auto-fix rewrites `|` to `|-` and `>` to `>-` when Seiton can locate the block-s
 
 Warns when workflows or jobs lack `concurrency` settings with explicit `cancel-in-progress`. Without concurrency limits, parallel runs can waste resources and cause race conditions.
 
+**Why:** Missing concurrency controls can trigger overlapping deploys and non-deterministic state transitions in shared environments.
+
 **Example trigger:**
 
 ```yaml
@@ -1004,6 +1030,11 @@ jobs:
       - run: echo ok
 ```
 
+**When fixing:**
+
+- `cancel-in-progress: true` can terminate in-flight runs; ensure this behavior is acceptable for deploy/release jobs.
+- Design `group` keys carefully to avoid unrelated branches canceling each other.
+
 > **Note:** Reusable-only workflows (`on: workflow_call`) and workflow-call jobs (`uses:`) are skipped. When workflow-level concurrency is set, job-level checks are suppressed.
 
 ---
@@ -1015,6 +1046,8 @@ jobs:
 | ✓ | — | ✗ |
 
 Detects `contains()` conditions that treat a plain string like a membership list, allowing substring matches to bypass the intended check.
+
+**Why:** Substring membership checks are bypass-prone and can let attacker-influenced values satisfy privileged conditions.
 
 **Example trigger:**
 
@@ -1049,6 +1082,8 @@ jobs:
 | ✓ | — | ✗ |
 
 Warns when a workflow gates privileged behavior on spoofable bot actor contexts such as `github.actor`, `github['actor']`, `github.triggering_actor`, `github.event.pull_request.sender.login`, `github.event['pull_request'].sender['login']`, `github.actor_id`, or `github['event']['pull_request']['sender']['id']`.
+
+**Why:** Actor identity in trigger context can be spoofed or misattributed; privileged bot-only logic should bind to trusted PR-author context.
 
 **Example trigger:**
 
@@ -1107,6 +1142,8 @@ jobs:
 
 Detects credential leakage risk when `actions/checkout` (without `persist-credentials: false`) is followed later in the same job by `actions/upload-artifact` uploading a dangerous path (root-like, parent-directory, or workspace-expression forms).
 
+**Why:** Combining persisted git credentials with broad artifact uploads can leak repository credentials to downloadable artifacts.
+
 **Example trigger:**
 
 ```yaml
@@ -1136,6 +1173,11 @@ steps:
       path: dist/
 ```
 
+**When fixing:**
+
+- If you disable persisted credentials, verify later authenticated git operations still succeed with explicit auth.
+- If you narrow artifact paths, ensure required files are still included for downstream consumers.
+
 **Notes:**
 
 <details>
@@ -1159,6 +1201,8 @@ steps:
 | ✓ | — | ✗ |
 
 Detects deprecated workflow command syntax (`::set-output`, `::save-state`, `::add-path`, `::set-env`) in `run` scripts. These commands are blocked or unsafe on modern runners.
+
+**Why:** Deprecated command channels bypass current hardening and are increasingly unsupported on modern GitHub-hosted runners.
 
 **Example trigger:**
 
@@ -1192,6 +1236,8 @@ jobs:
 | ✓ | — | ✗ |
 
 Validates `workflow_dispatch` input definitions for structural correctness. Reports excessive input count (max 25), type/option mismatches, invalid defaults, and duplicate options.
+
+**Why:** Invalid dispatch input schemas break manual/API-triggered workflows and can invalidate release/runbook entrypoints.
 
 **Example trigger:**
 
@@ -1247,6 +1293,8 @@ on:
 
 Validates `schedule` cron expressions for syntax correctness, minimum interval enforcement (5 minutes), and timezone validity.
 
+**Why:** Invalid or overly frequent schedules can either never run or overrun CI budgets and rate limits.
+
 **Example trigger:**
 
 ```yaml
@@ -1275,6 +1323,8 @@ on:
 | ✓ | — | ✗ |
 
 Validates `workflow_call` input default values match their declared types. Also reports an error when a required input has a default value (the default will never be used).
+
+**Why:** Invalid workflow-call defaults create reusable workflow contract drift and break downstream callers.
 
 **Example trigger:**
 
@@ -1320,6 +1370,8 @@ on:
 | ✓ | — | ✗ |
 
 Validates that local/composite action invocations (`uses: ./path`) provide all required inputs and do not pass unknown input keys. Also warns on deprecated inputs. Applies only to workflow files.
+
+**Why:** Local action contract mismatches fail execution at call sites and are easy to miss during action evolution.
 
 **Given the following local action (`./actions/deploy/action.yml`):**
 
@@ -1379,6 +1431,8 @@ jobs:
 | ✓ | — | ✗ |
 
 Errors when a popular action version uses a deprecated Node.js runtime (`node12`, `node16`). These runtimes are no longer supported by GitHub Actions runners.
+
+**Why:** Deprecated action runtimes eventually stop executing on hosted runners, causing sudden CI outages.
 
 **Example trigger:**
 
@@ -2078,6 +2132,8 @@ jobs:
 
 Warns when custom or private registry images are used in `job.container` or `job.services.*` without a `credentials` block.
 
+**Why:** Private image pulls without explicit credential handling either fail at runtime or encourage unsafe hardcoded secrets.
+
 **Example trigger:**
 
 ```yaml
@@ -2573,6 +2629,8 @@ container:
 
 Warns when known tool-setup actions rely on an unpinned tool version. The list of known actions is maintained in `data/sources/unpinned-tools/unpinned_tools.json` and currently covers `aquasecurity/setup-trivy` in both workflow steps and composite action steps. To add a new action, edit the JSON and run `dotnet run --project src/Seiton.Update -- sync-unpinned-tools`.
 
+**Why:** Floating tool versions make scan/build outputs non-reproducible and can introduce unexpected behavior changes.
+
 **Example trigger:**
 
 ```yaml
@@ -2617,6 +2675,8 @@ Dynamic values such as `version: ${{ inputs.trivy-version }}` are also warned be
 
 Warns when `uses:` references point to GitHub-archived repositories. Archived repositories are read-only and no longer receive security fixes.
 
+**Why:** Archived dependencies are effectively unmaintained and accumulate unpatched vulnerabilities.
+
 **Example trigger:**
 
 ```yaml
@@ -2647,6 +2707,8 @@ jobs:
 
 Warns when a version annotation or comment does not match the resolved commit's lineage. Prevents misleading provenance narratives.
 
+**Why:** Version/lineage mismatches undermine auditability and can mislead incident response and supply-chain review.
+
 **Example trigger:**
 
 ```yaml
@@ -2676,6 +2738,8 @@ jobs:
 | ✓ | — | ✗ |
 
 Errors or warns (per policy) when `uses:` references violate configured allow/deny patterns.
+
+**Why:** Policy-driven allow/deny enforcement is a primary control against risky or unapproved third-party actions.
 
 **Example trigger:**
 
@@ -2718,6 +2782,8 @@ rules:
 | ✓ | — | ✗ |
 
 Errors when `actions/create-github-app-token` is invoked without permission-limiting inputs, or when `owner`-scoped token issuance omits `repositories` to constrain the installation scope.
+
+**Why:** Over-broad app token issuance can grant unintended cross-repository write capabilities.
 
 **Example trigger:**
 
@@ -2812,6 +2878,8 @@ When this default is not configured, diagnostics include a help hint showing the
 
 Warns when a publishing or release workflow uses long-lived credentials instead of a trusted OIDC/provenance-based publishing flow.
 
+**Why:** Long-lived publish credentials expand breach impact; trusted publishing reduces secret lifetime and provenance ambiguity.
+
 **Example trigger:**
 
 ```yaml
@@ -2870,6 +2938,8 @@ rules:
 
 Errors when `uses:` references resolve to action versions listed in known vulnerability advisory data.
 
+**Why:** Known-vulnerable action versions represent documented exploit paths and should be removed from the pipeline trust chain.
+
 **Example trigger:**
 
 ```yaml
@@ -2892,6 +2962,8 @@ jobs:
 | ✗ | online | ✗ |
 
 Errors when a SHA-pinned `uses:` reference points to a commit that is not reachable in the referenced repository's expected history. Detects ghost or impostor commit supply-chain abuse.
+
+**Why:** Unreachable SHAs can indicate impostor commit attacks that bypass normal tag/branch trust assumptions.
 
 **Example trigger:**
 
@@ -2917,6 +2989,8 @@ jobs:
 
 Errors when a symbolic ref (tag or branch name) in `uses:` is ambiguous — the same name exists in both refs/tags and refs/heads.
 
+**Why:** Ambiguous refs create non-deterministic resolution and weaken provenance guarantees for reviewed workflows.
+
 **Example trigger:**
 
 ```yaml
@@ -2939,5 +3013,7 @@ jobs:
 | ✗ | online | ✗ |
 
 Warns when a SHA-pinned `uses:` reference is stale relative to the maintained release/tag mapping.
+
+**Why:** Stale pins miss upstream fixes and security patches, increasing long-term supply-chain exposure.
 
 **Remediation:** Update the pinned SHA to the current approved SHA for the intended release family.

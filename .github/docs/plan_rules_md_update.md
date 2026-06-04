@@ -139,6 +139,15 @@ Remediation はあるが注意が書かれていないルール群。
 
 構文・グラフ系は Why が自明なものは 1〜2 文に抑える。online ルールは API／トークン前提を When fixing に記載。
 
+#### Phase 3 実施結果
+
+- [x] Correctness 未反映分に `Why` を追加（`job-structure` 〜 `outdated-action-runner`）
+- [x] Supply Chain 未反映分に `Why` を追加（`credentials`, `unpinned-tools`, `archived-uses`, `ref-version-mismatch`, `forbidden-uses`, `github-app-token-inputs`, `use-trusted-publishing`）
+- [x] Online 4 ルールに `Why` を追加（`known-vulnerable-actions`, `impostor-commit`, `ref-confusion`, `stale-action-refs`）
+- [x] 注意が必要なルールに限定して `When fixing` を追加（`concurrency-limits`, `artipacked`）
+
+実装方針として、Phase 3 は「Why は短く」「注意は必要時のみ」を維持し、既存の Remediation/Notes/Configuration 構成は崩さずに補強した。
+
 ### Phase 4 — 仕様・スキル同期
 
 - [ ] `Seiton_Linter_spec.md` §4.4 は一行のまま、詳細 Why は `rules.md` に集約（authoring policy どおり）
