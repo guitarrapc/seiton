@@ -793,8 +793,7 @@ internal static class DynamicContextTypeBuilder
             }
         }
 
-        if (HasAssumedEvent(assumeEvents, "workflow_dispatch")
-            || HasAssumedEvent(assumeEvents, "workflow_call"))
+        if (HasAnyAssumedInputsEvent(assumeEvents))
         {
             // Assume those trigger modes provide runtime inputs, but schema is unknown in config.
             return (InputsKeyUtf8, looseDynamic);
@@ -862,7 +861,7 @@ internal static class DynamicContextTypeBuilder
         return ExprType.Object(props, strict: true);
     }
 
-    private static bool HasAssumedEvent(IReadOnlyList<string>? assumeEvents, string expected)
+    private static bool HasAnyAssumedInputsEvent(IReadOnlyList<string>? assumeEvents)
     {
         if (assumeEvents is null)
         {
@@ -871,7 +870,9 @@ internal static class DynamicContextTypeBuilder
 
         for (var i = 0; i < assumeEvents.Count; i++)
         {
-            if (expected.Equals(assumeEvents[i], StringComparison.OrdinalIgnoreCase))
+            var ev = assumeEvents[i];
+            if (ev.Equals("workflow_dispatch", StringComparison.OrdinalIgnoreCase)
+                || ev.Equals("workflow_call", StringComparison.OrdinalIgnoreCase))
             {
                 return true;
             }

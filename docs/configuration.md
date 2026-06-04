@@ -413,6 +413,24 @@ rules:
 >         refs: [main, master]
 > ```
 
+#### `expr-undefined-var.assume-events`
+
+Use this when expression validation needs to assume additional trigger events for context resolution (especially `inputs.*` availability).
+
+```yaml
+rules:
+  expr-undefined-var:
+    assume-events:
+      - workflow_dispatch
+      - workflow_call
+```
+
+Behavior:
+
+- Entries are additive and case-insensitive.
+- `workflow_dispatch` / `workflow_call` assumptions allow `inputs.*` to be treated as runtime-available even when the current workflow trigger set is mixed or cannot be narrowed statically.
+- This is intended to reduce false positives in `expr-undefined-var` for event-dependent expressions.
+
 ---
 
 ## Exclusions
