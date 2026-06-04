@@ -661,6 +661,10 @@ function syncConfigEditorTheme() {
 }
 
 const DEBOUNCE_MS = 500;
+/** Fold diagnostic messages longer than this in the results table. */
+const DIAG_MESSAGE_COLLAPSE_MIN_CHARS = 160;
+/** Line count (inclusive) shown while a diagnostic message is folded. */
+const DIAG_MESSAGE_COLLAPSED_LINES = 3;
 const utf8Decoder = new TextDecoder();
 let debounceId = null;
 /** Coalesce refreshes while typing so measurements track height for layout (page scroll). */
@@ -1023,6 +1027,121 @@ function normalizeGitHubBlobToRaw(input) {
 const URL_SPLIT_RE = /https?:\/\/[^\s<>()]+/gi;
 
 /**
+ * Cheap pre-filter before layout measurement (see {@link maybeAttachDiagMessageToggle}).
+ * @param {string} [text]
+ * @returns {boolean}
+ */
+function shouldCollapseDiagMessage(text) {
+  const s = String(text ?? '');
+  if (s.length >= DIAG_MESSAGE_COLLAPSE_MIN_CHARS) {
+    return true;
+  }
+  let lines = 1;
+  for (let i = 0; i < s.length; i++) {
+    if (s.charCodeAt(i) === 10) {
+      lines += 1;
+      if (lines > DIAG_MESSAGE_COLLAPSED_LINES) {
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
+/**
+ * @param {HTMLElement} msgEl
+ * @returns {boolean}
+ */
+function diagMessageOverflowsWhenCollapsed(msgEl) {
+  msgEl.classList.add('diag-message--collapsed');
+  const overflows = msgEl.scrollHeight > msgEl.clientHeight + 2;
+  if (!overflows) {
+    msgEl.classList.remove('diag-message--collapsed');
+  }
+  return overflows;
+}
+
+/**
+ * Adds Show more/less only when line-clamp actually hides content (avoids no-op toggles).
+ * @param {HTMLElement} wrap
+ * @param {HTMLElement} msgEl
+ */
+function maybeAttachDiagMessageToggle(wrap, msgEl) {
+  if (!shouldCollapseDiagMessage(msgEl.textContent)) {
+    return;
+  }
+
+  const attachIfOverflowing = () => {
+    if (!diagMessageOverflowsWhenCollapsed(msgEl)) {
+      return;
+    }
+    if (wrap.querySelector('.diag-message-toggle')) {
+      return;
+    }
+    const toggle = document.createElement('button');
+    toggle.type = 'button';
+    toggle.className = 'diag-message-toggle';
+    toggle.textContent = 'Show more';
+    toggle.setAttribute('aria-expanded', 'false');
+    toggle.addEventListener('click', (ev) => {
+      ev.stopPropagation();
+      const folded = msgEl.classList.toggle('diag-message--collapsed');
+      toggle.setAttribute('aria-expanded', folded ? 'false' : 'true');
+      toggle.textContent = folded ? 'Show more' : 'Show less';
+    });
+    const chips = wrap.querySelector('.diag-chips');
+    if (chips) {
+      wrap.insertBefore(toggle, chips);
+    } else {
+      wrap.appendChild(toggle);
+    }
+  };
+
+  if (typeof globalThis.requestAnimationFrame === 'function') {
+    globalThis.requestAnimationFrame(attachIfOverflowing);
+  } else {
+    attachIfOverflowing();
+  }
+}
+
+/**
+ * @param {HTMLElement} cell
+ * @param {string} [message]
+ * @param {{ fixable?: boolean, fixDescription?: string, ruleId?: string }} diag
+ */
+function appendDiagnosticDescriptionCell(cell, message, diag) {
+  const wrap = document.createElement('div');
+  wrap.className = 'diag-desc';
+
+  const msgEl = document.createElement('div');
+  msgEl.className = 'diag-message';
+  appendTextLinkifyingUrls(msgEl, message ?? '');
+  wrap.appendChild(msgEl);
+
+  if (diag.fixable || diag.ruleId) {
+    const chips = document.createElement('div');
+    chips.className = 'diag-chips';
+    if (diag.fixable) {
+      const fx = document.createElement('span');
+      fx.className = 'fix-chip';
+      fx.title = diag.fixDescription ?? 'Auto-fix available';
+      fx.textContent = 'Fix';
+      chips.appendChild(fx);
+    }
+    if (diag.ruleId) {
+      const kindTag = document.createElement('span');
+      kindTag.className = 'rule-chip';
+      kindTag.textContent = diag.ruleId;
+      chips.appendChild(kindTag);
+    }
+    wrap.appendChild(chips);
+  }
+
+  cell.appendChild(wrap);
+  maybeAttachDiagMessageToggle(wrap, msgEl);
+}
+
+/**
  * Turns http(s) substrings into links under `parent`; row clicks are not propagated from links.
  * @param {HTMLElement} parent
  * @param {string} [text]
@@ -1247,20 +1366,7 @@ function renderResults(diagnostics) {
     row.appendChild(sevCell);
 
     const descCell = document.createElement('td');
-    appendTextLinkifyingUrls(descCell, diag.message ?? '');
-    if (diag.fixable) {
-      const fx = document.createElement('span');
-      fx.className = 'fix-chip';
-      fx.title = diag.fixDescription ?? 'Auto-fix available';
-      fx.textContent = 'Fix';
-      descCell.appendChild(fx);
-    }
-    if (diag.ruleId) {
-      const kindTag = document.createElement('span');
-      kindTag.className = 'rule-chip';
-      kindTag.textContent = diag.ruleId;
-      descCell.appendChild(kindTag);
-    }
+    appendDiagnosticDescriptionCell(descCell, diag.message ?? '', diag);
     row.appendChild(descCell);
 
     resultBody.appendChild(row);
@@ -1335,6 +1441,8 @@ function installTestHooksIfRequested() {
         const diags = setConfig(configYaml ?? '');
         return { diagnostics: diags };
       },
+      renderDiagnostics: (diagnostics) => renderResults(diagnostics ?? []),
+      shouldCollapseDiagMessage,
       getRuntimeAlive: () => runtimeAlive,
       getRuntimeFlags: () => exports?.Seiton?.Playground?.LintInterop?.GetRuntimeFlags?.() ?? '',
     };
