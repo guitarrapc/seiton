@@ -150,9 +150,15 @@ Remediation はあるが注意が書かれていないルール群。
 
 ### Phase 4 — 仕様・スキル同期
 
-- [ ] `Seiton_Linter_spec.md` §4.4 は一行のまま、詳細 Why は `rules.md` に集約（authoring policy どおり）
-- [ ] §8.4 Fixable Rule Catalog の「Review downstream…」系文言を `rules.md` When fixing と突合（例: `deny-write-all` の spec 記述「read-all に置換」は実装が `{}` — **要修正の不整合**）
-- [ ] `.claude/skills/seiton/references/rules.md` / `src/Seiton/Skills/references/rules.md` は `docs/rules.md` へのリンクまたは同期方針を決める
+- [x] `Seiton_Linter_spec.md` §4.4 は一行のまま、詳細 Why は `rules.md` に集約（authoring policy どおり）
+- [x] §8.4 Fixable Rule Catalog の「Review downstream…」系文言を `rules.md` When fixing と突合（例: `deny-write-all` の spec 記述「read-all に置換」は実装が `{}` — **要修正の不整合**）
+- [x] `.claude/skills/seiton/references/rules.md` / `src/Seiton/Skills/references/rules.md` は `docs/rules.md` へのリンクまたは同期方針を決める
+
+#### Phase 4 実施結果
+
+- `Seiton_Linter_spec.md` §8.4 の `deny-write-all` fix 記述を実装準拠に修正（`write-all -> {}` ベースライン）。
+- `Seiton_Linter_spec.md` §8.5 の例示文言も同様に更新し、fix safety の説明を実装と整合。
+- skills 参照ファイル（`.claude/.../rules.md`, `src/Seiton/.../rules.md`）に「`docs/rules.md` を source of truth とする」同期方針を追記。
 
 ## ルール別プラン一覧
 
