@@ -2916,4 +2916,50 @@ public sealed partial class RuleInterfaceTests
 
         await AssertRuleCases(new ExprUndefinedVarRule(), "expr-undefined-var", cases);
     }
+
+
+    [Test]
+    public async Task RuleRegression_ExprUndefinedVarRule_AssumeEvents_InputsContext()
+    {
+        var yaml = NormalizeYaml("""
+        on: [push, workflow_dispatch]
+        jobs:
+          build:
+            runs-on: ubuntu-latest
+            steps:
+              - run: echo "${{ inputs.target }}"
+        """);
+
+        await AssertUndefinedInputsDiagnostic(yaml, assumeEvents: null, expectedUndefined: true, "assume-events-none.yml");
+        await AssertUndefinedInputsDiagnostic(yaml, assumeEvents: ["issue_comment"], expectedUndefined: true, "assume-events-issue.yml");
+        await AssertUndefinedInputsDiagnostic(yaml, assumeEvents: ["workflow_dispatch"], expectedUndefined: false, "assume-events-dispatch.yml");
+        await AssertUndefinedInputsDiagnostic(yaml, assumeEvents: ["workflow_call"], expectedUndefined: false, "assume-events-call.yml");
+    }
+
+    private static async Task AssertUndefinedInputsDiagnostic(
+        string yaml,
+        IReadOnlyList<string>? assumeEvents,
+        bool expectedUndefined,
+        string filePath)
+    {
+        var config = assumeEvents is null
+            ? null
+            : new LintConfig
+            {
+                Rules = new Dictionary<string, RuleConfig>(StringComparer.Ordinal)
+                {
+                    ["expr-undefined-var"] = new RuleConfig
+                    {
+                        AssumeEvents = assumeEvents,
+                    },
+                },
+            };
+
+        using var result = new LintEngine([new ExprUndefinedVarRule()])
+            .Check(Encoding.UTF8.GetBytes(yaml), filePath, config);
+        var hasUndefined = result.Diagnostics
+            .Where(x => x.RuleId == "expr-undefined-var")
+            .Any(x => x.Message.Contains("is not defined", StringComparison.Ordinal));
+        await Assert.That(hasUndefined).IsEqualTo(expectedUndefined);
+    }
 }

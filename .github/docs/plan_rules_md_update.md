@@ -351,3 +351,43 @@ job に `permissions` が無いと、workflow 既定や `GITHUB_TOKEN` のデフ
 - 執筆ガイド: `.github/docs/docs_authoring_guidelines.md`
 - 仕様（一行要約・fixable カタログ）: `.github/docs/Seiton_Linter_spec.md` §4.4, §8.4
 - 診断 fix hint 実装例: `src/Seiton.Core/Linting/Rules/CheckoutPersistCredentialsRule.cs`
+
+---
+
+## 実装メモ（2026-06-04）: `expr-undefined-var.assume-events` 配線
+
+### 実装内容
+
+- `ExprUndefinedVarRule` で `rules.expr-undefined-var.assume-events` を取得し、入力コンテキスト推論に渡すようにした。
+- `DynamicContextTypeBuilder.BuildInputsOverride` を拡張し、`assume-events` に `workflow_dispatch` または `workflow_call` が含まれる場合、`inputs` を strict-empty ではなく loose object として扱うようにした。
+- これにより、イベント混在時（例: `on: [push, workflow_dispatch]`）に `inputs.*` を参照する式で発生していた false positive を抑制できる。
+
+### テスト（Red → Green）
+
+- 追加: `RuleRegression_ExprUndefinedVarRule_AssumeEvents_InputsContext`
+  - `assume-events` なし: `inputs.target` は未定義診断が出る（期待どおり）
+  - `assume-events: [issue_comment]`: 未定義診断が出る（期待どおり）
+  - `assume-events: [workflow_dispatch]`: 未定義診断が抑制される
+  - `assume-events: [workflow_call]`: 未定義診断が抑制される
+- 回帰確認: `dotnet test`（2456 tests, failed 0）
+
+### ベンチマーク
+
+- 実行: `dotnet run -c Release --filter "*CoreLintBenchmark*"`（`src/Seiton.Benchmark`）
+- 比較対象: 既存の `BenchmarkDotNet.Artifacts/results/Seiton.Benchmark.CoreLintBenchmark-report-default.md`
+- 結果: 主要指標（Mean / Allocated）に差分なし（レポート差分なし）。
+
+### 性能評価
+
+- 変更は `VisitWorkflowPre` で 1 回だけ実行される config 分岐追加で、job/step ホットパスには新規処理を入れていない。
+- 追加ロジックは `assume-events` の短い配列走査のみで、lint 全体性能への寄与はノイズレベル。
+- したがって性能低下は観測されず、追加改善は不要。
+
+### API / UX 観点
+
+- 設定キーは既存の `rules.expr-undefined-var.assume-events` をそのまま有効化しており、API 追加なし。
+- ユーザーの直感（「この workflow は実質 dispatch/call 入力を扱う」）をそのまま設定に反映できる挙動となった。
+
+### 仕様整合
+
+- `.github/docs/Seiton_Linter_spec.md` 5.8.7（event-type context を与えて false positive を抑制）と整合。

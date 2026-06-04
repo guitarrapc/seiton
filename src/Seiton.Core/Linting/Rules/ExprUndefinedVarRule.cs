@@ -50,7 +50,8 @@ public sealed class ExprUndefinedVarRule() : RuleBase(RuleId.ExprUndefinedVar)
     {
         base.VisitWorkflowPre(workflow);
         _currentWorkflow = workflow;
-        _inputsOverride = DynamicContextTypeBuilder.BuildInputsOverride(workflow.On, Config.Utf8Yaml);
+        var assumeEvents = Config.GetRuleConfig(Id)?.AssumeEvents;
+        _inputsOverride = DynamicContextTypeBuilder.BuildInputsOverride(workflow.On, assumeEvents, Config.Utf8Yaml);
         _secretsOverride = DynamicContextTypeBuilder.BuildSecretsOverride(workflow.On, Config.Utf8Yaml);
 
         // Cache github override: only rebuild when source file or event count changes
