@@ -280,7 +280,6 @@ public static class PlaygroundLintRunner
 
             var utf8Yaml = EncodeToDoubleBuffer(yamlSource);
 
-            AstArena? ownedArena = null;
             byte[] result;
 
             var config = ActiveConfig;
@@ -289,13 +288,12 @@ public static class PlaygroundLintRunner
             // DiagnosticList/Diagnostic spans can reference arena-owned storage.
             // Never let a diagnostic span outlive the owning LintResult/AstArena.
             // Always serialize (or copy) diagnostics before disposing those owners.
+            // Browser path: `using var lintResult = Engine.Check(...)` then serialize inside the block.
 
             // Action metadata files (action.yml) require classified parsing — not incremental.
             if (DocumentKindClassifier.GetPathHintKind(filePath) == DocumentKind.ActionMetadata)
             {
-                var classifiedResult = WorkflowParser.ParseClassified(utf8Yaml, filePath, out ownedArena);
-                var lintResultData = Engine.CheckWithParseResult(utf8Yaml, filePath, config, classifiedResult.ParseResult, ownedArena);
-                result = SerializeDiagnosticsToResult(lintResultData.Diagnostics.AsSpan());
+                result = LintActionMetadataToJsonUtf8(utf8Yaml, filePath, config);
             }
             else if (UseIncrementalLint)
             {
@@ -318,15 +316,29 @@ public static class PlaygroundLintRunner
                 result = SerializeDiagnosticsToResult(lintResult.Diagnostics.AsSpan());
             }
 
-            // Dispose arena for ActionMetadata path (not owned by IncrementalParseContext)
-            ownedArena?.Dispose();
-
             // Cache for identity-based short circuit
             _lastYamlSource = yamlSource;
             _lastFilePath = filePath;
             _lastJsonOutput = result;
 
             return result;
+        }
+    }
+
+    /// <summary>
+    /// Lints action metadata with a caller-owned arena. Serializes diagnostics before arena disposal.
+    /// </summary>
+    private static byte[] LintActionMetadataToJsonUtf8(byte[] utf8Yaml, string filePath, LintConfig config)
+    {
+        var classifiedResult = WorkflowParser.ParseClassified(utf8Yaml, filePath, out var arena);
+        try
+        {
+            var lintResultData = Engine.CheckWithParseResult(utf8Yaml, filePath, config, classifiedResult.ParseResult, arena);
+            return SerializeDiagnosticsToResult(lintResultData.Diagnostics.AsSpan());
+        }
+        finally
+        {
+            arena?.Dispose();
         }
     }
 

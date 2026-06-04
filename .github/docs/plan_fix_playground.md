@@ -332,3 +332,55 @@ dotnet run -c Release --project src/Seiton.Benchmark/Seiton.Benchmark.csproj --f
 - 対応: Playground spec と C# spec の両方へ非機能要件・実装不変条件を追記。
 
 最終判定: P2 要件（保守性向上 + 同種リスクの可視化 + 文書化）は満たした。
+
+---
+
+## コードレビュー総括（2026-06-04）
+
+### Round 1 指摘と対応
+
+| 指摘 | 対応 |
+|---|---|
+| Action metadata 経路だけ `ownedArena?.Dispose()` が後置きで、将来の行順入れ替えで再発しやすい | `LintActionMetadataToJsonUtf8` を追加し、`try`/`finally` で「シリアライズ後に arena 破棄」を固定 |
+| `RunToJsonUtf8` の分岐（非 incremental / incremental / action metadata）ごとの等価クラステストが不足 | 3 経路 + negative をテーブル化し、テストを追加（下表） |
+| 仕様が「Browser path」のみで、実装の不変条件（全経路）とずれ | `Seiton_Playground_spec.md` を「全 `RunLint` 経路」に修正 |
+| `deny-write-all` の negative（誤検出）テストが明示的でない | `RunToJson_MinimalWorkflow_DoesNotReportDenyWriteAll` を追加 |
+
+### `RunToJsonUtf8` 分岐の等価クラスとテスト
+
+| Action metadata | Incremental (`UseIncrementalLint`) | 期待 | テスト |
+|---|---|---|---|
+| yes | — | 診断あり時に意味のある field | `RunToJson_ActionMetadata_InvalidYaml_ProducesMeaningfulDiagnosticFields` |
+| no | true | `deny-write-all` が意味のある field | `RunToJson_IncrementalPath_ProducesMeaningfulDiagnosticFields` |
+| no | false | 同上（Browser 相当） | `RunToJson_NonIncrementalPath_ProducesNonDefaultDiagnosticFields` |
+| no | true/false | `write-all` なしで `deny-write-all` なし | `RunToJson_MinimalWorkflow_DoesNotReportDenyWriteAll` |
+
+### Round 2 指摘
+
+なし（Round 1 対応後、追加の correctness / API / 性能 / テストギャップは未検出）。
+
+### ベンチマーク（レビュー後）
+
+`PlaygroundLintBenchmark` 再実行結果（P0 直後 baseline 比）:
+
+| Case | P0 After Mean | Review After Mean | Diff | Alloc |
+|---|---:|---:|---:|---|
+| Small / NoChange | 96.852 ns | 98.70 ns | +1.9% | 0 B |
+| Small / PartialChange | 683.007 us | 1.097 ms | +60.6%* | 136,080 B |
+| Small / FullChange | 204.978 us | 240.28 us | +17.2%* | 51,927 B |
+| Large / NoChange | 100.729 ns | 79.72 ns | -20.9%* | 0 B |
+| Large / PartialChange | 3.370 ms | 4.175 ms | +23.9%* | 383,206 B |
+| Large / FullChange | 1.126 ms | 1.322 ms | +17.4%* | 170,782 B |
+
+\* ShortRun（n=3）の ms/us ケースは揺れが大きい。Allocated はホットパスで維持。`LintActionMetadataToJsonUtf8` 抽出は NoChange（キャッシュヒット）に影響しない。
+
+### テスト（レビュー後）
+
+- ✅ `PlaygroundLintRunnerTests` 26 件すべて pass
+- UI / 全体 `dotnet test` は未再実行（Playwright 環境依存）。Core 回帰は上記でカバー。
+
+### API / 使い勝手
+
+- 公開 API 変更なし。
+- 内部は Browser 経路が `using var lintResult = Engine.Check(...)`、Action metadata が `try`/`finally` と対称になり、C# の直感的なリソース管理パターンに揃った。
+- `ForceUseIncrementalLintForTests` はテスト専用 seam として仕様書に明記。

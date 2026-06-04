@@ -164,7 +164,8 @@ Key implementation details:
 - **Double buffer**: Alternating `_utf8BufA`/`_utf8BufB` for UTF-8 encoding prevents overwriting the buffer that `IncrementalParseContext` holds as previous source.
 - **Identity-based short circuit**: If `yamlSource` (by reference) and `filePath` are identical to the last call, returns cached JSON output immediately.
 - **Byte-level cache reuse**: When serialized JSON bytes are content-equal to the previous result, the prior `byte[]` instance is reused (avoids allocation for unchanged output).
-- **Diagnostic lifetime invariant**: `DiagnosticList`/`ReadOnlySpan<Diagnostic>` values are consumed while the owning `LintResult`/`AstArena` is still alive. `RunToJsonUtf8` serializes diagnostics before those owners are disposed.
+- **Diagnostic lifetime invariant**: `DiagnosticList`/`ReadOnlySpan<Diagnostic>` values are consumed while the owning `LintResult`/`AstArena` is still alive. `RunToJsonUtf8` serializes diagnostics before those owners are disposed. Browser/workflow path uses `using var lintResult = Engine.Check(...)`; action metadata uses `LintActionMetadataToJsonUtf8` (`try`/`finally` around arena disposal).
+- **Test seam**: `ForceUseIncrementalLintForTests` forces incremental vs full parse+lint for desktop tests (simulates browser `UseIncrementalLint == false` without WASM).
 
 ### 2.1.1 Config Content-Hash Caching
 
