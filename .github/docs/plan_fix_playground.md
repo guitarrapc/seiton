@@ -250,3 +250,85 @@ dotnet run -c Release --project src/Seiton.Benchmark/Seiton.Benchmark.csproj --f
 - 対応: prepublish 生成物 + `SEITON_PLAYGROUND_PUBLISH_DIR_DEBUG` + `--maximum-parallel-tests 1` で安定実行に変更。
 
 最終判定: P1 要件（Browser/desktop/UI の検出力強化）は満たした。
+
+---
+
+## P2 実装結果（2026-06-04）
+
+### 実装した変更
+
+1. `src/Seiton.Playground.Core/PlaygroundLintRunner.cs`
+   - `RunToJsonUtf8()` の分岐直前に、`DiagnosticList` / `ReadOnlySpan<Diagnostic>` の寿命不変条件（owner 生存中に消費すること）を明示コメントで追加。
+   - Action metadata 分岐・incremental 分岐の変数名を `lintResultData` に統一し、`LintResultData`（非 `IDisposable`）を扱っていることをコード上で明確化。
+   - 同ファイル内を棚卸しし、`using` スコープ外へ span を持ち出す旧パターンがないことを再確認（いずれも owner 生存中に `SerializeDiagnosticsToResult(...)` へ渡す構造を維持）。
+
+2. `.github/docs/Seiton_Playground_spec.md`
+   - 非機能要件として「Browser 経路での診断完全性（`line>=1`,`column>=1`,`message非空`,`severity妥当`）」を明記。
+
+3. `.github/docs/Seiton_Playground_csharp_spec.md`
+   - C# 実装詳細に「diagnostic lifetime invariant（`LintResult` / `AstArena` 生存中に診断を消費）」を追記。
+
+### TDD 実施ログ（Red → Green）
+
+- **Red**:
+  - `LintResultData` を `using` しようとしてコンパイル失敗（`CS1674`）を確認。
+- **Green**:
+  - `LintResultData` が非 `IDisposable` である設計に合わせ、寿命境界を崩さない最小修正へ戻しビルド通過。
+  - `PlaygroundLintRunner` 非incremental回帰テスト単体 pass を確認。
+
+### ベンチマーク（PlaygroundLintBenchmark）
+
+実行コマンド:
+
+```shell
+dotnet run -c Release --project src/Seiton.Benchmark/Seiton.Benchmark.csproj --filter "*PlaygroundLintBenchmark*"
+```
+
+比較（Before = P2 着手前, After = P2 実装後の再計測）:
+
+| Case | Before Mean | After Mean | Diff | Before Alloc | After Alloc | Diff |
+|---|---:|---:|---:|---:|---:|---:|
+| Small / NoChange | 109.958 ns | 109.752 ns | -0.2% | 0 B | 0 B | 0% |
+| Small / PartialChange | 1.254 ms | 1.230 ms | -1.9% | 136,080 B | 136,080 B | 0% |
+| Small / FullChange | 237.299 us | 230.199 us | -3.0% | 51,927 B | 51,927 B | 0% |
+| Large / NoChange | 107.453 ns | 105.578 ns | -1.7% | 0 B | 0 B | 0% |
+| Large / PartialChange | 3.762 ms | 3.977 ms | +5.7% | 383,206 B | 383,206 B | 0% |
+| Large / FullChange | 1.326 ms | 1.312 ms | -1.1% | 170,942 B | 170,782 B | -0.1% |
+
+評価:
+
+- すべて +10% 以内（Mean/Allocated）で、回帰閾値を満たす。
+- 変更は寿命不変条件の明文化と可読性改善が中心で、Hot path の allocation 特性は実測でも維持された。
+
+### テスト実行結果
+
+- ✅ `dotnet build tests/Seiton.Playground.Tests/Seiton.Playground.Tests.csproj`
+- ✅ `dotnet test --project tests/Seiton.Playground.Tests --maximum-parallel-tests 1 --treenode-filter /*/*/PlaygroundLintRunnerTests/RunToJson_NonIncrementalPath_ProducesNonDefaultDiagnosticFields*`
+- ⚠️ `dotnet test`（全体）は `Seiton.Playground.Tests.exe` の file lock（`MSB3027`/`MSB3021`）で失敗。プロセス解放後に再試行が必要。
+
+### ユーザーファースト/API 観点の確認
+
+- 公開 API（`RunLint` / `SetConfig` / `ApplyAllFixes*`）のシグネチャ・返却形式は変更なし。
+- 開発者視点では、寿命境界がコードと仕様に明示され、将来の保守で「なぜこの場所で即シリアライズが必要か」を直感的に把握しやすくなった。
+
+### 仕様整合性チェック
+
+- `Seiton_Playground_spec.md` に Browser 診断完全性を非機能要件として追加。
+- `Seiton_Playground_csharp_spec.md` に実装側の lifetime invariant を追加。
+- 仕様と実装の整合をとる目的の更新であり、外部 API 互換性は維持。
+
+### 実装レビュー反復（セルフレビュー）
+
+#### Round 1
+- 指摘: lifetime ルールがコードから読み取りづらく、同種バグの再発防止として弱い。
+- 対応: `RunToJsonUtf8` に寿命不変条件コメントを追加し、分岐境界での意図を固定。
+
+#### Round 2
+- 指摘: Action/incremental 分岐の一時変数名が `lintResult` のままだと `IDisposable` 誤認を誘発する。
+- 対応: `lintResultData` に改名して型意図を明確化。
+
+#### Round 3
+- 指摘: 文書側に Browser 診断完全性要件がなく、実装意図が将来失われる。
+- 対応: Playground spec と C# spec の両方へ非機能要件・実装不変条件を追記。
+
+最終判定: P2 要件（保守性向上 + 同種リスクの可視化 + 文書化）は満たした。

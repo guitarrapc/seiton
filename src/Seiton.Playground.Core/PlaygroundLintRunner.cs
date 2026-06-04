@@ -285,12 +285,17 @@ public static class PlaygroundLintRunner
 
             var config = ActiveConfig;
 
+            // Lifetime invariant:
+            // DiagnosticList/Diagnostic spans can reference arena-owned storage.
+            // Never let a diagnostic span outlive the owning LintResult/AstArena.
+            // Always serialize (or copy) diagnostics before disposing those owners.
+
             // Action metadata files (action.yml) require classified parsing — not incremental.
             if (DocumentKindClassifier.GetPathHintKind(filePath) == DocumentKind.ActionMetadata)
             {
                 var classifiedResult = WorkflowParser.ParseClassified(utf8Yaml, filePath, out ownedArena);
-                var lintResult = Engine.CheckWithParseResult(utf8Yaml, filePath, config, classifiedResult.ParseResult, ownedArena);
-                result = SerializeDiagnosticsToResult(lintResult.Diagnostics.AsSpan());
+                var lintResultData = Engine.CheckWithParseResult(utf8Yaml, filePath, config, classifiedResult.ParseResult, ownedArena);
+                result = SerializeDiagnosticsToResult(lintResultData.Diagnostics.AsSpan());
             }
             else if (UseIncrementalLint)
             {
@@ -302,10 +307,10 @@ public static class PlaygroundLintRunner
                 var skipJobs = IncrementalCtx.BuildSkipJobs(jobCount, parseResult.Workflow);
 
                 // Lint with optional job skipping
-                var lintResult = Engine.CheckWithParseResult(utf8Yaml, filePath, config, parseResult.Data, IncrementalCtx.Arena, skipJobs);
+                var lintResultData = Engine.CheckWithParseResult(utf8Yaml, filePath, config, parseResult.Data, IncrementalCtx.Arena, skipJobs);
 
                 // Merge fresh diagnostics with cached diagnostics for skipped jobs
-                result = SerializeDiagnosticsToResult(IncrementalCtx.MergeDiagnosticsWithCache(lintResult.Diagnostics, skipJobs));
+                result = SerializeDiagnosticsToResult(IncrementalCtx.MergeDiagnosticsWithCache(lintResultData.Diagnostics, skipJobs));
             }
             else
             {
