@@ -77,9 +77,9 @@ rules:
     #     ubuntu-latest: "ubuntu-24.04"
     # credentials:
     #   public-registries: [registry.example.com]
-    # cache-poisoning:
+    # cache-poisoning-trigger:
     #   untrusted-triggers: [issue_comment]
-    # self-hosted-runner:
+    # self-hosted-runner-trigger:
     #   untrusted-triggers: [issue_comment]
     # unredacted-secrets:
     #   output-commands: [tee]

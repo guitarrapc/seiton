@@ -47,7 +47,7 @@ public static class LintConfigLibrary
           #   public-registries:
           #     - ghcr.io
 
-          # cache-poisoning:
+          # cache-poisoning-trigger:
           #   untrusted-triggers:
           #     - issue_comment
 

@@ -35,8 +35,8 @@ All lint rules, their default severity, auto-fix availability, and document scop
 | deny-inherit-secrets | error | no | both | on |
 | job-timeout-minutes-required | error | yes | both | on |
 | github-app-token-inputs | error | no | both | on |
-| cache-poisoning | warning | no | both | on |
-| self-hosted-runner | warning | no | both | on |
+| cache-poisoning-trigger | warning | no | both | on |
+| self-hosted-runner-trigger | warning | no | both | on |
 | unredacted-secrets | warning | no | both | on |
 | secrets-outside-env | warning | no | both | on |
 | workflow-secrets | error | no | both | on |
@@ -98,7 +98,7 @@ Online rules (`known-vulnerable-actions`, `impostor-commit`, `ref-confusion`, `s
 
 ### Security
 
-`template-injection`, `credentials`, `secrets-whole-context-access`, `run-secrets-context-direct-use`, `run-env-context-direct-use`, `run-inputs-context-direct-use`, `unredacted-secrets`, `secrets-outside-env`, `insecure-commands`, `cache-poisoning`, `self-hosted-runner`, `dangerous-triggers`, `known-vulnerable-actions`, `impostor-commit`, `ref-confusion`
+`template-injection`, `credentials`, `secrets-whole-context-access`, `run-secrets-context-direct-use`, `run-env-context-direct-use`, `run-inputs-context-direct-use`, `unredacted-secrets`, `secrets-outside-env`, `insecure-commands`, `cache-poisoning-trigger`, `self-hosted-runner-trigger`, `dangerous-triggers`, `known-vulnerable-actions`, `impostor-commit`, `ref-confusion`
 
 ### Pinning & Supply Chain
 

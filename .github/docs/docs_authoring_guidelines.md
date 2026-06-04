@@ -57,7 +57,7 @@ Rule sections should follow this order:
 | Element | Convention | Exception |
 |---|---|---|
 | Runner label | `ubuntu-24.04` (version-pinned) | `runner-no-latest` rule's own examples |
-| `uses:` reference | Full SHA (`owner/repo/action@<40-hex>`) or local path | Rules that examine action behavior by version (e.g., `artipacked`, `checkout-persist-credentials`, `outdated-action-runner`, `cache-poisoning`) may use version tags when the version distinction is essential to the explanation |
+| `uses:` reference | Full SHA (`owner/repo/action@<40-hex>`) or local path | Rules that examine action behavior by version (e.g., `artipacked`, `checkout-persist-credentials`, `outdated-action-runner`, `cache-poisoning-trigger`) may use version tags when the version distinction is essential to the explanation |
 | Reusable workflow ref | Full SHA (`owner/repo/.github/workflows/x.yml@<40-hex>`) | `unpinned-uses` / `reusable-workflow` own examples |
 | Shell examples | bash by default; show PowerShell only when shell distinction matters | — |
 | Placeholder commands | Convey rule intent (e.g., `npm test`, `./deploy.sh`, `curl`) when the step content illustrates *why* the rule matters | `echo ok` / `echo ng` acceptable in purely structural rules where the command content has no bearing on the rule |

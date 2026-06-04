@@ -208,8 +208,8 @@ Column definitions:
 | `workflow-secrets` | ✓ | — | Error when workflow-level `env` assigns `secrets.*`/`github.token` in multi-job workflows. |
 | `job-secrets` | ✓ | — | Error when job-level `env` assigns `secrets.*`/`github.token` in multi-step jobs. |
 | `action-shell-is-required` | ✓ | — | Error when a composite action `run` step omits explicit `shell`. |
-| `cache-poisoning` | ✓ | — | Warn when cache actions are used with untrusted triggers without isolated trust boundaries. |
-| `self-hosted-runner` | ✓ | — | Warn when self-hosted runners are used with untrusted triggers. |
+| `cache-poisoning-trigger` | ✓ | — | Warn when cache actions are used with untrusted triggers without isolated trust boundaries. |
+| `self-hosted-runner-trigger` | ✓ | — | Warn when self-hosted runners are used with untrusted triggers. |
 | `unredacted-secrets` | ✓ | — | Warn when secret-derived env vars are printed without redaction-safe handling. |
 | `secrets-outside-env` | ✓ | — | Warn when `secrets.*` is referenced in non-`env` sinks (`if`, `uses`, reusable call inputs). |
 | `matrix` | ✓ | — | Warn on malformed or suspicious matrix strategy configuration. |
@@ -433,8 +433,8 @@ The following table defines the normative default severity for each rule. Implem
 | `workflow-secrets` | error | |
 | `job-secrets` | error | |
 | `action-shell-is-required` | error | |
-| `cache-poisoning` | warning | |
-| `self-hosted-runner` | warning | |
+| `cache-poisoning-trigger` | warning | |
+| `self-hosted-runner-trigger` | warning | |
 | `unredacted-secrets` | warning | |
 | `secrets-outside-env` | warning | |
 | `matrix` | warning | |
@@ -482,7 +482,7 @@ rules:
       - registry.example.com
       - mirror.example.net:5000
 
-  cache-poisoning:
+  cache-poisoning-trigger:
     untrusted-triggers:
       - issue_comment
 
@@ -531,9 +531,9 @@ rules:
 - Matching uses normalized host values (ASCII lower-case).
 - When image registry host matches this merged public-registry set, missing credentials does not produce `credentials` diagnostics.
 
-#### 5.8.4 `cache-poisoning` / `self-hosted-runner` — `untrusted-triggers`
+#### 5.8.4 `cache-poisoning-trigger` / `self-hosted-runner-trigger` — `untrusted-triggers`
 
-- Allows users to add trigger event names treated as untrusted for `cache-poisoning` and/or `self-hosted-runner` evaluation.
+- Allows users to add trigger event names treated as untrusted for `cache-poisoning-trigger` and/or `self-hosted-runner-trigger` evaluation.
 - Each rule has its own independent `untrusted-triggers` list; users set them separately to control which rule is affected.
 - Matching uses normalized event names (ASCII lower-case).
 - Extended trigger names never replace the built-in untrusted trigger set.
@@ -611,7 +611,7 @@ rules:
       - registry.example.com
       - mirror.example.net:5000
 
-  cache-poisoning:
+  cache-poisoning-trigger:
     untrusted-triggers:
       - issue_comment
 
@@ -1077,8 +1077,8 @@ The following table classifies each default rule by fix feasibility.
 | `workflow-secrets` | ✗ Not auto-fixable | Correct scope-minimized secret mapping requires repository-specific intent. |
 | `job-secrets` | ✗ Not auto-fixable | Step-level secret scoping cannot be inferred safely in general. |
 | `action-shell-is-required` | ✗ Not auto-fixable | Explicit shell choice is runtime/policy dependent. |
-| `cache-poisoning` | ✗ Not auto-fixable | Trust-boundary-safe cache remediation is topology-dependent and cannot be inferred safely. |
-| `self-hosted-runner` | ✗ Not auto-fixable | Runner isolation/guard strategy is environment/policy dependent. |
+| `cache-poisoning-trigger` | ✗ Not auto-fixable | Trust-boundary-safe cache remediation is topology-dependent and cannot be inferred safely. |
+| `self-hosted-runner-trigger` | ✗ Not auto-fixable | Runner isolation/guard strategy is environment/policy dependent. |
 | `unredacted-secrets` | ✗ Not auto-fixable | Safe remediation requires sink-specific intent and may alter runtime behavior. |
 | `secrets-outside-env` | ✗ Not auto-fixable | Correct env handoff placement is context and policy dependent. |
 | `matrix` | ✗ Not auto-fixable | Matrix shape correction requires workflow-specific intent. |

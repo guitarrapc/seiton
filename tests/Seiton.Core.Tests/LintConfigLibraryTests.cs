@@ -71,7 +71,7 @@ public sealed class LintConfigLibraryTests
           credentials:
             public-registries:
               - GHCR.IO
-          cache-poisoning:
+          cache-poisoning-trigger:
             untrusted-triggers:
               - Issue_Comment
           unredacted-secrets:
@@ -99,7 +99,7 @@ public sealed class LintConfigLibraryTests
         await Assert.That(credConfig.PublicRegistries).IsNotNull();
         await Assert.That(credConfig.PublicRegistries![0]).IsEqualTo("ghcr.io");
 
-        var cpConfig = result.Config.Rules["cache-poisoning"];
+        var cpConfig = result.Config.Rules["cache-poisoning-trigger"];
         await Assert.That(cpConfig.UntrustedTriggers).IsNotNull();
         await Assert.That(cpConfig.UntrustedTriggers!).HasSingleItem();
         await Assert.That(cpConfig.UntrustedTriggers![0]).IsEqualTo("issue_comment");
@@ -123,6 +123,53 @@ public sealed class LintConfigLibraryTests
 
         await Assert.That(result.IsValid).IsFalse();
         await Assert.That(result.Diagnostics.Any(x => x.Severity == DiagnosticSeverity.Error && x.Message.Contains("unknown rule-id 'runner-lable'", StringComparison.Ordinal))).IsTrue();
+    }
+
+    [Test]
+    public async Task Validate_TriggerRuleIds_AcceptsTriggerSuffixAndRejectsLegacyIds()
+    {
+        var yaml = """
+        rules:
+          cache-poisoning-trigger:
+            untrusted-triggers:
+              - issue_comment
+          self-hosted-runner-trigger:
+            untrusted-triggers:
+              - issue_comment
+        exclusions:
+          - file: ".github/workflows/legacy-*.yml"
+            rules:
+              - cache-poisoning-trigger
+              - self-hosted-runner-trigger
+        """;
+
+        var result = LintConfigLibrary.Validate(yaml, "seiton.yaml");
+
+        await Assert.That(result.IsValid).IsTrue();
+        await Assert.That(result.Config).IsNotNull();
+        await Assert.That(result.Config!.Rules).ContainsKey("cache-poisoning-trigger");
+        await Assert.That(result.Config.Rules).ContainsKey("self-hosted-runner-trigger");
+        await Assert.That(result.Config.Exclusions![0].Rules).IsEquivalentTo(new[] { "cache-poisoning-trigger", "self-hosted-runner-trigger" });
+    }
+
+    [Test]
+    public async Task Validate_LegacyTriggerRuleIds_ReturnsUnknownRuleIdErrors()
+    {
+        var yaml = """
+        rules:
+          cache-poisoning:
+            untrusted-triggers:
+              - issue_comment
+          self-hosted-runner:
+            untrusted-triggers:
+              - issue_comment
+        """;
+
+        var result = LintConfigLibrary.Validate(yaml, "seiton.yaml");
+
+        await Assert.That(result.IsValid).IsFalse();
+        await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("unknown rule-id 'cache-poisoning'", StringComparison.Ordinal))).IsTrue();
+        await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("unknown rule-id 'self-hosted-runner'", StringComparison.Ordinal))).IsTrue();
     }
 
     [Test]
@@ -988,10 +1035,10 @@ public sealed class LintConfigLibraryTests
           credentials:
             public-registries:
               - ghcr.io
-          cache-poisoning:
+          cache-poisoning-trigger:
             untrusted-triggers:
               - issue_comment
-          self-hosted-runner:
+          self-hosted-runner-trigger:
             untrusted-triggers:
               - issue_comment
           unredacted-secrets:
@@ -1032,7 +1079,7 @@ public sealed class LintConfigLibraryTests
           credentials:
             public-registries:
               - registry.example.com
-          cache-poisoning:
+          cache-poisoning-trigger:
             untrusted-triggers:
               - issue_comment
           unredacted-secrets:
@@ -1099,7 +1146,7 @@ public sealed class LintConfigLibraryTests
         await Assert.That(result.Config.Rules["dangerous-triggers"].Events![0]).IsEqualTo("issue_comment");
         await Assert.That(result.Config.Rules["runner-label"].KnownHostedLabels![0]).IsEqualTo("ubuntu-24.04-large");
         await Assert.That(result.Config.Rules["credentials"].PublicRegistries![0]).IsEqualTo("registry.example.com");
-        await Assert.That(result.Config.Rules["cache-poisoning"].UntrustedTriggers![0]).IsEqualTo("issue_comment");
+        await Assert.That(result.Config.Rules["cache-poisoning-trigger"].UntrustedTriggers![0]).IsEqualTo("issue_comment");
         await Assert.That(result.Config.Rules["unredacted-secrets"].OutputCommands![0]).IsEqualTo("tee");
         await Assert.That(result.Config.Rules["forbidden-uses"].Deny![0]).IsEqualTo("some-untrusted-org/*");
         await Assert.That(result.Config.Rules["expr-undefined-var"].AssumeEvents!.Count).IsEqualTo(2);
@@ -1269,8 +1316,8 @@ public sealed class LintConfigLibraryTests
     [Arguments("dangerous-triggers", "events")]
     [Arguments("runner-label", "known-hosted-labels")]
     [Arguments("credentials", "public-registries")]
-    [Arguments("cache-poisoning", "untrusted-triggers")]
-    [Arguments("self-hosted-runner", "untrusted-triggers")]
+    [Arguments("cache-poisoning-trigger", "untrusted-triggers")]
+    [Arguments("self-hosted-runner-trigger", "untrusted-triggers")]
     [Arguments("unredacted-secrets", "output-commands")]
     public async Task Validate_OldExtendSyntax_EmitsMigrationDiagnostic(string ruleId, string keyName)
     {

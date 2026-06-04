@@ -219,7 +219,7 @@ public sealed record RuleConfig
     public IReadOnlyList<string>? KnownHostedLabels { get; init; }
     /// <summary>Gets the additional registry list for <c>credentials</c> (appended to built-in set).</summary>
     public IReadOnlyList<string>? PublicRegistries { get; init; }
-    /// <summary>Gets the additional trigger list for <c>cache-poisoning</c> and <c>self-hosted-runner</c> (appended to built-in set).</summary>
+    /// <summary>Gets the additional trigger list for <c>cache-poisoning-trigger</c> and <c>self-hosted-runner-trigger</c> (appended to built-in set).</summary>
     public IReadOnlyList<string>? UntrustedTriggers { get; init; }
     /// <summary>Gets the additional output command list for <c>unredacted-secrets</c> (appended to built-in set).</summary>
     public IReadOnlyList<string>? OutputCommands { get; init; }

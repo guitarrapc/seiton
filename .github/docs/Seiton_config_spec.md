@@ -102,7 +102,7 @@ rules:
       - registry.example.com
 
   # rule-specific: untrusted trigger 拡張 (adds to built-in set)
-  cache-poisoning:
+  cache-poisoning-trigger:
     untrusted-triggers:
       - issue_comment
 
@@ -137,7 +137,7 @@ rules:
 | `runner-label` | `known-hosted-labels` | `string[]` | 既知ランナーラベルの追加 (built-in に追加) |
 | `runner-no-latest` | `fix-mapping` | `map[string]string` | 検出対象に追加する runner label と auto-fix 時の置換先ラベルの対応。キーは ASCII 大文字小文字を無視して照合し、値はそのまま置換テキストとして使う |
 | `credentials` | `public-registries` | `string[]` | 公開レジストリの追加 (built-in に追加) |
-| `cache-poisoning` | `untrusted-triggers` | `string[]` | 信頼できないトリガーの追加 (built-in に追加) |
+| `cache-poisoning-trigger` | `untrusted-triggers` | `string[]` | 信頼できないトリガーの追加 (built-in に追加) |
 | `unredacted-secrets` | `output-commands` | `string[]` | 監視対象出力コマンドの追加 (built-in に追加) |
 | `forbidden-uses` | `deny` / `allow` | `string[]` | `uses:` 参照の拒否/許可 wildcard パターン |
 | `expr-undefined-var` | `assume-events` | `string[]` | 式評価時に仮定するイベント |

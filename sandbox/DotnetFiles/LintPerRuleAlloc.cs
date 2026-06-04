@@ -101,7 +101,7 @@ string[] ruleIds = [
     "runner-no-latest", "run-secrets-context-direct-use", "run-inputs-context-direct-use",
     "secrets-whole-context-access", "checkout-persist-credentials", "deny-read-all",
     "deny-inherit-secrets", "job-timeout-minutes-required", "github-app-token-inputs",
-    "cache-poisoning", "self-hosted-runner", "unredacted-secrets", "secrets-outside-env",
+    "cache-poisoning-trigger", "self-hosted-runner-trigger", "unredacted-secrets", "secrets-outside-env",
     "workflow-secrets", "job-secrets", "action-shell-is-required", "matrix", "env-var",
     "deprecated-commands", "if-cond", "fake-ternary", "archived-uses",
     "insecure-commands", "overprovisioned-secrets", "forbidden-uses",

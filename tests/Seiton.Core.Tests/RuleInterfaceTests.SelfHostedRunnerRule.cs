@@ -58,6 +58,6 @@ public sealed partial class RuleInterfaceTests
             ["jobs.'ci'.runs-on"]),
         };
 
-        await AssertRuleCases(new SelfHostedRunnerRule(), "self-hosted-runner", cases);
+        await AssertRuleCases(new SelfHostedRunnerRule(), "self-hosted-runner-trigger", cases);
     }
 }

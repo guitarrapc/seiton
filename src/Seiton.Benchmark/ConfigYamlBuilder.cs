@@ -40,7 +40,7 @@ internal static class ConfigYamlBuilder
               credentials:
                 public-registries:
                   - registry.example.com
-              cache-poisoning:
+              cache-poisoning-trigger:
                 untrusted-triggers:
                   - issue_comment
               unredacted-secrets:
@@ -126,11 +126,11 @@ internal static class ConfigYamlBuilder
         sb.AppendLine("      - registry.example.com");
         sb.AppendLine("      - ghcr.io");
         sb.AppendLine("      - docker.io");
-        sb.AppendLine("  cache-poisoning:");
+        sb.AppendLine("  cache-poisoning-trigger:");
         sb.AppendLine("    untrusted-triggers:");
         sb.AppendLine("      - issue_comment");
         sb.AppendLine("      - pull_request_target");
-        sb.AppendLine("  self-hosted-runner:");
+        sb.AppendLine("  self-hosted-runner-trigger:");
         sb.AppendLine("    severity: warning");
         sb.AppendLine("  unredacted-secrets:");
         sb.AppendLine("    output-commands:");
