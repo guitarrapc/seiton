@@ -84,3 +84,82 @@ Playground で lint 結果が存在するにもかかわらず、表示が次の
 
 - この不具合はユーザー体験への影響が大きいため、優先度は **Critical (P0)**。
 - 修正時は Playground の Browser 経路を明示的に通すテストを必須化すること（desktop のみでは再発を見逃す）。
+
+---
+
+## P0 実装結果（2026-06-04）
+
+### 実装した変更
+
+1. `src/Seiton.Playground.Core/PlaygroundLintRunner.cs`
+   - `RunToJsonUtf8()` を修正し、非 incremental 分岐（`Engine.Check`）で `lintResult` 生存中に JSON シリアライズを完了するよう変更。
+   - 診断シリアライズを `SerializeDiagnosticsToResult(ReadOnlySpan<Diagnostic>)` に抽出し、分岐ごとの寿命管理を明確化。
+   - テスト専用フック `ForceUseIncrementalLintForTests` を追加し、desktop でも Browser 相当の非 incremental 経路を再現可能にした。
+   - `ResetSharedStateForTests()` で上記フックを確実に初期化するよう追加。
+
+2. `tests/Seiton.Playground.Tests/PlaygroundLintRunnerTests.cs`
+   - 回帰テスト `RunToJson_NonIncrementalPath_ProducesNonDefaultDiagnosticFields` を追加。
+   - 非 incremental 経路で `deny-write-all` 診断を検出し、`line > 0` / `column > 0` / `message 非空` を検証。
+
+### TDD 実施ログ（Red → Green）
+
+- **Red**: 新規テスト追加直後、`ForceUseIncrementalLintForTests` 未定義でコンパイル失敗を確認。
+- **Green**: 実装後、同テスト単体が pass。
+- 追加で `PlaygroundLintRunnerTests` クラス全体（23件）も pass。
+
+### ベンチマーク（PlaygroundLintBenchmark）
+
+実行コマンド:
+
+```shell
+dotnet run -c Release --project src/Seiton.Benchmark/Seiton.Benchmark.csproj --filter "*PlaygroundLintBenchmark*"
+```
+
+比較（Mean / Allocated）:
+
+| Case | Before Mean | After Mean | Diff | Before Alloc | After Alloc | Diff |
+|---|---:|---:|---:|---:|---:|---:|
+| Small / NoChange | 97.567 ns | 96.852 ns | -0.7% | 0 B | 0 B | 0% |
+| Small / PartialChange | 676.460 us | 683.007 us | +1.0% | 136,080 B | 136,080 B | 0% |
+| Small / FullChange | 194.809 us | 204.978 us | +5.2% | 51,927 B | 51,927 B | 0% |
+| Large / NoChange | 89.094 ns | 100.729 ns | +13.1%* | 0 B | 0 B | 0% |
+| Large / PartialChange | 4.783 ms | 3.370 ms | -29.5% | 383,252 B | 383,206 B | -0.0% |
+| Large / FullChange | 1.129 ms | 1.126 ms | -0.3% | 170,782 B | 170,782 B | 0% |
+
+\* ShortRun（Iteration=3）のため ns オーダーの揺れが大きく、同時に信頼区間が広い。割当メモリは全ケースで維持され、ホットパスの allocation regression は確認されていない。
+
+### テスト実行結果
+
+- ✅ `dotnet test --project tests/Seiton.Playground.Tests --treenode-filter /*/*/PlaygroundLintRunnerTests/RunToJson_NonIncrementalPath_ProducesNonDefaultDiagnosticFields*`
+- ✅ `dotnet test --project tests/Seiton.Playground.Tests --treenode-filter /*/*/PlaygroundLintRunnerTests/*`
+- ⚠️ `dotnet test`（全体）は Playground UI 系でタイムアウト/環境依存失敗（本変更と無関係な Playwright 起動待ち失敗）により非成功。
+- ⚠️ skill 推奨の事前 publish も、既存の `Seiton.Playground.csproj` 側エラー（MSB3094）で完了できず、UI 系の再検証をブロック。
+
+### ユーザーファースト/API 観点の確認
+
+- 公開 API（JS から見える `RunLint` / `SetConfig` / `ApplyAllFixes*`）のシグネチャと返却形式は変更なし。
+- ユーザー体験上の改善点:
+  - 診断が `line:0, col:0 / Info` へ崩れる不正表示を防止。
+  - 既存 UI 操作（クリックジャンプ、severity 表示、ruleId 表示）が直感どおり機能する前提を回復。
+
+### 仕様整合性チェック
+
+- `Seiton_Playground_spec.md` の診断 JSON スキーマ（`line`,`column`,`severity`,`message`）と実装は整合。
+- `Seiton_Playground_csharp_spec.md` の `RunToJsonUtf8` hot path 記述（Utf8JsonWriter, zero-allocation方針）とも整合。
+- 今回は仕様変更ではなく不具合修正であり、仕様本文の更新は不要と判断。
+
+### 実装レビュー反復（セルフレビュー）
+
+#### Round 1
+- 指摘: 非 incremental 分岐で dispose 後 span 参照の可能性（根本不具合）。
+- 対応: 分岐内で即シリアライズする構造へ変更。
+
+#### Round 2
+- 指摘: Browser 経路を desktop テストで再現できず、回帰検出不能。
+- 対応: `ForceUseIncrementalLintForTests` を追加し、回帰テストを作成。
+
+#### Round 3
+- 指摘: 修正で allocation が増えないことの裏付け不足。
+- 対応: PlaygroundLintBenchmark を前後実行して Allocated を比較（全ケース維持）。
+
+最終判定: P0 要件（原因修正 + 回帰テスト + 性能確認）は満たした。

@@ -101,6 +101,52 @@ public sealed class PlaygroundLintRunnerTests
     }
 
     [Test]
+    public async Task RunToJson_NonIncrementalPath_ProducesNonDefaultDiagnosticFields()
+    {
+        PlaygroundLintRunner.ForceUseIncrementalLintForTests = false;
+        try
+        {
+            const string yaml = """
+                on: push
+                permissions: write-all
+                jobs:
+                  build:
+                    runs-on: ubuntu-latest
+                    steps:
+                      - run: echo ok
+                """;
+
+            var json = PlaygroundLintRunner.RunToJsonUtf8(yaml, ".github/workflows/ci.yml");
+            using var doc = JsonDocument.Parse(json);
+            var arr = doc.RootElement;
+            await Assert.That(arr.GetArrayLength()).IsGreaterThan(0);
+
+            var anyRuleDiagnostic = false;
+            foreach (var diag in arr.EnumerateArray())
+            {
+                if (diag.TryGetProperty("ruleId", out var ruleId)
+                    && string.Equals(ruleId.GetString(), "deny-write-all", StringComparison.Ordinal))
+                {
+                    anyRuleDiagnostic = true;
+                    await Assert.That(diag.TryGetProperty("line", out var line)).IsTrue();
+                    await Assert.That(diag.TryGetProperty("column", out var col)).IsTrue();
+                    await Assert.That(diag.TryGetProperty("message", out var msg)).IsTrue();
+                    await Assert.That(line.GetInt32()).IsGreaterThan(0);
+                    await Assert.That(col.GetInt32()).IsGreaterThan(0);
+                    await Assert.That(string.IsNullOrWhiteSpace(msg.GetString())).IsFalse();
+                    break;
+                }
+            }
+
+            await Assert.That(anyRuleDiagnostic).IsTrue();
+        }
+        finally
+        {
+            PlaygroundLintRunner.ForceUseIncrementalLintForTests = null;
+        }
+    }
+
+    [Test]
     public async Task RunToJson_UsesCamelCasePropertyNames()
     {
         var jsonBytes = PlaygroundLintRunner.RunToJsonUtf8("x", ".github/workflows/w.yml");
