@@ -1136,8 +1136,8 @@ function appendDiagnosticDescriptionCell(cell, message, diag) {
     if (diag.fixable) {
       const fx = document.createElement('span');
       fx.className = 'fix-chip';
-      fx.title = diag.fixDescription ?? 'Auto-fix available';
-      fx.textContent = 'Fix';
+      fx.title = diag.fixDescription ?? 'Included in Apply all fixes';
+      fx.textContent = 'Fixable';
       chips.appendChild(fx);
     }
     if (diag.ruleId) {
