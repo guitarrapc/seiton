@@ -561,7 +561,17 @@ jobs:
       - run: echo ok
 ```
 
+**Configuration — fix-mapping:**
+
 For self-hosted runners, add their labels to `rules.runner-label.known-hosted-labels` in [configuration](configuration.md).
+
+```yaml
+# seiton.yaml
+rules:
+  runner-label:
+    known-hosted-labels:
+      - my-org-runner-v2
+```
 
 ---
 
@@ -1803,6 +1813,10 @@ jobs:
 - Verify differences between `matrix`, `steps`, and `needs` availability after refactoring.
 - Re-test both expected true and false paths for guarded steps.
 
+**Configuration:**
+
+TODO
+
 ---
 
 ### `cache-poisoning`
@@ -1869,6 +1883,8 @@ jobs:
 
 **Configuration — extend untrusted triggers:**
 
+Add additional triggers considered untrusted for this rule.
+
 ```yaml
 # seiton.yaml
 rules:
@@ -1934,6 +1950,18 @@ jobs:
 - Moving to GitHub-hosted runners can change tooling/network assumptions; validate environment parity.
 - `if` guards are defense-in-depth, not a substitute for strong runner isolation.
 - For unavoidable self-hosted use, combine trigger restrictions with ephemeral runner lifecycle controls.
+
+**Configuration — extend untrusted triggers:**
+
+Add additional triggers considered untrusted.
+
+```yaml
+# seiton.yaml
+rules:
+   self-hosted-runner:
+    untrusted-triggers:
+      - issue_comment
+```
 
 ---
 
@@ -2378,6 +2406,8 @@ jobs:
 
 **Configuration — extend output commands:**
 
+Add additional output commands to the detection set.
+
 ```yaml
 # seiton.yaml
 rules:
@@ -2560,6 +2590,8 @@ Use `seiton --fix --enable-pin-network` to automatically resolve and apply SHA p
 
 **Configuration — ignore specific actions:**
 
+Add specific actions or entire owner namespaces to the ignore list when mutable refs are acceptable for certain trusted dependencies. Patterns use wildcard matching (`*` = any sequence, `?` = single character) against `owner/repo`.
+
 ```yaml
 # seiton.yaml
 rules:
@@ -2567,17 +2599,6 @@ rules:
     ignore-actions:
       - owner: "my-org/internal-action"
       - owner: "my-org/setup-*"
-```
-
-Patterns use wildcard matching (`*` = any sequence, `?` = single character) against `owner/repo`.
-
-**Ignore all refs or only specific refs:**
-
-```yaml
-# seiton.yaml
-rules:
-  unpinned-uses:
-    ignore-actions:
       # Omit refs to ignore ALL refs from this owner
       - owner: "my-org/*"
       # Include refs to ignore only @main and @master from this owner
@@ -2762,6 +2783,8 @@ jobs:
 ```
 
 **Configuration:**
+
+Add allow and deny patterns to control which actions are acceptable in your workflows. Patterns use wildcard matching (`*` = any sequence, `?` = single character) against `owner/repo`.
 
 ```yaml
 # seiton.yaml
