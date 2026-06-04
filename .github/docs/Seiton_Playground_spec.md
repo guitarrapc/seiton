@@ -90,6 +90,10 @@ Exported functions callable from JavaScript:
 ]
 ```
 
+Non-functional requirement:
+
+- Diagnostic completeness is mandatory on every `RunLint` path (browser/non-incremental, desktop/incremental, and action metadata). Any non-empty diagnostic in the returned JSON must preserve meaningful fields (`line >= 1`, `column >= 1`, non-empty `message`, and valid `severity`) in both the payload and rendered UI.
+
 ### 2.5 Input Normalization
 
 - `yamlSource`: null/empty treated as empty string

@@ -97,6 +97,7 @@ public static class PlaygroundLintRunner
             IncrementalCtx.ResetForTests();
             ActionShaResolverOverride = null;
             ImageDigestResolverOverride = null;
+            ForceUseIncrementalLintForTests = null;
         }
     }
 
@@ -113,7 +114,8 @@ public static class PlaygroundLintRunner
     /// Disabled in the browser: incremental reuse can retain stale spans across edits and trap in WASM AOT.
     /// Must be evaluated per call — <see cref="OperatingSystem.IsBrowser"/> is false during static type init in WASM.
     /// </summary>
-    private static bool UseIncrementalLint => !OperatingSystem.IsBrowser();
+    internal static bool? ForceUseIncrementalLintForTests { get; set; }
+    private static bool UseIncrementalLint => ForceUseIncrementalLintForTests ?? !OperatingSystem.IsBrowser();
 
     /// <summary>
     /// Sets the lint configuration from YAML text. Uses content-hash caching (XxHash64) to
@@ -278,17 +280,20 @@ public static class PlaygroundLintRunner
 
             var utf8Yaml = EncodeToDoubleBuffer(yamlSource);
 
-            ReadOnlySpan<Diagnostic> diagnosticsToSerialize;
-            AstArena? ownedArena = null;
+            byte[] result;
 
             var config = ActiveConfig;
+
+            // Lifetime invariant:
+            // DiagnosticList/Diagnostic spans can reference arena-owned storage.
+            // Never let a diagnostic span outlive the owning LintResult/AstArena.
+            // Always serialize (or copy) diagnostics before disposing those owners.
+            // Browser path: `using var lintResult = Engine.Check(...)` then serialize inside the block.
 
             // Action metadata files (action.yml) require classified parsing — not incremental.
             if (DocumentKindClassifier.GetPathHintKind(filePath) == DocumentKind.ActionMetadata)
             {
-                var classifiedResult = WorkflowParser.ParseClassified(utf8Yaml, filePath, out ownedArena);
-                var lintResult = Engine.CheckWithParseResult(utf8Yaml, filePath, config, classifiedResult.ParseResult, ownedArena);
-                diagnosticsToSerialize = lintResult.Diagnostics.AsSpan();
+                result = LintActionMetadataToJsonUtf8(utf8Yaml, filePath, config);
             }
             else if (UseIncrementalLint)
             {
@@ -300,42 +305,15 @@ public static class PlaygroundLintRunner
                 var skipJobs = IncrementalCtx.BuildSkipJobs(jobCount, parseResult.Workflow);
 
                 // Lint with optional job skipping
-                var lintResult = Engine.CheckWithParseResult(utf8Yaml, filePath, config, parseResult.Data, IncrementalCtx.Arena, skipJobs);
+                var lintResultData = Engine.CheckWithParseResult(utf8Yaml, filePath, config, parseResult.Data, IncrementalCtx.Arena, skipJobs);
 
                 // Merge fresh diagnostics with cached diagnostics for skipped jobs
-                diagnosticsToSerialize = IncrementalCtx.MergeDiagnosticsWithCache(lintResult.Diagnostics, skipJobs);
+                result = SerializeDiagnosticsToResult(IncrementalCtx.MergeDiagnosticsWithCache(lintResultData.Diagnostics, skipJobs));
             }
             else
             {
                 using var lintResult = Engine.Check(utf8Yaml, filePath, config);
-                diagnosticsToSerialize = lintResult.Diagnostics.AsSpan();
-            }
-
-            JsonBuffer.Clear();
-            using (var writer = new Utf8JsonWriter(JsonBuffer, CamelCaseWriterOptions))
-            {
-                WriteDiagnosticsArray(writer, diagnosticsToSerialize);
-            }
-
-            // Dispose arena for ActionMetadata path (not owned by IncrementalParseContext)
-            ownedArena?.Dispose();
-
-            // NOTE: Incremental path arena is NOT disposed — IncrementalParseContext owns it for reuse
-            var written = JsonBuffer.WrittenSpan;
-
-            // Reuse previous buffer when content is identical to avoid per-call byte[] allocation.
-            // When content differs we always allocate a new array so that callers who retain
-            // a previous result never observe their buffer mutating.
-            byte[] result;
-            if (_lastJsonOutput is not null && written.SequenceEqual(_lastJsonOutput))
-            {
-                // Content identical — return cached output (zero alloc)
-                result = _lastJsonOutput;
-            }
-            else
-            {
-                // Content or length changed — allocate new array
-                result = written.ToArray();
+                result = SerializeDiagnosticsToResult(lintResult.Diagnostics.AsSpan());
             }
 
             // Cache for identity-based short circuit
@@ -345,6 +323,40 @@ public static class PlaygroundLintRunner
 
             return result;
         }
+    }
+
+    /// <summary>
+    /// Lints action metadata with a caller-owned arena. Serializes diagnostics before arena disposal.
+    /// </summary>
+    private static byte[] LintActionMetadataToJsonUtf8(byte[] utf8Yaml, string filePath, LintConfig config)
+    {
+        var classifiedResult = WorkflowParser.ParseClassified(utf8Yaml, filePath, out var arena);
+        try
+        {
+            var lintResultData = Engine.CheckWithParseResult(utf8Yaml, filePath, config, classifiedResult.ParseResult, arena);
+            return SerializeDiagnosticsToResult(lintResultData.Diagnostics.AsSpan());
+        }
+        finally
+        {
+            arena?.Dispose();
+        }
+    }
+
+    private static byte[] SerializeDiagnosticsToResult(ReadOnlySpan<Diagnostic> diagnostics)
+    {
+        JsonBuffer.Clear();
+        using (var writer = new Utf8JsonWriter(JsonBuffer, CamelCaseWriterOptions))
+        {
+            WriteDiagnosticsArray(writer, diagnostics);
+        }
+
+        var written = JsonBuffer.WrittenSpan;
+        if (_lastJsonOutput is not null && written.SequenceEqual(_lastJsonOutput))
+        {
+            return _lastJsonOutput;
+        }
+
+        return written.ToArray();
     }
 
     private static void WriteDiagnosticsArray(Utf8JsonWriter writer, ReadOnlySpan<Diagnostic> diagnostics)

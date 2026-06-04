@@ -94,10 +94,107 @@ public sealed class PlaygroundLintRunnerTests
 
         var first = arr[0];
         await Assert.That(first.TryGetProperty("message", out var msg)).IsTrue();
-        await Assert.That(msg.GetString()).IsNotNull();
-        await Assert.That(first.TryGetProperty("line", out _)).IsTrue();
-        await Assert.That(first.TryGetProperty("column", out _)).IsTrue();
-        await Assert.That(first.TryGetProperty("severity", out _)).IsTrue();
+        await Assert.That(string.IsNullOrWhiteSpace(msg.GetString())).IsFalse();
+        await Assert.That(first.TryGetProperty("line", out var line)).IsTrue();
+        await Assert.That(first.TryGetProperty("column", out var column)).IsTrue();
+        await Assert.That(first.TryGetProperty("severity", out var severity)).IsTrue();
+        await Assert.That(line.GetInt32()).IsGreaterThan(0);
+        await Assert.That(column.GetInt32()).IsGreaterThan(0);
+        await Assert.That(new HashSet<string> { "Error", "Warning", "Info" }.Contains(severity.GetString()!)).IsTrue();
+    }
+
+    [Test]
+    public async Task RunToJson_NonIncrementalPath_ProducesNonDefaultDiagnosticFields()
+    {
+        PlaygroundLintRunner.ForceUseIncrementalLintForTests = false;
+        try
+        {
+            const string yaml = """
+                on: push
+                permissions: write-all
+                jobs:
+                  build:
+                    runs-on: ubuntu-latest
+                    steps:
+                      - run: echo ok
+                """;
+
+            var json = PlaygroundLintRunner.RunToJsonUtf8(yaml, ".github/workflows/ci.yml");
+            await AssertDiagnosticArrayContainsMeaningfulRuleDiagnostic(json, "deny-write-all");
+        }
+        finally
+        {
+            PlaygroundLintRunner.ForceUseIncrementalLintForTests = null;
+        }
+    }
+
+    [Test]
+    public async Task RunToJson_IncrementalPath_ProducesMeaningfulDiagnosticFields()
+    {
+        PlaygroundLintRunner.ForceUseIncrementalLintForTests = true;
+        try
+        {
+            const string yaml = """
+                on: push
+                permissions: write-all
+                jobs:
+                  build:
+                    runs-on: ubuntu-latest
+                    steps:
+                      - run: echo ok
+                """;
+
+            var json = PlaygroundLintRunner.RunToJsonUtf8(yaml, ".github/workflows/ci.yml");
+            await AssertDiagnosticArrayContainsMeaningfulRuleDiagnostic(json, "deny-write-all");
+        }
+        finally
+        {
+            PlaygroundLintRunner.ForceUseIncrementalLintForTests = null;
+        }
+    }
+
+    [Test]
+    public async Task RunToJson_ActionMetadata_InvalidYaml_ProducesMeaningfulDiagnosticFields()
+    {
+        const string invalidActionYaml = """
+            name: Broken Action
+            runs:
+              using: node20
+            """;
+
+        var json = PlaygroundLintRunner.RunToJsonUtf8(invalidActionYaml, "action.yml");
+        using var doc = JsonDocument.Parse(json);
+        var arr = doc.RootElement;
+        await Assert.That(arr.GetArrayLength()).IsGreaterThan(0);
+        await AssertMeaningfulDiagnosticFields(arr[0]);
+    }
+
+    [Test]
+    public async Task RunToJson_MinimalWorkflow_DoesNotReportDenyWriteAll()
+    {
+        const string yaml = """
+            on: push
+            jobs:
+              build:
+                runs-on: ubuntu-latest
+                steps:
+                  - run: echo ok
+            """;
+
+        var json = PlaygroundLintRunner.RunToJsonUtf8(yaml, ".github/workflows/ci.yml");
+        using var doc = JsonDocument.Parse(json);
+        var foundDenyWriteAll = false;
+        foreach (var diag in doc.RootElement.EnumerateArray())
+        {
+            if (diag.TryGetProperty("ruleId", out var ruleId)
+                && string.Equals(ruleId.GetString(), "deny-write-all", StringComparison.Ordinal))
+            {
+                foundDenyWriteAll = true;
+                break;
+            }
+        }
+
+        await Assert.That(foundDenyWriteAll).IsFalse();
     }
 
     [Test]
@@ -156,6 +253,12 @@ public sealed class PlaygroundLintRunnerTests
                 && el.TryGetProperty("fixable", out var fx) && fx.GetBoolean())
             {
                 found = true;
+                await Assert.That(el.TryGetProperty("line", out var line)).IsTrue();
+                await Assert.That(el.TryGetProperty("column", out var column)).IsTrue();
+                await Assert.That(el.TryGetProperty("message", out var message)).IsTrue();
+                await Assert.That(line.GetInt32()).IsGreaterThan(0);
+                await Assert.That(column.GetInt32()).IsGreaterThan(0);
+                await Assert.That(string.IsNullOrWhiteSpace(message.GetString())).IsFalse();
                 await Assert.That(el.TryGetProperty("fixDescription", out _)).IsTrue();
                 break;
             }
@@ -551,5 +654,38 @@ public sealed class PlaygroundLintRunnerTests
 
         // Cleanup
         PlaygroundLintRunner.SetConfig(null);
+    }
+
+    private static async Task AssertDiagnosticArrayContainsMeaningfulRuleDiagnostic(byte[] json, string expectedRuleId)
+    {
+        using var doc = JsonDocument.Parse(json);
+        var arr = doc.RootElement;
+        await Assert.That(arr.GetArrayLength()).IsGreaterThan(0);
+
+        var found = false;
+        foreach (var diag in arr.EnumerateArray())
+        {
+            if (diag.TryGetProperty("ruleId", out var ruleId)
+                && string.Equals(ruleId.GetString(), expectedRuleId, StringComparison.Ordinal))
+            {
+                found = true;
+                await AssertMeaningfulDiagnosticFields(diag);
+                break;
+            }
+        }
+
+        await Assert.That(found).IsTrue().Because($"expected ruleId {expectedRuleId}");
+    }
+
+    private static async Task AssertMeaningfulDiagnosticFields(JsonElement diag)
+    {
+        await Assert.That(diag.TryGetProperty("line", out var line)).IsTrue();
+        await Assert.That(diag.TryGetProperty("column", out var column)).IsTrue();
+        await Assert.That(diag.TryGetProperty("message", out var message)).IsTrue();
+        await Assert.That(diag.TryGetProperty("severity", out var severity)).IsTrue();
+        await Assert.That(line.GetInt32()).IsGreaterThan(0);
+        await Assert.That(column.GetInt32()).IsGreaterThan(0);
+        await Assert.That(string.IsNullOrWhiteSpace(message.GetString())).IsFalse();
+        await Assert.That(new HashSet<string> { "Error", "Warning", "Info" }.Contains(severity.GetString()!)).IsTrue();
     }
 }
