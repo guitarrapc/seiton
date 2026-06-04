@@ -163,3 +163,90 @@ dotnet run -c Release --project src/Seiton.Benchmark/Seiton.Benchmark.csproj --f
 - 対応: PlaygroundLintBenchmark を前後実行して Allocated を比較（全ケース維持）。
 
 最終判定: P0 要件（原因修正 + 回帰テスト + 性能確認）は満たした。
+
+---
+
+## P1 実装結果（2026-06-04）
+
+### 実装した変更
+
+1. `tests/Seiton.Playground.Tests/PlaygroundLintRunnerTests.cs`
+   - `RunToJson_InvalidYaml_ContainsParserDiagnosticWithLineAndMessage` を強化し、`line > 0` / `column > 0` / `message 非空` / `severity 値妥当` を検証。
+   - `RunToJson_DenyWriteAll_IncludesFixableDiagnostic` を強化し、`deny-write-all` 診断の位置情報とメッセージ妥当性を検証。
+
+2. `tests/Seiton.Playground.Tests/PlaygroundUiLayoutTests.cs`
+   - `BrowserHook_RunLint_DiagnosticsHaveMeaningfulFields` を追加。
+     - Browser の `__SEITON_PLAYGROUND_TEST__.runLint` を直接呼び、hook payload に対して `line/column/message/severity` の意味検証を実施。
+   - `DiagnosticsTable_RendersPositiveLineColumnAndMessage` を追加。
+     - 実際の結果テーブル描画を対象に `line:[1-9]..., col:[1-9]...`、severity、message を検証。
+
+### TDD 実施ログ（Red → Green）
+
+- **Red**:
+  - 新規 UI テスト実行時に `dotnet publish` 競合（StaticWebAssets 圧縮ファイル lock）で失敗を確認。
+- **Green**:
+  - skill に沿って prepublish 生成物を利用し、`SEITON_PLAYGROUND_PUBLISH_DIR_DEBUG` を指定して UI テストを再実行。
+  - 追加2テストとも pass。
+  - 既存 `PlaygroundLintRunnerTests` クラス（23件）も pass。
+
+### テスト実行結果
+
+- ✅ `dotnet test --project tests/Seiton.Playground.Tests --treenode-filter /*/*/PlaygroundLintRunnerTests/*`
+- ✅ `dotnet test --project tests/Seiton.Playground.Tests --maximum-parallel-tests 1 --treenode-filter /*/*/PlaygroundUiLayoutTests/BrowserHook_RunLint_DiagnosticsHaveMeaningfulFields*`
+- ✅ `dotnet test --project tests/Seiton.Playground.Tests --maximum-parallel-tests 1 --treenode-filter /*/*/PlaygroundUiLayoutTests/DiagnosticsTable_RendersPositiveLineColumnAndMessage*`
+
+### ベンチマーク（PlaygroundLintBenchmark）
+
+実行コマンド（2回）:
+
+```shell
+dotnet run -c Release --project src/Seiton.Benchmark/Seiton.Benchmark.csproj --filter "*PlaygroundLintBenchmark*"
+```
+
+比較（P1 run1 vs run2, Mean / Allocated）:
+
+| Case | Run1 Mean | Run2 Mean | Diff | Run1 Alloc | Run2 Alloc | Diff |
+|---|---:|---:|---:|---:|---:|---:|
+| Small / NoChange | 112.046 ns | 115.181 ns | +2.8% | 0 B | 0 B | 0% |
+| Small / PartialChange | 1.325 ms | 1.226 ms | -7.5% | 136,080 B | 136,080 B | 0% |
+| Small / FullChange | 225.449 us | 230.395 us | +2.2% | 51,927 B | 51,927 B | 0% |
+| Large / NoChange | 103.997 ns | 109.202 ns | +5.0% | 0 B | 0 B | 0% |
+| Large / PartialChange | 3.904 ms | 4.005 ms | +2.6% | 383,206 B | 383,206 B | 0% |
+| Large / FullChange | 1.278 ms | 1.278 ms | +0.0% | 170,782 B | 170,782 B | 0% |
+
+評価:
+
+- 変更対象はテストコードのみで、実行時コード（`src/`）のロジック変更はなし。
+- Mean の差分は ShortRun の計測揺れ範囲内。
+- Allocated は全ケースで不変であり、性能劣化の兆候は確認されない。
+
+### ユーザーファースト/API 観点の確認
+
+- ユーザー向け API/操作フローの変更はなし（公開シグネチャ不変）。
+- ただし検出力の強化により、次の UX 劣化を早期検知できる:
+  - 表示位置が `line:0,col:0` へ崩れる
+  - メッセージ欠落
+  - Browser 経路だけで発生する payload 破損
+- つまり「壊れた結果をユーザーに見せる」リスクを CI で抑制する改善。
+
+### 仕様整合性チェック
+
+- `Seiton_Playground_spec.md` の diagnostics schema（`message`,`line`,`column`,`severity`）に沿った検証をテストで明文化。
+- `Seiton_Playground_csharp_spec.md` の interop/JSON 仕様と矛盾なし。
+- 仕様変更は不要（検証強化のみ）。
+
+### 実装レビュー反復（セルフレビュー）
+
+#### Round 1
+- 指摘: desktop テストだけでは Browser hook payload の破損を見逃す。
+- 対応: `BrowserHook_RunLint_DiagnosticsHaveMeaningfulFields` を追加。
+
+#### Round 2
+- 指摘: payload 検証だけでは「UI描画の最終形」が担保されない。
+- 対応: `DiagnosticsTable_RendersPositiveLineColumnAndMessage` を追加。
+
+#### Round 3
+- 指摘: 並列テスト実行で publish lock が発生し、検証が不安定。
+- 対応: prepublish 生成物 + `SEITON_PLAYGROUND_PUBLISH_DIR_DEBUG` + `--maximum-parallel-tests 1` で安定実行に変更。
+
+最終判定: P1 要件（Browser/desktop/UI の検出力強化）は満たした。

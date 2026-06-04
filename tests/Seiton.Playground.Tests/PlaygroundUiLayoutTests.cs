@@ -111,6 +111,51 @@ public sealed class PlaygroundUiLayoutTests
     }
 
     [Test]
+    public async Task BrowserHook_RunLint_DiagnosticsHaveMeaningfulFields()
+    {
+        var host = await PlaygroundUiTestHost.GetOrCreateAsync();
+        var browser = await PlaygroundUiBrowserSession.GetBrowserAsync();
+        await using var context = await browser.NewContextAsync(new BrowserNewContextOptions
+        {
+            ViewportSize = new ViewportSize { Width = 900, Height = 720 },
+        });
+        var page = await context.NewPageAsync();
+        await GotoPlaygroundAndWaitForLinterGridAsync(page, $"{host.BaseUrl.TrimEnd('/')}/?seitonTestHooks=1");
+
+        await page.WaitForFunctionAsync(
+            "() => typeof globalThis.__SEITON_PLAYGROUND_TEST__?.runLint === 'function'",
+            arg: null,
+            new PageWaitForFunctionOptions { Timeout = 30_000 });
+
+        const string yaml = """
+            on: push
+            permissions: write-all
+            jobs:
+              build:
+                runs-on: ubuntu-latest
+                steps:
+                  - run: echo ok
+            """;
+
+        var result = await page.EvaluateAsync<HookRunLintResult>(
+            """
+            (src) => globalThis.__SEITON_PLAYGROUND_TEST__.runLint(src, '.github/workflows/ci.yml')
+            """,
+            yaml);
+
+        await Assert.That(result.Ok).IsTrue().Because(result.Error ?? "unknown");
+        await Assert.That(result.InternalError).IsFalse();
+        await Assert.That(result.Diagnostics?.Length ?? 0).IsGreaterThan(0);
+
+        var diag = Array.Find(result.Diagnostics ?? [], d => string.Equals(d.RuleId, "deny-write-all", StringComparison.Ordinal));
+        await Assert.That(diag is not null).IsTrue();
+        await Assert.That(diag!.Line).IsGreaterThan(0);
+        await Assert.That(diag.Column).IsGreaterThan(0);
+        await Assert.That(string.IsNullOrWhiteSpace(diag.Message)).IsFalse();
+        await Assert.That(string.IsNullOrWhiteSpace(diag.Severity)).IsFalse();
+    }
+
+    [Test]
     public async Task Toast_Escape_WithFocusOutsideStack_DismissesTopToast()
     {
         var host = await PlaygroundUiTestHost.GetOrCreateAsync();
@@ -179,6 +224,53 @@ public sealed class PlaygroundUiLayoutTests
     }
 
     [Test]
+    public async Task DiagnosticsTable_RendersPositiveLineColumnAndMessage()
+    {
+        var host = await PlaygroundUiTestHost.GetOrCreateAsync();
+        var browser = await PlaygroundUiBrowserSession.GetBrowserAsync();
+        await using var context = await browser.NewContextAsync(new BrowserNewContextOptions
+        {
+            ViewportSize = new ViewportSize { Width = 900, Height = 720 },
+        });
+        var page = await context.NewPageAsync();
+        await GotoPlaygroundAndWaitForLinterGridAsync(page, host.BaseUrl);
+
+        const string yaml = """
+            on: push
+            permissions: write-all
+            jobs:
+              build:
+                runs-on: ubuntu-latest
+                steps:
+                  - run: echo ok
+            """;
+
+        await page.EvaluateAsync(
+            """
+            (src) => {
+              const cm = document.querySelector('#editor .CodeMirror')?.CodeMirror;
+              if (!cm) throw new Error('workflow editor missing');
+              cm.setValue(src);
+              cm.refresh();
+            }
+            """,
+            yaml);
+
+        await page.WaitForFunctionAsync(
+            "() => document.querySelectorAll('#lint-result-body tr').length > 0",
+            arg: null,
+            new PageWaitForFunctionOptions { Timeout = 10_000 });
+
+        var positionText = ((await page.Locator("#lint-result-body tr:first-child td:first-child .pos-chip").TextContentAsync()) ?? string.Empty).Trim();
+        var severityText = ((await page.Locator("#lint-result-body tr:first-child td:nth-child(2) .severity-chip").TextContentAsync()) ?? string.Empty).Trim();
+        var messageText = ((await page.Locator("#lint-result-body tr:first-child td:nth-child(3)").TextContentAsync()) ?? string.Empty).Trim();
+
+        await Assert.That(Regex.IsMatch(positionText, @"^line:[1-9]\d*, col:[1-9]\d*$")).IsTrue();
+        await Assert.That(new HashSet<string> { "Error", "Warning", "Info" }.Contains(severityText)).IsTrue();
+        await Assert.That(string.IsNullOrWhiteSpace(messageText)).IsFalse();
+    }
+
+    [Test]
     public async Task Layout_WideViewport_UsesTwoColumnGridForLinterSection()
     {
         var host = await PlaygroundUiTestHost.GetOrCreateAsync();
@@ -232,4 +324,21 @@ public sealed class PlaygroundUiLayoutTests
 
     /// <summary>Forwarded to <see cref="PlaygroundUiBrowserSession"/> for assembly teardown tests.</summary>
     internal static Task DisposePlaywrightSessionAsync() => PlaygroundUiBrowserSession.DisposeAsync();
+
+    private sealed class HookRunLintResult
+    {
+        public bool Ok { get; set; }
+        public string? Error { get; set; }
+        public bool InternalError { get; set; }
+        public HookDiagnostic[]? Diagnostics { get; set; }
+    }
+
+    private sealed class HookDiagnostic
+    {
+        public string? Message { get; set; }
+        public int Line { get; set; }
+        public int Column { get; set; }
+        public string? Severity { get; set; }
+        public string? RuleId { get; set; }
+    }
 }

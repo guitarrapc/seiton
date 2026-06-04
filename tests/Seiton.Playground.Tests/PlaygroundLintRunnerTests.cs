@@ -94,10 +94,13 @@ public sealed class PlaygroundLintRunnerTests
 
         var first = arr[0];
         await Assert.That(first.TryGetProperty("message", out var msg)).IsTrue();
-        await Assert.That(msg.GetString()).IsNotNull();
-        await Assert.That(first.TryGetProperty("line", out _)).IsTrue();
-        await Assert.That(first.TryGetProperty("column", out _)).IsTrue();
-        await Assert.That(first.TryGetProperty("severity", out _)).IsTrue();
+        await Assert.That(string.IsNullOrWhiteSpace(msg.GetString())).IsFalse();
+        await Assert.That(first.TryGetProperty("line", out var line)).IsTrue();
+        await Assert.That(first.TryGetProperty("column", out var column)).IsTrue();
+        await Assert.That(first.TryGetProperty("severity", out var severity)).IsTrue();
+        await Assert.That(line.GetInt32()).IsGreaterThan(0);
+        await Assert.That(column.GetInt32()).IsGreaterThan(0);
+        await Assert.That(new HashSet<string> { "Error", "Warning", "Info" }.Contains(severity.GetString()!)).IsTrue();
     }
 
     [Test]
@@ -202,6 +205,12 @@ public sealed class PlaygroundLintRunnerTests
                 && el.TryGetProperty("fixable", out var fx) && fx.GetBoolean())
             {
                 found = true;
+                await Assert.That(el.TryGetProperty("line", out var line)).IsTrue();
+                await Assert.That(el.TryGetProperty("column", out var column)).IsTrue();
+                await Assert.That(el.TryGetProperty("message", out var message)).IsTrue();
+                await Assert.That(line.GetInt32()).IsGreaterThan(0);
+                await Assert.That(column.GetInt32()).IsGreaterThan(0);
+                await Assert.That(string.IsNullOrWhiteSpace(message.GetString())).IsFalse();
                 await Assert.That(el.TryGetProperty("fixDescription", out _)).IsTrue();
                 break;
             }
