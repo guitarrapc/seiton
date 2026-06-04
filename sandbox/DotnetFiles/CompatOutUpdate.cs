@@ -38,7 +38,7 @@ var seitonOnlyRules = new HashSet<string>(StringComparer.Ordinal)
     "runner-no-latest", "checkout-persist-credentials", "deny-write-all", "deny-read-all",
     "deny-inherit-secrets", "job-timeout-minutes-required", "github-app-token-inputs",
     "known-vulnerable-actions", "impostor-commit", "ref-confusion", "stale-action-refs",
-    "cache-poisoning", "self-hosted-runner", "unredacted-secrets", "secrets-outside-env",
+    "cache-poisoning-trigger", "self-hosted-runner-trigger", "unredacted-secrets", "secrets-outside-env",
     "workflow-secrets", "job-secrets", "action-shell-is-required", "fake-ternary",
     "archived-uses", "insecure-commands", "overprovisioned-secrets", "forbidden-uses",
     "ref-version-mismatch", "use-trusted-publishing", "outdated-action-runner",

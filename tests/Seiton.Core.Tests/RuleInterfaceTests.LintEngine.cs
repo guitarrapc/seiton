@@ -3654,7 +3654,7 @@ public sealed partial class RuleInterfaceTests
                 ["dangerous-triggers"] = new RuleConfig { Events = (string[])["issue_comment", "pull_request_review_comment"] },
                 ["runner-label"] = new RuleConfig { KnownHostedLabels = (string[])["ubuntu-24.04-arm", "windows-2025-vs2026"] },
                 ["credentials"] = new RuleConfig { PublicRegistries = (string[])["registry.example.com", "mirror.example.net:5000"] },
-                ["cache-poisoning"] = new RuleConfig { UntrustedTriggers = (string[])["issue_comment"] },
+                ["cache-poisoning-trigger"] = new RuleConfig { UntrustedTriggers = (string[])["issue_comment"] },
                 ["unredacted-secrets"] = new RuleConfig { OutputCommands = (string[])["tee"] },
             },
         };
@@ -3668,7 +3668,7 @@ public sealed partial class RuleInterfaceTests
         await Assert.That(rlRule?.KnownHostedLabels).IsEquivalentTo(new[] { "ubuntu-24.04-arm", "windows-2025-vs2026" });
         var crRule = rule.LastConfig.GetRuleConfig("credentials");
         await Assert.That(crRule?.PublicRegistries).IsEquivalentTo(new[] { "registry.example.com", "mirror.example.net:5000" });
-        var cpRule = rule.LastConfig.GetRuleConfig("cache-poisoning");
+        var cpRule = rule.LastConfig.GetRuleConfig("cache-poisoning-trigger");
         await Assert.That(cpRule?.UntrustedTriggers).IsEquivalentTo(new[] { "issue_comment" });
         var usRule = rule.LastConfig.GetRuleConfig("unredacted-secrets");
         await Assert.That(usRule?.OutputCommands).IsEquivalentTo(new[] { "tee" });
@@ -3714,7 +3714,7 @@ public sealed partial class RuleInterfaceTests
                 ["dangerous-triggers"] = new RuleConfig { Events = (string[])["Issue_Comment", "issue_comment"] },
                 ["runner-label"] = new RuleConfig { KnownHostedLabels = (string[])["Custom-Large", "custom-large"] },
                 ["credentials"] = new RuleConfig { PublicRegistries = (string[])["Registry.Example.Com", "registry.example.com"] },
-                ["cache-poisoning"] = new RuleConfig { UntrustedTriggers = (string[])["Issue_Comment", "issue_comment"] },
+                ["cache-poisoning-trigger"] = new RuleConfig { UntrustedTriggers = (string[])["Issue_Comment", "issue_comment"] },
                 ["unredacted-secrets"] = new RuleConfig { OutputCommands = (string[])["TEE", "tee"] },
             },
         };
@@ -3725,7 +3725,7 @@ public sealed partial class RuleInterfaceTests
         await Assert.That(rule.LastConfig!.GetRuleConfig("dangerous-triggers")?.Events).IsEquivalentTo(new[] { "issue_comment" });
         await Assert.That(rule.LastConfig.GetRuleConfig("runner-label")?.KnownHostedLabels).IsEquivalentTo(new[] { "custom-large" });
         await Assert.That(rule.LastConfig.GetRuleConfig("credentials")?.PublicRegistries).IsEquivalentTo(new[] { "registry.example.com" });
-        await Assert.That(rule.LastConfig.GetRuleConfig("cache-poisoning")?.UntrustedTriggers).IsEquivalentTo(new[] { "issue_comment" });
+        await Assert.That(rule.LastConfig.GetRuleConfig("cache-poisoning-trigger")?.UntrustedTriggers).IsEquivalentTo(new[] { "issue_comment" });
         await Assert.That(rule.LastConfig.GetRuleConfig("unredacted-secrets")?.OutputCommands).IsEquivalentTo(new[] { "tee" });
     }
 
@@ -3771,20 +3771,20 @@ public sealed partial class RuleInterfaceTests
         """;
 
         var engine = new LintEngine([new CachePoisoningRule()]);
-        using var withoutConfig = engine.Check(Encoding.UTF8.GetBytes(yaml), "cache-poisoning-custom-without.yml");
+        using var withoutConfig = engine.Check(Encoding.UTF8.GetBytes(yaml), "cache-poisoning-trigger-custom-without.yml");
         using var withConfig = engine.Check(
             Encoding.UTF8.GetBytes(yaml),
-            "cache-poisoning-custom-with.yml",
+            "cache-poisoning-trigger-custom-with.yml",
             new LintConfig
             {
                 Rules = new Dictionary<string, RuleConfig>
                 {
-                    ["cache-poisoning"] = new RuleConfig { UntrustedTriggers = (string[])["issue_comment"] },
+                    ["cache-poisoning-trigger"] = new RuleConfig { UntrustedTriggers = (string[])["issue_comment"] },
                 },
             });
 
-        await Assert.That(withoutConfig.Diagnostics.Any(x => x.RuleId == "cache-poisoning")).IsFalse();
-        await Assert.That(withConfig.Diagnostics.Any(x => x.RuleId == "cache-poisoning" && x.Message.Contains("untrusted triggers", StringComparison.Ordinal))).IsTrue();
+        await Assert.That(withoutConfig.Diagnostics.Any(x => x.RuleId == "cache-poisoning-trigger")).IsFalse();
+        await Assert.That(withConfig.Diagnostics.Any(x => x.RuleId == "cache-poisoning-trigger" && x.Message.Contains("untrusted triggers", StringComparison.Ordinal))).IsTrue();
     }
 
     [Test]
@@ -3800,20 +3800,20 @@ public sealed partial class RuleInterfaceTests
         """;
 
         var engine = new LintEngine([new SelfHostedRunnerRule()]);
-        using var withoutConfig = engine.Check(Encoding.UTF8.GetBytes(yaml), "self-hosted-runner-custom-without.yml");
+        using var withoutConfig = engine.Check(Encoding.UTF8.GetBytes(yaml), "self-hosted-runner-trigger-custom-without.yml");
         using var withConfig = engine.Check(
             Encoding.UTF8.GetBytes(yaml),
-            "self-hosted-runner-custom-with.yml",
+            "self-hosted-runner-trigger-custom-with.yml",
             new LintConfig
             {
                 Rules = new Dictionary<string, RuleConfig>
                 {
-                    ["self-hosted-runner"] = new RuleConfig { UntrustedTriggers = (string[])["issue_comment"] },
+                    ["self-hosted-runner-trigger"] = new RuleConfig { UntrustedTriggers = (string[])["issue_comment"] },
                 },
             });
 
-        await Assert.That(withoutConfig.Diagnostics.Any(x => x.RuleId == "self-hosted-runner")).IsFalse();
-        await Assert.That(withConfig.Diagnostics.Any(x => x.RuleId == "self-hosted-runner" && x.Message.Contains("untrusted triggers", StringComparison.Ordinal))).IsTrue();
+        await Assert.That(withoutConfig.Diagnostics.Any(x => x.RuleId == "self-hosted-runner-trigger")).IsFalse();
+        await Assert.That(withConfig.Diagnostics.Any(x => x.RuleId == "self-hosted-runner-trigger" && x.Message.Contains("untrusted triggers", StringComparison.Ordinal))).IsTrue();
     }
 
     [Test]
@@ -3927,7 +3927,7 @@ public sealed partial class RuleInterfaceTests
                 ["dangerous-triggers"] = new RuleConfig { Events = (string[])["   "] },
                 ["runner-label"] = new RuleConfig { KnownHostedLabels = (string[])[""] },
                 ["credentials"] = new RuleConfig { PublicRegistries = (string[])["https://registry.example.com/team/app"] },
-                ["cache-poisoning"] = new RuleConfig { UntrustedTriggers = (string[])[""] },
+                ["cache-poisoning-trigger"] = new RuleConfig { UntrustedTriggers = (string[])[""] },
                 ["unredacted-secrets"] = new RuleConfig { OutputCommands = (string[])["   "] },
                 ["forbidden-uses"] = new RuleConfig { Allow = ["   "], Deny = ["   "] },
             },

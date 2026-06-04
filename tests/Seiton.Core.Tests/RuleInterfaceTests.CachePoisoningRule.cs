@@ -54,6 +54,6 @@ public sealed partial class RuleInterfaceTests
             ["cache action", "untrusted triggers"]),
         };
 
-        await AssertRuleCases(new CachePoisoningRule(), "cache-poisoning", cases);
+        await AssertRuleCases(new CachePoisoningRule(), "cache-poisoning-trigger", cases);
     }
 }

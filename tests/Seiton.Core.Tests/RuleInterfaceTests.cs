@@ -159,8 +159,8 @@ public sealed partial class RuleInterfaceTests
         await Assert.That(RuleCatalog.GetPriority("deny-inherit-secrets")).IsEqualTo(26);
         await Assert.That(RuleCatalog.GetPriority("job-timeout-minutes-required")).IsEqualTo(27);
         await Assert.That(RuleCatalog.GetPriority("github-app-token-inputs")).IsEqualTo(28);
-        await Assert.That(RuleCatalog.GetPriority("cache-poisoning")).IsEqualTo(33);
-        await Assert.That(RuleCatalog.GetPriority("self-hosted-runner")).IsEqualTo(34);
+        await Assert.That(RuleCatalog.GetPriority("cache-poisoning-trigger")).IsEqualTo(33);
+        await Assert.That(RuleCatalog.GetPriority("self-hosted-runner-trigger")).IsEqualTo(34);
         await Assert.That(RuleCatalog.GetPriority("unredacted-secrets")).IsEqualTo(35);
         await Assert.That(RuleCatalog.GetPriority("secrets-outside-env")).IsEqualTo(36);
         await Assert.That(RuleCatalog.GetPriority("workflow-secrets")).IsEqualTo(37);
@@ -204,6 +204,18 @@ public sealed partial class RuleInterfaceTests
         await Assert.That(refConfusion).IsEqualTo(RuleId.RefConfusion);
         await Assert.That(RuleCatalog.TryResolveRuleId("stale-action-refs", out var staleActionRefs)).IsTrue();
         await Assert.That(staleActionRefs).IsEqualTo(RuleId.StaleActionRefs);
+    }
+
+    [Test]
+    public async Task RuleCatalog_TriggerRuleIds_UseTriggerSuffixOnly()
+    {
+        await Assert.That(RuleCatalog.TryResolveRuleId("cache-poisoning-trigger", out var cachePoisoning)).IsTrue();
+        await Assert.That(cachePoisoning).IsEqualTo(RuleId.CachePoisoning);
+        await Assert.That(RuleCatalog.TryResolveRuleId("self-hosted-runner-trigger", out var selfHostedRunner)).IsTrue();
+        await Assert.That(selfHostedRunner).IsEqualTo(RuleId.SelfHostedRunner);
+
+        await Assert.That(RuleCatalog.TryResolveRuleId("cache-poisoning", out _)).IsFalse();
+        await Assert.That(RuleCatalog.TryResolveRuleId("self-hosted-runner", out _)).IsFalse();
     }
 
     [Test]
@@ -602,7 +614,7 @@ public sealed partial class RuleInterfaceTests
                 """,
                 ExpectsFix: false),
             new FixabilityCase(
-                "cache-poisoning",
+                "cache-poisoning-trigger",
                 new CachePoisoningRule(),
                 """
                 on: pull_request
@@ -617,7 +629,7 @@ public sealed partial class RuleInterfaceTests
                 """,
                 ExpectsFix: false),
             new FixabilityCase(
-                "self-hosted-runner",
+                "self-hosted-runner-trigger",
                 new SelfHostedRunnerRule(),
                 """
                 on: pull_request

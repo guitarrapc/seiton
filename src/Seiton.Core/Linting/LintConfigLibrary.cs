@@ -23,44 +23,56 @@ public static class LintConfigLibrary
     public static string GenerateTemplateYaml()
     {
         return """
-        # Seiton linter configuration
+        # Seiton linter configuration. see https://github.com/guitarrapc/seiton/blob/main/docs/configuration.md for details.
         # Preferred location: .github/seiton.yaml
 
         rules:
-          # Example: override a rule's behavior.
+          # Add dangerous trigger events (appended to built-in set).
           # dangerous-triggers:
           #   severity: warning
           #   events:
           #     - issue_comment
 
+          # Add known GitHub-hosted runner labels (appended to built-in set).
           # runner-label:
           #   known-hosted-labels:
           #     - ubuntu-24.04-large
 
+          # Map moving labels to pinned replacements for detection/fix.
           # runner-no-latest:
           #   fix-mapping:
           #     ubuntu-latest: "ubuntu-24.04"
           #     windows-latest: "windows-2025"
           #     macos-latest: "macos-15"
 
+          # Add public registries treated as credential-optional.
           # credentials:
           #   public-registries:
           #     - ghcr.io
 
-          # cache-poisoning:
+          # Add untrusted triggers for cache poisoning checks.
+          # cache-poisoning-trigger:
           #   untrusted-triggers:
           #     - issue_comment
 
+          # Add untrusted triggers for self-hosted runner checks.
+          # self-hosted-runner-trigger:
+          #   untrusted-triggers:
+          #     - issue_comment
+
+          # Add output commands watched as secret sinks.
           # unredacted-secrets:
           #   output-commands:
           #     - tee
 
+          # Define allow/deny patterns for uses references.
           # forbidden-uses:
           #   allow:
           #     - actions/*
           #   deny:
           #     - some-untrusted-org/*
 
+          # Ignore selected actions from SHA pin checks.
           # unpinned-uses:
           #   ignore-actions:
           #     - owner: "my-org/*"
@@ -68,10 +80,12 @@ public static class LintConfigLibrary
           #     - owner: "my-org/setup-*"
           #       refs: [main, master]
 
+          # Tune secret count thresholds.
           # overprovisioned-secrets:
           #   max-step-env-secrets: 5
           #   max-job-secrets: 5
 
+          # Assume additional events for expression validation.
           # expr-undefined-var:
           #   assume-events:
           #     - workflow_dispatch

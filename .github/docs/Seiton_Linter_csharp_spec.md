@@ -377,8 +377,8 @@ Additive merge (`effective = built-in U user-extended`) is used for all additive
 - `rules.dangerous-triggers.events`
 - `rules.runner-label.known-hosted-labels`
 - `rules.credentials.public-registries`
-- `rules.cache-poisoning.untrusted-triggers`
-- `rules.self-hosted-runner.untrusted-triggers`
+- `rules.cache-poisoning-trigger.untrusted-triggers`
+- `rules.self-hosted-runner-trigger.untrusted-triggers`
 - `rules.unredacted-secrets.output-commands`
 
 Direct list keys:

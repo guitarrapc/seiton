@@ -64,8 +64,8 @@ default local rules（57）:
 - `deny-inherit-secrets`
 - `job-timeout-minutes-required`
 - `github-app-token-inputs`
-- `cache-poisoning`
-- `self-hosted-runner`
+- `cache-poisoning-trigger`
+- `self-hosted-runner-trigger`
 - `unredacted-secrets`
 - `secrets-outside-env`
 - `workflow-secrets`
@@ -234,7 +234,7 @@ online audit rules（4）:
 
 | 区分 | 件数 | Seiton 状況 |
 |---|---:|---|
-| 直接対応済み | 22 | `artipacked`, `bot-conditions`, `cache-poisoning`, `concurrency-limits`, `dangerous-triggers`, `github-app`, `hardcoded-container-credentials`, `impostor-commit`, `insecure-commands`, `known-vulnerable-actions`, `ref-confusion`, `secrets-inherit`, `secrets-outside-env`, `self-hosted-runner`, `stale-action-refs`, `template-injection`, `unpinned-images`, `unpinned-tools`, `unpinned-uses`, `unredacted-secrets`, `unsound-condition`, `unsound-contains` |
+| 直接対応済み | 22 | `artipacked`, `bot-conditions`, `cache-poisoning-trigger`, `concurrency-limits`, `dangerous-triggers`, `github-app`, `hardcoded-container-credentials`, `impostor-commit`, `insecure-commands`, `known-vulnerable-actions`, `ref-confusion`, `secrets-inherit`, `secrets-outside-env`, `self-hosted-runner-trigger`, `stale-action-refs`, `template-injection`, `unpinned-images`, `unpinned-tools`, `unpinned-uses`, `unredacted-secrets`, `unsound-condition`, `unsound-contains` |
 | 部分対応 | 7 | `archived-uses`, `excessive-permissions`, `forbidden-uses`, `overprovisioned-secrets`, `ref-version-mismatch`, `undocumented-permissions`, `use-trusted-publishing` |
 | 未対応 | 2 | `github-env`, `obfuscation` |
 | 非採用 | 3 | `anonymous-definition`, `misfeature`, `superfluous-actions` |
@@ -247,7 +247,7 @@ zizmor 監査ID別対応表（実装確認ベース）:
 | `archived-uses` | 🟡 | `archived-uses`（静的判定の初期実装） |
 | `artipacked` | ✅ | `artipacked` — checkout + upload-artifact のステップ間相関分析 |
 | `bot-conditions` | ✅ | `bot-conditions` |
-| `cache-poisoning` | ✅ | `cache-poisoning` |
+| `cache-poisoning` | ✅ | `cache-poisoning-trigger` |
 | `concurrency-limits` | ✅ | `concurrency-limits` — ワークフロー/ジョブレベルの concurrency 設定と cancel-in-progress を検査 |
 | `dangerous-triggers` | ✅ | `dangerous-triggers` |
 | `dependabot-cooldown` | ❌ | 専用監査なし |
@@ -267,7 +267,7 @@ zizmor 監査ID別対応表（実装確認ベース）:
 | `ref-version-mismatch` | 🟡 | `ref-version-mismatch`（ref/path major mismatch の初期実装） |
 | `secrets-inherit` | ✅ | `deny-inherit-secrets` |
 | `secrets-outside-env` | ✅ | `secrets-outside-env` |
-| `self-hosted-runner` | ✅ | `self-hosted-runner` |
+| `self-hosted-runner` | ✅ | `self-hosted-runner-trigger` |
 | `stale-action-refs` | ✅ | online 監査（`rules.stale-action-refs.enabled: true` で有効化） |
 | `superfluous-actions` | ❌ | zizmor 比較対象ではあるが、代替ツール選好に寄るため採用しない |
 | `template-injection` | ✅ | `template-injection` |

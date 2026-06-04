@@ -254,13 +254,13 @@ rules:
       - registry.example.com
       - mirror.example.net:5000
 
-  # Extend the trigger set that cache-poisoning considers untrusted.
-  cache-poisoning:
+  # Extend the trigger set that cache-poisoning-trigger considers untrusted.
+  cache-poisoning-trigger:
     untrusted-triggers:
       - issue_comment
 
-  # Extend the trigger set that self-hosted-runner considers untrusted.
-  self-hosted-runner:
+  # Extend the trigger set that self-hosted-runner-trigger considers untrusted.
+  self-hosted-runner-trigger:
     untrusted-triggers:
       - issue_comment
 
@@ -385,8 +385,8 @@ Some rules accept additional configuration keys. All additive list keys append t
 | `runner-label` | `known-hosted-labels` | Additional GitHub-hosted runner labels to treat as known (appended to built-in set). |
 | `runner-no-latest` | `fix-mapping` | Map of label → replacement pairs for auto-fix and custom detection. |
 | `credentials` | `public-registries` | Additional container registries to treat as public (appended to built-in set). |
-| `cache-poisoning` | `untrusted-triggers` | Additional trigger events to treat as untrusted (appended to built-in set). |
-| `self-hosted-runner` | `untrusted-triggers` | Additional trigger events to treat as untrusted for self-hosted runner checks (appended to built-in set). |
+| `cache-poisoning-trigger` | `untrusted-triggers` | Additional trigger events to treat as untrusted (appended to built-in set). |
+| `self-hosted-runner-trigger` | `untrusted-triggers` | Additional trigger events to treat as untrusted for self-hosted runner checks (appended to built-in set). |
 | `unredacted-secrets` | `output-commands` | Additional shell commands to watch for secret printing (appended to built-in set). |
 | `expr-undefined-var` | `assume-events` | Additional event names to assume when evaluating event-scoped expressions. |
 | `forbidden-uses` | `deny` / `allow` | Glob patterns for denying or allowing `uses:` references. |
@@ -473,26 +473,26 @@ Behavior:
 - `workflow_dispatch` / `workflow_call` assumptions allow `inputs.*` to be treated as runtime-available even when the current workflow trigger set is mixed or cannot be narrowed statically.
 - This is intended to reduce false positives in `expr-undefined-var` for event-dependent expressions.
 
-<a id="cache-poisoninguntrusted-triggers"></a>
-#### `cache-poisoning.untrusted-triggers`
+<a id="cache-poisoning-triggeruntrusted-triggers"></a>
+#### `cache-poisoning-trigger.untrusted-triggers`
 
-Additional trigger event names treated as untrusted by `cache-poisoning` (additive set).
+Additional trigger event names treated as untrusted by `cache-poisoning-trigger` (additive set).
 
 ```yaml
 rules:
-  cache-poisoning:
+  cache-poisoning-trigger:
     untrusted-triggers:
       - issue_comment
 ```
 
-<a id="self-hosted-runneruntrusted-triggers"></a>
-#### `self-hosted-runner.untrusted-triggers`
+<a id="self-hosted-runner-triggeruntrusted-triggers"></a>
+#### `self-hosted-runner-trigger.untrusted-triggers`
 
-Additional trigger event names treated as untrusted by `self-hosted-runner` (additive set).
+Additional trigger event names treated as untrusted by `self-hosted-runner-trigger` (additive set).
 
 ```yaml
 rules:
-  self-hosted-runner:
+  self-hosted-runner-trigger:
     untrusted-triggers:
       - issue_comment
 ```

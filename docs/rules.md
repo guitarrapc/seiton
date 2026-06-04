@@ -41,8 +41,8 @@ deny-read-all                            yes       local    error      yes   bot
 deny-inherit-secrets                     yes       local    error      no    both       default
 job-timeout-minutes-required             yes       local    error      yes   both       default
 github-app-token-inputs                  yes       local    error      no    both       default
-cache-poisoning                          yes       local    warning    no    both       default
-self-hosted-runner                       yes       local    warning    no    both       default
+cache-poisoning-trigger                  yes       local    warning    no    both       default
+self-hosted-runner-trigger               yes       local    warning    no    both       default
 unredacted-secrets                       yes       local    warning    no    both       default
 secrets-outside-env                      yes       local    warning    no    both       default
 workflow-secrets                         yes       local    error      no    both       default
@@ -134,8 +134,8 @@ Online rules use the GitHub API. Set GITHUB_TOKEN (or SEITON_GITHUB_TOKEN) to av
 - [run-inputs-context-direct-use](#run-inputs-context-direct-use)
 - [secrets-whole-context-access](#secrets-whole-context-access)
 - [expr-undefined-var](#expr-undefined-var)
-- [cache-poisoning](#cache-poisoning)
-- [self-hosted-runner](#self-hosted-runner)
+- [cache-poisoning-trigger](#cache-poisoning-trigger)
+- [self-hosted-runner-trigger](#self-hosted-runner-trigger)
 - [insecure-commands](#insecure-commands)
 - [unsound-contains](#unsound-contains)
 - [bot-conditions](#bot-conditions)
@@ -1784,7 +1784,7 @@ jobs:
 
 ---
 
-### `cache-poisoning`
+### `cache-poisoning-trigger`
 
 | Default | Network | Auto-fix |
 |---|---|---|
@@ -1849,11 +1849,11 @@ jobs:
 **Configuration:**
 
 - `untrusted-triggers`: Add trigger events treated as untrusted by this rule (additive to built-in defaults).
-- See: [configuration.md#cache-poisoninguntrusted-triggers](configuration.md#cache-poisoninguntrusted-triggers)
+- See: [configuration.md#cache-poisoning-triggeruntrusted-triggers](configuration.md#cache-poisoning-triggeruntrusted-triggers)
 
 ---
 
-### `self-hosted-runner`
+### `self-hosted-runner-trigger`
 
 | Default | Network | Auto-fix |
 |---|---|---|
@@ -1912,7 +1912,7 @@ jobs:
 **Configuration:**
 
 - `untrusted-triggers`: Add trigger events treated as untrusted by this rule (additive to built-in defaults).
-- See: [configuration.md#self-hosted-runneruntrusted-triggers](configuration.md#self-hosted-runneruntrusted-triggers)
+- See: [configuration.md#self-hosted-runner-triggeruntrusted-triggers](configuration.md#self-hosted-runner-triggeruntrusted-triggers)
 
 ---
 
