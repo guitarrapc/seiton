@@ -180,7 +180,7 @@ public sealed class PlaygroundHtmlContractTests
         await Assert.That(js).Contains("appendDiagnosticDescriptionCell");
         await Assert.That(js).Contains("shouldCollapseDiagMessage");
         await Assert.That(js).Contains("maybeAttachDiagMessageToggle");
-        await Assert.That(js).Contains("diagMessageOverflowsWhenCollapsed");
+        await Assert.That(js).Contains("countRenderedDiagMessageLines");
         await Assert.That(js).Contains("diag-message--collapsed");
         await Assert.That(js).Contains("diag-message-toggle");
         await Assert.That(js).Contains("DIAG_MESSAGE_COLLAPSE_MIN_CHARS");

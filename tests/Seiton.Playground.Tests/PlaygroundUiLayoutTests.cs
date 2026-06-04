@@ -270,6 +270,49 @@ public sealed class PlaygroundUiLayoutTests
     }
 
     [Test]
+    public async Task DiagnosticsTable_LongUrlMessage_NarrowViewport_ShowsExpandToggle()
+    {
+        const string message =
+            "character '\\' is invalid for branch and tag names. only special characters [, ?, +, *, \\, ! can be escaped with \\. "
+            + "see `man git-check-ref-format` for more details. note that regular expression is unavailable. "
+            + "note: filter pattern syntax is explained at https://docs.github.com/en/actions/using-workflows/workflow-syntax-for-github-actions#filter-pattern-cheat-sheet";
+
+        var host = await PlaygroundUiTestHost.GetOrCreateAsync();
+        var browser = await PlaygroundUiBrowserSession.GetBrowserAsync();
+        await using var context = await browser.NewContextAsync(new BrowserNewContextOptions
+        {
+            ViewportSize = new ViewportSize { Width = 600, Height = 720 },
+        });
+        var page = await context.NewPageAsync();
+        await page.GotoAsync($"{host.BaseUrl.TrimEnd('/')}/?seitonTestHooks=1", new PageGotoOptions
+        {
+            WaitUntil = WaitUntilState.DOMContentLoaded,
+            Timeout = 120_000,
+        });
+
+        await page.WaitForFunctionAsync(
+            "() => typeof globalThis.__SEITON_PLAYGROUND_TEST__?.renderDiagnostics === 'function'",
+            arg: null,
+            new PageWaitForFunctionOptions { Timeout = 30_000 });
+
+        await page.EvaluateAsync(
+            """
+            (msg) => globalThis.__SEITON_PLAYGROUND_TEST__.renderDiagnostics([{
+              line: 1,
+              column: 1,
+              severity: 'Warning',
+              ruleId: 'long-url-msg-test',
+              message: msg,
+            }])
+            """,
+            message);
+
+        var toggle = page.Locator(".diag-message-toggle");
+        await toggle.WaitForAsync(new LocatorWaitForOptions { Timeout = 5000 });
+        await Assert.That(await toggle.CountAsync()).IsEqualTo(1);
+    }
+
+    [Test]
     public async Task DiagnosticsTable_MediumMessage_NoExpandToggleWhenFullyVisible()
     {
         const string message =

@@ -1049,16 +1049,26 @@ function shouldCollapseDiagMessage(text) {
 }
 
 /**
+ * Counts rendered lines for wrapped inline content (text + links).
  * @param {HTMLElement} msgEl
- * @returns {boolean}
+ * @returns {number}
  */
-function diagMessageOverflowsWhenCollapsed(msgEl) {
-  msgEl.classList.add('diag-message--collapsed');
-  const overflows = msgEl.scrollHeight > msgEl.clientHeight + 2;
-  if (!overflows) {
-    msgEl.classList.remove('diag-message--collapsed');
+function countRenderedDiagMessageLines(msgEl) {
+  const range = document.createRange();
+  range.selectNodeContents(msgEl);
+  const rects = range.getClientRects();
+  if (rects.length === 0) {
+    return 0;
   }
-  return overflows;
+  /** @type {number[]} */
+  const tops = [];
+  for (const rect of rects) {
+    const top = Math.round(rect.top);
+    if (!tops.some((t) => Math.abs(t - top) <= 1)) {
+      tops.push(top);
+    }
+  }
+  return tops.length;
 }
 
 /**
@@ -1071,13 +1081,15 @@ function maybeAttachDiagMessageToggle(wrap, msgEl) {
     return;
   }
 
-  const attachIfOverflowing = () => {
-    if (!diagMessageOverflowsWhenCollapsed(msgEl)) {
+  const attachIfNeeded = () => {
+    const renderedLines = countRenderedDiagMessageLines(msgEl);
+    if (renderedLines <= DIAG_MESSAGE_COLLAPSED_LINES) {
       return;
     }
     if (wrap.querySelector('.diag-message-toggle')) {
       return;
     }
+    msgEl.classList.add('diag-message--collapsed');
     const toggle = document.createElement('button');
     toggle.type = 'button';
     toggle.className = 'diag-message-toggle';
@@ -1098,9 +1110,9 @@ function maybeAttachDiagMessageToggle(wrap, msgEl) {
   };
 
   if (typeof globalThis.requestAnimationFrame === 'function') {
-    globalThis.requestAnimationFrame(attachIfOverflowing);
+    globalThis.requestAnimationFrame(attachIfNeeded);
   } else {
-    attachIfOverflowing();
+    attachIfNeeded();
   }
 }
 
