@@ -36,13 +36,13 @@ Rules for writing and maintaining specification documents (`.github/docs/`) and 
 
 ### 2.1 Section Template
 
-Every rule section follows this order:
+Rule sections should follow this order:
 
 1. **Summary** — one sentence: what the rule detects.
 2. **Why** — 2-4 sentences describing the risk, motivation, and operational impact.
 3. **Example trigger** — minimal YAML that fires the rule.
 4. **Remediation** — how to fix, with code example(s).
-5. **When fixing** — 1-5 bullets of side effects, auto-fix limits, and follow-up checks.
+5. **When fixing** (optional) — 1-5 bullets of side effects, auto-fix limits, and follow-up checks.
 6. **Notes** (optional) — edge cases, auto-fix limitations, advanced details.
 7. **Configuration** (optional) — rule-specific config keys.
 

@@ -1105,7 +1105,7 @@ The following table classifies each default rule by fix feasibility.
 ### 8.5 Fix Safety Policy
 
 - A fix must be semantically equivalent for the common case; it must not silently change runtime behavior in a way that is not obvious from its description.
-- Unsafe transformations (for example, template-injection remediation that alters data flow) must not be provided as auto-fix; they may only appear as diagnostic message guidance.
+- Unsafe transformations that cannot preserve clear intent and reviewability must not be provided as auto-fix; they may only appear as diagnostic message guidance.
 - Security-critical rules (§8.5) must not offer fixes that would circumvent their intent (for example, `deny-write-all` fix replaces `write-all` with `{}` as a strict baseline, not with suppression).
 
 ---

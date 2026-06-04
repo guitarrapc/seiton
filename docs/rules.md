@@ -4,7 +4,7 @@ This page documents all lint rules included in Seiton. It is the **canonical use
 
 > **Tip:** Run `seiton rules` to see all rules and their effective enabled/disabled status in your terminal. Use `seiton rules --format json` for machine-readable output. See [Usage](usage.md#seiton-rules) for details.
 
-Each rule section is structured as: **Summary** (what it detects), **Why** (risk and intent), **Remediation** (how to fix), and **When fixing** (side effects and follow-up checks). For auto-fixable rules, always read **When fixing** before applying broad `--fix` updates.
+Rule sections use **Summary** (what it detects), **Why** (risk and intent), **Remediation** (how to fix), when needed, and **When fixing** (side effects and follow-up checks). For auto-fixable rules, always read **When fixing** before applying broad `--fix` updates.
 
 Default rules are enabled with no configuration required.
 
