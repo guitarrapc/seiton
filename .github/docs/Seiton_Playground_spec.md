@@ -49,7 +49,7 @@ The [actionlint playground](https://github.com/rhysd/actionlint/tree/main/playgr
 2. `main.js` initializes the WASM runtime
 3. JS obtains references to exported WASM functions
 4. User edits YAML in CodeMirror editor
-5. After debounce (300ms), JS calls `RunLint(yamlSource, filePath)`
+5. After debounce (500ms), JS calls `RunLint(yamlSource, filePath)`
 6. WASM side: parse + lint execution
 7. WASM returns diagnostic results as UTF-8 JSON
 8. JS renders results table + gutter markers in the editor
@@ -115,7 +115,7 @@ Non-functional requirement:
 
 | Behavior | Specification |
 |---|---|
-| Debounce interval | 300ms after last `change` event |
+| Debounce interval | 500ms after last `change` event |
 | Paste bypass | Lint executes immediately on paste (no debounce) |
 | Re-entry guard | `lintInProgress` flag prevents concurrent lint invocations |
 | Pending retry | If content changes during lint execution, a debounced re-lint is scheduled after completion |
@@ -189,8 +189,8 @@ This ensures cosmetic edits (adding/removing blank lines, trailing spaces) do no
 |---|---|
 | YAML editor | CodeMirror 5 with yaml mode, auto-grow (`viewportMargin: Infinity`), line numbers, active line highlight |
 | Config editor | CodeMirror 5 with yaml mode, collapsible panel below YAML editor; edits debounced 500ms before `SetConfig` call |
-| Real-time lint | Debounce 300ms, immediate on paste, staleness check |
-| Results table | Position chip + severity chip (Error/Warning/Info color-coded) + message + ruleId chip + fixable chip per diagnostic; left-border tint by severity (`data-severity` attribute) |
+| Real-time lint | Debounce 500ms, immediate on paste, staleness check |
+| Results table | Position chip + severity chip (Error/Warning/Info color-coded) + message + ruleId chip + fixable chip per diagnostic; left-border tint by severity (`data-severity` attribute). Long messages that overflow 3 lines when rendered show a link-style **Show more** / **Show less** control (toggle does not trigger row jump; omitted when line-clamp would not hide text) |
 | Gutter markers | Error = red (`--danger`), Warning = yellow (`--warning`), Info = blue (`--info`), CSS class-based |
 | Row click jump | Clicking a diagnostic row moves editor cursor to that position |
 | Loading indicator | "Loading WebAssembly binary..." shown until WASM runtime is ready |

@@ -660,7 +660,7 @@ function syncConfigEditorTheme() {
   configEditor.refresh();
 }
 
-const DEBOUNCE_MS = 300;
+const DEBOUNCE_MS = 500;
 const utf8Decoder = new TextDecoder();
 let debounceId = null;
 /** Coalesce refreshes while typing so measurements track height for layout (page scroll). */
