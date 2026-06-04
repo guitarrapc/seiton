@@ -1133,18 +1133,18 @@ function appendDiagnosticDescriptionCell(cell, message, diag) {
   if (diag.fixable || diag.ruleId) {
     const chips = document.createElement('div');
     chips.className = 'diag-chips';
+    if (diag.ruleId) {
+      const kindTag = document.createElement('span');
+      kindTag.className = 'rule-chip';
+      kindTag.textContent = diag.ruleId;
+      chips.appendChild(kindTag);
+    }
     if (diag.fixable) {
       const fx = document.createElement('span');
       fx.className = 'fix-chip';
       fx.title = diag.fixDescription ?? 'Included in Apply all fixes';
       fx.textContent = 'Fixable';
       chips.appendChild(fx);
-    }
-    if (diag.ruleId) {
-      const kindTag = document.createElement('span');
-      kindTag.className = 'rule-chip';
-      kindTag.textContent = diag.ruleId;
-      chips.appendChild(kindTag);
     }
     wrap.appendChild(chips);
   }
