@@ -93,6 +93,27 @@ rg "DiagnosticFix\(" src/Seiton.Core/Linting/Rules --files-with-matches
 | P1 | `runner-no-latest`, `popular-action-inputs`, `unsound-condition`, `if-expr-wrapper`, `job-timeout-minutes-required` | partial auto-fix |
 | P1 | `unpinned-uses`, `unpinned-image` | ネットワーク fix・更新コスト・ignore 設定 |
 
+#### Phase 1 実施結果
+
+- [x] `checkout-persist-credentials`
+- [x] `deny-write-all`
+- [x] `deny-read-all`
+- [x] `job-permissions-required`
+- [x] `template-injection`
+- [x] `run-env-context-direct-use`
+- [x] `run-secrets-context-direct-use`
+- [x] `run-inputs-context-direct-use`
+- [x] `id-naming`
+- [x] `runner-no-latest`
+- [x] `popular-action-inputs`
+- [x] `unsound-condition`
+- [x] `if-expr-wrapper`
+- [x] `job-timeout-minutes-required`
+- [x] `unpinned-uses`
+- [x] `unpinned-image`
+
+実装内容は `docs/rules.md` に対する **Why** / **When fixing** の追加。既存の Remediation 例と Configuration は維持し、auto-fix 可能条件と副作用（特に認証・権限・ネットワーク依存）を明示した。
+
 ### Phase 2 — セキュリティ／シークレット（手動修正が多い）
 
 Remediation はあるが注意が書かれていないルール群。
