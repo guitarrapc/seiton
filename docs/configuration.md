@@ -377,7 +377,7 @@ rules:
 
 ### Rule-Specific Options
 
-Some rules accept additional configuration keys. All additive list keys append to the built-in set — they never replace it. See the [Annotated Example](#annotated-example) for complete YAML examples of each rule's options.
+Some rules accept additional configuration keys. All additive list keys append to the built-in set, they never replace it. See the [Annotated Example](#annotated-example) for complete YAML examples of each rule's options.
 
 | Rule | Key | Description |
 |---|---|---|
@@ -392,28 +392,6 @@ Some rules accept additional configuration keys. All additive list keys append t
 | `forbidden-uses` | `deny` / `allow` | Glob patterns for denying or allowing `uses:` references. |
 | `unpinned-uses` | `ignore-actions` | Object entries for actions to exclude from SHA-pinning checks. `owner` is required; optional `refs` narrows the ignore to exact refs. |
 | `overprovisioned-secrets` | `max-step-env-secrets` / `max-job-secrets` | Integer thresholds for secret over-provisioning detection. |
-
-The **Key** column shows the YAML key name directly under the rule. For example, `events` maps to:
-
-```yaml
-rules:
-  dangerous-triggers:
-    events:
-      - issue_comment
-```
-
-> **Note:** Values in list keys like `events`, `known-hosted-labels`, etc. are **appended to built-in defaults** — they do not replace the built-in set. `unpinned-uses.ignore-actions` is special — each entry is an **object** with a required `owner` field and an optional `refs` list:
->
-> ```yaml
-> rules:
->   unpinned-uses:
->     ignore-actions:
->       - owner: "my-org/internal-action"
->       - owner: "my-org/*"
->         refs: [main, master]
-> ```
-
-### Rule-Specific Options
 
 <a id="runner-labelknown-hosted-labels"></a>
 #### `runner-label.known-hosted-labels`
