@@ -313,17 +313,17 @@ public sealed class PlaygroundUiLayoutTests
     }
 
     [Test]
-    public async Task DiagnosticsTable_MediumMessage_NoExpandToggleWhenFullyVisible()
+    public async Task DiagnosticsTable_ShortMessage_NoExpandToggleWhenFullyVisible()
     {
+        // Keep short enough to stay within three rendered lines in the results column (900px still uses a 2-column linter grid).
         const string message =
-            "on.push has unexpected key \"branch\" for \"push\" section. did you mean \"branches\"? "
-            + "expected one of \"branches\", \"branches-ignore\", \"paths\", \"paths-ignore\", \"tags\", \"tags-ignore\"";
+            "on.push has unexpected key \"branch\" for \"push\" section. did you mean \"branches\"?";
 
         var host = await PlaygroundUiTestHost.GetOrCreateAsync();
         var browser = await PlaygroundUiBrowserSession.GetBrowserAsync();
         await using var context = await browser.NewContextAsync(new BrowserNewContextOptions
         {
-            ViewportSize = new ViewportSize { Width = 900, Height = 720 },
+            ViewportSize = new ViewportSize { Width = 1280, Height = 720 },
         });
         var page = await context.NewPageAsync();
         await page.GotoAsync($"{host.BaseUrl.TrimEnd('/')}/?seitonTestHooks=1", new PageGotoOptions
@@ -343,7 +343,7 @@ public sealed class PlaygroundUiLayoutTests
               line: 1,
               column: 1,
               severity: 'Error',
-              ruleId: 'medium-msg-test',
+              ruleId: 'short-msg-test',
               message: msg,
             }])
             """,
@@ -351,6 +351,22 @@ public sealed class PlaygroundUiLayoutTests
 
         await page.EvaluateAsync(
             "() => new Promise((r) => globalThis.requestAnimationFrame(() => globalThis.requestAnimationFrame(r)))");
+
+        var renderedLines = await page.EvaluateAsync<int>(
+            """
+            () => {
+              const msg = document.querySelector('.diag-message');
+              if (!msg) return 0;
+              const range = document.createRange();
+              range.selectNodeContents(msg);
+              const tops = new Set();
+              for (const rect of range.getClientRects()) {
+                tops.add(Math.round(rect.top));
+              }
+              return tops.size;
+            }
+            """);
+        await Assert.That(renderedLines).IsLessThanOrEqualTo(3);
         await Assert.That(await page.Locator(".diag-message-toggle").CountAsync()).IsEqualTo(0);
     }
 
