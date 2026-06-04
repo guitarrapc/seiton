@@ -1042,7 +1042,7 @@ The following table classifies each default rule by fix feasibility.
 
 | Rule ID | Fix Feasibility | Fix Description |
 |---|---|---|
-| `deny-write-all` | ✓ Fixable | Replace `write-all` scalar with `read-all` in the permissions node. |
+| `deny-write-all` | ✓ Fixable | Replace `write-all` scalar with an explicit empty mapping baseline (`{}`) for least-privilege follow-up scoping. |
 | `run-env-context-direct-use` | △ Partial fixable | Replace `${{ env.VAR }}` with `$VAR` (or `${VAR}` for POSIX shells) inside `run:` text, except inside quoted heredoc bodies where expansion semantics differ. Compound expressions emit a help hint instead of a fix. |
 | `job-permissions-required` | ✓ Fixable | Insert `permissions:` as a new key immediately after `runs-on:` (or after `uses:` for reusable workflow jobs, or after job id key if both are absent). When the job's steps reference popular actions with known permission requirements (from supplemental-required-permissions.json), the fix inserts the merged minimum required scopes (e.g., `contents: read` for `actions/checkout`). When no known action requirements are found, the fix inserts `permissions: {}`. |
 | `unpinned-uses` | ✗ Not auto-fixable | Requires resolving current SHA for the referenced action/workflow at fix time (external I/O). |
@@ -1105,8 +1105,8 @@ The following table classifies each default rule by fix feasibility.
 ### 8.5 Fix Safety Policy
 
 - A fix must be semantically equivalent for the common case; it must not silently change runtime behavior in a way that is not obvious from its description.
-- Unsafe transformations (for example, template-injection remediation that alters data flow) must not be provided as auto-fix; they may only appear as diagnostic message guidance.
-- Security-critical rules (§8.5) must not offer fixes that would circumvent their intent (for example, `deny-write-all` fix replaces with `read-all`, not with suppression).
+- Unsafe transformations that cannot preserve clear intent and reviewability must not be provided as auto-fix; they may only appear as diagnostic message guidance.
+- Security-critical rules (§8.5) must not offer fixes that would circumvent their intent (for example, `deny-write-all` fix replaces `write-all` with `{}` as a strict baseline, not with suppression).
 
 ---
 

@@ -4,6 +4,8 @@ This page documents all lint rules included in Seiton. It is the **canonical use
 
 > **Tip:** Run `seiton rules` to see all rules and their effective enabled/disabled status in your terminal. Use `seiton rules --format json` for machine-readable output. See [Usage](usage.md#seiton-rules) for details.
 
+Rule sections use **Summary** (what it detects), **Why** (risk and intent), **Remediation** (how to fix), when needed, and **When fixing** (side effects and follow-up checks). For auto-fixable rules, always read **When fixing** before applying broad `--fix` updates.
+
 Default rules are enabled with no configuration required.
 
 ```shell
@@ -186,6 +188,8 @@ Online rules use the GitHub API. Set GITHUB_TOKEN (or SEITON_GITHUB_TOKEN) to av
 
 Validates core job shape. `uses` (reusable workflow call) is mutually exclusive with `steps` and `runs-on`. Each job must be either a reusable-call form (`uses`) or an executable form (`runs-on` + `steps`).
 
+**Why:** Invalid job shape causes workflow parse/runtime failures and makes execution intent ambiguous for reviewers.
+
 **Example trigger:**
 
 ```yaml
@@ -225,6 +229,8 @@ jobs:
 | ✓ | — | ✗ |
 
 Validates reusable workflow call semantics. `with` and `secrets` are only valid under a `uses` job. Reusable-call jobs must not contain incompatible execution keys (`steps`, `container`, `services`, etc.).
+
+**Why:** Reusable-call contract violations fail late at runtime and can silently bypass intended inputs/secrets wiring.
 
 **Example trigger:**
 
@@ -267,6 +273,8 @@ jobs:
 | ✓ | — | ✗ |
 
 Validates `permissions` values. Scalar must be `read-all` or `write-all`. Per-scope values must be `read`, `write`, or `none`. Even when valid, scalar permissions (`read-all`, `write-all`) emit a warning because explicit per-scope mapping is preferred.
+
+**Why:** Strict permission value validation prevents invalid tokens and nudges workflows toward explicit least-privilege declarations.
 
 **Example trigger:**
 
@@ -335,6 +343,8 @@ jobs:
 
 Validates the job dependency graph. Errors on unknown dependency targets and circular dependencies.
 
+**Why:** Broken dependency graphs create deadlocks or incorrect execution order, leading to partial or unreliable CI results.
+
 **Example trigger:**
 
 ```yaml
@@ -388,6 +398,8 @@ jobs:
 
 Validates shell names in workflow/job defaults and `run` steps. Reports shells outside the supported set for the target platform.
 
+**Why:** Unsupported shell declarations fail at execution time and can silently diverge behavior across runner platforms.
+
 **Example trigger:**
 
 ```yaml
@@ -432,6 +444,8 @@ jobs:
 
 Validates `job.id` and `step.id` values. IDs must use only alphanumeric characters, hyphens, and underscores.
 
+**Why:** Invalid IDs break references such as `needs`, `steps.<id>`, and outputs, which can lead to skipped dependencies or empty runtime values.
+
 **Example trigger:**
 
 ```yaml
@@ -465,6 +479,12 @@ jobs:
         run: echo ok
 ```
 
+**When fixing:**
+
+- Auto-fix rewrites deterministic `needs` string references in the same workflow.
+- Expression references (for example `${{ needs.old-id.outputs.x }}`) may still require manual updates.
+- If normalization would create duplicates, auto-fix is not attached.
+
 ---
 
 ### `glob-pattern`
@@ -474,6 +494,8 @@ jobs:
 | ✓ | — | ✗ |
 
 Validates glob syntax in event trigger filters. Reports invalid patterns and incompatible filter combinations (`branches` vs `branches-ignore`, `paths` vs `paths-ignore`, `tags` vs `tags-ignore`).
+
+**Why:** Invalid trigger filters cause workflows to run too often or not at all, which can break release and protection pipelines.
 
 **Example trigger:**
 
@@ -505,6 +527,8 @@ on:
 | ✓ | — | ✗ |
 
 Warns on unknown GitHub-hosted runner labels in `runs-on`. Self-hosted labels and expression-only values are excluded.
+
+**Why:** Unknown or conflicting runner labels lead to scheduling failures or platform mismatches that destabilize CI.
 
 **Example trigger:**
 
@@ -549,6 +573,8 @@ For self-hosted runners, add their labels to `rules.runner-label.known-hosted-la
 
 Warns when moving `*-latest` runner labels (`ubuntu-latest`, `windows-latest`, `macos-latest`) are used. These labels silently change the underlying runner when GitHub releases a new version. Also detects custom labels configured via `fix-mapping`.
 
+**Why:** Moving runner aliases can change image contents and default toolchains without any workflow diff, causing sudden CI regressions. Pinning to explicit versions keeps execution environments reproducible.
+
 **Example trigger:**
 
 ```yaml
@@ -570,6 +596,12 @@ jobs:
     steps:
       - run: echo ok
 ```
+
+**When fixing:**
+
+- `seiton --fix` can rewrite labels only when `rules.runner-no-latest.fix-mapping` is configured.
+- After pinning, verify tool/runtime compatibility on the new fixed image.
+- For custom/self-hosted labels, ensure the replacement label exists in the runner fleet.
 
 **Configuration — fix-mapping:**
 
@@ -610,6 +642,8 @@ Without `fix-mapping`, the rule still detects built-in `*-latest` labels but can
 
 Validates input names for well-known popular actions. Reports unknown input keys that are likely typos.
 
+**Why:** Input typos are often silently ignored by actions, so workflows can succeed while executing unintended defaults.
+
 **Example trigger:**
 
 ```yaml
@@ -638,6 +672,12 @@ jobs:
           fetch-depth: 1
 ```
 
+**When fixing:**
+
+- Auto-fix is attached only for unambiguous closest matches.
+- Confirm the suggested key matches intent, not only spelling similarity.
+- Re-run the job to verify behavior did not change unexpectedly.
+
 ---
 
 ### `action-shell-is-required`
@@ -647,6 +687,8 @@ jobs:
 | ✓ | — | ✗ |
 
 Requires an explicit `shell` declaration on composite action `run` steps. Applies only to action-metadata files.
+
+**Why:** Composite actions must be explicit about shell semantics to stay portable across caller workflows and runner OSes.
 
 **Example trigger (action.yml):**
 
@@ -681,6 +723,8 @@ runs:
 | ✓ | — | ✗ |
 
 Validates `strategy.matrix` definitions. Reports inconsistent keys, invalid `include`/`exclude` shapes, and suspicious expansion patterns.
+
+**Why:** Matrix shape errors can explode combinations, skip intended targets, or fail jobs unpredictably.
 
 **Example trigger:**
 
@@ -739,6 +783,8 @@ jobs:
 
 Validates environment variable names in `env:` blocks follow the portable naming convention `[A-Z_][A-Z0-9_]*`. Reports names that contain lowercase letters, dashes, or start with a digit.
 
+**Why:** Portable env naming avoids shell-specific parsing differences and reduces subtle cross-platform failures.
+
 **Example trigger:**
 
 ```yaml
@@ -779,6 +825,8 @@ jobs:
 
 Warns on malformed, constant, or unsound `if` conditions. Reports always-true / always-false conditions and context misuse.
 
+**Why:** Unsound conditions weaken workflow control-flow guarantees and can unintentionally run or skip privileged steps.
+
 **Example trigger:**
 
 ```yaml
@@ -817,6 +865,8 @@ jobs:
 
 Warns when `cond && a || b` fake ternary idioms are used in expression-bearing fields. This pattern has different semantics from a true ternary when `a` is falsy.
 
+**Why:** Fake ternary patterns are easy to misread and produce incorrect branches when the middle value can be falsy.
+
 **Example trigger:**
 
 ```yaml
@@ -852,6 +902,8 @@ jobs:
 
 Warns when `if:` conditions are missing the `${{ }}` expression wrapper. Auto-fix is offered for single-line scalars without existing `${{` markers.
 
+**Why:** Unwrapped conditions can be interpreted as plain strings and evaluated differently than intended, weakening gate logic.
+
 **Example trigger:**
 
 ```yaml
@@ -880,6 +932,11 @@ jobs:
         run: echo ok
 ```
 
+**When fixing:**
+
+- Auto-fix targets single-line scalar forms only.
+- Re-check quoting and operator behavior (`!`, function calls) after wrapping.
+
 > **Note:** Bare `true`, `false`, `always()`, `failure()`, `cancelled()`, `success()` literals are intentionally excluded from this rule since GitHub Actions handles them natively.
 
 ---
@@ -891,6 +948,8 @@ jobs:
 | ✓ | — | △ |
 
 Warns when `if:` uses a YAML block scalar (`|` or `>`) together with a fenced expression `${{ ... }}`. The trailing newline preserved by block-scalar clip chomping makes the final value a non-empty string, so the condition becomes truthy unexpectedly.
+
+**Why:** This pattern can make a condition effectively always truthy and unintentionally run guarded jobs/steps.
 
 **Example trigger:**
 
@@ -916,6 +975,11 @@ jobs:
       - run: echo ok
 ```
 
+**When fixing:**
+
+- Auto-fix rewrites `|` to `|-` and `>` to `>-` only when the scalar indicator location is deterministic.
+- Validate behavior on representative events after chomping changes.
+
 Auto-fix rewrites `|` to `|-` and `>` to `>-` when Seiton can locate the block-scalar indicator in source.
 
 ---
@@ -927,6 +991,8 @@ Auto-fix rewrites `|` to `|-` and `>` to `>-` when Seiton can locate the block-s
 | ✗ | — | ✗ |
 
 Warns when workflows or jobs lack `concurrency` settings with explicit `cancel-in-progress`. Without concurrency limits, parallel runs can waste resources and cause race conditions.
+
+**Why:** Missing concurrency controls can trigger overlapping deploys and non-deterministic state transitions in shared environments.
 
 **Example trigger:**
 
@@ -964,6 +1030,11 @@ jobs:
       - run: echo ok
 ```
 
+**When fixing:**
+
+- `cancel-in-progress: true` can terminate in-flight runs; ensure this behavior is acceptable for deploy/release jobs.
+- Design `group` keys carefully to avoid unrelated branches canceling each other.
+
 > **Note:** Reusable-only workflows (`on: workflow_call`) and workflow-call jobs (`uses:`) are skipped. When workflow-level concurrency is set, job-level checks are suppressed.
 
 ---
@@ -975,6 +1046,8 @@ jobs:
 | ✓ | — | ✗ |
 
 Detects `contains()` conditions that treat a plain string like a membership list, allowing substring matches to bypass the intended check.
+
+**Why:** Substring membership checks are bypass-prone and can let attacker-influenced values satisfy privileged conditions.
 
 **Example trigger:**
 
@@ -1009,6 +1082,8 @@ jobs:
 | ✓ | — | ✗ |
 
 Warns when a workflow gates privileged behavior on spoofable bot actor contexts such as `github.actor`, `github['actor']`, `github.triggering_actor`, `github.event.pull_request.sender.login`, `github.event['pull_request'].sender['login']`, `github.actor_id`, or `github['event']['pull_request']['sender']['id']`.
+
+**Why:** Actor identity in trigger context can be spoofed or misattributed; privileged bot-only logic should bind to trusted PR-author context.
 
 **Example trigger:**
 
@@ -1067,6 +1142,8 @@ jobs:
 
 Detects credential leakage risk when `actions/checkout` (without `persist-credentials: false`) is followed later in the same job by `actions/upload-artifact` uploading a dangerous path (root-like, parent-directory, or workspace-expression forms).
 
+**Why:** Combining persisted git credentials with broad artifact uploads can leak repository credentials to downloadable artifacts.
+
 **Example trigger:**
 
 ```yaml
@@ -1096,6 +1173,11 @@ steps:
       path: dist/
 ```
 
+**When fixing:**
+
+- If you disable persisted credentials, verify later authenticated git operations still succeed with explicit auth.
+- If you narrow artifact paths, ensure required files are still included for downstream consumers.
+
 **Notes:**
 
 <details>
@@ -1119,6 +1201,8 @@ steps:
 | ✓ | — | ✗ |
 
 Detects deprecated workflow command syntax (`::set-output`, `::save-state`, `::add-path`, `::set-env`) in `run` scripts. These commands are blocked or unsafe on modern runners.
+
+**Why:** Deprecated command channels bypass current hardening and are increasingly unsupported on modern GitHub-hosted runners.
 
 **Example trigger:**
 
@@ -1152,6 +1236,8 @@ jobs:
 | ✓ | — | ✗ |
 
 Validates `workflow_dispatch` input definitions for structural correctness. Reports excessive input count (max 25), type/option mismatches, invalid defaults, and duplicate options.
+
+**Why:** Invalid dispatch input schemas break manual/API-triggered workflows and can invalidate release/runbook entrypoints.
 
 **Example trigger:**
 
@@ -1207,6 +1293,8 @@ on:
 
 Validates `schedule` cron expressions for syntax correctness, minimum interval enforcement (5 minutes), and timezone validity.
 
+**Why:** Invalid or overly frequent schedules can either never run or overrun CI budgets and rate limits.
+
 **Example trigger:**
 
 ```yaml
@@ -1235,6 +1323,8 @@ on:
 | ✓ | — | ✗ |
 
 Validates `workflow_call` input default values match their declared types. Also reports an error when a required input has a default value (the default will never be used).
+
+**Why:** Invalid workflow-call defaults create reusable workflow contract drift and break downstream callers.
 
 **Example trigger:**
 
@@ -1280,6 +1370,8 @@ on:
 | ✓ | — | ✗ |
 
 Validates that local/composite action invocations (`uses: ./path`) provide all required inputs and do not pass unknown input keys. Also warns on deprecated inputs. Applies only to workflow files.
+
+**Why:** Local action contract mismatches fail execution at call sites and are easy to miss during action evolution.
 
 **Given the following local action (`./actions/deploy/action.yml`):**
 
@@ -1340,6 +1432,8 @@ jobs:
 
 Errors when a popular action version uses a deprecated Node.js runtime (`node12`, `node16`). These runtimes are no longer supported by GitHub Actions runners.
 
+**Why:** Deprecated action runtimes eventually stop executing on hosted runners, causing sudden CI outages.
+
 **Example trigger:**
 
 ```yaml
@@ -1376,6 +1470,8 @@ jobs:
 
 Detects unsafe direct interpolation of untrusted `github.event`-origin data into `run` script sinks. Using `${{ github.event.* }}` directly in a script can allow attackers to inject arbitrary shell commands through PR titles, comments, or labels.
 
+**Why:** Event payload values are often user-controlled in fork/comment flows, so direct interpolation crosses trust boundaries and can lead to command injection.
+
 **Example trigger:**
 
 ```yaml
@@ -1393,6 +1489,12 @@ Detects unsafe direct interpolation of untrusted `github.event`-origin data into
     echo "PR title: $PR_TITLE"
 ```
 
+**When fixing:**
+
+- Auto-fix covers deterministic `run:` sink cases; some heredoc/quoting forms and `actions/github-script` remain manual.
+- Prefer moving full expressions to `env:` and keeping shell scripts variable-only.
+- Verify sensitive values are not echoed after migration.
+
 ---
 
 ### `dangerous-triggers`
@@ -1402,6 +1504,8 @@ Detects unsafe direct interpolation of untrusted `github.event`-origin data into
 | ✓ | — | ✗ |
 
 Warns when high-risk trigger events (`pull_request_target`, `workflow_run`, etc.) are used. These events execute with elevated repository context and write permissions.
+
+**Why:** High-privilege trigger types can execute attacker-influenced code with repository-level authority, making fork and event-chain abuse significantly more dangerous.
 
 **Example trigger:**
 
@@ -1442,6 +1546,12 @@ jobs:
       - run: echo ok
 ```
 
+**When fixing:**
+
+- Switching to `pull_request` reduces privilege and can disable secret-dependent steps by design.
+- Conditional guards reduce risk but do not fully remove trust-boundary complexity; keep privileged operations isolated.
+- Re-test approval/deploy flows after trigger changes to confirm expected execution paths.
+
 **Configuration — extend the dangerous-events set:**
 
 ```yaml
@@ -1461,6 +1571,8 @@ rules:
 | ✓ | — | △ |
 
 Errors when `${{ env.* }}` is directly interpolated inside a `run` script. Shell variable expansion (`$VAR` / `$env:VAR`) must be used instead.
+
+**Why:** Expression interpolation happens before shell execution and can mismatch shell quoting/expansion semantics, producing brittle behavior.
 
 **Example trigger:**
 
@@ -1484,6 +1596,12 @@ jobs:
       - run: echo "$VERSION"
 ```
 
+**When fixing:**
+
+- Use `$VAR` for POSIX shells and `$env:VAR` for PowerShell.
+- Compound expressions are not auto-fixed; move them into `env:` first, then reference shell variables.
+- Review no-expand heredocs and single-quoted regions manually.
+
 Replace `${{ env.VAR }}` with `$VAR` (bash/sh) or `$env:VAR` (PowerShell).
 
 For compound expressions (e.g. `${{ env.TAG || 'fallback' }}`), no auto-fix is available. A help message suggests moving the entire expression to an `env:` block and referencing the shell variable instead.
@@ -1497,6 +1615,8 @@ For compound expressions (e.g. `${{ env.TAG || 'fallback' }}`), no auto-fix is a
 | ✓ | — | △ |
 
 Errors when `${{ secrets.* }}` is directly interpolated inside a `run` script. Secrets should be mapped via `env:` and referenced through shell variables.
+
+**Why:** Direct secret interpolation increases disclosure risk via logs and debugging output and weakens masking assumptions.
 
 **Example trigger:**
 
@@ -1525,6 +1645,12 @@ jobs:
           curl -H "Authorization: Bearer $TOKEN"
 ```
 
+**When fixing:**
+
+- Auto-fix can rewrite simple secret expressions only when a unique existing `env` mapping is available.
+- For compound expressions, move logic to `env:` and keep `run:` shell-variable-only.
+- Confirm secrets are not printed after refactoring.
+
 Auto-fix replaces simple `${{ secrets.KEY }}` when an existing `env` mapping exists. For compound expressions, no fix is offered; a help message suggests moving the expression to an `env:` block.
 
 ---
@@ -1536,6 +1662,8 @@ Auto-fix replaces simple `${{ secrets.KEY }}` when an existing `env` mapping exi
 | ✓ | — | △ |
 
 Errors when `${{ inputs.* }}` or `${{ github.event.inputs.* }}` are directly interpolated inside a `run` script. Inputs may be user-controlled.
+
+**Why:** Inputs can carry untrusted user data; direct interpolation into shell commands introduces injection and quoting risks.
 
 **Example trigger:**
 
@@ -1571,6 +1699,12 @@ jobs:
         run: echo "$BENCHMARK"
 ```
 
+**When fixing:**
+
+- Auto-fix may reuse an existing unique `env` mapping or insert a step-local mapping when deterministic.
+- No fix is attached for ambiguous mappings, no-expand heredocs, or shell single-quoted strings.
+- Re-test dispatch/reusable-call paths after migration to confirm quoting and default behaviors.
+
 **Notes:**
 
 Auto-fix reuses an existing unique `env` mapping for the same input when available. Otherwise, for simple expressions, it inserts a step-local `env:` entry and rewrites the script to a shell variable. No fix is offered for compound expressions, no-expand heredocs, or shell single-quoted strings; a help message suggests moving the entire expression to an `env:` block. The env-insertion path additionally skips flow-style `env` and empty `env: {}`.
@@ -1584,6 +1718,8 @@ Auto-fix reuses an existing unique `env` mapping for the same input when availab
 | ✓ | — | ✗ |
 
 Errors when an expression references the entire `secrets` context as an object (e.g. `${{ toJson(secrets) }}`). This leaks all secrets simultaneously.
+
+**Why:** Whole-context access collapses secret least-privilege boundaries and can expose every secret in one expression path.
 
 **Example trigger:**
 
@@ -1609,6 +1745,12 @@ jobs:
         run: some-command --token "$MY_SECRET"
 ```
 
+**When fixing:**
+
+- Replace bulk `secrets` usage with explicit per-key mappings only for required values.
+- Avoid dynamic key selection patterns that force whole-context references.
+- Verify logs and diagnostic output do not serialize secret-bearing objects.
+
 ---
 
 ### `expr-undefined-var`
@@ -1618,6 +1760,8 @@ jobs:
 | ✓ | — | ✗ |
 
 Errors when expressions reference context roots unavailable in the current scope (e.g. `steps.*` at job level).
+
+**Why:** Out-of-scope expression roots can evaluate unexpectedly and cause silent logic drift in conditions and computed values.
 
 **Example trigger:**
 
@@ -1653,6 +1797,12 @@ jobs:
         run: echo ok
 ```
 
+**When fixing:**
+
+- Move each expression to a scope where the referenced context root is valid (workflow/job/step).
+- Verify differences between `matrix`, `steps`, and `needs` availability after refactoring.
+- Re-test both expected true and false paths for guarded steps.
+
 ---
 
 ### `cache-poisoning`
@@ -1662,6 +1812,8 @@ jobs:
 | ✓ | — | ✗ |
 
 Warns when `actions/cache` is used in workflows that accept untrusted triggers (`pull_request`, `pull_request_target`, `workflow_run`). An attacker can write a poisoned cache entry that affects later privileged runs.
+
+**Why:** Shared writable caches across trust boundaries allow untrusted runs to persist artifacts that later trusted jobs consume.
 
 **Example trigger:**
 
@@ -1709,6 +1861,12 @@ jobs:
           key: npm-${{ runner.os }}
 ```
 
+**When fixing:**
+
+- Prefer strict trust-boundary separation: trusted runs write, untrusted runs restore-only.
+- Namespace cache keys so PR and protected-branch keys cannot collide.
+- Confirm cache hit-rate and performance after segmentation to avoid accidental regressions.
+
 **Configuration — extend untrusted triggers:**
 
 ```yaml
@@ -1728,6 +1886,8 @@ rules:
 | ✓ | — | ✗ |
 
 Warns when self-hosted runners are used in workflows with untrusted triggers. Compromised host isolation can expose long-lived credentials and filesystem state.
+
+**Why:** Self-hosted runners are persistent infrastructure, so untrusted workload execution increases lateral-movement and credential-exfiltration risk.
 
 **Example trigger:**
 
@@ -1769,6 +1929,12 @@ jobs:
       - run: echo ok
 ```
 
+**When fixing:**
+
+- Moving to GitHub-hosted runners can change tooling/network assumptions; validate environment parity.
+- `if` guards are defense-in-depth, not a substitute for strong runner isolation.
+- For unavoidable self-hosted use, combine trigger restrictions with ephemeral runner lifecycle controls.
+
 ---
 
 ### `insecure-commands`
@@ -1778,6 +1944,8 @@ jobs:
 | ✓ | — | ✗ |
 
 Detects unsafe command construction from untrusted inputs in `run` scripts.
+
+**Why:** Insecure command channels and untrusted command construction can reopen deprecated command-injection vectors.
 
 **Example trigger:**
 
@@ -1801,6 +1969,12 @@ jobs:
       - run: echo "/usr/local/custom-bin" >> "$GITHUB_PATH"
 ```
 
+**When fixing:**
+
+- Remove `ACTIONS_ALLOW_UNSECURE_COMMANDS` at all scopes (workflow/job/step) to prevent inherited bypasses.
+- Migrate scripts to environment-file APIs (`$GITHUB_OUTPUT`, `$GITHUB_ENV`, `$GITHUB_PATH`).
+- Re-test custom/composite actions that may still assume legacy command behavior.
+
 ---
 
 ## Permissions & Secrets
@@ -1814,6 +1988,8 @@ jobs:
 | ✓ | — | ✓ |
 
 Errors when workflow or job permissions are set to `write-all`.
+
+**Why:** `write-all` grants broad write access and maximizes impact if `GITHUB_TOKEN` or derived credentials are abused.
 
 **Example trigger:**
 
@@ -1841,6 +2017,12 @@ jobs:
       - run: echo ok
 ```
 
+**When fixing:**
+
+- Auto-fix replaces `write-all` with `permissions: {}` as a safe baseline.
+- Expect follow-up failures until required scopes are re-added explicitly.
+- Reintroduce scopes incrementally per failing action/job.
+
 ---
 
 ### `deny-read-all`
@@ -1850,6 +2032,8 @@ jobs:
 | ✓ | — | ✓ |
 
 Errors when workflow or job permissions are set to `read-all`. Explicit least-privilege scope declarations must be used.
+
+**Why:** Even read-only global scopes can expose excessive repository metadata and content beyond job requirements.
 
 **Example trigger:**
 
@@ -1876,6 +2060,11 @@ jobs:
       - run: echo ok
 ```
 
+**When fixing:**
+
+- Replace scalar defaults with explicit minimal scopes and verify each job.
+- Jobs relying on implicit reads (for example checkout/package metadata) may fail until scopes are restored.
+
 ---
 
 ### `job-permissions-required`
@@ -1887,6 +2076,8 @@ jobs:
 Warns when a job omits an explicit `permissions:` declaration. Without explicit permissions the job inherits potentially broad defaults.
 
 When auto-fix is enabled, the fix infers minimum required permission scopes from known popular actions used in the job's steps (e.g. `actions/checkout` requires `contents: read`). If multiple actions require the same scope, the highest access level wins (write > read). When no known action requirements are found, the fix inserts `permissions: {}`.
+
+**Why:** Implicit permission inheritance hides effective access and makes least-privilege review harder.
 
 **Example trigger:**
 
@@ -1925,6 +2116,12 @@ jobs:
       - run: echo ok
 ```
 
+**When fixing:**
+
+- Inferred scopes are catalog-based; custom/unknown actions still need manual permission tuning.
+- `permissions: {}` is intentionally strict and may break jobs until scopes are added.
+- Validate reusable workflow calls against callee token expectations after adding explicit permissions.
+
 ---
 
 ### `credentials`
@@ -1934,6 +2131,8 @@ jobs:
 | ✓ | — | ✗ |
 
 Warns when custom or private registry images are used in `job.container` or `job.services.*` without a `credentials` block.
+
+**Why:** Private image pulls without explicit credential handling either fail at runtime or encourage unsafe hardcoded secrets.
 
 **Example trigger:**
 
@@ -2000,6 +2199,8 @@ Warns when `actions/checkout` is used without `persist-credentials: false`.
 
 Legacy `actions/checkout` versions persist credentials in `.git/config`; `actions/checkout@v6+` stores them in a separate file under `$RUNNER_TEMP`. Either way, leaving credentials persisted broadens later-step and artifact exposure.
 
+**Why:** Persisted credentials can be consumed by later commands or leaked via unsafe artifact paths, expanding credential exposure.
+
 **Example trigger:**
 
 ```yaml
@@ -2024,6 +2225,12 @@ jobs:
           persist-credentials: false
 ```
 
+**When fixing:**
+
+- Review later authenticated git commands; for example, `git push` may require explicit auth setup such as `git remote set-url origin <url>` or `gh auth setup-git`.
+- Auto-fix inserts/replaces deterministic scalar values only; expression-valued cases are manual.
+- Review `artipacked` findings together when artifact upload paths are broad.
+
 ---
 
 ### `workflow-secrets`
@@ -2033,6 +2240,8 @@ jobs:
 | ✓ | — | ✗ |
 
 Errors when workflow-level `env` assigns `secrets.*` or `github.token` values in multi-job workflows. Secrets scoped this broadly are available to all jobs, including those that do not need them.
+
+**Why:** Workflow-level secret assignment fans out sensitive values to unrelated jobs, violating least-privilege boundaries.
 
 **Example trigger:**
 
@@ -2069,6 +2278,12 @@ jobs:
         run: ./deploy.sh
 ```
 
+**When fixing:**
+
+- Moving secrets to narrower scopes can break jobs that implicitly depended on broad workflow `env`.
+- Prefer step-local `env` for one-command usage; use job-level only when multiple steps truly need the same secret.
+- Re-validate fork/PR behavior after scope changes because secret availability may differ by event.
+
 ---
 
 ### `job-secrets`
@@ -2078,6 +2293,8 @@ jobs:
 | ✓ | — | ✗ |
 
 Errors when job-level `env` assigns `secrets.*` or `github.token` values in jobs with multiple steps.
+
+**Why:** Job-level secret scoping exposes sensitive values to every step, even when only one step needs them.
 
 **Example trigger:**
 
@@ -2107,6 +2324,12 @@ jobs:
         run: ./publish.sh
 ```
 
+**When fixing:**
+
+- Narrowing to step-level `env` requires checking all later steps that previously read the same variable.
+- Keep secret-bearing steps minimal and avoid passing secret values via intermediate files/artifacts.
+- Re-run publish/deploy paths to confirm required credentials are still present where needed.
+
 ---
 
 ### `unredacted-secrets`
@@ -2116,6 +2339,8 @@ jobs:
 | ✓ | — | ✗ |
 
 Warns when secret-derived environment variables appear to be printed via output commands (`echo`, `printf`, `Write-Host`, `Write-Output`). GitHub masking is not guaranteed for transformed or derived secret values.
+
+**Why:** Printed secret derivatives can bypass masking heuristics and persist in logs, summaries, and external log sinks.
 
 **Example trigger:**
 
@@ -2145,6 +2370,12 @@ jobs:
           # use $TOKEN in commands without printing it
 ```
 
+**When fixing:**
+
+- Mask before any potential output; masking after printing is ineffective.
+- Avoid printing transformed/partial secret values, not only raw secret strings.
+- If debugging is required, log presence/length/state flags instead of values.
+
 **Configuration — extend output commands:**
 
 ```yaml
@@ -2164,6 +2395,8 @@ rules:
 | ✓ | — | ✗ |
 
 Warns when `secrets.*` appears in `if` conditions, `uses:` references, or reusable-call input values instead of a controlled `env:` handoff.
+
+**Why:** Using secrets outside controlled `env` handoff broadens exposure surfaces and makes secret flow harder to audit.
 
 **Example trigger:**
 
@@ -2191,6 +2424,12 @@ jobs:
           if [ -n "$TOKEN" ]; then echo ok; fi
 ```
 
+**When fixing:**
+
+- Move secret access to the narrowest scope that still satisfies runtime needs.
+- Re-check condition semantics after migration because expression-time and shell-time evaluation differ.
+- Avoid passing secrets through `uses:` inputs unless the called action contract explicitly requires it.
+
 ---
 
 ### `overprovisioned-secrets`
@@ -2200,6 +2439,8 @@ jobs:
 | ✓ | — | ✗ |
 
 Warns when secrets are mapped at a broader scope (workflow or job) than is required. Enforces least-privilege secret handoff boundaries.
+
+**Why:** Over-broad secret mappings increase blast radius and accidental disclosure probability across unrelated steps/jobs.
 
 **Example trigger:**
 
@@ -2235,6 +2476,12 @@ jobs:
         run: echo "Step 2 only needs API_KEY"
 ```
 
+**When fixing:**
+
+- Split mappings by step responsibility so each step receives only required secrets.
+- Watch for hidden coupling where multiple scripts assumed a single shared secret namespace.
+- Verify no secrets are re-exported into broader scopes (`job.env`, artifacts, cache keys).
+
 ---
 
 ### `deny-inherit-secrets`
@@ -2244,6 +2491,8 @@ jobs:
 | ✓ | — | ✗ |
 
 Errors when a reusable workflow call job uses `secrets: inherit`. Full secret inheritance propagates all secrets across workflow boundaries without explicit declaration.
+
+**Why:** `secrets: inherit` bypasses explicit contract boundaries and can leak unnecessary secrets into called workflows.
 
 **Example trigger:**
 
@@ -2266,6 +2515,12 @@ jobs:
       token: ${{ secrets.GITHUB_TOKEN }}
 ```
 
+**When fixing:**
+
+- Enumerate only required secret keys based on the callee workflow contract.
+- After replacing `inherit`, test all called workflow paths to catch missing secret mappings early.
+- Keep secret key names explicit and stable to make cross-workflow review auditable.
+
 ---
 
 ## Supply Chain
@@ -2279,6 +2534,8 @@ jobs:
 | ✓ | — | ✗ (✓ with `--enable-pin-network`) |
 
 Warns when `uses:` references are not pinned to a full 40-character commit SHA. Mutable refs (`@v4`, `@main`) can be silently updated by the action maintainer.
+
+**Why:** Mutable refs weaken supply-chain integrity because the referenced code can change without any workflow diff.
 
 **Example trigger:**
 
@@ -2294,6 +2551,12 @@ Warns when `uses:` references are not pinned to a full 40-character commit SHA. 
 ```
 
 Use `seiton --fix --enable-pin-network` to automatically resolve and apply SHA pins.
+
+**When fixing:**
+
+- Network remediation requires connectivity/API quota and is more reliable with `GITHUB_TOKEN` set.
+- Verify resolved SHAs match the intended release line and policy before merge.
+- Keep exceptions explicit via `ignore-actions` so mutable-ref usage remains auditable.
 
 **Configuration — ignore specific actions:**
 
@@ -2334,6 +2597,8 @@ Each entry is an object with required `owner` (glob pattern) and optional `refs`
 
 Warns when container image references in `docker://`, `job.container.image`, or `job.services.*.image` are not pinned by digest.
 
+**Why:** Tag-based image refs are mutable and can resolve to different image contents over time, reducing reproducibility.
+
 **Example trigger:**
 
 ```yaml
@@ -2348,6 +2613,12 @@ container:
   image: ubuntu@sha256:a6d2f...
 ```
 
+**When fixing:**
+
+- Network digest resolution may fail under registry rate limits or missing private-registry credentials.
+- Re-test jobs after pinning because digest changes can alter packages and runtime behavior.
+- Maintain a periodic digest refresh process to avoid stale pins.
+
 ---
 
 ### `unpinned-tools`
@@ -2357,6 +2628,8 @@ container:
 | ✓ | — | ✗ |
 
 Warns when known tool-setup actions rely on an unpinned tool version. The list of known actions is maintained in `data/sources/unpinned-tools/unpinned_tools.json` and currently covers `aquasecurity/setup-trivy` in both workflow steps and composite action steps. To add a new action, edit the JSON and run `dotnet run --project src/Seiton.Update -- sync-unpinned-tools`.
+
+**Why:** Floating tool versions make scan/build outputs non-reproducible and can introduce unexpected behavior changes.
 
 **Example trigger:**
 
@@ -2402,6 +2675,8 @@ Dynamic values such as `version: ${{ inputs.trivy-version }}` are also warned be
 
 Warns when `uses:` references point to GitHub-archived repositories. Archived repositories are read-only and no longer receive security fixes.
 
+**Why:** Archived dependencies are effectively unmaintained and accumulate unpatched vulnerabilities.
+
 **Example trigger:**
 
 ```yaml
@@ -2432,6 +2707,8 @@ jobs:
 
 Warns when a version annotation or comment does not match the resolved commit's lineage. Prevents misleading provenance narratives.
 
+**Why:** Version/lineage mismatches undermine auditability and can mislead incident response and supply-chain review.
+
 **Example trigger:**
 
 ```yaml
@@ -2461,6 +2738,8 @@ jobs:
 | ✓ | — | ✗ |
 
 Errors or warns (per policy) when `uses:` references violate configured allow/deny patterns.
+
+**Why:** Policy-driven allow/deny enforcement is a primary control against risky or unapproved third-party actions.
 
 **Example trigger:**
 
@@ -2503,6 +2782,8 @@ rules:
 | ✓ | — | ✗ |
 
 Errors when `actions/create-github-app-token` is invoked without permission-limiting inputs, or when `owner`-scoped token issuance omits `repositories` to constrain the installation scope.
+
+**Why:** Over-broad app token issuance can grant unintended cross-repository write capabilities.
 
 **Example trigger:**
 
@@ -2552,6 +2833,8 @@ jobs:
 
 Errors when executable jobs omit `timeout-minutes`. Prevents runaway jobs from consuming unlimited runner time.
 
+**Why:** Missing timeouts allow hung jobs to consume runner capacity indefinitely and delay other pipelines.
+
 **Example trigger:**
 
 ```yaml
@@ -2576,6 +2859,12 @@ jobs:
       - run: echo ok
 ```
 
+**When fixing:**
+
+- Auto-fix is attached only when `fix.defaults.job-timeout-minutes` is configured.
+- Choose timeout values per workload type; one global value may be too strict or too loose.
+- Monitor new timeouts to tune false cancellations.
+
 Auto-fix is available when `fix.defaults.job-timeout-minutes` is set in [configuration](configuration.md).
 When this default is not configured, diagnostics include a help hint showing the exact config key to add.
 
@@ -2588,6 +2877,8 @@ When this default is not configured, diagnostics include a help hint showing the
 | ✓ | — | ✗ |
 
 Warns when a publishing or release workflow uses long-lived credentials instead of a trusted OIDC/provenance-based publishing flow.
+
+**Why:** Long-lived publish credentials expand breach impact; trusted publishing reduces secret lifetime and provenance ambiguity.
 
 **Example trigger:**
 
@@ -2647,6 +2938,8 @@ rules:
 
 Errors when `uses:` references resolve to action versions listed in known vulnerability advisory data.
 
+**Why:** Known-vulnerable action versions represent documented exploit paths and should be removed from the pipeline trust chain.
+
 **Example trigger:**
 
 ```yaml
@@ -2669,6 +2962,8 @@ jobs:
 | ✗ | online | ✗ |
 
 Errors when a SHA-pinned `uses:` reference points to a commit that is not reachable in the referenced repository's expected history. Detects ghost or impostor commit supply-chain abuse.
+
+**Why:** Unreachable SHAs can indicate impostor commit attacks that bypass normal tag/branch trust assumptions.
 
 **Example trigger:**
 
@@ -2694,6 +2989,8 @@ jobs:
 
 Errors when a symbolic ref (tag or branch name) in `uses:` is ambiguous — the same name exists in both refs/tags and refs/heads.
 
+**Why:** Ambiguous refs create non-deterministic resolution and weaken provenance guarantees for reviewed workflows.
+
 **Example trigger:**
 
 ```yaml
@@ -2716,5 +3013,7 @@ jobs:
 | ✗ | online | ✗ |
 
 Warns when a SHA-pinned `uses:` reference is stale relative to the maintained release/tag mapping.
+
+**Why:** Stale pins miss upstream fixes and security patches, increasing long-term supply-chain exposure.
 
 **Remediation:** Update the pinned SHA to the current approved SHA for the intended release family.
