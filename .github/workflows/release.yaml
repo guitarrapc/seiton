@@ -7,7 +7,8 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: "Existing Git tag to release (e.g. v1.0.0). Must already exist on
+        description:
+          "Existing Git tag to release (e.g. v1.0.0). Must already exist on
           the remote."
         required: true
         type: string
@@ -81,8 +82,15 @@ jobs:
       - name: Install Playwright (Chromium) for playground UI tests
         run: |
           pwsh tests/Seiton.Playground.Tests/bin/Release/net10.0/playwright.ps1 install chromium
+      - name: Pre-publish Playground for UI tests (avoid in-test WASM AOT peak RAM)
+        run: |
+          dotnet publish src/Seiton.Playground/Seiton.Playground.csproj -c Debug -o publish/playground-dbg/ -v q -p:RunAOTCompilation=false -p:PublishTrimmed=false -p:PlaygroundSoftFingerprint=true
+          dotnet publish src/Seiton.Playground/Seiton.Playground.csproj -c Release -o publish/playground-aot/ -v q -p:RunAOTCompilation=true -p:PublishTrimmed=true -p:PlaygroundSoftFingerprint=true
       - name: Test
         run: dotnet test -c Release --no-build
+        env:
+          SEITON_PLAYGROUND_PUBLISH_DIR_DEBUG: ${{ github.workspace }}/publish/playground-dbg
+          SEITON_PLAYGROUND_PUBLISH_DIR_RELEASE: ${{ github.workspace }}/publish/playground-aot
       - name: Verify generated data
         run: dotnet run --project src/Seiton.Update -- verify --dataset all
 
@@ -153,7 +161,7 @@ jobs:
 
   # GHCR: linux/amd64 + linux/arm64 from published Linux AOT tarballs
   docker:
-    needs: [ validate, publish ]
+    needs: [validate, publish]
     permissions:
       contents: read
       packages: write
@@ -224,7 +232,7 @@ jobs:
 
   # Release: create GitHub Release with checksums + SLSA attestation
   release:
-    needs: [ validate, publish ]
+    needs: [validate, publish]
     permissions:
       contents: write
       id-token: write
