@@ -118,6 +118,23 @@ rg "DiagnosticFix\(" src/Seiton.Core/Linting/Rules --files-with-matches
 
 Remediation はあるが注意が書かれていないルール群。
 
+#### Phase 2 実施結果
+
+- [x] `dangerous-triggers`
+- [x] `secrets-whole-context-access`
+- [x] `expr-undefined-var`
+- [x] `cache-poisoning`
+- [x] `self-hosted-runner`
+- [x] `insecure-commands`
+- [x] `workflow-secrets`
+- [x] `job-secrets`
+- [x] `unredacted-secrets`
+- [x] `secrets-outside-env`
+- [x] `overprovisioned-secrets`
+- [x] `deny-inherit-secrets`
+
+実装内容は `docs/rules.md` の対象ルールに **Why** / **When fixing** を追加し、手動修正時の副作用（権限境界・秘密情報スコープ・イベント差分）を明示することに集中した。
+
 ### Phase 3 — 正しさ・供給網・online（Why は短く、注意は必要時のみ）
 
 構文・グラフ系は Why が自明なものは 1〜2 文に抑える。online ルールは API／トークン前提を When fixing に記載。

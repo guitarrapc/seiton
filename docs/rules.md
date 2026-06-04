@@ -1451,6 +1451,8 @@ Detects unsafe direct interpolation of untrusted `github.event`-origin data into
 
 Warns when high-risk trigger events (`pull_request_target`, `workflow_run`, etc.) are used. These events execute with elevated repository context and write permissions.
 
+**Why:** High-privilege trigger types can execute attacker-influenced code with repository-level authority, making fork and event-chain abuse significantly more dangerous.
+
 **Example trigger:**
 
 ```yaml
@@ -1489,6 +1491,12 @@ jobs:
     steps:
       - run: echo ok
 ```
+
+**When fixing:**
+
+- Switching to `pull_request` reduces privilege and can disable secret-dependent steps by design.
+- Conditional guards reduce risk but do not fully remove trust-boundary complexity; keep privileged operations isolated.
+- Re-test approval/deploy flows after trigger changes to confirm expected execution paths.
 
 **Configuration — extend the dangerous-events set:**
 
@@ -1657,6 +1665,8 @@ Auto-fix reuses an existing unique `env` mapping for the same input when availab
 
 Errors when an expression references the entire `secrets` context as an object (e.g. `${{ toJson(secrets) }}`). This leaks all secrets simultaneously.
 
+**Why:** Whole-context access collapses secret least-privilege boundaries and can expose every secret in one expression path.
+
 **Example trigger:**
 
 ```yaml
@@ -1681,6 +1691,12 @@ jobs:
         run: some-command --token "$MY_SECRET"
 ```
 
+**When fixing:**
+
+- Replace bulk `secrets` usage with explicit per-key mappings only for required values.
+- Avoid dynamic key selection patterns that force whole-context references.
+- Verify logs and diagnostic output do not serialize secret-bearing objects.
+
 ---
 
 ### `expr-undefined-var`
@@ -1690,6 +1706,8 @@ jobs:
 | ✓ | — | ✗ |
 
 Errors when expressions reference context roots unavailable in the current scope (e.g. `steps.*` at job level).
+
+**Why:** Out-of-scope expression roots can evaluate unexpectedly and cause silent logic drift in conditions and computed values.
 
 **Example trigger:**
 
@@ -1725,6 +1743,12 @@ jobs:
         run: echo ok
 ```
 
+**When fixing:**
+
+- Move each expression to a scope where the referenced context root is valid (workflow/job/step).
+- Verify differences between `matrix`, `steps`, and `needs` availability after refactoring.
+- Re-test both expected true and false paths for guarded steps.
+
 ---
 
 ### `cache-poisoning`
@@ -1734,6 +1758,8 @@ jobs:
 | ✓ | — | ✗ |
 
 Warns when `actions/cache` is used in workflows that accept untrusted triggers (`pull_request`, `pull_request_target`, `workflow_run`). An attacker can write a poisoned cache entry that affects later privileged runs.
+
+**Why:** Shared writable caches across trust boundaries allow untrusted runs to persist artifacts that later trusted jobs consume.
 
 **Example trigger:**
 
@@ -1781,6 +1807,12 @@ jobs:
           key: npm-${{ runner.os }}
 ```
 
+**When fixing:**
+
+- Prefer strict trust-boundary separation: trusted runs write, untrusted runs restore-only.
+- Namespace cache keys so PR and protected-branch keys cannot collide.
+- Confirm cache hit-rate and performance after segmentation to avoid accidental regressions.
+
 **Configuration — extend untrusted triggers:**
 
 ```yaml
@@ -1800,6 +1832,8 @@ rules:
 | ✓ | — | ✗ |
 
 Warns when self-hosted runners are used in workflows with untrusted triggers. Compromised host isolation can expose long-lived credentials and filesystem state.
+
+**Why:** Self-hosted runners are persistent infrastructure, so untrusted workload execution increases lateral-movement and credential-exfiltration risk.
 
 **Example trigger:**
 
@@ -1841,6 +1875,12 @@ jobs:
       - run: echo ok
 ```
 
+**When fixing:**
+
+- Moving to GitHub-hosted runners can change tooling/network assumptions; validate environment parity.
+- `if` guards are defense-in-depth, not a substitute for strong runner isolation.
+- For unavoidable self-hosted use, combine trigger restrictions with ephemeral runner lifecycle controls.
+
 ---
 
 ### `insecure-commands`
@@ -1850,6 +1890,8 @@ jobs:
 | ✓ | — | ✗ |
 
 Detects unsafe command construction from untrusted inputs in `run` scripts.
+
+**Why:** Insecure command channels and untrusted command construction can reopen deprecated command-injection vectors.
 
 **Example trigger:**
 
@@ -1872,6 +1914,12 @@ jobs:
     steps:
       - run: echo "/usr/local/custom-bin" >> "$GITHUB_PATH"
 ```
+
+**When fixing:**
+
+- Remove `ACTIONS_ALLOW_UNSECURE_COMMANDS` at all scopes (workflow/job/step) to prevent inherited bypasses.
+- Migrate scripts to environment-file APIs (`$GITHUB_OUTPUT`, `$GITHUB_ENV`, `$GITHUB_PATH`).
+- Re-test custom/composite actions that may still assume legacy command behavior.
 
 ---
 
@@ -2137,6 +2185,8 @@ jobs:
 
 Errors when workflow-level `env` assigns `secrets.*` or `github.token` values in multi-job workflows. Secrets scoped this broadly are available to all jobs, including those that do not need them.
 
+**Why:** Workflow-level secret assignment fans out sensitive values to unrelated jobs, violating least-privilege boundaries.
+
 **Example trigger:**
 
 ```yaml
@@ -2172,6 +2222,12 @@ jobs:
         run: ./deploy.sh
 ```
 
+**When fixing:**
+
+- Moving secrets to narrower scopes can break jobs that implicitly depended on broad workflow `env`.
+- Prefer step-local `env` for one-command usage; use job-level only when multiple steps truly need the same secret.
+- Re-validate fork/PR behavior after scope changes because secret availability may differ by event.
+
 ---
 
 ### `job-secrets`
@@ -2181,6 +2237,8 @@ jobs:
 | ✓ | — | ✗ |
 
 Errors when job-level `env` assigns `secrets.*` or `github.token` values in jobs with multiple steps.
+
+**Why:** Job-level secret scoping exposes sensitive values to every step, even when only one step needs them.
 
 **Example trigger:**
 
@@ -2210,6 +2268,12 @@ jobs:
         run: ./publish.sh
 ```
 
+**When fixing:**
+
+- Narrowing to step-level `env` requires checking all later steps that previously read the same variable.
+- Keep secret-bearing steps minimal and avoid passing secret values via intermediate files/artifacts.
+- Re-run publish/deploy paths to confirm required credentials are still present where needed.
+
 ---
 
 ### `unredacted-secrets`
@@ -2219,6 +2283,8 @@ jobs:
 | ✓ | — | ✗ |
 
 Warns when secret-derived environment variables appear to be printed via output commands (`echo`, `printf`, `Write-Host`, `Write-Output`). GitHub masking is not guaranteed for transformed or derived secret values.
+
+**Why:** Printed secret derivatives can bypass masking heuristics and persist in logs, summaries, and external log sinks.
 
 **Example trigger:**
 
@@ -2248,6 +2314,12 @@ jobs:
           # use $TOKEN in commands without printing it
 ```
 
+**When fixing:**
+
+- Mask before any potential output; masking after printing is ineffective.
+- Avoid printing transformed/partial secret values, not only raw secret strings.
+- If debugging is required, log presence/length/state flags instead of values.
+
 **Configuration — extend output commands:**
 
 ```yaml
@@ -2267,6 +2339,8 @@ rules:
 | ✓ | — | ✗ |
 
 Warns when `secrets.*` appears in `if` conditions, `uses:` references, or reusable-call input values instead of a controlled `env:` handoff.
+
+**Why:** Using secrets outside controlled `env` handoff broadens exposure surfaces and makes secret flow harder to audit.
 
 **Example trigger:**
 
@@ -2294,6 +2368,12 @@ jobs:
           if [ -n "$TOKEN" ]; then echo ok; fi
 ```
 
+**When fixing:**
+
+- Move secret access to the narrowest scope that still satisfies runtime needs.
+- Re-check condition semantics after migration because expression-time and shell-time evaluation differ.
+- Avoid passing secrets through `uses:` inputs unless the called action contract explicitly requires it.
+
 ---
 
 ### `overprovisioned-secrets`
@@ -2303,6 +2383,8 @@ jobs:
 | ✓ | — | ✗ |
 
 Warns when secrets are mapped at a broader scope (workflow or job) than is required. Enforces least-privilege secret handoff boundaries.
+
+**Why:** Over-broad secret mappings increase blast radius and accidental disclosure probability across unrelated steps/jobs.
 
 **Example trigger:**
 
@@ -2338,6 +2420,12 @@ jobs:
         run: echo "Step 2 only needs API_KEY"
 ```
 
+**When fixing:**
+
+- Split mappings by step responsibility so each step receives only required secrets.
+- Watch for hidden coupling where multiple scripts assumed a single shared secret namespace.
+- Verify no secrets are re-exported into broader scopes (`job.env`, artifacts, cache keys).
+
 ---
 
 ### `deny-inherit-secrets`
@@ -2347,6 +2435,8 @@ jobs:
 | ✓ | — | ✗ |
 
 Errors when a reusable workflow call job uses `secrets: inherit`. Full secret inheritance propagates all secrets across workflow boundaries without explicit declaration.
+
+**Why:** `secrets: inherit` bypasses explicit contract boundaries and can leak unnecessary secrets into called workflows.
 
 **Example trigger:**
 
@@ -2368,6 +2458,12 @@ jobs:
     secrets:
       token: ${{ secrets.GITHUB_TOKEN }}
 ```
+
+**When fixing:**
+
+- Enumerate only required secret keys based on the callee workflow contract.
+- After replacing `inherit`, test all called workflow paths to catch missing secret mappings early.
+- Keep secret key names explicit and stable to make cross-workflow review auditable.
 
 ---
 
