@@ -843,3 +843,4 @@ To limit denial-of-service from maliciously large configuration inputs, validati
 Pattern matching notes:
 - `fix.pinning.ignore-actions` uses **wildcard matching** (`*` = any sequence, `?` = single char) — no regex, no ReDoS risk.
 - `fix.pinning.exclude-branches` uses exact string equality (ordinal).
+- `fix` always annotates alias-like version refs (`vN`, `vN.M`) with the highest compatible concrete tag on the same resolved SHA when available (for example `v1` -> `v1.0.2`).

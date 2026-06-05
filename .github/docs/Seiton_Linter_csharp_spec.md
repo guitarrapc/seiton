@@ -589,6 +589,7 @@ C# implementation notes:
 - Error results (non-skip failures) must not be cached.
 - Resolver implementations are injected by caller — not instantiated by `LintEngine`.
 - `GitHubActionShaResolver` resolves refs in order: `refs/tags/{ref}` first, then `refs/heads/{ref}` fallback when tag is not found.
+- Canonical tag-comment promotion applies to alias-like version refs (`vN`, `vN.M`): resolver may map resolved SHA back to the highest compatible concrete tag (for example `v1` -> `v1.0.2`). Promotion is skipped for concrete patch refs (`vN.M.P`) to avoid unnecessary API calls.
 - When a uses-ref is skipped (for example min-age gate), resolver may set `ActionShaResolution.SkipReason`; remediation appends this to diagnostic help so users can understand why `--fix --enable-pin-network` did not pin.
 
 **Comparison with `dockerfile-pin` (Go reference):**

@@ -276,6 +276,22 @@ public sealed class LintConfigLibraryTests
     }
 
     [Test]
+    public async Task Validate_Fix_PreferCanonicalTagComment_IsRejectedAsUnknownKey()
+    {
+        var yaml = """
+        fix:
+          pinning:
+            prefer-canonical-tag-comment: false
+        """;
+
+        var result = LintConfigLibrary.Validate(yaml, "seiton.yaml");
+
+        await Assert.That(result.IsValid).IsFalse();
+        await Assert.That(result.Diagnostics.Any(d =>
+            d.Message.Contains("unknown fix.pinning key 'prefer-canonical-tag-comment'", StringComparison.Ordinal))).IsTrue();
+    }
+
+    [Test]
     public async Task Validate_Network_MapsAllFields()
     {
         var yaml = """

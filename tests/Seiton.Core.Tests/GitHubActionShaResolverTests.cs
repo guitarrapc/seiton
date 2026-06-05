@@ -277,6 +277,340 @@ public sealed class GitHubActionShaResolverTests
     }
 
     [Test]
+    public async Task ResolveAsync_PrefersConcreteTagComment_WhenBranchAliasResolvesToTaggedCommit()
+    {
+        const string sharedSha = "0f877adfd3890a2333b954ab9a43d45c4b48e456";
+        var handler = new StubHttpMessageHandler();
+        handler.AddStatus(
+            "https://api.github.com/repos/guitarrapc/setup-seiton/git/ref/tags/v1",
+            HttpStatusCode.NotFound);
+        handler.AddJson(
+            "https://api.github.com/repos/guitarrapc/setup-seiton/git/ref/heads/v1",
+            $$"""
+            {
+              "object": {
+                "type": "commit",
+                "sha": "{{sharedSha}}"
+              }
+            }
+            """);
+        handler.AddJson(
+            "https://api.github.com/repos/guitarrapc/setup-seiton/tags?per_page=100",
+            $$"""
+            [
+              {
+                "name": "v1.0.2",
+                "commit": {
+                  "sha": "{{sharedSha}}"
+                }
+              }
+            ]
+            """);
+
+        var resolver = CreateResolver(handler, new FixPinningConfig { MinAgeDays = 0 });
+        var resolution = await resolver.ResolveAsync("guitarrapc", "setup-seiton", "v1");
+
+        await Assert.That(resolution.Sha).IsEqualTo(sharedSha);
+        await Assert.That(resolution.TagComment).IsEqualTo("v1.0.2");
+    }
+
+    [Test]
+    public async Task ResolveAsync_PrefersConcreteTagComment_WhenMajorTagDirectlyResolvesToTaggedCommit()
+    {
+        const string sharedSha = "0f877adfd3890a2333b954ab9a43d45c4b48e456";
+        var handler = new StubHttpMessageHandler();
+        handler.AddJson(
+            "https://api.github.com/repos/guitarrapc/setup-seiton/git/ref/tags/v1",
+            $$"""
+            {
+              "object": {
+                "type": "commit",
+                "sha": "{{sharedSha}}"
+              }
+            }
+            """);
+        handler.AddJson(
+            "https://api.github.com/repos/guitarrapc/setup-seiton/tags?per_page=100",
+            $$"""
+            [
+              {
+                "name": "v1.0.2",
+                "commit": {
+                  "sha": "{{sharedSha}}"
+                }
+              },
+              {
+                "name": "v1.0.1",
+                "commit": {
+                  "sha": "{{sharedSha}}"
+                }
+              }
+            ]
+            """);
+
+        var resolver = CreateResolver(handler, new FixPinningConfig { MinAgeDays = 0 });
+        var resolution = await resolver.ResolveAsync("guitarrapc", "setup-seiton", "v1");
+
+        await Assert.That(resolution.Sha).IsEqualTo(sharedSha);
+        await Assert.That(resolution.TagComment).IsEqualTo("v1.0.2");
+    }
+
+    [Test]
+    public async Task ResolveAsync_PrefersHighestSemverTagComment_WhenMultipleCompatibleTagsPointToSameCommit()
+    {
+        const string sharedSha = "0f877adfd3890a2333b954ab9a43d45c4b48e456";
+        var handler = new StubHttpMessageHandler();
+        handler.AddStatus(
+            "https://api.github.com/repos/guitarrapc/setup-seiton/git/ref/tags/v1",
+            HttpStatusCode.NotFound);
+        handler.AddJson(
+            "https://api.github.com/repos/guitarrapc/setup-seiton/git/ref/heads/v1",
+            $$"""
+            {
+              "object": {
+                "type": "commit",
+                "sha": "{{sharedSha}}"
+              }
+            }
+            """);
+        handler.AddJson(
+            "https://api.github.com/repos/guitarrapc/setup-seiton/tags?per_page=100",
+            $$"""
+            [
+              {
+                "name": "v1",
+                "commit": {
+                  "sha": "{{sharedSha}}"
+                }
+              },
+              {
+                "name": "v1.0.2",
+                "commit": {
+                  "sha": "{{sharedSha}}"
+                }
+              },
+              {
+                "name": "v1.0.1",
+                "commit": {
+                  "sha": "{{sharedSha}}"
+                }
+              }
+            ]
+            """);
+
+        var resolver = CreateResolver(handler, new FixPinningConfig { MinAgeDays = 0 });
+        var resolution = await resolver.ResolveAsync("guitarrapc", "setup-seiton", "v1");
+
+        await Assert.That(resolution.Sha).IsEqualTo(sharedSha);
+        await Assert.That(resolution.TagComment).IsEqualTo("v1.0.2");
+    }
+
+    [Test]
+    public async Task ResolveAsync_KeepsBranchAliasComment_WhenNoCompatibleTagPointsToResolvedCommit()
+    {
+        const string branchSha = "0f877adfd3890a2333b954ab9a43d45c4b48e456";
+        var handler = new StubHttpMessageHandler();
+        handler.AddStatus(
+            "https://api.github.com/repos/guitarrapc/setup-seiton/git/ref/tags/v1",
+            HttpStatusCode.NotFound);
+        handler.AddJson(
+            "https://api.github.com/repos/guitarrapc/setup-seiton/git/ref/heads/v1",
+            $$"""
+            {
+              "object": {
+                "type": "commit",
+                "sha": "{{branchSha}}"
+              }
+            }
+            """);
+        handler.AddJson(
+            "https://api.github.com/repos/guitarrapc/setup-seiton/tags?per_page=100",
+            """
+            [
+              {
+                "name": "v1.0.2",
+                "commit": {
+                  "sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+                }
+              }
+            ]
+            """);
+
+        var resolver = CreateResolver(handler, new FixPinningConfig { MinAgeDays = 0 });
+        var resolution = await resolver.ResolveAsync("guitarrapc", "setup-seiton", "v1");
+
+        await Assert.That(resolution.Sha).IsEqualTo(branchSha);
+        await Assert.That(resolution.TagComment).IsEqualTo("v1");
+    }
+
+    [Test]
+    public async Task ResolveAsync_CachesCanonicalTagComment_PerVersionFamily()
+    {
+        const string sharedSha = "0f877adfd3890a2333b954ab9a43d45c4b48e456";
+        var handler = new StubHttpMessageHandler();
+        handler.AddStatus(
+            "https://api.github.com/repos/guitarrapc/setup-seiton/git/ref/tags/v1",
+            HttpStatusCode.NotFound);
+        handler.AddStatus(
+            "https://api.github.com/repos/guitarrapc/setup-seiton/git/ref/tags/v2",
+            HttpStatusCode.NotFound);
+        handler.AddJson(
+            "https://api.github.com/repos/guitarrapc/setup-seiton/git/ref/heads/v1",
+            $$"""
+            {
+              "object": {
+                "type": "commit",
+                "sha": "{{sharedSha}}"
+              }
+            }
+            """);
+        handler.AddJson(
+            "https://api.github.com/repos/guitarrapc/setup-seiton/git/ref/heads/v2",
+            $$"""
+            {
+              "object": {
+                "type": "commit",
+                "sha": "{{sharedSha}}"
+              }
+            }
+            """);
+        handler.AddJson(
+            "https://api.github.com/repos/guitarrapc/setup-seiton/tags?per_page=100",
+            $$"""
+            [
+              {
+                "name": "v1.0.2",
+                "commit": {
+                  "sha": "{{sharedSha}}"
+                }
+              },
+              {
+                "name": "v2.0.1",
+                "commit": {
+                  "sha": "{{sharedSha}}"
+                }
+              }
+            ]
+            """);
+
+        var resolver = CreateResolver(handler, new FixPinningConfig { MinAgeDays = 0 });
+        var v1Resolution = await resolver.ResolveAsync("guitarrapc", "setup-seiton", "v1");
+        var v2Resolution = await resolver.ResolveAsync("guitarrapc", "setup-seiton", "v2");
+
+        await Assert.That(v1Resolution.TagComment).IsEqualTo("v1.0.2");
+        await Assert.That(v2Resolution.TagComment).IsEqualTo("v2.0.1");
+    }
+
+    [Test]
+    public async Task ResolveAsync_DoesNotQueryTagsForCanonicalization_WhenMinAgeAlreadySelectedConcreteTag()
+    {
+        var oldDate = DateTimeOffset.UtcNow.AddDays(-30).ToString("o");
+        const string sharedSha = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+        var handler = new StubHttpMessageHandler();
+        handler.AddJson(
+            "https://api.github.com/repos/guitarrapc/setup-seiton/releases?per_page=100",
+            $$"""
+            [
+              {
+                "tag_name": "v1.0.2",
+                "published_at": "{{oldDate}}"
+              }
+            ]
+            """);
+        handler.AddJson(
+            "https://api.github.com/repos/guitarrapc/setup-seiton/git/ref/tags/v1.0.2",
+            $$"""
+            {
+              "object": {
+                "type": "commit",
+                "sha": "{{sharedSha}}"
+              }
+            }
+            """);
+        var resolver = CreateResolver(handler, new FixPinningConfig { MinAgeDays = 14 });
+        var resolution = await resolver.ResolveAsync("guitarrapc", "setup-seiton", "v1");
+
+        await Assert.That(resolution.Sha).IsEqualTo(sharedSha);
+        await Assert.That(resolution.TagComment).IsEqualTo("v1.0.2");
+        await Assert.That(handler.RequestedUris.Count(uri =>
+            uri == "https://api.github.com/repos/guitarrapc/setup-seiton/tags?per_page=100")).IsEqualTo(0);
+    }
+
+    [Test]
+    public async Task ResolveAsync_CanonicalTagLookup_FallsBackToGitHubCom_WhenGhesTagListReturns404()
+    {
+        const string sharedSha = "0f877adfd3890a2333b954ab9a43d45c4b48e456";
+        var handler = new StubHttpMessageHandler();
+        handler.AddStatus(
+            "https://ghes.example.com/api/v3/repos/guitarrapc/setup-seiton/git/ref/tags/v1",
+            HttpStatusCode.NotFound);
+        handler.AddJson(
+            "https://ghes.example.com/api/v3/repos/guitarrapc/setup-seiton/git/ref/heads/v1",
+            $$"""
+            {
+              "object": {
+                "type": "commit",
+                "sha": "{{sharedSha}}"
+              }
+            }
+            """);
+        handler.AddStatus(
+            "https://ghes.example.com/api/v3/repos/guitarrapc/setup-seiton/tags?per_page=100",
+            HttpStatusCode.NotFound);
+        handler.AddJson(
+            "https://api.github.com/repos/guitarrapc/setup-seiton/tags?per_page=100",
+            $$"""
+            [
+              {
+                "name": "v1.0.2",
+                "commit": {
+                  "sha": "{{sharedSha}}"
+                }
+              }
+            ]
+            """);
+
+        var resolver = CreateResolver(
+            handler,
+            new FixPinningConfig { MinAgeDays = 0 },
+            new GitHubNetworkConfig
+            {
+                GhesApiUrl = "https://ghes.example.com/api/v3",
+                GhesFallback = true,
+            });
+        var resolution = await resolver.ResolveAsync("guitarrapc", "setup-seiton", "v1");
+
+        await Assert.That(resolution.TagComment).IsEqualTo("v1.0.2");
+        await Assert.That(handler.RequestedUris).Contains("https://ghes.example.com/api/v3/repos/guitarrapc/setup-seiton/tags?per_page=100");
+        await Assert.That(handler.RequestedUris).Contains("https://api.github.com/repos/guitarrapc/setup-seiton/tags?per_page=100");
+    }
+
+    [Test]
+    public async Task ResolveAsync_DoesNotPerformCanonicalTagLookup_WhenRefIsAlreadyConcreteSemverTag()
+    {
+        const string sha = "0f877adfd3890a2333b954ab9a43d45c4b48e456";
+        var handler = new StubHttpMessageHandler();
+        handler.AddJson(
+            "https://api.github.com/repos/guitarrapc/setup-seiton/git/ref/tags/v1.0.2",
+            $$"""
+            {
+              "object": {
+                "type": "commit",
+                "sha": "{{sha}}"
+              }
+            }
+            """);
+
+        var resolver = CreateResolver(handler, new FixPinningConfig { MinAgeDays = 0 });
+        var resolution = await resolver.ResolveAsync("guitarrapc", "setup-seiton", "v1.0.2");
+
+        await Assert.That(resolution.Sha).IsEqualTo(sha);
+        await Assert.That(resolution.TagComment).IsEqualTo("v1.0.2");
+        await Assert.That(handler.RequestedUris.Any(uri =>
+            uri == "https://api.github.com/repos/guitarrapc/setup-seiton/tags?per_page=100")).IsFalse();
+    }
+
+    [Test]
     public async Task ResolveAsync_Throws_WhenTagAndBranchReferencesAreMissing()
     {
         var handler = new StubHttpMessageHandler();

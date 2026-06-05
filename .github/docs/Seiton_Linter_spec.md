@@ -1243,7 +1243,9 @@ Resolve(owner, repo, ref) -> (sha, tagComment, error)
 - `owner`: repository owner (e.g. `actions`)
 - `repo`: repository name (e.g. `checkout`)
 - `ref`: tag, branch, or SHA string as it appears in the `uses:` value (e.g. `v4`, `main`)
-- Returns: 40-hex SHA, original ref as comment string (e.g. `v4`), error
+- Returns: 40-hex SHA and annotation comment string, error.
+  - Default comment: resolved ref string.
+  - Canonical promotion: for alias-like version refs (`vN`, `vN.M`), resolver chooses the highest compatible concrete tag on the same resolved SHA when available.
 - Returns `(null, null, SkippedError)` when the ref is excluded by configuration (matches `ignore_actions` patterns).
 
 #### 12.2.2 `IImageDigestResolver`
@@ -1297,15 +1299,15 @@ When `false` (the default), no resolver is instantiated and the corresponding di
 
 Token resolution and network behavior (GHES, timeouts, concurrency, redirect safety) are specified in §5.13 and apply to all network-dependent features including pin remediation.
 
-#### 12.3.4 `fix.pinning.ignore-actions`
+#### 12.3.3 `fix.pinning.ignore-actions`
 
 List of `{uses, ref}` wildcard patterns (`*` matches any sequence, `?` matches single char) to skip during Actions SHA resolution. Equivalent to pinact's `ignore_actions`. Common use case: SLSA reusable workflows where the caller must not pin the SHA. No regex — wildcard matching only, eliminating ReDoS risk.
 
-#### 12.3.5 `fix.pinning.exclude-branches`
+#### 12.3.4 `fix.pinning.exclude-branches`
 
 Branch names (exact string match, ordinal) to never pin. Default: `["main", "master"]`. Matches frizbee's default behavior. Rationale: pinning a branch reference to its current SHA is semantically incorrect — the intent of a branch ref is to track the branch tip.
 
-#### 12.3.6 `fix.pinning.min-age-days`
+#### 12.3.5 `fix.pinning.min-age-days`
 
 Minimum age in days a tag must have before it is considered eligible for SHA pinning. Default: `14`.
 
@@ -1335,7 +1337,7 @@ Rationale:
 - GitHub Actions ecosystem commonly uses moving branch aliases such as `v1`.
 - Without branch fallback, `min-age-days: 0` still cannot pin `owner/repo@v1` when `v1` is a branch but not a tag.
 
-#### 12.3.8 `fix.images.exclude-images` and `fix.images.exclude-tags`
+#### 12.3.6 `fix.images.exclude-images` and `fix.images.exclude-tags`
 
 Glob patterns for images and tags to skip during digest resolution.
 
@@ -1359,7 +1361,7 @@ An `unpinned-uses` diagnostic fix replaces the `@ref` portion of the `uses:` val
 - Before: `uses: actions/checkout@v6`
 - After: `uses: actions/checkout@<sha40> # v6.0.2`
 
-The separator between SHA and comment defaults to ` # ` (matches pinact's `separator` default). Comment preserves the original ref string verbatim.
+The separator between SHA and comment defaults to ` # ` (matches pinact's `separator` default). Comment usually follows the resolved ref string; for alias-like version refs (`vN`, `vN.M`) Seiton promotes the comment to the highest compatible concrete tag on the same commit when available (for example `v1` -> `v1.0.2`).
 
 If the ref is already a 40-hex SHA, it is considered already pinned; no fix is generated.
 
