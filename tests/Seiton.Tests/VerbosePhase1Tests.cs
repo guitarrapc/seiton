@@ -212,7 +212,7 @@ public sealed class VerbosePhase1Tests
             _ = InputDiscovery.ResolveFiles([], includeActions: false, logger, startDirectory: tempDir);
 
             var output = sw.ToString();
-            await Assert.That(output).Contains($"verbose: discovery: searching from {tempDir}");
+            await Assert.That(output).Contains($"verbose: discovery: searching under cwd {Path.GetFullPath(tempDir)}");
             await Assert.That(output).Contains($"verbose: discovery: found {workflowsDir}");
             await Assert.That(output).Contains("verbose: discovery: 1 file(s) resolved");
         }

@@ -933,7 +933,7 @@ internal static class CheckCommand
             return false;
         }
 
-        return HasGitHubActionsDirectoryInAncestors(discoveryStartDirectory);
+        return HasGitHubActionsDirectoryUnderCwd(discoveryStartDirectory);
     }
 
     internal static DocumentKind GetSlotDocumentKind(VerboseLogger logger, DocumentKind documentKind)
@@ -952,24 +952,9 @@ internal static class CheckCommand
 
     private static bool IsCi() => !string.IsNullOrEmpty(Environment.GetEnvironmentVariable("CI"));
 
-    private static bool HasGitHubActionsDirectoryInAncestors(string startDirectory)
+    private static bool HasGitHubActionsDirectoryUnderCwd(string startDirectory)
     {
-        var current = Path.GetFullPath(startDirectory);
-        while (true)
-        {
-            if (Directory.Exists(Path.Combine(current, ".github", "actions")))
-            {
-                return true;
-            }
-
-            var parent = Directory.GetParent(current);
-            if (parent is null)
-            {
-                return false;
-            }
-
-            current = parent.FullName;
-        }
+        return Directory.Exists(Path.Combine(Path.GetFullPath(startDirectory), ".github", "actions"));
     }
 }
 
