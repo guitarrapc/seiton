@@ -155,7 +155,13 @@ internal static class InputDiscovery
 
     private static void CollectYamlFilesWithExtension(string directory, string extension, List<string> files)
     {
-        foreach (var file in Directory.EnumerateFiles(directory, $"*{extension}", SearchOption.AllDirectories))
+        var options = new EnumerationOptions
+        {
+            RecurseSubdirectories = true,
+            MatchCasing = MatchCasing.CaseInsensitive,
+        };
+
+        foreach (var file in Directory.EnumerateFiles(directory, $"*{extension}", options))
         {
             files.Add(Path.GetFullPath(file));
         }
