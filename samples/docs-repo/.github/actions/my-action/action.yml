@@ -1,7 +1,0 @@
-name: Nested Sample Action
-description: Nested action for include-actions examples
-runs:
-  using: composite
-  steps:
-    - run: echo nested
-      shell: bash

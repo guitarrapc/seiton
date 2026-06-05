@@ -1,7 +1,0 @@
-name: Sample Action
-description: Root action for documentation examples
-runs:
-  using: composite
-  steps:
-    - run: echo hello
-      shell: bash
