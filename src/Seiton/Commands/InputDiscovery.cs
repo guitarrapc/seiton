@@ -14,7 +14,7 @@ internal static class InputDiscovery
         bool skipAgenticWorkflows = false,
         string? startDirectory = null)
     {
-        var startDir = startDirectory ?? Environment.CurrentDirectory;
+        var startDir = Path.GetFullPath(startDirectory ?? Environment.CurrentDirectory);
 
         string[] resolved;
         if (files.Length > 0)
@@ -63,13 +63,13 @@ internal static class InputDiscovery
     {
         if (verboseLogger.IsEnabled)
         {
-            verboseLogger.Log("discovery", $"searching from {startDir}");
+            verboseLogger.Log("discovery", $"searching under cwd {startDir}");
         }
 
         var files = new List<string>();
 
-        var workflowsDir = FindWorkflowsDirectory(startDir);
-        if (workflowsDir is not null && Directory.Exists(workflowsDir))
+        var workflowsDir = GetWorkflowsDirectory(startDir);
+        if (workflowsDir is not null)
         {
             if (verboseLogger.IsEnabled)
             {
@@ -80,8 +80,8 @@ internal static class InputDiscovery
 
         if (includeActions)
         {
-            var actionsDir = FindActionsDirectory(startDir);
-            if (actionsDir is not null && Directory.Exists(actionsDir))
+            var actionsDir = GetActionsDirectory(startDir);
+            if (actionsDir is not null)
             {
                 if (verboseLogger.IsEnabled)
                 {
@@ -105,36 +105,16 @@ internal static class InputDiscovery
         return [.. files];
     }
 
-    private static string? FindWorkflowsDirectory(string startDir)
+    private static string? GetWorkflowsDirectory(string startDir)
     {
-        var current = startDir;
-        while (current is not null)
-        {
-            var candidate = Path.Combine(current, ".github", "workflows");
-            if (Directory.Exists(candidate))
-                return candidate;
-
-            var parent = Directory.GetParent(current);
-            current = parent?.FullName;
-        }
-
-        return null;
+        var candidate = Path.Combine(startDir, ".github", "workflows");
+        return Directory.Exists(candidate) ? candidate : null;
     }
 
-    private static string? FindActionsDirectory(string startDir)
+    private static string? GetActionsDirectory(string startDir)
     {
-        var current = startDir;
-        while (current is not null)
-        {
-            var candidate = Path.Combine(current, ".github", "actions");
-            if (Directory.Exists(candidate))
-                return candidate;
-
-            var parent = Directory.GetParent(current);
-            current = parent?.FullName;
-        }
-
-        return null;
+        var candidate = Path.Combine(startDir, ".github", "actions");
+        return Directory.Exists(candidate) ? candidate : null;
     }
 
     private static string[] ExpandFileArgs(string[] args)
@@ -167,17 +147,23 @@ internal static class InputDiscovery
     private static string[] CollectYamlFiles(string directory)
     {
         var files = new List<string>();
-        foreach (var file in Directory.EnumerateFiles(directory, "*.*", SearchOption.AllDirectories))
-        {
-            var ext = Path.GetExtension(file);
-            if (ext.Equals(".yml", StringComparison.OrdinalIgnoreCase) ||
-                ext.Equals(".yaml", StringComparison.OrdinalIgnoreCase))
-            {
-                files.Add(Path.GetFullPath(file));
-            }
-        }
-
+        CollectYamlFilesWithExtension(directory, ".yml", files);
+        CollectYamlFilesWithExtension(directory, ".yaml", files);
         files.Sort(StringComparer.Ordinal);
         return [.. files];
+    }
+
+    private static void CollectYamlFilesWithExtension(string directory, string extension, List<string> files)
+    {
+        var options = new EnumerationOptions
+        {
+            RecurseSubdirectories = true,
+            MatchCasing = MatchCasing.CaseInsensitive,
+        };
+
+        foreach (var file in Directory.EnumerateFiles(directory, $"*{extension}", options))
+        {
+            files.Add(Path.GetFullPath(file));
+        }
     }
 }

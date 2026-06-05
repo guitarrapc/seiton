@@ -30,43 +30,20 @@ public static class CliConfigBridge
         return DiscoverConfigPath(Environment.CurrentDirectory);
     }
 
-    internal static ConfigPathResolution DiscoverConfigPath(
-        string discoveryStartDirectory,
-        string? discoveryBoundary = null)
+    internal static ConfigPathResolution DiscoverConfigPath(string discoveryStartDirectory)
     {
         var discoveryStart = Path.GetFullPath(discoveryStartDirectory);
-        string? normalizedBoundary = discoveryBoundary is null
-            ? null
-            : Path.GetFullPath(discoveryBoundary);
-        var current = discoveryStart;
-        var levelsWalked = 0;
-        while (current is not null)
+        var discovered = LintConfigLibrary.FindRecommendedConfigPath(discoveryStart);
+        if (discovered is not null)
         {
-            var discovered = LintConfigLibrary.FindRecommendedConfigPath(current);
-            if (discovered is not null)
-            {
-                return new ConfigPathResolution(
-                    discovered,
-                    ConfigPathSource.Discovery,
-                    discoveryStart,
-                    levelsWalked);
-            }
-
-            if (normalizedBoundary is not null
-                && PathsEqual(current, normalizedBoundary))
-            {
-                break;
-            }
-
-            var parent = Directory.GetParent(current);
-            if (parent is null)
-                break;
-
-            current = parent.FullName;
-            levelsWalked++;
+            return new ConfigPathResolution(
+                discovered,
+                ConfigPathSource.Discovery,
+                discoveryStart,
+                DiscoveryLevelsWalked: 0);
         }
 
-        return new ConfigPathResolution(null, ConfigPathSource.None, discoveryStart, levelsWalked);
+        return new ConfigPathResolution(null, ConfigPathSource.None, discoveryStart, DiscoveryLevelsWalked: 0);
     }
 
     /// <summary>
@@ -184,9 +161,4 @@ public static class CliConfigBridge
     }
 
     private static bool IsCi() => !string.IsNullOrEmpty(Environment.GetEnvironmentVariable("CI"));
-
-    private static bool PathsEqual(string left, string right)
-        => string.Equals(left, right, OperatingSystem.IsWindows()
-            ? StringComparison.OrdinalIgnoreCase
-            : StringComparison.Ordinal);
 }

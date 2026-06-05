@@ -19,7 +19,7 @@ public readonly record struct ConfigPathResolution(
         if (Path is null)
         {
             return DiscoveryStartDirectory is not null
-                ? $"(none, using defaults) (searched from {System.IO.Path.GetFullPath(DiscoveryStartDirectory)}, walked up {DiscoveryLevelsWalked} level(s))"
+                ? $"(none, using defaults) (searched under cwd {System.IO.Path.GetFullPath(DiscoveryStartDirectory)})"
                 : "(none, using defaults)";
         }
 
@@ -30,8 +30,8 @@ public readonly record struct ConfigPathResolution(
             ConfigPathSource.EnvironmentVariable => $"{fullPath} (from SEITON_CONFIG)",
             ConfigPathSource.Discovery =>
                 DiscoveryStartDirectory is null
-                    ? $"{fullPath} (discovered, walked up {DiscoveryLevelsWalked} level(s))"
-                    : $"{fullPath} (discovered from {System.IO.Path.GetFullPath(DiscoveryStartDirectory)}, walked up {DiscoveryLevelsWalked} level(s))",
+                    ? $"{fullPath} (discovered)"
+                    : $"{fullPath} (discovered under cwd {System.IO.Path.GetFullPath(DiscoveryStartDirectory)})",
             _ => fullPath,
         };
     }

@@ -48,9 +48,9 @@ When `--fix` is specified, the root command switches to fix mode: runs lint, the
 - If `--check` is given, exits with a non-zero code when any fixable diagnostic exists (does not apply fixes). When both `--check` and `--dry-run` are given, `--check` takes precedence (no diffs are printed, no fixes are applied).
 - Network-assisted pin remediation is activated when `fix.pinning.enable-network: true` or `fix.images.enable-network: true` is set in config (or via `--enable-pin-network` / `--enable-image-network` flags).
 
-When no `FILES` are given, discovers all `*.yml` / `*.yaml` files under `.github/workflows/` relative to the current working directory.
+When no `FILES` are given, discovers all `*.yml` / `*.yaml` files under `<cwd>/.github/workflows/` (current working directory only).
 
-When `--include-actions` is specified, no-arg discovery also includes `*.yml` / `*.yaml` files under `.github/actions/`.
+When `--include-actions` is specified, no-arg discovery also includes `*.yml` / `*.yaml` files under `<cwd>/.github/actions/`.
 
 Action metadata files are accepted when explicitly passed via `FILES` (for example `action.yml`, `action.yaml`, `.github/actions/<name>/action.yml`, `.github/actions/<name>/action.yaml`).
 
@@ -160,7 +160,7 @@ All flags apply to the default root command unless otherwise noted.
 
 | Flag | Short | Type | Default | Description |
 |---|---|---|---|---|
-| `--config` | `-c` | `string` | (auto-discovery) | Explicit config file path. If specified, that file is used exclusively. If omitted, Seiton auto-discovers `.github/seiton.yaml`, `.github/seiton.yml`, `seiton.yaml`, `seiton.yml` (nearest directory first, then parent directories). |
+| `--config` | `-c` | `string` | (auto-discovery) | Explicit config file path. If specified, that file is used exclusively. If omitted, Seiton auto-discovers `.github/seiton.yaml`, `.github/seiton.yml`, `seiton.yaml`, `seiton.yml` under `cwd` only. |
 | `--stdin-filename` | | `string` | `<stdin>` | Filename used for diagnostics when reading from stdin (`-`). |
 | `--include-actions` | | `bool` | `false` | Expand no-arg discovery scope to include `.github/actions/` in addition to `.github/workflows/`. |
 
@@ -296,20 +296,20 @@ This ensures users can always override config-file defaults at the command line 
 ### 4.2 Config Path Resolution
 
 1. If `--config` / `SEITON_CONFIG` is set, use that path exclusively. Error if file does not exist.
-2. Otherwise, run discovery (starting at current working directory, walking parent directories upward):
+2. Otherwise, run discovery under the current working directory only (`<cwd>/`), checking in order:
    - `.github/seiton.yaml`
    - `.github/seiton.yml`
    - `seiton.yaml`
    - `seiton.yml`
-3. If no config file is found, use built-in defaults.
+3. If no config file is found under `cwd`, use built-in defaults.
 
 In `-v` / `--verbose` mode, the resolved config is logged to stderr:
 
 ```
-verbose: config: /repo/.github/seiton.yaml (discovered from /repo/nested, walked up 1 level(s))
+verbose: config: /repo/nested/.github/seiton.yaml (discovered under cwd /repo/nested)
 verbose: config: /repo/.github/seiton.yaml (from --config)
 verbose: config: /repo/.github/seiton.yaml (from SEITON_CONFIG)
-verbose: config: (none, using defaults) (searched from /repo/nested, walked up 3 level(s))
+verbose: config: (none, using defaults) (searched under cwd /repo/nested)
 ```
 
 An empty config file is valid and equivalent to built-in defaults.
@@ -340,13 +340,16 @@ All other behavior comes from the resolved config loaded from the config file.
 
 When no `FILES` arguments are given to `check` / `fix`:
 
-1. Locate the nearest `.github/workflows/` directory by walking up from the current working directory.
-2. Collect all files matching `*.yml` and `*.yaml` under that directory recursively.
-3. Sort collected paths deterministically (lexicographic, ordinal comparison) before passing to the lint engine.
+1. Resolve the current working directory (`cwd`) to an absolute path.
+2. If `<cwd>/.github/workflows/` exists, collect all files matching `*.yml` and `*.yaml` under that directory recursively.
+3. When `--include-actions` is enabled and `<cwd>/.github/actions/` exists, collect all matching files under that directory recursively as well.
+4. Sort collected paths deterministically (lexicographic, ordinal comparison) before passing to the lint engine.
 
-Default auto-discovery scope remains workflow-first (`.github/workflows/`).
+Only `<cwd>/.github/workflows/` and `<cwd>/.github/actions/` are considered. To lint files outside `cwd`, pass explicit `FILES` paths or run `seiton` from the intended repository root.
 
-When `--include-actions` is enabled, discovery additionally includes `.github/actions/`. Note: the workflows and actions directories are resolved independently — they may come from different ancestor levels if one is found higher in the directory tree than the other.
+**Lessons learned (nested CI):** When a job checks out a parent repository at the workspace root and a child repository into a subdirectory (`path:` checkout), running `seiton` with `working-directory` set to the child must lint only the child's `.github/` tree. Parent-directory walks caused unintended lint of sibling checkouts (for example parent `.github/actions/` mixed with child `.github/workflows/`).
+
+Local action and reusable-workflow references inside workflow YAML (`uses: ./.github/actions/foo`, `uses: ../other/action.yml`) are resolved separately by the lint engine when analyzing each file; that reference resolution is not part of input discovery.
 
 Action metadata files are always accepted when explicitly passed in `FILES`.
 

@@ -18,7 +18,7 @@ app.Run(frameworkArgs);
 internal class SeitonCli
 {
     /// <summary>Lint workflow files by default, or apply fixes when --fix is specified.</summary>
-    /// <param name="config">-c, Path to config file. Auto-discovered from .github/seiton.yaml if omitted.</param>
+    /// <param name="config">-c, Path to config file. Auto-discovered from &lt;cwd&gt;/.github/seiton.yaml if omitted.</param>
     /// <param name="stdinFilename">Filename used when reading from stdin (-).</param>
     /// <param name="ignore">Substring patterns for messages to ignore (case-insensitive).</param>
     /// <param name="minSeverity">Minimum severity to report: error | warning | info.</param>
@@ -81,7 +81,7 @@ internal class SeitonCli
     }
 
     /// <summary>Lint workflow files.</summary>
-    /// <param name="config">-c, Path to config file. Auto-discovered from .github/seiton.yaml if omitted.</param>
+    /// <param name="config">-c, Path to config file. Auto-discovered from &lt;cwd&gt;/.github/seiton.yaml if omitted.</param>
     /// <param name="stdinFilename">Filename used when reading from stdin (-).</param>
     /// <param name="ignore">Substring patterns for messages to ignore (case-insensitive).</param>
     /// <param name="minSeverity">Minimum severity to report: error | warning | info.</param>
@@ -142,7 +142,7 @@ internal class SeitonCli
     }
 
     /// <summary>List all available lint rules and their effective status.</summary>
-    /// <param name="config">-c, Path to config file. Auto-discovered from .github/seiton.yaml if omitted.</param>
+    /// <param name="config">-c, Path to config file. Auto-discovered from &lt;cwd&gt;/.github/seiton.yaml if omitted.</param>
     /// <param name="format">Output format: text | json.</param>
     public void Rules(string? config = null, string format = "text")
     {

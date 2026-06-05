@@ -175,7 +175,7 @@ public sealed class CliConfigBridgeTests
             Directory.CreateDirectory(Path.GetDirectoryName(configPath)!);
             File.WriteAllText(configPath, "rules: {}\n");
 
-            var resolution = CliConfigBridge.DiscoverConfigPath(root, discoveryBoundary: root);
+            var resolution = CliConfigBridge.DiscoverConfigPath(root);
 
             await Assert.That(resolution.Path).IsEqualTo(configPath);
             await Assert.That(resolution.Source).IsEqualTo(ConfigPathSource.Discovery);
@@ -189,7 +189,7 @@ public sealed class CliConfigBridgeTests
     }
 
     [Test]
-    public async Task DiscoverConfigPath_FoundInParent_ReportsLevelsWalked()
+    public async Task DiscoverConfigPath_ParentConfigOnly_ReturnsNone()
     {
         var root = CreateTempDir();
         var nested = Path.Combine(root, "nested", "repo");
@@ -200,11 +200,11 @@ public sealed class CliConfigBridgeTests
             Directory.CreateDirectory(nested);
             File.WriteAllText(configPath, "rules: {}\n");
 
-            var resolution = CliConfigBridge.DiscoverConfigPath(nested, discoveryBoundary: root);
+            var resolution = CliConfigBridge.DiscoverConfigPath(nested);
 
-            await Assert.That(resolution.Path).IsEqualTo(configPath);
-            await Assert.That(resolution.Source).IsEqualTo(ConfigPathSource.Discovery);
-            await Assert.That(resolution.DiscoveryLevelsWalked).IsEqualTo(2);
+            await Assert.That(resolution.Path).IsNull();
+            await Assert.That(resolution.Source).IsEqualTo(ConfigPathSource.None);
+            await Assert.That(resolution.DiscoveryLevelsWalked).IsEqualTo(0);
             await Assert.That(resolution.DiscoveryStartDirectory).IsEqualTo(Path.GetFullPath(nested));
         }
         finally
@@ -214,7 +214,32 @@ public sealed class CliConfigBridgeTests
     }
 
     [Test]
-    public async Task DiscoverConfigPath_NotFoundWithinBoundary_ReportsSearchMetadata()
+    public async Task DiscoverConfigPath_NestedCiLayout_UsesChildConfigNotParent()
+    {
+        var root = CreateTempDir();
+        var child = Path.Combine(root, "LogicLooper");
+        var parentConfig = Path.Combine(root, ".github", "seiton.yaml");
+        var childConfig = Path.Combine(child, ".github", "seiton.yaml");
+        try
+        {
+            Directory.CreateDirectory(Path.GetDirectoryName(parentConfig)!);
+            Directory.CreateDirectory(Path.GetDirectoryName(childConfig)!);
+            File.WriteAllText(parentConfig, "rules:\n  runner-no-latest:\n    enabled: false\n");
+            File.WriteAllText(childConfig, "rules:\n  runner-no-latest:\n    enabled: true\n");
+
+            var resolution = CliConfigBridge.DiscoverConfigPath(child);
+
+            await Assert.That(resolution.Path).IsEqualTo(childConfig);
+            await Assert.That(resolution.Source).IsEqualTo(ConfigPathSource.Discovery);
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
+    [Test]
+    public async Task DiscoverConfigPath_NotFoundUnderCwd_ReportsSearchMetadata()
     {
         var root = CreateTempDir();
         var nested = Path.Combine(root, "child");
@@ -222,12 +247,12 @@ public sealed class CliConfigBridgeTests
         {
             Directory.CreateDirectory(nested);
 
-            var resolution = CliConfigBridge.DiscoverConfigPath(nested, discoveryBoundary: root);
+            var resolution = CliConfigBridge.DiscoverConfigPath(nested);
 
             await Assert.That(resolution.Path).IsNull();
             await Assert.That(resolution.Source).IsEqualTo(ConfigPathSource.None);
             await Assert.That(resolution.DiscoveryStartDirectory).IsEqualTo(Path.GetFullPath(nested));
-            await Assert.That(resolution.DiscoveryLevelsWalked).IsEqualTo(1);
+            await Assert.That(resolution.DiscoveryLevelsWalked).IsEqualTo(0);
         }
         finally
         {
@@ -304,21 +329,52 @@ public sealed class CliConfigBridgeTests
     }
 
     [Test]
-    public async Task FormatVerboseMessage_Discovery_IncludesStartDirectoryAndLevelsWalked()
+    public async Task ResolveConfigPath_CurrentDirectory_OnlyUsesCwdConfig()
+    {
+        var root = CreateTempDir();
+        var nested = Path.Combine(root, "nested");
+        var parentConfig = Path.Combine(root, ".github", "seiton.yaml");
+        var childConfig = Path.Combine(nested, ".github", "seiton.yaml");
+        var originalCwd = Environment.CurrentDirectory;
+        var originalEnv = Environment.GetEnvironmentVariable("SEITON_CONFIG");
+        try
+        {
+            Directory.CreateDirectory(Path.GetDirectoryName(parentConfig)!);
+            Directory.CreateDirectory(Path.GetDirectoryName(childConfig)!);
+            File.WriteAllText(parentConfig, "rules: {}\n");
+            File.WriteAllText(childConfig, "rules: {}\n");
+            Environment.SetEnvironmentVariable("SEITON_CONFIG", null);
+            Environment.CurrentDirectory = nested;
+
+            var resolution = CliConfigBridge.ResolveConfigPath(explicitConfigPath: null);
+
+            await Assert.That(resolution.Path).IsEqualTo(childConfig);
+            await Assert.That(resolution.Source).IsEqualTo(ConfigPathSource.Discovery);
+            await Assert.That(resolution.DiscoveryLevelsWalked).IsEqualTo(0);
+        }
+        finally
+        {
+            Environment.CurrentDirectory = originalCwd;
+            Environment.SetEnvironmentVariable("SEITON_CONFIG", originalEnv);
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
+    [Test]
+    public async Task FormatVerboseMessage_Discovery_IncludesCwdScope()
     {
         var start = Path.Combine("C:", "repo", "nested");
-        var config = Path.Combine("C:", "repo", ".github", "seiton.yaml");
+        var config = Path.Combine(start, ".github", "seiton.yaml");
         var resolution = new ConfigPathResolution(
             config,
             ConfigPathSource.Discovery,
             start,
-            DiscoveryLevelsWalked: 1);
+            DiscoveryLevelsWalked: 0);
 
         var message = resolution.FormatVerboseMessage();
 
         await Assert.That(message).Contains(Path.GetFullPath(config));
-        await Assert.That(message).Contains($"discovered from {Path.GetFullPath(start)}");
-        await Assert.That(message).Contains("walked up 1 level(s)");
+        await Assert.That(message).Contains($"discovered under cwd {Path.GetFullPath(start)}");
     }
 
     [Test]
@@ -329,12 +385,12 @@ public sealed class CliConfigBridgeTests
             null,
             ConfigPathSource.None,
             start,
-            DiscoveryLevelsWalked: 2);
+            DiscoveryLevelsWalked: 0);
 
         var message = resolution.FormatVerboseMessage();
 
         await Assert.That(message).IsEqualTo(
-            $"(none, using defaults) (searched from {Path.GetFullPath(start)}, walked up 2 level(s))");
+            $"(none, using defaults) (searched under cwd {Path.GetFullPath(start)})");
     }
 
     [Test]
@@ -371,7 +427,7 @@ public sealed class CliConfigBridgeTests
 
         var message = resolution.FormatVerboseMessage();
 
-        await Assert.That(message).IsEqualTo($"{Path.GetFullPath(config)} (discovered, walked up 2 level(s))");
+        await Assert.That(message).IsEqualTo($"{Path.GetFullPath(config)} (discovered)");
     }
 
     private static string CreateTempDir()

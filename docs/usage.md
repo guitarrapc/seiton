@@ -14,7 +14,7 @@ Arguments:
   [0] <string[]>    Workflow files or directories to lint. Auto-discovers .github/workflows/ if omitted.
 
 Options:
-  -c, --config <string?>       Path to config file. Auto-discovered from .github/seiton.yaml if omitted. [Default: null]
+  -c, --config <string?>       Path to config file. Auto-discovered from <cwd>/.github/seiton.yaml if omitted. [Default: null]
   --stdin-filename <string>    Filename used when reading from stdin (-). [Default: @"<stdin>"]
   --ignore <string[]?>         Substring patterns for messages to ignore (case-insensitive). [Default: null]
   --min-severity <string?>     Minimum severity to report: error | warning | info. [Default: null]
@@ -158,7 +158,9 @@ seiton validate-config           # 2. validate YAML and rule IDs
 seiton --verbose                 # 3. lint and confirm config on stderr
 ```
 
-In a **nested clone** inside a monorepo, pass `-c` explicitly so the parent repo's config is not picked up — see [Configuration: Nested repositories](configuration.md#nested-repositories-and-monorepos).
+In a **nested clone** inside a monorepo, run `seiton` from the nested repo directory (or pass `--config`, `-c` / `SEITON_CONFIG` for a config outside cwd) — see [Configuration: Nested repositories](configuration.md#nested-repositories-and-monorepos).
+
+`seiton` with no file arguments discovers workflows only under `<cwd>/.github/workflows/` (and actions under `<cwd>/.github/actions/` when `--include-actions` is set). Run from the repository root, or pass explicit paths (for example `seiton .github/workflows`).
 
 Specify a custom output path:
 
