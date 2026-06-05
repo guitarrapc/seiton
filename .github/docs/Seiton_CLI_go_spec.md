@@ -307,7 +307,7 @@ Go-specific design notes:
 
 Shared contract reference: `.github/docs/Seiton_CLI_spec.md` §5.
 
-- Auto-discovery: walks parent directories to find `.github/workflows/` (and `.github/actions/` when `includeActions`). Resolved independently — they may come from different ancestor levels.
+- Auto-discovery: CWD-scoped only — `<cwd>/.github/workflows/` and, when `includeActions`, `<cwd>/.github/actions/`. No parent-directory walk.
 - Explicit args: expands directories recursively via `filepath.WalkDir`, validates file existence.
 - Sort: deterministic ordering via `sort.Strings` for consistent output.
 - YAML file matching: `*.yml` and `*.yaml` extensions.

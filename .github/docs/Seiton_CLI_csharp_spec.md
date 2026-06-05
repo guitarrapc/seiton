@@ -321,7 +321,8 @@ C#-specific design notes:
 
 Shared contract reference: `.github/docs/Seiton_CLI_spec.md` §5.
 
-- Auto-discovery: walks parent directories to find `.github/workflows/` (and `.github/actions/` when `includeActions`).
+- Auto-discovery: CWD-scoped only — `<cwd>/.github/workflows/` and, when `includeActions`, `<cwd>/.github/actions/`. No parent-directory walk.
+- Verbose discovery logs use `searching under cwd {path}`.
 - Explicit args: expands directories recursively, validates file existence.
 - Sort: `StringComparer.Ordinal` for deterministic ordering.
 - Accepts optional `startDirectory` parameter for testability; production callers use the current working directory.

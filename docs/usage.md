@@ -160,6 +160,8 @@ seiton --verbose                 # 3. lint and confirm config on stderr
 
 In a **nested clone** inside a monorepo, pass `-c` explicitly so the parent repo's config is not picked up — see [Configuration: Nested repositories](configuration.md#nested-repositories-and-monorepos).
 
+`seiton` with no file arguments discovers workflows only under `<cwd>/.github/workflows/` (and actions under `<cwd>/.github/actions/` when `--include-actions` is set). It does not search parent directories. Run from the repository root, or pass explicit paths (for example `seiton .github/workflows`).
+
 Specify a custom output path:
 
 ```sh

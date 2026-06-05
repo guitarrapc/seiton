@@ -17,7 +17,9 @@ No config file is required. All defaults are safe.
 
 ## Nested repositories
 
-Discovery walks **up** parent directories from the current working directory. In a nested clone, the parent repo's `.github/seiton.yaml` may be used unintentionally.
+**Config discovery** walks **up** parent directories from the current working directory. In a nested clone, the parent repo's `.github/seiton.yaml` may be used unintentionally.
+
+**Input discovery** (no file arguments) is CWD-scoped only: `<cwd>/.github/workflows/` and `<cwd>/.github/actions/`. Use explicit paths or the correct `working-directory` in CI.
 
 ```bash
 cd .references/actions

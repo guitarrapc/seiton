@@ -49,7 +49,7 @@ seiton --fix --enable-pin-network --enable-image-network
 | `--ignore PATTERN` | Suppress diagnostics matching pattern |
 | `--oneline` | One diagnostic per line |
 | `--verbose` | Show progress and timing info |
-| `--include-actions` | Include `.github/actions/` in discovery |
+| `--include-actions` | Include `<cwd>/.github/actions/` in discovery (CWD-scoped; no parent walk) |
 | `--enable-pin-network` | Resolve action SHAs via network (fix mode) |
 | `--enable-image-network` | Resolve image digests via network (fix mode) |
 

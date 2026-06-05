@@ -40,7 +40,9 @@ seiton
 
 ### Nested repositories and monorepos
 
-Seiton discovers config by walking **up** from the current working directory through parent folders. In a nested clone or subdirectory (for example `.nested/subrepo` inside a parent repo), that walk can pick up the **parent** repository's `.github/seiton.yaml` instead of a config you intended for the nested tree.
+**Config discovery** walks **up** from the current working directory through parent folders. In a nested clone or subdirectory (for example `.nested/subrepo` inside a parent repo), that walk can pick up the **parent** repository's `.github/seiton.yaml` instead of a config you intended for the nested tree.
+
+**Input discovery** (workflow/action files when no paths are passed) is **CWD-scoped only**: `<cwd>/.github/workflows/` and `<cwd>/.github/actions/`. Parent directories are never searched. In CI with multiple checkouts, set `working-directory` to the repository you intend to lint, or pass explicit file paths.
 
 **Recommended workflow for a nested repo:**
 
