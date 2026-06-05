@@ -1,0 +1,287 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="utf-8" />
+  <title>seiton playground</title>
+  <meta name="description" content="A security-focused linter &amp; fixer for GitHub Actions in your browser">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:image" content="https://guitarrapc.github.io/seiton/ogp.png?v=2">
+  <meta name="twitter:title" content="seiton playground | Try in your browser">
+  <meta name="twitter:description" content="A security-focused linter &amp; fixer for GitHub Actions">
+  <meta property="og:type" content="website">
+  <meta property="og:url" content="https://guitarrapc.github.io/seiton/">
+  <meta property="og:title" content="seiton playground | Try in your browser">
+  <meta property="og:image" content="https://guitarrapc.github.io/seiton/ogp.png?v=2">
+  <meta property="og:description" content="A security-focused linter &amp; fixer for GitHub Actions">
+  <meta property="og:site_name" content="seiton playground">
+  <meta name="apple-mobile-web-app-title" content="seiton playground">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" id="meta-color-scheme" content="light dark" />
+  <link rel="icon" type="image/png" href="favicon.png" media="(prefers-color-scheme: light)" />
+  <link rel="icon" type="image/png" href="favicon-dark.png" media="(prefers-color-scheme: dark)" />
+  <link rel="preconnect" href="https://cdnjs.cloudflare.com" crossorigin />
+  <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin />
+  <script>
+    (function () {
+      var key = 'seiton-playground-color-mode';
+      var root = document.documentElement;
+      var meta = document.getElementById('meta-color-scheme');
+      function syncMeta(mode) {
+        if (!meta) return;
+        if (mode === 'light') meta.setAttribute('content', 'light');
+        else if (mode === 'dark') meta.setAttribute('content', 'dark');
+        else meta.setAttribute('content', 'light dark');
+      }
+      try {
+        var v = localStorage.getItem(key);
+        if (v === 'light') {
+          root.setAttribute('data-theme', 'light');
+          syncMeta('light');
+        } else if (v === 'dark') {
+          root.setAttribute('data-theme', 'dark');
+          syncMeta('dark');
+        } else {
+          root.removeAttribute('data-theme');
+          syncMeta('system');
+        }
+      } catch (e) { /* ignore */ }
+    })();
+  </script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.css"
+    integrity="sha384-zaeBlB/vwYsDRSlFajnDd7OydJ0cWk+c2OWybl3eSUf6hW2EbhlCsQPqKr3gkznT" crossorigin="anonymous"
+    referrerpolicy="no-referrer" media="print" onload="this.media='all'" />
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/theme/material-darker.min.css"
+    integrity="sha384-eZTPTN0EvJdn23s24UDYJmUM2T7C2ZFa3qFLypeBruJv8mZeTusKUAO/j5zPAQ6l" crossorigin="anonymous"
+    referrerpolicy="no-referrer" media="print" onload="this.media='all'" />
+  <noscript>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.css" />
+    <link rel="stylesheet"
+      href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/theme/material-darker.min.css" />
+  </noscript>
+  <link rel="stylesheet" href="style#[.{fingerprint}].css">
+  <script defer src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.js"
+    integrity="sha384-ZYmwuq4n2gOcNxMSiJ6jyTj+BbIrilr7p6dlq6q5nmSWKmsH9UU4K1qqjycMkfmR" crossorigin="anonymous"
+    referrerpolicy="no-referrer"></script>
+  <script defer src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/yaml/yaml.min.js"
+    integrity="sha384-9q49Jm3hZMwxEMLImsxPxLiaptHpFz1PVa26Dg6SVIO+rj5kx0cgOM2+4ikKJFH9" crossorigin="anonymous"
+    referrerpolicy="no-referrer"></script>
+  <script defer src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/selection/active-line.min.js"
+    integrity="sha384-hcxaXyAtJ30s2NeDu1OHWsQRiHiWuYLTbI596+YFb+f2pFhzO0mDuahZziRPPDxg" crossorigin="anonymous"
+    referrerpolicy="no-referrer"></script>
+</head>
+
+<body>
+  <nav id="header-bar">
+    <header>
+      <div class="site-title-row">
+        <h1>
+          <a href="https://github.com/guitarrapc/seiton" aria-label="seiton on GitHub"><span class="site-logo"
+              aria-hidden="true"></span></a>
+          seiton playground
+        </h1>
+        <a id="playground-version" class="version-badge" hidden target="_blank" rel="noopener noreferrer"
+          href="https://github.com/guitarrapc/seiton/releases"
+          aria-label="Playground build version — GitHub releases"></a>
+      </div>
+      <p class="tagline">Security-focused linter &amp; fixer for GitHub Actions</p>
+    </header>
+    <div id="controls">
+      <div class="controls-row controls-row--primary">
+        <button id="permalink-btn" type="button" class="toolbar-icon-btn"
+          title="Share — copy link with workflow YAML and config in URL hash"
+          aria-label="Share — copy link with workflow YAML and config in URL hash">
+          <svg class="toolbar-icon-btn__svg" fill="currentColor" viewBox="0 0 24 24" width="24" height="24"
+            xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+            <path fill="currentColor"
+              d="M16 5.63636L14.58 6.92727L12.99 5.48182V15.6364H11.01V5.48182L9.42 6.92727L8 5.63636L12 2L16 5.63636ZM20 10.1818V20.1818C20 21.1818 19.1 22 18 22H6C4.89 22 4 21.1818 4 20.1818V10.1818C4 9.17273 4.89 8.36364 6 8.36364H9V10.1818H6V20.1818H18V10.1818H15V8.36364H18C19.1 8.36364 20 9.17273 20 10.1818Z" />
+          </svg>
+        </button>
+        <span class="fetch-group" role="group" aria-label="Fetch YAML by URL">
+          <input type="url" id="url-input" aria-label="YAML URL" autocomplete="off" spellcheck="false"
+            placeholder="https://raw GitHub/Gist YAML URL" />
+          <button id="fetch-btn" type="button" class="toolbar-icon-btn" disabled title="Enter a YAML URL first"
+            aria-label="Fetch and lint YAML — enter a URL first">
+            <svg class="toolbar-icon-btn__svg" fill="currentColor" viewBox="0 0 24 24" width="24" height="24"
+              xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+              <path fill="currentColor"
+                d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z" />
+            </svg>
+          </button>
+        </span>
+      </div>
+      <div class="controls-row controls-row--meta">
+        <label
+          title="Virtual path selects workflow YAML vs composite action.yml — Seiton chooses parse/lint modes the same way GitHub does by file location/name.">
+          <select id="filetype-select">
+            <option value=".github/workflows/test.yml" selected>workflow</option>
+            <option value="action.yml">action.yml</option>
+          </select>
+        </label>
+        <label>
+          <select id="sample-select" title="Load a built-in example">
+            <option value="default">default workflow</option>
+            <option value="simple">simple workflow</option>
+            <option value="minimal">minimal workflow</option>
+            <option value="fixPermissions">fix: permissions (write-all)</option>
+            <option value="matrix">matrix + expressions</option>
+            <option value="actionComposite">action.yml (composite)</option>
+          </select>
+        </label>
+      </div>
+    </div>
+  </nav>
+  <div id="toast-stack" class="toast-stack" aria-live="polite" aria-relevant="additions"></div>
+  <main>
+    <section id="linter">
+      <div id="editor-wrap" class="split-pane">
+        <button id="apply-fixes-btn" type="button" class="apply-fixes-fab" hidden
+          title="Apply every fix suggested in the diagnostics. When enable-network is set in config, resolves action SHAs via GitHub API (unauthenticated, 60 req/hr) and image digests via OCI registries.">
+          Apply all fixes
+        </button>
+        <div id="editor"></div>
+        <div id="config-panel" class="config-panel">
+          <div class="config-panel__header">
+            <button id="config-toggle-btn" type="button" class="config-panel__toggle" aria-expanded="true"
+              aria-controls="config-editor-wrap"
+              title="Toggle lint configuration editor. Included in Share links when the URL is not too long.">
+              <span class="config-panel__toggle-icon" aria-hidden="true">&#9654;</span>
+              Config
+            </button>
+            <select id="config-template-select" class="config-panel__template-select" title="Load a config template">
+              <option value="">none</option>
+              <option value="timeoutAndLatest">timeout + latest mapping</option>
+              <option value="fullFix">full fix (network pinning)</option>
+              <option value="exclusions">rule exclusions</option>
+            </select>
+          </div>
+          <div id="config-editor-wrap" class="config-panel__body">
+            <div id="config-editor"></div>
+            <div id="config-resize-handle" class="config-panel__resize-handle" title="Drag to resize"></div>
+            <div id="config-diagnostics" class="config-diagnostics" hidden></div>
+          </div>
+        </div>
+      </div>
+      <div class="split-pane results-column">
+        <div id="loading" class="notification">Loading WebAssembly binary...</div>
+        <table id="lint-result" class="result-table" hidden>
+          <tbody id="lint-result-body"></tbody>
+        </table>
+        <div id="success-msg" class="notification success" style="display:none">No issues reported.</div>
+      </div>
+    </section>
+  </main>
+  <section class="playground-about" aria-labelledby="about-playground-heading">
+    <h2 id="about-playground-heading">About the playground</h2>
+    <div class="playground-about__body">
+      <p>
+        The seiton playground is a static page: after the WASM runtime loads, it parses and lints GitHub
+        Actions workflow and action metadata YAML <strong>in your browser</strong>. Your YAML is not uploaded to
+        a
+        server for analysis.
+      </p>
+      <p>
+        You can edit YAML in the editor, load built-in samples, open a document from a URL you enter (your
+        browser
+        requests that URL directly), or use Share to store <strong>workflow YAML and lint config</strong> in the page
+        URL when it fits. If the URL would be too long, Share falls back to workflow YAML only or copies both to your
+        clipboard. Very large snippets may exceed browser URL length limits when sharing.
+      </p>
+      <p>There are practical limits to what the playground can do:</p>
+      <ul>
+        <li>
+          It performs static checks only—it does not run workflows, actions, or <code>run:</code> steps on
+          GitHub’s
+          infrastructure.
+        </li>
+        <li>
+          <strong>Fetch by URL</strong> only contacts the host you specify; the playground does not proxy your
+          YAML
+          through another backend.
+        </li>
+        <li>
+          <strong>Apply all fixes</strong> runs locally for most fixes. When <code>enable-network: true</code>
+          is set in config, SHA/digest pinning resolves via the GitHub API (unauthenticated, 60 requests/hour limit).
+        </li>
+        <li>
+          Behavior matches the bundled Seiton build. A version badge appears in the header, which reflects
+          this
+          deployment.
+        </li>
+      </ul>
+      <p>
+        The source code is available on <a href="https://github.com/guitarrapc/seiton/tree/main/src/Seiton.Playground"
+          target="_blank" rel="noopener noreferrer">GitHub</a>.
+      </p>
+    </div>
+  </section>
+  <section class="resources" aria-labelledby="resources-heading">
+    <h2 id="resources-heading">References</h2>
+    <ul class="resources-links">
+      <li>
+        <a href="https://github.com/guitarrapc/seiton/blob/main/docs/checks.md">Seiton checks</a>
+      </li>
+      <li>
+        <a href="https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-syntax">Workflow
+          syntax for GitHub Actions</a>
+      </li>
+      <li>
+        <a href="https://docs.github.com/en/actions/reference/workflows-and-actions/contexts">Contexts reference
+          for GitHub Actions</a>
+      </li>
+      <li>
+        <a href="https://docs.github.com/en/actions/reference/security/secure-use">Secure use of GitHub
+          Actions</a>
+      </li>
+    </ul>
+  </section>
+  <footer>
+    <p class="footer-copy-row">
+      <a class="repo-mark" href="https://github.com/guitarrapc/seiton" target="_blank" rel="noopener noreferrer"
+        aria-label="seiton on GitHub">
+        <svg class="repo-mark__icon" viewBox="0 0 98 96" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+          <path fill="currentColor" fill-rule="evenodd" clip-rule="evenodd"
+            d="M48.854 0C21.839 0 0 22 0 49.217c0 21.756 13.993 40.172 33.405 46.69 2.427.49 3.316-1.059 3.316-2.362 0-1.141-.08-5.052-.08-9.127-13.59 2.934-16.42-5.867-16.42-5.867-2.184-5.704-5.42-7.17-5.42-7.17-4.448-3.015.324-3.015.324-3.015 4.934.326 7.523 5.052 7.523 5.052 4.367 7.496 11.404 5.378 14.235 4.074.404-3.178 1.699-5.378 3.074-6.6-10.839-1.235-22.23-5.42-22.23-24.251 0-5.378 1.94-9.778 5.014-13.2-.485-1.222-2.184-6.275.486-13.038 0 0 4.125-1.304 13.426 5.052a46.97 46.97 0 0 1 12.214-1.63c4.125 0 8.33.571 12.213 1.63 9.302-6.356 13.427-5.052 13.427-5.052 2.67 6.763.97 11.816.485 13.038 3.155 3.422 5.015 7.822 5.015 13.2 0 18.905-11.404 23.06-22.324 24.251 1.75 1.52 3.318 4.491 3.318 9.022 0 6.6-.08 11.897-.08 13.526 0 1.304.89 2.853 3.316 2.364 19.412-6.52 33.405-24.935 33.405-46.691C97.707 22 75.788 0 48.854 0z" />
+        </svg>
+      </a>
+      <span class="footer-copy-sep" aria-hidden="true">|</span>
+      <span class="footer-copy-text">© 2026 <a href="https://github.com/guitarrapc">guitarrapc</a>. The source
+        code and website content are licensed <a
+          href="https://github.com/guitarrapc/seiton/blob/main/LICENSE.md">MIT</a>.</span>
+      <span class="footer-copy-sep" aria-hidden="true">|</span>
+      <button type="button" id="theme-cycle-btn" class="theme-cycle-btn toolbar-icon-btn" data-theme-mode="system"
+        title="Cycle color theme: System → Light → Dark"
+        aria-label="Color theme: System. Click to cycle: System, Light, Dark.">
+        <svg class="theme-cycle-btn__svg theme-cycle-btn__svg--system" width="16" height="16" viewBox="0 0 24 24"
+          fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
+          aria-hidden="true">
+          <rect x="2" y="3" width="20" height="14" rx="2" ry="2" />
+          <line x1="8" y1="21" x2="16" y2="21" />
+          <line x1="12" y1="17" x2="12" y2="21" />
+        </svg>
+        <svg class="theme-cycle-btn__svg theme-cycle-btn__svg--light" width="16" height="16" viewBox="0 0 24 24"
+          fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
+          aria-hidden="true">
+          <circle cx="12" cy="12" r="5" />
+          <line x1="12" y1="1" x2="12" y2="3" />
+          <line x1="12" y1="21" x2="12" y2="23" />
+          <line x1="4.22" y1="4.22" x2="5.64" y2="5.64" />
+          <line x1="18.36" y1="18.36" x2="19.78" y2="19.78" />
+          <line x1="1" y1="12" x2="3" y2="12" />
+          <line x1="21" y1="12" x2="23" y2="12" />
+          <line x1="4.22" y1="19.78" x2="5.64" y2="18.36" />
+          <line x1="18.36" y1="5.64" x2="19.78" y2="4.22" />
+        </svg>
+        <svg class="theme-cycle-btn__svg theme-cycle-btn__svg--dark" width="16" height="16" viewBox="0 0 24 24"
+          fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
+          aria-hidden="true">
+          <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" />
+        </svg>
+      </button>
+    </p>
+  </footer>
+  <script type="importmap">{}</script>
+  <script type="module" src="main#[.{fingerprint}].js"></script>
+</body>
+
+</html>
