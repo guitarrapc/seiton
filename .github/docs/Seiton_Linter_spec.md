@@ -291,7 +291,6 @@ Default values:
 | `exclusions` | empty |
 | `fix.defaults.job-timeout-minutes` | `null` (no timeout auto-fix attachment) |
 | `fix.pinning.enable-network` | `false` |
-| `fix.pinning.prefer-canonical-tag-comment` | `true` |
 | `fix.pinning.min-age-days` | `14` |
 | `fix.pinning.exclude-branches` | `main`, `master` |
 | `fix.images.enable-network` | `false` |
@@ -819,7 +818,6 @@ fix:
 
   pinning:
     enable-network: true          # enable SHA resolution for unpinned-uses fixes
-    prefer-canonical-tag-comment: true  # promote alias comments (e.g. v1 -> v1.0.2) when same SHA has compatible tags
     min-age-days: 14              # minimum tag age for pinning eligibility
     exclude-branches:             # branch refs to never pin
       - main
@@ -840,7 +838,6 @@ fix:
 
 - `fix.defaults.job-timeout-minutes`: integer or null. When set, `job-timeout-minutes-required` attaches auto-fix with this value. Null/missing or `<= 0` disables fix attachment.
 - `fix.pinning.enable-network`: when `true`, `unpinned-uses` diagnostics may receive network-resolved SHA fix payloads via the pin remediation engine. Default: `false`.
-- `fix.pinning.prefer-canonical-tag-comment`: when `true` (default), version-family aliases (`vN`, `vN.M`) may be annotated with the highest compatible concrete tag on the same resolved SHA (for example `v1` -> `v1.0.2`). When `false`, comment remains the resolved ref string.
 - `fix.pinning.min-age-days`: minimum age in days before a tag is eligible for SHA pinning. Default: `14`. `0` disables the constraint.
 - `fix.pinning.exclude-branches`: branch names to never pin. Default: `["main", "master"]`.
 - `fix.pinning.ignore-actions`: list of `{uses, ref}` wildcard patterns (`*` matches any sequence, `?` matches single char) to skip during SHA resolution. No regex.
@@ -1249,7 +1246,6 @@ Resolve(owner, repo, ref) -> (sha, tagComment, error)
 - Returns: 40-hex SHA and annotation comment string, error.
   - Default comment: resolved ref string.
   - Optional canonical promotion (default on): for alias-like version refs (`vN`, `vN.M`), resolver may choose the highest compatible concrete tag on the same resolved SHA.
-  - Promotion can be disabled with `fix.pinning.prefer-canonical-tag-comment: false`.
 - Returns `(null, null, SkippedError)` when the ref is excluded by configuration (matches `ignore_actions` patterns).
 
 #### 12.2.2 `IImageDigestResolver`
@@ -1303,31 +1299,15 @@ When `false` (the default), no resolver is instantiated and the corresponding di
 
 Token resolution and network behavior (GHES, timeouts, concurrency, redirect safety) are specified in §5.13 and apply to all network-dependent features including pin remediation.
 
-#### 12.3.3 `fix.pinning.prefer-canonical-tag-comment`
-
-Controls whether alias-like version refs (`vN`, `vN.M`) are post-processed from resolved SHA back to the highest compatible concrete tag comment.
-
-- `true` (default): attempt canonical comment promotion.
-- `false`: keep resolved ref comment verbatim (legacy behavior).
-
-Promotion is bounded and deterministic:
-
-1. Resolver reads `GET /repos/{owner}/{repo}/tags?per_page=100`.
-2. It keeps tags that point to the resolved SHA and match the requested version family.
-3. It selects the highest compatible tag with semver-first ordering.
-4. If no candidate exists, it keeps the original resolved ref comment.
-
-For concrete patch refs (`vN.M.P`), promotion is skipped to avoid unnecessary API calls.
-
-#### 12.3.4 `fix.pinning.ignore-actions`
+#### 12.3.3 `fix.pinning.ignore-actions`
 
 List of `{uses, ref}` wildcard patterns (`*` matches any sequence, `?` matches single char) to skip during Actions SHA resolution. Equivalent to pinact's `ignore_actions`. Common use case: SLSA reusable workflows where the caller must not pin the SHA. No regex — wildcard matching only, eliminating ReDoS risk.
 
-#### 12.3.5 `fix.pinning.exclude-branches`
+#### 12.3.4 `fix.pinning.exclude-branches`
 
 Branch names (exact string match, ordinal) to never pin. Default: `["main", "master"]`. Matches frizbee's default behavior. Rationale: pinning a branch reference to its current SHA is semantically incorrect — the intent of a branch ref is to track the branch tip.
 
-#### 12.3.6 `fix.pinning.min-age-days`
+#### 12.3.5 `fix.pinning.min-age-days`
 
 Minimum age in days a tag must have before it is considered eligible for SHA pinning. Default: `14`.
 
@@ -1357,7 +1337,7 @@ Rationale:
 - GitHub Actions ecosystem commonly uses moving branch aliases such as `v1`.
 - Without branch fallback, `min-age-days: 0` still cannot pin `owner/repo@v1` when `v1` is a branch but not a tag.
 
-#### 12.3.8 `fix.images.exclude-images` and `fix.images.exclude-tags`
+#### 12.3.6 `fix.images.exclude-images` and `fix.images.exclude-tags`
 
 Glob patterns for images and tags to skip during digest resolution.
 
@@ -1381,7 +1361,7 @@ An `unpinned-uses` diagnostic fix replaces the `@ref` portion of the `uses:` val
 - Before: `uses: actions/checkout@v6`
 - After: `uses: actions/checkout@<sha40> # v6.0.2`
 
-The separator between SHA and comment defaults to ` # ` (matches pinact's `separator` default). Comment usually follows the resolved ref string; for alias-like version refs (`vN`, `vN.M`) Seiton may promote the comment to the highest compatible concrete tag on the same commit (for example `v1` -> `v1.0.2`) when `fix.pinning.prefer-canonical-tag-comment` is enabled.
+The separator between SHA and comment defaults to ` # ` (matches pinact's `separator` default). Comment usually follows the resolved ref string; for alias-like version refs (`vN`, `vN.M`) Seiton promotes the comment to the highest compatible concrete tag on the same commit when available (for example `v1` -> `v1.0.2`).
 
 If the ref is already a 40-hex SHA, it is considered already pinned; no fix is generated.
 

@@ -164,11 +164,7 @@ This change improves UX by:
 - improving comment specificity (`# v1.0.2`) when discoverable
 - preserving previous fallback (`# v1`) when no concrete matching tag exists
 
-After P1/P2, a rollout-safe config knob is available:
-
-- `fix.pinning.prefer-canonical-tag-comment` (default `true`)
-  - `true`: alias-like refs (`v1`, `v1.2`) prefer concrete tag comments on same SHA (for example `v1.0.2`).
-  - `false`: keep resolved ref comments (`v1`) for legacy output stability.
+After P1/P2, canonical tag comments are always on for alias-like refs (`v1`, `v1.2`) and return concrete comments on the same SHA when available (for example `v1.0.2`).
 
 ---
 
@@ -252,43 +248,115 @@ No further blocking findings.
 
 ### Config/API
 
-- Added `FixPinningConfig.PreferCanonicalTagComment` (default `true`).
-- Added YAML key: `fix.pinning.prefer-canonical-tag-comment: true|false`.
-- Parser validation added (`must be true or false`).
+- Removed toggle design and fixed behavior to always prefer canonical tag comments for alias-like refs.
+- `fix.pinning.prefer-canonical-tag-comment` is treated as unknown config key.
 
 ### Compatibility hardening tests
 
-- `ResolveAsync_KeepsOriginalComment_WhenCanonicalTagCommentIsDisabled`
-  - ensures opt-out keeps legacy `# v1` behavior and avoids extra tags-list API call.
+- `ResolveAsync_DoesNotQueryTagsForCanonicalization_WhenMinAgeAlreadySelectedConcreteTag`
+  - ensures resolver skips redundant canonicalization API calls when `min-age-days` already selected a concrete tag.
 - `ResolveAsync_CanonicalTagLookup_FallsBackToGitHubCom_WhenGhesTagListReturns404`
   - ensures canonicalization path follows GHES fallback semantics.
 - `ResolveAsync_DoesNotPerformCanonicalTagLookup_WhenRefIsAlreadyConcreteSemverTag`
   - protects performance for already-concrete refs.
 - Config mapping tests:
-  - `Validate_Fix_PreferCanonicalTagComment_False_IsMapped`
-  - `Validate_Fix_PreferCanonicalTagComment_DefaultsToTrue`
-  - `Validate_Fix_MapsAllSections` updated with the new key.
+  - `Validate_Fix_PreferCanonicalTagComment_IsRejectedAsUnknownKey`
+  - `Validate_Fix_MapsAllSections` updated to remove the obsolete key.
 
 ## P3 implementation (docs/spec alignment + rollout notes)
 
 Updated docs/spec to remove behavior drift and document rollout:
 
 - `.github/docs/Seiton_Linter_spec.md`
-  - defaults table, fix section, and configuration semantics now include `fix.pinning.prefer-canonical-tag-comment`
+  - defaults and fix semantics now describe canonicalization as always-on behavior for alias-like refs.
   - resolver/fix format text updated for alias-like canonical comment promotion.
 - `.github/docs/Seiton_Linter_csharp_spec.md`
   - C# implementation notes updated with canonical promotion and skip conditions.
 - `docs/configuration.md`
-  - annotated example and defaults reference updated with the new key.
-  - pattern/behavior notes now explain canonical tag comment behavior.
+  - annotated example and defaults reference updated to remove non-existent toggle key.
+  - pattern/behavior notes clarify always-on canonical tag comment behavior.
 - skill reference docs updated for user guidance parity:
   - `src/Seiton/Skills/references/configuration.md`
   - `.claude/skills/seiton/references/configuration.md`
 - template sync:
-  - `src/Seiton.Core/Linting/LintConfigLibrary.cs` now includes commented `prefer-canonical-tag-comment`.
+  - `src/Seiton.Core/Linting/LintConfigLibrary.cs` keeps pinning examples without toggle key.
 
 ### Rollout notes
 
-1. Default behavior stays user-friendly (`true`) and matches pinact-like expectations.
-2. Teams needing output stability can set `fix.pinning.prefer-canonical-tag-comment: false`.
-3. CI guidance: if workflows assert exact fixed text comments, pin this key explicitly during migration windows.
+1. Canonical tag comments are always used for alias-like refs and match pinact-like expectations.
+2. API overhead is reduced by skipping canonicalization lookups when resolver already selected a concrete tag (`resolvedRef != input ref`) and for concrete patch refs (`vN.M.P`).
+3. CI guidance: if workflows assert exact comment text, update goldens once to canonical concrete tags.
+
+---
+
+## Follow-up: always-on canonical comments + API reduction
+
+User decision:
+
+- `prefer-canonical-tag-comment` is removed.
+- Canonical tag comment behavior is always enabled for alias-like refs.
+
+### Test-first changes (Red -> Green)
+
+1. Added failing config test:
+   - `Validate_Fix_PreferCanonicalTagComment_IsRejectedAsUnknownKey`
+   - verifies the removed key is rejected as unknown.
+2. Added failing API-efficiency test:
+   - `ResolveAsync_DoesNotQueryTagsForCanonicalization_WhenMinAgeAlreadySelectedConcreteTag`
+   - verifies no redundant `/tags` call when `min-age-days` already selects a concrete tag.
+
+Both tests were observed failing first, then passed after implementation.
+
+### Implementation changes
+
+- Removed config surface:
+  - `FixPinningConfig.PreferCanonicalTagComment` removed.
+  - `LintConfigYamlParser` no longer accepts the key.
+- Resolver simplification:
+  - Canonical promotion is always attempted for alias-like refs (`vN`, `vN.M`).
+- API consumption reduction:
+  - Skip canonical `/tags` lookup when `resolvedRef != inputRef` (already canonicalized by min-age selection path).
+  - Keep skip for concrete patch refs (`vN.M.P`) to avoid unnecessary lookups.
+
+### Documentation/spec sync
+
+- Removed `prefer-canonical-tag-comment` from:
+  - `docs/configuration.md`
+  - `.github/docs/Seiton_Linter_spec.md`
+  - `.github/docs/Seiton_Linter_csharp_spec.md`
+  - `src/Seiton/Skills/references/configuration.md`
+  - `.claude/skills/seiton/references/configuration.md`
+  - template examples in `LintConfigLibrary`.
+- Updated specs to state canonical alias comment promotion as default behavior (non-configurable).
+
+### Verification
+
+Full regression suite:
+
+```bash
+dotnet test
+```
+
+Result: **2468 passed, 0 failed**.
+
+Benchmark:
+
+```bash
+cd src/Seiton.Benchmark
+dotnet run -c Release --filter "*FixApplyBenchmark*"
+```
+
+Compared to the previous phase baseline:
+
+| Scenario | Previous phase | Current | Delta |
+|---|---:|---:|---:|
+| NoConflict | 23.29 us | 22.32 us | -4.16% |
+| SingleJobConflict | 39.15 us | 38.93 us | -0.56% |
+| MultiJobConflict | 105.17 us | 110.83 us | +5.38% |
+
+Allocated remained unchanged across all scenarios.
+
+Interpretation:
+
+- No >10% regression in Mean or Allocated.
+- Resolver-path optimization mostly affects networked resolution path and is not fully represented by local `FixApplyBenchmark`; targeted test assertion confirms redundant API call removal.

@@ -126,7 +126,6 @@ public static class LintConfigLibrary
             # job-timeout-minutes: 15
           pinning:
             # enable-network: false
-            # prefer-canonical-tag-comment: true
             # min-age-days: 14
             # exclude-branches:
             #   - main

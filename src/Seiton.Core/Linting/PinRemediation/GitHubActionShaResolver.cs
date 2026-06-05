@@ -52,7 +52,7 @@ public sealed class GitHubActionShaResolver(HttpClient httpClient, FixPinningCon
         }
 
         var result = await ResolveShaWithFallbackAsync(owner, repo, resolvedRef, token, cancellationToken);
-        if (_pinningConfig.PreferCanonicalTagComment
+        if (string.Equals(resolvedRef, refStr, StringComparison.Ordinal)
             && TryBuildVersionFamily(refStr, out var refFamily)
             && refFamily.Parts.Length < 3)
         {
