@@ -15,6 +15,7 @@ public sealed class GitHubActionShaResolver(HttpClient httpClient, FixPinningCon
     private readonly FixPinningConfig _pinningConfig = pinningConfig;
     private readonly GitHubNetworkConfig _githubConfig = githubConfig;
     private readonly ConcurrentDictionary<string, CachedResolution> _successCache = new(StringComparer.Ordinal);
+    private readonly ConcurrentDictionary<string, string> _canonicalTagByShaCache = new(StringComparer.Ordinal);
     private readonly string[] _excludeBranches = ToExcludeBranchArray(pinningConfig.ExcludeBranches);
     private readonly CompiledIgnoreActionEntry[] _compiledIgnoreActions = CompileIgnoreActions(pinningConfig.IgnoreActions);
 
@@ -51,6 +52,21 @@ public sealed class GitHubActionShaResolver(HttpClient httpClient, FixPinningCon
         }
 
         var result = await ResolveShaWithFallbackAsync(owner, repo, resolvedRef, token, cancellationToken);
+        if (result.UsedBranchFallback && TryBuildVersionFamily(refStr, out var refFamily))
+        {
+            var promoted = await TryPromoteTagCommentForBranchAliasAsync(
+                owner,
+                repo,
+                result.Sha!,
+                refFamily,
+                token,
+                cancellationToken);
+            if (!string.IsNullOrWhiteSpace(promoted))
+            {
+                resolvedRef = promoted;
+            }
+        }
+
         if (_pinningConfig.MinAgeDays > 0 && !TryBuildVersionFamily(refStr, out _))
         {
             if (result.TagDate is not null)
@@ -270,6 +286,95 @@ public sealed class GitHubActionShaResolver(HttpClient httpClient, FixPinningCon
         return await SendGetAsync(PublicApiBaseUri, relativePath, token, cancellationToken);
     }
 
+    private async Task<string?> TryPromoteTagCommentForBranchAliasAsync(
+        string owner,
+        string repo,
+        string resolvedSha,
+        VersionFamily family,
+        string token,
+        CancellationToken cancellationToken)
+    {
+        var cacheKey = string.Concat(owner, "/", repo, "@", resolvedSha, "|", BuildFamilyCacheKey(family));
+        if (_canonicalTagByShaCache.TryGetValue(cacheKey, out var cached))
+        {
+            return cached;
+        }
+
+        var path = $"repos/{owner}/{repo}/tags?per_page=100";
+        var response = await SendGetWithFallbackAsync(owner, repo, path, token, cancellationToken);
+        if (response is null)
+        {
+            return null;
+        }
+
+        string? bestTag = null;
+        using (response)
+        {
+            if (!response.IsSuccessStatusCode)
+            {
+                return null;
+            }
+
+            await using var stream = await response.Content.ReadAsStreamAsync(cancellationToken);
+            using var document = await JsonDocument.ParseAsync(stream, cancellationToken: cancellationToken);
+            if (document.RootElement.ValueKind != JsonValueKind.Array)
+            {
+                return null;
+            }
+
+            var root = document.RootElement;
+            for (var i = 0; i < root.GetArrayLength(); i++)
+            {
+                var tag = root[i];
+                if (!tag.TryGetProperty("name", out var tagNameNode) ||
+                    !tag.TryGetProperty("commit", out var commitNode) ||
+                    !commitNode.TryGetProperty("sha", out var shaNode))
+                {
+                    continue;
+                }
+
+                var tagName = tagNameNode.GetString();
+                var commitSha = shaNode.GetString();
+                if (string.IsNullOrWhiteSpace(tagName) ||
+                    string.IsNullOrWhiteSpace(commitSha) ||
+                    !string.Equals(commitSha, resolvedSha, StringComparison.OrdinalIgnoreCase) ||
+                    !family.IsMatch(tagName))
+                {
+                    continue;
+                }
+
+                if (bestTag is null || CompareVersionTag(tagName, bestTag) > 0)
+                {
+                    bestTag = tagName;
+                }
+            }
+        }
+
+        if (!string.IsNullOrWhiteSpace(bestTag))
+        {
+            _canonicalTagByShaCache.TryAdd(cacheKey, bestTag);
+            return bestTag;
+        }
+
+        return null;
+    }
+
+    private static string BuildFamilyCacheKey(VersionFamily family)
+    {
+        var key = family.HasVPrefix ? "v" : string.Empty;
+        for (var i = 0; i < family.Parts.Length; i++)
+        {
+            if (i > 0)
+            {
+                key += ".";
+            }
+
+            key += family.Parts[i].ToString();
+        }
+
+        return key;
+    }
+
     private async Task<DateTimeOffset?> TryGetCommitDateWithFallbackAsync(
         string owner,
         string repo,
@@ -403,7 +508,7 @@ public sealed class GitHubActionShaResolver(HttpClient httpClient, FixPinningCon
             var branchResult = await TryResolveFromGitRefPathAsync(apiBaseUri, owner, repo, branchRefPath, token, cancellationToken);
             if (branchResult.Success)
             {
-                return branchResult;
+                return branchResult with { UsedBranchFallback = true };
             }
 
             return branchResult;
@@ -562,7 +667,11 @@ public sealed class GitHubActionShaResolver(HttpClient httpClient, FixPinningCon
             $"Failed to resolve GitHub action SHA for '{owner}/{repo}@{refStr}' via '{apiBaseUri}' (status {(int)statusCode}).");
     }
 
-    private readonly record struct ResolveAttemptResult(string? Sha, HttpStatusCode StatusCode, DateTimeOffset? TagDate = null)
+    private readonly record struct ResolveAttemptResult(
+        string? Sha,
+        HttpStatusCode StatusCode,
+        DateTimeOffset? TagDate = null,
+        bool UsedBranchFallback = false)
     {
         public bool Success => !string.IsNullOrWhiteSpace(Sha);
     }

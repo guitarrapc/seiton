@@ -1243,7 +1243,9 @@ Resolve(owner, repo, ref) -> (sha, tagComment, error)
 - `owner`: repository owner (e.g. `actions`)
 - `repo`: repository name (e.g. `checkout`)
 - `ref`: tag, branch, or SHA string as it appears in the `uses:` value (e.g. `v4`, `main`)
-- Returns: 40-hex SHA, original ref as comment string (e.g. `v4`), error
+- Returns: 40-hex SHA and annotation comment string, error.
+  - Default comment: resolved ref string (for direct tag refs this matches the input ref).
+  - Branch-alias promotion: when input is a version-family branch alias (for example `v1`), and the resolved branch commit also has matching semver tags (for example `v1.0.2`), the resolver chooses the highest compatible tag as the comment.
 - Returns `(null, null, SkippedError)` when the ref is excluded by configuration (matches `ignore_actions` patterns).
 
 #### 12.2.2 `IImageDigestResolver`
@@ -1359,7 +1361,7 @@ An `unpinned-uses` diagnostic fix replaces the `@ref` portion of the `uses:` val
 - Before: `uses: actions/checkout@v6`
 - After: `uses: actions/checkout@<sha40> # v6.0.2`
 
-The separator between SHA and comment defaults to ` # ` (matches pinact's `separator` default). Comment preserves the original ref string verbatim.
+The separator between SHA and comment defaults to ` # ` (matches pinact's `separator` default). Comment usually follows the resolved ref string; for version-family branch aliases (for example `v1`) Seiton may promote the comment to the highest compatible concrete tag on the same commit (for example `v1.0.2`).
 
 If the ref is already a 40-hex SHA, it is considered already pinned; no fix is generated.
 
