@@ -1245,7 +1245,7 @@ Resolve(owner, repo, ref) -> (sha, tagComment, error)
 - `ref`: tag, branch, or SHA string as it appears in the `uses:` value (e.g. `v4`, `main`)
 - Returns: 40-hex SHA and annotation comment string, error.
   - Default comment: resolved ref string.
-  - Optional canonical promotion (default on): for alias-like version refs (`vN`, `vN.M`), resolver may choose the highest compatible concrete tag on the same resolved SHA.
+  - Canonical promotion: for alias-like version refs (`vN`, `vN.M`), resolver chooses the highest compatible concrete tag on the same resolved SHA when available.
 - Returns `(null, null, SkippedError)` when the ref is excluded by configuration (matches `ignore_actions` patterns).
 
 #### 12.2.2 `IImageDigestResolver`

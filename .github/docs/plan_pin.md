@@ -360,3 +360,28 @@ Interpretation:
 
 - No >10% regression in Mean or Allocated.
 - Resolver-path optimization mostly affects networked resolution path and is not fully represented by local `FixApplyBenchmark`; targeted test assertion confirms redundant API call removal.
+
+---
+
+## Code review loop (post-implementation)
+
+### Round 1 finding
+
+- **Spec/doc mismatch (correctness + API usability docs):**
+  - `.github/docs/Seiton_Linter_spec.md` still described canonical promotion as optional/disableable in one resolver contract paragraph after toggle removal.
+
+### Round 1 fix
+
+- Updated resolver contract wording in `.github/docs/Seiton_Linter_spec.md`:
+  - canonical promotion is always applied for alias-like refs when candidate tags exist.
+  - removed obsolete disablement wording.
+
+### Round 2 result
+
+- Re-ran full review checklist (correctness/performance/API/test/spec).
+- **No further findings.**
+
+Verification rerun after Round 1 fix:
+
+- `dotnet test`: **2468 passed / 0 failed**
+- `FixApplyBenchmark`: no allocation regression, mean values within acceptable range.
