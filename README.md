@@ -236,6 +236,24 @@ seiton install --ci
 | [Configuration](docs/configuration.md) | Config file discovery, schema, exclusions, fix settings, and network options. |
 | [Overview](docs/index.md) | Product overview and [comparison with other tools](docs/index.md#comparison-with-other-tools). |
 
+## Release flow
+
+When releasing a new version, follow these steps:
+
+1. (manual) From the repository root, bump version strings in `.props`, `.md`, `.sh`, and `.yml` files (latest git tag → next semver; skips `references/` and `*.rb`):
+
+```sh
+dotnet ./sandbox/scripts/bump_version.cs patch   # e.g. 0.1.0 → 0.1.1
+dotnet ./sandbox/scripts/bump_version.cs minor   # e.g. 0.1.0 → 0.2.0
+dotnet ./sandbox/scripts/bump_version.cs major   # e.g. 0.1.0 → 1.0.0
+```
+
+2. (manual) Commit the version bump with a message like `chore: Bump version to 0.1.1` and push to the main branch.
+3. (manual) Create new tag with the new version (e.g. `git tag v0.1.1`) and push the tag (`git push origin v0.1.1`).
+4. (auto) GitHub Actions will trigger on the new tag, build the release artifacts, publish new Playground, and create a draft release with the new version. The release notes will be auto-generated based on merged PRs since the last release.
+5. (manual) Check draft release created by GitHub Actions in the [Releases page](https://github.com/guitarrapc/seiton/releases). If the release notes look good, publish the release.
+6. (auto) New homebrew rb will be automatically created by GitHub Actions.
+
 ## License
 
 Seiton is distributed under the [MIT license](./LICENSE.md).
