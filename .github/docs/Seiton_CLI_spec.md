@@ -296,20 +296,20 @@ This ensures users can always override config-file defaults at the command line 
 ### 4.2 Config Path Resolution
 
 1. If `--config` / `SEITON_CONFIG` is set, use that path exclusively. Error if file does not exist.
-2. Otherwise, run discovery (starting at current working directory, walking parent directories upward):
+2. Otherwise, run discovery under the current working directory only (`<cwd>/`), checking in order:
    - `.github/seiton.yaml`
    - `.github/seiton.yml`
    - `seiton.yaml`
    - `seiton.yml`
-3. If no config file is found, use built-in defaults.
+3. If no config file is found under `cwd`, use built-in defaults.
 
 In `-v` / `--verbose` mode, the resolved config is logged to stderr:
 
 ```
-verbose: config: /repo/.github/seiton.yaml (discovered from /repo/nested, walked up 1 level(s))
+verbose: config: /repo/nested/.github/seiton.yaml (discovered under cwd /repo/nested)
 verbose: config: /repo/.github/seiton.yaml (from --config)
 verbose: config: /repo/.github/seiton.yaml (from SEITON_CONFIG)
-verbose: config: (none, using defaults) (searched from /repo/nested, walked up 3 level(s))
+verbose: config: (none, using defaults) (searched under cwd /repo/nested)
 ```
 
 An empty config file is valid and equivalent to built-in defaults.

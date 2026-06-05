@@ -14,14 +14,14 @@ Configuration is **optional**. Running Seiton without a config file works in mos
 2. `SEITON_CONFIG` environment variable
 3. Auto-discovery (below)
 
-Seiton auto-discovers a config file by looking for the following names, starting from the current working directory and walking up parent directories:
+Seiton auto-discovers a config file by looking for the following names **under the current working directory only** (`<cwd>/`):
 
 1. `.github/seiton.yaml`
 2. `.github/seiton.yml`
 3. `seiton.yaml`
 4. `seiton.yml`
 
-The first file found is used. If no file is found, built-in defaults apply.
+The first name that exists is used. If no file is found, built-in defaults apply.
 
 To specify a config file explicitly:
 
@@ -40,9 +40,9 @@ seiton
 
 ### Nested repositories and monorepos
 
-**Config discovery** walks **up** from the current working directory through parent folders. In a nested clone or subdirectory (for example `.nested/subrepo` inside a parent repo), that walk can pick up the **parent** repository's `.github/seiton.yaml` instead of a config you intended for the nested tree.
+Both **config discovery** and **input discovery** (workflow/action files when no paths are passed) are **CWD-scoped only**.
 
-**Input discovery** (workflow/action files when no paths are passed) is **CWD-scoped only**: `<cwd>/.github/workflows/` and `<cwd>/.github/actions/`. Parent directories are never searched. In CI with multiple checkouts, set `working-directory` to the repository you intend to lint, or pass explicit file paths.
+In a nested clone or CI job with multiple checkouts, set `working-directory` to the repository you intend to lint, or pass explicit paths (`--config`, `-c`, `SEITON_CONFIG`, or file arguments).
 
 **Recommended workflow for a nested repo:**
 
@@ -53,23 +53,18 @@ cd .references/actions
 seiton init --output .github/seiton.yaml
 
 # 2. Validate it
-seiton validate-config -c .github/seiton.yaml
+seiton validate-config
 
-# 3. Lint with an explicit path (or set SEITON_CONFIG)
-seiton -c .github/seiton.yaml --verbose
+# 3. Lint (config is discovered under cwd)
+seiton --verbose
 ```
 
-Use `-c` / `SEITON_CONFIG` whenever the nested repo should not inherit the parent's policy. With `--verbose`, Seiton prints how config was resolved, including parent discovery:
+When the nested repo has its own `.github/seiton.yaml`, discovery picks it up automatically. To use a config outside `cwd`, pass `-c` or `SEITON_CONFIG`:
 
 ```text
-verbose: config: /parent/.github/seiton.yaml (discovered from /parent/.references/actions, walked up 2 level(s))
-verbose: config: /nested/.github/seiton.yaml (from --config)
-```
-
-When no config is found after the walk:
-
-```text
-verbose: config: (none, using defaults) (searched from /cwd, walked up N level(s))
+verbose: config: /nested/.github/seiton.yaml (discovered under cwd /nested)
+verbose: config: /other/seiton.yaml (from --config)
+verbose: config: (none, using defaults) (searched under cwd /nested)
 ```
 
 ### Config setup workflow
@@ -87,7 +82,7 @@ See [Common configuration recipes](#common-configuration-recipes) below for patt
 - **Prefer** a committed file (`.github/seiton.yaml` or discovery) so policy changes go through normal review.
 - **`SEITON_CONFIG`** and **`--config`** select **any** path on disk. On **shared runners**, only set them to paths you trust (typically under the checked-out repository). Do not pass PR-provided or untrusted strings as the path.
 - **Fork pull request** jobs often run with an untrusted merge ref. Avoid `SEITON_CONFIG` pointing at a path writable by that ref; rely on discovery from the base branch checkout or omit a config file to use defaults.
-- **Observation**: with **`seiton check --verbose`** or **`seiton --fix --verbose`**, Seiton prints the resolved config path and how it was chosen to stderr immediately after loading the config. Discovery includes the starting directory and how many parent levels were walked; explicit `-c` / `SEITON_CONFIG` paths include their source.
+- **Observation**: with **`seiton check --verbose`** or **`seiton --fix --verbose`**, Seiton prints the resolved config path and how it was chosen to stderr immediately after loading the config. Discovery reports the cwd searched; explicit `--config`, `-c` / `SEITON_CONFIG` paths include their source.
 
 **Governance in *your* repository** (when you adopt Seiton): treat `seiton.yaml` like security policy — wide `exclusions` or disabling online rules can blunt detection. Teams often add rules under **CODEOWNERS** plus branch protection (**require review from Code Owners**) for paths such as `.github/seiton.yaml` and root `seiton.yaml`. See GitHub’s [About code owners](https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-code-owners).
 
@@ -202,9 +197,9 @@ Seiton validates configuration before linting begins. Invalid configuration caus
 Use `seiton check --verbose` to confirm which config file was loaded:
 
 ```text
-verbose: config: /repo/.github/seiton.yaml (discovered from /repo, walked up 0 level(s))
+verbose: config: /repo/.github/seiton.yaml (discovered under cwd /repo)
 verbose: config: /repo/.github/seiton.yaml (from --config)
-verbose: config: (none, using defaults) (searched from /repo, walked up 3 level(s))
+verbose: config: (none, using defaults) (searched under cwd /repo)
 ```
 
 ### Loader resource limits

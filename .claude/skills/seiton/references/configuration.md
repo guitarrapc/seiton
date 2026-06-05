@@ -17,9 +17,7 @@ No config file is required. All defaults are safe.
 
 ## Nested repositories
 
-**Config discovery** walks **up** parent directories from the current working directory. In a nested clone, the parent repo's `.github/seiton.yaml` may be used unintentionally.
-
-**Input discovery** (no file arguments) is CWD-scoped only: `<cwd>/.github/workflows/` and `<cwd>/.github/actions/`. Use explicit paths or the correct `working-directory` in CI.
+**Config discovery** and **input discovery** are CWD-scoped only. In nested clones or multi-checkout CI, set `working-directory` to the target repo or pass explicit paths (`-c`, `SEITON_CONFIG`, file arguments).
 
 ```bash
 cd .references/actions
@@ -211,7 +209,7 @@ seiton validate-config
 
 # Show which config file is loaded
 seiton check --verbose
-# Prints: verbose: config: /path/to/.github/seiton.yaml (discovered from /cwd, walked up N level(s))
+# Prints: verbose: config: /path/to/.github/seiton.yaml (discovered under cwd /path/to)
 # Or: verbose: config: /path (from --config)
 ```
 

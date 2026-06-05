@@ -182,7 +182,7 @@ actionable issues remain. Don't try to get to zero diagnostics on the first pass
 
 ## Configuration
 
-Config is auto-discovered from `.github/seiton.yaml` (or `.github/seiton.yml`, `seiton.yaml`, `seiton.yml`). Discovery walks up parent directories — in nested clones use `-c` explicitly.
+Config is auto-discovered from `<cwd>/.github/seiton.yaml` (or `.github/seiton.yml`, `seiton.yaml`, `seiton.yml` under cwd). Use `--config`(`-c`) or `SEITON_CONFIG` for paths outside cwd.
 
 Setup flow:
 

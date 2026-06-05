@@ -215,7 +215,7 @@ Shared contract reference: `.github/docs/Seiton_CLI_spec.md` §4.
 ```csharp
 public static class CliConfigBridge
 {
-    // Config path: flag → SEITON_CONFIG env → directory walk discovery
+    // Config path: flag → SEITON_CONFIG env → CWD-scoped discovery
     public static ConfigPathResolution ResolveConfigPath(string? explicitConfigPath);
 
     // Output format: explicit non-text flag → explicit --format text → SEITON_FORMAT env → GITHUB_ACTIONS auto (GitHubActions) → default (Text)
@@ -237,36 +237,24 @@ public static class CliConfigBridge
 }
 ```
 
-`ConfigPathResolution.FormatVerboseMessage()` produces stderr lines such as `discovered from …, walked up N level(s)` and `(from --config)`.
+`ConfigPathResolution.FormatVerboseMessage()` produces stderr lines such as `discovered under cwd …` and `(from --config)`.
 
-### 5.2 Config Discovery Walk
+### 5.2 Config Discovery (CWD-scoped)
 
-Discovery calls `LintConfigLibrary.FindRecommendedConfigPath(directory)` at each level:
+Discovery calls `LintConfigLibrary.FindRecommendedConfigPath(directory)` once under `cwd`:
 
 ```csharp
 return DiscoverConfigPath(Environment.CurrentDirectory);
 
-internal static ConfigPathResolution DiscoverConfigPath(
-    string discoveryStartDirectory,
-    string? discoveryBoundary = null);
+internal static ConfigPathResolution DiscoverConfigPath(string discoveryStartDirectory);
 ```
-
-The walk loop (production passes `discoveryBoundary: null`):
 
 ```csharp
 var discoveryStart = Path.GetFullPath(discoveryStartDirectory);
-var current = discoveryStart;
-var levelsWalked = 0;
-while (current is not null)
-{
-    var discovered = LintConfigLibrary.FindRecommendedConfigPath(current);
-    if (discovered is not null)
-        return new ConfigPathResolution(discovered, Discovery, discoveryStart, levelsWalked);
-    if (discoveryBoundary reached) break;
-    current = Directory.GetParent(current)?.FullName;
-    levelsWalked++;
-}
-return new ConfigPathResolution(null, None, discoveryStart, levelsWalked);
+var discovered = LintConfigLibrary.FindRecommendedConfigPath(discoveryStart);
+if (discovered is not null)
+    return new ConfigPathResolution(discovered, Discovery, discoveryStart, DiscoveryLevelsWalked: 0);
+return new ConfigPathResolution(null, None, discoveryStart, DiscoveryLevelsWalked: 0);
 ```
 
 Probe order per directory (defined in `LintConfigLibrary.RecommendedRelativePaths`):

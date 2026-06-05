@@ -202,7 +202,7 @@ Shared contract reference: `.github/docs/Seiton_CLI_spec.md` §4.
 ### 5.1 Resolution Functions
 
 ```go
-// resolveConfigPath returns the config path from flag, env, or directory walk.
+// resolveConfigPath returns the config path from flag, env, or CWD-scoped discovery.
 // Returns ("", nil) when no config found. Returns ("", err) when explicit path missing.
 func resolveConfigPath(explicit string) (string, error)
 

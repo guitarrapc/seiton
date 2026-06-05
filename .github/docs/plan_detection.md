@@ -39,9 +39,9 @@ lint 対象の探索起点は CWD のまま。config パスとは無関係。
 
 `LocalActionOutputResolver` 等の参照追従は repository root ガード付きで維持（変更なし）。
 
-### 5. 設定ファイル探索
+### 5. 設定ファイル探索（2026-06-06 追記で CWD 厳密化）
 
-config の自動探索は**引き続き親へ walk**（本変更の対象外）。入力探索のみ CWD 厳密化。
+当初は入力探索のみ CWD 厳密化したが、config 探索の親 walk も一貫性・セキュリティの観点から廃止。`<cwd>/` 配下の推奨 config 名のみを 1 回検索する。
 
 ---
 
@@ -53,6 +53,8 @@ config の自動探索は**引き続き親へ walk**（本変更の対象外）�
 |----------|------|
 | `src/Seiton/Commands/InputDiscovery.cs` | `FindWorkflowsDirectory` / `FindActionsDirectory` の親 walk を削除。`GetWorkflowsDirectory` / `GetActionsDirectory` で CWD 直下のみ判定。`startDir` を `Path.GetFullPath` で正規化。verbose ログを `searching under cwd {path}` に変更。`CollectYamlFiles` を `*.yml` / `*.yaml` の2パス列挙に変更（拡張子フィルタのオーバーヘッド削減）。 |
 | `src/Seiton/Commands/CheckCommand.cs` | `ShouldSuggestIncludeActions` の判定を `<cwd>/.github/actions/` の存在のみに変更（ancestor walk 廃止）。 |
+| `src/Seiton/Config/CliConfigBridge.cs` | `DiscoverConfigPath` を CWD 1 回検索に簡素化。`discoveryBoundary` パラメータ削除。 |
+| `src/Seiton/Config/ConfigPathResolution.cs` | verbose 文言を `discovered under cwd` / `searched under cwd` に変更。 |
 
 ### テスト
 
@@ -60,6 +62,7 @@ config の自動探索は**引き続き親へ walk**（本変更の対象外）�
 |----------|------|
 | `tests/Seiton.Tests/InputDiscoveryTests.cs` | ネスト CI 再現、親 walk 非依存、CWD 両方収集、親のみ actions の hint 非表示 |
 | `tests/Seiton.Tests/VerbosePhase1Tests.cs` | verbose discovery ログ文言の更新 |
+| `tests/Seiton.Tests/CliConfigBridgeTests.cs` | 親 config 非検出、ネスト CI で子 config 採用、verbose 文言 |
 
 全テスト 2474 passed / 1 skipped（2026-06-06 ローカル）。
 
@@ -109,7 +112,7 @@ config の自動探索は**引き続き親へ walk**（本変更の対象外）�
 |------|------|
 | `startDirectory` 未正規化で相対パス混在の可能性 | `ResolveFiles` 入口で `Path.GetFullPath` を適用 |
 | `CollectYamlFiles` 重複定義 | 実装時のミスを削除し単一定義に修正 |
-| config 探索と入力探索の非対称 | 意図的に分離。config は walk 継続、入力は CWD のみ。`docs/configuration.md` に明記 |
+| config 探索と入力探索の非対称 | 追記対応で両方 CWD 厳密化。`docs/configuration.md` に統一記載 |
 | 仕様 §1.1 と §5 の矛盾 | §5 を正とし §1.1 も CWD 厳密の文言に統一 |
 
 ---
@@ -140,8 +143,7 @@ seiton ../../.github/workflows    # subdir から明示パス
 
 ## 未決定・将来
 
-1. **config 探索の walk** — 入力探索は CWD 厳密化済み。config も揃えるかは別 issue。
-2. **`discovery.scope` フラグ** — 案 A 相当の walk を opt-in で復活させる需要があれば検討。現時点では不要。
+1. **`discovery.scope` フラグ** — 親 walk を opt-in で復活させる需要があれば検討。現時点では不要。
 
 ---
 
