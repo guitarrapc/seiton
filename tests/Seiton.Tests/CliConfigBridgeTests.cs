@@ -329,6 +329,38 @@ public sealed class CliConfigBridgeTests
     }
 
     [Test]
+    public async Task ResolveConfigPath_CurrentDirectory_OnlyUsesCwdConfig()
+    {
+        var root = CreateTempDir();
+        var nested = Path.Combine(root, "nested");
+        var parentConfig = Path.Combine(root, ".github", "seiton.yaml");
+        var childConfig = Path.Combine(nested, ".github", "seiton.yaml");
+        var originalCwd = Environment.CurrentDirectory;
+        var originalEnv = Environment.GetEnvironmentVariable("SEITON_CONFIG");
+        try
+        {
+            Directory.CreateDirectory(Path.GetDirectoryName(parentConfig)!);
+            Directory.CreateDirectory(Path.GetDirectoryName(childConfig)!);
+            File.WriteAllText(parentConfig, "rules: {}\n");
+            File.WriteAllText(childConfig, "rules: {}\n");
+            Environment.SetEnvironmentVariable("SEITON_CONFIG", null);
+            Environment.CurrentDirectory = nested;
+
+            var resolution = CliConfigBridge.ResolveConfigPath(explicitConfigPath: null);
+
+            await Assert.That(resolution.Path).IsEqualTo(childConfig);
+            await Assert.That(resolution.Source).IsEqualTo(ConfigPathSource.Discovery);
+            await Assert.That(resolution.DiscoveryLevelsWalked).IsEqualTo(0);
+        }
+        finally
+        {
+            Environment.CurrentDirectory = originalCwd;
+            Environment.SetEnvironmentVariable("SEITON_CONFIG", originalEnv);
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
+    [Test]
     public async Task FormatVerboseMessage_Discovery_IncludesCwdScope()
     {
         var start = Path.Combine("C:", "repo", "nested");
