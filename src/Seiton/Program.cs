@@ -142,7 +142,7 @@ internal class SeitonCli
     }
 
     /// <summary>List all available lint rules and their effective status.</summary>
-    /// <param name="config">-c, Path to config file. Auto-discovered from <cwd>/.github/seiton.yaml if omitted.</param>
+    /// <param name="config">-c, Path to config file. Auto-discovered from &lt;cwd&gt;/.github/seiton.yaml if omitted.</param>
     /// <param name="format">Output format: text | json.</param>
     public void Rules(string? config = null, string format = "text")
     {
