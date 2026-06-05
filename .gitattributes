@@ -4,7 +4,10 @@ scripts/** text eol=lf
 *.sh text eol=lf
 
 data/** linguist-vendored
+Formula/** linguist-vendored
+samples/** linguist-vendored
 sandbox/** linguist-vendored
 scripts/** linguist-vendored
+src/Seiton.Playground/wwwroot/** linguist-vendored
 # LF only: golden .out / .seiton.out and YAML byte offsets must match CI (Windows autocrlf otherwise breaks compat tests).
 tests/Seiton.Core.Tests/fixtures/** text eol=lf linguist-vendored
