@@ -18,7 +18,7 @@ app.Run(frameworkArgs);
 internal class SeitonCli
 {
     /// <summary>Lint workflow files by default, or apply fixes when --fix is specified.</summary>
-    /// <param name="config">-c, Path to config file. Auto-discovered from <cwd>/.github/seiton.yaml if omitted.</param>
+    /// <param name="config">-c, Path to config file. Auto-discovered from &lt;cwd&gt;/.github/seiton.yaml if omitted.</param>
     /// <param name="stdinFilename">Filename used when reading from stdin (-).</param>
     /// <param name="ignore">Substring patterns for messages to ignore (case-insensitive).</param>
     /// <param name="minSeverity">Minimum severity to report: error | warning | info.</param>
