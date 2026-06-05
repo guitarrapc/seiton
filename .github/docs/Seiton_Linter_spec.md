@@ -291,6 +291,7 @@ Default values:
 | `exclusions` | empty |
 | `fix.defaults.job-timeout-minutes` | `null` (no timeout auto-fix attachment) |
 | `fix.pinning.enable-network` | `false` |
+| `fix.pinning.prefer-canonical-tag-comment` | `true` |
 | `fix.pinning.min-age-days` | `14` |
 | `fix.pinning.exclude-branches` | `main`, `master` |
 | `fix.images.enable-network` | `false` |
@@ -818,6 +819,7 @@ fix:
 
   pinning:
     enable-network: true          # enable SHA resolution for unpinned-uses fixes
+    prefer-canonical-tag-comment: true  # promote alias comments (e.g. v1 -> v1.0.2) when same SHA has compatible tags
     min-age-days: 14              # minimum tag age for pinning eligibility
     exclude-branches:             # branch refs to never pin
       - main
@@ -838,6 +840,7 @@ fix:
 
 - `fix.defaults.job-timeout-minutes`: integer or null. When set, `job-timeout-minutes-required` attaches auto-fix with this value. Null/missing or `<= 0` disables fix attachment.
 - `fix.pinning.enable-network`: when `true`, `unpinned-uses` diagnostics may receive network-resolved SHA fix payloads via the pin remediation engine. Default: `false`.
+- `fix.pinning.prefer-canonical-tag-comment`: when `true` (default), version-family aliases (`vN`, `vN.M`) may be annotated with the highest compatible concrete tag on the same resolved SHA (for example `v1` -> `v1.0.2`). When `false`, comment remains the resolved ref string.
 - `fix.pinning.min-age-days`: minimum age in days before a tag is eligible for SHA pinning. Default: `14`. `0` disables the constraint.
 - `fix.pinning.exclude-branches`: branch names to never pin. Default: `["main", "master"]`.
 - `fix.pinning.ignore-actions`: list of `{uses, ref}` wildcard patterns (`*` matches any sequence, `?` matches single char) to skip during SHA resolution. No regex.
@@ -1244,8 +1247,9 @@ Resolve(owner, repo, ref) -> (sha, tagComment, error)
 - `repo`: repository name (e.g. `checkout`)
 - `ref`: tag, branch, or SHA string as it appears in the `uses:` value (e.g. `v4`, `main`)
 - Returns: 40-hex SHA and annotation comment string, error.
-  - Default comment: resolved ref string (for direct tag refs this matches the input ref).
-  - Branch-alias promotion: when input is a version-family branch alias (for example `v1`), and the resolved branch commit also has matching semver tags (for example `v1.0.2`), the resolver chooses the highest compatible tag as the comment.
+  - Default comment: resolved ref string.
+  - Optional canonical promotion (default on): for alias-like version refs (`vN`, `vN.M`), resolver may choose the highest compatible concrete tag on the same resolved SHA.
+  - Promotion can be disabled with `fix.pinning.prefer-canonical-tag-comment: false`.
 - Returns `(null, null, SkippedError)` when the ref is excluded by configuration (matches `ignore_actions` patterns).
 
 #### 12.2.2 `IImageDigestResolver`
@@ -1298,6 +1302,22 @@ When `false` (the default), no resolver is instantiated and the corresponding di
 #### 12.3.2 Token Resolution
 
 Token resolution and network behavior (GHES, timeouts, concurrency, redirect safety) are specified in §5.13 and apply to all network-dependent features including pin remediation.
+
+#### 12.3.3 `fix.pinning.prefer-canonical-tag-comment`
+
+Controls whether alias-like version refs (`vN`, `vN.M`) are post-processed from resolved SHA back to the highest compatible concrete tag comment.
+
+- `true` (default): attempt canonical comment promotion.
+- `false`: keep resolved ref comment verbatim (legacy behavior).
+
+Promotion is bounded and deterministic:
+
+1. Resolver reads `GET /repos/{owner}/{repo}/tags?per_page=100`.
+2. It keeps tags that point to the resolved SHA and match the requested version family.
+3. It selects the highest compatible tag with semver-first ordering.
+4. If no candidate exists, it keeps the original resolved ref comment.
+
+For concrete patch refs (`vN.M.P`), promotion is skipped to avoid unnecessary API calls.
 
 #### 12.3.4 `fix.pinning.ignore-actions`
 
@@ -1361,7 +1381,7 @@ An `unpinned-uses` diagnostic fix replaces the `@ref` portion of the `uses:` val
 - Before: `uses: actions/checkout@v6`
 - After: `uses: actions/checkout@<sha40> # v6.0.2`
 
-The separator between SHA and comment defaults to ` # ` (matches pinact's `separator` default). Comment usually follows the resolved ref string; for version-family branch aliases (for example `v1`) Seiton may promote the comment to the highest compatible concrete tag on the same commit (for example `v1.0.2`).
+The separator between SHA and comment defaults to ` # ` (matches pinact's `separator` default). Comment usually follows the resolved ref string; for alias-like version refs (`vN`, `vN.M`) Seiton may promote the comment to the highest compatible concrete tag on the same commit (for example `v1` -> `v1.0.2`) when `fix.pinning.prefer-canonical-tag-comment` is enabled.
 
 If the ref is already a 40-hex SHA, it is considered already pinned; no fix is generated.
 

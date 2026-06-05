@@ -109,6 +109,7 @@ fix:
 
   pinning:
     enable-network: false        # Allow network SHA resolution
+    prefer-canonical-tag-comment: true  # For aliases like v1, prefer concrete tag comments like v1.0.2
     min-age-days: 14             # Minimum commit age for SHA pins
     exclude-branches:            # Skip pinning for these refs
       - main

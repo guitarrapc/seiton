@@ -736,6 +736,7 @@ internal static class LintConfigYamlParser
         var enableNetwork = false;
         var hasEnableNetwork = false;
         var minAgeDays = 14;
+        var preferCanonicalTagComment = true;
         IReadOnlyList<string> excludeBranches = [];
         IReadOnlyList<IgnoreActionEntry> ignoreActions = [];
 
@@ -766,6 +767,17 @@ internal static class LintConfigYamlParser
                     }
 
                     break;
+                case "prefer-canonical-tag-comment":
+                    if (!TryCoerceBool(value, out var preferCanonical))
+                    {
+                        diagnostics.Add(Diag("fix.pinning.prefer-canonical-tag-comment must be true or false", DomLine, 5, 29, filePath));
+                    }
+                    else
+                    {
+                        preferCanonicalTagComment = preferCanonical;
+                    }
+
+                    break;
                 case "exclude-branches":
                     excludeBranches = ParseStringList(value, "exclude-branches", diagnostics, filePath);
                     break;
@@ -783,6 +795,7 @@ internal static class LintConfigYamlParser
             EnableNetwork = enableNetwork,
             HasEnableNetwork = hasEnableNetwork,
             MinAgeDays = minAgeDays,
+            PreferCanonicalTagComment = preferCanonicalTagComment,
             ExcludeBranches = excludeBranches.Count > 0 ? excludeBranches : DefaultExcludeBranches,
             IgnoreActions = ignoreActions,
         };

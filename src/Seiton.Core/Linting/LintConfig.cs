@@ -297,6 +297,11 @@ public sealed record FixPinningConfig
     public bool HasEnableNetwork { get; init; }
     /// <summary>Gets the minimum age in days for an action reference to be eligible for pinning.</summary>
     public int MinAgeDays { get; init; } = 14;
+    /// <summary>
+    /// Gets whether annotation comments should be promoted from version-family aliases (for example <c>v1</c>)
+    /// to the highest compatible concrete tag (for example <c>v1.0.2</c>) when they resolve to the same commit SHA.
+    /// </summary>
+    public bool PreferCanonicalTagComment { get; init; } = true;
     /// <summary>Gets the branches excluded from pinning fix application.</summary>
     public IReadOnlyList<string> ExcludeBranches { get; init; } = ["main", "master"];
     /// <summary>Gets the action patterns to ignore during pinning.</summary>

@@ -223,6 +223,7 @@ public sealed class LintConfigLibraryTests
             job-timeout-minutes: 25
           pinning:
             enable-network: true
+            prefer-canonical-tag-comment: false
             min-age-days: 30
             exclude-branches:
               - release
@@ -247,6 +248,7 @@ public sealed class LintConfigLibraryTests
         var fix = result.Config!.Fix;
         await Assert.That(fix.Defaults.JobTimeoutMinutes).IsEqualTo(25);
         await Assert.That(fix.Pinning.EnableNetwork).IsTrue();
+        await Assert.That(fix.Pinning.PreferCanonicalTagComment).IsFalse();
         await Assert.That(fix.Pinning.MinAgeDays).IsEqualTo(30);
         await Assert.That(fix.Pinning.ExcludeBranches).Contains("release");
         await Assert.That(fix.Pinning.IgnoreActions.Count).IsEqualTo(1);
@@ -273,6 +275,36 @@ public sealed class LintConfigLibraryTests
 
         await Assert.That(result.IsValid).IsTrue();
         await Assert.That(result.Config!.Fix.Pinning.MinAgeDays).IsEqualTo(0);
+    }
+
+    [Test]
+    public async Task Validate_Fix_PreferCanonicalTagComment_False_IsMapped()
+    {
+        var yaml = """
+        fix:
+          pinning:
+            prefer-canonical-tag-comment: false
+        """;
+
+        var result = LintConfigLibrary.Validate(yaml, "seiton.yaml");
+
+        await Assert.That(result.IsValid).IsTrue();
+        await Assert.That(result.Config!.Fix.Pinning.PreferCanonicalTagComment).IsFalse();
+    }
+
+    [Test]
+    public async Task Validate_Fix_PreferCanonicalTagComment_DefaultsToTrue()
+    {
+        var yaml = """
+        fix:
+          pinning:
+            enable-network: true
+        """;
+
+        var result = LintConfigLibrary.Validate(yaml, "seiton.yaml");
+
+        await Assert.That(result.IsValid).IsTrue();
+        await Assert.That(result.Config!.Fix.Pinning.PreferCanonicalTagComment).IsTrue();
     }
 
     [Test]

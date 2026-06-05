@@ -52,7 +52,9 @@ public sealed class GitHubActionShaResolver(HttpClient httpClient, FixPinningCon
         }
 
         var result = await ResolveShaWithFallbackAsync(owner, repo, resolvedRef, token, cancellationToken);
-        if (result.UsedBranchFallback && TryBuildVersionFamily(refStr, out var refFamily))
+        if (_pinningConfig.PreferCanonicalTagComment
+            && TryBuildVersionFamily(refStr, out var refFamily)
+            && refFamily.Parts.Length < 3)
         {
             var promoted = await TryPromoteTagCommentForBranchAliasAsync(
                 owner,

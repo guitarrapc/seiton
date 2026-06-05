@@ -312,6 +312,7 @@ fix:
 
   pinning:
     enable-network: false      # Set true to allow network-assisted SHA pinning.
+    prefer-canonical-tag-comment: true  # For alias refs like v1, prefer concrete tag comments like v1.0.2 on same SHA.
     min-age-days: 14           # Minimum commit age before a SHA pin is considered stable.
     exclude-branches:          # Skip SHA pinning for these branch refs.
       - main
@@ -816,6 +817,7 @@ This is useful when batch-fixing all instances of a single rule at a time.
 | `exclusions` | (empty) |
 | `fix.defaults.job-timeout-minutes` | `null` (auto-fix disabled) |
 | `fix.pinning.enable-network` | `false` |
+| `fix.pinning.prefer-canonical-tag-comment` | `true` |
 | `fix.pinning.min-age-days` | `14` |
 | `fix.pinning.exclude-branches` | `main`, `master` |
 | `fix.images.enable-network` | `false` |
@@ -843,3 +845,4 @@ To limit denial-of-service from maliciously large configuration inputs, validati
 Pattern matching notes:
 - `fix.pinning.ignore-actions` uses **wildcard matching** (`*` = any sequence, `?` = single char) — no regex, no ReDoS risk.
 - `fix.pinning.exclude-branches` uses exact string equality (ordinal).
+- `fix.pinning.prefer-canonical-tag-comment` controls whether version-family aliases (for example `v1`, `v2.3`) are annotated with the highest compatible concrete tag on the same resolved SHA (for example `v1.0.2`).
