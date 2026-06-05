@@ -48,7 +48,7 @@ When `--fix` is specified, the root command switches to fix mode: runs lint, the
 - If `--check` is given, exits with a non-zero code when any fixable diagnostic exists (does not apply fixes). When both `--check` and `--dry-run` are given, `--check` takes precedence (no diffs are printed, no fixes are applied).
 - Network-assisted pin remediation is activated when `fix.pinning.enable-network: true` or `fix.images.enable-network: true` is set in config (or via `--enable-pin-network` / `--enable-image-network` flags).
 
-When no `FILES` are given, discovers all `*.yml` / `*.yaml` files under `<cwd>/.github/workflows/` (current working directory only; parent directories are not searched).
+When no `FILES` are given, discovers all `*.yml` / `*.yaml` files under `<cwd>/.github/workflows/` (current working directory only).
 
 When `--include-actions` is specified, no-arg discovery also includes `*.yml` / `*.yaml` files under `<cwd>/.github/actions/`.
 
@@ -160,7 +160,7 @@ All flags apply to the default root command unless otherwise noted.
 
 | Flag | Short | Type | Default | Description |
 |---|---|---|---|---|
-| `--config` | `-c` | `string` | (auto-discovery) | Explicit config file path. If specified, that file is used exclusively. If omitted, Seiton auto-discovers `.github/seiton.yaml`, `.github/seiton.yml`, `seiton.yaml`, `seiton.yml` (nearest directory first, then parent directories). |
+| `--config` | `-c` | `string` | (auto-discovery) | Explicit config file path. If specified, that file is used exclusively. If omitted, Seiton auto-discovers `.github/seiton.yaml`, `.github/seiton.yml`, `seiton.yaml`, `seiton.yml` under `cwd` only. |
 | `--stdin-filename` | | `string` | `<stdin>` | Filename used for diagnostics when reading from stdin (`-`). |
 | `--include-actions` | | `bool` | `false` | Expand no-arg discovery scope to include `.github/actions/` in addition to `.github/workflows/`. |
 
@@ -345,7 +345,7 @@ When no `FILES` arguments are given to `check` / `fix`:
 3. When `--include-actions` is enabled and `<cwd>/.github/actions/` exists, collect all matching files under that directory recursively as well.
 4. Sort collected paths deterministically (lexicographic, ordinal comparison) before passing to the lint engine.
 
-Auto-discovery never walks parent directories. Only `<cwd>/.github/workflows/` and `<cwd>/.github/actions/` are considered. To lint files outside `cwd`, pass explicit `FILES` paths or run `seiton` from the intended repository root.
+Only `<cwd>/.github/workflows/` and `<cwd>/.github/actions/` are considered. To lint files outside `cwd`, pass explicit `FILES` paths or run `seiton` from the intended repository root.
 
 **Lessons learned (nested CI):** When a job checks out a parent repository at the workspace root and a child repository into a subdirectory (`path:` checkout), running `seiton` with `working-directory` set to the child must lint only the child's `.github/` tree. Parent-directory walks caused unintended lint of sibling checkouts (for example parent `.github/actions/` mixed with child `.github/workflows/`).
 

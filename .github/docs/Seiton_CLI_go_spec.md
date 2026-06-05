@@ -215,9 +215,9 @@ func resolveOutputFormat(flagFormat string, allowGitHubActionsAutoDefault bool) 
 func resolveColorEnabled(colorFlag string, noColorFlag bool) bool
 ```
 
-### 5.2 Config Discovery Walk
+### 5.2 Config Discovery (CWD-scoped)
 
-Discovery probes each directory level starting from the current working directory:
+Discovery calls `findRecommendedConfigPath(directory)` once under `cwd`:
 
 ```go
 func resolveConfigPath(explicit string) (string, error) {
@@ -233,26 +233,20 @@ func resolveConfigPath(explicit string) (string, error) {
         }
         return envConfig, nil
     }
-    // Walk parent directories
-    dir, _ := os.Getwd()
-    for dir != "" {
-        for _, rel := range recommendedRelativePaths {
-            p := filepath.Join(dir, rel)
-            if _, err := os.Stat(p); err == nil {
-                return p, nil
-            }
-        }
-        parent := filepath.Dir(dir)
-        if parent == dir {
-            break
-        }
-        dir = parent
+    cwd, err := os.Getwd()
+    if err != nil {
+        return "", nil
+    }
+    if p := findRecommendedConfigPath(cwd); p != "" {
+        return p, nil
     }
     return "", nil
 }
 ```
 
-Probe order per directory:
+`ConfigPathResolution.FormatVerboseMessage()` produces stderr lines such as `discovered under cwd …` and `(from --config)`.
+
+Probe order under `cwd`:
 
 1. `.github/seiton.yaml`
 2. `.github/seiton.yml`
