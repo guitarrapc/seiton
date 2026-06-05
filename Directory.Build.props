@@ -7,6 +7,6 @@
     <IsPackable>false</IsPackable>
 
     <!-- Bump on release; embedded in the CLI & WASM assembly and shown in the header badge. -->
-    <Version>0.9.23</Version>
+    <Version>0.9.24</Version>
   </PropertyGroup>
 </Project>
