@@ -1117,6 +1117,23 @@ jobs:
 - `strict-detection`: Enable detection of inequality checks (`!=`) against spoofable contexts. This pattern is often used for exclusion (for example, "if not a bot") and has lower risk than equality checks, but it can still be bypassed by spoofing the trigger actor. Default is `false` to reduce false positives in common exclusion patterns.
 - See: [configuration.md#bot-conditionsstrict-detection](configuration.md#bot-conditionsstrict-detection)
 
+<a id="bot-conditions-decision-matrix"></a>
+
+**Decision matrix** (when does this rule report? `*` = any value):
+
+| `strict-detection` | Operator | Workflow triggers | Mitigation (AND-conjoined) | Outcome |
+| --- | --- | --- | --- | --- |
+| `false` | `==` | PR-only | none | **warning** |
+| `false` | `==` | PR-only | dual `==` on `user.login` / `user.id` | none |
+| `false` | `!=` | PR-only | any | none |
+| `true` | `!=` | PR-only | none | **info** |
+| `true` | `!=` | PR-only | dual `!=` on `user.login` / `user.id` | none |
+| `true` | `!=` | PR-only | mismatched operator | **info** |
+| `true` | `==` | PR-only | none | **warning** |
+| `*` | `*` | mixed or non-PR | `*` | none |
+
+PR-only means `pull_request`, `pull_request_target`, `pull_request_review`, or `pull_request_review_comment` only (no `push`, `schedule`, `workflow_dispatch`, etc.).
+
 ---
 
 ### `artipacked`

@@ -404,6 +404,8 @@ rules:
 
 When enabled, inequality checks on PR-only workflows are reported at info severity. Mixed or non-PR triggers remain suppressed. Dual exclusion filters (`github.actor != '…[bot]' && github.event.pull_request.user.login != '…[bot]'`) are not reported.
 
+For the full outcome matrix (`strict-detection` × operator × triggers × mitigation), see [rules.md#bot-conditions-decision-matrix](rules.md#bot-conditions-decision-matrix).
+
 <a id="runner-labelknown-hosted-labels"></a>
 #### `runner-label.known-hosted-labels`
 
