@@ -138,6 +138,12 @@ public sealed class BotConditionsRule() : RuleBase(RuleId.BotConditions)
                 continue;
             }
 
+            // Exclusion checks are opt-in; skip bot/mitigation work for != when strict detection is off.
+            if (node.Operator == ExpressionOperator.NotEqual && !_strictDetection)
+            {
+                continue;
+            }
+
             var leftId = node.Left;
             var rightId = node.Right;
 
@@ -170,20 +176,9 @@ public sealed class BotConditionsRule() : RuleBase(RuleId.BotConditions)
             }
 
             // != (exclusion pattern) emits info; == (privilege grant) emits warning
-            // Suppress when triggers are not PR-only (no PR context, or mixed triggers where github.actor is the only cross-trigger bot check).
-            if (!_emitBotConditionDiagnostics)
-            {
-                continue;
-            }
-
             var diagRange = Arena.GetStringRange(condition);
             if (node.Operator == ExpressionOperator.NotEqual)
             {
-                if (!IsStrictDetectionEnabled())
-                {
-                    continue;
-                }
-
                 if (job is not null)
                 {
                     AddJobInfo(job, InfoMessage, diagRange);
@@ -265,8 +260,6 @@ public sealed class BotConditionsRule() : RuleBase(RuleId.BotConditions)
             or WebhookTypes.EventId.PullRequestTarget
             or WebhookTypes.EventId.PullRequestReview
             or WebhookTypes.EventId.PullRequestReviewComment;
-
-    private bool IsStrictDetectionEnabled() => _strictDetection;
 
     /// <summary>
     /// Checks if the expression contains a non-spoofable context (trigger-author)
