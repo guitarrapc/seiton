@@ -1124,8 +1124,13 @@ jobs:
 | `strict-detection` | Operator | Workflow triggers | Mitigation (AND-conjoined) | Outcome |
 | --- | --- | --- | --- | --- |
 | `false` | `==` | PR-only | none | **warning** |
-| `false` | `==` | PR-only | dual `==` on `user.login` / `user.id` | none |
-| `false` | `!=` | PR-only | any | none |
+| `false` | `==` | PR-only | dual `==` on `user.login` / `user.id` | no diagnostic |
+| `false` | `!=` | PR-only | any | no diagnostic |
+| `true` | `!=` | PR-only | none | **info** |
+| `true` | `!=` | PR-only | dual `!=` on `user.login` / `user.id` | no diagnostic |
+| `true` | `!=` | PR-only | mismatched operator | **info** |
+| `true` | `==` | PR-only | none | **warning** |
+| `*` | `*` | mixed or non-PR | `*` | no diagnostic |
 | `true` | `!=` | PR-only | none | **info** |
 | `true` | `!=` | PR-only | dual `!=` on `user.login` / `user.id` | none |
 | `true` | `!=` | PR-only | mismatched operator | **info** |
