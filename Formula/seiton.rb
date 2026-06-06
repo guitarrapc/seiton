@@ -4,16 +4,16 @@
 class Seiton < Formula
   desc "Lint GitHub Actions workflows and action metadata files"
   homepage "https://github.com/guitarrapc/seiton"
-  version "0.9.24"
+  version "0.9.25"
   license "MIT"
 
   on_macos do
     if Hardware::CPU.arm?
-      url "https://github.com/guitarrapc/seiton/releases/download/v0.9.24/seiton-osx-arm64.tar.gz"
-      sha256 "fc355aa97e12a064b06af1d4b076752bb5d80f6b65fc121e85e078a7436d4507"
+      url "https://github.com/guitarrapc/seiton/releases/download/v0.9.25/seiton-osx-arm64.tar.gz"
+      sha256 "3fe1093e2cbebcc5280ec1b3eed4eb0f9a0c8e969a9bd858ba9b4cf857610497"
     elsif Hardware::CPU.intel?
-      url "https://github.com/guitarrapc/seiton/releases/download/v0.9.24/seiton-osx-amd64.tar.gz"
-      sha256 "0a8f909c7d1be6c537d965c9f4967c49d01dd554044d7ffff6289e069247a200"
+      url "https://github.com/guitarrapc/seiton/releases/download/v0.9.25/seiton-osx-amd64.tar.gz"
+      sha256 "5b2de3e03fc2f12b1cb93dde7a1af350e596338d383ae63cc504dab938279a5b"
     else
       odie "seiton: unsupported macOS CPU"
     end
@@ -21,11 +21,11 @@ class Seiton < Formula
 
   on_linux do
     if Hardware::CPU.arm? && Hardware::CPU.is_64_bit?
-      url "https://github.com/guitarrapc/seiton/releases/download/v0.9.24/seiton-linux-arm64.tar.gz"
-      sha256 "934c87c1cb7ad43bbe8aca984d20eaa156c44d04423e210551ccbd354363c697"
+      url "https://github.com/guitarrapc/seiton/releases/download/v0.9.25/seiton-linux-arm64.tar.gz"
+      sha256 "e72b9119fed8622299e55dae7c73723ed560042d413b62629c2dd476414b0acd"
     elsif Hardware::CPU.intel? && Hardware::CPU.is_64_bit?
-      url "https://github.com/guitarrapc/seiton/releases/download/v0.9.24/seiton-linux-amd64.tar.gz"
-      sha256 "1425fcc5dfdd3e94c38555d8c38ea1e3cc6008292c8b98632b148af00eb1cb20"
+      url "https://github.com/guitarrapc/seiton/releases/download/v0.9.25/seiton-linux-amd64.tar.gz"
+      sha256 "378cf4e3c5a3beb67b631286d89ea205c388c823fa1a0d8e658b80f2e3884e0c"
     else
       odie "seiton: unsupported Linux CPU"
     end
