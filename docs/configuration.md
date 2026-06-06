@@ -402,7 +402,7 @@ rules:
     strict-detection: true
 ```
 
-When enabled, inequality checks on PR-only workflows are reported at info severity. Mixed or non-PR triggers remain suppressed.
+When enabled, inequality checks on PR-only workflows are reported at info severity. Mixed or non-PR triggers remain suppressed. Dual exclusion filters (`github.actor != '…[bot]' && github.event.pull_request.user.login != '…[bot]'`) are not reported.
 
 <a id="runner-labelknown-hosted-labels"></a>
 #### `runner-label.known-hosted-labels`

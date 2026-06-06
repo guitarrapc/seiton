@@ -33,10 +33,17 @@ public sealed class BotConditionsRule() : RuleBase(RuleId.BotConditions)
 
     // whether bot-condition diagnostics are actionable for this workflow's triggers
     private bool _emitBotConditionDiagnostics;
+    private bool _strictDetection;
 
     public override string Name => "Bot Conditions Rule";
 
     public override bool SupportsDocumentKind(DocumentKind documentKind) => documentKind == DocumentKind.Workflow;
+
+    public override void SetConfig(LintConfig config)
+    {
+        base.SetConfig(config);
+        _strictDetection = config.GetRuleConfig(Id)?.StrictDetection == true;
+    }
 
     public override void VisitWorkflowPre(Workflow workflow)
     {
@@ -157,7 +164,7 @@ public sealed class BotConditionsRule() : RuleBase(RuleId.BotConditions)
             // If the same expression has a non-spoofable context check with the same literal
             // AND-conjoined, suppress. Skip suppression when OR operators exist (non-spoofable
             // check on the other side of OR does not mitigate the spoofable branch).
-            if (!hasOr && HasNonSpoofableConjunction(literalId, nodes, exprBytes))
+            if (!hasOr && HasNonSpoofableConjunction(literalId, node.Operator, nodes, exprBytes))
             {
                 continue;
             }
@@ -259,21 +266,24 @@ public sealed class BotConditionsRule() : RuleBase(RuleId.BotConditions)
             or WebhookTypes.EventId.PullRequestReview
             or WebhookTypes.EventId.PullRequestReviewComment;
 
-    private bool IsStrictDetectionEnabled() =>
-        Config.GetRuleConfig(Id)?.StrictDetection == true;
+    private bool IsStrictDetectionEnabled() => _strictDetection;
 
     /// <summary>
     /// Checks if the expression contains a non-spoofable context (trigger-author)
-    /// comparison with the same literal value, indicating the spoofable check is mitigated.
+    /// comparison with the same literal value and operator, indicating the spoofable check is mitigated.
     /// </summary>
-    private static bool HasNonSpoofableConjunction(int spoofableLiteralId, ExpressionNode[] nodes, ReadOnlySpan<byte> exprBytes)
+    private static bool HasNonSpoofableConjunction(
+        int spoofableLiteralId,
+        ExpressionOperator spoofableOperator,
+        ExpressionNode[] nodes,
+        ReadOnlySpan<byte> exprBytes)
     {
         var spoofableLiteral = nodes[spoofableLiteralId];
 
         for (var i = 0; i < nodes.Length; i++)
         {
             var node = nodes[i];
-            if (node.Kind != ExpressionNodeKind.Binary || node.Operator != ExpressionOperator.Equal)
+            if (node.Kind != ExpressionNodeKind.Binary || node.Operator != spoofableOperator)
             {
                 continue;
             }
