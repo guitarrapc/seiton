@@ -443,9 +443,9 @@ public sealed partial class RuleInterfaceTests
         await AssertRuleCases(new BotConditionsRule(), "bot-conditions", cases);
     }
 
-    // != operator emits info severity instead of warning ---
+    // != operator: suppressed by default; info when strict-detection is enabled ---
     [Test]
-    public async Task BotConditionsRule_NotEqual_EmitsInfoSeverity()
+    public async Task BotConditionsRule_NotEqual_Default_Suppressed()
     {
         var yaml = """
             on: pull_request
@@ -459,6 +459,35 @@ public sealed partial class RuleInterfaceTests
 
         using var result = new LintEngine([new BotConditionsRule()])
             .Check(Encoding.UTF8.GetBytes(yaml), "bot-ne-test.yml");
+        var botDiags = result.Diagnostics
+            .Where(x => x.RuleId == "bot-conditions")
+            .ToArray();
+        await Assert.That(botDiags.Length).IsEqualTo(0);
+    }
+
+    [Test]
+    public async Task BotConditionsRule_NotEqual_StrictDetection_EmitsInfoSeverity()
+    {
+        var yaml = """
+            on: pull_request
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    if: github.actor != 'dependabot[bot]'
+                    steps:
+                        - run: echo test
+            """.Replace("\r\n", "\n");
+
+        var config = new LintConfig
+        {
+            Rules = new Dictionary<string, RuleConfig>
+            {
+                ["bot-conditions"] = new RuleConfig { StrictDetection = true },
+            },
+        };
+
+        using var result = new LintEngine([new BotConditionsRule()])
+            .Check(Encoding.UTF8.GetBytes(yaml), "bot-ne-strict-test.yml", config);
         var botDiags = result.Diagnostics
             .Where(x => x.RuleId == "bot-conditions")
             .ToArray();
@@ -490,7 +519,7 @@ public sealed partial class RuleInterfaceTests
     }
 
     [Test]
-    public async Task BotConditionsRule_TriggeringActorNotEqual_EmitsInfoSeverity()
+    public async Task BotConditionsRule_TriggeringActorNotEqual_StrictDetection_EmitsInfoSeverity()
     {
         var yaml = """
             on: pull_request
@@ -502,8 +531,16 @@ public sealed partial class RuleInterfaceTests
                         - run: echo test
             """.Replace("\r\n", "\n");
 
+        var config = new LintConfig
+        {
+            Rules = new Dictionary<string, RuleConfig>
+            {
+                ["bot-conditions"] = new RuleConfig { StrictDetection = true },
+            },
+        };
+
         using var result = new LintEngine([new BotConditionsRule()])
-            .Check(Encoding.UTF8.GetBytes(yaml), "bot-ne-triggering-test.yml");
+            .Check(Encoding.UTF8.GetBytes(yaml), "bot-ne-triggering-test.yml", config);
         var botDiags = result.Diagnostics
             .Where(x => x.RuleId == "bot-conditions")
             .ToArray();
@@ -624,7 +661,7 @@ public sealed partial class RuleInterfaceTests
     }
 
     [Test]
-    public async Task BotConditionsRule_PullRequestOnlyEvents_NotEqual_EmitsInfo()
+    public async Task BotConditionsRule_PullRequestOnlyEvents_NotEqual_StrictDetection_EmitsInfo()
     {
         var yaml = """
             on: [pull_request, pull_request_target]
@@ -636,8 +673,16 @@ public sealed partial class RuleInterfaceTests
                         - run: echo test
             """.Replace("\r\n", "\n");
 
+        var config = new LintConfig
+        {
+            Rules = new Dictionary<string, RuleConfig>
+            {
+                ["bot-conditions"] = new RuleConfig { StrictDetection = true },
+            },
+        };
+
         using var result = new LintEngine([new BotConditionsRule()])
-            .Check(Encoding.UTF8.GetBytes(yaml), "bot-pr-only-mix-test.yml");
+            .Check(Encoding.UTF8.GetBytes(yaml), "bot-pr-only-mix-test.yml", config);
         var botDiags = result.Diagnostics
             .Where(x => x.RuleId == "bot-conditions")
             .ToArray();

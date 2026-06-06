@@ -1038,6 +1038,37 @@ public sealed class LintConfigLibraryTests
     }
 
     [Test]
+    public async Task Validate_BotConditions_StrictDetection_Parses()
+    {
+        var yaml = """
+        rules:
+          bot-conditions:
+            strict-detection: true
+        """;
+
+        var result = LintConfigLibrary.Validate(yaml, "seiton.yaml");
+
+        await Assert.That(result.IsValid).IsTrue();
+        await Assert.That(result.Config).IsNotNull();
+        await Assert.That(result.Config!.Rules!["bot-conditions"].StrictDetection).IsTrue();
+    }
+
+    [Test]
+    public async Task Validate_BotConditions_StrictDetection_WrongRule_ReturnsError()
+    {
+        var yaml = """
+        rules:
+          runner-label:
+            strict-detection: true
+        """;
+
+        var result = LintConfigLibrary.Validate(yaml, "seiton.yaml");
+
+        await Assert.That(result.IsValid).IsFalse();
+        await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("does not accept 'strict-detection'", StringComparison.Ordinal))).IsTrue();
+    }
+
+    [Test]
     public async Task Validate_RuleSpecificKey_CorrectRule_Accepted()
     {
         var yaml = """

@@ -172,6 +172,11 @@ public sealed class BotConditionsRule() : RuleBase(RuleId.BotConditions)
             var diagRange = Arena.GetStringRange(condition);
             if (node.Operator == ExpressionOperator.NotEqual)
             {
+                if (!IsStrictDetectionEnabled())
+                {
+                    continue;
+                }
+
                 if (job is not null)
                 {
                     AddJobInfo(job, InfoMessage, diagRange);
@@ -253,6 +258,9 @@ public sealed class BotConditionsRule() : RuleBase(RuleId.BotConditions)
             or WebhookTypes.EventId.PullRequestTarget
             or WebhookTypes.EventId.PullRequestReview
             or WebhookTypes.EventId.PullRequestReviewComment;
+
+    private bool IsStrictDetectionEnabled() =>
+        Config.GetRuleConfig(Id)?.StrictDetection == true;
 
     /// <summary>
     /// Checks if the expression contains a non-spoofable context (trigger-author)

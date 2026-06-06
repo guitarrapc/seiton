@@ -241,6 +241,12 @@ public sealed record RuleConfig
 
     /// <summary>Gets the fix-mapping dictionary for <c>runner-no-latest</c> (label → pinned version).</summary>
     public IReadOnlyDictionary<string, string>? FixMapping { get; init; }
+
+    /// <summary>
+    /// Gets whether <c>bot-conditions</c> reports exclusion checks (<c>!=</c>) on PR-only workflows.
+    /// Defaults to <c>false</c>.
+    /// </summary>
+    public bool StrictDetection { get; init; }
 }
 
 /// <summary>
