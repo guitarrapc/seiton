@@ -189,7 +189,7 @@ Column definitions:
 | `credentials` | ✓ | — | Warn on missing credentials for private registry images; error when `credentials.password` is a hardcoded literal. |
 | `template-injection` | ✓ | — | Error when untrusted `github.event`-origin data is interpolated into `run`/`script` sinks. `env:` indirection is not flagged. |
 | `unsound-contains` | ✓ | — | Detect bypassable `contains()` conditions (space-separated string lists). Error for user-controllable values; info for other contexts. Dot/bracket styles treated equivalently. |
-| `bot-conditions` | ✓ | — | Warn (==) or info (!=) when bot checks rely on spoofable actor contexts (name or ID). Suppressed when a non-spoofable trigger-author context (`github.event.pull_request.user.login`/`.id`) comparison with the same literal is AND-conjoined. Also suppressed entirely when workflow triggers are not PR-only (e.g. push-only, schedule-only, or mixed triggers such as `push` + `pull_request` where `github.actor` is the only cross-trigger bot check). Uses generated `BotActors` dataset. |
+| `bot-conditions` | ✓ | — | Warn when bot privilege checks (`==`) rely on spoofable actor contexts (name or ID). Exclusion checks (`!=`) are opt-in via `strict-detection: true` (info severity when enabled). Suppressed when a non-spoofable trigger-author context (`github.event.pull_request.user.login`/`.id`) comparison with the same literal and operator (`==` with `==`, `!=` with `!=`) is AND-conjoined. Also suppressed entirely when workflow triggers are not PR-only (e.g. push-only, schedule-only, or mixed triggers such as `push` + `pull_request` where `github.actor` is the only cross-trigger bot check). Uses generated `BotActors` dataset. |
 | `expr-undefined-var` | ✓ | — | Error when expressions reference unavailable context roots. Builds strict per-job types for `matrix`, `steps`, `needs`, popular-action outputs, local action outputs, and local reusable workflow outputs. Remote reusable workflows treated as loose. |
 | `run-env-context-direct-use` | ✓ | — | Error when `run:` directly references `${{ env.* }}`; shell variable expansion required. |
 | `run-secrets-context-direct-use` | ✓ | — | Error when `run:` directly references `${{ secrets.* }}`; must map via `env`. |
@@ -414,7 +414,7 @@ The following table defines the normative default severity for each rule. Implem
 | `credentials` | mixed | warning (missing credentials), error (plaintext password) |
 | `template-injection` | error | |
 | `unsound-contains` | mixed | error (user-controllable values), info (other contexts) |
-| `bot-conditions` | mixed | warning (equality checks), info (inequality/exclusion checks). Suppressed entirely when AND-conjoined with non-spoofable trigger-author context, when no workflow trigger provides PR context, or when any non-PR trigger is present (mixed-trigger workflows). |
+| `bot-conditions` | mixed | warning (equality checks). info (inequality/exclusion checks) only when `strict-detection: true`. Suppressed entirely when AND-conjoined with non-spoofable trigger-author context, when no workflow trigger provides PR context, or when any non-PR trigger is present (mixed-trigger workflows). |
 | `expr-undefined-var` | error | |
 | `run-env-context-direct-use` | error | |
 | `run-secrets-context-direct-use` | error | |
@@ -510,6 +510,9 @@ rules:
   overprovisioned-secrets:
     max-step-env-secrets: 5
     max-job-secrets: 5
+
+  bot-conditions:
+    strict-detection: false
 ```
 
 #### 5.8.1 `dangerous-triggers` — `events`
@@ -572,6 +575,31 @@ rules:
 - Both values must be non-negative integers; values of `0` effectively require zero secret assignments.
 - Setting either key suppresses the diagnostic only when the count is within the configured limit.
 - Note: two explicitly named secrets in a step `env:` is a well-established least-privilege pattern and should not produce diagnostics under the default threshold.
+
+#### 5.8.10 `bot-conditions` — `strict-detection`
+
+- `strict-detection`: When `true`, report exclusion checks (`!=`) against spoofable bot contexts on PR-only workflows at info severity. Default: `false`.
+- Rationale: `github.actor != 'dependabot[bot]'` is a common exclusion pattern with lower exploit impact than equality-based privilege grants; default-off reduces noise that would otherwise lead users to disable the rule entirely.
+- Mitigation: A spoofable comparison is suppressed when the same expression AND-conjoins a non-spoofable trigger-author context (`github.event.pull_request.user.login` or `.id`) comparing the same literal with the **same operator** (`==` with `==`, `!=` with `!=`). Mismatched operators (for example `github.actor != 'dependabot[bot]' && github.event.pull_request.user.login == 'dependabot[bot]'`) do not mitigate.
+- Trigger scope: Diagnostics are emitted only on PR-only workflows (`pull_request`, `pull_request_target`, `pull_request_review`, `pull_request_review_comment`). Mixed or non-PR triggers suppress all diagnostics for that workflow.
+
+**Outcome matrix** (representative cases; `*` = any value):
+
+| `strict-detection` | Operator | Workflow triggers | Mitigation (AND-conjoined) | Outcome |
+| --- | --- | --- | --- | --- |
+| `false` | `==` | PR-only | none | **warning** |
+| `false` | `==` | PR-only | dual `==` on `user.login` / `user.id` | no diagnostic |
+| `false` | `!=` | PR-only | any | no diagnostic |
+| `true` | `!=` | PR-only | none | **info** |
+| `true` | `!=` | PR-only | dual `!=` on `user.login` / `user.id` | no diagnostic |
+| `true` | `!=` | PR-only | mismatched operator | **info** |
+| `true` | `==` | PR-only | none | **warning** |
+| `*` | `*` | mixed or non-PR | `*` | no diagnostic |
+| `true` | `!=` | PR-only | none | **info** |
+| `true` | `!=` | PR-only | dual `!=` on `user.login` / `user.id` | none |
+| `true` | `!=` | PR-only | mismatched operator | **info** |
+| `true` | `==` | PR-only | none | **warning** |
+| `*` | `*` | mixed or non-PR | `*` | none |
 
 ### 5.9 Minimal and Advanced Example Configuration File
 

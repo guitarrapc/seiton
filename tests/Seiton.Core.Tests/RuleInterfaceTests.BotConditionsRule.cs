@@ -268,9 +268,9 @@ public sealed partial class RuleInterfaceTests
                         - run: echo test
             """,
             ["spoofable context"]),
-            // != with AND conjunction: fully mitigated, suppress entirely
+            // != with mismatched non-spoofable operator does not mitigate (default: no != diagnostic anyway)
             new RuleCase(
-            "ok-actor-ne-with-user-login-conjunction",
+            "ok-actor-ne-with-user-login-eq-conjunction-default",
             """
             on: pull_request
             jobs:
@@ -443,9 +443,136 @@ public sealed partial class RuleInterfaceTests
         await AssertRuleCases(new BotConditionsRule(), "bot-conditions", cases);
     }
 
-    // != operator emits info severity instead of warning ---
     [Test]
-    public async Task BotConditionsRule_NotEqual_EmitsInfoSeverity()
+    public async Task RuleRegression_BotConditionsRule_StrictDetection_TableDriven()
+    {
+        var strictConfig = new LintConfig
+        {
+            Rules = new Dictionary<string, RuleConfig>
+            {
+                ["bot-conditions"] = new RuleConfig { StrictDetection = true },
+            },
+        };
+
+        var cases = new[]
+        {
+            // strict + PR-only + != + no mitigation → info
+            new RuleCase(
+            "info-strict-pr-only-actor-ne",
+            """
+            on: pull_request
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    if: github.actor != 'dependabot[bot]'
+                    steps:
+                        - run: echo test
+            """,
+            ["spoofable context"]),
+            // strict + PR-only + == → warning (unchanged)
+            new RuleCase(
+            "warning-strict-pr-only-actor-eq",
+            """
+            on: pull_request
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    if: github.actor == 'dependabot[bot]'
+                    steps:
+                        - run: echo test
+            """,
+            ["spoofable context"]),
+            // strict + dual != filter → suppressed
+            new RuleCase(
+            "ok-strict-dual-ne-user-login-conjunction",
+            """
+            on: pull_request
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    if: github.actor != 'dependabot[bot]' && github.event.pull_request.user.login != 'dependabot[bot]'
+                    steps:
+                        - run: echo test
+            """,
+            []),
+            // strict + mismatched operator conjunction → still flagged
+            new RuleCase(
+            "info-strict-actor-ne-user-login-eq-mismatch",
+            """
+            on: pull_request
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    if: github.actor != 'dependabot[bot]' && github.event.pull_request.user.login == 'dependabot[bot]'
+                    steps:
+                        - run: echo test
+            """,
+            ["spoofable context"]),
+            // strict + mixed triggers → suppressed (not actionable)
+            new RuleCase(
+            "ok-strict-mixed-push-pr-actor-ne",
+            """
+            on: [push, pull_request]
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    if: github.actor != 'dependabot[bot]'
+                    steps:
+                        - run: echo test
+            """,
+            []),
+            // strict + non-PR trigger → suppressed
+            new RuleCase(
+            "ok-strict-push-only-actor-ne",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    if: github.actor != 'dependabot[bot]'
+                    steps:
+                        - run: echo test
+            """,
+            []),
+            // strict + dual == filter → suppressed
+            new RuleCase(
+            "ok-strict-dual-eq-user-login-conjunction",
+            """
+            on: pull_request
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    if: github.actor == 'dependabot[bot]' && github.event.pull_request.user.login == 'dependabot[bot]'
+                    steps:
+                        - run: echo test
+            """,
+            []),
+        };
+
+        await AssertRuleCases(new BotConditionsRule(), "bot-conditions", cases, strictConfig);
+
+        await AssertRuleCases(
+            new BotConditionsRule(),
+            "bot-conditions",
+            [
+                new RuleCase(
+                "ok-default-pr-only-actor-ne",
+                """
+                on: pull_request
+                jobs:
+                    build:
+                        runs-on: ubuntu-latest
+                        if: github.actor != 'dependabot[bot]'
+                        steps:
+                            - run: echo test
+                """,
+                []),
+            ]);
+    }
+
+    // != operator: suppressed by default; info when strict-detection is enabled ---
+    [Test]
+    public async Task BotConditionsRule_NotEqual_Default_Suppressed()
     {
         var yaml = """
             on: pull_request
@@ -459,6 +586,35 @@ public sealed partial class RuleInterfaceTests
 
         using var result = new LintEngine([new BotConditionsRule()])
             .Check(Encoding.UTF8.GetBytes(yaml), "bot-ne-test.yml");
+        var botDiags = result.Diagnostics
+            .Where(x => x.RuleId == "bot-conditions")
+            .ToArray();
+        await Assert.That(botDiags.Length).IsEqualTo(0);
+    }
+
+    [Test]
+    public async Task BotConditionsRule_NotEqual_StrictDetection_EmitsInfoSeverity()
+    {
+        var yaml = """
+            on: pull_request
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    if: github.actor != 'dependabot[bot]'
+                    steps:
+                        - run: echo test
+            """.Replace("\r\n", "\n");
+
+        var config = new LintConfig
+        {
+            Rules = new Dictionary<string, RuleConfig>
+            {
+                ["bot-conditions"] = new RuleConfig { StrictDetection = true },
+            },
+        };
+
+        using var result = new LintEngine([new BotConditionsRule()])
+            .Check(Encoding.UTF8.GetBytes(yaml), "bot-ne-strict-test.yml", config);
         var botDiags = result.Diagnostics
             .Where(x => x.RuleId == "bot-conditions")
             .ToArray();
@@ -490,7 +646,7 @@ public sealed partial class RuleInterfaceTests
     }
 
     [Test]
-    public async Task BotConditionsRule_TriggeringActorNotEqual_EmitsInfoSeverity()
+    public async Task BotConditionsRule_TriggeringActorNotEqual_StrictDetection_EmitsInfoSeverity()
     {
         var yaml = """
             on: pull_request
@@ -502,8 +658,16 @@ public sealed partial class RuleInterfaceTests
                         - run: echo test
             """.Replace("\r\n", "\n");
 
+        var config = new LintConfig
+        {
+            Rules = new Dictionary<string, RuleConfig>
+            {
+                ["bot-conditions"] = new RuleConfig { StrictDetection = true },
+            },
+        };
+
         using var result = new LintEngine([new BotConditionsRule()])
-            .Check(Encoding.UTF8.GetBytes(yaml), "bot-ne-triggering-test.yml");
+            .Check(Encoding.UTF8.GetBytes(yaml), "bot-ne-triggering-test.yml", config);
         var botDiags = result.Diagnostics
             .Where(x => x.RuleId == "bot-conditions")
             .ToArray();
@@ -624,7 +788,7 @@ public sealed partial class RuleInterfaceTests
     }
 
     [Test]
-    public async Task BotConditionsRule_PullRequestOnlyEvents_NotEqual_EmitsInfo()
+    public async Task BotConditionsRule_PullRequestOnlyEvents_NotEqual_StrictDetection_EmitsInfo()
     {
         var yaml = """
             on: [pull_request, pull_request_target]
@@ -636,8 +800,16 @@ public sealed partial class RuleInterfaceTests
                         - run: echo test
             """.Replace("\r\n", "\n");
 
+        var config = new LintConfig
+        {
+            Rules = new Dictionary<string, RuleConfig>
+            {
+                ["bot-conditions"] = new RuleConfig { StrictDetection = true },
+            },
+        };
+
         using var result = new LintEngine([new BotConditionsRule()])
-            .Check(Encoding.UTF8.GetBytes(yaml), "bot-pr-only-mix-test.yml");
+            .Check(Encoding.UTF8.GetBytes(yaml), "bot-pr-only-mix-test.yml", config);
         var botDiags = result.Diagnostics
             .Where(x => x.RuleId == "bot-conditions")
             .ToArray();

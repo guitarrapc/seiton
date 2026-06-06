@@ -389,6 +389,22 @@ Some rules accept additional configuration keys. All additive list keys append t
 | `forbidden-uses` | `deny` / `allow` | Glob patterns for denying or allowing `uses:` references. |
 | `unpinned-uses` | `ignore-actions` | Object entries for actions to exclude from SHA-pinning checks. `owner` is required; optional `refs` narrows the ignore to exact refs. |
 | `overprovisioned-secrets` | `max-step-env-secrets` / `max-job-secrets` | Integer thresholds for secret over-provisioning detection. |
+| `bot-conditions` | `strict-detection` | When `true`, report exclusion checks (`!=`) on PR-only workflows at info severity. Defaults to `false`. |
+
+<a id="bot-conditionsstrict-detection"></a>
+#### `bot-conditions.strict-detection`
+
+By default, `bot-conditions` warns only on equality checks (`==`) that grant privileges to a spoofable bot identity. Common exclusion patterns such as `github.actor != 'dependabot[bot]'` are not reported unless you opt in:
+
+```yaml
+rules:
+  bot-conditions:
+    strict-detection: true
+```
+
+When enabled, inequality checks on PR-only workflows are reported at info severity. Mixed or non-PR triggers remain suppressed. Dual exclusion filters (`github.actor != '…[bot]' && github.event.pull_request.user.login != '…[bot]'`) are not reported.
+
+For the full outcome matrix (`strict-detection` × operator × triggers × mitigation), see [rules.md#bot-conditions-decision-matrix](rules.md#bot-conditions-decision-matrix).
 
 <a id="runner-labelknown-hosted-labels"></a>
 #### `runner-label.known-hosted-labels`

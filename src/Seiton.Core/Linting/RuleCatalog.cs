@@ -487,6 +487,7 @@ internal static class RuleCatalog
                 RuleId.UnpinnedUses => RuleKeyFlags.IgnoreActions,
                 RuleId.OverprovisionedSecrets => RuleKeyFlags.MaxStepEnvSecrets | RuleKeyFlags.MaxJobSecrets,
                 RuleId.RunnerNoLatest => RuleKeyFlags.FixMapping,
+                RuleId.BotConditions => RuleKeyFlags.StrictDetection,
                 _ => RuleKeyFlags.None,
             };
         }

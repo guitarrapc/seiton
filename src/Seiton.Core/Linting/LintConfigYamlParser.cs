@@ -67,6 +67,7 @@ internal static class LintConfigYamlParser
         (RuleKeyFlags.MaxJobSecrets, "max-job-secrets"),
         (RuleKeyFlags.IgnoreActions, "ignore-actions"),
         (RuleKeyFlags.FixMapping, "fix-mapping"),
+        (RuleKeyFlags.StrictDetection, "strict-detection"),
     ];
 
     /// <summary>Parses lint configuration YAML bytes into a <see cref="LintConfigParseResult"/>.</summary>
@@ -425,6 +426,7 @@ internal static class LintConfigYamlParser
         int? maxStepEnvSecrets = null;
         int? maxJobSecrets = null;
         IReadOnlyDictionary<string, string>? fixMapping = null;
+        var strictDetection = false;
         var seenKeyFlags = RuleKeyFlags.None;
 
         foreach (var (key, value) in body)
@@ -517,6 +519,18 @@ internal static class LintConfigYamlParser
                     seenKeyFlags |= RuleKeyFlags.FixMapping;
                     fixMapping = ParseFixMapping(value, diagnostics, filePath);
                     break;
+                case "strict-detection":
+                    seenKeyFlags |= RuleKeyFlags.StrictDetection;
+                    if (!TryCoerceBool(value, out var strict))
+                    {
+                        diagnostics.Add(Diag("strict-detection must be true or false", DomLine, 5, 16, filePath));
+                    }
+                    else
+                    {
+                        strictDetection = strict;
+                    }
+
+                    break;
                 default:
                     diagnostics.Add(Diag($"unknown rule option '{key}'", DomLine, 5, key.Length, filePath));
                     break;
@@ -541,6 +555,7 @@ internal static class LintConfigYamlParser
             MaxStepEnvSecrets = maxStepEnvSecrets,
             MaxJobSecrets = maxJobSecrets,
             FixMapping = fixMapping,
+            StrictDetection = strictDetection,
         };
 
         if (!rules.TryAdd(ruleId, config))

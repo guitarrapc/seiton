@@ -296,7 +296,7 @@ The current default rule scope in C# is:
 | `credentials` | — |
 | `template-injection` | — |
 | `unsound-contains` | — |
-| `bot-conditions` | Uses `BotActors` generated dataset. |
+| `bot-conditions` | Uses `BotActors` generated dataset. `!=` exclusion checks are gated by `strict-detection` rule config (default `false`). |
 | `expr-undefined-var` | `CheckTemplateType`/`CheckTemplateTypeWithOverrides` for `${{ }}` type checks. `CheckEnvMappingType` for `env: ${{ expr }}`. `ValidateIndexAccess`/`ValidateIndexAccessWithOverrides` for index type checks. Uses `LocalActionOutputResolver` and `LocalReusableWorkflowOutputResolver`. |
 | `run-env-context-direct-use` | — |
 | `run-secrets-context-direct-use` | — |

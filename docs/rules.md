@@ -1104,12 +1104,40 @@ jobs:
 
 - **Severity:**
   - **warning** — equality checks (`==`): grants privileges to a bot identity that can be spoofed.
-  - **info** — inequality checks (`!=`): exclusion pattern with lower risk (attacker gains only normal processing).
+  - **info** — inequality checks (`!=`): exclusion pattern with lower risk (attacker gains only normal processing). Reported only when `strict-detection: true` (default: off).
+
 - **Suppression:** The diagnostic is suppressed entirely when:
-  - A spoofable context comparison is AND-conjoined with a non-spoofable trigger-author context (`github.event.pull_request.user.login` or `github.event.pull_request.user.id`) checking the same literal value.
+  - A spoofable context comparison is AND-conjoined with a non-spoofable trigger-author context (`github.event.pull_request.user.login` or `github.event.pull_request.user.id`) checking the same literal value with the same operator (`==` with `==`, `!=` with `!=`).
   - Workflow triggers are not PR-only — for example `on: push` only, `on: schedule` only, or mixed triggers such as `push` + `pull_request` where `github.event.pull_request.user.login` is unavailable on non-PR events and `github.actor` is the practical cross-trigger bot check.
   - Diagnostics remain for PR-only workflows (`pull_request`, `pull_request_target`, `pull_request_review`, `pull_request_review_comment` only) where a trigger-author alternative is actionable.
 - Known bot ID comparisons such as `github.actor_id == '49699333'` and equivalent bracket/index-style forms like `github['ACTOR_ID'] == 49699333` are also flagged. Prefer the corresponding trigger-author context like `github.event.pull_request.user.id`.
+
+**Configuration:**
+
+- `strict-detection`: Enable detection of inequality checks (`!=`) against spoofable contexts. This pattern is often used for exclusion (for example, "if not a bot") and has lower risk than equality checks, but it can still be bypassed by spoofing the trigger actor. Default is `false` to reduce false positives in common exclusion patterns.
+- See: [configuration.md#bot-conditionsstrict-detection](configuration.md#bot-conditionsstrict-detection)
+
+<a id="bot-conditions-decision-matrix"></a>
+
+**Decision matrix** (when does this rule report? `*` = any value):
+
+| `strict-detection` | Operator | Workflow triggers | Mitigation (AND-conjoined) | Outcome |
+| --- | --- | --- | --- | --- |
+| `false` | `==` | PR-only | none | **warning** |
+| `false` | `==` | PR-only | dual `==` on `user.login` / `user.id` | no diagnostic |
+| `false` | `!=` | PR-only | any | no diagnostic |
+| `true` | `!=` | PR-only | none | **info** |
+| `true` | `!=` | PR-only | dual `!=` on `user.login` / `user.id` | no diagnostic |
+| `true` | `!=` | PR-only | mismatched operator | **info** |
+| `true` | `==` | PR-only | none | **warning** |
+| `*` | `*` | mixed or non-PR | `*` | no diagnostic |
+| `true` | `!=` | PR-only | none | **info** |
+| `true` | `!=` | PR-only | dual `!=` on `user.login` / `user.id` | none |
+| `true` | `!=` | PR-only | mismatched operator | **info** |
+| `true` | `==` | PR-only | none | **warning** |
+| `*` | `*` | mixed or non-PR | `*` | none |
+
+PR-only means `pull_request`, `pull_request_target`, `pull_request_review`, or `pull_request_review_comment` only (no `push`, `schedule`, `workflow_dispatch`, etc.).
 
 ---
 
