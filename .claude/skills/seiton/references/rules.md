@@ -2,6 +2,18 @@
 
 All lint rules, their default severity, auto-fix availability, and document scope.
 
+## Tuning Order (Before Exclusions)
+
+When a rule reports diagnostics, use this order:
+
+1. Apply fixes (`seiton --fix`) or manual workflow edits.
+2. If the behavior is a repository-wide policy decision, tune `rules.<rule-id>` first:
+   - `enabled: false` (disable globally, last resort)
+   - `severity: warning|error` (adjust strictness)
+3. Use `exclusions` only for file/job-specific exceptions.
+
+For online rules, always enable them explicitly in config (`rules.<rule-id>.enabled: true`) and set `GITHUB_TOKEN` or `SEITON_GITHUB_TOKEN` to avoid rate limits.
+
 ## Rule Table
 
 | Rule ID | Severity | Fix | Scope | Default |
