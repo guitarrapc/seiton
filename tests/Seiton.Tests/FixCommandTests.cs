@@ -1,5 +1,6 @@
 ﻿using Seiton.Cli;
 using Seiton.Commands;
+using Seiton.Core.Linting.Fixing;
 using Seiton.Output;
 
 namespace Seiton.Tests;
@@ -755,6 +756,24 @@ public sealed class FixCommandTests
         await Assert.That(lines[0]).Contains("error: fix failed for workflow.yml");
         await Assert.That(lines[0]).Contains("offset 78");
         await Assert.That(lines[1]).Contains("hint:");
+    }
+
+    [Test]
+    public async Task CreateFixApplicationErrorLines_ConflictException_MentionsRuleIds()
+    {
+        var ex = new FixApplyConflictException(
+            conflictOffset: 78,
+            previousOffset: 78,
+            previousLength: 24,
+            currentOffset: 78,
+            currentLength: 24,
+            totalEditsInBatch: 2,
+            conflictingRuleIds: ["unpinned-uses", "job-timeout-minutes-required"]);
+
+        var lines = FixCommand.CreateFixApplicationErrorLines("workflow.yml", ex, verbose: false);
+
+        await Assert.That(lines[0]).Contains("unpinned-uses");
+        await Assert.That(lines[1]).Contains("conflicting rule-id(s)");
     }
 
     [Test]

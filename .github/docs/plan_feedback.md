@@ -247,8 +247,7 @@ exclusions:
   - file: .github/workflows/agentics-maintenance.yml
   - file: .github/workflows/injection-attack-via-context.yaml
   # file-only exclusion（rules 省略）で全ルール抑制
-  - file: .github/workflows/prevent-file-change.yaml
-    rules: [unpinned-uses]   # fix 競合回避の一時措置 → §5 修正後は削除可能
+  # prevent-file-change.yaml の unpinned-uses 抑制はフェーズ1修正後に削除可能
 
 fix:
   defaults:
@@ -287,23 +286,61 @@ rules:
 
 ## 7. 実装フェーズ（優先度順）
 
-### フェーズ 1 — P1 バグ修正（pin fix 競合）
+### フェーズ 1 — P1 バグ修正（pin fix 競合）— **実装済み（2026-06-07）**
 
 **WHY**: `--fix --enable-pin-network` が同一 uses 複数箇所で失敗するのは、pinact / zizmor 置き換えの信頼性を損なう。
 
 **完了条件**
 
-- [ ] `prevent-file-change.yaml` 相当 fixture で dry-run / apply が成功
-- [ ] `PinFixFormatterTests` に duplicate uses ケース
-- [ ] 競合時メッセージに rule-id と位置情報
+- [x] `prevent-file-change.yaml` 相当 fixture で dry-run / apply が成功（`PinFixFormatterTests` / `PinRemediationTests`）
+- [x] `PinFixFormatterTests` に duplicate uses ケース
+- [x] 競合時メッセージに rule-id（`FixApplyConflictException` + `FixEngine` enrichment）
 
-**想定変更ファイル**
+#### 実装内容
+
+| コンポーネント | 変更 |
+|----------------|------|
+| `PinFixFormatter.TryFindReplacementOffset` | 診断 anchor（`@ref` 開始位置）を含む occurrence を選択。グローバル先頭 `IndexOf` フォールバックを廃止 |
+| `FixCommand.ApplyPinRemediationAsync` | `SelectNonConflictingBatch` + 反復（re-lint / re-remediate）で pin fix を部分適用可能に |
+| `FixApplyConflictException` | 競合 offset・edit 長・`rule-id` リストを構造化。CLI hint を競合専用に分岐 |
+| `PinFixOffsetBenchmark` | 重複 uses 向け offset 解決のベンチマークを新規追加 |
+
+#### セルフレビュー（実施済み）
+
+| 指摘 | 対応 |
+|------|------|
+| 根本原因は `PinFixFormatter` の先頭一致フォールバック | anchor ベース解決に置換 |
+| pin 適用が conflict-aware でない | `SelectNonConflictingBatch` 経由に変更 |
+| 競合時の rule-id が不明 | `FixApplyConflictException` + diagnostic 適用時の enrichment |
+| 未使用変数（`FixEngine.Apply`） | 削除 |
+| UX: 汎用 hint が競合時に不親切 | `conflicting rule-id(s)` を参照する専用 hint |
+
+#### ベンチマーク（ShortRun, Release, 本実装後）
+
+| ベンチマーク | 条件 | Mean | Allocated/op | 備考 |
+|--------------|------|------|--------------|------|
+| `PinFixOffsetBenchmark` | 2 重複 uses | **~100 ns** | ~704 B | 新規。lint+pin fix 生成のホットパスはネットワーク待ちが支配的 |
+| `PinFixOffsetBenchmark` | 8 重複 uses | **~392 ns** | ~2.8 KB | uses 数にほぼ線形（ファイル内スキャン窓は `oldBytes.Length` 上限） |
+| `CoreLintBenchmark` | Small/Medium/Large | 変更前後で実質同等 | 変更なし | lint パス自体は未変更 |
+
+**性能評価**
+
+- **lint パス**: 変更なしのため CoreLint ベンチマークに有意差なし（±10% 以内）。
+- **pin offset 解決**: 旧実装は誤って先頭一致するだけで安価だったが、正しい anchor 探索は **O(uses文字列長 × 同一文字列出現数)** の小さな窓スキャン。実測 8 重複でも **sub-µs** で、GitHub API 呼び出し（ms〜秒）に比べ無視できる。
+- **pin 適用の反復**: 通常ケース（offset 正しい）は 1 パスで全 pin 適用。真の競合時のみ re-remediate が走る（エッジケース向けコスト）。
+
+**変更ファイル**
 
 - `src/Seiton.Core/Linting/PinRemediation/PinFixFormatter.cs`
+- `src/Seiton.Core/Linting/Fixing/FixEngine.cs`
+- `src/Seiton.Core/Linting/Fixing/FixApplyConflictException.cs`（新規）
 - `src/Seiton/Commands/FixCommand.cs`
-- `src/Seiton.Core/Linting/Fixing/FixEngine.cs`（エラーメッセージ）
+- `src/Seiton.Benchmark/PinFixOffsetBenchmark.cs`（新規）
 - `tests/Seiton.Core.Tests/PinFixFormatterTests.cs`
+- `tests/Seiton.Core.Tests/PinRemediationTests.cs`
+- `tests/Seiton.Core.Tests/FixEngineTests.cs`
 - `tests/Seiton.Tests/FixCommandTests.cs`
+- `docs/rules.md`, `.github/docs/Seiton_Linter_spec.md`, `.github/docs/Seiton_Linter_csharp_spec.md`
 
 ### フェーズ 2 — P2 UX（fix per-rule サマリ）
 

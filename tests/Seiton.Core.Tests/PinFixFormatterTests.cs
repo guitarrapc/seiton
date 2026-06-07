@@ -1,4 +1,7 @@
-﻿using Seiton.Core.Linting.PinRemediation;
+﻿using Seiton.Core.Linting;
+using Seiton.Core.Linting.Fixing;
+using Seiton.Core.Linting.PinRemediation;
+using Seiton.Core.Linting.Rules;
 using Seiton.Core.Parsing;
 using System.Text;
 
@@ -84,6 +87,86 @@ public sealed class PinFixFormatterTests
         var fix = PinFixFormatter.BuildActionsShaFix(diagnostic, sha, "v4", source);
 
         await Assert.That(fix.HasValue).IsFalse();
+    }
+
+    [Test]
+    public async Task BuildActionsShaFix_DuplicateUses_EachDiagnosticGetsDistinctOffset()
+    {
+        var yaml = """
+            on: push
+            jobs:
+              dependabot:
+                steps:
+                  - uses: actions/github-script@v9
+                    id: check
+              external:
+                steps:
+                  - uses: actions/github-script@v9
+                    id: check
+            """;
+        var source = Encoding.UTF8.GetBytes(yaml.Replace("\r\n", "\n", StringComparison.Ordinal));
+        var lintEngine = new LintEngine([new UnpinnedUsesRule()]);
+        using var lintResult = lintEngine.Check(source, "duplicate-uses.yml");
+
+        var unpinned = lintResult.Diagnostics
+            .Where(d => d.RuleId == "unpinned-uses")
+            .ToArray();
+        await Assert.That(unpinned.Length).IsEqualTo(2);
+
+        const string sha = "0123456789abcdef0123456789abcdef01234567";
+        var fixes = new DiagnosticFix?[unpinned.Length];
+        for (var i = 0; i < unpinned.Length; i++)
+        {
+            fixes[i] = PinFixFormatter.BuildActionsShaFix(unpinned[i], sha, "v9", source);
+            await Assert.That(fixes[i].HasValue).IsTrue();
+        }
+
+        await Assert.That(fixes[0]!.Value.Edits[0].Offset)
+            .IsNotEqualTo(fixes[1]!.Value.Edits[0].Offset);
+
+        var pinnedDiagnostics = new Diagnostic[unpinned.Length];
+        for (var i = 0; i < unpinned.Length; i++)
+        {
+            pinnedDiagnostics[i] = unpinned[i] with { Fix = fixes[i] };
+        }
+
+        var updated = FixEngine.Apply(source, pinnedDiagnostics);
+        var updatedYaml = Encoding.UTF8.GetString(updated);
+        var expectedPin = $"actions/github-script@{sha} # v9";
+        await Assert.That(updatedYaml.Split(expectedPin, StringSplitOptions.None).Length - 1).IsEqualTo(2);
+    }
+
+    [Test]
+    public async Task TryFindReplacementOffset_ContainingAnchor_FindsCorrectOccurrence()
+    {
+        var yaml = "aaa actions/checkout@v4 bbb actions/checkout@v4 ccc";
+        var source = Encoding.UTF8.GetBytes(yaml);
+        var oldBytes = Encoding.UTF8.GetBytes("actions/checkout@v4");
+        var secondAnchor = yaml.IndexOf("@v4", yaml.IndexOf("@v4", StringComparison.Ordinal) + 1, StringComparison.Ordinal);
+
+        await Assert.That(PinFixFormatter.TryFindReplacementOffset(source, oldBytes, secondAnchor, out var offset)).IsTrue();
+        await Assert.That(offset).IsEqualTo(yaml.LastIndexOf("actions/checkout@v4", StringComparison.Ordinal));
+    }
+
+    [Test]
+    public async Task TryFindReplacementOffset_AnchorBeforeValue_ForwardFallbackFindsMatch()
+    {
+        var yaml = "uses: actions/checkout@v4";
+        var source = Encoding.UTF8.GetBytes(yaml);
+        var oldBytes = Encoding.UTF8.GetBytes("actions/checkout@v4");
+        var anchor = yaml.IndexOf("uses", StringComparison.Ordinal);
+
+        await Assert.That(PinFixFormatter.TryFindReplacementOffset(source, oldBytes, anchor, out var offset)).IsTrue();
+        await Assert.That(offset).IsEqualTo(yaml.IndexOf("actions/checkout@v4", StringComparison.Ordinal));
+    }
+
+    [Test]
+    public async Task TryFindReplacementOffset_NoMatch_ReturnsFalse()
+    {
+        var source = Encoding.UTF8.GetBytes("uses: actions/checkout@v4");
+        var oldBytes = Encoding.UTF8.GetBytes("actions/setup-node@v4");
+
+        await Assert.That(PinFixFormatter.TryFindReplacementOffset(source, oldBytes, anchorOffset: 0, out _)).IsFalse();
     }
 
     [Test]

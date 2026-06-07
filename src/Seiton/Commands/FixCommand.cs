@@ -534,13 +534,16 @@ internal static class FixCommand
         // Normalize message to single line — exception messages can contain newlines
         // which would break the structured error:/hint:/detail: output format.
         var message = ex.Message.ReplaceLineEndings(" ");
+        var conflictHint = ex is FixApplyConflictException
+            ? "hint: overlapping fixes were detected (see conflicting rule-id(s) in the message). Re-run with --verbose for details, or exclude one of the conflicting rules for this file."
+            : "hint: this may indicate conflicting lint rules or a bug in fix generation. Please report this issue.";
 
         if (!verbose)
         {
             return
             [
                 $"error: fix failed for {filePath}: {message}",
-                "hint: this may indicate conflicting lint rules or a bug in fix generation. Please report this issue."
+                conflictHint
             ];
         }
 
@@ -551,7 +554,7 @@ internal static class FixCommand
         var detailLines = detail.Split('\n', StringSplitOptions.RemoveEmptyEntries);
         var result = new string[2 + detailLines.Length];
         result[0] = $"error: fix failed for {filePath}: {message}";
-        result[1] = "hint: this may indicate conflicting lint rules or a bug in fix generation. Please report this issue.";
+        result[1] = conflictHint;
         for (var i = 0; i < detailLines.Length; i++)
         {
             result[2 + i] = $"detail: {detailLines[i].TrimEnd()}";
@@ -862,36 +865,59 @@ internal static class FixCommand
         LintConfig fixEnabledLintConfig,
         VerboseLogger verboseLogger)
     {
-        using var handle = engine.Check(currentYaml, filePath, fixEnabledLintConfig);
-        var diagnostics = handle.CopyDiagnostics();
+        var yaml = currentYaml;
+        var appliedCount = 0;
+        const int maxPinPasses = 8;
 
-        // Quick pre-scan: skip network remediation entirely when no pin-target diagnostics exist.
-        if (!HasPinFixableDiagnostics(diagnostics))
+        for (var pass = 0; pass < maxPinPasses; pass++)
         {
-            return (currentYaml, 0);
-        }
+            using var handle = engine.Check(yaml, filePath, fixEnabledLintConfig);
+            if (!HasPinFixableDiagnostics(handle.Diagnostics))
+            {
+                break;
+            }
 
-        var netStart = verboseLogger.GetTimestamp();
-        var remResult = await pinRemediation.RemediateAsync(diagnostics, currentYaml);
-        if (remResult.ResolvedCount > 0)
-        {
+            var netStart = verboseLogger.GetTimestamp();
+            var remResult = await pinRemediation.RemediateAsync(handle.CopyDiagnostics(), yaml);
+            if (remResult.ResolvedCount == 0)
+            {
+                break;
+            }
+
             if (verboseLogger.IsEnabled)
             {
                 var netElapsed = verboseLogger.GetElapsedTime(netStart);
                 verboseLogger.Log("network", $"resolved {remResult.ResolvedCount} pin(s) for {filePath} in {CheckCommand.FormatMilliseconds(netElapsed)} ms");
             }
 
-            // Apply only pin-rule fixes. remResult.Diagnostics may still contain non-pin
-            // diagnostics with fixes (if maxPasses didn't fully converge). Applying those here
-            // would bypass the conflict-aware selection logic. Filter to pin rules only.
-            var pinYaml = FixEngine.Apply(currentYaml, PinFixableDiagnostics(remResult.Diagnostics));
-            if (!pinYaml.AsSpan().SequenceEqual(currentYaml))
+            var pinFixable = PinFixableDiagnostics(remResult.Diagnostics).ToArray();
+            if (pinFixable.Length == 0)
             {
-                return (pinYaml, remResult.ResolvedCount);
+                break;
+            }
+
+            var batch = SelectNonConflictingBatch(pinFixable);
+            if (batch.Length == 0)
+            {
+                break;
+            }
+
+            var nextYaml = FixEngine.Apply(yaml, batch);
+            if (nextYaml.AsSpan().SequenceEqual(yaml))
+            {
+                break;
+            }
+
+            appliedCount += batch.Length;
+            yaml = nextYaml;
+
+            if (batch.Length == pinFixable.Length)
+            {
+                break;
             }
         }
 
-        return (currentYaml, 0);
+        return (yaml, appliedCount);
     }
 
     /// <summary>
