@@ -85,6 +85,40 @@
 
 **検証:** `RuleInterfaceTests` または env-var 専用テストで `help:` 文字列をアサート。
 
+**実装状況（2026-06-08）:** ✅ 完了
+
+| 項目 | 内容 |
+|------|------|
+| 実装 | `EnvVarRule` に `NonPortableNameHelp` 定数を追加。workflow / job / step の非 portable キー診断すべてに同一 `help:` を付与。`RuleBase` に `Add*Warning(..., help)` オーバーロードを追加（`AddStepError` と同型） |
+| テスト | `RuleInterfaceTests.EnvVarRule.cs` に 2 件追加（workflow help、job+step help）。全 2539 テスト pass |
+| 仕様 | ルール判定・severity は不変のため `Seiton_Linter_spec.md` 変更なし。`docs/rules.md` §`env-var` に inputs 直渡し代替パターン（Option A/B）を追記 |
+| UX | メッセージは従来どおり（`{sink}.env key '{name}' is not portable; ...`）。`help:` は大文字リネーム例（`upstream -> UPSTREAM`）と「1 回だけ `with:` に渡すなら `${{ inputs.* }}` 直渡し」の 2 択を 1 行で提示 |
+
+**ベンチマーク（`CoreLintBenchmark`、ShortRun、実装前 → 実装後）:**
+
+| Size | FixEnabled | Before | After | Δ Mean | Δ Allocated |
+|------|------------|--------|-------|--------|-------------|
+| Small | False | 61.69 µs | 68.54 µs | +11.1%* | 8.67 KB → 8.67 KB（±0%） |
+| Small | True | 66.15 µs | 69.19 µs | +4.6% | 10.13 KB → 10.13 KB（±0%） |
+| Medium | False | 1,325 µs | 1,309 µs | −1.2% | 68.52 KB → 68.52 KB（±0%） |
+| Medium | True | 1,848 µs | 1,901 µs | +2.8% | 81.88 KB → 81.88 KB（±0%） |
+| Large | False | 20,433 µs | 21,367 µs | +4.6% | 325.53 KB → 325.53 KB（±0%） |
+| Large | True | 32,917 µs | 32,463 µs | −1.4% | 380.38 KB → 380.38 KB（±0%） |
+
+\* Small False の +11% は ShortRun の誤差幅内（CI 99.9% margin ±91%）。合成ワークフローは portable な env キーのみで `env-var` 非発火のため、lint ホットパスは実質不変。`help` 文字列は `const` で violation 時のみ `Diagnostic` に参照される。
+
+**性能評価:** Allocated は全ケース ±0%。Mean は Medium/Large で ±5% 以内、Small のみノイズで +11% だが violation 非発火パスに定数追加のみで実害なし。
+
+**セルフレビュー:**
+
+| 指摘 | 対応 |
+|------|------|
+| help をメッセージに埋め込むと SARIF / text 出力が冗長 | 既存の `Diagnostic.Help` 分離パターンを踏襲。`Add*Warning(..., help)` オーバーロードで他ルールも再利用可能に |
+| キーごとに異なる help（例: `UPSTREAM` 具体名）が親切か | 汎用 1 文に統一（キー名は message 側に既出）。動的 help 生成は violation 時の string 割当増になるため見送り |
+| inputs 直渡しが常に可能か | help に「only forwarded once」条件を明記。rules.md でも中間 env 回避の Option B として例示 |
+| portable キーに help が付く誤り | `ValidateEnv` は非 portable 時のみ `report` 呼び出し — 変更なし |
+| auto-fix 化の誘惑 | プランどおり見送り（B-4）。help のみで判断材料を補足 |
+
 ---
 
 ### B. 自動修正（`--fix`）
@@ -372,7 +406,7 @@ contextに限らず、exclusionの前に --fixを試すように指示するべ�
 | ~~**P1**~~ | B-2 | `run-secrets-context-direct-use` の env ブロック挿入 fix | ✅ 完了（2026-06-08） |
 | ~~**P1**~~ | C-1 | デフォルト出力にルール別 Top N（10 件） | ✅ 完了（2026-06-08） |
 | ~~**P1**~~ | B-3 | fix 優先 — adoption / fix-mode ドキュメント | ✅ 完了（2026-06-08） |
-| **P2** | A-3 | `env-var` の `help:` と rules.md 代替パターン | 実装（help のみ）+ docs |
+| ~~**P2**~~ | A-3 | `env-var` の `help:` と rules.md 代替パターン | ✅ 完了（2026-06-08） |
 | **P2** | C-4 | duplicate exclusion の位置情報改善 | 実装（段階的） |
 | **P3** | C-2 | `--include-actions` 案内の前倒し | 実装（Phase 1 から） |
 | **P3** | C-3 | exit code / `--min-severity` のドキュメント補強 | ドキュメントのみ |

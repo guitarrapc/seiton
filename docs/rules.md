@@ -794,6 +794,32 @@ jobs:
         run: echo ok "${FOO_BAR}"
 ```
 
+When a lowercase `env:` key only forwards an input or secret to a single `with:` field, you can often skip the intermediate variable and reference the context directly:
+
+```yaml
+# Avoid: lowercase env key used only to pass inputs into with:
+env:
+  upstream: ${{ inputs.upstream }}
+steps:
+  - uses: actions/checkout@v4
+    with:
+      ref: ${{ env.upstream }}
+
+# Option A: uppercase env key (update every reference)
+env:
+  UPSTREAM: ${{ inputs.upstream }}
+steps:
+  - uses: actions/checkout@v4
+    with:
+      ref: ${{ env.UPSTREAM }}
+
+# Option B: pass inputs directly when used once
+steps:
+  - uses: actions/checkout@v4
+    with:
+      ref: ${{ inputs.upstream }}
+```
+
 ---
 
 ### `if-cond`
