@@ -82,6 +82,7 @@ public static class ExclusionJobIdValidator
         for (var i = 0; i < jobScopedMatches.Count; i++)
         {
             var (jobs, matchingPaths) = jobScopedMatches[i];
+            var reportedUnknownJobIds = new HashSet<string>(StringComparer.Ordinal);
             for (var p = 0; p < matchingPaths.Count; p++)
             {
                 if (!jobIdsByPath.TryGetValue(matchingPaths[p], out var knownJobIds)
@@ -95,6 +96,11 @@ public static class ExclusionJobIdValidator
                 {
                     var jobId = jobs[j];
                     if (string.IsNullOrEmpty(jobId) || knownJobIds.Contains(jobId))
+                    {
+                        continue;
+                    }
+
+                    if (!reportedUnknownJobIds.Add(jobId))
                     {
                         continue;
                     }

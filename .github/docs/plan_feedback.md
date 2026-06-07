@@ -404,7 +404,7 @@ Skill / `docs/configuration.md` から `rules: ["*"]` の記述を削除し、`f
 
 | 項目 | 結果 |
 |------|------|
-| `ExclusionJobIdValidatorBenchmark`（discovery 4 件、マッチ 3 件パース） | Validate のみ **~4.1 µs** → 横断検証込み **~184 µs**（小規模 workflow 3 件パース分。絶対値はサブ ms） |
+| `ExclusionJobIdValidatorBenchmark`（discovery 4 件、マッチ 3 件パース） | Validate のみ **~3.4 µs** → 横断検証込み **~126 µs**（小規模 workflow 3 件パース分。絶対値はサブ ms） |
 | lint ホットパス | 変更なし（`LintEngine` 未変更） |
 | 設計 | job-scoped exclusion が無い config では workflow パースゼロ（discovery のみ） |
 
@@ -435,10 +435,11 @@ Skill / `docs/configuration.md` から `rules: ["*"]` の記述を削除し、`f
 
 | # | 手順 | 状態 | 根拠 |
 |---|------|------|------|
-| 1 | 移行 config の回帰テスト | **完了** | `tests/Seiton.Core.Tests/fixtures/migration/` + `FeedbackMigrationRegressionTests`（8 件） |
+| 1 | 移行 config の回帰テスト | **完了** | `tests/Seiton.Core.Tests/fixtures/migration/`（nest は job-scoped exclusion）+ `FeedbackMigrationRegressionTests`（8 件） |
 | 2 | `validate-config` / lint CLI 回帰 | **完了** | `tests/Seiton.Tests/FeedbackMigrationCliTests`（validate + verbose lint） |
 | 3 | job-scoped exclusion で他ファイルに unknown job-id が膨張しない | **完了** | `FeedbackMigrationRegressionTests.Lint_JobScopedExclusionForOtherFile_*` + B1 単体テスト |
 | 4 | `rules` 省略と `rules: ["*"]` で file 全体除外が同等 | **完了** | `FeedbackMigrationRegressionTests.Lint_AgenticsMaintenance_RulesWildcard_*` + B2 単体テスト |
+| 5 | `validate-config` が job-scoped exclusion を横断検証 | **完了** | migration fixture + `ValidateExclusionJobIds_MigratedConfig_*` / CLI verbose `job-id-check` |
 
 フィードバック本番規模（120 workflow）の件数（119 checked / 3 suppressed）はラボリポジトリ依存のため、上記ミニ fixture で **設定・抑制・検証ロジック**を回帰固定している。フルラボはリリース前の任意スポットチェックとする。
 

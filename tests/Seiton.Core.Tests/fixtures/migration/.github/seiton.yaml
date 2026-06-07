@@ -16,6 +16,8 @@ exclusions:
   - file: ".github/workflows/agentics-maintenance.yml"
 
   - file: ".github/workflows/reusable-workflow-caller-nest.yaml"
+    jobs:
+      - inherit-demo
     rules:
       - deny-inherit-secrets
 

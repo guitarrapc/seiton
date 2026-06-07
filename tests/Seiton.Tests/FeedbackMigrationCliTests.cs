@@ -26,7 +26,9 @@ public sealed class FeedbackMigrationCliTests
 
         await Assert.That(exitCode).IsEqualTo(ExitCode.Success);
         await Assert.That(stdout.ToString()).Contains("config valid:");
-        await Assert.That(stderr.ToString()).Contains("verbose: job-id-check:");
+        var verbose = stderr.ToString();
+        await Assert.That(verbose).Contains("verbose: job-id-check:");
+        await Assert.That(verbose).Contains("1 workflow file(s) scanned for 1 job-scoped exclusion(s)");
     }
 
     [Test]

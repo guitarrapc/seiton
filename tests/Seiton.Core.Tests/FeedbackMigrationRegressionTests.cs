@@ -33,9 +33,11 @@ public sealed class FeedbackMigrationRegressionTests
             validation.Config,
             workflowPaths,
             ConfigPath,
-            out _);
+            out var stats);
 
         await Assert.That(diags.Any(d => d.Severity == DiagnosticSeverity.Error)).IsFalse();
+        await Assert.That(stats.JobScopedExclusionsChecked).IsEqualTo(1);
+        await Assert.That(stats.WorkflowsScanned).IsEqualTo(1);
     }
 
     [Test]
@@ -57,14 +59,7 @@ public sealed class FeedbackMigrationRegressionTests
     public async Task Lint_JobScopedExclusionForOtherFile_DoesNotInflateUnknownJobIdErrors()
     {
         var cleanPath = Path.Combine(WorkflowsDir, "clean-ci.yml");
-        var baseConfig = LoadConfig();
-        var config = CloneConfigWithExtraExclusion(
-            baseConfig,
-            new LintExclusion(
-                ".github/workflows/reusable-workflow-caller-nest.yaml",
-                ["deny-inherit-secrets"],
-                Jobs: ["inherit-demo"]));
-
+        var config = LoadConfig();
         var bytes = File.ReadAllBytes(cleanPath);
         using var result = new LintEngine().Check(bytes, cleanPath, config);
 
@@ -131,8 +126,7 @@ public sealed class FeedbackMigrationRegressionTests
             total += result.SuppressionSummary.TotalSuppressed;
         }
 
-        await Assert.That(total).IsGreaterThanOrEqualTo(3);
-        await Assert.That(total).IsLessThanOrEqualTo(5);
+        await Assert.That(total).IsEqualTo(4);
     }
 
     private static async Task AssertSuppressedRule(string path, LintConfig config, string ruleId)
@@ -153,25 +147,6 @@ public sealed class FeedbackMigrationRegressionTests
         }
 
         return validation.Config;
-    }
-
-    private static LintConfig CloneConfigWithExtraExclusion(LintConfig baseConfig, LintExclusion extra)
-    {
-        var exclusions = new List<LintExclusion>(baseConfig.Exclusions!.Count + 1);
-        exclusions.AddRange(baseConfig.Exclusions);
-        exclusions.Add(extra);
-
-        return new LintConfig
-        {
-            Utf8Yaml = baseConfig.Utf8Yaml,
-            FilePath = baseConfig.FilePath,
-            ConfigFilePath = baseConfig.ConfigFilePath,
-            Rules = baseConfig.Rules,
-            Exclusions = exclusions,
-            Fix = baseConfig.Fix,
-            Network = baseConfig.Network,
-            Discovery = baseConfig.Discovery,
-        };
     }
 
     private static LintConfig CloneConfigWithAgenticsWildcard(LintConfig baseConfig)
