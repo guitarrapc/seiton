@@ -55,6 +55,36 @@ rules:
 
 Online rules need `GITHUB_TOKEN` or `SEITON_GITHUB_TOKEN` in CI. See `references/rules.md` (Opt-in Rules).
 
+## Mixed training repository recipe
+
+For repositories that intentionally mix good/bad examples, generated files, and production workflows, start with file-scoped exclusions before tuning individual rules.
+
+```yaml
+discovery:
+  skip-agentic-workflows: true
+
+exclusions:
+  # file-only exclusion: omit `rules` to suppress all rules for that file
+  - file: ".github/workflows/*.lock.yml"
+  - file: ".github/workflows/injection-attack-via-context.yaml"
+
+  # equivalent explicit form for file-only exclusion
+  - file: ".github/workflows/agentics-maintenance.yml"
+    rules: ["*"]
+
+  # rule-scoped exclusion for intentional lab patterns
+  - file: ".github/workflows/lab-*.yml"
+    rules:
+      - if-cond
+      - env-var
+```
+
+Notes:
+
+- Use file-only exclusions only for generated/demo paths that are intentionally noisy.
+- Prefer rule-scoped exclusions for real workflows so other checks remain active.
+- Re-check with `seiton --verbose` and keep exclusions as narrow as possible.
+
 ## Rules that often dominate a first run
 
 These are **default-on** rules that frequently produce many hits on existing repos. Treat them as tuning targets, not product defects.

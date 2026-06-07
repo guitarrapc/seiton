@@ -400,9 +400,41 @@ rules:
 
 **完了条件**
 
-- [ ] `adoption-workflow.md` に教材混在リポ向け exclusions レシピ
-- [ ] `docs/configuration.md` に `rules: ["*"]` / file-only exclusion の明記
-- [ ] `unpinned-uses` fix 制限の記載（フェーズ 1 完了後）
+- [x] `adoption-workflow.md` に教材混在リポ向け exclusions レシピ
+- [x] `docs/configuration.md` に `rules: ["*"]` / file-only exclusion の明記
+- [x] `unpinned-uses` fix 制限の記載（フェーズ 1 完了後）
+
+#### 実装内容（2026-06-07）
+
+| コンポーネント | 変更 |
+|----------------|------|
+| `src/Seiton/Skills/references/adoption-workflow.md` | 教材混在リポ向け exclusions レシピを追加（file-only と rule-scoped の使い分け） |
+| `docs/configuration.md` | `rules: ["*"]` と `rules` 省略の同値性を明確化し、混在リポ向け設定例を追記 |
+| `src/Seiton/Skills/references/configuration.md` | エージェント参照用の設定リファレンスにも同内容を同期 |
+| `docs/rules.md` (`unpinned-uses`) | fix 時の競合挙動（conflicting `rule-id` の提示）を追記 |
+| `src/Seiton.Benchmark/FixSummaryOutputBenchmark.cs` | verbose出力専用のため削除（通常経路の性能判断は `CoreLintBenchmark` に一本化） |
+
+#### セルフレビュー（実施済み）
+
+| 指摘 | 対応 |
+|------|------|
+| `rules: ["*"]` が旧挙動の印象で誤解されやすい | `docs/configuration.md` / skill reference に file-only exclusion の明示例を追加 |
+| 教材混在リポで exclusion の粒度が分かりづらい | `adoption-workflow.md` に file-only と rule-scoped の併用レシピを追記 |
+| `unpinned-uses` の fix 時挙動の補足不足 | `docs/rules.md` の `When fixing` に競合時の説明を追加 |
+| `FixSummaryOutputBenchmark` の保守価値が低い | ファイルを削除し、ベンチ確認は `CoreLintBenchmark` / `PinFixOffsetBenchmark` に集約 |
+
+#### ベンチマーク（ShortRun, Release, 本実装後）
+
+| ベンチマーク | 条件 | Mean | Allocated/op | 評価 |
+|--------------|------|------|--------------|------|
+| `CoreLintBenchmark` | Small/Medium/Large | 既存レンジ内 | 既存レンジ内 | 実行パス変更なし（ドキュメント更新 + ベンチ削除のみ） |
+| `PinFixOffsetBenchmark` | duplicate uses 2/8 | 既存レンジ内 | 既存レンジ内 | フェーズ1の pin offset 回帰なし |
+
+**性能評価**
+
+- 今回は実行コードのアルゴリズム変更なし。`FixSummaryOutputBenchmark` 削除により、ベンチ実行コストと保守対象を削減。
+- ユーザー体験上の性能指標は `CoreLintBenchmark`（通常 lint/fix 経路）で監視継続。
+- `unpinned-uses` の修正済み挙動は `PinFixOffsetBenchmark` で継続確認可能。
 
 ### フェーズ 4 — 再検証（githubactions-lab）
 

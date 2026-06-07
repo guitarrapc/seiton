@@ -2553,6 +2553,7 @@ Use `seiton --fix --enable-pin-network` to automatically resolve and apply SHA p
 
 - Network remediation requires connectivity/API quota and is more reliable with `GITHUB_TOKEN` set.
 - When the same unpinned action appears in multiple steps or jobs, `--fix --enable-pin-network` pins each occurrence independently.
+- If fix edits from different rules overlap, Seiton reports conflicting `rule-id` values and skips only the conflicting batch.
 - Verify resolved SHAs match the intended release line and policy before merge.
 - Keep exceptions explicit via `ignore-actions` so mutable-ref usage remains auditable.
 
