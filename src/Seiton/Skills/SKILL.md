@@ -94,7 +94,7 @@ error[rule-id]: message
 
 1. Run `seiton` to identify all diagnostics
 2. Review results — distinguish genuine issues from acceptable patterns
-3. Configure exclusions for intentional patterns (see Best Practices below)
+3. Tune per-rule config (`rules.<rule-id>`) for repository policy choices
 4. Re-run `seiton` and repeat steps 2–3 until only actionable issues remain
 5. Run `seiton --fix --dry-run` to preview available auto-fixes
 6. Run `seiton --fix` to apply fixes (or `seiton --fix --show-diff` to apply and print the diff)
@@ -121,10 +121,12 @@ When a diagnostic is reported, follow this decision flow:
 1. **Can `--fix` resolve it?** → Run `seiton --fix` (or `--fix --dry-run` to preview).
    Most issues have auto-fix support. Fix them rather than suppressing.
 2. **Is it a genuine issue without auto-fix?** → Fix it manually in the workflow file.
-3. **Is the violation intentional?** (demo file, legacy constraint, deliberate pattern)
+3. **Is this a repository-wide rule policy choice?**
+   (e.g., "we always use `-latest` runners", or severity should be warning instead of error)
+   → Adjust `rules: <rule-id>:` (`enabled` / `severity`) first.
+4. **Is the violation intentional only for specific files/jobs?**
+   (demo file, legacy constraint, deliberate pattern)
    → Add an `exclusions` entry scoped to that file/job.
-4. **Does the rule conflict with the repository's permanent policy?**
-   (e.g., "we always use `-latest` runners") → `rules: <rule-id>: enabled: false`.
 
 **Exclusions are for exceptions, not for avoiding fixes.** If a diagnostic has a fix
 available, apply the fix. Reserve `exclusions` for:
@@ -169,6 +171,24 @@ The `file:` value is a glob matched against the repository-relative path
 Each diagnostic includes a `= help:` line with actionable guidance — often showing the
 exact config key or exclusion pattern to suppress it. Read these hints to decide whether
 to fix the issue or suppress it via config.
+
+### Enable online rules explicitly in config
+
+Online rules are opt-in and should be enabled in `.github/seiton.yaml` via `rules.<rule-id>.enabled: true`, not by exclusions.
+
+```yaml
+rules:
+  known-vulnerable-actions:
+    enabled: true
+  impostor-commit:
+    enabled: true
+  ref-confusion:
+    enabled: true
+  stale-action-refs:
+    enabled: true
+```
+
+These rules require `GITHUB_TOKEN` or `SEITON_GITHUB_TOKEN`.
 
 ### Prefer `exclusions` over `rules: enabled: false`
 
