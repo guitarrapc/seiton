@@ -194,7 +194,8 @@ exclusions:
 - `file` パターンが discovery 結果に 1 件もマッチしない場合は **warning**（CI でファイル未 checkout の可能性を考慮）。error にはしない。
 - マッチした workflow のみパースする（job-scoped exclusion が無い、またはパターン不一致のファイルは読まない）。
 - マッチした workflow がパース不能、または `jobs` セクションが空の場合は job-id 検証をスキップする（lint 時の `LintEngine` と同じ。誤検知を避けるため unknown job-id にはしない）。
-- 同一 exclusion エントリで glob が複数 workflow にマッチし、同じ unknown job-id が複数ファイルで欠落していても error は **job-id ごとに 1 件**（重複メッセージを出さない）。
+- 同一 exclusion エントリで glob が複数 workflow にマッチし、同じ unknown job-id が複数ファイルで欠落していても error は **job-id ごとに 1 件**（重複メッセージを出さない）。job-id の重複判定は大文字小文字を区別しない。
+- workflow パスの収集は **Ordinal（大小文字区別）**。exclusion の `file` glob と同様、case-sensitive なファイルシステム上の別ファイルを誤ってマージしない。
 - `--verbose` 時: `verbose: job-id-check: N workflow file(s) scanned for M job-scoped exclusion(s)` を stderr に出力。
 
 ### 2.3.1 `discovery`

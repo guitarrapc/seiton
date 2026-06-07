@@ -273,7 +273,7 @@ public sealed class WriteSummaryTests
         var diagnostics = new List<Diagnostic>
         {
             new(DiagnosticSeverity.Error, "msg", new TextRange(0, 1, 1, 1, 1, 2), RuleId: "template-injection", FilePath: "a.yml"),
-            new(DiagnosticSeverity.Warning, "msg", new TextRange(0, 1, 2, 1, 2, 2), RuleId: "unpinned-uses", FilePath: "b.yml"),
+            new(DiagnosticSeverity.Warning, "msg", new TextRange(0, 1, 2, 1, 2, 2), RuleId: "unpinned-uses", FilePath: "a.yml"),
         };
 
         using var sw = new StringWriter();

@@ -29,7 +29,7 @@ public static class ExclusionJobIdValidator
 
         var configPath = config.ConfigFilePath ?? configDiagnosticPath;
         var diagnostics = new List<Diagnostic>();
-        var pathsToParse = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var pathsToParse = new HashSet<string>(StringComparer.Ordinal);
         var jobScopedMatches = new List<(IReadOnlyList<string> Jobs, List<string> MatchingPaths)>();
         var jobScopedCount = 0;
 
@@ -71,7 +71,7 @@ public static class ExclusionJobIdValidator
             return diagnostics.Count == 0 ? [] : [.. diagnostics];
         }
 
-        var jobIdsByPath = new Dictionary<string, HashSet<string>?>(pathsToParse.Count, StringComparer.OrdinalIgnoreCase);
+        var jobIdsByPath = new Dictionary<string, HashSet<string>?>(pathsToParse.Count, StringComparer.Ordinal);
         foreach (var workflowPath in pathsToParse)
         {
             jobIdsByPath[workflowPath] = TryExtractJobIds(workflowPath);
@@ -82,7 +82,7 @@ public static class ExclusionJobIdValidator
         for (var i = 0; i < jobScopedMatches.Count; i++)
         {
             var (jobs, matchingPaths) = jobScopedMatches[i];
-            var reportedUnknownJobIds = new HashSet<string>(StringComparer.Ordinal);
+            var reportedUnknownJobIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             for (var p = 0; p < matchingPaths.Count; p++)
             {
                 if (!jobIdsByPath.TryGetValue(matchingPaths[p], out var knownJobIds)

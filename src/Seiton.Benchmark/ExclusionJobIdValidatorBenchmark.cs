@@ -14,6 +14,7 @@ public class ExclusionJobIdValidatorBenchmark
 {
     private string _configYaml = null!;
     private string[] _workflowPaths = null!;
+    private string _repositoryRoot = null!;
     private const string ConfigPath = "bench-seiton.yaml";
 
     [GlobalSetup]
@@ -40,14 +41,23 @@ public class ExclusionJobIdValidatorBenchmark
             throw new InvalidOperationException("Benchmark config is invalid");
         }
 
-        var root = Path.Combine(Path.GetTempPath(), "seiton-bench-jobid", Guid.NewGuid().ToString("N"));
+        _repositoryRoot = Path.Combine(Path.GetTempPath(), "seiton-bench-jobid", Guid.NewGuid().ToString("N"));
         _workflowPaths =
         [
-            WriteWorkflow(root, "ci-a.yml", "build"),
-            WriteWorkflow(root, "ci-b.yml", "build", "deploy"),
-            WriteWorkflow(root, "release.yml", "publish"),
-            WriteWorkflow(root, "nightly.yml", "scan"),
+            WriteWorkflow(_repositoryRoot, "ci-a.yml", "build"),
+            WriteWorkflow(_repositoryRoot, "ci-b.yml", "build", "deploy"),
+            WriteWorkflow(_repositoryRoot, "release.yml", "publish"),
+            WriteWorkflow(_repositoryRoot, "nightly.yml", "scan"),
         ];
+    }
+
+    [GlobalCleanup]
+    public void Cleanup()
+    {
+        if (Directory.Exists(_repositoryRoot))
+        {
+            Directory.Delete(_repositoryRoot, recursive: true);
+        }
     }
 
     [Benchmark(Baseline = true, Description = "LintConfigLibrary.Validate only")]

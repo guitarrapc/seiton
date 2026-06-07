@@ -68,7 +68,8 @@ public sealed class FeedbackMigrationCliTests
             await Assert.That(err).Contains("agentic workflow");
             await Assert.That(err).Contains("suppressed:");
             await Assert.That(err).DoesNotContain("unknown job-id");
-            await Assert.That(err).Contains("1 excluded");
+            await Assert.That(err).Contains("verbose: excluded: 1 file(s):");
+            await Assert.That(err).Contains("agentics-maintenance.yml");
         }
         finally
         {
