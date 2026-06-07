@@ -178,6 +178,19 @@ exclusions:
       - runner-no-latest
 ```
 
+### File-only exclusion (`rules` omitted or `["*"]`)
+
+Both forms below suppress all rules for matching files:
+
+```yaml
+exclusions:
+  - file: ".github/workflows/generated.yml"
+  - file: ".github/workflows/agentics-maintenance.yml"
+    rules: ["*"]
+```
+
+Prefer omitted `rules` for readability. `rules: ["*"]` is supported for explicitness/tooling compatibility.
+
 ### Suppress within a specific job
 
 ```yaml

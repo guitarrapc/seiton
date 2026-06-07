@@ -81,31 +81,70 @@ public static class PinFixFormatter
         out DiagnosticFix fix)
     {
         var oldBytes = Encoding.UTF8.GetBytes(oldValue);
+        var anchorOffset = Math.Max(0, diagnostic.Location.Start);
 
-        var rangeStart = Math.Max(0, diagnostic.Location.Start);
-        var rangeLength = Math.Max(0, diagnostic.Location.Length);
-        var rangeEnd = Math.Min(utf8Yaml.Length, rangeStart + rangeLength);
-
-        if (rangeStart <= rangeEnd)
+        if (TryFindReplacementOffset(utf8Yaml.AsSpan(), oldBytes, anchorOffset, out var offset))
         {
-            var segment = utf8Yaml.AsSpan(rangeStart, rangeEnd - rangeStart);
-            var local = segment.IndexOf(oldBytes);
-            if (local >= 0)
-            {
-                var offset = rangeStart + local;
-                fix = new DiagnosticFix(description, [new TextEdit(offset, oldBytes.Length, newValue)]);
-                return true;
-            }
-        }
-
-        var global = utf8Yaml.AsSpan().IndexOf(oldBytes);
-        if (global >= 0)
-        {
-            fix = new DiagnosticFix(description, [new TextEdit(global, oldBytes.Length, newValue)]);
+            fix = new DiagnosticFix(description, [new TextEdit(offset, oldBytes.Length, newValue)]);
             return true;
         }
 
         fix = default;
+        return false;
+    }
+
+    /// <summary>
+    /// Locates <paramref name="oldBytes"/> using the diagnostic anchor (typically the <c>@ref</c> span).
+    /// Avoids matching the file's first occurrence when the same action reference appears multiple times.
+    /// </summary>
+    internal static bool TryFindReplacementOffset(
+        ReadOnlySpan<byte> source,
+        ReadOnlySpan<byte> oldBytes,
+        int anchorOffset,
+        out int offset)
+    {
+        offset = 0;
+        if (oldBytes.IsEmpty || source.IsEmpty)
+        {
+            return false;
+        }
+
+        anchorOffset = Math.Clamp(anchorOffset, 0, source.Length);
+
+        // Prefer the occurrence whose byte span contains the diagnostic anchor.
+        var windowStart = Math.Max(0, anchorOffset - oldBytes.Length + 1);
+        var windowEnd = Math.Min(source.Length, anchorOffset + oldBytes.Length);
+        if (windowStart < windowEnd)
+        {
+            var window = source[windowStart..windowEnd];
+            var searchFrom = 0;
+            while (searchFrom < window.Length)
+            {
+                var relative = window[searchFrom..].IndexOf(oldBytes);
+                if (relative < 0)
+                {
+                    break;
+                }
+
+                var candidate = windowStart + searchFrom + relative;
+                if (candidate <= anchorOffset && anchorOffset < candidate + oldBytes.Length)
+                {
+                    offset = candidate;
+                    return true;
+                }
+
+                searchFrom += relative + 1;
+            }
+        }
+
+        // Fallback when the diagnostic range spans the full replacement value.
+        var forward = source[anchorOffset..].IndexOf(oldBytes);
+        if (forward >= 0)
+        {
+            offset = anchorOffset + forward;
+            return true;
+        }
+
         return false;
     }
 }

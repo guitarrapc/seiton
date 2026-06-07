@@ -257,7 +257,8 @@ public static class FixEngine
         ArgumentNullException.ThrowIfNull(utf8Yaml);
         ArgumentNullException.ThrowIfNull(diagnosticsWithFix);
 
-        var fixes = new List<DiagnosticFix>();
+        var edits = new List<TextEdit>();
+        var editOwners = new List<Diagnostic>();
         foreach (var diagnostic in diagnosticsWithFix)
         {
             if (diagnostic.Fix is null)
@@ -265,10 +266,22 @@ public static class FixEngine
                 continue;
             }
 
-            fixes.Add(diagnostic.Fix.Value);
+            var fix = diagnostic.Fix.Value;
+            for (var i = 0; i < fix.Edits.Length; i++)
+            {
+                edits.Add(fix.Edits[i]);
+                editOwners.Add(diagnostic);
+            }
         }
 
-        return Apply(utf8Yaml, fixes);
+        try
+        {
+            return Apply(utf8Yaml, edits);
+        }
+        catch (FixApplyConflictException ex)
+        {
+            throw EnrichConflictWithRuleIds(ex, edits, editOwners);
+        }
     }
 
     /// <summary>Applies the given text <paramref name="edits"/> to the YAML bytes and returns the result.</summary>
@@ -346,11 +359,13 @@ public static class FixEngine
             {
                 if (edit.Offset < previousEnd || edit.Offset == previousOffset)
                 {
-                    throw new InvalidOperationException(
-                        $"overlapping or conflicting edits detected at offset {edit.Offset} " +
-                        $"(previous edit at offset {previousOffset} with length {previousEnd - previousOffset}, " +
-                        $"current edit at offset {edit.Offset} with length {edit.Length}; " +
-                        $"total {edits.Count} edits in batch)");
+                    throw new FixApplyConflictException(
+                        conflictOffset: edit.Offset,
+                        previousOffset: previousOffset,
+                        previousLength: previousEnd - previousOffset,
+                        currentOffset: edit.Offset,
+                        currentLength: edit.Length,
+                        totalEditsInBatch: edits.Count);
                 }
             }
 
@@ -632,6 +647,57 @@ public static class FixEngine
     }
 
     private readonly record struct DiffOp(DiffKind Kind, string Text);
+
+    private static FixApplyConflictException EnrichConflictWithRuleIds(
+        FixApplyConflictException ex,
+        IReadOnlyList<TextEdit> edits,
+        IReadOnlyList<Diagnostic> editOwners)
+    {
+        if (editOwners.Count != edits.Count || editOwners.Count == 0)
+        {
+            return ex;
+        }
+
+        var conflictOffset = ex.ConflictOffset;
+        var ruleIds = new HashSet<string>(StringComparer.Ordinal);
+        for (var i = 0; i < edits.Count; i++)
+        {
+            var edit = edits[i];
+            var editEnd = edit.Offset + edit.Length;
+            if (editEnd == edit.Offset)
+            {
+                editEnd = edit.Offset + 1;
+            }
+
+            if (edit.Offset <= conflictOffset && conflictOffset < editEnd)
+            {
+                var ruleId = editOwners[i].RuleId;
+                if (!string.IsNullOrEmpty(ruleId))
+                {
+                    ruleIds.Add(ruleId);
+                }
+            }
+        }
+
+        if (ruleIds.Count == 0)
+        {
+            return ex;
+        }
+
+        var orderedRuleIds = new string[ruleIds.Count];
+        ruleIds.CopyTo(orderedRuleIds);
+        Array.Sort(orderedRuleIds, StringComparer.Ordinal);
+
+        return new FixApplyConflictException(
+            ex.ConflictOffset,
+            ex.PreviousOffset,
+            ex.PreviousLength,
+            ex.CurrentOffset,
+            ex.CurrentLength,
+            ex.TotalEditsInBatch,
+            orderedRuleIds,
+            innerException: ex);
+    }
 }
 
 /// <summary>Result of applying auto-fixes and re-linting, containing before/after diagnostics and the patched YAML.</summary>

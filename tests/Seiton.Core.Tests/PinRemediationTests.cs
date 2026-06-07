@@ -102,6 +102,45 @@ public sealed class PinRemediationTests
     }
 
     [Test]
+    public async Task ApplyAndRelint_DuplicateUsesPinsBothOccurrences()
+    {
+        var yaml = """
+            on: push
+            jobs:
+              dependabot:
+                steps:
+                  - uses: actions/github-script@v9
+              external:
+                steps:
+                  - uses: actions/github-script@v9
+            """;
+        var source = Encoding.UTF8.GetBytes(yaml.Replace("\r\n", "\n", StringComparison.Ordinal));
+        var lintEngine = CreatePinLintEngine();
+        using var lintResult = lintEngine.Check(source, "pin-remediation-duplicate-uses.yml");
+
+        var remediationEngine = new PinRemediationEngine(
+            new DelegateActionShaResolver((_, _, _, _) => Task.FromResult(ActionShaResolution.Resolved(ActionSha, "v9"))),
+            null,
+            new FixPinningConfig { EnableNetwork = true },
+            new FixImagesConfig(),
+            new NetworkConfig());
+
+        var remediation = await remediationEngine.RemediateAsync(lintResult.Diagnostics, source);
+        await Assert.That(remediation.ResolvedCount).IsEqualTo(2);
+
+        using var revalidated = FixEngine.ApplyAndRelint(
+            lintEngine,
+            source,
+            "pin-remediation-duplicate-uses.yml",
+            remediation.Diagnostics);
+
+        await Assert.That(revalidated.After.Diagnostics.Any(d => d.RuleId == "unpinned-uses")).IsFalse();
+        var updatedYaml = Encoding.UTF8.GetString(revalidated.UpdatedUtf8Yaml);
+        var expectedPin = $"actions/github-script@{ActionSha} # v9";
+        await Assert.That(updatedYaml.Split(expectedPin, StringSplitOptions.None).Length - 1).IsEqualTo(2);
+    }
+
+    [Test]
     public async Task ApplyAndRelint_ClearsUnpinnedDiagnostics_AfterRemediationFixesApplied()
     {
         var source = Encoding.UTF8.GetBytes(CreateUnpinnedYaml());

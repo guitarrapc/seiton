@@ -472,8 +472,10 @@ Implementation requirements:
 
 - Rules attach fix payload only when remediation is deterministic and safe.
 - A single diagnostic fix must not contain overlapping edits.
-- Cross-diagnostic overlapping edits are conflict cases and must be rejected by fix-application layer.
+- Cross-diagnostic overlapping edits are conflict cases and must be rejected by fix-application layer (`FixApplyConflictException`; message includes conflicting `rule-id` values when fixes are applied from diagnostics).
 - Fix application must be independent from `LintEngine.Check` (no in-place mutation during linting).
+- `PinFixFormatter.TryFindReplacementOffset` resolves replacement byte offsets from the diagnostic anchor so duplicate identical `uses` strings in one file each receive distinct edits.
+- `FixCommand.ApplyPinRemediationAsync` applies pin fixes through `SelectNonConflictingBatch` and may iterate (re-lint + re-remediate) when a batch cannot include all resolved pins.
 
 ### 4.3 Fix Engine Formatting Preservation Mapping
 

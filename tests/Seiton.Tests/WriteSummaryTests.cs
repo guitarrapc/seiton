@@ -1,5 +1,6 @@
 ﻿using Seiton.Commands;
 using Seiton.Config;
+using Seiton.Core.Linting.Fixing;
 using Seiton.Core.Parsing;
 using Seiton.Output;
 
@@ -923,6 +924,121 @@ public sealed class WriteSummaryTests
     }
 
     [Test]
+    public async Task WriteFixSummary_Verbose_ShowsPerRuleFixBreakdown()
+    {
+        var fixedFiles = new List<(string FilePath, int FixedCount)>
+        {
+            ("/repo/ci.yml", 3),
+        };
+        var remainingDiagnostics = new List<Diagnostic>();
+        var fixedByRule = new Dictionary<string, int>(StringComparer.Ordinal)
+        {
+            ["if-expr-wrapper"] = 2,
+            ["job-timeout-minutes-required"] = 1,
+        };
+
+        using var sw = new StringWriter();
+        FixCommand.WriteFixSummary(
+            sw,
+            fixedFiles,
+            remainingDiagnostics,
+            FixCommand.FixSummaryMode.DryRun,
+            verbose: true,
+            fixedByRule: fixedByRule);
+        var output = sw.ToString();
+
+        await Assert.That(output).Contains("| Rule");
+        await Assert.That(output).Contains("| Would Fix");
+        await Assert.That(output).Contains("| if-expr-wrapper");
+        await Assert.That(output).Contains("| job-timeout-minutes-required");
+    }
+
+    [Test]
+    public async Task WriteFixSummary_Check_Verbose_BuildsPerRuleFixBreakdownFromFixableDiagnostics()
+    {
+        var fixedFiles = new List<(string FilePath, int FixedCount)>
+        {
+            ("/repo/ci.yml", 3),
+        };
+        var remainingDiagnostics = new List<Diagnostic>
+        {
+            new(DiagnosticSeverity.Warning, "a", new TextRange(0, 1, 1, 1, 1, 2), RuleId: "if-expr-wrapper", FilePath: "/repo/ci.yml", Fix: new DiagnosticFix("a", [])),
+            new(DiagnosticSeverity.Warning, "b", new TextRange(0, 1, 2, 1, 2, 2), RuleId: "if-expr-wrapper", FilePath: "/repo/ci.yml", Fix: new DiagnosticFix("b", [])),
+            new(DiagnosticSeverity.Warning, "c", new TextRange(0, 1, 3, 1, 3, 2), RuleId: "job-timeout-minutes-required", FilePath: "/repo/ci.yml", Fix: new DiagnosticFix("c", [])),
+            new(DiagnosticSeverity.Error, "d", new TextRange(0, 1, 4, 1, 4, 2), RuleId: "unpinned-uses", FilePath: "/repo/ci.yml"),
+        };
+
+        using var sw = new StringWriter();
+        FixCommand.WriteFixSummary(
+            sw,
+            fixedFiles,
+            remainingDiagnostics,
+            FixCommand.FixSummaryMode.Check,
+            verbose: true);
+        var output = sw.ToString();
+
+        await Assert.That(output).Contains("| Fixable");
+        await Assert.That(output).Contains("| if-expr-wrapper");
+        await Assert.That(output).Contains("| job-timeout-minutes-required");
+        await Assert.That(output).DoesNotContain("| unpinned-uses");
+    }
+
+    [Test]
+    public async Task WriteFixSummary_Check_Verbose_WithEmptyFixedByRule_BuildsPerRuleFixBreakdown()
+    {
+        var fixedFiles = new List<(string FilePath, int FixedCount)>
+        {
+            ("/repo/ci.yml", 2),
+        };
+        var remainingDiagnostics = new List<Diagnostic>
+        {
+            new(DiagnosticSeverity.Warning, "a", new TextRange(0, 1, 1, 1, 1, 2), RuleId: "if-expr-wrapper", FilePath: "/repo/ci.yml", Fix: new DiagnosticFix("a", [])),
+            new(DiagnosticSeverity.Warning, "b", new TextRange(0, 1, 2, 1, 2, 2), RuleId: "if-expr-wrapper", FilePath: "/repo/ci.yml", Fix: new DiagnosticFix("b", [])),
+        };
+        var fixedByRule = new Dictionary<string, int>(StringComparer.Ordinal);
+
+        using var sw = new StringWriter();
+        FixCommand.WriteFixSummary(
+            sw,
+            fixedFiles,
+            remainingDiagnostics,
+            FixCommand.FixSummaryMode.Check,
+            verbose: true,
+            fixedByRule: fixedByRule);
+        var output = sw.ToString();
+
+        await Assert.That(output).Contains("| Fixable");
+        await Assert.That(output).Contains("| if-expr-wrapper");
+    }
+
+    [Test]
+    public async Task WriteFixSummary_NonVerbose_EmitsPerRuleFixHint()
+    {
+        var fixedFiles = new List<(string FilePath, int FixedCount)>
+        {
+            ("/repo/ci.yml", 2),
+        };
+        var remainingDiagnostics = new List<Diagnostic>();
+        var fixedByRule = new Dictionary<string, int>(StringComparer.Ordinal)
+        {
+            ["if-expr-wrapper"] = 2,
+        };
+
+        using var sw = new StringWriter();
+        FixCommand.WriteFixSummary(
+            sw,
+            fixedFiles,
+            remainingDiagnostics,
+            FixCommand.FixSummaryMode.DryRun,
+            verbose: false,
+            fixedByRule: fixedByRule);
+        var output = sw.ToString();
+
+        await Assert.That(output).Contains("hint: re-run with --verbose for a per-rule fix breakdown");
+        await Assert.That(output).DoesNotContain("| if-expr-wrapper");
+    }
+
+    [Test]
     public async Task WriteFixSummary_PerFileDetail_ShowsZeroRemaining()
     {
         var fixedFiles = new List<(string FilePath, int FixedCount)>
@@ -1253,7 +1369,8 @@ public sealed class WriteSummaryTests
             await Assert.That(summary.Split("## Seiton", StringSplitOptions.None).Length - 1).IsEqualTo(1);
             await Assert.That(summary).Contains("Fixed 2 of");
             await Assert.That(summary).Contains("1 warning remains in 1 file");
-            await Assert.That(stderr.ToString()).IsEqualTo(string.Empty);
+            await Assert.That(stderr.ToString()).Contains("hint: re-run with --verbose for a per-rule fix breakdown");
+            await Assert.That(summary).DoesNotContain("hint: re-run with --verbose for a per-rule fix breakdown");
         }
         finally
         {

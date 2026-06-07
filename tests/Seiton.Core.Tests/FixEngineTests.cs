@@ -110,6 +110,58 @@ public sealed class FixEngineTests
     }
 
     [Test]
+    public async Task Apply_DiagnosticsWithConflictingEdits_IncludesRuleIdsInMessage()
+    {
+        var source = Encoding.UTF8.GetBytes("0123456789");
+        var diagnostics = new[]
+        {
+            new Diagnostic(
+                DiagnosticSeverity.Warning,
+                "first",
+                new TextRange(3, 0, 1, 4, 1, 4),
+                RuleId: "unpinned-uses",
+                Fix: new DiagnosticFix("a", [new TextEdit(3, 0, "INSERT-A")])),
+            new Diagnostic(
+                DiagnosticSeverity.Warning,
+                "second",
+                new TextRange(3, 0, 1, 4, 1, 4),
+                RuleId: "job-timeout-minutes-required",
+                Fix: new DiagnosticFix("b", [new TextEdit(3, 0, "INSERT-B")])),
+        };
+
+        var ex = Assert.Throws<FixApplyConflictException>(() => FixEngine.Apply(source, diagnostics));
+        await Assert.That(ex.Message).Contains("unpinned-uses");
+        await Assert.That(ex.Message).Contains("job-timeout-minutes-required");
+    }
+
+    [Test]
+    public async Task Apply_DiagnosticsWithConflictingEdits_PreservesOriginalConflictAsInnerException()
+    {
+        var source = Encoding.UTF8.GetBytes("0123456789");
+        var diagnostics = new[]
+        {
+            new Diagnostic(
+                DiagnosticSeverity.Warning,
+                "first",
+                new TextRange(3, 0, 1, 4, 1, 4),
+                RuleId: "unpinned-uses",
+                Fix: new DiagnosticFix("a", [new TextEdit(3, 0, "INSERT-A")])),
+            new Diagnostic(
+                DiagnosticSeverity.Warning,
+                "second",
+                new TextRange(3, 0, 1, 4, 1, 4),
+                RuleId: "job-timeout-minutes-required",
+                Fix: new DiagnosticFix("b", [new TextEdit(3, 0, "INSERT-B")])),
+        };
+
+        var ex = Assert.Throws<FixApplyConflictException>(() => FixEngine.Apply(source, diagnostics));
+
+        await Assert.That(ex.InnerException).IsNotNull();
+        await Assert.That(ex.InnerException).IsTypeOf<FixApplyConflictException>();
+        await Assert.That(ex.InnerException!.Message).DoesNotContain("conflicting rule-id(s)");
+    }
+
+    [Test]
     public async Task Apply_PartiallyOverlappingReplacements_Throws()
     {
         // Edit A covers [2,6), Edit B covers [4,8) — partial overlap

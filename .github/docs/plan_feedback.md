@@ -1,453 +1,502 @@
-# githubactions-lab 移行フィードバック — 評価と対応プラン
+# githubactions-lab フィードバック — 評価と対応プラン
 
-本書は [feedback_seiton.md](./feedback_seiton.md) に記録された、`.references/githubactions-lab` で actionlint / zizmor / ghalint を seiton（v0.9.25）に置き換えた際のフィードバックを評価し、seiton 本体への対応方針を整理したもの。
+本書は [feedback_seiton.md](./feedback_seiton.md) に記録された、`.references/githubactions-lab` へ ghalint / actionlint / zizmor を seiton に置き換えて適用した際のフィードバックを評価し、対応方針を整理したもの。
 
-## 背景
+## 前提
 
 | 項目 | 内容 |
 |------|------|
-| 対象リポジトリ | `guitarrapc/githubactions-lab`（ラボ用・意図的な bad practice を多数含む） |
-| 置き換え対象 | actionlint + zizmor (medium) + ghalint |
-| seiton バージョン | v0.9.25 |
-| 評価観点 | 使い勝手、ログの把握しやすさ、設定移植のしやすさ |
+| 対象リポジトリ | `githubactions-lab`（良い例・悪い例・生成物が混在する教材リポ） |
+| 置き換え対象 | ghalint / actionlint / zizmor |
+| フィードバック時の seiton | **v0.9.25** |
+| 本書作成時点の main | `rules: ["*"]` exclusion 正規化、lint 時の `--verbose` per-rule breakdown ヒント等が **v0.9.25 以降にマージ済み** |
 
-移植後も **31 errors** が残った主因は、旧リンターがカバーしなかったルール（特に `run-env-context-direct-use`）と、意図的デモ workflow の存在。これは製品バグというより検出範囲の差異とラボ固有の CI 方針の問題である（後述 §6）。
+フィードバックの数値・挙動は v0.9.25 基準。現行 main との差分は各項目の「現状」列に明記する。
 
 ---
 
 ## 評価サマリー
 
-| # | 区分 | 項目 | 重要度 | 評価 | 対応 |
-|---|------|------|--------|------|------|
-| P1 | 良い点 | 診断フォーマット | — | 妥当。差別化要素 | 維持 |
-| P2 | 良い点 | サマリー行（excluded / suppressed） | — | 妥当。設定デバッグに有効 | 維持 |
-| P3 | 良い点 | ファイル別集計テーブル | — | 妥当。大規模リポで有用 | 維持 |
-| P4 | 良い点 | `--verbose` の設定デバッグ情報 | — | 妥当 | 維持 |
-| P5 | 良い点 | `init` / `validate-config` / `install --ci` | — | 妥当。導入導線として機能 | 維持 |
-| P6 | 良い点 | `--oneline` | — | 妥当 | 維持 |
-| P7 | 良い点 | 実行速度（~10–50 ms / 120 files） | — | 妥当 | 維持・ベンチマーク監視 |
-| P8 | 良い点 | 除外設定の集約（1 ファイル化） | — | 妥当 | 維持 |
-| B1 | 課題 | `jobs` スコープ付き exclusion の job-id 検証 | **重大** | **バグ（修正済み）** | **完了** |
-| B2 | 課題 | `rules: ["*"]` 未サポート | 中 | **ドキュメントと実装の不整合（解消）** | **完了** |
-| B3 | 課題 | `skip-agentic-workflows` の検出範囲 | 中 | **仕様どおりだが説明不足（解消）** | **完了** |
-| B4 | 課題 | ルール別 Count テーブルの表示条件 | 軽 | **UX の非対称（ヒントで解消）** | **完了** |
-| B5 | 課題 | 旧リンターインライン抑制の移行 | 軽 | **移行支援不足**（機能欠如ではない） | **完了** — Agent Skill 参照 |
-| I1 | 情報 | 検出範囲の差異（和集合だが完全一致ではない） | — | 想定内 | **完了** — Agent Skill 参照 |
-| B6 | 課題 | `validate-config` が unknown job-id を検出しない | 中 | **B1 の派生** | **完了** |
+| 区分 | 件数 | 対応方針 |
+|------|:----:|----------|
+| 肯定的（維持・強化） | 8 | ドキュメント化・adoption 導線の補強 |
+| 改善要望（UX） | 3 | 1 件は解消済み、2 件は未対応 |
+| バグ（fix 競合） | 1 | 要修正（根本原因特定済み） |
+| 運用知見（設定パターン） | 複数 | adoption ドキュメントへ反映 |
+
+**総合判断**: 教材混在リポでも設定調整を前提に **実用可能**。ブロッカーは `unpinned-uses` の network pin 時 fix 競合 1 件。v0.9.25 以前の exclusion `*` 問題と per-rule ヒント不足は現行で解消済み。
 
 ---
 
-## 詳細評価と対応プラン
+## 1. 導入フロー・全体所感
 
-### §1 良い点（P1–P8）— 維持・強化
+### フィードバック
 
-いずれもフィードバックは正確で、現行実装の強みとして妥当。コード変更は不要。今後のリグレッション防止のみ意識する。
+- `init` → `validate-config` → `--fix --dry-run` の流れが素直
+- 初回は 46 errors / 35 warnings（120 files）とノイズが多いが、設定後は 32 errors / 17 warnings（127 files, 2 excluded）まで収束
+- `--fix --dry-run` 全体で **Would fix 53 of 64 issues in 23 files (11 remaining)** → 最終 **3 errors / 8 warnings in 7 files**
+- 教材混在環境でも **設定調整を前提にすれば実用的で、ログも十分読みやすい**
 
-| 項目 | 評価 | 維持方針 |
-|------|------|----------|
-| 診断フォーマット（`error[rule-id]` + キャレット + `= help:`） | actionlint / rustc 系に慣れたユーザーにとって直感的。help 行が設定チューニングに繋がる点は差別化要素 | フォーマッタ変更時はスナップショットテストで回帰防止 |
-| サマリー（`N errors … (Y excluded, Z suppressed)`） | 設定移植の検証にそのまま使えた。フィードバックの「設定あり実行 ◎」は妥当 | `CheckSummaryMetadata` の出力を E2E で固定 |
-| ファイル別集計テーブル | ラボのようにファイル数が多いリポで優先度付けに有効 | デフォルト表示を維持（`showPerFile: true`） |
-| `--verbose` | config パス、discovery、skip 理由、抑制件数が stderr に出る。設定デバッグに有効 | verbose ログ項目の追加・削除時は CLI spec を同期 |
-| 導入コマンド群 | `init` → `validate-config` → lint の流れが機能した | CI テンプレート（`install --ci`）を release ごとに検証 |
-| `--oneline` | CI / grep / annotation 連携向き | 維持 |
-| 高速 | 旧構成（actionlint + zizmor Docker）との差は体感的にも大きい | `Seiton.Benchmark` で回帰監視 |
-| 除外の集約 | 複数ツールの設定を `.github/seiton.yaml` に寄せられる | Agent Skill `inline-suppression.md` で config 優先・構文案内（§6 参照） |
+### 評価
+
+| 観点 | 判定 | 理由 |
+|------|:----:|------|
+| 導入フロー | ✅ 妥当 | CLI 設計意図どおり。段階的 adoption（error のみ → warning → fix）と整合 |
+| 初回ノイズ | ✅ 想定内 | 教材リポの性質上、exclusions / `skip-agentic-workflows` が必須。バグではない |
+| dry-run 集計 | ✅ 強み | `Would fix / Remaining` と per-file 表は導入判断に有効（[Seiton_CLI_spec.md](./Seiton_CLI_spec.md) §6.4） |
+
+### 対応プラン
+
+| 優先度 | アクション | 成果物 |
+|:------:|------------|--------|
+| P2 | `githubactions-lab` 相当リポ向けの「初回設定テンプレ」を adoption 資料に追加 | `src/Seiton/Skills/references/adoption-workflow.md` または `docs/configuration.md` の Recipes 節 |
+| P3 | フィードバックで確立した config 方針（下記 §6）を **参考例** としてリンク | `feedback_seiton.md` から `docs/configuration.md` へ相互参照 |
 
 ---
 
-### §2 `jobs` スコープ付き exclusion の job-id 検証（B1）— 重大バグ
+## 2. 検出の妥当性
 
-#### 評価
+### フィードバック
 
-**妥当。再現条件は v0.9.25 時点のコードと一致していた（修正済み）。**
+**妥当と判断されたルール**
 
-当時のバグ: `LintEngine.NormalizeExclusions` が exclusion の `file` マッチを見る前に `jobs` を検証し、別ファイル向けの job-id が全 workflow で `unknown job-id` として膨張した。
+- `run-env-context-direct-use`, `run-inputs-context-direct-use`, `run-secrets-context-direct-use`
+- `deny-inherit-secrets`
+- `unpinned-image`, `unpinned-uses`
+- `if-expr-wrapper`
 
-修正後: `file` パターンが現在の workflow にマッチするときのみ job-id を検証（`LintEngine.NormalizeExclusions`）。加えて B6 で `validate-config` 横断検証を追加。
+**意図的除外が適切なもの**
 
-既存テスト `LintEngine_ConfigExclusion_UnknownJobId_ReportsConfigurationError` は `file: "**/*.yml"` の glob 前提でこの挙動を期待しており、**特定ファイル向け exclusion のケースがカバーされていない**。
+- agentic workflow、`.lock.yml`、攻撃デモ系 workflow
+- 学習用 bad ケース（`if-cond`, `env-var` 等）
 
-#### 対応プラン
+**fix 後も残った主な項目**（意図的 bad 例）
 
-**フェーズ A（必須・次リリース）**
+- `deny-inherit-secrets`, `run-secrets-context-direct-use`, `unredacted-secrets`, `if-cond`, `env-var`
 
-1. job-id 検証を **exclusion の `file` パターンが現在の workflow パスにマッチするときだけ** 実行する。
-2. マッチしない exclusion エントリの job-id はスキップ（他ファイル向けの設定として保持）。
-3. テスト追加:
-   - ファイル A 向け job 除外を設定し、ファイル B を lint しても `unknown job-id` が出ないこと。
-   - ファイル A を lint したとき、存在しない job-id なら 1 件の設定エラーになること（回帰）。
-4. 設定エラーの `FilePath` を **seiton.yaml** 側に付与し、workflow ファイルの `error[parse]` と混同しないようにする（可能なら行番号も config 側を指す）。
+### 評価
 
-**フェーズ B（B6 と連動・推奨）**
+| 観点 | 判定 | 理由 |
+|------|:----:|------|
+| セキュリティ系検出 | ✅ 妥当 | ghalint / zizmor 代替として期待どおり。残件は教材の意図と一致 |
+| 除外戦略 | ✅ 妥当 | file-only / rule-scoped exclusion の使い分けが適切 |
+| actionlint 代替 | 🟡 部分 | 構文・式チェックは seiton がカバーするが、教材リポでは seiton 固有ルールが支配的 |
 
-`validate-config` 時に、リポジトリ内の workflow ファイルを走査し、exclusion の `file` + `jobs` の組み合わせで unknown job-id を **lint 前に** 報告する。
+### 対応プラン
 
-- `LintConfigLibrary.ValidateFile` の後段、または `validate-config` 専用の cross-file 検証ステップとして実装。
-- workflow ファイルが存在しない glob パターンは warning のみ（CI ではファイル未 checkout の可能性あり）。
-- `--verbose` でどの exclusion / どの workflow を検証したかを出す。
+| 優先度 | アクション | 成果物 |
+|:------:|------------|--------|
+| P3 | adoption 資料の「よく出るルール」表に `unredacted-secrets` を追記（残件例として） | `adoption-workflow.md` |
+| — | ルール検出ロジックの変更は不要 | — |
+
+---
+
+## 3. ログ可観測性
+
+### フィードバック
+
+- **総評: 高い** — `file:line:col`, `rule-id`, `help`, 集計テーブル、最終サマリが一貫
+- 失敗時も hint があり行動につなげやすい
+- **課題**: fix 競合時の内部理由が不足
+
+### 評価
+
+| 観点 | 判定 | 理由 |
+|------|:----:|------|
+| lint 出力 | ✅ 強み | 競合ツール比較でも差別化要素（[Seiton-feature-matrix.md](./Seiton-feature-matrix.md)） |
+| fix 競合時 | ❌ 不足 | offset / length は出るが rule-id・診断位置・対処がない（§5 参照） |
+| per-rule breakdown | 🟡 改善済み（lint） | v0.9.25 以降、`hint: re-run with --verbose for a per-rule breakdown` を lint サマリに表示 |
+
+### 対応プラン
+
+| 優先度 | アクション | 詳細 |
+|:------:|------------|------|
+| P1 | fix 競合エラーの診断強化 | §5 参照 |
+| P2 | fix モード向け per-rule「修正予定」サマリ | §4.3 参照 |
+| — | lint per-rule ヒント | **対応不要**（main 実装済み） |
+
+---
+
+## 4. 使い勝手改善要望
+
+### 4.1 `rules: ["*"]` exclusion
+
+**フィードバック**: v0.9.25 では `unknown rule-id '*'` で config parse エラー。エラーメッセージに file-only exclusion の代替案内がほしい。
+
+**評価**
+
+| 観点 | 判定 |
+|------|:----:|
+| 機能 | ✅ **main で解消** — `ExclusionNormalizer.IsAllRulesWildcard` により `rules: ["*"]` は `rules` 省略と同義に正規化（[Seiton_config_spec.md](./Seiton_config_spec.md)） |
+| エラーメッセージ | 🟡 旧バージョン利用者向けの案内は未整備 |
+
+**対応プラン**
+
+| 優先度 | アクション |
+|:------:|------------|
+| — | 機能修正は **不要**（実装済み） |
+| P3 | `docs/configuration.md` の Exclusions 節に「file-only = `rules` 省略または `rules: ["*"]`」を目立たせる |
+| P3 | CHANGELOG / リリースノートで v0.9.25 以降の挙動変更を明記（再評価時の混乱防止） |
+
+### 4.2 fix 競合時の詳細情報
+
+**フィードバック**: `overlapping or conflicting edits` 発生時、競合ルール名や該当 edit の詳細があると原因追跡が容易。
+
+**評価**
+
+| 観点 | 判定 |
+|------|:----:|
+| 現状 | offset / length / batch 内 edit 数のみ |
+| 期待 | 競合した rule-id ペア、診断の `file:line:col`、pin vs local fix の区別 |
+
+**対応プラン** — §5 と統合（P1）
+
+### 4.3 fix 時の rule 別サマリ
+
+**フィードバック**: large diff では、どのルールで何件修正予定かのサマリがあると把握しやすい。
+
+**評価**
+
+| 観点 | 判定 |
+|------|:----:|
+| lint `--verbose` | ✅ 実装済み — Remaining 件数の per-rule 表（[Seiton_CLI_spec.md](./Seiton_CLI_spec.md) §6.4） |
+| fix `--verbose` | ❌ 未実装 — per-file 表（Would Fix / Remaining）のみ。 **修正予定件数の per-rule 内訳はない** |
+| フィードバックの意図 | fix dry-run で「53 件のうち unpinned-uses が何件か」を一目で知りたい |
+
+**対応プラン**
+
+| 優先度 | アクション | 仕様案 |
+|:------:|------------|--------|
+| P2 | `WriteFixSummary` に optional per-rule 表を追加 | `--verbose` 時のみ。列: `Rule` / `Would Fix`（dry-run）または `Fixed`（apply） |
+| P2 | ヒント行の追加 | fix サマリ表示時に `hint: re-run with --verbose for a per-rule fix breakdown`（lint と対称） |
+| P2 | 仕様更新 | `Seiton_CLI_spec.md` §6.4 fix モード節 |
+
+---
+
+## 5. バグ: pin fix 競合（`unpinned-uses` 重複）
+
+### フィードバック
+
+- 対象: `.github/workflows/prevent-file-change.yaml`
+- 条件: 同一ファイル内に同一 `uses: actions/github-script@v9` が複数（異なる job）
+- コマンド: `seiton --fix --dry-run --enable-pin-network <file>`
+- 期待: 2 箇所それぞれ full SHA pin への diff
+- 実際: 同一 offset（271）への edit が 2 件として扱われ、`overlapping or conflicting edits detected` で失敗
+- 回避: 当該ファイルの `unpinned-uses` を exclusion で抑制
+
+### 評価
+
+| 観点 | 判定 | 根拠 |
+|------|:----:|------|
+| 再現性 | ✅ 確認 | フィードバックに再現コマンド・YAML 抜粋あり |
+| 深刻度 | **P1（バグ）** | network pin は `--fix` の主要ユースケース。workaround は rule 単位抑制のみ |
+| 根本原因 | **特定済み** | 下記 |
+
+#### 根本原因分析
+
+1. **`PinFixFormatter.TryBuildReplacementFix`**（`src/Seiton.Core/Linting/PinRemediation/PinFixFormatter.cs`）
+   - 診断の `Location` 範囲内で `oldValue`（例: `actions/github-script@v9`）を検索
+   - 範囲内に見つからない場合、**ファイル全体の最初の出現**（`IndexOf`）にフォールバック
+2. **`UnpinnedUsesRule.BuildRefLocation`** は `@ref` 部分のみを `Location` に設定（フル `uses` 文字列より短い）
+3. 同一 `uses` 文字列が複数あると、2 件目以降の診断でもフォールバックが **常に先頭出現** を指す → 同一 offset の edit が生成される
+4. **`ApplyPinRemediationAsync`** は `FixEngine.Apply` を **一括適用**（`SelectNonConflictingBatch` 未使用）。local fix 用の iterative pass とは経路が異なる
+
+local fix（`job-permissions-required` + `job-timeout-minutes-required` の同一 offset insert）は `SelectNonConflictingBatch` + iterative re-lint で回避済み（`FixCommandTests.Fix_OverlappingInserts_*`）。pin fix 経路のみ未対応。
+
+### 対応プラン
+
+#### フェーズ A — 正しい edit 位置（P1）
+
+| ステップ | 内容 | 検証 |
+|----------|------|------|
+| A1 | `PinFixFormatter`: フォールバックを「診断 `Location.Start` 以降の最初の一致」に変更。グローバル先頭 `IndexOf` を廃止または最終手段に格下げ | `PinFixFormatterTests` に同一 uses 2 箇所のケースを追加 |
+| A2 | 代替案: `Location` をフル uses 文字列幅に拡張（`BuildRefLocation` 変更）— A1 と併用可否を実装時に判断 | `UnpinnedUsesRule` 回帰テスト |
+
+#### フェーズ B — 防御的 fix 適用（P1）
+
+| ステップ | 内容 | 検証 |
+|----------|------|------|
+| B1 | `ApplyPinRemediationAsync` で `PinFixableDiagnostics` に `SelectNonConflictingBatch` を適用し、競合分は次パスへ defer（local fix と同様の iterative モデル） | `FixCommandTests` に `prevent-file-change` 相当 fixture |
+| B2 | 複数 pin を 1 パスで適用できない場合も **部分適用で継続**（全件失敗にしない） | dry-run / apply 両方 |
+
+#### フェーズ C — 診断メッセージ（P1）
+
+| ステップ | 内容 |
+|----------|------|
+| C1 | `FixEngine` / `FixCommand` の競合例外に rule-id、診断 line:col、edit の NewText プレビュー（先頭 N 文字）を付与 |
+| C2 | hint: `this often occurs when the same unpinned action appears multiple times; re-run with --verbose or apply fixes per job` |
+
+#### 仕様・ドキュメント
+
+- `Seiton_Linter_spec.md` §8（fix 適用）に「同一文字列の複数出現は診断位置ベースで個別 edit すること」を明記
+- `docs/rules.md` の `unpinned-uses` **When fixing** に既知制限と回避策を追記（修正完了後に削除可能）
+
+---
+
+## 6. 設定パターン（運用知見）
+
+フィードバックで有効だった設定。教材混在リポの **参考レシピ** としてドキュメント化する。
+
+```yaml
+# 要点のみ — 全文は feedback_seiton.md 参照
+discovery:
+  skip-agentic-workflows: true
+
+exclusions:
+  - file: .github/workflows/*.lock.yml
+  - file: .github/workflows/agentics-maintenance.yml
+  - file: .github/workflows/injection-attack-via-context.yaml
+  # file-only exclusion（rules 省略）で全ルール抑制
+  # prevent-file-change.yaml の unpinned-uses 抑制はフェーズ1修正後に削除可能
+
+fix:
+  defaults:
+    job-timeout-minutes: 15
+  pinning:
+    enable-network: true
+  images:
+    enable-network: true
+
+rules:
+  runner-no-latest:
+    fix-mapping:
+      ubuntu-latest: ubuntu-24.04
+      windows-latest: windows-2025
+      macos-latest: macos-15
+  known-vulnerable-actions:
+    enabled: true
+  impostor-commit:
+    enabled: true
+  ref-confusion:
+    enabled: true
+  stale-action-refs:
+    enabled: true
+```
+
+### 評価
+
+| パターン | 判定 | 対応 |
+|----------|:----:|------|
+| `skip-agentic-workflows` + `*.lock.yml` 除外 | ✅ 推奨 | adoption 資料に「教材 / agentic」節として記載 |
+| online rules 4 種 enable | ✅ 妥当 | zizmor 相当の supply-chain チェック代替として整合 |
+| `fix.pinning/images.enable-network` | ✅ 必須級 | `--enable-pin-network` CLI フラグと config の関係を adoption で明示 |
+| `prevent-file-change` の rule 抑制 | 🟡 一時的 | §5 修正後に githubactions-lab で再評価し、exclusion 削除を試す |
+
+---
+
+## 7. 実装フェーズ（優先度順）
+
+### フェーズ 1 — P1 バグ修正（pin fix 競合）— **実装済み（2026-06-07）**
+
+**WHY**: `--fix --enable-pin-network` が同一 uses 複数箇所で失敗するのは、pinact / zizmor 置き換えの信頼性を損なう。
 
 **完了条件**
 
-- フィードバックの再現 YAML で 119 ファイル lint 時に `unknown job-id` が 0 件（対象ファイル以外）。
-- `reusable-workflow-caller-nest.yaml` で job スコープ除外が機能すること。
-- `validate-config` が unknown job-id を検出できること（フェーズ B）。
+- [x] `prevent-file-change.yaml` 相当 fixture で dry-run / apply が成功（`PinFixFormatterTests` / `PinRemediationTests`）
+- [x] `PinFixFormatterTests` に duplicate uses ケース
+- [x] 競合時メッセージに rule-id（`FixApplyConflictException` + `FixEngine` enrichment）
 
-#### 実装記録（B1 — 2026-06-07）
+#### 実装内容
 
-**実装内容**
+| コンポーネント | 変更 |
+|----------------|------|
+| `PinFixFormatter.TryFindReplacementOffset` | 診断 anchor（`@ref` 開始位置）を含む occurrence を選択。グローバル先頭 `IndexOf` フォールバックを廃止 |
+| `FixCommand.ApplyPinRemediationAsync` | `SelectNonConflictingBatch` + 反復（re-lint / re-remediate）で pin fix を部分適用可能に |
+| `FixApplyConflictException` | 競合 offset・edit 長・`rule-id` リストを構造化。CLI hint を競合専用に分岐 |
+| `PinFixOffsetBenchmark` | 重複 uses 向け offset 解決のベンチマークを新規追加 |
 
-| 対象 | 変更 |
-|------|------|
-| `LintEngine.NormalizeExclusions` | `jobs` の unknown job-id 検証を **exclusion `file` が現在の workflow にマッチするときのみ** 実行 |
-| `LintConfig.ConfigFilePath` | 設定ファイルパスを保持。exclusion 設定診断の `FilePath` に使用 |
-| `LintConfigLibrary.Validate` / `CliConfigBridge` / `CheckCommand` / `FixCommand` | `ConfigFilePath` の伝播 |
-| テスト | 他ファイル lint 時に誤検出しないこと、マッチ時に config パスで報告すること、有効 job で抑制されること |
-| 仕様 | `Seiton_Linter_spec.md` §5.4、`Seiton_Linter_csharp_spec.md`、`docs/configuration.md` |
-
-**ユーザーファースト API レビュー**
-
-- 別 workflow 向けの job 除外が全ファイルで `error[parse]` になる挙動を修正。設定ミスは **seiton.yaml** に紐づく。
-- `**/*.yml` のような広い glob は従来どおり各ファイルで job-id を検証（既存テスト維持）。
-
-**性能**
-
-| 項目 | 結果 |
-|------|------|
-| `CoreLintBenchmark`（Small/Medium/Large × Fix on/off） | Ratio **1.00**（Mean / Allocated ベースライン同等） |
-| 改善点 | マッチしない job-scoped exclusion では `BuildKnownJobIdSlices` を遅延構築（該当 exclusion が無い workflow ではスキップ） |
-| 低下 | なし |
-
-**セルフレビューと対応**
+#### セルフレビュー（実施済み）
 
 | 指摘 | 対応 |
 |------|------|
-| exclusion 設定診断が workflow パスに付いていた | `ConfigFilePath` を導入し exclusion 正規化診断に使用 |
-| `FixCommand` の LintConfig クローンで `ConfigFilePath` が落ちる | クローンに追加 |
-| `NormalizeExclusionPattern` の二重呼び出し | ループ内で 1 回に集約 |
+| 根本原因は `PinFixFormatter` の先頭一致フォールバック | anchor ベース解決に置換 |
+| pin 適用が conflict-aware でない | `SelectNonConflictingBatch` 経由に変更 |
+| 競合時の rule-id が不明 | `FixApplyConflictException` + diagnostic 適用時の enrichment |
+| 未使用変数（`FixEngine.Apply`） | 削除 |
+| UX: 汎用 hint が競合時に不親切 | `conflicting rule-id(s)` を参照する専用 hint |
 
-**ステータス**: B1 完了（フェーズ A + B6 でフェーズ B も完了）。
+#### ベンチマーク（ShortRun, Release, 本実装後）
 
----
+| ベンチマーク | 条件 | Mean | Allocated/op | 備考 |
+|--------------|------|------|--------------|------|
+| `PinFixOffsetBenchmark` | 2 重複 uses | **~100 ns** | ~704 B | 新規。lint+pin fix 生成のホットパスはネットワーク待ちが支配的 |
+| `PinFixOffsetBenchmark` | 8 重複 uses | **~392 ns** | ~2.8 KB | uses 数にほぼ線形（ファイル内スキャン窓は `oldBytes.Length` 上限） |
+| `CoreLintBenchmark` | Small/Medium/Large | 変更前後で実質同等 | 変更なし | lint パス自体は未変更 |
 
-### §3 `rules: ["*"]` 未サポート（B2）— ドキュメントと実装の不整合
+**性能評価**
 
-#### 評価
+- **lint パス**: 変更なしのため CoreLint ベンチマークに有意差なし（±10% 以内）。
+- **pin offset 解決**: 旧実装は誤って先頭一致するだけで安価だったが、正しい anchor 探索は **O(uses文字列長 × 同一文字列出現数)** の小さな窓スキャン。実測 8 重複でも **sub-µs** で、GitHub API 呼び出し（ms〜秒）に比べ無視できる。
+- **pin 適用の反復**: 通常ケース（offset 正しい）は 1 パスで全 pin 適用。真の競合時のみ re-remediate が走る（エッジケース向けコスト）。
 
-**妥当。** `ExclusionNormalizer.CollectResolvedExclusionRules` は `RuleCatalog.TryResolveRuleId` のみで、`*` を「全ルール」として扱わない。`unknown rule-id '*'` → exit code 3 は実装どおり。
+**変更ファイル**
 
-一方、正規のユーザー向けドキュメント [docs/configuration.md](../../docs/configuration.md) は `rules` 省略で全ルール抑制と記載しており正しい。不整合は主に **Agent Skill**（`.claude/skills/seiton/SKILL.md`, `src/Seiton/Skills/SKILL.md`）が `rules: ["*"]` を推奨している点。
+- `src/Seiton.Core/Linting/PinRemediation/PinFixFormatter.cs`
+- `src/Seiton.Core/Linting/Fixing/FixEngine.cs`
+- `src/Seiton.Core/Linting/Fixing/FixApplyConflictException.cs`（新規）
+- `src/Seiton/Commands/FixCommand.cs`
+- `src/Seiton.Benchmark/PinFixOffsetBenchmark.cs`（新規）
+- `tests/Seiton.Core.Tests/PinFixFormatterTests.cs`
+- `tests/Seiton.Core.Tests/PinRemediationTests.cs`
+- `tests/Seiton.Core.Tests/FixEngineTests.cs`
+- `tests/Seiton.Tests/FixCommandTests.cs`
+- `docs/rules.md`, `.github/docs/Seiton_Linter_spec.md`, `.github/docs/Seiton_Linter_csharp_spec.md`
 
-`LintConfigLibrary` / パーサーは `rules` 省略 → `null`（全ルール）を既にサポートしている（`Validate_Exclusions_FileOnly_NoRules_ExcludesAllRules` テストあり）。フィードバックの回避策（`rules` 省略）は有効。
+### フェーズ 2 — P2 UX（fix per-rule サマリ）— **実装済み（2026-06-07）**
 
-#### 対応プラン
-
-**推奨: 実装で `*` を受け入れる（後方互換 + Skill との整合）**
-
-1. `ExclusionNormalizer`（および `LintConfigLibrary` 正規化）で `rules` 内の `"*"` を「全ルール抑制」（`resolvedRules = null` 相当）として解釈。
-2. `rules: ["*"]` と `rules` 省略が同義であることを `Seiton_config_spec.md` に明記。
-3. Skill の例は `rules` 省略を第一選択、`["*"]` を明示的エイリアスとして併記。
-4. テスト: `rules: ["*"]` でパース成功・ファイル全体除外が効くこと。
-
-**代替（実装を増やしたくない場合）**
-
-Skill / `docs/configuration.md` から `rules: ["*"]` の記述を削除し、`file` のみの exclusion に統一。ただし Skill 利用者には破壊的なドキュメント変更になる。
-
-**完了条件**
-
-- `rules: ["*"]` で `validate-config` が成功する。
-- Skill と `docs/configuration.md` の記述が一致する。
-
-#### 実装記録（B2 — 2026-06-07）
-
-**実装内容**
-
-| 対象 | 変更 |
-|------|------|
-| `ExclusionNormalizer` | `AllRulesWildcard` (`"*"`) と `IsAllRulesWildcard` を追加 |
-| `LintConfigLibrary` / `LintEngine` | `rules: ["*"]` を `rules` 省略と同義（`null` = 全ルール）に正規化 |
-| `ExclusionMatcher` | `rules: ["*"]` をファイル全体除外として扱う |
-| テスト | `Validate_Exclusions_AllRulesWildcard_*`, `LintEngine_ConfigExclusion_AllRulesWildcard_*`, `ExclusionMatcherTests` |
-| 仕様・ドキュメント | `Seiton_config_spec.md`, `Seiton_Linter_spec.md`, `docs/configuration.md`, Skill |
-
-**ユーザーファースト API レビュー**
-
-- `rules` 省略を推奨しつつ、Skill / 移行ユーザーが使う `["*"]` を正式サポート。
-- `["*"]` はファイル全体除外（parse error 含む short-circuit）と同等。
-
-**性能**
-
-| 項目 | 結果 |
-|------|------|
-| `LintConfigBenchmark`（Minimal/Typical/Heavy） | Ratio **1.00** |
-| 理由 | ルール ID リストの線形スキャン 1 回のみ。ホットパスへの影響なし |
-
-**ステータス**: B2 完了。
-
----
-
-### §4 `skip-agentic-workflows` の検出範囲（B3）— 仕様どおり、説明不足
-
-#### 評価
-
-**妥当だが、期待と仕様のギャップがある。**
-
-実装は先頭 ~10 行に `# gh-aw-metadata:` を含むファイルのみスキップ（`AgenticWorkflowSkipTests`, `Seiton_config_spec.md` §2.3.1）。`monthly-oss-repo-status.lock.yml` はスキップ、`agentics-maintenance.yml`（`DO NOT EDIT` のみ）はスキップされない — **現仕様どおり**。
-
-`seiton init` テンプレートのコメントが「agentics-maintenance を列挙」と `skip-agentic-workflows` の関係を曖昧にしている可能性がある。
-
-#### 対応プラン
-
-**フェーズ A（ドキュメント・テンプレート — 必須）**
-
-1. `docs/configuration.md` と `Seiton_config_spec.md` に以下を明記:
-   - `skip-agentic-workflows` が検出するのは **`# gh-aw-metadata:` ヘッダーのみ**。
-   - metadata のない gh-aw 生成物（例: `agentics-maintenance.yml`）は **`exclusions` でファイル単位除外**が必要。
-2. `seiton init` 生成テンプレート（`LintConfigLibrary`）のコメントを修正し、上記の使い分けを 1–2 行で説明。
-3. Skill の Agentic Workflow 節を同内容に同期。
+**WHY**: 大規模 dry-run で修正インパクトの内訳が per-file のみでは不足。
 
 **完了条件**
 
-- 移行ユーザーが「なぜ lock.yml だけ skip されたか」をドキュメントだけで理解できる。
-- init テンプレートと Skill に矛盾がない。
+- [x] `--fix --dry-run -v` で per-rule `Would Fix` 表
+- [x] `Seiton_CLI_spec.md` 更新
+- [x] `FixCommandTests` / `WriteSummaryTests` で表出力アサート
 
-#### B3-フェーズ A 実装記録（2026-06-07）
+#### 実装内容
 
-**実装内容**
+| コンポーネント | 変更 |
+|----------------|------|
+| `FixCommand.WriteFixSummary` | `--verbose` 時に per-rule 表を per-file 表の後に出力。列名はモード連動（`Would Fix` / `Fixed` / `Fixable`） |
+| `FixCommand.RecordFixedByRule` | apply/dry-run 時に rule-id 別カウント（`-v` 時のみ辞書を確保） |
+| `FixCommand` hint | 非 verbose 時 `hint: re-run with --verbose for a per-rule fix breakdown`（lint サマリと対称） |
+| `CheckCommand.WritePerRuleCountTable` | lint/fix 共通の per-rule 表レンダラに抽出 |
+| `--check -v` | fixable diagnostic から per-rule 表を自動構築（apply 不要） |
+| `FixSummaryOutputBenchmark` | 出力ベンチマーク新規追加 |
 
-| 対象 | 変更 |
-|------|------|
-| `docs/configuration.md` | `## Discovery` 節を新設。`skip-agentic-workflows` と `exclusions` の使い分け表・例を追加 |
-| `.github/docs/Seiton_config_spec.md` | §2.3.1 に gh-aw 使い分け・`agentics-maintenance.yml` 例を追記 |
-| `src/Seiton.Core/Linting/LintConfigLibrary.cs` | `seiton init` テンプレのコメント修正（`*.lock.yml` を exclusion 例から削除、metadata 検出条件を明記） |
-| `.github/seiton.yaml` | テンプレと同内容のコメント整合 |
-| `docs/usage.md` | `--skip-agentic-workflows` の説明を first 10 lines 基準に更新 |
-| Skill（`.claude/skills/seiton/SKILL.md`, `src/Seiton/Skills/SKILL.md`） | Agentic Workflow 節を二段構え（discovery vs exclusions）に書き換え。`rules: ["*"]` 例を file-only exclusion に変更 |
-| Skill references（`src/Seiton/Skills/references/configuration.md` 等） | `discovery` スキーマと gh-aw パターンを追加 |
-| テスト | `GenerateTemplateYaml_AgenticWorkflowDocs_ClarifySkipVsExclusions` 追加、`AgenticWorkflowSkipTests.ResolveFiles_SkipAgenticWorkflows_DoNotEditWithoutMetadata_IsNotSkipped` 追加 |
-
-**ユーザーファースト API レビュー**
-
-- 誤解の元だった「`# gh-aw-metadata:` または `*.lock.yml`」表現を廃止。ロックファイルは **マーカー** でスキップされることを明示。
-- `agentics-maintenance.yml` は **exclusions（file のみ）** が必要と三箇所（ユーザー doc / spec / init テンプレ）で統一。
-- Skill 例は未サポートの `rules: ["*"]` ではなく、動作する `file` のみ exclusion を採用。
-
-**仕様整合**
-
-- 実装ロジック（`AgenticWorkflowDetector`）は変更なし。`Seiton_config_spec.md` の記述を拡張し、既存仕様と一致。
-
-**性能**
-
-| 項目 | 結果 |
-|------|------|
-| 変更の性質 | テンプレ文字列・ドキュメントのみ。lint / discovery の実行パスに変更なし |
-| `CoreLintBenchmark`（Small/Medium/Large × Fix on/off） | Ratio **1.00**（Mean / Allocated ともベースラインと同等） |
-| 理由 | ホットパスに触れていないため性能差なし。新規ベンチマーク追加は不要 |
-
-**セルフレビューと対応**
+#### セルフレビュー（実施済み）
 
 | 指摘 | 対応 |
 |------|------|
-| init テンプレの小文字コメント行が `GenerateTemplateYaml_Uncommented_IsValidConfig` で不正 YAML になる | コメント行を `Gh-aw file without...`（先頭大文字）に変更し prose 扱いでアンコメント対象外に |
-| `verboseLogger: null` でコンパイルエラー | `VerboseLogger.Create(VerboseLevel.Off, TextWriter.Null)` を使用 |
+| lint と fix で per-rule 表の UX が非対称 | 同じ markdown 表形式・同じ hint 文言パターンに統一 |
+| `-v` 以外でも辞書を常時構築すると無駄 | `verboseLevel >= Summary` のときだけ `fixedByRule` を確保 |
+| GitHub Actions では hint が stderr に残るべき | `WriteFixSummaryAndSummary_GitHubActions` テストを hint 期待に更新 |
+| `--check` は apply 前なので rule カウント源が異なる | `BuildFixableCountsByRule` で fix 付き diagnostic から構築 |
 
-**ステータス**: B3 完了。
+#### ベンチマーク（ShortRun, Release, 本実装後）
 
----
+| ベンチマーク | Mean | Allocated/op | vs per-file のみ |
+|--------------|------|--------------|------------------|
+| `FixSummaryOutputBenchmark` per-file only | **~798 ns** | ~2.64 KB | baseline |
+| `FixSummaryOutputBenchmark` + per-rule table | **~1.16 µs** | ~3.64 KB | +47% Mean / +38% Alloc |
 
-### §5 ルール別 Count テーブルの表示条件（B4）— UX の非対称
+**性能評価**
 
-#### 評価
+- per-rule 表は **`-v` 指定時のみ** 生成。通常の fix/dry-run パスは per-file サマリのみで、追加コストなし。
+- verbose 時の追加コストは表ソート・文字列書き込み程度（sub-µs）で、fix 本体（lint + network pin）に比べ無視できる。
+- rule カウント辞書も `-v` 時のみ確保。`RecordFixedByRule` は `CollectionsMarshal` で O(1) 更新。
 
-**妥当。** 現行実装では:
+**変更ファイル**
 
-- ファイル別テーブル: `showPerFile && diagnostics.Count > 0`（デフォルト `showPerFile: true`）
-- ルール別テーブル: `verbose && diagnostics.Count > 0` のみ（`CheckCommand.WriteSummaryContent`）
+- `src/Seiton/Commands/FixCommand.cs`
+- `src/Seiton/Commands/CheckCommand.cs`
+- `src/Seiton.Benchmark/FixSummaryOutputBenchmark.cs`（新規）
+- `tests/Seiton.Tests/FixCommandTests.cs`
+- `tests/Seiton.Tests/WriteSummaryTests.cs`
+- `.github/docs/Seiton_CLI_spec.md`
 
-そのため設定あり実行でファイル別だけ出てルール別が出ないのは **仕様どおり**だが、フィードバックの「初回は両方出た」という体験との差は **`--verbose` の有無**か、実行モードの違いで説明できる。ユーザーにとっては「ファイル別が出るならルール別も欲しい」という期待は自然。
+### フェーズ 3 — P2/P3 ドキュメント
 
-#### 対応プラン
-
-**採用: ルール別テーブルは `--verbose` のまま、ファイル別テーブル直後にヒントを表示**
-
-常時ルール別テーブルを出すと出力が長くなるため、以下とする:
-
-1. ルール別 Count テーブルは **`--verbose` 時のみ**（現行維持）。
-2. ファイル別テーブル表示後（診断に `rule-id` あり・非 verbose）に stderr へ
-   `hint: re-run with --verbose for a per-rule breakdown` を出す。
-3. ヒントは job summary には書かない（既存 `hint:` 行と同様 stderr のみ）。
-4. `showPerFile: false`（fix サマリー等）ではヒントも出さない。
+**WHY**: フィードバック知見を次の採用者へ再利用可能にする。
 
 **完了条件**
 
-- 非 verbose でファイル別テーブルが出たとき、ルール別の見方がヒントで分かる。
-- verbose 時はルール別テーブルが出てヒントは出ない。
+- [x] `adoption-workflow.md` に教材混在リポ向け exclusions レシピ（その後不要判断で削除）
+- [x] `docs/configuration.md` に `rules: ["*"]` / file-only exclusion の明記
+- [x] `unpinned-uses` fix 制限の記載（フェーズ 1 完了後）
 
-#### 実装記録（B4 — 2026-06-07）
+#### 実装内容（2026-06-07）
 
-**実装内容**
+| コンポーネント | 変更 |
+|----------------|------|
+| `src/Seiton/Skills/references/adoption-workflow.md` | 教材混在リポ向け exclusions レシピを一度追加したが、不要判断で削除 |
+| `docs/configuration.md` | `rules: ["*"]` と `rules` 省略の同値性を明確化（混在リポ向け設定例は不要判断で削除） |
+| `src/Seiton/Skills/references/configuration.md` | エージェント参照用の設定リファレンスにも同内容を同期 |
+| `docs/rules.md` (`unpinned-uses`) | fix 時の競合挙動（conflicting `rule-id` の提示）を追記 |
+| `src/Seiton.Benchmark/FixSummaryOutputBenchmark.cs` | verbose出力専用のため削除（通常経路の性能判断は `CoreLintBenchmark` に一本化） |
 
-| 対象 | 変更 |
+#### セルフレビュー（実施済み）
+
+| 指摘 | 対応 |
 |------|------|
-| `CheckCommand.WriteSummary` | `ShouldOfferPerRuleBreakdownHint` + stderr ヒント行 |
-| テスト | `WriteSummary_NotVerbose_*`, `WriteSummary_Verbose_DoesNotShowRuleBreakdownHint` |
-| 仕様 | `Seiton_CLI_spec.md` §6.4 |
+| `rules: ["*"]` が旧挙動の印象で誤解されやすい | `docs/configuration.md` / skill reference に file-only exclusion の明示例を追加 |
+| 教材混在リポ向けレシピは保守対象として過剰 | `adoption-workflow.md` / `docs/configuration.md` からレシピ節を削除 |
+| `unpinned-uses` の fix 時挙動の補足不足 | `docs/rules.md` の `When fixing` に競合時の説明を追加 |
+| `FixSummaryOutputBenchmark` の保守価値が低い | ファイルを削除し、ベンチ確認は `CoreLintBenchmark` / `PinFixOffsetBenchmark` に集約 |
 
-**ユーザーファースト API レビュー**
+#### ベンチマーク（ShortRun, Release, 本実装後）
 
-- デフォルト出力はファイル別に留め、詳細は opt-in（`--verbose`）。
-- フィードバックの「ルール別が欲しい」期待にはヒントで応答し、ログ肥大化を避ける。
+| ベンチマーク | 条件 | Mean | Allocated/op | 評価 |
+|--------------|------|------|--------------|------|
+| `CoreLintBenchmark` | Small/Medium/Large | 既存レンジ内 | 既存レンジ内 | 実行パス変更なし（ドキュメント更新 + ベンチ削除のみ） |
+| `PinFixOffsetBenchmark` | duplicate uses 2/8 | 既存レンジ内 | 既存レンジ内 | フェーズ1の pin offset 回帰なし |
 
-**性能**
+**性能評価**
 
-| 項目 | 結果 |
-|------|------|
-| 変更の性質 | サマリー末尾の O(n) 1 パス（診断件数分）。lint ホットパス外 |
-| ベンチマーク | 対象外（CLI 出力のみ）。`CoreLintBenchmark` 影響なし |
+- 今回は実行コードのアルゴリズム変更なし。`FixSummaryOutputBenchmark` 削除により、ベンチ実行コストと保守対象を削減。
+- ユーザー体験上の性能指標は `CoreLintBenchmark`（通常 lint/fix 経路）で監視継続。
+- `unpinned-uses` の修正済み挙動は `PinFixOffsetBenchmark` で継続確認可能。
 
-**ステータス**: B4 完了。
+### フェーズ 4 — 再検証（githubactions-lab）
+
+**WHY**: フィードバックは v0.9.25 基準。修正後の実測で回帰確認。
+
+**手順**
+
+1. 現行 seiton（main または次リリース）を `githubactions-lab` に適用
+2. `feedback_seiton.md` と同じコマンド列を再実行
+3. 特に `prevent-file-change.yaml` で `--fix --dry-run --enable-pin-network` が成功すること
+4. `prevent-file-change.yaml` の `unpinned-uses` exclusion を外して再試行
+5. 結果を `feedback_seiton.md` に追記するか、本書の「再検証結果」節を更新
+
+**成功基準（再検証）**
+
+| 指標 | v0.9.25 実績 | 目標 |
+|------|-------------|------|
+| fix 競合 | 1 ファイルで失敗 | 0 失敗 |
+| Would fix（全体 dry-run） | 53 / 64 | 同等以上（exclusion 削除後は件数増の可能性あり） |
+| 最終残件 | 3 errors / 8 warnings / 7 files | 意図的 bad 例のみ残ること |
+
+#### 実測結果（2026-06-08, main）
+
+実行コマンド（`githubactions-lab` 上で `src/Seiton/Seiton.csproj` を直接実行）:
+
+1. `validate-config -c .github/seiton.phase4.with-exclusion.yaml`
+2. `--include-actions --oneline -c .github/seiton.phase4.with-exclusion.yaml`
+3. `--fix --dry-run --enable-pin-network -c .github/seiton.phase4.with-exclusion.yaml .github/workflows/prevent-file-change.yaml`
+4. `--fix --dry-run --enable-pin-network -c .github/seiton.phase4.without-exclusion.yaml .github/workflows/prevent-file-change.yaml`
+5. `--fix --dry-run --include-actions --oneline -c .github/seiton.phase4.without-exclusion.yaml`
+
+| 観点 | 結果 | 判定 |
+|------|------|------|
+| with-exclusion 全体 lint | **32 errors / 15 warnings in 127 files (2 excluded, 2 suppressed)** | v0.9.25 比で warning 減 |
+| `prevent-file-change` with-exclusion | **0 issues in 1 file (2 suppressed)** | 期待どおり（抑制確認） |
+| `prevent-file-change` without-exclusion | **Would fix 2 of 2 issues in 1 file (0 remaining)**、2 箇所とも SHA pin diff を生成 | ✅ **fix 競合なし** |
+| without-exclusion 全体 dry-run | **Would fix 55 of 68 issues in 25 files (13 remaining)** / **3 errors, 10 warnings remain in 8 files** | 指標達成（残件は意図的 bad 例中心） |
+
+#### 結論
+
+- フェーズ1で修正した `unpinned-uses` 重複時の pin fix 競合は、`prevent-file-change.yaml` で再発しなかった。
+- `prevent-file-change.yaml` の `unpinned-uses` exclusion なしでも dry-run が成立し、2 箇所を個別に pin できることを確認。
+- 残件は主に教材意図の警告/エラー群で、置き換え運用の再検証として合格。
 
 ---
 
-### §6 旧リンターインライン抑制の移行（B5）— 移行支援不足
+## 8. 非ゴール
 
-#### 評価
-
-**半分妥当。** seiton はネイティブのインライン抑制を既に持つ（`# seiton: disable-next-line`, `# seiton: disable-job` 等、`Seiton_Linter_spec.md`）。他ツールのインラインコメントを **そのまま読む機能はない**。
-
-フィードバックの「`.github/seiton.yaml` に集約（推奨）」は seiton の設計思想（`rules: enabled: false` より `exclusions` を優先）と一致。ユーザーが **seiton のインライン構文を知らない** ことが移行時の実質的な障壁だった。
-
-#### 方針（採用）
-
-- **競合ツール名の対応表は公開ドキュメントに載せない**（`docs/configuration.md` は既に Seiton ネイティブの Inline Suppression 節を持つ。変更不要）。
-- **Agent Skill** で「config vs inline」の判断フローと構文・配置の落とし穴を案内する（エージェントがワークフロー内の未知コメントを seiton 形式へ翻訳する想定）。
-
-#### 実装内容（B5 完了）
-
-| 変更 | 内容 |
-|------|------|
-| `src/Seiton/Skills/references/inline-suppression.md` | 新規。決定フロー、`disable-next-line` / `disable-job` / `disable-file`、`if-cond`・`matrix` 配置、カンマ区切り rule ID、エージェント向けチェックリスト |
-| `src/Seiton/Skills/SKILL.md` | 「Suppressing diagnostics (config vs inline)」節と References 追記 |
-| `.claude/skills/seiton/` | 上記と同期 |
-| `tests/Seiton.Tests/InstallCommandTests.cs` | `seiton install --skills` で reference が展開されることを検証 |
-
-**パフォーマンス**: ランタイム・リンター変更なし。ベンチマーク対象外（±0%）。
-
-**仕様整合**: `docs/configuration.md` の Inline Suppression Directives と内容一致。`Seiton_Linter_spec.md` の挙動変更なし。
-
-**ステータス**: B5 完了。
+- githubactions-lab の workflow 内容そのものの修正（seiton 側のタスクではない）
+- actionlint との 1:1 診断一致の追求（スコープ外）
+- 教材 bad 例の検出をデフォルトで無効化する機能（exclusions で十分）
 
 ---
 
-### §7 検出範囲の差異（I1）— 想定内、移行ガイドで吸収
+## 9. 関連ドキュメント
 
-#### 評価
-
-**妥当。バグではない。** seiton は広いデフォルトルールセットを持ち、初回実行で診断が増えるのは想定内。フィードバックの具体例はいずれも製品不具合ではなく、ルールカバレッジと設定チューニングの問題として説明可能:
-
-| 現象 | 評価 |
-|------|------|
-| `run-env-context-direct-use` が大量に新規検出 | デフォルト有効のセキュリティルール。既存 repo では初回に多く出やすい |
-| `deny-inherit-secrets` | デフォルト有効。意図的パターンは `exclusions` で抑制 |
-| `if-expr-wrapper` 等の warning | デフォルト有効。多くは `--fix` 可能 |
-| `impostor-commit` opt-in | 設計どおり。有効化時のみ追加検出 |
-| `ref-version-mismatch` | デフォルト有効。必要なら scoped exclusion |
-
-#### 方針（採用）
-
-- **`docs/migration.md` は作らない** — seiton は LLM + Agent Skill 前提。競合ツール比較や段階的移行はエージェントが `seiton install --skills` で取得する参照に集約する（B5 と同方針）。
-- **`Seiton-feature-matrix.md` は内部用のまま** — ユーザー向けには公開しない。初回で増えやすいルール一覧は Skill 参照に記載。
-- 公開 `docs/configuration.md` / `docs/usage.md` は既存の `--min-severity` 等で足りる。重複ドキュメントは増やさない。
-
-#### 実装内容（I1 完了）
-
-| 変更 | 内容 |
-|------|------|
-| `src/Seiton/Skills/references/adoption-workflow.md` | 新規。「診断増加 ≠ バグ」、フェーズ 1–3（error のみ → warning → opt-in）、初回多発ルール表、verbose 出力の読み方、エージェントチェックリスト |
-| `src/Seiton/Skills/SKILL.md` | 「First adoption」節、Troubleshooting 追記、References 追記 |
-| `.claude/skills/seiton/` | 上記と同期 |
-| `tests/Seiton.Tests/InstallCommandTests.cs` | install で reference が展開されることを検証 |
-
-**パフォーマンス**: ランタイム変更なし。ベンチマーク対象外（±0%）。
-
-**仕様整合**: 挙動変更なし。`Seiton_Linter_spec.md` のルール既定と一致。
-
-ラボリポジトリ固有の CI 方針（デモファイルの除外 / 修正）は **githubactions-lab 側**で決定。seiton 本体のスコープ外。
-
-**ステータス**: I1 完了。
-
----
-
-### §8 `validate-config` と設定ミス検出（B6）
-
-#### 評価
-
-**妥当。** 従来の `validate-config` は `LintConfigLibrary.ValidateFile` のみで workflow を読まず、job-scoped exclusion の unknown job-id は lint 実行まで検出されなかった。
-
-#### 実装内容（B6 完了）
-
-| 対象 | 変更 |
-|------|------|
-| `ExclusionJobIdValidator` | 新規。job-scoped exclusion の `file` にマッチする workflow のみパースし job-id を検証 |
-| `ExclusionMatcher.MatchesWorkflowFile` | exclusion `file` glob の共有マッチ API |
-| `ValidateCommand` | discovery + 横断検証、`--verbose: job-id-check` |
-| テスト | `ExclusionJobIdValidatorTests`, `ValidateCommandTests` |
-| 仕様 | `Seiton_config_spec.md`, `Seiton_CLI_spec.md`, `docs/usage.md` |
-
-**ユーザーファースト API**
-
-- 既存 `seiton validate-config` のまま。追加フラグなし。
-- unknown job-id は **config パス** に error（lint と同メッセージ）。workflow の parse error と混同しない。
-- マッチする workflow が discovery に無い場合は **warning** のみ（CI partial checkout 想定）。
-
-**性能**
-
-| 項目 | 結果 |
-|------|------|
-| `ExclusionJobIdValidatorBenchmark`（discovery 4 件、マッチ 3 件パース） | Validate のみ **~3.4 µs** → 横断検証込み **~126 µs**（小規模 workflow 3 件パース分。絶対値はサブ ms） |
-| lint ホットパス | 変更なし（`LintEngine` 未変更） |
-| 設計 | job-scoped exclusion が無い config では workflow パースゼロ（discovery のみ） |
-
-**ステータス**: B6 完了。
-
----
-
-## 実装優先度（すべて完了）
-
-| フェーズ | 項目 | 状態 |
-|---------|------|------|
-| 1 | B1 job-scoped exclusion の file 限定 job-id 検証 + B6 横断検証 | 完了 |
-| 1 | B2 `rules: ["*"]` サポート | 完了 |
-| 1 | B4 ルール別テーブルは `--verbose` のまま + stderr ヒント | 完了 |
-| 2 | B3 skip-agentic-workflows 説明・init テンプレ | 完了 |
-| 2 | B5 Agent Skill `inline-suppression.md` | 完了 |
-| 2 | I1 Agent Skill `adoption-workflow.md` | 完了 |
-| 2 | B6 `validate-config` cross-file job-id 検証 | 完了 |
-
-**採用しなかった案（意図的にスコープ外）**
-
-- `seiton migrate` コマンド — 提供予定なし（Agent Skill で移行を支援）
-- gh-aw metadata なしファイルのヒューリスティック skip — false positive を避けられないため不採用。`exclusions` で明示除外
-
----
-
-## 検証手順（リリース前）— 完了
-
-| # | 手順 | 状態 | 根拠 |
-|---|------|------|------|
-| 1 | 移行 config の回帰テスト | **完了** | `tests/Seiton.Core.Tests/fixtures/migration/`（nest は job-scoped exclusion）+ `FeedbackMigrationRegressionTests`（8 件） |
-| 2 | `validate-config` / lint CLI 回帰 | **完了** | `tests/Seiton.Tests/FeedbackMigrationCliTests`（validate + verbose lint） |
-| 3 | job-scoped exclusion で他ファイルに unknown job-id が膨張しない | **完了** | `FeedbackMigrationRegressionTests.Lint_JobScopedExclusionForOtherFile_*` + B1 単体テスト |
-| 4 | `rules` 省略と `rules: ["*"]` で file 全体除外が同等 | **完了** | `FeedbackMigrationRegressionTests.Lint_AgenticsMaintenance_RulesWildcard_*` + B2 単体テスト |
-| 5 | `validate-config` が job-scoped exclusion を横断検証 | **完了** | migration fixture + `ValidateExclusionJobIds_MigratedConfig_*` / CLI verbose `job-id-check` |
-
-フィードバック本番規模（120 workflow）の件数（119 checked / 3 suppressed）はラボリポジトリ依存のため、上記ミニ fixture で **設定・抑制・検証ロジック**を回帰固定している。フルラボはリリース前の任意スポットチェックとする。
-
----
-
-## 参照
-
-- [feedback_seiton.md](./feedback_seiton.md) — 元フィードバック全文
-- [Seiton_config_spec.md](./Seiton_config_spec.md) — exclusions / discovery の仕様
-- [Seiton-feature-matrix.md](./Seiton-feature-matrix.md) — 競合ツールとの機能比較
-- [docs/configuration.md](../../docs/configuration.md) — ユーザー向け設定リファレンス
+| ドキュメント | 関係 |
+|--------------|------|
+| [feedback_seiton.md](./feedback_seiton.md) | 一次フィードバック・再現手順・最終 config |
+| [Seiton-feature-matrix.md](./Seiton-feature-matrix.md) | 競合ツール比較 |
+| [Seiton_CLI_spec.md](./Seiton_CLI_spec.md) | 出力・サマリ仕様 |
+| [Seiton_config_spec.md](./Seiton_config_spec.md) | exclusion 正規化 |
+| [competitor-ghalint-structure-details.md](./competitor-ghalint-structure-details.md) | ghalint 置き換え観点 |
+| [competitor-actionlint-structure-details.md](./competitor-actionlint-structure-details.md) | actionlint 置き換え観点 |
+| [competitor-zizmor-structure-details.md](./competitor-zizmor-structure-details.md) | zizmor 置き換え観点 |

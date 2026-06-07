@@ -657,6 +657,29 @@ Fixed <fixed> of <found> issue(s) in <file-count> file(s) (<remaining> remaining
 
 In `--dry-run` mode, the table header uses "Would Fix" instead of "Fixed". In `--check` mode, the header uses "Fixable".
 
+When the fix summary is emitted and at least one issue was fixed/fixable/would be fixed, but `--verbose` is not set, stderr also emits:
+
+```
+hint: re-run with --verbose for a per-rule fix breakdown
+```
+
+This hint is not written to the job summary.
+
+In `-v` / `--verbose` mode, when the fix summary is emitted and at least one issue was fixed/fixable/would be fixed, a per-rule breakdown table is appended after the per-file table:
+
+```
+| Rule                         | Would Fix |
+|------------------------------|----------:|
+| if-expr-wrapper              |         4 |
+| job-timeout-minutes-required |         3 |
+```
+
+- In `--dry-run` mode, the per-rule count column is labeled "Would Fix".
+- In `--check` mode, the per-rule count column is labeled "Fixable" (counts are derived from diagnostics that carry a fix).
+- In applied fix mode, the per-rule count column is labeled "Fixed".
+- Rules are sorted by count descending, then by rule ID lexicographically.
+- Column widths are dynamically computed to align values.
+
 - The total summary line shows the relationship `found = fixed + remaining` explicitly ("Fixed X of Y issues").
 - The total summary line appears first, followed by the per-file detail table.
 - Column widths are dynamically computed from the longest file name.

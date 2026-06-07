@@ -1395,6 +1395,8 @@ The separator between SHA and comment defaults to ` # ` (matches pinact's `separ
 
 If the ref is already a 40-hex SHA, it is considered already pinned; no fix is generated.
 
+**Edit anchor resolution:** Pin fixes replace the full `uses:` reference string (for example `actions/checkout@v6`), but the diagnostic `TextRange` may cover only the `@ref` suffix. When the same reference string appears multiple times in one file, edit offset resolution must use the diagnostic anchor (the `@ref` range start) to select the occurrence whose byte span contains that anchor—not the file's first textual match.
+
 #### 12.5.2 OCI Digest Fix Format
 
 An `unpinned-image` diagnostic fix appends `@sha256:<hex>` to the image reference, preserving the tag:
