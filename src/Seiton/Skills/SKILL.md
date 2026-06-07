@@ -100,6 +100,18 @@ error[rule-id]: message
 6. Run `seiton --fix` to apply fixes (or `seiton --fix --show-diff` to apply and print the diff)
 7. For pinning: `seiton --fix --enable-pin-network --enable-image-network`
 
+### First adoption (many new diagnostics)
+
+**More findings than before is normal** — not a seiton bug. Default rules are broader than a minimal syntax-only check.
+
+Phased rollout:
+
+1. `seiton --min-severity error` — fix or exclude blocking issues first
+2. Full `seiton` + `--fix` — address warnings
+3. Enable opt-in / online rules in config when ready (`impostor-commit`, etc.)
+
+Rules that often dominate first runs: `run-env-context-direct-use`, `deny-inherit-secrets`, `if-expr-wrapper`, `unpinned-uses`. See `references/adoption-workflow.md` for the full table, verbose output interpretation, and agent checklist.
+
 ## Best Practices
 
 ### Fix first, exclude only when necessary
@@ -221,6 +233,7 @@ seiton --verbose    # confirm resolved config on stderr
 - **Config errors**: Run `seiton validate-config` to check configuration
 - **Unknown option**: seiton suggests the closest valid option with a `Did you mean` hint
 - **Too many warnings**: Use `--min-severity error` to focus on errors only
+- **More diagnostics than expected**: Usually broader default rules, not a defect — see `references/adoption-workflow.md`
 - **CI integration (GHA)**: Default `github-actions` writes the job summary and rich stdout; use `--format sarif` for Code Scanning upload. Docker: `-e GITHUB_ACTIONS -e GITHUB_STEP_SUMMARY`
 
 ## References
@@ -229,3 +242,4 @@ seiton --verbose    # confirm resolved config on stderr
 - `references/fix-mode.md` — Auto-fix commands, flags, and configuration
 - `references/configuration.md` — Full seiton.yaml schema and common patterns
 - `references/inline-suppression.md` — Config vs inline suppression, directive syntax, placement pitfalls
+- `references/adoption-workflow.md` — First-run diagnostic volume, phased rollout, common high-count rules

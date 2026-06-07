@@ -61,6 +61,37 @@ public sealed class InstallCommandTests
     }
 
     [Test]
+    public async Task Run_Skills_DefaultTarget_InstallsAdoptionWorkflowReference()
+    {
+        var dir = CreateTempDir();
+        try
+        {
+            using var stdout = new StringWriter();
+            using var stderr = new StringWriter();
+
+            var exitCode = InstallCommand.Run(skills: true, target: "claude", output: null, force: false, ci: false, baseDirectory: dir, stdout, stderr);
+
+            await Assert.That(exitCode).IsEqualTo(ExitCode.Success);
+
+            var skillDir = Path.Combine(dir, ".claude", "skills", "seiton");
+            var referencePath = Path.Combine(skillDir, "references", "adoption-workflow.md");
+            await Assert.That(File.Exists(referencePath)).IsTrue();
+
+            var reference = File.ReadAllText(referencePath);
+            await Assert.That(reference).Contains("--min-severity error");
+            await Assert.That(reference).Contains("run-env-context-direct-use");
+            await Assert.That(reference).Contains("impostor-commit");
+
+            var skill = File.ReadAllText(Path.Combine(skillDir, "SKILL.md"));
+            await Assert.That(skill).Contains("references/adoption-workflow.md");
+        }
+        finally
+        {
+            DeleteDirectory(dir);
+        }
+    }
+
+    [Test]
     public async Task Run_Skills_ExistingDirectory_WithoutForce_ReturnsFatalError()
     {
         var dir = CreateTempDir();

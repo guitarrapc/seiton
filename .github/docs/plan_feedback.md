@@ -32,7 +32,7 @@
 | B3 | 課題 | `skip-agentic-workflows` の検出範囲 | 中 | **仕様どおりだが説明不足** | ドキュメント改善 |
 | B4 | 課題 | ルール別 Count テーブルの表示条件 | 軽 | **UX の非対称** | 表示条件の整理 |
 | B5 | 課題 | 旧リンターインライン抑制の移行 | 軽 | **移行支援不足**（機能欠如ではない） | **完了** — Agent Skill 参照 |
-| I1 | 情報 | 検出範囲の差異（和集合だが完全一致ではない） | — | 想定内 | 移行ガイド整備 |
+| I1 | 情報 | 検出範囲の差異（和集合だが完全一致ではない） | — | 想定内 | **完了** — Agent Skill 参照 |
 | B6 | 課題 | `validate-config` が unknown job-id を検出しない | 中 | **B1 の派生** | B1 修正後に拡張 |
 
 ---
@@ -365,29 +365,38 @@ metadata なし gh-aw 生成物のヒューリスティック拡張（例: 先�
 
 #### 評価
 
-**妥当。バグではない。** seiton は actionlint + zizmor + ghalint の和集合に近いが完全一致ではない。フィードバックの具体例はいずれも説明可能:
+**妥当。バグではない。** seiton は広いデフォルトルールセットを持ち、初回実行で診断が増えるのは想定内。フィードバックの具体例はいずれも製品不具合ではなく、ルールカバレッジと設定チューニングの問題として説明可能:
 
 | 現象 | 評価 |
 |------|------|
-| `run-env-context-direct-use` が大量に新規検出 | seiton 固有ルール。旧リンター未カバー |
-| `auto-dump-context.yaml` の `deny-inherit-secrets` | zizmor では `dangerous-triggers` のみ ignore。ghalint 相当は今回の exclusion 未設定 |
-| `if-expr-wrapper` 等の warning | seiton デフォルト有効。zizmor medium 相当 |
-| `impostor-commit` opt-in | 設計どおり。今回有効化済み |
-| `ref-version-mismatch` | ローカルでも有効。zizmor 行 ignore は `exclusions` で代替 |
+| `run-env-context-direct-use` が大量に新規検出 | デフォルト有効のセキュリティルール。既存 repo では初回に多く出やすい |
+| `deny-inherit-secrets` | デフォルト有効。意図的パターンは `exclusions` で抑制 |
+| `if-expr-wrapper` 等の warning | デフォルト有効。多くは `--fix` 可能 |
+| `impostor-commit` opt-in | 設計どおり。有効化時のみ追加検出 |
+| `ref-version-mismatch` | デフォルト有効。必要なら scoped exclusion |
 
-#### 対応プラン
+#### 方針（採用）
 
-1. [Seiton-feature-matrix.md](./Seiton-feature-matrix.md) に「移行時に増えやすいルール」列を追加（`run-env-context-direct-use`, `deny-inherit-secrets` 等）。
-2. `docs/migration.md`（§6 と共通化可）に段階的移行パターンを記載:
-   - **段階 1**: `--min-severity error` + 既存 exclusion 移植
-   - **段階 2**: warning ルールを順次有効化
-   - **段階 3**: online ルール（`impostor-commit` 等）を opt-in
-3. ラボリポジトリ固有の CI 方針（デモファイルの除外 / 修正）は **githubactions-lab 側**で決定。seiton 本体のスコープ外。
+- **`docs/migration.md` は作らない** — seiton は LLM + Agent Skill 前提。競合ツール比較や段階的移行はエージェントが `seiton install --skills` で取得する参照に集約する（B5 と同方針）。
+- **`Seiton-feature-matrix.md` は内部用のまま** — ユーザー向けには公開しない。初回で増えやすいルール一覧は Skill 参照に記載。
+- 公開 `docs/configuration.md` / `docs/usage.md` は既存の `--min-severity` 等で足りる。重複ドキュメントは増やさない。
 
-**完了条件**
+#### 実装内容（I1 完了）
 
-- 移行ユーザーが「error が増えた＝バグ」と誤解しにくい。
-- feature matrix と migration ドキュメントが整合。
+| 変更 | 内容 |
+|------|------|
+| `src/Seiton/Skills/references/adoption-workflow.md` | 新規。「診断増加 ≠ バグ」、フェーズ 1–3（error のみ → warning → opt-in）、初回多発ルール表、verbose 出力の読み方、エージェントチェックリスト |
+| `src/Seiton/Skills/SKILL.md` | 「First adoption」節、Troubleshooting 追記、References 追記 |
+| `.claude/skills/seiton/` | 上記と同期 |
+| `tests/Seiton.Tests/InstallCommandTests.cs` | install で reference が展開されることを検証 |
+
+**パフォーマンス**: ランタイム変更なし。ベンチマーク対象外（±0%）。
+
+**仕様整合**: 挙動変更なし。`Seiton_Linter_spec.md` のルール既定と一致。
+
+ラボリポジトリ固有の CI 方針（デモファイルの除外 / 修正）は **githubactions-lab 側**で決定。seiton 本体のスコープ外。
+
+**ステータス**: I1 完了。
 
 ---
 
@@ -419,7 +428,7 @@ B1 フェーズ B と一体で実装（§2 参照）。加えて:
 フェーズ 2（ドキュメント — 同リリースまたは直後）
 ├── B3: skip-agentic-workflows の説明・init テンプレ修正
 ├── B5: Agent Skill インライン抑制参照（完了）
-├── I1: migration ガイド・feature matrix 更新
+├── I1: Agent Skill adoption-workflow 参照（完了）
 └── B6: validate-config の cross-file job-id 検証
 
 フェーズ 3（将来）
