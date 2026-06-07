@@ -97,7 +97,7 @@ steps:
 ## Configuration
 
 Config is auto-discovered from `<cwd>/.github/seiton.yaml` (or `.yml`, plus `seiton.yaml/.yml` under cwd).
-Use `--config` or `SEITON_CONFIG` for custom paths.
+Use `--config`/`-c` or `SEITON_CONFIG` for custom paths.
 
 ## Troubleshooting
 
