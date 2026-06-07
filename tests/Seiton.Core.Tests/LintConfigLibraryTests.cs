@@ -1320,8 +1320,19 @@ public sealed class LintConfigLibraryTests
         await Assert.That(yaml.Contains("run-env-context-direct-use", StringComparison.Ordinal)).IsTrue();
         await Assert.That(yaml.Contains("unpinned-image", StringComparison.Ordinal)).IsTrue();
         await Assert.That(yaml.Contains("agentics-maintenance.yml", StringComparison.Ordinal)).IsTrue();
-        await Assert.That(yaml.Contains("*.lock.yml", StringComparison.Ordinal)).IsTrue();
         await Assert.That(yaml.Contains("skip-agentic-workflows", StringComparison.Ordinal)).IsTrue();
+    }
+
+    [Test]
+    public async Task GenerateTemplateYaml_AgenticWorkflowDocs_ClarifySkipVsExclusions()
+    {
+        var yaml = LintConfigLibrary.GenerateTemplateYaml();
+
+        await Assert.That(yaml.Contains("# gh-aw-metadata:", StringComparison.Ordinal)).IsTrue();
+        await Assert.That(yaml.Contains("first 10 lines", StringComparison.Ordinal)).IsTrue();
+        await Assert.That(yaml.Contains("# gh-aw-metadata: header or *.lock.yml", StringComparison.Ordinal)).IsFalse();
+        await Assert.That(yaml.Contains("agentics-maintenance.yml", StringComparison.Ordinal)).IsTrue();
+        await Assert.That(yaml.Contains("without # gh-aw-metadata:", StringComparison.Ordinal)).IsTrue();
     }
 
     [Test]

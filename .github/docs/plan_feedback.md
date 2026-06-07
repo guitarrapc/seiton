@@ -168,6 +168,48 @@ metadata なし gh-aw 生成物のヒューリスティック拡張（例: 先�
 - 移行ユーザーが「なぜ lock.yml だけ skip されたか」をドキュメントだけで理解できる。
 - init テンプレートと Skill に矛盾がない。
 
+#### フェーズ A 実装記録（2026-06-07）
+
+**実装内容**
+
+| 対象 | 変更 |
+|------|------|
+| `docs/configuration.md` | `## Discovery` 節を新設。`skip-agentic-workflows` と `exclusions` の使い分け表・例を追加 |
+| `.github/docs/Seiton_config_spec.md` | §2.3.1 に gh-aw 使い分け・`agentics-maintenance.yml` 例を追記 |
+| `src/Seiton.Core/Linting/LintConfigLibrary.cs` | `seiton init` テンプレのコメント修正（`*.lock.yml` を exclusion 例から削除、metadata 検出条件を明記） |
+| `.github/seiton.yaml` | テンプレと同内容のコメント整合 |
+| `docs/usage.md` | `--skip-agentic-workflows` の説明を first 10 lines 基準に更新 |
+| Skill（`.claude/skills/seiton/SKILL.md`, `src/Seiton/Skills/SKILL.md`） | Agentic Workflow 節を二段構え（discovery vs exclusions）に書き換え。`rules: ["*"]` 例を file-only exclusion に変更 |
+| Skill references（`src/Seiton/Skills/references/configuration.md` 等） | `discovery` スキーマと gh-aw パターンを追加 |
+| テスト | `GenerateTemplateYaml_AgenticWorkflowDocs_ClarifySkipVsExclusions` 追加、`AgenticWorkflowSkipTests.ResolveFiles_SkipAgenticWorkflows_DoNotEditWithoutMetadata_IsNotSkipped` 追加 |
+
+**ユーザーファースト API レビュー**
+
+- 誤解の元だった「`# gh-aw-metadata:` または `*.lock.yml`」表現を廃止。ロックファイルは **マーカー** でスキップされることを明示。
+- `agentics-maintenance.yml` は **exclusions（file のみ）** が必要と三箇所（ユーザー doc / spec / init テンプレ）で統一。
+- Skill 例は未サポートの `rules: ["*"]` ではなく、動作する `file` のみ exclusion を採用。
+
+**仕様整合**
+
+- 実装ロジック（`AgenticWorkflowDetector`）は変更なし。`Seiton_config_spec.md` の記述を拡張し、既存仕様と一致。
+
+**性能**
+
+| 項目 | 結果 |
+|------|------|
+| 変更の性質 | テンプレ文字列・ドキュメントのみ。lint / discovery の実行パスに変更なし |
+| `CoreLintBenchmark`（Small/Medium/Large × Fix on/off） | Ratio **1.00**（Mean / Allocated ともベースラインと同等） |
+| 理由 | ホットパスに触れていないため性能差なし。新規ベンチマーク追加は不要 |
+
+**セルフレビューと対応**
+
+| 指摘 | 対応 |
+|------|------|
+| init テンプレの小文字コメント行が `GenerateTemplateYaml_Uncommented_IsValidConfig` で不正 YAML になる | コメント行を `Gh-aw file without...`（先頭大文字）に変更し prose 扱いでアンコメント対象外に |
+| `verboseLogger: null` でコンパイルエラー | `VerboseLogger.Create(VerboseLevel.Off, TextWriter.Null)` を使用 |
+
+**ステータス**: フェーズ A 完了。
+
 ---
 
 ### §5 ルール別 Count テーブルの表示条件（B4）— UX の非対称

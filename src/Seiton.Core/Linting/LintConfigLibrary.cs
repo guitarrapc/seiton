@@ -114,12 +114,11 @@ public static class LintConfigLibrary
           #     - unpinned-image
           # File-only exclusion (skips lint for the entire file):
           # - file: .github/workflows/generated.yml
-          # Agentic Workflow files (# gh-aw-metadata: header or *.lock.yml):
+          # Gh-aw file without # gh-aw-metadata: in the first 10 lines (e.g. agentics-maintenance.yml):
           # - file: .github/workflows/agentics-maintenance.yml
-          # - file: .github/workflows/*.lock.yml
 
         discovery:
-          # skip-agentic-workflows: true   # opt-in: skip files with # gh-aw-metadata:
+          # skip-agentic-workflows: true   # opt-in: skip workflows whose first 10 lines contain "# gh-aw-metadata:" (often *.lock.yml)
 
         fix:
           defaults:

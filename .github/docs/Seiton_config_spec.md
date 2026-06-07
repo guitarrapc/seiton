@@ -198,7 +198,17 @@ discovery:
 
 | Key | 型 | デフォルト | 説明 |
 |---|---|---|---|
-| `skip-agentic-workflows` | `bool` | `false` | `true` のとき、先頭 ~10 行に `# gh-aw-metadata:` を含む workflow を lint 対象から除外（opt-in）。CLI `--skip-agentic-workflows` で上書き可能。 |
+| `skip-agentic-workflows` | `bool` | `false` | `true` のとき、先頭 10 行以内に `# gh-aw-metadata:` を含む workflow を lint 対象から除外（opt-in）。CLI `--skip-agentic-workflows` で上書き可能。 |
+
+**Agentic Workflow（gh-aw）との使い分け**:
+
+- `skip-agentic-workflows` が検出するのは **`# gh-aw-metadata:` コメントのみ**（ファイル名や `DO NOT EDIT` ヘッダーは見ない）。多くの gh-aw ロックファイル（例: `monthly-oss-repo-status.lock.yml`）はこのマーカーを持つ。
+- metadata のない gh-aw 生成物（例: `agentics-maintenance.yml` — `DO NOT EDIT` のみ）は **スキップされない**。`exclusions` でファイル単位除外する（`file` のみ、全ルール抑制）。
+
+```yaml
+exclusions:
+  - file: ".github/workflows/agentics-maintenance.yml"
+```
 
 ### 2.4 `fix`
 

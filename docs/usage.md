@@ -23,7 +23,7 @@ Options:
   --color <ColorMode>          Color mode: auto | always | never. [Default: Auto]
   --no-color                   Disable color output (overrides --color).
   -v, --verbose                Print progress information to stderr. Use -vv for more detailed output.
-  --skip-agentic-workflows     Skip Agentic Workflow files (with # gh-aw-metadata: header).
+  --skip-agentic-workflows     Skip workflows whose first 10 lines contain # gh-aw-metadata: (see configuration.md).
   --fix                        Enable fix mode on the root command.
   --dry-run                    Print unified diff without modifying files (requires --fix).
   --show-diff                  Print unified diff after applying fixes (requires --fix; --dry-run takes precedence).
