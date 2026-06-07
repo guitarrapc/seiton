@@ -12,7 +12,7 @@ When a rule reports diagnostics, use this order:
    - `severity: warning|error` (adjust strictness)
 3. Use `exclusions` only for file/job-specific exceptions.
 
-For online rules, always enable them explicitly in config (`rules.<rule-id>.enabled: true`) and provide `GITHUB_TOKEN` or `SEITON_GITHUB_TOKEN`.
+For online rules, always enable them explicitly in config (`rules.<rule-id>.enabled: true`) and set `GITHUB_TOKEN` or `SEITON_GITHUB_TOKEN` to avoid rate limits.
 
 ## Rule Table
 
