@@ -18,6 +18,7 @@ seiton validate-config
 seiton --min-severity error
 ```
 
+- **Exit code:** Warnings alone still produce exit code `1` unless you pass `--min-severity error`; keep that flag in CI until you are ready to enforce warnings.
 - Port intentional suppressions into `.github/seiton.yaml` `exclusions` (see `references/configuration.md` and `references/inline-suppression.md`).
 - Use `seiton --verbose` to confirm config path, discovery count, and `suppressed:` totals.
 - Exclude generated or demo workflows before debating individual rules.

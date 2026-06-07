@@ -366,6 +366,28 @@ contextに限らず、exclusionの前に --fixを試すように指示するべ�
 2. adoption-workflow Phase 1 に exit code 挙動を 1 文追加
 3. コード変更は不要
 
+**実装状況（2026-06-08）:** ✅ 完了
+
+| 項目 | 内容 |
+|------|------|
+| 実装 | `docs/usage.md` §Exit Codes に **CI** 補足段落を追加。`adoption-workflow.md` Phase 1 に exit code 箇条書き。`SKILL.md` Troubleshooting に 1 行追加。`Seiton_CLI_spec.md` §7 に同趣旨の注記（§6.4 hint への参照付き） |
+| ミラー | `.claude/skills/seiton/` の `adoption-workflow.md` / `SKILL.md` を同期 |
+| テスト | `UsageDocsTests`（usage.md の CI 補足）、`InstallCommandTests`（インストール済み adoption-workflow の exit code 文）を追加。全 2543 テスト pass |
+| 仕様 | 挙動変更なし。CLI spec §7 を docs と整合 |
+| UX | 既存の runtime hint と同じ語彙（`--min-severity error`、warnings-only → exit `1`）。Phase 1 採用者が CI 設定前に読む導線を強化 |
+
+**ベンチマーク:** N/A（ドキュメントのみ、`src/` コード変更なし）
+
+**セルフレビュー:**
+
+| 指摘 | 対応 |
+|------|------|
+| usage と skill で文言がばらつく | adoption-workflow / usage / SKILL / CLI spec で同一メッセージ（warnings-only → exit 1、`--min-severity error`）に統一 |
+| 表だけでは CI 利用者が見落とす | 表直後の **CI:** 段落と adoption Phase 1 の **Exit code:** 箇条書きの二重掲載 |
+| runtime hint と docs の重複 | 意図的 — hint は実行時、docs は事前参照。usage に「hint も出る」と明記 |
+| テストで embedded skill の更新漏れ | `InstallCommandTests` で `seiton install --skills` 出力を検証（埋め込みリソース経由） |
+| `Contains` の大文字小文字 | adoption-workflow は文頭大文字 `Warnings`、usage は段落頭小文字 — 各テストで実際の casing に合わせた |
+
 ---
 
 #### C-4. duplicate exclusion の `info[parse]` 行番号
@@ -472,7 +494,7 @@ contextに限らず、exclusionの前に --fixを試すように指示するべ�
 | ~~**P2**~~ | A-3 | `env-var` の `help:` と rules.md 代替パターン | ✅ 完了（2026-06-08） |
 | ~~**P2**~~ | C-4 | duplicate exclusion の位置情報改善 | ✅ 完了（2026-06-08） |
 | ~~**P3**~~ | C-2 | `--include-actions` 案内の前倒し | ✅ 完了（2026-06-08、Phase 1） |
-| **P3** | C-3 | exit code / `--min-severity` のドキュメント補強 | ドキュメントのみ |
+| ~~**P3**~~ | C-3 | exit code / `--min-severity` のドキュメント補強 | ✅ 完了（2026-06-08） |
 
 **見送り（フィードバックでも妥当とされている）:** `if-cond` / `env-var` / `unredacted-secrets` の auto-fix 拡張、online rules のデフォルト有効化、`env-var` ルール緩和。
 

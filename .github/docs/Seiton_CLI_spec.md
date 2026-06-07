@@ -751,6 +751,8 @@ Progress (`--verbose`), configuration errors, init hints, fix diffs (when format
 | `2` | Invalid CLI options — argument parsing failed or unsupported option combination. |
 | `3` | Fatal error — config file error, I/O failure, or internal engine failure. |
 
+By default, warnings alone still produce exit code `1`. In CI, pass `--min-severity error` when warnings should not fail the job (see runtime hint in §6.4).
+
 For `--fix --check`: exits with `1` if any fixable diagnostic remains after post-lint filters such as `--min-severity` are applied.
 
 ---

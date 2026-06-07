@@ -689,6 +689,8 @@ jobs:
 | `2` | Invalid command-line options. |
 | `3` | Fatal error (for example config parse failure or unreadable file). |
 
+**CI:** By default, warnings alone still produce exit code `1`. To fail the job only on errors, pass `--min-severity error`. Seiton also prints this hint when warnings are the only actionable findings.
+
 ---
 
 ## Playground (browser)

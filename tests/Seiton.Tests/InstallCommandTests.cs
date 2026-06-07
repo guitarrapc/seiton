@@ -79,6 +79,7 @@ public sealed class InstallCommandTests
 
             var reference = File.ReadAllText(referencePath);
             await Assert.That(reference).Contains("--min-severity error");
+            await Assert.That(reference).Contains("Warnings alone still produce exit code");
             await Assert.That(reference).Contains("run-env-context-direct-use");
             await Assert.That(reference).Contains("impostor-commit");
             await Assert.That(reference).Contains("Fix before exclusions");

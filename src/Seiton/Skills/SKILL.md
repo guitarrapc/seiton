@@ -103,6 +103,7 @@ Use `--config`/`-c` or `SEITON_CONFIG` for custom paths.
 
 - Config errors: run `seiton validate-config`.
 - Too many findings: start with `--min-severity error`.
+- Warnings-only runs still exit `1` by default; use `--min-severity error` in CI if warnings should not fail the job.
 - More findings than expected: see `references/adoption-workflow.md`.
 - CI output format and SARIF usage: see `references/fix-mode.md` and `references/configuration.md`.
 
