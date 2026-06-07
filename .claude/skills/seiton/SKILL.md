@@ -150,6 +150,7 @@ exclusions:
 
 The `file:` value is a glob matched against the repository-relative path
 (e.g., `.github/workflows/foo.yml`). Omitting `rules` suppresses all diagnostics for matching files.
+`rules: ["*"]` is an explicit alias for the same behavior.
 
 ### Use help messages to tune config
 

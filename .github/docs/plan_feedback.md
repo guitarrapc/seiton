@@ -137,6 +137,32 @@ Skill / `docs/configuration.md` から `rules: ["*"]` の記述を削除し、`f
 - `rules: ["*"]` で `validate-config` が成功する。
 - Skill と `docs/configuration.md` の記述が一致する。
 
+#### 実装記録（B2 — 2026-06-07）
+
+**実装内容**
+
+| 対象 | 変更 |
+|------|------|
+| `ExclusionNormalizer` | `AllRulesWildcard` (`"*"`) と `IsAllRulesWildcard` を追加 |
+| `LintConfigLibrary` / `LintEngine` | `rules: ["*"]` を `rules` 省略と同義（`null` = 全ルール）に正規化 |
+| `ExclusionMatcher` | `rules: ["*"]` をファイル全体除外として扱う |
+| テスト | `Validate_Exclusions_AllRulesWildcard_*`, `LintEngine_ConfigExclusion_AllRulesWildcard_*`, `ExclusionMatcherTests` |
+| 仕様・ドキュメント | `Seiton_config_spec.md`, `Seiton_Linter_spec.md`, `docs/configuration.md`, Skill |
+
+**ユーザーファースト API レビュー**
+
+- `rules` 省略を推奨しつつ、Skill / 移行ユーザーが使う `["*"]` を正式サポート。
+- `["*"]` はファイル全体除外（parse error 含む short-circuit）と同等。
+
+**性能**
+
+| 項目 | 結果 |
+|------|------|
+| `LintConfigBenchmark`（Minimal/Typical/Heavy） | Ratio **1.00** |
+| 理由 | ルール ID リストの線形スキャン 1 回のみ。ホットパスへの影響なし |
+
+**ステータス**: B2 完了。
+
 ---
 
 ### §4 `skip-agentic-workflows` の検出範囲（B3）— 仕様どおり、説明不足

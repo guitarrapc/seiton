@@ -1389,9 +1389,9 @@ public sealed class LintEngine
             }
 
             IReadOnlySet<string>? normalizedRuleIds;
-            if (exclusion.Rules is null)
+            if (exclusion.Rules is null || ExclusionNormalizer.IsAllRulesWildcard(exclusion.Rules))
             {
-                // rules omitted → all rules
+                // rules omitted or rules: ["*"] → all rules
                 normalizedRuleIds = null;
             }
             else

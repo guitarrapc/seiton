@@ -819,6 +819,26 @@ public sealed class LintConfigLibraryTests
     }
 
     [Test]
+    public async Task Validate_Exclusions_AllRulesWildcard_ParsesAsFileLevelExclusion()
+    {
+        var yaml = """
+        exclusions:
+          - file: .github/workflows/generated.yml
+            rules:
+              - "*"
+        """;
+
+        var result = LintConfigLibrary.Validate(yaml, "seiton.yaml");
+
+        await Assert.That(result.IsValid).IsTrue();
+        await Assert.That(result.Config).IsNotNull();
+        await Assert.That(result.Config!.Exclusions!.Count).IsEqualTo(1);
+        var excl = result.Config.Exclusions![0];
+        await Assert.That(excl.File).IsEqualTo(".github/workflows/generated.yml");
+        await Assert.That(excl.Rules).IsNull();
+    }
+
+    [Test]
     public async Task Validate_Exclusions_DuplicateFileAndJobsScope_EmitsInfoDiagnostic()
     {
         var yaml = """

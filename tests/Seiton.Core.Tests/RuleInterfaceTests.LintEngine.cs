@@ -3171,6 +3171,32 @@ public sealed partial class RuleInterfaceTests
     }
 
     [Test]
+    public async Task LintEngine_ConfigExclusion_AllRulesWildcard_SuppressesAllDiagnostics()
+    {
+        var yaml = """
+        on: push
+        permissions: write-all
+        jobs:
+            build:
+                runs-on: ubuntu-latest
+                steps:
+                    - run: echo one
+        """;
+
+        var config = new LintConfig
+        {
+            Exclusions =
+            [
+                new LintExclusion("workflows/demo.yml", ["*"]),
+            ],
+        };
+
+        using var result = new LintEngine().Check(Encoding.UTF8.GetBytes(yaml), "workflows/demo.yml", config);
+
+        await Assert.That(result.Diagnostics).IsEmpty();
+    }
+
+    [Test]
     public async Task LintEngine_ConfigExclusion_RepoRootRelativePath_SuppressesDiagnostics()
     {
         // Bug: repo-root relative exclusion like ".github/workflows/ci.yml" should work

@@ -7,7 +7,7 @@ public static class ExclusionMatcher
 {
     /// <summary>
     /// Returns <c>true</c> when <paramref name="filePath"/> is fully excluded by a file-level
-    /// exclusion entry (<c>rules</c> omitted and no <c>jobs</c> scope).
+    /// exclusion entry (<c>rules</c> omitted or <c>rules: ["*"]</c>, and no <c>jobs</c> scope).
     /// </summary>
     public static bool IsFileFullyExcluded(IReadOnlyList<LintExclusion>? exclusions, string filePath)
     {
@@ -21,7 +21,12 @@ public static class ExclusionMatcher
         for (var i = 0; i < exclusions.Count; i++)
         {
             var exclusion = exclusions[i];
-            if (exclusion.Rules is not null || exclusion.Jobs is { Count: > 0 })
+            if (exclusion.Jobs is { Count: > 0 })
+            {
+                continue;
+            }
+
+            if (exclusion.Rules is not null && !ExclusionNormalizer.IsAllRulesWildcard(exclusion.Rules))
             {
                 continue;
             }

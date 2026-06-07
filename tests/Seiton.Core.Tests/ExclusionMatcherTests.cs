@@ -20,6 +20,21 @@ public sealed class ExclusionMatcherTests
     }
 
     [Test]
+    public async Task IsFileFullyExcluded_AllRulesWildcard_TreatedAsFileLevel()
+    {
+        var exclusions = new List<LintExclusion>
+        {
+            new(".github/workflows/generated.yml", Rules: ["*"], Jobs: null),
+        };
+
+        var isExcluded = ExclusionMatcher.IsFileFullyExcluded(
+            exclusions,
+            Path.GetFullPath(".github/workflows/generated.yml"));
+
+        await Assert.That(isExcluded).IsTrue();
+    }
+
+    [Test]
     public async Task IsFileFullyExcluded_JobScopedPattern_ReturnsFalse()
     {
         var exclusions = new List<LintExclusion>

@@ -338,6 +338,11 @@ public static class LintConfigLibrary
                 // rules: [] → explicit empty, no-op
                 continue;
             }
+            else if (ExclusionNormalizer.IsAllRulesWildcard(exclusion.Rules))
+            {
+                // rules: ["*"] → all rules (same as omitting rules)
+                resolvedRules = null;
+            }
             else
             {
                 var ruleIds = new HashSet<string>(StringComparer.Ordinal);

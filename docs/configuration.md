@@ -564,7 +564,16 @@ exclusions:
   - file: ".github/workflows/generated.yml"
 ```
 
-This is the broadest exclusion form. When `rules` and `jobs` are both omitted, Seiton short-circuits linting for matching files and suppresses parser diagnostics too. Configuration diagnostics produced while loading the config still appear.
+Equivalent explicit form (same behavior):
+
+```yaml
+exclusions:
+  - file: ".github/workflows/generated.yml"
+    rules:
+      - "*"
+```
+
+This is the broadest exclusion form. When `rules` is omitted or `rules: ["*"]`, and `jobs` is omitted, Seiton short-circuits linting for matching files and suppresses parser diagnostics too. Prefer omitting `rules` for readability; `"*"` is supported for clarity and tooling compatibility. Configuration diagnostics produced while loading the config still appear.
 
 ### File-Level Exclusion (specific rules)
 
