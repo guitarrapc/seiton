@@ -58,6 +58,12 @@ To lint composite actions under `.github/actions/` as well, pass `--include-acti
 seiton --include-actions
 ```
 
+When `.github/actions/` exists and you run `seiton` without `--include-actions`, seiton prints an early notice before discovery:
+
+```text
+notice: composite actions are not included; re-run with --include-actions
+```
+
 Pass explicit file paths to lint specific files:
 
 ```sh

@@ -509,6 +509,46 @@ contextに限らず、exclusionの前に --fixを試すように指示するべ�
 
 ---
 
+## 横断コードレビュー（2026-06-08）
+
+全採用項目（B-2 / B-3 / C-1〜C-4 / A-3 / C-3）を code-review skill で再検証。2 ラウンド実施（ラウンド 2 で指摘 0 件）。
+
+### ラウンド 1 指摘と対応
+
+| 指摘 | 対応 |
+|------|------|
+| B-2: `FixEngineTests` に apply+relint 経路がない | `RunSecretsContextDirectUseFix_ApplyAndRelint_ClearsDiagnostic` を追加 |
+| C-1: 10 ルール境界（hint 非表示）のテスト欠落 | `WriteSummary_NotVerbose_ShowsAllTenRules_WithoutHint_WhenExactlyTenRules` を追加 |
+| C-1: `Seiton_CLI_spec.md` §6.5.2 が「verbose per-rule」と古い | 「default top-10 per-rule breakdown」に修正 |
+| C-2: `docs/usage.md` に早期 `notice:` 未記載 | §Including Action Metadata に追記 |
+| C-3: CI テンプレートと Phase 1 の `--min-severity error` 導線が弱い | `CiTemplates/seiton.yml` にコメント行を追加。`InstallCommandTests` でコメント存在を検証 |
+| B-3/C-3: `.claude/skills` ミラー drift（`configuration.md`） | 欠落節を同期。`SkillMirrorSyncTests` で全ファイル一致を CI 化 |
+| `docs/rules.md` §`run-inputs-context-direct-use` Notes が compound fix と矛盾 | compound 式も `fix` 有効時は auto-fix 可能と修正 |
+| `UsageDocsTests` / `InstallCommandTests` の C-3 カバレッジ不足 | hint / notice / SKILL.md 行のアサーションを拡張 |
+
+### ラウンド 2（見送り・スコープ外）
+
+| 指摘 | 判断 |
+|------|------|
+| `FixCommand` に include-actions notice なし | C-2 は check のみ。fix への拡張は別タスク |
+| `env-var` help を secrets/matrix まで拡張 | A-3 はルール挙動不変・汎用 help で完了済み |
+| adoption-workflow の「57 rules」と docs の「56 enabled」表記差 | 軽微。別途ルール数ドキュメント整理で対応可 |
+| duplicate exclusion info が `check` では非表示 | 既存設計（`validate-config` 向け）。C-4 スコープ外 |
+
+### レビュー後ベンチマーク（ShortRun、コード変更なし・テスト/docs のみ）
+
+| Benchmark | Mean | Allocated | プラン baseline 比 |
+|-----------|------|-----------|-------------------|
+| `CoreLintBenchmark` Small False | 63.6 µs | 8.67 KB | ±0%（B-2 実装後と同等） |
+| `CoreLintBenchmark` Large True | 34.3 ms | 380.38 KB | ±0% |
+| `StepSummaryOutputBenchmark` stderr | 26.6 µs | 3.63 KB | C-1 実装後と同等（意図した追加出力コスト） |
+| `StepSummaryOutputBenchmark` step summary | 367 µs | 15.59 KB | 同上 |
+| `InputDiscoveryBenchmark` ShouldSuggestIncludeActions | 22.8 µs | 248 B | C-2 実装後と同等 |
+
+**テスト:** 2546 total（2545 pass, 1 skipped）
+
+---
+
 ## 参考ログ
 
 フィードバック作業時に保存された実行ログ（[feedback_seiton.md §8](feedback_seiton.md)）:

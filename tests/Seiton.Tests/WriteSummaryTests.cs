@@ -291,6 +291,29 @@ public sealed class WriteSummaryTests
     }
 
     [Test]
+    public async Task WriteSummary_NotVerbose_ShowsAllTenRules_WithoutHint_WhenExactlyTenRules()
+    {
+        var diagnostics = new List<Diagnostic>(capacity: 10);
+        for (var i = 0; i < 10; i++)
+        {
+            diagnostics.Add(new Diagnostic(
+                DiagnosticSeverity.Warning,
+                "msg",
+                new TextRange(0, 1, i + 1, 1, i + 1, 2),
+                RuleId: $"rule-{i:D2}",
+                FilePath: "a.yml"));
+        }
+
+        using var sw = new StringWriter();
+        CheckCommand.WriteSummary(sw, diagnostics, 1, verbose: false);
+        var output = sw.ToString();
+
+        await Assert.That(output).Contains("| rule-00");
+        await Assert.That(output).Contains("| rule-09");
+        await Assert.That(output).DoesNotContain("hint: re-run with --verbose for the full per-rule breakdown");
+    }
+
+    [Test]
     public async Task WriteSummary_NotVerbose_TruncatesPerRuleBreakdown_WhenMoreThanTenRules()
     {
         var diagnostics = new List<Diagnostic>(capacity: 12);

@@ -727,7 +727,7 @@ When no diagnostics are emitted, stdout carries no diagnostic lines (same as `te
 After diagnostics, summary content (§6.4) is written as GitHub Flavored Markdown:
 
 - When `GITHUB_STEP_SUMMARY` is set to a writable file path, the summary is **appended** to that file (with a leading blank line if the file already has content).
-- The block starts with a `## Seiton` heading, followed by the same summary lines and markdown tables as §6.4 (counts, per-file breakdown, verbose per-rule breakdown, fix-mode tables).
+- The block starts with a `## Seiton` heading, followed by the same summary lines and markdown tables as §6.4 (counts, per-file breakdown, default top-10 per-rule breakdown, fix-mode tables).
 - `hint:` lines from §6.4 are **not** copied to the job summary; they remain on stderr only.
 
 When `GITHUB_STEP_SUMMARY` is unset or not writable, the full §6.4 summary is written to **stderr** only (same as `text` / `json` / `sarif`).

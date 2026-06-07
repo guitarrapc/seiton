@@ -11,6 +11,8 @@ public sealed class UsageDocsTests
         var usage = File.ReadAllText(usagePath);
         await Assert.That(usage).Contains("warnings alone still produce exit code");
         await Assert.That(usage).Contains("--min-severity error");
+        await Assert.That(usage).Contains("Seiton also prints this hint");
+        await Assert.That(usage).Contains("notice: composite actions are not included");
     }
 
     private static string FindRepoRoot()

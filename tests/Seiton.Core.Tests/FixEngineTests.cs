@@ -385,6 +385,35 @@ public sealed class FixEngineTests
     }
 
     [Test]
+    public async Task RunSecretsContextDirectUseFix_ApplyAndRelint_ClearsDiagnostic()
+    {
+        var yaml = """
+        on: push
+        jobs:
+            build:
+                runs-on: ubuntu-latest
+                steps:
+                    - run: echo "${{ secrets.MY_TOKEN }}"
+        """;
+        var source = Encoding.UTF8.GetBytes(yaml);
+        var config = new LintConfig { Fix = new FixConfig { Enabled = true } };
+        var engine = new LintEngine([new RunSecretsContextDirectUseRule()]);
+
+        using var before = engine.Check(source, "secrets-access.yml", config);
+        await Assert.That(before.Diagnostics.Any(d => d.RuleId == "run-secrets-context-direct-use" && d.Fix is not null)).IsTrue();
+
+        using var revalidated = FixEngine.ApplyAndRelint(
+            engine,
+            source,
+            "secrets-access.yml",
+            before.Fixes,
+            expectedClearedRuleIds: ["run-secrets-context-direct-use"],
+            config);
+
+        await Assert.That(revalidated.After.Diagnostics.Any(d => d.RuleId == "run-secrets-context-direct-use")).IsFalse();
+    }
+
+    [Test]
     public async Task ApplyAndRelint_WithExpectedClearedRuleIds_PassesWhenRuleIsCleared()
     {
         var yaml = """

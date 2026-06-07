@@ -1735,7 +1735,7 @@ jobs:
 
 **Notes:**
 
-Auto-fix reuses an existing unique `env` mapping for the same input when available. Otherwise, for simple expressions, it inserts a step-local `env:` entry and rewrites the script to a shell variable. No fix is offered for compound expressions, no-expand heredocs, or shell single-quoted strings; a help message suggests moving the entire expression to an `env:` block. The env-insertion path additionally skips flow-style `env` and empty `env: {}`.
+Auto-fix reuses an existing unique `env` mapping for the same input when available. Otherwise, when `fix` is enabled, it inserts a step-local `env:` entry and rewrites simple or compound expressions to a shell variable. No fix is offered inside no-expand heredocs or shell single-quoted strings; a help message suggests moving the entire expression to an `env:` block when fix cannot apply. The env-insertion path additionally skips flow-style `env` and empty `env: {}`.
 
 ---
 

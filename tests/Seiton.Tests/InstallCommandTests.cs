@@ -87,6 +87,7 @@ public sealed class InstallCommandTests
 
             var skill = File.ReadAllText(Path.Combine(skillDir, "SKILL.md"));
             await Assert.That(skill).Contains("references/adoption-workflow.md");
+            await Assert.That(skill).Contains("Warnings-only runs still exit `1` by default");
         }
         finally
         {
@@ -568,6 +569,7 @@ public sealed class InstallCommandTests
         var activeContent = string.Join('\n', content!.Split('\n').Where(line => !line.TrimStart().StartsWith('#')));
         await Assert.That(activeContent).Contains("guitarrapc/setup-seiton@v1");
         await Assert.That(activeContent).Contains("run: seiton --include-actions");
+        await Assert.That(content).Contains("--min-severity error");
         await Assert.That(activeContent).DoesNotContain("docker run --rm");
         await Assert.That(activeContent).DoesNotContain("--format sarif");
     }
