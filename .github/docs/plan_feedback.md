@@ -210,6 +210,41 @@ metadata なし gh-aw 生成物のヒューリスティック拡張（例: 先�
 
 **ステータス**: フェーズ A 完了。
 
+#### フェーズ A 実装記録（B1 — 2026-06-07）
+
+**実装内容**
+
+| 対象 | 変更 |
+|------|------|
+| `LintEngine.NormalizeExclusions` | `jobs` の unknown job-id 検証を **exclusion `file` が現在の workflow にマッチするときのみ** 実行 |
+| `LintConfig.ConfigFilePath` | 設定ファイルパスを保持。exclusion 設定診断の `FilePath` に使用 |
+| `LintConfigLibrary.Validate` / `CliConfigBridge` / `CheckCommand` / `FixCommand` | `ConfigFilePath` の伝播 |
+| テスト | 他ファイル lint 時に誤検出しないこと、マッチ時に config パスで報告すること、有効 job で抑制されること |
+| 仕様 | `Seiton_Linter_spec.md` §5.4、`Seiton_Linter_csharp_spec.md`、`docs/configuration.md` |
+
+**ユーザーファースト API レビュー**
+
+- 別 workflow 向けの job 除外が全ファイルで `error[parse]` になる挙動を修正。設定ミスは **seiton.yaml** に紐づく。
+- `**/*.yml` のような広い glob は従来どおり各ファイルで job-id を検証（既存テスト維持）。
+
+**性能**
+
+| 項目 | 結果 |
+|------|------|
+| `CoreLintBenchmark`（Small/Medium/Large × Fix on/off） | Ratio **1.00**（Mean / Allocated ベースライン同等） |
+| 改善点 | マッチしない job-scoped exclusion では `BuildKnownJobIdSlices` を遅延構築（該当 exclusion が無い workflow ではスキップ） |
+| 低下 | なし |
+
+**セルフレビューと対応**
+
+| 指摘 | 対応 |
+|------|------|
+| exclusion 設定診断が workflow パスに付いていた | `ConfigFilePath` を導入し exclusion 正規化診断に使用 |
+| `FixCommand` の LintConfig クローンで `ConfigFilePath` が落ちる | クローンに追加 |
+| `NormalizeExclusionPattern` の二重呼び出し | ループ内で 1 回に集約 |
+
+**ステータス**: B1 フェーズ A 完了。フェーズ B（`validate-config` 横断検証）は未着手。
+
 ---
 
 ### §5 ルール別 Count テーブルの表示条件（B4）— UX の非対称

@@ -3415,6 +3415,92 @@ public sealed partial class RuleInterfaceTests
     }
 
     [Test]
+    public async Task LintEngine_ConfigExclusion_JobScopedOtherFile_DoesNotValidateJobId()
+    {
+        var yaml = """
+        on: push
+        jobs:
+            build:
+                runs-on: ubuntu-latest
+                steps:
+                    - run: echo one
+        """;
+
+        var config = new LintConfig
+        {
+            ConfigFilePath = ".github/seiton.yaml",
+            Exclusions =
+            [
+                new LintExclusion(
+                    ".github/workflows/reusable-workflow-caller-nest.yaml",
+                    ["deny-inherit-secrets"],
+                    Jobs: ["call-workflow-passing-data"]),
+            ],
+        };
+
+        using var result = new LintEngine().Check(Encoding.UTF8.GetBytes(yaml), "workflows/ci.yml", config);
+
+        await Assert.That(result.Diagnostics.Any(x =>
+            x.RuleId is null
+            && x.Message.Contains("unknown job-id", StringComparison.Ordinal))).IsFalse();
+    }
+
+    [Test]
+    public async Task LintEngine_ConfigExclusion_JobScopedMatchingFile_ValidJob_SuppressesRule()
+    {
+        var yaml = """
+        on: push
+        jobs:
+            call-workflow-passing-data:
+                secrets: inherit
+                uses: ./.github/workflows/callee.yml
+        """;
+
+        var config = new LintConfig
+        {
+            Exclusions =
+            [
+                new LintExclusion("workflows/nest.yml", ["deny-inherit-secrets"], Jobs: ["call-workflow-passing-data"]),
+            ],
+        };
+
+        using var result = new LintEngine().Check(Encoding.UTF8.GetBytes(yaml), "workflows/nest.yml", config);
+
+        await Assert.That(result.Diagnostics.Any(x => x.RuleId == "deny-inherit-secrets")).IsFalse();
+        await Assert.That(result.SuppressionSummary.TotalSuppressed).IsGreaterThanOrEqualTo(1);
+    }
+
+    [Test]
+    public async Task LintEngine_ConfigExclusion_JobScopedMatchingFile_UnknownJobId_ReportsOnConfigPath()
+    {
+        var yaml = """
+        on: push
+        jobs:
+            build:
+                runs-on: ubuntu-latest
+                steps:
+                    - run: echo one
+        """;
+
+        var config = new LintConfig
+        {
+            ConfigFilePath = ".github/seiton.yaml",
+            Exclusions =
+            [
+                new LintExclusion("workflows/nest.yml", ["deny-inherit-secrets"], Jobs: ["missing-job"]),
+            ],
+        };
+
+        using var result = new LintEngine().Check(Encoding.UTF8.GetBytes(yaml), "workflows/nest.yml", config);
+        var configError = result.Diagnostics.FirstOrDefault(x =>
+            x.RuleId is null
+            && x.Message.Contains("unknown job-id 'missing-job'", StringComparison.Ordinal));
+
+        await Assert.That(configError.Message.Length).IsGreaterThan(0);
+        await Assert.That(configError.FilePath).IsEqualTo(".github/seiton.yaml");
+    }
+
+    [Test]
     public async Task LintEngine_ConfigExclusion_FileLevelExclusion_ParseError_SkipsJobIdValidation()
     {
         // When a file is fully excluded AND has parse errors (Workflow is null),

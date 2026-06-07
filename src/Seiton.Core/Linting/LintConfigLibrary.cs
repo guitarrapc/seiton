@@ -277,6 +277,7 @@ public static class LintConfigLibrary
         {
             Utf8Yaml = utf8Yaml,
             FilePath = filePath,
+            ConfigFilePath = filePath,
             Rules = normalizedRules.Rules,
             Exclusions = normalizedExclusions.Exclusions,
             Fix = normalizedFix.Fix,

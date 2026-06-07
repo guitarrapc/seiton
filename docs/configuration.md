@@ -595,6 +595,10 @@ exclusions:
 
 Job matching uses `job.id` only (not `job.name`).
 
+When an exclusion lists `jobs`, Seiton validates each job ID **only while linting a workflow whose path matches that exclusion's `file` pattern**. A job-scoped exclusion for `reusable.yml` does not emit `unknown job-id` errors when linting other workflows.
+
+Configuration errors for invalid exclusion `jobs` entries are attributed to the seiton config file (not the workflow under lint).
+
 ---
 
 ## Discovery

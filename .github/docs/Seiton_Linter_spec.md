@@ -338,6 +338,8 @@ Configuration file may define file-targeted exclusion entries with path globs.
 - Job `name` is not a matching key for exclusion.
 - For reusable workflow call jobs (`uses:` at job level), matching is evaluated only against the caller workflow job in the current file.
 - Seiton does not traverse into the referenced reusable workflow file for caller-file exclusion matching.
+- When validating `jobs` entries in configuration, unknown `job.id` checks apply **only while linting a workflow file whose path matches the exclusion `file` glob**. Exclusions targeting other files must not produce configuration errors on unrelated workflows.
+- Configuration diagnostics for invalid exclusion `jobs` entries report against the configuration file path when available.
 
 ### 5.5 Inline Exclusion Directive
 

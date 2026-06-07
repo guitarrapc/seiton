@@ -89,6 +89,7 @@ public static class CliConfigBridge
             {
                 Utf8Yaml = loaded.Utf8Yaml,
                 FilePath = loaded.FilePath,
+                ConfigFilePath = loaded.ConfigFilePath,
                 Rules = loaded.Rules,
                 Exclusions = loaded.Exclusions,
                 Fix = new FixConfig

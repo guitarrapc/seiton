@@ -339,6 +339,7 @@ internal static class CheckCommand
             Discovery = lintConfig.Discovery,
             SkipSuppressionSummary = lintConfig.SkipSuppressionSummary,
             Verbose = lintConfig.Verbose,
+            ConfigFilePath = lintConfig.ConfigFilePath,
         };
     }
 

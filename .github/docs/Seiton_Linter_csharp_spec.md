@@ -361,6 +361,8 @@ C# implementation must provide:
 - config-based exclusion matching
 - inline next-line directive handling
 - unknown rule-id as configuration error
+- unknown exclusion `job.id` validation scoped to workflows whose path matches the exclusion `file` glob (`LintEngine.NormalizeExclusions`)
+- configuration diagnostics for exclusions attributed to `LintConfig.ConfigFilePath` when set
 - severity override application
 - suppression observability in `LintResult`
 
