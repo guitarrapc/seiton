@@ -1,0 +1,326 @@
+# githubactions-lab フィードバック対応プラン
+
+## 背景
+
+**実施日:** 2026-06-08  
+**環境:** seiton 0.9.26（.NET 10.0.8, win-x64）  
+**対象:** [githubactions-lab](https://github.com/guitarrapc/githubactions-lab) において、ghalint / actionlint / zizmor を seiton に置き換えた際の実運用フィードバック（[feedback_seiton.md](feedback_seiton.md)）
+
+本リポジトリは GitHub Actions の実験・デモ用ワークフロー約 120 ファイルを含む。設定なし初回スキャンで **46 errors / 35 warnings**、`--fix` と exclusions 調整後に **0 issues** まで到達している。
+
+本書はフィードバック各項目の**評価**（採用可否・優先度）と**seiton 側の対応プラン**を整理する。実装の詳細手順はここには書かず、WHAT / WHY / 優先順位に留める（[docs_authoring_guidelines.md](docs_authoring_guidelines.md) の plan 文書方針に準拠）。
+
+---
+
+## 総合評価
+
+| 観点 | フィードバック評価 | プラン上の判断 |
+|------|-------------------|----------------|
+| 検出の正確性 | ⭐⭐⭐⭐☆ | **概ね妥当。** デモリポジトリでは exclusions 設計が前提であり、誤検出ではない |
+| 使い勝手 | ⭐⭐⭐⭐☆ | **良好。** 初回の情報量と adoption 導線に改善余地 |
+| ログの把握しやすさ | ⭐⭐⭐⭐☆ | **良好。** ルール別内訳のデフォルト表示が最大の改善ポイント |
+| 自動修正 | ⭐⭐⭐⭐⭐ | **非常に良好。** `run-*-context-direct-use` と image pin が特に高評価 |
+| 設定の表現力 | ⭐⭐⭐⭐⭐ | **現状維持で十分。** 追加要望はテンプレート整備程度 |
+
+**結論:** コアの lint / fix / config 設計は adoption 可能な水準。改善は主に **初回体験（オンボーディング）** と **fix カバレッジの穴埋め**、**診断メッセージの文脈補足** に集中すべき。
+
+---
+
+## フィードバック項目別の評価と対応プラン
+
+### A. 検出の妥当性 — 現状維持（ドキュメント補強のみ）
+
+#### A-1. セキュリティ・ベストプラクティス系ルール（適切と評価された項目）
+
+**対象:** `run-env-context-direct-use`, `run-inputs-context-direct-use`, `run-secrets-context-direct-use`, `deny-inherit-secrets`, `dangerous-triggers`, `job-timeout-minutes-required`, `unpinned-image`, `if-expr-wrapper`, `unredacted-secrets`, `if-cond`, online rules 一式
+
+| 評価 | 対応 |
+|------|------|
+| **採用 — 変更不要** | ルール挙動・severity は現状のまま維持 |
+
+**WHY:** githubactions-lab は意図的な「悪い例」を含む。46 errors は製品欠陥ではなく、デフォルトルールセットの広さの表れ。フィードバック自体も「誤検出ではない」と明記している。
+
+**ドキュメント:** [adoption-workflow.md](../../src/Seiton/Skills/references/adoption-workflow.md) の「Rules that often dominate a first run」表は既に該当ルールを列挙済み。変更不要。
+
+---
+
+#### A-2. デモ / 学習リポジトリ向け exclusion テンプレート
+
+**フィードバック:** 設定なしで 46 errors は初見では多い。`hint: run 'seiton init'` は有用だが、**デモ・学習リポジトリ向け exclusion テンプレート**があると初回体験が良くなる。
+
+| 評価 | 優先度 | 工数 |
+|------|--------|------|
+| **不採用** | - | 小 |
+
+**現状:**
+
+- `seiton init` は [LintConfigLibrary.GenerateTemplateYaml](https://github.com/guitarrapc/seiton/blob/main/src/Seiton.Core/Linting/LintConfigLibrary.cs) で汎用コメント付きテンプレートを生成
+- 初回大量検出時は `CheckCommand` が `hint: run 'seiton init'` を出す（actionable ≥ 20 件）
+
+**対応方針:**
+
+デモリポジトリだけのために対応する理由がないため不採用。これはseitonではなく利用者側の意図的な検出過多であって、seitonとしては期待する結果である。
+
+
+---
+
+#### A-3. `env-var` と実用パターンのずれ
+
+**フィードバック:** `merge-branch.yaml`（`upstream` / `branch`）や `matrix-secret.yaml`（`fruit`）のように、inputs や動的シークレット参照の中間変数として小文字 `env:` キーを使う実務パターンが多い。ルール意図は理解できるが、**`help:` に代替パターン（大文字リネーム / inputs 直渡し）** があると判断しやすい。
+
+| 評価 | 優先度 | 工数 |
+|------|--------|------|
+| **採用 — 中** | P2 | 小 |
+
+**現状:**
+
+- [EnvVarRule.cs](../../src/Seiton.Core/Linting/Rules/EnvVarRule.cs) はメッセージのみ（`help:` なし）
+- [docs/rules.md](../../docs/rules.md) §`env-var` には大文字リネーム例のみ。inputs 直渡しの代替は未記載
+
+**対応方針:**
+
+1. **診断 `help:` を追加** — 例: 「Rename to `UPSTREAM` / `BRANCH` and update references, or pass `${{ inputs.* }}` directly in `with:` when used only once」
+2. **`docs/rules.md` の Remediation を拡充** — 大文字リネーム（既存）に加え inputs 直渡しパターンを追記
+3. **ルール挙動は変更しない** — 命名規則の warning 自体は正当。severity や auto-fix 化は見送り（キー改名は参照全体の変更が必要で、フィードバックも `--fix` 対象外と評価）
+
+**検証:** `RuleInterfaceTests` または env-var 専用テストで `help:` 文字列をアサート。
+
+---
+
+### B. 自動修正（`--fix`）
+
+#### B-1. 高評価項目 — 現状維持
+
+**対象:** `unpinned-image` digest pin、`if-expr-wrapper`、`run-env-context-direct-use` / `run-inputs-context-direct-use`（48/53 件自動修正）、dry-run diff、修正サマリー表、config からのネットワーク有効化、fix 後の残件表示
+
+| 評価 | 対応 |
+|------|------|
+| **採用 — 変更不要** | 実装・UX を維持。ベンチマーク回帰のみ継続監視 |
+
+**教訓（lessons learned）:** githubactions-lab では `run-env-context-direct-use` を最初に exclusion したが、`--fix --dry-run` で 48 件が修正可能と判明。**exclusion より fix 優先**が adoption の正しい順序。
+
+---
+
+#### B-2. `run-secrets-context-direct-use` — 単一行 `echo` の env 追加
+
+**フィードバック:** `secrets-access.yaml` の 1 行 `echo "${{ secrets.X }}"` は自動修正されず手動 `env:` 追加が必要。ここも `--fix` 対応すると完結する。
+
+| 評価 | 優先度 | 工数 |
+|------|--------|------|
+| **採用 — 高** | P1 | 中 |
+
+**現状:**
+
+- [RunSecretsContextDirectUseRule.cs](../../src/Seiton.Core/Linting/Rules/RunSecretsContextDirectUseRule.cs) の `TryBuildFix` は、**既存 env マッピングがある場合のみ** run 内の式を shell 変数に置換
+- [RunInputsContextDirectUseRule.cs](../../src/Seiton.Core/Linting/Rules/RunInputsContextDirectUseRule.cs) は **Case 2** として `TryBuildStepEnvInsertionEdit` による step `env:` ブロック挿入を実装済み
+- secrets ルールには同等の Case 2 がない → ギャップ
+
+**対応方針:**
+
+1. `RunSecretsContextDirectUseRule.TryBuildFix` に inputs ルールと同型の **env ブロック挿入 + shell 変数置換** を追加
+2. `RunContextDirectUseAnalyzer` の共有ユーティリティ（`TryBuildStepEnvInsertionEdit`, `DeduplicateEnvName`）を再利用
+3. **Fixable Rule Catalog**（`Seiton_Linter_spec.md` §8.4）と `docs/rules.md` の auto-fix 表記を更新
+4. `secrets-access.yaml` 相当の regression テストを [RuleInterfaceTests.RunSecretsContextDirectUseRule.cs](../../tests/Seiton.Core.Tests/RuleInterfaceTests.RunSecretsContextDirectUseRule.cs) と `FixEngineTests` に追加
+
+**検証:** githubactions-lab の `secrets-access.yaml` パターンで `--fix --dry-run` が 1 件 fixable になること。
+
+---
+
+#### B-3. context 系は exclusion より先に `--fix`（adoption ドキュメント）
+
+**フィードバック（githubactions-lab / skill 側推奨）:** `run-*-context-direct-use` は exclusion ではなく **`seiton --fix` を先に試す**。
+
+| 評価 | 優先度 | 工数 |
+|------|--------|------|
+| **採用 — 高（ドキュメント）** | P1 | 極小 |
+
+**現状:** [adoption-workflow.md](../../src/Seiton/Skills/references/adoption-workflow.md) Phase 2 に「Fix what `--fix` can handle first」はあるが、context 系を **exclusion 前に dry-run 必須**とまでは書いていない。
+
+**対応方針:**
+
+contextに限らず、exclusionの前に --fixを試すように指示するべき。
+
+1. adoption-workflow の該当ルール行に **「exclusion の前に `seiton --fix --dry-run`」** を First response として明記
+2. [fix-mode.md](../../src/Seiton/Skills/references/fix-mode.md) に context 系 fix の代表例（bash / pwsh）を 1 節追加
+3. `.claude/skills/seiton/references/` へミラー同期（既存の skill 配布フローに従う）
+
+**検証:** ドキュメントレビューのみ。
+
+---
+
+#### B-4. 意図的に fix しない項目 — 現状維持
+
+**対象:** `if-cond`（ジョブ削除は意図変更）、`env-var`（全体リネーム）、`unredacted-secrets`（echo 削除は手動判断）
+
+| 評価 | 対応 |
+|------|------|
+| **採用 — 変更不要** | フィードバックも「妥当」と評価。fix 拡張は見送り |
+
+---
+
+### C. ログ・出力の把握しやすさ
+
+#### C-1. デフォルト出力にルール別件数 Top N
+
+**フィードバック:** 120 ファイルで 46 errors。ファイル別サマリーはあるが、**ルール別内訳は `--verbose` まで見えない**。デフォルトでもルール別 Top N があると把握しやすい。
+
+| 評価 | 優先度 | 工数 |
+|------|--------|------|
+| **採用 — 高** | P1 | 小〜中 |
+
+**現状:**
+
+- [CheckCommand.WriteSummaryContent](../../src/Seiton/Commands/CheckCommand.cs) は `verbose && diagnostics.Count > 0` のときのみ `WritePerRuleBreakdown` を呼ぶ
+- 非 verbose 時は `hint: re-run with --verbose for a per-rule breakdown` を表示（`ShouldOfferPerRuleBreakdownHint`）
+- fix モードも同様（`FixCommand` は verbose 時のみ per-rule 表）
+
+**対応方針:**
+
+1. **lint サマリーにルール別 Top N（例: 5 件）をデフォルト表示** — 全件は verbose のまま
+2. 表形式は既存の `WritePerRuleCountTable` を再利用
+3. 診断 0 件のときは表示しない（現行テスト `WriteSummary_NotVerbose_DoesNotShowPerRuleBreakdown` の意図を Top N 用に更新）
+4. **`Seiton_CLI_spec.md`** にサマリー出力契約を追記（デフォルト = ファイル別 + ルール別 Top N、verbose = 全ルール）
+5. fix サマリーも同様に **Would Fix / Fixed の Top N** を非 verbose で表示するか検討（fix フィードバックも高評価のため一貫性が有用）
+
+**検証:** [WriteSummaryTests.cs](../../tests/Seiton.Tests/WriteSummaryTests.cs) を更新。6 ルール以上の fixture で Top 5 の切り捨てを確認。
+
+---
+
+#### C-2. `--include-actions` の案内タイミング
+
+**フィードバック:** 末尾 hint はあるが、**actions に問題がある場合は最初にも**気づけるとよい。
+
+| 評価 | 優先度 | 工数 |
+|------|--------|------|
+| **採用 — 低〜中** | P3 | 中 |
+
+**現状:**
+
+- `ShouldSuggestIncludeActions` は `.github/actions/` ディレクトリの存在のみチェック
+- hint は **大量検出時の末尾**（`ShouldShowInitHint`）にのみ表示。action 内の問題有無は未判定
+
+**対応方針（段階的）:**
+
+1. **Phase 1（軽量）:** discovery 開始時に `.github/actions/` が存在し `--include-actions` 未指定なら、**verbose なしでも stderr に 1 行 notice** を出す（「composite actions are not included; use --include-actions」）。問題の有無に関わらず案内
+2. **Phase 2（任意）:** action ファイルを軽量スキャンし、問題がある場合のみ **診断出力の直前** に強調 hint — コストと二重スキャンを避けるため、Phase 1 の効果を見てから判断
+
+**検証:** `CheckCommand` 統合テストで actions ディレクトリあり / なしの hint 出力を確認。
+
+---
+
+#### C-3. warning 時の exit code と CI 向け案内
+
+**フィードバック:** warning のみでも exit 1。CI では `--min-severity error` と組み合わせる必要があり、hint はあるが README / skill に明記されていると安心。
+
+| 評価 | 優先度 | 工数 |
+|------|--------|------|
+| **採用 — 低（ドキュメント）** | P3 | 極小 |
+
+**現状:**
+
+- exit 1 on warnings は [docs/usage.md](../../docs/usage.md) §Exit Codes に記載済み
+- 診断後に `hint: use --min-severity error to treat warnings as non-blocking in CI`（`showExitHint: minSeverity is null`）
+- [SKILL.md](../../src/Seiton/Skills/SKILL.md) にも `--min-severity error` あり
+
+**対応方針:**
+
+1. **Exit Codes 表に 1 行補足** — 「warnings のみでも exit 1。CI で warning を非ブロッキングにするには `--min-severity error` を使う」
+2. adoption-workflow Phase 1 に exit code 挙動を 1 文追加
+3. コード変更は不要
+
+---
+
+#### C-4. duplicate exclusion の `info[parse]` 行番号
+
+**フィードバック:** 同一ファイルへの複数 exclusion で `info[parse]` が出るのは良い。ただし位置が `seiton.yaml:1:1` 固定で、**重複エントリの行特定に手間**。
+
+| 評価 | 優先度 | 工数 |
+|------|--------|------|
+| **採用 — 中** | P2 | 中〜大 |
+
+**現状:**
+
+- [LintConfigLibrary.NormalizeExclusions](../../src/Seiton.Core/Linting/LintConfigLibrary.cs) が scope 重複を検出し、`TextRange(0, 1, 1, 1, 1, 2)`（実質 1:1）で info 診断を発行
+- [LintConfigYamlParser.cs](../../src/Seiton.Core/Linting/LintConfigYamlParser.cs) は `DomLine = 1` 定数を多用しており、**config YAML の実行列位置を保持していない**
+
+**対応方針:**
+
+1. **短期:** メッセージに重複エントリの **インデックス（例: exclusions[1] と exclusions[3]）** を含める。行番号がなくてもマージ先が特定しやすくなる
+2. **中期:** `LintConfigYamlParser` / `AddExclusion` で exclusion エントリの **開始行番号** を `LintExclusion` に保持し、duplicate 診断で各行を個別に報告（または primary + related lines）
+3. `validate-config` 出力と `info[parse]` ルール ID の一貫性を [docs/usage.md](../../docs/usage.md) に追記
+
+**検証:** [LintConfigLibraryTests.cs](../../tests/Seiton.Core.Tests/LintConfigLibraryTests.cs) の duplicate exclusion 系テストを行番号 / インデックス付きに拡張。
+
+---
+
+#### C-5. 高評価の出力機能 — 現状維持
+
+**対象:** リッチテキスト診断、`help:` 行、ファイル別サマリー表、`--verbose` の discovery / suppression / pin 解決時間、`validate-config`、抑制件数の透明性、`seiton init` / `--include-actions` hint
+
+| 評価 | 対応 |
+|------|------|
+| **採用 — 変更不要** | 維持。C-1 の Top N 追加はこれらを補完する形で実装 |
+
+---
+
+### D. 設定（`.github/seiton.yaml`）
+
+#### D-1. 設定設計の評価
+
+**フィードバック:** `fix` セクションの pinning / images / timeout 統合、`rules.<id>.fix-mapping`、online rules の `enabled: true`、exclusions の file + rules スコープ、`discovery.skip-agentic-workflows` — いずれも ⭐⭐⭐⭐⭐。
+
+| 評価 | 対応 |
+|------|------|
+| **採用 — 変更不要** | スキーマ・UX を維持 |
+
+**参考:** githubactions-lab で採用された最終設定は [feedback_seiton.md §5](feedback_seiton.md) を参照。seiton 側の変更は不要。
+
+---
+
+### E. githubactions-lab リポジトリ側（seiton 本体スコープ外）
+
+以下はフィードバックの「推奨アクション（本リポジトリ / skill 側）」。**seiton リポジトリでは adoption ドキュメント整備のみ対応**し、githubactions-lab への直接変更は別タスク。
+
+| 項目 | 評価 | seiton 側でできること |
+|------|------|----------------------|
+| `.github/seiton.yaml` をコミットし CI で `seiton --min-severity error` | 妥当 | [CiTemplates/seiton.yml](../../src/Seiton/CiTemplates/seiton.yml) を参照例として維持 |
+| exclusion は修正不能 or デモ意図の warning のみ | 妥当 | adoption-workflow + init テンプレートで方針を明示（§A-2, §B-3） |
+| README スニペットと workflow の同期 | 妥当（lab 側作業） | 対応不要 |
+
+---
+
+## 優先度付きロードマップ
+
+| 優先度 | ID | 内容 | 種別 |
+|--------|-----|------|------|
+| **P1** | B-2 | `run-secrets-context-direct-use` の env ブロック挿入 fix | 実装 + テスト + spec |
+| **P1** | C-1 | デフォルト出力にルール別 Top N | 実装 + CLI spec |
+| **P1** | B-3 | context 系は fix 優先 — adoption / fix-mode ドキュメント | ドキュメント |
+| **P2** | A-3 | `env-var` の `help:` と rules.md 代替パターン | 実装（help のみ）+ docs |
+| **P2** | C-4 | duplicate exclusion の位置情報改善 | 実装（段階的） |
+| **P3** | C-2 | `--include-actions` 案内の前倒し | 実装（Phase 1 から） |
+| **P3** | C-3 | exit code / `--min-severity` のドキュメント補強 | ドキュメントのみ |
+
+**見送り（フィードバックでも妥当とされている）:** `if-cond` / `env-var` / `unredacted-secrets` の auto-fix 拡張、online rules のデフォルト有効化、`env-var` ルール緩和。
+
+---
+
+## 実装時の横断要件
+
+1. **test-first** — [test-first-development skill](../../.claude/skills/test-first-development/SKILL.md) に従い、B-2 / C-1 / A-3 / C-4 は regression テスト先行
+2. **spec 更新** — 挙動変更は `Seiton_Linter_spec.md` §8.4（fix catalog）、`Seiton_CLI_spec.md`（サマリー出力）を同期
+3. **ユーザ向け docs** — `docs/rules.md`, `docs/usage.md` を必要箇所のみ更新
+4. **skill ミラー** — `src/Seiton/Skills/` 変更時は `.claude/skills/seiton/` を同期
+
+---
+
+## 参考ログ
+
+フィードバック作業時に保存された実行ログ（[feedback_seiton.md §8](feedback_seiton.md)）:
+
+| ファイル | 内容 |
+|----------|------|
+| [refs/seiton-errors.txt](refs/seiton-errors.txt) | 設定なし error スキャン |
+| [refs/seiton-full.txt](refs/seiton-full.txt) | 設定後全 severity |
+| [refs/seiton-fix-dryrun.txt](refs/seiton-fix-dryrun.txt) | `--fix --dry-run --verbose` |
+| [refs/seiton-fix-applied.txt](refs/seiton-fix-applied.txt) | `--fix --verbose` 適用結果 |

@@ -1,0 +1,1 @@
+config file not found: .github/seiton.yaml
