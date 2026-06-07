@@ -695,7 +695,8 @@ public static class FixEngine
             ex.CurrentOffset,
             ex.CurrentLength,
             ex.TotalEditsInBatch,
-            orderedRuleIds);
+            orderedRuleIds,
+            innerException: ex);
     }
 }
 

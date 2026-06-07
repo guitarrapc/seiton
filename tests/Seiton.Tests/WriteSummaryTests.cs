@@ -984,6 +984,34 @@ public sealed class WriteSummaryTests
     }
 
     [Test]
+    public async Task WriteFixSummary_Check_Verbose_WithEmptyFixedByRule_BuildsPerRuleFixBreakdown()
+    {
+        var fixedFiles = new List<(string FilePath, int FixedCount)>
+        {
+            ("/repo/ci.yml", 2),
+        };
+        var remainingDiagnostics = new List<Diagnostic>
+        {
+            new(DiagnosticSeverity.Warning, "a", new TextRange(0, 1, 1, 1, 1, 2), RuleId: "if-expr-wrapper", FilePath: "/repo/ci.yml", Fix: new DiagnosticFix("a", [])),
+            new(DiagnosticSeverity.Warning, "b", new TextRange(0, 1, 2, 1, 2, 2), RuleId: "if-expr-wrapper", FilePath: "/repo/ci.yml", Fix: new DiagnosticFix("b", [])),
+        };
+        var fixedByRule = new Dictionary<string, int>(StringComparer.Ordinal);
+
+        using var sw = new StringWriter();
+        FixCommand.WriteFixSummary(
+            sw,
+            fixedFiles,
+            remainingDiagnostics,
+            FixCommand.FixSummaryMode.Check,
+            verbose: true,
+            fixedByRule: fixedByRule);
+        var output = sw.ToString();
+
+        await Assert.That(output).Contains("| Fixable");
+        await Assert.That(output).Contains("| if-expr-wrapper");
+    }
+
+    [Test]
     public async Task WriteFixSummary_NonVerbose_EmitsPerRuleFixHint()
     {
         var fixedFiles = new List<(string FilePath, int FixedCount)>

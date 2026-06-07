@@ -774,6 +774,25 @@ public sealed class FixCommandTests
 
         await Assert.That(lines[0]).Contains("unpinned-uses");
         await Assert.That(lines[1]).Contains("conflicting rule-id(s)");
+        await Assert.That(lines[1]).Contains("Re-run with --verbose");
+    }
+
+    [Test]
+    public async Task CreateFixApplicationErrorLines_Verbose_ConflictException_PointsToDetailLines()
+    {
+        var ex = new FixApplyConflictException(
+            conflictOffset: 78,
+            previousOffset: 78,
+            previousLength: 24,
+            currentOffset: 78,
+            currentLength: 24,
+            totalEditsInBatch: 2,
+            conflictingRuleIds: ["unpinned-uses", "job-timeout-minutes-required"]);
+
+        var lines = FixCommand.CreateFixApplicationErrorLines("workflow.yml", ex, verbose: true);
+
+        await Assert.That(lines[1]).Contains("See detail lines below");
+        await Assert.That(lines[1]).DoesNotContain("Re-run with --verbose");
     }
 
     [Test]

@@ -538,7 +538,9 @@ internal static class FixCommand
         // which would break the structured error:/hint:/detail: output format.
         var message = ex.Message.ReplaceLineEndings(" ");
         var conflictHint = ex is FixApplyConflictException
-            ? "hint: overlapping fixes were detected (see conflicting rule-id(s) in the message). Re-run with --verbose for details, or exclude one of the conflicting rules for this file."
+            ? verbose
+                ? "hint: overlapping fixes were detected (see conflicting rule-id(s) in the message). See detail lines below, or exclude one of the conflicting rules for this file."
+                : "hint: overlapping fixes were detected (see conflicting rule-id(s) in the message). Re-run with --verbose for details, or exclude one of the conflicting rules for this file."
             : "hint: this may indicate conflicting lint rules or a bug in fix generation. Please report this issue.";
 
         if (!verbose)
@@ -816,9 +818,9 @@ internal static class FixCommand
 
         if (verbose && totalFixed > 0)
         {
-            var perRuleCounts = fixedByRule ?? (mode == FixSummaryMode.Check
+            var perRuleCounts = mode == FixSummaryMode.Check
                 ? BuildFixableCountsByRule(remainingDiagnostics)
-                : null);
+                : fixedByRule;
             if (perRuleCounts is { Count: > 0 })
             {
                 CheckCommand.WritePerRuleCountTable(writer, perRuleCounts, GetFixPerRuleColumnHeader(mode));

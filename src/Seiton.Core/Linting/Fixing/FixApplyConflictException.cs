@@ -12,7 +12,8 @@ public sealed class FixApplyConflictException : InvalidOperationException
         int currentOffset,
         int currentLength,
         int totalEditsInBatch,
-        IReadOnlyList<string>? conflictingRuleIds = null)
+        IReadOnlyList<string>? conflictingRuleIds = null,
+        Exception? innerException = null)
         : base(BuildMessage(
             conflictOffset,
             previousOffset,
@@ -20,7 +21,8 @@ public sealed class FixApplyConflictException : InvalidOperationException
             currentOffset,
             currentLength,
             totalEditsInBatch,
-            conflictingRuleIds))
+            conflictingRuleIds),
+            innerException)
     {
         ConflictOffset = conflictOffset;
         PreviousOffset = previousOffset;
