@@ -575,32 +575,6 @@ exclusions:
 
 This is the broadest exclusion form. When `rules` is omitted or `rules: ["*"]`, and `jobs` is omitted, Seiton short-circuits linting for matching files and suppresses parser diagnostics too. Prefer omitting `rules` for readability; `"*"` is supported for clarity and tooling compatibility. Configuration diagnostics produced while loading the config still appear.
 
-### Mixed training repository exclusion recipe
-
-For repositories that intentionally contain vulnerable samples, generated workflows, and production workflows together:
-
-```yaml
-discovery:
-  skip-agentic-workflows: true
-
-exclusions:
-  # file-only exclusion by omitted rules
-  - file: ".github/workflows/*.lock.yml"
-  - file: ".github/workflows/injection-attack-via-context.yaml"
-
-  # file-only exclusion by explicit wildcard rules
-  - file: ".github/workflows/agentics-maintenance.yml"
-    rules: ["*"]
-
-  # rule-scoped exclusion for intentional tutorial patterns
-  - file: ".github/workflows/lab-*.yml"
-    rules:
-      - if-cond
-      - env-var
-```
-
-Use file-only exclusions only for intentionally noisy paths. For real workflows, prefer rule-scoped exclusions so the remaining checks stay active.
-
 ### File-Level Exclusion (specific rules)
 
 Suppress one or more rules for all files matching a glob pattern:

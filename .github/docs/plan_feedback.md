@@ -400,7 +400,7 @@ rules:
 
 **完了条件**
 
-- [x] `adoption-workflow.md` に教材混在リポ向け exclusions レシピ
+- [x] `adoption-workflow.md` に教材混在リポ向け exclusions レシピ（その後不要判断で削除）
 - [x] `docs/configuration.md` に `rules: ["*"]` / file-only exclusion の明記
 - [x] `unpinned-uses` fix 制限の記載（フェーズ 1 完了後）
 
@@ -408,8 +408,8 @@ rules:
 
 | コンポーネント | 変更 |
 |----------------|------|
-| `src/Seiton/Skills/references/adoption-workflow.md` | 教材混在リポ向け exclusions レシピを追加（file-only と rule-scoped の使い分け） |
-| `docs/configuration.md` | `rules: ["*"]` と `rules` 省略の同値性を明確化し、混在リポ向け設定例を追記 |
+| `src/Seiton/Skills/references/adoption-workflow.md` | 教材混在リポ向け exclusions レシピを一度追加したが、不要判断で削除 |
+| `docs/configuration.md` | `rules: ["*"]` と `rules` 省略の同値性を明確化（混在リポ向け設定例は不要判断で削除） |
 | `src/Seiton/Skills/references/configuration.md` | エージェント参照用の設定リファレンスにも同内容を同期 |
 | `docs/rules.md` (`unpinned-uses`) | fix 時の競合挙動（conflicting `rule-id` の提示）を追記 |
 | `src/Seiton.Benchmark/FixSummaryOutputBenchmark.cs` | verbose出力専用のため削除（通常経路の性能判断は `CoreLintBenchmark` に一本化） |
@@ -419,7 +419,7 @@ rules:
 | 指摘 | 対応 |
 |------|------|
 | `rules: ["*"]` が旧挙動の印象で誤解されやすい | `docs/configuration.md` / skill reference に file-only exclusion の明示例を追加 |
-| 教材混在リポで exclusion の粒度が分かりづらい | `adoption-workflow.md` に file-only と rule-scoped の併用レシピを追記 |
+| 教材混在リポ向けレシピは保守対象として過剰 | `adoption-workflow.md` / `docs/configuration.md` からレシピ節を削除 |
 | `unpinned-uses` の fix 時挙動の補足不足 | `docs/rules.md` の `When fixing` に競合時の説明を追加 |
 | `FixSummaryOutputBenchmark` の保守価値が低い | ファイルを削除し、ベンチ確認は `CoreLintBenchmark` / `PinFixOffsetBenchmark` に集約 |
 
@@ -455,6 +455,29 @@ rules:
 | fix 競合 | 1 ファイルで失敗 | 0 失敗 |
 | Would fix（全体 dry-run） | 53 / 64 | 同等以上（exclusion 削除後は件数増の可能性あり） |
 | 最終残件 | 3 errors / 8 warnings / 7 files | 意図的 bad 例のみ残ること |
+
+#### 実測結果（2026-06-08, main）
+
+実行コマンド（`githubactions-lab` 上で `src/Seiton/Seiton.csproj` を直接実行）:
+
+1. `validate-config -c .github/seiton.phase4.with-exclusion.yaml`
+2. `--include-actions --oneline -c .github/seiton.phase4.with-exclusion.yaml`
+3. `--fix --dry-run --enable-pin-network -c .github/seiton.phase4.with-exclusion.yaml .github/workflows/prevent-file-change.yaml`
+4. `--fix --dry-run --enable-pin-network -c .github/seiton.phase4.without-exclusion.yaml .github/workflows/prevent-file-change.yaml`
+5. `--fix --dry-run --include-actions --oneline -c .github/seiton.phase4.without-exclusion.yaml`
+
+| 観点 | 結果 | 判定 |
+|------|------|------|
+| with-exclusion 全体 lint | **32 errors / 15 warnings in 127 files (2 excluded, 2 suppressed)** | v0.9.25 比で warning 減 |
+| `prevent-file-change` with-exclusion | **0 issues in 1 file (2 suppressed)** | 期待どおり（抑制確認） |
+| `prevent-file-change` without-exclusion | **Would fix 2 of 2 issues in 1 file (0 remaining)**、2 箇所とも SHA pin diff を生成 | ✅ **fix 競合なし** |
+| without-exclusion 全体 dry-run | **Would fix 55 of 68 issues in 25 files (13 remaining)** / **3 errors, 10 warnings remain in 8 files** | 指標達成（残件は意図的 bad 例中心） |
+
+#### 結論
+
+- フェーズ1で修正した `unpinned-uses` 重複時の pin fix 競合は、`prevent-file-change.yaml` で再発しなかった。
+- `prevent-file-change.yaml` の `unpinned-uses` exclusion なしでも dry-run が成立し、2 箇所を個別に pin できることを確認。
+- 残件は主に教材意図の警告/エラー群で、置き換え運用の再検証として合格。
 
 ---
 
