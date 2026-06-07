@@ -311,7 +311,7 @@ public static class LintConfigLibrary
 
         var normalized = new List<LintExclusion>(exclusions.Count);
         var diagnostics = new List<Diagnostic>();
-        var scopeCounts = new Dictionary<string, int>(StringComparer.Ordinal);
+        var scopeEntries = new Dictionary<string, List<(int Index, int Line)>>(StringComparer.Ordinal);
         var scopeFilePatterns = new Dictionary<string, string>(StringComparer.Ordinal);
 
         for (var i = 0; i < exclusions.Count; i++)
@@ -375,29 +375,49 @@ public static class LintConfigLibrary
             var filePattern = exclusion.File.Trim();
             var normalizedFilePattern = ActionRefHelpers.NormalizePath(filePattern);
             var scopeKey = BuildExclusionScopeKey(normalizedFilePattern, jobs);
-            scopeCounts.TryGetValue(scopeKey, out var seenCount);
-            scopeCounts[scopeKey] = seenCount + 1;
-            scopeFilePatterns.TryAdd(scopeKey, normalizedFilePattern);
+            if (!scopeEntries.TryGetValue(scopeKey, out var entries))
+            {
+                entries = new List<(int Index, int Line)>(2);
+                scopeEntries[scopeKey] = entries;
+                scopeFilePatterns[scopeKey] = normalizedFilePattern;
+            }
 
-            normalized.Add(new LintExclusion(filePattern, resolvedRules, jobs.Count > 0 ? jobs : null));
+            var sourceLine = exclusion.SourceLine > 0 ? exclusion.SourceLine : 1;
+            entries.Add((i, sourceLine));
+
+            normalized.Add(new LintExclusion(filePattern, resolvedRules, jobs.Count > 0 ? jobs : null, exclusion.SourceLine));
         }
 
-        foreach (var (scopeKey, count) in scopeCounts)
+        foreach (var (scopeKey, entries) in scopeEntries)
         {
-            if (count <= 1)
+            if (entries.Count <= 1)
             {
                 continue;
             }
 
             var filePattern = scopeFilePatterns[scopeKey];
+            var message = BuildDuplicateExclusionMessage(filePattern, entries);
+            var locationLine = entries[0].Line;
             diagnostics.Add(new Diagnostic(
                 DiagnosticSeverity.Info,
-                $"exclusion for '{filePattern}' appears {count} times; consider merging rules into one entry",
-                new TextRange(0, 1, 1, 1, 1, 2),
+                message,
+                new TextRange(0, 1, locationLine, 1, locationLine, 2),
                 FilePath: filePath));
         }
 
         return new NormalizedExclusions(normalized, diagnostics.ToArray());
+    }
+
+    private static string BuildDuplicateExclusionMessage(string filePattern, List<(int Index, int Line)> entries)
+    {
+        var locations = new string[entries.Count];
+        for (var i = 0; i < entries.Count; i++)
+        {
+            var entry = entries[i];
+            locations[i] = $"exclusions[{entry.Index + 1}] (line {entry.Line})";
+        }
+
+        return $"exclusion for '{filePattern}' appears {entries.Count} times at {string.Join(", ", locations)}; consider merging rules into one entry";
     }
 
     private static string BuildExclusionScopeKey(string filePattern, IReadOnlyList<string> jobs)

@@ -24,6 +24,12 @@ internal static class LintConfigYamlParser
         private int _depth;
         private int _units;
 
+        /// <summary>When set, <see cref="ReadSequence"/> records 1-based source lines for each sequence item.</summary>
+        public List<int>? ExclusionEntrySourceLines { get; set; }
+
+        /// <summary>Populated after parsing the top-level <c>exclusions</c> sequence.</summary>
+        public List<int>? CapturedExclusionEntrySourceLines { get; set; }
+
         public void EnterCompound()
         {
             if (++_depth > LintConfigResourceLimits.MaxYamlNestDepth)
@@ -74,9 +80,12 @@ internal static class LintConfigYamlParser
     public static LintConfigParseResult Parse(ReadOnlyMemory<byte> utf8Yaml, string filePath)
     {
         Dictionary<string, object?> root;
+        List<int>? exclusionEntrySourceLines;
         try
         {
-            root = ParseYamlDom(utf8Yaml) ?? new Dictionary<string, object?>();
+            var parsed = ParseYamlDom(utf8Yaml);
+            root = parsed.Root ?? new Dictionary<string, object?>();
+            exclusionEntrySourceLines = parsed.ExclusionEntrySourceLines;
         }
         catch (Exception ex)
         {
@@ -95,14 +104,14 @@ internal static class LintConfigYamlParser
                 [d]);
         }
 
-        return Convert(root, filePath);
+        return Convert(root, filePath, exclusionEntrySourceLines);
     }
 
     /// <summary>
     /// Builds an untyped DOM (Dictionary/List/string/bool/int/etc.) from YAML bytes
     /// using VYaml's pull parser. This is AOT-safe unlike <c>YamlSerializer.Deserialize</c>.
     /// </summary>
-    private static Dictionary<string, object?>? ParseYamlDom(ReadOnlyMemory<byte> utf8Yaml)
+    private static (Dictionary<string, object?>? Root, List<int>? ExclusionEntrySourceLines) ParseYamlDom(ReadOnlyMemory<byte> utf8Yaml)
     {
         // YamlParser.FromBytes requires Memory<byte>. When callers pass array-backed ReadOnlyMemory
         // from LintConfigLibrary (same backing array as LintConfig.Utf8Yaml), parse in-place —
@@ -141,24 +150,24 @@ internal static class LintConfigYamlParser
             // Advance past StreamStart
             if (!parser.Read() || parser.CurrentEventType == ParseEventType.StreamEnd)
             {
-                return null;
+                return (null, null);
             }
 
             // Advance past DocumentStart
             if (!parser.Read() || parser.CurrentEventType == ParseEventType.StreamEnd)
             {
-                return null;
+                return (null, null);
             }
 
             // Advance to first content event (MappingStart, SequenceStart, or Scalar)
             if (!parser.Read() || parser.CurrentEventType is ParseEventType.DocumentEnd or ParseEventType.StreamEnd)
             {
-                return null;
+                return (null, null);
             }
 
             var limiter = new YamlDomParseLimiter();
-            var result = ReadValue(ref parser, limiter);
-            return result as Dictionary<string, object?>;
+            var result = ReadValue(ref parser, limiter) as Dictionary<string, object?>;
+            return (result, limiter.CapturedExclusionEntrySourceLines);
         }
         finally
         {
@@ -192,7 +201,20 @@ internal static class LintConfigYamlParser
             {
                 var key = ReadMappingKeyScalar(ref parser, limiter);
                 parser.Read();
+                List<int>? exclusionLines = null;
+                if (key == "exclusions" && parser.CurrentEventType == ParseEventType.SequenceStart)
+                {
+                    exclusionLines = new List<int>(4);
+                    limiter.ExclusionEntrySourceLines = exclusionLines;
+                }
+
                 var value = ReadValue(ref parser, limiter);
+                if (exclusionLines is not null)
+                {
+                    limiter.CapturedExclusionEntrySourceLines = exclusionLines;
+                    limiter.ExclusionEntrySourceLines = null;
+                }
+
                 if (key is not null)
                 {
                     map[key] = value;
@@ -219,6 +241,14 @@ internal static class LintConfigYamlParser
             var list = new List<object?>();
             while (parser.CurrentEventType != ParseEventType.SequenceEnd)
             {
+                // Exclusion entries are mappings; nested sequences (e.g. rules:) must not append lines.
+                if (limiter.ExclusionEntrySourceLines is not null
+                    && parser.CurrentEventType == ParseEventType.MappingStart)
+                {
+                    var mark = parser.CurrentMark;
+                    limiter.ExclusionEntrySourceLines.Add(mark.Line > 0 ? mark.Line : DomLine);
+                }
+
                 list.Add(ReadValue(ref parser, limiter));
             }
 
@@ -287,7 +317,7 @@ internal static class LintConfigYamlParser
         return DecodeScalarStringUtf8(ref parser);
     }
 
-    private static LintConfigParseResult Convert(Dictionary<string, object?> root, string filePath)
+    private static LintConfigParseResult Convert(Dictionary<string, object?> root, string filePath, List<int>? exclusionEntrySourceLines = null)
     {
         var diagnostics = new List<Diagnostic>();
         var rules = new Dictionary<string, RuleConfig>(StringComparer.OrdinalIgnoreCase);
@@ -341,7 +371,10 @@ internal static class LintConfigYamlParser
             {
                 for (var i = 0; i < exList.Count; i++)
                 {
-                    AddExclusion(exList[i], exclusions, diagnostics, filePath);
+                    var sourceLine = exclusionEntrySourceLines is not null && i < exclusionEntrySourceLines.Count
+                        ? exclusionEntrySourceLines[i]
+                        : 0;
+                    AddExclusion(exList[i], exclusions, diagnostics, filePath, sourceLine);
                 }
             }
         }
@@ -1222,7 +1255,8 @@ internal static class LintConfigYamlParser
         object? itemObj,
         List<LintExclusion> exclusions,
         List<Diagnostic> diagnostics,
-        string filePath)
+        string filePath,
+        int sourceLine = 0)
     {
         if (AsMap(itemObj) is not { } item)
         {
@@ -1264,7 +1298,7 @@ internal static class LintConfigYamlParser
 
         // rules omitted → null (all rules); rules: [] → empty list (no-op, handled by normalizer)
         IReadOnlyList<string>? finalRules = rulesKeyPresent ? (rulesList ?? []) : null;
-        exclusions.Add(new LintExclusion(file, finalRules, jobsList.Count > 0 ? jobsList : null));
+        exclusions.Add(new LintExclusion(file, finalRules, jobsList.Count > 0 ? jobsList : null, sourceLine));
     }
 
     private static Dictionary<string, object?>? AsMap(object? o)

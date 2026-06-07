@@ -185,7 +185,7 @@ exclusions:
 
 **注意**: `file` はスカラー値（単一パターン）。複数パターンが必要な場合は複数エントリで記述する。
 
-`validate-config` 時、正規化後に同一 `file` + 同一 `jobs` スコープの exclusion が複数ある場合、スコープごとに info 診断を **1 件** 出す（例: `exclusion for '.github/workflows/ci.yml' appears 2 times; consider merging rules into one entry`）。3 件以上重複しても診断は 1 件（最終件数を表示）。`file` パターンはパス区切り（`\` / `/`）を正規化して同一スコープとみなす。自動マージはしない。
+`validate-config` 時、正規化後に同一 `file` + 同一 `jobs` スコープの exclusion が複数ある場合、スコープごとに info 診断を **1 件** 出す（例: `exclusion for '.github/workflows/ci.yml' appears 2 times at exclusions[1] (line 2), exclusions[2] (line 5); consider merging rules into one entry`）。メッセージには 1-based の `exclusions[N]` インデックスと YAML 上の開始行を列挙する。診断位置は最初の重複エントリの行を指す。3 件以上重複しても診断は 1 件（最終件数を表示）。`file` パターンはパス区切り（`\` / `/`）を正規化して同一スコープとみなす。自動マージはしない。
 
 **`validate-config` の job-id 横断検証**（`jobs` スコープ付き exclusion のみ）:
 

@@ -361,6 +361,41 @@ contextに限らず、exclusionの前に --fixを試すように指示するべ�
 
 **検証:** [LintConfigLibraryTests.cs](../../tests/Seiton.Core.Tests/LintConfigLibraryTests.cs) の duplicate exclusion 系テストを行番号 / インデックス付きに拡張。
 
+**実装状況（2026-06-08）:** ✅ 完了
+
+| 項目 | 内容 |
+|------|------|
+| パーサ | `LintConfigYamlParser` が top-level `exclusions` シーケンスの各 mapping 開始行を VYaml `CurrentMark` で記録。ネストした `rules:` リストは `MappingStart` フィルタで除外 |
+| モデル | `LintExclusion.SourceLine`（0 = 不明）を追加 |
+| 正規化 | `LintConfigLibrary.NormalizeExclusions` の info メッセージに `exclusions[N] (line L)` を列挙。診断位置は最初の重複エントリ行 |
+| テスト | `Validate_Exclusions_Duplicate*` / `TripleDuplicate*` をインデックス・行番号・アサートで拡張。全 2539 テスト pass |
+| 仕様 | `Seiton_config_spec.md`、`docs/usage.md` §validate-config を更新 |
+
+**ベンチマーク（`LintConfigBenchmark`、ShortRun、実装前 → 実装後）:**
+
+| Complexity | Method | Before Mean | After Mean | Δ Mean | Before Alloc | After Alloc |
+|------------|--------|-------------|------------|--------|--------------|-------------|
+| Minimal | Parse | 904 ns | 1,213 ns | +34%* | 1.30 KB | 1.31 KB (+1%) |
+| Minimal | Validate | 1,504 ns | 2,020 ns | +34%* | 4.47 KB | 4.48 KB (+0%) |
+| Typical | Parse | 16,460 ns | 21,427 ns | +30%* | 14.1 KB | 14.2 KB (+1%) |
+| Typical | Validate | 17,384 ns | 23,346 ns | +34%* | 24.23 KB | 24.48 KB (+1%) |
+| Heavy | Parse | 36,551 ns | 44,246 ns | +21%* | 30.54 KB | 31.09 KB (+2%) |
+| Heavy | Validate | 43,661 ns | 63,702 ns | +46%* | 55.73 KB | 58.00 KB (+4%) |
+
+\* ShortRun の誤差幅が大きく、Allocated は +4% 以内。行番号記録は `exclusions` セクションがある場合のみ `List<int>` + `CurrentMark` 読み取り（mapping 1 回あたり）で、重複検出メッセージ構築は validate-config のみのエラーパス。
+
+**性能評価:** ホットパス（lint 本番）への影響なし — 重複検出は `validate-config` / `LintConfigLibrary.Validate` のみ。パース時の追加コストは exclusion エントリ数に線形で、Typical/Heavy の Allocated 増は +1〜4%（+10% 以内）。
+
+**セルフレビュー:**
+
+| 指摘 | 対応 |
+|------|------|
+| ネスト `rules:` シーケンスが行番号リストを汚染 | `ReadSequence` で `MappingStart` のときのみ行を記録（スカラー rule 名はスキップ） |
+| 診断をエントリごとに複数出すとうるさい | プランどおりスコープあたり 1 件を維持。メッセージに全インデックス+行を列挙 |
+| 0-based vs 1-based インデックス | ユーザー向けに `exclusions[1]` 形式（1-based）を採用 |
+| `SourceLine` 未設定の手組み `LintExclusion` | デフォルト 0 → 正規化時は line 1 にフォールバック（既存テスト互換） |
+| 全 DOM 診断の行番号改善はスコープ外 | C-4 は exclusion duplicate に限定。他キーの `DomLine = 1` は変更なし |
+
 ---
 
 #### C-5. 高評価の出力機能 — 現状維持
@@ -407,7 +442,7 @@ contextに限らず、exclusionの前に --fixを試すように指示するべ�
 | ~~**P1**~~ | C-1 | デフォルト出力にルール別 Top N（10 件） | ✅ 完了（2026-06-08） |
 | ~~**P1**~~ | B-3 | fix 優先 — adoption / fix-mode ドキュメント | ✅ 完了（2026-06-08） |
 | ~~**P2**~~ | A-3 | `env-var` の `help:` と rules.md 代替パターン | ✅ 完了（2026-06-08） |
-| **P2** | C-4 | duplicate exclusion の位置情報改善 | 実装（段階的） |
+| ~~**P2**~~ | C-4 | duplicate exclusion の位置情報改善 | ✅ 完了（2026-06-08） |
 | **P3** | C-2 | `--include-actions` 案内の前倒し | 実装（Phase 1 から） |
 | **P3** | C-3 | exit code / `--min-severity` のドキュメント補強 | ドキュメントのみ |
 
