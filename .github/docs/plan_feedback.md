@@ -286,20 +286,44 @@ metadata なし gh-aw 生成物のヒューリスティック拡張（例: 先�
 
 #### 対応プラン
 
-**推奨: ルール別テーブルをファイル別と同条件で表示**
+**採用: ルール別テーブルは `--verbose` のまま、ファイル別テーブル直後にヒントを表示**
 
-1. `WritePerRuleBreakdown` の条件を `diagnostics.Count > 0` に変更（`showPerFile` と揃える、または `showPerFile` が true のとき常に両方）。
-2. `--oneline` 時はテーブル非表示のまま維持（1 行 1 診断と競合するため）。
-3. `--verbose` 専用だったルール別テーブルは、verbose 時の追加情報（Active rules 一覧など）と役割分担を CLI spec に記載。
+常時ルール別テーブルを出すと出力が長くなるため、以下とする:
 
-**代替**
-
-表示は変えず、`docs/usage.md` に「ルール別集計は `--verbose` 必須」と明記。体験改善効果は小さい。
+1. ルール別 Count テーブルは **`--verbose` 時のみ**（現行維持）。
+2. ファイル別テーブル表示後（診断に `rule-id` あり・非 verbose）に stderr へ  
+   `hint: re-run with --verbose for a per-rule breakdown` を出す。
+3. ヒントは job summary には書かない（既存 `hint:` 行と同様 stderr のみ）。
+4. `showPerFile: false`（fix サマリー等）ではヒントも出さない。
 
 **完了条件**
 
-- 通常の `seiton` 実行で、診断があればファイル別・ルール別の両テーブルが出る。
-- CLI 出力スナップショットテストを更新。
+- 非 verbose でファイル別テーブルが出たとき、ルール別の見方がヒントで分かる。
+- verbose 時はルール別テーブルが出てヒントは出ない。
+
+#### 実装記録（B4 — 2026-06-07）
+
+**実装内容**
+
+| 対象 | 変更 |
+|------|------|
+| `CheckCommand.WriteSummary` | `ShouldOfferPerRuleBreakdownHint` + stderr ヒント行 |
+| テスト | `WriteSummary_NotVerbose_*`, `WriteSummary_Verbose_DoesNotShowRuleBreakdownHint` |
+| 仕様 | `Seiton_CLI_spec.md` §6.4 |
+
+**ユーザーファースト API レビュー**
+
+- デフォルト出力はファイル別に留め、詳細は opt-in（`--verbose`）。
+- フィードバックの「ルール別が欲しい」期待にはヒントで応答し、ログ肥大化を避ける。
+
+**性能**
+
+| 項目 | 結果 |
+|------|------|
+| 変更の性質 | サマリー末尾の O(n) 1 パス（診断件数分）。lint ホットパス外 |
+| ベンチマーク | 対象外（CLI 出力のみ）。`CoreLintBenchmark` 影響なし |
+
+**ステータス**: B4 完了。
 
 ---
 
