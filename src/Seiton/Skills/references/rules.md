@@ -14,14 +14,6 @@ When a rule reports diagnostics, use this order:
 
 For online rules, always enable them explicitly in config (`rules.<rule-id>.enabled: true`) and set `GITHUB_TOKEN` or `SEITON_GITHUB_TOKEN` to avoid rate limits.
 
-## Prefer `exclusions` over global disable
-
-- `rules.<rule-id>.enabled: false` disables that rule globally for all files.
-- `exclusions` is scoped (file, job, and rule) and easier to revert.
-- Decision check: "Should this rule be ignored for all future files too?"
-  - Yes -> consider `enabled: false` (last resort).
-  - No -> use scoped `exclusions`.
-
 ```yaml
 # Good: scoped exclusion for a legacy file
 exclusions:
