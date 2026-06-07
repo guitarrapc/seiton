@@ -1047,6 +1047,70 @@ public sealed class FixCommandTests
     //  Fix Summary in Dry-Run / Check Mode Tests
 
     [Test]
+    public async Task Fix_Summary_DryRun_Verbose_ShowsPerRuleFixBreakdown()
+    {
+        var configPath = CreateConfigFile(
+            """
+            rules:
+              runner-no-latest:
+                enabled: false
+              job-permissions-required:
+                enabled: false
+              job-timeout-minutes-required:
+                enabled: false
+            """);
+        var filePath = CreateWorkflowFile(
+            """
+            on: push
+            jobs:
+              build:
+                runs-on: ubuntu-24.04
+                steps:
+                  - if: github.event_name == 'push'
+                    run: echo ok
+                  - if: github.ref == 'refs/heads/main'
+                    run: echo main
+            """);
+
+        try
+        {
+            using var sw = new StringWriter();
+            using var stderr = new StringWriter();
+
+            await FixCommand.RunAsync(
+                [filePath],
+                config: configPath,
+                stdinFilename: "stdin.yml",
+                ignore: [],
+                minSeverity: null,
+                format: OutputFormat.Text,
+                formatExplicitlySet: true,
+                oneline: true,
+                color: ColorMode.Never,
+                noColor: true,
+                verboseLevel: VerboseLevel.Summary,
+                dryRun: true,
+                check: false,
+                enablePinNetwork: false,
+                enableImageNetwork: false,
+                includeActions: false,
+                output: sw,
+                error: stderr);
+
+            var errorOutput = stderr.ToString();
+            await Assert.That(errorOutput).Contains("Would fix");
+            await Assert.That(errorOutput).Contains("| Rule");
+            await Assert.That(errorOutput).Contains("| Would Fix");
+            await Assert.That(errorOutput).Contains("| if-expr-wrapper");
+        }
+        finally
+        {
+            DeleteContainingDirectory(filePath);
+            DeleteContainingDirectory(configPath);
+        }
+    }
+
+    [Test]
     public async Task Fix_Summary_DryRun_ShowsSummary()
     {
         // Workflow with fixable issue (if-expr-wrapper)

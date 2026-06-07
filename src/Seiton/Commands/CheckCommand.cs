@@ -586,7 +586,6 @@ internal static class CheckCommand
 
     private static void WritePerRuleBreakdown(TextWriter writer, List<Diagnostic> diagnostics, bool isRemainMode = false)
     {
-        // Count per rule, excluding null RuleId (parser diagnostics)
         var ruleCounts = new Dictionary<string, int>(StringComparer.Ordinal);
         for (var i = 0; i < diagnostics.Count; i++)
         {
@@ -598,26 +597,39 @@ internal static class CheckCommand
                 ruleCounts[ruleId] = count + 1;
         }
 
-        if (ruleCounts.Count == 0) return;
+        WritePerRuleCountTable(writer, ruleCounts, isRemainMode ? "Remaining" : "Count");
+    }
 
-        // Sort by count descending, then by rule ID for determinism
-        var sorted = new List<KeyValuePair<string, int>>(ruleCounts);
-        sorted.Sort((a, b) =>
+    internal static void WritePerRuleCountTable(
+        TextWriter writer,
+        IReadOnlyDictionary<string, int> ruleCounts,
+        string countHeader)
+    {
+        if (ruleCounts.Count == 0)
+        {
+            return;
+        }
+
+        var sorted = new List<KeyValuePair<string, int>>(ruleCounts.Count);
+        foreach (var kvp in ruleCounts)
+        {
+            sorted.Add(kvp);
+        }
+
+        sorted.Sort(static (a, b) =>
         {
             var byCount = b.Value.CompareTo(a.Value);
             return byCount != 0 ? byCount : string.Compare(a.Key, b.Key, StringComparison.Ordinal);
         });
 
-        // Column header depends on mode
-        var countHeader = isRemainMode ? "Remaining" : "Count";
         var countHeaderLen = countHeader.Length;
-
-        // Compute column widths for table formatting
-        var maxRuleLen = 4; // "Rule".Length
+        var maxRuleLen = 4;
         for (var i = 0; i < sorted.Count; i++)
         {
             if (sorted[i].Key.Length > maxRuleLen)
+            {
                 maxRuleLen = sorted[i].Key.Length;
+            }
         }
 
         var maxCountLen = countHeaderLen;
@@ -625,10 +637,11 @@ internal static class CheckCommand
         {
             var digits = CountDigits(sorted[i].Value);
             if (digits > maxCountLen)
+            {
                 maxCountLen = digits;
+            }
         }
 
-        // Write table with blank line separator before it
         writer.WriteLine();
         writer.Write("| Rule");
         writer.Write(new string(' ', maxRuleLen - 4));
@@ -637,14 +650,12 @@ internal static class CheckCommand
         writer.Write(new string(' ', maxCountLen - countHeaderLen));
         writer.WriteLine(" |");
 
-        // Separator row (right-aligned count column)
         writer.Write('|');
         writer.Write(new string('-', maxRuleLen + 2));
         writer.Write('|');
         writer.Write(new string('-', maxCountLen + 1));
         writer.WriteLine(":|");
 
-        // Data rows
         for (var i = 0; i < sorted.Count; i++)
         {
             var rule = sorted[i].Key;

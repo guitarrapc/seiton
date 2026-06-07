@@ -144,6 +144,9 @@ internal static class FixCommand
             // Track per-file fix counts for the fix summary.
             // Key: filePath, Value: number of fixes applied.
             List<(string FilePath, int FixedCount)>? fixedFiles = null;
+            Dictionary<string, int>? fixedByRule = verboseLevel >= VerboseLevel.Summary
+                ? new Dictionary<string, int>(StringComparer.Ordinal)
+                : null;
 
             // Fix command always builds fixes; enable fix construction for all Check() calls.
             var fixEnabledLintConfig = new LintConfig
@@ -271,10 +274,10 @@ internal static class FixCommand
                     var dryRunApplied = 0;
                     try
                     {
-                        dryRunYaml = ApplyFixesIteratively(engine, utf8Yaml, filePath, fixEnabledLintConfig, 8, ref dryRunApplied);
+                        dryRunYaml = ApplyFixesIteratively(engine, utf8Yaml, filePath, fixEnabledLintConfig, 8, ref dryRunApplied, fixedByRule);
                         if (pinRemediation != null)
                         {
-                            var (pinYaml, pinCount) = await ApplyPinRemediationAsync(pinRemediation, engine, dryRunYaml, filePath, fixEnabledLintConfig, verboseLogger);
+                            var (pinYaml, pinCount) = await ApplyPinRemediationAsync(pinRemediation, engine, dryRunYaml, filePath, fixEnabledLintConfig, verboseLogger, fixedByRule);
                             dryRunYaml = pinYaml;
                             dryRunApplied += pinCount;
                         }
@@ -314,13 +317,13 @@ internal static class FixCommand
 
                 try
                 {
-                    currentYaml = ApplyFixesIteratively(engine, currentYaml, filePath, fixEnabledLintConfig, maxFixPasses, ref appliedFixes);
+                    currentYaml = ApplyFixesIteratively(engine, currentYaml, filePath, fixEnabledLintConfig, maxFixPasses, ref appliedFixes, fixedByRule);
 
                     // Pin remediation on stabilized YAML (案B).
                     // Local inserts are done, so pin edits target correct offsets.
                     if (pinRemediation != null)
                     {
-                        var (pinYaml, pinCount) = await ApplyPinRemediationAsync(pinRemediation, engine, currentYaml, filePath, fixEnabledLintConfig, verboseLogger);
+                        var (pinYaml, pinCount) = await ApplyPinRemediationAsync(pinRemediation, engine, currentYaml, filePath, fixEnabledLintConfig, verboseLogger, fixedByRule);
                         currentYaml = pinYaml;
                         appliedFixes += pinCount;
                     }
@@ -414,7 +417,7 @@ internal static class FixCommand
                 var summaryMode = check ? FixSummaryMode.Check
                     : dryRun ? FixSummaryMode.DryRun
                     : FixSummaryMode.Applied;
-                WriteFixSummary(errorWriter, fixedFiles, allDiagnostics, summaryMode, resolvedFormat);
+                WriteFixSummary(errorWriter, fixedFiles, allDiagnostics, summaryMode, resolvedFormat, showVerboseSummary, fixedByRule);
                 // Use "remain" wording only for applied/dry-run (where fixes were/would be applied).
                 // In check mode, nothing was changed so "remain" is misleading.
                 var useRemainMode = !check;
@@ -437,7 +440,7 @@ internal static class FixCommand
                 if (fixedFiles is { Count: > 0 } && check)
                 {
                     var summaryMode = FixSummaryMode.Check;
-                    WriteFixSummary(errorWriter, fixedFiles, allDiagnostics, summaryMode, resolvedFormat);
+                    WriteFixSummary(errorWriter, fixedFiles, allDiagnostics, summaryMode, resolvedFormat, showVerboseSummary, fixedByRule);
                     CheckCommand.WriteSummary(errorWriter, allDiagnostics, resolvedFiles.Length, resolvedFormat, showVerboseSummary, showExitHint: minSeverity is null, showPerFile: false, metadata: summaryMetadata, isRemainMode: false);
                 }
                 else
@@ -599,22 +602,56 @@ internal static class FixCommand
         List<(string FilePath, int FixedCount)> fixedFiles,
         List<Diagnostic> remainingDiagnostics,
         FixSummaryMode mode = FixSummaryMode.Applied,
-        OutputFormat format = OutputFormat.Text)
+        OutputFormat format = OutputFormat.Text,
+        bool verbose = false,
+        IReadOnlyDictionary<string, int>? fixedByRule = null)
     {
         if (GitHubStepSummaryWriter.TryAppend(format, jobSummary =>
-                WriteFixSummaryContent(jobSummary, fixedFiles, remainingDiagnostics, mode)))
+                WriteFixSummaryContent(jobSummary, fixedFiles, remainingDiagnostics, mode, verbose, fixedByRule)))
         {
+            if (!verbose && ShouldOfferPerRuleFixBreakdownHint(fixedFiles, fixedByRule))
+            {
+                writer.WriteLine("hint: re-run with --verbose for a per-rule fix breakdown");
+            }
+
             return;
         }
 
-        WriteFixSummaryContent(writer, fixedFiles, remainingDiagnostics, mode);
+        WriteFixSummaryContent(writer, fixedFiles, remainingDiagnostics, mode, verbose, fixedByRule);
+
+        if (!verbose && ShouldOfferPerRuleFixBreakdownHint(fixedFiles, fixedByRule))
+        {
+            writer.WriteLine("hint: re-run with --verbose for a per-rule fix breakdown");
+        }
+    }
+
+    private static bool ShouldOfferPerRuleFixBreakdownHint(
+        List<(string FilePath, int FixedCount)> fixedFiles,
+        IReadOnlyDictionary<string, int>? fixedByRule)
+    {
+        if (fixedByRule is { Count: > 0 })
+        {
+            return true;
+        }
+
+        for (var i = 0; i < fixedFiles.Count; i++)
+        {
+            if (fixedFiles[i].FixedCount > 0)
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private static void WriteFixSummaryContent(
         TextWriter writer,
         List<(string FilePath, int FixedCount)> fixedFiles,
         List<Diagnostic> remainingDiagnostics,
-        FixSummaryMode mode)
+        FixSummaryMode mode,
+        bool verbose,
+        IReadOnlyDictionary<string, int>? fixedByRule)
     {
         // Compute per-file remaining counts from the filtered diagnostics list.
         // Use a dictionary keyed by file path for O(1) lookup.
@@ -776,6 +813,63 @@ internal static class FixCommand
             writer.Write(remStr);
             writer.WriteLine(" |");
         }
+
+        if (verbose && totalFixed > 0)
+        {
+            var perRuleCounts = fixedByRule ?? (mode == FixSummaryMode.Check
+                ? BuildFixableCountsByRule(remainingDiagnostics)
+                : null);
+            if (perRuleCounts is { Count: > 0 })
+            {
+                CheckCommand.WritePerRuleCountTable(writer, perRuleCounts, GetFixPerRuleColumnHeader(mode));
+            }
+        }
+    }
+
+    private static string GetFixPerRuleColumnHeader(FixSummaryMode mode) => mode switch
+    {
+        FixSummaryMode.DryRun => "Would Fix",
+        FixSummaryMode.Check => "Fixable",
+        _ => "Fixed",
+    };
+
+    private static Dictionary<string, int>? BuildFixableCountsByRule(IReadOnlyList<Diagnostic> diagnostics)
+    {
+        Dictionary<string, int>? ruleCounts = null;
+        for (var i = 0; i < diagnostics.Count; i++)
+        {
+            var diagnostic = diagnostics[i];
+            if (diagnostic.Fix is null || diagnostic.RuleId is not { } ruleId)
+            {
+                continue;
+            }
+
+            ruleCounts ??= new Dictionary<string, int>(StringComparer.Ordinal);
+            ref var count = ref System.Runtime.InteropServices.CollectionsMarshal.GetValueRefOrAddDefault(ruleCounts, ruleId, out _);
+            count++;
+        }
+
+        return ruleCounts;
+    }
+
+    private static void RecordFixedByRule(Dictionary<string, int>? fixedByRule, ReadOnlySpan<Diagnostic> batch)
+    {
+        if (fixedByRule is null || batch.Length == 0)
+        {
+            return;
+        }
+
+        for (var i = 0; i < batch.Length; i++)
+        {
+            var ruleId = batch[i].RuleId;
+            if (ruleId is null)
+            {
+                continue;
+            }
+
+            ref var count = ref System.Runtime.InteropServices.CollectionsMarshal.GetValueRefOrAddDefault(fixedByRule, ruleId, out _);
+            count++;
+        }
     }
 
     private static readonly IReadOnlyDictionary<string, int> EmptySuppressedByRule =
@@ -819,7 +913,8 @@ internal static class FixCommand
         string filePath,
         LintConfig fixEnabledLintConfig,
         int maxPasses,
-        ref int appliedFixes)
+        ref int appliedFixes,
+        Dictionary<string, int>? fixedByRule = null)
     {
         for (var pass = 0; pass < maxPasses; pass++)
         {
@@ -833,24 +928,11 @@ internal static class FixCommand
                 break;
 
             appliedFixes += batch.Length;
+            RecordFixedByRule(fixedByRule, batch);
             currentYaml = nextYaml;
         }
 
         return currentYaml;
-    }
-
-    /// <summary>
-    /// Overload without appliedFixes counter (for dry-run).
-    /// </summary>
-    private static byte[] ApplyFixesIteratively(
-        LintEngine engine,
-        byte[] currentYaml,
-        string filePath,
-        LintConfig fixEnabledLintConfig,
-        int maxPasses = 8)
-    {
-        var unused = 0;
-        return ApplyFixesIteratively(engine, currentYaml, filePath, fixEnabledLintConfig, maxPasses, ref unused);
     }
 
     /// <summary>
@@ -863,7 +945,8 @@ internal static class FixCommand
         byte[] currentYaml,
         string filePath,
         LintConfig fixEnabledLintConfig,
-        VerboseLogger verboseLogger)
+        VerboseLogger verboseLogger,
+        Dictionary<string, int>? fixedByRule = null)
     {
         var yaml = currentYaml;
         var appliedCount = 0;
@@ -909,6 +992,7 @@ internal static class FixCommand
             }
 
             appliedCount += batch.Length;
+            RecordFixedByRule(fixedByRule, batch);
             yaml = nextYaml;
 
             if (batch.Length == pinFixable.Length)

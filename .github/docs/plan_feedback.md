@@ -342,15 +342,57 @@ rules:
 - `tests/Seiton.Tests/FixCommandTests.cs`
 - `docs/rules.md`, `.github/docs/Seiton_Linter_spec.md`, `.github/docs/Seiton_Linter_csharp_spec.md`
 
-### フェーズ 2 — P2 UX（fix per-rule サマリ）
+### フェーズ 2 — P2 UX（fix per-rule サマリ）— **実装済み（2026-06-07）**
 
 **WHY**: 大規模 dry-run で修正インパクトの内訳が per-file のみでは不足。
 
 **完了条件**
 
-- [ ] `--fix --dry-run -v` で per-rule `Would Fix` 表
-- [ ] `Seiton_CLI_spec.md` 更新
-- [ ] `FixCommandTests` で表出力アサート
+- [x] `--fix --dry-run -v` で per-rule `Would Fix` 表
+- [x] `Seiton_CLI_spec.md` 更新
+- [x] `FixCommandTests` / `WriteSummaryTests` で表出力アサート
+
+#### 実装内容
+
+| コンポーネント | 変更 |
+|----------------|------|
+| `FixCommand.WriteFixSummary` | `--verbose` 時に per-rule 表を per-file 表の後に出力。列名はモード連動（`Would Fix` / `Fixed` / `Fixable`） |
+| `FixCommand.RecordFixedByRule` | apply/dry-run 時に rule-id 別カウント（`-v` 時のみ辞書を確保） |
+| `FixCommand` hint | 非 verbose 時 `hint: re-run with --verbose for a per-rule fix breakdown`（lint サマリと対称） |
+| `CheckCommand.WritePerRuleCountTable` | lint/fix 共通の per-rule 表レンダラに抽出 |
+| `--check -v` | fixable diagnostic から per-rule 表を自動構築（apply 不要） |
+| `FixSummaryOutputBenchmark` | 出力ベンチマーク新規追加 |
+
+#### セルフレビュー（実施済み）
+
+| 指摘 | 対応 |
+|------|------|
+| lint と fix で per-rule 表の UX が非対称 | 同じ markdown 表形式・同じ hint 文言パターンに統一 |
+| `-v` 以外でも辞書を常時構築すると無駄 | `verboseLevel >= Summary` のときだけ `fixedByRule` を確保 |
+| GitHub Actions では hint が stderr に残るべき | `WriteFixSummaryAndSummary_GitHubActions` テストを hint 期待に更新 |
+| `--check` は apply 前なので rule カウント源が異なる | `BuildFixableCountsByRule` で fix 付き diagnostic から構築 |
+
+#### ベンチマーク（ShortRun, Release, 本実装後）
+
+| ベンチマーク | Mean | Allocated/op | vs per-file のみ |
+|--------------|------|--------------|------------------|
+| `FixSummaryOutputBenchmark` per-file only | **~798 ns** | ~2.64 KB | baseline |
+| `FixSummaryOutputBenchmark` + per-rule table | **~1.16 µs** | ~3.64 KB | +47% Mean / +38% Alloc |
+
+**性能評価**
+
+- per-rule 表は **`-v` 指定時のみ** 生成。通常の fix/dry-run パスは per-file サマリのみで、追加コストなし。
+- verbose 時の追加コストは表ソート・文字列書き込み程度（sub-µs）で、fix 本体（lint + network pin）に比べ無視できる。
+- rule カウント辞書も `-v` 時のみ確保。`RecordFixedByRule` は `CollectionsMarshal` で O(1) 更新。
+
+**変更ファイル**
+
+- `src/Seiton/Commands/FixCommand.cs`
+- `src/Seiton/Commands/CheckCommand.cs`
+- `src/Seiton.Benchmark/FixSummaryOutputBenchmark.cs`（新規）
+- `tests/Seiton.Tests/FixCommandTests.cs`
+- `tests/Seiton.Tests/WriteSummaryTests.cs`
+- `.github/docs/Seiton_CLI_spec.md`
 
 ### フェーズ 3 — P2/P3 ドキュメント
 
