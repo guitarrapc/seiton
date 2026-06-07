@@ -169,4 +169,201 @@ public sealed class CheckCommandTests
         if (directory is not null && Directory.Exists(directory))
             Directory.Delete(directory, recursive: true);
     }
+
+    [Test]
+    [NotInParallel("Console")]
+    public async Task Check_IncludeActionsNotice_WhenActionsDirExists_WritesEarlyNotice()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "Seiton.Tests", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(Path.Combine(root, ".github", "workflows"));
+        Directory.CreateDirectory(Path.Combine(root, ".github", "actions", "my-action"));
+        File.WriteAllText(
+            Path.Combine(root, ".github", "workflows", "ci.yml"),
+            """
+            on: push
+            jobs:
+              build:
+                runs-on: ubuntu-latest
+                steps:
+                  - run: echo ok
+            """);
+        File.WriteAllText(
+            Path.Combine(root, ".github", "actions", "my-action", "action.yml"),
+            """
+            name: my-action
+            runs:
+              using: composite
+              steps:
+                - run: echo ok
+            """);
+
+        var originalCwd = Environment.CurrentDirectory;
+        var originalOut = Console.Out;
+        var originalErr = Console.Error;
+        using var stdout = new StringWriter();
+        using var stderr = new StringWriter();
+
+        try
+        {
+            Environment.CurrentDirectory = root;
+#pragma warning disable TUnit0055
+            Console.SetOut(stdout);
+            Console.SetError(stderr);
+#pragma warning restore TUnit0055
+
+            _ = CheckCommand.Run(
+                [],
+                config: null,
+                stdinFilename: "stdin.yml",
+                ignore: [],
+                minSeverity: null,
+                format: OutputFormat.Text,
+                oneline: false,
+                color: ColorMode.Never,
+                noColor: true,
+                verboseLevel: VerboseLevel.Off,
+                includeActions: false);
+
+            var err = stderr.ToString();
+            await Assert.That(err).Contains("notice: composite actions are not included");
+            await Assert.That(err).Contains("--include-actions");
+            await Assert.That(err.TrimStart().StartsWith("notice:", StringComparison.Ordinal)).IsTrue();
+        }
+        finally
+        {
+            Environment.CurrentDirectory = originalCwd;
+#pragma warning disable TUnit0055
+            Console.SetOut(originalOut);
+            Console.SetError(originalErr);
+#pragma warning restore TUnit0055
+            if (Directory.Exists(root))
+                Directory.Delete(root, recursive: true);
+        }
+    }
+
+    [Test]
+    [NotInParallel("Console")]
+    public async Task Check_IncludeActionsNotice_WhenFlagOn_DoesNotWriteNotice()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "Seiton.Tests", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(Path.Combine(root, ".github", "workflows"));
+        Directory.CreateDirectory(Path.Combine(root, ".github", "actions", "my-action"));
+        File.WriteAllText(
+            Path.Combine(root, ".github", "workflows", "ci.yml"),
+            """
+            on: push
+            jobs:
+              build:
+                runs-on: ubuntu-latest
+                steps:
+                  - run: echo ok
+            """);
+        File.WriteAllText(
+            Path.Combine(root, ".github", "actions", "my-action", "action.yml"),
+            """
+            name: my-action
+            runs:
+              using: composite
+              steps:
+                - run: echo ok
+            """);
+
+        var originalCwd = Environment.CurrentDirectory;
+        var originalOut = Console.Out;
+        var originalErr = Console.Error;
+        using var stdout = new StringWriter();
+        using var stderr = new StringWriter();
+
+        try
+        {
+            Environment.CurrentDirectory = root;
+#pragma warning disable TUnit0055
+            Console.SetOut(stdout);
+            Console.SetError(stderr);
+#pragma warning restore TUnit0055
+
+            _ = CheckCommand.Run(
+                [],
+                config: null,
+                stdinFilename: "stdin.yml",
+                ignore: [],
+                minSeverity: null,
+                format: OutputFormat.Text,
+                oneline: false,
+                color: ColorMode.Never,
+                noColor: true,
+                verboseLevel: VerboseLevel.Off,
+                includeActions: true);
+
+            await Assert.That(stderr.ToString()).DoesNotContain("composite actions are not included");
+        }
+        finally
+        {
+            Environment.CurrentDirectory = originalCwd;
+#pragma warning disable TUnit0055
+            Console.SetOut(originalOut);
+            Console.SetError(originalErr);
+#pragma warning restore TUnit0055
+            if (Directory.Exists(root))
+                Directory.Delete(root, recursive: true);
+        }
+    }
+
+    [Test]
+    [NotInParallel("Console")]
+    public async Task Check_IncludeActionsNotice_WhenNoActionsDir_DoesNotWriteNotice()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "Seiton.Tests", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(Path.Combine(root, ".github", "workflows"));
+        File.WriteAllText(
+            Path.Combine(root, ".github", "workflows", "ci.yml"),
+            """
+            on: push
+            jobs:
+              build:
+                runs-on: ubuntu-latest
+                steps:
+                  - run: echo ok
+            """);
+
+        var originalCwd = Environment.CurrentDirectory;
+        var originalOut = Console.Out;
+        var originalErr = Console.Error;
+        using var stdout = new StringWriter();
+        using var stderr = new StringWriter();
+
+        try
+        {
+            Environment.CurrentDirectory = root;
+#pragma warning disable TUnit0055
+            Console.SetOut(stdout);
+            Console.SetError(stderr);
+#pragma warning restore TUnit0055
+
+            _ = CheckCommand.Run(
+                [],
+                config: null,
+                stdinFilename: "stdin.yml",
+                ignore: [],
+                minSeverity: null,
+                format: OutputFormat.Text,
+                oneline: false,
+                color: ColorMode.Never,
+                noColor: true,
+                verboseLevel: VerboseLevel.Off,
+                includeActions: false);
+
+            await Assert.That(stderr.ToString()).DoesNotContain("composite actions are not included");
+        }
+        finally
+        {
+            Environment.CurrentDirectory = originalCwd;
+#pragma warning disable TUnit0055
+            Console.SetOut(originalOut);
+            Console.SetError(originalErr);
+#pragma warning restore TUnit0055
+            if (Directory.Exists(root))
+                Directory.Delete(root, recursive: true);
+        }
+    }
 }

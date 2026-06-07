@@ -65,6 +65,12 @@ internal static class CheckCommand
         if (verboseLogger.IsEnabled)
             verboseLogger.Log("config", configResolution.FormatVerboseMessage());
 
+        var discoveryDirectory = configResolution.DiscoveryStartDirectory ?? Environment.CurrentDirectory;
+        if (ShouldSuggestIncludeActions(includeActions, discoveryDirectory))
+        {
+            WriteIncludeActionsNotice(Console.Error);
+        }
+
         // Resolve input files
         string[] resolvedFiles;
         try
@@ -297,10 +303,7 @@ internal static class CheckCommand
         WriteSummary(allDiagnostics, resolvedFiles.Length, resolvedFormat, verboseLevel >= VerboseLevel.Summary, showExitHint: minSeverity is null, metadata: summaryMetadata);
         if (ShouldShowInitHint(configResolution, resolvedFormat, allDiagnostics))
         {
-            var shouldSuggestIncludeActions = ShouldSuggestIncludeActions(
-                includeActions,
-                configResolution.DiscoveryStartDirectory ?? Environment.CurrentDirectory);
-            WriteInitHint(Console.Error, suggestIncludeActions: shouldSuggestIncludeActions);
+            WriteInitHint(Console.Error);
         }
 
         if (verboseLogger.IsEnabled)
@@ -975,13 +978,14 @@ internal static class CheckCommand
         return actionable >= 20;
     }
 
-    internal static void WriteInitHint(TextWriter writer, bool suggestIncludeActions = false)
+    internal static void WriteInitHint(TextWriter writer)
     {
         writer.WriteLine("hint: many issues detected with default config; run 'seiton init' to create .github/seiton.yaml and customize exclusions");
-        if (suggestIncludeActions)
-        {
-            writer.WriteLine("hint: this repository contains .github/actions; re-run with '--include-actions' to lint composite actions too");
-        }
+    }
+
+    internal static void WriteIncludeActionsNotice(TextWriter writer)
+    {
+        writer.WriteLine("notice: composite actions are not included; re-run with --include-actions");
     }
 
     internal static bool ShouldSuggestIncludeActions(bool includeActions, string? discoveryStartDirectory)

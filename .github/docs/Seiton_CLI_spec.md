@@ -350,6 +350,14 @@ When no `FILES` arguments are given to `check` / `fix`:
 
 Only `<cwd>/.github/workflows/` and `<cwd>/.github/actions/` are considered. To lint files outside `cwd`, pass explicit `FILES` paths or run `seiton` from the intended repository root.
 
+When `<cwd>/.github/actions/` exists and `--include-actions` is not set, `check` emits a one-line stderr notice **before** file discovery begins (regardless of `--verbose` or eventual diagnostic count):
+
+```
+notice: composite actions are not included; re-run with --include-actions
+```
+
+`notice:` lines are informational only; they do not affect exit code. They are not written to the job summary.
+
 **Lessons learned (nested CI):** When a job checks out a parent repository at the workspace root and a child repository into a subdirectory (`path:` checkout), running `seiton` with `working-directory` set to the child must lint only the child's `.github/` tree. Parent-directory walks caused unintended lint of sibling checkouts (for example parent `.github/actions/` mixed with child `.github/workflows/`).
 
 Local action and reusable-workflow references inside workflow YAML (`uses: ./.github/actions/foo`, `uses: ../other/action.yml`) are resolved separately by the lint engine when analyzing each file; that reference resolution is not part of input discovery.

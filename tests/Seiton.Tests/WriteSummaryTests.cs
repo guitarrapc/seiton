@@ -210,11 +210,14 @@ public sealed class WriteSummaryTests
     }
 
     [Test]
-    public async Task WriteInitHint_WhenIncludeActionsSuggested_ContainsFlagHint()
+    public async Task WriteIncludeActionsNotice_ContainsFlagHint()
     {
         using var sw = new StringWriter();
-        CheckCommand.WriteInitHint(sw, suggestIncludeActions: true);
-        await Assert.That(sw.ToString()).Contains("--include-actions");
+        CheckCommand.WriteIncludeActionsNotice(sw);
+        var output = sw.ToString();
+        await Assert.That(output).Contains("notice:");
+        await Assert.That(output).Contains("--include-actions");
+        await Assert.That(output).Contains("composite actions are not included");
     }
 
     private static string CreateTempDirectory()

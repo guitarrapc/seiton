@@ -316,6 +316,34 @@ contextに限らず、exclusionの前に --fixを試すように指示するべ�
 
 **検証:** `CheckCommand` 統合テストで actions ディレクトリあり / なしの hint 出力を確認。
 
+**実装状況（2026-06-08）:** ✅ 完了（Phase 1 のみ）
+
+| 項目 | 内容 |
+|------|------|
+| 実装 | `CheckCommand.WriteIncludeActionsNotice` を discovery 直前（`InputDiscovery.ResolveFiles` の前）に出力。`verbose` 不要。既存 `ShouldSuggestIncludeActions`（`Directory.Exists` 1 回）を再利用 |
+| メッセージ | `notice: composite actions are not included; re-run with --include-actions` |
+| 重複回避 | 末尾 `WriteInitHint` から `--include-actions` 行を削除（早期 notice に一本化） |
+| テスト | `CheckCommandTests` に 3 件（notice あり / `--include-actions` 時なし / actions ディレクトリなし）、`WriteSummaryTests.WriteIncludeActionsNotice`。全 2542 テスト pass |
+| 仕様 | `Seiton_CLI_spec.md` §5、`Seiton_Linter_csharp_spec.md` §2.2 を更新 |
+
+**ベンチマーク（`InputDiscoveryBenchmark`、ShortRun）:**
+
+| Method | Mean | Allocated |
+|--------|------|-----------|
+| `ShouldSuggestIncludeActions`（新規） | 22.9 µs | 248 B |
+| `ResolveFiles (cwd, workflows only)` | 15.1 µs（変更なし） | 280 B |
+
+**性能評価:** 追加コストは lint 1 回あたり `Directory.Exists` 1 回 + 条件成立時の 1 行 stderr 書き込みのみ。lint ホットパス（パース・ルール実行）への影響なし。Phase 2（問題がある場合のみ強調 hint）は見送り。
+
+**セルフレビュー:**
+
+| 指摘 | 対応 |
+|------|------|
+| 末尾 hint と二重表示 | `WriteInitHint` から include-actions 行を削除 |
+| `hint:` vs `notice:` の区別 | 早期案内は `notice:`（情報）、末尾は従来どおり `hint:`（init 誘導） |
+| 明示ファイル指定時も notice が出る | actions ディレクトリ存在時は常に案内（軽量・一貫）。問題の有無は判定しない（Phase 1 方針） |
+| FixCommand への適用 | スコープ外（C-2 は check の discovery 案内） |
+
 ---
 
 #### C-3. warning 時の exit code と CI 向け案内
@@ -443,7 +471,7 @@ contextに限らず、exclusionの前に --fixを試すように指示するべ�
 | ~~**P1**~~ | B-3 | fix 優先 — adoption / fix-mode ドキュメント | ✅ 完了（2026-06-08） |
 | ~~**P2**~~ | A-3 | `env-var` の `help:` と rules.md 代替パターン | ✅ 完了（2026-06-08） |
 | ~~**P2**~~ | C-4 | duplicate exclusion の位置情報改善 | ✅ 完了（2026-06-08） |
-| **P3** | C-2 | `--include-actions` 案内の前倒し | 実装（Phase 1 から） |
+| ~~**P3**~~ | C-2 | `--include-actions` 案内の前倒し | ✅ 完了（2026-06-08、Phase 1） |
 | **P3** | C-3 | exit code / `--min-severity` のドキュメント補強 | ドキュメントのみ |
 
 **見送り（フィードバックでも妥当とされている）:** `if-cond` / `env-var` / `unredacted-secrets` の auto-fix 拡張、online rules のデフォルト有効化、`env-var` ルール緩和。

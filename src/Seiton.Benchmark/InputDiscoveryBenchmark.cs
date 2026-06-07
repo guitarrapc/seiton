@@ -51,6 +51,12 @@ public class InputDiscoveryBenchmark
         return files.Length;
     }
 
+    [Benchmark(Description = "ShouldSuggestIncludeActions (actions dir exists)")]
+    public bool ShouldSuggestIncludeActions_ActionsDirExists()
+    {
+        return CheckCommand.ShouldSuggestIncludeActions(includeActions: false, discoveryStartDirectory: _cwd);
+    }
+
     [GlobalCleanup]
     public void Cleanup()
     {
