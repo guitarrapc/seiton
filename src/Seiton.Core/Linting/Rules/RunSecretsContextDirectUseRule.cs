@@ -134,28 +134,74 @@ public sealed class RunSecretsContextDirectUseRule() : RuleBase(RuleId.RunSecret
             return false;
         }
 
-        if (!TryResolveShellVariableName(Arena, step.Env, _currentJob?.Env, _currentWorkflow?.Env,
+        var absoluteOffset = Arena.GetStringSlice(runNode).Offset + expressionBodyStart - 3;
+
+        if (IsInsideNoExpandHereDoc(Config.Utf8Yaml, absoluteOffset))
+        {
+            return false;
+        }
+
+        if (IsInsideShellSingleQuotes(Config.Utf8Yaml, absoluteOffset))
+        {
+            return false;
+        }
+
+        // Case 1: existing unique env mapping resolves the variable name
+        if (TryResolveShellVariableName(Arena, step.Env, _currentJob?.Env, _currentWorkflow?.Env,
             Config.Utf8Yaml, secretName,
             static (ReadOnlySpan<byte> expr, out string name) => TryParseSimpleContextReference(expr, "secrets"u8, out name),
             out var variableName))
         {
-            return false;
+            var isPowerShell = RunContextDirectUseAnalyzer.IsPowerShellWithDefaults(Arena, step, _currentJob, _currentWorkflow, Config.Utf8Yaml);
+            if (isPowerShell is null)
+            {
+                return false;
+            }
+
+            var replacement = isPowerShell.Value
+                ? "$env:" + variableName
+                : "${" + variableName + "}";
+
+            fix = new DiagnosticFix(
+                "replace direct secrets context expansion with mapped shell variable",
+                [new TextEdit(absoluteOffset, expressionLength, replacement)]);
+            return true;
         }
 
-        var isPowerShell = RunContextDirectUseAnalyzer.IsPowerShellWithDefaults(Arena, step, _currentJob, _currentWorkflow, Config.Utf8Yaml);
-        if (isPowerShell is null)
+        // Case 2: no existing mapping — generate env var name and insert env block
+        if (!Config.Fix.Enabled)
         {
             return false;
         }
 
-        var replacement = isPowerShell.Value
-            ? "$env:" + variableName
-            : "${" + variableName + "}";
+        var expressionString = BuildSecretsExpressionString(secretName);
+        var envVarName = DeduplicateEnvName(Arena, RunInputsContextDirectUseRule.InputNameToEnvVarName(secretName),
+            step.Env, _currentJob?.Env, _currentWorkflow?.Env);
+        if (envVarName is null)
+        {
+            return false;
+        }
 
-        var absoluteOffset = Arena.GetStringSlice(runNode).Offset + expressionBodyStart - 3;
+        var isPowerShell2 = RunContextDirectUseAnalyzer.IsPowerShellWithDefaults(Arena, step, _currentJob, _currentWorkflow, Config.Utf8Yaml);
+        if (isPowerShell2 is null)
+        {
+            return false;
+        }
+
+        var shellReplacement = isPowerShell2.Value
+            ? "$env:" + envVarName
+            : "${" + envVarName + "}";
+
+        if (!TryBuildStepEnvInsertionEdit(Arena, Config.Utf8Yaml, step, envVarName, expressionString, out var insertEdit))
+        {
+            return false;
+        }
+
         fix = new DiagnosticFix(
-            "replace direct secrets context expansion with mapped shell variable",
-            [new TextEdit(absoluteOffset, expressionLength, replacement)]);
+            $"map secrets reference to env variable {envVarName}",
+            [insertEdit, new TextEdit(absoluteOffset, expressionLength, shellReplacement)]);
         return true;
     }
+
+    private static string BuildSecretsExpressionString(string secretName) => "secrets." + secretName;
 }

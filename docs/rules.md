@@ -1649,11 +1649,11 @@ jobs:
 
 **When fixing:**
 
-- Auto-fix can rewrite simple secret expressions only when a unique existing `env` mapping is available.
-- For compound expressions, move logic to `env:` and keep `run:` shell-variable-only.
+- Auto-fix rewrites simple `${{ secrets.KEY }}` / `${{ secrets['KEY'] }}` by reusing an existing unique `env` mapping when present, or inserts a step `env:` entry and rewrites to the shell variable when `fix` is enabled.
+- For compound expressions, move logic to `env:` manually and keep `run:` shell-variable-only; no fix is offered.
 - Confirm secrets are not printed after refactoring.
 
-Auto-fix replaces simple `${{ secrets.KEY }}` when an existing `env` mapping exists. For compound expressions, no fix is offered; a help message suggests moving the expression to an `env:` block.
+Auto-fix replaces simple secret expressions when fix mode is on (`seiton --fix` or `fix` enabled in config). With no existing mapping, it adds `env: SECRET_NAME: ${{ secrets.SECRET_NAME }}` and rewrites the `run:` reference. Ambiguous mappings, heredoc no-expand bodies, and shell single-quoted strings remain no-fix.
 
 ---
 

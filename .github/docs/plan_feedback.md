@@ -124,6 +124,37 @@
 
 **検証:** githubactions-lab の `secrets-access.yaml` パターンで `--fix --dry-run` が 1 件 fixable になること。
 
+**実装状況（2026-06-08）:** ✅ 完了
+
+| 項目 | 内容 |
+|------|------|
+| 実装 | `RunSecretsContextDirectUseRule.TryBuildFix` に Case 2（`Fix.Enabled` 時の step `env:` 挿入 + shell 変数置換）を追加。`run-inputs-context-direct-use` と同型の分岐・共有ユーティリティ（`TryBuildStepEnvInsertionEdit`, `DeduplicateEnvName`, `InputNameToEnvVarName`）を再利用 |
+| テスト | `RuleInterfaceTests.LintEngine.cs` に 5 件追加（posix / pwsh / bracket / fix 無効 / single-quote）。全 2534 テスト pass |
+| 仕様 | `Seiton_Linter_spec.md` §8.4、`docs/rules.md` §`run-secrets-context-direct-use` を更新 |
+| UX | `--fix` または config `fix:` 有効時のみ env 挿入（lint のみでは fix 非付与）。fix 説明文は `map secrets reference to env variable {NAME}` |
+
+**ベンチマーク（`CoreLintBenchmark`、ShortRun、実装前 → 実装後）:**
+
+| Size | FixEnabled | Before | After | Δ Mean | Δ Allocated |
+|------|------------|--------|-------|--------|-------------|
+| Small | False | 61.18 µs | 61.85 µs | +1.1% | 8.67 KB → 8.67 KB（±0%） |
+| Small | True | 73.49 µs | 70.91 µs | −3.5% | 10.13 KB → 10.13 KB（±0%） |
+| Medium | False | 1,313 µs | 1,293 µs | −1.5% | 68.52 KB → 68.52 KB（±0%） |
+| Medium | True | 1,868 µs | 1,888 µs | +1.1% | 81.88 KB → 81.88 KB（±0%） |
+| Large | False | 20,715 µs | 21,073 µs | +1.7% | 325.53 KB → 325.53 KB（±0%） |
+| Large | True | 30,917 µs | 31,613 µs | +2.3% | 380.38 KB → 380.38 KB（±0%） |
+
+**性能評価:** 全ケースで Mean +10% / Allocated +10% 以内。合成ワークフローは `run-secrets-context-direct-use` を発火しないため、差分は計測ノイズ域。Case 2 はルール発火時かつ `Fix.Enabled` のときのみ追加パスが走る設計で、通常 lint ホットパスへの影響は negligible。
+
+**セルフレビュー:**
+
+| 指摘 | 対応 |
+|------|------|
+| inputs ルールとの API 一貫性 | Case 1（既存 mapping 再利用）/ Case 2（env 挿入）の分岐と `Fix.Enabled` ゲートを inputs と同型にした |
+| パフォーマンス | 新規 string 割当は fix 構築時のみ。`BuildSecretsExpressionString` は単純連結。共有 `DeduplicateEnvName` の fast path を再利用 |
+| 複合式の fix 拡張 | 仕様どおり見送り（help hint のみ） |
+| single-quote / heredoc | `IsInsideShellSingleQuotes` / `IsInsideNoExpandHereDoc` を Case 1 前に統一チェック |
+
 ---
 
 #### B-3. context 系は exclusion より先に `--fix`（adoption ドキュメント）
@@ -293,7 +324,7 @@ contextに限らず、exclusionの前に --fixを試すように指示するべ�
 
 | 優先度 | ID | 内容 | 種別 |
 |--------|-----|------|------|
-| **P1** | B-2 | `run-secrets-context-direct-use` の env ブロック挿入 fix | 実装 + テスト + spec |
+| ~~**P1**~~ | B-2 | `run-secrets-context-direct-use` の env ブロック挿入 fix | ✅ 完了（2026-06-08） |
 | **P1** | C-1 | デフォルト出力にルール別 Top N | 実装 + CLI spec |
 | **P1** | B-3 | context 系は fix 優先 — adoption / fix-mode ドキュメント | ドキュメント |
 | **P2** | A-3 | `env-var` の `help:` と rules.md 代替パターン | 実装（help のみ）+ docs |
