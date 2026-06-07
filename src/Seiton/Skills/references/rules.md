@@ -14,6 +14,19 @@ When a rule reports diagnostics, use this order:
 
 For online rules, always enable them explicitly in config (`rules.<rule-id>.enabled: true`) and set `GITHUB_TOKEN` or `SEITON_GITHUB_TOKEN` to avoid rate limits.
 
+```yaml
+# Good: scoped exclusion for a legacy file
+exclusions:
+  - file: ".github/workflows/legacy-deploy.yml"
+    rules:
+      - unpinned-uses
+
+# Last resort: disable globally
+rules:
+  runner-no-latest:
+    enabled: false
+```
+
 ## Rule Table
 
 | Rule ID | Severity | Fix | Scope | Default |
