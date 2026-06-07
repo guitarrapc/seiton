@@ -179,6 +179,26 @@ rules:
     enabled: false
 ```
 
+### Suppressing diagnostics (config vs inline)
+
+**Prefer `.github/seiton.yaml` `exclusions`** for file-wide, job-wide, or repeated suppressions. Use inline comments only for one-off cases in a single workflow.
+
+| Situation | Mechanism |
+|-----------|-----------|
+| Many files or a glob pattern | `exclusions` with `file:` |
+| One job in one file | `exclusions` with `file:` + `jobs:` — or `# seiton: disable-job` |
+| Single line | `# seiton: disable-next-line <rule-id>` |
+| Entire workflow (rare) | `# seiton: disable-file` at top of file |
+
+When a workflow still has **unrecognized inline comments** from another linter, translate the intent into `exclusions` or seiton directives — seiton does not read foreign comment syntax. See `references/inline-suppression.md` for full syntax, placement pitfalls (`if-cond`, `matrix`), and comma-separated rule IDs.
+
+```yaml
+# One-off: unpinned action on the next line only
+steps:
+  # seiton: disable-next-line unpinned-uses
+  - uses: actions/checkout@v6
+```
+
 ### Iterate until clean
 
 The tuning loop is: **run → review → configure → re-run**. Repeat until only genuine,
@@ -208,3 +228,4 @@ seiton --verbose    # confirm resolved config on stderr
 - `references/rules.md` — All rule IDs, severities, fix support, and categories
 - `references/fix-mode.md` — Auto-fix commands, flags, and configuration
 - `references/configuration.md` — Full seiton.yaml schema and common patterns
+- `references/inline-suppression.md` — Config vs inline suppression, directive syntax, placement pitfalls

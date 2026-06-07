@@ -31,7 +31,7 @@
 | B2 | 課題 | `rules: ["*"]` 未サポート | 中 | **ドキュメントと実装の不整合** | 実装 or ドキュメント統一 |
 | B3 | 課題 | `skip-agentic-workflows` の検出範囲 | 中 | **仕様どおりだが説明不足** | ドキュメント改善 |
 | B4 | 課題 | ルール別 Count テーブルの表示条件 | 軽 | **UX の非対称** | 表示条件の整理 |
-| B5 | 課題 | 旧リンターインライン抑制の移行 | 軽 | **移行支援不足**（機能欠如ではない） | ドキュメント / 将来ツール |
+| B5 | 課題 | 旧リンターインライン抑制の移行 | 軽 | **移行支援不足**（機能欠如ではない） | **完了** — Agent Skill 参照 |
 | I1 | 情報 | 検出範囲の差異（和集合だが完全一致ではない） | — | 想定内 | 移行ガイド整備 |
 | B6 | 課題 | `validate-config` が unknown job-id を検出しない | 中 | **B1 の派生** | B1 修正後に拡張 |
 
@@ -52,7 +52,7 @@
 | 導入コマンド群 | `init` → `validate-config` → lint の流れが機能した | CI テンプレート（`install --ci`）を release ごとに検証 |
 | `--oneline` | CI / grep / annotation 連携向き | 維持 |
 | 高速 | 旧構成（actionlint + zizmor Docker）との差は体感的にも大きい | `Seiton.Benchmark` で回帰監視 |
-| 除外の集約 | zizmor インライン + `.zizmor.yaml` + `.ghalint.yaml` を `.github/seiton.yaml` に寄せられる | 移行ガイドで旧設定との対応表を公開（§6 参照） |
+| 除外の集約 | 複数ツールの設定を `.github/seiton.yaml` に寄せられる | Agent Skill `inline-suppression.md` で config 優先・構文案内（§6 参照） |
 
 ---
 
@@ -331,34 +331,33 @@ metadata なし gh-aw 生成物のヒューリスティック拡張（例: 先�
 
 #### 評価
 
-**半分妥当。** seiton はネイティブのインライン抑制を既に持つ（`# seiton: disable-next-line`, `# seiton: disable-job` 等、`Seiton_Linter_spec.md`）。zizmor の `# zizmor: ignore[rule]` や ghalint `excludes` を **そのまま読む機能はない**。
+**半分妥当。** seiton はネイティブのインライン抑制を既に持つ（`# seiton: disable-next-line`, `# seiton: disable-job` 等、`Seiton_Linter_spec.md`）。他ツールのインラインコメントを **そのまま読む機能はない**。
 
-フィードバックの「`.github/seiton.yaml` に集約（推奨）」は seiton の設計思想（`rules: enabled: false` より `exclusions` を優先）と一致。大規模リポ向けの **移行ツール**不足が本質。
+フィードバックの「`.github/seiton.yaml` に集約（推奨）」は seiton の設計思想（`rules: enabled: false` より `exclusions` を優先）と一致。ユーザーが **seiton のインライン構文を知らない** ことが移行時の実質的な障壁だった。
 
-#### 対応プラン
+#### 方針（採用）
 
-**フェーズ A（ドキュメント）**
+- **競合ツール名の対応表は公開ドキュメントに載せない**（`docs/configuration.md` は既に Seiton ネイティブの Inline Suppression 節を持つ。変更不要）。
+- **Agent Skill** で「config vs inline」の判断フローと構文・配置の落とし穴を案内する（エージェントがワークフロー内の未知コメントを seiton 形式へ翻訳する想定）。
 
-1. `docs/configuration.md` または新規 `docs/migration.md` に対応表を追加:
+#### 実装内容（B5 完了）
 
-   | 旧方式 | seiton |
-   |--------|--------|
-   | `# zizmor: ignore[rule]` | `exclusions` に集約（推奨）または `# seiton: disable-next-line rule` |
-   | `.zizmor.yaml` 行単位 ignore | `exclusions` の `file` + `rules` |
-   | ghalint `.ghalint.yaml` excludes | `exclusions` の `file` / `jobs` / `rules` |
-   | actionlint（config なし） | デフォルトルール + 必要なら `exclusions` |
+| 変更 | 内容 |
+|------|------|
+| `src/Seiton/Skills/references/inline-suppression.md` | 新規。決定フロー、`disable-next-line` / `disable-job` / `disable-file`、`if-cond`・`matrix` 配置、カンマ区切り rule ID、エージェント向けチェックリスト |
+| `src/Seiton/Skills/SKILL.md` | 「Suppressing diagnostics (config vs inline)」節と References 追記 |
+| `.claude/skills/seiton/` | 上記と同期 |
+| `tests/Seiton.Tests/InstallCommandTests.cs` | `seiton install --skills` で reference が展開されることを検証 |
 
-2. Skill の Migration 節に同表を要約で載せる。
+**パフォーマンス**: ランタイム・リンター変更なし。ベンチマーク対象外（±0%）。
+
+**仕様整合**: `docs/configuration.md` の Inline Suppression Directives と内容一致。`Seiton_Linter_spec.md` の挙動変更なし。
 
 **フェーズ B（将来・任意）**
 
-- `seiton migrate --from zizmor|ghalint` で既存 YAML から `exclusions` ドラフトを生成。
-- zizmor インラインコメントの静的変換は優先度低（集約設定が推奨のため）。
+- `seiton migrate` で既存設定から `exclusions` ドラフトを生成（別タスク）。
 
-**完了条件**
-
-- 移行ユーザーがインラインコメントを残すか config に寄せるかを判断できる。
-- コード変更はフェーズ A では不要。
+**ステータス**: B5 完了。
 
 ---
 
@@ -419,7 +418,8 @@ B1 フェーズ B と一体で実装（§2 参照）。加えて:
 
 フェーズ 2（ドキュメント — 同リリースまたは直後）
 ├── B3: skip-agentic-workflows の説明・init テンプレ修正
-├── B5 / I1: migration ガイド・feature matrix 更新
+├── B5: Agent Skill インライン抑制参照（完了）
+├── I1: migration ガイド・feature matrix 更新
 └── B6: validate-config の cross-file job-id 検証
 
 フェーズ 3（将来）
