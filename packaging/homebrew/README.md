@@ -25,8 +25,8 @@
 ```bash
 cd /path/to/seiton
 export GITHUB_REPOSITORY=guitarrapc/seiton
-export SEITON_TAG=v0.9.25
-export SEITON_VERSION=0.9.25
+export SEITON_TAG=v0.9.26
+export SEITON_VERSION=0.9.26
 export CHECKSUMS_FILE=./checksums-sha256.txt
 # export SKIP_PUSH=1   # コミットまでで止める
 bash scripts/commit-homebrew-formula.sh

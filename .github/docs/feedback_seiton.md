@@ -1,7 +1,7 @@
 # seiton フィードバック（githubactions-lab）
 
 実施日: 2026-06-07
-環境: Windows 11, seiton **v0.9.25** (.NET 10.0.8, win-x64)
+環境: Windows 11, seiton **v0.9.26** (.NET 10.0.8, win-x64)
 
 ## 実行経過
 

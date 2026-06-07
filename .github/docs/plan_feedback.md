@@ -8,10 +8,10 @@
 |------|------|
 | 対象リポジトリ | `githubactions-lab`（良い例・悪い例・生成物が混在する教材リポ） |
 | 置き換え対象 | ghalint / actionlint / zizmor |
-| フィードバック時の seiton | **v0.9.25** |
-| 本書作成時点の main | `rules: ["*"]` exclusion 正規化、lint 時の `--verbose` per-rule breakdown ヒント等が **v0.9.25 以降にマージ済み** |
+| フィードバック時の seiton | **v0.9.26** |
+| 本書作成時点の main | `rules: ["*"]` exclusion 正規化、lint 時の `--verbose` per-rule breakdown ヒント等が **v0.9.26 以降にマージ済み** |
 
-フィードバックの数値・挙動は v0.9.25 基準。現行 main との差分は各項目の「現状」列に明記する。
+フィードバックの数値・挙動は v0.9.26 基準。現行 main との差分は各項目の「現状」列に明記する。
 
 ---
 
@@ -24,7 +24,7 @@
 | バグ（fix 競合） | 1 | 要修正（根本原因特定済み） |
 | 運用知見（設定パターン） | 複数 | adoption ドキュメントへ反映 |
 
-**総合判断**: 教材混在リポでも設定調整を前提に **実用可能**。ブロッカーは `unpinned-uses` の network pin 時 fix 競合 1 件。v0.9.25 以前の exclusion `*` 問題と per-rule ヒント不足は現行で解消済み。
+**総合判断**: 教材混在リポでも設定調整を前提に **実用可能**。ブロッカーは `unpinned-uses` の network pin 時 fix 競合 1 件。v0.9.26 以前の exclusion `*` 問題と per-rule ヒント不足は現行で解消済み。
 
 ---
 
@@ -105,7 +105,7 @@
 |------|:----:|------|
 | lint 出力 | ✅ 強み | 競合ツール比較でも差別化要素（[Seiton-feature-matrix.md](./Seiton-feature-matrix.md)） |
 | fix 競合時 | ❌ 不足 | offset / length は出るが rule-id・診断位置・対処がない（§5 参照） |
-| per-rule breakdown | 🟡 改善済み（lint） | v0.9.25 以降、`hint: re-run with --verbose for a per-rule breakdown` を lint サマリに表示 |
+| per-rule breakdown | 🟡 改善済み（lint） | v0.9.26 以降、`hint: re-run with --verbose for a per-rule breakdown` を lint サマリに表示 |
 
 ### 対応プラン
 
@@ -121,7 +121,7 @@
 
 ### 4.1 `rules: ["*"]` exclusion
 
-**フィードバック**: v0.9.25 では `unknown rule-id '*'` で config parse エラー。エラーメッセージに file-only exclusion の代替案内がほしい。
+**フィードバック**: v0.9.26 では `unknown rule-id '*'` で config parse エラー。エラーメッセージに file-only exclusion の代替案内がほしい。
 
 **評価**
 
@@ -136,7 +136,7 @@
 |:------:|------------|
 | — | 機能修正は **不要**（実装済み） |
 | P3 | `docs/configuration.md` の Exclusions 節に「file-only = `rules` 省略または `rules: ["*"]`」を目立たせる |
-| P3 | CHANGELOG / リリースノートで v0.9.25 以降の挙動変更を明記（再評価時の混乱防止） |
+| P3 | CHANGELOG / リリースノートで v0.9.26 以降の挙動変更を明記（再評価時の混乱防止） |
 
 ### 4.2 fix 競合時の詳細情報
 
@@ -438,7 +438,7 @@ rules:
 
 ### フェーズ 4 — 再検証（githubactions-lab）
 
-**WHY**: フィードバックは v0.9.25 基準。修正後の実測で回帰確認。
+**WHY**: フィードバックは v0.9.26 基準。修正後の実測で回帰確認。
 
 **手順**
 
@@ -450,7 +450,7 @@ rules:
 
 **成功基準（再検証）**
 
-| 指標 | v0.9.25 実績 | 目標 |
+| 指標 | v0.9.26 実績 | 目標 |
 |------|-------------|------|
 | fix 競合 | 1 ファイルで失敗 | 0 失敗 |
 | Would fix（全体 dry-run） | 53 / 64 | 同等以上（exclusion 削除後は件数増の可能性あり） |
@@ -468,7 +468,7 @@ rules:
 
 | 観点 | 結果 | 判定 |
 |------|------|------|
-| with-exclusion 全体 lint | **32 errors / 15 warnings in 127 files (2 excluded, 2 suppressed)** | v0.9.25 比で warning 減 |
+| with-exclusion 全体 lint | **32 errors / 15 warnings in 127 files (2 excluded, 2 suppressed)** | v0.9.26 比で warning 減 |
 | `prevent-file-change` with-exclusion | **0 issues in 1 file (2 suppressed)** | 期待どおり（抑制確認） |
 | `prevent-file-change` without-exclusion | **Would fix 2 of 2 issues in 1 file (0 remaining)**、2 箇所とも SHA pin diff を生成 | ✅ **fix 競合なし** |
 | without-exclusion 全体 dry-run | **Would fix 55 of 68 issues in 25 files (13 remaining)** / **3 errors, 10 warnings remain in 8 files** | 指標達成（残件は意図的 bad 例中心） |
