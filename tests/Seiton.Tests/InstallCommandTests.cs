@@ -560,8 +560,9 @@ public sealed class InstallCommandTests
         await Assert.That(content).IsNotNull();
 
         var activeContent = string.Join('\n', content!.Split('\n').Where(line => !line.TrimStart().StartsWith('#')));
-        await Assert.That(activeContent).Contains("GITHUB_ACTIONS");
-        await Assert.That(activeContent).Contains("GITHUB_STEP_SUMMARY");
+        await Assert.That(activeContent).Contains("guitarrapc/setup-seiton@v1");
+        await Assert.That(activeContent).Contains("run: seiton --include-actions");
+        await Assert.That(activeContent).DoesNotContain("docker run --rm");
         await Assert.That(activeContent).DoesNotContain("--format sarif");
     }
 
