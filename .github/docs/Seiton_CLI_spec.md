@@ -565,15 +565,7 @@ When at least one diagnostic has a file path, a per-file breakdown is emitted as
 - When at least one info diagnostic exists in the per-file breakdown, an `Infos` column is also emitted.
 - Files are sorted by total issue count descending, then by file name lexicographically.
 
-When the per-file breakdown is shown and at least one diagnostic has a `rule-id`, but `--verbose` is not set, stderr also emits:
-
-```
-hint: re-run with --verbose for a per-rule breakdown
-```
-
-This hint is not written to the job summary.
-
-In `-v` / `--verbose` mode with at least one diagnostic that has a `rule-id`, a per-rule breakdown is emitted as a markdown-style table, separated from the preceding output by a blank line:
+When at least one diagnostic has a `rule-id`, a per-rule breakdown is emitted as a markdown-style table (top 10 rules by count), separated from the preceding output by a blank line:
 
 ```
 | Rule          | Count |
@@ -586,6 +578,13 @@ In `-v` / `--verbose` mode with at least one diagnostic that has a `rule-id`, a 
 - In fix/dry-run mode (when `isRemainMode` is true), the count column is labeled "Remaining" to reflect these are post-fix residual diagnostics.
 - Column widths are dynamically computed to align values.
 - Rules are sorted by count descending, then by rule ID lexicographically.
+- At most **10** rules are shown in default (non-verbose) mode. When more than 10 distinct rule IDs are present, stderr also emits (not written to the job summary):
+
+```
+hint: re-run with --verbose for the full per-rule breakdown
+```
+
+In `-v` / `--verbose` mode, the same per-rule table is emitted with **no row limit** (all distinct rule IDs).
 
 In `-v` / `--verbose` mode, rule activation metadata is emitted once per document kind seen in the run:
 

@@ -269,7 +269,7 @@ public sealed class WriteSummaryTests
     }
 
     [Test]
-    public async Task WriteSummary_NotVerbose_DoesNotShowPerRuleBreakdown()
+    public async Task WriteSummary_NotVerbose_ShowsTopTenPerRuleBreakdown()
     {
         var diagnostics = new List<Diagnostic>
         {
@@ -282,9 +282,49 @@ public sealed class WriteSummaryTests
         var output = sw.ToString();
 
         await Assert.That(output).Contains("1 error, 1 warning in 1 file");
-        await Assert.That(output).DoesNotContain("| template-injection");
-        await Assert.That(output).DoesNotContain("| unpinned-uses");
-        await Assert.That(output).Contains("hint: re-run with --verbose for a per-rule breakdown");
+        await Assert.That(output).Contains("| template-injection");
+        await Assert.That(output).Contains("| unpinned-uses");
+        await Assert.That(output).DoesNotContain("hint: re-run with --verbose for the full per-rule breakdown");
+    }
+
+    [Test]
+    public async Task WriteSummary_NotVerbose_TruncatesPerRuleBreakdown_WhenMoreThanTenRules()
+    {
+        var diagnostics = new List<Diagnostic>(capacity: 12);
+        for (var i = 0; i < 11; i++)
+        {
+            diagnostics.Add(new Diagnostic(
+                DiagnosticSeverity.Warning,
+                "msg",
+                new TextRange(0, 1, i + 1, 1, i + 1, 2),
+                RuleId: $"rule-{i:D2}",
+                FilePath: "a.yml"));
+        }
+
+        using var sw = new StringWriter();
+        CheckCommand.WriteSummary(sw, diagnostics, 1, verbose: false);
+        var output = sw.ToString();
+
+        await Assert.That(output).Contains("| rule-00");
+        await Assert.That(output).Contains("| rule-09");
+        await Assert.That(output).DoesNotContain("| rule-10");
+        await Assert.That(output).Contains("hint: re-run with --verbose for the full per-rule breakdown");
+    }
+
+    [Test]
+    public async Task WriteSummary_NotVerbose_ShowPerFileFalse_StillShowsPerRuleBreakdown()
+    {
+        var diagnostics = new List<Diagnostic>
+        {
+            new(DiagnosticSeverity.Error, "msg", new TextRange(0, 1, 1, 1, 1, 2), RuleId: "template-injection", FilePath: "a.yml"),
+        };
+
+        using var sw = new StringWriter();
+        CheckCommand.WriteSummary(sw, diagnostics, 1, verbose: false, showPerFile: false);
+        var output = sw.ToString();
+
+        await Assert.That(output).DoesNotContain("| a.yml");
+        await Assert.That(output).Contains("| template-injection");
     }
 
     [Test]
@@ -300,7 +340,7 @@ public sealed class WriteSummaryTests
         var output = sw.ToString();
 
         await Assert.That(output).Contains("| template-injection");
-        await Assert.That(output).DoesNotContain("hint: re-run with --verbose for a per-rule breakdown");
+        await Assert.That(output).DoesNotContain("hint: re-run with --verbose for the full per-rule breakdown");
     }
 
     [Test]
@@ -315,7 +355,7 @@ public sealed class WriteSummaryTests
         CheckCommand.WriteSummary(sw, diagnostics, 1, verbose: false, showPerFile: false);
         var output = sw.ToString();
 
-        await Assert.That(output).DoesNotContain("hint: re-run with --verbose for a per-rule breakdown");
+        await Assert.That(output).DoesNotContain("hint: re-run with --verbose for the full per-rule breakdown");
     }
 
     [Test]
@@ -330,7 +370,7 @@ public sealed class WriteSummaryTests
         CheckCommand.WriteSummary(sw, diagnostics, 1, verbose: false);
         var output = sw.ToString();
 
-        await Assert.That(output).DoesNotContain("hint: re-run with --verbose for a per-rule breakdown");
+        await Assert.That(output).DoesNotContain("hint: re-run with --verbose for the full per-rule breakdown");
     }
 
     [Test]
@@ -1130,8 +1170,8 @@ public sealed class WriteSummaryTests
             await Assert.That(summary).Contains("## Seiton");
             await Assert.That(summary).Contains("1 error, 1 warning in 2 files");
             await Assert.That(summary).Contains("| ci.yml");
-            await Assert.That(stderr.ToString()).Contains("hint: re-run with --verbose for a per-rule breakdown");
-            await Assert.That(summary).DoesNotContain("per-rule breakdown");
+            await Assert.That(stderr.ToString()).DoesNotContain("hint: re-run with --verbose for the full per-rule breakdown");
+            await Assert.That(summary).Contains("| rule-a");
         }
         finally
         {
@@ -1211,11 +1251,11 @@ public sealed class WriteSummaryTests
 
             var stderrText = stderr.ToString();
             await Assert.That(stderrText).Contains("hint: use --min-severity error");
-            await Assert.That(stderrText).Contains("hint: re-run with --verbose for a per-rule breakdown");
+            await Assert.That(stderrText).DoesNotContain("hint: re-run with --verbose for the full per-rule breakdown");
 
             var summary = await File.ReadAllTextAsync(summaryPath);
             await Assert.That(summary).DoesNotContain("hint:");
-            await Assert.That(summary).DoesNotContain("per-rule breakdown");
+            await Assert.That(summary).Contains("| rule-a");
         }
         finally
         {

@@ -213,7 +213,33 @@ contextに限らず、exclusionの前に --fixを試すように指示するべ�
 4. **`Seiton_CLI_spec.md`** にサマリー出力契約を追記（デフォルト = ファイル別 + ルール別 Top N、verbose = 全ルール）
 5. fix サマリーも同様に **Would Fix / Fixed の Top N** を非 verbose で表示するか検討（fix フィードバックも高評価のため一貫性が有用）
 
-**検証:** [WriteSummaryTests.cs](../../tests/Seiton.Tests/WriteSummaryTests.cs) を更新。6 ルール以上の fixture で Top 5 の切り捨てを確認。
+**検証:** [WriteSummaryTests.cs](../../tests/Seiton.Tests/WriteSummaryTests.cs) を更新。11 ルールの fixture で Top 10 の切り捨てを確認。
+
+**実装状況（2026-06-08）:** ✅ 完了
+
+| 項目 | 内容 |
+|------|------|
+| **Top N の選定** | **10 件**。5 件は初回スキャン（46 errors / 複数ルール種）で 6 番目以降が見えなくなる。10 件なら ≤10 ルールの repo では全件表示、>10 のときのみ truncation + hint |
+| 実装 | `DefaultPerRuleBreakdownTopN = 10`。非 verbose でも `WritePerRuleBreakdown` を呼び、`WritePerRuleCountTable` に `maxRows` を追加。distinct rules > 10 のときのみ `hint: ... full per-rule breakdown` |
+| テスト | `WriteSummary_NotVerbose_ShowsTopTenPerRuleBreakdown`、truncation（11 rules）、`showPerFile: false` でも rule 表表示。67 WriteSummaryTests pass |
+| 仕様 | `Seiton_CLI_spec.md` §6.4 を更新 |
+
+**ベンチマーク（`StepSummaryOutputBenchmark`、実装前 → 実装後）:**
+
+| Method | Before Mean | After Mean | Δ Mean | Before Alloc | After Alloc |
+|--------|-------------|------------|--------|--------------|-------------|
+| WriteSummary stderr (text) | 10.33 µs | 18.30 µs | +77%* | 2.19 KB | 3.63 KB (+66%*) |
+| WriteSummary step summary | 358.87 µs | 364.30 µs | +1.5% | 9.57 KB | 15.59 KB (+63%*) |
+
+\* 実装前は rule 表を出力していなかったため、**意図した機能追加分**のコスト。絶対値は stderr ~18 µs / +1.4 KB、step summary ~6 KB 増で lint 全体に対して negligible。+10% 閾値は「同一出力との比較」には適用せず、追加出力に見合うコストと評価。
+
+**セルフレビュー:**
+
+| 指摘 | 対応 |
+|------|------|
+| hint が常に出てうるさい | ≤10 distinct rules では hint 非表示に変更 |
+| fix サマリーの Top N | 本タスクは lint サマリー（C-1）のみ。fix は別タスク |
+| 性能 | `maxRows` で列幅計算・出力行を限定。distinct rule 数は通常小さく sort コストは negligible |
 
 ---
 
@@ -325,7 +351,7 @@ contextに限らず、exclusionの前に --fixを試すように指示するべ�
 | 優先度 | ID | 内容 | 種別 |
 |--------|-----|------|------|
 | ~~**P1**~~ | B-2 | `run-secrets-context-direct-use` の env ブロック挿入 fix | ✅ 完了（2026-06-08） |
-| **P1** | C-1 | デフォルト出力にルール別 Top N | 実装 + CLI spec |
+| ~~**P1**~~ | C-1 | デフォルト出力にルール別 Top N（10 件） | ✅ 完了（2026-06-08） |
 | **P1** | B-3 | context 系は fix 優先 — adoption / fix-mode ドキュメント | ドキュメント |
 | **P2** | A-3 | `env-var` の `help:` と rules.md 代替パターン | 実装（help のみ）+ docs |
 | **P2** | C-4 | duplicate exclusion の位置情報改善 | 実装（段階的） |
