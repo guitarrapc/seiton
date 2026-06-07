@@ -191,18 +191,6 @@ exclusions:
 
 Prefer omitted `rules` for readability. `rules: ["*"]` is supported for explicitness/tooling compatibility.
 
-### Mixed training repository recipe
-
-```yaml
-discovery:
-  skip-agentic-workflows: true
-exclusions:
-  - file: ".github/workflows/*.lock.yml"
-  - file: ".github/workflows/injection-attack-via-context.yaml"
-  - file: ".github/workflows/agentics-maintenance.yml"
-    rules: ["*"]
-```
-
 ### Suppress within a specific job
 
 ```yaml
