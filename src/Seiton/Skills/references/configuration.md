@@ -168,16 +168,6 @@ rules:
 
 Requires `GITHUB_TOKEN` or `SEITON_GITHUB_TOKEN`.
 
-### Suppress a rule for specific files
-
-```yaml
-exclusions:
-  - file: ".github/workflows/legacy-*.yml"
-    rules:
-      - unpinned-uses
-      - runner-no-latest
-```
-
 ### File-only exclusion (`rules` omitted or `["*"]`)
 
 Both forms below suppress all rules for matching files:
@@ -190,6 +180,16 @@ exclusions:
 ```
 
 Prefer omitted `rules` for readability. `rules: ["*"]` is supported for explicitness/tooling compatibility.
+
+### Suppress a rule for specific files
+
+```yaml
+exclusions:
+  - file: ".github/workflows/legacy-*.yml"
+    rules:
+      - unpinned-uses
+      - runner-no-latest
+```
 
 ### Suppress within a specific job
 

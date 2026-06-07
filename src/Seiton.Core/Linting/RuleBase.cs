@@ -91,6 +91,11 @@ public abstract class RuleBase : IRule
         AddDiagnostic(DiagnosticSeverity.Warning, message, location);
     }
 
+    protected void AddStepWarning(Step step, string message, TextRange location, string? help)
+    {
+        AddDiagnostic(DiagnosticSeverity.Warning, message, location, help: help);
+    }
+
     protected void AddStepWarning(Step step, string message, TextRange location, DiagnosticFix fix)
     {
         AddDiagnostic(DiagnosticSeverity.Warning, message, location, fix);
@@ -146,6 +151,11 @@ public abstract class RuleBase : IRule
         AddDiagnostic(DiagnosticSeverity.Warning, message, location);
     }
 
+    protected void AddJobWarning(Job job, string message, TextRange location, string? help)
+    {
+        AddDiagnostic(DiagnosticSeverity.Warning, message, location, help: help);
+    }
+
     protected void AddJobWarning(Job job, string message, TextRange location, DiagnosticFix fix)
     {
         AddDiagnostic(DiagnosticSeverity.Warning, message, location, fix);
@@ -179,6 +189,11 @@ public abstract class RuleBase : IRule
     protected void AddWorkflowWarning(Workflow workflow, string message, TextRange location)
     {
         AddDiagnostic(DiagnosticSeverity.Warning, message, location);
+    }
+
+    protected void AddWorkflowWarning(Workflow workflow, string message, TextRange location, string? help)
+    {
+        AddDiagnostic(DiagnosticSeverity.Warning, message, location, help: help);
     }
 
     protected void AddWorkflowInfo(Workflow workflow, string message, TextRange location)

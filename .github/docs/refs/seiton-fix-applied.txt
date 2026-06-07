@@ -1,0 +1,74 @@
+verbose: config: D:\github\guitarrapc\githubactions-lab\.github\seiton.yaml (discovered under cwd D:\github\guitarrapc\githubactions-lab)
+verbose: discovery: searching under cwd D:\github\guitarrapc\githubactions-lab
+verbose: discovery: found D:\github\guitarrapc\githubactions-lab\.github\workflows
+verbose: discovery: 120 file(s) resolved
+verbose: discovery: skipped D:\github\guitarrapc\githubactions-lab\.github\workflows\monthly-oss-repo-status.lock.yml (agentic workflow)
+verbose: config: fix.pinning.enable-network=true (source: config)
+verbose: config: fix.images.enable-network=true (source: config)
+verbose: rules: 59 enabled, 1 disabled (workflow)
+verbose: rules: disabled: concurrency-limits
+verbose: network: resolved 1 pin(s) for D:\github\guitarrapc\githubactions-lab\.github\workflows\container-job.yaml in 1046.9 ms
+verbose: network: resolved 1 pin(s) for D:\github\guitarrapc\githubactions-lab\.github\workflows\container-service.yaml in 618.5 ms
+verbose: network: resolved 1 pin(s) for D:\github\guitarrapc\githubactions-lab\.github\workflows\dotnet-build-only-tag.yaml in 121.6 ms
+verbose: network: resolved 1 pin(s) for D:\github\guitarrapc\githubactions-lab\.github\workflows\dotnet-build.yaml in 0.0 ms
+verbose: suppressed: 36 diagnostic(s) (run-env-context-direct-use: 28, dangerous-triggers: 2, deny-inherit-secrets: 2, unpinned-uses: 2, run-inputs-context-direct-use: 1, run-secrets-context-direct-use: 1)
+verbose: excluded: 2 file(s): D:\github\guitarrapc\githubactions-lab\.github\workflows\agentics-maintenance.yml, D:\github\guitarrapc\githubactions-lab\.github\workflows\injection-attack-via-context.yaml
+Fixed 5 of 13 issues in 9 files (8 remaining)
+
+| File                             | Fixed | Remaining |
+|----------------------------------|------:|----------:|
+| matrix-secret.yaml               |     0 |         3 |
+| job-needs-skip-handling-bad.yaml |     0 |         2 |
+| merge-branch.yaml                |     0 |         2 |
+| _reusable-workflow-called.yaml   |     0 |         1 |
+| cache.yaml                       |     1 |         0 |
+| container-job.yaml               |     1 |         0 |
+| container-service.yaml           |     1 |         0 |
+| dotnet-build-only-tag.yaml       |     1 |         0 |
+| dotnet-build.yaml                |     1 |         0 |
+
+| Rule            | Fixed |
+|-----------------|------:|
+| unpinned-image  |     4 |
+| if-expr-wrapper |     1 |
+8 warnings remain in 4 files (2 excluded, 36 suppressed)
+
+| Rule               | Remaining |
+|--------------------|----------:|
+| env-var            |         3 |
+| unredacted-secrets |         3 |
+| if-cond            |         2 |
+hint: use --min-severity error to treat warnings as non-blocking in CI
+warning[unredacted-secrets]: run script may print secret-derived variable 'APPLES' without masking; avoid echo/printf/Write-Host of secret values
+  --> .github/workflows/_reusable-workflow-called.yaml:61:35
+   |
+
+warning[if-cond]: constant expression "false" in condition. remove the if: section
+  --> .github/workflows/job-needs-skip-handling-bad.yaml:11:9
+   |
+
+warning[if-cond]: constant expression "false" in condition. remove the if: section
+  --> .github/workflows/job-needs-skip-handling-bad.yaml:20:9
+   |
+
+warning[env-var]: workflow.env key 'fruit' is not portable; use [A-Z_][A-Z0-9_]* naming
+  --> .github/workflows/matrix-secret.yaml:10:3
+   |
+
+warning[unredacted-secrets]: run script may print secret-derived variable 'SECRET' without masking; avoid echo/printf/Write-Host of secret values
+  --> .github/workflows/matrix-secret.yaml:30:49
+   |
+
+warning[unredacted-secrets]: run script may print secret-derived variable 'SECRET' without masking; avoid echo/printf/Write-Host of secret values
+  --> .github/workflows/matrix-secret.yaml:33:48
+   |
+
+warning[env-var]: job.env key 'upstream' is not portable; use [A-Z_][A-Z0-9_]* naming
+  --> .github/workflows/merge-branch.yaml:17:7
+   |
+
+warning[env-var]: job.env key 'branch' is not portable; use [A-Z_][A-Z0-9_]* naming
+  --> .github/workflows/merge-branch.yaml:18:7
+   |
+
+verbose: total: 119 file(s) processed, 5 modified in 1839.7 ms

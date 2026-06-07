@@ -6,25 +6,28 @@ namespace Seiton.Core.Linting.Rules;
 /// <summary>Validates environment variable name conventions in <c>env:</c> blocks.</summary>
 public sealed class EnvVarRule() : RuleBase(RuleId.EnvVar)
 {
+    private const string NonPortableNameHelp =
+        "rename to UPPER_SNAKE_CASE (e.g. upstream -> UPSTREAM) and update all references; or pass ${{ inputs.* }} directly in with: when the value is only forwarded once";
+
     public override string Name => "Env Var Rule";
 
     public override void VisitWorkflowPre(Workflow workflow)
     {
         base.VisitWorkflowPre(workflow);
         ValidateEnv(workflow.Env, static (rule, message, location, target) =>
-            rule.AddWorkflowWarning(target, message, location), workflow, "workflow.env");
+            rule.AddWorkflowWarning(target, message, location, NonPortableNameHelp), workflow, "workflow.env");
     }
 
     public override void VisitJobPre(Job job)
     {
         ValidateEnv(job.Env, static (rule, message, location, target) =>
-            rule.AddJobWarning(target, message, location), job, "job.env");
+            rule.AddJobWarning(target, message, location, NonPortableNameHelp), job, "job.env");
     }
 
     public override void VisitStep(Step step)
     {
         ValidateEnv(step.Env, static (rule, message, location, target) =>
-            rule.AddStepWarning(target, message, location), step, "step.env");
+            rule.AddStepWarning(target, message, location, NonPortableNameHelp), step, "step.env");
     }
 
     private void ValidateEnv<TTarget>(

@@ -2436,6 +2436,137 @@ public sealed partial class RuleInterfaceTests
     }
 
     [Test]
+    public async Task LintEngine_RunSecretsContextDirectUse_Fix_InsertsEnvAndReplacesExpression_WhenNoExistingMapping()
+    {
+        var yaml = """
+        on: push
+        jobs:
+            build:
+                runs-on: ubuntu-latest
+                steps:
+                    - run: echo "${{ secrets.MY_TOKEN }}"
+        """;
+
+        var sourceBytes = Encoding.UTF8.GetBytes(yaml);
+        var engine = new LintEngine([new RunSecretsContextDirectUseRule()]);
+        using var result = engine.Check(sourceBytes, "run-secrets-fix-no-mapping.yml", new LintConfig { Fix = new FixConfig { Enabled = true } });
+        var diagnostic = result.Diagnostics.First(x => x.RuleId == "run-secrets-context-direct-use");
+
+        await Assert.That(diagnostic.Fix is not null).IsTrue();
+
+        var fixedBytes = FixEngine.Apply(sourceBytes, diagnostic.Fix!.Value.Edits);
+        var fixedText = Encoding.UTF8.GetString(fixedBytes).Replace("\r\n", "\n", StringComparison.Ordinal);
+
+        await Assert.That(fixedText.Contains("${MY_TOKEN}", StringComparison.Ordinal)).IsTrue();
+        var runLine = fixedText.Split('\n').First(l => l.Contains("run:", StringComparison.Ordinal));
+        await Assert.That(runLine.Contains("${{ secrets.MY_TOKEN }}", StringComparison.Ordinal)).IsFalse();
+        await Assert.That(fixedText.Contains("env:", StringComparison.Ordinal)).IsTrue();
+        await Assert.That(fixedText.Contains("MY_TOKEN: ${{ secrets.MY_TOKEN }}", StringComparison.Ordinal)).IsTrue();
+
+        using var relint = engine.Check(fixedBytes, "run-secrets-fix-no-mapping.yml");
+        await Assert.That(relint.Diagnostics.Any(x => x.RuleId == "run-secrets-context-direct-use")).IsFalse();
+    }
+
+    [Test]
+    public async Task LintEngine_RunSecretsContextDirectUse_Fix_InsertsEnvAndReplacesPowershell_WhenNoExistingMapping()
+    {
+        var yaml = """
+        on: push
+        jobs:
+            build:
+                runs-on: windows-latest
+                steps:
+                    - shell: pwsh
+                      run: Write-Host "${{ secrets.MY_TOKEN }}"
+        """;
+
+        var sourceBytes = Encoding.UTF8.GetBytes(yaml);
+        var engine = new LintEngine([new RunSecretsContextDirectUseRule()]);
+        using var result = engine.Check(sourceBytes, "run-secrets-fix-no-mapping-pwsh.yml", new LintConfig { Fix = new FixConfig { Enabled = true } });
+        var diagnostic = result.Diagnostics.First(x => x.RuleId == "run-secrets-context-direct-use");
+
+        await Assert.That(diagnostic.Fix is not null).IsTrue();
+
+        var fixedBytes = FixEngine.Apply(sourceBytes, diagnostic.Fix!.Value.Edits);
+        var fixedText = Encoding.UTF8.GetString(fixedBytes).Replace("\r\n", "\n", StringComparison.Ordinal);
+
+        await Assert.That(fixedText.Contains("$env:MY_TOKEN", StringComparison.Ordinal)).IsTrue();
+        var runLine = fixedText.Split('\n').First(l => l.Contains("run:", StringComparison.Ordinal));
+        await Assert.That(runLine.Contains("${{ secrets.MY_TOKEN }}", StringComparison.Ordinal)).IsFalse();
+        await Assert.That(fixedText.Contains("MY_TOKEN: ${{ secrets.MY_TOKEN }}", StringComparison.Ordinal)).IsTrue();
+
+        using var relint = engine.Check(fixedBytes, "run-secrets-fix-no-mapping-pwsh.yml");
+        await Assert.That(relint.Diagnostics.Any(x => x.RuleId == "run-secrets-context-direct-use")).IsFalse();
+    }
+
+    [Test]
+    public async Task LintEngine_RunSecretsContextDirectUse_Fix_InsertsEnvWithBracketAccess_WhenNoExistingMapping()
+    {
+        var yaml = """
+        on: push
+        jobs:
+            build:
+                runs-on: ubuntu-latest
+                steps:
+                    - run: echo "${{ secrets['MY_TOKEN'] }}"
+        """;
+
+        var sourceBytes = Encoding.UTF8.GetBytes(yaml);
+        var engine = new LintEngine([new RunSecretsContextDirectUseRule()]);
+        using var result = engine.Check(sourceBytes, "run-secrets-fix-bracket.yml", new LintConfig { Fix = new FixConfig { Enabled = true } });
+        var diagnostic = result.Diagnostics.First(x => x.RuleId == "run-secrets-context-direct-use");
+
+        await Assert.That(diagnostic.Fix is not null).IsTrue();
+
+        var fixedBytes = FixEngine.Apply(sourceBytes, diagnostic.Fix!.Value.Edits);
+        var fixedText = Encoding.UTF8.GetString(fixedBytes).Replace("\r\n", "\n", StringComparison.Ordinal);
+
+        await Assert.That(fixedText.Contains("${MY_TOKEN}", StringComparison.Ordinal)).IsTrue();
+        await Assert.That(fixedText.Contains("MY_TOKEN: ${{ secrets.MY_TOKEN }}", StringComparison.Ordinal)).IsTrue();
+
+        using var relint = engine.Check(fixedBytes, "run-secrets-fix-bracket.yml");
+        await Assert.That(relint.Diagnostics.Any(x => x.RuleId == "run-secrets-context-direct-use")).IsFalse();
+    }
+
+    [Test]
+    public async Task LintEngine_RunSecretsContextDirectUse_Fix_DoesNotAttach_WithoutFixEnabled_WhenNoExistingMapping()
+    {
+        var yaml = """
+        on: push
+        jobs:
+            build:
+                runs-on: ubuntu-latest
+                steps:
+                    - run: echo "${{ secrets.MY_TOKEN }}"
+        """;
+
+        using var result = new LintEngine([new RunSecretsContextDirectUseRule()])
+            .Check(Encoding.UTF8.GetBytes(yaml), "run-secrets-no-fix-disabled.yml");
+        var diagnostic = result.Diagnostics.First(x => x.RuleId == "run-secrets-context-direct-use");
+
+        await Assert.That(diagnostic.Fix is null).IsTrue();
+    }
+
+    [Test]
+    public async Task LintEngine_RunSecretsContextDirectUse_Fix_DoesNotAttach_InsideSingleQuotes()
+    {
+        var yaml = """
+        on: push
+        jobs:
+            build:
+                runs-on: ubuntu-latest
+                steps:
+                    - run: echo '${{ secrets.MY_TOKEN }}'
+        """;
+
+        using var result = new LintEngine([new RunSecretsContextDirectUseRule()])
+            .Check(Encoding.UTF8.GetBytes(yaml), "run-secrets-no-fix-single-quotes.yml", new LintConfig { Fix = new FixConfig { Enabled = true } });
+        var diagnostic = result.Diagnostics.First(x => x.RuleId == "run-secrets-context-direct-use");
+
+        await Assert.That(diagnostic.Fix is null).IsTrue();
+    }
+
+    [Test]
     public async Task LintEngine_RunInputsContextDirectUse_Fix_ReplacesSimpleReferenceWithMappedVariable()
     {
         var yaml = """

@@ -79,11 +79,15 @@ public sealed class InstallCommandTests
 
             var reference = File.ReadAllText(referencePath);
             await Assert.That(reference).Contains("--min-severity error");
+            await Assert.That(reference).Contains("Warnings alone still produce exit code");
             await Assert.That(reference).Contains("run-env-context-direct-use");
             await Assert.That(reference).Contains("impostor-commit");
+            await Assert.That(reference).Contains("Fix before exclusions");
+            await Assert.That(reference).Contains("seiton --fix --dry-run");
 
             var skill = File.ReadAllText(Path.Combine(skillDir, "SKILL.md"));
             await Assert.That(skill).Contains("references/adoption-workflow.md");
+            await Assert.That(skill).Contains("Warnings-only runs still exit `1` by default");
         }
         finally
         {
@@ -388,6 +392,9 @@ public sealed class InstallCommandTests
 
             var fixContent = File.ReadAllText(Path.Combine(refsDir, "fix-mode.md"));
             await Assert.That(fixContent).Contains("--dry-run");
+            await Assert.That(fixContent).Contains("Fix before exclusions");
+            await Assert.That(fixContent).Contains("run-*-context-direct-use");
+            await Assert.That(fixContent).Contains("$env:MY_TOKEN");
 
             var configContent = File.ReadAllText(Path.Combine(refsDir, "configuration.md"));
             await Assert.That(configContent).Contains("seiton.yaml");
@@ -562,6 +569,7 @@ public sealed class InstallCommandTests
         var activeContent = string.Join('\n', content!.Split('\n').Where(line => !line.TrimStart().StartsWith('#')));
         await Assert.That(activeContent).Contains("guitarrapc/setup-seiton@v1");
         await Assert.That(activeContent).Contains("run: seiton --include-actions");
+        await Assert.That(content).Contains("--min-severity error");
         await Assert.That(activeContent).DoesNotContain("docker run --rm");
         await Assert.That(activeContent).DoesNotContain("--format sarif");
     }

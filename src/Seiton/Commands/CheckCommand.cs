@@ -10,6 +10,8 @@ namespace Seiton.Commands;
 
 internal static class CheckCommand
 {
+    internal const int DefaultPerRuleBreakdownTopN = 10;
+
     internal readonly record struct CheckSummaryMetadata(int ExcludedCount = 0, int SuppressedCount = 0);
 
     private static readonly IReadOnlyDictionary<string, int> EmptySuppressedByRule =
@@ -62,6 +64,12 @@ internal static class CheckCommand
 
         if (verboseLogger.IsEnabled)
             verboseLogger.Log("config", configResolution.FormatVerboseMessage());
+
+        var discoveryDirectory = configResolution.DiscoveryStartDirectory ?? Environment.CurrentDirectory;
+        if (ShouldSuggestIncludeActions(includeActions, discoveryDirectory))
+        {
+            WriteIncludeActionsNotice(Console.Error);
+        }
 
         // Resolve input files
         string[] resolvedFiles;
@@ -295,10 +303,7 @@ internal static class CheckCommand
         WriteSummary(allDiagnostics, resolvedFiles.Length, resolvedFormat, verboseLevel >= VerboseLevel.Summary, showExitHint: minSeverity is null, metadata: summaryMetadata);
         if (ShouldShowInitHint(configResolution, resolvedFormat, allDiagnostics))
         {
-            var shouldSuggestIncludeActions = ShouldSuggestIncludeActions(
-                includeActions,
-                configResolution.DiscoveryStartDirectory ?? Environment.CurrentDirectory);
-            WriteInitHint(Console.Error, suggestIncludeActions: shouldSuggestIncludeActions);
+            WriteInitHint(Console.Error);
         }
 
         if (verboseLogger.IsEnabled)
@@ -356,35 +361,38 @@ internal static class CheckCommand
             WriteSummaryContent(writer, diagnostics, fileCount, verbose, showPerFile, metadata, isRemainMode, errors, warnings, infos);
         }
 
-        if (!verbose && showPerFile && ShouldOfferPerRuleBreakdownHint(diagnostics))
-            writer.WriteLine("hint: re-run with --verbose for a per-rule breakdown");
+        if (!verbose && ShouldOfferFullPerRuleBreakdownHint(diagnostics))
+            writer.WriteLine("hint: re-run with --verbose for the full per-rule breakdown");
 
         if (showExitHint && errors == 0 && warnings > 0)
             writer.WriteLine("hint: use --min-severity error to treat warnings as non-blocking in CI");
     }
 
-    private static bool ShouldOfferPerRuleBreakdownHint(List<Diagnostic> diagnostics)
+    private static bool ShouldOfferFullPerRuleBreakdownHint(List<Diagnostic> diagnostics)
     {
         if (diagnostics.Count == 0)
         {
             return false;
         }
 
-        var hasFileBreakdown = false;
-        var hasRuleBreakdown = false;
+        var distinctRules = 0;
+        HashSet<string>? seen = null;
         for (var i = 0; i < diagnostics.Count; i++)
         {
-            if (diagnostics[i].FilePath is not null)
+            var ruleId = diagnostics[i].RuleId;
+            if (ruleId is null)
             {
-                hasFileBreakdown = true;
+                continue;
             }
 
-            if (diagnostics[i].RuleId is not null)
+            seen ??= new HashSet<string>(StringComparer.Ordinal);
+            if (!seen.Add(ruleId))
             {
-                hasRuleBreakdown = true;
+                continue;
             }
 
-            if (hasFileBreakdown && hasRuleBreakdown)
+            distinctRules++;
+            if (distinctRules > DefaultPerRuleBreakdownTopN)
             {
                 return true;
             }
@@ -462,9 +470,10 @@ internal static class CheckCommand
             WritePerFileBreakdown(writer, diagnostics);
         }
 
-        if (verbose && diagnostics.Count > 0)
+        if (diagnostics.Count > 0)
         {
-            WritePerRuleBreakdown(writer, diagnostics, isRemainMode);
+            var maxRows = verbose ? int.MaxValue : DefaultPerRuleBreakdownTopN;
+            WritePerRuleBreakdown(writer, diagnostics, isRemainMode, maxRows);
         }
     }
 
@@ -584,7 +593,7 @@ internal static class CheckCommand
         }
     }
 
-    private static void WritePerRuleBreakdown(TextWriter writer, List<Diagnostic> diagnostics, bool isRemainMode = false)
+    private static void WritePerRuleBreakdown(TextWriter writer, List<Diagnostic> diagnostics, bool isRemainMode = false, int maxRows = int.MaxValue)
     {
         var ruleCounts = new Dictionary<string, int>(StringComparer.Ordinal);
         for (var i = 0; i < diagnostics.Count; i++)
@@ -597,13 +606,14 @@ internal static class CheckCommand
                 ruleCounts[ruleId] = count + 1;
         }
 
-        WritePerRuleCountTable(writer, ruleCounts, isRemainMode ? "Remaining" : "Count");
+        WritePerRuleCountTable(writer, ruleCounts, isRemainMode ? "Remaining" : "Count", maxRows);
     }
 
     internal static void WritePerRuleCountTable(
         TextWriter writer,
         IReadOnlyDictionary<string, int> ruleCounts,
-        string countHeader)
+        string countHeader,
+        int maxRows = int.MaxValue)
     {
         if (ruleCounts.Count == 0)
         {
@@ -622,9 +632,15 @@ internal static class CheckCommand
             return byCount != 0 ? byCount : string.Compare(a.Key, b.Key, StringComparison.Ordinal);
         });
 
+        var rowCount = sorted.Count;
+        if (maxRows < rowCount)
+        {
+            rowCount = maxRows;
+        }
+
         var countHeaderLen = countHeader.Length;
         var maxRuleLen = 4;
-        for (var i = 0; i < sorted.Count; i++)
+        for (var i = 0; i < rowCount; i++)
         {
             if (sorted[i].Key.Length > maxRuleLen)
             {
@@ -633,7 +649,7 @@ internal static class CheckCommand
         }
 
         var maxCountLen = countHeaderLen;
-        for (var i = 0; i < sorted.Count; i++)
+        for (var i = 0; i < rowCount; i++)
         {
             var digits = CountDigits(sorted[i].Value);
             if (digits > maxCountLen)
@@ -656,7 +672,7 @@ internal static class CheckCommand
         writer.Write(new string('-', maxCountLen + 1));
         writer.WriteLine(":|");
 
-        for (var i = 0; i < sorted.Count; i++)
+        for (var i = 0; i < rowCount; i++)
         {
             var rule = sorted[i].Key;
             var count = sorted[i].Value;
@@ -962,13 +978,14 @@ internal static class CheckCommand
         return actionable >= 20;
     }
 
-    internal static void WriteInitHint(TextWriter writer, bool suggestIncludeActions = false)
+    internal static void WriteInitHint(TextWriter writer)
     {
         writer.WriteLine("hint: many issues detected with default config; run 'seiton init' to create .github/seiton.yaml and customize exclusions");
-        if (suggestIncludeActions)
-        {
-            writer.WriteLine("hint: this repository contains .github/actions; re-run with '--include-actions' to lint composite actions too");
-        }
+    }
+
+    internal static void WriteIncludeActionsNotice(TextWriter writer)
+    {
+        writer.WriteLine("notice: composite actions are not included; re-run with --include-actions");
     }
 
     internal static bool ShouldSuggestIncludeActions(bool includeActions, string? discoveryStartDirectory)

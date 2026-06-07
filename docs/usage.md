@@ -58,6 +58,12 @@ To lint composite actions under `.github/actions/` as well, pass `--include-acti
 seiton --include-actions
 ```
 
+When `.github/actions/` exists and you run `seiton` without `--include-actions`, seiton prints an early notice before discovery:
+
+```text
+notice: composite actions are not included; re-run with --include-actions
+```
+
 Pass explicit file paths to lint specific files:
 
 ```sh
@@ -235,6 +241,8 @@ seiton validate-config
 ```
 
 Catches YAML/schema issues, unknown rule IDs, duplicate exclusions, and **unknown job IDs in job-scoped exclusions** (by scanning matching workflow files under `.github/workflows/`). Configuration errors are reported against the config file path — not mixed into workflow lint output.
+
+Duplicate exclusion scopes emit a single `info` diagnostic on the config file (rule id `parse` in text/JSON output). The message lists each duplicate entry as `exclusions[N] (line L)` so you can jump to the YAML without searching.
 
 Use `--verbose` to inspect config resolution and quick validation stats (parse time, enabled rules, exclusions, job-id cross-check):
 
@@ -686,6 +694,8 @@ jobs:
 | `1` | One or more warnings, errors, or fixable diagnostics found. |
 | `2` | Invalid command-line options. |
 | `3` | Fatal error (for example config parse failure or unreadable file). |
+
+**CI:** By default, warnings alone still produce exit code `1`. To fail the job only on errors, pass `--min-severity error`. Seiton also prints this hint when warnings are the only actionable findings.
 
 ---
 

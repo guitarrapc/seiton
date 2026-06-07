@@ -350,6 +350,14 @@ When no `FILES` arguments are given to `check` / `fix`:
 
 Only `<cwd>/.github/workflows/` and `<cwd>/.github/actions/` are considered. To lint files outside `cwd`, pass explicit `FILES` paths or run `seiton` from the intended repository root.
 
+When `<cwd>/.github/actions/` exists and `--include-actions` is not set, `check` emits a one-line stderr notice **before** file discovery begins (regardless of `--verbose` or eventual diagnostic count):
+
+```
+notice: composite actions are not included; re-run with --include-actions
+```
+
+`notice:` lines are informational only; they do not affect exit code. They are not written to the job summary.
+
 **Lessons learned (nested CI):** When a job checks out a parent repository at the workspace root and a child repository into a subdirectory (`path:` checkout), running `seiton` with `working-directory` set to the child must lint only the child's `.github/` tree. Parent-directory walks caused unintended lint of sibling checkouts (for example parent `.github/actions/` mixed with child `.github/workflows/`).
 
 Local action and reusable-workflow references inside workflow YAML (`uses: ./.github/actions/foo`, `uses: ../other/action.yml`) are resolved separately by the lint engine when analyzing each file; that reference resolution is not part of input discovery.
@@ -565,15 +573,7 @@ When at least one diagnostic has a file path, a per-file breakdown is emitted as
 - When at least one info diagnostic exists in the per-file breakdown, an `Infos` column is also emitted.
 - Files are sorted by total issue count descending, then by file name lexicographically.
 
-When the per-file breakdown is shown and at least one diagnostic has a `rule-id`, but `--verbose` is not set, stderr also emits:
-
-```
-hint: re-run with --verbose for a per-rule breakdown
-```
-
-This hint is not written to the job summary.
-
-In `-v` / `--verbose` mode with at least one diagnostic that has a `rule-id`, a per-rule breakdown is emitted as a markdown-style table, separated from the preceding output by a blank line:
+When at least one diagnostic has a `rule-id`, a per-rule breakdown is emitted as a markdown-style table (top 10 rules by count), separated from the preceding output by a blank line:
 
 ```
 | Rule          | Count |
@@ -586,6 +586,13 @@ In `-v` / `--verbose` mode with at least one diagnostic that has a `rule-id`, a 
 - In fix/dry-run mode (when `isRemainMode` is true), the count column is labeled "Remaining" to reflect these are post-fix residual diagnostics.
 - Column widths are dynamically computed to align values.
 - Rules are sorted by count descending, then by rule ID lexicographically.
+- At most **10** rules are shown in default (non-verbose) mode. When more than 10 distinct rule IDs are present, stderr also emits (not written to the job summary):
+
+```
+hint: re-run with --verbose for the full per-rule breakdown
+```
+
+In `-v` / `--verbose` mode, the same per-rule table is emitted with **no row limit** (all distinct rule IDs).
 
 In `-v` / `--verbose` mode, rule activation metadata is emitted once per document kind seen in the run:
 
@@ -720,7 +727,7 @@ When no diagnostics are emitted, stdout carries no diagnostic lines (same as `te
 After diagnostics, summary content (§6.4) is written as GitHub Flavored Markdown:
 
 - When `GITHUB_STEP_SUMMARY` is set to a writable file path, the summary is **appended** to that file (with a leading blank line if the file already has content).
-- The block starts with a `## Seiton` heading, followed by the same summary lines and markdown tables as §6.4 (counts, per-file breakdown, verbose per-rule breakdown, fix-mode tables).
+- The block starts with a `## Seiton` heading, followed by the same summary lines and markdown tables as §6.4 (counts, per-file breakdown, default top-10 per-rule breakdown, fix-mode tables).
 - `hint:` lines from §6.4 are **not** copied to the job summary; they remain on stderr only.
 
 When `GITHUB_STEP_SUMMARY` is unset or not writable, the full §6.4 summary is written to **stderr** only (same as `text` / `json` / `sarif`).
@@ -743,6 +750,8 @@ Progress (`--verbose`), configuration errors, init hints, fix diffs (when format
 | `1` | Lint issues found — at least one diagnostic was emitted. |
 | `2` | Invalid CLI options — argument parsing failed or unsupported option combination. |
 | `3` | Fatal error — config file error, I/O failure, or internal engine failure. |
+
+By default, warnings alone still produce exit code `1`. In CI, pass `--min-severity error` when warnings should not fail the job (see runtime hint in §6.4).
 
 For `--fix --check`: exits with `1` if any fixable diagnostic remains after post-lint filters such as `--min-severity` are applied.
 

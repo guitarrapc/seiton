@@ -860,6 +860,11 @@ public sealed class LintConfigLibraryTests
             && d.Message.Contains("matrix-secret.yaml", StringComparison.Ordinal)).ToArray();
         await Assert.That(duplicateDiagnostics).HasSingleItem();
         await Assert.That(duplicateDiagnostics[0].Message.Contains("appears 2 times", StringComparison.Ordinal)).IsTrue();
+        await Assert.That(duplicateDiagnostics[0].Message.Contains("exclusions[1]", StringComparison.Ordinal)).IsTrue();
+        await Assert.That(duplicateDiagnostics[0].Message.Contains("exclusions[2]", StringComparison.Ordinal)).IsTrue();
+        await Assert.That(duplicateDiagnostics[0].Message.Contains("(line 2)", StringComparison.Ordinal)).IsTrue();
+        await Assert.That(duplicateDiagnostics[0].Message.Contains("(line 5)", StringComparison.Ordinal)).IsTrue();
+        await Assert.That(duplicateDiagnostics[0].Location.StartLine).IsEqualTo(2);
     }
 
     [Test]
@@ -887,6 +892,12 @@ public sealed class LintConfigLibraryTests
             && d.Message.Contains("ci.yml", StringComparison.Ordinal)).ToArray();
         await Assert.That(duplicateDiagnostics).HasSingleItem();
         await Assert.That(duplicateDiagnostics[0].Message.Contains("appears 3 times", StringComparison.Ordinal)).IsTrue();
+        await Assert.That(duplicateDiagnostics[0].Message.Contains("exclusions[1]", StringComparison.Ordinal)).IsTrue();
+        await Assert.That(duplicateDiagnostics[0].Message.Contains("exclusions[2]", StringComparison.Ordinal)).IsTrue();
+        await Assert.That(duplicateDiagnostics[0].Message).Contains("exclusions[3] (line 8)");
+        await Assert.That(duplicateDiagnostics[0].Message).Contains("exclusions[1] (line 2)");
+        await Assert.That(duplicateDiagnostics[0].Message).Contains("exclusions[2] (line 5)");
+        await Assert.That(duplicateDiagnostics[0].Location.StartLine).IsEqualTo(2);
     }
 
     [Test]

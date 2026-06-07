@@ -32,6 +32,8 @@ jobs:
         with:
           seiton-version: 0.9.26
       # Default on GitHub Actions: --format github-actions (rich stdout + job summary).
+      # First adoption: fail only on errors until warnings are enforced:
+      # run: seiton --include-actions --min-severity error
       - name: Run seiton
         run: seiton --include-actions
 

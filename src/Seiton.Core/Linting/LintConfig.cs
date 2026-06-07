@@ -271,7 +271,8 @@ public sealed record IgnoreActionRule(string Pattern, IReadOnlyList<string>? Ref
 public sealed record LintExclusion(
     string File,
     IReadOnlyList<string>? Rules,
-    IReadOnlyList<string>? Jobs = null);
+    IReadOnlyList<string>? Jobs = null,
+    int SourceLine = 0);
 
 /// <summary>Configuration for the <c>fix:</c> section controlling auto-fix behavior.</summary>
 public sealed record FixConfig

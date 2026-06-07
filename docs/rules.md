@@ -794,6 +794,32 @@ jobs:
         run: echo ok "${FOO_BAR}"
 ```
 
+When a lowercase `env:` key only forwards an input or secret to a single `with:` field, you can often skip the intermediate variable and reference the context directly:
+
+```yaml
+# Avoid: lowercase env key used only to pass inputs into with:
+env:
+  upstream: ${{ inputs.upstream }}
+steps:
+  - uses: actions/checkout@v4
+    with:
+      ref: ${{ env.upstream }}
+
+# Option A: uppercase env key (update every reference)
+env:
+  UPSTREAM: ${{ inputs.upstream }}
+steps:
+  - uses: actions/checkout@v4
+    with:
+      ref: ${{ env.UPSTREAM }}
+
+# Option B: pass inputs directly when used once
+steps:
+  - uses: actions/checkout@v4
+    with:
+      ref: ${{ inputs.upstream }}
+```
+
 ---
 
 ### `if-cond`
@@ -1649,11 +1675,11 @@ jobs:
 
 **When fixing:**
 
-- Auto-fix can rewrite simple secret expressions only when a unique existing `env` mapping is available.
-- For compound expressions, move logic to `env:` and keep `run:` shell-variable-only.
+- Auto-fix rewrites simple `${{ secrets.KEY }}` / `${{ secrets['KEY'] }}` by reusing an existing unique `env` mapping when present, or inserts a step `env:` entry and rewrites to the shell variable when `fix` is enabled.
+- For compound expressions, move logic to `env:` manually and keep `run:` shell-variable-only; no fix is offered.
 - Confirm secrets are not printed after refactoring.
 
-Auto-fix replaces simple `${{ secrets.KEY }}` when an existing `env` mapping exists. For compound expressions, no fix is offered; a help message suggests moving the expression to an `env:` block.
+Auto-fix replaces simple secret expressions when fix mode is on (`seiton --fix` or `fix` enabled in config). With no existing mapping, it adds `env: SECRET_NAME: ${{ secrets.SECRET_NAME }}` and rewrites the `run:` reference. Ambiguous mappings, heredoc no-expand bodies, and shell single-quoted strings remain no-fix.
 
 ---
 
@@ -1709,7 +1735,7 @@ jobs:
 
 **Notes:**
 
-Auto-fix reuses an existing unique `env` mapping for the same input when available. Otherwise, for simple expressions, it inserts a step-local `env:` entry and rewrites the script to a shell variable. No fix is offered for compound expressions, no-expand heredocs, or shell single-quoted strings; a help message suggests moving the entire expression to an `env:` block. The env-insertion path additionally skips flow-style `env` and empty `env: {}`.
+Auto-fix reuses an existing unique `env` mapping for the same input when available. Otherwise, when `fix` is enabled, it inserts a step-local `env:` entry and rewrites simple or compound expressions to a shell variable. No fix is offered inside no-expand heredocs or shell single-quoted strings; a help message suggests moving the entire expression to an `env:` block when fix cannot apply. The env-insertion path additionally skips flow-style `env` and empty `env: {}`.
 
 ---
 
