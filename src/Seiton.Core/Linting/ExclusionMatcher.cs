@@ -6,6 +6,21 @@ namespace Seiton.Core.Linting;
 public static class ExclusionMatcher
 {
     /// <summary>
+    /// Returns <c>true</c> when <paramref name="workflowFilePath"/> matches an exclusion <c>file</c> glob pattern.
+    /// </summary>
+    public static bool MatchesWorkflowFile(string filePattern, string workflowFilePath)
+    {
+        if (string.IsNullOrWhiteSpace(filePattern))
+        {
+            return false;
+        }
+
+        var normalizedPattern = NormalizeExclusionPattern(filePattern.Trim());
+        var normalizedFilePath = NormalizePath(workflowFilePath);
+        return GlobMatch(normalizedPattern, normalizedFilePath);
+    }
+
+    /// <summary>
     /// Returns <c>true</c> when <paramref name="filePath"/> is fully excluded by a file-level
     /// exclusion entry (<c>rules</c> omitted or <c>rules: ["*"]</c>, and no <c>jobs</c> scope).
     /// </summary>
@@ -36,8 +51,7 @@ public static class ExclusionMatcher
                 continue;
             }
 
-            var normalizedPattern = NormalizeExclusionPattern(exclusion.File);
-            if (GlobMatch(normalizedPattern, normalizedFilePath))
+            if (MatchesWorkflowFile(exclusion.File, normalizedFilePath))
             {
                 return true;
             }

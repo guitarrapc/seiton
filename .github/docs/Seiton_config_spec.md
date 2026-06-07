@@ -187,6 +187,14 @@ exclusions:
 
 `validate-config` 時、正規化後に同一 `file` + 同一 `jobs` スコープの exclusion が複数ある場合、スコープごとに info 診断を **1 件** 出す（例: `exclusion for '.github/workflows/ci.yml' appears 2 times; consider merging rules into one entry`）。3 件以上重複しても診断は 1 件（最終件数を表示）。`file` パターンはパス区切り（`\` / `/`）を正規化して同一スコープとみなす。自動マージはしない。
 
+**`validate-config` の job-id 横断検証**（`jobs` スコープ付き exclusion のみ）:
+
+- CWD 配下の `.github/workflows/` を discovery し、各 exclusion の `file` パターンにマッチする workflow をパースして `jobs` 内の ID を検証する。
+- 未知の job-id は **設定ファイルパス** に error 診断（lint 時と同じメッセージ）。workflow ファイルの `error[parse]` とは混同しない。
+- `file` パターンが discovery 結果に 1 件もマッチしない場合は **warning**（CI でファイル未 checkout の可能性を考慮）。error にはしない。
+- マッチした workflow のみパースする（job-scoped exclusion が無い、またはパターン不一致のファイルは読まない）。
+- `--verbose` 時: `verbose: job-id-check: N workflow file(s) scanned for M job-scoped exclusion(s)` を stderr に出力。
+
 ### 2.3.1 `discovery`
 
 ファイル探索の挙動を制御する。

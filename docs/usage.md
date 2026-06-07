@@ -234,7 +234,9 @@ Validate the resolved config file. Useful in CI jobs that maintain `.github/seit
 seiton validate-config
 ```
 
-Use `--verbose` to inspect config resolution and quick validation stats (parse time, enabled rules, exclusions):
+Catches YAML/schema issues, unknown rule IDs, duplicate exclusions, and **unknown job IDs in job-scoped exclusions** (by scanning matching workflow files under `.github/workflows/`). Configuration errors are reported against the config file path — not mixed into workflow lint output.
+
+Use `--verbose` to inspect config resolution and quick validation stats (parse time, enabled rules, exclusions, job-id cross-check):
 
 ```sh
 seiton validate-config --verbose

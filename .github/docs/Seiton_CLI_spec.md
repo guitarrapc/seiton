@@ -79,6 +79,9 @@ Parse and validate the resolved config file.
   - parse elapsed time (`verbose: parse: ... ms`)
   - effective enabled-rule count (`verbose: rules: ... enabled`)
   - configured exclusion entry count (`verbose: exclusions: ... entry(s)`)
+  - job-scoped exclusion cross-check stats (`verbose: job-id-check: N workflow file(s) scanned for M job-scoped exclusion(s)`)
+
+When the config contains job-scoped `exclusions` (`jobs:` array), discovered workflow files matching each `file` pattern are parsed to validate job IDs **before** lint runs. Unknown job IDs are reported as errors on the config file path. Unmatched `file` patterns produce warnings only.
 
 Useful in CI jobs that maintain `.github/seiton.yaml` to catch configuration drift before lint runs.
 

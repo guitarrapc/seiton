@@ -33,7 +33,7 @@
 | B4 | 課題 | ルール別 Count テーブルの表示条件 | 軽 | **UX の非対称** | 表示条件の整理 |
 | B5 | 課題 | 旧リンターインライン抑制の移行 | 軽 | **移行支援不足**（機能欠如ではない） | **完了** — Agent Skill 参照 |
 | I1 | 情報 | 検出範囲の差異（和集合だが完全一致ではない） | — | 想定内 | **完了** — Agent Skill 参照 |
-| B6 | 課題 | `validate-config` が unknown job-id を検出しない | 中 | **B1 の派生** | B1 修正後に拡張 |
+| B6 | 課題 | `validate-config` が unknown job-id を検出しない | 中 | **B1 の派生** | **完了** |
 
 ---
 
@@ -140,7 +140,7 @@
 | `FixCommand` の LintConfig クローンで `ConfigFilePath` が落ちる | クローンに追加 |
 | `NormalizeExclusionPattern` の二重呼び出し | ループ内で 1 回に集約 |
 
-**ステータス**: B1 フェーズ A 完了。フェーズ B（`validate-config` 横断検証）は未着手。
+**ステータス**: B1 完了（フェーズ A + B6 でフェーズ B も完了）。
 
 ---
 
@@ -404,16 +404,33 @@ metadata なし gh-aw 生成物のヒューリスティック拡張（例: 先�
 
 #### 評価
 
-**妥当。** `ValidateCommand` は `LintConfigLibrary.ValidateFile` のみ実行し、workflow ファイルを読まない。unknown job-id は lint 時に各 workflow へ設定エラーとして付与される設計のため、フィードバックの「`validate-config` では検出されなかった」は事実。
+**妥当。** 従来の `validate-config` は `LintConfigLibrary.ValidateFile` のみで workflow を読まず、job-scoped exclusion の unknown job-id は lint 実行まで検出されなかった。
 
-ただし B1 のバグがあると、lint 時のエラーも大量かつ誤解を招くため、**B1 修正が先決**。
+#### 実装内容（B6 完了）
 
-#### 対応プラン
+| 対象 | 変更 |
+|------|------|
+| `ExclusionJobIdValidator` | 新規。job-scoped exclusion の `file` にマッチする workflow のみパースし job-id を検証 |
+| `ExclusionMatcher.MatchesWorkflowFile` | exclusion `file` glob の共有マッチ API |
+| `ValidateCommand` | discovery + 横断検証、`--verbose: job-id-check` |
+| テスト | `ExclusionJobIdValidatorTests`, `ValidateCommandTests` |
+| 仕様 | `Seiton_config_spec.md`, `Seiton_CLI_spec.md`, `docs/usage.md` |
 
-B1 フェーズ B と一体で実装（§2 参照）。加えて:
+**ユーザーファースト API**
 
-1. 設定診断（unknown rule-id, unknown job-id, 重複 exclusion）を `validate-config` の exit code 3 で一括検出できることを `docs/usage.md` に強調。
-2. 設定エラーと workflow 診断を出力上で区別（config path / `error[config]` 等）— 実装コストと相談。
+- 既存 `seiton validate-config` のまま。追加フラグなし。
+- unknown job-id は **config パス** に error（lint と同メッセージ）。workflow の parse error と混同しない。
+- マッチする workflow が discovery に無い場合は **warning** のみ（CI partial checkout 想定）。
+
+**性能**
+
+| 項目 | 結果 |
+|------|------|
+| `ExclusionJobIdValidatorBenchmark`（discovery 4 件、マッチ 3 件パース） | Validate のみ **~4.1 µs** → 横断検証込み **~184 µs**（小規模 workflow 3 件パース分。絶対値はサブ ms） |
+| lint ホットパス | 変更なし（`LintEngine` 未変更） |
+| 設計 | job-scoped exclusion が無い config では workflow パースゼロ（discovery のみ） |
+
+**ステータス**: B6 完了。
 
 ---
 
@@ -429,7 +446,7 @@ B1 フェーズ B と一体で実装（§2 参照）。加えて:
 ├── B3: skip-agentic-workflows の説明・init テンプレ修正
 ├── B5: Agent Skill インライン抑制参照（完了）
 ├── I1: Agent Skill adoption-workflow 参照（完了）
-└── B6: validate-config の cross-file job-id 検証
+└── B6: validate-config の cross-file job-id 検証（完了）
 
 フェーズ 3（将来）
 ├── B5: seiton migrate コマンド
