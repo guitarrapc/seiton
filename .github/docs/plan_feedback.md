@@ -27,10 +27,10 @@
 | P6 | 良い点 | `--oneline` | — | 妥当 | 維持 |
 | P7 | 良い点 | 実行速度（~10–50 ms / 120 files） | — | 妥当 | 維持・ベンチマーク監視 |
 | P8 | 良い点 | 除外設定の集約（1 ファイル化） | — | 妥当 | 維持 |
-| B1 | 課題 | `jobs` スコープ付き exclusion の job-id 検証 | **重大** | **バグ（確認済み）** | 修正必須 |
-| B2 | 課題 | `rules: ["*"]` 未サポート | 中 | **ドキュメントと実装の不整合** | 実装 or ドキュメント統一 |
-| B3 | 課題 | `skip-agentic-workflows` の検出範囲 | 中 | **仕様どおりだが説明不足** | ドキュメント改善 |
-| B4 | 課題 | ルール別 Count テーブルの表示条件 | 軽 | **UX の非対称** | 表示条件の整理 |
+| B1 | 課題 | `jobs` スコープ付き exclusion の job-id 検証 | **重大** | **バグ（修正済み）** | **完了** |
+| B2 | 課題 | `rules: ["*"]` 未サポート | 中 | **ドキュメントと実装の不整合（解消）** | **完了** |
+| B3 | 課題 | `skip-agentic-workflows` の検出範囲 | 中 | **仕様どおりだが説明不足（解消）** | **完了** |
+| B4 | 課題 | ルール別 Count テーブルの表示条件 | 軽 | **UX の非対称（ヒントで解消）** | **完了** |
 | B5 | 課題 | 旧リンターインライン抑制の移行 | 軽 | **移行支援不足**（機能欠如ではない） | **完了** — Agent Skill 参照 |
 | I1 | 情報 | 検出範囲の差異（和集合だが完全一致ではない） | — | 想定内 | **完了** — Agent Skill 参照 |
 | B6 | 課題 | `validate-config` が unknown job-id を検出しない | 中 | **B1 の派生** | **完了** |
@@ -60,25 +60,11 @@
 
 #### 評価
 
-**妥当。再現条件はコードと一致する。**
+**妥当。再現条件は v0.9.25 時点のコードと一致していた（修正済み）。**
 
-`LintEngine.NormalizeExclusions` は、exclusion ごとの `jobs` 配列を **現在 lint 中の workflow** の `knownJobIdSlices` に対して検証している。exclusion の `file` パターンが現在のファイルにマッチするかどうかを見る前に検証するため、別ファイル向けの job-id が全ファイル分の `unknown job-id` エラーとして膨張する。
+当時のバグ: `LintEngine.NormalizeExclusions` が exclusion の `file` マッチを見る前に `jobs` を検証し、別ファイル向けの job-id が全 workflow で `unknown job-id` として膨張した。
 
-```1402:1416:src/Seiton.Core/Linting/LintEngine.cs
-            if (exclusion.Jobs is not null && !knownJobIdSlices.IsEmpty)
-            {
-                for (var j = 0; j < exclusion.Jobs.Count; j++)
-                {
-                    var jobId = exclusion.Jobs[j];
-                    if (!string.IsNullOrEmpty(jobId) && !ContainsJobIdOrdinalIgnoreCase(knownJobIdSlices, utf8Yaml, jobId))
-                    {
-                        _configDiagnostics.Add(new Diagnostic(
-                            DiagnosticSeverity.Error,
-                            $"unknown job-id '{jobId}' in exclusion configuration",
-                            ...
-```
-
-フィードバックの回避策（ファイルスコープのみの除外）は正しいが、ghalint 互換の job スコープ除外という本来の用途を潰す。
+修正後: `file` パターンが現在の workflow にマッチするときのみ job-id を検証（`LintEngine.NormalizeExclusions`）。加えて B6 で `validate-config` 横断検証を追加。
 
 既存テスト `LintEngine_ConfigExclusion_UnknownJobId_ReportsConfigurationError` は `file: "**/*.yml"` の glob 前提でこの挙動を期待しており、**特定ファイル向け exclusion のケースがカバーされていない**。
 
@@ -220,10 +206,6 @@ Skill / `docs/configuration.md` から `rules: ["*"]` の記述を削除し、`f
 2. `seiton init` 生成テンプレート（`LintConfigLibrary`）のコメントを修正し、上記の使い分けを 1–2 行で説明。
 3. Skill の Agentic Workflow 節を同内容に同期。
 
-**フェーズ B（任意・将来）**
-
-metadata なし gh-aw 生成物のヒューリスティック拡張（例: 先頭コメントに `DO NOT EDIT` + 既知の gh-aw パスパターン）。誤検知リスクがあるため、opt-in フラグまたは別キー（`skip-generated-workflows-patterns`）で検討。
-
 **完了条件**
 
 - 移行ユーザーが「なぜ lock.yml だけ skip されたか」をドキュメントだけで理解できる。
@@ -269,7 +251,7 @@ metadata なし gh-aw 生成物のヒューリスティック拡張（例: 先�
 | init テンプレの小文字コメント行が `GenerateTemplateYaml_Uncommented_IsValidConfig` で不正 YAML になる | コメント行を `Gh-aw file without...`（先頭大文字）に変更し prose 扱いでアンコメント対象外に |
 | `verboseLogger: null` でコンパイルエラー | `VerboseLogger.Create(VerboseLevel.Off, TextWriter.Null)` を使用 |
 
-**ステータス**: フェーズ A 完了。
+**ステータス**: B3 完了。
 
 ---
 
@@ -291,7 +273,7 @@ metadata なし gh-aw 生成物のヒューリスティック拡張（例: 先�
 常時ルール別テーブルを出すと出力が長くなるため、以下とする:
 
 1. ルール別 Count テーブルは **`--verbose` 時のみ**（現行維持）。
-2. ファイル別テーブル表示後（診断に `rule-id` あり・非 verbose）に stderr へ  
+2. ファイル別テーブル表示後（診断に `rule-id` あり・非 verbose）に stderr へ
    `hint: re-run with --verbose for a per-rule breakdown` を出す。
 3. ヒントは job summary には書かない（既存 `hint:` 行と同様 stderr のみ）。
 4. `showPerFile: false`（fix サマリー等）ではヒントも出さない。
@@ -352,10 +334,6 @@ metadata なし gh-aw 生成物のヒューリスティック拡張（例: 先�
 **パフォーマンス**: ランタイム・リンター変更なし。ベンチマーク対象外（±0%）。
 
 **仕様整合**: `docs/configuration.md` の Inline Suppression Directives と内容一致。`Seiton_Linter_spec.md` の挙動変更なし。
-
-**フェーズ B（将来・任意）**
-
-- `seiton migrate` で既存設定から `exclusions` ドラフトを生成（別タスク）。
 
 **ステータス**: B5 完了。
 
@@ -434,33 +412,35 @@ metadata なし gh-aw 生成物のヒューリスティック拡張（例: 先�
 
 ---
 
-## 実装優先度
+## 実装優先度（すべて完了）
 
-```
-フェーズ 1（次マイナー / パッチ — バグ・混乱の解消）
-├── B1: job-scoped exclusion の file 限定 job-id 検証
-├── B2: rules: ["*"] サポート（または Skill 修正のみ）
-└── B4: ルール別テーブルをデフォルト表示に
+| フェーズ | 項目 | 状態 |
+|---------|------|------|
+| 1 | B1 job-scoped exclusion の file 限定 job-id 検証 + B6 横断検証 | 完了 |
+| 1 | B2 `rules: ["*"]` サポート | 完了 |
+| 1 | B4 ルール別テーブルは `--verbose` のまま + stderr ヒント | 完了 |
+| 2 | B3 skip-agentic-workflows 説明・init テンプレ | 完了 |
+| 2 | B5 Agent Skill `inline-suppression.md` | 完了 |
+| 2 | I1 Agent Skill `adoption-workflow.md` | 完了 |
+| 2 | B6 `validate-config` cross-file job-id 検証 | 完了 |
 
-フェーズ 2（ドキュメント — 同リリースまたは直後）
-├── B3: skip-agentic-workflows の説明・init テンプレ修正
-├── B5: Agent Skill インライン抑制参照（完了）
-├── I1: Agent Skill adoption-workflow 参照（完了）
-└── B6: validate-config の cross-file job-id 検証（完了）
+**採用しなかった案（意図的にスコープ外）**
 
-フェーズ 3（将来）
-├── B5: seiton migrate コマンド
-└── B3 フェーズ B: gh-aw ヒューリスティック拡張（要設計）
-```
+- `seiton migrate` コマンド — 提供予定なし（Agent Skill で移行を支援）
+- gh-aw metadata なしファイルのヒューリスティック skip — false positive を避けられないため不採用。`exclusions` で明示除外
 
 ---
 
-## 検証手順（リリース前）
+## 検証手順（リリース前）— 完了
 
-1. `.references/githubactions-lab` 相当の fixture を tests に追加（または sandbox）し、フィードバックの `seiton.yaml` で回帰テスト。
-2. 手動: `seiton validate-config --verbose` → `seiton --verbose --include-actions` の順で、フィードバック §4 の期待出力（119 files, 3 suppressed 等）を確認。
-3. job-scoped exclusion の再現ケースで diagnostic 件数が膨張しないこと。
-4. `rules: ["*"]` と `rules` 省略の両方で `agentics-maintenance.yml` 相当が全除外されること。
+| # | 手順 | 状態 | 根拠 |
+|---|------|------|------|
+| 1 | 移行 config の回帰テスト | **完了** | `tests/Seiton.Core.Tests/fixtures/migration/` + `FeedbackMigrationRegressionTests`（8 件） |
+| 2 | `validate-config` / lint CLI 回帰 | **完了** | `tests/Seiton.Tests/FeedbackMigrationCliTests`（validate + verbose lint） |
+| 3 | job-scoped exclusion で他ファイルに unknown job-id が膨張しない | **完了** | `FeedbackMigrationRegressionTests.Lint_JobScopedExclusionForOtherFile_*` + B1 単体テスト |
+| 4 | `rules` 省略と `rules: ["*"]` で file 全体除外が同等 | **完了** | `FeedbackMigrationRegressionTests.Lint_AgenticsMaintenance_RulesWildcard_*` + B2 単体テスト |
+
+フィードバック本番規模（120 workflow）の件数（119 checked / 3 suppressed）はラボリポジトリ依存のため、上記ミニ fixture で **設定・抑制・検証ロジック**を回帰固定している。フルラボはリリース前の任意スポットチェックとする。
 
 ---
 

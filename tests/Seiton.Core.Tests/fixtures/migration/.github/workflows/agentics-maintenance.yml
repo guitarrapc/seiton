@@ -1,0 +1,8 @@
+# DO NOT EDIT — gh-aw generated (no gh-aw-metadata header)
+on: pull_request_target
+permissions: write-all
+jobs:
+  maintenance:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo maintenance

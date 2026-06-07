@@ -1,0 +1,8 @@
+on: pull_request_target
+jobs:
+  dump:
+    runs-on: ubuntu-latest
+    permissions: {}
+    timeout-minutes: 10
+    steps:
+      - run: echo dump

@@ -1,0 +1,5 @@
+on: push
+jobs:
+  inherit-demo:
+    uses: ./.github/workflows/callee.yml
+    secrets: inherit
