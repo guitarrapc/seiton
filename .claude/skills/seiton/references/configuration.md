@@ -17,7 +17,7 @@ No config file is required. All defaults are safe.
 
 ## Nested repositories
 
-**Config discovery** and **input discovery** are CWD-scoped only. In nested clones or multi-checkout CI, set `working-directory` to the target repo or pass explicit paths (`-c`, `SEITON_CONFIG`, file arguments).
+**Config discovery** and **input discovery** are CWD-scoped only. In nested clones or multi-checkout CI, set `working-directory` to the target repo or pass explicit paths (`--config`, `-c`, `SEITON_CONFIG`, file arguments).
 
 ```bash
 cd .references/actions
