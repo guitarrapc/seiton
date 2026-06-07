@@ -146,13 +146,15 @@ output:
 
 ## Common Patterns
 
-### Disable a noisy rule
+### Last resort: disable a rule globally
 
 ```yaml
 rules:
   runner-no-latest:
     enabled: false
 ```
+
+Use this only when repository policy truly applies to all files. For legacy or limited scope cases, prefer `exclusions` below.
 
 ### Enable online audit rules
 
