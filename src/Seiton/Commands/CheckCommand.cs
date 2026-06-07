@@ -339,6 +339,7 @@ internal static class CheckCommand
             Discovery = lintConfig.Discovery,
             SkipSuppressionSummary = lintConfig.SkipSuppressionSummary,
             Verbose = lintConfig.Verbose,
+            ConfigFilePath = lintConfig.ConfigFilePath,
         };
     }
 
@@ -355,8 +356,41 @@ internal static class CheckCommand
             WriteSummaryContent(writer, diagnostics, fileCount, verbose, showPerFile, metadata, isRemainMode, errors, warnings, infos);
         }
 
+        if (!verbose && showPerFile && ShouldOfferPerRuleBreakdownHint(diagnostics))
+            writer.WriteLine("hint: re-run with --verbose for a per-rule breakdown");
+
         if (showExitHint && errors == 0 && warnings > 0)
             writer.WriteLine("hint: use --min-severity error to treat warnings as non-blocking in CI");
+    }
+
+    private static bool ShouldOfferPerRuleBreakdownHint(List<Diagnostic> diagnostics)
+    {
+        if (diagnostics.Count == 0)
+        {
+            return false;
+        }
+
+        var hasFileBreakdown = false;
+        var hasRuleBreakdown = false;
+        for (var i = 0; i < diagnostics.Count; i++)
+        {
+            if (diagnostics[i].FilePath is not null)
+            {
+                hasFileBreakdown = true;
+            }
+
+            if (diagnostics[i].RuleId is not null)
+            {
+                hasRuleBreakdown = true;
+            }
+
+            if (hasFileBreakdown && hasRuleBreakdown)
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private static void CountSeverityTotals(List<Diagnostic> diagnostics, out int errors, out int warnings, out int infos)

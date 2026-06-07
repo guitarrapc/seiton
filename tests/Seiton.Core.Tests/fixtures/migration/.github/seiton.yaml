@@ -1,0 +1,40 @@
+# Seiton linter configuration — minimal githubactions-lab migration regression fixture.
+# See .github/docs/feedback_seiton.md for the full migrated config.
+
+rules:
+  impostor-commit:
+    enabled: true
+
+  unpinned-uses:
+    ignore-actions:
+      - owner: "guitarrapc/githubactions-lab/.github/workflows/*"
+
+discovery:
+  skip-agentic-workflows: true
+
+exclusions:
+  - file: ".github/workflows/agentics-maintenance.yml"
+
+  - file: ".github/workflows/reusable-workflow-caller-nest.yaml"
+    jobs:
+      - inherit-demo
+    rules:
+      - deny-inherit-secrets
+
+  - file: ".github/workflows/auto-dump-context.yaml"
+    rules:
+      - dangerous-triggers
+  - file: ".github/workflows/dump-context.yaml"
+    rules:
+      - dangerous-triggers
+
+  - file: ".github/workflows/matrix-secret.yaml"
+    rules:
+      - overprovisioned-secrets
+
+fix:
+  defaults:
+    job-timeout-minutes: 15
+
+network:
+  on-error: skip

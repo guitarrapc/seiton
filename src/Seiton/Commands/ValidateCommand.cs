@@ -8,11 +8,17 @@ namespace Seiton.Commands;
 
 internal static class ValidateCommand
 {
-    public static int Run(string? config, VerboseLevel verboseLevel = VerboseLevel.Off, TextWriter? output = null, TextWriter? error = null)
+    public static int Run(
+        string? config,
+        VerboseLevel verboseLevel = VerboseLevel.Off,
+        string? baseDirectory = null,
+        TextWriter? output = null,
+        TextWriter? error = null)
     {
         var outputWriter = output ?? Console.Out;
         var errorWriter = error ?? Console.Error;
         var verboseLogger = VerboseLogger.Create(verboseLevel, errorWriter);
+        var repositoryRoot = baseDirectory ?? Directory.GetCurrentDirectory();
 
         ConfigPathResolution configResolution;
         try
@@ -39,6 +45,37 @@ internal static class ValidateCommand
 
         var parseStart = verboseLogger.GetTimestamp();
         var result = LintConfigLibrary.ValidateFile(configPath);
+        var diagnostics = new List<Core.Parsing.Diagnostic>(result.Diagnostics);
+
+        if (result.Config is not null)
+        {
+            var skipAgentic = result.Config.Discovery?.SkipAgenticWorkflows ?? false;
+            var workflowFiles = InputDiscovery.ResolveFiles(
+                [],
+                includeActions: false,
+                verboseLogger,
+                skipAgenticWorkflows: skipAgentic,
+                startDirectory: repositoryRoot);
+
+            var jobIdDiagnostics = ExclusionJobIdValidator.Validate(
+                result.Config,
+                workflowFiles,
+                configPath,
+                out var jobIdStats);
+
+            if (jobIdDiagnostics.Length > 0)
+            {
+                diagnostics.AddRange(jobIdDiagnostics);
+            }
+
+            if (verboseLogger.IsEnabled)
+            {
+                verboseLogger.Log(
+                    "job-id-check",
+                    $"{jobIdStats.WorkflowsScanned} workflow file(s) scanned for {jobIdStats.JobScopedExclusionsChecked} job-scoped exclusion(s)");
+            }
+        }
+
         if (verboseLogger.IsEnabled)
         {
             var parseElapsed = verboseLogger.GetElapsedTime(parseStart);
@@ -67,12 +104,22 @@ internal static class ValidateCommand
             }
         }
 
-        if (result.Diagnostics.Length > 0)
+        if (diagnostics.Count > 0)
         {
-            DiagnosticFormatter.WriteToTextWriter(errorWriter, result.Diagnostics, OutputFormat.Text, oneline: false, color: false);
+            DiagnosticFormatter.WriteToTextWriter(errorWriter, diagnostics, OutputFormat.Text, oneline: false, color: false);
         }
 
-        if (result.IsValid)
+        var isValid = true;
+        for (var i = 0; i < diagnostics.Count; i++)
+        {
+            if (diagnostics[i].Severity == Core.Parsing.DiagnosticSeverity.Error)
+            {
+                isValid = false;
+                break;
+            }
+        }
+
+        if (isValid)
         {
             outputWriter.WriteLine($"config valid: {configPath}");
             return ExitCode.Success;

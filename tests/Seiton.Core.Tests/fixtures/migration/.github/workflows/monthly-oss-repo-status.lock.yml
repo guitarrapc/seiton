@@ -1,0 +1,9 @@
+# gh-aw-metadata: {"version":1}
+on: push
+jobs:
+  lock:
+    runs-on: ubuntu-latest
+    permissions: {}
+    timeout-minutes: 10
+    steps:
+      - run: echo lock

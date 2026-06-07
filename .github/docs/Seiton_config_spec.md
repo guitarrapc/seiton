@@ -168,7 +168,7 @@ exclusions:
 | Key | 型 | 必須 | 説明 |
 |---|---|---|---|
 | `file` | `string`（スカラー） | Yes | glob パターン（`*` / `**`、パス区切り `/`、大小文字区別） |
-| `rules` | `string[]` | No | 抑制対象の rule-id リスト。省略時はファイル全体（全ルール）を除外 |
+| `rules` | `string[]` | No | 抑制対象の rule-id リスト。省略時はファイル全体（全ルール）を除外。`["*"]` は省略と同義（全ルール抑制の明示エイリアス） |
 | `jobs` | `string[]` | No | 対象ジョブ ID（`job.id`）。省略時はファイル全体に適用 |
 
 **加算方式（progressive narrowing）**:
@@ -181,11 +181,22 @@ exclusions:
 - `file` のみの exclusion でも、`rules` / `exclusions` 正規化中に発生した設定診断は返す。
 - `file` + `rules` / `jobs` では parse error は抑制しない。
 
-`rules: []`（明示的空リスト）は no-op（除外効果なし）。省略と空リストは意味が異なる。
+`rules: []`（明示的空リスト）は no-op（除外効果なし）。省略と空リストは意味が異なる。`rules: ["*"]` は `rules` 省略と同義で、正規化後は `null`（全ルール）として扱う。
 
 **注意**: `file` はスカラー値（単一パターン）。複数パターンが必要な場合は複数エントリで記述する。
 
 `validate-config` 時、正規化後に同一 `file` + 同一 `jobs` スコープの exclusion が複数ある場合、スコープごとに info 診断を **1 件** 出す（例: `exclusion for '.github/workflows/ci.yml' appears 2 times; consider merging rules into one entry`）。3 件以上重複しても診断は 1 件（最終件数を表示）。`file` パターンはパス区切り（`\` / `/`）を正規化して同一スコープとみなす。自動マージはしない。
+
+**`validate-config` の job-id 横断検証**（`jobs` スコープ付き exclusion のみ）:
+
+- CWD 配下の `.github/workflows/` を discovery し、各 exclusion の `file` パターンにマッチする workflow をパースして `jobs` 内の ID を検証する。
+- 未知の job-id は **設定ファイルパス** に error 診断（lint 時と同じメッセージ）。workflow ファイルの `error[parse]` とは混同しない。
+- `file` パターンが discovery 結果に 1 件もマッチしない場合は **warning**（CI でファイル未 checkout の可能性を考慮）。error にはしない。
+- マッチした workflow のみパースする（job-scoped exclusion が無い、またはパターン不一致のファイルは読まない）。
+- マッチした workflow がパース不能、または `jobs` セクションが空の場合は job-id 検証をスキップする（lint 時の `LintEngine` と同じ。誤検知を避けるため unknown job-id にはしない）。
+- 同一 exclusion エントリで glob が複数 workflow にマッチし、同じ unknown job-id が複数ファイルで欠落していても error は **job-id ごとに 1 件**（重複メッセージを出さない）。job-id の重複判定は大文字小文字を区別しない。
+- workflow パスの収集は **Ordinal（大小文字区別）**。exclusion の `file` glob と同様、case-sensitive なファイルシステム上の別ファイルを誤ってマージしない。
+- `--verbose` 時: `verbose: job-id-check: N workflow file(s) scanned for M job-scoped exclusion(s)` を stderr に出力。
 
 ### 2.3.1 `discovery`
 
@@ -198,7 +209,17 @@ discovery:
 
 | Key | 型 | デフォルト | 説明 |
 |---|---|---|---|
-| `skip-agentic-workflows` | `bool` | `false` | `true` のとき、先頭 ~10 行に `# gh-aw-metadata:` を含む workflow を lint 対象から除外（opt-in）。CLI `--skip-agentic-workflows` で上書き可能。 |
+| `skip-agentic-workflows` | `bool` | `false` | `true` のとき、先頭 10 行以内に `# gh-aw-metadata:` を含む workflow を lint 対象から除外（opt-in）。CLI `--skip-agentic-workflows` で上書き可能。 |
+
+**Agentic Workflow（gh-aw）との使い分け**:
+
+- `skip-agentic-workflows` が検出するのは **`# gh-aw-metadata:` コメントのみ**（ファイル名や `DO NOT EDIT` ヘッダーは見ない）。多くの gh-aw ロックファイル（例: `monthly-oss-repo-status.lock.yml`）はこのマーカーを持つ。
+- metadata のない gh-aw 生成物（例: `agentics-maintenance.yml` — `DO NOT EDIT` のみ）は **スキップされない**。`exclusions` でファイル単位除外する（`file` のみ、全ルール抑制）。
+
+```yaml
+exclusions:
+  - file: ".github/workflows/agentics-maintenance.yml"
+```
 
 ### 2.4 `fix`
 

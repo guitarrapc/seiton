@@ -8,6 +8,23 @@ namespace Seiton.Core.Linting;
 /// </summary>
 internal static class ExclusionNormalizer
 {
+    /// <summary>Wildcard rule-id that suppresses all rules in an exclusion entry.</summary>
+    public const string AllRulesWildcard = "*";
+
+    /// <summary>Returns <c>true</c> when <paramref name="ruleIds"/> contains the all-rules wildcard.</summary>
+    public static bool IsAllRulesWildcard(IReadOnlyList<string> ruleIds)
+    {
+        for (var j = 0; j < ruleIds.Count; j++)
+        {
+            if (ruleIds[j] == AllRulesWildcard)
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
     /// <summary>
     /// Resolves and validates each rule ID in <paramref name="ruleIds"/>, adding normalized IDs to <paramref name="normalizedRuleIds"/> and emitting diagnostics for unknown rules.
     /// </summary>
@@ -20,6 +37,11 @@ internal static class ExclusionNormalizer
         for (var j = 0; j < ruleIds.Count; j++)
         {
             var ruleId = ruleIds[j];
+            if (ruleId == AllRulesWildcard)
+            {
+                continue;
+            }
+
             if (RuleCatalog.TryResolveRuleId(ruleId, out var resolvedRuleId))
             {
                 normalizedRuleIds.Add(resolvedRuleId.ToId());

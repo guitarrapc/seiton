@@ -22,6 +22,9 @@ public sealed class LintConfig
     /// <summary>Gets the file path of the document being linted.</summary>
     public string? FilePath { get; set; }
 
+    /// <summary>Gets the path to the seiton configuration file when loaded from disk.</summary>
+    public string? ConfigFilePath { get; init; }
+
     /// <summary>Pre-parsed expression artifacts from the parser. When set, <see cref="ParseExpression"/> consults this before re-parsing.</summary>
     internal ExpressionArtifactStore? ExpressionArtifacts { get; set; }
 

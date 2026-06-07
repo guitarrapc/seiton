@@ -99,8 +99,15 @@ exclusions:
   - file: "<glob-pattern>"       # Path glob for workflow files
     jobs:                        # Optional: limit to specific jobs
       - <job-id>
-    rules:                       # Rules to suppress
-      - <rule-id>
+    rules:                       # Rules to suppress (omit = all rules for file)
+
+# ─── Discovery ───────────────────────────────────────────────────────────────
+discovery:
+  skip-agentic-workflows: false  # true = skip files with "# gh-aw-metadata:" in first 10 lines
+
+# gh-aw files WITHOUT that marker (e.g. agentics-maintenance.yml) need exclusions:
+# exclusions:
+#   - file: ".github/workflows/agentics-maintenance.yml"
 
 # ─── Fix settings ────────────────────────────────────────────────────────────
 fix:
@@ -178,6 +185,18 @@ exclusions:
       - publish
     rules:
       - credentials
+```
+
+### Skip Agentic Workflow (gh-aw) files
+
+`skip-agentic-workflows` matches only `# gh-aw-metadata:` in the first 10 lines (not file names or `DO NOT EDIT`).
+
+```yaml
+discovery:
+  skip-agentic-workflows: true
+
+exclusions:
+  - file: ".github/workflows/agentics-maintenance.yml"  # no metadata header
 ```
 
 ### Pin runner versions with fix mapping

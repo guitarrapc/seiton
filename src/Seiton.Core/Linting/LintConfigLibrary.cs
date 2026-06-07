@@ -114,12 +114,11 @@ public static class LintConfigLibrary
           #     - unpinned-image
           # File-only exclusion (skips lint for the entire file):
           # - file: .github/workflows/generated.yml
-          # Agentic Workflow files (# gh-aw-metadata: header or *.lock.yml):
+          # Gh-aw file without # gh-aw-metadata: in the first 10 lines (e.g. agentics-maintenance.yml):
           # - file: .github/workflows/agentics-maintenance.yml
-          # - file: .github/workflows/*.lock.yml
 
         discovery:
-          # skip-agentic-workflows: true   # opt-in: skip files with # gh-aw-metadata:
+          # skip-agentic-workflows: true   # opt-in: skip workflows whose first 10 lines contain "# gh-aw-metadata:" (often *.lock.yml)
 
         fix:
           defaults:
@@ -278,6 +277,7 @@ public static class LintConfigLibrary
         {
             Utf8Yaml = utf8Yaml,
             FilePath = filePath,
+            ConfigFilePath = filePath,
             Rules = normalizedRules.Rules,
             Exclusions = normalizedExclusions.Exclusions,
             Fix = normalizedFix.Fix,
@@ -337,6 +337,11 @@ public static class LintConfigLibrary
             {
                 // rules: [] → explicit empty, no-op
                 continue;
+            }
+            else if (ExclusionNormalizer.IsAllRulesWildcard(exclusion.Rules))
+            {
+                // rules: ["*"] → all rules (same as omitting rules)
+                resolvedRules = null;
             }
             else
             {

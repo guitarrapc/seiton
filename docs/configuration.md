@@ -564,7 +564,16 @@ exclusions:
   - file: ".github/workflows/generated.yml"
 ```
 
-This is the broadest exclusion form. When `rules` and `jobs` are both omitted, Seiton short-circuits linting for matching files and suppresses parser diagnostics too. Configuration diagnostics produced while loading the config still appear.
+Equivalent explicit form (same behavior):
+
+```yaml
+exclusions:
+  - file: ".github/workflows/generated.yml"
+    rules:
+      - "*"
+```
+
+This is the broadest exclusion form. When `rules` is omitted or `rules: ["*"]`, and `jobs` is omitted, Seiton short-circuits linting for matching files and suppresses parser diagnostics too. Prefer omitting `rules` for readability; `"*"` is supported for clarity and tooling compatibility. Configuration diagnostics produced while loading the config still appear.
 
 ### File-Level Exclusion (specific rules)
 
@@ -594,6 +603,39 @@ exclusions:
 ```
 
 Job matching uses `job.id` only (not `job.name`).
+
+---
+
+## Discovery
+
+Controls how Seiton finds workflow files when no paths are passed on the command line.
+
+```yaml
+discovery:
+  skip-agentic-workflows: true
+```
+
+| Key | Type | Default | Description |
+|---|---|---|---|
+| `skip-agentic-workflows` | `bool` | `false` | When `true`, skip workflow files whose **first 10 lines** contain `# gh-aw-metadata:` (GitHub Agentic Workflow marker). Also available as CLI `--skip-agentic-workflows`. |
+
+### Agentic Workflow (gh-aw) files
+
+gh-aw can emit more than one workflow shape. Seiton uses **two mechanisms** — do not confuse them:
+
+| Mechanism | What it matches | Example |
+|---|---|---|
+| `discovery.skip-agentic-workflows: true` | `# gh-aw-metadata:` in the first 10 lines only (not file name, not `DO NOT EDIT`) | `monthly-oss-repo-status.lock.yml` |
+| `exclusions` with `file` only (no `rules`) | Explicit path/glob you list | `agentics-maintenance.yml` |
+
+Many gh-aw lock files include the metadata comment and are skipped automatically when the flag is enabled. Other generated files (for example `agentics-maintenance.yml` with only a `DO NOT EDIT` header and **no** `# gh-aw-metadata:` line) are **not** skipped by this flag — add a file-level exclusion:
+
+```yaml
+exclusions:
+  - file: ".github/workflows/agentics-maintenance.yml"
+```
+
+With `--verbose`, skipped agentic workflows appear on stderr as `discovery: skipped <file> (agentic workflow)`.
 
 ---
 

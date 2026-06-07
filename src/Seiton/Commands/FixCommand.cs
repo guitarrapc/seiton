@@ -153,6 +153,7 @@ internal static class FixCommand
                 Fix = (lintConfig?.Fix ?? new FixConfig()) with { Enabled = true },
                 Network = lintConfig?.Network ?? new NetworkConfig(),
                 Verbose = lintConfig?.Verbose ?? false,
+                ConfigFilePath = lintConfig?.ConfigFilePath,
             };
 
             for (var i = 0; i < resolvedFiles.Length; i++)

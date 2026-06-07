@@ -261,7 +261,7 @@ public sealed class LintEngine
             // and file patterns even when the workflow failed to parse.
             // Job-ID validation is skipped internally when no jobs are known.
             var exclusionNormResult = arena is not null
-                ? NormalizeExclusions(config?.Exclusions, filePath, parseResult.Workflow ?? EmptyWorkflowForSuppression, utf8Yaml, arena)
+                ? NormalizeExclusions(config?.Exclusions, filePath, parseResult.Workflow ?? EmptyWorkflowForSuppression, utf8Yaml, arena, config?.ConfigFilePath)
                 : ExclusionsNormalization.Empty;
 
             var configDiagnosticCount = ruleConfigDiagCount + exclusionNormResult.ConfigurationDiagnostics.Length;
@@ -342,7 +342,7 @@ public sealed class LintEngine
         var inlineSuppression = ParseInlineSuppression(utf8Yaml, filePath, workflowForSuppression, arena!);
         _diagnostics.AddRange(inlineSuppression.ConfigurationDiagnostics);
 
-        var normalizedExclusions = NormalizeExclusions(config?.Exclusions, filePath, workflowForSuppression, utf8Yaml, arena!);
+        var normalizedExclusions = NormalizeExclusions(config?.Exclusions, filePath, workflowForSuppression, utf8Yaml, arena!, config?.ConfigFilePath);
         _diagnostics.AddRange(normalizedExclusions.ConfigurationDiagnostics);
 
         if (rules.Count == 0 && _onlineRules.Count == 0)
@@ -1355,7 +1355,13 @@ public sealed class LintEngine
         return new RulesNormalization(_normalizedRulesDict, _configDiagnostics);
     }
 
-    private ExclusionsNormalization NormalizeExclusions(IReadOnlyList<LintExclusion>? exclusions, string filePath, Parsing.Ast.Workflow workflow, byte[] utf8Yaml, AstArena arena)
+    private ExclusionsNormalization NormalizeExclusions(
+        IReadOnlyList<LintExclusion>? exclusions,
+        string filePath,
+        Parsing.Ast.Workflow workflow,
+        byte[] utf8Yaml,
+        AstArena arena,
+        string? configFilePath = null)
     {
         var normalizedFilePath = NormalizePath(filePath);
         if (exclusions is null || exclusions.Count == 0)
@@ -1363,7 +1369,9 @@ public sealed class LintEngine
             return new ExclusionsNormalization([], normalizedFilePath, []);
         }
 
-        var knownJobIdSlices = BuildKnownJobIdSlices(workflow, arena);
+        var configurationDiagnosticPath = configFilePath ?? filePath;
+        ReadOnlySpan<Utf8Slice> knownJobIdSlices = default;
+        var knownJobIdSlicesBuilt = false;
         _normalizedExclusions.Clear();
         _configDiagnostics.Clear();
 
@@ -1376,20 +1384,20 @@ public sealed class LintEngine
                     DiagnosticSeverity.Error,
                     "exclusion file pattern must not be empty",
                     new TextRange(0, 1, 1, 1, 1, 2),
-                    FilePath: filePath));
+                    FilePath: configurationDiagnosticPath));
                 continue;
             }
 
             IReadOnlySet<string>? normalizedRuleIds;
-            if (exclusion.Rules is null)
+            if (exclusion.Rules is null || ExclusionNormalizer.IsAllRulesWildcard(exclusion.Rules))
             {
-                // rules omitted → all rules
+                // rules omitted or rules: ["*"] → all rules
                 normalizedRuleIds = null;
             }
             else
             {
                 var ruleIds = new HashSet<string>(StringComparer.Ordinal);
-                ExclusionNormalizer.CollectResolvedExclusionRules(exclusion.Rules, filePath, _configDiagnostics, ruleIds);
+                ExclusionNormalizer.CollectResolvedExclusionRules(exclusion.Rules, configurationDiagnosticPath, _configDiagnostics, ruleIds);
 
                 if (ruleIds.Count == 0)
                 {
@@ -1399,23 +1407,34 @@ public sealed class LintEngine
                 normalizedRuleIds = ruleIds;
             }
 
-            if (exclusion.Jobs is not null && !knownJobIdSlices.IsEmpty)
+            var normalizedPattern = NormalizeExclusionPattern(exclusion.File);
+            if (exclusion.Jobs is { Count: > 0 }
+                && GlobMatch(normalizedPattern, normalizedFilePath))
             {
-                for (var j = 0; j < exclusion.Jobs.Count; j++)
+                if (!knownJobIdSlicesBuilt)
                 {
-                    var jobId = exclusion.Jobs[j];
-                    if (!string.IsNullOrEmpty(jobId) && !ContainsJobIdOrdinalIgnoreCase(knownJobIdSlices, utf8Yaml, jobId))
+                    knownJobIdSlices = BuildKnownJobIdSlices(workflow, arena);
+                    knownJobIdSlicesBuilt = true;
+                }
+
+                if (!knownJobIdSlices.IsEmpty)
+                {
+                    for (var j = 0; j < exclusion.Jobs.Count; j++)
                     {
-                        _configDiagnostics.Add(new Diagnostic(
-                            DiagnosticSeverity.Error,
-                            $"unknown job-id '{jobId}' in exclusion configuration",
-                            new TextRange(0, jobId.Length, 1, 1, 1, 1 + jobId.Length),
-                            FilePath: filePath));
+                        var jobId = exclusion.Jobs[j];
+                        if (!string.IsNullOrEmpty(jobId) && !ContainsJobIdOrdinalIgnoreCase(knownJobIdSlices, utf8Yaml, jobId))
+                        {
+                            _configDiagnostics.Add(new Diagnostic(
+                                DiagnosticSeverity.Error,
+                                $"unknown job-id '{jobId}' in exclusion configuration",
+                                new TextRange(0, jobId.Length, 1, 1, 1, 1 + jobId.Length),
+                                FilePath: configurationDiagnosticPath));
+                        }
                     }
                 }
             }
 
-            _normalizedExclusions.Add(new NormalizedExclusion(NormalizeExclusionPattern(exclusion.File), normalizedRuleIds, exclusion.Jobs));
+            _normalizedExclusions.Add(new NormalizedExclusion(normalizedPattern, normalizedRuleIds, exclusion.Jobs));
         }
 
         return new ExclusionsNormalization(

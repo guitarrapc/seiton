@@ -23,7 +23,7 @@ Options:
   --color <ColorMode>          Color mode: auto | always | never. [Default: Auto]
   --no-color                   Disable color output (overrides --color).
   -v, --verbose                Print progress information to stderr. Use -vv for more detailed output.
-  --skip-agentic-workflows     Skip Agentic Workflow files (with # gh-aw-metadata: header).
+  --skip-agentic-workflows     Skip workflows whose first 10 lines contain # gh-aw-metadata: (see configuration.md).
   --fix                        Enable fix mode on the root command.
   --dry-run                    Print unified diff without modifying files (requires --fix).
   --show-diff                  Print unified diff after applying fixes (requires --fix; --dry-run takes precedence).
@@ -234,7 +234,9 @@ Validate the resolved config file. Useful in CI jobs that maintain `.github/seit
 seiton validate-config
 ```
 
-Use `--verbose` to inspect config resolution and quick validation stats (parse time, enabled rules, exclusions):
+Catches YAML/schema issues, unknown rule IDs, duplicate exclusions, and **unknown job IDs in job-scoped exclusions** (by scanning matching workflow files under `.github/workflows/`). Configuration errors are reported against the config file path — not mixed into workflow lint output.
+
+Use `--verbose` to inspect config resolution and quick validation stats (parse time, enabled rules, exclusions, job-id cross-check):
 
 ```sh
 seiton validate-config --verbose

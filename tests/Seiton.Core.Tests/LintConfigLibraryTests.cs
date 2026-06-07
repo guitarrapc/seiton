@@ -819,6 +819,26 @@ public sealed class LintConfigLibraryTests
     }
 
     [Test]
+    public async Task Validate_Exclusions_AllRulesWildcard_ParsesAsFileLevelExclusion()
+    {
+        var yaml = """
+        exclusions:
+          - file: .github/workflows/generated.yml
+            rules:
+              - "*"
+        """;
+
+        var result = LintConfigLibrary.Validate(yaml, "seiton.yaml");
+
+        await Assert.That(result.IsValid).IsTrue();
+        await Assert.That(result.Config).IsNotNull();
+        await Assert.That(result.Config!.Exclusions!.Count).IsEqualTo(1);
+        var excl = result.Config.Exclusions![0];
+        await Assert.That(excl.File).IsEqualTo(".github/workflows/generated.yml");
+        await Assert.That(excl.Rules).IsNull();
+    }
+
+    [Test]
     public async Task Validate_Exclusions_DuplicateFileAndJobsScope_EmitsInfoDiagnostic()
     {
         var yaml = """
@@ -1320,8 +1340,19 @@ public sealed class LintConfigLibraryTests
         await Assert.That(yaml.Contains("run-env-context-direct-use", StringComparison.Ordinal)).IsTrue();
         await Assert.That(yaml.Contains("unpinned-image", StringComparison.Ordinal)).IsTrue();
         await Assert.That(yaml.Contains("agentics-maintenance.yml", StringComparison.Ordinal)).IsTrue();
-        await Assert.That(yaml.Contains("*.lock.yml", StringComparison.Ordinal)).IsTrue();
         await Assert.That(yaml.Contains("skip-agentic-workflows", StringComparison.Ordinal)).IsTrue();
+    }
+
+    [Test]
+    public async Task GenerateTemplateYaml_AgenticWorkflowDocs_ClarifySkipVsExclusions()
+    {
+        var yaml = LintConfigLibrary.GenerateTemplateYaml();
+
+        await Assert.That(yaml.Contains("# gh-aw-metadata:", StringComparison.Ordinal)).IsTrue();
+        await Assert.That(yaml.Contains("first 10 lines", StringComparison.Ordinal)).IsTrue();
+        await Assert.That(yaml.Contains("# gh-aw-metadata: header or *.lock.yml", StringComparison.Ordinal)).IsFalse();
+        await Assert.That(yaml.Contains("agentics-maintenance.yml", StringComparison.Ordinal)).IsTrue();
+        await Assert.That(yaml.Contains("without # gh-aw-metadata:", StringComparison.Ordinal)).IsTrue();
     }
 
     [Test]

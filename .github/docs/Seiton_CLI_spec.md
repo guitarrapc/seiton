@@ -79,6 +79,9 @@ Parse and validate the resolved config file.
   - parse elapsed time (`verbose: parse: ... ms`)
   - effective enabled-rule count (`verbose: rules: ... enabled`)
   - configured exclusion entry count (`verbose: exclusions: ... entry(s)`)
+  - job-scoped exclusion cross-check stats (`verbose: job-id-check: N workflow file(s) scanned for M job-scoped exclusion(s)`)
+
+When the config contains job-scoped `exclusions` (`jobs:` array), discovered workflow files matching each `file` pattern are parsed to validate job IDs **before** lint runs. Unknown job IDs are reported as errors on the config file path. Unmatched `file` patterns produce warnings only.
 
 Useful in CI jobs that maintain `.github/seiton.yaml` to catch configuration drift before lint runs.
 
@@ -562,7 +565,15 @@ When at least one diagnostic has a file path, a per-file breakdown is emitted as
 - When at least one info diagnostic exists in the per-file breakdown, an `Infos` column is also emitted.
 - Files are sorted by total issue count descending, then by file name lexicographically.
 
-In `-v` / `--verbose` mode with at least one diagnostic, a per-rule breakdown is emitted as a markdown-style table, separated from the preceding output by a blank line:
+When the per-file breakdown is shown and at least one diagnostic has a `rule-id`, but `--verbose` is not set, stderr also emits:
+
+```
+hint: re-run with --verbose for a per-rule breakdown
+```
+
+This hint is not written to the job summary.
+
+In `-v` / `--verbose` mode with at least one diagnostic that has a `rule-id`, a per-rule breakdown is emitted as a markdown-style table, separated from the preceding output by a blank line:
 
 ```
 | Rule          | Count |
