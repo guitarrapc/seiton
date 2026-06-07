@@ -2,6 +2,18 @@
 
 Auto-fix workflows, flags, and behavior for rules that support automatic remediation.
 
+## Fix before exclusions
+
+When many diagnostics appear (especially on first adoption), **always preview fixes before adding `exclusions`**:
+
+```bash
+seiton --fix --dry-run    # review Would Fix / Remaining tables and diffs
+seiton --fix              # apply when satisfied
+seiton                    # confirm remaining issues
+```
+
+Use `exclusions` only for issues that are intentional, unfixable, or outside scope (demo workflows, generated files). See `references/adoption-workflow.md` for the full rollout order.
+
 ## Commands
 
 ```bash
@@ -59,6 +71,50 @@ The following rules support `--fix`:
 - `job-timeout-minutes-required` — adds `timeout-minutes`
 - `if-expr-wrapper` — removes redundant `${{ }}` wrapper in `if:`
 - `unsound-condition` — fixes always-true/false conditions
+
+## Context direct-use fixes (`run-*-context-direct-use`)
+
+These three rules flag `${{ env.* }}`, `${{ secrets.* }}`, and `${{ inputs.* }}` inside `run:` shell scripts. `--fix` rewrites the script to use shell variables and adds a step `env:` mapping when one is missing.
+
+**bash (default shell)** — before:
+
+```yaml
+steps:
+  - run: echo "${{ env.BRANCH_NAME }}"
+```
+
+After `--fix`:
+
+```yaml
+steps:
+  - run: echo "${BRANCH_NAME}"
+    env:
+      BRANCH_NAME: ${{ env.BRANCH_NAME }}
+```
+
+**PowerShell (`shell: pwsh`)** — before:
+
+```yaml
+steps:
+  - shell: pwsh
+    run: Write-Host "${{ secrets.MY_TOKEN }}"
+```
+
+After `--fix`:
+
+```yaml
+steps:
+  - shell: pwsh
+    run: Write-Host "$env:MY_TOKEN"
+    env:
+      MY_TOKEN: ${{ secrets.MY_TOKEN }}
+```
+
+Tips:
+
+- Run `seiton --fix --dry-run` across the repo; context rules often dominate fixable counts.
+- Sync README or doc snippets if they quote workflow YAML you changed.
+- Compound expressions in `run:` may get a `help:` hint instead of auto-fix — move the expression to `env:` manually.
 
 ## Fix Configuration
 

@@ -177,6 +177,25 @@ contextに限らず、exclusionの前に --fixを試すように指示するべ�
 
 **検証:** ドキュメントレビューのみ。
 
+**実装状況（2026-06-08）:** ✅ 完了
+
+| 項目 | 内容 |
+|------|------|
+| adoption-workflow | Phase 2 に fix フロー追記、「Fix before exclusions (all rules)」節追加、ルール表の First response を `--fix --dry-run` 優先に更新、Agent checklist に dry-run 手順追加 |
+| fix-mode | 「Fix before exclusions」節追加、`run-*-context-direct-use` の bash / pwsh before/after 例を追加 |
+| ミラー | `.claude/skills/seiton/references/` を同期 |
+| テスト | `InstallCommandTests` に skill 配布後のキーフレーズ検証を追加 |
+
+**ベンチマーク:** 対象外（`src/` コード変更なし）。性能影響なし。
+
+**セルフレビュー:**
+
+| 指摘 | 対応 |
+|------|------|
+| context のみに限定しすぎ | プラン更新どおり **全ルール** で fix → exclusion の順序を明記。context は代表例として fix-mode に詳述 |
+| SKILL.md との重複 | SKILL.md の「Fix first, exclude only when necessary」と整合。adoption / fix-mode で手順と例を補足 |
+| Phase 1 の exclusions | 生成・デモファイルの **ファイル単位** exclusion は維持（lint 対象外）。ルール単位の bulk exclusion とは区別して記載 |
+
 ---
 
 #### B-4. 意図的に fix しない項目 — 現状維持
@@ -352,7 +371,7 @@ contextに限らず、exclusionの前に --fixを試すように指示するべ�
 |--------|-----|------|------|
 | ~~**P1**~~ | B-2 | `run-secrets-context-direct-use` の env ブロック挿入 fix | ✅ 完了（2026-06-08） |
 | ~~**P1**~~ | C-1 | デフォルト出力にルール別 Top N（10 件） | ✅ 完了（2026-06-08） |
-| **P1** | B-3 | context 系は fix 優先 — adoption / fix-mode ドキュメント | ドキュメント |
+| ~~**P1**~~ | B-3 | fix 優先 — adoption / fix-mode ドキュメント | ✅ 完了（2026-06-08） |
 | **P2** | A-3 | `env-var` の `help:` と rules.md 代替パターン | 実装（help のみ）+ docs |
 | **P2** | C-4 | duplicate exclusion の位置情報改善 | 実装（段階的） |
 | **P3** | C-2 | `--include-actions` 案内の前倒し | 実装（Phase 1 から） |

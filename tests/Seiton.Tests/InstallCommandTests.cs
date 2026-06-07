@@ -81,6 +81,8 @@ public sealed class InstallCommandTests
             await Assert.That(reference).Contains("--min-severity error");
             await Assert.That(reference).Contains("run-env-context-direct-use");
             await Assert.That(reference).Contains("impostor-commit");
+            await Assert.That(reference).Contains("Fix before exclusions");
+            await Assert.That(reference).Contains("seiton --fix --dry-run");
 
             var skill = File.ReadAllText(Path.Combine(skillDir, "SKILL.md"));
             await Assert.That(skill).Contains("references/adoption-workflow.md");
@@ -388,6 +390,9 @@ public sealed class InstallCommandTests
 
             var fixContent = File.ReadAllText(Path.Combine(refsDir, "fix-mode.md"));
             await Assert.That(fixContent).Contains("--dry-run");
+            await Assert.That(fixContent).Contains("Fix before exclusions");
+            await Assert.That(fixContent).Contains("run-*-context-direct-use");
+            await Assert.That(fixContent).Contains("$env:MY_TOKEN");
 
             var configContent = File.ReadAllText(Path.Combine(refsDir, "configuration.md"));
             await Assert.That(configContent).Contains("seiton.yaml");
