@@ -27,17 +27,19 @@ jobs:
         with:
           persist-credentials: false
 
-      # Default on GitHub Actions: --format github-actions (rich stdout + job summary).
-      # Pin the image tag (e.g. :v0.9.25) instead of :latest for reproducible CI.
-      - name: Run seiton
-        run: |
-          docker run --rm \
-            -v "$PWD:/repo:ro" \
-            -e GITHUB_ACTIONS \
-            -e GITHUB_STEP_SUMMARY \
-            ghcr.io/guitarrapc/seiton:latest \
-            --include-actions
+      # Preferred: setup-seiton installs the native binary and keeps CI lightweight.
+      - uses: guitarrapc/setup-seiton@v1
 
+      # Default on GitHub Actions: --format github-actions (rich stdout + job summary).
+      - name: Run seiton
+        run: seiton --include-actions
+
+      # Alternative (containerized run): Use this instead of setup-seiton if needed.
+      # - name: Run seiton (Docker)
+      #   run: |
+      #     docker run --rm  -v "$PWD:/repo:ro" -e GITHUB_ACTIONS -e GITHUB_STEP_SUMMARY ghcr.io/guitarrapc/seiton:v0.9.25 --include-actions
+
+  # Optional: Docker-based run (if you prefer container execution over setup-seiton)
   # Optional: GitHub Code Scanning (SARIF). Uncomment this job and add workflow permissions:
   #   permissions:
   #     contents: read
@@ -54,12 +56,18 @@ jobs:
   #       with:
   #         persist-credentials: false
   #
+  #     - uses: guitarrapc/setup-seiton@v1
+  #
   #     - name: Run seiton (SARIF)
-  #       run: |
-  #         docker run --rm \
-  #           -v "$PWD:/repo:ro" \
-  #           ghcr.io/guitarrapc/seiton:latest \
-  #           --format sarif --include-actions > results.sarif
+  #       run: seiton --format sarif --include-actions > results.sarif
+  #
+  #     # Alternative (Docker):
+  #     # - name: Run seiton (SARIF, Docker)
+  #     #   run: |
+  #     #     docker run --rm \
+  #     #       -v "$PWD:/repo:ro" \
+  #     #       ghcr.io/guitarrapc/seiton:v0.9.25 \
+  #     #       --format sarif --include-actions > results.sarif
   #
   #     - name: Upload SARIF
   #       if: always()
