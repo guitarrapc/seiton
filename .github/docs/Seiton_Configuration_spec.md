@@ -1,58 +1,49 @@
-# Seiton Configuration Design Specification
+# Seiton Configuration Specification
 
-This document defines the design specification for Seiton's configuration files (`.github/seiton.yaml` / `seiton.yaml`). For the user-facing reference, see [`docs/configuration.md`](../../docs/configuration.md).
-
----
-
-## 1. Design Motivation
-
-### 1.1 Problems with the Previous Design
-
-The initial configuration design had the following problems.
-
-| # | Problem | Example |
-|---|---|---|
-| **U-1** | The user's mental model did not align with the config structure | Users think in terms of rule IDs, but concepts split for internal implementation reasons, such as `additiveCustomization`, `exprContext`, `pin_resolution`, and `online_audit`, were exposed in the config |
-| **U-2** | Setting names described “how it is implemented” rather than “what the user wants to do” | Internal module names such as `additiveCustomization` and `exprContext` were surfaced directly |
-| **U-3** | Rule IDs and their settings were not directly connected | Related settings were separated, such as `dangerous-triggers` and `additionalDangerousEvents`, or `runner-label` and `additionalKnownHostedLabels` |
-| **U-4** | Similar settings were scattered across multiple locations | Network-related settings such as timeout, concurrency, and fail-open were duplicated under `pin_resolution` and `online_audit` |
-| **U-5** | Settings with different levels of importance were placed at the same level | Everyday settings such as `rules` were placed alongside low-level settings such as `token_env_vars` and `request_timeout_sec` |
-| **U-6** | The add-only design was too visible in the UI | `additionalDangerousEvents` — users only want to know the final effective set |
-| **U-7** | Naming conventions and abstraction levels were inconsistent | Mixed kebab-case and snake_case, and verbose names such as `additional...` |
-
-### 1.2 Design Policy
-
-To address the problems above, the current schema was designed using the following principles.
-
-| Principle | Description | Related Problems |
-|---|---|---|
-| **Structure by the user's mental model** | Organize the schema around rule IDs, exclusions, fix, and network | U-1 |
-| **Place rule-effective settings near the rule** | Put rule-specific options under `rules.<rule-id>` | U-3 |
-| **Separate everyday settings from advanced settings** | Make `rules` / `exclusions` primary, and treat `network` as advanced configuration | U-5 |
-| **Name by “what the user wants to do”** | Use direct object-like key names such as `events` and `known-hosted-labels` | U-2, U-6 |
-| **Group similar settings together** | Consolidate network-related settings under `network` | U-4 |
-| **Unify naming convention** | Use kebab-case for all keys | U-7 |
-| **Hide internal concepts** | Do not expose `analysis` or `audit` as independent keys; integrate them into existing structures | U-2 |
-
-### 1.3 Design Trade-offs
-
-| Item | Decision | Reason |
-|---|---|---|
-| Top-level `analysis` key | **Not adopted** | `assume-events` fits naturally under the rule as `rules.expr-undefined-var.assume-events`. There is no need for an independent section |
-| Top-level `audit` key | **Not adopted** | Enabling an online rule is unified as `rules.<rule-id>.enabled: true`. A separate section would create duplicated management |
-| `network.fail-open` | **Use `network.on-error: skip \| fail`** | fail-open/fail-closed are ambiguous security terms. Explicit enum values communicate intent more clearly |
-| `exclusions[].files` → `exclusions[].file` | **Use a scalar value, a single glob** | The singular form matches the type and avoids confusion. Multiple patterns are represented by multiple entries |
-| `extend` keyword | **Not adopted; removed** | It leaked the internal concept of built-in sets to users. The design was changed to flat lists, with the documentation explicitly stating that these values are additive |
+> This document is language-neutral — it specifies WHAT the configuration schema is and WHY design decisions were made. For the user-facing reference, see [`docs/configuration.md`](../../docs/configuration.md).
 
 ---
 
-## 2. Current Schema
+## 0. Scope
 
-### 2.1 Top-level Structure
+This document specifies:
+
+- Configuration file format (`.github/seiton.yaml` / `seiton.yaml`)
+- Top-level schema and per-section semantics
+- Pattern matching rules for configuration values
+- Loader resource limits
+- Configuration file discovery and trust boundaries
+- Default values
+
+Out of scope:
+
+- CLI flag mapping and precedence (see `Seiton_CLI_spec.md`)
+- Rule behavior and diagnostics (see `Seiton_Linter_spec.md`)
+
+### Design Principles
+
+The schema is organized around the following principles:
+
+| Principle | Description |
+|---|---|
+| **Structure by the user's mental model** | Organize the schema around rule IDs, exclusions, fix, and network |
+| **Place rule-effective settings near the rule** | Put rule-specific options under `rules.<rule-id>` |
+| **Separate everyday settings from advanced settings** | Make `rules` / `exclusions` primary, and treat `network` as advanced configuration |
+| **Name by “what the user wants to do”** | Use direct object-like key names such as `events` and `known-hosted-labels` |
+| **Group similar settings together** | Consolidate network-related settings under `network` |
+| **Unify naming convention** | Use kebab-case for all keys |
+| **Hide internal concepts** | Do not expose `analysis` or `audit` as independent keys; integrate them into existing structures |
+
+---
+
+## 1. Schema Overview
+
+### 1.1 Top-level Structure
 
 ```yaml
 rules:        # Per-rule enable / severity / rule-specific options
 exclusions:   # Suppress diagnostics by file or job
+discovery:    # Control file discovery behavior
 fix:          # Control auto-fix behavior
 network:      # Common network-related settings
 output:       # Control diagnostic output
@@ -60,7 +51,9 @@ output:       # Control diagnostic output
 
 All sections are optional. An empty file is equivalent to using the default configuration. Unknown top-level keys are configuration errors.
 
-### 2.2 `rules`
+---
+
+## 2. `rules`
 
 Per-rule configuration. Each key is a rule ID in kebab-case. Unknown rule IDs are configuration errors.
 
@@ -129,7 +122,7 @@ rules:
     max-job-secrets: 10
 ```
 
-#### List of Rule-specific Options
+### 2.1 Rule-specific Options
 
 | Rule | Key | Type | Description |
 |---|---|---|---|
@@ -147,7 +140,9 @@ rules:
 
 List-type rule-specific options are **added to the built-in set**. They do not replace it.
 
-### 2.3 `exclusions`
+---
+
+## 3. `exclusions`
 
 Suppress diagnostics by file or job. A `file`-only entry is treated specially: it suppresses workflow diagnostics for the entire file, including parse errors. Configuration diagnostics are never suppressed.
 
@@ -171,23 +166,29 @@ exclusions:
 | `rules` | `string[]` | No | List of rule IDs to suppress. If omitted, the entire file is excluded from all rules. `["*"]` is equivalent to omission and is an explicit alias for suppressing all rules |
 | `jobs` | `string[]` | No | Target job IDs (`job.id`). If omitted, the exclusion applies to the entire file |
 
+### 3.1 Scoping Semantics
+
 **Additive narrowing, also called progressive narrowing**:
+
 - `file` only → suppress workflow diagnostics for the entire file, including parse errors
 - `file` + `jobs` → exclude the specified jobs from all rules
 - `file` + `rules` → exclude only the specified rules for the entire file
 - `file` + `jobs` + `rules` → exclude only the specified rules for the specified jobs
 
 Notes:
+
 - Even for a `file`-only exclusion, configuration diagnostics raised during `rules` / `exclusions` normalization are still returned.
 - For `file` + `rules` / `jobs`, parse errors are not suppressed.
 
 `rules: []`, an explicit empty list, is a no-op and has no exclusion effect. Omission and an empty list have different meanings. `rules: ["*"]` is equivalent to omitting `rules`, and is normalized to `null`, meaning all rules.
 
-**Note**: `file` is a scalar value, meaning a single pattern. Use multiple entries when multiple patterns are required.
+`file` is a scalar value, meaning a single pattern. Use multiple entries when multiple patterns are required.
+
+### 3.2 `validate-config` Behavior
 
 During `validate-config`, if multiple exclusions have the same normalized `file` and the same `jobs` scope, one info diagnostic is emitted per scope. Example: `exclusion for '.github/workflows/ci.yml' appears 2 times at exclusions[1] (line 2), exclusions[2] (line 5); consider merging rules into one entry`. The message lists 1-based `exclusions[N]` indexes and YAML start lines. The diagnostic location points to the first duplicate entry. Even if there are three or more duplicates, only one diagnostic is emitted, with the final count shown. Path separators in the `file` pattern (`\` / `/`) are normalized when determining whether entries belong to the same scope. Entries are not merged automatically.
 
-**Cross-workflow job ID validation in `validate-config`**, only for job-scoped exclusions:
+**Cross-workflow job ID validation**, only for job-scoped exclusions:
 
 - Discover `.github/workflows/` under the current working directory, parse workflows matching each exclusion's `file` pattern, and validate the IDs listed under `jobs`.
 - Unknown job IDs produce error diagnostics on the **configuration file path**, using the same message as lint. They are not mixed with `error[parse]` diagnostics on workflow files.
@@ -198,7 +199,9 @@ During `validate-config`, if multiple exclusions have the same normalized `file`
 - Workflow path collection is **ordinal and case-sensitive**. This avoids accidentally merging distinct files on case-sensitive file systems, consistent with the `file` glob used in exclusions.
 - With `--verbose`, output `verbose: job-id-check: N workflow file(s) scanned for M job-scoped exclusion(s)` to stderr.
 
-### 2.3.1 `discovery`
+---
+
+## 4. `discovery`
 
 Controls file discovery behavior.
 
@@ -211,7 +214,7 @@ discovery:
 |---|---|---|---|
 | `skip-agentic-workflows` | `bool` | `false` | When `true`, workflows containing `# gh-aw-metadata:` within the first 10 lines are excluded from lint targets as an opt-in behavior. This can be overridden by the CLI option `--skip-agentic-workflows`. |
 
-**Usage with Agentic Workflow, gh-aw**:
+### 4.1 Agentic Workflow (gh-aw)
 
 - `skip-agentic-workflows` detects only the **`# gh-aw-metadata:` comment**. It does not inspect filenames or `DO NOT EDIT` headers. Many gh-aw lock files, for example `monthly-oss-repo-status.lock.yml`, include this marker.
 - gh-aw-generated files without metadata, for example `agentics-maintenance.yml` with only `DO NOT EDIT`, are **not skipped**. Exclude them at the file level using `exclusions`, with `file` only and all rules suppressed.
@@ -221,7 +224,9 @@ exclusions:
   - file: ".github/workflows/agentics-maintenance.yml"
 ```
 
-### 2.4 `fix`
+---
+
+## 5. `fix`
 
 Controls auto-fix behavior for `seiton fix`.
 
@@ -262,7 +267,9 @@ fix:
 | `images.exclude-tags` | `string[]` | `["latest"]` | Tag names for which pinning is skipped |
 | `images.ignore-images` | `string[]` | `[]` | Images for which pinning is skipped, using glob patterns |
 
-### 2.5 `network`
+---
+
+## 6. `network`
 
 Common network-related settings. These apply to both online rules and network-assisted fixes.
 
@@ -286,7 +293,9 @@ network:
 
 The HTTP client has **`AllowAutoRedirect` disabled** and follows **only same-origin redirects**. For `3xx` redirects to a different origin, no request is issued, preventing token leakage.
 
-### 2.6 `output`
+---
+
+## 7. `output`
 
 ```yaml
 output:
@@ -299,7 +308,7 @@ output:
 
 ---
 
-## 3. Pattern Matching Types
+## 8. Pattern Matching Types
 
 Pattern matching used in configuration values differs by use case.
 
@@ -316,7 +325,7 @@ Pattern matching used in configuration values differs by use case.
 
 ---
 
-## 4. Loader Resource Limits
+## 9. Loader Resource Limits
 
 Defense against malicious configuration input.
 
@@ -330,7 +339,7 @@ If a limit is exceeded, validation fails and the configuration is not loaded.
 
 ---
 
-## 5. Configuration File Discovery
+## 10. Configuration File Discovery
 
 1. `--config` option / `SEITON_CONFIG` environment variable, explicit specification
 2. Search upward from the current directory:
@@ -349,13 +358,14 @@ If a limit is exceeded, validation fails and the configuration is not loaded.
 
 ---
 
-## 6. Default Values
+## 11. Default Values
 
 | Setting | Default |
 |---|---|
 | `rules.<rule-id>.enabled` | `true` for local rules / `false` for online rules |
 | `rules.<rule-id>.severity` | Rule-specific default |
 | `exclusions` | `[]` |
+| `discovery.skip-agentic-workflows` | `false` |
 | `fix.defaults.job-timeout-minutes` | `null`; auto-fix disabled |
 | `fix.pinning.enable-network` | `false` |
 | `fix.pinning.min-age-days` | `14` |
@@ -371,3 +381,31 @@ If a limit is exceeded, validation fails and the configuration is not loaded.
 | `network.github.ghes-api-url` | `""`; github.com only |
 | `network.github.ghes-fallback` | `false` |
 | `output.sort-order` | `location` |
+
+---
+
+## Appendix A: Design History
+
+This appendix records problems with the initial configuration design and the trade-offs that shaped the current schema. It is retained for context; the normative specification is in the sections above.
+
+### A.1 Problems with the Previous Design
+
+| # | Problem | Example |
+|---|---|---|
+| **U-1** | The user's mental model did not align with the config structure | Users think in terms of rule IDs, but concepts split for internal implementation reasons, such as `additiveCustomization`, `exprContext`, `pin_resolution`, and `online_audit`, were exposed in the config |
+| **U-2** | Setting names described “how it is implemented” rather than “what the user wants to do” | Internal module names such as `additiveCustomization` and `exprContext` were surfaced directly |
+| **U-3** | Rule IDs and their settings were not directly connected | Related settings were separated, such as `dangerous-triggers` and `additionalDangerousEvents`, or `runner-label` and `additionalKnownHostedLabels` |
+| **U-4** | Similar settings were scattered across multiple locations | Network-related settings such as timeout, concurrency, and fail-open were duplicated under `pin_resolution` and `online_audit` |
+| **U-5** | Settings with different levels of importance were placed at the same level | Everyday settings such as `rules` were placed alongside low-level settings such as `token_env_vars` and `request_timeout_sec` |
+| **U-6** | The add-only design was too visible in the UI | `additionalDangerousEvents` — users only want to know the final effective set |
+| **U-7** | Naming conventions and abstraction levels were inconsistent | Mixed kebab-case and snake_case, and verbose names such as `additional...` |
+
+### A.2 Design Trade-offs
+
+| Item | Decision | Reason |
+|---|---|---|
+| Top-level `analysis` key | **Not adopted** | `assume-events` fits naturally under the rule as `rules.expr-undefined-var.assume-events`. There is no need for an independent section |
+| Top-level `audit` key | **Not adopted** | Enabling an online rule is unified as `rules.<rule-id>.enabled: true`. A separate section would create duplicated management |
+| `network.fail-open` | **Use `network.on-error: skip \| fail`** | fail-open/fail-closed are ambiguous security terms. Explicit enum values communicate intent more clearly |
+| `exclusions[].files` → `exclusions[].file` | **Use a scalar value, a single glob** | The singular form matches the type and avoids confusion. Multiple patterns are represented by multiple entries |
+| `extend` keyword | **Not adopted; removed** | It leaked the internal concept of built-in sets to users. The design was changed to flat lists, with the documentation explicitly stating that these values are additive |
