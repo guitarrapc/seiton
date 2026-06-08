@@ -125,6 +125,100 @@ public sealed class DiagnosticFormatterRichTextTests
         await Assert.That(output).Contains("|");
     }
 
+    [Test]
+    public async Task Rich_SourceSnippet_GutterSeparator_EmitsPipeNotAsciiCode()
+    {
+        var source = "on: push\njobs:\n  build:\n"u8.ToArray();
+        var sourceMap = new Dictionary<string, byte[]> { ["ci.yml"] = source };
+
+        var diag = MakeDiagnostic(DiagnosticSeverity.Error, "msg", 2, 1, 2, 5, filePath: "ci.yml");
+        var output = Render(diag, sourceMap: sourceMap).ReplaceLineEndings("\n");
+
+        // '|' is ASCII 124; WriteLine('|') must not emit the numeric code as decimal text.
+        await Assert.That(output).DoesNotContain("\n    124\n");
+        await Assert.That(output).Contains("     |\n");
+        await Assert.That(output).Contains(" 2 | jobs:");
+    }
+
+    [Test]
+    public async Task Rich_SourceSnippet_MultiLineSpan_GutterSeparators_EmitPipeNotAsciiCode()
+    {
+        var source = "on: push\njobs:\n  build:\n    runs-on: ubuntu-latest\n"u8.ToArray();
+        var sourceMap = new Dictionary<string, byte[]> { ["ci.yml"] = source };
+
+        var diag = MakeDiagnostic(DiagnosticSeverity.Error, "multi", 2, 1, 3, 5, filePath: "ci.yml");
+        var output = Render(diag, sourceMap: sourceMap).ReplaceLineEndings("\n");
+
+        await Assert.That(output).DoesNotContain("124");
+        await Assert.That(output).Contains("     |\n");
+        await Assert.That(output.Split("     |\n", StringSplitOptions.None).Length).IsEqualTo(3);
+    }
+
+    [Test]
+    public async Task Rich_SourceSnippet_WideLineNumber_GutterSeparator_EmitsPipeNotAsciiCode()
+    {
+        var lines = Enumerable.Range(1, 120).Select(i => $"line-{i:000}");
+        var source = Encoding.UTF8.GetBytes(string.Join('\n', lines) + "\n");
+        var sourceMap = new Dictionary<string, byte[]> { ["ci.yml"] = source };
+
+        var diag = MakeDiagnostic(DiagnosticSeverity.Warning, "msg", 100, 1, 100, 8, filePath: "ci.yml");
+        var output = Render(diag, sourceMap: sourceMap).ReplaceLineEndings("\n");
+
+        await Assert.That(output).DoesNotContain("\n      124\n");
+        await Assert.That(output).Contains("       |\n");
+        await Assert.That(output).Contains("100 | line-100");
+    }
+
+    [Test]
+    public async Task Rich_SourceSnippet_GutterPipeColumn_Aligned_SingleDigitLineNumber()
+    {
+        var source = "on: push\njobs:\n  build:\n"u8.ToArray();
+        var sourceMap = new Dictionary<string, byte[]> { ["ci.yml"] = source };
+
+        var diag = MakeDiagnostic(DiagnosticSeverity.Error, "msg", 2, 1, 2, 5, filePath: "ci.yml");
+        var output = Render(diag, sourceMap: sourceMap);
+
+        await AssertGutterPipeColumnsAligned(output);
+    }
+
+    [Test]
+    public async Task Rich_SourceSnippet_GutterPipeColumn_Aligned_DoubleDigitLineNumber()
+    {
+        var lines = Enumerable.Range(1, 15).Select(i => $"line-{i}");
+        var source = Encoding.UTF8.GetBytes(string.Join('\n', lines) + "\n");
+        var sourceMap = new Dictionary<string, byte[]> { ["ci.yml"] = source };
+
+        var diag = MakeDiagnostic(DiagnosticSeverity.Warning, "msg", 10, 1, 10, 8, filePath: "ci.yml");
+        var output = Render(diag, sourceMap: sourceMap);
+
+        await AssertGutterPipeColumnsAligned(output);
+    }
+
+    [Test]
+    public async Task Rich_SourceSnippet_GutterPipeColumn_Aligned_TripleDigitLineNumber()
+    {
+        var lines = Enumerable.Range(1, 120).Select(i => $"line-{i:000}");
+        var source = Encoding.UTF8.GetBytes(string.Join('\n', lines) + "\n");
+        var sourceMap = new Dictionary<string, byte[]> { ["ci.yml"] = source };
+
+        var diag = MakeDiagnostic(DiagnosticSeverity.Warning, "msg", 100, 1, 100, 8, filePath: "ci.yml");
+        var output = Render(diag, sourceMap: sourceMap);
+
+        await AssertGutterPipeColumnsAligned(output);
+    }
+
+    [Test]
+    public async Task Rich_SourceSnippet_GutterPipeColumn_Aligned_MultiLineSpan()
+    {
+        var source = "on: push\njobs:\n  build:\n    runs-on: ubuntu-latest\n"u8.ToArray();
+        var sourceMap = new Dictionary<string, byte[]> { ["ci.yml"] = source };
+
+        var diag = MakeDiagnostic(DiagnosticSeverity.Error, "multi", 2, 1, 3, 5, filePath: "ci.yml");
+        var output = Render(diag, sourceMap: sourceMap);
+
+        await AssertGutterPipeColumnsAligned(output);
+    }
+
     // Rich format — help annotation
 
     [Test]
@@ -175,15 +269,67 @@ public sealed class DiagnosticFormatterRichTextTests
     [Test]
     public async Task Rich_SourceSnippet_CaretLengthMatchesColumnSpan()
     {
-        // "  build:" on line 3. col 3..8 → span of 5 chars
+        // "  build:" on line 3. col 3..8 (inclusive) → span of 6 chars
         var source = "on: push\njobs:\n  build:\n    runs-on: ubuntu-latest\n"u8.ToArray();
         var sourceMap = new Dictionary<string, byte[]> { ["ci.yml"] = source };
 
         var diag = MakeDiagnostic(DiagnosticSeverity.Error, "msg", 3, 3, 3, 8, filePath: "ci.yml");
         var output = Render(diag, sourceMap: sourceMap);
 
-        // Caret row must have exactly 5 carets (EndColumn - StartColumn = 8 - 3 = 5)
-        await Assert.That(output).Contains("^^^^^");
+        // Caret row must have exactly 6 carets (8 - 3 + 1 = 6)
+        await Assert.That(output).Contains("^^^^^^");
+    }
+
+    [Test]
+    public async Task Rich_SourceSnippet_RealisticTemplateExpression_CaretCoversWholeToken()
+    {
+        var source = "      - run: echo \"title is ${{ github.event.pull_request.title }}\"\n"u8.ToArray();
+        var sourceMap = new Dictionary<string, byte[]> { ["t.yml"] = source };
+
+        // "github.event.pull_request.title" starts at column 33 and has length 31 bytes.
+        var diag = MakeDiagnostic(DiagnosticSeverity.Error, "msg", 1, 33, 1, 63, filePath: "t.yml");
+        var output = Render(diag, sourceMap: sourceMap).ReplaceLineEndings("\n");
+
+        await Assert.That(output).Contains("^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^");
+    }
+
+    [Test]
+    public async Task Rich_SourceSnippet_TabPrefix_CaretAlignedToDisplayWidth()
+    {
+        var source = "\tfoo\n"u8.ToArray();
+        var sourceMap = new Dictionary<string, byte[]> { ["t.yml"] = source };
+
+        var diag = MakeDiagnostic(DiagnosticSeverity.Error, "msg", 1, 2, 1, 5, filePath: "t.yml");
+        var output = Render(diag, sourceMap: sourceMap).ReplaceLineEndings("\n");
+
+        await Assert.That(output).Contains(" 1 | \tfoo");
+        await Assert.That(output).Contains("     |     ^^^");
+    }
+
+    [Test]
+    public async Task Rich_SourceSnippet_WideCharacters_CaretAlignedToDisplayWidth()
+    {
+        var source = Encoding.UTF8.GetBytes("# 日本\n");
+        var sourceMap = new Dictionary<string, byte[]> { ["t.yml"] = source };
+
+        var diag = MakeDiagnostic(DiagnosticSeverity.Error, "msg", 1, 3, 1, 9, filePath: "t.yml");
+        var output = Render(diag, sourceMap: sourceMap).ReplaceLineEndings("\n");
+
+        await Assert.That(output).Contains(" 1 | # 日本");
+        await Assert.That(output).Contains("     |   ^^^^");
+    }
+
+    [Test]
+    public async Task Rich_SourceSnippet_MultiLineSpan_ClosingCaretUsesDisplayWidth()
+    {
+        var source = Encoding.UTF8.GetBytes("start\n\tend\n");
+        var sourceMap = new Dictionary<string, byte[]> { ["t.yml"] = source };
+
+        var diag = MakeDiagnostic(DiagnosticSeverity.Error, "multi", 1, 1, 2, 4, filePath: "t.yml");
+        var output = Render(diag, sourceMap: sourceMap).ReplaceLineEndings("\n");
+
+        await Assert.That(output).Contains("2 || \tend");
+        await Assert.That(output).Contains("     | |_^^^");
     }
 
     [Test]
@@ -192,11 +338,12 @@ public sealed class DiagnosticFormatterRichTextTests
         var source = "on: push\n"u8.ToArray();
         var sourceMap = new Dictionary<string, byte[]> { ["ci.yml"] = source };
 
-        // StartCol == EndCol → minimum 1 caret
+        // StartCol == EndCol (inclusive point range) → exactly 1 caret
         var diag = MakeDiagnostic(DiagnosticSeverity.Error, "msg", 1, 4, 1, 4, filePath: "ci.yml");
         var output = Render(diag, sourceMap: sourceMap);
 
-        await Assert.That(output).Contains("^");
+        await Assert.That(output).Contains("     |    ^");
+        await Assert.That(output).DoesNotContain("     |    ^^");
     }
 
     [Test]
@@ -955,5 +1102,28 @@ public sealed class DiagnosticFormatterRichTextTests
             color,
             sourceMap);
         return Encoding.UTF8.GetString(buffer.WrittenSpan);
+    }
+
+    /// <summary>
+    /// Every snippet gutter row (separators, source lines, caret rows) must place
+    /// <c>|</c> at the same column. Uses the first pipe on each row so multi-line
+    /// continuation rows (<c>N || …</c>) still compare the gutter pipe only.
+    /// </summary>
+    private static async Task AssertGutterPipeColumnsAligned(string output)
+    {
+        var gutterLines = output
+            .ReplaceLineEndings("\n")
+            .Split('\n')
+            .Where(static line => line.StartsWith("   ", StringComparison.Ordinal) && line.Contains('|'))
+            .ToArray();
+
+        await Assert.That(gutterLines.Length).IsGreaterThan(1);
+
+        var pipeColumns = gutterLines.Select(static line => line.IndexOf('|')).ToArray();
+        var expectedColumn = pipeColumns[0];
+        for (var i = 1; i < pipeColumns.Length; i++)
+        {
+            await Assert.That(pipeColumns[i]).IsEqualTo(expectedColumn);
+        }
     }
 }

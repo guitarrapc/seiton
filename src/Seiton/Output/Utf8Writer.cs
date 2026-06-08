@@ -100,6 +100,13 @@ internal ref struct Utf8Writer
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public void WriteLine(char value)
+    {
+        Write(value);
+        WriteNewLine();
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public void WriteLine(int value)
     {
         WriteInt(value);
