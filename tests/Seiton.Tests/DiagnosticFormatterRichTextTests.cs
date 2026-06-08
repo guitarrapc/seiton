@@ -140,6 +140,35 @@ public sealed class DiagnosticFormatterRichTextTests
         await Assert.That(output).Contains(" 2 | jobs:");
     }
 
+    [Test]
+    public async Task Rich_SourceSnippet_MultiLineSpan_GutterSeparators_EmitPipeNotAsciiCode()
+    {
+        var source = "on: push\njobs:\n  build:\n    runs-on: ubuntu-latest\n"u8.ToArray();
+        var sourceMap = new Dictionary<string, byte[]> { ["ci.yml"] = source };
+
+        var diag = MakeDiagnostic(DiagnosticSeverity.Error, "multi", 2, 1, 3, 5, filePath: "ci.yml");
+        var output = Render(diag, sourceMap: sourceMap).ReplaceLineEndings("\n");
+
+        await Assert.That(output).DoesNotContain("124");
+        await Assert.That(output).Contains("    |\n");
+        await Assert.That(output.Split("    |\n", StringSplitOptions.None).Length).IsEqualTo(3);
+    }
+
+    [Test]
+    public async Task Rich_SourceSnippet_WideLineNumber_GutterSeparator_EmitsPipeNotAsciiCode()
+    {
+        var lines = Enumerable.Range(1, 120).Select(i => $"line-{i:000}");
+        var source = Encoding.UTF8.GetBytes(string.Join('\n', lines) + "\n");
+        var sourceMap = new Dictionary<string, byte[]> { ["ci.yml"] = source };
+
+        var diag = MakeDiagnostic(DiagnosticSeverity.Warning, "msg", 100, 1, 100, 8, filePath: "ci.yml");
+        var output = Render(diag, sourceMap: sourceMap).ReplaceLineEndings("\n");
+
+        await Assert.That(output).DoesNotContain("\n     124\n");
+        await Assert.That(output).Contains("     |\n");
+        await Assert.That(output).Contains("100 | line-100");
+    }
+
     // Rich format — help annotation
 
     [Test]

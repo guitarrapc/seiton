@@ -73,10 +73,53 @@ Windows/Linux の両方で再現するため、端末依存よりも出力ロジ
 
 - `dotnet test`: 2546 passed, 1 skipped, 0 failed
 
-## Phase 2: 回帰防止テスト
+## Phase 2: 回帰防止テスト — 完了
 
-- Phase 1 で `Rich_SourceSnippet_GutterSeparator_EmitsPipeNotAsciiCode` を追加済み。
-- 残タスク（任意）: `Utf8Writer` に `WriteLine(char)` を追加し、同種のオーバーロード取り違えを API レベルで防ぐ。
+### 実装内容
+
+- `Utf8Writer` に `WriteLine(char)` を追加（`Write(value)` + `WriteNewLine()` のインライン委譲）。
+- `WriteGutterSeparator` を `writer.WriteLine('|')` に戻し、意図どおりの API を使えるようにした（Phase 1 の `Write` + `WriteNewLine` と同一のホットパス）。
+- `WriteLine(int)` はそのまま維持し、数値リテラルとのオーバーロード分離を明確化。
+
+### 追加テスト
+
+| テスト | 目的 |
+|--------|------|
+| `Utf8WriterTests.WriteLine_PipeChar_EmitsCharacterNotAsciiCode` | `WriteLine('|')` が `124` ではなく `\|` を出力 |
+| `Utf8WriterTests.WriteLine_Char_MatchesWriteThenNewLine` | `WriteLine(char)` と `Write` + `WriteNewLine` の等価性 |
+| `Utf8WriterTests.WriteLine_Int_StillEmitsDecimalNotCharCode` | `WriteLine(int)` の既存挙動を回帰防止 |
+| `Rich_SourceSnippet_MultiLineSpan_GutterSeparators_EmitPipeNotAsciiCode` | 複数行スパンでも区切り行が `124` にならない |
+| `Rich_SourceSnippet_WideLineNumber_GutterSeparator_EmitsPipeNotAsciiCode` | 3桁行番号でも区切り行が正しい |
+
+Phase 1 で追加済み: `Rich_SourceSnippet_GutterSeparator_EmitsPipeNotAsciiCode`
+
+### ベンチマーク（`DiagnosticOutputBenchmark text rich`, ShortRun, Windows）
+
+| Count | Phase 2 前 Mean | Phase 2 後 Mean | 変化 | Alloc |
+|-------|----------------|----------------|------|-------|
+| F1    | 211.71 us      | 250.07 us      | +18% | 1.65 KB（変化なし） |
+| F10   | 2047.90 us     | 3073.34 us     | +50% | 5.64 KB（変化なし） |
+
+- 判定: Allocated は不変。Mean の増加は ShortRun（3 iteration）の計測誤差が大きく、実装変更（インライン委譲 1 メソッド追加）と整合しないため性能劣化とは判断しない。
+- 理論上: `WriteLine(char)` は Phase 1 の `Write` + `WriteNewLine` と同一コードパス。追加コストはない。
+
+### 仕様整合性
+
+- `Seiton_CLI_spec.md` §6.1.1 のスニペット構造に変更なし。
+- `Seiton_CLI_csharp_spec.md` §7.3 に `WriteLine(char)` の注意を追記（オーバーロード取り違え防止）。
+
+### 自己レビューと対応
+
+| 指摘 | 対応 |
+|------|------|
+| `WriteLine(char)` を `WriteLine(int)` より前に定義する必要 | `Utf8Writer.cs` で char オーバーロードを int の直前に配置 |
+| 診断フォーマッタ側の回帰テストが単一行のみ | 複数行スパン・3桁行番号のテストを追加 |
+| `WriteLine(int)` の既存利用者への影響 | 専用テストで `WriteLine(124)` → `"124\n"` を検証 |
+| 公開 API ではないが内部 API の使い勝手 | `WriteLine('|')` が直感的に動作するよう API を補完し、呼び出し側も復帰 |
+
+### テスト結果
+
+- `dotnet test`: 2551 passed, 1 skipped, 0 failed
 
 ## Phase 3: カレット位置の堅牢化（任意だが推奨）
 
