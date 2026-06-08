@@ -580,7 +580,8 @@ public static class DiagnosticFormatter
     {
         writer.Write("   ");
         WriteRepeatedChar(writer, ' ', lineNumWidth);
-        writer.WriteLine('|');
+        writer.Write('|');
+        writer.WriteNewLine();
     }
 
     private static void WriteGutterLine(Utf8Writer writer, int lineNum, int width, ReadOnlySpan<byte> sourceLine, bool color, string? blue, string? reset)

@@ -125,6 +125,21 @@ public sealed class DiagnosticFormatterRichTextTests
         await Assert.That(output).Contains("|");
     }
 
+    [Test]
+    public async Task Rich_SourceSnippet_GutterSeparator_EmitsPipeNotAsciiCode()
+    {
+        var source = "on: push\njobs:\n  build:\n"u8.ToArray();
+        var sourceMap = new Dictionary<string, byte[]> { ["ci.yml"] = source };
+
+        var diag = MakeDiagnostic(DiagnosticSeverity.Error, "msg", 2, 1, 2, 5, filePath: "ci.yml");
+        var output = Render(diag, sourceMap: sourceMap).ReplaceLineEndings("\n");
+
+        // '|' is ASCII 124; WriteLine('|') must not emit the numeric code as decimal text.
+        await Assert.That(output).DoesNotContain("\n   124\n");
+        await Assert.That(output).Contains("    |\n");
+        await Assert.That(output).Contains(" 2 | jobs:");
+    }
+
     // Rich format — help annotation
 
     [Test]

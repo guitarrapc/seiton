@@ -29,21 +29,54 @@ Windows/Linux の両方で再現するため、端末依存よりも出力ロジ
 
 ## 対応プラン
 
-## Phase 1: 即時修正（見た目崩れの除去）
+## Phase 1: 即時修正（見た目崩れの除去） — 完了
 
-- `WriteGutterSeparator` の `writer.WriteLine('|')` を、文字コード化されない書き方へ変更する。
-  - 例: `writer.Write('|'); writer.WriteNewLine();`
-  - または `writer.WriteLine("|");`
-- 目的:
-  - `124` 出力をなくし、リッチ診断の行構造を正しく表示する。
+### 実装内容
+
+- `src/Seiton/Output/DiagnosticFormatter.cs` の `WriteGutterSeparator` を修正。
+  - 変更前: `writer.WriteLine('|')` → `WriteLine(int)` に解決され `124` を出力
+  - 変更後: `writer.Write('|'); writer.WriteNewLine();` → 1バイトの `|` を出力
+- 文字列リテラル `WriteLine("|")` は使わず、`Write(char)` + `WriteNewLine()` を採用（ヒープ割り当てなし）。
+
+### 回帰テスト（Phase 2 の一部を先行実施）
+
+- `tests/Seiton.Tests/DiagnosticFormatterRichTextTests.cs` に `Rich_SourceSnippet_GutterSeparator_EmitsPipeNotAsciiCode` を追加。
+  - 区切り行が `124` を含まないこと
+  - 区切り行が `    |` として出ること
+  - ソース行が ` 2 | jobs:` 形式で出ること
+
+### ベンチマーク（`DiagnosticOutputBenchmark`, ShortRun, Windows）
+
+対象: リッチテキスト出力（`DiagnosticFormatter text rich`）— 本修正の影響範囲。
+
+| Count | 修正前 Mean | 修正後 Mean | 変化 | 修正前 Alloc | 修正後 Alloc |
+|-------|------------|------------|------|-------------|-------------|
+| F1    | 212.32 us  | 217.11 us  | +2.3% | 1.65 KB    | 1.65 KB     |
+| F10   | 2040.87 us | 2045.07 us | +0.2% | 5.64 KB    | 5.64 KB     |
+
+- 判定: Mean / Allocated ともに +10% 以内。実質ノイズ範囲で性能劣化なし。
+- 理論上の改善点: 修正前は `124`（3バイト + 整数フォーマット）を出力していたが、修正後は `|`（1バイト）のみ。出力バイト数は減少するが、ベンチマーク上は計測誤差内。
+
+### 仕様整合性
+
+- `Seiton_CLI_spec.md` §6.1.1 のスニペット構造（区切り行 `|`、行番号 + `|` + ソース）と一致。仕様変更は不要。
+
+### 自己レビューと対応
+
+| 指摘 | 対応 |
+|------|------|
+| `Utf8Writer` に `WriteLine(char)` がなく、`WriteLine('|')` が `int` に解決される footgun | Phase 1 では呼び出し側を `Write(char)` + `WriteNewLine()` に修正。`Utf8Writer.WriteLine(char)` 追加は Phase 3 以降の API 改善候補として残す |
+| 既存テスト `Rich_GutterBar_AlwaysEmitted` は `\|` の存在のみ確認で不十分 | 新テストで `124` 非出力と正しい区切り行を明示的に検証 |
+| 公開 API 変更なし（内部フォーマッタ修正のみ） | ユーザー向け CLI 挙動は仕様どおりに修正されただけ。API 変更なし |
+
+### テスト結果
+
+- `dotnet test`: 2546 passed, 1 skipped, 0 failed
 
 ## Phase 2: 回帰防止テスト
 
-- `DiagnosticFormatterRichTextTests` に以下を追加する。
-  - 区切り行が `124` を含まないこと
-  - 区切り行が `|` として出ること（既存より厳密なアサーション）
-- 目的:
-  - 同種のオーバーロード取り違えを将来防ぐ。
+- Phase 1 で `Rich_SourceSnippet_GutterSeparator_EmitsPipeNotAsciiCode` を追加済み。
+- 残タスク（任意）: `Utf8Writer` に `WriteLine(char)` を追加し、同種のオーバーロード取り違えを API レベルで防ぐ。
 
 ## Phase 3: カレット位置の堅牢化（任意だが推奨）
 
