@@ -1,8 +1,9 @@
-# seiton
-
+<a href="https://github.com/guitarrapc/seiton/releases/latest"><img src="https://img.shields.io/github/v/release/guitarrapc/seiton" alt="GitHub Release"></a>
 [![build](https://github.com/guitarrapc/seiton/actions/workflows/build.yaml/badge.svg)](https://github.com/guitarrapc/seiton/actions/workflows/build.yaml)
 
-[Installation](docs/installation.md) | [Usage](docs/usage.md) | [Rules](docs/rules.md) | [Configuration](docs/configuration.md) | [Overview](docs/index.md) | [Playground](https://guitarrapc.github.io/seiton/)
+# seiton
+
+[Overview](docs/index.md) | [Installation](docs/installation.md) | [Usage](docs/usage.md) | [Rules](docs/rules.md) | [Configuration](docs/configuration.md) | [Playground](https://guitarrapc.github.io/seiton/)
 
 **Seiton** is a security-focused linter & fixer for [GitHub Actions](https://github.com/features/actions) workflow files and action metadata files.
 It catches security issues, policy violations, and mistakes before they reach production — then optionally fixes them. Try it out in the [playground](https://guitarrapc.github.io/seiton/).
@@ -230,11 +231,11 @@ seiton install --ci
 
 | Page | What it covers |
 |---|---|
+| [Overview](docs/index.md) | Product overview and [comparison with other tools](docs/index.md#comparison-with-other-tools). |
 | [Installation](docs/installation.md) | Package managers, prebuilt binaries, Docker, attestation verification, and building from source. |
 | [Usage](docs/usage.md) | Commands, flags, environment variables, output formats, CI examples, and exit codes. |
 | [Rules](docs/rules.md) | Canonical rule reference with behavior, examples, remediation, and configuration notes. |
 | [Configuration](docs/configuration.md) | Config file discovery, schema, exclusions, fix settings, and network options. |
-| [Overview](docs/index.md) | Product overview and [comparison with other tools](docs/index.md#comparison-with-other-tools). |
 
 ## Release flow
 
