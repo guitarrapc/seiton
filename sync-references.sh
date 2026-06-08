@@ -17,6 +17,7 @@ repo_specs=(
   "azu/dockerfile-pin"
   "stacklok/frizbee"
   "praetorian-inc/trajan"
+  "koki-develop/ghasec"
   "AdnaneKhan/Gato-X"
   "Cysharp/ConsoleAppFramework"
   "guitarrapc/githubactions-lab"

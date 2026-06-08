@@ -1,5 +1,5 @@
 ---
-name: spec-document-policy
+name: document-spec-policy
 description: Policy for reading and writing specification documents under `.github/docs/`. Covers what belongs in specs (WHAT, WHY, lessons learned), what does not (detailed HOW), post-implementation updates, and cross-document consistency rules between parser specs and downstream documents.
 ---
 
