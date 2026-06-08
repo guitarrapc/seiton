@@ -386,9 +386,6 @@ public sealed record OutputConfig
 {
     /// <summary>Gets the diagnostic sort order. Defaults to <see cref="DiagnosticSortOrder.Location"/>.</summary>
     public DiagnosticSortOrder SortOrder { get; init; } = DiagnosticSortOrder.Location;
-
-    /// <summary>When true, rich text output may include YAML structure context snippets. Defaults to true.</summary>
-    public bool StructureSnippets { get; init; } = true;
 }
 
 /// <summary>Specifies how diagnostics are sorted in the final output.</summary>

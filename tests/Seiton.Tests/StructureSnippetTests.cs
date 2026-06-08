@@ -37,7 +37,7 @@ public sealed class StructureSnippetTests
         using var result = new LintEngine().Check(bytes, path);
         var diag = result.Diagnostics.First(d => d.RuleId == "unpinned-uses");
 
-        var output = RenderRich(diag, bytes, path, structureSnippets: true);
+        var output = RenderRich(diag, bytes, path);
 
         await Assert.That(output).Contains("= structure:");
         await Assert.That(output).Contains("jobs:");
@@ -70,7 +70,7 @@ public sealed class StructureSnippetTests
             RuleId: "parse",
             FilePath: path);
 
-        var output = RenderRich(diag, bytes, path, structureSnippets: true);
+        var output = RenderRich(diag, bytes, path);
 
         await Assert.That(output).Contains("= structure:");
         await Assert.That(output).Contains("jobs:");
@@ -90,25 +90,12 @@ public sealed class StructureSnippetTests
             RuleId: "action-shell-is-required",
             FilePath: path);
 
-        var output = RenderRich(diag, bytes, path, structureSnippets: true);
+        var output = RenderRich(diag, bytes, path);
 
         await Assert.That(output).Contains("= structure:");
         await Assert.That(output).Contains("runs:");
         await Assert.That(output).Contains("steps:");
         await Assert.That(output).Contains("- run: echo hi");
-    }
-
-    [Test]
-    public async Task Rich_StructureSnippetsDisabled_OmitsStructureBlock()
-    {
-        var path = "ci.yml";
-        var bytes = Encoding.UTF8.GetBytes(WorkflowYaml);
-        using var result = new LintEngine().Check(bytes, path);
-        var diag = result.Diagnostics.First(d => d.RuleId == "unpinned-uses");
-
-        var output = RenderRich(diag, bytes, path, structureSnippets: false);
-
-        await Assert.That(output).DoesNotContain("= structure:");
     }
 
     [Test]
@@ -127,8 +114,7 @@ public sealed class StructureSnippetTests
             OutputFormat.Text,
             oneline: true,
             color: false,
-            new Dictionary<string, byte[]> { [path] = bytes },
-            options: new DiagnosticFormatOptions(StructureSnippets: true));
+            new Dictionary<string, byte[]> { [path] = bytes });
         writer.Flush();
 
         await Assert.That(sb.ToString()).DoesNotContain("= structure:");
@@ -150,19 +136,14 @@ public sealed class StructureSnippetTests
             OutputFormat.Json,
             oneline: false,
             color: false,
-            new Dictionary<string, byte[]> { [path] = bytes },
-            options: new DiagnosticFormatOptions(StructureSnippets: true));
+            new Dictionary<string, byte[]> { [path] = bytes });
         writer.Flush();
 
         await Assert.That(sb.ToString()).DoesNotContain("structure");
         await Assert.That(sb.ToString()).DoesNotContain("jobs:");
     }
 
-    private static string RenderRich(
-        Diagnostic diagnostic,
-        byte[] source,
-        string path,
-        bool structureSnippets)
+    private static string RenderRich(Diagnostic diagnostic, byte[] source, string path)
     {
         var buffer = new ArrayBufferWriter<byte>();
         DiagnosticFormatter.Write(
@@ -171,8 +152,7 @@ public sealed class StructureSnippetTests
             OutputFormat.Text,
             oneline: false,
             color: false,
-            new Dictionary<string, byte[]> { [path] = source },
-            options: new DiagnosticFormatOptions(StructureSnippets: structureSnippets));
+            new Dictionary<string, byte[]> { [path] = source });
         return Encoding.UTF8.GetString(buffer.WrittenSpan);
     }
 }

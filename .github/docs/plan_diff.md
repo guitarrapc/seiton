@@ -68,17 +68,10 @@
 
 ## インターフェース方針（WHY）
 
-### A. 既定 ON + 明示 OFF
+### 方針: rich 出力では常に structure 表示
 
-- 理由: 可読性向上の恩恵が大きく、既存利用者にも有益。
-- 互換性懸念（ログ量増）には `--no-structure-snippet` で対応。
-
-### B. 既定 OFF + 明示 ON
-
-- 理由: 出力差分を最小化できる。
-- ただし UX 改善が届きにくい。
-
-推奨は **A（既定 ON）**。CI ログサイズ懸念があるため、設定で抑制可能にする。
+- 理由: 可読性向上の恩恵が大きく、オプトアウト用フラグは不要と判断。
+- `--oneline` / `json` / `sarif` は従来どおり structure 非表示。
 
 ---
 
@@ -92,7 +85,7 @@
 2. `sourceMap` から YAML を走査し、パスに対応する最小構造ブロックを復元
 3. `DiagnosticFormatter` の rich 出力に構造ブロックを追記
 4. `github-actions` 出力でも同様に追記（グループ内）
-5. 機能フラグ（CLI/Config）で ON/OFF を切替可能にする
+5. rich 出力では structure を常時表示（`--oneline` / `json` / `sarif` は除外）
 
 完了条件:
 
@@ -106,20 +99,17 @@
 - `StructureSnippetBuilder` / `YamlLineIndex`: インデント親たどりで最小 YAML 骨格を復元。無関係 sibling は `...` で省略。
 - `DiagnosticFormatter`: rich 出力の source snippet 直後に `= structure:` ブロックを追加（`text` / `github-actions` のみ）。
 - 表示ゲート: メッセージに `jobs.` / `steps[` プレフィックスがある、または祖先に `jobs:` / `steps:` / `runs:` がある場合のみ。
-- `DiagnosticFormatOptions.StructureSnippets`（既定 `true`）。
-- CLI `--no-structure-snippet`、config `output.structure-snippets: false` で無効化。
+- rich 出力では structure を常時表示（オプトアウトなし）。
 - ファイル単位で `YamlLineIndex` をキャッシュし、診断ごとの行インデックス構築を抑制。
 
 **API（ユーザーファースト観点）**
 
-- 既定 ON: 追加学習なしで文脈が得られる。
-- 明示 OFF のみ: `--no-structure-snippet`（否定形フラグでログ量抑制が直感的）。
+- 追加学習なしで文脈が得られる（rich 出力のデフォルト体験）。
 - `json` / `sarif` は非対象のまま（機械解釈は既存の line/col）。
 
 **テスト**
 
-- `tests/Seiton.Tests/StructureSnippetTests.cs`（6 件）
-- `RuleInterfaceTests` に `output.structure-snippets` 設定パース 3 件
+- `tests/Seiton.Tests/StructureSnippetTests.cs`（5 件）
 - `DiagnosticFormatterRichTextTests` 回帰 65 件パス
 
 **ベンチマーク（`DiagnosticOutputBenchmark`, Release, ShortRun）**
@@ -128,9 +118,6 @@
 |---|---|---|---|---|
 | F1 text rich | 231.88 μs | 212.06 μs | -8.5% | 1.65 KB（不変） |
 | F10 text rich | 2,217.15 μs | 2,430.41 μs | +9.6% | 5.64 KB（不変） |
-| F1 no structure（新規比較） | — | 203.57 μs | 対 structure 有効比 -4% | 1.65 KB |
-| F10 no structure | — | 2,249.18 μs | 対 structure 有効比 -7% | 5.64 KB |
-
 **性能評価**
 
 - **Allocated は増加なし**（構造表示は既存 source バイト参照 + 行インデックス再利用）。
@@ -167,8 +154,6 @@
 - `jobs.examples.steps[0].uses` で期待骨格が出る
 - action metadata `steps[0].run` でも同様に出る
 - パス不明診断で従来出力のみ
-- `--no-structure-snippet`（または同等設定）で非表示
-
 ### 回帰テスト
 
 - 既存の `text` / `github-actions` スナップショット比較

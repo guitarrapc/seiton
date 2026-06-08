@@ -60,21 +60,6 @@ public class DiagnosticOutputBenchmark
         return buffer.WrittenSpan.Length;
     }
 
-    [Benchmark(Description = "DiagnosticFormatter text rich no structure")]
-    public int WriteTextRichNoStructure()
-    {
-        using var buffer = new PooledByteBufferWriter(16_384);
-        DiagnosticFormatter.Write(
-            buffer,
-            _diagnostics,
-            OutputFormat.Text,
-            oneline: false,
-            color: false,
-            _sourceMap,
-            options: new DiagnosticFormatOptions(StructureSnippets: false));
-        return buffer.WrittenSpan.Length;
-    }
-
     [Benchmark(Description = "DiagnosticFormatter github-actions rich")]
     public int WriteGitHubActionsRich()
     {

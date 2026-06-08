@@ -30,8 +30,7 @@ internal static class CheckCommand
         VerboseLevel verboseLevel,
         bool includeActions,
         bool skipAgenticWorkflows = false,
-        bool formatExplicitlySet = false,
-        bool noStructureSnippet = false)
+        bool formatExplicitlySet = false)
     {
         var resolvedFormat = CliConfigBridge.ResolveOutputFormat(format, formatExplicitlySet);
         GitHubStepSummaryWriter.Reset();
@@ -289,8 +288,7 @@ internal static class CheckCommand
         // Output
         if (allDiagnostics.Count > 0)
         {
-            var formatOptions = ResolveDiagnosticFormatOptions(lintConfig, noStructureSnippet);
-            DiagnosticFormatter.WriteToStandardOutput(allDiagnostics, resolvedFormat, oneline, colorEnabled, sourceMap, options: formatOptions);
+            DiagnosticFormatter.WriteToStandardOutput(allDiagnostics, resolvedFormat, oneline, colorEnabled, sourceMap);
         }
 
         if (totalSuppressed > 0 && verboseLogger.IsEnabled)
@@ -961,12 +959,6 @@ internal static class CheckCommand
 
         suffix.Append(')');
         return summaryLine + suffix;
-    }
-
-    internal static DiagnosticFormatOptions ResolveDiagnosticFormatOptions(LintConfig? lintConfig, bool noStructureSnippet)
-    {
-        var enabled = !noStructureSnippet && (lintConfig?.Output.StructureSnippets ?? true);
-        return new DiagnosticFormatOptions(StructureSnippets: enabled);
     }
 
     internal static bool ShouldShowInitHint(ConfigPathResolution configResolution, OutputFormat format, IReadOnlyList<Diagnostic> diagnostics)

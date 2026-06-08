@@ -918,13 +918,12 @@ The `output` top-level section controls diagnostic output behavior. All keys are
 ```yaml
 output:
   sort-order: location            # location | rule
-  structure-snippets: true        # rich text/github-actions structure context (default: true)
 ```
 
 - `output.sort-order`: controls the order in which diagnostics are emitted.
   - `location` (default): sort by source position (StartLine → StartColumn → RuleId → Message). This matches the reading order of the source file and is the most natural output for interactive use.
   - `rule`: sort by rule priority first, then severity, then source position. Groups diagnostics by rule, useful for batch-fixing all instances of a single rule at a time.
-- `output.structure-snippets`: when `true` (default), rich human-readable CLI output (`text`, `github-actions`) may include an optional YAML structure context block after the source snippet. CLI `--no-structure-snippet` disables this for the invocation. Not applicable to `json` or `sarif`.
+- Rich human-readable CLI output (`text`, `github-actions`) includes an optional YAML structure context block (`= structure:`) after the source snippet when the diagnostic is attributable to workflow/action structure. Not applicable to `json`, `sarif`, or `--oneline`.
 
 ---
 
