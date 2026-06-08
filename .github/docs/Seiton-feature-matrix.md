@@ -1,7 +1,7 @@
 # 競合ツール比較判定表（Seiton）
 
 > 目的: actionlint / ghalint / zizmor / pinact / dockerfile-pin / frizbee と Seiton の機能差分を明確化し、採用検討の優先度を決める。
-> 更新日: 2026-05-13
+> 更新日: 2026-06-08
 
 ---
 
@@ -27,7 +27,7 @@
 
 補足:
 - Seiton の Lint/Remediation は GitHub Actions 中心に強い。
-- ルール総数は 61（default local 57 + online audit 4、`RuleCatalog` 基準）。
+- ルール総数は 61（default local 57 + online audit 4、`RuleCatalog` 基準）。`concurrency-limits` のみ default local 内で opt-in。
 - ghalint 全 13 ポリシーを完全カバー（✅ 昇格）。
 - Dockerfile/compose/任意YAML全般まで広げると、dockerfile-pin/frizbee に対して現状は部分的。
 
@@ -108,7 +108,7 @@ online audit rules（4）:
 
 | 機能カテゴリ | actionlint | ghalint | zizmor | pinact | dockerfile-pin | frizbee | Seiton現状 | 判定 | 採用優先度 |
 |---|---|---|---|---|---|---|---|---|---|
-| セキュリティ監査ルール網羅 | 中 | 中 | 非常に強い（36 audits） | なし | なし | なし | 実装済み（zizmor 監査 17件対応 + 7件部分対応） | 🟡 | P1 |
+| セキュリティ監査ルール網羅 | 中 | 中 | 非常に強い（39 audits） | なし | なし | なし | 実装済み（zizmor 監査 22件対応 + 8件部分対応） | 🟡 | P1 |
 | UsesのSHA pin診断 | あり | あり | あり | 主機能 | なし | あり | 実装済み | ✅ | 維持 |
 | Image digest pin診断 | 部分 | 部分 | あり | なし | 主機能 | 主機能 | 実装済み | ✅ | 維持 |
 | Network-assisted pin fix | なし | なし | 部分 | 強い | 強い | 強い | 実装済み | ✅ | 維持 |
@@ -162,8 +162,9 @@ online audit rules（4）:
 - 理由: 効果はあるが安定運用観点で優先度は低め
 
 3. zizmor 低優先度監査の取り込み
-- `bot-conditions`（スプーフ可能な bot チェック）
 - `obfuscation`（難読化検出）
+- `typosquat-uses`（人気 action へのタイポスクワット検出）
+- `adhoc-packages`（`gem install` / `npm install <pkg>` 等の ad-hoc パッケージ導入）
 - `dependabot-execution` / `dependabot-cooldown`（Dependabot 設定検査）
 - 理由: セキュリティ影響が限定的か、運用導入コストが高い
 
@@ -175,7 +176,7 @@ online audit rules（4）:
 - ghalint は全 13 ポリシーを完全カバーし、完全上位互換を達成。
 - actionlint は 17 ルール中 15 ルールを同等以上にカバー（残: shellcheck / pyflakes 外部連携のみ）。
 - 競合を完全に上回るには、次の2点が鍵。
-  - 残存 zizmor 監査差分の吸収（P0: 7件未対応 → `github-env` などの高価値監査から段階実装）
+  - 残存 zizmor 監査差分の吸収（P0: 4件未対応 + 1件部分対応 → `github-env` などの高価値監査から段階実装）
   - dockerfile-pin/frizbee級の対象ファイル範囲拡張（P0）
 
 この順で実装すれば、Seitonは「競合機能を包括しつつ、より現代的な統合ツール」という目標に最短で近づく。
@@ -230,13 +231,13 @@ online audit rules（4）:
 
 対応率: 13/13（100%）。完全カバー達成。
 
-### 6.3 zizmor 監査対応サマリー（36件）
+### 6.3 zizmor 監査対応サマリー（39件、`.references/zizmor` v1.25.2 基準）
 
 | 区分 | 件数 | Seiton 状況 |
 |---|---:|---|
 | 直接対応済み | 22 | `artipacked`, `bot-conditions`, `cache-poisoning-trigger`, `concurrency-limits`, `dangerous-triggers`, `github-app`, `hardcoded-container-credentials`, `impostor-commit`, `insecure-commands`, `known-vulnerable-actions`, `ref-confusion`, `secrets-inherit`, `secrets-outside-env`, `self-hosted-runner-trigger`, `stale-action-refs`, `template-injection`, `unpinned-images`, `unpinned-tools`, `unpinned-uses`, `unredacted-secrets`, `unsound-condition`, `unsound-contains` |
-| 部分対応 | 7 | `archived-uses`, `excessive-permissions`, `forbidden-uses`, `overprovisioned-secrets`, `ref-version-mismatch`, `undocumented-permissions`, `use-trusted-publishing` |
-| 未対応 | 2 | `github-env`, `obfuscation` |
+| 部分対応 | 8 | `archived-uses`, `excessive-permissions`, `forbidden-uses`, `overprovisioned-secrets`, `ref-version-mismatch`, `undocumented-permissions`, `unsound-ternary`, `use-trusted-publishing` |
+| 未対応 | 4 | `adhoc-packages`, `github-env`, `obfuscation`, `typosquat-uses` |
 | 非採用 | 3 | `anonymous-definition`, `misfeature`, `superfluous-actions` |
 | スコープ外 | 2 | `dependabot-execution`, `dependabot-cooldown` |
 
@@ -244,6 +245,7 @@ zizmor 監査ID別対応表（実装確認ベース）:
 
 | 監査ID | Seiton 対応状況 | 備考 |
 |---|---|---|
+| `adhoc-packages` | ❌ | 専用監査なし |
 | `archived-uses` | 🟡 | `archived-uses`（静的判定の初期実装） |
 | `artipacked` | ✅ | `artipacked` — checkout + upload-artifact のステップ間相関分析 |
 | `bot-conditions` | ✅ | `bot-conditions` |
@@ -279,9 +281,11 @@ zizmor 監査ID別対応表（実装確認ベース）:
 | `unredacted-secrets` | ✅ | `unredacted-secrets` |
 | `unsound-condition` | ✅ | `unsound-condition` |
 | `unsound-contains` | ✅ | `unsound-contains` |
+| `unsound-ternary` | 🟡 | `fake-ternary`（`cond && a \|\| b` パターン検出。falsy true value 特化判定は未対応） |
+| `typosquat-uses` | ❌ | 専用監査なし |
 | `use-trusted-publishing` | 🟡 | `use-trusted-publishing`（publish コマンド文字列ヒューリスティック + `id-token: write` 判定。NuGet/Cargo 等未対応、uses 判定なし） |
 
-対応率: 29/36（81%）— 未対応 2 件、非採用 3 件、スコープ外 2 件。
+対応率: 30/39（77%）— 未対応 4 件、非採用 3 件、スコープ外 2 件。
 
 ### 6.4 pinact / dockerfile-pin / frizbee（ルールエンジンではなく変換系）
 
@@ -299,9 +303,12 @@ zizmor 監査ID別対応表（実装確認ベース）:
 
 1. Dockerfile / compose / 任意YAML image pin 拡張
 
-2. zizmor 残差分（実装対象 2件）
+2. zizmor 残差分（実装対象 4件 + 部分 1件）
 - `github-env` — GITHUB_ENV への危険な書き込み検出
 - `obfuscation` — 難読化された Actions 機能使用
+- `typosquat-uses` — 人気 action へのタイポスクワット検出
+- `adhoc-packages` — ad-hoc パッケージ導入（`gem install` / `npm install <pkg>` 等）
+- `unsound-ternary` — falsy true value 特化判定（`fake-ternary` の拡張）
 
 非採用:
 - `anonymous-definition` — 命名/見やすさ寄りのため非採用
