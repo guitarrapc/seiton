@@ -511,7 +511,7 @@ public static class DiagnosticFormatter
                 var prefixWidth = SourceDisplayWidth.GetWidthBeforeColumn(sourceLine, safeStart);
                 var caretLen = Math.Max(
                     1,
-                    SourceDisplayWidth.GetWidthBetweenColumnsInclusive(sourceLine, safeStart, safeEnd - 1));
+                    SourceDisplayWidth.GetWidthBetweenColumnsInclusive(sourceLine, safeStart, safeEnd));
 
                 writer.Write("   ");
                 WriteRepeatedChar(writer, ' ', lineNumWidth);

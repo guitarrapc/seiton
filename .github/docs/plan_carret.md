@@ -207,3 +207,19 @@ Phase 1 で追加済み: `Rich_SourceSnippet_GutterSeparator_EmitsPipeNotAsciiCo
 - `dotnet test`: 2566 passed, 1 skipped, 0 failed
 - `dotnet run -c Release -- --filter "*DiagnosticOutputBenchmark*" --job short`
   - Allocated は既存レンジ内（`text rich`: F1 1.65 KB / F10 5.64 KB）
+
+### Round 3 finding and fix (publish検証で判明)
+
+- Finding:
+  - `template-injection` など単一行診断で、カレット長が 1 文字短いケースがある（off-by-one）。
+  - 原因は `DiagnosticFormatter` が `EndColumn` を半開区間として扱っていた点。
+- Evidence:
+  - `samples/readme` の line 8 (`github.event.pull_request.title`) は 31 文字だが、publish バイナリは 30 carets。
+  - `dotnet run --project src/Seiton`（修正後）は 31 carets。
+- Fix:
+  - `DiagnosticFormatter.WriteSourceSnippet` で単一行の caret 長計算を `StartColumn..EndColumn`（inclusive）に変更。
+  - 回帰テスト追加:
+    - `Rich_SourceSnippet_RealisticTemplateExpression_CaretCoversWholeToken`
+    - `Rich_SourceSnippet_CaretLengthMatchesColumnSpan` を inclusive 前提へ更新。
+- Spec sync:
+  - `.github/docs/Seiton_CLI_spec.md` の説明を half-open から inclusive に修正。

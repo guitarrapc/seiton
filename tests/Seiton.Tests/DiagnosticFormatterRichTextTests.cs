@@ -219,15 +219,28 @@ public sealed class DiagnosticFormatterRichTextTests
     [Test]
     public async Task Rich_SourceSnippet_CaretLengthMatchesColumnSpan()
     {
-        // "  build:" on line 3. col 3..8 → span of 5 chars
+        // "  build:" on line 3. col 3..8 (inclusive) → span of 6 chars
         var source = "on: push\njobs:\n  build:\n    runs-on: ubuntu-latest\n"u8.ToArray();
         var sourceMap = new Dictionary<string, byte[]> { ["ci.yml"] = source };
 
         var diag = MakeDiagnostic(DiagnosticSeverity.Error, "msg", 3, 3, 3, 8, filePath: "ci.yml");
         var output = Render(diag, sourceMap: sourceMap);
 
-        // Caret row must have exactly 5 carets (EndColumn - StartColumn = 8 - 3 = 5)
-        await Assert.That(output).Contains("^^^^^");
+        // Caret row must have exactly 6 carets (8 - 3 + 1 = 6)
+        await Assert.That(output).Contains("^^^^^^");
+    }
+
+    [Test]
+    public async Task Rich_SourceSnippet_RealisticTemplateExpression_CaretCoversWholeToken()
+    {
+        var source = "      - run: echo \"title is ${{ github.event.pull_request.title }}\"\n"u8.ToArray();
+        var sourceMap = new Dictionary<string, byte[]> { ["t.yml"] = source };
+
+        // "github.event.pull_request.title" starts at column 33 and has length 31 bytes.
+        var diag = MakeDiagnostic(DiagnosticSeverity.Error, "msg", 1, 33, 1, 63, filePath: "t.yml");
+        var output = Render(diag, sourceMap: sourceMap).ReplaceLineEndings("\n");
+
+        await Assert.That(output).Contains("^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^");
     }
 
     [Test]

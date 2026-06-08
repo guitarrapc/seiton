@@ -434,7 +434,7 @@ Snippet rendering behavior:
 - Line numbers in the gutter are right-aligned to the width of the last shown line number.
 - Diagnostic columns are 1-based byte offsets within the source line (same basis as the parser).
 - Caret padding and length use terminal display width: tabs advance to the next 4-column stop; East Asian wide characters count as width 2; ASCII counts as width 1.
-- Caret length (`^`) spans the display width of bytes from `StartColumn` through `EndColumn - 1` (half-open byte range); minimum 1 caret.
+- Caret length (`^`) spans the display width of bytes from `StartColumn` through `EndColumn` (inclusive byte range); minimum 1 caret.
 - When source is unavailable (for example stdin without a path, or JSON/SARIF formats), the gutter line `|` is emitted without snippet.
 
 Structure:
