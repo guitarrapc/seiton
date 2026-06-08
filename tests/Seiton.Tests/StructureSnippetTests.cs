@@ -231,6 +231,42 @@ public sealed class StructureSnippetTests
     }
 
     [Test]
+    public async Task TryBuild_TypicalWorkflow_FitsStackScratch()
+    {
+        var path = "ci.yml";
+        var bytes = Encoding.UTF8.GetBytes(WorkflowYaml);
+        using var result = new LintEngine().Check(bytes, path);
+        var diag = result.Diagnostics.First(d => d.RuleId == "unpinned-uses");
+
+        Span<StructureSnippetEntry> scratch = stackalloc StructureSnippetEntry[StructureSnippetBuilder.MaxStackDisplayEntries];
+        var built = StructureSnippetBuilder.TryBuild(
+            bytes,
+            diag,
+            cachedIndex: null,
+            scratch,
+            out _,
+            out var entries,
+            out _,
+            out var rentedEntries);
+        var entryCount = entries.Length;
+        var usedScratch = rentedEntries is null;
+        try
+        {
+            await Assert.That(built).IsTrue();
+            await Assert.That(entryCount).IsGreaterThan(0);
+            await Assert.That(entryCount).IsLessThanOrEqualTo(StructureSnippetBuilder.MaxStackDisplayEntries);
+            await Assert.That(usedScratch).IsTrue();
+        }
+        finally
+        {
+            if (rentedEntries is not null)
+            {
+                ArrayPool<StructureSnippetEntry>.Shared.Return(rentedEntries);
+            }
+        }
+    }
+
+    [Test]
     public async Task Oneline_OmitsStructureBlock()
     {
         var path = "ci.yml";

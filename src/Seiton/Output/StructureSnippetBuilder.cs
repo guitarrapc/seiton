@@ -7,16 +7,22 @@ namespace Seiton.Output;
 internal static class StructureSnippetBuilder
 {
     private const int MaxStackLines = 256;
+    internal const int MaxStackDisplayEntries = 32;
 
     public static bool TryBuild(
         byte[] source,
         Diagnostic diagnostic,
         YamlLineIndex? cachedIndex,
+        Span<StructureSnippetEntry> scratch,
         out YamlLineIndex lineIndex,
-        out StructureSnippetLines lines)
+        out ReadOnlySpan<StructureSnippetEntry> entries,
+        out int highlightLine1Based,
+        out StructureSnippetEntry[]? rentedEntries)
     {
         lineIndex = cachedIndex ?? YamlLineIndex.Create(source);
-        lines = default;
+        entries = default;
+        highlightLine1Based = 0;
+        rentedEntries = null;
 
         if (source.Length == 0)
         {
@@ -61,7 +67,38 @@ internal static class StructureSnippetBuilder
                 return false;
             }
 
-            return TryBuildDisplayLines(lineIndex, chainBuffer.Slice(trimStart, trimmedLength), targetLine, out lines);
+            highlightLine1Based = targetLine + 1;
+            var displayCount = trimmedLength;
+            for (var i = 0; i < trimmedLength - 1; i++)
+            {
+                var current = chainBuffer[trimStart + i];
+                var next = chainBuffer[trimStart + i + 1];
+                if (next - current > 1)
+                {
+                    displayCount++;
+                }
+            }
+
+            StructureSnippetEntry[]? rented = null;
+            var entriesBuffer = displayCount <= scratch.Length
+                ? scratch[..displayCount]
+                : (rented = ArrayPool<StructureSnippetEntry>.Shared.Rent(displayCount)).AsSpan(0, displayCount);
+            var entryCount = 0;
+
+            for (var i = 0; i < trimmedLength; i++)
+            {
+                var line0 = chainBuffer[trimStart + i];
+                if (i > 0 && line0 - chainBuffer[trimStart + i - 1] > 1)
+                {
+                    entriesBuffer[entryCount++] = StructureSnippetEntry.Ellipsis;
+                }
+
+                entriesBuffer[entryCount++] = lineIndex.CreateEntry(line0);
+            }
+
+            entries = entriesBuffer[..entryCount];
+            rentedEntries = rented;
+            return true;
         }
         finally
         {
@@ -166,40 +203,6 @@ internal static class StructureSnippetBuilder
         return 0;
     }
 
-    private static bool TryBuildDisplayLines(
-        YamlLineIndex lineIndex,
-        ReadOnlySpan<int> chain,
-        int targetLine0,
-        out StructureSnippetLines lines)
-    {
-        lines = default;
-        var displayCount = chain.Length;
-        for (var i = 0; i < chain.Length - 1; i++)
-        {
-            if (chain[i + 1] - chain[i] > 1)
-            {
-                displayCount++;
-            }
-        }
-
-        var rented = ArrayPool<StructureSnippetEntry>.Shared.Rent(displayCount);
-        var entries = rented.AsSpan(0, displayCount);
-        var count = 0;
-
-        for (var i = 0; i < chain.Length; i++)
-        {
-            if (i > 0 && chain[i] - chain[i - 1] > 1)
-            {
-                entries[count++] = StructureSnippetEntry.Ellipsis;
-            }
-
-            entries[count++] = new StructureSnippetEntry(chain[i] + 1, lineIndex.GetLineUtf8(chain[i]));
-        }
-
-        lines = StructureSnippetLines.CreateRented(rented, count, targetLine0 + 1);
-        return true;
-    }
-
     private static int FindParentLine(YamlLineIndex lineIndex, int lineIndex0, int indent)
     {
         for (var i = lineIndex0 - 1; i >= 0; i--)
@@ -221,50 +224,22 @@ internal static class StructureSnippetBuilder
 
 internal readonly struct StructureSnippetEntry
 {
-    public static StructureSnippetEntry Ellipsis { get; } = new(-1, default);
+    public static StructureSnippetEntry Ellipsis { get; } = new(-1, 0, 0);
 
-    public StructureSnippetEntry(int lineNumber, ReadOnlyMemory<byte> lineUtf8)
+    public StructureSnippetEntry(int lineNumber, int utf8Start, int utf8Length)
     {
         LineNumber = lineNumber;
-        LineUtf8 = lineUtf8;
+        Utf8Start = utf8Start;
+        Utf8Length = utf8Length;
     }
 
     public int LineNumber { get; }
-    public ReadOnlyMemory<byte> LineUtf8 { get; }
+    public int Utf8Start { get; }
+    public int Utf8Length { get; }
     public bool IsEllipsis => LineNumber < 0;
-}
 
-internal struct StructureSnippetLines : IDisposable
-{
-    private StructureSnippetLines(
-        StructureSnippetEntry[] entries,
-        int count,
-        int highlightLine1Based,
-        bool isRented)
-    {
-        Entries = entries;
-        Count = count;
-        HighlightLine1Based = highlightLine1Based;
-        IsRented = isRented;
-    }
-
-    public static StructureSnippetLines CreateRented(StructureSnippetEntry[] rented, int count, int highlightLine1Based)
-        => new(rented, count, highlightLine1Based, isRented: true);
-
-    public void Dispose()
-    {
-        if (IsRented && Entries is not null)
-        {
-            ArrayPool<StructureSnippetEntry>.Shared.Return(Entries);
-            this = default;
-        }
-    }
-
-    public StructureSnippetEntry[] Entries { get; }
-    public int Count { get; }
-    public int HighlightLine1Based { get; }
-    public bool IsRented { get; }
-    public bool IsEmpty => Count == 0;
+    public ReadOnlySpan<byte> GetLineUtf8(ReadOnlySpan<byte> source)
+        => IsEllipsis ? default : source.Slice(Utf8Start, Utf8Length);
 }
 
 internal sealed class YamlLineIndex
@@ -347,6 +322,9 @@ internal sealed class YamlLineIndex
 
         return _source.AsMemory(_lineStarts[lineIndex], _lineLengths[lineIndex]);
     }
+
+    public StructureSnippetEntry CreateEntry(int lineIndex0)
+        => new(lineIndex0 + 1, _lineStarts[lineIndex0], _lineLengths[lineIndex0]);
 
     public bool IsStructuralKey(int lineIndex)
         => IsJobsKey(lineIndex) || IsStepsKey(lineIndex) || IsRunsKey(lineIndex);

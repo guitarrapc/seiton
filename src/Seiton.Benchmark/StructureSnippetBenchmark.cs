@@ -58,9 +58,23 @@ public class StructureSnippetBenchmark
             }
 
             _lineIndexCache.TryGetValue(file, out var cached);
-            if (StructureSnippetBuilder.TryBuild(bytes, diag, cached, out var lineIndex, out var lines) && !lines.IsEmpty)
+            Span<StructureSnippetEntry> scratch = stackalloc StructureSnippetEntry[StructureSnippetBuilder.MaxStackDisplayEntries];
+            if (StructureSnippetBuilder.TryBuild(
+                    bytes,
+                    diag,
+                    cached,
+                    scratch,
+                    out var lineIndex,
+                    out var entries,
+                    out _,
+                    out var rentedEntries)
+                && !entries.IsEmpty)
             {
-                using var linesLease = lines;
+                if (rentedEntries is not null)
+                {
+                    ArrayPool<StructureSnippetEntry>.Shared.Return(rentedEntries);
+                }
+
                 built++;
             }
 
