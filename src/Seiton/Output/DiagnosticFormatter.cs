@@ -515,7 +515,7 @@ public static class DiagnosticFormatter
 
                 writer.Write("   ");
                 WriteRepeatedChar(writer, ' ', lineNumWidth);
-                writer.Write("| ");
+                writer.Write(" | ");
                 WriteRepeatedChar(writer, ' ', prefixWidth);
                 if (color)
                 {
@@ -556,7 +556,7 @@ public static class DiagnosticFormatter
                     SourceDisplayWidth.GetWidthBetweenColumnsInclusive(lastLine, 2, closingEndColumn));
                 writer.Write("   ");
                 WriteRepeatedChar(writer, ' ', lineNumWidth);
-                writer.Write("| ");
+                writer.Write(" | ");
                 if (color)
                 {
                     writer.Write(severityColor!);
@@ -588,7 +588,7 @@ public static class DiagnosticFormatter
     {
         writer.Write("   ");
         WriteRepeatedChar(writer, ' ', lineNumWidth);
-        writer.WriteLine('|');
+        writer.WriteLine(" |");
     }
 
     private static void WriteGutterLine(Utf8Writer writer, int lineNum, int width, ReadOnlySpan<byte> sourceLine, bool color, string? blue, string? reset)
