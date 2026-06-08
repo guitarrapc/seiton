@@ -169,6 +169,56 @@ public sealed class DiagnosticFormatterRichTextTests
         await Assert.That(output).Contains("100 | line-100");
     }
 
+    [Test]
+    public async Task Rich_SourceSnippet_GutterPipeColumn_Aligned_SingleDigitLineNumber()
+    {
+        var source = "on: push\njobs:\n  build:\n"u8.ToArray();
+        var sourceMap = new Dictionary<string, byte[]> { ["ci.yml"] = source };
+
+        var diag = MakeDiagnostic(DiagnosticSeverity.Error, "msg", 2, 1, 2, 5, filePath: "ci.yml");
+        var output = Render(diag, sourceMap: sourceMap);
+
+        await AssertGutterPipeColumnsAligned(output);
+    }
+
+    [Test]
+    public async Task Rich_SourceSnippet_GutterPipeColumn_Aligned_DoubleDigitLineNumber()
+    {
+        var lines = Enumerable.Range(1, 15).Select(i => $"line-{i}");
+        var source = Encoding.UTF8.GetBytes(string.Join('\n', lines) + "\n");
+        var sourceMap = new Dictionary<string, byte[]> { ["ci.yml"] = source };
+
+        var diag = MakeDiagnostic(DiagnosticSeverity.Warning, "msg", 10, 1, 10, 8, filePath: "ci.yml");
+        var output = Render(diag, sourceMap: sourceMap);
+
+        await AssertGutterPipeColumnsAligned(output);
+    }
+
+    [Test]
+    public async Task Rich_SourceSnippet_GutterPipeColumn_Aligned_TripleDigitLineNumber()
+    {
+        var lines = Enumerable.Range(1, 120).Select(i => $"line-{i:000}");
+        var source = Encoding.UTF8.GetBytes(string.Join('\n', lines) + "\n");
+        var sourceMap = new Dictionary<string, byte[]> { ["ci.yml"] = source };
+
+        var diag = MakeDiagnostic(DiagnosticSeverity.Warning, "msg", 100, 1, 100, 8, filePath: "ci.yml");
+        var output = Render(diag, sourceMap: sourceMap);
+
+        await AssertGutterPipeColumnsAligned(output);
+    }
+
+    [Test]
+    public async Task Rich_SourceSnippet_GutterPipeColumn_Aligned_MultiLineSpan()
+    {
+        var source = "on: push\njobs:\n  build:\n    runs-on: ubuntu-latest\n"u8.ToArray();
+        var sourceMap = new Dictionary<string, byte[]> { ["ci.yml"] = source };
+
+        var diag = MakeDiagnostic(DiagnosticSeverity.Error, "multi", 2, 1, 3, 5, filePath: "ci.yml");
+        var output = Render(diag, sourceMap: sourceMap);
+
+        await AssertGutterPipeColumnsAligned(output);
+    }
+
     // Rich format — help annotation
 
     [Test]
@@ -1052,5 +1102,28 @@ public sealed class DiagnosticFormatterRichTextTests
             color,
             sourceMap);
         return Encoding.UTF8.GetString(buffer.WrittenSpan);
+    }
+
+    /// <summary>
+    /// Every snippet gutter row (separators, source lines, caret rows) must place
+    /// <c>|</c> at the same column. Uses the first pipe on each row so multi-line
+    /// continuation rows (<c>N || …</c>) still compare the gutter pipe only.
+    /// </summary>
+    private static async Task AssertGutterPipeColumnsAligned(string output)
+    {
+        var gutterLines = output
+            .ReplaceLineEndings("\n")
+            .Split('\n')
+            .Where(static line => line.StartsWith("   ", StringComparison.Ordinal) && line.Contains('|'))
+            .ToArray();
+
+        await Assert.That(gutterLines.Length).IsGreaterThan(1);
+
+        var pipeColumns = gutterLines.Select(static line => line.IndexOf('|')).ToArray();
+        var expectedColumn = pipeColumns[0];
+        for (var i = 1; i < pipeColumns.Length; i++)
+        {
+            await Assert.That(pipeColumns[i]).IsEqualTo(expectedColumn);
+        }
     }
 }

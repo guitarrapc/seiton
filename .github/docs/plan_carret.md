@@ -243,3 +243,11 @@ Phase 1 で追加済み: `Rich_SourceSnippet_GutterSeparator_EmitsPipeNotAsciiCo
   - F1: 224.99 μs (+6.0% vs Phase 1 前 212.32 μs), Alloc 1.65 KB（不変）
   - F10: 2194.35 μs (+7.5% vs Phase 1 前 2040.87 μs), Alloc 5.64 KB（不変）
 - 判定: Mean / Allocated ともに +10% 以内。性能劣化なし。
+
+### Round 5 (gutter pipe column regression tests)
+
+- Finding:
+  - 区切り行の `Contains("    |")` 等は部分文字列マッチのため、列ズレを検知できない（`"     |".Contains("    |")` が true）。
+- Fix:
+  - `AssertGutterPipeColumnsAligned` を追加し、スニペット内の全ガター行で `IndexOf('|')` が一致することを検証。
+  - 1桁 / 2桁 / 3桁行番号および複数行スパンでテストを追加。
