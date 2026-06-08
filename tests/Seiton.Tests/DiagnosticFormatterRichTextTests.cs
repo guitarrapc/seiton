@@ -231,6 +231,45 @@ public sealed class DiagnosticFormatterRichTextTests
     }
 
     [Test]
+    public async Task Rich_SourceSnippet_TabPrefix_CaretAlignedToDisplayWidth()
+    {
+        var source = "\tfoo\n"u8.ToArray();
+        var sourceMap = new Dictionary<string, byte[]> { ["t.yml"] = source };
+
+        var diag = MakeDiagnostic(DiagnosticSeverity.Error, "msg", 1, 2, 1, 5, filePath: "t.yml");
+        var output = Render(diag, sourceMap: sourceMap).ReplaceLineEndings("\n");
+
+        await Assert.That(output).Contains(" 1 | \tfoo");
+        await Assert.That(output).Contains("   |     ^^^");
+    }
+
+    [Test]
+    public async Task Rich_SourceSnippet_WideCharacters_CaretAlignedToDisplayWidth()
+    {
+        var source = Encoding.UTF8.GetBytes("# 日本\n");
+        var sourceMap = new Dictionary<string, byte[]> { ["t.yml"] = source };
+
+        var diag = MakeDiagnostic(DiagnosticSeverity.Error, "msg", 1, 3, 1, 9, filePath: "t.yml");
+        var output = Render(diag, sourceMap: sourceMap).ReplaceLineEndings("\n");
+
+        await Assert.That(output).Contains(" 1 | # 日本");
+        await Assert.That(output).Contains("    |   ^^^^");
+    }
+
+    [Test]
+    public async Task Rich_SourceSnippet_MultiLineSpan_ClosingCaretUsesDisplayWidth()
+    {
+        var source = Encoding.UTF8.GetBytes("start\n\tend\n");
+        var sourceMap = new Dictionary<string, byte[]> { ["t.yml"] = source };
+
+        var diag = MakeDiagnostic(DiagnosticSeverity.Error, "multi", 1, 1, 2, 4, filePath: "t.yml");
+        var output = Render(diag, sourceMap: sourceMap).ReplaceLineEndings("\n");
+
+        await Assert.That(output).Contains("2 || \tend");
+        await Assert.That(output).Contains("   | |_^^^");
+    }
+
+    [Test]
     public async Task Rich_SourceSnippet_MinimumOneCaret_WhenStartEqualsEnd()
     {
         var source = "on: push\n"u8.ToArray();

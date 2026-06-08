@@ -121,14 +121,51 @@ Phase 1 で追加済み: `Rich_SourceSnippet_GutterSeparator_EmitsPipeNotAsciiCo
 
 - `dotnet test`: 2551 passed, 1 skipped, 0 failed
 
-## Phase 3: カレット位置の堅牢化（任意だが推奨）
+## Phase 3: カレット位置の堅牢化 — 完了
 
-- 表示幅ベースのカレット配置を検討する。
-  - タブの展開方針（例: 4 or 8 固定）を決める
-  - 必要なら `Rune` 単位または表示幅計算を導入する
-- 最小要件:
-  - ASCII + スペースでは現行と同一表示を維持
-  - タブ/非ASCII入力で「見た目上のカレット先頭」が意図位置と一致することをテストで保証
+### 実装内容
+
+- `src/Seiton/Output/SourceDisplayWidth.cs` を追加。
+  - 1-based バイト列を端末表示幅へ変換（タブ幅 4、ASCII 幅 1、East Asian wide 幅 2）。
+  - `GetWidthBeforeColumn` / `GetWidthBetweenColumnsInclusive` を `DiagnosticFormatter` のカレット行で使用。
+- 単一行・複数行（closing caret）とも表示幅ベースでパディング / カレット長を計算。
+
+### 追加テスト
+
+| テスト | 目的 |
+|--------|------|
+| `SourceDisplayWidthTests.*` | 単体: ASCII / タブ / 全角 / 列範囲 |
+| `Rich_SourceSnippet_TabPrefix_CaretAlignedToDisplayWidth` | タブ後のカレット位置 |
+| `Rich_SourceSnippet_WideCharacters_CaretAlignedToDisplayWidth` | 全角文字のカレット位置 |
+| `Rich_SourceSnippet_MultiLineSpan_ClosingCaretUsesDisplayWidth` | 複数行 closing caret |
+
+### ベンチマーク（`DiagnosticOutputBenchmark text rich`, ShortRun, Windows）
+
+| Count | Phase 3 前 Mean | Phase 3 後 Mean | 変化 | Alloc |
+|-------|----------------|----------------|------|-------|
+| F1    | 227.65 us      | 215.78 us      | -5.2% | 1.65 KB（不変） |
+| F10   | 2149.93 us     | 2064.57 us     | -4.0% | 5.64 KB（不変） |
+
+- 判定: Allocated 不変。Mean は計測誤差内でむしろ微減（ASCII 主体ワークフローでは表示幅計算が byte 数と一致し、追加分岐コストが支配的でないため）。
+- 理論上: 表示幅スキャンはカレット行生成時のみ（診断あたり 1–2 回）、ヒープ割り当てなし。
+
+### 仕様整合性
+
+- `Seiton_CLI_spec.md` §6.1.1 に表示幅ルール（タブ幅 4、byte column 基準）を追記。
+- `Seiton_CLI_csharp_spec.md` §7.3 に `SourceDisplayWidth` を追記。
+
+### 自己レビューと対応
+
+| 指摘 | 対応 |
+|------|------|
+| タブ幅 4 の根拠が不明確 | YAML/エディタ慣習に合わせ 4 に固定し、仕様書に明記 |
+| East Asian wide 判定の完全性 | 主要 CJK 範囲をカバーする実用的テーブル。結合文字は幅 0 |
+| ASCII 回帰 | 既存 `DiagnosticFormatterRichTextTests` 全件パスで確認 |
+| 複数行 closing caret の byte column 前提 | `GetWidthBetweenColumnsInclusive(lastLine, 2, endCol)` で列 2 以降の表示幅を使用 |
+
+### テスト結果
+
+- `dotnet test`: 2560 passed, 1 skipped, 0 failed
 
 ## 受け入れ条件
 

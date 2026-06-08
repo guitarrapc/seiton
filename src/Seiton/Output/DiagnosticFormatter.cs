@@ -502,17 +502,21 @@ public static class DiagnosticFormatter
             if (startLine == endLine)
             {
                 // Single-line span
-                WriteGutterLine(writer, startLine, lineNumWidth, lineSlices[0].AsSpan(sourceSpan), color, blue, reset);
+                var sourceLine = lineSlices[0].AsSpan(sourceSpan);
+                WriteGutterLine(writer, startLine, lineNumWidth, sourceLine, color, blue, reset);
 
-                // Underline caret: columns are 1-based
+                // Underline caret: columns are 1-based byte positions; pad by terminal display width.
                 var safeStart = Math.Max(1, startCol);
                 var safeEnd = endCol > safeStart ? endCol : safeStart + 1;
-                var caretLen = Math.Max(1, safeEnd - safeStart);
+                var prefixWidth = SourceDisplayWidth.GetWidthBeforeColumn(sourceLine, safeStart);
+                var caretLen = Math.Max(
+                    1,
+                    SourceDisplayWidth.GetWidthBetweenColumnsInclusive(sourceLine, safeStart, safeEnd - 1));
 
                 writer.Write("   ");
                 WriteRepeatedChar(writer, ' ', lineNumWidth);
                 writer.Write("| ");
-                WriteRepeatedChar(writer, ' ', safeStart - 1);
+                WriteRepeatedChar(writer, ' ', prefixWidth);
                 if (color)
                 {
                     writer.Write(severityColor!);
@@ -544,8 +548,12 @@ public static class DiagnosticFormatter
                         reset);
                 }
 
-                // Closing underline
-                var closingCaretLen = Math.Max(1, endCol - 1);
+                // Closing underline on the last line (columns 2..endCol inclusive).
+                var lastLine = lineSlices[^1].AsSpan(sourceSpan);
+                var closingEndColumn = Math.Max(2, endCol);
+                var closingCaretLen = Math.Max(
+                    1,
+                    SourceDisplayWidth.GetWidthBetweenColumnsInclusive(lastLine, 2, closingEndColumn));
                 writer.Write("   ");
                 WriteRepeatedChar(writer, ' ', lineNumWidth);
                 writer.Write("| ");
