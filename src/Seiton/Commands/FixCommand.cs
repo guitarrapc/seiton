@@ -306,6 +306,11 @@ internal static class FixCommand
                         allDiagnostics.AddRange(dryRunHandle.Diagnostics.AsSpan());
                     }
 
+                    if (sourceMap is not null && !dryRunYaml.AsSpan().SequenceEqual(utf8Yaml))
+                    {
+                        sourceMap[filePath] = dryRunYaml;
+                    }
+
                     continue;
                 }
 
@@ -355,6 +360,10 @@ internal static class FixCommand
                     }
 
                     allDiagnostics.AddRange(currentHandle.Diagnostics.AsSpan());
+                    if (sourceMap is not null && applyContentChanged)
+                    {
+                        sourceMap[filePath] = currentYaml;
+                    }
                 }
                 finally
                 {

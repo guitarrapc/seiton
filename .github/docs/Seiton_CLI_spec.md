@@ -441,7 +441,9 @@ Structure snippet rendering behavior (`text` / `github-actions` rich format only
 
 - Rich `text` / `github-actions` output always includes a second gutter block labeled `= structure:` when applicable, following the source snippet.
 - The block shows the minimal YAML ancestor chain from `jobs:` / `runs:` down to the diagnostic line, omitting unrelated sibling keys with a `...` ellipsis line.
-- Shown only when the diagnostic is attributable to workflow/action structure (message path prefix such as `jobs.'…'` / `steps[n]`, or ancestor chain includes `jobs:` / `steps:` / `runs:`).
+- Shown only when the diagnostic is attributable to workflow/action structure (message path prefix such as `jobs.'…'` / `steps[n]`, optional `structure-path` diagnostic metadata, or ancestor chain includes `jobs:` / `steps:` / `runs:`).
+- When a structure path is present (parsed from the message or `structure-path` metadata), the snippet resolves the target YAML node from that path so the correct step/job context is shown even if the diagnostic line/column points elsewhere.
+- In `--fix` mode, structure snippets use the post-fix file bytes in `sourceMap` when fixes were applied, so remaining diagnostics align with the modified YAML.
 - Not emitted for `--oneline`, `json`, or `sarif` output.
 
 Structure:

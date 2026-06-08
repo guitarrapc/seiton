@@ -79,6 +79,90 @@ public sealed class StructureSnippetTests
     }
 
     [Test]
+    public async Task Rich_MessagePath_SelectsCorrectStepAmongSiblings()
+    {
+        var yaml = """
+            on: push
+            jobs:
+              build:
+                runs-on: ubuntu-24.04
+                steps:
+                  - uses: actions/checkout@v2
+                  - uses: actions/setup-node@v4
+            """;
+        var path = "ci.yml";
+        var bytes = Encoding.UTF8.GetBytes(yaml);
+        var diag = new Diagnostic(
+            DiagnosticSeverity.Error,
+            "jobs.'build'.steps[1].uses must be string",
+            new TextRange(0, 0, 8, 11, 8, 40),
+            RuleId: "parse",
+            FilePath: path);
+
+        var output = RenderRich(diag, bytes, path);
+
+        await Assert.That(output).Contains("- uses: actions/checkout@v2");
+        await Assert.That(output).DoesNotContain("setup-node");
+    }
+
+    [Test]
+    public async Task Rich_MetadataStructurePath_OverridesMessageParsing()
+    {
+        var yaml = """
+            on: push
+            jobs:
+              build:
+                runs-on: ubuntu-24.04
+                steps:
+                  - uses: actions/checkout@v2
+                  - uses: actions/setup-node@v4
+            """;
+        var path = "ci.yml";
+        var bytes = Encoding.UTF8.GetBytes(yaml);
+        var diag = new Diagnostic(
+            DiagnosticSeverity.Error,
+            "unpinned external action reference",
+            new TextRange(0, 0, 8, 11, 8, 40),
+            RuleId: "unpinned-uses",
+            FilePath: path,
+            Metadata: new Dictionary<string, string>
+            {
+                [DiagnosticStructurePathMetadata.Key] = "jobs.'build'.steps[1].uses",
+            });
+
+        var output = RenderRich(diag, bytes, path);
+
+        await Assert.That(output).Contains("- uses: actions/checkout@v2");
+        await Assert.That(output).DoesNotContain("setup-node");
+    }
+
+    [Test]
+    public async Task Rich_JobReusableWorkflow_ShowsUsesLine()
+    {
+        var yaml = """
+            on: push
+            jobs:
+              call:
+                uses: org/repo/.github/workflows/ci.yml@v1
+            """;
+        var path = "ci.yml";
+        var bytes = Encoding.UTF8.GetBytes(yaml);
+        var diag = new Diagnostic(
+            DiagnosticSeverity.Warning,
+            "jobs.'call'.uses 'org/repo/.github/workflows/ci.yml@v1' is not pinned to a full-length commit SHA",
+            new TextRange(0, 0, 4, 5, 4, 55),
+            RuleId: "unpinned-uses",
+            FilePath: path);
+
+        var output = RenderRich(diag, bytes, path);
+
+        await Assert.That(output).Contains("= structure:");
+        await Assert.That(output).Contains("jobs:");
+        await Assert.That(output).Contains("call:");
+        await Assert.That(output).Contains("uses: org/repo/.github/workflows/ci.yml@v1");
+    }
+
+    [Test]
     public async Task Rich_ActionMetadata_RunStep_ShowsStructure()
     {
         var path = "action.yml";
@@ -96,6 +180,52 @@ public sealed class StructureSnippetTests
         await Assert.That(output).Contains("runs:");
         await Assert.That(output).Contains("steps:");
         await Assert.That(output).Contains("- run: echo hi");
+    }
+
+    [Test]
+    public async Task Rich_ActionMetadata_StepsPathPrefix_ShowsStructure()
+    {
+        var path = "action.yml";
+        var bytes = Encoding.UTF8.GetBytes(ActionYaml);
+        var diag = new Diagnostic(
+            DiagnosticSeverity.Error,
+            "steps[1].run must be string",
+            new TextRange(0, 0, 5, 5, 5, 18),
+            RuleId: "parse",
+            FilePath: path);
+
+        var output = RenderRich(diag, bytes, path);
+
+        await Assert.That(output).Contains("= structure:");
+        await Assert.That(output).Contains("steps:");
+        await Assert.That(output).Contains("- run: echo hi");
+    }
+
+    [Test]
+    public async Task Rich_SourceMapReflectsProvidedBytes()
+    {
+        var yaml = """
+            on: push
+            jobs:
+              build:
+                runs-on: ubuntu-24.04
+                steps:
+                  - uses: actions/checkout@aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+            """;
+        var path = "ci.yml";
+        var bytes = Encoding.UTF8.GetBytes(yaml);
+        var diag = new Diagnostic(
+            DiagnosticSeverity.Error,
+            "jobs.'build'.steps[1].uses must be string",
+            new TextRange(0, 0, 99, 11, 99, 80),
+            RuleId: "parse",
+            FilePath: path);
+
+        var output = RenderRich(diag, bytes, path);
+
+        await Assert.That(output).Contains("= structure:");
+        await Assert.That(output).Contains("- uses: actions/checkout@aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa");
+        await Assert.That(output).Contains("6 |");
     }
 
     [Test]

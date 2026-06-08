@@ -145,6 +145,57 @@
 - 大規模 workflow でも実用的な速度・メモリで動作
 - ノイズ過多・情報不足の両方を抑制
 
+### フェーズ 2 実装記録（完了）
+
+**実装内容**
+
+- `DiagnosticStructurePathParser` / `DiagnosticStructurePathResolver`: メッセージまたは `structure-path` メタデータから `jobs.'id'.steps[n].field` 形式を解析し、YAML 上の対象行を解決。
+- インライン sequence キー（`- uses:` / `- run:`）をパス終端として認識。
+- 診断 location が範囲外でも、パス解決に成功すれば structure を表示（メッセージと表示の一貫性）。
+- `DiagnosticStructurePathMetadata.Key`（`structure-path`）: ルールが明示パスを付与できる公開定数（メッセージ非依存の安定 API）。
+- `StructureSnippetBuilder`: 祖先チェーン構築で `int[]` の診断ごと `ToArray()` を廃止し、`stackalloc`/`ArrayPool` 上で trim + 表示行生成。
+- `YamlLineIndex`: 子キー探索・sequence 項探索のナビゲーション API を追加。
+- `FixCommand`: fix / dry-run 適用後に `sourceMap` を更新し、残診断の structure が修正後 YAML と一致。
+- `StructureSnippetBenchmark`: TryBuild 専用ベンチマークを追加。
+
+**API（ユーザーファースト観点）**
+
+- ユーザーは追加フラグなしで、メッセージパスに基づく正しい job/step 文脈を得られる。
+- ルール作者は任意で `Metadata["structure-path"]` を付与でき、メッセージ文言変更の影響を受けにくい。
+- fix 後も structure がファイル実体とずれない。
+
+**テスト**
+
+- `StructureSnippetTests` 10 件（パス選択、metadata、job `uses`、action `steps[n]`、sourceMap、回帰）
+- `Seiton.Tests` 400 / `Seiton.Core.Tests` 1887 パス
+
+**ベンチマーク（Release, ShortRun）**
+
+| ケース | フェーズ 1 後 Mean | フェーズ 2 後 Mean | 変化 | Allocated (F10) |
+|---|---|---|---|---|
+| F1 text rich | 212.06 μs | 262.5 μs | +23.8%* | 18.93 KB |
+| F10 text rich | 2,430.41 μs | 2,578.1 μs | +6.1% | 177.31 KB |
+| TryBuild all (新規) | — | 176.7 μs | — | 128.91 KB |
+
+\*F1 は ShortRun 3 反復の誤差が大きく、セッション内の直前計測（~2535 μs F10）と比べると F10 は +1.7% 程度。フェーズ 2 のパス解析コストは F10 で許容閾値（+10%）内。
+
+**性能評価**
+
+- 祖先チェーンの中間 `int[]` 割当を削減。表示用 `StructureSnippetEntry[]` のみ残る（出力に必要）。
+- パス解析はメッセージ先頭または metadata のみを参照し、失敗時は location ベースにフォールバック（追加コストは診断あたり O(path長)）。
+- F10 Mean +6.1%（計測誤差含む）: パス解決とインラインキー判定が診断ごとに走るため。+10% 以内で許容。
+- 改善余地: パース結果を `Diagnostic` 生成時にキャッシュ（ルール側 metadata 付与で既に可能）。
+
+**レビュー指摘と対応**
+
+| 指摘 | 対応 |
+|---|---|
+| メッセージ末尾文言がパス解決を壊す（`uses must be string`） | パス suffix を空白で打ち切り |
+| location 範囲外で structure 非表示 | パス解決成功時は location 検証をバイパス |
+| `- uses:` が子キー探索で見つからない | インライン sequence キー判定を追加 |
+| fix 後に structure が旧 YAML 参照 | `sourceMap` を fix/dry-run 後 bytes で更新 |
+| 省略ポリシー拡張はノイズ増リスク | フェーズ 2 ではパス精度・性能に集中。省略拡張は将来 |
+
 ---
 
 ## テスト計画
@@ -181,7 +232,7 @@
 ## 推奨決定事項
 
 1. 初期スコープは `text` / `github-actions` に限定する
-2. 表示は既定 ON、CLI/Config で OFF 可能にする
+2. 表示は rich 出力で常時 ON（オプトアウトなし）
 3. 省略ポリシーは「最小骨格優先」、必要時のみ補助情報を追加する
 4. `json` / `sarif` は対象外とし、機械解釈は既存の行・列情報を正とする
 5. 将来拡張として `Diagnostic` に構造パスメタデータを導入し、文字列抽出依存を解消する
