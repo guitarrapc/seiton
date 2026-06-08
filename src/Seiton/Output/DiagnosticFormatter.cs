@@ -138,38 +138,45 @@ public static class DiagnosticFormatter
 
         var pathResolver = new PathDisplayResolver(pathBaseDirectory);
         var lineIndexCache = CreateLineIndexCache(oneline, sourceMap);
-        string? currentGroupFile = null;
-        string currentLineDisplay = "<unknown>";
-
-        for (var i = 0; i < diagnostics.Count; i++)
+        try
         {
-            var d = diagnostics[i];
-            var fileKey = PathDisplayResolver.NormalizeFileKey(d.FilePath);
+            string? currentGroupFile = null;
+            string currentLineDisplay = "<unknown>";
 
-            if (!string.Equals(currentGroupFile, fileKey, StringComparison.Ordinal))
+            for (var i = 0; i < diagnostics.Count; i++)
             {
-                if (currentGroupFile is not null)
+                var d = diagnostics[i];
+                var fileKey = PathDisplayResolver.NormalizeFileKey(d.FilePath);
+
+                if (!string.Equals(currentGroupFile, fileKey, StringComparison.Ordinal))
                 {
-                    writer.WriteUtf8("::endgroup::");
+                    if (currentGroupFile is not null)
+                    {
+                        writer.WriteUtf8("::endgroup::");
+                        writer.WriteNewLine();
+                    }
+
+                    var fileDisplay = pathResolver.GetDisplayPath(d.FilePath);
+                    var escaped = EscapeGitHubCommandValue(fileDisplay);
+                    currentLineDisplay = escaped.StartsWith("::", StringComparison.Ordinal)
+                        ? string.Concat(".", escaped)
+                        : escaped;
+                    writer.WriteUtf8("::group::");
+                    writer.WriteUtf8(escaped);
                     writer.WriteNewLine();
+                    currentGroupFile = fileKey;
                 }
 
-                var fileDisplay = pathResolver.GetDisplayPath(d.FilePath);
-                var escaped = EscapeGitHubCommandValue(fileDisplay);
-                currentLineDisplay = escaped.StartsWith("::", StringComparison.Ordinal)
-                    ? string.Concat(".", escaped)
-                    : escaped;
-                writer.WriteUtf8("::group::");
-                writer.WriteUtf8(escaped);
-                writer.WriteNewLine();
-                currentGroupFile = fileKey;
+                WriteTextDiagnostic(writer, d, fileKey, currentLineDisplay, oneline, color: false, sourceMap, lineIndexCache);
             }
 
-            WriteTextDiagnostic(writer, d, fileKey, currentLineDisplay, oneline, color: false, sourceMap, lineIndexCache);
+            writer.WriteUtf8("::endgroup::");
+            writer.WriteNewLine();
         }
-
-        writer.WriteUtf8("::endgroup::");
-        writer.WriteNewLine();
+        finally
+        {
+            DisposeLineIndexCache(lineIndexCache);
+        }
     }
 
     private static void WriteText(
@@ -182,25 +189,48 @@ public static class DiagnosticFormatter
     {
         var pathResolver = new PathDisplayResolver(pathBaseDirectory);
         var lineIndexCache = CreateLineIndexCache(oneline, sourceMap);
-        string? previousFileKey = null;
-        string previousDisplayPath = "<unknown>";
-        for (var i = 0; i < diagnostics.Count; i++)
+        try
         {
-            var d = diagnostics[i];
-            var fileKey = PathDisplayResolver.NormalizeFileKey(d.FilePath);
-            string fileDisplay;
-            if (string.Equals(previousFileKey, fileKey, StringComparison.Ordinal))
+            string? previousFileKey = null;
+            string previousDisplayPath = "<unknown>";
+            for (var i = 0; i < diagnostics.Count; i++)
             {
-                fileDisplay = previousDisplayPath;
+                var d = diagnostics[i];
+                var fileKey = PathDisplayResolver.NormalizeFileKey(d.FilePath);
+                string fileDisplay;
+                if (string.Equals(previousFileKey, fileKey, StringComparison.Ordinal))
+                {
+                    fileDisplay = previousDisplayPath;
+                }
+                else
+                {
+                    fileDisplay = pathResolver.GetDisplayPath(d.FilePath);
+                    previousFileKey = fileKey;
+                    previousDisplayPath = fileDisplay;
+                }
+
+                WriteTextDiagnostic(writer, d, fileKey, fileDisplay, oneline, color, sourceMap, lineIndexCache);
             }
-            else
-            {
-                fileDisplay = pathResolver.GetDisplayPath(d.FilePath);
-                previousFileKey = fileKey;
-                previousDisplayPath = fileDisplay;
-            }
-            WriteTextDiagnostic(writer, d, fileKey, fileDisplay, oneline, color, sourceMap, lineIndexCache);
         }
+        finally
+        {
+            DisposeLineIndexCache(lineIndexCache);
+        }
+    }
+
+    private static void DisposeLineIndexCache(Dictionary<string, YamlLineIndex>? cache)
+    {
+        if (cache is null)
+        {
+            return;
+        }
+
+        foreach (var index in cache.Values)
+        {
+            index.Dispose();
+        }
+
+        cache.Clear();
     }
 
     private static Dictionary<string, YamlLineIndex>? CreateLineIndexCache(
@@ -530,7 +560,7 @@ public static class DiagnosticFormatter
                 d,
                 cachedIndex,
                 scratch,
-                out var lineIndex,
+                out _,
                 out var entries,
                 out var highlightLine1Based,
                 out var rentedEntries)
@@ -541,8 +571,6 @@ public static class DiagnosticFormatter
 
         try
         {
-            lineIndexCache[file] = lineIndex;
-
             var lastLineNumber = 0;
             for (var i = 0; i < entries.Length; i++)
             {

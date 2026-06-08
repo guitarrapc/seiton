@@ -231,6 +231,16 @@ public sealed class StructureSnippetTests
     }
 
     [Test]
+    public async Task YamlLineIndex_CreateAndDispose_IsIdempotent()
+    {
+        var bytes = Encoding.UTF8.GetBytes("a\nb");
+        var index = YamlLineIndex.Create(bytes);
+        await Assert.That(index.Count).IsEqualTo(2);
+        index.Dispose();
+        index.Dispose();
+    }
+
+    [Test]
     public async Task TryBuild_TypicalWorkflow_FitsStackScratch()
     {
         var path = "ci.yml";

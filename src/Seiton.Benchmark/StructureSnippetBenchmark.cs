@@ -1,3 +1,4 @@
+using System.Buffers;
 using Seiton.Core.Linting;
 using Seiton.Core.Parsing;
 using Seiton.Output;
@@ -44,10 +45,22 @@ public class StructureSnippetBenchmark
         _diagnostics = [.. list];
     }
 
+    [GlobalCleanup]
+    public void Cleanup()
+    {
+        foreach (var index in _lineIndexCache.Values)
+        {
+            index.Dispose();
+        }
+
+        _lineIndexCache.Clear();
+    }
+
     [Benchmark(Baseline = true, Description = "StructureSnippetBuilder TryBuild all diagnostics")]
     public int TryBuildAll()
     {
         var built = 0;
+        Span<StructureSnippetEntry> scratch = stackalloc StructureSnippetEntry[StructureSnippetBuilder.MaxStackDisplayEntries];
         for (var i = 0; i < _diagnostics.Length; i++)
         {
             var diag = _diagnostics[i];
@@ -58,7 +71,6 @@ public class StructureSnippetBenchmark
             }
 
             _lineIndexCache.TryGetValue(file, out var cached);
-            Span<StructureSnippetEntry> scratch = stackalloc StructureSnippetEntry[StructureSnippetBuilder.MaxStackDisplayEntries];
             if (StructureSnippetBuilder.TryBuild(
                     bytes,
                     diag,

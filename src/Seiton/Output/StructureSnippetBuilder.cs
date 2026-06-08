@@ -242,29 +242,47 @@ internal readonly struct StructureSnippetEntry
         => IsEllipsis ? default : source.Slice(Utf8Start, Utf8Length);
 }
 
-internal sealed class YamlLineIndex
+internal sealed class YamlLineIndex : IDisposable
 {
-    private readonly byte[] _source;
-    private readonly int[] _lineStarts;
-    private readonly int[] _lineLengths;
-    private readonly int[] _indents;
+    private static readonly YamlLineIndex Empty = new(
+        Array.Empty<byte>(),
+        Array.Empty<int>(),
+        Array.Empty<int>(),
+        Array.Empty<int>(),
+        lineCount: 0,
+        pooled: false);
 
-    private YamlLineIndex(byte[] source, int[] lineStarts, int[] lineLengths, int[] indents)
+    private readonly byte[] _source;
+    private int[] _lineStarts;
+    private int[] _lineLengths;
+    private int[] _indents;
+    private readonly int _lineCount;
+    private readonly bool _pooled;
+    private bool _disposed;
+
+    private YamlLineIndex(
+        byte[] source,
+        int[] lineStarts,
+        int[] lineLengths,
+        int[] indents,
+        int lineCount,
+        bool pooled)
     {
         _source = source;
         _lineStarts = lineStarts;
         _lineLengths = lineLengths;
         _indents = indents;
-        Count = lineStarts.Length;
+        _lineCount = lineCount;
+        _pooled = pooled;
     }
 
-    public int Count { get; }
+    public int Count => _lineCount;
 
     public static YamlLineIndex Create(byte[] source)
     {
         if (source.Length == 0)
         {
-            return new YamlLineIndex(source, [], [], []);
+            return Empty;
         }
 
         var lineCount = 1;
@@ -276,9 +294,9 @@ internal sealed class YamlLineIndex
             }
         }
 
-        var lineStarts = new int[lineCount];
-        var lineLengths = new int[lineCount];
-        var indents = new int[lineCount];
+        var lineStarts = ArrayPool<int>.Shared.Rent(lineCount);
+        var lineLengths = ArrayPool<int>.Shared.Rent(lineCount);
+        var indents = ArrayPool<int>.Shared.Rent(lineCount);
 
         var lineIndex = 0;
         var lineStart = 0;
@@ -304,7 +322,23 @@ internal sealed class YamlLineIndex
             lineStart = i + 1;
         }
 
-        return new YamlLineIndex(source, lineStarts, lineLengths, indents);
+        return new YamlLineIndex(source, lineStarts, lineLengths, indents, lineCount, pooled: true);
+    }
+
+    public void Dispose()
+    {
+        if (!_pooled || _disposed)
+        {
+            return;
+        }
+
+        _disposed = true;
+        ArrayPool<int>.Shared.Return(_lineStarts);
+        ArrayPool<int>.Shared.Return(_lineLengths);
+        ArrayPool<int>.Shared.Return(_indents);
+        _lineStarts = Array.Empty<int>();
+        _lineLengths = Array.Empty<int>();
+        _indents = Array.Empty<int>();
     }
 
     public int GetIndent(int lineIndex)
