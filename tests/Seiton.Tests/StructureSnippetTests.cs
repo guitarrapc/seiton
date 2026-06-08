@@ -254,7 +254,7 @@ public sealed class StructureSnippetTests
             diag,
             cachedIndex: null,
             scratch,
-            out _,
+            out var lineIndex,
             out var entries,
             out _,
             out var rentedEntries);
@@ -269,6 +269,7 @@ public sealed class StructureSnippetTests
         }
         finally
         {
+            lineIndex.Dispose();
             if (rentedEntries is not null)
             {
                 ArrayPool<StructureSnippetEntry>.Shared.Return(rentedEntries);
