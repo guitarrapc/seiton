@@ -135,8 +135,15 @@ jobs:
           dotnet-version: 10.0
 
       - name: Publish (AOT)
+        shell: bash
         run: |
-          dotnet publish src/Seiton/Seiton.csproj -c Release -r ${{ matrix.rid }} -o publish/
+          dotnet publish src/Seiton/Seiton.csproj -c Release -r ${{ matrix.rid }} -o publish/ -p:CopyOutputSymbolsToPublishDirectory=false -p:DebugType=none
+
+      - name: Prepare release bundle
+        shell: bash
+        run: |
+          cp README.md LICENSE.md publish/
+          cp -r docs publish/
 
       - name: Create archive (Linux/macOS)
         if: ${{ runner.os != 'Windows' }}
