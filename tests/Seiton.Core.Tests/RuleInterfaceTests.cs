@@ -1019,6 +1019,43 @@ public sealed partial class RuleInterfaceTests
     }
 
     [Test]
+    public async Task LintConfig_Validate_OutputStructureSnippets_Default_IsTrue()
+    {
+        var result = LintConfigLibrary.Validate("rules: {}\n", "seiton.yaml");
+
+        await Assert.That(result.IsValid).IsTrue();
+        await Assert.That(result.Config!.Output.StructureSnippets).IsTrue();
+    }
+
+    [Test]
+    public async Task LintConfig_Validate_OutputStructureSnippets_ParsesFalse()
+    {
+        var yaml = """
+        output:
+          structure-snippets: false
+        """;
+
+        var result = LintConfigLibrary.Validate(yaml, "seiton.yaml");
+
+        await Assert.That(result.IsValid).IsTrue();
+        await Assert.That(result.Config!.Output.StructureSnippets).IsFalse();
+    }
+
+    [Test]
+    public async Task LintConfig_Validate_OutputStructureSnippets_InvalidValue_ReportsError()
+    {
+        var yaml = """
+        output:
+          structure-snippets: nope
+        """;
+
+        var result = LintConfigLibrary.Validate(yaml, "seiton.yaml");
+
+        await Assert.That(result.IsValid).IsFalse();
+        await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("structure-snippets", StringComparison.Ordinal))).IsTrue();
+    }
+
+    [Test]
     public async Task Parser_EmptyRunsOnLabel_MessageIncludesAvailableLabels()
     {
         // When runs-on has an empty label, the parser message should include

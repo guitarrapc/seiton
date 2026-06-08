@@ -35,6 +35,7 @@ internal class SeitonCli
     /// <param name="enablePinNetwork">Allow network requests to resolve action SHA pins (requires --fix).</param>
     /// <param name="enableImageNetwork">Allow network requests to resolve container image digests (requires --fix).</param>
     /// <param name="includeActions">When no FILES are provided, include .github/actions/ in auto-discovery.</param>
+    /// <param name="noStructureSnippet">Disable YAML structure context snippets in rich text output.</param>
     /// <param name="files">Workflow files or directories to lint. Auto-discovers .github/workflows/ if omitted.</param>
     [Command("")]
     public async Task Root(
@@ -55,6 +56,7 @@ internal class SeitonCli
         bool enablePinNetwork = false,
         bool enableImageNetwork = false,
         bool includeActions = false,
+        bool noStructureSnippet = false,
         [Argument] params string[] files)
     {
         if (!fix && (dryRun || showDiff || check || enablePinNetwork || enableImageNetwork))
@@ -74,8 +76,8 @@ internal class SeitonCli
         var verboseLevel = CliVerboseParser.Resolve(verbose);
         var formatExplicitlySet = CliFormatArgs.WasFormatSpecified(CliVerboseParser.GetRawArgs());
         var code = fix
-            ? await FixCommand.RunAsync(files, config, stdinFilename, ignore ?? [], minSeverity, outputFormat, oneline, color, noColor, verboseLevel, dryRun, check, enablePinNetwork, enableImageNetwork, includeActions, skipAgenticWorkflows, showDiff, formatExplicitlySet)
-            : CheckCommand.Run(files, config, stdinFilename, ignore ?? [], minSeverity, outputFormat, oneline, color, noColor, verboseLevel, includeActions, skipAgenticWorkflows, formatExplicitlySet);
+            ? await FixCommand.RunAsync(files, config, stdinFilename, ignore ?? [], minSeverity, outputFormat, oneline, color, noColor, verboseLevel, dryRun, check, enablePinNetwork, enableImageNetwork, includeActions, skipAgenticWorkflows, showDiff, formatExplicitlySet, noStructureSnippet)
+            : CheckCommand.Run(files, config, stdinFilename, ignore ?? [], minSeverity, outputFormat, oneline, color, noColor, verboseLevel, includeActions, skipAgenticWorkflows, formatExplicitlySet, noStructureSnippet);
 
         if (code != 0) Environment.ExitCode = code;
     }
@@ -92,6 +94,7 @@ internal class SeitonCli
     /// <param name="verbose">-v, Print progress information to stderr (-v / --verbose).</param>
     /// <param name="skipAgenticWorkflows">Skip Agentic Workflow files (with # gh-aw-metadata: header).</param>
     /// <param name="includeActions">When no FILES are provided, include .github/actions/ in auto-discovery.</param>
+    /// <param name="noStructureSnippet">Disable YAML structure context snippets in rich text output.</param>
     /// <param name="files">Workflow files or directories to lint. Auto-discovers .github/workflows/ if omitted.</param>
     public void Check(
         string? config = null,
@@ -105,6 +108,7 @@ internal class SeitonCli
         bool verbose = false,
         bool skipAgenticWorkflows = false,
         bool includeActions = false,
+        bool noStructureSnippet = false,
         [Argument] params string[] files)
     {
         if (!OutputFormatParser.TryParse(format, out var outputFormat))
@@ -116,7 +120,7 @@ internal class SeitonCli
 
         var verboseLevel = CliVerboseParser.Resolve(verbose);
         var formatExplicitlySet = CliFormatArgs.WasFormatSpecified(CliVerboseParser.GetRawArgs());
-        var code = CheckCommand.Run(files, config, stdinFilename, ignore ?? [], minSeverity, outputFormat, oneline, color, noColor, verboseLevel, includeActions, skipAgenticWorkflows, formatExplicitlySet);
+        var code = CheckCommand.Run(files, config, stdinFilename, ignore ?? [], minSeverity, outputFormat, oneline, color, noColor, verboseLevel, includeActions, skipAgenticWorkflows, formatExplicitlySet, noStructureSnippet);
         if (code != 0) Environment.ExitCode = code;
     }
 

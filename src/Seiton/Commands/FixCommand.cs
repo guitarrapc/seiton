@@ -29,6 +29,7 @@ internal static class FixCommand
         bool skipAgenticWorkflows = false,
         bool showDiff = false,
         bool formatExplicitlySet = false,
+        bool noStructureSnippet = false,
         TextWriter? output = null,
         TextWriter? error = null)
     {
@@ -130,6 +131,8 @@ internal static class FixCommand
         {
             var engine = new LintEngine();
             var allDiagnostics = new List<Diagnostic>();
+            Dictionary<string, byte[]>? sourceMap = resolvedFormat.UsesRichTextOutput() && !oneline ? new(StringComparer.Ordinal) : null;
+            var formatOptions = CheckCommand.ResolveDiagnosticFormatOptions(lintConfig, noStructureSnippet);
             var hasPrintedDiff = false;
             var totalSuppressed = 0;
             Dictionary<string, int>? suppressedByRule = null;
@@ -169,6 +172,7 @@ internal static class FixCommand
                 }
 
                 var utf8Yaml = File.ReadAllBytes(filePath);
+                sourceMap?.TryAdd(filePath, utf8Yaml);
 
                 if (ExclusionMatcher.IsFileFullyExcluded(lintConfig?.Exclusions, filePath))
                 {
@@ -430,9 +434,9 @@ internal static class FixCommand
                 if (hasPrintedDiff && resolvedFormat.UsesRichTextOutput())
                     outputWriter.WriteLine();
                 if (output is null)
-                    DiagnosticFormatter.WriteToStandardOutput(allDiagnostics, resolvedFormat, oneline, colorEnabled);
+                    DiagnosticFormatter.WriteToStandardOutput(allDiagnostics, resolvedFormat, oneline, colorEnabled, sourceMap, options: formatOptions);
                 else
-                    DiagnosticFormatter.WriteToTextWriter(outputWriter, allDiagnostics, resolvedFormat, oneline, colorEnabled);
+                    DiagnosticFormatter.WriteToTextWriter(outputWriter, allDiagnostics, resolvedFormat, oneline, colorEnabled, sourceMap, options: formatOptions);
             }
 
             if (check || fixedFiles is not { Count: > 0 })

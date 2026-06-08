@@ -14,6 +14,7 @@ internal static class CliOptionSuggester
         "--min-severity",
         "--format",
         "--oneline",
+        "--no-structure-snippet",
         "--color",
         "--no-color",
         "--verbose",

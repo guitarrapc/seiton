@@ -1193,11 +1193,24 @@ internal static class LintConfigYamlParser
     private static OutputConfig ParseOutput(Dictionary<string, object?> map, List<Diagnostic> diagnostics, string filePath)
     {
         var sortOrder = DiagnosticSortOrder.Location;
+        var structureSnippets = true;
 
         foreach (var (key, value) in map)
         {
             switch (key)
             {
+                case "structure-snippets":
+                    if (value is bool boolValue)
+                    {
+                        structureSnippets = boolValue;
+                    }
+                    else
+                    {
+                        diagnostics.Add(Diag("output.structure-snippets must be boolean", DomLine, 3, 18, filePath));
+                    }
+
+                    break;
+
                 case "sort-order":
                     var sv = ScalarToString(value);
                     if (string.Equals(sv, "location", StringComparison.OrdinalIgnoreCase))
@@ -1220,7 +1233,7 @@ internal static class LintConfigYamlParser
             }
         }
 
-        return new OutputConfig { SortOrder = sortOrder };
+        return new OutputConfig { SortOrder = sortOrder, StructureSnippets = structureSnippets };
     }
 
     private static DiscoveryConfig ParseDiscovery(Dictionary<string, object?> map, List<Diagnostic> diagnostics, string filePath)

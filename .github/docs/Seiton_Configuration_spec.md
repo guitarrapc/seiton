@@ -300,11 +300,13 @@ The HTTP client has **`AllowAutoRedirect` disabled** and follows **only same-ori
 ```yaml
 output:
   sort-order: location    # location | rule
+  structure-snippets: true
 ```
 
 | Key | Type | Default | Description |
 |---|---|---|---|
 | `sort-order` | `string` | `location` | `location`: source-location order. `rule`: rule-priority order |
+| `structure-snippets` | `bool` | `true` | Rich `text` / `github-actions` output may include YAML structure context snippets. CLI `--no-structure-snippet` overrides to `false` for that run. |
 
 ---
 

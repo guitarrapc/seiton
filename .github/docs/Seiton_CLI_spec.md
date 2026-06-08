@@ -203,6 +203,7 @@ Operational rule:
 |---|---|---|---|---|
 | `--format` | | `text\|json\|sarif\|github-actions` | `text` (see §3.1.1) | Output format for diagnostics. |
 | `--oneline` | | `bool` | `false` | Emit one diagnostic per line (`text` and `github-actions`). |
+| `--no-structure-snippet` | | `bool` | `false` | Disable YAML structure context snippets in rich `text` / `github-actions` output. |
 | `--color` | | `auto\|always\|never` | `auto` | Color output control. `auto` enables color when stdout is not a TTY or CI is detected. |
 | `--no-color` | | `bool` | `false` | Alias for `--color=never`. |
 | `--verbose` | `-v` | `bool` | `false` | Enable summary-level verbose output to stderr (config, discovery, rules, timing, suppression totals). |
@@ -437,6 +438,14 @@ Snippet rendering behavior:
 - Caret length (`^`) spans the display width of bytes from `StartColumn` through `EndColumn` (inclusive byte range); minimum 1 caret.
 - When source is unavailable (for example stdin without a path, or JSON/SARIF formats), the gutter line `|` is emitted without snippet.
 
+Structure snippet rendering behavior (`text` / `github-actions` rich format only):
+
+- When enabled (default), a second gutter block labeled `= structure:` may follow the source snippet.
+- The block shows the minimal YAML ancestor chain from `jobs:` / `runs:` down to the diagnostic line, omitting unrelated sibling keys with a `...` ellipsis line.
+- Shown only when the diagnostic is attributable to workflow/action structure (message path prefix such as `jobs.'…'` / `steps[n]`, or ancestor chain includes `jobs:` / `steps:` / `runs:`).
+- Disabled by `--no-structure-snippet` or `output.structure-snippets: false` in config.
+- Not emitted for `--oneline`, `json`, or `sarif` output.
+
 Structure:
 
 ```
@@ -445,6 +454,12 @@ Structure:
      |
 <line> | <source text>
      | <leading spaces><carets>
+     |
+   = structure:              (optional; rich text / github-actions only)
+     |
+<line> | <ancestor yaml>
+     | ...
+<line> | <target yaml>
      |
    = help: <help text>     (only when a help annotation is present)
 ```
