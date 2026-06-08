@@ -25,10 +25,11 @@ For every file it analyzes, Seiton:
 
 | Feature | Description |
 |---|---|
+| 61 lint rules | 57 default local rules plus 4 opt-in online audit rules (`RuleCatalog`). See [Rules](rules.md) for the full list. |
 | Security-first rules | Template injection, unpinned actions/images, dangerous triggers, secret misuse, and more. |
-| Correctness checks | Job structure, needs-graph cycles, glob syntax, shell names, ID naming. |
-| Supply-chain hygiene | Unpinned `uses:`, archived actions, known vulnerable actions (online), impostor commits (online). |
-| Auto-fix support | `seiton --fix` applies machine-safe remediations in place. |
+| Correctness checks | Job structure, needs-graph cycles, glob syntax, shell names, ID naming, schedule/dispatch validation. |
+| Supply-chain hygiene | Unpinned `uses:` / images, archived actions, and optional online checks (known vulnerabilities, impostor commits, ref confusion, stale refs). |
+| Auto-fix support | `seiton --fix` applies machine-safe remediations in place, including optional network-assisted SHA/digest pinning. |
 | Multiple output formats | `text` (default locally), `github-actions` (default on GitHub Actions: job summary + rich stdout), `json`, `sarif` (GitHub Advanced Security). |
 | Config file | Optional `.github/seiton.yaml` for rule tuning, exclusions, and network options. |
 | Inline suppression | `# seiton: disable-next-line <rule-id>` directives inside workflow files. |
@@ -81,21 +82,21 @@ Example `--oneline` output:
 
 ---
 
-## Comparison with Other Tools
+## Related Tools
 
-Several tools exist in the GitHub Actions analysis space. They differ significantly in **concept** — some are linters that find problems, others are pinners/updaters that rewrite version references. Seiton covers both.
+Several mature tools help with GitHub Actions workflows. They overlap in places but often emphasize different goals — correctness, security policy, or supply-chain pinning. None of them has to be an either/or choice.
 
-### Concept Overview
+### By category
 
-| Tool | Category | Primary Goal |
+| Tool | Category | What it focuses on |
 |---|---|---|
-| **Seiton** | Lint + Fix | Static analysis (security + correctness) with integrated auto-fix |
-| [actionlint] | Lint | Syntax and type correctness of workflow files |
-| [zizmor] | Lint | Security-focused static analysis |
-| [ghalint] | Lint | Security policy compliance (focused rule set) |
-| [frizbee] | Pin / Update | Replace action/image tags with SHA checksums |
-| [pinact] | Pin / Update | Pin and update action versions; verify version annotations |
-| [dockerfile-pin] | Pin | Add digest pins to Dockerfile `FROM` and compose `image` fields |
+| **Seiton** | Lint + Fix | Security, correctness, and supply-chain checks for workflow and action metadata files, with optional auto-fix |
+| [actionlint] | Lint | Workflow syntax, expression typing, and optional shellcheck / pyflakes integration |
+| [zizmor] | Lint | Security audits with persona profiles; also supports dependabot config and remote inputs |
+| [ghalint] | Lint | A small, opinionated set of security policies that are easy to adopt |
+| [frizbee] | Pin / Update | Rewriting action and image tags to checksums across YAML files |
+| [pinact] | Pin / Update | Pinning, updating, and verifying version annotations on action refs |
+| [dockerfile-pin] | Pin | Digest pins for Dockerfile `FROM`, docker-compose `image`, and related references |
 
 [actionlint]: https://github.com/rhysd/actionlint
 [zizmor]: https://github.com/zizmorcore/zizmor
@@ -104,121 +105,33 @@ Several tools exist in the GitHub Actions analysis space. They differ significan
 [pinact]: https://github.com/suzuki-shunsuke/pinact
 [dockerfile-pin]: https://github.com/azu/dockerfile-pin
 
-**Linters** (actionlint, zizmor, ghalint, Seiton) report diagnostics without modifying files by default.
-**Pinners/Updaters** (frizbee, pinact, dockerfile-pin) are primarily file-rewriting tools — they exist specifically to pin or update version references, and do not lint for broad security issues.
-Seiton bridges the two: it lints like a linter and can also apply fixes (including network-assisted SHA/digest pinning) like a pinner.
+**Linters** report diagnostics and usually leave files unchanged unless you opt into a fix mode.
+**Pinners / updaters** rewrite version references as their main job; they are not general-purpose security linters.
+Seiton sits primarily in the linter category, with optional fixes — including network-assisted SHA and digest pinning when you pass `--fix --enable-pin-network` / `--enable-image-network`.
 
----
+### Where Seiton fits
 
-### Seiton vs. actionlint
+Seiton is built for teams that want one tool to lint `.github/workflows/` and `action.yml` files: structural correctness, security policy, supply-chain hygiene, and optional online audits in a single pass. It also supports safe auto-fix for a subset of rules.
 
-[actionlint](https://github.com/rhysd/actionlint) is the most comprehensive correctness checker for GitHub Actions workflow files. It excels at syntax validation, expression type-checking, shellcheck/pyflakes integration, and reusable-workflow contract validation.
+Seiton does **not** try to replace every specialized workflow:
 
-Seiton matches actionlint on a wide range of structural checks (including `schedule` cron constraints, `workflow_dispatch` inputs, and local action metadata contracts) while emphasizing **security policy**, **supply-chain** rules that actionlint does not implement, and **auto-fix** support.
-
-| Aspect | Seiton | actionlint |
+| Area | Seiton today | Often handled elsewhere |
 |---|---|---|
-| Syntax / structural validation | ✓ | ✓ |
-| Expression type checking | ✓ | ✓ |
-| shellcheck / pyflakes integration | ✗ | ✓ |
-| Security rules (injection, secrets, permissions) | ✓ (broad) | Partial |
-| Supply-chain rules (pinning, archived, vulnerable) | ✓ | ✗ |
-| Auto-fix | ✓ | ✗ |
-| Online audit rules | ✓ (opt-in) | ✗ |
-| Action metadata file support | ✓ | ✗ (lints as secondary only) |
-| Local action input/output resolution | ✓ | ✓ |
-| Config model | Rule-ID-centric | Global + path-based |
+| Shell/Python script checks inside `run:` | Not built in | [actionlint] with shellcheck / pyflakes |
+| Dependabot config analysis | Out of scope | [zizmor] |
+| Remote repository auditing (`user/repo@ref`) | Out of scope | [zizmor] |
+| Upgrading pinned actions to newer releases | Not built in | [pinact] |
+| Verifying version comments next to SHA pins | Not built in | [pinact] |
+| Dockerfile / docker-compose digest pinning | Out of scope | [dockerfile-pin], [frizbee] |
+| Broad YAML image pinning outside Actions files | Out of scope | [frizbee] |
 
-**When to use actionlint alongside Seiton:** keep **Seiton** as the main linter; add **actionlint** when you need its integrated **shellcheck** / **pyflakes** or marginally deeper expression typing for a different class of bugs.
+### Working alongside other tools
 
----
+Many teams combine tools rather than picking one winner:
 
-### Seiton vs. zizmor
+- **[actionlint](https://github.com/rhysd/actionlint)** — strong workflow correctness and script-level checks. Pairs well with Seiton when you want shellcheck/pyflakes in addition to Seiton's security and policy rules.
+- **[zizmor](https://github.com/zizmorcore/zizmor)** — deep security audit catalog with persona-based noise control. Overlaps with several Seiton rules; some teams run one, others run both for defense in depth.
+- **[ghalint](https://github.com/suzuki-shunsuke/ghalint)** — minimal policy set that is quick to roll out. Seiton covers the same policy areas and extends with additional rules and per-rule configuration.
+- **[frizbee](https://github.com/stacklok/frizbee)**, **[pinact](https://github.com/suzuki-shunsuke/pinact)**, **[dockerfile-pin](https://github.com/azu/dockerfile-pin)** — dedicated pinning and update workflows. Seiton can pin during `--fix`, but these tools offer scope and workflows (compose files, comment verification, release updates) that Seiton intentionally leaves to specialized tools.
 
-[zizmor](https://github.com/zizmorcore/zizmor) is a security-focused static analysis tool written in Rust. It targets a similar security rule space to Seiton's security-oriented rules.
-
-| Aspect | Seiton | zizmor |
-|---|---|---|
-| Template injection detection | ✓ | ✓ |
-| Dangerous triggers | ✓ | ✓ |
-| Permissions and secret misuse | ✓ (broad) | ✓ |
-| Supply-chain / pinning rules | ✓ | ✓ |
-| Correctness rules (job structure, glob, etc.) | ✓ | Partial |
-| Auto-fix | ✓ | ✓ (growing) |
-| Online audit rules | ✓ (opt-in) | ✓ (opt-in) |
-| Dependabot config analysis | ✗ | ✓ |
-| Remote repository auditing | ✗ | ✓ |
-| Config model | Rule-ID-centric YAML | YAML |
-
----
-
-### Seiton vs. ghalint
-
-[ghalint](https://github.com/suzuki-shunsuke/ghalint) is a focused security-policy linter by suzuki-shunsuke. It enforces a curated set of ~13 policies (permissions, secrets scope, action pinning, timeouts, etc.) with no auto-fix.
-
-| Aspect | Seiton | ghalint |
-|---|---|---|
-| Rule breadth | Large (50+ rules) | Small (~13 policies) |
-| Rule configurability | High (per-rule tuning) | Low (enable/disable per policy) |
-| Auto-fix | ✓ | ✗ |
-| Inline suppression | ✓ | ✗ |
-| Action metadata support | ✓ | ✓ |
-
-**Concept difference:** ghalint is intentionally minimal — it enforces a small opinionated policy set without configuration complexity. Seiton provides a much larger rule set with per-rule tunability and fix capabilities.
-
----
-
-### Seiton vs. frizbee
-
-[frizbee](https://github.com/stacklok/frizbee) is a tag-to-checksum replacement tool, not a linter. It rewrites `uses: action@tag` to `uses: action@sha256` and does the same for container images. It does not detect security issues beyond unpinned references.
-
-| Aspect | Seiton | frizbee |
-|---|---|---|
-| Lint / detect issues | ✓ | ✗ |
-| Pin action refs to SHA | ✓ (fix, opt-in network) | ✓ (primary purpose) |
-| Pin container image digests | ✓ (fix, opt-in network) | ✓ (primary purpose) |
-| Dockerfile `FROM` pinning | ✗ | ✗ |
-| docker-compose image pinning | ✗ | ✓ |
-
-**Concept difference:** frizbee is a file-rewriting utility in the pinner category. Seiton includes pinning as one fix capability among many, but its primary value is detection and reporting.
-
----
-
-### Seiton vs. pinact
-
-[pinact](https://github.com/suzuki-shunsuke/pinact) is a pinner/updater for GitHub Actions version references. It pins tags to commit SHAs, updates pinned versions to newer releases, and verifies version annotations in comments. It does not perform general security linting.
-
-| Aspect | Seiton | pinact |
-|---|---|---|
-| Lint / detect issues | ✓ | ✗ |
-| Pin action refs to SHA | ✓ (fix, opt-in network) | ✓ (primary purpose) |
-| Update pinned actions to latest | ✗ | ✓ |
-| Verify version annotation comments | ✗ | ✓ |
-| PR review creation | ✗ | ✓ |
-
-**Concept difference:** pinact's primary workflow is "pin → update → annotate". Seiton's primary workflow is "detect → report → optionally fix". They solve different problems and can be used together.
-
----
-
-### Seiton vs. dockerfile-pin
-
-[dockerfile-pin](https://github.com/azu/dockerfile-pin) adds `@sha256:<digest>` to `FROM` lines in Dockerfiles, `image` fields in docker-compose.yml, and Docker image references in GitHub Actions. It is a single-purpose file-rewriting tool.
-
-| Aspect | Seiton | dockerfile-pin |
-|---|---|---|
-| Lint / detect issues | ✓ | ✗ |
-| Pin GitHub Actions image refs | ✓ (fix) | ✓ (primary purpose) |
-| Pin Dockerfile `FROM` lines | ✗ | ✓ |
-| Pin docker-compose image fields | ✗ | ✓ |
-
-**Concept difference:** dockerfile-pin is a Dockerfile/compose-oriented tool that also touches GitHub Actions Docker image references. Seiton focuses on GitHub Actions files and does not modify Dockerfiles.
-
----
-
-### Summary
-
-Use **Seiton** as your primary GitHub Actions linter: it covers security, supply-chain hygiene, workflow and action metadata structure (including schedule, dispatch inputs, and local action contracts), optional online audits, and fixes. Combine other tools only where Seiton intentionally does not go:
-
-- Add **actionlint** if you need integrated **shellcheck** / **pyflakes** or actionlint’s expression checker as an extra pass.
-- Add **frizbee** or **pinact** if you want a dedicated update workflow that also refreshes version annotation comments and upgrades pinned actions to newer releases.
-- Add **dockerfile-pin** if you need Dockerfile `FROM` and docker-compose `image` digest pinning outside of GitHub Actions files.
+For a detailed rule-by-rule mapping used during Seiton development, see [Seiton-feature-matrix](../.github/docs/Seiton-feature-matrix.md) in the repository docs.
