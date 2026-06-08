@@ -530,63 +530,70 @@ public static class DiagnosticFormatter
             return false;
         }
 
-        lineIndexCache[file] = lineIndex;
-
-        var lastLineNumber = 0;
-        for (var i = 0; i < lines.Entries.Length; i++)
+        try
         {
-            if (!lines.Entries[i].IsEllipsis)
+            lineIndexCache[file] = lineIndex;
+
+            var lastLineNumber = 0;
+            for (var i = 0; i < lines.Count; i++)
             {
-                lastLineNumber = Math.Max(lastLineNumber, lines.Entries[i].LineNumber);
-            }
-        }
-
-        var lineNumWidth = lastLineNumber > 0 ? lastLineNumber.ToString().Length : 1;
-        var caretLine = d.Location.StartLine;
-        var hasCaretLineInEntries = false;
-        for (var i = 0; i < lines.Entries.Length; i++)
-        {
-            if (!lines.Entries[i].IsEllipsis && lines.Entries[i].LineNumber == caretLine)
-            {
-                hasCaretLineInEntries = true;
-                break;
-            }
-        }
-
-        if (!hasCaretLineInEntries)
-        {
-            caretLine = lines.HighlightLine1Based;
-        }
-
-        for (var i = 0; i < lines.Entries.Length; i++)
-        {
-            ref readonly var entry = ref lines.Entries[i];
-            if (entry.IsEllipsis)
-            {
-                writer.Write("   ");
-                WriteRepeatedChar(writer, ' ', lineNumWidth);
-                writer.Write(" | ...");
-                writer.WriteNewLine();
-                continue;
+                if (!lines.Entries[i].IsEllipsis)
+                {
+                    lastLineNumber = Math.Max(lastLineNumber, lines.Entries[i].LineNumber);
+                }
             }
 
-            WriteGutterLine(writer, entry.LineNumber, lineNumWidth, entry.LineUtf8.Span, color, blue, reset);
-
-            if (entry.LineNumber == caretLine)
+            var lineNumWidth = lastLineNumber > 0 ? lastLineNumber.ToString().Length : 1;
+            var caretLine = d.Location.StartLine;
+            var hasCaretLineInEntries = false;
+            for (var i = 0; i < lines.Count; i++)
             {
-                WriteSingleLineCaret(
-                    writer,
-                    entry.LineUtf8.Span,
-                    lineNumWidth,
-                    d.Location.StartColumn,
-                    d.Location.EndColumn,
-                    color,
-                    severityColor,
-                    reset);
+                if (!lines.Entries[i].IsEllipsis && lines.Entries[i].LineNumber == caretLine)
+                {
+                    hasCaretLineInEntries = true;
+                    break;
+                }
             }
-        }
 
-        return true;
+            if (!hasCaretLineInEntries)
+            {
+                caretLine = lines.HighlightLine1Based;
+            }
+
+            for (var i = 0; i < lines.Count; i++)
+            {
+                ref readonly var entry = ref lines.Entries[i];
+                if (entry.IsEllipsis)
+                {
+                    writer.Write("   ");
+                    WriteRepeatedChar(writer, ' ', lineNumWidth);
+                    writer.Write(" | ...");
+                    writer.WriteNewLine();
+                    continue;
+                }
+
+                WriteGutterLine(writer, entry.LineNumber, lineNumWidth, entry.LineUtf8.Span, color, blue, reset);
+
+                if (entry.LineNumber == caretLine)
+                {
+                    WriteSingleLineCaret(
+                        writer,
+                        entry.LineUtf8.Span,
+                        lineNumWidth,
+                        d.Location.StartColumn,
+                        d.Location.EndColumn,
+                        color,
+                        severityColor,
+                        reset);
+                }
+            }
+
+            return true;
+        }
+        finally
+        {
+            lines.Dispose();
+        }
     }
 
     private static void WriteSingleLineCaret(

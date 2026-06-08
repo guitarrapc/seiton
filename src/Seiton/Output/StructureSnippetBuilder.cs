@@ -172,6 +172,7 @@ internal static class StructureSnippetBuilder
         int targetLine0,
         out StructureSnippetLines lines)
     {
+        lines = default;
         var displayCount = chain.Length;
         for (var i = 0; i < chain.Length - 1; i++)
         {
@@ -181,20 +182,21 @@ internal static class StructureSnippetBuilder
             }
         }
 
-        var entries = new StructureSnippetEntry[displayCount];
-        var entryIndex = 0;
+        var rented = ArrayPool<StructureSnippetEntry>.Shared.Rent(displayCount);
+        var entries = rented.AsSpan(0, displayCount);
+        var count = 0;
 
         for (var i = 0; i < chain.Length; i++)
         {
             if (i > 0 && chain[i] - chain[i - 1] > 1)
             {
-                entries[entryIndex++] = StructureSnippetEntry.Ellipsis;
+                entries[count++] = StructureSnippetEntry.Ellipsis;
             }
 
-            entries[entryIndex++] = new StructureSnippetEntry(chain[i] + 1, lineIndex.GetLineUtf8(chain[i]));
+            entries[count++] = new StructureSnippetEntry(chain[i] + 1, lineIndex.GetLineUtf8(chain[i]));
         }
 
-        lines = new StructureSnippetLines(entries, targetLine0 + 1);
+        lines = StructureSnippetLines.CreateRented(rented, count, targetLine0 + 1);
         return true;
     }
 
@@ -232,17 +234,37 @@ internal readonly struct StructureSnippetEntry
     public bool IsEllipsis => LineNumber < 0;
 }
 
-internal readonly struct StructureSnippetLines
+internal struct StructureSnippetLines
 {
-    public StructureSnippetLines(StructureSnippetEntry[] entries, int highlightLine1Based)
+    private StructureSnippetLines(
+        StructureSnippetEntry[] entries,
+        int count,
+        int highlightLine1Based,
+        bool isRented)
     {
         Entries = entries;
+        Count = count;
         HighlightLine1Based = highlightLine1Based;
+        IsRented = isRented;
+    }
+
+    public static StructureSnippetLines CreateRented(StructureSnippetEntry[] rented, int count, int highlightLine1Based)
+        => new(rented, count, highlightLine1Based, isRented: true);
+
+    public void Dispose()
+    {
+        if (IsRented)
+        {
+            ArrayPool<StructureSnippetEntry>.Shared.Return(Entries);
+            this = default;
+        }
     }
 
     public StructureSnippetEntry[] Entries { get; }
+    public int Count { get; }
     public int HighlightLine1Based { get; }
-    public bool IsEmpty => Entries.Length == 0;
+    public bool IsRented { get; }
+    public bool IsEmpty => Count == 0;
 }
 
 internal sealed class YamlLineIndex
