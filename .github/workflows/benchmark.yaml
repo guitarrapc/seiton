@@ -14,11 +14,18 @@ on:
           - "*Core*Benchmark*"
           - "*CoreLintBenchmark*"
           - "*CoreParsingBenchmark*"
+          - "*DiagnosticOutputBenchmark*"
+          - "*EditDistanceBenchmark*"
+          - "*ExclusionJobIdValidatorBenchmark*"
+          - "*FixApplyBenchmark*"
+          - "*IanaTimeZoneLookupBenchmark*"
           - "*IncrementalParseBenchmark*"
+          - "*InputDiscoveryBenchmark*"
           - "*LintConfigBenchmark*"
           - "*MultiFileLintBenchmark*"
           - "*MultiFileLintPeakMemoryBenchmark*"
           - "*PlaygroundLintBenchmark*"
+          - "*PlaygroundSharePayloadBenchmark*"
           - "*RuleCatalogBenchmark*"
 
 jobs:
