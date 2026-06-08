@@ -97,7 +97,7 @@
 **実装内容**
 
 - `StructureSnippetBuilder` / `YamlLineIndex`: インデント親たどりで最小 YAML 骨格を復元。無関係 sibling は `...` で省略。
-- `DiagnosticFormatter`: rich 出力の source snippet 直後に `= structure:` ブロックを追加（`text` / `github-actions` のみ）。
+- `DiagnosticFormatter`: rich 出力で structure を解決できる場合は source snippet を最小 YAML 骨格 gutter に置換（`text` / `github-actions` のみ）。`= structure:` ラベルは使わない。
 - 表示ゲート: メッセージに `jobs.` / `steps[` プレフィックスがある、または祖先に `jobs:` / `steps:` / `runs:` がある場合のみ。
 - rich 出力では structure を常時表示（オプトアウトなし）。
 - ファイル単位で `YamlLineIndex` をキャッシュし、診断ごとの行インデックス構築を抑制。
@@ -152,7 +152,7 @@
 - `DiagnosticStructurePathParser` / `DiagnosticStructurePathResolver`: メッセージまたは `structure-path` メタデータから `jobs.'id'.steps[n].field` 形式を解析し、YAML 上の対象行を解決。
 - インライン sequence キー（`- uses:` / `- run:`）をパス終端として認識。
 - 診断 location が範囲外でも、パス解決に成功すれば structure を表示（メッセージと表示の一貫性）。
-- `DiagnosticStructurePathMetadata.Key`（`structure-path`）: ルールが明示パスを付与できる公開定数（メッセージ非依存の安定 API）。
+- `DiagnosticStructurePathMetadata.Key`（`structure-path`）: ルールが明示パスを付与できる公開定数（`Seiton.Core.Linting`、メッセージ非依存の安定 API）。
 - `StructureSnippetBuilder`: 祖先チェーン構築で `int[]` の診断ごと `ToArray()` を廃止し、`stackalloc`/`ArrayPool` 上で trim + 表示行生成。
 - `YamlLineIndex`: 子キー探索・sequence 項探索のナビゲーション API を追加。
 - `FixCommand`: fix / dry-run 適用後に `sourceMap` を更新し、残診断の structure が修正後 YAML と一致。

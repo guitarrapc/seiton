@@ -923,7 +923,7 @@ output:
 - `output.sort-order`: controls the order in which diagnostics are emitted.
   - `location` (default): sort by source position (StartLine → StartColumn → RuleId → Message). This matches the reading order of the source file and is the most natural output for interactive use.
   - `rule`: sort by rule priority first, then severity, then source position. Groups diagnostics by rule, useful for batch-fixing all instances of a single rule at a time.
-- Rich human-readable CLI output (`text`, `github-actions`) includes an optional YAML structure context block (`= structure:`) after the source snippet when the diagnostic is attributable to workflow/action structure. Not applicable to `json`, `sarif`, or `--oneline`.
+- Rich human-readable CLI output (`text`, `github-actions`) replaces the source excerpt with a minimal YAML ancestor-chain gutter block when a structure path can be resolved (message prefix such as `jobs.'…'` / `steps[n]`, optional `structure-path` diagnostic metadata, or a structural ancestor including `jobs:` / `steps:` / `runs:`). Unrelated siblings are omitted with `...`; carets remain on the target line. When structure context cannot be built, the formatter falls back to the plain source snippet. Not applicable to `json`, `sarif`, or `--oneline`. See `.github/docs/Seiton_CLI_spec.md` §6.1.1 for the user-visible format.
 
 ---
 

@@ -1,4 +1,5 @@
-using System.Runtime.CompilerServices;
+﻿using System.Runtime.CompilerServices;
+using Seiton.Core.Linting;
 using Seiton.Core.Parsing;
 
 namespace Seiton.Output;

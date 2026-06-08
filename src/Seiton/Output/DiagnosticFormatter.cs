@@ -547,7 +547,11 @@ public static class DiagnosticFormatter
         string? blue,
         string? reset)
     {
-        lineIndexCache ??= new Dictionary<string, YamlLineIndex>(1, StringComparer.Ordinal);
+        if (lineIndexCache is null)
+        {
+            return false;
+        }
+
         if (!lineIndexCache.TryGetValue(file, out var cachedIndex))
         {
             cachedIndex = YamlLineIndex.Create(sourceBytes);

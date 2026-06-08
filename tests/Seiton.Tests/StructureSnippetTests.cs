@@ -129,7 +129,7 @@ public sealed class StructureSnippetTests
             FilePath: path,
             Metadata: new Dictionary<string, string>
             {
-                [DiagnosticStructurePathMetadata.Key] = "jobs.'build'.steps[1].uses",
+                [Seiton.Core.Linting.DiagnosticStructurePathMetadata.Key] = "jobs.'build'.steps[1].uses",
             });
 
         var output = RenderRich(diag, bytes, path);
@@ -275,6 +275,91 @@ public sealed class StructureSnippetTests
                 ArrayPool<StructureSnippetEntry>.Shared.Return(rentedEntries);
             }
         }
+    }
+
+    [Test]
+    public async Task Rich_MultiLineSpan_UsesSourceSnippetNotStructure()
+    {
+        var yaml = """
+            on: push
+            jobs:
+              build:
+                runs-on: ubuntu-24.04
+                steps:
+                  - run: |
+                      line one
+                      line two
+            """;
+        var path = "ci.yml";
+        var bytes = Encoding.UTF8.GetBytes(yaml);
+        var diag = new Diagnostic(
+            DiagnosticSeverity.Warning,
+            "jobs.'build'.steps[1].run script issue",
+            new TextRange(0, 0, 6, 7, 8, 10),
+            RuleId: "custom",
+            FilePath: path);
+
+        var output = RenderRich(diag, bytes, path);
+
+        await Assert.That(output).Contains("/ ");
+        await Assert.That(output).Contains("|_");
+        await Assert.That(output).DoesNotContain("= structure:");
+    }
+
+    [Test]
+    public async Task Rich_NoStructureContext_FallsBackToSourceSnippet()
+    {
+        var yaml = """
+            on: push
+            jobs:
+              build:
+                runs-on: ubuntu-24.04
+            """;
+        var path = "ci.yml";
+        var bytes = Encoding.UTF8.GetBytes(yaml);
+        var diag = new Diagnostic(
+            DiagnosticSeverity.Warning,
+            "workflow name should be descriptive",
+            new TextRange(0, 0, 1, 1, 1, 8),
+            RuleId: "custom",
+            FilePath: path);
+
+        var output = RenderRich(diag, bytes, path);
+
+        await Assert.That(output).Contains("on: push");
+        await Assert.That(output).DoesNotContain("jobs:");
+        await Assert.That(output).DoesNotContain("= structure:");
+    }
+
+    [Test]
+    public async Task Rich_UnresolvableMetadataPath_UsesLocationBasedStructure()
+    {
+        var yaml = """
+            on: push
+            jobs:
+              build:
+                runs-on: ubuntu-24.04
+                steps:
+                  - uses: actions/checkout@v2
+            """;
+        var path = "ci.yml";
+        var bytes = Encoding.UTF8.GetBytes(yaml);
+        var diag = new Diagnostic(
+            DiagnosticSeverity.Warning,
+            "unpinned external action reference",
+            new TextRange(0, 0, 6, 11, 6, 40),
+            RuleId: "unpinned-uses",
+            FilePath: path,
+            Metadata: new Dictionary<string, string>
+            {
+                [Seiton.Core.Linting.DiagnosticStructurePathMetadata.Key] = "jobs.'missing'.steps[1].uses",
+            });
+
+        var output = RenderRich(diag, bytes, path);
+
+        await Assert.That(output).Contains("build:");
+        await Assert.That(output).Contains("- uses: actions/checkout@v2");
+        await Assert.That(output).DoesNotContain("missing:");
     }
 
     [Test]
