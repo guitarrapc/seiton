@@ -130,6 +130,7 @@ internal static class FixCommand
         {
             var engine = new LintEngine();
             var allDiagnostics = new List<Diagnostic>();
+            Dictionary<string, byte[]>? sourceMap = resolvedFormat.UsesRichTextOutput() && !oneline ? new(StringComparer.Ordinal) : null;
             var hasPrintedDiff = false;
             var totalSuppressed = 0;
             Dictionary<string, int>? suppressedByRule = null;
@@ -169,6 +170,7 @@ internal static class FixCommand
                 }
 
                 var utf8Yaml = File.ReadAllBytes(filePath);
+                sourceMap?.TryAdd(filePath, utf8Yaml);
 
                 if (ExclusionMatcher.IsFileFullyExcluded(lintConfig?.Exclusions, filePath))
                 {
@@ -304,6 +306,11 @@ internal static class FixCommand
                         allDiagnostics.AddRange(dryRunHandle.Diagnostics.AsSpan());
                     }
 
+                    if (sourceMap is not null && !dryRunYaml.AsSpan().SequenceEqual(utf8Yaml))
+                    {
+                        sourceMap[filePath] = dryRunYaml;
+                    }
+
                     continue;
                 }
 
@@ -353,6 +360,10 @@ internal static class FixCommand
                     }
 
                     allDiagnostics.AddRange(currentHandle.Diagnostics.AsSpan());
+                    if (sourceMap is not null && applyContentChanged)
+                    {
+                        sourceMap[filePath] = currentYaml;
+                    }
                 }
                 finally
                 {
@@ -430,9 +441,9 @@ internal static class FixCommand
                 if (hasPrintedDiff && resolvedFormat.UsesRichTextOutput())
                     outputWriter.WriteLine();
                 if (output is null)
-                    DiagnosticFormatter.WriteToStandardOutput(allDiagnostics, resolvedFormat, oneline, colorEnabled);
+                    DiagnosticFormatter.WriteToStandardOutput(allDiagnostics, resolvedFormat, oneline, colorEnabled, sourceMap);
                 else
-                    DiagnosticFormatter.WriteToTextWriter(outputWriter, allDiagnostics, resolvedFormat, oneline, colorEnabled);
+                    DiagnosticFormatter.WriteToTextWriter(outputWriter, allDiagnostics, resolvedFormat, oneline, colorEnabled, sourceMap);
             }
 
             if (check || fixedFiles is not { Count: > 0 })

@@ -1019,6 +1019,20 @@ public sealed partial class RuleInterfaceTests
     }
 
     [Test]
+    public async Task LintConfig_Validate_OutputStructureSnippets_UnknownKey_ReportsError()
+    {
+        var yaml = """
+        output:
+          structure-snippets: false
+        """;
+
+        var result = LintConfigLibrary.Validate(yaml, "seiton.yaml");
+
+        await Assert.That(result.IsValid).IsFalse();
+        await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("unknown output key", StringComparison.Ordinal))).IsTrue();
+    }
+
+    [Test]
     public async Task Parser_EmptyRunsOnLabel_MessageIncludesAvailableLabels()
     {
         // When runs-on has an empty label, the parser message should include

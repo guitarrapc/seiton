@@ -137,62 +137,112 @@ public static class DiagnosticFormatter
         }
 
         var pathResolver = new PathDisplayResolver(pathBaseDirectory);
-        string? currentGroupFile = null;
-        string currentLineDisplay = "<unknown>";
-
-        for (var i = 0; i < diagnostics.Count; i++)
+        var lineIndexCache = CreateLineIndexCache(oneline, sourceMap);
+        try
         {
-            var d = diagnostics[i];
-            var fileKey = PathDisplayResolver.NormalizeFileKey(d.FilePath);
+            string? currentGroupFile = null;
+            string currentLineDisplay = "<unknown>";
 
-            if (!string.Equals(currentGroupFile, fileKey, StringComparison.Ordinal))
+            for (var i = 0; i < diagnostics.Count; i++)
             {
-                if (currentGroupFile is not null)
+                var d = diagnostics[i];
+                var fileKey = PathDisplayResolver.NormalizeFileKey(d.FilePath);
+
+                if (!string.Equals(currentGroupFile, fileKey, StringComparison.Ordinal))
                 {
-                    writer.WriteUtf8("::endgroup::");
+                    if (currentGroupFile is not null)
+                    {
+                        writer.WriteUtf8("::endgroup::");
+                        writer.WriteNewLine();
+                    }
+
+                    var fileDisplay = pathResolver.GetDisplayPath(d.FilePath);
+                    var escaped = EscapeGitHubCommandValue(fileDisplay);
+                    currentLineDisplay = escaped.StartsWith("::", StringComparison.Ordinal)
+                        ? string.Concat(".", escaped)
+                        : escaped;
+                    writer.WriteUtf8("::group::");
+                    writer.WriteUtf8(escaped);
                     writer.WriteNewLine();
+                    currentGroupFile = fileKey;
                 }
 
-                var fileDisplay = pathResolver.GetDisplayPath(d.FilePath);
-                var escaped = EscapeGitHubCommandValue(fileDisplay);
-                currentLineDisplay = escaped.StartsWith("::", StringComparison.Ordinal)
-                    ? string.Concat(".", escaped)
-                    : escaped;
-                writer.WriteUtf8("::group::");
-                writer.WriteUtf8(escaped);
-                writer.WriteNewLine();
-                currentGroupFile = fileKey;
+                WriteTextDiagnostic(writer, d, fileKey, currentLineDisplay, oneline, color: false, sourceMap, lineIndexCache);
             }
 
-            WriteTextDiagnostic(writer, d, fileKey, currentLineDisplay, oneline, color: false, sourceMap);
+            writer.WriteUtf8("::endgroup::");
+            writer.WriteNewLine();
         }
-
-        writer.WriteUtf8("::endgroup::");
-        writer.WriteNewLine();
+        finally
+        {
+            DisposeLineIndexCache(lineIndexCache);
+        }
     }
 
-    private static void WriteText(Utf8Writer writer, IReadOnlyList<Diagnostic> diagnostics, bool oneline, bool color, IReadOnlyDictionary<string, byte[]>? sourceMap, string? pathBaseDirectory)
+    private static void WriteText(
+        Utf8Writer writer,
+        IReadOnlyList<Diagnostic> diagnostics,
+        bool oneline,
+        bool color,
+        IReadOnlyDictionary<string, byte[]>? sourceMap,
+        string? pathBaseDirectory)
     {
         var pathResolver = new PathDisplayResolver(pathBaseDirectory);
-        string? previousFileKey = null;
-        string previousDisplayPath = "<unknown>";
-        for (var i = 0; i < diagnostics.Count; i++)
+        var lineIndexCache = CreateLineIndexCache(oneline, sourceMap);
+        try
         {
-            var d = diagnostics[i];
-            var fileKey = PathDisplayResolver.NormalizeFileKey(d.FilePath);
-            string fileDisplay;
-            if (string.Equals(previousFileKey, fileKey, StringComparison.Ordinal))
+            string? previousFileKey = null;
+            string previousDisplayPath = "<unknown>";
+            for (var i = 0; i < diagnostics.Count; i++)
             {
-                fileDisplay = previousDisplayPath;
+                var d = diagnostics[i];
+                var fileKey = PathDisplayResolver.NormalizeFileKey(d.FilePath);
+                string fileDisplay;
+                if (string.Equals(previousFileKey, fileKey, StringComparison.Ordinal))
+                {
+                    fileDisplay = previousDisplayPath;
+                }
+                else
+                {
+                    fileDisplay = pathResolver.GetDisplayPath(d.FilePath);
+                    previousFileKey = fileKey;
+                    previousDisplayPath = fileDisplay;
+                }
+
+                WriteTextDiagnostic(writer, d, fileKey, fileDisplay, oneline, color, sourceMap, lineIndexCache);
             }
-            else
-            {
-                fileDisplay = pathResolver.GetDisplayPath(d.FilePath);
-                previousFileKey = fileKey;
-                previousDisplayPath = fileDisplay;
-            }
-            WriteTextDiagnostic(writer, d, fileKey, fileDisplay, oneline, color, sourceMap);
         }
+        finally
+        {
+            DisposeLineIndexCache(lineIndexCache);
+        }
+    }
+
+    private static void DisposeLineIndexCache(Dictionary<string, YamlLineIndex>? cache)
+    {
+        if (cache is null)
+        {
+            return;
+        }
+
+        foreach (var index in cache.Values)
+        {
+            index.Dispose();
+        }
+
+        cache.Clear();
+    }
+
+    private static Dictionary<string, YamlLineIndex>? CreateLineIndexCache(
+        bool oneline,
+        IReadOnlyDictionary<string, byte[]>? sourceMap)
+    {
+        if (oneline || sourceMap is null)
+        {
+            return null;
+        }
+
+        return new Dictionary<string, YamlLineIndex>(sourceMap.Count, StringComparer.Ordinal);
     }
 
     private const int GitHubEscapeStackLimit = 512;
@@ -276,7 +326,8 @@ public static class DiagnosticFormatter
         string fileDisplay,
         bool oneline,
         bool color,
-        IReadOnlyDictionary<string, byte[]>? sourceMap)
+        IReadOnlyDictionary<string, byte[]>? sourceMap,
+        Dictionary<string, YamlLineIndex>? lineIndexCache)
     {
         var line = d.Location.StartLine;
         var col = d.Location.StartColumn;
@@ -290,7 +341,7 @@ public static class DiagnosticFormatter
         }
 
         // Rich multi-line format (Rust-style)
-        WriteRichDiagnostic(writer, d, fileKey, fileDisplay, line, col, severity, ruleId, color, sourceMap);
+        WriteRichDiagnostic(writer, d, fileKey, fileDisplay, line, col, severity, ruleId, color, sourceMap, lineIndexCache);
     }
 
     private static void WriteOnelineDiagnostic(
@@ -361,7 +412,8 @@ public static class DiagnosticFormatter
         string severity,
         string ruleId,
         bool color,
-        IReadOnlyDictionary<string, byte[]>? sourceMap)
+        IReadOnlyDictionary<string, byte[]>? sourceMap,
+        Dictionary<string, YamlLineIndex>? lineIndexCache)
     {
         if (color)
         {
@@ -402,8 +454,7 @@ public static class DiagnosticFormatter
             writer.Write(':');
             writer.WriteLine(col);
 
-            // Source snippet
-            WriteSourceSnippet(writer, d, sourceFileKey, sourceMap, color, severityColor, blue, reset, bold, dim);
+            WriteContextSnippet(writer, d, sourceFileKey, sourceMap, lineIndexCache, color, severityColor, blue, reset, bold, dim);
 
             // Help text
             if (d.Help is not null)
@@ -439,8 +490,7 @@ public static class DiagnosticFormatter
             writer.Write(':');
             writer.WriteLine(col);
 
-            // Source snippet
-            WriteSourceSnippet(writer, d, sourceFileKey, sourceMap, color, null, null, null, null, null);
+            WriteContextSnippet(writer, d, sourceFileKey, sourceMap, lineIndexCache, color, null, null, null, null, null);
 
             // Help text
             if (d.Help is not null)
@@ -451,6 +501,179 @@ public static class DiagnosticFormatter
 
             writer.WriteLine();
         }
+    }
+
+    private static void WriteContextSnippet(
+        Utf8Writer writer,
+        Diagnostic d,
+        string file,
+        IReadOnlyDictionary<string, byte[]>? sourceMap,
+        Dictionary<string, YamlLineIndex>? lineIndexCache,
+        bool color,
+        string? severityColor,
+        string? blue,
+        string? reset,
+        string? bold,
+        string? dim)
+    {
+        if (sourceMap is not null
+            && sourceMap.TryGetValue(file, out var sourceBytes)
+            && d.Location.StartLine == d.Location.EndLine
+            && TryWriteStructureContextSnippet(
+                writer,
+                d,
+                sourceBytes,
+                file,
+                lineIndexCache,
+                color,
+                severityColor,
+                blue,
+                reset))
+        {
+            return;
+        }
+
+        WriteSourceSnippet(writer, d, file, sourceMap, color, severityColor, blue, reset, bold, dim);
+    }
+
+    private static bool TryWriteStructureContextSnippet(
+        Utf8Writer writer,
+        Diagnostic d,
+        byte[] sourceBytes,
+        string file,
+        Dictionary<string, YamlLineIndex>? lineIndexCache,
+        bool color,
+        string? severityColor,
+        string? blue,
+        string? reset)
+    {
+        if (lineIndexCache is null)
+        {
+            return false;
+        }
+
+        if (!lineIndexCache.TryGetValue(file, out var cachedIndex))
+        {
+            cachedIndex = YamlLineIndex.Create(sourceBytes);
+            lineIndexCache[file] = cachedIndex;
+        }
+
+        Span<StructureSnippetEntry> scratch = stackalloc StructureSnippetEntry[StructureSnippetBuilder.MaxStackDisplayEntries];
+        if (!StructureSnippetBuilder.TryBuild(
+                sourceBytes,
+                d,
+                cachedIndex,
+                scratch,
+                out _,
+                out var entries,
+                out var highlightLine1Based,
+                out var rentedEntries)
+            || entries.IsEmpty)
+        {
+            return false;
+        }
+
+        try
+        {
+            var lastLineNumber = 0;
+            for (var i = 0; i < entries.Length; i++)
+            {
+                if (!entries[i].IsEllipsis)
+                {
+                    lastLineNumber = Math.Max(lastLineNumber, entries[i].LineNumber);
+                }
+            }
+
+            var lineNumWidth = DecimalFormat.CountDigits(lastLineNumber);
+            var caretLine = d.Location.StartLine;
+            var hasCaretLineInEntries = false;
+            for (var i = 0; i < entries.Length; i++)
+            {
+                if (!entries[i].IsEllipsis && entries[i].LineNumber == caretLine)
+                {
+                    hasCaretLineInEntries = true;
+                    break;
+                }
+            }
+
+            if (!hasCaretLineInEntries)
+            {
+                caretLine = highlightLine1Based;
+            }
+
+            for (var i = 0; i < entries.Length; i++)
+            {
+                ref readonly var entry = ref entries[i];
+                if (entry.IsEllipsis)
+                {
+                    writer.Write("   ");
+                    WriteRepeatedChar(writer, ' ', lineNumWidth);
+                    writer.Write(" | ...");
+                    writer.WriteNewLine();
+                    continue;
+                }
+
+                var sourceLine = entry.GetLineUtf8(sourceBytes);
+                WriteGutterLine(writer, entry.LineNumber, lineNumWidth, sourceLine, color, blue, reset);
+
+                if (entry.LineNumber == caretLine)
+                {
+                    WriteSingleLineCaret(
+                        writer,
+                        sourceLine,
+                        lineNumWidth,
+                        d.Location.StartColumn,
+                        d.Location.EndColumn,
+                        color,
+                        severityColor,
+                        reset);
+                }
+            }
+
+            return true;
+        }
+        finally
+        {
+            if (rentedEntries is not null)
+            {
+                ArrayPool<StructureSnippetEntry>.Shared.Return(rentedEntries);
+            }
+        }
+    }
+
+    private static void WriteSingleLineCaret(
+        Utf8Writer writer,
+        ReadOnlySpan<byte> sourceLine,
+        int lineNumWidth,
+        int startCol,
+        int endCol,
+        bool color,
+        string? severityColor,
+        string? reset)
+    {
+        var safeStart = Math.Max(1, startCol);
+        var safeEnd = endCol >= safeStart ? endCol : safeStart;
+        var prefixWidth = SourceDisplayWidth.GetWidthBeforeColumn(sourceLine, safeStart);
+        var caretLen = Math.Max(
+            1,
+            SourceDisplayWidth.GetWidthBetweenColumnsInclusive(sourceLine, safeStart, safeEnd));
+
+        writer.Write("   ");
+        WriteRepeatedChar(writer, ' ', lineNumWidth);
+        writer.Write(" | ");
+        WriteRepeatedChar(writer, ' ', prefixWidth);
+        if (color)
+        {
+            writer.Write(severityColor!);
+            WriteRepeatedChar(writer, '^', caretLen);
+            writer.Write(reset!);
+        }
+        else
+        {
+            WriteRepeatedChar(writer, '^', caretLen);
+        }
+
+        writer.WriteLine();
     }
 
     private static void WriteSourceSnippet(
@@ -495,7 +718,7 @@ public static class DiagnosticFormatter
         {
             ExtractLineSlices(sourceSpan, startLine, endLine, lineSlices);
 
-            var lineNumWidth = endLine.ToString().Length;
+            var lineNumWidth = DecimalFormat.CountDigits(endLine);
 
             WriteGutterSeparator(writer, lineNumWidth);
 
