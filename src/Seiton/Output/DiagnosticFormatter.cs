@@ -212,7 +212,7 @@ public static class DiagnosticFormatter
             return null;
         }
 
-        return new Dictionary<string, YamlLineIndex>(StringComparer.Ordinal);
+        return new Dictionary<string, YamlLineIndex>(sourceMap.Count, StringComparer.Ordinal);
     }
 
     private const int GitHubEscapeStackLimit = 512;
