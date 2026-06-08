@@ -177,3 +177,33 @@ Phase 1 で追加済み: `Rich_SourceSnippet_GutterSeparator_EmitsPipeNotAsciiCo
 
 - 文字リテラルを扱う API では、オーバーロード解決により意図しない数値出力が発生しうる。
 - 診断表示は「位置情報の正しさ」だけでなく、「視覚上の整列品質」もユーザー体験に直結するため、スナップショット/文字列テストで明示的に守る必要がある。
+
+## Code Review Follow-up (post Phase 3)
+
+### Round 1 findings
+
+- `SourceDisplayWidth` は主要ケースをカバーしていたが、分類/判定ロジックの等価クラス（境界・負ケース）のテストが不足。
+  - `column <= 1`
+  - 空行
+  - `endColumn < startColumn`
+  - 範囲外スライス
+  - 結合文字（幅 0）
+  - 不正 UTF-8 フォールバック
+
+### Round 1 fixes
+
+- `tests/Seiton.Tests/SourceDisplayWidthTests.cs` に上記等価クラスのテストを追加（計 6 ケース追加）。
+- 既存の Tab / Wide / Multi-line closing caret テストと合わせて、`SourceDisplayWidth` 分岐の true/false を網羅。
+
+### Round 2 review result
+
+- Correctness: 新規テスト全件パス。`dotnet test` 全体でも回帰なし。
+- Performance: 本体コード変更なし（テスト追加のみ）で Alloc 変化なし。`DiagnosticOutputBenchmark` を再実行しても hot path の挙動変更は確認されず。
+- API usability: 呼び出し側 API (`WriteLine(char)`, `DiagnosticFormatter`) の触り心地に追加修正は不要。
+- Spec sync: 既存仕様追記と実装の不整合なし。
+
+### Verification snapshot
+
+- `dotnet test`: 2566 passed, 1 skipped, 0 failed
+- `dotnet run -c Release -- --filter "*DiagnosticOutputBenchmark*" --job short`
+  - Allocated は既存レンジ内（`text rich`: F1 1.65 KB / F10 5.64 KB）
