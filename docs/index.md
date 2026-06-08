@@ -133,5 +133,3 @@ Many teams combine tools rather than picking one winner:
 - **[zizmor](https://github.com/zizmorcore/zizmor)** — deep security audit catalog with persona-based noise control. Overlaps with several Seiton rules; some teams run one, others run both for defense in depth.
 - **[ghalint](https://github.com/suzuki-shunsuke/ghalint)** — minimal policy set that is quick to roll out. Seiton covers the same policy areas and extends with additional rules and per-rule configuration.
 - **[frizbee](https://github.com/stacklok/frizbee)**, **[pinact](https://github.com/suzuki-shunsuke/pinact)**, **[dockerfile-pin](https://github.com/azu/dockerfile-pin)** — dedicated pinning and update workflows. Seiton can pin during `--fix`, but these tools offer scope and workflows (compose files, comment verification, release updates) that Seiton intentionally leaves to specialized tools.
-
-For a detailed rule-by-rule mapping used during Seiton development, see [Seiton-feature-matrix](../.github/docs/Seiton-feature-matrix.md) in the repository docs.

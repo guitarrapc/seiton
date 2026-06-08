@@ -329,12 +329,12 @@ zizmor 監査ID別対応表（実装確認ベース）:
 ## 8. 参照ドキュメント
 
 - .github/docs/Seiton_Linter_spec.md
-- .github/docs/competitor-actionlint-structure-details.md
-- .github/docs/competitor-ghalint-structure-details.md
-- .github/docs/competitor-zizmor-structure-details.md
-- .github/docs/competitor-pinact-structure-details.md
-- .github/docs/competitor-dockerfile-pin-structure-details.md
-- .github/docs/competitor-frizbee-structure-details.md
+- .github/docs/references/competitor-actionlint-structure-details.md
+- .github/docs/references/competitor-ghalint-structure-details.md
+- .github/docs/references/competitor-zizmor-structure-details.md
+- .github/docs/references/competitor-pinact-structure-details.md
+- .github/docs/references/competitor-dockerfile-pin-structure-details.md
+- .github/docs/references/competitor-frizbee-structure-details.md
 - .references/actionlint
 - .references/ghalint
 - .references/zizmor

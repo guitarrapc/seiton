@@ -3,17 +3,6 @@
     <File Path="Directory.Build.props" />
     <File Path="Directory.Packages.props" />
   </Folder>
-  <Folder Name="/docs/">
-    <File Path=".github/docs/architecture_spec_csharp.md" />
-    <File Path=".github/docs/architecture_spec_go.md" />
-    <File Path=".github/docs/architecture_spec_performance.md" />
-    <File Path=".github/docs/competitor-actionlint-structure-details.md" />
-    <File Path=".github/docs/competitor-ghalint-structure-details.md" />
-    <File Path=".github/docs/competitor-zizmor-structure-details.md" />
-    <File Path=".github/docs/Seiton_Parser_csharp_spec.md" />
-    <File Path=".github/docs/Seiton_Parser_go_spec.md" />
-    <File Path=".github/docs/Seiton_Parser_spec.md" />
-  </Folder>
   <Folder Name="/src/">
     <Project Path="src/Seiton/Seiton.csproj" />
     <Project Path="src/Seiton.Benchmark/Seiton.Benchmark.csproj" />
