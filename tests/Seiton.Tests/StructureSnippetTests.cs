@@ -39,15 +39,17 @@ public sealed class StructureSnippetTests
 
         var output = RenderRich(diag, bytes, path);
 
-        await Assert.That(output).Contains("= structure:");
+        await Assert.That(output).DoesNotContain("= structure:");
         await Assert.That(output).Contains("jobs:");
         await Assert.That(output).Contains("examples:");
         await Assert.That(output).Contains("steps:");
         await Assert.That(output).Contains("- uses: actions/checkout@v2");
         await Assert.That(output).Contains("...");
+        await Assert.That(output).Contains("^");
         await Assert.That(output).DoesNotContain("runs-on:");
         await Assert.That(output).DoesNotContain("permissions:");
         await Assert.That(output).DoesNotContain("fetch-depth:");
+        await Assert.That(output.Split("- uses: actions/checkout@v2").Length).IsEqualTo(2);
     }
 
     [Test]
@@ -72,7 +74,7 @@ public sealed class StructureSnippetTests
 
         var output = RenderRich(diag, bytes, path);
 
-        await Assert.That(output).Contains("= structure:");
+        await Assert.That(output).DoesNotContain("= structure:");
         await Assert.That(output).Contains("jobs:");
         await Assert.That(output).Contains("build:");
         await Assert.That(output).Contains("steps:");
@@ -156,7 +158,7 @@ public sealed class StructureSnippetTests
 
         var output = RenderRich(diag, bytes, path);
 
-        await Assert.That(output).Contains("= structure:");
+        await Assert.That(output).DoesNotContain("= structure:");
         await Assert.That(output).Contains("jobs:");
         await Assert.That(output).Contains("call:");
         await Assert.That(output).Contains("uses: org/repo/.github/workflows/ci.yml@v1");
@@ -176,7 +178,7 @@ public sealed class StructureSnippetTests
 
         var output = RenderRich(diag, bytes, path);
 
-        await Assert.That(output).Contains("= structure:");
+        await Assert.That(output).DoesNotContain("= structure:");
         await Assert.That(output).Contains("runs:");
         await Assert.That(output).Contains("steps:");
         await Assert.That(output).Contains("- run: echo hi");
@@ -196,7 +198,7 @@ public sealed class StructureSnippetTests
 
         var output = RenderRich(diag, bytes, path);
 
-        await Assert.That(output).Contains("= structure:");
+        await Assert.That(output).DoesNotContain("= structure:");
         await Assert.That(output).Contains("steps:");
         await Assert.That(output).Contains("- run: echo hi");
     }
@@ -223,7 +225,7 @@ public sealed class StructureSnippetTests
 
         var output = RenderRich(diag, bytes, path);
 
-        await Assert.That(output).Contains("= structure:");
+        await Assert.That(output).DoesNotContain("= structure:");
         await Assert.That(output).Contains("- uses: actions/checkout@aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa");
         await Assert.That(output).Contains("6 |");
     }

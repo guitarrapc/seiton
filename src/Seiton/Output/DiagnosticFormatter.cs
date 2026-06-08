@@ -424,9 +424,7 @@ public static class DiagnosticFormatter
             writer.Write(':');
             writer.WriteLine(col);
 
-            // Source snippet
-            WriteSourceSnippet(writer, d, sourceFileKey, sourceMap, color, severityColor, blue, reset, bold, dim);
-            WriteStructureSnippet(writer, d, sourceFileKey, sourceMap, lineIndexCache, color, blue, reset, dim);
+            WriteContextSnippet(writer, d, sourceFileKey, sourceMap, lineIndexCache, color, severityColor, blue, reset, bold, dim);
 
             // Help text
             if (d.Help is not null)
@@ -462,9 +460,7 @@ public static class DiagnosticFormatter
             writer.Write(':');
             writer.WriteLine(col);
 
-            // Source snippet
-            WriteSourceSnippet(writer, d, sourceFileKey, sourceMap, color, null, null, null, null, null);
-            WriteStructureSnippet(writer, d, sourceFileKey, sourceMap, lineIndexCache, color, null, null, null);
+            WriteContextSnippet(writer, d, sourceFileKey, sourceMap, lineIndexCache, color, null, null, null, null, null);
 
             // Help text
             if (d.Help is not null)
@@ -477,22 +473,50 @@ public static class DiagnosticFormatter
         }
     }
 
-    private static void WriteStructureSnippet(
+    private static void WriteContextSnippet(
         Utf8Writer writer,
         Diagnostic d,
         string file,
         IReadOnlyDictionary<string, byte[]>? sourceMap,
         Dictionary<string, YamlLineIndex>? lineIndexCache,
         bool color,
+        string? severityColor,
         string? blue,
         string? reset,
+        string? bold,
         string? dim)
     {
-        if (sourceMap is null || !sourceMap.TryGetValue(file, out var sourceBytes))
+        if (sourceMap is not null
+            && sourceMap.TryGetValue(file, out var sourceBytes)
+            && d.Location.StartLine == d.Location.EndLine
+            && TryWriteStructureContextSnippet(
+                writer,
+                d,
+                sourceBytes,
+                file,
+                lineIndexCache,
+                color,
+                severityColor,
+                blue,
+                reset))
         {
             return;
         }
 
+        WriteSourceSnippet(writer, d, file, sourceMap, color, severityColor, blue, reset, bold, dim);
+    }
+
+    private static bool TryWriteStructureContextSnippet(
+        Utf8Writer writer,
+        Diagnostic d,
+        byte[] sourceBytes,
+        string file,
+        Dictionary<string, YamlLineIndex>? lineIndexCache,
+        bool color,
+        string? severityColor,
+        string? blue,
+        string? reset)
+    {
         lineIndexCache ??= new Dictionary<string, YamlLineIndex>(1, StringComparer.Ordinal);
         if (!lineIndexCache.TryGetValue(file, out var cachedIndex))
         {
@@ -503,7 +527,7 @@ public static class DiagnosticFormatter
         if (!StructureSnippetBuilder.TryBuild(sourceBytes, d, cachedIndex, out var lineIndex, out var lines)
             || lines.IsEmpty)
         {
-            return;
+            return false;
         }
 
         lineIndexCache[file] = lineIndex;
@@ -518,25 +542,21 @@ public static class DiagnosticFormatter
         }
 
         var lineNumWidth = lastLineNumber > 0 ? lastLineNumber.ToString().Length : 1;
-
-        writer.Write("   ");
-        if (color)
+        var caretLine = d.Location.StartLine;
+        var hasCaretLineInEntries = false;
+        for (var i = 0; i < lines.Entries.Length; i++)
         {
-            writer.Write(dim!);
-            writer.Write('=');
-            writer.Write(reset!);
-            writer.Write(' ');
-            writer.Write("structure");
-            writer.Write(reset!);
-            writer.Write(": ");
-        }
-        else
-        {
-            writer.Write("= structure:");
+            if (!lines.Entries[i].IsEllipsis && lines.Entries[i].LineNumber == caretLine)
+            {
+                hasCaretLineInEntries = true;
+                break;
+            }
         }
 
-        writer.WriteLine();
-        WriteGutterSeparator(writer, lineNumWidth);
+        if (!hasCaretLineInEntries)
+        {
+            caretLine = lines.HighlightLine1Based;
+        }
 
         for (var i = 0; i < lines.Entries.Length; i++)
         {
@@ -551,9 +571,57 @@ public static class DiagnosticFormatter
             }
 
             WriteGutterLine(writer, entry.LineNumber, lineNumWidth, entry.LineUtf8.Span, color, blue, reset);
+
+            if (entry.LineNumber == caretLine)
+            {
+                WriteSingleLineCaret(
+                    writer,
+                    entry.LineUtf8.Span,
+                    lineNumWidth,
+                    d.Location.StartColumn,
+                    d.Location.EndColumn,
+                    color,
+                    severityColor,
+                    reset);
+            }
         }
 
-        WriteGutterSeparator(writer, lineNumWidth);
+        return true;
+    }
+
+    private static void WriteSingleLineCaret(
+        Utf8Writer writer,
+        ReadOnlySpan<byte> sourceLine,
+        int lineNumWidth,
+        int startCol,
+        int endCol,
+        bool color,
+        string? severityColor,
+        string? reset)
+    {
+        var safeStart = Math.Max(1, startCol);
+        var safeEnd = endCol >= safeStart ? endCol : safeStart;
+        var prefixWidth = SourceDisplayWidth.GetWidthBeforeColumn(sourceLine, safeStart);
+        var caretLen = Math.Max(
+            1,
+            SourceDisplayWidth.GetWidthBetweenColumnsInclusive(sourceLine, safeStart, safeEnd));
+
+        writer.Write("   ");
+        WriteRepeatedChar(writer, ' ', lineNumWidth);
+        writer.Write(" | ");
+        WriteRepeatedChar(writer, ' ', prefixWidth);
+        if (color)
+        {
+            writer.Write(severityColor!);
+            WriteRepeatedChar(writer, '^', caretLen);
+            writer.Write(reset!);
+        }
+        else
+        {
+            WriteRepeatedChar(writer, '^', caretLen);
+        }
+
+        writer.WriteLine();
     }
 
     private static void WriteSourceSnippet(

@@ -437,10 +437,10 @@ Snippet rendering behavior:
 - Caret length (`^`) spans the display width of bytes from `StartColumn` through `EndColumn` (inclusive byte range); minimum 1 caret.
 - When source is unavailable (for example stdin without a path, or JSON/SARIF formats), the gutter line `|` is emitted without snippet.
 
-Structure snippet rendering behavior (`text` / `github-actions` rich format only):
+Structure-aware context rendering (`text` / `github-actions` rich format only):
 
-- Rich `text` / `github-actions` output always includes a second gutter block labeled `= structure:` when applicable, following the source snippet.
-- The block shows the minimal YAML ancestor chain from `jobs:` / `runs:` down to the diagnostic line, omitting unrelated sibling keys with a `...` ellipsis line.
+- When a YAML structure path can be resolved, the source excerpt is replaced by a single gutter block showing the minimal ancestor chain from `jobs:` / `runs:` down to the diagnostic line (unrelated siblings omitted with `...`), with carets on the target line. There is no separate `= structure:` section and no duplicate source line.
+- When structure context cannot be built, the formatter falls back to the plain single-line (or multi-line) source snippet.
 - Shown only when the diagnostic is attributable to workflow/action structure (message path prefix such as `jobs.'…'` / `steps[n]`, optional `structure-path` diagnostic metadata, or ancestor chain includes `jobs:` / `steps:` / `runs:`).
 - When a structure path is present (parsed from the message or `structure-path` metadata), the snippet resolves the target YAML node from that path so the correct step/job context is shown even if the diagnostic line/column points elsewhere.
 - In `--fix` mode, structure snippets use the post-fix file bytes in `sourceMap` when fixes were applied, so remaining diagnostics align with the modified YAML.
@@ -451,16 +451,10 @@ Structure:
 ```
 <severity>[<rule-id>]: <message>
   --> <file>:<line>:<col>
-     |
-<line> | <source text>
-     | <leading spaces><carets>
-     |
-   = structure:              (optional; rich text / github-actions only)
-     |
-<line> | <ancestor yaml>
+<line> | <ancestor yaml>       (structure context when available)
      | ...
 <line> | <target yaml>
-     |
+     | <leading spaces><carets>
    = help: <help text>     (only when a help annotation is present)
 ```
 

@@ -18,7 +18,7 @@ internal static class StructureSnippetBuilder
         lineIndex = cachedIndex ?? YamlLineIndex.Create(source);
         lines = default;
 
-        if (source.Length == 0 || diagnostic.Location.StartLine <= 0)
+        if (source.Length == 0)
         {
             return false;
         }
@@ -61,7 +61,7 @@ internal static class StructureSnippetBuilder
                 return false;
             }
 
-            return TryBuildDisplayLines(lineIndex, chainBuffer.Slice(trimStart, trimmedLength), out lines);
+            return TryBuildDisplayLines(lineIndex, chainBuffer.Slice(trimStart, trimmedLength), targetLine, out lines);
         }
         finally
         {
@@ -166,7 +166,11 @@ internal static class StructureSnippetBuilder
         return 0;
     }
 
-    private static bool TryBuildDisplayLines(YamlLineIndex lineIndex, ReadOnlySpan<int> chain, out StructureSnippetLines lines)
+    private static bool TryBuildDisplayLines(
+        YamlLineIndex lineIndex,
+        ReadOnlySpan<int> chain,
+        int targetLine0,
+        out StructureSnippetLines lines)
     {
         var displayCount = chain.Length;
         for (var i = 0; i < chain.Length - 1; i++)
@@ -190,7 +194,7 @@ internal static class StructureSnippetBuilder
             entries[entryIndex++] = new StructureSnippetEntry(chain[i] + 1, lineIndex.GetLineUtf8(chain[i]));
         }
 
-        lines = new StructureSnippetLines(entries);
+        lines = new StructureSnippetLines(entries, targetLine0 + 1);
         return true;
     }
 
@@ -230,9 +234,14 @@ internal readonly struct StructureSnippetEntry
 
 internal readonly struct StructureSnippetLines
 {
-    public StructureSnippetLines(StructureSnippetEntry[] entries) => Entries = entries;
+    public StructureSnippetLines(StructureSnippetEntry[] entries, int highlightLine1Based)
+    {
+        Entries = entries;
+        HighlightLine1Based = highlightLine1Based;
+    }
 
     public StructureSnippetEntry[] Entries { get; }
+    public int HighlightLine1Based { get; }
     public bool IsEmpty => Entries.Length == 0;
 }
 
