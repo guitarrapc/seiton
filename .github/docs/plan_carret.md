@@ -35,14 +35,13 @@ Windows/Linux の両方で再現するため、端末依存よりも出力ロジ
 
 - `src/Seiton/Output/DiagnosticFormatter.cs` の `WriteGutterSeparator` を修正。
   - 変更前: `writer.WriteLine('|')` → `WriteLine(int)` に解決され `124` を出力
-  - 変更後: `writer.Write('|'); writer.WriteNewLine();` → 1バイトの `|` を出力
-- 文字列リテラル `WriteLine("|")` は使わず、`Write(char)` + `WriteNewLine()` を採用（ヒープ割り当てなし）。
+  - 変更後: `writer.WriteLine(" |")` → ソース行 (` N | `) と同じ列に `|` を出力（string リテラルのため追加のヒープ割り当てなし）
 
 ### 回帰テスト（Phase 2 の一部を先行実施）
 
 - `tests/Seiton.Tests/DiagnosticFormatterRichTextTests.cs` に `Rich_SourceSnippet_GutterSeparator_EmitsPipeNotAsciiCode` を追加。
   - 区切り行が `124` を含まないこと
-  - 区切り行が `    |` として出ること
+  - 区切り行が `     |` として出ること（ソース行 ` N | ` と列揃え）
   - ソース行が ` 2 | jobs:` 形式で出ること
 
 ### ベンチマーク（`DiagnosticOutputBenchmark`, ShortRun, Windows）
@@ -223,3 +222,24 @@ Phase 1 で追加済み: `Rich_SourceSnippet_GutterSeparator_EmitsPipeNotAsciiCo
     - `Rich_SourceSnippet_CaretLengthMatchesColumnSpan` を inclusive 前提へ更新。
 - Spec sync:
   - `.github/docs/Seiton_CLI_spec.md` の説明を half-open から inclusive に修正。
+
+### Round 4 (PR review follow-up)
+
+- Finding:
+  - `safeEnd = safeStart + 1` when `EndColumn <= StartColumn` は inclusive 点範囲で caret が 2 本になる。
+  - ガター区切り・caret 行のテスト期待値が `" |"` 整列前の旧レイアウトのまま。
+  - `Seiton_CLI_csharp_spec.md` / Phase 1 ノートが `WriteLine(char)` 実装と不一致。
+- Fix:
+  - `safeEnd = endCol >= safeStart ? endCol : safeStart` に変更。
+  - ガター・caret テストのスペース数を `" | "` 整列後に更新。
+  - `MinimumOneCaret_WhenStartEqualsEnd` で caret 1 本を明示検証。
+  - `SourceDisplayWidthTests.GetWidthBetweenColumnsInclusive_StartEqualsEnd_ReturnsSingleColumnWidth` を追加。
+  - 仕様書・plan を現行実装に同期。
+
+### Round 4 verification snapshot
+
+- `dotnet test`: 2568 passed, 1 skipped, 0 failed
+- `DiagnosticOutputBenchmark text rich` (ShortRun, Windows):
+  - F1: 224.99 μs (+6.0% vs Phase 1 前 212.32 μs), Alloc 1.65 KB（不変）
+  - F10: 2194.35 μs (+7.5% vs Phase 1 前 2040.87 μs), Alloc 5.64 KB（不変）
+- 判定: Mean / Allocated ともに +10% 以内。性能劣化なし。

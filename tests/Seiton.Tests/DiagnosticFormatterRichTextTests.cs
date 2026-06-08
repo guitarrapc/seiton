@@ -135,8 +135,8 @@ public sealed class DiagnosticFormatterRichTextTests
         var output = Render(diag, sourceMap: sourceMap).ReplaceLineEndings("\n");
 
         // '|' is ASCII 124; WriteLine('|') must not emit the numeric code as decimal text.
-        await Assert.That(output).DoesNotContain("\n   124\n");
-        await Assert.That(output).Contains("    |\n");
+        await Assert.That(output).DoesNotContain("\n    124\n");
+        await Assert.That(output).Contains("     |\n");
         await Assert.That(output).Contains(" 2 | jobs:");
     }
 
@@ -150,8 +150,8 @@ public sealed class DiagnosticFormatterRichTextTests
         var output = Render(diag, sourceMap: sourceMap).ReplaceLineEndings("\n");
 
         await Assert.That(output).DoesNotContain("124");
-        await Assert.That(output).Contains("    |\n");
-        await Assert.That(output.Split("    |\n", StringSplitOptions.None).Length).IsEqualTo(3);
+        await Assert.That(output).Contains("     |\n");
+        await Assert.That(output.Split("     |\n", StringSplitOptions.None).Length).IsEqualTo(3);
     }
 
     [Test]
@@ -164,8 +164,8 @@ public sealed class DiagnosticFormatterRichTextTests
         var diag = MakeDiagnostic(DiagnosticSeverity.Warning, "msg", 100, 1, 100, 8, filePath: "ci.yml");
         var output = Render(diag, sourceMap: sourceMap).ReplaceLineEndings("\n");
 
-        await Assert.That(output).DoesNotContain("\n     124\n");
-        await Assert.That(output).Contains("     |\n");
+        await Assert.That(output).DoesNotContain("\n      124\n");
+        await Assert.That(output).Contains("       |\n");
         await Assert.That(output).Contains("100 | line-100");
     }
 
@@ -253,7 +253,7 @@ public sealed class DiagnosticFormatterRichTextTests
         var output = Render(diag, sourceMap: sourceMap).ReplaceLineEndings("\n");
 
         await Assert.That(output).Contains(" 1 | \tfoo");
-        await Assert.That(output).Contains("   |     ^^^");
+        await Assert.That(output).Contains("     |     ^^^");
     }
 
     [Test]
@@ -266,7 +266,7 @@ public sealed class DiagnosticFormatterRichTextTests
         var output = Render(diag, sourceMap: sourceMap).ReplaceLineEndings("\n");
 
         await Assert.That(output).Contains(" 1 | # 日本");
-        await Assert.That(output).Contains("    |   ^^^^");
+        await Assert.That(output).Contains("     |   ^^^^");
     }
 
     [Test]
@@ -279,7 +279,7 @@ public sealed class DiagnosticFormatterRichTextTests
         var output = Render(diag, sourceMap: sourceMap).ReplaceLineEndings("\n");
 
         await Assert.That(output).Contains("2 || \tend");
-        await Assert.That(output).Contains("   | |_^^^");
+        await Assert.That(output).Contains("     | |_^^^");
     }
 
     [Test]
@@ -288,11 +288,12 @@ public sealed class DiagnosticFormatterRichTextTests
         var source = "on: push\n"u8.ToArray();
         var sourceMap = new Dictionary<string, byte[]> { ["ci.yml"] = source };
 
-        // StartCol == EndCol → minimum 1 caret
+        // StartCol == EndCol (inclusive point range) → exactly 1 caret
         var diag = MakeDiagnostic(DiagnosticSeverity.Error, "msg", 1, 4, 1, 4, filePath: "ci.yml");
         var output = Render(diag, sourceMap: sourceMap);
 
-        await Assert.That(output).Contains("^");
+        await Assert.That(output).Contains("     |    ^");
+        await Assert.That(output).DoesNotContain("     |    ^^");
     }
 
     [Test]

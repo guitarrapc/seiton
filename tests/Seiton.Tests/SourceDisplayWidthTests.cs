@@ -65,6 +65,13 @@ public sealed class SourceDisplayWidthTests
     }
 
     [Test]
+    public async Task GetWidthBetweenColumnsInclusive_StartEqualsEnd_ReturnsSingleColumnWidth()
+    {
+        var line = "on: push"u8.ToArray();
+        await Assert.That(SourceDisplayWidth.GetWidthBetweenColumnsInclusive(line, 4, 4)).IsEqualTo(1);
+    }
+
+    [Test]
     public async Task GetWidthBetweenColumnsInclusive_EndBeforeStart_ReturnsZero()
     {
         var line = "abcdef"u8.ToArray();

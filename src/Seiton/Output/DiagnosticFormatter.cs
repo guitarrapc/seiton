@@ -507,7 +507,7 @@ public static class DiagnosticFormatter
 
                 // Underline caret: columns are 1-based byte positions; pad by terminal display width.
                 var safeStart = Math.Max(1, startCol);
-                var safeEnd = endCol > safeStart ? endCol : safeStart + 1;
+                var safeEnd = endCol >= safeStart ? endCol : safeStart;
                 var prefixWidth = SourceDisplayWidth.GetWidthBeforeColumn(sourceLine, safeStart);
                 var caretLen = Math.Max(
                     1,
