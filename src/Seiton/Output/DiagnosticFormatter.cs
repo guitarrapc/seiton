@@ -530,70 +530,64 @@ public static class DiagnosticFormatter
             return false;
         }
 
-        try
+        using var linesLease = lines;
+        lineIndexCache[file] = lineIndex;
+
+        var lastLineNumber = 0;
+        for (var i = 0; i < lines.Count; i++)
         {
-            lineIndexCache[file] = lineIndex;
-
-            var lastLineNumber = 0;
-            for (var i = 0; i < lines.Count; i++)
+            if (!lines.Entries[i].IsEllipsis)
             {
-                if (!lines.Entries[i].IsEllipsis)
-                {
-                    lastLineNumber = Math.Max(lastLineNumber, lines.Entries[i].LineNumber);
-                }
+                lastLineNumber = Math.Max(lastLineNumber, lines.Entries[i].LineNumber);
             }
-
-            var lineNumWidth = lastLineNumber > 0 ? lastLineNumber.ToString().Length : 1;
-            var caretLine = d.Location.StartLine;
-            var hasCaretLineInEntries = false;
-            for (var i = 0; i < lines.Count; i++)
-            {
-                if (!lines.Entries[i].IsEllipsis && lines.Entries[i].LineNumber == caretLine)
-                {
-                    hasCaretLineInEntries = true;
-                    break;
-                }
-            }
-
-            if (!hasCaretLineInEntries)
-            {
-                caretLine = lines.HighlightLine1Based;
-            }
-
-            for (var i = 0; i < lines.Count; i++)
-            {
-                ref readonly var entry = ref lines.Entries[i];
-                if (entry.IsEllipsis)
-                {
-                    writer.Write("   ");
-                    WriteRepeatedChar(writer, ' ', lineNumWidth);
-                    writer.Write(" | ...");
-                    writer.WriteNewLine();
-                    continue;
-                }
-
-                WriteGutterLine(writer, entry.LineNumber, lineNumWidth, entry.LineUtf8.Span, color, blue, reset);
-
-                if (entry.LineNumber == caretLine)
-                {
-                    WriteSingleLineCaret(
-                        writer,
-                        entry.LineUtf8.Span,
-                        lineNumWidth,
-                        d.Location.StartColumn,
-                        d.Location.EndColumn,
-                        color,
-                        severityColor,
-                        reset);
-                }
-            }
-
-            return true;
         }
-        finally
+
+        var lineNumWidth = DecimalFormat.CountDigits(lastLineNumber);
+        var caretLine = d.Location.StartLine;
+        var hasCaretLineInEntries = false;
+        for (var i = 0; i < lines.Count; i++)
         {
-            lines.Dispose();
+            if (!lines.Entries[i].IsEllipsis && lines.Entries[i].LineNumber == caretLine)
+            {
+                hasCaretLineInEntries = true;
+                break;
+            }
         }
+
+        if (!hasCaretLineInEntries)
+        {
+            caretLine = lines.HighlightLine1Based;
+        }
+
+        for (var i = 0; i < lines.Count; i++)
+        {
+            ref readonly var entry = ref lines.Entries[i];
+            if (entry.IsEllipsis)
+            {
+                writer.Write("   ");
+                WriteRepeatedChar(writer, ' ', lineNumWidth);
+                writer.Write(" | ...");
+                writer.WriteNewLine();
+                continue;
+            }
+
+            WriteGutterLine(writer, entry.LineNumber, lineNumWidth, entry.LineUtf8.Span, color, blue, reset);
+
+            if (entry.LineNumber == caretLine)
+            {
+                WriteSingleLineCaret(
+                    writer,
+                    entry.LineUtf8.Span,
+                    lineNumWidth,
+                    d.Location.StartColumn,
+                    d.Location.EndColumn,
+                    color,
+                    severityColor,
+                    reset);
+            }
+        }
+
+        return true;
     }
 
     private static void WriteSingleLineCaret(
@@ -673,7 +667,7 @@ public static class DiagnosticFormatter
         {
             ExtractLineSlices(sourceSpan, startLine, endLine, lineSlices);
 
-            var lineNumWidth = endLine.ToString().Length;
+            var lineNumWidth = DecimalFormat.CountDigits(endLine);
 
             WriteGutterSeparator(writer, lineNumWidth);
 

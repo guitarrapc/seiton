@@ -689,14 +689,7 @@ internal static class CheckCommand
         }
     }
 
-    internal static int CountDigits(int value)
-    {
-        if (value < 10) return 1;
-        if (value < 100) return 2;
-        if (value < 1000) return 3;
-        if (value < 10000) return 4;
-        return value.ToString().Length;
-    }
+    internal static int CountDigits(int value) => DecimalFormat.CountDigits(value);
 
     internal static void WriteNetworkFixHint(TextWriter writer, List<Diagnostic> diagnostics, bool enablePinNetwork, bool enableImageNetwork)
     {

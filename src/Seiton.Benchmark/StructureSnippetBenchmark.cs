@@ -60,14 +60,8 @@ public class StructureSnippetBenchmark
             _lineIndexCache.TryGetValue(file, out var cached);
             if (StructureSnippetBuilder.TryBuild(bytes, diag, cached, out var lineIndex, out var lines) && !lines.IsEmpty)
             {
-                try
-                {
-                    built++;
-                }
-                finally
-                {
-                    lines.Dispose();
-                }
+                using var linesLease = lines;
+                built++;
             }
 
             _lineIndexCache[file] = lineIndex;

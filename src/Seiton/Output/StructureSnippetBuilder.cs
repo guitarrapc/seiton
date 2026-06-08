@@ -234,7 +234,7 @@ internal readonly struct StructureSnippetEntry
     public bool IsEllipsis => LineNumber < 0;
 }
 
-internal struct StructureSnippetLines
+internal struct StructureSnippetLines : IDisposable
 {
     private StructureSnippetLines(
         StructureSnippetEntry[] entries,
@@ -253,7 +253,7 @@ internal struct StructureSnippetLines
 
     public void Dispose()
     {
-        if (IsRented)
+        if (IsRented && Entries is not null)
         {
             ArrayPool<StructureSnippetEntry>.Shared.Return(Entries);
             this = default;
