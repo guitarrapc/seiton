@@ -6,28 +6,40 @@ namespace Seiton.Output;
 internal readonly struct DiagnosticStructurePath
 {
     public DiagnosticStructurePath(
+        string source,
         bool hasJobs,
-        string jobId,
+        int jobIdStart,
+        int jobIdLength,
         bool hasSteps,
         int stepIndex1Based,
-        ReadOnlyMemory<char> remaining)
+        int remainingStart,
+        int remainingLength)
     {
+        Source = source;
         HasJobs = hasJobs;
-        JobId = jobId;
+        JobIdStart = jobIdStart;
+        JobIdLength = jobIdLength;
         HasSteps = hasSteps;
         StepIndex1Based = stepIndex1Based;
-        Remaining = remaining;
+        RemainingStart = remainingStart;
+        RemainingLength = remainingLength;
     }
 
+    public string Source { get; }
     public bool HasJobs { get; }
-    public string JobId { get; }
+    public int JobIdStart { get; }
+    public int JobIdLength { get; }
     public bool HasSteps { get; }
     public int StepIndex1Based { get; }
-    public ReadOnlyMemory<char> Remaining { get; }
+    public int RemainingStart { get; }
+    public int RemainingLength { get; }
 
-    public bool IsEmpty => !HasJobs && !HasSteps && Remaining.IsEmpty;
+    public ReadOnlySpan<char> JobId => JobIdLength <= 0 ? [] : Source.AsSpan(JobIdStart, JobIdLength);
+    public ReadOnlySpan<char> Remaining => RemainingLength <= 0 ? [] : Source.AsSpan(RemainingStart, RemainingLength);
 
-    public bool IsWorkflowScoped => HasJobs || HasSteps || !Remaining.IsEmpty;
+    public bool IsEmpty => !HasJobs && !HasSteps && RemainingLength == 0;
+
+    public bool IsWorkflowScoped => HasJobs || HasSteps || RemainingLength > 0;
 }
 
 internal static class DiagnosticStructurePathParser
@@ -36,28 +48,28 @@ internal static class DiagnosticStructurePathParser
     {
         if (diagnostic.Metadata is not null
             && diagnostic.Metadata.TryGetValue(DiagnosticStructurePathMetadata.Key, out var metadataPath)
-            && TryParsePath(metadataPath.AsSpan(), out path))
+            && TryParsePath(metadataPath, out path))
         {
             return true;
         }
 
-        return TryParseMessage(diagnostic.Message.AsSpan(), out path);
+        return TryParseMessage(diagnostic.Message, out path);
     }
 
-    public static bool TryParseMessage(ReadOnlySpan<char> message, out DiagnosticStructurePath path)
+    public static bool TryParseMessage(string message, out DiagnosticStructurePath path)
     {
         path = default;
-        if (message.IsEmpty)
+        if (message.Length == 0)
         {
             return false;
         }
 
-        if (message.StartsWith("jobs.", StringComparison.Ordinal))
+        if (message.AsSpan().StartsWith("jobs.", StringComparison.Ordinal))
         {
             return TryParseJobsPath(message, out path);
         }
 
-        if (message.StartsWith("steps[", StringComparison.Ordinal))
+        if (message.AsSpan().StartsWith("steps[", StringComparison.Ordinal))
         {
             return TryParseStepsOnlyPath(message, out path);
         }
@@ -65,20 +77,20 @@ internal static class DiagnosticStructurePathParser
         return false;
     }
 
-    private static bool TryParsePath(ReadOnlySpan<char> path, out DiagnosticStructurePath result)
+    private static bool TryParsePath(string path, out DiagnosticStructurePath result)
     {
         result = default;
-        if (path.IsEmpty)
+        if (path.Length == 0)
         {
             return false;
         }
 
-        if (path.StartsWith("jobs.", StringComparison.Ordinal))
+        if (path.AsSpan().StartsWith("jobs.", StringComparison.Ordinal))
         {
             return TryParseJobsPath(path, out result);
         }
 
-        if (path.StartsWith("steps[", StringComparison.Ordinal))
+        if (path.AsSpan().StartsWith("steps[", StringComparison.Ordinal))
         {
             return TryParseStepsOnlyPath(path, out result);
         }
@@ -86,21 +98,24 @@ internal static class DiagnosticStructurePathParser
         return false;
     }
 
-    private static bool TryParseJobsPath(ReadOnlySpan<char> message, out DiagnosticStructurePath path)
+    private static bool TryParseJobsPath(string message, out DiagnosticStructurePath path)
     {
         path = default;
+        var messageSpan = message.AsSpan();
         var cursor = 5; // after "jobs."
 
-        string jobId;
+        var jobIdStart = 0;
+        var jobIdLength = 0;
         if (cursor < message.Length && message[cursor] == '\'')
         {
-            var close = message[(cursor + 1)..].IndexOf('\'');
+            var close = messageSpan[(cursor + 1)..].IndexOf('\'');
             if (close < 0)
             {
                 return false;
             }
 
-            jobId = message.Slice(cursor + 1, close).ToString();
+            jobIdStart = cursor + 1;
+            jobIdLength = close;
             cursor += close + 2;
             if (cursor >= message.Length || message[cursor] != '.')
             {
@@ -111,23 +126,25 @@ internal static class DiagnosticStructurePathParser
         }
         else
         {
-            var dot = message[cursor..].IndexOf('.');
+            var dot = messageSpan[cursor..].IndexOf('.');
             if (dot <= 0)
             {
                 return false;
             }
 
-            jobId = message.Slice(cursor, dot).ToString();
+            jobIdStart = cursor;
+            jobIdLength = dot;
             cursor += dot + 1;
         }
 
         var hasSteps = false;
         var stepIndex = 0;
-        ReadOnlyMemory<char> remaining = default;
+        var remainingStart = 0;
+        var remainingLength = 0;
 
-        if (message[cursor..].StartsWith("steps[", StringComparison.Ordinal))
+        if (messageSpan[cursor..].StartsWith("steps[", StringComparison.Ordinal))
         {
-            if (!TryParseStepIndex(message[cursor..], out var parsedIndex, out var consumed))
+            if (!TryParseStepIndex(messageSpan[cursor..], out var parsedIndex, out var consumed))
             {
                 return false;
             }
@@ -135,39 +152,48 @@ internal static class DiagnosticStructurePathParser
             hasSteps = true;
             stepIndex = parsedIndex;
             cursor += consumed;
-            remaining = TrimPathSuffix(message[cursor..]).ToString().AsMemory();
+            var suffix = TrimPathSuffix(messageSpan[cursor..]);
+            remainingStart = cursor;
+            remainingLength = suffix.Length;
         }
         else
         {
-            var tail = message[cursor..];
-            var keyEnd = tail.IndexOfAny('.', ' ');
-            if (keyEnd > 0)
-            {
-                remaining = tail[keyEnd..].ToString().AsMemory();
-            }
-            else if (keyEnd == 0)
-            {
-                remaining = tail.ToString().AsMemory();
-            }
-            else
-            {
-                remaining = tail.ToString().AsMemory();
-            }
+            var tailPath = TrimPathSuffix(messageSpan[cursor..]);
+            remainingStart = cursor;
+            remainingLength = tailPath.Length;
         }
 
-        path = new DiagnosticStructurePath(true, jobId, hasSteps, stepIndex, remaining);
+        path = new DiagnosticStructurePath(
+            source: message,
+            hasJobs: true,
+            jobIdStart: jobIdStart,
+            jobIdLength: jobIdLength,
+            hasSteps: hasSteps,
+            stepIndex1Based: stepIndex,
+            remainingStart: remainingStart,
+            remainingLength: remainingLength);
         return true;
     }
 
-    private static bool TryParseStepsOnlyPath(ReadOnlySpan<char> message, out DiagnosticStructurePath path)
+    private static bool TryParseStepsOnlyPath(string message, out DiagnosticStructurePath path)
     {
         path = default;
-        if (!TryParseStepIndex(message, out var stepIndex, out var consumed))
+        var messageSpan = message.AsSpan();
+        if (!TryParseStepIndex(messageSpan, out var stepIndex, out var consumed))
         {
             return false;
         }
 
-        path = new DiagnosticStructurePath(false, string.Empty, true, stepIndex, TrimPathSuffix(message[consumed..]).ToString().AsMemory());
+        var remaining = TrimPathSuffix(messageSpan[consumed..]);
+        path = new DiagnosticStructurePath(
+            source: message,
+            hasJobs: false,
+            jobIdStart: 0,
+            jobIdLength: 0,
+            hasSteps: true,
+            stepIndex1Based: stepIndex,
+            remainingStart: consumed,
+            remainingLength: remaining.Length);
         return true;
     }
 
@@ -221,7 +247,7 @@ internal static class DiagnosticStructurePathResolver
                 return false;
             }
 
-            if (!lineIndex.TryFindChildMappingKey(jobsLine, path.JobId, out current))
+            if (!lineIndex.TryFindChildScalarKey(jobsLine, path.JobId, out current))
             {
                 return false;
             }
@@ -255,7 +281,7 @@ internal static class DiagnosticStructurePathResolver
                 return false;
             }
 
-            if (!TryResolveRemainingKeys(lineIndex, current, path.Remaining.Span, out current))
+            if (!TryResolveRemainingKeys(lineIndex, current, path.Remaining, out current))
             {
                 return false;
             }
