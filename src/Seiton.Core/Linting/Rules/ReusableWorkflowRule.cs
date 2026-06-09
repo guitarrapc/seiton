@@ -234,7 +234,7 @@ public sealed class ReusableWorkflowRule() : RuleBase(RuleId.ReusableWorkflow)
         {
             if (useInputHashSet)
             {
-                providedInputNames = new HashSet<string>(StringComparer.Ordinal);
+                providedInputNames = new HashSet<string>(workflowCall.Inputs.Value.Count, StringComparer.Ordinal);
             }
 
             foreach (var pair in workflowCall.Inputs.Value)
@@ -322,7 +322,7 @@ public sealed class ReusableWorkflowRule() : RuleBase(RuleId.ReusableWorkflow)
         {
             if (useSecretHashSet)
             {
-                providedSecretNames = new HashSet<string>(StringComparer.Ordinal);
+                providedSecretNames = new HashSet<string>(workflowCall.Secrets.Value.Count, StringComparer.Ordinal);
             }
 
             foreach (var pair in workflowCall.Secrets.Value)

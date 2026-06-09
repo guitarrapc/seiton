@@ -283,6 +283,7 @@ internal static class RunContextDirectUseAnalyzer
         if (expression[index] == (byte)'.')
         {
             index++;
+            SkipWhiteSpace(expression, ref index);
             if (!TryReadSimpleIdentifierBounds(expression, ref index, out nameStart, out nameLength))
             {
                 return false;
@@ -353,6 +354,7 @@ internal static class RunContextDirectUseAnalyzer
         if (expression[index] == (byte)'.')
         {
             index++;
+            SkipWhiteSpace(expression, ref index);
             if (!TryReadGitHubIdentifierBounds(expression, ref index, out nameStart, out nameLength))
             {
                 return false;
