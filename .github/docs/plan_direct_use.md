@@ -190,7 +190,8 @@
 2. P1: `inputs` ノイズ削減
 3. P2: `env` 整合
 4. P3: `secrets` 文言調整
-5. P4: 横断ガードレール
+5. P4: strict オプション導入
+6. P5: 横断ガードレール
 
 ---
 
@@ -333,3 +334,93 @@
 最終判定:
 
 - 本フェーズの目的（P0/P1）は達成。追加改善は P2/P3 で継続。
+
+## 13. 実装結果（P2-P5, 2026-06-09）
+
+### 13.1 P2 実施結果（run-env-context-direct-use の同一設計適用）
+
+実装概要:
+
+1. `run-env-context-direct-use` で shell single-quoted no-expand 文脈の diagnostic を既定で抑制。
+2. no-expand heredoc (`<<'EOF'`) の抑制は従来どおり維持。
+3. strict 有効時は shell single-quoted 文脈で diagnostic を再有効化。
+
+テスト:
+
+1. `LintEngine_RunEnvContextDirectUse_DoesNotDiagnose_InsideSingleQuotes_ByDefault`
+2. `LintEngine_RunEnvContextDirectUse_StrictDetection_DiagnosesAndFixes_InsideSingleQuotes`
+
+### 13.2 P3 実施結果（run-secrets-context-direct-use の安全側維持 + 文言改善）
+
+実装概要:
+
+1. shell single-quoted no-expand 文脈でも検出は維持。
+2. fix 不可文脈では、`shell no-expand context` を含む手動リファクタリング誘導メッセージへ調整。
+
+テスト:
+
+1. `LintEngine_RunSecretsContextDirectUse_Fix_DoesNotAttach_InsideSingleQuotes`
+
+### 13.3 P4 実施結果（strict オプション導入）
+
+実装概要:
+
+1. `RuleConfig` に `Strict` を追加。
+2. `LintConfigYamlParser` に `strict` キーを追加。
+3. `RuleKeyFlags.Strict` を追加し、`run-env-context-direct-use` / `run-inputs-context-direct-use` で許可。
+4. 両ルールの `SetConfig(...)` で `strict` を解釈し、single-quote 抑制可否に反映。
+
+テスト:
+
+1. `Validate_RuleSpecificOptions_RunEnvContextDirectUseStrict_Parses`
+2. `Validate_RuleSpecificOptions_RunInputsContextDirectUseStrict_Parses`
+3. `Validate_RuleSpecificOptions_RunEnvContextDirectUseStrict_RejectsWrongRule`
+4. `Validate_RuleSpecificOptions_RunEnvContextDirectUseStrict_RejectsNonBool`
+5. `LintEngine_RunInputsContextDirectUse_StrictDetection_Diagnoses_InsideSingleQuotes`
+
+### 13.4 P5 実施結果（クロスルール整合ガードレール）
+
+実装概要:
+
+1. `RunContextDirectUseAnalyzer.ShouldSuppressNoExpandDirectUseDiagnostic(...)` を追加。
+2. `run-env` / `run-inputs` が同一 suppression gate を利用するよう統一。
+3. `run-secrets` は意図的差分として「single-quoted でも検出維持」を継続。
+
+期待効果:
+
+1. 類似ルール間の no-expand 文脈判定ドリフトを抑制。
+2. 今後のルール拡張で「判定重複実装による仕様ずれ」を予防。
+
+## 14. 検証結果（P2-P5 反映後）
+
+### 14.1 テスト
+
+実行コマンド:
+
+1. `dotnet test --project tests/Seiton.Core.Tests --treenode-filter "/*/*/RuleInterfaceTests/LintEngine_RunEnvContextDirectUse*|/*/*/RuleInterfaceTests/LintEngine_RunInputsContextDirectUse*|/*/*/RuleInterfaceTests/LintEngine_RunSecretsContextDirectUse*|/*/*/LintConfigLibraryTests/Validate_*Strict*"`
+2. `dotnet test`
+
+結果:
+
+1. 対象フィルタ実行: `total: 501, failed: 0, succeeded: 501`。
+2. 全体実行: 全プロジェクト pass（`Seiton.Playground.Tests` は既知 skip 1 件）。
+
+### 14.2 ベンチマーク
+
+実行コマンド:
+
+1. `dotnet run --project src/Seiton.Benchmark -c Release --filter "*CoreLintBenchmark*"`
+
+結果（ShortRun, 抜粋）:
+
+1. Small/Fix=false: Mean 224.7 us, Alloc 8.81 KB
+2. Small/Fix=true: Mean 135.9 us, Alloc 10.13 KB
+3. Medium/Fix=false: Mean 2,307.7 us, Alloc 68.52 KB
+4. Medium/Fix=true: Mean 3,567.4 us, Alloc 82.02 KB
+5. Large/Fix=false: Mean 38,471.8 us, Alloc 325.53 KB
+6. Large/Fix=true: Mean 54,664.6 us, Alloc 380.38 KB
+
+評価:
+
+1. 主要 Alloc は概ね安定（Medium/Fix=true のみ +0.14 KB 程度）。
+2. Mean は ShortRun のため分散が大きく、厳密判定は長時間設定での再計測が必要。
