@@ -1,6 +1,7 @@
 ﻿using Seiton.Core.Linting.Fixing;
 using Seiton.Core.Parsing;
 using Seiton.Core.Parsing.Ast;
+using System.Buffers;
 using System.Runtime.CompilerServices;
 using System.Text;
 
@@ -414,6 +415,153 @@ internal static class RunContextDirectUseAnalyzer
         }
 
         return matchCount == 1;
+    }
+
+    // Shell Replacement Builders
+
+    internal static bool TryBuildShellVariableReplacementFromExpression(
+        ReadOnlySpan<byte> expression,
+        int nameStart,
+        int nameLength,
+        bool isPowerShell,
+        bool wrapInDoubleQuotes,
+        out string replacement)
+    {
+        replacement = string.Empty;
+        if (nameStart < 0 || nameLength <= 0 || nameStart + nameLength > expression.Length)
+        {
+            return false;
+        }
+
+        return TryBuildShellVariableReplacement(
+            expression.Slice(nameStart, nameLength),
+            isPowerShell,
+            wrapInDoubleQuotes,
+            out replacement);
+    }
+
+    internal static bool TryBuildShellVariableReplacement(string variableName, bool isPowerShell, bool wrapInDoubleQuotes, out string replacement)
+    {
+        if (string.IsNullOrEmpty(variableName))
+        {
+            replacement = string.Empty;
+            return false;
+        }
+
+        return TryBuildShellVariableReplacement(variableName.AsSpan(), isPowerShell, wrapInDoubleQuotes, out replacement);
+    }
+
+    internal static bool TryBuildShellVariableReplacement(ReadOnlySpan<char> variableName, bool isPowerShell, bool wrapInDoubleQuotes, out string replacement)
+    {
+        replacement = string.Empty;
+        if (variableName.Length == 0)
+        {
+            return false;
+        }
+
+        var prefix = isPowerShell ? "$env:" : "${";
+        var suffixLength = isPowerShell ? 0 : 1; // '}'
+        var quoteChars = wrapInDoubleQuotes ? 2 : 0;
+        var totalLength = quoteChars + prefix.Length + variableName.Length + suffixLength;
+
+        char[]? rented = null;
+        Span<char> buffer = totalLength <= 128
+            ? stackalloc char[totalLength]
+            : (rented = ArrayPool<char>.Shared.Rent(totalLength));
+
+        try
+        {
+            var destination = buffer[..totalLength];
+            var index = 0;
+            if (wrapInDoubleQuotes)
+            {
+                destination[index++] = '"';
+            }
+
+            prefix.AsSpan().CopyTo(destination[index..]);
+            index += prefix.Length;
+
+            variableName.CopyTo(destination[index..]);
+            index += variableName.Length;
+
+            if (!isPowerShell)
+            {
+                destination[index++] = '}';
+            }
+
+            if (wrapInDoubleQuotes)
+            {
+                destination[index] = '"';
+            }
+
+            replacement = new string(destination);
+            return true;
+        }
+        finally
+        {
+            if (rented is not null)
+            {
+                ArrayPool<char>.Shared.Return(rented);
+            }
+        }
+    }
+
+    internal static bool TryBuildShellVariableReplacement(ReadOnlySpan<byte> variableName, bool isPowerShell, bool wrapInDoubleQuotes, out string replacement)
+    {
+        replacement = string.Empty;
+        if (variableName.Length == 0)
+        {
+            return false;
+        }
+
+        var prefix = isPowerShell ? "$env:" : "${";
+        var suffixLength = isPowerShell ? 0 : 1; // '}'
+        var quoteChars = wrapInDoubleQuotes ? 2 : 0;
+        var totalLength = quoteChars + prefix.Length + variableName.Length + suffixLength;
+
+        char[]? rented = null;
+        Span<char> buffer = totalLength <= 128
+            ? stackalloc char[totalLength]
+            : (rented = ArrayPool<char>.Shared.Rent(totalLength));
+
+        try
+        {
+            var destination = buffer[..totalLength];
+            var index = 0;
+            if (wrapInDoubleQuotes)
+            {
+                destination[index++] = '"';
+            }
+
+            prefix.AsSpan().CopyTo(destination[index..]);
+            index += prefix.Length;
+
+            for (var i = 0; i < variableName.Length; i++)
+            {
+                destination[index + i] = (char)variableName[i];
+            }
+
+            index += variableName.Length;
+            if (!isPowerShell)
+            {
+                destination[index++] = '}';
+            }
+
+            if (wrapInDoubleQuotes)
+            {
+                destination[index] = '"';
+            }
+
+            replacement = new string(destination);
+            return true;
+        }
+        finally
+        {
+            if (rented is not null)
+            {
+                ArrayPool<char>.Shared.Return(rented);
+            }
+        }
     }
 
     // HereDoc Detection

@@ -158,9 +158,10 @@ public sealed class RunSecretsContextDirectUseRule() : RuleBase(RuleId.RunSecret
                 return false;
             }
 
-            var replacement = isPowerShell.Value
-                ? "$env:" + variableName
-                : "${" + variableName + "}";
+            if (!TryBuildShellVariableReplacement(variableName, isPowerShell.Value, wrapInDoubleQuotes: false, out var replacement))
+            {
+                return false;
+            }
 
             fix = new DiagnosticFix(
                 "replace direct secrets context expansion with mapped shell variable",
@@ -188,9 +189,10 @@ public sealed class RunSecretsContextDirectUseRule() : RuleBase(RuleId.RunSecret
             return false;
         }
 
-        var shellReplacement = isPowerShell2.Value
-            ? "$env:" + envVarName
-            : "${" + envVarName + "}";
+        if (!TryBuildShellVariableReplacement(envVarName, isPowerShell2.Value, wrapInDoubleQuotes: false, out var shellReplacement))
+        {
+            return false;
+        }
 
         if (!TryBuildStepEnvInsertionEdit(Arena, Config.Utf8Yaml, step, envVarName, expressionString, out var insertEdit))
         {

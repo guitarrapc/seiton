@@ -1,6 +1,5 @@
 ﻿using Seiton.Core.Parsing;
 using Seiton.Core.Parsing.Ast;
-using System.Buffers;
 
 using static Seiton.Core.Parsing.SpanHelpers;
 using static Seiton.Core.Parsing.ExpressionScanHelpers;
@@ -214,55 +213,13 @@ public sealed class RunEnvContextDirectUseRule() : RuleBase(RuleId.RunEnvContext
             return false;
         }
 
-        var prefix = isPowerShell ? "$env:" : "${";
-        var suffix = isPowerShell ? string.Empty : "}";
-        var quoteChars = wrapInDoubleQuotes ? 2 : 0;
-        var totalLength = quoteChars + prefix.Length + nameLength + suffix.Length;
-
-        char[]? rented = null;
-        Span<char> buffer = totalLength <= 128
-            ? stackalloc char[totalLength]
-            : (rented = ArrayPool<char>.Shared.Rent(totalLength));
-
-        try
-        {
-            var destination = buffer[..totalLength];
-            var index = 0;
-            if (wrapInDoubleQuotes)
-            {
-                destination[index++] = '"';
-            }
-
-            prefix.AsSpan().CopyTo(destination[index..]);
-            index += prefix.Length;
-
-            var name = expression.Slice(nameStart, nameLength);
-            for (var i = 0; i < name.Length; i++)
-            {
-                destination[index + i] = (char)name[i];
-            }
-
-            index += nameLength;
-            if (!isPowerShell)
-            {
-                destination[index++] = '}';
-            }
-
-            if (wrapInDoubleQuotes)
-            {
-                destination[index] = '"';
-            }
-
-            replacement = new string(destination);
-            return true;
-        }
-        finally
-        {
-            if (rented is not null)
-            {
-                ArrayPool<char>.Shared.Return(rented);
-            }
-        }
+        return TryBuildShellVariableReplacementFromExpression(
+            expression,
+            nameStart,
+            nameLength,
+            isPowerShell,
+            wrapInDoubleQuotes,
+            out replacement);
     }
 
     private static bool TryGetSimpleEnvNameBounds(ReadOnlySpan<byte> expression, out int nameStart, out int nameLength)

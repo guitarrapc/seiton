@@ -226,11 +226,14 @@ public sealed class ReusableWorkflowRule() : RuleBase(RuleId.ReusableWorkflow)
 
     private void ValidateWorkflowCallInputs(Job job, string jobId, WorkflowCall workflowCall, LocalWorkflowContract contract)
     {
+        HashSet<string>? providedInputNames = null;
         if (workflowCall.Inputs is not null)
         {
+            providedInputNames = new HashSet<string>(StringComparer.Ordinal);
             foreach (var pair in workflowCall.Inputs.Value)
             {
                 var inputName = Decode(pair.Key);
+                providedInputNames.Add(inputName);
                 if (!contract.Inputs.TryGetValue(inputName, out var expected))
                 {
                     AddJobError(
@@ -246,7 +249,7 @@ public sealed class ReusableWorkflowRule() : RuleBase(RuleId.ReusableWorkflow)
 
         foreach (var requiredInput in contract.RequiredInputs)
         {
-            if (workflowCall.Inputs is not null && ContainsInput(workflowCall.Inputs.Value, requiredInput))
+            if (providedInputNames is not null && providedInputNames.Contains(requiredInput))
             {
                 continue;
             }
@@ -266,7 +269,6 @@ public sealed class ReusableWorkflowRule() : RuleBase(RuleId.ReusableWorkflow)
         }
 
         var value = providedInput.Value;
-        var valueSpan = Arena.GetStringValue(value);
         if (ExpressionScanHelpers.ContainsExpressionMarker(value, Arena))
         {
             return;
@@ -303,11 +305,14 @@ public sealed class ReusableWorkflowRule() : RuleBase(RuleId.ReusableWorkflow)
 
     private void ValidateWorkflowCallSecrets(Job job, string jobId, WorkflowCall workflowCall, LocalWorkflowContract contract)
     {
+        HashSet<string>? providedSecretNames = null;
         if (workflowCall.Secrets is not null)
         {
+            providedSecretNames = new HashSet<string>(StringComparer.Ordinal);
             foreach (var pair in workflowCall.Secrets.Value)
             {
                 var secretName = Decode(pair.Key);
+                providedSecretNames.Add(secretName);
                 if (contract.Secrets.Contains(secretName))
                 {
                     continue;
@@ -327,7 +332,7 @@ public sealed class ReusableWorkflowRule() : RuleBase(RuleId.ReusableWorkflow)
 
         foreach (var requiredSecret in contract.RequiredSecrets)
         {
-            if (workflowCall.Secrets is not null && ContainsSecret(workflowCall.Secrets.Value, requiredSecret))
+            if (providedSecretNames is not null && providedSecretNames.Contains(requiredSecret))
             {
                 continue;
             }
@@ -371,32 +376,6 @@ public sealed class ReusableWorkflowRule() : RuleBase(RuleId.ReusableWorkflow)
 
         resolvedPath = normalizedPath;
         return true;
-    }
-
-    private bool ContainsInput(SliceMap<WorkflowCallInput> providedInputs, string requiredInput)
-    {
-        foreach (var pair in providedInputs)
-        {
-            if (string.Equals(Decode(pair.Key), requiredInput, StringComparison.Ordinal))
-            {
-                return true;
-            }
-        }
-
-        return false;
-    }
-
-    private bool ContainsSecret(SliceMap<WorkflowCallSecret> providedSecrets, string requiredSecret)
-    {
-        foreach (var pair in providedSecrets)
-        {
-            if (string.Equals(Decode(pair.Key), requiredSecret, StringComparison.Ordinal))
-            {
-                return true;
-            }
-        }
-
-        return false;
     }
 
     private static bool IsBooleanLiteral(string value)
