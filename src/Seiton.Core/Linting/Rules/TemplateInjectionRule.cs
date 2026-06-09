@@ -555,7 +555,7 @@ public sealed class TemplateInjectionRule() : RuleBase(RuleId.TemplateInjection)
             return false;
         }
 
-        var runLine = FindLineNumberFromOffset(utf8Yaml, runKeyOffset);
+        var runLine = Utf8YamlLineHelpers.FindLineNumberFromOffset(utf8Yaml, runKeyOffset);
         if (runLine < 1)
         {
             return false;
@@ -584,7 +584,7 @@ public sealed class TemplateInjectionRule() : RuleBase(RuleId.TemplateInjection)
             var childIndent = envKeyLine >= 0
                 ? FixFormatting.GetLineIndentation(utf8Yaml, envKeyLine)
                 : FixFormatting.GetLineIndentation(utf8Yaml, lastEnvLine);
-            var insertOffset = FindLineEndOffsetIncludingNewLine(utf8Yaml, lastEnvLine);
+            var insertOffset = Utf8YamlLineHelpers.FindLineEndOffsetIncludingNewLine(utf8Yaml, lastEnvLine);
             // If the file doesn't end with a newline and we're inserting at EOF, prepend one
             var needsLeadingNewline = insertOffset == utf8Yaml.Length && utf8Yaml.Length > 0 && utf8Yaml[^1] != (byte)'\n';
             var insertText = (needsLeadingNewline ? lineEnding : "")
@@ -605,7 +605,7 @@ public sealed class TemplateInjectionRule() : RuleBase(RuleId.TemplateInjection)
         var childIndentUnit = FixFormatting.InferIndentationUnit(utf8Yaml);
         var envChildIndent = stepKeyIndent + childIndentUnit;
         var runEndLine = FindRunEndLine(utf8Yaml, runLine, stepKeyIndent);
-        var insertAfterRun = FindLineEndOffsetIncludingNewLine(utf8Yaml, runEndLine);
+        var insertAfterRun = Utf8YamlLineHelpers.FindLineEndOffsetIncludingNewLine(utf8Yaml, runEndLine);
         // If the file doesn't end with a newline, prepend one before the env block
         var needsLeadingNewlineForEnvBlock = insertAfterRun == utf8Yaml.Length && utf8Yaml.Length > 0 && utf8Yaml[^1] != (byte)'\n';
         var envBlock = (needsLeadingNewlineForEnvBlock ? lineEnding : "")
@@ -640,7 +640,7 @@ public sealed class TemplateInjectionRule() : RuleBase(RuleId.TemplateInjection)
         }
 
         // Return the line containing the last byte of the last value
-        return FindLineNumberFromOffset(Config.Utf8Yaml, maxEndOffset > 0 ? maxEndOffset - 1 : 0);
+        return Utf8YamlLineHelpers.FindLineNumberFromOffset(Config.Utf8Yaml, maxEndOffset > 0 ? maxEndOffset - 1 : 0);
     }
 
     /// <summary>
@@ -657,7 +657,7 @@ public sealed class TemplateInjectionRule() : RuleBase(RuleId.TemplateInjection)
         foreach (var pair in env.Vars.Value)
         {
             var nameSlice = Arena.GetStringSlice(pair.Value.Name);
-            return FindLineNumberFromOffset(Config.Utf8Yaml, nameSlice.Offset);
+            return Utf8YamlLineHelpers.FindLineNumberFromOffset(Config.Utf8Yaml, nameSlice.Offset);
         }
 
         return -1;
@@ -760,69 +760,6 @@ public sealed class TemplateInjectionRule() : RuleBase(RuleId.TemplateInjection)
         return sb.ToString();
     }
 
-    private static int FindLineStartOffset(byte[] utf8Yaml, int lineNumber)
-    {
-        if (lineNumber <= 1)
-        {
-            return 0;
-        }
-
-        var currentLine = 1;
-        for (var i = 0; i < utf8Yaml.Length; i++)
-        {
-            if (utf8Yaml[i] != (byte)'\n')
-            {
-                continue;
-            }
-
-            currentLine++;
-            if (currentLine == lineNumber)
-            {
-                return i + 1;
-            }
-        }
-
-        return utf8Yaml.Length;
-    }
-
-    private static int FindLineEndOffsetIncludingNewLine(byte[] utf8Yaml, int lineNumber)
-    {
-        var start = FindLineStartOffset(utf8Yaml, lineNumber);
-        for (var i = start; i < utf8Yaml.Length; i++)
-        {
-            if (utf8Yaml[i] == (byte)'\n')
-            {
-                return i + 1;
-            }
-        }
-
-        return utf8Yaml.Length;
-    }
-
-    private static int FindLineNumberFromOffset(byte[] utf8Yaml, int offset)
-    {
-        if (offset <= 0)
-        {
-            return 1;
-        }
-
-        if (offset > utf8Yaml.Length)
-        {
-            offset = utf8Yaml.Length;
-        }
-
-        var line = 1;
-        for (var i = 0; i < offset; i++)
-        {
-            if (utf8Yaml[i] == (byte)'\n')
-            {
-                line++;
-            }
-        }
-
-        return line;
-    }
-
     /// <summary>
     /// Gets the step key indentation, accounting for the YAML list item marker (<c>- </c>).
     /// For a line like <c>    - run: echo hello</c>, returns <c>"      "</c> (6 spaces)
@@ -831,7 +768,7 @@ public sealed class TemplateInjectionRule() : RuleBase(RuleId.TemplateInjection)
     private static string GetStepKeyIndentation(byte[] utf8Yaml, int lineNumber)
     {
         var baseIndent = FixFormatting.GetLineIndentation(utf8Yaml, lineNumber);
-        var lineStart = FindLineStartOffset(utf8Yaml, lineNumber);
+        var lineStart = Utf8YamlLineHelpers.FindLineStartOffset(utf8Yaml, lineNumber);
         var offset = lineStart + baseIndent.Length;
         return offset + 1 < utf8Yaml.Length && utf8Yaml[offset] == (byte)'-' && utf8Yaml[offset + 1] == (byte)' '
             ? baseIndent + "  "
@@ -848,7 +785,7 @@ public sealed class TemplateInjectionRule() : RuleBase(RuleId.TemplateInjection)
         var lastContentLine = runKeyLine;
         var stepKeyIndentLen = stepKeyIndent.Length;
         var currentLine = runKeyLine;
-        var pos = FindLineStartOffset(utf8Yaml, runKeyLine);
+        var pos = Utf8YamlLineHelpers.FindLineStartOffset(utf8Yaml, runKeyLine);
 
         // Advance past the run key line
         while (pos < utf8Yaml.Length && utf8Yaml[pos] != (byte)'\n')
