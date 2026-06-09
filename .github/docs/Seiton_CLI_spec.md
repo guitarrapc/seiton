@@ -520,6 +520,10 @@ Output is pretty-printed JSON (indented) for readability in code review and issu
 
 - `https://docs.oasis-open.org/sarif/sarif/v2.1.0/errata01/os/schemas/sarif-schema-2.1.0.json`
 
+Outputs should be pass official validation.
+
+- `https://sarifweb.azurewebsites.net/Validation`
+
 Each diagnostic maps to a SARIF `result` under a `run` with tool identity `seiton`.
 
 `runs[].results[].locations[].physicalLocation.artifactLocation.uri` is emitted as a URI reference (slash-separated, percent-encoded when needed):
