@@ -695,12 +695,19 @@ internal static class CheckCommand
     {
         var needsPin = false;
         var needsImage = false;
+        var hasUnfixedUnpinnedImage = false;
         for (var i = 0; i < diagnostics.Count; i++)
         {
-            var ruleId = diagnostics[i].RuleId;
+            var diagnostic = diagnostics[i];
+            var ruleId = diagnostic.RuleId;
             if (ruleId is null) continue;
             if (!enablePinNetwork && ruleId == "unpinned-uses") needsPin = true;
             if (!enableImageNetwork && ruleId == "unpinned-image") needsImage = true;
+            if (enableImageNetwork && ruleId == "unpinned-image" && diagnostic.Fix is null)
+            {
+                hasUnfixedUnpinnedImage = true;
+            }
+
             if (needsPin && needsImage) break;
         }
 
@@ -710,6 +717,11 @@ internal static class CheckCommand
             writer.WriteLine("hint: re-run with --enable-pin-network to auto-fix action pinning");
         else if (needsImage)
             writer.WriteLine("hint: re-run with --enable-image-network to auto-fix image pinning");
+        else if (hasUnfixedUnpinnedImage)
+        {
+            writer.WriteLine(
+                "hint: tagless or :latest images are not auto-pinned by default (fix.images.exclude-tags); use an explicit tag (e.g. redis:7) or clear exclude-tags in config");
+        }
     }
 
     internal static bool HasActionableDiagnostics(List<Diagnostic> diagnostics)

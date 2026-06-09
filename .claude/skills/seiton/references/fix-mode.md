@@ -139,11 +139,13 @@ fix:
     enable-network: false          # Default; use --enable-image-network to override
     exclude-images:                # Skip pinning these images
       - scratch
-    exclude-tags:                  # Skip images with these tags
-      - latest
+    exclude-tags:                  # Skip images with these tags (default: latest)
+      - latest                    # Tagless refs (e.g. image: redis) count as latest
     ignore-images:                 # Skip glob-matched images
       - "mcr.microsoft.com/**"
 ```
+
+When `--enable-image-network` is on but an image is still not pinned, check the diagnostic `help:` line. Skips due to `exclude-tags` / `exclude-images` are explained there. The CLI also prints a hint when unfixed `unpinned-image` diagnostics remain after a network-enabled fix run.
 
 ## Workflow Example
 

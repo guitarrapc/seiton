@@ -167,3 +167,59 @@ services:
 ## 調査日
 
 2026-06-10
+
+---
+
+## 実装結果（Phase 1–2、2026-06-10）
+
+### Phase 1: 可観測性の改善 — 完了
+
+| 項目 | 内容 |
+|------|------|
+| `ImageDigestResolution` | `ActionShaResolution` と同型の `record struct`（`Digest`, `SkipReason`） |
+| `IImageDigestResolver` | `Task<ImageDigestResolution>` を返すよう変更 |
+| `OciImageDigestResolver` | `TryGetSkipReason` で `exclude-images` / `exclude-tags` / `ignore-images` ごとに理由文字列を生成 |
+| `PinRemediationEngine` | `SkipReason` を診断 `help:` に付与（action pinning と同パターン） |
+| テスト | `OciImageDigestResolverTests`, `PinRemediationEngineTests`, `PinRemediationTests`（service image 統合） |
+
+**API / UX レビュー:**
+
+- action pinning と同じメンタルモデル（`help:` にスキップ理由）で直感的。
+- 理由文字列に設定キー名（`fix.images.exclude-tags` 等）を含め、config 調整先が明確。
+- 成功パスは `record struct` 返却のみで、ネットワーク I/O 経路に変更なし。
+
+### Phase 2: ドキュメント整備 — 完了
+
+| ファイル | 変更 |
+|----------|------|
+| `docs/rules.md` | `unpinned-image` に暗黙 `latest` / exclude-tags / `help:` 説明を追記 |
+| `docs/configuration.md` | `exclude-tags` コメント拡充 |
+| `src/Seiton/Skills/references/fix-mode.md` | 同上 + ネットワーク fix 後のヒント説明 |
+| `.claude/skills/seiton/references/fix-mode.md` | 同上 |
+| `CheckCommand.WriteNetworkFixHint` | イメージネットワーク有効でも未修正 `unpinned-image` が残る場合に exclude-tags ヒントを出力 |
+| `.github/docs/Seiton_Linter_spec.md` §12.2.2 | `ImageDigestResolution` / `SkipReason` を反映 |
+| `.github/docs/Seiton_Linter_csharp_spec.md` | C# API 仕様を実装に同期 |
+
+### Phase 3
+
+実施しない（合意どおり）。
+
+### ベンチマーク
+
+新規 `PinRemediationBenchmark`（`src/Seiton.Benchmark/PinRemediationBenchmark.cs`）を追加。実装後（ShortRun, Ryzen 9 7950X3D）:
+
+| ベンチマーク | Mean | Allocated/op |
+|-------------|------|----------------|
+| `OciImageDigestResolver` skip（`redis` × 32/iter） | 3.57 µs | 13.75 KB |
+| `PinRemediationEngine.RemediateAsync`（4 skip 診断） | 2.04 µs | 5.86 KB |
+
+**性能評価:**
+
+- 変更前は skip 時に `null` を返すのみで、理由文字列は生成しなかった。変更後は skip パスのみ 1 回の文字列補間が追加される（意図的なトレードオフ）。
+- 成功パス（registry HEAD + digest 取得）はロジック変更なし。`CoreLintBenchmark` 対象外のため lint ホットパスへの影響なし。
+- `PinRemediationEngine` 4 診断は 2 µs 台で、skip 理由付与のオーバーヘッドは実用上無視できる。
+- skip 理由文字列は今後キャッシュ可能だが、fix 実行はファイル単位・診断数が少ないため現状は割り切り（過剰最適化を避ける）。
+
+### テスト
+
+`dotnet test` — 2627 passed, 1 skipped（Playground 既存 skip）, 0 failed。

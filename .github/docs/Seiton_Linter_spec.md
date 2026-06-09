@@ -1327,13 +1327,13 @@ Resolve(owner, repo, ref) -> (sha, tagComment, error)
 Resolves an OCI image reference to a pinned digest.
 
 ```
-Resolve(imageRef) -> (digest, error)
+Resolve(imageRef) -> ImageDigestResolution
 ```
 
-- `imageRef`: fully-qualified image reference with tag (e.g. `node:20.11.1`, `ghcr.io/org/image:v1.2.3`)
-- Returns: `sha256:<hex>` digest string, error
-- Returns `(null, null)` when the image does not exist (HTTP 404 from registry).
-- Returns `(null, SkippedError)` when the image ref is excluded by configuration (matches `exclude_images` or `exclude_tags` patterns).
+- `imageRef`: image reference with optional tag (e.g. `node:20.11.1`, `redis`, `ghcr.io/org/image:v1.2.3`). Tagless refs are treated as `latest`.
+- Returns: `Digest` = `sha256:<hex>` on success.
+- Returns `Digest: null`, `SkipReason: null` when the image does not exist (HTTP 404 from registry) or is already digest-pinned.
+- Returns `Digest: null`, `SkipReason: "<reason>"` when the image ref is excluded by configuration (matches `exclude_images`, `exclude_tags`, or `ignore_images`). Remediation appends `SkipReason` to the diagnostic `help:` line.
 
 #### 12.2.3 OCI Registry Protocol: HEAD Manifest + Bearer Token Flow
 

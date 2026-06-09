@@ -2687,6 +2687,8 @@ container:
 - Network digest resolution may fail under registry rate limits or missing private-registry credentials.
 - Re-test jobs after pinning because digest changes can alter packages and runtime behavior.
 - Maintain a periodic digest refresh process to avoid stale pins.
+- Tagless refs (for example `image: redis`) are treated as the `latest` tag. By default, `fix.images.exclude-tags` includes `latest`, so `--fix --enable-image-network` does not pin them. Use an explicit tag (for example `redis:7`) or set `fix.images.exclude-tags: []` in config.
+- When pinning is skipped by config, the diagnostic `help:` line explains why (for example `pinning skipped: tag 'latest' matches fix.images.exclude-tags`).
 
 ---
 
