@@ -2072,6 +2072,32 @@ public sealed partial class RuleInterfaceTests
     }
 
     [Test]
+    public async Task LintEngine_RunEnvContextDirectUse_Fix_SingleQuotesInsideDoubleQuotes_ReplacesWithPosixVariable()
+    {
+        var yaml = """
+        on: push
+        jobs:
+            build:
+                runs-on: ubuntu-latest
+                steps:
+                    - run: for ip in $(az vm list -d --resource-group "${BENCHMARK_RESOURCE_GROUP}" --query "[?powerState=='VM running' && name=='${{ env.BENCHMARK_CLIENT_NAME }}'].publicIps" -o tsv); do echo "$ip"; done
+        """;
+
+        var sourceBytes = Encoding.UTF8.GetBytes(yaml);
+        var engine = new LintEngine([new RunEnvContextDirectUseRule()]);
+        using var result = engine.Check(sourceBytes, "run-env-fix-single-in-double.yml", new LintConfig { Fix = new FixConfig { Enabled = true } });
+        var diagnostic = result.Diagnostics.First(x => x.RuleId == "run-env-context-direct-use");
+
+        await Assert.That(diagnostic.Fix is not null).IsTrue();
+
+        var fixedBytes = FixEngine.Apply(sourceBytes, diagnostic.Fix!.Value.Edits);
+        var fixedText = Encoding.UTF8.GetString(fixedBytes);
+
+        await Assert.That(fixedText.Contains("name=='${BENCHMARK_CLIENT_NAME}'", StringComparison.Ordinal)).IsTrue();
+        await Assert.That(fixedText.Contains("name=='${{ env.BENCHMARK_CLIENT_NAME }}'", StringComparison.Ordinal)).IsFalse();
+    }
+
+    [Test]
     public async Task LintEngine_RunEnvContextDirectUse_Fix_DoesNotAttachFix_ForUnbalancedShellSingleQuoteContext()
     {
         var yaml = """
