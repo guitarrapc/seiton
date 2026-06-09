@@ -13,7 +13,7 @@ public sealed class RunInputsContextDirectUseRule() : RuleBase(RuleId.RunInputsC
 {
     private Workflow? _currentWorkflow;
     private Job? _currentJob;
-    private bool _strictDetection;
+    private bool _strict;
 
     public override string Name => "Run Inputs Context Direct Use Rule";
 
@@ -27,7 +27,7 @@ public sealed class RunInputsContextDirectUseRule() : RuleBase(RuleId.RunInputsC
     public override void SetConfig(LintConfig config)
     {
         base.SetConfig(config);
-        _strictDetection = config.GetRuleConfig(Id)?.Strict == true;
+        _strict = config.GetRuleConfig(Id)?.Strict == true;
     }
 
     public override void VisitWorkflowPost(Workflow workflow)
@@ -94,7 +94,7 @@ public sealed class RunInputsContextDirectUseRule() : RuleBase(RuleId.RunInputsC
 
             // Skip detection inside no-expand heredoc (<<'EOF') where shell variables don't expand
             var absoluteOffset = Arena.GetStringSlice(runNode).Offset + bodyStart - 3;
-            if (ShouldSuppressNoExpandDirectUseDiagnostic(Config.Utf8Yaml, absoluteOffset, _strictDetection))
+            if (ShouldSuppressNoExpandDirectUseDiagnostic(Config.Utf8Yaml, absoluteOffset, _strict))
             {
                 continue;
             }

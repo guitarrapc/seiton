@@ -1655,6 +1655,7 @@ Auto-fix when a diagnostic is emitted:
 | Complex single-quoted (e.g. `'pre-${{ env.X }}-post'`) | No fix (diagnosed under `strict: true` only) |
 
 - Single quotes inside a double-quoted string do not suppress detection.
+- Shell single-quote detection is line-scoped (quotes are not tracked across newlines).
 
 ---
 
@@ -1722,6 +1723,7 @@ Auto-fix when a diagnostic is emitted:
 | Single-quoted heredoc | n/a (suppressed) |
 
 - Single quotes inside a double-quoted string do not suppress detection.
+- Shell single-quote detection is line-scoped (quotes are not tracked across newlines).
 
 ---
 
@@ -1801,6 +1803,7 @@ Auto-fix when a diagnostic is emitted:
 | Complex single-quoted (e.g. `'pre-${{ inputs.X }}-post'`) | No fix (diagnosed under `strict: true` only) |
 
 - Single quotes inside a double-quoted string do not suppress detection.
+- Shell single-quote detection is line-scoped (quotes are not tracked across newlines).
 
 ---
 

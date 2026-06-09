@@ -1097,16 +1097,16 @@ internal static class RunContextDirectUseAnalyzer
     /// <summary>
     /// Returns true when a direct-use diagnostic should be suppressed for no-expand contexts.
     /// Always suppresses inside no-expand heredoc, and suppresses shell single-quoted contexts
-    /// unless strict detection is enabled.
+    /// unless strict mode is enabled.
     /// </summary>
-    internal static bool ShouldSuppressNoExpandDirectUseDiagnostic(byte[] source, int targetOffset, bool strictDetection)
+    internal static bool ShouldSuppressNoExpandDirectUseDiagnostic(byte[] source, int targetOffset, bool strict)
     {
         if (IsInsideNoExpandHereDoc(source, targetOffset))
         {
             return true;
         }
 
-        return !strictDetection && IsInsideShellSingleQuotes(source, targetOffset);
+        return !strict && IsInsideShellSingleQuotes(source, targetOffset);
     }
 
     // Single-Quote Detection

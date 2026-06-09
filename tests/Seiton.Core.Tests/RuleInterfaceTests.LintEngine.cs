@@ -3296,6 +3296,29 @@ public sealed partial class RuleInterfaceTests
     }
 
     [Test]
+    public async Task LintEngine_RunInputsContextDirectUse_Diagnoses_MultilineSingleQuoteOnSeparateLine()
+    {
+        // Single-quote state is line-scoped: an opening quote on a prior line does not suppress
+        // diagnostics for expressions on later lines.
+        var yaml = """
+        on: workflow_dispatch
+        jobs:
+            build:
+                runs-on: ubuntu-latest
+                steps:
+                    - run: |
+                        echo 'start
+                        ${{ inputs.target }}
+                        end'
+        """;
+
+        using var result = new LintEngine([new RunInputsContextDirectUseRule()])
+            .Check(Encoding.UTF8.GetBytes(yaml), "run-inputs-multiline-single-quote-line2.yml");
+
+        await Assert.That(result.Diagnostics.Any(x => x.RuleId == "run-inputs-context-direct-use")).IsTrue();
+    }
+
+    [Test]
     public async Task LintEngine_RunInputsContextDirectUse_Fix_DoesNotAttach_WithEmptyFlowStyleEnv()
     {
         var yaml = """

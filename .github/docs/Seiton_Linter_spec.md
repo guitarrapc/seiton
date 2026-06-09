@@ -644,6 +644,7 @@ Notes:
 - `strict` applies only to `run-env-context-direct-use` and `run-inputs-context-direct-use`.
 - Single quotes nested inside a double-quoted string do not enter shell single-quote state; expressions there follow the expandable row.
 - Complex single-quoted tokens (for example `'pre-${{ env.VERSION }}-post'`) are diagnosed under `strict: true` for env/inputs but remain no-fix.
+- Shell single-quote detection is line-scoped (quotes are not tracked across newlines).
 
 ### 5.9 Minimal and Advanced Example Configuration File
 
