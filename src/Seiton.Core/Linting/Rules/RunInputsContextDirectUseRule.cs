@@ -92,6 +92,13 @@ public sealed class RunInputsContextDirectUseRule() : RuleBase(RuleId.RunInputsC
                 continue;
             }
 
+            // Single-quoted shell strings intentionally disable shell-variable expansion.
+            // In this context, mapping inputs to shell vars is usually not actionable.
+            if (IsInsideShellSingleQuotes(Config.Utf8Yaml, absoluteOffset))
+            {
+                continue;
+            }
+
             if (TryBuildFix(step, runNode, expression, bodyStart, nextSearchStart - (bodyStart - 3), out var fix))
             {
                 AddStepError(

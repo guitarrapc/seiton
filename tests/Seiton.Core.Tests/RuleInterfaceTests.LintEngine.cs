@@ -3087,7 +3087,7 @@ public sealed partial class RuleInterfaceTests
     }
 
     [Test]
-    public async Task LintEngine_RunInputsContextDirectUse_Fix_DoesNotAttach_InsideSingleQuotes()
+    public async Task LintEngine_RunInputsContextDirectUse_DoesNotDiagnose_InsideSingleQuotes()
     {
         var yaml = """
         on: workflow_dispatch
@@ -3100,9 +3100,34 @@ public sealed partial class RuleInterfaceTests
 
         using var result = new LintEngine([new RunInputsContextDirectUseRule()])
             .Check(Encoding.UTF8.GetBytes(yaml), "run-inputs-no-fix-single-quotes.yml", new LintConfig { Fix = new FixConfig { Enabled = true } });
-        var diagnostic = result.Diagnostics.First(x => x.RuleId == "run-inputs-context-direct-use");
+        await Assert.That(result.Diagnostics.Where(x => x.RuleId == "run-inputs-context-direct-use")).IsEmpty();
+    }
 
-        await Assert.That(diagnostic.Fix is null).IsTrue();
+    [Test]
+    public async Task LintEngine_RunInputsContextDirectUse_DoesNotDiagnose_SshRemoteCommandInsideSingleQuotes()
+    {
+        var yaml = """
+        on:
+            workflow_call:
+                inputs:
+                    branch:
+                        required: true
+                        type: string
+        jobs:
+            benchmark:
+                runs-on: ubuntu-latest
+                steps:
+                    - name: Clone repository on VM
+                      run: |
+                        for ip in $(az vm list -d --resource-group "${BENCHMARK_RESOURCE_GROUP}" --query "[?powerState=='VM running'].publicIps" -o tsv); do
+                          ssh -o StrictHostKeyChecking=accept-new -i ~/.ssh/id_ed25519 azure-user@"$ip" 'bash -s -- --branch "${{ inputs.branch }}" --owner "${{ github.repository_owner }}" --repo "${{ github.event.repository.name }}"' < ./scripts/git_clone.sh
+                        done
+        """;
+
+        using var result = new LintEngine([new RunInputsContextDirectUseRule()])
+            .Check(Encoding.UTF8.GetBytes(yaml), "run-inputs-ssh-single-quotes.yml", new LintConfig { Fix = new FixConfig { Enabled = true } });
+
+        await Assert.That(result.Diagnostics.Where(x => x.RuleId == "run-inputs-context-direct-use")).IsEmpty();
     }
 
     [Test]
