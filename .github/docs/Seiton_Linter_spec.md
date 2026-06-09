@@ -622,6 +622,29 @@ rules:
 - shell single-quoted suppression is conditional (`strict: false`) for env/inputs, but intentionally **not** for secrets.
 - `run-secrets-context-direct-use` keeps diagnostics in shell single-quoted no-expand contexts and emits manual-refactor guidance when no safe fix can be attached.
 
+Diagnostic outcome matrix (`run-env-context-direct-use`, `run-inputs-context-direct-use`, `run-secrets-context-direct-use`):
+
+| Shell context | `strict` | `run-env` / `run-inputs` | `run-secrets` |
+|---|---|---|---|
+| Unquoted or double-quoted (expandable) | n/a | **diagnose** | **diagnose** |
+| Shell single-quoted (`'...${{ }}...'`) | `false` | none | **diagnose** |
+| Shell single-quoted (`'...${{ }}...'`) | `true` | **diagnose** | **diagnose** |
+| Single-quoted heredoc (`<<'DELIM'` body) | any | none | none |
+
+Auto-fix when a diagnostic is emitted:
+
+| Shell context | `run-env` (`strict: true` only for single-quoted) | `run-inputs` (`strict: true` only for single-quoted) | `run-secrets` |
+|---|---|---|---|
+| Unquoted or double-quoted | fix when safe | fix when safe | fix when safe |
+| Shell single-quoted | simple standalone token only | no fix | no fix |
+| Single-quoted heredoc | n/a (suppressed) | n/a (suppressed) | n/a (suppressed) |
+
+Notes:
+
+- `strict` applies only to `run-env-context-direct-use` and `run-inputs-context-direct-use`.
+- Single quotes nested inside a double-quoted string do not enter shell single-quote state; expressions there follow the expandable row.
+- Complex single-quoted tokens (for example `'pre-${{ env.VERSION }}-post'`) are diagnosed under `strict: true` for env/inputs but remain no-fix.
+
 ### 5.9 Minimal and Advanced Example Configuration File
 
 Minimal example (recommended default authoring style):
