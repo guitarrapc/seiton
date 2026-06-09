@@ -100,7 +100,7 @@ public sealed class RunEnvContextDirectUseRule() : RuleBase(RuleId.RunEnvContext
                     location,
                     fix);
             }
-            else if (!TryGetSimpleEnvNameBounds(expression, out _, out _))
+            else if (!TryParseSimpleContextReferenceBounds(expression, "env"u8, out _, out _))
             {
                 // Composite expression (e.g. "${{ env.FOO }}-suffix") — suggest env: block mapping
                 AddStepError(
@@ -135,7 +135,7 @@ public sealed class RunEnvContextDirectUseRule() : RuleBase(RuleId.RunEnvContext
             return false;
         }
 
-        if (!TryGetSimpleEnvNameBounds(expression, out _, out _))
+        if (!TryParseSimpleContextReferenceBounds(expression, "env"u8, out _, out _))
         {
             return false;
         }
@@ -208,7 +208,7 @@ public sealed class RunEnvContextDirectUseRule() : RuleBase(RuleId.RunEnvContext
     private static bool TryBuildShellReplacement(ReadOnlySpan<byte> expression, bool isPowerShell, bool wrapInDoubleQuotes, out string replacement)
     {
         replacement = string.Empty;
-        if (!TryGetSimpleEnvNameBounds(expression, out var nameStart, out var nameLength))
+        if (!TryParseSimpleContextReferenceBounds(expression, "env"u8, out var nameStart, out var nameLength))
         {
             return false;
         }
@@ -221,164 +221,6 @@ public sealed class RunEnvContextDirectUseRule() : RuleBase(RuleId.RunEnvContext
             wrapInDoubleQuotes,
             out replacement);
     }
-
-    private static bool TryGetSimpleEnvNameBounds(ReadOnlySpan<byte> expression, out int nameStart, out int nameLength)
-    {
-        nameStart = 0;
-        nameLength = 0;
-
-        var index = 0;
-        SkipAsciiWhiteSpace(expression, ref index);
-        if (!TryConsumeAsciiIgnoreCase(expression, ref index, "env"u8))
-        {
-            return false;
-        }
-
-        SkipAsciiWhiteSpace(expression, ref index);
-        if (index >= expression.Length)
-        {
-            return false;
-        }
-
-        if (expression[index] == (byte)'.')
-        {
-            index++;
-            if (!TryReadIdentifierBounds(expression, ref index, out nameStart, out nameLength))
-            {
-                return false;
-            }
-
-            SkipAsciiWhiteSpace(expression, ref index);
-            return index == expression.Length;
-        }
-
-        if (expression[index] != (byte)'[')
-        {
-            return false;
-        }
-
-        index++;
-        SkipAsciiWhiteSpace(expression, ref index);
-        if (index >= expression.Length)
-        {
-            return false;
-        }
-
-        var quote = expression[index];
-        if (quote is not ((byte)'\'' or (byte)'"'))
-        {
-            return false;
-        }
-
-        index++;
-        nameStart = index;
-        while (index < expression.Length && expression[index] != quote)
-        {
-            index++;
-        }
-
-        if (index >= expression.Length)
-        {
-            return false;
-        }
-
-        nameLength = index - nameStart;
-        if (nameLength == 0 || !IsSimpleIdentifierAscii(expression.Slice(nameStart, nameLength)))
-        {
-            return false;
-        }
-
-        index++;
-        SkipAsciiWhiteSpace(expression, ref index);
-        if (index >= expression.Length || expression[index] != (byte)']')
-        {
-            return false;
-        }
-
-        index++;
-        SkipAsciiWhiteSpace(expression, ref index);
-        return index == expression.Length;
-    }
-
-    private static bool TryReadIdentifierBounds(ReadOnlySpan<byte> expression, ref int index, out int start, out int length)
-    {
-        start = 0;
-        length = 0;
-        if (index >= expression.Length || !IsIdentifierStartAscii(expression[index]))
-        {
-            return false;
-        }
-
-        start = index;
-        index++;
-        while (index < expression.Length && IsIdentifierPartAscii(expression[index]))
-        {
-            index++;
-        }
-
-        length = index - start;
-        return true;
-    }
-
-    private static bool IsSimpleIdentifierAscii(ReadOnlySpan<byte> identifier)
-    {
-        if (identifier.Length == 0 || !IsIdentifierStartAscii(identifier[0]))
-        {
-            return false;
-        }
-
-        for (var i = 1; i < identifier.Length; i++)
-        {
-            if (!IsIdentifierPartAscii(identifier[i]))
-            {
-                return false;
-            }
-        }
-
-        return true;
-    }
-
-    private static void SkipAsciiWhiteSpace(ReadOnlySpan<byte> expression, ref int index)
-    {
-        while (index < expression.Length && expression[index] is (byte)' ' or (byte)'\t' or (byte)'\r' or (byte)'\n')
-        {
-            index++;
-        }
-    }
-
-    private static bool TryConsumeAsciiIgnoreCase(ReadOnlySpan<byte> expression, ref int index, ReadOnlySpan<byte> token)
-    {
-        if (index + token.Length > expression.Length)
-        {
-            return false;
-        }
-
-        for (var i = 0; i < token.Length; i++)
-        {
-            var value = expression[index + i];
-            if (value >= (byte)'A' && value <= (byte)'Z')
-            {
-                value = (byte)(value + 32);
-            }
-
-            if (value != token[i])
-            {
-                return false;
-            }
-        }
-
-        index += token.Length;
-        return true;
-    }
-
-    private static bool IsIdentifierStartAscii(byte value)
-        => (value >= (byte)'A' && value <= (byte)'Z')
-            || (value >= (byte)'a' && value <= (byte)'z')
-            || value == (byte)'_';
-
-    private static bool IsIdentifierPartAscii(byte value)
-        => IsIdentifierStartAscii(value)
-            || (value >= (byte)'0' && value <= (byte)'9');
 
     private static bool IsInsideNoExpandHereDoc(byte[] source, int targetOffset)
         => RunContextDirectUseAnalyzer.IsInsideNoExpandHereDoc(source, targetOffset);

@@ -633,6 +633,133 @@ internal static class RunContextDirectUseAnalyzer
         return false;
     }
 
+    internal static bool ContainsInputsReference(
+        int nodeId,
+        int parentId,
+        ExpressionNode[] nodes,
+        int[] arguments,
+        ReadOnlySpan<byte> expression)
+    {
+        if (nodeId < 0 || nodeId >= nodes.Length)
+        {
+            return false;
+        }
+
+        var node = nodes[nodeId];
+        if (node.Kind == ExpressionNodeKind.Identifier
+            && IsContextRootIdentifier(nodeId, parentId, nodes)
+            && EqualsAsciiIgnoreCase(node.Token.AsSpan(expression), "inputs"u8))
+        {
+            return true;
+        }
+
+        if (node.Kind is ExpressionNodeKind.MemberAccess
+            or ExpressionNodeKind.IndexAccess
+            or ExpressionNodeKind.WildcardAccess)
+        {
+            if (IsGithubEventInputsChain(node.Left, nodes, expression))
+            {
+                return true;
+            }
+        }
+
+        return node.Kind switch
+        {
+            ExpressionNodeKind.Unary => ContainsInputsReference(node.Left, nodeId, nodes, arguments, expression),
+            ExpressionNodeKind.Binary => ContainsInputsReference(node.Left, nodeId, nodes, arguments, expression)
+                || ContainsInputsReference(node.Right, nodeId, nodes, arguments, expression),
+            ExpressionNodeKind.MemberAccess => ContainsInputsReference(node.Left, nodeId, nodes, arguments, expression),
+            ExpressionNodeKind.WildcardAccess => ContainsInputsReference(node.Left, nodeId, nodes, arguments, expression),
+            ExpressionNodeKind.IndexAccess => ContainsInputsReference(node.Left, nodeId, nodes, arguments, expression)
+                || ContainsInputsReference(node.Right, nodeId, nodes, arguments, expression),
+            ExpressionNodeKind.FunctionCall => ContainsInputsReferenceInFunction(node, nodeId, nodes, arguments, expression),
+            _ => false,
+        };
+    }
+
+    internal static bool IsGithubEventInputsChain(int nodeId, ExpressionNode[] nodes, ReadOnlySpan<byte> expression)
+    {
+        if (nodeId < 0 || nodeId >= nodes.Length)
+        {
+            return false;
+        }
+
+        var node = nodes[nodeId];
+        if (node.Kind != ExpressionNodeKind.MemberAccess)
+        {
+            return false;
+        }
+
+        if (!EqualsAsciiIgnoreCase(node.Token.AsSpan(expression), "inputs"u8))
+        {
+            return false;
+        }
+
+        return IsGithubEventChain(node.Left, nodes, expression);
+    }
+
+    internal static bool IsIdentifierNode(int nodeId, ExpressionNode[] nodes, ReadOnlySpan<byte> expression, ReadOnlySpan<byte> expected)
+    {
+        if (nodeId < 0 || nodeId >= nodes.Length)
+        {
+            return false;
+        }
+
+        var node = nodes[nodeId];
+        return node.Kind == ExpressionNodeKind.Identifier
+            && EqualsAsciiIgnoreCase(node.Token.AsSpan(expression), expected);
+    }
+
+    private static bool IsGithubEventChain(int nodeId, ExpressionNode[] nodes, ReadOnlySpan<byte> expression)
+    {
+        if (nodeId < 0 || nodeId >= nodes.Length)
+        {
+            return false;
+        }
+
+        var node = nodes[nodeId];
+        if (node.Kind != ExpressionNodeKind.MemberAccess)
+        {
+            return false;
+        }
+
+        if (!EqualsAsciiIgnoreCase(node.Token.AsSpan(expression), "event"u8))
+        {
+            return false;
+        }
+
+        return IsIdentifierNode(node.Left, nodes, expression, "github"u8);
+    }
+
+    private static bool ContainsInputsReferenceInFunction(
+        ExpressionNode functionCallNode,
+        int functionCallNodeId,
+        ExpressionNode[] nodes,
+        int[] arguments,
+        ReadOnlySpan<byte> expression)
+    {
+        if (ContainsInputsReference(functionCallNode.Left, functionCallNodeId, nodes, arguments, expression))
+        {
+            return true;
+        }
+
+        for (var i = 0; i < functionCallNode.ArgCount; i++)
+        {
+            var argIndex = functionCallNode.ArgStart + i;
+            if (argIndex < 0 || argIndex >= arguments.Length)
+            {
+                continue;
+            }
+
+            if (ContainsInputsReference(arguments[argIndex], functionCallNodeId, nodes, arguments, expression))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
     // Env-Mapping Resolution
 
     internal static bool TryResolveShellVariableNameInEnv(AstArena arena, Env? env, byte[] utf8Yaml, string targetName, SimpleReferenceParser parser, out string variableName)
