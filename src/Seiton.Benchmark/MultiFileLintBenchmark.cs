@@ -1,5 +1,4 @@
-﻿using Seiton.Core.Linting;
-using System.Text;
+﻿using System.Text;
 
 namespace Seiton.Benchmark;
 

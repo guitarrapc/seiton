@@ -1,5 +1,4 @@
-using BenchmarkDotNet.Attributes;
-using BenchmarkDotNet.Order;
+﻿using BenchmarkDotNet.Order;
 using Seiton.Cli;
 using Seiton.Commands;
 namespace Seiton.Benchmark;

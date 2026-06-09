@@ -1,6 +1,4 @@
-using Seiton.Playground;
-
-namespace Seiton.Playground.Tests;
+﻿namespace Seiton.Playground.Tests;
 
 [NotInParallel(PlaygroundTestParallelism.AssemblyLockKey)]
 public sealed class PlaygroundSharePayloadTests

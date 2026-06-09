@@ -1,4 +1,4 @@
-namespace Seiton.Tests;
+﻿namespace Seiton.Tests;
 
 public sealed class SkillMirrorSyncTests
 {

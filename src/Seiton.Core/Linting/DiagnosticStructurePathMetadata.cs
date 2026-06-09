@@ -1,4 +1,4 @@
-namespace Seiton.Core.Linting;
+﻿namespace Seiton.Core.Linting;
 
 /// <summary>Well-known diagnostic metadata keys for structure snippet rendering.</summary>
 public static class DiagnosticStructurePathMetadata

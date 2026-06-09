@@ -1,5 +1,4 @@
-using BenchmarkDotNet.Attributes;
-using Seiton.Core.Linting;
+﻿using Seiton.Core.Linting;
 using Seiton.Core.Linting.Rules;
 using System.Text;
 
