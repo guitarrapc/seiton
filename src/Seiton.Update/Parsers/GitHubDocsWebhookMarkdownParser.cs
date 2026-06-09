@@ -12,6 +12,14 @@ internal sealed class GitHubDocsWebhookMarkdownParser
         "`(?<token>[a-z0-9_]+)`",
         RegexOptions.Compiled);
 
+    private static readonly Regex LiquidIfBlockRegex = new(
+        "\\{%\\s*ifversion\\b.*?%\\}.*?\\{%\\s*endif\\s*%\\}",
+        RegexOptions.Compiled | RegexOptions.Singleline);
+
+    private static readonly Regex LiquidTagRegex = new(
+        "\\{%.*?%\\}",
+        RegexOptions.Compiled | RegexOptions.Singleline);
+
     public IReadOnlyDictionary<string, IReadOnlyList<string>?> ParseActivityTypesByEvent(string markdown)
     {
         var result = new Dictionary<string, IReadOnlyList<string>?>(StringComparer.Ordinal);
@@ -155,15 +163,12 @@ internal sealed class GitHubDocsWebhookMarkdownParser
             return true;
         }
 
-        // Cells that still contain docs-template placeholders are not directly parseable.
-        // Keep the schema-derived value in such cases.
-        if (typesCell.Contains("{%", StringComparison.Ordinal) || typesCell.Contains("%}", StringComparison.Ordinal))
-        {
-            return false;
-        }
+        // Remove Liquid condition blocks/tags and parse stable backtick tokens from the remaining content.
+        // This keeps static values (e.g. typed/untyped) while ignoring version-gated values.
+        var parseableCell = StripLiquidTemplateContent(typesCell);
 
         var values = new List<string>();
-        foreach (Match token in BacktickTokenRegex.Matches(typesCell))
+        foreach (Match token in BacktickTokenRegex.Matches(parseableCell))
         {
             var value = token.Groups["token"].Value;
             if (!string.IsNullOrWhiteSpace(value))
@@ -184,5 +189,11 @@ internal sealed class GitHubDocsWebhookMarkdownParser
 
         activityTypes = values;
         return true;
+    }
+
+    private static string StripLiquidTemplateContent(string value)
+    {
+        var withoutIfBlocks = LiquidIfBlockRegex.Replace(value, string.Empty);
+        return LiquidTagRegex.Replace(withoutIfBlocks, string.Empty);
     }
 }
