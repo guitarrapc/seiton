@@ -68,7 +68,7 @@ public sealed class PinRemediationEngineTests
             throw new InvalidOperationException("resolver failure");
         });
         var imageResolver = new DelegateImageDigestResolver((_, _) =>
-            Task.FromResult<string?>(null));
+            Task.FromResult(default(ImageDigestResolution)));
 
         var engine = new PinRemediationEngine(
             actionResolver,
@@ -186,10 +186,49 @@ public sealed class PinRemediationEngineTests
             => impl(owner, repo, refStr, cancellationToken);
     }
 
-    private sealed class DelegateImageDigestResolver(
-        Func<string, CancellationToken, Task<string?>> impl) : IImageDigestResolver
+    [Test]
+    public async Task RemediateAsync_AttachesSkipReasonToHelp_WhenImageResolutionIsSkipped()
     {
-        public Task<string?> ResolveAsync(string imageRef, CancellationToken cancellationToken = default)
+        var source = Encoding.UTF8.GetBytes("""
+            on: push
+            jobs:
+              build:
+                runs-on: ubuntu-24.04
+                services:
+                  redis:
+                    image: redis
+            """);
+        var diagnostics = new[]
+        {
+            new Diagnostic(
+                DiagnosticSeverity.Warning,
+                "job.services image 'redis' is not pinned by digest (expected @sha256:<64-hex>)",
+                new TextRange(0, source.Length, 1, 1, 6, 20),
+                RuleId: "unpinned-image",
+                Metadata: PinDiagnosticMetadata.ForImageRef("redis")),
+        };
+
+        var imageResolver = new DelegateImageDigestResolver((_, _) =>
+            Task.FromResult(ImageDigestResolution.Skipped("pinning skipped: tag 'latest' matches fix.images.exclude-tags")));
+
+        var engine = new PinRemediationEngine(
+            null,
+            imageResolver,
+            new FixPinningConfig(),
+            new FixImagesConfig { EnableNetwork = true },
+            new NetworkConfig());
+
+        var result = await engine.RemediateAsync(diagnostics, source);
+
+        await Assert.That(result.SkippedCount).IsEqualTo(1);
+        await Assert.That(result.Diagnostics[0].Fix.HasValue).IsEqualTo(false);
+        await Assert.That(result.Diagnostics[0].Help).IsEqualTo("pinning skipped: tag 'latest' matches fix.images.exclude-tags");
+    }
+
+    private sealed class DelegateImageDigestResolver(
+        Func<string, CancellationToken, Task<ImageDigestResolution>> impl) : IImageDigestResolver
+    {
+        public Task<ImageDigestResolution> ResolveAsync(string imageRef, CancellationToken cancellationToken = default)
             => impl(imageRef, cancellationToken);
     }
 }

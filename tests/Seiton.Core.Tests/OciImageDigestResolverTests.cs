@@ -16,9 +16,10 @@ public sealed class OciImageDigestResolverTests
 
         var resolver = CreateResolver(handler);
 
-        var digest = await resolver.ResolveAsync("ghcr.io/astral-sh/uv:0.5.4");
+        var resolution = await resolver.ResolveAsync("ghcr.io/astral-sh/uv:0.5.4");
 
-        await Assert.That(digest).IsEqualTo(Digest);
+        await Assert.That(resolution.Digest).IsEqualTo(Digest);
+        await Assert.That(resolution.SkipReason).IsNull();
         await Assert.That(handler.RequestedUris).Contains("https://ghcr.io/v2/astral-sh/uv/manifests/0.5.4");
     }
 
@@ -32,9 +33,25 @@ public sealed class OciImageDigestResolverTests
         var latest = await resolver.ResolveAsync("docker://ghcr.io/astral-sh/uv:latest");
         var implicitLatest = await resolver.ResolveAsync("ghcr.io/astral-sh/uv");
 
-        await Assert.That(scratch).IsNull();
-        await Assert.That(latest).IsNull();
-        await Assert.That(implicitLatest).IsNull();
+        await Assert.That(scratch.Digest).IsNull();
+        await Assert.That(scratch.SkipReason).Contains("exclude-tags");
+        await Assert.That(latest.Digest).IsNull();
+        await Assert.That(latest.SkipReason).Contains("exclude-tags");
+        await Assert.That(implicitLatest.Digest).IsNull();
+        await Assert.That(implicitLatest.SkipReason).Contains("exclude-tags");
+        await Assert.That(handler.RequestedUris).IsEmpty();
+    }
+
+    [Test]
+    public async Task ResolveAsync_ReturnsSkipReason_ForImplicitLatestServiceStyleRef()
+    {
+        var handler = new StubHttpMessageHandler();
+        var resolver = CreateResolver(handler);
+
+        var resolution = await resolver.ResolveAsync("redis");
+
+        await Assert.That(resolution.Digest).IsNull();
+        await Assert.That(resolution.SkipReason).IsEqualTo("pinning skipped: tag 'latest' matches fix.images.exclude-tags");
         await Assert.That(handler.RequestedUris).IsEmpty();
     }
 
@@ -55,9 +72,12 @@ public sealed class OciImageDigestResolverTests
         var excludedTag = await resolver.ResolveAsync("ghcr.io/astral-sh/uv:edge");
         var ignoredImage = await resolver.ResolveAsync("ghcr.io/myorg/tooling/ci:1.2.3");
 
-        await Assert.That(excludedImage).IsNull();
-        await Assert.That(excludedTag).IsNull();
-        await Assert.That(ignoredImage).IsNull();
+        await Assert.That(excludedImage.Digest).IsNull();
+        await Assert.That(excludedImage.SkipReason).Contains("exclude-images");
+        await Assert.That(excludedTag.Digest).IsNull();
+        await Assert.That(excludedTag.SkipReason).Contains("exclude-tags");
+        await Assert.That(ignoredImage.Digest).IsNull();
+        await Assert.That(ignoredImage.SkipReason).Contains("ignore-images");
         await Assert.That(handler.RequestedUris).IsEmpty();
     }
 
@@ -85,9 +105,9 @@ public sealed class OciImageDigestResolverTests
             handler.AddHead("https://ghcr.io/v2/astral-sh/uv/manifests/0.5.4", Digest);
             var resolver = CreateResolver(handler, dockerConfigPath: dockerConfigPath);
 
-            var digest = await resolver.ResolveAsync("ghcr.io/astral-sh/uv:0.5.4");
+            var resolution = await resolver.ResolveAsync("ghcr.io/astral-sh/uv:0.5.4");
 
-            await Assert.That(digest).IsEqualTo(Digest);
+            await Assert.That(resolution.Digest).IsEqualTo(Digest);
             await Assert.That(handler.LastAuthorizationScheme).IsEqualTo("Basic");
             await Assert.That(handler.LastAuthorizationParameter).IsEqualTo("dXNlcjp0b2tlbg==");
         }
@@ -107,7 +127,7 @@ public sealed class OciImageDigestResolverTests
         var first = await resolver.ResolveAsync("docker://ghcr.io/astral-sh/uv:0.5.4");
         var second = await resolver.ResolveAsync("ghcr.io/astral-sh/uv:0.5.4");
 
-        await Assert.That(first).IsEqualTo(second);
+        await Assert.That(first.Digest).IsEqualTo(second.Digest);
         await Assert.That(handler.RequestedUris.Count(uri => uri == "https://ghcr.io/v2/astral-sh/uv/manifests/0.5.4"))
             .IsEqualTo(1);
     }
@@ -132,9 +152,9 @@ public sealed class OciImageDigestResolverTests
         handler.AddHeadWithBearer(manifestUri, bearerToken, Digest);
 
         var resolver = CreateResolver(handler);
-        var digest = await resolver.ResolveAsync("node:20.11.1");
+        var resolution = await resolver.ResolveAsync("node:20.11.1");
 
-        await Assert.That(digest).IsEqualTo(Digest);
+        await Assert.That(resolution.Digest).IsEqualTo(Digest);
         await Assert.That(handler.RequestedUris.Count(u => u == manifestUri)).IsEqualTo(2); // 401 + retry
         await Assert.That(handler.RequestedUris.Any(u => u.StartsWith(tokenEndpoint))).IsTrue();
     }
@@ -146,9 +166,10 @@ public sealed class OciImageDigestResolverTests
         var handler = new StubHttpMessageHandler(); // unregistered URIs return 404 by default
         var resolver = CreateResolver(handler);
 
-        var digest = await resolver.ResolveAsync("ghcr.io/myorg/nonexistent:1.0.0");
+        var resolution = await resolver.ResolveAsync("ghcr.io/myorg/nonexistent:1.0.0");
 
-        await Assert.That(digest).IsNull();
+        await Assert.That(resolution.Digest).IsNull();
+        await Assert.That(resolution.SkipReason).IsNull();
     }
 
     [Test]
@@ -170,9 +191,10 @@ public sealed class OciImageDigestResolverTests
         // No AddHeadWithBearer — handler falls back to 404 for the authenticated retry.
 
         var resolver = CreateResolver(handler);
-        var digest = await resolver.ResolveAsync("ghost:4.0.0");
+        var resolution = await resolver.ResolveAsync("ghost:4.0.0");
 
-        await Assert.That(digest).IsNull();
+        await Assert.That(resolution.Digest).IsNull();
+        await Assert.That(resolution.SkipReason).IsNull();
     }
 
     private static OciImageDigestResolver CreateResolver(

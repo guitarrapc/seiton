@@ -21,9 +21,10 @@ public sealed class PinRemediationContractsTests
     {
         IImageDigestResolver resolver = new FakeImageDigestResolver();
 
-        var digest = await resolver.ResolveAsync("node:20.11.1");
+        var resolution = await resolver.ResolveAsync("node:20.11.1");
 
-        await Assert.That(digest).IsEqualTo("sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa");
+        await Assert.That(resolution.Digest).IsEqualTo("sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa");
+        await Assert.That(resolution.SkipReason).IsNull();
     }
 
     [Test]
@@ -51,9 +52,9 @@ public sealed class PinRemediationContractsTests
 
     private sealed class FakeImageDigestResolver : IImageDigestResolver
     {
-        public Task<string?> ResolveAsync(string imageRef, CancellationToken cancellationToken = default)
+        public Task<ImageDigestResolution> ResolveAsync(string imageRef, CancellationToken cancellationToken = default)
         {
-            return Task.FromResult<string?>("sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa");
+            return Task.FromResult(ImageDigestResolution.Resolved("sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"));
         }
     }
 }
