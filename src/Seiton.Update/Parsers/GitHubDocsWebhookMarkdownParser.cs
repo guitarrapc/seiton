@@ -14,11 +14,13 @@ internal sealed class GitHubDocsWebhookMarkdownParser
 
     private static readonly Regex LiquidIfBlockRegex = new(
         "\\{%\\s*ifversion\\b.*?%\\}.*?\\{%\\s*endif\\s*%\\}",
-        RegexOptions.Compiled | RegexOptions.Singleline);
+        RegexOptions.Compiled | RegexOptions.CultureInvariant | RegexOptions.Singleline,
+        TimeSpan.FromSeconds(2));
 
     private static readonly Regex LiquidTagRegex = new(
         "\\{%.*?%\\}",
-        RegexOptions.Compiled | RegexOptions.Singleline);
+        RegexOptions.Compiled | RegexOptions.CultureInvariant | RegexOptions.Singleline,
+        TimeSpan.FromSeconds(2));
 
     public IReadOnlyDictionary<string, IReadOnlyList<string>?> ParseActivityTypesByEvent(string markdown)
     {
