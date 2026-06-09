@@ -35,7 +35,7 @@ public sealed class CheckoutPersistCredentialsRule() : RuleBase(RuleId.CheckoutP
 
         if (actionExec.Inputs is null || Config.Utf8Yaml is null || !actionExec.Inputs.Value.TryGetValue(Config.Utf8Yaml, "persist-credentials"u8, out var persistCredentialsNode))
         {
-            if (Config.Fix.Enabled && Config.Utf8Yaml is not null && TryBuildMissingInputFix(Config, step, actionExec, Config.Utf8Yaml, out var missingFix))
+            if (Config.Fix.Enabled && Config.Utf8Yaml is not null && TryBuildMissingInputFix(step, actionExec, Config.Utf8Yaml, out var missingFix))
             {
                 AddStepWarning(step, message, BuildStepLocation(step), missingFix);
                 return;
@@ -51,7 +51,7 @@ public sealed class CheckoutPersistCredentialsRule() : RuleBase(RuleId.CheckoutP
             return;
         }
 
-        if (Config.Fix.Enabled && Config.Utf8Yaml is not null && TryBuildValueReplacementFix(Config, persistCredentialsNode, Config.Utf8Yaml, out var valueFix))
+        if (Config.Fix.Enabled && Config.Utf8Yaml is not null && TryBuildValueReplacementFix(persistCredentialsNode, Config.Utf8Yaml, out var valueFix))
         {
             AddStepWarning(step, message, Arena.GetStringRange(persistCredentialsNode), valueFix);
             return;
@@ -83,7 +83,7 @@ public sealed class CheckoutPersistCredentialsRule() : RuleBase(RuleId.CheckoutP
         return msg;
     }
 
-    private bool TryBuildValueReplacementFix(LintConfig config, StringNodeId persistCredentialsNode, byte[] utf8Yaml, out DiagnosticFix fix)
+    private bool TryBuildValueReplacementFix(StringNodeId persistCredentialsNode, byte[] utf8Yaml, out DiagnosticFix fix)
     {
         fix = default;
         if (ExpressionScanHelpers.ContainsExpressionMarker(persistCredentialsNode, Arena))
@@ -98,7 +98,7 @@ public sealed class CheckoutPersistCredentialsRule() : RuleBase(RuleId.CheckoutP
         return true;
     }
 
-    private bool TryBuildMissingInputFix(LintConfig config, Step step, ExecAction actionExec, byte[] utf8Yaml, out DiagnosticFix fix)
+    private bool TryBuildMissingInputFix(Step step, ExecAction actionExec, byte[] utf8Yaml, out DiagnosticFix fix)
     {
         fix = default;
 
@@ -107,7 +107,7 @@ public sealed class CheckoutPersistCredentialsRule() : RuleBase(RuleId.CheckoutP
             return false;
         }
 
-        var usesLine = FindLineNumberFromOffset(utf8Yaml, Arena.GetStringSlice(actionExec.Uses).Offset);
+        var usesLine = Utf8YamlLineHelpers.FindLineNumberFromOffset(utf8Yaml, Arena.GetStringSlice(actionExec.Uses).Offset);
         if (usesLine < 1)
         {
             return false;
@@ -123,7 +123,7 @@ public sealed class CheckoutPersistCredentialsRule() : RuleBase(RuleId.CheckoutP
 
         if (actionExec.Inputs is not null && actionExec.Inputs.Value.Count > 0)
         {
-            var withLine = FindWithLine(utf8Yaml, usesLine, stepEndLine, keyIndent);
+            var withLine = Utf8YamlLineHelpers.FindLineWithKey(utf8Yaml, Math.Max(usesLine + 1, 1), stepEndLine, keyIndent, "with:"u8);
             if (withLine < 0 || LineContainsFlowMappingAt(utf8Yaml, withLine, keyIndent))
             {
                 return false;
@@ -136,7 +136,7 @@ public sealed class CheckoutPersistCredentialsRule() : RuleBase(RuleId.CheckoutP
             }
 
             var inputIndent = FixFormatting.GetLineIndentation(utf8Yaml, firstInputLine);
-            var insertOffset = FindLineStartOffset(utf8Yaml, firstInputLine);
+            var insertOffset = Utf8YamlLineHelpers.FindLineStartOffset(utf8Yaml, firstInputLine);
             var insertText = inputIndent + PersistCredentialsKey + ": false" + lineEnding;
 
             fix = new DiagnosticFix(
@@ -147,7 +147,7 @@ public sealed class CheckoutPersistCredentialsRule() : RuleBase(RuleId.CheckoutP
 
         var withIndent = keyIndent;
         var childIndent = withIndent + FixFormatting.InferIndentationUnit(utf8Yaml);
-        var insertAfterUsesOffset = FindLineEndOffsetIncludingNewLine(utf8Yaml, usesLine);
+        var insertAfterUsesOffset = Utf8YamlLineHelpers.FindLineEndOffsetIncludingNewLine(utf8Yaml, usesLine);
         var withBlock = withIndent + "with:" + lineEnding + childIndent + PersistCredentialsKey + ": false" + lineEnding;
         var insertTextNoWith = insertAfterUsesOffset > 0 && insertAfterUsesOffset <= utf8Yaml.Length && utf8Yaml[insertAfterUsesOffset - 1] != (byte)'\n'
             ? lineEnding + withBlock
@@ -205,46 +205,21 @@ public sealed class CheckoutPersistCredentialsRule() : RuleBase(RuleId.CheckoutP
     private static string GetStepKeyIndentation(byte[] utf8Yaml, int lineNumber)
     {
         var baseIndent = FixFormatting.GetLineIndentation(utf8Yaml, lineNumber);
-        var lineStart = FindLineStartOffset(utf8Yaml, lineNumber);
+        var lineStart = Utf8YamlLineHelpers.FindLineStartOffset(utf8Yaml, lineNumber);
         var offset = lineStart + baseIndent.Length;
         return offset + 1 < utf8Yaml.Length && utf8Yaml[offset] == (byte)'-' && utf8Yaml[offset + 1] == (byte)' '
             ? baseIndent + "  "
             : baseIndent;
     }
 
-    private static int FindWithLine(byte[] utf8Yaml, int usesLine, int stepEndLine, string keyIndent)
-    {
-        var currentLine = 1;
-        var pos = 0;
-        var startLine = Math.Max(usesLine + 1, 1);
-        while (currentLine < startLine && pos < utf8Yaml.Length)
-            if (utf8Yaml[pos++] == (byte)'\n') currentLine++;
-
-        while (currentLine <= stepEndLine && pos <= utf8Yaml.Length)
-        {
-            if (pos >= utf8Yaml.Length) break;
-            var lineStart = pos;
-            while (pos < utf8Yaml.Length && utf8Yaml[pos] != (byte)'\n') pos++;
-            var lineEnd = pos;
-            if (lineEnd > lineStart && utf8Yaml[lineEnd - 1] == (byte)'\r') lineEnd--;
-            if (pos < utf8Yaml.Length) pos++;
-
-            if (ByteLineHasKeyAtIndent(utf8Yaml, lineStart, lineEnd, keyIndent, "with:"u8))
-                return currentLine;
-
-            currentLine++;
-        }
-        return -1;
-    }
-
     private static bool LineContainsFlowMappingAt(byte[] utf8Yaml, int lineNumber, string keyIndent)
     {
-        var lineStart = FindLineStartOffset(utf8Yaml, lineNumber);
+        var lineStart = Utf8YamlLineHelpers.FindLineStartOffset(utf8Yaml, lineNumber);
         var lineEnd = lineStart;
         while (lineEnd < utf8Yaml.Length && utf8Yaml[lineEnd] != (byte)'\n') lineEnd++;
         if (lineEnd > lineStart && utf8Yaml[lineEnd - 1] == (byte)'\r') lineEnd--;
 
-        if (!ByteLineHasKeyAtIndent(utf8Yaml, lineStart, lineEnd, keyIndent, "with:"u8))
+        if (!Utf8YamlLineHelpers.ByteLineHasKeyAtIndent(utf8Yaml, lineStart, lineEnd, keyIndent, "with:"u8))
             return false;
 
         for (var i = lineStart; i < lineEnd; i++)
@@ -252,26 +227,12 @@ public sealed class CheckoutPersistCredentialsRule() : RuleBase(RuleId.CheckoutP
         return false;
     }
 
-    // Checks if the line [lineStart..lineEnd) starts with keyIndent (ASCII), followed by optional
-    // whitespace and then the given keyBytes prefix.
-    private static bool ByteLineHasKeyAtIndent(byte[] utf8Yaml, int lineStart, int lineEnd, string keyIndent, ReadOnlySpan<byte> keyBytes)
-    {
-        if (lineEnd - lineStart < keyIndent.Length) return false;
-        for (var k = 0; k < keyIndent.Length; k++)
-            if (utf8Yaml[lineStart + k] != (byte)keyIndent[k]) return false;
-        var idx = lineStart + keyIndent.Length;
-        while (idx < lineEnd && (utf8Yaml[idx] == (byte)' ' || utf8Yaml[idx] == (byte)'\t')) idx++;
-        var remaining = lineEnd - idx;
-        if (remaining < keyBytes.Length) return false;
-        return utf8Yaml.AsSpan(idx, keyBytes.Length).SequenceEqual(keyBytes);
-    }
-
     private int FindFirstInputLine(byte[] utf8Yaml, SliceMap<StringNodeId> inputs)
     {
         var firstLine = int.MaxValue;
         foreach (var pair in inputs)
         {
-            var line = FindLineNumberFromOffset(utf8Yaml, Arena.GetStringSlice(pair.Value).Offset);
+            var line = Utf8YamlLineHelpers.FindLineNumberFromOffset(utf8Yaml, Arena.GetStringSlice(pair.Value).Offset);
             if (line > 0 && line < firstLine)
             {
                 firstLine = line;
@@ -279,76 +240,6 @@ public sealed class CheckoutPersistCredentialsRule() : RuleBase(RuleId.CheckoutP
         }
 
         return firstLine == int.MaxValue ? -1 : firstLine;
-    }
-
-    private static string GetLine(string sourceText, int lineNumber)
-    {
-        // no longer called from the hot path; retained for safety
-        var lines = sourceText.Replace("\r\n", "\n", StringComparison.Ordinal).Split('\n');
-        return lineNumber >= 1 && lineNumber <= lines.Length ? lines[lineNumber - 1] : string.Empty;
-    }
-
-    private static int FindLineStartOffset(byte[] utf8Yaml, int lineNumber)
-    {
-        if (lineNumber <= 1)
-        {
-            return 0;
-        }
-
-        var currentLine = 1;
-        for (var i = 0; i < utf8Yaml.Length; i++)
-        {
-            if (utf8Yaml[i] != (byte)'\n')
-            {
-                continue;
-            }
-
-            currentLine++;
-            if (currentLine == lineNumber)
-            {
-                return i + 1;
-            }
-        }
-
-        return utf8Yaml.Length;
-    }
-
-    private static int FindLineEndOffsetIncludingNewLine(byte[] utf8Yaml, int lineNumber)
-    {
-        var start = FindLineStartOffset(utf8Yaml, lineNumber);
-        for (var i = start; i < utf8Yaml.Length; i++)
-        {
-            if (utf8Yaml[i] == (byte)'\n')
-            {
-                return i + 1;
-            }
-        }
-
-        return utf8Yaml.Length;
-    }
-
-    private static int FindLineNumberFromOffset(byte[] utf8Yaml, int offset)
-    {
-        if (offset <= 0)
-        {
-            return 1;
-        }
-
-        if (offset > utf8Yaml.Length)
-        {
-            offset = utf8Yaml.Length;
-        }
-
-        var lineNumber = 1;
-        for (var i = 0; i < offset; i++)
-        {
-            if (utf8Yaml[i] == (byte)'\n')
-            {
-                lineNumber++;
-            }
-        }
-
-        return lineNumber;
     }
 
     /// <summary>Case-insensitive YAML boolean false check (false, False, FALSE).</summary>
