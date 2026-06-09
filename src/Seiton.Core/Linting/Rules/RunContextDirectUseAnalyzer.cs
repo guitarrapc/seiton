@@ -580,7 +580,7 @@ internal static class RunContextDirectUseAnalyzer
     /// string on the same line. Shell single quotes suppress all variable expansion, so
     /// replacing ${{ }} with ${VAR} would be ineffective.
     /// </summary>
-    internal static bool IsInsideShellSingleQuotes(byte[] source, int targetOffset)
+    internal static bool IsInsideShellSingleQuotes(ReadOnlySpan<byte> source, int targetOffset)
     {
         if (source.Length == 0 || (uint)targetOffset >= (uint)source.Length)
         {
