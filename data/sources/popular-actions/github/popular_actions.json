@@ -222,6 +222,10 @@
           "required": false
         },
         {
+          "name": "dotnet-channel",
+          "required": false
+        },
+        {
           "name": "dotnet-quality",
           "required": false
         },

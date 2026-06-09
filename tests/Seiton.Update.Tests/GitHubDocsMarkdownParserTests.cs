@@ -95,6 +95,28 @@ public sealed class GitHubDocsMarkdownParserTests
     }
 
     [Test]
+    public async Task ParseActivityTypesByEvent_IssuesWithLiquidConditional_ParsesStableTypes()
+    {
+        var markdown = """
+            ## `issues`
+
+            | Event | Activity types | `GITHUB_SHA` | `GITHUB_REF` |
+            | --- | --- | --- | --- |
+            | `issues` | - `opened`<br/>- `edited`<br/>- `deleted`<br/>- `transferred`<br/>- `pinned`<br/>- `unpinned`<br/>- `closed`<br/>- `reopened`<br/>- `assigned`<br/>- `unassigned`<br/>- `labeled`<br/>- `unlabeled`<br/>- `locked`<br/>- `unlocked`<br/>- `milestoned`<br/> - `demilestoned`<br/> - `typed`<br/> - `untyped`{% ifversion issue-fields %}<br/> - `field_added`<br/> - `field_removed`{% endif %} | ... | ... |
+            """;
+
+        var parser = new GitHubDocsWebhookMarkdownParser();
+        var result = parser.ParseActivityTypesByEvent(markdown);
+
+        await Assert.That(result.ContainsKey("issues")).IsTrue();
+        var types = result["issues"]!;
+        await Assert.That(types).Contains("typed");
+        await Assert.That(types).Contains("untyped");
+        await Assert.That(types).DoesNotContain("field_added");
+        await Assert.That(types).DoesNotContain("field_removed");
+    }
+
+    [Test]
     public async Task ParseActivityTypesByEvent_LiquidTemplateCell_EventAbsentFromResult()
     {
         // Cells with {%...%} are unparseable; the event should not appear in the dict.

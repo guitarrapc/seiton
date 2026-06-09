@@ -239,6 +239,7 @@ Cross-walk of maintainer-facing datasets (including satellite **`event-payload-t
 When official GitHub sources disagree for webhook activity types:
 
 - GitHub Docs values are preferred when the Docs event table is parseable for the event.
+- Docs cells that mix static activity types and Liquid version-condition blocks are treated as parseable for the static subset; static backtick values are retained and Liquid-only conditional values are ignored.
 - SchemaStore metadata is used as fallback for events where Docs values are unavailable/unparseable.
 - Official-source mismatches are recorded in a dedicated official-source diff report.
 - actionlint parity is a separate differential check and never overrides official-source resolution.

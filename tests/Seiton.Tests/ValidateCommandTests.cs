@@ -69,7 +69,7 @@ public sealed class ValidateCommandTests
             await Assert.That(exitCode).IsEqualTo(ExitCode.LintIssuesFound);
             await Assert.That(stdout.ToString()).DoesNotContain("config valid:");
             await Assert.That(stderr.ToString()).Contains("unknown job-id 'missing-job'");
-            await Assert.That(stderr.ToString()).Contains(configPath.Replace('\\', '/'));
+            await Assert.That(stderr.ToString()).Contains("/.github/seiton.yaml:1:1");
         }
         finally
         {
