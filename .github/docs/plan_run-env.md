@@ -309,6 +309,65 @@ dotnet run -c Release --project src/Seiton.Benchmark --filter "*CoreLintBenchmar
 
 - 指摘なし
 
+## 追加コードレビュー記録（完了）
+
+`code-review` スキルに基づき、P0-P2 実装後に再レビューを実施した。
+
+### レビューラウンド 1
+
+指摘:
+
+- 性能レビュー: `CoreLintBenchmark` のみでは対象ルール固有の挙動差分を観測しにくく、計測ノイズも大きい
+
+対応:
+
+- `src/Seiton.Benchmark/RunEnvContextDirectUseBenchmark.cs` を追加
+  - 利用者が実際に書く `run:` パターンをケース化
+    - `PosixSimpleUnquoted`
+    - `PosixSimpleSingleQuoted`
+    - `PosixComplexSingleQuoted`
+    - `PwshSimpleSingleQuotedWithDefaults`
+    - `PosixCompositeExpression`
+  - `FixEnabled` true/false の両方を計測
+  - `using var result = _engine.Check(...)` を使い、呼び出し側の典型的リソース利用パターンに寄せた
+
+### レビューラウンド 2
+
+確認:
+
+- 正しさ: 追加ベンチは rule の public な利用経路（`LintEngine.Check`）のみを使用し、内部実装詳細に依存しない
+- API 使い勝手: fix 挙動の境界（単純 single-quote 救済 / 複雑・未閉 no-fix）は既存テストで担保済み
+- 仕様同期: `Seiton_Linter_spec.md` / `Seiton_Linter_csharp_spec.md` / `docs/rules.md` の記載と一致
+
+指摘:
+
+- なし
+
+### ベンチマーク結果（専用ベンチ）
+
+実行コマンド:
+
+```shell
+dotnet run -c Release --project src/Seiton.Benchmark --filter "*RunEnvContextDirectUseBenchmark*"
+```
+
+要約:
+
+- Mean は概ね 10-14 us
+- Allocated は 944 B-1400 B
+- もっとも重い `PwshSimpleSingleQuotedWithDefaults` でも他ケース比で大きな乖離なし
+- single-quote 救済ケースは no-fix ケースと同程度のオーダーで、明確な性能回帰は確認されない
+
+### テスト結果（再確認）
+
+- `dotnet test --project tests/Seiton.Core.Tests --treenode-filter /*/*/RuleInterfaceTests/LintEngine_RunEnvContextDirectUse*` 成功（20件）
+- `dotnet test` 全体は今回変更と無関係な既知失敗（`Seiton.Update.Tests` の raw source hash 差分、`Seiton.Tests` の path 表示差分）で失敗
+
+### 最終判定
+
+- 修正すべき追加指摘: なし
+- レビュー指摘は 0 件でクローズ
+
 ## P2 実装記録（完了）
 
 ### 実装内容
