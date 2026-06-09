@@ -35,6 +35,17 @@ public sealed partial class RuleInterfaceTests
             """,
             []),
             new RuleCase(
+            "ok-run-uses-string-that-looks-like-secrets-token",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - run: echo "secrets.MY_TOKEN"
+            """,
+            []),
+            new RuleCase(
             "ng-run-uses-secrets-dot-access",
             """
             on: push
@@ -46,6 +57,17 @@ public sealed partial class RuleInterfaceTests
             """,
             ["must not reference", "secrets.*", "shell variables"]),
             new RuleCase(
+            "ng-run-uses-secrets-dot-access-with-whitespace",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - run: echo "${{ secrets . MY_TOKEN }}"
+            """,
+            ["must not reference", "secrets.*", "shell variables"]),
+            new RuleCase(
             "ng-run-uses-secrets-bracket-access",
             """
             on: push
@@ -54,6 +76,17 @@ public sealed partial class RuleInterfaceTests
                     runs-on: ubuntu-latest
                     steps:
                         - run: echo "${{ secrets['MY_TOKEN'] }}"
+            """,
+            ["must not reference", "secrets.*", "shell variables"]),
+            new RuleCase(
+            "ng-run-uses-secrets-bracket-access-with-whitespace",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - run: echo "${{ secrets [ 'MY_TOKEN' ] }}"
             """,
             ["must not reference", "secrets.*", "shell variables"]),
             new RuleCase(

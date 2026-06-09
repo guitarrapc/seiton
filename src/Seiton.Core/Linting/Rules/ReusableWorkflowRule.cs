@@ -8,6 +8,8 @@ namespace Seiton.Core.Linting.Rules;
 /// <summary>Validates reusable workflow call semantics (<c>uses:</c>/<c>with:</c>/<c>secrets:</c> at job level).</summary>
 public sealed class ReusableWorkflowRule() : RuleBase(RuleId.ReusableWorkflow)
 {
+    private const int LookupHashSetThreshold = 8;
+
     private readonly Dictionary<string, LocalWorkflowContract?> localWorkflowContracts = new(StringComparer.OrdinalIgnoreCase);
 
     public override string Name => "Reusable Workflow Rule";
@@ -226,11 +228,19 @@ public sealed class ReusableWorkflowRule() : RuleBase(RuleId.ReusableWorkflow)
 
     private void ValidateWorkflowCallInputs(Job job, string jobId, WorkflowCall workflowCall, LocalWorkflowContract contract)
     {
+        HashSet<string>? providedInputNames = null;
+        var useInputHashSet = workflowCall.Inputs is not null && workflowCall.Inputs.Value.Count > LookupHashSetThreshold;
         if (workflowCall.Inputs is not null)
         {
+            if (useInputHashSet)
+            {
+                providedInputNames = new HashSet<string>(workflowCall.Inputs.Value.Count, StringComparer.Ordinal);
+            }
+
             foreach (var pair in workflowCall.Inputs.Value)
             {
                 var inputName = Decode(pair.Key);
+                providedInputNames?.Add(inputName);
                 if (!contract.Inputs.TryGetValue(inputName, out var expected))
                 {
                     AddJobError(
@@ -246,7 +256,11 @@ public sealed class ReusableWorkflowRule() : RuleBase(RuleId.ReusableWorkflow)
 
         foreach (var requiredInput in contract.RequiredInputs)
         {
-            if (workflowCall.Inputs is not null && ContainsInput(workflowCall.Inputs.Value, requiredInput))
+            var hasRequiredInput = providedInputNames is not null
+                ? providedInputNames.Contains(requiredInput)
+                : (workflowCall.Inputs is not null && ContainsInput(workflowCall.Inputs.Value, requiredInput));
+
+            if (hasRequiredInput)
             {
                 continue;
             }
@@ -266,7 +280,6 @@ public sealed class ReusableWorkflowRule() : RuleBase(RuleId.ReusableWorkflow)
         }
 
         var value = providedInput.Value;
-        var valueSpan = Arena.GetStringValue(value);
         if (ExpressionScanHelpers.ContainsExpressionMarker(value, Arena))
         {
             return;
@@ -303,11 +316,19 @@ public sealed class ReusableWorkflowRule() : RuleBase(RuleId.ReusableWorkflow)
 
     private void ValidateWorkflowCallSecrets(Job job, string jobId, WorkflowCall workflowCall, LocalWorkflowContract contract)
     {
+        HashSet<string>? providedSecretNames = null;
+        var useSecretHashSet = workflowCall.Secrets is not null && workflowCall.Secrets.Value.Count > LookupHashSetThreshold;
         if (workflowCall.Secrets is not null)
         {
+            if (useSecretHashSet)
+            {
+                providedSecretNames = new HashSet<string>(workflowCall.Secrets.Value.Count, StringComparer.Ordinal);
+            }
+
             foreach (var pair in workflowCall.Secrets.Value)
             {
                 var secretName = Decode(pair.Key);
+                providedSecretNames?.Add(secretName);
                 if (contract.Secrets.Contains(secretName))
                 {
                     continue;
@@ -327,7 +348,11 @@ public sealed class ReusableWorkflowRule() : RuleBase(RuleId.ReusableWorkflow)
 
         foreach (var requiredSecret in contract.RequiredSecrets)
         {
-            if (workflowCall.Secrets is not null && ContainsSecret(workflowCall.Secrets.Value, requiredSecret))
+            var hasRequiredSecret = providedSecretNames is not null
+                ? providedSecretNames.Contains(requiredSecret)
+                : (workflowCall.Secrets is not null && ContainsSecret(workflowCall.Secrets.Value, requiredSecret));
+
+            if (hasRequiredSecret)
             {
                 continue;
             }
@@ -373,6 +398,23 @@ public sealed class ReusableWorkflowRule() : RuleBase(RuleId.ReusableWorkflow)
         return true;
     }
 
+    private static bool IsBooleanLiteral(string value)
+    {
+        return string.Equals(value, "true", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(value, "false", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static string DecodeAscii(ReadOnlySpan<byte> utf8)
+    {
+        var chars = new char[utf8.Length];
+        for (var i = 0; i < utf8.Length; i++)
+        {
+            chars[i] = (char)utf8[i];
+        }
+
+        return new string(chars);
+    }
+
     private bool ContainsInput(SliceMap<WorkflowCallInput> providedInputs, string requiredInput)
     {
         foreach (var pair in providedInputs)
@@ -397,23 +439,6 @@ public sealed class ReusableWorkflowRule() : RuleBase(RuleId.ReusableWorkflow)
         }
 
         return false;
-    }
-
-    private static bool IsBooleanLiteral(string value)
-    {
-        return string.Equals(value, "true", StringComparison.OrdinalIgnoreCase)
-            || string.Equals(value, "false", StringComparison.OrdinalIgnoreCase);
-    }
-
-    private static string DecodeAscii(ReadOnlySpan<byte> utf8)
-    {
-        var chars = new char[utf8.Length];
-        for (var i = 0; i < utf8.Length; i++)
-        {
-            chars[i] = (char)utf8[i];
-        }
-
-        return new string(chars);
     }
 
     private void ReportIfPresent(Job job, bool present, string keyName, string jobId, TextRange? keyRange)

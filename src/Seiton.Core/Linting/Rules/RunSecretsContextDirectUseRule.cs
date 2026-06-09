@@ -100,7 +100,7 @@ public sealed class RunSecretsContextDirectUseRule() : RuleBase(RuleId.RunSecret
                     location,
                     fix);
             }
-            else if (!TryParseSimpleContextReference(expression, "secrets"u8, out _))
+            else if (!TryParseSimpleContextReferenceBounds(expression, "secrets"u8, out _, out _))
             {
                 // Composite expression (e.g. "${{ secrets.TOKEN }}-suffix") — suggest env: block mapping
                 AddStepError(
@@ -129,10 +129,11 @@ public sealed class RunSecretsContextDirectUseRule() : RuleBase(RuleId.RunSecret
             return false;
         }
 
-        if (!TryParseSimpleContextReference(expression, "secrets"u8, out var secretName))
+        if (!TryParseSimpleContextReferenceBounds(expression, "secrets"u8, out var nameStart, out var nameLength))
         {
             return false;
         }
+        var secretName = DecodeExpressionName(expression, nameStart, nameLength);
 
         var absoluteOffset = Arena.GetStringSlice(runNode).Offset + expressionBodyStart - 3;
 
@@ -158,9 +159,10 @@ public sealed class RunSecretsContextDirectUseRule() : RuleBase(RuleId.RunSecret
                 return false;
             }
 
-            var replacement = isPowerShell.Value
-                ? "$env:" + variableName
-                : "${" + variableName + "}";
+            if (!TryBuildShellVariableReplacement(variableName, isPowerShell.Value, wrapInDoubleQuotes: false, out var replacement))
+            {
+                return false;
+            }
 
             fix = new DiagnosticFix(
                 "replace direct secrets context expansion with mapped shell variable",
@@ -188,9 +190,10 @@ public sealed class RunSecretsContextDirectUseRule() : RuleBase(RuleId.RunSecret
             return false;
         }
 
-        var shellReplacement = isPowerShell2.Value
-            ? "$env:" + envVarName
-            : "${" + envVarName + "}";
+        if (!TryBuildShellVariableReplacement(envVarName, isPowerShell2.Value, wrapInDoubleQuotes: false, out var shellReplacement))
+        {
+            return false;
+        }
 
         if (!TryBuildStepEnvInsertionEdit(Arena, Config.Utf8Yaml, step, envVarName, expressionString, out var insertEdit))
         {

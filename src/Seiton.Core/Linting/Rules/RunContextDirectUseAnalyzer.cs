@@ -1,6 +1,7 @@
 ﻿using Seiton.Core.Linting.Fixing;
 using Seiton.Core.Parsing;
 using Seiton.Core.Parsing.Ast;
+using System.Buffers;
 using System.Runtime.CompilerServices;
 using System.Text;
 
@@ -165,6 +166,115 @@ internal static class RunContextDirectUseAnalyzer
     internal static bool TryConsumeMemberOrBracketName(ReadOnlySpan<byte> expression, ref int index, out string name)
     {
         name = string.Empty;
+        if (!TryConsumeMemberOrBracketNameBounds(expression, ref index, out var nameStart, out var nameLength))
+        {
+            return false;
+        }
+
+        name = DecodeExpressionName(expression, nameStart, nameLength);
+        return name.Length > 0;
+    }
+
+    internal static bool TryParseSimpleContextReference(ReadOnlySpan<byte> expression, ReadOnlySpan<byte> rootToken, out string name)
+    {
+        name = string.Empty;
+        if (!TryParseSimpleContextReferenceBounds(expression, rootToken, out var nameStart, out var nameLength))
+        {
+            return false;
+        }
+
+        name = Encoding.UTF8.GetString(expression.Slice(nameStart, nameLength));
+        return name.Length > 0;
+    }
+
+    internal static bool TryParseSimpleContextReferenceBounds(
+        ReadOnlySpan<byte> expression,
+        ReadOnlySpan<byte> rootToken,
+        out int nameStart,
+        out int nameLength)
+    {
+        nameStart = 0;
+        nameLength = 0;
+
+        var index = 0;
+        if (!ConsumeWordIgnoreCase(expression, ref index, rootToken))
+        {
+            return false;
+        }
+
+        SkipWhiteSpace(expression, ref index);
+        return TryConsumeMemberOrBracketNameBounds(expression, ref index, out nameStart, out nameLength);
+    }
+
+    internal static bool TryParseSimpleInputsReferenceBounds(
+        ReadOnlySpan<byte> expression,
+        out bool isGithubEventInputs,
+        out int nameStart,
+        out int nameLength)
+    {
+        isGithubEventInputs = false;
+        nameStart = 0;
+        nameLength = 0;
+
+        var index = 0;
+        if (ConsumeWordIgnoreCase(expression, ref index, "inputs"u8))
+        {
+            SkipWhiteSpace(expression, ref index);
+            return TryConsumeGitHubMemberOrBracketNameBounds(expression, ref index, out nameStart, out nameLength);
+        }
+
+        index = 0;
+        if (!TryConsumeGithubEventInputsRoot(expression, ref index))
+        {
+            return false;
+        }
+
+        isGithubEventInputs = true;
+        return TryConsumeGitHubMemberOrBracketNameBounds(expression, ref index, out nameStart, out nameLength);
+    }
+
+    internal static bool TryConsumeGithubEventInputsRoot(ReadOnlySpan<byte> expression, ref int index)
+    {
+        if (!ConsumeWordIgnoreCase(expression, ref index, "github"u8))
+        {
+            return false;
+        }
+
+        SkipWhiteSpace(expression, ref index);
+        if (index >= expression.Length || expression[index] != (byte)'.')
+        {
+            return false;
+        }
+
+        index++;
+        SkipWhiteSpace(expression, ref index);
+        if (!ConsumeWordIgnoreCase(expression, ref index, "event"u8))
+        {
+            return false;
+        }
+
+        SkipWhiteSpace(expression, ref index);
+        if (index >= expression.Length || expression[index] != (byte)'.')
+        {
+            return false;
+        }
+
+        index++;
+        SkipWhiteSpace(expression, ref index);
+        if (!ConsumeWordIgnoreCase(expression, ref index, "inputs"u8))
+        {
+            return false;
+        }
+
+        SkipWhiteSpace(expression, ref index);
+        return true;
+    }
+
+    internal static bool TryConsumeMemberOrBracketNameBounds(ReadOnlySpan<byte> expression, ref int index, out int nameStart, out int nameLength)
+    {
+        nameStart = 0;
+        nameLength = 0;
+
         if (index >= expression.Length)
         {
             return false;
@@ -173,7 +283,8 @@ internal static class RunContextDirectUseAnalyzer
         if (expression[index] == (byte)'.')
         {
             index++;
-            if (!TryReadIdentifier(expression, ref index, out name))
+            SkipWhiteSpace(expression, ref index);
+            if (!TryReadSimpleIdentifierBounds(expression, ref index, out nameStart, out nameLength))
             {
                 return false;
             }
@@ -201,7 +312,7 @@ internal static class RunContextDirectUseAnalyzer
         }
 
         index++;
-        var start = index;
+        nameStart = index;
         while (index < expression.Length && expression[index] != quote)
         {
             index++;
@@ -212,7 +323,12 @@ internal static class RunContextDirectUseAnalyzer
             return false;
         }
 
-        var nameBytes = expression[start..index];
+        nameLength = index - nameStart;
+        if (nameLength <= 0 || !IsSimpleIdentifierAscii(expression.Slice(nameStart, nameLength)))
+        {
+            return false;
+        }
+
         index++;
         SkipWhiteSpace(expression, ref index);
         if (index >= expression.Length || expression[index] != (byte)']')
@@ -222,32 +338,171 @@ internal static class RunContextDirectUseAnalyzer
 
         index++;
         SkipWhiteSpace(expression, ref index);
-        if (index != expression.Length)
+        return index == expression.Length;
+    }
+
+    internal static bool TryConsumeGitHubMemberOrBracketNameBounds(ReadOnlySpan<byte> expression, ref int index, out int nameStart, out int nameLength)
+    {
+        nameStart = 0;
+        nameLength = 0;
+
+        if (index >= expression.Length)
         {
             return false;
         }
 
-        var parsedName = Encoding.UTF8.GetString(nameBytes);
-        if (!IsSimpleIdentifier(parsedName))
+        if (expression[index] == (byte)'.')
+        {
+            index++;
+            SkipWhiteSpace(expression, ref index);
+            if (!TryReadGitHubIdentifierBounds(expression, ref index, out nameStart, out nameLength))
+            {
+                return false;
+            }
+
+            SkipWhiteSpace(expression, ref index);
+            return index == expression.Length;
+        }
+
+        if (expression[index] != (byte)'[')
         {
             return false;
         }
 
-        name = parsedName;
+        index++;
+        SkipWhiteSpace(expression, ref index);
+        if (index >= expression.Length)
+        {
+            return false;
+        }
+
+        var quote = expression[index];
+        if (quote is not ((byte)'\'' or (byte)'"'))
+        {
+            return false;
+        }
+
+        index++;
+        nameStart = index;
+        while (index < expression.Length && expression[index] != quote)
+        {
+            index++;
+        }
+
+        if (index >= expression.Length)
+        {
+            return false;
+        }
+
+        nameLength = index - nameStart;
+        if (nameLength <= 0 || !IsGitHubIdentifierAscii(expression.Slice(nameStart, nameLength)))
+        {
+            return false;
+        }
+
+        index++;
+        SkipWhiteSpace(expression, ref index);
+        if (index >= expression.Length || expression[index] != (byte)']')
+        {
+            return false;
+        }
+
+        index++;
+        SkipWhiteSpace(expression, ref index);
+        return index == expression.Length;
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private static bool TryReadSimpleIdentifierBounds(ReadOnlySpan<byte> expression, ref int index, out int start, out int length)
+    {
+        start = 0;
+        length = 0;
+        if (index >= expression.Length || !IsIdentifierStart(expression[index]))
+        {
+            return false;
+        }
+
+        start = index;
+        index++;
+        while (index < expression.Length && IsIdentifierPart(expression[index]))
+        {
+            index++;
+        }
+
+        length = index - start;
         return true;
     }
 
-    internal static bool TryParseSimpleContextReference(ReadOnlySpan<byte> expression, ReadOnlySpan<byte> rootToken, out string name)
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private static bool TryReadGitHubIdentifierBounds(ReadOnlySpan<byte> expression, ref int index, out int start, out int length)
     {
-        name = string.Empty;
-        var index = 0;
-        if (!ConsumeWordIgnoreCase(expression, ref index, rootToken))
+        start = 0;
+        length = 0;
+        if (index >= expression.Length || !IsIdentifierStart(expression[index]))
         {
             return false;
         }
 
-        SkipWhiteSpace(expression, ref index);
-        return TryConsumeMemberOrBracketName(expression, ref index, out name);
+        start = index;
+        index++;
+        while (index < expression.Length)
+        {
+            var b = expression[index];
+            if (!(IsIdentifierPart(b) || b == (byte)'-'))
+            {
+                break;
+            }
+
+            index++;
+        }
+
+        length = index - start;
+        return true;
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    internal static string DecodeExpressionName(ReadOnlySpan<byte> expression, int nameStart, int nameLength)
+    {
+        return Encoding.UTF8.GetString(expression.Slice(nameStart, nameLength));
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private static bool IsSimpleIdentifierAscii(ReadOnlySpan<byte> identifier)
+    {
+        if (identifier.Length == 0 || !IsIdentifierStart(identifier[0]))
+        {
+            return false;
+        }
+
+        for (var i = 1; i < identifier.Length; i++)
+        {
+            if (!IsIdentifierPart(identifier[i]))
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private static bool IsGitHubIdentifierAscii(ReadOnlySpan<byte> identifier)
+    {
+        if (identifier.Length == 0 || !IsIdentifierStart(identifier[0]))
+        {
+            return false;
+        }
+
+        for (var i = 1; i < identifier.Length; i++)
+        {
+            var b = identifier[i];
+            if (!(IsIdentifierPart(b) || b == (byte)'-'))
+            {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     // AST Root Reference Detection
@@ -309,6 +564,125 @@ internal static class RunContextDirectUseAnalyzer
             }
 
             if (ContainsContextRootReference(arguments[argIndex], functionCallNodeId, nodes, arguments, expression, rootToken))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    internal static bool ContainsInputsReference(
+        int nodeId,
+        int parentId,
+        ExpressionNode[] nodes,
+        int[] arguments,
+        ReadOnlySpan<byte> expression)
+    {
+        if (nodeId < 0 || nodeId >= nodes.Length)
+        {
+            return false;
+        }
+
+        var node = nodes[nodeId];
+        if (node.Kind == ExpressionNodeKind.Identifier
+            && IsContextRootIdentifier(nodeId, parentId, nodes)
+            && EqualsAsciiIgnoreCase(node.Token.AsSpan(expression), "inputs"u8))
+        {
+            return true;
+        }
+
+        if (node.Kind is ExpressionNodeKind.MemberAccess
+            or ExpressionNodeKind.IndexAccess
+            or ExpressionNodeKind.WildcardAccess)
+        {
+            if (IsGithubEventInputsChain(node.Left, nodes, expression))
+            {
+                return true;
+            }
+        }
+
+        return node.Kind switch
+        {
+            ExpressionNodeKind.Unary => ContainsInputsReference(node.Left, nodeId, nodes, arguments, expression),
+            ExpressionNodeKind.Binary => ContainsInputsReference(node.Left, nodeId, nodes, arguments, expression)
+                || ContainsInputsReference(node.Right, nodeId, nodes, arguments, expression),
+            ExpressionNodeKind.MemberAccess => ContainsInputsReference(node.Left, nodeId, nodes, arguments, expression),
+            ExpressionNodeKind.WildcardAccess => ContainsInputsReference(node.Left, nodeId, nodes, arguments, expression),
+            ExpressionNodeKind.IndexAccess => ContainsInputsReference(node.Left, nodeId, nodes, arguments, expression)
+                || ContainsInputsReference(node.Right, nodeId, nodes, arguments, expression),
+            ExpressionNodeKind.FunctionCall => ContainsInputsReferenceInFunction(node, nodeId, nodes, arguments, expression),
+            _ => false,
+        };
+    }
+
+    internal static bool IsGithubEventInputsChain(int nodeId, ExpressionNode[] nodes, ReadOnlySpan<byte> expression)
+    {
+        if (nodeId < 0 || nodeId >= nodes.Length)
+        {
+            return false;
+        }
+
+        var node = nodes[nodeId];
+        if (node.Kind != ExpressionNodeKind.MemberAccess)
+        {
+            return false;
+        }
+
+        if (!EqualsAsciiIgnoreCase(node.Token.AsSpan(expression), "inputs"u8))
+        {
+            return false;
+        }
+
+        var leftNodeId = node.Left;
+        if (leftNodeId < 0 || leftNodeId >= nodes.Length)
+        {
+            return false;
+        }
+
+        var eventNode = nodes[leftNodeId];
+        if (eventNode.Kind != ExpressionNodeKind.MemberAccess
+            || !EqualsAsciiIgnoreCase(eventNode.Token.AsSpan(expression), "event"u8))
+        {
+            return false;
+        }
+
+        return IsIdentifierNode(eventNode.Left, nodes, expression, "github"u8);
+    }
+
+    internal static bool IsIdentifierNode(int nodeId, ExpressionNode[] nodes, ReadOnlySpan<byte> expression, ReadOnlySpan<byte> expected)
+    {
+        if (nodeId < 0 || nodeId >= nodes.Length)
+        {
+            return false;
+        }
+
+        var node = nodes[nodeId];
+        return node.Kind == ExpressionNodeKind.Identifier
+            && EqualsAsciiIgnoreCase(node.Token.AsSpan(expression), expected);
+    }
+
+    private static bool ContainsInputsReferenceInFunction(
+        ExpressionNode functionCallNode,
+        int functionCallNodeId,
+        ExpressionNode[] nodes,
+        int[] arguments,
+        ReadOnlySpan<byte> expression)
+    {
+        if (ContainsInputsReference(functionCallNode.Left, functionCallNodeId, nodes, arguments, expression))
+        {
+            return true;
+        }
+
+        for (var i = 0; i < functionCallNode.ArgCount; i++)
+        {
+            var argIndex = functionCallNode.ArgStart + i;
+            if (argIndex < 0 || argIndex >= arguments.Length)
+            {
+                continue;
+            }
+
+            if (ContainsInputsReference(arguments[argIndex], functionCallNodeId, nodes, arguments, expression))
             {
                 return true;
             }
@@ -414,6 +788,153 @@ internal static class RunContextDirectUseAnalyzer
         }
 
         return matchCount == 1;
+    }
+
+    // Shell Replacement Builders
+
+    internal static bool TryBuildShellVariableReplacementFromExpression(
+        ReadOnlySpan<byte> expression,
+        int nameStart,
+        int nameLength,
+        bool isPowerShell,
+        bool wrapInDoubleQuotes,
+        out string replacement)
+    {
+        replacement = string.Empty;
+        if (nameStart < 0 || nameLength <= 0 || nameStart + nameLength > expression.Length)
+        {
+            return false;
+        }
+
+        return TryBuildShellVariableReplacement(
+            expression.Slice(nameStart, nameLength),
+            isPowerShell,
+            wrapInDoubleQuotes,
+            out replacement);
+    }
+
+    internal static bool TryBuildShellVariableReplacement(string variableName, bool isPowerShell, bool wrapInDoubleQuotes, out string replacement)
+    {
+        if (string.IsNullOrEmpty(variableName))
+        {
+            replacement = string.Empty;
+            return false;
+        }
+
+        return TryBuildShellVariableReplacement(variableName.AsSpan(), isPowerShell, wrapInDoubleQuotes, out replacement);
+    }
+
+    internal static bool TryBuildShellVariableReplacement(ReadOnlySpan<char> variableName, bool isPowerShell, bool wrapInDoubleQuotes, out string replacement)
+    {
+        replacement = string.Empty;
+        if (variableName.Length == 0)
+        {
+            return false;
+        }
+
+        var prefix = isPowerShell ? "$env:" : "${";
+        var suffixLength = isPowerShell ? 0 : 1; // '}'
+        var quoteChars = wrapInDoubleQuotes ? 2 : 0;
+        var totalLength = quoteChars + prefix.Length + variableName.Length + suffixLength;
+
+        char[]? rented = null;
+        Span<char> buffer = totalLength <= 128
+            ? stackalloc char[totalLength]
+            : (rented = ArrayPool<char>.Shared.Rent(totalLength));
+
+        try
+        {
+            var destination = buffer[..totalLength];
+            var index = 0;
+            if (wrapInDoubleQuotes)
+            {
+                destination[index++] = '"';
+            }
+
+            prefix.AsSpan().CopyTo(destination[index..]);
+            index += prefix.Length;
+
+            variableName.CopyTo(destination[index..]);
+            index += variableName.Length;
+
+            if (!isPowerShell)
+            {
+                destination[index++] = '}';
+            }
+
+            if (wrapInDoubleQuotes)
+            {
+                destination[index] = '"';
+            }
+
+            replacement = new string(destination);
+            return true;
+        }
+        finally
+        {
+            if (rented is not null)
+            {
+                ArrayPool<char>.Shared.Return(rented);
+            }
+        }
+    }
+
+    internal static bool TryBuildShellVariableReplacement(ReadOnlySpan<byte> variableName, bool isPowerShell, bool wrapInDoubleQuotes, out string replacement)
+    {
+        replacement = string.Empty;
+        if (variableName.Length == 0)
+        {
+            return false;
+        }
+
+        var prefix = isPowerShell ? "$env:" : "${";
+        var suffixLength = isPowerShell ? 0 : 1; // '}'
+        var quoteChars = wrapInDoubleQuotes ? 2 : 0;
+        var totalLength = quoteChars + prefix.Length + variableName.Length + suffixLength;
+
+        char[]? rented = null;
+        Span<char> buffer = totalLength <= 128
+            ? stackalloc char[totalLength]
+            : (rented = ArrayPool<char>.Shared.Rent(totalLength));
+
+        try
+        {
+            var destination = buffer[..totalLength];
+            var index = 0;
+            if (wrapInDoubleQuotes)
+            {
+                destination[index++] = '"';
+            }
+
+            prefix.AsSpan().CopyTo(destination[index..]);
+            index += prefix.Length;
+
+            for (var i = 0; i < variableName.Length; i++)
+            {
+                destination[index + i] = (char)variableName[i];
+            }
+
+            index += variableName.Length;
+            if (!isPowerShell)
+            {
+                destination[index++] = '}';
+            }
+
+            if (wrapInDoubleQuotes)
+            {
+                destination[index] = '"';
+            }
+
+            replacement = new string(destination);
+            return true;
+        }
+        finally
+        {
+            if (rented is not null)
+            {
+                ArrayPool<char>.Shared.Return(rented);
+            }
+        }
     }
 
     // HereDoc Detection
@@ -1097,77 +1618,12 @@ internal static class RunContextDirectUseAnalyzer
     internal static bool TryConsumeGitHubMemberOrBracketName(ReadOnlySpan<byte> expression, ref int index, out string name)
     {
         name = string.Empty;
-        if (index >= expression.Length)
+        if (!TryConsumeGitHubMemberOrBracketNameBounds(expression, ref index, out var nameStart, out var nameLength))
         {
             return false;
         }
 
-        if (expression[index] == (byte)'.')
-        {
-            index++;
-            SkipWhiteSpace(expression, ref index);
-            if (!TryReadGitHubIdentifier(expression, ref index, out name))
-            {
-                return false;
-            }
-
-            SkipWhiteSpace(expression, ref index);
-            return index == expression.Length;
-        }
-
-        if (expression[index] != (byte)'[')
-        {
-            return false;
-        }
-
-        index++;
-        SkipWhiteSpace(expression, ref index);
-        if (index >= expression.Length)
-        {
-            return false;
-        }
-
-        var quote = expression[index];
-        if (quote is not ((byte)'\'' or (byte)'"'))
-        {
-            return false;
-        }
-
-        index++;
-        var start = index;
-        while (index < expression.Length && expression[index] != quote)
-        {
-            index++;
-        }
-
-        if (index >= expression.Length)
-        {
-            return false;
-        }
-
-        var nameBytes = expression[start..index];
-        index++;
-        SkipWhiteSpace(expression, ref index);
-        if (index >= expression.Length || expression[index] != (byte)']')
-        {
-            return false;
-        }
-
-        index++;
-        SkipWhiteSpace(expression, ref index);
-        if (index != expression.Length)
-        {
-            return false;
-        }
-
-        // Validate as a GitHub identifier (allows hyphens)
-        var parsedIndex = 0;
-        if (!TryReadGitHubIdentifier(nameBytes, ref parsedIndex, out name) || parsedIndex != nameBytes.Length)
-        {
-            name = string.Empty;
-            return false;
-        }
-
-        return true;
+        name = DecodeExpressionName(expression, nameStart, nameLength);
+        return name.Length > 0;
     }
 }

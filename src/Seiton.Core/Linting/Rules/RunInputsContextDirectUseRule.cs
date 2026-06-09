@@ -100,7 +100,7 @@ public sealed class RunInputsContextDirectUseRule() : RuleBase(RuleId.RunInputsC
                     location,
                     fix);
             }
-            else if (!TryParseSimpleInputsReference(expression, out _))
+            else if (!TryParseSimpleInputsReferenceBounds(expression, out _, out _, out _))
             {
                 // Composite expression — suggest env: block mapping
                 AddStepError(
@@ -129,7 +129,7 @@ public sealed class RunInputsContextDirectUseRule() : RuleBase(RuleId.RunInputsC
             return false;
         }
 
-        if (!TryParseSimpleInputsReference(expression, out var inputName))
+        if (!TryParseSimpleInputsReference(expression, out var inputName, out var isGithubEventInputs))
         {
             return TryBuildCompoundExpressionFix(step, runNode, expression, expressionBodyStart, expressionLength, out fix);
         }
@@ -156,9 +156,10 @@ public sealed class RunInputsContextDirectUseRule() : RuleBase(RuleId.RunInputsC
                 return false;
             }
 
-            var replacement = isPowerShell.Value
-                ? "$env:" + variableName
-                : "${" + variableName + "}";
+            if (!TryBuildShellVariableReplacement(variableName, isPowerShell.Value, wrapInDoubleQuotes: false, out var replacement))
+            {
+                return false;
+            }
 
             fix = new DiagnosticFix(
                 "replace direct inputs context expansion with mapped shell variable",
@@ -172,7 +173,7 @@ public sealed class RunInputsContextDirectUseRule() : RuleBase(RuleId.RunInputsC
             return false;
         }
 
-        var expressionString = BuildInputsExpressionString(inputName, expression);
+        var expressionString = BuildInputsExpressionString(inputName, isGithubEventInputs);
         var envVarName = DeduplicateEnvName(Arena, InputNameToEnvVarName(inputName),
             step.Env, _currentJob?.Env, _currentWorkflow?.Env);
         if (envVarName is null)
@@ -186,9 +187,10 @@ public sealed class RunInputsContextDirectUseRule() : RuleBase(RuleId.RunInputsC
             return false;
         }
 
-        var shellReplacement = isPowerShell2.Value
-            ? "$env:" + envVarName
-            : "${" + envVarName + "}";
+        if (!TryBuildShellVariableReplacement(envVarName, isPowerShell2.Value, wrapInDoubleQuotes: false, out var shellReplacement))
+        {
+            return false;
+        }
 
         if (!TryBuildStepEnvInsertionEdit(Arena, Config.Utf8Yaml, step, envVarName, expressionString, out var insertEdit))
         {
@@ -234,9 +236,10 @@ public sealed class RunInputsContextDirectUseRule() : RuleBase(RuleId.RunInputsC
             return false;
         }
 
-        var shellReplacement = isPowerShell.Value
-            ? "$env:" + envVarName
-            : "${" + envVarName + "}";
+        if (!TryBuildShellVariableReplacement(envVarName, isPowerShell.Value, wrapInDoubleQuotes: false, out var shellReplacement))
+        {
+            return false;
+        }
 
         if (!TryBuildStepEnvInsertionEdit(Arena, Config.Utf8Yaml, step, envVarName, expressionString, out var insertEdit))
         {
@@ -387,10 +390,9 @@ public sealed class RunInputsContextDirectUseRule() : RuleBase(RuleId.RunInputsC
     }
 
     /// <summary>Builds the expression string for the env value (e.g. "inputs.target" or "github.event.inputs.target").</summary>
-    private static string BuildInputsExpressionString(string inputName, ReadOnlySpan<byte> expression)
+    private static string BuildInputsExpressionString(string inputName, bool isGithubEventInputs)
     {
-        var index = 0;
-        if (TryConsumeGithubEventInputsRoot(expression, ref index))
+        if (isGithubEventInputs)
         {
             return "github.event.inputs." + inputName;
         }
@@ -420,200 +422,19 @@ public sealed class RunInputsContextDirectUseRule() : RuleBase(RuleId.RunInputsC
 
     private static bool TryParseSimpleInputsReference(ReadOnlySpan<byte> expression, out string inputName)
     {
+        return TryParseSimpleInputsReference(expression, out inputName, out _);
+    }
+
+    private static bool TryParseSimpleInputsReference(ReadOnlySpan<byte> expression, out string inputName, out bool isGithubEventInputs)
+    {
         inputName = string.Empty;
-
-        var index = 0;
-        if (TryConsumeSimpleInputsRoot(expression, ref index))
-        {
-            return TryConsumeGitHubMemberOrBracketName(expression, ref index, out inputName);
-        }
-
-        index = 0;
-        if (!TryConsumeGithubEventInputsRoot(expression, ref index))
+        if (!TryParseSimpleInputsReferenceBounds(expression, out isGithubEventInputs, out var nameStart, out var nameLength))
         {
             return false;
         }
 
-        return TryConsumeGitHubMemberOrBracketName(expression, ref index, out inputName);
+        inputName = DecodeExpressionName(expression, nameStart, nameLength);
+        return inputName.Length > 0;
     }
 
-    private static bool TryConsumeSimpleInputsRoot(ReadOnlySpan<byte> expression, ref int index)
-    {
-        if (!ConsumeWordIgnoreCase(expression, ref index, "inputs"u8))
-        {
-            return false;
-        }
-
-        SkipWhiteSpace(expression, ref index);
-        return true;
-    }
-
-    private static bool TryConsumeGithubEventInputsRoot(ReadOnlySpan<byte> expression, ref int index)
-    {
-        if (!ConsumeWordIgnoreCase(expression, ref index, "github"u8))
-        {
-            return false;
-        }
-
-        SkipWhiteSpace(expression, ref index);
-        if (index >= expression.Length || expression[index] != (byte)'.')
-        {
-            return false;
-        }
-
-        index++;
-        SkipWhiteSpace(expression, ref index);
-        if (!ConsumeWordIgnoreCase(expression, ref index, "event"u8))
-        {
-            return false;
-        }
-
-        SkipWhiteSpace(expression, ref index);
-        if (index >= expression.Length || expression[index] != (byte)'.')
-        {
-            return false;
-        }
-
-        index++;
-        SkipWhiteSpace(expression, ref index);
-        if (!ConsumeWordIgnoreCase(expression, ref index, "inputs"u8))
-        {
-            return false;
-        }
-
-        SkipWhiteSpace(expression, ref index);
-        return true;
-    }
-
-    // Inputs-specific AST detection
-
-    private static bool ContainsInputsReference(
-        int nodeId,
-        int parentId,
-        ExpressionNode[] nodes,
-        int[] arguments,
-        ReadOnlySpan<byte> expression)
-    {
-        if (nodeId < 0 || nodeId >= nodes.Length)
-        {
-            return false;
-        }
-
-        var node = nodes[nodeId];
-
-        // Case 1: root `inputs` identifier — covers ${{ inputs.* }} and ${{ inputs['*'] }}
-        if (node.Kind == ExpressionNodeKind.Identifier
-            && IsContextRootIdentifier(nodeId, parentId, nodes)
-            && EqualsAsciiIgnoreCase(node.Token.AsSpan(expression), "inputs"u8))
-        {
-            return true;
-        }
-
-        // Case 2: accessing a property or index of github.event.inputs — covers ${{ github.event.inputs.* }}
-        if (node.Kind is ExpressionNodeKind.MemberAccess
-            or ExpressionNodeKind.IndexAccess
-            or ExpressionNodeKind.WildcardAccess)
-        {
-            if (IsGithubEventInputsChain(node.Left, nodes, expression))
-            {
-                return true;
-            }
-        }
-
-        return node.Kind switch
-        {
-            ExpressionNodeKind.Unary => ContainsInputsReference(node.Left, nodeId, nodes, arguments, expression),
-            ExpressionNodeKind.Binary => ContainsInputsReference(node.Left, nodeId, nodes, arguments, expression)
-                || ContainsInputsReference(node.Right, nodeId, nodes, arguments, expression),
-            ExpressionNodeKind.MemberAccess => ContainsInputsReference(node.Left, nodeId, nodes, arguments, expression),
-            ExpressionNodeKind.WildcardAccess => ContainsInputsReference(node.Left, nodeId, nodes, arguments, expression),
-            ExpressionNodeKind.IndexAccess => ContainsInputsReference(node.Left, nodeId, nodes, arguments, expression)
-                || ContainsInputsReference(node.Right, nodeId, nodes, arguments, expression),
-            ExpressionNodeKind.FunctionCall => ContainsInputsReferenceInFunction(node, nodeId, nodes, arguments, expression),
-            _ => false,
-        };
-    }
-
-    private static bool ContainsInputsReferenceInFunction(
-        ExpressionNode functionCallNode,
-        int functionCallNodeId,
-        ExpressionNode[] nodes,
-        int[] arguments,
-        ReadOnlySpan<byte> expression)
-    {
-        if (ContainsInputsReference(functionCallNode.Left, functionCallNodeId, nodes, arguments, expression))
-        {
-            return true;
-        }
-
-        for (var i = 0; i < functionCallNode.ArgCount; i++)
-        {
-            var argIndex = functionCallNode.ArgStart + i;
-            if (argIndex < 0 || argIndex >= arguments.Length)
-            {
-                continue;
-            }
-
-            if (ContainsInputsReference(arguments[argIndex], functionCallNodeId, nodes, arguments, expression))
-            {
-                return true;
-            }
-        }
-
-        return false;
-    }
-
-    private static bool IsGithubEventInputsChain(int nodeId, ExpressionNode[] nodes, ReadOnlySpan<byte> expression)
-    {
-        if (nodeId < 0 || nodeId >= nodes.Length)
-        {
-            return false;
-        }
-
-        var node = nodes[nodeId];
-        if (node.Kind != ExpressionNodeKind.MemberAccess)
-        {
-            return false;
-        }
-
-        if (!EqualsAsciiIgnoreCase(node.Token.AsSpan(expression), "inputs"u8))
-        {
-            return false;
-        }
-
-        return IsGithubEventChain(node.Left, nodes, expression);
-    }
-
-    private static bool IsGithubEventChain(int nodeId, ExpressionNode[] nodes, ReadOnlySpan<byte> expression)
-    {
-        if (nodeId < 0 || nodeId >= nodes.Length)
-        {
-            return false;
-        }
-
-        var node = nodes[nodeId];
-        if (node.Kind != ExpressionNodeKind.MemberAccess)
-        {
-            return false;
-        }
-
-        if (!EqualsAsciiIgnoreCase(node.Token.AsSpan(expression), "event"u8))
-        {
-            return false;
-        }
-
-        return IsIdentifierNode(node.Left, nodes, expression, "github"u8);
-    }
-
-    private static bool IsIdentifierNode(int nodeId, ExpressionNode[] nodes, ReadOnlySpan<byte> expression, ReadOnlySpan<byte> expected)
-    {
-        if (nodeId < 0 || nodeId >= nodes.Length)
-        {
-            return false;
-        }
-
-        var node = nodes[nodeId];
-        return node.Kind == ExpressionNodeKind.Identifier
-            && EqualsAsciiIgnoreCase(node.Token.AsSpan(expression), expected);
-    }
 }

@@ -83,6 +83,17 @@ public sealed partial class RuleInterfaceTests
             """,
             ["must not reference", "inputs.*", "shell variables"]),
             new RuleCase(
+            "ng-run-uses-inputs-dot-access-with-whitespace",
+            """
+            on: workflow_dispatch
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - run: echo "${{ inputs . target }}"
+            """,
+            ["must not reference", "inputs.*", "shell variables"]),
+            new RuleCase(
             "ng-run-uses-github-event-inputs-dot-access",
             """
             on: workflow_dispatch
@@ -91,6 +102,28 @@ public sealed partial class RuleInterfaceTests
                     runs-on: ubuntu-latest
                     steps:
                         - run: echo "${{ github.event.inputs.target }}"
+            """,
+            ["must not reference", "inputs.*", "shell variables"]),
+            new RuleCase(
+            "ng-run-uses-github-event-inputs-dot-access-with-whitespace",
+            """
+            on: workflow_dispatch
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - run: echo "${{ github . event . inputs . target }}"
+            """,
+            ["must not reference", "inputs.*", "shell variables"]),
+            new RuleCase(
+            "ng-run-uses-github-event-inputs-bracket-with-whitespace",
+            """
+            on: workflow_dispatch
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - run: echo "${{ github . event . inputs [ 'target' ] }}"
             """,
             ["must not reference", "inputs.*", "shell variables"]),
             new RuleCase(
