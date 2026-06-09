@@ -135,6 +135,11 @@ public sealed class RunEnvContextDirectUseRule() : RuleBase(RuleId.RunEnvContext
             return false;
         }
 
+        if (IsInsideShellSingleQuotes(Config.Utf8Yaml, absoluteOffset))
+        {
+            return false;
+        }
+
         if (!TryParseSimpleContextReference(expression, "env"u8, out var variableName))
         {
             return false;

@@ -131,3 +131,82 @@ GitHub Actions の式展開（`${{ ... }}`）はシングルクォート内で�
 
 - 「安全に意味保存できるか」を fix 付与の最優先条件にする
 - 自動修正は便利性よりも非破壊性を優先する
+
+## P0 実装記録（完了）
+
+### 実装内容
+
+- `RunEnvContextDirectUseRule.TryBuildFix` に `IsInsideShellSingleQuotes` 判定を追加
+- シングルクォート内部の `${{ env.* }}` は診断のみ（`Fix` 非付与）に変更
+- 既存の heredoc no-expand 判定と組み合わせ、安全側で fix を抑制
+
+### テスト（Red → Green）
+
+- 追加: `LintEngine_RunEnvContextDirectUse_Fix_DoesNotAttachFix_InShellSingleQuotes`
+  - ケース: `run: echo '${{ env.VERSION }}'`
+  - 期待: `diagnostic.Fix == null`
+- Red 確認: 変更前は `Fix` が付いて失敗
+- Green 確認: 実装後に当該テスト、および `LintEngine_RunEnvContextDirectUse*` 群が全件成功
+
+### 回帰確認
+
+- `dotnet test --project tests/Seiton.Core.Tests --treenode-filter /*/*/RuleInterfaceTests/LintEngine_RunEnvContextDirectUse*` は成功
+- `dotnet test` 全体は実行済みだが、今回変更と無関係な既知失敗（`Seiton.Update.Tests` の raw source hash 差分、`Seiton.Tests` のパス表現差分）で失敗
+
+### ベンチマーク
+
+実行コマンド（前後共通）:
+
+```shell
+dotnet run -c Release --project src/Seiton.Benchmark --filter "*CoreLintBenchmark*"
+```
+
+結果（ShortRun）:
+
+| Case | Before Mean | After Mean | 変化 | Before Alloc | After Alloc | 変化 |
+|---|---:|---:|---:|---:|---:|---:|
+| Small / Fix=false | 173.3 us | 227.2 us | +31.1% | 8.67 KB | 8.81 KB | +1.6% |
+| Small / Fix=true | 194.8 us | 302.0 us | +55.0% | 10.13 KB | 10.27 KB | +1.4% |
+| Medium / Fix=false | 3,471.1 us | 3,079.7 us | -11.3% | 68.52 KB | 68.66 KB | +0.2% |
+| Medium / Fix=true | 4,433.1 us | 4,909.9 us | +10.8% | 81.88 KB | 82.00 KB | +0.1% |
+| Large / Fix=false | 49,977.3 us | 52,249.8 us | +4.5% | 325.53 KB | 325.53 KB | 0.0% |
+| Large / Fix=true | 64,850.6 us | 77,876.0 us | +20.1% | 380.38 KB | 380.38 KB | 0.0% |
+
+評価:
+
+- Allocated は全ケースでほぼ不変（0.0%〜+1.6%）で、追加判定は実質ゼロアロケーション
+- Mean は ShortRun のばらつきが大きく、特に Small/Fix=true と Large/Fix=true で揺れが大きい
+- 本変更は `IsInsideShellSingleQuotes` を 1 回追加するだけで、計算量は「式位置までの同一行走査」増分に限定される
+
+改善策:
+
+- P2 で `run-env-context-direct-use` 専用の rule-focused benchmark を追加し、ノイズの少ない比較に切り替える
+- CoreLintBenchmark は回帰監視継続しつつ、性能判定は複数回計測の中央値で評価する
+
+### ユーザーファースト API 観点
+
+- 危険な自動修正を抑制し、ユーザーの意図しない実行時挙動変更を防止
+- 診断自体は維持するため、修正対象の発見性は落とさない
+- 既存の安全ケース（クォート外、単純式）は従来どおり自動修正可能
+
+### 仕様整合性
+
+- `.github/docs/Seiton_Linter_spec.md` の fixability 記述を更新
+  - `run-env-context-direct-use` は「quoted heredoc に加えて shell single-quoted strings も no-fix」と明記
+- `docs/rules.md` の `run-env-context-direct-use` セクションも同様に更新
+
+### 実装レビュー（反復）
+
+レビューラウンド 1 指摘:
+
+- 指摘: `run-env-context-direct-use` だけが single-quote no-fix を持たず、`run-inputs` / `run-secrets` と挙動不整合
+- 対応: `TryBuildFix` に `IsInsideShellSingleQuotes` を追加して整合化
+
+レビューラウンド 2 指摘:
+
+- 指摘: 実装変更後、仕様文言が heredoc 例外のみで不一致
+- 対応: `Seiton_Linter_spec.md` と `docs/rules.md` を更新して一致
+
+レビューラウンド 3 指摘:
+
+- 指摘なし

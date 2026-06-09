@@ -1971,6 +1971,25 @@ public sealed partial class RuleInterfaceTests
     }
 
     [Test]
+    public async Task LintEngine_RunEnvContextDirectUse_Fix_DoesNotAttachFix_InShellSingleQuotes()
+    {
+        var yaml = """
+        on: push
+        jobs:
+            build:
+                runs-on: ubuntu-latest
+                steps:
+                    - run: echo '${{ env.VERSION }}'
+        """;
+
+        using var result = new LintEngine([new RunEnvContextDirectUseRule()])
+            .Check(Encoding.UTF8.GetBytes(yaml), "run-env-fix-single-quote.yml");
+        var diagnostic = result.Diagnostics.First(x => x.RuleId == "run-env-context-direct-use");
+
+        await Assert.That(diagnostic.Fix).IsNull();
+    }
+
+    [Test]
     public async Task LintEngine_RunEnvContextDirectUse_Fix_ExpressionStepShell_DoesNotAttachFix()
     {
         var yaml = """

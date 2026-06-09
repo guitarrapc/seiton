@@ -1628,7 +1628,7 @@ jobs:
 
 - Use `$VAR` for POSIX shells and `$env:VAR` for PowerShell.
 - Compound expressions are not auto-fixed; move them into `env:` first, then reference shell variables.
-- Review no-expand heredocs and single-quoted regions manually.
+- No auto-fix is attached inside no-expand heredocs and shell single-quoted regions; review these manually.
 
 Replace `${{ env.VAR }}` with `$VAR` (bash/sh) or `$env:VAR` (PowerShell).
 
