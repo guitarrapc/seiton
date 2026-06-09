@@ -221,28 +221,41 @@ public sealed class PlaygroundLintRunnerAsyncFixTests : IDisposable
                   - run: npm install && npm test
             """;
 
-        PlaygroundLintRunner.SetConfig("""
+        var configDiagnostics = PlaygroundLintRunner.SetConfig("""
             fix:
               defaults:
                 job-timeout-minutes: 15
               pinning:
                 enable-network: true
-                min-age-days: 14
             """);
+        await Assert.That(configDiagnostics).IsEquivalentTo("[]"u8.ToArray());
 
-        // Resolver returns different SHAs for different actions
+        const string checkoutSha = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+        const string cacheSha = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
+        const string checkoutTagComment = "mock-checkout-tag";
+        const string cacheTagComment = "mock-cache-tag";
+
+        // Resolver returns fully deterministic fixtures (no external release dependency).
         PlaygroundLintRunner.ActionShaResolverOverride = new MultiFakeActionShaResolver(new Dictionary<string, (string sha, string comment)>
         {
-            ["actions/checkout"] = ("de0fac2e4500dabe0009e67214ff5f5447ce83dd", "v6.0.2"),
-            ["actions/cache"] = ("0057852bfaa89a56745cba8c7296529d2fc39830", "v4.3.0"),
+          ["actions/checkout"] = (checkoutSha, checkoutTagComment),
+          ["actions/cache"] = (cacheSha, cacheTagComment),
         });
 
         // Act
         var result = await PlaygroundLintRunner.ApplyAllFixesAsync(yaml, ".github/workflows/ci.yml");
 
-        // Assert: both actions are pinned correctly
-        await Assert.That(result.Yaml).Contains("actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2");
-        await Assert.That(result.Yaml).Contains("actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0");
+        // Assert: both actions were converted from tag refs to full SHA refs.
+        await Assert.That(result.Yaml).DoesNotContain("actions/checkout@v6");
+        await Assert.That(result.Yaml).DoesNotContain("actions/cache@v4");
+        await Assert.That(System.Text.RegularExpressions.Regex.IsMatch(
+          result.Yaml,
+          @"actions/checkout@[0-9a-f]{40}\s#\smock-checkout-tag"))
+          .IsTrue();
+        await Assert.That(System.Text.RegularExpressions.Regex.IsMatch(
+          result.Yaml,
+          @"actions/cache@[0-9a-f]{40}\s#\smock-cache-tag"))
+          .IsTrue();
         // Assert: timeout-minutes was also inserted by offline fix
         await Assert.That(result.Yaml).Contains("timeout-minutes: 15");
         // Assert: no corruption — persist-credentials line is intact
