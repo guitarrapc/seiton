@@ -16,7 +16,7 @@
     },
     {
       "fileName": "actions_setup-dotnet.action.yml",
-      "sha256": "sha256:c5f836742c82b726497caac0dee66e58c97b03373a53f624fe4e2ffe5ed8d7e6"
+      "sha256": "sha256:17151fbd59c8fec8d7b19947a232a428a9b0a21030fe69ece21d24312ecb5fa5"
     },
     {
       "fileName": "actions_setup-go.action.yml",
@@ -36,7 +36,7 @@
     },
     {
       "fileName": "docker_login-action.action.yml",
-      "sha256": "sha256:e15d3a9a4c036bdcd4ee245c494a952c522c4d55e79d276d57ed849ce76e39f2"
+      "sha256": "sha256:e65e6bdc57fc10adcee036a393229aae6b9a9f451b69528f4ff50d4b0e93f156"
     },
     {
       "fileName": "octokit_request-action.action.yml",
@@ -266,6 +266,10 @@
         },
         {
           "name": "config-file",
+          "required": false
+        },
+        {
+          "name": "dotnet-channel",
           "required": false
         },
         {

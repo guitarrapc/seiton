@@ -4,7 +4,7 @@
   "rawSources": [
     {
       "fileName": "aquasecurity_setup-trivy.action.yaml",
-      "sha256": "sha256:7fe5630d90ffc0dd016fe27e9ff42077ab60874dcbc2a3419523c0f9ef2ebfff"
+      "sha256": "sha256:ebbd967df4bb297e9ef9212878988b326a9eecbbead97e695c393efc01afb922"
     }
   ],
   "actions": [

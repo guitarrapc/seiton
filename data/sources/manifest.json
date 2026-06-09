@@ -6,7 +6,7 @@
       "sourceUrls": [
         "https://raw.githubusercontent.com/github/docs/main/content/actions/reference/workflows-and-actions/contexts.md"
       ],
-      "fetchedAtUtc": "2026-05-12T18:32:18.8943252\u002B00:00",
+      "fetchedAtUtc": "2026-06-09T05:43:13.9266418\u002B00:00",
       "rawFileHashes": {
         "contexts.docs.md": "sha256:4f21e3affbc4aac5fbf17358038265fc473592829138af2e364288d77261870a"
       }
@@ -16,7 +16,7 @@
       "sourceUrls": [
         "https://raw.githubusercontent.com/github/docs/main/content/actions/reference/workflows-and-actions/contexts.md"
       ],
-      "fetchedAtUtc": "2026-05-12T18:32:22.1234872\u002B00:00",
+      "fetchedAtUtc": "2026-06-09T05:43:18.0458648\u002B00:00",
       "rawFileHashes": {
         "contexts.docs.md": "sha256:4f21e3affbc4aac5fbf17358038265fc473592829138af2e364288d77261870a"
       }
@@ -26,9 +26,9 @@
       "sourceUrls": [
         "https://docs.github.com/en/webhooks/webhook-events-and-payloads"
       ],
-      "fetchedAtUtc": "2026-05-12T18:32:23.5314370\u002B00:00",
+      "fetchedAtUtc": "2026-06-09T05:43:22.3091979\u002B00:00",
       "rawFileHashes": {
-        "webhook-events-and-payloads.html": "sha256:e275618a2c3f435ae1fd2ef240a0cf941b1d136a55da2a836a5fdf7ec9db2d0c"
+        "webhook-events-and-payloads.html": "sha256:0d4e74ff4f328ff2a341279e1c5fb1999bc9f01145c8912113a7f4d68648b0c6"
       }
     },
     {
@@ -36,9 +36,9 @@
       "sourceUrls": [
         "https://raw.githubusercontent.com/github/docs/main/content/actions/reference/workflows-and-actions/workflow-syntax.md"
       ],
-      "fetchedAtUtc": "2026-05-12T18:32:23.3621431\u002B00:00",
+      "fetchedAtUtc": "2026-06-09T05:43:20.1181594\u002B00:00",
       "rawFileHashes": {
-        "workflow-syntax.md": "sha256:21872caf2c3aa9c4d60f0dd75ac652b4e7a9ccb5cdb7b30a6fcf4f8b9e58226b"
+        "workflow-syntax.md": "sha256:4f8cefcf8a390c4d3bff9f6601f444a7040b6ec0e75bcb744186017928bce041"
       }
     },
     {
@@ -46,7 +46,7 @@
       "sourceUrls": [
         "https://raw.githubusercontent.com/github/docs/main/content/actions/reference/workflows-and-actions/expressions.md"
       ],
-      "fetchedAtUtc": "2026-05-12T18:32:22.4127580\u002B00:00",
+      "fetchedAtUtc": "2026-06-09T05:43:18.3788303\u002B00:00",
       "rawFileHashes": {
         "expressions.docs.md": "sha256:d2c6a4492f4302046a35c5bf4ca402302ca2e8c5547febc07ced3e00c1450865"
       }
@@ -56,7 +56,7 @@
       "sourceUrls": [
         "https://data.iana.org/time-zones/tzdb/tzdata.zi"
       ],
-      "fetchedAtUtc": "2026-05-12T18:32:22.7986070\u002B00:00",
+      "fetchedAtUtc": "2026-06-09T05:43:19.5566780\u002B00:00",
       "rawFileHashes": {
         "tzdata.zi": "sha256:e500467b589740d2c0311c844896f2f3727ffc4baff7e82d65d0f8c1e7e6f0c1"
       }
@@ -66,7 +66,7 @@
       "sourceUrls": [
         "https://raw.githubusercontent.com/github/docs/main/data/reusables/actions/github-token-available-permissions.md"
       ],
-      "fetchedAtUtc": "2026-05-12T18:32:22.6751605\u002B00:00",
+      "fetchedAtUtc": "2026-06-09T05:43:18.6540345\u002B00:00",
       "rawFileHashes": {
         "github-token-available-permissions.md": "sha256:ea8a527d91e4b07e30e01575809aa4f913533ccfd622cfe99490789ac365d3a2"
       }
@@ -88,17 +88,17 @@
         "https://raw.githubusercontent.com/reviewdog/action-actionlint/v1/action.yml",
         "https://raw.githubusercontent.com/rhysd/action-setup-vim/v1/action.yml"
       ],
-      "fetchedAtUtc": "2026-05-12T18:32:21.8795862\u002B00:00",
+      "fetchedAtUtc": "2026-06-09T05:43:16.9053693\u002B00:00",
       "rawFileHashes": {
         "actions_cache.action.yml": "sha256:c04edf35104c16c8944076df01561748bac9cd10941417e467a236e508e52dda",
         "actions_checkout.action.yml": "sha256:8295fcc7299d02005f7c3a7f8a6b59a0c4e0577697b471c0e90aa5d4c6212130",
         "actions_download-artifact.action.yml": "sha256:e98559b7a31ba31be4709f20d22102dc2737fa630f69a339eb89981151e505fe",
-        "actions_setup-dotnet.action.yml": "sha256:c5f836742c82b726497caac0dee66e58c97b03373a53f624fe4e2ffe5ed8d7e6",
+        "actions_setup-dotnet.action.yml": "sha256:17151fbd59c8fec8d7b19947a232a428a9b0a21030fe69ece21d24312ecb5fa5",
         "actions_setup-go.action.yml": "sha256:cbfae748992b96b9a1bfa3f1679d17c898c78375aad8a0d0184820683c82c482",
         "actions_setup-node.action.yml": "sha256:ad45f1922115116fb4706651d0a9262332bc4e4f11eb2021e09789dd1af18085",
         "actions_stale.action.yml": "sha256:42c2129639c5e66ee659a85f3ab6bc67a05f46f1691f9fc1d2575035e30d06f4",
         "actions_upload-artifact.action.yml": "sha256:c5979822866a72362e609844b6ebe77d4b7e759af68cc1c2c425dcf51481fab4",
-        "docker_login-action.action.yml": "sha256:e15d3a9a4c036bdcd4ee245c494a952c522c4d55e79d276d57ed849ce76e39f2",
+        "docker_login-action.action.yml": "sha256:e65e6bdc57fc10adcee036a393229aae6b9a9f451b69528f4ff50d4b0e93f156",
         "octokit_request-action.action.yml": "sha256:bb286e504a0e382a926ee922bd1cd2dd15d390b60220cc9bf97e442db65ebd80",
         "pypa_gh-action-pypi-publish.action.yml": "sha256:31014244416b6a8b44882377770964566806e4510acb2bab5b36674ad36b0006",
         "reviewdog_action-actionlint.action.yml": "sha256:89826862aec8a9939cdb27e189335acb47d241f0f2df5ded462b2d21aa073c0c",
@@ -111,10 +111,10 @@
         "https://docs.github.com/en/actions/reference/runners/github-hosted-runners.md",
         "https://docs.github.com/en/actions/reference/runners/larger-runners.md"
       ],
-      "fetchedAtUtc": "2026-05-12T18:32:22.0479482\u002B00:00",
+      "fetchedAtUtc": "2026-06-09T05:43:17.9016087\u002B00:00",
       "rawFileHashes": {
-        "github-hosted-runners.docs.md": "sha256:d9c99ee80c6bf0cd3f0681ed5de16df944e5c613c11aff17331df4f8079435aa",
-        "larger-runners.docs.md": "sha256:cc293fa44c032b6b01c2922d9973329142b48b943987e0b25ae65b3905305bb8"
+        "github-hosted-runners.docs.md": "sha256:f268d962513d10bfc8a4f1b390fe78ffb33ff73062d3fd88ebe022494c0bbc7c",
+        "larger-runners.docs.md": "sha256:537d47d45bd3b7b02a542d8e640352b6ac5a02f204f273981f115f17c8917fc8"
       }
     },
     {
@@ -122,7 +122,7 @@
       "sourceUrls": [
         "https://raw.githubusercontent.com/github/docs/main/data/reusables/actions/supported-shells.md"
       ],
-      "fetchedAtUtc": "2026-05-12T18:32:23.0749427\u002B00:00",
+      "fetchedAtUtc": "2026-06-09T05:43:19.8304893\u002B00:00",
       "rawFileHashes": {
         "supported-shells.md": "sha256:49b49c756f8c6f47a91111d5e46363526ff101d4d3095012b9b9df3b4cb733cf"
       }
@@ -132,9 +132,9 @@
       "sourceUrls": [
         "https://raw.githubusercontent.com/aquasecurity/setup-trivy/main/action.yaml"
       ],
-      "fetchedAtUtc": "2026-05-17T07:28:45.1190823\u002B00:00",
+      "fetchedAtUtc": "2026-06-09T05:43:20.4042760\u002B00:00",
       "rawFileHashes": {
-        "aquasecurity_setup-trivy.action.yaml": "sha256:7fe5630d90ffc0dd016fe27e9ff42077ab60874dcbc2a3419523c0f9ef2ebfff"
+        "aquasecurity_setup-trivy.action.yaml": "sha256:ebbd967df4bb297e9ef9212878988b326a9eecbbead97e695c393efc01afb922"
       }
     },
     {
@@ -143,10 +143,10 @@
         "https://json.schemastore.org/github-workflow.json",
         "https://raw.githubusercontent.com/github/docs/main/content/actions/reference/workflows-and-actions/events-that-trigger-workflows.md"
       ],
-      "fetchedAtUtc": "2026-05-12T18:32:18.5923466\u002B00:00",
+      "fetchedAtUtc": "2026-06-09T05:43:13.5087236\u002B00:00",
       "rawFileHashes": {
-        "github-workflow.schema.json": "sha256:30e8f011e5337e90459776a2e01d8fd17ae199904b8ef12a6fd715edf599d79b",
-        "events-that-trigger-workflows.docs.md": "sha256:f7f0c636c2383018b01710c0197a1f770463c6872c2d387872698de7f9cef5e6"
+        "github-workflow.schema.json": "sha256:72ddb93afca7270a62b319175a6edc99e2fe802e5b58a6078e904cd726e10462",
+        "events-that-trigger-workflows.docs.md": "sha256:23ceec60064e046e76471da994a3b306662ce062c81c4ce9612758c53c617ccf"
       }
     }
   ]
