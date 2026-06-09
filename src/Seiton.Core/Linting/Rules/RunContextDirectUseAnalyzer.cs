@@ -1181,7 +1181,7 @@ internal static class RunContextDirectUseAnalyzer
             return false;
         }
 
-        var runLine = FindLineNumberFromOffset(utf8Yaml, runKeyOffset);
+        var runLine = Utf8YamlLineHelpers.FindLineNumberFromOffset(utf8Yaml, runKeyOffset);
         if (runLine < 1)
         {
             return false;
@@ -1206,7 +1206,7 @@ internal static class RunContextDirectUseAnalyzer
             var childIndent = envKeyLine >= 0
                 ? FixFormatting.GetLineIndentation(utf8Yaml, envKeyLine)
                 : FixFormatting.GetLineIndentation(utf8Yaml, lastEnvLine);
-            var insertOffset = FindLineEndOffsetIncludingNewLine(utf8Yaml, lastEnvLine);
+            var insertOffset = Utf8YamlLineHelpers.FindLineEndOffsetIncludingNewLine(utf8Yaml, lastEnvLine);
             var needsLeadingNewline = insertOffset == utf8Yaml.Length && utf8Yaml.Length > 0 && utf8Yaml[^1] != (byte)'\n';
             var insertText = (needsLeadingNewline ? lineEnding : "")
                 + childIndent + envVarName + ": ${{ " + expressionString + " }}" + lineEnding;
@@ -1224,7 +1224,7 @@ internal static class RunContextDirectUseAnalyzer
         var childIndentUnit = FixFormatting.InferIndentationUnit(utf8Yaml);
         var envChildIndent = stepKeyIndent + childIndentUnit;
         var runEndLine = FindRunEndLine(utf8Yaml, runLine, stepKeyIndent);
-        var insertAfterRun = FindLineEndOffsetIncludingNewLine(utf8Yaml, runEndLine);
+        var insertAfterRun = Utf8YamlLineHelpers.FindLineEndOffsetIncludingNewLine(utf8Yaml, runEndLine);
         var needsLeadingNewlineForEnvBlock = insertAfterRun == utf8Yaml.Length && utf8Yaml.Length > 0 && utf8Yaml[^1] != (byte)'\n';
         var envBlock = (needsLeadingNewlineForEnvBlock ? lineEnding : "")
             + stepKeyIndent + "env:" + lineEnding
@@ -1362,7 +1362,7 @@ internal static class RunContextDirectUseAnalyzer
             return -1;
         }
 
-        return FindLineNumberFromOffset(utf8Yaml, maxEndOffset - 1);
+        return Utf8YamlLineHelpers.FindLineNumberFromOffset(utf8Yaml, maxEndOffset - 1);
     }
 
     internal static int FindEnvKeyLine(AstArena arena, byte[] utf8Yaml, Env env)
@@ -1377,7 +1377,7 @@ internal static class RunContextDirectUseAnalyzer
             var nameRange = arena.GetStringRange(pair.Value.Name);
             if (nameRange.Start >= 0)
             {
-                return FindLineNumberFromOffset(utf8Yaml, nameRange.Start);
+                return Utf8YamlLineHelpers.FindLineNumberFromOffset(utf8Yaml, nameRange.Start);
             }
         }
 
@@ -1443,73 +1443,10 @@ internal static class RunContextDirectUseAnalyzer
         return -1;
     }
 
-    internal static int FindLineNumberFromOffset(byte[] utf8Yaml, int offset)
-    {
-        if (offset <= 0)
-        {
-            return 1;
-        }
-
-        if (offset > utf8Yaml.Length)
-        {
-            offset = utf8Yaml.Length;
-        }
-
-        var line = 1;
-        for (var i = 0; i < offset; i++)
-        {
-            if (utf8Yaml[i] == (byte)'\n')
-            {
-                line++;
-            }
-        }
-
-        return line;
-    }
-
-    internal static int FindLineStartOffset(byte[] utf8Yaml, int lineNumber)
-    {
-        if (lineNumber <= 1)
-        {
-            return 0;
-        }
-
-        var currentLine = 1;
-        for (var i = 0; i < utf8Yaml.Length; i++)
-        {
-            if (utf8Yaml[i] != (byte)'\n')
-            {
-                continue;
-            }
-
-            currentLine++;
-            if (currentLine == lineNumber)
-            {
-                return i + 1;
-            }
-        }
-
-        return utf8Yaml.Length;
-    }
-
-    internal static int FindLineEndOffsetIncludingNewLine(byte[] utf8Yaml, int lineNumber)
-    {
-        var start = FindLineStartOffset(utf8Yaml, lineNumber);
-        for (var i = start; i < utf8Yaml.Length; i++)
-        {
-            if (utf8Yaml[i] == (byte)'\n')
-            {
-                return i + 1;
-            }
-        }
-
-        return utf8Yaml.Length;
-    }
-
     internal static string GetStepKeyIndentation(byte[] utf8Yaml, int lineNumber)
     {
         var baseIndent = FixFormatting.GetLineIndentation(utf8Yaml, lineNumber);
-        var lineStart = FindLineStartOffset(utf8Yaml, lineNumber);
+        var lineStart = Utf8YamlLineHelpers.FindLineStartOffset(utf8Yaml, lineNumber);
         var offset = lineStart + baseIndent.Length;
         return offset + 1 < utf8Yaml.Length && utf8Yaml[offset] == (byte)'-' && utf8Yaml[offset + 1] == (byte)' '
             ? baseIndent + "  "
@@ -1521,7 +1458,7 @@ internal static class RunContextDirectUseAnalyzer
         var lastContentLine = runKeyLine;
         var stepKeyIndentLen = stepKeyIndent.Length;
         var currentLine = runKeyLine;
-        var pos = FindLineStartOffset(utf8Yaml, runKeyLine);
+        var pos = Utf8YamlLineHelpers.FindLineStartOffset(utf8Yaml, runKeyLine);
 
         while (pos < utf8Yaml.Length && utf8Yaml[pos] != (byte)'\n')
         {
