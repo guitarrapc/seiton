@@ -74,6 +74,7 @@ internal static class LintConfigYamlParser
         (RuleKeyFlags.IgnoreActions, "ignore-actions"),
         (RuleKeyFlags.FixMapping, "fix-mapping"),
         (RuleKeyFlags.StrictDetection, "strict-detection"),
+        (RuleKeyFlags.Strict, "strict"),
     ];
 
     /// <summary>Parses lint configuration YAML bytes into a <see cref="LintConfigParseResult"/>.</summary>
@@ -460,6 +461,7 @@ internal static class LintConfigYamlParser
         int? maxJobSecrets = null;
         IReadOnlyDictionary<string, string>? fixMapping = null;
         var strictDetection = false;
+        var strict = false;
         var seenKeyFlags = RuleKeyFlags.None;
 
         foreach (var (key, value) in body)
@@ -554,13 +556,25 @@ internal static class LintConfigYamlParser
                     break;
                 case "strict-detection":
                     seenKeyFlags |= RuleKeyFlags.StrictDetection;
-                    if (!TryCoerceBool(value, out var strict))
+                    if (!TryCoerceBool(value, out var strictDetectionValue))
                     {
                         diagnostics.Add(Diag("strict-detection must be true or false", DomLine, 5, 16, filePath));
                     }
                     else
                     {
-                        strictDetection = strict;
+                        strictDetection = strictDetectionValue;
+                    }
+
+                    break;
+                case "strict":
+                    seenKeyFlags |= RuleKeyFlags.Strict;
+                    if (!TryCoerceBool(value, out var strictValue))
+                    {
+                        diagnostics.Add(Diag("strict must be true or false", DomLine, 5, 6, filePath));
+                    }
+                    else
+                    {
+                        strict = strictValue;
                     }
 
                     break;
@@ -589,6 +603,7 @@ internal static class LintConfigYamlParser
             MaxJobSecrets = maxJobSecrets,
             FixMapping = fixMapping,
             StrictDetection = strictDetection,
+            Strict = strict,
         };
 
         if (!rules.TryAdd(ruleId, config))

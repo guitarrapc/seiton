@@ -488,6 +488,8 @@ internal static class RuleCatalog
                 RuleId.OverprovisionedSecrets => RuleKeyFlags.MaxStepEnvSecrets | RuleKeyFlags.MaxJobSecrets,
                 RuleId.RunnerNoLatest => RuleKeyFlags.FixMapping,
                 RuleId.BotConditions => RuleKeyFlags.StrictDetection,
+                RuleId.RunEnvContextDirectUse => RuleKeyFlags.Strict,
+                RuleId.RunInputsContextDirectUse => RuleKeyFlags.Strict,
                 _ => RuleKeyFlags.None,
             };
         }

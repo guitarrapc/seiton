@@ -1130,6 +1130,68 @@ public sealed class LintConfigLibraryTests
     }
 
     [Test]
+    public async Task Validate_RunEnvDirectUse_Strict_Parses()
+    {
+        var yaml = """
+        rules:
+          run-env-context-direct-use:
+            strict: true
+        """;
+
+        var result = LintConfigLibrary.Validate(yaml, "seiton.yaml");
+
+        await Assert.That(result.IsValid).IsTrue();
+        await Assert.That(result.Config).IsNotNull();
+        await Assert.That(result.Config!.Rules!["run-env-context-direct-use"].Strict).IsTrue();
+    }
+
+    [Test]
+    public async Task Validate_RunInputsDirectUse_Strict_Parses()
+    {
+        var yaml = """
+        rules:
+          run-inputs-context-direct-use:
+            strict: true
+        """;
+
+        var result = LintConfigLibrary.Validate(yaml, "seiton.yaml");
+
+        await Assert.That(result.IsValid).IsTrue();
+        await Assert.That(result.Config).IsNotNull();
+        await Assert.That(result.Config!.Rules!["run-inputs-context-direct-use"].Strict).IsTrue();
+    }
+
+    [Test]
+    public async Task Validate_Strict_WrongRule_ReturnsError()
+    {
+        var yaml = """
+        rules:
+          runner-label:
+            strict: true
+        """;
+
+        var result = LintConfigLibrary.Validate(yaml, "seiton.yaml");
+
+        await Assert.That(result.IsValid).IsFalse();
+        await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("does not accept 'strict'", StringComparison.Ordinal))).IsTrue();
+    }
+
+    [Test]
+    public async Task Validate_Strict_InvalidValue_ReturnsError()
+    {
+        var yaml = """
+        rules:
+          run-env-context-direct-use:
+            strict: maybe
+        """;
+
+        var result = LintConfigLibrary.Validate(yaml, "seiton.yaml");
+
+        await Assert.That(result.IsValid).IsFalse();
+        await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("strict must be true or false", StringComparison.Ordinal))).IsTrue();
+    }
+
+    [Test]
     public async Task Validate_RuleSpecificKey_CorrectRule_Accepted()
     {
         var yaml = """

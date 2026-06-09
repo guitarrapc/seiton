@@ -250,6 +250,12 @@ public sealed record RuleConfig
     /// Defaults to <c>false</c>.
     /// </summary>
     public bool StrictDetection { get; init; }
+
+    /// <summary>
+    /// Gets whether strict detection mode is enabled for rules that support no-expand-context diagnostics.
+    /// Defaults to <c>false</c>.
+    /// </summary>
+    public bool Strict { get; init; }
 }
 
 /// <summary>
