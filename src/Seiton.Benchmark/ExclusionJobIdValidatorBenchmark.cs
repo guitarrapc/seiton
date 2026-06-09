@@ -1,4 +1,4 @@
-using BenchmarkDotNet.Order;
+﻿using BenchmarkDotNet.Order;
 using Seiton.Core.Linting;
 using System.Text;
 

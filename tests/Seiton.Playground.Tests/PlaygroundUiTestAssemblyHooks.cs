@@ -1,6 +1,4 @@
-﻿using Seiton.Playground;
-
-namespace Seiton.Playground.Tests;
+﻿namespace Seiton.Playground.Tests;
 
 /// <summary>
 /// Ensures published playground host and Playwright browser are released after this assembly finishes.

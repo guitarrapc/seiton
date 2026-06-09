@@ -1,6 +1,4 @@
-using Seiton.Playground;
-
-namespace Seiton.Playground.Tests;
+﻿namespace Seiton.Playground.Tests;
 
 /// <summary>Desktop reproducers for WASM-only failures (bisect before browser tests).</summary>
 [NotInParallel(PlaygroundTestParallelism.AssemblyLockKey)]

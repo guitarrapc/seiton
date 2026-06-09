@@ -1,5 +1,4 @@
-using BenchmarkDotNet.Attributes;
-using Seiton.Playground;
+﻿using Seiton.Playground;
 
 namespace Seiton.Benchmark;
 

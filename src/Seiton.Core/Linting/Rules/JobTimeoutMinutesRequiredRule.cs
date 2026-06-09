@@ -30,7 +30,7 @@ public sealed class JobTimeoutMinutesRequiredRule() : RuleBase(RuleId.JobTimeout
             && Config.Utf8Yaml is not null
             && Config.Fix.Defaults.JobTimeoutMinutes is not null
             && Config.Fix.Defaults.JobTimeoutMinutes.Value > 0
-            && TryBuildJobTimeoutInsertFix(Config, job, Config.Utf8Yaml, Config.Fix.Defaults.JobTimeoutMinutes.Value, out var fix))
+            && TryBuildJobTimeoutInsertFix(job, Config.Utf8Yaml, Config.Fix.Defaults.JobTimeoutMinutes.Value, out var fix))
         {
             AddJobError(job, message, BuildJobLocation(job), fix);
             return;
@@ -68,7 +68,7 @@ public sealed class JobTimeoutMinutesRequiredRule() : RuleBase(RuleId.JobTimeout
         return true;
     }
 
-    private bool TryBuildJobTimeoutInsertFix(LintConfig config, Job job, byte[] utf8Yaml, int timeoutMinutes, out DiagnosticFix fix)
+    private bool TryBuildJobTimeoutInsertFix(Job job, byte[] utf8Yaml, int timeoutMinutes, out DiagnosticFix fix)
     {
         fix = default;
         if (timeoutMinutes <= 0)
@@ -115,14 +115,14 @@ public sealed class JobTimeoutMinutesRequiredRule() : RuleBase(RuleId.JobTimeout
 
         var lineEnding = FixFormatting.DetectDominantLineEnding(utf8Yaml);
         var timeoutLine = bodyIndent + "timeout-minutes: " + timeoutMinutes.ToString(System.Globalization.CultureInfo.InvariantCulture) + lineEnding;
-        var anchorLine = FindKeyLine(utf8Yaml, jobLine + 1, jobEndLine, bodyIndent, "runs-on:"u8);
+        var anchorLine = Utf8YamlLineHelpers.FindLineWithKey(utf8Yaml, jobLine + 1, jobEndLine, bodyIndent, "runs-on:"u8);
 
         int insertOffset;
         string insertText;
 
         if (anchorLine >= 0)
         {
-            insertOffset = FindLineEndOffsetIncludingNewLine(utf8Yaml, anchorLine);
+            insertOffset = Utf8YamlLineHelpers.FindLineEndOffsetIncludingNewLine(utf8Yaml, anchorLine);
             if (insertOffset > 0 && insertOffset <= utf8Yaml.Length && utf8Yaml[insertOffset - 1] != (byte)'\n')
             {
                 insertText = lineEnding + timeoutLine;
@@ -137,12 +137,12 @@ public sealed class JobTimeoutMinutesRequiredRule() : RuleBase(RuleId.JobTimeout
             var firstSiblingLine = FindFirstMappingSiblingLine(utf8Yaml, jobLine + 1, jobEndLine, bodyIndent);
             if (firstSiblingLine >= 0)
             {
-                insertOffset = FindLineStartOffset(utf8Yaml, firstSiblingLine);
+                insertOffset = Utf8YamlLineHelpers.FindLineStartOffset(utf8Yaml, firstSiblingLine);
                 insertText = timeoutLine;
             }
             else
             {
-                insertOffset = FindLineEndOffsetIncludingNewLine(utf8Yaml, jobLine);
+                insertOffset = Utf8YamlLineHelpers.FindLineEndOffsetIncludingNewLine(utf8Yaml, jobLine);
                 if (insertOffset > 0 && insertOffset <= utf8Yaml.Length && utf8Yaml[insertOffset - 1] != (byte)'\n')
                 {
                     insertText = lineEnding + timeoutLine;
@@ -158,30 +158,6 @@ public sealed class JobTimeoutMinutesRequiredRule() : RuleBase(RuleId.JobTimeout
             "insert timeout-minutes using configured default",
             [new TextEdit(insertOffset, 0, insertText)]);
         return true;
-    }
-
-    private static int FindKeyLine(byte[] utf8Yaml, int startLine, int endLine, string indent, ReadOnlySpan<byte> keyPrefix)
-    {
-        var currentLine = 1;
-        var pos = 0;
-        while (currentLine < startLine && pos < utf8Yaml.Length)
-            if (utf8Yaml[pos++] == (byte)'\n') currentLine++;
-
-        while (currentLine <= endLine && pos <= utf8Yaml.Length)
-        {
-            if (pos >= utf8Yaml.Length) break;
-            var lineStart = pos;
-            while (pos < utf8Yaml.Length && utf8Yaml[pos] != (byte)'\n') pos++;
-            var lineEnd = pos;
-            if (lineEnd > lineStart && utf8Yaml[lineEnd - 1] == (byte)'\r') lineEnd--;
-            if (pos < utf8Yaml.Length) pos++;
-
-            if (ByteLineHasKeyAtIndent(utf8Yaml, lineStart, lineEnd, indent, keyPrefix))
-                return currentLine;
-
-            currentLine++;
-        }
-        return -1;
     }
 
     private static int FindFirstMappingSiblingLine(byte[] utf8Yaml, int startLine, int endLine, string indent)
@@ -267,54 +243,4 @@ public sealed class JobTimeoutMinutesRequiredRule() : RuleBase(RuleId.JobTimeout
         return utf8Yaml[restStart] != (byte)'#';
     }
 
-    private static bool ByteLineHasKeyAtIndent(byte[] utf8Yaml, int lineStart, int lineEnd, string indent, ReadOnlySpan<byte> keyBytes)
-    {
-        if (lineEnd - lineStart < indent.Length) return false;
-        for (var k = 0; k < indent.Length; k++)
-            if (utf8Yaml[lineStart + k] != (byte)indent[k]) return false;
-        var idx = lineStart + indent.Length;
-        while (idx < lineEnd && (utf8Yaml[idx] == (byte)' ' || utf8Yaml[idx] == (byte)'\t')) idx++;
-        var remaining = lineEnd - idx;
-        if (remaining < keyBytes.Length) return false;
-        return utf8Yaml.AsSpan(idx, keyBytes.Length).SequenceEqual(keyBytes);
-    }
-
-    private static int FindLineStartOffset(byte[] utf8Yaml, int lineNumber)
-    {
-        if (lineNumber <= 1)
-        {
-            return 0;
-        }
-
-        var currentLine = 1;
-        for (var i = 0; i < utf8Yaml.Length; i++)
-        {
-            if (utf8Yaml[i] != (byte)'\n')
-            {
-                continue;
-            }
-
-            currentLine++;
-            if (currentLine == lineNumber)
-            {
-                return i + 1;
-            }
-        }
-
-        return utf8Yaml.Length;
-    }
-
-    private static int FindLineEndOffsetIncludingNewLine(byte[] utf8Yaml, int lineNumber)
-    {
-        var start = FindLineStartOffset(utf8Yaml, lineNumber);
-        for (var i = start; i < utf8Yaml.Length; i++)
-        {
-            if (utf8Yaml[i] == (byte)'\n')
-            {
-                return i + 1;
-            }
-        }
-
-        return utf8Yaml.Length;
-    }
 }

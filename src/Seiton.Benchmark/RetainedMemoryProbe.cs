@@ -1,4 +1,4 @@
-namespace Seiton.Benchmark;
+﻿namespace Seiton.Benchmark;
 
 /// <summary>
 /// Samples live managed heap size for peak-retained memory measurement in benchmarks.

@@ -1,6 +1,5 @@
 ﻿using Seiton.Commands;
 using Seiton.Config;
-using Seiton.Core.Linting.Fixing;
 using Seiton.Core.Parsing;
 using Seiton.Output;
 

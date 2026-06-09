@@ -1,4 +1,4 @@
-namespace Seiton.Core.Linting.Fixing;
+﻿namespace Seiton.Core.Linting.Fixing;
 
 /// <summary>
 /// Thrown when fix edits overlap or share the same offset. Carries structured context for CLI hints.

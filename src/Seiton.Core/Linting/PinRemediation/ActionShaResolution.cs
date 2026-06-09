@@ -1,4 +1,4 @@
-namespace Seiton.Core.Linting.PinRemediation;
+﻿namespace Seiton.Core.Linting.PinRemediation;
 
 /// <summary>
 /// Result of resolving an action reference to a pinned SHA.
