@@ -147,11 +147,6 @@ public sealed class RunEnvContextDirectUseRule() : RuleBase(RuleId.RunEnvContext
             return false;
         }
 
-        if (!TryBuildShellReplacement(expression, isPowerShell.Value, wrapInDoubleQuotes: false, out var replacement))
-        {
-            return false;
-        }
-
         if (IsInsideShellSingleQuotes(Config.Utf8Yaml, absoluteOffset))
         {
             if (!TryBuildSingleQuotedSimpleEdit(Config.Utf8Yaml, absoluteOffset, expressionLength, expression, isPowerShell.Value, out var singleQuotedEdit))
@@ -163,6 +158,11 @@ public sealed class RunEnvContextDirectUseRule() : RuleBase(RuleId.RunEnvContext
                 "replace direct env context expansion with shell variable",
                 [singleQuotedEdit]);
             return true;
+        }
+
+        if (!TryBuildShellReplacement(expression, isPowerShell.Value, wrapInDoubleQuotes: false, out var replacement))
+        {
+            return false;
         }
 
         fix = new DiagnosticFix(
