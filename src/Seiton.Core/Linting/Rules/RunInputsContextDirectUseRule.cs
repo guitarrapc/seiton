@@ -100,7 +100,7 @@ public sealed class RunInputsContextDirectUseRule() : RuleBase(RuleId.RunInputsC
                     location,
                     fix);
             }
-            else if (!TryParseSimpleInputsReference(expression, out _))
+            else if (!TryParseSimpleInputsReferenceBounds(expression, out _, out _, out _))
             {
                 // Composite expression — suggest env: block mapping
                 AddStepError(
@@ -129,7 +129,7 @@ public sealed class RunInputsContextDirectUseRule() : RuleBase(RuleId.RunInputsC
             return false;
         }
 
-        if (!TryParseSimpleInputsReference(expression, out var inputName))
+        if (!TryParseSimpleInputsReference(expression, out var inputName, out var isGithubEventInputs))
         {
             return TryBuildCompoundExpressionFix(step, runNode, expression, expressionBodyStart, expressionLength, out fix);
         }
@@ -173,7 +173,7 @@ public sealed class RunInputsContextDirectUseRule() : RuleBase(RuleId.RunInputsC
             return false;
         }
 
-        var expressionString = BuildInputsExpressionString(inputName, expression);
+        var expressionString = BuildInputsExpressionString(inputName, isGithubEventInputs);
         var envVarName = DeduplicateEnvName(Arena, InputNameToEnvVarName(inputName),
             step.Env, _currentJob?.Env, _currentWorkflow?.Env);
         if (envVarName is null)
@@ -390,10 +390,9 @@ public sealed class RunInputsContextDirectUseRule() : RuleBase(RuleId.RunInputsC
     }
 
     /// <summary>Builds the expression string for the env value (e.g. "inputs.target" or "github.event.inputs.target").</summary>
-    private static string BuildInputsExpressionString(string inputName, ReadOnlySpan<byte> expression)
+    private static string BuildInputsExpressionString(string inputName, bool isGithubEventInputs)
     {
-        var index = 0;
-        if (TryConsumeGithubEventInputsRoot(expression, ref index))
+        if (isGithubEventInputs)
         {
             return "github.event.inputs." + inputName;
         }
@@ -423,69 +422,19 @@ public sealed class RunInputsContextDirectUseRule() : RuleBase(RuleId.RunInputsC
 
     private static bool TryParseSimpleInputsReference(ReadOnlySpan<byte> expression, out string inputName)
     {
+        return TryParseSimpleInputsReference(expression, out inputName, out _);
+    }
+
+    private static bool TryParseSimpleInputsReference(ReadOnlySpan<byte> expression, out string inputName, out bool isGithubEventInputs)
+    {
         inputName = string.Empty;
-
-        var index = 0;
-        if (TryConsumeSimpleInputsRoot(expression, ref index))
-        {
-            return TryConsumeGitHubMemberOrBracketName(expression, ref index, out inputName);
-        }
-
-        index = 0;
-        if (!TryConsumeGithubEventInputsRoot(expression, ref index))
+        if (!TryParseSimpleInputsReferenceBounds(expression, out isGithubEventInputs, out var nameStart, out var nameLength))
         {
             return false;
         }
 
-        return TryConsumeGitHubMemberOrBracketName(expression, ref index, out inputName);
-    }
-
-    private static bool TryConsumeSimpleInputsRoot(ReadOnlySpan<byte> expression, ref int index)
-    {
-        if (!ConsumeWordIgnoreCase(expression, ref index, "inputs"u8))
-        {
-            return false;
-        }
-
-        SkipWhiteSpace(expression, ref index);
-        return true;
-    }
-
-    private static bool TryConsumeGithubEventInputsRoot(ReadOnlySpan<byte> expression, ref int index)
-    {
-        if (!ConsumeWordIgnoreCase(expression, ref index, "github"u8))
-        {
-            return false;
-        }
-
-        SkipWhiteSpace(expression, ref index);
-        if (index >= expression.Length || expression[index] != (byte)'.')
-        {
-            return false;
-        }
-
-        index++;
-        SkipWhiteSpace(expression, ref index);
-        if (!ConsumeWordIgnoreCase(expression, ref index, "event"u8))
-        {
-            return false;
-        }
-
-        SkipWhiteSpace(expression, ref index);
-        if (index >= expression.Length || expression[index] != (byte)'.')
-        {
-            return false;
-        }
-
-        index++;
-        SkipWhiteSpace(expression, ref index);
-        if (!ConsumeWordIgnoreCase(expression, ref index, "inputs"u8))
-        {
-            return false;
-        }
-
-        SkipWhiteSpace(expression, ref index);
-        return true;
+        inputName = DecodeExpressionName(expression, nameStart, nameLength);
+        return inputName.Length > 0;
     }
 
     // Inputs-specific AST detection
