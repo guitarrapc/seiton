@@ -35,6 +35,35 @@ public sealed partial class RuleInterfaceTests
             """,
             []),
             new RuleCase(
+            "ok-run-env-inside-single-quotes-default",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    env:
+                        VERSION: 1.2.3
+                    steps:
+                        - run: echo '${{ env.VERSION }}'
+            """,
+            []),
+            new RuleCase(
+            "ok-run-env-inside-single-quoted-heredoc",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    env:
+                        VERSION: 1.2.3
+                    steps:
+                        - run: |
+                            cat <<'EOF'
+                            ${{ env.VERSION }}
+                            EOF
+            """,
+            []),
+            new RuleCase(
             "ng-run-uses-env-dot-access",
             """
             on: push

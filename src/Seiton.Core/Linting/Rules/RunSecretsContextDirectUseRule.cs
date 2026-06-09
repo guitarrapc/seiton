@@ -92,6 +92,16 @@ public sealed class RunSecretsContextDirectUseRule() : RuleBase(RuleId.RunSecret
                 continue;
             }
 
+            if (IsInsideShellSingleQuotes(Config.Utf8Yaml, absoluteOffset))
+            {
+                AddStepError(
+                    step,
+                    "run script references ${{ secrets.* }} directly inside a shell no-expand context; avoid direct interpolation and refactor to a safer handoff",
+                    location,
+                    "single-quoted shell strings disable shell expansion; move secret handling to a controlled boundary (for example env mapping outside single quotes)");
+                return;
+            }
+
             if (TryBuildFix(step, runNode, expression, bodyStart, nextSearchStart - (bodyStart - 3), out var fix))
             {
                 AddStepError(

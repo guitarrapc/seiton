@@ -191,9 +191,9 @@ Column definitions:
 | `unsound-contains` | ✓ | — | Detect bypassable `contains()` conditions (space-separated string lists). Error for user-controllable values; info for other contexts. Dot/bracket styles treated equivalently. |
 | `bot-conditions` | ✓ | — | Warn when bot privilege checks (`==`) rely on spoofable actor contexts (name or ID). Exclusion checks (`!=`) are opt-in via `strict-detection: true` (info severity when enabled). Suppressed when a non-spoofable trigger-author context (`github.event.pull_request.user.login`/`.id`) comparison with the same literal and operator (`==` with `==`, `!=` with `!=`) is AND-conjoined. Also suppressed entirely when workflow triggers are not PR-only (e.g. push-only, schedule-only, or mixed triggers such as `push` + `pull_request` where `github.actor` is the only cross-trigger bot check). Uses generated `BotActors` dataset. |
 | `expr-undefined-var` | ✓ | — | Error when expressions reference unavailable context roots. Builds strict per-job types for `matrix`, `steps`, `needs`, popular-action outputs, local action outputs, and local reusable workflow outputs. Remote reusable workflows treated as loose. |
-| `run-env-context-direct-use` | ✓ | — | Error when `run:` directly references `${{ env.* }}`; shell variable expansion required. |
-| `run-secrets-context-direct-use` | ✓ | — | Error when `run:` directly references `${{ secrets.* }}`; must map via `env`. |
-| `run-inputs-context-direct-use` | ✓ | — | Error when `run:` directly references `${{ inputs.* }}` or `${{ github.event.inputs.* }}`; must map via `env`. |
+| `run-env-context-direct-use` | ✓ | — | Error when `run:` directly references `${{ env.* }}`; shell variable expansion required (except no-expand contexts such as single-quoted shell strings and single-quoted heredocs unless strict mode is enabled). |
+| `run-secrets-context-direct-use` | ✓ | — | Error when `run:` directly references `${{ secrets.* }}`; must map via `env`. Shell single-quoted no-expand contexts still emit diagnostics with manual-refactor guidance. |
+| `run-inputs-context-direct-use` | ✓ | — | Error when `run:` directly references `${{ inputs.* }}` or `${{ github.event.inputs.* }}`; must map via `env` (except no-expand contexts such as single-quoted shell strings and single-quoted heredocs unless strict mode is enabled). |
 | `secrets-whole-context-access` | ✓ | — | Error when an expression references the entire `secrets` context as an object rather than a specific key. |
 | `checkout-persist-credentials` | ✓ | — | Warn when `actions/checkout` does not set `persist-credentials: false`. Legacy stores credentials in `.git/config`; v6+ in `$RUNNER_TEMP`. |
 | `artipacked` | ✓ | — | Detect credential leakage when checkout (without `persist-credentials: false`) is followed by upload-artifact with a dangerous path that can expose credentials. Covers root-like, parent-directory, workspace-expression, and `_temp` glob paths. Error for non-v6+ checkout; warning for v6+ parent-directory uploads reaching `$RUNNER_TEMP`. Legacy `.git` exclusions must exclude every reachable `.git/config`; v6+ suppression requires a recursive runner-temp subtree exclusion rather than a bare or shallow `_temp` exclusion. Independent of `checkout-persist-credentials`. |
@@ -602,6 +602,49 @@ rules:
 | `true` | `!=` | PR-only | mismatched operator | **info** |
 | `true` | `==` | PR-only | none | **warning** |
 | `*` | `*` | mixed or non-PR | `*` | none |
+
+#### 5.8.11 `run-env-context-direct-use` — `strict`
+
+- `strict`: When `true`, `run-env-context-direct-use` reports shell single-quoted no-expand contexts instead of suppressing them. Default: `false`.
+- no-expand heredoc (`<<'EOF'`) remains suppressed regardless of `strict`.
+- Rationale: default behavior prioritizes noise reduction in intentional no-expand shell contexts; strict mode allows policy hardening for organizations that want explicit diagnostics.
+
+#### 5.8.12 `run-inputs-context-direct-use` — `strict`
+
+- `strict`: When `true`, `run-inputs-context-direct-use` reports shell single-quoted no-expand contexts instead of suppressing them. Default: `false`.
+- no-expand heredoc (`<<'EOF'`) remains suppressed regardless of `strict`.
+- Rationale: inputs are often routed through intentionally no-expand remote-shell patterns; default suppression avoids non-actionable diagnostics while preserving an explicit hardening opt-in.
+
+#### 5.8.13 Cross-Rule Guardrails (No-Expand Context Policy)
+
+- `run-env-context-direct-use` and `run-inputs-context-direct-use` share the same suppression gate for no-expand contexts to avoid drift across similar rules.
+- no-expand heredoc suppression is unconditional in these direct-use rules.
+- shell single-quoted suppression is conditional (`strict: false`) for env/inputs, but intentionally **not** for secrets.
+- `run-secrets-context-direct-use` keeps diagnostics in shell single-quoted no-expand contexts and emits manual-refactor guidance when no safe fix can be attached.
+
+Diagnostic outcome matrix (`run-env-context-direct-use`, `run-inputs-context-direct-use`, `run-secrets-context-direct-use`):
+
+| Shell context | `strict` | `run-env` / `run-inputs` | `run-secrets` |
+|---|---|---|---|
+| Unquoted or double-quoted (expandable) | n/a | **diagnose** | **diagnose** |
+| Shell single-quoted (`'...${{ }}...'`) | `false` | none | **diagnose** |
+| Shell single-quoted (`'...${{ }}...'`) | `true` | **diagnose** | **diagnose** |
+| Single-quoted heredoc (`<<'DELIM'` body) | any | none | none |
+
+Auto-fix when a diagnostic is emitted:
+
+| Shell context | `run-env` (`strict: true` only for single-quoted) | `run-inputs` (`strict: true` only for single-quoted) | `run-secrets` |
+|---|---|---|---|
+| Unquoted or double-quoted | fix when safe | fix when safe | fix when safe |
+| Shell single-quoted | simple standalone token only | no fix | no fix |
+| Single-quoted heredoc | n/a (suppressed) | n/a (suppressed) | n/a (suppressed) |
+
+Notes:
+
+- `strict` applies only to `run-env-context-direct-use` and `run-inputs-context-direct-use`.
+- Single quotes nested inside a double-quoted string do not enter shell single-quote state; expressions there follow the expandable row.
+- Complex single-quoted tokens (for example `'pre-${{ env.VERSION }}-post'`) are diagnosed under `strict: true` for env/inputs but remain no-fix.
+- Shell single-quote detection is line-scoped (quotes are not tracked across newlines).
 
 ### 5.9 Minimal and Advanced Example Configuration File
 
@@ -1074,7 +1117,7 @@ The following table classifies each default rule by fix feasibility.
 | Rule ID | Fix Feasibility | Fix Description |
 |---|---|---|
 | `deny-write-all` | ✓ Fixable | Replace `write-all` scalar with an explicit empty mapping baseline (`{}`) for least-privilege follow-up scoping. |
-| `run-env-context-direct-use` | △ Partial fixable | Replace `${{ env.VAR }}` with `$VAR` (or `${VAR}` for POSIX shells) inside `run:` text. In shell single-quoted strings, only a standalone simple token (for example `'${{ env.VAR }}'`) is auto-fixed by rewriting the surrounding quotes to double quotes; quoted heredoc bodies and complex single-quoted contexts remain no-fix. Compound expressions emit a help hint instead of a fix. |
+| `run-env-context-direct-use` | △ Partial fixable | Replace `${{ env.VAR }}` with `$VAR` (or `${VAR}` for POSIX shells) inside `run:` text. Diagnostics are suppressed in no-expand contexts (single-quoted shell strings and single-quoted heredocs) by default; with `strict: true`, shell single-quoted contexts are diagnosed and only standalone simple single-quoted tokens are auto-fixable. Compound expressions emit a help hint instead of a fix. |
 | `job-permissions-required` | ✓ Fixable | Insert `permissions:` as a new key immediately after `runs-on:` (or after `uses:` for reusable workflow jobs, or after job id key if both are absent). When the job's steps reference popular actions with known permission requirements (from supplemental-required-permissions.json), the fix inserts the merged minimum required scopes (e.g., `contents: read` for `actions/checkout`). When no known action requirements are found, the fix inserts `permissions: {}`. |
 | `unpinned-uses` | ✗ Not auto-fixable | Requires resolving current SHA for the referenced action/workflow at fix time (external I/O). |
 | `unpinned-image` | ✗ Not auto-fixable | Requires resolving current digest for the referenced image at fix time (external I/O). |
@@ -1092,8 +1135,8 @@ The following table classifies each default rule by fix feasibility.
 | `credentials` | ✗ Not auto-fixable | Adding credentials requires secrets names that are not known to linter. |
 | `template-injection` | △ Partial | For `run:` script sinks with deterministic paths, auto-fix generates env var indirection (new env mapping + shell variable reference). Skips `actions/github-script` `script` inputs, heredoc no-expand bodies, and shell single-quoted strings. One fix per step per pass (multi-pass handles remaining). |
 | `expr-undefined-var` | ✗ Not auto-fixable | Correct context variable cannot be inferred automatically. |
-| `run-secrets-context-direct-use` | △ Partial | Replace simple `${{ secrets.KEY }}` / `${{ secrets['KEY'] }}` in `run:` by reusing an existing unique `env` mapping when present; otherwise insert a new step-local `env:` entry and rewrite to the generated shell variable. Compound expressions emit a help hint instead of a fix. No fix is offered for ambiguous mappings, no-expand heredocs, or shell single-quoted strings; the insertion path additionally skips flow-style `env` and empty `env: {}` but replacement-only reuse may still be offered in those cases. |
-| `run-inputs-context-direct-use` | △ Partial | Replace simple `${{ inputs.KEY }}` / `${{ github.event.inputs.KEY }}` (and bracket forms) in `run:` by reusing an existing unique `env` mapping when present; otherwise insert a new step-local `env:` entry and rewrite to the generated shell variable. Compound expressions (single `${{ ... }}` block referencing inputs, e.g. `${{ inputs.tag \|\| 'v1.0.0' }}`) are fixed by moving the entire expression to `env:` and rewriting to the shell variable. No fix is offered for ambiguous mappings, no-expand heredocs, or shell single-quoted strings; the insertion path additionally skips flow-style `env` and empty `env: {}` but replacement-only reuse may still be offered in those cases. |
+| `run-secrets-context-direct-use` | △ Partial | Replace simple `${{ secrets.KEY }}` / `${{ secrets['KEY'] }}` in `run:` by reusing an existing unique `env` mapping when present; otherwise insert a new step-local `env:` entry and rewrite to the generated shell variable. Compound expressions emit a help hint instead of a fix. No fix is offered for ambiguous mappings, no-expand heredocs, or shell single-quoted strings; for shell single-quoted no-expand contexts diagnostics remain with manual-refactor guidance. The insertion path additionally skips flow-style `env` and empty `env: {}` but replacement-only reuse may still be offered in those cases. |
+| `run-inputs-context-direct-use` | △ Partial | Replace simple `${{ inputs.KEY }}` / `${{ github.event.inputs.KEY }}` (and bracket forms) in `run:` by reusing an existing unique `env` mapping when present; otherwise insert a new step-local `env:` entry and rewrite to the generated shell variable. Compound expressions (single `${{ ... }}` block referencing inputs, e.g. `${{ inputs.tag \|\| 'v1.0.0' }}`) are fixed by moving the entire expression to `env:` and rewriting to the shell variable. Diagnostics are suppressed in no-expand contexts (single-quoted shell strings and single-quoted heredocs) by default; with `strict: true`, shell single-quoted contexts are diagnosed again but remain no-fix (manual refactor required). The insertion path additionally skips flow-style `env` and empty `env: {}` but replacement-only reuse may still be offered in those cases. |
 | `secrets-whole-context-access` | ✗ Not auto-fixable | Correct remediation (refactoring to specific key access) requires user intent about which secrets are needed. |
 | `checkout-persist-credentials` | △ Partial | For deterministic cases, insert or replace `with.persist-credentials: false`. Expression-valued cases remain no-fix. Review downstream authenticated git commands such as `git push`, which may need explicit auth setup (for example `git remote set-url origin <url>` or `gh auth setup-git`). |
 | `artipacked` | ✗ Not auto-fixable | Safe remediation depends on whether the user intends to change checkout auth behavior, artifact scope, or hidden-file upload behavior. |

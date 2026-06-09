@@ -1971,7 +1971,7 @@ public sealed partial class RuleInterfaceTests
     }
 
     [Test]
-    public async Task LintEngine_RunEnvContextDirectUse_Fix_RewritesSimpleShellSingleQuotes_ForPosix()
+    public async Task LintEngine_RunEnvContextDirectUse_DoesNotDiagnose_InsideSingleQuotes_ByDefault()
     {
         var yaml = """
         on: push
@@ -1982,18 +1982,10 @@ public sealed partial class RuleInterfaceTests
                     - run: echo '${{ env.VERSION }}'
         """;
 
-        var sourceBytes = Encoding.UTF8.GetBytes(yaml);
-        var engine = new LintEngine([new RunEnvContextDirectUseRule()]);
-        using var result = engine.Check(sourceBytes, "run-env-fix-single-quote-posix.yml");
-        var diagnostic = result.Diagnostics.First(x => x.RuleId == "run-env-context-direct-use");
+        using var result = new LintEngine([new RunEnvContextDirectUseRule()])
+            .Check(Encoding.UTF8.GetBytes(yaml), "run-env-no-diagnostic-single-quote-posix.yml");
 
-        await Assert.That(diagnostic.Fix is not null).IsTrue();
-
-        var fixedBytes = FixEngine.Apply(sourceBytes, diagnostic.Fix!.Value.Edits);
-        var fixedText = Encoding.UTF8.GetString(fixedBytes);
-
-        await Assert.That(fixedText.Contains("\"${VERSION}\"", StringComparison.Ordinal)).IsTrue();
-        await Assert.That(fixedText.Contains("'${{ env.VERSION }}'", StringComparison.Ordinal)).IsFalse();
+        await Assert.That(result.Diagnostics.Where(x => x.RuleId == "run-env-context-direct-use")).IsEmpty();
     }
 
     [Test]
@@ -2011,7 +2003,13 @@ public sealed partial class RuleInterfaceTests
 
         var sourceBytes = Encoding.UTF8.GetBytes(yaml);
         var engine = new LintEngine([new RunEnvContextDirectUseRule()]);
-        using var result = engine.Check(sourceBytes, "run-env-fix-single-quote-pwsh.yml");
+        using var result = engine.Check(sourceBytes, "run-env-fix-single-quote-pwsh.yml", new LintConfig
+        {
+            Rules = new Dictionary<string, RuleConfig>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["run-env-context-direct-use"] = new RuleConfig { Strict = true },
+            }
+        });
         var diagnostic = result.Diagnostics.First(x => x.RuleId == "run-env-context-direct-use");
 
         await Assert.That(diagnostic.Fix is not null).IsTrue();
@@ -2040,7 +2038,13 @@ public sealed partial class RuleInterfaceTests
 
         var sourceBytes = Encoding.UTF8.GetBytes(yaml);
         var engine = new LintEngine([new RunEnvContextDirectUseRule()]);
-        using var result = engine.Check(sourceBytes, "run-env-fix-single-quote-job-defaults-pwsh.yml");
+        using var result = engine.Check(sourceBytes, "run-env-fix-single-quote-job-defaults-pwsh.yml", new LintConfig
+        {
+            Rules = new Dictionary<string, RuleConfig>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["run-env-context-direct-use"] = new RuleConfig { Strict = true },
+            }
+        });
         var diagnostic = result.Diagnostics.First(x => x.RuleId == "run-env-context-direct-use");
 
         await Assert.That(diagnostic.Fix is not null).IsTrue();
@@ -2065,10 +2069,76 @@ public sealed partial class RuleInterfaceTests
         """;
 
         using var result = new LintEngine([new RunEnvContextDirectUseRule()])
-            .Check(Encoding.UTF8.GetBytes(yaml), "run-env-no-fix-complex-single-quote.yml");
+            .Check(Encoding.UTF8.GetBytes(yaml), "run-env-no-fix-complex-single-quote.yml", new LintConfig
+            {
+                Rules = new Dictionary<string, RuleConfig>(StringComparer.OrdinalIgnoreCase)
+                {
+                    ["run-env-context-direct-use"] = new RuleConfig { Strict = true },
+                }
+            });
         var diagnostic = result.Diagnostics.First(x => x.RuleId == "run-env-context-direct-use");
 
         await Assert.That(diagnostic.Fix).IsNull();
+    }
+
+    [Test]
+    public async Task LintEngine_RunEnvContextDirectUse_StrictDetection_DiagnosesAndFixes_InsideSingleQuotes()
+    {
+        var yaml = """
+        on: push
+        jobs:
+            build:
+                runs-on: ubuntu-latest
+                steps:
+                    - run: echo '${{ env.VERSION }}'
+        """;
+
+        var sourceBytes = Encoding.UTF8.GetBytes(yaml);
+        var config = new LintConfig
+        {
+            Fix = new FixConfig { Enabled = true },
+            Rules = new Dictionary<string, RuleConfig>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["run-env-context-direct-use"] = new RuleConfig { Strict = true },
+            }
+        };
+
+        var engine = new LintEngine([new RunEnvContextDirectUseRule()]);
+        using var result = engine.Check(sourceBytes, "run-env-strict-single-quote-posix.yml", config);
+        var diagnostic = result.Diagnostics.First(x => x.RuleId == "run-env-context-direct-use");
+
+        await Assert.That(diagnostic.Fix is not null).IsTrue();
+
+        var fixedBytes = FixEngine.Apply(sourceBytes, diagnostic.Fix!.Value.Edits);
+        var fixedText = Encoding.UTF8.GetString(fixedBytes);
+
+        await Assert.That(fixedText.Contains("\"${VERSION}\"", StringComparison.Ordinal)).IsTrue();
+    }
+
+    [Test]
+    public async Task LintEngine_RunEnvContextDirectUse_Fix_SingleQuotesInsideDoubleQuotes_ReplacesWithPosixVariable()
+    {
+        var yaml = """
+        on: push
+        jobs:
+            build:
+                runs-on: ubuntu-latest
+                steps:
+                    - run: for ip in $(az vm list -d --resource-group "${BENCHMARK_RESOURCE_GROUP}" --query "[?powerState=='VM running' && name=='${{ env.BENCHMARK_CLIENT_NAME }}'].publicIps" -o tsv); do echo "$ip"; done
+        """;
+
+        var sourceBytes = Encoding.UTF8.GetBytes(yaml);
+        var engine = new LintEngine([new RunEnvContextDirectUseRule()]);
+        using var result = engine.Check(sourceBytes, "run-env-fix-single-in-double.yml", new LintConfig { Fix = new FixConfig { Enabled = true } });
+        var diagnostic = result.Diagnostics.First(x => x.RuleId == "run-env-context-direct-use");
+
+        await Assert.That(diagnostic.Fix is not null).IsTrue();
+
+        var fixedBytes = FixEngine.Apply(sourceBytes, diagnostic.Fix!.Value.Edits);
+        var fixedText = Encoding.UTF8.GetString(fixedBytes);
+
+        await Assert.That(fixedText.Contains("name=='${BENCHMARK_CLIENT_NAME}'", StringComparison.Ordinal)).IsTrue();
+        await Assert.That(fixedText.Contains("name=='${{ env.BENCHMARK_CLIENT_NAME }}'", StringComparison.Ordinal)).IsFalse();
     }
 
     [Test]
@@ -2084,7 +2154,13 @@ public sealed partial class RuleInterfaceTests
         """;
 
         using var result = new LintEngine([new RunEnvContextDirectUseRule()])
-            .Check(Encoding.UTF8.GetBytes(yaml), "run-env-no-fix-unbalanced-single-quote.yml");
+            .Check(Encoding.UTF8.GetBytes(yaml), "run-env-no-fix-unbalanced-single-quote.yml", new LintConfig
+            {
+                Rules = new Dictionary<string, RuleConfig>(StringComparer.OrdinalIgnoreCase)
+                {
+                    ["run-env-context-direct-use"] = new RuleConfig { Strict = true },
+                }
+            });
         var diagnostic = result.Diagnostics.First(x => x.RuleId == "run-env-context-direct-use");
 
         await Assert.That(diagnostic.Fix).IsNull();
@@ -2684,6 +2760,7 @@ public sealed partial class RuleInterfaceTests
         var diagnostic = result.Diagnostics.First(x => x.RuleId == "run-secrets-context-direct-use");
 
         await Assert.That(diagnostic.Fix is null).IsTrue();
+        await Assert.That(diagnostic.Message.Contains("shell no-expand context", StringComparison.Ordinal)).IsTrue();
     }
 
     [Test]
@@ -3061,7 +3138,7 @@ public sealed partial class RuleInterfaceTests
     }
 
     [Test]
-    public async Task LintEngine_RunInputsContextDirectUse_Fix_DoesNotAttach_InsideSingleQuotes()
+    public async Task LintEngine_RunInputsContextDirectUse_DoesNotDiagnose_InsideSingleQuotes()
     {
         var yaml = """
         on: workflow_dispatch
@@ -3074,9 +3151,171 @@ public sealed partial class RuleInterfaceTests
 
         using var result = new LintEngine([new RunInputsContextDirectUseRule()])
             .Check(Encoding.UTF8.GetBytes(yaml), "run-inputs-no-fix-single-quotes.yml", new LintConfig { Fix = new FixConfig { Enabled = true } });
+        await Assert.That(result.Diagnostics.Where(x => x.RuleId == "run-inputs-context-direct-use")).IsEmpty();
+    }
+
+    [Test]
+    public async Task LintEngine_RunInputsContextDirectUse_DoesNotDiagnose_SshRemoteCommandInsideSingleQuotes()
+    {
+        var yaml = """
+        on:
+            workflow_call:
+                inputs:
+                    branch:
+                        required: true
+                        type: string
+        jobs:
+            benchmark:
+                runs-on: ubuntu-latest
+                steps:
+                    - name: Clone repository on VM
+                      run: |
+                        for ip in $(az vm list -d --resource-group "${BENCHMARK_RESOURCE_GROUP}" --query "[?powerState=='VM running'].publicIps" -o tsv); do
+                          ssh -o StrictHostKeyChecking=accept-new -i ~/.ssh/id_ed25519 azure-user@"$ip" 'bash -s -- --branch "${{ inputs.branch }}" --owner "${{ github.repository_owner }}" --repo "${{ github.event.repository.name }}"' < ./scripts/git_clone.sh
+                        done
+        """;
+
+        using var result = new LintEngine([new RunInputsContextDirectUseRule()])
+            .Check(Encoding.UTF8.GetBytes(yaml), "run-inputs-ssh-single-quotes.yml", new LintConfig { Fix = new FixConfig { Enabled = true } });
+
+        await Assert.That(result.Diagnostics.Where(x => x.RuleId == "run-inputs-context-direct-use")).IsEmpty();
+    }
+
+    [Test]
+    public async Task LintEngine_RunInputsContextDirectUse_StrictDetection_Diagnoses_InsideSingleQuotes()
+    {
+        var yaml = """
+        on: workflow_dispatch
+        jobs:
+            build:
+                runs-on: ubuntu-latest
+                steps:
+                    - run: echo '${{ inputs.target }}'
+        """;
+
+        var config = new LintConfig
+        {
+            Rules = new Dictionary<string, RuleConfig>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["run-inputs-context-direct-use"] = new RuleConfig { Strict = true },
+            }
+        };
+
+        using var result = new LintEngine([new RunInputsContextDirectUseRule()])
+            .Check(Encoding.UTF8.GetBytes(yaml), "run-inputs-strict-single-quotes.yml", config);
+
+        await Assert.That(result.Diagnostics.Any(x => x.RuleId == "run-inputs-context-direct-use")).IsTrue();
+    }
+
+    [Test]
+    public async Task LintEngine_RunInputsContextDirectUse_StrictDetection_DoesNotAttachFix_InsideSingleQuotes()
+    {
+        var yaml = """
+        on: workflow_dispatch
+        jobs:
+            build:
+                runs-on: ubuntu-latest
+                steps:
+                    - run: echo '${{ inputs.target }}'
+        """;
+
+        var config = new LintConfig
+        {
+            Fix = new FixConfig { Enabled = true },
+            Rules = new Dictionary<string, RuleConfig>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["run-inputs-context-direct-use"] = new RuleConfig { Strict = true },
+            }
+        };
+
+        using var result = new LintEngine([new RunInputsContextDirectUseRule()])
+            .Check(Encoding.UTF8.GetBytes(yaml), "run-inputs-strict-single-quotes-no-fix.yml", config);
         var diagnostic = result.Diagnostics.First(x => x.RuleId == "run-inputs-context-direct-use");
 
         await Assert.That(diagnostic.Fix is null).IsTrue();
+    }
+
+    [Test]
+    public async Task LintEngine_RunInputsContextDirectUse_StrictMode_StillSuppresses_InsideSingleQuotedHereDoc()
+    {
+        var yaml = """
+        on: workflow_dispatch
+        jobs:
+            build:
+                runs-on: ubuntu-latest
+                steps:
+                    - run: |
+                        cat <<'EOF'
+                        ${{ inputs.target }}
+                        EOF
+        """;
+
+        var config = new LintConfig
+        {
+            Rules = new Dictionary<string, RuleConfig>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["run-inputs-context-direct-use"] = new RuleConfig { Strict = true },
+            }
+        };
+
+        using var result = new LintEngine([new RunInputsContextDirectUseRule()])
+            .Check(Encoding.UTF8.GetBytes(yaml), "run-inputs-strict-heredoc.yml", config);
+
+        await Assert.That(result.Diagnostics.Where(x => x.RuleId == "run-inputs-context-direct-use")).IsEmpty();
+    }
+
+    [Test]
+    public async Task LintEngine_RunEnvContextDirectUse_StrictMode_StillSuppresses_InsideSingleQuotedHereDoc()
+    {
+        var yaml = """
+        on: push
+        jobs:
+            build:
+                runs-on: ubuntu-latest
+                env:
+                    VERSION: 1.2.3
+                steps:
+                    - run: |
+                        cat <<'EOF'
+                        ${{ env.VERSION }}
+                        EOF
+        """;
+
+        var config = new LintConfig
+        {
+            Rules = new Dictionary<string, RuleConfig>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["run-env-context-direct-use"] = new RuleConfig { Strict = true },
+            }
+        };
+
+        using var result = new LintEngine([new RunEnvContextDirectUseRule()])
+            .Check(Encoding.UTF8.GetBytes(yaml), "run-env-strict-heredoc.yml", config);
+
+        await Assert.That(result.Diagnostics.Where(x => x.RuleId == "run-env-context-direct-use")).IsEmpty();
+    }
+
+    [Test]
+    public async Task LintEngine_RunInputsContextDirectUse_Diagnoses_MultilineSingleQuoteOnSeparateLine()
+    {
+        // Single-quote state is line-scoped: an opening quote on a prior line does not suppress
+        // diagnostics for expressions on later lines.
+        var yaml = """
+        on: workflow_dispatch
+        jobs:
+            build:
+                runs-on: ubuntu-latest
+                steps:
+                    - run: |
+                        echo 'start
+                        ${{ inputs.target }}
+                        end'
+        """;
+
+        using var result = new LintEngine([new RunInputsContextDirectUseRule()])
+            .Check(Encoding.UTF8.GetBytes(yaml), "run-inputs-multiline-single-quote-line2.yml");
+
+        await Assert.That(result.Diagnostics.Any(x => x.RuleId == "run-inputs-context-direct-use")).IsTrue();
     }
 
     [Test]

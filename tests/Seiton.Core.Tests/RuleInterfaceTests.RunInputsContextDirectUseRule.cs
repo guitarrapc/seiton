@@ -61,6 +61,31 @@ public sealed partial class RuleInterfaceTests
             """,
             []),
             new RuleCase(
+            "ok-run-inputs-inside-single-quotes-default",
+            """
+            on: workflow_dispatch
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - run: echo '${{ inputs.target }}'
+            """,
+            []),
+            new RuleCase(
+            "ok-run-inputs-inside-single-quoted-heredoc",
+            """
+            on: workflow_dispatch
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - run: |
+                            cat <<'EOF'
+                            ${{ inputs.target }}
+                            EOF
+            """,
+            []),
+            new RuleCase(
             "ng-run-uses-inputs-dot-access",
             """
             on: workflow_dispatch

@@ -24,4 +24,5 @@ internal enum RuleKeyFlags : ushort
     IgnoreActions = 1 << 10,
     FixMapping = 1 << 11,
     StrictDetection = 1 << 12,
+    Strict = 1 << 13,
 }

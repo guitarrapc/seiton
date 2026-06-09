@@ -1598,7 +1598,7 @@ jobs:
 |---|---|---|
 | ✓ | — | △ |
 
-Errors when `${{ env.* }}` is directly interpolated inside a `run` script. Shell variable expansion (`$VAR` / `$env:VAR`) must be used instead.
+Errors when `${{ env.* }}` is directly interpolated inside a `run` script. Shell variable expansion (`$VAR` / `$env:VAR`) must be used instead. By default, no diagnostic is emitted in shell no-expand contexts (single-quoted shell strings and single-quoted heredocs).
 
 **Why:** Expression interpolation happens before shell execution and can mismatch shell quoting/expansion semantics, producing brittle behavior.
 
@@ -1627,13 +1627,35 @@ jobs:
 **When fixing:**
 
 - Use `$VAR` for POSIX shells and `$env:VAR` for PowerShell.
-- Simple standalone single-quoted forms like `'${{ env.VERSION }}'` are auto-fixed by rewriting to double-quoted shell-variable form (`"${VERSION}"` / `"$env:VERSION"`).
+- Enable `rules.run-env-context-direct-use.strict: true` to diagnose shell single-quoted contexts.
+- Simple standalone single-quoted forms like `'${{ env.VERSION }}'` are auto-fixed by rewriting to double-quoted shell-variable form (`"${VERSION}"` / `"$env:VERSION"`) when strict mode is enabled.
 - Compound expressions are not auto-fixed; move them into `env:` first, then reference shell variables.
 - No auto-fix is attached inside no-expand heredocs or complex single-quoted regions (e.g. `'pre-${{ env.VERSION }}-post'`); review these manually.
 
 Replace `${{ env.VAR }}` with `$VAR` (bash/sh) or `$env:VAR` (PowerShell).
 
 For compound expressions (e.g. `${{ env.TAG || 'fallback' }}`), no auto-fix is available. A help message suggests moving the entire expression to an `env:` block and referencing the shell variable instead.
+
+**Shell context policy**
+
+| Shell context | `strict` | Outcome |
+|---|---|---|
+| Unquoted or double-quoted (expandable) | n/a | Diagnose |
+| Shell single-quoted (`'...${{ }}...'`) | `false` | Suppress |
+| Shell single-quoted (`'...${{ }}...'`) | `true` | Diagnose |
+| Single-quoted heredoc (`<<'EOF'` body) | any | Suppress |
+
+Auto-fix when a diagnostic is emitted:
+
+| Shell context | Outcome |
+|---|---|
+| Unquoted or double-quoted | Fix when safe |
+| Shell single-quoted | Simple standalone token only (`strict: true` only) |
+| Single-quoted heredoc | n/a (suppressed) |
+| Complex single-quoted (e.g. `'pre-${{ env.X }}-post'`) | No fix (diagnosed under `strict: true` only) |
+
+- Single quotes inside a double-quoted string do not suppress detection.
+- Shell single-quote detection is line-scoped (quotes are not tracked across newlines).
 
 ---
 
@@ -1680,7 +1702,28 @@ jobs:
 - For compound expressions, move logic to `env:` manually and keep `run:` shell-variable-only; no fix is offered.
 - Confirm secrets are not printed after refactoring.
 
-Auto-fix replaces simple secret expressions when fix mode is on (`seiton --fix` or `fix` enabled in config). With no existing mapping, it adds `env: SECRET_NAME: ${{ secrets.SECRET_NAME }}` and rewrites the `run:` reference. Ambiguous mappings, heredoc no-expand bodies, and shell single-quoted strings remain no-fix.
+Auto-fix replaces simple secret expressions when fix mode is on (`seiton --fix` or `fix` enabled in config). With no existing mapping, it adds `env: SECRET_NAME: ${{ secrets.SECRET_NAME }}` and rewrites the `run:` reference. Ambiguous mappings, heredoc no-expand bodies, and shell single-quoted strings remain no-fix. Shell single-quoted no-expand contexts still emit diagnostics with guidance for manual boundary refactoring.
+
+**Shell context policy**
+
+Unlike `run-env` / `run-inputs`, this rule keeps diagnostics in shell single-quoted contexts because secrets handling is security-sensitive. Only single-quoted heredocs are suppressed (no shell expansion occurs there).
+
+| Shell context | Outcome |
+|---|---|
+| Unquoted or double-quoted (expandable) | Diagnose |
+| Shell single-quoted (`'...${{ }}...'`) | Diagnose (manual-refactor guidance; no auto-fix) |
+| Single-quoted heredoc (`<<'EOF'` body) | Suppress |
+
+Auto-fix when a diagnostic is emitted:
+
+| Shell context | Outcome |
+|---|---|
+| Unquoted or double-quoted | Fix when safe |
+| Shell single-quoted | No fix |
+| Single-quoted heredoc | n/a (suppressed) |
+
+- Single quotes inside a double-quoted string do not suppress detection.
+- Shell single-quote detection is line-scoped (quotes are not tracked across newlines).
 
 ---
 
@@ -1690,7 +1733,7 @@ Auto-fix replaces simple secret expressions when fix mode is on (`seiton --fix` 
 |---|---|---|
 | ✓ | — | △ |
 
-Errors when `${{ inputs.* }}` or `${{ github.event.inputs.* }}` are directly interpolated inside a `run` script. Inputs may be user-controlled.
+Errors when `${{ inputs.* }}` or `${{ github.event.inputs.* }}` are directly interpolated inside a `run` script. Inputs may be user-controlled. By default, no diagnostic is emitted inside shell no-expand contexts (single-quoted shell strings and single-quoted heredocs).
 
 **Why:** Inputs can carry untrusted user data; direct interpolation into shell commands introduces injection and quoting risks.
 
@@ -1731,12 +1774,36 @@ jobs:
 **When fixing:**
 
 - Auto-fix may reuse an existing unique `env` mapping or insert a step-local mapping when deterministic.
-- No fix is attached for ambiguous mappings, no-expand heredocs, or shell single-quoted strings.
+- No fix is attached for ambiguous mappings.
+- Enable `rules.run-inputs-context-direct-use.strict: true` to diagnose shell single-quoted contexts.
+- Strict mode does not auto-fix shell single-quoted contexts (env mapping cannot be safely rewritten inside no-expand quotes); refactor manually.
+- no-expand heredocs remain suppressed regardless of strict mode.
 - Re-test dispatch/reusable-call paths after migration to confirm quoting and default behaviors.
 
 **Notes:**
 
-Auto-fix reuses an existing unique `env` mapping for the same input when available. Otherwise, when `fix` is enabled, it inserts a step-local `env:` entry and rewrites simple or compound expressions to a shell variable. No fix is offered inside no-expand heredocs or shell single-quoted strings; a help message suggests moving the entire expression to an `env:` block when fix cannot apply. The env-insertion path additionally skips flow-style `env` and empty `env: {}`.
+Auto-fix reuses an existing unique `env` mapping for the same input when available. Otherwise, when `fix` is enabled, it inserts a step-local `env:` entry and rewrites simple or compound expressions to a shell variable. For no-expand heredocs and shell single-quoted strings, this rule suppresses diagnostics to avoid non-actionable guidance. The env-insertion path additionally skips flow-style `env` and empty `env: {}`.
+
+**Shell context policy**
+
+| Shell context | `strict` | Outcome |
+|---|---|---|
+| Unquoted or double-quoted (expandable) | n/a | Diagnose |
+| Shell single-quoted (`'...${{ }}...'`) | `false` | Suppress |
+| Shell single-quoted (`'...${{ }}...'`) | `true` | Diagnose |
+| Single-quoted heredoc (`<<'EOF'` body) | any | Suppress |
+
+Auto-fix when a diagnostic is emitted:
+
+| Shell context | Outcome |
+|---|---|
+| Unquoted or double-quoted | Fix when safe |
+| Shell single-quoted | No fix (diagnosed under `strict: true` only) |
+| Single-quoted heredoc | n/a (suppressed) |
+| Complex single-quoted (e.g. `'pre-${{ inputs.X }}-post'`) | No fix (diagnosed under `strict: true` only) |
+
+- Single quotes inside a double-quoted string do not suppress detection.
+- Shell single-quote detection is line-scoped (quotes are not tracked across newlines).
 
 ---
 

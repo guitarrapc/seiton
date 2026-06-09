@@ -390,6 +390,8 @@ Some rules accept additional configuration keys. All additive list keys append t
 | `unpinned-uses` | `ignore-actions` | Object entries for actions to exclude from SHA-pinning checks. `owner` is required; optional `refs` narrows the ignore to exact refs. |
 | `overprovisioned-secrets` | `max-step-env-secrets` / `max-job-secrets` | Integer thresholds for secret over-provisioning detection. |
 | `bot-conditions` | `strict-detection` | When `true`, report exclusion checks (`!=`) on PR-only workflows at info severity. Defaults to `false`. |
+| `run-env-context-direct-use` | `strict` | When `true`, diagnose shell single-quoted no-expand contexts (default suppresses them). Defaults to `false`. |
+| `run-inputs-context-direct-use` | `strict` | When `true`, diagnose shell single-quoted no-expand contexts (default suppresses them). Defaults to `false`. |
 
 <a id="bot-conditionsstrict-detection"></a>
 #### `bot-conditions.strict-detection`
@@ -405,6 +407,32 @@ rules:
 When enabled, inequality checks on PR-only workflows are reported at info severity. Mixed or non-PR triggers remain suppressed. Dual exclusion filters (`github.actor != '…[bot]' && github.event.pull_request.user.login != '…[bot]'`) are not reported.
 
 For the full outcome matrix (`strict-detection` × operator × triggers × mitigation), see [rules.md#bot-conditions-decision-matrix](rules.md#bot-conditions-decision-matrix).
+
+<a id="run-env-context-direct-usestrict"></a>
+#### `run-env-context-direct-use.strict`
+
+By default, `run-env-context-direct-use` suppresses diagnostics in shell no-expand contexts to avoid non-actionable findings.
+
+```yaml
+rules:
+  run-env-context-direct-use:
+    strict: true
+```
+
+When enabled, shell single-quoted contexts are diagnosed. no-expand heredoc (`<<'EOF'`) remains suppressed.
+
+<a id="run-inputs-context-direct-usestrict"></a>
+#### `run-inputs-context-direct-use.strict`
+
+By default, `run-inputs-context-direct-use` suppresses diagnostics in shell no-expand contexts to reduce noise for intentional remote-shell patterns.
+
+```yaml
+rules:
+  run-inputs-context-direct-use:
+    strict: true
+```
+
+When enabled, shell single-quoted contexts are diagnosed. no-expand heredoc (`<<'EOF'`) remains suppressed.
 
 <a id="runner-labelknown-hosted-labels"></a>
 #### `runner-label.known-hosted-labels`

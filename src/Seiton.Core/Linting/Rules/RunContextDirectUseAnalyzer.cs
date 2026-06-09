@@ -1094,6 +1094,21 @@ internal static class RunContextDirectUseAnalyzer
 
     internal readonly record struct HereDocState(int TerminatorOffset, int TerminatorLength, bool StripTabs, int ContentIndentLength);
 
+    /// <summary>
+    /// Returns true when a direct-use diagnostic should be suppressed for no-expand contexts.
+    /// Always suppresses inside no-expand heredoc, and suppresses shell single-quoted contexts
+    /// unless strict mode is enabled.
+    /// </summary>
+    internal static bool ShouldSuppressNoExpandDirectUseDiagnostic(byte[] source, int targetOffset, bool strict)
+    {
+        if (IsInsideNoExpandHereDoc(source, targetOffset))
+        {
+            return true;
+        }
+
+        return !strict && IsInsideShellSingleQuotes(source, targetOffset);
+    }
+
     // Single-Quote Detection
 
     /// <summary>
