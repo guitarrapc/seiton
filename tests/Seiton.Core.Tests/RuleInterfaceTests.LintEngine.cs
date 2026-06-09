@@ -2024,6 +2024,35 @@ public sealed partial class RuleInterfaceTests
     }
 
     [Test]
+    public async Task LintEngine_RunEnvContextDirectUse_Fix_RewritesSimpleShellSingleQuotes_UsesJobDefaultsPowerShell()
+    {
+        var yaml = """
+        on: push
+        jobs:
+            build:
+                runs-on: windows-latest
+                defaults:
+                    run:
+                        shell: pwsh
+                steps:
+                    - run: Write-Host '${{ env.VERSION }}'
+        """;
+
+        var sourceBytes = Encoding.UTF8.GetBytes(yaml);
+        var engine = new LintEngine([new RunEnvContextDirectUseRule()]);
+        using var result = engine.Check(sourceBytes, "run-env-fix-single-quote-job-defaults-pwsh.yml");
+        var diagnostic = result.Diagnostics.First(x => x.RuleId == "run-env-context-direct-use");
+
+        await Assert.That(diagnostic.Fix is not null).IsTrue();
+
+        var fixedBytes = FixEngine.Apply(sourceBytes, diagnostic.Fix!.Value.Edits);
+        var fixedText = Encoding.UTF8.GetString(fixedBytes);
+
+        await Assert.That(fixedText.Contains("\"$env:VERSION\"", StringComparison.Ordinal)).IsTrue();
+        await Assert.That(fixedText.Contains("'${{ env.VERSION }}'", StringComparison.Ordinal)).IsFalse();
+    }
+
+    [Test]
     public async Task LintEngine_RunEnvContextDirectUse_Fix_DoesNotAttachFix_ForComplexShellSingleQuotes()
     {
         var yaml = """
@@ -2037,6 +2066,25 @@ public sealed partial class RuleInterfaceTests
 
         using var result = new LintEngine([new RunEnvContextDirectUseRule()])
             .Check(Encoding.UTF8.GetBytes(yaml), "run-env-no-fix-complex-single-quote.yml");
+        var diagnostic = result.Diagnostics.First(x => x.RuleId == "run-env-context-direct-use");
+
+        await Assert.That(diagnostic.Fix).IsNull();
+    }
+
+    [Test]
+    public async Task LintEngine_RunEnvContextDirectUse_Fix_DoesNotAttachFix_ForUnbalancedShellSingleQuoteContext()
+    {
+        var yaml = """
+        on: push
+        jobs:
+            build:
+                runs-on: ubuntu-latest
+                steps:
+                    - run: echo '${{ env.VERSION }}
+        """;
+
+        using var result = new LintEngine([new RunEnvContextDirectUseRule()])
+            .Check(Encoding.UTF8.GetBytes(yaml), "run-env-no-fix-unbalanced-single-quote.yml");
         var diagnostic = result.Diagnostics.First(x => x.RuleId == "run-env-context-direct-use");
 
         await Assert.That(diagnostic.Fix).IsNull();

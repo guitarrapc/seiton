@@ -308,3 +308,89 @@ dotnet run -c Release --project src/Seiton.Benchmark --filter "*CoreLintBenchmar
 レビューラウンド 4 指摘:
 
 - 指摘なし
+
+## P2 実装記録（完了）
+
+### 実装内容
+
+- 等価クラスの不足を補う回帰テストを追加
+  - `job defaults (pwsh)` 経由でも simple single-quote 救済が動作することを明示
+  - 未閉 single-quote（判定不能/非単純）では no-fix を維持することを明示
+- C# 実装仕様（`.github/docs/Seiton_Linter_csharp_spec.md`）に `run-env-context-direct-use` の fix 境界を追記
+
+### テスト（回帰防止）
+
+追加:
+
+- `LintEngine_RunEnvContextDirectUse_Fix_RewritesSimpleShellSingleQuotes_UsesJobDefaultsPowerShell`
+- `LintEngine_RunEnvContextDirectUse_Fix_DoesNotAttachFix_ForUnbalancedShellSingleQuoteContext`
+
+実行結果:
+
+- `dotnet test --project tests/Seiton.Core.Tests --treenode-filter /*/*/RuleInterfaceTests/LintEngine_RunEnvContextDirectUse*` 成功（20件）
+- `dotnet test` 全体は実行済みだが、今回変更と無関係な既知失敗（`Seiton.Update.Tests` の raw source hash 差分、`Seiton.Tests` のパス表現差分）で失敗
+
+### ベンチマーク（P2 前後比較）
+
+実行コマンド（前後共通）:
+
+```shell
+dotnet run -c Release --project src/Seiton.Benchmark --filter "*CoreLintBenchmark*"
+```
+
+比較（ShortRun, P2 前 = P1 完了時、P2 後 = 本フェーズ時点）:
+
+| Case | Before Mean | After Mean | 変化 | Before Alloc | After Alloc | 変化 |
+|---|---:|---:|---:|---:|---:|---:|
+| Small / Fix=false | 179.1 us | 188.9 us | +5.5% | 8.67 KB | 8.67 KB | 0.0% |
+| Small / Fix=true | 306.2 us | 145.1 us | -52.6% | 10.27 KB | 10.13 KB | -1.4% |
+| Medium / Fix=false | 3,806.9 us | 2,333.4 us | -38.7% | 68.66 KB | 68.52 KB | -0.2% |
+| Medium / Fix=true | 5,466.0 us | 4,508.2 us | -17.5% | 81.88 KB | 83.12 KB | +1.5% |
+| Large / Fix=false | 50,096.1 us | 35,398.9 us | -29.3% | 325.53 KB | 325.53 KB | 0.0% |
+| Large / Fix=true | 78,850.5 us | 48,720.3 us | -38.2% | 380.52 KB | 380.38 KB | 0.0% |
+
+評価:
+
+- 本フェーズは production code の変更を含まず、性能差は主に ShortRun 計測揺れ由来
+- Allocated は全ケースでほぼ不変（-1.4%〜+1.5%）で、メモリ回帰の兆候なし
+- P2 の性能要件は「回帰なし」と判断
+
+改善策（継続）:
+
+- `run-env-context-direct-use` の専用 micro-benchmark を将来追加し、ルール単体で安定比較できるようにする
+- CoreLintBenchmark は回帰監視に使用しつつ、判定は複数回計測の中央値で行う
+
+### ユーザーファースト API 観点
+
+- simple single-quote 救済が defaults 経由 shell 解決でも一貫して動作し、利用者の期待に沿う
+- 判定不能（未閉クォート）では no-fix を維持し、事故る自動修正を防止
+- 境界条件がテストで明文化され、利用者が挙動を予測しやすい
+
+### 仕様整合性
+
+- `.github/docs/Seiton_Linter_spec.md`（P1までで更新済み）
+- `.github/docs/Seiton_Linter_csharp_spec.md`（P2で更新）
+- `docs/rules.md`（P1までで更新済み）
+
+上記 3 点で `run-env-context-direct-use` の fix 制約が整合した状態になった。
+
+### 実装レビュー（反復）
+
+レビューラウンド 1 指摘:
+
+- 指摘: defaults 経由の shell 解決で single-quote 救済が仕様として明示されていない
+- 対応: job defaults(pwsh) 経由ケースの回帰テストを追加
+
+レビューラウンド 2 指摘:
+
+- 指摘: 判定不能 single-quote（未閉クォート）の no-fix 保証が不足
+- 対応: 未閉クォート no-fix テストを追加
+
+レビューラウンド 3 指摘:
+
+- 指摘: C# 実装仕様の rule 注釈が `—` のままで挙動差分が読めない
+- 対応: `.github/docs/Seiton_Linter_csharp_spec.md` に fix 境界を追記
+
+レビューラウンド 4 指摘:
+
+- 指摘なし
