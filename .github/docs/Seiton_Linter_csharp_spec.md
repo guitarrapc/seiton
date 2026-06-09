@@ -298,7 +298,7 @@ The current default rule scope in C# is:
 | `unsound-contains` | — |
 | `bot-conditions` | Uses `BotActors` generated dataset. `!=` exclusion checks are gated by `strict-detection` rule config (default `false`). |
 | `expr-undefined-var` | `CheckTemplateType`/`CheckTemplateTypeWithOverrides` for `${{ }}` type checks. `CheckEnvMappingType` for `env: ${{ expr }}`. `ValidateIndexAccess`/`ValidateIndexAccessWithOverrides` for index type checks. Uses `LocalActionOutputResolver` and `LocalReusableWorkflowOutputResolver`. |
-| `run-env-context-direct-use` | — |
+| `run-env-context-direct-use` | `RunEnvContextDirectUseRule`: simple `${{ env.* }}` is fixable to shell variable form. Shell single-quoted contexts are fixable only for standalone tokens (`'${{ env.VAR }}'` → `"${VAR}"` / `"$env:VAR"`); complex or unbalanced single-quote contexts remain no-fix. |
 | `run-secrets-context-direct-use` | — |
 | `run-inputs-context-direct-use` | — |
 | `secrets-whole-context-access` | Checked in `run:`, `env:`, and `with:` sinks at step and job level. |

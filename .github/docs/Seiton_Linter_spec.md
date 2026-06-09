@@ -1074,7 +1074,7 @@ The following table classifies each default rule by fix feasibility.
 | Rule ID | Fix Feasibility | Fix Description |
 |---|---|---|
 | `deny-write-all` | ✓ Fixable | Replace `write-all` scalar with an explicit empty mapping baseline (`{}`) for least-privilege follow-up scoping. |
-| `run-env-context-direct-use` | △ Partial fixable | Replace `${{ env.VAR }}` with `$VAR` (or `${VAR}` for POSIX shells) inside `run:` text, except inside quoted heredoc bodies where expansion semantics differ. Compound expressions emit a help hint instead of a fix. |
+| `run-env-context-direct-use` | △ Partial fixable | Replace `${{ env.VAR }}` with `$VAR` (or `${VAR}` for POSIX shells) inside `run:` text. In shell single-quoted strings, only a standalone simple token (for example `'${{ env.VAR }}'`) is auto-fixed by rewriting the surrounding quotes to double quotes; quoted heredoc bodies and complex single-quoted contexts remain no-fix. Compound expressions emit a help hint instead of a fix. |
 | `job-permissions-required` | ✓ Fixable | Insert `permissions:` as a new key immediately after `runs-on:` (or after `uses:` for reusable workflow jobs, or after job id key if both are absent). When the job's steps reference popular actions with known permission requirements (from supplemental-required-permissions.json), the fix inserts the merged minimum required scopes (e.g., `contents: read` for `actions/checkout`). When no known action requirements are found, the fix inserts `permissions: {}`. |
 | `unpinned-uses` | ✗ Not auto-fixable | Requires resolving current SHA for the referenced action/workflow at fix time (external I/O). |
 | `unpinned-image` | ✗ Not auto-fixable | Requires resolving current digest for the referenced image at fix time (external I/O). |
