@@ -46,6 +46,47 @@ public sealed partial class RuleInterfaceTests
             """,
             []),
             new RuleCase(
+            "ok-run-uses-job-level-env-mapping",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    env:
+                        TOKEN: ${{ secrets.MY_TOKEN }}
+                    steps:
+                        - run: echo "$TOKEN"
+            """,
+            []),
+            new RuleCase(
+            "ok-run-inside-single-quoted-heredoc",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - run: |
+                            cat <<'EOF'
+                            ${{ secrets.MY_TOKEN }}
+                            EOF
+            """,
+            []),
+            new RuleCase(
+            "ok-run-uses-pwsh-env-shell-variable",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: windows-latest
+                    steps:
+                        - shell: pwsh
+                          env:
+                              TOKEN: ${{ secrets.MY_TOKEN }}
+                          run: Write-Host $env:TOKEN
+            """,
+            []),
+            new RuleCase(
             "ng-run-uses-secrets-dot-access",
             """
             on: push
@@ -100,6 +141,17 @@ public sealed partial class RuleInterfaceTests
                         - run: echo "${{ format('{0}', secrets.MY_TOKEN) }}"
             """,
             ["must not reference", "secrets.*", "shell variables"]),
+            new RuleCase(
+            "ng-run-uses-secrets-in-shell-single-quotes",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - run: echo '${{ secrets.MY_TOKEN }}'
+            """,
+            ["shell no-expand context", "secrets.*"]),
         };
 
         await AssertRuleCases(new RunSecretsContextDirectUseRule(), "run-secrets-context-direct-use", cases);

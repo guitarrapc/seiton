@@ -3208,6 +3208,94 @@ public sealed partial class RuleInterfaceTests
     }
 
     [Test]
+    public async Task LintEngine_RunInputsContextDirectUse_StrictDetection_DoesNotAttachFix_InsideSingleQuotes()
+    {
+        var yaml = """
+        on: workflow_dispatch
+        jobs:
+            build:
+                runs-on: ubuntu-latest
+                steps:
+                    - run: echo '${{ inputs.target }}'
+        """;
+
+        var config = new LintConfig
+        {
+            Fix = new FixConfig { Enabled = true },
+            Rules = new Dictionary<string, RuleConfig>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["run-inputs-context-direct-use"] = new RuleConfig { Strict = true },
+            }
+        };
+
+        using var result = new LintEngine([new RunInputsContextDirectUseRule()])
+            .Check(Encoding.UTF8.GetBytes(yaml), "run-inputs-strict-single-quotes-no-fix.yml", config);
+        var diagnostic = result.Diagnostics.First(x => x.RuleId == "run-inputs-context-direct-use");
+
+        await Assert.That(diagnostic.Fix is null).IsTrue();
+    }
+
+    [Test]
+    public async Task LintEngine_RunInputsContextDirectUse_StrictMode_StillSuppresses_InsideSingleQuotedHereDoc()
+    {
+        var yaml = """
+        on: workflow_dispatch
+        jobs:
+            build:
+                runs-on: ubuntu-latest
+                steps:
+                    - run: |
+                        cat <<'EOF'
+                        ${{ inputs.target }}
+                        EOF
+        """;
+
+        var config = new LintConfig
+        {
+            Rules = new Dictionary<string, RuleConfig>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["run-inputs-context-direct-use"] = new RuleConfig { Strict = true },
+            }
+        };
+
+        using var result = new LintEngine([new RunInputsContextDirectUseRule()])
+            .Check(Encoding.UTF8.GetBytes(yaml), "run-inputs-strict-heredoc.yml", config);
+
+        await Assert.That(result.Diagnostics.Where(x => x.RuleId == "run-inputs-context-direct-use")).IsEmpty();
+    }
+
+    [Test]
+    public async Task LintEngine_RunEnvContextDirectUse_StrictMode_StillSuppresses_InsideSingleQuotedHereDoc()
+    {
+        var yaml = """
+        on: push
+        jobs:
+            build:
+                runs-on: ubuntu-latest
+                env:
+                    VERSION: 1.2.3
+                steps:
+                    - run: |
+                        cat <<'EOF'
+                        ${{ env.VERSION }}
+                        EOF
+        """;
+
+        var config = new LintConfig
+        {
+            Rules = new Dictionary<string, RuleConfig>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["run-env-context-direct-use"] = new RuleConfig { Strict = true },
+            }
+        };
+
+        using var result = new LintEngine([new RunEnvContextDirectUseRule()])
+            .Check(Encoding.UTF8.GetBytes(yaml), "run-env-strict-heredoc.yml", config);
+
+        await Assert.That(result.Diagnostics.Where(x => x.RuleId == "run-env-context-direct-use")).IsEmpty();
+    }
+
+    [Test]
     public async Task LintEngine_RunInputsContextDirectUse_Fix_DoesNotAttach_WithEmptyFlowStyleEnv()
     {
         var yaml = """

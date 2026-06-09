@@ -1734,6 +1734,7 @@ jobs:
 - Auto-fix may reuse an existing unique `env` mapping or insert a step-local mapping when deterministic.
 - No fix is attached for ambiguous mappings.
 - Enable `rules.run-inputs-context-direct-use.strict: true` to diagnose shell single-quoted contexts.
+- Strict mode does not auto-fix shell single-quoted contexts (env mapping cannot be safely rewritten inside no-expand quotes); refactor manually.
 - no-expand heredocs remain suppressed regardless of strict mode.
 - Re-test dispatch/reusable-call paths after migration to confirm quoting and default behaviors.
 
