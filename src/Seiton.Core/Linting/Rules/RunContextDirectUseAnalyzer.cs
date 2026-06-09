@@ -1386,20 +1386,25 @@ internal static class RunContextDirectUseAnalyzer
 
     internal static bool IsFlowStyleEnv(byte[] utf8Yaml, Env env)
     {
-        if (env.Range.Start < 0 || env.Range.Start >= utf8Yaml.Length)
+        if (env.Range.Start <= 0 || env.Range.Start > utf8Yaml.Length)
         {
             return false;
         }
 
-        var pos = env.Range.Start;
-        while (pos < utf8Yaml.Length && utf8Yaml[pos] != (byte)'\n')
+        // env.Range.Start points to the first content byte inside the mapping.
+        // For flow-style, '{' appears before this position on the same line.
+        for (var i = env.Range.Start - 1; i >= 0; i--)
         {
-            if (utf8Yaml[pos] == (byte)'{')
+            var b = utf8Yaml[i];
+            if (b == (byte)'\n' || b == (byte)'\r')
+            {
+                break;
+            }
+
+            if (b == (byte)'{')
             {
                 return true;
             }
-
-            pos++;
         }
 
         return false;
@@ -1510,6 +1515,29 @@ internal static class RunContextDirectUseAnalyzer
         }
 
         return lastContentLine;
+    }
+
+    internal static string PathToEnvVarName(string pathString)
+    {
+        var sb = new StringBuilder(pathString.Length);
+        for (var i = 0; i < pathString.Length; i++)
+        {
+            var c = pathString[i];
+            if (c is '.' or '-')
+            {
+                sb.Append('_');
+            }
+            else if (c is >= 'a' and <= 'z')
+            {
+                sb.Append((char)(c - 32));
+            }
+            else
+            {
+                sb.Append(c);
+            }
+        }
+
+        return sb.ToString();
     }
 
     /// <summary>
