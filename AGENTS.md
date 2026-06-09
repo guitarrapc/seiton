@@ -29,6 +29,17 @@ Define success criteria. Loop until verified.
 
 For multi-step tasks, state a brief plan with verification per step.
 
+### Data-Oriented Design
+
+Prefer data-oriented design with explicit types and explicit side-effect boundaries.
+
+- Model domain state with simple typed data structures first; keep transformations deterministic.
+- Make type intent obvious at API boundaries (input/output, ownership, nullability, lifetimes).
+- Isolate side effects (I/O, network, time, environment access) to clear boundary layers so core parsing/linting logic remains pure where practical.
+- Avoid over-OOP abstractions: do not add inheritance, service layers, or interface indirection unless there is a measured and recurring need.
+- Prefer value/data modeling (`struct`, `record struct`, plain data classes) and explicit control flow over deep class hierarchies or behavior-heavy objects.
+- Keep polymorphism at narrow extension points only (for example, rule/plugin boundaries). Do not spread dynamic dispatch across core hot paths.
+
 ## What is this project?
 
 Seiton is a C# tool that parses and lints GitHub Actions documents (workflow files and action metadata files).
