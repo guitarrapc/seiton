@@ -1690,7 +1690,7 @@ Auto-fix replaces simple secret expressions when fix mode is on (`seiton --fix` 
 |---|---|---|
 | ✓ | — | △ |
 
-Errors when `${{ inputs.* }}` or `${{ github.event.inputs.* }}` are directly interpolated inside a `run` script. Inputs may be user-controlled.
+Errors when `${{ inputs.* }}` or `${{ github.event.inputs.* }}` are directly interpolated inside a `run` script. Inputs may be user-controlled. No diagnostic is emitted inside shell no-expand contexts (single-quoted shell strings and single-quoted heredocs).
 
 **Why:** Inputs can carry untrusted user data; direct interpolation into shell commands introduces injection and quoting risks.
 
@@ -1731,12 +1731,13 @@ jobs:
 **When fixing:**
 
 - Auto-fix may reuse an existing unique `env` mapping or insert a step-local mapping when deterministic.
-- No fix is attached for ambiguous mappings, no-expand heredocs, or shell single-quoted strings.
+- No fix is attached for ambiguous mappings.
+- No diagnostic is emitted inside no-expand heredocs or shell single-quoted strings.
 - Re-test dispatch/reusable-call paths after migration to confirm quoting and default behaviors.
 
 **Notes:**
 
-Auto-fix reuses an existing unique `env` mapping for the same input when available. Otherwise, when `fix` is enabled, it inserts a step-local `env:` entry and rewrites simple or compound expressions to a shell variable. No fix is offered inside no-expand heredocs or shell single-quoted strings; a help message suggests moving the entire expression to an `env:` block when fix cannot apply. The env-insertion path additionally skips flow-style `env` and empty `env: {}`.
+Auto-fix reuses an existing unique `env` mapping for the same input when available. Otherwise, when `fix` is enabled, it inserts a step-local `env:` entry and rewrites simple or compound expressions to a shell variable. For no-expand heredocs and shell single-quoted strings, this rule suppresses diagnostics to avoid non-actionable guidance. The env-insertion path additionally skips flow-style `env` and empty `env: {}`.
 
 ---
 
