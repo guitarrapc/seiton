@@ -210,3 +210,101 @@ dotnet run -c Release --project src/Seiton.Benchmark --filter "*CoreLintBenchmar
 レビューラウンド 3 指摘:
 
 - 指摘なし
+
+## P1 実装記録（完了）
+
+### 実装内容
+
+- `RunEnvContextDirectUseRule.TryBuildFix` の single-quote 分岐を P0 の全面 no-fix から拡張
+- `IsInsideShellSingleQuotes` かつ「単純トークン `'${{ env.VAR }}'`」のみを救済
+- 救済時は置換範囲を式本体ではなく前後のシングルクォートを含む範囲へ拡張し、ダブルクォート化して shell 変数へ置換
+  - POSIX: `"${VAR}"`
+  - PowerShell: `"$env:VAR"`
+- 複雑 single-quote（前後に追加テキストあり等）は従来通り no-fix
+
+### テスト（Red → Green）
+
+追加/更新:
+
+- `LintEngine_RunEnvContextDirectUse_Fix_RewritesSimpleShellSingleQuotes_ForPosix`
+- `LintEngine_RunEnvContextDirectUse_Fix_RewritesSimpleShellSingleQuotes_ForPowerShell`
+- `LintEngine_RunEnvContextDirectUse_Fix_DoesNotAttachFix_ForComplexShellSingleQuotes`
+
+Red:
+
+- 実装前は simple single-quote ケースで `Fix == null` となり失敗
+
+Green:
+
+- 実装後は simple single-quote 2 ケースで fix 付与・期待置換
+- complex single-quote は `Fix == null` を維持
+- `LintEngine_RunEnvContextDirectUse*` 一式（18件）成功
+
+### 回帰確認
+
+- `dotnet test --project tests/Seiton.Core.Tests --treenode-filter /*/*/RuleInterfaceTests/LintEngine_RunEnvContextDirectUse*` は成功
+- `dotnet test` 全体は実行済みだが、今回変更と無関係な既知失敗（`Seiton.Update.Tests` の raw source hash 差分、`Seiton.Tests` のパス表現差分）で失敗
+
+### ベンチマーク（P1 前後比較）
+
+実行コマンド（前後共通）:
+
+```shell
+dotnet run -c Release --project src/Seiton.Benchmark --filter "*CoreLintBenchmark*"
+```
+
+比較（ShortRun, P1 前 = P0 適用後、P1 後 = 本実装後）:
+
+| Case | Before Mean | After Mean | 変化 | Before Alloc | After Alloc | 変化 |
+|---|---:|---:|---:|---:|---:|---:|
+| Small / Fix=false | 261.7 us | 179.1 us | -31.6% | 8.81 KB | 8.67 KB | -1.6% |
+| Small / Fix=true | 340.3 us | 306.2 us | -10.0% | 10.27 KB | 10.27 KB | 0.0% |
+| Medium / Fix=false | 2,171.3 us | 3,806.9 us | +75.3% | 68.52 KB | 68.66 KB | +0.2% |
+| Medium / Fix=true | 3,447.5 us | 5,466.0 us | +58.5% | 82.02 KB | 81.88 KB | -0.2% |
+| Large / Fix=false | 49,751.3 us | 50,096.1 us | +0.7% | 325.67 KB | 325.53 KB | 0.0% |
+| Large / Fix=true | 76,988.3 us | 78,850.5 us | +2.4% | 380.52 KB | 380.52 KB | 0.0% |
+
+評価:
+
+- Allocated は実質不変（-1.6%〜+0.2%）で、追加処理はゼロアロケーション方針を維持
+- Mean は ShortRun のばらつきが大きく、Medium で特に揺れが大きい
+- 影響の本質は single-quote ケースでの境界チェック（前後1文字確認 + 1 edit 生成）であり、hot path の計算量増分は小さい
+
+改善策:
+
+- P2 で `run-env-context-direct-use` 専用 benchmark（single-quote simple/complex を含む）を追加
+- CoreLintBenchmark の評価は単発比率ではなく複数回実行の中央値で判定
+
+### ユーザーファースト API 観点
+
+- 危険な自動修正は引き続き抑制しつつ、ユーザーが期待する単純ケースは自動修正される
+- 修正結果は直感的（single quote → double quote + shell 変数）で、手作業修正と一致する
+- 複雑ケースで無理に fix しないため、予期しない実行時破壊を回避
+
+### 仕様整合性
+
+- `.github/docs/Seiton_Linter_spec.md` を更新
+  - simple single-quote 救済あり、quoted heredoc/complex single-quote は no-fix を明記
+- `docs/rules.md` を更新
+  - 「When fixing」に single-quote 救済条件と no-fix 境界を追記
+
+### 実装レビュー（反復）
+
+レビューラウンド 1 指摘:
+
+- 指摘: P1 でも single-quote 全面 no-fix のままで、ユーザー期待（単純ケース救済）を満たしていない
+- 対応: 単純トークン `'${{ env.VAR }}'` を判定して quote ごと置換する経路を追加
+
+レビューラウンド 2 指摘:
+
+- 指摘: 複雑 single-quote まで置換すると意味破壊リスク
+- 対応: 前後が単一 quote 境界のケースのみに限定し、複雑ケース no-fix テストを追加
+
+レビューラウンド 3 指摘:
+
+- 指摘: 仕様・ユーザー向け文書が P1 挙動を説明できていない
+- 対応: `Seiton_Linter_spec.md` と `docs/rules.md` を同期更新
+
+レビューラウンド 4 指摘:
+
+- 指摘なし

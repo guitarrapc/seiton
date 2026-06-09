@@ -1627,8 +1627,9 @@ jobs:
 **When fixing:**
 
 - Use `$VAR` for POSIX shells and `$env:VAR` for PowerShell.
+- Simple standalone single-quoted forms like `'${{ env.VERSION }}'` are auto-fixed by rewriting to double-quoted shell-variable form (`"${VERSION}"` / `"$env:VERSION"`).
 - Compound expressions are not auto-fixed; move them into `env:` first, then reference shell variables.
-- No auto-fix is attached inside no-expand heredocs and shell single-quoted regions; review these manually.
+- No auto-fix is attached inside no-expand heredocs or complex single-quoted regions (e.g. `'pre-${{ env.VERSION }}-post'`); review these manually.
 
 Replace `${{ env.VAR }}` with `$VAR` (bash/sh) or `$env:VAR` (PowerShell).
 

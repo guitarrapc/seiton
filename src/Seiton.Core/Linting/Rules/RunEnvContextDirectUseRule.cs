@@ -135,11 +135,6 @@ public sealed class RunEnvContextDirectUseRule() : RuleBase(RuleId.RunEnvContext
             return false;
         }
 
-        if (IsInsideShellSingleQuotes(Config.Utf8Yaml, absoluteOffset))
-        {
-            return false;
-        }
-
         if (!TryParseSimpleContextReference(expression, "env"u8, out var variableName))
         {
             return false;
@@ -155,9 +150,46 @@ public sealed class RunEnvContextDirectUseRule() : RuleBase(RuleId.RunEnvContext
             ? "$env:" + variableName
             : "${" + variableName + "}";
 
+        if (IsInsideShellSingleQuotes(Config.Utf8Yaml, absoluteOffset))
+        {
+            if (!TryBuildSingleQuotedSimpleEdit(Config.Utf8Yaml, absoluteOffset, expressionLength, replacement, out var singleQuotedEdit))
+            {
+                return false;
+            }
+
+            fix = new DiagnosticFix(
+                "replace direct env context expansion with shell variable",
+                [singleQuotedEdit]);
+            return true;
+        }
+
         fix = new DiagnosticFix(
             "replace direct env context expansion with shell variable",
             [new TextEdit(absoluteOffset, expressionLength, replacement)]);
+        return true;
+    }
+
+    private static bool TryBuildSingleQuotedSimpleEdit(byte[] source, int absoluteOffset, int expressionLength, string replacement, out TextEdit edit)
+    {
+        edit = default;
+        if ((uint)absoluteOffset >= (uint)source.Length || expressionLength <= 0)
+        {
+            return false;
+        }
+
+        var singleQuoteStart = absoluteOffset - 1;
+        var singleQuoteEnd = absoluteOffset + expressionLength;
+        if ((uint)singleQuoteStart >= (uint)source.Length || (uint)singleQuoteEnd >= (uint)source.Length)
+        {
+            return false;
+        }
+
+        if (source[singleQuoteStart] != (byte)'\'' || source[singleQuoteEnd] != (byte)'\'')
+        {
+            return false;
+        }
+
+        edit = new TextEdit(singleQuoteStart, expressionLength + 2, "\"" + replacement + "\"");
         return true;
     }
 
