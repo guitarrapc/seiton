@@ -166,76 +166,13 @@ internal static class RunContextDirectUseAnalyzer
     internal static bool TryConsumeMemberOrBracketName(ReadOnlySpan<byte> expression, ref int index, out string name)
     {
         name = string.Empty;
-        if (index >= expression.Length)
+        if (!TryConsumeMemberOrBracketNameBounds(expression, ref index, out var nameStart, out var nameLength))
         {
             return false;
         }
 
-        if (expression[index] == (byte)'.')
-        {
-            index++;
-            if (!TryReadIdentifier(expression, ref index, out name))
-            {
-                return false;
-            }
-
-            SkipWhiteSpace(expression, ref index);
-            return index == expression.Length;
-        }
-
-        if (expression[index] != (byte)'[')
-        {
-            return false;
-        }
-
-        index++;
-        SkipWhiteSpace(expression, ref index);
-        if (index >= expression.Length)
-        {
-            return false;
-        }
-
-        var quote = expression[index];
-        if (quote is not ((byte)'\'' or (byte)'"'))
-        {
-            return false;
-        }
-
-        index++;
-        var start = index;
-        while (index < expression.Length && expression[index] != quote)
-        {
-            index++;
-        }
-
-        if (index >= expression.Length)
-        {
-            return false;
-        }
-
-        var nameBytes = expression[start..index];
-        index++;
-        SkipWhiteSpace(expression, ref index);
-        if (index >= expression.Length || expression[index] != (byte)']')
-        {
-            return false;
-        }
-
-        index++;
-        SkipWhiteSpace(expression, ref index);
-        if (index != expression.Length)
-        {
-            return false;
-        }
-
-        var parsedName = Encoding.UTF8.GetString(nameBytes);
-        if (!IsSimpleIdentifier(parsedName))
-        {
-            return false;
-        }
-
-        name = parsedName;
-        return true;
+        name = DecodeExpressionName(expression, nameStart, nameLength);
+        return name.Length > 0;
     }
 
     internal static bool TryParseSimpleContextReference(ReadOnlySpan<byte> expression, ReadOnlySpan<byte> rootToken, out string name)
@@ -695,7 +632,20 @@ internal static class RunContextDirectUseAnalyzer
             return false;
         }
 
-        return IsGithubEventChain(node.Left, nodes, expression);
+        var leftNodeId = node.Left;
+        if (leftNodeId < 0 || leftNodeId >= nodes.Length)
+        {
+            return false;
+        }
+
+        var eventNode = nodes[leftNodeId];
+        if (eventNode.Kind != ExpressionNodeKind.MemberAccess
+            || !EqualsAsciiIgnoreCase(eventNode.Token.AsSpan(expression), "event"u8))
+        {
+            return false;
+        }
+
+        return IsIdentifierNode(eventNode.Left, nodes, expression, "github"u8);
     }
 
     internal static bool IsIdentifierNode(int nodeId, ExpressionNode[] nodes, ReadOnlySpan<byte> expression, ReadOnlySpan<byte> expected)
@@ -708,27 +658,6 @@ internal static class RunContextDirectUseAnalyzer
         var node = nodes[nodeId];
         return node.Kind == ExpressionNodeKind.Identifier
             && EqualsAsciiIgnoreCase(node.Token.AsSpan(expression), expected);
-    }
-
-    private static bool IsGithubEventChain(int nodeId, ExpressionNode[] nodes, ReadOnlySpan<byte> expression)
-    {
-        if (nodeId < 0 || nodeId >= nodes.Length)
-        {
-            return false;
-        }
-
-        var node = nodes[nodeId];
-        if (node.Kind != ExpressionNodeKind.MemberAccess)
-        {
-            return false;
-        }
-
-        if (!EqualsAsciiIgnoreCase(node.Token.AsSpan(expression), "event"u8))
-        {
-            return false;
-        }
-
-        return IsIdentifierNode(node.Left, nodes, expression, "github"u8);
     }
 
     private static bool ContainsInputsReferenceInFunction(
@@ -1687,77 +1616,12 @@ internal static class RunContextDirectUseAnalyzer
     internal static bool TryConsumeGitHubMemberOrBracketName(ReadOnlySpan<byte> expression, ref int index, out string name)
     {
         name = string.Empty;
-        if (index >= expression.Length)
+        if (!TryConsumeGitHubMemberOrBracketNameBounds(expression, ref index, out var nameStart, out var nameLength))
         {
             return false;
         }
 
-        if (expression[index] == (byte)'.')
-        {
-            index++;
-            SkipWhiteSpace(expression, ref index);
-            if (!TryReadGitHubIdentifier(expression, ref index, out name))
-            {
-                return false;
-            }
-
-            SkipWhiteSpace(expression, ref index);
-            return index == expression.Length;
-        }
-
-        if (expression[index] != (byte)'[')
-        {
-            return false;
-        }
-
-        index++;
-        SkipWhiteSpace(expression, ref index);
-        if (index >= expression.Length)
-        {
-            return false;
-        }
-
-        var quote = expression[index];
-        if (quote is not ((byte)'\'' or (byte)'"'))
-        {
-            return false;
-        }
-
-        index++;
-        var start = index;
-        while (index < expression.Length && expression[index] != quote)
-        {
-            index++;
-        }
-
-        if (index >= expression.Length)
-        {
-            return false;
-        }
-
-        var nameBytes = expression[start..index];
-        index++;
-        SkipWhiteSpace(expression, ref index);
-        if (index >= expression.Length || expression[index] != (byte)']')
-        {
-            return false;
-        }
-
-        index++;
-        SkipWhiteSpace(expression, ref index);
-        if (index != expression.Length)
-        {
-            return false;
-        }
-
-        // Validate as a GitHub identifier (allows hyphens)
-        var parsedIndex = 0;
-        if (!TryReadGitHubIdentifier(nameBytes, ref parsedIndex, out name) || parsedIndex != nameBytes.Length)
-        {
-            name = string.Empty;
-            return false;
-        }
-
-        return true;
+        name = DecodeExpressionName(expression, nameStart, nameLength);
+        return name.Length > 0;
     }
 }
