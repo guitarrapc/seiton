@@ -45,6 +45,7 @@ src/Seiton.Benchmark/ — Performance benchmarks
 tests/                — Test projects
 sandbox/DotnetFiles/  — Prototyping and verification scripts
 data/                 — Generated data sources (manifest, availability, etc.)
+docs/                 - User-facing usage documentations
 ```
 
 ## Skills
