@@ -1,6 +1,6 @@
 ﻿namespace Seiton.Core.Linting.PinRemediation;
 
-internal static class PinRemediationTextHelpers
+public static class PinRemediationTextHelpers
 {
     internal static bool ContainsExact(IReadOnlyList<string> values, string target)
     {
@@ -16,7 +16,7 @@ internal static class PinRemediationTextHelpers
         return false;
     }
 
-    internal static string AppendHelp(string? originalHelp, string skipReason)
+    public static string AppendHelp(string? originalHelp, string skipReason)
     {
         if (string.IsNullOrWhiteSpace(originalHelp))
         {

@@ -89,6 +89,9 @@ public sealed class GitHubActionShaResolver(HttpClient httpClient, FixPinningCon
 
     public static bool TryGetSkipReasonForUsesRef(string usesRef, FixPinningConfig pinningConfig, out string reason)
     {
+        ArgumentNullException.ThrowIfNull(usesRef);
+        ArgumentNullException.ThrowIfNull(pinningConfig);
+
         if (!TryParseActionReference(usesRef, out var owner, out var repo, out var reference))
         {
             reason = string.Empty;

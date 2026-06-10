@@ -90,6 +90,9 @@ public sealed class OciImageDigestResolver : IImageDigestResolver
 
     public static bool TryGetSkipReason(string imageRef, FixImagesConfig config, out string reason)
     {
+        ArgumentNullException.ThrowIfNull(imageRef);
+        ArgumentNullException.ThrowIfNull(config);
+
         if (!TryParseImageReference(imageRef, out var parsed) || parsed.AlreadyPinned)
         {
             reason = string.Empty;

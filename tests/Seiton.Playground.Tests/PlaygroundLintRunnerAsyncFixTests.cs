@@ -238,8 +238,8 @@ public sealed class PlaygroundLintRunnerAsyncFixTests : IDisposable
         // Resolver returns fully deterministic fixtures (no external release dependency).
         PlaygroundLintRunner.ActionShaResolverOverride = new MultiFakeActionShaResolver(new Dictionary<string, (string sha, string comment)>
         {
-          ["actions/checkout"] = (checkoutSha, checkoutTagComment),
-          ["actions/cache"] = (cacheSha, cacheTagComment),
+            ["actions/checkout"] = (checkoutSha, checkoutTagComment),
+            ["actions/cache"] = (cacheSha, cacheTagComment),
         });
 
         // Act

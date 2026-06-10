@@ -705,7 +705,7 @@ internal static class CheckCommand
             var diagnostic = diagnostics[i];
             if (TryGetStaticPinSkipReason(diagnostic, pinningConfig, imagesConfig, out var reason))
             {
-                destination.Add(diagnostic with { Help = AppendHelp(diagnostic.Help, reason) });
+                destination.Add(diagnostic with { Help = PinRemediationTextHelpers.AppendHelp(diagnostic.Help, reason) });
                 continue;
             }
 
@@ -741,21 +741,6 @@ internal static class CheckCommand
         }
 
         return false;
-    }
-
-    private static string AppendHelp(string? originalHelp, string skipReason)
-    {
-        if (string.IsNullOrWhiteSpace(originalHelp))
-        {
-            return skipReason;
-        }
-
-        if (string.Equals(originalHelp, skipReason, StringComparison.Ordinal))
-        {
-            return originalHelp;
-        }
-
-        return string.Concat(originalHelp, "\n", skipReason);
     }
 
     internal static void WriteNetworkFixHint(TextWriter writer, List<Diagnostic> diagnostics, bool enablePinNetwork, bool enableImageNetwork)

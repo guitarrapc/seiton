@@ -2704,7 +2704,7 @@ public sealed class FixCommandTests
 
             await Assert.That(exitCode).IsEqualTo(ExitCode.LintIssuesFound);
             await Assert.That(sw.ToString()).Contains("help: pinning skipped: tag 'latest' matches fix.images.exclude-tags");
-      await Assert.That(stderr.ToString().Contains("tagless or :latest images are not auto-pinned by default", StringComparison.Ordinal)).IsFalse();
+            await Assert.That(stderr.ToString().Contains("tagless or :latest images are not auto-pinned by default", StringComparison.Ordinal)).IsFalse();
         }
         finally
         {

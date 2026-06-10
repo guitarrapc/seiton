@@ -9,6 +9,34 @@ public sealed class OciImageDigestResolverTests
     private const string Digest = "sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
 
     [Test]
+    public async Task TryGetSkipReason_ThrowsArgumentNull_WhenImageRefIsNull()
+    {
+        try
+        {
+            _ = OciImageDigestResolver.TryGetSkipReason(null!, new FixImagesConfig(), out _);
+            throw new Exception("Expected ArgumentNullException was not thrown.");
+        }
+        catch (ArgumentNullException ex)
+        {
+            await Assert.That(ex.ParamName).IsEqualTo("imageRef");
+        }
+    }
+
+    [Test]
+    public async Task TryGetSkipReason_ThrowsArgumentNull_WhenConfigIsNull()
+    {
+        try
+        {
+            _ = OciImageDigestResolver.TryGetSkipReason("ghcr.io/astral-sh/uv:0.5.4", null!, out _);
+            throw new Exception("Expected ArgumentNullException was not thrown.");
+        }
+        catch (ArgumentNullException ex)
+        {
+            await Assert.That(ex.ParamName).IsEqualTo("config");
+        }
+    }
+
+    [Test]
     public async Task ResolveAsync_ReturnsDigest_ForExplicitRegistryTag()
     {
         var handler = new StubHttpMessageHandler();

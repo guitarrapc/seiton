@@ -8,6 +8,34 @@ namespace Seiton.Core.Tests;
 public sealed class GitHubActionShaResolverTests
 {
     [Test]
+    public async Task TryGetSkipReasonForUsesRef_ThrowsArgumentNull_WhenUsesRefIsNull()
+    {
+        try
+        {
+            _ = GitHubActionShaResolver.TryGetSkipReasonForUsesRef(null!, new FixPinningConfig(), out _);
+            throw new Exception("Expected ArgumentNullException was not thrown.");
+        }
+        catch (ArgumentNullException ex)
+        {
+            await Assert.That(ex.ParamName).IsEqualTo("usesRef");
+        }
+    }
+
+    [Test]
+    public async Task TryGetSkipReasonForUsesRef_ThrowsArgumentNull_WhenPinningConfigIsNull()
+    {
+        try
+        {
+            _ = GitHubActionShaResolver.TryGetSkipReasonForUsesRef("actions/checkout@v4", null!, out _);
+            throw new Exception("Expected ArgumentNullException was not thrown.");
+        }
+        catch (ArgumentNullException ex)
+        {
+            await Assert.That(ex.ParamName).IsEqualTo("pinningConfig");
+        }
+    }
+
+    [Test]
     public async Task ResolveAsync_ReturnsCommitSha_ForDirectTagReference()
     {
         var handler = new StubHttpMessageHandler();
