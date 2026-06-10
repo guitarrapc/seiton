@@ -60,17 +60,17 @@ public sealed class PinRemediationEngine(
                 {
                     var output = await RemediateOneAsync(diagnostic, utf8Yaml, cancellationToken);
                     outputs[index] = output.Diagnostic;
-                    if (output.Resolved)
+                    switch (output.Status)
                     {
-                        Interlocked.Increment(ref resolvedCount);
-                    }
-                    if (output.Skipped)
-                    {
-                        Interlocked.Increment(ref skippedCount);
-                    }
-                    if (output.Failed)
-                    {
-                        Interlocked.Increment(ref failedCount);
+                        case RemediationStatus.Resolved:
+                            Interlocked.Increment(ref resolvedCount);
+                            break;
+                        case RemediationStatus.Skipped:
+                            Interlocked.Increment(ref skippedCount);
+                            break;
+                        case RemediationStatus.Failed:
+                            Interlocked.Increment(ref failedCount);
+                            break;
                     }
                 }
                 finally
@@ -91,7 +91,7 @@ public sealed class PinRemediationEngine(
     {
         if (diagnostic.RuleId is not (UsesRuleId or ImageRuleId))
         {
-            return new RemediationOutcome(diagnostic, Resolved: false, Skipped: false, Failed: false);
+            return new RemediationOutcome(diagnostic, RemediationStatus.None);
         }
 
         var timeout = _networkConfig.TimeoutSeconds > 0
@@ -115,7 +115,7 @@ public sealed class PinRemediationEngine(
         }
         catch when (_networkConfig.OnError == NetworkErrorMode.Skip)
         {
-            return new RemediationOutcome(diagnostic, Resolved: false, Skipped: false, Failed: true);
+            return new RemediationOutcome(diagnostic, RemediationStatus.Failed);
         }
     }
 
@@ -126,13 +126,13 @@ public sealed class PinRemediationEngine(
     {
         if (_actionShaResolver is null)
         {
-            return new RemediationOutcome(diagnostic, Resolved: false, Skipped: true, Failed: false);
+            return new RemediationOutcome(diagnostic, RemediationStatus.Skipped);
         }
 
         if (!PinDiagnosticMetadata.TryGetUsesRef(diagnostic, out var usesRef)
             || !TryParseActionReference(usesRef, out var owner, out var repo, out var currentRef))
         {
-            return new RemediationOutcome(diagnostic, Resolved: false, Skipped: false, Failed: true);
+            return new RemediationOutcome(diagnostic, RemediationStatus.Failed);
         }
 
         var resolution = await _actionShaResolver.ResolveAsync(owner, repo, currentRef, cancellationToken);
@@ -141,19 +141,19 @@ public sealed class PinRemediationEngine(
             if (!string.IsNullOrWhiteSpace(resolution.SkipReason))
             {
                 var help = PinRemediationTextHelpers.AppendHelp(diagnostic.Help, resolution.SkipReason);
-                return new RemediationOutcome(diagnostic with { Help = help }, Resolved: false, Skipped: true, Failed: false);
+                return new RemediationOutcome(diagnostic with { Help = help }, RemediationStatus.Skipped);
             }
 
-            return new RemediationOutcome(diagnostic, Resolved: false, Skipped: true, Failed: false);
+            return new RemediationOutcome(diagnostic, RemediationStatus.Skipped);
         }
 
         var fix = PinFixFormatter.BuildActionsShaFix(diagnostic, resolution.Sha, resolution.TagComment, utf8Yaml);
         if (fix is null)
         {
-            return new RemediationOutcome(diagnostic, Resolved: false, Skipped: false, Failed: true);
+            return new RemediationOutcome(diagnostic, RemediationStatus.Failed);
         }
 
-        return new RemediationOutcome(diagnostic with { Fix = fix.Value }, Resolved: true, Skipped: false, Failed: false);
+        return new RemediationOutcome(diagnostic with { Fix = fix.Value }, RemediationStatus.Resolved);
     }
 
     private async Task<RemediationOutcome> RemediateUnpinnedImageAsync(
@@ -163,35 +163,43 @@ public sealed class PinRemediationEngine(
     {
         if (_imageDigestResolver is null)
         {
-            return new RemediationOutcome(diagnostic, Resolved: false, Skipped: true, Failed: false);
+            return new RemediationOutcome(diagnostic, RemediationStatus.Skipped);
         }
 
         if (!PinDiagnosticMetadata.TryGetImageRef(diagnostic, out var imageRef))
         {
-            return new RemediationOutcome(diagnostic, Resolved: false, Skipped: false, Failed: true);
+            return new RemediationOutcome(diagnostic, RemediationStatus.Failed);
         }
 
         var resolution = await _imageDigestResolver.ResolveAsync(imageRef, cancellationToken);
         if (!string.IsNullOrWhiteSpace(resolution.SkipReason))
         {
             var help = PinRemediationTextHelpers.AppendHelp(diagnostic.Help, resolution.SkipReason);
-            return new RemediationOutcome(diagnostic with { Help = help }, Resolved: false, Skipped: true, Failed: false);
+            return new RemediationOutcome(diagnostic with { Help = help }, RemediationStatus.Skipped);
         }
 
         if (resolution.Digest is null)
         {
-            return new RemediationOutcome(diagnostic, Resolved: false, Skipped: true, Failed: false);
+            return new RemediationOutcome(diagnostic, RemediationStatus.Skipped);
         }
 
         var fix = PinFixFormatter.BuildImageDigestFix(diagnostic, resolution.Digest, utf8Yaml);
         if (fix is null)
         {
-            return new RemediationOutcome(diagnostic, Resolved: false, Skipped: false, Failed: true);
+            return new RemediationOutcome(diagnostic, RemediationStatus.Failed);
         }
 
-        return new RemediationOutcome(diagnostic with { Fix = fix.Value }, Resolved: true, Skipped: false, Failed: false);
+        return new RemediationOutcome(diagnostic with { Fix = fix.Value }, RemediationStatus.Resolved);
     }
 
-    private readonly record struct RemediationOutcome(Diagnostic Diagnostic, bool Resolved, bool Skipped, bool Failed);
+    private enum RemediationStatus
+    {
+        None,
+        Resolved,
+        Skipped,
+        Failed,
+    }
+
+    private readonly record struct RemediationOutcome(Diagnostic Diagnostic, RemediationStatus Status);
 
 }
