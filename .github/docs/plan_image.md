@@ -93,7 +93,7 @@ action pinning（`unpinned-uses`）は `ActionShaResolution.Skipped(reason)` に
 
 1. **`IImageDigestResolver` にスキップ理由を返す API を追加**
    - `ActionShaResolution` と同様に `ImageDigestResolution`（`Digest`, `SkipReason`）を導入
-   - `OciImageDigestResolver.ShouldSkip` 時に理由を返す  
+   - `OciImageDigestResolver.ShouldSkip` 時に理由を返す
      例: `pinning skipped: tag 'latest' matches fix.images.exclude-tags`
 2. **`PinRemediationEngine.RemediateUnpinnedImageAsync` で `help:` にスキップ理由を付与**
    - `RemediateUnpinnedUsesAsync` と同パターン
@@ -196,7 +196,7 @@ services:
 | `docs/configuration.md` | `exclude-tags` コメント拡充 |
 | `src/Seiton/Skills/references/fix-mode.md` | 同上 + ネットワーク fix 後のヒント説明 |
 | `.claude/skills/seiton/references/fix-mode.md` | 同上 |
-| `CheckCommand.WriteNetworkFixHint` | イメージネットワーク有効でも未修正 `unpinned-image` が残る場合に exclude-tags ヒントを出力 |
+| `CheckCommand.WriteNetworkFixHint` | ネットワーク未有効時のみ再実行ヒントを出力（`--enable-pin-network` / `--enable-image-network`）。ネットワーク有効時の `unpinned-image` は個別 `help:` を参照 |
 | `.github/docs/Seiton_Linter_spec.md` §12.2.2 | `ImageDigestResolution` / `SkipReason` を反映 |
 | `.github/docs/Seiton_Linter_csharp_spec.md` | C# API 仕様を実装に同期 |
 

@@ -145,7 +145,7 @@ fix:
       - "mcr.microsoft.com/**"
 ```
 
-When `--enable-image-network` is on but an image is still not pinned, check the diagnostic `help:` line. Skips due to `exclude-tags` / `exclude-images` are explained there. The CLI also prints a hint when unfixed `unpinned-image` diagnostics remain after a network-enabled fix run.
+When `--enable-image-network` is on but an image is still not pinned, check the diagnostic `help:` line. Skips due to `exclude-tags` / `exclude-images` are explained there.
 
 ## Workflow Example
 

@@ -1,4 +1,4 @@
-using System.Text;
+﻿using System.Text;
 using Seiton.Core.Linting;
 using Seiton.Core.Linting.PinRemediation;
 using Seiton.Core.Parsing;
@@ -11,6 +11,8 @@ namespace Seiton.Benchmark;
 [Orderer(BenchmarkDotNet.Order.SummaryOrderPolicy.FastestToSlowest)]
 public class PinRemediationBenchmark
 {
+    private NoNetworkHandler _handler = null!;
+    private HttpClient _httpClient = null!;
     private OciImageDigestResolver _resolver = null!;
     private PinRemediationEngine _engine = null!;
     private Diagnostic[] _skipDiagnostics = null!;
@@ -19,9 +21,10 @@ public class PinRemediationBenchmark
     [GlobalSetup]
     public void Setup()
     {
-        var handler = new NoNetworkHandler();
+        _handler = new NoNetworkHandler();
+        _httpClient = new HttpClient(_handler, disposeHandler: false);
         _resolver = new OciImageDigestResolver(
-            new HttpClient(handler, disposeHandler: true),
+            _httpClient,
             new FixImagesConfig(),
             dockerConfigPath: Path.Combine(Path.GetTempPath(), "__nonexistent_seiton_bench_docker_config__.json"));
 
@@ -76,6 +79,13 @@ public class PinRemediationBenchmark
                 RuleId: "unpinned-image",
                 Metadata: PinDiagnosticMetadata.ForImageRef("docker://ghcr.io/astral-sh/uv:latest")),
         ];
+    }
+
+    [GlobalCleanup]
+    public void Cleanup()
+    {
+        _httpClient.Dispose();
+        _handler.Dispose();
     }
 
     [Benchmark(Baseline = true, Description = "OciImageDigestResolver skip (implicit latest)")]
