@@ -227,6 +227,84 @@ jobs:
 3. duplicate 検出後も処理継続し、同ファイルの他問題も報告できる。
 4. 追加テストが通過し、既存テストを壊さない。
 
+## TODO（次セッション）— CLI サマリー: parser 診断のルール別集計
+
+### 背景
+
+`dotnet publish` 後に `samples/parser` で実行すると、診断本文は `error[parse]:` と表示されるが、末尾のルール別テーブル（`| Rule | Count |`）には parser 診断が載らない。
+
+```
+1 error in 1 file
+
+| File      | Errors | Warnings |
+|-----------|-------:|---------:|
+| test.yaml |      1 |        0 |
+
+（ルール別テーブルなし）
+```
+
+件数サマリーとファイル別テーブルは正しいが、「何のエラーか」のカテゴリがサマリーに残らず、本文を読まないと把握できない。
+
+### 現状（parser と syntax-check の整理）
+
+Seiton 内部では **parser 診断と lint rule 診断は分離**されているが、**ユーザー向け表示 ID は統一されていない**。
+
+| レイヤ | 内部 `RuleId` | CLI 表示 | actionlint 互換タグ |
+|--------|---------------|----------|---------------------|
+| Parser 構文診断（duplicate key 等） | `null` | `parse`（`DiagnosticFormatter` が `?? "parse"`） | `syntax-check` |
+| VYaml fatal（YAML 壊れ） | `null` | `parse` | `syntax-check` |
+| Lint rule が parser と同内容を再検出 | 各 rule id（例: `job-structure`） | その rule id | 互換マップ経由で `syntax-check` になるものあり |
+| `RuleId.Syntax`（`SyntaxRule`） | `"syntax"` | `"syntax"` | Seiton-only（actionlint 非対応） |
+
+要点:
+
+- **「parser」と「syntax-check」は CLI 上は分かれていない**。本文は `parse`、actionlint 互換出力は `syntax-check`、内部は `RuleId: null`。
+- ルール別サマリーだけが例外的に `RuleId is null` をスキップしている（`CheckCommand.WritePerRuleBreakdown`）。
+- これは意図的設計（`WriteSummaryTests.WriteSummary_Verbose_ParserDiagnosticsWithNullRuleId_GroupedSeparately`）だが、parser のみのケースでは UX が欠ける。
+
+### 案 B: `parse` をルール別サマリーに集計（採用）
+
+**表示レイヤー**で `RuleId ?? "parse"` を使い、診断本文の `error[parse]:` と揃える。
+
+期待出力:
+
+```
+1 error in 1 file
+
+| File      | Errors | Warnings |
+|-----------|-------:|---------:|
+| test.yaml |      1 |        0 |
+
+| Rule  | Count |
+|-------|------:|
+| parse |     1 |
+```
+
+**「デフォルトでもルール表を出す」について**: ルール表自体は既にデフォルト（非 verbose）で出力される。現状は `RuleId != null` の診断がある場合のみ中身が埋まる。案 B により **parser 診断のみのケースでも** ルール表が出る — 別フラグや verbose 不要。
+
+### 実装スコープ（次セッション）
+
+1. `CheckCommand.WritePerRuleBreakdown` — `if (ruleId is null) continue` を `ruleId ?? "parse"` に変更。
+2. `CheckCommand.ShouldOfferFullPerRuleBreakdownHint` — 同上（null をスキップしない）。
+3. テスト更新（`tests/Seiton.Tests/WriteSummaryTests.cs`）
+   - `WriteSummary_Verbose_ParserDiagnosticsWithNullRuleId_GroupedSeparately` → `| parse | 1 |` を期待するよう反転。
+   - `WriteSummary_NotVerbose_ParserOnlyDiagnostics_NoRuleBreakdownHint` → `| parse |` を含むことを追加。
+   - parser + lint 混在時は `parse` と各 rule id が共存することを確認。
+4. 仕様: `docs/usage.md` または linter spec に「parser 診断はサマリー上 `parse` カテゴリに集計」と 1 行追記（任意）。
+
+### スコープ外（今回やらない）
+
+- `parse` → `syntax` / `syntax-check` への表示 ID 統一（本文・JSON・SARIF・互換出力の一括変更が必要）。
+- LintEngine で parser 診断に `RuleId: "syntax"` を付与（dedup / 抑制モデルへの影響大）。
+- `seiton rules` への `parse` 登録（擬似カテゴリのまま維持でよい）。
+
+### 受け入れ基準
+
+1. parser 診断のみの workflow で、stderr サマリーに `| parse | N |` が出る。
+2. 診断本文の `error[parse]:` とサマリーの Rule 列が一致する。
+3. lint rule 診断との混在時、両方がルール表に載る。
+4. 既存 `WriteSummaryTests` / `CheckCommandTests` が通過。
+
 ## 実装時の注意
 
 - fatal parse error へ昇格しない。
