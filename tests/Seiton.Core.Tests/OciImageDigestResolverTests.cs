@@ -82,6 +82,25 @@ public sealed class OciImageDigestResolverTests
     }
 
     [Test]
+    public async Task ResolveAsync_IgnoreImagesReason_UsesMatchedRepositoryPath_WhenPatternMatchesRepositoryPath()
+    {
+        var handler = new StubHttpMessageHandler();
+        var resolver = CreateResolver(
+            handler,
+            new FixImagesConfig
+            {
+                IgnoreImages = ["astral-sh/**"],
+            });
+
+        var ignoredImage = await resolver.ResolveAsync("ghcr.io/astral-sh/uv:1.2.3");
+
+        await Assert.That(ignoredImage.Digest).IsNull();
+        await Assert.That(ignoredImage.SkipReason)
+            .IsEqualTo("pinning skipped: image 'astral-sh/uv' matches fix.images.ignore-images pattern 'astral-sh/**'");
+        await Assert.That(handler.RequestedUris).IsEmpty();
+    }
+
+    [Test]
     public async Task ResolveAsync_UsesDockerAuths_WhenRegistryCredentialsExist()
     {
         var tempDir = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N"));

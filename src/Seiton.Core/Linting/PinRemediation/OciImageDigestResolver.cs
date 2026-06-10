@@ -340,10 +340,15 @@ public sealed class OciImageDigestResolver : IImageDigestResolver
         for (var i = 0; i < _normalizedIgnoreImages.Length; i++)
         {
             var pattern = _normalizedIgnoreImages[i];
-            if (GlobMatch(pattern, parsed.MatchName)
-                || GlobMatch(pattern, parsed.RepositoryPath))
+            if (GlobMatch(pattern, parsed.MatchName))
             {
                 reason = $"pinning skipped: image '{parsed.MatchName}' matches fix.images.ignore-images pattern '{pattern}'";
+                return true;
+            }
+
+            if (GlobMatch(pattern, parsed.RepositoryPath))
+            {
+                reason = $"pinning skipped: image '{parsed.RepositoryPath}' matches fix.images.ignore-images pattern '{pattern}'";
                 return true;
             }
         }
