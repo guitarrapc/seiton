@@ -150,6 +150,45 @@ jobs:
 - 他セクションの duplicate key 文言と同じトーン/フォーマットに合わせる。
 - 目的: 既存ルール検出と同じ読み心地に寄せる。
 
+## 実装結果（2026-06-11）— P1
+
+### P1-1 Help メッセージ
+- 実装済み。
+- 変更ファイル: `src/Seiton.Core/Parsing/WorkflowParser.Steps.cs`, `WorkflowParser.ScalarParsing.cs`
+- 内容:
+  - step-level duplicate 診断に `Help` を付与（`AddError(..., help)` オーバーロード追加）。
+  - `env` 重複時: `YAML mapping keys must be unique. Merge variables into a single env: block.`
+  - その他キー: `YAML mapping keys must be unique. Keep only one "{key}" key in this step.`
+
+### P1-2 診断文言の統一
+- 実装済み。
+- 変更前: `jobs.'build'.steps[1] key "env" is duplicated. previously defined at line:X,col:Y`
+- 変更後: `jobs.'build'.steps[1] key "env" is duplicated in step. previously defined at line:X,col:Y`
+- job/section 形式（`is duplicated in "{container}" job/section`）と同じトーンに `"in step"` を追加。
+
+### P1 テスト
+- `tests/Seiton.Core.Tests/ParserTests.cs`
+  - `Parse_StepDuplicateEnv_IncludesHelp`
+  - `Parse_StepDuplicateEnv_MessageFormatMatchesOtherSections`
+- `tests/Seiton.Tests/CheckCommandTests.cs`
+  - `Check_TextMode_DuplicateStepEnv_IsReportedAndSummaryIsNotZeroIssues`（文言更新）
+
+### P1 ベンチマーク（CoreParsingBenchmark）
+
+| Size | Before (us) | After P1 (us) | Delta | Allocated |
+|------|-------------|---------------|-------|-----------|
+| Small | 45.328 | 45.777 | +1.0% | 3.84 KB（同等） |
+| Medium | 1,050.791 | 1,065.58 | +1.4% | 35.21 KB（同等） |
+| Large | 17,195.129 | 18,448.55 | +7.3% | 178.16 KB（同等） |
+
+- 所見: Help 文字列はエラー経路（コールドパス）のみで生成。hot path の bit mask 判定は不変。+10% 以内であり性能劣化なし。
+
+### P1 フェーズレビュー
+1. **Correctness**: Help が CLI `help:` として表示される（`DiagnosticFormatter` 経由）。文言は job duplicate と整合。
+2. **Performance**: エラー時のみ追加割り当て。ベンチマーク +10% 以内。
+3. **User-first API**: ユーザーは「何を直すか」（1 つの env にまとめる）を Help で受け取れる。
+4. **Spec 整合**: `Seiton_Parser_spec.md` に step duplicate + Help を追記。
+
 ## P2: 中（運用耐性の向上）
 
 1. 同一 step での複数重複ケース網羅
@@ -157,6 +196,29 @@ jobs:
 
 2. non-fatal 継続検証
 - duplicate key があっても、同ファイル内の後続 rule diagnostics が引き続き出ることを検証。
+
+## 実装結果（2026-06-11）— P2
+
+### P2-1 複数キー重複テスト
+- 実装済み（テストのみ。P0 の bit mask が全 known keys を既にカバー）。
+- 変更ファイル: `tests/Seiton.Core.Tests/ParserTests.cs`
+- 追加テスト: `Parse_StepDuplicateKnownKeys_TableDriven`（`run`, `uses`, `with`, `shell`）
+
+### P2-2 non-fatal 継続検証
+- 実装済み（テストのみ）。
+- 追加テスト: `Lint_StepDuplicateEnv_DoesNotSuppressSubsequentRuleDiagnostics`
+- 検証内容:
+  - `HasFatalError` は false
+  - duplicate `env` 診断と `expr-undefined-var` ルール診断が同一 LintEngine.Check 結果に共存
+
+### P2 ベンチマーク
+- 本番コード変更なしのため再計測不要。P1 時点の結果を維持。
+
+### P2 フェーズレビュー
+1. **Correctness**: `run`/`uses`/`with`/`shell` 重複が non-fatal で検出。後続ステップの lint も継続。
+2. **Performance**: 変更なし。
+3. **User-first API**: 1 ファイル内の複数問題を一度に把握できる挙動をテストで固定。
+4. **Spec 整合**: P0/P1 仕様と矛盾なし。
 
 ## 受け入れ基準
 

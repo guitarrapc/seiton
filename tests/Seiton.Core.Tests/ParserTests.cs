@@ -6566,6 +6566,81 @@ public sealed class ParserTests
         await Assert.That(diag.Message).Contains("key \"env\" is duplicated in step. previously defined at line:");
     }
 
+    [Test]
+    [Arguments("run", """
+        on: push
+        jobs:
+          build:
+            runs-on: ubuntu-latest
+            steps:
+              - run: echo one
+                run: echo two
+        """)]
+    [Arguments("uses", """
+        on: push
+        jobs:
+          build:
+            runs-on: ubuntu-latest
+            steps:
+              - uses: actions/checkout@v4
+                uses: actions/cache@v4
+        """)]
+    [Arguments("with", """
+        on: push
+        jobs:
+          build:
+            runs-on: ubuntu-latest
+            steps:
+              - uses: actions/checkout@v4
+                with:
+                  fetch-depth: 1
+                with:
+                  path: src
+        """)]
+    [Arguments("shell", """
+        on: push
+        jobs:
+          build:
+            runs-on: ubuntu-latest
+            steps:
+              - run: echo hi
+                shell: bash
+                shell: pwsh
+        """)]
+    public async Task Parse_StepDuplicateKnownKeys_TableDriven(string keyName, string yamlText)
+    {
+        var yaml = Encoding.UTF8.GetBytes(yamlText.TrimStart());
+        var result = WorkflowParser.ParseDirect(yaml, "test.yaml", out var arena);
+        await Assert.That(result.HasFatalError).IsFalse();
+        await Assert.That(result.Diagnostics.Any(d =>
+            d.Message.Contains($"key \"{keyName}\" is duplicated in step", StringComparison.Ordinal))).IsTrue();
+    }
+
+    [Test]
+    public async Task Lint_StepDuplicateEnv_DoesNotSuppressSubsequentRuleDiagnostics()
+    {
+        var yaml = """
+        on: push
+        jobs:
+          build:
+            runs-on: ubuntu-latest
+            steps:
+              - run: echo hi
+                env:
+                  FOO: bar
+                env:
+                  BAZ: qux
+              - run: echo ${{ steps.missing.outputs.x }}
+        """;
+        using var result = new LintEngine().Check(Encoding.UTF8.GetBytes(yaml), "test.yaml");
+        await Assert.That(result.HasFatalError).IsFalse();
+        await Assert.That(result.Diagnostics.Any(d =>
+            d.Message.Contains("key \"env\" is duplicated in step", StringComparison.Ordinal))).IsTrue();
+        await Assert.That(result.Diagnostics.Any(d =>
+            d.Message.Contains("\"missing\" is not defined in \"steps\" context", StringComparison.Ordinal)
+            && d.RuleId == "expr-undefined-var")).IsTrue();
+    }
+
     // regression: step diagnostics should include job context for actionability
     [Test]
     public async Task Parse_StepUnexpectedKey_IncludesJobContext()
