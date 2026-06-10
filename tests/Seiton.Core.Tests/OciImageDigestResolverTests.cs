@@ -9,6 +9,34 @@ public sealed class OciImageDigestResolverTests
     private const string Digest = "sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
 
     [Test]
+    public async Task TryGetSkipReason_ThrowsArgumentNull_WhenImageRefIsNull()
+    {
+        try
+        {
+            _ = OciImageDigestResolver.TryGetSkipReason(null!, new FixImagesConfig(), out _);
+            throw new Exception("Expected ArgumentNullException was not thrown.");
+        }
+        catch (ArgumentNullException ex)
+        {
+            await Assert.That(ex.ParamName).IsEqualTo("imageRef");
+        }
+    }
+
+    [Test]
+    public async Task TryGetSkipReason_ThrowsArgumentNull_WhenConfigIsNull()
+    {
+        try
+        {
+            _ = OciImageDigestResolver.TryGetSkipReason("ghcr.io/astral-sh/uv:0.5.4", null!, out _);
+            throw new Exception("Expected ArgumentNullException was not thrown.");
+        }
+        catch (ArgumentNullException ex)
+        {
+            await Assert.That(ex.ParamName).IsEqualTo("config");
+        }
+    }
+
+    [Test]
     public async Task ResolveAsync_ReturnsDigest_ForExplicitRegistryTag()
     {
         var handler = new StubHttpMessageHandler();
@@ -98,6 +126,39 @@ public sealed class OciImageDigestResolverTests
         await Assert.That(ignoredImage.SkipReason)
             .IsEqualTo("pinning skipped: image 'astral-sh/uv' matches fix.images.ignore-images pattern 'astral-sh/**'");
         await Assert.That(handler.RequestedUris).IsEmpty();
+    }
+
+    [Test]
+    public async Task TryGetSkipReason_StaticRules_CanBeReusedAcrossCalls()
+    {
+        var config = new FixImagesConfig
+        {
+            ExcludeImages = [" ghcr.io/internal/runner "],
+            ExcludeTags = [" edge "],
+            IgnoreImages = [" ghcr.io/myorg/** "],
+        };
+
+        var staticRules = OciImageDigestResolver.CreateStaticSkipRules(config);
+
+        var excludedByImage = OciImageDigestResolver.TryGetSkipReason(
+            "ghcr.io/internal/runner:1.0.0",
+            staticRules,
+            out var excludedByImageReason);
+        var excludedByTag = OciImageDigestResolver.TryGetSkipReason(
+            "ghcr.io/astral-sh/uv:edge",
+            staticRules,
+            out var excludedByTagReason);
+        var ignoredByPattern = OciImageDigestResolver.TryGetSkipReason(
+            "ghcr.io/myorg/tooling/ci:1.2.3",
+            staticRules,
+            out var ignoredByPatternReason);
+
+        await Assert.That(excludedByImage).IsTrue();
+        await Assert.That(excludedByImageReason).Contains("exclude-images");
+        await Assert.That(excludedByTag).IsTrue();
+        await Assert.That(excludedByTagReason).Contains("exclude-tags");
+        await Assert.That(ignoredByPattern).IsTrue();
+        await Assert.That(ignoredByPatternReason).Contains("ignore-images");
     }
 
     [Test]

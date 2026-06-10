@@ -1,0 +1,39 @@
+on:
+  workflow_dispatch:
+
+jobs:
+  action-pin-samples:
+    permissions:
+      contents: read
+    timeout-minutes: 10
+    runs-on: ubuntu-24.04
+    steps:
+      # fixable action pin example
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      # branch ref example (commonly skipped by default exclude-branches)
+      - uses: actions/setup-node@main
+        with:
+          node-version: "22"
+
+  image-pin-samples:
+    permissions: {}
+    timeout-minutes: 10
+    runs-on: ubuntu-24.04
+    steps:
+      # fixable image pin example
+      - name: Unpinned docker image
+        uses: docker://ghcr.io/astral-sh/uv:0.7.18
+
+  service-image-samples:
+    permissions: {}
+    timeout-minutes: 10
+    runs-on: ubuntu-24.04
+    services:
+      # implicit latest image (typically skipped by default exclude-tags)
+      redis:
+        image: redis
+    steps:
+      - run: echo "Service is up"

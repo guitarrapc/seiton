@@ -1,6 +1,7 @@
 ﻿using System.Collections.Concurrent;
 using System.Net;
 using System.Net.Http.Headers;
+using System.Runtime.CompilerServices;
 using System.Text.Json;
 
 using static Seiton.Core.Linting.ActionRefHelpers;
@@ -17,6 +18,7 @@ public sealed class OciImageDigestResolver : IImageDigestResolver
         "application/vnd.docker.distribution.manifest.list.v2+json",
         "application/vnd.docker.distribution.manifest.v2+json",
     ];
+    private static readonly ConditionalWeakTable<FixImagesConfig, StaticSkipRulesBox> StaticSkipRulesCache = new();
 
     private readonly HttpClient _httpClient;
     private readonly FixImagesConfig _config;
@@ -62,7 +64,7 @@ public sealed class OciImageDigestResolver : IImageDigestResolver
             return default;
         }
 
-        if (TryGetSkipReason(parsed, out var skipReason))
+        if (TryGetSkipReason(parsed, _normalizedExcludeImages, _normalizedExcludeTags, _normalizedIgnoreImages, out var skipReason))
         {
             return ImageDigestResolution.Skipped(skipReason);
         }
@@ -84,6 +86,42 @@ public sealed class OciImageDigestResolver : IImageDigestResolver
         }
 
         return default;
+    }
+
+    public static bool TryGetSkipReason(string imageRef, FixImagesConfig config, out string reason)
+    {
+        ArgumentNullException.ThrowIfNull(imageRef);
+        ArgumentNullException.ThrowIfNull(config);
+
+        if (!TryParseImageReference(imageRef, out var parsed) || parsed.AlreadyPinned)
+        {
+            reason = string.Empty;
+            return false;
+        }
+
+        var staticRules = StaticSkipRulesCache
+            .GetValue(config, static c => new StaticSkipRulesBox(CreateStaticSkipRules(c)))
+            .Rules;
+        return TryGetSkipReason(parsed, staticRules.ExcludeImages, staticRules.ExcludeTags, staticRules.IgnoreImages, out reason);
+    }
+
+    internal static StaticSkipRules CreateStaticSkipRules(FixImagesConfig config)
+    {
+        return new StaticSkipRules(
+            NormalizeEntries(config.ExcludeImages),
+            NormalizeEntries(config.ExcludeTags),
+            NormalizeEntries(config.IgnoreImages));
+    }
+
+    internal static bool TryGetSkipReason(string imageRef, in StaticSkipRules staticRules, out string reason)
+    {
+        if (!TryParseImageReference(imageRef, out var parsed) || parsed.AlreadyPinned)
+        {
+            reason = string.Empty;
+            return false;
+        }
+
+        return TryGetSkipReason(parsed, staticRules.ExcludeImages, staticRules.ExcludeTags, staticRules.IgnoreImages, out reason);
     }
 
     private async Task<string?> ResolveDigestAsync(
@@ -317,29 +355,34 @@ public sealed class OciImageDigestResolver : IImageDigestResolver
         return new Uri(realmStr + query);
     }
 
-    private bool TryGetSkipReason(ParsedImageReference parsed, out string reason)
+    private static bool TryGetSkipReason(
+        ParsedImageReference parsed,
+        string[] normalizedExcludeImages,
+        string[] normalizedExcludeTags,
+        string[] normalizedIgnoreImages,
+        out string reason)
     {
-        if (ContainsExact(_normalizedExcludeImages, parsed.MatchName))
+        if (PinRemediationTextHelpers.ContainsExact(normalizedExcludeImages, parsed.MatchName))
         {
             reason = $"pinning skipped: image '{parsed.MatchName}' matches fix.images.exclude-images";
             return true;
         }
 
-        if (ContainsExact(_normalizedExcludeImages, parsed.RepositoryPath))
+        if (PinRemediationTextHelpers.ContainsExact(normalizedExcludeImages, parsed.RepositoryPath))
         {
             reason = $"pinning skipped: image '{parsed.RepositoryPath}' matches fix.images.exclude-images";
             return true;
         }
 
-        if (ContainsExact(_normalizedExcludeTags, parsed.Reference))
+        if (PinRemediationTextHelpers.ContainsExact(normalizedExcludeTags, parsed.Reference))
         {
             reason = $"pinning skipped: tag '{parsed.Reference}' matches fix.images.exclude-tags";
             return true;
         }
 
-        for (var i = 0; i < _normalizedIgnoreImages.Length; i++)
+        for (var i = 0; i < normalizedIgnoreImages.Length; i++)
         {
-            var pattern = _normalizedIgnoreImages[i];
+            var pattern = normalizedIgnoreImages[i];
             if (GlobMatch(pattern, parsed.MatchName))
             {
                 reason = $"pinning skipped: image '{parsed.MatchName}' matches fix.images.ignore-images pattern '{pattern}'";
@@ -402,19 +445,6 @@ public sealed class OciImageDigestResolver : IImageDigestResolver
     private static string NormalizeValue(string value)
     {
         return value.Trim().ToLowerInvariant();
-    }
-
-    private static bool ContainsExact(string[] values, string target)
-    {
-        for (var i = 0; i < values.Length; i++)
-        {
-            if (string.Equals(values[i], target, StringComparison.Ordinal))
-            {
-                return true;
-            }
-        }
-
-        return false;
     }
 
     private static bool TryParseImageReference(string imageRef, out ParsedImageReference parsed)
@@ -628,6 +658,16 @@ public sealed class OciImageDigestResolver : IImageDigestResolver
         string Reference,
         string CacheKey,
         bool AlreadyPinned);
+
+    internal readonly record struct StaticSkipRules(
+        string[] ExcludeImages,
+        string[] ExcludeTags,
+        string[] IgnoreImages);
+
+    private sealed class StaticSkipRulesBox(StaticSkipRules rules)
+    {
+        public StaticSkipRules Rules { get; } = rules;
+    }
 
     private sealed class DockerAuthConfig(IReadOnlyDictionary<string, string> auths)
     {

@@ -3,6 +3,7 @@ using System.Runtime.InteropServices;
 using Seiton.Cli;
 using Seiton.Config;
 using Seiton.Core.Linting;
+using Seiton.Core.Linting.PinRemediation;
 using Seiton.Core.Parsing;
 using Seiton.Output;
 
@@ -90,6 +91,8 @@ internal static class CheckCommand
         }
 
         var lintRunConfig = CreateCheckLintConfig(lintConfig, resolvedFormat);
+        var pinningConfig = lintConfig?.Fix.Pinning ?? new FixPinningConfig();
+        var imagesConfig = lintConfig?.Fix.Images ?? new FixImagesConfig();
 
         // Lint files
         var allDiagnostics = new List<Diagnostic>();
@@ -139,7 +142,7 @@ internal static class CheckCommand
 
                 var fileStart = verboseLogger.GetTimestamp();
                 using var result = engine.Check(utf8Yaml, filePath, lintRunConfig);
-                allDiagnostics.AddRange(result.Diagnostics.AsSpan());
+                AddDiagnosticsWithStaticPinSkipHelp(allDiagnostics, result.Diagnostics.AsSpan(), pinningConfig, imagesConfig);
                 sourceMap?.TryAdd(filePath, utf8Yaml);
                 if (verboseLogger.IsEnabled)
                 {
@@ -234,7 +237,7 @@ internal static class CheckCommand
             // Aggregate in input order for stable output
             for (var i = 0; i < slots.Length; i++)
             {
-                allDiagnostics.AddRange(slots[i].Diagnostics.AsSpan());
+                AddDiagnosticsWithStaticPinSkipHelp(allDiagnostics, slots[i].Diagnostics.AsSpan(), pinningConfig, imagesConfig);
                 if (sourceMap is not null && slots[i].Utf8Yaml is { } yaml)
                     sourceMap.TryAdd(slots[i].FilePath, yaml);
 
@@ -690,6 +693,55 @@ internal static class CheckCommand
     }
 
     internal static int CountDigits(int value) => DecimalFormat.CountDigits(value);
+
+    private static void AddDiagnosticsWithStaticPinSkipHelp(
+        List<Diagnostic> destination,
+        ReadOnlySpan<Diagnostic> diagnostics,
+        FixPinningConfig pinningConfig,
+        FixImagesConfig imagesConfig)
+    {
+        for (var i = 0; i < diagnostics.Length; i++)
+        {
+            var diagnostic = diagnostics[i];
+            if (TryGetStaticPinSkipReason(diagnostic, pinningConfig, imagesConfig, out var reason))
+            {
+                destination.Add(diagnostic with { Help = PinRemediationTextHelpers.AppendHelp(diagnostic.Help, reason) });
+                continue;
+            }
+
+            destination.Add(diagnostic);
+        }
+    }
+
+    private static bool TryGetStaticPinSkipReason(
+        in Diagnostic diagnostic,
+        FixPinningConfig pinningConfig,
+        FixImagesConfig imagesConfig,
+        out string reason)
+    {
+        reason = string.Empty;
+
+        if (diagnostic.RuleId == "unpinned-uses")
+        {
+            if (!PinDiagnosticMetadata.TryGetUsesRef(diagnostic, out var usesRef))
+            {
+                return false;
+            }
+            return GitHubActionShaResolver.TryGetSkipReasonForUsesRef(usesRef, pinningConfig, out reason);
+        }
+
+        if (diagnostic.RuleId == "unpinned-image")
+        {
+            if (!PinDiagnosticMetadata.TryGetImageRef(diagnostic, out var imageRef))
+            {
+                return false;
+            }
+
+            return OciImageDigestResolver.TryGetSkipReason(imageRef, imagesConfig, out reason);
+        }
+
+        return false;
+    }
 
     internal static void WriteNetworkFixHint(TextWriter writer, List<Diagnostic> diagnostics, bool enablePinNetwork, bool enableImageNetwork)
     {

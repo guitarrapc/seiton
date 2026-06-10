@@ -8,6 +8,34 @@ namespace Seiton.Core.Tests;
 public sealed class GitHubActionShaResolverTests
 {
     [Test]
+    public async Task TryGetSkipReasonForUsesRef_ThrowsArgumentNull_WhenUsesRefIsNull()
+    {
+        try
+        {
+            _ = GitHubActionShaResolver.TryGetSkipReasonForUsesRef(null!, new FixPinningConfig(), out _);
+            throw new Exception("Expected ArgumentNullException was not thrown.");
+        }
+        catch (ArgumentNullException ex)
+        {
+            await Assert.That(ex.ParamName).IsEqualTo("usesRef");
+        }
+    }
+
+    [Test]
+    public async Task TryGetSkipReasonForUsesRef_ThrowsArgumentNull_WhenPinningConfigIsNull()
+    {
+        try
+        {
+            _ = GitHubActionShaResolver.TryGetSkipReasonForUsesRef("actions/checkout@v4", null!, out _);
+            throw new Exception("Expected ArgumentNullException was not thrown.");
+        }
+        catch (ArgumentNullException ex)
+        {
+            await Assert.That(ex.ParamName).IsEqualTo("pinningConfig");
+        }
+    }
+
+    [Test]
     public async Task ResolveAsync_ReturnsCommitSha_ForDirectTagReference()
     {
         var handler = new StubHttpMessageHandler();
@@ -112,10 +140,10 @@ public sealed class GitHubActionShaResolverTests
 
         await Assert.That(skippedBranch.Sha).IsNull();
         await Assert.That(skippedBranch.TagComment).IsNull();
-        await Assert.That(skippedBranch.SkipReason).Contains("exclude settings");
+        await Assert.That(skippedBranch.SkipReason).IsEqualTo("pinning skipped: ref 'main' matches fix.pinning.exclude-branches for 'actions/checkout'");
         await Assert.That(skippedAction.Sha).IsNull();
         await Assert.That(skippedAction.TagComment).IsNull();
-        await Assert.That(skippedAction.SkipReason).Contains("exclude settings");
+        await Assert.That(skippedAction.SkipReason).IsEqualTo("pinning skipped: 'actions/checkout@v4' matches fix.pinning.ignore-actions");
         await Assert.That(handler.RequestedUris).IsEmpty();
     }
 

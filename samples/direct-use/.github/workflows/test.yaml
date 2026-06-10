@@ -1,0 +1,30 @@
+on:
+  workflow_dispatch:
+    inputs:
+      foo-bar:
+        description: "foobar"
+        required: true
+
+jobs:
+  test:
+    permissions:
+      contents: read
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: env Single quote
+        run: echo '${{ env.FOOBAR }}'
+        env:
+          FOOBAR: "foobar"
+      - name: env Double quote
+        run: echo "${{ env.FOOBAR }}"
+        env:
+          FOOBAR: "foobar"
+      - name: inputs Single quote
+        run: echo '${{ inputs.foo-bar }}'
+      - name: inputs Double quote
+        run: echo "${{ inputs.foo-bar }}"
+      - name: secrets Single quote
+        run: echo '${{ secrets.FRUITS }}'
+      - name: secrets Double quote
+        run: echo "${{ secrets.FRUITS }}"
