@@ -3,6 +3,8 @@ using System.Net;
 using System.Net.Http.Headers;
 using System.Text.Json;
 
+using static Seiton.Core.Linting.ActionRefHelpers;
+
 namespace Seiton.Core.Linting.PinRemediation;
 
 /// <summary>Resolves GitHub Actions references to commit SHAs via the GitHub API for pinning remediation.</summary>
@@ -16,8 +18,6 @@ public sealed class GitHubActionShaResolver(HttpClient httpClient, FixPinningCon
     private readonly GitHubNetworkConfig _githubConfig = githubConfig;
     private readonly ConcurrentDictionary<string, CachedResolution> _successCache = new(StringComparer.Ordinal);
     private readonly ConcurrentDictionary<string, string> _canonicalTagByShaCache = new(StringComparer.Ordinal);
-    private readonly string[] _excludeBranches = ToExcludeBranchArray(pinningConfig.ExcludeBranches);
-    private readonly CompiledIgnoreActionEntry[] _compiledIgnoreActions = CompileIgnoreActions(pinningConfig.IgnoreActions);
 
     public async Task<ActionShaResolution> ResolveAsync(
         string owner,
@@ -25,9 +25,9 @@ public sealed class GitHubActionShaResolver(HttpClient httpClient, FixPinningCon
         string refStr,
         CancellationToken cancellationToken = default)
     {
-        if (ShouldSkip(owner, repo, refStr))
+        if (TryGetSkipReason(owner, repo, refStr, _pinningConfig, out var skipReason))
         {
-            return ActionShaResolution.Skipped($"pinning skipped: ref '{refStr}' matches fix.pinning.exclude-branches for '{owner}/{repo}'");
+            return ActionShaResolution.Skipped(skipReason);
         }
 
         var cacheKey = string.Concat(owner, "/", repo, "@", refStr);
@@ -85,6 +85,17 @@ public sealed class GitHubActionShaResolver(HttpClient httpClient, FixPinningCon
         var cacheValue = new CachedResolution(result.Sha!, resolvedRef);
         _successCache.TryAdd(cacheKey, cacheValue);
         return ActionShaResolution.Resolved(cacheValue.Sha, cacheValue.TagComment);
+    }
+
+    public static bool TryGetSkipReasonForUsesRef(string usesRef, FixPinningConfig pinningConfig, out string reason)
+    {
+        if (!TryParseActionReference(usesRef, out var owner, out var repo, out var reference))
+        {
+            reason = string.Empty;
+            return false;
+        }
+
+        return TryGetSkipReason(owner, repo, reference, pinningConfig, out reason);
     }
 
     private async Task<string?> SelectBestEligibleTagAsync(
@@ -402,36 +413,26 @@ public sealed class GitHubActionShaResolver(HttpClient httpClient, FixPinningCon
         return await TryGetCommitDateAsync(PublicApiBaseUri, owner, repo, commitSha, token, cancellationToken);
     }
 
-    private bool ShouldSkip(string owner, string repo, string refStr)
+    private static bool TryGetSkipReason(string owner, string repo, string refStr, FixPinningConfig pinningConfig, out string reason)
     {
-        if (MatchesExcludedBranch(refStr))
+        if (PinRemediationTextHelpers.ContainsExact(pinningConfig.ExcludeBranches, refStr))
         {
+            reason = $"pinning skipped: ref '{refStr}' matches fix.pinning.exclude-branches for '{owner}/{repo}'";
             return true;
         }
 
         var name = owner + "/" + repo;
-        for (var i = 0; i < _compiledIgnoreActions.Length; i++)
+        for (var i = 0; i < pinningConfig.IgnoreActions.Count; i++)
         {
-            var entry = _compiledIgnoreActions[i];
+            var entry = pinningConfig.IgnoreActions[i];
             if (ActionRefHelpers.WildcardMatch(name, entry.NamePattern) && ActionRefHelpers.WildcardMatch(refStr, entry.RefPattern))
             {
+                reason = $"pinning skipped: '{name}@{refStr}' matches fix.pinning.ignore-actions";
                 return true;
             }
         }
 
-        return false;
-    }
-
-    private bool MatchesExcludedBranch(string refStr)
-    {
-        for (var i = 0; i < _excludeBranches.Length; i++)
-        {
-            if (string.Equals(_excludeBranches[i], refStr, StringComparison.Ordinal))
-            {
-                return true;
-            }
-        }
-
+        reason = string.Empty;
         return false;
     }
 
@@ -625,39 +626,6 @@ public sealed class GitHubActionShaResolver(HttpClient httpClient, FixPinningCon
 
     private static Uri NormalizeApiBaseUri(string apiUrl) => GitHubEnterpriseApiBase.ToRequestBaseUri(apiUrl);
 
-    private static string[] ToExcludeBranchArray(IReadOnlyList<string> branches)
-    {
-        if (branches.Count == 0)
-        {
-            return [];
-        }
-
-        var result = new string[branches.Count];
-        for (var i = 0; i < branches.Count; i++)
-        {
-            result[i] = branches[i];
-        }
-
-        return result;
-    }
-
-    private static CompiledIgnoreActionEntry[] CompileIgnoreActions(IReadOnlyList<IgnoreActionEntry> entries)
-    {
-        if (entries.Count == 0)
-        {
-            return [];
-        }
-
-        var compiled = new CompiledIgnoreActionEntry[entries.Count];
-        for (var i = 0; i < entries.Count; i++)
-        {
-            var entry = entries[i];
-            compiled[i] = new CompiledIgnoreActionEntry(entry.NamePattern, entry.RefPattern);
-        }
-
-        return compiled;
-    }
-
     private static InvalidOperationException CreateResolutionException(
         string owner,
         string repo,
@@ -805,5 +773,4 @@ public sealed class GitHubActionShaResolver(HttpClient httpClient, FixPinningCon
 
     private readonly record struct ParsedVersionTag(bool HasVPrefix, int[] Parts, bool IsPrerelease);
 
-    private readonly record struct CompiledIgnoreActionEntry(string NamePattern, string RefPattern);
 }

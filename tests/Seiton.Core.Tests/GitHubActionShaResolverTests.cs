@@ -112,10 +112,10 @@ public sealed class GitHubActionShaResolverTests
 
         await Assert.That(skippedBranch.Sha).IsNull();
         await Assert.That(skippedBranch.TagComment).IsNull();
-        await Assert.That(skippedBranch.SkipReason).Contains("exclude settings");
+        await Assert.That(skippedBranch.SkipReason).IsEqualTo("pinning skipped: ref 'main' matches fix.pinning.exclude-branches for 'actions/checkout'");
         await Assert.That(skippedAction.Sha).IsNull();
         await Assert.That(skippedAction.TagComment).IsNull();
-        await Assert.That(skippedAction.SkipReason).Contains("exclude settings");
+        await Assert.That(skippedAction.SkipReason).IsEqualTo("pinning skipped: 'actions/checkout@v4' matches fix.pinning.ignore-actions");
         await Assert.That(handler.RequestedUris).IsEmpty();
     }
 

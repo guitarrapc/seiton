@@ -727,31 +727,7 @@ internal static class CheckCommand
             {
                 return false;
             }
-
-            var at = usesRef.LastIndexOf('@');
-            if (at <= 0 || at + 1 >= usesRef.Length)
-            {
-                return false;
-            }
-
-            var reference = usesRef[(at + 1)..];
-            if (ContainsExact(pinningConfig.ExcludeBranches, reference))
-            {
-                var slash = usesRef.IndexOf('/');
-                var at2 = usesRef.LastIndexOf('@');
-                if (slash > 0 && at2 > slash + 1)
-                {
-                    var ownerRepo = usesRef[..at2];
-                    reason = $"pinning skipped: ref '{reference}' matches fix.pinning.exclude-branches for '{ownerRepo}'";
-                }
-                else
-                {
-                    reason = $"pinning skipped: ref '{reference}' matches fix.pinning.exclude-branches";
-                }
-                return true;
-            }
-
-            return false;
+            return GitHubActionShaResolver.TryGetSkipReasonForUsesRef(usesRef, pinningConfig, out reason);
         }
 
         if (diagnostic.RuleId == "unpinned-image")
@@ -761,62 +737,7 @@ internal static class CheckCommand
                 return false;
             }
 
-            if (!TryGetImageTagOrImplicitLatest(imageRef, out var reference))
-            {
-                return false;
-            }
-
-            if (ContainsExact(imagesConfig.ExcludeTags, reference))
-            {
-                reason = $"pinning skipped: tag '{reference}' matches fix.images.exclude-tags";
-                return true;
-            }
-        }
-
-        return false;
-    }
-
-    private static bool TryGetImageTagOrImplicitLatest(string imageRef, out string reference)
-    {
-        reference = string.Empty;
-        if (string.IsNullOrWhiteSpace(imageRef))
-        {
-            return false;
-        }
-
-        var normalized = imageRef.StartsWith("docker://", StringComparison.OrdinalIgnoreCase)
-            ? imageRef["docker://".Length..]
-            : imageRef;
-        normalized = normalized.Trim();
-        if (normalized.Length == 0)
-        {
-            return false;
-        }
-
-        var at = normalized.LastIndexOf('@');
-        if (at >= 0)
-        {
-            // Digest-pinned refs do not need an exclude-tags help.
-            reference = string.Empty;
-            return true;
-        }
-
-        var slash = normalized.LastIndexOf('/');
-        var colon = normalized.LastIndexOf(':');
-        reference = colon > slash
-            ? normalized[(colon + 1)..].ToLowerInvariant()
-            : "latest";
-        return true;
-    }
-
-    private static bool ContainsExact(IReadOnlyList<string> values, string target)
-    {
-        for (var i = 0; i < values.Count; i++)
-        {
-            if (string.Equals(values[i], target, StringComparison.Ordinal))
-            {
-                return true;
-            }
+            return OciImageDigestResolver.TryGetSkipReason(imageRef, imagesConfig, out reason);
         }
 
         return false;

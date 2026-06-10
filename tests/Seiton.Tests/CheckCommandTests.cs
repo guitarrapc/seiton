@@ -495,4 +495,72 @@ public sealed class CheckCommandTests
             DeleteContainingDirectory(configPath);
         }
     }
+
+    [Test]
+    [NotInParallel("Console")]
+    public async Task Check_TextMode_EmitsStaticHelp_ForIgnoreActionsMatchedRef()
+    {
+        var configPath = CreateConfigFile(
+            """
+            rules:
+              runner-no-latest:
+                enabled: false
+              job-timeout-minutes-required:
+                enabled: false
+              job-permissions-required:
+                enabled: false
+            fix:
+              pinning:
+                ignore-actions:
+                  - uses: "octocat/*"
+                    ref: "v4"
+            """);
+        var filePath = CreateWorkflowFile(
+            """
+            on: push
+            jobs:
+              build:
+                runs-on: ubuntu-24.04
+                steps:
+                  - uses: octocat/hello-world-action@v4
+            """);
+
+        var originalOut = Console.Out;
+        var originalErr = Console.Error;
+        using var stdout = new StringWriter();
+        using var stderr = new StringWriter();
+
+        try
+        {
+#pragma warning disable TUnit0055
+            Console.SetOut(stdout);
+            Console.SetError(stderr);
+#pragma warning restore TUnit0055
+
+            var code = CheckCommand.Run(
+                [filePath],
+                config: configPath,
+                stdinFilename: "stdin.yml",
+                ignore: [],
+                minSeverity: null,
+                format: OutputFormat.Text,
+                oneline: false,
+                color: ColorMode.Never,
+                noColor: true,
+                verboseLevel: VerboseLevel.Off,
+                includeActions: false);
+
+            await Assert.That(code).IsEqualTo(ExitCode.LintIssuesFound);
+            await Assert.That(stdout.ToString()).Contains("pinning skipped: 'octocat/hello-world-action@v4' matches fix.pinning.ignore-actions");
+        }
+        finally
+        {
+#pragma warning disable TUnit0055
+            Console.SetOut(originalOut);
+            Console.SetError(originalErr);
+#pragma warning restore TUnit0055
+            DeleteContainingDirectory(filePath);
+            DeleteContainingDirectory(configPath);
+        }
+    }
 }

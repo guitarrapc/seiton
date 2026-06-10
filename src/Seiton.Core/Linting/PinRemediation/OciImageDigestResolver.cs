@@ -62,7 +62,7 @@ public sealed class OciImageDigestResolver : IImageDigestResolver
             return default;
         }
 
-        if (TryGetSkipReason(parsed, out var skipReason))
+        if (TryGetSkipReason(parsed, _normalizedExcludeImages, _normalizedExcludeTags, _normalizedIgnoreImages, out var skipReason))
         {
             return ImageDigestResolution.Skipped(skipReason);
         }
@@ -84,6 +84,20 @@ public sealed class OciImageDigestResolver : IImageDigestResolver
         }
 
         return default;
+    }
+
+    public static bool TryGetSkipReason(string imageRef, FixImagesConfig config, out string reason)
+    {
+        if (!TryParseImageReference(imageRef, out var parsed) || parsed.AlreadyPinned)
+        {
+            reason = string.Empty;
+            return false;
+        }
+
+        var normalizedExcludeImages = NormalizeEntries(config.ExcludeImages);
+        var normalizedExcludeTags = NormalizeEntries(config.ExcludeTags);
+        var normalizedIgnoreImages = NormalizeEntries(config.IgnoreImages);
+        return TryGetSkipReason(parsed, normalizedExcludeImages, normalizedExcludeTags, normalizedIgnoreImages, out reason);
     }
 
     private async Task<string?> ResolveDigestAsync(
@@ -317,29 +331,34 @@ public sealed class OciImageDigestResolver : IImageDigestResolver
         return new Uri(realmStr + query);
     }
 
-    private bool TryGetSkipReason(ParsedImageReference parsed, out string reason)
+    private static bool TryGetSkipReason(
+        ParsedImageReference parsed,
+        string[] normalizedExcludeImages,
+        string[] normalizedExcludeTags,
+        string[] normalizedIgnoreImages,
+        out string reason)
     {
-        if (PinRemediationTextHelpers.ContainsExact(_normalizedExcludeImages, parsed.MatchName))
+        if (PinRemediationTextHelpers.ContainsExact(normalizedExcludeImages, parsed.MatchName))
         {
             reason = $"pinning skipped: image '{parsed.MatchName}' matches fix.images.exclude-images";
             return true;
         }
 
-        if (PinRemediationTextHelpers.ContainsExact(_normalizedExcludeImages, parsed.RepositoryPath))
+        if (PinRemediationTextHelpers.ContainsExact(normalizedExcludeImages, parsed.RepositoryPath))
         {
             reason = $"pinning skipped: image '{parsed.RepositoryPath}' matches fix.images.exclude-images";
             return true;
         }
 
-        if (PinRemediationTextHelpers.ContainsExact(_normalizedExcludeTags, parsed.Reference))
+        if (PinRemediationTextHelpers.ContainsExact(normalizedExcludeTags, parsed.Reference))
         {
             reason = $"pinning skipped: tag '{parsed.Reference}' matches fix.images.exclude-tags";
             return true;
         }
 
-        for (var i = 0; i < _normalizedIgnoreImages.Length; i++)
+        for (var i = 0; i < normalizedIgnoreImages.Length; i++)
         {
-            var pattern = _normalizedIgnoreImages[i];
+            var pattern = normalizedIgnoreImages[i];
             if (GlobMatch(pattern, parsed.MatchName))
             {
                 reason = $"pinning skipped: image '{parsed.MatchName}' matches fix.images.ignore-images pattern '{pattern}'";
