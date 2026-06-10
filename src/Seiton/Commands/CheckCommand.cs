@@ -384,11 +384,7 @@ internal static class CheckCommand
         HashSet<string>? seen = null;
         for (var i = 0; i < diagnostics.Count; i++)
         {
-            var ruleId = diagnostics[i].RuleId;
-            if (ruleId is null)
-            {
-                continue;
-            }
+            var ruleId = diagnostics[i].RuleId ?? "parse";
 
             seen ??= new HashSet<string>(StringComparer.Ordinal);
             if (!seen.Add(ruleId))
@@ -603,8 +599,7 @@ internal static class CheckCommand
         var ruleCounts = new Dictionary<string, int>(StringComparer.Ordinal);
         for (var i = 0; i < diagnostics.Count; i++)
         {
-            var ruleId = diagnostics[i].RuleId;
-            if (ruleId is null) continue;
+            var ruleId = diagnostics[i].RuleId ?? "parse";
             if (!ruleCounts.TryGetValue(ruleId, out var count))
                 ruleCounts[ruleId] = 1;
             else

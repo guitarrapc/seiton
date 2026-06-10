@@ -588,11 +588,12 @@ When at least one diagnostic has a file path, a per-file breakdown is emitted as
 - When at least one info diagnostic exists in the per-file breakdown, an `Infos` column is also emitted.
 - Files are sorted by total issue count descending, then by file name lexicographically.
 
-When at least one diagnostic has a `rule-id`, a per-rule breakdown is emitted as a markdown-style table (top 10 rules by count), separated from the preceding output by a blank line:
+When at least one diagnostic is present, a per-rule breakdown is emitted as a markdown-style table (top 10 rules by count), separated from the preceding output by a blank line. Parser diagnostics (`RuleId` is null internally) are grouped under the pseudo rule ID `parse`, matching the `error[parse]:` label in diagnostic output.
 
 ```
 | Rule          | Count |
 |---------------|------:|
+| parse         |     1 |
 | unpinned-uses |     3 |
 | template-injection |  2 |
 ```

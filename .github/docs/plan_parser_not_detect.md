@@ -305,6 +305,34 @@ Seiton 内部では **parser 診断と lint rule 診断は分離**されてい�
 3. lint rule 診断との混在時、両方がルール表に載る。
 4. 既存 `WriteSummaryTests` / `CheckCommandTests` が通過。
 
+## 実装結果（2026-06-11）— CLI サマリー: parse 集計
+
+### 実装内容
+- 変更ファイル: `src/Seiton/Commands/CheckCommand.cs`
+  - `WritePerRuleBreakdown`: `RuleId ?? "parse"` で集計（`DiagnosticFormatter` と同一フォールバック）。
+  - `ShouldOfferFullPerRuleBreakdownHint`: 同上（parser のみでも distinct rule として `parse` を数える）。
+- テスト:
+  - `WriteSummary_NotVerbose_ParserOnlyDiagnostics_ShowsParseInRuleBreakdown`（新規）
+  - `WriteSummary_NotVerbose_ParserAndLintDiagnostics_ShowBothInRuleBreakdown`（新規）
+  - `WriteSummary_Verbose_ParserDiagnosticsWithNullRuleId_GroupedSeparately`（`| parse |` 期待に更新）
+  - `Check_TextMode_DuplicateStepEnv_IsReportedAndSummaryIsNotZeroIssues`（stderr に `| parse |` を追加）
+- 仕様: `.github/docs/Seiton_CLI_spec.md` §6.4 に pseudo rule ID `parse` を追記。
+
+### ベンチマーク（StepSummaryOutputBenchmark）
+
+| Method | Before | After | Delta | Allocated |
+|--------|--------|-------|-------|-----------|
+| WriteSummary stderr (text) | 17.90 us | 17.30 us | -3.4% | 3.63 KB（同等） |
+| WriteSummary step summary (github-actions) | 385.97 us | 388.20 us | +0.6% | 15.59 KB（同等） |
+
+- 所見: 表示レイヤーの `?? "parse"` のみ。hot path への影響なし。Allocated 不変。
+
+### フェーズレビュー
+1. **Correctness**: parser-only / parser+lint 混在の両方でルール表に `parse` が出る。本文 `error[parse]:` と一致。
+2. **Performance**: サマリー生成は診断出力後のコールドパス。ベンチマーク ±10% 以内。
+3. **User-first API**: サマリーだけ読んでも「parse エラーが N 件」と把握できる。
+4. **Spec 整合**: `Seiton_CLI_spec.md` を更新済み。内部 `RuleId: null` は維持（lint 層との分離不変）。
+
 ## 実装時の注意
 
 - fatal parse error へ昇格しない。
