@@ -24,7 +24,7 @@ jobs:
         run: echo '${{ inputs.foo-bar }}'
       - name: inputs Double quote
         run: echo "${{ inputs.foo-bar }}"
-      - name: inputs Single quote
+      - name: secrets Single quote
         run: echo '${{ secrets.FRUITS }}'
-      - name: inputs Double quote
+      - name: secrets Double quote
         run: echo "${{ secrets.FRUITS }}"
