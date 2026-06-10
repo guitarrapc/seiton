@@ -140,7 +140,7 @@ public sealed class PinRemediationEngine(
         {
             if (!string.IsNullOrWhiteSpace(resolution.SkipReason))
             {
-                var help = AppendHelp(diagnostic.Help, resolution.SkipReason);
+                var help = PinRemediationTextHelpers.AppendHelp(diagnostic.Help, resolution.SkipReason);
                 return new RemediationOutcome(diagnostic with { Help = help }, Resolved: false, Skipped: true, Failed: false);
             }
 
@@ -174,7 +174,7 @@ public sealed class PinRemediationEngine(
         var resolution = await _imageDigestResolver.ResolveAsync(imageRef, cancellationToken);
         if (!string.IsNullOrWhiteSpace(resolution.SkipReason))
         {
-            var help = AppendHelp(diagnostic.Help, resolution.SkipReason);
+            var help = PinRemediationTextHelpers.AppendHelp(diagnostic.Help, resolution.SkipReason);
             return new RemediationOutcome(diagnostic with { Help = help }, Resolved: false, Skipped: true, Failed: false);
         }
 
@@ -194,18 +194,4 @@ public sealed class PinRemediationEngine(
 
     private readonly record struct RemediationOutcome(Diagnostic Diagnostic, bool Resolved, bool Skipped, bool Failed);
 
-    private static string AppendHelp(string? originalHelp, string skipReason)
-    {
-        if (string.IsNullOrWhiteSpace(originalHelp))
-        {
-            return skipReason;
-        }
-
-        if (string.Equals(originalHelp, skipReason, StringComparison.Ordinal))
-        {
-            return originalHelp;
-        }
-
-        return string.Concat(originalHelp, "\n", skipReason);
-    }
 }

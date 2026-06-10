@@ -319,19 +319,19 @@ public sealed class OciImageDigestResolver : IImageDigestResolver
 
     private bool TryGetSkipReason(ParsedImageReference parsed, out string reason)
     {
-        if (ContainsExact(_normalizedExcludeImages, parsed.MatchName))
+        if (PinRemediationTextHelpers.ContainsExact(_normalizedExcludeImages, parsed.MatchName))
         {
             reason = $"pinning skipped: image '{parsed.MatchName}' matches fix.images.exclude-images";
             return true;
         }
 
-        if (ContainsExact(_normalizedExcludeImages, parsed.RepositoryPath))
+        if (PinRemediationTextHelpers.ContainsExact(_normalizedExcludeImages, parsed.RepositoryPath))
         {
             reason = $"pinning skipped: image '{parsed.RepositoryPath}' matches fix.images.exclude-images";
             return true;
         }
 
-        if (ContainsExact(_normalizedExcludeTags, parsed.Reference))
+        if (PinRemediationTextHelpers.ContainsExact(_normalizedExcludeTags, parsed.Reference))
         {
             reason = $"pinning skipped: tag '{parsed.Reference}' matches fix.images.exclude-tags";
             return true;
@@ -402,19 +402,6 @@ public sealed class OciImageDigestResolver : IImageDigestResolver
     private static string NormalizeValue(string value)
     {
         return value.Trim().ToLowerInvariant();
-    }
-
-    private static bool ContainsExact(string[] values, string target)
-    {
-        for (var i = 0; i < values.Length; i++)
-        {
-            if (string.Equals(values[i], target, StringComparison.Ordinal))
-            {
-                return true;
-            }
-        }
-
-        return false;
     }
 
     private static bool TryParseImageReference(string imageRef, out ParsedImageReference parsed)
