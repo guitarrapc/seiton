@@ -605,7 +605,7 @@ public sealed class WriteSummaryTests
     }
 
     [Test]
-    public async Task WriteNetworkFixHint_UnpinnedImageWithNetworkEnabled_ShowsExcludeTagsHint()
+    public async Task WriteNetworkFixHint_UnpinnedImageWithNetworkEnabled_NoHint()
     {
         var diagnostics = new List<Diagnostic>
         {
@@ -616,8 +616,7 @@ public sealed class WriteSummaryTests
         CheckCommand.WriteNetworkFixHint(sw, diagnostics, enablePinNetwork: false, enableImageNetwork: true);
         var output = sw.ToString();
 
-        await Assert.That(output).Contains("exclude-tags");
-        await Assert.That(output).Contains("explicit tag");
+        await Assert.That(output).IsEqualTo("");
     }
 
     [Test]

@@ -303,7 +303,8 @@ internal static class FixCommand
                     // consistent with the normal fix path's final-lint behavior.
                     using (var dryRunHandle = engine.Check(dryRunYaml, filePath, fixEnabledLintConfig))
                     {
-                        allDiagnostics.AddRange(dryRunHandle.Diagnostics.AsSpan());
+                        var remainingDiagnostics = await RefreshPinDiagnosticsAsync(pinRemediation, dryRunHandle.CopyDiagnostics(), dryRunYaml);
+                        allDiagnostics.AddRange(remainingDiagnostics);
                     }
 
                     if (sourceMap is not null && !dryRunYaml.AsSpan().SequenceEqual(utf8Yaml))
@@ -359,7 +360,8 @@ internal static class FixCommand
                         TryWriteFixDiff(utf8Yaml, currentYaml, filePath, resolvedFormat, outputWriter, errorWriter, ref hasPrintedDiff);
                     }
 
-                    allDiagnostics.AddRange(currentHandle.Diagnostics.AsSpan());
+                    var remainingDiagnostics = await RefreshPinDiagnosticsAsync(pinRemediation, currentHandle.CopyDiagnostics(), currentYaml);
+                    allDiagnostics.AddRange(remainingDiagnostics);
                     if (sourceMap is not null && applyContentChanged)
                     {
                         sourceMap[filePath] = currentYaml;
@@ -1015,6 +1017,20 @@ internal static class FixCommand
         }
 
         return (yaml, appliedCount);
+    }
+
+    private static async Task<IReadOnlyList<Diagnostic>> RefreshPinDiagnosticsAsync(
+        PinRemediationEngine? pinRemediation,
+        OwnedDiagnostics diagnostics,
+        byte[] yaml)
+    {
+        if (pinRemediation is null || !HasPinFixableDiagnostics(diagnostics))
+        {
+            return diagnostics;
+        }
+
+        var remResult = await pinRemediation.RemediateAsync(diagnostics, yaml);
+        return remResult.Diagnostics;
     }
 
     /// <summary>

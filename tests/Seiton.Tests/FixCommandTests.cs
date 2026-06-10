@@ -2652,6 +2652,68 @@ public sealed class FixCommandTests
     }
 
     [Test]
+    public async Task Fix_EnableImageNetwork_EmitsPerDiagnosticHelp_ForImplicitLatestServiceImage()
+    {
+        var configPath = CreateConfigFile(
+            """
+            rules:
+              runner-no-latest:
+                enabled: false
+              job-timeout-minutes-required:
+                enabled: false
+              job-permissions-required:
+                enabled: false
+            """);
+        var filePath = CreateWorkflowFile(
+            """
+            on: push
+            jobs:
+              build:
+                runs-on: ubuntu-24.04
+                services:
+                  redis:
+                    image: redis
+                steps:
+                  - run: echo ok
+            """);
+
+        try
+        {
+            using var sw = new StringWriter();
+            using var stderr = new StringWriter();
+
+            var exitCode = await FixCommand.RunAsync(
+                [filePath],
+                config: configPath,
+                stdinFilename: "stdin.yml",
+                ignore: [],
+                minSeverity: null,
+                format: OutputFormat.Text,
+                formatExplicitlySet: true,
+                oneline: false,
+                color: ColorMode.Never,
+                noColor: true,
+                verboseLevel: VerboseLevel.Off,
+                dryRun: false,
+                check: false,
+                enablePinNetwork: false,
+                enableImageNetwork: true,
+                includeActions: false,
+                output: sw,
+                error: stderr);
+
+            await Assert.That(exitCode).IsEqualTo(ExitCode.LintIssuesFound);
+            await Assert.That(sw.ToString()).Contains("help: pinning skipped: tag 'latest' matches fix.images.exclude-tags");
+      await Assert.That(stderr.ToString().Contains("tagless or :latest images are not auto-pinned by default", StringComparison.Ordinal)).IsFalse();
+        }
+        finally
+        {
+            DeleteContainingDirectory(filePath);
+            DeleteContainingDirectory(configPath);
+        }
+    }
+
+    [Test]
     public async Task WriteNoFilesModifiedHint_NoFixAttempted_EmitsNothing()
     {
         using var sw = new StringWriter();
