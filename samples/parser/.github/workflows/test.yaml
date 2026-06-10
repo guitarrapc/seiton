@@ -1,0 +1,15 @@
+on:
+  workflow_dispatch:
+
+jobs:
+  action-pin-samples:
+    permissions:
+      contents: read
+    timeout-minutes: 10
+    runs-on: ubuntu-24.04
+    steps:
+      - run: foo "$FOOBAR"
+        env:
+          FOOBAR: "foobar"
+        env:
+          PIYOPIYO: "piyopiyo"
