@@ -138,6 +138,8 @@ public static partial class WorkflowParser
         SliceMap<StringNodeId>? withInputs = null;
         StringNodeId dockerEntrypoint = default;
         StringNodeId dockerArgs = default;
+        ulong seen = 0;
+        Span<long> stepKeyFirstMark = stackalloc long[11];
 
         reader.Read(); // consume MappingStart
         while (!reader.End && reader.CurrentKind != YamlEventKind.MappingEnd)
@@ -167,6 +169,26 @@ public static partial class WorkflowParser
             {
                 var keyLen = keyUtf8.Length;
                 reader.Read();
+                if (!TrySetBit(ref seen, stepKeyOrd))
+                {
+                    var dupName = StepMappingKeyTable.Utf8Key(stepKeyOrd);
+                    var prevMark = stepKeyFirstMark[stepKeyOrd];
+                    var prevLine = (int)(prevMark >> 32);
+                    var prevCol = (int)(prevMark & 0xFFFFFFFF);
+                    AddError(ref diagnostics, $"{FormatStepPrefix(source, jobId, stepIndex)} key \"{Encoding.UTF8.GetString(dupName)}\" is duplicated. previously defined at line:{prevLine},col:{prevCol}", keyMark);
+                    if (!reader.End)
+                    {
+                        reader.SkipCurrentNode();
+                    }
+
+                    continue;
+                }
+
+                if (stepKeyOrd < stepKeyFirstMark.Length)
+                {
+                    stepKeyFirstMark[stepKeyOrd] = ((long)keyMark.Line << 32) | (uint)keyMark.Col;
+                }
+
                 switch ((StepMappingKey)stepKeyOrd)
                 {
                     case StepMappingKey.Run:

@@ -563,4 +563,66 @@ public sealed class CheckCommandTests
             DeleteContainingDirectory(configPath);
         }
     }
+
+    [Test]
+    [NotInParallel("Console")]
+    public async Task Check_TextMode_DuplicateStepEnv_IsReportedAndSummaryIsNotZeroIssues()
+    {
+        var filePath = CreateWorkflowFile(
+            """
+            on:
+              workflow_dispatch:
+
+            jobs:
+              action-pin-samples:
+                permissions:
+                  contents: read
+                timeout-minutes: 10
+                runs-on: ubuntu-24.04
+                steps:
+                  - run: foo "$FOOBAR"
+                    env:
+                      FOOBAR: "foobar"
+                    env:
+                      PIYOPIYO: "piyopiyo"
+            """);
+
+        var originalOut = Console.Out;
+        var originalErr = Console.Error;
+        using var stdout = new StringWriter();
+        using var stderr = new StringWriter();
+
+        try
+        {
+#pragma warning disable TUnit0055
+            Console.SetOut(stdout);
+            Console.SetError(stderr);
+#pragma warning restore TUnit0055
+
+            var code = CheckCommand.Run(
+                [filePath],
+                config: null,
+                stdinFilename: "stdin.yml",
+                ignore: [],
+                minSeverity: null,
+                format: OutputFormat.Text,
+                oneline: false,
+                color: ColorMode.Never,
+                noColor: true,
+                verboseLevel: VerboseLevel.Off,
+                includeActions: false);
+
+            await Assert.That(code).IsEqualTo(ExitCode.LintIssuesFound);
+            await Assert.That(stdout.ToString()).Contains("steps[1] key \"env\" is duplicated");
+            await Assert.That(stderr.ToString()).DoesNotContain("0 issues in 1 file");
+        }
+        finally
+        {
+#pragma warning disable TUnit0055
+            Console.SetOut(originalOut);
+            Console.SetError(originalErr);
+#pragma warning restore TUnit0055
+            DeleteContainingDirectory(filePath);
+        }
+    }
 }
