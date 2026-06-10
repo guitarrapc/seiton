@@ -3,6 +3,7 @@ using System.Runtime.InteropServices;
 using Seiton.Cli;
 using Seiton.Config;
 using Seiton.Core.Linting;
+using Seiton.Core.Linting.PinRemediation;
 using Seiton.Core.Parsing;
 using Seiton.Output;
 
@@ -90,6 +91,8 @@ internal static class CheckCommand
         }
 
         var lintRunConfig = CreateCheckLintConfig(lintConfig, resolvedFormat);
+        var pinningConfig = lintConfig?.Fix.Pinning ?? new FixPinningConfig();
+        var imagesConfig = lintConfig?.Fix.Images ?? new FixImagesConfig();
 
         // Lint files
         var allDiagnostics = new List<Diagnostic>();
@@ -139,7 +142,7 @@ internal static class CheckCommand
 
                 var fileStart = verboseLogger.GetTimestamp();
                 using var result = engine.Check(utf8Yaml, filePath, lintRunConfig);
-                allDiagnostics.AddRange(result.Diagnostics.AsSpan());
+                AddDiagnosticsWithStaticPinSkipHelp(allDiagnostics, result.Diagnostics.AsSpan(), pinningConfig, imagesConfig);
                 sourceMap?.TryAdd(filePath, utf8Yaml);
                 if (verboseLogger.IsEnabled)
                 {
@@ -234,7 +237,7 @@ internal static class CheckCommand
             // Aggregate in input order for stable output
             for (var i = 0; i < slots.Length; i++)
             {
-                allDiagnostics.AddRange(slots[i].Diagnostics.AsSpan());
+                AddDiagnosticsWithStaticPinSkipHelp(allDiagnostics, slots[i].Diagnostics.AsSpan(), pinningConfig, imagesConfig);
                 if (sourceMap is not null && slots[i].Utf8Yaml is { } yaml)
                     sourceMap.TryAdd(slots[i].FilePath, yaml);
 
@@ -690,6 +693,139 @@ internal static class CheckCommand
     }
 
     internal static int CountDigits(int value) => DecimalFormat.CountDigits(value);
+
+    private static void AddDiagnosticsWithStaticPinSkipHelp(
+        List<Diagnostic> destination,
+        ReadOnlySpan<Diagnostic> diagnostics,
+        FixPinningConfig pinningConfig,
+        FixImagesConfig imagesConfig)
+    {
+        for (var i = 0; i < diagnostics.Length; i++)
+        {
+            var diagnostic = diagnostics[i];
+            if (TryGetStaticPinSkipReason(diagnostic, pinningConfig, imagesConfig, out var reason))
+            {
+                destination.Add(diagnostic with { Help = AppendHelp(diagnostic.Help, reason) });
+                continue;
+            }
+
+            destination.Add(diagnostic);
+        }
+    }
+
+    private static bool TryGetStaticPinSkipReason(
+        in Diagnostic diagnostic,
+        FixPinningConfig pinningConfig,
+        FixImagesConfig imagesConfig,
+        out string reason)
+    {
+        reason = string.Empty;
+
+        if (diagnostic.RuleId == "unpinned-uses")
+        {
+            if (!PinDiagnosticMetadata.TryGetUsesRef(diagnostic, out var usesRef))
+            {
+                return false;
+            }
+
+            var at = usesRef.LastIndexOf('@');
+            if (at <= 0 || at + 1 >= usesRef.Length)
+            {
+                return false;
+            }
+
+            var reference = usesRef[(at + 1)..];
+            if (ContainsExact(pinningConfig.ExcludeBranches, reference))
+            {
+                reason = $"pinning skipped by fix.pinning exclude settings for '{usesRef}'";
+                return true;
+            }
+
+            return false;
+        }
+
+        if (diagnostic.RuleId == "unpinned-image")
+        {
+            if (!PinDiagnosticMetadata.TryGetImageRef(diagnostic, out var imageRef))
+            {
+                return false;
+            }
+
+            if (!TryGetImageTagOrImplicitLatest(imageRef, out var reference))
+            {
+                return false;
+            }
+
+            if (ContainsExact(imagesConfig.ExcludeTags, reference))
+            {
+                reason = $"pinning skipped: tag '{reference}' matches fix.images.exclude-tags";
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private static bool TryGetImageTagOrImplicitLatest(string imageRef, out string reference)
+    {
+        reference = string.Empty;
+        if (string.IsNullOrWhiteSpace(imageRef))
+        {
+            return false;
+        }
+
+        var normalized = imageRef.StartsWith("docker://", StringComparison.OrdinalIgnoreCase)
+            ? imageRef["docker://".Length..]
+            : imageRef;
+        normalized = normalized.Trim();
+        if (normalized.Length == 0)
+        {
+            return false;
+        }
+
+        var at = normalized.LastIndexOf('@');
+        if (at >= 0)
+        {
+            // Digest-pinned refs do not need an exclude-tags help.
+            reference = string.Empty;
+            return true;
+        }
+
+        var slash = normalized.LastIndexOf('/');
+        var colon = normalized.LastIndexOf(':');
+        reference = colon > slash
+            ? normalized[(colon + 1)..].ToLowerInvariant()
+            : "latest";
+        return true;
+    }
+
+    private static bool ContainsExact(IReadOnlyList<string> values, string target)
+    {
+        for (var i = 0; i < values.Count; i++)
+        {
+            if (string.Equals(values[i], target, StringComparison.Ordinal))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private static string AppendHelp(string? originalHelp, string skipReason)
+    {
+        if (string.IsNullOrWhiteSpace(originalHelp))
+        {
+            return skipReason;
+        }
+
+        if (string.Equals(originalHelp, skipReason, StringComparison.Ordinal))
+        {
+            return originalHelp;
+        }
+
+        return string.Concat(originalHelp, "\n", skipReason);
+    }
 
     internal static void WriteNetworkFixHint(TextWriter writer, List<Diagnostic> diagnostics, bool enablePinNetwork, bool enableImageNetwork)
     {

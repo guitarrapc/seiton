@@ -1,17 +1,30 @@
 on:
-  pull_request:
-    branches: [main]
+  workflow_dispatch:
+    inputs:
+      foo-bar:
+        description: "foobar"
+        required: true
+
 jobs:
   test:
     permissions:
       contents: read
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v6
-        with:
-          persist-credentials: false
-      - name: FooBar
+      - name: env Single quote
         run: echo '${{ env.FOOBAR }}'
         env:
           FOOBAR: "foobar"
+      - name: env Double quote
+        run: echo "${{ env.FOOBAR }}"
+        env:
+          FOOBAR: "foobar"
+      - name: inputs Single quote
+        run: echo '${{ inputs.foo-bar }}'
+      - name: inputs Double quote
+        run: echo "${{ inputs.foo-bar }}"
+      - name: inputs Single quote
+        run: echo '${{ secrets.FRUITS }}'
+      - name: inputs Double quote
+        run: echo "${{ secrets.FRUITS }}"
