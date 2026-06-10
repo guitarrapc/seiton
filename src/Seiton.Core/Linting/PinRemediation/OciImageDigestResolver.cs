@@ -1,6 +1,7 @@
 ﻿using System.Collections.Concurrent;
 using System.Net;
 using System.Net.Http.Headers;
+using System.Runtime.CompilerServices;
 using System.Text.Json;
 
 using static Seiton.Core.Linting.ActionRefHelpers;
@@ -17,6 +18,7 @@ public sealed class OciImageDigestResolver : IImageDigestResolver
         "application/vnd.docker.distribution.manifest.list.v2+json",
         "application/vnd.docker.distribution.manifest.v2+json",
     ];
+    private static readonly ConditionalWeakTable<FixImagesConfig, StaticSkipRulesBox> StaticSkipRulesCache = new();
 
     private readonly HttpClient _httpClient;
     private readonly FixImagesConfig _config;
@@ -94,10 +96,29 @@ public sealed class OciImageDigestResolver : IImageDigestResolver
             return false;
         }
 
-        var normalizedExcludeImages = NormalizeEntries(config.ExcludeImages);
-        var normalizedExcludeTags = NormalizeEntries(config.ExcludeTags);
-        var normalizedIgnoreImages = NormalizeEntries(config.IgnoreImages);
-        return TryGetSkipReason(parsed, normalizedExcludeImages, normalizedExcludeTags, normalizedIgnoreImages, out reason);
+        var staticRules = StaticSkipRulesCache
+            .GetValue(config, static c => new StaticSkipRulesBox(CreateStaticSkipRules(c)))
+            .Rules;
+        return TryGetSkipReason(parsed, staticRules.ExcludeImages, staticRules.ExcludeTags, staticRules.IgnoreImages, out reason);
+    }
+
+    internal static StaticSkipRules CreateStaticSkipRules(FixImagesConfig config)
+    {
+        return new StaticSkipRules(
+            NormalizeEntries(config.ExcludeImages),
+            NormalizeEntries(config.ExcludeTags),
+            NormalizeEntries(config.IgnoreImages));
+    }
+
+    internal static bool TryGetSkipReason(string imageRef, in StaticSkipRules staticRules, out string reason)
+    {
+        if (!TryParseImageReference(imageRef, out var parsed) || parsed.AlreadyPinned)
+        {
+            reason = string.Empty;
+            return false;
+        }
+
+        return TryGetSkipReason(parsed, staticRules.ExcludeImages, staticRules.ExcludeTags, staticRules.IgnoreImages, out reason);
     }
 
     private async Task<string?> ResolveDigestAsync(
@@ -634,6 +655,16 @@ public sealed class OciImageDigestResolver : IImageDigestResolver
         string Reference,
         string CacheKey,
         bool AlreadyPinned);
+
+    internal readonly record struct StaticSkipRules(
+        string[] ExcludeImages,
+        string[] ExcludeTags,
+        string[] IgnoreImages);
+
+    private sealed class StaticSkipRulesBox(StaticSkipRules rules)
+    {
+        public StaticSkipRules Rules { get; } = rules;
+    }
 
     private sealed class DockerAuthConfig(IReadOnlyDictionary<string, string> auths)
     {

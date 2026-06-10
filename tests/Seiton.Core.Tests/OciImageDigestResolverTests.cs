@@ -101,6 +101,39 @@ public sealed class OciImageDigestResolverTests
     }
 
     [Test]
+    public async Task TryGetSkipReason_StaticRules_CanBeReusedAcrossCalls()
+    {
+        var config = new FixImagesConfig
+        {
+            ExcludeImages = [" ghcr.io/internal/runner "],
+            ExcludeTags = [" edge "],
+            IgnoreImages = [" ghcr.io/myorg/** "],
+        };
+
+        var staticRules = OciImageDigestResolver.CreateStaticSkipRules(config);
+
+        var excludedByImage = OciImageDigestResolver.TryGetSkipReason(
+            "ghcr.io/internal/runner:1.0.0",
+            staticRules,
+            out var excludedByImageReason);
+        var excludedByTag = OciImageDigestResolver.TryGetSkipReason(
+            "ghcr.io/astral-sh/uv:edge",
+            staticRules,
+            out var excludedByTagReason);
+        var ignoredByPattern = OciImageDigestResolver.TryGetSkipReason(
+            "ghcr.io/myorg/tooling/ci:1.2.3",
+            staticRules,
+            out var ignoredByPatternReason);
+
+        await Assert.That(excludedByImage).IsTrue();
+        await Assert.That(excludedByImageReason).Contains("exclude-images");
+        await Assert.That(excludedByTag).IsTrue();
+        await Assert.That(excludedByTagReason).Contains("exclude-tags");
+        await Assert.That(ignoredByPattern).IsTrue();
+        await Assert.That(ignoredByPatternReason).Contains("ignore-images");
+    }
+
+    [Test]
     public async Task ResolveAsync_UsesDockerAuths_WhenRegistryCredentialsExist()
     {
         var tempDir = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N"));

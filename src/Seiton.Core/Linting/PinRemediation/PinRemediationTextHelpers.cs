@@ -4,7 +4,8 @@ internal static class PinRemediationTextHelpers
 {
     internal static bool ContainsExact(IReadOnlyList<string> values, string target)
     {
-        for (var i = 0; i < values.Count; i++)
+        var count = values.Count;
+        for (var i = 0; i < count; i++)
         {
             if (string.Equals(values[i], target, StringComparison.Ordinal))
             {
