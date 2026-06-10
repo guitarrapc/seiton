@@ -52,6 +52,16 @@ public static partial class WorkflowParser
             : $"steps[{stepIndex}]";
     }
 
+    private static string BuildStepDuplicateKeyHelp(ReadOnlySpan<byte> keyUtf8)
+    {
+        if (keyUtf8.SequenceEqual("env"u8))
+        {
+            return "YAML mapping keys must be unique. Merge variables into a single env: block.";
+        }
+
+        return $"YAML mapping keys must be unique. Keep only one \"{Encoding.UTF8.GetString(keyUtf8)}\" key in this step.";
+    }
+
     private static ArenaList<Step> ParseSteps<TReader>(ref TReader reader, AstArena arena, ref PooledBuffer<Diagnostic> diagnostics, ReadOnlySpan<byte> source, Utf8Slice jobId)
         where TReader : IYamlStreamReader, allows ref struct
     {
@@ -172,10 +182,15 @@ public static partial class WorkflowParser
                 if (!TrySetBit(ref seen, stepKeyOrd))
                 {
                     var dupName = StepMappingKeyTable.Utf8Key(stepKeyOrd);
+                    var keyName = Encoding.UTF8.GetString(dupName);
                     var prevMark = stepKeyFirstMark[stepKeyOrd];
                     var prevLine = (int)(prevMark >> 32);
                     var prevCol = (int)(prevMark & 0xFFFFFFFF);
-                    AddError(ref diagnostics, $"{FormatStepPrefix(source, jobId, stepIndex)} key \"{Encoding.UTF8.GetString(dupName)}\" is duplicated. previously defined at line:{prevLine},col:{prevCol}", keyMark);
+                    AddError(
+                        ref diagnostics,
+                        $"{FormatStepPrefix(source, jobId, stepIndex)} key \"{keyName}\" is duplicated in step. previously defined at line:{prevLine},col:{prevCol}",
+                        keyMark,
+                        BuildStepDuplicateKeyHelp(dupName));
                     if (!reader.End)
                     {
                         reader.SkipCurrentNode();

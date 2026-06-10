@@ -6523,6 +6523,49 @@ public sealed class ParserTests
         await Assert.That(diag.Location.StartColumn).IsEqualTo(11);
     }
 
+    [Test]
+    public async Task Parse_StepDuplicateEnv_IncludesHelp()
+    {
+        var yaml = """
+        on: push
+        jobs:
+          build:
+            runs-on: ubuntu-latest
+            steps:
+              - run: echo hi
+                env:
+                  FOO: bar
+                env:
+                  BAZ: qux
+        """u8;
+        var result = WorkflowParser.ParseDirect(yaml.ToArray(), "test.yaml", out var arena);
+        var diag = result.Diagnostics.First(d => d.Message.Contains("key \"env\" is duplicated in step"));
+        await Assert.That(diag.Help).IsNotNull();
+        await Assert.That(diag.Help!).Contains("YAML mapping keys must be unique");
+        await Assert.That(diag.Help!).Contains("env");
+    }
+
+    [Test]
+    public async Task Parse_StepDuplicateEnv_MessageFormatMatchesOtherSections()
+    {
+        var yaml = """
+        on: push
+        jobs:
+          build:
+            runs-on: ubuntu-latest
+            steps:
+              - run: echo hi
+                env:
+                  FOO: bar
+                env:
+                  BAZ: qux
+        """u8;
+        var result = WorkflowParser.ParseDirect(yaml.ToArray(), "test.yaml", out var arena);
+        await Assert.That(result.HasFatalError).IsFalse();
+        var diag = result.Diagnostics.First(d => d.Message.Contains("jobs.'build'.steps[1]"));
+        await Assert.That(diag.Message).Contains("key \"env\" is duplicated in step. previously defined at line:");
+    }
+
     // regression: step diagnostics should include job context for actionability
     [Test]
     public async Task Parse_StepUnexpectedKey_IncludesJobContext()
