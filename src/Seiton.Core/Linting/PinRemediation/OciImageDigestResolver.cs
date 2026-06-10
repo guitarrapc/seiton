@@ -50,7 +50,7 @@ public sealed class OciImageDigestResolver : IImageDigestResolver
     /// <param name="cancellationToken"></param>
     /// <returns></returns>
     /// <exception cref="InvalidOperationException"></exception>
-    public async Task<string?> ResolveAsync(string imageRef, CancellationToken cancellationToken = default)
+    public async Task<ImageDigestResolution> ResolveAsync(string imageRef, CancellationToken cancellationToken = default)
     {
         if (!TryParseImageReference(imageRef, out var parsed))
         {
@@ -59,17 +59,17 @@ public sealed class OciImageDigestResolver : IImageDigestResolver
 
         if (parsed.AlreadyPinned)
         {
-            return null;
+            return default;
         }
 
-        if (ShouldSkip(parsed))
+        if (TryGetSkipReason(parsed, out var skipReason))
         {
-            return null;
+            return ImageDigestResolution.Skipped(skipReason);
         }
 
         if (_successCache.TryGetValue(parsed.CacheKey, out var cachedDigest))
         {
-            return cachedDigest;
+            return ImageDigestResolution.Resolved(cachedDigest);
         }
 
         var client = _httpClient;
@@ -80,9 +80,10 @@ public sealed class OciImageDigestResolver : IImageDigestResolver
         if (digest is not null)
         {
             _successCache.TryAdd(parsed.CacheKey, digest);
+            return ImageDigestResolution.Resolved(digest);
         }
 
-        return digest;
+        return default;
     }
 
     private async Task<string?> ResolveDigestAsync(
@@ -316,28 +317,43 @@ public sealed class OciImageDigestResolver : IImageDigestResolver
         return new Uri(realmStr + query);
     }
 
-    private bool ShouldSkip(ParsedImageReference parsed)
+    private bool TryGetSkipReason(ParsedImageReference parsed, out string reason)
     {
-        if (ContainsExact(_normalizedExcludeImages, parsed.MatchName)
-            || ContainsExact(_normalizedExcludeImages, parsed.RepositoryPath))
+        if (ContainsExact(_normalizedExcludeImages, parsed.MatchName))
         {
+            reason = $"pinning skipped: image '{parsed.MatchName}' matches fix.images.exclude-images";
+            return true;
+        }
+
+        if (ContainsExact(_normalizedExcludeImages, parsed.RepositoryPath))
+        {
+            reason = $"pinning skipped: image '{parsed.RepositoryPath}' matches fix.images.exclude-images";
             return true;
         }
 
         if (ContainsExact(_normalizedExcludeTags, parsed.Reference))
         {
+            reason = $"pinning skipped: tag '{parsed.Reference}' matches fix.images.exclude-tags";
             return true;
         }
 
         for (var i = 0; i < _normalizedIgnoreImages.Length; i++)
         {
-            if (GlobMatch(_normalizedIgnoreImages[i], parsed.MatchName)
-                || GlobMatch(_normalizedIgnoreImages[i], parsed.RepositoryPath))
+            var pattern = _normalizedIgnoreImages[i];
+            if (GlobMatch(pattern, parsed.MatchName))
             {
+                reason = $"pinning skipped: image '{parsed.MatchName}' matches fix.images.ignore-images pattern '{pattern}'";
+                return true;
+            }
+
+            if (GlobMatch(pattern, parsed.RepositoryPath))
+            {
+                reason = $"pinning skipped: image '{parsed.RepositoryPath}' matches fix.images.ignore-images pattern '{pattern}'";
                 return true;
             }
         }
 
+        reason = string.Empty;
         return false;
     }
 

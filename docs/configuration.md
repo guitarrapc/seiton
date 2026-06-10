@@ -321,8 +321,8 @@ fix:
     enable-network: false      # Set true to allow network-assisted digest pinning.
     exclude-images:            # Skip pinning for these image names.
       - scratch
-    exclude-tags:              # Skip pinning for images with these tags.
-      - latest
+    exclude-tags:              # Skip pinning for images with these tags (default: latest).
+      - latest                # Tagless refs (e.g. image: redis) resolve to latest and are skipped.
     ignore-images:             # Skip pinning for images matching these glob patterns.
       - "mcr.microsoft.com/**"
 

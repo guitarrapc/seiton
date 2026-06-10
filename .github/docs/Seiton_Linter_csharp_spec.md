@@ -571,16 +571,21 @@ public readonly record struct ActionShaResolution(
     string? TagComment,
     string? SkipReason = null);
 
+public readonly record struct ImageDigestResolution(
+    string? Digest,
+    string? SkipReason = null);
+
 /// <summary>
 /// Resolves an OCI image reference to a pinned digest.
 /// </summary>
 public interface IImageDigestResolver
 {
     /// <summary>
-    /// Resolves imageRef (e.g. "node:20.11.1") to a sha256 digest string.
-    /// Returns null when the image is excluded by configuration.
+    /// Resolves imageRef (e.g. "node:20.11.1") to a digest result.
+    /// <see cref="ImageDigestResolution.SkipReason"/> is set when excluded by configuration.
+    /// <see cref="ImageDigestResolution.Digest"/> is null when skipped, not found (404), or already pinned.
     /// </summary>
-    Task<string?> ResolveAsync(
+    Task<ImageDigestResolution> ResolveAsync(
         string imageRef,
         CancellationToken cancellationToken = default);
 }
@@ -590,7 +595,8 @@ C# implementation notes:
 
 - Both interfaces are `async`; resolution may perform network I/O.
 - `IActionShaResolver` expresses skip via `ActionShaResolution` (`Sha`/`TagComment` null, optional `SkipReason`).
-- `IImageDigestResolver` returning `null` indicates configuration-based skip (not an error) **or** 404 image-not-found (also not an error — callers should not generate a fix for nonexistent images).
+- `IImageDigestResolver` expresses configuration skip via `ImageDigestResolution.SkipReason`; remediation appends this to diagnostic `help:` (same UX as action pinning).
+- `ImageDigestResolution` with null `Digest` and null `SkipReason` indicates 404 image-not-found or already-pinned input (not an error — callers should not generate a fix).
 - Implementations must cache successful resolutions in-process for the duration of a single `RemediateAsync` call.
 - Error results (non-skip failures) must not be cached.
 - Resolver implementations are injected by caller — not instantiated by `LintEngine`.
@@ -604,7 +610,7 @@ C# implementation notes:
 |---|---|---|
 | HTTP method | `remote.Head()` via go-containerregistry | `HttpMethod.Head` |
 | Auth handling | `authn.DefaultKeychain` (handles bearer + Basic + credential helpers automatically) | Basic from `~/.docker/config.json`; anonymous bearer challenge via RFC 6750 flow |
-| 404 image not found | `Exists()` returns `false, nil` | `Resolve()` returns `null` |
+| 404 image not found | `Exists()` returns `false, nil` | `Resolve()` returns `ImageDigestResolution` with null digest and null skip reason |
 | Error caching | Not cached (transient errors retried) | Not cached |
 | Existence check | Separate `Exists(imageRef) -> (bool, error)` method | Not exposed (folded into `Resolve` returning `null`) |
 

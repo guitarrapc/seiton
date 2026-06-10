@@ -697,10 +697,12 @@ internal static class CheckCommand
         var needsImage = false;
         for (var i = 0; i < diagnostics.Count; i++)
         {
-            var ruleId = diagnostics[i].RuleId;
+            var diagnostic = diagnostics[i];
+            var ruleId = diagnostic.RuleId;
             if (ruleId is null) continue;
             if (!enablePinNetwork && ruleId == "unpinned-uses") needsPin = true;
             if (!enableImageNetwork && ruleId == "unpinned-image") needsImage = true;
+
             if (needsPin && needsImage) break;
         }
 

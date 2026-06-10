@@ -1,8 +1,9 @@
-﻿using Seiton.Core.Linting;
+﻿using System.Net;
+using System.Text;
+using Seiton.Core.Linting;
 using Seiton.Core.Linting.Fixing;
 using Seiton.Core.Linting.PinRemediation;
 using Seiton.Core.Linting.Rules;
-using System.Text;
 
 namespace Seiton.Core.Tests;
 
@@ -20,7 +21,7 @@ public sealed class PinRemediationTests
 
         var engine = new PinRemediationEngine(
             new DelegateActionShaResolver((_, _, _, _) => Task.FromResult(ActionShaResolution.Resolved(ActionSha, "v4"))),
-            new DelegateImageDigestResolver((_, _) => Task.FromResult<string?>(ImageDigest)),
+            new DelegateImageDigestResolver((_, _) => Task.FromResult(ImageDigestResolution.Resolved(ImageDigest))),
             new FixPinningConfig { EnableNetwork = true }, new FixImagesConfig { EnableNetwork = true }, new NetworkConfig());
 
         var remediation = await engine.RemediateAsync(lintResult.Diagnostics, source);
@@ -50,7 +51,7 @@ public sealed class PinRemediationTests
             new DelegateImageDigestResolver((_, _) =>
             {
                 imageCalls++;
-                return Task.FromResult<string?>(ImageDigest);
+                return Task.FromResult(ImageDigestResolution.Resolved(ImageDigest));
             }),
             new FixPinningConfig(), new FixImagesConfig(), new NetworkConfig());
 
@@ -73,7 +74,7 @@ public sealed class PinRemediationTests
 
         var engine = new PinRemediationEngine(
             new DelegateActionShaResolver((_, _, _, _) => throw new InvalidOperationException("action resolver failed")),
-            new DelegateImageDigestResolver((_, _) => Task.FromResult<string?>(ImageDigest)),
+            new DelegateImageDigestResolver((_, _) => Task.FromResult(ImageDigestResolution.Resolved(ImageDigest))),
             new FixPinningConfig { EnableNetwork = true }, new FixImagesConfig { EnableNetwork = true }, new NetworkConfig());
 
         var remediation = await engine.RemediateAsync(lintResult.Diagnostics, source);
@@ -94,7 +95,7 @@ public sealed class PinRemediationTests
 
         var engine = new PinRemediationEngine(
             new DelegateActionShaResolver((_, _, _, _) => throw new InvalidOperationException("action resolver failed")),
-            new DelegateImageDigestResolver((_, _) => Task.FromResult<string?>(ImageDigest)),
+            new DelegateImageDigestResolver((_, _) => Task.FromResult(ImageDigestResolution.Resolved(ImageDigest))),
             new FixPinningConfig { EnableNetwork = true }, new FixImagesConfig { EnableNetwork = true }, new NetworkConfig { OnError = NetworkErrorMode.Fail });
 
         await Assert.That(async () => await engine.RemediateAsync(lintResult.Diagnostics, source))
@@ -149,7 +150,7 @@ public sealed class PinRemediationTests
 
         var remediationEngine = new PinRemediationEngine(
             new DelegateActionShaResolver((_, _, _, _) => Task.FromResult(ActionShaResolution.Resolved(ActionSha, "v4"))),
-            new DelegateImageDigestResolver((_, _) => Task.FromResult<string?>(ImageDigest)),
+            new DelegateImageDigestResolver((_, _) => Task.FromResult(ImageDigestResolution.Resolved(ImageDigest))),
             new FixPinningConfig { EnableNetwork = true }, new FixImagesConfig { EnableNetwork = true }, new NetworkConfig());
 
         var remediation = await remediationEngine.RemediateAsync(lintResult.Diagnostics, source);
@@ -198,10 +199,96 @@ public sealed class PinRemediationTests
             => impl(owner, repo, refStr, cancellationToken);
     }
 
-    private sealed class DelegateImageDigestResolver(
-        Func<string, CancellationToken, Task<string?>> impl) : IImageDigestResolver
+    [Test]
+    public async Task RemediateAsync_SkipsImplicitLatestServiceImage_WithExcludeTagsHelp()
     {
-        public Task<string?> ResolveAsync(string imageRef, CancellationToken cancellationToken = default)
+        var source = Encoding.UTF8.GetBytes("""
+            on: push
+            jobs:
+              build:
+                runs-on: ubuntu-24.04
+                services:
+                  redis:
+                    image: redis
+                steps:
+                  - run: echo test
+            """);
+
+        var handler = new StubHttpMessageHandler();
+        var resolver = new OciImageDigestResolver(
+            new HttpClient(handler),
+            new FixImagesConfig { EnableNetwork = true },
+            dockerConfigPath: Path.Combine(Path.GetTempPath(), "__nonexistent_seiton_test_docker_config__.json"));
+        var engine = new PinRemediationEngine(
+            null,
+            resolver,
+            new FixPinningConfig(),
+            new FixImagesConfig { EnableNetwork = true },
+            new NetworkConfig());
+
+        var lintEngine = CreatePinLintEngine();
+        using var lintResult = lintEngine.Check(source, "service-implicit-latest.yml");
+        var remediation = await engine.RemediateAsync(lintResult.Diagnostics, source);
+
+        var imageDiagnostic = remediation.Diagnostics.First(d => d.RuleId == "unpinned-image");
+
+        await Assert.That(remediation.ResolvedCount).IsEqualTo(0);
+        await Assert.That(remediation.SkippedCount).IsEqualTo(1);
+        await Assert.That(imageDiagnostic.Help).Contains("exclude-tags");
+        await Assert.That(handler.RequestedUris).IsEmpty();
+    }
+
+    [Test]
+    public async Task ApplyAndRelint_PinsExplicitTagServiceImage()
+    {
+        var source = Encoding.UTF8.GetBytes("""
+            on: push
+            jobs:
+              build:
+                runs-on: ubuntu-24.04
+                services:
+                  redis:
+                    image: redis:7
+            """);
+        var lintEngine = CreatePinLintEngine();
+        using var lintResult = lintEngine.Check(source, "service-explicit-tag.yml");
+
+        var remediationEngine = new PinRemediationEngine(
+            null,
+            new DelegateImageDigestResolver((_, _) => Task.FromResult(ImageDigestResolution.Resolved(ImageDigest))),
+            new FixPinningConfig(),
+            new FixImagesConfig { EnableNetwork = true },
+            new NetworkConfig());
+
+        var remediation = await remediationEngine.RemediateAsync(lintResult.Diagnostics, source);
+        await Assert.That(remediation.ResolvedCount).IsEqualTo(1);
+
+        using var revalidated = FixEngine.ApplyAndRelint(
+            lintEngine,
+            source,
+            "service-explicit-tag.yml",
+            remediation.Diagnostics);
+
+        await Assert.That(revalidated.After.Diagnostics.Any(d => d.RuleId == "unpinned-image")).IsFalse();
+        var updatedYaml = Encoding.UTF8.GetString(revalidated.UpdatedUtf8Yaml);
+        await Assert.That(updatedYaml.Contains($"redis:7@{ImageDigest}", StringComparison.Ordinal)).IsTrue();
+    }
+
+    private sealed class DelegateImageDigestResolver(
+        Func<string, CancellationToken, Task<ImageDigestResolution>> impl) : IImageDigestResolver
+    {
+        public Task<ImageDigestResolution> ResolveAsync(string imageRef, CancellationToken cancellationToken = default)
             => impl(imageRef, cancellationToken);
+    }
+
+    private sealed class StubHttpMessageHandler : HttpMessageHandler
+    {
+        public List<string> RequestedUris { get; } = [];
+
+        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+        {
+            RequestedUris.Add(request.RequestUri!.ToString());
+            return Task.FromResult(new HttpResponseMessage(HttpStatusCode.NotFound));
+        }
     }
 }

@@ -2,12 +2,15 @@
 
 /// <summary>
 /// Resolves an OCI image reference to a pinned digest.
-/// A null result indicates the reference was skipped by configuration.
 /// </summary>
 public interface IImageDigestResolver
 {
-    /// <summary>Resolves the given image reference to an OCI digest string. Returns <c>null</c> if skipped by configuration.</summary>
-    public Task<string?> ResolveAsync(
+    /// <summary>
+    /// Resolves the given image reference to an OCI digest.
+    /// <see cref="ImageDigestResolution.SkipReason"/> is set when excluded by configuration.
+    /// <see cref="ImageDigestResolution.Digest"/> is null when skipped, not found (404), or already pinned.
+    /// </summary>
+    public Task<ImageDigestResolution> ResolveAsync(
         string imageRef,
         CancellationToken cancellationToken = default);
 }

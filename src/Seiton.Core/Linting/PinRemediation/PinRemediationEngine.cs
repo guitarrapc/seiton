@@ -171,13 +171,19 @@ public sealed class PinRemediationEngine(
             return new RemediationOutcome(diagnostic, Resolved: false, Skipped: false, Failed: true);
         }
 
-        var digest = await _imageDigestResolver.ResolveAsync(imageRef, cancellationToken);
-        if (digest is null)
+        var resolution = await _imageDigestResolver.ResolveAsync(imageRef, cancellationToken);
+        if (!string.IsNullOrWhiteSpace(resolution.SkipReason))
+        {
+            var help = AppendHelp(diagnostic.Help, resolution.SkipReason);
+            return new RemediationOutcome(diagnostic with { Help = help }, Resolved: false, Skipped: true, Failed: false);
+        }
+
+        if (resolution.Digest is null)
         {
             return new RemediationOutcome(diagnostic, Resolved: false, Skipped: true, Failed: false);
         }
 
-        var fix = PinFixFormatter.BuildImageDigestFix(diagnostic, digest, utf8Yaml);
+        var fix = PinFixFormatter.BuildImageDigestFix(diagnostic, resolution.Digest, utf8Yaml);
         if (fix is null)
         {
             return new RemediationOutcome(diagnostic, Resolved: false, Skipped: false, Failed: true);
