@@ -483,7 +483,7 @@ public sealed class CheckCommandTests
                 includeActions: false);
 
             await Assert.That(code).IsEqualTo(ExitCode.LintIssuesFound);
-            await Assert.That(stdout.ToString()).Contains("pinning skipped by fix.pinning exclude settings for 'octocat/hello-world-action@main'");
+            await Assert.That(stdout.ToString()).Contains("pinning skipped: ref 'main' matches fix.pinning.exclude-branches for 'octocat/hello-world-action'");
         }
         finally
         {

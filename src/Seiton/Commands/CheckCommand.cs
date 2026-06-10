@@ -737,7 +737,17 @@ internal static class CheckCommand
             var reference = usesRef[(at + 1)..];
             if (ContainsExact(pinningConfig.ExcludeBranches, reference))
             {
-                reason = $"pinning skipped by fix.pinning exclude settings for '{usesRef}'";
+                var slash = usesRef.IndexOf('/');
+                var at2 = usesRef.LastIndexOf('@');
+                if (slash > 0 && at2 > slash + 1)
+                {
+                    var ownerRepo = usesRef[..at2];
+                    reason = $"pinning skipped: ref '{reference}' matches fix.pinning.exclude-branches for '{ownerRepo}'";
+                }
+                else
+                {
+                    reason = $"pinning skipped: ref '{reference}' matches fix.pinning.exclude-branches";
+                }
                 return true;
             }
 

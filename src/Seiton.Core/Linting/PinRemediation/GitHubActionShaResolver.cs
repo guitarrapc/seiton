@@ -27,7 +27,7 @@ public sealed class GitHubActionShaResolver(HttpClient httpClient, FixPinningCon
     {
         if (ShouldSkip(owner, repo, refStr))
         {
-            return ActionShaResolution.Skipped($"pinning skipped by fix.pinning exclude settings for '{owner}/{repo}@{refStr}'");
+            return ActionShaResolution.Skipped($"pinning skipped: ref '{refStr}' matches fix.pinning.exclude-branches for '{owner}/{repo}'");
         }
 
         var cacheKey = string.Concat(owner, "/", repo, "@", refStr);
