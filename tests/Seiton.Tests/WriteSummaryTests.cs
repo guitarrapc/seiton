@@ -384,7 +384,7 @@ public sealed class WriteSummaryTests
     }
 
     [Test]
-    public async Task WriteSummary_NotVerbose_ParserOnlyDiagnostics_ShowsParseInRuleBreakdown()
+    public async Task WriteSummary_NotVerbose_ParserOnlyDiagnostics_ShowsSyntaxCheckInRuleBreakdown()
     {
         var diagnostics = new List<Diagnostic>
         {

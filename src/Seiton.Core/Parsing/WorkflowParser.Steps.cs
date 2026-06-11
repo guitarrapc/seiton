@@ -149,7 +149,7 @@ public static partial class WorkflowParser
         StringNodeId dockerEntrypoint = default;
         StringNodeId dockerArgs = default;
         ulong seen = 0;
-        Span<long> stepKeyFirstMark = stackalloc long[11];
+        Span<long> stepKeyFirstMark = stackalloc long[StepMappingKeyTable.KeyCount];
 
         reader.Read(); // consume MappingStart
         while (!reader.End && reader.CurrentKind != YamlEventKind.MappingEnd)

@@ -308,7 +308,7 @@ Seiton 内部では **parser 診断と lint rule 診断は分離**されてい�
   - `WritePerRuleBreakdown`: `RuleId ?? "parse"` で集計（`DiagnosticFormatter` と同一フォールバック）。
   - `ShouldOfferFullPerRuleBreakdownHint`: 同上（parser のみでも distinct rule として `parse` を数える）。
 - テスト:
-  - `WriteSummary_NotVerbose_ParserOnlyDiagnostics_ShowsParseInRuleBreakdown`（新規）
+  - `WriteSummary_NotVerbose_ParserOnlyDiagnostics_ShowsSyntaxCheckInRuleBreakdown`（新規）
   - `WriteSummary_NotVerbose_ParserAndLintDiagnostics_ShowBothInRuleBreakdown`（新規）
   - `WriteSummary_Verbose_ParserDiagnosticsWithNullRuleId_GroupedSeparately`（`| parse |` 期待に更新）
   - `Check_TextMode_DuplicateStepEnv_IsReportedAndSummaryIsNotZeroIssues`（stderr に `| parse |` を追加）

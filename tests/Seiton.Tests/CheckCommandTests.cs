@@ -610,7 +610,8 @@ public sealed class CheckCommandTests
                 color: ColorMode.Never,
                 noColor: true,
                 verboseLevel: VerboseLevel.Off,
-                includeActions: false);
+                includeActions: false,
+                formatExplicitlySet: true);
 
             await Assert.That(code).IsEqualTo(ExitCode.LintIssuesFound);
             await Assert.That(stdout.ToString()).Contains("error[syntax-check]:");
