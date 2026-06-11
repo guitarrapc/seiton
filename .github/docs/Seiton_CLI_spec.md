@@ -538,7 +538,7 @@ Each diagnostic maps to a SARIF `result` under a `run` with tool identity `seito
 
 Rule metadata (`id`, `helpUri`) is emitted per-rule in `tool.driver.rules`.
 
-`runs[].tool.driver.rules[].helpUri` points to rule-specific documentation anchors in `docs/rules.md` using the rule id (`.../docs/rules.md#<rule-id>`). For parser-origin diagnostics (`ruleId = parse`), `helpUri` falls back to the general usage guide (`.../docs/usage.md`).
+`runs[].tool.driver.rules[].helpUri` points to rule-specific documentation anchors in `docs/rules.md` using the rule id (`.../docs/rules.md#<rule-id>`). For parser-origin diagnostics (internal `RuleId: null`, displayed as `syntax-check`), `helpUri` falls back to the general usage guide (`.../docs/usage.md`).
 
 `runs[].tool.driver.version` is always emitted, sourced from assembly informational version (with build metadata suffix trimmed when present).
 
@@ -588,12 +588,12 @@ When at least one diagnostic has a file path, a per-file breakdown is emitted as
 - When at least one info diagnostic exists in the per-file breakdown, an `Infos` column is also emitted.
 - Files are sorted by total issue count descending, then by file name lexicographically.
 
-When at least one diagnostic is present, a per-rule breakdown is emitted as a markdown-style table (top 10 rules by count), separated from the preceding output by a blank line. Parser diagnostics (`RuleId` is null internally) are grouped under the pseudo rule ID `parse`, matching the `error[parse]:` label in diagnostic output.
+When at least one diagnostic is present, a per-rule breakdown is emitted as a markdown-style table (top 10 rules by count), separated from the preceding output by a blank line. Parser diagnostics (`RuleId` is null internally) are grouped under the display rule ID `syntax-check`, matching the `error[syntax-check]:` label in diagnostic output and actionlint's `[syntax-check]` tag.
 
 ```
 | Rule          | Count |
 |---------------|------:|
-| parse         |     1 |
+| syntax-check  |     1 |
 | unpinned-uses |     3 |
 | template-injection |  2 |
 ```

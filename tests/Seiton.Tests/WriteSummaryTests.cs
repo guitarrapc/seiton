@@ -395,7 +395,7 @@ public sealed class WriteSummaryTests
         CheckCommand.WriteSummary(sw, diagnostics, 1, verbose: false);
         var output = sw.ToString();
 
-        await Assert.That(output).Contains("| parse");
+        await Assert.That(output).Contains("| syntax-check");
         await Assert.That(output).DoesNotContain("hint: re-run with --verbose for the full per-rule breakdown");
     }
 
@@ -412,7 +412,7 @@ public sealed class WriteSummaryTests
         CheckCommand.WriteSummary(sw, diagnostics, 1, verbose: false);
         var output = sw.ToString();
 
-        await Assert.That(output).Contains("| parse");
+        await Assert.That(output).Contains("| syntax-check");
         await Assert.That(output).Contains("| unpinned-uses");
     }
 
@@ -444,7 +444,7 @@ public sealed class WriteSummaryTests
         var output = sw.ToString();
 
         await Assert.That(output).Contains("| unpinned-uses");
-        await Assert.That(output).Contains("| parse");
+        await Assert.That(output).Contains("| syntax-check");
         await Assert.That(output).DoesNotContain("null");
     }
 

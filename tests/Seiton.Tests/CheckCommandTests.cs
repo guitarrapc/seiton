@@ -615,7 +615,7 @@ public sealed class CheckCommandTests
             await Assert.That(code).IsEqualTo(ExitCode.LintIssuesFound);
             await Assert.That(stdout.ToString()).Contains("steps[1] key \"env\" is duplicated in step");
             await Assert.That(stderr.ToString()).DoesNotContain("0 issues in 1 file");
-            await Assert.That(stderr.ToString()).Contains("| parse");
+            await Assert.That(stderr.ToString()).Contains("| syntax-check");
         }
         finally
         {

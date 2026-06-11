@@ -58,12 +58,12 @@ public sealed class DiagnosticFormatterRichTextTests
     }
 
     [Test]
-    public async Task Oneline_NullRuleId_UsesParseLabel()
+    public async Task Oneline_NullRuleId_UsesSyntaxCheckLabel()
     {
         var diag = MakeDiagnostic(DiagnosticSeverity.Error, "parse error", 1, 1, 1, 5, ruleId: null);
         var output = Render(diag, oneline: true);
 
-        await Assert.That(output.TrimEnd()).IsEqualTo("test.yml:1:1: error [parse] parse error");
+        await Assert.That(output.TrimEnd()).IsEqualTo("test.yml:1:1: error [syntax-check] parse error");
     }
 
     [Test]

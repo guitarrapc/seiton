@@ -68,7 +68,7 @@ public sealed class StructureSnippetTests
             DiagnosticSeverity.Error,
             "jobs.'build'.steps[1].uses must be string",
             new TextRange(0, 0, 6, 11, 6, 80),
-            RuleId: "parse",
+            RuleId: null,
             FilePath: path);
 
         var output = RenderRich(diag, bytes, path);
@@ -97,7 +97,7 @@ public sealed class StructureSnippetTests
             DiagnosticSeverity.Error,
             "jobs.'build'.steps[1].uses must be string",
             new TextRange(0, 0, 8, 11, 8, 40),
-            RuleId: "parse",
+            RuleId: null,
             FilePath: path);
 
         var output = RenderRich(diag, bytes, path);
@@ -192,7 +192,7 @@ public sealed class StructureSnippetTests
             DiagnosticSeverity.Error,
             "steps[1].run must be string",
             new TextRange(0, 0, 5, 5, 5, 18),
-            RuleId: "parse",
+            RuleId: null,
             FilePath: path);
 
         var output = RenderRich(diag, bytes, path);
@@ -219,7 +219,7 @@ public sealed class StructureSnippetTests
             DiagnosticSeverity.Error,
             "jobs.'build'.steps[1].uses must be string",
             new TextRange(0, 0, 99, 11, 99, 80),
-            RuleId: "parse",
+            RuleId: null,
             FilePath: path);
 
         var output = RenderRich(diag, bytes, path);

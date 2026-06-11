@@ -292,11 +292,11 @@ Seiton 内部では **parser 診断と lint rule 診断は分離**されてい�
    - parser + lint 混在時は `parse` と各 rule id が共存することを確認。
 4. 仕様: `docs/usage.md` または linter spec に「parser 診断はサマリー上 `parse` カテゴリに集計」と 1 行追記（任意）。
 
-### スコープ外（今回やらない）
+### スコープ外（当時）
 
-- `parse` → `syntax` / `syntax-check` への表示 ID 統一（本文・JSON・SARIF・互換出力の一括変更が必要）。
-- LintEngine で parser 診断に `RuleId: "syntax"` を付与（dedup / 抑制モデルへの影響大）。
-- `seiton rules` への `parse` 登録（擬似カテゴリのまま維持でよい）。
+- ~~`parse` → `syntax` / `syntax-check` への表示 ID 統一~~ → **実装済み（2026-06-11、下記）**
+- LintEngine で parser 診断に `RuleId: "syntax"` を付与（dedup / 抑制モデルへの影響大）— **不要（表示レイヤーのみで対応）**
+- `seiton rules` への登録 — **不要（擬似カテゴリ `syntax-check` のまま）**
 
 ### 受け入れ基準
 
@@ -332,6 +332,48 @@ Seiton 内部では **parser 診断と lint rule 診断は分離**されてい�
 2. **Performance**: サマリー生成は診断出力後のコールドパス。ベンチマーク ±10% 以内。
 3. **User-first API**: サマリーだけ読んでも「parse エラーが N 件」と把握できる。
 4. **Spec 整合**: `Seiton_CLI_spec.md` を更新済み。内部 `RuleId: null` は維持（lint 層との分離不変）。
+
+## 実装結果（2026-06-11）— 表示 ID 統一: `parse` → `syntax-check`
+
+### 方針
+
+- 内部 `Diagnostic.RuleId` は **null のまま**（LintEngine 付与・抑制可能ルール化はしない）。
+- ユーザー向け出力（text / JSON / SARIF / サマリー / actionlint 互換）のみ `DiagnosticDisplayRuleIds.ParserSyntaxCheck`（`syntax-check`）に統一。
+- actionlint の `[syntax-check]` タグと一致。compat テストの `parse` → `syntax-check` 中間マップを削除。
+
+### 実装内容
+
+- 新規: `src/Seiton.Core/Parsing/DiagnosticDisplayRuleIds.cs`
+  - `ParserSyntaxCheck = "syntax-check"`
+  - `Resolve(string? ruleId)` — null のみフォールバック（定数時間、追加割り当てなし）
+- 更新:
+  - `DiagnosticFormatter.cs` — text / JSON / SARIF
+  - `CheckCommand.cs` — per-rule サマリー
+  - `ActionlintCompatTests.cs` / `ActionlintExamplesCompatTests.cs`
+  - `README.md`, `docs/usage.md`, `Seiton_CLI_spec.md`
+
+### テスト
+
+- `DiagnosticFormatterRichTextTests.Oneline_NullRuleId_UsesSyntaxCheckLabel`
+- `WriteSummaryTests` / `CheckCommandTests` — `| syntax-check |`
+- `StructureSnippetTests` — 擬似 `RuleId: "parse"` を `null` に修正（実際の parser 診断に合わせる）
+- 全テスト **2647 passed**
+
+### ベンチマーク（StepSummaryOutputBenchmark）
+
+| Method | parse 集計時 | syntax-check 統一後 | Delta | Allocated |
+|--------|-------------|----------------------|-------|-----------|
+| WriteSummary stderr | 17.30 us | 18.30 us | +5.8% | 3.63 KB（同等） |
+| WriteSummary GHA | 388.20 us | 390.97 us | +0.7% | 15.59 KB（同等） |
+
+- 所見: `Resolve()` は null 分岐 + 定数参照のみ。±10% 以内。Allocated 不変。
+
+### フェーズレビュー
+
+1. **Correctness**: CLI・JSON・SARIF・サマリー・compat がすべて `syntax-check`。内部 null / 抑制モデルは不変。
+2. **Performance**: 表示レイヤーのみ。ベンチマーク ±10% 以内。
+3. **User-first API**: actionlint ユーザーに馴染む ID。`seiton rules` には載せず抑制不可を維持。
+4. **Spec 整合**: CLI spec / usage / README 更新済み。
 
 ## 実装時の注意
 

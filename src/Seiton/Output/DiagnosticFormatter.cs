@@ -332,7 +332,7 @@ public static class DiagnosticFormatter
         var line = d.Location.StartLine;
         var col = d.Location.StartColumn;
         var severity = GetSeverityLowerString(d.Severity);
-        var ruleId = d.RuleId ?? "parse";
+        var ruleId = DiagnosticDisplayRuleIds.Resolve(d.RuleId);
 
         if (oneline)
         {
@@ -944,7 +944,7 @@ public static class DiagnosticFormatter
             json.WriteNumber("line"u8, d.Location.StartLine);
             json.WriteNumber("col"u8, d.Location.StartColumn);
             json.WriteString("severity"u8, GetSeverityLowerString(d.Severity));
-            json.WriteString("ruleId"u8, d.RuleId ?? "parse");
+            json.WriteString("ruleId"u8, DiagnosticDisplayRuleIds.Resolve(d.RuleId));
             json.WriteString("message"u8, d.Message);
             json.WriteBoolean("fixable"u8, d.Fix is not null);
             if (d.Help is not null)
@@ -975,7 +975,7 @@ public static class DiagnosticFormatter
         var ruleSet = new Dictionary<string, int>(StringComparer.Ordinal);
         for (var i = 0; i < diagnostics.Count; i++)
         {
-            var ruleId = diagnostics[i].RuleId ?? "parse";
+            var ruleId = DiagnosticDisplayRuleIds.Resolve(diagnostics[i].RuleId);
             if (!ruleSet.ContainsKey(ruleId))
                 ruleSet[ruleId] = ruleSet.Count;
         }
@@ -1018,7 +1018,7 @@ public static class DiagnosticFormatter
         for (var i = 0; i < diagnostics.Count; i++)
         {
             var d = diagnostics[i];
-            var ruleId = d.RuleId ?? "parse";
+            var ruleId = DiagnosticDisplayRuleIds.Resolve(d.RuleId);
             var fileKey = PathDisplayResolver.NormalizeFileKey(d.FilePath);
             SarifArtifactLocation artifactLocation;
             if (string.Equals(previousFileKey, fileKey, StringComparison.Ordinal) && previousArtifactLocation is not null)
@@ -1090,7 +1090,7 @@ public static class DiagnosticFormatter
 
     private static string BuildSarifRuleHelpUri(string ruleId)
     {
-        if (string.Equals(ruleId, "parse", StringComparison.Ordinal))
+        if (string.Equals(ruleId, DiagnosticDisplayRuleIds.ParserSyntaxCheck, StringComparison.Ordinal))
             return SarifGeneralHelpUri;
 
         return string.Concat(SarifRuleHelpUriPrefix, ruleId);

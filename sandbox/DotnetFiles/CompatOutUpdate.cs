@@ -9,7 +9,7 @@ using Seiton.Core.Parsing;
 // Seiton rule ID → actionlint rule ID mapping
 var ruleIdMap = new Dictionary<string, string>(StringComparer.Ordinal)
 {
-    ["parse"] = "syntax-check",
+    ["syntax-check"] = "syntax-check",
     ["job-structure"] = "syntax-check",
     ["shell-name"] = "syntax-check",
     ["env-var"] = "syntax-check",
@@ -134,7 +134,7 @@ static List<string> FormatAsActionlint(Diagnostic[] diagnostics, Dictionary<stri
     var lines = new List<string>(diagnostics.Length);
     foreach (var d in diagnostics)
     {
-        var seitonRuleId = d.RuleId ?? "parse";
+        var seitonRuleId = DiagnosticDisplayRuleIds.Resolve(d.RuleId);
         if (seitonOnlyRules.Contains(seitonRuleId)) continue;
         if (!ruleIdMap.TryGetValue(seitonRuleId, out var actionlintRuleId))
             actionlintRuleId = seitonRuleId;
