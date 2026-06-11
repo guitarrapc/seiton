@@ -502,7 +502,7 @@ public static partial class WorkflowParser
         diagnostics.Add(new Diagnostic(DiagnosticSeverity.Error, message, location));
     }
 
-    private static void AddFatalParseError(ref PooledBuffer<Diagnostic> diagnostics, string message, TextPosition mark, string? help)
+    private static void AddError(ref PooledBuffer<Diagnostic> diagnostics, string message, TextPosition mark, string? help)
     {
         var location = new TextRange(
             Start: mark.Position,
@@ -513,6 +513,11 @@ public static partial class WorkflowParser
             EndColumn: mark.Col);
 
         diagnostics.Add(new Diagnostic(DiagnosticSeverity.Error, message, location, Help: help));
+    }
+
+    private static void AddFatalParseError(ref PooledBuffer<Diagnostic> diagnostics, string message, TextPosition mark, string? help)
+    {
+        AddError(ref diagnostics, message, mark, help);
     }
 
     private static void AddError(ref PooledBuffer<Diagnostic> diagnostics, string message, TextPosition mark, DiagnosticFix? fix)

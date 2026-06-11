@@ -374,11 +374,12 @@ Supported anchor targets:
 
 When a YAML fatal parse occurs, the parser may augment the `yaml parse failure` diagnostic with a `Help` field containing an explanatory hint for common authoring mistakes. This is NOT recovery — the parse still fails fatally and no AST is produced.
 
-Currently supported hint:
+Currently supported hints:
 
 | Pattern | Condition | Help message |
 |---|---|---|
 | Plain scalar colon-space in `run:`/`script:` | Error line or nearby lines contain a `run:` or `script:` key whose plain scalar value contains `: ` | Explains that the `: ` is invalid in a plain scalar and suggests quoting or block scalar (`\|`) |
+| Step-level duplicate known key | Second occurrence of a step mapping key (`run`, `uses`, `with`, `env`, etc.) | Explains that YAML mapping keys must be unique; for `env`, suggests merging into a single `env:` block |
 
 Constraints:
 
@@ -623,6 +624,8 @@ ParseStep(node):
       isRun             -> parseStepExecRun(entries)
       unknown           -> error "step must have run or uses"
 ```
+
+Step-level known keys (`run`, `uses`, `name`, `id`, `if`, `with`, `shell`, `working-directory`, `timeout-minutes`, `continue-on-error`, `env`) use duplicate detection identical to job-level known keys: first occurrence wins, duplicate occurrences emit a non-fatal error and skip the value node. Duplicate diagnostics use the dotted-path prefix (Principle 5) and include a `Help` hint explaining how to merge keys.
 
 #### 3.12.1 ExecAction Parse
 
@@ -1211,6 +1214,7 @@ Exception: `on.workflow_dispatch.inputs` and `on.workflow_call.secrets` receive 
 **Step-level examples (Principle 5):**
 - `jobs.'build'.steps[1] has unexpected key "shell" for step to execute action. expected one of ...`
 - `jobs.'deploy'.steps[3] must run script with "run" section or run action with "uses" section`
+- `jobs.'build'.steps[1] key "env" is duplicated in step. previously defined at line:12,col:9`
 
 **Job-scope unexpected-key (Principle 6):**
 - `jobs.'build' has unexpected key "X" for "job" section`

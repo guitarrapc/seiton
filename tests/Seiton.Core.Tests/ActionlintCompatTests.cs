@@ -11,10 +11,10 @@ namespace Seiton.Core.Tests;
 public sealed class ActionlintCompatTests
 {
     // Seiton rule ID → actionlint rule ID mapping.
-    // Parser diagnostics (RuleId = null) are mapped via the "parse" key.
+    // Parser diagnostics (RuleId = null) resolve to syntax-check via DiagnosticDisplayRuleIds.
     private static readonly Dictionary<string, string> RuleIdMap = new(StringComparer.Ordinal)
     {
-        ["parse"] = "syntax-check",
+        [DiagnosticDisplayRuleIds.ParserSyntaxCheck] = "syntax-check",
         ["job-structure"] = "syntax-check",
         ["shell-name"] = "syntax-check",
         ["env-var"] = "syntax-check",
@@ -262,7 +262,7 @@ public sealed class ActionlintCompatTests
         for (var i = 0; i < diagnostics.Length; i++)
         {
             var d = diagnostics[i];
-            var seitonRuleId = d.RuleId ?? "parse";
+            var seitonRuleId = DiagnosticDisplayRuleIds.Resolve(d.RuleId);
 
             // Exclude seiton-only rules
             if (SeitonOnlyRules.Contains(seitonRuleId))

@@ -78,7 +78,7 @@ var lintResult = new LintEngine().Check(dupYaml.ToArray(), "test.yaml");
 var runsOnDiags = lintResult.Diagnostics.Where(d => d.Message.Contains("requires runs-on")).ToList();
 Console.WriteLine($"  'requires runs-on' count = {runsOnDiags.Count} (expected: 1)");
 foreach (var d in runsOnDiags)
-    Console.WriteLine($"    [{d.RuleId ?? "parse"}] {d.Message}");
+    Console.WriteLine($"    [{DiagnosticDisplayRuleIds.Resolve(d.RuleId)}] {d.Message}");
 
 var stepsDiags = lintResult.Diagnostics.Where(d => d.Message.Contains("cannot have both uses and")).ToList();
 var dupYaml2 = """
@@ -94,4 +94,4 @@ lintResult = new LintEngine().Check(dupYaml2.ToArray(), "test.yaml");
 var bothDiags = lintResult.Diagnostics.Where(d => d.Message.Contains("cannot have both")).ToList();
 Console.WriteLine($"\n  'cannot have both' count = {bothDiags.Count} (expected: 2, uses+steps and uses+runs-on)");
 foreach (var d in bothDiags)
-    Console.WriteLine($"    [{d.RuleId ?? "parse"}] {d.Message}");
+    Console.WriteLine($"    [{DiagnosticDisplayRuleIds.Resolve(d.RuleId)}] {d.Message}");

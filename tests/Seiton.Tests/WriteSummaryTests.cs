@@ -384,7 +384,7 @@ public sealed class WriteSummaryTests
     }
 
     [Test]
-    public async Task WriteSummary_NotVerbose_ParserOnlyDiagnostics_NoRuleBreakdownHint()
+    public async Task WriteSummary_NotVerbose_ParserOnlyDiagnostics_ShowsSyntaxCheckInRuleBreakdown()
     {
         var diagnostics = new List<Diagnostic>
         {
@@ -395,7 +395,25 @@ public sealed class WriteSummaryTests
         CheckCommand.WriteSummary(sw, diagnostics, 1, verbose: false);
         var output = sw.ToString();
 
+        await Assert.That(output).Contains("| syntax-check");
         await Assert.That(output).DoesNotContain("hint: re-run with --verbose for the full per-rule breakdown");
+    }
+
+    [Test]
+    public async Task WriteSummary_NotVerbose_ParserAndLintDiagnostics_ShowBothInRuleBreakdown()
+    {
+        var diagnostics = new List<Diagnostic>
+        {
+            new(DiagnosticSeverity.Error, "parse error", new TextRange(0, 1, 1, 1, 1, 2), RuleId: null, FilePath: "a.yml"),
+            new(DiagnosticSeverity.Warning, "msg", new TextRange(0, 1, 2, 1, 2, 2), RuleId: "unpinned-uses", FilePath: "a.yml"),
+        };
+
+        using var sw = new StringWriter();
+        CheckCommand.WriteSummary(sw, diagnostics, 1, verbose: false);
+        var output = sw.ToString();
+
+        await Assert.That(output).Contains("| syntax-check");
+        await Assert.That(output).Contains("| unpinned-uses");
     }
 
     [Test]
@@ -426,7 +444,7 @@ public sealed class WriteSummaryTests
         var output = sw.ToString();
 
         await Assert.That(output).Contains("| unpinned-uses");
-        // Parser diagnostics (null RuleId) should not appear as a rule count
+        await Assert.That(output).Contains("| syntax-check");
         await Assert.That(output).DoesNotContain("null");
     }
 

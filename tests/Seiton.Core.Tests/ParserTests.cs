@@ -6523,6 +6523,186 @@ public sealed class ParserTests
         await Assert.That(diag.Location.StartColumn).IsEqualTo(11);
     }
 
+    [Test]
+    public async Task Parse_StepSingleEnv_NoDuplicateDiagnostic()
+    {
+        var yaml = """
+        on: push
+        jobs:
+          build:
+            runs-on: ubuntu-latest
+            steps:
+              - run: echo hi
+                env:
+                  FOO: bar
+        """u8;
+        var result = WorkflowParser.ParseDirect(yaml.ToArray(), "test.yaml", out var arena);
+        await Assert.That(result.HasFatalError).IsFalse();
+        await Assert.That(result.Diagnostics.Any(d =>
+            d.Message.Contains("is duplicated in step", StringComparison.Ordinal))).IsFalse();
+    }
+
+    [Test]
+    public async Task Parse_StepDuplicateEnv_FirstOccurrenceWins_SecondEnvSkipped()
+    {
+        var yamlBytes = """
+        on: push
+        jobs:
+          build:
+            runs-on: ubuntu-latest
+            steps:
+              - run: echo hi
+                env:
+                  FOO: bar
+                env:
+                  PIYOPIYO: qux
+        """u8.ToArray();
+        var result = WorkflowParser.ParseDirect(yamlBytes, "test.yaml", out var arena);
+        await Assert.That(result.HasFatalError).IsFalse();
+        var steps = result.Workflow!.Jobs.Values().First().Steps!;
+        var envVars = steps[0].Env!.Vars!.Value;
+        await Assert.That(envVars.Count).IsEqualTo(1);
+        await Assert.That(envVars.TryGetValue(yamlBytes, "FOO"u8, out _)).IsTrue();
+        await Assert.That(envVars.TryGetValue(yamlBytes, "PIYOPIYO"u8, out _)).IsFalse();
+    }
+
+    [Test]
+    public async Task Parse_StepDuplicateShell_IncludesGenericHelp()
+    {
+        var yaml = """
+        on: push
+        jobs:
+          build:
+            runs-on: ubuntu-latest
+            steps:
+              - run: echo hi
+                shell: bash
+                shell: pwsh
+        """u8;
+        var result = WorkflowParser.ParseDirect(yaml.ToArray(), "test.yaml", out var arena);
+        var diag = result.Diagnostics.First(d => d.Message.Contains("key \"shell\" is duplicated in step"));
+        await Assert.That(diag.Help).IsNotNull();
+        await Assert.That(diag.Help!).Contains("Keep only one \"shell\" key");
+    }
+
+    [Test]
+    public async Task Parse_StepDuplicateEnv_IncludesHelp()
+    {
+        var yaml = """
+        on: push
+        jobs:
+          build:
+            runs-on: ubuntu-latest
+            steps:
+              - run: echo hi
+                env:
+                  FOO: bar
+                env:
+                  BAZ: qux
+        """u8;
+        var result = WorkflowParser.ParseDirect(yaml.ToArray(), "test.yaml", out var arena);
+        var diag = result.Diagnostics.First(d => d.Message.Contains("key \"env\" is duplicated in step"));
+        await Assert.That(diag.Help).IsNotNull();
+        await Assert.That(diag.Help!).Contains("YAML mapping keys must be unique");
+        await Assert.That(diag.Help!).Contains("env");
+    }
+
+    [Test]
+    public async Task Parse_StepDuplicateEnv_MessageFormatMatchesOtherSections()
+    {
+        var yaml = """
+        on: push
+        jobs:
+          build:
+            runs-on: ubuntu-latest
+            steps:
+              - run: echo hi
+                env:
+                  FOO: bar
+                env:
+                  BAZ: qux
+        """u8;
+        var result = WorkflowParser.ParseDirect(yaml.ToArray(), "test.yaml", out var arena);
+        await Assert.That(result.HasFatalError).IsFalse();
+        var diag = result.Diagnostics.First(d => d.Message.Contains("jobs.'build'.steps[1]"));
+        await Assert.That(diag.Message).Contains("key \"env\" is duplicated in step. previously defined at line:");
+    }
+
+    [Test]
+    [Arguments("run", """
+        on: push
+        jobs:
+          build:
+            runs-on: ubuntu-latest
+            steps:
+              - run: echo one
+                run: echo two
+        """)]
+    [Arguments("uses", """
+        on: push
+        jobs:
+          build:
+            runs-on: ubuntu-latest
+            steps:
+              - uses: actions/checkout@v4
+                uses: actions/cache@v4
+        """)]
+    [Arguments("with", """
+        on: push
+        jobs:
+          build:
+            runs-on: ubuntu-latest
+            steps:
+              - uses: actions/checkout@v4
+                with:
+                  fetch-depth: 1
+                with:
+                  path: src
+        """)]
+    [Arguments("shell", """
+        on: push
+        jobs:
+          build:
+            runs-on: ubuntu-latest
+            steps:
+              - run: echo hi
+                shell: bash
+                shell: pwsh
+        """)]
+    public async Task Parse_StepDuplicateKnownKeys_TableDriven(string keyName, string yamlText)
+    {
+        var yaml = Encoding.UTF8.GetBytes(yamlText.TrimStart());
+        var result = WorkflowParser.ParseDirect(yaml, "test.yaml", out var arena);
+        await Assert.That(result.HasFatalError).IsFalse();
+        await Assert.That(result.Diagnostics.Any(d =>
+            d.Message.Contains($"key \"{keyName}\" is duplicated in step", StringComparison.Ordinal))).IsTrue();
+    }
+
+    [Test]
+    public async Task Lint_StepDuplicateEnv_DoesNotSuppressSubsequentRuleDiagnostics()
+    {
+        var yaml = """
+        on: push
+        jobs:
+          build:
+            runs-on: ubuntu-latest
+            steps:
+              - run: echo hi
+                env:
+                  FOO: bar
+                env:
+                  BAZ: qux
+              - run: echo ${{ steps.missing.outputs.x }}
+        """;
+        using var result = new LintEngine().Check(Encoding.UTF8.GetBytes(yaml), "test.yaml");
+        await Assert.That(result.HasFatalError).IsFalse();
+        await Assert.That(result.Diagnostics.Any(d =>
+            d.Message.Contains("key \"env\" is duplicated in step", StringComparison.Ordinal))).IsTrue();
+        await Assert.That(result.Diagnostics.Any(d =>
+            d.Message.Contains("\"missing\" is not defined in \"steps\" context", StringComparison.Ordinal)
+            && d.RuleId == "expr-undefined-var")).IsTrue();
+    }
+
     // regression: step diagnostics should include job context for actionability
     [Test]
     public async Task Parse_StepUnexpectedKey_IncludesJobContext()

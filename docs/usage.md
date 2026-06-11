@@ -242,7 +242,7 @@ seiton validate-config
 
 Catches YAML/schema issues, unknown rule IDs, duplicate exclusions, and **unknown job IDs in job-scoped exclusions** (by scanning matching workflow files under `.github/workflows/`). Configuration errors are reported against the config file path — not mixed into workflow lint output.
 
-Duplicate exclusion scopes emit a single `info` diagnostic on the config file (rule id `parse` in text/JSON output). The message lists each duplicate entry as `exclusions[N] (line L)` so you can jump to the YAML without searching.
+Duplicate exclusion scopes emit a single `info` diagnostic on the config file (display rule id `syntax-check` when `RuleId` is null). The message lists each duplicate entry as `exclusions[N] (line L)` so you can jump to the YAML without searching.
 
 Use `--verbose` to inspect config resolution and quick validation stats (parse time, enabled rules, exclusions, job-id cross-check):
 
