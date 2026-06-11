@@ -613,6 +613,7 @@ public sealed class CheckCommandTests
                 includeActions: false);
 
             await Assert.That(code).IsEqualTo(ExitCode.LintIssuesFound);
+            await Assert.That(stdout.ToString()).Contains("error[syntax-check]:");
             await Assert.That(stdout.ToString()).Contains("steps[1] key \"env\" is duplicated in step");
             await Assert.That(stderr.ToString()).DoesNotContain("0 issues in 1 file");
             await Assert.That(stderr.ToString()).Contains("| syntax-check");

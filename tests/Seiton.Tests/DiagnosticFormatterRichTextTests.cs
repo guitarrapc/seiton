@@ -67,6 +67,40 @@ public sealed class DiagnosticFormatterRichTextTests
     }
 
     [Test]
+    public async Task Rich_NullRuleId_UsesSyntaxCheckLabel()
+    {
+        var diag = MakeDiagnostic(DiagnosticSeverity.Error, "parse error", 1, 1, 1, 5, ruleId: null);
+        var output = Render(diag);
+
+        await Assert.That(output).Contains("error[syntax-check]: parse error");
+    }
+
+    [Test]
+    public async Task Rich_ExplicitRuleId_PreservesRuleId()
+    {
+        var diag = MakeDiagnostic(DiagnosticSeverity.Warning, "unpinned action", 1, 1, 1, 5, ruleId: "unpinned-uses");
+        var output = Render(diag);
+
+        await Assert.That(output).Contains("warning[unpinned-uses]: unpinned action");
+        await Assert.That(output).DoesNotContain("syntax-check");
+    }
+
+    [Test]
+    public async Task Json_Format_NullRuleId_UsesSyntaxCheckLabel()
+    {
+        var diag = MakeDiagnostic(DiagnosticSeverity.Error, "parse error", 1, 1, 1, 5, ruleId: null);
+
+        var sb = new StringBuilder();
+        using var writer = new StringWriter(sb);
+        DiagnosticFormatter.WriteToTextWriter(writer, [diag], OutputFormat.Json, oneline: false, color: false);
+        writer.Flush();
+
+        using var doc = JsonDocument.Parse(sb.ToString());
+        var entry = doc.RootElement[0];
+        await Assert.That(entry.GetProperty("ruleId").GetString()).IsEqualTo("syntax-check");
+    }
+
+    [Test]
     public async Task Oneline_MultipleDignostics_EachOnOwnLine()
     {
         var diagnostics = new[]

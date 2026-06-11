@@ -48,7 +48,7 @@ jobs:
 
 1. `ParseStep` に duplicate key 検出を追加
 - 方式: 既存セクションと同様に bit mask（`ulong seen`）で step-level known keys の重複を判定。
-- 診断: 例 `jobs.'action-pin-samples'.steps[1] key "env" is duplicated. previously defined at line:X,col:Y`。
+- 診断: 例 `jobs.'action-pin-samples'.steps[1] key "env" is duplicated in step. previously defined at line:X,col:Y`。
 - 動作: 重複を検出しても処理は継続し、重複側 value は `SkipCurrentNode()` でスキップ。fatal 化しない。
 - 意図: 「走査をターミネートしない」要件を満たしつつ、検出漏れを解消。
 
@@ -70,14 +70,17 @@ jobs:
   - step-level known keys（`StepMappingKeyTable`）で duplicate を検出。
   - duplicate 時はエラー診断を追加し、`SkipCurrentNode()` で値ノードを読み飛ばして走査継続（fatal 化しない）。
 - 診断例:
-  - `jobs.'action-pin-samples'.steps[1] key "env" is duplicated. previously defined at line:12,col:9`
+  - `jobs.'action-pin-samples'.steps[1] key "env" is duplicated in step. previously defined at line:12,col:9`
 
 ### P0-2 回帰テスト（Parser）
-- 未完了（次フェーズへ繰り越し）。
-- 背景:
-  - `tests/Seiton.Core.Tests/ParserTests.cs` への parser-only 追加ケースを試行したが、テスト経路の差分（parse API / classification / suppression 条件）切り分けが必要で、このフェーズでは安定化まで至らず。
-- 対応方針:
-  - 次フェーズで parser の public/internal どの経路を正とするか固定し、`Seiton.Core.Tests` に確定版の再現テストを追加する。
+- 実装済み（P1/P2 + コードレビューで追加）。
+- テスト:
+  - `Parse_StepDuplicateEnv_IncludesHelp` / `Parse_StepDuplicateEnv_MessageFormatMatchesOtherSections`
+  - `Parse_StepDuplicateKnownKeys_TableDriven`（`run`, `uses`, `with`, `shell`）
+  - `Parse_StepSingleEnv_NoDuplicateDiagnostic`（negative）
+  - `Parse_StepDuplicateEnv_FirstOccurrenceWins_SecondEnvSkipped`（first-win）
+  - `Parse_StepDuplicateShell_IncludesGenericHelp`（env 以外の Help）
+  - `Lint_StepDuplicateEnv_DoesNotSuppressSubsequentRuleDiagnostics`
 
 ### P0-3 回帰テスト（CLI 表示）
 - 実装済み。
@@ -86,8 +89,9 @@ jobs:
   - `Check_TextMode_DuplicateStepEnv_IsReportedAndSummaryIsNotZeroIssues`
 - 検証内容:
   - exit code が `LintIssuesFound`
-  - 標準出力に duplicate `env` 診断が含まれる
+  - 標準出力に `error[syntax-check]:` と duplicate `env` 診断が含まれる
   - 標準エラー summary に `0 issues in 1 file` が出ない
+  - 標準エラー summary に `| syntax-check |` が含まれる
 
 ## 動作確認結果
 
@@ -245,26 +249,26 @@ jobs:
 
 件数サマリーとファイル別テーブルは正しいが、「何のエラーか」のカテゴリがサマリーに残らず、本文を読まないと把握できない。
 
-### 現状（parser と syntax-check の整理）
+### 現状（parser と syntax-check の整理 — 2026-06-11 実装後）
 
-Seiton 内部では **parser 診断と lint rule 診断は分離**されているが、**ユーザー向け表示 ID は統一されていない**。
+Seiton 内部では **parser 診断と lint rule 診断は分離**されている。ユーザー向け表示 ID は **`syntax-check` に統一済み**。
 
 | レイヤ | 内部 `RuleId` | CLI 表示 | actionlint 互換タグ |
 |--------|---------------|----------|---------------------|
-| Parser 構文診断（duplicate key 等） | `null` | `parse`（`DiagnosticFormatter` が `?? "parse"`） | `syntax-check` |
-| VYaml fatal（YAML 壊れ） | `null` | `parse` | `syntax-check` |
-| Lint rule が parser と同内容を再検出 | 各 rule id（例: `job-structure`） | その rule id | 互換マップ経由で `syntax-check` になるものあり |
+| Parser 構文診断（duplicate key 等） | `null` | `syntax-check`（`DiagnosticDisplayRuleIds.Resolve`） | `syntax-check` |
+| VYaml fatal（YAML 壊れ） | `null` | `syntax-check` | `syntax-check` |
+| Lint rule 診断 | 各 rule id（例: `expr-undefined-var`） | その rule id | 互換マップ経由で `syntax-check` になるものあり |
 | `RuleId.Syntax`（`SyntaxRule`） | `"syntax"` | `"syntax"` | Seiton-only（actionlint 非対応） |
 
 要点:
 
-- **「parser」と「syntax-check」は CLI 上は分かれていない**。本文は `parse`、actionlint 互換出力は `syntax-check`、内部は `RuleId: null`。
-- ルール別サマリーだけが例外的に `RuleId is null` をスキップしている（`CheckCommand.WritePerRuleBreakdown`）。
-- これは意図的設計（`WriteSummaryTests.WriteSummary_Verbose_ParserDiagnosticsWithNullRuleId_GroupedSeparately`）だが、parser のみのケースでは UX が欠ける。
+- 内部 `RuleId: null` のまま。抑制不可・`seiton rules` 非掲載。
+- CLI 本文・JSON・SARIF・ルール別サマリーはすべて `syntax-check` で一貫。
+- `DiagnosticDisplayRuleIds.cs` が表示レイヤーの単一フォールバック。
 
-### 案 B: `parse` をルール別サマリーに集計（採用）
+### 案 B: parser 診断をルール別サマリーに集計（採用 → syntax-check に統一）
 
-**表示レイヤー**で `RuleId ?? "parse"` を使い、診断本文の `error[parse]:` と揃える。
+**表示レイヤー**で `DiagnosticDisplayRuleIds.Resolve(ruleId)` を使い、診断本文の `error[syntax-check]:` と揃える。
 
 期待出力:
 
@@ -275,33 +279,25 @@ Seiton 内部では **parser 診断と lint rule 診断は分離**されてい�
 |-----------|-------:|---------:|
 | test.yaml |      1 |        0 |
 
-| Rule  | Count |
-|-------|------:|
-| parse |     1 |
+| Rule          | Count |
+|---------------|------:|
+| syntax-check  |     1 |
 ```
 
-**「デフォルトでもルール表を出す」について**: ルール表自体は既にデフォルト（非 verbose）で出力される。現状は `RuleId != null` の診断がある場合のみ中身が埋まる。案 B により **parser 診断のみのケースでも** ルール表が出る — 別フラグや verbose 不要。
+**「デフォルトでもルール表を出す」について**: ルール表自体は既にデフォルト（非 verbose）で出力される。parser 診断のみのケースでも `syntax-check` 行が出る — 別フラグや verbose 不要。
 
-### 実装スコープ（次セッション）
+### 実装スコープ（完了）
 
-1. `CheckCommand.WritePerRuleBreakdown` — `if (ruleId is null) continue` を `ruleId ?? "parse"` に変更。
-2. `CheckCommand.ShouldOfferFullPerRuleBreakdownHint` — 同上（null をスキップしない）。
-3. テスト更新（`tests/Seiton.Tests/WriteSummaryTests.cs`）
-   - `WriteSummary_Verbose_ParserDiagnosticsWithNullRuleId_GroupedSeparately` → `| parse | 1 |` を期待するよう反転。
-   - `WriteSummary_NotVerbose_ParserOnlyDiagnostics_NoRuleBreakdownHint` → `| parse |` を含むことを追加。
-   - parser + lint 混在時は `parse` と各 rule id が共存することを確認。
-4. 仕様: `docs/usage.md` または linter spec に「parser 診断はサマリー上 `parse` カテゴリに集計」と 1 行追記（任意）。
+1. `CheckCommand.WritePerRuleBreakdown` — `DiagnosticDisplayRuleIds.Resolve(ruleId)` で集計。
+2. `CheckCommand.ShouldOfferFullPerRuleBreakdownHint` — 同上。
+3. `DiagnosticFormatter` — text / JSON / SARIF すべて `Resolve` 経由。
+4. テスト更新（`WriteSummaryTests`, `CheckCommandTests`, `DiagnosticFormatterRichTextTests`）
+5. 仕様: `Seiton_CLI_spec.md`, `docs/usage.md`, `README.md`
 
-### スコープ外（当時）
+### 受け入れ基準（達成）
 
-- ~~`parse` → `syntax` / `syntax-check` への表示 ID 統一~~ → **実装済み（2026-06-11、下記）**
-- LintEngine で parser 診断に `RuleId: "syntax"` を付与（dedup / 抑制モデルへの影響大）— **不要（表示レイヤーのみで対応）**
-- `seiton rules` への登録 — **不要（擬似カテゴリ `syntax-check` のまま）**
-
-### 受け入れ基準
-
-1. parser 診断のみの workflow で、stderr サマリーに `| parse | N |` が出る。
-2. 診断本文の `error[parse]:` とサマリーの Rule 列が一致する。
+1. parser 診断のみの workflow で、stderr サマリーに `| syntax-check | N |` が出る。
+2. 診断本文の `error[syntax-check]:` とサマリーの Rule 列が一致する。
 3. lint rule 診断との混在時、両方がルール表に載る。
 4. 既存 `WriteSummaryTests` / `CheckCommandTests` が通過。
 
@@ -380,3 +376,39 @@ Seiton 内部では **parser 診断と lint rule 診断は分離**されてい�
 - fatal parse error へ昇格しない。
 - duplicate key の扱いは steps 以外の既存実装に合わせる（first-win + duplicate 側 skip が自然）。
 - パフォーマンス回帰を避けるため、既存と同等の軽量判定（bit mask）を使う。
+
+## コードレビュー結果（2026-06-11 — 最終）
+
+### ラウンド 1 指摘と対応
+
+| 指摘 | 対応 |
+|------|------|
+| P0-2 が plan 上「未完了」のまま | `Parse_StepDuplicate*` 群で完了と明記 |
+| 等価クラス: 単一 `env`（negative）のテスト不足 | `Parse_StepSingleEnv_NoDuplicateDiagnostic` 追加 |
+| 等価クラス: first-win（2 番目 skip）の AST 検証不足 | `Parse_StepDuplicateEnv_FirstOccurrenceWins_SecondEnvSkipped` 追加 |
+| 等価クラス: env 以外の Help | `Parse_StepDuplicateShell_IncludesGenericHelp` 追加 |
+| CLI E2E: stdout に `error[syntax-check]:` 未検証 | `CheckCommandTests` に assertion 追加 |
+| JSON 出力の null RuleId → syntax-check 未検証 | `Json_Format_NullRuleId_UsesSyntaxCheckLabel` 追加 |
+| Rich 出力: lint rule id が誤って syntax-check にならない negative | `Rich_ExplicitRuleId_PreservesRuleId` 追加 |
+| plan TODO 節が `parse` 時代の記述のまま | 現状表・期待出力を `syntax-check` に更新 |
+| sandbox `CheckVYamlExceptionFormat.cs` が `?? "parse"` | `DiagnosticDisplayRuleIds.Resolve` に更新 |
+
+### ラウンド 2（再レビュー）
+
+- 分類ロジック（duplicate bit mask）: positive（各 known key）+ negative（単一 env）+ first-win をカバー。追加指摘なし。
+- `DiagnosticDisplayRuleIds.Resolve`: null → syntax-check、非 null 保持。formatter / summary / compat 一致。追加指摘なし。
+- 内部 `RuleId: null` 維持、抑制不可。ユーザー向け ID は actionlint 互換。API 触り心地 OK。
+- spec 整合: `Seiton_Parser_spec.md` §step duplicate + `Seiton_CLI_spec.md` §syntax-check サマリー。plan 更新済み。
+
+### ベンチマーク（コードレビュー後 — 2026-06-11）
+
+| Benchmark | Method | Mean | Allocated | vs 実装時 baseline | 判定 |
+|-----------|--------|------|-----------|-------------------|------|
+| CoreParsingBenchmark | Parse (Small) | 45.28 us | 3.84 KB | duplicate 検出実装時と同等 | OK |
+| CoreParsingBenchmark | Parse (Medium) | 1.05 ms | 35.21 KB | 同等 | OK |
+| CoreParsingBenchmark | Parse (Large) | 17.16 ms | 178.16 KB | 同等 | OK |
+| StepSummaryOutputBenchmark | WriteSummary stderr | 17.70 us | 3.63 KB | syntax-check 統一時 18.30 us → **-3.3%** | OK |
+| StepSummaryOutputBenchmark | WriteSummary GHA | 421.20 us | 15.59 KB | syntax-check 統一時 390.97 us → +7.7% | OK（±10% 以内） |
+
+- 全テスト **2653 passed**（+6 レビュー追加分）、1 skipped（Playground）
+- 所見: duplicate bit mask は hot path への measurable 回帰なし。表示レイヤー `Resolve()` も ±10% 以内。
