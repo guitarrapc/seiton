@@ -1,0 +1,12 @@
+name: steps-not-array
+
+on:
+  push:
+
+jobs:
+  build:
+    permissions: {}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      run: echo "hello"

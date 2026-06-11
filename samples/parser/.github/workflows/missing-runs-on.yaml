@@ -1,0 +1,11 @@
+name: missing-runs-on
+
+on:
+  pull_request:
+
+jobs:
+  test:
+    permissions: {}
+    timeout-minutes: 10
+    steps:
+      - run: echo "test"

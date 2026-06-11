@@ -1,0 +1,6 @@
+name: missing-jobs
+
+on:
+  push:
+    branches:
+      - main

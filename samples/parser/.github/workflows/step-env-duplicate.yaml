@@ -1,10 +1,10 @@
+name: step env duplicate
 on:
   workflow_dispatch:
 
 jobs:
-  action-pin-samples:
-    permissions:
-      contents: read
+  step-env-duplicate:
+    permissions: {}
     timeout-minutes: 10
     runs-on: ubuntu-24.04
     steps:
