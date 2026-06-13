@@ -14,6 +14,7 @@ internal static class ContextTypes
 
     private static (byte[] NameUtf8, ExprType Type)[] BuildBuiltinContextTypes()
     {
+        var envType = ExprType.Object(dynamicPropertyType: ExprType.String);
         var githubType = ExprType.Object(
             new Dictionary<Utf8String, ExprType>
             {
@@ -63,7 +64,7 @@ internal static class ContextTypes
                 { new Utf8String("workspace"u8), ExprType.String },
             },
             strict: true);
-        var envType = ExprType.Object(dynamicPropertyType: ExprType.String);
+        var inputsType = ExprType.Object(dynamicPropertyType: ExprType.Any);
         var jobType_container = ExprType.Object(
             new Dictionary<Utf8String, ExprType>
             {
@@ -92,6 +93,9 @@ internal static class ContextTypes
                 { new Utf8String("workflow_sha"u8), ExprType.String },
             },
             strict: true);
+        var jobsType = ExprType.Object(dynamicPropertyType: ExprType.Any);
+        var matrixType = ExprType.Object(dynamicPropertyType: ExprType.Any);
+        var needsType = ExprType.Object(dynamicPropertyType: ExprType.Any);
         var runnerType = ExprType.Object(
             new Dictionary<Utf8String, ExprType>
             {
@@ -110,6 +114,7 @@ internal static class ContextTypes
                 { new Utf8String("GITHUB_TOKEN"u8), ExprType.String },
             },
             dynamicPropertyType: ExprType.String);
+        var stepsType = ExprType.Object(dynamicPropertyType: ExprType.Any);
         var strategyType = ExprType.Object(
             new Dictionary<Utf8String, ExprType>
             {
@@ -119,27 +124,22 @@ internal static class ContextTypes
                 { new Utf8String("max-parallel"u8), ExprType.Number },
             },
             dynamicPropertyType: ExprType.Any);
-        var stepsType = ExprType.Object(dynamicPropertyType: ExprType.Any);
-        var matrixType = ExprType.Object(dynamicPropertyType: ExprType.Any);
-        var needsType = ExprType.Object(dynamicPropertyType: ExprType.Any);
-        var inputsType = ExprType.Object(dynamicPropertyType: ExprType.Any);
         var varsType = ExprType.Object(dynamicPropertyType: ExprType.String);
-        var jobsType = ExprType.Object(dynamicPropertyType: ExprType.Any);
 
         return
         [
-            ("github"u8.ToArray(), (ExprType)githubType),
             ("env"u8.ToArray(), (ExprType)envType),
+            ("github"u8.ToArray(), (ExprType)githubType),
+            ("inputs"u8.ToArray(), (ExprType)inputsType),
             ("job"u8.ToArray(), (ExprType)jobType),
-            ("runner"u8.ToArray(), (ExprType)runnerType),
-            ("secrets"u8.ToArray(), (ExprType)secretsType),
-            ("strategy"u8.ToArray(), (ExprType)strategyType),
-            ("steps"u8.ToArray(), (ExprType)stepsType),
+            ("jobs"u8.ToArray(), (ExprType)jobsType),
             ("matrix"u8.ToArray(), (ExprType)matrixType),
             ("needs"u8.ToArray(), (ExprType)needsType),
-            ("inputs"u8.ToArray(), (ExprType)inputsType),
+            ("runner"u8.ToArray(), (ExprType)runnerType),
+            ("secrets"u8.ToArray(), (ExprType)secretsType),
+            ("steps"u8.ToArray(), (ExprType)stepsType),
+            ("strategy"u8.ToArray(), (ExprType)strategyType),
             ("vars"u8.ToArray(), (ExprType)varsType),
-            ("jobs"u8.ToArray(), (ExprType)jobsType),
         ];
     }
 }

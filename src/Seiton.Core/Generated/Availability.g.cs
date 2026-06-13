@@ -603,9 +603,6 @@ namespace Seiton.Core.Generated
                 ExpressionValidationContext.Concurrency => "workflow",
                 ExpressionValidationContext.DefaultsRunShell => "workflow",
                 ExpressionValidationContext.Env => "workflow",
-                ExpressionValidationContext.RunName => "workflow",
-                ExpressionValidationContext.WorkflowCallInputsDefault => "workflow_call",
-                ExpressionValidationContext.WorkflowCallOutputsValue => "workflow_call",
                 ExpressionValidationContext.JobConcurrency => "job",
                 ExpressionValidationContext.JobContainer => "job",
                 ExpressionValidationContext.JobContainerCredentials => "job",
@@ -630,6 +627,7 @@ namespace Seiton.Core.Generated
                 ExpressionValidationContext.JobStrategy => "job",
                 ExpressionValidationContext.JobTimeoutMinutes => "job",
                 ExpressionValidationContext.JobWith => "job",
+                ExpressionValidationContext.RunName => "workflow",
                 ExpressionValidationContext.StepContinueOnError => "step",
                 ExpressionValidationContext.StepEnv => "step",
                 ExpressionValidationContext.StepId => "step",
@@ -640,6 +638,8 @@ namespace Seiton.Core.Generated
                 ExpressionValidationContext.StepTimeoutMinutes => "step",
                 ExpressionValidationContext.StepWith => "step",
                 ExpressionValidationContext.StepWorkingDirectory => "step",
+                ExpressionValidationContext.WorkflowCallInputsDefault => "workflow_call",
+                ExpressionValidationContext.WorkflowCallOutputsValue => "workflow_call",
                 _ => "unknown",
             };
         }
@@ -664,9 +664,6 @@ namespace Seiton.Core.Generated
                 ExpressionValidationContext.Concurrency => ConcurrencyRoots,
                 ExpressionValidationContext.DefaultsRunShell => DefaultsRunShellRoots,
                 ExpressionValidationContext.Env => EnvRoots,
-                ExpressionValidationContext.RunName => RunNameRoots,
-                ExpressionValidationContext.WorkflowCallInputsDefault => WorkflowCallInputsDefaultRoots,
-                ExpressionValidationContext.WorkflowCallOutputsValue => WorkflowCallOutputsValueRoots,
                 ExpressionValidationContext.JobConcurrency => JobConcurrencyRoots,
                 ExpressionValidationContext.JobContainer => JobContainerRoots,
                 ExpressionValidationContext.JobContainerCredentials => JobContainerCredentialsRoots,
@@ -691,6 +688,7 @@ namespace Seiton.Core.Generated
                 ExpressionValidationContext.JobStrategy => JobStrategyRoots,
                 ExpressionValidationContext.JobTimeoutMinutes => JobTimeoutMinutesRoots,
                 ExpressionValidationContext.JobWith => JobWithRoots,
+                ExpressionValidationContext.RunName => RunNameRoots,
                 ExpressionValidationContext.StepContinueOnError => StepContinueOnErrorRoots,
                 ExpressionValidationContext.StepEnv => StepEnvRoots,
                 ExpressionValidationContext.StepId => StepIdRoots,
@@ -701,6 +699,8 @@ namespace Seiton.Core.Generated
                 ExpressionValidationContext.StepTimeoutMinutes => StepTimeoutMinutesRoots,
                 ExpressionValidationContext.StepWith => StepWithRoots,
                 ExpressionValidationContext.StepWorkingDirectory => StepWorkingDirectoryRoots,
+                ExpressionValidationContext.WorkflowCallInputsDefault => WorkflowCallInputsDefaultRoots,
+                ExpressionValidationContext.WorkflowCallOutputsValue => WorkflowCallOutputsValueRoots,
                 _ => [],
             };
         }

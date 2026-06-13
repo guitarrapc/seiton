@@ -12,31 +12,34 @@ internal static class FunctionSpecs
 {
     internal static readonly ExpressionSemanticAnalyzer.FunctionSpec[] Specs =
     [
+        new ExpressionSemanticAnalyzer.FunctionSpec("always"u8.ToArray(),
+        [
+            new ExpressionSemanticAnalyzer.FuncOverload(ExprType.Bool, []),
+        ]),
+        new ExpressionSemanticAnalyzer.FunctionSpec("cancelled"u8.ToArray(),
+        [
+            new ExpressionSemanticAnalyzer.FuncOverload(ExprType.Bool, []),
+        ]),
+        new ExpressionSemanticAnalyzer.FunctionSpec("case"u8.ToArray(),
+        [
+            new ExpressionSemanticAnalyzer.FuncOverload(ExprType.Any, [ExprType.Bool, ExprType.Any, ExprType.Any], ExprType.Any),
+        ]),
         new ExpressionSemanticAnalyzer.FunctionSpec("contains"u8.ToArray(),
         [
             new ExpressionSemanticAnalyzer.FuncOverload(ExprType.Bool, [ExprType.String, ExprType.Any]),
             new ExpressionSemanticAnalyzer.FuncOverload(ExprType.Bool, [ExprType.ArrayOf(ExprType.Any), ExprType.Any]),
         ]),
-        new ExpressionSemanticAnalyzer.FunctionSpec("startswith"u8.ToArray(),
-        [
-            new ExpressionSemanticAnalyzer.FuncOverload(ExprType.Bool, [ExprType.String, ExprType.String]),
-        ]),
         new ExpressionSemanticAnalyzer.FunctionSpec("endswith"u8.ToArray(),
         [
             new ExpressionSemanticAnalyzer.FuncOverload(ExprType.Bool, [ExprType.String, ExprType.String]),
         ]),
+        new ExpressionSemanticAnalyzer.FunctionSpec("failure"u8.ToArray(),
+        [
+            new ExpressionSemanticAnalyzer.FuncOverload(ExprType.Bool, []),
+        ]),
         new ExpressionSemanticAnalyzer.FunctionSpec("format"u8.ToArray(),
         [
             new ExpressionSemanticAnalyzer.FuncOverload(ExprType.String, [ExprType.String], ExprType.Any),
-        ]),
-        new ExpressionSemanticAnalyzer.FunctionSpec("join"u8.ToArray(),
-        [
-            new ExpressionSemanticAnalyzer.FuncOverload(ExprType.String, [ExprType.ArrayOf(ExprType.Any)]),
-            new ExpressionSemanticAnalyzer.FuncOverload(ExprType.String, [ExprType.ArrayOf(ExprType.Any), ExprType.String]),
-        ]),
-        new ExpressionSemanticAnalyzer.FunctionSpec("tojson"u8.ToArray(),
-        [
-            new ExpressionSemanticAnalyzer.FuncOverload(ExprType.String, [ExprType.Any]),
         ]),
         new ExpressionSemanticAnalyzer.FunctionSpec("fromjson"u8.ToArray(),
         [
@@ -46,25 +49,22 @@ internal static class FunctionSpecs
         [
             new ExpressionSemanticAnalyzer.FuncOverload(ExprType.String, [ExprType.String], ExprType.String),
         ]),
+        new ExpressionSemanticAnalyzer.FunctionSpec("join"u8.ToArray(),
+        [
+            new ExpressionSemanticAnalyzer.FuncOverload(ExprType.String, [ExprType.ArrayOf(ExprType.Any)]),
+            new ExpressionSemanticAnalyzer.FuncOverload(ExprType.String, [ExprType.ArrayOf(ExprType.Any), ExprType.String]),
+        ]),
+        new ExpressionSemanticAnalyzer.FunctionSpec("startswith"u8.ToArray(),
+        [
+            new ExpressionSemanticAnalyzer.FuncOverload(ExprType.Bool, [ExprType.String, ExprType.String]),
+        ]),
         new ExpressionSemanticAnalyzer.FunctionSpec("success"u8.ToArray(),
         [
             new ExpressionSemanticAnalyzer.FuncOverload(ExprType.Bool, []),
         ]),
-        new ExpressionSemanticAnalyzer.FunctionSpec("failure"u8.ToArray(),
+        new ExpressionSemanticAnalyzer.FunctionSpec("tojson"u8.ToArray(),
         [
-            new ExpressionSemanticAnalyzer.FuncOverload(ExprType.Bool, []),
-        ]),
-        new ExpressionSemanticAnalyzer.FunctionSpec("cancelled"u8.ToArray(),
-        [
-            new ExpressionSemanticAnalyzer.FuncOverload(ExprType.Bool, []),
-        ]),
-        new ExpressionSemanticAnalyzer.FunctionSpec("always"u8.ToArray(),
-        [
-            new ExpressionSemanticAnalyzer.FuncOverload(ExprType.Bool, []),
-        ]),
-        new ExpressionSemanticAnalyzer.FunctionSpec("case"u8.ToArray(),
-        [
-            new ExpressionSemanticAnalyzer.FuncOverload(ExprType.Any, [ExprType.Bool, ExprType.Any, ExprType.Any], ExprType.Any),
+            new ExpressionSemanticAnalyzer.FuncOverload(ExprType.String, [ExprType.Any]),
         ]),
     ];
 }

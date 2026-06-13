@@ -22,6 +22,8 @@ internal static class DynamicContextTypeBuilder
     internal static readonly byte[] SecretsKeyUtf8 = "secrets"u8.ToArray();
     internal static readonly byte[] GithubKeyUtf8 = "github"u8.ToArray();
 
+    private static readonly ExprType BuiltinGithubContextType = ResolveBuiltinContextType(GithubKeyUtf8);
+
     // Static Utf8String keys reused across all needs entries
     private static readonly Utf8String resultKey = new("result"u8);
     private static readonly Utf8String outputsKey = new("outputs"u8);
@@ -960,7 +962,7 @@ internal static class DynamicContextTypeBuilder
     {
         if (utf8Yaml is null)
         {
-            return (GithubKeyUtf8, ContextTypes.BuiltinContextTypes[0].Type);
+            return (GithubKeyUtf8, BuiltinGithubContextType);
         }
 
         ObjectExprType? eventPayloadType = null;
@@ -996,7 +998,7 @@ internal static class DynamicContextTypeBuilder
         {
             if (!EventPayloadTypes.TryGetEventPayloadType("workflow_dispatch"u8, out var basePayloadType))
             {
-                return (GithubKeyUtf8, ContextTypes.BuiltinContextTypes[0].Type);
+                return (GithubKeyUtf8, BuiltinGithubContextType);
             }
 
             eventPayloadType = NarrowDispatchInputs(basePayloadType, dispatchEvent, arena, utf8Yaml);
@@ -1004,11 +1006,11 @@ internal static class DynamicContextTypeBuilder
 
         if (eventPayloadType is null)
         {
-            return (GithubKeyUtf8, ContextTypes.BuiltinContextTypes[0].Type);
+            return (GithubKeyUtf8, BuiltinGithubContextType);
         }
 
         // Build a new github type with the narrowed event property
-        var builtinGithub = (ObjectExprType)ContextTypes.BuiltinContextTypes[0].Type;
+        var builtinGithub = (ObjectExprType)BuiltinGithubContextType;
         var newProps = new Dictionary<Utf8String, ExprType>(builtinGithub.Properties!.Count);
         foreach (var kvp in builtinGithub.Properties!)
         {
@@ -1051,5 +1053,19 @@ internal static class DynamicContextTypeBuilder
         newPayloadProps[new Utf8String("inputs"u8)] = inputsType;
 
         return ExprType.Object(newPayloadProps, dynamicPropertyType: ExprType.Any);
+    }
+
+    private static ExprType ResolveBuiltinContextType(ReadOnlySpan<byte> nameUtf8)
+    {
+        var builtins = ContextTypes.BuiltinContextTypes;
+        for (var i = 0; i < builtins.Length; i++)
+        {
+            if (nameUtf8.SequenceEqual(builtins[i].NameUtf8))
+            {
+                return builtins[i].Type;
+            }
+        }
+
+        throw new InvalidOperationException("Built-in context type not found.");
     }
 }

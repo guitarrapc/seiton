@@ -11,28 +11,28 @@ internal static class BotActors
     /// <summary>Returns true if the value matches a known bot user ID.</summary>
     internal static bool IsKnownBotId(ReadOnlySpan<byte> value)
     {
-        return value.SequenceEqual("27856297"u8)
-            || value.SequenceEqual("49699333"u8)
-            || value.SequenceEqual("41898282"u8)
-            || value.SequenceEqual("29139614"u8);
+        return value.SequenceEqual("27856297"u8) // dependabot-preview[bot]
+            || value.SequenceEqual("49699333"u8) // dependabot[bot]
+            || value.SequenceEqual("41898282"u8) // github-actions[bot]
+            || value.SequenceEqual("29139614"u8); // renovate[bot]
     }
 
     /// <summary>Returns true if the value contains any known bot user ID as a byte substring.</summary>
     internal static bool ContainsKnownBotId(ReadOnlySpan<byte> value)
     {
-        return value.IndexOf("27856297"u8) >= 0
-            || value.IndexOf("49699333"u8) >= 0
-            || value.IndexOf("41898282"u8) >= 0
-            || value.IndexOf("29139614"u8) >= 0;
+        return value.IndexOf("27856297"u8) >= 0 // dependabot-preview[bot]
+            || value.IndexOf("49699333"u8) >= 0 // dependabot[bot]
+            || value.IndexOf("41898282"u8) >= 0 // github-actions[bot]
+            || value.IndexOf("29139614"u8) >= 0; // renovate[bot]
     }
 
     /// <summary>Returns true if the value exactly matches a known bot login name.</summary>
     internal static bool IsKnownBotLogin(ReadOnlySpan<byte> value)
     {
-        return value.SequenceEqual("dependabot-preview[bot]"u8)
-            || value.SequenceEqual("dependabot[bot]"u8)
-            || value.SequenceEqual("github-actions[bot]"u8)
-            || value.SequenceEqual("renovate[bot]"u8);
+        return value.SequenceEqual("dependabot-preview[bot]"u8) // id=27856297
+            || value.SequenceEqual("dependabot[bot]"u8) // id=49699333
+            || value.SequenceEqual("github-actions[bot]"u8) // id=41898282
+            || value.SequenceEqual("renovate[bot]"u8); // id=29139614
     }
 
     internal const string AllBotActorInfo = "dependabot-preview[bot]=27856297, dependabot[bot]=49699333, github-actions[bot]=41898282, renovate[bot]=29139614";
