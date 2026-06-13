@@ -17,6 +17,9 @@ internal static class RunnerLabels
     /// <summary>Comma-separated list of self-hosted preset labels for diagnostic messages.</summary>
     internal const string SelfHostedPresetLabelList = "\"arm\", \"arm64\", \"linux\", \"macos\", \"self-hosted\", \"windows\", \"x64\"";
 
+    /// <summary>Comma-separated list of deprecated hosted runner labels for diagnostic messages.</summary>
+    internal const string DeprecatedLabelList = "";
+
     internal static bool IsKnownHostedLabel(ReadOnlySpan<byte> labelUtf8)
     {
         return IsStableHostedLabel(labelUtf8)
@@ -82,6 +85,12 @@ internal static class RunnerLabels
             || EqualsAsciiIgnoreCase(labelUtf8, "linux"u8)
             || EqualsAsciiIgnoreCase(labelUtf8, "macos"u8)
             || EqualsAsciiIgnoreCase(labelUtf8, "windows"u8);
+    }
+
+    /// <summary>Returns <c>true</c> when the label is a curated deprecated hosted runner label.</summary>
+    internal static bool IsDeprecatedHostedLabel(ReadOnlySpan<byte> labelUtf8)
+    {
+        return false;
     }
 
     static bool EqualsAsciiIgnoreCase(ReadOnlySpan<byte> left, ReadOnlySpan<byte> right)

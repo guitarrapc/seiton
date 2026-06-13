@@ -37,12 +37,19 @@ internal sealed class GitHubRunnerLabelsSourceParser
             .OrderBy(static x => x, StringComparer.Ordinal)
             .ToArray();
 
-        return new RunnerLabelsModel(stable, preview);
+        var deprecated = (snapshot.DeprecatedLabels ?? [])
+            .Where(static x => !string.IsNullOrWhiteSpace(x))
+            .Distinct(StringComparer.Ordinal)
+            .OrderBy(static x => x, StringComparer.Ordinal)
+            .ToArray();
+
+        return new RunnerLabelsModel(stable, preview, deprecated);
     }
 
     private sealed class RunnerLabelsSnapshot
     {
         public List<string>? StableLabels { get; set; }
         public List<string>? PreviewLabels { get; set; }
+        public List<string>? DeprecatedLabels { get; set; }
     }
 }
