@@ -9,7 +9,7 @@ namespace Seiton.Core.Generated;
 internal static class RunnerLabels
 {
     /// <summary>Comma-separated list of standard hosted runner labels for diagnostic messages.</summary>
-    internal const string HostedLabelList = "\"macos-14\", \"macos-15\", \"macos-15-intel\", \"macos-26\", \"macos-26-intel\", \"macos-latest\", \"ubuntu-22.04\", \"ubuntu-22.04-arm\", \"ubuntu-24.04\", \"ubuntu-24.04-arm\", \"ubuntu-latest\", \"ubuntu-slim\", \"windows-11-arm\", \"windows-2022\", \"windows-2025\", \"windows-2025-vs2026\", \"windows-latest\"";
+    internal const string HostedLabelList = "\"macos-14\", \"macos-15\", \"macos-15-intel\", \"macos-26\", \"macos-26-intel\", \"macos-latest\", \"ubuntu-22.04\", \"ubuntu-22.04-arm\", \"ubuntu-24.04\", \"ubuntu-24.04-arm\", \"ubuntu-26.04\", \"ubuntu-26.04-arm\", \"ubuntu-latest\", \"ubuntu-slim\", \"windows-11-arm\", \"windows-11-vs2026-arm\", \"windows-2022\", \"windows-2025\", \"windows-2025-vs2026\", \"windows-latest\"";
 
     /// <summary>Comma-separated list of larger runner labels for diagnostic messages.</summary>
     internal const string LargerLabelList = "\"macos-14-large\", \"macos-14-xlarge\", \"macos-15-large\", \"macos-15-xlarge\", \"macos-26-large\", \"macos-26-xlarge\", \"macos-latest-large\", \"macos-latest-xlarge\", \"ubuntu-latest-16-cores\", \"ubuntu-latest-4-cores\", \"ubuntu-latest-8-cores\", \"windows-latest-8-cores\"";
@@ -25,7 +25,9 @@ internal static class RunnerLabels
 
     internal static bool IsPreviewHostedLabel(ReadOnlySpan<byte> labelUtf8)
     {
-        return false;
+        return EqualsAsciiIgnoreCase(labelUtf8, "ubuntu-26.04"u8)
+            || EqualsAsciiIgnoreCase(labelUtf8, "ubuntu-26.04-arm"u8)
+            || EqualsAsciiIgnoreCase(labelUtf8, "windows-11-vs2026-arm"u8);
     }
 
     internal static bool IsStableHostedLabel(ReadOnlySpan<byte> labelUtf8)

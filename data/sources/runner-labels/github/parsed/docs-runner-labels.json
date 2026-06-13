@@ -4,7 +4,7 @@
   "rawSources": [
     {
       "fileName": "github-hosted-runners.docs.md",
-      "sha256": "sha256:f268d962513d10bfc8a4f1b390fe78ffb33ff73062d3fd88ebe022494c0bbc7c"
+      "sha256": "sha256:9f264018ee71a2bf24343ac7b6aa70ca5e6ccbaa76840b0240ef77dc2abceaae"
     },
     {
       "fileName": "larger-runners.docs.md",
@@ -85,6 +85,14 @@
       "isPreview": false
     },
     {
+      "label": "ubuntu-26.04",
+      "isPreview": true
+    },
+    {
+      "label": "ubuntu-26.04-arm",
+      "isPreview": true
+    },
+    {
       "label": "ubuntu-latest",
       "isPreview": false
     },
@@ -95,6 +103,10 @@
     {
       "label": "windows-11-arm",
       "isPreview": false
+    },
+    {
+      "label": "windows-11-vs2026-arm",
+      "isPreview": true
     },
     {
       "label": "windows-2022",
