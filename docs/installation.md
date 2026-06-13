@@ -60,7 +60,7 @@ If you already use [GitHub CLI](https://cli.github.com/), you can download and v
 Example for Linux x64:
 
 ```sh
-version=v0.9.30
+version=v0.9.31
 asset=seiton-linux-amd64.tar.gz
 gh release download -R guitarrapc/seiton "$version" -p "$asset"
 tar xzf "$asset"
@@ -94,7 +94,7 @@ Install a specific version:
 ```yaml
 - uses: guitarrapc/setup-seiton@v1
   with:
-    seiton-version: 0.9.30
+    seiton-version: 0.9.31
 ```
 
 See [usage](usage.md#github-actions) for full CI examples, including Docker and SARIF upload.
@@ -107,8 +107,8 @@ Official multi-architecture container images are published to GHCR for `linux/am
 
 ```sh
 docker pull ghcr.io/guitarrapc/seiton:latest
-docker pull ghcr.io/guitarrapc/seiton:0.9.30
-docker pull ghcr.io/guitarrapc/seiton:v0.9.30
+docker pull ghcr.io/guitarrapc/seiton:0.9.31
+docker pull ghcr.io/guitarrapc/seiton:v0.9.31
 ```
 
 Lint the workflow files in the current directory:
@@ -173,7 +173,7 @@ seiton version
 Example output:
 
 ```text
-seiton 0.9.30
+seiton 0.9.31
 built with .NET 10.0.8, win-x64
 ```
 
