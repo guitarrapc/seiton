@@ -72,26 +72,37 @@ jobs:
 **Step2. Lint it**
 
 ```sh
-seiton --oneline -c samples/readme/.github/seiton.yaml samples/readme/.github/workflows/test.yaml
+seiton --oneline samples/readme/.github/workflows/test.yaml
 ```
 
 Output shows 3 errors and 6 warnings
 
 ```sh
-test.yaml:3:5: error [syntax-check] on.pull_request has unexpected key "branch" for "pull_request" section. did you mean "branches"? expected one of "types", "branches", "branches-ignore", "paths", "paths-ignore"
-test.yaml:5:3: warning [job-permissions-required] jobs.'test' does not have permissions defined; set explicit permissions to follow least-privilege principle
-test.yaml:5:3: error [job-timeout-minutes-required] jobs.'test' should define timeout-minutes (default is 360 minutes); if not possible, set timeout-minutes on each step instead
-test.yaml:6:14: warning [runner-no-latest] jobs.'test'.runs-on label 'ubuntu-latest' is a moving latest label; prefer explicit version-pinned runner labels
-test.yaml:8:33: error [template-injection] "github.event.pull_request.title" is potentially untrusted. avoid using it directly in inline scripts. instead, pass it through an environment variable. see https://docs.github.com/en/actions/security-for-github-actions/security-guides/security-hardening-for-github-actions#good-practices-for-mitigating-script-injection-attacks for more details
-test.yaml:9:15: warning [checkout-persist-credentials] action 'actions/checkout@v6' should set with.persist-credentials to false to avoid leaving credentials accessible to subsequent steps; after changing this, review later authenticated git commands; for example, git push may require explicit auth setup such as `git remote set-url origin <url>` or `gh auth setup-git`
-test.yaml:9:31: warning [unpinned-uses] 'actions/checkout@v6' is not pinned to a full-length commit SHA. see https://github.com/actions/checkout/tree/v6 (fixable with --fix --enable-pin-network)
-test.yaml:10:33: warning [unpinned-uses] 'actions/setup-node@v4' is not pinned to a full-length commit SHA. see https://github.com/actions/setup-node/tree/v4 (fixable with --fix --enable-pin-network)
-test.yaml:12:25: warning [popular-action-inputs] unknown input 'node_version' for action 'actions/setup-node@v4'. available inputs are "architecture", "cache", "cache-dependency-path", "check-latest", "mirror", "mirror-token", "node-version", "node-version-file", "package-manager-cache", "registry-url", "scope", "token". did you mean 'node-version'? see https://github.com/actions/setup-node/tree/v4
+samples/readme/.github/workflows/test.yaml:3:5: error [syntax-check] on.pull_request has unexpected key "branch" for "pull_request" section. did you mean "branches"? expected one of "types", "branches", "branches-ignore", "paths", "paths-ignore"
+samples/readme/.github/workflows/test.yaml:5:3: warning [job-permissions-required] jobs.'test' does not have permissions defined; set explicit permissions to follow least-privilege principle
+samples/readme/.github/workflows/test.yaml:5:3: error [job-timeout-minutes-required] jobs.'test' should define timeout-minutes (default is 360 minutes); if not possible, set timeout-minutes on each step instead
+samples/readme/.github/workflows/test.yaml:6:14: warning [runner-no-latest] jobs.'test'.runs-on label 'ubuntu-latest' is a moving latest label; prefer explicit version-pinned runner labels
+samples/readme/.github/workflows/test.yaml:8:33: error [template-injection] "github.event.pull_request.title" is potentially untrusted. avoid using it directly in inline scripts. instead, pass it through an environment variable. see https://docs.github.com/en/actions/security-for-github-actions/security-guides/security-hardening-for-github-actions#good-practices-for-mitigating-script-injection-attacks for more details
+samples/readme/.github/workflows/test.yaml:9:15: warning [checkout-persist-credentials] action 'actions/checkout@v6' should set with.persist-credentials to false to avoid leaving credentials accessible to subsequent steps; after changing this, review later authenticated git commands; for example, git push may require explicit auth setup such as `git remote set-url origin <url>` or `gh auth setup-git`
+samples/readme/.github/workflows/test.yaml:9:31: warning [unpinned-uses] 'actions/checkout@v6' is not pinned to a full-length commit SHA. see https://github.com/actions/checkout/tree/v6 (fixable with --fix --enable-pin-network)
+samples/readme/.github/workflows/test.yaml:10:33: warning [unpinned-uses] 'actions/setup-node@v4' is not pinned to a full-length commit SHA. see https://github.com/actions/setup-node/tree/v4 (fixable with --fix --enable-pin-network)
+samples/readme/.github/workflows/test.yaml:12:25: warning [popular-action-inputs] unknown input 'node_version' for action 'actions/setup-node@v4'. available inputs are "architecture", "cache", "cache-dependency-path", "check-latest", "mirror", "mirror-token", "node-version", "node-version-file", "package-manager-cache", "registry-url", "scope", "token". did you mean 'node-version'? see https://github.com/actions/setup-node/tree/v4
 3 errors, 6 warnings in 1 file
 
 | File      | Errors | Warnings |
 |-----------|-------:|---------:|
 | test.yaml |      3 |        6 |
+
+| Rule                         | Count |
+|------------------------------|------:|
+| unpinned-uses                |     2 |
+| checkout-persist-credentials |     1 |
+| job-permissions-required     |     1 |
+| job-timeout-minutes-required |     1 |
+| popular-action-inputs        |     1 |
+| runner-no-latest             |     1 |
+| syntax-check                 |     1 |
+| template-injection           |     1 |
 ```
 
 **Step3. Apply safe auto-fixes**
