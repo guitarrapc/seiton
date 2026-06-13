@@ -26,7 +26,7 @@ internal sealed class GitHubWebhookSourceParser
 
         var events = snapshot.Events
             .Where(static x => !string.IsNullOrWhiteSpace(x.Name))
-            .Select(static x => new WebhookEventModel(
+            .Select(static x => WebhookEventModel.Create(
                 x.Name,
                 x.ActivityTypes is null ? null : x.ActivityTypes.ToArray()))
             .OrderBy(static x => x.Name, StringComparer.Ordinal)

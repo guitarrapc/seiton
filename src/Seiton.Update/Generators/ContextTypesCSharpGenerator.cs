@@ -7,6 +7,10 @@ internal sealed class ContextTypesCSharpGenerator
 {
     public string Generate(ContextTypesModel model)
     {
+        var contexts = model.Contexts
+            .OrderBy(static x => x.Name, StringComparer.Ordinal)
+            .ToArray();
+
         var sb = new StringBuilder();
         GeneratorHelper.AppendGeneratedHeader(sb, "sync-context-types");
         sb.AppendLine(
@@ -24,7 +28,7 @@ internal sealed class ContextTypesCSharpGenerator
             """);
 
         // Emit helper variables for nested types before the return array
-        foreach (var ctx in model.Contexts)
+        foreach (var ctx in contexts)
         {
             EmitContextVariable(sb, ctx);
         }
@@ -33,7 +37,7 @@ internal sealed class ContextTypesCSharpGenerator
         sb.AppendLine();
         sb.AppendLine("        return");
         sb.AppendLine("        [");
-        foreach (var ctx in model.Contexts)
+        foreach (var ctx in contexts)
         {
             sb.AppendLine($"            (\"{ctx.Name}\"u8.ToArray(), (ExprType){VariableName(ctx.Name)}Type),");
         }

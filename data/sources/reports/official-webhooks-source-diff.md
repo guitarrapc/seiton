@@ -3,7 +3,7 @@
 - source-a: parsed schema input (raw schema file in-repo)
 - source-b: parsed docs input (raw GitHub Docs markdown in-repo)
 - exclude-schema-only: False
-- generated-at-utc: 2026-06-09T05:54:33.8882416Z
+- generated-at-utc: 2026-06-13T06:56:19.6762649Z
 
 Policy: normalized snapshot follows GitHub Docs for activity types when Docs table is parseable.
 
@@ -14,12 +14,11 @@ Policy: normalized snapshot follows GitHub Docs for activity types when Docs tab
 - issues
   - schema: [assigned, closed, deleted, demilestoned, edited, labeled, locked, milestoned, opened, pinned, reopened, transferred, unassigned, unlabeled, unlocked, unpinned]
   - docs: [assigned, closed, deleted, demilestoned, edited, labeled, locked, milestoned, opened, pinned, reopened, transferred, typed, unassigned, unlabeled, unlocked, unpinned, untyped]
-- project
-  - schema: [closed, created, deleted, edited, reopened, updated]
-  - docs: [closed, created, deleted, edited, reopened]
 
 ## Docs Only Events
 - none
 
 ## Schema Only Events
-- none
+- project
+- project_card
+- project_column

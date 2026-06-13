@@ -64,6 +64,8 @@ public sealed class CommittedRawMarkdownParserContractTests
 
         await Assert.That(labels.Count).IsGreaterThanOrEqualTo(12);
         await Assert.That(labels.Any(x => x.Label == "ubuntu-latest")).IsTrue();
+        await Assert.That(labels.Any(x => x.Label == "ubuntu-26.04" && x.IsPreview)).IsTrue();
+        await Assert.That(labels.Any(x => x.Label == "ubuntu-26.04-arm" && x.IsPreview)).IsTrue();
     }
 
     [Test]

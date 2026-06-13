@@ -1,0 +1,7 @@
+{
+  "schemaVersion": 1,
+  "source": "seiton-curated-runner-deprecations",
+  "description": "Hosted runner labels under GitHub deprecation policy. Labels stay in stableLabels while still documented; this list drives deprecation warnings separately from availability.",
+  "referenceUrl": "https://github.blog/changelog/",
+  "deprecatedLabels": []
+}

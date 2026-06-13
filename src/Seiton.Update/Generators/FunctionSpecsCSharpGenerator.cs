@@ -19,10 +19,14 @@ internal sealed class FunctionSpecsCSharpGenerator
             {
             """);
 
+        var functions = model.Functions
+            .OrderBy(static x => x.Name, StringComparer.Ordinal)
+            .ToArray();
+
         sb.AppendLine("    internal static readonly ExpressionSemanticAnalyzer.FunctionSpec[] Specs =");
         sb.AppendLine("    [");
 
-        foreach (var func in model.Functions)
+        foreach (var func in functions)
         {
             sb.AppendLine($"        new ExpressionSemanticAnalyzer.FunctionSpec(\"{func.Name}\"u8.ToArray(),");
             sb.AppendLine("        [");

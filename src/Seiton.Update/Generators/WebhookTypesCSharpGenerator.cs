@@ -308,12 +308,20 @@ internal sealed class WebhookTypesCSharpGenerator
 
     private static string BuildAnyOptionCondition(IReadOnlyList<string> options, string variableName)
     {
-        return string.Join(" || ", options.Select(o => $"{variableName}.SequenceEqual(\"{o}\"u8)"));
+        return string.Join(
+            " || ",
+            options
+                .OrderBy(static o => o, StringComparer.Ordinal)
+                .Select(o => $"{variableName}.SequenceEqual(\"{o}\"u8)"));
     }
 
     private static string BuildAnyValueCondition(IReadOnlyList<string> values, string variableName)
     {
-        return string.Join(" || ", values.Select(v => $"{variableName}.SequenceEqual(\"{v}\"u8)"));
+        return string.Join(
+            " || ",
+            values
+                .OrderBy(static v => v, StringComparer.Ordinal)
+                .Select(v => $"{variableName}.SequenceEqual(\"{v}\"u8)"));
     }
 
     private static string ToEventIdName(string eventName)

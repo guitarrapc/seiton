@@ -38,6 +38,10 @@ internal sealed partial class AvailabilityCSharpGenerator
             .ThenBy(static e => e.EnumName, StringComparer.Ordinal)
             .ToList();
 
+        var entriesByEnumName = entries
+            .OrderBy(static e => e.EnumName, StringComparer.Ordinal)
+            .ToList();
+
         var sb = new StringBuilder();
         GeneratorHelper.AppendGeneratedHeader(sb, "sync-availability");
 
@@ -120,7 +124,7 @@ internal sealed partial class AvailabilityCSharpGenerator
         sb.AppendLine("        {");
         sb.AppendLine("            return context switch");
         sb.AppendLine("            {");
-        foreach (var (enumName, workflowKey, _) in entries)
+        foreach (var (enumName, workflowKey, _) in entriesByEnumName)
         {
             sb.AppendLine($"                ExpressionValidationContext.{enumName} => \"{GetLintCategoryText(enumName, workflowKey)}\",");
         }
@@ -149,7 +153,7 @@ internal sealed partial class AvailabilityCSharpGenerator
         sb.AppendLine("        {");
         sb.AppendLine("            return context switch");
         sb.AppendLine("            {");
-        foreach (var (enumName, _, _) in entries)
+        foreach (var (enumName, _, _) in entriesByEnumName)
         {
             sb.AppendLine($"                ExpressionValidationContext.{enumName} => {enumName}Roots,");
         }

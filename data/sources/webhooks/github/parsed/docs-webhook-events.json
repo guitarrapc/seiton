@@ -4,7 +4,7 @@
   "rawSources": [
     {
       "fileName": "events-that-trigger-workflows.docs.md",
-      "sha256": "sha256:23ceec60064e046e76471da994a3b306662ce062c81c4ce9612758c53c617ccf"
+      "sha256": "sha256:512956d13b7ccf1ee23b3941b148f86d62e27c73aaf36c97ccfed40485ed9039"
     }
   ],
   "events": [
@@ -161,38 +161,6 @@
       "name": "page_build",
       "hasParseableActivityTypes": true,
       "activityTypes": []
-    },
-    {
-      "name": "project",
-      "hasParseableActivityTypes": true,
-      "activityTypes": [
-        "closed",
-        "created",
-        "deleted",
-        "edited",
-        "reopened"
-      ]
-    },
-    {
-      "name": "project_card",
-      "hasParseableActivityTypes": true,
-      "activityTypes": [
-        "converted",
-        "created",
-        "deleted",
-        "edited",
-        "moved"
-      ]
-    },
-    {
-      "name": "project_column",
-      "hasParseableActivityTypes": true,
-      "activityTypes": [
-        "created",
-        "deleted",
-        "moved",
-        "updated"
-      ]
     },
     {
       "name": "public",

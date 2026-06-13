@@ -32,5 +32,10 @@
     "windows-latest",
     "windows-latest-8-cores"
   ],
-  "previewLabels": []
+  "previewLabels": [
+    "ubuntu-26.04",
+    "ubuntu-26.04-arm",
+    "windows-11-vs2026-arm"
+  ],
+  "deprecatedLabels": []
 }

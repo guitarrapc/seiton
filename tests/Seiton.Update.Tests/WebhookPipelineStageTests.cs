@@ -307,6 +307,37 @@ public sealed class WebhookPipelineStageTests
     }
 
     [Test]
+    public async Task MergeParsedSources_ProjectSchemaOnlyTypes_AreAlphabeticallySortedAndIncludeUpdated()
+    {
+        var repoRoot = FindRepoRoot();
+        var tempRepo = CreateTempRepoWithParsed(repoRoot);
+
+        try
+        {
+            var fetcher = new GitHubWebhookFetcher();
+            fetcher.MergeParsedSources(tempRepo);
+
+            var snapshotPath = Path.Combine(tempRepo, "data", "sources", "webhooks", "github", "webhook_types.json");
+            using var doc = JsonDocument.Parse(File.ReadAllText(snapshotPath));
+            var projectEvent = doc.RootElement
+                .GetProperty("events")
+                .EnumerateArray()
+                .First(e => e.GetProperty("name").GetString() == "project");
+
+            var types = projectEvent.GetProperty("activityTypes")
+                .EnumerateArray()
+                .Select(t => t.GetString()!)
+                .ToArray();
+
+            await Assert.That(string.Join(',', types)).IsEqualTo("closed,created,deleted,edited,reopened,updated");
+        }
+        finally
+        {
+            Directory.Delete(tempRepo, recursive: true);
+        }
+    }
+
+    [Test]
     public async Task MergeParsedSources_IsIdempotent()
     {
         var repoRoot = FindRepoRoot();

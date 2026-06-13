@@ -151,7 +151,7 @@ internal sealed class GitHubWebhookFetcher
         }) ?? throw new InvalidDataException($"Invalid parsed docs snapshot: {paths.ParsedDocsPath}");
 
         var schemaEvents = parsedSchema.Events
-            .Select(static x => new WebhookEventModel(x.Name, x.ActivityTypes is null ? null : x.ActivityTypes.ToArray()))
+            .Select(static x => WebhookEventModel.Create(x.Name, x.ActivityTypes is null ? null : x.ActivityTypes.ToArray()))
             .OrderBy(static x => x.Name, StringComparer.Ordinal)
             .ToArray();
 
@@ -220,7 +220,7 @@ internal sealed class GitHubWebhookFetcher
         var merged = new Dictionary<string, WebhookEventModel>(StringComparer.Ordinal);
         foreach (var pair in docsActivityTypes)
         {
-            merged[pair.Key] = new WebhookEventModel(pair.Key, pair.Value);
+            merged[pair.Key] = WebhookEventModel.Create(pair.Key, pair.Value);
         }
 
         // Apply schema fallback for docs-known events when docs activity-types are unavailable/unparseable.
@@ -233,7 +233,7 @@ internal sealed class GitHubWebhookFetcher
 
             if (docsEventNames.Contains(model.Name))
             {
-                merged[model.Name] = model;
+                merged[model.Name] = WebhookEventModel.Create(model.Name, model.ActivityTypes);
             }
         }
 
@@ -244,7 +244,7 @@ internal sealed class GitHubWebhookFetcher
             {
                 if (!merged.ContainsKey(model.Name))
                 {
-                    merged[model.Name] = model;
+                    merged[model.Name] = WebhookEventModel.Create(model.Name, model.ActivityTypes);
                 }
             }
         }
@@ -254,7 +254,7 @@ internal sealed class GitHubWebhookFetcher
         {
             if (!merged.ContainsKey(supplemental.Name))
             {
-                merged[supplemental.Name] = supplemental;
+                merged[supplemental.Name] = WebhookEventModel.Create(supplemental.Name, supplemental.ActivityTypes);
             }
         }
 
@@ -295,7 +295,7 @@ internal sealed class GitHubWebhookFetcher
             }
 
             var activityTypes = ExtractActivityTypes(root, prop.Value);
-            var model = ApplyOverride(new WebhookEventModel(name, activityTypes));
+            var model = ApplyOverride(WebhookEventModel.Create(name, activityTypes));
             events.Add(model);
         }
 
@@ -334,7 +334,7 @@ internal sealed class GitHubWebhookFetcher
     {
         if (SchemaStoreGapOverrides.TryGetValue(model.Name, out var overriddenTypes))
         {
-            return model with { ActivityTypes = overriddenTypes };
+            return model with { ActivityTypes = WebhookEventModel.NormalizeActivityTypes(overriddenTypes) };
         }
 
         return model;
@@ -456,7 +456,7 @@ internal sealed class GitHubWebhookFetcher
                 }
             }
 
-            return list;
+            return WebhookEventModel.NormalizeActivityTypes(list)!;
         }
 
         // items exists but no enum -> unconstrained types (user-defined, like repository_dispatch)

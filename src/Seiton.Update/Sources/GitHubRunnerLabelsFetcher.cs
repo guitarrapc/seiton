@@ -149,7 +149,7 @@ internal sealed class GitHubRunnerLabelsFetcher
             .OrderBy(static x => x.Label, StringComparer.Ordinal)
             .ToArray();
 
-        // Merge supplemental labels (hand-written, not from docs)
+        // Merge supplemental and curated deprecation labels (hand-written, not from docs)
         var supplementalStable = Array.Empty<string>();
         var supplementalPreview = Array.Empty<string>();
         if (File.Exists(paths.SupplementalLabelsPath))
@@ -161,6 +161,36 @@ internal sealed class GitHubRunnerLabelsFetcher
             if (supDoc.TryGetProperty("previewLabels", out var previewArr))
                 supplementalPreview = previewArr.EnumerateArray().Select(e => e.GetString()!).ToArray();
             UpdateLogger.Info($"[merge:runner-labels:sources] merged {supplementalStable.Length + supplementalPreview.Length} supplemental labels from {Path.GetFileName(paths.SupplementalLabelsPath)}");
+        }
+
+        var deprecatedLabels = Array.Empty<string>();
+        if (File.Exists(paths.DeprecatedLabelsPath))
+        {
+            var depText = File.ReadAllText(paths.DeprecatedLabelsPath);
+            var depDoc = JsonSerializer.Deserialize<JsonElement>(depText);
+            if (depDoc.ValueKind != JsonValueKind.Object)
+            {
+                throw new InvalidDataException(
+                    $"Invalid deprecated-labels snapshot (expected JSON object): {paths.DeprecatedLabelsPath}");
+            }
+
+            if (depDoc.TryGetProperty("deprecatedLabels", out var deprecatedArr))
+            {
+                if (deprecatedArr.ValueKind != JsonValueKind.Array)
+                {
+                    throw new InvalidDataException(
+                        $"Invalid deprecated-labels snapshot ('deprecatedLabels' must be an array): {paths.DeprecatedLabelsPath}");
+                }
+
+                deprecatedLabels = deprecatedArr.EnumerateArray()
+                    .Select(static e => e.GetString()!)
+                    .Where(static x => !string.IsNullOrWhiteSpace(x))
+                    .Distinct(StringComparer.Ordinal)
+                    .OrderBy(static x => x, StringComparer.Ordinal)
+                    .ToArray();
+            }
+
+            UpdateLogger.Info($"[merge:runner-labels:sources] merged {deprecatedLabels.Length} deprecated labels from {Path.GetFileName(paths.DeprecatedLabelsPath)}");
         }
 
         var snapshot = new
@@ -181,6 +211,7 @@ internal sealed class GitHubRunnerLabelsFetcher
                 .Distinct(StringComparer.Ordinal)
                 .OrderBy(static x => x, StringComparer.Ordinal)
                 .ToArray(),
+            deprecatedLabels,
         };
 
         var snapshotJson = TextNormalization.NormalizeToLf(JsonSerializer.Serialize(snapshot, JsonOptions));
@@ -209,6 +240,7 @@ internal sealed class GitHubRunnerLabelsFetcher
             RawLargerRunnersPath = Path.Combine(baseDir, "raw", "larger-runners.docs.md"),
             ParsedDocsPath = Path.Combine(baseDir, "parsed", "docs-runner-labels.json"),
             SupplementalLabelsPath = Path.Combine(baseDir, "supplemental-labels.json"),
+            DeprecatedLabelsPath = Path.Combine(baseDir, "deprecated-labels.json"),
             MergedSnapshotPath = Path.Combine(baseDir, "runner_labels.json"),
         };
     }
@@ -219,6 +251,7 @@ internal sealed class GitHubRunnerLabelsFetcher
         public string RawLargerRunnersPath { get; set; } = string.Empty;
         public string ParsedDocsPath { get; set; } = string.Empty;
         public string SupplementalLabelsPath { get; set; } = string.Empty;
+        public string DeprecatedLabelsPath { get; set; } = string.Empty;
         public string MergedSnapshotPath { get; set; } = string.Empty;
     }
 

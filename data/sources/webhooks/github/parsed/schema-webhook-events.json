@@ -12,17 +12,17 @@
       "name": "branch_protection_rule",
       "activityTypes": [
         "created",
-        "edited",
-        "deleted"
+        "deleted",
+        "edited"
       ]
     },
     {
       "name": "check_run",
       "activityTypes": [
-        "created",
-        "rerequested",
         "completed",
-        "requested_action"
+        "created",
+        "requested_action",
+        "rerequested"
       ]
     },
     {
@@ -52,27 +52,27 @@
     {
       "name": "discussion",
       "activityTypes": [
-        "created",
-        "edited",
-        "deleted",
-        "transferred",
-        "pinned",
-        "unpinned",
-        "labeled",
-        "unlabeled",
-        "locked",
-        "unlocked",
-        "category_changed",
         "answered",
-        "unanswered"
+        "category_changed",
+        "created",
+        "deleted",
+        "edited",
+        "labeled",
+        "locked",
+        "pinned",
+        "transferred",
+        "unanswered",
+        "unlabeled",
+        "unlocked",
+        "unpinned"
       ]
     },
     {
       "name": "discussion_comment",
       "activityTypes": [
         "created",
-        "edited",
-        "deleted"
+        "deleted",
+        "edited"
       ]
     },
     {
@@ -91,37 +91,37 @@
       "name": "issue_comment",
       "activityTypes": [
         "created",
-        "edited",
-        "deleted"
+        "deleted",
+        "edited"
       ]
     },
     {
       "name": "issues",
       "activityTypes": [
-        "opened",
-        "edited",
-        "deleted",
-        "transferred",
-        "pinned",
-        "unpinned",
-        "closed",
-        "reopened",
         "assigned",
-        "unassigned",
+        "closed",
+        "deleted",
+        "demilestoned",
+        "edited",
         "labeled",
-        "unlabeled",
         "locked",
-        "unlocked",
         "milestoned",
-        "demilestoned"
+        "opened",
+        "pinned",
+        "reopened",
+        "transferred",
+        "unassigned",
+        "unlabeled",
+        "unlocked",
+        "unpinned"
       ]
     },
     {
       "name": "label",
       "activityTypes": [
         "created",
-        "edited",
-        "deleted"
+        "deleted",
+        "edited"
       ]
     },
     {
@@ -133,11 +133,11 @@
     {
       "name": "milestone",
       "activityTypes": [
-        "created",
         "closed",
-        "opened",
+        "created",
+        "deleted",
         "edited",
-        "deleted"
+        "opened"
       ]
     },
     {
@@ -147,31 +147,31 @@
     {
       "name": "project",
       "activityTypes": [
-        "created",
-        "updated",
         "closed",
-        "reopened",
+        "created",
+        "deleted",
         "edited",
-        "deleted"
+        "reopened",
+        "updated"
       ]
     },
     {
       "name": "project_card",
       "activityTypes": [
-        "created",
-        "moved",
         "converted",
+        "created",
+        "deleted",
         "edited",
-        "deleted"
+        "moved"
       ]
     },
     {
       "name": "project_column",
       "activityTypes": [
         "created",
-        "updated",
+        "deleted",
         "moved",
-        "deleted"
+        "updated"
       ]
     },
     {
@@ -182,64 +182,64 @@
       "name": "pull_request",
       "activityTypes": [
         "assigned",
-        "unassigned",
-        "labeled",
-        "unlabeled",
-        "opened",
-        "edited",
-        "closed",
-        "reopened",
-        "synchronize",
-        "converted_to_draft",
-        "ready_for_review",
-        "locked",
-        "unlocked",
-        "milestoned",
-        "demilestoned",
-        "review_requested",
-        "review_request_removed",
-        "auto_merge_enabled",
         "auto_merge_disabled",
+        "auto_merge_enabled",
+        "closed",
+        "converted_to_draft",
+        "demilestoned",
+        "dequeued",
+        "edited",
         "enqueued",
-        "dequeued"
+        "labeled",
+        "locked",
+        "milestoned",
+        "opened",
+        "ready_for_review",
+        "reopened",
+        "review_request_removed",
+        "review_requested",
+        "synchronize",
+        "unassigned",
+        "unlabeled",
+        "unlocked"
       ]
     },
     {
       "name": "pull_request_review",
       "activityTypes": [
-        "submitted",
+        "dismissed",
         "edited",
-        "dismissed"
+        "submitted"
       ]
     },
     {
       "name": "pull_request_review_comment",
       "activityTypes": [
         "created",
-        "edited",
-        "deleted"
+        "deleted",
+        "edited"
       ]
     },
     {
       "name": "pull_request_target",
       "activityTypes": [
         "assigned",
-        "unassigned",
-        "labeled",
-        "unlabeled",
-        "opened",
-        "edited",
-        "closed",
-        "reopened",
-        "synchronize",
-        "converted_to_draft",
-        "ready_for_review",
-        "locked",
-        "unlocked",
-        "review_requested",
-        "review_request_removed",
+        "auto_merge_disabled",
         "auto_merge_enabled",
-        "auto_merge_disabled"
+        "closed",
+        "converted_to_draft",
+        "edited",
+        "labeled",
+        "locked",
+        "opened",
+        "ready_for_review",
+        "reopened",
+        "review_request_removed",
+        "review_requested",
+        "synchronize",
+        "unassigned",
+        "unlabeled",
+        "unlocked"
       ]
     },
     {
@@ -256,13 +256,13 @@
     {
       "name": "release",
       "activityTypes": [
-        "published",
-        "unpublished",
         "created",
-        "edited",
         "deleted",
+        "edited",
         "prereleased",
-        "released"
+        "published",
+        "released",
+        "unpublished"
       ]
     },
     {
@@ -294,9 +294,9 @@
     {
       "name": "workflow_run",
       "activityTypes": [
-        "requested",
         "completed",
-        "in_progress"
+        "in_progress",
+        "requested"
       ]
     }
   ]

@@ -5,7 +5,7 @@
   "rawSources": [
     {
       "fileName": "github-token-available-permissions.md",
-      "sha256": "sha256:ea8a527d91e4b07e30e01575809aa4f913533ccfd622cfe99490789ac365d3a2"
+      "sha256": "sha256:c9f02c68d2fc22deb1824f5dc08a21c43e096ce386751d9ba42a31c98c2b9f49"
     }
   ],
   "scopes": [
@@ -113,14 +113,6 @@
     },
     {
       "name": "pull-requests",
-      "allowed": [
-        "read",
-        "write",
-        "none"
-      ]
-    },
-    {
-      "name": "repository-projects",
       "allowed": [
         "read",
         "write",

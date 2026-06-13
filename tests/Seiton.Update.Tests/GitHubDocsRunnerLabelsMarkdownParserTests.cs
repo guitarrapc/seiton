@@ -37,6 +37,33 @@ public sealed class GitHubDocsRunnerLabelsMarkdownParserTests
     }
 
     [Test]
+    public async Task ParseSupportedRunnerLabels_ExtractsUbuntu2604PreviewLabels()
+    {
+        var markdown = """
+            ## Supported runners and hardware resources
+
+            <table>
+              <tbody>
+                <tr>
+                  <td><code><a href="x">ubuntu-26.04</a></code> (Public preview)</td>
+                </tr>
+                <tr>
+                  <td><code><a href="x">ubuntu-26.04-arm</a></code> (Public preview)</td>
+                </tr>
+              </tbody>
+            </table>
+
+            ## Administrative privileges
+            """;
+
+        var parser = new GitHubDocsRunnerLabelsMarkdownParser();
+        var labels = parser.ParseSupportedRunnerLabels(markdown);
+
+        await Assert.That(labels.Any(x => x.Label == "ubuntu-26.04" && x.IsPreview)).IsTrue();
+        await Assert.That(labels.Any(x => x.Label == "ubuntu-26.04-arm" && x.IsPreview)).IsTrue();
+    }
+
+    [Test]
     public async Task ParseSupportedRunnerLabels_IgnoresNonHostedLabels()
     {
         var markdown = """

@@ -49,6 +49,30 @@ public sealed partial class RuleInterfaceTests
             """,
             []),
             new RuleCase(
+            "ok-ubuntu-26-04-preview",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-26.04
+                    permissions: {}
+                    steps:
+                        - run: echo ok
+            """,
+            []),
+            new RuleCase(
+            "ok-ubuntu-26-04-arm-preview",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: ubuntu-26.04-arm
+                    permissions: {}
+                    steps:
+                        - run: echo ok
+            """,
+            []),
+            new RuleCase(
             "ok-self-hosted-skip",
             """
             on: push

@@ -35,7 +35,7 @@ internal sealed class BotActorsCSharpGenerator
             {
                 var op = i == 0 ? "return " : "    || ";
                 var suffix = i == actors.Length - 1 ? ";" : string.Empty;
-                sb.AppendLine($"        {op}value.SequenceEqual(\"{actors[i].Id}\"u8){suffix}");
+                sb.AppendLine($"        {op}value.SequenceEqual(\"{actors[i].Id}\"u8){suffix} // {actors[i].Login}");
             }
         }
         sb.AppendLine("    }");
@@ -55,7 +55,7 @@ internal sealed class BotActorsCSharpGenerator
             {
                 var op = i == 0 ? "return " : "    || ";
                 var suffix = i == actors.Length - 1 ? ";" : string.Empty;
-                sb.AppendLine($"        {op}value.IndexOf(\"{actors[i].Id}\"u8) >= 0{suffix}");
+                sb.AppendLine($"        {op}value.IndexOf(\"{actors[i].Id}\"u8) >= 0{suffix} // {actors[i].Login}");
             }
         }
         sb.AppendLine("    }");
@@ -75,7 +75,7 @@ internal sealed class BotActorsCSharpGenerator
             {
                 var op = i == 0 ? "return " : "    || ";
                 var suffix = i == actors.Length - 1 ? ";" : string.Empty;
-                sb.AppendLine($"        {op}value.SequenceEqual(\"{actors[i].Login}\"u8){suffix}");
+                sb.AppendLine($"        {op}value.SequenceEqual(\"{actors[i].Login}\"u8){suffix} // id={actors[i].Id}");
             }
         }
         sb.AppendLine("    }");
