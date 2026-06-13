@@ -106,6 +106,8 @@ Apply conflict resolution policy across all parsed artifacts to produce one cano
 
 **Supplemental merge pattern**: Some datasets need key sets or entries that are not present in the raw source files parsed in Stage 2 (for example, action metadata keys are not in `workflow-syntax.md`). These are maintained as hand-written `supplemental-*.json` files alongside the canonical snapshot. Stage 3 reads the supplemental file, merges its entries into the parsed model (deduplicating by name, sorting alphabetically), and writes the combined result as the canonical snapshot. This keeps Stage 2 pure (derived only from raw) while allowing the canonical snapshot to include repository-managed additions. Current datasets using this pattern: `runner-labels` (`supplemental-labels.json`), `expected-keys` (`supplemental-keys.json`), `popular-actions` (`supplemental-required-permissions.json`).
 
+**Curated policy merge pattern (`runner-labels`)**: `deprecated-labels.json` is a hand-written file merged in Stage 3 alongside supplemental labels. It lists hosted runner labels under GitHub deprecation policy but still documented as available. The canonical snapshot exposes `deprecatedLabels` separately from `stableLabels` / `previewLabels` so generated `RunnerLabels.IsDeprecatedHostedLabel` can drive deprecation lint without removing labels from the known set.
+
 #### 3.1.4 Codegen — Sync .g.cs
 
 Generate `.g.cs` files from canonical snapshot or hand-written source JSON.
@@ -198,7 +200,7 @@ Cross-walk of maintainer-facing datasets (including satellite **`event-payload-t
 | iana-timezones | `iana-timezones` | Standard | `.../raw/tzdata.zi` | `.../parsed/iana-timezone-ids.json` | `iana_timezones.json` |
 | permissions | `permissions` | Standard | `.../raw/github-token-available-permissions.md` | `.../parsed/permissions-scopes.json` | `permissions.json` |
 | popular-actions | `popular-actions` | Standard | `.../raw/*.action.yml` (from `targets.json`) | `.../parsed/popular-actions-metadata.json` | `popular_actions.json` |
-| runner-labels | `runner-labels` | Standard | two `*.docs.md` under `raw/` | `.../parsed/docs-runner-labels.json` | `runner_labels.json` (+ optional supplemental JSON) |
+| runner-labels | `runner-labels` | Standard | two `*.docs.md` under `raw/` | `.../parsed/docs-runner-labels.json` | `runner_labels.json` (+ optional `supplemental-labels.json`, `deprecated-labels.json`) |
 | shells | `shells` | Standard (passthrough merge) | `.../raw/supported-shells.md` | `.../parsed/shells.json` | `shells.json` (copy of parsed) |
 | bot-actors | — | Hand-authored snapshot | — | — | `bot-actors.json` |
 | webhooks | `webhooks` | Standard | schema JSON + Docs `*.md` | multiple under `parsed/` | `webhook_types.json` |
@@ -415,6 +417,7 @@ data/sources/popular-actions/targets.json
 data/sources/runner-labels/github/raw/*
 data/sources/runner-labels/github/parsed/*
 data/sources/runner-labels/github/supplemental-labels.json
+data/sources/runner-labels/github/deprecated-labels.json
 data/sources/runner-labels/github/runner_labels.json
 
 data/sources/context-types/github/raw/*

@@ -168,8 +168,20 @@ internal sealed class GitHubRunnerLabelsFetcher
         {
             var depText = File.ReadAllText(paths.DeprecatedLabelsPath);
             var depDoc = JsonSerializer.Deserialize<JsonElement>(depText);
+            if (depDoc.ValueKind != JsonValueKind.Object)
+            {
+                throw new InvalidDataException(
+                    $"Invalid deprecated-labels snapshot (expected JSON object): {paths.DeprecatedLabelsPath}");
+            }
+
             if (depDoc.TryGetProperty("deprecatedLabels", out var deprecatedArr))
             {
+                if (deprecatedArr.ValueKind != JsonValueKind.Array)
+                {
+                    throw new InvalidDataException(
+                        $"Invalid deprecated-labels snapshot ('deprecatedLabels' must be an array): {paths.DeprecatedLabelsPath}");
+                }
+
                 deprecatedLabels = deprecatedArr.EnumerateArray()
                     .Select(static e => e.GetString()!)
                     .Where(static x => !string.IsNullOrWhiteSpace(x))
