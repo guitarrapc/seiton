@@ -543,31 +543,31 @@ Official container images are published to GHCR for `linux/amd64` and `linux/arm
 Available tags include:
 
 - `ghcr.io/guitarrapc/seiton:latest`
-- `ghcr.io/guitarrapc/seiton:0.9.31`
-- `ghcr.io/guitarrapc/seiton:v0.9.31`
+- `ghcr.io/guitarrapc/seiton:1.0.0`
+- `ghcr.io/guitarrapc/seiton:v1.0.0`
 
 To confirm the image works:
 
 ```sh
-docker run --rm ghcr.io/guitarrapc/seiton:v0.9.31 version
+docker run --rm ghcr.io/guitarrapc/seiton:v1.0.0 version
 ```
 
 Lint all workflow files (read-only mount):
 
 ```sh
-docker run --rm -v "$PWD:/repo:ro" ghcr.io/guitarrapc/seiton:v0.9.31
+docker run --rm -v "$PWD:/repo:ro" ghcr.io/guitarrapc/seiton:v1.0.0
 ```
 
 Lint a specific file:
 
 ```sh
-docker run --rm -v "$PWD:/repo:ro" ghcr.io/guitarrapc/seiton:v0.9.31 .github/workflows/ci.yml
+docker run --rm -v "$PWD:/repo:ro" ghcr.io/guitarrapc/seiton:v1.0.0 .github/workflows/ci.yml
 ```
 
 Apply fixes (omit `:ro` — writable mount is required):
 
 ```sh
-docker run --rm -v "$PWD:/repo" ghcr.io/guitarrapc/seiton:v0.9.31 --fix
+docker run --rm -v "$PWD:/repo" ghcr.io/guitarrapc/seiton:v1.0.0 --fix
 ```
 
 > `--fix --dry-run` and `--fix --check` do not write files, so `:ro` is fine for those.
@@ -593,7 +593,7 @@ Pin a specific version:
 ```yaml
 - uses: guitarrapc/setup-seiton@v1
   with:
-    seiton-version: 0.9.31
+    seiton-version: 1.0.0
 ```
 
 ### Docker
@@ -633,7 +633,7 @@ jobs:
 
       - uses: guitarrapc/setup-seiton@v1
         with:
-          seiton-version: 0.9.31
+          seiton-version: 1.0.0
 
       - name: Run seiton
         run: seiton --format sarif > seiton.sarif
@@ -675,7 +675,7 @@ jobs:
           persist-credentials: false
 
       - name: Run seiton in Docker
-        run: docker run --rm -v "$PWD:/repo:ro" ghcr.io/guitarrapc/seiton:v0.9.31 --format sarif > seiton.sarif
+        run: docker run --rm -v "$PWD:/repo:ro" ghcr.io/guitarrapc/seiton:v1.0.0 --format sarif > seiton.sarif
 
       - name: Upload SARIF
         uses: github/codeql-action/upload-sarif@ce28f5bb42d3534e5d0f3a320ca0b28ee32a72d0 # v3
