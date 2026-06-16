@@ -2,7 +2,7 @@
 
 This page describes how to use `seiton` locally and in CI/CD.
 
-## Current CLI Help
+## Help
 
 ```shell
 $ seiton --help
@@ -40,8 +40,6 @@ Commands:
   validate-config    Validate the seiton config file. Run after init and before production linting.
   version            Show version and runtime information.
 ```
-
-The examples below clarify the current behavior where fixes are enabled with `--fix` on the root command. There is no separate `fix` subcommand.
 
 ---
 
