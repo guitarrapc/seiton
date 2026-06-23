@@ -56,7 +56,7 @@ rules:
 | run-inputs-context-direct-use | error | yes | both | on |
 | secrets-whole-context-access | error | no | both | on |
 | checkout-persist-credentials | warning | yes | both | on |
-| checkout-unsafe-pr | warning | yes | workflow | on |
+| checkout-unsafe-pr | warning | yes | both | on |
 | deny-read-all | error | yes | both | on |
 | deny-inherit-secrets | error | no | both | on |
 | job-timeout-minutes-required | error | yes | both | on |

@@ -179,7 +179,7 @@ public sealed class RuleCatalogDescriptorTests
         await Assert.That(checkoutUnsafePr.IsOptIn).IsFalse();
         await Assert.That(checkoutUnsafePr.DefaultSeverity).IsEqualTo("warning");
         await Assert.That(checkoutUnsafePr.SupportsWorkflow).IsTrue();
-        await Assert.That(checkoutUnsafePr.SupportsAction).IsFalse();
+        await Assert.That(checkoutUnsafePr.SupportsAction).IsTrue();
         await Assert.That(checkoutUnsafePr.SupportsAutoFix).IsTrue();
     }
 }

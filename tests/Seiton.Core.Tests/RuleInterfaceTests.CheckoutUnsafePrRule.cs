@@ -154,4 +154,30 @@ public sealed partial class RuleInterfaceTests
         await Assert.That(literalDiagnostic.Fix!.Value.Edits[0].NewText).IsEqualTo("false");
         await Assert.That(expressionDiagnostic.Fix is null).IsTrue();
     }
+
+    [Test]
+    public async Task RuleRegression_CheckoutUnsafePrRule_ActionMetadataCompositeSteps()
+    {
+        const string yaml = """
+            name: unsafe checkout action
+            description: test action
+            runs:
+                using: composite
+                steps:
+                    - uses: actions/checkout@v7
+                      with:
+                          allow-unsafe-pr-checkout: true
+                    - uses: actions/setup-node@v6
+                      with:
+                          allow-unsafe-pr-checkout: true
+            """;
+
+        using var result = new LintEngine([new CheckoutUnsafePrRule()])
+            .Check(Encoding.UTF8.GetBytes(yaml), "action.yml");
+
+        await Assert.That(result.DocumentKind).IsEqualTo(Parsing.DocumentKind.ActionMetadata);
+        var diagnostics = result.Diagnostics.Where(d => d.RuleId == "checkout-unsafe-pr").ToArray();
+        await Assert.That(diagnostics.Length).IsEqualTo(1);
+        await Assert.That(diagnostics[0].Message).Contains("should not set with.allow-unsafe-pr-checkout to true");
+    }
 }

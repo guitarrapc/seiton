@@ -69,7 +69,7 @@ unpinned-tools                           yes       local    warning    no    bot
 unsound-contains                         yes       local    mixed      no    workflow   default
 bot-conditions                           yes       local    mixed      no    workflow   default
 artipacked                               yes       local    mixed      no    workflow   default
-checkout-unsafe-pr                       yes       local    warning    yes   workflow   default
+checkout-unsafe-pr                       yes       local    warning    yes   both       default
 known-vulnerable-actions                 no        online   error      no    workflow   opt-in (not configured)
 impostor-commit                          no        online   error      no    workflow   opt-in (not configured)
 ref-confusion                            no        online   error      no    workflow   opt-in (not configured)
@@ -2337,7 +2337,7 @@ jobs:
 |---|---|---|
 | ✓ | — | △ |
 
-Warns when `actions/checkout` sets `allow-unsafe-pr-checkout` to `true` or to an expression.
+Warns when `actions/checkout` sets `allow-unsafe-pr-checkout` to `true` or to an expression in workflows or composite action metadata.
 
 `allow-unsafe-pr-checkout` permits fork pull request code to be checked out in a trusted context. That pattern can lead to pwn request vulnerabilities when workflows run with base-repository credentials, secrets, caches, or runner access. The default value is safe (`false`), so missing inputs and literal `false` values are not reported.
 
@@ -2373,7 +2373,7 @@ jobs:
 
 - Auto-fix replaces deterministic literal `true` values with `false`, preserving quote style where possible.
 - Expression-valued cases are diagnostic-only because Seiton cannot prove the runtime value.
-- If the unsafe checkout is intentional, use inline suppression or config exclusions at the workflow/job scope and document the reason.
+- If the unsafe checkout is intentional, use inline suppression or config exclusions at the nearest supported scope and document the reason.
 
 ---
 

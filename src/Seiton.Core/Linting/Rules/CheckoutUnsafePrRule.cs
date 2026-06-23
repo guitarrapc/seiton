@@ -15,9 +15,6 @@ public sealed class CheckoutUnsafePrRule() : RuleBase(RuleId.CheckoutUnsafePr)
 
     public override string Name => "Checkout Unsafe PR Rule";
 
-    public override bool SupportsDocumentKind(DocumentKind documentKind)
-        => documentKind == DocumentKind.Workflow;
-
     public override void VisitStep(Step step)
     {
         if (step.Exec is not ExecAction actionExec || Config.Utf8Yaml is null || actionExec.Inputs is null)
