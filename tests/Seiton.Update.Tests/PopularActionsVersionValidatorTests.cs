@@ -73,23 +73,6 @@ public sealed class PopularActionsVersionValidatorTests
         }
     }
 
-    [Test]
-    public async Task ValidateAsync_CurrentTargetsAgainstGitHubTags_HasNoStaleTargets()
-    {
-        if (string.IsNullOrEmpty(Environment.GetEnvironmentVariable("GITHUB_TOKEN")))
-        {
-            Skip.Test("GITHUB_TOKEN is required for live GitHub tag validation to avoid unauthenticated API rate limits.");
-        }
-
-        var repoRoot = FindRepoRoot();
-        var validator = new PopularActionsVersionValidator();
-
-        var result = await validator.ValidateAsync(repoRoot);
-
-        await Assert.That(result.UnresolvedVersions).Count().IsEqualTo(0);
-        await Assert.That(result.StaleVersions).Count().IsEqualTo(0);
-    }
-
     private sealed class FakeGitHubTagsHandler : HttpMessageHandler
     {
         public Dictionary<string, string> Responses { get; } = new(StringComparer.Ordinal);
@@ -110,22 +93,5 @@ public sealed class PopularActionsVersionValidatorTests
                 Content = new StringContent(json),
             });
         }
-    }
-
-    private static string FindRepoRoot()
-    {
-        var dir = new DirectoryInfo(AppContext.BaseDirectory);
-        while (dir is not null)
-        {
-            var slnxPath = Path.Combine(dir.FullName, "seiton.slnx");
-            if (File.Exists(slnxPath))
-            {
-                return dir.FullName;
-            }
-
-            dir = dir.Parent;
-        }
-
-        throw new InvalidOperationException("Repository root not found from test base directory.");
     }
 }

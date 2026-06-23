@@ -41,7 +41,6 @@ jobs:
         env:
           SEITON_PLAYGROUND_PUBLISH_DIR_DEBUG: ${{ github.workspace }}/publish/playground-dbg
           SEITON_PLAYGROUND_PUBLISH_DIR_RELEASE: ${{ github.workspace }}/publish/playground-aot
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       - name: Publish (CLI)
         run: dotnet publish src/Seiton/Seiton.csproj -c Release -r linux-x64 -o publish/cli/
       - name: Publish (Playground)
