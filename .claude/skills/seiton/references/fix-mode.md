@@ -68,6 +68,7 @@ The following rules support `--fix`:
 - `run-inputs-context-direct-use` — moves `inputs.*` to step env
 - `runner-no-latest` — replaces `-latest` with pinned version
 - `checkout-persist-credentials` — adds `persist-credentials: false`
+- `checkout-unsafe-pr` — replaces `allow-unsafe-pr-checkout: true` with `false`
 - `job-timeout-minutes-required` — adds `timeout-minutes`
 - `if-expr-wrapper` — removes redundant `${{ }}` wrapper in `if:`
 - `unsound-condition` — fixes always-true/false conditions

@@ -27,6 +27,7 @@ public enum RuleId
     RunInputsContextDirectUse,
     SecretsWholeContextAccess,
     CheckoutPersistCredentials,
+    CheckoutUnsafePr,
     DenyReadAll,
     DenyInheritSecrets,
     JobTimeoutMinutesRequired,

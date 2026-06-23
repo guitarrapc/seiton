@@ -25,7 +25,7 @@ For every file it analyzes, Seiton:
 
 | Feature | Description |
 |---|---|
-| 61 lint rules | 57 default local rules plus 4 opt-in online audit rules (`RuleCatalog`). See [Rules](rules.md) for the full list. |
+| 62 lint rules | 58 default local rules plus 4 opt-in online audit rules (`RuleCatalog`). See [Rules](rules.md) for the full list. |
 | Security-first rules | Template injection, unpinned actions/images, dangerous triggers, secret misuse, and more. |
 | Correctness checks | Job structure, needs-graph cycles, glob syntax, shell names, ID naming, schedule/dispatch validation. |
 | Supply-chain hygiene | Unpinned `uses:` / images, archived actions, and optional online checks (known vulnerabilities, impostor commits, ref confusion, stale refs). |

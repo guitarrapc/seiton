@@ -69,12 +69,13 @@ unpinned-tools                           yes       local    warning    no    bot
 unsound-contains                         yes       local    mixed      no    workflow   default
 bot-conditions                           yes       local    mixed      no    workflow   default
 artipacked                               yes       local    mixed      no    workflow   default
+checkout-unsafe-pr                       yes       local    warning    yes   workflow   default
 known-vulnerable-actions                 no        online   error      no    workflow   opt-in (not configured)
 impostor-commit                          no        online   error      no    workflow   opt-in (not configured)
 ref-confusion                            no        online   error      no    workflow   opt-in (not configured)
 stale-action-refs                        no        online   warning    no    workflow   opt-in (not configured)
 
-61 rules total (56 enabled, 5 disabled)
+62 rules total (57 enabled, 5 disabled)
 
 To enable an opt-in rule, add to .github/seiton.yaml:
   rules:
@@ -148,6 +149,7 @@ Online rules use the GitHub API. Set GITHUB_TOKEN (or SEITON_GITHUB_TOKEN) to av
 - [job-permissions-required](#job-permissions-required)
 - [credentials](#credentials)
 - [checkout-persist-credentials](#checkout-persist-credentials)
+- [checkout-unsafe-pr](#checkout-unsafe-pr)
 - [workflow-secrets](#workflow-secrets)
 - [job-secrets](#job-secrets)
 - [unredacted-secrets](#unredacted-secrets)
@@ -2326,6 +2328,52 @@ jobs:
 - Review later authenticated git commands; for example, `git push` may require explicit auth setup such as `git remote set-url origin <url>` or `gh auth setup-git`.
 - Auto-fix inserts/replaces deterministic scalar values only; expression-valued cases are manual.
 - Review `artipacked` findings together when artifact upload paths are broad.
+
+---
+
+### `checkout-unsafe-pr`
+
+| Default | Network | Auto-fix |
+|---|---|---|
+| ✓ | — | △ |
+
+Warns when `actions/checkout` sets `allow-unsafe-pr-checkout` to `true` or to an expression.
+
+`allow-unsafe-pr-checkout` permits fork pull request code to be checked out in a trusted context. That pattern can lead to pwn request vulnerabilities when workflows run with base-repository credentials, secrets, caches, or runner access. The default value is safe (`false`), so missing inputs and literal `false` values are not reported.
+
+**Why:** A `true` value is an explicit opt-out from checkout's safe default and should be reviewed. Seiton reports it for every `actions/checkout` ref, regardless of workflow trigger, because the setting itself is the risk signal and workflows are often copied or later retargeted to dangerous triggers.
+
+**Example trigger:**
+
+```yaml
+on: push
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          allow-unsafe-pr-checkout: true  # WARNING: unsafe PR checkout enabled
+```
+
+**Remediation:**
+
+```yaml
+on: push
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          allow-unsafe-pr-checkout: false
+```
+
+**When fixing:**
+
+- Auto-fix replaces deterministic literal `true` values with `false`, preserving quote style where possible.
+- Expression-valued cases are diagnostic-only because Seiton cannot prove the runtime value.
+- If the unsafe checkout is intentional, use inline suppression or config exclusions at the workflow/job scope and document the reason.
 
 ---
 

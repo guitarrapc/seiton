@@ -56,6 +56,7 @@ rules:
 | run-inputs-context-direct-use | error | yes | both | on |
 | secrets-whole-context-access | error | no | both | on |
 | checkout-persist-credentials | warning | yes | both | on |
+| checkout-unsafe-pr | warning | yes | workflow | on |
 | deny-read-all | error | yes | both | on |
 | deny-inherit-secrets | error | no | both | on |
 | job-timeout-minutes-required | error | yes | both | on |
@@ -123,7 +124,7 @@ Online rules (`known-vulnerable-actions`, `impostor-commit`, `ref-confusion`, `s
 
 ### Security
 
-`template-injection`, `credentials`, `secrets-whole-context-access`, `run-secrets-context-direct-use`, `run-env-context-direct-use`, `run-inputs-context-direct-use`, `unredacted-secrets`, `secrets-outside-env`, `insecure-commands`, `cache-poisoning-trigger`, `self-hosted-runner-trigger`, `dangerous-triggers`, `known-vulnerable-actions`, `impostor-commit`, `ref-confusion`
+`template-injection`, `credentials`, `secrets-whole-context-access`, `run-secrets-context-direct-use`, `run-env-context-direct-use`, `run-inputs-context-direct-use`, `unredacted-secrets`, `secrets-outside-env`, `insecure-commands`, `cache-poisoning-trigger`, `self-hosted-runner-trigger`, `dangerous-triggers`, `checkout-unsafe-pr`, `known-vulnerable-actions`, `impostor-commit`, `ref-confusion`
 
 ### Pinning & Supply Chain
 
