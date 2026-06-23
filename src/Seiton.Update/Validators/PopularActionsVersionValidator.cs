@@ -9,6 +9,18 @@ namespace Seiton.Update.Validators;
 /// </summary>
 internal sealed partial class PopularActionsVersionValidator
 {
+    private readonly Func<HttpClient> createHttpClient;
+
+    public PopularActionsVersionValidator()
+        : this(CreateHttpClient)
+    {
+    }
+
+    internal PopularActionsVersionValidator(Func<HttpClient> createHttpClient)
+    {
+        this.createHttpClient = createHttpClient;
+    }
+
     /// <summary>
     /// Validates that targets.json versions are up to date.
     /// Returns any stale entries.
@@ -34,8 +46,9 @@ internal sealed partial class PopularActionsVersionValidator
             return new PopularActionsVersionValidationResult();
         }
 
-        using var client = CreateHttpClient();
+        using var client = createHttpClient();
         var stale = new List<StaleActionVersion>();
+        var unresolved = new List<string>();
 
         foreach (var target in targets)
         {
@@ -57,6 +70,7 @@ internal sealed partial class PopularActionsVersionValidator
             if (latestMajor is null)
             {
                 UpdateLogger.Warn($"[validate:popular-actions:versions] could not resolve tags for {ownerRepo}");
+                unresolved.Add(actionRef);
                 continue;
             }
 
@@ -66,7 +80,7 @@ internal sealed partial class PopularActionsVersionValidator
             }
         }
 
-        return new PopularActionsVersionValidationResult { StaleVersions = stale };
+        return new PopularActionsVersionValidationResult { StaleVersions = stale, UnresolvedVersions = unresolved };
     }
 
     /// <summary>
@@ -118,8 +132,7 @@ internal sealed partial class PopularActionsVersionValidator
     }
 
     /// <summary>
-    /// Tries to parse a major version number from a tag like "v4" or "v12".
-    /// Only matches exact major version tags (no dots, no suffixes).
+    /// Tries to parse a major version number from refs like "v4", "v4.1.0", or "release/v4".
     /// </summary>
     private static bool TryParseMajor(string tag, out int major)
     {
@@ -148,7 +161,7 @@ internal sealed partial class PopularActionsVersionValidator
         return client;
     }
 
-    [GeneratedRegex(@"^v(\d+)$")]
+    [GeneratedRegex(@"(?:^|/)v(\d+)(?:$|\.)")]
     private static partial Regex MajorVersionTagRegex();
 
     private sealed class TargetsConfig
@@ -170,7 +183,8 @@ internal sealed partial class PopularActionsVersionValidator
 internal sealed class PopularActionsVersionValidationResult
 {
     public IReadOnlyList<StaleActionVersion> StaleVersions { get; init; } = [];
-    public bool HasFindings => StaleVersions.Count > 0;
+    public IReadOnlyList<string> UnresolvedVersions { get; init; } = [];
+    public bool HasFindings => StaleVersions.Count > 0 || UnresolvedVersions.Count > 0;
 }
 
 internal sealed record StaleActionVersion(string ActionRef, int CurrentMajor, int LatestMajor);
