@@ -2339,14 +2339,14 @@ jobs:
 
 Warns when `actions/checkout` sets `allow-unsafe-pr-checkout` to `true` or to an expression in workflows or composite action metadata.
 
-`allow-unsafe-pr-checkout` permits fork pull request code to be checked out in a trusted context. That pattern can lead to pwn request vulnerabilities when workflows run with base-repository credentials, secrets, caches, or runner access. The default value is safe (`false`), so missing inputs, literal `false`, and other static non-`true` values are not reported.
+`allow-unsafe-pr-checkout` is required to check out fork pull request code from workflows triggered by `pull_request_target` or `workflow_run`. These triggers run in the base repository context, with its `GITHUB_TOKEN`, secrets, default-branch cache scope, and runner access, so fetching and executing fork code there commonly leads to pwn request vulnerabilities. The default value is safe (`false`), so missing inputs, literal `false`, and other static non-`true` values are not reported.
 
-**Why:** A `true` value is an explicit opt-out from checkout's safe default and should be reviewed. Seiton reports it for every `actions/checkout` ref, regardless of workflow trigger, because the setting itself is the risk signal and workflows are often copied or later retargeted to dangerous triggers.
+**Why:** A `true` value is an explicit opt-in after reviewing those risks. Seiton reports it for every `actions/checkout` ref, regardless of the current workflow trigger, because the setting itself is the risk signal and workflows or composite actions are often reused, copied, or later retargeted to dangerous triggers.
 
 **Example trigger:**
 
 ```yaml
-on: push
+on: pull_request_target
 jobs:
   build:
     runs-on: ubuntu-24.04
@@ -2359,7 +2359,7 @@ jobs:
 **Remediation:**
 
 ```yaml
-on: push
+on: pull_request_target
 jobs:
   build:
     runs-on: ubuntu-24.04
