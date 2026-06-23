@@ -17,6 +17,15 @@ public sealed class PopularActionsGeneratedTests
     }
 
     [Test]
+    public async Task TryGet_ActionsCheckoutV7_AllowsUnsafePrCheckoutInput()
+    {
+        var found = PopularActions.TryGet("actions/checkout@v7"u8, out var spec);
+
+        await Assert.That(found).IsTrue();
+        await Assert.That(spec.IsInputAllowed("allow-unsafe-pr-checkout"u8)).IsTrue();
+    }
+
+    [Test]
     public async Task TryGet_UnknownOrLocalActionReference_ReturnsFalse()
     {
         var unknownFound = PopularActions.TryGet("octocat/unknown@v1"u8, out _);
@@ -47,7 +56,7 @@ public sealed class PopularActionsGeneratedTests
         var actions = new[]
         {
             "actions/cache@v5"u8.ToArray(),
-            "actions/checkout@v6"u8.ToArray(),
+            "actions/checkout@v7"u8.ToArray(),
             "actions/download-artifact@v8"u8.ToArray(),
             "actions/setup-dotnet@v5"u8.ToArray(),
             "actions/setup-go@v6"u8.ToArray(),

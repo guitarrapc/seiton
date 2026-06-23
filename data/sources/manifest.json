@@ -75,7 +75,7 @@
       "dataset": "popular-actions",
       "sourceUrls": [
         "https://raw.githubusercontent.com/actions/cache/v5/action.yml",
-        "https://raw.githubusercontent.com/actions/checkout/v6/action.yml",
+        "https://raw.githubusercontent.com/actions/checkout/v7/action.yml",
         "https://raw.githubusercontent.com/actions/download-artifact/v8/action.yml",
         "https://raw.githubusercontent.com/actions/setup-dotnet/v5/action.yml",
         "https://raw.githubusercontent.com/actions/setup-go/v6/action.yml",
@@ -88,10 +88,10 @@
         "https://raw.githubusercontent.com/reviewdog/action-actionlint/v1/action.yml",
         "https://raw.githubusercontent.com/rhysd/action-setup-vim/v1/action.yml"
       ],
-      "fetchedAtUtc": "2026-06-23T02:56:38.0417384\u002B00:00",
+      "fetchedAtUtc": "2026-06-23T03:04:14.7893354\u002B00:00",
       "rawFileHashes": {
         "actions_cache.action.yml": "sha256:c04edf35104c16c8944076df01561748bac9cd10941417e467a236e508e52dda",
-        "actions_checkout.action.yml": "sha256:8295fcc7299d02005f7c3a7f8a6b59a0c4e0577697b471c0e90aa5d4c6212130",
+        "actions_checkout.action.yml": "sha256:fc3f945029a3905c34bb8d52a6d2faf4a2bdde2ce7baa57ae648154b0b6f05b5",
         "actions_download-artifact.action.yml": "sha256:e98559b7a31ba31be4709f20d22102dc2737fa630f69a339eb89981151e505fe",
         "actions_setup-dotnet.action.yml": "sha256:17151fbd59c8fec8d7b19947a232a428a9b0a21030fe69ece21d24312ecb5fa5",
         "actions_setup-go.action.yml": "sha256:cbfae748992b96b9a1bfa3f1679d17c898c78375aad8a0d0184820683c82c482",
