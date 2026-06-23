@@ -161,7 +161,7 @@ checksums-sha256.txt
 - [`.github/workflows/release.yaml`](../../.github/workflows/release.yaml) の **`docker` ジョブ**（`needs: validate, publish`）:
   - `seiton-linux-{amd64,arm64}.tar.gz` を展開して build context を組み立て
   - `docker/setup-qemu-action`, `docker/setup-buildx-action`, `docker/login-action`（GHCR）, `docker/build-push-action`
-  - タグ: `:latest`, `:<Version>`, `:<tag>`（例 `v1.0.0`）
+  - タグ: `:latest`, `:<Version>`, `:<tag>`（例 `v1.1.0`）
   - ジョブ権限: `packages: write`
 
 **完了条件**: `docker pull ghcr.io/<owner>/<repo>:latest` → `docker run --rm -v "$PWD:/repo:ro" ... /repo` で動作する（`<owner>/<repo>` は小文字の GitHub リポジトリパス）。
@@ -194,7 +194,7 @@ checksums-sha256.txt
 
 同一リポジトリに `action.yml` を置く案もあるが、以下の理由から別リポとする:
 
-- **タグ衝突の回避**: CLI は固定 semver タグ (`v1.0.0`) でリリースするが、Action の慣例は floating major タグ (`v1`) を最新 `v1.x.x` に追従させる。同一リポでは両タグ体系が干渉しリリースフローが複雑化する。
+- **タグ衝突の回避**: CLI は固定 semver タグ (`v1.1.0`) でリリースするが、Action の慣例は floating major タグ (`v1`) を最新 `v1.x.x` に追従させる。同一リポでは両タグ体系が干渉しリリースフローが複雑化する。
 - **チェックアウトの軽量化**: `uses:` で参照するとリポジトリ全体がチェックアウトされる。CLI ソースコードを含むリポは不必要に大きい。
 - **seiton 自身との混乱回避**: seiton は `action.yml` を lint するツールなので、ルートに実際の `action.yml` があると開発時に紛らわしい。
 - **業界標準**: ツール系 Action の一般的なパターン（`reviewdog/action-*` 等）と合致する。
@@ -211,7 +211,7 @@ checksums-sha256.txt
 - 出力:
   - `seiton-version`: インストールされたバージョン。
   - `seiton-path`: バイナリを含む `PATH` 追加ディレクトリ。
-- タグ運用: リリース時に `v1.0.0` タグを打ち、`v1` floating tag を追従させる。
+- タグ運用: リリース時に `v1.1.0` タグを打ち、`v1` floating tag を追従させる。
 
 #### 8-2. リリース連動
 
