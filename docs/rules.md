@@ -2339,7 +2339,7 @@ jobs:
 
 Warns when `actions/checkout` sets `allow-unsafe-pr-checkout` to `true` or to an expression in workflows or composite action metadata.
 
-`allow-unsafe-pr-checkout` permits fork pull request code to be checked out in a trusted context. That pattern can lead to pwn request vulnerabilities when workflows run with base-repository credentials, secrets, caches, or runner access. The default value is safe (`false`), so missing inputs and literal `false` values are not reported.
+`allow-unsafe-pr-checkout` permits fork pull request code to be checked out in a trusted context. That pattern can lead to pwn request vulnerabilities when workflows run with base-repository credentials, secrets, caches, or runner access. The default value is safe (`false`), so missing inputs, literal `false`, and other static non-`true` values are not reported.
 
 **Why:** A `true` value is an explicit opt-out from checkout's safe default and should be reviewed. Seiton reports it for every `actions/checkout` ref, regardless of workflow trigger, because the setting itself is the risk signal and workflows are often copied or later retargeted to dangerous triggers.
 
