@@ -5,7 +5,7 @@ using Seiton.Core.Parsing.Ast;
 
 namespace Seiton.Core.Linting.Rules;
 
-/// <summary>Flags <c>actions/checkout</c> usage with <c>allow-unsafe-pr-checkout: true</c>.</summary>
+/// <summary>Flags <c>actions/checkout</c> usage with unsafe PR checkout enabled or expression-driven.</summary>
 public sealed class CheckoutUnsafePrRule() : RuleBase(RuleId.CheckoutUnsafePr)
 {
     private const string InputName = "allow-unsafe-pr-checkout";
@@ -53,7 +53,7 @@ public sealed class CheckoutUnsafePrRule() : RuleBase(RuleId.CheckoutUnsafePr)
 
     private static string BuildMessage(string actionRef)
     {
-        return $"action '{actionRef}' should not set with.allow-unsafe-pr-checkout to true; this allows fork pull request code to be checked out in a trusted context and can lead to pwn request vulnerabilities";
+        return $"action '{actionRef}' should not set with.allow-unsafe-pr-checkout to true or to an expression; this can allow fork pull request code to be checked out in a trusted context and can lead to pwn request vulnerabilities";
     }
 
     private string GetCachedMessage(Utf8Slice usesSlice)

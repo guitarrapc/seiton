@@ -106,7 +106,7 @@ public sealed partial class RuleInterfaceTests
                           with:
                               allow-unsafe-pr-checkout: true
             """,
-            ["should not set with.allow-unsafe-pr-checkout to true", "fork pull request code", "trusted context", "pwn request vulnerabilities"]),
+            ["should not set with.allow-unsafe-pr-checkout to true or to an expression", "fork pull request code", "trusted context", "pwn request vulnerabilities"]),
             new RuleCase(
             "ng-uppercase-true",
             """
@@ -119,7 +119,7 @@ public sealed partial class RuleInterfaceTests
                           with:
                               allow-unsafe-pr-checkout: TRUE
             """,
-            ["should not set with.allow-unsafe-pr-checkout to true"]),
+            ["should not set with.allow-unsafe-pr-checkout to true or to an expression"]),
             new RuleCase(
             "ng-quoted-true-old-version",
             """
@@ -132,7 +132,7 @@ public sealed partial class RuleInterfaceTests
                           with:
                               allow-unsafe-pr-checkout: "true"
             """,
-            ["should not set with.allow-unsafe-pr-checkout to true"]),
+            ["should not set with.allow-unsafe-pr-checkout to true or to an expression"]),
             new RuleCase(
             "ng-expression",
             """
@@ -145,7 +145,7 @@ public sealed partial class RuleInterfaceTests
                           with:
                               allow-unsafe-pr-checkout: ${{ inputs.allow_unsafe_pr_checkout }}
             """,
-            ["should not set with.allow-unsafe-pr-checkout to true"]),
+            ["should not set with.allow-unsafe-pr-checkout to true or to an expression"]),
         };
 
         await AssertRuleCases(new CheckoutUnsafePrRule(), "checkout-unsafe-pr", cases);
@@ -298,7 +298,7 @@ public sealed partial class RuleInterfaceTests
         await Assert.That(result.HasFatalError).IsFalse();
         var diagnostics = result.Diagnostics.Where(d => d.RuleId == "checkout-unsafe-pr").ToArray();
         await Assert.That(diagnostics.Length).IsEqualTo(2);
-        await Assert.That(diagnostics[0].Message).Contains("should not set with.allow-unsafe-pr-checkout to true");
+        await Assert.That(diagnostics[0].Message).Contains("should not set with.allow-unsafe-pr-checkout to true or to an expression");
     }
 
     private readonly record struct FixCase(string Name, string Path, string Yaml, string ExpectedReplacement);
