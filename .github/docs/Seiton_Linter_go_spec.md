@@ -262,6 +262,7 @@ Go runtime behavior must align with `Seiton_Linter_spec.md` §4.4 for the defaul
 | `run-inputs-context-direct-use` | — |
 | `secrets-whole-context-access` | — |
 | `checkout-persist-credentials` | — |
+| `checkout-unsafe-pr` | — |
 | `artipacked` | Step-order scan within job. Tracks unsafe legacy/v6+ checkout state and re-evaluates exclusion lines. |
 | `workflow-secrets` | — |
 | `job-secrets` | — |

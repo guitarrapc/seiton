@@ -78,6 +78,7 @@ internal static class RuleCatalog
         (RuleId.UnsoundContains, 58, false, static () => new UnsoundContainsRule()),
         (RuleId.BotConditions, 59, false, static () => new BotConditionsRule()),
         (RuleId.Artipacked, 60, false, static () => new ArtipackedRule()),
+        (RuleId.CheckoutUnsafePr, 61, false, static () => new CheckoutUnsafePrRule()),
     ];
 
     // Online rules: opt-in only (disabled by default), participate in WorkflowVisitor
@@ -279,6 +280,7 @@ internal static class RuleCatalog
         RuleId.RunInputsContextDirectUse => "error",
         RuleId.SecretsWholeContextAccess => "error",
         RuleId.CheckoutPersistCredentials => "warning",
+        RuleId.CheckoutUnsafePr => "warning",
         RuleId.DenyReadAll => "error",
         RuleId.DenyInheritSecrets => "error",
         RuleId.JobTimeoutMinutesRequired => "error",
@@ -325,6 +327,7 @@ internal static class RuleCatalog
         RuleId.UnpinnedUses => true,
         RuleId.UnpinnedImage => true,
         RuleId.CheckoutPersistCredentials => true,
+        RuleId.CheckoutUnsafePr => true,
         RuleId.DenyWriteAll => true,
         RuleId.DenyReadAll => true,
         RuleId.IdNaming => true,

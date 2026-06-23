@@ -27,13 +27,13 @@
 
 補足:
 - Seiton の Lint/Remediation は GitHub Actions 中心に強い。
-- ルール総数は 61（default local 57 + online audit 4、`RuleCatalog` 基準）。`concurrency-limits` のみ default local 内で opt-in。
+- ルール総数は 62（default local 58 + online audit 4、`RuleCatalog` 基準）。`concurrency-limits` のみ default local 内で opt-in。
 - ghalint 全 13 ポリシーを完全カバー（✅ 昇格）。
 - Dockerfile/compose/任意YAML全般まで広げると、dockerfile-pin/frizbee に対して現状は部分的。
 
 ### 2.1 現在の実装済みルール一覧（最新）
 
-default local rules（57）:
+default local rules（58）:
 
 - `job-structure`
 - `reusable-workflow`
@@ -60,6 +60,7 @@ default local rules（57）:
 - `run-inputs-context-direct-use`
 - `secrets-whole-context-access`
 - `checkout-persist-credentials`
+- `checkout-unsafe-pr`
 - `deny-read-all`
 - `deny-inherit-secrets`
 - `job-timeout-minutes-required`
@@ -104,7 +105,7 @@ online audit rules（4）:
 
 ## 3. 機能カテゴリ別判定（採用可否）
 
-実装済み（61 rules: default local 57 + online audit 4）
+実装済み（62 rules: default local 58 + online audit 4）
 
 | 機能カテゴリ | actionlint | ghalint | zizmor | pinact | dockerfile-pin | frizbee | Seiton現状 | 判定 | 採用優先度 |
 |---|---|---|---|---|---|---|---|---|---|

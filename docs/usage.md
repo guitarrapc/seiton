@@ -210,7 +210,7 @@ concurrency-limits                       no        local    warning    no    wor
 known-vulnerable-actions                 no        online   error      no    workflow   opt-in (not configured)
 ...redacted for brevity...
 
-61 rules total (56 enabled, 5 disabled)
+62 rules total (57 enabled, 5 disabled)
 
 To enable an opt-in rule, add to .github/seiton.yaml:
   rules:

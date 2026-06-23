@@ -35,6 +35,7 @@ internal static class RuleIdExtensions
         RuleId.RunInputsContextDirectUse => "run-inputs-context-direct-use",
         RuleId.SecretsWholeContextAccess => "secrets-whole-context-access",
         RuleId.CheckoutPersistCredentials => "checkout-persist-credentials",
+        RuleId.CheckoutUnsafePr => "checkout-unsafe-pr",
         RuleId.DenyReadAll => "deny-read-all",
         RuleId.DenyInheritSecrets => "deny-inherit-secrets",
         RuleId.JobTimeoutMinutesRequired => "job-timeout-minutes-required",

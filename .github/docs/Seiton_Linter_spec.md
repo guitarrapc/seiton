@@ -196,6 +196,7 @@ Column definitions:
 | `run-inputs-context-direct-use` | ✓ | — | Error when `run:` directly references `${{ inputs.* }}` or `${{ github.event.inputs.* }}`; must map via `env` (except no-expand contexts such as single-quoted shell strings and single-quoted heredocs unless strict mode is enabled). |
 | `secrets-whole-context-access` | ✓ | — | Error when an expression references the entire `secrets` context as an object rather than a specific key. |
 | `checkout-persist-credentials` | ✓ | — | Warn when `actions/checkout` does not set `persist-credentials: false`. Legacy stores credentials in `.git/config`; v6+ in `$RUNNER_TEMP`. |
+| `checkout-unsafe-pr` | ✓ | — | Warn when `actions/checkout` sets `allow-unsafe-pr-checkout` to `true` or to an expression in workflow steps or action-metadata composite steps. Missing, literal `false`, and other static non-`true` values are not reported. Literal `true` values are auto-fixable to `false`. |
 | `artipacked` | ✓ | — | Detect credential leakage when checkout (without `persist-credentials: false`) is followed by upload-artifact with a dangerous path that can expose credentials. Covers root-like, parent-directory, workspace-expression, and `_temp` glob paths. Error for non-v6+ checkout; warning for v6+ parent-directory uploads reaching `$RUNNER_TEMP`. Legacy `.git` exclusions must exclude every reachable `.git/config`; v6+ suppression requires a recursive runner-temp subtree exclusion rather than a bare or shallow `_temp` exclusion. Independent of `checkout-persist-credentials`. |
 | `known-vulnerable-actions` | ✗ | `online` | Error when `uses:` resolves to known vulnerable action versions. |
 | `impostor-commit` | ✗ | `online` | Error when a SHA-pinned `uses:` points to a commit not directly targeted by any branch HEAD or tag (fork-origin impostor detection). |
@@ -423,6 +424,7 @@ The following table defines the normative default severity for each rule. Implem
 | `run-inputs-context-direct-use` | error | |
 | `secrets-whole-context-access` | error | |
 | `checkout-persist-credentials` | warning | |
+| `checkout-unsafe-pr` | warning | |
 | `artipacked` | mixed | error (legacy checkout credentials exposed via hidden files), warning (v6+ $RUNNER_TEMP risk only). Unknown checkout refs (for example SHA pins, branch refs, or arbitrary non-semver tags) conservatively assume both risks; unknown upload-artifact refs conservatively assume hidden-file behavior is not statically known. |
 | `known-vulnerable-actions` | error | online |
 | `impostor-commit` | error | online |
@@ -1139,6 +1141,7 @@ The following table classifies each default rule by fix feasibility.
 | `run-inputs-context-direct-use` | △ Partial | Replace simple `${{ inputs.KEY }}` / `${{ github.event.inputs.KEY }}` (and bracket forms) in `run:` by reusing an existing unique `env` mapping when present; otherwise insert a new step-local `env:` entry and rewrite to the generated shell variable. Compound expressions (single `${{ ... }}` block referencing inputs, e.g. `${{ inputs.tag \|\| 'v1.0.0' }}`) are fixed by moving the entire expression to `env:` and rewriting to the shell variable. Diagnostics are suppressed in no-expand contexts (single-quoted shell strings and single-quoted heredocs) by default; with `strict: true`, shell single-quoted contexts are diagnosed again but remain no-fix (manual refactor required). The insertion path additionally skips flow-style `env` and empty `env: {}` but replacement-only reuse may still be offered in those cases. |
 | `secrets-whole-context-access` | ✗ Not auto-fixable | Correct remediation (refactoring to specific key access) requires user intent about which secrets are needed. |
 | `checkout-persist-credentials` | △ Partial | For deterministic cases, insert or replace `with.persist-credentials: false`. Expression-valued cases remain no-fix. Review downstream authenticated git commands such as `git push`, which may need explicit auth setup (for example `git remote set-url origin <url>` or `gh auth setup-git`). |
+| `checkout-unsafe-pr` | △ Partial | For deterministic literal `true` values, replace `with.allow-unsafe-pr-checkout` with `false`. Expression-valued cases remain no-fix because intent and runtime value are not statically known. |
 | `artipacked` | ✗ Not auto-fixable | Safe remediation depends on whether the user intends to change checkout auth behavior, artifact scope, or hidden-file upload behavior. |
 | `known-vulnerable-actions` | ✗ Not auto-fixable | Selecting a safe replacement version/commit requires advisory-aware upgrade policy and user intent. |
 | `impostor-commit` | ✗ Not auto-fixable | Safe replacement SHA requires trusted repository graph/advisory resolution outside deterministic local edit. |

@@ -9,9 +9,9 @@ public sealed class RuleCatalogDescriptorTests
     {
         var descriptors = RuleCatalog.GetAllRuleDescriptors();
 
-        // Total rules: 57 default + 4 online = 61
+        // Total rules: 58 default + 4 online = 62
         // (Syntax is not in the catalog)
-        await Assert.That(descriptors.Count).IsEqualTo(61);
+        await Assert.That(descriptors.Count).IsEqualTo(62);
     }
 
     [Test]
@@ -168,5 +168,18 @@ public sealed class RuleCatalogDescriptorTests
         var runnerNoLatest = descriptors.First(d => d.Id == "runner-no-latest");
 
         await Assert.That(runnerNoLatest.SupportsAutoFix).IsTrue();
+    }
+
+    [Test]
+    public async Task GetAllRuleDescriptors_CheckoutUnsafePrMetadata()
+    {
+        var descriptors = RuleCatalog.GetAllRuleDescriptors();
+        var checkoutUnsafePr = descriptors.First(d => d.Id == "checkout-unsafe-pr");
+
+        await Assert.That(checkoutUnsafePr.IsOptIn).IsFalse();
+        await Assert.That(checkoutUnsafePr.DefaultSeverity).IsEqualTo("warning");
+        await Assert.That(checkoutUnsafePr.SupportsWorkflow).IsTrue();
+        await Assert.That(checkoutUnsafePr.SupportsAction).IsTrue();
+        await Assert.That(checkoutUnsafePr.SupportsAutoFix).IsTrue();
     }
 }

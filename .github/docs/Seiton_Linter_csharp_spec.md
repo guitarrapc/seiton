@@ -303,6 +303,7 @@ The current default rule scope in C# is:
 | `run-inputs-context-direct-use` | Suppresses diagnostics in no-expand contexts by default (single-quoted shell strings and single-quoted heredocs). `rules.run-inputs-context-direct-use.strict: true` re-enables shell single-quoted diagnostics without auto-fix; no-expand heredoc suppression remains. Shared diagnostic/fix matrix: `Seiton_Linter_spec.md` §5.8.13. |
 | `secrets-whole-context-access` | Checked in `run:`, `env:`, and `with:` sinks at step and job level. |
 | `checkout-persist-credentials` | — |
+| `checkout-unsafe-pr` | Implemented as a `VisitStep` checkout input check for workflow and action-metadata composite steps. Literal `true` values are fixable to `false`; expression values emit diagnostics without fixes. |
 | `artipacked` | Implemented as `VisitJobPost` step-order scan. Tracks unsafe legacy/v6+ checkout state and re-evaluates exclusion lines against tracked legacy checkouts using job-local temporary storage. V6+ runner-temp warnings are suppressed only by recursive subtree exclusions (for example `!../../_temp/**` or workspace-prefixed equivalents), not by bare or shallow `_temp` exclusions. Deferred scope does not implement checkout `with.path` correlation. |
 | `workflow-secrets` | — |
 | `job-secrets` | — |
