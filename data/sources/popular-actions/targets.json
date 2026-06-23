@@ -9,7 +9,7 @@
       "maxDeprecatedMajorVersion": 3
     },
     {
-      "actionRef": "actions/checkout@v6",
+      "actionRef": "actions/checkout@v7",
       "uses": "actions/checkout",
       "rawFileName": "actions_checkout.action.yml",
       "maxDeprecatedMajorVersion": 3

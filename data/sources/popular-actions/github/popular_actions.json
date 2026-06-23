@@ -52,6 +52,10 @@
       "uses": "actions/checkout",
       "inputs": [
         {
+          "name": "allow-unsafe-pr-checkout",
+          "required": false
+        },
+        {
           "name": "clean",
           "required": false
         },

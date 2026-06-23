@@ -23,8 +23,6 @@ You can choose from several specifications for larger runners.
 
 > \[!NOTE] The 4-vCPU Windows runner only works with the Windows Server 2025 or the Base Windows 11 Desktop image.
 
-> \[!NOTE] The 5-vCPU macOS runner is in public preview and subject to change.
-
 ### Specifications for GPU larger runners
 
 | CPU | GPU | GPU card | Memory (RAM) | GPU memory (VRAM) | Storage (SSD) | Operating system (OS) |

@@ -47,7 +47,7 @@ public sealed class PopularActionsGeneratedTests
         var actions = new[]
         {
             "actions/cache@v5"u8.ToArray(),
-            "actions/checkout@v6"u8.ToArray(),
+            "actions/checkout@v7"u8.ToArray(),
             "actions/download-artifact@v8"u8.ToArray(),
             "actions/setup-dotnet@v5"u8.ToArray(),
             "actions/setup-go@v6"u8.ToArray(),

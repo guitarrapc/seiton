@@ -86,7 +86,12 @@ internal static class PopularActionsCommands
                 UpdateLogger.Warn($"[validate:popular-actions:versions] {stale.ActionRef} is stale (current: v{stale.CurrentMajor}, latest: v{stale.LatestMajor})");
             }
 
-            UpdateLogger.Error($"[validate:popular-actions:versions] {result.StaleVersions.Count} action(s) have newer major versions available.");
+            foreach (var unresolved in result.UnresolvedVersions)
+            {
+                UpdateLogger.Warn($"[validate:popular-actions:versions] {unresolved} could not be resolved against GitHub tags");
+            }
+
+            UpdateLogger.Error($"[validate:popular-actions:versions] {result.StaleVersions.Count} action(s) have newer major versions available; {result.UnresolvedVersions.Count} action(s) could not be resolved.");
             return 4;
         }
 

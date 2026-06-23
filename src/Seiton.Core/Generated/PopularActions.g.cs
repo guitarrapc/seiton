@@ -47,7 +47,8 @@ internal static class PopularActions
                     || EqualsAsciiIgnoreCase(inputNameUtf8, "save-always"u8)
                     || EqualsAsciiIgnoreCase(inputNameUtf8, "upload-chunk-size"u8),
                 ActionId.ActionsCheckout =>
-                    EqualsAsciiIgnoreCase(inputNameUtf8, "clean"u8)
+                    EqualsAsciiIgnoreCase(inputNameUtf8, "allow-unsafe-pr-checkout"u8)
+                    || EqualsAsciiIgnoreCase(inputNameUtf8, "clean"u8)
                     || EqualsAsciiIgnoreCase(inputNameUtf8, "fetch-depth"u8)
                     || EqualsAsciiIgnoreCase(inputNameUtf8, "fetch-tags"u8)
                     || EqualsAsciiIgnoreCase(inputNameUtf8, "filter"u8)
@@ -273,7 +274,7 @@ internal static class PopularActions
             return Id switch
             {
                 ActionId.ActionsCache => ["enableCrossOsArchive", "fail-on-cache-miss", "key", "lookup-only", "path", "restore-keys", "save-always", "upload-chunk-size"],
-                ActionId.ActionsCheckout => ["clean", "fetch-depth", "fetch-tags", "filter", "github-server-url", "lfs", "path", "persist-credentials", "ref", "repository", "set-safe-directory", "show-progress", "sparse-checkout", "sparse-checkout-cone-mode", "ssh-key", "ssh-known-hosts", "ssh-strict", "ssh-user", "submodules", "token"],
+                ActionId.ActionsCheckout => ["allow-unsafe-pr-checkout", "clean", "fetch-depth", "fetch-tags", "filter", "github-server-url", "lfs", "path", "persist-credentials", "ref", "repository", "set-safe-directory", "show-progress", "sparse-checkout", "sparse-checkout-cone-mode", "ssh-key", "ssh-known-hosts", "ssh-strict", "ssh-user", "submodules", "token"],
                 ActionId.ActionsDownloadArtifact => ["artifact-ids", "digest-mismatch", "github-token", "merge-multiple", "name", "path", "pattern", "repository", "run-id", "skip-decompress"],
                 ActionId.ActionsSetupDotnet => ["architecture", "cache", "cache-dependency-path", "config-file", "dotnet-channel", "dotnet-quality", "dotnet-version", "global-json-file", "owner", "source-url", "workloads"],
                 ActionId.ActionsSetupGo => ["architecture", "cache", "cache-dependency-path", "check-latest", "go-download-base-url", "go-version", "go-version-file", "token"],
