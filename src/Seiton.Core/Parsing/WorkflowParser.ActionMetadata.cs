@@ -711,7 +711,7 @@ public static partial class WorkflowParser
                             }
                             else
                             {
-                                steps = ParseSteps(ref reader, arena, ref diagnostics, source, "steps");
+                                steps = ParseSteps(ref reader, arena, ref diagnostics, source, "steps", StepParseContext.CompositeActionStep);
                             }
                         }
 

@@ -952,11 +952,11 @@ Implementation note (2026-04-14):
 ### 3.7 Step Parse (Spec §3.11–§3.12)
 
 ```csharp
-private ArenaList<Step> ParseSteps<TReader>(..., string stepPathPrefix)   // Spec §3.11
-private Step? ParseStep<TReader>(..., string stepPathPrefix, int stepIndex)  // Spec §3.12
+private ArenaList<Step> ParseSteps<TReader>(..., string stepPathPrefix, StepParseContext context)   // Spec §3.11
+private Step? ParseStep<TReader>(..., string stepPathPrefix, int stepIndex, StepParseContext context)  // Spec §3.12
 ```
 
-`ParseStep` is a **single-pass** mapping walk: `Utf8MappingDispatch` + `StepSchema` select the primary form (`run` / `uses` / `wait` / `wait-all` / `cancel` / `parallel`), optional `background` on run/uses, and per-form value parsing. `parallel` recurses via `ParseSteps` with nested path prefix (`jobs.'id'.steps[n].parallel[m]`). `WorkflowVisitor` recurses into `ExecParallel.Steps`.
+`ParseStep` is a **single-pass** mapping walk: `Utf8MappingDispatch` + `StepSchema` select the primary form (`run` / `uses` / `wait` / `wait-all` / `cancel` / `parallel`), optional `background` on run/uses, and per-form value parsing. **`StepParseContext`** (`WorkflowJobStep` | `ParallelChild` | `CompositeActionStep`) enforces GitHub runtime constraints (parallel children and composite steps: `run`/`uses` only; no parallel controls in composite). `parallel` recurses via `ParseSteps(..., ParallelChild)` with nested path prefix (`jobs.'id'.steps[n].parallel[m]`). `WorkflowVisitor` recurses into `ExecParallel.Steps`.
 
 ### 3.8 Strategy / Matrix Parse (Spec §3.15)
 

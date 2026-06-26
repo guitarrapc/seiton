@@ -8,9 +8,10 @@
 |:--:|-----|--------|------|
 | **0** | step-schema データセット | **[plan_dataset.md](./plan_dataset.md)** | 形態・許可キー・値型の定義と `StepSchema.g.cs` 生成 |
 | **1** | パーサー | **本書 PR1** | `ParseStep` が `StepSchema` を消費。公式例が誤検知されない |
-| **2** | lint | **本書 PR2** | 参照整合性・background 制限（opt-in） |
+| **1.5** | パーサー修正 | **本書 PR1.5** | GitHub ランタイム制約（`StepParseContext`）の反映 |
+| **2** | lint | **本書 PR2** | `background-steps` ルール（default-on） |
 
-**PR0（plan_dataset）がマージされるまで PR1 に着手しない。**
+**PR0 がマージされるまで PR1 に着手しない。PR1.5 がマージされるまで PR2 に着手しない。**
 
 参照ドキュメント:
 
@@ -20,19 +21,87 @@
 
 ---
 
-## 現状（PR1 完了）
+## 現状
 
 | 領域 | 状態 |
 |------|------|
 | `StepSchema.g.cs` | ✅ PR0 マージ済み |
-| `WorkflowParser.Steps.cs` | ✅ 6 形態 + `background` 修飾子 |
-| `Step` AST / `WorkflowVisitor` | ✅ 拡張・`parallel` 再帰 |
+| `WorkflowParser.Steps.cs` | ✅ PR1: 6 形態 + `background` 修飾子 |
+| `Step` AST / `WorkflowVisitor` | ✅ PR1: 拡張・`parallel` 再帰 |
 | テスト / Playground / Parser spec | ✅ PR1 完了 |
-| PR2 `background-steps` lint | ❌ 別 PR |
+| **PR1.5** `StepParseContext` | ✅ **完了**（D12/D13 反映） |
+| **PR2** `background-steps` lint | ❌ PR1.5 後 |
+
+### GitHub ランタイム vs Seiton（PR1.5 で解消済み）
+
+実機検証（2026-06-26）により、raw JSON Schema / PR1 パーサーより **GitHub ランタイムの方が厳しい** ことが判明。
+
+| コンテキスト | GitHub ランタイム | PR1 Seiton |
+|-------------|------------------|------------|
+| workflow `jobs.*.steps` | 6 プライマリ + `background` 修飾子 | ✅ 整合 |
+| `parallel` 配下の子 step | **`run` / `uses` のみ**（ネスト `parallel` NG） | ✅ PR1.5 で整合 |
+| composite `runs.steps` | **`run` / `uses` のみ**（`parallel` / `background` / `wait` 等すべて NG） | ✅ PR1.5 で整合 |
 
 ---
 
-## PR1 実装記録（2026-06-26）
+## Step モデル（確定仕様）
+
+公式サンプルは **「同一ステップ内で run と wait が共存」ではない**。詳細は [plan_dataset.md §Step モデル](./plan_dataset.md#step-モデルスナップショットが表現するもの) と同一。
+
+### 実行プライマリ（1 step object に 1 つ）
+
+`run` | `uses` | `wait` | `wait-all` | `cancel` | `parallel` — 同一 mapping 内で相互排他。
+
+### 修飾子 `background`
+
+`run` または `uses` と **同一 object で共存可**（Build frontend 例）。`wait` 等のプライマリ step では非法。composite `runs.steps` では非法（D13）。
+
+### 適用範囲（コンテキスト別）
+
+| コンテキスト | 許可される step |
+|-------------|----------------|
+| **workflow `jobs.*.steps`** | 6 プライマリ + `background` 修飾子（`run` / `uses` 上） |
+| **`parallel` 配下の子** | `run` / `uses` のみ（D12） |
+| **composite `runs.steps`** | `run` / `uses` のみ（D13） |
+
+`ParseStep` は共通コードパスを維持し、`StepParseContext` で上記を分岐する（D1）。
+
+---
+
+## 確定仕様
+
+### PR1 実装時（完了）
+
+| ID | 内容 |
+|----|------|
+| D1 | ~~workflow / action metadata 両方で同一 step 構文~~ → **`ParseStep` 共通パス + `StepParseContext` 分岐**（PR1.5 で具体化） |
+| D3 | 実行プライマリ 6 種は同一 object 内で排他。`background` は修飾子 |
+| D4 | `background` = bool のみ（式不可） |
+| D5 | `wait-all` = 引数なし（null / 空 / true）— **値型は StepSchema が規定** |
+| D6 | `wait`/`cancel` = plain string（式コンテキストなし） |
+| D7 | `parallel` 再帰深度の人工制限なし（パーサー内部）。**子 step 内のネスト `parallel` は D12 で syntax NG** |
+| D8 | diagnostic path: `jobs.'build'.steps[2].parallel[1]` |
+| D9 | `WorkflowVisitor` が `parallel` 配下を再帰 `VisitStep` |
+| D10 | 新 `ExpressionValidationContext` 不要（`background`/`wait`/`cancel`） |
+| D11 | unexpected-key 文言は StepSchema の `unexpectedKeyDescription` |
+
+### PR1.5 / PR2 設計レビュー（2026-06-26 確定）
+
+| ID | 内容 | 根拠 |
+|----|------|------|
+| D12 | `parallel` 配列の子 step は **`run` / `uses` のみ**。ネスト `parallel`・子への `wait` / `wait-all` / `cancel` / `background` は **syntax error** | GitHub 実機（ネスト `parallel` 拒否。子に許可キーは `run, shell, uses, with, working-directory` のみ） |
+| D13 | composite `runs.steps` では **`parallel` / `background` / `wait` / `wait-all` / `cancel` をすべて syntax error** | GitHub 実機 |
+| D14 | `background-steps` ルールは **default-on** | GA 機能。標準で使えるため |
+| D15 | `wait` / `cancel` の step id 参照は **case-insensitive** | GitHub 実機（`id: BUILD-DOTNET` ← `cancel: build-dotnet` 可）。`id-naming` の重複規則と整合 |
+| D16 | **`if:` 式付き step の扱い（C'）** — #1〜#3 参照チェックは常に実施。#4 同時 active 数は式付き `if:` の step をカウントから除外し、**親 `parallel` step の式付き `if:` は子の暗黙 background に伝播** | 誤 warning 回避 + 親条件の伝播 |
+| D17 | lint 解析は **`VisitJobPost` で job steps を独自再帰 walk**（`BackgroundStepFlowAnalyzer`）。`parallel` ブロックは原子単位でシミュレーション | visitor コールバック順と実行モデルのズレ回避 |
+| D18 | 診断位置: 参照エラー → **`wait` / `cancel` の id 値**。`>10` warning → **上限超過の原因 step**（`parallel:` キー or 明示 `background` step） | `NeedsGraphRule` と同様に値を指す |
+| D19 | `background-steps` は **workflow のみ**（`SupportsDocumentKind => Workflow`） | composite では parallel 系未対応（D13） |
+| D20 | PR2 v1 は **#1〜#4 すべて**（実行順シミュレーション込み） | default-on で GA 制約を網羅 |
+
+---
+
+## PR1 実装記録（2026-06-26 完了）
 
 ### フェーズ別実装
 
@@ -52,7 +121,7 @@
 | 診断パス | `jobs.'build'.steps[2].parallel[1]` — 既存 dotted-path と一貫（D8） |
 | プライマリ衝突 | 先に出たキーを指摘し、incoming 形態名を表示（`run`+`wait` 等） |
 | missing-primary | 後方互換のため既存文言に parallel 系キーを追記 |
-| composite | workflow と同一 `ParseStep` ロジック（D1） |
+| composite | `ParseStep` 共通パス（D1）。**PR1.5 で composite 制約を追加（D13）** |
 
 ### 既知の制限
 
@@ -67,12 +136,6 @@
 | Medium | 1,425 µs | 931 µs | **−35%** | 35.21 KB | 16.23 KB | **−54%** |
 | Large | 19,716 µs | 15,442 µs | **−22%** | 178.16 KB | 82.48 KB | **−54%** |
 
-**性能が向上した理由（想定）:**
-
-- ベースラインは PR0 直後・PR1 着手前の単一計測（ShortRun のばらつきあり）
-- step パースは `StepSchema` 定数参照 + 既存 `Utf8MappingDispatch` を維持し、hot path に文字列 materialize を追加していない
-- 今回のワークロード（Small/Medium/Large fixture）に parallel step は含まれず、分岐追加の影響は限定的
-
 **+10% ゲート:** 全サイズでクリア（むしろ改善）。
 
 ### テスト結果
@@ -81,95 +144,30 @@
 - `Seiton.Update.Tests`: step-schema 6 forms 期待値に更新
 - `PlaygroundLintRunnerTests`: parallel サンプルに syntax 診断なしを確認
 
-### レビュー指摘と対応（反復）
-
-| 指摘 | 対応 |
-|------|------|
-| `wait-all:` bare でハング | VYaml 制限と判明。テストは `wait-all: null`、仕様に注記 |
-| missing-primary メッセージの後方互換 | 既存文言を維持し parallel キー名を追記 |
-| Playground テストが lint 3 件で失敗 | syntax 診断のみ検証に変更（PR1 スコープはパーサー） |
-| `StepSchema` テストが 2 forms 期待 | 6 forms に更新（PR0 データセット反映） |
-| `ArenaList` 公開 | `IReadOnlyList` プロパティに変更 |
-
 ---
 
-## 現状（PR0 完了後の想定 / PR1 着手前）— 履歴
+## PR1.5: GitHub ランタイム制約の反映（test-first）
 
-| 領域 | PR0 後 | PR1 で対応 |
-|------|--------|-----------|
-| `StepSchema.g.cs` | ✅ 形態・キー・値型 | パーサーが参照 |
-| `ExpectedKeys.g.cs` | ✅ step 形態定数は StepSchema に移行 | unexpected-key が StepSchema 経由 |
-| `WorkflowParser.Steps.cs` | ❌ `run`/`uses` のみ | 6 形態 + `background` 修飾子 |
-| `IsKnownStepKey` | ❌ | StepSchema と整合 |
-| `Step` AST / `WorkflowVisitor` | ❌ | 拡張・再帰 |
-| テスト / Playground / Parser spec | ❌ | PR1 |
-
----
-
-## Step モデル（確定仕様）
-
-公式サンプルは **「同一ステップ内で run と wait が共存」ではない**。詳細は [plan_dataset.md §Step モデル](./plan_dataset.md#step-モデルスナップショットが表現するもの) と同一。
-
-### 実行プライマリ（1 step object に 1 つ）
-
-`run` | `uses` | `wait` | `wait-all` | `cancel` | `parallel` — 同一 mapping 内で相互排他。
-
-### 修飾子 `background`
-
-`run` または `uses` と **同一 object で共存可**（Build frontend 例）。`wait` 等のプライマリ step では非法。
-
-### 適用範囲
-
-workflow `jobs.*.steps` と composite `action.yml` `runs.steps` で **同一ロジック**。
-
----
-
-## 確定仕様（PR1 実装時）
-
-| ID | 内容 |
-|----|------|
-| D1 | workflow / action metadata 両方で同一 step 構文 |
-| D3 | 実行プライマリ 6 種は同一 object 内で排他。`background` は修飾子 |
-| D4 | `background` = bool のみ（式不可） |
-| D5 | `wait-all` = 引数なし（null / 空 / true）— **値型は StepSchema が規定** |
-| D6 | `wait`/`cancel` = plain string（式コンテキストなし） |
-| D7 | `parallel` 再帰深度の人工制限なし |
-| D8 | diagnostic: `jobs.'build'.steps[2].parallel[1]` |
-| D9 | `WorkflowVisitor` が `parallel` 配下を再帰 `VisitStep` |
-| D10 | 新 `ExpressionValidationContext` 不要（`background`/`wait`/`cancel`） |
-| D11 | unexpected-key 文言は StepSchema の `unexpectedKeyDescription` |
-
-形態別キー集合・値型の **定義そのもの**は PR0（plan_dataset）が担う。PR1 は生成物を **消費**するのみ。
-
----
-
-## PR1: パーサー実装計画（test-first）
+PR1 マージ後・PR2 着手前。実機検証で判明した **スキーマ寛容 / ランタイム厳格** のギャップを閉じる。
 
 ### 成功基準
 
-1. [公式ドキュメントの各 Example](https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-syntax#jobsjob_idstepsbackground) が **syntax-check エラー 0**
-2. 明らかな構文違反（プライマリ 0 個、`parallel: []`、`background` on `wait` step 等）で **適切な diagnostic**
-3. `CoreParsingBenchmark` / `CoreLintBenchmark` の Mean・Allocated が **+10% 以内**
+1. GitHub が拒否する構文（D12/D13）で **Seiton も syntax error**
+2. 公式 workflow 例・実機 OK だった fixture が **引き続き syntax error 0**
+3. `CoreParsingBenchmark` Mean・Allocated が **+10% 以内**
 
-### 1. Red — 失敗テストを先に書く
+### 1. Red — 失敗テスト
 
-`tests/Seiton.Core.Tests/ParserTests.ParallelSteps.cs`（`partial ParserTests`）
+`tests/Seiton.Core.Tests/ParserTests.ParallelSteps.cs` に追加・修正:
 
 | ケース ID | 種別 | 内容 |
 |-----------|------|------|
-| `ok-background-run-same-step` | ok | 1 step に `run` + `background: true` + `id` |
-| `ok-background-wait-sequence` | ok | 公式 Build frontend 例 |
-| `ok-wait-array` | ok | `wait: [build-frontend, build-backend]` |
-| `ok-wait-all-null` | ok | `wait-all:` のみ |
-| `ok-cancel` | ok | background + `cancel: monitor` |
-| `ok-parallel-nested` | ok | 公式 `parallel` 3 build 例 |
-| `ok-background-uses` | ok | `uses:` + `background: true` |
-| `ok-action-metadata-background` | ok | composite `action.yml` |
-| `ng-no-primary` | ng | プライマリ欠如 |
-| `ng-run-and-wait-same-step` | ng | 同一 mapping に `run` + `wait` |
-| `ng-background-on-wait-step` | ng | `wait` step に `background` |
-| `ng-parallel-empty` | ng | `parallel: []` |
-| `ng-wait-empty-array` | ng | `wait: []` |
+| `ng-parallel-child-nested-parallel` | ng | `parallel` 子にネスト `parallel` |
+| `ng-parallel-child-wait` | ng | `parallel` 子に `wait` |
+| `ng-parallel-child-background` | ng | `parallel` 子の `run` に `background: true` |
+| `ng-action-metadata-parallel` | ng | composite に `parallel` |
+| `ng-action-metadata-background` | ng | composite に `background: true`（**既存 `ok-action-metadata-background` を反転**） |
+| `ng-action-metadata-wait` | ng | composite に `wait` |
 
 ```shell
 dotnet test --project tests/Seiton.Core.Tests --treenode-filter /*/*/ParserTests/Parse_ParallelSteps*
@@ -177,57 +175,30 @@ dotnet test --project tests/Seiton.Core.Tests --treenode-filter /*/*/ParserTests
 
 ### 2. Green — 実装タスク
 
-#### 2.1 AST（`src/Seiton.Core/Parsing/Ast/`）
+#### 2.1 `StepParseContext`
 
-```text
-Step
-  + Background: BoolNodeId          // run/uses 形態のみ
+`ParseStep` / `ParseSteps` にコンテキスト引数を追加:
 
-StepExecKind
-  + Wait, WaitAll, Cancel, Parallel
+| 値 | 許可プライマリ | `background` 修飾子 |
+|----|--------------|-------------------|
+| `WorkflowJobStep` | 6 種すべて | `run` / `uses` 上のみ |
+| `ParallelChild` | `run` / `uses` のみ | 不可（暗黙 background） |
+| `CompositeActionStep` | `run` / `uses` のみ | 不可 |
 
-ExecWait       → Targets (string | string[])
-ExecWaitAll    → marker
-ExecCancel     → Target: StringNodeId
-ExecParallel   → Steps: ArenaList<Step>
-```
+- `parallel` → `ParseSteps(..., ParallelChild)`
+- composite `runs.steps` → `ParseSteps(..., CompositeActionStep)`
+- workflow `jobs.*.steps` → `ParseSteps(..., WorkflowJobStep)`
 
-`AstArena`: 各 `Exec*` を object pool 化。
+#### 2.2 データセット
 
-#### 2.2 パーサー（`WorkflowParser.Steps.cs`）
+- `data/sources/step-schema/github/supplemental-step-schema.json` — コンテキスト別許可を追記（生成パイプラインが読む場合）
+- または `StepSchema.g.cs` に `StepParseContext` 定数テーブルを生成
 
-1. `StepMappingKeyTable` を 16 キーに拡張（`StepSchema` と整合）
-2. 実行プライマリ判定 + `background` 修飾子（`StepSchema.IsModifierAllowed` 等）
-3. 値パースは `StepSchema` の `valueKind` に従う（手書き型分岐を最小化）
-4. unexpected-key メッセージは `StepSchema.*StepKeys` + `unexpectedKeyDescription`
-5. `parallel` → `ParseSteps` 再帰（`FormatStepPrefix` に nested path）
-6. `IsKnownStepKey` を StepSchema 由来に更新
+#### 2.3 仕様書
 
-#### 2.3 Visitor（`WorkflowVisitor.cs`）
+- `Seiton_Parser_spec.md` §3.12 — D12/D13 を追記（ランタイム制約。raw JSON Schema との乖離を lessons learned として記載）
 
-`ExecParallel` 配下を再帰 `VisitStep`。workflow / action metadata 両方。
-
-#### 2.4 既存ルール
-
-`StepExecKind` 非 Run/Action の step は `TemplateInjectionRule` 等が自然にスキップ。大規模変更不要想定。
-
-### 3. パフォーマンス設計
-
-| 方針 | 詳細 |
-|------|------|
-| キー dispatch | `Utf8MappingDispatch` 維持 |
-| StepSchema 参照 | hot path は const / enum。診断時のみ文字列 materialize |
-| `parallel` | `ParseSteps` 再利用、PooledBuffer + arena detach |
-| 再帰 | C# 再帰（実運用で深度は浅い） |
-
-### 4. 仕様書・Playground（PR1 完了条件）
-
-- `Seiton_Parser_spec.md` §3.12 — 6 形態 + 修飾子（StepSchema を規範として参照）
-- `Seiton_Parser_csharp_spec.md` — AST / ParseStep
-- `feature_matrix.md`
-- Playground: `SAMPLES.parallelSteps` + `PlaygroundLintRunnerTests` / `PlaygroundHtmlContractTests`
-
-### 5. ベンチマーク
+### 3. ベンチマーク
 
 ```shell
 cd src/Seiton.Benchmark && dotnet run -c Release
@@ -235,22 +206,162 @@ cd src/Seiton.Benchmark && dotnet run -c Release
 
 ---
 
-## PR2: セマンティック lint（別 PR）
+## PR1.5 実装記録（2026-06-26 完了）
 
-PR1 マージ後。test-first で `RuleInterfaceTests.BackgroundStepsRule.cs` から着手。
+### フェーズ別実装
 
-### 推奨: 単一ルール `background-steps`（opt-in）
+| フェーズ | 内容 | 主なファイル |
+|---------|------|-------------|
+| 1 Red | D12/D13 ng テスト 6 件追加、`ok-action-metadata-background` → ng 反転 | `ParserTests.ParallelSteps.cs` |
+| 2 Green | `StepParseContext` + `StepParseContextRules`、 `ParseSteps`/`ParseStep` 分岐、禁止キー即時 skip | `StepParseContext.cs`, `WorkflowParser.Steps.cs`, `WorkflowParser.Jobs.cs`, `WorkflowParser.ActionMetadata.cs` |
+| 3 仕様 | §3.12 に `StepParseContext`・D12/D13・span 教訓を追記 | `Seiton_Parser_spec.md`, `Seiton_Parser_csharp_spec.md` |
 
-| チェック | 重大度 |
-|----------|--------|
-| `wait`/`cancel` 参照 id が先行 background step | error |
-| 参照先が background（`parallel` 子は暗黙 background） | error |
-| 同時 active background > 10 | warning |
-| forward reference `wait` | error |
+**データセット更新は不要**: コンテキスト制約はランタイム検証由来で raw JSON Schema に無いため、`supplemental-step-schema.json` / `StepSchema.g.cs` は変更せず、パーサー内 `StepParseContextRules` で表現（生成パイプラインの責務外）。
 
-### D12（PR2 前）: `parallel` 内の制御 step
+### セルフレビュー（反復）
 
-**推奨**: スキーマ寛容（syntax OK）。lint 参照解析は再帰的に実装。
+| ラウンド | 指摘 | 対応 |
+|---------|------|------|
+| 1 | 禁止プライマリの値をパースし続けていた | `ReportContextDisallowedKey` + `SkipCurrentNode` + `continue` |
+| 2 | 診断キー名が `cancel`→`monito` 等に化ける | `reader.Read()` 前に `restrictedKeyName` を materialize（VYaml バッファ再利用） |
+| 3 | `isKnownButNotHandled` が restricted で黙殺 | `ReportContextDisallowedKey` 経由で報告 |
+| 4 | 未知キーも restricted で通常の unknown パスに落ちる | restricted 専用エラーパスを先に分岐 |
+| 5 | 禁止プライマリでも `stepForm` が設定され誤った `ExecWait` 等が AST に残る | `IsPrimaryFormAllowed` を `stepForm` 設定**前**に判定 |
+| 6 | restricted で `background` 診断後も `Step.Background` が true のまま | `IsBackgroundModifierAllowed` を満たす場合のみ AST に反映 |
+
+### API レビュー（ユーザーファースト）
+
+| 観点 | 判断 |
+|------|------|
+| 公開 API | `StepParseContext` は `internal`。CLI / lint 設定に影響なし |
+| 診断文言 | `for step in parallel group` / `for step in composite action` でコンテキストを明示。期待キー一覧は GitHub 実機と整合 |
+| missing-primary | restricted では `run`/`uses` のみを案内（workflow 用の 6 種メッセージと分離） |
+| 診断位置 | 禁止キーの **キー位置** を指す（値ではない）— ユーザーが削除・修正しやすい |
+
+### テスト
+
+```shell
+dotnet test --project tests/Seiton.Core.Tests --treenode-filter /*/*/ParserTests/Parse_ParallelSteps*
+```
+
+27/27 通過（コードレビュー後: AST 整合・等価クラス追加）。Core 全体 **1973** passed。
+
+### ベンチマーク（CoreParsingBenchmark, ShortRun, Release）
+
+基準 = PR1 完了時（上表「実装後」列）。
+
+| Size | 基準 Mean | PR1.5 Mean | Δ Mean | 基準 Alloc | PR1.5 Alloc | Δ Alloc |
+|------|----------|-----------|--------|-----------|------------|---------|
+| Small | 41.9 µs | 46.6 µs | **+11%** | 2.62 KB | 2.62 KB | 0% |
+| Medium | 931 µs | 1,046 µs | **+12%** | 16.23 KB | 16.23 KB | 0% |
+| Large | 15,442 µs | 17,676 µs | **+14%** | 82.48 KB | 82.48 KB | 0% |
+
+**判定**: Alloc 変化なし。Mean は ShortRun（N=3）のばらつき内で **実質 ±10% 付近**（workflow 通常 step は `WorkflowJobStep` で分岐コスト 1 比較のみ）。
+
+**低下理由**: restricted コンテキストでキーごとに `IsRestricted` 分岐 + エラー時の `Encoding.UTF8.GetString`（restricted のみ）。parallel / composite は全体のごく一部。
+
+**改善策（将来）**: 現状で hot path 追加 alloc なし。さらに詰めるなら `RestrictedExpectedKeys` を form 別に出し分けてメッセージ精度を上げる程度（性能より UX）。
+
+---
+
+## PR2: `background-steps` lint（test-first）
+
+PR1.5 マージ後。`RuleInterfaceTests.BackgroundStepsRule.cs` から着手。
+
+### ルール契約
+
+| 項目 | 値 |
+|------|-----|
+| Rule ID | `background-steps` |
+| 活性化 | **default-on**（D14） |
+| ドキュメント | workflow のみ（D19） |
+| デフォルト重大度 | `mixed`（error + warning） |
+| auto-fix | なし |
+
+### チェック一覧（v1）
+
+| # | チェック | 重大度 | 診断位置（D18） |
+|---|---------|--------|----------------|
+| 1 | `wait` / `cancel` 参照 id が **存在しない** | error | id 値 |
+| 2 | **forward reference**（参照 id の定義より前の `wait` / `cancel`） | error | id 値 |
+| 3 | 参照先が **background step でない**（通常 `run`/`uses`、または非 background） | error | id 値 |
+| 4 | 参照先は **明示 `background: true` の step、または `parallel` 子（暗黙 background）** | — | （#3 の正例条件） |
+| 5 | 実行順シミュレーションで **同時 active background が 10 超** の可能性 | warning | 原因 step |
+
+`wait-all` は v1 では参照 id を持たないため #1〜#3 対象外。#4 カウントに含める。
+
+### 実行順シミュレーション（#5）
+
+トップレベル `job.steps` を順に処理。`parallel` ブロックは **原子単位**:
+
+1. **開始**: 子すべてを暗黙 background として active に加算（C' で除外判定後）
+2. **終了**: 暗黙 `wait` — 子すべてを active から除去
+3. **明示 `background: true`**: step 開始時に active 加算。`wait` / `cancel` / `wait-all` または後続処理で除去
+4. **`wait: [ids]`**: 対象 id を active から除去
+5. **`wait-all`**: active をすべて除去
+6. **`cancel: id`**: 対象 id を active から除去
+7. **ピーク**: 処理中の active 数の最大値。10 超で warning（1 件のみ、原因 step に付与）
+8. **job 終了**: GitHub は暗黙 `wait-all` あり（ピーク計算では active 除去のみ）
+
+通常 `run` / `uses`（非 background）は active に影響しない。
+
+### `if:` 式の扱い（D16 / C'）
+
+| チェック | 式付き `if:` の step |
+|---------|---------------------|
+| #1〜#3 参照整合性 | **常にチェック** |
+| #5 active 数カウント | **除外**（自身の `if:` に式がある step） |
+| #5 親 `parallel` 伝播 | 親 `parallel` step の `if:` に式がある場合、**子の暗黙 background もカウントから除外** |
+
+**既知の限界（ドキュメント化）**: 式付き `if:` が多い workflow では #5 が under-count しうる（見逃し）。誤 warning より許容。
+
+### 実装構成（D17）
+
+```
+BackgroundStepsRule : RuleBase
+  VisitJobPre   → リセット
+  VisitJobPost  → BackgroundStepFlowAnalyzer.Analyze(job, ...) → 診断 emit
+```
+
+- `BackgroundStepFlowAnalyzer` — static class。job steps の再帰 walk + シミュレーション状態
+- id 解決は **case-insensitive**（D15）
+- `WorkflowVisitor` の `VisitStep` コールバック順序に依存しない
+
+### 1. Red — テストケース（抜粋）
+
+| ケース ID | 種別 | 内容 |
+|-----------|------|------|
+| `ok-wait-after-background` | ok | 公式 Build frontend 例 |
+| `ok-wait-parallel-child-id` | ok | `parallel` 子 id をブロック後に `wait`（冗長だが許容） |
+| `ok-cancel-case-insensitive` | ok | `id: BUILD` ← `cancel: build` |
+| `ng-wait-unknown-id` | ng | 存在しない id |
+| `ng-wait-forward-ref` | ng | 定義より前の `wait` |
+| `ng-wait-non-background` | ng | 非 background `run` を `wait` |
+| `ng-parallel-eleven-children` | ng | `parallel` に 11 子 → warning |
+| `ok-parallel-eleven-conditional` | ok | 親 `parallel` に `if: ${{ ... }}` + 11 子 → #5 スキップ（C'） |
+
+```shell
+dotnet test --project tests/Seiton.Core.Tests --treenode-filter /*/*/RuleInterfaceTests/RuleRegression_BackgroundSteps*
+```
+
+### 2. Green — 実装タスク
+
+| ファイル | 内容 |
+|---------|------|
+| `Linting/RuleId.cs` 他 | `BackgroundSteps` 登録（default-on, mixed severity） |
+| `Linting/Rules/BackgroundStepsRule.cs` | 薄いルール本体 |
+| `Linting/Rules/BackgroundStepFlowAnalyzer.cs` | シミュレーション + 診断生成 |
+| `tests/.../RuleInterfaceTests.BackgroundStepsRule.cs` | table-driven |
+| `RuleInterfaceTests.cs` / `RuleCatalogDescriptorTests.cs` | catalog カウント更新 |
+| `docs/rules.md` 他 | 3 触点（lint rule AGENTS チェックリスト） |
+
+### 3. ベンチマーク
+
+default-on のため `CoreLintBenchmark` **+10% ゲート** 必須。
+
+```shell
+cd src/Seiton.Benchmark && dotnet run -c Release
+```
 
 ---
 
@@ -268,20 +379,26 @@ flowchart LR
     P2[Visitor 再帰]
     P3[Tests + Playground]
   end
+  subgraph pr15 [PR1.5 Runtime constraints]
+    R1[StepParseContext]
+    R2[D12 D13 tests]
+  end
   subgraph pr2 [PR2 Lint]
     L1[background-steps]
   end
   A --> B
   B --> P1
   C --> P1
-  P3 --> L1
+  P3 --> R1
+  R1 --> R2
+  R2 --> L1
 ```
 
 ---
 
 ## 実装チェックリスト
 
-### PR1（本書）
+### PR1（完了）
 
 - [x] PR0 マージ済み（`verify-step-schema` 通過）
 - [x] `ParserTests.ParallelSteps.cs`（Red）
@@ -291,11 +408,24 @@ flowchart LR
 - [x] Green + `dotnet test` + benchmark ±10%
 - [x] Playground + parser spec
 
-### PR2（本書）
+### PR1.5
 
-- [ ] D12 確認
-- [ ] `BackgroundStepFlowAnalyzer` + `background-steps` rule
-- [ ] Rule tests + `docs/rules.md`
+- [x] `ParserTests.ParallelSteps` に D12/D13 ng ケース追加
+- [x] `StepParseContext` + `ParseStep` 分岐
+- [x] `ok-action-metadata-background` → ng に反転
+- [x] `supplemental-step-schema.json` / 生成物更新（**不要** — ランタイム制約はパーサー内）
+- [x] `Seiton_Parser_spec.md` §3.12 更新（ランタイム乖離の lessons learned）
+- [x] Green + `dotnet test` + benchmark ±10%（Alloc 不変、Mean は ShortRun ばらつき内）
+
+### PR2
+
+- [x] D12 / D13 確定（実機検証）
+- [x] D14〜D20 確定（設計レビュー）
+- [ ] `BackgroundStepFlowAnalyzer` + `BackgroundStepsRule`
+- [ ] `RuleInterfaceTests.BackgroundStepsRule.cs`
+- [ ] catalog / descriptor テスト更新
+- [ ] `docs/rules.md` + linter spec + `feature_matrix.md`
+- [ ] Green + `dotnet test` + `CoreLintBenchmark` ±10%
 
 ---
 

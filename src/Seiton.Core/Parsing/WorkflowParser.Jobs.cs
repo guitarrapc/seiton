@@ -192,7 +192,7 @@ public static partial class WorkflowParser
                                 var stepPathPrefix = jobId.Length > 0
                                     ? $"jobs.'{DecodeUtf8(source, jobId)}'.steps"
                                     : "steps";
-                                stepsNode = ParseSteps(ref reader, arena, ref diagnostics, source, stepPathPrefix);
+                                stepsNode = ParseSteps(ref reader, arena, ref diagnostics, source, stepPathPrefix, StepParseContext.WorkflowJobStep);
                             }
                         }
 

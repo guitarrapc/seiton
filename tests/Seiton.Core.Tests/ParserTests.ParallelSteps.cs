@@ -162,7 +162,7 @@ public sealed partial class ParserTests
     }
 
     [Test]
-    public async Task Parse_ParallelSteps_ok_action_metadata_background()
+    public async Task Parse_ParallelSteps_ng_action_metadata_background()
     {
         var yaml = """
             name: My action
@@ -175,7 +175,293 @@ public sealed partial class ParserTests
             """;
 
         var result = WorkflowParser.ParseDirect(Encoding.UTF8.GetBytes(yaml), "action.yml", out _);
+        await Assert.That(result.Diagnostics.Any(d =>
+            d.Message.Contains("unexpected key \"background\"", StringComparison.Ordinal)
+            && d.Message.Contains("composite action", StringComparison.Ordinal))).IsTrue();
+        var step = result.ActionMetadata!.Runs!.Steps![0];
+        await Assert.That(step.Background.HasValue).IsFalse();
+    }
+
+    [Test]
+    public async Task Parse_ParallelSteps_ng_parallel_child_nested_parallel()
+    {
+        var yaml = """
+            on: push
+            jobs:
+              build:
+                runs-on: ubuntu-latest
+                steps:
+                  - parallel:
+                    - run: echo a
+                    - parallel:
+                      - run: echo b
+            """;
+
+        var result = WorkflowParser.ParseDirect(Encoding.UTF8.GetBytes(yaml), "wf.yml", out _);
+        await Assert.That(result.Diagnostics.Any(d =>
+            d.Message.Contains("unexpected key \"parallel\"", StringComparison.Ordinal)
+            && d.Message.Contains("parallel group", StringComparison.Ordinal))).IsTrue();
+    }
+
+    [Test]
+    public async Task Parse_ParallelSteps_ng_parallel_child_wait_all()
+    {
+        var yaml = """
+            on: push
+            jobs:
+              build:
+                runs-on: ubuntu-latest
+                steps:
+                  - parallel:
+                    - wait-all: null
+            """;
+
+        var result = WorkflowParser.ParseDirect(Encoding.UTF8.GetBytes(yaml), "wf.yml", out _);
+        await Assert.That(result.Diagnostics.Any(d =>
+            d.Message.Contains("unexpected key \"wait-all\"", StringComparison.Ordinal)
+            && d.Message.Contains("parallel group", StringComparison.Ordinal))).IsTrue();
+        var child = ((ExecParallel)result.Workflow!.Jobs.Values().First().Steps![0].Exec).Steps![0];
+        await Assert.That(child.Exec).IsNotTypeOf<ExecWaitAll>();
+    }
+
+    [Test]
+    public async Task Parse_ParallelSteps_ng_parallel_child_wait()
+    {
+        var yaml = """
+            on: push
+            jobs:
+              build:
+                runs-on: ubuntu-latest
+                steps:
+                  - parallel:
+                    - wait: other
+            """;
+
+        var result = WorkflowParser.ParseDirect(Encoding.UTF8.GetBytes(yaml), "wf.yml", out _);
+        await Assert.That(result.Diagnostics.Any(d =>
+            d.Message.Contains("unexpected key \"wait\"", StringComparison.Ordinal)
+            && d.Message.Contains("parallel group", StringComparison.Ordinal))).IsTrue();
+        var child = ((ExecParallel)result.Workflow!.Jobs.Values().First().Steps![0].Exec).Steps![0];
+        await Assert.That(child.Exec).IsNotTypeOf<ExecWait>();
+    }
+
+    [Test]
+    public async Task Parse_ParallelSteps_ng_parallel_child_cancel()
+    {
+        var yaml = """
+            on: push
+            jobs:
+              build:
+                runs-on: ubuntu-latest
+                steps:
+                  - parallel:
+                    - cancel: other
+            """;
+
+        var result = WorkflowParser.ParseDirect(Encoding.UTF8.GetBytes(yaml), "wf.yml", out _);
+        await Assert.That(result.Diagnostics.Any(d =>
+            d.Message.Contains("unexpected key \"cancel\"", StringComparison.Ordinal)
+            && d.Message.Contains("parallel group", StringComparison.Ordinal))).IsTrue();
+        var child = ((ExecParallel)result.Workflow!.Jobs.Values().First().Steps![0].Exec).Steps![0];
+        await Assert.That(child.Exec).IsNotTypeOf<ExecCancel>();
+    }
+
+    [Test]
+    public async Task Parse_ParallelSteps_ng_parallel_child_background()
+    {
+        var yaml = """
+            on: push
+            jobs:
+              build:
+                runs-on: ubuntu-latest
+                steps:
+                  - parallel:
+                    - run: echo hi
+                      background: true
+            """;
+
+        var result = WorkflowParser.ParseDirect(Encoding.UTF8.GetBytes(yaml), "wf.yml", out _);
+        await Assert.That(result.Diagnostics.Any(d =>
+            d.Message.Contains("unexpected key \"background\"", StringComparison.Ordinal)
+            && d.Message.Contains("parallel group", StringComparison.Ordinal))).IsTrue();
+        var child = ((ExecParallel)result.Workflow!.Jobs.Values().First().Steps![0].Exec).Steps![0];
+        await Assert.That(child.Background.HasValue).IsFalse();
+    }
+
+    [Test]
+    public async Task Parse_ParallelSteps_ng_action_metadata_parallel()
+    {
+        var yaml = """
+            name: My action
+            description: test
+            runs:
+              using: composite
+              steps:
+                - parallel:
+                  - run: echo hi
+            """;
+
+        var result = WorkflowParser.ParseDirect(Encoding.UTF8.GetBytes(yaml), "action.yml", out _);
+        await Assert.That(result.Diagnostics.Any(d =>
+            d.Message.Contains("unexpected key \"parallel\"", StringComparison.Ordinal)
+            && d.Message.Contains("composite action", StringComparison.Ordinal))).IsTrue();
+        await Assert.That(result.ActionMetadata!.Runs!.Steps![0].Exec).IsNotTypeOf<ExecParallel>();
+    }
+
+    [Test]
+    public async Task Parse_ParallelSteps_ng_action_metadata_wait_all()
+    {
+        var yaml = """
+            name: My action
+            description: test
+            runs:
+              using: composite
+              steps:
+                - wait-all: null
+            """;
+
+        var result = WorkflowParser.ParseDirect(Encoding.UTF8.GetBytes(yaml), "action.yml", out _);
+        await Assert.That(result.Diagnostics.Any(d =>
+            d.Message.Contains("unexpected key \"wait-all\"", StringComparison.Ordinal)
+            && d.Message.Contains("composite action", StringComparison.Ordinal))).IsTrue();
+    }
+
+    [Test]
+    public async Task Parse_ParallelSteps_ok_wait_scalar()
+    {
+        var yaml = """
+            on: push
+            jobs:
+              build:
+                runs-on: ubuntu-latest
+                steps:
+                  - id: a
+                    run: echo a
+                    background: true
+                  - wait: a
+            """;
+
+        var result = WorkflowParser.ParseDirect(Encoding.UTF8.GetBytes(yaml), "wf.yml", out var arena);
         await Assert.That(result.Diagnostics).IsEmpty();
+        var waitStep = result.Workflow!.Jobs.Values().First().Steps![1];
+        await Assert.That(waitStep.Exec).IsTypeOf<ExecWait>();
+        var targets = ((ExecWait)waitStep.Exec).Targets;
+        await Assert.That(targets!.Count).IsEqualTo(1);
+        await Assert.That(Encoding.UTF8.GetString(arena!.GetStringValue(targets[0]))).IsEqualTo("a");
+    }
+
+    [Test]
+    public async Task Parse_ParallelSteps_ok_wait_all_true()
+    {
+        var yaml = """
+            on: push
+            jobs:
+              build:
+                runs-on: ubuntu-latest
+                steps:
+                  - run: echo hi
+                    background: true
+                  - wait-all: true
+            """;
+
+        var result = WorkflowParser.ParseDirect(Encoding.UTF8.GetBytes(yaml), "wf.yml", out _);
+        await Assert.That(result.Diagnostics).IsEmpty();
+        await Assert.That(result.Workflow!.Jobs.Values().First().Steps![1].Exec).IsTypeOf<ExecWaitAll>();
+    }
+
+    [Test]
+    public async Task Parse_ParallelSteps_ng_background_expression()
+    {
+        var yaml = """
+            on: push
+            jobs:
+              build:
+                runs-on: ubuntu-latest
+                steps:
+                  - run: echo hi
+                    background: ${{ true }}
+            """;
+
+        var result = WorkflowParser.ParseDirect(Encoding.UTF8.GetBytes(yaml), "wf.yml", out _);
+        await Assert.That(result.Diagnostics.Any(d =>
+            d.Message.Contains("background must be bool", StringComparison.Ordinal))).IsTrue();
+    }
+
+    [Test]
+    public async Task Parse_ParallelSteps_ng_action_metadata_cancel()
+    {
+        var yaml = """
+            name: My action
+            description: test
+            runs:
+              using: composite
+              steps:
+                - cancel: other
+            """;
+
+        var result = WorkflowParser.ParseDirect(Encoding.UTF8.GetBytes(yaml), "action.yml", out _);
+        await Assert.That(result.Diagnostics.Any(d =>
+            d.Message.Contains("unexpected key \"cancel\"", StringComparison.Ordinal)
+            && d.Message.Contains("composite action", StringComparison.Ordinal))).IsTrue();
+        var step = result.ActionMetadata!.Runs!.Steps![0];
+        await Assert.That(step.Exec).IsNotTypeOf<ExecCancel>();
+    }
+
+    [Test]
+    public async Task Parse_ParallelSteps_ok_parallel_child_uses()
+    {
+        var yaml = """
+            on: push
+            jobs:
+              build:
+                runs-on: ubuntu-latest
+                steps:
+                  - parallel:
+                    - uses: actions/checkout@v4
+            """;
+
+        var result = WorkflowParser.ParseDirect(Encoding.UTF8.GetBytes(yaml), "wf.yml", out _);
+        await Assert.That(result.Diagnostics).IsEmpty();
+        var child = ((ExecParallel)result.Workflow!.Jobs.Values().First().Steps![0].Exec).Steps![0];
+        await Assert.That(child.Exec).IsTypeOf<ExecAction>();
+    }
+
+    [Test]
+    public async Task Parse_ParallelSteps_ng_action_metadata_wait_scalar()
+    {
+        var yaml = """
+            name: My action
+            description: test
+            runs:
+              using: composite
+              steps:
+                - wait: other
+            """;
+
+        var result = WorkflowParser.ParseDirect(Encoding.UTF8.GetBytes(yaml), "action.yml", out _);
+        await Assert.That(result.Diagnostics.Any(d =>
+            d.Message.Contains("unexpected key \"wait\"", StringComparison.Ordinal)
+            && d.Message.Contains("composite action", StringComparison.Ordinal))).IsTrue();
+        await Assert.That(result.ActionMetadata!.Runs!.Steps![0].Exec).IsNotTypeOf<ExecWait>();
+    }
+
+    [Test]
+    public async Task Parse_ParallelSteps_ng_parallel_child_missing_primary_message()
+    {
+        var yaml = """
+            on: push
+            jobs:
+              build:
+                runs-on: ubuntu-latest
+                steps:
+                  - parallel:
+                    - name: empty child
+            """;
+
+        var result = WorkflowParser.ParseDirect(Encoding.UTF8.GetBytes(yaml), "wf.yml", out _);
+        await Assert.That(result.Diagnostics.Any(d =>
+            d.Message.Contains("must run script with \"run\" section or run action with \"uses\" section", StringComparison.Ordinal)
+            && d.Message.Contains("parallel[1]", StringComparison.Ordinal))).IsTrue();
     }
 
     [Test]
