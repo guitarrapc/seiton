@@ -309,7 +309,7 @@ public sealed partial class ParserTests
     }
 
     [Test]
-    public async Task Parse_ParallelSteps_ng_action_metadata_wait()
+    public async Task Parse_ParallelSteps_ng_action_metadata_wait_all()
     {
         var yaml = """
             name: My action
