@@ -33,6 +33,21 @@ public sealed class ExpectedKeysCSharpGeneratorTests
         }
     }
 
+    [Test]
+    public async Task Generate_ModelWithoutJobSection_OmitsJobMappingKeyArtifacts()
+    {
+        var model = new ExpectedKeysModel(
+        [
+            new ExpectedKeySection("workflow", "Top-level workflow keys", ["name", "on", "jobs"]),
+        ]);
+
+        var output = new ExpectedKeysCSharpGenerator().Generate(model);
+
+        await Assert.That(output).DoesNotContain("JobMappingKeyTable");
+        await Assert.That(output).DoesNotContain("IsKnownJobKey");
+        await Assert.That(output).Contains("internal const string WorkflowKeys");
+    }
+
     private static ExpectedKeysModel LoadCommittedModel()
     {
         var repoRoot = FindRepoRoot();

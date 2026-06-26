@@ -173,6 +173,21 @@ cd src/Seiton.Benchmark && dotnet run -c Release -- --filter "*CoreParsingBenchm
 | `JobMappingKey.RunsOn =` 形式のテスト期待が生成出力と不一致 | `RunsOn = 11,` に修正（enum 本体はプレフィックスなし） |
 | 重複キー名に手書き switch が残る | `JobMappingKeyTable.Utf8Key(ordinal)` + `Encoding.UTF8.GetString` に統一（step と同型） |
 | `stackalloc long[20]` ハードコード | `JobMappingKeyTable.KeyCount` に変更 |
+| `IsKnownJobKey` の negative ケース不足 | 等価クラス別テスト 6 件追加（prefix / case / 他セクション / empty 等） |
+| `JobKeys` const とテーブルの二重管理リスク | 整合性テスト + dispatch/classifier 一致テスト追加 |
+| generator の `job` セクション欠落時の挙動未検証 | `Generate_ModelWithoutJobSection_OmitsJobMappingKeyArtifacts` 追加 |
+
+### レビュー Round 2 ベンチマーク（2026-06-26）
+
+`CoreParsingBenchmark.ParseWorkflowFull` / ShortRun（テスト追加後・同一マシン）
+
+| Size | 実装前 Mean | レビュー後 Mean | Δ Mean | Alloc |
+|------|------------|----------------|--------|-------|
+| Small | 45.0 µs | 43.5 µs | −3.4% | 2.62 KB（変化なし） |
+| Medium | 1,121 µs | 948 µs | −15.4% | 16.23 KB（変化なし） |
+| Large | 15,506 µs | 15,820 µs | +2.0% | 82.48 KB（変化なし） |
+
+初回計測の Large 回帰（+12〜17%）は ShortRun のばらつき。再計測では **全サイズ ±10% 以内・Allocated 不変**。
 
 ---
 
