@@ -32,7 +32,7 @@
 | **PR1.5** `StepParseContext` | ✅ **完了**（D12/D13 反映） |
 | **PR2** `background-steps` lint | ❌ PR1.5 後 |
 
-### GitHub ランタイム vs Seiton（PR1.5 で解消予定）
+### GitHub ランタイム vs Seiton（PR1.5 で解消済み）
 
 実機検証（2026-06-26）により、raw JSON Schema / PR1 パーサーより **GitHub ランタイムの方が厳しい** ことが判明。
 
