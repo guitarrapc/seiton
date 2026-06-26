@@ -39,6 +39,17 @@ internal static class StepSchema
     /// <summary>Legacy alias for uses-form step keys.</summary>
     internal const string ActionStepKeys = UsesStepKeys;
 
+    internal static string GetExpectedKeys(FormId formId) => formId switch
+    {
+        FormId.Cancel => CancelStepKeys,
+        FormId.Parallel => ParallelStepKeys,
+        FormId.Run => RunStepKeys,
+        FormId.Uses => UsesStepKeys,
+        FormId.Wait => WaitStepKeys,
+        FormId.WaitAll => WaitAllStepKeys,
+        _ => RunStepKeys,
+    };
+
     internal static string GetUnexpectedKeyDescription(FormId formId) => formId switch
     {
         FormId.Cancel => "step to cancel a background step",
@@ -48,6 +59,89 @@ internal static class StepSchema
         FormId.Wait => "step to wait for background steps",
         FormId.WaitAll => "step to wait for all background steps",
         _ => "step",
+    };
+
+    internal enum MappingKey : byte
+    {
+        Background = 0,
+        Cancel = 1,
+        ContinueOnError = 2,
+        Env = 3,
+        Id = 4,
+        If = 5,
+        Name = 6,
+        Parallel = 7,
+        Run = 8,
+        Shell = 9,
+        TimeoutMinutes = 10,
+        Uses = 11,
+        Wait = 12,
+        WaitAll = 13,
+        With = 14,
+        WorkingDirectory = 15,
+    }
+
+    internal readonly struct MappingKeyTable : global::Seiton.Core.Parsing.IUtf8OrderedKeyTable
+    {
+        public static int KeyCount => 16;
+
+        public static ReadOnlySpan<byte> Utf8Key(int ordinal) => ordinal switch
+        {
+            0 => "background"u8,
+            1 => "cancel"u8,
+            2 => "continue-on-error"u8,
+            3 => "env"u8,
+            4 => "id"u8,
+            5 => "if"u8,
+            6 => "name"u8,
+            7 => "parallel"u8,
+            8 => "run"u8,
+            9 => "shell"u8,
+            10 => "timeout-minutes"u8,
+            11 => "uses"u8,
+            12 => "wait"u8,
+            13 => "wait-all"u8,
+            14 => "with"u8,
+            15 => "working-directory"u8,
+            _ => ReadOnlySpan<byte>.Empty,
+        };
+    }
+
+    internal static bool IsKnownMappingKey(ReadOnlySpan<byte> keyUtf8)
+    {
+        return keyUtf8.SequenceEqual("background"u8)
+            || keyUtf8.SequenceEqual("cancel"u8)
+            || keyUtf8.SequenceEqual("continue-on-error"u8)
+            || keyUtf8.SequenceEqual("env"u8)
+            || keyUtf8.SequenceEqual("id"u8)
+            || keyUtf8.SequenceEqual("if"u8)
+            || keyUtf8.SequenceEqual("name"u8)
+            || keyUtf8.SequenceEqual("parallel"u8)
+            || keyUtf8.SequenceEqual("run"u8)
+            || keyUtf8.SequenceEqual("shell"u8)
+            || keyUtf8.SequenceEqual("timeout-minutes"u8)
+            || keyUtf8.SequenceEqual("uses"u8)
+            || keyUtf8.SequenceEqual("wait"u8)
+            || keyUtf8.SequenceEqual("wait-all"u8)
+            || keyUtf8.SequenceEqual("with"u8)
+            || keyUtf8.SequenceEqual("working-directory"u8);
+    }
+
+    internal static bool IsPrimaryMappingKey(MappingKey key) => key switch
+    {
+        MappingKey.Cancel or MappingKey.Parallel or MappingKey.Run or MappingKey.Uses or MappingKey.Wait or MappingKey.WaitAll => true,
+        _ => false,
+    };
+
+    internal static FormId PrimaryFormForMappingKey(MappingKey key) => key switch
+    {
+        MappingKey.Cancel => FormId.Cancel,
+        MappingKey.Parallel => FormId.Parallel,
+        MappingKey.Run => FormId.Run,
+        MappingKey.Uses => FormId.Uses,
+        MappingKey.Wait => FormId.Wait,
+        MappingKey.WaitAll => FormId.WaitAll,
+        _ => FormId.Run,
     };
 
     internal static bool IsModifierAllowed(FormId formId, ReadOnlySpan<byte> keyUtf8)

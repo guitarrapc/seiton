@@ -6,90 +6,8 @@ namespace Seiton.Core.Parsing;
 
 public static partial class WorkflowParser
 {
-    private enum StepMappingKey : byte
-    {
-        Background = 0,
-        Cancel = 1,
-        ContinueOnError = 2,
-        Env = 3,
-        Id = 4,
-        If = 5,
-        Name = 6,
-        Parallel = 7,
-        Run = 8,
-        Shell = 9,
-        TimeoutMinutes = 10,
-        Uses = 11,
-        Wait = 12,
-        WaitAll = 13,
-        With = 14,
-        WorkingDirectory = 15,
-    }
-
-    private readonly struct StepMappingKeyTable : IUtf8OrderedKeyTable
-    {
-        public static int KeyCount => 16;
-
-        public static ReadOnlySpan<byte> Utf8Key(int ordinal) => ordinal switch
-        {
-            0 => "background"u8,
-            1 => "cancel"u8,
-            2 => "continue-on-error"u8,
-            3 => "env"u8,
-            4 => "id"u8,
-            5 => "if"u8,
-            6 => "name"u8,
-            7 => "parallel"u8,
-            8 => "run"u8,
-            9 => "shell"u8,
-            10 => "timeout-minutes"u8,
-            11 => "uses"u8,
-            12 => "wait"u8,
-            13 => "wait-all"u8,
-            14 => "with"u8,
-            15 => "working-directory"u8,
-            _ => ReadOnlySpan<byte>.Empty,
-        };
-    }
-
-    private const string ActionStepExpectedKeys = StepSchema.ActionStepKeys;
-    private const string RunStepExpectedKeys = StepSchema.RunStepKeys;
-    private const string WaitStepExpectedKeys = StepSchema.WaitStepKeys;
-    private const string WaitAllStepExpectedKeys = StepSchema.WaitAllStepKeys;
-    private const string CancelStepExpectedKeys = StepSchema.CancelStepKeys;
-    private const string ParallelStepExpectedKeys = StepSchema.ParallelStepKeys;
-
     private static string FormatStepPrefix(string stepPathPrefix, int stepIndex)
         => $"{stepPathPrefix}[{stepIndex}]";
-
-    private static string GetExpectedKeys(StepSchema.FormId form) => form switch
-    {
-        StepSchema.FormId.Run => RunStepExpectedKeys,
-        StepSchema.FormId.Uses => ActionStepExpectedKeys,
-        StepSchema.FormId.Wait => WaitStepExpectedKeys,
-        StepSchema.FormId.WaitAll => WaitAllStepExpectedKeys,
-        StepSchema.FormId.Cancel => CancelStepExpectedKeys,
-        StepSchema.FormId.Parallel => ParallelStepExpectedKeys,
-        _ => RunStepExpectedKeys,
-    };
-
-    private static StepSchema.FormId FormForPrimaryKey(StepMappingKey key) => key switch
-    {
-        StepMappingKey.Run => StepSchema.FormId.Run,
-        StepMappingKey.Uses => StepSchema.FormId.Uses,
-        StepMappingKey.Wait => StepSchema.FormId.Wait,
-        StepMappingKey.WaitAll => StepSchema.FormId.WaitAll,
-        StepMappingKey.Cancel => StepSchema.FormId.Cancel,
-        StepMappingKey.Parallel => StepSchema.FormId.Parallel,
-        _ => StepSchema.FormId.Run,
-    };
-
-    private static bool IsPrimaryStepKey(StepMappingKey key) => key switch
-    {
-        StepMappingKey.Run or StepMappingKey.Uses or StepMappingKey.Wait or StepMappingKey.WaitAll
-            or StepMappingKey.Cancel or StepMappingKey.Parallel => true,
-        _ => false,
-    };
 
     private static string BuildStepDuplicateKeyHelp(ReadOnlySpan<byte> keyUtf8)
     {
@@ -104,12 +22,12 @@ public static partial class WorkflowParser
     private static void ReportPrimaryConflict(
         ref PooledBuffer<Diagnostic> diagnostics,
         string stepPrefix,
-        StepMappingKey firstPrimaryKey,
+        StepSchema.MappingKey firstPrimaryKey,
         TextPosition firstPrimaryMark,
         StepSchema.FormId incomingForm)
     {
-        var firstKeyName = Encoding.UTF8.GetString(StepMappingKeyTable.Utf8Key((int)firstPrimaryKey));
-        var expectedKeys = GetExpectedKeys(incomingForm);
+        var firstKeyName = Encoding.UTF8.GetString(StepSchema.MappingKeyTable.Utf8Key((int)firstPrimaryKey));
+        var expectedKeys = StepSchema.GetExpectedKeys(incomingForm);
         var desc = StepSchema.GetUnexpectedKeyDescription(incomingForm);
         AddError(
             ref diagnostics,
@@ -129,7 +47,7 @@ public static partial class WorkflowParser
             return;
         }
 
-        var expectedKeys = GetExpectedKeys(form);
+        var expectedKeys = StepSchema.GetExpectedKeys(form);
         var desc = StepSchema.GetUnexpectedKeyDescription(form);
         AddError(
             ref diagnostics,
@@ -145,7 +63,7 @@ public static partial class WorkflowParser
         TextPosition keyMark,
         StepSchema.FormId form)
     {
-        var expectedKeys = GetExpectedKeys(form);
+        var expectedKeys = StepSchema.GetExpectedKeys(form);
         var desc = StepSchema.GetUnexpectedKeyDescription(form);
         var suggestion = SuggestionHelper.FindClosestFromFormattedKeys(unknownKey, expectedKeys);
         var msg = suggestion is not null
@@ -228,7 +146,7 @@ public static partial class WorkflowParser
 
         var stepMark = reader.CurrentStart;
         StepSchema.FormId? stepForm = null;
-        StepMappingKey firstPrimaryKey = default;
+        StepSchema.MappingKey firstPrimaryKey = default;
         TextPosition firstPrimaryMark = default;
         TextPosition shellKeyMark = default;
         TextPosition wdKeyMark = default;
@@ -260,7 +178,7 @@ public static partial class WorkflowParser
         ArenaList<Step> parallelSteps = default;
         TextPosition parallelKeyMark = default;
         ulong seen = 0;
-        Span<long> stepKeyFirstMark = stackalloc long[StepMappingKeyTable.KeyCount];
+        Span<long> stepKeyFirstMark = stackalloc long[StepSchema.MappingKeyTable.KeyCount];
 
         reader.Read();
         while (!reader.End && reader.CurrentKind != YamlEventKind.MappingEnd)
@@ -290,11 +208,11 @@ public static partial class WorkflowParser
             {
                 var keyLen = keyUtf8.Length;
                 reader.Read();
-                if (!TrySetBit(ref seen, (int)StepMappingKey.WaitAll))
+                if (!TrySetBit(ref seen, (int)StepSchema.MappingKey.WaitAll))
                 {
-                    var dupName = StepMappingKeyTable.Utf8Key((int)StepMappingKey.WaitAll);
+                    var dupName = StepSchema.MappingKeyTable.Utf8Key((int)StepSchema.MappingKey.WaitAll);
                     var keyName = Encoding.UTF8.GetString(dupName);
-                    var prevMark = stepKeyFirstMark[(int)StepMappingKey.WaitAll];
+                    var prevMark = stepKeyFirstMark[(int)StepSchema.MappingKey.WaitAll];
                     var prevLine = (int)(prevMark >> 32);
                     var prevCol = (int)(prevMark & 0xFFFFFFFF);
                     AddError(
@@ -310,8 +228,8 @@ public static partial class WorkflowParser
                     continue;
                 }
 
-                stepKeyFirstMark[(int)StepMappingKey.WaitAll] = ((long)keyMark.Line << 32) | (uint)keyMark.Col;
-                firstPrimaryKey = StepMappingKey.WaitAll;
+                stepKeyFirstMark[(int)StepSchema.MappingKey.WaitAll] = ((long)keyMark.Line << 32) | (uint)keyMark.Col;
+                firstPrimaryKey = StepSchema.MappingKey.WaitAll;
                 firstPrimaryMark = keyMark;
                 stepForm = StepSchema.FormId.WaitAll;
                 hasPrimary = true;
@@ -327,13 +245,13 @@ public static partial class WorkflowParser
                 continue;
             }
 
-            if (Utf8MappingDispatch.TryMatchFirstOrdered<StepMappingKeyTable>(keyUtf8, out var stepKeyOrd))
+            if (Utf8MappingDispatch.TryMatchFirstOrdered<StepSchema.MappingKeyTable>(keyUtf8, out var stepKeyOrd))
             {
                 var keyLen = keyUtf8.Length;
                 reader.Read();
                 if (!TrySetBit(ref seen, stepKeyOrd))
                 {
-                    var dupName = StepMappingKeyTable.Utf8Key(stepKeyOrd);
+                    var dupName = StepSchema.MappingKeyTable.Utf8Key(stepKeyOrd);
                     var keyName = Encoding.UTF8.GetString(dupName);
                     var prevMark = stepKeyFirstMark[stepKeyOrd];
                     var prevLine = (int)(prevMark >> 32);
@@ -356,10 +274,10 @@ public static partial class WorkflowParser
                     stepKeyFirstMark[stepKeyOrd] = ((long)keyMark.Line << 32) | (uint)keyMark.Col;
                 }
 
-                var stepKey = (StepMappingKey)stepKeyOrd;
-                if (IsPrimaryStepKey(stepKey))
+                var stepKey = (StepSchema.MappingKey)stepKeyOrd;
+                if (StepSchema.IsPrimaryMappingKey(stepKey))
                 {
-                    var newForm = FormForPrimaryKey(stepKey);
+                    var newForm = StepSchema.PrimaryFormForMappingKey(stepKey);
                     if (stepForm is StepSchema.FormId existingForm && existingForm != newForm)
                     {
                         ReportPrimaryConflict(ref diagnostics, stepPrefix, firstPrimaryKey, firstPrimaryMark, newForm);
@@ -373,7 +291,7 @@ public static partial class WorkflowParser
 
                 switch (stepKey)
                 {
-                    case StepMappingKey.Background:
+                    case StepSchema.MappingKey.Background:
                         backgroundKeyMark = keyMark;
                         if (!reader.End)
                         {
@@ -383,7 +301,7 @@ public static partial class WorkflowParser
 
                         break;
 
-                    case StepMappingKey.Run:
+                    case StepSchema.MappingKey.Run:
                         if (!reader.End)
                         {
                             runNode = ParseStringAndValidateExpression(
@@ -397,7 +315,7 @@ public static partial class WorkflowParser
 
                         break;
 
-                    case StepMappingKey.Uses:
+                    case StepSchema.MappingKey.Uses:
                         usesKeyRange = BuildScalarLocation(keyMark, keyLen);
                         if (!reader.End)
                         {
@@ -407,7 +325,7 @@ public static partial class WorkflowParser
 
                         break;
 
-                    case StepMappingKey.Wait:
+                    case StepSchema.MappingKey.Wait:
                         if (!reader.End && reader.CurrentKind != YamlEventKind.MappingEnd)
                         {
                             waitTargets = ParseStringOrStringSequence(
@@ -432,7 +350,7 @@ public static partial class WorkflowParser
 
                         break;
 
-                    case StepMappingKey.WaitAll:
+                    case StepSchema.MappingKey.WaitAll:
                         if (!reader.End && reader.CurrentKind != YamlEventKind.MappingEnd)
                         {
                             if (!TryParseNullaryStepValue(ref reader, out var waErr, out var waMark))
@@ -443,7 +361,7 @@ public static partial class WorkflowParser
 
                         break;
 
-                    case StepMappingKey.Cancel:
+                    case StepSchema.MappingKey.Cancel:
                         if (!reader.End)
                         {
                             cancelTarget = ParseString(ref reader, arena, out var cancelErr, out var cancelMark, allowEmpty: false);
@@ -458,7 +376,7 @@ public static partial class WorkflowParser
 
                         break;
 
-                    case StepMappingKey.Parallel:
+                    case StepSchema.MappingKey.Parallel:
                         parallelKeyMark = keyMark;
                         if (reader.CurrentKind != YamlEventKind.SequenceStart)
                         {
@@ -476,7 +394,7 @@ public static partial class WorkflowParser
 
                         break;
 
-                    case StepMappingKey.Name:
+                    case StepSchema.MappingKey.Name:
                         if (!reader.End)
                         {
                             nameNode = ParseString(ref reader, arena, out var nameErr, out var nameMark);
@@ -485,7 +403,7 @@ public static partial class WorkflowParser
 
                         break;
 
-                    case StepMappingKey.Id:
+                    case StepSchema.MappingKey.Id:
                         if (!reader.End)
                         {
                             idNode = ParseString(ref reader, arena, out var idErr, out var idMark);
@@ -500,7 +418,7 @@ public static partial class WorkflowParser
 
                         break;
 
-                    case StepMappingKey.If:
+                    case StepSchema.MappingKey.If:
                         ifKeyMark = keyMark;
                         if (!reader.End)
                         {
@@ -514,7 +432,7 @@ public static partial class WorkflowParser
 
                         break;
 
-                    case StepMappingKey.With:
+                    case StepSchema.MappingKey.With:
                         withKeyMark = keyMark;
                         if (!reader.End)
                         {
@@ -530,7 +448,7 @@ public static partial class WorkflowParser
 
                         break;
 
-                    case StepMappingKey.Shell:
+                    case StepSchema.MappingKey.Shell:
                         shellKeyMark = keyMark;
                         if (!reader.End)
                         {
@@ -540,7 +458,7 @@ public static partial class WorkflowParser
 
                         break;
 
-                    case StepMappingKey.WorkingDirectory:
+                    case StepSchema.MappingKey.WorkingDirectory:
                         wdKeyMark = keyMark;
                         if (!reader.End)
                         {
@@ -555,7 +473,7 @@ public static partial class WorkflowParser
 
                         break;
 
-                    case StepMappingKey.TimeoutMinutes:
+                    case StepSchema.MappingKey.TimeoutMinutes:
                         if (!reader.End)
                         {
                             timeoutMinutesNode = ParseFloatOrExpression(ref reader, arena, ref diagnostics, ExpressionValidationContext.StepTimeoutMinutes, out var tmErr, out var tmMark);
@@ -568,7 +486,7 @@ public static partial class WorkflowParser
 
                         break;
 
-                    case StepMappingKey.ContinueOnError:
+                    case StepSchema.MappingKey.ContinueOnError:
                         if (!reader.End)
                         {
                             continueOnErrorNode = ParseBoolOrExpression(ref reader, arena, ref diagnostics, ExpressionValidationContext.StepContinueOnError, out var coeErr, out var coeMark);
@@ -577,7 +495,7 @@ public static partial class WorkflowParser
 
                         break;
 
-                    case StepMappingKey.Env:
+                    case StepSchema.MappingKey.Env:
                         if (!reader.End)
                         {
                             envNode = ParseEnvNode(
@@ -594,7 +512,7 @@ public static partial class WorkflowParser
                 continue;
             }
 
-            var isKnownButNotHandled = IsKnownStepKey(keyUtf8);
+            var isKnownButNotHandled = StepSchema.IsKnownMappingKey(keyUtf8);
             var unknownKey = isKnownButNotHandled ? null : Encoding.UTF8.GetString(keyUtf8);
             var unknownKeySlice = isKnownButNotHandled ? default : reader.GetScalarSlice();
 

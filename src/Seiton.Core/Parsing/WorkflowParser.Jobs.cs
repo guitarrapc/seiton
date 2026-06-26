@@ -619,18 +619,7 @@ public static partial class WorkflowParser
             || keyUtf8.SequenceEqual("with"u8);
     }
 
-    private static bool IsKnownStepKey(ReadOnlySpan<byte> keyUtf8)
-    {
-        return keyUtf8.SequenceEqual("name"u8)
-            || keyUtf8.SequenceEqual("id"u8)
-            || keyUtf8.SequenceEqual("if"u8)
-            || keyUtf8.SequenceEqual("with"u8)
-            || keyUtf8.SequenceEqual("env"u8)
-            || keyUtf8.SequenceEqual("shell"u8)
-            || keyUtf8.SequenceEqual("working-directory"u8)
-            || keyUtf8.SequenceEqual("timeout-minutes"u8)
-            || keyUtf8.SequenceEqual("continue-on-error"u8);
-    }
+    private static bool IsKnownStepKey(ReadOnlySpan<byte> keyUtf8) => StepSchema.IsKnownMappingKey(keyUtf8);
 
     private enum SnapshotMappingKey : byte
     {
