@@ -251,7 +251,9 @@ The job timeout for single-CPU runners is 15 minutes. If a job reaches this limi
 
 ### Larger runners
 
-Customers on GitHub Team and GitHub Enterprise Cloud plans can choose from a range of managed virtual machines that have more resources than the [standard GitHub-hosted runners](/en/actions/how-tos/using-github-hosted-runners/using-github-hosted-runners/about-github-hosted-runners#supported-runners-and-hardware-resources). These machines are referred to as "larger runners." They offer the following advanced features:
+Larger runners are available for organizations and enterprises on GitHub Team and GitHub Enterprise Cloud plans.
+
+Larger runners are managed virtual machines with more resources than [standard GitHub-hosted runners](/en/actions/how-tos/using-github-hosted-runners/using-github-hosted-runners/about-github-hosted-runners#supported-runners-and-hardware-resources). They offer the following advanced features:
 
 * More RAM, CPU, and disk space
 * Static IP addresses

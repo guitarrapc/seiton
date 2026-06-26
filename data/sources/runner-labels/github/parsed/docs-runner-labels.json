@@ -4,11 +4,11 @@
   "rawSources": [
     {
       "fileName": "github-hosted-runners.docs.md",
-      "sha256": "sha256:9f264018ee71a2bf24343ac7b6aa70ca5e6ccbaa76840b0240ef77dc2abceaae"
+      "sha256": "sha256:5c11432778fb4d71401662fbac91b0df8798e33a6e98efab8c87e63555120a98"
     },
     {
       "fileName": "larger-runners.docs.md",
-      "sha256": "sha256:74fbec0a4ae28ef2336f5eb362086ed6aece1767dcdfbe15e014607b1e57215a"
+      "sha256": "sha256:8ec2a6bac58284ccbc5164e6ba7fbf9bd2f2357f49bab5d5ff804c4a36431ae7"
     }
   ],
   "labels": [

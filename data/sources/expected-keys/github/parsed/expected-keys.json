@@ -4,7 +4,7 @@
   "rawSources": [
     {
       "fileName": "workflow-syntax.md",
-      "sha256": "sha256:4f8cefcf8a390c4d3bff9f6601f444a7040b6ec0e75bcb744186017928bce041"
+      "sha256": "sha256:db81ac320c88c68b541cd0cffb9b1a6f51975eeb5f5d2c1b57b12977531ff793"
     }
   ],
   "sections": [
@@ -228,15 +228,20 @@
       "name": "step",
       "description": "Expected keys for jobs.\u003Cjob_id\u003E.steps[*]",
       "keys": [
+        "background",
+        "cancel",
         "continue-on-error",
         "env",
         "id",
         "if",
         "name",
+        "parallel",
         "run",
         "shell",
         "timeout-minutes",
         "uses",
+        "wait",
+        "wait-all",
         "with",
         "working-directory"
       ]

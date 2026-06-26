@@ -4,10 +4,18 @@
   "rawSources": [
     {
       "fileName": "github-workflow.schema.json",
-      "sha256": "sha256:a02c482ea324db6178a6d2fed198808cbd62694c1f4c57d053252a82521b412d"
+      "sha256": "sha256:7a952fdb7c1b130732e40ccea9db9bced906c1198e97834f8a49ae3b411f3161"
     }
   ],
   "forms": [
+    {
+      "id": "cancel",
+      "primaryKey": "cancel"
+    },
+    {
+      "id": "parallel",
+      "primaryKey": "parallel"
+    },
     {
       "id": "run",
       "primaryKey": "run"
@@ -15,6 +23,14 @@
     {
       "id": "uses",
       "primaryKey": "uses"
+    },
+    {
+      "id": "wait",
+      "primaryKey": "wait"
+    },
+    {
+      "id": "wait-all",
+      "primaryKey": "wait-all"
     }
   ],
   "properties": {
@@ -61,6 +77,26 @@
     "timeout-minutes": {
       "valueKind": "floatOrExpression",
       "expressionContext": "StepTimeoutMinutes"
+    },
+    "background": {
+      "valueKind": "boolean",
+      "expressionContext": null
+    },
+    "wait": {
+      "valueKind": "stringOrNonEmptyStringArray",
+      "expressionContext": null
+    },
+    "wait-all": {
+      "valueKind": "nullary",
+      "expressionContext": null
+    },
+    "cancel": {
+      "valueKind": "nonEmptyString",
+      "expressionContext": null
+    },
+    "parallel": {
+      "valueKind": "nonEmptyStepArray",
+      "expressionContext": null
     }
   },
   "keyDependencies": [
