@@ -133,4 +133,84 @@ internal static class ExpectedKeys
 
     /// <summary>Expected keys for on.workflow_dispatch.inputs.<input_id> fields</summary>
     internal const string WorkflowDispatchInputFieldKeys = "\"default\", \"description\", \"options\", \"required\", \"type\"";
+
+    /// <summary>UTF-8 ordinals for jobs.&lt;job_id&gt; mapping keys; matches <see cref="JobMappingKeyTable"/>.</summary>
+    internal enum JobMappingKey : byte
+    {
+        Concurrency = 0,
+        Container = 1,
+        ContinueOnError = 2,
+        Defaults = 3,
+        Env = 4,
+        Environment = 5,
+        If = 6,
+        Name = 7,
+        Needs = 8,
+        Outputs = 9,
+        Permissions = 10,
+        RunsOn = 11,
+        Secrets = 12,
+        Services = 13,
+        Snapshot = 14,
+        Steps = 15,
+        Strategy = 16,
+        TimeoutMinutes = 17,
+        Uses = 18,
+        With = 19,
+    }
+
+    /// <summary>UTF-8 rows for <see cref="JobMappingKey"/>; ordinal must match enum value and duplicate-tracking bit index.</summary>
+    internal readonly struct JobMappingKeyTable : global::Seiton.Core.Parsing.IUtf8OrderedKeyTable
+    {
+        public static int KeyCount => 20;
+
+        public static ReadOnlySpan<byte> Utf8Key(int ordinal) => ordinal switch
+        {
+            0 => "concurrency"u8,
+            1 => "container"u8,
+            2 => "continue-on-error"u8,
+            3 => "defaults"u8,
+            4 => "env"u8,
+            5 => "environment"u8,
+            6 => "if"u8,
+            7 => "name"u8,
+            8 => "needs"u8,
+            9 => "outputs"u8,
+            10 => "permissions"u8,
+            11 => "runs-on"u8,
+            12 => "secrets"u8,
+            13 => "services"u8,
+            14 => "snapshot"u8,
+            15 => "steps"u8,
+            16 => "strategy"u8,
+            17 => "timeout-minutes"u8,
+            18 => "uses"u8,
+            19 => "with"u8,
+            _ => ReadOnlySpan<byte>.Empty,
+        };
+    }
+
+    internal static bool IsKnownJobKey(ReadOnlySpan<byte> keyUtf8)
+    {
+        return keyUtf8.SequenceEqual("concurrency"u8)
+            || keyUtf8.SequenceEqual("container"u8)
+            || keyUtf8.SequenceEqual("continue-on-error"u8)
+            || keyUtf8.SequenceEqual("defaults"u8)
+            || keyUtf8.SequenceEqual("env"u8)
+            || keyUtf8.SequenceEqual("environment"u8)
+            || keyUtf8.SequenceEqual("if"u8)
+            || keyUtf8.SequenceEqual("name"u8)
+            || keyUtf8.SequenceEqual("needs"u8)
+            || keyUtf8.SequenceEqual("outputs"u8)
+            || keyUtf8.SequenceEqual("permissions"u8)
+            || keyUtf8.SequenceEqual("runs-on"u8)
+            || keyUtf8.SequenceEqual("secrets"u8)
+            || keyUtf8.SequenceEqual("services"u8)
+            || keyUtf8.SequenceEqual("snapshot"u8)
+            || keyUtf8.SequenceEqual("steps"u8)
+            || keyUtf8.SequenceEqual("strategy"u8)
+            || keyUtf8.SequenceEqual("timeout-minutes"u8)
+            || keyUtf8.SequenceEqual("uses"u8)
+            || keyUtf8.SequenceEqual("with"u8);
+    }
 }

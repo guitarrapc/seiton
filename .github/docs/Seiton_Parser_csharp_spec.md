@@ -947,6 +947,8 @@ Implementation note (2026-04-14):
 - C# implementation emits these job-structure diagnostics at parse time in `WorkflowParser.ParseJobNode`.
 - Lint rules may still report overlapping diagnostics for AST-only visitor scenarios, but parser output is the primary contract.
 
+`ParseJob` is a **single-pass** mapping walk: `Utf8MappingDispatch` + `ExpectedKeys.JobMappingKeyTable` dispatch job keys (alphabetical order from `expected-keys.json` `job` section). Unknown keys always emit unexpected-key diagnostics via `ExpectedKeys.JobKeys`. The former hand-written `IsKnownJobKey` silent-skip fallback was removed (dead code — all 14 keys were already in the dispatch table).
+
 ### 3.7 Step Parse (Spec §3.11–§3.12)
 
 ```csharp

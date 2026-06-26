@@ -345,6 +345,8 @@ Stage 3 merges supplemental sections (for example `action-metadata`: keys for ac
 
 The codegen stage (`ExpectedKeysCSharpGenerator`) produces `const string` fields with quoted, sorted key names for each section. These are consumed by the parser for diagnostic messages when encountering unexpected keys.
 
+Additionally, the `job` section emits `JobMappingKey` enum, `JobMappingKeyTable` (`IUtf8OrderedKeyTable`), and `IsKnownJobKey(ReadOnlySpan<byte>)` for parser UTF-8 dispatch — same stage-A pattern as `StepSchema.MappingKeyTable`.
+
 ---
 
 ## 5. CLI Commands

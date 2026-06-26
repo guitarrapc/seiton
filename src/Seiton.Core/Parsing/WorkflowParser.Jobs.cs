@@ -15,86 +15,6 @@ public static partial class WorkflowParser
     private static readonly string LabelsSectionEmptyMessage =
         $"\"labels\" section should not be empty. available labels are: hosted runners: {RunnerLabels.HostedLabelList}. larger runners: {RunnerLabels.LargerLabelList}. self-hosted presets: {RunnerLabels.SelfHostedPresetLabelList}. if it is a custom label for self-hosted runner, set list of labels in config file";
 
-    private enum JobNodeMappingKey : byte
-    {
-        RunsOn = 0,
-        Name = 1,
-        Needs = 2,
-        Env = 3,
-        Steps = 4,
-        Uses = 5,
-        If = 6,
-        Permissions = 7,
-        Environment = 8,
-        Concurrency = 9,
-        Outputs = 10,
-        Defaults = 11,
-        TimeoutMinutes = 12,
-        ContinueOnError = 13,
-        Strategy = 14,
-        Container = 15,
-        Services = 16,
-        With = 17,
-        Secrets = 18,
-        Snapshot = 19,
-    }
-
-    /// <summary>UTF-8 rows for <see cref="JobNodeMappingKey"/>; ordinal must match enum value and duplicate-tracking bit index.</summary>
-    private readonly struct JobNodeKeyTable : IUtf8OrderedKeyTable
-    {
-        public static int KeyCount => 20;
-
-        public static ReadOnlySpan<byte> Utf8Key(int ordinal) => ordinal switch
-        {
-            0 => "runs-on"u8,
-            1 => "name"u8,
-            2 => "needs"u8,
-            3 => "env"u8,
-            4 => "steps"u8,
-            5 => "uses"u8,
-            6 => "if"u8,
-            7 => "permissions"u8,
-            8 => "environment"u8,
-            9 => "concurrency"u8,
-            10 => "outputs"u8,
-            11 => "defaults"u8,
-            12 => "timeout-minutes"u8,
-            13 => "continue-on-error"u8,
-            14 => "strategy"u8,
-            15 => "container"u8,
-            16 => "services"u8,
-            17 => "with"u8,
-            18 => "secrets"u8,
-            19 => "snapshot"u8,
-            _ => ReadOnlySpan<byte>.Empty,
-        };
-    }
-
-    private static string JobNodeDuplicateKeyName(JobNodeMappingKey key) => key switch
-    {
-        JobNodeMappingKey.RunsOn => "runs-on",
-        JobNodeMappingKey.Name => "name",
-        JobNodeMappingKey.Needs => "needs",
-        JobNodeMappingKey.Env => "env",
-        JobNodeMappingKey.Steps => "steps",
-        JobNodeMappingKey.Uses => "uses",
-        JobNodeMappingKey.If => "if",
-        JobNodeMappingKey.Permissions => "permissions",
-        JobNodeMappingKey.Environment => "environment",
-        JobNodeMappingKey.Concurrency => "concurrency",
-        JobNodeMappingKey.Outputs => "outputs",
-        JobNodeMappingKey.Defaults => "defaults",
-        JobNodeMappingKey.TimeoutMinutes => "timeout-minutes",
-        JobNodeMappingKey.ContinueOnError => "continue-on-error",
-        JobNodeMappingKey.Strategy => "strategy",
-        JobNodeMappingKey.Container => "container",
-        JobNodeMappingKey.Services => "services",
-        JobNodeMappingKey.With => "with",
-        JobNodeMappingKey.Secrets => "secrets",
-        JobNodeMappingKey.Snapshot => "snapshot",
-        _ => "job key",
-    };
-
     private enum RunsOnMappingKey : byte
     {
         Labels = 0,
@@ -159,7 +79,7 @@ public static partial class WorkflowParser
         }
 
         ulong seen = 0;
-        Span<long> jobKeyFirstMark = stackalloc long[20];
+        Span<long> jobKeyFirstMark = stackalloc long[ExpectedKeys.JobMappingKeyTable.KeyCount];
 
         var mappingStart = reader.CurrentStart;
         var range = BuildScalarLocation(mappingStart, 1);
@@ -186,14 +106,14 @@ public static partial class WorkflowParser
                 continue;
             }
 
-            if (Utf8MappingDispatch.TryMatchFirstOrdered<JobNodeKeyTable>(keyUtf8, out var jobKeyOrd))
+            if (Utf8MappingDispatch.TryMatchFirstOrdered<ExpectedKeys.JobMappingKeyTable>(keyUtf8, out var jobKeyOrd))
             {
                 var keyLen = keyUtf8.Length;
-                var jobKey = (JobNodeMappingKey)jobKeyOrd;
+                var jobKey = (ExpectedKeys.JobMappingKey)jobKeyOrd;
                 reader.Read();
                 if (!TrySetBit(ref seen, jobKeyOrd))
                 {
-                    var dupName = JobNodeDuplicateKeyName(jobKey);
+                    var dupName = Encoding.UTF8.GetString(ExpectedKeys.JobMappingKeyTable.Utf8Key(jobKeyOrd));
                     var jobIdText = DecodeUtf8(source, jobId);
                     var prevMark = jobKeyFirstMark[jobKeyOrd];
                     var prevLine = (int)(prevMark >> 32);
@@ -210,7 +130,7 @@ public static partial class WorkflowParser
 
                 switch (jobKey)
                 {
-                    case JobNodeMappingKey.RunsOn:
+                    case ExpectedKeys.JobMappingKey.RunsOn:
                         runsOnKeyPos = keyMark;
                         if (!reader.End)
                         {
@@ -219,7 +139,7 @@ public static partial class WorkflowParser
 
                         break;
 
-                    case JobNodeMappingKey.Name:
+                    case ExpectedKeys.JobMappingKey.Name:
                         if (!reader.End)
                         {
                             nameNode = ParseStringAndValidateExpression(ref reader, arena, ref diagnostics, ExpressionValidationContext.JobName, out var nameErr, out var nameMark, false);
@@ -228,7 +148,7 @@ public static partial class WorkflowParser
 
                         break;
 
-                    case JobNodeMappingKey.Needs:
+                    case ExpectedKeys.JobMappingKey.Needs:
                         if (!reader.End)
                         {
                             var needsSeqMark = reader.CurrentStart;
@@ -239,7 +159,7 @@ public static partial class WorkflowParser
 
                         break;
 
-                    case JobNodeMappingKey.Env:
+                    case ExpectedKeys.JobMappingKey.Env:
                         if (!reader.End)
                         {
                             envNode = ParseEnvNode(ref reader, arena, ref diagnostics, source, $"jobs.'{DecodeUtf8(source, jobId)}'.env must be object", ExpressionValidationContext.JobEnv, $"jobs.'{DecodeUtf8(source, jobId)}'.env");
@@ -247,7 +167,7 @@ public static partial class WorkflowParser
 
                         break;
 
-                    case JobNodeMappingKey.Steps:
+                    case ExpectedKeys.JobMappingKey.Steps:
                         stepsKeyPos = keyMark;
                         if (!reader.End)
                         {
@@ -278,7 +198,7 @@ public static partial class WorkflowParser
 
                         break;
 
-                    case JobNodeMappingKey.Uses:
+                    case ExpectedKeys.JobMappingKey.Uses:
                         if (!reader.End)
                         {
                             var usesNode = ParseString(ref reader, arena, out var usesErr, out var usesMark);
@@ -304,7 +224,7 @@ public static partial class WorkflowParser
 
                         break;
 
-                    case JobNodeMappingKey.If:
+                    case ExpectedKeys.JobMappingKey.If:
                         ifKeyMark = keyMark;
                         if (!reader.End)
                         {
@@ -314,7 +234,7 @@ public static partial class WorkflowParser
 
                         break;
 
-                    case JobNodeMappingKey.Permissions:
+                    case ExpectedKeys.JobMappingKey.Permissions:
                         if (!reader.End)
                         {
                             permissionsNode = ParsePermissionsNode(ref reader, arena, ref diagnostics, source, $"jobs.'{DecodeUtf8(source, jobId)}'.permissions must be string or object");
@@ -322,7 +242,7 @@ public static partial class WorkflowParser
 
                         break;
 
-                    case JobNodeMappingKey.Environment:
+                    case ExpectedKeys.JobMappingKey.Environment:
                         if (!reader.End)
                         {
                             environmentNode = ParseEnvironmentNode(ref reader, arena, ref diagnostics, source, jobId, keyMark);
@@ -330,7 +250,7 @@ public static partial class WorkflowParser
 
                         break;
 
-                    case JobNodeMappingKey.Concurrency:
+                    case ExpectedKeys.JobMappingKey.Concurrency:
                         if (!reader.End)
                         {
                             var jobIdForConcurrency = DecodeUtf8(source, jobId);
@@ -339,7 +259,7 @@ public static partial class WorkflowParser
 
                         break;
 
-                    case JobNodeMappingKey.Outputs:
+                    case ExpectedKeys.JobMappingKey.Outputs:
                         if (!reader.End)
                         {
                             outputsNode = ParseOutputsNode(ref reader, arena, ref diagnostics, source, jobId);
@@ -347,7 +267,7 @@ public static partial class WorkflowParser
 
                         break;
 
-                    case JobNodeMappingKey.Defaults:
+                    case ExpectedKeys.JobMappingKey.Defaults:
                         if (!reader.End)
                         {
                             var jobIdForDefaults = DecodeUtf8(source, jobId);
@@ -356,7 +276,7 @@ public static partial class WorkflowParser
 
                         break;
 
-                    case JobNodeMappingKey.TimeoutMinutes:
+                    case ExpectedKeys.JobMappingKey.TimeoutMinutes:
                         if (!reader.End)
                         {
                             timeoutMinutesNode = ParseFloatOrExpression(ref reader, arena, ref diagnostics, ExpressionValidationContext.JobTimeoutMinutes, out var tmErr, out var tmMark);
@@ -369,7 +289,7 @@ public static partial class WorkflowParser
 
                         break;
 
-                    case JobNodeMappingKey.ContinueOnError:
+                    case ExpectedKeys.JobMappingKey.ContinueOnError:
                         if (!reader.End)
                         {
                             continueOnErrorNode = ParseBoolOrExpression(ref reader, arena, ref diagnostics, ExpressionValidationContext.JobContinueOnError, out var coeErr, out var coeMark);
@@ -378,7 +298,7 @@ public static partial class WorkflowParser
 
                         break;
 
-                    case JobNodeMappingKey.Strategy:
+                    case ExpectedKeys.JobMappingKey.Strategy:
                         if (!reader.End)
                         {
                             if (reader.CurrentKind != YamlEventKind.MappingStart)
@@ -394,7 +314,7 @@ public static partial class WorkflowParser
 
                         break;
 
-                    case JobNodeMappingKey.Container:
+                    case ExpectedKeys.JobMappingKey.Container:
                         if (!reader.End)
                         {
                             containerNode = ParseContainerLike(ref reader, arena, ref diagnostics, source, jobId, default, isService: false, requireImage: true, keyMark);
@@ -402,7 +322,7 @@ public static partial class WorkflowParser
 
                         break;
 
-                    case JobNodeMappingKey.Services:
+                    case ExpectedKeys.JobMappingKey.Services:
                         if (!reader.End)
                         {
                             servicesNode = ParseServices(ref reader, arena, ref diagnostics, source, jobId);
@@ -410,7 +330,7 @@ public static partial class WorkflowParser
 
                         break;
 
-                    case JobNodeMappingKey.With:
+                    case ExpectedKeys.JobMappingKey.With:
                         withKeyPos = keyMark;
                         if (!reader.End)
                         {
@@ -445,7 +365,7 @@ public static partial class WorkflowParser
 
                         break;
 
-                    case JobNodeMappingKey.Secrets:
+                    case ExpectedKeys.JobMappingKey.Secrets:
                         secretsKeyPos = keyMark;
                         if (!reader.End)
                         {
@@ -480,7 +400,7 @@ public static partial class WorkflowParser
 
                         break;
 
-                    case JobNodeMappingKey.Snapshot:
+                    case ExpectedKeys.JobMappingKey.Snapshot:
                         if (!reader.End)
                         {
                             snapshotNode = ParseSnapshotNode(ref reader, arena, ref diagnostics, source, jobId);
@@ -492,22 +412,12 @@ public static partial class WorkflowParser
                 continue;
             }
 
-            var isKnownKey = IsKnownJobKey(keyUtf8);
-            var unknownJobKey = !isKnownKey ? Encoding.UTF8.GetString(keyUtf8) : null;
-            var keySlice = !isKnownKey ? reader.GetScalarSlice() : default;
+            var unknownJobKey = Encoding.UTF8.GetString(keyUtf8);
+            var keySlice = reader.GetScalarSlice();
 
             reader.Read();
 
-            if (isKnownKey)
-            {
-                if (!reader.End)
-                {
-                    reader.SkipCurrentNode();
-                }
-                continue;
-            }
-
-            var jobSuggestion = SuggestionHelper.FindClosestFromFormattedKeys(unknownJobKey!, Generated.ExpectedKeys.JobKeys);
+            var jobSuggestion = SuggestionHelper.FindClosestFromFormattedKeys(unknownJobKey, Generated.ExpectedKeys.JobKeys);
             var jobMessage = jobSuggestion is not null
                 ? $"jobs.'{DecodeUtf8(source, jobId)}' has unexpected key \"{unknownJobKey}\" for \"job\" section. did you mean \"{jobSuggestion}\"? expected one of {Generated.ExpectedKeys.JobKeys}"
                 : $"jobs.'{DecodeUtf8(source, jobId)}' has unexpected key \"{unknownJobKey}\" for \"job\" section. expected one of {Generated.ExpectedKeys.JobKeys}";
@@ -598,25 +508,6 @@ public static partial class WorkflowParser
         job.Snapshot = snapshotNode;
         job.Range = BuildCompositeLocation(jobIdMark, mappingEndMark);
         return job;
-    }
-
-
-    private static bool IsKnownJobKey(ReadOnlySpan<byte> keyUtf8)
-    {
-        return keyUtf8.SequenceEqual("name"u8)
-            || keyUtf8.SequenceEqual("needs"u8)
-            || keyUtf8.SequenceEqual("if"u8)
-            || keyUtf8.SequenceEqual("permissions"u8)
-            || keyUtf8.SequenceEqual("env"u8)
-            || keyUtf8.SequenceEqual("defaults"u8)
-            || keyUtf8.SequenceEqual("timeout-minutes"u8)
-            || keyUtf8.SequenceEqual("strategy"u8)
-            || keyUtf8.SequenceEqual("concurrency"u8)
-            || keyUtf8.SequenceEqual("container"u8)
-            || keyUtf8.SequenceEqual("services"u8)
-            || keyUtf8.SequenceEqual("outputs"u8)
-            || keyUtf8.SequenceEqual("secrets"u8)
-            || keyUtf8.SequenceEqual("with"u8);
     }
 
     private enum SnapshotMappingKey : byte

@@ -272,6 +272,16 @@ data/sources/step-schema/github/
 
 パーサーは PR1 で `ExpectedKeys.RunStepKeys` → `StepSchema.RunStepKeys` に切替。
 
+### 生成物 `ExpectedKeys.g.cs`（job dispatch 拡張）
+
+`job` セクションから stage A として追加生成（[plan_jobkey.md](./plan_jobkey.md)）:
+
+| 生成内容 | 用途 |
+|----------|------|
+| `JobKeys` const string | unexpected-key 診断（既存） |
+| `JobMappingKey` enum + `JobMappingKeyTable` (`IUtf8OrderedKeyTable`) | `ParseJob` UTF-8 dispatch（アルファベット順） |
+| `IsKnownJobKey(ReadOnlySpan<byte>)` | 将来のネスト job キー / 段階 B 用（現行パーサーは dispatch 不一致で診断） |
+
 ---
 
 ## テスト計画（test-first）
