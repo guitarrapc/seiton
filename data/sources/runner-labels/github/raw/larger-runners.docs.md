@@ -43,7 +43,7 @@ Larger runners run on virtual machines (VMs), and GitHub installs a virtual hard
 
 ## Available macOS larger runners and labels
 
-The following machines are available for macOS larger runners.
+The following machines are available for macOS larger runners. When you create a macOS larger runner, the runner name is also available as a workflow label that you can use with `runs-on`.
 
 | Runner Size | Architecture | Processor (CPU)                   | Memory (RAM) | Storage (SSD) | Workflow label                                                                                                                      |
 | ----------- | ------------ | --------------------------------- | ------------ | ------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
@@ -56,6 +56,17 @@ The following machines are available for macOS larger runners.
 * Nested-virtualization is not supported due to the limitation of Apple's Virtualization Framework.
 * Networking capabilities such as Azure private networking and assigning static IPs are not currently available for macOS larger runners.
 * The arm64 macOS runners do not have a static UUID/UDID assigned to them because Apple does not support this feature. However, Intel MacOS runners are assigned a static UDID, specifically `4203018E-580F-C1B5-9525-B745CECA79EB`. If you are building and signing on the same host you plan to test the build on, you can sign with a [development provisioning profile](https://developer.apple.com/help/account/provisioning-profiles/create-a-development-provisioning-profile/). If you do require a static UDID, you can use Intel runners and add their UDID to your Apple Developer account.
+
+## Troubleshooting larger runners
+
+If you notice the jobs that target your larger runners are delayed or not running, there are several factors that may be causing this.
+
+* **Concurrency settings:** You may have reached your maximum concurrency limit. If you would like to enable more jobs to run in parallel, you can update your autoscaling settings to a larger number. See [Managing larger runners](/en/actions/using-github-hosted-runners/managing-larger-runners#configuring-autoscaling-for-larger-runners).
+* **Repository permissions:** Ensure you have the appropriate repository permissions enabled for your larger runners. By default, enterprise runners are not available at the repository level and must be manually enabled by an organization administrator. See [Managing larger runners](/en/actions/using-github-hosted-runners/managing-larger-runners#allowing-repositories-to-access-larger-runners).
+* **Billing information:** You must have a valid credit card on file in order to use larger runners. After adding a credit card to your account, it can take up to 10 minutes to enable the use of your larger runners. See [Managing your payment and billing information](/en/billing/managing-your-billing/managing-your-payment-and-billing-information).
+* **Spending limit:** Your GitHub Actions spending limit must be set to a value greater than zero. See [Setting up budgets to control spending on metered products](/en/billing/managing-billing-for-github-actions/managing-your-spending-limit-for-github-actions).
+* **Fair use policy:** GitHub has a fair use policy that begins to throttle jobs based on several factors, such as how many jobs you are running or how many jobs are running across the entirety of GitHub Actions.
+* **Job queue to assign time:** Job queue to assign time refers to the time between a job request and GitHub assigning a VM to execute the job. Standard GitHub-hosted runners utilizing prescribed YAML workflow labels (such as `ubuntu-latest`) are always in a "warm" state. With larger runners, a warm VM may not be ready to pick up a job on first request as the pools for these machines are smaller. As a result, GitHub may need to create a new VM, which increases the queue to assign time. Once a runner is in use, VMs are ready for subsequent workflow runs within 5 minutes. If not used again within that time, a subset of those machines remains warm, reducing the queue to assign time for future workflow runs over the next 24 hours. The higher the volume of jobs you run, the more VMs will remain in the warm pool.
 
 ## Networking for larger runners
 

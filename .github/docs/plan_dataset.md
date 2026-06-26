@@ -251,10 +251,12 @@ data/sources/step-schema/github/
 
 | 生成内容 | 用途 |
 |----------|------|
-| `StepFormId` enum または `byte` 定数 | 形態識別 |
-| `RunStepKeys`, `WaitStepKeys`, … const string | unexpected-key 診断（現 `ExpectedKeys` の step 系を置換） |
-| `StepFormUnexpectedKeyDescription(formId)` | D11 診断文言 |
-| `StepPropertyValueKinds` | キー ordinal → valueKind（PR1 の parse 分岐） |
+| `FormId` enum | 形態識別 |
+| `RunStepKeys`, `WaitStepKeys`, … const string | unexpected-key 診断 |
+| `GetExpectedKeys(formId)` | 形態別 allowed-keys 文字列 |
+| `GetUnexpectedKeyDescription(formId)` | D11 診断文言 |
+| `MappingKey` enum + `MappingKeyTable` (`IUtf8OrderedKeyTable`) | パーサー UTF-8 dispatch（全 allowed-keys の和集合） |
+| `IsKnownMappingKey`, `IsPrimaryMappingKey`, `PrimaryFormForMappingKey` | キー分類メタデータ |
 | `IsModifierAllowed(formId, keyUtf8)` | `background` 修飾子チェック |
 
 **性能**: 生成コードは既存 `ExpectedKeys` と同様、診断 path 以外では UTF-8 span 比較・整数 enum のみ。ルックアップテーブルは compile-time const。

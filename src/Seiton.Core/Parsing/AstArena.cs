@@ -170,6 +170,18 @@ internal sealed class AstArena : IDisposable
     private ExecAction[] _execActions;
     private int _execActionCount;
 
+    private ExecWait[] _execWaits;
+    private int _execWaitCount;
+
+    private ExecWaitAll[] _execWaitAlls;
+    private int _execWaitAllCount;
+
+    private ExecCancel[] _execCancels;
+    private int _execCancelCount;
+
+    private ExecParallel[] _execParallels;
+    private int _execParallelCount;
+
     // D-1: Pooled diagnostics buffer registered by ParseClassified/ParseIncremental.
     // Returned to ArrayPool<Diagnostic>.Shared on Dispose.
     private Diagnostic[]? _diagnosticsBuffer;
@@ -195,6 +207,10 @@ internal sealed class AstArena : IDisposable
         _steps = new Step[DefaultStepCapacity];
         _execRuns = new ExecRun[DefaultExecRunCapacity];
         _execActions = new ExecAction[DefaultExecActionCapacity];
+        _execWaits = new ExecWait[DefaultExecWaitCapacity];
+        _execWaitAlls = new ExecWaitAll[DefaultExecWaitAllCapacity];
+        _execCancels = new ExecCancel[DefaultExecCancelCapacity];
+        _execParallels = new ExecParallel[DefaultExecParallelCapacity];
     }
 
     /// <summary>
@@ -316,6 +332,10 @@ internal sealed class AstArena : IDisposable
         for (var i = 0; i < _stepCount; i++) _steps[i]?.Reset();
         for (var i = 0; i < _execRunCount; i++) _execRuns[i]?.Reset();
         for (var i = 0; i < _execActionCount; i++) _execActions[i]?.Reset();
+        for (var i = 0; i < _execWaitCount; i++) _execWaits[i]?.Reset();
+        for (var i = 0; i < _execWaitAllCount; i++) _execWaitAlls[i]?.Reset();
+        for (var i = 0; i < _execCancelCount; i++) _execCancels[i]?.Reset();
+        for (var i = 0; i < _execParallelCount; i++) _execParallels[i]?.Reset();
 
         _stringCount = 0;
         _boolCount = 0;
@@ -325,6 +345,10 @@ internal sealed class AstArena : IDisposable
         _stepCount = 0;
         _execRunCount = 0;
         _execActionCount = 0;
+        _execWaitCount = 0;
+        _execWaitAllCount = 0;
+        _execCancelCount = 0;
+        _execParallelCount = 0;
         _source = [];
 
         if (cached is null)
@@ -343,6 +367,10 @@ internal sealed class AstArena : IDisposable
             ShrinkObjectPoolIfOversized(ref _steps, DefaultStepCapacity);
             ShrinkObjectPoolIfOversized(ref _execRuns, DefaultExecRunCapacity);
             ShrinkObjectPoolIfOversized(ref _execActions, DefaultExecActionCapacity);
+            ShrinkObjectPoolIfOversized(ref _execWaits, DefaultExecWaitCapacity);
+            ShrinkObjectPoolIfOversized(ref _execWaitAlls, DefaultExecWaitAllCapacity);
+            ShrinkObjectPoolIfOversized(ref _execCancels, DefaultExecCancelCapacity);
+            ShrinkObjectPoolIfOversized(ref _execParallels, DefaultExecParallelCapacity);
             cached = this;
         }
         else
@@ -360,6 +388,10 @@ internal sealed class AstArena : IDisposable
             _steps = null!;
             _execRuns = null!;
             _execActions = null!;
+            _execWaits = null!;
+            _execWaitAlls = null!;
+            _execCancels = null!;
+            _execParallels = null!;
         }
     }
 
@@ -374,6 +406,10 @@ internal sealed class AstArena : IDisposable
     private const int DefaultStepCapacity = 128;
     private const int DefaultExecRunCapacity = 128;
     private const int DefaultExecActionCapacity = 128;
+    private const int DefaultExecWaitCapacity = 32;
+    private const int DefaultExecWaitAllCapacity = 16;
+    private const int DefaultExecCancelCapacity = 16;
+    private const int DefaultExecParallelCapacity = 32;
 
     private static void ShrinkIfOversized<T>(ref T[] array, int maxRetainedCapacity)
     {
@@ -403,6 +439,10 @@ internal sealed class AstArena : IDisposable
         _stepCount = 0;
         _execRunCount = 0;
         _execActionCount = 0;
+        _execWaitCount = 0;
+        _execWaitAllCount = 0;
+        _execCancelCount = 0;
+        _execParallelCount = 0;
         EnsureMinCapacity(ref _strings, Math.Max(64, source.Length / 20));
         EnsureMinCapacity(ref _bools, Math.Max(8, source.Length / 200));
         EnsureMinCapacity(ref _ints, Math.Max(4, source.Length / 500));
@@ -708,6 +748,70 @@ internal sealed class AstArena : IDisposable
         }
         obj.Reset();
         _execActionCount++;
+        return obj;
+    }
+
+    /// <summary>Returns a pooled or new ExecWait instance with all fields reset to default.</summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public ExecWait AllocExecWait()
+    {
+        if (_execWaitCount == _execWaits.Length) GrowObjectPool(ref _execWaits);
+        var obj = _execWaits[_execWaitCount];
+        if (obj is null)
+        {
+            obj = new ExecWait();
+            _execWaits[_execWaitCount] = obj;
+        }
+        obj.Reset();
+        _execWaitCount++;
+        return obj;
+    }
+
+    /// <summary>Returns a pooled or new ExecWaitAll instance with all fields reset to default.</summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public ExecWaitAll AllocExecWaitAll()
+    {
+        if (_execWaitAllCount == _execWaitAlls.Length) GrowObjectPool(ref _execWaitAlls);
+        var obj = _execWaitAlls[_execWaitAllCount];
+        if (obj is null)
+        {
+            obj = new ExecWaitAll();
+            _execWaitAlls[_execWaitAllCount] = obj;
+        }
+        obj.Reset();
+        _execWaitAllCount++;
+        return obj;
+    }
+
+    /// <summary>Returns a pooled or new ExecCancel instance with all fields reset to default.</summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public ExecCancel AllocExecCancel()
+    {
+        if (_execCancelCount == _execCancels.Length) GrowObjectPool(ref _execCancels);
+        var obj = _execCancels[_execCancelCount];
+        if (obj is null)
+        {
+            obj = new ExecCancel();
+            _execCancels[_execCancelCount] = obj;
+        }
+        obj.Reset();
+        _execCancelCount++;
+        return obj;
+    }
+
+    /// <summary>Returns a pooled or new ExecParallel instance with all fields reset to default.</summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public ExecParallel AllocExecParallel()
+    {
+        if (_execParallelCount == _execParallels.Length) GrowObjectPool(ref _execParallels);
+        var obj = _execParallels[_execParallelCount];
+        if (obj is null)
+        {
+            obj = new ExecParallel();
+            _execParallels[_execParallelCount] = obj;
+        }
+        obj.Reset();
+        _execParallelCount++;
         return obj;
     }
 

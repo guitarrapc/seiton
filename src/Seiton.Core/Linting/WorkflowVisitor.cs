@@ -74,11 +74,7 @@ public sealed class WorkflowVisitor
             {
                 for (var s = 0; s < job.Steps.Count; s++)
                 {
-                    var step = job.Steps[s];
-                    for (var i = 0; i < passes.Count; i++)
-                    {
-                        passes[i].VisitStep(step);
-                    }
+                    VisitStepRecursive(job.Steps[s]);
                 }
             }
 
@@ -116,17 +112,29 @@ public sealed class WorkflowVisitor
         {
             for (var s = 0; s < steps.Count; s++)
             {
-                var step = steps[s];
-                for (var i = 0; i < passes.Count; i++)
-                {
-                    passes[i].VisitStep(step);
-                }
+                VisitStepRecursive(steps[s]);
             }
         }
 
         for (var i = 0; i < passes.Count; i++)
         {
             passes[i].VisitActionMetadataPost(metadata);
+        }
+    }
+
+    private void VisitStepRecursive(Step step)
+    {
+        for (var i = 0; i < passes.Count; i++)
+        {
+            passes[i].VisitStep(step);
+        }
+
+        if (step.Exec is ExecParallel parallel && parallel.Steps is { Count: > 0 })
+        {
+            for (var s = 0; s < parallel.Steps.Count; s++)
+            {
+                VisitStepRecursive(parallel.Steps[s]);
+            }
         }
     }
 }

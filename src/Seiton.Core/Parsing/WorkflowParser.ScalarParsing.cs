@@ -122,6 +122,13 @@ public static partial class WorkflowParser
             return default;
         }
 
+        if (reader.CurrentKind == YamlEventKind.MappingEnd)
+        {
+            needsError = true;
+            errorMark = reader.CurrentStart;
+            return default;
+        }
+
         if (reader.CurrentKind == YamlEventKind.Scalar)
         {
             var single = ParseString(ref reader, arena, out needsError, out errorMark, allowEmpty);

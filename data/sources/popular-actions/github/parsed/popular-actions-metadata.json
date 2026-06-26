@@ -16,7 +16,7 @@
     },
     {
       "fileName": "actions_setup-dotnet.action.yml",
-      "sha256": "sha256:17151fbd59c8fec8d7b19947a232a428a9b0a21030fe69ece21d24312ecb5fa5"
+      "sha256": "sha256:75999c0bf863f23de88dad047ccf176b5089454cf7e3264c3fee5bc47eba4cf1"
     },
     {
       "fileName": "actions_setup-go.action.yml",

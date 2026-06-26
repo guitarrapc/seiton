@@ -269,7 +269,10 @@ public static partial class WorkflowParser
                             }
                             else
                             {
-                                stepsNode = ParseSteps(ref reader, arena, ref diagnostics, source, jobId);
+                                var stepPathPrefix = jobId.Length > 0
+                                    ? $"jobs.'{DecodeUtf8(source, jobId)}'.steps"
+                                    : "steps";
+                                stepsNode = ParseSteps(ref reader, arena, ref diagnostics, source, stepPathPrefix);
                             }
                         }
 
@@ -614,19 +617,6 @@ public static partial class WorkflowParser
             || keyUtf8.SequenceEqual("outputs"u8)
             || keyUtf8.SequenceEqual("secrets"u8)
             || keyUtf8.SequenceEqual("with"u8);
-    }
-
-    private static bool IsKnownStepKey(ReadOnlySpan<byte> keyUtf8)
-    {
-        return keyUtf8.SequenceEqual("name"u8)
-            || keyUtf8.SequenceEqual("id"u8)
-            || keyUtf8.SequenceEqual("if"u8)
-            || keyUtf8.SequenceEqual("with"u8)
-            || keyUtf8.SequenceEqual("env"u8)
-            || keyUtf8.SequenceEqual("shell"u8)
-            || keyUtf8.SequenceEqual("working-directory"u8)
-            || keyUtf8.SequenceEqual("timeout-minutes"u8)
-            || keyUtf8.SequenceEqual("continue-on-error"u8);
     }
 
     private enum SnapshotMappingKey : byte

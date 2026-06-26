@@ -234,13 +234,25 @@ WorkflowCallEventOutput: `Name`, `Description?`, `Value` (required)
 | Id | StringNode? | - | `id:` |
 | If | StringNode? | - | `if:` |
 | Name | StringNode? | - | `name:` |
-| Exec | ExecRun or ExecAction | ✓ | Execution content |
+| Background | BoolNode? | - | `background:` modifier on `run` / `uses` steps only (bool literal; no expression) |
+| Exec | StepExec | ✓ | Execution content (see below) |
 | Env | Env? | - | `env:` |
 | ContinueOnError | BoolNode? | - | `continue-on-error:` |
 | TimeoutMinutes | FloatNode? | - | `timeout-minutes:` (> 0) |
 
-**ExecRun**: `Run` (required), `Shell?`, `WorkingDirectory?`
-**ExecAction**: `Uses` (required), `Inputs?` (`with:`), `Entrypoint?` (docker only), `Args?` (docker only)
+**Execution primary (mutually exclusive per step object):** `run` | `uses` | `wait` | `wait-all` | `cancel` | `parallel`. Per-form allowed keys and unexpected-key descriptions are generated from the **`step-schema` dataset** (`StepSchema.g.cs`).
+
+**ExecRun** (`run:`): `Run` (required), `Shell?`, `WorkingDirectory?`
+
+**ExecAction** (`uses:`): `Uses` (required), `Inputs?` (`with:`), `Entrypoint?` (docker only), `Args?` (docker only)
+
+**ExecWait** (`wait:`): `Targets` — plain string or non-empty string sequence
+
+**ExecWaitAll** (`wait-all:`): marker only; value must be null, empty, or `true`
+
+**ExecCancel** (`cancel:`): `Target` — non-empty plain string
+
+**ExecParallel** (`parallel:`): `Steps` — non-empty nested step sequence (same parse rules as job `steps:`)
 
 ### 2.6 Common Node Types
 
@@ -612,22 +624,23 @@ ParseSteps(node):
 
 ### 3.12 Step Parse
 
-Per-form allowed keys and unexpected-key descriptions for `run` / `uses` steps are generated from the **`step-schema` dataset** (`StepSchema.g.cs`). The `expected-keys` dataset still provides the union of all documented step keys for the generic `step` section only.
+Per-form allowed keys and unexpected-key descriptions are generated from the **`step-schema` dataset** (`StepSchema.g.cs`). The `expected-keys` dataset still provides the union of all documented step keys for the generic `step` section only.
+
+**Primary forms (one per step mapping):** `run`, `uses`, `wait`, `wait-all`, `cancel`, `parallel`. **`background`** is a modifier allowed only on `run` / `uses` forms (same object).
 
 ```
 ParseStep(node):
-  collect all mapping entries (2-pass design):
-    Pass 1: determine kind
-      "uses" -> if value has "docker://" prefix -> isDocker, else -> isAction
-      "run"  -> isRun
-      common: "id", "if", "name", "env", "continue-on-error", "timeout-minutes"
-    Pass 2: build ExecAction or ExecRun depending on kind
-      isAction/isDocker -> parseStepExecAction(entries, isDocker)
-      isRun             -> parseStepExecRun(entries)
-      unknown           -> error "step must have run or uses"
+  single-pass mapping dispatch (Utf8MappingDispatch + StepSchema):
+    detect primary form + optional background modifier
+    parse values per StepSchema valueKind
+    parallel -> ParseSteps (recursive; path jobs.'id'.steps[n].parallel[m])
+    missing primary -> error with run/uses/wait/wait-all/cancel/parallel hint
+    unexpected keys -> StepSchema unexpectedKeyDescription per form
 ```
 
-Step-level known keys (`run`, `uses`, `name`, `id`, `if`, `with`, `shell`, `working-directory`, `timeout-minutes`, `continue-on-error`, `env`) use duplicate detection identical to job-level known keys: first occurrence wins, duplicate occurrences emit a non-fatal error and skip the value node. Duplicate diagnostics use the dotted-path prefix (Principle 5) and include a `Help` hint explaining how to merge keys.
+Step-level known keys use duplicate detection identical to job-level known keys: first occurrence wins, duplicate occurrences emit a non-fatal error and skip the value node. Duplicate diagnostics use the dotted-path prefix (Principle 5) and include a `Help` hint explaining how to merge keys.
+
+**Note:** Bare `wait-all:` with no trailing file newline can hang VYaml (upstream limitation). Explicit `null` / `true` or a trailing newline avoids the issue.
 
 #### 3.12.1 ExecAction Parse
 

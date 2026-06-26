@@ -22,9 +22,11 @@ public sealed class GitHubWorkflowStepSchemaParserTests
         var parser = new GitHubWorkflowStepSchemaParser();
         var model = parser.ParseFile(schemaPath);
 
-        await Assert.That(model.Forms).Count().IsEqualTo(2);
+        await Assert.That(model.Forms).Count().IsEqualTo(6);
         await Assert.That(model.Forms.Select(static f => f.Id)).Contains("run");
         await Assert.That(model.Forms.Select(static f => f.Id)).Contains("uses");
+        await Assert.That(model.Forms.Select(static f => f.Id)).Contains("wait");
+        await Assert.That(model.Forms.Select(static f => f.Id)).Contains("parallel");
     }
 
     [Test]

@@ -96,7 +96,7 @@ internal static class ExpectedKeys
     internal const string SnapshotKeys = "\"if\", \"image-name\", \"version\"";
 
     /// <summary>Expected keys for jobs.<job_id>.steps[*]</summary>
-    internal const string StepKeys = "\"continue-on-error\", \"env\", \"id\", \"if\", \"name\", \"run\", \"shell\", \"timeout-minutes\", \"uses\", \"with\", \"working-directory\"";
+    internal const string StepKeys = "\"background\", \"cancel\", \"continue-on-error\", \"env\", \"id\", \"if\", \"name\", \"parallel\", \"run\", \"shell\", \"timeout-minutes\", \"uses\", \"wait\", \"wait-all\", \"with\", \"working-directory\"";
 
     /// <summary>Expected keys for jobs.<job_id>.steps[*].with</summary>
     internal const string StepWithKeys = "\"args\", \"entrypoint\"";
