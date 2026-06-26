@@ -22,7 +22,7 @@ public sealed class StepSchemaPipelineStageTests
 
             using var doc = JsonDocument.Parse(File.ReadAllText(parsedPath));
             await Assert.That(doc.RootElement.TryGetProperty("forms", out var forms)).IsTrue();
-            await Assert.That(forms.GetArrayLength()).IsEqualTo(2);
+            await Assert.That(forms.GetArrayLength()).IsEqualTo(6);
             await Assert.That(doc.RootElement.TryGetProperty("properties", out _)).IsTrue();
             await Assert.That(doc.RootElement.TryGetProperty("modifiers", out var modifiers)).IsFalse();
 

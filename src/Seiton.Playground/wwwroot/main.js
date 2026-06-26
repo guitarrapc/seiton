@@ -101,6 +101,23 @@ runs:
     - run: echo hello world
       shell: bash
 `,
+  parallelSteps:
+    `on: push
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - id: build-frontend
+        run: npm run build
+        background: true
+      - id: build-backend
+        run: npm run build
+        background: true
+      - wait: [build-frontend, build-backend]
+      - parallel:
+        - run: npm run build-app1
+        - run: npm run build-app2
+`,
 };
 
 const THEME_STORAGE_KEY = 'seiton-playground-color-mode';

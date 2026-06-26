@@ -636,38 +636,32 @@ public sealed class Job
 ```csharp
 public sealed class Step
 {
-    public StringNode? Id { get; init; }
-    public StringNode? If { get; init; }
-    public StringNode? Name { get; init; }
-    public StepExec Exec { get; init; }
-    public Env? Env { get; init; }
-    public BoolNode? ContinueOnError { get; init; }
-    public FloatNode? TimeoutMinutes { get; init; }
-    public TextRange Range { get; init; }
+    public StringNodeId Id { get; set; }
+    public StringNodeId If { get; set; }
+    public TextRange? IfKeyRange { get; set; }
+    public StringNodeId Name { get; set; }
+    public BoolNodeId Background { get; set; }   // run/uses modifier only
+    public StepExec Exec { get; set; }
+    public Env? Env { get; set; }
+    public BoolNodeId ContinueOnError { get; set; }
+    public FloatNodeId TimeoutMinutes { get; set; }
+    public TextRange Range { get; set; }
 }
 
 public abstract class StepExec
 {
-    public StepExecKind Kind { get; init; }
-    public TextRange Range { get; init; }
+    public StepExecKind Kind { get; set; }
+    public TextRange Range { get; set; }
 }
 
-public enum StepExecKind { Run, Action }
+public enum StepExecKind { Run, Action, Wait, WaitAll, Cancel, Parallel }
 
-public sealed class ExecRun : StepExec
-{
-    public StringNode Run { get; init; }
-    public StringNode? Shell { get; init; }
-    public StringNode? WorkingDirectory { get; init; }
-}
-
-public sealed class ExecAction : StepExec
-{
-    public StringNode Uses { get; init; }
-    public IReadOnlyDictionary<Utf8String, StringNode>? Inputs { get; init; }
-    public StringNode? Entrypoint { get; init; }   // docker only
-    public StringNode? Args { get; init; }          // docker only
-}
+public sealed class ExecRun : StepExec { /* Run, Shell?, WorkingDirectory? */ }
+public sealed class ExecAction : StepExec { /* Uses, Inputs?, Entrypoint?, Args? */ }
+public sealed class ExecWait : StepExec { public IReadOnlyList<StringNodeId>? Targets { get; set; } }
+public sealed class ExecWaitAll : StepExec { }
+public sealed class ExecCancel : StepExec { public StringNodeId Target { get; set; } }
+public sealed class ExecParallel : StepExec { public IReadOnlyList<Step>? Steps { get; set; } }
 ```
 
 ### 2.6 Structural Nodes (Spec §2.7–§2.11)
@@ -956,15 +950,11 @@ Implementation note (2026-04-14):
 ### 3.7 Step Parse (Spec §3.11–§3.12)
 
 ```csharp
-private IReadOnlyList<Step> ParseSteps(IYamlStreamReader reader)                     // Spec §3.11
-private Step ParseStep(IYamlStreamReader reader)                                      // Spec §3.12
-private ExecAction ParseStepExecAction(/* entries */, bool isDocker)                  // Spec §3.12.1
-private ExecRun ParseStepExecRun(/* entries */)                                       // Spec §3.12.2
+private ArenaList<Step> ParseSteps<TReader>(..., string stepPathPrefix)   // Spec §3.11
+private Step? ParseStep<TReader>(..., string stepPathPrefix, int stepIndex)  // Spec §3.12
 ```
 
-Step parsing uses a **2-pass design** (Spec §3.12):
-1. **Pass 1**: Collect all entries, find `run` or `uses` key
-2. **Pass 2**: Dispatch to `ParseStepExecRun` or `ParseStepExecAction`
+`ParseStep` is a **single-pass** mapping walk: `Utf8MappingDispatch` + `StepSchema` select the primary form (`run` / `uses` / `wait` / `wait-all` / `cancel` / `parallel`), optional `background` on run/uses, and per-form value parsing. `parallel` recurses via `ParseSteps` with nested path prefix (`jobs.'id'.steps[n].parallel[m]`). `WorkflowVisitor` recurses into `ExecParallel.Steps`.
 
 ### 3.8 Strategy / Matrix Parse (Spec §3.15)
 

@@ -85,6 +85,39 @@ public sealed class PlaygroundLintRunnerTests
     }
 
     [Test]
+    public async Task RunToJson_ParallelBackgroundSteps_HasNoSyntaxDiagnostics()
+    {
+        const string yaml = """
+            on: push
+            jobs:
+              build:
+                runs-on: ubuntu-24.04
+                timeout-minutes: 15
+                permissions:
+                  contents: read
+                steps:
+                  - id: build-frontend
+                    run: npm run build
+                    background: true
+                  - id: build-backend
+                    run: npm run build
+                    background: true
+                  - wait: [build-frontend, build-backend]
+                  - parallel:
+                    - run: npm run build-app1
+                    - run: npm run build-app2
+            """;
+
+        var json = PlaygroundLintRunner.RunToJsonUtf8(yaml, ".github/workflows/parallel.yml");
+        using var doc = JsonDocument.Parse(json);
+        var syntaxDiags = doc.RootElement.EnumerateArray()
+            .Where(d => d.TryGetProperty("ruleId", out var ruleId)
+                && string.Equals(ruleId.GetString(), "syntax", StringComparison.Ordinal))
+            .ToList();
+        await Assert.That(syntaxDiags).IsEmpty();
+    }
+
+    [Test]
     public async Task RunToJson_InvalidYaml_ContainsParserDiagnosticWithLineAndMessage()
     {
         var json = PlaygroundLintRunner.RunToJsonUtf8("not: @@@", ".github/workflows/test.yml");
