@@ -8,7 +8,10 @@ namespace Seiton.Update.Services;
 /// </summary>
 internal sealed class StepSchemaMerger
 {
-    public StepSchemaModel Merge(StepSchemaParsedModel parsed, StepSchemaSupplementalModel supplemental)
+    public StepSchemaModel Merge(
+        StepSchemaParsedModel parsed,
+        StepSchemaSupplementalModel supplemental,
+        IReadOnlyList<RawSourceRef>? canonicalRawSources = null)
     {
         var properties = new Dictionary<string, StepSchemaPropertyModel>(StringComparer.Ordinal);
         foreach (var pair in parsed.Properties)
@@ -90,10 +93,12 @@ internal sealed class StepSchemaMerger
 
             allowed.Add(builder.PrimaryKey);
 
-            if (modifierByKey.TryGetValue("background", out var backgroundModifier)
-                && backgroundModifier.AllowedOnFormIds.Contains(builder.Id, StringComparer.Ordinal))
+            foreach (var modifier in modifierByKey.Values)
             {
-                allowed.Add("background");
+                if (modifier.AllowedOnFormIds.Contains(builder.Id, StringComparer.Ordinal))
+                {
+                    allowed.Add(modifier.Key);
+                }
             }
 
             foreach (var pair in properties)
@@ -150,7 +155,7 @@ internal sealed class StepSchemaMerger
         {
             SchemaVersion = 1,
             Source = "github-workflow-schema+supplemental",
-            RawSources = parsed.RawSources,
+            RawSources = canonicalRawSources ?? parsed.RawSources,
             AppliesTo = supplemental.AppliesTo.Count > 0
                 ? supplemental.AppliesTo
                 : ["workflow-job-steps", "action-metadata-steps"],

@@ -90,9 +90,7 @@ internal sealed class GitHubStepSchemaFetcher
         {
             SchemaVersion = parsed.SchemaVersion,
             Source = parsed.Source,
-            RawSources = Stage2ArtifactRawSources.FromFiles(
-                (schemaPath, "github-workflow.schema.json"),
-                (Path.Combine(rawDir, "workflow-syntax.md"), "workflow-syntax.md")),
+            RawSources = Stage2ArtifactRawSources.FromFiles((schemaPath, "github-workflow.schema.json")),
             Forms = parsed.Forms,
             Properties = parsed.Properties,
             KeyDependencies = parsed.KeyDependencies,
@@ -126,7 +124,7 @@ internal sealed class GitHubStepSchemaFetcher
         var parsed = LoadParsedModel(parsedPath);
         var supplemental = sourceParser.ParseSupplemental(supplementalPath);
 
-        var merged = new StepSchemaMerger().Merge(parsed, supplemental);
+        var merged = new StepSchemaMerger().Merge(parsed, supplemental, BuildCanonicalRawSources(repoRoot));
         var mergedJson = SerializeCanonical(merged);
 
         var primaryPath = Path.Combine(StepSchemaSourcePathResolver.ResolveGithubDir(repoRoot), "step-schema.json");
@@ -144,6 +142,25 @@ internal sealed class GitHubStepSchemaFetcher
         {
             UpdateLogger.Info("[merge:step-schema:sources] canonical snapshot already up to date.");
         }
+    }
+
+    private static IReadOnlyList<RawSourceRef> BuildCanonicalRawSources(string repoRoot)
+    {
+        var rawDir = StepSchemaSourcePathResolver.ResolveRawDir(repoRoot);
+        var files = new List<(string fullPath, string manifestFileName)>(2);
+        var schemaPath = Path.Combine(rawDir, "github-workflow.schema.json");
+        if (File.Exists(schemaPath))
+        {
+            files.Add((schemaPath, "github-workflow.schema.json"));
+        }
+
+        var docsPath = Path.Combine(rawDir, "workflow-syntax.md");
+        if (File.Exists(docsPath))
+        {
+            files.Add((docsPath, "workflow-syntax.md"));
+        }
+
+        return Stage2ArtifactRawSources.FromFiles(files.ToArray());
     }
 
     private static StepSchemaParsedModel LoadParsedModel(string parsedPath)

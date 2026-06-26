@@ -25,6 +25,10 @@ public sealed class StepSchemaPipelineStageTests
             await Assert.That(forms.GetArrayLength()).IsEqualTo(2);
             await Assert.That(doc.RootElement.TryGetProperty("properties", out _)).IsTrue();
             await Assert.That(doc.RootElement.TryGetProperty("modifiers", out var modifiers)).IsFalse();
+
+            var rawSources = doc.RootElement.GetProperty("rawSources");
+            await Assert.That(rawSources.GetArrayLength()).IsEqualTo(1);
+            await Assert.That(rawSources[0].GetProperty("fileName").GetString()).IsEqualTo("github-workflow.schema.json");
         }
         finally
         {
@@ -53,6 +57,29 @@ public sealed class StepSchemaPipelineStageTests
                 .Replace("\r\n", "\n");
 
             await Assert.That(actual).IsEqualTo(expected);
+        }
+        finally
+        {
+            Directory.Delete(tempRepo, recursive: true);
+        }
+    }
+
+    [Test]
+    public async Task ParseLocalSourceFiles_SchemaOnlyRaw_SucceedsWithoutWorkflowSyntax()
+    {
+        var repoRoot = FindRepoRoot();
+        var tempRepo = Path.Combine(Path.GetTempPath(), "seiton-ss-schema-only-" + Guid.NewGuid().ToString("N"));
+        var rawDir = Path.Combine(tempRepo, "data", "sources", "step-schema", "github", "raw");
+        Directory.CreateDirectory(rawDir);
+        File.Copy(
+            Path.Combine(repoRoot, "data", "sources", "step-schema", "github", "raw", "github-workflow.schema.json"),
+            Path.Combine(rawDir, "github-workflow.schema.json"));
+
+        try
+        {
+            new GitHubStepSchemaFetcher().ParseLocalSourceFiles(tempRepo);
+            await Assert.That(File.Exists(Path.Combine(
+                tempRepo, "data", "sources", "step-schema", "github", "parsed", "step-schema.json"))).IsTrue();
         }
         finally
         {

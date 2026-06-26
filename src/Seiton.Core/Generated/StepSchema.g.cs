@@ -50,5 +50,10 @@ internal static class StepSchema
         _ => "step",
     };
 
-    internal static bool IsBackgroundModifierAllowed(FormId formId) => formId is FormId.Run or FormId.Uses;
+    internal static bool IsModifierAllowed(FormId formId, ReadOnlySpan<byte> keyUtf8)
+    {
+        if (keyUtf8.SequenceEqual("background"u8))
+            return formId is FormId.Run or FormId.Uses;
+        return false;
+    }
 }

@@ -5,10 +5,6 @@
     {
       "fileName": "github-workflow.schema.json",
       "sha256": "sha256:a02c482ea324db6178a6d2fed198808cbd62694c1f4c57d053252a82521b412d"
-    },
-    {
-      "fileName": "workflow-syntax.md",
-      "sha256": "sha256:4f8cefcf8a390c4d3bff9f6601f444a7040b6ec0e75bcb744186017928bce041"
     }
   ],
   "forms": [

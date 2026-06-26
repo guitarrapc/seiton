@@ -250,20 +250,9 @@ internal sealed class GitHubWorkflowStepSchemaParser
     private static string InferFromOneOf(string propertyName, JsonElement oneOf, JsonElement definitions)
     {
         var branches = oneOf.EnumerateArray().ToList();
-        if (branches.Count == 2
-            && branches.Any(static b => b.TryGetProperty("type", out var t) && t.ValueKind == JsonValueKind.String && t.GetString() == "string")
-            && branches.Any(static b => b.TryGetProperty("type", out var t)
-                                        && t.ValueKind == JsonValueKind.Array
-                                        && t.EnumerateArray().Any(static i => i.GetString() == "string")))
+        if (TryInferStringOrNonEmptyStringArray(branches))
         {
-            var arrayBranch = branches.First(static b =>
-                b.TryGetProperty("type", out var t) && t.ValueKind == JsonValueKind.Array);
-            if (arrayBranch.TryGetProperty("minItems", out var minItems)
-                && minItems.ValueKind == JsonValueKind.Number
-                && minItems.GetInt32() >= 1)
-            {
-                return "stringOrNonEmptyStringArray";
-            }
+            return "stringOrNonEmptyStringArray";
         }
 
         if (branches.Any(static b => HasRef(b, "#/definitions/expressionSyntax")))
@@ -276,14 +265,53 @@ internal sealed class GitHubWorkflowStepSchemaParser
             };
         }
 
-        if (branches.Any(static b => b.TryGetProperty("type", out var t) && t.GetString() == "string")
-            && branches.Any(static b =>
-                b.TryGetProperty("type", out var t) && t.ValueKind == JsonValueKind.Array && t.EnumerateArray().Any(static i => i.GetString() == "string")))
+        throw new InvalidDataException($"Unable to infer oneOf valueKind for '{propertyName}'.");
+    }
+
+    private static bool TryInferStringOrNonEmptyStringArray(IReadOnlyList<JsonElement> branches)
+    {
+        if (!branches.Any(static b => b.TryGetProperty("type", out var t) && t.ValueKind == JsonValueKind.String && t.GetString() == "string"))
         {
-            return "stringOrNonEmptyStringArray";
+            return false;
         }
 
-        throw new InvalidDataException($"Unable to infer oneOf valueKind for '{propertyName}'.");
+        foreach (var branch in branches)
+        {
+            if (!branch.TryGetProperty("type", out var typeElement) || typeElement.ValueKind != JsonValueKind.String
+                || typeElement.GetString() != "array")
+            {
+                continue;
+            }
+
+            if (!branch.TryGetProperty("items", out var items)
+                || !items.TryGetProperty("type", out var itemType)
+                || itemType.ValueKind != JsonValueKind.String
+                || itemType.GetString() != "string")
+            {
+                continue;
+            }
+
+            if (branch.TryGetProperty("minItems", out var minItems)
+                && minItems.ValueKind == JsonValueKind.Number
+                && minItems.GetInt32() >= 1)
+            {
+                return true;
+            }
+        }
+
+        if (branches.Count == 2
+            && branches.Any(static b => b.TryGetProperty("type", out var t)
+                                        && t.ValueKind == JsonValueKind.Array
+                                        && t.EnumerateArray().Any(static i => i.GetString() == "string")))
+        {
+            var arrayBranch = branches.First(static b =>
+                b.TryGetProperty("type", out var t) && t.ValueKind == JsonValueKind.Array);
+            return arrayBranch.TryGetProperty("minItems", out var minItems)
+                   && minItems.ValueKind == JsonValueKind.Number
+                   && minItems.GetInt32() >= 1;
+        }
+
+        return false;
     }
 
     private static string InferFromAnyOf(JsonElement anyOf, JsonElement definitions)

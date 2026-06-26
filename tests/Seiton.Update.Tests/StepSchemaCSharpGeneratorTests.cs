@@ -52,6 +52,9 @@ public sealed class StepSchemaCSharpGeneratorTests
         await Assert.That(output).Contains("\\\"wait\\\"");
         await Assert.That(output).DoesNotContain("\\\"run\\\"\", \\\"wait\\\"");
         await Assert.That(output).Contains("internal const string ActionStepKeys = UsesStepKeys;");
+        await Assert.That(output).Contains("internal static bool IsModifierAllowed(FormId formId, ReadOnlySpan<byte> keyUtf8)");
+        await Assert.That(output).Contains("keyUtf8.SequenceEqual(\"background\"u8)");
+        await Assert.That(output).DoesNotContain("IsBackgroundModifierAllowed");
     }
 
     private static string FindRepoRoot()

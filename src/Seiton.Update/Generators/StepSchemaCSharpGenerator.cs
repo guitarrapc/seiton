@@ -54,7 +54,34 @@ internal sealed class StepSchemaCSharpGenerator
         sb.AppendLine("    };");
         sb.AppendLine();
 
-        sb.AppendLine("    internal static bool IsBackgroundModifierAllowed(FormId formId) => formId is FormId.Run or FormId.Uses;");
+        if (model.Modifiers.Count > 0)
+        {
+            sb.AppendLine("    internal static bool IsModifierAllowed(FormId formId, ReadOnlySpan<byte> keyUtf8)");
+            sb.AppendLine("    {");
+            foreach (var modifier in model.Modifiers)
+            {
+                var formChecks = modifier.AllowedOnFormIds
+                    .Select(ToFormEnumName)
+                    .Select(static name => $"FormId.{name}")
+                    .ToList();
+                var formGuard = formChecks.Count switch
+                {
+                    0 => "false",
+                    1 => $"formId is {formChecks[0]}",
+                    _ => $"formId is {string.Join(" or ", formChecks)}",
+                };
+                sb.AppendLine($"        if (keyUtf8.SequenceEqual(\"{modifier.Key}\"u8))");
+                sb.AppendLine($"            return {formGuard};");
+            }
+
+            sb.AppendLine("        return false;");
+            sb.AppendLine("    }");
+        }
+        else
+        {
+            sb.AppendLine("    internal static bool IsModifierAllowed(FormId formId, ReadOnlySpan<byte> keyUtf8) => false;");
+        }
+
         sb.AppendLine("}");
 
         return TextNormalization.NormalizeToLf(sb.ToString());
