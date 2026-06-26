@@ -269,7 +269,10 @@ public static partial class WorkflowParser
                             }
                             else
                             {
-                                stepsNode = ParseSteps(ref reader, arena, ref diagnostics, source, jobId);
+                                var stepPathPrefix = jobId.Length > 0
+                                    ? $"jobs.'{DecodeUtf8(source, jobId)}'.steps"
+                                    : "steps";
+                                stepsNode = ParseSteps(ref reader, arena, ref diagnostics, source, stepPathPrefix);
                             }
                         }
 

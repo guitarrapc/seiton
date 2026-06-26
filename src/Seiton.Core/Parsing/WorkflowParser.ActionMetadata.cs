@@ -711,8 +711,7 @@ public static partial class WorkflowParser
                             }
                             else
                             {
-                                Utf8Slice emptyJobId = default;
-                                steps = ParseSteps(ref reader, arena, ref diagnostics, source, emptyJobId);
+                                steps = ParseSteps(ref reader, arena, ref diagnostics, source, "steps");
                             }
                         }
 
