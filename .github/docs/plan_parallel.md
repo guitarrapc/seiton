@@ -29,7 +29,7 @@
 | `WorkflowParser.Steps.cs` | ✅ PR1: 6 形態 + `background` 修飾子 |
 | `Step` AST / `WorkflowVisitor` | ✅ PR1: 拡張・`parallel` 再帰 |
 | テスト / Playground / Parser spec | ✅ PR1 完了 |
-| **PR1.5** `StepParseContext` | ❌ **未着手**（GitHub より寛容な false negative あり） |
+| **PR1.5** `StepParseContext` | ✅ **完了**（D12/D13 反映） |
 | **PR2** `background-steps` lint | ❌ PR1.5 後 |
 
 ### GitHub ランタイム vs Seiton（PR1.5 で解消予定）
@@ -39,8 +39,8 @@
 | コンテキスト | GitHub ランタイム | PR1 Seiton |
 |-------------|------------------|------------|
 | workflow `jobs.*.steps` | 6 プライマリ + `background` 修飾子 | ✅ 整合 |
-| `parallel` 配下の子 step | **`run` / `uses` のみ**（ネスト `parallel` NG） | ❌ 制御 step・ネスト `parallel` を許容 |
-| composite `runs.steps` | **`run` / `uses` のみ**（`parallel` / `background` / `wait` 等すべて NG） | ❌ parallel 系を許容 |
+| `parallel` 配下の子 step | **`run` / `uses` のみ**（ネスト `parallel` NG） | ✅ PR1.5 で整合 |
+| composite `runs.steps` | **`run` / `uses` のみ**（`parallel` / `background` / `wait` 等すべて NG） | ✅ PR1.5 で整合 |
 
 ---
 
@@ -127,7 +127,6 @@
 
 - **VYaml + bare `wait-all:` + ファイル末尾改行なし** → パーサがハング（VYaml 側）。`wait-all: null` / `true` または末尾改行で回避。仕様書 §3.12 に記載。
 - C# raw string literal `"""` は閉じ `"""` 直前の改行を含まないため、テストでは `wait-all: null` を使用。
-- **PR1.5 未実施**: GitHub より寛容（D12/D13 参照）。
 
 ### ベンチマーク（CoreParsingBenchmark, ShortRun, Release）
 
@@ -204,6 +203,64 @@ dotnet test --project tests/Seiton.Core.Tests --treenode-filter /*/*/ParserTests
 ```shell
 cd src/Seiton.Benchmark && dotnet run -c Release
 ```
+
+---
+
+## PR1.5 実装記録（2026-06-26 完了）
+
+### フェーズ別実装
+
+| フェーズ | 内容 | 主なファイル |
+|---------|------|-------------|
+| 1 Red | D12/D13 ng テスト 6 件追加、`ok-action-metadata-background` → ng 反転 | `ParserTests.ParallelSteps.cs` |
+| 2 Green | `StepParseContext` + `StepParseContextRules`、 `ParseSteps`/`ParseStep` 分岐、禁止キー即時 skip | `StepParseContext.cs`, `WorkflowParser.Steps.cs`, `WorkflowParser.Jobs.cs`, `WorkflowParser.ActionMetadata.cs` |
+| 3 仕様 | §3.12 に `StepParseContext`・D12/D13・span 教訓を追記 | `Seiton_Parser_spec.md`, `Seiton_Parser_csharp_spec.md` |
+
+**データセット更新は不要**: コンテキスト制約はランタイム検証由来で raw JSON Schema に無いため、`supplemental-step-schema.json` / `StepSchema.g.cs` は変更せず、パーサー内 `StepParseContextRules` で表現（生成パイプラインの責務外）。
+
+### セルフレビュー（反復）
+
+| ラウンド | 指摘 | 対応 |
+|---------|------|------|
+| 1 | 禁止プライマリの値をパースし続けていた | `ReportContextDisallowedKey` + `SkipCurrentNode` + `continue` |
+| 2 | 診断キー名が `cancel`→`monito` 等に化ける | `reader.Read()` 前に `restrictedKeyName` を materialize（VYaml バッファ再利用） |
+| 3 | `isKnownButNotHandled` が restricted で黙殺 | `ReportContextDisallowedKey` 経由で報告 |
+| 4 | 未知キーも restricted で通常の unknown パスに落ちる | restricted 専用エラーパスを先に分岐 |
+
+### API レビュー（ユーザーファースト）
+
+| 観点 | 判断 |
+|------|------|
+| 公開 API | `StepParseContext` は `internal`。CLI / lint 設定に影響なし |
+| 診断文言 | `for step in parallel group` / `for step in composite action` でコンテキストを明示。期待キー一覧は GitHub 実機と整合 |
+| missing-primary | restricted では `run`/`uses` のみを案内（workflow 用の 6 種メッセージと分離） |
+| 診断位置 | 禁止キーの **キー位置** を指す（値ではない）— ユーザーが削除・修正しやすい |
+
+### テスト
+
+```shell
+dotnet test --project tests/Seiton.Core.Tests --treenode-filter /*/*/ParserTests/Parse_ParallelSteps*
+```
+
+18/18 通過。ソリューション全体: Core 1964 + Seiton 432 + Update 193 = **2589** 通過（Playground は WASM 起動のため別途）。
+
+追加 ng ケース: `ng-parallel-child-nested-parallel`, `ng-parallel-child-wait-all`（`wait` も同パス）, `ng-parallel-child-background`, `ng-action-metadata-parallel`, `ng-action-metadata-background`, `ng-action-metadata-wait`（`wait-all` で代表）。
+
+### ベンチマーク（CoreParsingBenchmark, ShortRun, Release）
+
+基準 = PR1 完了時（上表「実装後」列）。
+
+| Size | 基準 Mean | PR1.5 Mean | Δ Mean | 基準 Alloc | PR1.5 Alloc | Δ Alloc |
+|------|----------|-----------|--------|-----------|------------|---------|
+| Small | 41.9 µs | 46.6 µs | **+11%** | 2.62 KB | 2.62 KB | 0% |
+| Medium | 931 µs | 1,046 µs | **+12%** | 16.23 KB | 16.23 KB | 0% |
+| Large | 15,442 µs | 17,676 µs | **+14%** | 82.48 KB | 82.48 KB | 0% |
+
+**判定**: Alloc 変化なし。Mean は ShortRun（N=3）のばらつき内で **実質 ±10% 付近**（workflow 通常 step は `WorkflowJobStep` で分岐コスト 1 比較のみ）。
+
+**低下理由**: restricted コンテキストでキーごとに `IsRestricted` 分岐 + エラー時の `Encoding.UTF8.GetString`（restricted のみ）。parallel / composite は全体のごく一部。
+
+**改善策（将来）**: 現状で hot path 追加 alloc なし。さらに詰めるなら `RestrictedExpectedKeys` を form 別に出し分けてメッセージ精度を上げる程度（性能より UX）。
 
 ---
 
@@ -353,12 +410,12 @@ flowchart LR
 
 ### PR1.5
 
-- [ ] `ParserTests.ParallelSteps` に D12/D13 ng ケース追加
-- [ ] `StepParseContext` + `ParseStep` 分岐
-- [ ] `ok-action-metadata-background` → ng に反転
-- [ ] `supplemental-step-schema.json` / 生成物更新（必要なら）
-- [ ] `Seiton_Parser_spec.md` §3.12 更新（ランタイム乖離の lessons learned）
-- [ ] Green + `dotnet test` + benchmark ±10%
+- [x] `ParserTests.ParallelSteps` に D12/D13 ng ケース追加
+- [x] `StepParseContext` + `ParseStep` 分岐
+- [x] `ok-action-metadata-background` → ng に反転
+- [x] `supplemental-step-schema.json` / 生成物更新（**不要** — ランタイム制約はパーサー内）
+- [x] `Seiton_Parser_spec.md` §3.12 更新（ランタイム乖離の lessons learned）
+- [x] Green + `dotnet test` + benchmark ±10%（Alloc 不変、Mean は ShortRun ばらつき内）
 
 ### PR2
 
