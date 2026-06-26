@@ -15,7 +15,7 @@ public sealed class ExpectedKeysCSharpGeneratorTests
         await Assert.That(output).Contains("internal enum JobMappingKey : byte");
         await Assert.That(output).Contains("internal readonly struct JobMappingKeyTable : global::Seiton.Core.Parsing.IUtf8OrderedKeyTable");
         await Assert.That(output).Contains("public static int KeyCount => 20;");
-        await Assert.That(output).Contains("JobMappingKey.RunsOn =");
+        await Assert.That(output).Contains("RunsOn = 11,");
         await Assert.That(output).Contains("internal static bool IsKnownJobKey(ReadOnlySpan<byte> keyUtf8)");
         await Assert.That(output).Contains("keyUtf8.SequenceEqual(\"runs-on\"u8)");
     }
