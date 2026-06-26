@@ -265,15 +265,6 @@ public static partial class WorkflowParser
                 if (isPrimaryKey)
                 {
                     var newForm = StepSchema.PrimaryFormForMappingKey(stepKey);
-                    if (stepForm is StepSchema.FormId existingForm && existingForm != newForm)
-                    {
-                        ReportPrimaryConflict(ref diagnostics, stepPrefix, firstPrimaryKey, firstPrimaryMark, newForm);
-                    }
-
-                    firstPrimaryKey = stepKey;
-                    firstPrimaryMark = keyMark;
-                    stepForm = newForm;
-                    hasPrimary = true;
                     if (!StepParseContextRules.IsPrimaryFormAllowed(context, newForm))
                     {
                         ReportContextDisallowedKey(ref diagnostics, stepPrefix, restrictedKeyName!, keyMark, context);
@@ -284,6 +275,16 @@ public static partial class WorkflowParser
 
                         continue;
                     }
+
+                    if (stepForm is StepSchema.FormId existingForm && existingForm != newForm)
+                    {
+                        ReportPrimaryConflict(ref diagnostics, stepPrefix, firstPrimaryKey, firstPrimaryMark, newForm);
+                    }
+
+                    firstPrimaryKey = stepKey;
+                    firstPrimaryMark = keyMark;
+                    stepForm = newForm;
+                    hasPrimary = true;
                 }
 
                 switch (stepKey)
@@ -708,7 +709,9 @@ public static partial class WorkflowParser
         step.If = ifNode;
         step.IfKeyRange = ifNode.HasValue ? BuildScalarLocation(ifKeyMark, 2) : null;
         step.Name = nameNode;
-        step.Background = stepForm is StepSchema.FormId.Run or StepSchema.FormId.Uses
+        step.Background = stepForm is StepSchema.FormId bgForm
+            && StepParseContextRules.IsBackgroundModifierAllowed(context, bgForm)
+            && backgroundNode.HasValue
             ? backgroundNode
             : default;
         step.Exec = exec;

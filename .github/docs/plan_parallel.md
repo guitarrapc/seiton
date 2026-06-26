@@ -226,6 +226,8 @@ cd src/Seiton.Benchmark && dotnet run -c Release
 | 2 | 診断キー名が `cancel`→`monito` 等に化ける | `reader.Read()` 前に `restrictedKeyName` を materialize（VYaml バッファ再利用） |
 | 3 | `isKnownButNotHandled` が restricted で黙殺 | `ReportContextDisallowedKey` 経由で報告 |
 | 4 | 未知キーも restricted で通常の unknown パスに落ちる | restricted 専用エラーパスを先に分岐 |
+| 5 | 禁止プライマリでも `stepForm` が設定され誤った `ExecWait` 等が AST に残る | `IsPrimaryFormAllowed` を `stepForm` 設定**前**に判定 |
+| 6 | restricted で `background` 診断後も `Step.Background` が true のまま | `IsBackgroundModifierAllowed` を満たす場合のみ AST に反映 |
 
 ### API レビュー（ユーザーファースト）
 
@@ -243,8 +245,6 @@ dotnet test --project tests/Seiton.Core.Tests --treenode-filter /*/*/ParserTests
 ```
 
 18/18 通過。ソリューション全体: Core 1964 + Seiton 432 + Update 193 = **2589** 通過（Playground は WASM 起動のため別途）。
-
-追加 ng ケース: `ng-parallel-child-nested-parallel`, `ng-parallel-child-wait-all`（`wait` も同パス）, `ng-parallel-child-background`, `ng-action-metadata-parallel`, `ng-action-metadata-background`, `ng-action-metadata-wait`（`wait-all` で代表）。
 
 ### ベンチマーク（CoreParsingBenchmark, ShortRun, Release）
 
