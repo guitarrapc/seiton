@@ -91,6 +91,13 @@ public sealed class GitHubWorkflowStepSchemaParserInferValueKindTests
     }
 
     [Test]
+    public void InferValueKind_StringNullUnion_IsNotNullary()
+    {
+        Assert.Throws<InvalidDataException>(() =>
+            Infer("name", """{ "type": ["string", "null"] }""", out _));
+    }
+
+    [Test]
     public async Task InferValueKind_WaitOneOf_ReturnsStringOrNonEmptyStringArray()
     {
         var kind = Infer(

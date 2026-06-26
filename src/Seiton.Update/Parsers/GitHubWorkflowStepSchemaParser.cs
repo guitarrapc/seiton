@@ -226,7 +226,7 @@ internal sealed class GitHubWorkflowStepSchemaParser
                 .ToList();
 
             if (types.Contains("null", StringComparer.Ordinal)
-                && types.Any(static t => t is "boolean" or "null"))
+                && types.Contains("boolean", StringComparer.Ordinal))
             {
                 return "nullary";
             }
