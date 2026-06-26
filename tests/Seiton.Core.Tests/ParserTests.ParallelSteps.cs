@@ -1,0 +1,270 @@
+using System.Text;
+using Seiton.Core.Parsing;
+using Seiton.Core.Parsing.Ast;
+
+namespace Seiton.Core.Tests;
+
+public sealed partial class ParserTests
+{
+    [Test]
+    public async Task Parse_ParallelSteps_ok_background_run_same_step()
+    {
+        var yaml = """
+            on: push
+            jobs:
+              build:
+                runs-on: ubuntu-latest
+                steps:
+                  - id: build
+                    run: npm run build
+                    background: true
+            """;
+
+        var result = WorkflowParser.ParseDirect(Encoding.UTF8.GetBytes(yaml), "wf.yml", out var arena);
+        await Assert.That(result.Diagnostics).IsEmpty();
+        var step = result.Workflow!.Jobs.Values().First().Steps![0];
+        await Assert.That(step.Background.HasValue).IsTrue();
+        await Assert.That(arena!.GetBoolValue(step.Background)).IsTrue();
+        await Assert.That(step.Exec).IsTypeOf<ExecRun>();
+    }
+
+    [Test]
+    public async Task Parse_ParallelSteps_ok_background_wait_sequence()
+    {
+        var yaml = """
+            on: push
+            jobs:
+              build:
+                runs-on: ubuntu-latest
+                steps:
+                  - id: build-frontend
+                    run: npm run build
+                    background: true
+                  - id: build-backend
+                    run: npm run build
+                    background: true
+                  - wait: [build-frontend, build-backend]
+            """;
+
+        var result = WorkflowParser.ParseDirect(Encoding.UTF8.GetBytes(yaml), "wf.yml", out _);
+        await Assert.That(result.Diagnostics).IsEmpty();
+    }
+
+    [Test]
+    public async Task Parse_ParallelSteps_ok_wait_array()
+    {
+        var yaml = """
+            on: push
+            jobs:
+              build:
+                runs-on: ubuntu-latest
+                steps:
+                  - id: a
+                    run: echo a
+                    background: true
+                  - id: b
+                    run: echo b
+                    background: true
+                  - wait: [a, b]
+            """;
+
+        var result = WorkflowParser.ParseDirect(Encoding.UTF8.GetBytes(yaml), "wf.yml", out var arena);
+        await Assert.That(result.Diagnostics).IsEmpty();
+        var waitStep = result.Workflow!.Jobs.Values().First().Steps![2];
+        await Assert.That(waitStep.Exec).IsTypeOf<ExecWait>();
+        var targets = ((ExecWait)waitStep.Exec).Targets;
+        await Assert.That(targets!.Count).IsEqualTo(2);
+        await Assert.That(Encoding.UTF8.GetString(arena!.GetStringValue(targets[0]))).IsEqualTo("a");
+    }
+
+    [Test]
+    public async Task Parse_ParallelSteps_ok_wait_all_null()
+    {
+        var yaml = """
+            on: push
+            jobs:
+              build:
+                runs-on: ubuntu-latest
+                steps:
+                  - run: echo hi
+                    background: true
+                  - wait-all: null
+            """;
+
+        var result = WorkflowParser.ParseDirect(Encoding.UTF8.GetBytes(yaml), "wf.yml", out _);
+        await Assert.That(result.Diagnostics).IsEmpty();
+        var waitAllStep = result.Workflow!.Jobs.Values().First().Steps![1];
+        await Assert.That(waitAllStep.Exec).IsTypeOf<ExecWaitAll>();
+    }
+
+    [Test]
+    public async Task Parse_ParallelSteps_ok_cancel()
+    {
+        var yaml = """
+            on: push
+            jobs:
+              build:
+                runs-on: ubuntu-latest
+                steps:
+                  - id: monitor
+                    run: ./monitor.sh
+                    background: true
+                  - cancel: monitor
+            """;
+
+        var result = WorkflowParser.ParseDirect(Encoding.UTF8.GetBytes(yaml), "wf.yml", out var arena);
+        await Assert.That(result.Diagnostics).IsEmpty();
+        var cancelStep = result.Workflow!.Jobs.Values().First().Steps![1];
+        await Assert.That(cancelStep.Exec).IsTypeOf<ExecCancel>();
+        await Assert.That(Encoding.UTF8.GetString(arena!.GetStringValue(((ExecCancel)cancelStep.Exec).Target))).IsEqualTo("monitor");
+    }
+
+    [Test]
+    public async Task Parse_ParallelSteps_ok_parallel_nested()
+    {
+        var yaml = """
+            on: push
+            jobs:
+              build:
+                runs-on: ubuntu-latest
+                steps:
+                  - parallel:
+                    - run: npm run build-app1
+                    - run: npm run build-app2
+                    - run: npm run build-app3
+            """;
+
+        var result = WorkflowParser.ParseDirect(Encoding.UTF8.GetBytes(yaml), "wf.yml", out _);
+        await Assert.That(result.Diagnostics).IsEmpty();
+        var parallel = (ExecParallel)result.Workflow!.Jobs.Values().First().Steps![0].Exec;
+        await Assert.That(parallel.Steps!.Count).IsEqualTo(3);
+    }
+
+    [Test]
+    public async Task Parse_ParallelSteps_ok_background_uses()
+    {
+        var yaml = """
+            on: push
+            jobs:
+              build:
+                runs-on: ubuntu-latest
+                steps:
+                  - uses: actions/checkout@v4
+                    background: true
+            """;
+
+        var result = WorkflowParser.ParseDirect(Encoding.UTF8.GetBytes(yaml), "wf.yml", out var arena);
+        await Assert.That(result.Diagnostics).IsEmpty();
+        var step = result.Workflow!.Jobs.Values().First().Steps![0];
+        await Assert.That(step.Background.HasValue).IsTrue();
+        await Assert.That(arena!.GetBoolValue(step.Background)).IsTrue();
+        await Assert.That(step.Exec).IsTypeOf<ExecAction>();
+    }
+
+    [Test]
+    public async Task Parse_ParallelSteps_ok_action_metadata_background()
+    {
+        var yaml = """
+            name: My action
+            description: test
+            runs:
+              using: composite
+              steps:
+                - run: echo hi
+                  background: true
+            """;
+
+        var result = WorkflowParser.ParseDirect(Encoding.UTF8.GetBytes(yaml), "action.yml", out _);
+        await Assert.That(result.Diagnostics).IsEmpty();
+    }
+
+    [Test]
+    public async Task Parse_ParallelSteps_ng_no_primary()
+    {
+        var yaml = """
+            on: push
+            jobs:
+              build:
+                runs-on: ubuntu-latest
+                steps:
+                  - name: empty
+            """;
+
+        var result = WorkflowParser.ParseDirect(Encoding.UTF8.GetBytes(yaml), "wf.yml", out _);
+        await Assert.That(result.Diagnostics.Any(d =>
+            d.Message.Contains("must have step execution key", StringComparison.Ordinal)
+            || d.Message.Contains("must run script", StringComparison.Ordinal))).IsTrue();
+    }
+
+    [Test]
+    public async Task Parse_ParallelSteps_ng_run_and_wait_same_step()
+    {
+        var yaml = """
+            on: push
+            jobs:
+              build:
+                runs-on: ubuntu-latest
+                steps:
+                  - run: echo hi
+                    wait: other
+            """;
+
+        var result = WorkflowParser.ParseDirect(Encoding.UTF8.GetBytes(yaml), "wf.yml", out _);
+        await Assert.That(result.Diagnostics.Any(d =>
+            d.Message.Contains("unexpected key \"run\"", StringComparison.Ordinal)
+            && d.Message.Contains("step to wait for background steps", StringComparison.Ordinal))).IsTrue();
+    }
+
+    [Test]
+    public async Task Parse_ParallelSteps_ng_background_on_wait_step()
+    {
+        var yaml = """
+            on: push
+            jobs:
+              build:
+                runs-on: ubuntu-latest
+                steps:
+                  - wait: other
+                    background: true
+            """;
+
+        var result = WorkflowParser.ParseDirect(Encoding.UTF8.GetBytes(yaml), "wf.yml", out _);
+        await Assert.That(result.Diagnostics.Any(d =>
+            d.Message.Contains("unexpected key \"background\"", StringComparison.Ordinal)
+            && d.Message.Contains("step to wait for background steps", StringComparison.Ordinal))).IsTrue();
+    }
+
+    [Test]
+    public async Task Parse_ParallelSteps_ng_parallel_empty()
+    {
+        var yaml = """
+            on: push
+            jobs:
+              build:
+                runs-on: ubuntu-latest
+                steps:
+                  - parallel: []
+            """;
+
+        var result = WorkflowParser.ParseDirect(Encoding.UTF8.GetBytes(yaml), "wf.yml", out _);
+        await Assert.That(result.Diagnostics.Any(d =>
+            d.Message.Contains("parallel must be non-empty", StringComparison.Ordinal))).IsTrue();
+    }
+
+    [Test]
+    public async Task Parse_ParallelSteps_ng_wait_empty_array()
+    {
+        var yaml = """
+            on: push
+            jobs:
+              build:
+                runs-on: ubuntu-latest
+                steps:
+                  - wait: []
+            """;
+
+        var result = WorkflowParser.ParseDirect(Encoding.UTF8.GetBytes(yaml), "wf.yml", out _);
+        await Assert.That(result.Diagnostics.Any(d =>
+            d.Message.Contains("wait must be string or non-empty sequence", StringComparison.Ordinal))).IsTrue();
+    }
+}

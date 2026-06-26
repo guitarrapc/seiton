@@ -6,7 +6,7 @@ using static Seiton.Core.Tests.TestHelper;
 
 namespace Seiton.Core.Tests;
 
-public sealed class ParserTests
+public sealed partial class ParserTests
 {
     [Test]
     public async Task Parse_MinimalWorkflow_NoDiagnostics()
@@ -6806,7 +6806,7 @@ public sealed class ParserTests
         """u8;
         var result = WorkflowParser.ParseDirect(yaml.ToArray(), "test.yaml", out var arena);
         var diag = result.Diagnostics.First(d => d.Message.Contains("must run script"));
-        await Assert.That(diag.Message).IsEqualTo("jobs.'test'.steps[1] must run script with \"run\" section or run action with \"uses\" section");
+        await Assert.That(diag.Message).IsEqualTo("jobs.'test'.steps[1] must run script with \"run\" section or run action with \"uses\" section, or use \"wait\", \"wait-all\", \"cancel\", or \"parallel\"");
     }
 
     // regression: "with" section scalar → mapping expected
