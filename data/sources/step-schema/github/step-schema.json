@@ -1,0 +1,336 @@
+{
+  "schemaVersion": 1,
+  "source": "github-workflow-schema\u002Bsupplemental",
+  "rawSources": [
+    {
+      "fileName": "github-workflow.schema.json",
+      "sha256": "sha256:a02c482ea324db6178a6d2fed198808cbd62694c1f4c57d053252a82521b412d"
+    },
+    {
+      "fileName": "workflow-syntax.md",
+      "sha256": "sha256:4f8cefcf8a390c4d3bff9f6601f444a7040b6ec0e75bcb744186017928bce041"
+    }
+  ],
+  "appliesTo": [
+    "workflow-job-steps",
+    "action-metadata-steps"
+  ],
+  "sharedKeys": [
+    "continue-on-error",
+    "env",
+    "id",
+    "if",
+    "name",
+    "timeout-minutes"
+  ],
+  "forms": [
+    {
+      "id": "cancel",
+      "primaryKey": "cancel",
+      "unexpectedKeyDescription": "step to cancel a background step",
+      "allowedKeys": [
+        "cancel",
+        "continue-on-error",
+        "env",
+        "id",
+        "if",
+        "name",
+        "timeout-minutes"
+      ],
+      "properties": {
+        "continue-on-error": {
+          "valueKind": "boolOrExpression",
+          "expressionContext": "StepContinueOnError"
+        },
+        "env": {
+          "valueKind": "envMapping",
+          "expressionContext": null
+        },
+        "id": {
+          "valueKind": "string",
+          "expressionContext": null
+        },
+        "if": {
+          "valueKind": "stepIf",
+          "expressionContext": "StepIf"
+        },
+        "name": {
+          "valueKind": "string",
+          "expressionContext": null
+        },
+        "timeout-minutes": {
+          "valueKind": "floatOrExpression",
+          "expressionContext": "StepTimeoutMinutes"
+        },
+        "cancel": {
+          "valueKind": "nonEmptyString",
+          "expressionContext": null
+        }
+      }
+    },
+    {
+      "id": "parallel",
+      "primaryKey": "parallel",
+      "unexpectedKeyDescription": "step to run steps in parallel",
+      "allowedKeys": [
+        "continue-on-error",
+        "env",
+        "id",
+        "if",
+        "name",
+        "parallel",
+        "timeout-minutes"
+      ],
+      "properties": {
+        "continue-on-error": {
+          "valueKind": "boolOrExpression",
+          "expressionContext": "StepContinueOnError"
+        },
+        "env": {
+          "valueKind": "envMapping",
+          "expressionContext": null
+        },
+        "id": {
+          "valueKind": "string",
+          "expressionContext": null
+        },
+        "if": {
+          "valueKind": "stepIf",
+          "expressionContext": "StepIf"
+        },
+        "name": {
+          "valueKind": "string",
+          "expressionContext": null
+        },
+        "timeout-minutes": {
+          "valueKind": "floatOrExpression",
+          "expressionContext": "StepTimeoutMinutes"
+        },
+        "parallel": {
+          "valueKind": "nonEmptyStepArray",
+          "expressionContext": null
+        }
+      }
+    },
+    {
+      "id": "run",
+      "primaryKey": "run",
+      "unexpectedKeyDescription": "step to run shell command",
+      "allowedKeys": [
+        "background",
+        "continue-on-error",
+        "env",
+        "id",
+        "if",
+        "name",
+        "run",
+        "shell",
+        "timeout-minutes",
+        "working-directory"
+      ],
+      "properties": {
+        "continue-on-error": {
+          "valueKind": "boolOrExpression",
+          "expressionContext": "StepContinueOnError"
+        },
+        "env": {
+          "valueKind": "envMapping",
+          "expressionContext": null
+        },
+        "id": {
+          "valueKind": "string",
+          "expressionContext": null
+        },
+        "if": {
+          "valueKind": "stepIf",
+          "expressionContext": "StepIf"
+        },
+        "name": {
+          "valueKind": "string",
+          "expressionContext": null
+        },
+        "timeout-minutes": {
+          "valueKind": "floatOrExpression",
+          "expressionContext": "StepTimeoutMinutes"
+        },
+        "run": {
+          "valueKind": "string",
+          "expressionContext": "StepRun"
+        },
+        "background": {
+          "valueKind": "boolean",
+          "expressionContext": null
+        },
+        "working-directory": {
+          "valueKind": "string",
+          "expressionContext": "StepWorkingDirectory"
+        },
+        "shell": {
+          "valueKind": "string",
+          "expressionContext": "StepShell"
+        }
+      }
+    },
+    {
+      "id": "uses",
+      "primaryKey": "uses",
+      "unexpectedKeyDescription": "step to execute action",
+      "allowedKeys": [
+        "background",
+        "continue-on-error",
+        "env",
+        "id",
+        "if",
+        "name",
+        "timeout-minutes",
+        "uses",
+        "with"
+      ],
+      "properties": {
+        "continue-on-error": {
+          "valueKind": "boolOrExpression",
+          "expressionContext": "StepContinueOnError"
+        },
+        "env": {
+          "valueKind": "envMapping",
+          "expressionContext": null
+        },
+        "id": {
+          "valueKind": "string",
+          "expressionContext": null
+        },
+        "if": {
+          "valueKind": "stepIf",
+          "expressionContext": "StepIf"
+        },
+        "name": {
+          "valueKind": "string",
+          "expressionContext": null
+        },
+        "timeout-minutes": {
+          "valueKind": "floatOrExpression",
+          "expressionContext": "StepTimeoutMinutes"
+        },
+        "uses": {
+          "valueKind": "string",
+          "expressionContext": null
+        },
+        "background": {
+          "valueKind": "boolean",
+          "expressionContext": null
+        },
+        "with": {
+          "valueKind": "envMapping",
+          "expressionContext": null
+        }
+      }
+    },
+    {
+      "id": "wait",
+      "primaryKey": "wait",
+      "unexpectedKeyDescription": "step to wait for background steps",
+      "allowedKeys": [
+        "continue-on-error",
+        "env",
+        "id",
+        "if",
+        "name",
+        "timeout-minutes",
+        "wait"
+      ],
+      "properties": {
+        "continue-on-error": {
+          "valueKind": "boolOrExpression",
+          "expressionContext": "StepContinueOnError"
+        },
+        "env": {
+          "valueKind": "envMapping",
+          "expressionContext": null
+        },
+        "id": {
+          "valueKind": "string",
+          "expressionContext": null
+        },
+        "if": {
+          "valueKind": "stepIf",
+          "expressionContext": "StepIf"
+        },
+        "name": {
+          "valueKind": "string",
+          "expressionContext": null
+        },
+        "timeout-minutes": {
+          "valueKind": "floatOrExpression",
+          "expressionContext": "StepTimeoutMinutes"
+        },
+        "wait": {
+          "valueKind": "stringOrNonEmptyStringArray",
+          "expressionContext": null
+        }
+      }
+    },
+    {
+      "id": "wait-all",
+      "primaryKey": "wait-all",
+      "unexpectedKeyDescription": "step to wait for all background steps",
+      "allowedKeys": [
+        "continue-on-error",
+        "env",
+        "id",
+        "if",
+        "name",
+        "timeout-minutes",
+        "wait-all"
+      ],
+      "properties": {
+        "continue-on-error": {
+          "valueKind": "boolOrExpression",
+          "expressionContext": "StepContinueOnError"
+        },
+        "env": {
+          "valueKind": "envMapping",
+          "expressionContext": null
+        },
+        "id": {
+          "valueKind": "string",
+          "expressionContext": null
+        },
+        "if": {
+          "valueKind": "stepIf",
+          "expressionContext": "StepIf"
+        },
+        "name": {
+          "valueKind": "string",
+          "expressionContext": null
+        },
+        "timeout-minutes": {
+          "valueKind": "floatOrExpression",
+          "expressionContext": "StepTimeoutMinutes"
+        },
+        "wait-all": {
+          "valueKind": "nullary",
+          "expressionContext": null
+        }
+      }
+    }
+  ],
+  "modifiers": [
+    {
+      "key": "background",
+      "allowedOnFormIds": [
+        "run",
+        "uses"
+      ]
+    }
+  ],
+  "keyDependencies": [
+    {
+      "key": "shell",
+      "requiresPrimary": "run"
+    },
+    {
+      "key": "working-directory",
+      "requiresPrimary": "run"
+    }
+  ]
+}

@@ -329,20 +329,6 @@ public sealed class WorkflowSyntaxExpectedKeysParserTests
         await Assert.That(step.Keys).Contains("run");
         await Assert.That(step.Keys).Contains("uses");
 
-        // Check derived action-step (step minus run-only)
-        var actionStep = model.Sections.FirstOrDefault(s => s.Name == "action-step");
-        await Assert.That(actionStep).IsNotNull();
-        await Assert.That(actionStep!.Keys).Contains("id");
-        await Assert.That(actionStep.Keys).Contains("uses");
-        await Assert.That(actionStep.Keys).DoesNotContain("run");
-
-        // Check derived run-step (step minus action-only)
-        var runStep = model.Sections.FirstOrDefault(s => s.Name == "run-step");
-        await Assert.That(runStep).IsNotNull();
-        await Assert.That(runStep!.Keys).Contains("id");
-        await Assert.That(runStep.Keys).Contains("run");
-        await Assert.That(runStep.Keys).DoesNotContain("uses");
-
         // Check container section
         var container = model.Sections.FirstOrDefault(s => s.Name == "container");
         await Assert.That(container).IsNotNull();
@@ -462,22 +448,6 @@ public sealed class WorkflowSyntaxExpectedKeysParserTests
         await Assert.That(step.Keys).Contains("env");
         await Assert.That(step.Keys).Contains("shell");
         await Assert.That(step.Keys).Contains("working-directory");
-
-        // action-step should have uses/with but NOT run/shell/working-directory
-        var actionStep = model.Sections.First(s => s.Name == "action-step");
-        await Assert.That(actionStep.Keys).Contains("uses");
-        await Assert.That(actionStep.Keys).Contains("with");
-        await Assert.That(actionStep.Keys).DoesNotContain("run");
-        await Assert.That(actionStep.Keys).DoesNotContain("shell");
-        await Assert.That(actionStep.Keys).DoesNotContain("working-directory");
-
-        // run-step should have run/shell/working-directory but NOT uses/with
-        var runStep = model.Sections.First(s => s.Name == "run-step");
-        await Assert.That(runStep.Keys).Contains("run");
-        await Assert.That(runStep.Keys).Contains("shell");
-        await Assert.That(runStep.Keys).Contains("working-directory");
-        await Assert.That(runStep.Keys).DoesNotContain("uses");
-        await Assert.That(runStep.Keys).DoesNotContain("with");
 
         // container and service sections
         var container = model.Sections.First(s => s.Name == "container");

@@ -1,0 +1,76 @@
+{
+  "schemaVersion": 1,
+  "source": "github-workflow-schema-raw",
+  "rawSources": [
+    {
+      "fileName": "github-workflow.schema.json",
+      "sha256": "sha256:a02c482ea324db6178a6d2fed198808cbd62694c1f4c57d053252a82521b412d"
+    }
+  ],
+  "forms": [
+    {
+      "id": "run",
+      "primaryKey": "run"
+    },
+    {
+      "id": "uses",
+      "primaryKey": "uses"
+    }
+  ],
+  "properties": {
+    "id": {
+      "valueKind": "string",
+      "expressionContext": null
+    },
+    "if": {
+      "valueKind": "stepIf",
+      "expressionContext": "StepIf"
+    },
+    "name": {
+      "valueKind": "string",
+      "expressionContext": null
+    },
+    "uses": {
+      "valueKind": "string",
+      "expressionContext": null
+    },
+    "run": {
+      "valueKind": "string",
+      "expressionContext": "StepRun"
+    },
+    "working-directory": {
+      "valueKind": "string",
+      "expressionContext": "StepWorkingDirectory"
+    },
+    "shell": {
+      "valueKind": "string",
+      "expressionContext": "StepShell"
+    },
+    "with": {
+      "valueKind": "envMapping",
+      "expressionContext": null
+    },
+    "env": {
+      "valueKind": "envMapping",
+      "expressionContext": null
+    },
+    "continue-on-error": {
+      "valueKind": "boolOrExpression",
+      "expressionContext": "StepContinueOnError"
+    },
+    "timeout-minutes": {
+      "valueKind": "floatOrExpression",
+      "expressionContext": "StepTimeoutMinutes"
+    }
+  },
+  "keyDependencies": [
+    {
+      "key": "shell",
+      "requiresPrimary": "run"
+    },
+    {
+      "key": "working-directory",
+      "requiresPrimary": "run"
+    }
+  ]
+}

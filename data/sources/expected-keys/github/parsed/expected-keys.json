@@ -9,20 +9,6 @@
   ],
   "sections": [
     {
-      "name": "action-step",
-      "description": "Keys valid for action-form steps (with \u0027uses\u0027)",
-      "keys": [
-        "continue-on-error",
-        "env",
-        "id",
-        "if",
-        "name",
-        "timeout-minutes",
-        "uses",
-        "with"
-      ]
-    },
-    {
       "name": "concurrency",
       "description": "Expected keys for concurrency section",
       "keys": [
@@ -206,21 +192,6 @@
         "branches",
         "branches-ignore",
         "workflows"
-      ]
-    },
-    {
-      "name": "run-step",
-      "description": "Keys valid for run-form steps (with \u0027run\u0027)",
-      "keys": [
-        "continue-on-error",
-        "env",
-        "id",
-        "if",
-        "name",
-        "run",
-        "shell",
-        "timeout-minutes",
-        "working-directory"
       ]
     },
     {

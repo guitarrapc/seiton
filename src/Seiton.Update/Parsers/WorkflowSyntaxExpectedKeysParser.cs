@@ -14,7 +14,7 @@ namespace Seiton.Update.Parsers;
 ///   <item>Expand pipe-separated alternatives in angle brackets (e.g. <c>&lt;branches|branches-ignore&gt;</c>).</item>
 ///   <item>Register every concrete (non-parameter) segment as a child of its parent path.</item>
 ///   <item>Emit named sections for all parents that have concrete children.</item>
-///   <item>Derive special sections (action-step, run-step) and supplement missing ones (credentials, runs-on).</item>
+///   <item>Supplement missing ones (credentials, runs-on).</item>
 /// </list>
 /// </summary>
 internal sealed partial class WorkflowSyntaxExpectedKeysParser
@@ -114,29 +114,6 @@ internal sealed partial class WorkflowSyntaxExpectedKeysParser
                 : $"Expected keys for {parentPath}";
             var sortedKeys = children.OrderBy(static k => k, StringComparer.Ordinal).ToList();
             sections.Add(new ExpectedKeySection(name, description, sortedKeys));
-        }
-
-        // Derive action-step and run-step from step section
-        var stepSection = sections.FirstOrDefault(static s => s.Name == "step");
-        if (stepSection is not null)
-        {
-            var actionStepKeys = stepSection.Keys
-                .Where(static k => k is not ("run" or "shell" or "working-directory"))
-                .OrderBy(static k => k, StringComparer.Ordinal)
-                .ToList();
-            sections.Add(new ExpectedKeySection(
-                "action-step",
-                "Keys valid for action-form steps (with 'uses')",
-                actionStepKeys));
-
-            var runStepKeys = stepSection.Keys
-                .Where(static k => k is not ("uses" or "with"))
-                .OrderBy(static k => k, StringComparer.Ordinal)
-                .ToList();
-            sections.Add(new ExpectedKeySection(
-                "run-step",
-                "Keys valid for run-form steps (with 'run')",
-                runStepKeys));
         }
 
         // Add supplemented sections (sub-keys documented in body text, not as headings)

@@ -41,8 +41,8 @@ public static partial class WorkflowParser
         };
     }
 
-    private const string ActionStepExpectedKeys = Generated.ExpectedKeys.ActionStepKeys;
-    private const string RunStepExpectedKeys = Generated.ExpectedKeys.RunStepKeys;
+    private const string ActionStepExpectedKeys = Generated.StepSchema.ActionStepKeys;
+    private const string RunStepExpectedKeys = Generated.StepSchema.RunStepKeys;
 
     /// <summary>Formats a diagnostic prefix like <c>jobs.'build'.steps[1]</c>. When jobId is empty (action metadata), returns <c>steps[1]</c>.</summary>
     private static string FormatStepPrefix(ReadOnlySpan<byte> source, Utf8Slice jobId, int stepIndex)

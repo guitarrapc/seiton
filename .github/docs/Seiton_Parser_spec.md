@@ -612,6 +612,8 @@ ParseSteps(node):
 
 ### 3.12 Step Parse
 
+Per-form allowed keys and unexpected-key descriptions for `run` / `uses` steps are generated from the **`step-schema` dataset** (`StepSchema.g.cs`). The `expected-keys` dataset still provides the union of all documented step keys for the generic `step` section only.
+
 ```
 ParseStep(node):
   collect all mapping entries (2-pass design):
