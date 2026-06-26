@@ -11,6 +11,9 @@ public sealed class Step
 
     public StringNodeId Name { get; set; }
 
+    /// <summary>Background modifier on <c>run</c> / <c>uses</c> steps only.</summary>
+    public BoolNodeId Background { get; set; }
+
     public StepExec Exec { get; set; } = null!;
 
     public Env? Env { get; set; }
@@ -27,6 +30,7 @@ public sealed class Step
         If = default;
         IfKeyRange = null;
         Name = default;
+        Background = default;
         Exec = null!;
         Env = null;
         ContinueOnError = default;
@@ -35,7 +39,7 @@ public sealed class Step
     }
 }
 
-/// <summary>Base class for step execution payloads (<c>run:</c> or <c>uses:</c>).</summary>
+/// <summary>Base class for step execution payloads.</summary>
 public abstract class StepExec
 {
     public StepExecKind Kind { get; set; }
@@ -48,6 +52,10 @@ public enum StepExecKind
 {
     Run,
     Action,
+    Wait,
+    WaitAll,
+    Cancel,
+    Parallel,
 }
 
 /// <summary>Execution payload for a <c>run:</c> step.</summary>
@@ -90,6 +98,55 @@ public sealed class ExecAction : StepExec
         Inputs = null;
         Entrypoint = default;
         Args = default;
+        Range = default;
+    }
+}
+
+/// <summary>Execution payload for a <c>wait:</c> step.</summary>
+public sealed class ExecWait : StepExec
+{
+    public IReadOnlyList<StringNodeId>? Targets { get; set; }
+
+    internal void Reset()
+    {
+        Kind = StepExecKind.Wait;
+        Targets = null;
+        Range = default;
+    }
+}
+
+/// <summary>Execution payload for a <c>wait-all:</c> step.</summary>
+public sealed class ExecWaitAll : StepExec
+{
+    internal void Reset()
+    {
+        Kind = StepExecKind.WaitAll;
+        Range = default;
+    }
+}
+
+/// <summary>Execution payload for a <c>cancel:</c> step.</summary>
+public sealed class ExecCancel : StepExec
+{
+    public StringNodeId Target { get; set; }
+
+    internal void Reset()
+    {
+        Kind = StepExecKind.Cancel;
+        Target = default;
+        Range = default;
+    }
+}
+
+/// <summary>Execution payload for a <c>parallel:</c> step.</summary>
+public sealed class ExecParallel : StepExec
+{
+    public IReadOnlyList<Step>? Steps { get; set; }
+
+    internal void Reset()
+    {
+        Kind = StepExecKind.Parallel;
+        Steps = null;
         Range = default;
     }
 }
