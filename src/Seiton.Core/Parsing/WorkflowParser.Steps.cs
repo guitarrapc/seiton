@@ -217,9 +217,6 @@ public static partial class WorkflowParser
 
             var keyMark = reader.CurrentStart;
             var keyUtf8 = reader.GetScalarUtf8();
-            string? restrictedKeyName = StepParseContextRules.IsRestricted(context)
-                ? Encoding.UTF8.GetString(keyUtf8)
-                : null;
             if (IsMergeKey(keyUtf8, keyMark, ref diagnostics, stepPrefix))
             {
                 reader.Read();
@@ -267,7 +264,12 @@ public static partial class WorkflowParser
                     var newForm = StepSchema.PrimaryFormForMappingKey(stepKey);
                     if (!StepParseContextRules.IsPrimaryFormAllowed(context, newForm))
                     {
-                        ReportContextDisallowedKey(ref diagnostics, stepPrefix, restrictedKeyName!, keyMark, context);
+                        ReportContextDisallowedKey(
+                            ref diagnostics,
+                            stepPrefix,
+                            Encoding.UTF8.GetString(StepSchema.MappingKeyTable.Utf8Key(stepKeyOrd)),
+                            keyMark,
+                            context);
                         if (!reader.End && reader.CurrentKind != YamlEventKind.MappingEnd)
                         {
                             reader.SkipCurrentNode();
@@ -514,8 +516,18 @@ public static partial class WorkflowParser
             }
 
             var isKnownButNotHandled = StepSchema.IsKnownMappingKey(keyUtf8);
-            var unknownKey = isKnownButNotHandled ? null : Encoding.UTF8.GetString(keyUtf8);
-            var unknownKeySlice = isKnownButNotHandled ? default : reader.GetScalarSlice();
+            string? unknownKey = null;
+            Utf8Slice unknownKeySlice = default;
+            string? restrictedKnownKeyName = null;
+            if (isKnownButNotHandled && StepParseContextRules.IsRestricted(context))
+            {
+                restrictedKnownKeyName = Encoding.UTF8.GetString(keyUtf8);
+            }
+            else if (!isKnownButNotHandled)
+            {
+                unknownKey = Encoding.UTF8.GetString(keyUtf8);
+                unknownKeySlice = reader.GetScalarSlice();
+            }
 
             reader.Read();
 
@@ -523,7 +535,12 @@ public static partial class WorkflowParser
             {
                 if (StepParseContextRules.IsRestricted(context))
                 {
-                    ReportContextDisallowedKey(ref diagnostics, stepPrefix, restrictedKeyName!, keyMark, context);
+                    ReportContextDisallowedKey(
+                        ref diagnostics,
+                        stepPrefix,
+                        restrictedKnownKeyName!,
+                        keyMark,
+                        context);
                 }
 
                 if (!reader.End && reader.CurrentKind != YamlEventKind.MappingEnd)
@@ -536,7 +553,7 @@ public static partial class WorkflowParser
 
             if (StepParseContextRules.IsRestricted(context))
             {
-                ReportContextDisallowedKey(ref diagnostics, stepPrefix, restrictedKeyName!, keyMark, context);
+                ReportContextDisallowedKey(ref diagnostics, stepPrefix, unknownKey!, keyMark, context);
                 if (!reader.End && reader.CurrentKind != YamlEventKind.MappingEnd)
                 {
                     reader.SkipCurrentNode();
@@ -614,7 +631,8 @@ public static partial class WorkflowParser
                     break;
             }
 
-            if (backgroundKeyMark != default
+            if (StepParseContextRules.IsRestricted(context)
+                && backgroundKeyMark != default
                 && !StepParseContextRules.IsBackgroundModifierAllowed(context, resolvedForm))
             {
                 ReportContextDisallowedKey(
