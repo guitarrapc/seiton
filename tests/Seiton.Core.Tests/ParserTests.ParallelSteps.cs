@@ -232,6 +232,8 @@ public sealed partial class ParserTests
         await Assert.That(result.Diagnostics.Any(d =>
             d.Message.Contains("unexpected key \"background\"", StringComparison.Ordinal)
             && d.Message.Contains("step to wait for background steps", StringComparison.Ordinal))).IsTrue();
+        var step = result.Workflow!.Jobs.Values().First().Steps![0];
+        await Assert.That(step.Background.HasValue).IsFalse();
     }
 
     [Test]

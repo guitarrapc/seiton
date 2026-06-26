@@ -647,7 +647,9 @@ public static partial class WorkflowParser
         step.If = ifNode;
         step.IfKeyRange = ifNode.HasValue ? BuildScalarLocation(ifKeyMark, 2) : null;
         step.Name = nameNode;
-        step.Background = backgroundNode;
+        step.Background = stepForm is StepSchema.FormId.Run or StepSchema.FormId.Uses
+            ? backgroundNode
+            : default;
         step.Exec = exec;
         step.Env = envNode;
         step.ContinueOnError = continueOnErrorNode;
