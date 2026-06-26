@@ -200,46 +200,9 @@ public static partial class WorkflowParser
             if (IsMergeKey(keyUtf8, keyMark, ref diagnostics, stepPrefix))
             {
                 reader.Read();
-                if (!reader.End) reader.SkipCurrentNode();
-                continue;
-            }
-
-            if (keyUtf8.SequenceEqual("wait-all"u8))
-            {
-                var keyLen = keyUtf8.Length;
-                reader.Read();
-                if (!TrySetBit(ref seen, (int)StepSchema.MappingKey.WaitAll))
-                {
-                    var dupName = StepSchema.MappingKeyTable.Utf8Key((int)StepSchema.MappingKey.WaitAll);
-                    var keyName = Encoding.UTF8.GetString(dupName);
-                    var prevMark = stepKeyFirstMark[(int)StepSchema.MappingKey.WaitAll];
-                    var prevLine = (int)(prevMark >> 32);
-                    var prevCol = (int)(prevMark & 0xFFFFFFFF);
-                    AddError(
-                        ref diagnostics,
-                        $"{stepPrefix} key \"{keyName}\" is duplicated in step. previously defined at line:{prevLine},col:{prevCol}",
-                        keyMark,
-                        BuildStepDuplicateKeyHelp(dupName));
-                    if (!reader.End)
-                    {
-                        reader.SkipCurrentNode();
-                    }
-
-                    continue;
-                }
-
-                stepKeyFirstMark[(int)StepSchema.MappingKey.WaitAll] = ((long)keyMark.Line << 32) | (uint)keyMark.Col;
-                firstPrimaryKey = StepSchema.MappingKey.WaitAll;
-                firstPrimaryMark = keyMark;
-                stepForm = StepSchema.FormId.WaitAll;
-                hasPrimary = true;
-
                 if (!reader.End && reader.CurrentKind != YamlEventKind.MappingEnd)
                 {
-                    if (!TryParseNullaryStepValue(ref reader, out var waErr, out var waMark))
-                    {
-                        AddError(ref diagnostics, $"{stepPrefix} wait-all must be null, empty, or true", waMark);
-                    }
+                    reader.SkipCurrentNode();
                 }
 
                 continue;
@@ -261,7 +224,7 @@ public static partial class WorkflowParser
                         $"{stepPrefix} key \"{keyName}\" is duplicated in step. previously defined at line:{prevLine},col:{prevCol}",
                         keyMark,
                         BuildStepDuplicateKeyHelp(dupName));
-                    if (!reader.End)
+                    if (!reader.End && reader.CurrentKind != YamlEventKind.MappingEnd)
                     {
                         reader.SkipCurrentNode();
                     }
@@ -381,7 +344,10 @@ public static partial class WorkflowParser
                         if (reader.CurrentKind != YamlEventKind.SequenceStart)
                         {
                             AddError(ref diagnostics, $"{stepPrefix} parallel must be non-empty sequence of steps", reader.CurrentStart);
-                            if (!reader.End) reader.SkipCurrentNode();
+                            if (!reader.End && reader.CurrentKind != YamlEventKind.MappingEnd)
+                            {
+                                reader.SkipCurrentNode();
+                            }
                         }
                         else
                         {
@@ -520,10 +486,11 @@ public static partial class WorkflowParser
 
             if (isKnownButNotHandled)
             {
-                if (!reader.End)
+                if (!reader.End && reader.CurrentKind != YamlEventKind.MappingEnd)
                 {
                     reader.SkipCurrentNode();
                 }
+
                 continue;
             }
 
@@ -538,7 +505,7 @@ public static partial class WorkflowParser
                 deferredUnknownKeySlice = unknownKeySlice;
             }
 
-            if (!reader.End)
+            if (!reader.End && reader.CurrentKind != YamlEventKind.MappingEnd)
             {
                 reader.SkipCurrentNode();
             }
@@ -791,10 +758,11 @@ public static partial class WorkflowParser
                     "with"))
                 {
                     reader.Read();
-                    if (!reader.End)
+                    if (!reader.End && reader.CurrentKind != YamlEventKind.MappingEnd)
                     {
                         reader.SkipCurrentNode();
                     }
+
                     continue;
                 }
 

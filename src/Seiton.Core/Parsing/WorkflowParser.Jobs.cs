@@ -619,8 +619,6 @@ public static partial class WorkflowParser
             || keyUtf8.SequenceEqual("with"u8);
     }
 
-    private static bool IsKnownStepKey(ReadOnlySpan<byte> keyUtf8) => StepSchema.IsKnownMappingKey(keyUtf8);
-
     private enum SnapshotMappingKey : byte
     {
         Version = 0,
