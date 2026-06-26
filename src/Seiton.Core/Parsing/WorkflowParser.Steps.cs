@@ -75,12 +75,32 @@ public static partial class WorkflowParser
         AddError(ref diagnostics, msg, keyMark, fix);
     }
 
+    private static void ReportContextDisallowedKey(
+        ref PooledBuffer<Diagnostic> diagnostics,
+        string stepPrefix,
+        string keyName,
+        TextPosition keyMark,
+        StepParseContext context)
+    {
+        if (keyMark == default)
+        {
+            return;
+        }
+
+        var scope = StepParseContextRules.GetScopeDescription(context);
+        AddError(
+            ref diagnostics,
+            $"{stepPrefix} has unexpected key \"{keyName}\" for {scope}. expected one of {StepParseContextRules.RestrictedExpectedKeys}",
+            keyMark);
+    }
+
     private static ArenaList<Step> ParseSteps<TReader>(
         ref TReader reader,
         AstArena arena,
         ref PooledBuffer<Diagnostic> diagnostics,
         ReadOnlySpan<byte> source,
-        string stepPathPrefix)
+        string stepPathPrefix,
+        StepParseContext context)
         where TReader : IYamlStreamReader, allows ref struct
     {
         var steps = new PooledBuffer<Step>(8);
@@ -92,7 +112,7 @@ public static partial class WorkflowParser
             while (!reader.End && reader.CurrentKind != YamlEventKind.SequenceEnd)
             {
                 stepIndex++;
-                var step = ParseStep(ref reader, arena, ref diagnostics, source, stepPathPrefix, stepIndex);
+                var step = ParseStep(ref reader, arena, ref diagnostics, source, stepPathPrefix, stepIndex, context);
                 if (step is not null)
                 {
                     steps.Add(step);
@@ -115,12 +135,12 @@ public static partial class WorkflowParser
         ref PooledBuffer<Diagnostic> diagnostics,
         ReadOnlySpan<byte> source,
         string stepPathPrefix,
-        int stepIndex)
+        int stepIndex,
+        StepParseContext context)
         where TReader : IYamlStreamReader, allows ref struct
     {
         var stepPrefix = FormatStepPrefix(stepPathPrefix, stepIndex);
-        const string missingPrimaryMessage =
-            "must run script with \"run\" section or run action with \"uses\" section, or use \"wait\", \"wait-all\", \"cancel\", or \"parallel\"";
+        var missingPrimaryMessage = StepParseContextRules.GetMissingPrimaryMessage(context);
 
         if (reader.CurrentKind != YamlEventKind.MappingStart)
         {
@@ -197,6 +217,9 @@ public static partial class WorkflowParser
 
             var keyMark = reader.CurrentStart;
             var keyUtf8 = reader.GetScalarUtf8();
+            string? restrictedKeyName = StepParseContextRules.IsRestricted(context)
+                ? Encoding.UTF8.GetString(keyUtf8)
+                : null;
             if (IsMergeKey(keyUtf8, keyMark, ref diagnostics, stepPrefix))
             {
                 reader.Read();
@@ -215,13 +238,13 @@ public static partial class WorkflowParser
                 if (!TrySetBit(ref seen, stepKeyOrd))
                 {
                     var dupName = StepSchema.MappingKeyTable.Utf8Key(stepKeyOrd);
-                    var keyName = Encoding.UTF8.GetString(dupName);
+                    var dupKeyName = Encoding.UTF8.GetString(dupName);
                     var prevMark = stepKeyFirstMark[stepKeyOrd];
                     var prevLine = (int)(prevMark >> 32);
                     var prevCol = (int)(prevMark & 0xFFFFFFFF);
                     AddError(
                         ref diagnostics,
-                        $"{stepPrefix} key \"{keyName}\" is duplicated in step. previously defined at line:{prevLine},col:{prevCol}",
+                        $"{stepPrefix} key \"{dupKeyName}\" is duplicated in step. previously defined at line:{prevLine},col:{prevCol}",
                         keyMark,
                         BuildStepDuplicateKeyHelp(dupName));
                     if (!reader.End && reader.CurrentKind != YamlEventKind.MappingEnd)
@@ -238,7 +261,8 @@ public static partial class WorkflowParser
                 }
 
                 var stepKey = (StepSchema.MappingKey)stepKeyOrd;
-                if (StepSchema.IsPrimaryMappingKey(stepKey))
+                var isPrimaryKey = StepSchema.IsPrimaryMappingKey(stepKey);
+                if (isPrimaryKey)
                 {
                     var newForm = StepSchema.PrimaryFormForMappingKey(stepKey);
                     if (stepForm is StepSchema.FormId existingForm && existingForm != newForm)
@@ -250,6 +274,16 @@ public static partial class WorkflowParser
                     firstPrimaryMark = keyMark;
                     stepForm = newForm;
                     hasPrimary = true;
+                    if (!StepParseContextRules.IsPrimaryFormAllowed(context, newForm))
+                    {
+                        ReportContextDisallowedKey(ref diagnostics, stepPrefix, restrictedKeyName!, keyMark, context);
+                        if (!reader.End && reader.CurrentKind != YamlEventKind.MappingEnd)
+                        {
+                            reader.SkipCurrentNode();
+                        }
+
+                        continue;
+                    }
                 }
 
                 switch (stepKey)
@@ -351,7 +385,7 @@ public static partial class WorkflowParser
                         }
                         else
                         {
-                            parallelSteps = ParseSteps(ref reader, arena, ref diagnostics, source, $"{stepPrefix}.parallel");
+                            parallelSteps = ParseSteps(ref reader, arena, ref diagnostics, source, $"{stepPrefix}.parallel", StepParseContext.ParallelChild);
                             if (parallelSteps.Count == 0)
                             {
                                 AddError(ref diagnostics, $"{stepPrefix} parallel must be non-empty sequence of steps", parallelKeyMark);
@@ -486,6 +520,22 @@ public static partial class WorkflowParser
 
             if (isKnownButNotHandled)
             {
+                if (StepParseContextRules.IsRestricted(context))
+                {
+                    ReportContextDisallowedKey(ref diagnostics, stepPrefix, restrictedKeyName!, keyMark, context);
+                }
+
+                if (!reader.End && reader.CurrentKind != YamlEventKind.MappingEnd)
+                {
+                    reader.SkipCurrentNode();
+                }
+
+                continue;
+            }
+
+            if (StepParseContextRules.IsRestricted(context))
+            {
+                ReportContextDisallowedKey(ref diagnostics, stepPrefix, restrictedKeyName!, keyMark, context);
                 if (!reader.End && reader.CurrentKind != YamlEventKind.MappingEnd)
                 {
                     reader.SkipCurrentNode();
@@ -561,6 +611,17 @@ public static partial class WorkflowParser
                     ReportDisallowedStepKey(ref diagnostics, stepPrefix, "with", withKeyMark, resolvedForm);
                     ReportDisallowedStepKey(ref diagnostics, stepPrefix, "background", backgroundKeyMark, resolvedForm);
                     break;
+            }
+
+            if (backgroundKeyMark != default
+                && !StepParseContextRules.IsBackgroundModifierAllowed(context, resolvedForm))
+            {
+                ReportContextDisallowedKey(
+                    ref diagnostics,
+                    stepPrefix,
+                    "background",
+                    backgroundKeyMark,
+                    context);
             }
         }
 

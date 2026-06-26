@@ -162,7 +162,7 @@ public sealed partial class ParserTests
     }
 
     [Test]
-    public async Task Parse_ParallelSteps_ok_action_metadata_background()
+    public async Task Parse_ParallelSteps_ng_action_metadata_background()
     {
         var yaml = """
             name: My action
@@ -175,7 +175,106 @@ public sealed partial class ParserTests
             """;
 
         var result = WorkflowParser.ParseDirect(Encoding.UTF8.GetBytes(yaml), "action.yml", out _);
-        await Assert.That(result.Diagnostics).IsEmpty();
+        await Assert.That(result.Diagnostics.Any(d =>
+            d.Message.Contains("unexpected key \"background\"", StringComparison.Ordinal)
+            && d.Message.Contains("composite action", StringComparison.Ordinal))).IsTrue();
+    }
+
+    [Test]
+    public async Task Parse_ParallelSteps_ng_parallel_child_nested_parallel()
+    {
+        var yaml = """
+            on: push
+            jobs:
+              build:
+                runs-on: ubuntu-latest
+                steps:
+                  - parallel:
+                    - run: echo a
+                    - parallel:
+                      - run: echo b
+            """;
+
+        var result = WorkflowParser.ParseDirect(Encoding.UTF8.GetBytes(yaml), "wf.yml", out _);
+        await Assert.That(result.Diagnostics.Any(d =>
+            d.Message.Contains("unexpected key \"parallel\"", StringComparison.Ordinal)
+            && d.Message.Contains("parallel group", StringComparison.Ordinal))).IsTrue();
+    }
+
+    [Test]
+    public async Task Parse_ParallelSteps_ng_parallel_child_wait_all()
+    {
+        var yaml = """
+            on: push
+            jobs:
+              build:
+                runs-on: ubuntu-latest
+                steps:
+                  - parallel:
+                    - wait-all: null
+            """;
+
+        var result = WorkflowParser.ParseDirect(Encoding.UTF8.GetBytes(yaml), "wf.yml", out _);
+        await Assert.That(result.Diagnostics.Any(d =>
+            d.Message.Contains("unexpected key \"wait-all\"", StringComparison.Ordinal)
+            && d.Message.Contains("parallel group", StringComparison.Ordinal))).IsTrue();
+    }
+
+    [Test]
+    public async Task Parse_ParallelSteps_ng_parallel_child_background()
+    {
+        var yaml = """
+            on: push
+            jobs:
+              build:
+                runs-on: ubuntu-latest
+                steps:
+                  - parallel:
+                    - run: echo hi
+                      background: true
+            """;
+
+        var result = WorkflowParser.ParseDirect(Encoding.UTF8.GetBytes(yaml), "wf.yml", out _);
+        await Assert.That(result.Diagnostics.Any(d =>
+            d.Message.Contains("unexpected key \"background\"", StringComparison.Ordinal)
+            && d.Message.Contains("parallel group", StringComparison.Ordinal))).IsTrue();
+    }
+
+    [Test]
+    public async Task Parse_ParallelSteps_ng_action_metadata_parallel()
+    {
+        var yaml = """
+            name: My action
+            description: test
+            runs:
+              using: composite
+              steps:
+                - parallel:
+                  - run: echo hi
+            """;
+
+        var result = WorkflowParser.ParseDirect(Encoding.UTF8.GetBytes(yaml), "action.yml", out _);
+        await Assert.That(result.Diagnostics.Any(d =>
+            d.Message.Contains("unexpected key \"parallel\"", StringComparison.Ordinal)
+            && d.Message.Contains("composite action", StringComparison.Ordinal))).IsTrue();
+    }
+
+    [Test]
+    public async Task Parse_ParallelSteps_ng_action_metadata_wait()
+    {
+        var yaml = """
+            name: My action
+            description: test
+            runs:
+              using: composite
+              steps:
+                - wait-all: null
+            """;
+
+        var result = WorkflowParser.ParseDirect(Encoding.UTF8.GetBytes(yaml), "action.yml", out _);
+        await Assert.That(result.Diagnostics.Any(d =>
+            d.Message.Contains("unexpected key \"wait-all\"", StringComparison.Ordinal)
+            && d.Message.Contains("composite action", StringComparison.Ordinal))).IsTrue();
     }
 
     [Test]
