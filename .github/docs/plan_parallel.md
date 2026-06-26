@@ -244,7 +244,7 @@ cd src/Seiton.Benchmark && dotnet run -c Release
 dotnet test --project tests/Seiton.Core.Tests --treenode-filter /*/*/ParserTests/Parse_ParallelSteps*
 ```
 
-18/18 通過。ソリューション全体: Core 1964 + Seiton 432 + Update 193 = **2589** 通過（Playground は WASM 起動のため別途）。
+27/27 通過（コードレビュー後: AST 整合・等価クラス追加）。Core 全体 **1973** passed。
 
 ### ベンチマーク（CoreParsingBenchmark, ShortRun, Release）
 
