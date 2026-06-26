@@ -691,6 +691,66 @@ app.Add("verify-bot-actors", () =>
     }
 });
 
+app.Add("fetch-step-schema", async () =>
+{
+    var code = await StepSchemaCommands.Fetch(repoRoot);
+    if (code != 0)
+    {
+        Environment.ExitCode = code;
+        throw new InvalidOperationException($"fetch-step-schema failed with code {code}");
+    }
+});
+
+app.Add("fetch-step-schema-sources", async () =>
+{
+    var code = await StepSchemaCommands.FetchSources(repoRoot);
+    if (code != 0)
+    {
+        Environment.ExitCode = code;
+        throw new InvalidOperationException($"fetch-step-schema-sources failed with code {code}");
+    }
+});
+
+app.Add("parse-step-schema-sources", () =>
+{
+    var code = StepSchemaCommands.ParseSources(repoRoot);
+    if (code != 0)
+    {
+        Environment.ExitCode = code;
+        throw new InvalidOperationException($"parse-step-schema-sources failed with code {code}");
+    }
+});
+
+app.Add("merge-step-schema-sources", () =>
+{
+    var code = StepSchemaCommands.MergeSources(repoRoot);
+    if (code != 0)
+    {
+        Environment.ExitCode = code;
+        throw new InvalidOperationException($"merge-step-schema-sources failed with code {code}");
+    }
+});
+
+app.Add("sync-step-schema", () =>
+{
+    var code = StepSchemaCommands.Sync(repoRoot);
+    if (code != 0)
+    {
+        Environment.ExitCode = code;
+        throw new InvalidOperationException($"sync-step-schema failed with code {code}");
+    }
+});
+
+app.Add("verify-step-schema", () =>
+{
+    var code = StepSchemaCommands.Verify(repoRoot);
+    if (code != 0)
+    {
+        Environment.ExitCode = code;
+        throw new InvalidOperationException($"verify-step-schema failed with code {code}");
+    }
+});
+
 app.Add("fetch-expected-keys", async () =>
 {
     var code = await ExpectedKeysCommands.Fetch(repoRoot);
@@ -888,6 +948,11 @@ static async Task<int> RunFetch(string repoRoot, string dataset, bool webhooksEx
         return await ShellsCommands.Fetch(repoRoot);
     }
 
+    if (dataset is "step-schema")
+    {
+        return await StepSchemaCommands.Fetch(repoRoot);
+    }
+
     if (dataset is "expected-keys")
     {
         return await ExpectedKeysCommands.Fetch(repoRoot);
@@ -959,6 +1024,12 @@ static async Task<int> RunFetch(string repoRoot, string dataset, bool webhooksEx
             return code;
         }
 
+        code = await StepSchemaCommands.Fetch(repoRoot);
+        if (code != 0)
+        {
+            return code;
+        }
+
         code = await ExpectedKeysCommands.Fetch(repoRoot);
         if (code != 0)
         {
@@ -1023,6 +1094,11 @@ static int RunSync(string repoRoot, string dataset)
     if (dataset is "shells")
     {
         return ShellsCommands.Sync(repoRoot);
+    }
+
+    if (dataset is "step-schema")
+    {
+        return StepSchemaCommands.Sync(repoRoot);
     }
 
     if (dataset is "expected-keys")
@@ -1091,6 +1167,12 @@ static int RunSync(string repoRoot, string dataset)
         }
 
         code = ShellsCommands.Sync(repoRoot);
+        if (code != 0)
+        {
+            return code;
+        }
+
+        code = StepSchemaCommands.Sync(repoRoot);
         if (code != 0)
         {
             return code;
@@ -1173,6 +1255,11 @@ static int RunVerify(string repoRoot, string dataset)
         return ShellsCommands.Verify(repoRoot);
     }
 
+    if (dataset is "step-schema")
+    {
+        return StepSchemaCommands.Verify(repoRoot);
+    }
+
     if (dataset is "expected-keys")
     {
         return ExpectedKeysCommands.Verify(repoRoot);
@@ -1239,6 +1326,12 @@ static int RunVerify(string repoRoot, string dataset)
         }
 
         code = ShellsCommands.Verify(repoRoot);
+        if (code != 0)
+        {
+            return code;
+        }
+
+        code = StepSchemaCommands.Verify(repoRoot);
         if (code != 0)
         {
             return code;

@@ -32,6 +32,13 @@
       }
     },
     {
+      "dataset": "step-schema",
+      "sourceUrls": [
+        "https://json.schemastore.org/github-workflow.json",
+        "https://raw.githubusercontent.com/github/docs/main/content/actions/reference/workflows-and-actions/workflow-syntax.md"
+      ]
+    },
+    {
       "dataset": "expected-keys",
       "sourceUrls": [
         "https://raw.githubusercontent.com/github/docs/main/content/actions/reference/workflows-and-actions/workflow-syntax.md"

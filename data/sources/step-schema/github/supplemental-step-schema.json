@@ -1,0 +1,66 @@
+{
+  "schemaVersion": 1,
+  "description": "Step schema overlays not expressible in JSON Schema oneOf alone (modifiers, forms ahead of schemastore).",
+  "appliesTo": ["workflow-job-steps", "action-metadata-steps"],
+  "sharedKeys": ["id", "if", "name", "env", "continue-on-error", "timeout-minutes"],
+  "modifiers": [
+    { "key": "background", "allowedOnFormIds": ["run", "uses"] }
+  ],
+  "additionalProperties": {
+    "background": { "valueKind": "boolean" },
+    "wait": { "valueKind": "stringOrNonEmptyStringArray" },
+    "wait-all": { "valueKind": "nullary" },
+    "cancel": { "valueKind": "nonEmptyString" },
+    "parallel": { "valueKind": "nonEmptyStepArray" }
+  },
+  "formOverlays": [
+    {
+      "id": "run",
+      "unexpectedKeyDescription": "step to run shell command",
+      "disallowedKeys": ["uses", "with", "wait", "wait-all", "cancel", "parallel"]
+    },
+    {
+      "id": "uses",
+      "unexpectedKeyDescription": "step to execute action",
+      "disallowedKeys": ["run", "shell", "working-directory", "wait", "wait-all", "cancel", "parallel"]
+    }
+  ],
+  "additionalForms": [
+    {
+      "id": "wait",
+      "primaryKey": "wait",
+      "unexpectedKeyDescription": "step to wait for background steps",
+      "disallowedKeys": ["run", "uses", "with", "shell", "working-directory", "background", "wait-all", "cancel", "parallel"],
+      "properties": {
+        "wait": { "valueKind": "stringOrNonEmptyStringArray" }
+      }
+    },
+    {
+      "id": "wait-all",
+      "primaryKey": "wait-all",
+      "unexpectedKeyDescription": "step to wait for all background steps",
+      "disallowedKeys": ["run", "uses", "with", "shell", "working-directory", "background", "wait", "cancel", "parallel"],
+      "properties": {
+        "wait-all": { "valueKind": "nullary" }
+      }
+    },
+    {
+      "id": "cancel",
+      "primaryKey": "cancel",
+      "unexpectedKeyDescription": "step to cancel a background step",
+      "disallowedKeys": ["run", "uses", "with", "shell", "working-directory", "background", "wait", "wait-all", "parallel"],
+      "properties": {
+        "cancel": { "valueKind": "nonEmptyString" }
+      }
+    },
+    {
+      "id": "parallel",
+      "primaryKey": "parallel",
+      "unexpectedKeyDescription": "step to run steps in parallel",
+      "disallowedKeys": ["run", "uses", "with", "shell", "working-directory", "background", "wait", "wait-all", "cancel"],
+      "properties": {
+        "parallel": { "valueKind": "nonEmptyStepArray" }
+      }
+    }
+  ]
+}

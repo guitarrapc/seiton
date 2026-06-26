@@ -202,6 +202,7 @@ Cross-walk of maintainer-facing datasets (including satellite **`event-payload-t
 | popular-actions | `popular-actions` | Standard | `.../raw/*.action.yml` (from `targets.json`) | `.../parsed/popular-actions-metadata.json` | `popular_actions.json` |
 | runner-labels | `runner-labels` | Standard | two `*.docs.md` under `raw/` | `.../parsed/docs-runner-labels.json` | `runner_labels.json` (+ optional `supplemental-labels.json`, `deprecated-labels.json`) |
 | shells | `shells` | Standard (passthrough merge) | `.../raw/supported-shells.md` | `.../parsed/shells.json` | `shells.json` (copy of parsed) |
+| step-schema | `step-schema` | Standard | `.../raw/github-workflow.schema.json` + `workflow-syntax.md` | `.../parsed/step-schema.json` | `step-schema.json` (parsed + supplemental merge) |
 | bot-actors | — | Hand-authored snapshot | — | — | `bot-actors.json` |
 | webhooks | `webhooks` | Standard | schema JSON + Docs `*.md` | multiple under `parsed/` | `webhook_types.json` |
 | event-payload-types | `event-payload-types` | Satellite | `webhooks/github/raw/webhook-events-and-payloads.html` | `webhooks/github/parsed/parsed-event-payload-types.json` | `webhooks/github/event_payload_types.json` |
@@ -224,6 +225,7 @@ Cross-walk of maintainer-facing datasets (including satellite **`event-payload-t
 | iana-timezones | IANA `tzdata.zi` | `IanaTimeZones.g.cs` | IANA timezone identifiers (zones + links) for schedule-event timezone validation |
 | event-payload-types | GitHub Docs (HTML) | `EventPayloadTypes.g.cs` | Webhook event payload type shapes for expression typing |
 | shells | GitHub Docs reusable (`supported-shells.md`); table included from workflow-syntax `defaults.run.shell` | `Shells.g.cs` | Shell availability per OS platform for `shell-name` rule validation |
+| step-schema | json.schemastore `github-workflow.json` (`definitions.step`) + supplemental overlay | `StepSchema.g.cs` | Step form allowed keys and value kinds for parser diagnostics (and future parse branches) |
 | bot-actors | Hand-written GitHub API provenance JSON | `BotActors.g.cs` | Known bot actor logins and user IDs for provenance tracking and future audit consumers |
 | expected-keys | GitHub Docs | `ExpectedKeys.g.cs` | Expected YAML key lists per parser section for diagnostic messages |
 
@@ -312,7 +314,15 @@ The codegen stage (`ShellsCSharpGenerator`) produces:
 
 All methods use `ReadOnlySpan<byte>` comparisons for zero-allocation hot-path usage. These are consumed by the `shell-name` linter rule.
 
-#### 4.3.7 Expected Keys
+#### 4.3.7 Step Schema
+
+`step-schema` is **independent of the webhooks dataset** but fetches the same schemastore URL into its own `raw/github-workflow.schema.json`. Stage 2 (`GitHubWorkflowStepSchemaParser`) extracts `definitions.step` only — forms from `oneOf`, property value kinds, and `dependencies` — into `parsed/step-schema.json` with **no supplemental content**. Stage 3 merges `supplemental-step-schema.json` (modifiers such as `background`, additional parallel step forms when schemastore lags, per-form `disallowedKeys`) into canonical `step-schema.json`.
+
+Orchestrator: `fetch-step-schema`; stages: `fetch-step-schema-sources`, `parse-step-schema-sources`, `merge-step-schema-sources`; codegen: `sync-step-schema`, `verify-step-schema`.
+
+`StepSchema.g.cs` emits per-form allowed-key constants (`RunStepKeys`, `UsesStepKeys`, `WaitStepKeys`, …), `FormId`, and unexpected-key description helpers. Step-form keys were **removed** from `ExpectedKeys.g.cs` (no more `action-step` / `run-step` derivation in `expected-keys`).
+
+#### 4.3.8 Expected Keys
 
 `expected-keys` follows the **standard** raw → **`parsed/expected-keys.json`** → **`expected-keys.json`** layout (§3.4): Stage 2 writes the parsed hierarchy; Stage 3 (`merge-expected-keys-sources`) deserializes the parsed JSON, merges hand-written supplemental sections from `supplemental-keys.json` (§3.1.3), sorts all sections alphabetically, and writes the combined result as `expected-keys.json`.
 
@@ -323,15 +333,14 @@ All methods use `ReadOnlySpan<byte>` comparisons for zero-allocation hot-path us
 3. Expand pipe-separated alternatives in angle brackets (e.g. `<branches|branches-ignore>`) into the cartesian product of all combinations.
 4. For each expanded path, register every concrete (non-parameter) segment as a child of its parent path. Single-parameter wildcards like `<job_id>` are skipped; `[*]` array subscripts are stripped from child key names.
 5. Emit named sections for all parents that have concrete children, using a known-path→name mapping with algorithmic fallback for unknown paths.
-6. Derive `action-step` (step keys minus `run`, `shell`, `working-directory`) and `run-step` (step keys minus `uses`, `with`) from the `step` section.
-7. Supplement sections whose sub-keys are documented in body text rather than as headings (`credentials`: `password`/`username`; `runs-on`: `group`/`labels`).
+6. Supplement sections whose sub-keys are documented in body text rather than as headings (`credentials`: `password`/`username`; `runs-on`: `group`/`labels`).
 
-Stage 3 merges supplemental sections (for example `action-metadata`: keys for action.yml top-level that are not in workflow-syntax.md) into the parsed output. The canonical file has ~38 sections covering:
+Stage 3 merges supplemental sections (for example `action-metadata`: keys for action.yml top-level that are not in workflow-syntax.md) into the parsed output. The canonical file has ~35 sections covering:
 
 - Top-level workflow keys, `on` event names, per-event filter keys (`on.push`, `on.pull_request`, etc.)
 - `on.workflow_call`/`on.workflow_dispatch` sub-keys and input/secret sub-keys
 - Job-level keys, job defaults, strategy, strategy matrix
-- Step keys (full, action-step, run-step), step-with
+- Step keys (full union for the `step` section), step-with
 - Container, service, credentials, runs-on
 
 The codegen stage (`ExpectedKeysCSharpGenerator`) produces `const string` fields with quoted, sorted key names for each section. These are consumed by the parser for diagnostic messages when encountering unexpected keys.
@@ -368,6 +377,7 @@ Per-dataset commands follow this naming pattern:
 | permissions | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | — | — |
 | iana-timezones | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | — | — |
 | shells | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | — | — |
+| step-schema | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | — | — |
 | bot-actors | — | — | — | — | ✓ | ✓ | — | — |
 | expected-keys | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | — | — |
 | event-payload-types | ✓ | ✓ | ✓ | — | ✓ | ✓ | — | — |
@@ -384,7 +394,7 @@ Per-dataset commands follow this naming pattern:
 | `verify --dataset {name\|all}` | Run verify for specified dataset or all datasets |
 | `update` | Run **`fetch --dataset all`**, then **`sync --dataset all`**, then **`verify --dataset all`**; optional `--exclude-schema-only` applies to the webhooks fetch step |
 
-`fetch --dataset all` processes fetched datasets in a fixed internal order: webhooks → availability → popular-actions → runner-labels → context-types → function-specs → permissions → iana-timezones → shells → expected-keys → event-payload-types. `sync --dataset all` / `verify --dataset all` run the same sequence and additionally include the hand-authored `bot-actors` dataset before `event-payload-types`.
+`fetch --dataset all` processes fetched datasets in a fixed internal order: webhooks → availability → popular-actions → runner-labels → context-types → function-specs → permissions → iana-timezones → shells → step-schema → expected-keys → event-payload-types. `sync --dataset all` / `verify --dataset all` run the same sequence and additionally include the hand-authored `bot-actors` dataset before `event-payload-types`.
 
 ### 5.4 Exit Codes
 
@@ -439,6 +449,12 @@ data/sources/iana-timezones/iana/iana_timezones.json
 data/sources/shells/github/raw/supported-shells.md
 data/sources/shells/github/parsed/shells.json
 data/sources/shells/github/shells.json
+
+data/sources/step-schema/github/raw/github-workflow.schema.json
+data/sources/step-schema/github/raw/workflow-syntax.md
+data/sources/step-schema/github/parsed/step-schema.json
+data/sources/step-schema/github/supplemental-step-schema.json
+data/sources/step-schema/github/step-schema.json
 
 data/sources/expected-keys/github/raw/workflow-syntax.md
 data/sources/expected-keys/github/parsed/expected-keys.json

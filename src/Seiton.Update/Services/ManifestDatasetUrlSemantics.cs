@@ -54,6 +54,14 @@ internal static class ManifestDatasetUrlSemantics
                 EnsureUri(urls[0], dataset, 0, static u =>
                     IsOfficialGitHubDocsRaw(u, "content/actions/reference/workflows-and-actions/workflow-syntax.md"));
                 return;
+            case "step-schema":
+                RequireCount(urls, 2, dataset);
+                EnsureUri(urls[0], dataset, 0, static u =>
+                    HostEquals(u, "json.schemastore.org") &&
+                    PathEqualsIgnoreCase(u, "/github-workflow.json"));
+                EnsureUri(urls[1], dataset, 1, static u =>
+                    IsOfficialGitHubDocsRaw(u, "content/actions/reference/workflows-and-actions/workflow-syntax.md"));
+                return;
             case "shells":
                 RequireCount(urls, 1, dataset);
                 EnsureUri(urls[0], dataset, 0, static u =>
