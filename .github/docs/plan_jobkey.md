@@ -149,15 +149,52 @@ cd src/Seiton.Benchmark && dotnet run -c Release -- --filter "*CoreParsingBenchm
 
 ---
 
-## ベンチマーク（実装後に本節を更新）
+## 実装結果（2026-06-26）
+
+### 実装内容
+
+| 変更 | 内容 |
+|------|------|
+| `ExpectedKeysCSharpGenerator` | `job` セクションから `JobMappingKey` / `JobMappingKeyTable` / `IsKnownJobKey` を生成 |
+| `ExpectedKeys.g.cs` | `sync-expected-keys` で再生成（キー順: アルファベット順 = 方針 B） |
+| `WorkflowParser.Jobs.cs` | 手書き `JobNodeMappingKey` / `JobNodeKeyTable` / `JobNodeDuplicateKeyName` / `IsKnownJobKey` を削除。`ExpectedKeys.JobMappingKeyTable` + enum switch に置換。未知キーは常に unexpected-key 診断 |
+| テスト | `ExpectedKeysCSharpGeneratorTests`, `ExpectedKeysJobMappingKeyTests` 追加 |
+
+### API レビュー
+
+- **ユーザーファースト**: パーサー内部 API は `ExpectedKeys.JobMappingKey` / `JobMappingKeyTable` に統一。step 側 `StepSchema.MappingKey*` と同型で直感的。
+- **診断 UX**: `IsKnownJobKey` によるサイレントスキップを削除し、dispatch 不一致は常に `ExpectedKeys.JobKeys` 付き診断 — 旧コードでは到達不能だった分岐の整理。
+- **データソース単一化**: `expected-keys.json` の `job` セクションが dispatch テーブルと診断用文字列の両方の canonical source。
+
+### 自己レビュー指摘と対応
+
+| 指摘 | 対応 |
+|------|------|
+| `JobMappingKey.RunsOn =` 形式のテスト期待が生成出力と不一致 | `RunsOn = 11,` に修正（enum 本体はプレフィックスなし） |
+| 重複キー名に手書き switch が残る | `JobMappingKeyTable.Utf8Key(ordinal)` + `Encoding.UTF8.GetString` に統一（step と同型） |
+| `stackalloc long[20]` ハードコード | `JobMappingKeyTable.KeyCount` に変更 |
+
+---
+
+## ベンチマーク（実装後）
+
+測定: `CoreParsingBenchmark.ParseWorkflowFull` / ShortRun job（実装前後同一マシン）
 
 | Size | 実装前 Mean | 実装後 Mean | Δ Mean | 実装前 Alloc | 実装後 Alloc | Δ Alloc |
 |------|------------|------------|--------|-------------|-------------|---------|
-| Small | _TBD_ | _TBD_ | _TBD_ | _TBD_ | _TBD_ | _TBD_ |
-| Medium | _TBD_ | _TBD_ | _TBD_ | _TBD_ | _TBD_ | _TBD_ |
-| Large | _TBD_ | _TBD_ | _TBD_ | _TBD_ | _TBD_ | _TBD_ |
+| Small | 45.0 µs | 47.4 µs | +5.3% | 2.62 KB | 2.62 KB | 0% |
+| Medium | 1,121 µs | 1,089 µs | −2.9% | 16.23 KB | 16.23 KB | 0% |
+| Large | 15,506 µs | 17,367 µs (ShortRun) / 18,190 µs (Default) | +12〜17% | 82.48 KB | 82.48 KB | 0% |
 
-**想定**: hot path は既存と同じ `Utf8MappingDispatch` + static switch。生成は compile-time const のみのため **±0〜数% 程度**（測定誤差内）。回帰時は `IsKnownJobKey` OR チェーンのキー数増加を疑う。
+**Allocated**: 全サイズで変化なし（±10% ゲート内）。
+
+**Mean（Large）**: +10% ゲートをわずかに超過。原因はキー順序をアルファベット順（方針 B）に変更したこと。`Utf8MappingDispatch.TryMatchFirstOrdered` は線形スキャンのため、高頻度キー `runs-on`（旧 ordinal 0 → 新 ordinal 11）と `steps`（旧 4 → 新 15）のマッチまでの比較回数が増加。Large ワークフロー（20 jobs）で影響が顕在化。
+
+**改善策（非ゴール / 将来）**:
+- `dispatchOrder` を supplemental に持たせてホットキーを先頭に配置（方針 A）
+- `Utf8MappingDispatch` を二分探索または perfect hash に変更（全テーブル共通）
+
+Small/Medium は測定誤差〜数% 以内で neutral。
 
 ---
 
