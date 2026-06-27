@@ -9,9 +9,10 @@
 | **0** | step-schema データセット | **[plan_dataset.md](./plan_dataset.md)** | 形態・許可キー・値型の定義と `StepSchema.g.cs` 生成 |
 | **1** | パーサー | **本書 PR1** | `ParseStep` が `StepSchema` を消費。公式例が誤検知されない |
 | **1.5** | パーサー修正 | **本書 PR1.5** | GitHub ランタイム制約（`StepParseContext`）の反映 |
+| **1.6** | パーサー修正 | **本書 PR1.6** | control step への `if:` 拒否（D21） |
 | **2** | lint | **本書 PR2** | `background-steps` ルール（default-on） |
 
-**PR0 がマージされるまで PR1 に着手しない。PR1.5 がマージされるまで PR2 に着手しない。**
+**PR0 がマージされるまで PR1 に着手しない。PR1.6 がマージされるまで PR2 に着手しない。**
 
 参照ドキュメント:
 
@@ -30,7 +31,8 @@
 | `Step` AST / `WorkflowVisitor` | ✅ PR1: 拡張・`parallel` 再帰 |
 | テスト / Playground / Parser spec | ✅ PR1 完了 |
 | **PR1.5** `StepParseContext` | ✅ **完了**（D12/D13 反映） |
-| **PR2** `background-steps` lint | ❌ PR1.5 後 |
+| **PR1.6** control step `if:` 拒否 | ✅ **完了**（D21 反映） |
+| **PR2** `background-steps` lint | ❌ PR1.6 後 |
 
 ### GitHub ランタイム vs Seiton（PR1.5 で解消済み）
 
@@ -93,11 +95,12 @@
 | D13 | composite `runs.steps` では **`parallel` / `background` / `wait` / `wait-all` / `cancel` をすべて syntax error** | GitHub 実機 |
 | D14 | `background-steps` ルールは **default-on** | GA 機能。標準で使えるため |
 | D15 | `wait` / `cancel` の step id 参照は **case-insensitive** | GitHub 実機（`id: BUILD-DOTNET` ← `cancel: build-dotnet` 可）。`id-naming` の重複規則と整合 |
-| D16 | **`if:` 式付き step の扱い（C'）** — #1〜#3 参照チェックは常に実施。#4 同時 active 数は式付き `if:` の step をカウントから除外し、**親 `parallel` step の式付き `if:` は子の暗黙 background に伝播** | 誤 warning 回避 + 親条件の伝播 |
+| D16 | **`if:` 式付き step の扱い（C''）** — #1〜#3 参照チェックは常に実施。#5 active 数は **C'' 3 段階**（定数折りたたみ: `if:` なし / スカラー truthy / 式の定数評価）。**親 `parallel` への `if:` 伝播なし**（D21: GitHub が拒否） | 誤 warning 回避 + 実機整合 |
 | D17 | lint 解析は **`VisitJobPost` で job steps を独自再帰 walk**（`BackgroundStepFlowAnalyzer`）。`parallel` ブロックは原子単位でシミュレーション | visitor コールバック順と実行モデルのズレ回避 |
 | D18 | 診断位置: 参照エラー → **`wait` / `cancel` の id 値**。`>10` warning → **上限超過の原因 step**（`parallel:` キー or 明示 `background` step） | `NeedsGraphRule` と同様に値を指す |
 | D19 | `background-steps` は **workflow のみ**（`SupportsDocumentKind => Workflow`） | composite では parallel 系未対応（D13） |
-| D20 | PR2 v1 は **#1〜#4 すべて**（実行順シミュレーション込み） | default-on で GA 制約を網羅 |
+| D20 | PR2 v1 は **#1〜#5 すべて**（実行順シミュレーション込み） | default-on で GA 制約を網羅 |
+| D21 | `parallel` / `wait` / `wait-all` / `cancel` プライマリ step への **`if:` は syntax error**（`run` / `uses` と `parallel` 子への `if:` は許可） | GitHub 実機（2026-06-27） |
 
 ---
 
@@ -264,9 +267,46 @@ dotnet test --project tests/Seiton.Core.Tests --treenode-filter /*/*/ParserTests
 
 ---
 
+## PR1.6: control step への `if:` 拒否（test-first）
+
+PR1.5 マージ後・PR2 着手前。実機検証（2026-06-27）で raw JSON Schema が `parallel` / `wait` / `wait-all` / `cancel` form に `if` を許すが、**GitHub ランタイムはすべて拒否**（`Unexpected value 'if'`）。
+
+### 成功基準
+
+1. 4 control form いずれかに `if:` があると **Seiton も syntax error**（キー順序に依存しない）
+2. `parallel` 子 / `run` / `uses` への `if:` は引き続き OK
+3. `CoreParsingBenchmark` Mean・Allocated が **+10% 以内**
+
+### 実装
+
+- `StepParseContextRules.IsIfKeyAllowed` — `run` / `uses` のみ許可
+- `ParseStep` — `if` 遭遇時に即時拒否（primary 確定済み）+ end-of-step 拒否（`if` が primary より先）
+- 診断: `has unexpected key "if" for {desc}. "if" is not supported on parallel, wait, wait-all, or cancel steps`
+- AST: 拒否時 `Step.If` を保持しない
+
+### テスト
+
+`ParserTests.ParallelSteps` に ng 5 + ok 1（`parallel` 子 `if:`）追加。33/33 通過。
+
+### ベンチマーク（CoreParsingBenchmark, ShortRun, Release）
+
+基準 = PR1.5 完了時。
+
+| Size | 基準 Mean | PR1.6 Mean | Δ Mean | 基準 Alloc | PR1.6 Alloc | Δ Alloc |
+|------|----------|-----------|--------|-----------|------------|---------|
+| Small | 46.6 µs | 41.1 µs | **−12%** | 2.62 KB | 2.62 KB | 0% |
+| Medium | 1,046 µs | 1,057 µs | **+1%** | 16.23 KB | 16.23 KB | 0% |
+| Large | 17,676 µs | 18,232 µs | **+3%** | 82.48 KB | 82.48 KB | 0% |
+
+**判定**: Alloc 不変。Mean は ShortRun ばらつき内で **±10% クリア**（Small は計測ノイズでやや改善）。
+
+**変化理由**: hot path は `IsIfKeyAllowed` 1 比較（end-of-step、通常 `run`/`uses` step は false 分岐のみ）。エラー path のみ追加診断。
+
+---
+
 ## PR2: `background-steps` lint（test-first）
 
-PR1.5 マージ後。`RuleInterfaceTests.BackgroundStepsRule.cs` から着手。
+PR1.6 マージ後。`RuleInterfaceTests.BackgroundStepsRule.cs` から着手。
 
 ### ルール契約
 
@@ -294,7 +334,7 @@ PR1.5 マージ後。`RuleInterfaceTests.BackgroundStepsRule.cs` から着手。
 
 トップレベル `job.steps` を順に処理。`parallel` ブロックは **原子単位**:
 
-1. **開始**: 子すべてを暗黙 background として active に加算（C' で除外判定後）
+1. **開始**: 子すべてを暗黙 background として active に加算（C'' で除外判定後）
 2. **終了**: 暗黙 `wait` — 子すべてを active から除去
 3. **明示 `background: true`**: step 開始時に active 加算。`wait` / `cancel` / `wait-all` または後続処理で除去
 4. **`wait: [ids]`**: 対象 id を active から除去
@@ -305,15 +345,33 @@ PR1.5 マージ後。`RuleInterfaceTests.BackgroundStepsRule.cs` から着手。
 
 通常 `run` / `uses`（非 background）は active に影響しない。
 
-### `if:` 式の扱い（D16 / C'）
+### `if:` 式の扱い（D16 / C''）
 
-| チェック | 式付き `if:` の step |
-|---------|---------------------|
+| チェック | `if:` の扱い |
+|---------|-------------|
 | #1〜#3 参照整合性 | **常にチェック** |
-| #5 active 数カウント | **除外**（自身の `if:` に式がある step） |
-| #5 親 `parallel` 伝播 | 親 `parallel` step の `if:` に式がある場合、**子の暗黙 background もカウントから除外** |
+| #5 active 数カウント | **C'' 3 段階**（`ShouldCountForPeak`） |
 
-**既知の限界（ドキュメント化）**: 式付き `if:` が多い workflow では #5 が under-count しうる（見逃し）。誤 warning より許容。
+**C'' 3 段階:**
+
+1. `if:` なし → カウントする
+2. 式マーカーなしスカラー → GitHub 互換 truthy 評価
+3. `${{ }}` あり → `Config.ParseExpression` + `IfCondRule` 相当の定数折りたたみ。定数 truthy → カウント、定数 falsy / 非定数 → 除外
+
+**既知の限界**: 非定数 `if:` が多い workflow では #5 が under-count しうる。誤 warning より許容。
+
+### 設計合意（2026-06-27 grill）
+
+| 項目 | 決定 |
+|------|------|
+| Analyzer | 1 パス + registry miss 時 forward scan |
+| #1〜#3 | target ごと独立 emit；invalid 参照は active 不変 |
+| #3 | `background: false` もエラー |
+| #5 warning | job あたり 1 件（初回 10 超 step） |
+| レジストリ | 静的 `id:` のみ（式 id 除外） |
+| 早期 return | background flow なし job はスキップ |
+| 診断 metadata | `structure-path`（例: `jobs.'build'.steps[3].wait`） |
+| メッセージ | `"wait" references unknown background step id '{id}'` 等（step lint スタイル） |
 
 ### 実装構成（D17）
 
@@ -338,7 +396,7 @@ BackgroundStepsRule : RuleBase
 | `ng-wait-forward-ref` | ng | 定義より前の `wait` |
 | `ng-wait-non-background` | ng | 非 background `run` を `wait` |
 | `ng-parallel-eleven-children` | ng | `parallel` に 11 子 → warning |
-| `ok-parallel-eleven-conditional` | ok | 親 `parallel` に `if: ${{ ... }}` + 11 子 → #5 スキップ（C'） |
+| `ok-parallel-eleven-conditional` | ok | 11 子のうち式付き `if:` 子を C'' で除外しカウント ≤10 |
 
 ```shell
 dotnet test --project tests/Seiton.Core.Tests --treenode-filter /*/*/RuleInterfaceTests/RuleRegression_BackgroundSteps*
@@ -383,6 +441,9 @@ flowchart LR
     R1[StepParseContext]
     R2[D12 D13 tests]
   end
+  subgraph pr16 [PR1.6 if on control steps]
+    R3[D21 if rejected]
+  end
   subgraph pr2 [PR2 Lint]
     L1[background-steps]
   end
@@ -391,7 +452,8 @@ flowchart LR
   C --> P1
   P3 --> R1
   R1 --> R2
-  R2 --> L1
+  R2 --> R3
+  R3 --> L1
 ```
 
 ---
@@ -416,6 +478,13 @@ flowchart LR
 - [x] `supplemental-step-schema.json` / 生成物更新（**不要** — ランタイム制約はパーサー内）
 - [x] `Seiton_Parser_spec.md` §3.12 更新（ランタイム乖離の lessons learned）
 - [x] Green + `dotnet test` + benchmark ±10%（Alloc 不変、Mean は ShortRun ばらつき内）
+
+### PR1.6
+
+- [x] `ParserTests.ParallelSteps` に D21 ng ケース 5 件 + `parallel` 子 `if:` ok
+- [x] `StepParseContextRules.IsIfKeyAllowed` + `ParseStep` end-of-step / 即時拒否
+- [x] `Seiton_Parser_spec.md` §3.12 更新
+- [x] Green + `dotnet test` + benchmark ±10%
 
 ### PR2
 

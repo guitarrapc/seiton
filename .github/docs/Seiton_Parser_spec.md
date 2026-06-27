@@ -630,13 +630,13 @@ Per-form allowed keys and unexpected-key descriptions are generated from the **`
 
 **`StepParseContext` (GitHub runtime constraints):** `ParseStep` / `ParseSteps` take a context that reflects where the step appears. Raw JSON Schema allows recursive `parallel` items; GitHub’s runtime validator is stricter (verified 2026-06-26).
 
-| Context | Allowed primary | `background` modifier |
-|---------|----------------|---------------------|
-| `WorkflowJobStep` (`jobs.*.steps`) | all six primaries | `run` / `uses` only |
-| `ParallelChild` (`parallel` array items) | `run` / `uses` only | not allowed (implicit background) |
-| `CompositeActionStep` (`runs.steps`) | `run` / `uses` only | not allowed |
+| Context | Allowed primary | `background` modifier | `if:` modifier |
+|---------|----------------|---------------------|----------------|
+| `WorkflowJobStep` (`jobs.*.steps`) | all six primaries | `run` / `uses` only | `run` / `uses` only; **not** on `parallel` / `wait` / `wait-all` / `cancel` (D21, verified 2026-06-27) |
+| `ParallelChild` (`parallel` array items) | `run` / `uses` only | not allowed (implicit background) | allowed on child `run` / `uses` |
+| `CompositeActionStep` (`runs.steps`) | `run` / `uses` only | not allowed | allowed on child `run` / `uses` |
 
-Disallowed keys emit: `has unexpected key "…" for step in parallel group` or `… for step in composite action` with the restricted key list.
+Disallowed keys emit: `has unexpected key "…" for step in parallel group` or `… for step in composite action` with the restricted key list. Control-step `if:` emits: `has unexpected key "if" for …. "if" is not supported on parallel, wait, wait-all, or cancel steps`.
 
 ```
 ParseStep(node, context):
@@ -655,6 +655,7 @@ Step-level known keys use duplicate detection identical to job-level known keys:
 
 - Bare `wait-all:` with no trailing file newline can hang VYaml (upstream limitation). Explicit `null` / `true` or a trailing newline avoids the issue.
 - Restricted-context diagnostics materialize the mapping key name before advancing the YAML reader past the key scalar (the reader reuses scalar buffers; reporting after `Read()` can corrupt hyphenated keys such as `wait-all`).
+- Control-step `if:` (D21): GitHub rejects `if` on `parallel` / `wait` / `wait-all` / `cancel` primaries even though raw JSON Schema lists `if` in those forms. Seiton reports at end-of-step (or immediately when `if` follows a resolved control primary) and does not retain `Step.If` on the AST.
 
 #### 3.12.1 ExecAction Parse
 

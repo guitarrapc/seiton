@@ -94,6 +94,24 @@ public static partial class WorkflowParser
             keyMark);
     }
 
+    private static void ReportIfDisallowedOnControlStep(
+        ref PooledBuffer<Diagnostic> diagnostics,
+        string stepPrefix,
+        TextPosition ifKeyMark,
+        StepSchema.FormId form)
+    {
+        if (ifKeyMark == default)
+        {
+            return;
+        }
+
+        var desc = StepSchema.GetUnexpectedKeyDescription(form);
+        AddError(
+            ref diagnostics,
+            $"{stepPrefix} has unexpected key \"if\" for {desc}. \"if\" is not supported on parallel, wait, wait-all, or cancel steps",
+            ifKeyMark);
+    }
+
     private static ArenaList<Step> ParseSteps<TReader>(
         ref TReader reader,
         AstArena arena,
@@ -423,6 +441,19 @@ public static partial class WorkflowParser
 
                     case StepSchema.MappingKey.If:
                         ifKeyMark = keyMark;
+                        if (stepForm is StepSchema.FormId existingIfForm
+                            && !StepParseContextRules.IsIfKeyAllowed(existingIfForm))
+                        {
+                            ReportIfDisallowedOnControlStep(ref diagnostics, stepPrefix, keyMark, existingIfForm);
+                            ifKeyMark = default;
+                            if (!reader.End && reader.CurrentKind != YamlEventKind.MappingEnd)
+                            {
+                                reader.SkipCurrentNode();
+                            }
+
+                            break;
+                        }
+
                         if (!reader.End)
                         {
                             ifNode = ParseExpression(
@@ -641,6 +672,13 @@ public static partial class WorkflowParser
                     "background",
                     backgroundKeyMark,
                     context);
+            }
+
+            if (ifKeyMark != default && !StepParseContextRules.IsIfKeyAllowed(resolvedForm))
+            {
+                ReportIfDisallowedOnControlStep(ref diagnostics, stepPrefix, ifKeyMark, resolvedForm);
+                ifNode = default;
+                ifKeyMark = default;
             }
         }
 

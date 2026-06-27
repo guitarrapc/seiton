@@ -956,7 +956,7 @@ private ArenaList<Step> ParseSteps<TReader>(..., string stepPathPrefix, StepPars
 private Step? ParseStep<TReader>(..., string stepPathPrefix, int stepIndex, StepParseContext context)  // Spec §3.12
 ```
 
-`ParseStep` is a **single-pass** mapping walk: `Utf8MappingDispatch` + `StepSchema` select the primary form (`run` / `uses` / `wait` / `wait-all` / `cancel` / `parallel`), optional `background` on run/uses, and per-form value parsing. **`StepParseContext`** (`WorkflowJobStep` | `ParallelChild` | `CompositeActionStep`) enforces GitHub runtime constraints (parallel children and composite steps: `run`/`uses` only; no parallel controls in composite). `parallel` recurses via `ParseSteps(..., ParallelChild)` with nested path prefix (`jobs.'id'.steps[n].parallel[m]`). `WorkflowVisitor` recurses into `ExecParallel.Steps`.
+`ParseStep` is a **single-pass** mapping walk: `Utf8MappingDispatch` + `StepSchema` select the primary form (`run` / `uses` / `wait` / `wait-all` / `cancel` / `parallel`), optional `background` on run/uses, and per-form value parsing. **`StepParseContext`** (`WorkflowJobStep` | `ParallelChild` | `CompositeActionStep`) enforces GitHub runtime constraints (parallel children and composite steps: `run`/`uses` only; no parallel controls in composite). **`IsIfKeyAllowed`** rejects `if:` on `parallel` / `wait` / `wait-all` / `cancel` primaries (D21). `parallel` recurses via `ParseSteps(..., ParallelChild)` with nested path prefix (`jobs.'id'.steps[n].parallel[m]`). `WorkflowVisitor` recurses into `ExecParallel.Steps`.
 
 ### 3.8 Strategy / Matrix Parse (Spec §3.15)
 

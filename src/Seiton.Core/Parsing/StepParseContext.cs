@@ -39,6 +39,11 @@ internal static class StepParseContextRules
         => context == StepParseContext.WorkflowJobStep
             && form is StepSchema.FormId.Run or StepSchema.FormId.Uses;
 
+    /// <summary>GitHub runtime rejects <c>if:</c> on parallel / wait / wait-all / cancel steps (verified 2026-06-27).</summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    internal static bool IsIfKeyAllowed(StepSchema.FormId form)
+        => form is StepSchema.FormId.Run or StepSchema.FormId.Uses;
+
     internal static string GetScopeDescription(StepParseContext context)
         => context switch
         {

@@ -555,4 +555,142 @@ public sealed partial class ParserTests
         await Assert.That(result.Diagnostics.Any(d =>
             d.Message.Contains("wait must be string or non-empty sequence", StringComparison.Ordinal))).IsTrue();
     }
+
+    [Test]
+    public async Task Parse_ParallelSteps_ng_parallel_step_if()
+    {
+        var yaml = """
+            on: push
+            jobs:
+              build:
+                runs-on: ubuntu-latest
+                steps:
+                  - parallel:
+                    - run: echo a
+                    if: ${{ true }}
+            """;
+
+        var result = WorkflowParser.ParseDirect(Encoding.UTF8.GetBytes(yaml), "wf.yml", out _);
+        await Assert.That(result.Diagnostics.Any(d =>
+            d.Message.Contains("unexpected key \"if\"", StringComparison.Ordinal)
+            && d.Message.Contains("not supported on parallel, wait, wait-all, or cancel steps", StringComparison.Ordinal))).IsTrue();
+        var step = result.Workflow!.Jobs.Values().First().Steps![0];
+        await Assert.That(step.If.HasValue).IsFalse();
+    }
+
+    [Test]
+    public async Task Parse_ParallelSteps_ng_wait_step_if()
+    {
+        var yaml = """
+            on: push
+            jobs:
+              build:
+                runs-on: ubuntu-latest
+                steps:
+                  - id: svc
+                    run: echo hi
+                    background: true
+                  - wait: [svc]
+                    if: ${{ true }}
+            """;
+
+        var result = WorkflowParser.ParseDirect(Encoding.UTF8.GetBytes(yaml), "wf.yml", out _);
+        var ifDiagnostics = result.Diagnostics.Where(d =>
+            d.Message.Contains("unexpected key \"if\"", StringComparison.Ordinal)
+            && d.Message.Contains("not supported on parallel, wait, wait-all, or cancel steps", StringComparison.Ordinal)).ToArray();
+        await Assert.That(ifDiagnostics.Length).IsEqualTo(1);
+        var waitStep = result.Workflow!.Jobs.Values().First().Steps![1];
+        await Assert.That(waitStep.If.HasValue).IsFalse();
+    }
+
+    [Test]
+    public async Task Parse_ParallelSteps_ng_wait_all_step_if()
+    {
+        var yaml = """
+            on: push
+            jobs:
+              build:
+                runs-on: ubuntu-latest
+                steps:
+                  - run: echo hi
+                    background: true
+                  - wait-all:
+                    if: ${{ true }}
+            """;
+
+        var result = WorkflowParser.ParseDirect(Encoding.UTF8.GetBytes(yaml), "wf.yml", out _);
+        await Assert.That(result.Diagnostics.Any(d =>
+            d.Message.Contains("unexpected key \"if\"", StringComparison.Ordinal)
+            && d.Message.Contains("not supported on parallel, wait, wait-all, or cancel steps", StringComparison.Ordinal))).IsTrue();
+        var waitAllStep = result.Workflow!.Jobs.Values().First().Steps![1];
+        await Assert.That(waitAllStep.If.HasValue).IsFalse();
+    }
+
+    [Test]
+    public async Task Parse_ParallelSteps_ng_cancel_step_if()
+    {
+        var yaml = """
+            on: push
+            jobs:
+              build:
+                runs-on: ubuntu-latest
+                steps:
+                  - id: svc
+                    run: echo hi
+                    background: true
+                  - cancel: svc
+                    if: ${{ true }}
+            """;
+
+        var result = WorkflowParser.ParseDirect(Encoding.UTF8.GetBytes(yaml), "wf.yml", out _);
+        await Assert.That(result.Diagnostics.Any(d =>
+            d.Message.Contains("unexpected key \"if\"", StringComparison.Ordinal)
+            && d.Message.Contains("not supported on parallel, wait, wait-all, or cancel steps", StringComparison.Ordinal))).IsTrue();
+        var cancelStep = result.Workflow!.Jobs.Values().First().Steps![1];
+        await Assert.That(cancelStep.If.HasValue).IsFalse();
+    }
+
+    [Test]
+    public async Task Parse_ParallelSteps_ng_wait_step_if_before_primary()
+    {
+        var yaml = """
+            on: push
+            jobs:
+              build:
+                runs-on: ubuntu-latest
+                steps:
+                  - id: svc
+                    run: echo hi
+                    background: true
+                  - if: ${{ true }}
+                    wait: [svc]
+            """;
+
+        var result = WorkflowParser.ParseDirect(Encoding.UTF8.GetBytes(yaml), "wf.yml", out _);
+        await Assert.That(result.Diagnostics.Any(d =>
+            d.Message.Contains("unexpected key \"if\"", StringComparison.Ordinal)
+            && d.Message.Contains("not supported on parallel, wait, wait-all, or cancel steps", StringComparison.Ordinal))).IsTrue();
+        var waitStep = result.Workflow!.Jobs.Values().First().Steps![1];
+        await Assert.That(waitStep.If.HasValue).IsFalse();
+    }
+
+    [Test]
+    public async Task Parse_ParallelSteps_ok_parallel_child_if()
+    {
+        var yaml = """
+            on: push
+            jobs:
+              build:
+                runs-on: ubuntu-latest
+                steps:
+                  - parallel:
+                    - if: ${{ github.ref == 'refs/heads/main' }}
+                      run: echo hi
+            """;
+
+        var result = WorkflowParser.ParseDirect(Encoding.UTF8.GetBytes(yaml), "wf.yml", out var arena);
+        await Assert.That(result.Diagnostics).IsEmpty();
+        var child = ((ExecParallel)result.Workflow!.Jobs.Values().First().Steps![0].Exec).Steps![0];
+        await Assert.That(child.If.HasValue).IsTrue();
+    }
 }
