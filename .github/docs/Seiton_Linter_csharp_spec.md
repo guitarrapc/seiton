@@ -305,6 +305,7 @@ The current default rule scope in C# is:
 | `checkout-persist-credentials` | — |
 | `checkout-unsafe-pr` | Implemented as a `VisitStep` checkout input check for workflow and action-metadata composite steps. Literal `true` values are fixable to `false`; expression values emit diagnostics without fixes. |
 | `artipacked` | Implemented as `VisitJobPost` step-order scan. Tracks unsafe legacy/v6+ checkout state and re-evaluates exclusion lines against tracked legacy checkouts using job-local temporary storage. V6+ runner-temp warnings are suppressed only by recursive subtree exclusions (for example `!../../_temp/**` or workspace-prefixed equivalents), not by bare or shallow `_temp` exclusions. Deferred scope does not implement checkout `with.path` correlation. |
+| `background-steps` | Implemented as `VisitJobPost` via `BackgroundStepFlowAnalyzer`: one-pass job step simulation with forward scan on registry miss. Skips jobs without background flow. Attaches `structure-path` metadata for CLI structure snippets. |
 | `workflow-secrets` | — |
 | `job-secrets` | — |
 | `local-action-inputs` | Local action metadata resolution uses `ActionRefHelpers` (repository-root policy when references start with `./.github/`). |

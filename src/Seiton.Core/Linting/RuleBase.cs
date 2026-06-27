@@ -136,6 +136,11 @@ public abstract class RuleBase : IRule
         AddDiagnostic(DiagnosticSeverity.Error, message, location, fix);
     }
 
+    protected void AddStepError(Step step, string message, TextRange location, IReadOnlyDictionary<string, string> metadata)
+    {
+        AddDiagnostic(DiagnosticSeverity.Error, message, location, fix: null, metadata);
+    }
+
     protected void AddJobWarning(Job job, string message)
     {
         AddDiagnostic(DiagnosticSeverity.Warning, message, BuildJobLocation(job));
