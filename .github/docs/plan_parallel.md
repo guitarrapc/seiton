@@ -526,6 +526,9 @@ flowchart LR
 | `id` なし parallel 子がピークに含まれない | `ActiveCount` + `ActiveIds` に分離し、id なし子もカウント |
 | invalid `wait`/`cancel` が active を変更 | `TryResolveValidBackgroundTarget` は registry 上の有効参照のみ除去 |
 | `ExpressionConstantEvaluator` 重複 | `IfCondRule` から抽出して共有 |
+| forward scan が非 background 定義でも #2 を出す | forward scan で background 可否を判定し、非 background は #3 メッセージに分岐 |
+| `StructurePathDiagnosticMetadata` が毎回 `Dictionary` を確保 | `PinSingleEntryReadOnlyDictionary` を再利用 |
+| descriptor テストコメントが 62 のまま | 59 default + 4 online = 63 に更新 |
 
 ### ベンチマーク（CoreLintBenchmark, ShortRun, Release, FixEnabled=False）
 

@@ -322,14 +322,27 @@ internal static class BackgroundStepFlowAnalyzer
             return;
         }
 
-        if (ForwardScanHasStaticId(topLevelSteps, stepIndex + 1, targetSpan, arena))
+        if (TryForwardScanFindStaticId(topLevelSteps, stepIndex + 1, targetSpan, arena, out var forwardIsBackground))
         {
-            findings.Add(new Finding(
-                step,
-                location,
-                DiagnosticSeverity.Error,
-                $"background step id '{idText}' is referenced by \"{refKind}\" before it is defined",
-                structurePath));
+            if (forwardIsBackground)
+            {
+                findings.Add(new Finding(
+                    step,
+                    location,
+                    DiagnosticSeverity.Error,
+                    $"background step id '{idText}' is referenced by \"{refKind}\" before it is defined",
+                    structurePath));
+            }
+            else
+            {
+                findings.Add(new Finding(
+                    step,
+                    location,
+                    DiagnosticSeverity.Error,
+                    $"\"{refKind}\" references step id '{idText}' that is not a background step",
+                    structurePath));
+            }
+
             return;
         }
 
@@ -410,27 +423,30 @@ internal static class BackgroundStepFlowAnalyzer
         return false;
     }
 
-    private static bool ForwardScanHasStaticId(
+    private static bool TryForwardScanFindStaticId(
         IReadOnlyList<Step> steps,
         int startIndex,
         ReadOnlySpan<byte> targetSpan,
-        AstArena arena)
+        AstArena arena,
+        out bool isBackground)
     {
         for (var i = startIndex; i < steps.Count; i++)
         {
-            if (StepDefinesStaticId(steps[i], targetSpan, arena))
+            if (TryFindStaticIdInStep(steps[i], targetSpan, arena, out isBackground))
             {
                 return true;
             }
         }
 
+        isBackground = false;
         return false;
     }
 
-    private static bool StepDefinesStaticId(Step step, ReadOnlySpan<byte> targetSpan, AstArena arena)
+    private static bool TryFindStaticIdInStep(Step step, ReadOnlySpan<byte> targetSpan, AstArena arena, out bool isBackground)
     {
         if (StepHasMatchingStaticId(step, targetSpan, arena))
         {
+            isBackground = IsExplicitBackground(step, arena);
             return true;
         }
 
@@ -440,11 +456,13 @@ internal static class BackgroundStepFlowAnalyzer
             {
                 if (StepHasMatchingStaticId(children[i], targetSpan, arena))
                 {
+                    isBackground = true;
                     return true;
                 }
             }
         }
 
+        isBackground = false;
         return false;
     }
 

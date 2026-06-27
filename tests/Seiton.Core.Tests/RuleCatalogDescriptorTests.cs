@@ -9,7 +9,7 @@ public sealed class RuleCatalogDescriptorTests
     {
         var descriptors = RuleCatalog.GetAllRuleDescriptors();
 
-        // Total rules: 58 default + 4 online = 62
+        // Total rules: 59 default + 4 online = 63
         // (Syntax is not in the catalog)
         await Assert.That(descriptors.Count).IsEqualTo(63);
     }

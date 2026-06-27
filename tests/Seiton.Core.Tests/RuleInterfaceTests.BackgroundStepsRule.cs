@@ -83,6 +83,19 @@ public sealed partial class RuleInterfaceTests
                 """,
                 ["background step id 'later' is referenced by \"wait\" before it is defined"]),
             new RuleCase(
+                "ng-wait-forward-ref-non-background",
+                """
+                on: push
+                jobs:
+                    build:
+                        runs-on: ubuntu-latest
+                        steps:
+                            - wait: [plain]
+                            - id: plain
+                              run: echo plain
+                """,
+                ["\"wait\" references step id 'plain' that is not a background step"]),
+            new RuleCase(
                 "ng-wait-non-background",
                 """
                 on: push
@@ -107,6 +120,18 @@ public sealed partial class RuleInterfaceTests
                 {elevenParallelChildren}
                 """,
                 ["more than 10 background steps may run concurrently in this job"]),
+            new RuleCase(
+                "ok-no-background-flow",
+                """
+                on: push
+                jobs:
+                    build:
+                        runs-on: ubuntu-latest
+                        steps:
+                            - run: echo hello
+                            - uses: actions/checkout@v4
+                """,
+                []),
             new RuleCase(
                 "ok-parallel-eleven-conditional",
                 $"""
