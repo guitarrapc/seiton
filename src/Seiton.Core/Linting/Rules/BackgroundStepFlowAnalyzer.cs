@@ -308,7 +308,6 @@ internal static class BackgroundStepFlowAnalyzer
 
         var targetKey = Utf8String.FromLowerAscii(targetSpan);
         var location = arena.GetStringRange(targetId);
-        var idText = Encoding.UTF8.GetString(targetSpan);
 
         if (registry.TryGetValue(targetKey, out var registered))
         {
@@ -318,7 +317,7 @@ internal static class BackgroundStepFlowAnalyzer
                     step,
                     location,
                     DiagnosticSeverity.Error,
-                    $"\"{refKind}\" references step id '{idText}' that is not a background step",
+                    $"\"{refKind}\" references step id '{DecodeId(targetSpan)}' that is not a background step",
                     structurePath));
             }
 
@@ -327,6 +326,7 @@ internal static class BackgroundStepFlowAnalyzer
 
         if (TryForwardScanFindStaticId(topLevelSteps, stepIndex + 1, targetSpan, arena, out var forwardIsBackground))
         {
+            var idText = DecodeId(targetSpan);
             if (forwardIsBackground)
             {
                 findings.Add(new Finding(
@@ -353,9 +353,11 @@ internal static class BackgroundStepFlowAnalyzer
             step,
             location,
             DiagnosticSeverity.Error,
-            $"\"{refKind}\" references unknown background step id '{idText}'",
+            $"\"{refKind}\" references unknown background step id '{DecodeId(targetSpan)}'",
             structurePath));
     }
+
+    private static string DecodeId(ReadOnlySpan<byte> targetSpan) => Encoding.UTF8.GetString(targetSpan);
 
     private static void RemoveValidTargets(
         IReadOnlyList<StringNodeId>? targets,
