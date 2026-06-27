@@ -21,11 +21,11 @@ public static class PinDiagnosticMetadata
 
     /// <summary>Creates or retrieves a cached metadata dictionary for the given <c>uses</c> reference string.</summary>
     public static IReadOnlyDictionary<string, string> ForUsesRef(string usesRef) =>
-        UsesRefCache.GetOrAdd(usesRef, static ur => new PinSingleEntryReadOnlyDictionary(UsesRefKey, ur));
+        UsesRefCache.GetOrAdd(usesRef, static ur => new SingleEntryReadOnlyDictionary(UsesRefKey, ur));
 
     /// <summary>Creates or retrieves a cached metadata dictionary for the given image reference string.</summary>
     public static IReadOnlyDictionary<string, string> ForImageRef(string imageRef) =>
-        ImageRefCache.GetOrAdd(imageRef, static ir => new PinSingleEntryReadOnlyDictionary(ImageRefKey, ir));
+        ImageRefCache.GetOrAdd(imageRef, static ir => new SingleEntryReadOnlyDictionary(ImageRefKey, ir));
 
     /// <summary>Extracts the <c>uses-ref</c> value from a diagnostic's metadata.</summary>
     public static bool TryGetUsesRef(in Diagnostic diagnostic, out string usesRef) =>

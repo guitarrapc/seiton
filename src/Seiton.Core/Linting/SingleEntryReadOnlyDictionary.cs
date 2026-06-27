@@ -1,17 +1,17 @@
-﻿using System.Collections;
+using System.Collections;
 
-namespace Seiton.Core.Linting.PinRemediation;
+namespace Seiton.Core.Linting;
 
 /// <summary>
 /// Minimal <see cref="IReadOnlyDictionary{TKey,TValue}"/> with one entry (ordinal key equality).
-/// Avoids <see cref="Dictionary{TKey,TValue}"/> bucket/entry allocations for pin-rule metadata.
+/// Avoids <see cref="Dictionary{TKey,TValue}"/> bucket/entry allocations for single-key diagnostic metadata.
 /// </summary>
-internal sealed class PinSingleEntryReadOnlyDictionary : IReadOnlyDictionary<string, string>
+internal sealed class SingleEntryReadOnlyDictionary : IReadOnlyDictionary<string, string>
 {
     private readonly string _key;
     private readonly string _value;
 
-    public PinSingleEntryReadOnlyDictionary(string key, string value)
+    public SingleEntryReadOnlyDictionary(string key, string value)
     {
         _key = key;
         _value = value;
