@@ -11,7 +11,7 @@ public sealed class RuleCatalogDescriptorTests
 
         // Total rules: 58 default + 4 online = 62
         // (Syntax is not in the catalog)
-        await Assert.That(descriptors.Count).IsEqualTo(62);
+        await Assert.That(descriptors.Count).IsEqualTo(63);
     }
 
     [Test]

@@ -79,6 +79,7 @@ internal static class RuleCatalog
         (RuleId.BotConditions, 59, false, static () => new BotConditionsRule()),
         (RuleId.Artipacked, 60, false, static () => new ArtipackedRule()),
         (RuleId.CheckoutUnsafePr, 61, false, static () => new CheckoutUnsafePrRule()),
+        (RuleId.BackgroundSteps, 62, false, static () => new BackgroundStepsRule()),
     ];
 
     // Online rules: opt-in only (disabled by default), participate in WorkflowVisitor
@@ -317,6 +318,7 @@ internal static class RuleCatalog
         RuleId.UnsoundContains => "mixed",
         RuleId.BotConditions => "mixed",
         RuleId.Artipacked => "mixed",
+        RuleId.BackgroundSteps => "mixed",
         _ => throw new ArgumentOutOfRangeException(nameof(ruleId), ruleId, "No default severity defined for this rule."),
     };
 

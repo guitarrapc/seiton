@@ -93,6 +93,7 @@ default local rules（58）:
 - `unsound-contains`
 - `bot-conditions`
 - `artipacked`
+- `background-steps`
 
 online audit rules（4）:
 
@@ -105,7 +106,7 @@ online audit rules（4）:
 
 ## 3. 機能カテゴリ別判定（採用可否）
 
-実装済み（62 rules: default local 58 + online audit 4）
+実装済み（63 rules: default local 59 + online audit 4）
 
 | 機能カテゴリ | actionlint | ghalint | zizmor | pinact | dockerfile-pin | frizbee | Seiton現状 | 判定 | 採用優先度 |
 |---|---|---|---|---|---|---|---|---|---|

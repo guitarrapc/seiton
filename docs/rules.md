@@ -70,12 +70,13 @@ unsound-contains                         yes       local    mixed      no    wor
 bot-conditions                           yes       local    mixed      no    workflow   default
 artipacked                               yes       local    mixed      no    workflow   default
 checkout-unsafe-pr                       yes       local    warning    yes   both       default
+background-steps                         yes       local    mixed      no    workflow   default
 known-vulnerable-actions                 no        online   error      no    workflow   opt-in (not configured)
 impostor-commit                          no        online   error      no    workflow   opt-in (not configured)
 ref-confusion                            no        online   error      no    workflow   opt-in (not configured)
 stale-action-refs                        no        online   warning    no    workflow   opt-in (not configured)
 
-62 rules total (57 enabled, 5 disabled)
+63 rules total (58 enabled, 5 disabled)
 
 To enable an opt-in rule, add to .github/seiton.yaml:
   rules:
@@ -105,6 +106,7 @@ Online rules use the GitHub API. Set GITHUB_TOKEN (or SEITON_GITHUB_TOKEN) to av
 - [reusable-workflow](#reusable-workflow)
 - [permissions](#permissions)
 - [needs-graph](#needs-graph)
+- [background-steps](#background-steps)
 - [shell-name](#shell-name)
 - [id-naming](#id-naming)
 - [glob-pattern](#glob-pattern)
@@ -389,6 +391,53 @@ jobs:
     steps:
       - run: echo build
 ```
+
+---
+
+### `background-steps`
+
+| Default | Network | Auto-fix |
+|---|---|---|
+| ✓ | — | ✗ |
+
+Validates background step flow in workflow jobs: `wait` / `cancel` references must target defined background steps in execution order, and a job must not run more than 10 background steps concurrently.
+
+**Why:** GitHub Actions rejects invalid background references at runtime and limits concurrent background steps to 10 per job. Catching these issues early avoids failed workflow runs.
+
+**Example trigger:**
+
+```yaml
+on: push
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - wait: [svc]
+      - id: svc
+        run: npm start
+        background: true
+```
+
+**Remediation:** Define background steps before `wait` / `cancel` references, mark targets with `background: true` (or run them inside `parallel`), and split large `parallel` groups so at most 10 backgrounds are active at once:
+
+```yaml
+on: push
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - id: svc
+        run: npm start
+        background: true
+      - wait: [svc]
+```
+
+**When fixing:**
+
+- `parallel` child steps are implicitly background; waiting on their ids after the `parallel` block is allowed.
+- `wait` / `cancel` id matching is case-insensitive.
+- Peak-count warnings exclude steps whose `if:` folds to a constant falsy value; non-constant `if:` conditions are excluded from the count (under-count is possible).
+- Diagnostics attach `structure-path` metadata for richer CLI snippets.
 
 ---
 

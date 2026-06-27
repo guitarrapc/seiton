@@ -64,6 +64,7 @@ public enum RuleId
     UnsoundContains,
     BotConditions,
     Artipacked,
+    BackgroundSteps,
 
     // Composite / internal-only (not in RuleCatalog)
     Syntax,

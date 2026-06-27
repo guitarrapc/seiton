@@ -32,7 +32,7 @@
 | テスト / Playground / Parser spec | ✅ PR1 完了 |
 | **PR1.5** `StepParseContext` | ✅ **完了**（D12/D13 反映） |
 | **PR1.6** control step `if:` 拒否 | ✅ **完了**（D21 反映） |
-| **PR2** `background-steps` lint | ❌ PR1.6 後 |
+| **PR2** `background-steps` lint | ✅ **完了** |
 
 ### GitHub ランタイム vs Seiton（PR1.5 で解消済み）
 
@@ -490,11 +490,58 @@ flowchart LR
 
 - [x] D12 / D13 確定（実機検証）
 - [x] D14〜D20 確定（設計レビュー）
-- [ ] `BackgroundStepFlowAnalyzer` + `BackgroundStepsRule`
-- [ ] `RuleInterfaceTests.BackgroundStepsRule.cs`
-- [ ] catalog / descriptor テスト更新
-- [ ] `docs/rules.md` + linter spec + `feature_matrix.md`
-- [ ] Green + `dotnet test` + `CoreLintBenchmark` ±10%
+- [x] `BackgroundStepFlowAnalyzer` + `BackgroundStepsRule`
+- [x] `RuleInterfaceTests.BackgroundStepsRule.cs`
+- [x] catalog / descriptor テスト更新
+- [x] `docs/rules.md` + linter spec + `feature_matrix.md`
+- [x] Green + `dotnet test` + `CoreLintBenchmark` ±10%
+
+---
+
+## PR2 実装記録（2026-06-27 完了）
+
+### フェーズ別実装
+
+| フェーズ | 内容 | 主なファイル |
+|---------|------|-------------|
+| 1 Red | table-driven 8 ケース | `RuleInterfaceTests.BackgroundStepsRule.cs` |
+| 2 Green | `BackgroundStepFlowAnalyzer` + `BackgroundStepsRule` | `Linting/Rules/` |
+| 3 共有化 | 定数式評価を `ExpressionConstantEvaluator` に抽出（`IfCondRule` も利用） | `Linting/ExpressionConstantEvaluator.cs` |
+| 4 登録 | RuleId / RuleCatalog priority 62 / descriptor 63 | catalog テスト更新 |
+| 5 仕様 | linter spec / `docs/rules.md` / `feature_matrix.md` | 3 触点 |
+
+### API レビュー（ユーザーファースト）
+
+| 観点 | 判断 |
+|------|------|
+| 診断メッセージ | step lint スタイル（`"wait" references …`）。値位置を指す（D18） |
+| structure-path | `structure-path` metadata で CLI 構造スニペットを補強 |
+| 早期 return | background flow のない job はスキップ（通常 workflow へのオーバーヘッド最小） |
+| 既知の限界 | 非定数 `if:` はピークカウントから除外（under-count 許容、D16/C''） |
+
+### セルフレビュー指摘と対応
+
+| 指摘 | 対応 |
+|------|------|
+| `id` なし parallel 子がピークに含まれない | `ActiveCount` + `ActiveIds` に分離し、id なし子もカウント |
+| invalid `wait`/`cancel` が active を変更 | `TryResolveValidBackgroundTarget` は registry 上の有効参照のみ除去 |
+| `ExpressionConstantEvaluator` 重複 | `IfCondRule` から抽出して共有 |
+
+### ベンチマーク（CoreLintBenchmark, ShortRun, Release, FixEnabled=False）
+
+| Size | 実装前 Mean | 実装後 Mean | Δ Mean | 実装前 Alloc | 実装後 Alloc | Δ Alloc |
+|------|------------|------------|--------|-------------|-------------|---------|
+| Small | 63.97 µs | 56.93 µs | **−11%** | 7.45 KB | 7.52 KB | **+0.9%** |
+| Medium | 1,408 µs | 1,188 µs | **−16%** | 49.53 KB | 50.00 KB | **+0.9%** |
+| Large | 20,984 µs | 18,364 µs | **−12%** | 229.84 KB | 231.41 KB | **+0.7%** |
+
+**+10% ゲート:** Mean・Allocated ともにクリア（ShortRun ばらつき内でやや改善に見えるが、主因は計測ノイズ。Allocated は early-return により実質フラット）。
+
+**変化理由:** ベンチマーク workflow は parallel/background キーを含まないため、新ルールは `NeedsAnalysis` で即 return。Allocated 増分は default rule 配列 +1 および rule インスタンスの再利用フィールドのみ。
+
+### テスト結果
+
+- `Seiton.Core.Tests`: **1980** passed（`RuleRegression_BackgroundStepsRule_TableDriven` 8 ケース含む）
 
 ---
 
