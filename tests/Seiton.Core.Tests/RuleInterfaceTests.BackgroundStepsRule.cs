@@ -109,6 +109,19 @@ public sealed partial class RuleInterfaceTests
                 """,
                 ["\"wait\" references step id 'plain' that is not a background step"]),
             new RuleCase(
+                "ng-wait-control-step-id",
+                """
+                on: push
+                jobs:
+                    build:
+                        runs-on: ubuntu-latest
+                        steps:
+                            - id: gate
+                              wait-all: null
+                            - wait: [gate]
+                """,
+                ["\"wait\" references step id 'gate' that is not a background step"]),
+            new RuleCase(
                 "ng-parallel-eleven-children",
                 $"""
                 on: push

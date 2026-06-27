@@ -121,12 +121,12 @@ internal static class BackgroundStepFlowAnalyzer
     {
         var stepPath = $"{jobStructurePrefix}.steps[{stepIndex}]";
         var registry = state.Registry;
-        var activeIds = state.ActiveIds;
         var findings = state.Findings;
 
         switch (step.Exec)
         {
             case ExecParallel parallel:
+                TryRegisterStaticId(step, arena, registry, isBackground: false);
                 RegisterParallelChildren(parallel.Steps, arena, registry);
                 AddParallelChildrenToActive(parallel.Steps, arena, config, state);
                 MaybeEmitPeakWarning(step, parallel.Range, $"{stepPath}.parallel", findings, state, ref peakWarningEmitted);
@@ -134,16 +134,19 @@ internal static class BackgroundStepFlowAnalyzer
                 break;
 
             case ExecWait wait:
+                TryRegisterStaticId(step, arena, registry, isBackground: false);
                 ValidateWaitTargets(step, wait, stepPath, $"{stepPath}.wait", topLevelSteps, stepIndex, arena, registry, findings);
                 RemoveValidTargets(wait.Targets, topLevelSteps, stepIndex, arena, registry, state);
                 break;
 
             case ExecCancel cancel:
+                TryRegisterStaticId(step, arena, registry, isBackground: false);
                 ValidateCancelTarget(step, cancel, stepPath, $"{stepPath}.cancel", topLevelSteps, stepIndex, arena, registry, findings);
                 RemoveValidCancelTarget(cancel, topLevelSteps, stepIndex, arena, registry, state);
                 break;
 
             case ExecWaitAll:
+                TryRegisterStaticId(step, arena, registry, isBackground: false);
                 state.ActiveIds.Clear();
                 state.ActiveCount = 0;
                 break;
