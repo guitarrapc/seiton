@@ -595,9 +595,10 @@ public sealed partial class ParserTests
             """;
 
         var result = WorkflowParser.ParseDirect(Encoding.UTF8.GetBytes(yaml), "wf.yml", out _);
-        await Assert.That(result.Diagnostics.Any(d =>
+        var ifDiagnostics = result.Diagnostics.Where(d =>
             d.Message.Contains("unexpected key \"if\"", StringComparison.Ordinal)
-            && d.Message.Contains("not supported on parallel, wait, wait-all, or cancel steps", StringComparison.Ordinal))).IsTrue();
+            && d.Message.Contains("not supported on parallel, wait, wait-all, or cancel steps", StringComparison.Ordinal)).ToArray();
+        await Assert.That(ifDiagnostics.Length).IsEqualTo(1);
         var waitStep = result.Workflow!.Jobs.Values().First().Steps![1];
         await Assert.That(waitStep.If.HasValue).IsFalse();
     }

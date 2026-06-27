@@ -445,6 +445,7 @@ public static partial class WorkflowParser
                             && !StepParseContextRules.IsIfKeyAllowed(existingIfForm))
                         {
                             ReportIfDisallowedOnControlStep(ref diagnostics, stepPrefix, keyMark, existingIfForm);
+                            ifKeyMark = default;
                             if (!reader.End && reader.CurrentKind != YamlEventKind.MappingEnd)
                             {
                                 reader.SkipCurrentNode();

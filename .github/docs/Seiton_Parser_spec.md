@@ -636,7 +636,7 @@ Per-form allowed keys and unexpected-key descriptions are generated from the **`
 | `ParallelChild` (`parallel` array items) | `run` / `uses` only | not allowed (implicit background) | allowed on child `run` / `uses` |
 | `CompositeActionStep` (`runs.steps`) | `run` / `uses` only | not allowed | allowed on child `run` / `uses` |
 
-Disallowed keys emit: `has unexpected key "…" for step in parallel group` or `… for step in composite action` with the restricted key list. Control-step `if:` emits: `has unexpected key "if" for … . "if" is not supported on parallel, wait, wait-all, or cancel steps`.
+Disallowed keys emit: `has unexpected key "…" for step in parallel group` or `… for step in composite action` with the restricted key list. Control-step `if:` emits: `has unexpected key "if" for …. "if" is not supported on parallel, wait, wait-all, or cancel steps`.
 
 ```
 ParseStep(node, context):
