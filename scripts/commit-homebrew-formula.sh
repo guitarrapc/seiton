@@ -5,8 +5,8 @@
 #
 # Required env:
 #   GITHUB_REPOSITORY — owner/name (e.g. guitarrapc/seiton)
-#   SEITON_TAG        — v1.2.0
-#   SEITON_VERSION    — 1.2.0
+#   SEITON_TAG        — v1.2.1
+#   SEITON_VERSION    — 1.2.1
 # One of:
 #   CHECKSUMS_URL  — URL to checksums-sha256.txt for this release
 #   CHECKSUMS_FILE — local path
