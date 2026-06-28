@@ -653,7 +653,7 @@ Step-level known keys use duplicate detection identical to job-level known keys:
 
 **Notes:**
 
-- Bare `wait-all:` with no trailing file newline can hang VYaml (upstream limitation). `WorkflowParser` appends a virtual trailing `\n` to a parse-only copy when the source has no trailing `\n` and the last non-whitespace byte is `:` (covers bare `wait-all:` / `uses:` at EOF). Caller `byte[]` and diagnostic offsets into the original source are unchanged.
+- Bare `wait-all:` with no trailing file newline hung VYaml before 1.4.0; fixed upstream. Seiton requires VYaml ≥ 1.4.0.
 - Restricted-context diagnostics materialize the mapping key name before advancing the YAML reader past the key scalar (the reader reuses scalar buffers; reporting after `Read()` can corrupt hyphenated keys such as `wait-all`).
 - Control-step `if:` (D21): GitHub rejects `if` on `parallel` / `wait` / `wait-all` / `cancel` primaries even though raw JSON Schema lists `if` in those forms. Seiton reports at end-of-step (or immediately when `if` follows a resolved control primary) and does not retain `Step.If` on the AST.
 

@@ -85,13 +85,12 @@ public static partial class WorkflowParser
 
         try
         {
-            var parseSource = YamlParseSource.GetVYamlMemory(utf8Yaml);
             var hasHints = false;
             var hasJobs = false;
             var hasRuns = false;
             try
             {
-                var hintReader = new VYamlStreamAdapter(parseSource);
+                var hintReader = new VYamlStreamAdapter(utf8Yaml.AsMemory());
                 hasHints = TryReadRootStructuralHints(ref hintReader, out hasJobs, out hasRuns);
             }
             catch (Exception ex) when (ex is not OutOfMemoryException and not OperationCanceledException)
@@ -111,7 +110,7 @@ public static partial class WorkflowParser
                 pathHintKind == DocumentKind.ActionMetadata &&
                 finalKind == DocumentKind.Workflow;
 
-            var parseReader = new VYamlStreamAdapter(parseSource);
+            var parseReader = new VYamlStreamAdapter(utf8Yaml.AsMemory());
             var parseMode = finalKind == DocumentKind.ActionMetadata ? ParseMode.ActionMetadata : ParseMode.Workflow;
             localArena = AstArena.Rent(utf8Yaml);
             var diagnostics = new PooledBuffer<Diagnostic>(16);
@@ -413,8 +412,7 @@ public static partial class WorkflowParser
     /// </summary>
     internal static ParseResultData ParseIncremental(byte[] utf8Yaml, string filePath, AstArena arena, byte rootSkipMask, JobSkipEntry[]? jobSkipEntries = null)
     {
-        var parseSource = YamlParseSource.GetVYamlMemory(utf8Yaml);
-        var reader = new VYamlStreamAdapter(parseSource);
+        var reader = new VYamlStreamAdapter(utf8Yaml.AsMemory());
         var diagnostics = new PooledBuffer<Diagnostic>(16);
         try
         {

@@ -675,17 +675,6 @@ public sealed partial class ParserTests
     }
 
     [Test]
-    public async Task YamlParseSource_NeedsVirtualTrailingNewline_OnlyWhenBareKeyAtEof()
-    {
-        await Assert.That(YamlParseSource.NeedsVirtualTrailingNewline("on: push\njobs:"u8)).IsTrue();
-        await Assert.That(YamlParseSource.NeedsVirtualTrailingNewline("      - wait-all:"u8)).IsTrue();
-        await Assert.That(YamlParseSource.NeedsVirtualTrailingNewline(ReadOnlySpan<byte>.Empty)).IsFalse();
-        await Assert.That(YamlParseSource.NeedsVirtualTrailingNewline("on: push\n"u8)).IsFalse();
-        await Assert.That(YamlParseSource.NeedsVirtualTrailingNewline("echo done        "u8)).IsFalse();
-        await Assert.That(YamlParseSource.NeedsVirtualTrailingNewline("wait-all: true"u8)).IsFalse();
-    }
-
-    [Test]
     public async Task Parse_ParallelSteps_ok_bare_wait_all_at_eof_without_trailing_newline()
     {
         const string yaml = """
