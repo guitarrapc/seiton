@@ -36,10 +36,11 @@ Pick the closest existing rule and follow its shape.
 | Archetype | When to use | Examples |
 |-----------|-------------|----------|
 | **Step/job visitor** | Check a single AST field on `VisitStep` or `VisitJobPre` | `DenyReadAllRule`, `ShellNameRule` |
+| **Job post visitor** | Per-job checks after all steps; simulate step order | `BackgroundStepsRule` |
 | **Workflow-wide state** | Cross-job validation; reset state in `VisitWorkflowPre` | `IdNamingRule`, `ConcurrencyLimitsRule` |
 | **Expression analysis** | Parse `${{ }}` via `Config.ParseExpression()` | `ExprUndefinedVarRule`, `IfCondRule` |
 | **Configurable policy** | Read `rules.<id>.*` keys in `SetConfig` | `ForbiddenUsesRule`, `DangerousTriggersRule` |
-| **Shared analyzer** | Logic reused by multiple rules | `RunContextDirectUseAnalyzer` |
+| **Shared analyzer** | Logic reused by multiple rules | `RunContextDirectUseAnalyzer`, `BackgroundStepFlowAnalyzer` |
 | **Data-driven** | Lookup tables from `data/` via `Seiton.Update` generators | `UnpinnedToolsRule`, `PopularActionInputsRule` |
 | **Online audit** | Needs GitHub API / advisory data for `uses:` refs | `KnownVulnerableActionsRule`, `StaleActionRefsRule` |
 | **Auto-fix** | Attach `DiagnosticFix` with `TextEdit[]` | `IfExprWrapperRule`, `IdNamingRule` |
@@ -214,7 +215,7 @@ Do **not** put step-by-step implementation HOW in specs; keep WHAT/WHY there, HO
 | `VisitWorkflowPost` | Cross-job checks needing full job list |
 | `VisitEvent` | Trigger configuration (`on: push`, `schedule`, etc.) |
 | `VisitJobPre` | Job keys before steps (`runs-on`, `needs`, reusable `uses:`) |
-| `VisitJobPost` | After all steps; cleanup per-job state |
+| `VisitJobPost` | After all steps; cross-step flow within a job (`wait`/`cancel` refs, concurrent background peak) | `BackgroundStepsRule` |
 | `VisitStep` | Step-level `uses:`, `run:`, `if:`, `env:` |
 | `VisitActionMetadataPre/Post` | Composite action `action.yml` structure |
 

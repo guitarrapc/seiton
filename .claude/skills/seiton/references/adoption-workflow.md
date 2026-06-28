@@ -2,7 +2,7 @@
 
 Use this reference when a repository **first runs seiton** and the user is surprised by diagnostic volume, or asks whether new findings are a bug.
 
-**Key message:** more diagnostics than before does **not** mean seiton is broken. Seiton ships a broad default rule set (57 local rules on by default, plus optional online rules). Many findings are genuine issues that were simply not checked previously.
+**Key message:** more diagnostics than before does **not** mean seiton is broken. Seiton ships a broad default rule set (58 local rules on by default, plus optional online rules). Many findings are genuine issues that were simply not checked previously.
 
 ## Phased adoption
 

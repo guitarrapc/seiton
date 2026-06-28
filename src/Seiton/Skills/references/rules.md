@@ -89,6 +89,7 @@ rules:
 | unsound-contains | mixed | no | workflow | on |
 | bot-conditions | mixed | no | workflow | on |
 | artipacked | mixed | no | workflow | on |
+| background-steps | mixed | no | workflow | on |
 | known-vulnerable-actions | error | no | workflow | opt-in |
 | impostor-commit | error | no | workflow | opt-in |
 | ref-confusion | error | no | workflow | opt-in |
@@ -136,7 +137,7 @@ Online rules (`known-vulnerable-actions`, `impostor-commit`, `ref-confusion`, `s
 
 ### Correctness
 
-`job-structure`, `reusable-workflow`, `needs-graph`, `dispatch-inputs`, `schedule-event`, `glob-pattern`, `expr-undefined-var`, `popular-action-inputs`, `local-action-inputs`, `github-app-token-inputs`, `workflow-call-input-default`, `matrix`, `if-cond`, `unsound-condition`, `unsound-contains`, `bot-conditions`
+`job-structure`, `reusable-workflow`, `needs-graph`, `dispatch-inputs`, `schedule-event`, `glob-pattern`, `expr-undefined-var`, `popular-action-inputs`, `local-action-inputs`, `github-app-token-inputs`, `workflow-call-input-default`, `matrix`, `if-cond`, `unsound-condition`, `unsound-contains`, `bot-conditions`, `background-steps`
 
 ### Style & Best Practice
 
