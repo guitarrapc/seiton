@@ -7,8 +7,8 @@ public sealed partial class RuleInterfaceTests
     [Test]
     public async Task RuleRegression_BackgroundStepsRule_TableDriven()
     {
-        var elevenParallelChildren = BuildParallelChildrenYaml(11, includeFalseIf: false);
-        var elevenParallelConditional = BuildParallelChildrenYaml(11, includeFalseIf: true);
+        var elevenParallelChildren = BuildParallelChildrenYaml(11);
+        var elevenParallelConditional = BuildParallelChildrenYaml(11, ParallelChildIfKind.ConstantFalse);
 
         var cases = new[]
         {
@@ -157,19 +157,42 @@ public sealed partial class RuleInterfaceTests
                 {elevenParallelConditional}
                 """,
                 []),
+            new RuleCase(
+                "ok-parallel-eleven-dynamic-if",
+                $"""
+                on: push
+                jobs:
+                    build:
+                        runs-on: ubuntu-latest
+                        steps:
+                            - parallel:
+                {BuildParallelChildrenYaml(11, ParallelChildIfKind.Dynamic)}
+                """,
+                []),
         };
 
         await AssertRuleCases(new BackgroundStepsRule(), "background-steps", cases);
     }
 
-    private static string BuildParallelChildrenYaml(int count, bool includeFalseIf)
+    private enum ParallelChildIfKind
+    {
+        None,
+        ConstantFalse,
+        Dynamic,
+    }
+
+    private static string BuildParallelChildrenYaml(int count, ParallelChildIfKind ifKind = ParallelChildIfKind.None)
     {
         var lines = new string[count];
         for (var i = 0; i < count; i++)
         {
-            lines[i] = includeFalseIf
-                ? $"                - id: child{i}\n                  run: echo {i}\n                  if: ${{{{ false }}}}"
-                : $"                - id: child{i}\n                  run: echo {i}";
+            var ifLine = ifKind switch
+            {
+                ParallelChildIfKind.ConstantFalse => "\n                  if: ${{ false }}",
+                ParallelChildIfKind.Dynamic => "\n                  if: ${{ github.ref == 'main' }}",
+                _ => string.Empty,
+            };
+            lines[i] = $"                - id: child{i}\n                  run: echo {i}{ifLine}";
         }
 
         return string.Join('\n', lines);

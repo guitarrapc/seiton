@@ -439,6 +439,37 @@ jobs:
 - Peak-count warnings exclude steps whose `if:` folds to a constant falsy value; non-constant `if:` conditions are excluded from the count (under-count is possible).
 - Diagnostics attach `structure-path` metadata for richer CLI snippets.
 
+**Peak count and non-constant `if:` (intentional under-count):**
+
+Seiton only adds a step to the concurrent peak when its `if:` is absent or folds to a constant truthy value at lint time. Dynamic conditions are skipped so default-on lint stays quiet on common patterns. Runtime may still run more than 10 backgrounds; split `parallel` groups when that risk matters.
+
+```yaml
+# No peak warning: each child has non-constant if:, so none count toward the limit.
+on: push
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - parallel:
+          - id: child0
+            run: echo 0
+            if: ${{ github.ref == 'main' }}
+          # ... child1 .. child10 with the same if: pattern
+```
+
+```yaml
+# Peak warning: eleven unconditional parallel children all count.
+on: push
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - parallel:
+          - id: child0
+            run: echo 0
+          # ... child1 .. child10 without if:
+```
+
 ---
 
 ### `shell-name`
