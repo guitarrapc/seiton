@@ -62,7 +62,7 @@ References:
 | `MemoryMarshal` | ✅ | Part of BCL |
 | `XxHash64` (scalar impl) | ✅ | No SIMD, pure arithmetic |
 | `ReadOnlySpan<byte>` / UTF-8 comparisons | ✅ | Runtime supported |
-| VYaml 1.2.0 | ✅ | Pure C#, verified working |
+| VYaml 1.4.0 | ✅ | Pure C#, verified working |
 | `HttpClient` (OnlineAudit) | ⚠️ | Browser fetch with CORS constraints; disabled in playground |
 | SSE/AVX/Vector intrinsics | ✅ N/A | Not used in Seiton.Core |
 

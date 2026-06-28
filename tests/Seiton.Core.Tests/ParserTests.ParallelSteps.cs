@@ -675,6 +675,31 @@ public sealed partial class ParserTests
     }
 
     [Test]
+    public async Task Parse_ok_bare_jobs_at_eof_without_trailing_newline_does_not_hang()
+    {
+        var bytes = Encoding.UTF8.GetBytes("on: push\njobs:");
+        await Assert.That(bytes[^1]).IsNotEqualTo((byte)'\n');
+
+        using var parseCts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+        var (result, arena) = await Task.Run(() =>
+        {
+            var r = WorkflowParser.ParseDirect(bytes, "wf.yml", out var a);
+            return (r, a);
+        }).WaitAsync(parseCts.Token);
+
+        try
+        {
+            await Assert.That(result.HasFatalError).IsFalse();
+            await Assert.That(result.Diagnostics.Any(d =>
+                d.Message.Contains("jobs must be object", StringComparison.Ordinal))).IsTrue();
+        }
+        finally
+        {
+            arena?.Dispose();
+        }
+    }
+
+    [Test]
     public async Task Parse_ParallelSteps_ok_bare_wait_all_at_eof_without_trailing_newline()
     {
         const string yaml = """
