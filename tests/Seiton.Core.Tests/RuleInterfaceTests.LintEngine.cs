@@ -4358,7 +4358,7 @@ public sealed partial class RuleInterfaceTests
     }
 
     [Test]
-    public async Task LintEngine_CachePoisoning_BuiltinLowTrustTrigger_EmitsWarning()
+    public async Task LintEngine_CachePoisoning_BuiltinLowTrustTrigger_EmitWarning()
     {
         var yaml = """
         on: issue_comment
