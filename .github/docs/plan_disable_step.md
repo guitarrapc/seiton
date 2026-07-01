@@ -40,26 +40,26 @@ Add `# seiton: disable-step <rule-id list>` so users can suppress diagnostics th
 - Rule interface regression tests: `dotnet test --project tests/Seiton.Core.Tests --treenode-filter /*/*/RuleInterfaceTests/*` passed, 518 tests.
 - Full suite: `dotnet test` passed across `Seiton.Update.Tests`, `Seiton.Tests`, `Seiton.Core.Tests`, and `Seiton.Playground.Tests` (`[✓142/x0/↓1]`, 1 existing skip).
 
-Final `CoreLintBenchmark` after the review pass, lazy step-scope construction, cached step item line lookup, and indentation-aware step binding:
+Final `CoreLintBenchmark` after the review pass, lazy step-scope construction, cached step item line lookup, cached line-start reuse, and indentation-aware step binding:
 
 | Size | FixEnabled | Baseline Mean | Final Mean | Baseline Allocated | Final Allocated |
 |---|---:|---:|---:|---:|---:|
-| Small | False | 288.3 us | 338.8 us | 9.89 KB | 9.88 KB |
-| Small | True | 192.3 us | 223.1 us | 11.2 KB | 11.2 KB |
-| Medium | False | 3,739.6 us | 11,349.5 us | 52.91 KB | 53.48 KB |
-| Medium | True | 4,894.2 us | 6,644.5 us | 66.13 KB | 66.84 KB |
-| Large | False | 50,190.3 us | 56,502.3 us | 256.86 KB | 233.77 KB |
-| Large | True | 76,443.6 us | 81,744.6 us | 317.51 KB | 288.61 KB |
+| Small | False | 288.3 us | 368.5 us | 9.89 KB | 9.89 KB |
+| Small | True | 192.3 us | 465.8 us | 11.2 KB | 11.35 KB |
+| Medium | False | 3,739.6 us | 4,304.5 us | 52.91 KB | 52.91 KB |
+| Medium | True | 4,894.2 us | 5,763.2 us | 66.13 KB | 66.27 KB |
+| Large | False | 50,190.3 us | 56,396.3 us | 256.86 KB | 262.75 KB |
+| Large | True | 76,443.6 us | 89,062.1 us | 317.51 KB | 346.7 KB |
 
-BenchmarkDotNet ShortRun timings were noisy on this machine, especially the Medium/False case (`Error = 93,460.4 us`, `StdDev = 5,122.88 us`, `RatioSD = 0.82`). Allocation stayed within the +10% threshold for every scenario. The largest allocation increase was Medium/False at about +1.1%, while large scenarios allocated less than the baseline. Documents without `disable-step` do not eagerly build step scopes.
+BenchmarkDotNet ShortRun timings were noisy on this machine. The latest run still had wide error margins, for example Small/True `Error = 889.0 us` for a `Mean = 465.8 us`, and Large/True `Error = 116,857.5 us` for a `Mean = 89,062.1 us`. Allocation stayed within the +10% threshold for every scenario; the largest increase was Large/True at about +9.2%. Documents without `disable-step` do not eagerly build step scopes.
 
 Focused `DisableStepInlineSuppressionBenchmark` was added to measure files that actually contain `# seiton: disable-step` directives and trigger suppressed `unredacted-secrets` diagnostics. That benchmark showed the cached line-start change reduced allocation for the feature-specific path:
 
 | Size | Before Mean | After Mean | Before Allocated | After Allocated |
 |---|---:|---:|---:|---:|
-| Small | 38.95 us | 39.41 us | 6.74 KB | 6.62 KB |
-| Medium | 1,062.19 us | 901.20 us | 53.17 KB | 52.24 KB |
-| Large | 19,789.37 us | 19,250.60 us | 266.88 KB | 264.71 KB |
+| Small | 38.95 us | 40.87 us | 6.74 KB | 6.62 KB |
+| Medium | 1,062.19 us | 854.87 us | 53.17 KB | 51.89 KB |
+| Large | 19,789.37 us | 13,166.31 us | 266.88 KB | 261.61 KB |
 
 This benchmark also confirmed that the earlier aggregate `CoreLintBenchmark` was not suitable for attributing `disable-step` cost directly, because its synthetic workflows did not contain inline suppression directives.
 
@@ -71,3 +71,4 @@ This benchmark also confirmed that the earlier aggregate `CoreLintBenchmark` was
 - Review fix: step binding now checks the actual nearest sequence item line for the AST step scope, so a directive before another YAML sequence item such as `services.*.ports` cannot suppress a later step.
 - Review fix: step item line lookup is cached in `StepScope`; this avoids per-directive/per-scope source rescans when a file contains multiple `disable-step` directives.
 - Review fix: `disable-step` scope construction now reuses the per-run `LintConfig.GetLineStarts()` cache instead of allocating a fresh line-start array for each lint run that contains the directive.
+- Review fix: step item line lookup skips deeper nested sequence items (for example a list under `with:`) and binds to the nearest owning step item, while still handling block scalar diagnostic ranges.
