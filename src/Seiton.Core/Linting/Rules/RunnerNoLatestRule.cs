@@ -38,7 +38,18 @@ public sealed class RunnerNoLatestRule() : RuleBase(RuleId.RunnerNoLatest)
     public override void VisitJobPre(Job job)
     {
         var runsOn = job.RunsOn;
-        if (runsOn is null || runsOn.LabelsExpr.HasValue || runsOn.Labels is null || Config.Utf8Yaml is null)
+        if (runsOn is null || Config.Utf8Yaml is null)
+        {
+            return;
+        }
+
+        if (runsOn.LabelsExpr.HasValue)
+        {
+            CheckMatrixExpandedLabels(job, runsOn);
+            return;
+        }
+
+        if (runsOn.Labels is null)
         {
             return;
         }
@@ -59,35 +70,122 @@ public sealed class RunnerNoLatestRule() : RuleBase(RuleId.RunnerNoLatest)
 
             var labelUtf8 = Arena.GetStringValue(label);
 
-            // Single lookup: check built-in first, then fix-mapping (avoids double scan)
-            var isBuiltIn = IsBuiltInLatestLabel(labelUtf8);
-            var hasMappingValue = TryGetFixValue(labelUtf8, out var pinned);
-            if (!isBuiltIn && !hasMappingValue)
+            ReportLatestLabel(job, jobId, label, labelUtf8);
+        }
+    }
+
+    private void ReportLatestLabel(Job job, string jobId, StringNodeId label, ReadOnlySpan<byte> labelUtf8)
+    {
+        // Single lookup: check built-in first, then fix-mapping (avoids double scan)
+        var isBuiltIn = IsBuiltInLatestLabel(labelUtf8);
+        var hasMappingValue = TryGetFixValue(labelUtf8, out var pinned);
+        if (!isBuiltIn && !hasMappingValue)
+        {
+            return;
+        }
+
+        var location = Arena.GetStringRange(label);
+
+        DiagnosticFix? fix = null;
+        if (Config.Fix.Enabled && hasMappingValue)
+        {
+            var slice = Arena.GetStringSlice(label);
+            fix = new DiagnosticFix(
+                $"pin runner label to '{pinned}'",
+                [new TextEdit(slice.Offset, slice.Length, pinned)]);
+        }
+
+        var labelText = Decode(Arena.GetStringSlice(label));
+
+        if (fix.HasValue)
+        {
+            AddJobWarning(job, $"jobs.'{jobId}'.runs-on label '{labelText}' is a moving latest label; prefer explicit version-pinned runner labels", location, fix.Value);
+        }
+        else
+        {
+            AddJobWarning(job, $"jobs.'{jobId}'.runs-on label '{labelText}' is a moving latest label; prefer explicit version-pinned runner labels", location);
+        }
+    }
+
+    private void CheckMatrixExpandedLabels(Job job, Runner runsOn)
+    {
+        var exprUtf8 = Arena.GetStringValue(runsOn.LabelsExpr);
+        if (!ExpressionScanHelpers.TryExtractExpressionBody(exprUtf8, out var body))
+        {
+            return;
+        }
+
+        if (!body.StartsWith("matrix."u8) || body.Length <= 7)
+        {
+            return;
+        }
+
+        if (body[7..].IndexOf((byte)'.') >= 0)
+        {
+            return;
+        }
+
+        var matrix = job.Strategy?.Matrix;
+        if (matrix is null || matrix.Expression.HasValue || matrix.Rows is null)
+        {
+            return;
+        }
+
+        if (!matrix.Rows.Value.TryGetValue(Config.Utf8Yaml, body[7..], out var row))
+        {
+            return;
+        }
+
+        if (row.Expression.HasValue || row.Values is null)
+        {
+            return;
+        }
+
+        var jobId = Decode(Arena.GetStringSlice(job.Id));
+
+        for (var i = 0; i < row.Values.Count; i++)
+        {
+            switch (row.Values[i])
+            {
+                case RawYamlString scalar:
+                    if (ExpressionScanHelpers.ContainsExpressionMarker(scalar.Value, Arena))
+                    {
+                        continue;
+                    }
+
+                    ReportLatestLabel(job, jobId, scalar.Value, Arena.GetStringValue(scalar.Value));
+                    break;
+
+                case RawYamlArray array:
+                    ReportLatestLabelsInMatrixArray(job, jobId, array);
+                    break;
+            }
+        }
+    }
+
+    private void ReportLatestLabelsInMatrixArray(Job job, string jobId, RawYamlArray array)
+    {
+        for (var i = 0; i < array.Items.Count; i++)
+        {
+            if (array.Items[i] is RawYamlString item && RunnerLabels.IsSelfHostedLabel(Arena.GetStringValue(item.Value)))
+            {
+                return;
+            }
+        }
+
+        for (var i = 0; i < array.Items.Count; i++)
+        {
+            if (array.Items[i] is not RawYamlString item)
             {
                 continue;
             }
 
-            var location = Arena.GetStringRange(label);
-
-            DiagnosticFix? fix = null;
-            if (Config.Fix.Enabled && hasMappingValue)
+            if (ExpressionScanHelpers.ContainsExpressionMarker(item.Value, Arena))
             {
-                var slice = Arena.GetStringSlice(label);
-                fix = new DiagnosticFix(
-                    $"pin runner label to '{pinned}'",
-                    [new TextEdit(slice.Offset, slice.Length, pinned)]);
+                continue;
             }
 
-            var labelText = Decode(Arena.GetStringSlice(label));
-
-            if (fix.HasValue)
-            {
-                AddJobWarning(job, $"jobs.'{jobId}'.runs-on label '{labelText}' is a moving latest label; prefer explicit version-pinned runner labels", location, fix.Value);
-            }
-            else
-            {
-                AddJobWarning(job, $"jobs.'{jobId}'.runs-on label '{labelText}' is a moving latest label; prefer explicit version-pinned runner labels", location);
-            }
+            ReportLatestLabel(job, jobId, item.Value, Arena.GetStringValue(item.Value));
         }
     }
 

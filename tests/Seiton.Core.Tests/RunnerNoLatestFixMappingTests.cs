@@ -1,5 +1,6 @@
 ﻿using System.Text;
 using Seiton.Core.Linting;
+using Seiton.Core.Linting.Fixing;
 using Seiton.Core.Linting.Rules;
 using Seiton.Core.Parsing;
 
@@ -646,6 +647,44 @@ public sealed class RunnerNoLatestFixMappingTests
         await Assert.That(diagnostics.Length).IsEqualTo(2);
         await Assert.That(diagnostics.All(d => d.Fix is not null)).IsTrue();
 
+    }
+
+    [Test]
+    public async Task Fix_MatrixExpandedLabel_GeneratesFixForMatchedValue()
+    {
+        var yaml = """
+        on: push
+        jobs:
+          build:
+            strategy:
+              matrix:
+                os: [macos-latest, ubuntu-latest]
+            runs-on: ${{ matrix.os }}
+            steps:
+              - run: echo ng
+        """;
+
+        var config = BuildConfigWithFixMapping(new Dictionary<string, string>
+        {
+            ["ubuntu-latest"] = "ubuntu-24.04",
+            ["macos-latest"] = "macos-15"
+        }, fixEnabled: true);
+
+        using var result = LintWithConfig(yaml, config);
+        var diagnostics = result.Diagnostics
+            .Where(d => d.RuleId == "runner-no-latest")
+            .ToArray();
+
+        await Assert.That(diagnostics.Length).IsEqualTo(2);
+        await Assert.That(diagnostics.All(d => d.Fix is not null)).IsTrue();
+        await Assert.That(diagnostics.Select(d => d.Fix!.Value.Edits[0].NewText).ToArray())
+            .IsEquivalentTo(["macos-15", "ubuntu-24.04"]);
+
+        var sourceBytes = Encoding.UTF8.GetBytes(NormalizeYaml(yaml));
+        var fixedText = Encoding.UTF8.GetString(FixEngine.Apply(sourceBytes, diagnostics))
+            .Replace("\r\n", "\n");
+
+        await Assert.That(fixedText).Contains("os: [macos-15, ubuntu-24.04]");
     }
 
     #endregion
