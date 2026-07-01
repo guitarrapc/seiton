@@ -130,7 +130,7 @@ rules:
 | `runner-label` | `known-hosted-labels` | `string[]` | Additional known runner labels; added to the built-in set |
 | `runner-no-latest` | `fix-mapping` | `map[string]string` | Mapping from runner labels to be detected to replacement labels used during auto-fix. Keys are matched ASCII case-insensitively, and values are used as replacement text as-is |
 | `credentials` | `public-registries` | `string[]` | Additional public registries; added to the built-in set |
-| `cache-poisoning-trigger` | `untrusted-triggers` | `string[]` | Additional untrusted triggers; added to the built-in set |
+| `cache-poisoning-trigger` | `untrusted-triggers` | `string[]` | Additional low-trust triggers; added to built-in set (`pull_request_target`, `workflow_run`, `issue_comment`) |
 | `unredacted-secrets` | `output-commands` | `string[]` | Additional output commands to monitor; added to the built-in set |
 | `forbidden-uses` | `deny` / `allow` | `string[]` | Deny/allow wildcard patterns for `uses:` references |
 | `expr-undefined-var` | `assume-events` | `string[]` | Events assumed during expression evaluation |
