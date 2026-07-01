@@ -109,6 +109,13 @@ public sealed class ExprUndefinedVarRule() : RuleBase(RuleId.ExprUndefinedVar)
         }
     }
 
+    public override void VisitActionMetadataPre(ActionMetadata metadata)
+    {
+        base.VisitActionMetadataPre(metadata);
+        _currentWorkflow = null;
+        ResetStepOverrideState();
+    }
+
     public override void VisitEvent(Event ev)
     {
         if (Config.Utf8Yaml is null)
@@ -484,6 +491,14 @@ public sealed class ExprUndefinedVarRule() : RuleBase(RuleId.ExprUndefinedVar)
         {
             PlanStepVisibilityCore(steps[i]);
         }
+    }
+
+    private void ResetStepOverrideState()
+    {
+        _hasOverrides = false;
+        _stepVisibilityTimeline.Clear();
+        _stepVisibleBeforeCounts.Clear();
+        _stepsOverrideProps.Clear();
     }
 
     private void PlanStepVisibilityCore(Step step)

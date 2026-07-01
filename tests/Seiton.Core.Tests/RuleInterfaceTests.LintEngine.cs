@@ -5269,6 +5269,43 @@ public sealed partial class RuleInterfaceTests
     }
 
     [Test]
+    public async Task LintEngine_ExprUndefinedVar_ActionMetadata_NoStaleWorkflowStepOverrides()
+    {
+        var workflowYaml = """
+        on: push
+        jobs:
+            build:
+                runs-on: ubuntu-latest
+                steps:
+                                        - id: build
+                                            run: echo "mode=release" >> $GITHUB_OUTPUT
+                                        - run: echo '${{ steps.build.outputs.mode }}'
+        """;
+
+        var actionYaml = """
+        name: My Action
+        description: Test action
+        runs:
+            using: composite
+            steps:
+                - run: echo '${{ steps.prep.outputs.mode }}'
+                  shell: bash
+        """;
+
+        var engine = new LintEngine([new ExprUndefinedVarRule()]);
+
+        using var _ = engine.Check(Encoding.UTF8.GetBytes(workflowYaml), ".github/workflows/ci.yml");
+        using var actionResult = engine.Check(Encoding.UTF8.GetBytes(actionYaml), "action.yml");
+
+        var messages = actionResult.Diagnostics
+            .Where(x => x.RuleId == "expr-undefined-var")
+            .Select(x => x.Message)
+            .ToArray();
+
+        await Assert.That(messages).DoesNotContain(message => message.Contains("\"prep\" is not defined in \"steps\" context", StringComparison.Ordinal));
+    }
+
+    [Test]
     public async Task LintEngine_TemplateInjection_Fix_EmptyEnvMapping_SkipsFix()
     {
         // When step has env: {} (empty mapping), inserting a new env: block would create

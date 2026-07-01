@@ -1787,6 +1787,20 @@ public sealed partial class RuleInterfaceTests
                         - run: echo '${{ steps.sha.outputs.short }}'
             """,
             []),
+            new RuleCase(
+            "ng-reference-parallel-sibling-step-id-inside-parallel",
+            """
+            on: push
+            jobs:
+                dotnet:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - parallel:
+                            - uses: owner/action@v1
+                              id: sha
+                            - run: echo '${{ steps.sha.outputs.short }}'
+            """,
+            ["\"sha\" is not defined in \"steps\" context"]),
         };
 
         await AssertRuleCases(new ExprUndefinedVarRule(), "expr-undefined-var", cases);
