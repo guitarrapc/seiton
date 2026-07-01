@@ -31,9 +31,10 @@ public sealed class ExprUndefinedVarRule() : RuleBase(RuleId.ExprUndefinedVar)
     private bool _hasOverrides;
     private static readonly (byte[] NameUtf8, ExprType Type)[] _emptyOverrides = [];
     private readonly List<Diagnostic> _propertyDiagnostics = new();
-    // Per-job state for incremental step override building
-    private IReadOnlyList<Step>? _currentJobSteps;
-    private int _currentStepIndex;
+    // Per-job state for incremental step override building.
+    // The timeline contains steps in the order their IDs become visible to later steps.
+    private readonly List<Step> _stepVisibilityTimeline = [];
+    private readonly Dictionary<Step, int> _stepVisibleBeforeCounts = [];
     // Reusable dictionary for BuildStepsOverrideInto (avoids per-step allocation)
     private readonly Dictionary<Utf8String, ExprType> _stepsOverrideProps = new();
     // Reusable dictionaries for BuildMatrixOverrideInto / BuildNeedsOverrideInto (avoids per-job allocation)
@@ -106,6 +107,13 @@ public sealed class ExprUndefinedVarRule() : RuleBase(RuleId.ExprUndefinedVar)
             CheckNode(defaultsRun.WorkingDirectory, ExpressionValidationContext.DefaultsRunShell, static (rule, message, location, w) =>
                 rule.AddWorkflowError(w, message, location), workflow);
         }
+    }
+
+    public override void VisitActionMetadataPre(ActionMetadata metadata)
+    {
+        base.VisitActionMetadataPre(metadata);
+        _currentWorkflow = null;
+        ResetStepOverrideState();
     }
 
     public override void VisitEvent(Event ev)
@@ -261,9 +269,7 @@ public sealed class ExprUndefinedVarRule() : RuleBase(RuleId.ExprUndefinedVar)
             yaml,
             _localReusableOutputResolverFunc);
 
-        // Store job steps for incremental step override building in VisitStep
-        _currentJobSteps = job.Steps;
-        _currentStepIndex = 0;
+        PlanStepVisibility(job.Steps);
 
         // job scope: matrix, needs, inputs, secrets, github available (steps is NOT available in job scope)
         _jobScopeOverrides[0] = matrixOverride;
@@ -272,7 +278,7 @@ public sealed class ExprUndefinedVarRule() : RuleBase(RuleId.ExprUndefinedVar)
         _jobScopeOverrides[3] = _secretsOverride;
         _jobScopeOverrides[4] = _githubOverride;
         // step scope: initialize with empty steps (will be rebuilt per-step in VisitStep)
-        _stepScopeOverrides[0] = DynamicContextTypeBuilder.BuildStepsOverrideInto(_stepsOverrideProps, job.Steps, Arena, yaml, maxStepIndex: 0, _localActionOutputResolverFunc);
+        _stepScopeOverrides[0] = DynamicContextTypeBuilder.BuildStepsOverrideInto(_stepsOverrideProps, _stepVisibilityTimeline, Arena, yaml, maxStepIndex: 0, _localActionOutputResolverFunc);
         _stepScopeOverrides[1] = matrixOverride;
         _stepScopeOverrides[2] = needsOverride;
         _stepScopeOverrides[3] = _inputsOverride;
@@ -397,12 +403,11 @@ public sealed class ExprUndefinedVarRule() : RuleBase(RuleId.ExprUndefinedVar)
             return;
         }
 
-        // Rebuild steps override to include only steps defined before the current one
-        if (_hasOverrides && _currentJobSteps is not null)
+        // Rebuild steps override to include only steps visible before the current one.
+        if (_hasOverrides && _stepVisibleBeforeCounts.TryGetValue(step, out var visibleBeforeCount))
         {
             _stepScopeOverrides[0] = DynamicContextTypeBuilder.BuildStepsOverrideInto(
-                _stepsOverrideProps, _currentJobSteps, Arena, Config.Utf8Yaml, maxStepIndex: _currentStepIndex, _localActionOutputResolverFunc);
-            _currentStepIndex++;
+                _stepsOverrideProps, _stepVisibilityTimeline, Arena, Config.Utf8Yaml, maxStepIndex: visibleBeforeCount, _localActionOutputResolverFunc);
         }
 
         CheckNode(step.If, ExpressionValidationContext.StepIf, static (rule, message, location, targetStep) =>
@@ -469,6 +474,76 @@ public sealed class ExprUndefinedVarRule() : RuleBase(RuleId.ExprUndefinedVar)
             var envVar = pair.Value;
             CheckNode(envVar.Name, context, report, target);
             CheckNode(envVar.Value, context, report, target);
+        }
+    }
+
+    private void PlanStepVisibility(IReadOnlyList<Step>? steps)
+    {
+        _stepVisibilityTimeline.Clear();
+        _stepVisibleBeforeCounts.Clear();
+
+        if (steps is null || steps.Count == 0)
+        {
+            return;
+        }
+
+        for (var i = 0; i < steps.Count; i++)
+        {
+            PlanStepVisibilityCore(steps[i]);
+        }
+    }
+
+    private void ResetStepOverrideState()
+    {
+        _hasOverrides = false;
+        _stepVisibilityTimeline.Clear();
+        _stepVisibleBeforeCounts.Clear();
+        _stepsOverrideProps.Clear();
+    }
+
+    private void PlanStepVisibilityCore(Step step)
+    {
+        _stepVisibleBeforeCounts[step] = _stepVisibilityTimeline.Count;
+
+        if (step.Exec is ExecParallel parallel && parallel.Steps is { Count: > 0 } children)
+        {
+            for (var i = 0; i < children.Count; i++)
+            {
+                PlanParallelChildVisibility(children[i]);
+            }
+
+            AddExportedSteps(step);
+            return;
+        }
+
+        _stepVisibilityTimeline.Add(step);
+    }
+
+    private void PlanParallelChildVisibility(Step step)
+    {
+        _stepVisibleBeforeCounts[step] = _stepVisibilityTimeline.Count;
+
+        if (step.Exec is ExecParallel parallel && parallel.Steps is { Count: > 0 } children)
+        {
+            for (var i = 0; i < children.Count; i++)
+            {
+                PlanParallelChildVisibility(children[i]);
+            }
+        }
+    }
+
+    private void AddExportedSteps(Step step)
+    {
+        _stepVisibilityTimeline.Add(step);
+
+        if (step.Exec is not ExecParallel { Steps: { Count: > 0 } children })
+        {
+            return;
+        }
+
+        for (var i = 0; i < children.Count; i++)
+        {
+            AddExportedSteps(children[i]);
         }
     }
 

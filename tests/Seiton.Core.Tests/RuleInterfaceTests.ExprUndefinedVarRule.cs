@@ -1768,6 +1768,46 @@ public sealed partial class RuleInterfaceTests
 
 
     [Test]
+    public async Task RuleRegression_ExprUndefinedVarRule_ParallelStepIdsVisibleAfterParallel_TableDriven()
+    {
+        var cases = new[]
+        {
+            new RuleCase(
+            "ok-reference-step-id-defined-inside-parallel-after-parallel",
+            """
+            on: push
+            jobs:
+                dotnet:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - parallel:
+                            - uses: owner/action@v1
+                              id: sha
+                            - run: echo setup
+                        - run: echo '${{ steps.sha.outputs.short }}'
+            """,
+            []),
+            new RuleCase(
+            "ng-reference-parallel-sibling-step-id-inside-parallel",
+            """
+            on: push
+            jobs:
+                dotnet:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - parallel:
+                            - uses: owner/action@v1
+                              id: sha
+                            - run: echo '${{ steps.sha.outputs.short }}'
+            """,
+            ["\"sha\" is not defined in \"steps\" context"]),
+        };
+
+        await AssertRuleCases(new ExprUndefinedVarRule(), "expr-undefined-var", cases);
+    }
+
+
+    [Test]
     public async Task RuleRegression_ExprUndefinedVarRule_RunnerContextInMatrix_TableDriven()
     {
         var cases = new[]
