@@ -5294,9 +5294,10 @@ public sealed partial class RuleInterfaceTests
 
         var engine = new LintEngine([new ExprUndefinedVarRule()]);
 
-        using var _ = engine.Check(Encoding.UTF8.GetBytes(workflowYaml), ".github/workflows/ci.yml");
+        using var workflowResult = engine.Check(Encoding.UTF8.GetBytes(workflowYaml), ".github/workflows/ci.yml");
+        await Assert.That(workflowResult.HasFatalError).IsFalse();
         using var actionResult = engine.Check(Encoding.UTF8.GetBytes(actionYaml), "action.yml");
-
+        await Assert.That(actionResult.HasFatalError).IsFalse();
         var messages = actionResult.Diagnostics
             .Where(x => x.RuleId == "expr-undefined-var")
             .Select(x => x.Message)
