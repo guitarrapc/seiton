@@ -76,6 +76,34 @@ public sealed partial class RuleInterfaceTests
                         - run: echo ok
             """,
             []),
+            new RuleCase(
+            "ng-matrix-expanded-ubuntu-latest",
+            """
+            on: push
+            jobs:
+                build:
+                    strategy:
+                        matrix:
+                            os: [macos-latest, ubuntu-latest]
+                    runs-on: ${{ matrix.os }}
+                    steps:
+                        - run: echo ng
+            """,
+            ["ubuntu-latest", "moving latest label"]),
+            new RuleCase(
+            "ok-matrix-expanded-pinned-labels",
+            """
+            on: push
+            jobs:
+                build:
+                    strategy:
+                        matrix:
+                            os: [macos-15, ubuntu-24.04]
+                    runs-on: ${{ matrix.os }}
+                    steps:
+                        - run: echo ok
+            """,
+            []),
         };
 
         await AssertRuleCases(new RunnerNoLatestRule(), "runner-no-latest", cases);
