@@ -345,21 +345,30 @@ Configuration file may define file-targeted exclusion entries with path globs.
 
 ### 5.5 Inline Exclusion Directive
 
-Inline suppression supports file/job/next-line scopes.
+Inline suppression supports file/job/step/next-line scopes.
 
 - `disable-next-line` applies only to the immediately following YAML line.
+- `disable-step` applies to diagnostics inside the next step item in the same `steps` sequence. Blank lines, non-`seiton` comments, and other inline suppression directives between the directive and the step item are ignored. Any intervening YAML content makes the directive invalid.
 - `disable-job` applies to diagnostics inside the specified `job.id` scope.
 - `disable-file` applies to all diagnostics in the current workflow file.
+
+Inline suppression has the following constraints.
+
 - A directive can target one or multiple rule IDs.
 - Multiple rule ID format is comma-separated; semantic IDs (kebab-case) are required per §5.1.
+- `disable-step` requires at least one rule ID. If no following step item exists in the same `steps` sequence, implementations must report a configuration diagnostic against the directive.
+- `disable-step` is available for workflow steps and composite action steps. It is inline-only; configuration exclusions do not define step-level scope.
 
 Inline directive format:
 
 ```
 # seiton: disable-next-line job-permissions-required
+# seiton: disable-step unredacted-secrets
 # seiton: disable-job build job-permissions-required,credentials
 # seiton: disable-file dangerous-triggers,job-permissions-required
 ```
+
+Use `disable-step` when a diagnostic belongs to a step as a whole or may be reported inside a multi-line `run:` block. Use `disable-next-line` only when the rule reports on a specific YAML key line.
 
 Non-normative note: parsers may allow optional spaces after commas, but normalized output must preserve rule-id matching behavior.
 

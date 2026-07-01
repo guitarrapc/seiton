@@ -92,6 +92,10 @@ Prefer `.github/seiton.yaml` for repeated or broad suppressions. Use inline dire
 steps:
   # seiton: disable-next-line unpinned-uses
   - uses: actions/checkout@v6
+
+  # seiton: disable-step unredacted-secrets
+  - run: |
+      echo "${SECRET_VALUE}"
 ```
 
 ## Configuration

@@ -717,6 +717,20 @@ jobs:
 >     ${{ contains(github.event.head_commit.message, 'skip') }}
 > ```
 
+### Suppress a step
+
+Use `disable-step` when the diagnostic belongs to a step as a whole or may be reported inside a multi-line `run:` block:
+
+```yaml
+steps:
+  # seiton: disable-step unredacted-secrets
+  - name: Setup Cosign keys
+    run: |
+      echo "${SYNCED_COSIGN_PRIVATE_KEY}" > cosign.key
+```
+
+`disable-step` suppresses matching diagnostics inside the next step item in the same `steps:` sequence. Blank lines and comments between the directive and the step are allowed.
+
 ### Suppress within a job
 
 ```yaml
