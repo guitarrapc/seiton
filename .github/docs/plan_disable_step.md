@@ -57,9 +57,9 @@ Focused `DisableStepInlineSuppressionBenchmark` was added to measure files that 
 
 | Size | Before Mean | After Mean | Before Allocated | After Allocated |
 |---|---:|---:|---:|---:|
-| Small | 38.95 us | 40.87 us | 6.74 KB | 6.62 KB |
-| Medium | 1,062.19 us | 854.87 us | 53.17 KB | 51.89 KB |
-| Large | 19,789.37 us | 13,166.31 us | 266.88 KB | 261.61 KB |
+| Small | 38.95 us | 61.12 us | 6.74 KB | 6.76 KB |
+| Medium | 1,062.19 us | 931.33 us | 53.17 KB | 51.94 KB |
+| Large | 19,789.37 us | 18,884.40 us | 266.88 KB | 261.61 KB |
 
 This benchmark also confirmed that the earlier aggregate `CoreLintBenchmark` was not suitable for attributing `disable-step` cost directly, because its synthetic workflows did not contain inline suppression directives.
 
@@ -72,3 +72,4 @@ This benchmark also confirmed that the earlier aggregate `CoreLintBenchmark` was
 - Review fix: step item line lookup is cached in `StepScope`; this avoids per-directive/per-scope source rescans when a file contains multiple `disable-step` directives.
 - Review fix: `disable-step` scope construction now reuses the per-run `LintConfig.GetLineStarts()` cache instead of allocating a fresh line-start array for each lint run that contains the directive.
 - Review fix: step item line lookup skips deeper nested sequence items (for example a list under `with:`) and binds to the nearest owning step item, while still handling block scalar diagnostic ranges.
+- Review fix: per-diagnostic step suppression lookup now uses an allocation-free binary search over source-ordered step scopes instead of scanning all steps in reverse for every diagnostic.

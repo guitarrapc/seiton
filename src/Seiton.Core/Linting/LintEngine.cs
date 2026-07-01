@@ -946,10 +946,32 @@ public sealed class LintEngine
 
     private static bool TryFindStepStartLineForLine(int line, IReadOnlyList<StepScope> stepScopes, out int stepStartLine)
     {
-        for (var i = stepScopes.Count - 1; i >= 0; i--)
+        var low = 0;
+        var high = stepScopes.Count - 1;
+        var candidateIndex = -1;
+        while (low <= high)
+        {
+            var mid = low + ((high - low) >> 1);
+            if (stepScopes[mid].StartLine <= line)
+            {
+                candidateIndex = mid;
+                low = mid + 1;
+            }
+            else
+            {
+                high = mid - 1;
+            }
+        }
+
+        for (var i = candidateIndex; i >= 0; i--)
         {
             var scope = stepScopes[i];
-            if (line >= scope.StartLine && line <= scope.EndLine)
+            if (line > scope.EndLine)
+            {
+                break;
+            }
+
+            if (line >= scope.StartLine)
             {
                 stepStartLine = scope.StartLine;
                 return true;
