@@ -38,7 +38,7 @@ Add `# seiton: disable-step <rule-id list>` so users can suppress diagnostics th
 - Red tests were added before production code for step-scope suppression, following-step isolation, directive merging, invalid placement, composite action steps, and non-step sequence items.
 - Targeted disable-step tests: `dotnet test --project tests/Seiton.Core.Tests --treenode-filter /*/*/RuleInterfaceTests/DisableStep_*` passed, 6 tests.
 - Rule interface regression tests: `dotnet test --project tests/Seiton.Core.Tests --treenode-filter /*/*/RuleInterfaceTests/*` passed, 518 tests.
-- Full suite was run after documentation mirror sync and showed all test assemblies passed; the process did not return promptly after assembly-level pass output on that run.
+- Full suite: `dotnet test` passed across `Seiton.Update.Tests`, `Seiton.Tests`, `Seiton.Core.Tests`, and `Seiton.Playground.Tests` (`[✓142/x0/↓1]`, 1 existing skip).
 
 Final `CoreLintBenchmark` after the review pass, lazy step-scope construction, cached step item line lookup, and indentation-aware step binding:
 
@@ -53,6 +53,16 @@ Final `CoreLintBenchmark` after the review pass, lazy step-scope construction, c
 
 BenchmarkDotNet ShortRun timings were noisy on this machine, especially the Medium/False case (`Error = 93,460.4 us`, `StdDev = 5,122.88 us`, `RatioSD = 0.82`). Allocation stayed within the +10% threshold for every scenario. The largest allocation increase was Medium/False at about +1.1%, while large scenarios allocated less than the baseline. Documents without `disable-step` do not eagerly build step scopes.
 
+Focused `DisableStepInlineSuppressionBenchmark` was added to measure files that actually contain `# seiton: disable-step` directives and trigger suppressed `unredacted-secrets` diagnostics. That benchmark showed the cached line-start change reduced allocation for the feature-specific path:
+
+| Size | Before Mean | After Mean | Before Allocated | After Allocated |
+|---|---:|---:|---:|---:|
+| Small | 38.95 us | 39.41 us | 6.74 KB | 6.62 KB |
+| Medium | 1,062.19 us | 901.20 us | 53.17 KB | 52.24 KB |
+| Large | 19,789.37 us | 19,250.60 us | 266.88 KB | 264.71 KB |
+
+This benchmark also confirmed that the earlier aggregate `CoreLintBenchmark` was not suitable for attributing `disable-step` cost directly, because its synthetic workflows did not contain inline suppression directives.
+
 ## Review Focus
 
 - API wording is intuitive: `disable-step` names the scope, while placement selects the next step.
@@ -60,3 +70,4 @@ BenchmarkDotNet ShortRun timings were noisy on this machine, especially the Medi
 - Tests cover valid suppression, invalid placement, comment/blank-line skipping, merge behavior, composite action steps, non-step sequence items, representative summary source, and no unused-suppression warnings.
 - Review fix: step binding now checks the actual nearest sequence item line for the AST step scope, so a directive before another YAML sequence item such as `services.*.ports` cannot suppress a later step.
 - Review fix: step item line lookup is cached in `StepScope`; this avoids per-directive/per-scope source rescans when a file contains multiple `disable-step` directives.
+- Review fix: `disable-step` scope construction now reuses the per-run `LintConfig.GetLineStarts()` cache instead of allocating a fresh line-start array for each lint run that contains the directive.

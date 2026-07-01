@@ -340,6 +340,18 @@ public sealed class LintEngine
 
         _diagnostics.AddRange(normalizedRules.ConfigurationDiagnostics);
 
+        _effectiveConfig.PrepareForRun(
+            utf8Yaml,
+            arena,
+            filePath,
+            normalizedRules.Rules,
+            config?.Fix,
+            config?.Network,
+            config?.Output,
+            config?.Verbose ?? false,
+            parseResult.ExpressionArtifacts);
+        var effectiveConfig = _effectiveConfig;
+
         var workflowForSuppression = parseResult.Workflow ?? EmptyWorkflowForSuppression;
         var inlineSuppression = ParseInlineSuppression(utf8Yaml, filePath, workflowForSuppression, parseResult.ActionMetadata, arena!);
         _diagnostics.AddRange(inlineSuppression.ConfigurationDiagnostics);
@@ -356,17 +368,6 @@ public sealed class LintEngine
         }
 
         _visitor.Reset();
-        _effectiveConfig.PrepareForRun(
-            utf8Yaml,
-            arena,
-            filePath,
-            normalizedRules.Rules,
-            config?.Fix,
-            config?.Network,
-            config?.Output,
-            config?.Verbose ?? false,
-            parseResult.ExpressionArtifacts);
-        var effectiveConfig = _effectiveConfig;
         var sharedDisabledRuleIds = effectiveConfig.Rules is null || effectiveConfig.Rules.Count == 0
             ? GetSharedDefaultDisabledRuleIds(documentKind)
             : null;
@@ -1097,7 +1098,7 @@ public sealed class LintEngine
             {
                 if (!stepScopesBuilt)
                 {
-                    BuildStepScopes(utf8Yaml, workflow, actionMetadata);
+                    BuildStepScopes(utf8Yaml, _effectiveConfig.GetLineStarts(), workflow, actionMetadata);
                     stepScopesBuilt = true;
                 }
 
@@ -1317,10 +1318,9 @@ public sealed class LintEngine
         }
     }
 
-    private void BuildStepScopes(byte[] source, Parsing.Ast.Workflow workflow, ActionMetadata? actionMetadata)
+    private void BuildStepScopes(byte[] source, int[] lineStarts, Parsing.Ast.Workflow workflow, ActionMetadata? actionMetadata)
     {
         _stepScopes.Clear();
-        var lineStarts = ExpressionScanHelpers.BuildLineStarts(source);
         foreach (var pair in workflow.Jobs)
         {
             AddStepScopes(source, lineStarts, pair.Value.Steps);
