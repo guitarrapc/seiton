@@ -621,7 +621,7 @@ public sealed partial class RuleInterfaceTests
                 "cache-poisoning-trigger",
                 new CachePoisoningRule(),
                 """
-                on: pull_request
+                on: pull_request_target
                 jobs:
                     build:
                         runs-on: ubuntu-latest

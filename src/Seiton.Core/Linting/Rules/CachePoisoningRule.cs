@@ -7,18 +7,22 @@ using static Seiton.Core.Linting.RuleConfigHelpers;
 
 namespace Seiton.Core.Linting.Rules;
 
-/// <summary>Detects cache-poisoning risks where untrusted triggers use caching actions without adequate protection.</summary>
+/// <summary>
+/// Detects cache-poisoning risks where low-trust triggers use write-capable cache actions
+/// on the default-branch cache scope. Aligns with GitHub Actions read-only cache tokens for
+/// low-trust workflow triggers (see dependency caching reference).
+/// </summary>
 public sealed class CachePoisoningRule() : RuleBase(RuleId.CachePoisoning)
 {
-    private bool hasUntrustedTrigger;
-    private HashSet<string> additionalUntrustedTriggers = [];
+    private bool hasLowTrustTrigger;
+    private HashSet<string> additionalLowTrustTriggers = [];
 
     public override string Name => "Cache Poisoning Rule";
 
     public override void SetConfig(LintConfig config)
     {
         base.SetConfig(config);
-        additionalUntrustedTriggers = config.GetRuleConfig(Id)?.UntrustedTriggers is { Count: > 0 } triggers
+        additionalLowTrustTriggers = config.GetRuleConfig(Id)?.UntrustedTriggers is { Count: > 0 } triggers
             ? BuildNormalizedSet(triggers)
             : [];
     }
@@ -26,18 +30,19 @@ public sealed class CachePoisoningRule() : RuleBase(RuleId.CachePoisoning)
     public override void VisitWorkflowPre(Workflow workflow)
     {
         base.VisitWorkflowPre(workflow);
-        hasUntrustedTrigger = Config.Utf8Yaml is not null && HasUntrustedTrigger(workflow, Config.Utf8Yaml, additionalUntrustedTriggers);
+        hasLowTrustTrigger = Config.Utf8Yaml is not null
+            && HasLowTrustTrigger(workflow, additionalLowTrustTriggers);
     }
 
     public override void VisitStep(Step step)
     {
-        if (!hasUntrustedTrigger || step.Exec is not ExecAction action || Config.Utf8Yaml is null)
+        if (!hasLowTrustTrigger || step.Exec is not ExecAction action || Config.Utf8Yaml is null)
         {
             return;
         }
 
         var uses = Arena.GetStringValue(action.Uses);
-        if (!IsCacheAction(uses))
+        if (!IsWriteCapableCacheAction(uses))
         {
             return;
         }
@@ -45,11 +50,11 @@ public sealed class CachePoisoningRule() : RuleBase(RuleId.CachePoisoning)
         var actionRef = Decode(Arena.GetStringSlice(action.Uses));
         AddStepWarning(
             step,
-            $"cache action '{actionRef}' runs in a workflow with untrusted triggers; isolate cache scope and avoid restore-key fallback across trust boundaries",
+            $"write-capable cache action '{actionRef}' runs in a workflow with low-trust triggers; use actions/cache/restore on low-trust events or save caches from trusted triggers only (push, schedule, workflow_dispatch, etc.)",
             BuildUsesLocation(action));
     }
 
-    private bool HasUntrustedTrigger(Workflow workflow, byte[] utf8Yaml, HashSet<string> additionalUntrustedTriggers)
+    private bool HasLowTrustTrigger(Workflow workflow, HashSet<string> additionalLowTrustTriggers)
     {
         for (var i = 0; i < workflow.On.Count; i++)
         {
@@ -60,14 +65,14 @@ public sealed class CachePoisoningRule() : RuleBase(RuleId.CachePoisoning)
 
             var hook = Arena.GetStringValue(webhook.Hook);
             if (WebhookTypes.TryGet(hook, out _, out var spec)
-                && spec.Id is WebhookTypes.EventId.PullRequest
-                    or WebhookTypes.EventId.PullRequestTarget
-                    or WebhookTypes.EventId.WorkflowRun)
+                && spec.Id is WebhookTypes.EventId.PullRequestTarget
+                    or WebhookTypes.EventId.WorkflowRun
+                    or WebhookTypes.EventId.IssueComment)
             {
                 return true;
             }
 
-            if (IsAdditionalUntrustedTrigger(hook, additionalUntrustedTriggers))
+            if (IsAdditionalLowTrustTrigger(hook, additionalLowTrustTriggers))
             {
                 return true;
             }
@@ -76,19 +81,19 @@ public sealed class CachePoisoningRule() : RuleBase(RuleId.CachePoisoning)
         return false;
     }
 
-    private static bool IsAdditionalUntrustedTrigger(ReadOnlySpan<byte> hook, HashSet<string> additionalUntrustedTriggers)
+    private static bool IsAdditionalLowTrustTrigger(ReadOnlySpan<byte> hook, HashSet<string> additionalLowTrustTriggers)
     {
-        if (additionalUntrustedTriggers.Count == 0)
+        if (additionalLowTrustTriggers.Count == 0)
         {
             return false;
         }
 
-        return additionalUntrustedTriggers.Contains(NormalizeAsciiLower(hook));
+        return additionalLowTrustTriggers.Contains(NormalizeAsciiLower(hook));
     }
-    private static bool IsCacheAction(ReadOnlySpan<byte> uses)
+
+    private static bool IsWriteCapableCacheAction(ReadOnlySpan<byte> uses)
     {
         return IsActionReference(uses, "actions/cache"u8)
-            || IsActionReference(uses, "actions/cache/restore"u8)
             || IsActionReference(uses, "actions/cache/save"u8);
     }
 
