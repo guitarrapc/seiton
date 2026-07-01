@@ -78,7 +78,8 @@ rules:
     # credentials:
     #   public-registries: [registry.example.com]
     # cache-poisoning-trigger:
-    #   untrusted-triggers: [issue_comment]
+    #   # Built-in low-trust: pull_request_target, workflow_run, issue_comment
+    #   untrusted-triggers: [discussion]
     # self-hosted-runner-trigger:
     #   untrusted-triggers: [issue_comment]
     # unredacted-secrets:

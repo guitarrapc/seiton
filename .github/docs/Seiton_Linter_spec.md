@@ -210,7 +210,7 @@ Column definitions:
 | `workflow-secrets` | ✓ | — | Error when workflow-level `env` assigns `secrets.*`/`github.token` in multi-job workflows. |
 | `job-secrets` | ✓ | — | Error when job-level `env` assigns `secrets.*`/`github.token` in multi-step jobs. |
 | `action-shell-is-required` | ✓ | — | Error when a composite action `run` step omits explicit `shell`. |
-| `cache-poisoning-trigger` | ✓ | — | Warn when cache actions are used with untrusted triggers without isolated trust boundaries. |
+| `cache-poisoning-trigger` | ✓ | — | Warn when write-capable `actions/cache` steps appear in workflows with low-trust triggers that can run on the default-branch cache scope (`pull_request_target`, `workflow_run`, `issue_comment`). |
 | `self-hosted-runner-trigger` | ✓ | — | Warn when self-hosted runners are used with untrusted triggers. |
 | `unredacted-secrets` | ✓ | — | Warn when secret-derived env vars are printed without redaction-safe handling. |
 | `secrets-outside-env` | ✓ | — | Warn when `secrets.*` is referenced in non-`env` sinks (`if`, `uses`, reusable call inputs). |
@@ -499,7 +499,7 @@ rules:
 
   cache-poisoning-trigger:
     untrusted-triggers:
-      - issue_comment
+      - discussion
 
   unredacted-secrets:
     output-commands:
@@ -551,10 +551,25 @@ rules:
 
 #### 5.8.4 `cache-poisoning-trigger` / `self-hosted-runner-trigger` — `untrusted-triggers`
 
-- Allows users to add trigger event names treated as untrusted for `cache-poisoning-trigger` and/or `self-hosted-runner-trigger` evaluation.
+- Allows users to add trigger event names treated as low-trust for `cache-poisoning-trigger` and/or `self-hosted-runner-trigger` evaluation.
 - Each rule has its own independent `untrusted-triggers` list; users set them separately to control which rule is affected.
 - Matching uses normalized event names (ASCII lower-case).
-- Extended trigger names never replace the built-in untrusted trigger set.
+- Extended trigger names never replace the built-in low-trust trigger set.
+
+Built-in low-trust triggers for `cache-poisoning-trigger` (aligned with [GitHub Actions dependency caching — cache access for low-trust workflow triggers](https://docs.github.com/en/actions/reference/workflows-and-actions/dependency-caching#cache-access-for-low-trust-workflow-triggers)):
+
+- `pull_request_target`
+- `workflow_run`
+- `issue_comment`
+
+`pull_request` is intentionally excluded: caches created by `pull_request` runs are scoped to the merge ref and do not write to the default-branch cache scope.
+
+Evaluation scope:
+
+- Workflow-level: if any built-in or configured low-trust trigger appears in `on:`, write-capable cache steps are reported.
+- Write-capable cache actions: `actions/cache`, `actions/cache/save`.
+- Not reported: `actions/cache/restore` (restore-only). `lookup-only: true` on `actions/cache` does not disable saves.
+- Does not analyze cache `key` / `restore-keys` expressions or `actions/checkout` `ref` values.
 
 #### 5.8.5 `unredacted-secrets` — `output-commands`
 
@@ -699,7 +714,7 @@ rules:
 
   cache-poisoning-trigger:
     untrusted-triggers:
-      - issue_comment
+      - discussion
 
   unredacted-secrets:
     output-commands:

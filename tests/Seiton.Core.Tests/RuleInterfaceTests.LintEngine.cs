@@ -4358,10 +4358,32 @@ public sealed partial class RuleInterfaceTests
     }
 
     [Test]
-    public async Task LintEngine_CachePoisoning_AdditionalUntrustedTriggers_EmitWarning()
+    public async Task LintEngine_CachePoisoning_BuiltinLowTrustTrigger_EmitWarning()
     {
         var yaml = """
         on: issue_comment
+        jobs:
+            build:
+                runs-on: ubuntu-latest
+                steps:
+                    - uses: actions/cache@v4
+                      with:
+                          path: ~/.npm
+                          key: npm-${{ runner.os }}
+        """;
+
+        using var result = new LintEngine([new CachePoisoningRule()]).Check(
+            Encoding.UTF8.GetBytes(yaml),
+            "cache-poisoning-trigger-builtin.yml");
+
+        await Assert.That(result.Diagnostics.Any(x => x.RuleId == "cache-poisoning-trigger" && x.Message.Contains("low-trust triggers", StringComparison.Ordinal))).IsTrue();
+    }
+
+    [Test]
+    public async Task LintEngine_CachePoisoning_AdditionalUntrustedTriggers_EmitWarning()
+    {
+        var yaml = """
+        on: discussion
         jobs:
             build:
                 runs-on: ubuntu-latest
@@ -4381,12 +4403,12 @@ public sealed partial class RuleInterfaceTests
             {
                 Rules = new Dictionary<string, RuleConfig>
                 {
-                    ["cache-poisoning-trigger"] = new RuleConfig { UntrustedTriggers = (string[])["issue_comment"] },
+                    ["cache-poisoning-trigger"] = new RuleConfig { UntrustedTriggers = (string[])["discussion"] },
                 },
             });
 
         await Assert.That(withoutConfig.Diagnostics.Any(x => x.RuleId == "cache-poisoning-trigger")).IsFalse();
-        await Assert.That(withConfig.Diagnostics.Any(x => x.RuleId == "cache-poisoning-trigger" && x.Message.Contains("untrusted triggers", StringComparison.Ordinal))).IsTrue();
+        await Assert.That(withConfig.Diagnostics.Any(x => x.RuleId == "cache-poisoning-trigger" && x.Message.Contains("low-trust triggers", StringComparison.Ordinal))).IsTrue();
     }
 
     [Test]

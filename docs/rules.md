@@ -1994,11 +1994,39 @@ jobs:
 |---|---|---|
 | ✓ | — | ✗ |
 
-Warns when `actions/cache` is used in workflows that accept untrusted triggers (`pull_request`, `pull_request_target`, `workflow_run`). An attacker can write a poisoned cache entry that affects later privileged runs.
+Warns when a **write-capable** `actions/cache` step appears in a workflow whose `on:` includes a **low-trust trigger** that can run on the default-branch cache scope. This aligns with [GitHub Actions read-only cache tokens for low-trust triggers](https://github.blog/changelog/2026-06-26-read-only-actions-cache-for-untrusted-triggers/) and the [dependency caching reference](https://docs.github.com/en/actions/reference/workflows-and-actions/dependency-caching#cache-access-for-low-trust-workflow-triggers).
 
-**Why:** Shared writable caches across trust boundaries allow untrusted runs to persist artifacts that later trusted jobs consume.
+Built-in low-trust triggers: `pull_request_target`, `workflow_run`, `issue_comment`.
+
+`pull_request` is **not** flagged: PR caches are scoped to the merge ref (`refs/pull/.../merge`) and do not write to the default-branch cache scope.
+
+**Why:** Low-trust events running on the default-branch context could previously poison caches that trusted workflows (`push`, `schedule`, etc.) later restored. GitHub now issues read-only cache tokens for those runs, but using restore-only cache steps on low-trust triggers remains best practice and avoids save warnings in workflow logs.
+
+**Write-capable vs restore-only:**
+
+| Action | Reported |
+|---|---|
+| `actions/cache` | Yes (restores and saves) |
+| `actions/cache/save` | Yes |
+| `actions/cache/restore` | No (restore-only) |
+
+`lookup-only: true` on `actions/cache` skips download but **does not** disable saves.
 
 **Example trigger:**
+
+```yaml
+on: pull_request_target
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/cache@v4       # WARNING: write-capable cache on low-trust trigger
+        with:
+          path: ~/.npm
+          key: npm-${{ runner.os }}
+```
+
+**Not reported (`pull_request`):**
 
 ```yaml
 on: pull_request
@@ -2006,20 +2034,19 @@ jobs:
   build:
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/cache@v4       # WARNING: cache on untrusted trigger
+      - uses: actions/cache@v4
         with:
           path: ~/.npm
           key: npm-${{ runner.os }}
 ```
 
-**Remediation:** Prevent attackers from poisoning shared cache entries. Common approaches:
+**Remediation:**
 
-- Move cacheable jobs to trusted triggers only (`push`, `merge_group`)
-- Use `actions/cache/restore` (read-only) on untrusted triggers so forks cannot write entries
-- Namespace cache keys by trust boundary (`pr-${{ github.event.number }}` vs `main-`)
+- On low-trust triggers, use `actions/cache/restore` (restore-only) or split workflows so trusted triggers (`push`, `schedule`, `workflow_dispatch`, etc.) perform cache saves.
+- Keep cache saves on trusted triggers that update the default-branch cache scope.
 
 ```yaml
-# Approach A: restrict cache to trusted triggers
+# Trusted trigger: save caches
 on: push
 jobs:
   build:
@@ -2032,8 +2059,8 @@ jobs:
 ```
 
 ```yaml
-# Approach B: read-only cache on untrusted trigger
-on: pull_request
+# Low-trust trigger: restore only
+on: pull_request_target
 jobs:
   build:
     runs-on: ubuntu-24.04
@@ -2046,13 +2073,13 @@ jobs:
 
 **When fixing:**
 
-- Prefer strict trust-boundary separation: trusted runs write, untrusted runs restore-only.
-- Namespace cache keys so PR and protected-branch keys cannot collide.
-- Confirm cache hit-rate and performance after segmentation to avoid accidental regressions.
+- Prefer strict trust-boundary separation: trusted runs write, low-trust runs restore-only.
+- Workflow-level `on:` with both trusted and low-trust triggers still reports write-capable cache steps (the low-trust event may run the same job).
+- Confirm cache hit-rate after segmentation.
 
 **Configuration:**
 
-- `untrusted-triggers`: Add trigger events treated as untrusted by this rule (additive to built-in defaults).
+- `untrusted-triggers`: Add trigger events treated as low-trust by this rule (additive to built-in defaults).
 - See: [configuration.md#cache-poisoning-triggeruntrusted-triggers](configuration.md#cache-poisoning-triggeruntrusted-triggers)
 
 ---

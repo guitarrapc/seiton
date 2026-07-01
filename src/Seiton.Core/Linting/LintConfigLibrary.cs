@@ -50,10 +50,11 @@ public static class LintConfigLibrary
           #   public-registries:
           #     - ghcr.io
 
-          # Add untrusted triggers for cache poisoning checks.
+          # Add low-trust triggers for cache poisoning checks.
+          # Built-in: pull_request_target, workflow_run, issue_comment
           # cache-poisoning-trigger:
           #   untrusted-triggers:
-          #     - issue_comment
+          #     - discussion
 
           # Add untrusted triggers for self-hosted runner checks.
           # self-hosted-runner-trigger:

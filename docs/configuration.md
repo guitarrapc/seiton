@@ -251,10 +251,11 @@ rules:
       - registry.example.com
       - mirror.example.net:5000
 
-  # Extend the trigger set that cache-poisoning-trigger considers untrusted.
+  # Extend the low-trust trigger set that cache-poisoning-trigger considers.
+  # Built-in: pull_request_target, workflow_run, issue_comment
   cache-poisoning-trigger:
     untrusted-triggers:
-      - issue_comment
+      - discussion
 
   # Extend the trigger set that self-hosted-runner-trigger considers untrusted.
   self-hosted-runner-trigger:
@@ -382,7 +383,7 @@ Some rules accept additional configuration keys. All additive list keys append t
 | `runner-label` | `known-hosted-labels` | Additional GitHub-hosted runner labels to treat as known (appended to built-in set). |
 | `runner-no-latest` | `fix-mapping` | Map of label → replacement pairs for auto-fix and custom detection. |
 | `credentials` | `public-registries` | Additional container registries to treat as public (appended to built-in set). |
-| `cache-poisoning-trigger` | `untrusted-triggers` | Additional trigger events to treat as untrusted (appended to built-in set). |
+| `cache-poisoning-trigger` | `untrusted-triggers` | Additional low-trust triggers; appended to built-in set (`pull_request_target`, `workflow_run`, `issue_comment`). |
 | `self-hosted-runner-trigger` | `untrusted-triggers` | Additional trigger events to treat as untrusted for self-hosted runner checks (appended to built-in set). |
 | `unredacted-secrets` | `output-commands` | Additional shell commands to watch for secret printing (appended to built-in set). |
 | `expr-undefined-var` | `assume-events` | Additional event names to assume when evaluating event-scoped expressions. |
@@ -495,13 +496,13 @@ Behavior:
 <a id="cache-poisoning-triggeruntrusted-triggers"></a>
 #### `cache-poisoning-trigger.untrusted-triggers`
 
-Additional trigger event names treated as untrusted by `cache-poisoning-trigger` (additive set).
+Additional trigger event names treated as low-trust by `cache-poisoning-trigger` (additive to the built-in set: `pull_request_target`, `workflow_run`, `issue_comment`).
 
 ```yaml
 rules:
   cache-poisoning-trigger:
     untrusted-triggers:
-      - issue_comment
+      - discussion
 ```
 
 <a id="self-hosted-runner-triggeruntrusted-triggers"></a>
