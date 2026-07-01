@@ -5277,9 +5277,9 @@ public sealed partial class RuleInterfaceTests
             build:
                 runs-on: ubuntu-latest
                 steps:
-                                        - id: build
-                                            run: echo "mode=release" >> $GITHUB_OUTPUT
-                                        - run: echo '${{ steps.build.outputs.mode }}'
+                    - id: build
+                      run: echo "mode=release" >> $GITHUB_OUTPUT
+                    - run: echo '${{ steps.build.outputs.mode }}'
         """;
 
         var actionYaml = """
