@@ -6,7 +6,7 @@
       "sourceUrls": [
         "https://raw.githubusercontent.com/github/docs/main/content/actions/reference/workflows-and-actions/contexts.md"
       ],
-      "fetchedAtUtc": "2026-06-26T05:28:59.7728698\u002B00:00",
+      "fetchedAtUtc": "2026-07-01T11:25:19.9300837\u002B00:00",
       "rawFileHashes": {
         "contexts.docs.md": "sha256:4f21e3affbc4aac5fbf17358038265fc473592829138af2e364288d77261870a"
       }
@@ -16,7 +16,7 @@
       "sourceUrls": [
         "https://raw.githubusercontent.com/github/docs/main/content/actions/reference/workflows-and-actions/contexts.md"
       ],
-      "fetchedAtUtc": "2026-06-26T05:29:02.6465175\u002B00:00",
+      "fetchedAtUtc": "2026-07-01T11:25:25.0150116\u002B00:00",
       "rawFileHashes": {
         "contexts.docs.md": "sha256:4f21e3affbc4aac5fbf17358038265fc473592829138af2e364288d77261870a"
       }
@@ -26,9 +26,9 @@
       "sourceUrls": [
         "https://docs.github.com/en/webhooks/webhook-events-and-payloads"
       ],
-      "fetchedAtUtc": "2026-06-26T05:29:04.7934603\u002B00:00",
+      "fetchedAtUtc": "2026-07-01T11:25:32.2577802\u002B00:00",
       "rawFileHashes": {
-        "webhook-events-and-payloads.html": "sha256:e7c4190c9b661f11d8cb135bb60b63d2e7afaa59009d0d6206a4657d04565b9e"
+        "webhook-events-and-payloads.html": "sha256:e8bb6b391d6a2cc63bbc223ea982b26e9f5f1a15e17efb33795560a0e782f0b2"
       }
     },
     {
@@ -36,9 +36,9 @@
       "sourceUrls": [
         "https://raw.githubusercontent.com/github/docs/main/content/actions/reference/workflows-and-actions/workflow-syntax.md"
       ],
-      "fetchedAtUtc": "2026-06-26T05:29:04.3767392\u002B00:00",
+      "fetchedAtUtc": "2026-07-01T11:25:30.4831768\u002B00:00",
       "rawFileHashes": {
-        "workflow-syntax.md": "sha256:db81ac320c88c68b541cd0cffb9b1a6f51975eeb5f5d2c1b57b12977531ff793"
+        "workflow-syntax.md": "sha256:fc5595c70efb9e3d84176e19d36232be063bfddde07b3a6c484b035b7410330d"
       }
     },
     {
@@ -46,7 +46,7 @@
       "sourceUrls": [
         "https://raw.githubusercontent.com/github/docs/main/content/actions/reference/workflows-and-actions/expressions.md"
       ],
-      "fetchedAtUtc": "2026-06-26T05:29:02.9313976\u002B00:00",
+      "fetchedAtUtc": "2026-07-01T11:25:25.3387039\u002B00:00",
       "rawFileHashes": {
         "expressions.docs.md": "sha256:d2c6a4492f4302046a35c5bf4ca402302ca2e8c5547febc07ced3e00c1450865"
       }
@@ -56,7 +56,7 @@
       "sourceUrls": [
         "https://data.iana.org/time-zones/tzdb/tzdata.zi"
       ],
-      "fetchedAtUtc": "2026-06-26T05:29:03.3216608\u002B00:00",
+      "fetchedAtUtc": "2026-07-01T11:25:29.2462250\u002B00:00",
       "rawFileHashes": {
         "tzdata.zi": "sha256:e500467b589740d2c0311c844896f2f3727ffc4baff7e82d65d0f8c1e7e6f0c1"
       }
@@ -66,7 +66,7 @@
       "sourceUrls": [
         "https://raw.githubusercontent.com/github/docs/main/data/reusables/actions/github-token-available-permissions.md"
       ],
-      "fetchedAtUtc": "2026-06-26T05:29:03.2021122\u002B00:00",
+      "fetchedAtUtc": "2026-07-01T11:25:25.6109945\u002B00:00",
       "rawFileHashes": {
         "github-token-available-permissions.md": "sha256:c9f02c68d2fc22deb1824f5dc08a21c43e096ce386751d9ba42a31c98c2b9f49"
       }
@@ -88,7 +88,7 @@
         "https://raw.githubusercontent.com/reviewdog/action-actionlint/v1/action.yml",
         "https://raw.githubusercontent.com/rhysd/action-setup-vim/v1/action.yml"
       ],
-      "fetchedAtUtc": "2026-06-26T05:29:02.4749828\u002B00:00",
+      "fetchedAtUtc": "2026-07-01T11:25:22.6691856\u002B00:00",
       "rawFileHashes": {
         "actions_cache.action.yml": "sha256:c04edf35104c16c8944076df01561748bac9cd10941417e467a236e508e52dda",
         "actions_checkout.action.yml": "sha256:fc3f945029a3905c34bb8d52a6d2faf4a2bdde2ce7baa57ae648154b0b6f05b5",
@@ -111,7 +111,7 @@
         "https://docs.github.com/en/actions/reference/runners/github-hosted-runners.md",
         "https://docs.github.com/en/actions/reference/runners/larger-runners.md"
       ],
-      "fetchedAtUtc": "2026-06-26T05:29:02.5846161\u002B00:00",
+      "fetchedAtUtc": "2026-07-01T11:25:24.7990109\u002B00:00",
       "rawFileHashes": {
         "github-hosted-runners.docs.md": "sha256:5c11432778fb4d71401662fbac91b0df8798e33a6e98efab8c87e63555120a98",
         "larger-runners.docs.md": "sha256:8ec2a6bac58284ccbc5164e6ba7fbf9bd2f2357f49bab5d5ff804c4a36431ae7"
@@ -122,7 +122,7 @@
       "sourceUrls": [
         "https://raw.githubusercontent.com/github/docs/main/data/reusables/actions/supported-shells.md"
       ],
-      "fetchedAtUtc": "2026-06-26T05:29:03.5871110\u002B00:00",
+      "fetchedAtUtc": "2026-07-01T11:25:29.5120070\u002B00:00",
       "rawFileHashes": {
         "supported-shells.md": "sha256:49b49c756f8c6f47a91111d5e46363526ff101d4d3095012b9b9df3b4cb733cf"
       }
@@ -133,10 +133,10 @@
         "https://json.schemastore.org/github-workflow.json",
         "https://raw.githubusercontent.com/github/docs/main/content/actions/reference/workflows-and-actions/workflow-syntax.md"
       ],
-      "fetchedAtUtc": "2026-06-26T05:29:04.2951777\u002B00:00",
+      "fetchedAtUtc": "2026-07-01T11:25:30.3976813\u002B00:00",
       "rawFileHashes": {
         "github-workflow.schema.json": "sha256:7a952fdb7c1b130732e40ccea9db9bced906c1198e97834f8a49ae3b411f3161",
-        "workflow-syntax.md": "sha256:db81ac320c88c68b541cd0cffb9b1a6f51975eeb5f5d2c1b57b12977531ff793"
+        "workflow-syntax.md": "sha256:fc5595c70efb9e3d84176e19d36232be063bfddde07b3a6c484b035b7410330d"
       }
     },
     {
@@ -144,7 +144,7 @@
       "sourceUrls": [
         "https://raw.githubusercontent.com/aquasecurity/setup-trivy/main/action.yaml"
       ],
-      "fetchedAtUtc": "2026-06-26T05:29:04.6605913\u002B00:00",
+      "fetchedAtUtc": "2026-07-01T11:25:30.7430014\u002B00:00",
       "rawFileHashes": {
         "aquasecurity_setup-trivy.action.yaml": "sha256:ebbd967df4bb297e9ef9212878988b326a9eecbbead97e695c393efc01afb922"
       }
@@ -155,7 +155,7 @@
         "https://json.schemastore.org/github-workflow.json",
         "https://raw.githubusercontent.com/github/docs/main/content/actions/reference/workflows-and-actions/events-that-trigger-workflows.md"
       ],
-      "fetchedAtUtc": "2026-06-26T05:28:59.4955425\u002B00:00",
+      "fetchedAtUtc": "2026-07-01T11:25:19.6659973\u002B00:00",
       "rawFileHashes": {
         "github-workflow.schema.json": "sha256:7a952fdb7c1b130732e40ccea9db9bced906c1198e97834f8a49ae3b411f3161",
         "events-that-trigger-workflows.docs.md": "sha256:522377578cf45ad6dbba4cbea5109c2d53fe2cfd5a0f817bcae00783f75bc368"
