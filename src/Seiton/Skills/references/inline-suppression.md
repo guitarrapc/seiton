@@ -102,7 +102,7 @@ jobs:
     ...
 ```
 
-`job-id` is the YAML key under `jobs:` (e.g. `build`). Rule IDs follow, comma-separated.
+`job-id` is the YAML key under `jobs:` (e.g. `build`). Rule IDs follow and may be separated by commas and/or ASCII whitespace.
 
 ### `disable-file` — top of workflow file
 

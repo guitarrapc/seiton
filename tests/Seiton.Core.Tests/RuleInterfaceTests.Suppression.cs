@@ -111,7 +111,6 @@ public sealed partial class RuleInterfaceTests
     [Test]
     public async Task DisableJob_Matrix_CheckBehavior()
     {
-        // Check if disable-job suppresses matrix diagnostics.
         var yaml = """
         # seiton: disable-job build matrix
         on: push
@@ -249,13 +248,11 @@ public sealed partial class RuleInterfaceTests
     {
         // Space-separated rule IDs are accepted, matching comma-separated rule lists.
         var yaml = """
-        on:
-            # seiton: disable-next-line dangerous-triggers job-permissions-required
-            pull_request_target:
+        on: push
         jobs:
+            # seiton: disable-next-line job-timeout-minutes-required job-permissions-required
             build:
-                runs-on: ubuntu-latest
-                timeout-minutes: 10
+                runs-on: ubuntu-24.04
                 steps:
                     - run: echo test
         """;
@@ -264,8 +261,8 @@ public sealed partial class RuleInterfaceTests
 
         var configErrors = result.Diagnostics.Where(d => d.RuleId is null && d.Message.Contains("unknown rule-id", StringComparison.Ordinal)).ToArray();
         await Assert.That(configErrors).IsEmpty();
-        await Assert.That(result.Diagnostics.Any(d => d.RuleId == "dangerous-triggers")).IsFalse();
-        await Assert.That(result.Diagnostics.Any(d => d.RuleId == "job-permissions-required")).IsTrue();
+        await Assert.That(result.Diagnostics.Any(d => d.RuleId == "job-timeout-minutes-required")).IsFalse();
+        await Assert.That(result.Diagnostics.Any(d => d.RuleId == "job-permissions-required")).IsFalse();
     }
 
     [Test]

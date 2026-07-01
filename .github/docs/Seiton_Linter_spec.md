@@ -355,7 +355,7 @@ Inline suppression supports file/job/step/next-line scopes.
 Inline suppression has the following constraints.
 
 - A directive can target one or multiple rule IDs.
-- Multiple rule ID format is comma-separated; semantic IDs (kebab-case) are required per §5.1.
+- Multiple rule IDs may be separated by commas and/or ASCII whitespace (spaces or tabs); semantic IDs (kebab-case) are required per §5.1.
 - `disable-step` requires at least one rule ID. If no following step item exists in the same `steps` sequence, implementations must report a configuration diagnostic against the directive.
 - `disable-step` is available for workflow steps and composite action steps. It is inline-only; configuration exclusions do not define step-level scope.
 
@@ -370,7 +370,7 @@ Inline directive format:
 
 Use `disable-step` when a diagnostic belongs to a step as a whole or may be reported inside a multi-line `run:` block. Use `disable-next-line` only when the rule reports on a specific YAML key line.
 
-Non-normative note: parsers may allow optional spaces after commas, but normalized output must preserve rule-id matching behavior.
+Non-normative note: parsers may allow optional spaces after commas and repeated separators (comma plus whitespace), but normalized output must preserve rule-id matching behavior.
 
 ### 5.6 Audit Metadata Policy
 

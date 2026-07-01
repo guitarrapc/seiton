@@ -750,14 +750,17 @@ Place at the top of the workflow file:
 
 ### Multiple rule IDs
 
-Multiple rule IDs are **comma-separated**. Spaces between commas are allowed, but space-separated rule IDs are **not** supported:
+Multiple rule IDs may be separated by **commas and/or ASCII whitespace**. Spaces after commas and repeated separators are allowed:
 
 ```yaml
 # ✓ Comma-separated — both rules are suppressed
 # seiton: disable-next-line dangerous-triggers, job-permissions-required
 
-# ✗ Space-separated — treated as a single unknown rule ID, produces a config error
+# ✓ Space-separated — both rules are suppressed
 # seiton: disable-next-line dangerous-triggers job-permissions-required
+
+# ✓ Repeated separators are also accepted
+# seiton: disable-next-line dangerous-triggers,   job-permissions-required
 ```
 
 Inline directives take precedence over config-file exclusions.
