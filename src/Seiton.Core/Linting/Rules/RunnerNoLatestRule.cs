@@ -76,9 +76,15 @@ public sealed class RunnerNoLatestRule() : RuleBase(RuleId.RunnerNoLatest)
 
     private void ReportLatestLabel(Job job, string jobId, StringNodeId label, ReadOnlySpan<byte> labelUtf8)
     {
-        // Single lookup: check built-in first, then fix-mapping (avoids double scan)
+        // Only scan fix-mapping when built-in detection is insufficient or fix generation needs the pinned value.
         var isBuiltIn = IsBuiltInLatestLabel(labelUtf8);
-        var hasMappingValue = TryGetFixValue(labelUtf8, out var pinned);
+        var hasMappingValue = false;
+        var pinned = string.Empty;
+        if (!isBuiltIn || Config.Fix.Enabled)
+        {
+            hasMappingValue = TryGetFixValue(labelUtf8, out pinned);
+        }
+
         if (!isBuiltIn && !hasMappingValue)
         {
             return;
