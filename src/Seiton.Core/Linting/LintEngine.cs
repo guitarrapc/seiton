@@ -1417,6 +1417,7 @@ public sealed class LintEngine
     {
         itemLineNumber = 0;
         itemIndent = 0;
+        var maxItemIndent = -1;
         for (var currentLine = scopeStartLine; currentLine >= 1 && currentLine <= lineStarts.Length; currentLine--)
         {
             var lineStart = lineStarts[currentLine - 1];
@@ -1429,7 +1430,14 @@ public sealed class LintEngine
             var line = source.AsSpan(lineStart, lineEnd - lineStart);
             var leadingWS = CountLeadingAsciiWhitespace(line);
             var content = line[leadingWS..];
-            if (!content.IsEmpty && content[0] == (byte)'-')
+            if (maxItemIndent < 0 && !content.IsEmpty)
+            {
+                maxItemIndent = content[0] == (byte)'-'
+                    ? leadingWS
+                    : leadingWS >= 2 ? leadingWS - 2 : 0;
+            }
+
+            if (!content.IsEmpty && content[0] == (byte)'-' && leadingWS <= maxItemIndent)
             {
                 itemLineNumber = currentLine;
                 itemIndent = leadingWS;

@@ -754,6 +754,38 @@ public sealed partial class RuleInterfaceTests
     }
 
     [Test]
+    public async Task DisableStep_NestedSequenceBeforeRun_BindsStepItemNotNestedItem()
+    {
+        var yaml = """
+        on: push
+        jobs:
+            build:
+                runs-on: ubuntu-24.04
+                timeout-minutes: 10
+                permissions: {}
+                env:
+                    TOKEN: ${{ secrets.TOKEN }}
+                steps:
+                    # seiton: disable-step unredacted-secrets
+                    - name: Suppressed
+                      with:
+                        args:
+                          - --example
+                      run: echo "${TOKEN}"
+        """;
+
+        using var result = new LintEngine([new UnredactedSecretsRule()]).Check(Encoding.UTF8.GetBytes(yaml), "test.yml");
+        var configErrors = result.Diagnostics.Where(d =>
+            d.RuleId is null
+            && d.Message.Contains("disable-step requires a following step item", StringComparison.Ordinal)).ToArray();
+        var secretDiags = result.Diagnostics.Where(d => d.RuleId == "unredacted-secrets").ToArray();
+
+        await Assert.That(configErrors).IsEmpty();
+        await Assert.That(secretDiags).IsEmpty();
+        await Assert.That(result.SuppressionSummary.Records.Any(x => x.Source == SuppressionSource.InlineStep)).IsTrue();
+    }
+
+    [Test]
     public async Task DisableStep_BlanksCommentsAndMultipleDirectives_TargetSameStep()
     {
         var yaml = """
