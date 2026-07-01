@@ -1097,7 +1097,7 @@ public sealed class LintEngine
             {
                 if (!stepScopesBuilt)
                 {
-                    BuildStepScopes(workflow, actionMetadata);
+                    BuildStepScopes(utf8Yaml, workflow, actionMetadata);
                     stepScopesBuilt = true;
                 }
 
@@ -1118,7 +1118,7 @@ public sealed class LintEngine
                 if (!TryFindNextYamlContentLine(remaining[lineAdvance..], lineNumber, out var targetLine, out var targetIndent, out var targetContent)
                     || targetContent.IsEmpty
                     || targetContent[0] != (byte)'-'
-                    || !TryFindStepScopeForItemLine(utf8Yaml, targetLine, targetIndent, _stepScopes, out var targetStepScope))
+                    || !TryFindStepScopeForItemLine(targetLine, targetIndent, _stepScopes, out var targetStepScope))
                 {
                     _configDiagnostics.Add(BuildInlineDirectiveError(
                         "disable-step requires a following step item in the same steps sequence",
@@ -1132,12 +1132,7 @@ public sealed class LintEngine
                     continue;
                 }
 
-                var targetStepStartLine = targetLine < targetStepScope.StartLine ? targetLine : targetStepScope.StartLine;
-                if (targetStepStartLine != targetStepScope.StartLine)
-                {
-                    _stepScopes.Add(new StepScope(targetStepStartLine, targetStepScope.EndLine));
-                }
-
+                var targetStepStartLine = targetStepScope.StartLine;
                 if (!_stepRuleSuppressions.TryGetValue(targetStepStartLine, out var stepSuppressedRuleIds))
                 {
                     stepSuppressedRuleIds = new Dictionary<string, SuppressionAnchor>(StringComparer.Ordinal);
@@ -1322,18 +1317,19 @@ public sealed class LintEngine
         }
     }
 
-    private void BuildStepScopes(Parsing.Ast.Workflow workflow, ActionMetadata? actionMetadata)
+    private void BuildStepScopes(byte[] source, Parsing.Ast.Workflow workflow, ActionMetadata? actionMetadata)
     {
         _stepScopes.Clear();
+        var lineStarts = ExpressionScanHelpers.BuildLineStarts(source);
         foreach (var pair in workflow.Jobs)
         {
-            AddStepScopes(pair.Value.Steps);
+            AddStepScopes(source, lineStarts, pair.Value.Steps);
         }
 
-        AddStepScopes(actionMetadata?.Runs?.Steps);
+        AddStepScopes(source, lineStarts, actionMetadata?.Runs?.Steps);
     }
 
-    private void AddStepScopes(IReadOnlyList<Step>? steps)
+    private void AddStepScopes(byte[] source, int[] lineStarts, IReadOnlyList<Step>? steps)
     {
         if (steps is null)
         {
@@ -1348,7 +1344,13 @@ public sealed class LintEngine
                 continue;
             }
 
-            _stepScopes.Add(new StepScope(range.StartLine, range.EndLine));
+            if (!TryFindStepItemLineForScope(source, lineStarts, range.StartLine, out var itemLine, out var itemIndent))
+            {
+                itemLine = range.StartLine;
+                itemIndent = 0;
+            }
+
+            _stepScopes.Add(new StepScope(itemLine, range.EndLine, itemIndent));
         }
     }
 
@@ -1395,17 +1397,12 @@ public sealed class LintEngine
         return false;
     }
 
-    private static bool TryFindStepScopeForItemLine(byte[] source, int line, int indent, IReadOnlyList<StepScope> stepScopes, out StepScope stepScope)
+    private static bool TryFindStepScopeForItemLine(int line, int indent, IReadOnlyList<StepScope> stepScopes, out StepScope stepScope)
     {
         for (var i = 0; i < stepScopes.Count; i++)
         {
             var scope = stepScopes[i];
-            if (scope.StartLine < line)
-            {
-                continue;
-            }
-
-            if (scope.StartLine == line || TryFindStepItemLineForScope(source, line, scope.StartLine, out var itemLine, out var itemIndent) && itemLine == line && itemIndent == indent)
+            if (scope.StartLine == line && scope.ItemIndent == indent)
             {
                 stepScope = scope;
                 return true;
@@ -1416,52 +1413,31 @@ public sealed class LintEngine
         return false;
     }
 
-    private static bool TryFindStepItemLineForScope(byte[] source, int minLineNumber, int scopeStartLine, out int itemLineNumber, out int itemIndent)
+    private static bool TryFindStepItemLineForScope(byte[] source, int[] lineStarts, int scopeStartLine, out int itemLineNumber, out int itemIndent)
     {
         itemLineNumber = 0;
         itemIndent = 0;
-        var currentLine = 1;
-        var offset = 0;
-        while (offset < source.Length)
+        for (var currentLine = scopeStartLine; currentLine >= 1 && currentLine <= lineStarts.Length; currentLine--)
         {
-            var lineStart = offset;
-            while (offset < source.Length && source[offset] != (byte)'\n')
+            var lineStart = lineStarts[currentLine - 1];
+            var lineEnd = currentLine < lineStarts.Length ? lineStarts[currentLine] - 1 : source.Length;
+            if (lineEnd > lineStart && source[lineEnd - 1] == (byte)'\r')
             {
-                offset++;
+                lineEnd--;
             }
 
-            if (currentLine >= minLineNumber && currentLine <= scopeStartLine)
+            var line = source.AsSpan(lineStart, lineEnd - lineStart);
+            var leadingWS = CountLeadingAsciiWhitespace(line);
+            var content = line[leadingWS..];
+            if (!content.IsEmpty && content[0] == (byte)'-')
             {
-                var lineEnd = offset;
-                if (lineEnd > lineStart && source[lineEnd - 1] == (byte)'\r')
-                {
-                    lineEnd--;
-                }
-
-                var line = source.AsSpan(lineStart, lineEnd - lineStart);
-                var leadingWS = CountLeadingAsciiWhitespace(line);
-                var content = line[leadingWS..];
-                if (!content.IsEmpty && content[0] == (byte)'-')
-                {
-                    itemLineNumber = currentLine;
-                    itemIndent = leadingWS;
-                }
+                itemLineNumber = currentLine;
+                itemIndent = leadingWS;
+                return true;
             }
-
-            if (currentLine > scopeStartLine)
-            {
-                return itemLineNumber != 0;
-            }
-
-            if (offset < source.Length && source[offset] == (byte)'\n')
-            {
-                offset++;
-            }
-
-            currentLine++;
         }
 
-        return itemLineNumber != 0;
+        return false;
     }
 
     private static void AddRuleIds(
@@ -1872,7 +1848,7 @@ public sealed class LintEngine
             []);
     }
 
-    private readonly record struct StepScope(int StartLine, int EndLine);
+    private readonly record struct StepScope(int StartLine, int EndLine, int ItemIndent);
 
     private readonly record struct JobScope(Utf8Slice JobIdSlice, int StartLine, int EndLine);
 

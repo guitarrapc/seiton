@@ -29,6 +29,7 @@ Add `# seiton: disable-step <rule-id list>` so users can suppress diagnostics th
 
 - Reuse existing per-run inline suppression parsing and dictionary structures.
 - Build step suppression scopes lazily only after a `disable-step` directive is encountered; documents without `disable-step` keep the existing suppression path.
+- Resolve step item lines once while building step scopes, using a per-run line-start table, so each `disable-step` directive can bind with integer comparisons instead of rescanning source text.
 - Avoid string decoding for step matching; use line/range metadata from AST and existing rule-id normalization.
 - No parser changes are planned.
 
@@ -39,18 +40,18 @@ Add `# seiton: disable-step <rule-id list>` so users can suppress diagnostics th
 - Rule interface regression tests: `dotnet test --project tests/Seiton.Core.Tests --treenode-filter /*/*/RuleInterfaceTests/*` passed, 518 tests.
 - Full suite was run after documentation mirror sync and showed all test assemblies passed; the process did not return promptly after assembly-level pass output on that run.
 
-Final `CoreLintBenchmark` after lazy step-scope construction and indentation-aware step binding:
+Final `CoreLintBenchmark` after the review pass, lazy step-scope construction, cached step item line lookup, and indentation-aware step binding:
 
 | Size | FixEnabled | Baseline Mean | Final Mean | Baseline Allocated | Final Allocated |
 |---|---:|---:|---:|---:|---:|
-| Small | False | 288.3 us | 142.6 us | 9.89 KB | 9.75 KB |
-| Small | True | 192.3 us | 367.7 us | 11.2 KB | 11.35 KB |
-| Medium | False | 3,739.6 us | 2,490.7 us | 52.91 KB | 52.91 KB |
-| Medium | True | 4,894.2 us | 3,975.1 us | 66.13 KB | 66.27 KB |
-| Large | False | 50,190.3 us | 46,260.8 us | 256.86 KB | 250.22 KB |
-| Large | True | 76,443.6 us | 58,689.7 us | 317.51 KB | 321.78 KB |
+| Small | False | 288.3 us | 338.8 us | 9.89 KB | 9.88 KB |
+| Small | True | 192.3 us | 223.1 us | 11.2 KB | 11.2 KB |
+| Medium | False | 3,739.6 us | 11,349.5 us | 52.91 KB | 53.48 KB |
+| Medium | True | 4,894.2 us | 6,644.5 us | 66.13 KB | 66.84 KB |
+| Large | False | 50,190.3 us | 56,502.3 us | 256.86 KB | 233.77 KB |
+| Large | True | 76,443.6 us | 81,744.6 us | 317.51 KB | 288.61 KB |
 
-BenchmarkDotNet ShortRun timings are noisy on this machine, but allocation stayed within the +10% threshold for every scenario. The only allocation increase in the large fix-enabled case is about +1.3%, and documents without `disable-step` do not eagerly build step scopes.
+BenchmarkDotNet ShortRun timings were noisy on this machine, especially the Medium/False case (`Error = 93,460.4 us`, `StdDev = 5,122.88 us`, `RatioSD = 0.82`). Allocation stayed within the +10% threshold for every scenario. The largest allocation increase was Medium/False at about +1.1%, while large scenarios allocated less than the baseline. Documents without `disable-step` do not eagerly build step scopes.
 
 ## Review Focus
 
@@ -58,3 +59,4 @@ BenchmarkDotNet ShortRun timings are noisy on this machine, but allocation staye
 - `disable-next-line` remains a physical-line directive and keeps backward compatibility.
 - Tests cover valid suppression, invalid placement, comment/blank-line skipping, merge behavior, composite action steps, non-step sequence items, representative summary source, and no unused-suppression warnings.
 - Review fix: step binding now checks the actual nearest sequence item line for the AST step scope, so a directive before another YAML sequence item such as `services.*.ports` cannot suppress a later step.
+- Review fix: step item line lookup is cached in `StepScope`; this avoids per-directive/per-scope source rescans when a file contains multiple `disable-step` directives.
