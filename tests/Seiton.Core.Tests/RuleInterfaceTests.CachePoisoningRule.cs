@@ -85,7 +85,21 @@ public sealed partial class RuleInterfaceTests
             """,
             []),
             new RuleCase(
-            "ok-cache-lookup-only-on-pull-request-target",
+            "ok-cache-restore-on-issue-comment",
+            """
+            on: issue_comment
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - uses: actions/cache/restore@v4
+                          with:
+                              path: ~/.npm
+                              key: npm-${{ runner.os }}
+            """,
+            []),
+            new RuleCase(
+            "ng-cache-lookup-only-on-pull-request-target",
             """
             on: pull_request_target
             jobs:
@@ -97,6 +111,24 @@ public sealed partial class RuleInterfaceTests
                               path: ~/.npm
                               key: npm-${{ runner.os }}
                               lookup-only: true
+            """,
+            ["write-capable cache action", "low-trust triggers"]),
+            new RuleCase(
+            "ng-cache-on-push-and-pull-request-target",
+            """
+            on:
+                push:
+                    branches: [main]
+                pull_request_target:
+                    types: [labeled]
+            jobs:
+                build:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - uses: actions/cache@v4
+                          with:
+                              path: ~/.npm
+                              key: npm-${{ runner.os }}
             """,
             ["write-capable cache action", "low-trust triggers"]),
             new RuleCase(
