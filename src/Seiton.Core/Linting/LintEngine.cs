@@ -38,8 +38,10 @@ public sealed class LintEngine
 
     // ParseInlineSuppression reusable collections
     private readonly Dictionary<int, Dictionary<string, SuppressionAnchor>> _nextLineRuleSuppressions = new();
+    private readonly Dictionary<int, Dictionary<string, SuppressionAnchor>> _stepRuleSuppressions = new();
     private readonly Dictionary<string, SuppressionAnchor> _fileRuleSuppressions = new(StringComparer.Ordinal);
     private readonly Dictionary<string, Dictionary<string, SuppressionAnchor>> _jobRuleSuppressions = new(StringComparer.OrdinalIgnoreCase);
+    private readonly List<StepScope> _stepScopes = new();
     private readonly List<JobScope> _jobScopes = new();
 
     // S-6: Reusable buffer for BuildKnownJobIdSlices (avoids per-call allocation)
@@ -338,8 +340,20 @@ public sealed class LintEngine
 
         _diagnostics.AddRange(normalizedRules.ConfigurationDiagnostics);
 
+        _effectiveConfig.PrepareForRun(
+            utf8Yaml,
+            arena,
+            filePath,
+            normalizedRules.Rules,
+            config?.Fix,
+            config?.Network,
+            config?.Output,
+            config?.Verbose ?? false,
+            parseResult.ExpressionArtifacts);
+        var effectiveConfig = _effectiveConfig;
+
         var workflowForSuppression = parseResult.Workflow ?? EmptyWorkflowForSuppression;
-        var inlineSuppression = ParseInlineSuppression(utf8Yaml, filePath, workflowForSuppression, arena!);
+        var inlineSuppression = ParseInlineSuppression(utf8Yaml, filePath, workflowForSuppression, parseResult.ActionMetadata, arena!);
         _diagnostics.AddRange(inlineSuppression.ConfigurationDiagnostics);
 
         var normalizedExclusions = NormalizeExclusions(config?.Exclusions, filePath, workflowForSuppression, utf8Yaml, arena!, config?.ConfigFilePath);
@@ -354,17 +368,6 @@ public sealed class LintEngine
         }
 
         _visitor.Reset();
-        _effectiveConfig.PrepareForRun(
-            utf8Yaml,
-            arena,
-            filePath,
-            normalizedRules.Rules,
-            config?.Fix,
-            config?.Network,
-            config?.Output,
-            config?.Verbose ?? false,
-            parseResult.ExpressionArtifacts);
-        var effectiveConfig = _effectiveConfig;
         var sharedDisabledRuleIds = effectiveConfig.Rules is null || effectiveConfig.Rules.Count == 0
             ? GetSharedDefaultDisabledRuleIds(documentKind)
             : null;
@@ -805,6 +808,21 @@ public sealed class LintEngine
             return true;
         }
 
+        if (inlineSuppression.StepRuleSuppressions.Count != 0
+            && TryFindStepStartLineForLine(diagnostic.Location.StartLine, inlineSuppression.StepScopes, out var stepStartLine)
+            && inlineSuppression.StepRuleSuppressions.TryGetValue(stepStartLine, out var stepSuppressedRuleIds)
+            && stepSuppressedRuleIds.TryGetValue(diagnostic.RuleId, out var stepAnchor))
+        {
+            suppressionRecord = new SuppressionRecord(
+                diagnostic.RuleId,
+                SuppressionSource.InlineStep,
+                stepAnchor.Line,
+                stepAnchor.Column,
+                diagnostic.Location.StartLine,
+                diagnostic.Location.StartColumn);
+            return true;
+        }
+
         if (inlineSuppression.JobRuleSuppressions.Count == 0)
         {
             suppressionRecord = default;
@@ -926,24 +944,66 @@ public sealed class LintEngine
         return false;
     }
 
-    private InlineSuppression ParseInlineSuppression(byte[] utf8Yaml, string filePath, Parsing.Ast.Workflow workflow, AstArena arena)
+    private static bool TryFindStepStartLineForLine(int line, IReadOnlyList<StepScope> stepScopes, out int stepStartLine)
+    {
+        var low = 0;
+        var high = stepScopes.Count - 1;
+        var candidateIndex = -1;
+        while (low <= high)
+        {
+            var mid = low + ((high - low) >> 1);
+            if (stepScopes[mid].StartLine <= line)
+            {
+                candidateIndex = mid;
+                low = mid + 1;
+            }
+            else
+            {
+                high = mid - 1;
+            }
+        }
+
+        for (var i = candidateIndex; i >= 0; i--)
+        {
+            var scope = stepScopes[i];
+            if (line > scope.EndLine)
+            {
+                break;
+            }
+
+            if (line >= scope.StartLine)
+            {
+                stepStartLine = scope.StartLine;
+                return true;
+            }
+        }
+
+        stepStartLine = 0;
+        return false;
+    }
+
+    private InlineSuppression ParseInlineSuppression(byte[] utf8Yaml, string filePath, Parsing.Ast.Workflow workflow, ActionMetadata? actionMetadata, AstArena arena)
     {
         if (utf8Yaml.Length == 0)
         {
             return InlineSuppression.Empty;
         }
 
-        var knownJobIdSlices = BuildKnownJobIdSlices(workflow, arena);
-        BuildJobScopes(workflow, arena);
-
         // UTF-8 byte constants for directive parsing
         ReadOnlySpan<byte> seitonPrefixUtf8 = "seiton:"u8;
         ReadOnlySpan<byte> disableNextLineUtf8 = "disable-next-line"u8;
+        ReadOnlySpan<byte> disableStepUtf8 = "disable-step"u8;
         ReadOnlySpan<byte> disableFileUtf8 = "disable-file"u8;
         ReadOnlySpan<byte> disableJobUtf8 = "disable-job"u8;
 
+        var knownJobIdSlices = BuildKnownJobIdSlices(workflow, arena);
+        BuildJobScopes(workflow, arena);
+        _stepScopes.Clear();
+        var stepScopesBuilt = false;
+
         // Clear reusable collections; inner dicts of nextLine/job are discarded on Clear
         _nextLineRuleSuppressions.Clear();
+        _stepRuleSuppressions.Clear();
         _fileRuleSuppressions.Clear();
         _jobRuleSuppressions.Clear();
         _configDiagnostics.Clear();
@@ -1056,6 +1116,58 @@ public sealed class LintEngine
                 continue;
             }
 
+            if (commandBytes.SequenceEqual(disableStepUtf8))
+            {
+                if (!stepScopesBuilt)
+                {
+                    BuildStepScopes(utf8Yaml, _effectiveConfig.GetLineStarts(), workflow, actionMetadata);
+                    stepScopesBuilt = true;
+                }
+
+                if (argsBytes.IsEmpty)
+                {
+                    _configDiagnostics.Add(BuildInlineDirectiveError(
+                        "disable-step requires at least one rule-id",
+                        filePath,
+                        lineStartOffset,
+                        lineNumber,
+                        commandColumn,
+                        commandLen));
+                    lineStartOffset += lineAdvance;
+                    remaining = remaining[lineAdvance..];
+                    continue;
+                }
+
+                if (!TryFindNextYamlContentLine(remaining[lineAdvance..], lineNumber, out var targetLine, out var targetIndent, out var targetContent)
+                    || targetContent.IsEmpty
+                    || targetContent[0] != (byte)'-'
+                    || !TryFindStepScopeForItemLine(targetLine, targetIndent, _stepScopes, out var targetStepScope))
+                {
+                    _configDiagnostics.Add(BuildInlineDirectiveError(
+                        "disable-step requires a following step item in the same steps sequence",
+                        filePath,
+                        lineStartOffset,
+                        lineNumber,
+                        commandColumn,
+                        commandLen));
+                    lineStartOffset += lineAdvance;
+                    remaining = remaining[lineAdvance..];
+                    continue;
+                }
+
+                var targetStepStartLine = targetStepScope.StartLine;
+                if (!_stepRuleSuppressions.TryGetValue(targetStepStartLine, out var stepSuppressedRuleIds))
+                {
+                    stepSuppressedRuleIds = new Dictionary<string, SuppressionAnchor>(StringComparer.Ordinal);
+                    _stepRuleSuppressions[targetStepStartLine] = stepSuppressedRuleIds;
+                }
+
+                AddRuleIds(argsBytes, argsOffset, stepSuppressedRuleIds, _configDiagnostics, filePath, lineStartOffset, lineNumber);
+                lineStartOffset += lineAdvance;
+                remaining = remaining[lineAdvance..];
+                continue;
+            }
+
             if (commandBytes.SequenceEqual(disableFileUtf8))
             {
                 if (!argsBytes.IsEmpty)
@@ -1160,8 +1272,10 @@ public sealed class LintEngine
 
         return new InlineSuppression(
             _nextLineRuleSuppressions,
+            _stepRuleSuppressions,
             _fileRuleSuppressions,
             _jobRuleSuppressions,
+            _stepScopes,
             _jobScopes,
             utf8Yaml,
             _configDiagnostics);
@@ -1226,6 +1340,136 @@ public sealed class LintEngine
         }
     }
 
+    private void BuildStepScopes(byte[] source, int[] lineStarts, Parsing.Ast.Workflow workflow, ActionMetadata? actionMetadata)
+    {
+        _stepScopes.Clear();
+        foreach (var pair in workflow.Jobs)
+        {
+            AddStepScopes(source, lineStarts, pair.Value.Steps);
+        }
+
+        AddStepScopes(source, lineStarts, actionMetadata?.Runs?.Steps);
+    }
+
+    private void AddStepScopes(byte[] source, int[] lineStarts, IReadOnlyList<Step>? steps)
+    {
+        if (steps is null)
+        {
+            return;
+        }
+
+        for (var i = 0; i < steps.Count; i++)
+        {
+            var range = steps[i].Range;
+            if (range.StartLine <= 0 || range.EndLine <= 0)
+            {
+                continue;
+            }
+
+            if (!TryFindStepItemLineForScope(source, lineStarts, range.StartLine, out var itemLine, out var itemIndent))
+            {
+                itemLine = range.StartLine;
+                itemIndent = 0;
+            }
+
+            _stepScopes.Add(new StepScope(itemLine, range.EndLine, itemIndent));
+        }
+    }
+
+    private static bool TryFindNextYamlContentLine(ReadOnlySpan<byte> remaining, int currentLineNumber, out int lineNumber, out int indent, out ReadOnlySpan<byte> content)
+    {
+        lineNumber = currentLineNumber;
+        indent = 0;
+        content = default;
+        while (!remaining.IsEmpty)
+        {
+            lineNumber++;
+            var newlinePos = remaining.IndexOf((byte)'\n');
+            ReadOnlySpan<byte> lineBytes;
+            int lineAdvance;
+            if (newlinePos >= 0)
+            {
+                lineBytes = remaining[..newlinePos];
+                lineAdvance = newlinePos + 1;
+            }
+            else
+            {
+                lineBytes = remaining;
+                lineAdvance = remaining.Length;
+            }
+
+            var lineCore = (!lineBytes.IsEmpty && lineBytes[^1] == (byte)'\r')
+                ? lineBytes[..^1]
+                : lineBytes;
+            var leadingWS = CountLeadingAsciiWhitespace(lineCore);
+            var lineContent = lineCore[leadingWS..];
+            if (!lineContent.IsEmpty && lineContent[0] != (byte)'#')
+            {
+                indent = leadingWS;
+                content = lineContent;
+                return true;
+            }
+
+            remaining = remaining[lineAdvance..];
+        }
+
+        lineNumber = 0;
+        indent = 0;
+        content = default;
+        return false;
+    }
+
+    private static bool TryFindStepScopeForItemLine(int line, int indent, IReadOnlyList<StepScope> stepScopes, out StepScope stepScope)
+    {
+        for (var i = 0; i < stepScopes.Count; i++)
+        {
+            var scope = stepScopes[i];
+            if (scope.StartLine == line && scope.ItemIndent == indent)
+            {
+                stepScope = scope;
+                return true;
+            }
+        }
+
+        stepScope = default;
+        return false;
+    }
+
+    private static bool TryFindStepItemLineForScope(byte[] source, int[] lineStarts, int scopeStartLine, out int itemLineNumber, out int itemIndent)
+    {
+        itemLineNumber = 0;
+        itemIndent = 0;
+        var maxItemIndent = -1;
+        for (var currentLine = scopeStartLine; currentLine >= 1 && currentLine <= lineStarts.Length; currentLine--)
+        {
+            var lineStart = lineStarts[currentLine - 1];
+            var lineEnd = currentLine < lineStarts.Length ? lineStarts[currentLine] - 1 : source.Length;
+            if (lineEnd > lineStart && source[lineEnd - 1] == (byte)'\r')
+            {
+                lineEnd--;
+            }
+
+            var line = source.AsSpan(lineStart, lineEnd - lineStart);
+            var leadingWS = CountLeadingAsciiWhitespace(line);
+            var content = line[leadingWS..];
+            if (maxItemIndent < 0 && !content.IsEmpty)
+            {
+                maxItemIndent = content[0] == (byte)'-'
+                    ? leadingWS
+                    : leadingWS >= 2 ? leadingWS - 2 : 0;
+            }
+
+            if (!content.IsEmpty && content[0] == (byte)'-' && leadingWS <= maxItemIndent)
+            {
+                itemLineNumber = currentLine;
+                itemIndent = leadingWS;
+                return true;
+            }
+        }
+
+        return false;
+    }
+
     private static void AddRuleIds(
         ReadOnlySpan<byte> ruleIdListBytes,
         int argsLineOffset,
@@ -1239,12 +1483,12 @@ public sealed class LintEngine
         var currentOffset = argsLineOffset;
         while (true)
         {
-            var commaIdx = remaining.IndexOf((byte)',');
+            var separatorIdx = remaining.IndexOfAny((byte)',', (byte)' ', (byte)'\t');
             ReadOnlySpan<byte> tokenBytes;
             bool hasMore;
-            if (commaIdx >= 0)
+            if (separatorIdx >= 0)
             {
-                tokenBytes = remaining[..commaIdx];
+                tokenBytes = remaining[..separatorIdx];
                 hasMore = true;
             }
             else
@@ -1284,8 +1528,8 @@ public sealed class LintEngine
             if (!hasMore)
                 break;
 
-            currentOffset += commaIdx + 1;
-            remaining = remaining[(commaIdx + 1)..];
+            currentOffset += separatorIdx + 1;
+            remaining = remaining[(separatorIdx + 1)..];
         }
     }
 
@@ -1615,20 +1859,26 @@ public sealed class LintEngine
 
     private readonly record struct InlineSuppression(
         IReadOnlyDictionary<int, Dictionary<string, SuppressionAnchor>> NextLineRuleSuppressions,
+        IReadOnlyDictionary<int, Dictionary<string, SuppressionAnchor>> StepRuleSuppressions,
         IReadOnlyDictionary<string, SuppressionAnchor> FileRuleSuppressions,
         IReadOnlyDictionary<string, Dictionary<string, SuppressionAnchor>> JobRuleSuppressions,
+        IReadOnlyList<StepScope> StepScopes,
         IReadOnlyList<JobScope> JobScopes,
         byte[] Source,
         IReadOnlyList<Diagnostic> ConfigurationDiagnostics)
     {
         public static InlineSuppression Empty { get; } = new(
             new Dictionary<int, Dictionary<string, SuppressionAnchor>>(),
+            new Dictionary<int, Dictionary<string, SuppressionAnchor>>(),
             new Dictionary<string, SuppressionAnchor>(StringComparer.Ordinal),
             new Dictionary<string, Dictionary<string, SuppressionAnchor>>(StringComparer.Ordinal),
             [],
             [],
+            [],
             []);
     }
+
+    private readonly record struct StepScope(int StartLine, int EndLine, int ItemIndent);
 
     private readonly record struct JobScope(Utf8Slice JobIdSlice, int StartLine, int EndLine);
 

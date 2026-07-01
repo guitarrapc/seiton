@@ -717,6 +717,20 @@ jobs:
 >     ${{ contains(github.event.head_commit.message, 'skip') }}
 > ```
 
+### Suppress a step
+
+Use `disable-step` when the diagnostic belongs to a step as a whole or may be reported inside a multi-line `run:` block:
+
+```yaml
+steps:
+  # seiton: disable-step unredacted-secrets
+  - name: Setup Cosign keys
+    run: |
+      echo "${SYNCED_COSIGN_PRIVATE_KEY}" > cosign.key
+```
+
+`disable-step` suppresses matching diagnostics inside the next step item in the same `steps:` sequence. Blank lines and comments between the directive and the step are allowed.
+
 ### Suppress within a job
 
 ```yaml
@@ -736,14 +750,17 @@ Place at the top of the workflow file:
 
 ### Multiple rule IDs
 
-Multiple rule IDs are **comma-separated**. Spaces between commas are allowed, but space-separated rule IDs are **not** supported:
+Multiple rule IDs may be separated by **commas and/or ASCII whitespace**. Spaces after commas and repeated separators are allowed:
 
 ```yaml
 # ✓ Comma-separated — both rules are suppressed
 # seiton: disable-next-line dangerous-triggers, job-permissions-required
 
-# ✗ Space-separated — treated as a single unknown rule ID, produces a config error
+# ✓ Space-separated — both rules are suppressed
 # seiton: disable-next-line dangerous-triggers job-permissions-required
+
+# ✓ Repeated separators are also accepted
+# seiton: disable-next-line dangerous-triggers,   job-permissions-required
 ```
 
 Inline directives take precedence over config-file exclusions.

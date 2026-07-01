@@ -1,5 +1,6 @@
 ﻿using System.Text;
 using Seiton.Core.Linting;
+using Seiton.Core.Linting.Rules;
 
 namespace Seiton.Core.Tests;
 
@@ -110,7 +111,6 @@ public sealed partial class RuleInterfaceTests
     [Test]
     public async Task DisableJob_Matrix_CheckBehavior()
     {
-        // Check if disable-job suppresses matrix diagnostics.
         var yaml = """
         # seiton: disable-job build matrix
         on: push
@@ -244,31 +244,25 @@ public sealed partial class RuleInterfaceTests
     }
 
     [Test]
-    public async Task DisableNextLine_SpaceSeparatedRuleIds_DoesNotSuppressSecondRule()
+    public async Task DisableNextLine_SpaceSeparatedRuleIds_SuppressesBothRules()
     {
-        // Space-separated is NOT the supported format.
-        // "dangerous-triggers job-permissions-required" is treated as a single rule ID token,
-        // which fails to resolve.
+        // Space-separated rule IDs are accepted, matching comma-separated rule lists.
         var yaml = """
-        on:
-            # seiton: disable-next-line dangerous-triggers job-permissions-required
-            pull_request_target:
+        on: push
         jobs:
+            # seiton: disable-next-line job-timeout-minutes-required job-permissions-required
             build:
-                runs-on: ubuntu-latest
-                timeout-minutes: 10
+                runs-on: ubuntu-24.04
                 steps:
                     - run: echo test
         """;
 
         using var result = new LintEngine().Check(Encoding.UTF8.GetBytes(yaml), "test.yml");
 
-        // Rule IDs are split by comma only, so space-separated IDs are treated as one
-        // unknown rule-id token and therefore do not suppress diagnostics.
-
-        // Both rules should still be active (not suppressed)
         var configErrors = result.Diagnostics.Where(d => d.RuleId is null && d.Message.Contains("unknown rule-id", StringComparison.Ordinal)).ToArray();
-        await Assert.That(configErrors.Length).IsGreaterThanOrEqualTo(1);
+        await Assert.That(configErrors).IsEmpty();
+        await Assert.That(result.Diagnostics.Any(d => d.RuleId == "job-timeout-minutes-required")).IsFalse();
+        await Assert.That(result.Diagnostics.Any(d => d.RuleId == "job-permissions-required")).IsFalse();
     }
 
     [Test]
@@ -702,6 +696,205 @@ public sealed partial class RuleInterfaceTests
         // Both suppression sources should appear
         await Assert.That(result.SuppressionSummary.Records.Any(x => x.Source == SuppressionSource.InlineJob)).IsTrue();
         await Assert.That(result.SuppressionSummary.Records.Any(x => x.Source == SuppressionSource.InlineNextLine)).IsTrue();
+    }
+
+    [Test]
+    public async Task DisableStep_RunBlockScalarSuppressesDiagnosticInsideStep()
+    {
+        var yaml = """
+        on: push
+        jobs:
+            build:
+                runs-on: ubuntu-24.04
+                timeout-minutes: 10
+                permissions: {}
+                env:
+                    SYNCED_COSIGN_PRIVATE_KEY: ${{ secrets.SYNCED_COSIGN_PRIVATE_KEY }}
+                steps:
+                    # seiton: disable-step unredacted-secrets
+                    - name: Setup Cosign keys
+                      run: |
+                        echo "${SYNCED_COSIGN_PRIVATE_KEY}" > cosign.key
+                        chmod 600 cosign.key
+        """;
+
+        using var result = new LintEngine([new UnredactedSecretsRule()]).Check(Encoding.UTF8.GetBytes(yaml), "test.yml");
+        var secretDiags = result.Diagnostics.Where(d => d.RuleId == "unredacted-secrets").ToArray();
+
+        await Assert.That(secretDiags).IsEmpty();
+        await Assert.That(result.SuppressionSummary.Records.Any(x => x.Source == SuppressionSource.InlineStep)).IsTrue();
+    }
+
+    [Test]
+    public async Task DisableStep_DoesNotSuppressFollowingStep()
+    {
+        var yaml = """
+        on: push
+        jobs:
+            build:
+                runs-on: ubuntu-24.04
+                timeout-minutes: 10
+                permissions: {}
+                env:
+                    FIRST_SECRET: ${{ secrets.FIRST_SECRET }}
+                    SECOND_SECRET: ${{ secrets.SECOND_SECRET }}
+                steps:
+                    # seiton: disable-step unredacted-secrets
+                    - name: Suppressed
+                      run: echo "${FIRST_SECRET}"
+                    - name: Unsuppressed
+                      run: echo "${SECOND_SECRET}"
+        """;
+
+        using var result = new LintEngine([new UnredactedSecretsRule()]).Check(Encoding.UTF8.GetBytes(yaml), "test.yml");
+        var secretDiags = result.Diagnostics.Where(d => d.RuleId == "unredacted-secrets").ToArray();
+
+        await Assert.That(secretDiags.Length).IsEqualTo(1);
+        await Assert.That(secretDiags[0].Message).Contains("SECOND_SECRET");
+    }
+
+    [Test]
+    public async Task DisableStep_NestedSequenceBeforeRun_BindsStepItemNotNestedItem()
+    {
+        var yaml = """
+        on: push
+        jobs:
+            build:
+                runs-on: ubuntu-24.04
+                timeout-minutes: 10
+                permissions: {}
+                env:
+                    TOKEN: ${{ secrets.TOKEN }}
+                steps:
+                    # seiton: disable-step unredacted-secrets
+                    - name: Suppressed
+                      with:
+                        args:
+                          - --example
+                      run: echo "${TOKEN}"
+        """;
+
+        using var result = new LintEngine([new UnredactedSecretsRule()]).Check(Encoding.UTF8.GetBytes(yaml), "test.yml");
+        var configErrors = result.Diagnostics.Where(d =>
+            d.RuleId is null
+            && d.Message.Contains("disable-step requires a following step item", StringComparison.Ordinal)).ToArray();
+        var secretDiags = result.Diagnostics.Where(d => d.RuleId == "unredacted-secrets").ToArray();
+
+        await Assert.That(configErrors).IsEmpty();
+        await Assert.That(secretDiags).IsEmpty();
+        await Assert.That(result.SuppressionSummary.Records.Any(x => x.Source == SuppressionSource.InlineStep)).IsTrue();
+    }
+
+    [Test]
+    public async Task DisableStep_BlanksCommentsAndMultipleDirectives_TargetSameStep()
+    {
+        var yaml = """
+        on: push
+        jobs:
+            build:
+                runs-on: ubuntu-latest
+                timeout-minutes: 10
+                permissions: {}
+                env:
+                    TOKEN: ${{ secrets.TOKEN }}
+                steps:
+                    # seiton: disable-step unredacted-secrets
+
+                    # reason: this step intentionally writes a local secret file in docs
+                    # seiton: disable-step if-cond
+                    - if: true
+                      run: echo "${TOKEN}"
+        """;
+
+        using var result = new LintEngine([new UnredactedSecretsRule(), new IfCondRule()]).Check(Encoding.UTF8.GetBytes(yaml), "test.yml");
+        var secretDiags = result.Diagnostics.Where(d => d.RuleId == "unredacted-secrets").ToArray();
+        var ifCondDiags = result.Diagnostics.Where(d => d.RuleId == "if-cond").ToArray();
+
+        await Assert.That(secretDiags).IsEmpty();
+        await Assert.That(ifCondDiags).IsEmpty();
+        await Assert.That(result.SuppressionSummary.Records.Count(x => x.Source == SuppressionSource.InlineStep)).IsEqualTo(2);
+    }
+
+    [Test]
+    public async Task DisableStep_NotBeforeStepItem_ReportsConfigurationError()
+    {
+        var yaml = """
+        on: push
+        jobs:
+            build:
+                runs-on: ubuntu-24.04
+                timeout-minutes: 10
+                permissions: {}
+                # seiton: disable-step unredacted-secrets
+                steps:
+                    - run: echo ok
+        """;
+
+        using var result = new LintEngine().Check(Encoding.UTF8.GetBytes(yaml), "test.yml");
+        var configErrors = result.Diagnostics.Where(d =>
+            d.RuleId is null
+            && d.Message.Contains("disable-step requires a following step item", StringComparison.Ordinal)).ToArray();
+
+        await Assert.That(configErrors.Length).IsEqualTo(1);
+    }
+
+    [Test]
+    public async Task DisableStep_NextSequenceItemIsNotStep_ReportsConfigurationError()
+    {
+        var yaml = """
+        on: push
+        jobs:
+            build:
+                runs-on: ubuntu-24.04
+                timeout-minutes: 10
+                permissions: {}
+                env:
+                    TOKEN: ${{ secrets.TOKEN }}
+                services:
+                    redis:
+                        image: redis
+                        ports:
+                            # seiton: disable-step unredacted-secrets
+                            - 6379:6379
+                steps:
+                    - run: echo "${TOKEN}"
+        """;
+
+        using var result = new LintEngine([new UnredactedSecretsRule()]).Check(Encoding.UTF8.GetBytes(yaml), "test.yml");
+        var configErrors = result.Diagnostics.Where(d =>
+            d.RuleId is null
+            && d.Message.Contains("disable-step requires a following step item", StringComparison.Ordinal)).ToArray();
+        var secretDiags = result.Diagnostics.Where(d => d.RuleId == "unredacted-secrets").ToArray();
+
+        await Assert.That(configErrors.Length).IsEqualTo(1);
+        await Assert.That(secretDiags.Length).IsEqualTo(1);
+        await Assert.That(result.SuppressionSummary.Records.Any(x => x.Source == SuppressionSource.InlineStep)).IsFalse();
+    }
+
+    [Test]
+    public async Task DisableStep_CompositeActionStep_SuppressesDiagnostic()
+    {
+        var yaml = """
+        name: demo
+        description: demo composite action
+        runs:
+          using: composite
+          steps:
+            # seiton: disable-step if-cond
+            - name: Setup Cosign keys
+              if: true
+              run: |
+                echo "${SYNCED_COSIGN_PRIVATE_KEY}" > cosign.key
+              shell: bash
+              env:
+                SYNCED_COSIGN_PRIVATE_KEY: ${{ secrets.SYNCED_COSIGN_PRIVATE_KEY }}
+        """;
+
+        using var result = new LintEngine([new IfCondRule()]).Check(Encoding.UTF8.GetBytes(yaml), ".github/actions/demo/action.yml");
+        var ifCondDiags = result.Diagnostics.Where(d => d.RuleId == "if-cond").ToArray();
+
+        await Assert.That(ifCondDiags).IsEmpty();
+        await Assert.That(result.SuppressionSummary.Records.Any(x => x.Source == SuppressionSource.InlineStep)).IsTrue();
     }
 
     [Test]

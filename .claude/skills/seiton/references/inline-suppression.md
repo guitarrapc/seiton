@@ -11,8 +11,9 @@ When helping a user suppress a diagnostic:
 1. **Can `seiton --fix` resolve it?** → Fix, do not suppress.
 2. **Same rule on many files or jobs?** → `exclusions` in config (see `references/configuration.md`).
 3. **One line in one file?** → `# seiton: disable-next-line <rule-id>`
-4. **One job in one file?** → `# seiton: disable-job <job-id> <rule-ids>`
-5. **Entire workflow file (rare)?** → `# seiton: disable-file <rule-ids>` at the top
+4. **One step in one file?** → `# seiton: disable-step <rule-ids>` above the step item
+5. **One job in one file?** → `# seiton: disable-job <job-id> <rule-ids>`
+6. **Entire workflow file (rare)?** → `# seiton: disable-file <rule-ids>` at the top
 
 If the workflow contains **unrecognized inline comments** from another tool, translate the intent into config `exclusions` or seiton directives below — seiton does not read foreign comment syntax.
 
@@ -80,6 +81,18 @@ strategy:
 
 Block-scalar `if:` (`|` or `>`): place the comment above the `if:` key; diagnostics are attributed to that line.
 
+### `disable-step` — next step item only
+
+```yaml
+steps:
+  # seiton: disable-step unredacted-secrets
+  - name: Setup Cosign keys
+    run: |
+      echo "${SYNCED_COSIGN_PRIVATE_KEY}" > cosign.key
+```
+
+Use `disable-step` when the diagnostic belongs to a step as a whole or may be reported inside a multi-line `run:` block. It applies to the next step item in the same `steps:` sequence. Blank lines, ordinary comments, and other seiton directives between the directive and the step are allowed.
+
 ### `disable-job` — all matching diagnostics in one job
 
 ```yaml
@@ -89,7 +102,7 @@ jobs:
     ...
 ```
 
-`job-id` is the YAML key under `jobs:` (e.g. `build`). Rule IDs follow, comma-separated.
+`job-id` is the YAML key under `jobs:` (e.g. `build`). Rule IDs follow and may be separated by commas and/or ASCII whitespace.
 
 ### `disable-file` — top of workflow file
 
@@ -102,13 +115,10 @@ jobs:
 
 ## Multiple rule IDs
 
-Use **commas** between rule IDs. Spaces after commas are allowed. **Space-separated** IDs are treated as one unknown rule and produce a config error:
+Use commas or whitespace between rule IDs:
 
 ```yaml
-# ✓ Comma-separated
 # seiton: disable-next-line dangerous-triggers,job-permissions-required
-
-# ✗ Space-separated — invalid
 # seiton: disable-next-line dangerous-triggers job-permissions-required
 ```
 

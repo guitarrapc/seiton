@@ -499,6 +499,16 @@ steps:
   - uses: actions/checkout@v6
 ```
 
+Suppress a whole step, including diagnostics reported inside a multi-line `run:` block:
+
+```yaml
+steps:
+  # seiton: disable-step unredacted-secrets
+  - name: Setup Cosign keys
+    run: |
+      echo "${SYNCED_COSIGN_PRIVATE_KEY}" > cosign.key
+```
+
 Suppress for an entire job:
 
 ```yaml
@@ -514,7 +524,7 @@ Suppress for the entire file (place at the top):
 # seiton: disable-file dangerous-triggers
 ```
 
-Multiple rule IDs are comma-separated. See [Configuration](configuration.md) for file-level exclusions.
+Multiple rule IDs can be comma-separated or whitespace-separated. See [Configuration](configuration.md) for file-level exclusions.
 
 ---
 

@@ -178,6 +178,7 @@ public enum SuppressionSource
 {
     InlineNextLine,
     InlineJob,
+    InlineStep,
     InlineFile,
     ConfigFile,
     ConfigJob,
