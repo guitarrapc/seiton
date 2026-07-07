@@ -11,8 +11,7 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: "Existing Git tag to deploy (e.g. v1.0.0 or 1.0.0). Must already
-          exist on the remote."
+        description: "Existing Git tag to deploy (e.g. v1.0.0 or 1.0.0). Must already exist on the remote."
         required: true
         type: string
 
@@ -54,8 +53,7 @@ jobs:
         with:
           persist-credentials: false
           fetch-depth: 0
-          ref: ${{ github.event_name == 'workflow_dispatch' && steps.tag.outputs.ref ||
-            github.ref }}
+          ref: ${{ github.event_name == 'workflow_dispatch' && steps.tag.outputs.ref || github.ref }}
 
       - name: Deploy summary
         run: |
@@ -63,7 +61,7 @@ jobs:
           echo "- **Ref:** \`${{ github.event_name == 'workflow_dispatch' && steps.tag.outputs.ref || github.ref }}\`" >> "$GITHUB_STEP_SUMMARY"
           echo "- **Commit:** \`$(git rev-parse HEAD)\`" >> "$GITHUB_STEP_SUMMARY"
 
-      - uses: guitarrapc/actions/.github/actions/setup-dotnet@main
+      - uses: guitarrapc/actions/.github/actions/setup-dotnet@9122a18b0dea07585a242b9eb6ed7886f8587c49 # v1.0.1
         with:
           dotnet-version: 10.0
       - name: Install wasm-tools workload
