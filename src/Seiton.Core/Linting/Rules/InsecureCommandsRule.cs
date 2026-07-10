@@ -1,6 +1,9 @@
 ﻿using Seiton.Core.Parsing;
 using Seiton.Core.Parsing.Ast;
 
+using static Seiton.Core.Parsing.ExpressionScanHelpers;
+using static Seiton.Core.Parsing.SpanHelpers;
+
 namespace Seiton.Core.Linting.Rules;
 
 /// <summary>Flags use of <c>ACTIONS_ALLOW_UNSECURE_COMMANDS</c> which enables deprecated insecure workflow commands.</summary>
@@ -68,19 +71,19 @@ public sealed class InsecureCommandsRule() : RuleBase(RuleId.InsecureCommands)
 
         foreach (var pair in env.Vars)
         {
-            var key = Decode(pair.Key);
-            if (!string.Equals(key, "ACTIONS_ALLOW_UNSECURE_COMMANDS", StringComparison.OrdinalIgnoreCase))
+            if (!EqualsAsciiIgnoreCase(pair.Key.AsSpan(Config.Utf8Yaml), "ACTIONS_ALLOW_UNSECURE_COMMANDS"u8))
             {
                 continue;
             }
 
-            var valueText = Decode(Arena.GetStringSlice(pair.Value.Value)).Trim();
-            if (!IsTruthy(valueText))
+            var valueUtf8 = TrimAsciiWhiteSpace(Arena.GetStringValue(pair.Value.Value));
+            if (!IsTruthy(valueUtf8))
             {
                 continue;
             }
 
-            envName = key;
+            // Decode only on the diagnostic path, preserving the source casing in the message.
+            envName = Decode(pair.Key);
             location = Arena.GetStringRange(pair.Value.Value);
             return true;
         }
@@ -88,11 +91,11 @@ public sealed class InsecureCommandsRule() : RuleBase(RuleId.InsecureCommands)
         return false;
     }
 
-    private static bool IsTruthy(string value)
+    private static bool IsTruthy(ReadOnlySpan<byte> value)
     {
-        return value.Equals("true", StringComparison.OrdinalIgnoreCase)
-            || value.Equals("1", StringComparison.Ordinal)
-            || value.Equals("yes", StringComparison.OrdinalIgnoreCase)
-            || value.Equals("on", StringComparison.OrdinalIgnoreCase);
+        return EqualsAsciiIgnoreCase(value, "true"u8)
+            || value.SequenceEqual("1"u8)
+            || EqualsAsciiIgnoreCase(value, "yes"u8)
+            || EqualsAsciiIgnoreCase(value, "on"u8);
     }
 }
