@@ -81,6 +81,46 @@ internal static class DynamicContextTypeBuilder
         return BuildStepsOverrideCore(reusableProps, steps, arena, utf8Yaml, maxStepIndex, localActionOutputResolver);
     }
 
+    /// <summary>
+    /// Incrementally extends a steps override previously built by <see cref="BuildStepsOverrideInto"/>:
+    /// adds entries for timeline steps in [<paramref name="fromStepIndex"/>, <paramref name="maxStepIndex"/>)
+    /// to <paramref name="reusableProps"/> without clearing. <see cref="ObjectExprType"/> wraps the property
+    /// dictionary by reference, so the override tuple returned by the initial build observes the added
+    /// entries — a caller visiting steps in timeline order avoids the O(steps²) full rebuild per step.
+    /// </summary>
+    internal static void AppendStepsOverrideInto(
+        Dictionary<Utf8String, ExprType> reusableProps,
+        IReadOnlyList<Step>? steps,
+        AstArena arena,
+        byte[] utf8Yaml,
+        int fromStepIndex,
+        int maxStepIndex,
+        Func<ReadOnlyMemory<byte>, string[]?>? localActionOutputResolver = null)
+    {
+        if (steps is null || steps.Count == 0)
+        {
+            return;
+        }
+
+        var limit = Math.Min(maxStepIndex, steps.Count);
+        for (var i = Math.Max(fromStepIndex, 0); i < limit; i++)
+        {
+            var step = steps[i];
+            if (!step.Id.HasValue)
+            {
+                continue;
+            }
+
+            var idSlice = arena.GetStringSlice(step.Id);
+            if (idSlice.IsEmpty)
+            {
+                continue;
+            }
+
+            reusableProps[idSlice.ToUtf8StringZeroCopy(utf8Yaml)] = BuildStepEntryType(step, arena, utf8Yaml, localActionOutputResolver);
+        }
+    }
+
     private static (byte[] NameUtf8, ExprType Type) BuildStepsOverrideCore(
         Dictionary<Utf8String, ExprType> props,
         IReadOnlyList<Step> steps,
