@@ -1,4 +1,4 @@
-namespace Seiton.Update.Services;
+﻿namespace Seiton.Update.Services;
 
 internal static class StepSchemaSourcePathResolver
 {

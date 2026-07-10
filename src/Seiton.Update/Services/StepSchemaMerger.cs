@@ -1,4 +1,4 @@
-using Seiton.Update.Model;
+﻿using Seiton.Update.Model;
 using Seiton.Update.Parsers;
 
 namespace Seiton.Update.Services;

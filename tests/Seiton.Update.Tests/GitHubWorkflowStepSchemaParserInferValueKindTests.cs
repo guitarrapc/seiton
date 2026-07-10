@@ -1,4 +1,4 @@
-using System.Text.Json;
+﻿using System.Text.Json;
 using Seiton.Update.Parsers;
 
 namespace Seiton.Update.Tests;

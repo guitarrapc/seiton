@@ -1,4 +1,4 @@
-using Seiton.Update.Services;
+﻿using Seiton.Update.Services;
 using Seiton.Update.Sources;
 
 namespace Seiton.Update.Commands;

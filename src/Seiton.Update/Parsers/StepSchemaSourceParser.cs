@@ -1,4 +1,4 @@
-using System.Text.Json;
+﻿using System.Text.Json;
 using Seiton.Update.Model;
 
 namespace Seiton.Update.Parsers;
@@ -89,16 +89,16 @@ internal sealed class StepSchemaSourceParser
 
     private static StepSchemaSupplementalAdditionalFormModel ToAdditionalFormModel(
         StepSchemaAdditionalFormSnapshot snapshot) => new()
-    {
-        Id = snapshot.Id ?? string.Empty,
-        PrimaryKey = snapshot.PrimaryKey ?? string.Empty,
-        UnexpectedKeyDescription = snapshot.UnexpectedKeyDescription,
-        DisallowedKeys = snapshot.DisallowedKeys ?? [],
-        Properties = snapshot.Properties?.ToDictionary(
+        {
+            Id = snapshot.Id ?? string.Empty,
+            PrimaryKey = snapshot.PrimaryKey ?? string.Empty,
+            UnexpectedKeyDescription = snapshot.UnexpectedKeyDescription,
+            DisallowedKeys = snapshot.DisallowedKeys ?? [],
+            Properties = snapshot.Properties?.ToDictionary(
             static p => p.Key,
             static p => ToPropertyModel(p.Value),
             StringComparer.Ordinal) ?? new Dictionary<string, StepSchemaPropertyModel>(StringComparer.Ordinal),
-    };
+        };
 
     private static StepSchemaPropertyModel ToPropertyModel(StepSchemaPropertySnapshot snapshot) => new()
     {

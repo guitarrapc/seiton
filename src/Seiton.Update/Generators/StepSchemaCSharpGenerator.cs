@@ -1,4 +1,4 @@
-using System.Text;
+﻿using System.Text;
 using Seiton.Update.Model;
 
 namespace Seiton.Update.Generators;

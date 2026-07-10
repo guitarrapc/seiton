@@ -1,4 +1,4 @@
-using Seiton.Core.Generated;
+﻿using Seiton.Core.Generated;
 
 namespace Seiton.Core.Tests;
 

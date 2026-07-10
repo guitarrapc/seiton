@@ -1,6 +1,4 @@
-using Seiton.Update.Parsers;
-using Seiton.Update.Services;
-using Seiton.Update.Sources;
+﻿using Seiton.Update.Parsers;
 
 namespace Seiton.Update.Tests;
 

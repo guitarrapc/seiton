@@ -1,4 +1,4 @@
-using System.Buffers.Text;
+﻿using System.Buffers.Text;
 using System.Text;
 using Seiton.Core.Parsing;
 

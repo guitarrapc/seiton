@@ -1,4 +1,4 @@
-namespace Seiton.Update.Model;
+﻿namespace Seiton.Update.Model;
 
 /// <summary>Canonical merged snapshot consumed by <c>sync-step-schema</c>.</summary>
 internal sealed class StepSchemaModel

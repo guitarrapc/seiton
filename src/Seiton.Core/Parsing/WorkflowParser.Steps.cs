@@ -687,77 +687,77 @@ public static partial class WorkflowParser
         switch (stepForm)
         {
             case StepSchema.FormId.Run:
-            {
-                var execRun = arena.AllocExecRun();
-                execRun.Kind = StepExecKind.Run;
-                execRun.Run = runNode.HasValue ? runNode : arena.AddString(default, false, default);
-                execRun.Shell = shellNode;
-                execRun.WorkingDirectory = workingDirectoryNode;
-                execRun.Range = runNode.HasValue ? arena.GetStringRange(runNode) : default;
-                execRange = execRun.Range;
-                exec = execRun;
-                break;
-            }
+                {
+                    var execRun = arena.AllocExecRun();
+                    execRun.Kind = StepExecKind.Run;
+                    execRun.Run = runNode.HasValue ? runNode : arena.AddString(default, false, default);
+                    execRun.Shell = shellNode;
+                    execRun.WorkingDirectory = workingDirectoryNode;
+                    execRun.Range = runNode.HasValue ? arena.GetStringRange(runNode) : default;
+                    execRange = execRun.Range;
+                    exec = execRun;
+                    break;
+                }
             case StepSchema.FormId.Uses:
-            {
-                var execAction = arena.AllocExecAction();
-                execAction.Kind = StepExecKind.Action;
-                execAction.Uses = usesNode.HasValue ? usesNode : arena.AddString(default, false, default);
-                execAction.UsesKeyRange = usesKeyRange;
-                execAction.Inputs = withInputs;
-                execAction.Entrypoint = dockerEntrypoint;
-                execAction.Args = dockerArgs;
-                execAction.Range = usesNode.HasValue ? arena.GetStringRange(usesNode) : default;
-                execRange = execAction.Range;
-                exec = execAction;
-                break;
-            }
+                {
+                    var execAction = arena.AllocExecAction();
+                    execAction.Kind = StepExecKind.Action;
+                    execAction.Uses = usesNode.HasValue ? usesNode : arena.AddString(default, false, default);
+                    execAction.UsesKeyRange = usesKeyRange;
+                    execAction.Inputs = withInputs;
+                    execAction.Entrypoint = dockerEntrypoint;
+                    execAction.Args = dockerArgs;
+                    execAction.Range = usesNode.HasValue ? arena.GetStringRange(usesNode) : default;
+                    execRange = execAction.Range;
+                    exec = execAction;
+                    break;
+                }
             case StepSchema.FormId.Wait:
-            {
-                var execWait = arena.AllocExecWait();
-                execWait.Kind = StepExecKind.Wait;
-                execWait.Targets = waitTargets;
-                execWait.Range = waitTargets.Count > 0 ? arena.GetStringRange(waitTargets[0]) : default;
-                execRange = execWait.Range;
-                exec = execWait;
-                break;
-            }
+                {
+                    var execWait = arena.AllocExecWait();
+                    execWait.Kind = StepExecKind.Wait;
+                    execWait.Targets = waitTargets;
+                    execWait.Range = waitTargets.Count > 0 ? arena.GetStringRange(waitTargets[0]) : default;
+                    execRange = execWait.Range;
+                    exec = execWait;
+                    break;
+                }
             case StepSchema.FormId.WaitAll:
-            {
-                var execWaitAll = arena.AllocExecWaitAll();
-                execWaitAll.Kind = StepExecKind.WaitAll;
-                execWaitAll.Range = firstPrimaryMark != default ? BuildScalarLocation(firstPrimaryMark, 8) : default;
-                execRange = execWaitAll.Range;
-                exec = execWaitAll;
-                break;
-            }
+                {
+                    var execWaitAll = arena.AllocExecWaitAll();
+                    execWaitAll.Kind = StepExecKind.WaitAll;
+                    execWaitAll.Range = firstPrimaryMark != default ? BuildScalarLocation(firstPrimaryMark, 8) : default;
+                    execRange = execWaitAll.Range;
+                    exec = execWaitAll;
+                    break;
+                }
             case StepSchema.FormId.Cancel:
-            {
-                var execCancel = arena.AllocExecCancel();
-                execCancel.Kind = StepExecKind.Cancel;
-                execCancel.Target = cancelTarget.HasValue ? cancelTarget : arena.AddString(default, false, default);
-                execCancel.Range = cancelTarget.HasValue ? arena.GetStringRange(cancelTarget) : default;
-                execRange = execCancel.Range;
-                exec = execCancel;
-                break;
-            }
+                {
+                    var execCancel = arena.AllocExecCancel();
+                    execCancel.Kind = StepExecKind.Cancel;
+                    execCancel.Target = cancelTarget.HasValue ? cancelTarget : arena.AddString(default, false, default);
+                    execCancel.Range = cancelTarget.HasValue ? arena.GetStringRange(cancelTarget) : default;
+                    execRange = execCancel.Range;
+                    exec = execCancel;
+                    break;
+                }
             case StepSchema.FormId.Parallel:
-            {
-                var execParallel = arena.AllocExecParallel();
-                execParallel.Kind = StepExecKind.Parallel;
-                execParallel.Steps = parallelSteps;
-                execParallel.Range = parallelKeyMark != default ? BuildScalarLocation(parallelKeyMark, 8) : default;
-                execRange = execParallel.Range;
-                exec = execParallel;
-                break;
-            }
+                {
+                    var execParallel = arena.AllocExecParallel();
+                    execParallel.Kind = StepExecKind.Parallel;
+                    execParallel.Steps = parallelSteps;
+                    execParallel.Range = parallelKeyMark != default ? BuildScalarLocation(parallelKeyMark, 8) : default;
+                    execRange = execParallel.Range;
+                    exec = execParallel;
+                    break;
+                }
             default:
-            {
-                var execRun = arena.AllocExecRun();
-                execRun.Kind = StepExecKind.Run;
-                exec = execRun;
-                break;
-            }
+                {
+                    var execRun = arena.AllocExecRun();
+                    execRun.Kind = StepExecKind.Run;
+                    exec = execRun;
+                    break;
+                }
         }
 
         var step = arena.AllocStep();

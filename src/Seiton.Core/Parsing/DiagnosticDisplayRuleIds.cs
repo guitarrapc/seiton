@@ -1,4 +1,4 @@
-namespace Seiton.Core.Parsing;
+﻿namespace Seiton.Core.Parsing;
 
 /// <summary>Display rule IDs for diagnostics that have no lint <see cref="Diagnostic.RuleId"/>.</summary>
 public static class DiagnosticDisplayRuleIds
