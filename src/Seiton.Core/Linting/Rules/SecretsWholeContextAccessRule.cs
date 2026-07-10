@@ -29,7 +29,7 @@ public sealed class SecretsWholeContextAccessRule() : RuleBase(RuleId.SecretsWho
         // Check run: script
         if (step.Exec is ExecRun run)
         {
-            CheckNode(run.Run, sinkName: "run", static (rule, location, s) =>
+            CheckNode(run.Run, static (rule, location, s) =>
                 rule.AddStepError(s, DiagnosticMessage, location), step);
         }
 
@@ -41,8 +41,7 @@ public sealed class SecretsWholeContextAccessRule() : RuleBase(RuleId.SecretsWho
         {
             foreach (var pair in action.Inputs.Value)
             {
-                var inputName = Decode(pair.Key);
-                CheckNode(pair.Value, sinkName: $"with.{inputName}", static (rule, location, s) =>
+                CheckNode(pair.Value, static (rule, location, s) =>
                     rule.AddStepError(s, DiagnosticMessage, location), step);
             }
         }
@@ -67,8 +66,7 @@ public sealed class SecretsWholeContextAccessRule() : RuleBase(RuleId.SecretsWho
 
         foreach (var pair in callInputs.Value)
         {
-            var inputName = Decode(Arena.GetStringSlice(pair.Value.Name));
-            CheckNode(pair.Value.Value, sinkName: $"with.{inputName}", static (rule, location, j) =>
+            CheckNode(pair.Value.Value, static (rule, location, j) =>
                 rule.AddJobError(j, DiagnosticMessage, location), job);
         }
     }
@@ -82,7 +80,7 @@ public sealed class SecretsWholeContextAccessRule() : RuleBase(RuleId.SecretsWho
             return;
         }
 
-        CheckNode(Arena.GetStringExpression(env.Expression), sinkName: "env", static (rule, location, s) =>
+        CheckNode(Arena.GetStringExpression(env.Expression), static (rule, location, s) =>
             rule.AddStepError(s, DiagnosticMessage, location), step);
 
         var vars = env.Vars;
@@ -93,8 +91,7 @@ public sealed class SecretsWholeContextAccessRule() : RuleBase(RuleId.SecretsWho
 
         foreach (var pair in vars.Value)
         {
-            var keyName = Decode(Arena.GetStringSlice(pair.Value.Name));
-            CheckNode(pair.Value.Value, sinkName: $"env.{keyName}", static (rule, location, s) =>
+            CheckNode(pair.Value.Value, static (rule, location, s) =>
                 rule.AddStepError(s, DiagnosticMessage, location), step);
         }
     }
@@ -108,7 +105,7 @@ public sealed class SecretsWholeContextAccessRule() : RuleBase(RuleId.SecretsWho
             return;
         }
 
-        CheckNode(Arena.GetStringExpression(env.Expression), sinkName: "env", static (rule, location, j) =>
+        CheckNode(Arena.GetStringExpression(env.Expression), static (rule, location, j) =>
             rule.AddJobError(j, DiagnosticMessage, location), job);
 
         var vars = env.Vars;
@@ -119,8 +116,7 @@ public sealed class SecretsWholeContextAccessRule() : RuleBase(RuleId.SecretsWho
 
         foreach (var pair in vars.Value)
         {
-            var keyName = Decode(Arena.GetStringSlice(pair.Value.Name));
-            CheckNode(pair.Value.Value, sinkName: $"env.{keyName}", static (rule, location, j) =>
+            CheckNode(pair.Value.Value, static (rule, location, j) =>
                 rule.AddJobError(j, DiagnosticMessage, location), job);
         }
     }
@@ -129,7 +125,6 @@ public sealed class SecretsWholeContextAccessRule() : RuleBase(RuleId.SecretsWho
 
     private void CheckNode<TTarget>(
         StringNodeId node,
-        string sinkName,
         Action<SecretsWholeContextAccessRule, TextRange, TTarget> report,
         TTarget target)
     {

@@ -1,4 +1,5 @@
 ﻿using System.Buffers;
+using System.Buffers.Text;
 using System.Globalization;
 using System.Runtime.CompilerServices;
 using System.Text;
@@ -370,7 +371,8 @@ internal static class ActionRefHelpers
             return false;
         }
 
-        return int.TryParse(Encoding.UTF8.GetString(reference[1..end]), NumberStyles.Integer, CultureInfo.InvariantCulture, out major);
+        var digits = reference[1..end];
+        return Utf8Parser.TryParse(digits, out major, out var consumed) && consumed == digits.Length;
     }
 
     internal static bool TryExtractPathVersionMajor(ReadOnlySpan<byte> actionPath, out int major)
@@ -460,11 +462,8 @@ internal static class ActionRefHelpers
             end++;
         }
 
-        return int.TryParse(
-            Encoding.UTF8.GetString(trimmed[candidateStart..end]),
-            NumberStyles.Integer,
-            CultureInfo.InvariantCulture,
-            out major);
+        var digits = trimmed[candidateStart..end];
+        return Utf8Parser.TryParse(digits, out major, out var consumed) && consumed == digits.Length;
     }
 
     private static ReadOnlySpan<byte> TrimKnownYamlExtension(ReadOnlySpan<byte> segment)

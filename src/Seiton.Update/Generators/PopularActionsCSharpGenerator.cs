@@ -33,6 +33,10 @@ internal sealed class PopularActionsCSharpGenerator
             .ToArray();
 
         var sb = new StringBuilder();
+        // Per-action list accessors return cached static arrays: callers treat them as
+        // read-only, and per-call collection expressions would allocate on every lookup
+        // (GetOutputNames is on ExprUndefinedVarRule's per-step hot path).
+        var staticFields = new StringBuilder();
         AppendGeneratedHeader(sb, "sync-popular-actions");
         sb.AppendLine(
             """
@@ -144,7 +148,8 @@ internal sealed class PopularActionsCSharpGenerator
             }
 
             var items = string.Join(", ", requiredInputs.Select(static i => $"\"{i.Name}\"u8.ToArray()"));
-            sb.AppendLine($"                ActionId.{actionId} => [{items}],");
+            staticFields.AppendLine($"        private static readonly byte[][] RequiredInputs{actionId} = [{items}];");
+            sb.AppendLine($"                ActionId.{actionId} => RequiredInputs{actionId},");
         }
 
         sb.Append(
@@ -170,7 +175,8 @@ internal sealed class PopularActionsCSharpGenerator
             }
 
             var items = string.Join(", ", action.Inputs.Select(static i => $"\"{i.Name}\""));
-            sb.AppendLine($"                ActionId.{actionId} => [{items}],");
+            staticFields.AppendLine($"        private static readonly string[] InputNames{actionId} = [{items}];");
+            sb.AppendLine($"                ActionId.{actionId} => InputNames{actionId},");
         }
 
         sb.Append(
@@ -196,7 +202,8 @@ internal sealed class PopularActionsCSharpGenerator
             }
 
             var items = string.Join(", ", action.Outputs.Select(static o => $"\"{o.Name}\"u8.ToArray()"));
-            sb.AppendLine($"                ActionId.{actionId} => [{items}],");
+            staticFields.AppendLine($"        private static readonly byte[][] OutputNames{actionId} = [{items}];");
+            sb.AppendLine($"                ActionId.{actionId} => OutputNames{actionId},");
         }
 
         sb.Append(
@@ -313,15 +320,26 @@ internal sealed class PopularActionsCSharpGenerator
                     var access = p.Access.Replace("\\", "\\\\").Replace("\"", "\\\"");
                     return $"(\"{scope}\", \"{access}\")";
                 }));
-                sb.AppendLine($"                ActionId.{actionId} => [{items}],");
+                staticFields.AppendLine($"        private static readonly (string Scope, string Access)[] RequiredPermissions{actionId} = [{items}];");
+                sb.AppendLine($"                ActionId.{actionId} => RequiredPermissions{actionId},");
             }
         }
 
-        sb.Append(
+        sb.AppendLine(
             """
                             _ => [],
                         };
                     }
+            """);
+
+        if (staticFields.Length > 0)
+        {
+            sb.AppendLine();
+            sb.Append(staticFields);
+        }
+
+        sb.Append(
+            """
                 }
 
                 internal static bool TryGet(ReadOnlySpan<byte> usesUtf8, out ActionSpec spec)

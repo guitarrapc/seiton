@@ -40,15 +40,17 @@ public sealed class PopularActionInputsRule() : RuleBase(RuleId.PopularActionInp
             return;
         }
 
-        var actionName = GetCachedActionName(Arena.GetStringSlice(actionExec.Uses));
+        // Decoded name and GitHub URL are only consumed by diagnostic messages —
+        // resolve them lazily so the clean path (all inputs valid) stays allocation-free.
+        string? actionName = null;
+        string ActionName() => actionName ??= GetCachedActionName(Arena.GetStringSlice(actionExec.Uses));
 
         // Check unknown inputs
         if (actionExec.Inputs is { Count: > 0 } inputs)
         {
             string[]? inputNames = null;
             string? availableInputs = null;
-            var url = ActionRefHelpers.BuildGitHubUrl(actionName);
-            var urlSuffix = url is not null ? $" see {url}" : "";
+            string? urlSuffix = null;
 
             foreach (var pair in inputs)
             {
@@ -60,7 +62,7 @@ public sealed class PopularActionInputsRule() : RuleBase(RuleId.PopularActionInp
                     {
                         var inputName = Encoding.UTF8.GetString(pair.Key.AsSpan(Config.Utf8Yaml));
                         var message = Encoding.UTF8.GetString(deprecationMessage);
-                        AddStepWarning(step, $"avoid using deprecated input \"{inputName}\" in action \"{actionName}\": {message}", Arena.GetStringRange(pair.Value));
+                        AddStepWarning(step, $"avoid using deprecated input \"{inputName}\" in action \"{ActionName()}\": {message}", Arena.GetStringRange(pair.Value));
                     }
 
                     continue;
@@ -70,9 +72,10 @@ public sealed class PopularActionInputsRule() : RuleBase(RuleId.PopularActionInp
                 inputNames ??= actionSpec.GetInputNames();
                 var suggestion = FindClosestInput(unknownInputName, inputNames);
                 availableInputs ??= FormatAvailableInputs(inputNames);
+                urlSuffix ??= ActionRefHelpers.BuildGitHubUrl(ActionName()) is { } url ? $" see {url}" : "";
                 var unknownMessage = suggestion is not null
-                    ? $"unknown input '{unknownInputName}' for action '{actionName}'. available inputs are {availableInputs}. did you mean '{suggestion}'?{urlSuffix}"
-                    : $"unknown input '{unknownInputName}' for action '{actionName}'. available inputs are {availableInputs}.{urlSuffix}";
+                    ? $"unknown input '{unknownInputName}' for action '{ActionName()}'. available inputs are {availableInputs}. did you mean '{suggestion}'?{urlSuffix}"
+                    : $"unknown input '{unknownInputName}' for action '{ActionName()}'. available inputs are {availableInputs}.{urlSuffix}";
 
                 DiagnosticFix? fix = null;
                 if (suggestion is not null && Config.Fix.Enabled)
@@ -104,7 +107,7 @@ public sealed class PopularActionInputsRule() : RuleBase(RuleId.PopularActionInp
             }
 
             var requiredName = Encoding.UTF8.GetString(requiredUtf8);
-            AddStepWarning(step, $"missing required input '{requiredName}' for action '{actionName}'");
+            AddStepWarning(step, $"missing required input '{requiredName}' for action '{ActionName()}'");
         }
     }
 

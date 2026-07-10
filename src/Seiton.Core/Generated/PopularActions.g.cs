@@ -252,16 +252,16 @@ internal static class PopularActions
         {
             return Id switch
             {
-                ActionId.ActionsCache => ["key"u8.ToArray(), "path"u8.ToArray()],
+                ActionId.ActionsCache => RequiredInputsActionsCache,
                 ActionId.ActionsCheckout => [],
                 ActionId.ActionsDownloadArtifact => [],
                 ActionId.ActionsSetupDotnet => [],
                 ActionId.ActionsSetupGo => [],
                 ActionId.ActionsSetupNode => [],
                 ActionId.ActionsStale => [],
-                ActionId.ActionsUploadArtifact => ["path"u8.ToArray()],
+                ActionId.ActionsUploadArtifact => RequiredInputsActionsUploadArtifact,
                 ActionId.DockerLoginAction => [],
-                ActionId.OctokitRequestAction => ["route"u8.ToArray()],
+                ActionId.OctokitRequestAction => RequiredInputsOctokitRequestAction,
                 ActionId.PypaGhActionPypiPublish => [],
                 ActionId.ReviewdogActionActionlint => [],
                 ActionId.RhysdActionSetupVim => [],
@@ -273,19 +273,19 @@ internal static class PopularActions
         {
             return Id switch
             {
-                ActionId.ActionsCache => ["enableCrossOsArchive", "fail-on-cache-miss", "key", "lookup-only", "path", "restore-keys", "save-always", "upload-chunk-size"],
-                ActionId.ActionsCheckout => ["allow-unsafe-pr-checkout", "clean", "fetch-depth", "fetch-tags", "filter", "github-server-url", "lfs", "path", "persist-credentials", "ref", "repository", "set-safe-directory", "show-progress", "sparse-checkout", "sparse-checkout-cone-mode", "ssh-key", "ssh-known-hosts", "ssh-strict", "ssh-user", "submodules", "token"],
-                ActionId.ActionsDownloadArtifact => ["artifact-ids", "digest-mismatch", "github-token", "merge-multiple", "name", "path", "pattern", "repository", "run-id", "skip-decompress"],
-                ActionId.ActionsSetupDotnet => ["architecture", "cache", "cache-dependency-path", "config-file", "dotnet-channel", "dotnet-quality", "dotnet-version", "global-json-file", "owner", "source-url", "workloads"],
-                ActionId.ActionsSetupGo => ["architecture", "cache", "cache-dependency-path", "check-latest", "go-download-base-url", "go-version", "go-version-file", "token"],
-                ActionId.ActionsSetupNode => ["architecture", "cache", "cache-dependency-path", "check-latest", "mirror", "mirror-token", "node-version", "node-version-file", "package-manager-cache", "registry-url", "scope", "token"],
-                ActionId.ActionsStale => ["any-of-issue-labels", "any-of-labels", "any-of-pr-labels", "ascending", "close-issue-label", "close-issue-message", "close-issue-reason", "close-pr-label", "close-pr-message", "days-before-close", "days-before-issue-close", "days-before-issue-stale", "days-before-pr-close", "days-before-pr-stale", "days-before-stale", "debug-only", "delete-branch", "enable-statistics", "exempt-all-assignees", "exempt-all-issue-assignees", "exempt-all-issue-milestones", "exempt-all-milestones", "exempt-all-pr-assignees", "exempt-all-pr-milestones", "exempt-assignees", "exempt-draft-pr", "exempt-issue-assignees", "exempt-issue-labels", "exempt-issue-milestones", "exempt-milestones", "exempt-pr-assignees", "exempt-pr-labels", "exempt-pr-milestones", "ignore-issue-updates", "ignore-pr-updates", "ignore-updates", "include-only-assigned", "labels-to-add-when-unstale", "labels-to-remove-when-stale", "labels-to-remove-when-unstale", "only-issue-labels", "only-issue-types", "only-labels", "only-pr-labels", "operations-per-run", "remove-issue-stale-when-updated", "remove-pr-stale-when-updated", "remove-stale-when-updated", "repo-token", "sort-by", "stale-issue-label", "stale-issue-message", "stale-pr-label", "stale-pr-message", "start-date"],
-                ActionId.ActionsUploadArtifact => ["archive", "compression-level", "if-no-files-found", "include-hidden-files", "name", "overwrite", "path", "retention-days"],
-                ActionId.DockerLoginAction => ["ecr", "logout", "password", "registry", "registry-auth", "scope", "username"],
-                ActionId.OctokitRequestAction => ["mediaType", "route"],
-                ActionId.PypaGhActionPypiPublish => ["attestations", "packages-dir", "packages_dir", "password", "print-hash", "print_hash", "repository-url", "repository_url", "skip-existing", "skip_existing", "user", "verbose", "verify-metadata", "verify_metadata"],
-                ActionId.ReviewdogActionActionlint => ["actionlint_flags", "fail_level", "fail_on_error", "filter_mode", "github_token", "level", "reporter", "reviewdog_flags", "tool_name"],
-                ActionId.RhysdActionSetupVim => ["configure-args", "neovim", "token", "version"],
+                ActionId.ActionsCache => InputNamesActionsCache,
+                ActionId.ActionsCheckout => InputNamesActionsCheckout,
+                ActionId.ActionsDownloadArtifact => InputNamesActionsDownloadArtifact,
+                ActionId.ActionsSetupDotnet => InputNamesActionsSetupDotnet,
+                ActionId.ActionsSetupGo => InputNamesActionsSetupGo,
+                ActionId.ActionsSetupNode => InputNamesActionsSetupNode,
+                ActionId.ActionsStale => InputNamesActionsStale,
+                ActionId.ActionsUploadArtifact => InputNamesActionsUploadArtifact,
+                ActionId.DockerLoginAction => InputNamesDockerLoginAction,
+                ActionId.OctokitRequestAction => InputNamesOctokitRequestAction,
+                ActionId.PypaGhActionPypiPublish => InputNamesPypaGhActionPypiPublish,
+                ActionId.ReviewdogActionActionlint => InputNamesReviewdogActionActionlint,
+                ActionId.RhysdActionSetupVim => InputNamesRhysdActionSetupVim,
                 _ => [],
             };
         }
@@ -294,19 +294,19 @@ internal static class PopularActions
         {
             return Id switch
             {
-                ActionId.ActionsCache => ["cache-hit"u8.ToArray()],
-                ActionId.ActionsCheckout => ["commit"u8.ToArray(), "ref"u8.ToArray()],
-                ActionId.ActionsDownloadArtifact => ["download-path"u8.ToArray()],
-                ActionId.ActionsSetupDotnet => ["cache-hit"u8.ToArray(), "dotnet-version"u8.ToArray()],
-                ActionId.ActionsSetupGo => ["cache-hit"u8.ToArray(), "go-version"u8.ToArray()],
-                ActionId.ActionsSetupNode => ["cache-hit"u8.ToArray(), "node-version"u8.ToArray()],
-                ActionId.ActionsStale => ["closed-issues-prs"u8.ToArray(), "staled-issues-prs"u8.ToArray()],
-                ActionId.ActionsUploadArtifact => ["artifact-digest"u8.ToArray(), "artifact-id"u8.ToArray(), "artifact-url"u8.ToArray()],
+                ActionId.ActionsCache => OutputNamesActionsCache,
+                ActionId.ActionsCheckout => OutputNamesActionsCheckout,
+                ActionId.ActionsDownloadArtifact => OutputNamesActionsDownloadArtifact,
+                ActionId.ActionsSetupDotnet => OutputNamesActionsSetupDotnet,
+                ActionId.ActionsSetupGo => OutputNamesActionsSetupGo,
+                ActionId.ActionsSetupNode => OutputNamesActionsSetupNode,
+                ActionId.ActionsStale => OutputNamesActionsStale,
+                ActionId.ActionsUploadArtifact => OutputNamesActionsUploadArtifact,
                 ActionId.DockerLoginAction => [],
-                ActionId.OctokitRequestAction => ["data"u8.ToArray(), "headers"u8.ToArray(), "status"u8.ToArray()],
+                ActionId.OctokitRequestAction => OutputNamesOctokitRequestAction,
                 ActionId.PypaGhActionPypiPublish => [],
                 ActionId.ReviewdogActionActionlint => [],
-                ActionId.RhysdActionSetupVim => ["executable"u8.ToArray(), "vim-dir"u8.ToArray()],
+                ActionId.RhysdActionSetupVim => OutputNamesRhysdActionSetupVim,
                 _ => [],
             };
         }
@@ -389,21 +389,52 @@ internal static class PopularActions
             return Id switch
             {
                 ActionId.ActionsCache => [],
-                ActionId.ActionsCheckout => [("contents", "read")],
+                ActionId.ActionsCheckout => RequiredPermissionsActionsCheckout,
                 ActionId.ActionsDownloadArtifact => [],
                 ActionId.ActionsSetupDotnet => [],
                 ActionId.ActionsSetupGo => [],
                 ActionId.ActionsSetupNode => [],
-                ActionId.ActionsStale => [("issues", "write"), ("pull-requests", "write")],
+                ActionId.ActionsStale => RequiredPermissionsActionsStale,
                 ActionId.ActionsUploadArtifact => [],
                 ActionId.DockerLoginAction => [],
                 ActionId.OctokitRequestAction => [],
-                ActionId.PypaGhActionPypiPublish => [("id-token", "write")],
-                ActionId.ReviewdogActionActionlint => [("contents", "read")],
+                ActionId.PypaGhActionPypiPublish => RequiredPermissionsPypaGhActionPypiPublish,
+                ActionId.ReviewdogActionActionlint => RequiredPermissionsReviewdogActionActionlint,
                 ActionId.RhysdActionSetupVim => [],
                 _ => [],
             };
         }
+
+        private static readonly byte[][] RequiredInputsActionsCache = ["key"u8.ToArray(), "path"u8.ToArray()];
+        private static readonly byte[][] RequiredInputsActionsUploadArtifact = ["path"u8.ToArray()];
+        private static readonly byte[][] RequiredInputsOctokitRequestAction = ["route"u8.ToArray()];
+        private static readonly string[] InputNamesActionsCache = ["enableCrossOsArchive", "fail-on-cache-miss", "key", "lookup-only", "path", "restore-keys", "save-always", "upload-chunk-size"];
+        private static readonly string[] InputNamesActionsCheckout = ["allow-unsafe-pr-checkout", "clean", "fetch-depth", "fetch-tags", "filter", "github-server-url", "lfs", "path", "persist-credentials", "ref", "repository", "set-safe-directory", "show-progress", "sparse-checkout", "sparse-checkout-cone-mode", "ssh-key", "ssh-known-hosts", "ssh-strict", "ssh-user", "submodules", "token"];
+        private static readonly string[] InputNamesActionsDownloadArtifact = ["artifact-ids", "digest-mismatch", "github-token", "merge-multiple", "name", "path", "pattern", "repository", "run-id", "skip-decompress"];
+        private static readonly string[] InputNamesActionsSetupDotnet = ["architecture", "cache", "cache-dependency-path", "config-file", "dotnet-channel", "dotnet-quality", "dotnet-version", "global-json-file", "owner", "source-url", "workloads"];
+        private static readonly string[] InputNamesActionsSetupGo = ["architecture", "cache", "cache-dependency-path", "check-latest", "go-download-base-url", "go-version", "go-version-file", "token"];
+        private static readonly string[] InputNamesActionsSetupNode = ["architecture", "cache", "cache-dependency-path", "check-latest", "mirror", "mirror-token", "node-version", "node-version-file", "package-manager-cache", "registry-url", "scope", "token"];
+        private static readonly string[] InputNamesActionsStale = ["any-of-issue-labels", "any-of-labels", "any-of-pr-labels", "ascending", "close-issue-label", "close-issue-message", "close-issue-reason", "close-pr-label", "close-pr-message", "days-before-close", "days-before-issue-close", "days-before-issue-stale", "days-before-pr-close", "days-before-pr-stale", "days-before-stale", "debug-only", "delete-branch", "enable-statistics", "exempt-all-assignees", "exempt-all-issue-assignees", "exempt-all-issue-milestones", "exempt-all-milestones", "exempt-all-pr-assignees", "exempt-all-pr-milestones", "exempt-assignees", "exempt-draft-pr", "exempt-issue-assignees", "exempt-issue-labels", "exempt-issue-milestones", "exempt-milestones", "exempt-pr-assignees", "exempt-pr-labels", "exempt-pr-milestones", "ignore-issue-updates", "ignore-pr-updates", "ignore-updates", "include-only-assigned", "labels-to-add-when-unstale", "labels-to-remove-when-stale", "labels-to-remove-when-unstale", "only-issue-labels", "only-issue-types", "only-labels", "only-pr-labels", "operations-per-run", "remove-issue-stale-when-updated", "remove-pr-stale-when-updated", "remove-stale-when-updated", "repo-token", "sort-by", "stale-issue-label", "stale-issue-message", "stale-pr-label", "stale-pr-message", "start-date"];
+        private static readonly string[] InputNamesActionsUploadArtifact = ["archive", "compression-level", "if-no-files-found", "include-hidden-files", "name", "overwrite", "path", "retention-days"];
+        private static readonly string[] InputNamesDockerLoginAction = ["ecr", "logout", "password", "registry", "registry-auth", "scope", "username"];
+        private static readonly string[] InputNamesOctokitRequestAction = ["mediaType", "route"];
+        private static readonly string[] InputNamesPypaGhActionPypiPublish = ["attestations", "packages-dir", "packages_dir", "password", "print-hash", "print_hash", "repository-url", "repository_url", "skip-existing", "skip_existing", "user", "verbose", "verify-metadata", "verify_metadata"];
+        private static readonly string[] InputNamesReviewdogActionActionlint = ["actionlint_flags", "fail_level", "fail_on_error", "filter_mode", "github_token", "level", "reporter", "reviewdog_flags", "tool_name"];
+        private static readonly string[] InputNamesRhysdActionSetupVim = ["configure-args", "neovim", "token", "version"];
+        private static readonly byte[][] OutputNamesActionsCache = ["cache-hit"u8.ToArray()];
+        private static readonly byte[][] OutputNamesActionsCheckout = ["commit"u8.ToArray(), "ref"u8.ToArray()];
+        private static readonly byte[][] OutputNamesActionsDownloadArtifact = ["download-path"u8.ToArray()];
+        private static readonly byte[][] OutputNamesActionsSetupDotnet = ["cache-hit"u8.ToArray(), "dotnet-version"u8.ToArray()];
+        private static readonly byte[][] OutputNamesActionsSetupGo = ["cache-hit"u8.ToArray(), "go-version"u8.ToArray()];
+        private static readonly byte[][] OutputNamesActionsSetupNode = ["cache-hit"u8.ToArray(), "node-version"u8.ToArray()];
+        private static readonly byte[][] OutputNamesActionsStale = ["closed-issues-prs"u8.ToArray(), "staled-issues-prs"u8.ToArray()];
+        private static readonly byte[][] OutputNamesActionsUploadArtifact = ["artifact-digest"u8.ToArray(), "artifact-id"u8.ToArray(), "artifact-url"u8.ToArray()];
+        private static readonly byte[][] OutputNamesOctokitRequestAction = ["data"u8.ToArray(), "headers"u8.ToArray(), "status"u8.ToArray()];
+        private static readonly byte[][] OutputNamesRhysdActionSetupVim = ["executable"u8.ToArray(), "vim-dir"u8.ToArray()];
+        private static readonly (string Scope, string Access)[] RequiredPermissionsActionsCheckout = [("contents", "read")];
+        private static readonly (string Scope, string Access)[] RequiredPermissionsActionsStale = [("issues", "write"), ("pull-requests", "write")];
+        private static readonly (string Scope, string Access)[] RequiredPermissionsPypaGhActionPypiPublish = [("id-token", "write")];
+        private static readonly (string Scope, string Access)[] RequiredPermissionsReviewdogActionActionlint = [("contents", "read")];
     }
 
     internal static bool TryGet(ReadOnlySpan<byte> usesUtf8, out ActionSpec spec)
