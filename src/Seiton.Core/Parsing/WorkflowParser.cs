@@ -91,7 +91,14 @@ public static partial class WorkflowParser
             try
             {
                 var hintReader = new VYamlStreamAdapter(utf8Yaml.AsMemory());
-                hasHints = TryReadRootStructuralHints(ref hintReader, out hasJobs, out hasRuns);
+                try
+                {
+                    hasHints = TryReadRootStructuralHints(ref hintReader, out hasJobs, out hasRuns);
+                }
+                finally
+                {
+                    hintReader.Dispose();
+                }
             }
             catch (Exception ex) when (ex is not OutOfMemoryException and not OperationCanceledException)
             {
@@ -110,10 +117,14 @@ public static partial class WorkflowParser
                 pathHintKind == DocumentKind.ActionMetadata &&
                 finalKind == DocumentKind.Workflow;
 
-            var parseReader = new VYamlStreamAdapter(utf8Yaml.AsMemory());
             var parseMode = finalKind == DocumentKind.ActionMetadata ? ParseMode.ActionMetadata : ParseMode.Workflow;
             localArena = AstArena.Rent(utf8Yaml);
             var diagnostics = new PooledBuffer<Diagnostic>(16);
+            // CA2000 false positive: disposed in the finally below; the analyzer cannot
+            // track the ref-struct through `ref parseReader` uses inside the try.
+#pragma warning disable CA2000
+            var parseReader = new VYamlStreamAdapter(utf8Yaml.AsMemory());
+#pragma warning restore CA2000
             try
             {
                 var coreResult = ParseCore(ref parseReader, localArena, utf8Yaml, parseMode, ref diagnostics);
@@ -178,7 +189,11 @@ public static partial class WorkflowParser
                     parseResult,
                     new DocumentKindClassification(pathHintKind, finalKind, hasHintMismatch, isAmbiguous));
             }
-            finally { diagnostics.Dispose(); }
+            finally
+            {
+                diagnostics.Dispose();
+                parseReader.Dispose();
+            }
         }
         catch (Exception ex) when (ex is not OutOfMemoryException and not OperationCanceledException)
         {
@@ -412,8 +427,12 @@ public static partial class WorkflowParser
     /// </summary>
     internal static ParseResultData ParseIncremental(byte[] utf8Yaml, string filePath, AstArena arena, byte rootSkipMask, JobSkipEntry[]? jobSkipEntries = null)
     {
-        var reader = new VYamlStreamAdapter(utf8Yaml.AsMemory());
         var diagnostics = new PooledBuffer<Diagnostic>(16);
+        // CA2000 false positive: disposed in the finally below; the analyzer cannot
+        // track the ref-struct through `ref reader` uses inside the try.
+#pragma warning disable CA2000
+        var reader = new VYamlStreamAdapter(utf8Yaml.AsMemory());
+#pragma warning restore CA2000
         try
         {
             ParseCoreResult result;
@@ -474,6 +493,7 @@ public static partial class WorkflowParser
         finally
         {
             diagnostics.Dispose();
+            reader.Dispose();
         }
     }
 
