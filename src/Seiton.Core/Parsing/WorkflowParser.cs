@@ -841,13 +841,15 @@ public static partial class WorkflowParser
                 AddError(ref diagnostics, "permissions value must not be empty", errorMark);
             }
 
-            return !all.HasValue
-                ? null
-                : new Permissions
-                {
-                    All = all,
-                    Range = arena.GetStringRange(all),
-                };
+            if (!all.HasValue)
+            {
+                return null;
+            }
+
+            var scalarPermissions = arena.AllocPermissions();
+            scalarPermissions.All = all;
+            scalarPermissions.Range = arena.GetStringRange(all);
+            return scalarPermissions;
         }
 
         if (reader.CurrentKind != YamlEventKind.MappingStart)
@@ -939,11 +941,10 @@ public static partial class WorkflowParser
 
             var (scopeEntries, scopeCount) = scopes.DetachArray();
             arena.RegisterSliceMapBuffer(scopeEntries);
-            return new Permissions
-            {
-                Scopes = new SliceMap<PermissionScope>(scopeEntries, scopeCount, caseSensitive: true),
-                Range = range,
-            };
+            var permissions = arena.AllocPermissions();
+            permissions.Scopes = new SliceMap<PermissionScope>(scopeEntries, scopeCount, caseSensitive: true);
+            permissions.Range = range;
+            return permissions;
         }
         finally { scopes.Dispose(); }
     }
@@ -963,13 +964,15 @@ public static partial class WorkflowParser
             }
 
             var expression = ParseStringAndValidateExpression(ref reader, arena, ref diagnostics, expressionContext, error, parseWholeValueIfNoEmbedded: false);
-            return !expression.HasValue
-                ? null
-                : new Env
-                {
-                    Expression = expression,
-                    Range = arena.GetStringRange(expression),
-                };
+            if (!expression.HasValue)
+            {
+                return null;
+            }
+
+            var expressionEnv = arena.AllocEnv();
+            expressionEnv.Expression = expression;
+            expressionEnv.Range = arena.GetStringRange(expression);
+            return expressionEnv;
         }
 
         if (reader.CurrentKind != YamlEventKind.MappingStart)
@@ -1053,11 +1056,10 @@ public static partial class WorkflowParser
 
             var (varEntries, varCount) = vars.DetachArray();
             arena.RegisterSliceMapBuffer(varEntries);
-            return new Env
-            {
-                Vars = new SliceMap<EnvVar>(varEntries, varCount, caseSensitive: true),
-                Range = range,
-            };
+            var env = arena.AllocEnv();
+            env.Vars = new SliceMap<EnvVar>(varEntries, varCount, caseSensitive: true);
+            env.Range = range;
+            return env;
         }
         finally { vars.Dispose(); }
     }
@@ -1247,16 +1249,15 @@ public static partial class WorkflowParser
             return default;
         }
 
-        return new Defaults
-        {
-            Run = new DefaultsRun
-            {
-                Shell = shellNode,
-                WorkingDirectory = workingDirectoryNode,
-                Range = shellNode.HasValue ? arena.GetStringRange(shellNode) : workingDirectoryNode.HasValue ? arena.GetStringRange(workingDirectoryNode) : range,
-            },
-            Range = range,
-        };
+        var defaultsRun = arena.AllocDefaultsRun();
+        defaultsRun.Shell = shellNode;
+        defaultsRun.WorkingDirectory = workingDirectoryNode;
+        defaultsRun.Range = shellNode.HasValue ? arena.GetStringRange(shellNode) : workingDirectoryNode.HasValue ? arena.GetStringRange(workingDirectoryNode) : range;
+
+        var defaults = arena.AllocDefaults();
+        defaults.Run = defaultsRun;
+        defaults.Range = range;
+        return defaults;
     }
 
     private static Concurrency? ParseConcurrencyNode<TReader>(ref TReader reader, AstArena arena, ref PooledBuffer<Diagnostic> diagnostics, string error, ExpressionValidationContext expressionContext, TextPosition keyMark, string sectionContext = "")
@@ -1265,13 +1266,15 @@ public static partial class WorkflowParser
         if (reader.CurrentKind == YamlEventKind.Scalar)
         {
             var group = ParseStringAndValidateExpression(ref reader, arena, ref diagnostics, expressionContext, error, parseWholeValueIfNoEmbedded: false);
-            return !group.HasValue
-                ? null
-                : new Concurrency
-                {
-                    Group = group,
-                    Range = arena.GetStringRange(group),
-                };
+            if (!group.HasValue)
+            {
+                return null;
+            }
+
+            var scalarConcurrency = arena.AllocConcurrency();
+            scalarConcurrency.Group = group;
+            scalarConcurrency.Range = arena.GetStringRange(group);
+            return scalarConcurrency;
         }
 
         if (reader.CurrentKind != YamlEventKind.MappingStart)
@@ -1381,13 +1384,12 @@ public static partial class WorkflowParser
             return default;
         }
 
-        return new Concurrency
-        {
-            Group = groupNode,
-            CancelInProgress = cancelInProgressNode,
-            Queue = queueNode,
-            Range = range,
-        };
+        var concurrency = arena.AllocConcurrency();
+        concurrency.Group = groupNode;
+        concurrency.CancelInProgress = cancelInProgressNode;
+        concurrency.Queue = queueNode;
+        concurrency.Range = range;
+        return concurrency;
     }
 
     private static StringNodeId ParseConcurrencyQueue<TReader>(ref TReader reader, AstArena arena, ref PooledBuffer<Diagnostic> diagnostics, ExpressionValidationContext context, string sectionContext)

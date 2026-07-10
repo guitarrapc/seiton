@@ -28,9 +28,15 @@ public static partial class WorkflowParser
                 AddError(ref diagnostics, "\"services\" section is scalar node but mapping node is expected", scalarMark);
                 return null;
             }
-            return !expression.HasValue
-                ? null
-                : new Services { Expression = expression, Range = arena.GetStringRange(expression) };
+            if (!expression.HasValue)
+            {
+                return null;
+            }
+
+            var exprServices = arena.AllocServices();
+            exprServices.Expression = expression;
+            exprServices.Range = arena.GetStringRange(expression);
+            return exprServices;
         }
 
         if (reader.CurrentKind != YamlEventKind.MappingStart)
@@ -96,12 +102,11 @@ public static partial class WorkflowParser
                 var container = ParseContainerLike(ref reader, arena, ref diagnostics, source, jobId, serviceName, isService: true, requireImage: true, serviceMark);
                 if (container is not null)
                 {
-                    map.Add(new SliceMap<Service>.Entry(serviceName, new Service
-                    {
-                        Name = serviceNameNode,
-                        Container = container,
-                        Range = arena.GetStringRange(serviceNameNode),
-                    }));
+                    var service = arena.AllocService();
+                    service.Name = serviceNameNode;
+                    service.Container = container;
+                    service.Range = arena.GetStringRange(serviceNameNode);
+                    map.Add(new SliceMap<Service>.Entry(serviceName, service));
                 }
             }
 
@@ -113,11 +118,10 @@ public static partial class WorkflowParser
 
             var (svcEntries, svcCount) = map.DetachArray();
             arena.RegisterSliceMapBuffer(svcEntries);
-            return new Services
-            {
-                ServiceMap = new SliceMap<Service>(svcEntries, svcCount, caseSensitive: false),
-                Range = range,
-            };
+            var services = arena.AllocServices();
+            services.ServiceMap = new SliceMap<Service>(svcEntries, svcCount, caseSensitive: false);
+            services.Range = range;
+            return services;
         }
         finally { map.Dispose(); }
     }
@@ -156,11 +160,10 @@ public static partial class WorkflowParser
                 return default;
             }
 
-            return new Container
-            {
-                Image = scalarImage,
-                Range = arena.GetStringRange(scalarImage),
-            };
+            var scalarContainer = arena.AllocContainer();
+            scalarContainer.Image = scalarImage;
+            scalarContainer.Range = arena.GetStringRange(scalarImage);
+            return scalarContainer;
         }
 
         if (reader.CurrentKind != YamlEventKind.MappingStart)
@@ -363,18 +366,17 @@ public static partial class WorkflowParser
             AddError(ref diagnostics, $"\"image\" is missing in {sectionType} section", sectionKeyStart);
         }
 
-        return new Container
-        {
-            Image = image.HasValue ? image : arena.AddString(default, false, default),
-            Credentials = credentials,
-            Env = env,
-            Ports = ports,
-            Volumes = volumes,
-            Options = options,
-            Entrypoint = entrypoint,
-            Command = command,
-            Range = range,
-        };
+        var mappingContainer = arena.AllocContainer();
+        mappingContainer.Image = image.HasValue ? image : arena.AddString(default, false, default);
+        mappingContainer.Credentials = credentials;
+        mappingContainer.Env = env;
+        mappingContainer.Ports = ports;
+        mappingContainer.Volumes = volumes;
+        mappingContainer.Options = options;
+        mappingContainer.Entrypoint = entrypoint;
+        mappingContainer.Command = command;
+        mappingContainer.Range = range;
+        return mappingContainer;
     }
 
     private static Credentials? ParseCredentials<TReader>(ref TReader reader, AstArena arena, ref PooledBuffer<Diagnostic> diagnostics, ReadOnlySpan<byte> source, Utf8Slice jobId, Utf8Slice serviceName, bool isService, TextPosition credentialsKeyMark)
@@ -409,9 +411,15 @@ public static partial class WorkflowParser
                 out var crExprMark,
                 parseWholeValueIfNoEmbedded: false);
             if (crExprErr) AddError(ref diagnostics, $"\"credentials\" section is scalar node but mapping node is expected", crExprMark);
-            return !expression.HasValue
-                ? null
-                : new Credentials { Expression = expression, Range = arena.GetStringRange(expression) };
+            if (!expression.HasValue)
+            {
+                return null;
+            }
+
+            var exprCredentials = arena.AllocCredentials();
+            exprCredentials.Expression = expression;
+            exprCredentials.Range = arena.GetStringRange(expression);
+            return exprCredentials;
         }
 
         if (reader.CurrentKind != YamlEventKind.MappingStart)
@@ -525,12 +533,11 @@ public static partial class WorkflowParser
             AddError(ref diagnostics, "both \"username\" and \"password\" must be specified in \"credentials\" section", credentialsKeyMark);
         }
 
-        return new Credentials
-        {
-            Username = username,
-            Password = password,
-            Range = range,
-        };
+        var mappingCredentials = arena.AllocCredentials();
+        mappingCredentials.Username = username;
+        mappingCredentials.Password = password;
+        mappingCredentials.Range = range;
+        return mappingCredentials;
     }
 
     private static void ParseStringMapping<TReader>(ref TReader reader, AstArena arena, ref PooledBuffer<Diagnostic> diagnostics, ReadOnlySpan<byte> source, string error, ExpressionValidationContext? expressionContext = null)

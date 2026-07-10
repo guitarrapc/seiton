@@ -210,16 +210,9 @@ public static partial class WorkflowParser
                                 AddError(ref diagnostics, usesMsg, usesMark);
                             }
 
-                            workflowCallNode = new WorkflowCall
-                            {
-                                Uses = usesNode.HasValue ? usesNode : arena.AddString(default, false, default),
-                                UsesKeyRange = BuildScalarLocation(keyMark, keyLen),
-                                Inputs = workflowCallNode?.Inputs,
-                                WithKeyRange = workflowCallNode?.WithKeyRange,
-                                Secrets = workflowCallNode?.Secrets,
-                                SecretsKeyRange = workflowCallNode?.SecretsKeyRange,
-                                InheritSecrets = workflowCallNode?.InheritSecrets ?? false,
-                            };
+                            workflowCallNode ??= arena.AllocWorkflowCall();
+                            workflowCallNode.Uses = usesNode.HasValue ? usesNode : arena.AddString(default, false, default);
+                            workflowCallNode.UsesKeyRange = BuildScalarLocation(keyMark, keyLen);
                         }
 
                         break;
@@ -335,32 +328,14 @@ public static partial class WorkflowParser
                         if (!reader.End)
                         {
                             var inputs = ParseWorkflowCallInputsNode(ref reader, arena, ref diagnostics, source, jobId);
-                            if (workflowCallNode is not null)
+                            if (workflowCallNode is null)
                             {
-                                workflowCallNode = new WorkflowCall
-                                {
-                                    Uses = workflowCallNode.Uses,
-                                    UsesKeyRange = workflowCallNode.UsesKeyRange,
-                                    Inputs = inputs,
-                                    WithKeyRange = BuildScalarLocation(withKeyPos, 4),
-                                    Secrets = workflowCallNode.Secrets,
-                                    SecretsKeyRange = workflowCallNode.SecretsKeyRange,
-                                    InheritSecrets = workflowCallNode.InheritSecrets,
-                                };
+                                workflowCallNode = arena.AllocWorkflowCall();
+                                workflowCallNode.Uses = arena.AddString(default, false, default);
                             }
-                            else
-                            {
-                                workflowCallNode = new WorkflowCall
-                                {
-                                    Uses = arena.AddString(default, false, default),
-                                    UsesKeyRange = null,
-                                    Inputs = inputs,
-                                    WithKeyRange = BuildScalarLocation(withKeyPos, 4),
-                                    Secrets = null,
-                                    SecretsKeyRange = null,
-                                    InheritSecrets = false,
-                                };
-                            }
+
+                            workflowCallNode.Inputs = inputs;
+                            workflowCallNode.WithKeyRange = BuildScalarLocation(withKeyPos, 4);
                         }
 
                         break;
@@ -370,32 +345,15 @@ public static partial class WorkflowParser
                         if (!reader.End)
                         {
                             var secrets = ParseWorkflowCallSecretsNode(ref reader, arena, ref diagnostics, source, jobId, out var inheritSecrets);
-                            if (workflowCallNode is not null)
+                            if (workflowCallNode is null)
                             {
-                                workflowCallNode = new WorkflowCall
-                                {
-                                    Uses = workflowCallNode.Uses,
-                                    UsesKeyRange = workflowCallNode.UsesKeyRange,
-                                    Inputs = workflowCallNode.Inputs,
-                                    WithKeyRange = workflowCallNode.WithKeyRange,
-                                    Secrets = secrets,
-                                    SecretsKeyRange = BuildScalarLocation(secretsKeyPos, 7),
-                                    InheritSecrets = inheritSecrets,
-                                };
+                                workflowCallNode = arena.AllocWorkflowCall();
+                                workflowCallNode.Uses = arena.AddString(default, false, default);
                             }
-                            else
-                            {
-                                workflowCallNode = new WorkflowCall
-                                {
-                                    Uses = arena.AddString(default, false, default),
-                                    UsesKeyRange = null,
-                                    Inputs = null,
-                                    WithKeyRange = null,
-                                    Secrets = secrets,
-                                    SecretsKeyRange = BuildScalarLocation(secretsKeyPos, 7),
-                                    InheritSecrets = inheritSecrets,
-                                };
-                            }
+
+                            workflowCallNode.Secrets = secrets;
+                            workflowCallNode.SecretsKeyRange = BuildScalarLocation(secretsKeyPos, 7);
+                            workflowCallNode.InheritSecrets = inheritSecrets;
                         }
 
                         break;
@@ -547,7 +505,7 @@ public static partial class WorkflowParser
         {
             AddError(ref diagnostics, $"{section} must be object", reader.CurrentStart);
             reader.SkipCurrentNode();
-            return new Snapshot();
+            return arena.AllocSnapshot();
         }
 
         var snapshotMark = reader.CurrentStart;
@@ -654,13 +612,12 @@ public static partial class WorkflowParser
             AddError(ref diagnostics, "\"snapshot\" section must have \"image-name\" configuration", snapshotMark);
         }
 
-        return new Snapshot
-        {
-            Version = versionNode,
-            ImageName = imageNameNode,
-            If = ifNode,
-            IfKeyRange = ifNode.HasValue ? BuildScalarLocation(ifKeyMark, 2) : null,
-        };
+        var snapshot = arena.AllocSnapshot();
+        snapshot.Version = versionNode;
+        snapshot.ImageName = imageNameNode;
+        snapshot.If = ifNode;
+        snapshot.IfKeyRange = ifNode.HasValue ? BuildScalarLocation(ifKeyMark, 2) : null;
+        return snapshot;
     }
 
 
@@ -808,13 +765,12 @@ public static partial class WorkflowParser
                 AddError(ref diagnostics, $"{section} requires labels", mappingStartMark);
             }
 
-            return new Runner
-            {
-                Labels = labels,
-                LabelsExpr = labelsExpr,
-                Group = group,
-                Range = labelsExpr.HasValue ? arena.GetStringRange(labelsExpr) : group.HasValue ? arena.GetStringRange(group) : (labels is { Count: > 0 } ? arena.GetStringRange(labels[0]) : default),
-            };
+            var mappingRunner = arena.AllocRunner();
+            mappingRunner.Labels = labels;
+            mappingRunner.LabelsExpr = labelsExpr;
+            mappingRunner.Group = group;
+            mappingRunner.Range = labelsExpr.HasValue ? arena.GetStringRange(labelsExpr) : group.HasValue ? arena.GetStringRange(group) : (labels is { Count: > 0 } ? arena.GetStringRange(labels[0]) : default);
+            return mappingRunner;
         }
 
         if (reader.CurrentKind == YamlEventKind.Scalar)
@@ -824,11 +780,10 @@ public static partial class WorkflowParser
             {
                 var expr = ParseStringAndValidateExpression(ref reader, arena, ref diagnostics, ExpressionValidationContext.JobRunsOn, out var roExprErr, out var roExprMark, parseWholeValueIfNoEmbedded: false);
                 if (roExprErr) AddError(ref diagnostics, $"{section} must be string, sequence, or mapping", roExprMark);
-                return new Runner
-                {
-                    LabelsExpr = expr,
-                    Range = expr.HasValue ? arena.GetStringRange(expr) : default,
-                };
+                var exprRunner = arena.AllocRunner();
+                exprRunner.LabelsExpr = expr;
+                exprRunner.Range = expr.HasValue ? arena.GetStringRange(expr) : default;
+                return exprRunner;
             }
         }
 
@@ -846,11 +801,10 @@ public static partial class WorkflowParser
         {
             AddError(ref diagnostics, RunsOnSectionEmptyMessage, fbSeqMark);
         }
-        return new Runner
-        {
-            Labels = labelsFallback,
-            Range = labelsFallback.Count > 0 ? arena.GetStringRange(labelsFallback[0]) : default,
-        };
+        var runner = arena.AllocRunner();
+        runner.Labels = labelsFallback;
+        runner.Range = labelsFallback.Count > 0 ? arena.GetStringRange(labelsFallback[0]) : default;
+        return runner;
     }
 
     private static Seiton.Core.Parsing.Ast.Environment? ParseEnvironmentNode<TReader>(ref TReader reader, AstArena arena, ref PooledBuffer<Diagnostic> diagnostics, ReadOnlySpan<byte> source, Utf8Slice jobId, TextPosition environmentKeyMark)
@@ -860,13 +814,15 @@ public static partial class WorkflowParser
         {
             var name = ParseStringAndValidateExpression(ref reader, arena, ref diagnostics, ExpressionValidationContext.JobEnvironment, out var envNameErr, out var envNameMark, false);
             if (envNameErr) AddError(ref diagnostics, $"jobs.'{DecodeUtf8(source, jobId)}'.environment must be string or object", envNameMark);
-            return !name.HasValue
-                ? null
-                : new Seiton.Core.Parsing.Ast.Environment
-                {
-                    Name = name,
-                    Range = arena.GetStringRange(name),
-                };
+            if (!name.HasValue)
+            {
+                return null;
+            }
+
+            var scalarEnvironment = arena.AllocEnvironment();
+            scalarEnvironment.Name = name;
+            scalarEnvironment.Range = arena.GetStringRange(name);
+            return scalarEnvironment;
         }
 
         if (reader.CurrentKind != YamlEventKind.MappingStart)
@@ -961,13 +917,12 @@ public static partial class WorkflowParser
             return default;
         }
 
-        return new Seiton.Core.Parsing.Ast.Environment
-        {
-            Name = nameNode,
-            Url = urlNode,
-            Deployment = deploymentNode,
-            Range = arena.GetStringRange(nameNode),
-        };
+        var environment = arena.AllocEnvironment();
+        environment.Name = nameNode;
+        environment.Url = urlNode;
+        environment.Deployment = deploymentNode;
+        environment.Range = arena.GetStringRange(nameNode);
+        return environment;
     }
 
     private static SliceMap<StringNodeId>? ParseOutputsNode<TReader>(ref TReader reader, AstArena arena, ref PooledBuffer<Diagnostic> diagnostics, ReadOnlySpan<byte> source, Utf8Slice jobId)

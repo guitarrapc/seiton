@@ -182,6 +182,29 @@ internal sealed class AstArena : IDisposable
     private ExecParallel[] _execParallels;
     private int _execParallelCount;
 
+    // Object pools for section AST nodes (Permissions, Env, Runner, ...).
+    // Same reuse semantics as the Job/Step pools above, via AstNodePool<T>.
+    private AstNodePool<Permissions> _permissionsPool = new(DefaultSectionNodeCapacity, static n => n.Reset());
+    private AstNodePool<Env> _envPool = new(DefaultEnvCapacity, static n => n.Reset());
+    private AstNodePool<Defaults> _defaultsPool = new(DefaultSectionNodeCapacity, static n => n.Reset());
+    private AstNodePool<DefaultsRun> _defaultsRunPool = new(DefaultSectionNodeCapacity, static n => n.Reset());
+    private AstNodePool<Concurrency> _concurrencyPool = new(DefaultSectionNodeCapacity, static n => n.Reset());
+    private AstNodePool<Ast.Environment> _environmentPool = new(DefaultSectionNodeCapacity, static n => n.Reset());
+    private AstNodePool<Runner> _runnerPool = new(DefaultRunnerCapacity, static n => n.Reset());
+    private AstNodePool<Strategy> _strategyPool = new(DefaultStrategyCapacity, static n => n.Reset());
+    private AstNodePool<Matrix> _matrixPool = new(DefaultStrategyCapacity, static n => n.Reset());
+    private AstNodePool<MatrixRow> _matrixRowPool = new(DefaultMatrixRowCapacity, static n => n.Reset());
+    private AstNodePool<MatrixCombinations> _matrixCombinationsPool = new(DefaultStrategyCapacity, static n => n.Reset());
+    private AstNodePool<RawYamlString> _rawYamlStringPool = new(DefaultRawYamlValueCapacity, static n => n.Reset());
+    private AstNodePool<RawYamlArray> _rawYamlArrayPool = new(DefaultSectionNodeCapacity, static n => n.Reset());
+    private AstNodePool<RawYamlObject> _rawYamlObjectPool = new(DefaultSectionNodeCapacity, static n => n.Reset());
+    private AstNodePool<Container> _containerPool = new(DefaultSectionNodeCapacity, static n => n.Reset());
+    private AstNodePool<Services> _servicesPool = new(DefaultSectionNodeCapacity, static n => n.Reset());
+    private AstNodePool<Service> _servicePool = new(DefaultSectionNodeCapacity, static n => n.Reset());
+    private AstNodePool<Credentials> _credentialsPool = new(DefaultSectionNodeCapacity, static n => n.Reset());
+    private AstNodePool<WorkflowCall> _workflowCallPool = new(DefaultSectionNodeCapacity, static n => n.Reset());
+    private AstNodePool<Snapshot> _snapshotPool = new(DefaultSectionNodeCapacity, static n => n.Reset());
+
     // D-1: Pooled diagnostics buffer registered by ParseClassified/ParseIncremental.
     // Returned to ArrayPool<Diagnostic>.Shared on Dispose.
     private Diagnostic[]? _diagnosticsBuffer;
@@ -337,6 +360,28 @@ internal sealed class AstArena : IDisposable
         for (var i = 0; i < _execCancelCount; i++) _execCancels[i]?.Reset();
         for (var i = 0; i < _execParallelCount; i++) _execParallels[i]?.Reset();
 
+        // Section node pools: reset allocated nodes and cap retained capacity
+        _permissionsPool.Release(DefaultSectionNodeCapacity);
+        _envPool.Release(DefaultEnvCapacity);
+        _defaultsPool.Release(DefaultSectionNodeCapacity);
+        _defaultsRunPool.Release(DefaultSectionNodeCapacity);
+        _concurrencyPool.Release(DefaultSectionNodeCapacity);
+        _environmentPool.Release(DefaultSectionNodeCapacity);
+        _runnerPool.Release(DefaultRunnerCapacity);
+        _strategyPool.Release(DefaultStrategyCapacity);
+        _matrixPool.Release(DefaultStrategyCapacity);
+        _matrixRowPool.Release(DefaultMatrixRowCapacity);
+        _matrixCombinationsPool.Release(DefaultStrategyCapacity);
+        _rawYamlStringPool.Release(DefaultRawYamlValueCapacity);
+        _rawYamlArrayPool.Release(DefaultSectionNodeCapacity);
+        _rawYamlObjectPool.Release(DefaultSectionNodeCapacity);
+        _containerPool.Release(DefaultSectionNodeCapacity);
+        _servicesPool.Release(DefaultSectionNodeCapacity);
+        _servicePool.Release(DefaultSectionNodeCapacity);
+        _credentialsPool.Release(DefaultSectionNodeCapacity);
+        _workflowCallPool.Release(DefaultSectionNodeCapacity);
+        _snapshotPool.Release(DefaultSectionNodeCapacity);
+
         _stringCount = 0;
         _boolCount = 0;
         _intCount = 0;
@@ -410,6 +455,15 @@ internal sealed class AstArena : IDisposable
     private const int DefaultExecWaitAllCapacity = 16;
     private const int DefaultExecCancelCapacity = 16;
     private const int DefaultExecParallelCapacity = 32;
+
+    // Section node pool default capacities. Env appears per step + per job + workflow-level,
+    // Runner/Strategy/Matrix/MatrixRow per job, the rest are occasional per-job sections.
+    private const int DefaultSectionNodeCapacity = 8;
+    private const int DefaultEnvCapacity = 64;
+    private const int DefaultRunnerCapacity = 24;
+    private const int DefaultStrategyCapacity = 16;
+    private const int DefaultMatrixRowCapacity = 32;
+    private const int DefaultRawYamlValueCapacity = 64;
 
     private static void ShrinkIfOversized<T>(ref T[] array, int maxRetainedCapacity)
     {
@@ -814,6 +868,88 @@ internal sealed class AstArena : IDisposable
         _execParallelCount++;
         return obj;
     }
+
+    // Section node pool allocation methods (same reset-on-alloc semantics as Job/Step above)
+
+    /// <summary>Returns a pooled or new <see cref="Permissions"/> with all fields reset to default.</summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public Permissions AllocPermissions() => _permissionsPool.Alloc();
+
+    /// <summary>Returns a pooled or new <see cref="Env"/> with all fields reset to default.</summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public Env AllocEnv() => _envPool.Alloc();
+
+    /// <summary>Returns a pooled or new <see cref="Defaults"/> with all fields reset to default.</summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public Defaults AllocDefaults() => _defaultsPool.Alloc();
+
+    /// <summary>Returns a pooled or new <see cref="DefaultsRun"/> with all fields reset to default.</summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public DefaultsRun AllocDefaultsRun() => _defaultsRunPool.Alloc();
+
+    /// <summary>Returns a pooled or new <see cref="Concurrency"/> with all fields reset to default.</summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public Concurrency AllocConcurrency() => _concurrencyPool.Alloc();
+
+    /// <summary>Returns a pooled or new <see cref="Ast.Environment"/> with all fields reset to default.</summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public Ast.Environment AllocEnvironment() => _environmentPool.Alloc();
+
+    /// <summary>Returns a pooled or new <see cref="Runner"/> with all fields reset to default.</summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public Runner AllocRunner() => _runnerPool.Alloc();
+
+    /// <summary>Returns a pooled or new <see cref="Strategy"/> with all fields reset to default.</summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public Strategy AllocStrategy() => _strategyPool.Alloc();
+
+    /// <summary>Returns a pooled or new <see cref="Matrix"/> with all fields reset to default.</summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public Matrix AllocMatrix() => _matrixPool.Alloc();
+
+    /// <summary>Returns a pooled or new <see cref="MatrixRow"/> with all fields reset to default.</summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public MatrixRow AllocMatrixRow() => _matrixRowPool.Alloc();
+
+    /// <summary>Returns a pooled or new <see cref="MatrixCombinations"/> with all fields reset to default.</summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public MatrixCombinations AllocMatrixCombinations() => _matrixCombinationsPool.Alloc();
+
+    /// <summary>Returns a pooled or new <see cref="RawYamlString"/> with all fields reset to default.</summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public RawYamlString AllocRawYamlString() => _rawYamlStringPool.Alloc();
+
+    /// <summary>Returns a pooled or new <see cref="RawYamlArray"/> with all fields reset to default.</summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public RawYamlArray AllocRawYamlArray() => _rawYamlArrayPool.Alloc();
+
+    /// <summary>Returns a pooled or new <see cref="RawYamlObject"/> with all fields reset to default.</summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public RawYamlObject AllocRawYamlObject() => _rawYamlObjectPool.Alloc();
+
+    /// <summary>Returns a pooled or new <see cref="Container"/> with all fields reset to default.</summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public Container AllocContainer() => _containerPool.Alloc();
+
+    /// <summary>Returns a pooled or new <see cref="Services"/> with all fields reset to default.</summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public Services AllocServices() => _servicesPool.Alloc();
+
+    /// <summary>Returns a pooled or new <see cref="Service"/> with all fields reset to default.</summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public Service AllocService() => _servicePool.Alloc();
+
+    /// <summary>Returns a pooled or new <see cref="Credentials"/> with all fields reset to default.</summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public Credentials AllocCredentials() => _credentialsPool.Alloc();
+
+    /// <summary>Returns a pooled or new <see cref="WorkflowCall"/> with all fields reset to default.</summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public WorkflowCall AllocWorkflowCall() => _workflowCallPool.Alloc();
+
+    /// <summary>Returns a pooled or new <see cref="Snapshot"/> with all fields reset to default.</summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public Snapshot AllocSnapshot() => _snapshotPool.Alloc();
 
     // Incremental parse support
 

@@ -172,13 +172,12 @@ public static partial class WorkflowParser
             reader.Read();
         }
 
-        return new Strategy
-        {
-            Matrix = matrix,
-            FailFast = failFast,
-            MaxParallel = maxParallel,
-            Range = range,
-        };
+        var strategy = arena.AllocStrategy();
+        strategy.Matrix = matrix;
+        strategy.FailFast = failFast;
+        strategy.MaxParallel = maxParallel;
+        strategy.Range = range;
+        return strategy;
     }
 
     private static Matrix? ParseMatrix<TReader>(ref TReader reader, AstArena arena, ref PooledBuffer<Diagnostic> diagnostics, ReadOnlySpan<byte> source, Utf8Slice jobId)
@@ -193,7 +192,10 @@ public static partial class WorkflowParser
                 out var mxExprMark,
                 parseWholeValueIfNoEmbedded: false);
             if (mxExprErr) AddError(ref diagnostics, $"jobs.'{DecodeUtf8(source, jobId)}'.strategy.matrix must be string or object", mxExprMark);
-            return new Matrix { Expression = expression, Range = expression.HasValue ? arena.GetStringRange(expression) : default };
+            var exprMatrix = arena.AllocMatrix();
+            exprMatrix.Expression = expression;
+            exprMatrix.Range = expression.HasValue ? arena.GetStringRange(expression) : default;
+            return exprMatrix;
         }
 
         if (reader.CurrentKind != YamlEventKind.MappingStart)
@@ -308,7 +310,16 @@ public static partial class WorkflowParser
                         parseWholeValueIfNoEmbedded: false);
                     if (rowErr) AddError(ref diagnostics, $"jobs.'{DecodeUtf8(source, jobId)}'.strategy.matrix.{DecodeUtf8(source, keySlice)} must be array or string", rowMark);
                     rowExpr = valueNode;
-                    rowValues = !valueNode.HasValue ? [] : [new RawYamlString { Value = valueNode }];
+                    if (!valueNode.HasValue)
+                    {
+                        rowValues = [];
+                    }
+                    else
+                    {
+                        var rowValue = arena.AllocRawYamlString();
+                        rowValue.Value = valueNode;
+                        rowValues = [rowValue];
+                    }
                 }
                 else if (reader.CurrentKind == YamlEventKind.SequenceStart)
                 {
@@ -324,12 +335,11 @@ public static partial class WorkflowParser
                     reader.SkipCurrentNode();
                 }
 
-                rowBuffer.Add(new SliceMap<MatrixRow>.Entry(keySlice, new MatrixRow
-                {
-                    Name = rowName,
-                    Expression = rowExpr,
-                    Values = rowValues,
-                }));
+                var matrixRow = arena.AllocMatrixRow();
+                matrixRow.Name = rowName;
+                matrixRow.Expression = rowExpr;
+                matrixRow.Values = rowValues;
+                rowBuffer.Add(new SliceMap<MatrixRow>.Entry(keySlice, matrixRow));
             }
 
             if (reader.CurrentKind == YamlEventKind.MappingEnd)
@@ -346,13 +356,12 @@ public static partial class WorkflowParser
                 rows = new SliceMap<MatrixRow>(rowEntries, rowCount, caseSensitive: false);
             }
 
-            return new Matrix
-            {
-                Include = include,
-                Exclude = exclude,
-                Rows = rows,
-                Range = range,
-            };
+            var matrix = arena.AllocMatrix();
+            matrix.Include = include;
+            matrix.Exclude = exclude;
+            matrix.Rows = rows;
+            matrix.Range = range;
+            return matrix;
         }
         finally { rowBuffer.Dispose(); }
     }
@@ -369,13 +378,9 @@ public static partial class WorkflowParser
                 out var mcMark,
                 parseWholeValueIfNoEmbedded: false);
             if (mcErr) AddError(ref diagnostics, $"jobs.'{DecodeUtf8(source, jobId)}'.strategy.matrix.{section} must be array or string", mcMark);
-            return ArenaListOfOne(
-                new MatrixCombinations
-                {
-                    Expression = expr,
-                    Entries = null,
-                },
-                arena);
+            var exprCombos = arena.AllocMatrixCombinations();
+            exprCombos.Expression = expr;
+            return ArenaListOfOne(exprCombos, arena);
         }
 
         if (reader.CurrentKind != YamlEventKind.SequenceStart)
@@ -406,12 +411,9 @@ public static partial class WorkflowParser
                 reader.Read();
             }
 
-            return ArenaListOfOne(
-                new MatrixCombinations
-                {
-                    Entries = DetachArenaList(ref entries, arena),
-                },
-                arena);
+            var combos = arena.AllocMatrixCombinations();
+            combos.Entries = DetachArenaList(ref entries, arena);
+            return ArenaListOfOne(combos, arena);
         }
         finally { entries.Dispose(); }
     }
@@ -453,39 +455,43 @@ public static partial class WorkflowParser
             var node = ParseStringAndValidateExpression(ref reader, arena, ref diagnostics, exprContext, out var mvErr, out var mvMark, parseWholeValueIfNoEmbedded: false);
             if (mvErr) AddError(ref diagnostics, $"jobs.'{DecodeUtf8(source, jobId)}'.strategy.matrix value must be string, object, or array", mvMark);
             if (!node.HasValue) node = arena.AddString(default, false, default);
-            return new RawYamlString { Value = node };
+            var scalarValue = arena.AllocRawYamlString();
+            scalarValue.Value = node;
+            return scalarValue;
         }
 
         if (reader.CurrentKind == YamlEventKind.MappingStart)
         {
             var startMark = reader.CurrentStart;
-            return new RawYamlObject
-            {
-                Properties = ParseRawYamlObject(ref reader, arena, ref diagnostics, source, jobId, exprContext),
-                Range = BuildScalarLocation(startMark, 0),
-            };
+            var objectValue = arena.AllocRawYamlObject();
+            objectValue.Properties = ParseRawYamlObject(ref reader, arena, ref diagnostics, source, jobId, exprContext);
+            objectValue.Range = BuildScalarLocation(startMark, 0);
+            return objectValue;
         }
 
         if (reader.CurrentKind == YamlEventKind.SequenceStart)
         {
             var startMark = reader.CurrentStart;
-            return new RawYamlArray
-            {
-                Items = ParseRawYamlArray(ref reader, arena, ref diagnostics, source, jobId, "matrix"u8, exprContext),
-                Range = BuildScalarLocation(startMark, 0),
-            };
+            var arrayValue = arena.AllocRawYamlArray();
+            arrayValue.Items = ParseRawYamlArray(ref reader, arena, ref diagnostics, source, jobId, "matrix"u8, exprContext);
+            arrayValue.Range = BuildScalarLocation(startMark, 0);
+            return arrayValue;
         }
 
         if (reader.CurrentKind == YamlEventKind.Alias)
         {
             AddError(ref diagnostics, $"jobs.'{DecodeUtf8(source, jobId)}'.strategy.matrix unexpected alias node in value", reader.CurrentStart);
             reader.SkipCurrentNode();
-            return new RawYamlString { Value = arena.AddString(default, false, default) };
+            var aliasValue = arena.AllocRawYamlString();
+            aliasValue.Value = arena.AddString(default, false, default);
+            return aliasValue;
         }
 
         AddError(ref diagnostics, $"jobs.'{DecodeUtf8(source, jobId)}'.strategy.matrix value has unsupported shape", reader.CurrentStart);
         reader.SkipCurrentNode();
-        return new RawYamlString { Value = arena.AddString(default, false, default) };
+        var unsupportedValue = arena.AllocRawYamlString();
+        unsupportedValue.Value = arena.AddString(default, false, default);
+        return unsupportedValue;
     }
 
     private static SliceMap<RawYamlValue> ParseRawYamlObject<TReader>(ref TReader reader, AstArena arena, ref PooledBuffer<Diagnostic> diagnostics, ReadOnlySpan<byte> source, Utf8Slice jobId, ExpressionValidationContext exprContext)

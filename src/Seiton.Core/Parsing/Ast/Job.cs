@@ -3,13 +3,21 @@
 /// <summary>AST node representing a snapshot configuration for a job.</summary>
 public sealed class Snapshot
 {
-    public StringNodeId Version { get; init; }
+    public StringNodeId Version { get; set; }
 
-    public StringNodeId ImageName { get; init; }
+    public StringNodeId ImageName { get; set; }
 
-    public StringNodeId If { get; init; }
+    public StringNodeId If { get; set; }
 
-    public TextRange? IfKeyRange { get; init; }
+    public TextRange? IfKeyRange { get; set; }
+
+    internal void Reset()
+    {
+        Version = default;
+        ImageName = default;
+        If = default;
+        IfKeyRange = null;
+    }
 }
 
 /// <summary>AST node representing a single job in a workflow.</summary>
