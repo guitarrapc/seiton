@@ -37,6 +37,10 @@ public sealed class ExprUndefinedVarRule() : RuleBase(RuleId.ExprUndefinedVar)
     private readonly Dictionary<Step, int> _stepVisibleBeforeCounts = [];
     // Reusable dictionary for BuildStepsOverrideInto (avoids per-step allocation)
     private readonly Dictionary<Utf8String, ExprType> _stepsOverrideProps = new();
+    // Number of timeline entries already materialized into _stepsOverrideProps.
+    // Steps are visited in timeline order, so VisitStep only appends the delta
+    // (O(steps) per job) instead of rebuilding the whole prefix (O(steps²)).
+    private int _stepsOverrideBuiltCount;
     // Reusable dictionaries for BuildMatrixOverrideInto / BuildNeedsOverrideInto (avoids per-job allocation)
     private readonly Dictionary<Utf8String, ExprType> _matrixOverrideProps = new();
     private readonly Dictionary<Utf8String, ExprType> _needsOverrideProps = new();
@@ -277,8 +281,10 @@ public sealed class ExprUndefinedVarRule() : RuleBase(RuleId.ExprUndefinedVar)
         _jobScopeOverrides[2] = _inputsOverride;
         _jobScopeOverrides[3] = _secretsOverride;
         _jobScopeOverrides[4] = _githubOverride;
-        // step scope: initialize with empty steps (will be rebuilt per-step in VisitStep)
+        // step scope: initialize with empty steps (extended per-step in VisitStep; the returned
+        // ObjectExprType wraps _stepsOverrideProps by reference and observes appended entries)
         _stepScopeOverrides[0] = DynamicContextTypeBuilder.BuildStepsOverrideInto(_stepsOverrideProps, _stepVisibilityTimeline, Arena, yaml, maxStepIndex: 0, _localActionOutputResolverFunc);
+        _stepsOverrideBuiltCount = 0;
         _stepScopeOverrides[1] = matrixOverride;
         _stepScopeOverrides[2] = needsOverride;
         _stepScopeOverrides[3] = _inputsOverride;
@@ -403,11 +409,23 @@ public sealed class ExprUndefinedVarRule() : RuleBase(RuleId.ExprUndefinedVar)
             return;
         }
 
-        // Rebuild steps override to include only steps visible before the current one.
+        // Extend the steps override to include only steps visible before the current one.
+        // Visitor order matches timeline order, so appending the delta suffices.
         if (_hasOverrides && _stepVisibleBeforeCounts.TryGetValue(step, out var visibleBeforeCount))
         {
-            _stepScopeOverrides[0] = DynamicContextTypeBuilder.BuildStepsOverrideInto(
-                _stepsOverrideProps, _stepVisibilityTimeline, Arena, Config.Utf8Yaml, maxStepIndex: visibleBeforeCount, _localActionOutputResolverFunc);
+            if (visibleBeforeCount > _stepsOverrideBuiltCount)
+            {
+                DynamicContextTypeBuilder.AppendStepsOverrideInto(
+                    _stepsOverrideProps, _stepVisibilityTimeline, Arena, Config.Utf8Yaml, _stepsOverrideBuiltCount, visibleBeforeCount, _localActionOutputResolverFunc);
+                _stepsOverrideBuiltCount = visibleBeforeCount;
+            }
+            else if (visibleBeforeCount < _stepsOverrideBuiltCount)
+            {
+                // Defensive: only reachable if visit order ever diverges from timeline order.
+                _stepScopeOverrides[0] = DynamicContextTypeBuilder.BuildStepsOverrideInto(
+                    _stepsOverrideProps, _stepVisibilityTimeline, Arena, Config.Utf8Yaml, maxStepIndex: visibleBeforeCount, _localActionOutputResolverFunc);
+                _stepsOverrideBuiltCount = visibleBeforeCount;
+            }
         }
 
         CheckNode(step.If, ExpressionValidationContext.StepIf, static (rule, message, location, targetStep) =>
@@ -499,6 +517,7 @@ public sealed class ExprUndefinedVarRule() : RuleBase(RuleId.ExprUndefinedVar)
         _stepVisibilityTimeline.Clear();
         _stepVisibleBeforeCounts.Clear();
         _stepsOverrideProps.Clear();
+        _stepsOverrideBuiltCount = 0;
     }
 
     private void PlanStepVisibilityCore(Step step)
