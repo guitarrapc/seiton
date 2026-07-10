@@ -1,4 +1,5 @@
 ﻿using System.Buffers.Text;
+using System.Diagnostics.CodeAnalysis;
 using System.Runtime.CompilerServices;
 using VYaml.Parser;
 
@@ -35,6 +36,12 @@ internal ref struct VYamlStreamAdapter : IYamlStreamReader
         _parser = YamlParser.FromBytes(bytes);
     }
 
+    // Set when the UnsafeAccessor target cannot be resolved at runtime (e.g. a future
+    // VYaml version renames ReturnPool, or an aggressive trimmer strips it despite the
+    // DynamicDependency root). Pooling then degrades to a no-op instead of failing every
+    // parse from inside a finally block.
+    private static bool s_returnPoolUnavailable;
+
     /// <summary>
     /// Returns VYaml's internal parser/tokenizer buffers to their thread-local pool.
     /// VYaml only exposes this as the internal <c>YamlParser.ReturnPool</c> (its own
@@ -45,15 +52,23 @@ internal ref struct VYamlStreamAdapter : IYamlStreamReader
     /// </summary>
     public void Dispose()
     {
-        if (_poolReturned)
+        if (_poolReturned || s_returnPoolUnavailable)
         {
             return;
         }
 
         _poolReturned = true;
-        ReturnParserPool(ref _parser);
+        try
+        {
+            ReturnParserPool(ref _parser);
+        }
+        catch (MissingMethodException)
+        {
+            s_returnPoolUnavailable = true;
+        }
     }
 
+    [DynamicDependency("ReturnPool", typeof(YamlParser))]
     [UnsafeAccessor(UnsafeAccessorKind.Method, Name = "ReturnPool")]
     private static extern void ReturnParserPool(ref YamlParser parser);
 
