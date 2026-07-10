@@ -1,4 +1,6 @@
 ﻿using System.Buffers.Text;
+using System.Diagnostics.CodeAnalysis;
+using System.Runtime.CompilerServices;
 using VYaml.Parser;
 
 namespace Seiton.Core.Parsing;
@@ -24,6 +26,8 @@ internal ref struct VYamlStreamAdapter : IYamlStreamReader
     private List<(string Name, TextPosition Position, TextPosition AnchorPosition)>? _recursiveAliases;            // recursive alias occurrences
     private List<(int Id, List<AnchorEvent> Events, int Depth)>? _nestedRecordings;  // nested anchors inside outer recording
 
+    private bool _poolReturned;
+
     /// <summary>Creates a new adapter wrapping the given UTF-8 YAML bytes for pull-based parsing.</summary>
     public VYamlStreamAdapter(Memory<byte> bytes)
     {
@@ -31,6 +35,42 @@ internal ref struct VYamlStreamAdapter : IYamlStreamReader
         _scalarSliceCursor = 0;
         _parser = YamlParser.FromBytes(bytes);
     }
+
+    // Set when the UnsafeAccessor target cannot be resolved at runtime (e.g. a future
+    // VYaml version renames ReturnPool, or an aggressive trimmer strips it despite the
+    // DynamicDependency root). Pooling then degrades to a no-op instead of failing every
+    // parse from inside a finally block.
+    private static bool s_returnPoolUnavailable;
+
+    /// <summary>
+    /// Returns VYaml's internal parser/tokenizer buffers to their thread-local pool.
+    /// VYaml only exposes this as the internal <c>YamlParser.ReturnPool</c> (its own
+    /// <c>YamlSerializer</c> calls it after every deserialize); without this call the pool
+    /// stays empty and every parse allocates fresh tokenizer buffers. Idempotent — the pool
+    /// has no double-return guard, so returning twice would hand the same buffers to two
+    /// renters. The adapter must not be read after disposal.
+    /// </summary>
+    public void Dispose()
+    {
+        if (_poolReturned || s_returnPoolUnavailable)
+        {
+            return;
+        }
+
+        _poolReturned = true;
+        try
+        {
+            ReturnParserPool(ref _parser);
+        }
+        catch (MissingMethodException)
+        {
+            s_returnPoolUnavailable = true;
+        }
+    }
+
+    [DynamicDependency("ReturnPool", typeof(YamlParser))]
+    [UnsafeAccessor(UnsafeAccessorKind.Method, Name = "ReturnPool")]
+    private static extern void ReturnParserPool(ref YamlParser parser);
 
     public YamlEventKind CurrentKind =>
         _isReplaying ? _virtualCurrent.Kind : MapEventKind(_parser.CurrentEventType);
