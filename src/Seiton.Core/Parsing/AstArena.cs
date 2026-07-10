@@ -872,63 +872,83 @@ internal sealed class AstArena : IDisposable
     // Section node pool allocation methods (same reset-on-alloc semantics as Job/Step above)
 
     /// <summary>Returns a pooled or new <see cref="Permissions"/> with all fields reset to default.</summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public Permissions AllocPermissions() => _permissionsPool.Alloc();
 
     /// <summary>Returns a pooled or new <see cref="Env"/> with all fields reset to default.</summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public Env AllocEnv() => _envPool.Alloc();
 
     /// <summary>Returns a pooled or new <see cref="Defaults"/> with all fields reset to default.</summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public Defaults AllocDefaults() => _defaultsPool.Alloc();
 
     /// <summary>Returns a pooled or new <see cref="DefaultsRun"/> with all fields reset to default.</summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public DefaultsRun AllocDefaultsRun() => _defaultsRunPool.Alloc();
 
     /// <summary>Returns a pooled or new <see cref="Concurrency"/> with all fields reset to default.</summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public Concurrency AllocConcurrency() => _concurrencyPool.Alloc();
 
     /// <summary>Returns a pooled or new <see cref="Ast.Environment"/> with all fields reset to default.</summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public Ast.Environment AllocEnvironment() => _environmentPool.Alloc();
 
     /// <summary>Returns a pooled or new <see cref="Runner"/> with all fields reset to default.</summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public Runner AllocRunner() => _runnerPool.Alloc();
 
     /// <summary>Returns a pooled or new <see cref="Strategy"/> with all fields reset to default.</summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public Strategy AllocStrategy() => _strategyPool.Alloc();
 
     /// <summary>Returns a pooled or new <see cref="Matrix"/> with all fields reset to default.</summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public Matrix AllocMatrix() => _matrixPool.Alloc();
 
     /// <summary>Returns a pooled or new <see cref="MatrixRow"/> with all fields reset to default.</summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public MatrixRow AllocMatrixRow() => _matrixRowPool.Alloc();
 
     /// <summary>Returns a pooled or new <see cref="MatrixCombinations"/> with all fields reset to default.</summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public MatrixCombinations AllocMatrixCombinations() => _matrixCombinationsPool.Alloc();
 
     /// <summary>Returns a pooled or new <see cref="RawYamlString"/> with all fields reset to default.</summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public RawYamlString AllocRawYamlString() => _rawYamlStringPool.Alloc();
 
     /// <summary>Returns a pooled or new <see cref="RawYamlArray"/> with all fields reset to default.</summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public RawYamlArray AllocRawYamlArray() => _rawYamlArrayPool.Alloc();
 
     /// <summary>Returns a pooled or new <see cref="RawYamlObject"/> with all fields reset to default.</summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public RawYamlObject AllocRawYamlObject() => _rawYamlObjectPool.Alloc();
 
     /// <summary>Returns a pooled or new <see cref="Container"/> with all fields reset to default.</summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public Container AllocContainer() => _containerPool.Alloc();
 
     /// <summary>Returns a pooled or new <see cref="Services"/> with all fields reset to default.</summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public Services AllocServices() => _servicesPool.Alloc();
 
     /// <summary>Returns a pooled or new <see cref="Service"/> with all fields reset to default.</summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public Service AllocService() => _servicePool.Alloc();
 
     /// <summary>Returns a pooled or new <see cref="Credentials"/> with all fields reset to default.</summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public Credentials AllocCredentials() => _credentialsPool.Alloc();
 
     /// <summary>Returns a pooled or new <see cref="WorkflowCall"/> with all fields reset to default.</summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public WorkflowCall AllocWorkflowCall() => _workflowCallPool.Alloc();
 
     /// <summary>Returns a pooled or new <see cref="Snapshot"/> with all fields reset to default.</summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public Snapshot AllocSnapshot() => _snapshotPool.Alloc();
 
     // Incremental parse support

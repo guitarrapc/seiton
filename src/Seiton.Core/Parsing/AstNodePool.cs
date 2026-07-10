@@ -1,3 +1,5 @@
+using System.Runtime.CompilerServices;
+
 namespace Seiton.Core.Parsing;
 
 /// <summary>
@@ -20,11 +22,13 @@ internal struct AstNodePool<T> where T : class, new()
     }
 
     /// <summary>Returns a pooled or new instance with all fields reset to default.</summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public T Alloc()
     {
         if (_count == _items.Length)
         {
-            var grown = new T?[_items.Length * 2];
+            // Math.Max guards the zero-length case (capacity 0 would otherwise stay 0 forever).
+            var grown = new T?[Math.Max(_items.Length * 2, 4)];
             Array.Copy(_items, grown, _items.Length);
             _items = grown;
         }
