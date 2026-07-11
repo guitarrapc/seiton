@@ -201,30 +201,29 @@ internal sealed class AstArena : IDisposable
     private NodeTable<DefaultsData> _defaultsTable;
     private NodeTable<DefaultsRunData> _defaultsRunTable;
 
+    // Step family tables (Stage 2). Step rows are addressed by StepId; step lists go
+    // through the shared _stepIdItems store (nested parallel parsing appends step rows
+    // non-contiguously). Exec payload tables are addressed by 1-based payload index.
+    private NodeTable<StepData> _stepTable;
+    private NodeTable<StepId> _stepIdItems;
+    private NodeTable<ExecRunData> _execRunTable;
+    private NodeTable<ExecActionData> _execActionTable;
+    private NodeTable<ActionInputData> _actionInputTable;
+    private NodeTable<ExecWaitData> _execWaitTable;
+    private NodeTable<ExecWaitAllData> _execWaitAllTable;
+    private NodeTable<ExecCancelData> _execCancelTable;
+    private NodeTable<ExecParallelData> _execParallelTable;
+
+    // ActionMetadata family tables (Stage 2). Inputs/Outputs are key-embedded row maps
+    // (NodeRange over contiguous rows); Runs/Branding are single rows addressed by typed IDs.
+    private NodeTable<ActionMetadataInputData> _actionMetadataInputTable;
+    private NodeTable<ActionMetadataOutputData> _actionMetadataOutputTable;
+    private NodeTable<ActionMetadataRunsData> _actionMetadataRunsTable;
+    private NodeTable<ActionMetadataBrandingData> _actionMetadataBrandingTable;
+
     // Object pools for composite AST nodes (reused across parse calls)
     private Job[] _jobs;
     private int _jobCount;
-
-    private Step[] _steps;
-    private int _stepCount;
-
-    private ExecRun[] _execRuns;
-    private int _execRunCount;
-
-    private ExecAction[] _execActions;
-    private int _execActionCount;
-
-    private ExecWait[] _execWaits;
-    private int _execWaitCount;
-
-    private ExecWaitAll[] _execWaitAlls;
-    private int _execWaitAllCount;
-
-    private ExecCancel[] _execCancels;
-    private int _execCancelCount;
-
-    private ExecParallel[] _execParallels;
-    private int _execParallelCount;
 
     // Object pools for section AST nodes (Permissions, Env, Runner, ...).
     // Same reuse semantics as the Job/Step pools above, via AstNodePool<T>.
@@ -251,13 +250,6 @@ internal sealed class AstArena : IDisposable
         _ints = ArrayPool<IntNodeData>.Shared.Rent(intCapacity);
         _floats = ArrayPool<FloatNodeData>.Shared.Rent(floatCapacity);
         _jobs = new Job[DefaultJobCapacity];
-        _steps = new Step[DefaultStepCapacity];
-        _execRuns = new ExecRun[DefaultExecRunCapacity];
-        _execActions = new ExecAction[DefaultExecActionCapacity];
-        _execWaits = new ExecWait[DefaultExecWaitCapacity];
-        _execWaitAlls = new ExecWaitAll[DefaultExecWaitAllCapacity];
-        _execCancels = new ExecCancel[DefaultExecCancelCapacity];
-        _execParallels = new ExecParallel[DefaultExecParallelCapacity];
     }
 
     /// <summary>
@@ -376,13 +368,6 @@ internal sealed class AstArena : IDisposable
         // Reset pooled objects to release references to prior AST graphs (Steps lists, SliceMaps, etc.)
         // This prevents memory retention across parse calls, which is critical in WASM.
         for (var i = 0; i < _jobCount; i++) _jobs[i]?.Reset();
-        for (var i = 0; i < _stepCount; i++) _steps[i]?.Reset();
-        for (var i = 0; i < _execRunCount; i++) _execRuns[i]?.Reset();
-        for (var i = 0; i < _execActionCount; i++) _execActions[i]?.Reset();
-        for (var i = 0; i < _execWaitCount; i++) _execWaits[i]?.Reset();
-        for (var i = 0; i < _execWaitAllCount; i++) _execWaitAlls[i]?.Reset();
-        for (var i = 0; i < _execCancelCount; i++) _execCancels[i]?.Reset();
-        for (var i = 0; i < _execParallelCount; i++) _execParallels[i]?.Reset();
 
         // Section node pools: reset allocated nodes and cap retained capacity
 
@@ -426,6 +411,19 @@ internal sealed class AstArena : IDisposable
         _snapshotTable.Reset();
         _defaultsTable.Reset();
         _defaultsRunTable.Reset();
+        _stepTable.Reset();
+        _stepIdItems.Reset();
+        _execRunTable.Reset();
+        _execActionTable.Reset();
+        _actionInputTable.Reset();
+        _execWaitTable.Reset();
+        _execWaitAllTable.Reset();
+        _execCancelTable.Reset();
+        _execParallelTable.Reset();
+        _actionMetadataInputTable.Reset();
+        _actionMetadataOutputTable.Reset();
+        _actionMetadataRunsTable.Reset();
+        _actionMetadataBrandingTable.Reset();
         _stringIdItems.ReleaseOversized(DefaultStringIdItemsRetainedCapacity);
         _permissionsTable.ReleaseOversized(DefaultNodeTableRetainedCapacity);
         _permissionScopeTable.ReleaseOversized(DefaultStringIdItemsRetainedCapacity);
@@ -465,30 +463,29 @@ internal sealed class AstArena : IDisposable
         _snapshotTable.ReleaseOversized(DefaultNodeTableRetainedCapacity);
         _defaultsTable.ReleaseOversized(DefaultNodeTableRetainedCapacity);
         _defaultsRunTable.ReleaseOversized(DefaultNodeTableRetainedCapacity);
+        _stepTable.ReleaseOversized(DefaultStringIdItemsRetainedCapacity);
+        _stepIdItems.ReleaseOversized(DefaultStringIdItemsRetainedCapacity);
+        _execRunTable.ReleaseOversized(DefaultStringIdItemsRetainedCapacity);
+        _execActionTable.ReleaseOversized(DefaultStringIdItemsRetainedCapacity);
+        _actionInputTable.ReleaseOversized(DefaultStringIdItemsRetainedCapacity);
+        _execWaitTable.ReleaseOversized(DefaultNodeTableRetainedCapacity);
+        _execWaitAllTable.ReleaseOversized(DefaultNodeTableRetainedCapacity);
+        _execCancelTable.ReleaseOversized(DefaultNodeTableRetainedCapacity);
+        _execParallelTable.ReleaseOversized(DefaultNodeTableRetainedCapacity);
+        _actionMetadataInputTable.ReleaseOversized(DefaultStringIdItemsRetainedCapacity);
+        _actionMetadataOutputTable.ReleaseOversized(DefaultStringIdItemsRetainedCapacity);
+        _actionMetadataRunsTable.ReleaseOversized(DefaultNodeTableRetainedCapacity);
+        _actionMetadataBrandingTable.ReleaseOversized(DefaultNodeTableRetainedCapacity);
 
         // Capture per-parse usage before the counters reset — the shrink policy below
         // retains pooled instances up to the most recent use.
         var jobsUsed = _jobCount;
-        var stepsUsed = _stepCount;
-        var execRunsUsed = _execRunCount;
-        var execActionsUsed = _execActionCount;
-        var execWaitsUsed = _execWaitCount;
-        var execWaitAllsUsed = _execWaitAllCount;
-        var execCancelsUsed = _execCancelCount;
-        var execParallelsUsed = _execParallelCount;
 
         _stringCount = 0;
         _boolCount = 0;
         _intCount = 0;
         _floatCount = 0;
         _jobCount = 0;
-        _stepCount = 0;
-        _execRunCount = 0;
-        _execActionCount = 0;
-        _execWaitCount = 0;
-        _execWaitAllCount = 0;
-        _execCancelCount = 0;
-        _execParallelCount = 0;
         _source = [];
 
         if (cached is null)
@@ -507,13 +504,6 @@ internal sealed class AstArena : IDisposable
             ShrinkIfOversized(ref _ints, DefaultIntCapacity);
             ShrinkIfOversized(ref _floats, DefaultFloatCapacity);
             ShrinkObjectPoolIfOversized(ref _jobs, Math.Max(DefaultJobCapacity, jobsUsed));
-            ShrinkObjectPoolIfOversized(ref _steps, Math.Max(DefaultStepCapacity, stepsUsed));
-            ShrinkObjectPoolIfOversized(ref _execRuns, Math.Max(DefaultExecRunCapacity, execRunsUsed));
-            ShrinkObjectPoolIfOversized(ref _execActions, Math.Max(DefaultExecActionCapacity, execActionsUsed));
-            ShrinkObjectPoolIfOversized(ref _execWaits, Math.Max(DefaultExecWaitCapacity, execWaitsUsed));
-            ShrinkObjectPoolIfOversized(ref _execWaitAlls, Math.Max(DefaultExecWaitAllCapacity, execWaitAllsUsed));
-            ShrinkObjectPoolIfOversized(ref _execCancels, Math.Max(DefaultExecCancelCapacity, execCancelsUsed));
-            ShrinkObjectPoolIfOversized(ref _execParallels, Math.Max(DefaultExecParallelCapacity, execParallelsUsed));
             cached = this;
         }
         else
@@ -562,18 +552,24 @@ internal sealed class AstArena : IDisposable
             _snapshotTable.ReleaseAll();
             _defaultsTable.ReleaseAll();
             _defaultsRunTable.ReleaseAll();
+            _stepTable.ReleaseAll();
+            _stepIdItems.ReleaseAll();
+            _execRunTable.ReleaseAll();
+            _execActionTable.ReleaseAll();
+            _actionInputTable.ReleaseAll();
+            _execWaitTable.ReleaseAll();
+            _execWaitAllTable.ReleaseAll();
+            _execCancelTable.ReleaseAll();
+            _execParallelTable.ReleaseAll();
+            _actionMetadataInputTable.ReleaseAll();
+            _actionMetadataOutputTable.ReleaseAll();
+            _actionMetadataRunsTable.ReleaseAll();
+            _actionMetadataBrandingTable.ReleaseAll();
             _strings = null!;
             _bools = null!;
             _ints = null!;
             _floats = null!;
             _jobs = null!;
-            _steps = null!;
-            _execRuns = null!;
-            _execActions = null!;
-            _execWaits = null!;
-            _execWaitAlls = null!;
-            _execCancels = null!;
-            _execParallels = null!;
         }
     }
 
@@ -585,13 +581,6 @@ internal sealed class AstArena : IDisposable
 
     // Object pool default capacities (retain up to these sizes across parses)
     private const int DefaultJobCapacity = 24;
-    private const int DefaultStepCapacity = 128;
-    private const int DefaultExecRunCapacity = 128;
-    private const int DefaultExecActionCapacity = 128;
-    private const int DefaultExecWaitCapacity = 32;
-    private const int DefaultExecWaitAllCapacity = 16;
-    private const int DefaultExecCancelCapacity = 16;
-    private const int DefaultExecParallelCapacity = 32;
 
     // Section node pool default capacities. Env appears per step + per job + workflow-level,
     // Runner/Strategy/Matrix/MatrixRow per job, the rest are occasional per-job sections.
@@ -633,13 +622,6 @@ internal sealed class AstArena : IDisposable
         _intCount = 0;
         _floatCount = 0;
         _jobCount = 0;
-        _stepCount = 0;
-        _execRunCount = 0;
-        _execActionCount = 0;
-        _execWaitCount = 0;
-        _execWaitAllCount = 0;
-        _execCancelCount = 0;
-        _execParallelCount = 0;
         _stringIdItems.Reset();
         _permissionsTable.Reset();
         _permissionScopeTable.Reset();
@@ -679,6 +661,19 @@ internal sealed class AstArena : IDisposable
         _snapshotTable.Reset();
         _defaultsTable.Reset();
         _defaultsRunTable.Reset();
+        _stepTable.Reset();
+        _stepIdItems.Reset();
+        _execRunTable.Reset();
+        _execActionTable.Reset();
+        _actionInputTable.Reset();
+        _execWaitTable.Reset();
+        _execWaitAllTable.Reset();
+        _execCancelTable.Reset();
+        _execParallelTable.Reset();
+        _actionMetadataInputTable.Reset();
+        _actionMetadataOutputTable.Reset();
+        _actionMetadataRunsTable.Reset();
+        _actionMetadataBrandingTable.Reset();
         EnsureMinCapacity(ref _strings, Math.Max(64, source.Length / 20));
         EnsureMinCapacity(ref _bools, Math.Max(8, source.Length / 200));
         EnsureMinCapacity(ref _ints, Math.Max(4, source.Length / 500));
@@ -939,119 +934,7 @@ internal sealed class AstArena : IDisposable
         return obj;
     }
 
-    /// <summary>Returns a pooled or new Step instance with all fields reset to default.</summary>
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public Step AllocStep()
-    {
-        if (_stepCount == _steps.Length) GrowObjectPool(ref _steps);
-        var obj = _steps[_stepCount];
-        if (obj is null)
-        {
-            obj = new Step();
-            _steps[_stepCount] = obj;
-        }
-        obj.Reset();
-        _stepCount++;
-        return obj;
-    }
-
-    /// <summary>Returns a pooled or new ExecRun instance with all fields reset to default.</summary>
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public ExecRun AllocExecRun()
-    {
-        if (_execRunCount == _execRuns.Length) GrowObjectPool(ref _execRuns);
-        var obj = _execRuns[_execRunCount];
-        if (obj is null)
-        {
-            obj = new ExecRun();
-            _execRuns[_execRunCount] = obj;
-        }
-        obj.Reset();
-        _execRunCount++;
-        return obj;
-    }
-
-    /// <summary>Returns a pooled or new ExecAction instance with all fields reset to default.</summary>
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public ExecAction AllocExecAction()
-    {
-        if (_execActionCount == _execActions.Length) GrowObjectPool(ref _execActions);
-        var obj = _execActions[_execActionCount];
-        if (obj is null)
-        {
-            obj = new ExecAction();
-            _execActions[_execActionCount] = obj;
-        }
-        obj.Reset();
-        _execActionCount++;
-        return obj;
-    }
-
-    /// <summary>Returns a pooled or new ExecWait instance with all fields reset to default.</summary>
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public ExecWait AllocExecWait()
-    {
-        if (_execWaitCount == _execWaits.Length) GrowObjectPool(ref _execWaits);
-        var obj = _execWaits[_execWaitCount];
-        if (obj is null)
-        {
-            obj = new ExecWait();
-            _execWaits[_execWaitCount] = obj;
-        }
-        obj.Reset();
-        _execWaitCount++;
-        return obj;
-    }
-
-    /// <summary>Returns a pooled or new ExecWaitAll instance with all fields reset to default.</summary>
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public ExecWaitAll AllocExecWaitAll()
-    {
-        if (_execWaitAllCount == _execWaitAlls.Length) GrowObjectPool(ref _execWaitAlls);
-        var obj = _execWaitAlls[_execWaitAllCount];
-        if (obj is null)
-        {
-            obj = new ExecWaitAll();
-            _execWaitAlls[_execWaitAllCount] = obj;
-        }
-        obj.Reset();
-        _execWaitAllCount++;
-        return obj;
-    }
-
-    /// <summary>Returns a pooled or new ExecCancel instance with all fields reset to default.</summary>
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public ExecCancel AllocExecCancel()
-    {
-        if (_execCancelCount == _execCancels.Length) GrowObjectPool(ref _execCancels);
-        var obj = _execCancels[_execCancelCount];
-        if (obj is null)
-        {
-            obj = new ExecCancel();
-            _execCancels[_execCancelCount] = obj;
-        }
-        obj.Reset();
-        _execCancelCount++;
-        return obj;
-    }
-
-    /// <summary>Returns a pooled or new ExecParallel instance with all fields reset to default.</summary>
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public ExecParallel AllocExecParallel()
-    {
-        if (_execParallelCount == _execParallels.Length) GrowObjectPool(ref _execParallels);
-        var obj = _execParallels[_execParallelCount];
-        if (obj is null)
-        {
-            obj = new ExecParallel();
-            _execParallels[_execParallelCount] = obj;
-        }
-        obj.Reset();
-        _execParallelCount++;
-        return obj;
-    }
-
-    // Section node pool allocation methods (same reset-on-alloc semantics as Job/Step above)
+    // Section node pool allocation methods (same reset-on-alloc semantics as Job above)
 
     // Data-oriented node table accessors (Stage 2)
 
@@ -1070,6 +953,134 @@ internal sealed class AstArena : IDisposable
     /// <summary>Resolves one element of a <see cref="StringIdRange"/>.</summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     internal StringNodeId GetStringIdAt(StringIdRange range, int index) => _stringIdItems[range.First + index];
+
+    // Step family accessors. Step rows are addressed by StepId; step lists are ranges over
+    // the shared StepId list store (nested parallel parsing appends step rows non-contiguously).
+    // StepData.ExecPayload is a 1-based index into the kind-specific payload table.
+
+    /// <summary>Appends a <see cref="StepData"/> row and returns its handle.</summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public StepId AddStep(in StepData data) => new(_stepTable.Add(in data) + 1);
+
+    /// <summary>Resolves a <see cref="StepData"/> row.</summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    internal ref readonly StepData GetStep(StepId id) => ref _stepTable[id.Index];
+
+    /// <summary>Copies the given step handles into the shared list store and returns their range.</summary>
+    public StepIdRange AddStepIdList(ReadOnlySpan<StepId> items)
+    {
+        var first = _stepIdItems.Count;
+        for (var i = 0; i < items.Length; i++)
+        {
+            _stepIdItems.Add(in items[i]);
+        }
+
+        return new StepIdRange(first, items.Length);
+    }
+
+    /// <summary>Resolves one element of a <see cref="StepIdRange"/>.</summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    internal StepId GetStepIdAt(StepIdRange range, int index) => _stepIdItems[range.First + index];
+
+    /// <summary>Appends an <see cref="ExecRunData"/> payload row; returns its 1-based payload index.</summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public int AddExecRun(in ExecRunData data) => _execRunTable.Add(in data) + 1;
+
+    /// <summary>Resolves a <c>run:</c> payload row by 1-based payload index.</summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    internal ref readonly ExecRunData GetExecRun(int payload) => ref _execRunTable[payload - 1];
+
+    /// <summary>Appends an <see cref="ExecActionData"/> payload row; returns its 1-based payload index.</summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public int AddExecAction(in ExecActionData data) => _execActionTable.Add(in data) + 1;
+
+    /// <summary>Resolves a <c>uses:</c> payload row by 1-based payload index.</summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    internal ref readonly ExecActionData GetExecAction(int payload) => ref _execActionTable[payload - 1];
+
+    /// <summary>Appends an <see cref="ActionInputData"/> row (rows of one <c>with:</c> block must be appended contiguously).</summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public int AddActionInput(in ActionInputData data) => _actionInputTable.Add(in data);
+
+    /// <summary>Gets the current action-input row count (range start capture).</summary>
+    internal int ActionInputCount => _actionInputTable.Count;
+
+    /// <summary>Resolves one element of an action-input <see cref="NodeRange"/>.</summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    internal ref readonly ActionInputData GetActionInputAt(NodeRange range, int index) => ref _actionInputTable[range.First + index];
+
+    /// <summary>Appends an <see cref="ExecWaitData"/> payload row; returns its 1-based payload index.</summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public int AddExecWait(in ExecWaitData data) => _execWaitTable.Add(in data) + 1;
+
+    /// <summary>Resolves a <c>wait:</c> payload row by 1-based payload index.</summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    internal ref readonly ExecWaitData GetExecWait(int payload) => ref _execWaitTable[payload - 1];
+
+    /// <summary>Appends an <see cref="ExecWaitAllData"/> payload row; returns its 1-based payload index.</summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public int AddExecWaitAll(in ExecWaitAllData data) => _execWaitAllTable.Add(in data) + 1;
+
+    /// <summary>Resolves a <c>wait-all:</c> payload row by 1-based payload index.</summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    internal ref readonly ExecWaitAllData GetExecWaitAll(int payload) => ref _execWaitAllTable[payload - 1];
+
+    /// <summary>Appends an <see cref="ExecCancelData"/> payload row; returns its 1-based payload index.</summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public int AddExecCancel(in ExecCancelData data) => _execCancelTable.Add(in data) + 1;
+
+    /// <summary>Resolves a <c>cancel:</c> payload row by 1-based payload index.</summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    internal ref readonly ExecCancelData GetExecCancel(int payload) => ref _execCancelTable[payload - 1];
+
+    /// <summary>Appends an <see cref="ExecParallelData"/> payload row; returns its 1-based payload index.</summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public int AddExecParallel(in ExecParallelData data) => _execParallelTable.Add(in data) + 1;
+
+    /// <summary>Resolves a <c>parallel:</c> payload row by 1-based payload index.</summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    internal ref readonly ExecParallelData GetExecParallel(int payload) => ref _execParallelTable[payload - 1];
+
+    // ActionMetadata family accessors. Inputs/Outputs rows of one map are contiguous
+    // (key embedded in the row); Runs/Branding are single rows addressed by typed IDs.
+
+    /// <summary>Appends an <see cref="ActionMetadataInputData"/> row (rows of one <c>inputs:</c> map must be appended contiguously).</summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public int AddActionMetadataInput(in ActionMetadataInputData data) => _actionMetadataInputTable.Add(in data);
+
+    /// <summary>Gets the current action-metadata-input row count (range start capture).</summary>
+    internal int ActionMetadataInputCount => _actionMetadataInputTable.Count;
+
+    /// <summary>Resolves one element of an action-metadata-input <see cref="NodeRange"/>.</summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    internal ref readonly ActionMetadataInputData GetActionMetadataInputAt(NodeRange range, int index) => ref _actionMetadataInputTable[range.First + index];
+
+    /// <summary>Appends an <see cref="ActionMetadataOutputData"/> row (rows of one <c>outputs:</c> map must be appended contiguously).</summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public int AddActionMetadataOutput(in ActionMetadataOutputData data) => _actionMetadataOutputTable.Add(in data);
+
+    /// <summary>Gets the current action-metadata-output row count (range start capture).</summary>
+    internal int ActionMetadataOutputCount => _actionMetadataOutputTable.Count;
+
+    /// <summary>Resolves one element of an action-metadata-output <see cref="NodeRange"/>.</summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    internal ref readonly ActionMetadataOutputData GetActionMetadataOutputAt(NodeRange range, int index) => ref _actionMetadataOutputTable[range.First + index];
+
+    /// <summary>Appends an <see cref="ActionMetadataRunsData"/> row and returns its handle.</summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public ActionMetadataRunsId AddActionMetadataRuns(in ActionMetadataRunsData data) => new(_actionMetadataRunsTable.Add(in data) + 1);
+
+    /// <summary>Resolves an <see cref="ActionMetadataRunsData"/> row.</summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    internal ref readonly ActionMetadataRunsData GetActionMetadataRuns(ActionMetadataRunsId id) => ref _actionMetadataRunsTable[id.Index];
+
+    /// <summary>Appends an <see cref="ActionMetadataBrandingData"/> row and returns its handle.</summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public ActionMetadataBrandingId AddActionMetadataBranding(in ActionMetadataBrandingData data) => new(_actionMetadataBrandingTable.Add(in data) + 1);
+
+    /// <summary>Resolves an <see cref="ActionMetadataBrandingData"/> row.</summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    internal ref readonly ActionMetadataBrandingData GetActionMetadataBranding(ActionMetadataBrandingId id) => ref _actionMetadataBrandingTable[id.Index];
 
     /// <summary>Appends a <see cref="PermissionsData"/> row and returns its handle.</summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -1526,6 +1537,19 @@ internal sealed class AstArena : IDisposable
         _snapshotTable.CopyFrom(in source._snapshotTable, source._snapshotTable.Count);
         _defaultsTable.CopyFrom(in source._defaultsTable, source._defaultsTable.Count);
         _defaultsRunTable.CopyFrom(in source._defaultsRunTable, source._defaultsRunTable.Count);
+        _stepTable.CopyFrom(in source._stepTable, source._stepTable.Count);
+        _stepIdItems.CopyFrom(in source._stepIdItems, source._stepIdItems.Count);
+        _execRunTable.CopyFrom(in source._execRunTable, source._execRunTable.Count);
+        _execActionTable.CopyFrom(in source._execActionTable, source._execActionTable.Count);
+        _actionInputTable.CopyFrom(in source._actionInputTable, source._actionInputTable.Count);
+        _execWaitTable.CopyFrom(in source._execWaitTable, source._execWaitTable.Count);
+        _execWaitAllTable.CopyFrom(in source._execWaitAllTable, source._execWaitAllTable.Count);
+        _execCancelTable.CopyFrom(in source._execCancelTable, source._execCancelTable.Count);
+        _execParallelTable.CopyFrom(in source._execParallelTable, source._execParallelTable.Count);
+        _actionMetadataInputTable.CopyFrom(in source._actionMetadataInputTable, source._actionMetadataInputTable.Count);
+        _actionMetadataOutputTable.CopyFrom(in source._actionMetadataOutputTable, source._actionMetadataOutputTable.Count);
+        _actionMetadataRunsTable.CopyFrom(in source._actionMetadataRunsTable, source._actionMetadataRunsTable.Count);
+        _actionMetadataBrandingTable.CopyFrom(in source._actionMetadataBrandingTable, source._actionMetadataBrandingTable.Count);
     }
 
     /// <summary>Gets the current number of string entries in the arena.</summary>

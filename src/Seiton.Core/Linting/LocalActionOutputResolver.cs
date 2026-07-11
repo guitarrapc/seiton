@@ -135,17 +135,17 @@ internal sealed class LocalActionOutputResolver
             return null;
         }
 
-        var meta = parseHandle.ActionMetadataNode;
-        if (meta.Outputs is null || meta.Outputs.Value.Count == 0)
+        var outputs = parseHandle.ActionMetadata.Outputs;
+        if (!outputs.HasValue || outputs.Count == 0)
         {
             return [];
         }
 
-        var names = new string[meta.Outputs.Value.Count];
+        var names = new string[outputs.Count];
         var idx = 0;
-        foreach (var kv in meta.Outputs.Value)
+        foreach (var kv in outputs)
         {
-            names[idx++] = Encoding.UTF8.GetString(kv.Key.AsSpan(bytes));
+            names[idx++] = Encoding.UTF8.GetString(kv.Key.Slice.AsSpan(bytes));
         }
 
         return names;

@@ -228,7 +228,7 @@ public sealed class CheckoutPersistCredentialsRule() : RuleBase(RuleId.CheckoutP
         return false;
     }
 
-    private int FindFirstInputLine(byte[] utf8Yaml, StringRefMap inputs)
+    private int FindFirstInputLine(byte[] utf8Yaml, ActionInputRefMap inputs)
     {
         var firstLine = int.MaxValue;
         foreach (var pair in inputs)

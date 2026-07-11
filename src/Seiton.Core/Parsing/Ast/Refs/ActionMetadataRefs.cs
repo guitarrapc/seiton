@@ -20,127 +20,123 @@ public readonly struct ActionMetadataRef
 
     public StringRef Description => new(_arena, _node?.Description ?? default);
 
-    public ActionMetadataInputRefMap Inputs => new(_arena, _node?.Inputs);
+    public ActionMetadataInputRefMap Inputs => new(_arena, _node?.Inputs ?? default);
 
-    public ActionMetadataOutputRefMap Outputs => new(_arena, _node?.Outputs);
+    public ActionMetadataOutputRefMap Outputs => new(_arena, _node?.Outputs ?? default);
 
-    public ActionMetadataRunsRef Runs => new(_arena, _node?.Runs);
+    public ActionMetadataRunsRef Runs => new(_arena, _node?.Runs ?? default);
 
-    public ActionMetadataBrandingRef Branding => new(_arena, _node?.Branding);
+    public ActionMetadataBrandingRef Branding => new(_arena, _node?.Branding ?? default);
 
     public TextRange Range => _node?.Range ?? default;
 }
 
 /// <summary>An input parameter declared in action metadata.</summary>
-public readonly struct ActionMetadataInputRef : INodeRef<ActionMetadataInput, ActionMetadataInputRef>
+public readonly struct ActionMetadataInputRef
 {
     private readonly AstArena? _arena;
-    private readonly ActionMetadataInput? _node;
+    private readonly ActionMetadataInputData _row;
 
-    internal ActionMetadataInputRef(AstArena? arena, ActionMetadataInput? node)
+    internal ActionMetadataInputRef(AstArena? arena, in ActionMetadataInputData row)
     {
         _arena = arena;
-        _node = node;
+        _row = row;
     }
 
-    static ActionMetadataInputRef INodeRef<ActionMetadataInput, ActionMetadataInputRef>.Create(AstArena? arena, ActionMetadataInput node) => new(arena, node);
+    public bool HasValue => _arena is not null;
 
-    public bool HasValue => _node is not null && _arena is not null;
+    public StringRef Name => new(_arena, _row.Name);
 
-    public StringRef Name => new(_arena, _node?.Name ?? default);
+    public StringRef Description => new(_arena, _row.Description);
 
-    public StringRef Description => new(_arena, _node?.Description ?? default);
+    public BoolRef Required => new(_arena, _row.Required);
 
-    public BoolRef Required => new(_arena, _node?.Required ?? default);
+    public StringRef Default => new(_arena, _row.Default);
 
-    public StringRef Default => new(_arena, _node?.Default ?? default);
+    public StringRef DeprecationMessage => new(_arena, _row.DeprecationMessage);
 
-    public StringRef DeprecationMessage => new(_arena, _node?.DeprecationMessage ?? default);
-
-    public TextRange Range => _node?.Range ?? default;
+    public TextRange Range => _row.Range;
 }
 
 /// <summary>An output parameter declared in action metadata.</summary>
-public readonly struct ActionMetadataOutputRef : INodeRef<ActionMetadataOutput, ActionMetadataOutputRef>
+public readonly struct ActionMetadataOutputRef
 {
     private readonly AstArena? _arena;
-    private readonly ActionMetadataOutput? _node;
+    private readonly ActionMetadataOutputData _row;
 
-    internal ActionMetadataOutputRef(AstArena? arena, ActionMetadataOutput? node)
+    internal ActionMetadataOutputRef(AstArena? arena, in ActionMetadataOutputData row)
     {
         _arena = arena;
-        _node = node;
+        _row = row;
     }
 
-    static ActionMetadataOutputRef INodeRef<ActionMetadataOutput, ActionMetadataOutputRef>.Create(AstArena? arena, ActionMetadataOutput node) => new(arena, node);
+    public bool HasValue => _arena is not null;
 
-    public bool HasValue => _node is not null && _arena is not null;
+    public StringRef Name => new(_arena, _row.Name);
 
-    public StringRef Name => new(_arena, _node?.Name ?? default);
+    public StringRef Description => new(_arena, _row.Description);
 
-    public StringRef Description => new(_arena, _node?.Description ?? default);
+    public StringRef Value => new(_arena, _row.Value);
 
-    public StringRef Value => new(_arena, _node?.Value ?? default);
-
-    public TextRange Range => _node?.Range ?? default;
+    public TextRange Range => _row.Range;
 }
 
 /// <summary>The <c>runs:</c> section of action metadata defining the execution entry points.</summary>
 public readonly struct ActionMetadataRunsRef
 {
     private readonly AstArena? _arena;
-    private readonly ActionMetadataRuns? _node;
+    private readonly ActionMetadataRunsId _id;
 
-    internal ActionMetadataRunsRef(AstArena? arena, ActionMetadataRuns? node)
+    internal ActionMetadataRunsRef(AstArena? arena, ActionMetadataRunsId id)
     {
         _arena = arena;
-        _node = node;
+        _id = id;
     }
 
-    public bool HasValue => _node is not null && _arena is not null;
+    public bool HasValue => _arena is not null && _id.HasValue;
 
-    public StringRef Using => new(_arena, _node?.Using ?? default);
+    public StringRef Using => HasValue ? new(_arena, _arena!.GetActionMetadataRuns(_id).Using) : default;
 
-    public StringRef Main => new(_arena, _node?.Main ?? default);
+    public StringRef Main => HasValue ? new(_arena, _arena!.GetActionMetadataRuns(_id).Main) : default;
 
-    public StringRef Pre => new(_arena, _node?.Pre ?? default);
+    public StringRef Pre => HasValue ? new(_arena, _arena!.GetActionMetadataRuns(_id).Pre) : default;
 
-    public StringRef Post => new(_arena, _node?.Post ?? default);
+    public StringRef Post => HasValue ? new(_arena, _arena!.GetActionMetadataRuns(_id).Post) : default;
 
-    public StringRef PreIf => new(_arena, _node?.PreIf ?? default);
+    public StringRef PreIf => HasValue ? new(_arena, _arena!.GetActionMetadataRuns(_id).PreIf) : default;
 
-    public StringRef PostIf => new(_arena, _node?.PostIf ?? default);
+    public StringRef PostIf => HasValue ? new(_arena, _arena!.GetActionMetadataRuns(_id).PostIf) : default;
 
-    public StringRef Image => new(_arena, _node?.Image ?? default);
+    public StringRef Image => HasValue ? new(_arena, _arena!.GetActionMetadataRuns(_id).Image) : default;
 
-    public StringRef Entrypoint => new(_arena, _node?.Entrypoint ?? default);
+    public StringRef Entrypoint => HasValue ? new(_arena, _arena!.GetActionMetadataRuns(_id).Entrypoint) : default;
 
-    public StringRefList Args => new(_arena, _node?.Args ?? default);
+    public StringRefList Args => HasValue ? new(_arena, _arena!.GetActionMetadataRuns(_id).Args) : default;
 
-    public EnvRef Env => new(_arena, _node?.Env ?? default);
+    public EnvRef Env => HasValue ? new(_arena, _arena!.GetActionMetadataRuns(_id).Env) : default;
 
-    public StepRefList Steps => new(_arena, _node?.Steps);
+    public StepRefList Steps => HasValue ? new(_arena, _arena!.GetActionMetadataRuns(_id).Steps) : default;
 
-    public TextRange Range => _node?.Range ?? default;
+    public TextRange Range => HasValue ? _arena!.GetActionMetadataRuns(_id).Range : default;
 }
 
 /// <summary>The <c>branding:</c> section of action metadata (icon and color).</summary>
 public readonly struct ActionMetadataBrandingRef
 {
     private readonly AstArena? _arena;
-    private readonly ActionMetadataBranding? _node;
+    private readonly ActionMetadataBrandingId _id;
 
-    internal ActionMetadataBrandingRef(AstArena? arena, ActionMetadataBranding? node)
+    internal ActionMetadataBrandingRef(AstArena? arena, ActionMetadataBrandingId id)
     {
         _arena = arena;
-        _node = node;
+        _id = id;
     }
 
-    public bool HasValue => _node is not null && _arena is not null;
+    public bool HasValue => _arena is not null && _id.HasValue;
 
-    public StringRef Icon => new(_arena, _node?.Icon ?? default);
+    public StringRef Icon => HasValue ? new(_arena, _arena!.GetActionMetadataBranding(_id).Icon) : default;
 
-    public StringRef Color => new(_arena, _node?.Color ?? default);
+    public StringRef Color => HasValue ? new(_arena, _arena!.GetActionMetadataBranding(_id).Color) : default;
 
-    public TextRange Range => _node?.Range ?? default;
+    public TextRange Range => HasValue ? _arena!.GetActionMetadataBranding(_id).Range : default;
 }

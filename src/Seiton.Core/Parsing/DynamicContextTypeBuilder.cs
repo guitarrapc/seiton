@@ -105,13 +105,13 @@ internal static class DynamicContextTypeBuilder
         var limit = Math.Min(maxStepIndex, steps.Count);
         for (var i = Math.Max(fromStepIndex, 0); i < limit; i++)
         {
-            var step = steps[i].Node!;
+            var step = steps[i];
             if (!step.Id.HasValue)
             {
                 continue;
             }
 
-            var idSlice = arena.GetStringSlice(step.Id);
+            var idSlice = step.Id.Slice;
             if (idSlice.IsEmpty)
             {
                 continue;
@@ -132,13 +132,13 @@ internal static class DynamicContextTypeBuilder
         var limit = maxStepIndex >= 0 ? Math.Min(maxStepIndex, steps.Count) : steps.Count;
         for (var i = 0; i < limit; i++)
         {
-            var step = steps[i].Node!;
+            var step = steps[i];
             if (!step.Id.HasValue)
             {
                 continue;
             }
 
-            var idSlice = arena.GetStringSlice(step.Id);
+            var idSlice = step.Id.Slice;
             if (idSlice.IsEmpty)
             {
                 continue;
@@ -160,14 +160,15 @@ internal static class DynamicContextTypeBuilder
     /// For local actions, uses the optional resolver to get output names from action metadata.
     /// </summary>
     private static ObjectExprType BuildStepEntryType(
-        Step step,
+        StepRef step,
         AstArena arena,
         byte[] utf8Yaml,
         Func<ReadOnlyMemory<byte>, string[]?>? localActionOutputResolver = null)
     {
-        if (step.Exec is ExecAction action)
+        if (step.Exec.Kind == StepExecKind.Action)
         {
-            var usesValue = arena.GetStringValue(action.Uses);
+            var action = step.Exec.AsAction();
+            var usesValue = action.Uses.Value;
             if (PopularActions.TryGet(usesValue, out var spec))
             {
                 var outputNames = spec.GetOutputNames();
@@ -180,7 +181,8 @@ internal static class DynamicContextTypeBuilder
             // Try local action output resolution
             if (localActionOutputResolver is not null && usesValue.Length > 0)
             {
-                var usesMemory = utf8Yaml.AsMemory(arena.GetStringSlice(action.Uses).Offset, arena.GetStringSlice(action.Uses).Length);
+                var usesSlice = action.Uses.Slice;
+                var usesMemory = utf8Yaml.AsMemory(usesSlice.Offset, usesSlice.Length);
                 var outputNames = localActionOutputResolver(usesMemory);
                 if (outputNames is { Length: > 0 })
                 {

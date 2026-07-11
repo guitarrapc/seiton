@@ -47,38 +47,38 @@ public readonly struct StringRefList
 public readonly struct StepRefList
 {
     private readonly AstArena? _arena;
-    private readonly IReadOnlyList<Step>? _nodes;
+    private readonly StepIdRange _range;
 
-    internal StepRefList(AstArena? arena, IReadOnlyList<Step>? nodes)
+    internal StepRefList(AstArena? arena, StepIdRange range)
     {
         _arena = arena;
-        _nodes = nodes;
+        _range = range;
     }
 
-    public bool HasValue => _nodes is not null;
+    public bool HasValue => _arena is not null && _range.HasValue;
 
-    public int Count => _nodes?.Count ?? 0;
+    public int Count => _range.Count;
 
-    public StepRef this[int index] => new(_arena, _nodes![index]);
+    public StepRef this[int index] => new(_arena, _arena!.GetStepIdAt(_range, index));
 
-    public Enumerator GetEnumerator() => new(_arena, _nodes);
+    public Enumerator GetEnumerator() => new(_arena, _range);
 
     public struct Enumerator
     {
         private readonly AstArena? _arena;
-        private readonly IReadOnlyList<Step>? _nodes;
+        private readonly StepIdRange _range;
         private int _index;
 
-        internal Enumerator(AstArena? arena, IReadOnlyList<Step>? nodes)
+        internal Enumerator(AstArena? arena, StepIdRange range)
         {
             _arena = arena;
-            _nodes = nodes;
+            _range = range;
             _index = -1;
         }
 
-        public bool MoveNext() => _nodes is not null && ++_index < _nodes.Count;
+        public bool MoveNext() => _arena is not null && ++_index < _range.Count;
 
-        public readonly StepRef Current => new(_arena, _nodes![_index]);
+        public readonly StepRef Current => new(_arena, _arena!.GetStepIdAt(_range, _index));
     }
 }
 

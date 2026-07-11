@@ -14,21 +14,21 @@ public sealed partial class RuleInterfaceTests
         var sourceBytes = Array.Empty<byte>();
         var arena = new AstArena(sourceBytes);
 
+        var runPayload = arena.AddExecRun(new ExecRunData
+        {
+            Run = arena.AddString(new Utf8Slice(0, 0), false, default),
+        });
+        var runStep = arena.AddStep(new StepData
+        {
+            ExecKind = StepExecKind.Run,
+            ExecPayload = runPayload,
+        });
+
         var (jobs, _) = SliceMapTestExtensions.CreateSliceMap(
             (new Utf8String("build"u8), new Job
             {
                 Id = arena.AddString(new Utf8Slice(0, 0), false, default),
-                Steps =
-                [
-                    new Step
-                    {
-                        Exec = new ExecRun
-                        {
-                            Kind = StepExecKind.Run,
-                            Run = arena.AddString(new Utf8Slice(0, 0), false, default),
-                        },
-                    },
-                ],
+                Steps = arena.AddStepIdList([runStep]),
             }));
 
         var firstEvent = arena.EventCount;

@@ -29,7 +29,7 @@ public sealed class Job
 
     public TextRange? IfKeyRange { get; set; }
 
-    public IReadOnlyList<Step>? Steps { get; set; }
+    public StepIdRange Steps { get; set; }
 
     public TextRange? StepsKeyRange { get; set; }
 
@@ -64,7 +64,7 @@ public sealed class Job
         Defaults = default;
         If = default;
         IfKeyRange = null;
-        Steps = null;
+        Steps = default;
         StepsKeyRange = null;
         TimeoutMinutes = default;
         Strategy = default;

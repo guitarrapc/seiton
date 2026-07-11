@@ -1120,7 +1120,7 @@ public sealed class LintEngine
             {
                 if (!stepScopesBuilt)
                 {
-                    BuildStepScopes(utf8Yaml, _effectiveConfig.GetLineStarts(), workflow, actionMetadata);
+                    BuildStepScopes(utf8Yaml, _effectiveConfig.GetLineStarts(), workflow, actionMetadata, arena);
                     stepScopesBuilt = true;
                 }
 
@@ -1340,24 +1340,22 @@ public sealed class LintEngine
         }
     }
 
-    private void BuildStepScopes(byte[] source, int[] lineStarts, Parsing.Ast.Workflow workflow, ActionMetadata? actionMetadata)
+    private void BuildStepScopes(byte[] source, int[] lineStarts, Parsing.Ast.Workflow workflow, ActionMetadata? actionMetadata, AstArena arena)
     {
         _stepScopes.Clear();
         foreach (var pair in workflow.Jobs)
         {
-            AddStepScopes(source, lineStarts, pair.Value.Steps);
+            AddStepScopes(source, lineStarts, new StepRefList(arena, pair.Value.Steps));
         }
 
-        AddStepScopes(source, lineStarts, actionMetadata?.Runs?.Steps);
+        var actionRunsSteps = actionMetadata is not null && actionMetadata.Runs.HasValue
+            ? arena.GetActionMetadataRuns(actionMetadata.Runs).Steps
+            : default;
+        AddStepScopes(source, lineStarts, new StepRefList(arena, actionRunsSteps));
     }
 
-    private void AddStepScopes(byte[] source, int[] lineStarts, IReadOnlyList<Step>? steps)
+    private void AddStepScopes(byte[] source, int[] lineStarts, StepRefList steps)
     {
-        if (steps is null)
-        {
-            return;
-        }
-
         for (var i = 0; i < steps.Count; i++)
         {
             var range = steps[i].Range;

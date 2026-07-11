@@ -143,6 +143,103 @@ public readonly struct StringRefMap
     public RefMap<StringNodeId, StringRef>.Enumerator GetEnumerator() => _core.GetEnumerator();
 }
 
+/// <summary>The <c>with:</c> inputs of an action step (case-insensitive keys, row-table backed).</summary>
+public readonly struct ActionInputRefMap
+{
+    private readonly AstArena? _arena;
+    private readonly NodeRange _range;
+
+    internal ActionInputRefMap(AstArena? arena, NodeRange range)
+    {
+        _arena = arena;
+        _range = range;
+    }
+
+    public bool HasValue => _arena is not null && _range.HasValue;
+
+    public int Count => _range.Count;
+
+    public bool TryGetValue(ReadOnlySpan<byte> key, out StringRef value)
+    {
+        if (_arena is not null)
+        {
+            for (var i = 0; i < _range.Count; i++)
+            {
+                ref readonly var row = ref _arena.GetActionInputAt(_range, i);
+                if (SliceMap<int>.AsciiEqualsIgnoreCase(row.Key.AsSpan(_arena.Source), key))
+                {
+                    value = new StringRef(_arena, row.Value);
+                    return true;
+                }
+            }
+        }
+
+        value = default;
+        return false;
+    }
+
+    public bool ContainsKey(ReadOnlySpan<byte> key) => TryGetValue(key, out _);
+
+    /// <summary>Returns the entry at the given document-order index.</summary>
+    public Entry GetAt(int index)
+    {
+        if (_arena is null || (uint)index >= (uint)_range.Count)
+        {
+            throw new ArgumentOutOfRangeException(nameof(index));
+        }
+
+        ref readonly var row = ref _arena.GetActionInputAt(_range, index);
+        return new Entry(new KeyRef(_arena, row.Key), new StringRef(_arena, row.Value));
+    }
+
+    public Enumerator GetEnumerator() => new(_arena, _range);
+
+    /// <summary>A key-value pair yielded during enumeration.</summary>
+    public readonly struct Entry
+    {
+        internal Entry(KeyRef key, StringRef value)
+        {
+            Key = key;
+            Value = value;
+        }
+
+        public KeyRef Key { get; }
+
+        public StringRef Value { get; }
+
+        public void Deconstruct(out KeyRef key, out StringRef value)
+        {
+            key = Key;
+            value = Value;
+        }
+    }
+
+    public struct Enumerator
+    {
+        private readonly AstArena? _arena;
+        private readonly NodeRange _range;
+        private int _index;
+
+        internal Enumerator(AstArena? arena, NodeRange range)
+        {
+            _arena = arena;
+            _range = range;
+            _index = -1;
+        }
+
+        public bool MoveNext() => _arena is not null && ++_index < _range.Count;
+
+        public readonly Entry Current
+        {
+            get
+            {
+                ref readonly var row = ref _arena!.GetActionInputAt(_range, _index);
+                return new Entry(new KeyRef(_arena, row.Key), new StringRef(_arena, row.Value));
+            }
+        }
+    }
+}
+
 /// <summary>The per-scope entries of a <c>permissions:</c> map (case-sensitive keys, row-table backed).</summary>
 public readonly struct PermissionScopeRefMap
 {
@@ -1113,44 +1210,196 @@ public readonly struct RawYamlRefMap
     }
 }
 
-/// <summary>The <c>inputs:</c> map of action metadata.</summary>
+/// <summary>The <c>inputs:</c> map of action metadata (case-insensitive keys, row-table backed).</summary>
 public readonly struct ActionMetadataInputRefMap
 {
-    private readonly RefMap<ActionMetadataInput, ActionMetadataInputRef> _core;
+    private readonly AstArena? _arena;
+    private readonly NodeRange _range;
 
-    internal ActionMetadataInputRefMap(AstArena? arena, SliceMap<ActionMetadataInput>? map) => _core = new(arena, map);
+    internal ActionMetadataInputRefMap(AstArena? arena, NodeRange range)
+    {
+        _arena = arena;
+        _range = range;
+    }
 
-    public bool HasValue => _core.HasValue;
+    public bool HasValue => _arena is not null && _range.HasValue;
 
-    public int Count => _core.Count;
+    public int Count => _range.Count;
 
-    public bool TryGetValue(ReadOnlySpan<byte> key, out ActionMetadataInputRef value) => _core.TryGetValue(key, out value);
+    public bool TryGetValue(ReadOnlySpan<byte> key, out ActionMetadataInputRef value)
+    {
+        if (_arena is not null)
+        {
+            for (var i = 0; i < _range.Count; i++)
+            {
+                ref readonly var row = ref _arena.GetActionMetadataInputAt(_range, i);
+                if (SliceMap<int>.AsciiEqualsIgnoreCase(row.Key.AsSpan(_arena.Source), key))
+                {
+                    value = new ActionMetadataInputRef(_arena, in row);
+                    return true;
+                }
+            }
+        }
 
-    public bool ContainsKey(ReadOnlySpan<byte> key) => _core.ContainsKey(key);
+        value = default;
+        return false;
+    }
+
+    public bool ContainsKey(ReadOnlySpan<byte> key) => TryGetValue(key, out _);
 
     /// <summary>Returns the entry at the given document-order index.</summary>
-    public RefMap<ActionMetadataInput, ActionMetadataInputRef>.Entry GetAt(int index) => _core.GetAt(index);
+    public Entry GetAt(int index)
+    {
+        if (_arena is null || (uint)index >= (uint)_range.Count)
+        {
+            throw new ArgumentOutOfRangeException(nameof(index));
+        }
 
-    public RefMap<ActionMetadataInput, ActionMetadataInputRef>.Enumerator GetEnumerator() => _core.GetEnumerator();
+        ref readonly var row = ref _arena.GetActionMetadataInputAt(_range, index);
+        return new Entry(new KeyRef(_arena, row.Key), new ActionMetadataInputRef(_arena, in row));
+    }
+
+    public Enumerator GetEnumerator() => new(_arena, _range);
+
+    /// <summary>A key-value pair yielded during enumeration.</summary>
+    public readonly struct Entry
+    {
+        internal Entry(KeyRef key, ActionMetadataInputRef value)
+        {
+            Key = key;
+            Value = value;
+        }
+
+        public KeyRef Key { get; }
+
+        public ActionMetadataInputRef Value { get; }
+
+        public void Deconstruct(out KeyRef key, out ActionMetadataInputRef value)
+        {
+            key = Key;
+            value = Value;
+        }
+    }
+
+    public struct Enumerator
+    {
+        private readonly AstArena? _arena;
+        private readonly NodeRange _range;
+        private int _index;
+
+        internal Enumerator(AstArena? arena, NodeRange range)
+        {
+            _arena = arena;
+            _range = range;
+            _index = -1;
+        }
+
+        public bool MoveNext() => _arena is not null && ++_index < _range.Count;
+
+        public readonly Entry Current
+        {
+            get
+            {
+                ref readonly var row = ref _arena!.GetActionMetadataInputAt(_range, _index);
+                return new Entry(new KeyRef(_arena, row.Key), new ActionMetadataInputRef(_arena, in row));
+            }
+        }
+    }
 }
 
-/// <summary>The <c>outputs:</c> map of action metadata.</summary>
+/// <summary>The <c>outputs:</c> map of action metadata (case-insensitive keys, row-table backed).</summary>
 public readonly struct ActionMetadataOutputRefMap
 {
-    private readonly RefMap<ActionMetadataOutput, ActionMetadataOutputRef> _core;
+    private readonly AstArena? _arena;
+    private readonly NodeRange _range;
 
-    internal ActionMetadataOutputRefMap(AstArena? arena, SliceMap<ActionMetadataOutput>? map) => _core = new(arena, map);
+    internal ActionMetadataOutputRefMap(AstArena? arena, NodeRange range)
+    {
+        _arena = arena;
+        _range = range;
+    }
 
-    public bool HasValue => _core.HasValue;
+    public bool HasValue => _arena is not null && _range.HasValue;
 
-    public int Count => _core.Count;
+    public int Count => _range.Count;
 
-    public bool TryGetValue(ReadOnlySpan<byte> key, out ActionMetadataOutputRef value) => _core.TryGetValue(key, out value);
+    public bool TryGetValue(ReadOnlySpan<byte> key, out ActionMetadataOutputRef value)
+    {
+        if (_arena is not null)
+        {
+            for (var i = 0; i < _range.Count; i++)
+            {
+                ref readonly var row = ref _arena.GetActionMetadataOutputAt(_range, i);
+                if (SliceMap<int>.AsciiEqualsIgnoreCase(row.Key.AsSpan(_arena.Source), key))
+                {
+                    value = new ActionMetadataOutputRef(_arena, in row);
+                    return true;
+                }
+            }
+        }
 
-    public bool ContainsKey(ReadOnlySpan<byte> key) => _core.ContainsKey(key);
+        value = default;
+        return false;
+    }
+
+    public bool ContainsKey(ReadOnlySpan<byte> key) => TryGetValue(key, out _);
 
     /// <summary>Returns the entry at the given document-order index.</summary>
-    public RefMap<ActionMetadataOutput, ActionMetadataOutputRef>.Entry GetAt(int index) => _core.GetAt(index);
+    public Entry GetAt(int index)
+    {
+        if (_arena is null || (uint)index >= (uint)_range.Count)
+        {
+            throw new ArgumentOutOfRangeException(nameof(index));
+        }
 
-    public RefMap<ActionMetadataOutput, ActionMetadataOutputRef>.Enumerator GetEnumerator() => _core.GetEnumerator();
+        ref readonly var row = ref _arena.GetActionMetadataOutputAt(_range, index);
+        return new Entry(new KeyRef(_arena, row.Key), new ActionMetadataOutputRef(_arena, in row));
+    }
+
+    public Enumerator GetEnumerator() => new(_arena, _range);
+
+    /// <summary>A key-value pair yielded during enumeration.</summary>
+    public readonly struct Entry
+    {
+        internal Entry(KeyRef key, ActionMetadataOutputRef value)
+        {
+            Key = key;
+            Value = value;
+        }
+
+        public KeyRef Key { get; }
+
+        public ActionMetadataOutputRef Value { get; }
+
+        public void Deconstruct(out KeyRef key, out ActionMetadataOutputRef value)
+        {
+            key = Key;
+            value = Value;
+        }
+    }
+
+    public struct Enumerator
+    {
+        private readonly AstArena? _arena;
+        private readonly NodeRange _range;
+        private int _index;
+
+        internal Enumerator(AstArena? arena, NodeRange range)
+        {
+            _arena = arena;
+            _range = range;
+            _index = -1;
+        }
+
+        public bool MoveNext() => _arena is not null && ++_index < _range.Count;
+
+        public readonly Entry Current
+        {
+            get
+            {
+                ref readonly var row = ref _arena!.GetActionMetadataOutputAt(_range, _index);
+                return new Entry(new KeyRef(_arena, row.Key), new ActionMetadataOutputRef(_arena, in row));
+            }
+        }
+    }
 }

@@ -535,10 +535,10 @@ public static partial class WorkflowParser
         SliceMap<Job> jobs = default;
         ulong seen = 0;
         StringNodeId actionDescription = default;
-        SliceMap<ActionMetadataInput>? actionInputs = null;
-        SliceMap<ActionMetadataOutput>? actionOutputs = null;
-        ActionMetadataRuns? actionRuns = null;
-        ActionMetadataBranding? actionBranding = null;
+        NodeRange actionInputs = default;
+        NodeRange actionOutputs = default;
+        ActionMetadataRunsId actionRuns = default;
+        ActionMetadataBrandingId actionBranding = default;
         ulong actionSeen = 0;
 
         while (!reader.End && reader.CurrentKind != YamlEventKind.MappingEnd)
@@ -796,7 +796,7 @@ public static partial class WorkflowParser
                 AddError(ref diagnostics, "required key 'description' is missing in action metadata", new TextPosition(0, 1, 1));
             }
 
-            if (actionRuns == null)
+            if (!actionRuns.HasValue)
             {
                 AddError(ref diagnostics, "required key 'runs' is missing in action metadata", new TextPosition(0, 1, 1));
             }

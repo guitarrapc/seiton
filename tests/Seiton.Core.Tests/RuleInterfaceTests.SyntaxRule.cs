@@ -24,6 +24,16 @@ public sealed partial class RuleInterfaceTests
         var sourceBytes = Encoding.UTF8.GetBytes(source);
         var arena = new AstArena(sourceBytes);
 
+        var runPayload = arena.AddExecRun(new ExecRunData
+        {
+            Run = arena.AddString(new Utf8Slice(0, 0), false, default),
+        });
+        var runStep = arena.AddStep(new StepData
+        {
+            ExecKind = StepExecKind.Run,
+            ExecPayload = runPayload,
+        });
+
         var (jobs, _) = SliceMapTestExtensions.CreateSliceMap(
             (new Utf8String("build"u8), new Job
             {
@@ -36,17 +46,7 @@ public sealed partial class RuleInterfaceTests
                 {
                     Uses = arena.AddString(new Utf8Slice(source.IndexOf("./.github/workflows/reusable.yml", StringComparison.Ordinal), "./.github/workflows/reusable.yml".Length), false, default),
                 }),
-                Steps =
-                [
-                    new Step
-                    {
-                        Exec = new ExecRun
-                        {
-                            Kind = StepExecKind.Run,
-                            Run = arena.AddString(new Utf8Slice(0, 0), false, default),
-                        },
-                    },
-                ],
+                Steps = arena.AddStepIdList([runStep]),
             }));
 
         var workflow = new Workflow
@@ -80,10 +80,27 @@ public sealed partial class RuleInterfaceTests
         var buildKeyLength = "build".Length;
 
         var arena = new AstArena(sourceBytes);
-        var inputsEntries = new SliceMap<StringNodeId>.Entry[]
+
+        var inputsFirst = arena.ActionInputCount;
+        arena.AddActionInput(new ActionInputData
         {
-            new(new Utf8Slice(inputKeyOffset, inputKeyLength), arena.AddString(new Utf8Slice(0, 0), false, default)),
-        };
+            Key = new Utf8Slice(inputKeyOffset, inputKeyLength),
+            Value = arena.AddString(new Utf8Slice(0, 0), false, default),
+        });
+        var actionPayload = arena.AddExecAction(new ExecActionData
+        {
+            Uses = arena.AddString(
+                new Utf8Slice(0, usesEnd),
+                false,
+                new TextRange(0, usesEnd, 1, 1, 1, usesEnd + 1)),
+            Inputs = new NodeRange(inputsFirst, 1),
+        });
+        var actionStep = arena.AddStep(new StepData
+        {
+            ExecKind = StepExecKind.Action,
+            ExecPayload = actionPayload,
+            Range = new TextRange(0, 0, 1, 1, 1, 1),
+        });
 
         var (jobs, _) = SliceMapTestExtensions.CreateSliceMap(
             (new Utf8String("build"u8), new Job
@@ -93,22 +110,7 @@ public sealed partial class RuleInterfaceTests
                     false,
                     new TextRange(0, 0, 1, 1, 1, 1)),
                 RunsOn = arena.AddRunner(new RunnerData()),
-                Steps =
-                [
-                    new Step
-                    {
-                        Exec = new ExecAction
-                        {
-                            Kind = StepExecKind.Action,
-                            Uses = arena.AddString(
-                                new Utf8Slice(0, usesEnd),
-                                false,
-                                new TextRange(0, usesEnd, 1, 1, 1, usesEnd + 1)),
-                            Inputs = new SliceMap<StringNodeId>(inputsEntries, caseSensitive: false),
-                        },
-                        Range = new TextRange(0, 0, 1, 1, 1, 1),
-                    },
-                ],
+                Steps = arena.AddStepIdList([actionStep]),
             }));
 
         var workflow = new Workflow

@@ -375,3 +375,100 @@ public readonly record struct DefaultsRunId
         get => _raw - 1;
     }
 }
+
+/// <summary>Handle referencing a <see cref="StepData"/> row.</summary>
+public readonly record struct StepId
+{
+    private readonly int _raw;
+
+    internal StepId(int raw) => _raw = raw;
+
+    public bool HasValue
+    {
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        get => _raw > 0;
+    }
+
+    internal int Index
+    {
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        get => _raw - 1;
+    }
+}
+
+/// <summary>
+/// A (first, count) range over the arena's shared <see cref="StepId"/> list store.
+/// Step lists are ranges into the shared store (not the step row table) because nested
+/// <c>parallel:</c> parsing appends step rows non-contiguously.
+/// <c>default</c> = absent (<see cref="HasValue"/> false); a present-but-empty list has
+/// <see cref="HasValue"/> true and <see cref="Count"/> 0.
+/// </summary>
+public readonly record struct StepIdRange
+{
+    private readonly int _firstRaw;
+    private readonly int _count;
+
+    internal StepIdRange(int first, int count)
+    {
+        _firstRaw = first + 1;
+        _count = count;
+    }
+
+    public bool HasValue
+    {
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        get => _firstRaw > 0;
+    }
+
+    public int Count
+    {
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        get => _count;
+    }
+
+    internal int First
+    {
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        get => _firstRaw - 1;
+    }
+}
+
+/// <summary>Handle referencing an <see cref="ActionMetadataRunsData"/> row.</summary>
+public readonly record struct ActionMetadataRunsId
+{
+    private readonly int _raw;
+
+    internal ActionMetadataRunsId(int raw) => _raw = raw;
+
+    public bool HasValue
+    {
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        get => _raw > 0;
+    }
+
+    internal int Index
+    {
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        get => _raw - 1;
+    }
+}
+
+/// <summary>Handle referencing an <see cref="ActionMetadataBrandingData"/> row.</summary>
+public readonly record struct ActionMetadataBrandingId
+{
+    private readonly int _raw;
+
+    internal ActionMetadataBrandingId(int raw) => _raw = raw;
+
+    public bool HasValue
+    {
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        get => _raw > 0;
+    }
+
+    internal int Index
+    {
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        get => _raw - 1;
+    }
+}

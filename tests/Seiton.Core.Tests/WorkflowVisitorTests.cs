@@ -16,19 +16,19 @@ public sealed class WorkflowVisitorTests
             (new Utf8String("build"u8), new Job
             {
                 Id = arena.AddString(new Utf8Slice(0, 0), false, default),
-                Steps =
+                Steps = arena.AddStepIdList(
                 [
-                    new Step { Exec = new ExecRun { Kind = StepExecKind.Run, Run = arena.AddString(new Utf8Slice(0, 0), false, default) } },
-                    new Step { Exec = new ExecRun { Kind = StepExecKind.Run, Run = arena.AddString(new Utf8Slice(0, 0), false, default) } },
-                ],
+                    AddRunStep(arena),
+                    AddRunStep(arena),
+                ]),
             }),
             (new Utf8String("test"u8), new Job
             {
                 Id = arena.AddString(new Utf8Slice(0, 0), false, default),
-                Steps =
+                Steps = arena.AddStepIdList(
                 [
-                    new Step { Exec = new ExecRun { Kind = StepExecKind.Run, Run = arena.AddString(new Utf8Slice(0, 0), false, default) } },
-                ],
+                    AddRunStep(arena),
+                ]),
             }));
 
         var workflow = new Workflow
@@ -67,14 +67,14 @@ public sealed class WorkflowVisitorTests
 
         var metadata = new ActionMetadata
         {
-            Runs = new ActionMetadataRuns
+            Runs = arena.AddActionMetadataRuns(new ActionMetadataRunsData
             {
-                Steps =
+                Steps = arena.AddStepIdList(
                 [
-                    new Step { Exec = new ExecRun { Kind = StepExecKind.Run, Run = arena.AddString(new Utf8Slice(0, 0), false, default) } },
-                    new Step { Exec = new ExecRun { Kind = StepExecKind.Run, Run = arena.AddString(new Utf8Slice(0, 0), false, default) } },
-                ],
-            },
+                    AddRunStep(arena),
+                    AddRunStep(arena),
+                ]),
+            }),
         };
 
         var trace = new List<string>();
@@ -101,26 +101,20 @@ public sealed class WorkflowVisitorTests
         var sourceBytes = Array.Empty<byte>();
         var arena = new AstArena(sourceBytes);
 
-        var nestedRun = new Step
+        var nestedRun = AddRunStep(arena);
+        var parallelPayload = arena.AddExecParallel(new ExecParallelData
         {
-            Exec = new ExecRun
-            {
-                Kind = StepExecKind.Run,
-                Run = arena.AddString(new Utf8Slice(0, 0), false, default),
-            },
-        };
-        var parallel = new ExecParallel
+            Steps = arena.AddStepIdList([nestedRun, nestedRun]),
+        });
+        var parallelStep = arena.AddStep(new StepData
         {
-            Kind = StepExecKind.Parallel,
-            Steps = [nestedRun, nestedRun],
-        };
+            ExecKind = StepExecKind.Parallel,
+            ExecPayload = parallelPayload,
+        });
         var job = new Job
         {
             Id = arena.AddString(new Utf8Slice(0, 0), false, default),
-            Steps =
-            [
-                new Step { Exec = parallel },
-            ],
+            Steps = arena.AddStepIdList([parallelStep]),
         };
 
         var (jobs, _) = SliceMapTestExtensions.CreateSliceMap(
@@ -154,30 +148,21 @@ public sealed class WorkflowVisitorTests
         var sourceBytes = Array.Empty<byte>();
         var arena = new AstArena(sourceBytes);
 
-        var nested = new Step
+        var nested = AddRunStep(arena);
+        var parallelStep = arena.AddStep(new StepData
         {
-            Exec = new ExecRun
+            ExecKind = StepExecKind.Parallel,
+            ExecPayload = arena.AddExecParallel(new ExecParallelData
             {
-                Kind = StepExecKind.Run,
-                Run = arena.AddString(new Utf8Slice(0, 0), false, default),
-            },
-        };
+                Steps = arena.AddStepIdList([nested]),
+            }),
+        });
         var metadata = new ActionMetadata
         {
-            Runs = new ActionMetadataRuns
+            Runs = arena.AddActionMetadataRuns(new ActionMetadataRunsData
             {
-                Steps =
-                [
-                    new Step
-                    {
-                        Exec = new ExecParallel
-                        {
-                            Kind = StepExecKind.Parallel,
-                            Steps = [nested],
-                        },
-                    },
-                ],
-            },
+                Steps = arena.AddStepIdList([parallelStep]),
+            }),
         };
 
         var trace = new List<string>();
@@ -195,6 +180,19 @@ public sealed class WorkflowVisitorTests
         };
 
         await Assert.That(trace.SequenceEqual(expected)).IsTrue();
+    }
+
+    private static StepId AddRunStep(AstArena arena)
+    {
+        var runPayload = arena.AddExecRun(new ExecRunData
+        {
+            Run = arena.AddString(new Utf8Slice(0, 0), false, default),
+        });
+        return arena.AddStep(new StepData
+        {
+            ExecKind = StepExecKind.Run,
+            ExecPayload = runPayload,
+        });
     }
 
     private sealed class RecordingPass(List<string> trace) : IPass

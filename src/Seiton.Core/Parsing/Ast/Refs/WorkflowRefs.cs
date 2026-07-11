@@ -83,7 +83,7 @@ public readonly struct JobRef : IEquatable<JobRef>, INodeRef<Job, JobRef>
 
     public TextRange? IfKeyRange => _node?.IfKeyRange;
 
-    public StepRefList Steps => new(_arena, _node?.Steps);
+    public StepRefList Steps => new(_arena, _node?.Steps ?? default);
 
     public TextRange? StepsKeyRange => _node?.StepsKeyRange;
 
@@ -118,44 +118,54 @@ public readonly struct JobRef : IEquatable<JobRef>, INodeRef<Job, JobRef>
 public readonly struct StepRef : IEquatable<StepRef>
 {
     private readonly AstArena? _arena;
-    private readonly Step? _node;
+    private readonly StepId _id;
 
-    internal StepRef(AstArena? arena, Step? node)
+    internal StepRef(AstArena? arena, StepId id)
     {
         _arena = arena;
-        _node = node;
+        _id = id;
     }
 
-    public bool HasValue => _node is not null && _arena is not null;
+    public bool HasValue => _arena is not null && _id.HasValue;
 
-    internal Step? Node => _node;
+    public StringRef Id => HasValue ? new(_arena, _arena!.GetStep(_id).Id) : default;
 
-    public StringRef Id => new(_arena, _node?.Id ?? default);
+    public StringRef If => HasValue ? new(_arena, _arena!.GetStep(_id).If) : default;
 
-    public StringRef If => new(_arena, _node?.If ?? default);
+    public TextRange? IfKeyRange => HasValue ? _arena!.GetStep(_id).IfKeyRange : null;
 
-    public TextRange? IfKeyRange => _node?.IfKeyRange;
-
-    public StringRef Name => new(_arena, _node?.Name ?? default);
+    public StringRef Name => HasValue ? new(_arena, _arena!.GetStep(_id).Name) : default;
 
     /// <summary>Background modifier on <c>run</c> / <c>uses</c> steps only.</summary>
-    public BoolRef Background => new(_arena, _node?.Background ?? default);
+    public BoolRef Background => HasValue ? new(_arena, _arena!.GetStep(_id).Background) : default;
 
-    public StepExecRef Exec => new(_arena, _node?.Exec);
+    public StepExecRef Exec
+    {
+        get
+        {
+            if (!HasValue)
+            {
+                return default;
+            }
 
-    public EnvRef Env => new(_arena, _node?.Env ?? default);
+            ref readonly var row = ref _arena!.GetStep(_id);
+            return new StepExecRef(_arena, row.ExecKind, row.ExecPayload);
+        }
+    }
 
-    public BoolRef ContinueOnError => new(_arena, _node?.ContinueOnError ?? default);
+    public EnvRef Env => HasValue ? new(_arena, _arena!.GetStep(_id).Env) : default;
 
-    public FloatRef TimeoutMinutes => new(_arena, _node?.TimeoutMinutes ?? default);
+    public BoolRef ContinueOnError => HasValue ? new(_arena, _arena!.GetStep(_id).ContinueOnError) : default;
 
-    public TextRange Range => _node?.Range ?? default;
+    public FloatRef TimeoutMinutes => HasValue ? new(_arena, _arena!.GetStep(_id).TimeoutMinutes) : default;
 
-    public bool Equals(StepRef other) => ReferenceEquals(_node, other._node);
+    public TextRange Range => HasValue ? _arena!.GetStep(_id).Range : default;
+
+    public bool Equals(StepRef other) => ReferenceEquals(_arena, other._arena) && _id.Equals(other._id);
 
     public override bool Equals(object? obj) => obj is StepRef other && Equals(other);
 
-    public override int GetHashCode() => _node is null ? 0 : RuntimeHelpers.GetHashCode(_node);
+    public override int GetHashCode() => _id.GetHashCode();
 
     public static bool operator ==(StepRef left, StepRef right) => left.Equals(right);
 
@@ -166,144 +176,163 @@ public readonly struct StepRef : IEquatable<StepRef>
 public readonly struct StepExecRef
 {
     private readonly AstArena? _arena;
-    private readonly StepExec? _node;
+    private readonly StepExecKind _kind;
+    // 1-based index into the payload table selected by _kind (0 = none).
+    private readonly int _payload;
 
-    internal StepExecRef(AstArena? arena, StepExec? node)
+    internal StepExecRef(AstArena? arena, StepExecKind kind, int payload)
     {
         _arena = arena;
-        _node = node;
+        _kind = kind;
+        _payload = payload;
     }
 
-    public bool HasValue => _node is not null && _arena is not null;
+    public bool HasValue => _arena is not null && _payload > 0;
 
-    internal StepExec? Node => _node;
+    public StepExecKind Kind => _kind;
 
-    public StepExecKind Kind => _node?.Kind ?? StepExecKind.None;
+    public TextRange Range
+    {
+        get
+        {
+            if (_arena is null || _payload == 0)
+            {
+                return default;
+            }
 
-    public TextRange Range => _node?.Range ?? default;
+            return _kind switch
+            {
+                StepExecKind.Run => _arena.GetExecRun(_payload).Range,
+                StepExecKind.Action => _arena.GetExecAction(_payload).Range,
+                StepExecKind.Wait => _arena.GetExecWait(_payload).Range,
+                StepExecKind.WaitAll => _arena.GetExecWaitAll(_payload).Range,
+                StepExecKind.Cancel => _arena.GetExecCancel(_payload).Range,
+                StepExecKind.Parallel => _arena.GetExecParallel(_payload).Range,
+                _ => default,
+            };
+        }
+    }
 
     /// <summary>The <c>run:</c> payload. Default when <see cref="Kind"/> is not <see cref="StepExecKind.Run"/>.</summary>
-    public ExecRunRef AsRun() => new(_arena, _node as ExecRun);
+    public ExecRunRef AsRun() => _kind == StepExecKind.Run && _payload > 0 ? new(_arena, _payload) : default;
 
     /// <summary>The <c>uses:</c> payload. Default when <see cref="Kind"/> is not <see cref="StepExecKind.Action"/>.</summary>
-    public ExecActionRef AsAction() => new(_arena, _node as ExecAction);
+    public ExecActionRef AsAction() => _kind == StepExecKind.Action && _payload > 0 ? new(_arena, _payload) : default;
 
     /// <summary>The <c>wait:</c> payload. Default when <see cref="Kind"/> is not <see cref="StepExecKind.Wait"/>.</summary>
-    public ExecWaitRef AsWait() => new(_arena, _node as ExecWait);
+    public ExecWaitRef AsWait() => _kind == StepExecKind.Wait && _payload > 0 ? new(_arena, _payload) : default;
 
     /// <summary>The <c>cancel:</c> payload. Default when <see cref="Kind"/> is not <see cref="StepExecKind.Cancel"/>.</summary>
-    public ExecCancelRef AsCancel() => new(_arena, _node as ExecCancel);
+    public ExecCancelRef AsCancel() => _kind == StepExecKind.Cancel && _payload > 0 ? new(_arena, _payload) : default;
 
     /// <summary>The <c>parallel:</c> payload. Default when <see cref="Kind"/> is not <see cref="StepExecKind.Parallel"/>.</summary>
-    public ExecParallelRef AsParallel() => new(_arena, _node as ExecParallel);
+    public ExecParallelRef AsParallel() => _kind == StepExecKind.Parallel && _payload > 0 ? new(_arena, _payload) : default;
 }
 
 /// <summary>The payload of a <c>run:</c> step.</summary>
 public readonly struct ExecRunRef
 {
     private readonly AstArena? _arena;
-    private readonly ExecRun? _node;
+    private readonly int _payload;
 
-    internal ExecRunRef(AstArena? arena, ExecRun? node)
+    internal ExecRunRef(AstArena? arena, int payload)
     {
         _arena = arena;
-        _node = node;
+        _payload = payload;
     }
 
-    public bool HasValue => _node is not null && _arena is not null;
+    public bool HasValue => _arena is not null && _payload > 0;
 
-    public StringRef Run => new(_arena, _node?.Run ?? default);
+    public StringRef Run => HasValue ? new(_arena, _arena!.GetExecRun(_payload).Run) : default;
 
-    public StringRef Shell => new(_arena, _node?.Shell ?? default);
+    public StringRef Shell => HasValue ? new(_arena, _arena!.GetExecRun(_payload).Shell) : default;
 
-    public StringRef WorkingDirectory => new(_arena, _node?.WorkingDirectory ?? default);
+    public StringRef WorkingDirectory => HasValue ? new(_arena, _arena!.GetExecRun(_payload).WorkingDirectory) : default;
 
-    public TextRange Range => _node?.Range ?? default;
+    public TextRange Range => HasValue ? _arena!.GetExecRun(_payload).Range : default;
 }
 
 /// <summary>The payload of a <c>uses:</c> step (action invocation).</summary>
 public readonly struct ExecActionRef
 {
     private readonly AstArena? _arena;
-    private readonly ExecAction? _node;
+    private readonly int _payload;
 
-    internal ExecActionRef(AstArena? arena, ExecAction? node)
+    internal ExecActionRef(AstArena? arena, int payload)
     {
         _arena = arena;
-        _node = node;
+        _payload = payload;
     }
 
-    public bool HasValue => _node is not null && _arena is not null;
+    public bool HasValue => _arena is not null && _payload > 0;
 
-    internal ExecAction? Node => _node;
+    public StringRef Uses => HasValue ? new(_arena, _arena!.GetExecAction(_payload).Uses) : default;
 
-    public StringRef Uses => new(_arena, _node?.Uses ?? default);
-
-    public TextRange? UsesKeyRange => _node?.UsesKeyRange;
+    public TextRange? UsesKeyRange => HasValue ? _arena!.GetExecAction(_payload).UsesKeyRange : null;
 
     /// <summary>The <c>with:</c> inputs.</summary>
-    public StringRefMap Inputs => new(_arena, _node?.Inputs);
+    public ActionInputRefMap Inputs => HasValue ? new(_arena, _arena!.GetExecAction(_payload).Inputs) : default;
 
-    public StringRef Entrypoint => new(_arena, _node?.Entrypoint ?? default);
+    public StringRef Entrypoint => HasValue ? new(_arena, _arena!.GetExecAction(_payload).Entrypoint) : default;
 
-    public StringRef Args => new(_arena, _node?.Args ?? default);
+    public StringRef Args => HasValue ? new(_arena, _arena!.GetExecAction(_payload).Args) : default;
 
-    public TextRange Range => _node?.Range ?? default;
+    public TextRange Range => HasValue ? _arena!.GetExecAction(_payload).Range : default;
 }
 
 /// <summary>The payload of a <c>wait:</c> step.</summary>
 public readonly struct ExecWaitRef
 {
     private readonly AstArena? _arena;
-    private readonly ExecWait? _node;
+    private readonly int _payload;
 
-    internal ExecWaitRef(AstArena? arena, ExecWait? node)
+    internal ExecWaitRef(AstArena? arena, int payload)
     {
         _arena = arena;
-        _node = node;
+        _payload = payload;
     }
 
-    public bool HasValue => _node is not null && _arena is not null;
+    public bool HasValue => _arena is not null && _payload > 0;
 
-    public StringRefList Targets => new(_arena, _node?.Targets ?? default);
+    public StringRefList Targets => HasValue ? new(_arena, _arena!.GetExecWait(_payload).Targets) : default;
 
-    public TextRange Range => _node?.Range ?? default;
+    public TextRange Range => HasValue ? _arena!.GetExecWait(_payload).Range : default;
 }
 
 /// <summary>The payload of a <c>cancel:</c> step.</summary>
 public readonly struct ExecCancelRef
 {
     private readonly AstArena? _arena;
-    private readonly ExecCancel? _node;
+    private readonly int _payload;
 
-    internal ExecCancelRef(AstArena? arena, ExecCancel? node)
+    internal ExecCancelRef(AstArena? arena, int payload)
     {
         _arena = arena;
-        _node = node;
+        _payload = payload;
     }
 
-    public bool HasValue => _node is not null && _arena is not null;
+    public bool HasValue => _arena is not null && _payload > 0;
 
-    public StringRef Target => new(_arena, _node?.Target ?? default);
+    public StringRef Target => HasValue ? new(_arena, _arena!.GetExecCancel(_payload).Target) : default;
 
-    public TextRange Range => _node?.Range ?? default;
+    public TextRange Range => HasValue ? _arena!.GetExecCancel(_payload).Range : default;
 }
 
 /// <summary>The payload of a <c>parallel:</c> step.</summary>
 public readonly struct ExecParallelRef
 {
     private readonly AstArena? _arena;
-    private readonly ExecParallel? _node;
+    private readonly int _payload;
 
-    internal ExecParallelRef(AstArena? arena, ExecParallel? node)
+    internal ExecParallelRef(AstArena? arena, int payload)
     {
         _arena = arena;
-        _node = node;
+        _payload = payload;
     }
 
-    public bool HasValue => _node is not null && _arena is not null;
+    public bool HasValue => _arena is not null && _payload > 0;
 
-    public StepRefList Steps => new(_arena, _node?.Steps);
+    public StepRefList Steps => HasValue ? new(_arena, _arena!.GetExecParallel(_payload).Steps) : default;
 
-    public TextRange Range => _node?.Range ?? default;
+    public TextRange Range => HasValue ? _arena!.GetExecParallel(_payload).Range : default;
 }

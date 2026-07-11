@@ -109,16 +109,22 @@ CLI は診断のみを参照し AST 型に依存しない (実測: `src/Seiton/`
 7. **Strategy / Matrix / RawYaml — 再帰 tagged union** (2026-07-12): `RawYamlData` は Kind + Scalar/Items/Properties の tagged union 行。再帰は「配列 = `RawYamlId` の共有 ID リストストアへのレンジ、オブジェクト = キー内蔵 prop 行テーブルへのレンジ」で表現。**入れ子のパースが自テーブルに行を差し込むケース (配列 items / オブジェクト props / combination entries) はスクラッチ `PooledBuffer` に集めてから一括 append** して連続性を守る。それ以外 (matrix rows / services など、入れ子が他テーブルにしか触れないケース) は直接 append で良い。`DynamicContextTypeBuilder` の Matrix/RawYaml 型推論も Ref API へ移行。
 8. **Container / Services / WorkflowCall** (2026-07-12): 行テーブル + ID + キー内蔵マップ 3 種 (services / with / secrets)。WorkflowCall はジョブ解析中に uses/with/secrets が別キーとして逐次到着するため、**ローカル変数に蓄積してジョブ構築時に 1 回で行化** (行 struct は追記後の mutate 不可)。`StructuralNodes.cs` は空になり削除。
 9. **Events tagged union** (2026-07-12): `Workflow.On` は `EventData` 行テーブルへの `NodeRange`。`EventData` = Kind + EventName + Range + **Payload (kind 別 payload テーブルへの 1-based index)**。payload 6 種 (Webhook/Scheduled/WorkflowDispatch/WorkflowCall/RepositoryDispatch/ImageVersion) + 付随テーブル (webhook filters / schedule entries / dispatch inputs / workflow_call inputs·secrets·outputs)。パース手順は「payload 行を先に append → 最後に `AddEvent` 1 回」(イベント本体テーブルの連続性を守る)。旧 `Events.cs` クラス群と `On` の `ArenaList` は削除。`EventRef` は `Kind` + `AsWebhook()` 等の payload アクセサを持つ。`DynamicContextTypeBuilder` のイベント系 (inputs/secrets/github override) と `LocalReusableWorkflowOutputResolver`/`ReusableWorkflowRule`/`ExprUndefinedVarRule` も Ref API へ移行。
+10. **Step + Exec* tagged union** (2026-07-12): `StepData` 行 + `StepId`。Exec は `StepData.ExecKind + ExecPayload` (kind 別 payload テーブルへの 1-based index、増分 9 の EventData パターン)。payload 6 種 (Run/Action/Wait/WaitAll/Cancel/Parallel) + `ActionInputData` (with: 入力、キー内蔵・case-insensitive)。**ステップリストは共有 `StepId[]` ストアへの `StepIdRange`** (`Job.Steps`/`ExecParallelData.Steps`/`ActionMetadataRuns.Steps`) — 入れ子 parallel が行テーブルを非連続にするため、リストは必ずスクラッチ `PooledBuffer<StepId>` 経由で一括 append する。`ParseSteps` は steps: キー存在時に常に anchored レンジを返す (旧 boxed-ArenaList 非 null 挙動の保存)。Step/Exec* クラスと手書きプール 7 系統を削除 (`Job` プールのみ Stage 3 まで存置)。`StepRef` は (arena, StepId) の値等価になり、`Dictionary<StepRef,int>` の意味論は同一パース内で不変。`IncrementalParseContext` は無変更でコンパイル (Job 継ぎ足しは range コピー + BulkImportFrom 全行コピーで ID 有効)。旧 Step/Exec プールテスト 5 本は廃止 (NodeTable + AstArenaReuseTests でカバー)。
+11. **ActionMetadata 族** (2026-07-12): `ActionMetadataInput/Output` はキー内蔵行マップ (case-insensitive、`NodeRange`)、`Runs`/`Branding` は行 + typed ID (`Runs.Steps` は増分 10 の `StepIdRange`)。ルートの `ActionMetadata` クラスは Workflow と同様 Stage 3 まで存置。`LocalActionOutputResolver`/`LocalActionInputsRule`(キャッシュした別 arena の行を読む箇所含む) を移行。SliceMap 依存はこれで Job.Outputs / Workflow.Jobs のみ (Stage 3 スコープ)。
 
 ベンチ確認 (増分 8 まで、idle マシン): Parse Large 15.80ms (Stage 1 比 +1.5%) / **3,576B (Stage 1 比 −28%)**。Lint 全ケース Mean ±6% 以内・Allocated 微減 (Large/False 34.96KB)。
 
 ベンチ確認 (増分 9): Parse Large 15.70ms / **3,248B** (増分 8 比さらに −9%)。Lint Allocated は Large/False 34.64KB と微減。Lint Mean は ShortRun で見かけ +40% が出たが、HEAD との A/B (stash 切替 + Stopwatch phase-split + dotnet-trace + affinity 固定 steady-state) の結果**計測アーティファクトと確定** (Lessons Learned 参照)。定常状態は parse/lint 側とも HEAD 同等〜微改善 (long-loop 収束値 18.7ms は HEAD のどの区間よりも速い)。
 
+ベンチ確認 (増分 10): 全数値改善。Parse Small **37.99μs (増分 9 比 −28%)** / Medium 944μs / Large 15.58ms、Allocated Small 248B / Medium 848B / **Large 2,608B (増分 9 比 −20%)**。Lint Large/False 16.38ms / **34.02KB**。プール Alloc/Reset ループと ArenaList boxing の消滅が Small で顕著。
+
+ベンチ確認 (増分 11): マシン thermal soak 下のランで Mean が全ケース一様 +50% に見えたが、無変更コードのコントロール (ExpressionExtractor) も同率 +50% → コントロール正規化で中立 (Parse Large ≈15.5ms 相当)。**Allocated は増分 10 と全ケースでバイト一致** (Parse 248B/848B/2,608B、Lint 3.74/10.81/34.02KB — CoreParsingBenchmark はワークフローのみで増分 11 のパスを通らないため、これが期待値)。
+
 **incremental parse との整合の要**: 継ぎ足し (セクション/ジョブの再利用) は「同一バイトオフセット + 同一内容ハッシュ」の場合にのみ発生するため、新テーブルを `BulkImportFrom` で**全行コピー**すれば、再利用ノード内の ID は新 arena でもそのまま解決できる。テーブル追加時は (a) `ResetForSource`/`Dispose` のリセット、(b) `BulkImportFrom` のコピー、(c) discard パスの `ReleaseAll` の 3 点を配線すること。
 
 意味論の写像 (テスト移行時の規約): 旧 `null` (キー不在) → `default` ID/レンジ (`HasValue == false`)。旧「キーは在るが空」→ `HasValue == true` かつ `Count == 0`。`ParseStringOrStringSequence` は回復パスでも常に present レンジを返す (旧実装で default `ArenaList` が boxing により非 null になっていた挙動の保存)。
 
-残作業: Exec*/Step/Job/Workflow 行化 (+ Jobs/Outputs/ExecAction.Inputs マップ — `IncrementalParseContext` の継ぎ足しと衝突するため Stage 3 と統合)、ActionMetadata 族。マップは増分 5 のパターン (キー内蔵行テーブル + NodeRange)、多態は増分 7/9 のパターン (Kind + payload) を踏襲する。
+残作業: Job/Workflow 行化 + Jobs/Outputs マップ — `IncrementalParseContext` の継ぎ足しと衝突するため **Stage 3 と統合して実施** (Stage 2 として独立に進められる増分はこれで完了)。ActionMetadata ルートクラスも同時に行化する。
 
 ## 7. Lessons Learned (随時追記)
 

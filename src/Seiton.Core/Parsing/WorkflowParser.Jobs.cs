@@ -55,7 +55,7 @@ public static partial class WorkflowParser
         DefaultsId defaultsNode = default;
         StringNodeId ifNode = default;
         TextPosition ifKeyMark = default;
-        IReadOnlyList<Step>? stepsNode = null;
+        StepIdRange stepsNode = default;
         FloatNodeId timeoutMinutesNode = default;
         StrategyId strategyNode = default;
         BoolNodeId continueOnErrorNode = default;
@@ -412,7 +412,7 @@ public static partial class WorkflowParser
         var decodedJobId = DecodeUtf8(source, jobId);
         var hasUsesKey = hasWorkflowCall && wcUsesKeyRange is not null;
         var hasUsesValue = hasUsesKey && arena.GetStringValue(wcUses).Length > 0;
-        var hasSteps = stepsNode is not null;
+        var hasSteps = stepsNode.HasValue;
         var hasRunsOn = runsOnNode.HasValue;
 
         // spec §3.10.1: reusable workflow calls (`uses`) cannot also define `steps`
@@ -469,7 +469,7 @@ public static partial class WorkflowParser
         job.If = ifNode;
         job.IfKeyRange = ifNode.HasValue ? BuildScalarLocation(ifKeyMark, 2) : null;
         job.Steps = stepsNode;
-        job.StepsKeyRange = stepsNode is not null ? BuildScalarLocation(stepsKeyPos, 5) : null;
+        job.StepsKeyRange = stepsNode.HasValue ? BuildScalarLocation(stepsKeyPos, 5) : null;
         job.TimeoutMinutes = timeoutMinutesNode;
         job.Strategy = strategyNode;
         job.ContinueOnError = continueOnErrorNode;
