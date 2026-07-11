@@ -380,11 +380,11 @@ public sealed class LintEngine
 
         if (parseResult.Workflow is not null)
         {
-            _visitor.Visit(parseResult.Workflow, skipJobs);
+            _visitor.Visit(new WorkflowRef(arena, parseResult.Workflow), skipJobs);
         }
         else if (parseResult.ActionMetadata is not null)
         {
-            _visitor.VisitActionMetadata(parseResult.ActionMetadata);
+            _visitor.VisitActionMetadata(new ActionMetadataRef(arena, parseResult.ActionMetadata));
         }
 
         return FinalizeRuleDiagnostics(

@@ -22,15 +22,15 @@ public sealed class SelfHostedRunnerRule() : RuleBase(RuleId.SelfHostedRunner)
             : [];
     }
 
-    public override void VisitWorkflowPre(Workflow workflow)
+    public override void VisitWorkflowPre(WorkflowRef workflow)
     {
         base.VisitWorkflowPre(workflow);
         hasUntrustedTrigger = Config.Utf8Yaml is not null && HasUntrustedTrigger(workflow, Config.Utf8Yaml, additionalUntrustedTriggers);
     }
 
-    public override void VisitJobPre(Job job)
+    public override void VisitJobPre(JobRef job)
     {
-        if (!hasUntrustedTrigger || job.RunsOn?.Labels is null || Config.Utf8Yaml is null)
+        if (!hasUntrustedTrigger || !job.RunsOn.Labels.HasValue || Config.Utf8Yaml is null)
         {
             return;
         }
@@ -39,35 +39,36 @@ public sealed class SelfHostedRunnerRule() : RuleBase(RuleId.SelfHostedRunner)
         for (var i = 0; i < labels.Count; i++)
         {
             var label = labels[i];
-            if (Arena.GetStringExpression(label).HasValue)
+            if (label.Expression.HasValue)
             {
                 continue;
             }
 
-            if (!RunnerLabels.IsSelfHostedLabel(Arena.GetStringValue(label)))
+            if (!RunnerLabels.IsSelfHostedLabel(label.Value))
             {
                 continue;
             }
 
-            var jobId = Decode(Arena.GetStringSlice(job.Id));
+            var jobId = job.Id.Decode();
             AddJobWarning(
                 job,
                 $"jobs.'{jobId}'.runs-on uses self-hosted runner under untrusted triggers; add strict job guards and isolate self-hosted execution paths",
-                Arena.GetStringRange(label));
+                label.Range);
             return;
         }
     }
 
-    private bool HasUntrustedTrigger(Workflow workflow, byte[] utf8Yaml, HashSet<string> additionalUntrustedTriggers)
+    private bool HasUntrustedTrigger(WorkflowRef workflow, byte[] utf8Yaml, HashSet<string> additionalUntrustedTriggers)
     {
         for (var i = 0; i < workflow.On.Count; i++)
         {
-            if (workflow.On[i] is not WebhookEvent webhook)
+            var ev = workflow.On[i];
+            if (ev.Kind != EventKind.Webhook)
             {
                 continue;
             }
 
-            var hook = Arena.GetStringValue(webhook.Hook);
+            var hook = ev.AsWebhook().Hook.Value;
             if (WebhookTypes.TryGet(hook, out _, out var spec)
                 && spec.Id is WebhookTypes.EventId.PullRequest
                     or WebhookTypes.EventId.PullRequestTarget

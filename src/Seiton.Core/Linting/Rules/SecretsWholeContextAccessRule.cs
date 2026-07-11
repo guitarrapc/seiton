@@ -19,7 +19,7 @@ public sealed class SecretsWholeContextAccessRule() : RuleBase(RuleId.SecretsWho
 
     public override string Name => "Secrets Whole Context Access Rule";
 
-    public override void VisitStep(Step step)
+    public override void VisitStep(StepRef step)
     {
         if (Config.Utf8Yaml is null)
         {
@@ -27,9 +27,9 @@ public sealed class SecretsWholeContextAccessRule() : RuleBase(RuleId.SecretsWho
         }
 
         // Check run: script
-        if (step.Exec is ExecRun run)
+        if (step.Exec.Kind == StepExecKind.Run)
         {
-            CheckNode(run.Run, static (rule, location, s) =>
+            CheckNode(step.Exec.AsRun().Run, static (rule, location, s) =>
                 rule.AddStepError(s, DiagnosticMessage, location), step);
         }
 
@@ -37,17 +37,21 @@ public sealed class SecretsWholeContextAccessRule() : RuleBase(RuleId.SecretsWho
         CheckEnvForStep(step.Env, step);
 
         // Check step with: inputs (only for use:actions steps)
-        if (step.Exec is ExecAction action && action.Inputs is not null && action.Inputs.Value.Count > 0)
+        if (step.Exec.Kind == StepExecKind.Action)
         {
-            foreach (var pair in action.Inputs.Value)
+            var action = step.Exec.AsAction();
+            if (action.Inputs.Count > 0)
             {
-                CheckNode(pair.Value, static (rule, location, s) =>
-                    rule.AddStepError(s, DiagnosticMessage, location), step);
+                foreach (var pair in action.Inputs)
+                {
+                    CheckNode(pair.Value, static (rule, location, s) =>
+                        rule.AddStepError(s, DiagnosticMessage, location), step);
+                }
             }
         }
     }
 
-    public override void VisitJobPre(Job job)
+    public override void VisitJobPre(JobRef job)
     {
         if (Config.Utf8Yaml is null)
         {
@@ -58,13 +62,13 @@ public sealed class SecretsWholeContextAccessRule() : RuleBase(RuleId.SecretsWho
         CheckEnvForJob(job.Env, job);
 
         // Check job with: (reusable-workflow call inputs)
-        var callInputs = job.WorkflowCall?.Inputs;
-        if (callInputs is null || callInputs.Value.Count == 0)
+        var callInputs = job.WorkflowCall.Inputs;
+        if (callInputs.Count == 0)
         {
             return;
         }
 
-        foreach (var pair in callInputs.Value)
+        foreach (var pair in callInputs)
         {
             CheckNode(pair.Value.Value, static (rule, location, j) =>
                 rule.AddJobError(j, DiagnosticMessage, location), job);
@@ -73,23 +77,23 @@ public sealed class SecretsWholeContextAccessRule() : RuleBase(RuleId.SecretsWho
 
     // Step-level env helper
 
-    private void CheckEnvForStep(Env? env, Step step)
+    private void CheckEnvForStep(EnvRef env, StepRef step)
     {
-        if (env is null)
+        if (!env.HasValue)
         {
             return;
         }
 
-        CheckNode(Arena.GetStringExpression(env.Expression), static (rule, location, s) =>
+        CheckNode(env.Expression.Expression, static (rule, location, s) =>
             rule.AddStepError(s, DiagnosticMessage, location), step);
 
         var vars = env.Vars;
-        if (vars is null || vars.Value.Count == 0)
+        if (vars.Count == 0)
         {
             return;
         }
 
-        foreach (var pair in vars.Value)
+        foreach (var pair in vars)
         {
             CheckNode(pair.Value.Value, static (rule, location, s) =>
                 rule.AddStepError(s, DiagnosticMessage, location), step);
@@ -98,23 +102,23 @@ public sealed class SecretsWholeContextAccessRule() : RuleBase(RuleId.SecretsWho
 
     // Job-level env helper
 
-    private void CheckEnvForJob(Env? env, Job job)
+    private void CheckEnvForJob(EnvRef env, JobRef job)
     {
-        if (env is null)
+        if (!env.HasValue)
         {
             return;
         }
 
-        CheckNode(Arena.GetStringExpression(env.Expression), static (rule, location, j) =>
+        CheckNode(env.Expression.Expression, static (rule, location, j) =>
             rule.AddJobError(j, DiagnosticMessage, location), job);
 
         var vars = env.Vars;
-        if (vars is null || vars.Value.Count == 0)
+        if (vars.Count == 0)
         {
             return;
         }
 
-        foreach (var pair in vars.Value)
+        foreach (var pair in vars)
         {
             CheckNode(pair.Value.Value, static (rule, location, j) =>
                 rule.AddJobError(j, DiagnosticMessage, location), job);
@@ -124,7 +128,7 @@ public sealed class SecretsWholeContextAccessRule() : RuleBase(RuleId.SecretsWho
     // Core expression scanning
 
     private void CheckNode<TTarget>(
-        StringNodeId node,
+        StringRef node,
         Action<SecretsWholeContextAccessRule, TextRange, TTarget> report,
         TTarget target)
     {
@@ -133,7 +137,7 @@ public sealed class SecretsWholeContextAccessRule() : RuleBase(RuleId.SecretsWho
             return;
         }
 
-        var value = Arena.GetStringValue(node);
+        var value = node.Value;
         if (value.Length == 0)
         {
             return;
@@ -166,7 +170,7 @@ public sealed class SecretsWholeContextAccessRule() : RuleBase(RuleId.SecretsWho
                 continue;
             }
 
-            report(this, Arena.GetStringRange(node), target);
+            report(this, node.Range, target);
             return;
         }
     }

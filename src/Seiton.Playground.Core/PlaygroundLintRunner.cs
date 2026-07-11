@@ -306,8 +306,8 @@ public static class PlaygroundLintRunner
                 using var parseResult = IncrementalCtx.ParseIncrementally(utf8Yaml, filePath);
 
                 // D-5d: Build skip mask — reused jobs with cached diagnostics skip lint
-                var jobCount = parseResult.Workflow?.Jobs.Count ?? 0;
-                var skipJobs = IncrementalCtx.BuildSkipJobs(jobCount, parseResult.Workflow);
+                var jobCount = parseResult.WorkflowNode?.Jobs.Count ?? 0;
+                var skipJobs = IncrementalCtx.BuildSkipJobs(jobCount, parseResult.WorkflowNode);
 
                 // Lint with optional job skipping
                 var lintResultData = Engine.CheckWithParseResult(utf8Yaml, filePath, config, parseResult.Data, IncrementalCtx.Arena, skipJobs);

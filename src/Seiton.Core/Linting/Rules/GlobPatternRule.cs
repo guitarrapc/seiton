@@ -11,18 +11,20 @@ public sealed class GlobPatternRule() : RuleBase(RuleId.GlobPattern)
 
     public override string Name => "Glob Pattern Rule";
 
-    public override void VisitEvent(Event ev)
+    public override void VisitEvent(EventRef ev)
     {
         if (Config.Utf8Yaml is null)
         {
             return;
         }
 
-        if (ev is WebhookEvent webhookEv)
+        if (ev.Kind == EventKind.Webhook)
         {
+            var webhookEv = ev.AsWebhook();
+
             // Note: Option allow-list, activity type, and mutual exclusion checks are handled
             // at parser level (WorkflowParser.On.Webhook.cs). This rule only validates glob syntax.
-            Action<string, TextRange> reportError = (msg, range) => AddEventError(webhookEv, msg, range);
+            Action<string, TextRange> reportError = (msg, range) => AddEventError(ev, msg, range);
 
             ValidateFilter(reportError, webhookEv.Branches, FilterKind.Ref);
             ValidateFilter(reportError, webhookEv.BranchesIgnore, FilterKind.Ref);
@@ -31,16 +33,17 @@ public sealed class GlobPatternRule() : RuleBase(RuleId.GlobPattern)
             ValidateFilter(reportError, webhookEv.Paths, FilterKind.Path);
             ValidateFilter(reportError, webhookEv.PathsIgnore, FilterKind.Path);
         }
-        else if (ev is ImageVersionEvent imageVersionEv)
+        else if (ev.Kind == EventKind.ImageVersion)
         {
-            Action<string, TextRange> reportError = (msg, range) => AddEventError(imageVersionEv, msg, range);
+            var imageVersionEv = ev.AsImageVersion();
+            Action<string, TextRange> reportError = (msg, range) => AddEventError(ev, msg, range);
             ValidateValues(reportError, imageVersionEv.Versions, FilterKind.Version);
         }
     }
 
-    public override void VisitJobPre(Job job)
+    public override void VisitJobPre(JobRef job)
     {
-        if (Config.Utf8Yaml is null || job.Snapshot is null)
+        if (Config.Utf8Yaml is null || !job.Snapshot.HasValue)
         {
             return;
         }
@@ -51,8 +54,8 @@ public sealed class GlobPatternRule() : RuleBase(RuleId.GlobPattern)
             return;
         }
 
-        var pattern = Arena.GetStringValue(version);
-        if (ExpressionScanHelpers.ContainsExpressionMarker(version, Arena))
+        var pattern = version.Value;
+        if (ExpressionScanHelpers.ContainsExpressionMarker(version.Id, Arena))
         {
             return;
         }
@@ -63,9 +66,9 @@ public sealed class GlobPatternRule() : RuleBase(RuleId.GlobPattern)
 
     private enum FilterKind { Ref, Path, Version }
 
-    private void ValidateFilter(Action<string, TextRange> reportError, WebhookEventFilter? filter, FilterKind kind)
+    private void ValidateFilter(Action<string, TextRange> reportError, WebhookEventFilterRef filter, FilterKind kind)
     {
-        if (filter is null)
+        if (!filter.HasValue)
         {
             return;
         }
@@ -73,9 +76,9 @@ public sealed class GlobPatternRule() : RuleBase(RuleId.GlobPattern)
         ValidateValues(reportError, filter.Values, kind);
     }
 
-    private void ValidateValues(Action<string, TextRange> reportError, IReadOnlyList<StringNodeId>? values, FilterKind kind)
+    private void ValidateValues(Action<string, TextRange> reportError, StringRefList values, FilterKind kind)
     {
-        if (values is null)
+        if (!values.HasValue)
         {
             return;
         }
@@ -83,8 +86,8 @@ public sealed class GlobPatternRule() : RuleBase(RuleId.GlobPattern)
         for (var i = 0; i < values.Count; i++)
         {
             var valueNode = values[i];
-            var pattern = Arena.GetStringValue(valueNode);
-            if (ExpressionScanHelpers.ContainsExpressionMarker(valueNode, Arena))
+            var pattern = valueNode.Value;
+            if (ExpressionScanHelpers.ContainsExpressionMarker(valueNode.Id, Arena))
             {
                 continue;
             }
@@ -93,9 +96,9 @@ public sealed class GlobPatternRule() : RuleBase(RuleId.GlobPattern)
         }
     }
 
-    private void ValidatePattern(Action<string, TextRange> reportError, StringNodeId valueNode, ReadOnlySpan<byte> pattern, FilterKind kind)
+    private void ValidatePattern(Action<string, TextRange> reportError, StringRef valueNode, ReadOnlySpan<byte> pattern, FilterKind kind)
     {
-        var range = Arena.GetStringRange(valueNode);
+        var range = valueNode.Range;
 
         // For block scalars (trailing \n), report at the block indicator (| or >) position
         // instead of the content position on the next line.

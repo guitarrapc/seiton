@@ -11,33 +11,34 @@ public sealed class DeprecatedCommandsRule() : RuleBase(RuleId.DeprecatedCommand
 
     private const string DocsUrl = "https://docs.github.com/en/actions/using-workflows/workflow-commands-for-github-actions";
 
-    public override void VisitStep(Step step)
+    public override void VisitStep(StepRef step)
     {
-        if (Config.Utf8Yaml is null || step.Exec is not ExecRun run)
+        if (Config.Utf8Yaml is null || step.Exec.Kind != StepExecKind.Run)
         {
             return;
         }
 
-        var script = Arena.GetStringValue(run.Run);
+        var run = step.Exec.AsRun();
+        var script = run.Run.Value;
 
         if (ContainsAsciiIgnoreCase(script, "::set-output"u8))
         {
-            AddStepWarning(step, $"workflow command \"set-output\" was deprecated. use `echo \"{{name}}={{value}}\" >> $GITHUB_OUTPUT` instead: {DocsUrl}", Arena.GetStringRange(run.Run));
+            AddStepWarning(step, $"workflow command \"set-output\" was deprecated. use `echo \"{{name}}={{value}}\" >> $GITHUB_OUTPUT` instead: {DocsUrl}", run.Run.Range);
         }
 
         if (ContainsAsciiIgnoreCase(script, "::save-state"u8))
         {
-            AddStepWarning(step, $"workflow command \"save-state\" was deprecated. use `echo \"{{name}}={{value}}\" >> $GITHUB_STATE` instead: {DocsUrl}", Arena.GetStringRange(run.Run));
+            AddStepWarning(step, $"workflow command \"save-state\" was deprecated. use `echo \"{{name}}={{value}}\" >> $GITHUB_STATE` instead: {DocsUrl}", run.Run.Range);
         }
 
         if (ContainsAsciiIgnoreCase(script, "::add-path"u8))
         {
-            AddStepWarning(step, $"workflow command \"add-path\" was deprecated. use `echo \"{{path}}\" >> $GITHUB_PATH` instead: {DocsUrl}", Arena.GetStringRange(run.Run));
+            AddStepWarning(step, $"workflow command \"add-path\" was deprecated. use `echo \"{{path}}\" >> $GITHUB_PATH` instead: {DocsUrl}", run.Run.Range);
         }
 
         if (ContainsAsciiIgnoreCase(script, "::set-env"u8))
         {
-            AddStepWarning(step, $"workflow command \"set-env\" was deprecated. use `echo \"{{name}}={{value}}\" >> $GITHUB_ENV` instead: {DocsUrl}", Arena.GetStringRange(run.Run));
+            AddStepWarning(step, $"workflow command \"set-env\" was deprecated. use `echo \"{{name}}={{value}}\" >> $GITHUB_ENV` instead: {DocsUrl}", run.Run.Range);
         }
     }
 }

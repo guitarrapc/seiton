@@ -24,23 +24,33 @@ public sealed class LintResult : IDisposable
     /// <summary>Gets the underlying lint result data for internal consumers.</summary>
     internal LintResultData Data { get; }
 
-    /// <summary>Gets the parsed workflow AST, if the document is a workflow file.</summary>
-    public Workflow? Workflow
+    /// <summary>Gets the parsed workflow AST root. Default ref when the document is not a workflow file.</summary>
+    public WorkflowRef Workflow
+    {
+        get
+        {
+            ThrowIfDisposed();
+            return new WorkflowRef(_arena, Data.Workflow);
+        }
+    }
+
+    /// <summary>Gets the parsed action metadata AST root. Default ref when the document is not an action file.</summary>
+    public ActionMetadataRef ActionMetadata
+    {
+        get
+        {
+            ThrowIfDisposed();
+            return new ActionMetadataRef(_arena, Data.ActionMetadata);
+        }
+    }
+
+    /// <summary>Gets the parsed workflow AST node, if the document is a workflow file.</summary>
+    internal Workflow? WorkflowNode
     {
         get
         {
             ThrowIfDisposed();
             return Data.Workflow;
-        }
-    }
-
-    /// <summary>Gets the parsed action metadata AST, if the document is an action file.</summary>
-    public ActionMetadata? ActionMetadata
-    {
-        get
-        {
-            ThrowIfDisposed();
-            return Data.ActionMetadata;
         }
     }
 

@@ -59,7 +59,7 @@ public sealed partial class RuleInterfaceTests
         rule.SetConfig(new LintConfig { Utf8Yaml = sourceBytes, Arena = arena });
         visitor.AddPass(rule);
 
-        visitor.Visit(workflow);
+        visitor.Visit(new WorkflowRef(arena, workflow));
         var diagnostics = rule.GetDiagnostics();
 
         await Assert.That(diagnostics.Any(x => x.Message.Contains("cannot have both uses and steps", StringComparison.Ordinal))).IsTrue();
@@ -121,7 +121,7 @@ public sealed partial class RuleInterfaceTests
         rule.SetConfig(new LintConfig { Utf8Yaml = sourceBytes, Arena = arena });
         visitor.AddPass(rule);
 
-        visitor.Visit(workflow);
+        visitor.Visit(new WorkflowRef(arena, workflow));
         var diagnostics = rule.GetDiagnostics();
 
         await Assert.That(diagnostics.Any(x => x.Severity == DiagnosticSeverity.Warning && x.Message.Contains("unknown input 'fetch-depht' for action 'actions/checkout@v4'", StringComparison.Ordinal))).IsTrue();

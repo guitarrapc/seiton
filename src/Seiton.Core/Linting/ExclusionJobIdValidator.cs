@@ -156,7 +156,7 @@ public static class ExclusionJobIdValidator
         }
 
         using var parseResult = WorkflowParser.Parse(bytes, workflowFilePath);
-        var workflow = parseResult.Workflow;
+        var workflow = parseResult.WorkflowNode;
         if (workflow is null)
         {
             return null;

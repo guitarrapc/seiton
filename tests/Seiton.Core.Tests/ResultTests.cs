@@ -30,7 +30,7 @@ public sealed class ResultTests
     public async Task Parse_ReturnsParseResult()
     {
         using ParseResult result = WorkflowParser.Parse(SimpleWorkflow, ".github/workflows/test.yml");
-        await Assert.That(result.Workflow).IsNotNull();
+        await Assert.That(result.Workflow.HasValue).IsTrue();
         await Assert.That(result.HasFatalError).IsFalse();
     }
 
@@ -38,14 +38,14 @@ public sealed class ResultTests
     public async Task Parse_AstRemainsValidUntilResultDisposed()
     {
         using ParseResult result = WorkflowParser.Parse(SimpleWorkflow, ".github/workflows/test.yml");
-        await Assert.That(result.Workflow).IsNotNull();
+        await Assert.That(result.Workflow.HasValue).IsTrue();
 
-        var workflow = result.Workflow!;
+        var workflow = result.Workflow;
         var jobs = workflow.Jobs;
         await Assert.That(jobs.Count).IsEqualTo(1);
 
-        var job = jobs.Entries[0].Value;
-        var jobIdStr = result.GetString(job.Id);
+        var job = jobs.GetAt(0).Value;
+        var jobIdStr = job.Id.Decode();
         await Assert.That(jobIdStr).IsEqualTo("build");
     }
 
@@ -54,8 +54,8 @@ public sealed class ResultTests
     {
         using ParseResult result = WorkflowParser.Parse(SimpleWorkflow, ".github/workflows/test.yml");
 
-        var jobKey = result.Workflow!.Jobs.Entries[0].Key;
-        await Assert.That(result.GetString(jobKey)).IsEqualTo("build");
+        var jobKey = result.Workflow.Jobs.GetAt(0).Key;
+        await Assert.That(jobKey.Decode()).IsEqualTo("build");
     }
 
     [Test]
@@ -79,10 +79,10 @@ public sealed class ResultTests
     public async Task Parse_ActionMetadata_ReturnsParseResult()
     {
         using ParseResult result = WorkflowParser.Parse(SimpleAction, "action.yml");
-        await Assert.That(result.ActionMetadata).IsNotNull();
-        await Assert.That(result.Workflow).IsNull();
+        await Assert.That(result.ActionMetadata.HasValue).IsTrue();
+        await Assert.That(result.Workflow.HasValue).IsFalse();
 
-        var nameStr = result.GetString(result.ActionMetadata!.Name);
+        var nameStr = result.ActionMetadata.Name.Decode();
         await Assert.That(nameStr).IsEqualTo("My Action");
     }
 
@@ -91,7 +91,7 @@ public sealed class ResultTests
     {
         var engine = new LintEngine();
         using LintResult result = engine.Check(SimpleWorkflow, ".github/workflows/test.yml");
-        await Assert.That(result.Workflow).IsNotNull();
+        await Assert.That(result.Workflow.HasValue).IsTrue();
         await Assert.That(result.HasFatalError).IsFalse();
     }
 
@@ -100,11 +100,11 @@ public sealed class ResultTests
     {
         var engine = new LintEngine();
         using LintResult result = engine.Check(SimpleWorkflow, ".github/workflows/test.yml");
-        await Assert.That(result.Workflow).IsNotNull();
+        await Assert.That(result.Workflow.HasValue).IsTrue();
 
-        var workflow = result.Workflow!;
-        var job = workflow.Jobs.Entries[0].Value;
-        var jobIdStr = result.GetString(job.Id);
+        var workflow = result.Workflow;
+        var job = workflow.Jobs.GetAt(0).Value;
+        var jobIdStr = job.Id.Decode();
         await Assert.That(jobIdStr).IsEqualTo("build");
 
         await Assert.That(result.DiagnosticCount).IsGreaterThanOrEqualTo(0);
@@ -115,8 +115,8 @@ public sealed class ResultTests
     {
         var engine = new LintEngine();
         using LintResult result = engine.Check(SimpleWorkflow, ".github/workflows/test.yml");
-        var workflow = result.Workflow!;
-        var jobIdStr = result.GetString(workflow.Jobs.Entries[0].Value.Id);
+        var workflow = result.Workflow;
+        var jobIdStr = workflow.Jobs.GetAt(0).Value.Id.Decode();
         await Assert.That(jobIdStr).IsEqualTo("build");
     }
 
@@ -140,8 +140,8 @@ public sealed class ResultTests
     public async Task ParseResult_CanCrossAsyncBoundary()
     {
         using ParseResult result = await ParseAsync();
-        await Assert.That(result.Workflow).IsNotNull();
-        var jobIdStr = result.GetString(result.Workflow!.Jobs.Entries[0].Value.Id);
+        await Assert.That(result.Workflow.HasValue).IsTrue();
+        var jobIdStr = result.Workflow.Jobs.GetAt(0).Value.Id.Decode();
         await Assert.That(jobIdStr).IsEqualTo("build");
     }
 
@@ -159,14 +159,14 @@ public sealed class ResultTests
         holder.Result = engine.Check(SimpleWorkflow, ".github/workflows/test.yml");
 
         using var result = holder.Result;
-        await Assert.That(result!.Workflow).IsNotNull();
+        await Assert.That(result!.Workflow.HasValue).IsTrue();
     }
 
     [Test]
     public async Task ParseResult_Dispose_ThrowsOnValueAccess()
     {
         ParseResult result = WorkflowParser.Parse(SimpleWorkflow, ".github/workflows/test.yml");
-        var jobId = result.Workflow!.Jobs.Entries[0].Value.Id;
+        var jobId = result.Workflow.Jobs.GetAt(0).Value.Id.Id;
 
         result.Dispose();
 
@@ -261,9 +261,9 @@ public sealed class ResultTests
     {
         public override string Name => "capture-job-id";
 
-        public override void VisitJobPre(Job job)
+        public override void VisitJobPre(JobRef job)
         {
-            AddJobInfo(job, $"job id: {GetString(job.Id)}", GetRange(job.Id));
+            AddJobInfo(job, $"job id: {job.Id.Decode()}", job.Id.Range);
         }
     }
 
@@ -271,7 +271,7 @@ public sealed class ResultTests
     {
         public override string Name => "override-workflow-pre-without-base";
 
-        public override void VisitWorkflowPre(Workflow workflow)
+        public override void VisitWorkflowPre(WorkflowRef workflow)
         {
             AddWarning("workflow visited", new TextRange(0, 0, 1, 1, 1, 1));
         }
@@ -281,9 +281,9 @@ public sealed class ResultTests
     {
         public override string Name => "override-action-pre-without-base";
 
-        public override void VisitActionMetadataPre(ActionMetadata metadata)
+        public override void VisitActionMetadataPre(ActionMetadataRef metadata)
         {
-            AddWarning("action visited", GetRange(metadata.Name));
+            AddWarning("action visited", metadata.Name.Range);
         }
     }
 }

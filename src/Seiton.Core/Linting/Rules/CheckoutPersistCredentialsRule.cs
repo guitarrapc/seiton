@@ -17,23 +17,24 @@ public sealed class CheckoutPersistCredentialsRule() : RuleBase(RuleId.CheckoutP
 
     public override string Name => "Checkout Persist Credentials Rule";
 
-    public override void VisitStep(Step step)
+    public override void VisitStep(StepRef step)
     {
-        if (step.Exec is not ExecAction actionExec || Config.Utf8Yaml is null)
+        if (step.Exec.Kind != StepExecKind.Action || Config.Utf8Yaml is null)
         {
             return;
         }
 
-        var usesText = Arena.GetStringValue(actionExec.Uses);
+        var actionExec = step.Exec.AsAction();
+        var usesText = actionExec.Uses.Value;
         if (!PopularActions.TryGet(usesText, out var actionSpec) || actionSpec.Id != PopularActions.ActionId.ActionsCheckout)
         {
             return;
         }
 
-        var usesSlice = Arena.GetStringSlice(actionExec.Uses);
+        var usesSlice = actionExec.Uses.Slice;
         var message = GetCachedMessage(usesSlice);
 
-        if (actionExec.Inputs is null || Config.Utf8Yaml is null || !actionExec.Inputs.Value.TryGetValue(Config.Utf8Yaml, "persist-credentials"u8, out var persistCredentialsNode))
+        if (!actionExec.Inputs.TryGetValue("persist-credentials"u8, out var persistCredentialsNode))
         {
             if (Config.Fix.Enabled && Config.Utf8Yaml is not null && TryBuildMissingInputFix(step, actionExec, Config.Utf8Yaml, out var missingFix))
             {
@@ -45,19 +46,19 @@ public sealed class CheckoutPersistCredentialsRule() : RuleBase(RuleId.CheckoutP
             return;
         }
 
-        var value = Arena.GetStringValue(persistCredentialsNode);
-        if (!ExpressionScanHelpers.ContainsExpressionMarker(persistCredentialsNode, Arena) && IsBooleanFalse(value))
+        var value = persistCredentialsNode.Value;
+        if (!ExpressionScanHelpers.ContainsExpressionMarker(persistCredentialsNode.Id, Arena) && IsBooleanFalse(value))
         {
             return;
         }
 
         if (Config.Fix.Enabled && Config.Utf8Yaml is not null && TryBuildValueReplacementFix(persistCredentialsNode, Config.Utf8Yaml, out var valueFix))
         {
-            AddStepWarning(step, message, Arena.GetStringRange(persistCredentialsNode), valueFix);
+            AddStepWarning(step, message, persistCredentialsNode.Range, valueFix);
             return;
         }
 
-        AddStepWarning(step, message, Arena.GetStringRange(persistCredentialsNode));
+        AddStepWarning(step, message, persistCredentialsNode.Range);
     }
 
     private static string BuildMessage(string actionRef)
@@ -83,10 +84,10 @@ public sealed class CheckoutPersistCredentialsRule() : RuleBase(RuleId.CheckoutP
         return msg;
     }
 
-    private bool TryBuildValueReplacementFix(StringNodeId persistCredentialsNode, byte[] utf8Yaml, out DiagnosticFix fix)
+    private bool TryBuildValueReplacementFix(StringRef persistCredentialsNode, byte[] utf8Yaml, out DiagnosticFix fix)
     {
         fix = default;
-        if (ExpressionScanHelpers.ContainsExpressionMarker(persistCredentialsNode, Arena))
+        if (ExpressionScanHelpers.ContainsExpressionMarker(persistCredentialsNode.Id, Arena))
         {
             return false;
         }
@@ -94,11 +95,11 @@ public sealed class CheckoutPersistCredentialsRule() : RuleBase(RuleId.CheckoutP
         var replacement = BuildReplacementText(persistCredentialsNode, utf8Yaml);
         fix = new DiagnosticFix(
             $"set with.{PersistCredentialsKey} to false; {FixHint}",
-            [new TextEdit(Arena.GetStringSlice(persistCredentialsNode).Offset, Arena.GetStringSlice(persistCredentialsNode).Length, replacement)]);
+            [new TextEdit(persistCredentialsNode.Slice.Offset, persistCredentialsNode.Slice.Length, replacement)]);
         return true;
     }
 
-    private bool TryBuildMissingInputFix(Step step, ExecAction actionExec, byte[] utf8Yaml, out DiagnosticFix fix)
+    private bool TryBuildMissingInputFix(StepRef step, ExecActionRef actionExec, byte[] utf8Yaml, out DiagnosticFix fix)
     {
         fix = default;
 
@@ -107,7 +108,7 @@ public sealed class CheckoutPersistCredentialsRule() : RuleBase(RuleId.CheckoutP
             return false;
         }
 
-        var usesLine = Utf8YamlLineHelpers.FindLineNumberFromOffset(utf8Yaml, Arena.GetStringSlice(actionExec.Uses).Offset);
+        var usesLine = Utf8YamlLineHelpers.FindLineNumberFromOffset(utf8Yaml, actionExec.Uses.Slice.Offset);
         if (usesLine < 1)
         {
             return false;
@@ -121,7 +122,7 @@ public sealed class CheckoutPersistCredentialsRule() : RuleBase(RuleId.CheckoutP
         var lineEnding = FixFormatting.DetectDominantLineEnding(utf8Yaml);
         var keyIndent = GetStepKeyIndentation(utf8Yaml, usesLine);
 
-        if (actionExec.Inputs is not null && actionExec.Inputs.Value.Count > 0)
+        if (actionExec.Inputs.Count > 0)
         {
             var withLine = Utf8YamlLineHelpers.FindLineWithKey(utf8Yaml, Math.Max(usesLine + 1, 1), stepEndLine, keyIndent, "with:"u8);
             if (withLine < 0 || LineContainsFlowMappingAt(utf8Yaml, withLine, keyIndent))
@@ -129,7 +130,7 @@ public sealed class CheckoutPersistCredentialsRule() : RuleBase(RuleId.CheckoutP
                 return false;
             }
 
-            var firstInputLine = FindFirstInputLine(utf8Yaml, actionExec.Inputs.Value);
+            var firstInputLine = FindFirstInputLine(utf8Yaml, actionExec.Inputs);
             if (firstInputLine < 1)
             {
                 return false;
@@ -159,17 +160,17 @@ public sealed class CheckoutPersistCredentialsRule() : RuleBase(RuleId.CheckoutP
         return true;
     }
 
-    private string BuildReplacementText(StringNodeId valueNode, byte[] utf8Yaml)
+    private string BuildReplacementText(StringRef valueNode, byte[] utf8Yaml)
     {
-        var valueStart = Arena.GetStringSlice(valueNode).Offset;
-        var valueEnd = Arena.GetStringSlice(valueNode).Offset + Arena.GetStringSlice(valueNode).Length;
+        var valueStart = valueNode.Slice.Offset;
+        var valueEnd = valueNode.Slice.Offset + valueNode.Slice.Length;
         if (valueStart < 0 || valueEnd > utf8Yaml.Length || valueStart > valueEnd)
         {
             return "false";
         }
 
-        var valueSpan = Arena.GetStringValue(valueNode);
-        if (Arena.GetStringQuoted(valueNode))
+        var valueSpan = valueNode.Value;
+        if (valueNode.Quoted)
         {
             if (valueSpan.Length >= 2 && valueSpan[0] == (byte)'\'' && valueSpan[^1] == (byte)'\'')
             {
@@ -182,7 +183,7 @@ public sealed class CheckoutPersistCredentialsRule() : RuleBase(RuleId.CheckoutP
             }
         }
 
-        var style = FixFormatting.DetectQuoteStyle(utf8Yaml, Arena.GetStringRange(valueNode), Arena.GetStringQuoted(valueNode));
+        var style = FixFormatting.DetectQuoteStyle(utf8Yaml, valueNode.Range, valueNode.Quoted);
         if (style == ScalarQuoteStyle.Unquoted)
         {
             return "false";
@@ -227,12 +228,12 @@ public sealed class CheckoutPersistCredentialsRule() : RuleBase(RuleId.CheckoutP
         return false;
     }
 
-    private int FindFirstInputLine(byte[] utf8Yaml, SliceMap<StringNodeId> inputs)
+    private int FindFirstInputLine(byte[] utf8Yaml, StringRefMap inputs)
     {
         var firstLine = int.MaxValue;
         foreach (var pair in inputs)
         {
-            var line = Utf8YamlLineHelpers.FindLineNumberFromOffset(utf8Yaml, Arena.GetStringSlice(pair.Value).Offset);
+            var line = Utf8YamlLineHelpers.FindLineNumberFromOffset(utf8Yaml, pair.Value.Slice.Offset);
             if (line > 0 && line < firstLine)
             {
                 firstLine = line;

@@ -9,10 +9,10 @@ public sealed class InsecureCommandsRule() : RuleBase(RuleId.InsecureCommands)
 {
     public override string Name => "Insecure Commands Rule";
 
-    public override void VisitWorkflowPre(Workflow workflow)
+    public override void VisitWorkflowPre(WorkflowRef workflow)
     {
         base.VisitWorkflowPre(workflow);
-        if (workflow.Env is null)
+        if (!workflow.Env.HasValue)
         {
             return;
         }
@@ -26,9 +26,9 @@ public sealed class InsecureCommandsRule() : RuleBase(RuleId.InsecureCommands)
         }
     }
 
-    public override void VisitJobPre(Job job)
+    public override void VisitJobPre(JobRef job)
     {
-        if (job.Env is null)
+        if (!job.Env.HasValue)
         {
             return;
         }
@@ -42,9 +42,9 @@ public sealed class InsecureCommandsRule() : RuleBase(RuleId.InsecureCommands)
         }
     }
 
-    public override void VisitStep(Step step)
+    public override void VisitStep(StepRef step)
     {
-        if (step.Env is null)
+        if (!step.Env.HasValue)
         {
             return;
         }
@@ -58,31 +58,31 @@ public sealed class InsecureCommandsRule() : RuleBase(RuleId.InsecureCommands)
         }
     }
 
-    private bool TryFindInsecureCommandsEnv(Env env, out string envName, out TextRange location)
+    private bool TryFindInsecureCommandsEnv(EnvRef env, out string envName, out TextRange location)
     {
         envName = string.Empty;
         location = env.Range;
-        if (env.Vars is null || env.Vars.Value.Count == 0 || Config.Utf8Yaml is null)
+        if (!env.Vars.HasValue || env.Vars.Count == 0 || Config.Utf8Yaml is null)
         {
             return false;
         }
 
         foreach (var pair in env.Vars)
         {
-            if (!EqualsAsciiIgnoreCase(pair.Key.AsSpan(Config.Utf8Yaml), "ACTIONS_ALLOW_UNSECURE_COMMANDS"u8))
+            if (!EqualsAsciiIgnoreCase(pair.Key.Bytes, "ACTIONS_ALLOW_UNSECURE_COMMANDS"u8))
             {
                 continue;
             }
 
-            var valueUtf8 = TrimAsciiWhiteSpace(Arena.GetStringValue(pair.Value.Value));
+            var valueUtf8 = TrimAsciiWhiteSpace(pair.Value.Value.Value);
             if (!IsTruthy(valueUtf8))
             {
                 continue;
             }
 
             // Decode only on the diagnostic path, preserving the source casing in the message.
-            envName = Decode(pair.Key);
-            location = Arena.GetStringRange(pair.Value.Value);
+            envName = pair.Key.Decode();
+            location = pair.Value.Value.Range;
             return true;
         }
 

@@ -10,57 +10,57 @@ namespace Seiton.Core.Linting.Rules;
 /// <summary>Flags direct use of <c>secrets.*</c> context in <c>run:</c> scripts where environment variables should be used instead.</summary>
 public sealed class RunSecretsContextDirectUseRule() : RuleBase(RuleId.RunSecretsContextDirectUse)
 {
-    private Workflow? _currentWorkflow;
-    private Job? _currentJob;
+    private WorkflowRef _currentWorkflow;
+    private JobRef _currentJob;
 
     public override string Name => "Run Secrets Context Direct Use Rule";
 
-    public override void VisitWorkflowPre(Workflow workflow)
+    public override void VisitWorkflowPre(WorkflowRef workflow)
     {
         base.VisitWorkflowPre(workflow);
         _currentWorkflow = workflow;
-        _currentJob = null;
+        _currentJob = default;
     }
 
-    public override void VisitWorkflowPost(Workflow workflow)
+    public override void VisitWorkflowPost(WorkflowRef workflow)
     {
-        _currentWorkflow = null;
-        _currentJob = null;
+        _currentWorkflow = default;
+        _currentJob = default;
     }
 
-    public override void VisitJobPre(Job job)
+    public override void VisitJobPre(JobRef job)
     {
         _currentJob = job;
     }
 
-    public override void VisitJobPost(Job job)
+    public override void VisitJobPost(JobRef job)
     {
-        _currentJob = null;
+        _currentJob = default;
     }
 
-    public override void VisitStep(Step step)
+    public override void VisitStep(StepRef step)
     {
-        if (Config.Utf8Yaml is null || step.Exec is not ExecRun run)
+        if (Config.Utf8Yaml is null || step.Exec.Kind != StepExecKind.Run)
         {
             return;
         }
 
-        CheckRunNode(step, run.Run);
+        CheckRunNode(step, step.Exec.AsRun().Run);
     }
 
-    private void CheckRunNode(Step step, StringNodeId runNode)
+    private void CheckRunNode(StepRef step, StringRef runNode)
     {
         if (Config.Utf8Yaml is null)
         {
             return;
         }
 
-        var runText = Arena.GetStringValue(runNode);
+        var runText = runNode.Value;
         var searchStart = 0;
         while (TryFindExpression(runText, searchStart, out var bodyStart, out var bodyLength, out var nextSearchStart))
         {
             searchStart = nextSearchStart;
-            var location = BuildExpressionLocation(Arena, Config.Utf8Yaml, runNode, bodyStart, nextSearchStart, Config.GetLineStarts());
+            var location = BuildExpressionLocation(Config.Utf8Yaml, runNode, bodyStart, nextSearchStart, Config.GetLineStarts());
 
             var expression = TrimAsciiWhiteSpace(runText.Slice(bodyStart, bodyLength));
             if (expression.Length == 0)
@@ -86,7 +86,7 @@ public sealed class RunSecretsContextDirectUseRule() : RuleBase(RuleId.RunSecret
             }
 
             // Skip detection inside no-expand heredoc (<<'EOF') where shell variables don't expand
-            var absoluteOffset = Arena.GetStringSlice(runNode).Offset + bodyStart - 3;
+            var absoluteOffset = runNode.Slice.Offset + bodyStart - 3;
             if (IsInsideNoExpandHereDoc(Config.Utf8Yaml, absoluteOffset))
             {
                 continue;
@@ -131,7 +131,7 @@ public sealed class RunSecretsContextDirectUseRule() : RuleBase(RuleId.RunSecret
         }
     }
 
-    private bool TryBuildFix(Step step, StringNodeId runNode, ReadOnlySpan<byte> expression, int expressionBodyStart, int expressionLength, out DiagnosticFix fix)
+    private bool TryBuildFix(StepRef step, StringRef runNode, ReadOnlySpan<byte> expression, int expressionBodyStart, int expressionLength, out DiagnosticFix fix)
     {
         fix = default;
         if (Config.Utf8Yaml is null)
@@ -145,7 +145,7 @@ public sealed class RunSecretsContextDirectUseRule() : RuleBase(RuleId.RunSecret
         }
         var secretName = DecodeExpressionName(expression, nameStart, nameLength);
 
-        var absoluteOffset = Arena.GetStringSlice(runNode).Offset + expressionBodyStart - 3;
+        var absoluteOffset = runNode.Slice.Offset + expressionBodyStart - 3;
 
         if (IsInsideNoExpandHereDoc(Config.Utf8Yaml, absoluteOffset))
         {
@@ -158,12 +158,12 @@ public sealed class RunSecretsContextDirectUseRule() : RuleBase(RuleId.RunSecret
         }
 
         // Case 1: existing unique env mapping resolves the variable name
-        if (TryResolveShellVariableName(Arena, step.Env, _currentJob?.Env, _currentWorkflow?.Env,
+        if (TryResolveShellVariableName(step.Env, _currentJob.Env, _currentWorkflow.Env,
             Config.Utf8Yaml, secretName,
             static (ReadOnlySpan<byte> expr, out string name) => TryParseSimpleContextReference(expr, "secrets"u8, out name),
             out var variableName))
         {
-            var isPowerShell = RunContextDirectUseAnalyzer.IsPowerShellWithDefaults(Arena, step, _currentJob, _currentWorkflow, Config.Utf8Yaml);
+            var isPowerShell = RunContextDirectUseAnalyzer.IsPowerShellWithDefaults(step, _currentJob, _currentWorkflow, Config.Utf8Yaml);
             if (isPowerShell is null)
             {
                 return false;
@@ -187,14 +187,14 @@ public sealed class RunSecretsContextDirectUseRule() : RuleBase(RuleId.RunSecret
         }
 
         var expressionString = BuildSecretsExpressionString(secretName);
-        var envVarName = DeduplicateEnvName(Arena, RunInputsContextDirectUseRule.InputNameToEnvVarName(secretName),
-            step.Env, _currentJob?.Env, _currentWorkflow?.Env);
+        var envVarName = DeduplicateEnvName(RunInputsContextDirectUseRule.InputNameToEnvVarName(secretName),
+            step.Env, _currentJob.Env, _currentWorkflow.Env);
         if (envVarName is null)
         {
             return false;
         }
 
-        var isPowerShell2 = RunContextDirectUseAnalyzer.IsPowerShellWithDefaults(Arena, step, _currentJob, _currentWorkflow, Config.Utf8Yaml);
+        var isPowerShell2 = RunContextDirectUseAnalyzer.IsPowerShellWithDefaults(step, _currentJob, _currentWorkflow, Config.Utf8Yaml);
         if (isPowerShell2 is null)
         {
             return false;
@@ -205,7 +205,7 @@ public sealed class RunSecretsContextDirectUseRule() : RuleBase(RuleId.RunSecret
             return false;
         }
 
-        if (!TryBuildStepEnvInsertionEdit(Arena, Config.Utf8Yaml, step, envVarName, expressionString, out var insertEdit))
+        if (!TryBuildStepEnvInsertionEdit(Config.Utf8Yaml, step, envVarName, expressionString, out var insertEdit))
         {
             return false;
         }

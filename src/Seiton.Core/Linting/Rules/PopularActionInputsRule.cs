@@ -14,7 +14,7 @@ public sealed class PopularActionInputsRule() : RuleBase(RuleId.PopularActionInp
 
     public override string Name => "Popular Action Inputs Rule";
 
-    public override void VisitWorkflowPre(Workflow workflow)
+    public override void VisitWorkflowPre(WorkflowRef workflow)
     {
         base.VisitWorkflowPre(workflow);
         // Clear per-source cache — slice offsets are invalid across different source bytes.
@@ -22,9 +22,9 @@ public sealed class PopularActionInputsRule() : RuleBase(RuleId.PopularActionInp
         _lastActionName = null;
     }
 
-    public override void VisitStep(Step step)
+    public override void VisitStep(StepRef step)
     {
-        if (step.Exec is not ExecAction actionExec)
+        if (step.Exec.Kind != StepExecKind.Action)
         {
             return;
         }
@@ -34,7 +34,8 @@ public sealed class PopularActionInputsRule() : RuleBase(RuleId.PopularActionInp
             return;
         }
 
-        var usesText = Arena.GetStringValue(actionExec.Uses);
+        var actionExec = step.Exec.AsAction();
+        var usesText = actionExec.Uses.Value;
         if (!PopularActions.TryGet(usesText, out var actionSpec))
         {
             return;
@@ -43,10 +44,11 @@ public sealed class PopularActionInputsRule() : RuleBase(RuleId.PopularActionInp
         // Decoded name and GitHub URL are only consumed by diagnostic messages —
         // resolve them lazily so the clean path (all inputs valid) stays allocation-free.
         string? actionName = null;
-        string ActionName() => actionName ??= GetCachedActionName(Arena.GetStringSlice(actionExec.Uses));
+        string ActionName() => actionName ??= GetCachedActionName(actionExec.Uses.Slice);
 
         // Check unknown inputs
-        if (actionExec.Inputs is { Count: > 0 } inputs)
+        var inputs = actionExec.Inputs;
+        if (inputs.Count > 0)
         {
             string[]? inputNames = null;
             string? availableInputs = null;
@@ -54,21 +56,21 @@ public sealed class PopularActionInputsRule() : RuleBase(RuleId.PopularActionInp
 
             foreach (var pair in inputs)
             {
-                if (actionSpec.IsInputAllowed(pair.Key.AsSpan(Config.Utf8Yaml)))
+                if (actionSpec.IsInputAllowed(pair.Key.Bytes))
                 {
                     // Check deprecated inputs
-                    var deprecationMessage = actionSpec.GetDeprecatedInputMessage(pair.Key.AsSpan(Config.Utf8Yaml));
+                    var deprecationMessage = actionSpec.GetDeprecatedInputMessage(pair.Key.Bytes);
                     if (!deprecationMessage.IsEmpty)
                     {
-                        var inputName = Encoding.UTF8.GetString(pair.Key.AsSpan(Config.Utf8Yaml));
+                        var inputName = pair.Key.Decode();
                         var message = Encoding.UTF8.GetString(deprecationMessage);
-                        AddStepWarning(step, $"avoid using deprecated input \"{inputName}\" in action \"{ActionName()}\": {message}", Arena.GetStringRange(pair.Value));
+                        AddStepWarning(step, $"avoid using deprecated input \"{inputName}\" in action \"{ActionName()}\": {message}", pair.Value.Range);
                     }
 
                     continue;
                 }
 
-                var unknownInputName = Encoding.UTF8.GetString(pair.Key.AsSpan(Config.Utf8Yaml));
+                var unknownInputName = pair.Key.Decode();
                 inputNames ??= actionSpec.GetInputNames();
                 var suggestion = FindClosestInput(unknownInputName, inputNames);
                 availableInputs ??= FormatAvailableInputs(inputNames);
@@ -82,16 +84,16 @@ public sealed class PopularActionInputsRule() : RuleBase(RuleId.PopularActionInp
                 {
                     fix = new DiagnosticFix(
                         $"replace '{unknownInputName}' with '{suggestion}'",
-                        [new TextEdit(pair.Key.Offset, pair.Key.Length, suggestion)]);
+                        [new TextEdit(pair.Key.Slice.Offset, pair.Key.Slice.Length, suggestion)]);
                 }
 
                 if (fix is not null)
                 {
-                    AddStepWarning(step, unknownMessage, Arena.GetStringRange(pair.Value), fix.Value);
+                    AddStepWarning(step, unknownMessage, pair.Value.Range, fix.Value);
                 }
                 else
                 {
-                    AddStepWarning(step, unknownMessage, Arena.GetStringRange(pair.Value));
+                    AddStepWarning(step, unknownMessage, pair.Value.Range);
                 }
             }
         }
@@ -111,16 +113,17 @@ public sealed class PopularActionInputsRule() : RuleBase(RuleId.PopularActionInp
         }
     }
 
-    private bool IsInputProvided(ExecAction actionExec, ReadOnlySpan<byte> inputNameUtf8)
+    private bool IsInputProvided(ExecActionRef actionExec, ReadOnlySpan<byte> inputNameUtf8)
     {
-        if (actionExec.Inputs is not { Count: > 0 } inputs || Config.Utf8Yaml is null)
+        var inputs = actionExec.Inputs;
+        if (inputs.Count == 0 || Config.Utf8Yaml is null)
         {
             return false;
         }
 
         foreach (var pair in inputs)
         {
-            if (SpanHelpers.EqualsAsciiIgnoreCase(pair.Key.AsSpan(Config.Utf8Yaml), inputNameUtf8))
+            if (SpanHelpers.EqualsAsciiIgnoreCase(pair.Key.Bytes, inputNameUtf8))
             {
                 return true;
             }

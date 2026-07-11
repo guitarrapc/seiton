@@ -44,7 +44,7 @@ internal static class DynamicContextTypeBuilder
     /// (for detecting forward references to steps defined later).
     /// </summary>
     internal static (byte[] NameUtf8, ExprType Type) BuildStepsOverride(
-        IReadOnlyList<Step>? steps,
+        IReadOnlyList<StepRef>? steps,
         AstArena arena,
         byte[] utf8Yaml,
         int maxStepIndex = -1,
@@ -67,7 +67,7 @@ internal static class DynamicContextTypeBuilder
     /// </summary>
     internal static (byte[] NameUtf8, ExprType Type) BuildStepsOverrideInto(
         Dictionary<Utf8String, ExprType> reusableProps,
-        IReadOnlyList<Step>? steps,
+        IReadOnlyList<StepRef>? steps,
         AstArena arena,
         byte[] utf8Yaml,
         int maxStepIndex,
@@ -90,7 +90,7 @@ internal static class DynamicContextTypeBuilder
     /// </summary>
     internal static void AppendStepsOverrideInto(
         Dictionary<Utf8String, ExprType> reusableProps,
-        IReadOnlyList<Step>? steps,
+        IReadOnlyList<StepRef>? steps,
         AstArena arena,
         byte[] utf8Yaml,
         int fromStepIndex,
@@ -105,7 +105,7 @@ internal static class DynamicContextTypeBuilder
         var limit = Math.Min(maxStepIndex, steps.Count);
         for (var i = Math.Max(fromStepIndex, 0); i < limit; i++)
         {
-            var step = steps[i];
+            var step = steps[i].Node!;
             if (!step.Id.HasValue)
             {
                 continue;
@@ -123,7 +123,7 @@ internal static class DynamicContextTypeBuilder
 
     private static (byte[] NameUtf8, ExprType Type) BuildStepsOverrideCore(
         Dictionary<Utf8String, ExprType> props,
-        IReadOnlyList<Step> steps,
+        IReadOnlyList<StepRef> steps,
         AstArena arena,
         byte[] utf8Yaml,
         int maxStepIndex,
@@ -132,7 +132,7 @@ internal static class DynamicContextTypeBuilder
         var limit = maxStepIndex >= 0 ? Math.Min(maxStepIndex, steps.Count) : steps.Count;
         for (var i = 0; i < limit; i++)
         {
-            var step = steps[i];
+            var step = steps[i].Node!;
             if (!step.Id.HasValue)
             {
                 continue;

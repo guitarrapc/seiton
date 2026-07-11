@@ -13,19 +13,20 @@ public sealed class ActionShellIsRequiredRule() : RuleBase(RuleId.ActionShellIsR
         return documentKind == DocumentKind.ActionMetadata;
     }
 
-    public override void VisitStep(Step step)
+    public override void VisitStep(StepRef step)
     {
-        if (Config.Utf8Yaml is null || step.Exec is not ExecRun run)
+        if (Config.Utf8Yaml is null || step.Exec.Kind != StepExecKind.Run)
         {
             return;
         }
 
-        if (run.Shell.HasValue && !IsMissingShell(Arena.GetStringValue(run.Shell)))
+        var run = step.Exec.AsRun();
+        if (run.Shell.HasValue && !IsMissingShell(run.Shell.Value))
         {
             return;
         }
 
-        AddStepError(step, "shell is required if run is set", Arena.GetStringRange(run.Run));
+        AddStepError(step, "shell is required if run is set", run.Run.Range);
     }
 
     private static bool IsMissingShell(ReadOnlySpan<byte> value)

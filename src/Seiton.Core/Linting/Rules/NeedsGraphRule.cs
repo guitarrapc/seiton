@@ -8,17 +8,17 @@ public sealed class NeedsGraphRule() : RuleBase(RuleId.NeedsGraph)
 {
     public override string Name => "Needs Graph Rule";
 
-    private SliceMap<Job> _knownJobs;
+    private JobRefMap _knownJobs;
 
-    public override void VisitWorkflowPre(Workflow workflow)
+    public override void VisitWorkflowPre(WorkflowRef workflow)
     {
         base.VisitWorkflowPre(workflow);
         _knownJobs = workflow.Jobs;
     }
 
-    public override void VisitJobPre(Job job)
+    public override void VisitJobPre(JobRef job)
     {
-        if (job.Needs is null || Config.Utf8Yaml is null)
+        if (!job.Needs.HasValue || Config.Utf8Yaml is null)
         {
             return;
         }
@@ -26,30 +26,30 @@ public sealed class NeedsGraphRule() : RuleBase(RuleId.NeedsGraph)
         for (var i = 0; i < job.Needs.Count; i++)
         {
             var need = job.Needs[i];
-            var needSpan = Arena.GetStringValue(need);
-            if (!_knownJobs.ContainsKey(Config.Utf8Yaml, needSpan))
+            var needSpan = need.Value;
+            if (!_knownJobs.ContainsKey(needSpan))
             {
-                var jobId = Decode(Arena.GetStringSlice(job.Id));
-                var needText = Decode(Arena.GetStringSlice(need));
-                AddJobError(job, $"jobs.'{jobId}'.needs references unknown job '{needText}'", Arena.GetStringRange(need));
+                var jobId = job.Id.Decode();
+                var needText = need.Decode();
+                AddJobError(job, $"jobs.'{jobId}'.needs references unknown job '{needText}'", need.Range);
             }
 
             // Check for duplicates among earlier entries (case-insensitive, GitHub Actions job IDs are case-insensitive)
             for (var j = 0; j < i; j++)
             {
                 var earlier = job.Needs[j];
-                if (EqualsAsciiIgnoreCase(needSpan, Arena.GetStringValue(earlier)))
+                if (EqualsAsciiIgnoreCase(needSpan, earlier.Value))
                 {
-                    var jobId = Decode(Arena.GetStringSlice(job.Id));
-                    var needText = Decode(Arena.GetStringSlice(need));
-                    AddJobError(job, $"jobs.'{jobId}'.needs has duplicates '{needText}'", Arena.GetStringRange(need));
+                    var jobId = job.Id.Decode();
+                    var needText = need.Decode();
+                    AddJobError(job, $"jobs.'{jobId}'.needs has duplicates '{needText}'", need.Range);
                     break;
                 }
             }
         }
     }
 
-    public override void VisitWorkflowPost(Workflow workflow)
+    public override void VisitWorkflowPost(WorkflowRef workflow)
     {
         DetectCycles();
     }
@@ -67,14 +67,14 @@ public sealed class NeedsGraphRule() : RuleBase(RuleId.NeedsGraph)
         var color = new Dictionary<Utf8String, byte>(_knownJobs.Count);
         foreach (var pair in _knownJobs)
         {
-            color[pair.Key.ToUtf8StringZeroCopy(source)] = 0;
+            color[pair.Key.Slice.ToUtf8StringZeroCopy(source)] = 0;
         }
 
         var stack = new Stack<(Utf8String Key, int NeighborIndex)>();
 
         foreach (var kvp in _knownJobs)
         {
-            var key = kvp.Key.ToUtf8StringZeroCopy(source);
+            var key = kvp.Key.Slice.ToUtf8StringZeroCopy(source);
             if (color[key] != 0)
             {
                 continue;
@@ -86,7 +86,7 @@ public sealed class NeedsGraphRule() : RuleBase(RuleId.NeedsGraph)
             while (stack.Count > 0)
             {
                 var (currentKey, ni) = stack.Peek();
-                if (!_knownJobs.TryGetValue(source, currentKey.Span, out var currentJob))
+                if (!_knownJobs.TryGetValue(currentKey.Span, out var currentJob))
                 {
                     stack.Pop();
                     color[currentKey] = 2;
@@ -95,7 +95,7 @@ public sealed class NeedsGraphRule() : RuleBase(RuleId.NeedsGraph)
 
                 var needs = currentJob.Needs;
 
-                if (needs is null || ni >= needs.Count)
+                if (!needs.HasValue || ni >= needs.Count)
                 {
                     stack.Pop();
                     color[currentKey] = 2;
@@ -107,7 +107,7 @@ public sealed class NeedsGraphRule() : RuleBase(RuleId.NeedsGraph)
                 stack.Push((currentKey, ni + 1));
 
                 var need = needs[ni];
-                var needSpan = Arena.GetStringValue(need);
+                var needSpan = need.Value;
                 var needKey = Utf8String.FromLowerAscii(needSpan);
 
                 if (!color.TryGetValue(needKey, out var neighborColor))
@@ -118,13 +118,13 @@ public sealed class NeedsGraphRule() : RuleBase(RuleId.NeedsGraph)
                 if (neighborColor == 1) // gray: back-edge = cycle
                 {
                     // Build cycle path from DFS stack for informative message
-                    var cyclePath = BuildCyclePath(source, stack, needKey);
+                    var cyclePath = BuildCyclePath(stack, needKey);
                     // Report at the first job in the cycle
-                    var cycleStartJob = FindCycleStartJob(source, stack, needKey);
-                    var reportJob = cycleStartJob ?? currentJob;
-                    var reportRange = cycleStartJob is not null
-                        ? Arena.GetStringRange(cycleStartJob.Id)
-                        : Arena.GetStringRange(need);
+                    var cycleStartJob = FindCycleStartJob(stack, needKey);
+                    var reportJob = cycleStartJob.HasValue ? cycleStartJob : currentJob;
+                    var reportRange = cycleStartJob.HasValue
+                        ? cycleStartJob.Id.Range
+                        : need.Range;
                     AddJobError(reportJob, $"cyclic dependencies in \"needs\" job configurations are detected. detected cycle is {cyclePath}", reportRange);
                 }
                 else if (neighborColor == 0)
@@ -140,7 +140,7 @@ public sealed class NeedsGraphRule() : RuleBase(RuleId.NeedsGraph)
     /// Builds a human-readable cycle path string from the DFS stack.
     /// Example: "a -> b -> c -> a"
     /// </summary>
-    private string BuildCyclePath(byte[] source, Stack<(Utf8String Key, int NeighborIndex)> stack, Utf8String cycleTarget)
+    private string BuildCyclePath(Stack<(Utf8String Key, int NeighborIndex)> stack, Utf8String cycleTarget)
     {
         // Stack contains the gray path from root to current node.
         // Find cycleTarget in the stack to extract only the cycle portion.
@@ -163,10 +163,10 @@ public sealed class NeedsGraphRule() : RuleBase(RuleId.NeedsGraph)
                     sb.Append(" -> ");
                 }
 
-                if (_knownJobs.TryGetValue(source, key.Span, out var job))
+                if (_knownJobs.TryGetValue(key.Span, out var job))
                 {
                     sb.Append('"');
-                    sb.Append(Decode(Arena.GetStringSlice(job.Id)));
+                    sb.Append(job.Id.Decode());
                     sb.Append('"');
                 }
             }
@@ -176,10 +176,10 @@ public sealed class NeedsGraphRule() : RuleBase(RuleId.NeedsGraph)
         if (sb.Length > 0)
         {
             sb.Append(" -> ");
-            if (_knownJobs.TryGetValue(source, cycleTarget.Span, out var targetJob))
+            if (_knownJobs.TryGetValue(cycleTarget.Span, out var targetJob))
             {
                 sb.Append('"');
-                sb.Append(Decode(Arena.GetStringSlice(targetJob.Id)));
+                sb.Append(targetJob.Id.Decode());
                 sb.Append('"');
             }
         }
@@ -191,9 +191,9 @@ public sealed class NeedsGraphRule() : RuleBase(RuleId.NeedsGraph)
     /// Finds the first job in the cycle (the cycle target) from the DFS stack.
     /// Returns null if not found.
     /// </summary>
-    private Job? FindCycleStartJob(byte[] source, Stack<(Utf8String Key, int NeighborIndex)> stack, Utf8String cycleTarget)
+    private JobRef FindCycleStartJob(Stack<(Utf8String Key, int NeighborIndex)> stack, Utf8String cycleTarget)
     {
-        return _knownJobs.TryGetValue(source, cycleTarget.Span, out var job) ? job : null;
+        return _knownJobs.TryGetValue(cycleTarget.Span, out var job) ? job : default;
     }
 
     private static bool EqualsAsciiIgnoreCase(ReadOnlySpan<byte> left, ReadOnlySpan<byte> right)

@@ -10,8 +10,8 @@ namespace Seiton.Core.Linting.Rules;
 /// <summary>Detects expressions in <c>run:</c> scripts that may be vulnerable to template injection attacks.</summary>
 public sealed class TemplateInjectionRule() : RuleBase(RuleId.TemplateInjection)
 {
-    private Workflow? _currentWorkflow;
-    private Job? _currentJob;
+    private WorkflowRef _currentWorkflow;
+    private JobRef _currentJob;
     private bool _fixAttachedForCurrentStep;
     private static readonly string[][] untrustedPaths =
     [
@@ -39,37 +39,37 @@ public sealed class TemplateInjectionRule() : RuleBase(RuleId.TemplateInjection)
 
     public override string Name => "Template Injection Rule";
 
-    public override void VisitWorkflowPre(Workflow workflow)
+    public override void VisitWorkflowPre(WorkflowRef workflow)
     {
         base.VisitWorkflowPre(workflow);
         _currentWorkflow = workflow;
-        _currentJob = null;
+        _currentJob = default;
     }
 
-    public override void VisitWorkflowPost(Workflow workflow)
+    public override void VisitWorkflowPost(WorkflowRef workflow)
     {
-        _currentWorkflow = null;
-        _currentJob = null;
+        _currentWorkflow = default;
+        _currentJob = default;
     }
 
-    public override void VisitActionMetadataPre(ActionMetadata metadata)
+    public override void VisitActionMetadataPre(ActionMetadataRef metadata)
     {
         base.VisitActionMetadataPre(metadata);
-        _currentWorkflow = null;
-        _currentJob = null;
+        _currentWorkflow = default;
+        _currentJob = default;
     }
 
-    public override void VisitJobPre(Job job)
+    public override void VisitJobPre(JobRef job)
     {
         _currentJob = job;
     }
 
-    public override void VisitJobPost(Job job)
+    public override void VisitJobPost(JobRef job)
     {
-        _currentJob = null;
+        _currentJob = default;
     }
 
-    public override void VisitStep(Step step)
+    public override void VisitStep(StepRef step)
     {
         if (Config.Utf8Yaml is null)
         {
@@ -78,24 +78,25 @@ public sealed class TemplateInjectionRule() : RuleBase(RuleId.TemplateInjection)
 
         _fixAttachedForCurrentStep = false;
 
-        if (step.Exec is ExecRun run)
+        if (step.Exec.Kind == StepExecKind.Run)
         {
+            var run = step.Exec.AsRun();
             CheckSink(step, run.Run, "run");
         }
-        else if (step.Exec is ExecAction action)
+        else if (step.Exec.Kind == StepExecKind.Action)
         {
-            CheckActionScriptSink(step, action);
+            CheckActionScriptSink(step, step.Exec.AsAction());
         }
     }
 
-    private void CheckActionScriptSink(Step step, ExecAction action)
+    private void CheckActionScriptSink(StepRef step, ExecActionRef action)
     {
-        if (!action.Uses.HasValue || action.Inputs is null || Config.Utf8Yaml is null)
+        if (!action.Uses.HasValue || !action.Inputs.HasValue || Config.Utf8Yaml is null)
         {
             return;
         }
 
-        var uses = Arena.GetStringValue(action.Uses);
+        var uses = action.Uses.Value;
         if (!IsGithubScriptAction(uses))
         {
             return;
@@ -103,7 +104,7 @@ public sealed class TemplateInjectionRule() : RuleBase(RuleId.TemplateInjection)
 
         foreach (var pair in action.Inputs)
         {
-            var keySpan = pair.Key.AsSpan(Config.Utf8Yaml);
+            var keySpan = pair.Key.Bytes;
             if (keySpan.SequenceEqual("script"u8))
             {
                 CheckSink(step, pair.Value, "script");
@@ -125,15 +126,15 @@ public sealed class TemplateInjectionRule() : RuleBase(RuleId.TemplateInjection)
         return uses[..atIndex].SequenceEqual("actions/github-script"u8);
     }
 
-    private void CheckSink(Step step, StringNodeId valueNode, string sinkName)
+    private void CheckSink(StepRef step, StringRef valueNode, string sinkName)
     {
         if (!valueNode.HasValue || Config.Utf8Yaml is null)
         {
             return;
         }
 
-        var value = Arena.GetStringValue(valueNode);
-        var valueSlice = Arena.GetStringSlice(valueNode);
+        var value = valueNode.Value;
+        var valueSlice = valueNode.Slice;
         var lineStarts = Config.GetLineStarts();
         var searchStart = 0;
         while (TryFindExpression(value, searchStart, out var bodyStart, out var bodyLength, out var nextSearchStart))
@@ -169,7 +170,7 @@ public sealed class TemplateInjectionRule() : RuleBase(RuleId.TemplateInjection)
     }
 
     private void ReportUntrustedReferences(
-        Step step,
+        StepRef step,
         ExpressionParseResult parseResult,
         ReadOnlySpan<byte> expression,
         Utf8Slice valueSlice,
@@ -190,7 +191,7 @@ public sealed class TemplateInjectionRule() : RuleBase(RuleId.TemplateInjection)
         int[] arguments,
         ReadOnlySpan<byte> expression,
         int safeDepth,
-        Step step,
+        StepRef step,
         Utf8Slice valueSlice,
         int bodyStart,
         int trimOffset,
@@ -244,7 +245,7 @@ public sealed class TemplateInjectionRule() : RuleBase(RuleId.TemplateInjection)
         int[] arguments,
         ReadOnlySpan<byte> expression,
         int safeDepth,
-        Step step,
+        StepRef step,
         Utf8Slice valueSlice,
         int bodyStart,
         int trimOffset,
@@ -279,7 +280,7 @@ public sealed class TemplateInjectionRule() : RuleBase(RuleId.TemplateInjection)
         ExpressionNode[] nodes,
         int[] arguments,
         ReadOnlySpan<byte> expression,
-        Step step,
+        StepRef step,
         Utf8Slice valueSlice,
         int bodyStart,
         int trimOffset,
@@ -308,7 +309,7 @@ public sealed class TemplateInjectionRule() : RuleBase(RuleId.TemplateInjection)
     }
 
     private void EmitUntrustedDiagnostic(
-        Step step,
+        StepRef step,
         int nodeId,
         ExpressionNode[] nodes,
         ReadOnlySpan<byte> expression,
@@ -366,7 +367,7 @@ public sealed class TemplateInjectionRule() : RuleBase(RuleId.TemplateInjection)
         }
     }
 
-    private bool TryBuildFix(Step step, string pathString, string sinkName, int exprAbsoluteOffset, int exprLength, out DiagnosticFix fix)
+    private bool TryBuildFix(StepRef step, string pathString, string sinkName, int exprAbsoluteOffset, int exprLength, out DiagnosticFix fix)
     {
         fix = default;
         if (!Config.Fix.Enabled || Config.Utf8Yaml is null)
@@ -411,7 +412,7 @@ public sealed class TemplateInjectionRule() : RuleBase(RuleId.TemplateInjection)
         if (TryFindExistingEnvMapping(step, pathString, out var existingVarName))
         {
             // Only need to replace the expression with the shell variable reference
-            var isPowerShell = IsPowerShellWithDefaults(Arena, step, _currentJob, _currentWorkflow, Config.Utf8Yaml);
+            var isPowerShell = IsPowerShellWithDefaults(step, _currentJob, _currentWorkflow, Config.Utf8Yaml);
             if (isPowerShell is null)
             {
                 return false;
@@ -430,18 +431,17 @@ public sealed class TemplateInjectionRule() : RuleBase(RuleId.TemplateInjection)
 
         // Generate mechanical env var name and deduplicate
         var envVarName = DeduplicateEnvName(
-            Arena,
             PathToEnvVarName(pathString),
             step.Env,
-            _currentJob?.Env,
-            _currentWorkflow?.Env);
+            _currentJob.Env,
+            _currentWorkflow.Env);
         if (envVarName is null)
         {
             return false;
         }
 
         // Build shell variable replacement
-        var isPowerShell2 = IsPowerShellWithDefaults(Arena, step, _currentJob, _currentWorkflow, Config.Utf8Yaml);
+        var isPowerShell2 = IsPowerShellWithDefaults(step, _currentJob, _currentWorkflow, Config.Utf8Yaml);
         if (isPowerShell2 is null)
         {
             return false;
@@ -452,7 +452,7 @@ public sealed class TemplateInjectionRule() : RuleBase(RuleId.TemplateInjection)
             : "${" + envVarName + "}";
 
         // Build env insertion: insert env block after the run value
-        if (!TryBuildStepEnvInsertionEdit(Arena, Config.Utf8Yaml, step, envVarName, pathString, out var insertEdit))
+        if (!TryBuildStepEnvInsertionEdit(Config.Utf8Yaml, step, envVarName, pathString, out var insertEdit))
         {
             return false;
         }
@@ -464,7 +464,7 @@ public sealed class TemplateInjectionRule() : RuleBase(RuleId.TemplateInjection)
         return true;
     }
 
-    private bool TryFindExistingEnvMapping(Step step, string pathString, out string variableName)
+    private bool TryFindExistingEnvMapping(StepRef step, string pathString, out string variableName)
     {
         variableName = string.Empty;
         if (Config.Utf8Yaml is null)
@@ -480,13 +480,13 @@ public sealed class TemplateInjectionRule() : RuleBase(RuleId.TemplateInjection)
             matchCount++;
         }
 
-        if (TryFindEnvMappingInEnv(_currentJob?.Env, pathString, out var jobVar))
+        if (TryFindEnvMappingInEnv(_currentJob.Env, pathString, out var jobVar))
         {
             variableName = jobVar;
             matchCount++;
         }
 
-        if (TryFindEnvMappingInEnv(_currentWorkflow?.Env, pathString, out var workflowVar))
+        if (TryFindEnvMappingInEnv(_currentWorkflow.Env, pathString, out var workflowVar))
         {
             variableName = workflowVar;
             matchCount++;
@@ -495,20 +495,20 @@ public sealed class TemplateInjectionRule() : RuleBase(RuleId.TemplateInjection)
         return matchCount == 1;
     }
 
-    private bool TryFindEnvMappingInEnv(Env? env, string pathString, out string variableName)
+    private bool TryFindEnvMappingInEnv(EnvRef env, string pathString, out string variableName)
     {
         variableName = string.Empty;
-        if (env?.Vars is null || env.Vars.Value.Count == 0 || Config.Utf8Yaml is null)
+        if (!env.Vars.HasValue || env.Vars.Count == 0 || Config.Utf8Yaml is null)
         {
             return false;
         }
 
         var pathUtf8 = System.Text.Encoding.UTF8.GetBytes(pathString);
         var matches = 0;
-        foreach (var pair in env.Vars.Value)
+        foreach (var pair in env.Vars)
         {
             var envVar = pair.Value;
-            if (!TryExtractExpressionBody(Arena, envVar.Value, Config.Utf8Yaml, out var body))
+            if (!TryExtractExpressionBody(envVar.Value, Config.Utf8Yaml, out var body))
             {
                 continue;
             }
@@ -520,10 +520,10 @@ public sealed class TemplateInjectionRule() : RuleBase(RuleId.TemplateInjection)
             }
 
             // Read the env var name
-            var nameBytes = Arena.GetStringValue(envVar.Name);
+            var nameBytes = envVar.Name.Value;
             var nameIndex = 0;
             if (!TryReadIdentifier(nameBytes, ref nameIndex, out var candidateName)
-                || nameIndex != Arena.GetStringSlice(envVar.Name).Length)
+                || nameIndex != envVar.Name.Slice.Length)
             {
                 continue;
             }

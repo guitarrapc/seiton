@@ -23,7 +23,7 @@ public sealed class CredentialsRule() : RuleBase(RuleId.Credentials)
             : [];
     }
 
-    public override void VisitJobPre(Job job)
+    public override void VisitJobPre(JobRef job)
     {
         if (Config.Utf8Yaml is null)
         {
@@ -32,8 +32,8 @@ public sealed class CredentialsRule() : RuleBase(RuleId.Credentials)
 
         ValidateContainer(job, "job.container", "\"container\" section", job.Container);
 
-        var serviceMap = job.Services?.ServiceMap;
-        if (serviceMap is null || serviceMap.Value.Count == 0)
+        var serviceMap = job.Services.ServiceMap;
+        if (serviceMap.Count == 0)
         {
             return;
         }
@@ -41,31 +41,31 @@ public sealed class CredentialsRule() : RuleBase(RuleId.Credentials)
         foreach (var pair in serviceMap)
         {
             var service = pair.Value;
-            var serviceName = Decode(Arena.GetStringSlice(service.Name));
+            var serviceName = service.Name.Decode();
             ValidateContainer(job, $"job.services.{serviceName}", $"\"{serviceName}\" service", service.Container);
         }
     }
 
-    private void ValidateContainer(Job job, string locationName, string credentialLocationName, Container? container)
+    private void ValidateContainer(JobRef job, string locationName, string credentialLocationName, ContainerRef container)
     {
-        if (container is null)
+        if (!container.HasValue)
         {
             return;
         }
 
-        if (container.Credentials is not null)
+        if (container.Credentials.HasValue)
         {
             ValidateHardcodedPassword(job, credentialLocationName, container.Credentials);
             return;
         }
 
         var imageNode = container.Image;
-        if (Arena.GetStringExpression(imageNode).HasValue || Config.Utf8Yaml is null)
+        if (imageNode.Expression.HasValue || Config.Utf8Yaml is null)
         {
             return;
         }
 
-        var image = Arena.GetStringValue(imageNode);
+        var image = imageNode.Value;
         if (ExpressionScanHelpers.ContainsExpressionMarker(image))
         {
             return;
@@ -81,12 +81,12 @@ public sealed class CredentialsRule() : RuleBase(RuleId.Credentials)
             return;
         }
 
-        var imageText = Decode(Arena.GetStringSlice(imageNode));
+        var imageText = imageNode.Decode();
         var hostText = Encoding.UTF8.GetString(host);
-        AddJobWarning(job, $"{locationName} image '{imageText}' uses registry '{hostText}' but credentials are not configured", Arena.GetStringRange(imageNode));
+        AddJobWarning(job, $"{locationName} image '{imageText}' uses registry '{hostText}' but credentials are not configured", imageNode.Range);
     }
 
-    private void ValidateHardcodedPassword(Job job, string locationName, Credentials credentials)
+    private void ValidateHardcodedPassword(JobRef job, string locationName, CredentialsRef credentials)
     {
         var passwordNode = credentials.Password;
         if (!passwordNode.HasValue || Config.Utf8Yaml is null)
@@ -95,24 +95,24 @@ public sealed class CredentialsRule() : RuleBase(RuleId.Credentials)
         }
 
         // If the entire credentials block is an expression, skip
-        if (Arena.GetStringExpression(credentials.Expression).HasValue)
+        if (credentials.Expression.Expression.HasValue)
         {
             return;
         }
 
         // If password is an expression (${{ ... }}), it's likely secrets reference — OK
-        if (Arena.GetStringExpression(passwordNode).HasValue)
+        if (passwordNode.Expression.HasValue)
         {
             return;
         }
 
-        var password = Arena.GetStringValue(passwordNode);
+        var password = passwordNode.Value;
         if (ExpressionScanHelpers.ContainsExpressionMarker(password))
         {
             return;
         }
 
-        AddJobError(job, $"\"password\" section in {locationName} should be specified via secrets. do not put password value directly", Arena.GetStringRange(passwordNode));
+        AddJobError(job, $"\"password\" section in {locationName} should be specified via secrets. do not put password value directly", passwordNode.Range);
     }
 
     private static bool TryGetRegistryHost(ReadOnlySpan<byte> image, out ReadOnlySpan<byte> host)

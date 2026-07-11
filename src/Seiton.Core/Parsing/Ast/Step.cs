@@ -47,9 +47,10 @@ public abstract class StepExec
     public TextRange Range { get; set; }
 }
 
-/// <summary>Discriminator for step execution kind.</summary>
+/// <summary>Discriminator for step execution kind. <see cref="None"/> represents an absent payload (default ref).</summary>
 public enum StepExecKind
 {
+    None,
     Run,
     Action,
     Wait,

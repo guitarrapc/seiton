@@ -14,7 +14,7 @@ public sealed class LocalActionInputsRule() : RuleBase(RuleId.LocalActionInputs)
 
     public override bool SupportsDocumentKind(DocumentKind documentKind) => documentKind == DocumentKind.Workflow;
 
-    public override void VisitWorkflowPre(Workflow workflow)
+    public override void VisitWorkflowPre(WorkflowRef workflow)
     {
         base.VisitWorkflowPre(workflow);
         DisposeCachedArenas();
@@ -22,7 +22,7 @@ public sealed class LocalActionInputsRule() : RuleBase(RuleId.LocalActionInputs)
         _metadataCheckedPaths.Clear();
     }
 
-    public override void VisitStep(Step step)
+    public override void VisitStep(StepRef step)
     {
         if (Config.Utf8Yaml is null
             || string.IsNullOrEmpty(Config.FilePath)
@@ -32,12 +32,18 @@ public sealed class LocalActionInputsRule() : RuleBase(RuleId.LocalActionInputs)
             return;
         }
 
-        if (step.Exec is not ExecAction action || !HasNodeValue(action.Uses, Arena))
+        if (step.Exec.Kind != StepExecKind.Action)
         {
             return;
         }
 
-        var uses = Arena.GetStringValue(action.Uses);
+        var action = step.Exec.AsAction();
+        if (!action.Uses.HasText)
+        {
+            return;
+        }
+
+        var uses = action.Uses.Value;
         if (!TryResolveLocalActionYamlPath(uses, out var actionYamlPath, out var actionDisplayPath, out var invalidRef))
         {
             if (invalidRef)
@@ -66,36 +72,36 @@ public sealed class LocalActionInputsRule() : RuleBase(RuleId.LocalActionInputs)
 
         if (meta.Inputs is null || meta.Inputs.Value.Count == 0)
         {
-            if (action.Inputs is not null)
+            if (action.Inputs.HasValue)
             {
-                foreach (var pair in action.Inputs.Value)
+                foreach (var pair in action.Inputs)
                 {
-                    var inputName = Decode(pair.Key);
+                    var inputName = pair.Key.Decode();
                     AddStepError(
                         step,
                         $"local action does not declare inputs; unknown input '{inputName}'",
-                        Arena.GetStringRange(pair.Value));
+                        pair.Value.Range);
                 }
             }
 
             return;
         }
 
-        if (action.Inputs is not null)
+        if (action.Inputs.HasValue)
         {
-            foreach (var pair in action.Inputs.Value)
+            foreach (var pair in action.Inputs)
             {
-                var inputName = Decode(pair.Key);
+                var inputName = pair.Key.Decode();
                 if (!TryFindMetadataInput(actionSource, meta.Inputs.Value, inputName, out var inputDef))
                 {
-                    AddStepError(step, FormatUnknownInputMessage(actionSource, inputName, meta.Inputs.Value), Arena.GetStringRange(pair.Value));
+                    AddStepError(step, FormatUnknownInputMessage(actionSource, inputName, meta.Inputs.Value), pair.Value.Range);
                     continue;
                 }
 
                 if (inputDef.DeprecationMessage.HasValue && HasNodeValue(inputDef.DeprecationMessage, actionArena))
                 {
                     var depText = DecodeSlice(actionSource, actionArena.GetStringSlice(inputDef.DeprecationMessage));
-                    AddStepWarning(step, $"input '{inputName}' is deprecated: {depText}", Arena.GetStringRange(pair.Value));
+                    AddStepWarning(step, $"input '{inputName}' is deprecated: {depText}", pair.Value.Range);
                 }
             }
         }
@@ -118,7 +124,7 @@ public sealed class LocalActionInputsRule() : RuleBase(RuleId.LocalActionInputs)
             }
 
             var name = DecodeSlice(actionSource, kv.Key);
-            if (action.Inputs is not null && ContainsInputName(Config.Utf8Yaml!, action.Inputs.Value, name))
+            if (action.Inputs.HasValue && ContainsInputName(action.Inputs, name))
             {
                 continue;
             }
@@ -180,7 +186,7 @@ public sealed class LocalActionInputsRule() : RuleBase(RuleId.LocalActionInputs)
         return true;
     }
 
-    private void ValidateRunsUsing(Step step, ExecAction action, ActionMetadata meta, byte[] actionSource, AstArena actionArena)
+    private void ValidateRunsUsing(StepRef step, ExecActionRef action, ActionMetadata meta, byte[] actionSource, AstArena actionArena)
     {
         if (meta.Runs?.Using is null || !HasNodeValue(meta.Runs.Using, actionArena))
         {
@@ -217,12 +223,12 @@ public sealed class LocalActionInputsRule() : RuleBase(RuleId.LocalActionInputs)
             BuildUsesLocation(action));
     }
 
-    private void ValidateMetadata(Step step, ExecAction action, ActionMetadata meta, byte[] actionSource, AstArena actionArena, string actionYamlPath, string displayPath)
+    private void ValidateMetadata(StepRef step, ExecActionRef action, ActionMetadata meta, byte[] actionSource, AstArena actionArena, string actionYamlPath, string displayPath)
     {
         var usesLocation = BuildUsesLocation(action);
         var actionName = meta.Name.HasValue && HasNodeValue(meta.Name, actionArena)
             ? DecodeSlice(actionSource, actionArena.GetStringSlice(meta.Name))
-            : Encoding.UTF8.GetString(Arena.GetStringValue(action.Uses));
+            : Encoding.UTF8.GetString(action.Uses.Value);
         var actionDir = Path.GetDirectoryName(actionYamlPath) ?? actionYamlPath;
         var displayDir = displayPath.Contains('/') ? displayPath[..displayPath.LastIndexOf('/')] : displayPath;
 
@@ -279,7 +285,7 @@ public sealed class LocalActionInputsRule() : RuleBase(RuleId.LocalActionInputs)
             && (span[3] == (byte)'e' || span[3] == (byte)'E');
     }
 
-    private void ValidateJsEntryPoint(Step step, StringNodeId entryPoint, string keyName, string actionName, string actionDir, string displayDir, byte[] actionSource, AstArena actionArena, TextRange usesLocation)
+    private void ValidateJsEntryPoint(StepRef step, StringNodeId entryPoint, string keyName, string actionName, string actionDir, string displayDir, byte[] actionSource, AstArena actionArena, TextRange usesLocation)
     {
         if (!entryPoint.HasValue || !HasNodeValue(entryPoint, actionArena))
         {
@@ -327,11 +333,11 @@ public sealed class LocalActionInputsRule() : RuleBase(RuleId.LocalActionInputs)
         return false;
     }
 
-    private static bool ContainsInputName(byte[] source, SliceMap<StringNodeId> provided, string name)
+    private static bool ContainsInputName(StringRefMap provided, string name)
     {
         foreach (var kv in provided)
         {
-            if (string.Equals(DecodeSlice(source, kv.Key), name, StringComparison.OrdinalIgnoreCase))
+            if (string.Equals(kv.Key.Decode(), name, StringComparison.OrdinalIgnoreCase))
             {
                 return true;
             }

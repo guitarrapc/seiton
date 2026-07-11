@@ -11,23 +11,24 @@ public sealed class MatrixRule() : RuleBase(RuleId.Matrix)
 
     public override string Name => "Matrix Rule";
 
-    public override void VisitJobPre(Job job)
+    public override void VisitJobPre(JobRef job)
     {
-        if (job.Strategy?.Matrix is not Matrix matrix || Config.Utf8Yaml is null)
+        var matrix = job.Strategy.Matrix;
+        if (!matrix.HasValue || Config.Utf8Yaml is null)
         {
             return;
         }
 
-        if (Arena.GetStringExpression(matrix.Expression).HasValue || matrix.Rows is null || matrix.Rows.Value.Count == 0)
+        if (matrix.Expression.Expression.HasValue || matrix.Rows.Count == 0)
         {
             return;
         }
 
-        ValidateRows(job, matrix.Rows.Value);
+        ValidateRows(job, matrix.Rows);
         ValidateCombinations(job, matrix, matrix.Exclude, "exclude");
     }
 
-    private void ValidateRows(Job job, SliceMap<MatrixRow> rows)
+    private void ValidateRows(JobRef job, MatrixRowRefMap rows)
     {
         long combinations = 1;
         var combinationWarningReported = false;
@@ -35,20 +36,20 @@ public sealed class MatrixRule() : RuleBase(RuleId.Matrix)
         foreach (var pair in rows)
         {
             var row = pair.Value;
-            if (Arena.GetStringExpression(row.Expression).HasValue)
+            if (row.Expression.Expression.HasValue)
             {
                 continue;
             }
 
             var values = row.Values;
-            if (values is null || values.Count == 0)
+            if (values.Count == 0)
             {
-                var jobId = Decode(Arena.GetStringSlice(job.Id));
-                var axisName = Decode(Arena.GetStringSlice(row.Name));
+                var jobId = job.Id.Decode();
+                var axisName = row.Name.Decode();
                 AddJobWarning(
                     job,
                     $"jobs.'{jobId}'.strategy.matrix axis '{axisName}' has no values; remove the axis or provide at least one value",
-                    Arena.GetStringRange(row.Name));
+                    row.Name.Range);
                 continue;
             }
 
@@ -66,13 +67,13 @@ public sealed class MatrixRule() : RuleBase(RuleId.Matrix)
                 continue;
             }
 
-            var matrixNode = job.Strategy?.Matrix;
-            if (matrixNode is null)
+            var matrixNode = job.Strategy.Matrix;
+            if (!matrixNode.HasValue)
             {
                 continue;
             }
 
-            var jobIdForMessage = Decode(Arena.GetStringSlice(job.Id));
+            var jobIdForMessage = job.Id.Decode();
             AddJobWarning(
                 job,
                 $"jobs.'{jobIdForMessage}'.strategy.matrix expands to more than {MaxRecommendedCombinations} combinations; consider reducing matrix fan-out",
@@ -81,51 +82,53 @@ public sealed class MatrixRule() : RuleBase(RuleId.Matrix)
         }
     }
 
-    private void ValidateNoDuplicateAxisValues(Job job, MatrixRow row)
+    private void ValidateNoDuplicateAxisValues(JobRef job, MatrixRowRef row)
     {
         var values = row.Values;
-        if (values is null || values.Count < 2)
+        if (values.Count < 2)
         {
             return;
         }
 
         for (var i = 1; i < values.Count; i++)
         {
-            if (values[i] is not RawYamlString current)
+            var current = values[i];
+            if (current.Kind != RawYamlKind.String)
             {
                 continue;
             }
 
-            var currentSpan = Arena.GetStringValue(current.Value);
-            if (ExpressionScanHelpers.ContainsExpressionMarker(current.Value, Arena))
+            var currentSpan = current.Scalar.Value;
+            if (ExpressionScanHelpers.ContainsExpressionMarker(current.Scalar.Id, Arena))
             {
                 continue;
             }
 
             for (var j = 0; j < i; j++)
             {
-                if (values[j] is not RawYamlString earlier)
+                var earlier = values[j];
+                if (earlier.Kind != RawYamlKind.String)
                 {
                     continue;
                 }
 
-                if (ExpressionScanHelpers.ContainsExpressionMarker(earlier.Value, Arena))
+                if (ExpressionScanHelpers.ContainsExpressionMarker(earlier.Scalar.Id, Arena))
                 {
                     continue;
                 }
 
-                if (!currentSpan.SequenceEqual(Arena.GetStringValue(earlier.Value)))
+                if (!currentSpan.SequenceEqual(earlier.Scalar.Value))
                 {
                     continue;
                 }
 
-                var jobId = Decode(Arena.GetStringSlice(job.Id));
-                var axisName = Decode(Arena.GetStringSlice(row.Name));
-                var valueText = Decode(Arena.GetStringSlice(current.Value));
+                var jobId = job.Id.Decode();
+                var axisName = row.Name.Decode();
+                var valueText = current.Scalar.Decode();
                 AddJobWarning(
                     job,
                     $"jobs.'{jobId}'.strategy.matrix axis '{axisName}' has duplicate value '{valueText}'",
-                    Arena.GetStringRange(current.Value));
+                    current.Scalar.Range);
                 goto nextValue;
             }
 
@@ -133,9 +136,9 @@ public sealed class MatrixRule() : RuleBase(RuleId.Matrix)
         }
     }
 
-    private void ValidateCombinations(Job job, Matrix matrix, IReadOnlyList<MatrixCombinations>? combinations, string section)
+    private void ValidateCombinations(JobRef job, MatrixRef matrix, CombinationsRefList combinations, string section)
     {
-        if (matrix.Rows is null || combinations is null || combinations.Count == 0)
+        if (!matrix.Rows.HasValue || combinations.Count == 0)
         {
             return;
         }
@@ -145,7 +148,7 @@ public sealed class MatrixRule() : RuleBase(RuleId.Matrix)
         for (var i = 0; i < combinations.Count; i++)
         {
             var combo = combinations[i];
-            if (Arena.GetStringExpression(combo.Expression).HasValue || combo.Entries is null)
+            if (combo.Expression.Expression.HasValue || !combo.Entries.HasValue)
             {
                 continue;
             }
@@ -155,27 +158,27 @@ public sealed class MatrixRule() : RuleBase(RuleId.Matrix)
                 var entry = combo.Entries[entryIndex];
                 foreach (var pair in entry)
                 {
-                    var keyBytes = pair.Key.AsSpan(source);
+                    var keyBytes = pair.Key.Bytes;
 
                     // Check if axis exists in Rows
-                    if (matrix.Rows.Value.TryGetValue(source, keyBytes, out var row))
+                    if (matrix.Rows.TryGetValue(keyBytes, out var row))
                     {
-                        ValidateExcludeValueMatch(job, matrix, row, pair.Key, pair.Value, section);
+                        ValidateExcludeValueMatch(job, matrix, row, pair.Key.Slice, pair.Value, section);
                         continue;
                     }
 
                     // Check if axis exists in Include entries
-                    var includeValues = CollectIncludeAxisValues(matrix, source, keyBytes);
+                    var includeValues = CollectIncludeAxisValues(matrix, keyBytes);
                     if (includeValues is not null)
                     {
-                        ValidateExcludeValueMatchAgainstList(job, matrix, pair.Key, pair.Value, includeValues, section);
+                        ValidateExcludeValueMatchAgainstList(job, matrix, pair.Key.Slice, pair.Value, includeValues, section);
                         continue;
                     }
 
                     // Unknown axis
-                    var jobId = Decode(Arena.GetStringSlice(job.Id));
-                    var axisName = Decode(pair.Key);
-                    var keyLocation = BuildKeyLocation(source, pair.Key);
+                    var jobId = job.Id.Decode();
+                    var axisName = pair.Key.Decode();
+                    var keyLocation = BuildKeyLocation(source, pair.Key.Slice);
                     AddJobWarning(
                         job,
                         $"jobs.'{jobId}'.strategy.matrix.{section} references unknown axis '{axisName}'",
@@ -188,10 +191,10 @@ public sealed class MatrixRule() : RuleBase(RuleId.Matrix)
         }
     }
 
-    private void ValidateExcludeValueMatch(Job job, Matrix matrix, MatrixRow row, Utf8Slice axisKey, RawYamlValue excludeValue, string section)
+    private void ValidateExcludeValueMatch(JobRef job, MatrixRef matrix, MatrixRowRef row, Utf8Slice axisKey, RawYamlRef excludeValue, string section)
     {
         // Skip if row is expression-based or has no values
-        if (Arena.GetStringExpression(row.Expression).HasValue || row.Values is null || row.Values.Count == 0)
+        if (row.Expression.Expression.HasValue || row.Values.Count == 0)
         {
             return;
         }
@@ -201,8 +204,6 @@ public sealed class MatrixRule() : RuleBase(RuleId.Matrix)
         {
             return;
         }
-
-        var source = Config.Utf8Yaml!;
 
         // Check if exclude value matches any row value
         for (var i = 0; i < row.Values.Count; i++)
@@ -213,14 +214,14 @@ public sealed class MatrixRule() : RuleBase(RuleId.Matrix)
                 return; // Can't statically verify when row values contain expressions
             }
 
-            if (RawYamlValuesMatch(excludeValue, rowValue, source))
+            if (RawYamlValuesMatch(excludeValue, rowValue))
             {
                 return; // Match found
             }
         }
 
         // No match found — report diagnostic
-        var jobId = Decode(Arena.GetStringSlice(job.Id));
+        var jobId = job.Id.Decode();
         var axisName = Decode(axisKey);
         var excludeText = FormatRawYamlValue(excludeValue);
         var possibleText = FormatPossibleValues(row.Values);
@@ -231,15 +232,13 @@ public sealed class MatrixRule() : RuleBase(RuleId.Matrix)
             location);
     }
 
-    private void ValidateExcludeValueMatchAgainstList(Job job, Matrix matrix, Utf8Slice axisKey, RawYamlValue excludeValue, List<RawYamlValue> possibleValues, string section)
+    private void ValidateExcludeValueMatchAgainstList(JobRef job, MatrixRef matrix, Utf8Slice axisKey, RawYamlRef excludeValue, List<RawYamlRef> possibleValues, string section)
     {
         // Skip if exclude value contains an expression
         if (ContainsExpression(excludeValue))
         {
             return;
         }
-
-        var source = Config.Utf8Yaml!;
 
         for (var i = 0; i < possibleValues.Count; i++)
         {
@@ -249,7 +248,7 @@ public sealed class MatrixRule() : RuleBase(RuleId.Matrix)
                 return;
             }
 
-            if (RawYamlValuesMatch(excludeValue, possible, source))
+            if (RawYamlValuesMatch(excludeValue, possible))
             {
                 return;
             }
@@ -266,25 +265,25 @@ public sealed class MatrixRule() : RuleBase(RuleId.Matrix)
             location);
     }
 
-    private static List<RawYamlValue>? CollectIncludeAxisValues(Matrix matrix, ReadOnlySpan<byte> source, ReadOnlySpan<byte> axisKey)
+    private static List<RawYamlRef>? CollectIncludeAxisValues(MatrixRef matrix, ReadOnlySpan<byte> axisKey)
     {
-        if (matrix.Include is null || matrix.Include.Count == 0)
+        if (matrix.Include.Count == 0)
         {
             return null;
         }
 
-        List<RawYamlValue>? values = null;
+        List<RawYamlRef>? values = null;
         for (var i = 0; i < matrix.Include.Count; i++)
         {
             var combo = matrix.Include[i];
-            if (combo.Entries is null)
+            if (!combo.Entries.HasValue)
             {
                 continue;
             }
 
             for (var j = 0; j < combo.Entries.Count; j++)
             {
-                if (combo.Entries[j].TryGetValue(source, axisKey, out var val))
+                if (combo.Entries[j].TryGetValue(axisKey, out var val))
                 {
                     values ??= [];
                     values.Add(val);
@@ -295,25 +294,25 @@ public sealed class MatrixRule() : RuleBase(RuleId.Matrix)
         return values;
     }
 
-    private bool RawYamlValuesMatch(RawYamlValue excludeValue, RawYamlValue rowValue, ReadOnlySpan<byte> source)
+    private bool RawYamlValuesMatch(RawYamlRef excludeValue, RawYamlRef rowValue)
     {
         // Both scalars
-        if (excludeValue is RawYamlString exStr && rowValue is RawYamlString rwStr)
+        if (excludeValue.Kind == RawYamlKind.String && rowValue.Kind == RawYamlKind.String)
         {
-            return Arena.GetStringValue(exStr.Value).SequenceEqual(Arena.GetStringValue(rwStr.Value));
+            return excludeValue.Scalar.Value.SequenceEqual(rowValue.Scalar.Value);
         }
 
         // Both objects — partial match (every key in exclude must exist in row with matching value)
-        if (excludeValue is RawYamlObject exObj && rowValue is RawYamlObject rwObj)
+        if (excludeValue.Kind == RawYamlKind.Object && rowValue.Kind == RawYamlKind.Object)
         {
-            foreach (var pair in exObj.Properties)
+            foreach (var pair in excludeValue.Properties)
             {
-                if (!rwObj.Properties.TryGetValue(source, pair.Key.AsSpan(source), out var rwVal))
+                if (!rowValue.Properties.TryGetValue(pair.Key.Bytes, out var rwVal))
                 {
                     return false;
                 }
 
-                if (!RawYamlValuesMatch(pair.Value, rwVal, source))
+                if (!RawYamlValuesMatch(pair.Value, rwVal))
                 {
                     return false;
                 }
@@ -323,16 +322,16 @@ public sealed class MatrixRule() : RuleBase(RuleId.Matrix)
         }
 
         // Both arrays — same length, element-wise match
-        if (excludeValue is RawYamlArray exArr && rowValue is RawYamlArray rwArr)
+        if (excludeValue.Kind == RawYamlKind.Array && rowValue.Kind == RawYamlKind.Array)
         {
-            if (exArr.Items.Count != rwArr.Items.Count)
+            if (excludeValue.Items.Count != rowValue.Items.Count)
             {
                 return false;
             }
 
-            for (var i = 0; i < exArr.Items.Count; i++)
+            for (var i = 0; i < excludeValue.Items.Count; i++)
             {
-                if (!RawYamlValuesMatch(exArr.Items[i], rwArr.Items[i], source))
+                if (!RawYamlValuesMatch(excludeValue.Items[i], rowValue.Items[i]))
                 {
                     return false;
                 }
@@ -345,31 +344,31 @@ public sealed class MatrixRule() : RuleBase(RuleId.Matrix)
         return false;
     }
 
-    private bool ContainsExpression(RawYamlValue value)
+    private bool ContainsExpression(RawYamlRef value)
     {
-        if (value is RawYamlString str)
+        if (value.Kind == RawYamlKind.String)
         {
-            return ExpressionScanHelpers.ContainsExpressionMarker(str.Value, Arena);
+            return ExpressionScanHelpers.ContainsExpressionMarker(value.Scalar.Id, Arena);
         }
 
         return false;
     }
 
-    private string FormatRawYamlValue(RawYamlValue value)
+    private string FormatRawYamlValue(RawYamlRef value)
     {
-        if (value is RawYamlString str)
+        if (value.Kind == RawYamlKind.String)
         {
-            return $"\"{Decode(Arena.GetStringSlice(str.Value))}\"";
+            return $"\"{value.Scalar.Decode()}\"";
         }
 
-        if (value is RawYamlObject obj)
+        if (value.Kind == RawYamlKind.Object)
         {
             var sb = new StringBuilder();
             sb.Append('{');
             var sortedEntries = new List<(string Key, string Value)>();
-            foreach (var pair in obj.Properties)
+            foreach (var pair in value.Properties)
             {
-                sortedEntries.Add((Decode(pair.Key), FormatRawYamlValue(pair.Value)));
+                sortedEntries.Add((pair.Key.Decode(), FormatRawYamlValue(pair.Value)));
             }
 
             sortedEntries.Sort(static (a, b) => string.Compare(a.Key, b.Key, StringComparison.Ordinal));
@@ -387,18 +386,18 @@ public sealed class MatrixRule() : RuleBase(RuleId.Matrix)
             return sb.ToString();
         }
 
-        if (value is RawYamlArray arr)
+        if (value.Kind == RawYamlKind.Array)
         {
             var sb = new StringBuilder();
             sb.Append('[');
-            for (var i = 0; i < arr.Items.Count; i++)
+            for (var i = 0; i < value.Items.Count; i++)
             {
                 if (i > 0)
                 {
                     sb.Append(", ");
                 }
 
-                sb.Append(FormatRawYamlValue(arr.Items[i]));
+                sb.Append(FormatRawYamlValue(value.Items[i]));
             }
 
             sb.Append(']');
@@ -408,7 +407,7 @@ public sealed class MatrixRule() : RuleBase(RuleId.Matrix)
         return "?";
     }
 
-    private string FormatPossibleValues(IReadOnlyList<RawYamlValue> values)
+    private string FormatPossibleValues(RawYamlRefList values)
     {
         var sb = new StringBuilder();
         for (var i = 0; i < values.Count; i++)
@@ -424,11 +423,27 @@ public sealed class MatrixRule() : RuleBase(RuleId.Matrix)
         return sb.ToString();
     }
 
-    private TextRange GetRawYamlValueLocation(RawYamlValue value, TextRange fallback)
+    private string FormatPossibleValues(List<RawYamlRef> values)
     {
-        if (value is RawYamlString str)
+        var sb = new StringBuilder();
+        for (var i = 0; i < values.Count; i++)
         {
-            return Arena.GetStringRange(str.Value);
+            if (i > 0)
+            {
+                sb.Append(", ");
+            }
+
+            sb.Append(FormatRawYamlValue(values[i]));
+        }
+
+        return sb.ToString();
+    }
+
+    private TextRange GetRawYamlValueLocation(RawYamlRef value, TextRange fallback)
+    {
+        if (value.Kind == RawYamlKind.String)
+        {
+            return value.Scalar.Range;
         }
 
         if (value.Range.StartLine > 0)

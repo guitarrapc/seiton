@@ -36,27 +36,28 @@ public sealed class ForbiddenUsesRule() : RuleBase(RuleId.ForbiddenUses)
         denyPatterns = DefaultDenyPatterns;
     }
 
-    public override void VisitJobPre(Job job)
+    public override void VisitJobPre(JobRef job)
     {
-        if (Config.Utf8Yaml is null || job.WorkflowCall is null)
+        if (Config.Utf8Yaml is null || !job.WorkflowCall.HasValue)
         {
             return;
         }
 
-        CheckUses(Arena.GetStringValue(job.WorkflowCall.Uses), BuildUsesLocation(job.WorkflowCall), job, null);
+        CheckUses(job.WorkflowCall.Uses.Value, BuildUsesLocation(job.WorkflowCall), job, default);
     }
 
-    public override void VisitStep(Step step)
+    public override void VisitStep(StepRef step)
     {
-        if (Config.Utf8Yaml is null || step.Exec is not ExecAction action)
+        if (Config.Utf8Yaml is null || step.Exec.Kind != StepExecKind.Action)
         {
             return;
         }
 
-        CheckUses(Arena.GetStringValue(action.Uses), BuildUsesLocation(action), null, step);
+        var action = step.Exec.AsAction();
+        CheckUses(action.Uses.Value, BuildUsesLocation(action), default, step);
     }
 
-    private void CheckUses(ReadOnlySpan<byte> uses, TextRange location, Job? job, Step? step)
+    private void CheckUses(ReadOnlySpan<byte> uses, TextRange location, JobRef job, StepRef step)
     {
         if (Config.Utf8Yaml is null || !HasPolicy())
         {
@@ -88,11 +89,11 @@ public sealed class ForbiddenUsesRule() : RuleBase(RuleId.ForbiddenUses)
                     {
                         var matchedOwnerRepoText = Encoding.UTF8.GetString(ownerRepoKey);
                         var infoMessage = $"'{matchedOwnerRepoText}' matched allow pattern, skipping forbidden-uses check";
-                        if (step is not null)
+                        if (step.HasValue)
                         {
                             AddStepInfo(step, infoMessage, location);
                         }
-                        else if (job is not null)
+                        else if (job.HasValue)
                         {
                             AddJobInfo(job, infoMessage, location);
                         }
@@ -103,11 +104,11 @@ public sealed class ForbiddenUsesRule() : RuleBase(RuleId.ForbiddenUses)
 
                 var deniedOwnerRepoText = Encoding.UTF8.GetString(ownerRepoKey);
                 var message = $"uses reference '{deniedOwnerRepoText}' is denied by forbidden-uses policy";
-                if (step is not null)
+                if (step.HasValue)
                 {
                     AddStepWarning(step, message, location);
                 }
-                else if (job is not null)
+                else if (job.HasValue)
                 {
                     AddJobWarning(job, message, location);
                 }
@@ -119,11 +120,11 @@ public sealed class ForbiddenUsesRule() : RuleBase(RuleId.ForbiddenUses)
             {
                 var allowedOwnerRepoText = Encoding.UTF8.GetString(ownerRepoKey);
                 var message = $"uses reference '{allowedOwnerRepoText}' is not in forbidden-uses allow policy";
-                if (step is not null)
+                if (step.HasValue)
                 {
                     AddStepWarning(step, message, location);
                 }
-                else if (job is not null)
+                else if (job.HasValue)
                 {
                     AddJobWarning(job, message, location);
                 }

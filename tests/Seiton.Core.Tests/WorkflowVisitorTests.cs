@@ -41,7 +41,7 @@ public sealed class WorkflowVisitorTests
         var visitor = new WorkflowVisitor();
         visitor.AddPass(pass);
 
-        visitor.Visit(workflow);
+        visitor.Visit(new WorkflowRef(arena, workflow));
 
         var expected = new[]
         {
@@ -82,7 +82,7 @@ public sealed class WorkflowVisitorTests
         var visitor = new WorkflowVisitor();
         visitor.AddPass(pass);
 
-        visitor.VisitActionMetadata(metadata);
+        visitor.VisitActionMetadata(new ActionMetadataRef(arena, metadata));
 
         var expected = new[]
         {
@@ -132,7 +132,7 @@ public sealed class WorkflowVisitorTests
         var pass = new RecordingPass(trace);
         var visitor = new WorkflowVisitor();
         visitor.AddPass(pass);
-        visitor.Visit(workflow);
+        visitor.Visit(new WorkflowRef(arena, workflow));
 
         var expected = new[]
         {
@@ -184,7 +184,7 @@ public sealed class WorkflowVisitorTests
         var pass = new RecordingPass(trace);
         var visitor = new WorkflowVisitor();
         visitor.AddPass(pass);
-        visitor.VisitActionMetadata(metadata);
+        visitor.VisitActionMetadata(new ActionMetadataRef(arena, metadata));
 
         var expected = new[]
         {
@@ -199,20 +199,20 @@ public sealed class WorkflowVisitorTests
 
     private sealed class RecordingPass(List<string> trace) : IPass
     {
-        public void VisitWorkflowPre(Workflow workflow) => trace.Add("workflow-pre");
+        public void VisitWorkflowPre(WorkflowRef workflow) => trace.Add("workflow-pre");
 
-        public void VisitWorkflowPost(Workflow workflow) => trace.Add("workflow-post");
+        public void VisitWorkflowPost(WorkflowRef workflow) => trace.Add("workflow-post");
 
-        public void VisitActionMetadataPre(ActionMetadata metadata) => trace.Add("action-metadata-pre");
+        public void VisitActionMetadataPre(ActionMetadataRef metadata) => trace.Add("action-metadata-pre");
 
-        public void VisitActionMetadataPost(ActionMetadata metadata) => trace.Add("action-metadata-post");
+        public void VisitActionMetadataPost(ActionMetadataRef metadata) => trace.Add("action-metadata-post");
 
-        public void VisitEvent(Event ev) => trace.Add("event");
+        public void VisitEvent(EventRef ev) => trace.Add("event");
 
-        public void VisitJobPre(Job job) => trace.Add("job-pre");
+        public void VisitJobPre(JobRef job) => trace.Add("job-pre");
 
-        public void VisitJobPost(Job job) => trace.Add("job-post");
+        public void VisitJobPost(JobRef job) => trace.Add("job-post");
 
-        public void VisitStep(Step step) => trace.Add("step");
+        public void VisitStep(StepRef step) => trace.Add("step");
     }
 }

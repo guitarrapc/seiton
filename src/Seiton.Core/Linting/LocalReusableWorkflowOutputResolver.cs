@@ -161,15 +161,15 @@ internal sealed class LocalReusableWorkflowOutputResolver
 
         var parseHandle = WorkflowParser.Parse(bytes, resolvedPath);
         using var _ = parseHandle;
-        if (parseHandle.HasFatalError || parseHandle.Workflow is null)
+        if (parseHandle.HasFatalError || parseHandle.WorkflowNode is null)
         {
             return null;
         }
 
         WorkflowCallEvent? workflowCallEvent = null;
-        for (var i = 0; i < parseHandle.Workflow.On.Count; i++)
+        for (var i = 0; i < parseHandle.WorkflowNode.On.Count; i++)
         {
-            if (parseHandle.Workflow.On[i] is WorkflowCallEvent wce)
+            if (parseHandle.WorkflowNode.On[i] is WorkflowCallEvent wce)
             {
                 workflowCallEvent = wce;
                 break;

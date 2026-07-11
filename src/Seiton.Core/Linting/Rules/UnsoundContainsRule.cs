@@ -28,29 +28,30 @@ public sealed class UnsoundContainsRule() : RuleBase(RuleId.UnsoundContains)
 
     public override bool SupportsDocumentKind(DocumentKind documentKind) => documentKind == DocumentKind.Workflow;
 
-    public override void VisitJobPre(Job job)
+    public override void VisitJobPre(JobRef job)
     {
-        CheckCondition(job.If, job, null);
+        CheckCondition(job.If, job, default);
 
-        if (job.Snapshot is { } snapshot)
+        var snapshot = job.Snapshot;
+        if (snapshot.HasValue)
         {
-            CheckCondition(snapshot.If, job, null);
+            CheckCondition(snapshot.If, job, default);
         }
     }
 
-    public override void VisitStep(Step step)
+    public override void VisitStep(StepRef step)
     {
-        CheckCondition(step.If, null, step);
+        CheckCondition(step.If, default, step);
     }
 
-    private void CheckCondition(StringNodeId condition, Job? job, Step? step)
+    private void CheckCondition(StringRef condition, JobRef job, StepRef step)
     {
         if (!condition.HasValue || Config.Utf8Yaml is null)
         {
             return;
         }
 
-        var raw = Arena.GetStringValue(condition);
+        var raw = condition.Value;
         if (raw.Length == 0)
         {
             return;
@@ -85,7 +86,7 @@ public sealed class UnsoundContainsRule() : RuleBase(RuleId.UnsoundContains)
         ScanForUnsoundContains(result, exprBody, job, step, condition);
     }
 
-    private void ScanForUnsoundContains(ExpressionParseResult result, ReadOnlySpan<byte> exprBytes, Job? job, Step? step, StringNodeId condition)
+    private void ScanForUnsoundContains(ExpressionParseResult result, ReadOnlySpan<byte> exprBytes, JobRef job, StepRef step, StringRef condition)
     {
         var nodes = result.Nodes;
         var arguments = result.Arguments;
@@ -146,14 +147,14 @@ public sealed class UnsoundContainsRule() : RuleBase(RuleId.UnsoundContains)
             var isUserControllable = IsUserControllableContext(arg1NodeId, nodes, arguments, exprBytes);
 
             // Report diagnostic
-            var diagRange = Arena.GetStringRange(condition);
+            var diagRange = condition.Range;
             if (isUserControllable)
             {
-                if (job is not null)
+                if (job.HasValue)
                 {
                     AddJobError(job, ErrorMessage, diagRange);
                 }
-                else if (step is not null)
+                else if (step.HasValue)
                 {
                     AddStepError(step, ErrorMessage, diagRange);
                 }
@@ -163,11 +164,11 @@ public sealed class UnsoundContainsRule() : RuleBase(RuleId.UnsoundContains)
                 // Check if it's any context access at all (not just a literal)
                 if (IsAnyContextAccess(arg1NodeId, nodes))
                 {
-                    if (job is not null)
+                    if (job.HasValue)
                     {
                         AddJobInfo(job, InfoMessage, diagRange);
                     }
-                    else if (step is not null)
+                    else if (step.HasValue)
                     {
                         AddStepInfo(step, InfoMessage, diagRange);
                     }

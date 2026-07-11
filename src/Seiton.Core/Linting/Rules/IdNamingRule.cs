@@ -9,18 +9,18 @@ public sealed class IdNamingRule() : RuleBase(RuleId.IdNaming)
 {
     public override string Name => "Id Naming Rule";
 
-    private Workflow? _workflow;
-    private Job? _currentJob;
-    private Step? _currentStep;
+    private WorkflowRef _workflow;
+    private JobRef _currentJob;
+    private StepRef _currentStep;
     private List<Utf8Slice>? _seenStepIdSlices;
 
-    public override void VisitWorkflowPre(Workflow workflow)
+    public override void VisitWorkflowPre(WorkflowRef workflow)
     {
         base.VisitWorkflowPre(workflow);
         _workflow = workflow;
     }
 
-    public override void VisitJobPre(Job job)
+    public override void VisitJobPre(JobRef job)
     {
         if (Config.Utf8Yaml is null)
         {
@@ -30,10 +30,10 @@ public sealed class IdNamingRule() : RuleBase(RuleId.IdNaming)
         _currentJob = job;
         _seenStepIdSlices = [];
         ValidateId(job.Id, "job ID");
-        _currentJob = null;
+        _currentJob = default;
     }
 
-    public override void VisitStep(Step step)
+    public override void VisitStep(StepRef step)
     {
         if (Config.Utf8Yaml is null || !step.Id.HasValue)
         {
@@ -43,23 +43,23 @@ public sealed class IdNamingRule() : RuleBase(RuleId.IdNaming)
         _currentStep = step;
         ValidateId(step.Id, "step ID");
         ValidateStepIdUniqueness(step);
-        _currentStep = null;
+        _currentStep = default;
     }
 
-    public override void VisitJobPost(Job job)
+    public override void VisitJobPost(JobRef job)
     {
         _seenStepIdSlices = null;
     }
 
-    public override void VisitWorkflowPost(Workflow workflow)
+    public override void VisitWorkflowPost(WorkflowRef workflow)
     {
-        _workflow = null;
+        _workflow = default;
     }
 
-    private void ValidateId(StringNodeId idNode, string kind)
+    private void ValidateId(StringRef idNode, string kind)
     {
-        var value = Arena.GetStringValue(idNode);
-        if (ExpressionScanHelpers.ContainsExpressionMarker(idNode, Arena))
+        var value = idNode.Value;
+        if (ExpressionScanHelpers.ContainsExpressionMarker(idNode.Id, Arena))
         {
             return;
         }
@@ -69,35 +69,35 @@ public sealed class IdNamingRule() : RuleBase(RuleId.IdNaming)
             return;
         }
 
-        var idText = Decode(Arena.GetStringSlice(idNode));
+        var idText = idNode.Decode();
         var message = value.Length == 0
             ? $"{kind} should not be empty"
             : $"invalid {kind} \"{idText}\". {kind} must start with a letter or _ and contain only alphanumeric characters, -, or _";
 
         DiagnosticFix? fix = null;
-        if (value.Length > 0 && _currentJob is not null)
+        if (value.Length > 0 && _currentJob.HasValue)
         {
             fix = BuildJobIdFix(idNode, idText);
         }
 
-        if (_currentJob is not null)
+        if (_currentJob.HasValue)
         {
             if (fix is not null)
             {
-                AddJobError(_currentJob, message, Arena.GetStringRange(idNode), fix.Value);
+                AddJobError(_currentJob, message, idNode.Range, fix.Value);
             }
             else
             {
-                AddJobError(_currentJob, message, Arena.GetStringRange(idNode));
+                AddJobError(_currentJob, message, idNode.Range);
             }
         }
-        else if (_currentStep is not null)
+        else if (_currentStep.HasValue)
         {
-            AddStepError(_currentStep, message, Arena.GetStringRange(idNode));
+            AddStepError(_currentStep, message, idNode.Range);
         }
     }
 
-    private DiagnosticFix? BuildJobIdFix(StringNodeId idNode, string originalId)
+    private DiagnosticFix? BuildJobIdFix(StringRef idNode, string originalId)
     {
         var newId = ToKebabCase(originalId);
         if (newId.Length == 0)
@@ -111,13 +111,13 @@ public sealed class IdNamingRule() : RuleBase(RuleId.IdNaming)
             return null;
         }
 
-        var currentJobIdUtf8 = Arena.GetStringValue(idNode);
+        var currentJobIdUtf8 = idNode.Value;
 
-        if (_workflow is not null)
+        if (_workflow.HasValue)
         {
             foreach (var (_, job) in _workflow.Jobs)
             {
-                var existingJobIdUtf8 = Arena.GetStringValue(job.Id);
+                var existingJobIdUtf8 = job.Id.Value;
                 if (SpanEqualsIgnoreCaseAscii(existingJobIdUtf8, newIdUtf8)
                     && !SpanEqualsIgnoreCaseAscii(existingJobIdUtf8, currentJobIdUtf8))
                 {
@@ -133,11 +133,11 @@ public sealed class IdNamingRule() : RuleBase(RuleId.IdNaming)
         edits.Add(idEdit);
 
         // Edit for all needs references to this job ID across all jobs
-        if (_workflow is not null && Config.Utf8Yaml is not null)
+        if (_workflow.HasValue && Config.Utf8Yaml is not null)
         {
             foreach (var (_, job) in _workflow.Jobs)
             {
-                if (job.Needs is null)
+                if (!job.Needs.HasValue)
                 {
                     continue;
                 }
@@ -150,7 +150,7 @@ public sealed class IdNamingRule() : RuleBase(RuleId.IdNaming)
                         continue;
                     }
 
-                    var needsValue = Arena.GetStringValue(needsNode);
+                    var needsValue = needsNode.Value;
                     if (SpanEqualsIgnoreCaseAscii(needsValue, currentJobIdUtf8))
                     {
                         var needsEdit = BuildSliceReplacementEdit(needsNode, newId);
@@ -163,14 +163,14 @@ public sealed class IdNamingRule() : RuleBase(RuleId.IdNaming)
         return new DiagnosticFix($"rename job ID to '{newId}'", edits.ToArray());
     }
 
-    private TextEdit BuildSliceReplacementEdit(StringNodeId node, string newText)
+    private TextEdit BuildSliceReplacementEdit(StringRef node, string newText)
     {
-        var slice = Arena.GetStringSlice(node);
+        var slice = node.Slice;
         var offset = slice.Offset;
         var length = slice.Length;
 
         // If the node is quoted, expand the range to include quotes
-        if (Arena.GetStringQuoted(node) && Config.Utf8Yaml is not null)
+        if (node.Quoted && Config.Utf8Yaml is not null)
         {
             var before = offset - 1;
             var after = offset + length;
@@ -278,14 +278,14 @@ public sealed class IdNamingRule() : RuleBase(RuleId.IdNaming)
         return true;
     }
 
-    private void ValidateStepIdUniqueness(Step step)
+    private void ValidateStepIdUniqueness(StepRef step)
     {
         if (!step.Id.HasValue || _seenStepIdSlices is null || Config.Utf8Yaml is null)
         {
             return;
         }
 
-        var idSpan = Arena.GetStringValue(step.Id);
+        var idSpan = step.Id.Value;
         if (idSpan.Length == 0)
         {
             return;
@@ -296,13 +296,13 @@ public sealed class IdNamingRule() : RuleBase(RuleId.IdNaming)
             var seenSpan = _seenStepIdSlices[i].AsSpan(Config.Utf8Yaml);
             if (SpanEqualsIgnoreCaseAscii(seenSpan, idSpan))
             {
-                var idText = Decode(Arena.GetStringSlice(step.Id));
-                AddStepError(step, $"step id '{idText}' is duplicated in the same job (case-insensitive)", Arena.GetStringRange(step.Id));
+                var idText = step.Id.Decode();
+                AddStepError(step, $"step id '{idText}' is duplicated in the same job (case-insensitive)", step.Id.Range);
                 return;
             }
         }
 
-        _seenStepIdSlices.Add(Arena.GetStringSlice(step.Id));
+        _seenStepIdSlices.Add(step.Id.Slice);
     }
 
     private static bool SpanEqualsIgnoreCaseAscii(ReadOnlySpan<byte> left, ReadOnlySpan<byte> right)

@@ -68,8 +68,8 @@ public sealed class PublicApiContractTests
 
         using var result = WorkflowParser.Parse(yaml, "api.yml");
 
-        await Assert.That(result.Workflow).IsNotNull();
-        await Assert.That(result.Workflow!.Jobs.Count).IsEqualTo(1);
+        await Assert.That(result.Workflow.HasValue).IsTrue();
+        await Assert.That(result.Workflow.Jobs.Count).IsEqualTo(1);
     }
 
     [Test]
@@ -80,7 +80,7 @@ public sealed class PublicApiContractTests
         using var result = new LintEngine().Check(yaml, "api.yml");
 
         await Assert.That(result.Diagnostics.Length).IsGreaterThan(0);
-        await Assert.That(result.Workflow).IsNotNull();
+        await Assert.That(result.Workflow.HasValue).IsTrue();
     }
 
     [Test]
@@ -117,9 +117,9 @@ public sealed class PublicApiContractTests
         using var lintResult = new LintEngine().Check(parseResult, yaml, "api.yml");
 
         // LintResult must be able to resolve strings through the borrowed arena
-        await Assert.That(lintResult.Workflow).IsNotNull();
-        var job = lintResult.Workflow!.Jobs.Values().First();
-        var runsOn = lintResult.GetString(job.RunsOn!.Labels![0]);
+        await Assert.That(lintResult.Workflow.HasValue).IsTrue();
+        var job = lintResult.Workflow.Jobs.GetAt(0).Value;
+        var runsOn = job.RunsOn.Labels[0].Decode();
         await Assert.That(runsOn).IsEqualTo("ubuntu-latest");
     }
 
@@ -187,9 +187,9 @@ public sealed class PublicApiContractTests
         lintResult.Dispose();
 
         // ParseResult must still be usable (arena not disposed)
-        await Assert.That(parseResult.Workflow).IsNotNull();
-        var job = parseResult.Workflow!.Jobs.Values().First();
-        var runsOn = parseResult.GetString(job.RunsOn!.Labels![0]);
+        await Assert.That(parseResult.Workflow.HasValue).IsTrue();
+        var job = parseResult.Workflow.Jobs.GetAt(0).Value;
+        var runsOn = job.RunsOn.Labels[0].Decode();
         await Assert.That(runsOn).IsEqualTo("ubuntu-latest");
     }
 

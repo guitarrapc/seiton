@@ -13,7 +13,7 @@ public sealed class ConcurrencyLimitsRule() : RuleBase(RuleId.ConcurrencyLimits)
 
     public override bool SupportsDocumentKind(DocumentKind documentKind) => documentKind == DocumentKind.Workflow;
 
-    public override void VisitWorkflowPre(Workflow workflow)
+    public override void VisitWorkflowPre(WorkflowRef workflow)
     {
         base.VisitWorkflowPre(workflow);
         _isReusableOnly = false;
@@ -25,7 +25,7 @@ public sealed class ConcurrencyLimitsRule() : RuleBase(RuleId.ConcurrencyLimits)
             return;
         }
 
-        if (workflow.Concurrency is { } concurrency)
+        if (workflow.Concurrency is { HasValue: true } concurrency)
         {
             _hasWorkflowConcurrency = true;
 
@@ -36,31 +36,31 @@ public sealed class ConcurrencyLimitsRule() : RuleBase(RuleId.ConcurrencyLimits)
         }
     }
 
-    public override void VisitJobPre(Job job)
+    public override void VisitJobPre(JobRef job)
     {
         if (_isReusableOnly || _hasWorkflowConcurrency)
         {
             return;
         }
 
-        if (job.WorkflowCall is not null)
+        if (job.WorkflowCall.HasValue)
         {
             return;
         }
 
-        if (job.Concurrency is null)
+        if (!job.Concurrency.HasValue)
         {
-            var jobId = Decode(Arena.GetStringSlice(job.Id));
+            var jobId = job.Id.Decode();
             AddJobWarning(job, $"job '{jobId}' does not declare concurrency settings; consider adding workflow-level concurrency");
         }
         else if (!job.Concurrency.CancelInProgress.HasValue)
         {
-            var jobId = Decode(Arena.GetStringSlice(job.Id));
+            var jobId = job.Id.Decode();
             AddWarning($"job '{jobId}' concurrency is missing 'cancel-in-progress' setting", job.Concurrency.Range);
         }
     }
 
-    private static bool IsReusableOnlyWorkflow(Workflow workflow)
+    private static bool IsReusableOnlyWorkflow(WorkflowRef workflow)
     {
         if (workflow.On.Count == 0)
         {
@@ -69,7 +69,7 @@ public sealed class ConcurrencyLimitsRule() : RuleBase(RuleId.ConcurrencyLimits)
 
         for (var i = 0; i < workflow.On.Count; i++)
         {
-            if (workflow.On[i] is not WorkflowCallEvent)
+            if (workflow.On[i].Kind != EventKind.WorkflowCall)
             {
                 return false;
             }

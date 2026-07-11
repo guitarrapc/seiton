@@ -17,14 +17,15 @@ public sealed class UnpinnedToolsRule() : RuleBase(RuleId.UnpinnedTools)
 
     public override string Name => "Unpinned Tools Rule";
 
-    public override void VisitStep(Step step)
+    public override void VisitStep(StepRef step)
     {
-        if (step.Exec is not ExecAction actionExec || Config.Utf8Yaml is null)
+        if (step.Exec.Kind != StepExecKind.Action || Config.Utf8Yaml is null)
         {
             return;
         }
 
-        var uses = Arena.GetStringValue(actionExec.Uses);
+        var actionExec = step.Exec.AsAction();
+        var uses = actionExec.Uses.Value;
         if (uses.Length == 0)
         {
             return;
@@ -38,7 +39,7 @@ public sealed class UnpinnedToolsRule() : RuleBase(RuleId.UnpinnedTools)
         var versionKey = UnpinnedToolsActions.GetVersionInputKey(actionIndex);
 
         // Check if version input is provided
-        if (actionExec.Inputs is null || !actionExec.Inputs.Value.TryGetValue(Config.Utf8Yaml, versionKey, out var versionNode))
+        if (!actionExec.Inputs.TryGetValue(versionKey, out var versionNode))
         {
             var location = BuildUsesLocation(actionExec);
             AddStepWarning(step, UnpinnedToolsActions.GetMissingVersionMessage(actionIndex), location);
@@ -46,7 +47,7 @@ public sealed class UnpinnedToolsRule() : RuleBase(RuleId.UnpinnedTools)
         }
 
         // Check the version value
-        var versionValue = Arena.GetStringValue(versionNode);
+        var versionValue = versionNode.Value;
         if (versionValue.Length == 0)
         {
             return;
@@ -55,7 +56,7 @@ public sealed class UnpinnedToolsRule() : RuleBase(RuleId.UnpinnedTools)
         // version: latest
         if (versionValue.SequenceEqual(LatestValue))
         {
-            var location = Arena.GetStringRange(versionNode);
+            var location = versionNode.Range;
             AddStepWarning(step, UnpinnedToolsActions.GetLatestMessage(actionIndex), location);
             return;
         }
@@ -63,7 +64,7 @@ public sealed class UnpinnedToolsRule() : RuleBase(RuleId.UnpinnedTools)
         // version: ${{ expr }} - dynamic expression may be unpinned
         if (ExpressionScanHelpers.TryExtractExpressionBody(versionValue, out _))
         {
-            var location = Arena.GetStringRange(versionNode);
+            var location = versionNode.Range;
             AddStepWarning(step, UnpinnedToolsActions.GetDynamicMessage(actionIndex), location);
         }
     }

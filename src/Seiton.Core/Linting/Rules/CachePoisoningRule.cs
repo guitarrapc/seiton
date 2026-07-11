@@ -27,43 +27,45 @@ public sealed class CachePoisoningRule() : RuleBase(RuleId.CachePoisoning)
             : [];
     }
 
-    public override void VisitWorkflowPre(Workflow workflow)
+    public override void VisitWorkflowPre(WorkflowRef workflow)
     {
         base.VisitWorkflowPre(workflow);
         hasLowTrustTrigger = Config.Utf8Yaml is not null
             && HasLowTrustTrigger(workflow, additionalLowTrustTriggers);
     }
 
-    public override void VisitStep(Step step)
+    public override void VisitStep(StepRef step)
     {
-        if (!hasLowTrustTrigger || step.Exec is not ExecAction action || Config.Utf8Yaml is null)
+        if (!hasLowTrustTrigger || step.Exec.Kind != StepExecKind.Action || Config.Utf8Yaml is null)
         {
             return;
         }
 
-        var uses = Arena.GetStringValue(action.Uses);
+        var action = step.Exec.AsAction();
+        var uses = action.Uses.Value;
         if (!IsWriteCapableCacheAction(uses))
         {
             return;
         }
 
-        var actionRef = Decode(Arena.GetStringSlice(action.Uses));
+        var actionRef = action.Uses.Decode();
         AddStepWarning(
             step,
             $"write-capable cache action '{actionRef}' runs in a workflow with low-trust triggers; use actions/cache/restore on low-trust events or save caches from trusted triggers only (push, schedule, workflow_dispatch, etc.)",
             BuildUsesLocation(action));
     }
 
-    private bool HasLowTrustTrigger(Workflow workflow, HashSet<string> additionalLowTrustTriggers)
+    private bool HasLowTrustTrigger(WorkflowRef workflow, HashSet<string> additionalLowTrustTriggers)
     {
         for (var i = 0; i < workflow.On.Count; i++)
         {
-            if (workflow.On[i] is not WebhookEvent webhook)
+            if (workflow.On[i].Kind != EventKind.Webhook)
             {
                 continue;
             }
 
-            var hook = Arena.GetStringValue(webhook.Hook);
+            var webhook = workflow.On[i].AsWebhook();
+            var hook = webhook.Hook.Value;
             if (WebhookTypes.TryGet(hook, out _, out var spec)
                 && spec.Id is WebhookTypes.EventId.PullRequestTarget
                     or WebhookTypes.EventId.WorkflowRun

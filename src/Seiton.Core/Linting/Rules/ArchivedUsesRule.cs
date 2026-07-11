@@ -25,14 +25,14 @@ public sealed class ArchivedUsesRule() : RuleBase(RuleId.ArchivedUses)
 
     public override string Name => "Archived Uses Rule";
 
-    public override void VisitJobPre(Job job)
+    public override void VisitJobPre(JobRef job)
     {
-        if (Config.Utf8Yaml is null || job.WorkflowCall is null)
+        if (Config.Utf8Yaml is null || !job.WorkflowCall.HasValue)
         {
             return;
         }
 
-        if (!TryGetOwnerRepo(Arena.GetStringValue(job.WorkflowCall.Uses), out var owner, out var repo))
+        if (!TryGetOwnerRepo(job.WorkflowCall.Uses.Value, out var owner, out var repo))
         {
             return;
         }
@@ -45,14 +45,15 @@ public sealed class ArchivedUsesRule() : RuleBase(RuleId.ArchivedUses)
         AddJobWarning(job, message, BuildUsesLocation(job.WorkflowCall));
     }
 
-    public override void VisitStep(Step step)
+    public override void VisitStep(StepRef step)
     {
-        if (Config.Utf8Yaml is null || step.Exec is not ExecAction action)
+        if (Config.Utf8Yaml is null || step.Exec.Kind != StepExecKind.Action)
         {
             return;
         }
 
-        if (!TryGetOwnerRepo(Arena.GetStringValue(action.Uses), out var owner, out var repo))
+        var action = step.Exec.AsAction();
+        if (!TryGetOwnerRepo(action.Uses.Value, out var owner, out var repo))
         {
             return;
         }

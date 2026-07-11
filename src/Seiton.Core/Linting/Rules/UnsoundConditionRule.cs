@@ -15,29 +15,30 @@ public sealed class UnsoundConditionRule() : RuleBase(RuleId.UnsoundCondition)
 
     public override string Name => "Unsound Condition Rule";
 
-    public override void VisitJobPre(Job job)
+    public override void VisitJobPre(JobRef job)
     {
-        ValidateCondition(job.If, job, null, job.IfKeyRange);
+        ValidateCondition(job.If, job, default, job.IfKeyRange);
 
-        if (job.Snapshot is { } snapshot)
+        var snapshot = job.Snapshot;
+        if (snapshot.HasValue)
         {
-            ValidateCondition(snapshot.If, job, null, snapshot.IfKeyRange);
+            ValidateCondition(snapshot.If, job, default, snapshot.IfKeyRange);
         }
     }
 
-    public override void VisitStep(Step step)
+    public override void VisitStep(StepRef step)
     {
-        ValidateCondition(step.If, null, step, step.IfKeyRange);
+        ValidateCondition(step.If, default, step, step.IfKeyRange);
     }
 
-    private void ValidateCondition(StringNodeId condition, Job? job, Step? step, TextRange? ifKeyRange)
+    private void ValidateCondition(StringRef condition, JobRef job, StepRef step, TextRange? ifKeyRange)
     {
         if (!condition.HasValue || Config.Utf8Yaml is null)
         {
             return;
         }
 
-        var raw = Arena.GetStringValue(condition);
+        var raw = condition.Value;
         if (raw.Length == 0)
         {
             return;
@@ -61,7 +62,7 @@ public sealed class UnsoundConditionRule() : RuleBase(RuleId.UnsoundCondition)
         // and we confirmed trailing \n exists, this is an unsound condition.
 
         // Find the block indicator position for diagnostic location and fix
-        var diagRange = Arena.GetStringRange(condition);
+        var diagRange = condition.Range;
         var indicatorInfo = FindBlockIndicator(diagRange, ifKeyRange);
         if (indicatorInfo is not null)
         {
@@ -76,7 +77,7 @@ public sealed class UnsoundConditionRule() : RuleBase(RuleId.UnsoundCondition)
             fix = BuildFix(indicatorInfo.Value);
         }
 
-        if (job is not null)
+        if (job.HasValue)
         {
             if (fix is { } f)
             {
@@ -88,7 +89,7 @@ public sealed class UnsoundConditionRule() : RuleBase(RuleId.UnsoundCondition)
             }
         }
 
-        if (step is not null)
+        if (step.HasValue)
         {
             if (fix is { } f)
             {

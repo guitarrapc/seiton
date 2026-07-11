@@ -130,12 +130,12 @@ internal sealed class LocalActionOutputResolver
         }
 
         using var parseHandle = WorkflowParser.Parse(bytes, actionYamlPath);
-        if (parseHandle.HasFatalError || parseHandle.ActionMetadata is null)
+        if (parseHandle.HasFatalError || parseHandle.ActionMetadataNode is null)
         {
             return null;
         }
 
-        var meta = parseHandle.ActionMetadata;
+        var meta = parseHandle.ActionMetadataNode;
         if (meta.Outputs is null || meta.Outputs.Value.Count == 0)
         {
             return [];

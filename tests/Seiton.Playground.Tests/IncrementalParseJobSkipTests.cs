@@ -1,5 +1,4 @@
 ﻿using System.Text;
-using Seiton.Core.Parsing.Ast;
 
 namespace Seiton.Playground.Tests;
 
@@ -23,7 +22,7 @@ public sealed class IncrementalParseJobSkipTests
         var result1 = ctx.ParseIncrementally(yaml1, FilePath);
 
         // Get reference to the deploy job from first parse
-        var deployJob1 = result1.Workflow!.Jobs.Entries[1].Value;
+        var deployJob1 = result1.Workflow.Jobs.GetAt(1).Value;
 
         // Change only the build job (same length: "hello" → "world")
         var yaml2 = Encoding.UTF8.GetBytes(
@@ -31,12 +30,12 @@ public sealed class IncrementalParseJobSkipTests
 
         var result2 = ctx.ParseIncrementally(yaml2, FilePath);
 
-        await Assert.That(result2.Workflow).IsNotNull();
-        await Assert.That(result2.Workflow!.Jobs.Count).IsEqualTo(2);
+        await Assert.That(result2.Workflow.HasValue).IsTrue();
+        await Assert.That(result2.Workflow.Jobs.Count).IsEqualTo(2);
 
         // deploy job should be the SAME object instance (reused)
-        var deployJob2 = result2.Workflow!.Jobs.Entries[1].Value;
-        await Assert.That(ReferenceEquals(deployJob1, deployJob2)).IsTrue();
+        var deployJob2 = result2.Workflow.Jobs.GetAt(1).Value;
+        await Assert.That(deployJob1.Equals(deployJob2)).IsTrue();
     }
 
     [Test]
@@ -54,16 +53,15 @@ public sealed class IncrementalParseJobSkipTests
 
         var result2 = ctx.ParseIncrementally(yaml2, FilePath);
 
-        await Assert.That(result2.Workflow).IsNotNull();
-        await Assert.That(result2.Workflow!.Jobs.Count).IsEqualTo(2);
+        await Assert.That(result2.Workflow.HasValue).IsTrue();
+        await Assert.That(result2.Workflow.Jobs.Count).IsEqualTo(2);
 
         // deploy job's step should contain "finish"
-        var arena = ctx.Arena!;
-        var deployJob = result2.Workflow!.Jobs.Entries[1].Value;
-        var step = deployJob.Steps![0];
-        var exec = step.Exec as ExecRun;
-        var runValue = arena.GetStringValue(exec!.Run);
-        await Assert.That(Encoding.UTF8.GetString(runValue)).Contains("finish");
+        var deployJob = result2.Workflow.Jobs.GetAt(1).Value;
+        var step = deployJob.Steps[0];
+        var exec = step.Exec.AsRun();
+        var runValue = exec.Run.Decode();
+        await Assert.That(runValue).Contains("finish");
     }
 
     [Test]
@@ -81,18 +79,17 @@ public sealed class IncrementalParseJobSkipTests
             "on: push\njobs:\n  build:\n    runs-on: ubuntu-latest\n    steps:\n      - run: echo build2\n  deploy:\n    runs-on: ubuntu-latest\n    needs: [build]\n    steps:\n      - run: echo deploy\n");
 
         var result2 = ctx.ParseIncrementally(yaml2, FilePath);
-        var arena = ctx.Arena!;
 
         // deploy job is reused — verify its needs and step resolve correctly
-        var deployJob = result2.Workflow!.Jobs.Entries[1].Value;
-        await Assert.That(deployJob.Needs).IsNotNull();
-        await Assert.That(deployJob.Needs!.Count).IsEqualTo(1);
+        var deployJob = result2.Workflow.Jobs.GetAt(1).Value;
+        await Assert.That(deployJob.Needs.HasValue).IsTrue();
+        await Assert.That(deployJob.Needs.Count).IsEqualTo(1);
 
         // The deploy step should still resolve
-        var step = deployJob.Steps![0];
-        var exec = step.Exec as ExecRun;
-        var runValue = arena.GetStringValue(exec!.Run);
-        await Assert.That(Encoding.UTF8.GetString(runValue)).IsEqualTo("echo deploy");
+        var step = deployJob.Steps[0];
+        var exec = step.Exec.AsRun();
+        var runValue = exec.Run.Decode();
+        await Assert.That(runValue).IsEqualTo("echo deploy");
     }
 
     [Test]
@@ -104,7 +101,7 @@ public sealed class IncrementalParseJobSkipTests
 
         var ctx = new IncrementalParseContext();
         var result1 = ctx.ParseIncrementally(yaml1, FilePath);
-        var buildJob1 = result1.Workflow!.Jobs.Entries[0].Value;
+        var buildJob1 = result1.Workflow.Jobs.GetAt(0).Value;
 
         // deploy changes to longer text — different total length
         var yaml2 = Encoding.UTF8.GetBytes(
@@ -112,12 +109,12 @@ public sealed class IncrementalParseJobSkipTests
 
         var result2 = ctx.ParseIncrementally(yaml2, FilePath);
 
-        await Assert.That(result2.Workflow).IsNotNull();
-        await Assert.That(result2.Workflow!.Jobs.Count).IsEqualTo(2);
+        await Assert.That(result2.Workflow.HasValue).IsTrue();
+        await Assert.That(result2.Workflow.Jobs.Count).IsEqualTo(2);
 
         // build job should be reused (it's before the edit, same bytes at same offset)
-        var buildJob2 = result2.Workflow!.Jobs.Entries[0].Value;
-        await Assert.That(ReferenceEquals(buildJob1, buildJob2)).IsTrue();
+        var buildJob2 = result2.Workflow.Jobs.GetAt(0).Value;
+        await Assert.That(buildJob1.Equals(buildJob2)).IsTrue();
     }
 
     [Test]
@@ -145,8 +142,8 @@ public sealed class IncrementalParseJobSkipTests
 
         var ctx = new IncrementalParseContext();
         var result1 = ctx.ParseIncrementally(yaml1, FilePath);
-        var buildJob1 = result1.Workflow!.Jobs.Entries[0].Value;
-        var deployJob1 = result1.Workflow!.Jobs.Entries[2].Value;
+        var buildJob1 = result1.Workflow.Jobs.GetAt(0).Value;
+        var deployJob1 = result1.Workflow.Jobs.GetAt(2).Value;
 
         // Change only test job (same length: "test1" → "test2")
         var yaml2 = Encoding.UTF8.GetBytes(
@@ -154,14 +151,14 @@ public sealed class IncrementalParseJobSkipTests
 
         var result2 = ctx.ParseIncrementally(yaml2, FilePath);
 
-        await Assert.That(result2.Workflow).IsNotNull();
-        await Assert.That(result2.Workflow!.Jobs.Count).IsEqualTo(3);
+        await Assert.That(result2.Workflow.HasValue).IsTrue();
+        await Assert.That(result2.Workflow.Jobs.Count).IsEqualTo(3);
 
         // build and deploy should be reused (same bytes at same offsets)
-        var buildJob2 = result2.Workflow!.Jobs.Entries[0].Value;
-        var deployJob2 = result2.Workflow!.Jobs.Entries[2].Value;
-        await Assert.That(ReferenceEquals(buildJob1, buildJob2)).IsTrue();
-        await Assert.That(ReferenceEquals(deployJob1, deployJob2)).IsTrue();
+        var buildJob2 = result2.Workflow.Jobs.GetAt(0).Value;
+        var deployJob2 = result2.Workflow.Jobs.GetAt(2).Value;
+        await Assert.That(buildJob1.Equals(buildJob2)).IsTrue();
+        await Assert.That(deployJob1.Equals(deployJob2)).IsTrue();
     }
 
     [Test]
@@ -173,7 +170,7 @@ public sealed class IncrementalParseJobSkipTests
 
         var ctx = new IncrementalParseContext();
         var result1 = ctx.ParseIncrementally(yaml1, FilePath);
-        var buildJob1 = result1.Workflow!.Jobs.Entries[0].Value;
+        var buildJob1 = result1.Workflow.Jobs.GetAt(0).Value;
 
         // Add a second job
         var yaml2 = Encoding.UTF8.GetBytes(
@@ -181,12 +178,12 @@ public sealed class IncrementalParseJobSkipTests
 
         var result2 = ctx.ParseIncrementally(yaml2, FilePath);
 
-        await Assert.That(result2.Workflow).IsNotNull();
-        await Assert.That(result2.Workflow!.Jobs.Count).IsEqualTo(2);
+        await Assert.That(result2.Workflow.HasValue).IsTrue();
+        await Assert.That(result2.Workflow.Jobs.Count).IsEqualTo(2);
 
         // build job should NOT be reused (job count changed → full jobs reparse)
-        var buildJob2 = result2.Workflow!.Jobs.Entries[0].Value;
-        await Assert.That(ReferenceEquals(buildJob1, buildJob2)).IsFalse();
+        var buildJob2 = result2.Workflow.Jobs.GetAt(0).Value;
+        await Assert.That(buildJob1.Equals(buildJob2)).IsFalse();
     }
 
     // ─────────────────────────────────────────────────────────────────────
@@ -202,23 +199,22 @@ public sealed class IncrementalParseJobSkipTests
 
         var ctx = new IncrementalParseContext();
         var result1 = ctx.ParseIncrementally(yaml1, FilePath);
-        await Assert.That(result1.Workflow).IsNotNull();
-        await Assert.That(result1.Workflow!.Jobs.Count).IsEqualTo(1);
+        await Assert.That(result1.Workflow.HasValue).IsTrue();
+        await Assert.That(result1.Workflow.Jobs.Count).IsEqualTo(1);
 
         // Same-length edit: "hello" → "world" (P-1 detects jobs hash change → FullParseAndStore)
         var yaml2 = Encoding.UTF8.GetBytes(
             "on: push\njobs:\n  build:\n    runs-on: ubuntu-latest\n    steps:\n      - run: echo world\n");
 
         var result2 = ctx.ParseIncrementally(yaml2, FilePath);
-        await Assert.That(result2.Workflow).IsNotNull();
-        await Assert.That(result2.Workflow!.Jobs.Count).IsEqualTo(1);
+        await Assert.That(result2.Workflow.HasValue).IsTrue();
+        await Assert.That(result2.Workflow.Jobs.Count).IsEqualTo(1);
 
         // Verify the step content was updated
-        var arena = ctx.Arena!;
-        var step = result2.Workflow!.Jobs.Entries[0].Value.Steps![0];
-        var exec = step.Exec as ExecRun;
-        var runValue = arena.GetStringValue(exec!.Run);
-        await Assert.That(Encoding.UTF8.GetString(runValue)).Contains("world");
+        var step = result2.Workflow.Jobs.GetAt(0).Value.Steps[0];
+        var exec = step.Exec.AsRun();
+        var runValue = exec.Run.Decode();
+        await Assert.That(runValue).Contains("world");
     }
 
     [Test]
@@ -230,7 +226,7 @@ public sealed class IncrementalParseJobSkipTests
         var yaml0 = Encoding.UTF8.GetBytes(
             "on: push\njobs:\n  build:\n    runs-on: ubuntu-latest\n    steps:\n      - run: echo edit0\n");
         var r0 = ctx.ParseIncrementally(yaml0, FilePath);
-        await Assert.That(r0.Workflow).IsNotNull();
+        await Assert.That(r0.Workflow.HasValue).IsTrue();
 
         // Iterate through same-length edits (edit0 → edit1 → edit2 → ...)
         for (var i = 1; i <= 5; i++)
@@ -238,14 +234,13 @@ public sealed class IncrementalParseJobSkipTests
             var yaml = Encoding.UTF8.GetBytes(
                 $"on: push\njobs:\n  build:\n    runs-on: ubuntu-latest\n    steps:\n      - run: echo edit{i}\n");
             var result = ctx.ParseIncrementally(yaml, FilePath);
-            await Assert.That(result.Workflow).IsNotNull();
-            await Assert.That(result.Workflow!.Jobs.Count).IsEqualTo(1);
+            await Assert.That(result.Workflow.HasValue).IsTrue();
+            await Assert.That(result.Workflow.Jobs.Count).IsEqualTo(1);
 
-            var arena = ctx.Arena!;
-            var step = result.Workflow!.Jobs.Entries[0].Value.Steps![0];
-            var exec = step.Exec as ExecRun;
-            var runValue = arena.GetStringValue(exec!.Run);
-            await Assert.That(Encoding.UTF8.GetString(runValue)).Contains($"edit{i}");
+            var step = result.Workflow.Jobs.GetAt(0).Value.Steps[0];
+            var exec = step.Exec.AsRun();
+            var runValue = exec.Run.Decode();
+            await Assert.That(runValue).Contains($"edit{i}");
         }
     }
 
@@ -259,22 +254,21 @@ public sealed class IncrementalParseJobSkipTests
 
         var ctx = new IncrementalParseContext();
         var result1 = ctx.ParseIncrementally(yaml1, FilePath);
-        await Assert.That(result1.Workflow).IsNotNull();
+        await Assert.That(result1.Workflow.HasValue).IsTrue();
 
         // Change only name (same length: "AA" → "BB"), jobs section unchanged
         var yaml2 = Encoding.UTF8.GetBytes(
             "name: BB\non: push\njobs:\n  build:\n    runs-on: ubuntu-latest\n    steps:\n      - run: echo ok\n");
 
         var result2 = ctx.ParseIncrementally(yaml2, FilePath);
-        await Assert.That(result2.Workflow).IsNotNull();
-        await Assert.That(result2.Workflow!.Jobs.Count).IsEqualTo(1);
+        await Assert.That(result2.Workflow.HasValue).IsTrue();
+        await Assert.That(result2.Workflow.Jobs.Count).IsEqualTo(1);
 
         // Job should still be correct
-        var arena = ctx.Arena!;
-        var step = result2.Workflow!.Jobs.Entries[0].Value.Steps![0];
-        var exec = step.Exec as ExecRun;
-        var runValue = arena.GetStringValue(exec!.Run);
-        await Assert.That(Encoding.UTF8.GetString(runValue)).Contains("echo ok");
+        var step = result2.Workflow.Jobs.GetAt(0).Value.Steps[0];
+        var exec = step.Exec.AsRun();
+        var runValue = exec.Run.Decode();
+        await Assert.That(runValue).Contains("echo ok");
     }
 
     [Test]
@@ -292,13 +286,12 @@ public sealed class IncrementalParseJobSkipTests
             "on: push\njobs:\n  build:\n    runs-on: ubuntu-latest\n    steps:\n      - run: echo much-longer-text\n");
 
         var result2 = ctx.ParseIncrementally(yaml2, FilePath);
-        await Assert.That(result2.Workflow).IsNotNull();
-        await Assert.That(result2.Workflow!.Jobs.Count).IsEqualTo(1);
+        await Assert.That(result2.Workflow.HasValue).IsTrue();
+        await Assert.That(result2.Workflow.Jobs.Count).IsEqualTo(1);
 
-        var arena = ctx.Arena!;
-        var step = result2.Workflow!.Jobs.Entries[0].Value.Steps![0];
-        var exec = step.Exec as ExecRun;
-        var runValue = arena.GetStringValue(exec!.Run);
-        await Assert.That(Encoding.UTF8.GetString(runValue)).Contains("much-longer-text");
+        var step = result2.Workflow.Jobs.GetAt(0).Value.Steps[0];
+        var exec = step.Exec.AsRun();
+        var runValue = exec.Run.Decode();
+        await Assert.That(runValue).Contains("much-longer-text");
     }
 }

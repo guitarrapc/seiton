@@ -53,7 +53,7 @@ public sealed partial class RuleInterfaceTests
 
         var visitor = new WorkflowVisitor();
         visitor.AddPass(rule);
-        visitor.Visit(workflow);
+        visitor.Visit(new WorkflowRef(arena, workflow));
 
         await Assert.That(rule.Id).IsEqualTo(RuleId.JobStructure);
         await Assert.That(rule.Name).IsEqualTo("Test Rule");

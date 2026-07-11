@@ -17,7 +17,7 @@ public sealed class IfExprWrapperRule() : RuleBase(RuleId.IfExprWrapper)
 
     public override string Name => "If Expression Wrapper Rule";
 
-    public override void VisitWorkflowPre(Workflow workflow)
+    public override void VisitWorkflowPre(WorkflowRef workflow)
     {
         base.VisitWorkflowPre(workflow);
         // Reset cache on new file to avoid stale offset references
@@ -27,30 +27,31 @@ public sealed class IfExprWrapperRule() : RuleBase(RuleId.IfExprWrapper)
         _lastSlice = default;
     }
 
-    public override void VisitJobPre(Job job)
+    public override void VisitJobPre(JobRef job)
     {
-        ValidateCondition(job.If, job, null);
+        ValidateCondition(job.If, job, default);
 
         // snapshot.if
-        if (job.Snapshot is { } snapshot)
+        var snapshot = job.Snapshot;
+        if (snapshot.HasValue)
         {
-            ValidateCondition(snapshot.If, job, null);
+            ValidateCondition(snapshot.If, job, default);
         }
     }
 
-    public override void VisitStep(Step step)
+    public override void VisitStep(StepRef step)
     {
-        ValidateCondition(step.If, null, step);
+        ValidateCondition(step.If, default, step);
     }
 
-    private void ValidateCondition(StringNodeId condition, Job? job, Step? step)
+    private void ValidateCondition(StringRef condition, JobRef job, StepRef step)
     {
         if (!condition.HasValue || Config.Utf8Yaml is null)
         {
             return;
         }
 
-        var raw = Arena.GetStringValue(condition);
+        var raw = condition.Value;
         if (raw.Length == 0)
         {
             return;
@@ -79,8 +80,8 @@ public sealed class IfExprWrapperRule() : RuleBase(RuleId.IfExprWrapper)
         var canFix = CanOfferAutoFix(raw, containsMarker);
 
         // This is an expression without ${{ }} wrapper — emit warning with optional auto-fix
-        var slice = Arena.GetStringSlice(condition);
-        var range = Arena.GetStringRange(condition);
+        var slice = condition.Slice;
+        var range = condition.Range;
         var (message, fixText) = GetOrBuildDiagnosticStrings(slice, Config.Utf8Yaml, containsMarker);
 
         DiagnosticFix? fix = null;
@@ -90,7 +91,7 @@ public sealed class IfExprWrapperRule() : RuleBase(RuleId.IfExprWrapper)
             fix = new DiagnosticFix(FixDescription, [edit]);
         }
 
-        if (job is not null)
+        if (job.HasValue)
         {
             if (fix is { } f)
             {
@@ -102,7 +103,7 @@ public sealed class IfExprWrapperRule() : RuleBase(RuleId.IfExprWrapper)
             }
         }
 
-        if (step is not null)
+        if (step.HasValue)
         {
             if (fix is { } f)
             {
@@ -140,13 +141,13 @@ public sealed class IfExprWrapperRule() : RuleBase(RuleId.IfExprWrapper)
     }
 
     /// <summary>Builds the TextEdit, expanding range to include surrounding quotes if needed.</summary>
-    private TextEdit BuildFixEdit(StringNodeId condition, Utf8Slice slice, string fixText)
+    private TextEdit BuildFixEdit(StringRef condition, Utf8Slice slice, string fixText)
     {
         var offset = slice.Offset;
         var length = slice.Length;
 
         // If the node is quoted, expand the range to include surrounding quotes
-        if (Arena.GetStringQuoted(condition) && Config.Utf8Yaml is not null)
+        if (condition.Quoted && Config.Utf8Yaml is not null)
         {
             var before = offset - 1;
             var after = offset + length;

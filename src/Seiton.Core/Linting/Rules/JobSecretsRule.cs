@@ -11,9 +11,9 @@ public sealed class JobSecretsRule() : RuleBase(RuleId.JobSecrets)
 {
     public override string Name => "Job Secrets Rule";
 
-    public override void VisitJobPre(Job job)
+    public override void VisitJobPre(JobRef job)
     {
-        if (Config.Utf8Yaml is null || job.Steps is null || job.Steps.Count < 2)
+        if (Config.Utf8Yaml is null || !job.Steps.HasValue || job.Steps.Count < 2)
         {
             return;
         }
@@ -21,9 +21,9 @@ public sealed class JobSecretsRule() : RuleBase(RuleId.JobSecrets)
         CheckEnv(job.Env, job);
     }
 
-    private void CheckEnv(Env? env, Job job)
+    private void CheckEnv(EnvRef env, JobRef job)
     {
-        if (env?.Vars is null || env.Vars.Value.Count == 0 || Config.Utf8Yaml is null)
+        if (!env.Vars.HasValue || env.Vars.Count == 0 || Config.Utf8Yaml is null)
         {
             return;
         }
@@ -36,32 +36,32 @@ public sealed class JobSecretsRule() : RuleBase(RuleId.JobSecrets)
                 continue;
             }
 
-            var envName = Decode(Arena.GetStringSlice(envVar.Name));
+            var envName = envVar.Name.Decode();
             AddJobError(
                 job,
                 $"job env '{envName}' must not set secrets.* or github.token when job has multiple steps; move secret mapping to step env",
-                Arena.GetStringRange(envVar.Value));
+                envVar.Value.Range);
         }
     }
 
-    private bool ContainsSecretsOrGitHubTokenReference(StringNodeId node)
+    private bool ContainsSecretsOrGitHubTokenReference(StringRef node)
     {
         if (Config.Utf8Yaml is null)
         {
             return false;
         }
 
-        if (ContainsReferenceInValue(Arena.GetStringValue(node)))
+        if (ContainsReferenceInValue(node.Value))
         {
             return true;
         }
 
-        if (!Arena.GetStringExpression(node).HasValue)
+        if (!node.Expression.HasValue)
         {
             return false;
         }
 
-        var expression = TrimAsciiWhiteSpace(Arena.GetStringValue(Arena.GetStringExpression(node)));
+        var expression = TrimAsciiWhiteSpace(node.Expression.Value);
         return ContainsReferenceInExpression(expression);
     }
 

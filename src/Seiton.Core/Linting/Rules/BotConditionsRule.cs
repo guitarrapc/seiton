@@ -45,35 +45,35 @@ public sealed class BotConditionsRule() : RuleBase(RuleId.BotConditions)
         _strictDetection = config.GetRuleConfig(Id)?.StrictDetection == true;
     }
 
-    public override void VisitWorkflowPre(Workflow workflow)
+    public override void VisitWorkflowPre(WorkflowRef workflow)
     {
         base.VisitWorkflowPre(workflow);
         _emitBotConditionDiagnostics = ShouldEmitBotConditionDiagnostics(workflow);
     }
 
-    public override void VisitJobPre(Job job)
+    public override void VisitJobPre(JobRef job)
     {
-        CheckCondition(job.If, job, null);
+        CheckCondition(job.If, job, default);
 
-        if (job.Snapshot is { } snapshot)
+        if (job.Snapshot is { HasValue: true } snapshot)
         {
-            CheckCondition(snapshot.If, job, null);
+            CheckCondition(snapshot.If, job, default);
         }
     }
 
-    public override void VisitStep(Step step)
+    public override void VisitStep(StepRef step)
     {
-        CheckCondition(step.If, null, step);
+        CheckCondition(step.If, default, step);
     }
 
-    private void CheckCondition(StringNodeId condition, Job? job, Step? step)
+    private void CheckCondition(StringRef condition, JobRef job, StepRef step)
     {
         if (!condition.HasValue || Config.Utf8Yaml is null)
         {
             return;
         }
 
-        var raw = Arena.GetStringValue(condition);
+        var raw = condition.Value;
         if (raw.Length == 0)
         {
             return;
@@ -119,7 +119,7 @@ public sealed class BotConditionsRule() : RuleBase(RuleId.BotConditions)
         ScanForBotConditions(result, exprBody, job, step, condition);
     }
 
-    private void ScanForBotConditions(ExpressionParseResult result, ReadOnlySpan<byte> exprBytes, Job? job, Step? step, StringNodeId condition)
+    private void ScanForBotConditions(ExpressionParseResult result, ReadOnlySpan<byte> exprBytes, JobRef job, StepRef step, StringRef condition)
     {
         var nodes = result.Nodes;
         var hasOr = HasOrOperator(nodes);
@@ -176,25 +176,25 @@ public sealed class BotConditionsRule() : RuleBase(RuleId.BotConditions)
             }
 
             // != (exclusion pattern) emits info; == (privilege grant) emits warning
-            var diagRange = Arena.GetStringRange(condition);
+            var diagRange = condition.Range;
             if (node.Operator == ExpressionOperator.NotEqual)
             {
-                if (job is not null)
+                if (job.HasValue)
                 {
                     AddJobInfo(job, InfoMessage, diagRange);
                 }
-                else if (step is not null)
+                else if (step.HasValue)
                 {
                     AddStepInfo(step, InfoMessage, diagRange);
                 }
             }
             else
             {
-                if (job is not null)
+                if (job.HasValue)
                 {
                     AddJobWarning(job, WarningMessage, diagRange);
                 }
-                else if (step is not null)
+                else if (step.HasValue)
                 {
                     AddStepWarning(step, WarningMessage, diagRange);
                 }
@@ -225,17 +225,18 @@ public sealed class BotConditionsRule() : RuleBase(RuleId.BotConditions)
     /// Mixed or non-PR triggers suppress diagnostics because <c>github.actor</c> is often the only
     /// cross-trigger bot check.
     /// </summary>
-    private bool ShouldEmitBotConditionDiagnostics(Workflow workflow)
+    private bool ShouldEmitBotConditionDiagnostics(WorkflowRef workflow)
     {
         var hasPrEvent = false;
         var hasNonPrTrigger = false;
 
         for (var i = 0; i < workflow.On.Count; i++)
         {
-            switch (workflow.On[i])
+            switch (workflow.On[i].Kind)
             {
-                case WebhookEvent webhook:
-                    var hook = Arena.GetStringValue(webhook.Hook);
+                case EventKind.Webhook:
+                    var webhook = workflow.On[i].AsWebhook();
+                    var hook = webhook.Hook.Value;
                     if (WebhookTypes.TryGet(hook, out _, out var spec) && IsPullRequestWebhook(spec.Id))
                     {
                         hasPrEvent = true;

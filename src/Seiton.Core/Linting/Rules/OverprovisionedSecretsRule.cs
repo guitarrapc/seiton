@@ -1,5 +1,4 @@
-﻿using Seiton.Core.Parsing;
-using Seiton.Core.Parsing.Ast;
+﻿using Seiton.Core.Parsing.Ast;
 
 using static Seiton.Core.Parsing.SpanHelpers;
 
@@ -32,26 +31,26 @@ public sealed class OverprovisionedSecretsRule() : RuleBase(RuleId.Overprovision
         }
     }
 
-    public override void VisitJobPre(Job job)
+    public override void VisitJobPre(JobRef job)
     {
-        if (job.WorkflowCall?.Secrets is not null && job.WorkflowCall.Secrets.Value.Count > _maxJobSecrets)
+        if (job.WorkflowCall.Secrets.Count > _maxJobSecrets)
         {
             AddJobWarning(
                 job,
-                $"reusable workflow call passes {job.WorkflowCall.Secrets.Value.Count} explicit secrets; map only minimum required secrets",
+                $"reusable workflow call passes {job.WorkflowCall.Secrets.Count} explicit secrets; map only minimum required secrets",
                 BuildUsesLocation(job.WorkflowCall));
         }
     }
 
-    public override void VisitStep(Step step)
+    public override void VisitStep(StepRef step)
     {
-        if (Config.Utf8Yaml is null || step.Env?.Vars is null || step.Env.Vars.Value.Count == 0)
+        if (Config.Utf8Yaml is null || step.Env.Vars.Count == 0)
         {
             return;
         }
 
         var secretVarCount = 0;
-        foreach (var pair in step.Env.Vars.Value)
+        foreach (var pair in step.Env.Vars)
         {
             if (!ContainsSecretsReference(pair.Value.Value))
             {
@@ -70,14 +69,14 @@ public sealed class OverprovisionedSecretsRule() : RuleBase(RuleId.Overprovision
         }
     }
 
-    private bool ContainsSecretsReference(StringNodeId node)
+    private bool ContainsSecretsReference(StringRef node)
     {
         if (Config.Utf8Yaml is null)
         {
             return false;
         }
 
-        var value = Arena.GetStringValue(node);
+        var value = node.Value;
         if (ContainsAsciiIgnoreCase(value, "secrets."u8)
             || ContainsAsciiIgnoreCase(value, "secrets["u8)
             || ContainsAsciiIgnoreCase(value, "tojson(secrets)"u8)
@@ -86,12 +85,12 @@ public sealed class OverprovisionedSecretsRule() : RuleBase(RuleId.Overprovision
             return true;
         }
 
-        if (!Arena.GetStringExpression(node).HasValue)
+        if (!node.Expression.HasValue)
         {
             return false;
         }
 
-        var expression = Arena.GetStringValue(Arena.GetStringExpression(node));
+        var expression = node.Expression.Value;
         return ContainsAsciiIgnoreCase(expression, "secrets"u8);
     }
 }

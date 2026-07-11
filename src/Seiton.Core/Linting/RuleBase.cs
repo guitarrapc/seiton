@@ -34,35 +34,35 @@ public abstract class RuleBase : IRule
         Config = config;
     }
 
-    public virtual void VisitWorkflowPre(Workflow workflow)
+    public virtual void VisitWorkflowPre(WorkflowRef workflow)
     {
     }
 
-    public virtual void VisitWorkflowPost(Workflow workflow)
+    public virtual void VisitWorkflowPost(WorkflowRef workflow)
     {
     }
 
-    public virtual void VisitActionMetadataPre(ActionMetadata metadata)
+    public virtual void VisitActionMetadataPre(ActionMetadataRef metadata)
     {
     }
 
-    public virtual void VisitActionMetadataPost(ActionMetadata metadata)
+    public virtual void VisitActionMetadataPost(ActionMetadataRef metadata)
     {
     }
 
-    public virtual void VisitEvent(Event ev)
+    public virtual void VisitEvent(EventRef ev)
     {
     }
 
-    public virtual void VisitJobPre(Job job)
+    public virtual void VisitJobPre(JobRef job)
     {
     }
 
-    public virtual void VisitJobPost(Job job)
+    public virtual void VisitJobPost(JobRef job)
     {
     }
 
-    public virtual void VisitStep(Step step)
+    public virtual void VisitStep(StepRef step)
     {
     }
 
@@ -76,152 +76,152 @@ public abstract class RuleBase : IRule
         AddDiagnostic(DiagnosticSeverity.Warning, message, location);
     }
 
-    protected void AddJobError(Job job, string message)
+    protected void AddJobError(JobRef job, string message)
     {
         AddDiagnostic(DiagnosticSeverity.Error, message, BuildJobLocation(job));
     }
 
-    protected void AddStepWarning(Step step, string message)
+    protected void AddStepWarning(StepRef step, string message)
     {
         AddDiagnostic(DiagnosticSeverity.Warning, message, BuildStepLocation(step));
     }
 
-    protected void AddStepWarning(Step step, string message, TextRange location)
+    protected void AddStepWarning(StepRef step, string message, TextRange location)
     {
         AddDiagnostic(DiagnosticSeverity.Warning, message, location);
     }
 
-    protected void AddStepWarning(Step step, string message, TextRange location, string? help)
+    protected void AddStepWarning(StepRef step, string message, TextRange location, string? help)
     {
         AddDiagnostic(DiagnosticSeverity.Warning, message, location, help: help);
     }
 
-    protected void AddStepWarning(Step step, string message, TextRange location, DiagnosticFix fix)
+    protected void AddStepWarning(StepRef step, string message, TextRange location, DiagnosticFix fix)
     {
         AddDiagnostic(DiagnosticSeverity.Warning, message, location, fix);
     }
 
-    protected void AddStepWarning(Step step, string message, TextRange location, IReadOnlyDictionary<string, string> metadata)
+    protected void AddStepWarning(StepRef step, string message, TextRange location, IReadOnlyDictionary<string, string> metadata)
     {
         AddDiagnostic(DiagnosticSeverity.Warning, message, location, fix: null, metadata);
     }
 
-    protected void AddStepWarning(Step step, string message, TextRange location, IReadOnlyDictionary<string, string> metadata, string? help)
+    protected void AddStepWarning(StepRef step, string message, TextRange location, IReadOnlyDictionary<string, string> metadata, string? help)
     {
         AddDiagnostic(DiagnosticSeverity.Warning, message, location, fix: null, metadata, help);
     }
 
-    protected void AddStepInfo(Step step, string message, TextRange location)
+    protected void AddStepInfo(StepRef step, string message, TextRange location)
     {
         AddDiagnostic(DiagnosticSeverity.Info, message, location);
     }
 
-    protected void AddStepInfo(Step step, string message, TextRange location, DiagnosticFix fix)
+    protected void AddStepInfo(StepRef step, string message, TextRange location, DiagnosticFix fix)
     {
         AddDiagnostic(DiagnosticSeverity.Info, message, location, fix);
     }
 
-    protected void AddStepError(Step step, string message, TextRange location)
+    protected void AddStepError(StepRef step, string message, TextRange location)
     {
         AddDiagnostic(DiagnosticSeverity.Error, message, location);
     }
 
-    protected void AddStepError(Step step, string message, TextRange location, string help)
+    protected void AddStepError(StepRef step, string message, TextRange location, string help)
     {
         AddDiagnostic(DiagnosticSeverity.Error, message, location, help: help);
     }
 
-    protected void AddStepError(Step step, string message, TextRange location, DiagnosticFix fix)
+    protected void AddStepError(StepRef step, string message, TextRange location, DiagnosticFix fix)
     {
         AddDiagnostic(DiagnosticSeverity.Error, message, location, fix);
     }
 
-    protected void AddStepError(Step step, string message, TextRange location, IReadOnlyDictionary<string, string> metadata)
+    protected void AddStepError(StepRef step, string message, TextRange location, IReadOnlyDictionary<string, string> metadata)
     {
         AddDiagnostic(DiagnosticSeverity.Error, message, location, fix: null, metadata);
     }
 
-    protected void AddJobWarning(Job job, string message)
+    protected void AddJobWarning(JobRef job, string message)
     {
         AddDiagnostic(DiagnosticSeverity.Warning, message, BuildJobLocation(job));
     }
 
-    protected void AddJobInfo(Job job, string message, TextRange location)
+    protected void AddJobInfo(JobRef job, string message, TextRange location)
     {
         AddDiagnostic(DiagnosticSeverity.Info, message, location);
     }
 
-    protected void AddJobWarning(Job job, string message, TextRange location)
+    protected void AddJobWarning(JobRef job, string message, TextRange location)
     {
         AddDiagnostic(DiagnosticSeverity.Warning, message, location);
     }
 
-    protected void AddJobWarning(Job job, string message, TextRange location, string? help)
+    protected void AddJobWarning(JobRef job, string message, TextRange location, string? help)
     {
         AddDiagnostic(DiagnosticSeverity.Warning, message, location, help: help);
     }
 
-    protected void AddJobWarning(Job job, string message, TextRange location, DiagnosticFix fix)
+    protected void AddJobWarning(JobRef job, string message, TextRange location, DiagnosticFix fix)
     {
         AddDiagnostic(DiagnosticSeverity.Warning, message, location, fix);
     }
 
-    protected void AddJobWarning(Job job, string message, TextRange location, IReadOnlyDictionary<string, string> metadata)
+    protected void AddJobWarning(JobRef job, string message, TextRange location, IReadOnlyDictionary<string, string> metadata)
     {
         AddDiagnostic(DiagnosticSeverity.Warning, message, location, fix: null, metadata);
     }
 
-    protected void AddJobWarning(Job job, string message, TextRange location, IReadOnlyDictionary<string, string> metadata, string? help)
+    protected void AddJobWarning(JobRef job, string message, TextRange location, IReadOnlyDictionary<string, string> metadata, string? help)
     {
         AddDiagnostic(DiagnosticSeverity.Warning, message, location, fix: null, metadata, help);
     }
 
-    protected void AddEventWarning(Event ev, string message)
+    protected void AddEventWarning(EventRef ev, string message)
     {
         AddDiagnostic(DiagnosticSeverity.Warning, message, BuildEventLocation(ev));
     }
 
-    protected void AddEventError(Event ev, string message, TextRange location)
+    protected void AddEventError(EventRef ev, string message, TextRange location)
     {
         AddDiagnostic(DiagnosticSeverity.Error, message, location);
     }
 
-    protected void AddWorkflowError(Workflow workflow, string message, TextRange location)
+    protected void AddWorkflowError(WorkflowRef workflow, string message, TextRange location)
     {
         AddDiagnostic(DiagnosticSeverity.Error, message, location);
     }
 
-    protected void AddWorkflowWarning(Workflow workflow, string message, TextRange location)
+    protected void AddWorkflowWarning(WorkflowRef workflow, string message, TextRange location)
     {
         AddDiagnostic(DiagnosticSeverity.Warning, message, location);
     }
 
-    protected void AddWorkflowWarning(Workflow workflow, string message, TextRange location, string? help)
+    protected void AddWorkflowWarning(WorkflowRef workflow, string message, TextRange location, string? help)
     {
         AddDiagnostic(DiagnosticSeverity.Warning, message, location, help: help);
     }
 
-    protected void AddWorkflowInfo(Workflow workflow, string message, TextRange location)
+    protected void AddWorkflowInfo(WorkflowRef workflow, string message, TextRange location)
     {
         AddDiagnostic(DiagnosticSeverity.Info, message, location);
     }
 
-    protected void AddWorkflowError(Workflow workflow, string message, TextRange location, DiagnosticFix fix)
+    protected void AddWorkflowError(WorkflowRef workflow, string message, TextRange location, DiagnosticFix fix)
     {
         AddDiagnostic(DiagnosticSeverity.Error, message, location, fix);
     }
 
-    protected void AddJobError(Job job, string message, TextRange location)
+    protected void AddJobError(JobRef job, string message, TextRange location)
     {
         AddDiagnostic(DiagnosticSeverity.Error, message, location);
     }
 
-    protected void AddJobError(Job job, string message, TextRange location, DiagnosticFix fix)
+    protected void AddJobError(JobRef job, string message, TextRange location, DiagnosticFix fix)
     {
         AddDiagnostic(DiagnosticSeverity.Error, message, location, fix);
     }
 
-    protected void AddJobError(Job job, string message, TextRange location, string help)
+    protected void AddJobError(JobRef job, string message, TextRange location, string help)
     {
         AddDiagnostic(DiagnosticSeverity.Error, message, location, help: help);
     }
@@ -322,9 +322,9 @@ public abstract class RuleBase : IRule
     /// <summary>Gets the source range for a float scalar handle for custom rules.</summary>
     protected TextRange GetRange(FloatNodeId id) => Arena.GetFloatRange(id);
 
-    protected TextRange BuildJobLocation(Job job)
+    protected static TextRange BuildJobLocation(JobRef job)
     {
-        var range = Arena.GetStringRange(job.Id);
+        var range = job.Id.Range;
         return new TextRange(
             Start: range.Start,
             Length: 0,
@@ -334,9 +334,9 @@ public abstract class RuleBase : IRule
             EndColumn: range.StartColumn);
     }
 
-    protected TextRange BuildEventLocation(Event ev)
+    protected static TextRange BuildEventLocation(EventRef ev)
     {
-        var range = Arena.GetStringRange(ev.EventName);
+        var range = ev.EventName.Range;
         return new TextRange(
             Start: range.Start,
             Length: 0,
@@ -346,7 +346,7 @@ public abstract class RuleBase : IRule
             EndColumn: range.StartColumn);
     }
 
-    protected static TextRange BuildStepLocation(Step step)
+    protected static TextRange BuildStepLocation(StepRef step)
     {
         var range = step.Range;
         return new TextRange(
@@ -360,14 +360,14 @@ public abstract class RuleBase : IRule
 
     private protected AstArena Arena => Config.Arena!;
 
-    protected TextRange BuildUsesLocation(ExecAction action)
+    protected static TextRange BuildUsesLocation(ExecActionRef action)
     {
-        return action.UsesKeyRange ?? Arena.GetStringRange(action.Uses);
+        return action.UsesKeyRange ?? action.Uses.Range;
     }
 
-    protected TextRange BuildUsesLocation(WorkflowCall workflowCall)
+    protected static TextRange BuildUsesLocation(WorkflowCallRef workflowCall)
     {
-        return workflowCall.UsesKeyRange ?? Arena.GetStringRange(workflowCall.Uses);
+        return workflowCall.UsesKeyRange ?? workflowCall.Uses.Range;
     }
 
     private protected static bool HasNodeValue(StringNodeId node, AstArena arena)

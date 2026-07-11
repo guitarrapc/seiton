@@ -42,7 +42,7 @@ public class CoreParsingBenchmark
     public int ParseWorkflowFull()
     {
         using var result = WorkflowParser.Parse(_yamlBytes, _filePath);
-        var count = (result.Workflow?.Jobs.Count ?? 0) + result.Diagnostics.Length;
+        var count = result.Workflow.Jobs.Count + result.Diagnostics.Length;
         return count;
     }
 

@@ -10,27 +10,28 @@ public sealed class RefVersionMismatchRule() : RuleBase(RuleId.RefVersionMismatc
 {
     public override string Name => "Ref Version Mismatch Rule";
 
-    public override void VisitJobPre(Job job)
+    public override void VisitJobPre(JobRef job)
     {
-        if (Config.Utf8Yaml is null || job.WorkflowCall is null)
+        if (Config.Utf8Yaml is null || !job.WorkflowCall.HasValue)
         {
             return;
         }
 
-        CheckUses(Arena.GetStringValue(job.WorkflowCall.Uses), BuildUsesLocation(job.WorkflowCall), job, null);
+        CheckUses(job.WorkflowCall.Uses.Value, BuildUsesLocation(job.WorkflowCall), job, default);
     }
 
-    public override void VisitStep(Step step)
+    public override void VisitStep(StepRef step)
     {
-        if (Config.Utf8Yaml is null || step.Exec is not ExecAction action)
+        if (Config.Utf8Yaml is null || step.Exec.Kind != StepExecKind.Action)
         {
             return;
         }
 
-        CheckUses(Arena.GetStringValue(action.Uses), BuildUsesLocation(action), null, step);
+        var action = step.Exec.AsAction();
+        CheckUses(action.Uses.Value, BuildUsesLocation(action), default, step);
     }
 
-    private void CheckUses(ReadOnlySpan<byte> uses, TextRange location, Job? job, Step? step)
+    private void CheckUses(ReadOnlySpan<byte> uses, TextRange location, JobRef job, StepRef step)
     {
         if (Config.Utf8Yaml is null)
         {
@@ -47,11 +48,11 @@ public sealed class RefVersionMismatchRule() : RuleBase(RuleId.RefVersionMismatc
         }
 
         var message = $"uses ref major version 'v{refMajor}' mismatches action path version hint 'v{pathMajor}'; align ref and path intent";
-        if (step is not null)
+        if (step.HasValue)
         {
             AddStepWarning(step, message, location);
         }
-        else if (job is not null)
+        else if (job.HasValue)
         {
             AddJobWarning(job, message, location);
         }

@@ -1147,8 +1147,8 @@ public sealed class IncrementalParseContext
         using var parseResult = ParseIncrementally(utf8Yaml, filePath);
 
         // Build skip mask from reused jobs + cached diagnostics
-        var jobCount = parseResult.Workflow?.Jobs.Count ?? 0;
-        var skipJobs = BuildSkipJobs(jobCount, parseResult.Workflow);
+        var jobCount = parseResult.WorkflowNode?.Jobs.Count ?? 0;
+        var skipJobs = BuildSkipJobs(jobCount, parseResult.WorkflowNode);
 
         // Lint with optional job skipping
         var lintResult = _lintEngine.CheckWithParseResult(utf8Yaml, filePath, LintConfig, parseResult.Data, _previousArena, skipJobs);

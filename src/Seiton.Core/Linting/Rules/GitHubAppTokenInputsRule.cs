@@ -9,14 +9,15 @@ public sealed class GitHubAppTokenInputsRule() : RuleBase(RuleId.GitHubAppTokenI
 {
     public override string Name => "GitHub App Token Inputs Rule";
 
-    public override void VisitStep(Step step)
+    public override void VisitStep(StepRef step)
     {
-        if (step.Exec is not ExecAction actionExec || Config.Utf8Yaml is null)
+        if (step.Exec.Kind != StepExecKind.Action || Config.Utf8Yaml is null)
         {
             return;
         }
 
-        var uses = Arena.GetStringValue(actionExec.Uses);
+        var actionExec = step.Exec.AsAction();
+        var uses = actionExec.Uses.Value;
         if (!IsCreateGitHubAppTokenAction(uses))
         {
             return;
@@ -25,11 +26,11 @@ public sealed class GitHubAppTokenInputsRule() : RuleBase(RuleId.GitHubAppTokenI
         var hasRepositoryConstraint = false;
         var hasPermissionConstraint = false;
         var hasOwner = false;
-        if (actionExec.Inputs is not null)
+        if (actionExec.Inputs.HasValue)
         {
-            foreach (var pair in actionExec.Inputs.Value)
+            foreach (var pair in actionExec.Inputs)
             {
-                var key = pair.Key.AsSpan(Config.Utf8Yaml);
+                var key = pair.Key.Bytes;
                 if (IsRepositoryConstraintKey(key))
                 {
                     hasRepositoryConstraint = true;
@@ -59,7 +60,7 @@ public sealed class GitHubAppTokenInputsRule() : RuleBase(RuleId.GitHubAppTokenI
             return;
         }
 
-        var usesText = Decode(Arena.GetStringSlice(actionExec.Uses));
+        var usesText = actionExec.Uses.Decode();
         var usesLocation = BuildUsesLocation(actionExec);
         if (!hasRepositoryConstraint && !hasPermissionConstraint)
         {
