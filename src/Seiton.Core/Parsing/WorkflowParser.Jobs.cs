@@ -1,4 +1,4 @@
-using System.Text;
+﻿using System.Text;
 using Seiton.Core.Generated;
 using Seiton.Core.Parsing.Ast;
 
@@ -45,14 +45,14 @@ public static partial class WorkflowParser
         where TReader : IYamlStreamReader, allows ref struct
     {
         StringNodeId nameNode = default;
-        IReadOnlyList<StringNodeId>? needsNode = null;
+        StringIdRange needsNode = default;
         Runner? runsOnNode = null;
         Permissions? permissionsNode = null;
-        Seiton.Core.Parsing.Ast.Environment? environmentNode = null;
-        Concurrency? concurrencyNode = null;
+        EnvironmentId environmentNode = default;
+        ConcurrencyId concurrencyNode = default;
         SliceMap<StringNodeId>? outputsNode = null;
         Env? envNode = null;
-        Defaults? defaultsNode = null;
+        DefaultsId defaultsNode = default;
         StringNodeId ifNode = default;
         TextPosition ifKeyMark = default;
         IReadOnlyList<Step>? stepsNode = null;
@@ -62,7 +62,7 @@ public static partial class WorkflowParser
         Container? containerNode = null;
         Services? servicesNode = null;
         WorkflowCall? workflowCallNode = null;
-        Snapshot? snapshotNode = null;
+        SnapshotId snapshotNode = default;
         TextPosition stepsKeyPos = default;
         TextPosition runsOnKeyPos = default;
         TextPosition withKeyPos = default;
@@ -500,7 +500,7 @@ public static partial class WorkflowParser
         _ => "snapshot key",
     };
 
-    private static Snapshot ParseSnapshotNode<TReader>(ref TReader reader, AstArena arena, ref PooledBuffer<Diagnostic> diagnostics, ReadOnlySpan<byte> source, Utf8Slice jobId)
+    private static SnapshotId ParseSnapshotNode<TReader>(ref TReader reader, AstArena arena, ref PooledBuffer<Diagnostic> diagnostics, ReadOnlySpan<byte> source, Utf8Slice jobId)
         where TReader : IYamlStreamReader, allows ref struct
     {
         string? section = null;
@@ -509,7 +509,7 @@ public static partial class WorkflowParser
         {
             AddError(ref diagnostics, $"{SectionName(source, jobId, ".snapshot", ref section)} must be object", reader.CurrentStart);
             reader.SkipCurrentNode();
-            return arena.AllocSnapshot();
+            return arena.AddSnapshot(default);
         }
 
         var snapshotMark = reader.CurrentStart;
@@ -617,12 +617,13 @@ public static partial class WorkflowParser
             AddError(ref diagnostics, "\"snapshot\" section must have \"image-name\" configuration", snapshotMark);
         }
 
-        var snapshot = arena.AllocSnapshot();
-        snapshot.Version = versionNode;
-        snapshot.ImageName = imageNameNode;
-        snapshot.If = ifNode;
-        snapshot.IfKeyRange = ifNode.HasValue ? BuildScalarLocation(ifKeyMark, 2) : null;
-        return snapshot;
+        return arena.AddSnapshot(new SnapshotData
+        {
+            Version = versionNode,
+            ImageName = imageNameNode,
+            If = ifNode,
+            IfKeyRange = ifNode.HasValue ? BuildScalarLocation(ifKeyMark, 2) : null,
+        });
     }
 
 
@@ -633,7 +634,7 @@ public static partial class WorkflowParser
 
         if (reader.CurrentKind == YamlEventKind.MappingStart)
         {
-            IReadOnlyList<StringNodeId>? labels = null;
+            StringIdRange labels = default;
             StringNodeId labelsExpr = default;
             StringNodeId group = default;
             ulong seen = 0;
@@ -765,7 +766,7 @@ public static partial class WorkflowParser
                 reader.Read();
             }
 
-            if (labels is null && !labelsExpr.HasValue && !hasUnknownKey && (seen & (1UL << (int)RunsOnMappingKey.Group)) == 0 && (seen & (1UL << (int)RunsOnMappingKey.Labels)) == 0)
+            if (!labels.HasValue && !labelsExpr.HasValue && !hasUnknownKey && (seen & (1UL << (int)RunsOnMappingKey.Group)) == 0 && (seen & (1UL << (int)RunsOnMappingKey.Labels)) == 0)
             {
                 AddError(ref diagnostics, $"{SectionName(source, jobId, ".runs-on", ref section)} requires labels", mappingStartMark);
             }
@@ -774,7 +775,7 @@ public static partial class WorkflowParser
             mappingRunner.Labels = labels;
             mappingRunner.LabelsExpr = labelsExpr;
             mappingRunner.Group = group;
-            mappingRunner.Range = labelsExpr.HasValue ? arena.GetStringRange(labelsExpr) : group.HasValue ? arena.GetStringRange(group) : (labels is { Count: > 0 } ? arena.GetStringRange(labels[0]) : default);
+            mappingRunner.Range = labelsExpr.HasValue ? arena.GetStringRange(labelsExpr) : group.HasValue ? arena.GetStringRange(group) : (labels.Count > 0 ? arena.GetStringRange(arena.GetStringIdAt(labels, 0)) : default);
             return mappingRunner;
         }
 
@@ -808,11 +809,11 @@ public static partial class WorkflowParser
         }
         var runner = arena.AllocRunner();
         runner.Labels = labelsFallback;
-        runner.Range = labelsFallback.Count > 0 ? arena.GetStringRange(labelsFallback[0]) : default;
+        runner.Range = labelsFallback.Count > 0 ? arena.GetStringRange(arena.GetStringIdAt(labelsFallback, 0)) : default;
         return runner;
     }
 
-    private static Seiton.Core.Parsing.Ast.Environment? ParseEnvironmentNode<TReader>(ref TReader reader, AstArena arena, ref PooledBuffer<Diagnostic> diagnostics, ReadOnlySpan<byte> source, Utf8Slice jobId, TextPosition environmentKeyMark)
+    private static EnvironmentId ParseEnvironmentNode<TReader>(ref TReader reader, AstArena arena, ref PooledBuffer<Diagnostic> diagnostics, ReadOnlySpan<byte> source, Utf8Slice jobId, TextPosition environmentKeyMark)
         where TReader : IYamlStreamReader, allows ref struct
     {
         if (reader.CurrentKind == YamlEventKind.Scalar)
@@ -821,13 +822,14 @@ public static partial class WorkflowParser
             if (envNameErr) AddError(ref diagnostics, $"jobs.'{DecodeUtf8(source, jobId)}'.environment must be string or object", envNameMark);
             if (!name.HasValue)
             {
-                return null;
+                return default;
             }
 
-            var scalarEnvironment = arena.AllocEnvironment();
-            scalarEnvironment.Name = name;
-            scalarEnvironment.Range = arena.GetStringRange(name);
-            return scalarEnvironment;
+            return arena.AddEnvironment(new EnvironmentData
+            {
+                Name = name,
+                Range = arena.GetStringRange(name),
+            });
         }
 
         if (reader.CurrentKind != YamlEventKind.MappingStart)
@@ -922,12 +924,13 @@ public static partial class WorkflowParser
             return default;
         }
 
-        var environment = arena.AllocEnvironment();
-        environment.Name = nameNode;
-        environment.Url = urlNode;
-        environment.Deployment = deploymentNode;
-        environment.Range = arena.GetStringRange(nameNode);
-        return environment;
+        return arena.AddEnvironment(new EnvironmentData
+        {
+            Name = nameNode,
+            Url = urlNode,
+            Deployment = deploymentNode,
+            Range = arena.GetStringRange(nameNode),
+        });
     }
 
     private static SliceMap<StringNodeId>? ParseOutputsNode<TReader>(ref TReader reader, AstArena arena, ref PooledBuffer<Diagnostic> diagnostics, ReadOnlySpan<byte> source, Utf8Slice jobId)

@@ -78,7 +78,7 @@ public readonly struct WebhookEventRef
 
     public StringRef Hook => new(_arena, _node?.Hook ?? default);
 
-    public StringRefList Types => new(_arena, _node?.Types);
+    public StringRefList Types => new(_arena, _node?.Types ?? default);
 
     public WebhookEventFilterRef Branches => new(_arena, _node?.Branches);
 
@@ -92,7 +92,7 @@ public readonly struct WebhookEventRef
 
     public WebhookEventFilterRef PathsIgnore => new(_arena, _node?.PathsIgnore);
 
-    public StringRefList Workflows => new(_arena, _node?.Workflows);
+    public StringRefList Workflows => new(_arena, _node?.Workflows ?? default);
 }
 
 /// <summary>A branch/path/tag filter within a webhook event.</summary>
@@ -111,7 +111,7 @@ public readonly struct WebhookEventFilterRef
 
     public StringRef Name => new(_arena, _node?.Name ?? default);
 
-    public StringRefList Values => new(_arena, _node?.Values);
+    public StringRefList Values => new(_arena, _node?.Values ?? default);
 }
 
 /// <summary>A <c>schedule:</c> event containing cron entries.</summary>
@@ -193,7 +193,7 @@ public readonly struct DispatchInputRef : INodeRef<DispatchInput, DispatchInputR
 
     public DispatchInputType Type => _node?.Type ?? DispatchInputType.None;
 
-    public StringRefList Options => new(_arena, _node?.Options);
+    public StringRefList Options => new(_arena, _node?.Options ?? default);
 
     public TextRange Range => _node?.Range ?? default;
 }
@@ -311,7 +311,7 @@ public readonly struct RepositoryDispatchEventRef
 
     public bool HasValue => _node is not null && _arena is not null;
 
-    public StringRefList Types => new(_arena, _node?.Types);
+    public StringRefList Types => new(_arena, _node?.Types ?? default);
 }
 
 /// <summary>An image version event (e.g. container image update triggers).</summary>
@@ -328,7 +328,7 @@ public readonly struct ImageVersionEventRef
 
     public bool HasValue => _node is not null && _arena is not null;
 
-    public StringRefList Names => new(_arena, _node?.Names);
+    public StringRefList Names => new(_arena, _node?.Names ?? default);
 
-    public StringRefList Versions => new(_arena, _node?.Versions);
+    public StringRefList Versions => new(_arena, _node?.Versions ?? default);
 }

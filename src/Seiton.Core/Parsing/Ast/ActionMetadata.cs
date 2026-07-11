@@ -65,7 +65,7 @@ public sealed class ActionMetadataRuns
 
     public StringNodeId Entrypoint { get; init; }
 
-    public IReadOnlyList<StringNodeId>? Args { get; init; }
+    public StringIdRange Args { get; init; }
 
     public Env? Env { get; init; }
 

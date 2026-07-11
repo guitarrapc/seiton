@@ -13,9 +13,9 @@ public sealed class Workflow
 
     public Env? Env { get; internal set; }
 
-    public Defaults? Defaults { get; internal set; }
+    public DefaultsId Defaults { get; internal set; }
 
-    public Concurrency? Concurrency { get; internal set; }
+    public ConcurrencyId Concurrency { get; internal set; }
 
     public SliceMap<Job> Jobs { get; internal set; }
 

@@ -155,7 +155,7 @@ public static partial class WorkflowParser
         BoolNodeId required = default;
         StringNodeId defaultValue = default;
         DispatchInputType type = DispatchInputType.None;
-        IReadOnlyList<StringNodeId>? options = null;
+        StringIdRange options = default;
         ulong seen = 0;
 
         if (reader.CurrentKind != YamlEventKind.MappingStart)

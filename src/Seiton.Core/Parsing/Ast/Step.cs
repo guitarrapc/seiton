@@ -106,12 +106,12 @@ public sealed class ExecAction : StepExec
 /// <summary>Execution payload for a <c>wait:</c> step.</summary>
 public sealed class ExecWait : StepExec
 {
-    public IReadOnlyList<StringNodeId>? Targets { get; set; }
+    public StringIdRange Targets { get; set; }
 
     internal void Reset()
     {
         Kind = StepExecKind.Wait;
-        Targets = null;
+        Targets = default;
         Range = default;
     }
 }

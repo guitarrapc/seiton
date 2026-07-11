@@ -16,7 +16,7 @@ public sealed class AstArenaObjectPoolTests
         await Assert.That(job).IsNotNull();
         await Assert.That(job.Id.HasValue).IsFalse();
         await Assert.That(job.Name.HasValue).IsFalse();
-        await Assert.That(job.Needs).IsNull();
+        await Assert.That(job.Needs.HasValue).IsFalse();
         await Assert.That(job.Steps).IsNull();
         await Assert.That(job.RunsOn).IsNull();
     }
@@ -81,7 +81,7 @@ public sealed class AstArenaObjectPoolTests
         await Assert.That(job2).IsSameReferenceAs(job1);
         await Assert.That(job2.Name.HasValue).IsFalse();
         await Assert.That(job2.Steps).IsNull();
-        await Assert.That(job2.Needs).IsNull();
+        await Assert.That(job2.Needs.HasValue).IsFalse();
         arena.Dispose();
     }
 

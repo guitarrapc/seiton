@@ -8,38 +8,38 @@
 public readonly struct StringRefList
 {
     private readonly AstArena? _arena;
-    private readonly IReadOnlyList<StringNodeId>? _nodes;
+    private readonly StringIdRange _range;
 
-    internal StringRefList(AstArena? arena, IReadOnlyList<StringNodeId>? nodes)
+    internal StringRefList(AstArena? arena, StringIdRange range)
     {
         _arena = arena;
-        _nodes = nodes;
+        _range = range;
     }
 
-    public bool HasValue => _nodes is not null;
+    public bool HasValue => _arena is not null && _range.HasValue;
 
-    public int Count => _nodes?.Count ?? 0;
+    public int Count => _range.Count;
 
-    public StringRef this[int index] => new(_arena, _nodes![index]);
+    public StringRef this[int index] => new(_arena, _arena!.GetStringIdAt(_range, index));
 
-    public Enumerator GetEnumerator() => new(_arena, _nodes);
+    public Enumerator GetEnumerator() => new(_arena, _range);
 
     public struct Enumerator
     {
         private readonly AstArena? _arena;
-        private readonly IReadOnlyList<StringNodeId>? _nodes;
+        private readonly StringIdRange _range;
         private int _index;
 
-        internal Enumerator(AstArena? arena, IReadOnlyList<StringNodeId>? nodes)
+        internal Enumerator(AstArena? arena, StringIdRange range)
         {
             _arena = arena;
-            _nodes = nodes;
+            _range = range;
             _index = -1;
         }
 
-        public bool MoveNext() => _nodes is not null && ++_index < _nodes.Count;
+        public bool MoveNext() => _arena is not null && ++_index < _range.Count;
 
-        public readonly StringRef Current => new(_arena, _nodes![_index]);
+        public readonly StringRef Current => new(_arena, _arena!.GetStringIdAt(_range, _index));
     }
 }
 

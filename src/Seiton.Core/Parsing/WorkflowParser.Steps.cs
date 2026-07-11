@@ -1,4 +1,4 @@
-using System.Text;
+﻿using System.Text;
 using Seiton.Core.Generated;
 using Seiton.Core.Parsing.Ast;
 
@@ -210,7 +210,7 @@ public static partial class WorkflowParser
         SliceMap<StringNodeId>? withInputs = null;
         StringNodeId dockerEntrypoint = default;
         StringNodeId dockerArgs = default;
-        ArenaList<StringNodeId> waitTargets = default;
+        StringIdRange waitTargets = default;
         StringNodeId cancelTarget = default;
         ArenaList<Step> parallelSteps = default;
         TextPosition parallelKeyMark = default;
@@ -716,7 +716,7 @@ public static partial class WorkflowParser
                     var execWait = arena.AllocExecWait();
                     execWait.Kind = StepExecKind.Wait;
                     execWait.Targets = waitTargets;
-                    execWait.Range = waitTargets.Count > 0 ? arena.GetStringRange(waitTargets[0]) : default;
+                    execWait.Range = waitTargets.Count > 0 ? arena.GetStringRange(arena.GetStringIdAt(waitTargets, 0)) : default;
                     execRange = execWait.Range;
                     exec = execWait;
                     break;

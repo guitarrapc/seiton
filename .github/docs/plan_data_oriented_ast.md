@@ -77,7 +77,7 @@ CLI は診断のみを参照し AST 型に依存しない (実測: `src/Seiton/`
 | Stage | 内容 | 検証 |
 |---|---|---|
 | 1 ✅ (2026-07-11 完了) | Ref ファサードを**現行クラスの上に**導入 (`JobRef` が Job オブジェクトを内包)。`IPass`/`RuleBase`/`WorkflowVisitor` 署名と全ルール・テストを Ref へ移行。三値 null 11 ルールと同一性キー 1 ルールを修正 | 全テスト green。ベンチマーク中立 (±10% 以内) |
-| 2 | ストレージ差替: 複合ノード → struct 行テーブル + typed ID、子リスト → レンジ、SliceMap → 共有テーブル。パーサ構築サイト書換。Ref 内部を (arena, id) に差替 — **ルールコードは不変** | 全テスト green。Allocated 減少を確認 |
+| 2 (進行中) | ストレージ差替: 複合ノード → struct 行テーブル + typed ID、子リスト → レンジ、SliceMap → 共有テーブル。パーサ構築サイト書換。Ref 内部を (arena, id) に差替 — **ルールコードは不変** | 全テスト green。Allocated 減少を確認 |
 | 3 | `IncrementalParseContext` を row-copy + ハンドル再配置へ再設計 (`BulkImportFrom` を全テーブル + レンジ再マップに拡張) | Incremental 系 + Playground desktop テスト green |
 | 4 | `AstNodePool` / オブジェクトプール / 全 `Reset()` / 手動登録の削除。プール系抽象の統合。DEBUG 世代カウンタ | 全テスト green。`Reset(` が src から消えること |
 | 5 | spec 更新 (`Seiton_Parser_csharp_spec.md` §0.5/§2、`Seiton_Linter_csharp_spec.md`、skills)、全ベンチマーク比較の記録 | spec と実装の一致 |
@@ -95,6 +95,20 @@ CLI は診断のみを参照し AST 型に依存しない (実測: `src/Seiton/`
 - `ExprUndefinedVarRule` → `DynamicContextTypeBuilder` 境界は `.Node` 内部アクセサでブリッジ (Stage 2 で本移行)。
 - 検証: Seiton.Core.Tests 2005 / Seiton.Tests 432 / Seiton.Update.Tests 193 / Playground desktop 系 52 全 green。CoreParsing / CoreLint ベンチは全ケースで baseline 以下 (Mean −5〜17%、gate +10% 以内)。
 
+## 6.1 Stage 2 実装記録 (進行中)
+
+完了した増分 (各増分で全テスト green を維持):
+
+1. **基盤** (2026-07-12): `NodeTable<T>` (ArrayPool-backed 行テーブル、Reset/CopyFrom/縮退)。typed ID は `Ast/NodeIds.cs`、行 struct は `Ast/SectionData.cs`。
+2. **葉ノード 6 種** (2026-07-12): `Concurrency`/`Environment`/`Credentials`/`Snapshot`/`Defaults`/`DefaultsRun` をクラス+プールから行テーブル+ID へ。クラスと `AstNodePool` エントリは削除。
+3. **文字列リスト → `StringIdRange`** (2026-07-12): `IReadOnlyList<StringNodeId>` フィールド 12 個 (needs/labels/types/values/options/ports/volumes/targets/args/workflows/names/versions) を共有 `StringNodeId[]` ストアへの (first,count) レンジへ。この経路の `ArenaList` boxing と `RegisterSliceMapBuffer` 登録を廃止。
+
+**incremental parse との整合の要**: 継ぎ足し (セクション/ジョブの再利用) は「同一バイトオフセット + 同一内容ハッシュ」の場合にのみ発生するため、新テーブルを `BulkImportFrom` で**全行コピー**すれば、再利用ノード内の ID は新 arena でもそのまま解決できる。テーブル追加時は (a) `ResetForSource`/`Dispose` のリセット、(b) `BulkImportFrom` のコピー、(c) discard パスの `ReleaseAll` の 3 点を配線すること。
+
+意味論の写像 (テスト移行時の規約): 旧 `null` (キー不在) → `default` ID/レンジ (`HasValue == false`)。旧「キーは在るが空」→ `HasValue == true` かつ `Count == 0`。`ParseStringOrStringSequence` は回復パスでも常に present レンジを返す (旧実装で default `ArenaList` が boxing により非 null になっていた挙動の保存)。
+
+残作業: Permissions/Env/Runner、Strategy/Matrix/RawYaml (tagged union)、Container/Services/WorkflowCall、SliceMap → 共有 `(Utf8Slice, int)` エントリテーブル、Events tagged union、Exec*/Step/Job/Workflow 行化、ActionMetadata 族。
+
 ## 7. Lessons Learned (随時追記)
 
 - (2026-07-11) `ArenaList<T> : IReadOnlyList<T>` を interface 型フィールドに代入すると boxing する。「struct で包めばゼロアロケ」はフィールドの静的型が interface なら成立しない。
@@ -102,3 +116,5 @@ CLI は診断のみを参照し AST 型に依存しない (実測: `src/Seiton/`
 - (2026-07-11 Stage 1) default ref の安全連鎖 (`x.Permissions.Scopes` が絶対に throw しない) は、ルール側の `?.`/null ガードの大半をそのまま削除できるため、移行コストを大きく下げた。一方 `is { }` パターンは struct では常に true になるため、`is { HasValue: true }` への書換が必要 (機械的置換の罠)。
 - (2026-07-11 Stage 1) 判別子 enum に `None = 0` を持たせると default ref の `Kind` が誤って有効値 (旧 `Run = 0`) を返す事故を防げる。tagged union 化する際は必ず None を先頭に置く。
 - (2026-07-11 Stage 1) 静的 abstract interface メンバ (`INodeRef<TNode,TSelf>.Create`) は internal メンバとして公開 struct に実装でき、マップ/リストの生成ボイラープレートを 1/5 に圧縮できた。AOT でも問題なし (値型 generic は特殊化される)。
+- (2026-07-12 Stage 2) **arena 再利用バグの教訓**: 共有リストストアの `Reset()` 配線漏れで、count がパースを跨いで蓄積 → 保持上限超過で配列だけ解放 (count 残留) → 次パースで `IndexOutOfRange` → fatal 化。単発パース中心のテストでは検出できず、**ベンチマークの「速すぎる数値 + 全サイズ一律の Allocated」が実質の検出器**だった (壊れた op は fatal 即返しで速い)。対策: (a) `NodeTable` は配列解放時に必ず count も 0 化する不変条件を実装に内蔵、(b) `AstArenaReuseTests` で同一スレッド 40 回再利用の黒箱回帰を常設、(c) ベンチ結果が不自然に良い時はまず正しさを疑う (`jobs+diags` の積算検証)。
+- (2026-07-12 Stage 2) CRLF リポジトリでは perl/sed の複数行パターン (`\n` アンカー) がサイレントに不発になる。ライフサイクル配線 (Reset/Release/CopyFrom の 3 点セット) は必ず grep で着地確認するか Edit ツールで行う。

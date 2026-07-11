@@ -177,10 +177,10 @@ public static partial class WorkflowParser
         var range = BuildScalarLocation(mappingStart, 1);
         var hasImage = false;
         StringNodeId image = default;
-        Credentials? credentials = null;
+        CredentialsId credentials = default;
         Env? env = null;
-        IReadOnlyList<StringNodeId>? ports = null;
-        IReadOnlyList<StringNodeId>? volumes = null;
+        StringIdRange ports = default;
+        StringIdRange volumes = default;
         StringNodeId options = default;
         StringNodeId entrypoint = default;
         StringNodeId command = default;
@@ -379,7 +379,7 @@ public static partial class WorkflowParser
         return mappingContainer;
     }
 
-    private static Credentials? ParseCredentials<TReader>(ref TReader reader, AstArena arena, ref PooledBuffer<Diagnostic> diagnostics, ReadOnlySpan<byte> source, Utf8Slice jobId, Utf8Slice serviceName, bool isService, TextPosition credentialsKeyMark)
+    private static CredentialsId ParseCredentials<TReader>(ref TReader reader, AstArena arena, ref PooledBuffer<Diagnostic> diagnostics, ReadOnlySpan<byte> source, Utf8Slice jobId, Utf8Slice serviceName, bool isService, TextPosition credentialsKeyMark)
         where TReader : IYamlStreamReader, allows ref struct
     {
         // spec §3.18: expression form is accepted as Credentials { Expression }
@@ -413,13 +413,14 @@ public static partial class WorkflowParser
             if (crExprErr) AddError(ref diagnostics, $"\"credentials\" section is scalar node but mapping node is expected", crExprMark);
             if (!expression.HasValue)
             {
-                return null;
+                return default;
             }
 
-            var exprCredentials = arena.AllocCredentials();
-            exprCredentials.Expression = expression;
-            exprCredentials.Range = arena.GetStringRange(expression);
-            return exprCredentials;
+            return arena.AddCredentials(new CredentialsData
+            {
+                Expression = expression,
+                Range = arena.GetStringRange(expression),
+            });
         }
 
         if (reader.CurrentKind != YamlEventKind.MappingStart)
@@ -533,11 +534,12 @@ public static partial class WorkflowParser
             AddError(ref diagnostics, "both \"username\" and \"password\" must be specified in \"credentials\" section", credentialsKeyMark);
         }
 
-        var mappingCredentials = arena.AllocCredentials();
-        mappingCredentials.Username = username;
-        mappingCredentials.Password = password;
-        mappingCredentials.Range = range;
-        return mappingCredentials;
+        return arena.AddCredentials(new CredentialsData
+        {
+            Username = username,
+            Password = password,
+            Range = range,
+        });
     }
 
     private static void ParseStringMapping<TReader>(ref TReader reader, AstArena arena, ref PooledBuffer<Diagnostic> diagnostics, ReadOnlySpan<byte> source, string error, ExpressionValidationContext? expressionContext = null)

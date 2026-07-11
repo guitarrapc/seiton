@@ -526,8 +526,8 @@ public static partial class WorkflowParser
         StringNodeId runNameNode = default;
         Permissions? permissionsNode = null;
         Env? envNode = null;
-        Defaults? defaultsNode = null;
-        Concurrency? concurrencyNode = null;
+        DefaultsId defaultsNode = default;
+        ConcurrencyId concurrencyNode = default;
         var hasOn = false;
         var hasJobs = false;
         var lastRootKeyMark = new TextPosition(0, 1, 1);
@@ -1064,7 +1064,7 @@ public static partial class WorkflowParser
         finally { vars.Dispose(); }
     }
 
-    private static Defaults? ParseDefaultsNode<TReader>(ref TReader reader, AstArena arena, ref PooledBuffer<Diagnostic> diagnostics, string error, ExpressionValidationContext? expressionContext = null, string sectionContext = "")
+    private static DefaultsId ParseDefaultsNode<TReader>(ref TReader reader, AstArena arena, ref PooledBuffer<Diagnostic> diagnostics, string error, ExpressionValidationContext? expressionContext = null, string sectionContext = "")
         where TReader : IYamlStreamReader, allows ref struct
     {
         if (reader.CurrentKind != YamlEventKind.MappingStart)
@@ -1249,18 +1249,21 @@ public static partial class WorkflowParser
             return default;
         }
 
-        var defaultsRun = arena.AllocDefaultsRun();
-        defaultsRun.Shell = shellNode;
-        defaultsRun.WorkingDirectory = workingDirectoryNode;
-        defaultsRun.Range = shellNode.HasValue ? arena.GetStringRange(shellNode) : workingDirectoryNode.HasValue ? arena.GetStringRange(workingDirectoryNode) : range;
+        var defaultsRun = arena.AddDefaultsRun(new DefaultsRunData
+        {
+            Shell = shellNode,
+            WorkingDirectory = workingDirectoryNode,
+            Range = shellNode.HasValue ? arena.GetStringRange(shellNode) : workingDirectoryNode.HasValue ? arena.GetStringRange(workingDirectoryNode) : range,
+        });
 
-        var defaults = arena.AllocDefaults();
-        defaults.Run = defaultsRun;
-        defaults.Range = range;
-        return defaults;
+        return arena.AddDefaults(new DefaultsData
+        {
+            Run = defaultsRun,
+            Range = range,
+        });
     }
 
-    private static Concurrency? ParseConcurrencyNode<TReader>(ref TReader reader, AstArena arena, ref PooledBuffer<Diagnostic> diagnostics, string error, ExpressionValidationContext expressionContext, TextPosition keyMark, string sectionContext = "")
+    private static ConcurrencyId ParseConcurrencyNode<TReader>(ref TReader reader, AstArena arena, ref PooledBuffer<Diagnostic> diagnostics, string error, ExpressionValidationContext expressionContext, TextPosition keyMark, string sectionContext = "")
         where TReader : IYamlStreamReader, allows ref struct
     {
         if (reader.CurrentKind == YamlEventKind.Scalar)
@@ -1268,13 +1271,14 @@ public static partial class WorkflowParser
             var group = ParseStringAndValidateExpression(ref reader, arena, ref diagnostics, expressionContext, error, parseWholeValueIfNoEmbedded: false);
             if (!group.HasValue)
             {
-                return null;
+                return default;
             }
 
-            var scalarConcurrency = arena.AllocConcurrency();
-            scalarConcurrency.Group = group;
-            scalarConcurrency.Range = arena.GetStringRange(group);
-            return scalarConcurrency;
+            return arena.AddConcurrency(new ConcurrencyData
+            {
+                Group = group,
+                Range = arena.GetStringRange(group),
+            });
         }
 
         if (reader.CurrentKind != YamlEventKind.MappingStart)
@@ -1384,12 +1388,13 @@ public static partial class WorkflowParser
             return default;
         }
 
-        var concurrency = arena.AllocConcurrency();
-        concurrency.Group = groupNode;
-        concurrency.CancelInProgress = cancelInProgressNode;
-        concurrency.Queue = queueNode;
-        concurrency.Range = range;
-        return concurrency;
+        return arena.AddConcurrency(new ConcurrencyData
+        {
+            Group = groupNode,
+            CancelInProgress = cancelInProgressNode,
+            Queue = queueNode,
+            Range = range,
+        });
     }
 
     private static StringNodeId ParseConcurrencyQueue<TReader>(ref TReader reader, AstArena arena, ref PooledBuffer<Diagnostic> diagnostics, ExpressionValidationContext context, string sectionContext)

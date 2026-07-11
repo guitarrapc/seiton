@@ -1,4 +1,4 @@
-namespace Seiton.Core.Parsing.Ast;
+﻿namespace Seiton.Core.Parsing.Ast;
 
 // Section nodes are arena-pooled (see AstArena.Alloc* methods): properties are settable
 // and each class has an internal Reset() releasing references, mirroring Job/Step.
@@ -57,81 +57,10 @@ public readonly struct EnvVar
     public StringNodeId Value { get; init; }
 }
 
-/// <summary>The <c>defaults:</c> section.</summary>
-public sealed class Defaults
-{
-    public DefaultsRun Run { get; set; } = null!;
-
-    public TextRange Range { get; set; }
-
-    internal void Reset()
-    {
-        Run = null!;
-        Range = default;
-    }
-}
-
-/// <summary>The <c>defaults.run:</c> section (default shell and working directory).</summary>
-public sealed class DefaultsRun
-{
-    public StringNodeId Shell { get; set; }
-
-    public StringNodeId WorkingDirectory { get; set; }
-
-    public TextRange Range { get; set; }
-
-    internal void Reset()
-    {
-        Shell = default;
-        WorkingDirectory = default;
-        Range = default;
-    }
-}
-
-/// <summary>The <c>concurrency:</c> block.</summary>
-public sealed class Concurrency
-{
-    public StringNodeId Group { get; set; }
-
-    public BoolNodeId CancelInProgress { get; set; }
-
-    public StringNodeId Queue { get; set; }
-
-    public TextRange Range { get; set; }
-
-    internal void Reset()
-    {
-        Group = default;
-        CancelInProgress = default;
-        Queue = default;
-        Range = default;
-    }
-}
-
-/// <summary>The <c>environment:</c> block for deployment environments.</summary>
-public sealed class Environment
-{
-    public StringNodeId Name { get; set; }
-
-    public StringNodeId Url { get; set; }
-
-    public BoolNodeId Deployment { get; set; }
-
-    public TextRange Range { get; set; }
-
-    internal void Reset()
-    {
-        Name = default;
-        Url = default;
-        Deployment = default;
-        Range = default;
-    }
-}
-
 /// <summary>The <c>runs-on:</c> specification for job runner selection.</summary>
 public sealed class Runner
 {
-    public IReadOnlyList<StringNodeId>? Labels { get; set; }
+    public StringIdRange Labels { get; set; }
 
     public StringNodeId LabelsExpr { get; set; }
 
@@ -141,7 +70,7 @@ public sealed class Runner
 
     internal void Reset()
     {
-        Labels = null;
+        Labels = default;
         LabelsExpr = default;
         Group = default;
         Range = default;
@@ -270,13 +199,13 @@ public sealed class Container
 {
     public StringNodeId Image { get; set; }
 
-    public Credentials? Credentials { get; set; }
+    public CredentialsId Credentials { get; set; }
 
     public Env? Env { get; set; }
 
-    public IReadOnlyList<StringNodeId>? Ports { get; set; }
+    public StringIdRange Ports { get; set; }
 
-    public IReadOnlyList<StringNodeId>? Volumes { get; set; }
+    public StringIdRange Volumes { get; set; }
 
     public StringNodeId Options { get; set; }
 
@@ -289,10 +218,10 @@ public sealed class Container
     internal void Reset()
     {
         Image = default;
-        Credentials = null;
+        Credentials = default;
         Env = null;
-        Ports = null;
-        Volumes = null;
+        Ports = default;
+        Volumes = default;
         Options = default;
         Entrypoint = default;
         Command = default;
@@ -330,26 +259,6 @@ public sealed class Service
     {
         Name = default;
         Container = null!;
-        Range = default;
-    }
-}
-
-/// <summary>Registry credentials for a container image.</summary>
-public sealed class Credentials
-{
-    public StringNodeId Username { get; set; }
-
-    public StringNodeId Password { get; set; }
-
-    public StringNodeId Expression { get; set; }
-
-    public TextRange Range { get; set; }
-
-    internal void Reset()
-    {
-        Username = default;
-        Password = default;
-        Expression = default;
         Range = default;
     }
 }

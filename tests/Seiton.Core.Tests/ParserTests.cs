@@ -169,13 +169,15 @@ public sealed partial class ParserTests
         await Assert.That(result.Workflow.Env is not null).IsTrue();
         await Assert.That(result.Workflow.Env!.Vars is not null).IsTrue();
         await Assert.That(result.Workflow.Env.Vars!.Value.Count).IsEqualTo(1);
-        await Assert.That(result.Workflow.Defaults is not null).IsTrue();
-        await Assert.That(result.Workflow.Defaults!.Run.Shell.HasValue).IsTrue();
-        await Assert.That(result.Workflow.Defaults.Run.WorkingDirectory.HasValue).IsTrue();
-        await Assert.That(result.Workflow.Concurrency is not null).IsTrue();
-        await Assert.That(arena!.GetStringValue(result.Workflow.Concurrency!.Group).Length).IsGreaterThan(0);
-        await Assert.That(result.Workflow.Concurrency.CancelInProgress.HasValue).IsTrue();
-        await Assert.That(arena!.GetBoolValue(result.Workflow.Concurrency.CancelInProgress)).IsTrue();
+        await Assert.That(result.Workflow.Defaults.HasValue).IsTrue();
+        var defaults = new DefaultsRef(arena, result.Workflow.Defaults);
+        await Assert.That(defaults.Run.Shell.HasValue).IsTrue();
+        await Assert.That(defaults.Run.WorkingDirectory.HasValue).IsTrue();
+        await Assert.That(result.Workflow.Concurrency.HasValue).IsTrue();
+        var concurrency = new ConcurrencyRef(arena, result.Workflow.Concurrency);
+        await Assert.That(concurrency.Group.Value.Length).IsGreaterThan(0);
+        await Assert.That(concurrency.CancelInProgress.HasValue).IsTrue();
+        await Assert.That(concurrency.CancelInProgress.Value).IsTrue();
         await Assert.That(result.Diagnostics).IsEmpty();
     }
 
@@ -195,8 +197,8 @@ public sealed partial class ParserTests
         await Assert.That(result.Workflow is not null).IsTrue();
         await Assert.That(result.Workflow!.Permissions is not null).IsTrue();
         await Assert.That(result.Workflow.Permissions!.All.HasValue).IsTrue();
-        await Assert.That(result.Workflow.Concurrency is not null).IsTrue();
-        await Assert.That(arena!.GetStringValue(result.Workflow.Concurrency!.Group).Length).IsGreaterThan(0);
+        await Assert.That(result.Workflow.Concurrency.HasValue).IsTrue();
+        await Assert.That(new ConcurrencyRef(arena, result.Workflow.Concurrency).Group.Value.Length).IsGreaterThan(0);
         await Assert.That(result.Diagnostics).IsEmpty();
     }
 
@@ -1371,10 +1373,11 @@ public sealed partial class ParserTests
         await Assert.That(result.Workflow is not null).IsTrue();
         var job = result.Workflow!.Jobs.Get(bytes, "build"u8);
         await Assert.That(job.Container is not null).IsTrue();
-        await Assert.That(job.Container!.Credentials is not null).IsTrue();
-        await Assert.That(job.Container.Credentials!.Expression.HasValue).IsTrue();
-        await Assert.That(job.Container.Credentials.Username.HasValue).IsFalse();
-        await Assert.That(job.Container.Credentials.Password.HasValue).IsFalse();
+        await Assert.That(job.Container!.Credentials.HasValue).IsTrue();
+        var credentials = new CredentialsRef(arena, job.Container.Credentials);
+        await Assert.That(credentials.Expression.HasValue).IsTrue();
+        await Assert.That(credentials.Username.HasValue).IsFalse();
+        await Assert.That(credentials.Password.HasValue).IsFalse();
     }
 
     [Test]
@@ -1461,8 +1464,8 @@ public sealed partial class ParserTests
         await Assert.That(input.Type).IsEqualTo(DispatchInputType.Choice);
         await Assert.That(input.Required.HasValue).IsTrue();
         await Assert.That(arena!.GetBoolValue(input.Required)).IsTrue();
-        await Assert.That(input.Options is not null).IsTrue();
-        await Assert.That(input.Options!.Count).IsEqualTo(2);
+        await Assert.That(input.Options.HasValue).IsTrue();
+        await Assert.That(input.Options.Count).IsEqualTo(2);
         await Assert.That(result.Diagnostics).IsEmpty();
     }
 
@@ -1494,15 +1497,15 @@ public sealed partial class ParserTests
         var key = Utf8String.FromLowerAscii("operation"u8);
         evt.Inputs!.Value.TryGetValue(bytes, key.Span, out var input);
         await Assert.That(input.Type).IsEqualTo(DispatchInputType.Choice);
-        await Assert.That(input.Options!.Count).IsEqualTo(3);
+        await Assert.That(input.Options.Count).IsEqualTo(3);
         // Empty string in options is legitimate for choice-type inputs (e.g. "no selection" option).
         // Parser must NOT emit a diagnostic for empty option elements.
         var emptyDiag = result.Diagnostics.Where(d => d.Message.Contains("option should not be empty")).ToArray();
         await Assert.That(emptyDiag.Length).IsEqualTo(0);
         // Empty-string option node must report the line of '' itself, not the next item.
         // This validates VYamlStreamAdapter's backward-scan fix for empty-scalar mark positions.
-        var emptyOptionNode = input.Options![0];
-        var disableOptionNode = input.Options![1];
+        var emptyOptionNode = arena!.GetStringIdAt(input.Options, 0);
+        var disableOptionNode = arena!.GetStringIdAt(input.Options, 1);
         await Assert.That(arena!.GetStringRange(emptyOptionNode).StartLine).IsNotEqualTo(arena!.GetStringRange(disableOptionNode).StartLine);
     }
 
@@ -1902,11 +1905,12 @@ public sealed partial class ParserTests
 
         await Assert.That(result.HasFatalError).IsFalse();
         await Assert.That(result.Diagnostics).IsEmpty();
-        await Assert.That(result.Workflow!.Concurrency is not null).IsTrue();
-        await Assert.That(arena!.GetStringValue(result.Workflow.Concurrency!.Group).Length).IsGreaterThan(0);
-        await Assert.That(arena!.GetBoolValue(result.Workflow.Concurrency.CancelInProgress)).IsTrue();
-        await Assert.That(result.Workflow.Concurrency.Queue.HasValue).IsTrue();
-        await Assert.That(Encoding.UTF8.GetString(arena!.GetStringValue(result.Workflow.Concurrency.Queue))).IsEqualTo("single");
+        await Assert.That(result.Workflow!.Concurrency.HasValue).IsTrue();
+        var concurrency = new ConcurrencyRef(arena, result.Workflow.Concurrency);
+        await Assert.That(concurrency.Group.Value.Length).IsGreaterThan(0);
+        await Assert.That(concurrency.CancelInProgress.Value).IsTrue();
+        await Assert.That(concurrency.Queue.HasValue).IsTrue();
+        await Assert.That(concurrency.Queue.Decode()).IsEqualTo("single");
     }
 
     [Test]
@@ -1924,11 +1928,12 @@ public sealed partial class ParserTests
 
         await Assert.That(result.HasFatalError).IsFalse();
         await Assert.That(result.Diagnostics).IsEmpty();
-        await Assert.That(result.Workflow!.Concurrency is not null).IsTrue();
-        await Assert.That(result.Workflow.Concurrency!.Queue.HasValue).IsTrue();
-        await Assert.That(Encoding.UTF8.GetString(arena!.GetStringValue(result.Workflow.Concurrency.Queue))).IsEqualTo("max");
+        await Assert.That(result.Workflow!.Concurrency.HasValue).IsTrue();
+        var concurrency = new ConcurrencyRef(arena, result.Workflow.Concurrency);
+        await Assert.That(concurrency.Queue.HasValue).IsTrue();
+        await Assert.That(concurrency.Queue.Decode()).IsEqualTo("max");
         // cancel-in-progress should be unset when omitted
-        await Assert.That(result.Workflow.Concurrency.CancelInProgress.HasValue).IsFalse();
+        await Assert.That(concurrency.CancelInProgress.HasValue).IsFalse();
     }
 
     [Test]
@@ -1946,8 +1951,8 @@ public sealed partial class ParserTests
 
         await Assert.That(result.HasFatalError).IsFalse();
         await Assert.That(result.Diagnostics).IsEmpty();
-        await Assert.That(result.Workflow!.Concurrency is not null).IsTrue();
-        await Assert.That(result.Workflow.Concurrency!.Queue.HasValue).IsTrue();
+        await Assert.That(result.Workflow!.Concurrency.HasValue).IsTrue();
+        await Assert.That(new ConcurrencyRef(arena, result.Workflow.Concurrency).Queue.HasValue).IsTrue();
     }
 
     [Test]
@@ -1981,8 +1986,8 @@ public sealed partial class ParserTests
 
         await Assert.That(result.HasFatalError).IsFalse();
         await Assert.That(result.Diagnostics).IsEmpty();
-        await Assert.That(result.Workflow!.Concurrency is not null).IsTrue();
-        await Assert.That(result.Workflow.Concurrency!.Queue.HasValue).IsFalse();
+        await Assert.That(result.Workflow!.Concurrency.HasValue).IsTrue();
+        await Assert.That(new ConcurrencyRef(arena, result.Workflow.Concurrency).Queue.HasValue).IsFalse();
     }
 
     [Test]
@@ -2005,8 +2010,8 @@ public sealed partial class ParserTests
         await Assert.That(result.HasFatalError).IsFalse();
         await Assert.That(result.Diagnostics).IsEmpty();
         var job = result.Workflow!.Jobs.Values().First();
-        await Assert.That(job.Concurrency is not null).IsTrue();
-        await Assert.That(Encoding.UTF8.GetString(arena!.GetStringValue(job.Concurrency!.Queue))).IsEqualTo("max");
+        await Assert.That(job.Concurrency.HasValue).IsTrue();
+        await Assert.That(new ConcurrencyRef(arena, job.Concurrency).Queue.Decode()).IsEqualTo("max");
     }
 
     [Test]
@@ -2081,8 +2086,8 @@ public sealed partial class ParserTests
         await Assert.That(result.Workflow!.On.Count).IsEqualTo(1);
         await Assert.That(result.Workflow.On[0]).IsTypeOf<RepositoryDispatchEvent>();
         var evt = (RepositoryDispatchEvent)result.Workflow.On[0];
-        await Assert.That(evt.Types is not null).IsTrue();
-        await Assert.That(evt.Types!.Count).IsEqualTo(2);
+        await Assert.That(evt.Types.HasValue).IsTrue();
+        await Assert.That(evt.Types.Count).IsEqualTo(2);
         await Assert.That(result.Diagnostics).IsEmpty();
     }
 
@@ -2136,8 +2141,8 @@ public sealed partial class ParserTests
             await Assert.That(result.Workflow!.On.Count).IsEqualTo(1);
             await Assert.That(result.Workflow.On[0]).IsTypeOf<ImageVersionEvent>();
             var evt = (ImageVersionEvent)result.Workflow.On[0];
-            await Assert.That(evt.Names?.Count ?? 0).IsEqualTo(c.ExpectedNames);
-            await Assert.That(evt.Versions?.Count ?? 0).IsEqualTo(c.ExpectedVersions);
+            await Assert.That(evt.Names.Count).IsEqualTo(c.ExpectedNames);
+            await Assert.That(evt.Versions.Count).IsEqualTo(c.ExpectedVersions);
             await Assert.That(result.Diagnostics).IsEmpty();
         }
     }
@@ -3165,8 +3170,8 @@ public sealed partial class ParserTests
         var job = result.Workflow.Jobs.Get(bytes, "build"u8);
         await Assert.That(job.Name.HasValue).IsTrue();
         await Assert.That(job.RunsOn is not null).IsTrue();
-        await Assert.That(job.RunsOn!.Labels is not null).IsTrue();
-        await Assert.That(job.RunsOn.Labels!.Count).IsEqualTo(1);
+        await Assert.That(job.RunsOn!.Labels.HasValue).IsTrue();
+        await Assert.That(job.RunsOn.Labels.Count).IsEqualTo(1);
         await Assert.That(job.TimeoutMinutes.HasValue).IsTrue();
         await Assert.That(job.ContinueOnError.HasValue).IsTrue();
         await Assert.That(arena!.GetBoolValue(job.ContinueOnError)).IsFalse();
@@ -3289,7 +3294,7 @@ public sealed partial class ParserTests
         await Assert.That(job.Strategy.Matrix is not null).IsTrue();
         await Assert.That(job.Container is not null).IsTrue();
         await Assert.That(arena!.GetStringValue(job.Container!.Image).Length).IsGreaterThan(0);
-        await Assert.That(job.Container.Credentials is not null).IsTrue();
+        await Assert.That(job.Container.Credentials.HasValue).IsTrue();
         await Assert.That(job.Services is not null).IsTrue();
         await Assert.That(job.Services!.ServiceMap is not null).IsTrue();
         await Assert.That(job.Services.ServiceMap!.Value.Count).IsEqualTo(1);
@@ -3372,8 +3377,8 @@ public sealed partial class ParserTests
         var runner = result.Workflow!.Jobs.Get(bytes, "build"u8).RunsOn;
         await Assert.That(runner is not null).IsTrue();
         await Assert.That(runner!.Group.HasValue).IsTrue();
-        await Assert.That(runner.Labels is not null).IsTrue();
-        await Assert.That(runner.Labels!.Count).IsEqualTo(2);
+        await Assert.That(runner.Labels.HasValue).IsTrue();
+        await Assert.That(runner.Labels.Count).IsEqualTo(2);
         await Assert.That(runner.LabelsExpr.HasValue).IsFalse();
     }
 
@@ -3398,7 +3403,7 @@ public sealed partial class ParserTests
         var runner = result.Workflow!.Jobs.Get(bytes, "build"u8).RunsOn;
         await Assert.That(runner is not null).IsTrue();
         await Assert.That(runner!.LabelsExpr.HasValue).IsTrue();
-        await Assert.That(runner.Labels).IsNull();
+        await Assert.That(runner.Labels.HasValue).IsFalse();
     }
 
     [Test]
@@ -4652,7 +4657,7 @@ public sealed partial class ParserTests
         await Assert.That(evt).IsTypeOf<WebhookEvent>();
         var webhook = (WebhookEvent)evt;
         await Assert.That(arena!.GetStringValue(webhook.Hook).Length).IsGreaterThan(0);
-        await Assert.That(webhook.Types).IsNull();
+        await Assert.That(webhook.Types.HasValue).IsFalse();
         await Assert.That(webhook.Branches).IsNull();
         await Assert.That(result.Diagnostics).IsEmpty();
     }
@@ -4829,8 +4834,8 @@ public sealed partial class ParserTests
         await Assert.That(workflow.RunName.HasValue).IsTrue();
         await Assert.That(workflow.Permissions is not null).IsTrue();
         await Assert.That(workflow.Env is not null).IsTrue();
-        await Assert.That(workflow.Defaults is not null).IsTrue();
-        await Assert.That(workflow.Concurrency is not null).IsTrue();
+        await Assert.That(workflow.Defaults.HasValue).IsTrue();
+        await Assert.That(workflow.Concurrency.HasValue).IsTrue();
 
         await Assert.That(workflow.On.Count).IsEqualTo(6);
         await Assert.That(workflow.On.Any(static e => e is WebhookEvent)).IsTrue();
@@ -4863,10 +4868,10 @@ public sealed partial class ParserTests
         await Assert.That(callEvent.Outputs!.Value.Count).IsEqualTo(1);
 
         var imageVersionEvent = (ImageVersionEvent)workflow.On.First(static e => e is ImageVersionEvent);
-        await Assert.That(imageVersionEvent.Names is not null).IsTrue();
-        await Assert.That(imageVersionEvent.Names!.Count).IsEqualTo(1);
-        await Assert.That(imageVersionEvent.Versions is not null).IsTrue();
-        await Assert.That(imageVersionEvent.Versions!.Count).IsEqualTo(1);
+        await Assert.That(imageVersionEvent.Names.HasValue).IsTrue();
+        await Assert.That(imageVersionEvent.Names.Count).IsEqualTo(1);
+        await Assert.That(imageVersionEvent.Versions.HasValue).IsTrue();
+        await Assert.That(imageVersionEvent.Versions.Count).IsEqualTo(1);
 
         var buildKey = Utf8String.FromLowerAscii("build"u8);
         var callKey = Utf8String.FromLowerAscii("call"u8);
@@ -4874,14 +4879,14 @@ public sealed partial class ParserTests
         await Assert.That(workflow.Jobs.ContainsKey(bytes, callKey.Span)).IsTrue();
 
         var buildJob = workflow.Jobs.Get(bytes, "build"u8);
-        await Assert.That(buildJob.Needs is not null).IsTrue();
+        await Assert.That(buildJob.Needs.HasValue).IsTrue();
         await Assert.That(buildJob.RunsOn is not null).IsTrue();
-        await Assert.That(buildJob.Environment is not null).IsTrue();
+        await Assert.That(buildJob.Environment.HasValue).IsTrue();
         await Assert.That(buildJob.Permissions is not null).IsTrue();
-        await Assert.That(buildJob.Concurrency is not null).IsTrue();
+        await Assert.That(buildJob.Concurrency.HasValue).IsTrue();
         await Assert.That(buildJob.Outputs is not null).IsTrue();
         await Assert.That(buildJob.Env is not null).IsTrue();
-        await Assert.That(buildJob.Defaults is not null).IsTrue();
+        await Assert.That(buildJob.Defaults.HasValue).IsTrue();
         await Assert.That(buildJob.If.HasValue).IsTrue();
         await Assert.That(buildJob.TimeoutMinutes.HasValue).IsTrue();
         await Assert.That(buildJob.ContinueOnError.HasValue).IsTrue();
@@ -4959,11 +4964,12 @@ public sealed partial class ParserTests
         await Assert.That(HasRange(workflow.Permissions!.Range)).IsTrue();
         await Assert.That(workflow.Env is not null).IsTrue();
         await Assert.That(HasRange(workflow.Env!.Range)).IsTrue();
-        await Assert.That(workflow.Defaults is not null).IsTrue();
-        await Assert.That(HasRange(workflow.Defaults!.Range)).IsTrue();
-        await Assert.That(HasRange(workflow.Defaults.Run.Range)).IsTrue();
-        await Assert.That(workflow.Concurrency is not null).IsTrue();
-        await Assert.That(HasRange(workflow.Concurrency!.Range)).IsTrue();
+        await Assert.That(workflow.Defaults.HasValue).IsTrue();
+        var defaults = new DefaultsRef(arena, workflow.Defaults);
+        await Assert.That(HasRange(defaults.Range)).IsTrue();
+        await Assert.That(HasRange(defaults.Run.Range)).IsTrue();
+        await Assert.That(workflow.Concurrency.HasValue).IsTrue();
+        await Assert.That(HasRange(new ConcurrencyRef(arena, workflow.Concurrency).Range)).IsTrue();
 
         var buildJob = workflow.Jobs.Get(bytes, "build"u8);
         await Assert.That(HasRange(buildJob.Range)).IsTrue();
@@ -4973,8 +4979,8 @@ public sealed partial class ParserTests
         await Assert.That(HasRange(buildJob.Strategy.Matrix!.Range)).IsTrue();
         await Assert.That(buildJob.Container is not null).IsTrue();
         await Assert.That(HasRange(buildJob.Container!.Range)).IsTrue();
-        await Assert.That(buildJob.Container.Credentials is not null).IsTrue();
-        await Assert.That(HasRange(buildJob.Container.Credentials!.Range)).IsTrue();
+        await Assert.That(buildJob.Container.Credentials.HasValue).IsTrue();
+        await Assert.That(HasRange(new CredentialsRef(arena, buildJob.Container.Credentials).Range)).IsTrue();
         await Assert.That(buildJob.Services is not null).IsTrue();
         await Assert.That(HasRange(buildJob.Services!.Range)).IsTrue();
         await Assert.That(buildJob.Steps is not null).IsTrue();
@@ -6985,10 +6991,10 @@ public sealed partial class ParserTests
         var runner = result.Workflow!.Jobs.Get(bytes, "test"u8)!.RunsOn;
         await Assert.That(runner).IsNotNull();
         var labels = runner!.Labels;
-        await Assert.That(labels).IsNotNull();
-        var labelStr = Encoding.UTF8.GetString(arena!.GetStringValue(labels![0]));
+        await Assert.That(labels.HasValue).IsTrue();
+        var labelStr = Encoding.UTF8.GetString(arena!.GetStringValue(arena!.GetStringIdAt(labels, 0)));
         await Assert.That(labelStr).IsEqualTo("ubuntu-latest");
-        var range = arena!.GetStringRange(labels[0]);
+        var range = arena!.GetStringRange(arena!.GetStringIdAt(labels, 0));
         await Assert.That(range.StartLine).IsEqualTo(4);
         await Assert.That(range.StartColumn).IsEqualTo(14);
     }
@@ -8210,9 +8216,9 @@ public sealed partial class ParserTests
 
         await Assert.That(result.HasFatalError).IsFalse();
         var testJob = result.Workflow!.Jobs.Get(bytes, "test"u8);
-        await Assert.That(testJob.Needs).IsNotNull();
-        await Assert.That(testJob.Needs!.Count).IsEqualTo(1);
-        await Assert.That(arena!.GetStringValue(testJob.Needs[0]).ToArray()).IsEquivalentTo("build"u8.ToArray());
+        await Assert.That(testJob.Needs.HasValue).IsTrue();
+        await Assert.That(testJob.Needs.Count).IsEqualTo(1);
+        await Assert.That(arena!.GetStringValue(arena!.GetStringIdAt(testJob.Needs, 0)).ToArray()).IsEquivalentTo("build"u8.ToArray());
         arena?.Dispose();
     }
 
@@ -8242,8 +8248,8 @@ public sealed partial class ParserTests
 
         await Assert.That(result.HasFatalError).IsFalse();
         var deployJob = result.Workflow!.Jobs.Get(bytes, "deploy"u8);
-        await Assert.That(deployJob.Needs).IsNotNull();
-        await Assert.That(deployJob.Needs!.Count).IsEqualTo(2);
+        await Assert.That(deployJob.Needs.HasValue).IsTrue();
+        await Assert.That(deployJob.Needs.Count).IsEqualTo(2);
         arena?.Dispose();
     }
 
@@ -8312,7 +8318,7 @@ public sealed partial class ParserTests
 
         await Assert.That(result.HasFatalError).IsFalse();
         var job = result.Workflow!.Jobs.Get(bytes, "deploy"u8);
-        await Assert.That(job.Environment).IsNotNull();
+        await Assert.That(job.Environment.HasValue).IsTrue();
         arena?.Dispose();
     }
 
@@ -8336,7 +8342,7 @@ public sealed partial class ParserTests
 
         await Assert.That(result.HasFatalError).IsFalse();
         var job = result.Workflow!.Jobs.Get(bytes, "deploy"u8);
-        await Assert.That(job.Environment).IsNotNull();
+        await Assert.That(job.Environment.HasValue).IsTrue();
         arena?.Dispose();
     }
 
@@ -8360,7 +8366,7 @@ public sealed partial class ParserTests
 
         await Assert.That(result.HasFatalError).IsFalse();
         var job = result.Workflow!.Jobs.Get(bytes, "build"u8);
-        await Assert.That(job.Concurrency).IsNotNull();
+        await Assert.That(job.Concurrency.HasValue).IsTrue();
         arena?.Dispose();
     }
 
@@ -8385,7 +8391,7 @@ public sealed partial class ParserTests
 
         await Assert.That(result.HasFatalError).IsFalse();
         var job = result.Workflow!.Jobs.Get(bytes, "build"u8);
-        await Assert.That(job.Defaults).IsNotNull();
+        await Assert.That(job.Defaults.HasValue).IsTrue();
         arena?.Dispose();
     }
 
@@ -8410,10 +8416,11 @@ public sealed partial class ParserTests
 
         await Assert.That(result.HasFatalError).IsFalse();
         var job = result.Workflow!.Jobs.Get(bytes, "build"u8);
-        await Assert.That(job.Snapshot).IsNotNull();
-        await Assert.That(job.Snapshot!.Version.HasValue).IsTrue();
-        await Assert.That(job.Snapshot.ImageName.HasValue).IsTrue();
-        await Assert.That(job.Snapshot.If.HasValue).IsTrue();
+        await Assert.That(job.Snapshot.HasValue).IsTrue();
+        var snapshot = new SnapshotRef(arena, job.Snapshot);
+        await Assert.That(snapshot.Version.HasValue).IsTrue();
+        await Assert.That(snapshot.ImageName.HasValue).IsTrue();
+        await Assert.That(snapshot.If.HasValue).IsTrue();
         arena?.Dispose();
     }
 

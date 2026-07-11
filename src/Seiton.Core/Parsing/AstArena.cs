@@ -157,6 +157,18 @@ internal sealed class AstArena : IDisposable
     private FloatNodeData[] _floats;
     private int _floatCount;
 
+    // Data-oriented composite node tables (Stage 2). Rows are addressed by typed IDs
+    // (ConcurrencyId, ...) and copied wholesale by BulkImportFrom for incremental parse.
+    // Shared list store for StringNodeId ranges (needs, labels, filter values, ...).
+    private NodeTable<StringNodeId> _stringIdItems;
+
+    private NodeTable<ConcurrencyData> _concurrencyTable;
+    private NodeTable<EnvironmentData> _environmentTable;
+    private NodeTable<CredentialsData> _credentialsTable;
+    private NodeTable<SnapshotData> _snapshotTable;
+    private NodeTable<DefaultsData> _defaultsTable;
+    private NodeTable<DefaultsRunData> _defaultsRunTable;
+
     // Object pools for composite AST nodes (reused across parse calls)
     private Job[] _jobs;
     private int _jobCount;
@@ -186,10 +198,6 @@ internal sealed class AstArena : IDisposable
     // Same reuse semantics as the Job/Step pools above, via AstNodePool<T>.
     private AstNodePool<Permissions> _permissionsPool = new(DefaultSectionNodeCapacity, static n => n.Reset());
     private AstNodePool<Env> _envPool = new(DefaultEnvCapacity, static n => n.Reset());
-    private AstNodePool<Defaults> _defaultsPool = new(DefaultSectionNodeCapacity, static n => n.Reset());
-    private AstNodePool<DefaultsRun> _defaultsRunPool = new(DefaultSectionNodeCapacity, static n => n.Reset());
-    private AstNodePool<Concurrency> _concurrencyPool = new(DefaultSectionNodeCapacity, static n => n.Reset());
-    private AstNodePool<Ast.Environment> _environmentPool = new(DefaultSectionNodeCapacity, static n => n.Reset());
     private AstNodePool<Runner> _runnerPool = new(DefaultRunnerCapacity, static n => n.Reset());
     private AstNodePool<Strategy> _strategyPool = new(DefaultStrategyCapacity, static n => n.Reset());
     private AstNodePool<Matrix> _matrixPool = new(DefaultStrategyCapacity, static n => n.Reset());
@@ -201,9 +209,7 @@ internal sealed class AstArena : IDisposable
     private AstNodePool<Container> _containerPool = new(DefaultSectionNodeCapacity, static n => n.Reset());
     private AstNodePool<Services> _servicesPool = new(DefaultSectionNodeCapacity, static n => n.Reset());
     private AstNodePool<Service> _servicePool = new(DefaultSectionNodeCapacity, static n => n.Reset());
-    private AstNodePool<Credentials> _credentialsPool = new(DefaultSectionNodeCapacity, static n => n.Reset());
     private AstNodePool<WorkflowCall> _workflowCallPool = new(DefaultSectionNodeCapacity, static n => n.Reset());
-    private AstNodePool<Snapshot> _snapshotPool = new(DefaultSectionNodeCapacity, static n => n.Reset());
 
     // D-1: Pooled diagnostics buffer registered by ParseClassified/ParseIncremental.
     // Returned to ArrayPool<Diagnostic>.Shared on Dispose.
@@ -363,10 +369,6 @@ internal sealed class AstArena : IDisposable
         // Section node pools: reset allocated nodes and cap retained capacity
         _permissionsPool.Release(DefaultSectionNodeCapacity);
         _envPool.Release(DefaultEnvCapacity);
-        _defaultsPool.Release(DefaultSectionNodeCapacity);
-        _defaultsRunPool.Release(DefaultSectionNodeCapacity);
-        _concurrencyPool.Release(DefaultSectionNodeCapacity);
-        _environmentPool.Release(DefaultSectionNodeCapacity);
         _runnerPool.Release(DefaultRunnerCapacity);
         _strategyPool.Release(DefaultStrategyCapacity);
         _matrixPool.Release(DefaultStrategyCapacity);
@@ -378,9 +380,23 @@ internal sealed class AstArena : IDisposable
         _containerPool.Release(DefaultSectionNodeCapacity);
         _servicesPool.Release(DefaultSectionNodeCapacity);
         _servicePool.Release(DefaultSectionNodeCapacity);
-        _credentialsPool.Release(DefaultSectionNodeCapacity);
         _workflowCallPool.Release(DefaultSectionNodeCapacity);
-        _snapshotPool.Release(DefaultSectionNodeCapacity);
+
+        // Data-oriented node tables: clear counts, cap retained capacity
+        _stringIdItems.Reset();
+        _concurrencyTable.Reset();
+        _environmentTable.Reset();
+        _credentialsTable.Reset();
+        _snapshotTable.Reset();
+        _defaultsTable.Reset();
+        _defaultsRunTable.Reset();
+        _stringIdItems.ReleaseOversized(DefaultStringIdItemsRetainedCapacity);
+        _concurrencyTable.ReleaseOversized(DefaultNodeTableRetainedCapacity);
+        _environmentTable.ReleaseOversized(DefaultNodeTableRetainedCapacity);
+        _credentialsTable.ReleaseOversized(DefaultNodeTableRetainedCapacity);
+        _snapshotTable.ReleaseOversized(DefaultNodeTableRetainedCapacity);
+        _defaultsTable.ReleaseOversized(DefaultNodeTableRetainedCapacity);
+        _defaultsRunTable.ReleaseOversized(DefaultNodeTableRetainedCapacity);
 
         // Capture per-parse usage before the counters reset — the shrink policy below
         // retains pooled instances up to the most recent use.
@@ -439,6 +455,13 @@ internal sealed class AstArena : IDisposable
             ArrayPool<BoolNodeData>.Shared.Return(_bools);
             ArrayPool<IntNodeData>.Shared.Return(_ints);
             ArrayPool<FloatNodeData>.Shared.Return(_floats);
+            _stringIdItems.ReleaseAll();
+            _concurrencyTable.ReleaseAll();
+            _environmentTable.ReleaseAll();
+            _credentialsTable.ReleaseAll();
+            _snapshotTable.ReleaseAll();
+            _defaultsTable.ReleaseAll();
+            _defaultsRunTable.ReleaseAll();
             _strings = null!;
             _bools = null!;
             _ints = null!;
@@ -473,6 +496,13 @@ internal sealed class AstArena : IDisposable
     // Section node pool default capacities. Env appears per step + per job + workflow-level,
     // Runner/Strategy/Matrix/MatrixRow per job, the rest are occasional per-job sections.
     private const int DefaultSectionNodeCapacity = 8;
+
+    // Retained-capacity cap for data-oriented node tables (rows are small structs;
+    // ArrayPool re-rent is allocation-free, so the cap only bounds ThreadStatic retention).
+    private const int DefaultNodeTableRetainedCapacity = 64;
+
+    // The shared StringNodeId list store grows with needs/labels/filter values across the file.
+    private const int DefaultStringIdItemsRetainedCapacity = 512;
     private const int DefaultEnvCapacity = 64;
     private const int DefaultRunnerCapacity = 24;
     private const int DefaultStrategyCapacity = 16;
@@ -511,6 +541,13 @@ internal sealed class AstArena : IDisposable
         _execWaitAllCount = 0;
         _execCancelCount = 0;
         _execParallelCount = 0;
+        _stringIdItems.Reset();
+        _concurrencyTable.Reset();
+        _environmentTable.Reset();
+        _credentialsTable.Reset();
+        _snapshotTable.Reset();
+        _defaultsTable.Reset();
+        _defaultsRunTable.Reset();
         EnsureMinCapacity(ref _strings, Math.Max(64, source.Length / 20));
         EnsureMinCapacity(ref _bools, Math.Max(8, source.Length / 200));
         EnsureMinCapacity(ref _ints, Math.Max(4, source.Length / 500));
@@ -893,21 +930,71 @@ internal sealed class AstArena : IDisposable
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public Env AllocEnv() => _envPool.Alloc();
 
-    /// <summary>Returns a pooled or new <see cref="Defaults"/> with all fields reset to default.</summary>
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public Defaults AllocDefaults() => _defaultsPool.Alloc();
+    // Data-oriented node table accessors (Stage 2)
 
-    /// <summary>Returns a pooled or new <see cref="DefaultsRun"/> with all fields reset to default.</summary>
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public DefaultsRun AllocDefaultsRun() => _defaultsRunPool.Alloc();
+    /// <summary>Copies the given string scalar handles into the shared list store and returns their range.</summary>
+    public StringIdRange AddStringIdList(ReadOnlySpan<StringNodeId> items)
+    {
+        var first = _stringIdItems.Count;
+        for (var i = 0; i < items.Length; i++)
+        {
+            _stringIdItems.Add(in items[i]);
+        }
 
-    /// <summary>Returns a pooled or new <see cref="Concurrency"/> with all fields reset to default.</summary>
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public Concurrency AllocConcurrency() => _concurrencyPool.Alloc();
+        return new StringIdRange(first, items.Length);
+    }
 
-    /// <summary>Returns a pooled or new <see cref="Ast.Environment"/> with all fields reset to default.</summary>
+    /// <summary>Resolves one element of a <see cref="StringIdRange"/>.</summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public Ast.Environment AllocEnvironment() => _environmentPool.Alloc();
+    internal StringNodeId GetStringIdAt(StringIdRange range, int index) => _stringIdItems[range.First + index];
+
+    /// <summary>Appends a <see cref="DefaultsData"/> row and returns its handle.</summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public DefaultsId AddDefaults(in DefaultsData data) => new(_defaultsTable.Add(in data) + 1);
+
+    /// <summary>Resolves a <see cref="DefaultsData"/> row.</summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    internal ref readonly DefaultsData GetDefaults(DefaultsId id) => ref _defaultsTable[id.Index];
+
+    /// <summary>Appends a <see cref="DefaultsRunData"/> row and returns its handle.</summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public DefaultsRunId AddDefaultsRun(in DefaultsRunData data) => new(_defaultsRunTable.Add(in data) + 1);
+
+    /// <summary>Resolves a <see cref="DefaultsRunData"/> row.</summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    internal ref readonly DefaultsRunData GetDefaultsRun(DefaultsRunId id) => ref _defaultsRunTable[id.Index];
+
+    /// <summary>Appends a <see cref="ConcurrencyData"/> row and returns its handle.</summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public ConcurrencyId AddConcurrency(in ConcurrencyData data) => new(_concurrencyTable.Add(in data) + 1);
+
+    /// <summary>Resolves a <see cref="ConcurrencyData"/> row.</summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    internal ref readonly ConcurrencyData GetConcurrency(ConcurrencyId id) => ref _concurrencyTable[id.Index];
+
+    /// <summary>Appends an <see cref="EnvironmentData"/> row and returns its handle.</summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public EnvironmentId AddEnvironment(in EnvironmentData data) => new(_environmentTable.Add(in data) + 1);
+
+    /// <summary>Resolves an <see cref="EnvironmentData"/> row.</summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    internal ref readonly EnvironmentData GetEnvironment(EnvironmentId id) => ref _environmentTable[id.Index];
+
+    /// <summary>Appends a <see cref="CredentialsData"/> row and returns its handle.</summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public CredentialsId AddCredentials(in CredentialsData data) => new(_credentialsTable.Add(in data) + 1);
+
+    /// <summary>Resolves a <see cref="CredentialsData"/> row.</summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    internal ref readonly CredentialsData GetCredentials(CredentialsId id) => ref _credentialsTable[id.Index];
+
+    /// <summary>Appends a <see cref="SnapshotData"/> row and returns its handle.</summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public SnapshotId AddSnapshot(in SnapshotData data) => new(_snapshotTable.Add(in data) + 1);
+
+    /// <summary>Resolves a <see cref="SnapshotData"/> row.</summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    internal ref readonly SnapshotData GetSnapshot(SnapshotId id) => ref _snapshotTable[id.Index];
 
     /// <summary>Returns a pooled or new <see cref="Runner"/> with all fields reset to default.</summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -953,17 +1040,9 @@ internal sealed class AstArena : IDisposable
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public Service AllocService() => _servicePool.Alloc();
 
-    /// <summary>Returns a pooled or new <see cref="Credentials"/> with all fields reset to default.</summary>
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public Credentials AllocCredentials() => _credentialsPool.Alloc();
-
     /// <summary>Returns a pooled or new <see cref="WorkflowCall"/> with all fields reset to default.</summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public WorkflowCall AllocWorkflowCall() => _workflowCallPool.Alloc();
-
-    /// <summary>Returns a pooled or new <see cref="Snapshot"/> with all fields reset to default.</summary>
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public Snapshot AllocSnapshot() => _snapshotPool.Alloc();
 
     // Incremental parse support
 
@@ -1006,6 +1085,17 @@ internal sealed class AstArena : IDisposable
             Array.Copy(source._floats, 0, _floats, 0, fc);
             _floatCount = fc;
         }
+
+        // Data-oriented node tables are copied wholesale: reused sections/jobs are only
+        // spliced when their source bytes are byte-identical at identical offsets, so
+        // row indices (and the IDs stored in reused nodes) stay valid in this arena.
+        _stringIdItems.CopyFrom(in source._stringIdItems, source._stringIdItems.Count);
+        _concurrencyTable.CopyFrom(in source._concurrencyTable, source._concurrencyTable.Count);
+        _environmentTable.CopyFrom(in source._environmentTable, source._environmentTable.Count);
+        _credentialsTable.CopyFrom(in source._credentialsTable, source._credentialsTable.Count);
+        _snapshotTable.CopyFrom(in source._snapshotTable, source._snapshotTable.Count);
+        _defaultsTable.CopyFrom(in source._defaultsTable, source._defaultsTable.Count);
+        _defaultsRunTable.CopyFrom(in source._defaultsRunTable, source._defaultsRunTable.Count);
     }
 
     /// <summary>Gets the current number of string entries in the arena.</summary>

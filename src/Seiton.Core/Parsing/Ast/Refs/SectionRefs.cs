@@ -92,86 +92,86 @@ public readonly struct EnvVarRef : INodeRef<EnvVar, EnvVarRef>
 public readonly struct DefaultsRef
 {
     private readonly AstArena? _arena;
-    private readonly Defaults? _node;
+    private readonly DefaultsId _id;
 
-    internal DefaultsRef(AstArena? arena, Defaults? node)
+    internal DefaultsRef(AstArena? arena, DefaultsId id)
     {
         _arena = arena;
-        _node = node;
+        _id = id;
     }
 
-    public bool HasValue => _node is not null && _arena is not null;
+    public bool HasValue => _arena is not null && _id.HasValue;
 
-    public DefaultsRunRef Run => new(_arena, _node?.Run);
+    public DefaultsRunRef Run => HasValue ? new(_arena, _arena!.GetDefaults(_id).Run) : default;
 
-    public TextRange Range => _node?.Range ?? default;
+    public TextRange Range => HasValue ? _arena!.GetDefaults(_id).Range : default;
 }
 
 /// <summary>The <c>defaults.run:</c> section (default shell and working directory).</summary>
 public readonly struct DefaultsRunRef
 {
     private readonly AstArena? _arena;
-    private readonly DefaultsRun? _node;
+    private readonly DefaultsRunId _id;
 
-    internal DefaultsRunRef(AstArena? arena, DefaultsRun? node)
+    internal DefaultsRunRef(AstArena? arena, DefaultsRunId id)
     {
         _arena = arena;
-        _node = node;
+        _id = id;
     }
 
-    public bool HasValue => _node is not null && _arena is not null;
+    public bool HasValue => _arena is not null && _id.HasValue;
 
-    public StringRef Shell => new(_arena, _node?.Shell ?? default);
+    public StringRef Shell => HasValue ? new(_arena, _arena!.GetDefaultsRun(_id).Shell) : default;
 
-    public StringRef WorkingDirectory => new(_arena, _node?.WorkingDirectory ?? default);
+    public StringRef WorkingDirectory => HasValue ? new(_arena, _arena!.GetDefaultsRun(_id).WorkingDirectory) : default;
 
-    public TextRange Range => _node?.Range ?? default;
+    public TextRange Range => HasValue ? _arena!.GetDefaultsRun(_id).Range : default;
 }
 
 /// <summary>The <c>concurrency:</c> block.</summary>
 public readonly struct ConcurrencyRef
 {
     private readonly AstArena? _arena;
-    private readonly Concurrency? _node;
+    private readonly ConcurrencyId _id;
 
-    internal ConcurrencyRef(AstArena? arena, Concurrency? node)
+    internal ConcurrencyRef(AstArena? arena, ConcurrencyId id)
     {
         _arena = arena;
-        _node = node;
+        _id = id;
     }
 
-    public bool HasValue => _node is not null && _arena is not null;
+    public bool HasValue => _arena is not null && _id.HasValue;
 
-    public StringRef Group => new(_arena, _node?.Group ?? default);
+    public StringRef Group => HasValue ? new(_arena, _arena!.GetConcurrency(_id).Group) : default;
 
-    public BoolRef CancelInProgress => new(_arena, _node?.CancelInProgress ?? default);
+    public BoolRef CancelInProgress => HasValue ? new(_arena, _arena!.GetConcurrency(_id).CancelInProgress) : default;
 
-    public StringRef Queue => new(_arena, _node?.Queue ?? default);
+    public StringRef Queue => HasValue ? new(_arena, _arena!.GetConcurrency(_id).Queue) : default;
 
-    public TextRange Range => _node?.Range ?? default;
+    public TextRange Range => HasValue ? _arena!.GetConcurrency(_id).Range : default;
 }
 
 /// <summary>The <c>environment:</c> block for deployment environments.</summary>
 public readonly struct EnvironmentRef
 {
     private readonly AstArena? _arena;
-    private readonly Environment? _node;
+    private readonly EnvironmentId _id;
 
-    internal EnvironmentRef(AstArena? arena, Environment? node)
+    internal EnvironmentRef(AstArena? arena, EnvironmentId id)
     {
         _arena = arena;
-        _node = node;
+        _id = id;
     }
 
-    public bool HasValue => _node is not null && _arena is not null;
+    public bool HasValue => _arena is not null && _id.HasValue;
 
-    public StringRef Name => new(_arena, _node?.Name ?? default);
+    public StringRef Name => HasValue ? new(_arena, _arena!.GetEnvironment(_id).Name) : default;
 
-    public StringRef Url => new(_arena, _node?.Url ?? default);
+    public StringRef Url => HasValue ? new(_arena, _arena!.GetEnvironment(_id).Url) : default;
 
-    public BoolRef Deployment => new(_arena, _node?.Deployment ?? default);
+    public BoolRef Deployment => HasValue ? new(_arena, _arena!.GetEnvironment(_id).Deployment) : default;
 
-    public TextRange Range => _node?.Range ?? default;
+    public TextRange Range => HasValue ? _arena!.GetEnvironment(_id).Range : default;
 }
 
 /// <summary>The <c>runs-on:</c> specification for job runner selection.</summary>
@@ -188,7 +188,7 @@ public readonly struct RunnerRef
 
     public bool HasValue => _node is not null && _arena is not null;
 
-    public StringRefList Labels => new(_arena, _node?.Labels);
+    public StringRefList Labels => new(_arena, _node?.Labels ?? default);
 
     /// <summary>The whole-value <c>${{ }}</c> expression, if used for the labels.</summary>
     public StringRef LabelsExpr => new(_arena, _node?.LabelsExpr ?? default);
@@ -266,7 +266,7 @@ public readonly struct MatrixRowRef : INodeRef<MatrixRow, MatrixRowRef>
     /// <summary>The whole-row <c>${{ }}</c> expression, if used.</summary>
     public StringRef Expression => new(_arena, _node?.Expression ?? default);
 
-    public RawYamlRefList Values => new(_arena, _node?.Values);
+    public RawYamlRefList Values => new(_arena, _node?.Values ?? default);
 
     public StringRef Name => new(_arena, _node?.Name ?? default);
 }
@@ -352,13 +352,13 @@ public readonly struct ContainerRef
 
     public StringRef Image => new(_arena, _node?.Image ?? default);
 
-    public CredentialsRef Credentials => new(_arena, _node?.Credentials);
+    public CredentialsRef Credentials => new(_arena, _node?.Credentials ?? default);
 
     public EnvRef Env => new(_arena, _node?.Env);
 
-    public StringRefList Ports => new(_arena, _node?.Ports);
+    public StringRefList Ports => new(_arena, _node?.Ports ?? default);
 
-    public StringRefList Volumes => new(_arena, _node?.Volumes);
+    public StringRefList Volumes => new(_arena, _node?.Volumes ?? default);
 
     public StringRef Options => new(_arena, _node?.Options ?? default);
 
@@ -418,24 +418,24 @@ public readonly struct ServiceRef : INodeRef<Service, ServiceRef>
 public readonly struct CredentialsRef
 {
     private readonly AstArena? _arena;
-    private readonly Credentials? _node;
+    private readonly CredentialsId _id;
 
-    internal CredentialsRef(AstArena? arena, Credentials? node)
+    internal CredentialsRef(AstArena? arena, CredentialsId id)
     {
         _arena = arena;
-        _node = node;
+        _id = id;
     }
 
-    public bool HasValue => _node is not null && _arena is not null;
+    public bool HasValue => _arena is not null && _id.HasValue;
 
-    public StringRef Username => new(_arena, _node?.Username ?? default);
+    public StringRef Username => HasValue ? new(_arena, _arena!.GetCredentials(_id).Username) : default;
 
-    public StringRef Password => new(_arena, _node?.Password ?? default);
+    public StringRef Password => HasValue ? new(_arena, _arena!.GetCredentials(_id).Password) : default;
 
     /// <summary>The whole-block <c>${{ }}</c> expression, if used instead of a mapping.</summary>
-    public StringRef Expression => new(_arena, _node?.Expression ?? default);
+    public StringRef Expression => HasValue ? new(_arena, _arena!.GetCredentials(_id).Expression) : default;
 
-    public TextRange Range => _node?.Range ?? default;
+    public TextRange Range => HasValue ? _arena!.GetCredentials(_id).Range : default;
 }
 
 /// <summary>A reusable workflow call (<c>uses:</c> at job level).</summary>
@@ -511,21 +511,21 @@ public readonly struct WorkflowCallSecretRef : INodeRef<WorkflowCallSecret, Work
 public readonly struct SnapshotRef
 {
     private readonly AstArena? _arena;
-    private readonly Snapshot? _node;
+    private readonly SnapshotId _id;
 
-    internal SnapshotRef(AstArena? arena, Snapshot? node)
+    internal SnapshotRef(AstArena? arena, SnapshotId id)
     {
         _arena = arena;
-        _node = node;
+        _id = id;
     }
 
-    public bool HasValue => _node is not null && _arena is not null;
+    public bool HasValue => _arena is not null && _id.HasValue;
 
-    public StringRef Version => new(_arena, _node?.Version ?? default);
+    public StringRef Version => HasValue ? new(_arena, _arena!.GetSnapshot(_id).Version) : default;
 
-    public StringRef ImageName => new(_arena, _node?.ImageName ?? default);
+    public StringRef ImageName => HasValue ? new(_arena, _arena!.GetSnapshot(_id).ImageName) : default;
 
-    public StringRef If => new(_arena, _node?.If ?? default);
+    public StringRef If => HasValue ? new(_arena, _arena!.GetSnapshot(_id).If) : default;
 
-    public TextRange? IfKeyRange => _node?.IfKeyRange;
+    public TextRange? IfKeyRange => HasValue ? _arena!.GetSnapshot(_id).IfKeyRange : null;
 }

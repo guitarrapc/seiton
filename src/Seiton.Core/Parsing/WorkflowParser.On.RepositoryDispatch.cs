@@ -14,10 +14,10 @@ public static partial class WorkflowParser
         {
             AddError(ref diagnostics, "on.repository_dispatch must be object", reader.CurrentStart);
             reader.SkipCurrentNode();
-            return new RepositoryDispatchEvent { EventName = nameNode, Types = null, Range = arena.GetStringRange(nameNode) };
+            return new RepositoryDispatchEvent { EventName = nameNode, Range = arena.GetStringRange(nameNode) };
         }
 
-        IReadOnlyList<StringNodeId>? types = null;
+        StringIdRange types = default;
         ulong seen = 0;
         reader.Read(); // consume MappingStart
         while (!reader.End && reader.CurrentKind != YamlEventKind.MappingEnd)

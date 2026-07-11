@@ -1,25 +1,5 @@
 ﻿namespace Seiton.Core.Parsing.Ast;
 
-/// <summary>AST node representing a snapshot configuration for a job.</summary>
-public sealed class Snapshot
-{
-    public StringNodeId Version { get; set; }
-
-    public StringNodeId ImageName { get; set; }
-
-    public StringNodeId If { get; set; }
-
-    public TextRange? IfKeyRange { get; set; }
-
-    internal void Reset()
-    {
-        Version = default;
-        ImageName = default;
-        If = default;
-        IfKeyRange = null;
-    }
-}
-
 /// <summary>AST node representing a single job in a workflow.</summary>
 public sealed class Job
 {
@@ -27,7 +7,7 @@ public sealed class Job
 
     public StringNodeId Name { get; set; }
 
-    public IReadOnlyList<StringNodeId>? Needs { get; set; }
+    public StringIdRange Needs { get; set; }
 
     public Runner? RunsOn { get; set; }
 
@@ -35,15 +15,15 @@ public sealed class Job
 
     public Permissions? Permissions { get; set; }
 
-    public Environment? Environment { get; set; }
+    public EnvironmentId Environment { get; set; }
 
-    public Concurrency? Concurrency { get; set; }
+    public ConcurrencyId Concurrency { get; set; }
 
     public SliceMap<StringNodeId>? Outputs { get; set; }
 
     public Env? Env { get; set; }
 
-    public Defaults? Defaults { get; set; }
+    public DefaultsId Defaults { get; set; }
 
     public StringNodeId If { get; set; }
 
@@ -65,7 +45,7 @@ public sealed class Job
 
     public WorkflowCall? WorkflowCall { get; set; }
 
-    public Snapshot? Snapshot { get; set; }
+    public SnapshotId Snapshot { get; set; }
 
     public TextRange Range { get; set; }
 
@@ -73,15 +53,15 @@ public sealed class Job
     {
         Id = default;
         Name = default;
-        Needs = null;
+        Needs = default;
         RunsOn = null;
         RunsOnKeyRange = null;
         Permissions = null;
-        Environment = null;
-        Concurrency = null;
+        Environment = default;
+        Concurrency = default;
         Outputs = null;
         Env = null;
-        Defaults = null;
+        Defaults = default;
         If = default;
         IfKeyRange = null;
         Steps = null;
@@ -92,7 +72,7 @@ public sealed class Job
         Container = null;
         Services = null;
         WorkflowCall = null;
-        Snapshot = null;
+        Snapshot = default;
         Range = default;
     }
 }

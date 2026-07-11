@@ -73,8 +73,8 @@ public sealed partial class ParserTests
         var waitStep = result.Workflow!.Jobs.Values().First().Steps![2];
         await Assert.That(waitStep.Exec).IsTypeOf<ExecWait>();
         var targets = ((ExecWait)waitStep.Exec).Targets;
-        await Assert.That(targets!.Count).IsEqualTo(2);
-        await Assert.That(Encoding.UTF8.GetString(arena!.GetStringValue(targets[0]))).IsEqualTo("a");
+        await Assert.That(targets.Count).IsEqualTo(2);
+        await Assert.That(Encoding.UTF8.GetString(arena!.GetStringValue(arena!.GetStringIdAt(targets, 0)))).IsEqualTo("a");
     }
 
     [Test]
@@ -346,8 +346,8 @@ public sealed partial class ParserTests
         var waitStep = result.Workflow!.Jobs.Values().First().Steps![1];
         await Assert.That(waitStep.Exec).IsTypeOf<ExecWait>();
         var targets = ((ExecWait)waitStep.Exec).Targets;
-        await Assert.That(targets!.Count).IsEqualTo(1);
-        await Assert.That(Encoding.UTF8.GetString(arena!.GetStringValue(targets[0]))).IsEqualTo("a");
+        await Assert.That(targets.Count).IsEqualTo(1);
+        await Assert.That(Encoding.UTF8.GetString(arena!.GetStringValue(arena!.GetStringIdAt(targets, 0)))).IsEqualTo("a");
     }
 
     [Test]

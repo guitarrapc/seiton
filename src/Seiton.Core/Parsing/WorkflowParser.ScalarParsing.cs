@@ -1,5 +1,6 @@
 ﻿using System.Buffers.Text;
 using System.Text;
+using Seiton.Core.Parsing.Ast;
 
 using static Seiton.Core.Parsing.SpanHelpers;
 
@@ -103,7 +104,7 @@ public static partial class WorkflowParser
         return node;
     }
 
-    internal static ArenaList<StringNodeId> ParseStringOrStringSequence<TReader>(ref TReader reader, AstArena arena, ref PooledBuffer<Diagnostic> diagnostics, string errorMessage, bool allowEmpty = false, bool allowElemEmpty = false)
+    internal static StringIdRange ParseStringOrStringSequence<TReader>(ref TReader reader, AstArena arena, ref PooledBuffer<Diagnostic> diagnostics, string errorMessage, bool allowEmpty = false, bool allowElemEmpty = false)
         where TReader : IYamlStreamReader, allows ref struct
     {
         var nodes = ParseStringOrStringSequence(ref reader, arena, ref diagnostics, out var needsError, out var errorMark, allowEmpty, allowElemEmpty);
@@ -111,7 +112,10 @@ public static partial class WorkflowParser
         return nodes;
     }
 
-    internal static ArenaList<StringNodeId> ParseStringOrStringSequence<TReader>(ref TReader reader, AstArena arena, ref PooledBuffer<Diagnostic> diagnostics, out bool needsError, out TextPosition errorMark, bool allowEmpty = false, bool allowElemEmpty = false, string? emptyElementMessage = null)
+    // Always returns a present range (HasValue) even when empty or on recovery paths:
+    // callers assign the result whenever the key was present, matching the pre-range
+    // semantics where a (possibly empty) list instance was stored on the node.
+    internal static StringIdRange ParseStringOrStringSequence<TReader>(ref TReader reader, AstArena arena, ref PooledBuffer<Diagnostic> diagnostics, out bool needsError, out TextPosition errorMark, bool allowEmpty = false, bool allowElemEmpty = false, string? emptyElementMessage = null)
         where TReader : IYamlStreamReader, allows ref struct
     {
         needsError = false;
@@ -119,20 +123,20 @@ public static partial class WorkflowParser
 
         if (reader.End)
         {
-            return default;
+            return arena.AddStringIdList([]);
         }
 
         if (reader.CurrentKind == YamlEventKind.MappingEnd)
         {
             needsError = true;
             errorMark = reader.CurrentStart;
-            return default;
+            return arena.AddStringIdList([]);
         }
 
         if (reader.CurrentKind == YamlEventKind.Scalar)
         {
             var single = ParseString(ref reader, arena, out needsError, out errorMark, allowEmpty);
-            return !single.HasValue ? default : ArenaListOfOne(single, arena);
+            return !single.HasValue ? arena.AddStringIdList([]) : arena.AddStringIdList([single]);
         }
 
         if (reader.CurrentKind != YamlEventKind.SequenceStart)
@@ -140,7 +144,7 @@ public static partial class WorkflowParser
             needsError = true;
             errorMark = reader.CurrentStart;
             reader.SkipCurrentNode();
-            return default;
+            return arena.AddStringIdList([]);
         }
 
         var list = new PooledBuffer<StringNodeId>(4);
@@ -178,7 +182,7 @@ public static partial class WorkflowParser
                 reader.Read();
             }
 
-            return DetachArenaList(ref list, arena);
+            return arena.AddStringIdList(list.AsSpan());
         }
         finally { list.Dispose(); }
     }

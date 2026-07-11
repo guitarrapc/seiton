@@ -30,9 +30,9 @@ public readonly struct WorkflowRef
 
     public EnvRef Env => new(_arena, _node?.Env);
 
-    public DefaultsRef Defaults => new(_arena, _node?.Defaults);
+    public DefaultsRef Defaults => new(_arena, _node?.Defaults ?? default);
 
-    public ConcurrencyRef Concurrency => new(_arena, _node?.Concurrency);
+    public ConcurrencyRef Concurrency => new(_arena, _node?.Concurrency ?? default);
 
     public JobRefMap Jobs => new(_arena, _node?.Jobs);
 
@@ -61,7 +61,7 @@ public readonly struct JobRef : IEquatable<JobRef>, INodeRef<Job, JobRef>
 
     public StringRef Name => new(_arena, _node?.Name ?? default);
 
-    public StringRefList Needs => new(_arena, _node?.Needs);
+    public StringRefList Needs => new(_arena, _node?.Needs ?? default);
 
     public RunnerRef RunsOn => new(_arena, _node?.RunsOn);
 
@@ -69,15 +69,15 @@ public readonly struct JobRef : IEquatable<JobRef>, INodeRef<Job, JobRef>
 
     public PermissionsRef Permissions => new(_arena, _node?.Permissions);
 
-    public EnvironmentRef Environment => new(_arena, _node?.Environment);
+    public EnvironmentRef Environment => new(_arena, _node?.Environment ?? default);
 
-    public ConcurrencyRef Concurrency => new(_arena, _node?.Concurrency);
+    public ConcurrencyRef Concurrency => new(_arena, _node?.Concurrency ?? default);
 
     public StringRefMap Outputs => new(_arena, _node?.Outputs);
 
     public EnvRef Env => new(_arena, _node?.Env);
 
-    public DefaultsRef Defaults => new(_arena, _node?.Defaults);
+    public DefaultsRef Defaults => new(_arena, _node?.Defaults ?? default);
 
     public StringRef If => new(_arena, _node?.If ?? default);
 
@@ -99,7 +99,7 @@ public readonly struct JobRef : IEquatable<JobRef>, INodeRef<Job, JobRef>
 
     public WorkflowCallRef WorkflowCall => new(_arena, _node?.WorkflowCall);
 
-    public SnapshotRef Snapshot => new(_arena, _node?.Snapshot);
+    public SnapshotRef Snapshot => new(_arena, _node?.Snapshot ?? default);
 
     public TextRange Range => _node?.Range ?? default;
 
@@ -265,7 +265,7 @@ public readonly struct ExecWaitRef
 
     public bool HasValue => _node is not null && _arena is not null;
 
-    public StringRefList Targets => new(_arena, _node?.Targets);
+    public StringRefList Targets => new(_arena, _node?.Targets ?? default);
 
     public TextRange Range => _node?.Range ?? default;
 }
