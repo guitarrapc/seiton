@@ -36,11 +36,18 @@ internal readonly struct SectionText
 
     public override string ToString()
     {
+        // Check the sentinel first: default(SectionText) has _stepIndex == 0, so testing
+        // _stepIndex before _prefix would format the empty sentinel as "[0]".
+        if (_prefix is null)
+        {
+            return string.Empty;
+        }
+
         if (_stepIndex >= 0)
         {
             return $"{_prefix}[{_stepIndex}]{_suffix}";
         }
 
-        return _suffix is null or "" ? _prefix ?? string.Empty : string.Concat(_prefix, _suffix);
+        return string.IsNullOrEmpty(_suffix) ? _prefix : string.Concat(_prefix, _suffix);
     }
 }

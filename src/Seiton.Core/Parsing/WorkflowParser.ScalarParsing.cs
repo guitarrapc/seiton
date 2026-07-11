@@ -409,8 +409,9 @@ public static partial class WorkflowParser
     /// <summary>
     /// Checks if the key is the YAML merge key '&lt;&lt;' and rejects it.
     /// Returns true if the key IS a merge key (caller should skip key+value).
-    /// VYaml's CurrentMark for the '&lt;&lt;' key points past the key text (at the ':'),
-    /// so we adjust the position back by the key length to report the correct column.
+    /// <paramref name="keyMark"/> must already point at the key text: callers pass the
+    /// reader's <c>CurrentStart</c>, which corrects VYaml's past-the-token scalar mark
+    /// by backward-scanning to the scalar start (see <c>VYamlStreamAdapter.CurrentStart</c>).
     /// </summary>
     private static bool IsMergeKey(ReadOnlySpan<byte> keyUtf8, TextPosition keyMark, ref PooledBuffer<Diagnostic> diagnostics, SectionText mappingName)
     {
