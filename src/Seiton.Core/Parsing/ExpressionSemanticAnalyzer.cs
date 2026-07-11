@@ -1679,6 +1679,17 @@ public static class ExpressionSemanticAnalyzer
     /// Only emits diagnostics when at least one argument has a concrete (non-Any) override type
     /// that fails assignability, avoiding duplicate diagnostics with the parser-level check.
     /// </summary>
+    // Scratch buffer for per-function-call argument types. Reuse is safe because
+    // invocations never overlap: the walker validates argument subtrees before the
+    // enclosing call node, and InferTypeWithOverrides never re-enters validation.
+    // ThreadStatic because the analyzer is static and lint engines are per-thread.
+    // Capacity is capped: wider calls fall back to a one-off array so a single
+    // pathological expression cannot pin a peak-sized buffer for the thread's lifetime.
+    private const int MaxCachedArgTypeCount = 64;
+
+    [ThreadStatic]
+    private static ExprType[]? threadstaticArgTypesBuffer;
+
     private static void ValidateFunctionCallWithOverrides(
         ExpressionNode node,
         ReadOnlySpan<ExpressionNode> nodes,
@@ -1706,7 +1717,27 @@ public static class ExpressionSemanticAnalyzer
         }
 
         var argCount = node.ArgCount;
-        var argTypes = new ExprType[argCount];
+        if (argCount == 0)
+        {
+            // Zero-arg calls can never have an override-refined argument type, so the
+            // hasConcreteOverride check below would always bail — return before touching
+            // the scratch buffer.
+            return;
+        }
+
+        ExprType[] argTypesBuffer;
+        if (argCount > MaxCachedArgTypeCount)
+        {
+            // Pathologically wide call (user-controlled input): use a one-off array
+            // instead of retaining a peak-sized buffer for the thread's lifetime.
+            argTypesBuffer = new ExprType[argCount];
+        }
+        else
+        {
+            argTypesBuffer = threadstaticArgTypesBuffer ??= new ExprType[MaxCachedArgTypeCount];
+        }
+
+        var argTypes = argTypesBuffer.AsSpan(0, argCount);
         var hasConcreteOverride = false;
         for (var i = 0; i < argCount; i++)
         {
