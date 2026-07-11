@@ -99,8 +99,12 @@ public static partial class WorkflowParser
 
             var keyMark = reader.CurrentStart;
             var keyUtf8 = reader.GetScalarUtf8();
-            if (IsMergeKey(keyUtf8, keyMark, ref diagnostics, $"jobs.'{DecodeUtf8(source, jobId)}'"))
+            // Inline merge-key check: passing an interpolated section name to IsMergeKey
+            // would decode the job id and format the string for EVERY job key on clean
+            // parses; build the message only when the merge key actually occurs.
+            if (keyUtf8.SequenceEqual("<<"u8))
             {
+                AddError(ref diagnostics, $"GitHub Actions does not support YAML merge key \"<<\". occurred in jobs.'{DecodeUtf8(source, jobId)}'", keyMark);
                 reader.Read();
                 if (!reader.End) reader.SkipCurrentNode();
                 continue;

@@ -49,8 +49,11 @@ public static partial class WorkflowParser
             var keyMark = reader.CurrentStart;
             var keySlice = reader.GetScalarSlice();
             var keyUtf8 = reader.GetScalarUtf8();
-            if (IsMergeKey(keyUtf8, keyMark, ref diagnostics, $"on.{eventInfo.Name}"))
+            // Inline merge-key check: an interpolated section name would allocate per event
+            // option key on clean parses; format only when the merge key actually occurs.
+            if (keyUtf8.SequenceEqual("<<"u8))
             {
+                AddError(ref diagnostics, $"GitHub Actions does not support YAML merge key \"<<\". occurred in on.{eventInfo.Name}", keyMark);
                 reader.Read();
                 if (!reader.End) reader.SkipCurrentNode();
                 continue;
