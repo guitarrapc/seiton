@@ -79,16 +79,16 @@ public sealed class UnpinnedUsesRule() : RuleBase(RuleId.UnpinnedUses)
 
         var uses = workflowCall.Uses.Value;
         var usesLocation = BuildUsesLocation(workflowCall);
-        var usesRefLocation = BuildRefLocation(workflowCall.Uses.Slice, uses, Config.Utf8Yaml, usesLocation);
         if (uses.StartsWith("./"u8))
         {
             if (uses.IndexOf((byte)'@') >= 0)
             {
                 var localJobId = job.Id.Decode();
+                var localRefLocation = BuildRefLocation(workflowCall.Uses.Slice, uses, Config.Utf8Yaml, usesLocation);
                 AddJobWarning(
                     job,
                     $"jobs.'{localJobId}'.uses local reusable workflow reference must not contain '@ref'",
-                    usesRefLocation);
+                    localRefLocation);
             }
 
             return;
@@ -133,6 +133,7 @@ public sealed class UnpinnedUsesRule() : RuleBase(RuleId.UnpinnedUses)
         var url = ActionRefHelpers.BuildGitHubUrl(usesText);
         var urlSuffix = url is not null ? $". see {url}" : "";
         var help = BuildOwnerHintOnce(parsedJob.ActionPath);
+        var usesRefLocation = BuildRefLocation(workflowCall.Uses.Slice, uses, Config.Utf8Yaml, usesLocation);
         AddJobWarning(job, $"jobs.'{jobId}'.uses '{usesText}' is not pinned to a full-length commit SHA{urlSuffix} (fixable with --fix --enable-pin-network)", usesRefLocation, PinDiagnosticMetadata.ForUsesRef(usesText), help);
     }
 
@@ -151,7 +152,6 @@ public sealed class UnpinnedUsesRule() : RuleBase(RuleId.UnpinnedUses)
             return;
         }
         var usesLocation = actionExec.UsesKeyRange ?? actionExec.Uses.Range;
-        var usesRefLocation = BuildRefLocation(actionExec.Uses.Slice, uses, Config.Utf8Yaml, usesLocation);
         if (uses.StartsWith("docker://"u8))
         {
             if (uses.Length <= "docker://"u8.Length)
@@ -178,7 +178,8 @@ public sealed class UnpinnedUsesRule() : RuleBase(RuleId.UnpinnedUses)
         {
             if (uses.IndexOf((byte)'@') >= 0)
             {
-                AddStepWarning(step, "local action uses must not contain '@ref'", usesRefLocation);
+                var localRefLocation = BuildRefLocation(actionExec.Uses.Slice, uses, Config.Utf8Yaml, usesLocation);
+                AddStepWarning(step, "local action uses must not contain '@ref'", localRefLocation);
                 return;
             }
 
@@ -215,6 +216,7 @@ public sealed class UnpinnedUsesRule() : RuleBase(RuleId.UnpinnedUses)
         var usesSlice = actionExec.Uses.Slice;
         var message = GetUnpinnedStepMessage(usesSlice, out var decodedUsesText);
         var help = BuildOwnerHintOnce(parsedStep.ActionPath);
+        var usesRefLocation = BuildRefLocation(usesSlice, uses, Config.Utf8Yaml, usesLocation);
         AddStepWarning(step, message, usesRefLocation, PinDiagnosticMetadata.ForUsesRef(decodedUsesText), help);
     }
 
@@ -285,7 +287,7 @@ public sealed class UnpinnedUsesRule() : RuleBase(RuleId.UnpinnedUses)
         return msg;
     }
 
-    private static TextRange BuildRefLocation(Utf8Slice usesValue, ReadOnlySpan<byte> uses, byte[] source, TextRange fallback)
+    private TextRange BuildRefLocation(Utf8Slice usesValue, ReadOnlySpan<byte> uses, byte[] source, TextRange fallback)
     {
         var at = uses.LastIndexOf((byte)'@');
         if (at < 0 || at + 1 >= uses.Length)
@@ -300,8 +302,9 @@ public sealed class UnpinnedUsesRule() : RuleBase(RuleId.UnpinnedUses)
             return fallback;
         }
 
-        var (startLine, startColumn) = ComputeLineColumn(source, startOffset);
-        var (endLine, endColumn) = ComputeLineColumn(source, endOffset);
+        var lineStarts = Config.GetLineStarts();
+        var (startLine, startColumn) = ExpressionScanHelpers.OffsetToLineColumn(lineStarts, startOffset);
+        var (endLine, endColumn) = ExpressionScanHelpers.OffsetToLineColumn(lineStarts, endOffset);
 
         return new TextRange(
             Start: startOffset,
@@ -310,30 +313,6 @@ public sealed class UnpinnedUsesRule() : RuleBase(RuleId.UnpinnedUses)
             StartColumn: startColumn,
             EndLine: endLine,
             EndColumn: endColumn);
-    }
-
-    private static (int Line, int Column) ComputeLineColumn(byte[] source, int offset)
-    {
-        var line = 1;
-        var column = 1;
-
-        for (var i = 0; i < offset; i++)
-        {
-            var b = source[i];
-            if (b == (byte)'\n')
-            {
-                line++;
-                column = 1;
-                continue;
-            }
-
-            if (b != (byte)'\r')
-            {
-                column++;
-            }
-        }
-
-        return (line, column);
     }
 
     private void ValidateLocalActionResolution(StepRef step, ReadOnlySpan<byte> uses, TextRange location)
