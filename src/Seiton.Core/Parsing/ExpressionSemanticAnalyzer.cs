@@ -1679,6 +1679,13 @@ public static class ExpressionSemanticAnalyzer
     /// Only emits diagnostics when at least one argument has a concrete (non-Any) override type
     /// that fails assignability, avoiding duplicate diagnostics with the parser-level check.
     /// </summary>
+    // Scratch buffer for per-function-call argument types. Reuse is safe because
+    // invocations never overlap: the walker validates argument subtrees before the
+    // enclosing call node, and InferTypeWithOverrides never re-enters validation.
+    // ThreadStatic because the analyzer is static and lint engines are per-thread.
+    [ThreadStatic]
+    private static ExprType[]? threadstaticArgTypesBuffer;
+
     private static void ValidateFunctionCallWithOverrides(
         ExpressionNode node,
         ReadOnlySpan<ExpressionNode> nodes,
@@ -1706,7 +1713,14 @@ public static class ExpressionSemanticAnalyzer
         }
 
         var argCount = node.ArgCount;
-        var argTypes = new ExprType[argCount];
+        var argTypesBuffer = threadstaticArgTypesBuffer;
+        if (argTypesBuffer is null || argTypesBuffer.Length < argCount)
+        {
+            argTypesBuffer = new ExprType[Math.Max(argCount, 8)];
+            threadstaticArgTypesBuffer = argTypesBuffer;
+        }
+
+        var argTypes = argTypesBuffer.AsSpan(0, argCount);
         var hasConcreteOverride = false;
         for (var i = 0; i < argCount; i++)
         {
