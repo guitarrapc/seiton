@@ -3,80 +3,6 @@
 // Section nodes are arena-pooled (see AstArena.Alloc* methods): properties are settable
 // and each class has an internal Reset() releasing references, mirroring Job/Step.
 
-/// <summary>The <c>permissions:</c> block (either a single keyword or per-scope map).</summary>
-public sealed class Permissions
-{
-    public StringNodeId All { get; set; }
-
-    public SliceMap<PermissionScope>? Scopes { get; set; }
-
-    public TextRange Range { get; set; }
-
-    internal void Reset()
-    {
-        All = default;
-        Scopes = null;
-        Range = default;
-    }
-}
-
-/// <summary>A single permission scope entry (e.g. <c>contents: read</c>).</summary>
-public readonly struct PermissionScope
-{
-    public StringNodeId Name { get; init; }
-
-    public Utf8Slice NameText { get; init; }
-
-    public StringNodeId Value { get; init; }
-
-    public Utf8Slice ValueText { get; init; }
-}
-
-/// <summary>The <c>env:</c> block containing environment variable definitions.</summary>
-public sealed class Env
-{
-    public StringNodeId Expression { get; set; }
-
-    public SliceMap<EnvVar>? Vars { get; set; }
-
-    public TextRange Range { get; set; }
-
-    internal void Reset()
-    {
-        Expression = default;
-        Vars = null;
-        Range = default;
-    }
-}
-
-/// <summary>A single environment variable (key-value pair).</summary>
-public readonly struct EnvVar
-{
-    public StringNodeId Name { get; init; }
-
-    public StringNodeId Value { get; init; }
-}
-
-/// <summary>The <c>runs-on:</c> specification for job runner selection.</summary>
-public sealed class Runner
-{
-    public StringIdRange Labels { get; set; }
-
-    public StringNodeId LabelsExpr { get; set; }
-
-    public StringNodeId Group { get; set; }
-
-    public TextRange Range { get; set; }
-
-    internal void Reset()
-    {
-        Labels = default;
-        LabelsExpr = default;
-        Group = default;
-        Range = default;
-    }
-}
-
 /// <summary>The <c>strategy:</c> block for job execution strategy.</summary>
 public sealed class Strategy
 {
@@ -201,7 +127,7 @@ public sealed class Container
 
     public CredentialsId Credentials { get; set; }
 
-    public Env? Env { get; set; }
+    public EnvId Env { get; set; }
 
     public StringIdRange Ports { get; set; }
 
@@ -219,7 +145,7 @@ public sealed class Container
     {
         Image = default;
         Credentials = default;
-        Env = null;
+        Env = default;
         Ports = default;
         Volumes = default;
         Options = default;

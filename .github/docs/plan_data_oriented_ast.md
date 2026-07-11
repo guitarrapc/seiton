@@ -102,12 +102,16 @@ CLI は診断のみを参照し AST 型に依存しない (実測: `src/Seiton/`
 1. **基盤** (2026-07-12): `NodeTable<T>` (ArrayPool-backed 行テーブル、Reset/CopyFrom/縮退)。typed ID は `Ast/NodeIds.cs`、行 struct は `Ast/SectionData.cs`。
 2. **葉ノード 6 種** (2026-07-12): `Concurrency`/`Environment`/`Credentials`/`Snapshot`/`Defaults`/`DefaultsRun` をクラス+プールから行テーブル+ID へ。クラスと `AstNodePool` エントリは削除。
 3. **文字列リスト → `StringIdRange`** (2026-07-12): `IReadOnlyList<StringNodeId>` フィールド 12 個 (needs/labels/types/values/options/ports/volumes/targets/args/workflows/names/versions) を共有 `StringNodeId[]` ストアへの (first,count) レンジへ。この経路の `ArenaList` boxing と `RegisterSliceMapBuffer` 登録を廃止。
+4. **Runner** (2026-07-12): `RunnerData` 行 + `RunnerId`。`Job.RunsOn` は ID。
+5. **Permissions / Env — マップの行テーブル化パターン確立** (2026-07-12): マップは「キー slice を行に内蔵した行テーブルへの `NodeRange`」で表現し、lookup はレンジ内線形スキャン (旧 SliceMap と同じ計算量、個別 `Entry[]` レンタル + 登録が消える)。`PermissionsData`/`PermissionScopeData`/`EnvData`/`EnvVarData` + `PermissionsId`/`EnvId`。行はマッピングのパース中に連続 append する (入れ子のパースがスカラーテーブルにしか触れないことが前提 — 新たな入れ子を導入する場合はスクラッチ経由に変えること)。`PermissionScopeRefMap`/`EnvVarRefMap` は (arena, NodeRange) の自己完結 struct になった (旧 `RefMap<TNode,TRef>` generic core から離脱)。case sensitivity はマップ型ごとに固定 (scopes/vars = sensitive)。
+
+ベンチ確認 (増分 5 まで、idle マシン): Parse Large 15.69ms (Stage 1 比 +0.8%) / 4,216B (−15%)。Lint 全ケース Mean ±5% 以内・Allocated 微減。
 
 **incremental parse との整合の要**: 継ぎ足し (セクション/ジョブの再利用) は「同一バイトオフセット + 同一内容ハッシュ」の場合にのみ発生するため、新テーブルを `BulkImportFrom` で**全行コピー**すれば、再利用ノード内の ID は新 arena でもそのまま解決できる。テーブル追加時は (a) `ResetForSource`/`Dispose` のリセット、(b) `BulkImportFrom` のコピー、(c) discard パスの `ReleaseAll` の 3 点を配線すること。
 
 意味論の写像 (テスト移行時の規約): 旧 `null` (キー不在) → `default` ID/レンジ (`HasValue == false`)。旧「キーは在るが空」→ `HasValue == true` かつ `Count == 0`。`ParseStringOrStringSequence` は回復パスでも常に present レンジを返す (旧実装で default `ArenaList` が boxing により非 null になっていた挙動の保存)。
 
-残作業: Permissions/Env/Runner、Strategy/Matrix/RawYaml (tagged union)、Container/Services/WorkflowCall、SliceMap → 共有 `(Utf8Slice, int)` エントリテーブル、Events tagged union、Exec*/Step/Job/Workflow 行化、ActionMetadata 族。
+残作業: Strategy/Matrix/RawYaml (tagged union)、Container/Services/WorkflowCall (+ WorkflowCallInput/Secret マップ)、Events tagged union、Exec*/Step/Job/Workflow 行化 (+ Jobs/Outputs/ExecAction.Inputs マップ)、ActionMetadata 族。マップは増分 5 のパターン (キー内蔵行テーブル + NodeRange) を踏襲する。
 
 ## 7. Lessons Learned (随時追記)
 

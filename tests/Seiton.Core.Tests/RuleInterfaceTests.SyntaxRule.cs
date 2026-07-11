@@ -31,7 +31,7 @@ public sealed partial class RuleInterfaceTests
                     new Utf8Slice(source.IndexOf("build", StringComparison.Ordinal), "build".Length),
                     false,
                     new TextRange(0, 0, 1, 1, 1, 1)),
-                RunsOn = new Runner(),
+                RunsOn = arena.AddRunner(new RunnerData()),
                 WorkflowCall = new WorkflowCall
                 {
                     Uses = arena.AddString(new Utf8Slice(source.IndexOf("./.github/workflows/reusable.yml", StringComparison.Ordinal), "./.github/workflows/reusable.yml".Length), false, default),
@@ -92,7 +92,7 @@ public sealed partial class RuleInterfaceTests
                     new Utf8Slice(buildKeyOffset, buildKeyLength),
                     false,
                     new TextRange(0, 0, 1, 1, 1, 1)),
-                RunsOn = new Runner(),
+                RunsOn = arena.AddRunner(new RunnerData()),
                 Steps =
                 [
                     new Step

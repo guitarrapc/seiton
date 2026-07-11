@@ -178,7 +178,7 @@ public static partial class WorkflowParser
         var hasImage = false;
         StringNodeId image = default;
         CredentialsId credentials = default;
-        Env? env = null;
+        EnvId env = default;
         StringIdRange ports = default;
         StringIdRange volumes = default;
         StringNodeId options = default;

@@ -4,88 +4,84 @@
 public readonly struct PermissionsRef
 {
     private readonly AstArena? _arena;
-    private readonly Permissions? _node;
+    private readonly PermissionsId _id;
 
-    internal PermissionsRef(AstArena? arena, Permissions? node)
+    internal PermissionsRef(AstArena? arena, PermissionsId id)
     {
         _arena = arena;
-        _node = node;
+        _id = id;
     }
 
-    public bool HasValue => _node is not null && _arena is not null;
+    public bool HasValue => _arena is not null && _id.HasValue;
 
     /// <summary>The scalar form (<c>read-all</c> / <c>write-all</c>), if used.</summary>
-    public StringRef All => new(_arena, _node?.All ?? default);
+    public StringRef All => HasValue ? new(_arena, _arena!.GetPermissions(_id).All) : default;
 
-    public PermissionScopeRefMap Scopes => new(_arena, _node?.Scopes);
+    public PermissionScopeRefMap Scopes => HasValue ? new(_arena, _arena!.GetPermissions(_id).Scopes) : default;
 
-    public TextRange Range => _node?.Range ?? default;
+    public TextRange Range => HasValue ? _arena!.GetPermissions(_id).Range : default;
 }
 
 /// <summary>A single permission scope entry (e.g. <c>contents: read</c>).</summary>
-public readonly struct PermissionScopeRef : INodeRef<PermissionScope, PermissionScopeRef>
+public readonly struct PermissionScopeRef
 {
     private readonly AstArena? _arena;
-    private readonly PermissionScope _node;
+    private readonly PermissionScopeData _row;
 
-    internal PermissionScopeRef(AstArena? arena, PermissionScope node)
+    internal PermissionScopeRef(AstArena? arena, in PermissionScopeData row)
     {
         _arena = arena;
-        _node = node;
+        _row = row;
     }
 
-    static PermissionScopeRef INodeRef<PermissionScope, PermissionScopeRef>.Create(AstArena? arena, PermissionScope node) => new(arena, node);
-
-    public StringRef Name => new(_arena, _node.Name);
+    public StringRef Name => new(_arena, _row.Name);
 
     /// <summary>The raw key text of the scope name.</summary>
-    public KeyRef NameText => new(_arena, _node.NameText);
+    public KeyRef NameText => new(_arena, _row.NameText);
 
-    public StringRef Value => new(_arena, _node.Value);
+    public StringRef Value => new(_arena, _row.Value);
 
     /// <summary>The raw value text of the scope.</summary>
-    public KeyRef ValueText => new(_arena, _node.ValueText);
+    public KeyRef ValueText => new(_arena, _row.ValueText);
 }
 
 /// <summary>The <c>env:</c> block (mapping form or whole-map expression form).</summary>
 public readonly struct EnvRef
 {
     private readonly AstArena? _arena;
-    private readonly Env? _node;
+    private readonly EnvId _id;
 
-    internal EnvRef(AstArena? arena, Env? node)
+    internal EnvRef(AstArena? arena, EnvId id)
     {
         _arena = arena;
-        _node = node;
+        _id = id;
     }
 
-    public bool HasValue => _node is not null && _arena is not null;
+    public bool HasValue => _arena is not null && _id.HasValue;
 
     /// <summary>The whole-map <c>${{ }}</c> expression, if used instead of a mapping.</summary>
-    public StringRef Expression => new(_arena, _node?.Expression ?? default);
+    public StringRef Expression => HasValue ? new(_arena, _arena!.GetEnv(_id).Expression) : default;
 
-    public EnvVarRefMap Vars => new(_arena, _node?.Vars);
+    public EnvVarRefMap Vars => HasValue ? new(_arena, _arena!.GetEnv(_id).Vars) : default;
 
-    public TextRange Range => _node?.Range ?? default;
+    public TextRange Range => HasValue ? _arena!.GetEnv(_id).Range : default;
 }
 
 /// <summary>A single environment variable (key-value pair).</summary>
-public readonly struct EnvVarRef : INodeRef<EnvVar, EnvVarRef>
+public readonly struct EnvVarRef
 {
     private readonly AstArena? _arena;
-    private readonly EnvVar _node;
+    private readonly EnvVarData _row;
 
-    internal EnvVarRef(AstArena? arena, EnvVar node)
+    internal EnvVarRef(AstArena? arena, in EnvVarData row)
     {
         _arena = arena;
-        _node = node;
+        _row = row;
     }
 
-    static EnvVarRef INodeRef<EnvVar, EnvVarRef>.Create(AstArena? arena, EnvVar node) => new(arena, node);
+    public StringRef Name => new(_arena, _row.Name);
 
-    public StringRef Name => new(_arena, _node.Name);
-
-    public StringRef Value => new(_arena, _node.Value);
+    public StringRef Value => new(_arena, _row.Value);
 }
 
 /// <summary>The <c>defaults:</c> section.</summary>
@@ -178,24 +174,24 @@ public readonly struct EnvironmentRef
 public readonly struct RunnerRef
 {
     private readonly AstArena? _arena;
-    private readonly Runner? _node;
+    private readonly RunnerId _id;
 
-    internal RunnerRef(AstArena? arena, Runner? node)
+    internal RunnerRef(AstArena? arena, RunnerId id)
     {
         _arena = arena;
-        _node = node;
+        _id = id;
     }
 
-    public bool HasValue => _node is not null && _arena is not null;
+    public bool HasValue => _arena is not null && _id.HasValue;
 
-    public StringRefList Labels => new(_arena, _node?.Labels ?? default);
+    public StringRefList Labels => HasValue ? new(_arena, _arena!.GetRunner(_id).Labels) : default;
 
     /// <summary>The whole-value <c>${{ }}</c> expression, if used for the labels.</summary>
-    public StringRef LabelsExpr => new(_arena, _node?.LabelsExpr ?? default);
+    public StringRef LabelsExpr => HasValue ? new(_arena, _arena!.GetRunner(_id).LabelsExpr) : default;
 
-    public StringRef Group => new(_arena, _node?.Group ?? default);
+    public StringRef Group => HasValue ? new(_arena, _arena!.GetRunner(_id).Group) : default;
 
-    public TextRange Range => _node?.Range ?? default;
+    public TextRange Range => HasValue ? _arena!.GetRunner(_id).Range : default;
 }
 
 /// <summary>The <c>strategy:</c> block for job execution strategy.</summary>
@@ -354,7 +350,7 @@ public readonly struct ContainerRef
 
     public CredentialsRef Credentials => new(_arena, _node?.Credentials ?? default);
 
-    public EnvRef Env => new(_arena, _node?.Env);
+    public EnvRef Env => new(_arena, _node?.Env ?? default);
 
     public StringRefList Ports => new(_arena, _node?.Ports ?? default);
 

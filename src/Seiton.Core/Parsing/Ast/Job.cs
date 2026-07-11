@@ -9,11 +9,11 @@ public sealed class Job
 
     public StringIdRange Needs { get; set; }
 
-    public Runner? RunsOn { get; set; }
+    public RunnerId RunsOn { get; set; }
 
     public TextRange? RunsOnKeyRange { get; set; }
 
-    public Permissions? Permissions { get; set; }
+    public PermissionsId Permissions { get; set; }
 
     public EnvironmentId Environment { get; set; }
 
@@ -21,7 +21,7 @@ public sealed class Job
 
     public SliceMap<StringNodeId>? Outputs { get; set; }
 
-    public Env? Env { get; set; }
+    public EnvId Env { get; set; }
 
     public DefaultsId Defaults { get; set; }
 
@@ -54,13 +54,13 @@ public sealed class Job
         Id = default;
         Name = default;
         Needs = default;
-        RunsOn = null;
+        RunsOn = default;
         RunsOnKeyRange = null;
-        Permissions = null;
+        Permissions = default;
         Environment = default;
         Concurrency = default;
         Outputs = null;
-        Env = null;
+        Env = default;
         Defaults = default;
         If = default;
         IfKeyRange = null;

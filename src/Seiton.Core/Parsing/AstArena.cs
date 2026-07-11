@@ -162,6 +162,11 @@ internal sealed class AstArena : IDisposable
     // Shared list store for StringNodeId ranges (needs, labels, filter values, ...).
     private NodeTable<StringNodeId> _stringIdItems;
 
+    private NodeTable<PermissionsData> _permissionsTable;
+    private NodeTable<PermissionScopeData> _permissionScopeTable;
+    private NodeTable<EnvData> _envTable;
+    private NodeTable<EnvVarData> _envVarTable;
+    private NodeTable<RunnerData> _runnerTable;
     private NodeTable<ConcurrencyData> _concurrencyTable;
     private NodeTable<EnvironmentData> _environmentTable;
     private NodeTable<CredentialsData> _credentialsTable;
@@ -196,9 +201,6 @@ internal sealed class AstArena : IDisposable
 
     // Object pools for section AST nodes (Permissions, Env, Runner, ...).
     // Same reuse semantics as the Job/Step pools above, via AstNodePool<T>.
-    private AstNodePool<Permissions> _permissionsPool = new(DefaultSectionNodeCapacity, static n => n.Reset());
-    private AstNodePool<Env> _envPool = new(DefaultEnvCapacity, static n => n.Reset());
-    private AstNodePool<Runner> _runnerPool = new(DefaultRunnerCapacity, static n => n.Reset());
     private AstNodePool<Strategy> _strategyPool = new(DefaultStrategyCapacity, static n => n.Reset());
     private AstNodePool<Matrix> _matrixPool = new(DefaultStrategyCapacity, static n => n.Reset());
     private AstNodePool<MatrixRow> _matrixRowPool = new(DefaultMatrixRowCapacity, static n => n.Reset());
@@ -367,9 +369,6 @@ internal sealed class AstArena : IDisposable
         for (var i = 0; i < _execParallelCount; i++) _execParallels[i]?.Reset();
 
         // Section node pools: reset allocated nodes and cap retained capacity
-        _permissionsPool.Release(DefaultSectionNodeCapacity);
-        _envPool.Release(DefaultEnvCapacity);
-        _runnerPool.Release(DefaultRunnerCapacity);
         _strategyPool.Release(DefaultStrategyCapacity);
         _matrixPool.Release(DefaultStrategyCapacity);
         _matrixRowPool.Release(DefaultMatrixRowCapacity);
@@ -384,6 +383,11 @@ internal sealed class AstArena : IDisposable
 
         // Data-oriented node tables: clear counts, cap retained capacity
         _stringIdItems.Reset();
+        _permissionsTable.Reset();
+        _permissionScopeTable.Reset();
+        _envTable.Reset();
+        _envVarTable.Reset();
+        _runnerTable.Reset();
         _concurrencyTable.Reset();
         _environmentTable.Reset();
         _credentialsTable.Reset();
@@ -391,6 +395,11 @@ internal sealed class AstArena : IDisposable
         _defaultsTable.Reset();
         _defaultsRunTable.Reset();
         _stringIdItems.ReleaseOversized(DefaultStringIdItemsRetainedCapacity);
+        _permissionsTable.ReleaseOversized(DefaultNodeTableRetainedCapacity);
+        _permissionScopeTable.ReleaseOversized(DefaultStringIdItemsRetainedCapacity);
+        _envTable.ReleaseOversized(DefaultStringIdItemsRetainedCapacity);
+        _envVarTable.ReleaseOversized(DefaultStringIdItemsRetainedCapacity);
+        _runnerTable.ReleaseOversized(DefaultNodeTableRetainedCapacity);
         _concurrencyTable.ReleaseOversized(DefaultNodeTableRetainedCapacity);
         _environmentTable.ReleaseOversized(DefaultNodeTableRetainedCapacity);
         _credentialsTable.ReleaseOversized(DefaultNodeTableRetainedCapacity);
@@ -456,6 +465,11 @@ internal sealed class AstArena : IDisposable
             ArrayPool<IntNodeData>.Shared.Return(_ints);
             ArrayPool<FloatNodeData>.Shared.Return(_floats);
             _stringIdItems.ReleaseAll();
+            _permissionsTable.ReleaseAll();
+            _permissionScopeTable.ReleaseAll();
+            _envTable.ReleaseAll();
+            _envVarTable.ReleaseAll();
+            _runnerTable.ReleaseAll();
             _concurrencyTable.ReleaseAll();
             _environmentTable.ReleaseAll();
             _credentialsTable.ReleaseAll();
@@ -504,7 +518,6 @@ internal sealed class AstArena : IDisposable
     // The shared StringNodeId list store grows with needs/labels/filter values across the file.
     private const int DefaultStringIdItemsRetainedCapacity = 512;
     private const int DefaultEnvCapacity = 64;
-    private const int DefaultRunnerCapacity = 24;
     private const int DefaultStrategyCapacity = 16;
     private const int DefaultMatrixRowCapacity = 32;
     private const int DefaultRawYamlValueCapacity = 64;
@@ -542,6 +555,11 @@ internal sealed class AstArena : IDisposable
         _execCancelCount = 0;
         _execParallelCount = 0;
         _stringIdItems.Reset();
+        _permissionsTable.Reset();
+        _permissionScopeTable.Reset();
+        _envTable.Reset();
+        _envVarTable.Reset();
+        _runnerTable.Reset();
         _concurrencyTable.Reset();
         _environmentTable.Reset();
         _credentialsTable.Reset();
@@ -922,14 +940,6 @@ internal sealed class AstArena : IDisposable
 
     // Section node pool allocation methods (same reset-on-alloc semantics as Job/Step above)
 
-    /// <summary>Returns a pooled or new <see cref="Permissions"/> with all fields reset to default.</summary>
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public Permissions AllocPermissions() => _permissionsPool.Alloc();
-
-    /// <summary>Returns a pooled or new <see cref="Env"/> with all fields reset to default.</summary>
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public Env AllocEnv() => _envPool.Alloc();
-
     // Data-oriented node table accessors (Stage 2)
 
     /// <summary>Copies the given string scalar handles into the shared list store and returns their range.</summary>
@@ -947,6 +957,52 @@ internal sealed class AstArena : IDisposable
     /// <summary>Resolves one element of a <see cref="StringIdRange"/>.</summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     internal StringNodeId GetStringIdAt(StringIdRange range, int index) => _stringIdItems[range.First + index];
+
+    /// <summary>Appends a <see cref="PermissionsData"/> row and returns its handle.</summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public PermissionsId AddPermissions(in PermissionsData data) => new(_permissionsTable.Add(in data) + 1);
+
+    /// <summary>Resolves a <see cref="PermissionsData"/> row.</summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    internal ref readonly PermissionsData GetPermissions(PermissionsId id) => ref _permissionsTable[id.Index];
+
+    /// <summary>Appends a <see cref="PermissionScopeData"/> row (rows of one map must be appended contiguously).</summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public int AddPermissionScope(in PermissionScopeData data) => _permissionScopeTable.Add(in data);
+
+    /// <summary>Gets the current permission-scope row count (range start capture).</summary>
+    internal int PermissionScopeCount => _permissionScopeTable.Count;
+
+    /// <summary>Resolves one element of a permission-scope <see cref="NodeRange"/>.</summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    internal ref readonly PermissionScopeData GetPermissionScopeAt(NodeRange range, int index) => ref _permissionScopeTable[range.First + index];
+
+    /// <summary>Appends an <see cref="EnvData"/> row and returns its handle.</summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public EnvId AddEnv(in EnvData data) => new(_envTable.Add(in data) + 1);
+
+    /// <summary>Resolves an <see cref="EnvData"/> row.</summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    internal ref readonly EnvData GetEnv(EnvId id) => ref _envTable[id.Index];
+
+    /// <summary>Appends an <see cref="EnvVarData"/> row (rows of one map must be appended contiguously).</summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public int AddEnvVar(in EnvVarData data) => _envVarTable.Add(in data);
+
+    /// <summary>Gets the current env-var row count (range start capture).</summary>
+    internal int EnvVarCount => _envVarTable.Count;
+
+    /// <summary>Resolves one element of an env-var <see cref="NodeRange"/>.</summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    internal ref readonly EnvVarData GetEnvVarAt(NodeRange range, int index) => ref _envVarTable[range.First + index];
+
+    /// <summary>Appends a <see cref="RunnerData"/> row and returns its handle.</summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public RunnerId AddRunner(in RunnerData data) => new(_runnerTable.Add(in data) + 1);
+
+    /// <summary>Resolves a <see cref="RunnerData"/> row.</summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    internal ref readonly RunnerData GetRunner(RunnerId id) => ref _runnerTable[id.Index];
 
     /// <summary>Appends a <see cref="DefaultsData"/> row and returns its handle.</summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -995,10 +1051,6 @@ internal sealed class AstArena : IDisposable
     /// <summary>Resolves a <see cref="SnapshotData"/> row.</summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     internal ref readonly SnapshotData GetSnapshot(SnapshotId id) => ref _snapshotTable[id.Index];
-
-    /// <summary>Returns a pooled or new <see cref="Runner"/> with all fields reset to default.</summary>
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public Runner AllocRunner() => _runnerPool.Alloc();
 
     /// <summary>Returns a pooled or new <see cref="Strategy"/> with all fields reset to default.</summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -1090,6 +1142,11 @@ internal sealed class AstArena : IDisposable
         // spliced when their source bytes are byte-identical at identical offsets, so
         // row indices (and the IDs stored in reused nodes) stay valid in this arena.
         _stringIdItems.CopyFrom(in source._stringIdItems, source._stringIdItems.Count);
+        _permissionsTable.CopyFrom(in source._permissionsTable, source._permissionsTable.Count);
+        _permissionScopeTable.CopyFrom(in source._permissionScopeTable, source._permissionScopeTable.Count);
+        _envTable.CopyFrom(in source._envTable, source._envTable.Count);
+        _envVarTable.CopyFrom(in source._envVarTable, source._envVarTable.Count);
+        _runnerTable.CopyFrom(in source._runnerTable, source._runnerTable.Count);
         _concurrencyTable.CopyFrom(in source._concurrencyTable, source._concurrencyTable.Count);
         _environmentTable.CopyFrom(in source._environmentTable, source._environmentTable.Count);
         _credentialsTable.CopyFrom(in source._credentialsTable, source._credentialsTable.Count);

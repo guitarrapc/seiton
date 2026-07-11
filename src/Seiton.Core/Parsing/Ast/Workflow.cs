@@ -9,9 +9,9 @@ public sealed class Workflow
 
     public IReadOnlyList<Event> On { get; internal set; } = [];
 
-    public Permissions? Permissions { get; internal set; }
+    public PermissionsId Permissions { get; internal set; }
 
-    public Env? Env { get; internal set; }
+    public EnvId Env { get; internal set; }
 
     public DefaultsId Defaults { get; internal set; }
 

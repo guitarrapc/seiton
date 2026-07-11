@@ -16,7 +16,7 @@ public sealed class Step
 
     public StepExec Exec { get; set; } = null!;
 
-    public Env? Env { get; set; }
+    public EnvId Env { get; set; }
 
     public BoolNodeId ContinueOnError { get; set; }
 
@@ -32,7 +32,7 @@ public sealed class Step
         Name = default;
         Background = default;
         Exec = null!;
-        Env = null;
+        Env = default;
         ContinueOnError = default;
         TimeoutMinutes = default;
         Range = default;

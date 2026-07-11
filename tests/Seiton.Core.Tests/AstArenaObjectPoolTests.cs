@@ -18,7 +18,7 @@ public sealed class AstArenaObjectPoolTests
         await Assert.That(job.Name.HasValue).IsFalse();
         await Assert.That(job.Needs.HasValue).IsFalse();
         await Assert.That(job.Steps).IsNull();
-        await Assert.That(job.RunsOn).IsNull();
+        await Assert.That(job.RunsOn.HasValue).IsFalse();
     }
 
     [Test]
@@ -32,7 +32,7 @@ public sealed class AstArenaObjectPoolTests
         await Assert.That(step).IsNotNull();
         await Assert.That(step.Id.HasValue).IsFalse();
         await Assert.That(step.Name.HasValue).IsFalse();
-        await Assert.That(step.Env).IsNull();
+        await Assert.That(step.Env.HasValue).IsFalse();
     }
 
     [Test]
@@ -212,7 +212,7 @@ public sealed class AstArenaObjectPoolTests
             var step = arena.AllocStep();
             await Assert.That(step).IsSameReferenceAs(originalSteps[i]);
             await Assert.That(step.Name.HasValue).IsFalse(); // Reset
-            await Assert.That(step.Env).IsNull(); // Reset
+            await Assert.That(step.Env.HasValue).IsFalse(); // Reset
         }
         arena.Dispose();
     }

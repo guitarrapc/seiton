@@ -46,12 +46,12 @@ public static partial class WorkflowParser
     {
         StringNodeId nameNode = default;
         StringIdRange needsNode = default;
-        Runner? runsOnNode = null;
-        Permissions? permissionsNode = null;
+        RunnerId runsOnNode = default;
+        PermissionsId permissionsNode = default;
         EnvironmentId environmentNode = default;
         ConcurrencyId concurrencyNode = default;
         SliceMap<StringNodeId>? outputsNode = null;
-        Env? envNode = null;
+        EnvId envNode = default;
         DefaultsId defaultsNode = default;
         StringNodeId ifNode = default;
         TextPosition ifKeyMark = default;
@@ -404,7 +404,7 @@ public static partial class WorkflowParser
         var hasUsesKey = workflowCallNode is not null && workflowCallNode.UsesKeyRange is not null;
         var hasUsesValue = hasUsesKey && arena.GetStringValue(workflowCallNode!.Uses).Length > 0;
         var hasSteps = stepsNode is not null;
-        var hasRunsOn = runsOnNode is not null;
+        var hasRunsOn = runsOnNode.HasValue;
 
         // spec §3.10.1: reusable workflow calls (`uses`) cannot also define `steps`
         if (hasUsesValue && hasSteps)
@@ -450,7 +450,7 @@ public static partial class WorkflowParser
         job.Name = nameNode;
         job.Needs = needsNode;
         job.RunsOn = runsOnNode;
-        job.RunsOnKeyRange = runsOnNode is not null ? BuildScalarLocation(runsOnKeyPos, 7) : null;
+        job.RunsOnKeyRange = runsOnNode.HasValue ? BuildScalarLocation(runsOnKeyPos, 7) : null;
         job.Permissions = permissionsNode;
         job.Environment = environmentNode;
         job.Concurrency = concurrencyNode;
@@ -627,7 +627,7 @@ public static partial class WorkflowParser
     }
 
 
-    private static Runner? ParseRunsOnNode<TReader>(ref TReader reader, AstArena arena, ref PooledBuffer<Diagnostic> diagnostics, ReadOnlySpan<byte> source, Utf8Slice jobId)
+    private static RunnerId ParseRunsOnNode<TReader>(ref TReader reader, AstArena arena, ref PooledBuffer<Diagnostic> diagnostics, ReadOnlySpan<byte> source, Utf8Slice jobId)
         where TReader : IYamlStreamReader, allows ref struct
     {
         string? section = null;
@@ -771,12 +771,13 @@ public static partial class WorkflowParser
                 AddError(ref diagnostics, $"{SectionName(source, jobId, ".runs-on", ref section)} requires labels", mappingStartMark);
             }
 
-            var mappingRunner = arena.AllocRunner();
-            mappingRunner.Labels = labels;
-            mappingRunner.LabelsExpr = labelsExpr;
-            mappingRunner.Group = group;
-            mappingRunner.Range = labelsExpr.HasValue ? arena.GetStringRange(labelsExpr) : group.HasValue ? arena.GetStringRange(group) : (labels.Count > 0 ? arena.GetStringRange(arena.GetStringIdAt(labels, 0)) : default);
-            return mappingRunner;
+            return arena.AddRunner(new RunnerData
+            {
+                Labels = labels,
+                LabelsExpr = labelsExpr,
+                Group = group,
+                Range = labelsExpr.HasValue ? arena.GetStringRange(labelsExpr) : group.HasValue ? arena.GetStringRange(group) : (labels.Count > 0 ? arena.GetStringRange(arena.GetStringIdAt(labels, 0)) : default),
+            });
         }
 
         if (reader.CurrentKind == YamlEventKind.Scalar)
@@ -786,10 +787,11 @@ public static partial class WorkflowParser
             {
                 var expr = ParseStringAndValidateExpression(ref reader, arena, ref diagnostics, ExpressionValidationContext.JobRunsOn, out var roExprErr, out var roExprMark, parseWholeValueIfNoEmbedded: false);
                 if (roExprErr) AddError(ref diagnostics, $"{SectionName(source, jobId, ".runs-on", ref section)} must be string, sequence, or mapping", roExprMark);
-                var exprRunner = arena.AllocRunner();
-                exprRunner.LabelsExpr = expr;
-                exprRunner.Range = expr.HasValue ? arena.GetStringRange(expr) : default;
-                return exprRunner;
+                return arena.AddRunner(new RunnerData
+                {
+                    LabelsExpr = expr,
+                    Range = expr.HasValue ? arena.GetStringRange(expr) : default,
+                });
             }
         }
 
@@ -807,10 +809,11 @@ public static partial class WorkflowParser
         {
             AddError(ref diagnostics, RunsOnSectionEmptyMessage, fbSeqMark);
         }
-        var runner = arena.AllocRunner();
-        runner.Labels = labelsFallback;
-        runner.Range = labelsFallback.Count > 0 ? arena.GetStringRange(arena.GetStringIdAt(labelsFallback, 0)) : default;
-        return runner;
+        return arena.AddRunner(new RunnerData
+        {
+            Labels = labelsFallback,
+            Range = labelsFallback.Count > 0 ? arena.GetStringRange(arena.GetStringIdAt(labelsFallback, 0)) : default,
+        });
     }
 
     private static EnvironmentId ParseEnvironmentNode<TReader>(ref TReader reader, AstArena arena, ref PooledBuffer<Diagnostic> diagnostics, ReadOnlySpan<byte> source, Utf8Slice jobId, TextPosition environmentKeyMark)

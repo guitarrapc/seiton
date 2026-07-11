@@ -26,9 +26,9 @@ public readonly struct WorkflowRef
 
     public EventRefList On => new(_arena, _node?.On);
 
-    public PermissionsRef Permissions => new(_arena, _node?.Permissions);
+    public PermissionsRef Permissions => new(_arena, _node?.Permissions ?? default);
 
-    public EnvRef Env => new(_arena, _node?.Env);
+    public EnvRef Env => new(_arena, _node?.Env ?? default);
 
     public DefaultsRef Defaults => new(_arena, _node?.Defaults ?? default);
 
@@ -63,11 +63,11 @@ public readonly struct JobRef : IEquatable<JobRef>, INodeRef<Job, JobRef>
 
     public StringRefList Needs => new(_arena, _node?.Needs ?? default);
 
-    public RunnerRef RunsOn => new(_arena, _node?.RunsOn);
+    public RunnerRef RunsOn => new(_arena, _node?.RunsOn ?? default);
 
     public TextRange? RunsOnKeyRange => _node?.RunsOnKeyRange;
 
-    public PermissionsRef Permissions => new(_arena, _node?.Permissions);
+    public PermissionsRef Permissions => new(_arena, _node?.Permissions ?? default);
 
     public EnvironmentRef Environment => new(_arena, _node?.Environment ?? default);
 
@@ -75,7 +75,7 @@ public readonly struct JobRef : IEquatable<JobRef>, INodeRef<Job, JobRef>
 
     public StringRefMap Outputs => new(_arena, _node?.Outputs);
 
-    public EnvRef Env => new(_arena, _node?.Env);
+    public EnvRef Env => new(_arena, _node?.Env ?? default);
 
     public DefaultsRef Defaults => new(_arena, _node?.Defaults ?? default);
 
@@ -143,7 +143,7 @@ public readonly struct StepRef : IEquatable<StepRef>
 
     public StepExecRef Exec => new(_arena, _node?.Exec);
 
-    public EnvRef Env => new(_arena, _node?.Env);
+    public EnvRef Env => new(_arena, _node?.Env ?? default);
 
     public BoolRef ContinueOnError => new(_arena, _node?.ContinueOnError ?? default);
 

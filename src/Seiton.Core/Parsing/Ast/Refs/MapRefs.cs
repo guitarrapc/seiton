@@ -143,46 +143,198 @@ public readonly struct StringRefMap
     public RefMap<StringNodeId, StringRef>.Enumerator GetEnumerator() => _core.GetEnumerator();
 }
 
-/// <summary>The per-scope entries of a <c>permissions:</c> map.</summary>
+/// <summary>The per-scope entries of a <c>permissions:</c> map (case-sensitive keys, row-table backed).</summary>
 public readonly struct PermissionScopeRefMap
 {
-    private readonly RefMap<PermissionScope, PermissionScopeRef> _core;
+    private readonly AstArena? _arena;
+    private readonly NodeRange _range;
 
-    internal PermissionScopeRefMap(AstArena? arena, SliceMap<PermissionScope>? map) => _core = new(arena, map);
+    internal PermissionScopeRefMap(AstArena? arena, NodeRange range)
+    {
+        _arena = arena;
+        _range = range;
+    }
 
-    public bool HasValue => _core.HasValue;
+    public bool HasValue => _arena is not null && _range.HasValue;
 
-    public int Count => _core.Count;
+    public int Count => _range.Count;
 
-    public bool TryGetValue(ReadOnlySpan<byte> key, out PermissionScopeRef value) => _core.TryGetValue(key, out value);
+    public bool TryGetValue(ReadOnlySpan<byte> key, out PermissionScopeRef value)
+    {
+        if (_arena is not null)
+        {
+            for (var i = 0; i < _range.Count; i++)
+            {
+                ref readonly var row = ref _arena.GetPermissionScopeAt(_range, i);
+                if (row.Key.AsSpan(_arena.Source).SequenceEqual(key))
+                {
+                    value = new PermissionScopeRef(_arena, in row);
+                    return true;
+                }
+            }
+        }
 
-    public bool ContainsKey(ReadOnlySpan<byte> key) => _core.ContainsKey(key);
+        value = default;
+        return false;
+    }
+
+    public bool ContainsKey(ReadOnlySpan<byte> key) => TryGetValue(key, out _);
 
     /// <summary>Returns the entry at the given document-order index.</summary>
-    public RefMap<PermissionScope, PermissionScopeRef>.Entry GetAt(int index) => _core.GetAt(index);
+    public Entry GetAt(int index)
+    {
+        if (_arena is null || (uint)index >= (uint)_range.Count)
+        {
+            throw new ArgumentOutOfRangeException(nameof(index));
+        }
 
-    public RefMap<PermissionScope, PermissionScopeRef>.Enumerator GetEnumerator() => _core.GetEnumerator();
+        ref readonly var row = ref _arena.GetPermissionScopeAt(_range, index);
+        return new Entry(new KeyRef(_arena, row.Key), new PermissionScopeRef(_arena, in row));
+    }
+
+    public Enumerator GetEnumerator() => new(_arena, _range);
+
+    /// <summary>A key-value pair yielded during enumeration.</summary>
+    public readonly struct Entry
+    {
+        internal Entry(KeyRef key, PermissionScopeRef value)
+        {
+            Key = key;
+            Value = value;
+        }
+
+        public KeyRef Key { get; }
+
+        public PermissionScopeRef Value { get; }
+
+        public void Deconstruct(out KeyRef key, out PermissionScopeRef value)
+        {
+            key = Key;
+            value = Value;
+        }
+    }
+
+    public struct Enumerator
+    {
+        private readonly AstArena? _arena;
+        private readonly NodeRange _range;
+        private int _index;
+
+        internal Enumerator(AstArena? arena, NodeRange range)
+        {
+            _arena = arena;
+            _range = range;
+            _index = -1;
+        }
+
+        public bool MoveNext() => _arena is not null && ++_index < _range.Count;
+
+        public readonly Entry Current
+        {
+            get
+            {
+                ref readonly var row = ref _arena!.GetPermissionScopeAt(_range, _index);
+                return new Entry(new KeyRef(_arena, row.Key), new PermissionScopeRef(_arena, in row));
+            }
+        }
+    }
 }
 
-/// <summary>The variable entries of an <c>env:</c> map.</summary>
+/// <summary>The variable entries of an <c>env:</c> map (case-sensitive keys, row-table backed).</summary>
 public readonly struct EnvVarRefMap
 {
-    private readonly RefMap<EnvVar, EnvVarRef> _core;
+    private readonly AstArena? _arena;
+    private readonly NodeRange _range;
 
-    internal EnvVarRefMap(AstArena? arena, SliceMap<EnvVar>? map) => _core = new(arena, map);
+    internal EnvVarRefMap(AstArena? arena, NodeRange range)
+    {
+        _arena = arena;
+        _range = range;
+    }
 
-    public bool HasValue => _core.HasValue;
+    public bool HasValue => _arena is not null && _range.HasValue;
 
-    public int Count => _core.Count;
+    public int Count => _range.Count;
 
-    public bool TryGetValue(ReadOnlySpan<byte> key, out EnvVarRef value) => _core.TryGetValue(key, out value);
+    public bool TryGetValue(ReadOnlySpan<byte> key, out EnvVarRef value)
+    {
+        if (_arena is not null)
+        {
+            for (var i = 0; i < _range.Count; i++)
+            {
+                ref readonly var row = ref _arena.GetEnvVarAt(_range, i);
+                if (row.Key.AsSpan(_arena.Source).SequenceEqual(key))
+                {
+                    value = new EnvVarRef(_arena, in row);
+                    return true;
+                }
+            }
+        }
 
-    public bool ContainsKey(ReadOnlySpan<byte> key) => _core.ContainsKey(key);
+        value = default;
+        return false;
+    }
+
+    public bool ContainsKey(ReadOnlySpan<byte> key) => TryGetValue(key, out _);
 
     /// <summary>Returns the entry at the given document-order index.</summary>
-    public RefMap<EnvVar, EnvVarRef>.Entry GetAt(int index) => _core.GetAt(index);
+    public Entry GetAt(int index)
+    {
+        if (_arena is null || (uint)index >= (uint)_range.Count)
+        {
+            throw new ArgumentOutOfRangeException(nameof(index));
+        }
 
-    public RefMap<EnvVar, EnvVarRef>.Enumerator GetEnumerator() => _core.GetEnumerator();
+        ref readonly var row = ref _arena.GetEnvVarAt(_range, index);
+        return new Entry(new KeyRef(_arena, row.Key), new EnvVarRef(_arena, in row));
+    }
+
+    public Enumerator GetEnumerator() => new(_arena, _range);
+
+    /// <summary>A key-value pair yielded during enumeration.</summary>
+    public readonly struct Entry
+    {
+        internal Entry(KeyRef key, EnvVarRef value)
+        {
+            Key = key;
+            Value = value;
+        }
+
+        public KeyRef Key { get; }
+
+        public EnvVarRef Value { get; }
+
+        public void Deconstruct(out KeyRef key, out EnvVarRef value)
+        {
+            key = Key;
+            value = Value;
+        }
+    }
+
+    public struct Enumerator
+    {
+        private readonly AstArena? _arena;
+        private readonly NodeRange _range;
+        private int _index;
+
+        internal Enumerator(AstArena? arena, NodeRange range)
+        {
+            _arena = arena;
+            _range = range;
+            _index = -1;
+        }
+
+        public bool MoveNext() => _arena is not null && ++_index < _range.Count;
+
+        public readonly Entry Current
+        {
+            get
+            {
+                ref readonly var row = ref _arena!.GetEnvVarAt(_range, _index);
+                return new Entry(new KeyRef(_arena, row.Key), new EnvVarRef(_arena, in row));
+            }
+        }
+    }
 }
 
 /// <summary>The row (dimension) entries of a <c>matrix:</c> map.</summary>

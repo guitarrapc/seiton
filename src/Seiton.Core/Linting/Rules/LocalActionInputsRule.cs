@@ -243,7 +243,7 @@ public sealed class LocalActionInputsRule() : RuleBase(RuleId.LocalActionInputs)
             var isJsAction = IsJavaScriptAction(meta.Runs, actionSource, actionArena);
 
             // 2. env not allowed for JavaScript actions
-            if (isJsAction && meta.Runs.Env is not null)
+            if (isJsAction && meta.Runs.Env.HasValue)
             {
                 AddStepError(step, $"\"env\" is not allowed in \"runs\" section because \"{actionName}\" is a JavaScript action", usesLocation);
             }

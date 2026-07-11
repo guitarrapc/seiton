@@ -602,7 +602,7 @@ public static partial class WorkflowParser
         StringNodeId image = default;
         StringNodeId entrypoint = default;
         StringIdRange args = default;
-        Env? env = null;
+        EnvId env = default;
         IReadOnlyList<Step>? steps = null;
         ulong seen = 0;
         reader.Read();

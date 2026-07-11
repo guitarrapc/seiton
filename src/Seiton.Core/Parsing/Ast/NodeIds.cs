@@ -120,6 +120,102 @@ public readonly record struct SnapshotId
     }
 }
 
+/// <summary>
+/// A (first, count) range over rows in an arena node table. The owning field/accessor
+/// implies which table the range addresses (e.g. <c>PermissionsData.Scopes</c> → the
+/// permission-scope table). <c>default</c> = section absent; present-but-empty has
+/// <see cref="HasValue"/> with Count 0.
+/// </summary>
+public readonly record struct NodeRange
+{
+    private readonly int _firstRaw;
+    private readonly int _count;
+
+    internal NodeRange(int first, int count)
+    {
+        _firstRaw = first + 1;
+        _count = count;
+    }
+
+    public bool HasValue
+    {
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        get => _firstRaw > 0;
+    }
+
+    public int Count
+    {
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        get => _count;
+    }
+
+    internal int First
+    {
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        get => _firstRaw - 1;
+    }
+}
+
+/// <summary>Handle referencing a <see cref="PermissionsData"/> row.</summary>
+public readonly record struct PermissionsId
+{
+    private readonly int _raw;
+
+    internal PermissionsId(int raw) => _raw = raw;
+
+    public bool HasValue
+    {
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        get => _raw > 0;
+    }
+
+    internal int Index
+    {
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        get => _raw - 1;
+    }
+}
+
+/// <summary>Handle referencing an <see cref="EnvData"/> row.</summary>
+public readonly record struct EnvId
+{
+    private readonly int _raw;
+
+    internal EnvId(int raw) => _raw = raw;
+
+    public bool HasValue
+    {
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        get => _raw > 0;
+    }
+
+    internal int Index
+    {
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        get => _raw - 1;
+    }
+}
+
+/// <summary>Handle referencing a <see cref="RunnerData"/> row.</summary>
+public readonly record struct RunnerId
+{
+    private readonly int _raw;
+
+    internal RunnerId(int raw) => _raw = raw;
+
+    public bool HasValue
+    {
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        get => _raw > 0;
+    }
+
+    internal int Index
+    {
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        get => _raw - 1;
+    }
+}
+
 /// <summary>Handle referencing a <see cref="DefaultsData"/> row.</summary>
 public readonly record struct DefaultsId
 {

@@ -67,7 +67,7 @@ public sealed class ActionMetadataRuns
 
     public StringIdRange Args { get; init; }
 
-    public Env? Env { get; init; }
+    public EnvId Env { get; init; }
 
     public IReadOnlyList<Step>? Steps { get; init; }
 

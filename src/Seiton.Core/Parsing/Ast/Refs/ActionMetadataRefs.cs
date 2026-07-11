@@ -117,7 +117,7 @@ public readonly struct ActionMetadataRunsRef
 
     public StringRefList Args => new(_arena, _node?.Args ?? default);
 
-    public EnvRef Env => new(_arena, _node?.Env);
+    public EnvRef Env => new(_arena, _node?.Env ?? default);
 
     public StepRefList Steps => new(_arena, _node?.Steps);
 

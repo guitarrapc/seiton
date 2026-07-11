@@ -199,7 +199,7 @@ public static partial class WorkflowParser
         TextPosition ifKeyMark = default;
         StringNodeId nameNode = default;
         BoolNodeId backgroundNode = default;
-        Env? envNode = null;
+        EnvId envNode = default;
         BoolNodeId continueOnErrorNode = default;
         FloatNodeId timeoutMinutesNode = default;
         StringNodeId runNode = default;

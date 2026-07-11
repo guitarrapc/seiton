@@ -524,8 +524,8 @@ public static partial class WorkflowParser
 
         StringNodeId nameNode = default;
         StringNodeId runNameNode = default;
-        Permissions? permissionsNode = null;
-        Env? envNode = null;
+        PermissionsId permissionsNode = default;
+        EnvId envNode = default;
         DefaultsId defaultsNode = default;
         ConcurrencyId concurrencyNode = default;
         var hasOn = false;
@@ -830,7 +830,7 @@ public static partial class WorkflowParser
         return new ParseCoreResult(workflow, null, hasFatalError: false, arena);
     }
 
-    private static Permissions? ParsePermissionsNode<TReader>(ref TReader reader, AstArena arena, ref PooledBuffer<Diagnostic> diagnostics, ReadOnlySpan<byte> source, string error)
+    private static PermissionsId ParsePermissionsNode<TReader>(ref TReader reader, AstArena arena, ref PooledBuffer<Diagnostic> diagnostics, ReadOnlySpan<byte> source, string error)
         where TReader : IYamlStreamReader, allows ref struct
     {
         if (reader.CurrentKind == YamlEventKind.Scalar)
@@ -843,13 +843,14 @@ public static partial class WorkflowParser
 
             if (!all.HasValue)
             {
-                return null;
+                return default;
             }
 
-            var scalarPermissions = arena.AllocPermissions();
-            scalarPermissions.All = all;
-            scalarPermissions.Range = arena.GetStringRange(all);
-            return scalarPermissions;
+            return arena.AddPermissions(new PermissionsData
+            {
+                All = all,
+                Range = arena.GetStringRange(all),
+            });
         }
 
         if (reader.CurrentKind != YamlEventKind.MappingStart)
@@ -862,94 +863,94 @@ public static partial class WorkflowParser
 
         var mappingStart = reader.CurrentStart;
         var range = BuildScalarLocation(mappingStart, 1);
-        var scopes = new PooledBuffer<SliceMap<PermissionScope>.Entry>(8);
-        try
+        // Scope rows are appended contiguously into the arena's permission-scope table;
+        // nested ParseString calls only touch the scalar tables, so the range stays dense.
+        var scopesFirst = arena.PermissionScopeCount;
+        var scopeCount = 0;
+        Span<long> keyStore = stackalloc long[64];
+        var keyCount = 0;
+        reader.Read(); // consume MappingStart
+        while (!reader.End && reader.CurrentKind != YamlEventKind.MappingEnd)
         {
-            Span<long> keyStore = stackalloc long[64];
-            var keyCount = 0;
-            reader.Read(); // consume MappingStart
-            while (!reader.End && reader.CurrentKind != YamlEventKind.MappingEnd)
+            if (reader.CurrentKind != YamlEventKind.Scalar)
             {
-                if (reader.CurrentKind != YamlEventKind.Scalar)
+                AddError(ref diagnostics, error, reader.CurrentStart);
+                reader.SkipCurrentNode();
+                if (!reader.End && reader.CurrentKind != YamlEventKind.MappingEnd)
                 {
-                    AddError(ref diagnostics, error, reader.CurrentStart);
                     reader.SkipCurrentNode();
-                    if (!reader.End && reader.CurrentKind != YamlEventKind.MappingEnd)
-                    {
-                        reader.SkipCurrentNode();
-                    }
-                    continue;
                 }
-
-                var keyMark = reader.CurrentStart;
-                var keySlice = reader.GetScalarSlice();
-                var keyUtf8 = reader.GetScalarUtf8();
-                if (!TryRegisterDynamicKey(
-                    source,
-                    keyUtf8,
-                    keySlice.Offset,
-                    keySlice.Length,
-                    keyMark,
-                    ref diagnostics,
-                    keyStore,
-                    ref keyCount,
-                    caseSensitive: false,
-                    "permissions"))
-                {
-                    reader.Read();
-                    if (!reader.End)
-                    {
-                        reader.SkipCurrentNode();
-                    }
-
-                    continue;
-                }
-
-                var keyNode = arena.AddString(keySlice, reader.IsScalarQuoted(), BuildScalarLocation(keyMark, keyUtf8.Length));
-
-                reader.Read(); // consume key
-                if (reader.End)
-                {
-                    break;
-                }
-
-                var valueNode = ParseString(ref reader, arena, ref diagnostics, error);
-                if (!valueNode.HasValue)
-                {
-                    continue;
-                }
-
-                // Use the slice stored in the arena (computed by ParseString's single GetScalarSlice call)
-                // to avoid calling GetScalarSlice twice for the same scalar 窶・which would advance the cursor
-                // past the value and cause a position mismatch.
-                var valueSlice = arena.GetStringSlice(valueNode);
-
-                scopes.Add(new SliceMap<PermissionScope>.Entry(keySlice, new PermissionScope
-                {
-                    Name = keyNode,
-                    NameText = keySlice,
-                    Value = valueNode,
-                    ValueText = valueSlice,
-                }));
+                continue;
             }
 
-            if (reader.CurrentKind == YamlEventKind.MappingEnd)
+            var keyMark = reader.CurrentStart;
+            var keySlice = reader.GetScalarSlice();
+            var keyUtf8 = reader.GetScalarUtf8();
+            if (!TryRegisterDynamicKey(
+                source,
+                keyUtf8,
+                keySlice.Offset,
+                keySlice.Length,
+                keyMark,
+                ref diagnostics,
+                keyStore,
+                ref keyCount,
+                caseSensitive: false,
+                "permissions"))
             {
-                range = BuildCompositeLocation(mappingStart, reader.CurrentEnd);
                 reader.Read();
+                if (!reader.End)
+                {
+                    reader.SkipCurrentNode();
+                }
+
+                continue;
             }
 
-            var (scopeEntries, scopeCount) = scopes.DetachArray();
-            arena.RegisterSliceMapBuffer(scopeEntries);
-            var permissions = arena.AllocPermissions();
-            permissions.Scopes = new SliceMap<PermissionScope>(scopeEntries, scopeCount, caseSensitive: true);
-            permissions.Range = range;
-            return permissions;
+            var keyNode = arena.AddString(keySlice, reader.IsScalarQuoted(), BuildScalarLocation(keyMark, keyUtf8.Length));
+
+            reader.Read(); // consume key
+            if (reader.End)
+            {
+                break;
+            }
+
+            var valueNode = ParseString(ref reader, arena, ref diagnostics, error);
+            if (!valueNode.HasValue)
+            {
+                continue;
+            }
+
+            // Use the slice stored in the arena (computed by ParseString's single GetScalarSlice call)
+            // to avoid calling GetScalarSlice twice for the same scalar — which would advance the cursor
+            // past the value and cause a position mismatch.
+            var valueSlice = arena.GetStringSlice(valueNode);
+
+            arena.AddPermissionScope(new PermissionScopeData
+            {
+                Key = keySlice,
+                Name = keyNode,
+                NameText = keySlice,
+                Value = valueNode,
+                ValueText = valueSlice,
+            });
+            scopeCount++;
         }
-        finally { scopes.Dispose(); }
+
+        if (reader.CurrentKind == YamlEventKind.MappingEnd)
+        {
+            range = BuildCompositeLocation(mappingStart, reader.CurrentEnd);
+            reader.Read();
+        }
+
+        return arena.AddPermissions(new PermissionsData
+        {
+            Scopes = new NodeRange(scopesFirst, scopeCount),
+            Range = range,
+        });
     }
 
-    private static Env? ParseEnvNode<TReader>(ref TReader reader, AstArena arena, ref PooledBuffer<Diagnostic> diagnostics, ReadOnlySpan<byte> source, SectionText error, ExpressionValidationContext expressionContext, SectionText sectionName = default)
+    private static EnvId ParseEnvNode<TReader>(ref TReader reader, AstArena arena, ref PooledBuffer<Diagnostic> diagnostics, ReadOnlySpan<byte> source, SectionText error, ExpressionValidationContext expressionContext, SectionText sectionName = default)
         where TReader : IYamlStreamReader, allows ref struct
     {
         if (reader.CurrentKind == YamlEventKind.Scalar)
@@ -960,19 +961,20 @@ public static partial class WorkflowParser
             {
                 AddError(ref diagnostics, $"expecting a single ${{{{...}}}} expression or mapping value for \"env\" section, but found plain text node", reader.CurrentStart);
                 reader.SkipCurrentNode();
-                return null;
+                return default;
             }
 
             var expression = ParseStringAndValidateExpression(ref reader, arena, ref diagnostics, expressionContext, error, parseWholeValueIfNoEmbedded: false);
             if (!expression.HasValue)
             {
-                return null;
+                return default;
             }
 
-            var expressionEnv = arena.AllocEnv();
-            expressionEnv.Expression = expression;
-            expressionEnv.Range = arena.GetStringRange(expression);
-            return expressionEnv;
+            return arena.AddEnv(new EnvData
+            {
+                Expression = expression,
+                Range = arena.GetStringRange(expression),
+            });
         }
 
         if (reader.CurrentKind != YamlEventKind.MappingStart)
@@ -984,84 +986,84 @@ public static partial class WorkflowParser
 
         var mappingStart = reader.CurrentStart;
         var range = BuildScalarLocation(mappingStart, 1);
-        var vars = new PooledBuffer<SliceMap<EnvVar>.Entry>(8);
-        try
+        // Var rows are appended contiguously into the arena's env-var table; nested
+        // value parsing only touches the scalar tables, so the range stays dense.
+        var varsFirst = arena.EnvVarCount;
+        var varCount = 0;
+        Span<long> keyStore = stackalloc long[64];
+        var keyCount = 0;
+        reader.Read(); // consume MappingStart
+        while (!reader.End && reader.CurrentKind != YamlEventKind.MappingEnd)
         {
-            Span<long> keyStore = stackalloc long[64];
-            var keyCount = 0;
-            reader.Read(); // consume MappingStart
-            while (!reader.End && reader.CurrentKind != YamlEventKind.MappingEnd)
+            if (reader.CurrentKind != YamlEventKind.Scalar)
             {
-                if (reader.CurrentKind != YamlEventKind.Scalar)
+                AddError(ref diagnostics, error.ToString(), reader.CurrentStart);
+                reader.SkipCurrentNode();
+                if (!reader.End && reader.CurrentKind != YamlEventKind.MappingEnd)
                 {
-                    AddError(ref diagnostics, error.ToString(), reader.CurrentStart);
                     reader.SkipCurrentNode();
-                    if (!reader.End && reader.CurrentKind != YamlEventKind.MappingEnd)
-                    {
-                        reader.SkipCurrentNode();
-                    }
-                    continue;
                 }
-
-                var keyMark = reader.CurrentStart;
-                var keySlice = reader.GetScalarSlice();
-                var keyUtf8 = reader.GetScalarUtf8();
-                if (!TryRegisterDynamicKey(
-                    source,
-                    keyUtf8,
-                    keySlice.Offset,
-                    keySlice.Length,
-                    keyMark,
-                    ref diagnostics,
-                    keyStore,
-                    ref keyCount,
-                    caseSensitive: false,
-                    sectionName.IsEmpty ? error : sectionName))
-                {
-                    reader.Read();
-                    if (!reader.End)
-                    {
-                        reader.SkipCurrentNode();
-                    }
-
-                    continue;
-                }
-
-                var keyNode = arena.AddString(keySlice, reader.IsScalarQuoted(), BuildScalarLocation(keyMark, keyUtf8.Length));
-
-                reader.Read(); // consume key
-                if (reader.End)
-                {
-                    break;
-                }
-
-                var valueNode = ParseStringAndValidateExpression(ref reader, arena, ref diagnostics, expressionContext, error, parseWholeValueIfNoEmbedded: false);
-                if (!valueNode.HasValue)
-                {
-                    continue;
-                }
-
-                vars.Add(new SliceMap<EnvVar>.Entry(keySlice, new EnvVar
-                {
-                    Name = keyNode,
-                    Value = valueNode,
-                }));
+                continue;
             }
 
-            if (reader.CurrentKind == YamlEventKind.MappingEnd)
+            var keyMark = reader.CurrentStart;
+            var keySlice = reader.GetScalarSlice();
+            var keyUtf8 = reader.GetScalarUtf8();
+            if (!TryRegisterDynamicKey(
+                source,
+                keyUtf8,
+                keySlice.Offset,
+                keySlice.Length,
+                keyMark,
+                ref diagnostics,
+                keyStore,
+                ref keyCount,
+                caseSensitive: false,
+                sectionName.IsEmpty ? error : sectionName))
             {
-                range = BuildCompositeLocation(mappingStart, reader.CurrentEnd);
                 reader.Read();
+                if (!reader.End)
+                {
+                    reader.SkipCurrentNode();
+                }
+
+                continue;
             }
 
-            var (varEntries, varCount) = vars.DetachArray();
-            arena.RegisterSliceMapBuffer(varEntries);
-            var env = arena.AllocEnv();
-            env.Vars = new SliceMap<EnvVar>(varEntries, varCount, caseSensitive: true);
-            env.Range = range;
-            return env;
+            var keyNode = arena.AddString(keySlice, reader.IsScalarQuoted(), BuildScalarLocation(keyMark, keyUtf8.Length));
+
+            reader.Read(); // consume key
+            if (reader.End)
+            {
+                break;
+            }
+
+            var valueNode = ParseStringAndValidateExpression(ref reader, arena, ref diagnostics, expressionContext, error, parseWholeValueIfNoEmbedded: false);
+            if (!valueNode.HasValue)
+            {
+                continue;
+            }
+
+            arena.AddEnvVar(new EnvVarData
+            {
+                Key = keySlice,
+                Name = keyNode,
+                Value = valueNode,
+            });
+            varCount++;
         }
-        finally { vars.Dispose(); }
+
+        if (reader.CurrentKind == YamlEventKind.MappingEnd)
+        {
+            range = BuildCompositeLocation(mappingStart, reader.CurrentEnd);
+            reader.Read();
+        }
+
+        return arena.AddEnv(new EnvData
+        {
+            Vars = new NodeRange(varsFirst, varCount),
+            Range = range,
+        });
     }
 
     private static DefaultsId ParseDefaultsNode<TReader>(ref TReader reader, AstArena arena, ref PooledBuffer<Diagnostic> diagnostics, string error, ExpressionValidationContext? expressionContext = null, string sectionContext = "")
