@@ -1683,6 +1683,10 @@ public static class ExpressionSemanticAnalyzer
     // invocations never overlap: the walker validates argument subtrees before the
     // enclosing call node, and InferTypeWithOverrides never re-enters validation.
     // ThreadStatic because the analyzer is static and lint engines are per-thread.
+    // Capacity is capped: wider calls fall back to a one-off array so a single
+    // pathological expression cannot pin a peak-sized buffer for the thread's lifetime.
+    private const int MaxCachedArgTypeCount = 64;
+
     [ThreadStatic]
     private static ExprType[]? threadstaticArgTypesBuffer;
 
@@ -1713,11 +1717,24 @@ public static class ExpressionSemanticAnalyzer
         }
 
         var argCount = node.ArgCount;
-        var argTypesBuffer = threadstaticArgTypesBuffer;
-        if (argTypesBuffer is null || argTypesBuffer.Length < argCount)
+        if (argCount == 0)
         {
-            argTypesBuffer = new ExprType[Math.Max(argCount, 8)];
-            threadstaticArgTypesBuffer = argTypesBuffer;
+            // Zero-arg calls can never have an override-refined argument type, so the
+            // hasConcreteOverride check below would always bail — return before touching
+            // the scratch buffer.
+            return;
+        }
+
+        ExprType[] argTypesBuffer;
+        if (argCount > MaxCachedArgTypeCount)
+        {
+            // Pathologically wide call (user-controlled input): use a one-off array
+            // instead of retaining a peak-sized buffer for the thread's lifetime.
+            argTypesBuffer = new ExprType[argCount];
+        }
+        else
+        {
+            argTypesBuffer = threadstaticArgTypesBuffer ??= new ExprType[MaxCachedArgTypeCount];
         }
 
         var argTypes = argTypesBuffer.AsSpan(0, argCount);
