@@ -337,88 +337,392 @@ public readonly struct EnvVarRefMap
     }
 }
 
-/// <summary>The row (dimension) entries of a <c>matrix:</c> map.</summary>
+/// <summary>The row (dimension) entries of a <c>matrix:</c> map (case-insensitive keys, row-table backed).</summary>
 public readonly struct MatrixRowRefMap
 {
-    private readonly RefMap<MatrixRow, MatrixRowRef> _core;
+    private readonly AstArena? _arena;
+    private readonly NodeRange _range;
 
-    internal MatrixRowRefMap(AstArena? arena, SliceMap<MatrixRow>? map) => _core = new(arena, map);
+    internal MatrixRowRefMap(AstArena? arena, NodeRange range)
+    {
+        _arena = arena;
+        _range = range;
+    }
 
-    public bool HasValue => _core.HasValue;
+    public bool HasValue => _arena is not null && _range.HasValue;
 
-    public int Count => _core.Count;
+    public int Count => _range.Count;
 
-    public bool TryGetValue(ReadOnlySpan<byte> key, out MatrixRowRef value) => _core.TryGetValue(key, out value);
+    public bool TryGetValue(ReadOnlySpan<byte> key, out MatrixRowRef value)
+    {
+        if (_arena is not null)
+        {
+            for (var i = 0; i < _range.Count; i++)
+            {
+                ref readonly var row = ref _arena.GetMatrixRowAt(_range, i);
+                if (SliceMap<int>.AsciiEqualsIgnoreCase(row.Key.AsSpan(_arena.Source), key))
+                {
+                    value = new MatrixRowRef(_arena, in row);
+                    return true;
+                }
+            }
+        }
 
-    public bool ContainsKey(ReadOnlySpan<byte> key) => _core.ContainsKey(key);
+        value = default;
+        return false;
+    }
+
+    public bool ContainsKey(ReadOnlySpan<byte> key) => TryGetValue(key, out _);
 
     /// <summary>Returns the entry at the given document-order index.</summary>
-    public RefMap<MatrixRow, MatrixRowRef>.Entry GetAt(int index) => _core.GetAt(index);
+    public Entry GetAt(int index)
+    {
+        if (_arena is null || (uint)index >= (uint)_range.Count)
+        {
+            throw new ArgumentOutOfRangeException(nameof(index));
+        }
 
-    public RefMap<MatrixRow, MatrixRowRef>.Enumerator GetEnumerator() => _core.GetEnumerator();
+        ref readonly var row = ref _arena.GetMatrixRowAt(_range, index);
+        return new Entry(new KeyRef(_arena, row.Key), new MatrixRowRef(_arena, in row));
+    }
+
+    public Enumerator GetEnumerator() => new(_arena, _range);
+
+    /// <summary>A key-value pair yielded during enumeration.</summary>
+    public readonly struct Entry
+    {
+        internal Entry(KeyRef key, MatrixRowRef value)
+        {
+            Key = key;
+            Value = value;
+        }
+
+        public KeyRef Key { get; }
+
+        public MatrixRowRef Value { get; }
+
+        public void Deconstruct(out KeyRef key, out MatrixRowRef value)
+        {
+            key = Key;
+            value = Value;
+        }
+    }
+
+    public struct Enumerator
+    {
+        private readonly AstArena? _arena;
+        private readonly NodeRange _range;
+        private int _index;
+
+        internal Enumerator(AstArena? arena, NodeRange range)
+        {
+            _arena = arena;
+            _range = range;
+            _index = -1;
+        }
+
+        public bool MoveNext() => _arena is not null && ++_index < _range.Count;
+
+        public readonly Entry Current
+        {
+            get
+            {
+                ref readonly var row = ref _arena!.GetMatrixRowAt(_range, _index);
+                return new Entry(new KeyRef(_arena, row.Key), new MatrixRowRef(_arena, in row));
+            }
+        }
+    }
 }
 
-/// <summary>The named service containers of a <c>services:</c> map.</summary>
+/// <summary>The named service containers of a <c>services:</c> map (case-insensitive keys, row-table backed).</summary>
 public readonly struct ServiceRefMap
 {
-    private readonly RefMap<Service, ServiceRef> _core;
+    private readonly AstArena? _arena;
+    private readonly NodeRange _range;
 
-    internal ServiceRefMap(AstArena? arena, SliceMap<Service>? map) => _core = new(arena, map);
+    internal ServiceRefMap(AstArena? arena, NodeRange range)
+    {
+        _arena = arena;
+        _range = range;
+    }
 
-    public bool HasValue => _core.HasValue;
+    public bool HasValue => _arena is not null && _range.HasValue;
 
-    public int Count => _core.Count;
+    public int Count => _range.Count;
 
-    public bool TryGetValue(ReadOnlySpan<byte> key, out ServiceRef value) => _core.TryGetValue(key, out value);
+    public bool TryGetValue(ReadOnlySpan<byte> key, out ServiceRef value)
+    {
+        if (_arena is not null)
+        {
+            for (var i = 0; i < _range.Count; i++)
+            {
+                ref readonly var row = ref _arena.GetServiceAt(_range, i);
+                if (SliceMap<int>.AsciiEqualsIgnoreCase(row.Key.AsSpan(_arena.Source), key))
+                {
+                    value = new ServiceRef(_arena, in row);
+                    return true;
+                }
+            }
+        }
 
-    public bool ContainsKey(ReadOnlySpan<byte> key) => _core.ContainsKey(key);
+        value = default;
+        return false;
+    }
+
+    public bool ContainsKey(ReadOnlySpan<byte> key) => TryGetValue(key, out _);
 
     /// <summary>Returns the entry at the given document-order index.</summary>
-    public RefMap<Service, ServiceRef>.Entry GetAt(int index) => _core.GetAt(index);
+    public Entry GetAt(int index)
+    {
+        if (_arena is null || (uint)index >= (uint)_range.Count)
+        {
+            throw new ArgumentOutOfRangeException(nameof(index));
+        }
 
-    public RefMap<Service, ServiceRef>.Enumerator GetEnumerator() => _core.GetEnumerator();
+        ref readonly var row = ref _arena.GetServiceAt(_range, index);
+        return new Entry(new KeyRef(_arena, row.Key), new ServiceRef(_arena, in row));
+    }
+
+    public Enumerator GetEnumerator() => new(_arena, _range);
+
+    /// <summary>A key-value pair yielded during enumeration.</summary>
+    public readonly struct Entry
+    {
+        internal Entry(KeyRef key, ServiceRef value)
+        {
+            Key = key;
+            Value = value;
+        }
+
+        public KeyRef Key { get; }
+
+        public ServiceRef Value { get; }
+
+        public void Deconstruct(out KeyRef key, out ServiceRef value)
+        {
+            key = Key;
+            value = Value;
+        }
+    }
+
+    public struct Enumerator
+    {
+        private readonly AstArena? _arena;
+        private readonly NodeRange _range;
+        private int _index;
+
+        internal Enumerator(AstArena? arena, NodeRange range)
+        {
+            _arena = arena;
+            _range = range;
+            _index = -1;
+        }
+
+        public bool MoveNext() => _arena is not null && ++_index < _range.Count;
+
+        public readonly Entry Current
+        {
+            get
+            {
+                ref readonly var row = ref _arena!.GetServiceAt(_range, _index);
+                return new Entry(new KeyRef(_arena, row.Key), new ServiceRef(_arena, in row));
+            }
+        }
+    }
 }
 
-/// <summary>The <c>with:</c> inputs of a reusable workflow call.</summary>
+/// <summary>The <c>with:</c> inputs of a reusable workflow call (case-insensitive keys, row-table backed).</summary>
 public readonly struct WorkflowCallInputRefMap
 {
-    private readonly RefMap<WorkflowCallInput, WorkflowCallInputRef> _core;
+    private readonly AstArena? _arena;
+    private readonly NodeRange _range;
 
-    internal WorkflowCallInputRefMap(AstArena? arena, SliceMap<WorkflowCallInput>? map) => _core = new(arena, map);
+    internal WorkflowCallInputRefMap(AstArena? arena, NodeRange range)
+    {
+        _arena = arena;
+        _range = range;
+    }
 
-    public bool HasValue => _core.HasValue;
+    public bool HasValue => _arena is not null && _range.HasValue;
 
-    public int Count => _core.Count;
+    public int Count => _range.Count;
 
-    public bool TryGetValue(ReadOnlySpan<byte> key, out WorkflowCallInputRef value) => _core.TryGetValue(key, out value);
+    public bool TryGetValue(ReadOnlySpan<byte> key, out WorkflowCallInputRef value)
+    {
+        if (_arena is not null)
+        {
+            for (var i = 0; i < _range.Count; i++)
+            {
+                ref readonly var row = ref _arena.GetWorkflowCallInputAt(_range, i);
+                if (SliceMap<int>.AsciiEqualsIgnoreCase(row.Key.AsSpan(_arena.Source), key))
+                {
+                    value = new WorkflowCallInputRef(_arena, in row);
+                    return true;
+                }
+            }
+        }
 
-    public bool ContainsKey(ReadOnlySpan<byte> key) => _core.ContainsKey(key);
+        value = default;
+        return false;
+    }
+
+    public bool ContainsKey(ReadOnlySpan<byte> key) => TryGetValue(key, out _);
 
     /// <summary>Returns the entry at the given document-order index.</summary>
-    public RefMap<WorkflowCallInput, WorkflowCallInputRef>.Entry GetAt(int index) => _core.GetAt(index);
+    public Entry GetAt(int index)
+    {
+        if (_arena is null || (uint)index >= (uint)_range.Count)
+        {
+            throw new ArgumentOutOfRangeException(nameof(index));
+        }
 
-    public RefMap<WorkflowCallInput, WorkflowCallInputRef>.Enumerator GetEnumerator() => _core.GetEnumerator();
+        ref readonly var row = ref _arena.GetWorkflowCallInputAt(_range, index);
+        return new Entry(new KeyRef(_arena, row.Key), new WorkflowCallInputRef(_arena, in row));
+    }
+
+    public Enumerator GetEnumerator() => new(_arena, _range);
+
+    /// <summary>A key-value pair yielded during enumeration.</summary>
+    public readonly struct Entry
+    {
+        internal Entry(KeyRef key, WorkflowCallInputRef value)
+        {
+            Key = key;
+            Value = value;
+        }
+
+        public KeyRef Key { get; }
+
+        public WorkflowCallInputRef Value { get; }
+
+        public void Deconstruct(out KeyRef key, out WorkflowCallInputRef value)
+        {
+            key = Key;
+            value = Value;
+        }
+    }
+
+    public struct Enumerator
+    {
+        private readonly AstArena? _arena;
+        private readonly NodeRange _range;
+        private int _index;
+
+        internal Enumerator(AstArena? arena, NodeRange range)
+        {
+            _arena = arena;
+            _range = range;
+            _index = -1;
+        }
+
+        public bool MoveNext() => _arena is not null && ++_index < _range.Count;
+
+        public readonly Entry Current
+        {
+            get
+            {
+                ref readonly var row = ref _arena!.GetWorkflowCallInputAt(_range, _index);
+                return new Entry(new KeyRef(_arena, row.Key), new WorkflowCallInputRef(_arena, in row));
+            }
+        }
+    }
 }
 
-/// <summary>The <c>secrets:</c> entries of a reusable workflow call.</summary>
+/// <summary>The <c>secrets:</c> entries of a reusable workflow call (case-insensitive keys, row-table backed).</summary>
 public readonly struct WorkflowCallSecretRefMap
 {
-    private readonly RefMap<WorkflowCallSecret, WorkflowCallSecretRef> _core;
+    private readonly AstArena? _arena;
+    private readonly NodeRange _range;
 
-    internal WorkflowCallSecretRefMap(AstArena? arena, SliceMap<WorkflowCallSecret>? map) => _core = new(arena, map);
+    internal WorkflowCallSecretRefMap(AstArena? arena, NodeRange range)
+    {
+        _arena = arena;
+        _range = range;
+    }
 
-    public bool HasValue => _core.HasValue;
+    public bool HasValue => _arena is not null && _range.HasValue;
 
-    public int Count => _core.Count;
+    public int Count => _range.Count;
 
-    public bool TryGetValue(ReadOnlySpan<byte> key, out WorkflowCallSecretRef value) => _core.TryGetValue(key, out value);
+    public bool TryGetValue(ReadOnlySpan<byte> key, out WorkflowCallSecretRef value)
+    {
+        if (_arena is not null)
+        {
+            for (var i = 0; i < _range.Count; i++)
+            {
+                ref readonly var row = ref _arena.GetWorkflowCallSecretAt(_range, i);
+                if (SliceMap<int>.AsciiEqualsIgnoreCase(row.Key.AsSpan(_arena.Source), key))
+                {
+                    value = new WorkflowCallSecretRef(_arena, in row);
+                    return true;
+                }
+            }
+        }
 
-    public bool ContainsKey(ReadOnlySpan<byte> key) => _core.ContainsKey(key);
+        value = default;
+        return false;
+    }
+
+    public bool ContainsKey(ReadOnlySpan<byte> key) => TryGetValue(key, out _);
 
     /// <summary>Returns the entry at the given document-order index.</summary>
-    public RefMap<WorkflowCallSecret, WorkflowCallSecretRef>.Entry GetAt(int index) => _core.GetAt(index);
+    public Entry GetAt(int index)
+    {
+        if (_arena is null || (uint)index >= (uint)_range.Count)
+        {
+            throw new ArgumentOutOfRangeException(nameof(index));
+        }
 
-    public RefMap<WorkflowCallSecret, WorkflowCallSecretRef>.Enumerator GetEnumerator() => _core.GetEnumerator();
+        ref readonly var row = ref _arena.GetWorkflowCallSecretAt(_range, index);
+        return new Entry(new KeyRef(_arena, row.Key), new WorkflowCallSecretRef(_arena, in row));
+    }
+
+    public Enumerator GetEnumerator() => new(_arena, _range);
+
+    /// <summary>A key-value pair yielded during enumeration.</summary>
+    public readonly struct Entry
+    {
+        internal Entry(KeyRef key, WorkflowCallSecretRef value)
+        {
+            Key = key;
+            Value = value;
+        }
+
+        public KeyRef Key { get; }
+
+        public WorkflowCallSecretRef Value { get; }
+
+        public void Deconstruct(out KeyRef key, out WorkflowCallSecretRef value)
+        {
+            key = Key;
+            value = Value;
+        }
+    }
+
+    public struct Enumerator
+    {
+        private readonly AstArena? _arena;
+        private readonly NodeRange _range;
+        private int _index;
+
+        internal Enumerator(AstArena? arena, NodeRange range)
+        {
+            _arena = arena;
+            _range = range;
+            _index = -1;
+        }
+
+        public bool MoveNext() => _arena is not null && ++_index < _range.Count;
+
+        public readonly Entry Current
+        {
+            get
+            {
+                ref readonly var row = ref _arena!.GetWorkflowCallSecretAt(_range, _index);
+                return new Entry(new KeyRef(_arena, row.Key), new WorkflowCallSecretRef(_arena, in row));
+            }
+        }
+    }
 }
 
 /// <summary>The inputs declared on a <c>workflow_dispatch</c> event.</summary>
@@ -484,25 +788,101 @@ public readonly struct WorkflowCallEventOutputRefMap
     public RefMap<WorkflowCallEventOutput, WorkflowCallEventOutputRef>.Enumerator GetEnumerator() => _core.GetEnumerator();
 }
 
-/// <summary>The properties of a raw YAML mapping value.</summary>
+/// <summary>The properties of a raw YAML mapping value (case-insensitive keys, row-table backed).</summary>
 public readonly struct RawYamlRefMap
 {
-    private readonly RefMap<RawYamlValue, RawYamlRef> _core;
+    private readonly AstArena? _arena;
+    private readonly NodeRange _range;
 
-    internal RawYamlRefMap(AstArena? arena, SliceMap<RawYamlValue>? map) => _core = new(arena, map);
+    internal RawYamlRefMap(AstArena? arena, NodeRange range)
+    {
+        _arena = arena;
+        _range = range;
+    }
 
-    public bool HasValue => _core.HasValue;
+    public bool HasValue => _arena is not null && _range.HasValue;
 
-    public int Count => _core.Count;
+    public int Count => _range.Count;
 
-    public bool TryGetValue(ReadOnlySpan<byte> key, out RawYamlRef value) => _core.TryGetValue(key, out value);
+    public bool TryGetValue(ReadOnlySpan<byte> key, out RawYamlRef value)
+    {
+        if (_arena is not null)
+        {
+            for (var i = 0; i < _range.Count; i++)
+            {
+                ref readonly var prop = ref _arena.GetRawYamlPropAt(_range, i);
+                if (SliceMap<int>.AsciiEqualsIgnoreCase(prop.Key.AsSpan(_arena.Source), key))
+                {
+                    value = new RawYamlRef(_arena, prop.Value);
+                    return true;
+                }
+            }
+        }
 
-    public bool ContainsKey(ReadOnlySpan<byte> key) => _core.ContainsKey(key);
+        value = default;
+        return false;
+    }
+
+    public bool ContainsKey(ReadOnlySpan<byte> key) => TryGetValue(key, out _);
 
     /// <summary>Returns the entry at the given document-order index.</summary>
-    public RefMap<RawYamlValue, RawYamlRef>.Entry GetAt(int index) => _core.GetAt(index);
+    public Entry GetAt(int index)
+    {
+        if (_arena is null || (uint)index >= (uint)_range.Count)
+        {
+            throw new ArgumentOutOfRangeException(nameof(index));
+        }
 
-    public RefMap<RawYamlValue, RawYamlRef>.Enumerator GetEnumerator() => _core.GetEnumerator();
+        ref readonly var prop = ref _arena.GetRawYamlPropAt(_range, index);
+        return new Entry(new KeyRef(_arena, prop.Key), new RawYamlRef(_arena, prop.Value));
+    }
+
+    public Enumerator GetEnumerator() => new(_arena, _range);
+
+    /// <summary>A key-value pair yielded during enumeration.</summary>
+    public readonly struct Entry
+    {
+        internal Entry(KeyRef key, RawYamlRef value)
+        {
+            Key = key;
+            Value = value;
+        }
+
+        public KeyRef Key { get; }
+
+        public RawYamlRef Value { get; }
+
+        public void Deconstruct(out KeyRef key, out RawYamlRef value)
+        {
+            key = Key;
+            value = Value;
+        }
+    }
+
+    public struct Enumerator
+    {
+        private readonly AstArena? _arena;
+        private readonly NodeRange _range;
+        private int _index;
+
+        internal Enumerator(AstArena? arena, NodeRange range)
+        {
+            _arena = arena;
+            _range = range;
+            _index = -1;
+        }
+
+        public bool MoveNext() => _arena is not null && ++_index < _range.Count;
+
+        public readonly Entry Current
+        {
+            get
+            {
+                ref readonly var prop = ref _arena!.GetRawYamlPropAt(_range, _index);
+                return new Entry(new KeyRef(_arena, prop.Key), new RawYamlRef(_arena, prop.Value));
+            }
+        }
+    }
 }
 
 /// <summary>The <c>inputs:</c> map of action metadata.</summary>

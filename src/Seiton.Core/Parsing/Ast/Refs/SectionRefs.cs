@@ -198,93 +198,91 @@ public readonly struct RunnerRef
 public readonly struct StrategyRef
 {
     private readonly AstArena? _arena;
-    private readonly Strategy? _node;
+    private readonly StrategyId _id;
 
-    internal StrategyRef(AstArena? arena, Strategy? node)
+    internal StrategyRef(AstArena? arena, StrategyId id)
     {
         _arena = arena;
-        _node = node;
+        _id = id;
     }
 
-    public bool HasValue => _node is not null && _arena is not null;
+    public bool HasValue => _arena is not null && _id.HasValue;
 
-    public MatrixRef Matrix => new(_arena, _node?.Matrix);
+    public MatrixRef Matrix => HasValue ? new(_arena, _arena!.GetStrategy(_id).Matrix) : default;
 
-    public BoolRef FailFast => new(_arena, _node?.FailFast ?? default);
+    public BoolRef FailFast => HasValue ? new(_arena, _arena!.GetStrategy(_id).FailFast) : default;
 
-    public IntRef MaxParallel => new(_arena, _node?.MaxParallel ?? default);
+    public IntRef MaxParallel => HasValue ? new(_arena, _arena!.GetStrategy(_id).MaxParallel) : default;
 
-    public TextRange Range => _node?.Range ?? default;
+    public TextRange Range => HasValue ? _arena!.GetStrategy(_id).Range : default;
 }
 
 /// <summary>The <c>matrix:</c> block defining build matrix dimensions.</summary>
 public readonly struct MatrixRef
 {
     private readonly AstArena? _arena;
-    private readonly Matrix? _node;
+    private readonly MatrixId _id;
 
-    internal MatrixRef(AstArena? arena, Matrix? node)
+    internal MatrixRef(AstArena? arena, MatrixId id)
     {
         _arena = arena;
-        _node = node;
+        _id = id;
     }
 
-    public bool HasValue => _node is not null && _arena is not null;
+    public bool HasValue => _arena is not null && _id.HasValue;
 
     /// <summary>The whole-matrix <c>${{ }}</c> expression, if used.</summary>
-    public StringRef Expression => new(_arena, _node?.Expression ?? default);
+    public StringRef Expression => HasValue ? new(_arena, _arena!.GetMatrix(_id).Expression) : default;
 
-    public CombinationsRefList Include => new(_arena, _node?.Include);
+    public CombinationsRefList Include => HasValue ? new(_arena, _arena!.GetMatrix(_id).Include) : default;
 
-    public CombinationsRefList Exclude => new(_arena, _node?.Exclude);
+    public CombinationsRefList Exclude => HasValue ? new(_arena, _arena!.GetMatrix(_id).Exclude) : default;
 
-    public MatrixRowRefMap Rows => new(_arena, _node?.Rows);
+    public MatrixRowRefMap Rows => HasValue ? new(_arena, _arena!.GetMatrix(_id).Rows) : default;
 
-    public TextRange Range => _node?.Range ?? default;
+    public TextRange Range => HasValue ? _arena!.GetMatrix(_id).Range : default;
 }
 
 /// <summary>A single row (dimension) in a matrix definition.</summary>
-public readonly struct MatrixRowRef : INodeRef<MatrixRow, MatrixRowRef>
+public readonly struct MatrixRowRef
 {
     private readonly AstArena? _arena;
-    private readonly MatrixRow? _node;
+    private readonly MatrixRowData _row;
 
-    internal MatrixRowRef(AstArena? arena, MatrixRow? node)
+    internal MatrixRowRef(AstArena? arena, in MatrixRowData row)
     {
         _arena = arena;
-        _node = node;
+        _row = row;
     }
 
-    static MatrixRowRef INodeRef<MatrixRow, MatrixRowRef>.Create(AstArena? arena, MatrixRow node) => new(arena, node);
-
-    public bool HasValue => _node is not null && _arena is not null;
+    public bool HasValue => _arena is not null;
 
     /// <summary>The whole-row <c>${{ }}</c> expression, if used.</summary>
-    public StringRef Expression => new(_arena, _node?.Expression ?? default);
+    public StringRef Expression => new(_arena, _row.Expression);
 
-    public RawYamlRefList Values => new(_arena, _node?.Values ?? default);
+    public RawYamlRefList Values => new(_arena, _row.Values);
 
-    public StringRef Name => new(_arena, _node?.Name ?? default);
+    public StringRef Name => new(_arena, _row.Name);
 }
 
 /// <summary>Matrix include/exclude combination entries.</summary>
 public readonly struct MatrixCombinationsRef
 {
     private readonly AstArena? _arena;
-    private readonly MatrixCombinations? _node;
+    private readonly MatrixCombinationsData _row;
 
-    internal MatrixCombinationsRef(AstArena? arena, MatrixCombinations? node)
+    internal MatrixCombinationsRef(AstArena? arena, in MatrixCombinationsData row)
     {
         _arena = arena;
-        _node = node;
+        _row = row;
     }
 
-    public bool HasValue => _node is not null && _arena is not null;
+    public bool HasValue => _arena is not null;
 
     /// <summary>The whole-block <c>${{ }}</c> expression, if used.</summary>
-    public StringRef Expression => new(_arena, _node?.Expression ?? default);
+    public StringRef Expression => new(_arena, _row.Expression);
 
-    public CombinationEntryRefList Entries => new(_arena, _node?.Entries);
+    public CombinationEntryRefList Entries => new(_arena, _row.Entries);
 }
 
 /// <summary>Discriminator for raw YAML value kinds.</summary>
@@ -297,117 +295,107 @@ public enum RawYamlKind
 }
 
 /// <summary>An unstructured YAML value (matrix entries), discriminated by <see cref="Kind"/>.</summary>
-public readonly struct RawYamlRef : INodeRef<RawYamlValue, RawYamlRef>
+public readonly struct RawYamlRef
 {
     private readonly AstArena? _arena;
-    private readonly RawYamlValue? _node;
+    private readonly RawYamlId _id;
 
-    internal RawYamlRef(AstArena? arena, RawYamlValue? node)
+    internal RawYamlRef(AstArena? arena, RawYamlId id)
     {
         _arena = arena;
-        _node = node;
+        _id = id;
     }
 
-    static RawYamlRef INodeRef<RawYamlValue, RawYamlRef>.Create(AstArena? arena, RawYamlValue node) => new(arena, node);
+    public bool HasValue => _arena is not null && _id.HasValue;
 
-    public bool HasValue => _node is not null && _arena is not null;
-
-    public RawYamlKind Kind => _node switch
-    {
-        RawYamlString => RawYamlKind.String,
-        RawYamlArray => RawYamlKind.Array,
-        RawYamlObject => RawYamlKind.Object,
-        _ => RawYamlKind.None,
-    };
+    public RawYamlKind Kind => HasValue ? _arena!.GetRawYaml(_id).Kind : RawYamlKind.None;
 
     /// <summary>The scalar value. Default when <see cref="Kind"/> is not <see cref="RawYamlKind.String"/>.</summary>
-    public StringRef Scalar => new(_arena, (_node as RawYamlString)?.Value ?? default);
+    public StringRef Scalar => HasValue ? new(_arena, _arena!.GetRawYaml(_id).Scalar) : default;
 
     /// <summary>The array items. Default when <see cref="Kind"/> is not <see cref="RawYamlKind.Array"/>.</summary>
-    public RawYamlRefList Items => new(_arena, (_node as RawYamlArray)?.Items);
+    public RawYamlRefList Items => HasValue ? new(_arena, _arena!.GetRawYaml(_id).Items) : default;
 
     /// <summary>The mapping properties. Default when <see cref="Kind"/> is not <see cref="RawYamlKind.Object"/>.</summary>
-    public RawYamlRefMap Properties => new(_arena, (_node as RawYamlObject)?.Properties);
+    public RawYamlRefMap Properties => HasValue ? new(_arena, _arena!.GetRawYaml(_id).Properties) : default;
 
-    public TextRange Range => _node?.Range ?? default;
+    public TextRange Range => HasValue ? _arena!.GetRawYaml(_id).Range : default;
 }
 
 /// <summary>The <c>container:</c> block for job containerization.</summary>
 public readonly struct ContainerRef
 {
     private readonly AstArena? _arena;
-    private readonly Container? _node;
+    private readonly ContainerId _id;
 
-    internal ContainerRef(AstArena? arena, Container? node)
+    internal ContainerRef(AstArena? arena, ContainerId id)
     {
         _arena = arena;
-        _node = node;
+        _id = id;
     }
 
-    public bool HasValue => _node is not null && _arena is not null;
+    public bool HasValue => _arena is not null && _id.HasValue;
 
-    public StringRef Image => new(_arena, _node?.Image ?? default);
+    public StringRef Image => HasValue ? new(_arena, _arena!.GetContainer(_id).Image) : default;
 
-    public CredentialsRef Credentials => new(_arena, _node?.Credentials ?? default);
+    public CredentialsRef Credentials => HasValue ? new(_arena, _arena!.GetContainer(_id).Credentials) : default;
 
-    public EnvRef Env => new(_arena, _node?.Env ?? default);
+    public EnvRef Env => HasValue ? new(_arena, _arena!.GetContainer(_id).Env) : default;
 
-    public StringRefList Ports => new(_arena, _node?.Ports ?? default);
+    public StringRefList Ports => HasValue ? new(_arena, _arena!.GetContainer(_id).Ports) : default;
 
-    public StringRefList Volumes => new(_arena, _node?.Volumes ?? default);
+    public StringRefList Volumes => HasValue ? new(_arena, _arena!.GetContainer(_id).Volumes) : default;
 
-    public StringRef Options => new(_arena, _node?.Options ?? default);
+    public StringRef Options => HasValue ? new(_arena, _arena!.GetContainer(_id).Options) : default;
 
-    public StringRef Entrypoint => new(_arena, _node?.Entrypoint ?? default);
+    public StringRef Entrypoint => HasValue ? new(_arena, _arena!.GetContainer(_id).Entrypoint) : default;
 
-    public StringRef Command => new(_arena, _node?.Command ?? default);
+    public StringRef Command => HasValue ? new(_arena, _arena!.GetContainer(_id).Command) : default;
 
-    public TextRange Range => _node?.Range ?? default;
+    public TextRange Range => HasValue ? _arena!.GetContainer(_id).Range : default;
 }
 
 /// <summary>The <c>services:</c> block for job service containers.</summary>
 public readonly struct ServicesRef
 {
     private readonly AstArena? _arena;
-    private readonly Services? _node;
+    private readonly ServicesId _id;
 
-    internal ServicesRef(AstArena? arena, Services? node)
+    internal ServicesRef(AstArena? arena, ServicesId id)
     {
         _arena = arena;
-        _node = node;
+        _id = id;
     }
 
-    public bool HasValue => _node is not null && _arena is not null;
+    public bool HasValue => _arena is not null && _id.HasValue;
 
     /// <summary>The whole-map <c>${{ }}</c> expression, if used instead of a mapping.</summary>
-    public StringRef Expression => new(_arena, _node?.Expression ?? default);
+    public StringRef Expression => HasValue ? new(_arena, _arena!.GetServices(_id).Expression) : default;
 
-    public ServiceRefMap ServiceMap => new(_arena, _node?.ServiceMap);
+    public ServiceRefMap ServiceMap => HasValue ? new(_arena, _arena!.GetServices(_id).ServiceMap) : default;
 
-    public TextRange Range => _node?.Range ?? default;
+    public TextRange Range => HasValue ? _arena!.GetServices(_id).Range : default;
 }
 
 /// <summary>A single service container definition.</summary>
-public readonly struct ServiceRef : INodeRef<Service, ServiceRef>
+public readonly struct ServiceRef
 {
     private readonly AstArena? _arena;
-    private readonly Service? _node;
+    private readonly ServiceData _row;
 
-    internal ServiceRef(AstArena? arena, Service? node)
+    internal ServiceRef(AstArena? arena, in ServiceData row)
     {
         _arena = arena;
-        _node = node;
+        _row = row;
     }
 
-    static ServiceRef INodeRef<Service, ServiceRef>.Create(AstArena? arena, Service node) => new(arena, node);
+    public bool HasValue => _arena is not null;
 
-    public bool HasValue => _node is not null && _arena is not null;
+    public StringRef Name => new(_arena, _row.Name);
 
-    public StringRef Name => new(_arena, _node?.Name ?? default);
+    public ContainerRef Container => new(_arena, _row.Container);
 
-    public ContainerRef Container => new(_arena, _node?.Container);
-
-    public TextRange Range => _node?.Range ?? default;
+    public TextRange Range => _row.Range;
 }
 
 /// <summary>Registry credentials for a container image.</summary>
@@ -438,69 +426,63 @@ public readonly struct CredentialsRef
 public readonly struct WorkflowCallRef
 {
     private readonly AstArena? _arena;
-    private readonly WorkflowCall? _node;
+    private readonly WorkflowCallId _id;
 
-    internal WorkflowCallRef(AstArena? arena, WorkflowCall? node)
+    internal WorkflowCallRef(AstArena? arena, WorkflowCallId id)
     {
         _arena = arena;
-        _node = node;
+        _id = id;
     }
 
-    public bool HasValue => _node is not null && _arena is not null;
+    public bool HasValue => _arena is not null && _id.HasValue;
 
-    internal WorkflowCall? Node => _node;
+    public StringRef Uses => HasValue ? new(_arena, _arena!.GetWorkflowCall(_id).Uses) : default;
 
-    public StringRef Uses => new(_arena, _node?.Uses ?? default);
+    public TextRange? UsesKeyRange => HasValue ? _arena!.GetWorkflowCall(_id).UsesKeyRange : null;
 
-    public TextRange? UsesKeyRange => _node?.UsesKeyRange;
+    public WorkflowCallInputRefMap Inputs => HasValue ? new(_arena, _arena!.GetWorkflowCall(_id).Inputs) : default;
 
-    public WorkflowCallInputRefMap Inputs => new(_arena, _node?.Inputs);
+    public TextRange? WithKeyRange => HasValue ? _arena!.GetWorkflowCall(_id).WithKeyRange : null;
 
-    public TextRange? WithKeyRange => _node?.WithKeyRange;
+    public WorkflowCallSecretRefMap Secrets => HasValue ? new(_arena, _arena!.GetWorkflowCall(_id).Secrets) : default;
 
-    public WorkflowCallSecretRefMap Secrets => new(_arena, _node?.Secrets);
+    public TextRange? SecretsKeyRange => HasValue ? _arena!.GetWorkflowCall(_id).SecretsKeyRange : null;
 
-    public TextRange? SecretsKeyRange => _node?.SecretsKeyRange;
-
-    public bool InheritSecrets => _node?.InheritSecrets ?? false;
+    public bool InheritSecrets => HasValue && _arena!.GetWorkflowCall(_id).InheritSecrets;
 }
 
 /// <summary>An input passed to a reusable workflow call.</summary>
-public readonly struct WorkflowCallInputRef : INodeRef<WorkflowCallInput, WorkflowCallInputRef>
+public readonly struct WorkflowCallInputRef
 {
     private readonly AstArena? _arena;
-    private readonly WorkflowCallInput _node;
+    private readonly WorkflowCallInputData _row;
 
-    internal WorkflowCallInputRef(AstArena? arena, WorkflowCallInput node)
+    internal WorkflowCallInputRef(AstArena? arena, in WorkflowCallInputData row)
     {
         _arena = arena;
-        _node = node;
+        _row = row;
     }
 
-    static WorkflowCallInputRef INodeRef<WorkflowCallInput, WorkflowCallInputRef>.Create(AstArena? arena, WorkflowCallInput node) => new(arena, node);
+    public StringRef Name => new(_arena, _row.Name);
 
-    public StringRef Name => new(_arena, _node.Name);
-
-    public StringRef Value => new(_arena, _node.Value);
+    public StringRef Value => new(_arena, _row.Value);
 }
 
 /// <summary>A secret passed to a reusable workflow call.</summary>
-public readonly struct WorkflowCallSecretRef : INodeRef<WorkflowCallSecret, WorkflowCallSecretRef>
+public readonly struct WorkflowCallSecretRef
 {
     private readonly AstArena? _arena;
-    private readonly WorkflowCallSecret _node;
+    private readonly WorkflowCallSecretData _row;
 
-    internal WorkflowCallSecretRef(AstArena? arena, WorkflowCallSecret node)
+    internal WorkflowCallSecretRef(AstArena? arena, in WorkflowCallSecretData row)
     {
         _arena = arena;
-        _node = node;
+        _row = row;
     }
 
-    static WorkflowCallSecretRef INodeRef<WorkflowCallSecret, WorkflowCallSecretRef>.Create(AstArena? arena, WorkflowCallSecret node) => new(arena, node);
+    public StringRef Name => new(_arena, _row.Name);
 
-    public StringRef Name => new(_arena, _node.Name);
-
-    public StringRef Value => new(_arena, _node.Value);
+    public StringRef Value => new(_arena, _row.Value);
 }
 
 /// <summary>The <c>snapshot:</c> configuration of a job.</summary>

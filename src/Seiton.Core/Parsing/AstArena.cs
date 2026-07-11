@@ -166,6 +166,20 @@ internal sealed class AstArena : IDisposable
     private NodeTable<PermissionScopeData> _permissionScopeTable;
     private NodeTable<EnvData> _envTable;
     private NodeTable<EnvVarData> _envVarTable;
+    private NodeTable<StrategyData> _strategyTable;
+    private NodeTable<MatrixData> _matrixTable;
+    private NodeTable<MatrixRowData> _matrixRowTable;
+    private NodeTable<MatrixCombinationsData> _matrixCombinationsTable;
+    private NodeTable<NodeRange> _combinationEntryList;
+    private NodeTable<RawYamlData> _rawYamlTable;
+    private NodeTable<RawYamlId> _rawYamlIdItems;
+    private NodeTable<RawYamlPropData> _rawYamlPropTable;
+    private NodeTable<ContainerData> _containerTable;
+    private NodeTable<ServicesData> _servicesTable;
+    private NodeTable<ServiceData> _serviceTable;
+    private NodeTable<WorkflowCallData> _workflowCallTable;
+    private NodeTable<WorkflowCallInputData> _workflowCallInputTable;
+    private NodeTable<WorkflowCallSecretData> _workflowCallSecretTable;
     private NodeTable<RunnerData> _runnerTable;
     private NodeTable<ConcurrencyData> _concurrencyTable;
     private NodeTable<EnvironmentData> _environmentTable;
@@ -201,17 +215,6 @@ internal sealed class AstArena : IDisposable
 
     // Object pools for section AST nodes (Permissions, Env, Runner, ...).
     // Same reuse semantics as the Job/Step pools above, via AstNodePool<T>.
-    private AstNodePool<Strategy> _strategyPool = new(DefaultStrategyCapacity, static n => n.Reset());
-    private AstNodePool<Matrix> _matrixPool = new(DefaultStrategyCapacity, static n => n.Reset());
-    private AstNodePool<MatrixRow> _matrixRowPool = new(DefaultMatrixRowCapacity, static n => n.Reset());
-    private AstNodePool<MatrixCombinations> _matrixCombinationsPool = new(DefaultStrategyCapacity, static n => n.Reset());
-    private AstNodePool<RawYamlString> _rawYamlStringPool = new(DefaultRawYamlValueCapacity, static n => n.Reset());
-    private AstNodePool<RawYamlArray> _rawYamlArrayPool = new(DefaultSectionNodeCapacity, static n => n.Reset());
-    private AstNodePool<RawYamlObject> _rawYamlObjectPool = new(DefaultSectionNodeCapacity, static n => n.Reset());
-    private AstNodePool<Container> _containerPool = new(DefaultSectionNodeCapacity, static n => n.Reset());
-    private AstNodePool<Services> _servicesPool = new(DefaultSectionNodeCapacity, static n => n.Reset());
-    private AstNodePool<Service> _servicePool = new(DefaultSectionNodeCapacity, static n => n.Reset());
-    private AstNodePool<WorkflowCall> _workflowCallPool = new(DefaultSectionNodeCapacity, static n => n.Reset());
 
     // D-1: Pooled diagnostics buffer registered by ParseClassified/ParseIncremental.
     // Returned to ArrayPool<Diagnostic>.Shared on Dispose.
@@ -369,17 +372,6 @@ internal sealed class AstArena : IDisposable
         for (var i = 0; i < _execParallelCount; i++) _execParallels[i]?.Reset();
 
         // Section node pools: reset allocated nodes and cap retained capacity
-        _strategyPool.Release(DefaultStrategyCapacity);
-        _matrixPool.Release(DefaultStrategyCapacity);
-        _matrixRowPool.Release(DefaultMatrixRowCapacity);
-        _matrixCombinationsPool.Release(DefaultStrategyCapacity);
-        _rawYamlStringPool.Release(DefaultRawYamlValueCapacity);
-        _rawYamlArrayPool.Release(DefaultSectionNodeCapacity);
-        _rawYamlObjectPool.Release(DefaultSectionNodeCapacity);
-        _containerPool.Release(DefaultSectionNodeCapacity);
-        _servicesPool.Release(DefaultSectionNodeCapacity);
-        _servicePool.Release(DefaultSectionNodeCapacity);
-        _workflowCallPool.Release(DefaultSectionNodeCapacity);
 
         // Data-oriented node tables: clear counts, cap retained capacity
         _stringIdItems.Reset();
@@ -387,6 +379,20 @@ internal sealed class AstArena : IDisposable
         _permissionScopeTable.Reset();
         _envTable.Reset();
         _envVarTable.Reset();
+        _strategyTable.Reset();
+        _matrixTable.Reset();
+        _matrixRowTable.Reset();
+        _matrixCombinationsTable.Reset();
+        _combinationEntryList.Reset();
+        _rawYamlTable.Reset();
+        _rawYamlIdItems.Reset();
+        _rawYamlPropTable.Reset();
+        _containerTable.Reset();
+        _servicesTable.Reset();
+        _serviceTable.Reset();
+        _workflowCallTable.Reset();
+        _workflowCallInputTable.Reset();
+        _workflowCallSecretTable.Reset();
         _runnerTable.Reset();
         _concurrencyTable.Reset();
         _environmentTable.Reset();
@@ -399,6 +405,20 @@ internal sealed class AstArena : IDisposable
         _permissionScopeTable.ReleaseOversized(DefaultStringIdItemsRetainedCapacity);
         _envTable.ReleaseOversized(DefaultStringIdItemsRetainedCapacity);
         _envVarTable.ReleaseOversized(DefaultStringIdItemsRetainedCapacity);
+        _strategyTable.ReleaseOversized(DefaultNodeTableRetainedCapacity);
+        _matrixTable.ReleaseOversized(DefaultNodeTableRetainedCapacity);
+        _matrixRowTable.ReleaseOversized(DefaultNodeTableRetainedCapacity);
+        _matrixCombinationsTable.ReleaseOversized(DefaultNodeTableRetainedCapacity);
+        _combinationEntryList.ReleaseOversized(DefaultNodeTableRetainedCapacity);
+        _rawYamlTable.ReleaseOversized(DefaultStringIdItemsRetainedCapacity);
+        _rawYamlIdItems.ReleaseOversized(DefaultStringIdItemsRetainedCapacity);
+        _rawYamlPropTable.ReleaseOversized(DefaultStringIdItemsRetainedCapacity);
+        _containerTable.ReleaseOversized(DefaultNodeTableRetainedCapacity);
+        _servicesTable.ReleaseOversized(DefaultNodeTableRetainedCapacity);
+        _serviceTable.ReleaseOversized(DefaultNodeTableRetainedCapacity);
+        _workflowCallTable.ReleaseOversized(DefaultNodeTableRetainedCapacity);
+        _workflowCallInputTable.ReleaseOversized(DefaultStringIdItemsRetainedCapacity);
+        _workflowCallSecretTable.ReleaseOversized(DefaultStringIdItemsRetainedCapacity);
         _runnerTable.ReleaseOversized(DefaultNodeTableRetainedCapacity);
         _concurrencyTable.ReleaseOversized(DefaultNodeTableRetainedCapacity);
         _environmentTable.ReleaseOversized(DefaultNodeTableRetainedCapacity);
@@ -469,6 +489,20 @@ internal sealed class AstArena : IDisposable
             _permissionScopeTable.ReleaseAll();
             _envTable.ReleaseAll();
             _envVarTable.ReleaseAll();
+            _strategyTable.ReleaseAll();
+            _matrixTable.ReleaseAll();
+            _matrixRowTable.ReleaseAll();
+            _matrixCombinationsTable.ReleaseAll();
+            _combinationEntryList.ReleaseAll();
+            _rawYamlTable.ReleaseAll();
+            _rawYamlIdItems.ReleaseAll();
+            _rawYamlPropTable.ReleaseAll();
+            _containerTable.ReleaseAll();
+            _servicesTable.ReleaseAll();
+            _serviceTable.ReleaseAll();
+            _workflowCallTable.ReleaseAll();
+            _workflowCallInputTable.ReleaseAll();
+            _workflowCallSecretTable.ReleaseAll();
             _runnerTable.ReleaseAll();
             _concurrencyTable.ReleaseAll();
             _environmentTable.ReleaseAll();
@@ -559,6 +593,20 @@ internal sealed class AstArena : IDisposable
         _permissionScopeTable.Reset();
         _envTable.Reset();
         _envVarTable.Reset();
+        _strategyTable.Reset();
+        _matrixTable.Reset();
+        _matrixRowTable.Reset();
+        _matrixCombinationsTable.Reset();
+        _combinationEntryList.Reset();
+        _rawYamlTable.Reset();
+        _rawYamlIdItems.Reset();
+        _rawYamlPropTable.Reset();
+        _containerTable.Reset();
+        _servicesTable.Reset();
+        _serviceTable.Reset();
+        _workflowCallTable.Reset();
+        _workflowCallInputTable.Reset();
+        _workflowCallSecretTable.Reset();
         _runnerTable.Reset();
         _concurrencyTable.Reset();
         _environmentTable.Reset();
@@ -996,6 +1044,157 @@ internal sealed class AstArena : IDisposable
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     internal ref readonly EnvVarData GetEnvVarAt(NodeRange range, int index) => ref _envVarTable[range.First + index];
 
+    /// <summary>Appends a <see cref="StrategyData"/> row and returns its handle.</summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public StrategyId AddStrategy(in StrategyData data) => new(_strategyTable.Add(in data) + 1);
+
+    /// <summary>Resolves a <see cref="StrategyData"/> row.</summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    internal ref readonly StrategyData GetStrategy(StrategyId id) => ref _strategyTable[id.Index];
+
+    /// <summary>Appends a <see cref="MatrixData"/> row and returns its handle.</summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public MatrixId AddMatrix(in MatrixData data) => new(_matrixTable.Add(in data) + 1);
+
+    /// <summary>Resolves a <see cref="MatrixData"/> row.</summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    internal ref readonly MatrixData GetMatrix(MatrixId id) => ref _matrixTable[id.Index];
+
+    /// <summary>Appends a <see cref="MatrixRowData"/> row (rows of one map must be appended contiguously).</summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public int AddMatrixRow(in MatrixRowData data) => _matrixRowTable.Add(in data);
+
+    /// <summary>Gets the current matrix-row count (range start capture).</summary>
+    internal int MatrixRowCount => _matrixRowTable.Count;
+
+    /// <summary>Resolves one element of a matrix-row <see cref="NodeRange"/>.</summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    internal ref readonly MatrixRowData GetMatrixRowAt(NodeRange range, int index) => ref _matrixRowTable[range.First + index];
+
+    /// <summary>Appends a <see cref="MatrixCombinationsData"/> row (rows of one list must be appended contiguously).</summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public int AddMatrixCombinations(in MatrixCombinationsData data) => _matrixCombinationsTable.Add(in data);
+
+    /// <summary>Gets the current matrix-combinations count (range start capture).</summary>
+    internal int MatrixCombinationsCount => _matrixCombinationsTable.Count;
+
+    /// <summary>Resolves one element of a matrix-combinations <see cref="NodeRange"/>.</summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    internal ref readonly MatrixCombinationsData GetMatrixCombinationsAt(NodeRange range, int index) => ref _matrixCombinationsTable[range.First + index];
+
+    /// <summary>Copies combination-entry prop ranges into the shared entry-list store and returns their range.</summary>
+    public NodeRange AddCombinationEntryList(ReadOnlySpan<NodeRange> entries)
+    {
+        var first = _combinationEntryList.Count;
+        for (var i = 0; i < entries.Length; i++)
+        {
+            _combinationEntryList.Add(in entries[i]);
+        }
+
+        return new NodeRange(first, entries.Length);
+    }
+
+    /// <summary>Resolves one element of a combination-entry-list <see cref="NodeRange"/>.</summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    internal NodeRange GetCombinationEntryAt(NodeRange range, int index) => _combinationEntryList[range.First + index];
+
+    /// <summary>Appends a <see cref="RawYamlData"/> row and returns its handle.</summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public RawYamlId AddRawYaml(in RawYamlData data) => new(_rawYamlTable.Add(in data) + 1);
+
+    /// <summary>Resolves a <see cref="RawYamlData"/> row.</summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    internal ref readonly RawYamlData GetRawYaml(RawYamlId id) => ref _rawYamlTable[id.Index];
+
+    /// <summary>Copies raw-yaml ids into the shared id-list store and returns their range.</summary>
+    public NodeRange AddRawYamlIdList(ReadOnlySpan<RawYamlId> items)
+    {
+        var first = _rawYamlIdItems.Count;
+        for (var i = 0; i < items.Length; i++)
+        {
+            _rawYamlIdItems.Add(in items[i]);
+        }
+
+        return new NodeRange(first, items.Length);
+    }
+
+    /// <summary>Resolves one element of a raw-yaml id-list <see cref="NodeRange"/>.</summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    internal RawYamlId GetRawYamlIdAt(NodeRange range, int index) => _rawYamlIdItems[range.First + index];
+
+    /// <summary>Copies raw-yaml prop rows into the shared prop table and returns their range.</summary>
+    public NodeRange AddRawYamlPropList(ReadOnlySpan<RawYamlPropData> props)
+    {
+        var first = _rawYamlPropTable.Count;
+        for (var i = 0; i < props.Length; i++)
+        {
+            _rawYamlPropTable.Add(in props[i]);
+        }
+
+        return new NodeRange(first, props.Length);
+    }
+
+    /// <summary>Resolves one element of a raw-yaml prop <see cref="NodeRange"/>.</summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    internal ref readonly RawYamlPropData GetRawYamlPropAt(NodeRange range, int index) => ref _rawYamlPropTable[range.First + index];
+
+    /// <summary>Appends a <see cref="ContainerData"/> row and returns its handle.</summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public ContainerId AddContainer(in ContainerData data) => new(_containerTable.Add(in data) + 1);
+
+    /// <summary>Resolves a <see cref="ContainerData"/> row.</summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    internal ref readonly ContainerData GetContainer(ContainerId id) => ref _containerTable[id.Index];
+
+    /// <summary>Appends a <see cref="ServicesData"/> row and returns its handle.</summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public ServicesId AddServices(in ServicesData data) => new(_servicesTable.Add(in data) + 1);
+
+    /// <summary>Resolves a <see cref="ServicesData"/> row.</summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    internal ref readonly ServicesData GetServices(ServicesId id) => ref _servicesTable[id.Index];
+
+    /// <summary>Appends a <see cref="ServiceData"/> row (rows of one map must be appended contiguously).</summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public int AddService(in ServiceData data) => _serviceTable.Add(in data);
+
+    /// <summary>Gets the current service row count (range start capture).</summary>
+    internal int ServiceCount => _serviceTable.Count;
+
+    /// <summary>Resolves one element of a service <see cref="NodeRange"/>.</summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    internal ref readonly ServiceData GetServiceAt(NodeRange range, int index) => ref _serviceTable[range.First + index];
+
+    /// <summary>Appends a <see cref="WorkflowCallData"/> row and returns its handle.</summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public WorkflowCallId AddWorkflowCall(in WorkflowCallData data) => new(_workflowCallTable.Add(in data) + 1);
+
+    /// <summary>Resolves a <see cref="WorkflowCallData"/> row.</summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    internal ref readonly WorkflowCallData GetWorkflowCall(WorkflowCallId id) => ref _workflowCallTable[id.Index];
+
+    /// <summary>Appends a <see cref="WorkflowCallInputData"/> row (rows of one map must be appended contiguously).</summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public int AddWorkflowCallInput(in WorkflowCallInputData data) => _workflowCallInputTable.Add(in data);
+
+    /// <summary>Gets the current workflow-call input row count (range start capture).</summary>
+    internal int WorkflowCallInputCount => _workflowCallInputTable.Count;
+
+    /// <summary>Resolves one element of a workflow-call input <see cref="NodeRange"/>.</summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    internal ref readonly WorkflowCallInputData GetWorkflowCallInputAt(NodeRange range, int index) => ref _workflowCallInputTable[range.First + index];
+
+    /// <summary>Appends a <see cref="WorkflowCallSecretData"/> row (rows of one map must be appended contiguously).</summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public int AddWorkflowCallSecret(in WorkflowCallSecretData data) => _workflowCallSecretTable.Add(in data);
+
+    /// <summary>Gets the current workflow-call secret row count (range start capture).</summary>
+    internal int WorkflowCallSecretCount => _workflowCallSecretTable.Count;
+
+    /// <summary>Resolves one element of a workflow-call secret <see cref="NodeRange"/>.</summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    internal ref readonly WorkflowCallSecretData GetWorkflowCallSecretAt(NodeRange range, int index) => ref _workflowCallSecretTable[range.First + index];
+
     /// <summary>Appends a <see cref="RunnerData"/> row and returns its handle.</summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public RunnerId AddRunner(in RunnerData data) => new(_runnerTable.Add(in data) + 1);
@@ -1052,49 +1251,6 @@ internal sealed class AstArena : IDisposable
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     internal ref readonly SnapshotData GetSnapshot(SnapshotId id) => ref _snapshotTable[id.Index];
 
-    /// <summary>Returns a pooled or new <see cref="Strategy"/> with all fields reset to default.</summary>
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public Strategy AllocStrategy() => _strategyPool.Alloc();
-
-    /// <summary>Returns a pooled or new <see cref="Matrix"/> with all fields reset to default.</summary>
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public Matrix AllocMatrix() => _matrixPool.Alloc();
-
-    /// <summary>Returns a pooled or new <see cref="MatrixRow"/> with all fields reset to default.</summary>
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public MatrixRow AllocMatrixRow() => _matrixRowPool.Alloc();
-
-    /// <summary>Returns a pooled or new <see cref="MatrixCombinations"/> with all fields reset to default.</summary>
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public MatrixCombinations AllocMatrixCombinations() => _matrixCombinationsPool.Alloc();
-
-    /// <summary>Returns a pooled or new <see cref="RawYamlString"/> with all fields reset to default.</summary>
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public RawYamlString AllocRawYamlString() => _rawYamlStringPool.Alloc();
-
-    /// <summary>Returns a pooled or new <see cref="RawYamlArray"/> with all fields reset to default.</summary>
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public RawYamlArray AllocRawYamlArray() => _rawYamlArrayPool.Alloc();
-
-    /// <summary>Returns a pooled or new <see cref="RawYamlObject"/> with all fields reset to default.</summary>
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public RawYamlObject AllocRawYamlObject() => _rawYamlObjectPool.Alloc();
-
-    /// <summary>Returns a pooled or new <see cref="Container"/> with all fields reset to default.</summary>
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public Container AllocContainer() => _containerPool.Alloc();
-
-    /// <summary>Returns a pooled or new <see cref="Services"/> with all fields reset to default.</summary>
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public Services AllocServices() => _servicesPool.Alloc();
-
-    /// <summary>Returns a pooled or new <see cref="Service"/> with all fields reset to default.</summary>
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public Service AllocService() => _servicePool.Alloc();
-
-    /// <summary>Returns a pooled or new <see cref="WorkflowCall"/> with all fields reset to default.</summary>
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public WorkflowCall AllocWorkflowCall() => _workflowCallPool.Alloc();
 
     // Incremental parse support
 
@@ -1146,6 +1302,20 @@ internal sealed class AstArena : IDisposable
         _permissionScopeTable.CopyFrom(in source._permissionScopeTable, source._permissionScopeTable.Count);
         _envTable.CopyFrom(in source._envTable, source._envTable.Count);
         _envVarTable.CopyFrom(in source._envVarTable, source._envVarTable.Count);
+        _strategyTable.CopyFrom(in source._strategyTable, source._strategyTable.Count);
+        _matrixTable.CopyFrom(in source._matrixTable, source._matrixTable.Count);
+        _matrixRowTable.CopyFrom(in source._matrixRowTable, source._matrixRowTable.Count);
+        _matrixCombinationsTable.CopyFrom(in source._matrixCombinationsTable, source._matrixCombinationsTable.Count);
+        _combinationEntryList.CopyFrom(in source._combinationEntryList, source._combinationEntryList.Count);
+        _rawYamlTable.CopyFrom(in source._rawYamlTable, source._rawYamlTable.Count);
+        _rawYamlIdItems.CopyFrom(in source._rawYamlIdItems, source._rawYamlIdItems.Count);
+        _rawYamlPropTable.CopyFrom(in source._rawYamlPropTable, source._rawYamlPropTable.Count);
+        _containerTable.CopyFrom(in source._containerTable, source._containerTable.Count);
+        _servicesTable.CopyFrom(in source._servicesTable, source._servicesTable.Count);
+        _serviceTable.CopyFrom(in source._serviceTable, source._serviceTable.Count);
+        _workflowCallTable.CopyFrom(in source._workflowCallTable, source._workflowCallTable.Count);
+        _workflowCallInputTable.CopyFrom(in source._workflowCallInputTable, source._workflowCallInputTable.Count);
+        _workflowCallSecretTable.CopyFrom(in source._workflowCallSecretTable, source._workflowCallSecretTable.Count);
         _runnerTable.CopyFrom(in source._runnerTable, source._runnerTable.Count);
         _concurrencyTable.CopyFrom(in source._concurrencyTable, source._concurrencyTable.Count);
         _environmentTable.CopyFrom(in source._environmentTable, source._environmentTable.Count);

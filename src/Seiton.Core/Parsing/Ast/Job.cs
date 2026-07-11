@@ -35,15 +35,15 @@ public sealed class Job
 
     public FloatNodeId TimeoutMinutes { get; set; }
 
-    public Strategy? Strategy { get; set; }
+    public StrategyId Strategy { get; set; }
 
     public BoolNodeId ContinueOnError { get; set; }
 
-    public Container? Container { get; set; }
+    public ContainerId Container { get; set; }
 
-    public Services? Services { get; set; }
+    public ServicesId Services { get; set; }
 
-    public WorkflowCall? WorkflowCall { get; set; }
+    public WorkflowCallId WorkflowCall { get; set; }
 
     public SnapshotId Snapshot { get; set; }
 
@@ -67,11 +67,11 @@ public sealed class Job
         Steps = null;
         StepsKeyRange = null;
         TimeoutMinutes = default;
-        Strategy = null;
+        Strategy = default;
         ContinueOnError = default;
-        Container = null;
-        Services = null;
-        WorkflowCall = null;
+        Container = default;
+        Services = default;
+        WorkflowCall = default;
         Snapshot = default;
         Range = default;
     }

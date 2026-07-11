@@ -1349,9 +1349,10 @@ public sealed partial class ParserTests
 
         await Assert.That(result.Workflow is not null).IsTrue();
         var job = result.Workflow!.Jobs.Get(bytes, "build"u8);
-        await Assert.That(job.Services is not null).IsTrue();
-        await Assert.That(job.Services!.Expression.HasValue).IsTrue();
-        await Assert.That(job.Services.ServiceMap).IsNull();
+        await Assert.That(job.Services.HasValue).IsTrue();
+        var services = new ServicesRef(arena, job.Services);
+        await Assert.That(services.Expression.HasValue).IsTrue();
+        await Assert.That(services.ServiceMap.HasValue).IsFalse();
     }
 
     [Test]
@@ -1374,9 +1375,10 @@ public sealed partial class ParserTests
 
         await Assert.That(result.Workflow is not null).IsTrue();
         var job = result.Workflow!.Jobs.Get(bytes, "build"u8);
-        await Assert.That(job.Container is not null).IsTrue();
-        await Assert.That(job.Container!.Credentials.HasValue).IsTrue();
-        var credentials = new CredentialsRef(arena, job.Container.Credentials);
+        await Assert.That(job.Container.HasValue).IsTrue();
+        var container = new ContainerRef(arena, job.Container);
+        await Assert.That(container.Credentials.HasValue).IsTrue();
+        var credentials = container.Credentials;
         await Assert.That(credentials.Expression.HasValue).IsTrue();
         await Assert.That(credentials.Username.HasValue).IsFalse();
         await Assert.That(credentials.Password.HasValue).IsFalse();
@@ -1402,8 +1404,8 @@ public sealed partial class ParserTests
 
         await Assert.That(result.Workflow is not null).IsTrue();
         var job = result.Workflow!.Jobs.Get(bytes, "build"u8);
-        await Assert.That(job.Container is not null).IsTrue();
-        var containerEnv = new EnvRef(arena, job.Container!.Env);
+        await Assert.That(job.Container.HasValue).IsTrue();
+        var containerEnv = new ContainerRef(arena, job.Container).Env;
         await Assert.That(containerEnv.HasValue).IsTrue();
         await Assert.That(containerEnv.Expression.HasValue).IsTrue();
         await Assert.That(containerEnv.Vars.HasValue).IsFalse();
@@ -1430,11 +1432,12 @@ public sealed partial class ParserTests
 
         await Assert.That(result.Workflow is not null).IsTrue();
         var job = result.Workflow!.Jobs.Get(bytes, "build"u8);
-        await Assert.That(job.Services is not null).IsTrue();
-        await Assert.That(job.Services!.ServiceMap is not null).IsTrue();
-        await Assert.That(job.Services.ServiceMap!.Value.Count).IsEqualTo(1);
-        var redis = job.Services.ServiceMap.Value.Values().First();
-        var redisEnv = new EnvRef(arena, redis.Container.Env);
+        await Assert.That(job.Services.HasValue).IsTrue();
+        var servicesRef = new ServicesRef(arena, job.Services);
+        await Assert.That(servicesRef.ServiceMap.HasValue).IsTrue();
+        await Assert.That(servicesRef.ServiceMap.Count).IsEqualTo(1);
+        var redis = servicesRef.ServiceMap.GetAt(0).Value;
+        var redisEnv = redis.Container.Env;
         await Assert.That(redisEnv.HasValue).IsTrue();
         await Assert.That(redisEnv.Expression.HasValue).IsTrue();
         await Assert.That(redisEnv.Vars.HasValue).IsFalse();
@@ -3206,11 +3209,12 @@ public sealed partial class ParserTests
         var key = Utf8String.FromLowerAscii("reuse"u8);
         await Assert.That(result.Workflow!.Jobs.ContainsKey(bytes, key.Span)).IsTrue();
         var job = result.Workflow.Jobs.Get(bytes, "reuse"u8);
-        await Assert.That(job.WorkflowCall is not null).IsTrue();
-        await Assert.That(arena!.GetStringValue(job.WorkflowCall!.Uses).Length).IsGreaterThan(0);
-        await Assert.That(job.WorkflowCall.Inputs is not null).IsTrue();
-        await Assert.That(job.WorkflowCall.Inputs!.Value.Count).IsEqualTo(1);
-        await Assert.That(job.WorkflowCall.InheritSecrets).IsTrue();
+        await Assert.That(job.WorkflowCall.HasValue).IsTrue();
+        var workflowCall = new WorkflowCallRef(arena, job.WorkflowCall);
+        await Assert.That(workflowCall.Uses.Value.Length).IsGreaterThan(0);
+        await Assert.That(workflowCall.Inputs.HasValue).IsTrue();
+        await Assert.That(workflowCall.Inputs.Count).IsEqualTo(1);
+        await Assert.That(workflowCall.InheritSecrets).IsTrue();
     }
 
     [Test]
@@ -3293,16 +3297,19 @@ public sealed partial class ParserTests
         await Assert.That(result.Workflow is not null).IsTrue();
         var key = Utf8String.FromLowerAscii("build"u8);
         var job = result.Workflow!.Jobs.Get(bytes, "build"u8);
-        await Assert.That(job.Strategy is not null).IsTrue();
-        await Assert.That(job.Strategy!.FailFast.HasValue).IsTrue();
-        await Assert.That(job.Strategy.MaxParallel.HasValue).IsTrue();
-        await Assert.That(job.Strategy.Matrix is not null).IsTrue();
-        await Assert.That(job.Container is not null).IsTrue();
-        await Assert.That(arena!.GetStringValue(job.Container!.Image).Length).IsGreaterThan(0);
-        await Assert.That(job.Container.Credentials.HasValue).IsTrue();
-        await Assert.That(job.Services is not null).IsTrue();
-        await Assert.That(job.Services!.ServiceMap is not null).IsTrue();
-        await Assert.That(job.Services.ServiceMap!.Value.Count).IsEqualTo(1);
+        await Assert.That(job.Strategy.HasValue).IsTrue();
+        var strategy = new StrategyRef(arena, job.Strategy);
+        await Assert.That(strategy.FailFast.HasValue).IsTrue();
+        await Assert.That(strategy.MaxParallel.HasValue).IsTrue();
+        await Assert.That(strategy.Matrix.HasValue).IsTrue();
+        await Assert.That(job.Container.HasValue).IsTrue();
+        var container = new ContainerRef(arena, job.Container);
+        await Assert.That(container.Image.Value.Length).IsGreaterThan(0);
+        await Assert.That(container.Credentials.HasValue).IsTrue();
+        await Assert.That(job.Services.HasValue).IsTrue();
+        var services = new ServicesRef(arena, job.Services);
+        await Assert.That(services.ServiceMap.HasValue).IsTrue();
+        await Assert.That(services.ServiceMap.Count).IsEqualTo(1);
     }
 
     [Test]
@@ -3351,12 +3358,12 @@ public sealed partial class ParserTests
             }
         }
 
-        await Assert.That(job.Container is not null).IsTrue();
-        await Assert.That(arena!.GetStringRange(job.Container!.Image).StartLine).IsEqualTo(expectedContainerImageLine);
+        await Assert.That(job.Container.HasValue).IsTrue();
+        await Assert.That(new ContainerRef(arena, job.Container).Image.Range.StartLine).IsEqualTo(expectedContainerImageLine);
 
-        await Assert.That(job.Services is not null).IsTrue();
-        var redis = job.Services!.ServiceMap!.Value.Values().First();
-        await Assert.That(arena!.GetStringRange(redis.Container.Image).StartLine).IsEqualTo(expectedServiceImageLine);
+        await Assert.That(job.Services.HasValue).IsTrue();
+        var redis = new ServicesRef(arena, job.Services).ServiceMap.GetAt(0).Value;
+        await Assert.That(redis.Container.Image.Range.StartLine).IsEqualTo(expectedServiceImageLine);
     }
 
     [Test]
@@ -4894,9 +4901,9 @@ public sealed partial class ParserTests
         await Assert.That(buildJob.If.HasValue).IsTrue();
         await Assert.That(buildJob.TimeoutMinutes.HasValue).IsTrue();
         await Assert.That(buildJob.ContinueOnError.HasValue).IsTrue();
-        await Assert.That(buildJob.Strategy is not null).IsTrue();
-        await Assert.That(buildJob.Container is not null).IsTrue();
-        await Assert.That(buildJob.Services is not null).IsTrue();
+        await Assert.That(buildJob.Strategy.HasValue).IsTrue();
+        await Assert.That(buildJob.Container.HasValue).IsTrue();
+        await Assert.That(buildJob.Services.HasValue).IsTrue();
         await Assert.That(buildJob.Steps is not null).IsTrue();
         await Assert.That(buildJob.Steps!.Count).IsEqualTo(2);
 
@@ -4913,9 +4920,10 @@ public sealed partial class ParserTests
         await Assert.That(actionExec.Inputs!.Value.Count).IsEqualTo(1);
 
         var callJob = workflow.Jobs.Get(bytes, callKey.Span);
-        await Assert.That(callJob.WorkflowCall is not null).IsTrue();
-        await Assert.That(callJob.WorkflowCall!.Inputs is not null).IsTrue();
-        await Assert.That(callJob.WorkflowCall.Secrets is not null).IsTrue();
+        await Assert.That(callJob.WorkflowCall.HasValue).IsTrue();
+        var callWorkflowCall = new WorkflowCallRef(arena, callJob.WorkflowCall);
+        await Assert.That(callWorkflowCall.Inputs.HasValue).IsTrue();
+        await Assert.That(callWorkflowCall.Secrets.HasValue).IsTrue();
     }
 
     [Test]
@@ -4977,16 +4985,18 @@ public sealed partial class ParserTests
 
         var buildJob = workflow.Jobs.Get(bytes, "build"u8);
         await Assert.That(HasRange(buildJob.Range)).IsTrue();
-        await Assert.That(buildJob.Strategy is not null).IsTrue();
-        await Assert.That(HasRange(buildJob.Strategy!.Range)).IsTrue();
-        await Assert.That(buildJob.Strategy.Matrix is not null).IsTrue();
-        await Assert.That(HasRange(buildJob.Strategy.Matrix!.Range)).IsTrue();
-        await Assert.That(buildJob.Container is not null).IsTrue();
-        await Assert.That(HasRange(buildJob.Container!.Range)).IsTrue();
-        await Assert.That(buildJob.Container.Credentials.HasValue).IsTrue();
-        await Assert.That(HasRange(new CredentialsRef(arena, buildJob.Container.Credentials).Range)).IsTrue();
-        await Assert.That(buildJob.Services is not null).IsTrue();
-        await Assert.That(HasRange(buildJob.Services!.Range)).IsTrue();
+        await Assert.That(buildJob.Strategy.HasValue).IsTrue();
+        var strategy = new StrategyRef(arena, buildJob.Strategy);
+        await Assert.That(HasRange(strategy.Range)).IsTrue();
+        await Assert.That(strategy.Matrix.HasValue).IsTrue();
+        await Assert.That(HasRange(strategy.Matrix.Range)).IsTrue();
+        await Assert.That(buildJob.Container.HasValue).IsTrue();
+        var buildContainer = new ContainerRef(arena, buildJob.Container);
+        await Assert.That(HasRange(buildContainer.Range)).IsTrue();
+        await Assert.That(buildContainer.Credentials.HasValue).IsTrue();
+        await Assert.That(HasRange(buildContainer.Credentials.Range)).IsTrue();
+        await Assert.That(buildJob.Services.HasValue).IsTrue();
+        await Assert.That(HasRange(new ServicesRef(arena, buildJob.Services).Range)).IsTrue();
         await Assert.That(buildJob.Steps is not null).IsTrue();
         await Assert.That(HasRange(buildJob.Steps![0].Range)).IsTrue();
     }
@@ -5024,36 +5034,44 @@ public sealed partial class ParserTests
 
         var buildKey = Utf8String.FromLowerAscii("build"u8);
         var job = result.Workflow!.Jobs.Get(bytes, "build"u8);
-        await Assert.That(job.Strategy is not null).IsTrue();
-        await Assert.That(job.Strategy!.Matrix is not null).IsTrue();
+        await Assert.That(job.Strategy.HasValue).IsTrue();
+        var strategy = new StrategyRef(arena, job.Strategy);
+        await Assert.That(strategy.Matrix.HasValue).IsTrue();
 
-        var matrix = job.Strategy.Matrix!;
-        await Assert.That(matrix.Include is not null).IsTrue();
-        await Assert.That(matrix.Exclude is not null).IsTrue();
-        await Assert.That(matrix.Rows is not null).IsTrue();
-        var axisRow = matrix.Rows!.Value.Values().FirstOrDefault(static r => r.Values is not null && r.Values.Count == 3);
-        await Assert.That(axisRow is not null).IsTrue();
-        axisRow ??= new MatrixRow { Name = default };
-        await Assert.That(axisRow.Values is not null).IsTrue();
-        await Assert.That(axisRow.Values!.Count).IsEqualTo(3);
-        await Assert.That(axisRow.Values[0]).IsTypeOf<RawYamlString>();
-        await Assert.That(axisRow.Values[1]).IsTypeOf<RawYamlObject>();
-        await Assert.That(axisRow.Values[2]).IsTypeOf<RawYamlArray>();
+        var matrix = strategy.Matrix;
+        await Assert.That(matrix.Include.HasValue).IsTrue();
+        await Assert.That(matrix.Exclude.HasValue).IsTrue();
+        await Assert.That(matrix.Rows.HasValue).IsTrue();
+        var axisRow = default(MatrixRowRef);
+        foreach (var rowEntry in matrix.Rows)
+        {
+            if (rowEntry.Value.Values.HasValue && rowEntry.Value.Values.Count == 3)
+            {
+                axisRow = rowEntry.Value;
+                break;
+            }
+        }
 
-        await Assert.That(matrix.Include![0].Entries is not null).IsTrue();
-        var includeEntries = matrix.Include[0].Entries!;
+        await Assert.That(axisRow.HasValue).IsTrue();
+        await Assert.That(axisRow.Values.HasValue).IsTrue();
+        await Assert.That(axisRow.Values.Count).IsEqualTo(3);
+        await Assert.That(axisRow.Values[0].Kind).IsEqualTo(RawYamlKind.String);
+        await Assert.That(axisRow.Values[1].Kind).IsEqualTo(RawYamlKind.Object);
+        await Assert.That(axisRow.Values[2].Kind).IsEqualTo(RawYamlKind.Array);
+
+        await Assert.That(matrix.Include[0].Entries.HasValue).IsTrue();
+        var includeEntries = matrix.Include[0].Entries;
         await Assert.That(includeEntries.Count).IsEqualTo(1);
         var includeEntry = includeEntries[0];
         var metaKey = Utf8String.FromLowerAscii("meta"u8);
-        await Assert.That(includeEntry.ContainsKey(bytes, metaKey.Span)).IsTrue();
-        var metaRaw = includeEntry.Get(bytes, "meta"u8);
-        await Assert.That(metaRaw).IsTypeOf<RawYamlObject>();
+        await Assert.That(includeEntry.ContainsKey(metaKey.Span)).IsTrue();
+        includeEntry.TryGetValue("meta"u8, out var metaRaw);
+        await Assert.That(metaRaw.Kind).IsEqualTo(RawYamlKind.Object);
 
-        var metaObject = (RawYamlObject)metaRaw;
         var versionsKey = Utf8String.FromLowerAscii("versions"u8);
-        await Assert.That(metaObject.Properties.ContainsKey(bytes, versionsKey.Span)).IsTrue();
-        var versionsRaw = metaObject.Properties.Get(bytes, "versions"u8);
-        await Assert.That(versionsRaw).IsTypeOf<RawYamlArray>();
+        await Assert.That(metaRaw.Properties.ContainsKey(versionsKey.Span)).IsTrue();
+        metaRaw.Properties.TryGetValue("versions"u8, out var versionsRaw);
+        await Assert.That(versionsRaw.Kind).IsEqualTo(RawYamlKind.Array);
     }
 
     private static IEnumerable<string> EnumerateCorpusYamlFiles(string repoRoot)
@@ -6975,7 +6993,7 @@ public sealed partial class ParserTests
         var result = WorkflowParser.ParseDirect(bytes, "test.yaml", out var arena);
         await Assert.That(result.HasFatalError).IsFalse();
         var container = result.Workflow!.Jobs.Get(bytes, "test"u8)!.Container;
-        await Assert.That(container).IsNotNull();
+        await Assert.That(container.HasValue).IsTrue();
     }
 
     [Test]

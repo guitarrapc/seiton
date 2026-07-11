@@ -238,14 +238,14 @@ internal static class DynamicContextTypeBuilder
     /// Builds the matrix context type override for a job.
     /// Returns a strict object keyed by matrix row names, or a loose object when no rows are declared.
     /// </summary>
-    internal static (byte[] NameUtf8, ExprType Type) BuildMatrixOverride(Matrix? matrix, AstArena? arena = null, byte[]? utf8Yaml = null)
+    internal static (byte[] NameUtf8, ExprType Type) BuildMatrixOverride(MatrixRef matrix, byte[]? utf8Yaml = null)
     {
         if (utf8Yaml is null)
         {
             return (MatrixKeyUtf8, looseDynamic);
         }
 
-        if (matrix is null)
+        if (!matrix.HasValue)
         {
             // Job has no matrix — return strict empty so any `matrix.X` is flagged
             return (MatrixKeyUtf8, ExprType.Object(strict: true));
@@ -260,48 +260,43 @@ internal static class DynamicContextTypeBuilder
         var include = matrix.Include;
 
         // No rows and no include: loose dynamic
-        if ((rows is null || rows.Value.Count == 0) && (include is null || include.Count == 0))
+        if (rows.Count == 0 && include.Count == 0)
         {
             return (MatrixKeyUtf8, looseDynamic);
         }
 
-        var estimatedCapacity = (rows is null ? 0 : rows.Value.Count) + 4; // extra room for include-only keys
+        var estimatedCapacity = rows.Count + 4; // extra room for include-only keys
         var props = new Dictionary<Utf8String, ExprType>(estimatedCapacity);
 
         // Add keys from main axes with inferred types
-        if (rows is { Count: > 0 })
+        foreach (var row in rows)
         {
-            foreach (var row in rows)
-            {
-                props[row.Key.ToUtf8StringZeroCopy(utf8Yaml)] = InferMatrixRowType(row.Value, utf8Yaml, arena);
-            }
+            props[row.Key.Slice.ToUtf8StringZeroCopy(utf8Yaml)] = InferMatrixRowType(row.Value, utf8Yaml);
         }
 
         // Also add keys that appear only in include: entries (e.g. 'npm' added via include)
         // Infer types from include values when possible (e.g. ${{ fromJSON('null') }} → NullExprType)
-        if (include is not null)
+        for (var i = 0; i < include.Count; i++)
         {
-            for (var i = 0; i < include.Count; i++)
+            var combo = include[i];
+            var entries = combo.Entries;
+            if (!entries.HasValue) continue;
+            for (var j = 0; j < entries.Count; j++)
             {
-                var combo = include[i];
-                if (combo.Entries is null) continue;
-                for (var j = 0; j < combo.Entries.Count; j++)
+                var entry = entries[j];
+                foreach (var pair in entry)
                 {
-                    var entry = combo.Entries[j];
-                    foreach (var pair in entry)
+                    var key = pair.Key.Slice.ToUtf8StringZeroCopy(utf8Yaml);
+                    // YAML null keys (bare `null:`) are stored as zero-length slices.
+                    // GitHub Actions treats them as the string "null".
+                    if (key.Length == 0)
                     {
-                        var key = pair.Key.ToUtf8StringZeroCopy(utf8Yaml);
-                        // YAML null keys (bare `null:`) are stored as zero-length slices.
-                        // GitHub Actions treats them as the string "null".
-                        if (key.Length == 0)
-                        {
-                            key = new Utf8String("null"u8);
-                        }
-                        // Don't overwrite existing axes; include-only keys get inferred type
-                        if (!props.ContainsKey(key))
-                        {
-                            props[key] = InferIncludeValueType(pair.Value, utf8Yaml, arena);
-                        }
+                        key = new Utf8String("null"u8);
+                    }
+                    // Don't overwrite existing axes; include-only keys get inferred type
+                    if (!props.ContainsKey(key))
+                    {
+                        props[key] = InferIncludeValueType(pair.Value, utf8Yaml);
                     }
                 }
             }
@@ -324,7 +319,7 @@ internal static class DynamicContextTypeBuilder
     /// </remarks>
     internal static (byte[] NameUtf8, ExprType Type) BuildMatrixOverrideInto(
         Dictionary<Utf8String, ExprType> reusableProps,
-        Matrix? matrix, AstArena? arena = null, byte[]? utf8Yaml = null)
+        MatrixRef matrix, byte[]? utf8Yaml = null)
     {
         reusableProps.Clear();
         if (utf8Yaml is null)
@@ -332,7 +327,7 @@ internal static class DynamicContextTypeBuilder
             return (MatrixKeyUtf8, looseDynamic);
         }
 
-        if (matrix is null)
+        if (!matrix.HasValue)
         {
             return (MatrixKeyUtf8, ExprType.Object(reusableProps, strict: true));
         }
@@ -345,39 +340,34 @@ internal static class DynamicContextTypeBuilder
         var rows = matrix.Rows;
         var include = matrix.Include;
 
-        if ((rows is null || rows.Value.Count == 0) && (include is null || include.Count == 0))
+        if (rows.Count == 0 && include.Count == 0)
         {
             return (MatrixKeyUtf8, looseDynamic);
         }
 
-        if (rows is { Count: > 0 })
+        foreach (var row in rows)
         {
-            foreach (var row in rows)
-            {
-                reusableProps[row.Key.ToUtf8StringZeroCopy(utf8Yaml)] = InferMatrixRowType(row.Value, utf8Yaml, arena);
-            }
+            reusableProps[row.Key.Slice.ToUtf8StringZeroCopy(utf8Yaml)] = InferMatrixRowType(row.Value, utf8Yaml);
         }
 
-        if (include is not null)
+        for (var i = 0; i < include.Count; i++)
         {
-            for (var i = 0; i < include.Count; i++)
+            var combo = include[i];
+            var entries = combo.Entries;
+            if (!entries.HasValue) continue;
+            for (var j = 0; j < entries.Count; j++)
             {
-                var combo = include[i];
-                if (combo.Entries is null) continue;
-                for (var j = 0; j < combo.Entries.Count; j++)
+                var entry = entries[j];
+                foreach (var pair in entry)
                 {
-                    var entry = combo.Entries[j];
-                    foreach (var pair in entry)
+                    var key = pair.Key.Slice.ToUtf8StringZeroCopy(utf8Yaml);
+                    if (key.Length == 0)
                     {
-                        var key = pair.Key.ToUtf8StringZeroCopy(utf8Yaml);
-                        if (key.Length == 0)
-                        {
-                            key = new Utf8String("null"u8);
-                        }
-                        if (!reusableProps.ContainsKey(key))
-                        {
-                            reusableProps[key] = InferIncludeValueType(pair.Value, utf8Yaml, arena);
-                        }
+                        key = new Utf8String("null"u8);
+                    }
+                    if (!reusableProps.ContainsKey(key))
+                    {
+                        reusableProps[key] = InferIncludeValueType(pair.Value, utf8Yaml);
                     }
                 }
             }
@@ -394,9 +384,10 @@ internal static class DynamicContextTypeBuilder
     /// When all values are arrays, returns an array type.
     /// Otherwise returns Any.
     /// </summary>
-    private static ExprType InferMatrixRowType(MatrixRow row, byte[] utf8Yaml, AstArena? arena = null)
+    private static ExprType InferMatrixRowType(MatrixRowRef row, byte[] utf8Yaml)
     {
-        if (row.Expression.HasValue || row.Values is null || row.Values.Count == 0)
+        var values = row.Values;
+        if (row.Expression.HasValue || !values.HasValue || values.Count == 0)
         {
             return ExprType.Any;
         }
@@ -405,21 +396,22 @@ internal static class DynamicContextTypeBuilder
         var allObjects = true;
         var allArrays = true;
         var allScalars = true;
-        for (var i = 0; i < row.Values.Count; i++)
+        for (var i = 0; i < values.Count; i++)
         {
-            if (row.Values[i] is not RawYamlObject) allObjects = false;
-            if (row.Values[i] is not RawYamlArray) allArrays = false;
-            if (row.Values[i] is not RawYamlString) allScalars = false;
+            var kind = values[i].Kind;
+            if (kind != RawYamlKind.Object) allObjects = false;
+            if (kind != RawYamlKind.Array) allArrays = false;
+            if (kind != RawYamlKind.String) allScalars = false;
         }
 
         if (allArrays)
         {
-            return InferArrayRowElementType(row, utf8Yaml, arena);
+            return InferArrayRowElementType(row, utf8Yaml);
         }
 
         if (allScalars)
         {
-            return InferScalarRowType(row, utf8Yaml, arena);
+            return InferScalarRowType(row);
         }
 
         if (!allObjects)
@@ -429,27 +421,27 @@ internal static class DynamicContextTypeBuilder
 
         // All values are objects — build merged property set
         Dictionary<Utf8String, ExprType>? mergedProps = null;
-        for (var i = 0; i < row.Values.Count; i++)
+        for (var i = 0; i < values.Count; i++)
         {
-            var obj = (RawYamlObject)row.Values[i];
+            var properties = values[i].Properties;
 
             if (mergedProps is null)
             {
-                mergedProps = new Dictionary<Utf8String, ExprType>(obj.Properties.Count);
-                foreach (var pair in obj.Properties)
+                mergedProps = new Dictionary<Utf8String, ExprType>(properties.Count);
+                foreach (var pair in properties)
                 {
-                    mergedProps[pair.Key.ToUtf8StringZeroCopy(utf8Yaml)] = InferRawValueType(pair.Value, utf8Yaml, arena);
+                    mergedProps[pair.Key.Slice.ToUtf8StringZeroCopy(utf8Yaml)] = InferRawValueType(pair.Value, utf8Yaml);
                 }
             }
             else
             {
                 // Merge keys from subsequent objects
-                foreach (var pair in obj.Properties)
+                foreach (var pair in properties)
                 {
-                    var key = pair.Key.ToUtf8StringZeroCopy(utf8Yaml);
+                    var key = pair.Key.Slice.ToUtf8StringZeroCopy(utf8Yaml);
                     if (!mergedProps.ContainsKey(key))
                     {
-                        mergedProps[key] = InferRawValueType(pair.Value, utf8Yaml, arena);
+                        mergedProps[key] = InferRawValueType(pair.Value, utf8Yaml);
                     }
                 }
             }
@@ -460,20 +452,20 @@ internal static class DynamicContextTypeBuilder
             : ExprType.Any;
     }
 
-    private static ExprType InferRawValueType(RawYamlValue value, byte[] utf8Yaml, AstArena? arena = null)
+    private static ExprType InferRawValueType(RawYamlRef value, byte[] utf8Yaml)
     {
-        return value switch
+        return value.Kind switch
         {
-            RawYamlString str when arena is not null && str.Value.HasValue => InferRawScalarType(str, arena),
-            RawYamlArray arr when arena is not null && arr.Items.Count > 0 => ExprType.ArrayOf(InferRawValueType(arr.Items[0], utf8Yaml, arena)),
-            RawYamlObject obj => InferRawObjectType(obj, utf8Yaml, arena),
+            RawYamlKind.String when value.Scalar.HasValue => InferRawScalarType(value.Scalar),
+            RawYamlKind.Array when value.Items.Count > 0 => ExprType.ArrayOf(InferRawValueType(value.Items[0], utf8Yaml)),
+            RawYamlKind.Object => InferRawObjectType(value.Properties, utf8Yaml),
             _ => ExprType.Any,
         };
     }
 
-    private static ExprType InferRawScalarType(RawYamlString str, AstArena arena)
+    private static ExprType InferRawScalarType(StringRef scalar)
     {
-        var bytes = arena.GetStringValue(str.Value);
+        var bytes = scalar.Value;
         if (bytes.Length == 0) return ExprType.Any;
         if (bytes.SequenceEqual("true"u8) || bytes.SequenceEqual("false"u8))
             return ExprType.Bool;
@@ -489,32 +481,31 @@ internal static class DynamicContextTypeBuilder
     /// parses the expression and infers the return type (e.g. <c>fromJSON('null')</c> → NullExprType).
     /// Falls back to <see cref="ExprType.Any"/> when inference is not possible.
     /// </summary>
-    private static ExprType InferIncludeValueType(RawYamlValue value, byte[] utf8Yaml, AstArena? arena)
+    private static ExprType InferIncludeValueType(RawYamlRef value, byte[] utf8Yaml)
     {
-        if (value is RawYamlString str && arena is not null && str.Value.HasValue)
+        if (value.Kind == RawYamlKind.String && value.Scalar.HasValue)
         {
-            var scalar = arena.GetStringValue(str.Value);
-            var exprType = TryInferExpressionType(scalar);
+            var exprType = TryInferExpressionType(value.Scalar.Value);
             if (exprType is not null)
             {
                 return exprType;
             }
         }
 
-        return value switch
+        return value.Kind switch
         {
-            RawYamlObject obj => InferRawObjectType(obj, utf8Yaml, arena),
-            RawYamlArray arr when arr.Items.Count > 0 => ExprType.ArrayOf(InferRawValueType(arr.Items[0], utf8Yaml, arena)),
+            RawYamlKind.Object => InferRawObjectType(value.Properties, utf8Yaml),
+            RawYamlKind.Array when value.Items.Count > 0 => ExprType.ArrayOf(InferRawValueType(value.Items[0], utf8Yaml)),
             _ => ExprType.Any,
         };
     }
 
-    private static ObjectExprType InferRawObjectType(RawYamlObject obj, byte[] utf8Yaml, AstArena? arena = null)
+    private static ObjectExprType InferRawObjectType(RawYamlRefMap properties, byte[] utf8Yaml)
     {
-        var props = new Dictionary<Utf8String, ExprType>(obj.Properties.Count);
-        foreach (var pair in obj.Properties)
+        var props = new Dictionary<Utf8String, ExprType>(properties.Count);
+        foreach (var pair in properties)
         {
-            props[pair.Key.ToUtf8StringZeroCopy(utf8Yaml)] = InferRawValueType(pair.Value, utf8Yaml, arena);
+            props[pair.Key.Slice.ToUtf8StringZeroCopy(utf8Yaml)] = InferRawValueType(pair.Value, utf8Yaml);
         }
 
         return ExprType.Object(props, strict: true);
@@ -524,19 +515,21 @@ internal static class DynamicContextTypeBuilder
     /// Infers the array element type from array values in a matrix row.
     /// If all arrays have similar structure, infers a specific element type; otherwise falls back to Any.
     /// </summary>
-    private static ArrayExprType InferArrayRowElementType(MatrixRow row, byte[] utf8Yaml, AstArena? arena = null)
+    private static ArrayExprType InferArrayRowElementType(MatrixRowRef row, byte[] utf8Yaml)
     {
         // Look at the first array's element types to infer the element type
         ExprType? elementType = null;
-        for (var i = 0; i < row.Values!.Count; i++)
+        var values = row.Values;
+        for (var i = 0; i < values.Count; i++)
         {
-            if (row.Values[i] is not RawYamlArray arr || arr.Items is null || arr.Items.Count == 0)
+            var items = values[i].Items;
+            if (values[i].Kind != RawYamlKind.Array || items.Count == 0)
             {
                 continue;
             }
 
             // Use the first item's type as representative
-            var firstItemType = InferRawValueType(arr.Items[0], utf8Yaml, arena);
+            var firstItemType = InferRawValueType(items[0], utf8Yaml);
             if (elementType is null)
             {
                 elementType = firstItemType;
@@ -558,23 +551,22 @@ internal static class DynamicContextTypeBuilder
     /// If all scalars are pure <c>${{ expr }}</c> expressions with the same inferred type, uses that type.
     /// Otherwise returns String (default scalar type).
     /// </summary>
-    private static ExprType InferScalarRowType(MatrixRow row, byte[] utf8Yaml, AstArena? arena)
+    private static ExprType InferScalarRowType(MatrixRowRef row)
     {
         ExprType? unifiedType = null;
         var allSameType = true;
 
-        for (var i = 0; i < row.Values!.Count; i++)
+        var values = row.Values;
+        for (var i = 0; i < values.Count; i++)
         {
-            var str = (RawYamlString)row.Values[i];
-            if (!str.Value.HasValue || arena is null)
+            var scalar = values[i].Scalar;
+            if (!scalar.HasValue)
             {
                 unifiedType ??= ExprType.String;
                 continue;
             }
 
-            var value = arena.GetStringValue(str.Value);
-
-            var exprType = TryInferExpressionType(value);
+            var exprType = TryInferExpressionType(scalar.Value);
             if (exprType is null)
             {
                 // Not a pure expression — treat as string
@@ -763,12 +755,12 @@ internal static class DynamicContextTypeBuilder
         // not from any local outputs: block (which is invalid on a uses: job).
         // Check WorkflowCall first so that an invalid local outputs: block doesn't shadow
         // the called workflow's outputs.
-        if (job.WorkflowCall is not null)
+        if (job.WorkflowCall.HasValue)
         {
             // Try local resolution for local reusable workflow references
-            if (localReusableOutputResolver is not null && arena is not null && utf8Yaml is not null && job.WorkflowCall.Uses.HasValue)
+            if (localReusableOutputResolver is not null && arena is not null && utf8Yaml is not null && arena.GetWorkflowCall(job.WorkflowCall).Uses.HasValue)
             {
-                var usesSlice = arena.GetStringSlice(job.WorkflowCall.Uses);
+                var usesSlice = arena.GetStringSlice(arena.GetWorkflowCall(job.WorkflowCall).Uses);
                 if (!usesSlice.IsEmpty)
                 {
                     var usesMemory = utf8Yaml.AsMemory(usesSlice.Offset, usesSlice.Length);

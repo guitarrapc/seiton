@@ -196,6 +196,126 @@ public readonly record struct EnvId
     }
 }
 
+/// <summary>Handle referencing a <see cref="StrategyData"/> row.</summary>
+public readonly record struct StrategyId
+{
+    private readonly int _raw;
+
+    internal StrategyId(int raw) => _raw = raw;
+
+    public bool HasValue
+    {
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        get => _raw > 0;
+    }
+
+    internal int Index
+    {
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        get => _raw - 1;
+    }
+}
+
+/// <summary>Handle referencing a <see cref="MatrixData"/> row.</summary>
+public readonly record struct MatrixId
+{
+    private readonly int _raw;
+
+    internal MatrixId(int raw) => _raw = raw;
+
+    public bool HasValue
+    {
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        get => _raw > 0;
+    }
+
+    internal int Index
+    {
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        get => _raw - 1;
+    }
+}
+
+/// <summary>Handle referencing a <see cref="RawYamlData"/> row.</summary>
+public readonly record struct RawYamlId
+{
+    private readonly int _raw;
+
+    internal RawYamlId(int raw) => _raw = raw;
+
+    public bool HasValue
+    {
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        get => _raw > 0;
+    }
+
+    internal int Index
+    {
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        get => _raw - 1;
+    }
+}
+
+/// <summary>Handle referencing a <see cref="ContainerData"/> row.</summary>
+public readonly record struct ContainerId
+{
+    private readonly int _raw;
+
+    internal ContainerId(int raw) => _raw = raw;
+
+    public bool HasValue
+    {
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        get => _raw > 0;
+    }
+
+    internal int Index
+    {
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        get => _raw - 1;
+    }
+}
+
+/// <summary>Handle referencing a <see cref="ServicesData"/> row.</summary>
+public readonly record struct ServicesId
+{
+    private readonly int _raw;
+
+    internal ServicesId(int raw) => _raw = raw;
+
+    public bool HasValue
+    {
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        get => _raw > 0;
+    }
+
+    internal int Index
+    {
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        get => _raw - 1;
+    }
+}
+
+/// <summary>Handle referencing a <see cref="WorkflowCallData"/> row.</summary>
+public readonly record struct WorkflowCallId
+{
+    private readonly int _raw;
+
+    internal WorkflowCallId(int raw) => _raw = raw;
+
+    public bool HasValue
+    {
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        get => _raw > 0;
+    }
+
+    internal int Index
+    {
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        get => _raw - 1;
+    }
+}
+
 /// <summary>Handle referencing a <see cref="RunnerData"/> row.</summary>
 public readonly record struct RunnerId
 {

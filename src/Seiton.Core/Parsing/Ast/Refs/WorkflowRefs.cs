@@ -89,15 +89,15 @@ public readonly struct JobRef : IEquatable<JobRef>, INodeRef<Job, JobRef>
 
     public FloatRef TimeoutMinutes => new(_arena, _node?.TimeoutMinutes ?? default);
 
-    public StrategyRef Strategy => new(_arena, _node?.Strategy);
+    public StrategyRef Strategy => new(_arena, _node?.Strategy ?? default);
 
     public BoolRef ContinueOnError => new(_arena, _node?.ContinueOnError ?? default);
 
-    public ContainerRef Container => new(_arena, _node?.Container);
+    public ContainerRef Container => new(_arena, _node?.Container ?? default);
 
-    public ServicesRef Services => new(_arena, _node?.Services);
+    public ServicesRef Services => new(_arena, _node?.Services ?? default);
 
-    public WorkflowCallRef WorkflowCall => new(_arena, _node?.WorkflowCall);
+    public WorkflowCallRef WorkflowCall => new(_arena, _node?.WorkflowCall ?? default);
 
     public SnapshotRef Snapshot => new(_arena, _node?.Snapshot ?? default);
 

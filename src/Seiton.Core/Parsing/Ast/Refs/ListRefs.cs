@@ -164,38 +164,38 @@ public readonly struct ScheduleRefList
 public readonly struct RawYamlRefList
 {
     private readonly AstArena? _arena;
-    private readonly IReadOnlyList<RawYamlValue>? _nodes;
+    private readonly NodeRange _range;
 
-    internal RawYamlRefList(AstArena? arena, IReadOnlyList<RawYamlValue>? nodes)
+    internal RawYamlRefList(AstArena? arena, NodeRange range)
     {
         _arena = arena;
-        _nodes = nodes;
+        _range = range;
     }
 
-    public bool HasValue => _nodes is not null;
+    public bool HasValue => _arena is not null && _range.HasValue;
 
-    public int Count => _nodes?.Count ?? 0;
+    public int Count => _range.Count;
 
-    public RawYamlRef this[int index] => new(_arena, _nodes![index]);
+    public RawYamlRef this[int index] => new(_arena, _arena!.GetRawYamlIdAt(_range, index));
 
-    public Enumerator GetEnumerator() => new(_arena, _nodes);
+    public Enumerator GetEnumerator() => new(_arena, _range);
 
     public struct Enumerator
     {
         private readonly AstArena? _arena;
-        private readonly IReadOnlyList<RawYamlValue>? _nodes;
+        private readonly NodeRange _range;
         private int _index;
 
-        internal Enumerator(AstArena? arena, IReadOnlyList<RawYamlValue>? nodes)
+        internal Enumerator(AstArena? arena, NodeRange range)
         {
             _arena = arena;
-            _nodes = nodes;
+            _range = range;
             _index = -1;
         }
 
-        public bool MoveNext() => _nodes is not null && ++_index < _nodes.Count;
+        public bool MoveNext() => _arena is not null && ++_index < _range.Count;
 
-        public readonly RawYamlRef Current => new(_arena, _nodes![_index]);
+        public readonly RawYamlRef Current => new(_arena, _arena!.GetRawYamlIdAt(_range, _index));
     }
 }
 
@@ -203,38 +203,38 @@ public readonly struct RawYamlRefList
 public readonly struct CombinationsRefList
 {
     private readonly AstArena? _arena;
-    private readonly IReadOnlyList<MatrixCombinations>? _nodes;
+    private readonly NodeRange _range;
 
-    internal CombinationsRefList(AstArena? arena, IReadOnlyList<MatrixCombinations>? nodes)
+    internal CombinationsRefList(AstArena? arena, NodeRange range)
     {
         _arena = arena;
-        _nodes = nodes;
+        _range = range;
     }
 
-    public bool HasValue => _nodes is not null;
+    public bool HasValue => _arena is not null && _range.HasValue;
 
-    public int Count => _nodes?.Count ?? 0;
+    public int Count => _range.Count;
 
-    public MatrixCombinationsRef this[int index] => new(_arena, _nodes![index]);
+    public MatrixCombinationsRef this[int index] => new(_arena, in _arena!.GetMatrixCombinationsAt(_range, index));
 
-    public Enumerator GetEnumerator() => new(_arena, _nodes);
+    public Enumerator GetEnumerator() => new(_arena, _range);
 
     public struct Enumerator
     {
         private readonly AstArena? _arena;
-        private readonly IReadOnlyList<MatrixCombinations>? _nodes;
+        private readonly NodeRange _range;
         private int _index;
 
-        internal Enumerator(AstArena? arena, IReadOnlyList<MatrixCombinations>? nodes)
+        internal Enumerator(AstArena? arena, NodeRange range)
         {
             _arena = arena;
-            _nodes = nodes;
+            _range = range;
             _index = -1;
         }
 
-        public bool MoveNext() => _nodes is not null && ++_index < _nodes.Count;
+        public bool MoveNext() => _arena is not null && ++_index < _range.Count;
 
-        public readonly MatrixCombinationsRef Current => new(_arena, _nodes![_index]);
+        public readonly MatrixCombinationsRef Current => new(_arena, in _arena!.GetMatrixCombinationsAt(_range, _index));
     }
 }
 
@@ -242,38 +242,38 @@ public readonly struct CombinationsRefList
 public readonly struct CombinationEntryRefList
 {
     private readonly AstArena? _arena;
-    private readonly IReadOnlyList<SliceMap<RawYamlValue>>? _nodes;
+    private readonly NodeRange _range;
 
-    internal CombinationEntryRefList(AstArena? arena, IReadOnlyList<SliceMap<RawYamlValue>>? nodes)
+    internal CombinationEntryRefList(AstArena? arena, NodeRange range)
     {
         _arena = arena;
-        _nodes = nodes;
+        _range = range;
     }
 
-    public bool HasValue => _nodes is not null;
+    public bool HasValue => _arena is not null && _range.HasValue;
 
-    public int Count => _nodes?.Count ?? 0;
+    public int Count => _range.Count;
 
-    public RawYamlRefMap this[int index] => new(_arena, _nodes![index]);
+    public RawYamlRefMap this[int index] => new(_arena, _arena!.GetCombinationEntryAt(_range, index));
 
-    public Enumerator GetEnumerator() => new(_arena, _nodes);
+    public Enumerator GetEnumerator() => new(_arena, _range);
 
     public struct Enumerator
     {
         private readonly AstArena? _arena;
-        private readonly IReadOnlyList<SliceMap<RawYamlValue>>? _nodes;
+        private readonly NodeRange _range;
         private int _index;
 
-        internal Enumerator(AstArena? arena, IReadOnlyList<SliceMap<RawYamlValue>>? nodes)
+        internal Enumerator(AstArena? arena, NodeRange range)
         {
             _arena = arena;
-            _nodes = nodes;
+            _range = range;
             _index = -1;
         }
 
-        public bool MoveNext() => _nodes is not null && ++_index < _nodes.Count;
+        public bool MoveNext() => _arena is not null && ++_index < _range.Count;
 
-        public readonly RawYamlRefMap Current => new(_arena, _nodes![_index]);
+        public readonly RawYamlRefMap Current => new(_arena, _arena!.GetCombinationEntryAt(_range, _index));
     }
 }
 

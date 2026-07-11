@@ -105,13 +105,17 @@ CLI は診断のみを参照し AST 型に依存しない (実測: `src/Seiton/`
 4. **Runner** (2026-07-12): `RunnerData` 行 + `RunnerId`。`Job.RunsOn` は ID。
 5. **Permissions / Env — マップの行テーブル化パターン確立** (2026-07-12): マップは「キー slice を行に内蔵した行テーブルへの `NodeRange`」で表現し、lookup はレンジ内線形スキャン (旧 SliceMap と同じ計算量、個別 `Entry[]` レンタル + 登録が消える)。`PermissionsData`/`PermissionScopeData`/`EnvData`/`EnvVarData` + `PermissionsId`/`EnvId`。行はマッピングのパース中に連続 append する (入れ子のパースがスカラーテーブルにしか触れないことが前提 — 新たな入れ子を導入する場合はスクラッチ経由に変えること)。`PermissionScopeRefMap`/`EnvVarRefMap` は (arena, NodeRange) の自己完結 struct になった (旧 `RefMap<TNode,TRef>` generic core から離脱)。case sensitivity はマップ型ごとに固定 (scopes/vars = sensitive)。
 
-ベンチ確認 (増分 5 まで、idle マシン): Parse Large 15.69ms (Stage 1 比 +0.8%) / 4,216B (−15%)。Lint 全ケース Mean ±5% 以内・Allocated 微減。
+6. **Runner** (2026-07-12): `RunnerData` 行 + `RunnerId`。
+7. **Strategy / Matrix / RawYaml — 再帰 tagged union** (2026-07-12): `RawYamlData` は Kind + Scalar/Items/Properties の tagged union 行。再帰は「配列 = `RawYamlId` の共有 ID リストストアへのレンジ、オブジェクト = キー内蔵 prop 行テーブルへのレンジ」で表現。**入れ子のパースが自テーブルに行を差し込むケース (配列 items / オブジェクト props / combination entries) はスクラッチ `PooledBuffer` に集めてから一括 append** して連続性を守る。それ以外 (matrix rows / services など、入れ子が他テーブルにしか触れないケース) は直接 append で良い。`DynamicContextTypeBuilder` の Matrix/RawYaml 型推論も Ref API へ移行。
+8. **Container / Services / WorkflowCall** (2026-07-12): 行テーブル + ID + キー内蔵マップ 3 種 (services / with / secrets)。WorkflowCall はジョブ解析中に uses/with/secrets が別キーとして逐次到着するため、**ローカル変数に蓄積してジョブ構築時に 1 回で行化** (行 struct は追記後の mutate 不可)。`StructuralNodes.cs` は空になり削除。
+
+ベンチ確認 (増分 8 まで、idle マシン): Parse Large 15.80ms (Stage 1 比 +1.5%) / **3,576B (Stage 1 比 −28%)**。Lint 全ケース Mean ±6% 以内・Allocated 微減 (Large/False 34.96KB)。
 
 **incremental parse との整合の要**: 継ぎ足し (セクション/ジョブの再利用) は「同一バイトオフセット + 同一内容ハッシュ」の場合にのみ発生するため、新テーブルを `BulkImportFrom` で**全行コピー**すれば、再利用ノード内の ID は新 arena でもそのまま解決できる。テーブル追加時は (a) `ResetForSource`/`Dispose` のリセット、(b) `BulkImportFrom` のコピー、(c) discard パスの `ReleaseAll` の 3 点を配線すること。
 
 意味論の写像 (テスト移行時の規約): 旧 `null` (キー不在) → `default` ID/レンジ (`HasValue == false`)。旧「キーは在るが空」→ `HasValue == true` かつ `Count == 0`。`ParseStringOrStringSequence` は回復パスでも常に present レンジを返す (旧実装で default `ArenaList` が boxing により非 null になっていた挙動の保存)。
 
-残作業: Strategy/Matrix/RawYaml (tagged union)、Container/Services/WorkflowCall (+ WorkflowCallInput/Secret マップ)、Events tagged union、Exec*/Step/Job/Workflow 行化 (+ Jobs/Outputs/ExecAction.Inputs マップ)、ActionMetadata 族。マップは増分 5 のパターン (キー内蔵行テーブル + NodeRange) を踏襲する。
+残作業: Events tagged union、Exec*/Step/Job/Workflow 行化 (+ Jobs/Outputs/ExecAction.Inputs マップ)、ActionMetadata 族。マップは増分 5 のパターン (キー内蔵行テーブル + NodeRange)、多態は増分 7 のパターン (Kind + payload) を踏襲する。
 
 ## 7. Lessons Learned (随時追記)
 

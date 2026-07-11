@@ -266,7 +266,7 @@ public sealed class ExprUndefinedVarRule() : RuleBase(RuleId.ExprUndefinedVar)
         }
 
         var yaml = Config.Utf8Yaml;
-        var matrixOverride = DynamicContextTypeBuilder.BuildMatrixOverrideInto(_matrixOverrideProps, job.Node!.Strategy?.Matrix, Arena, yaml);
+        var matrixOverride = DynamicContextTypeBuilder.BuildMatrixOverrideInto(_matrixOverrideProps, job.Strategy.Matrix, yaml);
         var needsOverride = DynamicContextTypeBuilder.BuildNeedsOverrideInto(
             _needsOverrideProps,
             job.Node!.Needs,

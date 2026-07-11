@@ -32,10 +32,10 @@ public sealed partial class RuleInterfaceTests
                     false,
                     new TextRange(0, 0, 1, 1, 1, 1)),
                 RunsOn = arena.AddRunner(new RunnerData()),
-                WorkflowCall = new WorkflowCall
+                WorkflowCall = arena.AddWorkflowCall(new WorkflowCallData
                 {
                     Uses = arena.AddString(new Utf8Slice(source.IndexOf("./.github/workflows/reusable.yml", StringComparison.Ordinal), "./.github/workflows/reusable.yml".Length), false, default),
-                },
+                }),
                 Steps =
                 [
                     new Step
