@@ -808,22 +808,29 @@ internal static class DynamicContextTypeBuilder
     /// Returns a strict object keyed by input names when workflow_call or workflow_dispatch inputs are defined.
     /// </summary>
     internal static (byte[] NameUtf8, ExprType Type) BuildInputsOverride(
-        IReadOnlyList<Event> on,
+        EventRefList on,
         IReadOnlyList<string>? assumeEvents = null,
         byte[]? utf8Yaml = null)
     {
         for (var i = 0; i < on.Count; i++)
         {
             var ev = on[i];
-            if (ev is WorkflowCallEvent { Inputs: { Count: > 0 } callInputs })
+            if (ev.Kind == EventKind.WorkflowCall)
             {
-                return (InputsKeyUtf8, BuildWorkflowCallInputsType(callInputs));
+                var callInputs = ev.AsWorkflowCall().Inputs;
+                if (callInputs.Count > 0)
+                {
+                    return (InputsKeyUtf8, BuildWorkflowCallInputsType(callInputs));
+                }
             }
 
-            if (ev is WorkflowDispatchEvent { Inputs: { Count: > 0 } dispatchInputs }
-                && utf8Yaml is not null)
+            if (ev.Kind == EventKind.WorkflowDispatch && utf8Yaml is not null)
             {
-                return (InputsKeyUtf8, BuildWorkflowDispatchInputsType(dispatchInputs, utf8Yaml));
+                var dispatchInputs = ev.AsWorkflowDispatch().Inputs;
+                if (dispatchInputs.Count > 0)
+                {
+                    return (InputsKeyUtf8, BuildWorkflowDispatchInputsType(dispatchInputs, utf8Yaml));
+                }
             }
         }
 
@@ -837,7 +844,7 @@ internal static class DynamicContextTypeBuilder
         return (InputsKeyUtf8, ExprType.Object(strict: true));
     }
 
-    private static ObjectExprType BuildWorkflowCallInputsType(IReadOnlyList<WorkflowCallEventInput> inputs)
+    private static ObjectExprType BuildWorkflowCallInputsType(WorkflowCallEventInputRefList inputs)
     {
         return BuildWorkflowCallInputsTypeUpTo(inputs, inputs.Count);
     }
@@ -847,12 +854,12 @@ internal static class DynamicContextTypeBuilder
     /// Used for incremental validation of input default expressions.
     /// </summary>
     internal static (byte[] NameUtf8, ExprType Type) BuildWorkflowCallInputsOverrideUpTo(
-        IReadOnlyList<WorkflowCallEventInput> inputs, int upToIndex)
+        WorkflowCallEventInputRefList inputs, int upToIndex)
     {
         return (InputsKeyUtf8, BuildWorkflowCallInputsTypeUpTo(inputs, upToIndex));
     }
 
-    private static ObjectExprType BuildWorkflowCallInputsTypeUpTo(IReadOnlyList<WorkflowCallEventInput> inputs, int count)
+    private static ObjectExprType BuildWorkflowCallInputsTypeUpTo(WorkflowCallEventInputRefList inputs, int count)
     {
         if (count <= 0)
         {
@@ -877,7 +884,7 @@ internal static class DynamicContextTypeBuilder
     }
 
     private static ObjectExprType BuildWorkflowDispatchInputsType(
-        SliceMap<DispatchInput> inputs,
+        DispatchInputRefMap inputs,
         byte[] utf8Yaml)
     {
         var props = new Dictionary<Utf8String, ExprType>(inputs.Count);
@@ -889,7 +896,7 @@ internal static class DynamicContextTypeBuilder
                 DispatchInputType.Number => ExprType.Number,
                 _ => ExprType.String,
             };
-            props[pair.Key.ToUtf8StringZeroCopy(utf8Yaml)] = type;
+            props[pair.Key.Slice.ToUtf8StringZeroCopy(utf8Yaml)] = type;
         }
 
         return ExprType.Object(props, strict: true);
@@ -919,34 +926,41 @@ internal static class DynamicContextTypeBuilder
     /// Builds the secrets context type override for a workflow.
     /// Returns a strict object keyed by secret names when workflow_call secrets are defined.
     /// </summary>
-    internal static (byte[] NameUtf8, ExprType Type) BuildSecretsOverride(IReadOnlyList<Event> on, byte[]? utf8Yaml = null)
+    internal static (byte[] NameUtf8, ExprType Type) BuildSecretsOverride(EventRefList on, byte[]? utf8Yaml = null)
     {
         for (var i = 0; i < on.Count; i++)
         {
             var ev = on[i];
-            if (ev is WorkflowCallEvent { Secrets: not null } wce)
+            if (ev.Kind != EventKind.WorkflowCall)
             {
-                var secrets = wce.Secrets.Value;
-                if (secrets.Count == 0)
+                continue;
+            }
+
+            var secrets = ev.AsWorkflowCall().Secrets;
+            if (!secrets.HasValue)
+            {
+                continue;
+            }
+
+            if (secrets.Count == 0)
+            {
+                // Empty secrets: explicitly declared as empty → strict object with only GITHUB_TOKEN
+                return (SecretsKeyUtf8, ExprType.Object(new Dictionary<Utf8String, ExprType>
                 {
-                    // Empty secrets: explicitly declared as empty → strict object with only GITHUB_TOKEN
-                    return (SecretsKeyUtf8, ExprType.Object(new Dictionary<Utf8String, ExprType>
-                    {
-                        { new Utf8String("GITHUB_TOKEN"u8), ExprType.String },
-                    }, strict: true));
+                    { new Utf8String("GITHUB_TOKEN"u8), ExprType.String },
+                }, strict: true));
+            }
+
+            if (utf8Yaml is not null)
+            {
+                var props = new Dictionary<Utf8String, ExprType>(secrets.Count + 1);
+                props[new Utf8String("GITHUB_TOKEN"u8)] = ExprType.String;
+                foreach (var pair in secrets)
+                {
+                    props[pair.Key.Slice.ToUtf8StringZeroCopy(utf8Yaml)] = ExprType.String;
                 }
 
-                if (utf8Yaml is not null)
-                {
-                    var props = new Dictionary<Utf8String, ExprType>(secrets.Count + 1);
-                    props[new Utf8String("GITHUB_TOKEN"u8)] = ExprType.String;
-                    foreach (var pair in secrets)
-                    {
-                        props[pair.Key.ToUtf8StringZeroCopy(utf8Yaml)] = ExprType.String;
-                    }
-
-                    return (SecretsKeyUtf8, ExprType.Object(props, strict: true));
-                }
+                return (SecretsKeyUtf8, ExprType.Object(props, strict: true));
             }
         }
 
@@ -990,7 +1004,7 @@ internal static class DynamicContextTypeBuilder
     /// of the workflow's trigger event(s). When only one webhook event is declared, the event
     /// property is set to that event's payload type. Otherwise the default loose type is used.
     /// </summary>
-    internal static (byte[] NameUtf8, ExprType Type) BuildGithubOverride(IReadOnlyList<Event> onEvents, AstArena arena, byte[]? utf8Yaml)
+    internal static (byte[] NameUtf8, ExprType Type) BuildGithubOverride(EventRefList onEvents, AstArena arena, byte[]? utf8Yaml)
     {
         if (utf8Yaml is null)
         {
@@ -998,24 +1012,25 @@ internal static class DynamicContextTypeBuilder
         }
 
         ObjectExprType? eventPayloadType = null;
-        WorkflowDispatchEvent? dispatchEvent = null;
+        WorkflowDispatchEventRef dispatchEvent = default;
 
         // Resolve event payload type: use concrete type only when exactly one webhook event is declared
         var webhookCount = 0;
         for (var i = 0; i < onEvents.Count; i++)
         {
-            if (onEvents[i] is WebhookEvent we && we.Hook.HasValue)
+            var ev = onEvents[i];
+            if (ev.Kind == EventKind.Webhook && ev.AsWebhook().Hook.HasValue)
             {
                 webhookCount++;
-                var nameUtf8 = arena.GetStringValue(we.Hook);
+                var nameUtf8 = ev.AsWebhook().Hook.Value;
                 if (EventPayloadTypes.TryGetEventPayloadType(nameUtf8, out var payloadType))
                 {
                     eventPayloadType = payloadType;
                 }
             }
-            else if (onEvents[i] is WorkflowDispatchEvent wde)
+            else if (ev.Kind == EventKind.WorkflowDispatch)
             {
-                dispatchEvent = wde;
+                dispatchEvent = ev.AsWorkflowDispatch();
             }
         }
 
@@ -1026,14 +1041,14 @@ internal static class DynamicContextTypeBuilder
         }
 
         // workflow_dispatch: narrow github.event.inputs to declared input names (all string type in event payload)
-        if (dispatchEvent is not null && webhookCount == 0)
+        if (dispatchEvent.HasValue && webhookCount == 0)
         {
             if (!EventPayloadTypes.TryGetEventPayloadType("workflow_dispatch"u8, out var basePayloadType))
             {
                 return (GithubKeyUtf8, BuiltinGithubContextType);
             }
 
-            eventPayloadType = NarrowDispatchInputs(basePayloadType, dispatchEvent, arena, utf8Yaml);
+            eventPayloadType = NarrowDispatchInputs(basePayloadType, dispatchEvent, utf8Yaml);
         }
 
         if (eventPayloadType is null)
@@ -1058,18 +1073,19 @@ internal static class DynamicContextTypeBuilder
     /// Narrows workflow_dispatch event payload's <c>inputs</c> property to a strict object
     /// with declared input names, all typed as string (since event payloads deliver inputs as strings).
     /// </summary>
-    private static ObjectExprType NarrowDispatchInputs(ObjectExprType basePayloadType, WorkflowDispatchEvent dispatch, AstArena arena, byte[] utf8Yaml)
+    private static ObjectExprType NarrowDispatchInputs(ObjectExprType basePayloadType, WorkflowDispatchEventRef dispatch, byte[] utf8Yaml)
     {
-        if (dispatch.Inputs is not { Count: > 0 })
+        var inputs = dispatch.Inputs;
+        if (inputs.Count == 0)
         {
             return basePayloadType;
         }
 
         // Build strict inputs object: all input values are string in the event payload
-        var inputProps = new Dictionary<Utf8String, ExprType>(dispatch.Inputs.Value.Count);
-        foreach (var pair in dispatch.Inputs.Value)
+        var inputProps = new Dictionary<Utf8String, ExprType>(inputs.Count);
+        foreach (var pair in inputs)
         {
-            var inputName = arena.GetStringSlice(pair.Value.Name);
+            var inputName = pair.Value.Name.Slice;
             var nameBytes = utf8Yaml.AsSpan(inputName.Offset, inputName.Length);
             inputProps[new Utf8String(nameBytes)] = ExprType.String;
         }

@@ -24,7 +24,7 @@ public readonly struct WorkflowRef
 
     public StringRef RunName => new(_arena, _node?.RunName ?? default);
 
-    public EventRefList On => new(_arena, _node?.On);
+    public EventRefList On => new(_arena, _node?.On ?? default);
 
     public PermissionsRef Permissions => new(_arena, _node?.Permissions ?? default);
 

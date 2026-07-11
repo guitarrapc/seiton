@@ -725,67 +725,295 @@ public readonly struct WorkflowCallSecretRefMap
     }
 }
 
-/// <summary>The inputs declared on a <c>workflow_dispatch</c> event.</summary>
+/// <summary>The inputs declared on a <c>workflow_dispatch</c> event (case-insensitive keys, row-table backed).</summary>
 public readonly struct DispatchInputRefMap
 {
-    private readonly RefMap<DispatchInput, DispatchInputRef> _core;
+    private readonly AstArena? _arena;
+    private readonly NodeRange _range;
 
-    internal DispatchInputRefMap(AstArena? arena, SliceMap<DispatchInput>? map) => _core = new(arena, map);
+    internal DispatchInputRefMap(AstArena? arena, NodeRange range)
+    {
+        _arena = arena;
+        _range = range;
+    }
 
-    public bool HasValue => _core.HasValue;
+    public bool HasValue => _arena is not null && _range.HasValue;
 
-    public int Count => _core.Count;
+    public int Count => _range.Count;
 
-    public bool TryGetValue(ReadOnlySpan<byte> key, out DispatchInputRef value) => _core.TryGetValue(key, out value);
+    public bool TryGetValue(ReadOnlySpan<byte> key, out DispatchInputRef value)
+    {
+        if (_arena is not null)
+        {
+            for (var i = 0; i < _range.Count; i++)
+            {
+                ref readonly var row = ref _arena.GetDispatchInputAt(_range, i);
+                if (SliceMap<int>.AsciiEqualsIgnoreCase(row.Key.AsSpan(_arena.Source), key))
+                {
+                    value = new DispatchInputRef(_arena, in row);
+                    return true;
+                }
+            }
+        }
 
-    public bool ContainsKey(ReadOnlySpan<byte> key) => _core.ContainsKey(key);
+        value = default;
+        return false;
+    }
+
+    public bool ContainsKey(ReadOnlySpan<byte> key) => TryGetValue(key, out _);
 
     /// <summary>Returns the entry at the given document-order index.</summary>
-    public RefMap<DispatchInput, DispatchInputRef>.Entry GetAt(int index) => _core.GetAt(index);
+    public Entry GetAt(int index)
+    {
+        if (_arena is null || (uint)index >= (uint)_range.Count)
+        {
+            throw new ArgumentOutOfRangeException(nameof(index));
+        }
 
-    public RefMap<DispatchInput, DispatchInputRef>.Enumerator GetEnumerator() => _core.GetEnumerator();
+        ref readonly var row = ref _arena.GetDispatchInputAt(_range, index);
+        return new Entry(new KeyRef(_arena, row.Key), new DispatchInputRef(_arena, in row));
+    }
+
+    public Enumerator GetEnumerator() => new(_arena, _range);
+
+    /// <summary>A key-value pair yielded during enumeration.</summary>
+    public readonly struct Entry
+    {
+        internal Entry(KeyRef key, DispatchInputRef value)
+        {
+            Key = key;
+            Value = value;
+        }
+
+        public KeyRef Key { get; }
+
+        public DispatchInputRef Value { get; }
+
+        public void Deconstruct(out KeyRef key, out DispatchInputRef value)
+        {
+            key = Key;
+            value = Value;
+        }
+    }
+
+    public struct Enumerator
+    {
+        private readonly AstArena? _arena;
+        private readonly NodeRange _range;
+        private int _index;
+
+        internal Enumerator(AstArena? arena, NodeRange range)
+        {
+            _arena = arena;
+            _range = range;
+            _index = -1;
+        }
+
+        public bool MoveNext() => _arena is not null && ++_index < _range.Count;
+
+        public readonly Entry Current
+        {
+            get
+            {
+                ref readonly var row = ref _arena!.GetDispatchInputAt(_range, _index);
+                return new Entry(new KeyRef(_arena, row.Key), new DispatchInputRef(_arena, in row));
+            }
+        }
+    }
 }
 
-/// <summary>The secrets declared on a <c>workflow_call</c> event.</summary>
+/// <summary>The secrets declared on a <c>workflow_call</c> event (case-insensitive keys, row-table backed).</summary>
 public readonly struct WorkflowCallEventSecretRefMap
 {
-    private readonly RefMap<WorkflowCallEventSecret, WorkflowCallEventSecretRef> _core;
+    private readonly AstArena? _arena;
+    private readonly NodeRange _range;
 
-    internal WorkflowCallEventSecretRefMap(AstArena? arena, SliceMap<WorkflowCallEventSecret>? map) => _core = new(arena, map);
+    internal WorkflowCallEventSecretRefMap(AstArena? arena, NodeRange range)
+    {
+        _arena = arena;
+        _range = range;
+    }
 
-    public bool HasValue => _core.HasValue;
+    public bool HasValue => _arena is not null && _range.HasValue;
 
-    public int Count => _core.Count;
+    public int Count => _range.Count;
 
-    public bool TryGetValue(ReadOnlySpan<byte> key, out WorkflowCallEventSecretRef value) => _core.TryGetValue(key, out value);
+    public bool TryGetValue(ReadOnlySpan<byte> key, out WorkflowCallEventSecretRef value)
+    {
+        if (_arena is not null)
+        {
+            for (var i = 0; i < _range.Count; i++)
+            {
+                ref readonly var row = ref _arena.GetWorkflowCallEventSecretAt(_range, i);
+                if (SliceMap<int>.AsciiEqualsIgnoreCase(row.Key.AsSpan(_arena.Source), key))
+                {
+                    value = new WorkflowCallEventSecretRef(_arena, in row);
+                    return true;
+                }
+            }
+        }
 
-    public bool ContainsKey(ReadOnlySpan<byte> key) => _core.ContainsKey(key);
+        value = default;
+        return false;
+    }
+
+    public bool ContainsKey(ReadOnlySpan<byte> key) => TryGetValue(key, out _);
 
     /// <summary>Returns the entry at the given document-order index.</summary>
-    public RefMap<WorkflowCallEventSecret, WorkflowCallEventSecretRef>.Entry GetAt(int index) => _core.GetAt(index);
+    public Entry GetAt(int index)
+    {
+        if (_arena is null || (uint)index >= (uint)_range.Count)
+        {
+            throw new ArgumentOutOfRangeException(nameof(index));
+        }
 
-    public RefMap<WorkflowCallEventSecret, WorkflowCallEventSecretRef>.Enumerator GetEnumerator() => _core.GetEnumerator();
+        ref readonly var row = ref _arena.GetWorkflowCallEventSecretAt(_range, index);
+        return new Entry(new KeyRef(_arena, row.Key), new WorkflowCallEventSecretRef(_arena, in row));
+    }
+
+    public Enumerator GetEnumerator() => new(_arena, _range);
+
+    /// <summary>A key-value pair yielded during enumeration.</summary>
+    public readonly struct Entry
+    {
+        internal Entry(KeyRef key, WorkflowCallEventSecretRef value)
+        {
+            Key = key;
+            Value = value;
+        }
+
+        public KeyRef Key { get; }
+
+        public WorkflowCallEventSecretRef Value { get; }
+
+        public void Deconstruct(out KeyRef key, out WorkflowCallEventSecretRef value)
+        {
+            key = Key;
+            value = Value;
+        }
+    }
+
+    public struct Enumerator
+    {
+        private readonly AstArena? _arena;
+        private readonly NodeRange _range;
+        private int _index;
+
+        internal Enumerator(AstArena? arena, NodeRange range)
+        {
+            _arena = arena;
+            _range = range;
+            _index = -1;
+        }
+
+        public bool MoveNext() => _arena is not null && ++_index < _range.Count;
+
+        public readonly Entry Current
+        {
+            get
+            {
+                ref readonly var row = ref _arena!.GetWorkflowCallEventSecretAt(_range, _index);
+                return new Entry(new KeyRef(_arena, row.Key), new WorkflowCallEventSecretRef(_arena, in row));
+            }
+        }
+    }
 }
 
-/// <summary>The outputs declared on a <c>workflow_call</c> event.</summary>
+/// <summary>The outputs declared on a <c>workflow_call</c> event (case-insensitive keys, row-table backed).</summary>
 public readonly struct WorkflowCallEventOutputRefMap
 {
-    private readonly RefMap<WorkflowCallEventOutput, WorkflowCallEventOutputRef> _core;
+    private readonly AstArena? _arena;
+    private readonly NodeRange _range;
 
-    internal WorkflowCallEventOutputRefMap(AstArena? arena, SliceMap<WorkflowCallEventOutput>? map) => _core = new(arena, map);
+    internal WorkflowCallEventOutputRefMap(AstArena? arena, NodeRange range)
+    {
+        _arena = arena;
+        _range = range;
+    }
 
-    public bool HasValue => _core.HasValue;
+    public bool HasValue => _arena is not null && _range.HasValue;
 
-    public int Count => _core.Count;
+    public int Count => _range.Count;
 
-    public bool TryGetValue(ReadOnlySpan<byte> key, out WorkflowCallEventOutputRef value) => _core.TryGetValue(key, out value);
+    public bool TryGetValue(ReadOnlySpan<byte> key, out WorkflowCallEventOutputRef value)
+    {
+        if (_arena is not null)
+        {
+            for (var i = 0; i < _range.Count; i++)
+            {
+                ref readonly var row = ref _arena.GetWorkflowCallEventOutputAt(_range, i);
+                if (SliceMap<int>.AsciiEqualsIgnoreCase(row.Key.AsSpan(_arena.Source), key))
+                {
+                    value = new WorkflowCallEventOutputRef(_arena, in row);
+                    return true;
+                }
+            }
+        }
 
-    public bool ContainsKey(ReadOnlySpan<byte> key) => _core.ContainsKey(key);
+        value = default;
+        return false;
+    }
+
+    public bool ContainsKey(ReadOnlySpan<byte> key) => TryGetValue(key, out _);
 
     /// <summary>Returns the entry at the given document-order index.</summary>
-    public RefMap<WorkflowCallEventOutput, WorkflowCallEventOutputRef>.Entry GetAt(int index) => _core.GetAt(index);
+    public Entry GetAt(int index)
+    {
+        if (_arena is null || (uint)index >= (uint)_range.Count)
+        {
+            throw new ArgumentOutOfRangeException(nameof(index));
+        }
 
-    public RefMap<WorkflowCallEventOutput, WorkflowCallEventOutputRef>.Enumerator GetEnumerator() => _core.GetEnumerator();
+        ref readonly var row = ref _arena.GetWorkflowCallEventOutputAt(_range, index);
+        return new Entry(new KeyRef(_arena, row.Key), new WorkflowCallEventOutputRef(_arena, in row));
+    }
+
+    public Enumerator GetEnumerator() => new(_arena, _range);
+
+    /// <summary>A key-value pair yielded during enumeration.</summary>
+    public readonly struct Entry
+    {
+        internal Entry(KeyRef key, WorkflowCallEventOutputRef value)
+        {
+            Key = key;
+            Value = value;
+        }
+
+        public KeyRef Key { get; }
+
+        public WorkflowCallEventOutputRef Value { get; }
+
+        public void Deconstruct(out KeyRef key, out WorkflowCallEventOutputRef value)
+        {
+            key = Key;
+            value = Value;
+        }
+    }
+
+    public struct Enumerator
+    {
+        private readonly AstArena? _arena;
+        private readonly NodeRange _range;
+        private int _index;
+
+        internal Enumerator(AstArena? arena, NodeRange range)
+        {
+            _arena = arena;
+            _range = range;
+            _index = -1;
+        }
+
+        public bool MoveNext() => _arena is not null && ++_index < _range.Count;
+
+        public readonly Entry Current
+        {
+            get
+            {
+                ref readonly var row = ref _arena!.GetWorkflowCallEventOutputAt(_range, _index);
+                return new Entry(new KeyRef(_arena, row.Key), new WorkflowCallEventOutputRef(_arena, in row));
+            }
+        }
+    }
 }
 
 /// <summary>The properties of a raw YAML mapping value (case-insensitive keys, row-table backed).</summary>

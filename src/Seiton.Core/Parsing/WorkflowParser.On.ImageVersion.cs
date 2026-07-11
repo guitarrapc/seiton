@@ -9,14 +9,15 @@ public static partial class WorkflowParser
 {
     private static readonly string[] ImageVersionOptionNames = ["names", "versions"];
 
-    private static ImageVersionEvent ParseImageVersionEvent<TReader>(ref TReader reader, AstArena arena, ref PooledBuffer<Diagnostic> diagnostics, StringNodeId nameNode)
+    private static void ParseImageVersionEvent<TReader>(ref TReader reader, AstArena arena, ref PooledBuffer<Diagnostic> diagnostics, StringNodeId nameNode)
         where TReader : IYamlStreamReader, allows ref struct
     {
         if (reader.CurrentKind != YamlEventKind.MappingStart)
         {
             AddError(ref diagnostics, "on.image_version must be object", reader.CurrentStart);
             reader.SkipCurrentNode();
-            return new ImageVersionEvent { EventName = nameNode, Range = arena.GetStringRange(nameNode) };
+            arena.AddEvent(new EventData { Kind = EventKind.ImageVersion, EventName = nameNode, Range = arena.GetStringRange(nameNode), Payload = arena.AddImageVersionEvent(default) });
+            return;
         }
 
         StringIdRange names = default;
@@ -103,6 +104,7 @@ public static partial class WorkflowParser
             reader.Read();
         }
 
-        return new ImageVersionEvent { EventName = nameNode, Names = names, Versions = versions, Range = arena.GetStringRange(nameNode) };
+        var payload = arena.AddImageVersionEvent(new ImageVersionEventData { Names = names, Versions = versions });
+        arena.AddEvent(new EventData { Kind = EventKind.ImageVersion, EventName = nameNode, Range = arena.GetStringRange(nameNode), Payload = payload });
     }
 }

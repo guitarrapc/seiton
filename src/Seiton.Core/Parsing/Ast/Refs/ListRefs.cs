@@ -86,38 +86,38 @@ public readonly struct StepRefList
 public readonly struct EventRefList
 {
     private readonly AstArena? _arena;
-    private readonly IReadOnlyList<Event>? _nodes;
+    private readonly NodeRange _range;
 
-    internal EventRefList(AstArena? arena, IReadOnlyList<Event>? nodes)
+    internal EventRefList(AstArena? arena, NodeRange range)
     {
         _arena = arena;
-        _nodes = nodes;
+        _range = range;
     }
 
-    public bool HasValue => _nodes is not null;
+    public bool HasValue => _arena is not null && _range.HasValue;
 
-    public int Count => _nodes?.Count ?? 0;
+    public int Count => _range.Count;
 
-    public EventRef this[int index] => new(_arena, _nodes![index]);
+    public EventRef this[int index] => new(_arena, _range.First + index);
 
-    public Enumerator GetEnumerator() => new(_arena, _nodes);
+    public Enumerator GetEnumerator() => new(_arena, _range);
 
     public struct Enumerator
     {
         private readonly AstArena? _arena;
-        private readonly IReadOnlyList<Event>? _nodes;
+        private readonly NodeRange _range;
         private int _index;
 
-        internal Enumerator(AstArena? arena, IReadOnlyList<Event>? nodes)
+        internal Enumerator(AstArena? arena, NodeRange range)
         {
             _arena = arena;
-            _nodes = nodes;
+            _range = range;
             _index = -1;
         }
 
-        public bool MoveNext() => _nodes is not null && ++_index < _nodes.Count;
+        public bool MoveNext() => _arena is not null && ++_index < _range.Count;
 
-        public readonly EventRef Current => new(_arena, _nodes![_index]);
+        public readonly EventRef Current => new(_arena, _range.First + _index);
     }
 }
 
@@ -125,38 +125,38 @@ public readonly struct EventRefList
 public readonly struct ScheduleRefList
 {
     private readonly AstArena? _arena;
-    private readonly IReadOnlyList<ScheduleEntry>? _nodes;
+    private readonly NodeRange _range;
 
-    internal ScheduleRefList(AstArena? arena, IReadOnlyList<ScheduleEntry>? nodes)
+    internal ScheduleRefList(AstArena? arena, NodeRange range)
     {
         _arena = arena;
-        _nodes = nodes;
+        _range = range;
     }
 
-    public bool HasValue => _nodes is not null;
+    public bool HasValue => _arena is not null && _range.HasValue;
 
-    public int Count => _nodes?.Count ?? 0;
+    public int Count => _range.Count;
 
-    public ScheduleEntryRef this[int index] => new(_arena, _nodes![index]);
+    public ScheduleEntryRef this[int index] => new(_arena, in _arena!.GetScheduleEntryAt(_range, index));
 
-    public Enumerator GetEnumerator() => new(_arena, _nodes);
+    public Enumerator GetEnumerator() => new(_arena, _range);
 
     public struct Enumerator
     {
         private readonly AstArena? _arena;
-        private readonly IReadOnlyList<ScheduleEntry>? _nodes;
+        private readonly NodeRange _range;
         private int _index;
 
-        internal Enumerator(AstArena? arena, IReadOnlyList<ScheduleEntry>? nodes)
+        internal Enumerator(AstArena? arena, NodeRange range)
         {
             _arena = arena;
-            _nodes = nodes;
+            _range = range;
             _index = -1;
         }
 
-        public bool MoveNext() => _nodes is not null && ++_index < _nodes.Count;
+        public bool MoveNext() => _arena is not null && ++_index < _range.Count;
 
-        public readonly ScheduleEntryRef Current => new(_arena, _nodes![_index]);
+        public readonly ScheduleEntryRef Current => new(_arena, in _arena!.GetScheduleEntryAt(_range, _index));
     }
 }
 
@@ -281,37 +281,37 @@ public readonly struct CombinationEntryRefList
 public readonly struct WorkflowCallEventInputRefList
 {
     private readonly AstArena? _arena;
-    private readonly IReadOnlyList<WorkflowCallEventInput>? _nodes;
+    private readonly NodeRange _range;
 
-    internal WorkflowCallEventInputRefList(AstArena? arena, IReadOnlyList<WorkflowCallEventInput>? nodes)
+    internal WorkflowCallEventInputRefList(AstArena? arena, NodeRange range)
     {
         _arena = arena;
-        _nodes = nodes;
+        _range = range;
     }
 
-    public bool HasValue => _nodes is not null;
+    public bool HasValue => _arena is not null && _range.HasValue;
 
-    public int Count => _nodes?.Count ?? 0;
+    public int Count => _range.Count;
 
-    public WorkflowCallEventInputRef this[int index] => new(_arena, _nodes![index]);
+    public WorkflowCallEventInputRef this[int index] => new(_arena, in _arena!.GetWorkflowCallEventInputAt(_range, index));
 
-    public Enumerator GetEnumerator() => new(_arena, _nodes);
+    public Enumerator GetEnumerator() => new(_arena, _range);
 
     public struct Enumerator
     {
         private readonly AstArena? _arena;
-        private readonly IReadOnlyList<WorkflowCallEventInput>? _nodes;
+        private readonly NodeRange _range;
         private int _index;
 
-        internal Enumerator(AstArena? arena, IReadOnlyList<WorkflowCallEventInput>? nodes)
+        internal Enumerator(AstArena? arena, NodeRange range)
         {
             _arena = arena;
-            _nodes = nodes;
+            _range = range;
             _index = -1;
         }
 
-        public bool MoveNext() => _nodes is not null && ++_index < _nodes.Count;
+        public bool MoveNext() => _arena is not null && ++_index < _range.Count;
 
-        public readonly WorkflowCallEventInputRef Current => new(_arena, _nodes![_index]);
+        public readonly WorkflowCallEventInputRef Current => new(_arena, in _arena!.GetWorkflowCallEventInputAt(_range, _index));
     }
 }

@@ -7,17 +7,18 @@ namespace Seiton.Core.Parsing;
 
 public static partial class WorkflowParser
 {
-    private static WorkflowDispatchEvent ParseWorkflowDispatchEvent<TReader>(ref TReader reader, AstArena arena, ref PooledBuffer<Diagnostic> diagnostics, ReadOnlySpan<byte> source, StringNodeId nameNode)
+    private static void ParseWorkflowDispatchEvent<TReader>(ref TReader reader, AstArena arena, ref PooledBuffer<Diagnostic> diagnostics, ReadOnlySpan<byte> source, StringNodeId nameNode)
         where TReader : IYamlStreamReader, allows ref struct
     {
         if (reader.CurrentKind != YamlEventKind.MappingStart)
         {
             AddError(ref diagnostics, "on.workflow_dispatch must be object", reader.CurrentStart);
             reader.SkipCurrentNode();
-            return new WorkflowDispatchEvent { EventName = nameNode, Inputs = null, Range = arena.GetStringRange(nameNode) };
+            arena.AddEvent(new EventData { Kind = EventKind.WorkflowDispatch, EventName = nameNode, Range = arena.GetStringRange(nameNode), Payload = arena.AddWorkflowDispatchEvent(default) });
+            return;
         }
 
-        SliceMap<DispatchInput>? inputs = null;
+        NodeRange inputs = default;
         ulong seen = 0;
         reader.Read(); // consume MappingStart
         while (!reader.End && reader.CurrentKind != YamlEventKind.MappingEnd)
@@ -72,10 +73,11 @@ public static partial class WorkflowParser
             reader.Read();
         }
 
-        return new WorkflowDispatchEvent { EventName = nameNode, Inputs = inputs, Range = arena.GetStringRange(nameNode) };
+        var payload = arena.AddWorkflowDispatchEvent(new WorkflowDispatchEventData { Inputs = inputs });
+        arena.AddEvent(new EventData { Kind = EventKind.WorkflowDispatch, EventName = nameNode, Range = arena.GetStringRange(nameNode), Payload = payload });
     }
 
-    private static SliceMap<DispatchInput>? ParseWorkflowDispatchInputs<TReader>(ref TReader reader, AstArena arena, ref PooledBuffer<Diagnostic> diagnostics, ReadOnlySpan<byte> source)
+    private static NodeRange ParseWorkflowDispatchInputs<TReader>(ref TReader reader, AstArena arena, ref PooledBuffer<Diagnostic> diagnostics, ReadOnlySpan<byte> source)
         where TReader : IYamlStreamReader, allows ref struct
     {
         if (reader.CurrentKind != YamlEventKind.MappingStart)
@@ -85,70 +87,63 @@ public static partial class WorkflowParser
             return default;
         }
 
-        var map = new PooledBuffer<SliceMap<DispatchInput>.Entry>(8);
-        try
+        var first = arena.DispatchInputCount;
+        Span<long> keyStore = stackalloc long[64];
+        var keyCount = 0;
+        reader.Read(); // consume MappingStart
+        while (!reader.End && reader.CurrentKind != YamlEventKind.MappingEnd)
         {
-            Span<long> keyStore = stackalloc long[64];
-            var keyCount = 0;
-            reader.Read(); // consume MappingStart
-            while (!reader.End && reader.CurrentKind != YamlEventKind.MappingEnd)
+            if (reader.CurrentKind != YamlEventKind.Scalar)
             {
-                if (reader.CurrentKind != YamlEventKind.Scalar)
+                AddError(ref diagnostics, "on.workflow_dispatch.inputs key must be string", reader.CurrentStart);
+                reader.SkipCurrentNode();
+                if (!reader.End && reader.CurrentKind != YamlEventKind.MappingEnd)
                 {
-                    AddError(ref diagnostics, "on.workflow_dispatch.inputs key must be string", reader.CurrentStart);
                     reader.SkipCurrentNode();
-                    if (!reader.End && reader.CurrentKind != YamlEventKind.MappingEnd)
-                    {
-                        reader.SkipCurrentNode();
-                    }
-                    continue;
                 }
-
-                var idMark = reader.CurrentStart;
-                var idSlice = reader.GetScalarSlice();
-                var idUtf8 = reader.GetScalarUtf8();
-                if (!TryRegisterDynamicKey(
-                    source,
-                    idUtf8,
-                    idSlice.Offset,
-                    idSlice.Length,
-                    idMark,
-                    ref diagnostics,
-                    keyStore,
-                    ref keyCount,
-                    caseSensitive: false,
-                    "on.workflow_dispatch.inputs"))
-                {
-                    reader.Read();
-                    if (!reader.End)
-                    {
-                        reader.SkipCurrentNode();
-                    }
-
-                    continue;
-                }
-
-                var idRange = BuildScalarLocation(idMark, idUtf8.Length);
-                var nameNode = arena.AddString(idSlice, reader.IsScalarQuoted(), idRange);
-                reader.Read(); // consume input id
-
-                var input = ParseWorkflowDispatchInput(ref reader, arena, ref diagnostics, nameNode);
-                map.Add(new SliceMap<DispatchInput>.Entry(idSlice, input));
+                continue;
             }
 
-            if (reader.CurrentKind == YamlEventKind.MappingEnd)
+            var idMark = reader.CurrentStart;
+            var idSlice = reader.GetScalarSlice();
+            var idUtf8 = reader.GetScalarUtf8();
+            if (!TryRegisterDynamicKey(
+                source,
+                idUtf8,
+                idSlice.Offset,
+                idSlice.Length,
+                idMark,
+                ref diagnostics,
+                keyStore,
+                ref keyCount,
+                caseSensitive: false,
+                "on.workflow_dispatch.inputs"))
             {
                 reader.Read();
+                if (!reader.End)
+                {
+                    reader.SkipCurrentNode();
+                }
+
+                continue;
             }
 
-            var (dispEntries, dispCount) = map.DetachArray();
-            arena.RegisterSliceMapBuffer(dispEntries);
-            return new SliceMap<DispatchInput>(dispEntries, dispCount, caseSensitive: false);
+            var idRange = BuildScalarLocation(idMark, idUtf8.Length);
+            var nameNode = arena.AddString(idSlice, reader.IsScalarQuoted(), idRange);
+            reader.Read(); // consume input id
+
+            arena.AddDispatchInput(ParseWorkflowDispatchInput(ref reader, arena, ref diagnostics, nameNode, idSlice));
         }
-        finally { map.Dispose(); }
+
+        if (reader.CurrentKind == YamlEventKind.MappingEnd)
+        {
+            reader.Read();
+        }
+
+        return new NodeRange(first, arena.DispatchInputCount - first);
     }
 
-    private static DispatchInput ParseWorkflowDispatchInput<TReader>(ref TReader reader, AstArena arena, ref PooledBuffer<Diagnostic> diagnostics, StringNodeId nameNode)
+    private static DispatchInputData ParseWorkflowDispatchInput<TReader>(ref TReader reader, AstArena arena, ref PooledBuffer<Diagnostic> diagnostics, StringNodeId nameNode, Utf8Slice key)
         where TReader : IYamlStreamReader, allows ref struct
     {
         StringNodeId description = default;
@@ -162,7 +157,7 @@ public static partial class WorkflowParser
         {
             AddError(ref diagnostics, "on.workflow_dispatch input must be object", reader.CurrentStart);
             reader.SkipCurrentNode();
-            return new DispatchInput { Name = nameNode, Description = description, Required = required, Default = defaultValue, Type = type, Options = options, Range = arena.GetStringRange(nameNode) };
+            return new DispatchInputData { Key = key, Name = nameNode, Description = description, Required = required, Default = defaultValue, Type = type, Options = options, Range = arena.GetStringRange(nameNode) };
         }
 
         reader.Read(); // consume MappingStart
@@ -269,8 +264,9 @@ public static partial class WorkflowParser
             reader.Read();
         }
 
-        return new DispatchInput
+        return new DispatchInputData
         {
+            Key = key,
             Name = nameNode,
             Description = description,
             Required = required,

@@ -1,5 +1,4 @@
 ﻿using System.Globalization;
-using System.Text;
 using Seiton.Core.Parsing;
 using Seiton.Core.Parsing.Ast;
 
@@ -201,26 +200,27 @@ public sealed class ReusableWorkflowRule() : RuleBase(RuleId.ReusableWorkflow)
             return null;
         }
 
-        WorkflowCallEvent? workflowCallEvent = null;
-        for (var i = 0; i < parseResult.Workflow.On.Count; i++)
+        var ownedArena = parseArena!;
+        var on = new EventRefList(ownedArena, parseResult.Workflow.On);
+        WorkflowCallEventRef workflowCallEvent = default;
+        for (var i = 0; i < on.Count; i++)
         {
-            if (parseResult.Workflow.On[i] is WorkflowCallEvent current)
+            if (on[i].Kind == EventKind.WorkflowCall)
             {
-                workflowCallEvent = current;
+                workflowCallEvent = on[i].AsWorkflowCall();
                 break;
             }
         }
 
-        if (workflowCallEvent is null)
+        if (!workflowCallEvent.HasValue)
         {
-            parseArena?.Dispose();
+            ownedArena.Dispose();
             AddJobError(job, $"jobs.'{jobId}' references local workflow '{relativePath}' that does not declare on.workflow_call", BuildJobLocation(job));
             localWorkflowContracts[resolvedPath] = null;
             return null;
         }
 
-        var ownedArena = parseArena!;
-        var contract = LocalWorkflowContract.FromEvent(workflowCallEvent, bytes, ownedArena);
+        var contract = LocalWorkflowContract.FromEvent(workflowCallEvent);
         ownedArena.Dispose();
         localWorkflowContracts[resolvedPath] = contract;
         return contract;
@@ -463,36 +463,31 @@ public sealed class ReusableWorkflowRule() : RuleBase(RuleId.ReusableWorkflow)
 
         public HashSet<string> RequiredSecrets { get; } = new(StringComparer.Ordinal);
 
-        public static LocalWorkflowContract FromEvent(WorkflowCallEvent workflowCallEvent, byte[] source, AstArena arena)
+        public static LocalWorkflowContract FromEvent(WorkflowCallEventRef workflowCallEvent)
         {
             var contract = new LocalWorkflowContract();
 
-            if (workflowCallEvent.Inputs is not null)
+            var inputs = workflowCallEvent.Inputs;
+            for (var i = 0; i < inputs.Count; i++)
             {
-                for (var i = 0; i < workflowCallEvent.Inputs.Count; i++)
-                {
-                    var input = workflowCallEvent.Inputs[i];
-                    var inputName = Decode(input.Id);
-                    contract.Inputs[inputName] = new InputContract(inputName, input.Type);
+                var input = inputs[i];
+                var inputName = Decode(input.Id);
+                contract.Inputs[inputName] = new InputContract(inputName, input.Type);
 
-                    var hasDefault = input.Default.HasValue;
-                    if (input.Required.HasValue && arena.GetBoolValue(input.Required) && !hasDefault)
-                    {
-                        contract.RequiredInputs.Add(inputName);
-                    }
+                var hasDefault = input.Default.HasValue;
+                if (input.Required.HasValue && input.Required.Value && !hasDefault)
+                {
+                    contract.RequiredInputs.Add(inputName);
                 }
             }
 
-            if (workflowCallEvent.Secrets is not null)
+            foreach (var pair in workflowCallEvent.Secrets)
             {
-                foreach (var pair in workflowCallEvent.Secrets.Value)
+                var secretName = pair.Key.Decode();
+                contract.Secrets.Add(secretName);
+                if (pair.Value.Required.HasValue && pair.Value.Required.Value)
                 {
-                    var secretName = Encoding.UTF8.GetString(pair.Key.AsSpan(source));
-                    contract.Secrets.Add(secretName);
-                    if (pair.Value.Required.HasValue && arena.GetBoolValue(pair.Value.Required))
-                    {
-                        contract.RequiredSecrets.Add(secretName);
-                    }
+                    contract.RequiredSecrets.Add(secretName);
                 }
             }
 

@@ -7,14 +7,15 @@ namespace Seiton.Core.Parsing;
 
 public static partial class WorkflowParser
 {
-    private static RepositoryDispatchEvent ParseRepositoryDispatchEvent<TReader>(ref TReader reader, AstArena arena, ref PooledBuffer<Diagnostic> diagnostics, in OnEventInfo eventInfo, StringNodeId nameNode)
+    private static void ParseRepositoryDispatchEvent<TReader>(ref TReader reader, AstArena arena, ref PooledBuffer<Diagnostic> diagnostics, in OnEventInfo eventInfo, StringNodeId nameNode)
         where TReader : IYamlStreamReader, allows ref struct
     {
         if (reader.CurrentKind != YamlEventKind.MappingStart)
         {
             AddError(ref diagnostics, "on.repository_dispatch must be object", reader.CurrentStart);
             reader.SkipCurrentNode();
-            return new RepositoryDispatchEvent { EventName = nameNode, Range = arena.GetStringRange(nameNode) };
+            arena.AddEvent(new EventData { Kind = EventKind.RepositoryDispatch, EventName = nameNode, Range = arena.GetStringRange(nameNode), Payload = arena.AddRepositoryDispatchEvent(default) });
+            return;
         }
 
         StringIdRange types = default;
@@ -72,6 +73,7 @@ public static partial class WorkflowParser
             reader.Read();
         }
 
-        return new RepositoryDispatchEvent { EventName = nameNode, Types = types, Range = arena.GetStringRange(nameNode) };
+        var payload = arena.AddRepositoryDispatchEvent(new RepositoryDispatchEventData { Types = types });
+        arena.AddEvent(new EventData { Kind = EventKind.RepositoryDispatch, EventName = nameNode, Range = arena.GetStringRange(nameNode), Payload = payload });
     }
 }

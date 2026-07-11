@@ -7,7 +7,7 @@ public sealed class Workflow
 
     public StringNodeId RunName { get; init; }
 
-    public IReadOnlyList<Event> On { get; internal set; } = [];
+    public NodeRange On { get; internal set; }
 
     public PermissionsId Permissions { get; internal set; }
 

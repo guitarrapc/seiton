@@ -31,20 +31,26 @@ public sealed partial class RuleInterfaceTests
                 ],
             }));
 
+        var firstEvent = arena.EventCount;
+        arena.AddEvent(new EventData
+        {
+            Kind = EventKind.Webhook,
+            EventName = arena.AddString(new Utf8Slice(0, 0), false, default),
+            Payload = arena.AddWebhookEvent(new WebhookEventData
+            {
+                Hook = arena.AddString(new Utf8Slice(0, 0), false, default),
+            }),
+        });
+        arena.AddEvent(new EventData
+        {
+            Kind = EventKind.Scheduled,
+            EventName = arena.AddString(new Utf8Slice(0, 0), false, default),
+            Payload = arena.AddScheduledEvent(default),
+        });
+
         var workflow = new Workflow
         {
-            On =
-            [
-                new WebhookEvent
-                {
-                    EventName = arena.AddString(new Utf8Slice(0, 0), false, default),
-                    Hook = arena.AddString(new Utf8Slice(0, 0), false, default),
-                },
-                new ScheduledEvent
-                {
-                    EventName = arena.AddString(new Utf8Slice(0, 0), false, default),
-                },
-            ],
+            On = new NodeRange(firstEvent, 2),
             Jobs = jobs,
         };
 

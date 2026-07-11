@@ -56,8 +56,8 @@ public sealed class ExprUndefinedVarRule() : RuleBase(RuleId.ExprUndefinedVar)
         base.VisitWorkflowPre(workflow);
         _currentWorkflow = workflow;
         var assumeEvents = Config.GetRuleConfig(Id)?.AssumeEvents;
-        _inputsOverride = DynamicContextTypeBuilder.BuildInputsOverride(workflow.Node!.On, assumeEvents, Config.Utf8Yaml);
-        _secretsOverride = DynamicContextTypeBuilder.BuildSecretsOverride(workflow.Node!.On, Config.Utf8Yaml);
+        _inputsOverride = DynamicContextTypeBuilder.BuildInputsOverride(workflow.On, assumeEvents, Config.Utf8Yaml);
+        _secretsOverride = DynamicContextTypeBuilder.BuildSecretsOverride(workflow.On, Config.Utf8Yaml);
 
         // Cache github override: only rebuild when source file or event count changes
         if (ReferenceEquals(Config.Utf8Yaml, _cachedGithubYamlRef) && workflow.On.Count == _cachedGithubEventCount)
@@ -66,7 +66,7 @@ public sealed class ExprUndefinedVarRule() : RuleBase(RuleId.ExprUndefinedVar)
         }
         else
         {
-            _githubOverride = DynamicContextTypeBuilder.BuildGithubOverride(workflow.Node!.On, Arena, Config.Utf8Yaml);
+            _githubOverride = DynamicContextTypeBuilder.BuildGithubOverride(workflow.On, Arena, Config.Utf8Yaml);
             _cachedGithubOverride = _githubOverride;
             _cachedGithubYamlRef = Config.Utf8Yaml;
             _cachedGithubEventCount = workflow.On.Count;
@@ -141,7 +141,7 @@ public sealed class ExprUndefinedVarRule() : RuleBase(RuleId.ExprUndefinedVar)
                     }
 
                     // Build incremental inputs override: only inputs defined before current index
-                    var incrementalInputsOverride = DynamicContextTypeBuilder.BuildWorkflowCallInputsOverrideUpTo(wce.Node!.Inputs!, idx);
+                    var incrementalInputsOverride = DynamicContextTypeBuilder.BuildWorkflowCallInputsOverrideUpTo(wce.Inputs, idx);
 
                     CheckNodeWithOverrides(
                         input.Default,

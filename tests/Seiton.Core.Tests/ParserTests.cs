@@ -30,7 +30,7 @@ public sealed partial class ParserTests
         await Assert.That(arena!.GetStringValue(result.Workflow.Name).Length).IsGreaterThan(0);
         await Assert.That(result.Workflow.RunName.HasValue).IsFalse();
         await Assert.That(result.Workflow.On.Count).IsEqualTo(1);
-        await Assert.That(result.Workflow.On[0]).IsTypeOf<WebhookEvent>();
+        await Assert.That(new EventRefList(arena, result.Workflow.On)[0].Kind).IsEqualTo(EventKind.Webhook);
         await Assert.That(result.Workflow.Jobs.Count).IsEqualTo(1);
         await Assert.That(result.Diagnostics).IsEmpty();
     }
@@ -51,7 +51,7 @@ public sealed partial class ParserTests
         await Assert.That(result.Workflow!.RunName.HasValue).IsTrue();
         await Assert.That(arena!.GetStringValue(result.Workflow.RunName).Length).IsGreaterThan(0);
         await Assert.That(result.Workflow.On.Count).IsEqualTo(1);
-        await Assert.That(result.Workflow.On[0]).IsTypeOf<WebhookEvent>();
+        await Assert.That(new EventRefList(arena, result.Workflow.On)[0].Kind).IsEqualTo(EventKind.Webhook);
         await Assert.That(result.Workflow.Jobs.Count).IsEqualTo(0);
         await Assert.That(result.Diagnostics).IsEmpty();
     }
@@ -80,7 +80,7 @@ public sealed partial class ParserTests
         await Assert.That(arena!.GetStringValue(result.Workflow.Name).Length).IsGreaterThan(0);
         await Assert.That(result.Workflow.RunName.HasValue).IsFalse();
         await Assert.That(result.Workflow.On.Count).IsEqualTo(1);
-        await Assert.That(result.Workflow.On[0]).IsTypeOf<WebhookEvent>();
+        await Assert.That(new EventRefList(arena, result.Workflow.On)[0].Kind).IsEqualTo(EventKind.Webhook);
         await Assert.That(result.Workflow.Jobs.Count).IsEqualTo(1);
         await Assert.That(result.Diagnostics).IsEmpty();
     }
@@ -1235,8 +1235,9 @@ public sealed partial class ParserTests
 
         await Assert.That(result.Workflow is not null).IsTrue();
         await Assert.That(result.Workflow!.On.Count).IsEqualTo(1);
-        await Assert.That(result.Workflow.On[0]).IsTypeOf<ScheduledEvent>();
-        var evt = (ScheduledEvent)result.Workflow.On[0];
+        var on = new EventRefList(arena, result.Workflow.On);
+        await Assert.That(on[0].Kind).IsEqualTo(EventKind.Scheduled);
+        var evt = on[0].AsScheduled();
         await Assert.That(evt.Schedules.Count).IsEqualTo(1);
         await Assert.That(evt.Schedules[0].Cron.HasValue).IsTrue();
         await Assert.That(result.Diagnostics).IsEmpty();
@@ -1246,12 +1247,12 @@ public sealed partial class ParserTests
     public async Task Parse_OnSpecialEventsScalarForm_PopulatesEmptyEvents_TableDriven()
     {
         // spec §3.4.1: workflow_dispatch / workflow_call / repository_dispatch in scalar form → empty typed event
-        var cases = new (string EventName, Type ExpectedType)[]
+        var cases = new (string EventName, EventKind ExpectedKind)[]
         {
-            ("workflow_dispatch", typeof(WorkflowDispatchEvent)),
-            ("workflow_call", typeof(WorkflowCallEvent)),
-            ("repository_dispatch", typeof(RepositoryDispatchEvent)),
-            ("image_version", typeof(ImageVersionEvent)),
+            ("workflow_dispatch", EventKind.WorkflowDispatch),
+            ("workflow_call", EventKind.WorkflowCall),
+            ("repository_dispatch", EventKind.RepositoryDispatch),
+            ("image_version", EventKind.ImageVersion),
         };
 
         for (var i = 0; i < cases.Length; i++)
@@ -1266,7 +1267,7 @@ public sealed partial class ParserTests
 
             await Assert.That(result.Workflow is not null).IsTrue();
             await Assert.That(result.Workflow!.On.Count).IsEqualTo(1);
-            await Assert.That(result.Workflow.On[0].GetType()).IsEqualTo(c.ExpectedType);
+            await Assert.That(new EventRefList(arena, result.Workflow.On)[0].Kind).IsEqualTo(c.ExpectedKind);
             await Assert.That(result.Diagnostics).IsEmpty();
         }
     }
@@ -1275,12 +1276,12 @@ public sealed partial class ParserTests
     public async Task Parse_OnSpecialEventsEmptyMappingValue_PopulatesEmptyEvents_TableDriven()
     {
         // spec §3.4.1: empty mapping value (YAML null scalar) is treated as scalar-form event
-        var cases = new (string EventName, Type ExpectedType)[]
+        var cases = new (string EventName, EventKind ExpectedKind)[]
         {
-            ("workflow_dispatch", typeof(WorkflowDispatchEvent)),
-            ("workflow_call", typeof(WorkflowCallEvent)),
-            ("repository_dispatch", typeof(RepositoryDispatchEvent)),
-            ("image_version", typeof(ImageVersionEvent)),
+            ("workflow_dispatch", EventKind.WorkflowDispatch),
+            ("workflow_call", EventKind.WorkflowCall),
+            ("repository_dispatch", EventKind.RepositoryDispatch),
+            ("image_version", EventKind.ImageVersion),
         };
 
         for (var i = 0; i < cases.Length; i++)
@@ -1296,7 +1297,7 @@ public sealed partial class ParserTests
 
             await Assert.That(result.Workflow is not null).IsTrue();
             await Assert.That(result.Workflow!.On.Count).IsEqualTo(1);
-            await Assert.That(result.Workflow.On[0].GetType()).IsEqualTo(c.ExpectedType);
+            await Assert.That(new EventRefList(arena, result.Workflow.On)[0].Kind).IsEqualTo(c.ExpectedKind);
             await Assert.That(result.Diagnostics).IsEmpty();
         }
     }
@@ -1462,15 +1463,16 @@ public sealed partial class ParserTests
 
         await Assert.That(result.Workflow is not null).IsTrue();
         await Assert.That(result.Workflow!.On.Count).IsEqualTo(1);
-        await Assert.That(result.Workflow.On[0]).IsTypeOf<WorkflowDispatchEvent>();
-        var evt = (WorkflowDispatchEvent)result.Workflow.On[0];
-        await Assert.That(evt.Inputs is not null).IsTrue();
-        await Assert.That(evt.Inputs!.Value.Count).IsEqualTo(1);
+        var on = new EventRefList(arena, result.Workflow.On);
+        await Assert.That(on[0].Kind).IsEqualTo(EventKind.WorkflowDispatch);
+        var evt = on[0].AsWorkflowDispatch();
+        await Assert.That(evt.Inputs.HasValue).IsTrue();
+        await Assert.That(evt.Inputs.Count).IsEqualTo(1);
         var key = Utf8String.FromLowerAscii("target"u8);
-        evt.Inputs.Value.TryGetValue(Encoding.UTF8.GetBytes(yaml), key.Span, out var input);
+        evt.Inputs.TryGetValue(key.Span, out var input);
         await Assert.That(input.Type).IsEqualTo(DispatchInputType.Choice);
         await Assert.That(input.Required.HasValue).IsTrue();
-        await Assert.That(arena!.GetBoolValue(input.Required)).IsTrue();
+        await Assert.That(input.Required.Value).IsTrue();
         await Assert.That(input.Options.HasValue).IsTrue();
         await Assert.That(input.Options.Count).IsEqualTo(2);
         await Assert.That(result.Diagnostics).IsEmpty();
@@ -1500,9 +1502,9 @@ public sealed partial class ParserTests
         var result = WorkflowParser.ParseDirect(bytes, "dispatch-choice-empty.yml", out var arena);
 
         await Assert.That(result.Workflow is not null).IsTrue();
-        var evt = (WorkflowDispatchEvent)result.Workflow!.On[0];
+        var evt = new EventRefList(arena, result.Workflow!.On)[0].AsWorkflowDispatch();
         var key = Utf8String.FromLowerAscii("operation"u8);
-        evt.Inputs!.Value.TryGetValue(bytes, key.Span, out var input);
+        evt.Inputs.TryGetValue(key.Span, out var input);
         await Assert.That(input.Type).IsEqualTo(DispatchInputType.Choice);
         await Assert.That(input.Options.Count).IsEqualTo(3);
         // Empty string in options is legitimate for choice-type inputs (e.g. "no selection" option).
@@ -1511,9 +1513,9 @@ public sealed partial class ParserTests
         await Assert.That(emptyDiag.Length).IsEqualTo(0);
         // Empty-string option node must report the line of '' itself, not the next item.
         // This validates VYamlStreamAdapter's backward-scan fix for empty-scalar mark positions.
-        var emptyOptionNode = arena!.GetStringIdAt(input.Options, 0);
-        var disableOptionNode = arena!.GetStringIdAt(input.Options, 1);
-        await Assert.That(arena!.GetStringRange(emptyOptionNode).StartLine).IsNotEqualTo(arena!.GetStringRange(disableOptionNode).StartLine);
+        var emptyOption = input.Options[0];
+        var disableOption = input.Options[1];
+        await Assert.That(emptyOption.Range.StartLine).IsNotEqualTo(disableOption.Range.StartLine);
     }
 
     [Test]
@@ -1539,16 +1541,17 @@ public sealed partial class ParserTests
 
         await Assert.That(result.Workflow is not null).IsTrue();
         await Assert.That(result.Workflow!.On.Count).IsEqualTo(1);
-        await Assert.That(result.Workflow.On[0]).IsTypeOf<WorkflowCallEvent>();
-        var evt = (WorkflowCallEvent)result.Workflow.On[0];
-        await Assert.That(evt.Inputs is not null).IsTrue();
-        await Assert.That(evt.Inputs!.Count).IsEqualTo(1);
+        var on = new EventRefList(arena, result.Workflow.On);
+        await Assert.That(on[0].Kind).IsEqualTo(EventKind.WorkflowCall);
+        var evt = on[0].AsWorkflowCall();
+        await Assert.That(evt.Inputs.HasValue).IsTrue();
+        await Assert.That(evt.Inputs.Count).IsEqualTo(1);
         await Assert.That(evt.Inputs[0].Type).IsEqualTo(WorkflowCallInputType.String);
-        await Assert.That(evt.Secrets is not null).IsTrue();
-        await Assert.That(evt.Secrets!.Value.Count).IsEqualTo(1);
-        await Assert.That(evt.Outputs is not null).IsTrue();
-        await Assert.That(evt.Outputs!.Value.Count).IsEqualTo(1);
-        await Assert.That(evt.Outputs.Value.Values().First().Value.HasValue).IsTrue();
+        await Assert.That(evt.Secrets.HasValue).IsTrue();
+        await Assert.That(evt.Secrets.Count).IsEqualTo(1);
+        await Assert.That(evt.Outputs.HasValue).IsTrue();
+        await Assert.That(evt.Outputs.Count).IsEqualTo(1);
+        await Assert.That(evt.Outputs.GetAt(0).Value.Value.HasValue).IsTrue();
         await Assert.That(result.Diagnostics).IsEmpty();
     }
 
@@ -2091,8 +2094,9 @@ public sealed partial class ParserTests
 
         await Assert.That(result.Workflow is not null).IsTrue();
         await Assert.That(result.Workflow!.On.Count).IsEqualTo(1);
-        await Assert.That(result.Workflow.On[0]).IsTypeOf<RepositoryDispatchEvent>();
-        var evt = (RepositoryDispatchEvent)result.Workflow.On[0];
+        var on = new EventRefList(arena, result.Workflow.On);
+        await Assert.That(on[0].Kind).IsEqualTo(EventKind.RepositoryDispatch);
+        var evt = on[0].AsRepositoryDispatch();
         await Assert.That(evt.Types.HasValue).IsTrue();
         await Assert.That(evt.Types.Count).IsEqualTo(2);
         await Assert.That(result.Diagnostics).IsEmpty();
@@ -2146,8 +2150,9 @@ public sealed partial class ParserTests
 
             await Assert.That(result.Workflow is not null).IsTrue();
             await Assert.That(result.Workflow!.On.Count).IsEqualTo(1);
-            await Assert.That(result.Workflow.On[0]).IsTypeOf<ImageVersionEvent>();
-            var evt = (ImageVersionEvent)result.Workflow.On[0];
+            var on = new EventRefList(arena, result.Workflow.On);
+            await Assert.That(on[0].Kind).IsEqualTo(EventKind.ImageVersion);
+            var evt = on[0].AsImageVersion();
             await Assert.That(evt.Names.Count).IsEqualTo(c.ExpectedNames);
             await Assert.That(evt.Versions.Count).IsEqualTo(c.ExpectedVersions);
             await Assert.That(result.Diagnostics).IsEmpty();
@@ -2654,13 +2659,21 @@ public sealed partial class ParserTests
         var result = WorkflowParser.ParseDirect(Encoding.UTF8.GetBytes(yaml), "anchor-sequence.yml", out var arena);
         await Assert.That(result.HasFatalError).IsFalse();
         await Assert.That(result.Diagnostics).IsEmpty();
-        var events = result.Workflow!.On.OfType<WebhookEvent>().ToArray();
-        await Assert.That(events.Length).IsEqualTo(2);
+        var events = new List<WebhookEventRef>();
+        foreach (var evt in new EventRefList(arena, result.Workflow!.On))
+        {
+            if (evt.Kind == EventKind.Webhook)
+            {
+                events.Add(evt.AsWebhook());
+            }
+        }
+
+        await Assert.That(events.Count).IsEqualTo(2);
         var pushEvent = events[0];
         var prEvent = events[1];
-        await Assert.That(pushEvent.Paths).IsNotNull();
-        await Assert.That(prEvent.Paths).IsNotNull();
-        await Assert.That(pushEvent.Paths!.Values.Count).IsEqualTo(prEvent.Paths!.Values.Count);
+        await Assert.That(pushEvent.Paths.HasValue).IsTrue();
+        await Assert.That(prEvent.Paths.HasValue).IsTrue();
+        await Assert.That(pushEvent.Paths.Values.Count).IsEqualTo(prEvent.Paths.Values.Count);
     }
 
     [Test]
@@ -4664,12 +4677,12 @@ public sealed partial class ParserTests
 
         await Assert.That(result.Workflow is not null).IsTrue();
         await Assert.That(result.Workflow!.On.Count).IsEqualTo(1);
-        var evt = result.Workflow.On[0];
-        await Assert.That(evt).IsTypeOf<WebhookEvent>();
-        var webhook = (WebhookEvent)evt;
-        await Assert.That(arena!.GetStringValue(webhook.Hook).Length).IsGreaterThan(0);
+        var evt = new EventRefList(arena, result.Workflow.On)[0];
+        await Assert.That(evt.Kind).IsEqualTo(EventKind.Webhook);
+        var webhook = evt.AsWebhook();
+        await Assert.That(webhook.Hook.Value.Length).IsGreaterThan(0);
         await Assert.That(webhook.Types.HasValue).IsFalse();
-        await Assert.That(webhook.Branches).IsNull();
+        await Assert.That(webhook.Branches.HasValue).IsFalse();
         await Assert.That(result.Diagnostics).IsEmpty();
     }
 
@@ -4684,12 +4697,13 @@ public sealed partial class ParserTests
 
         await Assert.That(result.Workflow is not null).IsTrue();
         await Assert.That(result.Workflow!.On.Count).IsEqualTo(2);
-        await Assert.That(result.Workflow.On[0]).IsTypeOf<WebhookEvent>();
-        await Assert.That(result.Workflow.On[1]).IsTypeOf<WebhookEvent>();
-        var first = (WebhookEvent)result.Workflow.On[0];
-        var second = (WebhookEvent)result.Workflow.On[1];
-        await Assert.That(arena!.GetStringValue(first.Hook).Length).IsGreaterThan(0);
-        await Assert.That(arena!.GetStringValue(second.Hook).Length).IsGreaterThan(0);
+        var on = new EventRefList(arena, result.Workflow.On);
+        await Assert.That(on[0].Kind).IsEqualTo(EventKind.Webhook);
+        await Assert.That(on[1].Kind).IsEqualTo(EventKind.Webhook);
+        var first = on[0].AsWebhook();
+        var second = on[1].AsWebhook();
+        await Assert.That(first.Hook.Value.Length).IsGreaterThan(0);
+        await Assert.That(second.Hook.Value.Length).IsGreaterThan(0);
         await Assert.That(result.Diagnostics).IsEmpty();
     }
 
@@ -4707,11 +4721,12 @@ public sealed partial class ParserTests
 
         await Assert.That(result.Workflow is not null).IsTrue();
         await Assert.That(result.Workflow!.On.Count).IsEqualTo(1);
-        await Assert.That(result.Workflow.On[0]).IsTypeOf<WebhookEvent>();
-        var webhook = (WebhookEvent)result.Workflow.On[0];
-        await Assert.That(webhook.Branches is not null).IsTrue();
-        await Assert.That(webhook.Branches!.Values.Count).IsEqualTo(1);
-        await Assert.That(webhook.BranchesIgnore).IsNull();
+        var on = new EventRefList(arena, result.Workflow.On);
+        await Assert.That(on[0].Kind).IsEqualTo(EventKind.Webhook);
+        var webhook = on[0].AsWebhook();
+        await Assert.That(webhook.Branches.HasValue).IsTrue();
+        await Assert.That(webhook.Branches.Values.Count).IsEqualTo(1);
+        await Assert.That(webhook.BranchesIgnore.HasValue).IsFalse();
         await Assert.That(result.Diagnostics).IsEmpty();
     }
 
@@ -4848,37 +4863,51 @@ public sealed partial class ParserTests
         await Assert.That(workflow.Defaults.HasValue).IsTrue();
         await Assert.That(workflow.Concurrency.HasValue).IsTrue();
 
-        await Assert.That(workflow.On.Count).IsEqualTo(6);
-        await Assert.That(workflow.On.Any(static e => e is WebhookEvent)).IsTrue();
-        await Assert.That(workflow.On.Any(static e => e is ScheduledEvent)).IsTrue();
-        await Assert.That(workflow.On.Any(static e => e is WorkflowDispatchEvent)).IsTrue();
-        await Assert.That(workflow.On.Any(static e => e is WorkflowCallEvent)).IsTrue();
-        await Assert.That(workflow.On.Any(static e => e is RepositoryDispatchEvent)).IsTrue();
-        await Assert.That(workflow.On.Any(static e => e is ImageVersionEvent)).IsTrue();
+        static EventRef FirstOfKind(EventRefList events, EventKind kind)
+        {
+            foreach (var evt in events)
+            {
+                if (evt.Kind == kind)
+                {
+                    return evt;
+                }
+            }
 
-        var scheduled = (ScheduledEvent)workflow.On.First(static e => e is ScheduledEvent);
+            return default;
+        }
+
+        var on = new EventRefList(arena, workflow.On);
+        await Assert.That(workflow.On.Count).IsEqualTo(6);
+        await Assert.That(FirstOfKind(on, EventKind.Webhook).HasValue).IsTrue();
+        await Assert.That(FirstOfKind(on, EventKind.Scheduled).HasValue).IsTrue();
+        await Assert.That(FirstOfKind(on, EventKind.WorkflowDispatch).HasValue).IsTrue();
+        await Assert.That(FirstOfKind(on, EventKind.WorkflowCall).HasValue).IsTrue();
+        await Assert.That(FirstOfKind(on, EventKind.RepositoryDispatch).HasValue).IsTrue();
+        await Assert.That(FirstOfKind(on, EventKind.ImageVersion).HasValue).IsTrue();
+
+        var scheduled = FirstOfKind(on, EventKind.Scheduled).AsScheduled();
         await Assert.That(scheduled.Schedules.Count).IsEqualTo(1);
         await Assert.That(scheduled.Schedules[0].Cron.HasValue).IsTrue();
         await Assert.That(scheduled.Schedules[0].Timezone.HasValue).IsTrue();
 
-        var dispatch = (WorkflowDispatchEvent)workflow.On.First(static e => e is WorkflowDispatchEvent);
-        await Assert.That(dispatch.Inputs is not null).IsTrue();
-        await Assert.That(dispatch.Inputs!.Value.Count).IsEqualTo(1);
+        var dispatch = FirstOfKind(on, EventKind.WorkflowDispatch).AsWorkflowDispatch();
+        await Assert.That(dispatch.Inputs.HasValue).IsTrue();
+        await Assert.That(dispatch.Inputs.Count).IsEqualTo(1);
         var targetKey = Utf8String.FromLowerAscii("target"u8);
-        await Assert.That(dispatch.Inputs.Value.ContainsKey(bytes, targetKey.Span)).IsTrue();
-        dispatch.Inputs.Value.TryGetValue(bytes, targetKey.Span, out var dispatchTargetInput);
+        await Assert.That(dispatch.Inputs.ContainsKey(targetKey.Span)).IsTrue();
+        dispatch.Inputs.TryGetValue(targetKey.Span, out var dispatchTargetInput);
         await Assert.That(dispatchTargetInput.Type).IsEqualTo(DispatchInputType.Choice);
 
-        var callEvent = (WorkflowCallEvent)workflow.On.First(static e => e is WorkflowCallEvent);
-        await Assert.That(callEvent.Inputs is not null).IsTrue();
-        await Assert.That(callEvent.Inputs!.Count).IsEqualTo(1);
+        var callEvent = FirstOfKind(on, EventKind.WorkflowCall).AsWorkflowCall();
+        await Assert.That(callEvent.Inputs.HasValue).IsTrue();
+        await Assert.That(callEvent.Inputs.Count).IsEqualTo(1);
         await Assert.That(callEvent.Inputs[0].Type).IsEqualTo(WorkflowCallInputType.String);
-        await Assert.That(callEvent.Secrets is not null).IsTrue();
-        await Assert.That(callEvent.Secrets!.Value.Count).IsEqualTo(1);
-        await Assert.That(callEvent.Outputs is not null).IsTrue();
-        await Assert.That(callEvent.Outputs!.Value.Count).IsEqualTo(1);
+        await Assert.That(callEvent.Secrets.HasValue).IsTrue();
+        await Assert.That(callEvent.Secrets.Count).IsEqualTo(1);
+        await Assert.That(callEvent.Outputs.HasValue).IsTrue();
+        await Assert.That(callEvent.Outputs.Count).IsEqualTo(1);
 
-        var imageVersionEvent = (ImageVersionEvent)workflow.On.First(static e => e is ImageVersionEvent);
+        var imageVersionEvent = FirstOfKind(on, EventKind.ImageVersion).AsImageVersion();
         await Assert.That(imageVersionEvent.Names.HasValue).IsTrue();
         await Assert.That(imageVersionEvent.Names.Count).IsEqualTo(1);
         await Assert.That(imageVersionEvent.Versions.HasValue).IsTrue();
@@ -4971,7 +5000,7 @@ public sealed partial class ParserTests
 
         var workflow = result.Workflow!;
         await Assert.That(HasRange(workflow.Range)).IsTrue();
-        await Assert.That(HasRange(workflow.On[0].Range)).IsTrue();
+        await Assert.That(HasRange(new EventRefList(arena, workflow.On)[0].Range)).IsTrue();
         await Assert.That(workflow.Permissions.HasValue).IsTrue();
         await Assert.That(HasRange(new PermissionsRef(arena, workflow.Permissions).Range)).IsTrue();
         await Assert.That(workflow.Env.HasValue).IsTrue();

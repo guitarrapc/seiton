@@ -108,14 +108,17 @@ CLI は診断のみを参照し AST 型に依存しない (実測: `src/Seiton/`
 6. **Runner** (2026-07-12): `RunnerData` 行 + `RunnerId`。
 7. **Strategy / Matrix / RawYaml — 再帰 tagged union** (2026-07-12): `RawYamlData` は Kind + Scalar/Items/Properties の tagged union 行。再帰は「配列 = `RawYamlId` の共有 ID リストストアへのレンジ、オブジェクト = キー内蔵 prop 行テーブルへのレンジ」で表現。**入れ子のパースが自テーブルに行を差し込むケース (配列 items / オブジェクト props / combination entries) はスクラッチ `PooledBuffer` に集めてから一括 append** して連続性を守る。それ以外 (matrix rows / services など、入れ子が他テーブルにしか触れないケース) は直接 append で良い。`DynamicContextTypeBuilder` の Matrix/RawYaml 型推論も Ref API へ移行。
 8. **Container / Services / WorkflowCall** (2026-07-12): 行テーブル + ID + キー内蔵マップ 3 種 (services / with / secrets)。WorkflowCall はジョブ解析中に uses/with/secrets が別キーとして逐次到着するため、**ローカル変数に蓄積してジョブ構築時に 1 回で行化** (行 struct は追記後の mutate 不可)。`StructuralNodes.cs` は空になり削除。
+9. **Events tagged union** (2026-07-12): `Workflow.On` は `EventData` 行テーブルへの `NodeRange`。`EventData` = Kind + EventName + Range + **Payload (kind 別 payload テーブルへの 1-based index)**。payload 6 種 (Webhook/Scheduled/WorkflowDispatch/WorkflowCall/RepositoryDispatch/ImageVersion) + 付随テーブル (webhook filters / schedule entries / dispatch inputs / workflow_call inputs·secrets·outputs)。パース手順は「payload 行を先に append → 最後に `AddEvent` 1 回」(イベント本体テーブルの連続性を守る)。旧 `Events.cs` クラス群と `On` の `ArenaList` は削除。`EventRef` は `Kind` + `AsWebhook()` 等の payload アクセサを持つ。`DynamicContextTypeBuilder` のイベント系 (inputs/secrets/github override) と `LocalReusableWorkflowOutputResolver`/`ReusableWorkflowRule`/`ExprUndefinedVarRule` も Ref API へ移行。
 
 ベンチ確認 (増分 8 まで、idle マシン): Parse Large 15.80ms (Stage 1 比 +1.5%) / **3,576B (Stage 1 比 −28%)**。Lint 全ケース Mean ±6% 以内・Allocated 微減 (Large/False 34.96KB)。
+
+ベンチ確認 (増分 9): Parse Large 15.70ms / **3,248B** (増分 8 比さらに −9%)。Lint Allocated は Large/False 34.64KB と微減。Lint Mean は ShortRun で見かけ +40% が出たが、HEAD との A/B (stash 切替 + Stopwatch phase-split + dotnet-trace + affinity 固定 steady-state) の結果**計測アーティファクトと確定** (Lessons Learned 参照)。定常状態は parse/lint 側とも HEAD 同等〜微改善 (long-loop 収束値 18.7ms は HEAD のどの区間よりも速い)。
 
 **incremental parse との整合の要**: 継ぎ足し (セクション/ジョブの再利用) は「同一バイトオフセット + 同一内容ハッシュ」の場合にのみ発生するため、新テーブルを `BulkImportFrom` で**全行コピー**すれば、再利用ノード内の ID は新 arena でもそのまま解決できる。テーブル追加時は (a) `ResetForSource`/`Dispose` のリセット、(b) `BulkImportFrom` のコピー、(c) discard パスの `ReleaseAll` の 3 点を配線すること。
 
 意味論の写像 (テスト移行時の規約): 旧 `null` (キー不在) → `default` ID/レンジ (`HasValue == false`)。旧「キーは在るが空」→ `HasValue == true` かつ `Count == 0`。`ParseStringOrStringSequence` は回復パスでも常に present レンジを返す (旧実装で default `ArenaList` が boxing により非 null になっていた挙動の保存)。
 
-残作業: Events tagged union、Exec*/Step/Job/Workflow 行化 (+ Jobs/Outputs/ExecAction.Inputs マップ)、ActionMetadata 族。マップは増分 5 のパターン (キー内蔵行テーブル + NodeRange)、多態は増分 7 のパターン (Kind + payload) を踏襲する。
+残作業: Exec*/Step/Job/Workflow 行化 (+ Jobs/Outputs/ExecAction.Inputs マップ — `IncrementalParseContext` の継ぎ足しと衝突するため Stage 3 と統合)、ActionMetadata 族。マップは増分 5 のパターン (キー内蔵行テーブル + NodeRange)、多態は増分 7/9 のパターン (Kind + payload) を踏襲する。
 
 ## 7. Lessons Learned (随時追記)
 
@@ -126,3 +129,5 @@ CLI は診断のみを参照し AST 型に依存しない (実測: `src/Seiton/`
 - (2026-07-11 Stage 1) 静的 abstract interface メンバ (`INodeRef<TNode,TSelf>.Create`) は internal メンバとして公開 struct に実装でき、マップ/リストの生成ボイラープレートを 1/5 に圧縮できた。AOT でも問題なし (値型 generic は特殊化される)。
 - (2026-07-12 Stage 2) **arena 再利用バグの教訓**: 共有リストストアの `Reset()` 配線漏れで、count がパースを跨いで蓄積 → 保持上限超過で配列だけ解放 (count 残留) → 次パースで `IndexOutOfRange` → fatal 化。単発パース中心のテストでは検出できず、**ベンチマークの「速すぎる数値 + 全サイズ一律の Allocated」が実質の検出器**だった (壊れた op は fatal 即返しで速い)。対策: (a) `NodeTable` は配列解放時に必ず count も 0 化する不変条件を実装に内蔵、(b) `AstArenaReuseTests` で同一スレッド 40 回再利用の黒箱回帰を常設、(c) ベンチ結果が不自然に良い時はまず正しさを疑う (`jobs+diags` の積算検証)。
 - (2026-07-12 Stage 2) CRLF リポジトリでは perl/sed の複数行パターン (`\n` アンカー) がサイレントに不発になる。ライフサイクル配線 (Reset/Release/CopyFrom の 3 点セット) は必ず grep で着地確認するか Edit ツールで行う。
+- (2026-07-12 Stage 2 増分 9) **ShortRun ベンチの位相アーティファクト**: `Program.cs` は常に `Job.ShortRun` (warmup 3 + 計測 3)。20-30ms/op のケースでは計測が「dynamic PGO の instrumented tier 区間」(long-loop 実測で op 100〜1100 付近、約 +40%) に入るかどうかがバイナリごとにほぼ決定的に変わり、**コード変更なしでも走行間で 19ms ↔ 28ms のモードフリップ**が起きる (同一 WIP バイナリで Medium/False が 1.19ms と 1.80ms の両方を記録)。さらに 7950X3D は CCD 移動と thermal soak で pinned 計測でも走行間 ±3ms ドリフトする。対策: gate 判定で ±10% を超えたら (a) HEAD と stash A/B、(b) `WorkflowParser.Parse` + `Check(parseResult,...)` の Stopwatch phase-split、(c) 400+ ops warmup 後の steady-state、の 3 点で実体かアーティファクトかを確定してから対応する。単発 ShortRun の数値だけで回帰と断定しない。
+- (2026-07-12 Stage 2 増分 9) trace 調査の副産物: `UnpinnedUsesRule.BuildRefLocation` が action step ごとに `ComputeLineColumn` (ファイル先頭からの O(offset) 走査) を 2 回呼び、lint 側 CPU の最大ホットスポット (二乗コスト、Large lint 側時間の約半分)。**既存挙動であり本移行の回帰ではない**。`Config.GetLineStarts()` の binary search へ置換すれば解消する — 別課題として扱う。

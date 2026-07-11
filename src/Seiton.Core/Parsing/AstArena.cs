@@ -180,6 +180,19 @@ internal sealed class AstArena : IDisposable
     private NodeTable<WorkflowCallData> _workflowCallTable;
     private NodeTable<WorkflowCallInputData> _workflowCallInputTable;
     private NodeTable<WorkflowCallSecretData> _workflowCallSecretTable;
+    private NodeTable<EventData> _eventTable;
+    private NodeTable<WebhookEventData> _webhookEventTable;
+    private NodeTable<WebhookEventFilterData> _webhookFilterTable;
+    private NodeTable<ScheduledEventData> _scheduledEventTable;
+    private NodeTable<ScheduleEntry> _scheduleEntryTable;
+    private NodeTable<WorkflowDispatchEventData> _workflowDispatchEventTable;
+    private NodeTable<DispatchInputData> _dispatchInputTable;
+    private NodeTable<WorkflowCallEventData> _workflowCallEventTable;
+    private NodeTable<WorkflowCallEventInputData> _wceInputTable;
+    private NodeTable<WorkflowCallEventSecretData> _wceSecretTable;
+    private NodeTable<WorkflowCallEventOutputData> _wceOutputTable;
+    private NodeTable<RepositoryDispatchEventData> _repositoryDispatchEventTable;
+    private NodeTable<ImageVersionEventData> _imageVersionEventTable;
     private NodeTable<RunnerData> _runnerTable;
     private NodeTable<ConcurrencyData> _concurrencyTable;
     private NodeTable<EnvironmentData> _environmentTable;
@@ -393,6 +406,19 @@ internal sealed class AstArena : IDisposable
         _workflowCallTable.Reset();
         _workflowCallInputTable.Reset();
         _workflowCallSecretTable.Reset();
+        _eventTable.Reset();
+        _webhookEventTable.Reset();
+        _webhookFilterTable.Reset();
+        _scheduledEventTable.Reset();
+        _scheduleEntryTable.Reset();
+        _workflowDispatchEventTable.Reset();
+        _dispatchInputTable.Reset();
+        _workflowCallEventTable.Reset();
+        _wceInputTable.Reset();
+        _wceSecretTable.Reset();
+        _wceOutputTable.Reset();
+        _repositoryDispatchEventTable.Reset();
+        _imageVersionEventTable.Reset();
         _runnerTable.Reset();
         _concurrencyTable.Reset();
         _environmentTable.Reset();
@@ -419,6 +445,19 @@ internal sealed class AstArena : IDisposable
         _workflowCallTable.ReleaseOversized(DefaultNodeTableRetainedCapacity);
         _workflowCallInputTable.ReleaseOversized(DefaultStringIdItemsRetainedCapacity);
         _workflowCallSecretTable.ReleaseOversized(DefaultStringIdItemsRetainedCapacity);
+        _eventTable.ReleaseOversized(DefaultNodeTableRetainedCapacity);
+        _webhookEventTable.ReleaseOversized(DefaultNodeTableRetainedCapacity);
+        _webhookFilterTable.ReleaseOversized(DefaultNodeTableRetainedCapacity);
+        _scheduledEventTable.ReleaseOversized(DefaultNodeTableRetainedCapacity);
+        _scheduleEntryTable.ReleaseOversized(DefaultNodeTableRetainedCapacity);
+        _workflowDispatchEventTable.ReleaseOversized(DefaultNodeTableRetainedCapacity);
+        _dispatchInputTable.ReleaseOversized(DefaultStringIdItemsRetainedCapacity);
+        _workflowCallEventTable.ReleaseOversized(DefaultNodeTableRetainedCapacity);
+        _wceInputTable.ReleaseOversized(DefaultStringIdItemsRetainedCapacity);
+        _wceSecretTable.ReleaseOversized(DefaultStringIdItemsRetainedCapacity);
+        _wceOutputTable.ReleaseOversized(DefaultStringIdItemsRetainedCapacity);
+        _repositoryDispatchEventTable.ReleaseOversized(DefaultNodeTableRetainedCapacity);
+        _imageVersionEventTable.ReleaseOversized(DefaultNodeTableRetainedCapacity);
         _runnerTable.ReleaseOversized(DefaultNodeTableRetainedCapacity);
         _concurrencyTable.ReleaseOversized(DefaultNodeTableRetainedCapacity);
         _environmentTable.ReleaseOversized(DefaultNodeTableRetainedCapacity);
@@ -503,6 +542,19 @@ internal sealed class AstArena : IDisposable
             _workflowCallTable.ReleaseAll();
             _workflowCallInputTable.ReleaseAll();
             _workflowCallSecretTable.ReleaseAll();
+            _eventTable.ReleaseAll();
+            _webhookEventTable.ReleaseAll();
+            _webhookFilterTable.ReleaseAll();
+            _scheduledEventTable.ReleaseAll();
+            _scheduleEntryTable.ReleaseAll();
+            _workflowDispatchEventTable.ReleaseAll();
+            _dispatchInputTable.ReleaseAll();
+            _workflowCallEventTable.ReleaseAll();
+            _wceInputTable.ReleaseAll();
+            _wceSecretTable.ReleaseAll();
+            _wceOutputTable.ReleaseAll();
+            _repositoryDispatchEventTable.ReleaseAll();
+            _imageVersionEventTable.ReleaseAll();
             _runnerTable.ReleaseAll();
             _concurrencyTable.ReleaseAll();
             _environmentTable.ReleaseAll();
@@ -607,6 +659,19 @@ internal sealed class AstArena : IDisposable
         _workflowCallTable.Reset();
         _workflowCallInputTable.Reset();
         _workflowCallSecretTable.Reset();
+        _eventTable.Reset();
+        _webhookEventTable.Reset();
+        _webhookFilterTable.Reset();
+        _scheduledEventTable.Reset();
+        _scheduleEntryTable.Reset();
+        _workflowDispatchEventTable.Reset();
+        _dispatchInputTable.Reset();
+        _workflowCallEventTable.Reset();
+        _wceInputTable.Reset();
+        _wceSecretTable.Reset();
+        _wceOutputTable.Reset();
+        _repositoryDispatchEventTable.Reset();
+        _imageVersionEventTable.Reset();
         _runnerTable.Reset();
         _concurrencyTable.Reset();
         _environmentTable.Reset();
@@ -1138,6 +1203,131 @@ internal sealed class AstArena : IDisposable
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     internal ref readonly RawYamlPropData GetRawYamlPropAt(NodeRange range, int index) => ref _rawYamlPropTable[range.First + index];
 
+    // Event family accessors. Event header rows for one `on:` section are contiguous;
+    // EventData.Payload is a 1-based index into the kind-specific payload table.
+
+    /// <summary>Appends an <see cref="EventData"/> header row (rows of one <c>on:</c> section must be contiguous).</summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public int AddEvent(in EventData data) => _eventTable.Add(in data);
+
+    /// <summary>Gets the current event header row count (range start capture).</summary>
+    internal int EventCount => _eventTable.Count;
+
+    /// <summary>Resolves an event header row by absolute index.</summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    internal ref readonly EventData GetEvent(int index) => ref _eventTable[index];
+
+    /// <summary>Appends a <see cref="WebhookEventData"/> payload row; returns its 1-based payload index.</summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public int AddWebhookEvent(in WebhookEventData data) => _webhookEventTable.Add(in data) + 1;
+
+    /// <summary>Resolves a webhook payload row by 1-based payload index.</summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    internal ref readonly WebhookEventData GetWebhookEvent(int payload) => ref _webhookEventTable[payload - 1];
+
+    /// <summary>Appends a <see cref="WebhookEventFilterData"/> row and returns its handle.</summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public WebhookFilterId AddWebhookFilter(in WebhookEventFilterData data) => new(_webhookFilterTable.Add(in data) + 1);
+
+    /// <summary>Resolves a <see cref="WebhookEventFilterData"/> row.</summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    internal ref readonly WebhookEventFilterData GetWebhookFilter(WebhookFilterId id) => ref _webhookFilterTable[id.Index];
+
+    /// <summary>Appends a <see cref="ScheduledEventData"/> payload row; returns its 1-based payload index.</summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public int AddScheduledEvent(in ScheduledEventData data) => _scheduledEventTable.Add(in data) + 1;
+
+    /// <summary>Resolves a schedule payload row by 1-based payload index.</summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    internal ref readonly ScheduledEventData GetScheduledEvent(int payload) => ref _scheduledEventTable[payload - 1];
+
+    /// <summary>Appends a <see cref="ScheduleEntry"/> row (rows of one schedule must be appended contiguously).</summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public int AddScheduleEntry(in ScheduleEntry data) => _scheduleEntryTable.Add(in data);
+
+    /// <summary>Gets the current schedule-entry row count (range start capture).</summary>
+    internal int ScheduleEntryCount => _scheduleEntryTable.Count;
+
+    /// <summary>Resolves one element of a schedule-entry <see cref="NodeRange"/>.</summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    internal ref readonly ScheduleEntry GetScheduleEntryAt(NodeRange range, int index) => ref _scheduleEntryTable[range.First + index];
+
+    /// <summary>Appends a <see cref="WorkflowDispatchEventData"/> payload row; returns its 1-based payload index.</summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public int AddWorkflowDispatchEvent(in WorkflowDispatchEventData data) => _workflowDispatchEventTable.Add(in data) + 1;
+
+    /// <summary>Resolves a workflow_dispatch payload row by 1-based payload index.</summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    internal ref readonly WorkflowDispatchEventData GetWorkflowDispatchEvent(int payload) => ref _workflowDispatchEventTable[payload - 1];
+
+    /// <summary>Appends a <see cref="DispatchInputData"/> row (rows of one map must be appended contiguously).</summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public int AddDispatchInput(in DispatchInputData data) => _dispatchInputTable.Add(in data);
+
+    /// <summary>Gets the current dispatch-input row count (range start capture).</summary>
+    internal int DispatchInputCount => _dispatchInputTable.Count;
+
+    /// <summary>Resolves one element of a dispatch-input <see cref="NodeRange"/>.</summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    internal ref readonly DispatchInputData GetDispatchInputAt(NodeRange range, int index) => ref _dispatchInputTable[range.First + index];
+
+    /// <summary>Appends a <see cref="WorkflowCallEventData"/> payload row; returns its 1-based payload index.</summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public int AddWorkflowCallEvent(in WorkflowCallEventData data) => _workflowCallEventTable.Add(in data) + 1;
+
+    /// <summary>Resolves a workflow_call payload row by 1-based payload index.</summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    internal ref readonly WorkflowCallEventData GetWorkflowCallEvent(int payload) => ref _workflowCallEventTable[payload - 1];
+
+    /// <summary>Appends a <see cref="WorkflowCallEventInputData"/> row (rows of one list must be appended contiguously).</summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public int AddWorkflowCallEventInput(in WorkflowCallEventInputData data) => _wceInputTable.Add(in data);
+
+    /// <summary>Gets the current workflow-call event input row count (range start capture).</summary>
+    internal int WorkflowCallEventInputCount => _wceInputTable.Count;
+
+    /// <summary>Resolves one element of a workflow-call event input <see cref="NodeRange"/>.</summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    internal ref readonly WorkflowCallEventInputData GetWorkflowCallEventInputAt(NodeRange range, int index) => ref _wceInputTable[range.First + index];
+
+    /// <summary>Appends a <see cref="WorkflowCallEventSecretData"/> row (rows of one map must be appended contiguously).</summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public int AddWorkflowCallEventSecret(in WorkflowCallEventSecretData data) => _wceSecretTable.Add(in data);
+
+    /// <summary>Gets the current workflow-call event secret row count (range start capture).</summary>
+    internal int WorkflowCallEventSecretCount => _wceSecretTable.Count;
+
+    /// <summary>Resolves one element of a workflow-call event secret <see cref="NodeRange"/>.</summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    internal ref readonly WorkflowCallEventSecretData GetWorkflowCallEventSecretAt(NodeRange range, int index) => ref _wceSecretTable[range.First + index];
+
+    /// <summary>Appends a <see cref="WorkflowCallEventOutputData"/> row (rows of one map must be appended contiguously).</summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public int AddWorkflowCallEventOutput(in WorkflowCallEventOutputData data) => _wceOutputTable.Add(in data);
+
+    /// <summary>Gets the current workflow-call event output row count (range start capture).</summary>
+    internal int WorkflowCallEventOutputCount => _wceOutputTable.Count;
+
+    /// <summary>Resolves one element of a workflow-call event output <see cref="NodeRange"/>.</summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    internal ref readonly WorkflowCallEventOutputData GetWorkflowCallEventOutputAt(NodeRange range, int index) => ref _wceOutputTable[range.First + index];
+
+    /// <summary>Appends a <see cref="RepositoryDispatchEventData"/> payload row; returns its 1-based payload index.</summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public int AddRepositoryDispatchEvent(in RepositoryDispatchEventData data) => _repositoryDispatchEventTable.Add(in data) + 1;
+
+    /// <summary>Resolves a repository_dispatch payload row by 1-based payload index.</summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    internal ref readonly RepositoryDispatchEventData GetRepositoryDispatchEvent(int payload) => ref _repositoryDispatchEventTable[payload - 1];
+
+    /// <summary>Appends an <see cref="ImageVersionEventData"/> payload row; returns its 1-based payload index.</summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public int AddImageVersionEvent(in ImageVersionEventData data) => _imageVersionEventTable.Add(in data) + 1;
+
+    /// <summary>Resolves an image_version payload row by 1-based payload index.</summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    internal ref readonly ImageVersionEventData GetImageVersionEvent(int payload) => ref _imageVersionEventTable[payload - 1];
+
     /// <summary>Appends a <see cref="ContainerData"/> row and returns its handle.</summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public ContainerId AddContainer(in ContainerData data) => new(_containerTable.Add(in data) + 1);
@@ -1316,6 +1506,19 @@ internal sealed class AstArena : IDisposable
         _workflowCallTable.CopyFrom(in source._workflowCallTable, source._workflowCallTable.Count);
         _workflowCallInputTable.CopyFrom(in source._workflowCallInputTable, source._workflowCallInputTable.Count);
         _workflowCallSecretTable.CopyFrom(in source._workflowCallSecretTable, source._workflowCallSecretTable.Count);
+        _eventTable.CopyFrom(in source._eventTable, source._eventTable.Count);
+        _webhookEventTable.CopyFrom(in source._webhookEventTable, source._webhookEventTable.Count);
+        _webhookFilterTable.CopyFrom(in source._webhookFilterTable, source._webhookFilterTable.Count);
+        _scheduledEventTable.CopyFrom(in source._scheduledEventTable, source._scheduledEventTable.Count);
+        _scheduleEntryTable.CopyFrom(in source._scheduleEntryTable, source._scheduleEntryTable.Count);
+        _workflowDispatchEventTable.CopyFrom(in source._workflowDispatchEventTable, source._workflowDispatchEventTable.Count);
+        _dispatchInputTable.CopyFrom(in source._dispatchInputTable, source._dispatchInputTable.Count);
+        _workflowCallEventTable.CopyFrom(in source._workflowCallEventTable, source._workflowCallEventTable.Count);
+        _wceInputTable.CopyFrom(in source._wceInputTable, source._wceInputTable.Count);
+        _wceSecretTable.CopyFrom(in source._wceSecretTable, source._wceSecretTable.Count);
+        _wceOutputTable.CopyFrom(in source._wceOutputTable, source._wceOutputTable.Count);
+        _repositoryDispatchEventTable.CopyFrom(in source._repositoryDispatchEventTable, source._repositoryDispatchEventTable.Count);
+        _imageVersionEventTable.CopyFrom(in source._imageVersionEventTable, source._imageVersionEventTable.Count);
         _runnerTable.CopyFrom(in source._runnerTable, source._runnerTable.Count);
         _concurrencyTable.CopyFrom(in source._concurrencyTable, source._concurrencyTable.Count);
         _environmentTable.CopyFrom(in source._environmentTable, source._environmentTable.Count);
