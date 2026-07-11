@@ -48,6 +48,10 @@ internal struct AstNodePool<T> where T : class, new()
     /// <summary>
     /// Resets all allocated nodes (releasing references to the prior AST graph) and caps the
     /// retained capacity so the ThreadStatic arena cache does not keep high-water-mark pools.
+    /// Retains at least what the finished parse used: shrinking straight to
+    /// <paramref name="maxRetainedCapacity"/> would discard instances the very next parse of
+    /// the same document re-allocates (per-parse alloc/free ping-pong). Retention follows the
+    /// most recent parse with a one-parse lag, so a small parse still releases a prior peak.
     /// Call from <see cref="AstArena.Dispose"/> before recaching the arena.
     /// </summary>
     public void Release(int maxRetainedCapacity)
@@ -60,11 +64,12 @@ internal struct AstNodePool<T> where T : class, new()
             }
         }
 
+        var retain = Math.Max(maxRetainedCapacity, _count);
         _count = 0;
-        if (_items.Length > maxRetainedCapacity)
+        if (_items.Length > retain)
         {
-            var shrunk = new T?[maxRetainedCapacity];
-            Array.Copy(_items, shrunk, maxRetainedCapacity);
+            var shrunk = new T?[retain];
+            Array.Copy(_items, shrunk, retain);
             _items = shrunk;
         }
     }

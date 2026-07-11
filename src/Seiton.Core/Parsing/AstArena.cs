@@ -382,6 +382,17 @@ internal sealed class AstArena : IDisposable
         _workflowCallPool.Release(DefaultSectionNodeCapacity);
         _snapshotPool.Release(DefaultSectionNodeCapacity);
 
+        // Capture per-parse usage before the counters reset — the shrink policy below
+        // retains pooled instances up to the most recent use.
+        var jobsUsed = _jobCount;
+        var stepsUsed = _stepCount;
+        var execRunsUsed = _execRunCount;
+        var execActionsUsed = _execActionCount;
+        var execWaitsUsed = _execWaitCount;
+        var execWaitAllsUsed = _execWaitAllCount;
+        var execCancelsUsed = _execCancelCount;
+        var execParallelsUsed = _execParallelCount;
+
         _stringCount = 0;
         _boolCount = 0;
         _intCount = 0;
@@ -398,24 +409,27 @@ internal sealed class AstArena : IDisposable
 
         if (cached is null)
         {
-            // Cap backing arrays to default sizes to prevent unbounded growth.
-            // Grow() doubles arrays but Dispose() must shrink them back so the ThreadStatic
-            // cache doesn't permanently retain peak-sized arrays.
-            // Uses ArrayPool.Rent for replacements (may return slightly oversized arrays but
-            // always from the smallest matching bucket, far below peak). All arrays stay
-            // pool-rented so EnsureMinCapacity/Return in subsequent Rent() calls are safe.
+            // Cap backing arrays to prevent unbounded growth of the ThreadStatic cache,
+            // but retain at least what THIS parse used: shrinking straight to the default
+            // would discard pooled instances the very next parse of the same document
+            // re-allocates, turning the pool into a per-parse alloc/free ping-pong for any
+            // file above default capacity. Retention follows the most recent parse with a
+            // one-parse lag, so a small parse after a large one still releases the peak
+            // (the WASM memory concern the caps exist for).
+            // Scalar arrays go through ArrayPool (re-renting large buckets is allocation-free),
+            // so they keep the plain default cap.
             ShrinkIfOversized(ref _strings, DefaultStringCapacity);
             ShrinkIfOversized(ref _bools, DefaultBoolCapacity);
             ShrinkIfOversized(ref _ints, DefaultIntCapacity);
             ShrinkIfOversized(ref _floats, DefaultFloatCapacity);
-            ShrinkObjectPoolIfOversized(ref _jobs, DefaultJobCapacity);
-            ShrinkObjectPoolIfOversized(ref _steps, DefaultStepCapacity);
-            ShrinkObjectPoolIfOversized(ref _execRuns, DefaultExecRunCapacity);
-            ShrinkObjectPoolIfOversized(ref _execActions, DefaultExecActionCapacity);
-            ShrinkObjectPoolIfOversized(ref _execWaits, DefaultExecWaitCapacity);
-            ShrinkObjectPoolIfOversized(ref _execWaitAlls, DefaultExecWaitAllCapacity);
-            ShrinkObjectPoolIfOversized(ref _execCancels, DefaultExecCancelCapacity);
-            ShrinkObjectPoolIfOversized(ref _execParallels, DefaultExecParallelCapacity);
+            ShrinkObjectPoolIfOversized(ref _jobs, Math.Max(DefaultJobCapacity, jobsUsed));
+            ShrinkObjectPoolIfOversized(ref _steps, Math.Max(DefaultStepCapacity, stepsUsed));
+            ShrinkObjectPoolIfOversized(ref _execRuns, Math.Max(DefaultExecRunCapacity, execRunsUsed));
+            ShrinkObjectPoolIfOversized(ref _execActions, Math.Max(DefaultExecActionCapacity, execActionsUsed));
+            ShrinkObjectPoolIfOversized(ref _execWaits, Math.Max(DefaultExecWaitCapacity, execWaitsUsed));
+            ShrinkObjectPoolIfOversized(ref _execWaitAlls, Math.Max(DefaultExecWaitAllCapacity, execWaitAllsUsed));
+            ShrinkObjectPoolIfOversized(ref _execCancels, Math.Max(DefaultExecCancelCapacity, execCancelsUsed));
+            ShrinkObjectPoolIfOversized(ref _execParallels, Math.Max(DefaultExecParallelCapacity, execParallelsUsed));
             cached = this;
         }
         else
