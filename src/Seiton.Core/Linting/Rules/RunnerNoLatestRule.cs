@@ -59,7 +59,6 @@ public sealed class RunnerNoLatestRule() : RuleBase(RuleId.RunnerNoLatest)
             return;
         }
 
-        var jobId = Decode(Arena.GetStringSlice(job.Id));
         for (var i = 0; i < runsOn.Labels.Count; i++)
         {
             var label = runsOn.Labels[i];
@@ -70,11 +69,11 @@ public sealed class RunnerNoLatestRule() : RuleBase(RuleId.RunnerNoLatest)
 
             var labelUtf8 = Arena.GetStringValue(label);
 
-            ReportLatestLabel(job, jobId, label, labelUtf8);
+            ReportLatestLabel(job, label, labelUtf8);
         }
     }
 
-    private void ReportLatestLabel(Job job, string jobId, StringNodeId label, ReadOnlySpan<byte> labelUtf8)
+    private void ReportLatestLabel(Job job, StringNodeId label, ReadOnlySpan<byte> labelUtf8)
     {
         // Only scan fix-mapping when built-in detection is insufficient or fix generation needs the pinned value.
         var isBuiltIn = IsBuiltInLatestLabel(labelUtf8);
@@ -101,7 +100,12 @@ public sealed class RunnerNoLatestRule() : RuleBase(RuleId.RunnerNoLatest)
                 [new TextEdit(slice.Offset, slice.Length, pinned)]);
         }
 
-        var labelText = Decode(Arena.GetStringSlice(label));
+        // Decode the job id and label into stack buffers so the diagnostic costs a single
+        // string (the message itself) instead of message + two intermediate strings.
+        Span<char> jobIdBuffer = stackalloc char[128];
+        var jobId = DecodeChars(Arena.GetStringSlice(job.Id), jobIdBuffer);
+        Span<char> labelBuffer = stackalloc char[128];
+        var labelText = DecodeChars(Arena.GetStringSlice(label), labelBuffer);
 
         if (fix.HasValue)
         {
@@ -147,8 +151,6 @@ public sealed class RunnerNoLatestRule() : RuleBase(RuleId.RunnerNoLatest)
             return;
         }
 
-        var jobId = Decode(Arena.GetStringSlice(job.Id));
-
         for (var i = 0; i < row.Values.Count; i++)
         {
             switch (row.Values[i])
@@ -159,17 +161,17 @@ public sealed class RunnerNoLatestRule() : RuleBase(RuleId.RunnerNoLatest)
                         continue;
                     }
 
-                    ReportLatestLabel(job, jobId, scalar.Value, Arena.GetStringValue(scalar.Value));
+                    ReportLatestLabel(job, scalar.Value, Arena.GetStringValue(scalar.Value));
                     break;
 
                 case RawYamlArray array:
-                    ReportLatestLabelsInMatrixArray(job, jobId, array);
+                    ReportLatestLabelsInMatrixArray(job, array);
                     break;
             }
         }
     }
 
-    private void ReportLatestLabelsInMatrixArray(Job job, string jobId, RawYamlArray array)
+    private void ReportLatestLabelsInMatrixArray(Job job, RawYamlArray array)
     {
         for (var i = 0; i < array.Items.Count; i++)
         {
@@ -191,7 +193,7 @@ public sealed class RunnerNoLatestRule() : RuleBase(RuleId.RunnerNoLatest)
                 continue;
             }
 
-            ReportLatestLabel(job, jobId, item.Value, Arena.GetStringValue(item.Value));
+            ReportLatestLabel(job, item.Value, Arena.GetStringValue(item.Value));
         }
     }
 

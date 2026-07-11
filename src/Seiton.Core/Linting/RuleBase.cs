@@ -263,6 +263,30 @@ public abstract class RuleBase : IRule
         return Encoding.UTF8.GetString(slice.AsSpan(Config.Utf8Yaml));
     }
 
+    /// <summary>
+    /// Decodes a UTF-8 slice into <paramref name="buffer"/> and returns the written chars,
+    /// falling back to a heap string only when the slice does not fit. Use with a stackalloc
+    /// buffer inside diagnostic-message interpolations to avoid the intermediate string that
+    /// <see cref="Decode(Utf8Slice)"/> would allocate per diagnostic.
+    /// </summary>
+    private protected ReadOnlySpan<char> DecodeChars(Utf8Slice slice, Span<char> buffer)
+    {
+        if (Config.Utf8Yaml is null || slice.Length <= 0)
+        {
+            return [];
+        }
+
+        var utf8 = slice.AsSpan(Config.Utf8Yaml);
+        // UTF-8 decodes to at most one char per byte, so byte length fitting means chars fit.
+        if (utf8.Length <= buffer.Length)
+        {
+            var written = Encoding.UTF8.GetChars(utf8, buffer);
+            return buffer[..written];
+        }
+
+        return Encoding.UTF8.GetString(utf8);
+    }
+
     protected static string Decode(Utf8String value)
     {
         return value.Length == 0 ? string.Empty : Encoding.UTF8.GetString(value.Span);

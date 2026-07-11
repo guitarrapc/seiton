@@ -17,7 +17,10 @@ public sealed class JobPermissionsRequiredRule() : RuleBase(RuleId.JobPermission
             return;
         }
 
-        var jobId = Decode(Arena.GetStringSlice(job.Id));
+        // Decode the job id into a stack buffer so the diagnostic costs a single string
+        // (the message itself) instead of message + intermediate job-id string.
+        Span<char> jobIdBuffer = stackalloc char[128];
+        var jobId = DecodeChars(Arena.GetStringSlice(job.Id), jobIdBuffer);
         var message = $"jobs.'{jobId}' does not have permissions defined; set explicit permissions to follow least-privilege principle";
         if (Config.Fix.Enabled && Config.Utf8Yaml is not null && TryBuildPermissionsInsertFix(job, Config.Utf8Yaml, out var fix))
         {
