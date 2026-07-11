@@ -409,10 +409,11 @@ public static partial class WorkflowParser
     /// <summary>
     /// Checks if the key is the YAML merge key '&lt;&lt;' and rejects it.
     /// Returns true if the key IS a merge key (caller should skip key+value).
-    /// VYaml's CurrentMark for the '&lt;&lt;' key points past the key text (at the ':'),
-    /// so we adjust the position back by the key length to report the correct column.
+    /// <paramref name="keyMark"/> must already point at the key text: callers pass the
+    /// reader's <c>CurrentStart</c>, which corrects VYaml's past-the-token scalar mark
+    /// by backward-scanning to the scalar start (see <c>VYamlStreamAdapter.CurrentStart</c>).
     /// </summary>
-    private static bool IsMergeKey(ReadOnlySpan<byte> keyUtf8, TextPosition keyMark, ref PooledBuffer<Diagnostic> diagnostics, string mappingName)
+    private static bool IsMergeKey(ReadOnlySpan<byte> keyUtf8, TextPosition keyMark, ref PooledBuffer<Diagnostic> diagnostics, SectionText mappingName)
     {
         if (!keyUtf8.SequenceEqual("<<"u8)) return false;
         AddError(ref diagnostics, $"GitHub Actions does not support YAML merge key \"<<\". occurred in {mappingName}", keyMark);
@@ -434,7 +435,7 @@ public static partial class WorkflowParser
         Span<long> keyStore,
         ref int keyCount,
         bool caseSensitive,
-        string mappingName)
+        SectionText mappingName)
     {
         if (keyUtf8.SequenceEqual("<<"u8))
         {
@@ -453,7 +454,7 @@ public static partial class WorkflowParser
             if (isMatch)
             {
                 var keyText = Encoding.UTF8.GetString(keyUtf8);
-                var sectionName = ExtractSectionDisplayName(mappingName);
+                var sectionName = ExtractSectionDisplayName(mappingName.ToString());
                 var (prevLine, prevCol) = ComputeLineColumn(source, prevOffset);
                 var caseNote = caseSensitive ? "" : ". note that this key is case insensitive";
                 AddError(ref diagnostics, $"key \"{keyText}\" is duplicated in \"{sectionName}\" section. previously defined at line:{prevLine},col:{prevCol}{caseNote}", keyMark);
@@ -483,6 +484,17 @@ public static partial class WorkflowParser
     private static string DecodeUtf8(ReadOnlySpan<byte> source, Utf8Slice slice)
     {
         return Encoding.UTF8.GetString(slice.AsSpan(source));
+    }
+
+    /// <summary>
+    /// Lazily builds and caches a "jobs.'&lt;id&gt;'&lt;suffix&gt;" section name for diagnostics.
+    /// Call inside error branches only — the jobId decode and interpolation run on the first
+    /// diagnostic and are skipped entirely on clean parses. (A local function cannot be used
+    /// for this because <paramref name="source"/> is a span and cannot be captured.)
+    /// </summary>
+    private static string SectionName(ReadOnlySpan<byte> source, Utf8Slice jobId, string suffix, ref string? cache)
+    {
+        return cache ??= $"jobs.'{DecodeUtf8(source, jobId)}'{suffix}";
     }
 
     private static string FormatContainerSectionName(ReadOnlySpan<byte> source, Utf8Slice jobId, Utf8Slice serviceName, bool isService)

@@ -949,7 +949,7 @@ public static partial class WorkflowParser
         finally { scopes.Dispose(); }
     }
 
-    private static Env? ParseEnvNode<TReader>(ref TReader reader, AstArena arena, ref PooledBuffer<Diagnostic> diagnostics, ReadOnlySpan<byte> source, string error, ExpressionValidationContext expressionContext, string? sectionName = null)
+    private static Env? ParseEnvNode<TReader>(ref TReader reader, AstArena arena, ref PooledBuffer<Diagnostic> diagnostics, ReadOnlySpan<byte> source, SectionText error, ExpressionValidationContext expressionContext, SectionText sectionName = default)
         where TReader : IYamlStreamReader, allows ref struct
     {
         if (reader.CurrentKind == YamlEventKind.Scalar)
@@ -977,7 +977,7 @@ public static partial class WorkflowParser
 
         if (reader.CurrentKind != YamlEventKind.MappingStart)
         {
-            AddError(ref diagnostics, error, reader.CurrentStart);
+            AddError(ref diagnostics, error.ToString(), reader.CurrentStart);
             reader.SkipCurrentNode();
             return default;
         }
@@ -994,7 +994,7 @@ public static partial class WorkflowParser
             {
                 if (reader.CurrentKind != YamlEventKind.Scalar)
                 {
-                    AddError(ref diagnostics, error, reader.CurrentStart);
+                    AddError(ref diagnostics, error.ToString(), reader.CurrentStart);
                     reader.SkipCurrentNode();
                     if (!reader.End && reader.CurrentKind != YamlEventKind.MappingEnd)
                     {
@@ -1016,7 +1016,7 @@ public static partial class WorkflowParser
                     keyStore,
                     ref keyCount,
                     caseSensitive: false,
-                    sectionName ?? error))
+                    sectionName.IsEmpty ? error : sectionName))
                 {
                     reader.Read();
                     if (!reader.End)

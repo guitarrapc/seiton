@@ -1,4 +1,4 @@
-﻿using System.Text;
+using System.Text;
 using Seiton.Core.Generated;
 using Seiton.Core.Parsing.Ast;
 
@@ -6,9 +6,6 @@ namespace Seiton.Core.Parsing;
 
 public static partial class WorkflowParser
 {
-    private static string FormatStepPrefix(string stepPathPrefix, int stepIndex)
-        => $"{stepPathPrefix}[{stepIndex}]";
-
     private static string BuildStepDuplicateKeyHelp(ReadOnlySpan<byte> keyUtf8)
     {
         if (keyUtf8.SequenceEqual("env"u8))
@@ -21,7 +18,7 @@ public static partial class WorkflowParser
 
     private static void ReportPrimaryConflict(
         ref PooledBuffer<Diagnostic> diagnostics,
-        string stepPrefix,
+        SectionText stepPrefix,
         StepSchema.MappingKey firstPrimaryKey,
         TextPosition firstPrimaryMark,
         StepSchema.FormId incomingForm)
@@ -37,7 +34,7 @@ public static partial class WorkflowParser
 
     private static void ReportDisallowedStepKey(
         ref PooledBuffer<Diagnostic> diagnostics,
-        string stepPrefix,
+        SectionText stepPrefix,
         string keyName,
         TextPosition keyMark,
         StepSchema.FormId form)
@@ -57,7 +54,7 @@ public static partial class WorkflowParser
 
     private static void AddStepUnexpectedKeyError(
         ref PooledBuffer<Diagnostic> diagnostics,
-        string stepPrefix,
+        SectionText stepPrefix,
         string unknownKey,
         Utf8Slice unknownKeySlice,
         TextPosition keyMark,
@@ -77,7 +74,7 @@ public static partial class WorkflowParser
 
     private static void ReportContextDisallowedKey(
         ref PooledBuffer<Diagnostic> diagnostics,
-        string stepPrefix,
+        SectionText stepPrefix,
         string keyName,
         TextPosition keyMark,
         StepParseContext context)
@@ -96,7 +93,7 @@ public static partial class WorkflowParser
 
     private static void ReportIfDisallowedOnControlStep(
         ref PooledBuffer<Diagnostic> diagnostics,
-        string stepPrefix,
+        SectionText stepPrefix,
         TextPosition ifKeyMark,
         StepSchema.FormId form)
     {
@@ -157,7 +154,9 @@ public static partial class WorkflowParser
         StepParseContext context)
         where TReader : IYamlStreamReader, allows ref struct
     {
-        var stepPrefix = FormatStepPrefix(stepPathPrefix, stepIndex);
+        // Lazily formatted: the "{prefix}[{index}]" string is only materialized when a
+        // diagnostic is actually emitted (SectionText.ToString at the AddError sites).
+        var stepPrefix = new SectionText(stepPathPrefix, stepIndex);
         var missingPrimaryMessage = StepParseContextRules.GetMissingPrimaryMessage(context);
 
         if (reader.CurrentKind != YamlEventKind.MappingStart)
@@ -535,9 +534,9 @@ public static partial class WorkflowParser
                             envNode = ParseEnvNode(
                                 ref reader, arena, ref diagnostics,
                                 source,
-                                $"{stepPrefix} env must be object",
+                                new SectionText(stepPathPrefix, stepIndex, " env must be object"),
                                 ExpressionValidationContext.StepEnv,
-                                $"{stepPrefix} env");
+                                new SectionText(stepPathPrefix, stepIndex, " env"));
                         }
 
                         break;
@@ -827,7 +826,7 @@ public static partial class WorkflowParser
         AstArena arena,
         ref PooledBuffer<Diagnostic> diagnostics,
         ReadOnlySpan<byte> source,
-        string stepPrefix,
+        SectionText stepPrefix,
         out StringNodeId entrypoint,
         out StringNodeId args)
         where TReader : IYamlStreamReader, allows ref struct

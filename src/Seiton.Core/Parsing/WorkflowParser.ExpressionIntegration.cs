@@ -85,11 +85,11 @@ public static partial class WorkflowParser
         return node;
     }
 
-    private static StringNodeId ParseStringAndValidateExpression<TReader>(ref TReader reader, AstArena arena, ref PooledBuffer<Diagnostic> diagnostics, ExpressionValidationContext context, string errorMessage, bool parseWholeValueIfNoEmbedded)
+    private static StringNodeId ParseStringAndValidateExpression<TReader>(ref TReader reader, AstArena arena, ref PooledBuffer<Diagnostic> diagnostics, ExpressionValidationContext context, SectionText errorMessage, bool parseWholeValueIfNoEmbedded)
         where TReader : IYamlStreamReader, allows ref struct
     {
         var node = ParseStringAndValidateExpression(ref reader, arena, ref diagnostics, context, out var needsError, out var errorMark, parseWholeValueIfNoEmbedded);
-        if (needsError) AddError(ref diagnostics, errorMessage, errorMark);
+        if (needsError) AddError(ref diagnostics, errorMessage.ToString(), errorMark);
         return node;
     }
 
