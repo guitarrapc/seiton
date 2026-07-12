@@ -841,42 +841,45 @@ internal static class DynamicContextTypeBuilder
 
     private static ObjectExprType BuildWorkflowCallInputsType(WorkflowCallEventInputRefList inputs)
     {
-        return BuildWorkflowCallInputsTypeUpTo(inputs, inputs.Count);
+        var props = new Dictionary<Utf8String, ExprType>(inputs.Count);
+        AppendWorkflowCallInputsInto(inputs, props, 0, inputs.Count);
+        return ExprType.Object(props, strict: true);
     }
 
     /// <summary>
-    /// Builds a strict inputs type including only inputs defined before the given index.
-    /// Used for incremental validation of input default expressions.
+    /// Appends <paramref name="inputs"/>[fromIndex..toIndex) into <paramref name="props"/>.
+    /// Used with <see cref="CreateWorkflowCallInputsOverride"/> for incremental prefix
+    /// validation of input default expressions: an input's default may only reference
+    /// inputs declared before it, so the caller grows one shared dictionary as it walks
+    /// the inputs instead of rebuilding the prefix per input (O(n) instead of O(n²)).
     /// </summary>
-    internal static (byte[] NameUtf8, ExprType Type) BuildWorkflowCallInputsOverrideUpTo(
-        WorkflowCallEventInputRefList inputs, int upToIndex)
+    internal static void AppendWorkflowCallInputsInto(
+        WorkflowCallEventInputRefList inputs,
+        Dictionary<Utf8String, ExprType> props,
+        int fromIndex,
+        int toIndex)
     {
-        return (InputsKeyUtf8, BuildWorkflowCallInputsTypeUpTo(inputs, upToIndex));
-    }
-
-    private static ObjectExprType BuildWorkflowCallInputsTypeUpTo(WorkflowCallEventInputRefList inputs, int count)
-    {
-        if (count <= 0)
-        {
-            return ExprType.Object(strict: true);
-        }
-
-        var props = new Dictionary<Utf8String, ExprType>(count);
-        for (var i = 0; i < count; i++)
+        for (var i = fromIndex; i < toIndex; i++)
         {
             var input = inputs[i];
-            var type = input.Type switch
+            props[input.Id] = input.Type switch
             {
                 WorkflowCallInputType.Boolean => ExprType.Bool,
                 WorkflowCallInputType.Number => ExprType.Number,
                 WorkflowCallInputType.String => ExprType.String,
                 _ => ExprType.String,
             };
-            props[input.Id] = type;
         }
-
-        return ExprType.Object(props, strict: true);
     }
+
+    /// <summary>
+    /// Wraps a live, caller-grown property map as the strict <c>inputs</c> context override.
+    /// <see cref="ObjectExprType"/> holds the dictionary by reference, so entries appended
+    /// via <see cref="AppendWorkflowCallInputsInto"/> after creation are visible to later
+    /// validations through the same override instance.
+    /// </summary>
+    internal static (byte[] NameUtf8, ExprType Type) CreateWorkflowCallInputsOverride(Dictionary<Utf8String, ExprType> props)
+        => (InputsKeyUtf8, ExprType.Object(props, strict: true));
 
     private static ObjectExprType BuildWorkflowDispatchInputsType(
         DispatchInputRefMap inputs,

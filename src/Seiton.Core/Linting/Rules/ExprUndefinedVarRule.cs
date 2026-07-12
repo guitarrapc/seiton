@@ -44,6 +44,9 @@ public sealed class ExprUndefinedVarRule() : RuleBase(RuleId.ExprUndefinedVar)
     // Reusable dictionaries for BuildMatrixOverrideInto / BuildNeedsOverrideInto (avoids per-job allocation)
     private readonly Dictionary<Utf8String, ExprType> _matrixOverrideProps = new();
     private readonly Dictionary<Utf8String, ExprType> _needsOverrideProps = new();
+    // Reusable dictionary for the workflow_call inputs prefix override (grown incrementally
+    // while validating input default expressions in VisitEvent; avoids per-input rebuilds)
+    private readonly Dictionary<Utf8String, ExprType> _wcInputsOverrideProps = new();
     // Local action output resolver for building strict step output types
     private LocalActionOutputResolver? _localActionOutputResolver;
     private Func<ReadOnlyMemory<byte>, string[]?>? _localActionOutputResolverFunc;
@@ -132,6 +135,13 @@ public sealed class ExprUndefinedVarRule() : RuleBase(RuleId.ExprUndefinedVar)
             var wce = ev.AsWorkflowCall();
             if (wce.Inputs is { HasValue: true } inputs)
             {
+                // Incremental prefix override (mirrors the steps-override delta pattern):
+                // one shared dictionary grows as we walk the inputs, so validating n
+                // defaults costs O(n) appends instead of O(n²) per-input rebuilds. The
+                // override wraps the live dictionary, so each validation sees exactly
+                // the inputs declared before the current one.
+                (byte[] NameUtf8, ExprType Type)[]? overrides = null;
+                var builtCount = 0;
                 for (var idx = 0; idx < inputs.Count; idx++)
                 {
                     var input = inputs[idx];
@@ -140,13 +150,19 @@ public sealed class ExprUndefinedVarRule() : RuleBase(RuleId.ExprUndefinedVar)
                         continue;
                     }
 
-                    // Build incremental inputs override: only inputs defined before current index
-                    var incrementalInputsOverride = DynamicContextTypeBuilder.BuildWorkflowCallInputsOverrideUpTo(wce.Inputs, idx);
+                    if (overrides is null)
+                    {
+                        _wcInputsOverrideProps.Clear();
+                        overrides = [DynamicContextTypeBuilder.CreateWorkflowCallInputsOverride(_wcInputsOverrideProps)];
+                    }
+
+                    DynamicContextTypeBuilder.AppendWorkflowCallInputsInto(inputs, _wcInputsOverrideProps, builtCount, idx);
+                    builtCount = idx;
 
                     CheckNodeWithOverrides(
                         input.Default,
                         ExpressionValidationContext.WorkflowCallInputsDefault,
-                        [incrementalInputsOverride],
+                        overrides,
                         static (rule, message, location, e) =>
                             rule.AddWorkflowError(rule._currentWorkflow, message, location),
                         ev);
@@ -154,7 +170,7 @@ public sealed class ExprUndefinedVarRule() : RuleBase(RuleId.ExprUndefinedVar)
                     // Type check: inferred expression type vs declared input type
                     if (input.Type is WorkflowCallInputType.Boolean or WorkflowCallInputType.Number)
                     {
-                        ValidateInputDefaultType(input, [incrementalInputsOverride]);
+                        ValidateInputDefaultType(input, overrides);
                     }
                 }
             }

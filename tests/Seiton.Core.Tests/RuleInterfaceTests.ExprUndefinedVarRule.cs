@@ -2844,6 +2844,57 @@ public sealed partial class RuleInterfaceTests
                         - run: echo ok
             """,
             []),
+            // Chained back-references across several defaults: each default sees exactly
+            // the inputs declared before it (exercises the incremental prefix building).
+            new RuleCase(
+            "ok-input-default-chained-refs",
+            """
+            on:
+                workflow_call:
+                    inputs:
+                        input1:
+                            type: string
+                        input2:
+                            type: string
+                            default: ${{ inputs.input1 }}
+                        input3:
+                            type: string
+                            default: ${{ inputs.input2 }}
+                        input4:
+                            type: string
+                            default: ${{ inputs.input1 }}
+            jobs:
+                test:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - run: echo ok
+            """,
+            []),
+            // Mixed: a forward reference mid-chain errors, and validation of the LATER
+            // default still sees the correct (larger) prefix and passes.
+            new RuleCase(
+            "ng-input-default-chain-forward-mid",
+            """
+            on:
+                workflow_call:
+                    inputs:
+                        input1:
+                            type: string
+                        input2:
+                            type: string
+                            default: ${{ inputs.input3 }}
+                        input3:
+                            type: string
+                        input4:
+                            type: string
+                            default: ${{ inputs.input2 }}
+            jobs:
+                test:
+                    runs-on: ubuntu-latest
+                    steps:
+                        - run: echo ok
+            """,
+            ["property \"input3\" is not defined in \"inputs\" context"]),
         };
 
         await AssertRuleCases(new ExprUndefinedVarRule(), "expr-undefined-var", cases);
