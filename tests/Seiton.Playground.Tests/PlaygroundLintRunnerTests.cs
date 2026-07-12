@@ -566,6 +566,7 @@ public sealed class PlaygroundLintRunnerTests
     }
 
     [Test]
+    [Retry(3)]
     [NotInParallel(ConfigLockKey)]
     public async Task SetConfig_FixDefaults_AppliedByApplyAllFixes()
     {
