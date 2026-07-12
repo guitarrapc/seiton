@@ -897,7 +897,6 @@ public static partial class WorkflowParser
                 ref diagnostics,
                 keyStore,
                 ref keyCount,
-                caseSensitive: false,
                 "permissions"))
             {
                 reader.Read();
@@ -1020,7 +1019,6 @@ public static partial class WorkflowParser
                 ref diagnostics,
                 keyStore,
                 ref keyCount,
-                caseSensitive: false,
                 sectionName.IsEmpty ? error : sectionName))
             {
                 reader.Read();
@@ -1540,7 +1538,6 @@ public static partial class WorkflowParser
                 ref diagnostics,
                 keyStore,
                 ref keyCount,
-                caseSensitive: false,
                 "jobs"))
             {
                 reader.Read(); // consume key
@@ -1630,7 +1627,6 @@ public static partial class WorkflowParser
                         ref diagnostics,
                         keyStore,
                         ref keyCount,
-                        caseSensitive: false,
                         "jobs"))
                     {
                         reader.Read(); // consume key
@@ -1663,7 +1659,6 @@ public static partial class WorkflowParser
                 ref diagnostics,
                 keyStore,
                 ref keyCount,
-                caseSensitive: false,
                 "jobs"))
             {
                 reader.Read(); // consume key

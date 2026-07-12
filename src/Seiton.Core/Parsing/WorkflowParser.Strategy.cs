@@ -244,7 +244,6 @@ public static partial class WorkflowParser
                 ref diagnostics,
                 keyStore,
                 ref keyCount,
-                caseSensitive: false,
                 "strategy.matrix"))
             {
                 reader.Read();
@@ -556,7 +555,6 @@ public static partial class WorkflowParser
                     ref diagnostics,
                     keyStore,
                     ref keyCount,
-                    caseSensitive: false,
                     "matrix object"))
                 {
                     reader.Read();

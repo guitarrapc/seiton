@@ -888,7 +888,6 @@ public static partial class WorkflowParser
                 ref diagnostics,
                 keyStore,
                 ref keyCount,
-                caseSensitive: false,
                 "with"))
             {
                 reader.Read();

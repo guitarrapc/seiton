@@ -996,7 +996,6 @@ public static partial class WorkflowParser
                 ref diagnostics,
                 keyStore,
                 ref keyCount,
-                caseSensitive: false,
                 "outputs"))
             {
                 reader.Read();
@@ -1062,7 +1061,7 @@ public static partial class WorkflowParser
             var nameMark = reader.CurrentStart;
             var nameSlice = reader.GetScalarSlice();
             var nameUtf8 = reader.GetScalarUtf8();
-            if (!TryRegisterDynamicKey(source, nameUtf8, nameSlice.Offset, nameSlice.Length, nameMark, ref diagnostics, keyStore, ref keyCount, caseSensitive: false, "with"))
+            if (!TryRegisterDynamicKey(source, nameUtf8, nameSlice.Offset, nameSlice.Length, nameMark, ref diagnostics, keyStore, ref keyCount, "with"))
             {
                 reader.Read();
                 if (!reader.End)
@@ -1163,7 +1162,7 @@ public static partial class WorkflowParser
             var nameMark = reader.CurrentStart;
             var nameSlice = reader.GetScalarSlice();
             var nameUtf8 = reader.GetScalarUtf8();
-            if (!TryRegisterDynamicKey(source, nameUtf8, nameSlice.Offset, nameSlice.Length, nameMark, ref diagnostics, keyStore, ref keyCount, caseSensitive: false, "secrets"))
+            if (!TryRegisterDynamicKey(source, nameUtf8, nameSlice.Offset, nameSlice.Length, nameMark, ref diagnostics, keyStore, ref keyCount, "secrets"))
             {
                 reader.Read();
                 if (!reader.End)
@@ -1208,23 +1207,6 @@ public static partial class WorkflowParser
         }
 
         return new NodeRange(secretsFirst, secretCount);
-    }
-
-    private static void ParseJobSecrets<TReader>(ref TReader reader, AstArena arena, ref PooledBuffer<Diagnostic> diagnostics, ReadOnlySpan<byte> source, Utf8Slice jobId)
-        where TReader : IYamlStreamReader, allows ref struct
-    {
-        if (reader.CurrentKind == YamlEventKind.Scalar)
-        {
-            var valueUtf8 = reader.GetScalarUtf8();
-            if (!valueUtf8.SequenceEqual("inherit"u8))
-            {
-                AddError(ref diagnostics, $"jobs.'{DecodeUtf8(source, jobId)}'.secrets scalar must be 'inherit'", reader.CurrentStart);
-            }
-            reader.Read();
-            return;
-        }
-
-        ParseStringMapping(ref reader, arena, ref diagnostics, source, $"jobs.'{DecodeUtf8(source, jobId)}'.secrets must be object or scalar 'inherit'");
     }
 
 }

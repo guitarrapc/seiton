@@ -97,7 +97,6 @@ public static partial class WorkflowParser
                     ref diagnostics,
                     keyStore,
                     ref keyCount,
-                    caseSensitive: false,
                     "on"))
                 {
                     reader.Read();

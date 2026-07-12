@@ -62,7 +62,7 @@ A list's representation is decided by **which table nested parsing inserts rows 
 Map rows embed the key `Utf8Slice` in the row; lookup is a linear scan within the range (same complexity as the old SliceMap; GitHub Actions maps are assumed small). Case sensitivity is **fixed separately for the lookup (Ref maps) and the parser's duplicate-key detection**, and changing either is a behavior change:
 
 - **Ref map lookup**: only `permissions:` scopes and `env:` variable names are case-SENSITIVE (exact byte equality). Everything else (jobs / outputs / `with:` / secrets / services / action metadata inputs·outputs / dispatch inputs / ...) is case-INSENSITIVE.
-- **Parser duplicate-key detection** (`TryRegisterDynamicKey`): every reachable call site passes `caseSensitive: false` (case-INSENSITIVE) — including permissions and env, matching actionlint's "note that this key is case insensitive" diagnostics.
+- **Parser duplicate-key detection** (`TryRegisterDynamicKey`): unconditionally case-INSENSITIVE — including permissions and env, matching actionlint's "note that this key is case insensitive" diagnostics.
 
 Case-insensitive comparison is centralized in `SpanHelpers.EqualsAsciiIgnoreCase`.
 

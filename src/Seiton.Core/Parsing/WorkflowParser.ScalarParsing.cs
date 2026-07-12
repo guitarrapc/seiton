@@ -427,6 +427,8 @@ public static partial class WorkflowParser
     /// <summary>
     /// Registers a dynamic (user-defined) mapping key for duplicate detection.
     /// Uses offset-based storage in a stackalloc buffer to avoid heap allocation.
+    /// Duplicate matching is ASCII case-insensitive for every dynamic-key mapping
+    /// (matches actionlint's "note that this key is case insensitive" diagnostics).
     /// Returns true if the key is new; false if duplicate or merge key.
     /// </summary>
     private static bool TryRegisterDynamicKey(
@@ -438,7 +440,6 @@ public static partial class WorkflowParser
         ref PooledBuffer<Diagnostic> diagnostics,
         Span<long> keyStore,
         ref int keyCount,
-        bool caseSensitive,
         SectionText mappingName)
     {
         if (keyUtf8.SequenceEqual("<<"u8))
@@ -452,16 +453,12 @@ public static partial class WorkflowParser
             var prevOffset = (int)(keyStore[i] >> 32);
             var prevLength = (int)(keyStore[i] & 0xFFFFFFFF);
             var prev = source.Slice(prevOffset, prevLength);
-            var isMatch = caseSensitive
-                ? prev.SequenceEqual(keyUtf8)
-                : EqualsAsciiIgnoreCase(prev, keyUtf8);
-            if (isMatch)
+            if (EqualsAsciiIgnoreCase(prev, keyUtf8))
             {
                 var keyText = Encoding.UTF8.GetString(keyUtf8);
                 var sectionName = ExtractSectionDisplayName(mappingName.ToString());
                 var (prevLine, prevCol) = ComputeLineColumn(source, prevOffset);
-                var caseNote = caseSensitive ? "" : ". note that this key is case insensitive";
-                AddError(ref diagnostics, $"key \"{keyText}\" is duplicated in \"{sectionName}\" section. previously defined at line:{prevLine},col:{prevCol}{caseNote}", keyMark);
+                AddError(ref diagnostics, $"key \"{keyText}\" is duplicated in \"{sectionName}\" section. previously defined at line:{prevLine},col:{prevCol}. note that this key is case insensitive", keyMark);
                 return false;
             }
         }

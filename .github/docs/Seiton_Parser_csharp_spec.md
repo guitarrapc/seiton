@@ -635,14 +635,14 @@ Mapping traversal is **inlined** at each call site rather than using a callback 
 // No callback delegate; key matching is performed inline via ReadOnlySpan<byte>.
 private void ParseMappingInline(
     ReadOnlySpan<byte> sectionNameUtf8,  // for diagnostics only
-    bool allowEmpty,
-    bool caseSensitive)
+    bool allowEmpty)
 {
     // 1. Check for null scalar → allowEmpty ? return : error
     // 2. Expect MappingStart
     // 3. Loop: Read key as ReadOnlySpan<byte>
-    //    - Normalize to lower-case via Ascii.ToLower if !caseSensitive
-    //    - Detect duplicate keys (tracked via Utf8String set)
+    //    - Detect duplicate keys via TryRegisterDynamicKey (offset-based stackalloc store;
+    //      unconditionally ASCII case-insensitive — the shared spec's caseSensitive mode
+    //      has no case-sensitive user in the C# implementation)
     //    - Detect "<<" merge key → error
     //    - Switch on key bytes:
     //        if (keyUtf8.SequenceEqual("name"u8)) ...
@@ -1204,7 +1204,7 @@ Same rules as Go. The `ParseMapping` helper supports case-insensitive mode via `
 
 | Spec Function | C# Conceptual counterpart | Spec § |
 |---|---|---|
-| `ParseMapping(sectionName, allowEmpty, caseSensitive)` | Inline mapping traversal pattern + `TryRegisterDynamicKey(...)` | §3.3 |
+| `ParseMapping(sectionName, allowEmpty, caseSensitive)` | Inline mapping traversal pattern + `TryRegisterDynamicKey(...)` (duplicate detection is unconditionally case-insensitive; the spec's case-sensitive mode has no C# user) | §3.3 |
 | `parseStringOrStringSequence(sec, node, allowEmpty, allowElemEmpty)` | `WorkflowParser.ParseStringOrStringSequence<TReader>(...)` | §4.7 |
 
 ### A.7 Scalar Helpers

@@ -153,7 +153,6 @@ public static partial class WorkflowParser
                 ref diagnostics,
                 keyStore,
                 ref keyCount,
-                caseSensitive: false,
                 "on.workflow_call.inputs"))
             {
                 reader.Read();
@@ -422,7 +421,6 @@ public static partial class WorkflowParser
                 ref diagnostics,
                 keyStore,
                 ref keyCount,
-                caseSensitive: false,
                 "on.workflow_call.secrets"))
             {
                 reader.Read();
@@ -608,7 +606,6 @@ public static partial class WorkflowParser
                 ref diagnostics,
                 keyStore,
                 ref keyCount,
-                caseSensitive: false,
                 "on.workflow_call.outputs"))
             {
                 reader.Read();

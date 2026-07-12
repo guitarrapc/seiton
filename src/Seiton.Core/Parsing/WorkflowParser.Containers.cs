@@ -82,7 +82,6 @@ public static partial class WorkflowParser
                 ref diagnostics,
                 keyStore,
                 ref keyCount,
-                caseSensitive: false,
                 "services"))
             {
                 reader.Read();
@@ -544,92 +543,6 @@ public static partial class WorkflowParser
             Password = password,
             Range = range,
         });
-    }
-
-    private static void ParseStringMapping<TReader>(ref TReader reader, AstArena arena, ref PooledBuffer<Diagnostic> diagnostics, ReadOnlySpan<byte> source, string error, ExpressionValidationContext? expressionContext = null)
-        where TReader : IYamlStreamReader, allows ref struct
-    {
-        if (reader.CurrentKind != YamlEventKind.MappingStart)
-        {
-            AddError(ref diagnostics, error, reader.CurrentStart);
-            reader.SkipCurrentNode();
-            return;
-        }
-
-        Span<long> keyStore = stackalloc long[64];
-        var keyCount = 0;
-        reader.Read();
-        while (!reader.End && reader.CurrentKind != YamlEventKind.MappingEnd)
-        {
-            if (reader.CurrentKind != YamlEventKind.Scalar)
-            {
-                AddError(ref diagnostics, error, reader.CurrentStart);
-                reader.SkipCurrentNode();
-                if (!reader.End && reader.CurrentKind != YamlEventKind.MappingEnd)
-                {
-                    reader.SkipCurrentNode();
-                }
-                continue;
-            }
-
-            var keyMark = reader.CurrentStart;
-            var keySlice = reader.GetScalarSlice();
-            var keyUtf8 = reader.GetScalarUtf8();
-            if (!TryRegisterDynamicKey(
-                source,
-                keyUtf8,
-                keySlice.Offset,
-                keySlice.Length,
-                keyMark,
-                ref diagnostics,
-                keyStore,
-                ref keyCount,
-                caseSensitive: true,
-                error))
-            {
-                reader.Read(); // consume key
-                if (!reader.End)
-                {
-                    reader.SkipCurrentNode();
-                }
-
-                continue;
-            }
-
-            reader.Read();
-            if (reader.End)
-            {
-                break;
-            }
-
-            if (reader.CurrentKind != YamlEventKind.Scalar)
-            {
-                AddError(ref diagnostics, error, reader.CurrentStart);
-                reader.SkipCurrentNode();
-                continue;
-            }
-
-            if (expressionContext.HasValue)
-            {
-                var valueMark = reader.CurrentStart;
-                var valueUtf8 = reader.GetScalarUtf8();
-                ValidateExpressionText(
-                    valueUtf8,
-                    BuildScalarLocation(valueMark, valueUtf8.Length),
-                    expressionContext.Value,
-                    ref diagnostics,
-                    parseWholeValueIfNoEmbedded: false);
-                reader.Read();
-                continue;
-            }
-
-            reader.Read();
-        }
-
-        if (reader.CurrentKind == YamlEventKind.MappingEnd)
-        {
-            reader.Read();
-        }
     }
 
 }
