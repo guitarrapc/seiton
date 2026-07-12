@@ -1,9 +1,9 @@
 ﻿namespace Seiton.Core.Parsing.Ast;
 
-// Data-oriented AST rows (Stage 2). Each *Data struct is a row in an AstArena table,
+// Data-oriented AST rows. Each *Data struct is a row in an AstArena table,
 // addressed by the matching typed ID in NodeIds.cs. Rows hold only scalar handles,
 // other node IDs, and ranges — never object references or strings.
-// See `.github/docs/plan_data_oriented_ast.md`.
+// See `.github/docs/architecture_spec_ast.md`.
 
 /// <summary>Row data for the <c>concurrency:</c> block.</summary>
 public readonly struct ConcurrencyData

@@ -1,4 +1,42 @@
-# seiton 性能最優先時の最終言語判断
+# seiton 性能アーキテクチャ
+
+本書は 2 部構成である。第 1 部が**現在の実装の性能設計** (規範)、第 2 部が**プロジェクト初期の言語選定の記録** (lessons learned、歴史的記録) である。
+
+## 第 1 部: 現在の性能設計 (2026-07、データ指向 AST)
+
+### 1.1 アロケーションモデル
+
+パイプライン全体 (parse → lint → 診断) の定常アロケーションは次の 3 層で管理する:
+
+1. **AST**: 全ノードが `AstArena` 内の struct 行テーブル (ArrayPool-backed)。ノード単位のヒープ割り当ては存在しない。arena 自体は thread-static キャッシュで再利用され、リセットはテーブルカウンタのクリアのみ。設計の規約と不変条件は `.github/docs/architecture_spec_ast.md` を参照。
+2. **作業バッファ**: パース中のスクラッチは `PooledBuffer<T>` (ArrayPool)、診断は pooled 配列を arena に登録して寿命を揃える。
+3. **文字列化の遅延**: UTF-8 バイト列 (`Utf8Slice` / span) のまま処理し、`string` 化は診断メッセージ構築時のみ (`.github/docs/Seiton_Parser_csharp_spec.md` §0.5 の語彙と許可リスト)。
+
+結果として **Medium/Large ワークフローで Gen0 コレクション 0 回**。実測 (2026-07-12、ShortRun、冷機): Parse Large 15.70ms / 2,600B、Lint Large/False 16.26ms / 34.01KB (データ指向移行前 baseline: 21.8ms / 234KB)。
+
+### 1.2 キャッシュの層
+
+- **per-run** (LintConfig 単位): 式パース結果キャッシュ (`Config.ParseExpression`)、行頭オフセット表 (`Config.GetLineStarts()` — 行/列計算はこの表の binary search を使い、ファイル先頭からの再走査を書かない)、`BuildGithubOverride` の型キャッシュ。
+- **cross-run**: thread-static arena キャッシュ、生成済みデータ表 (`src/Seiton.Core/Generated/` — u8 リテラル比較の switch/静的メソッド群と `static readonly` 型テーブル。実行時パースなし)。
+- **incremental** (Playground): 同一オフセット + 同一ハッシュのセクション/ジョブ再利用と per-job 診断キャッシュ (`.github/docs/Seiton_Playground_csharp_spec.md`)。
+
+### 1.3 性能ゲートと計測の規約
+
+- `CoreParsingBenchmark` / `CoreLintBenchmark` の Mean / Allocated は変更前比 **+10% 以内**を維持する (ルール追加・パーサ変更とも)。
+- ベンチハーネスは常に `Job.ShortRun` であり、20-30ms/op のケースは dynamic PGO の位相と CPU 熱状態で **Mean がコード変更なしに大きく振れる**。±10% 超過時の切り分け手順 (stash A/B → Stopwatch phase-split → steady-state) と、Allocated 列・コントロールベンチによる一次判定は `.github/docs/architecture_spec_ast.md` §8 を参照。
+- 不自然に**良い**数値は正しさの破綻を疑う (壊れた op は fatal 即返しで速くなる)。
+
+### 1.4 ホットパスの原則
+
+- ルールは Ref surface で読む (線形スキャンのマップ lookup を大きなマップに対して繰り返さない)。
+- 比較は `"literal"u8` / span で行い、ループ内で `Encoding.UTF8.GetString` を呼ばない。
+- 診断の位置計算・メッセージ整形は診断が実際に発行される分岐まで遅延する (per-step の早期 return パスに O(file) 処理を置かない — unpinned-uses の行列再計算が実例で、`GetLineStarts()` 化で lint 側時間の約半分を回収した)。
+
+詳細な実装ガイドは `.claude/skills/performance-requirements/SKILL.md` を参照。
+
+## 第 2 部: 言語選定の記録 (lessons learned)
+
+> 以下はプロジェクト初期の Go / C# / Rust 選定時の判断記録である。**現在の規範ではなく**、当時の論点を保存した歴史的記録として残す (実装はその後 C# で確立し、AST はデータ指向設計へ移行した)。
 
 ## 1. 結論
 
@@ -71,7 +109,7 @@ AST ノードの多様性は、このプロジェクトの中核実装の一つ�
 2. Go では interface + type switch であり、網羅性チェックはコンパイラが行わない。
 3. ルール実装者が新しい AST ノードを追加したとき、C# は処理漏れを静的に検出できる。
 
-> 補記 (2026-07): 実装はその後、データ指向 AST 移行 (`plan_data_oriented_ast.md`) で sealed クラス階層を Kind enum + payload テーブルの tagged union に置き換えた。switch の網羅性チェックはコンパイルエラーから警告ベースに弱まったが、これはアロケーション根絶・ライフタイム機構の一元化との意図的なトレードオフである。本節は言語選定当時の論点の記録としてそのまま残す。
+> 補記 (2026-07): 実装はその後、データ指向 AST 移行 (`.github/docs/architecture_spec_ast.md`) で sealed クラス階層を Kind enum + payload テーブルの tagged union に置き換えた。switch の網羅性チェックはコンパイルエラーから警告ベースに弱まったが、これはアロケーション根絶・ライフタイム機構の一元化との意図的なトレードオフである。本節は言語選定当時の論点の記録としてそのまま残す。
 
 #### C. チーム習熟が .NET の場合は開発体験が上回る
 

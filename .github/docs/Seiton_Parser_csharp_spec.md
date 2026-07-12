@@ -425,7 +425,7 @@ This parser document only assumes the integration boundary from `Seiton_Parser_s
 ## 2. AST Definitions (Spec §2)
 
 > For field semantics and constraints, see `Seiton_Parser_spec.md` §2.
-> Only the C# storage and access contract is defined here. Migration history and rationale live in `plan_data_oriented_ast.md`.
+> Only the C# storage and access contract is defined here. Design conventions, invariants, and rationale live in `.github/docs/architecture_spec_ast.md`.
 
 ### 2.1 Storage Model (Data-Oriented AST)
 
@@ -438,7 +438,7 @@ Every composite AST node is a row in a typed struct table (`NodeTable<T>`) owned
 - **Roots**: `Workflow` and `ActionMetadata` remain classes, but hold only IDs/ranges (no child object references).
 - **Lifecycle**: arena reset clears table counters only. There are no per-node `Reset()` methods, no object pools, and no manual buffer registration. In DEBUG builds a generation counter makes resolving any handle/ref (or `ParseResult`/`LintResult` accessor) after arena reset/dispose throw `InvalidOperationException` instead of silently returning another parse's data; the check compiles out in Release builds (zero cost). `HasValue` and ref equality remain safe (non-throwing) on stale refs.
 
-Deliberate trade-off: replacing the former sealed class hierarchies with `Kind` enums weakens `switch` exhaustiveness from compile errors to warnings, in exchange for uniform node lifetime, zero boxing, and pool-free reset (see `plan_data_oriented_ast.md` §3.2).
+Deliberate trade-off: replacing the former sealed class hierarchies with `Kind` enums weakens `switch` exhaustiveness from compile errors to warnings, in exchange for uniform node lifetime, zero boxing, and pool-free reset (see `.github/docs/architecture_spec_ast.md` §2).
 
 ### 2.2 Public Read Surface (Refs)
 
@@ -532,7 +532,7 @@ public readonly struct JobData
 
 (Key-range fields such as `IfKeyRange` / `RunsOnKeyRange` / `StepsKeyRange` are omitted above; see the source for the full row.)
 
-The workflow `jobs:` map is a `NodeRange` over `JobEntryData { Utf8Slice Key, JobId Job }` rows — an entry/row indirection rather than a direct range over the `JobData` table, because incremental parsing splices reused `JobId`s from a previous arena next to freshly parsed ones (see `plan_data_oriented_ast.md` §6.2). `Job.Outputs` is a `NodeRange` over `JobOutputData { Utf8Slice Key, StringNodeId Value }` rows. Both maps are case-insensitive.
+The workflow `jobs:` map is a `NodeRange` over `JobEntryData { Utf8Slice Key, JobId Job }` rows — an entry/row indirection rather than a direct range over the `JobData` table, because incremental parsing splices reused `JobId`s from a previous arena next to freshly parsed ones (see `.github/docs/architecture_spec_ast.md` §6). `Job.Outputs` is a `NodeRange` over `JobOutputData { Utf8Slice Key, StringNodeId Value }` rows. Both maps are case-insensitive.
 
 ### 2.7 Step and Exec (Spec §2.5)
 

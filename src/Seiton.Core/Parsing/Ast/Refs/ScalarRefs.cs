@@ -12,7 +12,7 @@ namespace Seiton.Core.Parsing.Ast;
 //
 // In DEBUG builds every ref captures its arena's generation at construction and
 // dereferencing after the arena is reset/disposed throws immediately.
-// See `.github/docs/plan_data_oriented_ast.md`.
+// See `.github/docs/architecture_spec_ast.md`.
 
 /// <summary>A string scalar in the AST, resolved against its owning arena.</summary>
 public readonly struct StringRef : IEquatable<StringRef>
