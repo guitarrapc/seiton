@@ -267,6 +267,9 @@ public sealed class IncrementalParseTests
         // First parse under path A
         var result1 = ctx.ParseIncrementally(yaml, ".github/workflows/a.yml");
         await Assert.That(result1.Workflow.HasValue).IsTrue();
+        // Capture the node identity now: result1 is a non-owning view whose arena is
+        // released by the next ParseIncrementally call, so it must not be accessed later.
+        var node1 = result1.WorkflowNode;
 
         // Same bytes, different filePath — must NOT return cached result
         var yamlCopy = yaml.ToArray(); // new array instance with same content
@@ -274,7 +277,7 @@ public sealed class IncrementalParseTests
 
         await Assert.That(result2.Workflow.HasValue).IsTrue();
         // The returned parse result must be a fresh parse (not ReferenceEquals to previous)
-        await Assert.That(ReferenceEquals(result1.Workflow.Node, result2.Workflow.Node)).IsFalse()
+        await Assert.That(ReferenceEquals(node1, result2.WorkflowNode)).IsFalse()
             .Because("different filePath must produce a new parse, not reuse cached workflow");
     }
 
@@ -426,12 +429,16 @@ public sealed class IncrementalParseTests
         // First parse with buffer A (yaml1)
         var result1 = ctx.ParseIncrementally(bufA, FilePath);
         await Assert.That(result1.Workflow.HasValue).IsTrue();
+        // Capture the node identity now: result1 is a non-owning view whose arena is
+        // released by a later re-parsing ParseIncrementally call, so it must not be
+        // accessed after the third parse below.
+        var node1 = result1.WorkflowNode;
 
         // Second parse with buffer B containing same content as bufA (fast path)
         Array.Copy(bufA, bufB, bufA.Length);
         var result2 = ctx.ParseIncrementally(bufB, FilePath);
         await Assert.That(result2.Workflow.HasValue).IsTrue();
-        await Assert.That(ReferenceEquals(result1.Workflow.Node, result2.Workflow.Node)).IsTrue()
+        await Assert.That(ReferenceEquals(node1, result2.WorkflowNode)).IsTrue()
             .Because("identical content should use fast path");
 
         // Now overwrite buffer A with DIFFERENT content (same length)
@@ -440,7 +447,7 @@ public sealed class IncrementalParseTests
         // Third parse with mutated buffer A — must NOT return stale result
         var result3 = ctx.ParseIncrementally(bufA, FilePath);
         await Assert.That(result3.Workflow.HasValue).IsTrue();
-        await Assert.That(ReferenceEquals(result1.Workflow.Node, result3.Workflow.Node)).IsFalse()
+        await Assert.That(ReferenceEquals(node1, result3.WorkflowNode)).IsFalse()
             .Because("mutated buffer must not be considered identical to previous content");
     }
 }

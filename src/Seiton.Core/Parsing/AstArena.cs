@@ -237,11 +237,29 @@ internal sealed class AstArena : IDisposable
     // Returned to ArrayPool<Diagnostic>.Shared on Dispose.
     private Diagnostic[]? _lintDiagnosticsBuffer;
 
-    // D-4: Pooled SliceMap Entry[] arrays registered during parsing.
-    // Each entry stores the array reference + a cached return delegate.
-    // Returned to the appropriate ArrayPool<T>.Shared on Dispose/Reset.
-    private (Array Buffer, Action<Array> Return)[] _sliceMapBuffers = new (Array, Action<Array>)[32];
-    private int _sliceMapBufferCount;
+    // Bumped at the start of every ResetForSource/Dispose so stale handles/refs can be
+    // detected in DEBUG builds. The field and increments are unconditional (an int is
+    // free); only the checks are DEBUG-gated.
+    private int _generation;
+
+    /// <summary>Gets the current generation counter (bumped on every reset/dispose).</summary>
+    internal int Generation => _generation;
+
+    /// <summary>
+    /// DEBUG-only: throws when the given captured generation no longer matches this arena's
+    /// current generation, i.e. the arena was reset or disposed after the handle/ref was created.
+    /// Compiled out entirely in Release builds.
+    /// </summary>
+    [System.Diagnostics.Conditional("DEBUG")]
+    internal void AssertGeneration(int generation)
+    {
+        if (generation != _generation)
+        {
+            throw new InvalidOperationException(
+                "AST handle used after its arena was reset or disposed (use-after-dispose). " +
+                "Copy needed values out before disposing the ParseResult/LintResult.");
+        }
+    }
 
     internal AstArena(byte[] source, int stringCapacity = 64, int boolCapacity = 8, int intCapacity = 4, int floatCapacity = 4)
     {
@@ -274,22 +292,6 @@ internal sealed class AstArena : IDisposable
     /// to <see cref="ArrayPool{T}.Shared"/> when this arena is disposed.
     /// </summary>
     internal void RegisterDiagnosticsBuffer(Diagnostic[] buffer) => _diagnosticsBuffer = buffer;
-
-    /// <summary>
-    /// Registers a pooled SliceMap Entry[] array with this arena. The array will be returned
-    /// to <see cref="ArrayPool{T}.Shared"/> when this arena is disposed or reset.
-    /// Uses a static cached delegate per type T to avoid per-call allocations.
-    /// </summary>
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    internal void RegisterSliceMapBuffer<T>(T[] array)
-    {
-        if (_sliceMapBufferCount == _sliceMapBuffers.Length)
-        {
-            Array.Resize(ref _sliceMapBuffers, _sliceMapBuffers.Length * 2);
-        }
-
-        _sliceMapBuffers[_sliceMapBufferCount++] = (array, PoolReturnCache<T>.Instance);
-    }
 
     /// <summary>
     /// Registers a pooled lint diagnostics array with this arena. The array will be returned
@@ -343,6 +345,8 @@ internal sealed class AstArena : IDisposable
     /// </summary>
     public void Dispose()
     {
+        _generation++;
+
         // Return pooled diagnostics buffer if registered
         if (_diagnosticsBuffer is not null)
         {
@@ -356,14 +360,6 @@ internal sealed class AstArena : IDisposable
             ArrayPool<Diagnostic>.Shared.Return(_lintDiagnosticsBuffer, clearArray: true);
             _lintDiagnosticsBuffer = null;
         }
-
-        // D-4: Return all registered SliceMap Entry[] arrays to their respective pools
-        for (var i = 0; i < _sliceMapBufferCount; i++)
-        {
-            _sliceMapBuffers[i].Return(_sliceMapBuffers[i].Buffer);
-            _sliceMapBuffers[i] = default;
-        }
-        _sliceMapBufferCount = 0;
 
         // Data-oriented node tables: clear counts, cap retained capacity
         _stringIdItems.Reset();
@@ -604,6 +600,7 @@ internal sealed class AstArena : IDisposable
 
     private void ResetForSource(byte[] source)
     {
+        _generation++;
         _source = source;
         _stringCount = 0;
         _boolCount = 0;
@@ -1603,13 +1600,3 @@ internal sealed class AstArena : IDisposable
     }
 }
 
-/// <summary>
-/// Caches a single <see cref="Action{Array}"/> delegate per type T that returns the array
-/// to <see cref="ArrayPool{T}.Shared"/>. Uses <c>clearArray: true</c> when T contains
-/// references to prevent retaining prior AST objects in the shared pool.
-/// </summary>
-internal static class PoolReturnCache<T>
-{
-    public static readonly Action<Array> Instance = static arr =>
-        ArrayPool<T>.Shared.Return((T[])arr, clearArray: RuntimeHelpers.IsReferenceOrContainsReferences<T>());
-}

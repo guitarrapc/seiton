@@ -4,26 +4,43 @@ namespace Seiton.Core.Parsing.Ast;
 
 // Readonly-struct facade layer over the AST.
 //
-// Refs wrap (arena, node) and expose ergonomic accessors so that rules and tests
-// never touch AstArena or raw handles directly. `default` refs represent absence
-// (the old `null` / `HasValue == false` handle) and every accessor is default-safe:
+// Refs wrap (arena, typed id) and expose ergonomic accessors so that rules and
+// tests never touch AstArena row tables or raw handles directly. `default` refs
+// represent absence (`HasValue == false`) and every accessor is default-safe:
 // scalar accessors return empty values and child accessors return default refs,
 // so chained reads like `job.Strategy.Matrix.Rows` never throw.
 //
-// Stage 1 (current): refs wrap the existing pooled class nodes.
-// Stage 2: node storage moves into flat struct tables inside AstArena and refs
-// become (arena, typed index) with the same public shape. See
-// `.github/docs/plan_data_oriented_ast.md`.
+// In DEBUG builds every ref captures its arena's generation at construction and
+// dereferencing after the arena is reset/disposed throws immediately.
+// See `.github/docs/plan_data_oriented_ast.md`.
 
 /// <summary>A string scalar in the AST, resolved against its owning arena.</summary>
 public readonly struct StringRef : IEquatable<StringRef>
 {
     private readonly AstArena? _arena;
+#if DEBUG
+    private readonly int _generation;
+#endif
+
+    private AstArena? ArenaChecked
+    {
+        get
+        {
+#if DEBUG
+            _arena?.AssertGeneration(_generation);
+#endif
+            return _arena;
+        }
+    }
+
     private readonly StringNodeId _id;
 
     internal StringRef(AstArena? arena, StringNodeId id)
     {
         _arena = arena;
+#if DEBUG
+        _generation = arena?.Generation ?? 0;
+#endif
         _id = id;
     }
 
@@ -34,19 +51,19 @@ public readonly struct StringRef : IEquatable<StringRef>
     public StringNodeId Id => _id;
 
     /// <summary>The UTF-8 value bytes (empty when absent).</summary>
-    public ReadOnlySpan<byte> Value => _arena is null ? default : _arena.GetStringValue(_id);
+    public ReadOnlySpan<byte> Value => _arena is null ? default : ArenaChecked!.GetStringValue(_id);
 
     /// <summary>The value as an offset/length slice into the source YAML.</summary>
-    public Utf8Slice Slice => _arena is null ? default : _arena.GetStringSlice(_id);
+    public Utf8Slice Slice => _arena is null ? default : ArenaChecked!.GetStringSlice(_id);
 
     /// <summary>The source location of the scalar.</summary>
-    public TextRange Range => _arena is null ? default : _arena.GetStringRange(_id);
+    public TextRange Range => _arena is null ? default : ArenaChecked!.GetStringRange(_id);
 
     /// <summary>Whether the scalar was quoted in YAML.</summary>
-    public bool Quoted => _arena is not null && _arena.GetStringQuoted(_id);
+    public bool Quoted => _arena is not null && ArenaChecked!.GetStringQuoted(_id);
 
     /// <summary>The embedded <c>${{ }}</c> expression scalar, if any.</summary>
-    public StringRef Expression => _arena is null ? default : new(_arena, _arena.GetStringExpression(_id));
+    public StringRef Expression => _arena is null ? default : new(ArenaChecked, ArenaChecked!.GetStringExpression(_id));
 
     /// <summary>Whether the value is absent or empty.</summary>
     public bool IsEmpty => Value.IsEmpty;
@@ -79,11 +96,29 @@ public readonly struct StringRef : IEquatable<StringRef>
 public readonly struct BoolRef
 {
     private readonly AstArena? _arena;
+#if DEBUG
+    private readonly int _generation;
+#endif
+
+    private AstArena? ArenaChecked
+    {
+        get
+        {
+#if DEBUG
+            _arena?.AssertGeneration(_generation);
+#endif
+            return _arena;
+        }
+    }
+
     private readonly BoolNodeId _id;
 
     internal BoolRef(AstArena? arena, BoolNodeId id)
     {
         _arena = arena;
+#if DEBUG
+        _generation = arena?.Generation ?? 0;
+#endif
         _id = id;
     }
 
@@ -91,23 +126,41 @@ public readonly struct BoolRef
 
     public BoolNodeId Id => _id;
 
-    public bool Value => _arena is not null && _arena.GetBoolValue(_id);
+    public bool Value => _arena is not null && ArenaChecked!.GetBoolValue(_id);
 
-    public TextRange Range => _arena is null ? default : _arena.GetBoolRange(_id);
+    public TextRange Range => _arena is null ? default : ArenaChecked!.GetBoolRange(_id);
 
     /// <summary>The embedded <c>${{ }}</c> expression scalar, if any.</summary>
-    public StringRef Expression => _arena is null ? default : new(_arena, _arena.GetBoolExpression(_id));
+    public StringRef Expression => _arena is null ? default : new(ArenaChecked, ArenaChecked!.GetBoolExpression(_id));
 }
 
 /// <summary>An integer scalar in the AST.</summary>
 public readonly struct IntRef
 {
     private readonly AstArena? _arena;
+#if DEBUG
+    private readonly int _generation;
+#endif
+
+    private AstArena? ArenaChecked
+    {
+        get
+        {
+#if DEBUG
+            _arena?.AssertGeneration(_generation);
+#endif
+            return _arena;
+        }
+    }
+
     private readonly IntNodeId _id;
 
     internal IntRef(AstArena? arena, IntNodeId id)
     {
         _arena = arena;
+#if DEBUG
+        _generation = arena?.Generation ?? 0;
+#endif
         _id = id;
     }
 
@@ -115,23 +168,41 @@ public readonly struct IntRef
 
     public IntNodeId Id => _id;
 
-    public long Value => _arena is null ? 0 : _arena.GetIntValue(_id);
+    public long Value => _arena is null ? 0 : ArenaChecked!.GetIntValue(_id);
 
-    public TextRange Range => _arena is null ? default : _arena.GetIntRange(_id);
+    public TextRange Range => _arena is null ? default : ArenaChecked!.GetIntRange(_id);
 
     /// <summary>The embedded <c>${{ }}</c> expression scalar, if any.</summary>
-    public StringRef Expression => _arena is null ? default : new(_arena, _arena.GetIntExpression(_id));
+    public StringRef Expression => _arena is null ? default : new(ArenaChecked, ArenaChecked!.GetIntExpression(_id));
 }
 
 /// <summary>A float scalar in the AST.</summary>
 public readonly struct FloatRef
 {
     private readonly AstArena? _arena;
+#if DEBUG
+    private readonly int _generation;
+#endif
+
+    private AstArena? ArenaChecked
+    {
+        get
+        {
+#if DEBUG
+            _arena?.AssertGeneration(_generation);
+#endif
+            return _arena;
+        }
+    }
+
     private readonly FloatNodeId _id;
 
     internal FloatRef(AstArena? arena, FloatNodeId id)
     {
         _arena = arena;
+#if DEBUG
+        _generation = arena?.Generation ?? 0;
+#endif
         _id = id;
     }
 
@@ -139,23 +210,41 @@ public readonly struct FloatRef
 
     public FloatNodeId Id => _id;
 
-    public double Value => _arena is null ? 0 : _arena.GetFloatValue(_id);
+    public double Value => _arena is null ? 0 : ArenaChecked!.GetFloatValue(_id);
 
-    public TextRange Range => _arena is null ? default : _arena.GetFloatRange(_id);
+    public TextRange Range => _arena is null ? default : ArenaChecked!.GetFloatRange(_id);
 
     /// <summary>The embedded <c>${{ }}</c> expression scalar, if any.</summary>
-    public StringRef Expression => _arena is null ? default : new(_arena, _arena.GetFloatExpression(_id));
+    public StringRef Expression => _arena is null ? default : new(ArenaChecked, ArenaChecked!.GetFloatExpression(_id));
 }
 
 /// <summary>A map key (raw YAML key text) resolved against its owning arena.</summary>
 public readonly struct KeyRef
 {
     private readonly AstArena? _arena;
+#if DEBUG
+    private readonly int _generation;
+#endif
+
+    private AstArena? ArenaChecked
+    {
+        get
+        {
+#if DEBUG
+            _arena?.AssertGeneration(_generation);
+#endif
+            return _arena;
+        }
+    }
+
     private readonly Utf8Slice _slice;
 
     internal KeyRef(AstArena? arena, Utf8Slice slice)
     {
         _arena = arena;
+#if DEBUG
+        _generation = arena?.Generation ?? 0;
+#endif
         _slice = slice;
     }
 
@@ -163,7 +252,7 @@ public readonly struct KeyRef
     public Utf8Slice Slice => _slice;
 
     /// <summary>The UTF-8 key bytes.</summary>
-    public ReadOnlySpan<byte> Bytes => _arena is null ? default : _slice.AsSpan(_arena.Source);
+    public ReadOnlySpan<byte> Bytes => _arena is null ? default : _slice.AsSpan(ArenaChecked!.Source);
 
     /// <summary>Compares the key bytes to the given UTF-8 text.</summary>
     public bool ValueEquals(ReadOnlySpan<byte> utf8) => Bytes.SequenceEqual(utf8);

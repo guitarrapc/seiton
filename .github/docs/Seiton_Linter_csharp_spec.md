@@ -56,8 +56,9 @@ Representative implementation surface:
 
 Current public ergonomics note:
 
+- Rules read the AST exclusively through `readonly struct` Ref facades (`WorkflowRef` / `JobRef` / `StepRef` / `EventRef` / `StringRef`, list/map refs — see `Seiton_Parser_csharp_spec.md` §2.2): `LintResult.Workflow` returns `WorkflowRef`, `LintResult.ActionMetadata` returns `ActionMetadataRef`, and visitor callbacks receive refs. Default refs represent absence (`HasValue == false`) and chain safely without throwing.
 - `LintResult` mirrors `ParseResult` value-resolution helpers for external callers (`GetString(StringNodeId)`, `GetString(Utf8Slice)`, `GetUtf8`, `GetBool/GetInt/GetFloat`, `GetRange`, copy methods).
-- `RuleBase` exposes protected scalar-resolution helpers with the same public-type vocabulary so external custom rules can resolve `StringNodeId` / `BoolNodeId` / `IntNodeId` / `FloatNodeId` without any `AstArena` access.
+- `RuleBase` exposes protected scalar-resolution helpers with the same public-type vocabulary so external custom rules can resolve `StringNodeId` / `BoolNodeId` / `IntNodeId` / `FloatNodeId` (e.g. cached handles) without any `AstArena` access.
 - `AstArena` itself is internal implementation detail and not part of the public extension contract.
 
 ### 0.4 Runtime Model
@@ -189,58 +190,60 @@ C# mapping:
 ```csharp
 public interface IPass
 {
-	void VisitWorkflowPre(Workflow workflow);
-	void VisitWorkflowPost(Workflow workflow);
-	void VisitEvent(Event ev);
-	void VisitJobPre(Job job);
-	void VisitJobPost(Job job);
-	void VisitStep(Step step);
+	void VisitWorkflowPre(WorkflowRef workflow);
+	void VisitWorkflowPost(WorkflowRef workflow);
+	void VisitActionMetadataPre(ActionMetadataRef metadata);   // default no-op
+	void VisitActionMetadataPost(ActionMetadataRef metadata);  // default no-op
+	void VisitEvent(EventRef ev);
+	void VisitJobPre(JobRef job);
+	void VisitJobPost(JobRef job);
+	void VisitStep(StepRef step);
 }
 ```
+
+Callbacks receive readonly-struct Ref facades (`Seiton_Parser_csharp_spec.md` §2.2), not node objects.
 
 ### 3.2 Visitor
 
 ```csharp
 public sealed class WorkflowVisitor
 {
-	private readonly List<IPass> _passes = new();
+	private readonly List<IPass> passes = [];
 
-	public void AddPass(IPass pass) => _passes.Add(pass);
+	public void AddPass(IPass pass) => passes.Add(pass);
 
-	public void Visit(Workflow workflow)
+	public void Visit(WorkflowRef workflow)
 	{
-		foreach (var pass in _passes)
+		foreach (var pass in passes)
 			pass.VisitWorkflowPre(workflow);
 
-		foreach (var ev in workflow.On)
+		foreach (var ev in workflow.On)          // EventRefList
 		{
-			foreach (var pass in _passes)
+			foreach (var pass in passes)
 				pass.VisitEvent(ev);
 		}
 
-		foreach (var (_, job) in workflow.Jobs)
+		foreach (var (_, job) in workflow.Jobs)  // JobRefMap → JobRef
 		{
-			foreach (var pass in _passes)
+			foreach (var pass in passes)
 				pass.VisitJobPre(job);
 
-			if (job.Steps is not null)
+			foreach (var step in job.Steps)      // StepRefList; empty when absent
 			{
-				foreach (var step in job.Steps)
-				{
-					foreach (var pass in _passes)
-						pass.VisitStep(step);
-				}
+				VisitStepRecursive(step);        // VisitStep, then recurse into parallel children
 			}
 
-			foreach (var pass in _passes)
+			foreach (var pass in passes)
 				pass.VisitJobPost(job);
 		}
 
-		foreach (var pass in _passes)
+		foreach (var pass in passes)
 			pass.VisitWorkflowPost(workflow);
 	}
 }
 ```
+
+Step traversal recurses into `parallel:` child steps (`step.Exec.AsParallel().Steps`). `WorkflowVisitor.VisitActionMetadata(ActionMetadataRef)` provides the equivalent traversal for action-metadata documents (`VisitActionMetadataPre` → composite `runs.steps` via `VisitStep` → `VisitActionMetadataPost`).
 
 Traversal order:
 
@@ -261,15 +264,15 @@ VisitWorkflowPost(workflow)     // all passes
 ```csharp
 public interface IRule : IPass
 {
-	string Id { get; }
+	RuleId Id { get; }
 	string Name { get; }
 	bool SupportsDocumentKind(DocumentKind documentKind);
-	Diagnostic[] GetDiagnostics();
+	IReadOnlyList<Diagnostic> GetDiagnostics();
 	void SetConfig(LintConfig config);
 }
 ```
 
-Each rule inspects AST nodes in `IPass` callbacks and accumulates diagnostics internally.
+Each rule inspects AST refs in `IPass` callbacks and accumulates diagnostics internally.
 
 ### 3.4 Current C# Default Rule Pack
 
@@ -499,7 +502,7 @@ C# fix-engine implementation must enforce the following preservation policies:
 
 C# implementation note:
 
-- Quote and range data come from AST (`StringNode.Quoted`, `TextRange`).
+- Quote and range data come from AST (`StringRef.Quoted`, `TextRange`).
 - Indentation and line-ending style are recovered from original source bytes/text.
 
 ### 4.4 Fix Observability Mapping

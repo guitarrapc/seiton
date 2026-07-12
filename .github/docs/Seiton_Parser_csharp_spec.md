@@ -29,7 +29,7 @@ All parser and expression features from actionlint have been implemented in the 
 
 | Category | Summary |
 |---|---|
-| **AST Construction** | `ParseResult.Workflow` returns typed `Workflow` AST |
+| **AST Construction** | `ParseResult.Workflow` returns a typed `WorkflowRef` facade over the arena-stored AST |
 | **AST Range Coverage** | Scalar nodes keep scalar ranges; structural nodes build composite `TextRange` spans |
 | **Event Detail Parse** | All five structured event types (`schedule`, `workflow_dispatch`, `workflow_call`, `repository_dispatch`, `image_version`) |
 | **workflow_dispatch inputs** | `type`, `options`, `required`, `default` parsed individually |
@@ -286,7 +286,7 @@ Alias resolution is a current-contract feature owned entirely by the adapter lay
 1. Accept UTF-8 input as `ReadOnlySpan<byte>`
 2. Use `ReadOnlySpan<byte>` comparisons on hot paths for scalar comparison
 3. Store `Utf8Slice` (offset + length) in AST, not `Span<T>`
-4. Use `Utf8String` (`ReadOnlyMemory<byte>`-backed) for dictionary keys; never `System.String`
+4. AST map keys are `Utf8Slice` values embedded in arena rows (§2.1); `Utf8String` (`ReadOnlyMemory<byte>`-backed) is used for owned keys outside the AST (generated tables, linter caches); never `System.String`
 5. Use generated static tables for metadata lookup
 6. Do not hold YAML library-specific types outside the adapter layer
 7. **`System.String` is banned on the normal success path** — AST node fields, dictionary keys, parse function return types, and intermediate values must use the UTF-8 type vocabulary defined in §0.2.4
@@ -320,12 +320,12 @@ The following types form the string representation layer for the C# implementati
 | Type | Ownership | Lifetime | Use Case |
 |---|---|---|---|
 | `ReadOnlySpan<byte>` | Non-owning, stack-only | Current parse position only | Transient key matching, value inspection in parse functions |
-| `Utf8Slice` | Non-owning (offset + length into input buffer) | Input buffer lifetime | AST scalar values (`StringNode.Value`, etc.) |
-| `Utf8String` | Owning (`ReadOnlyMemory<byte>`) | Unbounded | Dictionary keys in AST, case-normalized identifiers |
+| `Utf8Slice` | Non-owning (offset + length into input buffer) | Input buffer lifetime | AST scalar values and embedded map keys in arena rows |
+| `Utf8String` | Owning (`ReadOnlyMemory<byte>`) | Unbounded | Owned dictionary keys outside the AST (generated tables, linter caches), case-normalized identifiers |
 
 ```csharp
 /// Owned immutable UTF-8 byte sequence.
-/// Used as dictionary key where the value must outlive the current parse position.
+/// Used as dictionary key (outside the AST) where the value must outlive the current parse position.
 /// Implements IEquatable<Utf8String> and GetHashCode over raw bytes (XXH64 truncated to 32-bit).
 /// No UTF-16 transcoding occurs.
 public readonly struct Utf8String : IEquatable<Utf8String>
@@ -353,7 +353,7 @@ public readonly struct Utf8String : IEquatable<Utf8String>
 - Case-normalized: `Utf8String.FromLowerAscii(span)` — copies with ASCII lower-case conversion
 
 **Design rationale:**
-- `Utf8Slice` avoids allocation for the vast majority of AST scalar values (names, expressions, etc.) that are read but never used as lookup keys
+- `Utf8Slice` avoids allocation for AST scalar values and map keys (names, expressions, etc.); map lookups compare key slices in place against the caller's span
 - `Utf8String` uses `ReadOnlyMemory<byte>` as its backing store. For static/literal keys (generated code, builtins), the copying constructor `Utf8String(ReadOnlySpan<byte>)` allocates a `byte[]`. For linter hot paths where the source YAML `byte[]` is guaranteed to outlive the `Utf8String`, the zero-copy constructor `Utf8String(ReadOnlyMemory<byte>)` wraps a slice of the existing array without allocation
 - `System.String` is never constructed on the normal path — the parser operates entirely in UTF-8 byte space
 
@@ -396,8 +396,8 @@ Implemented in `WorkflowParser.ActionMetadata.cs` (partial class).
 public static ParseResult Parse(byte[] utf8Yaml, string filePath)
 ```
 
-- Return: `ParseResult { Workflow?, DiagnosticList Diagnostics, HasFatalError, GetString(StringNodeId), GetString(Utf8Slice), GetUtf8, GetBool/GetInt/GetFloat, GetRange..., CopyDiagnostics(), IDisposable }`
-- Returns parse diagnostics even if YAML parsing itself fails; `Workflow` is null
+- Return: `ParseResult { WorkflowRef Workflow, ActionMetadataRef ActionMetadata, DiagnosticList Diagnostics, HasFatalError, GetString(StringNodeId), GetString(Utf8Slice), GetUtf8, GetBool/GetInt/GetFloat, GetRange..., CopyDiagnostics(), IDisposable }`
+- Returns parse diagnostics even if YAML parsing itself fails; `Workflow` is a default ref (`HasValue == false`)
 - Errors during AST construction are accumulated, not immediately fatal
 - Internal-only: `ParseClassified(byte[] utf8Yaml, string filePath, out AstArena? arena)` additionally returns `DocumentKindClassification` (`PathHintKind`, `FinalKind`, `HasHintMismatch`, `IsAmbiguous`) for linter/CLI routing.
 
@@ -425,416 +425,186 @@ This parser document only assumes the integration boundary from `Seiton_Parser_s
 ## 2. AST Definitions (Spec §2)
 
 > For field semantics and constraints, see `Seiton_Parser_spec.md` §2.
-> Only the C# type structure is defined here.
+> Only the C# storage and access contract is defined here. Migration history and rationale live in `plan_data_oriented_ast.md`.
 
-### 2.1 Primitive Types (Spec §2.6)
+### 2.1 Storage Model (Data-Oriented AST)
 
-```csharp
-public sealed class StringNode
-{
-    public Utf8Slice Value { get; init; }
-    public bool Quoted { get; init; }
-    public StringNode? Expression { get; init; }
-    public TextRange Range { get; init; }
-}
+Every composite AST node is a row in a typed struct table (`NodeTable<T>`) owned by the internal `AstArena`; the arena is the sole owner of all node data. There is no node object graph — nodes reference each other through typed handles and ranges.
 
-public sealed class BoolNode
-{
-    public bool Value { get; init; }
-    public StringNode? Expression { get; init; }
-    public TextRange Range { get; init; }
-}
+- **Handles**: 1-based `readonly record struct` IDs (`JobId`, `StepId`, `PermissionsId`, ... in `Ast/NodeIds.cs`; same convention as the scalar `StringNodeId`). `default` = absent (the former `null`), observable as `HasValue == false`.
+- **Child lists**: `(first, count)` ranges. Lists whose rows can be appended non-contiguously (nested parsing inserts rows into the same table, e.g. `parallel:` child steps) range over shared ID stores: `StringIdRange` (needs, labels, filter values, ...) and `StepIdRange` (all step lists). Lists whose rows are guaranteed contiguous use `NodeRange` directly over the row table.
+- **Maps** (`jobs:`, job `outputs:`, `with:` inputs, `env:` vars, permissions scopes, services, action metadata inputs/outputs, ...): the key is a `Utf8Slice` embedded in the row; the map value is a `NodeRange` over those rows, and lookup is a linear scan within the range. Case sensitivity is fixed per map type: permissions scope names and env var names are case-**sensitive**; all other maps are ASCII case-**insensitive**.
+- **Polymorphic nodes** are tagged unions: a `Kind` enum plus a 1-based payload index into a kind-specific payload table. Used by step exec (`StepExecKind`), events (`EventKind`), and raw YAML values (`RawYamlKind`). Every discriminator enum places `None = 0` first so a `default` ref can never read as a valid kind.
+- **Roots**: `Workflow` and `ActionMetadata` remain classes, but hold only IDs/ranges (no child object references).
+- **Lifecycle**: arena reset clears table counters only. There are no per-node `Reset()` methods, no object pools, and no manual buffer registration. In DEBUG builds a generation counter makes resolving any handle/ref (or `ParseResult`/`LintResult` accessor) after arena reset/dispose throw `InvalidOperationException` instead of silently returning another parse's data; the check compiles out in Release builds (zero cost). `HasValue` and ref equality remain safe (non-throwing) on stale refs.
 
-public sealed class IntNode
-{
-    public long Value { get; init; }
-    public StringNode? Expression { get; init; }
-    public TextRange Range { get; init; }
-}
+Deliberate trade-off: replacing the former sealed class hierarchies with `Kind` enums weakens `switch` exhaustiveness from compile errors to warnings, in exchange for uniform node lifetime, zero boxing, and pool-free reset (see `plan_data_oriented_ast.md` §3.2).
 
-public sealed class FloatNode
-{
-    public double Value { get; init; }
-    public StringNode? Expression { get; init; }
-    public TextRange Range { get; init; }
-}
-```
+### 2.2 Public Read Surface (Refs)
+
+`AstArena` is internal; rules, tests, and external callers read the AST exclusively through `readonly struct` facades ("Refs", `Ast/Refs/*.cs`) that wrap (arena, handle):
+
+- `ParseResult.Workflow` / `LintResult.Workflow` return `WorkflowRef`; `ParseResult.ActionMetadata` / `LintResult.ActionMetadata` return `ActionMetadataRef`.
+- Node ref properties return other refs: `workflow.Jobs` → `JobRefMap`, `job.Steps` → `StepRefList`, `job.Name` → `StringRef`, and so on for list refs (`*RefList`) and map refs (`*RefMap`).
+- Absence is a `default` ref: `HasValue == false`, and every accessor is default-safe — chained reads like `job.Strategy.Matrix.Rows` never throw.
+- Scalars: `StringRef` exposes `.Value` (UTF-8 span), `.Slice`, `.Range`, `.Quoted`, `.Expression`, `.ValueEquals("..."u8)`, and `.Decode()` (UTF-16 materialization — diagnostics only). `BoolRef` / `IntRef` / `FloatRef` expose `.Value`, `.Range`, `.Expression`.
+- Map refs expose `TryGetValue(ReadOnlySpan<byte> key, out TRef value)`, `ContainsKey`, `Count`, and enumeration; key comparison follows the per-map case-sensitivity contract in §2.1.
+- Tagged unions are read as `Kind` plus typed payload accessors: `step.Exec.Kind == StepExecKind.Action` then `step.Exec.AsAction()`. A mismatched accessor returns a default ref.
+- Ref equality is handle equality (stable within one parse) — `Dictionary<StepRef, T>` keeps the identity semantics of the former `Dictionary<Step, T>`.
+
+Presence semantics: the former `null` (key absent) maps to `HasValue == false`; "key present but empty" maps to `HasValue == true` with `Count == 0` (ranges) or an empty value (scalars).
+
+### 2.3 Scalar Nodes (Spec §2.6)
+
+String/bool/int/float scalars are rows in dedicated arena tables addressed by `StringNodeId` / `BoolNodeId` / `IntNodeId` / `FloatNodeId`. Each row carries the value (`Utf8Slice` for strings — a non-owning reference into the input buffer, never `System.String`), the quoted flag (strings), the optional embedded `${{ }}` expression (a `StringNodeId`), and the source `TextRange`. Consumers read them via `StringRef` / `BoolRef` / `IntRef` / `FloatRef` (§2.2).
 
 AST design principles:
 
-- Use `sealed class` with `{ get; init; }` properties
-- TextRange is held as `TextRange Range` on every node; scalar nodes use scalar locations and structural mapping nodes use composite spans derived from mapping start/end marks
-- Nullable types represent YAML omission
-- Scalar values use `Utf8Slice` (non-owning reference into input buffer), never `System.String`
-- Dictionary keys use `Utf8String` (owned UTF-8 byte copy), never `System.String`
-- Collections use `IReadOnlyList<T>` or `IReadOnlyDictionary<Utf8String, TValue>` for public API; internally built with arrays or dictionaries
-- No AST node stores `System.String` — see §0.2.1 and §0.2.4 for the complete type vocabulary
+- `TextRange Range` is held on every row; scalar rows use scalar locations and structural mapping rows use composite spans derived from mapping start/end marks
+- `default` IDs/ranges represent YAML omission (§2.1)
+- Scalar values and embedded map keys use `Utf8Slice`, never `System.String` — see §0.2.1 and §0.2.4 for the complete type vocabulary
 
-### 2.2 Workflow (Spec §2.2)
+### 2.4 Workflow (Spec §2.2)
+
+The root `Workflow` class (`Ast/Workflow.cs`) holds only handles and ranges:
 
 ```csharp
 public sealed class Workflow
 {
-    public StringNode? Name { get; init; }
-    public StringNode? RunName { get; init; }
-    public IReadOnlyList<Event> On { get; init; } = Array.Empty<Event>();
-    public Permissions? Permissions { get; init; }
-    public Env? Env { get; init; }
-    public Defaults? Defaults { get; init; }
-    public Concurrency? Concurrency { get; init; }
-    public IReadOnlyDictionary<Utf8String, Job> Jobs { get; init; }
-        = new Dictionary<Utf8String, Job>();
+    public StringNodeId Name { get; init; }
+    public StringNodeId RunName { get; init; }
+    public NodeRange On { get; internal set; }            // range over EventData rows (§2.5)
+    public PermissionsId Permissions { get; internal set; }
+    public EnvId Env { get; internal set; }
+    public DefaultsId Defaults { get; internal set; }
+    public ConcurrencyId Concurrency { get; internal set; }
+    public NodeRange Jobs { get; internal set; }           // range over key-embedded JobEntryData rows (§2.6)
     public TextRange Range { get; init; }
 }
 ```
 
-### 2.3 Events (Spec §2.3)
+Consumers use `WorkflowRef` (`.On` → `EventRefList`, `.Jobs` → `JobRefMap`, ...).
+
+### 2.5 Events (Spec §2.3)
+
+Events are a tagged union (`Ast/EventData.cs`). `Workflow.On` is a `NodeRange` over `EventData` rows; each row carries:
+
+- `Kind` — `EventKind` discriminator: `None`, `Webhook`, `Scheduled`, `WorkflowDispatch`, `WorkflowCall`, `RepositoryDispatch`, `ImageVersion`
+- `EventName` — `StringNodeId`
+- `Range` — `TextRange`
+- Payload — 1-based index into the payload table selected by `Kind`
+
+Kind-specific payload rows (`WebhookEventData`, `ScheduledEventData`, `WorkflowDispatchEventData`, `WorkflowCallEventData`, `RepositoryDispatchEventData`, `ImageVersionEventData`) hold the event configuration; auxiliary row tables hold webhook filters, schedule entries, dispatch inputs, and `workflow_call` inputs/secrets/outputs. String lists (`types`, `workflows`, filter values, `names`/`versions`) are `StringIdRange` values; input/secret/output maps are key-embedded rows read via `*RefMap` facades.
+
+`DispatchInputType` (`None`/`String`/`Number`/`Boolean`/`Choice`/`Environment`) and `WorkflowCallInputType` (`Invalid`/`Boolean`/`Number`/`String`) remain typed enums on the input rows.
+
+`EventRef` exposes `Kind` plus typed payload accessors (`AsWebhook()`, `AsScheduled()`, `AsWorkflowDispatch()`, ...).
+
+### 2.6 Job (Spec §2.4)
+
+A job is a `JobData` row (`Ast/JobData.cs`) addressed by `JobId`:
 
 ```csharp
-public abstract class Event
+public readonly struct JobData
 {
-    public StringNode EventName { get; init; }
+    public StringNodeId Id { get; init; }
+    public StringNodeId Name { get; init; }
+    public StringIdRange Needs { get; init; }
+    public RunnerId RunsOn { get; init; }
+    public PermissionsId Permissions { get; init; }
+    public EnvironmentId Environment { get; init; }
+    public ConcurrencyId Concurrency { get; init; }
+    public NodeRange Outputs { get; init; }        // key-embedded JobOutputData rows
+    public EnvId Env { get; init; }
+    public DefaultsId Defaults { get; init; }
+    public StringNodeId If { get; init; }
+    public StepIdRange Steps { get; init; }
+    public FloatNodeId TimeoutMinutes { get; init; }
+    public StrategyId Strategy { get; init; }
+    public BoolNodeId ContinueOnError { get; init; }
+    public ContainerId Container { get; init; }
+    public ServicesId Services { get; init; }
+    public WorkflowCallId WorkflowCall { get; init; }
+    public SnapshotId Snapshot { get; init; }
     public TextRange Range { get; init; }
-}
-
-public sealed class WebhookEvent : Event
-{
-    public StringNode Hook { get; init; }
-    public IReadOnlyList<StringNode>? Types { get; init; }
-    public WebhookEventFilter? Branches { get; init; }
-    public WebhookEventFilter? BranchesIgnore { get; init; }
-    public WebhookEventFilter? Tags { get; init; }
-    public WebhookEventFilter? TagsIgnore { get; init; }
-    public WebhookEventFilter? Paths { get; init; }
-    public WebhookEventFilter? PathsIgnore { get; init; }
-    public IReadOnlyList<StringNode>? Workflows { get; init; }
-}
-
-public sealed class WebhookEventFilter
-{
-    public StringNode Name { get; init; }
-    public IReadOnlyList<StringNode> Values { get; init; }
-        = Array.Empty<StringNode>();
-}
-
-public sealed class ScheduledEvent : Event
-{
-    public IReadOnlyList<ScheduleEntry> Schedules { get; init; }
-        = Array.Empty<ScheduleEntry>();
-}
-
-public sealed class ScheduleEntry
-{
-    public StringNode? Cron { get; init; }
-    public StringNode? Timezone { get; init; }
-    public TextRange Range { get; init; }
-}
-
-public sealed class WorkflowDispatchEvent : Event
-{
-    public IReadOnlyDictionary<Utf8String, DispatchInput>? Inputs { get; init; }
-}
-
-public sealed class DispatchInput
-{
-    public StringNode Name { get; init; }
-    public StringNode? Description { get; init; }
-    public BoolNode? Required { get; init; }
-    public StringNode? Default { get; init; }
-    public DispatchInputType Type { get; init; }
-    public IReadOnlyList<StringNode>? Options { get; init; }
-    public TextRange Range { get; init; }
-}
-
-public enum DispatchInputType
-{
-    None,
-    String,
-    Number,
-    Boolean,
-    Choice,
-    Environment,
-}
-
-public sealed class WorkflowCallEvent : Event
-{
-    public IReadOnlyList<WorkflowCallEventInput>? Inputs { get; init; }
-    public IReadOnlyDictionary<Utf8String, WorkflowCallEventSecret>? Secrets { get; init; }
-    public IReadOnlyDictionary<Utf8String, WorkflowCallEventOutput>? Outputs { get; init; }
-}
-
-public sealed class WorkflowCallEventInput
-{
-    public StringNode Name { get; init; }
-    public Utf8String Id { get; init; }   // lower-case (Utf8String.FromLowerAscii)
-    public StringNode? Description { get; init; }
-    public BoolNode? Required { get; init; }
-    public StringNode? Default { get; init; }
-    public WorkflowCallInputType Type { get; init; }
-    public TextRange Range { get; init; }
-}
-
-public enum WorkflowCallInputType
-{
-    Invalid,
-    Boolean,
-    Number,
-    String,
-}
-
-public sealed class WorkflowCallEventSecret
-{
-    public StringNode Name { get; init; }
-    public StringNode? Description { get; init; }
-    public BoolNode? Required { get; init; }
-    public TextRange Range { get; init; }
-}
-
-public sealed class WorkflowCallEventOutput
-{
-    public StringNode Name { get; init; }
-    public StringNode? Description { get; init; }
-    public StringNode? Value { get; init; }
-    public TextRange Range { get; init; }
-}
-
-public sealed class RepositoryDispatchEvent : Event
-{
-    public IReadOnlyList<StringNode>? Types { get; init; }
 }
 ```
 
-### 2.4 Job (Spec §2.4)
+(Key-range fields such as `IfKeyRange` / `RunsOnKeyRange` / `StepsKeyRange` are omitted above; see the source for the full row.)
+
+The workflow `jobs:` map is a `NodeRange` over `JobEntryData { Utf8Slice Key, JobId Job }` rows — an entry/row indirection rather than a direct range over the `JobData` table, because incremental parsing splices reused `JobId`s from a previous arena next to freshly parsed ones (see `plan_data_oriented_ast.md` §6.2). `Job.Outputs` is a `NodeRange` over `JobOutputData { Utf8Slice Key, StringNodeId Value }` rows. Both maps are case-insensitive.
+
+### 2.7 Step and Exec (Spec §2.5)
+
+A step is a `StepData` row (`Ast/StepData.cs`) addressed by `StepId`. The exec form is a tagged union embedded in the step row:
 
 ```csharp
-public sealed class Job
+public readonly struct StepData
 {
-    public StringNode Id { get; init; }
-    public StringNode? Name { get; init; }
-    public IReadOnlyList<StringNode>? Needs { get; init; }
-    public Runner? RunsOn { get; init; }
-    public Permissions? Permissions { get; init; }
-    public Environment? Environment { get; init; }
-    public Concurrency? Concurrency { get; init; }
-    public IReadOnlyDictionary<Utf8String, StringNode>? Outputs { get; init; }
-    public Env? Env { get; init; }
-    public Defaults? Defaults { get; init; }
-    public StringNode? If { get; init; }
-    public IReadOnlyList<Step>? Steps { get; init; }
-    public FloatNode? TimeoutMinutes { get; init; }
-    public Strategy? Strategy { get; init; }
-    public BoolNode? ContinueOnError { get; init; }
-    public Container? Container { get; init; }
-    public Services? Services { get; init; }
-    public WorkflowCall? WorkflowCall { get; init; }
+    public StringNodeId Id { get; init; }
+    public StringNodeId If { get; init; }
+    public StringNodeId Name { get; init; }
+    public BoolNodeId Background { get; init; }   // run/uses modifier only
+    public StepExecKind ExecKind { get; init; }   // discriminator
+    public int ExecPayload { get; init; }         // 1-based index into the kind-specific payload table (0 = none)
+    public EnvId Env { get; init; }
+    public BoolNodeId ContinueOnError { get; init; }
+    public FloatNodeId TimeoutMinutes { get; init; }
     public TextRange Range { get; init; }
 }
+
+public enum StepExecKind { None, Run, Action, Wait, WaitAll, Cancel, Parallel }
 ```
 
-### 2.5 Step and Exec (Spec §2.5)
+Kind-specific payload rows: `ExecRunData` (run/shell/working-directory), `ExecActionData` (uses, `with:` inputs as a `NodeRange` over key-embedded case-insensitive `ActionInputData` rows, entrypoint, args), `ExecWaitData` (targets `StringIdRange`), `ExecWaitAllData`, `ExecCancelData` (target), `ExecParallelData` (nested steps).
 
-```csharp
-public sealed class Step
-{
-    public StringNodeId Id { get; set; }
-    public StringNodeId If { get; set; }
-    public TextRange? IfKeyRange { get; set; }
-    public StringNodeId Name { get; set; }
-    public BoolNodeId Background { get; set; }   // run/uses modifier only
-    public StepExec Exec { get; set; }
-    public Env? Env { get; set; }
-    public BoolNodeId ContinueOnError { get; set; }
-    public FloatNodeId TimeoutMinutes { get; set; }
-    public TextRange Range { get; set; }
-}
+Step lists (`Job.Steps`, `ExecParallelData.Steps`, `ActionMetadataRunsData.Steps`) are `StepIdRange` values over the arena's shared `StepId` list store — never direct ranges over the step row table, because nested `parallel:` parsing appends step rows non-contiguously.
 
-public abstract class StepExec
-{
-    public StepExecKind Kind { get; set; }
-    public TextRange Range { get; set; }
-}
+Consumers read `step.Exec` as a `StepExecRef` (`Kind` + `AsRun()` / `AsAction()` / `AsWait()` / `AsCancel()` / `AsParallel()`).
 
-public enum StepExecKind { Run, Action, Wait, WaitAll, Cancel, Parallel }
+### 2.8 Structural Nodes (Spec §2.7–§2.11)
 
-public sealed class ExecRun : StepExec { /* Run, Shell?, WorkingDirectory? */ }
-public sealed class ExecAction : StepExec { /* Uses, Inputs?, Entrypoint?, Args? */ }
-public sealed class ExecWait : StepExec { public IReadOnlyList<StringNodeId>? Targets { get; set; } }
-public sealed class ExecWaitAll : StepExec { }
-public sealed class ExecCancel : StepExec { public StringNodeId Target { get; set; } }
-public sealed class ExecParallel : StepExec { public IReadOnlyList<Step>? Steps { get; set; } }
-```
+Structural sections are rows addressed by typed IDs (`Ast/SectionData.cs`):
 
-### 2.6 Structural Nodes (Spec §2.7–§2.11)
+- `PermissionsData` (`PermissionsId`): `All` (`StringNodeId`, `"read-all"` / `"write-all"`) + `Scopes` — `NodeRange` over key-embedded `PermissionScopeData` rows. Scope lookup is case-**sensitive**.
+- `EnvData` (`EnvId`): `Expression` (`StringNodeId`, entire `${{ }}` form) + `Vars` — `NodeRange` over key-embedded `EnvVarData` rows. Var lookup is case-**sensitive**.
+- `DefaultsData` (`DefaultsId`) / `DefaultsRunData` (`DefaultsRunId`): shell / working-directory scalars.
+- `ConcurrencyData` (`ConcurrencyId`): group / cancel-in-progress / queue scalars.
+- `EnvironmentData` (`EnvironmentId`): name / url / deployment scalars.
+- `RunnerData` (`RunnerId`): `Labels` (`StringIdRange`), `LabelsExpr`, `Group`.
+- `WorkflowCallData` (`WorkflowCallId`): `Uses` + `with:` inputs and `secrets:` as key-embedded case-insensitive row maps + `InheritSecrets` flag.
+- `SnapshotData` (`SnapshotId`): job `snapshot:` section.
 
-```csharp
-public sealed class Permissions
-{
-    public StringNode? All { get; init; }               // "read-all" / "write-all"
-    public IReadOnlyDictionary<Utf8String, PermissionScope>? Scopes { get; init; }
-    public TextRange Range { get; init; }
-}
+Implementation note: `Concurrency.Queue` accepts literal values `single` and `max`. When the scalar contains expression markers, the parser preserves the string node and still performs normal parse-time expression validation (including semantic validation of the expression); only the literal `single`/`max` domain check is skipped for expression-bearing strings.
 
-public sealed class PermissionScope
-{
-    public StringNode Name { get; init; }
-    public StringNode Value { get; init; }
-}
+### 2.9 Strategy / Matrix (Spec §2.13)
 
-public sealed class Env
-{
-    public StringNode? Expression { get; init; }        // entire ${{ }}
-    public IReadOnlyDictionary<Utf8String, EnvVar>? Vars { get; init; }
-    public TextRange Range { get; init; }
-}
+- `StrategyData` (`StrategyId`): `Matrix` (`MatrixId`), `FailFast` (`BoolNodeId`), `MaxParallel` (`IntNodeId`), `Range`.
+- `MatrixData` (`MatrixId`): `Expression` (whole-block `${{ }}`), `Include` / `Exclude` (`NodeRange` over `MatrixCombinationsData` rows), `Rows` (`NodeRange` over key-embedded `MatrixRowData` rows, case-insensitive), `Range`.
+- `MatrixRowData`: `Expression` or `Values` — a `NodeRange` referencing raw YAML values (§2.11) — plus the row `Name`.
+- `MatrixCombinationsData`: `Expression` or `Entries` — a `NodeRange` over the combination-entry list store, where each entry is a raw-yaml property range (one mapping per combination).
 
-public sealed class EnvVar
-{
-    public StringNode Name { get; init; }
-    public StringNode Value { get; init; }
-}
+### 2.10 Container / Services / Credentials (Spec §2.14)
 
-public sealed class Defaults
-{
-    public DefaultsRun Run { get; init; }
-    public TextRange Range { get; init; }
-}
-
-public sealed class DefaultsRun
-{
-    public StringNode? Shell { get; init; }
-    public StringNode? WorkingDirectory { get; init; }
-    public TextRange Range { get; init; }
-}
-
-public sealed class Concurrency
-{
-    public StringNode Group { get; init; }
-    public BoolNode? CancelInProgress { get; init; }
-    public StringNode? Queue { get; init; }
-    public TextRange Range { get; init; }
-}
-
-Implementation note: `Queue` accepts literal values `single` and `max`. When the scalar contains expression markers, the parser preserves the string node and still performs normal parse-time expression validation (including semantic validation of the expression); only the literal `single`/`max` domain check is skipped for expression-bearing strings.
-
-public sealed class Environment
-{
-    public StringNode Name { get; init; }
-    public StringNode? Url { get; init; }
-    public BoolNode? Deployment { get; init; }
-    public TextRange Range { get; init; }
-}
-
-public sealed class Runner
-{
-    public IReadOnlyList<StringNode>? Labels { get; init; }
-    public StringNode? LabelsExpr { get; init; }
-    public StringNode? Group { get; init; }
-    public TextRange Range { get; init; }
-}
-
-public sealed class WorkflowCall
-{
-    public StringNode Uses { get; init; }
-    public Dictionary<Utf8String, WorkflowCallInput>? Inputs { get; init; }
-    public Dictionary<Utf8String, WorkflowCallSecret>? Secrets { get; init; }
-    public bool InheritSecrets { get; init; }
-}
-```
-
-### 2.7 Strategy / Matrix (Spec §2.13)
-
-```csharp
-public sealed class Strategy
-{
-    public Matrix? Matrix { get; init; }
-    public BoolNode? FailFast { get; init; }
-    public IntNode? MaxParallel { get; init; }
-    public TextRange Range { get; init; }
-}
-
-public sealed class Matrix
-{
-    public StringNode? Expression { get; init; }
-    public IReadOnlyList<MatrixCombinations>? Include { get; init; }
-    public IReadOnlyList<MatrixCombinations>? Exclude { get; init; }
-    public IReadOnlyDictionary<Utf8String, MatrixRow>? Rows { get; init; }
-    public TextRange Range { get; init; }
-}
-
-public sealed class MatrixRow
-{
-    public StringNode? Expression { get; init; }
-    public IReadOnlyList<RawYamlValue>? Values { get; init; }
-    public StringNode Name { get; init; }
-}
-
-public sealed class MatrixCombinations
-{
-    public StringNode? Expression { get; init; }
-    public IReadOnlyList<IReadOnlyDictionary<Utf8String, RawYamlValue>>? Entries { get; init; }
-}
-```
-
-### 2.8 Container / Services / Credentials (Spec §2.14)
-
-```csharp
-public sealed class Container
-{
-    public StringNode Image { get; init; }
-    public Credentials? Credentials { get; init; }
-    public Env? Env { get; init; }
-    public IReadOnlyList<StringNode>? Ports { get; init; }
-    public IReadOnlyList<StringNode>? Volumes { get; init; }
-    public StringNode? Options { get; init; }
-    public TextRange Range { get; init; }
-}
-
-public sealed class Services
-{
-    public StringNode? Expression { get; init; }
-    public IReadOnlyDictionary<Utf8String, Service>? ServiceMap { get; init; }
-    public TextRange Range { get; init; }
-}
-
-public sealed class Service
-{
-    public StringNode Name { get; init; }
-    public Container Container { get; init; }
-    public TextRange Range { get; init; }
-}
-
-public sealed class Credentials
-{
-    public StringNode? Username { get; init; }
-    public StringNode? Password { get; init; }
-    public StringNode? Expression { get; init; }
-    public TextRange Range { get; init; }
-}
-```
+- `ContainerData` (`ContainerId`): `Image` (`StringNodeId`), `Credentials` (`CredentialsId`), `Env` (`EnvId`), `Ports` / `Volumes` (`StringIdRange`), `Options`, `Range`.
+- `ServicesData` (`ServicesId`): `Expression` or a `NodeRange` over key-embedded `ServiceData` rows (name + `ContainerId`; lookup case-insensitive), plus `Range`.
+- `CredentialsData` (`CredentialsId`): `Username` / `Password` / `Expression` scalars, `Range`.
 
 Implementation notes:
 
-- `Services` accepts either a mapping of named services or a single expression scalar.
-- `Credentials` accepts either an expression scalar or a mapping with required `username` + `password`.
-- Container-level and service-level `env` reuse the same expression-or-mapping `Env` shape as top-level / job-level `env`.
+- `services:` accepts either a mapping of named services or a single expression scalar.
+- `credentials:` accepts either an expression scalar or a mapping with required `username` + `password`.
+- Container-level and service-level `env` reuse the same expression-or-mapping `EnvData` shape as top-level / job-level `env`.
 
-### 2.9 RawYAMLValue
+### 2.11 RawYAMLValue
 
-```csharp
-public abstract class RawYamlValue { }
-public sealed class RawYamlString : RawYamlValue
-{
-    public StringNode Value { get; init; }
-}
-public sealed class RawYamlArray : RawYamlValue
-{
-    public IReadOnlyList<RawYamlValue> Items { get; init; }
-}
-public sealed class RawYamlObject : RawYamlValue
-{
-    public IReadOnlyDictionary<Utf8String, RawYamlValue> Properties { get; init; }
-}
-```
+Raw YAML values (matrix entries) are a recursive tagged union: `RawYamlData` rows addressed by `RawYamlId`, discriminated by `RawYamlKind` (`None`, `String`, `Array`, `Object`):
+
+- `String` → `Scalar` (`StringNodeId`)
+- `Array` → `Items`: a `NodeRange` over the shared `RawYamlId` list store (nested values append rows non-contiguously)
+- `Object` → `Properties`: a `NodeRange` over key-embedded `RawYamlPropData` rows (case-insensitive lookup)
+
+Consumers read them via `RawYamlRef` (`Kind` + kind-specific accessors).
 
 ---
 
@@ -844,15 +614,17 @@ public sealed class RawYamlObject : RawYamlValue
 
 ### 3.1 Parser State
 
+Parse functions are static generic methods that thread their state explicitly:
+
 ```csharp
-public ref struct WorkflowParser
-{
-    private IYamlStreamReader _reader;
-    private List<Diagnostic> _diagnostics;
-}
+private static ... ParseX<TReader>(
+    ref TReader reader,                        // YAML event stream (devirtualized adapter)
+    AstArena arena,                            // node row tables + scalar stores (§2.1)
+    ref PooledBuffer<Diagnostic> diagnostics,  // pooled diagnostic accumulator
+    ...)
 ```
 
-The parser accumulates diagnostics in a list and never aborts on the first error (multi-error recovery, Spec §5.1).
+Parse functions append rows to the arena and return typed IDs/ranges (§2.1). Child lists whose rows would be non-contiguous are collected in scratch `PooledBuffer<T>` buffers and bulk-appended to the shared list stores on completion. The parser accumulates diagnostics and never aborts on the first error (multi-error recovery, Spec §5.1).
 
 ### 3.2 Mapping Traversal (Spec §3.3)
 
@@ -885,7 +657,7 @@ private void ParseMappingInline(
 ### 3.3 Workflow Parse (Spec §3.2)
 
 ```csharp
-private Workflow ParseWorkflow(IYamlStreamReader reader)
+private static Workflow ParseWorkflow<TReader>(ref TReader reader, AstArena arena, ...)
 ```
 
 Top-level mapping traversal:
@@ -904,8 +676,8 @@ Post-validation: `on` and `jobs` are required.
 ### 3.4 Events Parse (Spec §3.4)
 
 ```csharp
-private IReadOnlyList<Event> ParseEvents(IYamlStreamReader reader)
-private Event ParseEventWithNoConfig(IYamlStreamReader reader)
+private static NodeRange ParseEvents<TReader>(...)          // range over EventData rows
+private static void ParseEventWithNoConfig<TReader>(...)    // appends one EventData row
 ```
 
 Three forms: scalar → single event, sequence → multiple events, mapping → events with config.
@@ -920,12 +692,12 @@ For mapping form, dispatches by event name:
 ### 3.5 Structural Section Parse (Spec §3.5–§3.8)
 
 ```csharp
-private Permissions? ParsePermissions(IYamlStreamReader reader)   // Spec §3.5
-private Env? ParseEnv(IYamlStreamReader reader)                   // Spec §3.6
-private Defaults? ParseDefaults(IYamlStreamReader reader)         // Spec §3.7
-private Concurrency? ParseConcurrency(IYamlStreamReader reader)   // Spec §3.8
-private Environment? ParseEnvironment(IYamlStreamReader reader)   // Spec §3.14
-private IReadOnlyDictionary<Utf8String, StringNode>? ParseOutputs(IYamlStreamReader reader) // Spec §3.10
+private static PermissionsId ParsePermissions<TReader>(...)   // Spec §3.5
+private static EnvId ParseEnv<TReader>(...)                   // Spec §3.6
+private static DefaultsId ParseDefaults<TReader>(...)         // Spec §3.7
+private static ConcurrencyId ParseConcurrency<TReader>(...)   // Spec §3.8
+private static EnvironmentId ParseEnvironment<TReader>(...)   // Spec §3.14
+private static NodeRange ParseOutputs<TReader>(...)           // Spec §3.10 — key-embedded JobOutputData rows
 ```
 
 Implementation note (Spec §3.8 sync): `concurrency.queue` accepts literal `single` / `max` and reports a parser diagnostic for any other plain literal value. Expression-bearing strings are preserved and validated through the normal expression parsing/semantic-validation path; only the plain-literal value-domain restriction is skipped for those values.
@@ -933,10 +705,10 @@ Implementation note (Spec §3.8 sync): `concurrency.queue` accepts literal `sing
 ### 3.6 Job Parse (Spec §3.9–§3.10)
 
 ```csharp
-private IReadOnlyDictionary<Utf8String, Job> ParseJobs(IYamlStreamReader reader) // Spec §3.9
-private Job ParseJob(StringNode id, IYamlStreamReader reader)                // Spec §3.10
-private Runner? ParseRunsOn(IYamlStreamReader reader)                        // Spec §3.13
-private FloatNode? ParseTimeoutMinutes(IYamlStreamReader reader)             // validates > 0
+private static NodeRange ParseJobs<TReader>(...)          // Spec §3.9 — key-embedded JobEntryData rows
+private static JobId ParseJob<TReader>(...)               // Spec §3.10
+private static RunnerId ParseRunsOn<TReader>(...)         // Spec §3.13
+private static FloatNodeId ParseTimeoutMinutes<TReader>(...)  // validates > 0
 ```
 
 Job parsing includes reusable workflow detection and constraint validation (Spec §3.10.1):
@@ -952,27 +724,29 @@ Implementation note (2026-04-14):
 ### 3.7 Step Parse (Spec §3.11–§3.12)
 
 ```csharp
-private ArenaList<Step> ParseSteps<TReader>(..., string stepPathPrefix, StepParseContext context)   // Spec §3.11
-private Step? ParseStep<TReader>(..., string stepPathPrefix, int stepIndex, StepParseContext context)  // Spec §3.12
+private static StepIdRange ParseSteps<TReader>(..., string stepPathPrefix, StepParseContext context)   // Spec §3.11
+private static StepId ParseStep<TReader>(..., string stepPathPrefix, int stepIndex, StepParseContext context)  // Spec §3.12
 ```
 
-`ParseStep` is a **single-pass** mapping walk: `Utf8MappingDispatch` + `StepSchema` select the primary form (`run` / `uses` / `wait` / `wait-all` / `cancel` / `parallel`), optional `background` on run/uses, and per-form value parsing. **`StepParseContext`** (`WorkflowJobStep` | `ParallelChild` | `CompositeActionStep`) enforces GitHub runtime constraints (parallel children and composite steps: `run`/`uses` only; no parallel controls in composite). **`IsIfKeyAllowed`** rejects `if:` on `parallel` / `wait` / `wait-all` / `cancel` primaries (D21). `parallel` recurses via `ParseSteps(..., ParallelChild)` with nested path prefix (`jobs.'id'.steps[n].parallel[m]`). `WorkflowVisitor` recurses into `ExecParallel.Steps`.
+`ParseStep` is a **single-pass** mapping walk: `Utf8MappingDispatch` + `StepSchema` select the primary form (`run` / `uses` / `wait` / `wait-all` / `cancel` / `parallel`), optional `background` on run/uses, and per-form value parsing. **`StepParseContext`** (`WorkflowJobStep` | `ParallelChild` | `CompositeActionStep`) enforces GitHub runtime constraints (parallel children and composite steps: `run`/`uses` only; no parallel controls in composite). **`IsIfKeyAllowed`** rejects `if:` on `parallel` / `wait` / `wait-all` / `cancel` primaries (D21). `parallel` recurses via `ParseSteps(..., ParallelChild)` with nested path prefix (`jobs.'id'.steps[n].parallel[m]`); step lists are collected in a scratch `PooledBuffer<StepId>` and bulk-appended to the shared `StepId` store (§2.7). `ParseSteps` always returns an anchored (present) range when the `steps:` key exists, even on recovery paths. `WorkflowVisitor` recurses into `ExecParallelRef.Steps`.
 
 ### 3.8 Strategy / Matrix Parse (Spec §3.15)
 
 ```csharp
-private Strategy? ParseStrategy(IYamlStreamReader reader)
-private Matrix? ParseMatrix(IYamlStreamReader reader)
-private MatrixCombinations? ParseMatrixCombinations(string section, IYamlStreamReader reader)
-private RawYamlValue ParseRawYamlValue(IYamlStreamReader reader)
+private static StrategyId ParseStrategy<TReader>(...)
+private static MatrixId ParseMatrix<TReader>(...)
+private static NodeRange ParseMatrixCombinations<TReader>(...)   // combination-entry rows
+private static RawYamlId ParseRawYamlValue<TReader>(...)
 ```
+
+Recursive raw-yaml parsing collects array items / object properties / combination entries in scratch `PooledBuffer` buffers and bulk-appends them, preserving range contiguity when nested parsing inserts rows into the same table (§2.1).
 
 ### 3.9 Container / Services Parse (Spec §3.16–§3.18)
 
 ```csharp
-private Container? ParseContainer(string section, IYamlStreamReader reader)  // Spec §3.16
-private Services? ParseServices(IYamlStreamReader reader)                    // Spec §3.17
-private Credentials? ParseCredentials(IYamlStreamReader reader)              // Spec §3.18
+private static ContainerId ParseContainer<TReader>(...)     // Spec §3.16
+private static ServicesId ParseServices<TReader>(...)       // Spec §3.17
+private static CredentialsId ParseCredentials<TReader>(...) // Spec §3.18
 ```
 
 ---
@@ -984,45 +758,47 @@ Scalar tag information (`!!str`, `!!bool`, `!!int`, `!!float`, `!!null`) is obta
 ### 4.1 parseString (Spec §4.1)
 
 ```csharp
-private StringNode? ParseString(IYamlStreamReader reader, bool allowEmpty = false)
+internal static StringNodeId ParseString<TReader>(..., bool allowEmpty = false)
 ```
 
 ### 4.2 parseBool (Spec §4.2)
 
 ```csharp
-private BoolNode? ParseBool(IYamlStreamReader reader)
+internal static BoolNodeId ParseBool<TReader>(...)
 ```
 
 ### 4.3 parseInt (Spec §4.3)
 
 ```csharp
-private IntNode? ParseInt(IYamlStreamReader reader)
+internal static IntNodeId ParseInt<TReader>(...)
 ```
 
 ### 4.4 parseFloat (Spec §4.4)
 
 ```csharp
-private FloatNode? ParseFloat(IYamlStreamReader reader)
+internal static FloatNodeId ParseFloat<TReader>(...)
 ```
 
 ### 4.5 parseExpression (Spec §4.5)
 
 ```csharp
-private StringNode? ParseExpression(IYamlStreamReader reader, string expecting)
+private static StringNodeId ParseExpression<TReader>(..., string expecting)
 ```
 
 ### 4.6 mayParseExpression (Spec §4.6)
 
 ```csharp
-private StringNode? MayParseExpression(IYamlStreamReader reader)
+private static StringNodeId MayParseExpression<TReader>(...)
 ```
 
 ### 4.7 Collection Helpers (Spec §4.7)
 
 ```csharp
-private IReadOnlyList<StringNode> ParseStringOrStringSequence(
-    string section, IYamlStreamReader reader, bool allowEmpty = false, bool allowElemEmpty = false)
+internal static StringIdRange ParseStringOrStringSequence<TReader>(
+    ..., bool allowEmpty = false, bool allowElemEmpty = false)
 ```
+
+`ParseStringOrStringSequence` returns a present (anchored) range even on recovery paths when the key exists.
 
 ---
 
@@ -1033,7 +809,7 @@ private IReadOnlyList<StringNode> ParseStringOrStringSequence(
 ```csharp
 private void AddError(TextRange location, string message)
 private void AddErrorf(TextRange location, string format, params object[] args)
-private void UnexpectedKey(StringNode key, string section, string[] expected)
+private void UnexpectedKey(Utf8Slice key, string section, string[] expected)
 private void MissingExpression(TextRange location, string expecting)
 ```
 
@@ -1314,8 +1090,8 @@ The parser attaches `DiagnosticFix` on error paths where a deterministic fix is 
 The C# implementation enforces a **`System.String`-free normal path**: no AST node, dictionary key, or parse function intermediate value uses `System.String`. The UTF-8 type vocabulary (§0.2.4) provides three tiers:
 
 - `ReadOnlySpan<byte>` for transient comparisons (key matching in mapping loops)
-- `Utf8Slice` for AST scalar values (non-owning reference into the input buffer)
-- `Utf8String` for dictionary keys (owned copy of UTF-8 bytes)
+- `Utf8Slice` for AST scalar values and embedded map keys (non-owning references into the input buffer)
+- `Utf8String` for owned dictionary keys outside the AST (generated tables, linter caches)
 
 This constraint is enforced at the language specification level, not as a guideline. Any code change introducing `System.String` on the success path is a spec violation.
 
@@ -1447,7 +1223,7 @@ Same rules as Go. The `ParseMapping` helper supports case-insensitive mode via `
 
 | Spec Function | C# Conceptual counterpart | Spec § |
 |---|---|---|
-| `Visitor.Visit(workflow)` | `WorkflowVisitor.Visit(Workflow)` | `Seiton_Linter_spec.md` §4.2 |
+| `Visitor.Visit(workflow)` | `WorkflowVisitor.Visit(WorkflowRef)` | `Seiton_Linter_spec.md` §4.2 |
 | `Pass` interface | `IPass` | `Seiton_Linter_spec.md` §4.1 |
 | `Rule` interface | `IRule : IPass` | `Seiton_Linter_spec.md` §4.3 |
 

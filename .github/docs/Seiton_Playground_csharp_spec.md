@@ -216,13 +216,12 @@ Result: "rules:\n  runner-no-latest: warn\n  # comment"
 - Caches per-job diagnostics and merges them with fresh results for modified jobs
 - **Workflow-level diagnostics are never cached** — only job-range diagnostics are eligible
 - Action metadata files use classified parsing (not incremental)
-- Arena is owned by `IncrementalParseContext` and reused across calls
+- `IncrementalParseContext` owns the previous parse's arena; section/job reuse is **ID-based**: the new arena copies all node tables wholesale from the previous arena (`BulkImportFrom`), so previous-parse IDs (e.g. reused `JobId`s) stay resolvable in the new arena and the old arena is disposed immediately after every parse (no multi-arena retention)
 
 #### 2.2.1 Guardrails
 
 | Guard | Threshold | Behavior |
 |---|---|---|
-| Arena retention cap | `MaxRetainedArenas = 4` | Exceeding triggers full-parse fallback + arena reset |
 | Growth threshold | 3× full-parse baseline entry count | Forces full reparse |
 | Diagnostic-tainted sections | Per-section flag | Tainted sections are never skipped on subsequent parses |
 | `needs` dependency invalidation | Any changed job | Reused jobs with `needs` referencing changed jobs are re-parsed |

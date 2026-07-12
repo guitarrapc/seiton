@@ -8,11 +8,29 @@
 public readonly struct JobRefMap
 {
     private readonly AstArena? _arena;
+#if DEBUG
+    private readonly int _generation;
+#endif
+
+    private AstArena? ArenaChecked
+    {
+        get
+        {
+#if DEBUG
+            _arena?.AssertGeneration(_generation);
+#endif
+            return _arena;
+        }
+    }
+
     private readonly NodeRange _range;
 
     internal JobRefMap(AstArena? arena, NodeRange range)
     {
         _arena = arena;
+#if DEBUG
+        _generation = arena?.Generation ?? 0;
+#endif
         _range = range;
     }
 
@@ -26,8 +44,8 @@ public readonly struct JobRefMap
         {
             for (var i = 0; i < _range.Count; i++)
             {
-                ref readonly var entry = ref _arena.GetJobEntryAt(_range, i);
-                if (SliceMap<int>.AsciiEqualsIgnoreCase(entry.Key.AsSpan(_arena.Source), key))
+                ref readonly var entry = ref ArenaChecked!.GetJobEntryAt(_range, i);
+                if (SpanHelpers.EqualsAsciiIgnoreCase(entry.Key.AsSpan(ArenaChecked!.Source), key))
                 {
                     value = new JobRef(_arena, entry.Job);
                     return true;
@@ -49,11 +67,11 @@ public readonly struct JobRefMap
             throw new ArgumentOutOfRangeException(nameof(index));
         }
 
-        ref readonly var entry = ref _arena.GetJobEntryAt(_range, index);
+        ref readonly var entry = ref ArenaChecked!.GetJobEntryAt(_range, index);
         return new Entry(new KeyRef(_arena, entry.Key), new JobRef(_arena, entry.Job));
     }
 
-    public Enumerator GetEnumerator() => new(_arena, _range);
+    public Enumerator GetEnumerator() => new(ArenaChecked, _range);
 
     /// <summary>A key-value pair yielded during enumeration.</summary>
     public readonly struct Entry
@@ -78,12 +96,30 @@ public readonly struct JobRefMap
     public struct Enumerator
     {
         private readonly AstArena? _arena;
+#if DEBUG
+        private readonly int _generation;
+#endif
+
+        private readonly AstArena? ArenaChecked
+        {
+            get
+            {
+#if DEBUG
+                _arena?.AssertGeneration(_generation);
+#endif
+                return _arena;
+            }
+        }
+
         private readonly NodeRange _range;
         private int _index;
 
         internal Enumerator(AstArena? arena, NodeRange range)
         {
             _arena = arena;
+#if DEBUG
+            _generation = arena?.Generation ?? 0;
+#endif
             _range = range;
             _index = -1;
         }
@@ -94,7 +130,7 @@ public readonly struct JobRefMap
         {
             get
             {
-                ref readonly var entry = ref _arena!.GetJobEntryAt(_range, _index);
+                ref readonly var entry = ref ArenaChecked!.GetJobEntryAt(_range, _index);
                 return new Entry(new KeyRef(_arena, entry.Key), new JobRef(_arena, entry.Job));
             }
         }
@@ -105,11 +141,29 @@ public readonly struct JobRefMap
 public readonly struct StringRefMap
 {
     private readonly AstArena? _arena;
+#if DEBUG
+    private readonly int _generation;
+#endif
+
+    private AstArena? ArenaChecked
+    {
+        get
+        {
+#if DEBUG
+            _arena?.AssertGeneration(_generation);
+#endif
+            return _arena;
+        }
+    }
+
     private readonly NodeRange _range;
 
     internal StringRefMap(AstArena? arena, NodeRange range)
     {
         _arena = arena;
+#if DEBUG
+        _generation = arena?.Generation ?? 0;
+#endif
         _range = range;
     }
 
@@ -123,8 +177,8 @@ public readonly struct StringRefMap
         {
             for (var i = 0; i < _range.Count; i++)
             {
-                ref readonly var row = ref _arena.GetJobOutputAt(_range, i);
-                if (SliceMap<int>.AsciiEqualsIgnoreCase(row.Key.AsSpan(_arena.Source), key))
+                ref readonly var row = ref ArenaChecked!.GetJobOutputAt(_range, i);
+                if (SpanHelpers.EqualsAsciiIgnoreCase(row.Key.AsSpan(ArenaChecked!.Source), key))
                 {
                     value = new StringRef(_arena, row.Value);
                     return true;
@@ -146,11 +200,11 @@ public readonly struct StringRefMap
             throw new ArgumentOutOfRangeException(nameof(index));
         }
 
-        ref readonly var row = ref _arena.GetJobOutputAt(_range, index);
+        ref readonly var row = ref ArenaChecked!.GetJobOutputAt(_range, index);
         return new Entry(new KeyRef(_arena, row.Key), new StringRef(_arena, row.Value));
     }
 
-    public Enumerator GetEnumerator() => new(_arena, _range);
+    public Enumerator GetEnumerator() => new(ArenaChecked, _range);
 
     /// <summary>A key-value pair yielded during enumeration.</summary>
     public readonly struct Entry
@@ -175,12 +229,30 @@ public readonly struct StringRefMap
     public struct Enumerator
     {
         private readonly AstArena? _arena;
+#if DEBUG
+        private readonly int _generation;
+#endif
+
+        private readonly AstArena? ArenaChecked
+        {
+            get
+            {
+#if DEBUG
+                _arena?.AssertGeneration(_generation);
+#endif
+                return _arena;
+            }
+        }
+
         private readonly NodeRange _range;
         private int _index;
 
         internal Enumerator(AstArena? arena, NodeRange range)
         {
             _arena = arena;
+#if DEBUG
+            _generation = arena?.Generation ?? 0;
+#endif
             _range = range;
             _index = -1;
         }
@@ -191,7 +263,7 @@ public readonly struct StringRefMap
         {
             get
             {
-                ref readonly var row = ref _arena!.GetJobOutputAt(_range, _index);
+                ref readonly var row = ref ArenaChecked!.GetJobOutputAt(_range, _index);
                 return new Entry(new KeyRef(_arena, row.Key), new StringRef(_arena, row.Value));
             }
         }
@@ -202,11 +274,29 @@ public readonly struct StringRefMap
 public readonly struct ActionInputRefMap
 {
     private readonly AstArena? _arena;
+#if DEBUG
+    private readonly int _generation;
+#endif
+
+    private AstArena? ArenaChecked
+    {
+        get
+        {
+#if DEBUG
+            _arena?.AssertGeneration(_generation);
+#endif
+            return _arena;
+        }
+    }
+
     private readonly NodeRange _range;
 
     internal ActionInputRefMap(AstArena? arena, NodeRange range)
     {
         _arena = arena;
+#if DEBUG
+        _generation = arena?.Generation ?? 0;
+#endif
         _range = range;
     }
 
@@ -220,8 +310,8 @@ public readonly struct ActionInputRefMap
         {
             for (var i = 0; i < _range.Count; i++)
             {
-                ref readonly var row = ref _arena.GetActionInputAt(_range, i);
-                if (SliceMap<int>.AsciiEqualsIgnoreCase(row.Key.AsSpan(_arena.Source), key))
+                ref readonly var row = ref ArenaChecked!.GetActionInputAt(_range, i);
+                if (SpanHelpers.EqualsAsciiIgnoreCase(row.Key.AsSpan(ArenaChecked!.Source), key))
                 {
                     value = new StringRef(_arena, row.Value);
                     return true;
@@ -243,11 +333,11 @@ public readonly struct ActionInputRefMap
             throw new ArgumentOutOfRangeException(nameof(index));
         }
 
-        ref readonly var row = ref _arena.GetActionInputAt(_range, index);
+        ref readonly var row = ref ArenaChecked!.GetActionInputAt(_range, index);
         return new Entry(new KeyRef(_arena, row.Key), new StringRef(_arena, row.Value));
     }
 
-    public Enumerator GetEnumerator() => new(_arena, _range);
+    public Enumerator GetEnumerator() => new(ArenaChecked, _range);
 
     /// <summary>A key-value pair yielded during enumeration.</summary>
     public readonly struct Entry
@@ -272,12 +362,30 @@ public readonly struct ActionInputRefMap
     public struct Enumerator
     {
         private readonly AstArena? _arena;
+#if DEBUG
+        private readonly int _generation;
+#endif
+
+        private readonly AstArena? ArenaChecked
+        {
+            get
+            {
+#if DEBUG
+                _arena?.AssertGeneration(_generation);
+#endif
+                return _arena;
+            }
+        }
+
         private readonly NodeRange _range;
         private int _index;
 
         internal Enumerator(AstArena? arena, NodeRange range)
         {
             _arena = arena;
+#if DEBUG
+            _generation = arena?.Generation ?? 0;
+#endif
             _range = range;
             _index = -1;
         }
@@ -288,7 +396,7 @@ public readonly struct ActionInputRefMap
         {
             get
             {
-                ref readonly var row = ref _arena!.GetActionInputAt(_range, _index);
+                ref readonly var row = ref ArenaChecked!.GetActionInputAt(_range, _index);
                 return new Entry(new KeyRef(_arena, row.Key), new StringRef(_arena, row.Value));
             }
         }
@@ -299,11 +407,29 @@ public readonly struct ActionInputRefMap
 public readonly struct PermissionScopeRefMap
 {
     private readonly AstArena? _arena;
+#if DEBUG
+    private readonly int _generation;
+#endif
+
+    private AstArena? ArenaChecked
+    {
+        get
+        {
+#if DEBUG
+            _arena?.AssertGeneration(_generation);
+#endif
+            return _arena;
+        }
+    }
+
     private readonly NodeRange _range;
 
     internal PermissionScopeRefMap(AstArena? arena, NodeRange range)
     {
         _arena = arena;
+#if DEBUG
+        _generation = arena?.Generation ?? 0;
+#endif
         _range = range;
     }
 
@@ -317,8 +443,8 @@ public readonly struct PermissionScopeRefMap
         {
             for (var i = 0; i < _range.Count; i++)
             {
-                ref readonly var row = ref _arena.GetPermissionScopeAt(_range, i);
-                if (row.Key.AsSpan(_arena.Source).SequenceEqual(key))
+                ref readonly var row = ref ArenaChecked!.GetPermissionScopeAt(_range, i);
+                if (row.Key.AsSpan(ArenaChecked!.Source).SequenceEqual(key))
                 {
                     value = new PermissionScopeRef(_arena, in row);
                     return true;
@@ -340,11 +466,11 @@ public readonly struct PermissionScopeRefMap
             throw new ArgumentOutOfRangeException(nameof(index));
         }
 
-        ref readonly var row = ref _arena.GetPermissionScopeAt(_range, index);
+        ref readonly var row = ref ArenaChecked!.GetPermissionScopeAt(_range, index);
         return new Entry(new KeyRef(_arena, row.Key), new PermissionScopeRef(_arena, in row));
     }
 
-    public Enumerator GetEnumerator() => new(_arena, _range);
+    public Enumerator GetEnumerator() => new(ArenaChecked, _range);
 
     /// <summary>A key-value pair yielded during enumeration.</summary>
     public readonly struct Entry
@@ -369,12 +495,30 @@ public readonly struct PermissionScopeRefMap
     public struct Enumerator
     {
         private readonly AstArena? _arena;
+#if DEBUG
+        private readonly int _generation;
+#endif
+
+        private readonly AstArena? ArenaChecked
+        {
+            get
+            {
+#if DEBUG
+                _arena?.AssertGeneration(_generation);
+#endif
+                return _arena;
+            }
+        }
+
         private readonly NodeRange _range;
         private int _index;
 
         internal Enumerator(AstArena? arena, NodeRange range)
         {
             _arena = arena;
+#if DEBUG
+            _generation = arena?.Generation ?? 0;
+#endif
             _range = range;
             _index = -1;
         }
@@ -385,7 +529,7 @@ public readonly struct PermissionScopeRefMap
         {
             get
             {
-                ref readonly var row = ref _arena!.GetPermissionScopeAt(_range, _index);
+                ref readonly var row = ref ArenaChecked!.GetPermissionScopeAt(_range, _index);
                 return new Entry(new KeyRef(_arena, row.Key), new PermissionScopeRef(_arena, in row));
             }
         }
@@ -396,11 +540,29 @@ public readonly struct PermissionScopeRefMap
 public readonly struct EnvVarRefMap
 {
     private readonly AstArena? _arena;
+#if DEBUG
+    private readonly int _generation;
+#endif
+
+    private AstArena? ArenaChecked
+    {
+        get
+        {
+#if DEBUG
+            _arena?.AssertGeneration(_generation);
+#endif
+            return _arena;
+        }
+    }
+
     private readonly NodeRange _range;
 
     internal EnvVarRefMap(AstArena? arena, NodeRange range)
     {
         _arena = arena;
+#if DEBUG
+        _generation = arena?.Generation ?? 0;
+#endif
         _range = range;
     }
 
@@ -414,8 +576,8 @@ public readonly struct EnvVarRefMap
         {
             for (var i = 0; i < _range.Count; i++)
             {
-                ref readonly var row = ref _arena.GetEnvVarAt(_range, i);
-                if (row.Key.AsSpan(_arena.Source).SequenceEqual(key))
+                ref readonly var row = ref ArenaChecked!.GetEnvVarAt(_range, i);
+                if (row.Key.AsSpan(ArenaChecked!.Source).SequenceEqual(key))
                 {
                     value = new EnvVarRef(_arena, in row);
                     return true;
@@ -437,11 +599,11 @@ public readonly struct EnvVarRefMap
             throw new ArgumentOutOfRangeException(nameof(index));
         }
 
-        ref readonly var row = ref _arena.GetEnvVarAt(_range, index);
+        ref readonly var row = ref ArenaChecked!.GetEnvVarAt(_range, index);
         return new Entry(new KeyRef(_arena, row.Key), new EnvVarRef(_arena, in row));
     }
 
-    public Enumerator GetEnumerator() => new(_arena, _range);
+    public Enumerator GetEnumerator() => new(ArenaChecked, _range);
 
     /// <summary>A key-value pair yielded during enumeration.</summary>
     public readonly struct Entry
@@ -466,12 +628,30 @@ public readonly struct EnvVarRefMap
     public struct Enumerator
     {
         private readonly AstArena? _arena;
+#if DEBUG
+        private readonly int _generation;
+#endif
+
+        private readonly AstArena? ArenaChecked
+        {
+            get
+            {
+#if DEBUG
+                _arena?.AssertGeneration(_generation);
+#endif
+                return _arena;
+            }
+        }
+
         private readonly NodeRange _range;
         private int _index;
 
         internal Enumerator(AstArena? arena, NodeRange range)
         {
             _arena = arena;
+#if DEBUG
+            _generation = arena?.Generation ?? 0;
+#endif
             _range = range;
             _index = -1;
         }
@@ -482,7 +662,7 @@ public readonly struct EnvVarRefMap
         {
             get
             {
-                ref readonly var row = ref _arena!.GetEnvVarAt(_range, _index);
+                ref readonly var row = ref ArenaChecked!.GetEnvVarAt(_range, _index);
                 return new Entry(new KeyRef(_arena, row.Key), new EnvVarRef(_arena, in row));
             }
         }
@@ -493,11 +673,29 @@ public readonly struct EnvVarRefMap
 public readonly struct MatrixRowRefMap
 {
     private readonly AstArena? _arena;
+#if DEBUG
+    private readonly int _generation;
+#endif
+
+    private AstArena? ArenaChecked
+    {
+        get
+        {
+#if DEBUG
+            _arena?.AssertGeneration(_generation);
+#endif
+            return _arena;
+        }
+    }
+
     private readonly NodeRange _range;
 
     internal MatrixRowRefMap(AstArena? arena, NodeRange range)
     {
         _arena = arena;
+#if DEBUG
+        _generation = arena?.Generation ?? 0;
+#endif
         _range = range;
     }
 
@@ -511,8 +709,8 @@ public readonly struct MatrixRowRefMap
         {
             for (var i = 0; i < _range.Count; i++)
             {
-                ref readonly var row = ref _arena.GetMatrixRowAt(_range, i);
-                if (SliceMap<int>.AsciiEqualsIgnoreCase(row.Key.AsSpan(_arena.Source), key))
+                ref readonly var row = ref ArenaChecked!.GetMatrixRowAt(_range, i);
+                if (SpanHelpers.EqualsAsciiIgnoreCase(row.Key.AsSpan(ArenaChecked!.Source), key))
                 {
                     value = new MatrixRowRef(_arena, in row);
                     return true;
@@ -534,11 +732,11 @@ public readonly struct MatrixRowRefMap
             throw new ArgumentOutOfRangeException(nameof(index));
         }
 
-        ref readonly var row = ref _arena.GetMatrixRowAt(_range, index);
+        ref readonly var row = ref ArenaChecked!.GetMatrixRowAt(_range, index);
         return new Entry(new KeyRef(_arena, row.Key), new MatrixRowRef(_arena, in row));
     }
 
-    public Enumerator GetEnumerator() => new(_arena, _range);
+    public Enumerator GetEnumerator() => new(ArenaChecked, _range);
 
     /// <summary>A key-value pair yielded during enumeration.</summary>
     public readonly struct Entry
@@ -563,12 +761,30 @@ public readonly struct MatrixRowRefMap
     public struct Enumerator
     {
         private readonly AstArena? _arena;
+#if DEBUG
+        private readonly int _generation;
+#endif
+
+        private readonly AstArena? ArenaChecked
+        {
+            get
+            {
+#if DEBUG
+                _arena?.AssertGeneration(_generation);
+#endif
+                return _arena;
+            }
+        }
+
         private readonly NodeRange _range;
         private int _index;
 
         internal Enumerator(AstArena? arena, NodeRange range)
         {
             _arena = arena;
+#if DEBUG
+            _generation = arena?.Generation ?? 0;
+#endif
             _range = range;
             _index = -1;
         }
@@ -579,7 +795,7 @@ public readonly struct MatrixRowRefMap
         {
             get
             {
-                ref readonly var row = ref _arena!.GetMatrixRowAt(_range, _index);
+                ref readonly var row = ref ArenaChecked!.GetMatrixRowAt(_range, _index);
                 return new Entry(new KeyRef(_arena, row.Key), new MatrixRowRef(_arena, in row));
             }
         }
@@ -590,11 +806,29 @@ public readonly struct MatrixRowRefMap
 public readonly struct ServiceRefMap
 {
     private readonly AstArena? _arena;
+#if DEBUG
+    private readonly int _generation;
+#endif
+
+    private AstArena? ArenaChecked
+    {
+        get
+        {
+#if DEBUG
+            _arena?.AssertGeneration(_generation);
+#endif
+            return _arena;
+        }
+    }
+
     private readonly NodeRange _range;
 
     internal ServiceRefMap(AstArena? arena, NodeRange range)
     {
         _arena = arena;
+#if DEBUG
+        _generation = arena?.Generation ?? 0;
+#endif
         _range = range;
     }
 
@@ -608,8 +842,8 @@ public readonly struct ServiceRefMap
         {
             for (var i = 0; i < _range.Count; i++)
             {
-                ref readonly var row = ref _arena.GetServiceAt(_range, i);
-                if (SliceMap<int>.AsciiEqualsIgnoreCase(row.Key.AsSpan(_arena.Source), key))
+                ref readonly var row = ref ArenaChecked!.GetServiceAt(_range, i);
+                if (SpanHelpers.EqualsAsciiIgnoreCase(row.Key.AsSpan(ArenaChecked!.Source), key))
                 {
                     value = new ServiceRef(_arena, in row);
                     return true;
@@ -631,11 +865,11 @@ public readonly struct ServiceRefMap
             throw new ArgumentOutOfRangeException(nameof(index));
         }
 
-        ref readonly var row = ref _arena.GetServiceAt(_range, index);
+        ref readonly var row = ref ArenaChecked!.GetServiceAt(_range, index);
         return new Entry(new KeyRef(_arena, row.Key), new ServiceRef(_arena, in row));
     }
 
-    public Enumerator GetEnumerator() => new(_arena, _range);
+    public Enumerator GetEnumerator() => new(ArenaChecked, _range);
 
     /// <summary>A key-value pair yielded during enumeration.</summary>
     public readonly struct Entry
@@ -660,12 +894,30 @@ public readonly struct ServiceRefMap
     public struct Enumerator
     {
         private readonly AstArena? _arena;
+#if DEBUG
+        private readonly int _generation;
+#endif
+
+        private readonly AstArena? ArenaChecked
+        {
+            get
+            {
+#if DEBUG
+                _arena?.AssertGeneration(_generation);
+#endif
+                return _arena;
+            }
+        }
+
         private readonly NodeRange _range;
         private int _index;
 
         internal Enumerator(AstArena? arena, NodeRange range)
         {
             _arena = arena;
+#if DEBUG
+            _generation = arena?.Generation ?? 0;
+#endif
             _range = range;
             _index = -1;
         }
@@ -676,7 +928,7 @@ public readonly struct ServiceRefMap
         {
             get
             {
-                ref readonly var row = ref _arena!.GetServiceAt(_range, _index);
+                ref readonly var row = ref ArenaChecked!.GetServiceAt(_range, _index);
                 return new Entry(new KeyRef(_arena, row.Key), new ServiceRef(_arena, in row));
             }
         }
@@ -687,11 +939,29 @@ public readonly struct ServiceRefMap
 public readonly struct WorkflowCallInputRefMap
 {
     private readonly AstArena? _arena;
+#if DEBUG
+    private readonly int _generation;
+#endif
+
+    private AstArena? ArenaChecked
+    {
+        get
+        {
+#if DEBUG
+            _arena?.AssertGeneration(_generation);
+#endif
+            return _arena;
+        }
+    }
+
     private readonly NodeRange _range;
 
     internal WorkflowCallInputRefMap(AstArena? arena, NodeRange range)
     {
         _arena = arena;
+#if DEBUG
+        _generation = arena?.Generation ?? 0;
+#endif
         _range = range;
     }
 
@@ -705,8 +975,8 @@ public readonly struct WorkflowCallInputRefMap
         {
             for (var i = 0; i < _range.Count; i++)
             {
-                ref readonly var row = ref _arena.GetWorkflowCallInputAt(_range, i);
-                if (SliceMap<int>.AsciiEqualsIgnoreCase(row.Key.AsSpan(_arena.Source), key))
+                ref readonly var row = ref ArenaChecked!.GetWorkflowCallInputAt(_range, i);
+                if (SpanHelpers.EqualsAsciiIgnoreCase(row.Key.AsSpan(ArenaChecked!.Source), key))
                 {
                     value = new WorkflowCallInputRef(_arena, in row);
                     return true;
@@ -728,11 +998,11 @@ public readonly struct WorkflowCallInputRefMap
             throw new ArgumentOutOfRangeException(nameof(index));
         }
 
-        ref readonly var row = ref _arena.GetWorkflowCallInputAt(_range, index);
+        ref readonly var row = ref ArenaChecked!.GetWorkflowCallInputAt(_range, index);
         return new Entry(new KeyRef(_arena, row.Key), new WorkflowCallInputRef(_arena, in row));
     }
 
-    public Enumerator GetEnumerator() => new(_arena, _range);
+    public Enumerator GetEnumerator() => new(ArenaChecked, _range);
 
     /// <summary>A key-value pair yielded during enumeration.</summary>
     public readonly struct Entry
@@ -757,12 +1027,30 @@ public readonly struct WorkflowCallInputRefMap
     public struct Enumerator
     {
         private readonly AstArena? _arena;
+#if DEBUG
+        private readonly int _generation;
+#endif
+
+        private readonly AstArena? ArenaChecked
+        {
+            get
+            {
+#if DEBUG
+                _arena?.AssertGeneration(_generation);
+#endif
+                return _arena;
+            }
+        }
+
         private readonly NodeRange _range;
         private int _index;
 
         internal Enumerator(AstArena? arena, NodeRange range)
         {
             _arena = arena;
+#if DEBUG
+            _generation = arena?.Generation ?? 0;
+#endif
             _range = range;
             _index = -1;
         }
@@ -773,7 +1061,7 @@ public readonly struct WorkflowCallInputRefMap
         {
             get
             {
-                ref readonly var row = ref _arena!.GetWorkflowCallInputAt(_range, _index);
+                ref readonly var row = ref ArenaChecked!.GetWorkflowCallInputAt(_range, _index);
                 return new Entry(new KeyRef(_arena, row.Key), new WorkflowCallInputRef(_arena, in row));
             }
         }
@@ -784,11 +1072,29 @@ public readonly struct WorkflowCallInputRefMap
 public readonly struct WorkflowCallSecretRefMap
 {
     private readonly AstArena? _arena;
+#if DEBUG
+    private readonly int _generation;
+#endif
+
+    private AstArena? ArenaChecked
+    {
+        get
+        {
+#if DEBUG
+            _arena?.AssertGeneration(_generation);
+#endif
+            return _arena;
+        }
+    }
+
     private readonly NodeRange _range;
 
     internal WorkflowCallSecretRefMap(AstArena? arena, NodeRange range)
     {
         _arena = arena;
+#if DEBUG
+        _generation = arena?.Generation ?? 0;
+#endif
         _range = range;
     }
 
@@ -802,8 +1108,8 @@ public readonly struct WorkflowCallSecretRefMap
         {
             for (var i = 0; i < _range.Count; i++)
             {
-                ref readonly var row = ref _arena.GetWorkflowCallSecretAt(_range, i);
-                if (SliceMap<int>.AsciiEqualsIgnoreCase(row.Key.AsSpan(_arena.Source), key))
+                ref readonly var row = ref ArenaChecked!.GetWorkflowCallSecretAt(_range, i);
+                if (SpanHelpers.EqualsAsciiIgnoreCase(row.Key.AsSpan(ArenaChecked!.Source), key))
                 {
                     value = new WorkflowCallSecretRef(_arena, in row);
                     return true;
@@ -825,11 +1131,11 @@ public readonly struct WorkflowCallSecretRefMap
             throw new ArgumentOutOfRangeException(nameof(index));
         }
 
-        ref readonly var row = ref _arena.GetWorkflowCallSecretAt(_range, index);
+        ref readonly var row = ref ArenaChecked!.GetWorkflowCallSecretAt(_range, index);
         return new Entry(new KeyRef(_arena, row.Key), new WorkflowCallSecretRef(_arena, in row));
     }
 
-    public Enumerator GetEnumerator() => new(_arena, _range);
+    public Enumerator GetEnumerator() => new(ArenaChecked, _range);
 
     /// <summary>A key-value pair yielded during enumeration.</summary>
     public readonly struct Entry
@@ -854,12 +1160,30 @@ public readonly struct WorkflowCallSecretRefMap
     public struct Enumerator
     {
         private readonly AstArena? _arena;
+#if DEBUG
+        private readonly int _generation;
+#endif
+
+        private readonly AstArena? ArenaChecked
+        {
+            get
+            {
+#if DEBUG
+                _arena?.AssertGeneration(_generation);
+#endif
+                return _arena;
+            }
+        }
+
         private readonly NodeRange _range;
         private int _index;
 
         internal Enumerator(AstArena? arena, NodeRange range)
         {
             _arena = arena;
+#if DEBUG
+            _generation = arena?.Generation ?? 0;
+#endif
             _range = range;
             _index = -1;
         }
@@ -870,7 +1194,7 @@ public readonly struct WorkflowCallSecretRefMap
         {
             get
             {
-                ref readonly var row = ref _arena!.GetWorkflowCallSecretAt(_range, _index);
+                ref readonly var row = ref ArenaChecked!.GetWorkflowCallSecretAt(_range, _index);
                 return new Entry(new KeyRef(_arena, row.Key), new WorkflowCallSecretRef(_arena, in row));
             }
         }
@@ -881,11 +1205,29 @@ public readonly struct WorkflowCallSecretRefMap
 public readonly struct DispatchInputRefMap
 {
     private readonly AstArena? _arena;
+#if DEBUG
+    private readonly int _generation;
+#endif
+
+    private AstArena? ArenaChecked
+    {
+        get
+        {
+#if DEBUG
+            _arena?.AssertGeneration(_generation);
+#endif
+            return _arena;
+        }
+    }
+
     private readonly NodeRange _range;
 
     internal DispatchInputRefMap(AstArena? arena, NodeRange range)
     {
         _arena = arena;
+#if DEBUG
+        _generation = arena?.Generation ?? 0;
+#endif
         _range = range;
     }
 
@@ -899,8 +1241,8 @@ public readonly struct DispatchInputRefMap
         {
             for (var i = 0; i < _range.Count; i++)
             {
-                ref readonly var row = ref _arena.GetDispatchInputAt(_range, i);
-                if (SliceMap<int>.AsciiEqualsIgnoreCase(row.Key.AsSpan(_arena.Source), key))
+                ref readonly var row = ref ArenaChecked!.GetDispatchInputAt(_range, i);
+                if (SpanHelpers.EqualsAsciiIgnoreCase(row.Key.AsSpan(ArenaChecked!.Source), key))
                 {
                     value = new DispatchInputRef(_arena, in row);
                     return true;
@@ -922,11 +1264,11 @@ public readonly struct DispatchInputRefMap
             throw new ArgumentOutOfRangeException(nameof(index));
         }
 
-        ref readonly var row = ref _arena.GetDispatchInputAt(_range, index);
+        ref readonly var row = ref ArenaChecked!.GetDispatchInputAt(_range, index);
         return new Entry(new KeyRef(_arena, row.Key), new DispatchInputRef(_arena, in row));
     }
 
-    public Enumerator GetEnumerator() => new(_arena, _range);
+    public Enumerator GetEnumerator() => new(ArenaChecked, _range);
 
     /// <summary>A key-value pair yielded during enumeration.</summary>
     public readonly struct Entry
@@ -951,12 +1293,30 @@ public readonly struct DispatchInputRefMap
     public struct Enumerator
     {
         private readonly AstArena? _arena;
+#if DEBUG
+        private readonly int _generation;
+#endif
+
+        private readonly AstArena? ArenaChecked
+        {
+            get
+            {
+#if DEBUG
+                _arena?.AssertGeneration(_generation);
+#endif
+                return _arena;
+            }
+        }
+
         private readonly NodeRange _range;
         private int _index;
 
         internal Enumerator(AstArena? arena, NodeRange range)
         {
             _arena = arena;
+#if DEBUG
+            _generation = arena?.Generation ?? 0;
+#endif
             _range = range;
             _index = -1;
         }
@@ -967,7 +1327,7 @@ public readonly struct DispatchInputRefMap
         {
             get
             {
-                ref readonly var row = ref _arena!.GetDispatchInputAt(_range, _index);
+                ref readonly var row = ref ArenaChecked!.GetDispatchInputAt(_range, _index);
                 return new Entry(new KeyRef(_arena, row.Key), new DispatchInputRef(_arena, in row));
             }
         }
@@ -978,11 +1338,29 @@ public readonly struct DispatchInputRefMap
 public readonly struct WorkflowCallEventSecretRefMap
 {
     private readonly AstArena? _arena;
+#if DEBUG
+    private readonly int _generation;
+#endif
+
+    private AstArena? ArenaChecked
+    {
+        get
+        {
+#if DEBUG
+            _arena?.AssertGeneration(_generation);
+#endif
+            return _arena;
+        }
+    }
+
     private readonly NodeRange _range;
 
     internal WorkflowCallEventSecretRefMap(AstArena? arena, NodeRange range)
     {
         _arena = arena;
+#if DEBUG
+        _generation = arena?.Generation ?? 0;
+#endif
         _range = range;
     }
 
@@ -996,8 +1374,8 @@ public readonly struct WorkflowCallEventSecretRefMap
         {
             for (var i = 0; i < _range.Count; i++)
             {
-                ref readonly var row = ref _arena.GetWorkflowCallEventSecretAt(_range, i);
-                if (SliceMap<int>.AsciiEqualsIgnoreCase(row.Key.AsSpan(_arena.Source), key))
+                ref readonly var row = ref ArenaChecked!.GetWorkflowCallEventSecretAt(_range, i);
+                if (SpanHelpers.EqualsAsciiIgnoreCase(row.Key.AsSpan(ArenaChecked!.Source), key))
                 {
                     value = new WorkflowCallEventSecretRef(_arena, in row);
                     return true;
@@ -1019,11 +1397,11 @@ public readonly struct WorkflowCallEventSecretRefMap
             throw new ArgumentOutOfRangeException(nameof(index));
         }
 
-        ref readonly var row = ref _arena.GetWorkflowCallEventSecretAt(_range, index);
+        ref readonly var row = ref ArenaChecked!.GetWorkflowCallEventSecretAt(_range, index);
         return new Entry(new KeyRef(_arena, row.Key), new WorkflowCallEventSecretRef(_arena, in row));
     }
 
-    public Enumerator GetEnumerator() => new(_arena, _range);
+    public Enumerator GetEnumerator() => new(ArenaChecked, _range);
 
     /// <summary>A key-value pair yielded during enumeration.</summary>
     public readonly struct Entry
@@ -1048,12 +1426,30 @@ public readonly struct WorkflowCallEventSecretRefMap
     public struct Enumerator
     {
         private readonly AstArena? _arena;
+#if DEBUG
+        private readonly int _generation;
+#endif
+
+        private readonly AstArena? ArenaChecked
+        {
+            get
+            {
+#if DEBUG
+                _arena?.AssertGeneration(_generation);
+#endif
+                return _arena;
+            }
+        }
+
         private readonly NodeRange _range;
         private int _index;
 
         internal Enumerator(AstArena? arena, NodeRange range)
         {
             _arena = arena;
+#if DEBUG
+            _generation = arena?.Generation ?? 0;
+#endif
             _range = range;
             _index = -1;
         }
@@ -1064,7 +1460,7 @@ public readonly struct WorkflowCallEventSecretRefMap
         {
             get
             {
-                ref readonly var row = ref _arena!.GetWorkflowCallEventSecretAt(_range, _index);
+                ref readonly var row = ref ArenaChecked!.GetWorkflowCallEventSecretAt(_range, _index);
                 return new Entry(new KeyRef(_arena, row.Key), new WorkflowCallEventSecretRef(_arena, in row));
             }
         }
@@ -1075,11 +1471,29 @@ public readonly struct WorkflowCallEventSecretRefMap
 public readonly struct WorkflowCallEventOutputRefMap
 {
     private readonly AstArena? _arena;
+#if DEBUG
+    private readonly int _generation;
+#endif
+
+    private AstArena? ArenaChecked
+    {
+        get
+        {
+#if DEBUG
+            _arena?.AssertGeneration(_generation);
+#endif
+            return _arena;
+        }
+    }
+
     private readonly NodeRange _range;
 
     internal WorkflowCallEventOutputRefMap(AstArena? arena, NodeRange range)
     {
         _arena = arena;
+#if DEBUG
+        _generation = arena?.Generation ?? 0;
+#endif
         _range = range;
     }
 
@@ -1093,8 +1507,8 @@ public readonly struct WorkflowCallEventOutputRefMap
         {
             for (var i = 0; i < _range.Count; i++)
             {
-                ref readonly var row = ref _arena.GetWorkflowCallEventOutputAt(_range, i);
-                if (SliceMap<int>.AsciiEqualsIgnoreCase(row.Key.AsSpan(_arena.Source), key))
+                ref readonly var row = ref ArenaChecked!.GetWorkflowCallEventOutputAt(_range, i);
+                if (SpanHelpers.EqualsAsciiIgnoreCase(row.Key.AsSpan(ArenaChecked!.Source), key))
                 {
                     value = new WorkflowCallEventOutputRef(_arena, in row);
                     return true;
@@ -1116,11 +1530,11 @@ public readonly struct WorkflowCallEventOutputRefMap
             throw new ArgumentOutOfRangeException(nameof(index));
         }
 
-        ref readonly var row = ref _arena.GetWorkflowCallEventOutputAt(_range, index);
+        ref readonly var row = ref ArenaChecked!.GetWorkflowCallEventOutputAt(_range, index);
         return new Entry(new KeyRef(_arena, row.Key), new WorkflowCallEventOutputRef(_arena, in row));
     }
 
-    public Enumerator GetEnumerator() => new(_arena, _range);
+    public Enumerator GetEnumerator() => new(ArenaChecked, _range);
 
     /// <summary>A key-value pair yielded during enumeration.</summary>
     public readonly struct Entry
@@ -1145,12 +1559,30 @@ public readonly struct WorkflowCallEventOutputRefMap
     public struct Enumerator
     {
         private readonly AstArena? _arena;
+#if DEBUG
+        private readonly int _generation;
+#endif
+
+        private readonly AstArena? ArenaChecked
+        {
+            get
+            {
+#if DEBUG
+                _arena?.AssertGeneration(_generation);
+#endif
+                return _arena;
+            }
+        }
+
         private readonly NodeRange _range;
         private int _index;
 
         internal Enumerator(AstArena? arena, NodeRange range)
         {
             _arena = arena;
+#if DEBUG
+            _generation = arena?.Generation ?? 0;
+#endif
             _range = range;
             _index = -1;
         }
@@ -1161,7 +1593,7 @@ public readonly struct WorkflowCallEventOutputRefMap
         {
             get
             {
-                ref readonly var row = ref _arena!.GetWorkflowCallEventOutputAt(_range, _index);
+                ref readonly var row = ref ArenaChecked!.GetWorkflowCallEventOutputAt(_range, _index);
                 return new Entry(new KeyRef(_arena, row.Key), new WorkflowCallEventOutputRef(_arena, in row));
             }
         }
@@ -1172,11 +1604,29 @@ public readonly struct WorkflowCallEventOutputRefMap
 public readonly struct RawYamlRefMap
 {
     private readonly AstArena? _arena;
+#if DEBUG
+    private readonly int _generation;
+#endif
+
+    private AstArena? ArenaChecked
+    {
+        get
+        {
+#if DEBUG
+            _arena?.AssertGeneration(_generation);
+#endif
+            return _arena;
+        }
+    }
+
     private readonly NodeRange _range;
 
     internal RawYamlRefMap(AstArena? arena, NodeRange range)
     {
         _arena = arena;
+#if DEBUG
+        _generation = arena?.Generation ?? 0;
+#endif
         _range = range;
     }
 
@@ -1190,8 +1640,8 @@ public readonly struct RawYamlRefMap
         {
             for (var i = 0; i < _range.Count; i++)
             {
-                ref readonly var prop = ref _arena.GetRawYamlPropAt(_range, i);
-                if (SliceMap<int>.AsciiEqualsIgnoreCase(prop.Key.AsSpan(_arena.Source), key))
+                ref readonly var prop = ref ArenaChecked!.GetRawYamlPropAt(_range, i);
+                if (SpanHelpers.EqualsAsciiIgnoreCase(prop.Key.AsSpan(ArenaChecked!.Source), key))
                 {
                     value = new RawYamlRef(_arena, prop.Value);
                     return true;
@@ -1213,11 +1663,11 @@ public readonly struct RawYamlRefMap
             throw new ArgumentOutOfRangeException(nameof(index));
         }
 
-        ref readonly var prop = ref _arena.GetRawYamlPropAt(_range, index);
+        ref readonly var prop = ref ArenaChecked!.GetRawYamlPropAt(_range, index);
         return new Entry(new KeyRef(_arena, prop.Key), new RawYamlRef(_arena, prop.Value));
     }
 
-    public Enumerator GetEnumerator() => new(_arena, _range);
+    public Enumerator GetEnumerator() => new(ArenaChecked, _range);
 
     /// <summary>A key-value pair yielded during enumeration.</summary>
     public readonly struct Entry
@@ -1242,12 +1692,30 @@ public readonly struct RawYamlRefMap
     public struct Enumerator
     {
         private readonly AstArena? _arena;
+#if DEBUG
+        private readonly int _generation;
+#endif
+
+        private readonly AstArena? ArenaChecked
+        {
+            get
+            {
+#if DEBUG
+                _arena?.AssertGeneration(_generation);
+#endif
+                return _arena;
+            }
+        }
+
         private readonly NodeRange _range;
         private int _index;
 
         internal Enumerator(AstArena? arena, NodeRange range)
         {
             _arena = arena;
+#if DEBUG
+            _generation = arena?.Generation ?? 0;
+#endif
             _range = range;
             _index = -1;
         }
@@ -1258,7 +1726,7 @@ public readonly struct RawYamlRefMap
         {
             get
             {
-                ref readonly var prop = ref _arena!.GetRawYamlPropAt(_range, _index);
+                ref readonly var prop = ref ArenaChecked!.GetRawYamlPropAt(_range, _index);
                 return new Entry(new KeyRef(_arena, prop.Key), new RawYamlRef(_arena, prop.Value));
             }
         }
@@ -1269,11 +1737,29 @@ public readonly struct RawYamlRefMap
 public readonly struct ActionMetadataInputRefMap
 {
     private readonly AstArena? _arena;
+#if DEBUG
+    private readonly int _generation;
+#endif
+
+    private AstArena? ArenaChecked
+    {
+        get
+        {
+#if DEBUG
+            _arena?.AssertGeneration(_generation);
+#endif
+            return _arena;
+        }
+    }
+
     private readonly NodeRange _range;
 
     internal ActionMetadataInputRefMap(AstArena? arena, NodeRange range)
     {
         _arena = arena;
+#if DEBUG
+        _generation = arena?.Generation ?? 0;
+#endif
         _range = range;
     }
 
@@ -1287,8 +1773,8 @@ public readonly struct ActionMetadataInputRefMap
         {
             for (var i = 0; i < _range.Count; i++)
             {
-                ref readonly var row = ref _arena.GetActionMetadataInputAt(_range, i);
-                if (SliceMap<int>.AsciiEqualsIgnoreCase(row.Key.AsSpan(_arena.Source), key))
+                ref readonly var row = ref ArenaChecked!.GetActionMetadataInputAt(_range, i);
+                if (SpanHelpers.EqualsAsciiIgnoreCase(row.Key.AsSpan(ArenaChecked!.Source), key))
                 {
                     value = new ActionMetadataInputRef(_arena, in row);
                     return true;
@@ -1310,11 +1796,11 @@ public readonly struct ActionMetadataInputRefMap
             throw new ArgumentOutOfRangeException(nameof(index));
         }
 
-        ref readonly var row = ref _arena.GetActionMetadataInputAt(_range, index);
+        ref readonly var row = ref ArenaChecked!.GetActionMetadataInputAt(_range, index);
         return new Entry(new KeyRef(_arena, row.Key), new ActionMetadataInputRef(_arena, in row));
     }
 
-    public Enumerator GetEnumerator() => new(_arena, _range);
+    public Enumerator GetEnumerator() => new(ArenaChecked, _range);
 
     /// <summary>A key-value pair yielded during enumeration.</summary>
     public readonly struct Entry
@@ -1339,12 +1825,30 @@ public readonly struct ActionMetadataInputRefMap
     public struct Enumerator
     {
         private readonly AstArena? _arena;
+#if DEBUG
+        private readonly int _generation;
+#endif
+
+        private readonly AstArena? ArenaChecked
+        {
+            get
+            {
+#if DEBUG
+                _arena?.AssertGeneration(_generation);
+#endif
+                return _arena;
+            }
+        }
+
         private readonly NodeRange _range;
         private int _index;
 
         internal Enumerator(AstArena? arena, NodeRange range)
         {
             _arena = arena;
+#if DEBUG
+            _generation = arena?.Generation ?? 0;
+#endif
             _range = range;
             _index = -1;
         }
@@ -1355,7 +1859,7 @@ public readonly struct ActionMetadataInputRefMap
         {
             get
             {
-                ref readonly var row = ref _arena!.GetActionMetadataInputAt(_range, _index);
+                ref readonly var row = ref ArenaChecked!.GetActionMetadataInputAt(_range, _index);
                 return new Entry(new KeyRef(_arena, row.Key), new ActionMetadataInputRef(_arena, in row));
             }
         }
@@ -1366,11 +1870,29 @@ public readonly struct ActionMetadataInputRefMap
 public readonly struct ActionMetadataOutputRefMap
 {
     private readonly AstArena? _arena;
+#if DEBUG
+    private readonly int _generation;
+#endif
+
+    private AstArena? ArenaChecked
+    {
+        get
+        {
+#if DEBUG
+            _arena?.AssertGeneration(_generation);
+#endif
+            return _arena;
+        }
+    }
+
     private readonly NodeRange _range;
 
     internal ActionMetadataOutputRefMap(AstArena? arena, NodeRange range)
     {
         _arena = arena;
+#if DEBUG
+        _generation = arena?.Generation ?? 0;
+#endif
         _range = range;
     }
 
@@ -1384,8 +1906,8 @@ public readonly struct ActionMetadataOutputRefMap
         {
             for (var i = 0; i < _range.Count; i++)
             {
-                ref readonly var row = ref _arena.GetActionMetadataOutputAt(_range, i);
-                if (SliceMap<int>.AsciiEqualsIgnoreCase(row.Key.AsSpan(_arena.Source), key))
+                ref readonly var row = ref ArenaChecked!.GetActionMetadataOutputAt(_range, i);
+                if (SpanHelpers.EqualsAsciiIgnoreCase(row.Key.AsSpan(ArenaChecked!.Source), key))
                 {
                     value = new ActionMetadataOutputRef(_arena, in row);
                     return true;
@@ -1407,11 +1929,11 @@ public readonly struct ActionMetadataOutputRefMap
             throw new ArgumentOutOfRangeException(nameof(index));
         }
 
-        ref readonly var row = ref _arena.GetActionMetadataOutputAt(_range, index);
+        ref readonly var row = ref ArenaChecked!.GetActionMetadataOutputAt(_range, index);
         return new Entry(new KeyRef(_arena, row.Key), new ActionMetadataOutputRef(_arena, in row));
     }
 
-    public Enumerator GetEnumerator() => new(_arena, _range);
+    public Enumerator GetEnumerator() => new(ArenaChecked, _range);
 
     /// <summary>A key-value pair yielded during enumeration.</summary>
     public readonly struct Entry
@@ -1436,12 +1958,30 @@ public readonly struct ActionMetadataOutputRefMap
     public struct Enumerator
     {
         private readonly AstArena? _arena;
+#if DEBUG
+        private readonly int _generation;
+#endif
+
+        private readonly AstArena? ArenaChecked
+        {
+            get
+            {
+#if DEBUG
+                _arena?.AssertGeneration(_generation);
+#endif
+                return _arena;
+            }
+        }
+
         private readonly NodeRange _range;
         private int _index;
 
         internal Enumerator(AstArena? arena, NodeRange range)
         {
             _arena = arena;
+#if DEBUG
+            _generation = arena?.Generation ?? 0;
+#endif
             _range = range;
             _index = -1;
         }
@@ -1452,7 +1992,7 @@ public readonly struct ActionMetadataOutputRefMap
         {
             get
             {
-                ref readonly var row = ref _arena!.GetActionMetadataOutputAt(_range, _index);
+                ref readonly var row = ref ArenaChecked!.GetActionMetadataOutputAt(_range, _index);
                 return new Entry(new KeyRef(_arena, row.Key), new ActionMetadataOutputRef(_arena, in row));
             }
         }

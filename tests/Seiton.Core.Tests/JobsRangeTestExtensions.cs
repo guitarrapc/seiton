@@ -37,7 +37,7 @@ internal static class JobsRangeTestExtensions
         for (var i = 0; i < jobs.Count; i++)
         {
             ref readonly var entry = ref arena.GetJobEntryAt(jobs, i);
-            if (SliceMap<int>.AsciiEqualsIgnoreCase(entry.Key.AsSpan(arena.Source), key))
+            if (SpanHelpers.EqualsAsciiIgnoreCase(entry.Key.AsSpan(arena.Source), key))
             {
                 job = arena.GetJob(entry.Job);
                 return true;

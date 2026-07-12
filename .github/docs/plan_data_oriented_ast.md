@@ -1,6 +1,6 @@
 # Plan: Data-Oriented AST (Arena 徹底化)
 
-> Status: **in progress** (2026-07-11 開始)
+> Status: **completed** (2026-07-11 開始 / 2026-07-12 全 Stage 完了)
 > Related: `Seiton_Parser_csharp_spec.md` §0.5 / §2, `architecture_spec_performance.md`, `.claude/skills/performance-requirements/SKILL.md`
 
 ## 1. WHAT
@@ -79,8 +79,8 @@ CLI は診断のみを参照し AST 型に依存しない (実測: `src/Seiton/`
 | 1 ✅ (2026-07-11 完了) | Ref ファサードを**現行クラスの上に**導入 (`JobRef` が Job オブジェクトを内包)。`IPass`/`RuleBase`/`WorkflowVisitor` 署名と全ルール・テストを Ref へ移行。三値 null 11 ルールと同一性キー 1 ルールを修正 | 全テスト green。ベンチマーク中立 (±10% 以内) |
 | 2 ✅ (2026-07-12 完了) | ストレージ差替: 複合ノード → struct 行テーブル + typed ID、子リスト → レンジ、SliceMap → 共有テーブル。パーサ構築サイト書換。Ref 内部を (arena, id) に差替 — **ルールコードは不変** | 全テスト green。Allocated 減少を確認 |
 | 3 ✅ (2026-07-12 完了) | `IncrementalParseContext` を row-copy + ハンドル再配置へ再設計 (`BulkImportFrom` を全テーブル + レンジ再マップに拡張) | Incremental 系 + Playground desktop テスト green |
-| 4 | `AstNodePool` / オブジェクトプール / 全 `Reset()` / 手動登録の削除。プール系抽象の統合。DEBUG 世代カウンタ | 全テスト green。`Reset(` が src から消えること |
-| 5 | spec 更新 (`Seiton_Parser_csharp_spec.md` §0.5/§2、`Seiton_Linter_csharp_spec.md`、skills)、全ベンチマーク比較の記録 | spec と実装の一致 |
+| 4 ✅ (2026-07-12 完了) | `AstNodePool` / オブジェクトプール / 全 `Reset()` / 手動登録の削除。プール系抽象の統合。DEBUG 世代カウンタ | 全テスト green。`Reset(` が src から消えること |
+| 5 ✅ (2026-07-12 完了) | spec 更新 (`Seiton_Parser_csharp_spec.md` §0.5/§2、`Seiton_Linter_csharp_spec.md`、skills)、全ベンチマーク比較の記録 | spec と実装の一致 |
 
 各 Stage 完了時に `dotnet test` 全 green + `CoreParsingBenchmark` / `CoreLintBenchmark` を baseline (committed reports) と比較し、Mean/Allocated +10% 以内を守る。
 
@@ -133,6 +133,29 @@ CLI は診断のみを参照し AST 型に依存しない (実測: `src/Seiton/`
 - 巻き添えで消えたもの: Job オブジェクトプール (最後の AST プール)、`SliceMap<Job>`、generic `RefMap<TNode,TRef>`/`INodeRef` core (JobRefMap/StringRefMap が自己完結レンジマップ化して最後のユーザーが消滅)、`ShrinkObjectPoolIfOversized`。
 - テスト意味論の変更点 (唯一): `IncrementalParseJobSkipTests` の 4 assertion が「Job オブジェクト同一性による再利用観測」だったため、ID ベース再利用では観測不能 (旧 arena は即 Dispose) — `ctx.LastReusedJobs` (internal test hook) + 再利用ジョブ内容の解決可能性で書き直し。他の assert 値は全増分を通じて不変。
 - 検証: Core 2000 / CLI 432 / Playground incremental 系全部 (14+11+27+11+9+6) green。Allocated: Parse 240B/840B/2,600B (Job プール分 −8B each)、Lint 34.01KB。IncrementalParseBenchmark も正常 (FullPipeline_SmallEdits Large 559KB)。Mean はマシン熱ドリフト下 (コントロール同率上昇) で判定はコントロール正規化。
+
+## 6.3 Stage 4 実装記録 (2026-07-12 完了)
+
+- **デッドコード掃討**: `AstNodePool.cs` / `ArenaList.cs` / `SliceMap.cs` / `WorkflowParser.PooledList.cs` を削除 (Stage 2/3 完了時点で呼び出しゼロ)。`RegisterSliceMapBuffer` + `_sliceMapBuffers` + `PoolReturnCache<T>` を AstArena から削除。SliceMap の静的 `AsciiEqualsIgnoreCase` は既存の `SpanHelpers.EqualsAsciiIgnoreCase` へ集約。AST ノードの `Reset()` は全滅 (残る `Reset()` は `NodeTable` のカウンタクリアのみ — これは設計どおり)。
+- **DEBUG 世代カウンタ**: `AstArena._generation` (int、Release でも保持するがチェックは `[Conditional("DEBUG")]`) を `ResetForSource`/`Dispose` 冒頭でインクリメント。全 Ref/Map/List struct 100 個が `#if DEBUG` で生成時世代を捕捉し、arena 参照経由の全 deref を `ArenaChecked` ガード経由に変更 — dispose 後のハンドル解決は「別パースのデータが黙って返る」から **即 `InvalidOperationException`** に。`ParseResult`/`LintResult` 自身もアクセサで世代を検証 (dispose 後に新規 Ref を作らせない)。`HasValue`/等価比較は stale でも安全 (throw しない) 仕様。
+- 導入と同時に **Playground テスト側の実在 use-after-dispose を 2 件検出・修正** (`ParseIncrementally` の「診断は次回呼び出しで解放」契約違反)。src 側の違反はゼロ。
+- 検証: Debug/Release 両ビルド 0 警告 0 エラー。Core 1994 / CLI 432 / Playground 全 incremental 系 green。ベンチ (冷機、全 Stage 通し最良値): Parse Small 36.4μs / Large 15.70ms・240B/840B/2,600B、Lint Small/False 52.1μs / Large/False 16.26ms・34.01KB。世代カウンタの Release コストはゼロ (int インクリメントのみ)。
+
+## 6.4 Stage 5 実装記録 (2026-07-12 完了) — 移行完了
+
+- spec 同期: `Seiton_Parser_csharp_spec.md` §2 を行テーブル/ID/Ref の契約記述へ全面書き換え (§0.5/§1.1/§3/§4/§11.1/Appendix も同期)。`Seiton_Linter_csharp_spec.md` の IPass/IRule/visitor 署名、`Seiton_Playground_csharp_spec.md` の retention 記述 (削除済み `MaxRetainedArenas` 等)、`Rules/AGENTS.md` のルール実装ガイド (`Arena.Get*` → Ref surface)、skills (architecture / performance-requirements) を更新。`architecture_spec_performance.md` の「sealed AST の網羅性」は判断当時の記録として保存し補記で trade-off を注記。
+- **最終ベンチマーク比較 (冷機、ShortRun)**:
+
+| 指標 | 移行前 baseline (2026-07-11 main) | 移行後 (2026-07-12) |
+|---|---|---|
+| Parse Small Mean / Allocated | ~53μs / — | **36.4μs / 240B** |
+| Parse Large Mean / Allocated | ~15.6ms / ~26KB | **15.70ms / 2,600B** |
+| Lint Small/False | 86.7μs | **52.1μs / 3.73KB** |
+| Lint Large/False | 21.8ms / 234KB | **16.26ms / 34.01KB** (−25% / −85%) |
+| Lint Large/True | — | 25.4ms / 83.54KB |
+| Gen0 (Medium/Large) | 0 | 0 |
+
+(Lint Large/False の Mean 改善には UnpinnedUsesRule の O(n²) 行列計算修正 (2026-07-12、移行と独立) を含む)
 
 ## 7. Lessons Learned (随時追記)
 

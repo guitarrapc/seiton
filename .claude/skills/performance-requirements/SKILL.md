@@ -24,6 +24,8 @@ Parser-specific additions:
 - `GetScalarString()` is allowed only for diagnostics or exceptional fallback handling.
 - Keep dynamic text as `Utf8Slice` and decode only when reporting diagnostics.
 - Repeated lookups must be avoided by carrying resolved metadata through parse steps.
+- AST nodes are struct rows in `AstArena` `NodeTable`s addressed by typed IDs/ranges. Do not add class nodes, object pools, or per-node `Reset()` methods — arena reset is a table-counter clear.
+- When nested parsing can insert rows into the same table (child lists such as steps, raw-yaml items/props), collect IDs in a scratch `PooledBuffer<T>` and bulk-append to the shared list store so ranges stay valid. Key-embedded map rows (`NodeRange` maps) must be appended contiguously — their nested parsing may only touch *other* tables; if a new nesting violates that, switch that map to scratch-buffer construction.
 
 **Example:**
 
@@ -73,6 +75,7 @@ else
 
 Lint rules execute per-workflow, per-job, or per-step and are called hundreds of times for large workflows (e.g. 20 jobs × 12 steps = 240 steps). Apply the following patterns when writing or modifying lint rules.
 
+- Lint rules read the AST through the readonly-struct Ref surface (`StepRef` / `StringRef` / map refs): compare with `StringRef.Value` / `.ValueEquals("..."u8)` (UTF-8 spans), look up maps with `TryGetValue(keySpan, out ...)`, and call `StringRef.Decode()` only when actually emitting a diagnostic.
 - Lint rules may use `string` for convenience, but prefer Span-based APIs for key checks and value comparisons in hot paths.
 - If a rule is expensive, make it opt-in (only runs when explicitly enabled) rather than always-on.
 

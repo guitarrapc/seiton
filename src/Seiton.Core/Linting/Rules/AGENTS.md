@@ -19,11 +19,11 @@ LintEngine.Check()
   → (optional) OnlineAuditEngine resolves uses: refs and calls IOnlineRule.EvaluateTarget
 ```
 
-Rules are **visitor passes** (`IPass` / `IRule`). They read parsed AST nodes via `LintConfig.Arena`, emit diagnostics through `RuleBase` helpers, and must not re-parse YAML.
+Rules are **visitor passes** (`IPass` / `IRule`). They read the parsed AST through readonly-struct Ref facades (`WorkflowRef` / `JobRef` / `StepRef` / `EventRef` / `StringRef`, list/map refs) received in `Visit*` callbacks, emit diagnostics through `RuleBase` helpers, and must not re-parse YAML.
 
 | Component | Role |
 |-----------|------|
-| `RuleBase` | Diagnostic helpers, `Config` / `Arena` access, default no-op visitor hooks |
+| `RuleBase` | Diagnostic helpers, `Config` access, location builders, default no-op visitor hooks |
 | `OnlineRuleBase` | Collects `uses:` targets during traversal; evaluation deferred to `OnlineAuditEngine` |
 | `RuleCatalog` | Factory registration, priority, opt-in policy, default severity, auto-fix metadata, allowed config keys |
 | `RuleId` + `RuleIdExtensions` | Strongly typed ID and stable kebab-case string (`job-structure`, etc.) |
@@ -115,7 +115,7 @@ public sealed class MyRule() : RuleBase(RuleId.MyRule)
 {
     public override string Name => "My Rule";
 
-    public override void VisitStep(Step step) { /* ... */ }
+    public override void VisitStep(StepRef step) { /* ... */ }
 }
 ```
 
@@ -126,7 +126,7 @@ Implementation rules:
 - **`sealed`** unless extension is required.
 - **Guard early**: `if (Config.Utf8Yaml is null) return;` when reading source bytes.
 - **Skip dynamic values**: if a field contains `${{ }}`, skip or handle explicitly (see `ExpressionScanHelpers`).
-- **Use `Arena` for values and ranges**: `Arena.GetStringValue`, `Arena.GetStringRange`, `GetString`/`GetUtf8` helpers on `RuleBase`.
+- **Read values through Refs**: absence is `HasValue == false` (default refs chain safely); exec dispatch is `step.Exec.Kind == StepExecKind.Action` + `step.Exec.AsAction()`; string values via `StringRef.Value` (UTF-8 span) / `.Slice` / `.ValueEquals("..."u8)`; maps via `TryGetValue(keySpan, out ...)`. Use `.Decode()` only when building diagnostic messages.
 - **Emit via `Add*Error` / `Add*Warning` / `Add*Info`**: never construct `Diagnostic` directly in rules.
 - **Messages are single-line**: `RuleBase` collapses embedded newlines; still avoid putting block-scalar content raw into messages when possible.
 - **Locations must be actionable**: point at the YAML token the user should edit (see `Seiton_Linter_spec.md` §4.5 for intentional divergences).
@@ -243,7 +243,7 @@ Users can override severity via config; the rule still emits using the semantic 
 
 ### Locations
 
-- Prefer `Arena.GetStringRange(node)` or specialized builders: `BuildUsesLocation`, `BuildStepLocation`, `BuildJobLocation`.
+- Prefer `StringRef.Range` (or `.Expression.Range`) or specialized builders: `BuildUsesLocation`, `BuildStepLocation`, `BuildJobLocation`.
 - For expressions inside `run:` scripts, use `Config.GetLineStarts()` and offset math (see `RunContextDirectUseAnalyzer`).
 - Attach `help:` for non-obvious remediations.
 

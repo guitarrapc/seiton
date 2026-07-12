@@ -8,11 +8,29 @@
 public readonly struct StringRefList
 {
     private readonly AstArena? _arena;
+#if DEBUG
+    private readonly int _generation;
+#endif
+
+    private AstArena? ArenaChecked
+    {
+        get
+        {
+#if DEBUG
+            _arena?.AssertGeneration(_generation);
+#endif
+            return _arena;
+        }
+    }
+
     private readonly StringIdRange _range;
 
     internal StringRefList(AstArena? arena, StringIdRange range)
     {
         _arena = arena;
+#if DEBUG
+        _generation = arena?.Generation ?? 0;
+#endif
         _range = range;
     }
 
@@ -20,26 +38,44 @@ public readonly struct StringRefList
 
     public int Count => _range.Count;
 
-    public StringRef this[int index] => new(_arena, _arena!.GetStringIdAt(_range, index));
+    public StringRef this[int index] => new(ArenaChecked, ArenaChecked!.GetStringIdAt(_range, index));
 
-    public Enumerator GetEnumerator() => new(_arena, _range);
+    public Enumerator GetEnumerator() => new(ArenaChecked, _range);
 
     public struct Enumerator
     {
         private readonly AstArena? _arena;
+#if DEBUG
+        private readonly int _generation;
+#endif
+
+        private readonly AstArena? ArenaChecked
+        {
+            get
+            {
+#if DEBUG
+                _arena?.AssertGeneration(_generation);
+#endif
+                return _arena;
+            }
+        }
+
         private readonly StringIdRange _range;
         private int _index;
 
         internal Enumerator(AstArena? arena, StringIdRange range)
         {
             _arena = arena;
+#if DEBUG
+            _generation = arena?.Generation ?? 0;
+#endif
             _range = range;
             _index = -1;
         }
 
         public bool MoveNext() => _arena is not null && ++_index < _range.Count;
 
-        public readonly StringRef Current => new(_arena, _arena!.GetStringIdAt(_range, _index));
+        public readonly StringRef Current => new(ArenaChecked, ArenaChecked!.GetStringIdAt(_range, _index));
     }
 }
 
@@ -47,11 +83,29 @@ public readonly struct StringRefList
 public readonly struct StepRefList
 {
     private readonly AstArena? _arena;
+#if DEBUG
+    private readonly int _generation;
+#endif
+
+    private AstArena? ArenaChecked
+    {
+        get
+        {
+#if DEBUG
+            _arena?.AssertGeneration(_generation);
+#endif
+            return _arena;
+        }
+    }
+
     private readonly StepIdRange _range;
 
     internal StepRefList(AstArena? arena, StepIdRange range)
     {
         _arena = arena;
+#if DEBUG
+        _generation = arena?.Generation ?? 0;
+#endif
         _range = range;
     }
 
@@ -59,26 +113,44 @@ public readonly struct StepRefList
 
     public int Count => _range.Count;
 
-    public StepRef this[int index] => new(_arena, _arena!.GetStepIdAt(_range, index));
+    public StepRef this[int index] => new(ArenaChecked, ArenaChecked!.GetStepIdAt(_range, index));
 
-    public Enumerator GetEnumerator() => new(_arena, _range);
+    public Enumerator GetEnumerator() => new(ArenaChecked, _range);
 
     public struct Enumerator
     {
         private readonly AstArena? _arena;
+#if DEBUG
+        private readonly int _generation;
+#endif
+
+        private readonly AstArena? ArenaChecked
+        {
+            get
+            {
+#if DEBUG
+                _arena?.AssertGeneration(_generation);
+#endif
+                return _arena;
+            }
+        }
+
         private readonly StepIdRange _range;
         private int _index;
 
         internal Enumerator(AstArena? arena, StepIdRange range)
         {
             _arena = arena;
+#if DEBUG
+            _generation = arena?.Generation ?? 0;
+#endif
             _range = range;
             _index = -1;
         }
 
         public bool MoveNext() => _arena is not null && ++_index < _range.Count;
 
-        public readonly StepRef Current => new(_arena, _arena!.GetStepIdAt(_range, _index));
+        public readonly StepRef Current => new(ArenaChecked, ArenaChecked!.GetStepIdAt(_range, _index));
     }
 }
 
@@ -86,11 +158,29 @@ public readonly struct StepRefList
 public readonly struct EventRefList
 {
     private readonly AstArena? _arena;
+#if DEBUG
+    private readonly int _generation;
+#endif
+
+    private AstArena? ArenaChecked
+    {
+        get
+        {
+#if DEBUG
+            _arena?.AssertGeneration(_generation);
+#endif
+            return _arena;
+        }
+    }
+
     private readonly NodeRange _range;
 
     internal EventRefList(AstArena? arena, NodeRange range)
     {
         _arena = arena;
+#if DEBUG
+        _generation = arena?.Generation ?? 0;
+#endif
         _range = range;
     }
 
@@ -98,26 +188,44 @@ public readonly struct EventRefList
 
     public int Count => _range.Count;
 
-    public EventRef this[int index] => new(_arena, _range.First + index);
+    public EventRef this[int index] => new(ArenaChecked, _range.First + index);
 
-    public Enumerator GetEnumerator() => new(_arena, _range);
+    public Enumerator GetEnumerator() => new(ArenaChecked, _range);
 
     public struct Enumerator
     {
         private readonly AstArena? _arena;
+#if DEBUG
+        private readonly int _generation;
+#endif
+
+        private readonly AstArena? ArenaChecked
+        {
+            get
+            {
+#if DEBUG
+                _arena?.AssertGeneration(_generation);
+#endif
+                return _arena;
+            }
+        }
+
         private readonly NodeRange _range;
         private int _index;
 
         internal Enumerator(AstArena? arena, NodeRange range)
         {
             _arena = arena;
+#if DEBUG
+            _generation = arena?.Generation ?? 0;
+#endif
             _range = range;
             _index = -1;
         }
 
         public bool MoveNext() => _arena is not null && ++_index < _range.Count;
 
-        public readonly EventRef Current => new(_arena, _range.First + _index);
+        public readonly EventRef Current => new(ArenaChecked, _range.First + _index);
     }
 }
 
@@ -125,11 +233,29 @@ public readonly struct EventRefList
 public readonly struct ScheduleRefList
 {
     private readonly AstArena? _arena;
+#if DEBUG
+    private readonly int _generation;
+#endif
+
+    private AstArena? ArenaChecked
+    {
+        get
+        {
+#if DEBUG
+            _arena?.AssertGeneration(_generation);
+#endif
+            return _arena;
+        }
+    }
+
     private readonly NodeRange _range;
 
     internal ScheduleRefList(AstArena? arena, NodeRange range)
     {
         _arena = arena;
+#if DEBUG
+        _generation = arena?.Generation ?? 0;
+#endif
         _range = range;
     }
 
@@ -137,26 +263,44 @@ public readonly struct ScheduleRefList
 
     public int Count => _range.Count;
 
-    public ScheduleEntryRef this[int index] => new(_arena, in _arena!.GetScheduleEntryAt(_range, index));
+    public ScheduleEntryRef this[int index] => new(ArenaChecked, in ArenaChecked!.GetScheduleEntryAt(_range, index));
 
-    public Enumerator GetEnumerator() => new(_arena, _range);
+    public Enumerator GetEnumerator() => new(ArenaChecked, _range);
 
     public struct Enumerator
     {
         private readonly AstArena? _arena;
+#if DEBUG
+        private readonly int _generation;
+#endif
+
+        private readonly AstArena? ArenaChecked
+        {
+            get
+            {
+#if DEBUG
+                _arena?.AssertGeneration(_generation);
+#endif
+                return _arena;
+            }
+        }
+
         private readonly NodeRange _range;
         private int _index;
 
         internal Enumerator(AstArena? arena, NodeRange range)
         {
             _arena = arena;
+#if DEBUG
+            _generation = arena?.Generation ?? 0;
+#endif
             _range = range;
             _index = -1;
         }
 
         public bool MoveNext() => _arena is not null && ++_index < _range.Count;
 
-        public readonly ScheduleEntryRef Current => new(_arena, in _arena!.GetScheduleEntryAt(_range, _index));
+        public readonly ScheduleEntryRef Current => new(ArenaChecked, in ArenaChecked!.GetScheduleEntryAt(_range, _index));
     }
 }
 
@@ -164,11 +308,29 @@ public readonly struct ScheduleRefList
 public readonly struct RawYamlRefList
 {
     private readonly AstArena? _arena;
+#if DEBUG
+    private readonly int _generation;
+#endif
+
+    private AstArena? ArenaChecked
+    {
+        get
+        {
+#if DEBUG
+            _arena?.AssertGeneration(_generation);
+#endif
+            return _arena;
+        }
+    }
+
     private readonly NodeRange _range;
 
     internal RawYamlRefList(AstArena? arena, NodeRange range)
     {
         _arena = arena;
+#if DEBUG
+        _generation = arena?.Generation ?? 0;
+#endif
         _range = range;
     }
 
@@ -176,26 +338,44 @@ public readonly struct RawYamlRefList
 
     public int Count => _range.Count;
 
-    public RawYamlRef this[int index] => new(_arena, _arena!.GetRawYamlIdAt(_range, index));
+    public RawYamlRef this[int index] => new(ArenaChecked, ArenaChecked!.GetRawYamlIdAt(_range, index));
 
-    public Enumerator GetEnumerator() => new(_arena, _range);
+    public Enumerator GetEnumerator() => new(ArenaChecked, _range);
 
     public struct Enumerator
     {
         private readonly AstArena? _arena;
+#if DEBUG
+        private readonly int _generation;
+#endif
+
+        private readonly AstArena? ArenaChecked
+        {
+            get
+            {
+#if DEBUG
+                _arena?.AssertGeneration(_generation);
+#endif
+                return _arena;
+            }
+        }
+
         private readonly NodeRange _range;
         private int _index;
 
         internal Enumerator(AstArena? arena, NodeRange range)
         {
             _arena = arena;
+#if DEBUG
+            _generation = arena?.Generation ?? 0;
+#endif
             _range = range;
             _index = -1;
         }
 
         public bool MoveNext() => _arena is not null && ++_index < _range.Count;
 
-        public readonly RawYamlRef Current => new(_arena, _arena!.GetRawYamlIdAt(_range, _index));
+        public readonly RawYamlRef Current => new(ArenaChecked, ArenaChecked!.GetRawYamlIdAt(_range, _index));
     }
 }
 
@@ -203,11 +383,29 @@ public readonly struct RawYamlRefList
 public readonly struct CombinationsRefList
 {
     private readonly AstArena? _arena;
+#if DEBUG
+    private readonly int _generation;
+#endif
+
+    private AstArena? ArenaChecked
+    {
+        get
+        {
+#if DEBUG
+            _arena?.AssertGeneration(_generation);
+#endif
+            return _arena;
+        }
+    }
+
     private readonly NodeRange _range;
 
     internal CombinationsRefList(AstArena? arena, NodeRange range)
     {
         _arena = arena;
+#if DEBUG
+        _generation = arena?.Generation ?? 0;
+#endif
         _range = range;
     }
 
@@ -215,26 +413,44 @@ public readonly struct CombinationsRefList
 
     public int Count => _range.Count;
 
-    public MatrixCombinationsRef this[int index] => new(_arena, in _arena!.GetMatrixCombinationsAt(_range, index));
+    public MatrixCombinationsRef this[int index] => new(ArenaChecked, in ArenaChecked!.GetMatrixCombinationsAt(_range, index));
 
-    public Enumerator GetEnumerator() => new(_arena, _range);
+    public Enumerator GetEnumerator() => new(ArenaChecked, _range);
 
     public struct Enumerator
     {
         private readonly AstArena? _arena;
+#if DEBUG
+        private readonly int _generation;
+#endif
+
+        private readonly AstArena? ArenaChecked
+        {
+            get
+            {
+#if DEBUG
+                _arena?.AssertGeneration(_generation);
+#endif
+                return _arena;
+            }
+        }
+
         private readonly NodeRange _range;
         private int _index;
 
         internal Enumerator(AstArena? arena, NodeRange range)
         {
             _arena = arena;
+#if DEBUG
+            _generation = arena?.Generation ?? 0;
+#endif
             _range = range;
             _index = -1;
         }
 
         public bool MoveNext() => _arena is not null && ++_index < _range.Count;
 
-        public readonly MatrixCombinationsRef Current => new(_arena, in _arena!.GetMatrixCombinationsAt(_range, _index));
+        public readonly MatrixCombinationsRef Current => new(ArenaChecked, in ArenaChecked!.GetMatrixCombinationsAt(_range, _index));
     }
 }
 
@@ -242,11 +458,29 @@ public readonly struct CombinationsRefList
 public readonly struct CombinationEntryRefList
 {
     private readonly AstArena? _arena;
+#if DEBUG
+    private readonly int _generation;
+#endif
+
+    private AstArena? ArenaChecked
+    {
+        get
+        {
+#if DEBUG
+            _arena?.AssertGeneration(_generation);
+#endif
+            return _arena;
+        }
+    }
+
     private readonly NodeRange _range;
 
     internal CombinationEntryRefList(AstArena? arena, NodeRange range)
     {
         _arena = arena;
+#if DEBUG
+        _generation = arena?.Generation ?? 0;
+#endif
         _range = range;
     }
 
@@ -254,26 +488,44 @@ public readonly struct CombinationEntryRefList
 
     public int Count => _range.Count;
 
-    public RawYamlRefMap this[int index] => new(_arena, _arena!.GetCombinationEntryAt(_range, index));
+    public RawYamlRefMap this[int index] => new(ArenaChecked, ArenaChecked!.GetCombinationEntryAt(_range, index));
 
-    public Enumerator GetEnumerator() => new(_arena, _range);
+    public Enumerator GetEnumerator() => new(ArenaChecked, _range);
 
     public struct Enumerator
     {
         private readonly AstArena? _arena;
+#if DEBUG
+        private readonly int _generation;
+#endif
+
+        private readonly AstArena? ArenaChecked
+        {
+            get
+            {
+#if DEBUG
+                _arena?.AssertGeneration(_generation);
+#endif
+                return _arena;
+            }
+        }
+
         private readonly NodeRange _range;
         private int _index;
 
         internal Enumerator(AstArena? arena, NodeRange range)
         {
             _arena = arena;
+#if DEBUG
+            _generation = arena?.Generation ?? 0;
+#endif
             _range = range;
             _index = -1;
         }
 
         public bool MoveNext() => _arena is not null && ++_index < _range.Count;
 
-        public readonly RawYamlRefMap Current => new(_arena, _arena!.GetCombinationEntryAt(_range, _index));
+        public readonly RawYamlRefMap Current => new(ArenaChecked, ArenaChecked!.GetCombinationEntryAt(_range, _index));
     }
 }
 
@@ -281,11 +533,29 @@ public readonly struct CombinationEntryRefList
 public readonly struct WorkflowCallEventInputRefList
 {
     private readonly AstArena? _arena;
+#if DEBUG
+    private readonly int _generation;
+#endif
+
+    private AstArena? ArenaChecked
+    {
+        get
+        {
+#if DEBUG
+            _arena?.AssertGeneration(_generation);
+#endif
+            return _arena;
+        }
+    }
+
     private readonly NodeRange _range;
 
     internal WorkflowCallEventInputRefList(AstArena? arena, NodeRange range)
     {
         _arena = arena;
+#if DEBUG
+        _generation = arena?.Generation ?? 0;
+#endif
         _range = range;
     }
 
@@ -293,25 +563,43 @@ public readonly struct WorkflowCallEventInputRefList
 
     public int Count => _range.Count;
 
-    public WorkflowCallEventInputRef this[int index] => new(_arena, in _arena!.GetWorkflowCallEventInputAt(_range, index));
+    public WorkflowCallEventInputRef this[int index] => new(ArenaChecked, in ArenaChecked!.GetWorkflowCallEventInputAt(_range, index));
 
-    public Enumerator GetEnumerator() => new(_arena, _range);
+    public Enumerator GetEnumerator() => new(ArenaChecked, _range);
 
     public struct Enumerator
     {
         private readonly AstArena? _arena;
+#if DEBUG
+        private readonly int _generation;
+#endif
+
+        private readonly AstArena? ArenaChecked
+        {
+            get
+            {
+#if DEBUG
+                _arena?.AssertGeneration(_generation);
+#endif
+                return _arena;
+            }
+        }
+
         private readonly NodeRange _range;
         private int _index;
 
         internal Enumerator(AstArena? arena, NodeRange range)
         {
             _arena = arena;
+#if DEBUG
+            _generation = arena?.Generation ?? 0;
+#endif
             _range = range;
             _index = -1;
         }
 
         public bool MoveNext() => _arena is not null && ++_index < _range.Count;
 
-        public readonly WorkflowCallEventInputRef Current => new(_arena, in _arena!.GetWorkflowCallEventInputAt(_range, _index));
+        public readonly WorkflowCallEventInputRef Current => new(ArenaChecked, in ArenaChecked!.GetWorkflowCallEventInputAt(_range, _index));
     }
 }

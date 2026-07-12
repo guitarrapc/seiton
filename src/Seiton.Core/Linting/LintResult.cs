@@ -13,12 +13,31 @@ public sealed class LintResult : IDisposable
     private AstArena? _arena;
     private readonly bool _ownsArena;
     private bool _disposed;
+#if DEBUG
+    private readonly int _generation;
+#endif
 
     internal LintResult(LintResultData data, AstArena? arena, bool ownsArena = true)
     {
         Data = data;
         _arena = arena;
         _ownsArena = ownsArena;
+#if DEBUG
+        _generation = arena?.Generation ?? 0;
+#endif
+    }
+
+    /// <summary>
+    /// DEBUG-only: throws when the arena was reset or disposed after this result was created
+    /// (e.g. a non-owning result outliving its <c>IncrementalParseContext</c> arena reuse).
+    /// Compiled out entirely in Release builds.
+    /// </summary>
+    [System.Diagnostics.Conditional("DEBUG")]
+    private void AssertGeneration()
+    {
+#if DEBUG
+        _arena?.AssertGeneration(_generation);
+#endif
     }
 
     /// <summary>Gets the underlying lint result data for internal consumers.</summary>
@@ -30,6 +49,7 @@ public sealed class LintResult : IDisposable
         get
         {
             ThrowIfDisposed();
+            AssertGeneration();
             return new WorkflowRef(_arena, Data.Workflow);
         }
     }
@@ -40,6 +60,7 @@ public sealed class LintResult : IDisposable
         get
         {
             ThrowIfDisposed();
+            AssertGeneration();
             return new ActionMetadataRef(_arena, Data.ActionMetadata);
         }
     }
@@ -50,6 +71,7 @@ public sealed class LintResult : IDisposable
         get
         {
             ThrowIfDisposed();
+            AssertGeneration();
             return Data.Workflow;
         }
     }
@@ -60,6 +82,7 @@ public sealed class LintResult : IDisposable
         get
         {
             ThrowIfDisposed();
+            AssertGeneration();
             return Data.Diagnostics;
         }
     }
@@ -70,6 +93,7 @@ public sealed class LintResult : IDisposable
         get
         {
             ThrowIfDisposed();
+            AssertGeneration();
             return Data.ParseDiagnostics;
         }
     }
@@ -245,7 +269,19 @@ public sealed class LintResult : IDisposable
         return new OwnedDiagnostics(diags.AsSpan().ToArray());
     }
 
-    internal AstArena Arena => _disposed || _arena is null ? throw new ObjectDisposedException(nameof(LintResult)) : _arena;
+    internal AstArena Arena
+    {
+        get
+        {
+            if (_disposed || _arena is null)
+            {
+                throw new ObjectDisposedException(nameof(LintResult));
+            }
+
+            AssertGeneration();
+            return _arena;
+        }
+    }
 
     private void ThrowIfDisposed()
     {
