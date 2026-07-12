@@ -29,7 +29,8 @@
 
 - **per-run** (LintConfig 単位): 式パース結果キャッシュ (`Config.ParseExpression`)、行頭オフセット表 (`Config.GetLineStarts()` — 行/列計算はこの表の binary search を使い、ファイル先頭からの再走査を書かない)、`BuildGithubOverride` の型キャッシュ。
 - **cross-run**: thread-static arena キャッシュ、生成済みデータ表 (`src/Seiton.Core/Generated/` — u8 リテラル比較の switch/静的メソッド群と `static readonly` 型テーブル。実行時パースなし)。
-- **incremental** (Playground): 同一オフセット + 同一ハッシュのセクション/ジョブ再利用と per-job 診断キャッシュ (`.github/docs/Seiton_Playground_csharp_spec.md`)。
+
+(Playground の incremental parse キャッシュ層は 2026-07 に削除。経緯は `.github/docs/Seiton_Playground_csharp_spec.md` §6.5。)
 
 ### 1.3 性能ゲートと計測の規約
 

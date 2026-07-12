@@ -53,9 +53,6 @@ public static class PlaygroundLintRunner
 
     private static readonly JsonWriterOptions CamelCaseWriterOptions = new() { Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping };
 
-    /// <summary>Incremental parse context for D-5b root section reuse. Guarded by <see cref="EngineGate"/>.</summary>
-    private static readonly IncrementalParseContext IncrementalCtx = new();
-
     // ─── Config Content-Hash Caching ───
 
     /// <summary>Default config used when no user config is set.</summary>
@@ -85,7 +82,7 @@ public static class PlaygroundLintRunner
     /// <summary>Gets the active lint config (user config if set, otherwise default).</summary>
     private static LintConfig ActiveConfig => _cachedConfig ?? DefaultConfig;
 
-    /// <summary>Clears shared caches and incremental parse state between playground tests.</summary>
+    /// <summary>Clears shared caches between playground tests.</summary>
     internal static void ResetSharedStateForTests()
     {
         lock (EngineGate)
@@ -94,10 +91,8 @@ public static class PlaygroundLintRunner
             _configHash = 0;
             _cachedConfigDiag = EmptyJsonArray;
             InvalidateLintCache();
-            IncrementalCtx.ResetForTests();
             ActionShaResolverOverride = null;
             ImageDigestResolverOverride = null;
-            ForceUseIncrementalLintForTests = null;
         }
     }
 
@@ -108,14 +103,6 @@ public static class PlaygroundLintRunner
 
     /// <summary>Override for image digest resolver. Used in tests; production uses <see cref="DefaultImageDigestResolver"/>.</summary>
     internal static IImageDigestResolver? ImageDigestResolverOverride;
-
-    /// <summary>
-    /// When false, <see cref="RunToJsonUtf8"/> uses full parse+lint (no incremental job cache).
-    /// Disabled in the browser: incremental reuse can retain stale spans across edits and trap in WASM AOT.
-    /// Must be evaluated per call — <see cref="OperatingSystem.IsBrowser"/> is false during static type init in WASM.
-    /// </summary>
-    internal static bool? ForceUseIncrementalLintForTests { get; set; }
-    private static bool UseIncrementalLint => ForceUseIncrementalLintForTests ?? !OperatingSystem.IsBrowser();
 
     /// <summary>
     /// Sets the lint configuration from YAML text. Uses content-hash caching (XxHash64) to
@@ -199,8 +186,8 @@ public static class PlaygroundLintRunner
                 // (avoids re-parsing the same broken config on every keystroke).
                 _configHash = hash;
                 _cachedConfigDiag = diagBytes;
-                // Config content is unchanged, but drop lint caches so the next RunLint cannot
-                // reuse per-job diagnostics produced under a prior config (D-5d).
+                // Config content is unchanged, but drop the lint output cache so the next
+                // RunLint cannot reuse output produced under a prior config.
                 InvalidateLintCache();
                 return diagBytes;
             }
@@ -259,12 +246,10 @@ public static class PlaygroundLintRunner
         _lastJsonOutput = null;
         _defaultActionShaResolver = null;
         _defaultImageDigestResolver = null;
-        IncrementalCtx.InvalidateLintDiagnosticCache();
     }
 
     /// <summary>
     /// Parses and lints <paramref name="yamlSource"/> and returns a UTF-8 JSON byte array of diagnostics.
-    /// Uses incremental parsing (D-5b) to skip unchanged root sections when possible.
     /// Suitable for WASM interop where JavaScript can decode with TextDecoder, or for
     /// scenarios where the result is written directly to a stream.
     /// </summary>
@@ -283,7 +268,7 @@ public static class PlaygroundLintRunner
                 return _lastJsonOutput;
             }
 
-            var utf8Yaml = EncodeToDoubleBuffer(yamlSource);
+            var utf8Yaml = EncodeToReusableBuffer(yamlSource);
 
             byte[] result;
 
@@ -293,27 +278,11 @@ public static class PlaygroundLintRunner
             // DiagnosticList/Diagnostic spans can reference arena-owned storage.
             // Never let a diagnostic span outlive the owning LintResult/AstArena.
             // Always serialize (or copy) diagnostics before disposing those owners.
-            // Browser path: `using var lintResult = Engine.Check(...)` then serialize inside the block.
 
-            // Action metadata files (action.yml) require classified parsing — not incremental.
+            // Action metadata files (action.yml) require classified parsing.
             if (DocumentKindClassifier.GetPathHintKind(filePath) == DocumentKind.ActionMetadata)
             {
                 result = LintActionMetadataToJsonUtf8(utf8Yaml, filePath, config);
-            }
-            else if (UseIncrementalLint)
-            {
-                // D-5b/5c: Use incremental parse to skip unchanged root sections and jobs
-                using var parseResult = IncrementalCtx.ParseIncrementally(utf8Yaml, filePath);
-
-                // D-5d: Build skip mask — reused jobs with cached diagnostics skip lint
-                var jobCount = parseResult.WorkflowNode?.Jobs.Count ?? 0;
-                var skipJobs = IncrementalCtx.BuildSkipJobs(jobCount, parseResult.WorkflowNode);
-
-                // Lint with optional job skipping
-                var lintResultData = Engine.CheckWithParseResult(utf8Yaml, filePath, config, parseResult.Data, IncrementalCtx.Arena, skipJobs);
-
-                // Merge fresh diagnostics with cached diagnostics for skipped jobs
-                result = SerializeDiagnosticsToResult(IncrementalCtx.MergeDiagnosticsWithCache(lintResultData.Diagnostics, skipJobs));
             }
             else
             {
@@ -659,33 +628,25 @@ public static class PlaygroundLintRunner
     }
 
     /// <summary>
-    /// Double-buffer for UTF-8 encoding. By alternating between two buffers,
-    /// the buffer that <see cref="IncrementalParseContext"/> stores as <c>_previousSource</c>
-    /// is never overwritten by the next call. Only allocates when the required exact size
-    /// differs from the existing buffer.
-    /// Guarded by <see cref="EngineGate"/>.
+    /// Reusable buffer for UTF-8 encoding. Guarded by <see cref="EngineGate"/>.
     /// </summary>
-    private static byte[]? _utf8BufA;
-    private static byte[]? _utf8BufB;
-    private static bool _useUtf8BufA = true;
+    private static byte[]? _utf8Buf;
 
     /// <summary>
-    /// Encodes <paramref name="source"/> into the inactive double-buffer and returns it.
-    /// Only allocates when the byte length changes from the last call to this buffer slot.
+    /// Encodes <paramref name="source"/> into the reusable buffer and returns it.
+    /// Only allocates when the byte length changes from the last call.
     /// The returned array has <c>Length == byteCount</c> (exact size) so VYaml and the
     /// parser see no trailing garbage. Must be called under <see cref="EngineGate"/>.
     /// </summary>
-    private static byte[] EncodeToDoubleBuffer(string source)
+    private static byte[] EncodeToReusableBuffer(string source)
     {
         var byteCount = Encoding.UTF8.GetByteCount(source);
-        ref var buf = ref (_useUtf8BufA ? ref _utf8BufA : ref _utf8BufB);
-        if (buf is null || buf.Length != byteCount)
+        if (_utf8Buf is null || _utf8Buf.Length != byteCount)
         {
-            buf = new byte[byteCount];
+            _utf8Buf = new byte[byteCount];
         }
-        Encoding.UTF8.GetBytes(source, buf);
-        _useUtf8BufA = !_useUtf8BufA;
-        return buf;
+        Encoding.UTF8.GetBytes(source, _utf8Buf);
+        return _utf8Buf;
     }
 }
 

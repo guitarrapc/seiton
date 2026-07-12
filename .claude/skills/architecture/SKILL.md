@@ -55,7 +55,7 @@ The AST is not an object graph. Every composite node is a struct row in a typed 
 5. Consumers (rules, tests) read through readonly-struct Ref facades (`WorkflowRef` / `JobRef` / `StepRef` / `StringRef`, ...); default refs chain safely (`HasValue == false`, never throw).
 6. Arena reset clears table counters only — no object pools, no per-node `Reset()`, no manual buffer registration. A DEBUG-only generation counter turns use-after-dispose into an immediate exception.
 
-Contract details: `.github/docs/Seiton_Parser_csharp_spec.md` §2. Design conventions, invariants (lifecycle wiring, contiguity rule, incremental-parse invariants), and lessons learned: `.github/docs/architecture_spec_ast.md`.
+Contract details: `.github/docs/Seiton_Parser_csharp_spec.md` §2. Design conventions, invariants (lifecycle wiring, contiguity rule), and lessons learned: `.github/docs/architecture_spec_ast.md`.
 
 ## Layered Architecture
 

@@ -532,7 +532,7 @@ public readonly struct JobData
 
 (Key-range fields such as `IfKeyRange` / `RunsOnKeyRange` / `StepsKeyRange` are omitted above; see the source for the full row.)
 
-The workflow `jobs:` map is a `NodeRange` over `JobEntryData { Utf8Slice Key, JobId Job }` rows — an entry/row indirection rather than a direct range over the `JobData` table, because incremental parsing splices reused `JobId`s from a previous arena next to freshly parsed ones (see `.github/docs/architecture_spec_ast.md` §6). `Job.Outputs` is a `NodeRange` over `JobOutputData { Utf8Slice Key, StringNodeId Value }` rows. Both maps are case-insensitive.
+The workflow `jobs:` map is a `NodeRange` over `JobEntryData { Utf8Slice Key, JobId Job }` rows — an entry/row indirection rather than a direct range over the `JobData` table, so map entries and job rows stay independently addressable (see `.github/docs/architecture_spec_ast.md` §6). `Job.Outputs` is a `NodeRange` over `JobOutputData { Utf8Slice Key, StringNodeId Value }` rows. Both maps are case-insensitive.
 
 ### 2.7 Step and Exec (Spec §2.5)
 
@@ -831,7 +831,7 @@ The parser never aborts on a single error. Each parse function:
 
 #### Fatal Parse Explanatory Hints (C# Implementation)
 
-After a fatal YAML parse, `ParseCore`, `ParseClassified`, and `ParseIncremental` catch blocks first require a reliable VYaml position in the exception message (`Line:`, `Col:`, and parseable `Idx:` markers), then call `TryGetPlainScalarColonHint(source, errorOffset)` to detect common authoring mistakes. If a `run:` or `script:` key with a plain scalar value containing `: ` is found near the error position, the diagnostic's `Help` field is populated with an explanatory message.
+After a fatal YAML parse, the `ParseCore` and `ParseClassified` catch blocks first require a reliable VYaml position in the exception message (`Line:`, `Col:`, and parseable `Idx:` markers), then call `TryGetPlainScalarColonHint(source, errorOffset)` to detect common authoring mistakes. If a `run:` or `script:` key with a plain scalar value containing `: ` is found near the error position, the diagnostic's `Help` field is populated with an explanatory message.
 
 Implementation: `WorkflowParser.PlainScalarHint.cs` (partial class).
 

@@ -13,7 +13,7 @@
 The Seiton Playground C# implementation provides:
 
 1. **WASM host** (`Seiton.Playground`) — `Microsoft.NET.Sdk.WebAssembly` project with `[JSExport]`/`[JSImport]` interop
-2. **Core logic** (`Seiton.Playground.Core`) — testable lint runner, incremental parse context, JSON serialization
+2. **Core logic** (`Seiton.Playground.Core`) — testable lint runner, JSON serialization
 3. **Tests** (`Seiton.Playground.Tests`) — unit tests for core logic + Playwright browser UI tests
 
 ### 0.2 Technology Choice
@@ -42,16 +42,15 @@ References:
 | `src/Seiton.Playground.Core/PlaygroundDiagnosticDto.cs` | Diagnostic DTO |
 | `src/Seiton.Playground.Core/PlaygroundJsonSerializerContext.cs` | Source Generator JSON context |
 | `src/Seiton.Playground.Core/PlaygroundBuildInfo.cs` | Version string logic |
-| `src/Seiton.Playground.Core/IncrementalParseContext.cs` | Incremental parse (D-5b) |
 | `tests/Seiton.Playground.Tests/` | Unit + Playwright tests |
 
 ### 0.4 Design Decisions
 
 1. Separate `Seiton.Playground` (WASM host) from `Seiton.Playground.Core` (logic) so core logic can be unit-tested without a WASM environment.
 2. Reuse a single static `LintEngine` instance to amortize rule setup cost and avoid GC pressure on the constrained WASM heap.
-3. In the browser, `PlaygroundLintRunner` disables incremental parse/job-cache reuse (`UseIncrementalLint` is false when `OperatingSystem.IsBrowser()` is true at call time). Static initialization runs before the WASM host is ready, so the flag must not be captured in a static field initializer.
-3. All `[JSExport]` methods catch exceptions internally — unhandled exceptions crossing the interop boundary abort the Mono WASM runtime irreversibly.
-4. Use `Utf8JsonWriter` (not `JsonSerializer` with reflection) for zero-allocation diagnostic serialization in the hot path.
+3. Every lint call is a full parse + full lint. Incremental parsing was removed (see §6.5) — it had no production consumer and its lifetime hazards outweighed its benefit.
+4. All `[JSExport]` methods catch exceptions internally — unhandled exceptions crossing the interop boundary abort the Mono WASM runtime irreversibly.
+5. Use `Utf8JsonWriter` (not `JsonSerializer` with reflection) for zero-allocation diagnostic serialization in the hot path.
 
 ### 0.5 Seiton.Core WASM Compatibility
 
@@ -161,11 +160,10 @@ Key implementation details:
 - **Engine reuse**: Static `LintEngine` avoids allocating 50+ rule objects per keystroke. `LintEngine.Check()` clears internal state at the start of each call; reuse is safe.
 - **Lock**: WASM is single-threaded, but the lock ensures correctness for parallel test runners on desktop .NET.
 - **JSON serialization**: `ArrayBufferWriter<byte>` + `Utf8JsonWriter` (zero-allocation hot path). `JsonWriterOptions` with `UnsafeRelaxedJsonEscaping`.
-- **Double buffer**: Alternating `_utf8BufA`/`_utf8BufB` for UTF-8 encoding prevents overwriting the buffer that `IncrementalParseContext` holds as previous source.
+- **Reusable encode buffer**: `_utf8Buf` is reused for UTF-8 encoding; it only reallocates when the byte length changes (the parser requires an exact-size array).
 - **Identity-based short circuit**: If `yamlSource` (by reference) and `filePath` are identical to the last call, returns cached JSON output immediately.
 - **Byte-level cache reuse**: When serialized JSON bytes are content-equal to the previous result, the prior `byte[]` instance is reused (avoids allocation for unchanged output).
-- **Diagnostic lifetime invariant**: `DiagnosticList`/`ReadOnlySpan<Diagnostic>` values are consumed while the owning `LintResult`/`AstArena` is still alive. `RunToJsonUtf8` serializes diagnostics before those owners are disposed. Browser/workflow path uses `using var lintResult = Engine.Check(...)`; action metadata uses `LintActionMetadataToJsonUtf8` (`try`/`finally` around arena disposal).
-- **Test seam**: `ForceUseIncrementalLintForTests` forces incremental vs full parse+lint for desktop tests (simulates browser `UseIncrementalLint == false` without WASM).
+- **Diagnostic lifetime invariant**: `DiagnosticList`/`ReadOnlySpan<Diagnostic>` values are consumed while the owning `LintResult`/`AstArena` is still alive. `RunToJsonUtf8` serializes diagnostics before those owners are disposed. Workflow path uses `using var lintResult = Engine.Check(...)`; action metadata uses `LintActionMetadataToJsonUtf8` (`try`/`finally` around arena disposal).
 
 ### 2.1.1 Config Content-Hash Caching
 
@@ -204,37 +202,10 @@ Result: "rules:\n  runner-no-latest: warn\n  # comment"
 
 - Both methods use `_cachedConfig ?? DefaultConfig` when invoking `LintEngine.Check()`
 - The `DefaultConfig` is the same hardcoded config currently used (Fix enabled, Network default, Output default, SkipSuppressionSummary=true)
-- Config change does NOT invalidate the incremental parse cache (`IncrementalParseContext`) — config affects rule evaluation, not YAML structure
 
-### 2.2 Incremental Parse (D-5b)
+### 2.2 Parse Strategy: Full Parse Per Call
 
-`IncrementalParseContext` manages root-section hashing and per-job diagnostic caching for workflow documents:
-
-- **Source identity fast-path**: Reference-equal source skips all parsing and returns previous result
-- **File path change**: Forces full reparse to avoid stale cross-file caches
-- Skips re-parsing unchanged root sections (detected via XxHash64 of byte ranges)
-- Caches per-job diagnostics and merges them with fresh results for modified jobs
-- **Workflow-level diagnostics are never cached** — only job-range diagnostics are eligible
-- Action metadata files use classified parsing (not incremental)
-- `IncrementalParseContext` owns the previous parse's arena; section/job reuse is **ID-based**: the new arena copies all node tables wholesale from the previous arena (`BulkImportFrom`), so previous-parse IDs (e.g. reused `JobId`s) stay resolvable in the new arena and the old arena is disposed immediately after every parse (no multi-arena retention)
-
-#### 2.2.1 Guardrails
-
-| Guard | Threshold | Behavior |
-|---|---|---|
-| Growth threshold | 3× full-parse baseline entry count | Forces full reparse |
-| Diagnostic-tainted sections | Per-section flag | Tainted sections are never skipped on subsequent parses |
-| `needs` dependency invalidation | Any changed job | Reused jobs with `needs` referencing changed jobs are re-parsed |
-
-#### 2.2.2 Skip-Mask Policy
-
-- `name`, `run-name` root keys: excluded from skip mask (always re-parsed)
-- `jobs` root key: excluded from root skip mask (handled at job level)
-- Any changed tracked root key: disables root-level skipping entirely
-
-#### 2.2.3 Merged Output
-
-- Diagnostics from cached + fresh jobs are deduplicated and position-sorted for stable output
+Every `RunToJsonUtf8` call performs a full parse + full lint. Workflow files use `Engine.Check`; action metadata files (`action.yml`) use classified parsing via `LintActionMetadataToJsonUtf8`. The only caches are the identity-based short circuit and the byte-level output reuse (§2.1). Incremental parsing existed previously (D-5b/5c/5d) but was removed — see §6.5 for the decision record.
 
 ### 2.3 ApplyAllFixes Strategy
 
@@ -440,9 +411,18 @@ The WASM heap is constrained. Creating a new `LintEngine` per keystroke allocate
 1. JS debounce prevents rapid `SetConfig` calls during typing
 2. WASM hash check prevents re-parse when edits are purely cosmetic (whitespace/blank lines)
 
-### 6.3 Double Buffer for UTF-8 Source Preservation
+### 6.5 Incremental Parse Was Removed (2026-07)
 
-`IncrementalParseContext` retains a reference to the previous source buffer. The double-buffer pattern (`_utf8BufA`/`_utf8BufB`) alternates encoding targets so the previous buffer is never overwritten by the current call.
+**History**: Incremental parsing (D-5b root-section skip / D-5c job reuse / D-5d per-job diagnostic cache) was built to reduce WASM allocations per keystroke and showed large benchmark wins at the time (PartialChange Large: -99.4% allocation). It was later disabled in the browser after a "memory access out of bounds" crash during typing (#125) — incremental reuse could retain stale spans across edits and trap under WASM AOT. From that point the only runtime that ever executed the incremental path was the desktop test suite.
+
+**Decision**: Remove the entire mechanism (`IncrementalParseContext`, `WorkflowParser.ParseIncremental`, `AstArena.BulkImportFrom`/`RebindSource`, `LintEngine`/`WorkflowVisitor` job-skip support). Every playground lint call is now a full parse + full lint.
+
+**Why**:
+1. **No production consumer** — the CLI never used it, and the browser (the playground's only runtime) had it disabled.
+2. **Memory-safety tax** — it imposed lifetime invariants (pooled buffer reuse, arena rebinding, previous-source retention) that every AST/arena change had to preserve, and violations surfaced as native WASM traps rather than managed exceptions.
+3. **It had become a net loss** — after the data-oriented AST redesign (#183) made full parse cheap, the committed `PlaygroundLintBenchmark` baseline showed the incremental path (`PartialChange`) was *slower* than full parse (`FullChange`) and allocated *more* (Small: 1.16 ms / 123 KB vs 0.20 ms / 52 KB), because section scanning/hashing plus wholesale table copies (`BulkImportFrom`) outweighed the skipped work.
+
+**Lesson**: An optimization that requires cross-call buffer lifetime invariants is a liability in WASM AOT, where violations are unrecoverable runtime aborts. Re-check an optimization's benefit after each major architecture change — the AST redesign silently inverted this one's cost/benefit. If large-document typing latency ever becomes a requirement, design incrementality fresh (position-shift-tolerant, e.g. LSP-style) instead of resurrecting the byte-identical-offset design.
 
 ---
 

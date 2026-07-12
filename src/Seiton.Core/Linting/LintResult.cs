@@ -29,7 +29,7 @@ public sealed class LintResult : IDisposable
 
     /// <summary>
     /// DEBUG-only: throws when the arena was reset or disposed after this result was created
-    /// (e.g. a non-owning result outliving its <c>IncrementalParseContext</c> arena reuse).
+    /// (e.g. a non-owning result outliving the arena it borrows).
     /// Compiled out entirely in Release builds.
     /// </summary>
     [System.Diagnostics.Conditional("DEBUG")]
