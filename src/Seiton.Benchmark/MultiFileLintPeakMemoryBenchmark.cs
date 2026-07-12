@@ -96,8 +96,7 @@ internal static class PeakHeapRecorder
 
 /// <summary>
 /// Measures peak live managed heap during multi-file lint.
-/// Unlike <see cref="MultiFileLintBenchmark"/> (which reports cumulative <c>Allocated</c>),
-/// this benchmark reports <c>PeakHeap</c> (bytes above pre-iteration baseline).
+/// Reports <c>PeakHeap</c> (bytes above pre-iteration baseline), not cumulative <c>Allocated</c>.
 /// </summary>
 [Config(typeof(PeakMemoryBenchmarkConfig))]
 [Orderer(BenchmarkDotNet.Order.SummaryOrderPolicy.FastestToSlowest)]

@@ -3,8 +3,7 @@
 namespace Seiton.Benchmark;
 
 /// <summary>
-/// Sequential/parallel multi-file lint loops shared by <see cref="MultiFileLintBenchmark"/>
-/// and <see cref="MultiFileLintPeakMemoryBenchmark"/>.
+/// Sequential/parallel multi-file lint loops used by <see cref="MultiFileLintPeakMemoryBenchmark"/>.
 /// </summary>
 internal static class MultiFileLintHarness
 {

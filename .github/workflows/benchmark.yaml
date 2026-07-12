@@ -21,7 +21,6 @@ on:
           - "*IanaTimeZoneLookupBenchmark*"
           - "*InputDiscoveryBenchmark*"
           - "*LintConfigBenchmark*"
-          - "*MultiFileLintBenchmark*"
           - "*MultiFileLintPeakMemoryBenchmark*"
           - "*PlaygroundLintBenchmark*"
           - "*PlaygroundSharePayloadBenchmark*"
