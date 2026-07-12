@@ -212,6 +212,8 @@ dotnet test --project tests/Seiton.Core.Tests --treenode-filter /*/*/ExpressionT
 
 **Line endings**: `tests/Seiton.Core.Tests/fixtures` are stored with LF line endings (`.gitattributes`). Actionlint compat tests normalize YAML newlines when loading fixtures so a Windows checkout with `core.autocrlf` does not shift byte indexes in golden `.out` / `.seiton.out` expectations.
 
+**CRLF editing trap**: source files are CRLF on checkout. `perl`/`sed` multiline patterns anchored on `\n` fail **silently** (no match, no error) against CRLF files — a "successful" bulk edit may have changed nothing. For mechanical multi-site edits (e.g. arena lifecycle wiring), use a structured editor and verify every landing site with `grep` afterward.
+
 ### Assertions
 
 Use TUnit async assertions:

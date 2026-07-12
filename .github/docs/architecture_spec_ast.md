@@ -1,146 +1,146 @@
-# seiton AST アーキテクチャ (データ指向設計)
+# Seiton AST Architecture (Data-Oriented Design)
 
-> 本書は AST の設計思想・規約・不変条件を定義する恒久ドキュメントである。
-> C# の型シグネチャレベルの契約は `.github/docs/Seiton_Parser_csharp_spec.md` §2、
-> ルール実装者向けの読み取り API 規約は `src/Seiton.Core/Linting/Rules/AGENTS.md`、
-> 性能要求の詳細は `.github/docs/architecture_spec_performance.md` と
-> `.claude/skills/performance-requirements/SKILL.md` を参照。
+> This is the permanent design document for the AST: concepts, conventions, and invariants.
+> For the C# type-signature-level contract see `.github/docs/Seiton_Parser_csharp_spec.md` §2,
+> for the rule-author read API see `src/Seiton.Core/Linting/Rules/AGENTS.md`,
+> and for performance requirements see `.github/docs/architecture_spec_performance.md` and
+> `.claude/skills/performance-requirements/SKILL.md`.
 
-## 1. コンセプト (WHAT)
+## 1. Concept (WHAT)
 
-AST は「クラスオブジェクトのグラフ」ではなく、**`AstArena` が単独所有する flat struct 行テーブルの集合**である。
+The AST is not a graph of class objects. It is a **set of flat struct row tables solely owned by `AstArena`**.
 
-- 全複合ノード (Job / Step / Event / Permissions / Matrix / ...) は、ノード種別ごとの `NodeTable<T>` (ArrayPool-backed 追記専用配列) の**行**。
-- ノード参照は **1-based の型付き ID** (`JobId`, `StepId`, `PermissionsId`, ...)。`default` = 不在。
-- 子リストは共有ストアへの **(first, count) レンジ** (`NodeRange` / `StringIdRange` / `StepIdRange`)。
-- マップは**キー (`Utf8Slice`) を行に内蔵した行テーブルへのレンジ**。lookup はレンジ内線形スキャン。
-- 多態ノードは **tagged union**: `Kind` enum + kind 別 payload テーブルへの 1-based index。
-- ルール・テストが触れる公開面は **readonly struct の Ref ファサード** (`WorkflowRef` / `JobRef` / `StepRef` / `StringRef` / 各種リスト・マップ Ref) のみ。arena の生アクセサはルール作者の API ではない。
-- ルート (`Workflow` / `ActionMetadata`) のみ、ID とレンジを束ねる薄いクラスとして残る。
+- Every composite node (Job / Step / Event / Permissions / Matrix / ...) is a **row** in a per-node-kind `NodeTable<T>` (an ArrayPool-backed append-only array).
+- Node references are **1-based typed IDs** (`JobId`, `StepId`, `PermissionsId`, ...). `default` = absent.
+- Child lists are **(first, count) ranges** over shared stores (`NodeRange` / `StringIdRange` / `StepIdRange`).
+- Maps are **ranges over row tables with the key (`Utf8Slice`) embedded in the row**; lookup is a linear scan within the range.
+- Polymorphic nodes are **tagged unions**: a `Kind` enum plus a 1-based index into a kind-specific payload table.
+- The only surface rules and tests touch is the **readonly-struct Ref facade layer** (`WorkflowRef` / `JobRef` / `StepRef` / `StringRef` and the list/map refs). Raw arena accessors are not a rule-author API.
+- Only the roots (`Workflow` / `ActionMetadata`) remain as thin classes that bundle IDs and ranges.
 
-## 2. 選定理由 (WHY)
+## 2. Rationale (WHY)
 
-旧実装 (プール付き mutable クラス + 後付け arena) で顕在化した複雑さの回収が目的である。**速度向上は目的ではない**(移行前の時点で Medium/Large は Gen0=0 であり、GC は wall-clock に現れていなかった)。
+The goal was to pay down the complexity that had accumulated in the previous implementation (pooled mutable classes with an arena bolted on). **Speed was not the goal** — Medium/Large workflows were already at zero Gen0 collections before the migration, so the GC did not appear in wall-clock time.
 
-回収した問題:
+Problems that were eliminated:
 
-1. スカラーは arena・複合ノードは `Reset()` 付きオブジェクトプール、という二重ライフタイム機構。フィールド追加のたびに `Reset()` の手動保守が必要だった。
-2. `ArenaList<T>` (struct) を `IReadOnlyList<T>` フィールドに代入した時点で boxing し、ゼロアロケーション目的の型がアロケーションを産んでいた。
-3. プール系抽象の並立 (`ArenaList` / `SliceMap` / `AstNodePool` / 手動バッファ登録) と、登録漏れによるリーク。
-4. use-after-reset がサイレントに**別ファイルのデータ**を返す事故。
-5. arena の制約 (`Arena.GetStringValue`、zero-copy 規約) がルール作者にそのまま露出し、ルール実装の難度が高かった。
+1. A dual lifetime mechanism: scalars lived in a true arena while 28 composite node kinds were mutable pooled classes with `Reset()` methods that had to be hand-maintained on every field addition.
+2. Assigning `ArenaList<T>` (a struct) to an `IReadOnlyList<T>` field boxed it — a type built for zero allocation was producing allocations.
+3. Multiple parallel pooling abstractions (`ArenaList` / `SliceMap` / `AstNodePool` / manual buffer registration) where a missed registration leaked.
+4. Use-after-reset silently returned **another file's data**.
+5. Arena constraints (`Arena.GetStringValue`, zero-copy conventions) leaked directly into the rule-author API, making rules hard to write.
 
-移行後、これらの機構はすべて削除済みであり、arena のリセットは「全テーブルのカウンタをゼロにする」だけになった。
+All of these mechanisms are deleted. Resetting the arena is now nothing more than zeroing every table counter.
 
-トレードオフとして意図的に受け入れたもの:
+Trade-off accepted deliberately:
 
-- sealed クラス階層への `is` パターンが持っていた **switch 網羅性のコンパイルエラーは、Kind enum switch の警告ベースに弱まった**。tagged union 化 (アロケーション根絶・ライフタイム一元化) との交換である。
+- The **compile-time `switch` exhaustiveness that sealed class hierarchies provided is weakened to warning-based checking** over `Kind` enums. This was exchanged for uniform node lifetime, zero boxing, and pool-free reset.
 
-## 3. ストレージモデルの規約
+## 3. Storage Model Conventions
 
-### 3.1 ID とレンジ
+### 3.1 IDs and ranges
 
-| 型 | 表現 | `default` の意味 |
+| Type | Representation | Meaning of `default` |
 |---|---|---|
-| 型付き ID (`JobId` 等) | 1-based int の `readonly record struct`。`HasValue` / internal `Index` | キー不在 (旧 `null`) |
-| `NodeRange` | 行テーブルへの (first, count) | キー不在 |
-| `StringIdRange` / `StepIdRange` | 共有 ID ストア (`StringNodeId[]` / `StepId[]`) への (first, count) | キー不在 |
+| Typed ID (`JobId`, ...) | 1-based int `readonly record struct` with `HasValue` / internal `Index` | key absent (the former `null`) |
+| `NodeRange` | (first, count) over a row table | key absent |
+| `StringIdRange` / `StepIdRange` | (first, count) over a shared ID store (`StringNodeId[]` / `StepId[]`) | key absent |
 
-**「キーは在るが空」と「キー不在」は区別する**: 前者は anchored な空レンジ (`HasValue == true`, `Count == 0`)、後者は `default`。パーサの回復パスがどちらを返すかは旧実装の観測可能挙動を保存して決めてある (例: `ParseSteps` は `steps:` の値が sequence である限り、要素が全部エラーでも常に anchored レンジを返す。値が sequence ですらない場合は呼ばれず `default` = 不在になる)。この区別を崩すとルールの診断有無が変わる。
+**"Present but empty" and "absent" are distinct**: the former is an anchored empty range (`HasValue == true`, `Count == 0`), the latter is `default`. Which one a parser recovery path returns was chosen to preserve the observable behavior of the previous implementation (example: `ParseSteps` always returns an anchored range as long as the `steps:` value is a sequence — even if every element errors; if the value is not a sequence at all, it is never called and the field stays `default` = absent). Breaking this distinction changes which diagnostics rules emit.
 
-### 3.2 リストの 2 形態と連続性ルール
+### 3.2 The two list shapes and the contiguity rule
 
-リストの表現は、**入れ子のパースがどのテーブルに行を差し込むか**で決まる:
+A list's representation is decided by **which table nested parsing inserts rows into**:
 
-- 入れ子のパースが**自分のテーブルに行を差し込む**場合 (例: ステップの中の `parallel:` が Step 行を追加する、RawYaml の再帰)、行テーブル直接レンジは非連続になり使えない。**スクラッチ `PooledBuffer<T>` に ID を集めてから共有 ID ストアへ一括 append** し、そのレンジを持つ (`StepIdRange` / `StringIdRange` 方式)。
-- 入れ子のパースが**他のテーブル (スカラー等) にしか触れない**場合 (例: env vars、with: 入力、jobs マップエントリ)、行は連続するので**行テーブルへ直接 append + `NodeRange`** で良い。
+- If nested parsing **inserts rows into the list's own table** (e.g. `parallel:` inside a step appends Step rows; RawYaml recursion), a direct row-table range would be non-contiguous. **Collect IDs in a scratch `PooledBuffer<T>` and bulk-append them to a shared ID store**, then hold that range (`StepIdRange` / `StringIdRange` style).
+- If nested parsing **only touches other tables** (scalars etc. — e.g. env vars, `with:` inputs, jobs map entries), rows are contiguous, so **direct append to the row table + `NodeRange`** is fine.
 
-**新しい入れ子構造を導入するときは、この前提を再確認すること。** 「値のパースがスカラーにしか触れない」前提で直接 append しているマップに、行テーブルを触る入れ子を後から足すと、レンジがサイレントに壊れる。
+**Re-verify this premise whenever you introduce a new nested structure.** If a map that direct-appends on the assumption "value parsing only touches scalar tables" later gains a nested parse that touches row tables, the range breaks silently.
 
-### 3.3 キー内蔵マップと case sensitivity
+### 3.3 Key-embedded maps and case sensitivity
 
-マップ行はキー `Utf8Slice` を行に内蔵し、lookup はレンジ内線形スキャン (旧 SliceMap と同じ計算量。GitHub Actions のマップは小さいことが前提)。case sensitivity は **lookup (Ref マップ) とパーサの重複キー検出で別々に固定**されており、変更は挙動変更である:
+Map rows embed the key `Utf8Slice` in the row; lookup is a linear scan within the range (same complexity as the old SliceMap; GitHub Actions maps are assumed small). Case sensitivity is **fixed separately for the lookup (Ref maps) and the parser's duplicate-key detection**, and changing either is a behavior change:
 
-- **Ref マップの lookup**: `permissions:` の scopes と `env:` の変数名のみ case-SENSITIVE (バイト完全一致)。それ以外すべて (jobs / outputs / with: / secrets / services / action metadata inputs·outputs / dispatch inputs / ...) は case-INSENSITIVE。
-- **パーサの重複キー検出** (`TryRegisterDynamicKey`): 到達可能な全呼び出しサイトが `caseSensitive: false` (case-INSENSITIVE)。permissions / env も含む — actionlint 互換の「note that this key is case insensitive」診断に対応する。
+- **Ref map lookup**: only `permissions:` scopes and `env:` variable names are case-SENSITIVE (exact byte equality). Everything else (jobs / outputs / `with:` / secrets / services / action metadata inputs·outputs / dispatch inputs / ...) is case-INSENSITIVE.
+- **Parser duplicate-key detection** (`TryRegisterDynamicKey`): every reachable call site passes `caseSensitive: false` (case-INSENSITIVE) — including permissions and env, matching actionlint's "note that this key is case insensitive" diagnostics.
 
-case-insensitive 比較は `SpanHelpers.EqualsAsciiIgnoreCase` に集約されている。
+Case-insensitive comparison is centralized in `SpanHelpers.EqualsAsciiIgnoreCase`.
 
-### 3.4 tagged union
+### 3.4 Tagged unions
 
-- 判別子 enum は**必ず `None = 0` を先頭に置く** (default ref の `Kind` が有効値を返す事故の防止)。
-- payload は kind 別テーブルへの **1-based index** (0 = payload なし)。
-- パース手順は「**payload 行を先に append → 最後に本体行を 1 回 append**」(本体テーブルの連続性を守る)。
-- 現在の tagged union: `StepData.ExecKind + ExecPayload`、`EventData.Kind + Payload`、`RawYamlData.Kind`。
+- Discriminator enums **must place `None = 0` first** (prevents a `default` ref's `Kind` from reading as a valid value).
+- Payloads are **1-based indexes** into kind-specific tables (0 = no payload).
+- Parse order is "**append the payload row first → append the body row once at the end**" (keeps the body table contiguous).
+- Current tagged unions: `StepData.ExecKind + ExecPayload`, `EventData.Kind + Payload`, `RawYamlData.Kind`.
 
-### 3.5 行 struct の不変性とローカル蓄積
+### 3.5 Row immutability and local accumulation
 
-行 struct は `init` プロパティのみで、**追記後の mutate はできない**。パーサは値をローカル変数に蓄積し、ノードの解析完了時に 1 回で行化する。複数の YAML キーにまたがって 1 ノードが構成される場合 (例: 旧 workflow-call の uses/with/secrets) も同様にローカル蓄積で解決する。
+Row structs have `init` properties only — **rows cannot be mutated after append**. Parsers accumulate values in locals and materialize the row once when the node's parse completes. When one node is assembled from multiple YAML keys (e.g. the former workflow-call's uses/with/secrets), the same local-accumulation pattern applies.
 
-## 4. Ref ファサードの規約 (公開 API)
+## 4. Ref Facade Conventions (Public API)
 
-- `ParseResult.Workflow` / `LintResult.Workflow` は `WorkflowRef` を返す。ルール・テストは Ref だけで完結させる。
-- **default ref は安全に連鎖する**: `job.Strategy.Matrix.Rows` は途中がどれだけ不在でも throw せず、末端が `HasValue == false` / 空になる。ルール側の null ガードは原則不要。
-- 不在チェックは `HasValue`。struct なので `is null` / `is { }` パターンは使えない (`is { }` は常に true になる — 機械的置換の罠)。テストで boxed struct に `IsNull()` / `IsNotNull()` を使うとコンパイルは通るが実行時に誤判定する — 必ず `HasValue` を assert する。
-- 多態は `Kind` の switch + `AsRun()` / `AsAction()` 等の型付きアクセサ。Kind 不一致の `As*()` は default ref を返す。
-- Ref の等価は (arena, id) の値等価。同一パース内で安定しており、`Dictionary<StepRef, T>` は旧オブジェクト同一性キーと同じ意味論になる。
-- 文字列は `StringRef.Value` (UTF-8 span) / `.Slice` / `.Range` で読む。`.Decode()` (string 化) は**診断メッセージ構築時のみ**。
+- `ParseResult.Workflow` / `LintResult.Workflow` return `WorkflowRef`. Rules and tests work exclusively through refs.
+- **Default refs chain safely**: `job.Strategy.Matrix.Rows` never throws no matter how much of the chain is absent — the tail simply has `HasValue == false` / is empty. Rule-side null guards are unnecessary as a rule.
+- Absence checks use `HasValue`. These are structs, so `is null` / `is { }` patterns do not work (`is { }` is always true — a mechanical-replacement trap). In tests, `IsNull()` / `IsNotNull()` on a boxed struct compiles but misjudges at runtime — always assert `HasValue`.
+- Polymorphism is a `Kind` switch plus typed accessors (`AsRun()` / `AsAction()` / ...). An `As*()` call with a mismatched kind returns a default ref.
+- Ref equality is (arena, id) value equality — stable within one parse, so `Dictionary<StepRef, T>` has the same semantics as the old object-identity keys.
+- Read strings via `StringRef.Value` (UTF-8 span) / `.Slice` / `.Range`. `.Decode()` (string materialization) is **only for building diagnostic messages**.
 
-## 5. ライフタイムと安全性
+## 5. Lifetime and Safety
 
-- arena は thread-static キャッシュ経由で再利用される (`Rent` → `ResetForSource` → parse → `Dispose`)。リセットは全テーブルのカウンタクリアのみ。
-- **`NodeTable` の不変条件: backing 配列を解放するとき、count も必ず 0 にする。** 配列だけ解放して count が残ると、次のパースで縮小後の配列を旧 count で索引して `IndexOutOfRange` → fatal 化する (実際に起きた事故。`AstArenaReuseTests` が同一スレッド 40 回再利用の黒箱回帰として常設されている)。
-- **DEBUG 世代カウンタ**: arena は `ResetForSource` / `Dispose` で世代をインクリメントする (カウンタ自体は Release でも動く int 加算)。DEBUG ビルドでは全 Ref が生成時世代を捕捉し、dispose 後のハンドル解決は即 `InvalidOperationException` (Release では捕捉フィールドもチェックもコンパイルアウトされコストゼロ)。`HasValue` と等価比較は stale でも throw しない (安全に呼べる)。
-- 値を arena の寿命より長く保持したい場合は、**dispose 前に値をコピーして持ち出す** (`Decode()` した string、`LocalWorkflowContract` のような値スナップショット)。
+- Arenas are reused through a thread-static cache (`Rent` → `ResetForSource` → parse → `Dispose`). Reset only clears table counters.
+- **`NodeTable` invariant: whenever the backing array is released, the count must also be zeroed.** Releasing the array while the count survives makes the next parse index a shrunken array with the old count → `IndexOutOfRange` → fatal (this accident actually happened; `AstArenaReuseTests` is the permanent black-box regression, 40 same-thread reuses).
+- **DEBUG generation counter**: the arena increments its generation at `ResetForSource` / `Dispose` (the counter itself runs in Release too — an int increment). In DEBUG builds every ref captures the generation at construction, and resolving a handle after dispose throws `InvalidOperationException` immediately (in Release the capture fields and checks compile out — zero cost). `HasValue` and equality never throw on stale refs (safe to call).
+- To keep a value beyond the arena's lifetime, **copy it out before dispose** (a `Decode()`d string, or a value snapshot like `LocalWorkflowContract`).
 
-## 6. incremental parse との整合 (不変条件)
+## 6. Incremental Parse Invariants
 
-Playground の `IncrementalParseContext` (D-5b/5c/5d) は次の不変条件の上に成立している:
+The Playground's `IncrementalParseContext` (D-5b/5c/5d) rests on these invariants:
 
-1. セクション/ジョブの再利用は「**同一バイトオフセット + 同一内容ハッシュ**」の場合にのみ発生する。したがって再利用ノード内の `Utf8Slice` は新ソースでもそのまま有効。
-2. 新 arena は `BulkImportFrom` で前 arena の**全ノードテーブルを全行コピー**する (スカラー 4 テーブルのみ base count でキャップ)。したがって前パースの ID / レンジは新 arena でもそのまま解決できる。
-3. ジョブ再利用は **`JobId` ベース** (`JobSkipEntry` が JobId を運ぶ)。jobs マップが `JobEntryData {Key, JobId}` へのエントリ間接になっているのは、再利用 JobId (インポートされた低い行 index) と新規パース JobId が 1 つのマップに混在するためである。
-4. 旧 arena は毎パース後に即 Dispose する。オブジェクト所有による arena 退避 (retention) は存在しない。
-5. テーブルの行はパースを跨いで蓄積するため、scalar 成長しきい値 (3×) がフルパースを強制して境界を保つ。
+1. A section/job is reused only when it is **byte-identical at the identical byte offset (same offset + same content hash)**. Therefore `Utf8Slice`s inside reused nodes remain valid against the new source.
+2. The new arena's `BulkImportFrom` **copies every node table wholesale** from the previous arena (only the 4 scalar tables are capped at base counts). Therefore previous-parse IDs and ranges resolve unchanged in the new arena.
+3. Job reuse is **`JobId`-based** (`JobSkipEntry` carries a JobId). The jobs map is an entry indirection over `JobEntryData {Key, JobId}` precisely because reused JobIds (low row indexes from the import) and freshly parsed JobIds coexist in one map.
+4. The old arena is disposed immediately after every parse. There is no arena retention via object ownership.
+5. Table rows accumulate across parses, so the scalar growth threshold (3×) forces a full parse to bound growth.
 
-**この不変条件から導かれる配線ルール**: arena に新しいテーブルを追加したら、必ず次の全箇所に配線する —
-(a) `ResetForSource` の Reset、(b) `Dispose` の Reset + `ReleaseOversized` (保持・破棄どちらのパスでも通る)、(c) `Dispose` 破棄パス (キャッシュ占有時) の `ReleaseAll`、(d) **`BulkImportFrom` の `CopyFrom`**。既存テーブル (`_stringIdItems` 等) を grep して全配線箇所を列挙し、着地を grep で確認する。(d) を忘れると単発パースのテストは全部通り、incremental parse だけがサイレントに壊れる。
+**Wiring rule derived from these invariants**: whenever you add a table to the arena, wire it at ALL of —
+(a) `Reset` in `ResetForSource`, (b) `Reset` + `ReleaseOversized` in `Dispose` (runs on both the retain and discard paths), (c) `ReleaseAll` on the `Dispose` discard path (cache already occupied), and (d) **`CopyFrom` in `BulkImportFrom`**. Grep an existing table (`_stringIdItems` etc.) to enumerate all wiring sites and grep-verify the landing. Missing (d) passes every single-parse test and breaks only incremental parsing, silently.
 
-## 7. ノード追加チェックリスト
+## 7. Checklist for Adding a Node Kind
 
-新しい AST ノード種別を追加するときの規約 (詳細な型契約は Parser spec §2):
+Conventions when adding a new AST node kind (the type-level contract lives in the Parser spec §2):
 
-1. 行 struct を定義する (`Ast/*Data.cs`)。フィールドはスカラー ID / 他ノード ID / レンジ / `TextRange` のみ。オブジェクト参照・string は持たない。
-2. 型付き ID を `Ast/NodeIds.cs` に追加する (1-based、既存 ID の複製)。
-3. arena に `NodeTable<T>` + アクセサ (`AddXxx` / `GetXxx`、マップなら `GetXxxAt(NodeRange, i)` + `XxxCount`) を追加し、§6 の 4 点ライフサイクル配線を行う。
-4. Ref (と必要ならリスト/マップ Ref) を追加する。既存の同型 Ref を複製し、公開面の形 (HasValue / TryGetValue / enumerator) を揃える。
-5. パーサ構築サイトはローカル蓄積 → 解析完了時に 1 回 `Add` (§3.5)。リスト表現は §3.2 の連続性ルールで決める。マップなら case sensitivity を §3.3 に従い明示する。
-6. テスト: 意味論の写像 (§3.1 の不在 vs 空) を保存し、`HasValue` で assert する。
+1. Define the row struct (`Ast/*Data.cs`). Fields are scalar IDs / other node IDs / ranges / `TextRange` only — never object references or strings.
+2. Add the typed ID to `Ast/NodeIds.cs` (1-based; clone an existing ID).
+3. Add the `NodeTable<T>` + accessors to the arena (`AddXxx` / `GetXxx`; for maps `GetXxxAt(NodeRange, i)` + `XxxCount`), and do the 4-point lifecycle wiring from §6.
+4. Add the Ref (and list/map refs if needed). Clone an existing ref of the same shape and keep the public surface consistent (HasValue / TryGetValue / enumerator).
+5. Parser construction sites accumulate locals → one `Add` at parse completion (§3.5). Choose the list shape by the contiguity rule (§3.2). For maps, state the case sensitivity explicitly per §3.3.
+6. Tests: preserve the semantics mapping (§3.1 absent vs present-empty) and assert with `HasValue`.
 
-## 8. パフォーマンス特性と注意点
+## 8. Performance Characteristics and Caveats
 
-- 定常状態のアロケーションは ArrayPool の rent/return に支配され、パース・lint とも **Medium/Large で Gen0 = 0**。移行完了時の実測 (ShortRun、冷機): Parse Large 15.70ms / 2,600B、Lint Large/False 16.26ms / 34.01KB (移行前 baseline: 21.8ms / 234KB)。
-- マップ lookup は線形スキャンである。**大きなマップに対する繰り返し lookup をホットパスに置かない** (GitHub Actions の実ファイルではマップは小さく、これは問題にならない前提)。
-- Ref のプロパティは arena の行を読むだけの薄いラッパで、JIT にインライン化される。Ref を経由すること自体のコストを理由に生 arena アクセスへ降りない。
-- ベンチマーク判定の罠: `Program.cs` は常に `Job.ShortRun` であり、20-30ms/op のケースでは dynamic PGO の instrumented tier 区間に計測が落ちるかどうかで **コード変更なしに Mean が ±40% 振れる**。ゲート判定で ±10% を超えたら、(a) stash A/B、(b) `WorkflowParser.Parse` + pre-parsed `Check` の Stopwatch phase-split、(c) 400+ ops warmup 後の steady-state、の 3 点で実体かアーティファクトかを確定する。**Allocated 列とコントロールベンチ (`ExpressionExtractor`) は熱・位相の影響を受けにくい一次判定材料**である。
-- 逆に「不自然に良い数値 + 全サイズ一律の Allocated」は正しさの破綻 (fatal 即返し) を疑う。ベンチマークは性能計測器であると同時に corruption detector である。
+- Steady-state allocation is dominated by ArrayPool rent/return; both parse and lint run at **Gen0 = 0 for Medium/Large**. Measured at migration completion (ShortRun, cool machine): Parse Large 15.70ms / 2,600B; Lint Large/False 16.26ms / 34.01KB (pre-migration baseline: 21.8ms / 234KB).
+- Map lookup is a linear scan. **Do not put repeated lookups against large maps on a hot path** (maps in real GitHub Actions files are small; this is the standing assumption).
+- Ref properties are thin wrappers that read arena rows and are JIT-inlined. Do not drop to raw arena access on the grounds of "ref overhead".
+- Benchmark measurement trap: `Program.cs` always uses `Job.ShortRun`, and for 20–30ms/op cases the measurement may land inside dynamic PGO's instrumented tier — **Mean can swing ±40% between runs with no code change**. When the ±10% gate is exceeded, determine real-vs-artifact with three checks: (a) stash A/B against HEAD, (b) a Stopwatch phase-split (`WorkflowParser.Parse` + pre-parsed `Check`), (c) steady-state after 400+ warmup ops. **The Allocated column and the control benchmark (`ExpressionExtractor`) are the primary signals** — they are largely immune to thermal and JIT-phase noise.
+- Conversely, treat **suspiciously good numbers with size-independent Allocated** as a correctness failure (a broken op returns fatal early and is fast). The benchmark is a corruption detector as much as a performance meter.
 
-## 9. Lessons Learned (設計に埋め込まれた教訓)
+## 9. Lessons Learned (baked into the design)
 
-移行過程で「実際にやってみて初めて分かった」もののうち、恒久的に設計判断へ影響するもの:
+Discoveries made only by building it, kept here because they permanently shape design decisions:
 
-1. **struct + interface フィールドは boxing する**。`ArenaList<T> : IReadOnlyList<T>` を interface 型フィールドに代入した時点でヒープに逃げる。「struct で包めばゼロアロケ」はフィールドの静的型が interface なら成立しない。現設計がレンジ + 具象 struct Ref で統一されているのはこのため。
-2. **ゼロアロケーション追求は Gen0=0 到達時点で wall-clock への寄与が消える**。以後の削減は複雑さの純増になりやすい。投資判断はベンチの Gen0 列を見てから行う。
-3. **default ref の安全連鎖はルール側の null ガードを大量に消す**。移行コストの過半はこの設計で回収された。一方で `is { }` / `IsNull()` の struct 罠 (§4) が機械的置換の落とし穴になる。
-4. **判別子 enum の `None = 0`** は default ref の誤動作を型で塞ぐ。tagged union を増やすときは必ず踏襲する。
-5. **共有ストアの Reset 配線漏れは単発パースのテストでは検出できない**。count がパースを跨いで蓄積 → 保持上限で配列だけ解放 → 次パースで崩壊、という遅発性の壊れ方をする (§5 の NodeTable 不変条件と `AstArenaReuseTests` はその再発防止策)。
-6. **「同一オフセット + 同一ハッシュのみ再利用」という不変条件が、incremental parse の複雑さを全行コピーの単純さに変換した** (§6)。この不変条件を緩める変更 (オフセットシフトを許す等) は、ID 再配置という別次元の複雑さを解禁するため、設計判断として扱うこと。
+1. **A struct assigned to an interface-typed field boxes.** `ArenaList<T> : IReadOnlyList<T>` escaped to the heap the moment it was stored as `IReadOnlyList<T>`. "Wrap it in a struct and it's allocation-free" does not hold when the field's static type is an interface. This is why the current design is uniformly ranges + concrete struct refs.
+2. **Zero-allocation work stops paying at Gen0 = 0.** Further reductions tend to be pure complexity increases; judge the investment by the benchmark's Gen0 column first.
+3. **Default-safe ref chaining deleted the majority of rule-side null guards** and paid for much of the migration. Its flip side is the struct traps in §4 (`is { }` / `IsNull()`), which are mechanical-replacement hazards.
+4. **`None = 0` on discriminator enums** closes off default-ref misbehavior at the type level. Always follow it when adding tagged unions.
+5. **A missed Reset wiring on a shared store is undetectable by single-parse tests.** Counts accumulate across parses → the retention cap releases the array while the count survives → a later parse collapses. (§5's NodeTable invariant and `AstArenaReuseTests` are the recurrence guards.)
+6. **The "reuse only at identical offset + identical hash" invariant converted incremental-parse complexity into the simplicity of wholesale table copies** (§6). Relaxing it (e.g. allowing offset shifts) would re-open ID relocation — treat that as a design decision, not a tweak.
 
-## 10. 関連ドキュメント
+## 10. Related Documents
 
-- `.github/docs/Seiton_Parser_csharp_spec.md` §2 — 型シグネチャレベルのストレージ/Ref 契約 (本書の規約の具体形)
-- `.github/docs/Seiton_Linter_csharp_spec.md` — IPass/IRule/visitor の Ref 署名
-- `.github/docs/Seiton_Playground_csharp_spec.md` — incremental parse (D-5b/5c/5d) の契約
-- `.github/docs/architecture_spec_performance.md` — 性能アーキテクチャ全体と言語選定の記録
-- `.claude/skills/architecture/SKILL.md` / `.claude/skills/performance-requirements/SKILL.md` — 実装時ガイド
-- `src/Seiton.Core/Linting/Rules/AGENTS.md` — ルール実装者向けの Ref API 規約
+- `.github/docs/Seiton_Parser_csharp_spec.md` §2 — the type-signature-level storage/Ref contract (the concrete form of this document's conventions)
+- `.github/docs/Seiton_Linter_csharp_spec.md` — IPass/IRule/visitor Ref signatures
+- `.github/docs/Seiton_Playground_csharp_spec.md` — incremental parse (D-5b/5c/5d) contract
+- `.github/docs/architecture_spec_performance.md` — overall performance architecture and the language-selection record
+- `.claude/skills/architecture/SKILL.md` / `.claude/skills/performance-requirements/SKILL.md` — implementation-time guides
+- `src/Seiton.Core/Linting/Rules/AGENTS.md` — rule-author Ref API conventions and typical patterns

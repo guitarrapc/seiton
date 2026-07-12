@@ -12,7 +12,18 @@
 2. **作業バッファ**: パース中のスクラッチは `PooledBuffer<T>` (ArrayPool)、診断は pooled 配列を arena に登録して寿命を揃える。
 3. **文字列化の遅延**: UTF-8 バイト列 (`Utf8Slice` / span) のまま処理し、`string` 化は診断メッセージ構築時のみ (`.github/docs/Seiton_Parser_csharp_spec.md` §0.5 の語彙と許可リスト)。
 
-結果として **Medium/Large ワークフローで Gen0 コレクション 0 回**。実測 (2026-07-12、ShortRun、冷機): Parse Large 15.70ms / 2,600B、Lint Large/False 16.26ms / 34.01KB (データ指向移行前 baseline: 21.8ms / 234KB)。
+結果として **Medium/Large ワークフローで Gen0 コレクション 0 回**。データ指向 AST 移行 (2026-07) 前後の実測 (ShortRun、冷機):
+
+| 指標 | 移行前 (2026-07-11 main) | 移行後 (2026-07-12) |
+|---|---|---|
+| Parse Small Mean / Allocated | ~53μs / — | 36.4μs / 240B |
+| Parse Large Mean / Allocated | ~15.6ms / ~26KB | 15.70ms / 2,600B |
+| Lint Small/False | 86.7μs | 52.1μs / 3.73KB |
+| Lint Large/False | 21.8ms / 234KB | **16.26ms / 34.01KB** (−25% / −85%) |
+| Lint Large/True | — | 25.4ms / 83.54KB |
+| Gen0 (Medium/Large) | 0 | 0 |
+
+(Lint Mean の改善には、移行とは独立の UnpinnedUsesRule 行列計算修正 (§1.4) を含む。移行自体の主目的は複雑さの回収であり、Allocated の桁的減少はその副産物である。)
 
 ### 1.2 キャッシュの層
 
