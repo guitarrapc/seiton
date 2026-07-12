@@ -8,7 +8,7 @@ namespace Seiton.Benchmark;
 /// Three scenarios:
 /// <list type="bullet">
 ///   <item><description><c>NoChange</c> — same string object every call (reference-equality cache hit)</description></item>
-///   <item><description><c>PartialChange</c> — only one job differs each call (incremental D-5c job skip)</description></item>
+///   <item><description><c>PartialChange</c> — only one job differs each call (typing-like edits; full parse + full lint)</description></item>
 ///   <item><description><c>FullChange</c> — entirely different content each call (full parse + full lint)</description></item>
 /// </list>
 /// </summary>
@@ -86,7 +86,7 @@ public partial class PlaygroundLintBenchmark
         return totalLength;
     }
 
-    /// <summary>Only first job differs each call — exercises incremental job skip (D-5c).</summary>
+    /// <summary>Only first job differs each call — typing-like edit pattern.</summary>
     [Benchmark]
     public int PartialChange()
     {

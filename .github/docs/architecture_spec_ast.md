@@ -94,18 +94,14 @@ Row structs have `init` properties only — **rows cannot be mutated after appen
 - **DEBUG generation counter**: the arena increments its generation at `ResetForSource` / `Dispose` (the counter itself runs in Release too — an int increment). In DEBUG builds every ref captures the generation at construction, and resolving a handle after dispose throws `InvalidOperationException` immediately (in Release the capture fields and checks compile out — zero cost). `HasValue` and equality never throw on stale refs (safe to call).
 - To keep a value beyond the arena's lifetime, **copy it out before dispose** (a `Decode()`d string, or a value snapshot like `LocalWorkflowContract`).
 
-## 6. Incremental Parse Invariants
+## 6. Incremental Parse (removed 2026-07)
 
-The Playground's `IncrementalParseContext` (D-5b/5c/5d) rests on these invariants:
+The Playground's `IncrementalParseContext` (D-5b/5c/5d) and its arena support (`BulkImportFrom`, `RebindSource`, `JobSkipEntry`, lint job-skip) were removed: the browser had it disabled since the #125 WASM OOB crash, the CLI never used it, and after this AST redesign made full parse cheap the incremental path benchmarked slower and heavier than full parse. Decision record: `.github/docs/Seiton_Playground_csharp_spec.md` §6.5.
 
-1. A section/job is reused only when it is **byte-identical at the identical byte offset (same offset + same content hash)**. Therefore `Utf8Slice`s inside reused nodes remain valid against the new source.
-2. The new arena's `BulkImportFrom` **copies every node table wholesale** from the previous arena (only the 4 scalar tables are capped at base counts). Therefore previous-parse IDs and ranges resolve unchanged in the new arena.
-3. Job reuse is **`JobId`-based** (`JobSkipEntry` carries a JobId). The jobs map is an entry indirection over `JobEntryData {Key, JobId}` precisely because reused JobIds (low row indexes from the import) and freshly parsed JobIds coexist in one map.
-4. The old arena is disposed immediately after every parse. There is no arena retention via object ownership.
-5. Table rows accumulate across parses, so the scalar growth threshold (3×) forces a full parse to bound growth.
+Kept for the record: reuse was sound only under "byte-identical content at the identical byte offset" — that invariant is what allowed wholesale table copies instead of ID relocation. Any future incremental design that relaxes it (e.g. offset shifts) must solve ID relocation, which is a redesign, not a tweak.
 
-**Wiring rule derived from these invariants**: whenever you add a table to the arena, wire it at ALL of —
-(a) `Reset` in `ResetForSource`, (b) `Reset` + `ReleaseOversized` in `Dispose` (runs on both the retain and discard paths), (c) `ReleaseAll` on the `Dispose` discard path (cache already occupied), and (d) **`CopyFrom` in `BulkImportFrom`**. Grep an existing table (`_stringIdItems` etc.) to enumerate all wiring sites and grep-verify the landing. Missing (d) passes every single-parse test and breaks only incremental parsing, silently.
+**Wiring rule**: whenever you add a table to the arena, wire it at ALL of —
+(a) `Reset` in `ResetForSource`, (b) `Reset` + `ReleaseOversized` in `Dispose` (runs on both the retain and discard paths), and (c) `ReleaseAll` on the `Dispose` discard path (cache already occupied). Grep an existing table (`_stringIdItems` etc.) to enumerate all wiring sites and grep-verify the landing.
 
 ## 7. Checklist for Adding a Node Kind
 
@@ -113,7 +109,7 @@ Conventions when adding a new AST node kind (the type-level contract lives in th
 
 1. Define the row struct (`Ast/*Data.cs`). Fields are scalar IDs / other node IDs / ranges / `TextRange` only — never object references or strings.
 2. Add the typed ID to `Ast/NodeIds.cs` (1-based; clone an existing ID).
-3. Add the `NodeTable<T>` + accessors to the arena (`AddXxx` / `GetXxx`; for maps `GetXxxAt(NodeRange, i)` + `XxxCount`), and do the 4-point lifecycle wiring from §6.
+3. Add the `NodeTable<T>` + accessors to the arena (`AddXxx` / `GetXxx`; for maps `GetXxxAt(NodeRange, i)` + `XxxCount`), and do the 3-point lifecycle wiring from §6.
 4. Add the Ref (and list/map refs if needed). Clone an existing ref of the same shape and keep the public surface consistent (HasValue / TryGetValue / enumerator).
 5. Parser construction sites accumulate locals → one `Add` at parse completion (§3.5). Choose the list shape by the contiguity rule (§3.2). For maps, state the case sensitivity explicitly per §3.3.
 6. Tests: preserve the semantics mapping (§3.1 absent vs present-empty) and assert with `HasValue`.
@@ -135,13 +131,14 @@ Discoveries made only by building it, kept here because they permanently shape d
 3. **Default-safe ref chaining deleted the majority of rule-side null guards** and paid for much of the migration. Its flip side is the struct traps in §4 (`is { }` / `IsNull()`), which are mechanical-replacement hazards.
 4. **`None = 0` on discriminator enums** closes off default-ref misbehavior at the type level. Always follow it when adding tagged unions.
 5. **A missed Reset wiring on a shared store is undetectable by single-parse tests.** Counts accumulate across parses → the retention cap releases the array while the count survives → a later parse collapses. (§5's NodeTable invariant and `AstArenaReuseTests` are the recurrence guards.)
-6. **The "reuse only at identical offset + identical hash" invariant converted incremental-parse complexity into the simplicity of wholesale table copies** (§6). Relaxing it (e.g. allowing offset shifts) would re-open ID relocation — treat that as a design decision, not a tweak.
+6. **The "reuse only at identical offset + identical hash" invariant converted incremental-parse complexity into the simplicity of wholesale table copies** (§6; the mechanism itself was later removed, but the invariant lesson stands for any future incremental design).
+7. **Re-check an optimization's benefit after each major architecture change.** This redesign made full parse cheap enough that the playground's incremental path became a net loss (slower Mean, higher Allocated than full parse) and was removed (§6).
 
 ## 10. Related Documents
 
 - `.github/docs/Seiton_Parser_csharp_spec.md` §2 — the type-signature-level storage/Ref contract (the concrete form of this document's conventions)
 - `.github/docs/Seiton_Linter_csharp_spec.md` — IPass/IRule/visitor Ref signatures
-- `.github/docs/Seiton_Playground_csharp_spec.md` — incremental parse (D-5b/5c/5d) contract
+- `.github/docs/Seiton_Playground_csharp_spec.md` — playground lint runner contract (incremental parse removal record in §6.5)
 - `.github/docs/architecture_spec_performance.md` — overall performance architecture and the language-selection record
 - `.claude/skills/architecture/SKILL.md` / `.claude/skills/performance-requirements/SKILL.md` — implementation-time guides
 - `src/Seiton.Core/Linting/Rules/AGENTS.md` — rule-author Ref API conventions and typical patterns

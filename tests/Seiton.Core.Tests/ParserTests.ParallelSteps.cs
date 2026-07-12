@@ -737,50 +737,6 @@ public sealed partial class ParserTests
     }
 
     [Test]
-    public async Task Parse_ParallelSteps_ok_bare_wait_all_at_eof_without_trailing_newline_incremental()
-    {
-        const string yaml = """
-            on: push
-            jobs:
-              build:
-                runs-on: ubuntu-latest
-                steps:
-                  - run: echo hi
-                    background: true
-                  - wait-all:
-            """;
-        var bytes = Encoding.UTF8.GetBytes(yaml.TrimEnd('\n', '\r'));
-        await Assert.That(bytes[^1]).IsNotEqualTo((byte)'\n');
-
-        using var parseCts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
-        var (result, arena) = await Task.Run(() =>
-        {
-            var a = AstArena.Rent(bytes);
-            try
-            {
-                var r = WorkflowParser.ParseIncremental(bytes, "wf.yml", a, rootSkipMask: 0);
-                return (r, a);
-            }
-            catch
-            {
-                a.Dispose();
-                throw;
-            }
-        }).WaitAsync(parseCts.Token);
-
-        try
-        {
-            await Assert.That(result.HasFatalError).IsFalse();
-            var steps = new StepRefList(arena, result.Workflow!.Jobs.Values(arena!).First().Steps);
-            await Assert.That(steps[1].Exec.Kind).IsEqualTo(StepExecKind.WaitAll);
-        }
-        finally
-        {
-            arena.Dispose();
-        }
-    }
-
-    [Test]
     public async Task Parse_ParallelSteps_ok_parallel_child_if()
     {
         var yaml = """

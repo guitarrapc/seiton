@@ -48,32 +48,6 @@ internal struct NodeTable<T> where T : struct
     /// <summary>Clears the row count while retaining capacity for the next parse.</summary>
     public void Reset() => _count = 0;
 
-    /// <summary>Copies the first <paramref name="limit"/> rows from <paramref name="source"/> (incremental parse import).</summary>
-    public void CopyFrom(in NodeTable<T> source, int limit)
-    {
-        var count = Math.Min(source._count, limit);
-        if (count <= 0)
-        {
-            // Zero the count even for an empty source so stale destination rows can
-            // never remain addressable after the copy.
-            _count = 0;
-            return;
-        }
-
-        if (_rows is null || _rows.Length < count)
-        {
-            if (_rows is not null)
-            {
-                ArrayPool<T>.Shared.Return(_rows);
-            }
-
-            _rows = ArrayPool<T>.Shared.Rent(Math.Max(count, DefaultCapacity));
-        }
-
-        Array.Copy(source._rows!, _rows, count);
-        _count = count;
-    }
-
     /// <summary>Returns the backing array to the pool when it grew beyond <paramref name="maxRetainedCapacity"/>.</summary>
     public void ReleaseOversized(int maxRetainedCapacity)
     {

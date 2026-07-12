@@ -175,15 +175,9 @@ func getEngine() *LintEngine {
 - Empty `source`: treated as empty YAML (returns zero diagnostics)
 - Empty `filePath`: defaults to `.github/workflows/test.yml`
 
-### 2.3 Incremental Parse
+### 2.3 Parse Strategy
 
-If incremental parsing is implemented for Go (per `Seiton_Parser_go_spec.md`), the playground would:
-
-- Maintain a `*IncrementalContext` as a package-level variable
-- Reset on file-path change
-- Reuse section hashes for unchanged root keys
-
-If not implemented, full parse on every invocation (acceptable for Go WASM given single-binary size advantage).
+Full parse on every invocation. Do not implement incremental parsing: the C# playground built and then removed it — it had no production consumer, its cross-call buffer lifetime invariants caused a WASM AOT crash, and it ended up slower than full parse (decision record: `Seiton_Playground_csharp_spec.md` §6.5).
 
 ### 2.4 Config Content-Hash Caching
 
@@ -219,7 +213,6 @@ var (
 **Integration with `runLint`/`applyAllFixes`:**
 
 - Both use `cachedConfig` (or default) when invoking the lint engine
-- Config change does NOT invalidate incremental parse context (config affects rule evaluation, not YAML structure)
 
 ---
 

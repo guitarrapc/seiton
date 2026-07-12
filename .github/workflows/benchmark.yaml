@@ -19,7 +19,6 @@ on:
           - "*ExclusionJobIdValidatorBenchmark*"
           - "*FixApplyBenchmark*"
           - "*IanaTimeZoneLookupBenchmark*"
-          - "*IncrementalParseBenchmark*"
           - "*InputDiscoveryBenchmark*"
           - "*LintConfigBenchmark*"
           - "*MultiFileLintBenchmark*"

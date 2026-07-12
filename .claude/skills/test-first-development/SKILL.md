@@ -92,7 +92,6 @@ Playground changes touch **Core logic** (`src/Seiton.Playground.Core`), **WASM h
 | Layer | When to use | Examples |
 |-------|-------------|----------|
 | **Fast / no browser** | Logic, JSON, share payload, HTML contract | `PlaygroundLintRunnerTests`, `PlaygroundSharePayloadTests`, `PlaygroundHtmlContractTests` |
-| **Incremental parse/lint** | `IncrementalParseContext`, D-5b/c/d | `IncrementalParseTests`, `IncrementalLintCacheTests` |
 | **Desktop WASM repro** | Bug is WASM/AOT-specific but avoid Playwright | `PlaygroundWasmMemoryOobDesktopTests` — calls `PlaygroundLintRunner` on CoreCLR |
 | **Browser + published WASM** | Real Mono WASM, Release+AOT bundle, UI hooks | `PlaygroundUiLayoutTests`, `PlaygroundWasmMemoryOobUiTests` — needs Playwright + `PlaygroundUiTestHost` |
 
@@ -144,7 +143,6 @@ Further context: `.github/docs/plan_memory.md`.
 | Change | First failing test to write | Notes |
 |--------|----------------------------|-------|
 | `PlaygroundLintRunner` / config cache | `PlaygroundLintRunnerTests` | Config-mutating tests use `[NotInParallel(ConfigLockKey)]` on methods |
-| Incremental parse | `IncrementalParseTests` or `IncrementalParseContextTests` | New `IncrementalParseContext` per test unless testing shared runner |
 | WASM OOB / incomplete YAML while typing | `PlaygroundWasmMemoryOobDesktopTests` then `PlaygroundWasmMemoryOobUiTests` | Bare trailing `- uses:` may trap AOT WASM; UI defers lint in `main.js` |
 | `wwwroot` UI behavior | `PlaygroundHtmlContractTests` or `PlaygroundUiLayoutTests` | Layout tests use `PlaygroundWasmPublishMode.DebugFast` unless production bundle is required |
 | Browser-only hooks | `?seitonTestHooks=1` + `__SEITON_PLAYGROUND_TEST__` | See `PlaygroundWasmMemoryOobUiTests` |
@@ -158,7 +156,7 @@ When adding Playwright tests: prefer **new browser context per scenario** that c
 
 ### Benchmarks (Playground hot path)
 
-When changing `PlaygroundLintRunner` or incremental playground paths:
+When changing `PlaygroundLintRunner` or other playground hot paths:
 
 ```shell
 cd src/Seiton.Benchmark

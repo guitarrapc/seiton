@@ -2,9 +2,7 @@
 
 // Data-oriented AST rows for jobs (Stage 3).
 // The workflow jobs map is a NodeRange over JobEntryData rows (key + JobId), NOT over
-// the JobData row table: incremental parsing (D-5c) splices reused JobIds from a
-// previous arena (valid after BulkImportFrom's wholesale table copy) next to freshly
-// parsed JobIds, so map entries and job rows must be independently addressable.
+// the JobData row table: map entries and job rows are independently addressable.
 
 /// <summary>Row data for a single job in a workflow.</summary>
 public readonly struct JobData

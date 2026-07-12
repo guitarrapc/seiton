@@ -4103,7 +4103,7 @@ public sealed partial class ParserTests
     }
 
     [Test]
-    public async Task ParseIncremental_BrokenYaml_PreservesEarlierDiagnostics()
+    public async Task Parse_BrokenYaml_PreservesEarlierDiagnostics()
     {
         var yaml = """
         on:
@@ -4118,18 +4118,16 @@ public sealed partial class ParserTests
         """u8;
 
         var bytes = yaml.ToArray();
-        var arena = AstArena.Rent(bytes);
+        var result = WorkflowParser.ParseDirect(bytes, "test.yml", out var arena);
         try
         {
-            var result = WorkflowParser.ParseIncremental(bytes, "test.yml", arena, rootSkipMask: 0);
-
             await Assert.That(result.HasFatalError).IsTrue();
             await Assert.That(result.Diagnostics.Any(d => d.Message.Contains("unexpected key \"branch\"", StringComparison.Ordinal))).IsTrue();
             await Assert.That(result.Diagnostics.Any(d => d.Message.Contains("yaml parse failure", StringComparison.OrdinalIgnoreCase))).IsTrue();
         }
         finally
         {
-            arena.Dispose();
+            arena?.Dispose();
         }
     }
 

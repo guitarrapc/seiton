@@ -25,16 +25,6 @@ public sealed class WorkflowVisitor
     /// <summary>Traverses the given <paramref name="workflow"/>, invoking all registered passes for each event, job, and step.</summary>
     public void Visit(WorkflowRef workflow)
     {
-        Visit(workflow, skipJobs: null);
-    }
-
-    /// <summary>
-    /// Traverses the given <paramref name="workflow"/>, optionally skipping jobs by index.
-    /// When <paramref name="skipJobs"/>[i] is true, VisitJobPre/VisitStep/VisitJobPost are not called for that job.
-    /// VisitWorkflowPre/VisitWorkflowPost are always called (they handle cross-job validation).
-    /// </summary>
-    internal void Visit(WorkflowRef workflow, bool[]? skipJobs)
-    {
         if (!workflow.HasValue)
         {
             throw new ArgumentNullException(nameof(workflow));
@@ -60,15 +50,8 @@ public sealed class WorkflowVisitor
             }
         }
 
-        var jobIndex = 0;
         foreach (var (_, job) in workflow.Jobs)
         {
-            if (skipJobs is not null && (uint)jobIndex < (uint)skipJobs.Length && skipJobs[jobIndex])
-            {
-                jobIndex++;
-                continue;
-            }
-
             for (var i = 0; i < passes.Count; i++)
             {
                 passes[i].VisitJobPre(job);
@@ -84,8 +67,6 @@ public sealed class WorkflowVisitor
             {
                 passes[i].VisitJobPost(job);
             }
-
-            jobIndex++;
         }
 
         for (var i = 0; i < passes.Count; i++)

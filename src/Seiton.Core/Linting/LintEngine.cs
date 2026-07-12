@@ -206,20 +206,16 @@ public sealed class LintEngine
 
     /// <summary>
     /// Lints a pre-parsed <see cref="ParseResultData"/> without re-parsing.
-    /// Used by Playground incremental parsing (D-5b) where parsing is done externally.
+    /// Used by the Playground where parsing is done externally.
     /// Infers <see cref="DocumentKind"/> from the parse result content.
     /// </summary>
-    /// <param name="skipJobs">
-    /// Optional job-skipping mask (D-5d). When <paramref name="skipJobs"/>[i] is true, lint rules
-    /// are not run on that job (its diagnostics are expected to be supplied from a cache by the caller).
-    /// </param>
-    internal LintResultData CheckWithParseResult(byte[] utf8Yaml, string filePath, LintConfig? config, ParseResultData parseResult, AstArena? arena, bool[]? skipJobs = null)
+    internal LintResultData CheckWithParseResult(byte[] utf8Yaml, string filePath, LintConfig? config, ParseResultData parseResult, AstArena? arena)
     {
         ArgumentNullException.ThrowIfNull(utf8Yaml);
         ArgumentException.ThrowIfNullOrEmpty(filePath);
 
         var kind = InferDocumentKindForPreParsedResult(parseResult, filePath);
-        return CheckCore(utf8Yaml, filePath, config, parseResult, arena, kind, skipJobs);
+        return CheckCore(utf8Yaml, filePath, config, parseResult, arena, kind);
     }
 
     private static DocumentKind InferDocumentKindForPreParsedResult(ParseResultData parseResult, string filePath)
@@ -237,7 +233,7 @@ public sealed class LintEngine
         return DocumentKindClassifier.GetPathHintKind(filePath);
     }
 
-    private LintResultData CheckCore(byte[] utf8Yaml, string filePath, LintConfig? config, ParseResultData parseResult, AstArena? arena, DocumentKind documentKind, bool[]? skipJobs = null)
+    private LintResultData CheckCore(byte[] utf8Yaml, string filePath, LintConfig? config, ParseResultData parseResult, AstArena? arena, DocumentKind documentKind)
     {
         var normalizedRules = NormalizeRules(config?.Rules, filePath);
         _disabledRuleIds.Clear();
@@ -380,7 +376,7 @@ public sealed class LintEngine
 
         if (parseResult.Workflow is not null)
         {
-            _visitor.Visit(new WorkflowRef(arena, parseResult.Workflow), skipJobs);
+            _visitor.Visit(new WorkflowRef(arena, parseResult.Workflow));
         }
         else if (parseResult.ActionMetadata is not null)
         {

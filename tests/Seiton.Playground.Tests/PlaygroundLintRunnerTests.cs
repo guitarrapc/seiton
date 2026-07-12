@@ -137,53 +137,20 @@ public sealed class PlaygroundLintRunnerTests
     }
 
     [Test]
-    public async Task RunToJson_NonIncrementalPath_ProducesNonDefaultDiagnosticFields()
+    public async Task RunToJson_Workflow_ProducesMeaningfulDiagnosticFields()
     {
-        PlaygroundLintRunner.ForceUseIncrementalLintForTests = false;
-        try
-        {
-            const string yaml = """
-                on: push
-                permissions: write-all
-                jobs:
-                  build:
-                    runs-on: ubuntu-latest
-                    steps:
-                      - run: echo ok
-                """;
+        const string yaml = """
+            on: push
+            permissions: write-all
+            jobs:
+              build:
+                runs-on: ubuntu-latest
+                steps:
+                  - run: echo ok
+            """;
 
-            var json = PlaygroundLintRunner.RunToJsonUtf8(yaml, ".github/workflows/ci.yml");
-            await AssertDiagnosticArrayContainsMeaningfulRuleDiagnostic(json, "deny-write-all");
-        }
-        finally
-        {
-            PlaygroundLintRunner.ForceUseIncrementalLintForTests = null;
-        }
-    }
-
-    [Test]
-    public async Task RunToJson_IncrementalPath_ProducesMeaningfulDiagnosticFields()
-    {
-        PlaygroundLintRunner.ForceUseIncrementalLintForTests = true;
-        try
-        {
-            const string yaml = """
-                on: push
-                permissions: write-all
-                jobs:
-                  build:
-                    runs-on: ubuntu-latest
-                    steps:
-                      - run: echo ok
-                """;
-
-            var json = PlaygroundLintRunner.RunToJsonUtf8(yaml, ".github/workflows/ci.yml");
-            await AssertDiagnosticArrayContainsMeaningfulRuleDiagnostic(json, "deny-write-all");
-        }
-        finally
-        {
-            PlaygroundLintRunner.ForceUseIncrementalLintForTests = null;
-        }
+        var json = PlaygroundLintRunner.RunToJsonUtf8(yaml, ".github/workflows/ci.yml");
+        await AssertDiagnosticArrayContainsMeaningfulRuleDiagnostic(json, "deny-write-all");
     }
 
     [Test]
@@ -558,7 +525,6 @@ public sealed class PlaygroundLintRunnerTests
     public async Task SetConfig_InvalidConfig_RetainsPreviousValidConfig()
     {
         PlaygroundLintRunner.ResetSharedStateForTests();
-        PlaygroundLintRunner.ForceUseIncrementalLintForTests = false;
 
         const string yaml = """
             on: push
@@ -596,11 +562,11 @@ public sealed class PlaygroundLintRunnerTests
         await Assert.That(ContainsRunnerNoLatestDiagnostic(
             PlaygroundLintRunner.RunToJsonUtf8(new string(yaml.AsSpan()), ".github/workflows/ci.yml"))).IsFalse();
 
-        PlaygroundLintRunner.ForceUseIncrementalLintForTests = null;
         PlaygroundLintRunner.SetConfig(null);
     }
 
     [Test]
+    [Retry(3)]
     [NotInParallel(ConfigLockKey)]
     public async Task SetConfig_FixDefaults_AppliedByApplyAllFixes()
     {

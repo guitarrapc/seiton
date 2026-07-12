@@ -158,7 +158,7 @@ internal sealed class AstArena : IDisposable
     private int _floatCount;
 
     // Data-oriented composite node tables (Stage 2). Rows are addressed by typed IDs
-    // (ConcurrencyId, ...) and copied wholesale by BulkImportFrom for incremental parse.
+    // (ConcurrencyId, ...).
     // Shared list store for StringNodeId ranges (needs, labels, filter values, ...).
     private NodeTable<StringNodeId> _stringIdItems;
 
@@ -222,14 +222,13 @@ internal sealed class AstArena : IDisposable
     private NodeTable<ActionMetadataBrandingData> _actionMetadataBrandingTable;
 
     // Job family tables (Stage 3). Job rows are addressed by JobId; the workflow jobs
-    // map is a NodeRange over key-embedded JobEntryData rows (key + JobId indirection so
-    // incremental parse can splice reused JobIds next to freshly parsed ones), and job
-    // outputs maps are NodeRanges over key-embedded JobOutputData rows.
+    // map is a NodeRange over key-embedded JobEntryData rows (key + JobId indirection),
+    // and job outputs maps are NodeRanges over key-embedded JobOutputData rows.
     private NodeTable<JobData> _jobTable;
     private NodeTable<JobEntryData> _jobEntryTable;
     private NodeTable<JobOutputData> _jobOutputTable;
 
-    // D-1: Pooled diagnostics buffer registered by ParseClassified/ParseIncremental.
+    // D-1: Pooled diagnostics buffer registered by ParseClassified.
     // Returned to ArrayPool<Diagnostic>.Shared on Dispose.
     private Diagnostic[]? _diagnosticsBuffer;
 
@@ -308,7 +307,7 @@ internal sealed class AstArena : IDisposable
     /// Registers a pooled lint diagnostics array with this arena. The array will be returned
     /// to <see cref="ArrayPool{T}.Shared"/> when this arena is disposed.
     /// If a previous lint buffer was registered, it is returned to the pool immediately
-    /// (supports repeated lint calls on the same arena, e.g. IncrementalParseContext).
+    /// (supports repeated lint calls on the same arena).
     /// </summary>
     internal void RegisterLintDiagnosticsBuffer(Diagnostic[] buffer)
     {
@@ -684,17 +683,6 @@ internal sealed class AstArena : IDisposable
 
     /// <summary>Gets the raw UTF-8 source bytes that this arena indexes into.</summary>
     public byte[] Source => _source;
-
-    /// <summary>
-    /// Rebinds this arena to a byte-identical source buffer. Used by the incremental
-    /// identical-source fast path so slices resolve against the caller's live array
-    /// instead of the previous (potentially reused/overwritten) buffer.
-    /// </summary>
-    internal void RebindSource(byte[] source)
-    {
-        Debug.Assert(source.Length == _source.Length, "RebindSource requires a byte-identical source buffer");
-        _source = source;
-    }
 
     // String allocation
 
@@ -1461,182 +1449,6 @@ internal sealed class AstArena : IDisposable
     /// <summary>Resolves one element of a job-outputs <see cref="NodeRange"/>.</summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     internal ref readonly JobOutputData GetJobOutputAt(NodeRange range, int index) => ref _jobOutputTable[range.First + index];
-
-    // Incremental parse support
-
-    /// <summary>
-    /// Copies node entries (strings, bools, ints, floats) from <paramref name="source"/> into this arena,
-    /// limited to the specified counts. After this call, handles from the source arena in the imported
-    /// range resolve correctly against this arena. New entries added after this call receive indices
-    /// beyond the imported range.
-    /// </summary>
-    internal void BulkImportFrom(AstArena source, int stringLimit, int boolLimit, int intLimit, int floatLimit)
-    {
-        var sc = Math.Min(source._stringCount, stringLimit);
-        if (sc > 0)
-        {
-            EnsureMinCapacity(ref _strings, sc);
-            Array.Copy(source._strings, 0, _strings, 0, sc);
-            _stringCount = sc;
-        }
-
-        var bc = Math.Min(source._boolCount, boolLimit);
-        if (bc > 0)
-        {
-            EnsureMinCapacity(ref _bools, bc);
-            Array.Copy(source._bools, 0, _bools, 0, bc);
-            _boolCount = bc;
-        }
-
-        var ic = Math.Min(source._intCount, intLimit);
-        if (ic > 0)
-        {
-            EnsureMinCapacity(ref _ints, ic);
-            Array.Copy(source._ints, 0, _ints, 0, ic);
-            _intCount = ic;
-        }
-
-        var fc = Math.Min(source._floatCount, floatLimit);
-        if (fc > 0)
-        {
-            EnsureMinCapacity(ref _floats, fc);
-            Array.Copy(source._floats, 0, _floats, 0, fc);
-            _floatCount = fc;
-        }
-
-        // Data-oriented node tables are copied wholesale: reused sections/jobs are only
-        // spliced when their source bytes are byte-identical at identical offsets, so
-        // row indices (and the IDs stored in reused nodes) stay valid in this arena.
-        _stringIdItems.CopyFrom(in source._stringIdItems, source._stringIdItems.Count);
-        _permissionsTable.CopyFrom(in source._permissionsTable, source._permissionsTable.Count);
-        _permissionScopeTable.CopyFrom(in source._permissionScopeTable, source._permissionScopeTable.Count);
-        _envTable.CopyFrom(in source._envTable, source._envTable.Count);
-        _envVarTable.CopyFrom(in source._envVarTable, source._envVarTable.Count);
-        _strategyTable.CopyFrom(in source._strategyTable, source._strategyTable.Count);
-        _matrixTable.CopyFrom(in source._matrixTable, source._matrixTable.Count);
-        _matrixRowTable.CopyFrom(in source._matrixRowTable, source._matrixRowTable.Count);
-        _matrixCombinationsTable.CopyFrom(in source._matrixCombinationsTable, source._matrixCombinationsTable.Count);
-        _combinationEntryList.CopyFrom(in source._combinationEntryList, source._combinationEntryList.Count);
-        _rawYamlTable.CopyFrom(in source._rawYamlTable, source._rawYamlTable.Count);
-        _rawYamlIdItems.CopyFrom(in source._rawYamlIdItems, source._rawYamlIdItems.Count);
-        _rawYamlPropTable.CopyFrom(in source._rawYamlPropTable, source._rawYamlPropTable.Count);
-        _containerTable.CopyFrom(in source._containerTable, source._containerTable.Count);
-        _servicesTable.CopyFrom(in source._servicesTable, source._servicesTable.Count);
-        _serviceTable.CopyFrom(in source._serviceTable, source._serviceTable.Count);
-        _workflowCallTable.CopyFrom(in source._workflowCallTable, source._workflowCallTable.Count);
-        _workflowCallInputTable.CopyFrom(in source._workflowCallInputTable, source._workflowCallInputTable.Count);
-        _workflowCallSecretTable.CopyFrom(in source._workflowCallSecretTable, source._workflowCallSecretTable.Count);
-        _eventTable.CopyFrom(in source._eventTable, source._eventTable.Count);
-        _webhookEventTable.CopyFrom(in source._webhookEventTable, source._webhookEventTable.Count);
-        _webhookFilterTable.CopyFrom(in source._webhookFilterTable, source._webhookFilterTable.Count);
-        _scheduledEventTable.CopyFrom(in source._scheduledEventTable, source._scheduledEventTable.Count);
-        _scheduleEntryTable.CopyFrom(in source._scheduleEntryTable, source._scheduleEntryTable.Count);
-        _workflowDispatchEventTable.CopyFrom(in source._workflowDispatchEventTable, source._workflowDispatchEventTable.Count);
-        _dispatchInputTable.CopyFrom(in source._dispatchInputTable, source._dispatchInputTable.Count);
-        _workflowCallEventTable.CopyFrom(in source._workflowCallEventTable, source._workflowCallEventTable.Count);
-        _wceInputTable.CopyFrom(in source._wceInputTable, source._wceInputTable.Count);
-        _wceSecretTable.CopyFrom(in source._wceSecretTable, source._wceSecretTable.Count);
-        _wceOutputTable.CopyFrom(in source._wceOutputTable, source._wceOutputTable.Count);
-        _repositoryDispatchEventTable.CopyFrom(in source._repositoryDispatchEventTable, source._repositoryDispatchEventTable.Count);
-        _imageVersionEventTable.CopyFrom(in source._imageVersionEventTable, source._imageVersionEventTable.Count);
-        _runnerTable.CopyFrom(in source._runnerTable, source._runnerTable.Count);
-        _concurrencyTable.CopyFrom(in source._concurrencyTable, source._concurrencyTable.Count);
-        _environmentTable.CopyFrom(in source._environmentTable, source._environmentTable.Count);
-        _credentialsTable.CopyFrom(in source._credentialsTable, source._credentialsTable.Count);
-        _snapshotTable.CopyFrom(in source._snapshotTable, source._snapshotTable.Count);
-        _defaultsTable.CopyFrom(in source._defaultsTable, source._defaultsTable.Count);
-        _defaultsRunTable.CopyFrom(in source._defaultsRunTable, source._defaultsRunTable.Count);
-        _stepTable.CopyFrom(in source._stepTable, source._stepTable.Count);
-        _stepIdItems.CopyFrom(in source._stepIdItems, source._stepIdItems.Count);
-        _execRunTable.CopyFrom(in source._execRunTable, source._execRunTable.Count);
-        _execActionTable.CopyFrom(in source._execActionTable, source._execActionTable.Count);
-        _actionInputTable.CopyFrom(in source._actionInputTable, source._actionInputTable.Count);
-        _execWaitTable.CopyFrom(in source._execWaitTable, source._execWaitTable.Count);
-        _execWaitAllTable.CopyFrom(in source._execWaitAllTable, source._execWaitAllTable.Count);
-        _execCancelTable.CopyFrom(in source._execCancelTable, source._execCancelTable.Count);
-        _execParallelTable.CopyFrom(in source._execParallelTable, source._execParallelTable.Count);
-        _actionMetadataInputTable.CopyFrom(in source._actionMetadataInputTable, source._actionMetadataInputTable.Count);
-        _actionMetadataOutputTable.CopyFrom(in source._actionMetadataOutputTable, source._actionMetadataOutputTable.Count);
-        _actionMetadataRunsTable.CopyFrom(in source._actionMetadataRunsTable, source._actionMetadataRunsTable.Count);
-        _actionMetadataBrandingTable.CopyFrom(in source._actionMetadataBrandingTable, source._actionMetadataBrandingTable.Count);
-        _jobTable.CopyFrom(in source._jobTable, source._jobTable.Count);
-        _jobEntryTable.CopyFrom(in source._jobEntryTable, source._jobEntryTable.Count);
-        _jobOutputTable.CopyFrom(in source._jobOutputTable, source._jobOutputTable.Count);
-    }
-
-    /// <summary>Gets the current number of string entries in the arena.</summary>
-    internal int StringCount => _stringCount;
-
-    /// <summary>Gets the current number of bool entries in the arena.</summary>
-    internal int BoolCount => _boolCount;
-
-    /// <summary>Gets the current number of int entries in the arena.</summary>
-    internal int IntCount => _intCount;
-
-    /// <summary>Gets the current number of float entries in the arena.</summary>
-    internal int FloatCount => _floatCount;
-
-    /// <summary>
-    /// Total rows across all data-oriented node tables. Used by the incremental parse
-    /// growth threshold: node tables are copied wholesale by <see cref="BulkImportFrom"/>
-    /// and re-appended per parse, so they can grow independently of the scalar counts.
-    /// </summary>
-    internal int NodeRowTotal =>
-        _stringIdItems.Count +
-        _permissionsTable.Count +
-        _permissionScopeTable.Count +
-        _envTable.Count +
-        _envVarTable.Count +
-        _strategyTable.Count +
-        _matrixTable.Count +
-        _matrixRowTable.Count +
-        _matrixCombinationsTable.Count +
-        _combinationEntryList.Count +
-        _rawYamlTable.Count +
-        _rawYamlIdItems.Count +
-        _rawYamlPropTable.Count +
-        _containerTable.Count +
-        _servicesTable.Count +
-        _serviceTable.Count +
-        _workflowCallTable.Count +
-        _workflowCallInputTable.Count +
-        _workflowCallSecretTable.Count +
-        _eventTable.Count +
-        _webhookEventTable.Count +
-        _webhookFilterTable.Count +
-        _scheduledEventTable.Count +
-        _scheduleEntryTable.Count +
-        _workflowDispatchEventTable.Count +
-        _dispatchInputTable.Count +
-        _workflowCallEventTable.Count +
-        _wceInputTable.Count +
-        _wceSecretTable.Count +
-        _wceOutputTable.Count +
-        _repositoryDispatchEventTable.Count +
-        _imageVersionEventTable.Count +
-        _runnerTable.Count +
-        _concurrencyTable.Count +
-        _environmentTable.Count +
-        _credentialsTable.Count +
-        _snapshotTable.Count +
-        _defaultsTable.Count +
-        _defaultsRunTable.Count +
-        _stepTable.Count +
-        _stepIdItems.Count +
-        _execRunTable.Count +
-        _execActionTable.Count +
-        _actionInputTable.Count +
-        _execWaitTable.Count +
-        _execWaitAllTable.Count +
-        _execCancelTable.Count +
-        _execParallelTable.Count +
-        _actionMetadataInputTable.Count +
-        _actionMetadataOutputTable.Count +
-        _actionMetadataRunsTable.Count +
-        _actionMetadataBrandingTable.Count +
-        _jobTable.Count +
-        _jobEntryTable.Count +
-        _jobOutputTable.Count;
 
     // Debug helpers (§6.2 debugging experience)
 
