@@ -438,7 +438,7 @@ public static partial class WorkflowParser
         int keyLength,
         TextPosition keyMark,
         ref PooledBuffer<Diagnostic> diagnostics,
-        Span<long> keyStore,
+        ref Span<long> keyStore,
         ref int keyCount,
         SectionText mappingName)
     {
@@ -463,11 +463,18 @@ public static partial class WorkflowParser
             }
         }
 
-        if (keyCount < keyStore.Length)
+        if (keyCount == keyStore.Length)
         {
-            keyStore[keyCount] = ((long)keyOffset << 32) | (uint)keyLength;
-            keyCount++;
+            // Rare path: more than 64 dynamic keys in a single mapping. Grow into a plain
+            // heap array so later duplicates are still detected (rare-path allocation is
+            // within the project's error-path budget).
+            var grown = new long[keyStore.Length * 2];
+            keyStore[..keyCount].CopyTo(grown);
+            keyStore = grown;
         }
+
+        keyStore[keyCount] = ((long)keyOffset << 32) | (uint)keyLength;
+        keyCount++;
 
         return true;
     }

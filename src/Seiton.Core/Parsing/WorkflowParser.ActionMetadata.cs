@@ -107,7 +107,7 @@ public static partial class WorkflowParser
                 idSlice.Length,
                 idMark,
                 ref diagnostics,
-                keyStore,
+                ref keyStore,
                 ref keyCount,
                 "action inputs"))
             {
@@ -307,7 +307,7 @@ public static partial class WorkflowParser
                 idSlice.Length,
                 idMark,
                 ref diagnostics,
-                keyStore,
+                ref keyStore,
                 ref keyCount,
                 "action outputs"))
             {

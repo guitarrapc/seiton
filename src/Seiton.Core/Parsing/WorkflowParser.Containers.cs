@@ -80,7 +80,7 @@ public static partial class WorkflowParser
                 serviceName.Length,
                 serviceMark,
                 ref diagnostics,
-                keyStore,
+                ref keyStore,
                 ref keyCount,
                 "services"))
             {

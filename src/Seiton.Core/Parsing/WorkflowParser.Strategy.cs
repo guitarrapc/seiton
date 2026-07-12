@@ -242,7 +242,7 @@ public static partial class WorkflowParser
                 keySlice.Length,
                 keyMark,
                 ref diagnostics,
-                keyStore,
+                ref keyStore,
                 ref keyCount,
                 "strategy.matrix"))
             {
@@ -553,7 +553,7 @@ public static partial class WorkflowParser
                     keySlice.Length,
                     keyMark,
                     ref diagnostics,
-                    keyStore,
+                    ref keyStore,
                     ref keyCount,
                     "matrix object"))
                 {

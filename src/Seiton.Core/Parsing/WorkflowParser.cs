@@ -895,7 +895,7 @@ public static partial class WorkflowParser
                 keySlice.Length,
                 keyMark,
                 ref diagnostics,
-                keyStore,
+                ref keyStore,
                 ref keyCount,
                 "permissions"))
             {
@@ -1017,7 +1017,7 @@ public static partial class WorkflowParser
                 keySlice.Length,
                 keyMark,
                 ref diagnostics,
-                keyStore,
+                ref keyStore,
                 ref keyCount,
                 sectionName.IsEmpty ? error : sectionName))
             {
@@ -1536,7 +1536,7 @@ public static partial class WorkflowParser
                 jobId.Length,
                 jobIdMark,
                 ref diagnostics,
-                keyStore,
+                ref keyStore,
                 ref keyCount,
                 "jobs"))
             {
@@ -1625,7 +1625,7 @@ public static partial class WorkflowParser
                         jobId.Length,
                         jobIdMark,
                         ref diagnostics,
-                        keyStore,
+                        ref keyStore,
                         ref keyCount,
                         "jobs"))
                     {
@@ -1657,7 +1657,7 @@ public static partial class WorkflowParser
                 jobId.Length,
                 jobIdMark,
                 ref diagnostics,
-                keyStore,
+                ref keyStore,
                 ref keyCount,
                 "jobs"))
             {

@@ -95,7 +95,7 @@ public static partial class WorkflowParser
                     eventKeySlice.Length,
                     eventMark,
                     ref diagnostics,
-                    keyStore,
+                    ref keyStore,
                     ref keyCount,
                     "on"))
                 {

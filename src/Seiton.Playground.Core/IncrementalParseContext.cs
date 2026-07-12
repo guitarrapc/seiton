@@ -8,6 +8,12 @@ using Seiton.Core.Parsing.Ast;
 namespace Seiton.Playground;
 
 /// <summary>Identifies a root-level workflow section for incremental parsing.</summary>
+/// <remarks>
+/// Bit positions must stay aligned with the parser's <c>WorkflowRootMappingKey</c>
+/// enum (WorkflowParser.MappingKeys.WorkflowRoot.cs): the skip mask built from these
+/// ordinals is consumed as <c>rootSkipMask &amp; (1 &lt;&lt; workflowKeyOrdinal)</c>.
+/// Do not reorder.
+/// </remarks>
 public enum RootSectionKind
 {
     /// <summary>The workflow <c>name</c> section.</summary>
@@ -193,6 +199,7 @@ public sealed class IncrementalParseContext
     private int _baseBoolCount;
     private int _baseIntCount;
     private int _baseFloatCount;
+    private int _baseNodeRowTotal;
 
     // Full-parse baseline counts: used to detect excessive growth and force full re-parse.
     // Prevents unbounded BulkImport growth when root sections change repeatedly.
@@ -201,6 +208,7 @@ public sealed class IncrementalParseContext
     private int _fullParseBoolCount;
     private int _fullParseIntCount;
     private int _fullParseFloatCount;
+    private int _fullParseNodeRowTotal;
 
     // D-5c: reusable buffer for job skip entries (avoids per-call allocation)
     private JobSkipEntry[]? _jobSkipEntriesBuf;
@@ -235,10 +243,12 @@ public sealed class IncrementalParseContext
         _baseBoolCount = 0;
         _baseIntCount = 0;
         _baseFloatCount = 0;
+        _baseNodeRowTotal = 0;
         _fullParseStringCount = 0;
         _fullParseBoolCount = 0;
         _fullParseIntCount = 0;
         _fullParseFloatCount = 0;
+        _fullParseNodeRowTotal = 0;
         _cachedJobDiagnostics = null;
         _lastReusedJobs = null;
 
@@ -282,6 +292,9 @@ public sealed class IncrementalParseContext
         if (!string.Equals(_previousFilePath, filePath, StringComparison.Ordinal))
         {
             _lastReusedJobs = null;
+            // Also drop the per-job lint diagnostic cache: file A's cached diagnostics
+            // must never merge into file B's results.
+            _cachedJobDiagnostics = null;
             return FullParseAndStore(utf8Yaml, filePath);
         }
 
@@ -292,6 +305,9 @@ public sealed class IncrementalParseContext
             // Update stored reference so that if the caller reuses/overwrites the OLD buffer,
             // future comparisons will use the new (current) buffer as the baseline.
             _previousSource = utf8Yaml;
+            // Rebind the arena to the caller's live (byte-identical) buffer so slices
+            // resolve against it instead of the old array the caller may reuse.
+            _previousArena.RebindSource(utf8Yaml);
             return new ParseResult(new ParseResultData(_previousWorkflow, null, _previousDiagnostics, _previousHasFatalError), _previousArena, ownsArena: false);
         }
 
@@ -328,7 +344,8 @@ public sealed class IncrementalParseContext
             (_baseStringCount > _fullParseStringCount * GrowthThresholdMultiplier ||
              _baseBoolCount > _fullParseBoolCount * GrowthThresholdMultiplier ||
              _baseIntCount > _fullParseIntCount * GrowthThresholdMultiplier ||
-             _baseFloatCount > _fullParseFloatCount * GrowthThresholdMultiplier))
+             _baseFloatCount > _fullParseFloatCount * GrowthThresholdMultiplier ||
+             _baseNodeRowTotal > _fullParseNodeRowTotal * GrowthThresholdMultiplier))
         {
             _lastReusedJobs = null;
             return FullParseAndStore(utf8Yaml, filePath);
@@ -368,6 +385,7 @@ public sealed class IncrementalParseContext
         _baseBoolCount = arena.BoolCount;
         _baseIntCount = arena.IntCount;
         _baseFloatCount = arena.FloatCount;
+        _baseNodeRowTotal = arena.NodeRowTotal;
         _registry = newRegistry;
 
         // Mark sections that produced diagnostics so they are never skipped on next parse.
@@ -379,14 +397,26 @@ public sealed class IncrementalParseContext
         // diagnostics buffers still registered on it.
         oldArena?.Dispose();
 
-        // D-5d: record which jobs were reused for lint cache
+        // D-5d: record which jobs were reused for lint cache.
+        // _lastReusedJobs is recorded from jobSkipEntries (REGISTRY order) but consumed
+        // in JOBS-MAP-ENTRY order by BuildSkipJobs/the visitor. When a job key is dropped
+        // as a duplicate during incremental parse (the registry counts the line, but the
+        // jobs map has no entry for it), the orders diverge and the wrong job would be
+        // skipped in lint. Skip caching for this round when the counts disagree.
         var jobCount = parseResult.Workflow!.Jobs.Count;
-        if (_lastReusedJobs is null || _lastReusedJobs.Length < jobCount)
-            _lastReusedJobs = new bool[jobCount];
+        if (jobCount != newRegistry.JobCount)
+        {
+            _lastReusedJobs = null;
+        }
         else
-            Array.Clear(_lastReusedJobs, 0, _lastReusedJobs.Length);
-        for (var i = 0; i < jobSkipEntries.Length && i < jobCount; i++)
-            _lastReusedJobs[i] = jobSkipEntries[i].Job.HasValue;
+        {
+            if (_lastReusedJobs is null || _lastReusedJobs.Length < jobCount)
+                _lastReusedJobs = new bool[jobCount];
+            else
+                Array.Clear(_lastReusedJobs, 0, _lastReusedJobs.Length);
+            for (var i = 0; i < jobSkipEntries.Length && i < jobCount; i++)
+                _lastReusedJobs[i] = jobSkipEntries[i].Job.HasValue;
+        }
 
         return new ParseResult(parseResult, arena, ownsArena: false);
     }
@@ -540,11 +570,13 @@ public sealed class IncrementalParseContext
             _baseBoolCount = arena.BoolCount;
             _baseIntCount = arena.IntCount;
             _baseFloatCount = arena.FloatCount;
+            _baseNodeRowTotal = arena.NodeRowTotal;
             // Store full-parse baseline for growth threshold detection
             _fullParseStringCount = _baseStringCount;
             _fullParseBoolCount = _baseBoolCount;
             _fullParseIntCount = _baseIntCount;
             _fullParseFloatCount = _baseFloatCount;
+            _fullParseNodeRowTotal = _baseNodeRowTotal;
         }
 
         // Full parse invalidates job cache — all diagnostics will be fresh
@@ -744,6 +776,11 @@ public sealed class IncrementalParseContext
         for (var j = 0; j < foundCount; j++)
         {
             var (kind, _, valueStart) = found[j];
+            // First-wins: the parser ignores a duplicated root key (with a diagnostic) and
+            // uses the FIRST occurrence, so the registry must record the first occurrence
+            // too. Recording the second would let edits to the parser-effective first block
+            // be judged "unchanged" and return stale AST/diagnostics.
+            if (registry.GetRootSection(kind).IsValid) continue;
             var endOffset = (j + 1 < foundCount) ? found[j + 1].KeyOffset : length;
             var sectionSpan = source.AsSpan(valueStart, endOffset - valueStart);
             var hash = ComputeHash(sectionSpan);

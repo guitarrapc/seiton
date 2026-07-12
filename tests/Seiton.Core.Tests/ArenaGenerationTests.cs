@@ -66,6 +66,45 @@ public sealed class ArenaGenerationTests
     }
 
     [Test]
+    public async Task EnumeratingCapturedEnumeratorAfterDispose_Throws()
+    {
+        var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(Yaml), "wf.yml");
+
+        var workflow = result.Workflow;
+        var jobs = workflow.Jobs;
+        workflow.Jobs.TryGetValue("build"u8, out var job);
+        var steps = job.Steps;
+
+        // Capture enumerators before dispose.
+        var jobsEnumerator = jobs.GetEnumerator();
+        var stepsEnumerator = steps.GetEnumerator();
+
+        result.Dispose();
+
+        // foreach over stale maps/lists throws the generation check.
+        Assert.Throws<InvalidOperationException>(() =>
+        {
+            foreach (var _ in jobs) { }
+        });
+        Assert.Throws<InvalidOperationException>(() =>
+        {
+            foreach (var _ in steps) { }
+        });
+
+        // Enumerators captured before dispose throw when their elements are resolved.
+        Assert.Throws<InvalidOperationException>(() =>
+        {
+            while (jobsEnumerator.MoveNext()) { _ = jobsEnumerator.Current; }
+        });
+        Assert.Throws<InvalidOperationException>(() =>
+        {
+            while (stepsEnumerator.MoveNext()) { _ = stepsEnumerator.Current; }
+        });
+
+        await Task.CompletedTask;
+    }
+
+    [Test]
     public async Task HasValueOnStaleRef_DoesNotThrow()
     {
         var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(Yaml), "wf.yml");

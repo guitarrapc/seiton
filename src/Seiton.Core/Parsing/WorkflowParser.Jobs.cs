@@ -994,7 +994,7 @@ public static partial class WorkflowParser
                 keySlice.Length,
                 keyMark,
                 ref diagnostics,
-                keyStore,
+                ref keyStore,
                 ref keyCount,
                 "outputs"))
             {
@@ -1061,7 +1061,7 @@ public static partial class WorkflowParser
             var nameMark = reader.CurrentStart;
             var nameSlice = reader.GetScalarSlice();
             var nameUtf8 = reader.GetScalarUtf8();
-            if (!TryRegisterDynamicKey(source, nameUtf8, nameSlice.Offset, nameSlice.Length, nameMark, ref diagnostics, keyStore, ref keyCount, "with"))
+            if (!TryRegisterDynamicKey(source, nameUtf8, nameSlice.Offset, nameSlice.Length, nameMark, ref diagnostics, ref keyStore, ref keyCount, "with"))
             {
                 reader.Read();
                 if (!reader.End)
@@ -1162,7 +1162,7 @@ public static partial class WorkflowParser
             var nameMark = reader.CurrentStart;
             var nameSlice = reader.GetScalarSlice();
             var nameUtf8 = reader.GetScalarUtf8();
-            if (!TryRegisterDynamicKey(source, nameUtf8, nameSlice.Offset, nameSlice.Length, nameMark, ref diagnostics, keyStore, ref keyCount, "secrets"))
+            if (!TryRegisterDynamicKey(source, nameUtf8, nameSlice.Offset, nameSlice.Length, nameMark, ref diagnostics, ref keyStore, ref keyCount, "secrets"))
             {
                 reader.Read();
                 if (!reader.End)

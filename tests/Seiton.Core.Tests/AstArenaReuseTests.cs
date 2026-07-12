@@ -58,6 +58,27 @@ public sealed class AstArenaReuseTests
     }
 
     [Test]
+    public async Task Arena_DoubleDispose_DoesNotPoisonThreadCache()
+    {
+        // Regression: a second Dispose on an arena already sitting in the ThreadStatic
+        // cache took the "cache occupied" branch, returned all backing arrays to the
+        // pool and nulled them — poisoning the cached arena so the next Rent+parse on
+        // the same thread crashed.
+        var yaml = Encoding.UTF8.GetBytes("on: push\njobs: {}\n");
+
+        var result = WorkflowParser.ParseDirect(yaml, "double-dispose-a.yml", out var arena);
+        await Assert.That(result.HasFatalError).IsFalse();
+
+        arena!.Dispose();
+        arena.Dispose(); // double dispose must be a no-op
+
+        // Subsequent rent + parse on the same thread must still work.
+        using var result2 = WorkflowParser.Parse(yaml, "double-dispose-b.yml");
+        await Assert.That(result2.HasFatalError).IsFalse();
+        await Assert.That(result2.Workflow.HasValue).IsTrue();
+    }
+
+    [Test]
     public async Task NodeTable_ReleaseOversized_ClearsCountWithArray()
     {
         var table = new NodeTable<int>();

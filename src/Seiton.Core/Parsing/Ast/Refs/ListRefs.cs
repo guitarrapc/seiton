@@ -38,7 +38,16 @@ public readonly struct StringRefList
 
     public int Count => _range.Count;
 
-    public StringRef this[int index] => new(ArenaChecked, ArenaChecked!.GetStringIdAt(_range, index));
+    public StringRef this[int index]
+    {
+        get
+        {
+            // Backing store is shared across lists — an unbounded index would silently
+            // read another list's element. Also makes default-instance indexing throw.
+            if ((uint)index >= (uint)_range.Count) throw new ArgumentOutOfRangeException(nameof(index));
+            return new(ArenaChecked, ArenaChecked!.GetStringIdAt(_range, index));
+        }
+    }
 
     public Enumerator GetEnumerator() => new(ArenaChecked, _range);
 
@@ -113,7 +122,14 @@ public readonly struct StepRefList
 
     public int Count => _range.Count;
 
-    public StepRef this[int index] => new(ArenaChecked, ArenaChecked!.GetStepIdAt(_range, index));
+    public StepRef this[int index]
+    {
+        get
+        {
+            if ((uint)index >= (uint)_range.Count) throw new ArgumentOutOfRangeException(nameof(index));
+            return new(ArenaChecked, ArenaChecked!.GetStepIdAt(_range, index));
+        }
+    }
 
     public Enumerator GetEnumerator() => new(ArenaChecked, _range);
 
@@ -188,7 +204,14 @@ public readonly struct EventRefList
 
     public int Count => _range.Count;
 
-    public EventRef this[int index] => new(ArenaChecked, _range.First + index);
+    public EventRef this[int index]
+    {
+        get
+        {
+            if ((uint)index >= (uint)_range.Count) throw new ArgumentOutOfRangeException(nameof(index));
+            return new(ArenaChecked, _range.First + index);
+        }
+    }
 
     public Enumerator GetEnumerator() => new(ArenaChecked, _range);
 
@@ -263,7 +286,14 @@ public readonly struct ScheduleRefList
 
     public int Count => _range.Count;
 
-    public ScheduleEntryRef this[int index] => new(ArenaChecked, in ArenaChecked!.GetScheduleEntryAt(_range, index));
+    public ScheduleEntryRef this[int index]
+    {
+        get
+        {
+            if ((uint)index >= (uint)_range.Count) throw new ArgumentOutOfRangeException(nameof(index));
+            return new(ArenaChecked, in ArenaChecked!.GetScheduleEntryAt(_range, index));
+        }
+    }
 
     public Enumerator GetEnumerator() => new(ArenaChecked, _range);
 
@@ -338,7 +368,14 @@ public readonly struct RawYamlRefList
 
     public int Count => _range.Count;
 
-    public RawYamlRef this[int index] => new(ArenaChecked, ArenaChecked!.GetRawYamlIdAt(_range, index));
+    public RawYamlRef this[int index]
+    {
+        get
+        {
+            if ((uint)index >= (uint)_range.Count) throw new ArgumentOutOfRangeException(nameof(index));
+            return new(ArenaChecked, ArenaChecked!.GetRawYamlIdAt(_range, index));
+        }
+    }
 
     public Enumerator GetEnumerator() => new(ArenaChecked, _range);
 
@@ -413,7 +450,14 @@ public readonly struct CombinationsRefList
 
     public int Count => _range.Count;
 
-    public MatrixCombinationsRef this[int index] => new(ArenaChecked, in ArenaChecked!.GetMatrixCombinationsAt(_range, index));
+    public MatrixCombinationsRef this[int index]
+    {
+        get
+        {
+            if ((uint)index >= (uint)_range.Count) throw new ArgumentOutOfRangeException(nameof(index));
+            return new(ArenaChecked, in ArenaChecked!.GetMatrixCombinationsAt(_range, index));
+        }
+    }
 
     public Enumerator GetEnumerator() => new(ArenaChecked, _range);
 
@@ -488,7 +532,14 @@ public readonly struct CombinationEntryRefList
 
     public int Count => _range.Count;
 
-    public RawYamlRefMap this[int index] => new(ArenaChecked, ArenaChecked!.GetCombinationEntryAt(_range, index));
+    public RawYamlRefMap this[int index]
+    {
+        get
+        {
+            if ((uint)index >= (uint)_range.Count) throw new ArgumentOutOfRangeException(nameof(index));
+            return new(ArenaChecked, ArenaChecked!.GetCombinationEntryAt(_range, index));
+        }
+    }
 
     public Enumerator GetEnumerator() => new(ArenaChecked, _range);
 
@@ -563,7 +614,14 @@ public readonly struct WorkflowCallEventInputRefList
 
     public int Count => _range.Count;
 
-    public WorkflowCallEventInputRef this[int index] => new(ArenaChecked, in ArenaChecked!.GetWorkflowCallEventInputAt(_range, index));
+    public WorkflowCallEventInputRef this[int index]
+    {
+        get
+        {
+            if ((uint)index >= (uint)_range.Count) throw new ArgumentOutOfRangeException(nameof(index));
+            return new(ArenaChecked, in ArenaChecked!.GetWorkflowCallEventInputAt(_range, index));
+        }
+    }
 
     public Enumerator GetEnumerator() => new(ArenaChecked, _range);
 

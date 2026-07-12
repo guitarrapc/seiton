@@ -15,6 +15,9 @@ public static partial class WorkflowParser
         };
     }
 
+    // Bit positions must stay aligned with Seiton.Playground's RootSectionKind
+    // (IncrementalParseContext.cs): the incremental rootSkipMask is built from that
+    // enum's ordinals and tested here as (1 << workflowKeyOrdinal). Do not reorder.
     private enum WorkflowRootMappingKey : byte
     {
         Name = 0,

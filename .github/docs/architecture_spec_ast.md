@@ -83,7 +83,8 @@ Row structs have `init` properties only — **rows cannot be mutated after appen
 - **Default refs chain safely**: `job.Strategy.Matrix.Rows` never throws no matter how much of the chain is absent — the tail simply has `HasValue == false` / is empty. Rule-side null guards are unnecessary as a rule.
 - Absence checks use `HasValue`. These are structs, so `is null` / `is { }` patterns do not work (`is { }` is always true — a mechanical-replacement trap). In tests, `IsNull()` / `IsNotNull()` on a boxed struct compiles but misjudges at runtime — always assert `HasValue`.
 - Polymorphism is a `Kind` switch plus typed accessors (`AsRun()` / `AsAction()` / ...). An `As*()` call with a mismatched kind returns a default ref.
-- Ref equality is (arena, id) value equality — stable within one parse, so `Dictionary<StepRef, T>` has the same semantics as the old object-identity keys.
+- Ref equality is (arena, id) value equality — stable within one parse, so `Dictionary<StepRef, T>` has the same semantics as the old object-identity keys. Caveat: equality is generation-blind (it never throws on stale refs by design), and arenas are pooled per thread — a ref retained across a re-parse can compare equal to a same-index ref from the new parse. Never key a collection with refs from more than one parse.
+- List indexers and map `GetAt` are bounds-checked against the range and throw `ArgumentOutOfRangeException` on misuse (the backing stores are shared across lists, so an unchecked out-of-range read would silently return another list's data).
 - Read strings via `StringRef.Value` (UTF-8 span) / `.Slice` / `.Range`. `.Decode()` (string materialization) is **only for building diagnostic messages**.
 
 ## 5. Lifetime and Safety

@@ -114,7 +114,7 @@ public static partial class WorkflowParser
                 idSlice.Length,
                 idMark,
                 ref diagnostics,
-                keyStore,
+                ref keyStore,
                 ref keyCount,
                 "on.workflow_dispatch.inputs"))
             {

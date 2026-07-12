@@ -302,4 +302,58 @@ public sealed class IncrementalParseJobSkipTests
         var runValue = exec.Run.Decode();
         await Assert.That(runValue).Contains("much-longer-text");
     }
+
+    [Test]
+    public async Task ParseIncrementally_ManyAlternatingEdits_RemainsCorrect()
+    {
+        // Growth-threshold guard (including node-table rows): repeated incremental parses
+        // copy node tables wholesale and re-append re-parsed rows each round. After many
+        // rounds the context must force a full parse instead of accumulating unbounded
+        // rows, and results must stay correct throughout.
+        var ctx = new IncrementalParseContext();
+
+        for (var i = 0; i <= 34; i++)
+        {
+            var timeout = (i % 2 == 0) ? 11 : 22;
+            var yaml = Encoding.UTF8.GetBytes(
+                $"on: push\njobs:\n  build:\n    runs-on: ubuntu-latest\n    timeout-minutes: {timeout}\n    steps:\n      - run: echo edit\n  deploy:\n    runs-on: ubuntu-latest\n    steps:\n      - run: echo deploy\n");
+
+            var result = ctx.ParseIncrementally(yaml, FilePath);
+
+            await Assert.That(result.Workflow.Jobs.Count).IsEqualTo(2);
+            await Assert.That(result.Workflow.Jobs.GetAt(0).Value.TimeoutMinutes.Value).IsEqualTo((double)timeout);
+            await Assert.That(result.Workflow.Jobs.GetAt(1).Value.Steps[0].Exec.AsRun().Run.Decode()).IsEqualTo("echo deploy");
+        }
+    }
+
+    [Test]
+    public async Task ParseIncrementally_DuplicateRootJobsKey_EditToFirstBlockIsReflected()
+    {
+        // Regression: with a duplicated root key (two `jobs:` blocks) the registry recorded
+        // the SECOND occurrence (last-wins) while the parser uses the FIRST (first-wins).
+        // An edit to the effective first block was then judged "unchanged" (the second
+        // block's bytes did not move) and a stale job AST was reused.
+        // Assert on a parse-time-computed value (timeout-minutes) rather than a raw
+        // string slice: same-length edits leave stale slices pointing at the new bytes,
+        // so only parse-time-materialized values reveal a stale reused job AST.
+        var yaml1 = Encoding.UTF8.GetBytes(
+            "on: push\njobs:\n  alpha:\n    runs-on: ubuntu-latest\n    timeout-minutes: 10\n    steps:\n      - run: echo aaa\njobs:\n  beta:\n    runs-on: ubuntu-latest\n    steps:\n      - run: echo beta\n");
+
+        var ctx = new IncrementalParseContext();
+        var result1 = ctx.ParseIncrementally(yaml1, FilePath);
+
+        // Parser first-wins: workflow uses the first block and reports the duplicate key.
+        await Assert.That(result1.Workflow.Jobs.Count).IsEqualTo(1);
+        await Assert.That(result1.Diagnostics.Any(d => d.Message.Contains("duplicate key: jobs", StringComparison.Ordinal))).IsTrue();
+
+        // Same-length edit inside the FIRST block ("timeout-minutes: 10" → "99")
+        var yaml2 = Encoding.UTF8.GetBytes(
+            "on: push\njobs:\n  alpha:\n    runs-on: ubuntu-latest\n    timeout-minutes: 99\n    steps:\n      - run: echo aaa\njobs:\n  beta:\n    runs-on: ubuntu-latest\n    steps:\n      - run: echo beta\n");
+
+        var result2 = ctx.ParseIncrementally(yaml2, FilePath);
+
+        await Assert.That(result2.Workflow.Jobs.Count).IsEqualTo(1);
+        var alphaJob = result2.Workflow.Jobs.GetAt(0).Value;
+        await Assert.That(alphaJob.TimeoutMinutes.Value).IsEqualTo(99d);
+    }
 }

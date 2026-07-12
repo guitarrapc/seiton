@@ -54,6 +54,9 @@ internal struct NodeTable<T> where T : struct
         var count = Math.Min(source._count, limit);
         if (count <= 0)
         {
+            // Zero the count even for an empty source so stale destination rows can
+            // never remain addressable after the copy.
+            _count = 0;
             return;
         }
 

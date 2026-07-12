@@ -290,8 +290,19 @@ internal sealed class AstArena : IDisposable
     /// <summary>
     /// Registers a pooled diagnostics array with this arena. The array will be returned
     /// to <see cref="ArrayPool{T}.Shared"/> when this arena is disposed.
+    /// If a previous buffer was registered, it is returned to the pool immediately
+    /// (matches <see cref="RegisterLintDiagnosticsBuffer"/>; prevents leaking the old buffer
+    /// when a parse is repeated on the same arena).
     /// </summary>
-    internal void RegisterDiagnosticsBuffer(Diagnostic[] buffer) => _diagnosticsBuffer = buffer;
+    internal void RegisterDiagnosticsBuffer(Diagnostic[] buffer)
+    {
+        if (_diagnosticsBuffer is not null)
+        {
+            ArrayPool<Diagnostic>.Shared.Return(_diagnosticsBuffer, clearArray: true);
+        }
+
+        _diagnosticsBuffer = buffer;
+    }
 
     /// <summary>
     /// Registers a pooled lint diagnostics array with this arena. The array will be returned
@@ -345,6 +356,11 @@ internal sealed class AstArena : IDisposable
     /// </summary>
     public void Dispose()
     {
+        // Double-dispose guard: an arena already sitting in the ThreadStatic cache is
+        // already disposed. Running Dispose again would take the "cache occupied" branch
+        // and null out the cached arena's backing arrays, poisoning the cache.
+        if (ReferenceEquals(cached, this)) return;
+
         _generation++;
 
         // Return pooled diagnostics buffer if registered
@@ -668,6 +684,17 @@ internal sealed class AstArena : IDisposable
 
     /// <summary>Gets the raw UTF-8 source bytes that this arena indexes into.</summary>
     public byte[] Source => _source;
+
+    /// <summary>
+    /// Rebinds this arena to a byte-identical source buffer. Used by the incremental
+    /// identical-source fast path so slices resolve against the caller's live array
+    /// instead of the previous (potentially reused/overwritten) buffer.
+    /// </summary>
+    internal void RebindSource(byte[] source)
+    {
+        Debug.Assert(source.Length == _source.Length, "RebindSource requires a byte-identical source buffer");
+        _source = source;
+    }
 
     // String allocation
 
@@ -1548,6 +1575,68 @@ internal sealed class AstArena : IDisposable
 
     /// <summary>Gets the current number of float entries in the arena.</summary>
     internal int FloatCount => _floatCount;
+
+    /// <summary>
+    /// Total rows across all data-oriented node tables. Used by the incremental parse
+    /// growth threshold: node tables are copied wholesale by <see cref="BulkImportFrom"/>
+    /// and re-appended per parse, so they can grow independently of the scalar counts.
+    /// </summary>
+    internal int NodeRowTotal =>
+        _stringIdItems.Count +
+        _permissionsTable.Count +
+        _permissionScopeTable.Count +
+        _envTable.Count +
+        _envVarTable.Count +
+        _strategyTable.Count +
+        _matrixTable.Count +
+        _matrixRowTable.Count +
+        _matrixCombinationsTable.Count +
+        _combinationEntryList.Count +
+        _rawYamlTable.Count +
+        _rawYamlIdItems.Count +
+        _rawYamlPropTable.Count +
+        _containerTable.Count +
+        _servicesTable.Count +
+        _serviceTable.Count +
+        _workflowCallTable.Count +
+        _workflowCallInputTable.Count +
+        _workflowCallSecretTable.Count +
+        _eventTable.Count +
+        _webhookEventTable.Count +
+        _webhookFilterTable.Count +
+        _scheduledEventTable.Count +
+        _scheduleEntryTable.Count +
+        _workflowDispatchEventTable.Count +
+        _dispatchInputTable.Count +
+        _workflowCallEventTable.Count +
+        _wceInputTable.Count +
+        _wceSecretTable.Count +
+        _wceOutputTable.Count +
+        _repositoryDispatchEventTable.Count +
+        _imageVersionEventTable.Count +
+        _runnerTable.Count +
+        _concurrencyTable.Count +
+        _environmentTable.Count +
+        _credentialsTable.Count +
+        _snapshotTable.Count +
+        _defaultsTable.Count +
+        _defaultsRunTable.Count +
+        _stepTable.Count +
+        _stepIdItems.Count +
+        _execRunTable.Count +
+        _execActionTable.Count +
+        _actionInputTable.Count +
+        _execWaitTable.Count +
+        _execWaitAllTable.Count +
+        _execCancelTable.Count +
+        _execParallelTable.Count +
+        _actionMetadataInputTable.Count +
+        _actionMetadataOutputTable.Count +
+        _actionMetadataRunsTable.Count +
+        _actionMetadataBrandingTable.Count +
+        _jobTable.Count +
+        _jobEntryTable.Count +
+        _jobOutputTable.Count;
 
     // Debug helpers (§6.2 debugging experience)
 
