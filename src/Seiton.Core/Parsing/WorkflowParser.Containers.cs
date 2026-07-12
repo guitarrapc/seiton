@@ -5,7 +5,7 @@ namespace Seiton.Core.Parsing;
 
 public static partial class WorkflowParser
 {
-    private static Services? ParseServices<TReader>(ref TReader reader, AstArena arena, ref PooledBuffer<Diagnostic> diagnostics, ReadOnlySpan<byte> source, Utf8Slice jobId)
+    private static ServicesId ParseServices<TReader>(ref TReader reader, AstArena arena, ref PooledBuffer<Diagnostic> diagnostics, ReadOnlySpan<byte> source, Utf8Slice jobId)
         where TReader : IYamlStreamReader, allows ref struct
     {
         // spec §3.17: expression form is accepted as Services { Expression }
@@ -26,17 +26,18 @@ public static partial class WorkflowParser
             {
                 // Plain scalar without expression → not a valid services value
                 AddError(ref diagnostics, "\"services\" section is scalar node but mapping node is expected", scalarMark);
-                return null;
+                return default;
             }
             if (!expression.HasValue)
             {
-                return null;
+                return default;
             }
 
-            var exprServices = arena.AllocServices();
-            exprServices.Expression = expression;
-            exprServices.Range = arena.GetStringRange(expression);
-            return exprServices;
+            return arena.AddServices(new ServicesData
+            {
+                Expression = expression,
+                Range = arena.GetStringRange(expression),
+            });
         }
 
         if (reader.CurrentKind != YamlEventKind.MappingStart)
@@ -48,85 +49,85 @@ public static partial class WorkflowParser
 
         var mappingStart = reader.CurrentStart;
         var range = BuildScalarLocation(mappingStart, 1);
-        var map = new PooledBuffer<SliceMap<Service>.Entry>(8);
-        try
+        // Service rows are appended contiguously: nested container parsing only touches
+        // other tables (container/env/credentials/scalars), never the service table.
+        var servicesFirst = arena.ServiceCount;
+        var serviceCount = 0;
+        Span<long> keyStore = stackalloc long[64];
+        var keyCount = 0;
+
+        reader.Read(); // consume services mapping
+        while (!reader.End && reader.CurrentKind != YamlEventKind.MappingEnd)
         {
-            Span<long> keyStore = stackalloc long[64];
-            var keyCount = 0;
-
-            reader.Read(); // consume services mapping
-            while (!reader.End && reader.CurrentKind != YamlEventKind.MappingEnd)
+            if (reader.CurrentKind != YamlEventKind.Scalar)
             {
-                if (reader.CurrentKind != YamlEventKind.Scalar)
+                AddError(ref diagnostics, $"jobs.'{DecodeUtf8(source, jobId)}'.services key must be string", reader.CurrentStart);
+                reader.SkipCurrentNode();
+                if (!reader.End && reader.CurrentKind != YamlEventKind.MappingEnd)
                 {
-                    AddError(ref diagnostics, $"jobs.'{DecodeUtf8(source, jobId)}'.services key must be string", reader.CurrentStart);
                     reader.SkipCurrentNode();
-                    if (!reader.End && reader.CurrentKind != YamlEventKind.MappingEnd)
-                    {
-                        reader.SkipCurrentNode();
-                    }
-                    continue;
                 }
-
-                var serviceName = reader.GetScalarSlice();
-                var serviceNameUtf8 = reader.GetScalarUtf8();
-                var serviceMark = reader.CurrentStart;
-                if (!TryRegisterDynamicKey(
-                    source,
-                    serviceNameUtf8,
-                    serviceName.Offset,
-                    serviceName.Length,
-                    serviceMark,
-                    ref diagnostics,
-                    keyStore,
-                    ref keyCount,
-                    caseSensitive: false,
-                    "services"))
-                {
-                    reader.Read();
-                    if (!reader.End)
-                    {
-                        reader.SkipCurrentNode();
-                    }
-
-                    continue;
-                }
-
-                var serviceNameNode = arena.AddString(serviceName, reader.IsScalarQuoted(), BuildScalarLocation(reader.CurrentStart, serviceNameUtf8.Length));
-                reader.Read();
-                if (reader.End)
-                {
-                    break;
-                }
-
-                var container = ParseContainerLike(ref reader, arena, ref diagnostics, source, jobId, serviceName, isService: true, requireImage: true, serviceMark);
-                if (container is not null)
-                {
-                    var service = arena.AllocService();
-                    service.Name = serviceNameNode;
-                    service.Container = container;
-                    service.Range = arena.GetStringRange(serviceNameNode);
-                    map.Add(new SliceMap<Service>.Entry(serviceName, service));
-                }
+                continue;
             }
 
-            if (reader.CurrentKind == YamlEventKind.MappingEnd)
+            var serviceName = reader.GetScalarSlice();
+            var serviceNameUtf8 = reader.GetScalarUtf8();
+            var serviceMark = reader.CurrentStart;
+            if (!TryRegisterDynamicKey(
+                source,
+                serviceNameUtf8,
+                serviceName.Offset,
+                serviceName.Length,
+                serviceMark,
+                ref diagnostics,
+                ref keyStore,
+                ref keyCount,
+                "services"))
             {
-                range = BuildCompositeLocation(mappingStart, reader.CurrentEnd);
                 reader.Read();
+                if (!reader.End)
+                {
+                    reader.SkipCurrentNode();
+                }
+
+                continue;
             }
 
-            var (svcEntries, svcCount) = map.DetachArray();
-            arena.RegisterSliceMapBuffer(svcEntries);
-            var services = arena.AllocServices();
-            services.ServiceMap = new SliceMap<Service>(svcEntries, svcCount, caseSensitive: false);
-            services.Range = range;
-            return services;
+            var serviceNameNode = arena.AddString(serviceName, reader.IsScalarQuoted(), BuildScalarLocation(reader.CurrentStart, serviceNameUtf8.Length));
+            reader.Read();
+            if (reader.End)
+            {
+                break;
+            }
+
+            var container = ParseContainerLike(ref reader, arena, ref diagnostics, source, jobId, serviceName, isService: true, requireImage: true, serviceMark);
+            if (container.HasValue)
+            {
+                arena.AddService(new ServiceData
+                {
+                    Key = serviceName,
+                    Name = serviceNameNode,
+                    Container = container,
+                    Range = arena.GetStringRange(serviceNameNode),
+                });
+                serviceCount++;
+            }
         }
-        finally { map.Dispose(); }
+
+        if (reader.CurrentKind == YamlEventKind.MappingEnd)
+        {
+            range = BuildCompositeLocation(mappingStart, reader.CurrentEnd);
+            reader.Read();
+        }
+
+        return arena.AddServices(new ServicesData
+        {
+            ServiceMap = new NodeRange(servicesFirst, serviceCount),
+            Range = range,
+        });
     }
 
-    private static Container? ParseContainerLike<TReader>(ref TReader reader, AstArena arena, ref PooledBuffer<Diagnostic> diagnostics, ReadOnlySpan<byte> source, Utf8Slice jobId, Utf8Slice serviceName, bool isService, bool requireImage, TextPosition sectionKeyStart)
+    private static ContainerId ParseContainerLike<TReader>(ref TReader reader, AstArena arena, ref PooledBuffer<Diagnostic> diagnostics, ReadOnlySpan<byte> source, Utf8Slice jobId, Utf8Slice serviceName, bool isService, bool requireImage, TextPosition sectionKeyStart)
         where TReader : IYamlStreamReader, allows ref struct
     {
         if (reader.CurrentKind == YamlEventKind.Scalar)
@@ -160,10 +161,11 @@ public static partial class WorkflowParser
                 return default;
             }
 
-            var scalarContainer = arena.AllocContainer();
-            scalarContainer.Image = scalarImage;
-            scalarContainer.Range = arena.GetStringRange(scalarImage);
-            return scalarContainer;
+            return arena.AddContainer(new ContainerData
+            {
+                Image = scalarImage,
+                Range = arena.GetStringRange(scalarImage),
+            });
         }
 
         if (reader.CurrentKind != YamlEventKind.MappingStart)
@@ -177,10 +179,10 @@ public static partial class WorkflowParser
         var range = BuildScalarLocation(mappingStart, 1);
         var hasImage = false;
         StringNodeId image = default;
-        Credentials? credentials = null;
-        Env? env = null;
-        IReadOnlyList<StringNodeId>? ports = null;
-        IReadOnlyList<StringNodeId>? volumes = null;
+        CredentialsId credentials = default;
+        EnvId env = default;
+        StringIdRange ports = default;
+        StringIdRange volumes = default;
         StringNodeId options = default;
         StringNodeId entrypoint = default;
         StringNodeId command = default;
@@ -366,20 +368,21 @@ public static partial class WorkflowParser
             AddError(ref diagnostics, $"\"image\" is missing in {sectionType} section", sectionKeyStart);
         }
 
-        var mappingContainer = arena.AllocContainer();
-        mappingContainer.Image = image.HasValue ? image : arena.AddString(default, false, default);
-        mappingContainer.Credentials = credentials;
-        mappingContainer.Env = env;
-        mappingContainer.Ports = ports;
-        mappingContainer.Volumes = volumes;
-        mappingContainer.Options = options;
-        mappingContainer.Entrypoint = entrypoint;
-        mappingContainer.Command = command;
-        mappingContainer.Range = range;
-        return mappingContainer;
+        return arena.AddContainer(new ContainerData
+        {
+            Image = image.HasValue ? image : arena.AddString(default, false, default),
+            Credentials = credentials,
+            Env = env,
+            Ports = ports,
+            Volumes = volumes,
+            Options = options,
+            Entrypoint = entrypoint,
+            Command = command,
+            Range = range,
+        });
     }
 
-    private static Credentials? ParseCredentials<TReader>(ref TReader reader, AstArena arena, ref PooledBuffer<Diagnostic> diagnostics, ReadOnlySpan<byte> source, Utf8Slice jobId, Utf8Slice serviceName, bool isService, TextPosition credentialsKeyMark)
+    private static CredentialsId ParseCredentials<TReader>(ref TReader reader, AstArena arena, ref PooledBuffer<Diagnostic> diagnostics, ReadOnlySpan<byte> source, Utf8Slice jobId, Utf8Slice serviceName, bool isService, TextPosition credentialsKeyMark)
         where TReader : IYamlStreamReader, allows ref struct
     {
         // spec §3.18: expression form is accepted as Credentials { Expression }
@@ -413,13 +416,14 @@ public static partial class WorkflowParser
             if (crExprErr) AddError(ref diagnostics, $"\"credentials\" section is scalar node but mapping node is expected", crExprMark);
             if (!expression.HasValue)
             {
-                return null;
+                return default;
             }
 
-            var exprCredentials = arena.AllocCredentials();
-            exprCredentials.Expression = expression;
-            exprCredentials.Range = arena.GetStringRange(expression);
-            return exprCredentials;
+            return arena.AddCredentials(new CredentialsData
+            {
+                Expression = expression,
+                Range = arena.GetStringRange(expression),
+            });
         }
 
         if (reader.CurrentKind != YamlEventKind.MappingStart)
@@ -533,97 +537,12 @@ public static partial class WorkflowParser
             AddError(ref diagnostics, "both \"username\" and \"password\" must be specified in \"credentials\" section", credentialsKeyMark);
         }
 
-        var mappingCredentials = arena.AllocCredentials();
-        mappingCredentials.Username = username;
-        mappingCredentials.Password = password;
-        mappingCredentials.Range = range;
-        return mappingCredentials;
-    }
-
-    private static void ParseStringMapping<TReader>(ref TReader reader, AstArena arena, ref PooledBuffer<Diagnostic> diagnostics, ReadOnlySpan<byte> source, string error, ExpressionValidationContext? expressionContext = null)
-        where TReader : IYamlStreamReader, allows ref struct
-    {
-        if (reader.CurrentKind != YamlEventKind.MappingStart)
+        return arena.AddCredentials(new CredentialsData
         {
-            AddError(ref diagnostics, error, reader.CurrentStart);
-            reader.SkipCurrentNode();
-            return;
-        }
-
-        Span<long> keyStore = stackalloc long[64];
-        var keyCount = 0;
-        reader.Read();
-        while (!reader.End && reader.CurrentKind != YamlEventKind.MappingEnd)
-        {
-            if (reader.CurrentKind != YamlEventKind.Scalar)
-            {
-                AddError(ref diagnostics, error, reader.CurrentStart);
-                reader.SkipCurrentNode();
-                if (!reader.End && reader.CurrentKind != YamlEventKind.MappingEnd)
-                {
-                    reader.SkipCurrentNode();
-                }
-                continue;
-            }
-
-            var keyMark = reader.CurrentStart;
-            var keySlice = reader.GetScalarSlice();
-            var keyUtf8 = reader.GetScalarUtf8();
-            if (!TryRegisterDynamicKey(
-                source,
-                keyUtf8,
-                keySlice.Offset,
-                keySlice.Length,
-                keyMark,
-                ref diagnostics,
-                keyStore,
-                ref keyCount,
-                caseSensitive: true,
-                error))
-            {
-                reader.Read(); // consume key
-                if (!reader.End)
-                {
-                    reader.SkipCurrentNode();
-                }
-
-                continue;
-            }
-
-            reader.Read();
-            if (reader.End)
-            {
-                break;
-            }
-
-            if (reader.CurrentKind != YamlEventKind.Scalar)
-            {
-                AddError(ref diagnostics, error, reader.CurrentStart);
-                reader.SkipCurrentNode();
-                continue;
-            }
-
-            if (expressionContext.HasValue)
-            {
-                var valueMark = reader.CurrentStart;
-                var valueUtf8 = reader.GetScalarUtf8();
-                ValidateExpressionText(
-                    valueUtf8,
-                    BuildScalarLocation(valueMark, valueUtf8.Length),
-                    expressionContext.Value,
-                    ref diagnostics,
-                    parseWholeValueIfNoEmbedded: false);
-                reader.Read();
-                continue;
-            }
-
-            reader.Read();
-        }
-
-        if (reader.CurrentKind == YamlEventKind.MappingEnd)
-        {
-            reader.Read();
-        }
+            Username = username,
+            Password = password,
+            Range = range,
+        });
     }
 
 }

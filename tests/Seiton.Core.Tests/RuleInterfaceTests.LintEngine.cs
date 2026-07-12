@@ -22,7 +22,7 @@ public sealed partial class RuleInterfaceTests
         using var result = new LintEngine().Check(Encoding.UTF8.GetBytes(yaml), "lint-engine.yml");
 
         await Assert.That(result.HasFatalError).IsFalse();
-        await Assert.That(result.Workflow is not null).IsTrue();
+        await Assert.That(result.Workflow.HasValue).IsTrue();
         await Assert.That(result.ParseDiagnostics.Any(x => x.Message.Contains("\"runs-on\" section is missing", StringComparison.Ordinal))).IsTrue();
         await Assert.That(result.Diagnostics.Any(x => x.Message.Contains("\"runs-on\" section is missing", StringComparison.Ordinal))).IsTrue();
     }
@@ -35,7 +35,7 @@ public sealed partial class RuleInterfaceTests
         using var result = new LintEngine().Check(Encoding.UTF8.GetBytes(yaml), "fatal.yml");
 
         await Assert.That(result.HasFatalError).IsTrue();
-        await Assert.That(result.Workflow).IsNull();
+        await Assert.That(result.Workflow.HasValue).IsFalse();
         await Assert.That(result.Diagnostics).HasSingleItem();
         await Assert.That(result.Diagnostics[0].Message).IsEqualTo("workflow root must be object");
         await Assert.That(result.Diagnostics[0].FilePath).IsEqualTo("fatal.yml");

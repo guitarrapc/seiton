@@ -7,17 +7,18 @@ public sealed class Workflow
 
     public StringNodeId RunName { get; init; }
 
-    public IReadOnlyList<Event> On { get; internal set; } = [];
+    public NodeRange On { get; internal set; }
 
-    public Permissions? Permissions { get; internal set; }
+    public PermissionsId Permissions { get; internal set; }
 
-    public Env? Env { get; internal set; }
+    public EnvId Env { get; internal set; }
 
-    public Defaults? Defaults { get; internal set; }
+    public DefaultsId Defaults { get; internal set; }
 
-    public Concurrency? Concurrency { get; internal set; }
+    public ConcurrencyId Concurrency { get; internal set; }
 
-    public SliceMap<Job> Jobs { get; internal set; }
+    /// <summary>The <c>jobs:</c> map — range over <see cref="JobEntryData"/> rows. default = key absent.</summary>
+    public NodeRange Jobs { get; internal set; }
 
     public TextRange Range { get; init; }
 }

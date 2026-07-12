@@ -22,10 +22,10 @@ public sealed partial class ParserTests
 
         var result = WorkflowParser.ParseDirect(Encoding.UTF8.GetBytes(yaml), "wf.yml", out var arena);
         await Assert.That(result.Diagnostics).IsEmpty();
-        var step = result.Workflow!.Jobs.Values().First().Steps![0];
+        var step = new StepRefList(arena, result.Workflow!.Jobs.Values(arena!).First().Steps)[0];
         await Assert.That(step.Background.HasValue).IsTrue();
-        await Assert.That(arena!.GetBoolValue(step.Background)).IsTrue();
-        await Assert.That(step.Exec).IsTypeOf<ExecRun>();
+        await Assert.That(step.Background.Value).IsTrue();
+        await Assert.That(step.Exec.Kind).IsEqualTo(StepExecKind.Run);
     }
 
     [Test]
@@ -70,11 +70,11 @@ public sealed partial class ParserTests
 
         var result = WorkflowParser.ParseDirect(Encoding.UTF8.GetBytes(yaml), "wf.yml", out var arena);
         await Assert.That(result.Diagnostics).IsEmpty();
-        var waitStep = result.Workflow!.Jobs.Values().First().Steps![2];
-        await Assert.That(waitStep.Exec).IsTypeOf<ExecWait>();
-        var targets = ((ExecWait)waitStep.Exec).Targets;
-        await Assert.That(targets!.Count).IsEqualTo(2);
-        await Assert.That(Encoding.UTF8.GetString(arena!.GetStringValue(targets[0]))).IsEqualTo("a");
+        var waitStep = new StepRefList(arena, result.Workflow!.Jobs.Values(arena!).First().Steps)[2];
+        await Assert.That(waitStep.Exec.Kind).IsEqualTo(StepExecKind.Wait);
+        var targets = waitStep.Exec.AsWait().Targets;
+        await Assert.That(targets.Count).IsEqualTo(2);
+        await Assert.That(targets[0].Decode()).IsEqualTo("a");
     }
 
     [Test]
@@ -91,10 +91,10 @@ public sealed partial class ParserTests
                   - wait-all: null
             """;
 
-        var result = WorkflowParser.ParseDirect(Encoding.UTF8.GetBytes(yaml), "wf.yml", out _);
+        var result = WorkflowParser.ParseDirect(Encoding.UTF8.GetBytes(yaml), "wf.yml", out var arena);
         await Assert.That(result.Diagnostics).IsEmpty();
-        var waitAllStep = result.Workflow!.Jobs.Values().First().Steps![1];
-        await Assert.That(waitAllStep.Exec).IsTypeOf<ExecWaitAll>();
+        var waitAllStep = new StepRefList(arena, result.Workflow!.Jobs.Values(arena!).First().Steps)[1];
+        await Assert.That(waitAllStep.Exec.Kind).IsEqualTo(StepExecKind.WaitAll);
     }
 
     [Test]
@@ -114,9 +114,9 @@ public sealed partial class ParserTests
 
         var result = WorkflowParser.ParseDirect(Encoding.UTF8.GetBytes(yaml), "wf.yml", out var arena);
         await Assert.That(result.Diagnostics).IsEmpty();
-        var cancelStep = result.Workflow!.Jobs.Values().First().Steps![1];
-        await Assert.That(cancelStep.Exec).IsTypeOf<ExecCancel>();
-        await Assert.That(Encoding.UTF8.GetString(arena!.GetStringValue(((ExecCancel)cancelStep.Exec).Target))).IsEqualTo("monitor");
+        var cancelStep = new StepRefList(arena, result.Workflow!.Jobs.Values(arena!).First().Steps)[1];
+        await Assert.That(cancelStep.Exec.Kind).IsEqualTo(StepExecKind.Cancel);
+        await Assert.That(cancelStep.Exec.AsCancel().Target.Decode()).IsEqualTo("monitor");
     }
 
     [Test]
@@ -134,10 +134,10 @@ public sealed partial class ParserTests
                     - run: npm run build-app3
             """;
 
-        var result = WorkflowParser.ParseDirect(Encoding.UTF8.GetBytes(yaml), "wf.yml", out _);
+        var result = WorkflowParser.ParseDirect(Encoding.UTF8.GetBytes(yaml), "wf.yml", out var arena);
         await Assert.That(result.Diagnostics).IsEmpty();
-        var parallel = (ExecParallel)result.Workflow!.Jobs.Values().First().Steps![0].Exec;
-        await Assert.That(parallel.Steps!.Count).IsEqualTo(3);
+        var parallel = new StepRefList(arena, result.Workflow!.Jobs.Values(arena!).First().Steps)[0].Exec.AsParallel();
+        await Assert.That(parallel.Steps.Count).IsEqualTo(3);
     }
 
     [Test]
@@ -155,10 +155,10 @@ public sealed partial class ParserTests
 
         var result = WorkflowParser.ParseDirect(Encoding.UTF8.GetBytes(yaml), "wf.yml", out var arena);
         await Assert.That(result.Diagnostics).IsEmpty();
-        var step = result.Workflow!.Jobs.Values().First().Steps![0];
+        var step = new StepRefList(arena, result.Workflow!.Jobs.Values(arena!).First().Steps)[0];
         await Assert.That(step.Background.HasValue).IsTrue();
-        await Assert.That(arena!.GetBoolValue(step.Background)).IsTrue();
-        await Assert.That(step.Exec).IsTypeOf<ExecAction>();
+        await Assert.That(step.Background.Value).IsTrue();
+        await Assert.That(step.Exec.Kind).IsEqualTo(StepExecKind.Action);
     }
 
     [Test]
@@ -174,11 +174,11 @@ public sealed partial class ParserTests
                   background: true
             """;
 
-        var result = WorkflowParser.ParseDirect(Encoding.UTF8.GetBytes(yaml), "action.yml", out _);
+        var result = WorkflowParser.ParseDirect(Encoding.UTF8.GetBytes(yaml), "action.yml", out var arena);
         await Assert.That(result.Diagnostics.Any(d =>
             d.Message.Contains("unexpected key \"background\"", StringComparison.Ordinal)
             && d.Message.Contains("composite action", StringComparison.Ordinal))).IsTrue();
-        var step = result.ActionMetadata!.Runs!.Steps![0];
+        var step = new StepRefList(arena, arena!.GetActionMetadataRuns(result.ActionMetadata!.Runs).Steps)[0];
         await Assert.That(step.Background.HasValue).IsFalse();
     }
 
@@ -216,12 +216,12 @@ public sealed partial class ParserTests
                     - wait-all: null
             """;
 
-        var result = WorkflowParser.ParseDirect(Encoding.UTF8.GetBytes(yaml), "wf.yml", out _);
+        var result = WorkflowParser.ParseDirect(Encoding.UTF8.GetBytes(yaml), "wf.yml", out var arena);
         await Assert.That(result.Diagnostics.Any(d =>
             d.Message.Contains("unexpected key \"wait-all\"", StringComparison.Ordinal)
             && d.Message.Contains("parallel group", StringComparison.Ordinal))).IsTrue();
-        var child = ((ExecParallel)result.Workflow!.Jobs.Values().First().Steps![0].Exec).Steps![0];
-        await Assert.That(child.Exec).IsNotTypeOf<ExecWaitAll>();
+        var child = new StepRefList(arena, result.Workflow!.Jobs.Values(arena!).First().Steps)[0].Exec.AsParallel().Steps[0];
+        await Assert.That(child.Exec.Kind).IsNotEqualTo(StepExecKind.WaitAll);
     }
 
     [Test]
@@ -237,12 +237,12 @@ public sealed partial class ParserTests
                     - wait: other
             """;
 
-        var result = WorkflowParser.ParseDirect(Encoding.UTF8.GetBytes(yaml), "wf.yml", out _);
+        var result = WorkflowParser.ParseDirect(Encoding.UTF8.GetBytes(yaml), "wf.yml", out var arena);
         await Assert.That(result.Diagnostics.Any(d =>
             d.Message.Contains("unexpected key \"wait\"", StringComparison.Ordinal)
             && d.Message.Contains("parallel group", StringComparison.Ordinal))).IsTrue();
-        var child = ((ExecParallel)result.Workflow!.Jobs.Values().First().Steps![0].Exec).Steps![0];
-        await Assert.That(child.Exec).IsNotTypeOf<ExecWait>();
+        var child = new StepRefList(arena, result.Workflow!.Jobs.Values(arena!).First().Steps)[0].Exec.AsParallel().Steps[0];
+        await Assert.That(child.Exec.Kind).IsNotEqualTo(StepExecKind.Wait);
     }
 
     [Test]
@@ -258,12 +258,12 @@ public sealed partial class ParserTests
                     - cancel: other
             """;
 
-        var result = WorkflowParser.ParseDirect(Encoding.UTF8.GetBytes(yaml), "wf.yml", out _);
+        var result = WorkflowParser.ParseDirect(Encoding.UTF8.GetBytes(yaml), "wf.yml", out var arena);
         await Assert.That(result.Diagnostics.Any(d =>
             d.Message.Contains("unexpected key \"cancel\"", StringComparison.Ordinal)
             && d.Message.Contains("parallel group", StringComparison.Ordinal))).IsTrue();
-        var child = ((ExecParallel)result.Workflow!.Jobs.Values().First().Steps![0].Exec).Steps![0];
-        await Assert.That(child.Exec).IsNotTypeOf<ExecCancel>();
+        var child = new StepRefList(arena, result.Workflow!.Jobs.Values(arena!).First().Steps)[0].Exec.AsParallel().Steps[0];
+        await Assert.That(child.Exec.Kind).IsNotEqualTo(StepExecKind.Cancel);
     }
 
     [Test]
@@ -280,11 +280,11 @@ public sealed partial class ParserTests
                       background: true
             """;
 
-        var result = WorkflowParser.ParseDirect(Encoding.UTF8.GetBytes(yaml), "wf.yml", out _);
+        var result = WorkflowParser.ParseDirect(Encoding.UTF8.GetBytes(yaml), "wf.yml", out var arena);
         await Assert.That(result.Diagnostics.Any(d =>
             d.Message.Contains("unexpected key \"background\"", StringComparison.Ordinal)
             && d.Message.Contains("parallel group", StringComparison.Ordinal))).IsTrue();
-        var child = ((ExecParallel)result.Workflow!.Jobs.Values().First().Steps![0].Exec).Steps![0];
+        var child = new StepRefList(arena, result.Workflow!.Jobs.Values(arena!).First().Steps)[0].Exec.AsParallel().Steps[0];
         await Assert.That(child.Background.HasValue).IsFalse();
     }
 
@@ -301,11 +301,11 @@ public sealed partial class ParserTests
                   - run: echo hi
             """;
 
-        var result = WorkflowParser.ParseDirect(Encoding.UTF8.GetBytes(yaml), "action.yml", out _);
+        var result = WorkflowParser.ParseDirect(Encoding.UTF8.GetBytes(yaml), "action.yml", out var arena);
         await Assert.That(result.Diagnostics.Any(d =>
             d.Message.Contains("unexpected key \"parallel\"", StringComparison.Ordinal)
             && d.Message.Contains("composite action", StringComparison.Ordinal))).IsTrue();
-        await Assert.That(result.ActionMetadata!.Runs!.Steps![0].Exec).IsNotTypeOf<ExecParallel>();
+        await Assert.That(new StepRefList(arena, arena!.GetActionMetadataRuns(result.ActionMetadata!.Runs).Steps)[0].Exec.Kind).IsNotEqualTo(StepExecKind.Parallel);
     }
 
     [Test]
@@ -343,11 +343,11 @@ public sealed partial class ParserTests
 
         var result = WorkflowParser.ParseDirect(Encoding.UTF8.GetBytes(yaml), "wf.yml", out var arena);
         await Assert.That(result.Diagnostics).IsEmpty();
-        var waitStep = result.Workflow!.Jobs.Values().First().Steps![1];
-        await Assert.That(waitStep.Exec).IsTypeOf<ExecWait>();
-        var targets = ((ExecWait)waitStep.Exec).Targets;
-        await Assert.That(targets!.Count).IsEqualTo(1);
-        await Assert.That(Encoding.UTF8.GetString(arena!.GetStringValue(targets[0]))).IsEqualTo("a");
+        var waitStep = new StepRefList(arena, result.Workflow!.Jobs.Values(arena!).First().Steps)[1];
+        await Assert.That(waitStep.Exec.Kind).IsEqualTo(StepExecKind.Wait);
+        var targets = waitStep.Exec.AsWait().Targets;
+        await Assert.That(targets.Count).IsEqualTo(1);
+        await Assert.That(targets[0].Decode()).IsEqualTo("a");
     }
 
     [Test]
@@ -364,9 +364,9 @@ public sealed partial class ParserTests
                   - wait-all: true
             """;
 
-        var result = WorkflowParser.ParseDirect(Encoding.UTF8.GetBytes(yaml), "wf.yml", out _);
+        var result = WorkflowParser.ParseDirect(Encoding.UTF8.GetBytes(yaml), "wf.yml", out var arena);
         await Assert.That(result.Diagnostics).IsEmpty();
-        await Assert.That(result.Workflow!.Jobs.Values().First().Steps![1].Exec).IsTypeOf<ExecWaitAll>();
+        await Assert.That(new StepRefList(arena, result.Workflow!.Jobs.Values(arena!).First().Steps)[1].Exec.Kind).IsEqualTo(StepExecKind.WaitAll);
     }
 
     [Test]
@@ -399,12 +399,12 @@ public sealed partial class ParserTests
                 - cancel: other
             """;
 
-        var result = WorkflowParser.ParseDirect(Encoding.UTF8.GetBytes(yaml), "action.yml", out _);
+        var result = WorkflowParser.ParseDirect(Encoding.UTF8.GetBytes(yaml), "action.yml", out var arena);
         await Assert.That(result.Diagnostics.Any(d =>
             d.Message.Contains("unexpected key \"cancel\"", StringComparison.Ordinal)
             && d.Message.Contains("composite action", StringComparison.Ordinal))).IsTrue();
-        var step = result.ActionMetadata!.Runs!.Steps![0];
-        await Assert.That(step.Exec).IsNotTypeOf<ExecCancel>();
+        var step = new StepRefList(arena, arena!.GetActionMetadataRuns(result.ActionMetadata!.Runs).Steps)[0];
+        await Assert.That(step.Exec.Kind).IsNotEqualTo(StepExecKind.Cancel);
     }
 
     [Test]
@@ -420,10 +420,10 @@ public sealed partial class ParserTests
                     - uses: actions/checkout@v4
             """;
 
-        var result = WorkflowParser.ParseDirect(Encoding.UTF8.GetBytes(yaml), "wf.yml", out _);
+        var result = WorkflowParser.ParseDirect(Encoding.UTF8.GetBytes(yaml), "wf.yml", out var arena);
         await Assert.That(result.Diagnostics).IsEmpty();
-        var child = ((ExecParallel)result.Workflow!.Jobs.Values().First().Steps![0].Exec).Steps![0];
-        await Assert.That(child.Exec).IsTypeOf<ExecAction>();
+        var child = new StepRefList(arena, result.Workflow!.Jobs.Values(arena!).First().Steps)[0].Exec.AsParallel().Steps[0];
+        await Assert.That(child.Exec.Kind).IsEqualTo(StepExecKind.Action);
     }
 
     [Test]
@@ -438,11 +438,11 @@ public sealed partial class ParserTests
                 - wait: other
             """;
 
-        var result = WorkflowParser.ParseDirect(Encoding.UTF8.GetBytes(yaml), "action.yml", out _);
+        var result = WorkflowParser.ParseDirect(Encoding.UTF8.GetBytes(yaml), "action.yml", out var arena);
         await Assert.That(result.Diagnostics.Any(d =>
             d.Message.Contains("unexpected key \"wait\"", StringComparison.Ordinal)
             && d.Message.Contains("composite action", StringComparison.Ordinal))).IsTrue();
-        await Assert.That(result.ActionMetadata!.Runs!.Steps![0].Exec).IsNotTypeOf<ExecWait>();
+        await Assert.That(new StepRefList(arena, arena!.GetActionMetadataRuns(result.ActionMetadata!.Runs).Steps)[0].Exec.Kind).IsNotEqualTo(StepExecKind.Wait);
     }
 
     [Test]
@@ -514,11 +514,11 @@ public sealed partial class ParserTests
                     background: true
             """;
 
-        var result = WorkflowParser.ParseDirect(Encoding.UTF8.GetBytes(yaml), "wf.yml", out _);
+        var result = WorkflowParser.ParseDirect(Encoding.UTF8.GetBytes(yaml), "wf.yml", out var arena);
         await Assert.That(result.Diagnostics.Any(d =>
             d.Message.Contains("unexpected key \"background\"", StringComparison.Ordinal)
             && d.Message.Contains("step to wait for background steps", StringComparison.Ordinal))).IsTrue();
-        var step = result.Workflow!.Jobs.Values().First().Steps![0];
+        var step = new StepRefList(arena, result.Workflow!.Jobs.Values(arena!).First().Steps)[0];
         await Assert.That(step.Background.HasValue).IsFalse();
     }
 
@@ -570,11 +570,11 @@ public sealed partial class ParserTests
                     if: ${{ true }}
             """;
 
-        var result = WorkflowParser.ParseDirect(Encoding.UTF8.GetBytes(yaml), "wf.yml", out _);
+        var result = WorkflowParser.ParseDirect(Encoding.UTF8.GetBytes(yaml), "wf.yml", out var arena);
         await Assert.That(result.Diagnostics.Any(d =>
             d.Message.Contains("unexpected key \"if\"", StringComparison.Ordinal)
             && d.Message.Contains("not supported on parallel, wait, wait-all, or cancel steps", StringComparison.Ordinal))).IsTrue();
-        var step = result.Workflow!.Jobs.Values().First().Steps![0];
+        var step = new StepRefList(arena, result.Workflow!.Jobs.Values(arena!).First().Steps)[0];
         await Assert.That(step.If.HasValue).IsFalse();
     }
 
@@ -594,12 +594,12 @@ public sealed partial class ParserTests
                     if: ${{ true }}
             """;
 
-        var result = WorkflowParser.ParseDirect(Encoding.UTF8.GetBytes(yaml), "wf.yml", out _);
+        var result = WorkflowParser.ParseDirect(Encoding.UTF8.GetBytes(yaml), "wf.yml", out var arena);
         var ifDiagnostics = result.Diagnostics.Where(d =>
             d.Message.Contains("unexpected key \"if\"", StringComparison.Ordinal)
             && d.Message.Contains("not supported on parallel, wait, wait-all, or cancel steps", StringComparison.Ordinal)).ToArray();
         await Assert.That(ifDiagnostics.Length).IsEqualTo(1);
-        var waitStep = result.Workflow!.Jobs.Values().First().Steps![1];
+        var waitStep = new StepRefList(arena, result.Workflow!.Jobs.Values(arena!).First().Steps)[1];
         await Assert.That(waitStep.If.HasValue).IsFalse();
     }
 
@@ -618,11 +618,11 @@ public sealed partial class ParserTests
                     if: ${{ true }}
             """;
 
-        var result = WorkflowParser.ParseDirect(Encoding.UTF8.GetBytes(yaml), "wf.yml", out _);
+        var result = WorkflowParser.ParseDirect(Encoding.UTF8.GetBytes(yaml), "wf.yml", out var arena);
         await Assert.That(result.Diagnostics.Any(d =>
             d.Message.Contains("unexpected key \"if\"", StringComparison.Ordinal)
             && d.Message.Contains("not supported on parallel, wait, wait-all, or cancel steps", StringComparison.Ordinal))).IsTrue();
-        var waitAllStep = result.Workflow!.Jobs.Values().First().Steps![1];
+        var waitAllStep = new StepRefList(arena, result.Workflow!.Jobs.Values(arena!).First().Steps)[1];
         await Assert.That(waitAllStep.If.HasValue).IsFalse();
     }
 
@@ -642,11 +642,11 @@ public sealed partial class ParserTests
                     if: ${{ true }}
             """;
 
-        var result = WorkflowParser.ParseDirect(Encoding.UTF8.GetBytes(yaml), "wf.yml", out _);
+        var result = WorkflowParser.ParseDirect(Encoding.UTF8.GetBytes(yaml), "wf.yml", out var arena);
         await Assert.That(result.Diagnostics.Any(d =>
             d.Message.Contains("unexpected key \"if\"", StringComparison.Ordinal)
             && d.Message.Contains("not supported on parallel, wait, wait-all, or cancel steps", StringComparison.Ordinal))).IsTrue();
-        var cancelStep = result.Workflow!.Jobs.Values().First().Steps![1];
+        var cancelStep = new StepRefList(arena, result.Workflow!.Jobs.Values(arena!).First().Steps)[1];
         await Assert.That(cancelStep.If.HasValue).IsFalse();
     }
 
@@ -666,11 +666,11 @@ public sealed partial class ParserTests
                     wait: [svc]
             """;
 
-        var result = WorkflowParser.ParseDirect(Encoding.UTF8.GetBytes(yaml), "wf.yml", out _);
+        var result = WorkflowParser.ParseDirect(Encoding.UTF8.GetBytes(yaml), "wf.yml", out var arena);
         await Assert.That(result.Diagnostics.Any(d =>
             d.Message.Contains("unexpected key \"if\"", StringComparison.Ordinal)
             && d.Message.Contains("not supported on parallel, wait, wait-all, or cancel steps", StringComparison.Ordinal))).IsTrue();
-        var waitStep = result.Workflow!.Jobs.Values().First().Steps![1];
+        var waitStep = new StepRefList(arena, result.Workflow!.Jobs.Values(arena!).First().Steps)[1];
         await Assert.That(waitStep.If.HasValue).IsFalse();
     }
 
@@ -725,9 +725,9 @@ public sealed partial class ParserTests
         try
         {
             await Assert.That(result.HasFatalError).IsFalse();
-            var steps = result.Workflow!.Jobs.Values().First().Steps!;
+            var steps = new StepRefList(arena, result.Workflow!.Jobs.Values(arena!).First().Steps);
             await Assert.That(steps.Count).IsEqualTo(2);
-            await Assert.That(steps[1].Exec).IsTypeOf<ExecWaitAll>();
+            await Assert.That(steps[1].Exec.Kind).IsEqualTo(StepExecKind.WaitAll);
             await Assert.That(bytes[^1]).IsNotEqualTo((byte)'\n');
         }
         finally
@@ -771,8 +771,8 @@ public sealed partial class ParserTests
         try
         {
             await Assert.That(result.HasFatalError).IsFalse();
-            var steps = result.Workflow!.Jobs.Values().First().Steps!;
-            await Assert.That(steps[1].Exec).IsTypeOf<ExecWaitAll>();
+            var steps = new StepRefList(arena, result.Workflow!.Jobs.Values(arena!).First().Steps);
+            await Assert.That(steps[1].Exec.Kind).IsEqualTo(StepExecKind.WaitAll);
         }
         finally
         {
@@ -796,7 +796,7 @@ public sealed partial class ParserTests
 
         var result = WorkflowParser.ParseDirect(Encoding.UTF8.GetBytes(yaml), "wf.yml", out var arena);
         await Assert.That(result.Diagnostics).IsEmpty();
-        var child = ((ExecParallel)result.Workflow!.Jobs.Values().First().Steps![0].Exec).Steps![0];
+        var child = new StepRefList(arena, result.Workflow!.Jobs.Values(arena!).First().Steps)[0].Exec.AsParallel().Steps[0];
         await Assert.That(child.If.HasValue).IsTrue();
     }
 }

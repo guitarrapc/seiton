@@ -25,7 +25,7 @@ internal static class BackgroundStepFlowAnalyzer
 
     internal readonly struct Finding
     {
-        public Finding(Step step, TextRange location, DiagnosticSeverity severity, string message, string structurePath)
+        public Finding(StepRef step, TextRange location, DiagnosticSeverity severity, string message, string structurePath)
         {
             Step = step;
             Location = location;
@@ -34,7 +34,7 @@ internal static class BackgroundStepFlowAnalyzer
             StructurePath = structurePath;
         }
 
-        public Step Step { get; }
+        public StepRef Step { get; }
         public TextRange Location { get; }
         public DiagnosticSeverity Severity { get; }
         public string Message { get; }
@@ -42,8 +42,7 @@ internal static class BackgroundStepFlowAnalyzer
     }
 
     internal static void Analyze(
-        Job job,
-        AstArena arena,
+        JobRef job,
         LintConfig config,
         string jobStructurePrefix,
         State state)
@@ -54,12 +53,12 @@ internal static class BackgroundStepFlowAnalyzer
         state.ActiveCount = 0;
 
         var steps = job.Steps;
-        if (steps is null or { Count: 0 } || config.Utf8Yaml is null)
+        if (steps.Count == 0 || config.Utf8Yaml is null)
         {
             return;
         }
 
-        if (!NeedsAnalysis(steps, arena))
+        if (!NeedsAnalysis(steps))
         {
             return;
         }
@@ -71,7 +70,6 @@ internal static class BackgroundStepFlowAnalyzer
                 steps[i],
                 i,
                 steps,
-                arena,
                 config,
                 jobStructurePrefix,
                 state,
@@ -82,11 +80,11 @@ internal static class BackgroundStepFlowAnalyzer
         state.ActiveCount = 0;
     }
 
-    private static bool NeedsAnalysis(IReadOnlyList<Step> steps, AstArena arena)
+    private static bool NeedsAnalysis(StepRefList steps)
     {
         for (var i = 0; i < steps.Count; i++)
         {
-            if (StepMightAffectFlow(steps[i], arena))
+            if (StepMightAffectFlow(steps[i]))
             {
                 return true;
             }
@@ -95,9 +93,9 @@ internal static class BackgroundStepFlowAnalyzer
         return false;
     }
 
-    private static bool StepMightAffectFlow(Step step, AstArena arena)
+    private static bool StepMightAffectFlow(StepRef step)
     {
-        if (IsExplicitBackground(step, arena))
+        if (IsExplicitBackground(step))
         {
             return true;
         }
@@ -110,10 +108,9 @@ internal static class BackgroundStepFlowAnalyzer
     }
 
     private static void ProcessTopLevelStep(
-        Step step,
+        StepRef step,
         int stepIndex,
-        IReadOnlyList<Step> topLevelSteps,
-        AstArena arena,
+        StepRefList topLevelSteps,
         LintConfig config,
         string jobStructurePrefix,
         State state,
@@ -123,69 +120,72 @@ internal static class BackgroundStepFlowAnalyzer
         var registry = state.Registry;
         var findings = state.Findings;
 
-        switch (step.Exec)
+        switch (step.Exec.Kind)
         {
-            case ExecParallel parallel:
-                TryRegisterStaticId(step, arena, registry, isBackground: false);
-                RegisterParallelChildren(parallel.Steps, arena, registry);
-                AddParallelChildrenToActive(parallel.Steps, arena, config, state);
+            case StepExecKind.Parallel:
+                var parallel = step.Exec.AsParallel();
+                TryRegisterStaticId(step, registry, isBackground: false);
+                RegisterParallelChildren(parallel.Steps, registry);
+                AddParallelChildrenToActive(parallel.Steps, config, state);
                 MaybeEmitPeakWarning(step, parallel.Range, $"{stepPath}.parallel", findings, state, ref peakWarningEmitted);
-                RemoveParallelChildrenFromActive(parallel.Steps, arena, config, state);
+                RemoveParallelChildrenFromActive(parallel.Steps, config, state);
                 break;
 
-            case ExecWait wait:
-                TryRegisterStaticId(step, arena, registry, isBackground: false);
-                ValidateWaitTargets(step, wait, stepPath, $"{stepPath}.wait", topLevelSteps, stepIndex, arena, registry, findings);
-                RemoveValidTargets(wait.Targets, topLevelSteps, stepIndex, arena, registry, state);
+            case StepExecKind.Wait:
+                var wait = step.Exec.AsWait();
+                TryRegisterStaticId(step, registry, isBackground: false);
+                ValidateWaitTargets(step, wait, stepPath, $"{stepPath}.wait", topLevelSteps, stepIndex, registry, findings);
+                RemoveValidTargets(wait.Targets, topLevelSteps, stepIndex, registry, state);
                 break;
 
-            case ExecCancel cancel:
-                TryRegisterStaticId(step, arena, registry, isBackground: false);
-                ValidateCancelTarget(step, cancel, stepPath, $"{stepPath}.cancel", topLevelSteps, stepIndex, arena, registry, findings);
-                RemoveValidCancelTarget(cancel, topLevelSteps, stepIndex, arena, registry, state);
+            case StepExecKind.Cancel:
+                var cancel = step.Exec.AsCancel();
+                TryRegisterStaticId(step, registry, isBackground: false);
+                ValidateCancelTarget(step, cancel, stepPath, $"{stepPath}.cancel", topLevelSteps, stepIndex, registry, findings);
+                RemoveValidCancelTarget(cancel, topLevelSteps, stepIndex, registry, state);
                 break;
 
-            case ExecWaitAll:
-                TryRegisterStaticId(step, arena, registry, isBackground: false);
+            case StepExecKind.WaitAll:
+                TryRegisterStaticId(step, registry, isBackground: false);
                 state.ActiveIds.Clear();
                 state.ActiveCount = 0;
                 break;
 
             default:
-                if (IsExplicitBackground(step, arena))
+                if (IsExplicitBackground(step))
                 {
-                    TryRegisterStaticId(step, arena, registry, isBackground: true);
-                    if (ShouldCountForPeak(step, arena, config))
+                    TryRegisterStaticId(step, registry, isBackground: true);
+                    if (ShouldCountForPeak(step, config))
                     {
-                        AddStepToActive(step, arena, state);
+                        AddStepToActive(step, state);
                         MaybeEmitPeakWarning(step, step.Range, stepPath, findings, state, ref peakWarningEmitted);
                     }
                 }
                 else
                 {
-                    TryRegisterStaticId(step, arena, registry, isBackground: false);
+                    TryRegisterStaticId(step, registry, isBackground: false);
                 }
 
                 break;
         }
     }
 
-    private static void RegisterParallelChildren(IReadOnlyList<Step>? children, AstArena arena, Dictionary<Utf8String, RegisteredStep> registry)
+    private static void RegisterParallelChildren(StepRefList children, Dictionary<Utf8String, RegisteredStep> registry)
     {
-        if (children is null)
+        if (!children.HasValue)
         {
             return;
         }
 
         for (var i = 0; i < children.Count; i++)
         {
-            TryRegisterStaticId(children[i], arena, registry, isBackground: true);
+            TryRegisterStaticId(children[i], registry, isBackground: true);
         }
     }
 
-    private static void AddParallelChildrenToActive(IReadOnlyList<Step>? children, AstArena arena, LintConfig config, State state)
+    private static void AddParallelChildrenToActive(StepRefList children, LintConfig config, State state)
     {
-        if (children is null)
+        if (!children.HasValue)
         {
             return;
         }
@@ -193,22 +193,22 @@ internal static class BackgroundStepFlowAnalyzer
         for (var i = 0; i < children.Count; i++)
         {
             var child = children[i];
-            if (!ShouldCountForPeak(child, arena, config))
+            if (!ShouldCountForPeak(child, config))
             {
                 continue;
             }
 
             state.ActiveCount++;
-            if (TryGetStaticIdKey(child, arena, out var key))
+            if (TryGetStaticIdKey(child, out var key))
             {
                 state.ActiveIds.Add(key);
             }
         }
     }
 
-    private static void RemoveParallelChildrenFromActive(IReadOnlyList<Step>? children, AstArena arena, LintConfig config, State state)
+    private static void RemoveParallelChildrenFromActive(StepRefList children, LintConfig config, State state)
     {
-        if (children is null)
+        if (!children.HasValue)
         {
             return;
         }
@@ -216,13 +216,13 @@ internal static class BackgroundStepFlowAnalyzer
         for (var i = 0; i < children.Count; i++)
         {
             var child = children[i];
-            if (!ShouldCountForPeak(child, arena, config))
+            if (!ShouldCountForPeak(child, config))
             {
                 continue;
             }
 
             state.ActiveCount = Math.Max(0, state.ActiveCount - 1);
-            if (TryGetStaticIdKey(child, arena, out var key))
+            if (TryGetStaticIdKey(child, out var key))
             {
                 state.ActiveIds.Remove(key);
             }
@@ -230,18 +230,17 @@ internal static class BackgroundStepFlowAnalyzer
     }
 
     private static void ValidateWaitTargets(
-        Step step,
-        ExecWait wait,
+        StepRef step,
+        ExecWaitRef wait,
         string stepPath,
         string structurePath,
-        IReadOnlyList<Step> topLevelSteps,
+        StepRefList topLevelSteps,
         int stepIndex,
-        AstArena arena,
         Dictionary<Utf8String, RegisteredStep> registry,
         List<Finding> findings)
     {
         var targets = wait.Targets;
-        if (targets is null)
+        if (!targets.HasValue)
         {
             return;
         }
@@ -255,20 +254,18 @@ internal static class BackgroundStepFlowAnalyzer
                 structurePath,
                 topLevelSteps,
                 stepIndex,
-                arena,
                 registry,
                 findings);
         }
     }
 
     private static void ValidateCancelTarget(
-        Step step,
-        ExecCancel cancel,
+        StepRef step,
+        ExecCancelRef cancel,
         string stepPath,
         string structurePath,
-        IReadOnlyList<Step> topLevelSteps,
+        StepRefList topLevelSteps,
         int stepIndex,
-        AstArena arena,
         Dictionary<Utf8String, RegisteredStep> registry,
         List<Finding> findings)
     {
@@ -284,30 +281,28 @@ internal static class BackgroundStepFlowAnalyzer
             structurePath,
             topLevelSteps,
             stepIndex,
-            arena,
             registry,
             findings);
     }
 
     private static void ValidateReference(
-        Step step,
-        StringNodeId targetId,
+        StepRef step,
+        StringRef target,
         string refKind,
         string structurePath,
-        IReadOnlyList<Step> topLevelSteps,
+        StepRefList topLevelSteps,
         int stepIndex,
-        AstArena arena,
         Dictionary<Utf8String, RegisteredStep> registry,
         List<Finding> findings)
     {
-        var targetSpan = arena.GetStringValue(targetId);
+        var targetSpan = target.Value;
         if (targetSpan.Length == 0)
         {
             return;
         }
 
         var targetKey = Utf8String.FromLowerAscii(targetSpan);
-        var location = arena.GetStringRange(targetId);
+        var location = target.Range;
 
         if (registry.TryGetValue(targetKey, out var registered))
         {
@@ -324,7 +319,7 @@ internal static class BackgroundStepFlowAnalyzer
             return;
         }
 
-        if (TryForwardScanFindStaticId(topLevelSteps, stepIndex + 1, targetSpan, arena, out var forwardIsBackground))
+        if (TryForwardScanFindStaticId(topLevelSteps, stepIndex + 1, targetSpan, out var forwardIsBackground))
         {
             var idText = DecodeId(targetSpan);
             if (forwardIsBackground)
@@ -360,21 +355,20 @@ internal static class BackgroundStepFlowAnalyzer
     private static string DecodeId(ReadOnlySpan<byte> targetSpan) => Encoding.UTF8.GetString(targetSpan);
 
     private static void RemoveValidTargets(
-        IReadOnlyList<StringNodeId>? targets,
-        IReadOnlyList<Step> topLevelSteps,
+        StringRefList targets,
+        StepRefList topLevelSteps,
         int stepIndex,
-        AstArena arena,
         Dictionary<Utf8String, RegisteredStep> registry,
         State state)
     {
-        if (targets is null)
+        if (!targets.HasValue)
         {
             return;
         }
 
         for (var i = 0; i < targets.Count; i++)
         {
-            if (TryResolveValidBackgroundTarget(targets[i], topLevelSteps, stepIndex, arena, registry, out var key))
+            if (TryResolveValidBackgroundTarget(targets[i], topLevelSteps, stepIndex, registry, out var key))
             {
                 if (state.ActiveIds.Remove(key))
                 {
@@ -385,10 +379,9 @@ internal static class BackgroundStepFlowAnalyzer
     }
 
     private static void RemoveValidCancelTarget(
-        ExecCancel cancel,
-        IReadOnlyList<Step> topLevelSteps,
+        ExecCancelRef cancel,
+        StepRefList topLevelSteps,
         int stepIndex,
-        AstArena arena,
         Dictionary<Utf8String, RegisteredStep> registry,
         State state)
     {
@@ -397,7 +390,7 @@ internal static class BackgroundStepFlowAnalyzer
             return;
         }
 
-        if (TryResolveValidBackgroundTarget(cancel.Target, topLevelSteps, stepIndex, arena, registry, out var key)
+        if (TryResolveValidBackgroundTarget(cancel.Target, topLevelSteps, stepIndex, registry, out var key)
             && state.ActiveIds.Remove(key))
         {
             state.ActiveCount = Math.Max(0, state.ActiveCount - 1);
@@ -405,15 +398,14 @@ internal static class BackgroundStepFlowAnalyzer
     }
 
     private static bool TryResolveValidBackgroundTarget(
-        StringNodeId targetId,
-        IReadOnlyList<Step> topLevelSteps,
+        StringRef target,
+        StepRefList topLevelSteps,
         int stepIndex,
-        AstArena arena,
         Dictionary<Utf8String, RegisteredStep> registry,
         out Utf8String key)
     {
         key = default;
-        var targetSpan = arena.GetStringValue(targetId);
+        var targetSpan = target.Value;
         if (targetSpan.Length == 0)
         {
             return false;
@@ -429,15 +421,14 @@ internal static class BackgroundStepFlowAnalyzer
     }
 
     private static bool TryForwardScanFindStaticId(
-        IReadOnlyList<Step> steps,
+        StepRefList steps,
         int startIndex,
         ReadOnlySpan<byte> targetSpan,
-        AstArena arena,
         out bool isBackground)
     {
         for (var i = startIndex; i < steps.Count; i++)
         {
-            if (TryFindStaticIdInStep(steps[i], targetSpan, arena, out isBackground))
+            if (TryFindStaticIdInStep(steps[i], targetSpan, out isBackground))
             {
                 return true;
             }
@@ -447,19 +438,20 @@ internal static class BackgroundStepFlowAnalyzer
         return false;
     }
 
-    private static bool TryFindStaticIdInStep(Step step, ReadOnlySpan<byte> targetSpan, AstArena arena, out bool isBackground)
+    private static bool TryFindStaticIdInStep(StepRef step, ReadOnlySpan<byte> targetSpan, out bool isBackground)
     {
-        if (StepHasMatchingStaticId(step, targetSpan, arena))
+        if (StepHasMatchingStaticId(step, targetSpan))
         {
-            isBackground = IsExplicitBackground(step, arena);
+            isBackground = IsExplicitBackground(step);
             return true;
         }
 
-        if (step.Exec is ExecParallel { Steps: { } children })
+        if (step.Exec.Kind == StepExecKind.Parallel)
         {
+            var children = step.Exec.AsParallel().Steps;
             for (var i = 0; i < children.Count; i++)
             {
-                if (StepHasMatchingStaticId(children[i], targetSpan, arena))
+                if (StepHasMatchingStaticId(children[i], targetSpan))
                 {
                     isBackground = true;
                     return true;
@@ -471,9 +463,9 @@ internal static class BackgroundStepFlowAnalyzer
         return false;
     }
 
-    private static bool StepHasMatchingStaticId(Step step, ReadOnlySpan<byte> targetSpan, AstArena arena)
+    private static bool StepHasMatchingStaticId(StepRef step, ReadOnlySpan<byte> targetSpan)
     {
-        if (!TryGetStaticIdKey(step, arena, out var key))
+        if (!TryGetStaticIdKey(step, out var key))
         {
             return false;
         }
@@ -481,9 +473,9 @@ internal static class BackgroundStepFlowAnalyzer
         return EqualsAsciiIgnoreCase(key.Span, targetSpan);
     }
 
-    private static void TryRegisterStaticId(Step step, AstArena arena, Dictionary<Utf8String, RegisteredStep> registry, bool isBackground)
+    private static void TryRegisterStaticId(StepRef step, Dictionary<Utf8String, RegisteredStep> registry, bool isBackground)
     {
-        if (!TryGetStaticIdKey(step, arena, out var key))
+        if (!TryGetStaticIdKey(step, out var key))
         {
             return;
         }
@@ -491,16 +483,16 @@ internal static class BackgroundStepFlowAnalyzer
         registry.TryAdd(key, new RegisteredStep(isBackground));
     }
 
-    private static void AddStepToActive(Step step, AstArena arena, State state)
+    private static void AddStepToActive(StepRef step, State state)
     {
         state.ActiveCount++;
-        if (TryGetStaticIdKey(step, arena, out var key))
+        if (TryGetStaticIdKey(step, out var key))
         {
             state.ActiveIds.Add(key);
         }
     }
 
-    private static bool TryGetStaticIdKey(Step step, AstArena arena, out Utf8String key)
+    private static bool TryGetStaticIdKey(StepRef step, out Utf8String key)
     {
         key = default;
         if (!step.Id.HasValue)
@@ -508,12 +500,12 @@ internal static class BackgroundStepFlowAnalyzer
             return false;
         }
 
-        if (ExpressionScanHelpers.ContainsExpressionMarker(step.Id, arena))
+        if (step.Id.Expression.HasValue || ExpressionScanHelpers.ContainsExpressionMarker(step.Id.Value))
         {
             return false;
         }
 
-        var idSpan = arena.GetStringValue(step.Id);
+        var idSpan = step.Id.Value;
         if (idSpan.Length == 0)
         {
             return false;
@@ -523,21 +515,21 @@ internal static class BackgroundStepFlowAnalyzer
         return true;
     }
 
-    private static bool IsExplicitBackground(Step step, AstArena arena)
+    private static bool IsExplicitBackground(StepRef step)
     {
         return step.Background.HasValue
-            && arena.GetBoolValue(step.Background)
+            && step.Background.Value
             && step.Exec.Kind is StepExecKind.Run or StepExecKind.Action;
     }
 
-    private static bool ShouldCountForPeak(Step step, AstArena arena, LintConfig config)
+    private static bool ShouldCountForPeak(StepRef step, LintConfig config)
     {
         if (!step.If.HasValue)
         {
             return true;
         }
 
-        var raw = arena.GetStringValue(step.If);
+        var raw = step.If.Value;
         if (raw.Length == 0)
         {
             return false;
@@ -586,7 +578,7 @@ internal static class BackgroundStepFlowAnalyzer
     }
 
     private static void MaybeEmitPeakWarning(
-        Step step,
+        StepRef step,
         TextRange location,
         string structurePath,
         List<Finding> findings,

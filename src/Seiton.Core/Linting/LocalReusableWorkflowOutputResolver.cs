@@ -161,27 +161,29 @@ internal sealed class LocalReusableWorkflowOutputResolver
 
         var parseHandle = WorkflowParser.Parse(bytes, resolvedPath);
         using var _ = parseHandle;
-        if (parseHandle.HasFatalError || parseHandle.Workflow is null)
+        if (parseHandle.HasFatalError || parseHandle.WorkflowNode is null)
         {
             return null;
         }
 
-        WorkflowCallEvent? workflowCallEvent = null;
-        for (var i = 0; i < parseHandle.Workflow.On.Count; i++)
+        var on = parseHandle.Workflow.On;
+        WorkflowCallEventRef workflowCallEvent = default;
+        for (var i = 0; i < on.Count; i++)
         {
-            if (parseHandle.Workflow.On[i] is WorkflowCallEvent wce)
+            if (on[i].Kind == EventKind.WorkflowCall)
             {
-                workflowCallEvent = wce;
+                workflowCallEvent = on[i].AsWorkflowCall();
                 break;
             }
         }
 
-        if (workflowCallEvent is null)
+        if (!workflowCallEvent.HasValue)
         {
             return null;
         }
 
-        if (workflowCallEvent.Outputs is not { Count: > 0 } outputs)
+        var outputs = workflowCallEvent.Outputs;
+        if (outputs.Count == 0)
         {
             return [];
         }
@@ -190,7 +192,7 @@ internal sealed class LocalReusableWorkflowOutputResolver
         var idx = 0;
         foreach (var kv in outputs)
         {
-            names[idx++] = Encoding.UTF8.GetString(kv.Key.AsSpan(bytes));
+            names[idx++] = kv.Key.Decode();
         }
 
         return names;

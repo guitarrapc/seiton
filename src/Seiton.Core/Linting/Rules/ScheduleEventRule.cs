@@ -14,20 +14,21 @@ public sealed class ScheduleEventRule() : RuleBase(RuleId.ScheduleEvent)
 
     public override string Name => "Schedule Event Rule";
 
-    public override void VisitEvent(Event ev)
+    public override void VisitEvent(EventRef ev)
     {
-        if (ev is not ScheduledEvent scheduleEvent || Config.Utf8Yaml is null)
+        if (ev.Kind != EventKind.Scheduled || Config.Utf8Yaml is null)
         {
             return;
         }
 
-        for (var i = 0; i < scheduleEvent.Schedules.Count; i++)
+        var schedules = ev.AsScheduled().Schedules;
+        for (var i = 0; i < schedules.Count; i++)
         {
-            ValidateScheduleEntry(scheduleEvent, scheduleEvent.Schedules[i]);
+            ValidateScheduleEntry(ev, schedules[i]);
         }
     }
 
-    private void ValidateScheduleEntry(ScheduledEvent scheduleEvent, ScheduleEntry entry)
+    private void ValidateScheduleEntry(EventRef scheduleEvent, ScheduleEntryRef entry)
     {
         if (entry.Cron.HasValue && !IsExpressionOrInterpolation(entry.Cron))
         {
@@ -40,19 +41,19 @@ public sealed class ScheduleEventRule() : RuleBase(RuleId.ScheduleEvent)
         }
     }
 
-    private void ValidateCron(ScheduledEvent scheduleEvent, StringNodeId cronNode)
+    private void ValidateCron(EventRef scheduleEvent, StringRef cronNode)
     {
         var yaml = Config.Utf8Yaml!;
-        var cronUtf8 = Arena.GetStringSlice(cronNode).AsSpan(yaml);
+        var cronUtf8 = cronNode.Slice.AsSpan(yaml);
         if (cronUtf8.IsEmpty)
         {
-            AddEventError(scheduleEvent, "on.schedule cron must not be empty", Arena.GetStringRange(cronNode));
+            AddEventError(scheduleEvent, "on.schedule cron must not be empty", cronNode.Range);
             return;
         }
 
         if (!TryParseCronUtf8(cronUtf8, out var cron, out var reason))
         {
-            AddEventError(scheduleEvent, $"on.schedule cron '{Decode(Arena.GetStringSlice(cronNode))}' is invalid: {reason}", Arena.GetStringRange(cronNode));
+            AddEventError(scheduleEvent, $"on.schedule cron '{Decode(cronNode.Slice)}' is invalid: {reason}", cronNode.Range);
             return;
         }
 
@@ -67,25 +68,25 @@ public sealed class ScheduleEventRule() : RuleBase(RuleId.ScheduleEvent)
             AddEventError(
                 scheduleEvent,
                 $"scheduled job runs too frequently. it runs once per {intervalSeconds} seconds. the shortest interval is once every {MinIntervalMinutes} minutes",
-                Arena.GetStringRange(cronNode));
+                cronNode.Range);
         }
     }
 
     private const int MaxDisplayTimezoneLength = 40;
 
-    private void ValidateTimezone(ScheduledEvent scheduleEvent, StringNodeId timezoneNode)
+    private void ValidateTimezone(EventRef scheduleEvent, StringRef timezoneNode)
     {
         var yaml = Config.Utf8Yaml!;
-        var span = TrimAscii(Arena.GetStringSlice(timezoneNode).AsSpan(yaml));
+        var span = TrimAscii(timezoneNode.Slice.AsSpan(yaml));
         if (span.IsEmpty)
         {
-            AddEventError(scheduleEvent, "on.schedule timezone must not be empty", Arena.GetStringRange(timezoneNode));
+            AddEventError(scheduleEvent, "on.schedule timezone must not be empty", timezoneNode.Range);
             return;
         }
 
         if (IsUtcOrLocalUtf8(span))
         {
-            AddEventError(scheduleEvent, $"on.schedule timezone '{Decode(Arena.GetStringSlice(timezoneNode))}' is invalid", Arena.GetStringRange(timezoneNode));
+            AddEventError(scheduleEvent, $"on.schedule timezone '{Decode(timezoneNode.Slice)}' is invalid", timezoneNode.Range);
             return;
         }
 
@@ -101,7 +102,7 @@ public sealed class ScheduleEventRule() : RuleBase(RuleId.ScheduleEvent)
             }
             else
             {
-                var decoded = Decode(Arena.GetStringSlice(timezoneNode));
+                var decoded = Decode(timezoneNode.Slice);
                 display = decoded;
                 suggestion = Generated.IanaTimeZones.FindSuggestion(decoded);
             }
@@ -109,13 +110,13 @@ public sealed class ScheduleEventRule() : RuleBase(RuleId.ScheduleEvent)
             var message = suggestion is not null
                 ? $"on.schedule timezone '{display}' is invalid. did you mean '{suggestion}'?"
                 : $"on.schedule timezone '{display}' is invalid";
-            AddEventError(scheduleEvent, message, Arena.GetStringRange(timezoneNode));
+            AddEventError(scheduleEvent, message, timezoneNode.Range);
         }
     }
 
-    private bool IsExpressionOrInterpolation(StringNodeId node)
+    private bool IsExpressionOrInterpolation(StringRef node)
     {
-        return ExpressionScanHelpers.ContainsExpressionMarker(node, Arena);
+        return node.Expression.HasValue || ExpressionScanHelpers.ContainsExpressionMarker(node.Value);
     }
 
     private static ReadOnlySpan<byte> TrimAscii(ReadOnlySpan<byte> span)

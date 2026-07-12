@@ -48,7 +48,7 @@ public sealed class SyntaxRule : IRule
         }
     }
 
-    public void VisitWorkflowPre(Workflow workflow)
+    public void VisitWorkflowPre(WorkflowRef workflow)
     {
         for (var i = 0; i < rules.Length; i++)
         {
@@ -56,7 +56,7 @@ public sealed class SyntaxRule : IRule
         }
     }
 
-    public void VisitWorkflowPost(Workflow workflow)
+    public void VisitWorkflowPost(WorkflowRef workflow)
     {
         for (var i = 0; i < rules.Length; i++)
         {
@@ -64,7 +64,7 @@ public sealed class SyntaxRule : IRule
         }
     }
 
-    public void VisitActionMetadataPre(ActionMetadata metadata)
+    public void VisitActionMetadataPre(ActionMetadataRef metadata)
     {
         for (var i = 0; i < rules.Length; i++)
         {
@@ -72,7 +72,7 @@ public sealed class SyntaxRule : IRule
         }
     }
 
-    public void VisitActionMetadataPost(ActionMetadata metadata)
+    public void VisitActionMetadataPost(ActionMetadataRef metadata)
     {
         for (var i = 0; i < rules.Length; i++)
         {
@@ -80,7 +80,7 @@ public sealed class SyntaxRule : IRule
         }
     }
 
-    public void VisitEvent(Event ev)
+    public void VisitEvent(EventRef ev)
     {
         for (var i = 0; i < rules.Length; i++)
         {
@@ -88,7 +88,7 @@ public sealed class SyntaxRule : IRule
         }
     }
 
-    public void VisitJobPre(Job job)
+    public void VisitJobPre(JobRef job)
     {
         for (var i = 0; i < rules.Length; i++)
         {
@@ -96,7 +96,7 @@ public sealed class SyntaxRule : IRule
         }
     }
 
-    public void VisitJobPost(Job job)
+    public void VisitJobPost(JobRef job)
     {
         for (var i = 0; i < rules.Length; i++)
         {
@@ -104,7 +104,7 @@ public sealed class SyntaxRule : IRule
         }
     }
 
-    public void VisitStep(Step step)
+    public void VisitStep(StepRef step)
     {
         for (var i = 0; i < rules.Length; i++)
         {

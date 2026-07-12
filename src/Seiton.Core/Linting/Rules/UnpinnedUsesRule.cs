@@ -58,7 +58,7 @@ public sealed class UnpinnedUsesRule() : RuleBase(RuleId.UnpinnedUses)
         }
     }
 
-    public override void VisitWorkflowPre(Workflow workflow)
+    public override void VisitWorkflowPre(WorkflowRef workflow)
     {
         base.VisitWorkflowPre(workflow);
         // Clear per-source cache — slice offsets are invalid across different source bytes.
@@ -69,26 +69,26 @@ public sealed class UnpinnedUsesRule() : RuleBase(RuleId.UnpinnedUses)
         _lastHintedOwnerBytes = null;
     }
 
-    public override void VisitJobPre(Job job)
+    public override void VisitJobPre(JobRef job)
     {
         var workflowCall = job.WorkflowCall;
-        if (workflowCall is null || Config.Utf8Yaml is null)
+        if (!workflowCall.HasValue || Config.Utf8Yaml is null)
         {
             return;
         }
 
-        var uses = Arena.GetStringValue(workflowCall.Uses);
+        var uses = workflowCall.Uses.Value;
         var usesLocation = BuildUsesLocation(workflowCall);
-        var usesRefLocation = BuildRefLocation(Arena.GetStringSlice(workflowCall.Uses), uses, Config.Utf8Yaml, usesLocation);
         if (uses.StartsWith("./"u8))
         {
             if (uses.IndexOf((byte)'@') >= 0)
             {
-                var localJobId = Decode(Arena.GetStringSlice(job.Id));
+                var localJobId = job.Id.Decode();
+                var localRefLocation = BuildRefLocation(workflowCall.Uses.Slice, uses, Config.Utf8Yaml, usesLocation);
                 AddJobWarning(
                     job,
                     $"jobs.'{localJobId}'.uses local reusable workflow reference must not contain '@ref'",
-                    usesRefLocation);
+                    localRefLocation);
             }
 
             return;
@@ -103,8 +103,8 @@ public sealed class UnpinnedUsesRule() : RuleBase(RuleId.UnpinnedUses)
 
         if (!TryParseRemoteUses(uses, out var parsedJob))
         {
-            var formatJobId = Decode(Arena.GetStringSlice(job.Id));
-            var invalidUsesText = Decode(Arena.GetStringSlice(workflowCall.Uses));
+            var formatJobId = job.Id.Decode();
+            var invalidUsesText = workflowCall.Uses.Decode();
             AddJobError(
                 job,
                 $"jobs.'{formatJobId}'.uses '{invalidUsesText}' has invalid reference format; expected owner/repo/path@ref",
@@ -121,36 +121,37 @@ public sealed class UnpinnedUsesRule() : RuleBase(RuleId.UnpinnedUses)
         {
             if (Config.Verbose)
             {
-                var ignoredUsesText = Decode(Arena.GetStringSlice(workflowCall.Uses));
+                var ignoredUsesText = workflowCall.Uses.Decode();
                 AddJobInfo(job, $"ignored '{ignoredUsesText}' (matched ignore-actions pattern)", usesLocation);
             }
 
             return;
         }
 
-        var jobId = Decode(Arena.GetStringSlice(job.Id));
-        var usesText = Decode(Arena.GetStringSlice(workflowCall.Uses));
+        var jobId = job.Id.Decode();
+        var usesText = workflowCall.Uses.Decode();
         var url = ActionRefHelpers.BuildGitHubUrl(usesText);
         var urlSuffix = url is not null ? $". see {url}" : "";
         var help = BuildOwnerHintOnce(parsedJob.ActionPath);
+        var usesRefLocation = BuildRefLocation(workflowCall.Uses.Slice, uses, Config.Utf8Yaml, usesLocation);
         AddJobWarning(job, $"jobs.'{jobId}'.uses '{usesText}' is not pinned to a full-length commit SHA{urlSuffix} (fixable with --fix --enable-pin-network)", usesRefLocation, PinDiagnosticMetadata.ForUsesRef(usesText), help);
     }
 
-    public override void VisitStep(Step step)
+    public override void VisitStep(StepRef step)
     {
-        if (step.Exec is not ExecAction actionExec || Config.Utf8Yaml is null)
+        if (step.Exec.Kind != StepExecKind.Action || Config.Utf8Yaml is null)
         {
             return;
         }
 
-        var uses = Arena.GetStringValue(actionExec.Uses);
+        var actionExec = step.Exec.AsAction();
+        var uses = actionExec.Uses.Value;
         if (uses.Length == 0)
         {
             // Empty uses value: the parser already reported an error for this step.
             return;
         }
-        var usesLocation = actionExec.UsesKeyRange ?? Arena.GetStringRange(actionExec.Uses);
-        var usesRefLocation = BuildRefLocation(Arena.GetStringSlice(actionExec.Uses), uses, Config.Utf8Yaml, usesLocation);
+        var usesLocation = actionExec.UsesKeyRange ?? actionExec.Uses.Range;
         if (uses.StartsWith("docker://"u8))
         {
             if (uses.Length <= "docker://"u8.Length)
@@ -160,8 +161,7 @@ public sealed class UnpinnedUsesRule() : RuleBase(RuleId.UnpinnedUses)
             else if (uses[^1] == (byte)':')
             {
                 // Tag portion is empty: "docker://image:" → flag it
-                var imageSlice = Arena.GetStringSlice(actionExec.Uses);
-                var imageDisplay = Decode(imageSlice);
+                var imageDisplay = actionExec.Uses.Decode();
                 // Remove trailing colon for display (matches actionlint format)
                 if (imageDisplay.EndsWith(':'))
                 {
@@ -178,7 +178,8 @@ public sealed class UnpinnedUsesRule() : RuleBase(RuleId.UnpinnedUses)
         {
             if (uses.IndexOf((byte)'@') >= 0)
             {
-                AddStepWarning(step, "local action uses must not contain '@ref'", usesRefLocation);
+                var localRefLocation = BuildRefLocation(actionExec.Uses.Slice, uses, Config.Utf8Yaml, usesLocation);
+                AddStepWarning(step, "local action uses must not contain '@ref'", localRefLocation);
                 return;
             }
 
@@ -188,7 +189,7 @@ public sealed class UnpinnedUsesRule() : RuleBase(RuleId.UnpinnedUses)
 
         if (!TryParseRemoteUses(uses, out var parsedStep))
         {
-            var invalidUsesText = Decode(Arena.GetStringSlice(actionExec.Uses));
+            var invalidUsesText = actionExec.Uses.Decode();
             AddStepError(
                 step,
                 $"'{invalidUsesText}' has invalid reference format; expected owner/repo[/path]@ref",
@@ -205,16 +206,17 @@ public sealed class UnpinnedUsesRule() : RuleBase(RuleId.UnpinnedUses)
         {
             if (Config.Verbose)
             {
-                var ignoredUsesText = Decode(Arena.GetStringSlice(actionExec.Uses));
+                var ignoredUsesText = actionExec.Uses.Decode();
                 AddStepInfo(step, $"ignored '{ignoredUsesText}' (matched ignore-actions pattern)", usesLocation);
             }
 
             return;
         }
 
-        var usesSlice = Arena.GetStringSlice(actionExec.Uses);
+        var usesSlice = actionExec.Uses.Slice;
         var message = GetUnpinnedStepMessage(usesSlice, out var decodedUsesText);
         var help = BuildOwnerHintOnce(parsedStep.ActionPath);
+        var usesRefLocation = BuildRefLocation(usesSlice, uses, Config.Utf8Yaml, usesLocation);
         AddStepWarning(step, message, usesRefLocation, PinDiagnosticMetadata.ForUsesRef(decodedUsesText), help);
     }
 
@@ -285,7 +287,7 @@ public sealed class UnpinnedUsesRule() : RuleBase(RuleId.UnpinnedUses)
         return msg;
     }
 
-    private static TextRange BuildRefLocation(Utf8Slice usesValue, ReadOnlySpan<byte> uses, byte[] source, TextRange fallback)
+    private TextRange BuildRefLocation(Utf8Slice usesValue, ReadOnlySpan<byte> uses, byte[] source, TextRange fallback)
     {
         var at = uses.LastIndexOf((byte)'@');
         if (at < 0 || at + 1 >= uses.Length)
@@ -300,8 +302,9 @@ public sealed class UnpinnedUsesRule() : RuleBase(RuleId.UnpinnedUses)
             return fallback;
         }
 
-        var (startLine, startColumn) = ComputeLineColumn(source, startOffset);
-        var (endLine, endColumn) = ComputeLineColumn(source, endOffset);
+        var lineStarts = Config.GetLineStarts();
+        var (startLine, startColumn) = ExpressionScanHelpers.OffsetToLineColumn(lineStarts, startOffset);
+        var (endLine, endColumn) = ExpressionScanHelpers.OffsetToLineColumn(lineStarts, endOffset);
 
         return new TextRange(
             Start: startOffset,
@@ -312,31 +315,7 @@ public sealed class UnpinnedUsesRule() : RuleBase(RuleId.UnpinnedUses)
             EndColumn: endColumn);
     }
 
-    private static (int Line, int Column) ComputeLineColumn(byte[] source, int offset)
-    {
-        var line = 1;
-        var column = 1;
-
-        for (var i = 0; i < offset; i++)
-        {
-            var b = source[i];
-            if (b == (byte)'\n')
-            {
-                line++;
-                column = 1;
-                continue;
-            }
-
-            if (b != (byte)'\r')
-            {
-                column++;
-            }
-        }
-
-        return (line, column);
-    }
-
-    private void ValidateLocalActionResolution(Step step, ReadOnlySpan<byte> uses, TextRange location)
+    private void ValidateLocalActionResolution(StepRef step, ReadOnlySpan<byte> uses, TextRange location)
     {
         if (string.IsNullOrEmpty(Config.FilePath)
             || !Path.IsPathFullyQualified(Config.FilePath)

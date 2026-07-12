@@ -7,7 +7,7 @@ namespace Seiton.Core.Parsing;
 
 public static partial class WorkflowParser
 {
-    private static ScheduledEvent ParseScheduleEvent<TReader>(
+    private static void ParseScheduleEvent<TReader>(
         ref TReader reader,
         AstArena arena,
         ref PooledBuffer<Diagnostic> diagnostics,
@@ -18,40 +18,39 @@ public static partial class WorkflowParser
         {
             AddError(ref diagnostics, "on.schedule must be array", reader.CurrentStart);
             reader.SkipCurrentNode();
-            return new ScheduledEvent { EventName = nameNode, Schedules = [], Range = arena.GetStringRange(nameNode) };
+            arena.AddEvent(new EventData { Kind = EventKind.Scheduled, EventName = nameNode, Range = arena.GetStringRange(nameNode), Payload = arena.AddScheduledEvent(default) });
+            return;
         }
 
-        var schedules = new PooledBuffer<ScheduleEntry>(2);
-        try
+        var first = arena.ScheduleEntryCount;
+        var seqMark = reader.CurrentStart;
+        reader.Read(); // consume SequenceStart
+
+        while (!reader.End && reader.CurrentKind != YamlEventKind.SequenceEnd)
         {
-            var seqMark = reader.CurrentStart;
-            reader.Read(); // consume SequenceStart
-
-            while (!reader.End && reader.CurrentKind != YamlEventKind.SequenceEnd)
+            if (reader.CurrentKind != YamlEventKind.MappingStart)
             {
-                if (reader.CurrentKind != YamlEventKind.MappingStart)
-                {
-                    AddError(ref diagnostics, "on.schedule item must be object", reader.CurrentStart);
-                    reader.SkipCurrentNode();
-                    continue;
-                }
-
-                schedules.Add(ParseScheduleEntry(ref reader, arena, ref diagnostics));
+                AddError(ref diagnostics, "on.schedule item must be object", reader.CurrentStart);
+                reader.SkipCurrentNode();
+                continue;
             }
 
-            if (reader.CurrentKind == YamlEventKind.SequenceEnd)
-            {
-                reader.Read();
-            }
-
-            if (schedules.Count == 0)
-            {
-                AddError(ref diagnostics, "\"schedule\" section should not be empty", seqMark);
-            }
-
-            return new ScheduledEvent { EventName = nameNode, Schedules = DetachArenaList(ref schedules, arena), Range = arena.GetStringRange(nameNode) };
+            arena.AddScheduleEntry(ParseScheduleEntry(ref reader, arena, ref diagnostics));
         }
-        finally { schedules.Dispose(); }
+
+        if (reader.CurrentKind == YamlEventKind.SequenceEnd)
+        {
+            reader.Read();
+        }
+
+        var count = arena.ScheduleEntryCount - first;
+        if (count == 0)
+        {
+            AddError(ref diagnostics, "\"schedule\" section should not be empty", seqMark);
+        }
+
+        var payload = arena.AddScheduledEvent(new ScheduledEventData { Schedules = new NodeRange(first, count) });
+        arena.AddEvent(new EventData { Kind = EventKind.Scheduled, EventName = nameNode, Range = arena.GetStringRange(nameNode), Payload = payload });
     }
 
     private static ScheduleEntry ParseScheduleEntry<TReader>(ref TReader reader, AstArena arena, ref PooledBuffer<Diagnostic> diagnostics)

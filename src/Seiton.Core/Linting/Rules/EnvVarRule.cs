@@ -11,32 +11,32 @@ public sealed class EnvVarRule() : RuleBase(RuleId.EnvVar)
 
     public override string Name => "Env Var Rule";
 
-    public override void VisitWorkflowPre(Workflow workflow)
+    public override void VisitWorkflowPre(WorkflowRef workflow)
     {
         base.VisitWorkflowPre(workflow);
         ValidateEnv(workflow.Env, static (rule, message, location, target) =>
             rule.AddWorkflowWarning(target, message, location, NonPortableNameHelp), workflow, "workflow.env");
     }
 
-    public override void VisitJobPre(Job job)
+    public override void VisitJobPre(JobRef job)
     {
         ValidateEnv(job.Env, static (rule, message, location, target) =>
             rule.AddJobWarning(target, message, location, NonPortableNameHelp), job, "job.env");
     }
 
-    public override void VisitStep(Step step)
+    public override void VisitStep(StepRef step)
     {
         ValidateEnv(step.Env, static (rule, message, location, target) =>
             rule.AddStepWarning(target, message, location, NonPortableNameHelp), step, "step.env");
     }
 
     private void ValidateEnv<TTarget>(
-        Env? env,
+        EnvRef env,
         Action<EnvVarRule, string, TextRange, TTarget> report,
         TTarget target,
         string sinkName)
     {
-        if (env?.Vars is null || env.Vars.Value.Count == 0 || Config.Utf8Yaml is null)
+        if (!env.Vars.HasValue || env.Vars.Count == 0 || Config.Utf8Yaml is null)
         {
             return;
         }
@@ -44,16 +44,16 @@ public sealed class EnvVarRule() : RuleBase(RuleId.EnvVar)
         foreach (var pair in env.Vars)
         {
             var envVar = pair.Value;
-            if (IsPortableEnvName(Arena.GetStringValue(envVar.Name)))
+            if (IsPortableEnvName(envVar.Name.Value))
             {
                 continue;
             }
 
-            var name = Decode(Arena.GetStringSlice(envVar.Name));
+            var name = envVar.Name.Decode();
             report(
                 this,
                 $"{sinkName} key '{name}' is not portable; use [A-Z_][A-Z0-9_]* naming",
-                Arena.GetStringRange(envVar.Name),
+                envVar.Name.Range,
                 target);
         }
     }

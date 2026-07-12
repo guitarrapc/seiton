@@ -67,7 +67,7 @@ public static partial class WorkflowParser
         "zoom-in", "zoom-out",
     ], StringComparer.OrdinalIgnoreCase);
 
-    private static SliceMap<ActionMetadataInput>? ParseActionMetadataInputs<TReader>(ref TReader reader, AstArena arena, ref PooledBuffer<Diagnostic> diagnostics, ReadOnlySpan<byte> source)
+    private static NodeRange ParseActionMetadataInputs<TReader>(ref TReader reader, AstArena arena, ref PooledBuffer<Diagnostic> diagnostics, ReadOnlySpan<byte> source)
         where TReader : IYamlStreamReader, allows ref struct
     {
         if (reader.CurrentKind != YamlEventKind.MappingStart)
@@ -77,68 +77,63 @@ public static partial class WorkflowParser
             return default;
         }
 
-        var map = new PooledBuffer<SliceMap<ActionMetadataInput>.Entry>(8);
-        try
+        // Anchor the contiguous row range before the loop. Nested input parsing only
+        // touches scalar tables, so direct contiguous append is safe.
+        var first = arena.ActionMetadataInputCount;
+        Span<long> keyStore = stackalloc long[64];
+        var keyCount = 0;
+        reader.Read();
+        while (!reader.End && reader.CurrentKind != YamlEventKind.MappingEnd)
         {
-            Span<long> keyStore = stackalloc long[64];
-            var keyCount = 0;
-            reader.Read();
-            while (!reader.End && reader.CurrentKind != YamlEventKind.MappingEnd)
+            if (reader.CurrentKind != YamlEventKind.Scalar)
             {
-                if (reader.CurrentKind != YamlEventKind.Scalar)
+                AddError(ref diagnostics, "action inputs key must be string", reader.CurrentStart);
+                reader.SkipCurrentNode();
+                if (!reader.End && reader.CurrentKind != YamlEventKind.MappingEnd)
                 {
-                    AddError(ref diagnostics, "action inputs key must be string", reader.CurrentStart);
                     reader.SkipCurrentNode();
-                    if (!reader.End && reader.CurrentKind != YamlEventKind.MappingEnd)
-                    {
-                        reader.SkipCurrentNode();
-                    }
-
-                    continue;
                 }
 
-                var idMark = reader.CurrentStart;
-                var idSlice = reader.GetScalarSlice();
-                var idUtf8 = reader.GetScalarUtf8();
-                if (!TryRegisterDynamicKey(
-                    source,
-                    idUtf8,
-                    idSlice.Offset,
-                    idSlice.Length,
-                    idMark,
-                    ref diagnostics,
-                    keyStore,
-                    ref keyCount,
-                    caseSensitive: false,
-                    "action inputs"))
-                {
-                    reader.Read();
-                    if (!reader.End)
-                    {
-                        reader.SkipCurrentNode();
-                    }
-
-                    continue;
-                }
-
-                var nameNode = arena.AddString(idSlice, reader.IsScalarQuoted(), BuildScalarLocation(idMark, idUtf8.Length));
-                reader.Read();
-                map.Add(new SliceMap<ActionMetadataInput>.Entry(idSlice, ParseActionMetadataInput(ref reader, arena, ref diagnostics, nameNode)));
+                continue;
             }
 
-            if (reader.CurrentKind == YamlEventKind.MappingEnd)
+            var idMark = reader.CurrentStart;
+            var idSlice = reader.GetScalarSlice();
+            var idUtf8 = reader.GetScalarUtf8();
+            if (!TryRegisterDynamicKey(
+                source,
+                idUtf8,
+                idSlice.Offset,
+                idSlice.Length,
+                idMark,
+                ref diagnostics,
+                ref keyStore,
+                ref keyCount,
+                "action inputs"))
             {
                 reader.Read();
+                if (!reader.End)
+                {
+                    reader.SkipCurrentNode();
+                }
+
+                continue;
             }
 
-            var (inputEntries, inputCount) = map.DetachArray();
-            arena.RegisterSliceMapBuffer(inputEntries);
-            return new SliceMap<ActionMetadataInput>(inputEntries, inputCount, caseSensitive: false);
+            var nameNode = arena.AddString(idSlice, reader.IsScalarQuoted(), BuildScalarLocation(idMark, idUtf8.Length));
+            reader.Read();
+            arena.AddActionMetadataInput(ParseActionMetadataInput(ref reader, arena, ref diagnostics, nameNode, idSlice));
         }
-        finally { map.Dispose(); }
+
+        if (reader.CurrentKind == YamlEventKind.MappingEnd)
+        {
+            reader.Read();
+        }
+
+        return new NodeRange(first, arena.ActionMetadataInputCount - first);
     }
 
-    private static ActionMetadataInput ParseActionMetadataInput<TReader>(ref TReader reader, AstArena arena, ref PooledBuffer<Diagnostic> diagnostics, StringNodeId nameNode)
+    private static ActionMetadataInputData ParseActionMetadataInput<TReader>(ref TReader reader, AstArena arena, ref PooledBuffer<Diagnostic> diagnostics, StringNodeId nameNode, Utf8Slice idSlice)
         where TReader : IYamlStreamReader, allows ref struct
     {
         StringNodeId description = default;
@@ -151,8 +146,9 @@ public static partial class WorkflowParser
         {
             AddError(ref diagnostics, "action input must be object", reader.CurrentStart);
             reader.SkipCurrentNode();
-            return new ActionMetadataInput
+            return new ActionMetadataInputData
             {
+                Key = idSlice,
                 Name = nameNode,
                 Description = description,
                 Required = required,
@@ -259,8 +255,9 @@ public static partial class WorkflowParser
             reader.Read();
         }
 
-        return new ActionMetadataInput
+        return new ActionMetadataInputData
         {
+            Key = idSlice,
             Name = nameNode,
             Description = description,
             Required = required,
@@ -270,7 +267,7 @@ public static partial class WorkflowParser
         };
     }
 
-    private static SliceMap<ActionMetadataOutput>? ParseActionMetadataOutputs<TReader>(ref TReader reader, AstArena arena, ref PooledBuffer<Diagnostic> diagnostics, ReadOnlySpan<byte> source)
+    private static NodeRange ParseActionMetadataOutputs<TReader>(ref TReader reader, AstArena arena, ref PooledBuffer<Diagnostic> diagnostics, ReadOnlySpan<byte> source)
         where TReader : IYamlStreamReader, allows ref struct
     {
         if (reader.CurrentKind != YamlEventKind.MappingStart)
@@ -280,68 +277,63 @@ public static partial class WorkflowParser
             return default;
         }
 
-        var map = new PooledBuffer<SliceMap<ActionMetadataOutput>.Entry>(8);
-        try
+        // Anchor the contiguous row range before the loop. Nested output parsing only
+        // touches scalar tables, so direct contiguous append is safe.
+        var first = arena.ActionMetadataOutputCount;
+        Span<long> keyStore = stackalloc long[64];
+        var keyCount = 0;
+        reader.Read();
+        while (!reader.End && reader.CurrentKind != YamlEventKind.MappingEnd)
         {
-            Span<long> keyStore = stackalloc long[64];
-            var keyCount = 0;
-            reader.Read();
-            while (!reader.End && reader.CurrentKind != YamlEventKind.MappingEnd)
+            if (reader.CurrentKind != YamlEventKind.Scalar)
             {
-                if (reader.CurrentKind != YamlEventKind.Scalar)
+                AddError(ref diagnostics, "action outputs key must be string", reader.CurrentStart);
+                reader.SkipCurrentNode();
+                if (!reader.End && reader.CurrentKind != YamlEventKind.MappingEnd)
                 {
-                    AddError(ref diagnostics, "action outputs key must be string", reader.CurrentStart);
                     reader.SkipCurrentNode();
-                    if (!reader.End && reader.CurrentKind != YamlEventKind.MappingEnd)
-                    {
-                        reader.SkipCurrentNode();
-                    }
-
-                    continue;
                 }
 
-                var idMark = reader.CurrentStart;
-                var idSlice = reader.GetScalarSlice();
-                var idUtf8 = reader.GetScalarUtf8();
-                if (!TryRegisterDynamicKey(
-                    source,
-                    idUtf8,
-                    idSlice.Offset,
-                    idSlice.Length,
-                    idMark,
-                    ref diagnostics,
-                    keyStore,
-                    ref keyCount,
-                    caseSensitive: false,
-                    "action outputs"))
-                {
-                    reader.Read();
-                    if (!reader.End)
-                    {
-                        reader.SkipCurrentNode();
-                    }
-
-                    continue;
-                }
-
-                var nameNode = arena.AddString(idSlice, reader.IsScalarQuoted(), BuildScalarLocation(idMark, idUtf8.Length));
-                reader.Read();
-                map.Add(new SliceMap<ActionMetadataOutput>.Entry(idSlice, ParseActionMetadataOutput(ref reader, arena, ref diagnostics, nameNode)));
+                continue;
             }
 
-            if (reader.CurrentKind == YamlEventKind.MappingEnd)
+            var idMark = reader.CurrentStart;
+            var idSlice = reader.GetScalarSlice();
+            var idUtf8 = reader.GetScalarUtf8();
+            if (!TryRegisterDynamicKey(
+                source,
+                idUtf8,
+                idSlice.Offset,
+                idSlice.Length,
+                idMark,
+                ref diagnostics,
+                ref keyStore,
+                ref keyCount,
+                "action outputs"))
             {
                 reader.Read();
+                if (!reader.End)
+                {
+                    reader.SkipCurrentNode();
+                }
+
+                continue;
             }
 
-            var (outputEntries, outputCount) = map.DetachArray();
-            arena.RegisterSliceMapBuffer(outputEntries);
-            return new SliceMap<ActionMetadataOutput>(outputEntries, outputCount, caseSensitive: false);
+            var nameNode = arena.AddString(idSlice, reader.IsScalarQuoted(), BuildScalarLocation(idMark, idUtf8.Length));
+            reader.Read();
+            arena.AddActionMetadataOutput(ParseActionMetadataOutput(ref reader, arena, ref diagnostics, nameNode, idSlice));
         }
-        finally { map.Dispose(); }
+
+        if (reader.CurrentKind == YamlEventKind.MappingEnd)
+        {
+            reader.Read();
+        }
+
+        return new NodeRange(first, arena.ActionMetadataOutputCount - first);
     }
 
-    private static ActionMetadataOutput ParseActionMetadataOutput<TReader>(ref TReader reader, AstArena arena, ref PooledBuffer<Diagnostic> diagnostics, StringNodeId nameNode)
+    private static ActionMetadataOutputData ParseActionMetadataOutput<TReader>(ref TReader reader, AstArena arena, ref PooledBuffer<Diagnostic> diagnostics, StringNodeId nameNode, Utf8Slice idSlice)
         where TReader : IYamlStreamReader, allows ref struct
     {
         StringNodeId description = default;
@@ -352,7 +344,7 @@ public static partial class WorkflowParser
         {
             AddError(ref diagnostics, "action output must be object", reader.CurrentStart);
             reader.SkipCurrentNode();
-            return new ActionMetadataOutput { Name = nameNode, Description = description, Value = value, Range = arena.GetStringRange(nameNode) };
+            return new ActionMetadataOutputData { Key = idSlice, Name = nameNode, Description = description, Value = value, Range = arena.GetStringRange(nameNode) };
         }
 
         reader.Read();
@@ -443,8 +435,9 @@ public static partial class WorkflowParser
             reader.Read();
         }
 
-        return new ActionMetadataOutput
+        return new ActionMetadataOutputData
         {
+            Key = idSlice,
             Name = nameNode,
             Description = description,
             Value = value,
@@ -452,7 +445,7 @@ public static partial class WorkflowParser
         };
     }
 
-    private static ActionMetadataBranding? ParseActionMetadataBranding<TReader>(ref TReader reader, AstArena arena, ref PooledBuffer<Diagnostic> diagnostics)
+    private static ActionMetadataBrandingId ParseActionMetadataBranding<TReader>(ref TReader reader, AstArena arena, ref PooledBuffer<Diagnostic> diagnostics)
         where TReader : IYamlStreamReader, allows ref struct
     {
         if (reader.CurrentKind != YamlEventKind.MappingStart)
@@ -574,15 +567,15 @@ public static partial class WorkflowParser
             }
         }
 
-        return new ActionMetadataBranding
+        return arena.AddActionMetadataBranding(new ActionMetadataBrandingData
         {
             Icon = icon,
             Color = color,
             Range = range,
-        };
+        });
     }
 
-    private static ActionMetadataRuns? ParseActionMetadataRuns<TReader>(ref TReader reader, AstArena arena, ref PooledBuffer<Diagnostic> diagnostics, ReadOnlySpan<byte> source)
+    private static ActionMetadataRunsId ParseActionMetadataRuns<TReader>(ref TReader reader, AstArena arena, ref PooledBuffer<Diagnostic> diagnostics, ReadOnlySpan<byte> source)
         where TReader : IYamlStreamReader, allows ref struct
     {
         if (reader.CurrentKind != YamlEventKind.MappingStart)
@@ -601,9 +594,9 @@ public static partial class WorkflowParser
         StringNodeId postIf = default;
         StringNodeId image = default;
         StringNodeId entrypoint = default;
-        IReadOnlyList<StringNodeId>? args = null;
-        Env? env = null;
-        IReadOnlyList<Step>? steps = null;
+        StringIdRange args = default;
+        EnvId env = default;
+        StepIdRange steps = default;
         ulong seen = 0;
         reader.Read();
         while (!reader.End && reader.CurrentKind != YamlEventKind.MappingEnd)
@@ -750,7 +743,7 @@ public static partial class WorkflowParser
             reader.Read();
         }
 
-        return new ActionMetadataRuns
+        return arena.AddActionMetadataRuns(new ActionMetadataRunsData
         {
             Using = usingNode,
             Main = main,
@@ -764,10 +757,10 @@ public static partial class WorkflowParser
             Env = env,
             Steps = steps,
             Range = range,
-        };
+        });
     }
 
-    private static IReadOnlyList<StringNodeId>? ParseActionRunsArgs<TReader>(ref TReader reader, AstArena arena, ref PooledBuffer<Diagnostic> diagnostics)
+    private static StringIdRange ParseActionRunsArgs<TReader>(ref TReader reader, AstArena arena, ref PooledBuffer<Diagnostic> diagnostics)
         where TReader : IYamlStreamReader, allows ref struct
     {
         if (reader.CurrentKind == YamlEventKind.SequenceStart)
@@ -790,7 +783,7 @@ public static partial class WorkflowParser
                     reader.Read();
                 }
 
-                return DetachArenaList(ref list, arena);
+                return arena.AddStringIdList(list.AsSpan());
             }
             finally { list.Dispose(); }
         }
@@ -798,7 +791,7 @@ public static partial class WorkflowParser
         if (reader.CurrentKind == YamlEventKind.Scalar)
         {
             var single = ParseString(ref reader, arena, ref diagnostics, "action runs args must be string or array");
-            return !single.HasValue ? null : ArenaListOfOne(single, arena);
+            return !single.HasValue ? default : arena.AddStringIdList([single]);
         }
 
         AddError(ref diagnostics, "action runs args must be string or array", reader.CurrentStart);

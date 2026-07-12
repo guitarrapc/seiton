@@ -11,17 +11,17 @@ namespace Seiton.Core.Linting.Rules;
 /// <summary>Flags direct use of <c>inputs.*</c> context in <c>run:</c> scripts where environment variables should be used instead.</summary>
 public sealed class RunInputsContextDirectUseRule() : RuleBase(RuleId.RunInputsContextDirectUse)
 {
-    private Workflow? _currentWorkflow;
-    private Job? _currentJob;
+    private WorkflowRef _currentWorkflow;
+    private JobRef _currentJob;
     private bool _strict;
 
     public override string Name => "Run Inputs Context Direct Use Rule";
 
-    public override void VisitWorkflowPre(Workflow workflow)
+    public override void VisitWorkflowPre(WorkflowRef workflow)
     {
         base.VisitWorkflowPre(workflow);
         _currentWorkflow = workflow;
-        _currentJob = null;
+        _currentJob = default;
     }
 
     public override void SetConfig(LintConfig config)
@@ -30,45 +30,45 @@ public sealed class RunInputsContextDirectUseRule() : RuleBase(RuleId.RunInputsC
         _strict = config.GetRuleConfig(Id)?.Strict == true;
     }
 
-    public override void VisitWorkflowPost(Workflow workflow)
+    public override void VisitWorkflowPost(WorkflowRef workflow)
     {
-        _currentWorkflow = null;
-        _currentJob = null;
+        _currentWorkflow = default;
+        _currentJob = default;
     }
 
-    public override void VisitJobPre(Job job)
+    public override void VisitJobPre(JobRef job)
     {
         _currentJob = job;
     }
 
-    public override void VisitJobPost(Job job)
+    public override void VisitJobPost(JobRef job)
     {
-        _currentJob = null;
+        _currentJob = default;
     }
 
-    public override void VisitStep(Step step)
+    public override void VisitStep(StepRef step)
     {
-        if (Config.Utf8Yaml is null || step.Exec is not ExecRun run)
+        if (Config.Utf8Yaml is null || step.Exec.Kind != StepExecKind.Run)
         {
             return;
         }
 
-        CheckRunNode(step, run.Run);
+        CheckRunNode(step, step.Exec.AsRun().Run);
     }
 
-    private void CheckRunNode(Step step, StringNodeId runNode)
+    private void CheckRunNode(StepRef step, StringRef runNode)
     {
         if (Config.Utf8Yaml is null)
         {
             return;
         }
 
-        var runText = Arena.GetStringValue(runNode);
+        var runText = runNode.Value;
         var searchStart = 0;
         while (TryFindExpression(runText, searchStart, out var bodyStart, out var bodyLength, out var nextSearchStart))
         {
             searchStart = nextSearchStart;
-            var location = BuildExpressionLocation(Arena, Config.Utf8Yaml, runNode, bodyStart, nextSearchStart, Config.GetLineStarts());
+            var location = BuildExpressionLocation(Config.Utf8Yaml, runNode, bodyStart, nextSearchStart, Config.GetLineStarts());
 
             var expression = TrimAsciiWhiteSpace(runText.Slice(bodyStart, bodyLength));
             if (expression.Length == 0)
@@ -93,7 +93,7 @@ public sealed class RunInputsContextDirectUseRule() : RuleBase(RuleId.RunInputsC
             }
 
             // Skip detection inside no-expand heredoc (<<'EOF') where shell variables don't expand
-            var absoluteOffset = Arena.GetStringSlice(runNode).Offset + bodyStart - 3;
+            var absoluteOffset = runNode.Slice.Offset + bodyStart - 3;
             if (ShouldSuppressNoExpandDirectUseDiagnostic(Config.Utf8Yaml, absoluteOffset, _strict))
             {
                 continue;
@@ -128,7 +128,7 @@ public sealed class RunInputsContextDirectUseRule() : RuleBase(RuleId.RunInputsC
         }
     }
 
-    private bool TryBuildFix(Step step, StringNodeId runNode, ReadOnlySpan<byte> expression, int expressionBodyStart, int expressionLength, out DiagnosticFix fix)
+    private bool TryBuildFix(StepRef step, StringRef runNode, ReadOnlySpan<byte> expression, int expressionBodyStart, int expressionLength, out DiagnosticFix fix)
     {
         fix = default;
         if (Config.Utf8Yaml is null)
@@ -141,7 +141,7 @@ public sealed class RunInputsContextDirectUseRule() : RuleBase(RuleId.RunInputsC
             return TryBuildCompoundExpressionFix(step, runNode, expression, expressionBodyStart, expressionLength, out fix);
         }
 
-        var absoluteOffset = Arena.GetStringSlice(runNode).Offset + expressionBodyStart - 3;
+        var absoluteOffset = runNode.Slice.Offset + expressionBodyStart - 3;
 
         if (IsInsideNoExpandHereDoc(Config.Utf8Yaml, absoluteOffset))
         {
@@ -154,10 +154,10 @@ public sealed class RunInputsContextDirectUseRule() : RuleBase(RuleId.RunInputsC
         }
 
         // Case 1: existing unique env mapping resolves the variable name
-        if (TryResolveShellVariableName(Arena, step.Env, _currentJob?.Env, _currentWorkflow?.Env,
+        if (TryResolveShellVariableName(step.Env, _currentJob.Env, _currentWorkflow.Env,
             Config.Utf8Yaml, inputName, TryParseSimpleInputsReference, out var variableName))
         {
-            var isPowerShell = RunContextDirectUseAnalyzer.IsPowerShellWithDefaults(Arena, step, _currentJob, _currentWorkflow, Config.Utf8Yaml);
+            var isPowerShell = RunContextDirectUseAnalyzer.IsPowerShellWithDefaults(step, _currentJob, _currentWorkflow, Config.Utf8Yaml);
             if (isPowerShell is null)
             {
                 return false;
@@ -181,14 +181,14 @@ public sealed class RunInputsContextDirectUseRule() : RuleBase(RuleId.RunInputsC
         }
 
         var expressionString = BuildInputsExpressionString(inputName, isGithubEventInputs);
-        var envVarName = DeduplicateEnvName(Arena, InputNameToEnvVarName(inputName),
-            step.Env, _currentJob?.Env, _currentWorkflow?.Env);
+        var envVarName = DeduplicateEnvName(InputNameToEnvVarName(inputName),
+            step.Env, _currentJob.Env, _currentWorkflow.Env);
         if (envVarName is null)
         {
             return false;
         }
 
-        var isPowerShell2 = RunContextDirectUseAnalyzer.IsPowerShellWithDefaults(Arena, step, _currentJob, _currentWorkflow, Config.Utf8Yaml);
+        var isPowerShell2 = RunContextDirectUseAnalyzer.IsPowerShellWithDefaults(step, _currentJob, _currentWorkflow, Config.Utf8Yaml);
         if (isPowerShell2 is null)
         {
             return false;
@@ -199,7 +199,7 @@ public sealed class RunInputsContextDirectUseRule() : RuleBase(RuleId.RunInputsC
             return false;
         }
 
-        if (!TryBuildStepEnvInsertionEdit(Arena, Config.Utf8Yaml, step, envVarName, expressionString, out var insertEdit))
+        if (!TryBuildStepEnvInsertionEdit(Config.Utf8Yaml, step, envVarName, expressionString, out var insertEdit))
         {
             return false;
         }
@@ -210,7 +210,7 @@ public sealed class RunInputsContextDirectUseRule() : RuleBase(RuleId.RunInputsC
         return true;
     }
 
-    private bool TryBuildCompoundExpressionFix(Step step, StringNodeId runNode, ReadOnlySpan<byte> expression, int expressionBodyStart, int expressionLength, out DiagnosticFix fix)
+    private bool TryBuildCompoundExpressionFix(StepRef step, StringRef runNode, ReadOnlySpan<byte> expression, int expressionBodyStart, int expressionLength, out DiagnosticFix fix)
     {
         fix = default;
         if (Config.Utf8Yaml is null || !Config.Fix.Enabled)
@@ -218,7 +218,7 @@ public sealed class RunInputsContextDirectUseRule() : RuleBase(RuleId.RunInputsC
             return false;
         }
 
-        var absoluteOffset = Arena.GetStringSlice(runNode).Offset + expressionBodyStart - 3;
+        var absoluteOffset = runNode.Slice.Offset + expressionBodyStart - 3;
 
         if (IsInsideNoExpandHereDoc(Config.Utf8Yaml, absoluteOffset)
             || IsInsideShellSingleQuotes(Config.Utf8Yaml, absoluteOffset))
@@ -230,14 +230,14 @@ public sealed class RunInputsContextDirectUseRule() : RuleBase(RuleId.RunInputsC
         var envBaseName = TryExtractFirstInputsName(expression, out var firstInputName)
             ? InputNameToEnvVarName(firstInputName)
             : "INPUT_VALUE";
-        var envVarName = DeduplicateEnvName(Arena, envBaseName,
-            step.Env, _currentJob?.Env, _currentWorkflow?.Env);
+        var envVarName = DeduplicateEnvName(envBaseName,
+            step.Env, _currentJob.Env, _currentWorkflow.Env);
         if (envVarName is null)
         {
             return false;
         }
 
-        var isPowerShell = RunContextDirectUseAnalyzer.IsPowerShellWithDefaults(Arena, step, _currentJob, _currentWorkflow, Config.Utf8Yaml);
+        var isPowerShell = RunContextDirectUseAnalyzer.IsPowerShellWithDefaults(step, _currentJob, _currentWorkflow, Config.Utf8Yaml);
         if (isPowerShell is null)
         {
             return false;
@@ -248,7 +248,7 @@ public sealed class RunInputsContextDirectUseRule() : RuleBase(RuleId.RunInputsC
             return false;
         }
 
-        if (!TryBuildStepEnvInsertionEdit(Arena, Config.Utf8Yaml, step, envVarName, expressionString, out var insertEdit))
+        if (!TryBuildStepEnvInsertionEdit(Config.Utf8Yaml, step, envVarName, expressionString, out var insertEdit))
         {
             return false;
         }

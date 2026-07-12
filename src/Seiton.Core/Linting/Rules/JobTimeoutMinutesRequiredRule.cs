@@ -12,7 +12,7 @@ public sealed class JobTimeoutMinutesRequiredRule() : RuleBase(RuleId.JobTimeout
 
     public override string Name => "Job Timeout Minutes Required Rule";
 
-    public override void VisitJobPre(Job job)
+    public override void VisitJobPre(JobRef job)
     {
         if (!IsExecutableJob(job) || job.TimeoutMinutes.HasValue)
         {
@@ -24,7 +24,7 @@ public sealed class JobTimeoutMinutesRequiredRule() : RuleBase(RuleId.JobTimeout
             return;
         }
 
-        var jobId = Decode(Arena.GetStringSlice(job.Id));
+        var jobId = job.Id.Decode();
         var message = $"jobs.'{jobId}' should define timeout-minutes (default is {GitHubDefaultTimeoutMinutes} minutes); if not possible, set timeout-minutes on each step instead";
         if (Config.Fix.Enabled
             && Config.Utf8Yaml is not null
@@ -43,16 +43,16 @@ public sealed class JobTimeoutMinutesRequiredRule() : RuleBase(RuleId.JobTimeout
             "to enable auto-fix, set fix.defaults.job-timeout-minutes in .github/seiton.yaml (example: 15)");
     }
 
-    private static bool IsExecutableJob(Job job)
+    private static bool IsExecutableJob(JobRef job)
     {
-        return job.WorkflowCall is null
-            && job.Steps is not null
+        return !job.WorkflowCall.HasValue
+            && job.Steps.HasValue
             && job.Steps.Count > 0;
     }
 
-    private static bool AllStepsHaveTimeout(IReadOnlyList<Step>? steps)
+    private static bool AllStepsHaveTimeout(StepRefList steps)
     {
-        if (steps is null || steps.Count == 0)
+        if (!steps.HasValue || steps.Count == 0)
         {
             return false;
         }
@@ -68,7 +68,7 @@ public sealed class JobTimeoutMinutesRequiredRule() : RuleBase(RuleId.JobTimeout
         return true;
     }
 
-    private bool TryBuildJobTimeoutInsertFix(Job job, byte[] utf8Yaml, int timeoutMinutes, out DiagnosticFix fix)
+    private bool TryBuildJobTimeoutInsertFix(JobRef job, byte[] utf8Yaml, int timeoutMinutes, out DiagnosticFix fix)
     {
         fix = default;
         if (timeoutMinutes <= 0)
@@ -81,7 +81,7 @@ public sealed class JobTimeoutMinutesRequiredRule() : RuleBase(RuleId.JobTimeout
             return false;
         }
 
-        var jobLine = Arena.GetStringRange(job.Id).StartLine;
+        var jobLine = job.Id.Range.StartLine;
         if (jobLine < 1)
         {
             return false;

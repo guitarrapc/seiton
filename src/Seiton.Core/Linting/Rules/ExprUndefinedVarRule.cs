@@ -17,7 +17,7 @@ public sealed class ExprUndefinedVarRule() : RuleBase(RuleId.ExprUndefinedVar)
     // per-workflow and per-job dynamic context type overrides.
     // These replace the loose static types for steps/matrix/needs/inputs with strict,
     // job-specific types so that property-access errors can be detected.
-    private Workflow? _currentWorkflow;
+    private WorkflowRef _currentWorkflow;
     private (byte[] NameUtf8, ExprType Type) _inputsOverride;
     private (byte[] NameUtf8, ExprType Type) _secretsOverride;
     private (byte[] NameUtf8, ExprType Type) _githubOverride;
@@ -33,8 +33,8 @@ public sealed class ExprUndefinedVarRule() : RuleBase(RuleId.ExprUndefinedVar)
     private readonly List<Diagnostic> _propertyDiagnostics = new();
     // Per-job state for incremental step override building.
     // The timeline contains steps in the order their IDs become visible to later steps.
-    private readonly List<Step> _stepVisibilityTimeline = [];
-    private readonly Dictionary<Step, int> _stepVisibleBeforeCounts = [];
+    private readonly List<StepRef> _stepVisibilityTimeline = [];
+    private readonly Dictionary<StepRef, int> _stepVisibleBeforeCounts = [];
     // Reusable dictionary for BuildStepsOverrideInto (avoids per-step allocation)
     private readonly Dictionary<Utf8String, ExprType> _stepsOverrideProps = new();
     // Number of timeline entries already materialized into _stepsOverrideProps.
@@ -44,6 +44,9 @@ public sealed class ExprUndefinedVarRule() : RuleBase(RuleId.ExprUndefinedVar)
     // Reusable dictionaries for BuildMatrixOverrideInto / BuildNeedsOverrideInto (avoids per-job allocation)
     private readonly Dictionary<Utf8String, ExprType> _matrixOverrideProps = new();
     private readonly Dictionary<Utf8String, ExprType> _needsOverrideProps = new();
+    // Reusable dictionary for the workflow_call inputs prefix override (grown incrementally
+    // while validating input default expressions in VisitEvent; avoids per-input rebuilds)
+    private readonly Dictionary<Utf8String, ExprType> _wcInputsOverrideProps = new();
     // Local action output resolver for building strict step output types
     private LocalActionOutputResolver? _localActionOutputResolver;
     private Func<ReadOnlyMemory<byte>, string[]?>? _localActionOutputResolverFunc;
@@ -51,7 +54,7 @@ public sealed class ExprUndefinedVarRule() : RuleBase(RuleId.ExprUndefinedVar)
     private LocalReusableWorkflowOutputResolver? _localReusableOutputResolver;
     private Func<ReadOnlyMemory<byte>, string[]?>? _localReusableOutputResolverFunc;
 
-    public override void VisitWorkflowPre(Workflow workflow)
+    public override void VisitWorkflowPre(WorkflowRef workflow)
     {
         base.VisitWorkflowPre(workflow);
         _currentWorkflow = workflow;
@@ -96,7 +99,7 @@ public sealed class ExprUndefinedVarRule() : RuleBase(RuleId.ExprUndefinedVar)
         CheckEnv(workflow.Env, ExpressionValidationContext.Env, static (rule, message, location, w) =>
             rule.AddWorkflowError(w, message, location), workflow);
 
-        if (workflow.Concurrency is { } concurrency)
+        if (workflow.Concurrency is { HasValue: true } concurrency)
         {
             CheckNode(concurrency.Group, ExpressionValidationContext.Concurrency, static (rule, message, location, w) =>
                 rule.AddWorkflowError(w, message, location), workflow);
@@ -104,7 +107,7 @@ public sealed class ExprUndefinedVarRule() : RuleBase(RuleId.ExprUndefinedVar)
                 rule.AddWorkflowError(w, message, location), workflow);
         }
 
-        if (workflow.Defaults?.Run is { } defaultsRun)
+        if (workflow.Defaults.Run is { HasValue: true } defaultsRun)
         {
             CheckNode(defaultsRun.Shell, ExpressionValidationContext.DefaultsRunShell, static (rule, message, location, w) =>
                 rule.AddWorkflowError(w, message, location), workflow);
@@ -113,24 +116,32 @@ public sealed class ExprUndefinedVarRule() : RuleBase(RuleId.ExprUndefinedVar)
         }
     }
 
-    public override void VisitActionMetadataPre(ActionMetadata metadata)
+    public override void VisitActionMetadataPre(ActionMetadataRef metadata)
     {
         base.VisitActionMetadataPre(metadata);
-        _currentWorkflow = null;
+        _currentWorkflow = default;
         ResetStepOverrideState();
     }
 
-    public override void VisitEvent(Event ev)
+    public override void VisitEvent(EventRef ev)
     {
         if (Config.Utf8Yaml is null)
         {
             return;
         }
 
-        if (ev is WorkflowCallEvent wce)
+        if (ev.Kind == EventKind.WorkflowCall)
         {
-            if (wce.Inputs is { } inputs)
+            var wce = ev.AsWorkflowCall();
+            if (wce.Inputs is { HasValue: true } inputs)
             {
+                // Incremental prefix override (mirrors the steps-override delta pattern):
+                // one shared dictionary grows as we walk the inputs, so validating n
+                // defaults costs O(n) appends instead of O(n²) per-input rebuilds. The
+                // override wraps the live dictionary, so each validation sees exactly
+                // the inputs declared before the current one.
+                (byte[] NameUtf8, ExprType Type)[]? overrides = null;
+                var builtCount = 0;
                 for (var idx = 0; idx < inputs.Count; idx++)
                 {
                     var input = inputs[idx];
@@ -139,30 +150,36 @@ public sealed class ExprUndefinedVarRule() : RuleBase(RuleId.ExprUndefinedVar)
                         continue;
                     }
 
-                    // Build incremental inputs override: only inputs defined before current index
-                    var incrementalInputsOverride = DynamicContextTypeBuilder.BuildWorkflowCallInputsOverrideUpTo(inputs, idx);
+                    if (overrides is null)
+                    {
+                        _wcInputsOverrideProps.Clear();
+                        overrides = [DynamicContextTypeBuilder.CreateWorkflowCallInputsOverride(_wcInputsOverrideProps)];
+                    }
+
+                    DynamicContextTypeBuilder.AppendWorkflowCallInputsInto(inputs, _wcInputsOverrideProps, builtCount, idx);
+                    builtCount = idx;
 
                     CheckNodeWithOverrides(
                         input.Default,
                         ExpressionValidationContext.WorkflowCallInputsDefault,
-                        [incrementalInputsOverride],
+                        overrides,
                         static (rule, message, location, e) =>
-                            rule.AddWorkflowError(rule._currentWorkflow!, message, location),
+                            rule.AddWorkflowError(rule._currentWorkflow, message, location),
                         ev);
 
                     // Type check: inferred expression type vs declared input type
                     if (input.Type is WorkflowCallInputType.Boolean or WorkflowCallInputType.Number)
                     {
-                        ValidateInputDefaultType(input, [incrementalInputsOverride]);
+                        ValidateInputDefaultType(input, overrides);
                     }
                 }
             }
         }
     }
 
-    private void ValidateInputDefaultType(WorkflowCallEventInput input, (byte[] NameUtf8, ExprType Type)[] overrides)
+    private void ValidateInputDefaultType(WorkflowCallEventInputRef input, (byte[] NameUtf8, ExprType Type)[] overrides)
     {
-        var value = Arena.GetStringValue(input.Default);
+        var value = input.Default.Value;
         if (value.Length == 0)
         {
             return;
@@ -214,13 +231,13 @@ public sealed class ExprUndefinedVarRule() : RuleBase(RuleId.ExprUndefinedVar)
 
         var inputName = Encoding.UTF8.GetString(input.Id.Span);
         var message = $"type of input \"{inputName}\" must be {expectedTypeName} but found type {inferredType.TypeName}";
-        var location = Arena.GetStringRange(input.Default);
-        AddWorkflowError(_currentWorkflow!, message, location);
+        var location = input.Default.Range;
+        AddWorkflowError(_currentWorkflow, message, location);
     }
 
-    public override void VisitWorkflowPost(Workflow workflow)
+    public override void VisitWorkflowPost(WorkflowRef workflow)
     {
-        if (Config.Utf8Yaml is null || _currentWorkflow is null)
+        if (Config.Utf8Yaml is null || !_currentWorkflow.HasValue)
         {
             return;
         }
@@ -228,7 +245,8 @@ public sealed class ExprUndefinedVarRule() : RuleBase(RuleId.ExprUndefinedVar)
         // Validate workflow_call output value expressions against jobs context
         for (var i = 0; i < workflow.On.Count; i++)
         {
-            if (workflow.On[i] is not WorkflowCallEvent { Outputs: { Count: > 0 } outputs })
+            if (workflow.On[i].Kind != EventKind.WorkflowCall
+                || workflow.On[i].AsWorkflowCall().Outputs is not { Count: > 0 } outputs)
             {
                 continue;
             }
@@ -255,7 +273,7 @@ public sealed class ExprUndefinedVarRule() : RuleBase(RuleId.ExprUndefinedVar)
         }
     }
 
-    public override void VisitJobPre(Job job)
+    public override void VisitJobPre(JobRef job)
     {
         if (Config.Utf8Yaml is null)
         {
@@ -264,11 +282,11 @@ public sealed class ExprUndefinedVarRule() : RuleBase(RuleId.ExprUndefinedVar)
         }
 
         var yaml = Config.Utf8Yaml;
-        var matrixOverride = DynamicContextTypeBuilder.BuildMatrixOverrideInto(_matrixOverrideProps, job.Strategy?.Matrix, Arena, yaml);
+        var matrixOverride = DynamicContextTypeBuilder.BuildMatrixOverrideInto(_matrixOverrideProps, job.Strategy.Matrix, yaml);
         var needsOverride = DynamicContextTypeBuilder.BuildNeedsOverrideInto(
             _needsOverrideProps,
-            job.Needs,
-            _currentWorkflow?.Jobs ?? default,
+            job.NeedsRange,
+            _currentWorkflow.Jobs,
             Arena,
             yaml,
             _localReusableOutputResolverFunc);
@@ -308,11 +326,11 @@ public sealed class ExprUndefinedVarRule() : RuleBase(RuleId.ExprUndefinedVar)
             rule.AddJobError(targetJob, message, location), job);
 
         // job.runs-on
-        if (job.RunsOn is { } runsOn)
+        if (job.RunsOn is { HasValue: true } runsOn)
         {
             CheckNode(runsOn.LabelsExpr, ExpressionValidationContext.JobRunsOn, static (rule, message, location, targetJob) =>
                 rule.AddJobError(targetJob, message, location), job, isRunsOnLabels: true);
-            if (runsOn.Labels is { } labels)
+            if (runsOn.Labels is { HasValue: true } labels)
             {
                 for (var li = 0; li < labels.Count; li++)
                 {
@@ -325,7 +343,7 @@ public sealed class ExprUndefinedVarRule() : RuleBase(RuleId.ExprUndefinedVar)
         }
 
         // job.concurrency
-        if (job.Concurrency is { } jobConcurrency)
+        if (job.Concurrency is { HasValue: true } jobConcurrency)
         {
             CheckNode(jobConcurrency.Group, ExpressionValidationContext.JobConcurrency, static (rule, message, location, targetJob) =>
                 rule.AddJobError(targetJob, message, location), job);
@@ -334,7 +352,7 @@ public sealed class ExprUndefinedVarRule() : RuleBase(RuleId.ExprUndefinedVar)
         }
 
         // job.environment
-        if (job.Environment is { } environment)
+        if (job.Environment is { HasValue: true } environment)
         {
             CheckNode(environment.Name, ExpressionValidationContext.JobEnvironment, static (rule, message, location, targetJob) =>
                 rule.AddJobError(targetJob, message, location), job);
@@ -343,7 +361,7 @@ public sealed class ExprUndefinedVarRule() : RuleBase(RuleId.ExprUndefinedVar)
         }
 
         // job.defaults.run
-        if (job.Defaults?.Run is { } jobDefaultsRun)
+        if (job.Defaults.Run is { HasValue: true } jobDefaultsRun)
         {
             CheckNode(jobDefaultsRun.Shell, ExpressionValidationContext.JobDefaultsRun, static (rule, message, location, targetJob) =>
                 rule.AddJobError(targetJob, message, location), job);
@@ -371,30 +389,30 @@ public sealed class ExprUndefinedVarRule() : RuleBase(RuleId.ExprUndefinedVar)
         CheckServices(job.Services, job);
 
         // job.snapshot.if
-        if (job.Snapshot is { } snapshot)
+        if (job.Snapshot is { HasValue: true } snapshot)
         {
             CheckNode(snapshot.If, ExpressionValidationContext.JobSnapshotIf, static (rule, message, location, targetJob) =>
                 rule.AddJobError(targetJob, message, location), job);
         }
 
         // job.secrets (reusable workflow call)
-        var callSecrets = job.WorkflowCall?.Secrets;
+        var callSecrets = job.WorkflowCall.Secrets;
         if (callSecrets is { Count: > 0 })
         {
-            foreach (var pair in callSecrets.Value)
+            foreach (var pair in callSecrets)
             {
                 CheckNode(pair.Value.Value, ExpressionValidationContext.JobSecrets, static (rule, message, location, targetJob) =>
                     rule.AddJobError(targetJob, message, location), job);
             }
         }
 
-        var callInputs = job.WorkflowCall?.Inputs;
-        if (callInputs is null || callInputs.Value.Count == 0)
+        var callInputs = job.WorkflowCall.Inputs;
+        if (!callInputs.HasValue || callInputs.Count == 0)
         {
             return;
         }
 
-        foreach (var pair in callInputs.Value)
+        foreach (var pair in callInputs)
         {
             var input = pair.Value;
             CheckNode(input.Value, ExpressionValidationContext.JobWith, static (rule, message, location, targetJob) =>
@@ -402,7 +420,7 @@ public sealed class ExprUndefinedVarRule() : RuleBase(RuleId.ExprUndefinedVar)
         }
     }
 
-    public override void VisitStep(Step step)
+    public override void VisitStep(StepRef step)
     {
         if (Config.Utf8Yaml is null)
         {
@@ -446,8 +464,9 @@ public sealed class ExprUndefinedVarRule() : RuleBase(RuleId.ExprUndefinedVar)
         CheckNode(step.TimeoutMinutes, ExpressionValidationContext.StepTimeoutMinutes, static (rule, message, location, targetStep) =>
             rule.AddStepError(targetStep, message, location), step);
 
-        if (step.Exec is ExecRun run)
+        if (step.Exec.Kind == StepExecKind.Run)
         {
+            var run = step.Exec.AsRun();
             CheckNode(run.Run, ExpressionValidationContext.StepRun, static (rule, message, location, targetStep) =>
                 rule.AddStepError(targetStep, message, location), step);
             CheckNode(run.Shell, ExpressionValidationContext.StepShell, static (rule, message, location, targetStep) =>
@@ -455,9 +474,9 @@ public sealed class ExprUndefinedVarRule() : RuleBase(RuleId.ExprUndefinedVar)
             CheckNode(run.WorkingDirectory, ExpressionValidationContext.StepWorkingDirectory, static (rule, message, location, targetStep) =>
                 rule.AddStepError(targetStep, message, location), step);
         }
-        else if (step.Exec is ExecAction action && action.Inputs is { Count: > 0 })
+        else if (step.Exec.Kind == StepExecKind.Action && step.Exec.AsAction().Inputs is { Count: > 0 } actionInputs)
         {
-            foreach (var pair in action.Inputs.Value)
+            foreach (var pair in actionInputs)
             {
                 CheckNode(pair.Value, ExpressionValidationContext.StepWith, static (rule, message, location, targetStep) =>
                     rule.AddStepError(targetStep, message, location), step);
@@ -466,12 +485,12 @@ public sealed class ExprUndefinedVarRule() : RuleBase(RuleId.ExprUndefinedVar)
     }
 
     private void CheckEnv<TTarget>(
-        Env? env,
+        EnvRef env,
         ExpressionValidationContext context,
         Action<ExprUndefinedVarRule, string, TextRange, TTarget> report,
         TTarget target)
     {
-        if (env is null)
+        if (!env.HasValue)
         {
             return;
         }
@@ -482,12 +501,12 @@ public sealed class ExprUndefinedVarRule() : RuleBase(RuleId.ExprUndefinedVar)
         ValidateEnvMappingType(env.Expression, context, report, target);
 
         var vars = env.Vars;
-        if (vars is null || vars.Value.Count == 0)
+        if (!vars.HasValue || vars.Count == 0)
         {
             return;
         }
 
-        foreach (var pair in vars.Value)
+        foreach (var pair in vars)
         {
             var envVar = pair.Value;
             CheckNode(envVar.Name, context, report, target);
@@ -495,12 +514,12 @@ public sealed class ExprUndefinedVarRule() : RuleBase(RuleId.ExprUndefinedVar)
         }
     }
 
-    private void PlanStepVisibility(IReadOnlyList<Step>? steps)
+    private void PlanStepVisibility(StepRefList steps)
     {
         _stepVisibilityTimeline.Clear();
         _stepVisibleBeforeCounts.Clear();
 
-        if (steps is null || steps.Count == 0)
+        if (!steps.HasValue || steps.Count == 0)
         {
             return;
         }
@@ -520,11 +539,11 @@ public sealed class ExprUndefinedVarRule() : RuleBase(RuleId.ExprUndefinedVar)
         _stepsOverrideBuiltCount = 0;
     }
 
-    private void PlanStepVisibilityCore(Step step)
+    private void PlanStepVisibilityCore(StepRef step)
     {
         _stepVisibleBeforeCounts[step] = _stepVisibilityTimeline.Count;
 
-        if (step.Exec is ExecParallel parallel && parallel.Steps is { Count: > 0 } children)
+        if (step.Exec.Kind == StepExecKind.Parallel && step.Exec.AsParallel().Steps is { Count: > 0 } children)
         {
             for (var i = 0; i < children.Count; i++)
             {
@@ -538,11 +557,11 @@ public sealed class ExprUndefinedVarRule() : RuleBase(RuleId.ExprUndefinedVar)
         _stepVisibilityTimeline.Add(step);
     }
 
-    private void PlanParallelChildVisibility(Step step)
+    private void PlanParallelChildVisibility(StepRef step)
     {
         _stepVisibleBeforeCounts[step] = _stepVisibilityTimeline.Count;
 
-        if (step.Exec is ExecParallel parallel && parallel.Steps is { Count: > 0 } children)
+        if (step.Exec.Kind == StepExecKind.Parallel && step.Exec.AsParallel().Steps is { Count: > 0 } children)
         {
             for (var i = 0; i < children.Count; i++)
             {
@@ -551,11 +570,11 @@ public sealed class ExprUndefinedVarRule() : RuleBase(RuleId.ExprUndefinedVar)
         }
     }
 
-    private void AddExportedSteps(Step step)
+    private void AddExportedSteps(StepRef step)
     {
         _stepVisibilityTimeline.Add(step);
 
-        if (step.Exec is not ExecParallel { Steps: { Count: > 0 } children })
+        if (step.Exec.Kind != StepExecKind.Parallel || step.Exec.AsParallel().Steps is not { Count: > 0 } children)
         {
             return;
         }
@@ -567,27 +586,27 @@ public sealed class ExprUndefinedVarRule() : RuleBase(RuleId.ExprUndefinedVar)
     }
 
     private void CheckNode<TTarget>(
-        FloatNodeId node,
+        FloatRef node,
         ExpressionValidationContext context,
         Action<ExprUndefinedVarRule, string, TextRange, TTarget> report,
         TTarget target)
     {
         if (!node.HasValue) return;
-        CheckNode(Arena.GetFloatExpression(node), context, report, target);
+        CheckNode(node.Expression, context, report, target);
     }
 
     private void CheckNode<TTarget>(
-        BoolNodeId node,
+        BoolRef node,
         ExpressionValidationContext context,
         Action<ExprUndefinedVarRule, string, TextRange, TTarget> report,
         TTarget target)
     {
         if (!node.HasValue) return;
-        CheckNode(Arena.GetBoolExpression(node), context, report, target);
+        CheckNode(node.Expression, context, report, target);
     }
 
     private void CheckNode<TTarget>(
-        StringNodeId node,
+        StringRef node,
         ExpressionValidationContext context,
         Action<ExprUndefinedVarRule, string, TextRange, TTarget> report,
         TTarget target,
@@ -598,7 +617,7 @@ public sealed class ExprUndefinedVarRule() : RuleBase(RuleId.ExprUndefinedVar)
             return;
         }
 
-        var value = Arena.GetStringValue(node);
+        var value = node.Value;
         if (value.Length == 0)
         {
             return;
@@ -609,11 +628,11 @@ public sealed class ExprUndefinedVarRule() : RuleBase(RuleId.ExprUndefinedVar)
 
         if (parseWholeValue && !hasEmbeddedExpression)
         {
-            ValidateExpression(value, context, Arena.GetStringRange(node), report, target);
+            ValidateExpression(value, context, node.Range, report, target);
             return;
         }
 
-        var nodeRange = Arena.GetStringRange(node);
+        var nodeRange = node.Range;
         var searchStart = 0;
         while (TryFindEmbeddedExpression(value, searchStart, out var bodyStart, out var bodyLength, out var nextSearchStart))
         {
@@ -641,16 +660,16 @@ public sealed class ExprUndefinedVarRule() : RuleBase(RuleId.ExprUndefinedVar)
     /// evaluate the expression result directly rather than interpolating into a string.
     /// </summary>
     private void CheckSectionExpression<TTarget>(
-        StringNodeId node,
+        StringRef node,
         ExpressionValidationContext context,
         Action<ExprUndefinedVarRule, string, TextRange, TTarget> report,
         TTarget target)
     {
         if (!node.HasValue || Config.Utf8Yaml is null) return;
-        var value = Arena.GetStringValue(node);
+        var value = node.Value;
         if (value.Length == 0) return;
 
-        var nodeRange = Arena.GetStringRange(node);
+        var nodeRange = node.Range;
         var searchStart = 0;
         while (TryFindEmbeddedExpression(value, searchStart, out var bodyStart, out var bodyLength, out var nextSearchStart))
         {
@@ -708,7 +727,7 @@ public sealed class ExprUndefinedVarRule() : RuleBase(RuleId.ExprUndefinedVar)
     /// Used for contexts like workflow_call input defaults where overrides are computed per-node.
     /// </summary>
     private void CheckNodeWithOverrides<TTarget>(
-        StringNodeId node,
+        StringRef node,
         ExpressionValidationContext context,
         (byte[] NameUtf8, ExprType Type)[] overrides,
         Action<ExprUndefinedVarRule, string, TextRange, TTarget> report,
@@ -719,13 +738,13 @@ public sealed class ExprUndefinedVarRule() : RuleBase(RuleId.ExprUndefinedVar)
             return;
         }
 
-        var value = Arena.GetStringValue(node);
+        var value = node.Value;
         if (value.Length == 0)
         {
             return;
         }
 
-        var nodeRange = Arena.GetStringRange(node);
+        var nodeRange = node.Range;
         var searchStart = 0;
         while (TryFindEmbeddedExpression(value, searchStart, out var bodyStart, out var bodyLength, out var nextSearchStart))
         {
@@ -920,7 +939,7 @@ public sealed class ExprUndefinedVarRule() : RuleBase(RuleId.ExprUndefinedVar)
     }
 
     private void ValidateEnvMappingType<TTarget>(
-        StringNodeId envExpression,
+        StringRef envExpression,
         ExpressionValidationContext context,
         Action<ExprUndefinedVarRule, string, TextRange, TTarget> report,
         TTarget target)
@@ -930,7 +949,7 @@ public sealed class ExprUndefinedVarRule() : RuleBase(RuleId.ExprUndefinedVar)
             return;
         }
 
-        var value = Arena.GetStringValue(envExpression);
+        var value = envExpression.Value;
         if (value.Length == 0)
         {
             return;
@@ -953,7 +972,7 @@ public sealed class ExprUndefinedVarRule() : RuleBase(RuleId.ExprUndefinedVar)
             : null;
 
         var diag = ExpressionSemanticAnalyzer.CheckEnvMappingType(
-            parseResult, body, Arena.GetStringRange(envExpression), overrides);
+            parseResult, body, envExpression.Range, overrides);
         if (diag is { } d)
         {
             report(this, d.Message, d.Location, target);
@@ -964,7 +983,7 @@ public sealed class ExprUndefinedVarRule() : RuleBase(RuleId.ExprUndefinedVar)
     /// Checks that an expression node evaluates to an object type. Used for credentials, services, etc.
     /// </summary>
     private void ValidateExpectedObjectType<TTarget>(
-        StringNodeId expressionNode,
+        StringRef expressionNode,
         ExpressionValidationContext context,
         string sectionName,
         Action<ExprUndefinedVarRule, string, TextRange, TTarget> report,
@@ -975,7 +994,7 @@ public sealed class ExprUndefinedVarRule() : RuleBase(RuleId.ExprUndefinedVar)
             return;
         }
 
-        var value = Arena.GetStringValue(expressionNode);
+        var value = expressionNode.Value;
         if (value.Length == 0)
         {
             return;
@@ -998,7 +1017,7 @@ public sealed class ExprUndefinedVarRule() : RuleBase(RuleId.ExprUndefinedVar)
             : null;
 
         var diag = ExpressionSemanticAnalyzer.CheckExpectedObjectType(
-            parseResult, body, Arena.GetStringRange(expressionNode), overrides, sectionName);
+            parseResult, body, expressionNode.Range, overrides, sectionName);
         if (diag is { } d)
         {
             report(this, d.Message, d.Location, target);
@@ -1071,16 +1090,16 @@ public sealed class ExprUndefinedVarRule() : RuleBase(RuleId.ExprUndefinedVar)
             col);
     }
 
-    private void CheckStrategy(Strategy? strategy, Job job)
+    private void CheckStrategy(StrategyRef strategy, JobRef job)
     {
-        if (strategy is null) return;
+        if (!strategy.HasValue) return;
 
         CheckNode(strategy.FailFast, ExpressionValidationContext.JobStrategy, static (rule, message, location, j) =>
             rule.AddJobError(j, message, location), job);
         CheckNode(strategy.MaxParallel, ExpressionValidationContext.JobStrategy, static (rule, message, location, j) =>
             rule.AddJobError(j, message, location), job);
 
-        if (strategy.Matrix is { } matrix)
+        if (strategy.Matrix is { HasValue: true } matrix)
         {
             CheckSectionExpression(matrix.Expression, ExpressionValidationContext.JobStrategy, static (rule, message, location, j) =>
                 rule.AddJobError(j, message, location), job);
@@ -1115,38 +1134,38 @@ public sealed class ExprUndefinedVarRule() : RuleBase(RuleId.ExprUndefinedVar)
         }
     }
 
-    private void CheckMatrixValues(IReadOnlyList<RawYamlValue>? values, ExpressionValidationContext context, Job job)
+    private void CheckMatrixValues(RawYamlRefList values, ExpressionValidationContext context, JobRef job)
     {
-        if (values is null) return;
+        if (!values.HasValue) return;
         for (var i = 0; i < values.Count; i++)
         {
-            if (values[i] is RawYamlString str)
+            if (values[i].Kind == RawYamlKind.String)
             {
-                CheckNode(str.Value, context, static (rule, message, location, j) =>
+                CheckNode(values[i].Scalar, context, static (rule, message, location, j) =>
                     rule.AddJobError(j, message, location), job);
             }
         }
     }
 
-    private void CheckMatrixCombinationEntries(IReadOnlyList<SliceMap<RawYamlValue>>? entries, ExpressionValidationContext context, Job job)
+    private void CheckMatrixCombinationEntries(CombinationEntryRefList entries, ExpressionValidationContext context, JobRef job)
     {
-        if (entries is null) return;
+        if (!entries.HasValue) return;
         for (var i = 0; i < entries.Count; i++)
         {
             foreach (var pair in entries[i])
             {
-                if (pair.Value is RawYamlString str)
+                if (pair.Value.Kind == RawYamlKind.String)
                 {
-                    CheckNode(str.Value, context, static (rule, message, location, j) =>
+                    CheckNode(pair.Value.Scalar, context, static (rule, message, location, j) =>
                         rule.AddJobError(j, message, location), job);
                 }
             }
         }
     }
 
-    private void CheckContainer(Container? container, ExpressionValidationContext imageCtx, ExpressionValidationContext credentialsCtx, ExpressionValidationContext envCtx, ExpressionValidationContext optionsCtx, Job job)
+    private void CheckContainer(ContainerRef container, ExpressionValidationContext imageCtx, ExpressionValidationContext credentialsCtx, ExpressionValidationContext envCtx, ExpressionValidationContext optionsCtx, JobRef job)
     {
-        if (container is null) return;
+        if (!container.HasValue) return;
 
         CheckNode(container.Image, imageCtx, static (rule, message, location, j) =>
             rule.AddJobError(j, message, location), job);
@@ -1155,7 +1174,7 @@ public sealed class ExprUndefinedVarRule() : RuleBase(RuleId.ExprUndefinedVar)
         CheckEnv(container.Env, envCtx, static (rule, message, location, j) =>
             rule.AddJobError(j, message, location), job);
 
-        if (container.Credentials is { } creds)
+        if (container.Credentials is { HasValue: true } creds)
         {
             CheckNode(creds.Username, credentialsCtx, static (rule, message, location, j) =>
                 rule.AddJobError(j, message, location), job);
@@ -1168,9 +1187,9 @@ public sealed class ExprUndefinedVarRule() : RuleBase(RuleId.ExprUndefinedVar)
         }
     }
 
-    private void CheckServices(Services? services, Job job)
+    private void CheckServices(ServicesRef services, JobRef job)
     {
-        if (services is null) return;
+        if (!services.HasValue) return;
 
         CheckSectionExpression(services.Expression, ExpressionValidationContext.JobServices, static (rule, message, location, j) =>
             rule.AddJobError(j, message, location), job);
@@ -1183,7 +1202,7 @@ public sealed class ExprUndefinedVarRule() : RuleBase(RuleId.ExprUndefinedVar)
         {
             var svc = pair.Value;
             var svcContainer = svc.Container;
-            if (svcContainer is null) continue;
+            if (!svcContainer.HasValue) continue;
 
             CheckNode(svcContainer.Image, ExpressionValidationContext.JobServices, static (rule, message, location, j) =>
                 rule.AddJobError(j, message, location), job);
@@ -1196,7 +1215,7 @@ public sealed class ExprUndefinedVarRule() : RuleBase(RuleId.ExprUndefinedVar)
             CheckEnv(svcContainer.Env, ExpressionValidationContext.JobServicesEnv, static (rule, message, location, j) =>
                 rule.AddJobError(j, message, location), job);
 
-            if (svcContainer.Credentials is { } svcCreds)
+            if (svcContainer.Credentials is { HasValue: true } svcCreds)
             {
                 CheckNode(svcCreds.Username, ExpressionValidationContext.JobServicesCredentials, static (rule, message, location, j) =>
                     rule.AddJobError(j, message, location), job);
@@ -1211,13 +1230,13 @@ public sealed class ExprUndefinedVarRule() : RuleBase(RuleId.ExprUndefinedVar)
     }
 
     private void CheckNode<TTarget>(
-        IntNodeId node,
+        IntRef node,
         ExpressionValidationContext context,
         Action<ExprUndefinedVarRule, string, TextRange, TTarget> report,
         TTarget target)
     {
         if (!node.HasValue) return;
-        CheckNode(Arena.GetIntExpression(node), context, report, target);
+        CheckNode(node.Expression, context, report, target);
     }
 
     private static string FormatScopeName(ExpressionValidationContext context) => context switch

@@ -8,9 +8,13 @@ namespace Seiton.Core.Parsing;
 
 public static partial class WorkflowParser
 {
-    private static ArenaList<Event> ParseOnEvents<TReader>(ref TReader reader, AstArena arena, ref PooledBuffer<Diagnostic> diagnostics, ReadOnlySpan<byte> source)
+    private static NodeRange ParseOnEvents<TReader>(ref TReader reader, AstArena arena, ref PooledBuffer<Diagnostic> diagnostics, ReadOnlySpan<byte> source)
         where TReader : IYamlStreamReader, allows ref struct
     {
+        // Event header rows for this `on:` section are appended contiguously: each
+        // per-event parser appends its payload rows first, then exactly one header row.
+        var eventsFirst = arena.EventCount;
+
         if (reader.CurrentKind == YamlEventKind.Scalar)
         {
             var eventMark = reader.CurrentStart;
@@ -26,168 +30,175 @@ public static partial class WorkflowParser
             if (eventInfo.IsKnown && eventInfo.Spec.Id == WebhookTypes.EventId.Schedule)
             {
                 AddError(ref diagnostics, "schedule event must be configured with mapping", eventMark);
-                return default;
+                return new NodeRange(eventsFirst, 0);
             }
-            return ArenaListOfOne(BuildSimpleEvent(arena, in eventInfo, nameNode), arena);
+            AppendSimpleEvent(arena, in eventInfo, nameNode);
+            return new NodeRange(eventsFirst, 1);
         }
 
         if (reader.CurrentKind == YamlEventKind.SequenceStart)
         {
             reader.Read(); // consume SequenceStart
-            var events = new PooledBuffer<Event>(4);
-            try
+            while (!reader.End && reader.CurrentKind != YamlEventKind.SequenceEnd)
             {
-                while (!reader.End && reader.CurrentKind != YamlEventKind.SequenceEnd)
+                if (reader.CurrentKind != YamlEventKind.Scalar)
                 {
-                    if (reader.CurrentKind != YamlEventKind.Scalar)
-                    {
-                        AddError(ref diagnostics, "on sequence item must be string event name", reader.CurrentStart);
-                        reader.SkipCurrentNode();
-                        continue;
-                    }
-
-                    var eventMark = reader.CurrentStart;
-                    var eventInfo = ReadOnEventInfo(ref reader);
-                    Utf8Slice eventSlice;
-                    int eventByteLen;
-                    try { var u = reader.GetScalarUtf8(); eventSlice = reader.GetScalarSlice(); eventByteLen = u.Length; }
-                    catch { eventSlice = default; eventByteLen = 0; }
-                    ValidateKnownOnEvent(in eventInfo, eventMark, eventSlice, ref diagnostics);
-                    var nameNode = arena.AddString(eventSlice, reader.IsScalarQuoted(), BuildScalarLocation(eventMark, eventByteLen));
-                    reader.Read();
-                    // spec §3.4.1: schedule requires mapping form; scalar form is an error
-                    if (eventInfo.IsKnown && eventInfo.Spec.Id == WebhookTypes.EventId.Schedule)
-                    {
-                        AddError(ref diagnostics, "schedule event must be configured with mapping", eventMark);
-                        continue;
-                    }
-                    events.Add(BuildSimpleEvent(arena, in eventInfo, nameNode));
+                    AddError(ref diagnostics, "on sequence item must be string event name", reader.CurrentStart);
+                    reader.SkipCurrentNode();
+                    continue;
                 }
 
-                if (reader.CurrentKind == YamlEventKind.SequenceEnd) { reader.Read(); }
-                return DetachArenaList(ref events, arena);
+                var eventMark = reader.CurrentStart;
+                var eventInfo = ReadOnEventInfo(ref reader);
+                Utf8Slice eventSlice;
+                int eventByteLen;
+                try { var u = reader.GetScalarUtf8(); eventSlice = reader.GetScalarSlice(); eventByteLen = u.Length; }
+                catch { eventSlice = default; eventByteLen = 0; }
+                ValidateKnownOnEvent(in eventInfo, eventMark, eventSlice, ref diagnostics);
+                var nameNode = arena.AddString(eventSlice, reader.IsScalarQuoted(), BuildScalarLocation(eventMark, eventByteLen));
+                reader.Read();
+                // spec §3.4.1: schedule requires mapping form; scalar form is an error
+                if (eventInfo.IsKnown && eventInfo.Spec.Id == WebhookTypes.EventId.Schedule)
+                {
+                    AddError(ref diagnostics, "schedule event must be configured with mapping", eventMark);
+                    continue;
+                }
+                AppendSimpleEvent(arena, in eventInfo, nameNode);
             }
-            finally { events.Dispose(); }
+
+            if (reader.CurrentKind == YamlEventKind.SequenceEnd) { reader.Read(); }
+            return new NodeRange(eventsFirst, arena.EventCount - eventsFirst);
         }
 
         if (reader.CurrentKind == YamlEventKind.MappingStart)
         {
             reader.Read(); // consume MappingStart
-            var events = new PooledBuffer<Event>(4);
-            try
+            Span<long> keyStore = stackalloc long[64];
+            var keyCount = 0;
+            while (!reader.End && reader.CurrentKind != YamlEventKind.MappingEnd)
             {
-                Span<long> keyStore = stackalloc long[64];
-                var keyCount = 0;
-                while (!reader.End && reader.CurrentKind != YamlEventKind.MappingEnd)
+                if (reader.CurrentKind != YamlEventKind.Scalar)
                 {
-                    if (reader.CurrentKind != YamlEventKind.Scalar)
-                    {
-                        AddError(ref diagnostics, "on mapping key must be string event name", reader.CurrentStart);
-                        reader.SkipCurrentNode();
-                        if (!reader.End && reader.CurrentKind != YamlEventKind.MappingEnd) { reader.SkipCurrentNode(); }
-                        continue;
-                    }
-
-                    var eventMark = reader.CurrentStart;
-                    var eventKeySlice = reader.GetScalarSlice();
-                    var eventKeyUtf8 = reader.GetScalarUtf8();
-                    if (!TryRegisterDynamicKey(
-                        source,
-                        eventKeyUtf8,
-                        eventKeySlice.Offset,
-                        eventKeySlice.Length,
-                        eventMark,
-                        ref diagnostics,
-                        keyStore,
-                        ref keyCount,
-                        caseSensitive: false,
-                        "on"))
-                    {
-                        reader.Read();
-                        if (!reader.End && reader.CurrentKind != YamlEventKind.MappingEnd)
-                        {
-                            reader.SkipCurrentNode();
-                        }
-
-                        continue;
-                    }
-
-                    var eventInfo = ReadOnEventInfo(ref reader);
-                    Utf8Slice eventSlice;
-                    int eventByteLen;
-                    try { var u = reader.GetScalarUtf8(); eventSlice = reader.GetScalarSlice(); eventByteLen = u.Length; }
-                    catch { eventSlice = default; eventByteLen = 0; }
-                    ValidateKnownOnEvent(in eventInfo, eventMark, eventSlice, ref diagnostics);
-                    var nameNode = arena.AddString(eventSlice, reader.IsScalarQuoted(), BuildScalarLocation(eventMark, eventByteLen));
-                    reader.Read(); // consume event key
-
-                    if (reader.End)
-                    {
-                        events.Add(BuildSimpleEvent(arena, in eventInfo, nameNode));
-                        break;
-                    }
-
-                    if (IsSpecialOnEvent(in eventInfo))
-                    {
-                        events.Add(ParseOnEventWithOptions(ref reader, arena, ref diagnostics, source, in eventInfo, eventMark, nameNode));
-                        continue;
-                    }
-
-                    if (reader.CurrentKind == YamlEventKind.MappingStart)
-                    {
-                        events.Add(ParseOnEventWithOptions(ref reader, arena, ref diagnostics, source, in eventInfo, eventMark, nameNode));
-                        continue;
-                    }
-
-                    if (reader.CurrentKind is YamlEventKind.Scalar or YamlEventKind.SequenceStart)
-                    {
-                        // Some events have null-like / scalar options value; accept and build stub
-                        reader.SkipCurrentNode();
-                        events.Add(BuildSimpleEvent(arena, in eventInfo, nameNode));
-                        continue;
-                    }
-
-                    AddError(ref diagnostics, $"on.{eventInfo.Name} must be string, sequence, or mapping", reader.CurrentStart);
+                    AddError(ref diagnostics, "on mapping key must be string event name", reader.CurrentStart);
                     reader.SkipCurrentNode();
-                    events.Add(BuildSimpleEvent(arena, in eventInfo, nameNode));
+                    if (!reader.End && reader.CurrentKind != YamlEventKind.MappingEnd) { reader.SkipCurrentNode(); }
+                    continue;
                 }
 
-                if (reader.CurrentKind == YamlEventKind.MappingEnd) { reader.Read(); }
-                return DetachArenaList(ref events, arena);
+                var eventMark = reader.CurrentStart;
+                var eventKeySlice = reader.GetScalarSlice();
+                var eventKeyUtf8 = reader.GetScalarUtf8();
+                if (!TryRegisterDynamicKey(
+                    source,
+                    eventKeyUtf8,
+                    eventKeySlice.Offset,
+                    eventKeySlice.Length,
+                    eventMark,
+                    ref diagnostics,
+                    ref keyStore,
+                    ref keyCount,
+                    "on"))
+                {
+                    reader.Read();
+                    if (!reader.End && reader.CurrentKind != YamlEventKind.MappingEnd)
+                    {
+                        reader.SkipCurrentNode();
+                    }
+
+                    continue;
+                }
+
+                var eventInfo = ReadOnEventInfo(ref reader);
+                Utf8Slice eventSlice;
+                int eventByteLen;
+                try { var u = reader.GetScalarUtf8(); eventSlice = reader.GetScalarSlice(); eventByteLen = u.Length; }
+                catch { eventSlice = default; eventByteLen = 0; }
+                ValidateKnownOnEvent(in eventInfo, eventMark, eventSlice, ref diagnostics);
+                var nameNode = arena.AddString(eventSlice, reader.IsScalarQuoted(), BuildScalarLocation(eventMark, eventByteLen));
+                reader.Read(); // consume event key
+
+                if (reader.End)
+                {
+                    AppendSimpleEvent(arena, in eventInfo, nameNode);
+                    break;
+                }
+
+                if (IsSpecialOnEvent(in eventInfo))
+                {
+                    ParseOnEventWithOptions(ref reader, arena, ref diagnostics, source, in eventInfo, eventMark, nameNode);
+                    continue;
+                }
+
+                if (reader.CurrentKind == YamlEventKind.MappingStart)
+                {
+                    ParseOnEventWithOptions(ref reader, arena, ref diagnostics, source, in eventInfo, eventMark, nameNode);
+                    continue;
+                }
+
+                if (reader.CurrentKind is YamlEventKind.Scalar or YamlEventKind.SequenceStart)
+                {
+                    // Some events have null-like / scalar options value; accept and build stub
+                    reader.SkipCurrentNode();
+                    AppendSimpleEvent(arena, in eventInfo, nameNode);
+                    continue;
+                }
+
+                AddError(ref diagnostics, $"on.{eventInfo.Name} must be string, sequence, or mapping", reader.CurrentStart);
+                reader.SkipCurrentNode();
+                AppendSimpleEvent(arena, in eventInfo, nameNode);
             }
-            finally { events.Dispose(); }
+
+            if (reader.CurrentKind == YamlEventKind.MappingEnd) { reader.Read(); }
+            return new NodeRange(eventsFirst, arena.EventCount - eventsFirst);
         }
 
         AddError(ref diagnostics, "on must be string, sequence, or mapping", reader.CurrentStart);
         reader.SkipCurrentNode();
-        return default;
+        return new NodeRange(eventsFirst, 0);
     }
 
-    private static Event BuildSimpleEvent(AstArena arena, in OnEventInfo eventInfo, StringNodeId nameNode)
+    private static void AppendSimpleEvent(AstArena arena, in OnEventInfo eventInfo, StringNodeId nameNode)
     {
+        var range = arena.GetStringRange(nameNode);
         if (eventInfo.IsKnown)
         {
-            return eventInfo.Spec.Id switch
+            switch (eventInfo.Spec.Id)
             {
-                WebhookTypes.EventId.Schedule => new ScheduledEvent { EventName = nameNode, Range = arena.GetStringRange(nameNode) },
-                WebhookTypes.EventId.WorkflowDispatch => new WorkflowDispatchEvent { EventName = nameNode, Range = arena.GetStringRange(nameNode) },
-                WebhookTypes.EventId.WorkflowCall => new WorkflowCallEvent { EventName = nameNode, Range = arena.GetStringRange(nameNode) },
-                WebhookTypes.EventId.RepositoryDispatch => new RepositoryDispatchEvent { EventName = nameNode, Range = arena.GetStringRange(nameNode) },
-                WebhookTypes.EventId.ImageVersion => new ImageVersionEvent { EventName = nameNode, Range = arena.GetStringRange(nameNode) },
-                _ => new WebhookEvent { EventName = nameNode, Hook = nameNode, Range = arena.GetStringRange(nameNode) },
-            };
+                case WebhookTypes.EventId.Schedule:
+                    arena.AddEvent(new EventData { Kind = EventKind.Scheduled, EventName = nameNode, Range = range, Payload = arena.AddScheduledEvent(default) });
+                    return;
+                case WebhookTypes.EventId.WorkflowDispatch:
+                    arena.AddEvent(new EventData { Kind = EventKind.WorkflowDispatch, EventName = nameNode, Range = range, Payload = arena.AddWorkflowDispatchEvent(default) });
+                    return;
+                case WebhookTypes.EventId.WorkflowCall:
+                    arena.AddEvent(new EventData { Kind = EventKind.WorkflowCall, EventName = nameNode, Range = range, Payload = arena.AddWorkflowCallEvent(default) });
+                    return;
+                case WebhookTypes.EventId.RepositoryDispatch:
+                    arena.AddEvent(new EventData { Kind = EventKind.RepositoryDispatch, EventName = nameNode, Range = range, Payload = arena.AddRepositoryDispatchEvent(default) });
+                    return;
+                case WebhookTypes.EventId.ImageVersion:
+                    arena.AddEvent(new EventData { Kind = EventKind.ImageVersion, EventName = nameNode, Range = range, Payload = arena.AddImageVersionEvent(default) });
+                    return;
+            }
         }
 
-        return new WebhookEvent { EventName = nameNode, Hook = nameNode, Range = arena.GetStringRange(nameNode) };
+        arena.AddEvent(new EventData
+        {
+            Kind = EventKind.Webhook,
+            EventName = nameNode,
+            Range = range,
+            Payload = arena.AddWebhookEvent(new WebhookEventData { Hook = nameNode }),
+        });
     }
 
-    private static Event ParseOnEventWithOptions<TReader>(ref TReader reader, AstArena arena, ref PooledBuffer<Diagnostic> diagnostics, ReadOnlySpan<byte> source, in OnEventInfo eventInfo, TextPosition eventMark, StringNodeId nameNode)
+    private static void ParseOnEventWithOptions<TReader>(ref TReader reader, AstArena arena, ref PooledBuffer<Diagnostic> diagnostics, ReadOnlySpan<byte> source, in OnEventInfo eventInfo, TextPosition eventMark, StringNodeId nameNode)
         where TReader : IYamlStreamReader, allows ref struct
     {
         if (!IsSpecialOnEvent(in eventInfo))
         {
             // Webhook event: build full AST with filters
-            return ParseWebhookEventWithOptions(ref reader, arena, ref diagnostics, in eventInfo, eventMark, nameNode);
+            ParseWebhookEventWithOptions(ref reader, arena, ref diagnostics, in eventInfo, eventMark, nameNode);
+            return;
         }
 
         if (reader.CurrentKind == YamlEventKind.Scalar
@@ -206,31 +217,43 @@ public static partial class WorkflowParser
 
             if (!isNullLike)
             {
-                return eventInfo.Spec.Id switch
-                {
-                    WebhookTypes.EventId.Schedule => ParseScheduleEvent(ref reader, arena, ref diagnostics, nameNode),
-                    WebhookTypes.EventId.WorkflowDispatch => ParseWorkflowDispatchEvent(ref reader, arena, ref diagnostics, source, nameNode),
-                    WebhookTypes.EventId.WorkflowCall => ParseWorkflowCallEvent(ref reader, arena, ref diagnostics, source, nameNode),
-                    WebhookTypes.EventId.RepositoryDispatch => ParseRepositoryDispatchEvent(ref reader, arena, ref diagnostics, in eventInfo, nameNode),
-                    WebhookTypes.EventId.ImageVersion => ParseImageVersionEvent(ref reader, arena, ref diagnostics, nameNode),
-                    _ => BuildSimpleEvent(arena, in eventInfo, nameNode),
-                };
+                DispatchSpecialOnEvent(ref reader, arena, ref diagnostics, source, in eventInfo, nameNode);
+                return;
             }
 
             // Allow scalar/null form such as "workflow_dispatch:" in on-mapping context.
             reader.SkipCurrentNode();
-            return BuildSimpleEvent(arena, in eventInfo, nameNode);
+            AppendSimpleEvent(arena, in eventInfo, nameNode);
+            return;
         }
 
-        return eventInfo.Spec.Id switch
+        DispatchSpecialOnEvent(ref reader, arena, ref diagnostics, source, in eventInfo, nameNode);
+    }
+
+    private static void DispatchSpecialOnEvent<TReader>(ref TReader reader, AstArena arena, ref PooledBuffer<Diagnostic> diagnostics, ReadOnlySpan<byte> source, in OnEventInfo eventInfo, StringNodeId nameNode)
+        where TReader : IYamlStreamReader, allows ref struct
+    {
+        switch (eventInfo.Spec.Id)
         {
-            WebhookTypes.EventId.Schedule => ParseScheduleEvent(ref reader, arena, ref diagnostics, nameNode),
-            WebhookTypes.EventId.WorkflowDispatch => ParseWorkflowDispatchEvent(ref reader, arena, ref diagnostics, source, nameNode),
-            WebhookTypes.EventId.WorkflowCall => ParseWorkflowCallEvent(ref reader, arena, ref diagnostics, source, nameNode),
-            WebhookTypes.EventId.RepositoryDispatch => ParseRepositoryDispatchEvent(ref reader, arena, ref diagnostics, in eventInfo, nameNode),
-            WebhookTypes.EventId.ImageVersion => ParseImageVersionEvent(ref reader, arena, ref diagnostics, nameNode),
-            _ => BuildSimpleEvent(arena, in eventInfo, nameNode),
-        };
+            case WebhookTypes.EventId.Schedule:
+                ParseScheduleEvent(ref reader, arena, ref diagnostics, nameNode);
+                return;
+            case WebhookTypes.EventId.WorkflowDispatch:
+                ParseWorkflowDispatchEvent(ref reader, arena, ref diagnostics, source, nameNode);
+                return;
+            case WebhookTypes.EventId.WorkflowCall:
+                ParseWorkflowCallEvent(ref reader, arena, ref diagnostics, source, nameNode);
+                return;
+            case WebhookTypes.EventId.RepositoryDispatch:
+                ParseRepositoryDispatchEvent(ref reader, arena, ref diagnostics, in eventInfo, nameNode);
+                return;
+            case WebhookTypes.EventId.ImageVersion:
+                ParseImageVersionEvent(ref reader, arena, ref diagnostics, nameNode);
+                return;
+            default:
+                AppendSimpleEvent(arena, in eventInfo, nameNode);
+                return;
+        }
     }
 
     private static bool IsSpecialOnEvent(in OnEventInfo eventInfo)

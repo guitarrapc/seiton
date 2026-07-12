@@ -28,18 +28,18 @@ public sealed class DangerousTriggersRule() : RuleBase(RuleId.DangerousTriggers)
             : [];
     }
 
-    public override void VisitEvent(Event ev)
+    public override void VisitEvent(EventRef ev)
     {
-        if (ev is not WebhookEvent webhookEv || Config.Utf8Yaml is null)
+        if (ev.Kind != EventKind.Webhook || Config.Utf8Yaml is null)
         {
             return;
         }
 
-        var eventNameSpan = Arena.GetStringValue(webhookEv.EventName);
+        var eventNameSpan = ev.EventName.Value;
         if (IsAdditionalDangerousEvent(eventNameSpan))
         {
-            var configuredEventName = Decode(Arena.GetStringSlice(webhookEv.EventName));
-            AddEventWarning(webhookEv, $"event '{configuredEventName}' is potentially dangerous and may allow privilege escalation from a pull request");
+            var configuredEventName = ev.EventName.Decode();
+            AddEventWarning(ev, $"event '{configuredEventName}' is potentially dangerous and may allow privilege escalation from a pull request");
             return;
         }
 
@@ -55,8 +55,8 @@ public sealed class DangerousTriggersRule() : RuleBase(RuleId.DangerousTriggers)
                 continue;
             }
 
-            var eventName = Decode(Arena.GetStringSlice(webhookEv.EventName));
-            AddEventWarning(webhookEv, $"event '{eventName}' is potentially dangerous and may allow privilege escalation from a pull request");
+            var eventName = ev.EventName.Decode();
+            AddEventWarning(ev, $"event '{eventName}' is potentially dangerous and may allow privilege escalation from a pull request");
             return;
         }
     }

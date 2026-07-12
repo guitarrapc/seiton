@@ -28,9 +28,10 @@ public sealed class ArtipackedRule() : RuleBase(RuleId.Artipacked)
         _lastMessage = null;
     }
 
-    public override void VisitJobPost(Job job)
+    public override void VisitJobPost(JobRef job)
     {
-        if (job.Steps is not { Count: > 0 } steps || Config.Utf8Yaml is null)
+        var steps = job.Steps;
+        if (steps.Count == 0 || Config.Utf8Yaml is null)
         {
             return;
         }
@@ -38,19 +39,20 @@ public sealed class ArtipackedRule() : RuleBase(RuleId.Artipacked)
         var utf8Yaml = Config.Utf8Yaml;
         var hasUnsafeLegacyCheckout = false;
         var hasUnsafeV6PlusCheckout = false;
-        ExecAction[]? unsafeLegacyCheckouts = null;
+        ExecActionRef[]? unsafeLegacyCheckouts = null;
         var unsafeLegacyCheckoutCount = 0;
 
         try
         {
             for (var i = 0; i < steps.Count; i++)
             {
-                if (steps[i].Exec is not ExecAction actionExec)
+                if (steps[i].Exec.Kind != StepExecKind.Action)
                 {
                     continue;
                 }
 
-                var usesText = Arena.GetStringValue(actionExec.Uses);
+                var actionExec = steps[i].Exec.AsAction();
+                var usesText = actionExec.Uses.Value;
                 if (!PopularActions.TryGet(usesText, out var actionSpec))
                 {
                     continue;
@@ -58,7 +60,7 @@ public sealed class ArtipackedRule() : RuleBase(RuleId.Artipacked)
 
                 if (actionSpec.Id == PopularActions.ActionId.ActionsCheckout)
                 {
-                    if (HasPersistCredentialsFalse(actionExec, utf8Yaml))
+                    if (HasPersistCredentialsFalse(actionExec))
                     {
                         continue;
                     }
@@ -72,7 +74,7 @@ public sealed class ArtipackedRule() : RuleBase(RuleId.Artipacked)
                         else
                         {
                             hasUnsafeLegacyCheckout = true;
-                            unsafeLegacyCheckouts ??= ArrayPool<ExecAction>.Shared.Rent(steps.Count);
+                            unsafeLegacyCheckouts ??= ArrayPool<ExecActionRef>.Shared.Rent(steps.Count);
                             unsafeLegacyCheckouts[unsafeLegacyCheckoutCount++] = actionExec;
                         }
                     }
@@ -81,7 +83,7 @@ public sealed class ArtipackedRule() : RuleBase(RuleId.Artipacked)
                         // Cannot determine version (SHA/branch ref) — conservatively assume both risks
                         hasUnsafeLegacyCheckout = true;
                         hasUnsafeV6PlusCheckout = true;
-                        unsafeLegacyCheckouts ??= ArrayPool<ExecAction>.Shared.Rent(steps.Count);
+                        unsafeLegacyCheckouts ??= ArrayPool<ExecActionRef>.Shared.Rent(steps.Count);
                         unsafeLegacyCheckouts[unsafeLegacyCheckoutCount++] = actionExec;
                     }
 
@@ -94,25 +96,23 @@ public sealed class ArtipackedRule() : RuleBase(RuleId.Artipacked)
                 }
 
                 if (actionSpec.Id != PopularActions.ActionId.ActionsUploadArtifact
-                    || actionExec.Inputs is null
-                    || !actionExec.Inputs.Value.TryGetValue(utf8Yaml, "path"u8, out var pathNode))
+                    || !actionExec.Inputs.TryGetValue("path"u8, out var pathNode))
                 {
                     continue;
                 }
 
-                var pathValue = Arena.GetStringValue(pathNode);
+                var pathValue = pathNode.Value;
                 if (!TryClassifyDangerousPath(pathValue, out var reachesRunnerTemp, out var excludesLegacyCredentialPath, out var excludesRunnerTempPath))
                 {
                     continue;
                 }
 
-                var mayIncludeHiddenFiles = MayIncludeHiddenFiles(actionExec, usesText, utf8Yaml);
+                var mayIncludeHiddenFiles = MayIncludeHiddenFiles(actionExec, usesText);
                 var legacyCredentialsExcluded = excludesLegacyCredentialPath
                                                 && AreTrackedLegacyCheckoutsExcludedByUploadPath(
                                                     pathValue,
                                                     unsafeLegacyCheckouts!,
-                                                    unsafeLegacyCheckoutCount,
-                                                    utf8Yaml);
+                                                    unsafeLegacyCheckoutCount);
                 var mayExposeLegacyCredentials = hasUnsafeLegacyCheckout
                                                  && mayIncludeHiddenFiles
                                                  && !legacyCredentialsExcluded;
@@ -125,14 +125,14 @@ public sealed class ArtipackedRule() : RuleBase(RuleId.Artipacked)
                 // Error when legacy checkout credentials (.git/config) are actually exposed
                 // (hidden files included); warning otherwise (only v6+ $RUNNER_TEMP concern).
                 var reportAsWarning = !mayExposeLegacyCredentials;
-                var message = GetCachedMessage(Arena.GetStringSlice(pathNode), reportAsWarning, utf8Yaml);
+                var message = GetCachedMessage(pathNode.Slice, reportAsWarning, utf8Yaml);
                 if (reportAsWarning)
                 {
-                    AddStepWarning(steps[i], message, GetRange(pathNode));
+                    AddStepWarning(steps[i], message, pathNode.Range);
                 }
                 else
                 {
-                    AddStepError(steps[i], message, GetRange(pathNode));
+                    AddStepError(steps[i], message, pathNode.Range);
                 }
             }
         }
@@ -140,33 +140,31 @@ public sealed class ArtipackedRule() : RuleBase(RuleId.Artipacked)
         {
             if (unsafeLegacyCheckouts is not null)
             {
-                ArrayPool<ExecAction>.Shared.Return(unsafeLegacyCheckouts, clearArray: true);
+                ArrayPool<ExecActionRef>.Shared.Return(unsafeLegacyCheckouts, clearArray: true);
             }
         }
     }
 
-    private bool HasPersistCredentialsFalse(ExecAction actionExec, byte[] utf8Yaml)
+    private bool HasPersistCredentialsFalse(ExecActionRef actionExec)
     {
-        if (actionExec.Inputs is null
-            || !actionExec.Inputs.Value.TryGetValue(utf8Yaml, "persist-credentials"u8, out var persistCredentialsNode))
+        if (!actionExec.Inputs.TryGetValue("persist-credentials"u8, out var persistCredentialsNode))
         {
             return false;
         }
 
-        var value = Arena.GetStringValue(persistCredentialsNode);
-        return !ExpressionScanHelpers.ContainsExpressionMarker(persistCredentialsNode, Arena)
+        var value = persistCredentialsNode.Value;
+        return !ExpressionScanHelpers.ContainsExpressionMarker(persistCredentialsNode.Id, Arena)
                && IsBooleanFalse(value);
     }
 
-    private bool AreTrackedLegacyCheckoutsExcludedByUploadPath(
+    private static bool AreTrackedLegacyCheckoutsExcludedByUploadPath(
         ReadOnlySpan<byte> uploadPath,
-        ExecAction[] unsafeLegacyCheckouts,
-        int unsafeLegacyCheckoutCount,
-        byte[] utf8Yaml)
+        ExecActionRef[] unsafeLegacyCheckouts,
+        int unsafeLegacyCheckoutCount)
     {
         for (var i = 0; i < unsafeLegacyCheckoutCount; i++)
         {
-            if (!IsLegacyCheckoutPathExcludedByUploadPath(uploadPath, unsafeLegacyCheckouts[i], utf8Yaml))
+            if (!IsLegacyCheckoutPathExcludedByUploadPath(uploadPath, unsafeLegacyCheckouts[i]))
             {
                 return false;
             }
@@ -175,13 +173,12 @@ public sealed class ArtipackedRule() : RuleBase(RuleId.Artipacked)
         return true;
     }
 
-    private bool IsLegacyCheckoutPathExcludedByUploadPath(ReadOnlySpan<byte> uploadPath, ExecAction checkoutAction, byte[] utf8Yaml)
+    private static bool IsLegacyCheckoutPathExcludedByUploadPath(ReadOnlySpan<byte> uploadPath, ExecActionRef checkoutAction)
     {
         ReadOnlySpan<byte> checkoutPath = ReadOnlySpan<byte>.Empty;
-        if (checkoutAction.Inputs is not null
-            && checkoutAction.Inputs.Value.TryGetValue(utf8Yaml, "path"u8, out var checkoutPathNode))
+        if (checkoutAction.Inputs.TryGetValue("path"u8, out var checkoutPathNode))
         {
-            checkoutPath = Arena.GetStringValue(checkoutPathNode);
+            checkoutPath = checkoutPathNode.Value;
         }
 
         while (uploadPath.Length > 0)
@@ -206,11 +203,9 @@ public sealed class ArtipackedRule() : RuleBase(RuleId.Artipacked)
         return false;
     }
 
-    private bool MayIncludeHiddenFiles(ExecAction actionExec, ReadOnlySpan<byte> usesText, byte[] utf8Yaml)
+    private bool MayIncludeHiddenFiles(ExecActionRef actionExec, ReadOnlySpan<byte> usesText)
     {
-        StringNodeId includeHiddenFilesNode = default;
-        var hasExplicitIncludeHiddenFiles = actionExec.Inputs is not null
-            && actionExec.Inputs.Value.TryGetValue(utf8Yaml, "include-hidden-files"u8, out includeHiddenFilesNode);
+        var hasExplicitIncludeHiddenFiles = actionExec.Inputs.TryGetValue("include-hidden-files"u8, out var includeHiddenFilesNode);
 
         if (!TryExtractMajorAndMinorVersion(usesText, out var majorVersion, out var minorVersion, out var hasMinorVersion))
         {
@@ -246,14 +241,14 @@ public sealed class ArtipackedRule() : RuleBase(RuleId.Artipacked)
         return MayExplicitlyIncludeHiddenFiles(includeHiddenFilesNode);
     }
 
-    private bool MayExplicitlyIncludeHiddenFiles(StringNodeId includeHiddenFilesNode)
+    private bool MayExplicitlyIncludeHiddenFiles(StringRef includeHiddenFilesNode)
     {
-        if (ExpressionScanHelpers.ContainsExpressionMarker(includeHiddenFilesNode, Arena))
+        if (ExpressionScanHelpers.ContainsExpressionMarker(includeHiddenFilesNode.Id, Arena))
         {
             return true;
         }
 
-        var value = Arena.GetStringValue(includeHiddenFilesNode);
+        var value = includeHiddenFilesNode.Value;
         return IsBooleanTrue(value);
     }
 

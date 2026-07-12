@@ -22,10 +22,10 @@ public sealed class RunnerLabelRule() : RuleBase(RuleId.RunnerLabel)
             : [];
     }
 
-    public override void VisitJobPre(Job job)
+    public override void VisitJobPre(JobRef job)
     {
         var runsOn = job.RunsOn;
-        if (runsOn is null || Config.Utf8Yaml is null)
+        if (!runsOn.HasValue || Config.Utf8Yaml is null)
         {
             return;
         }
@@ -36,7 +36,7 @@ public sealed class RunnerLabelRule() : RuleBase(RuleId.RunnerLabel)
             return;
         }
 
-        if (runsOn.Labels is null)
+        if (!runsOn.Labels.HasValue)
         {
             return;
         }
@@ -46,7 +46,7 @@ public sealed class RunnerLabelRule() : RuleBase(RuleId.RunnerLabel)
             return;
         }
 
-        var jobId = Decode(Arena.GetStringSlice(job.Id));
+        var jobId = job.Id.Decode();
 
         // Detect OS family conflicts among static labels (reports ALL conflicts)
         var (staticOsFamily, firstOsLabel) = DetectOsFamilyConflicts(job, jobId, runsOn.Labels);
@@ -62,12 +62,12 @@ public sealed class RunnerLabelRule() : RuleBase(RuleId.RunnerLabel)
         for (var i = 0; i < runsOn.Labels.Count; i++)
         {
             var label = runsOn.Labels[i];
-            if (ExpressionScanHelpers.ContainsExpressionMarker(label, Arena))
+            if (label.Expression.HasValue || ExpressionScanHelpers.ContainsExpressionMarker(label.Value))
             {
                 continue;
             }
 
-            var labelUtf8 = Arena.GetStringValue(label);
+            var labelUtf8 = label.Value;
             if (labelUtf8.IsEmpty)
             {
                 // Empty labels are already reported by the parser as syntax-check.
@@ -84,8 +84,8 @@ public sealed class RunnerLabelRule() : RuleBase(RuleId.RunnerLabel)
                 continue;
             }
 
-            var labelText = Decode(Arena.GetStringSlice(label));
-            AddJobWarning(job, BuildUnknownLabelMessage(labelText), Arena.GetStringRange(label));
+            var labelText = label.Decode();
+            AddJobWarning(job, BuildUnknownLabelMessage(labelText), label.Range);
         }
     }
 
@@ -94,20 +94,20 @@ public sealed class RunnerLabelRule() : RuleBase(RuleId.RunnerLabel)
     /// Reports ALL conflicts (not just the first) and returns the combined OS family bitmask
     /// and the first OS label for use in matrix conflict messages.
     /// </summary>
-    private (byte SeenOsFamilies, StringNodeId FirstOsLabel) DetectOsFamilyConflicts(Job job, string jobId, IReadOnlyList<StringNodeId> labels)
+    private (byte SeenOsFamilies, StringRef FirstOsLabel) DetectOsFamilyConflicts(JobRef job, string jobId, StringRefList labels)
     {
         byte seenOsFamilies = 0; // bit 0=linux, 1=windows, 2=macos
-        var firstOsLabel = default(StringNodeId);
+        var firstOsLabel = default(StringRef);
 
         for (var i = 0; i < labels.Count; i++)
         {
             var label = labels[i];
-            if (ExpressionScanHelpers.ContainsExpressionMarker(label, Arena))
+            if (label.Expression.HasValue || ExpressionScanHelpers.ContainsExpressionMarker(label.Value))
             {
                 continue;
             }
 
-            var labelUtf8 = Arena.GetStringValue(label);
+            var labelUtf8 = label.Value;
             var family = GetOsFamily(labelUtf8);
             if (family == 0)
             {
@@ -117,10 +117,10 @@ public sealed class RunnerLabelRule() : RuleBase(RuleId.RunnerLabel)
             if (seenOsFamilies != 0 && (seenOsFamilies & family) == 0)
             {
                 // Different OS family from what we already saw
-                var labelText = Decode(Arena.GetStringSlice(label));
-                var firstText = Decode(Arena.GetStringSlice(firstOsLabel));
-                var firstRange = Arena.GetStringRange(firstOsLabel);
-                AddJobError(job, $"label \"{labelText}\" conflicts with label \"{firstText}\" defined at line:{firstRange.StartLine},col:{firstRange.StartColumn}. note: to run your job on each workers, use matrix", Arena.GetStringRange(label));
+                var labelText = label.Decode();
+                var firstText = firstOsLabel.Decode();
+                var firstRange = firstOsLabel.Range;
+                AddJobError(job, $"label \"{labelText}\" conflicts with label \"{firstText}\" defined at line:{firstRange.StartLine},col:{firstRange.StartColumn}. note: to run your job on each workers, use matrix", label.Range);
                 // Continue checking remaining labels — don't return early
             }
             else if (seenOsFamilies == 0)
@@ -139,25 +139,25 @@ public sealed class RunnerLabelRule() : RuleBase(RuleId.RunnerLabel)
     /// When runs-on is a list containing both static labels and <c>${{ matrix.AXIS }}</c> expressions,
     /// resolves the matrix axis values and checks each for OS family conflicts with the static labels.
     /// </summary>
-    private void DetectMatrixLabelOsConflicts(Job job, string jobId, IReadOnlyList<StringNodeId> labels, byte staticOsFamily, StringNodeId firstOsLabel)
+    private void DetectMatrixLabelOsConflicts(JobRef job, string jobId, StringRefList labels, byte staticOsFamily, StringRef firstOsLabel)
     {
-        var matrix = job.Strategy?.Matrix;
-        if (matrix is null || matrix.Expression.HasValue || matrix.Rows is null)
+        var matrix = job.Strategy.Matrix;
+        if (!matrix.HasValue || matrix.Expression.HasValue || !matrix.Rows.HasValue)
         {
             return;
         }
 
-        var firstOsLabelText = Decode(Arena.GetStringSlice(firstOsLabel));
+        var firstOsLabelText = firstOsLabel.Decode();
 
         for (var i = 0; i < labels.Count; i++)
         {
             var label = labels[i];
-            if (!ExpressionScanHelpers.ContainsExpressionMarker(label, Arena))
+            if (!(label.Expression.HasValue || ExpressionScanHelpers.ContainsExpressionMarker(label.Value)))
             {
                 continue;
             }
 
-            var exprUtf8 = Arena.GetStringValue(label);
+            var exprUtf8 = label.Value;
             if (!ExpressionScanHelpers.TryExtractExpressionBody(exprUtf8, out var body))
             {
                 continue;
@@ -177,29 +177,31 @@ public sealed class RunnerLabelRule() : RuleBase(RuleId.RunnerLabel)
 
             var axisName = body[7..]; // slice after "matrix."
 
-            if (!matrix.Rows.Value.TryGetValue(Config.Utf8Yaml, axisName, out var row))
+            if (!matrix.Rows.TryGetValue(axisName, out var row))
             {
                 continue;
             }
 
-            if (row.Expression.HasValue || row.Values is null)
+            if (row.Expression.HasValue || !row.Values.HasValue)
             {
                 continue;
             }
 
             for (var j = 0; j < row.Values.Count; j++)
             {
-                if (row.Values[j] is not RawYamlString scalar)
+                var rawValue = row.Values[j];
+                if (rawValue.Kind != RawYamlKind.String)
                 {
                     continue;
                 }
 
-                if (ExpressionScanHelpers.ContainsExpressionMarker(scalar.Value, Arena))
+                var scalar = rawValue.Scalar;
+                if (scalar.Expression.HasValue || ExpressionScanHelpers.ContainsExpressionMarker(scalar.Value))
                 {
                     continue;
                 }
 
-                var valueUtf8 = Arena.GetStringValue(scalar.Value);
+                var valueUtf8 = scalar.Value;
                 var family = GetOsFamily(valueUtf8);
                 if (family == 0 || (staticOsFamily & family) != 0)
                 {
@@ -207,9 +209,9 @@ public sealed class RunnerLabelRule() : RuleBase(RuleId.RunnerLabel)
                     continue;
                 }
 
-                var valueText = Decode(Arena.GetStringSlice(scalar.Value));
-                var firstRange = Arena.GetStringRange(firstOsLabel);
-                AddJobError(job, $"label \"{valueText}\" conflicts with label \"{firstOsLabelText}\" defined at line:{firstRange.StartLine},col:{firstRange.StartColumn}. note: to run your job on each workers, use matrix", Arena.GetStringRange(scalar.Value));
+                var valueText = scalar.Decode();
+                var firstRange = firstOsLabel.Range;
+                AddJobError(job, $"label \"{valueText}\" conflicts with label \"{firstOsLabelText}\" defined at line:{firstRange.StartLine},col:{firstRange.StartColumn}. note: to run your job on each workers, use matrix", scalar.Range);
             }
         }
     }
@@ -274,7 +276,7 @@ public sealed class RunnerLabelRule() : RuleBase(RuleId.RunnerLabel)
         return true;
     }
 
-    private bool ContainsSelfHostedLabel(IReadOnlyList<StringNodeId> labels)
+    private bool ContainsSelfHostedLabel(StringRefList labels)
     {
         if (Config.Utf8Yaml is null)
         {
@@ -284,7 +286,7 @@ public sealed class RunnerLabelRule() : RuleBase(RuleId.RunnerLabel)
         for (var i = 0; i < labels.Count; i++)
         {
             var label = labels[i];
-            var labelUtf8 = Arena.GetStringValue(label);
+            var labelUtf8 = label.Value;
             if (RunnerLabels.IsSelfHostedLabel(labelUtf8))
             {
                 return true;
@@ -320,9 +322,9 @@ public sealed class RunnerLabelRule() : RuleBase(RuleId.RunnerLabel)
     /// When <c>runs-on</c> is a single <c>${{ matrix.AXIS }}</c> expression,
     /// resolves the matrix dimension and validates each scalar value as a runner label.
     /// </summary>
-    private void CheckMatrixExpandedLabels(Job job, Runner runsOn)
+    private void CheckMatrixExpandedLabels(JobRef job, RunnerRef runsOn)
     {
-        var exprUtf8 = Arena.GetStringValue(runsOn.LabelsExpr);
+        var exprUtf8 = runsOn.LabelsExpr.Value;
         if (!ExpressionScanHelpers.TryExtractExpressionBody(exprUtf8, out var body))
         {
             return;
@@ -342,39 +344,40 @@ public sealed class RunnerLabelRule() : RuleBase(RuleId.RunnerLabel)
 
         var axisName = body[7..]; // slice after "matrix."
 
-        var matrix = job.Strategy?.Matrix;
-        if (matrix is null || matrix.Expression.HasValue || matrix.Rows is null)
+        var matrix = job.Strategy.Matrix;
+        if (!matrix.HasValue || matrix.Expression.HasValue || !matrix.Rows.HasValue)
         {
             return;
         }
 
-        if (!matrix.Rows.Value.TryGetValue(Config.Utf8Yaml, axisName, out var row))
+        if (!matrix.Rows.TryGetValue(axisName, out var row))
         {
             return;
         }
 
         // Row is an expression — cannot validate
-        if (row.Expression.HasValue || row.Values is null)
+        if (row.Expression.HasValue || !row.Values.HasValue)
         {
             return;
         }
 
-        var jobId = Decode(Arena.GetStringSlice(job.Id));
+        var jobId = job.Id.Decode();
         var loggedAdditionalKnownHostedLabel = false;
 
         for (var i = 0; i < row.Values.Count; i++)
         {
             var value = row.Values[i];
-            switch (value)
+            switch (value.Kind)
             {
-                case RawYamlString scalar:
+                case RawYamlKind.String:
                     {
-                        if (ExpressionScanHelpers.ContainsExpressionMarker(scalar.Value, Arena))
+                        var scalar = value.Scalar;
+                        if (scalar.Expression.HasValue || ExpressionScanHelpers.ContainsExpressionMarker(scalar.Value))
                         {
                             continue;
                         }
 
-                        var labelUtf8 = Arena.GetStringValue(scalar.Value);
+                        var labelUtf8 = scalar.Value;
                         if (labelUtf8.IsEmpty
                             || RunnerLabels.IsKnownHostedLabel(labelUtf8)
                             || RunnerLabels.IsSelfHostedPresetLabel(labelUtf8))
@@ -382,23 +385,26 @@ public sealed class RunnerLabelRule() : RuleBase(RuleId.RunnerLabel)
                             continue;
                         }
 
-                        if (TryHandleAdditionalKnownHostedLabel(job, scalar.Value, labelUtf8, ref loggedAdditionalKnownHostedLabel, dedupeInfoPerJob: true))
+                        if (TryHandleAdditionalKnownHostedLabel(job, scalar, labelUtf8, ref loggedAdditionalKnownHostedLabel, dedupeInfoPerJob: true))
                         {
                             continue;
                         }
 
-                        var labelText = Decode(Arena.GetStringSlice(scalar.Value));
-                        AddJobWarning(job, BuildUnknownLabelMessage(labelText), Arena.GetStringRange(scalar.Value));
+                        var labelText = scalar.Decode();
+                        AddJobWarning(job, BuildUnknownLabelMessage(labelText), scalar.Range);
                         break;
                     }
 
-                case RawYamlArray array:
+                case RawYamlKind.Array:
                     {
+                        var items = value.Items;
+
                         // If any element is "self-hosted", the whole entry is self-hosted runner labels
                         var hasSelfHosted = false;
-                        for (var j = 0; j < array.Items.Count; j++)
+                        for (var j = 0; j < items.Count; j++)
                         {
-                            if (array.Items[j] is RawYamlString item && RunnerLabels.IsSelfHostedLabel(Arena.GetStringValue(item.Value)))
+                            var item = items[j];
+                            if (item.Kind == RawYamlKind.String && RunnerLabels.IsSelfHostedLabel(item.Scalar.Value))
                             {
                                 hasSelfHosted = true;
                                 break;
@@ -411,19 +417,20 @@ public sealed class RunnerLabelRule() : RuleBase(RuleId.RunnerLabel)
                         }
 
                         // Validate each element
-                        for (var j = 0; j < array.Items.Count; j++)
+                        for (var j = 0; j < items.Count; j++)
                         {
-                            if (array.Items[j] is not RawYamlString element)
+                            if (items[j].Kind != RawYamlKind.String)
                             {
                                 continue;
                             }
 
-                            if (ExpressionScanHelpers.ContainsExpressionMarker(element.Value, Arena))
+                            var element = items[j].Scalar;
+                            if (element.Expression.HasValue || ExpressionScanHelpers.ContainsExpressionMarker(element.Value))
                             {
                                 continue;
                             }
 
-                            var elemUtf8 = Arena.GetStringValue(element.Value);
+                            var elemUtf8 = element.Value;
                             if (elemUtf8.IsEmpty
                                 || RunnerLabels.IsKnownHostedLabel(elemUtf8)
                                 || RunnerLabels.IsSelfHostedPresetLabel(elemUtf8))
@@ -431,13 +438,13 @@ public sealed class RunnerLabelRule() : RuleBase(RuleId.RunnerLabel)
                                 continue;
                             }
 
-                            if (TryHandleAdditionalKnownHostedLabel(job, element.Value, elemUtf8, ref loggedAdditionalKnownHostedLabel, dedupeInfoPerJob: true))
+                            if (TryHandleAdditionalKnownHostedLabel(job, element, elemUtf8, ref loggedAdditionalKnownHostedLabel, dedupeInfoPerJob: true))
                             {
                                 continue;
                             }
 
-                            var elemText = Decode(Arena.GetStringSlice(element.Value));
-                            AddJobWarning(job, BuildUnknownLabelMessage(elemText), Arena.GetStringRange(element.Value));
+                            var elemText = element.Decode();
+                            AddJobWarning(job, BuildUnknownLabelMessage(elemText), element.Range);
                         }
 
                         break;
@@ -446,7 +453,7 @@ public sealed class RunnerLabelRule() : RuleBase(RuleId.RunnerLabel)
         }
     }
 
-    private bool TryHandleAdditionalKnownHostedLabel(Job job, StringNodeId labelNode, ReadOnlySpan<byte> labelUtf8, ref bool loggedAdditionalKnownHostedLabel, bool dedupeInfoPerJob)
+    private bool TryHandleAdditionalKnownHostedLabel(JobRef job, StringRef labelNode, ReadOnlySpan<byte> labelUtf8, ref bool loggedAdditionalKnownHostedLabel, bool dedupeInfoPerJob)
     {
         if (!IsAdditionalKnownHostedLabel(labelUtf8))
         {
@@ -456,7 +463,7 @@ public sealed class RunnerLabelRule() : RuleBase(RuleId.RunnerLabel)
         if (Config.Verbose && (!dedupeInfoPerJob || !loggedAdditionalKnownHostedLabel))
         {
             var knownLabelText = System.Text.Encoding.UTF8.GetString(labelUtf8);
-            AddJobInfo(job, $"label '{knownLabelText}' matched known-hosted-labels config, skipping", Arena.GetStringRange(labelNode));
+            AddJobInfo(job, $"label '{knownLabelText}' matched known-hosted-labels config, skipping", labelNode.Range);
             loggedAdditionalKnownHostedLabel = true;
         }
 

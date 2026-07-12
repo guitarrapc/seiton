@@ -14,7 +14,7 @@ public sealed class LocalActionInputsRule() : RuleBase(RuleId.LocalActionInputs)
 
     public override bool SupportsDocumentKind(DocumentKind documentKind) => documentKind == DocumentKind.Workflow;
 
-    public override void VisitWorkflowPre(Workflow workflow)
+    public override void VisitWorkflowPre(WorkflowRef workflow)
     {
         base.VisitWorkflowPre(workflow);
         DisposeCachedArenas();
@@ -22,7 +22,7 @@ public sealed class LocalActionInputsRule() : RuleBase(RuleId.LocalActionInputs)
         _metadataCheckedPaths.Clear();
     }
 
-    public override void VisitStep(Step step)
+    public override void VisitStep(StepRef step)
     {
         if (Config.Utf8Yaml is null
             || string.IsNullOrEmpty(Config.FilePath)
@@ -32,12 +32,18 @@ public sealed class LocalActionInputsRule() : RuleBase(RuleId.LocalActionInputs)
             return;
         }
 
-        if (step.Exec is not ExecAction action || !HasNodeValue(action.Uses, Arena))
+        if (step.Exec.Kind != StepExecKind.Action)
         {
             return;
         }
 
-        var uses = Arena.GetStringValue(action.Uses);
+        var action = step.Exec.AsAction();
+        if (!action.Uses.HasText)
+        {
+            return;
+        }
+
+        var uses = action.Uses.Value;
         if (!TryResolveLocalActionYamlPath(uses, out var actionYamlPath, out var actionDisplayPath, out var invalidRef))
         {
             if (invalidRef)
@@ -64,45 +70,45 @@ public sealed class LocalActionInputsRule() : RuleBase(RuleId.LocalActionInputs)
             ValidateMetadata(step, action, meta, actionSource, actionArena, actionYamlPath, actionDisplayPath);
         }
 
-        if (meta.Inputs is null || meta.Inputs.Value.Count == 0)
+        if (!meta.Inputs.HasValue || meta.Inputs.Count == 0)
         {
-            if (action.Inputs is not null)
+            if (action.Inputs.HasValue)
             {
-                foreach (var pair in action.Inputs.Value)
+                foreach (var pair in action.Inputs)
                 {
-                    var inputName = Decode(pair.Key);
+                    var inputName = pair.Key.Decode();
                     AddStepError(
                         step,
                         $"local action does not declare inputs; unknown input '{inputName}'",
-                        Arena.GetStringRange(pair.Value));
+                        pair.Value.Range);
                 }
             }
 
             return;
         }
 
-        if (action.Inputs is not null)
+        if (action.Inputs.HasValue)
         {
-            foreach (var pair in action.Inputs.Value)
+            foreach (var pair in action.Inputs)
             {
-                var inputName = Decode(pair.Key);
-                if (!TryFindMetadataInput(actionSource, meta.Inputs.Value, inputName, out var inputDef))
+                var inputName = pair.Key.Decode();
+                if (!TryFindMetadataInput(actionSource, actionArena, meta.Inputs, inputName, out var inputDef))
                 {
-                    AddStepError(step, FormatUnknownInputMessage(actionSource, inputName, meta.Inputs.Value), Arena.GetStringRange(pair.Value));
+                    AddStepError(step, FormatUnknownInputMessage(actionSource, actionArena, inputName, meta.Inputs), pair.Value.Range);
                     continue;
                 }
 
                 if (inputDef.DeprecationMessage.HasValue && HasNodeValue(inputDef.DeprecationMessage, actionArena))
                 {
                     var depText = DecodeSlice(actionSource, actionArena.GetStringSlice(inputDef.DeprecationMessage));
-                    AddStepWarning(step, $"input '{inputName}' is deprecated: {depText}", Arena.GetStringRange(pair.Value));
+                    AddStepWarning(step, $"input '{inputName}' is deprecated: {depText}", pair.Value.Range);
                 }
             }
         }
 
-        foreach (var kv in meta.Inputs.Value)
+        for (var i = 0; i < meta.Inputs.Count; i++)
         {
-            var def = kv.Value;
+            ref readonly var def = ref actionArena.GetActionMetadataInputAt(meta.Inputs, i);
             if (def.Required.HasValue && actionArena.GetBoolValue(def.Required))
             {
                 // required is true - check if default is set
@@ -117,8 +123,8 @@ public sealed class LocalActionInputsRule() : RuleBase(RuleId.LocalActionInputs)
                 continue;
             }
 
-            var name = DecodeSlice(actionSource, kv.Key);
-            if (action.Inputs is not null && ContainsInputName(Config.Utf8Yaml!, action.Inputs.Value, name))
+            var name = DecodeSlice(actionSource, def.Key);
+            if (action.Inputs.HasValue && ContainsInputName(action.Inputs, name))
             {
                 continue;
             }
@@ -180,14 +186,20 @@ public sealed class LocalActionInputsRule() : RuleBase(RuleId.LocalActionInputs)
         return true;
     }
 
-    private void ValidateRunsUsing(Step step, ExecAction action, ActionMetadata meta, byte[] actionSource, AstArena actionArena)
+    private void ValidateRunsUsing(StepRef step, ExecActionRef action, ActionMetadata meta, byte[] actionSource, AstArena actionArena)
     {
-        if (meta.Runs?.Using is null || !HasNodeValue(meta.Runs.Using, actionArena))
+        if (!meta.Runs.HasValue)
         {
             return;
         }
 
-        var span = actionArena.GetStringSlice(meta.Runs.Using).AsSpan(actionSource);
+        ref readonly var runs = ref actionArena.GetActionMetadataRuns(meta.Runs);
+        if (!HasNodeValue(runs.Using, actionArena))
+        {
+            return;
+        }
+
+        var span = actionArena.GetStringSlice(runs.Using).AsSpan(actionSource);
         if (span.IsEmpty)
         {
             return;
@@ -217,12 +229,12 @@ public sealed class LocalActionInputsRule() : RuleBase(RuleId.LocalActionInputs)
             BuildUsesLocation(action));
     }
 
-    private void ValidateMetadata(Step step, ExecAction action, ActionMetadata meta, byte[] actionSource, AstArena actionArena, string actionYamlPath, string displayPath)
+    private void ValidateMetadata(StepRef step, ExecActionRef action, ActionMetadata meta, byte[] actionSource, AstArena actionArena, string actionYamlPath, string displayPath)
     {
         var usesLocation = BuildUsesLocation(action);
         var actionName = meta.Name.HasValue && HasNodeValue(meta.Name, actionArena)
             ? DecodeSlice(actionSource, actionArena.GetStringSlice(meta.Name))
-            : Encoding.UTF8.GetString(Arena.GetStringValue(action.Uses));
+            : Encoding.UTF8.GetString(action.Uses.Value);
         var actionDir = Path.GetDirectoryName(actionYamlPath) ?? actionYamlPath;
         var displayDir = displayPath.Contains('/') ? displayPath[..displayPath.LastIndexOf('/')] : displayPath;
 
@@ -232,12 +244,13 @@ public sealed class LocalActionInputsRule() : RuleBase(RuleId.LocalActionInputs)
             AddStepError(step, $"description is required in metadata of \"{actionName}\" action at \"{displayPath}\"", usesLocation);
         }
 
-        if (meta.Runs is not null)
+        if (meta.Runs.HasValue)
         {
-            var isJsAction = IsJavaScriptAction(meta.Runs, actionSource, actionArena);
+            ref readonly var runs = ref actionArena.GetActionMetadataRuns(meta.Runs);
+            var isJsAction = IsJavaScriptAction(in runs, actionSource, actionArena);
 
             // 2. env not allowed for JavaScript actions
-            if (isJsAction && meta.Runs.Env is not null)
+            if (isJsAction && runs.Env.HasValue)
             {
                 AddStepError(step, $"\"env\" is not allowed in \"runs\" section because \"{actionName}\" is a JavaScript action", usesLocation);
             }
@@ -245,9 +258,9 @@ public sealed class LocalActionInputsRule() : RuleBase(RuleId.LocalActionInputs)
             // 3. File existence for JavaScript entry points (main, pre, post)
             if (isJsAction)
             {
-                ValidateJsEntryPoint(step, meta.Runs.Main, "main", actionName, actionDir, displayDir, actionSource, actionArena, usesLocation);
-                ValidateJsEntryPoint(step, meta.Runs.Pre, "pre", actionName, actionDir, displayDir, actionSource, actionArena, usesLocation);
-                ValidateJsEntryPoint(step, meta.Runs.Post, "post", actionName, actionDir, displayDir, actionSource, actionArena, usesLocation);
+                ValidateJsEntryPoint(step, runs.Main, "main", actionName, actionDir, displayDir, actionSource, actionArena, usesLocation);
+                ValidateJsEntryPoint(step, runs.Pre, "pre", actionName, actionDir, displayDir, actionSource, actionArena, usesLocation);
+                ValidateJsEntryPoint(step, runs.Post, "post", actionName, actionDir, displayDir, actionSource, actionArena, usesLocation);
             }
         }
 
@@ -264,7 +277,7 @@ public sealed class LocalActionInputsRule() : RuleBase(RuleId.LocalActionInputs)
         }
     }
 
-    private static bool IsJavaScriptAction(ActionMetadataRuns runs, byte[] actionSource, AstArena actionArena)
+    private static bool IsJavaScriptAction(in ActionMetadataRunsData runs, byte[] actionSource, AstArena actionArena)
     {
         if (!runs.Using.HasValue || !HasNodeValue(runs.Using, actionArena))
         {
@@ -279,7 +292,7 @@ public sealed class LocalActionInputsRule() : RuleBase(RuleId.LocalActionInputs)
             && (span[3] == (byte)'e' || span[3] == (byte)'E');
     }
 
-    private void ValidateJsEntryPoint(Step step, StringNodeId entryPoint, string keyName, string actionName, string actionDir, string displayDir, byte[] actionSource, AstArena actionArena, TextRange usesLocation)
+    private void ValidateJsEntryPoint(StepRef step, StringNodeId entryPoint, string keyName, string actionName, string actionDir, string displayDir, byte[] actionSource, AstArena actionArena, TextRange usesLocation)
     {
         if (!entryPoint.HasValue || !HasNodeValue(entryPoint, actionArena))
         {
@@ -310,28 +323,30 @@ public sealed class LocalActionInputsRule() : RuleBase(RuleId.LocalActionInputs)
 
     private static bool TryFindMetadataInput(
         byte[] source,
-        SliceMap<ActionMetadataInput> inputs,
+        AstArena arena,
+        NodeRange inputs,
         string name,
-        out ActionMetadataInput input)
+        out ActionMetadataInputData input)
     {
-        foreach (var kv in inputs)
+        for (var i = 0; i < inputs.Count; i++)
         {
-            if (string.Equals(DecodeSlice(source, kv.Key), name, StringComparison.OrdinalIgnoreCase))
+            ref readonly var row = ref arena.GetActionMetadataInputAt(inputs, i);
+            if (string.Equals(DecodeSlice(source, row.Key), name, StringComparison.OrdinalIgnoreCase))
             {
-                input = kv.Value;
+                input = row;
                 return true;
             }
         }
 
-        input = null!;
+        input = default;
         return false;
     }
 
-    private static bool ContainsInputName(byte[] source, SliceMap<StringNodeId> provided, string name)
+    private static bool ContainsInputName(ActionInputRefMap provided, string name)
     {
         foreach (var kv in provided)
         {
-            if (string.Equals(DecodeSlice(source, kv.Key), name, StringComparison.OrdinalIgnoreCase))
+            if (string.Equals(kv.Key.Decode(), name, StringComparison.OrdinalIgnoreCase))
             {
                 return true;
             }
@@ -340,12 +355,12 @@ public sealed class LocalActionInputsRule() : RuleBase(RuleId.LocalActionInputs)
         return false;
     }
 
-    private static string FormatUnknownInputMessage(byte[] source, string inputName, SliceMap<ActionMetadataInput> declared)
+    private static string FormatUnknownInputMessage(byte[] source, AstArena arena, string inputName, NodeRange declared)
     {
         var names = new List<string>(declared.Count);
-        foreach (var kv in declared)
+        for (var i = 0; i < declared.Count; i++)
         {
-            names.Add(DecodeSlice(source, kv.Key));
+            names.Add(DecodeSlice(source, arena.GetActionMetadataInputAt(declared, i).Key));
         }
 
         names.Sort(StringComparer.Ordinal);

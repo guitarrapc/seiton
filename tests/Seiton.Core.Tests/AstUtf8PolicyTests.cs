@@ -7,9 +7,12 @@ public sealed class AstUtf8PolicyTests
     [Test]
     public async Task AstFiles_ShouldNotUseSystemStringType()
     {
+        // Scope: AST node definitions only (top-level Ast/*.cs). The Refs/ facade layer is
+        // excluded because refs never store strings — their Decode() methods return strings
+        // for diagnostic display, which spec §0.5.2 explicitly permits.
         var root = FindRepoRoot();
         var astDir = Path.Combine(root, "src", "Seiton.Core", "Parsing", "Ast");
-        var files = Directory.EnumerateFiles(astDir, "*.cs", SearchOption.AllDirectories).ToArray();
+        var files = Directory.EnumerateFiles(astDir, "*.cs", SearchOption.TopDirectoryOnly).ToArray();
 
         await Assert.That(files.Length).IsGreaterThan(0);
 

@@ -23,14 +23,15 @@ public sealed class OutdatedActionRunnerRule() : RuleBase(RuleId.OutdatedActionR
 
     public override string Name => "Outdated Action Runner Rule";
 
-    public override void VisitStep(Step step)
+    public override void VisitStep(StepRef step)
     {
-        if (step.Exec is not ExecAction actionExec || Config.Utf8Yaml is null)
+        if (step.Exec.Kind != StepExecKind.Action || Config.Utf8Yaml is null)
         {
             return;
         }
 
-        var usesValue = Arena.GetStringValue(actionExec.Uses);
+        var actionExec = step.Exec.AsAction();
+        var usesValue = actionExec.Uses.Value;
         if (usesValue.IsEmpty)
         {
             return;
@@ -45,8 +46,8 @@ public sealed class OutdatedActionRunnerRule() : RuleBase(RuleId.OutdatedActionR
         var maxDeprecated = spec.GetMaxDeprecatedMajorVersion();
         if (maxDeprecated > 0 && TryExtractMajorVersion(usesValue, out var majorVersion) && majorVersion <= maxDeprecated)
         {
-            var usesStr = Decode(Arena.GetStringSlice(actionExec.Uses));
-            AddStepError(step, $"the runner of \"{usesStr}\" action is too old to run on GitHub Actions. update the action's version to fix this issue", Arena.GetStringRange(actionExec.Uses));
+            var usesStr = actionExec.Uses.Decode();
+            AddStepError(step, $"the runner of \"{usesStr}\" action is too old to run on GitHub Actions. update the action's version to fix this issue", actionExec.Uses.Range);
             return;
         }
 
@@ -62,8 +63,8 @@ public sealed class OutdatedActionRunnerRule() : RuleBase(RuleId.OutdatedActionR
             return;
         }
 
-        var usesStr2 = Decode(Arena.GetStringSlice(actionExec.Uses));
-        AddStepError(step, $"the runner of \"{usesStr2}\" action is too old to run on GitHub Actions. update the action's version to fix this issue", Arena.GetStringRange(actionExec.Uses));
+        var usesStr2 = actionExec.Uses.Decode();
+        AddStepError(step, $"the runner of \"{usesStr2}\" action is too old to run on GitHub Actions. update the action's version to fix this issue", actionExec.Uses.Range);
     }
 
     /// <summary>

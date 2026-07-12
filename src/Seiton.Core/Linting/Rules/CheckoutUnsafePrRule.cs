@@ -15,33 +15,39 @@ public sealed class CheckoutUnsafePrRule() : RuleBase(RuleId.CheckoutUnsafePr)
 
     public override string Name => "Checkout Unsafe PR Rule";
 
-    public override void VisitStep(Step step)
+    public override void VisitStep(StepRef step)
     {
-        if (step.Exec is not ExecAction actionExec || Config.Utf8Yaml is null || actionExec.Inputs is null)
+        if (step.Exec.Kind != StepExecKind.Action || Config.Utf8Yaml is null)
         {
             return;
         }
 
-        var usesText = Arena.GetStringValue(actionExec.Uses);
+        var actionExec = step.Exec.AsAction();
+        if (!actionExec.Inputs.HasValue)
+        {
+            return;
+        }
+
+        var usesText = actionExec.Uses.Value;
         if (!PopularActions.TryGet(usesText, out var actionSpec) || actionSpec.Id != PopularActions.ActionId.ActionsCheckout)
         {
             return;
         }
 
-        if (!actionExec.Inputs.Value.TryGetValue(Config.Utf8Yaml, "allow-unsafe-pr-checkout"u8, out var allowUnsafePrCheckoutNode))
+        if (!actionExec.Inputs.TryGetValue("allow-unsafe-pr-checkout"u8, out var allowUnsafePrCheckoutNode))
         {
             return;
         }
 
-        var value = Arena.GetStringValue(allowUnsafePrCheckoutNode);
-        var containsExpression = ExpressionScanHelpers.ContainsExpressionMarker(allowUnsafePrCheckoutNode, Arena);
+        var value = allowUnsafePrCheckoutNode.Value;
+        var containsExpression = ExpressionScanHelpers.ContainsExpressionMarker(allowUnsafePrCheckoutNode.Id, Arena);
         if (!containsExpression && !IsBooleanTrue(value))
         {
             return;
         }
 
-        var message = GetCachedMessage(Arena.GetStringSlice(actionExec.Uses));
-        var location = Arena.GetStringRange(allowUnsafePrCheckoutNode);
+        var message = GetCachedMessage(actionExec.Uses.Slice);
+        var location = allowUnsafePrCheckoutNode.Range;
         if (!containsExpression && Config.Fix.Enabled && TryBuildValueReplacementFix(allowUnsafePrCheckoutNode, Config.Utf8Yaml, out var fix))
         {
             AddStepWarning(step, message, location, fix);
@@ -74,10 +80,10 @@ public sealed class CheckoutUnsafePrRule() : RuleBase(RuleId.CheckoutUnsafePr)
         return msg;
     }
 
-    private bool TryBuildValueReplacementFix(StringNodeId valueNode, byte[] utf8Yaml, out DiagnosticFix fix)
+    private bool TryBuildValueReplacementFix(StringRef valueNode, byte[] utf8Yaml, out DiagnosticFix fix)
     {
         fix = default;
-        if (ExpressionScanHelpers.ContainsExpressionMarker(valueNode, Arena))
+        if (ExpressionScanHelpers.ContainsExpressionMarker(valueNode.Id, Arena))
         {
             return false;
         }
@@ -85,21 +91,21 @@ public sealed class CheckoutUnsafePrRule() : RuleBase(RuleId.CheckoutUnsafePr)
         var replacement = BuildReplacementText(valueNode, utf8Yaml);
         fix = new DiagnosticFix(
             $"set with.{InputName} to false",
-            [new TextEdit(Arena.GetStringSlice(valueNode).Offset, Arena.GetStringSlice(valueNode).Length, replacement)]);
+            [new TextEdit(valueNode.Slice.Offset, valueNode.Slice.Length, replacement)]);
         return true;
     }
 
-    private string BuildReplacementText(StringNodeId valueNode, byte[] utf8Yaml)
+    private string BuildReplacementText(StringRef valueNode, byte[] utf8Yaml)
     {
-        var valueStart = Arena.GetStringSlice(valueNode).Offset;
-        var valueEnd = Arena.GetStringSlice(valueNode).Offset + Arena.GetStringSlice(valueNode).Length;
+        var valueStart = valueNode.Slice.Offset;
+        var valueEnd = valueNode.Slice.Offset + valueNode.Slice.Length;
         if (valueStart < 0 || valueEnd > utf8Yaml.Length || valueStart > valueEnd)
         {
             return "false";
         }
 
-        var valueSpan = Arena.GetStringValue(valueNode);
-        if (Arena.GetStringQuoted(valueNode))
+        var valueSpan = valueNode.Value;
+        if (valueNode.Quoted)
         {
             if (valueSpan.Length >= 2 && valueSpan[0] == (byte)'\'' && valueSpan[^1] == (byte)'\'')
             {
@@ -112,7 +118,7 @@ public sealed class CheckoutUnsafePrRule() : RuleBase(RuleId.CheckoutUnsafePr)
             }
         }
 
-        var style = FixFormatting.DetectQuoteStyle(utf8Yaml, Arena.GetStringRange(valueNode), Arena.GetStringQuoted(valueNode));
+        var style = FixFormatting.DetectQuoteStyle(utf8Yaml, valueNode.Range, valueNode.Quoted);
         if (style == ScalarQuoteStyle.Unquoted)
         {
             return "false";

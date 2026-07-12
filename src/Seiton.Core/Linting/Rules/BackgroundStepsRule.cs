@@ -12,7 +12,7 @@ public sealed class BackgroundStepsRule() : RuleBase(RuleId.BackgroundSteps)
 
     public override bool SupportsDocumentKind(DocumentKind documentKind) => documentKind == DocumentKind.Workflow;
 
-    public override void VisitJobPre(Job job)
+    public override void VisitJobPre(JobRef job)
     {
         _state.Registry.Clear();
         _state.ActiveIds.Clear();
@@ -20,16 +20,16 @@ public sealed class BackgroundStepsRule() : RuleBase(RuleId.BackgroundSteps)
         _state.Findings.Clear();
     }
 
-    public override void VisitJobPost(Job job)
+    public override void VisitJobPost(JobRef job)
     {
-        if (job.Steps is null or { Count: 0 } || Config.Utf8Yaml is null)
+        if (job.Steps.Count == 0 || Config.Utf8Yaml is null)
         {
             return;
         }
 
-        var jobId = Decode(Arena.GetStringSlice(job.Id));
+        var jobId = job.Id.Decode();
         var jobStructurePrefix = $"jobs.'{jobId}'";
-        BackgroundStepFlowAnalyzer.Analyze(job, Arena, Config, jobStructurePrefix, _state);
+        BackgroundStepFlowAnalyzer.Analyze(job, Config, jobStructurePrefix, _state);
 
         for (var i = 0; i < _state.Findings.Count; i++)
         {

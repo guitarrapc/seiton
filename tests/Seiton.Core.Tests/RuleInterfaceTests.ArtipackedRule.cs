@@ -2907,7 +2907,7 @@ public sealed partial class RuleInterfaceTests
         {
         }
 
-        public void VisitWorkflowPre(Workflow workflow)
+        public void VisitWorkflowPre(WorkflowRef workflow)
         {
             diagnostics.Clear();
             diagnostics.Add(new Diagnostic(
@@ -2917,23 +2917,23 @@ public sealed partial class RuleInterfaceTests
                     RuleId: Id.ToId()));
         }
 
-        public void VisitWorkflowPost(Workflow workflow)
+        public void VisitWorkflowPost(WorkflowRef workflow)
         {
         }
 
-        public void VisitEvent(Event ev)
+        public void VisitEvent(EventRef ev)
         {
         }
 
-        public void VisitJobPre(Job job)
+        public void VisitJobPre(JobRef job)
         {
         }
 
-        public void VisitJobPost(Job job)
+        public void VisitJobPost(JobRef job)
         {
         }
 
-        public void VisitStep(Step step)
+        public void VisitStep(StepRef step)
         {
         }
     }
@@ -2956,27 +2956,27 @@ public sealed partial class RuleInterfaceTests
             LastConfig = config;
         }
 
-        public void VisitWorkflowPre(Workflow workflow)
+        public void VisitWorkflowPre(WorkflowRef workflow)
         {
         }
 
-        public void VisitWorkflowPost(Workflow workflow)
+        public void VisitWorkflowPost(WorkflowRef workflow)
         {
         }
 
-        public void VisitEvent(Event ev)
+        public void VisitEvent(EventRef ev)
         {
         }
 
-        public void VisitJobPre(Job job)
+        public void VisitJobPre(JobRef job)
         {
         }
 
-        public void VisitJobPost(Job job)
+        public void VisitJobPost(JobRef job)
         {
         }
 
-        public void VisitStep(Step step)
+        public void VisitStep(StepRef step)
         {
         }
     }
@@ -3011,37 +3011,37 @@ public sealed partial class RuleInterfaceTests
             this.config = config;
         }
 
-        public void VisitWorkflowPre(Workflow workflow)
+        public void VisitWorkflowPre(WorkflowRef workflow)
         {
             EnsureConfigured();
             WorkflowPreCount++;
         }
 
-        public void VisitWorkflowPost(Workflow workflow)
+        public void VisitWorkflowPost(WorkflowRef workflow)
         {
             EnsureConfigured();
             WorkflowPostCount++;
         }
 
-        public void VisitEvent(Event ev)
+        public void VisitEvent(EventRef ev)
         {
             EnsureConfigured();
             EventCount++;
         }
 
-        public void VisitJobPre(Job job)
+        public void VisitJobPre(JobRef job)
         {
             EnsureConfigured();
             JobPreCount++;
         }
 
-        public void VisitJobPost(Job job)
+        public void VisitJobPost(JobRef job)
         {
             EnsureConfigured();
             JobPostCount++;
         }
 
-        public void VisitStep(Step step)
+        public void VisitStep(StepRef step)
         {
             EnsureConfigured();
             StepCount++;

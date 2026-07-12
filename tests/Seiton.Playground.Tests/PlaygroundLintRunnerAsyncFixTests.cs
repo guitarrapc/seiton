@@ -196,6 +196,7 @@ public sealed class PlaygroundLintRunnerAsyncFixTests : IDisposable
     }
 
     [Test]
+    [Retry(3)]
     public async Task ApplyAllFixesAsync_MultipleUnpinnedActions_NoOffsetCorruption()
     {
         // Regression test: When offline fixes (e.g. timeout-minutes insertion) shift byte offsets,

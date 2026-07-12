@@ -157,7 +157,7 @@ public static class ExclusionJobIdValidator
 
         using var parseResult = WorkflowParser.Parse(bytes, workflowFilePath);
         var workflow = parseResult.Workflow;
-        if (workflow is null)
+        if (!workflow.HasValue)
         {
             return null;
         }
@@ -172,7 +172,7 @@ public static class ExclusionJobIdValidator
             }
 
             jobIds ??= new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-            jobIds.Add(parseResult.GetString(id));
+            jobIds.Add(parseResult.GetString(id.Id));
         }
 
         return jobIds;

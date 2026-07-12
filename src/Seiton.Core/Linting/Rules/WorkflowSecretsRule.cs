@@ -11,7 +11,7 @@ public sealed class WorkflowSecretsRule() : RuleBase(RuleId.WorkflowSecrets)
 {
     public override string Name => "Workflow Secrets Rule";
 
-    public override void VisitWorkflowPre(Workflow workflow)
+    public override void VisitWorkflowPre(WorkflowRef workflow)
     {
         base.VisitWorkflowPre(workflow);
 
@@ -23,9 +23,9 @@ public sealed class WorkflowSecretsRule() : RuleBase(RuleId.WorkflowSecrets)
         CheckEnv(workflow.Env, workflow);
     }
 
-    private void CheckEnv(Env? env, Workflow workflow)
+    private void CheckEnv(EnvRef env, WorkflowRef workflow)
     {
-        if (env?.Vars is null || env.Vars.Value.Count == 0 || Config.Utf8Yaml is null)
+        if (!env.Vars.HasValue || env.Vars.Count == 0 || Config.Utf8Yaml is null)
         {
             return;
         }
@@ -38,32 +38,32 @@ public sealed class WorkflowSecretsRule() : RuleBase(RuleId.WorkflowSecrets)
                 continue;
             }
 
-            var envName = Decode(Arena.GetStringSlice(envVar.Name));
+            var envName = envVar.Name.Decode();
             AddWorkflowError(
                 workflow,
                 $"workflow env '{envName}' must not set secrets.* or github.token when workflow has multiple jobs; move secret mapping to job/step env",
-                Arena.GetStringRange(envVar.Value));
+                envVar.Value.Range);
         }
     }
 
-    private bool ContainsSecretsOrGitHubTokenReference(StringNodeId node)
+    private bool ContainsSecretsOrGitHubTokenReference(StringRef node)
     {
         if (Config.Utf8Yaml is null)
         {
             return false;
         }
 
-        if (ContainsReferenceInValue(Arena.GetStringValue(node)))
+        if (ContainsReferenceInValue(node.Value))
         {
             return true;
         }
 
-        if (!Arena.GetStringExpression(node).HasValue)
+        if (!node.Expression.HasValue)
         {
             return false;
         }
 
-        var expression = TrimAsciiWhiteSpace(Arena.GetStringValue(Arena.GetStringExpression(node)));
+        var expression = TrimAsciiWhiteSpace(node.Expression.Value);
         return ContainsReferenceInExpression(expression);
     }
 

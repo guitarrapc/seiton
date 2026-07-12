@@ -23,7 +23,7 @@ public sealed class WorkflowVisitor
     }
 
     /// <summary>Traverses the given <paramref name="workflow"/>, invoking all registered passes for each event, job, and step.</summary>
-    public void Visit(Workflow workflow)
+    public void Visit(WorkflowRef workflow)
     {
         Visit(workflow, skipJobs: null);
     }
@@ -33,9 +33,12 @@ public sealed class WorkflowVisitor
     /// When <paramref name="skipJobs"/>[i] is true, VisitJobPre/VisitStep/VisitJobPost are not called for that job.
     /// VisitWorkflowPre/VisitWorkflowPost are always called (they handle cross-job validation).
     /// </summary>
-    internal void Visit(Workflow workflow, bool[]? skipJobs)
+    internal void Visit(WorkflowRef workflow, bool[]? skipJobs)
     {
-        ArgumentNullException.ThrowIfNull(workflow);
+        if (!workflow.HasValue)
+        {
+            throw new ArgumentNullException(nameof(workflow));
+        }
 
         for (var i = 0; i < passes.Count; i++)
         {
@@ -47,9 +50,10 @@ public sealed class WorkflowVisitor
             passes[i].VisitWorkflowPre(workflow);
         }
 
-        for (var e = 0; e < workflow.On.Count; e++)
+        var on = workflow.On;
+        for (var e = 0; e < on.Count; e++)
         {
-            var ev = workflow.On[e];
+            var ev = on[e];
             for (var i = 0; i < passes.Count; i++)
             {
                 passes[i].VisitEvent(ev);
@@ -70,12 +74,10 @@ public sealed class WorkflowVisitor
                 passes[i].VisitJobPre(job);
             }
 
-            if (job.Steps is not null)
+            var steps = job.Steps;
+            for (var s = 0; s < steps.Count; s++)
             {
-                for (var s = 0; s < job.Steps.Count; s++)
-                {
-                    VisitStepRecursive(job.Steps[s]);
-                }
+                VisitStepRecursive(steps[s]);
             }
 
             for (var i = 0; i < passes.Count; i++)
@@ -93,9 +95,12 @@ public sealed class WorkflowVisitor
     }
 
     /// <summary>Traverses the given action <paramref name="metadata"/>, invoking all registered passes for each step in <c>runs.steps</c>.</summary>
-    public void VisitActionMetadata(ActionMetadata metadata)
+    public void VisitActionMetadata(ActionMetadataRef metadata)
     {
-        ArgumentNullException.ThrowIfNull(metadata);
+        if (!metadata.HasValue)
+        {
+            throw new ArgumentNullException(nameof(metadata));
+        }
 
         for (var i = 0; i < passes.Count; i++)
         {
@@ -107,13 +112,10 @@ public sealed class WorkflowVisitor
             passes[i].VisitActionMetadataPre(metadata);
         }
 
-        var steps = metadata.Runs?.Steps;
-        if (steps is not null)
+        var steps = metadata.Runs.Steps;
+        for (var s = 0; s < steps.Count; s++)
         {
-            for (var s = 0; s < steps.Count; s++)
-            {
-                VisitStepRecursive(steps[s]);
-            }
+            VisitStepRecursive(steps[s]);
         }
 
         for (var i = 0; i < passes.Count; i++)
@@ -122,18 +124,19 @@ public sealed class WorkflowVisitor
         }
     }
 
-    private void VisitStepRecursive(Step step)
+    private void VisitStepRecursive(StepRef step)
     {
         for (var i = 0; i < passes.Count; i++)
         {
             passes[i].VisitStep(step);
         }
 
-        if (step.Exec is ExecParallel parallel && parallel.Steps is { Count: > 0 })
+        if (step.Exec.Kind == StepExecKind.Parallel)
         {
-            for (var s = 0; s < parallel.Steps.Count; s++)
+            var children = step.Exec.AsParallel().Steps;
+            for (var s = 0; s < children.Count; s++)
             {
-                VisitStepRecursive(parallel.Steps[s]);
+                VisitStepRecursive(children[s]);
             }
         }
     }

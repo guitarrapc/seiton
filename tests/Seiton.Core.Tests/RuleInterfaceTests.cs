@@ -14,38 +14,45 @@ public sealed partial class RuleInterfaceTests
         var sourceBytes = Array.Empty<byte>();
         var arena = new AstArena(sourceBytes);
 
-        var (jobs, _) = SliceMapTestExtensions.CreateSliceMap(
-            (new Utf8String("build"u8), new Job
+        var runPayload = arena.AddExecRun(new ExecRunData
+        {
+            Run = arena.AddString(new Utf8Slice(0, 0), false, default),
+        });
+        var runStep = arena.AddStep(new StepData
+        {
+            ExecKind = StepExecKind.Run,
+            ExecPayload = runPayload,
+        });
+
+        var buildJob = arena.AddJob(new JobData
+        {
+            Id = arena.AddString(new Utf8Slice(0, 0), false, default),
+            Steps = arena.AddStepIdList([runStep]),
+        });
+        var jobsFirst = arena.JobEntryCount;
+        arena.AddJobEntry(new JobEntryData { Key = new Utf8Slice(0, 0), Job = buildJob });
+
+        var firstEvent = arena.EventCount;
+        arena.AddEvent(new EventData
+        {
+            Kind = EventKind.Webhook,
+            EventName = arena.AddString(new Utf8Slice(0, 0), false, default),
+            Payload = arena.AddWebhookEvent(new WebhookEventData
             {
-                Id = arena.AddString(new Utf8Slice(0, 0), false, default),
-                Steps =
-                [
-                    new Step
-                    {
-                        Exec = new ExecRun
-                        {
-                            Kind = StepExecKind.Run,
-                            Run = arena.AddString(new Utf8Slice(0, 0), false, default),
-                        },
-                    },
-                ],
-            }));
+                Hook = arena.AddString(new Utf8Slice(0, 0), false, default),
+            }),
+        });
+        arena.AddEvent(new EventData
+        {
+            Kind = EventKind.Scheduled,
+            EventName = arena.AddString(new Utf8Slice(0, 0), false, default),
+            Payload = arena.AddScheduledEvent(default),
+        });
 
         var workflow = new Workflow
         {
-            On =
-            [
-                new WebhookEvent
-                {
-                    EventName = arena.AddString(new Utf8Slice(0, 0), false, default),
-                    Hook = arena.AddString(new Utf8Slice(0, 0), false, default),
-                },
-                new ScheduledEvent
-                {
-                    EventName = arena.AddString(new Utf8Slice(0, 0), false, default),
-                },
-            ],
-            Jobs = jobs,
+            On = new NodeRange(firstEvent, 2),
+            Jobs = new NodeRange(jobsFirst, 1),
         };
 
         var rule = new CountingRule();
@@ -53,7 +60,7 @@ public sealed partial class RuleInterfaceTests
 
         var visitor = new WorkflowVisitor();
         visitor.AddPass(rule);
-        visitor.Visit(workflow);
+        visitor.Visit(new WorkflowRef(arena, workflow));
 
         await Assert.That(rule.Id).IsEqualTo(RuleId.JobStructure);
         await Assert.That(rule.Name).IsEqualTo("Test Rule");

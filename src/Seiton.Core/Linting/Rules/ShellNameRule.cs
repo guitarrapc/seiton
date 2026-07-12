@@ -9,44 +9,50 @@ public sealed class ShellNameRule() : RuleBase(RuleId.ShellName)
 {
     public override string Name => "Shell Name Rule";
 
-    private Workflow? _currentWorkflow;
-    private Job? _currentJob;
+    private WorkflowRef _currentWorkflow;
+    private JobRef _currentJob;
     private OsFamily _currentOsFamily;
 
-    public override void VisitWorkflowPre(Workflow workflow)
+    public override void VisitWorkflowPre(WorkflowRef workflow)
     {
         base.VisitWorkflowPre(workflow);
         _currentWorkflow = workflow;
         CheckDefaultsRunShell(workflow.Defaults);
-        _currentWorkflow = null;
+        _currentWorkflow = default;
     }
 
-    public override void VisitJobPre(Job job)
+    public override void VisitJobPre(JobRef job)
     {
         _currentJob = job;
         _currentOsFamily = ResolveOsFamily(job);
         CheckDefaultsRunShell(job.Defaults);
-        _currentJob = null;
+        _currentJob = default;
     }
 
-    public override void VisitStep(Step step)
+    public override void VisitStep(StepRef step)
     {
-        if (step.Exec is not ExecRun run || !run.Shell.HasValue || Config.Utf8Yaml is null)
+        if (step.Exec.Kind != StepExecKind.Run || Config.Utf8Yaml is null)
         {
             return;
         }
 
-        var shellSpan = Arena.GetStringValue(run.Shell);
+        var run = step.Exec.AsRun();
+        if (!run.Shell.HasValue)
+        {
+            return;
+        }
+
+        var shellSpan = run.Shell.Value;
 
         // Skip expression values ? cannot validate at static analysis time
-        if (ExpressionScanHelpers.ContainsExpressionMarker(run.Shell, Arena))
+        if (run.Shell.Expression.HasValue || ExpressionScanHelpers.ContainsExpressionMarker(shellSpan))
         {
             return;
         }
 
         if (!IsValidShellName(shellSpan))
         {
-            AddStepError(step, BuildInvalidShellMessage(run.Shell), Arena.GetStringRange(run.Shell));
+            AddStepError(step, BuildInvalidShellMessage(run.Shell), run.Shell.Range);
             return;
         }
 
@@ -57,43 +63,42 @@ public sealed class ShellNameRule() : RuleBase(RuleId.ShellName)
         }
     }
 
-    private void CheckDefaultsRunShell(Defaults? defaults)
+    private void CheckDefaultsRunShell(DefaultsRef defaults)
     {
-        if (defaults is null || Config.Utf8Yaml is null)
+        if (!defaults.HasValue || Config.Utf8Yaml is null)
         {
             return;
         }
 
-        var shellNodeNullable = defaults.Run?.Shell;
-        if (shellNodeNullable is null || !shellNodeNullable.Value.HasValue)
+        var shellNode = defaults.Run.Shell;
+        if (!shellNode.HasValue)
         {
             return;
         }
 
-        var shellNode = shellNodeNullable.Value;
-        var shellSpan = Arena.GetStringValue(shellNode);
+        var shellSpan = shellNode.Value;
 
-        if (ExpressionScanHelpers.ContainsExpressionMarker(shellNode, Arena))
+        if (shellNode.Expression.HasValue || ExpressionScanHelpers.ContainsExpressionMarker(shellSpan))
         {
             return;
         }
 
         if (!IsValidShellName(shellSpan))
         {
-            if (_currentWorkflow is not null)
+            if (_currentWorkflow.HasValue)
             {
-                AddWorkflowError(_currentWorkflow, BuildInvalidShellMessage(shellNode), Arena.GetStringRange(shellNode));
+                AddWorkflowError(_currentWorkflow, BuildInvalidShellMessage(shellNode), shellNode.Range);
             }
-            else if (_currentJob is not null)
+            else if (_currentJob.HasValue)
             {
-                AddJobError(_currentJob, BuildInvalidShellMessage(shellNode), Arena.GetStringRange(shellNode));
+                AddJobError(_currentJob, BuildInvalidShellMessage(shellNode), shellNode.Range);
             }
         }
     }
 
-    private string BuildInvalidShellMessage(StringNodeId shellNode)
+    private string BuildInvalidShellMessage(StringRef shellNode)
     {
-        var shellText = Decode(Arena.GetStringSlice(shellNode));
+        var shellText = Decode(shellNode.Slice);
         return $"shell name '{shellText}' is invalid; valid values are: {Shells.AllValidShellNames}, or a custom shell command containing '{{0}}'";
     }
 
@@ -103,7 +108,7 @@ public sealed class ShellNameRule() : RuleBase(RuleId.ShellName)
             || shell.IndexOf("{0}"u8) >= 0;
     }
 
-    private void CheckOsSpecificShell(Step step, StringNodeId shellNode, ReadOnlySpan<byte> shellSpan)
+    private void CheckOsSpecificShell(StepRef step, StringRef shellNode, ReadOnlySpan<byte> shellSpan)
     {
         // Check shell availability for the detected OS
         var available = _currentOsFamily switch
@@ -117,14 +122,14 @@ public sealed class ShellNameRule() : RuleBase(RuleId.ShellName)
         if (!available)
         {
             var osName = _currentOsFamily.ToString().ToLowerInvariant();
-            AddStepWarning(step, $"shell '{Decode(Arena.GetStringSlice(shellNode))}' is not available on {osName} runners", Arena.GetStringRange(shellNode));
+            AddStepWarning(step, $"shell '{Decode(shellNode.Slice)}' is not available on {osName} runners", shellNode.Range);
         }
     }
 
-    private OsFamily ResolveOsFamily(Job job)
+    private OsFamily ResolveOsFamily(JobRef job)
     {
         var runsOn = job.RunsOn;
-        if (runsOn is null || runsOn.LabelsExpr.HasValue || runsOn.Labels is null || Config.Utf8Yaml is null)
+        if (!runsOn.HasValue || runsOn.LabelsExpr.HasValue || !runsOn.Labels.HasValue || Config.Utf8Yaml is null)
         {
             return OsFamily.Unknown;
         }
@@ -133,12 +138,12 @@ public sealed class ShellNameRule() : RuleBase(RuleId.ShellName)
         for (var i = 0; i < runsOn.Labels.Count; i++)
         {
             var label = runsOn.Labels[i];
-            if (Arena.GetStringExpression(label).HasValue)
+            if (label.Expression.HasValue)
             {
                 return OsFamily.Unknown;
             }
 
-            var labelUtf8 = Arena.GetStringValue(label);
+            var labelUtf8 = label.Value;
             var family = GetOsFamilyFromLabel(labelUtf8);
             if (family == OsFamily.Unknown)
             {

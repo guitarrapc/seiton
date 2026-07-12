@@ -247,6 +247,29 @@ public sealed class IncrementalLintCacheTests
         }
     }
 
+    [Test]
+    public async Task LintIncrementally_RenameCreatesDuplicateJobKey_LaterJobDiagnosticsPreserved()
+    {
+        // Regression: _lastReusedJobs was recorded in REGISTRY order (byte-scan of job keys)
+        // but consumed in JOBS-MAP-ENTRY order. When a job key is dropped as a duplicate
+        // during incremental parse (registry counts the line; jobs map has no entry), the
+        // orders diverge and the WRONG job is skipped in lint — one job's diagnostics vanish.
+        // 4 jobs a,b,c,d (each missing timeout → per-job diagnostics). Rename b: → a:
+        // (same byte length, so c/d offsets are unchanged).
+        var yaml1 = "on: push\njobs:\n  a:\n    runs-on: ubuntu-latest\n    steps:\n      - run: echo a\n  b:\n    runs-on: ubuntu-latest\n    steps:\n      - run: echo b\n  c:\n    runs-on: ubuntu-latest\n    steps:\n      - run: echo c\n  d:\n    runs-on: ubuntu-latest\n    steps:\n      - run: echo d\n";
+        var yaml2 = yaml1.Replace("  b:\n", "  a:\n");
+
+        var ctx = new IncrementalParseContext();
+        ctx.LintIncrementally(Encoding.UTF8.GetBytes(yaml1), FilePath);
+        var incremental = ctx.LintIncrementally(Encoding.UTF8.GetBytes(yaml2), FilePath);
+
+        var fresh = new IncrementalParseContext().LintIncrementally(Encoding.UTF8.GetBytes(yaml2), FilePath);
+
+        // Job d starts at line 15 — its diagnostics must not silently vanish.
+        await Assert.That(incremental.Any(d => d.GetProperty("line").GetInt32() >= 15)).IsTrue();
+        await AssertDiagnosticsEquivalent(incremental, fresh);
+    }
+
     private static async Task AssertDiagnosticsEquivalent(System.Text.Json.JsonElement[] actual, System.Text.Json.JsonElement[] expected)
     {
         var actualOrdered = (System.Text.Json.JsonElement[])actual.Clone();

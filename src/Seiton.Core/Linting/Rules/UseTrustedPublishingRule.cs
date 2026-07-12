@@ -12,28 +12,29 @@ public sealed class UseTrustedPublishingRule() : RuleBase(RuleId.UseTrustedPubli
 
     public override string Name => "Use Trusted Publishing Rule";
 
-    public override void VisitWorkflowPre(Workflow workflow)
+    public override void VisitWorkflowPre(WorkflowRef workflow)
     {
         base.VisitWorkflowPre(workflow);
         workflowHasIdTokenWrite = HasIdTokenWrite(workflow.Permissions);
         currentJobHasIdTokenWrite = workflowHasIdTokenWrite;
     }
 
-    public override void VisitJobPre(Job job)
+    public override void VisitJobPre(JobRef job)
     {
-        currentJobHasIdTokenWrite = job.Permissions is null
+        currentJobHasIdTokenWrite = !job.Permissions.HasValue
             ? workflowHasIdTokenWrite
             : HasIdTokenWrite(job.Permissions);
     }
 
-    public override void VisitStep(Step step)
+    public override void VisitStep(StepRef step)
     {
-        if (Config.Utf8Yaml is null || step.Exec is not ExecRun run)
+        if (Config.Utf8Yaml is null || step.Exec.Kind != StepExecKind.Run)
         {
             return;
         }
 
-        var runText = Arena.GetStringValue(run.Run);
+        var run = step.Exec.AsRun();
+        var runText = run.Run.Value;
         if (!ContainsPublishCommand(runText) || currentJobHasIdTokenWrite)
         {
             return;
@@ -42,39 +43,39 @@ public sealed class UseTrustedPublishingRule() : RuleBase(RuleId.UseTrustedPubli
         AddStepWarning(
             step,
             "publish-like command detected without id-token: write permission; use trusted publishing (OIDC) instead of long-lived registry secrets",
-            Arena.GetStringRange(run.Run));
+            run.Run.Range);
     }
 
-    private bool HasIdTokenWrite(Permissions? permissions)
+    private bool HasIdTokenWrite(PermissionsRef permissions)
     {
-        if (permissions is null)
+        if (!permissions.HasValue)
         {
             return false;
         }
 
         if (permissions.All.HasValue)
         {
-            var scalar = Decode(Arena.GetStringSlice(permissions.All));
+            var scalar = permissions.All.Decode();
             if (string.Equals(scalar, "write-all", StringComparison.OrdinalIgnoreCase))
             {
                 return true;
             }
         }
 
-        if (permissions.Scopes is null || permissions.Scopes.Value.Count == 0)
+        if (!permissions.Scopes.HasValue || permissions.Scopes.Count == 0)
         {
             return false;
         }
 
         foreach (var pair in permissions.Scopes)
         {
-            var key = Decode(pair.Key);
+            var key = pair.Key.Decode();
             if (!string.Equals(key, "id-token", StringComparison.OrdinalIgnoreCase))
             {
                 continue;
             }
 
-            var value = Decode(pair.Value.ValueText);
+            var value = pair.Value.ValueText.Decode();
             return string.Equals(value, "write", StringComparison.OrdinalIgnoreCase);
         }
 

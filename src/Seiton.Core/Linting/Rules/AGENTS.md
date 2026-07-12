@@ -19,11 +19,11 @@ LintEngine.Check()
   → (optional) OnlineAuditEngine resolves uses: refs and calls IOnlineRule.EvaluateTarget
 ```
 
-Rules are **visitor passes** (`IPass` / `IRule`). They read parsed AST nodes via `LintConfig.Arena`, emit diagnostics through `RuleBase` helpers, and must not re-parse YAML.
+Rules are **visitor passes** (`IPass` / `IRule`). They read the parsed AST through readonly-struct Ref facades (`WorkflowRef` / `JobRef` / `StepRef` / `EventRef` / `StringRef`, list/map refs) received in `Visit*` callbacks, emit diagnostics through `RuleBase` helpers, and must not re-parse YAML.
 
 | Component | Role |
 |-----------|------|
-| `RuleBase` | Diagnostic helpers, `Config` / `Arena` access, default no-op visitor hooks |
+| `RuleBase` | Diagnostic helpers, `Config` access, location builders, default no-op visitor hooks |
 | `OnlineRuleBase` | Collects `uses:` targets during traversal; evaluation deferred to `OnlineAuditEngine` |
 | `RuleCatalog` | Factory registration, priority, opt-in policy, default severity, auto-fix metadata, allowed config keys |
 | `RuleId` + `RuleIdExtensions` | Strongly typed ID and stable kebab-case string (`job-structure`, etc.) |
@@ -115,7 +115,7 @@ public sealed class MyRule() : RuleBase(RuleId.MyRule)
 {
     public override string Name => "My Rule";
 
-    public override void VisitStep(Step step) { /* ... */ }
+    public override void VisitStep(StepRef step) { /* ... */ }
 }
 ```
 
@@ -126,7 +126,7 @@ Implementation rules:
 - **`sealed`** unless extension is required.
 - **Guard early**: `if (Config.Utf8Yaml is null) return;` when reading source bytes.
 - **Skip dynamic values**: if a field contains `${{ }}`, skip or handle explicitly (see `ExpressionScanHelpers`).
-- **Use `Arena` for values and ranges**: `Arena.GetStringValue`, `Arena.GetStringRange`, `GetString`/`GetUtf8` helpers on `RuleBase`.
+- **Read values through Refs**: absence is `HasValue == false` (default refs chain safely); exec dispatch is `step.Exec.Kind == StepExecKind.Action` + `step.Exec.AsAction()`; string values via `StringRef.Value` (UTF-8 span) / `.Slice` / `.ValueEquals("..."u8)`; maps via `TryGetValue(keySpan, out ...)`. Use `.Decode()` only when building diagnostic messages.
 - **Emit via `Add*Error` / `Add*Warning` / `Add*Info`**: never construct `Diagnostic` directly in rules.
 - **Messages are single-line**: `RuleBase` collapses embedded newlines; still avoid putting block-scalar content raw into messages when possible.
 - **Locations must be actionable**: point at the YAML token the user should edit (see `Seiton_Linter_spec.md` §4.5 for intentional divergences).
@@ -221,6 +221,83 @@ Do **not** put step-by-step implementation HOW in specs; keep WHAT/WHY there, HO
 
 `WorkflowVisitor` resets diagnostics on each `RuleBase` at the start of `VisitWorkflowPre`.
 
+## Typical Ref API Patterns
+
+> **Maintenance**: this section shows the canonical read patterns against the Ref facade. When the Ref surface or visitor signatures change, update these snippets **in the same change** — they are the first thing rule authors copy. Design background: `.github/docs/architecture_spec_ast.md`.
+
+**Absence checks** — refs are structs; `default` = absent. Never use `is null` / `is { }` (always true on a struct) or test-side `IsNull()`/`IsNotNull()` (boxed-struct trap):
+
+```csharp
+if (!permissions.All.HasValue) return;          // absent
+if (job.Steps.HasValue && job.Steps.Count == 0) // present but empty — distinct states
+```
+
+**Step exec dispatch + UTF-8 value compare** (per-step rules):
+
+```csharp
+public override void VisitStep(StepRef step)
+{
+    if (step.Exec.Kind != StepExecKind.Action || Config.Utf8Yaml is null) return;
+    var action = step.Exec.AsAction();          // default ref when Kind mismatches
+    if (!action.Uses.Value.StartsWith("actions/checkout"u8)) return;
+    // string materialization only when emitting:
+    AddStepWarning(step, $"'{action.Uses.Decode()}' ...", action.Uses.Range);
+}
+```
+
+**Map lookup and enumeration** (`with:` inputs, outputs, services, ... — all `TryGetValue(ReadOnlySpan<byte>, out ...)`, case sensitivity is fixed per map type):
+
+```csharp
+if (action.Inputs.TryGetValue("persist-credentials"u8, out var node) && node.HasValue) { ... }
+
+foreach (var (key, value) in job.Outputs)       // Entry deconstructs to (KeyRef, StringRef)
+{
+    var keySpan = key.Bytes;                    // UTF-8 span; key.Decode() only for messages
+    if (key.ValueEquals("token"u8)) { ... }
+}
+```
+
+**Event dispatch** (`VisitEvent`):
+
+```csharp
+public override void VisitEvent(EventRef ev)
+{
+    if (ev.Kind != EventKind.Webhook) return;
+    var name = ev.EventName.Value;              // ReadOnlySpan<byte>
+    // ev.AsWorkflowDispatch().Inputs / ev.AsWorkflowCall().Secrets for other kinds
+}
+```
+
+**List iteration** (needs, wait targets, schedule entries, ...):
+
+```csharp
+var needs = job.Needs;                          // StringRefList over a range
+for (var i = 0; i < needs.Count; i++)
+{
+    var target = needs[i];                      // StringRef
+}
+```
+
+**Per-workflow state** — instance fields reset in `VisitWorkflowPre`; ref fields reset to `default`:
+
+```csharp
+private JobRef _currentJob;                     // value-equality (arena, id); valid within one parse
+public override void VisitWorkflowPre(WorkflowRef workflow)
+{
+    base.VisitWorkflowPre(workflow);
+    _currentJob = default;
+    _seenIds.Clear();
+}
+```
+
+**Skip dynamic values** — fields containing `${{ }}` still expose the raw text; check before treating a value as literal:
+
+```csharp
+if (ExpressionScanHelpers.ContainsExpressionMarker(node.Id, Arena)) return;
+```
+
+**Lazy cost at emission** — do not compute locations/messages on early-return paths; most steps emit nothing (see `UnpinnedUsesRule.BuildRefLocation` for the precedent, and use `Config.GetLineStarts()` — never scan from the start of the file per diagnostic).
+
 ## Diagnostic Conventions
 
 ### Severity
@@ -243,7 +320,7 @@ Users can override severity via config; the rule still emits using the semantic 
 
 ### Locations
 
-- Prefer `Arena.GetStringRange(node)` or specialized builders: `BuildUsesLocation`, `BuildStepLocation`, `BuildJobLocation`.
+- Prefer `StringRef.Range` (or `.Expression.Range`) or specialized builders: `BuildUsesLocation`, `BuildStepLocation`, `BuildJobLocation`.
 - For expressions inside `run:` scripts, use `Config.GetLineStarts()` and offset math (see `RunContextDirectUseAnalyzer`).
 - Attach `help:` for non-obvious remediations.
 

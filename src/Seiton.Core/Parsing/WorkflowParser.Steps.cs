@@ -1,4 +1,4 @@
-using System.Text;
+﻿using System.Text;
 using Seiton.Core.Generated;
 using Seiton.Core.Parsing.Ast;
 
@@ -109,7 +109,7 @@ public static partial class WorkflowParser
             ifKeyMark);
     }
 
-    private static ArenaList<Step> ParseSteps<TReader>(
+    private static StepIdRange ParseSteps<TReader>(
         ref TReader reader,
         AstArena arena,
         ref PooledBuffer<Diagnostic> diagnostics,
@@ -118,7 +118,9 @@ public static partial class WorkflowParser
         StepParseContext context)
         where TReader : IYamlStreamReader, allows ref struct
     {
-        var steps = new PooledBuffer<Step>(8);
+        // Steps collect into a scratch buffer first: nested parallel parsing appends step
+        // rows non-contiguously, so the list must go through the shared StepId store.
+        var steps = new PooledBuffer<StepId>(8);
         try
         {
             reader.Read();
@@ -128,7 +130,7 @@ public static partial class WorkflowParser
             {
                 stepIndex++;
                 var step = ParseStep(ref reader, arena, ref diagnostics, source, stepPathPrefix, stepIndex, context);
-                if (step is not null)
+                if (step.HasValue)
                 {
                     steps.Add(step);
                 }
@@ -139,12 +141,14 @@ public static partial class WorkflowParser
                 reader.Read();
             }
 
-            return DetachArenaList(ref steps, arena);
+            // Always anchored (HasValue true), even when empty or after errors — the steps:
+            // key was present, matching the old unconditionally-non-null list semantic.
+            return arena.AddStepIdList(steps.AsSpan());
         }
         finally { steps.Dispose(); }
     }
 
-    private static Step? ParseStep<TReader>(
+    private static StepId ParseStep<TReader>(
         ref TReader reader,
         AstArena arena,
         ref PooledBuffer<Diagnostic> diagnostics,
@@ -199,7 +203,7 @@ public static partial class WorkflowParser
         TextPosition ifKeyMark = default;
         StringNodeId nameNode = default;
         BoolNodeId backgroundNode = default;
-        Env? envNode = null;
+        EnvId envNode = default;
         BoolNodeId continueOnErrorNode = default;
         FloatNodeId timeoutMinutesNode = default;
         StringNodeId runNode = default;
@@ -207,12 +211,12 @@ public static partial class WorkflowParser
         TextRange? usesKeyRange = null;
         StringNodeId shellNode = default;
         StringNodeId workingDirectoryNode = default;
-        SliceMap<StringNodeId>? withInputs = null;
+        NodeRange withInputs = default;
         StringNodeId dockerEntrypoint = default;
         StringNodeId dockerArgs = default;
-        ArenaList<StringNodeId> waitTargets = default;
+        StringIdRange waitTargets = default;
         StringNodeId cancelTarget = default;
-        ArenaList<Step> parallelSteps = default;
+        StepIdRange parallelSteps = default;
         TextPosition parallelKeyMark = default;
         ulong seen = 0;
         Span<long> stepKeyFirstMark = stackalloc long[StepSchema.MappingKeyTable.KeyCount];
@@ -681,100 +685,108 @@ public static partial class WorkflowParser
             }
         }
 
-        StepExec exec;
+        StepExecKind execKind;
+        int execPayload;
         TextRange execRange = default;
         switch (stepForm)
         {
             case StepSchema.FormId.Run:
                 {
-                    var execRun = arena.AllocExecRun();
-                    execRun.Kind = StepExecKind.Run;
-                    execRun.Run = runNode.HasValue ? runNode : arena.AddString(default, false, default);
-                    execRun.Shell = shellNode;
-                    execRun.WorkingDirectory = workingDirectoryNode;
-                    execRun.Range = runNode.HasValue ? arena.GetStringRange(runNode) : default;
-                    execRange = execRun.Range;
-                    exec = execRun;
+                    execRange = runNode.HasValue ? arena.GetStringRange(runNode) : default;
+                    execPayload = arena.AddExecRun(new ExecRunData
+                    {
+                        Run = runNode.HasValue ? runNode : arena.AddString(default, false, default),
+                        Shell = shellNode,
+                        WorkingDirectory = workingDirectoryNode,
+                        Range = execRange,
+                    });
+                    execKind = StepExecKind.Run;
                     break;
                 }
             case StepSchema.FormId.Uses:
                 {
-                    var execAction = arena.AllocExecAction();
-                    execAction.Kind = StepExecKind.Action;
-                    execAction.Uses = usesNode.HasValue ? usesNode : arena.AddString(default, false, default);
-                    execAction.UsesKeyRange = usesKeyRange;
-                    execAction.Inputs = withInputs;
-                    execAction.Entrypoint = dockerEntrypoint;
-                    execAction.Args = dockerArgs;
-                    execAction.Range = usesNode.HasValue ? arena.GetStringRange(usesNode) : default;
-                    execRange = execAction.Range;
-                    exec = execAction;
+                    execRange = usesNode.HasValue ? arena.GetStringRange(usesNode) : default;
+                    execPayload = arena.AddExecAction(new ExecActionData
+                    {
+                        Uses = usesNode.HasValue ? usesNode : arena.AddString(default, false, default),
+                        UsesKeyRange = usesKeyRange,
+                        Inputs = withInputs,
+                        Entrypoint = dockerEntrypoint,
+                        Args = dockerArgs,
+                        Range = execRange,
+                    });
+                    execKind = StepExecKind.Action;
                     break;
                 }
             case StepSchema.FormId.Wait:
                 {
-                    var execWait = arena.AllocExecWait();
-                    execWait.Kind = StepExecKind.Wait;
-                    execWait.Targets = waitTargets;
-                    execWait.Range = waitTargets.Count > 0 ? arena.GetStringRange(waitTargets[0]) : default;
-                    execRange = execWait.Range;
-                    exec = execWait;
+                    execRange = waitTargets.Count > 0 ? arena.GetStringRange(arena.GetStringIdAt(waitTargets, 0)) : default;
+                    execPayload = arena.AddExecWait(new ExecWaitData
+                    {
+                        Targets = waitTargets,
+                        Range = execRange,
+                    });
+                    execKind = StepExecKind.Wait;
                     break;
                 }
             case StepSchema.FormId.WaitAll:
                 {
-                    var execWaitAll = arena.AllocExecWaitAll();
-                    execWaitAll.Kind = StepExecKind.WaitAll;
-                    execWaitAll.Range = firstPrimaryMark != default ? BuildScalarLocation(firstPrimaryMark, 8) : default;
-                    execRange = execWaitAll.Range;
-                    exec = execWaitAll;
+                    execRange = firstPrimaryMark != default ? BuildScalarLocation(firstPrimaryMark, 8) : default;
+                    execPayload = arena.AddExecWaitAll(new ExecWaitAllData
+                    {
+                        Range = execRange,
+                    });
+                    execKind = StepExecKind.WaitAll;
                     break;
                 }
             case StepSchema.FormId.Cancel:
                 {
-                    var execCancel = arena.AllocExecCancel();
-                    execCancel.Kind = StepExecKind.Cancel;
-                    execCancel.Target = cancelTarget.HasValue ? cancelTarget : arena.AddString(default, false, default);
-                    execCancel.Range = cancelTarget.HasValue ? arena.GetStringRange(cancelTarget) : default;
-                    execRange = execCancel.Range;
-                    exec = execCancel;
+                    execRange = cancelTarget.HasValue ? arena.GetStringRange(cancelTarget) : default;
+                    execPayload = arena.AddExecCancel(new ExecCancelData
+                    {
+                        Target = cancelTarget.HasValue ? cancelTarget : arena.AddString(default, false, default),
+                        Range = execRange,
+                    });
+                    execKind = StepExecKind.Cancel;
                     break;
                 }
             case StepSchema.FormId.Parallel:
                 {
-                    var execParallel = arena.AllocExecParallel();
-                    execParallel.Kind = StepExecKind.Parallel;
-                    execParallel.Steps = parallelSteps;
-                    execParallel.Range = parallelKeyMark != default ? BuildScalarLocation(parallelKeyMark, 8) : default;
-                    execRange = execParallel.Range;
-                    exec = execParallel;
+                    execRange = parallelKeyMark != default ? BuildScalarLocation(parallelKeyMark, 8) : default;
+                    execPayload = arena.AddExecParallel(new ExecParallelData
+                    {
+                        Steps = parallelSteps,
+                        Range = execRange,
+                    });
+                    execKind = StepExecKind.Parallel;
                     break;
                 }
             default:
                 {
-                    var execRun = arena.AllocExecRun();
-                    execRun.Kind = StepExecKind.Run;
-                    exec = execRun;
+                    execPayload = arena.AddExecRun(new ExecRunData());
+                    execKind = StepExecKind.Run;
                     break;
                 }
         }
 
-        var step = arena.AllocStep();
-        step.Id = idNode;
-        step.If = ifNode;
-        step.IfKeyRange = ifNode.HasValue ? BuildScalarLocation(ifKeyMark, 2) : null;
-        step.Name = nameNode;
-        step.Background = stepForm is StepSchema.FormId bgForm
-            && StepParseContextRules.IsBackgroundModifierAllowed(context, bgForm)
-            && backgroundNode.HasValue
-            ? backgroundNode
-            : default;
-        step.Exec = exec;
-        step.Env = envNode;
-        step.ContinueOnError = continueOnErrorNode;
-        step.TimeoutMinutes = timeoutMinutesNode;
-        step.Range = execRange;
-        return step;
+        return arena.AddStep(new StepData
+        {
+            Id = idNode,
+            If = ifNode,
+            IfKeyRange = ifNode.HasValue ? BuildScalarLocation(ifKeyMark, 2) : null,
+            Name = nameNode,
+            Background = stepForm is StepSchema.FormId bgForm
+                && StepParseContextRules.IsBackgroundModifierAllowed(context, bgForm)
+                && backgroundNode.HasValue
+                ? backgroundNode
+                : default,
+            ExecKind = execKind,
+            ExecPayload = execPayload,
+            Env = envNode,
+            ContinueOnError = continueOnErrorNode,
+            TimeoutMinutes = timeoutMinutesNode,
+            Range = execRange,
+        });
     }
 
     private static bool TryParseNullaryStepValue<TReader>(ref TReader reader, out bool needsError, out TextPosition errorMark)
@@ -821,7 +833,7 @@ public static partial class WorkflowParser
         return false;
     }
 
-    private static SliceMap<StringNodeId>? ParseStepWithInputsNode<TReader>(
+    private static NodeRange ParseStepWithInputsNode<TReader>(
         ref TReader reader,
         AstArena arena,
         ref PooledBuffer<Diagnostic> diagnostics,
@@ -841,91 +853,88 @@ public static partial class WorkflowParser
             return default;
         }
 
-        var map = new PooledBuffer<SliceMap<StringNodeId>.Entry>(8);
-        try
+        // Input values touch only scalar tables, so rows of this with: block append
+        // contiguously and the range can anchor directly on the action-input table.
+        var first = arena.ActionInputCount;
+        var count = 0;
+        Span<long> keyStore = stackalloc long[64];
+        var keyCount = 0;
+        reader.Read();
+        while (!reader.End && reader.CurrentKind != YamlEventKind.MappingEnd)
         {
-            Span<long> keyStore = stackalloc long[64];
-            var keyCount = 0;
-            reader.Read();
-            while (!reader.End && reader.CurrentKind != YamlEventKind.MappingEnd)
+            if (reader.CurrentKind != YamlEventKind.Scalar)
             {
-                if (reader.CurrentKind != YamlEventKind.Scalar)
+                AddError(ref diagnostics, $"{stepPrefix} with must be object", reader.CurrentStart);
+                reader.SkipCurrentNode();
+                if (!reader.End && reader.CurrentKind != YamlEventKind.MappingEnd)
                 {
-                    AddError(ref diagnostics, $"{stepPrefix} with must be object", reader.CurrentStart);
                     reader.SkipCurrentNode();
-                    if (!reader.End && reader.CurrentKind != YamlEventKind.MappingEnd)
-                    {
-                        reader.SkipCurrentNode();
-                    }
-                    continue;
                 }
-
-                var keyMark = reader.CurrentStart;
-                var keySlice = reader.GetScalarSlice();
-                var keyUtf8 = reader.GetScalarUtf8();
-                var isEntrypoint = keyUtf8.SequenceEqual("entrypoint"u8);
-                var isArgs = keyUtf8.SequenceEqual("args"u8);
-
-                if (!TryRegisterDynamicKey(
-                    source,
-                    keyUtf8,
-                    keySlice.Offset,
-                    keySlice.Length,
-                    keyMark,
-                    ref diagnostics,
-                    keyStore,
-                    ref keyCount,
-                    caseSensitive: false,
-                    "with"))
-                {
-                    reader.Read();
-                    if (!reader.End && reader.CurrentKind != YamlEventKind.MappingEnd)
-                    {
-                        reader.SkipCurrentNode();
-                    }
-
-                    continue;
-                }
-
-                reader.Read();
-                if (reader.End)
-                {
-                    break;
-                }
-
-                var value = ParseStringAndValidateExpression(
-                    ref reader, arena, ref diagnostics,
-                    ExpressionValidationContext.StepWith,
-                    out var withErr,
-                    out var withMark,
-                    parseWholeValueIfNoEmbedded: false);
-                if (withErr) AddError(ref diagnostics, $"{stepPrefix} with.{Encoding.UTF8.GetString(keyUtf8)} must be string", withMark);
-
-                if (!value.HasValue)
-                {
-                    continue;
-                }
-
-                map.Add(new SliceMap<StringNodeId>.Entry(keySlice, value));
-                if (isEntrypoint)
-                {
-                    entrypoint = value;
-                }
-                else if (isArgs)
-                {
-                    args = value;
-                }
+                continue;
             }
 
-            if (reader.CurrentKind == YamlEventKind.MappingEnd)
+            var keyMark = reader.CurrentStart;
+            var keySlice = reader.GetScalarSlice();
+            var keyUtf8 = reader.GetScalarUtf8();
+            var isEntrypoint = keyUtf8.SequenceEqual("entrypoint"u8);
+            var isArgs = keyUtf8.SequenceEqual("args"u8);
+
+            if (!TryRegisterDynamicKey(
+                source,
+                keyUtf8,
+                keySlice.Offset,
+                keySlice.Length,
+                keyMark,
+                ref diagnostics,
+                ref keyStore,
+                ref keyCount,
+                "with"))
             {
                 reader.Read();
+                if (!reader.End && reader.CurrentKind != YamlEventKind.MappingEnd)
+                {
+                    reader.SkipCurrentNode();
+                }
+
+                continue;
             }
 
-            var (withEntries, withCount) = map.DetachArray();
-            arena.RegisterSliceMapBuffer(withEntries);
-            return new SliceMap<StringNodeId>(withEntries, withCount, caseSensitive: false);
+            reader.Read();
+            if (reader.End)
+            {
+                break;
+            }
+
+            var value = ParseStringAndValidateExpression(
+                ref reader, arena, ref diagnostics,
+                ExpressionValidationContext.StepWith,
+                out var withErr,
+                out var withMark,
+                parseWholeValueIfNoEmbedded: false);
+            if (withErr) AddError(ref diagnostics, $"{stepPrefix} with.{Encoding.UTF8.GetString(keyUtf8)} must be string", withMark);
+
+            if (!value.HasValue)
+            {
+                continue;
+            }
+
+            arena.AddActionInput(new ActionInputData { Key = keySlice, Value = value });
+            count++;
+            if (isEntrypoint)
+            {
+                entrypoint = value;
+            }
+            else if (isArgs)
+            {
+                args = value;
+            }
         }
-        finally { map.Dispose(); }
+
+        if (reader.CurrentKind == YamlEventKind.MappingEnd)
+        {
+            reader.Read();
+        }
+
+        return new NodeRange(first, count);
     }
 }

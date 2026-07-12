@@ -10,8 +10,8 @@ namespace Seiton.Core.Linting.Rules;
 /// <summary>Flags workflow patterns that may leak secrets through unredacted output commands.</summary>
 public sealed class UnredactedSecretsRule() : RuleBase(RuleId.UnredactedSecrets)
 {
-    private Workflow? currentWorkflow;
-    private Job? currentJob;
+    private WorkflowRef currentWorkflow;
+    private JobRef currentJob;
     private HashSet<string> additionalOutputCommands = [];
     private readonly List<string> _workflowVarNames = [];
     private readonly List<string> _jobVarNames = [];
@@ -27,41 +27,43 @@ public sealed class UnredactedSecretsRule() : RuleBase(RuleId.UnredactedSecrets)
             : [];
     }
 
-    public override void VisitWorkflowPre(Workflow workflow)
+    public override void VisitWorkflowPre(WorkflowRef workflow)
     {
         base.VisitWorkflowPre(workflow);
         currentWorkflow = workflow;
-        currentJob = null;
+        currentJob = default;
         _workflowVarNames.Clear();
         AddSecretMappedVars(workflow.Env, _workflowVarNames);
     }
 
-    public override void VisitWorkflowPost(Workflow workflow)
+    public override void VisitWorkflowPost(WorkflowRef workflow)
     {
-        currentWorkflow = null;
-        currentJob = null;
+        currentWorkflow = default;
+        currentJob = default;
         _workflowVarNames.Clear();
     }
 
-    public override void VisitJobPre(Job job)
+    public override void VisitJobPre(JobRef job)
     {
         currentJob = job;
         _jobVarNames.Clear();
         AddSecretMappedVars(job.Env, _jobVarNames);
     }
 
-    public override void VisitJobPost(Job job)
+    public override void VisitJobPost(JobRef job)
     {
-        currentJob = null;
+        currentJob = default;
         _jobVarNames.Clear();
     }
 
-    public override void VisitStep(Step step)
+    public override void VisitStep(StepRef step)
     {
-        if (Config.Utf8Yaml is null || step.Exec is not ExecRun run)
+        if (Config.Utf8Yaml is null || step.Exec.Kind != StepExecKind.Run)
         {
             return;
         }
+
+        var run = step.Exec.AsRun();
 
         _stepVarNames.Clear();
         AddSecretMappedVars(step.Env, _stepVarNames);
@@ -71,13 +73,13 @@ public sealed class UnredactedSecretsRule() : RuleBase(RuleId.UnredactedSecrets)
             return;
         }
 
-        var runText = Arena.GetStringValue(run.Run);
+        var runText = run.Run.Value;
         if (FindAndReportSecretVar(runText, _stepVarNames, run, step)) return;
         if (FindAndReportSecretVar(runText, _jobVarNames, run, step)) return;
         FindAndReportSecretVar(runText, _workflowVarNames, run, step);
     }
 
-    private bool FindAndReportSecretVar(ReadOnlySpan<byte> runText, List<string> varNames, ExecRun run, Step step)
+    private bool FindAndReportSecretVar(ReadOnlySpan<byte> runText, List<string> varNames, ExecRunRef run, StepRef step)
     {
         for (var i = 0; i < varNames.Count; i++)
         {
@@ -104,13 +106,13 @@ public sealed class UnredactedSecretsRule() : RuleBase(RuleId.UnredactedSecrets)
         return false;
     }
 
-    private TextRange BuildRunTextLocation(StringNodeId runNode, int relativeOffset, int tokenLength)
+    private TextRange BuildRunTextLocation(StringRef runNode, int relativeOffset, int tokenLength)
     {
-        var absoluteStart = Arena.GetStringSlice(runNode).Offset + relativeOffset;
+        var absoluteStart = runNode.Slice.Offset + relativeOffset;
         var absoluteLength = tokenLength;
         if (Config.Utf8Yaml is null || absoluteStart < 0 || absoluteLength <= 0)
         {
-            return Arena.GetStringRange(runNode);
+            return runNode.Range;
         }
 
         var lineStarts = Config.GetLineStarts();
@@ -125,14 +127,14 @@ public sealed class UnredactedSecretsRule() : RuleBase(RuleId.UnredactedSecrets)
             EndColumn: end.Column);
     }
 
-    private void AddSecretMappedVars(Env? env, List<string> names)
+    private void AddSecretMappedVars(EnvRef env, List<string> names)
     {
-        if (env?.Vars is null || env.Vars.Value.Count == 0 || Config.Utf8Yaml is null)
+        if (!env.Vars.HasValue || env.Vars.Count == 0 || Config.Utf8Yaml is null)
         {
             return;
         }
 
-        foreach (var pair in env.Vars.Value)
+        foreach (var pair in env.Vars)
         {
             var envVar = pair.Value;
             if (!ContainsSecretsReference(envVar.Value))
@@ -140,7 +142,7 @@ public sealed class UnredactedSecretsRule() : RuleBase(RuleId.UnredactedSecrets)
                 continue;
             }
 
-            var name = Decode(Arena.GetStringSlice(envVar.Name));
+            var name = envVar.Name.Decode();
             if (IsSimpleIdentifier(name))
             {
                 names.Add(name);
@@ -148,24 +150,24 @@ public sealed class UnredactedSecretsRule() : RuleBase(RuleId.UnredactedSecrets)
         }
     }
 
-    private bool ContainsSecretsReference(StringNodeId node)
+    private bool ContainsSecretsReference(StringRef node)
     {
         if (Config.Utf8Yaml is null)
         {
             return false;
         }
 
-        if (ContainsSecretsReferenceInValue(Arena.GetStringValue(node)))
+        if (ContainsSecretsReferenceInValue(node.Value))
         {
             return true;
         }
 
-        if (!Arena.GetStringExpression(node).HasValue)
+        if (!node.Expression.HasValue)
         {
             return false;
         }
 
-        var expression = TrimAsciiWhiteSpace(Arena.GetStringValue(Arena.GetStringExpression(node)));
+        var expression = TrimAsciiWhiteSpace(node.Expression.Value);
         return ContainsSecretsReferenceInExpression(expression);
     }
 

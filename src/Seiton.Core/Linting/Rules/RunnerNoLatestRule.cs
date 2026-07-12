@@ -35,10 +35,10 @@ public sealed class RunnerNoLatestRule() : RuleBase(RuleId.RunnerNoLatest)
         _fixMappingEntries = entries;
     }
 
-    public override void VisitJobPre(Job job)
+    public override void VisitJobPre(JobRef job)
     {
         var runsOn = job.RunsOn;
-        if (runsOn is null || Config.Utf8Yaml is null)
+        if (!runsOn.HasValue || Config.Utf8Yaml is null)
         {
             return;
         }
@@ -49,7 +49,7 @@ public sealed class RunnerNoLatestRule() : RuleBase(RuleId.RunnerNoLatest)
             return;
         }
 
-        if (runsOn.Labels is null)
+        if (!runsOn.Labels.HasValue)
         {
             return;
         }
@@ -62,18 +62,18 @@ public sealed class RunnerNoLatestRule() : RuleBase(RuleId.RunnerNoLatest)
         for (var i = 0; i < runsOn.Labels.Count; i++)
         {
             var label = runsOn.Labels[i];
-            if (Arena.GetStringExpression(label).HasValue)
+            if (label.Expression.HasValue)
             {
                 continue;
             }
 
-            var labelUtf8 = Arena.GetStringValue(label);
+            var labelUtf8 = label.Value;
 
             ReportLatestLabel(job, label, labelUtf8);
         }
     }
 
-    private void ReportLatestLabel(Job job, StringNodeId label, ReadOnlySpan<byte> labelUtf8)
+    private void ReportLatestLabel(JobRef job, StringRef label, ReadOnlySpan<byte> labelUtf8)
     {
         // Only scan fix-mapping when built-in detection is insufficient or fix generation needs the pinned value.
         var isBuiltIn = IsBuiltInLatestLabel(labelUtf8);
@@ -89,12 +89,12 @@ public sealed class RunnerNoLatestRule() : RuleBase(RuleId.RunnerNoLatest)
             return;
         }
 
-        var location = Arena.GetStringRange(label);
+        var location = label.Range;
 
         DiagnosticFix? fix = null;
         if (Config.Fix.Enabled && hasMappingValue)
         {
-            var slice = Arena.GetStringSlice(label);
+            var slice = label.Slice;
             fix = new DiagnosticFix(
                 $"pin runner label to '{pinned}'",
                 [new TextEdit(slice.Offset, slice.Length, pinned)]);
@@ -103,9 +103,9 @@ public sealed class RunnerNoLatestRule() : RuleBase(RuleId.RunnerNoLatest)
         // Decode the job id and label into stack buffers so the diagnostic costs a single
         // string (the message itself) instead of message + two intermediate strings.
         Span<char> jobIdBuffer = stackalloc char[128];
-        var jobId = DecodeChars(Arena.GetStringSlice(job.Id), jobIdBuffer);
+        var jobId = DecodeChars(job.Id.Slice, jobIdBuffer);
         Span<char> labelBuffer = stackalloc char[128];
-        var labelText = DecodeChars(Arena.GetStringSlice(label), labelBuffer);
+        var labelText = DecodeChars(label.Slice, labelBuffer);
 
         if (fix.HasValue)
         {
@@ -117,9 +117,9 @@ public sealed class RunnerNoLatestRule() : RuleBase(RuleId.RunnerNoLatest)
         }
     }
 
-    private void CheckMatrixExpandedLabels(Job job, Runner runsOn)
+    private void CheckMatrixExpandedLabels(JobRef job, RunnerRef runsOn)
     {
-        var exprUtf8 = Arena.GetStringValue(runsOn.LabelsExpr);
+        var exprUtf8 = runsOn.LabelsExpr.Value;
         if (!ExpressionScanHelpers.TryExtractExpressionBody(exprUtf8, out var body))
         {
             return;
@@ -135,47 +135,50 @@ public sealed class RunnerNoLatestRule() : RuleBase(RuleId.RunnerNoLatest)
             return;
         }
 
-        var matrix = job.Strategy?.Matrix;
-        if (matrix is null || matrix.Expression.HasValue || matrix.Rows is null)
+        var matrix = job.Strategy.Matrix;
+        if (!matrix.HasValue || matrix.Expression.HasValue || !matrix.Rows.HasValue)
         {
             return;
         }
 
-        if (!matrix.Rows.Value.TryGetValue(Config.Utf8Yaml, body[7..], out var row))
+        if (!matrix.Rows.TryGetValue(body[7..], out var row))
         {
             return;
         }
 
-        if (row.Expression.HasValue || row.Values is null)
+        if (row.Expression.HasValue || !row.Values.HasValue)
         {
             return;
         }
 
         for (var i = 0; i < row.Values.Count; i++)
         {
-            switch (row.Values[i])
+            var value = row.Values[i];
+            switch (value.Kind)
             {
-                case RawYamlString scalar:
-                    if (ExpressionScanHelpers.ContainsExpressionMarker(scalar.Value, Arena))
+                case RawYamlKind.String:
+                    var scalar = value.Scalar;
+                    if (scalar.Expression.HasValue || ExpressionScanHelpers.ContainsExpressionMarker(scalar.Value))
                     {
                         continue;
                     }
 
-                    ReportLatestLabel(job, scalar.Value, Arena.GetStringValue(scalar.Value));
+                    ReportLatestLabel(job, scalar, scalar.Value);
                     break;
 
-                case RawYamlArray array:
-                    ReportLatestLabelsInMatrixArray(job, array);
+                case RawYamlKind.Array:
+                    ReportLatestLabelsInMatrixArray(job, value);
                     break;
             }
         }
     }
 
-    private void ReportLatestLabelsInMatrixArray(Job job, RawYamlArray array)
+    private void ReportLatestLabelsInMatrixArray(JobRef job, RawYamlRef array)
     {
         for (var i = 0; i < array.Items.Count; i++)
         {
-            if (array.Items[i] is RawYamlString item && RunnerLabels.IsSelfHostedLabel(Arena.GetStringValue(item.Value)))
+            var item = array.Items[i];
+            if (item.Kind == RawYamlKind.String && RunnerLabels.IsSelfHostedLabel(item.Scalar.Value))
             {
                 return;
             }
@@ -183,17 +186,18 @@ public sealed class RunnerNoLatestRule() : RuleBase(RuleId.RunnerNoLatest)
 
         for (var i = 0; i < array.Items.Count; i++)
         {
-            if (array.Items[i] is not RawYamlString item)
+            if (array.Items[i].Kind != RawYamlKind.String)
             {
                 continue;
             }
 
-            if (ExpressionScanHelpers.ContainsExpressionMarker(item.Value, Arena))
+            var item = array.Items[i].Scalar;
+            if (item.Expression.HasValue || ExpressionScanHelpers.ContainsExpressionMarker(item.Value))
             {
                 continue;
             }
 
-            ReportLatestLabel(job, item.Value, Arena.GetStringValue(item.Value));
+            ReportLatestLabel(job, item, item.Value);
         }
     }
 
@@ -221,7 +225,7 @@ public sealed class RunnerNoLatestRule() : RuleBase(RuleId.RunnerNoLatest)
         return false;
     }
 
-    private bool ContainsSelfHostedLabel(IReadOnlyList<StringNodeId> labels)
+    private bool ContainsSelfHostedLabel(StringRefList labels)
     {
         if (Config.Utf8Yaml is null)
         {
@@ -231,12 +235,12 @@ public sealed class RunnerNoLatestRule() : RuleBase(RuleId.RunnerNoLatest)
         for (var i = 0; i < labels.Count; i++)
         {
             var label = labels[i];
-            if (Arena.GetStringExpression(label).HasValue)
+            if (label.Expression.HasValue)
             {
                 continue;
             }
 
-            var labelUtf8 = Arena.GetStringValue(label);
+            var labelUtf8 = label.Value;
             if (RunnerLabels.IsSelfHostedLabel(labelUtf8))
             {
                 return true;

@@ -13,34 +13,66 @@ public sealed class LintResult : IDisposable
     private AstArena? _arena;
     private readonly bool _ownsArena;
     private bool _disposed;
+#if DEBUG
+    private readonly int _generation;
+#endif
 
     internal LintResult(LintResultData data, AstArena? arena, bool ownsArena = true)
     {
         Data = data;
         _arena = arena;
         _ownsArena = ownsArena;
+#if DEBUG
+        _generation = arena?.Generation ?? 0;
+#endif
+    }
+
+    /// <summary>
+    /// DEBUG-only: throws when the arena was reset or disposed after this result was created
+    /// (e.g. a non-owning result outliving its <c>IncrementalParseContext</c> arena reuse).
+    /// Compiled out entirely in Release builds.
+    /// </summary>
+    [System.Diagnostics.Conditional("DEBUG")]
+    private void AssertGeneration()
+    {
+#if DEBUG
+        _arena?.AssertGeneration(_generation);
+#endif
     }
 
     /// <summary>Gets the underlying lint result data for internal consumers.</summary>
     internal LintResultData Data { get; }
 
-    /// <summary>Gets the parsed workflow AST, if the document is a workflow file.</summary>
-    public Workflow? Workflow
+    /// <summary>Gets the parsed workflow AST root. Default ref when the document is not a workflow file.</summary>
+    public WorkflowRef Workflow
     {
         get
         {
             ThrowIfDisposed();
-            return Data.Workflow;
+            AssertGeneration();
+            return new WorkflowRef(_arena, Data.Workflow);
         }
     }
 
-    /// <summary>Gets the parsed action metadata AST, if the document is an action file.</summary>
-    public ActionMetadata? ActionMetadata
+    /// <summary>Gets the parsed action metadata AST root. Default ref when the document is not an action file.</summary>
+    public ActionMetadataRef ActionMetadata
     {
         get
         {
             ThrowIfDisposed();
-            return Data.ActionMetadata;
+            AssertGeneration();
+            return new ActionMetadataRef(_arena, Data.ActionMetadata);
+        }
+    }
+
+    /// <summary>Gets the parsed workflow AST node, if the document is a workflow file.</summary>
+    internal Workflow? WorkflowNode
+    {
+        get
+        {
+            ThrowIfDisposed();
+            AssertGeneration();
+            return Data.Workflow;
         }
     }
 
@@ -50,6 +82,7 @@ public sealed class LintResult : IDisposable
         get
         {
             ThrowIfDisposed();
+            AssertGeneration();
             return Data.Diagnostics;
         }
     }
@@ -60,6 +93,7 @@ public sealed class LintResult : IDisposable
         get
         {
             ThrowIfDisposed();
+            AssertGeneration();
             return Data.ParseDiagnostics;
         }
     }
@@ -235,7 +269,19 @@ public sealed class LintResult : IDisposable
         return new OwnedDiagnostics(diags.AsSpan().ToArray());
     }
 
-    internal AstArena Arena => _disposed || _arena is null ? throw new ObjectDisposedException(nameof(LintResult)) : _arena;
+    internal AstArena Arena
+    {
+        get
+        {
+            if (_disposed || _arena is null)
+            {
+                throw new ObjectDisposedException(nameof(LintResult));
+            }
+
+            AssertGeneration();
+            return _arena;
+        }
+    }
 
     private void ThrowIfDisposed()
     {

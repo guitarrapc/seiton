@@ -8,34 +8,34 @@ public sealed class DenyReadAllRule() : RuleBase(RuleId.DenyReadAll)
 {
     public override string Name => "Deny Read-All Rule";
 
-    private Workflow? _currentWorkflow;
-    private Job? _currentJob;
+    private WorkflowRef _currentWorkflow;
+    private JobRef _currentJob;
 
-    public override void VisitWorkflowPre(Workflow workflow)
+    public override void VisitWorkflowPre(WorkflowRef workflow)
     {
         base.VisitWorkflowPre(workflow);
         _currentWorkflow = workflow;
         ValidatePermissionsAll(workflow.Permissions);
-        _currentWorkflow = null;
+        _currentWorkflow = default;
     }
 
-    public override void VisitJobPre(Job job)
+    public override void VisitJobPre(JobRef job)
     {
         _currentJob = job;
         ValidatePermissionsAll(job.Permissions);
-        _currentJob = null;
+        _currentJob = default;
     }
 
-    private void ValidatePermissionsAll(Permissions? permissions)
+    private void ValidatePermissionsAll(PermissionsRef permissions)
     {
-        if (Config.Utf8Yaml is null || permissions?.All is null)
+        if (Config.Utf8Yaml is null || !permissions.All.HasValue)
         {
             return;
         }
 
         var allNode = permissions.All;
-        var value = Arena.GetStringValue(allNode);
-        if (ExpressionScanHelpers.ContainsExpressionMarker(allNode, Arena))
+        var value = allNode.Value;
+        if (ExpressionScanHelpers.ContainsExpressionMarker(allNode.Id, Arena))
         {
             return;
         }
@@ -51,23 +51,23 @@ public sealed class DenyReadAllRule() : RuleBase(RuleId.DenyReadAll)
             [edit]);
         var message = "permissions scalar 'read-all' is forbidden; use explicit least-privilege scopes";
 
-        if (_currentWorkflow is not null)
+        if (_currentWorkflow.HasValue)
         {
-            AddWorkflowError(_currentWorkflow, message, Arena.GetStringRange(allNode), fix);
+            AddWorkflowError(_currentWorkflow, message, allNode.Range, fix);
         }
-        else if (_currentJob is not null)
+        else if (_currentJob.HasValue)
         {
-            AddJobError(_currentJob, message, Arena.GetStringRange(allNode), fix);
+            AddJobError(_currentJob, message, allNode.Range, fix);
         }
     }
 
-    private TextEdit BuildExplicitMappingReplacementEdit(StringNodeId allNode, byte[] utf8Yaml)
+    private TextEdit BuildExplicitMappingReplacementEdit(StringRef allNode, byte[] utf8Yaml)
     {
-        var start = Arena.GetStringSlice(allNode).Offset;
-        var end = Arena.GetStringSlice(allNode).Offset + Arena.GetStringSlice(allNode).Length;
+        var start = allNode.Slice.Offset;
+        var end = allNode.Slice.Offset + allNode.Slice.Length;
         if (start < 0 || end > utf8Yaml.Length || start > end)
         {
-            return new TextEdit(Arena.GetStringSlice(allNode).Offset, Arena.GetStringSlice(allNode).Length, "{}");
+            return new TextEdit(allNode.Slice.Offset, allNode.Slice.Length, "{}");
         }
 
         if (start > 0 && end < utf8Yaml.Length)

@@ -7,19 +7,20 @@ namespace Seiton.Core.Parsing;
 
 public static partial class WorkflowParser
 {
-    private static WorkflowCallEvent ParseWorkflowCallEvent<TReader>(ref TReader reader, AstArena arena, ref PooledBuffer<Diagnostic> diagnostics, ReadOnlySpan<byte> source, StringNodeId nameNode)
+    private static void ParseWorkflowCallEvent<TReader>(ref TReader reader, AstArena arena, ref PooledBuffer<Diagnostic> diagnostics, ReadOnlySpan<byte> source, StringNodeId nameNode)
         where TReader : IYamlStreamReader, allows ref struct
     {
         if (reader.CurrentKind != YamlEventKind.MappingStart)
         {
             AddError(ref diagnostics, "on.workflow_call must be object", reader.CurrentStart);
             reader.SkipCurrentNode();
-            return new WorkflowCallEvent { EventName = nameNode, Inputs = null, Secrets = null, Outputs = null, Range = arena.GetStringRange(nameNode) };
+            arena.AddEvent(new EventData { Kind = EventKind.WorkflowCall, EventName = nameNode, Range = arena.GetStringRange(nameNode), Payload = arena.AddWorkflowCallEvent(default) });
+            return;
         }
 
-        IReadOnlyList<WorkflowCallEventInput>? inputs = null;
-        SliceMap<WorkflowCallEventSecret>? secrets = null;
-        SliceMap<WorkflowCallEventOutput>? outputs = null;
+        NodeRange inputs = default;
+        NodeRange secrets = default;
+        NodeRange outputs = default;
         ulong seen = 0;
 
         reader.Read(); // consume MappingStart
@@ -104,17 +105,16 @@ public static partial class WorkflowParser
             reader.Read();
         }
 
-        return new WorkflowCallEvent
+        var payload = arena.AddWorkflowCallEvent(new WorkflowCallEventData
         {
-            EventName = nameNode,
             Inputs = inputs,
             Secrets = secrets,
             Outputs = outputs,
-            Range = arena.GetStringRange(nameNode),
-        };
+        });
+        arena.AddEvent(new EventData { Kind = EventKind.WorkflowCall, EventName = nameNode, Range = arena.GetStringRange(nameNode), Payload = payload });
     }
 
-    private static IReadOnlyList<WorkflowCallEventInput>? ParseWorkflowCallInputs<TReader>(ref TReader reader, AstArena arena, ref PooledBuffer<Diagnostic> diagnostics, ReadOnlySpan<byte> source)
+    private static NodeRange ParseWorkflowCallInputs<TReader>(ref TReader reader, AstArena arena, ref PooledBuffer<Diagnostic> diagnostics, ReadOnlySpan<byte> source)
         where TReader : IYamlStreamReader, allows ref struct
     {
         if (reader.CurrentKind != YamlEventKind.MappingStart)
@@ -124,68 +124,63 @@ public static partial class WorkflowParser
             return default;
         }
 
-        var list = new PooledBuffer<WorkflowCallEventInput>(4);
-        try
+        var first = arena.WorkflowCallEventInputCount;
+        Span<long> keyStore = stackalloc long[64];
+        var keyCount = 0;
+        reader.Read(); // consume MappingStart
+        while (!reader.End && reader.CurrentKind != YamlEventKind.MappingEnd)
         {
-            Span<long> keyStore = stackalloc long[64];
-            var keyCount = 0;
-            reader.Read(); // consume MappingStart
-            while (!reader.End && reader.CurrentKind != YamlEventKind.MappingEnd)
+            if (reader.CurrentKind != YamlEventKind.Scalar)
             {
-                if (reader.CurrentKind != YamlEventKind.Scalar)
+                AddError(ref diagnostics, "on.workflow_call.inputs key must be string", reader.CurrentStart);
+                reader.SkipCurrentNode();
+                if (!reader.End && reader.CurrentKind != YamlEventKind.MappingEnd)
                 {
-                    AddError(ref diagnostics, "on.workflow_call.inputs key must be string", reader.CurrentStart);
                     reader.SkipCurrentNode();
-                    if (!reader.End && reader.CurrentKind != YamlEventKind.MappingEnd)
-                    {
-                        reader.SkipCurrentNode();
-                    }
-                    continue;
                 }
-
-                var idMark = reader.CurrentStart;
-                var idSlice = reader.GetScalarSlice();
-                var idUtf8 = reader.GetScalarUtf8();
-                if (!TryRegisterDynamicKey(
-                    source,
-                    idUtf8,
-                    idSlice.Offset,
-                    idSlice.Length,
-                    idMark,
-                    ref diagnostics,
-                    keyStore,
-                    ref keyCount,
-                    caseSensitive: false,
-                    "on.workflow_call.inputs"))
-                {
-                    reader.Read();
-                    if (!reader.End)
-                    {
-                        reader.SkipCurrentNode();
-                    }
-
-                    continue;
-                }
-
-                var id = Utf8String.FromLowerAscii(idUtf8);
-                var nameNode = arena.AddString(idSlice, reader.IsScalarQuoted(), BuildScalarLocation(idMark, idUtf8.Length));
-                var idText = Encoding.UTF8.GetString(idUtf8);
-                reader.Read();
-
-                list.Add(ParseWorkflowCallInput(ref reader, arena, ref diagnostics, nameNode, id, idText));
+                continue;
             }
 
-            if (reader.CurrentKind == YamlEventKind.MappingEnd)
+            var idMark = reader.CurrentStart;
+            var idSlice = reader.GetScalarSlice();
+            var idUtf8 = reader.GetScalarUtf8();
+            if (!TryRegisterDynamicKey(
+                source,
+                idUtf8,
+                idSlice.Offset,
+                idSlice.Length,
+                idMark,
+                ref diagnostics,
+                ref keyStore,
+                ref keyCount,
+                "on.workflow_call.inputs"))
             {
                 reader.Read();
+                if (!reader.End)
+                {
+                    reader.SkipCurrentNode();
+                }
+
+                continue;
             }
 
-            return DetachArenaList(ref list, arena);
+            var id = Utf8String.FromLowerAscii(idUtf8);
+            var nameNode = arena.AddString(idSlice, reader.IsScalarQuoted(), BuildScalarLocation(idMark, idUtf8.Length));
+            var idText = Encoding.UTF8.GetString(idUtf8);
+            reader.Read();
+
+            arena.AddWorkflowCallEventInput(ParseWorkflowCallInput(ref reader, arena, ref diagnostics, nameNode, id, idText));
         }
-        finally { list.Dispose(); }
+
+        if (reader.CurrentKind == YamlEventKind.MappingEnd)
+        {
+            reader.Read();
+        }
+
+        return new NodeRange(first, arena.WorkflowCallEventInputCount - first);
     }
 
-    private static WorkflowCallEventInput ParseWorkflowCallInput<TReader>(ref TReader reader, AstArena arena, ref PooledBuffer<Diagnostic> diagnostics, StringNodeId nameNode, Utf8String id, string idText)
+    private static WorkflowCallEventInputData ParseWorkflowCallInput<TReader>(ref TReader reader, AstArena arena, ref PooledBuffer<Diagnostic> diagnostics, StringNodeId nameNode, Utf8String id, string idText)
         where TReader : IYamlStreamReader, allows ref struct
     {
         StringNodeId description = default;
@@ -222,7 +217,7 @@ public static partial class WorkflowParser
                 ref diagnostics,
                 $"on.workflow_call input \"{idText}\" is missing \"type\"",
                 new TextPosition(arena.GetStringRange(nameNode).Start, arena.GetStringRange(nameNode).StartLine, arena.GetStringRange(nameNode).StartColumn));
-            return new WorkflowCallEventInput { Name = nameNode, Id = id, Description = description, Required = required, Default = defaultValue, Type = type, Range = arena.GetStringRange(nameNode) };
+            return new WorkflowCallEventInputData { Name = nameNode, Id = id, Description = description, Required = required, Default = defaultValue, Type = type, Range = arena.GetStringRange(nameNode) };
         }
 
         reader.Read(); // consume MappingStart
@@ -327,7 +322,7 @@ public static partial class WorkflowParser
                 new TextPosition(arena.GetStringRange(nameNode).Start, arena.GetStringRange(nameNode).StartLine, arena.GetStringRange(nameNode).StartColumn));
         }
 
-        return new WorkflowCallEventInput
+        return new WorkflowCallEventInputData
         {
             Name = nameNode,
             Id = id,
@@ -376,7 +371,7 @@ public static partial class WorkflowParser
         return type;
     }
 
-    private static SliceMap<WorkflowCallEventSecret>? ParseWorkflowCallSecrets<TReader>(ref TReader reader, AstArena arena, ref PooledBuffer<Diagnostic> diagnostics, ReadOnlySpan<byte> source)
+    private static NodeRange ParseWorkflowCallSecrets<TReader>(ref TReader reader, AstArena arena, ref PooledBuffer<Diagnostic> diagnostics, ReadOnlySpan<byte> source)
         where TReader : IYamlStreamReader, allows ref struct
     {
         if (reader.CurrentKind != YamlEventKind.MappingStart)
@@ -388,7 +383,7 @@ public static partial class WorkflowParser
                 if (IsNullLikeOnEventOptionsScalar(scalarUtf8) || scalarUtf8.Length == 0)
                 {
                     reader.Read(); // consume null scalar
-                    return new SliceMap<WorkflowCallEventSecret>();
+                    return new NodeRange(arena.WorkflowCallEventSecretCount, 0);
                 }
             }
 
@@ -397,68 +392,61 @@ public static partial class WorkflowParser
             return default;
         }
 
-        var map = new PooledBuffer<SliceMap<WorkflowCallEventSecret>.Entry>(8);
-        try
+        var first = arena.WorkflowCallEventSecretCount;
+        Span<long> keyStore = stackalloc long[64];
+        var keyCount = 0;
+        reader.Read(); // consume MappingStart
+        while (!reader.End && reader.CurrentKind != YamlEventKind.MappingEnd)
         {
-            Span<long> keyStore = stackalloc long[64];
-            var keyCount = 0;
-            reader.Read(); // consume MappingStart
-            while (!reader.End && reader.CurrentKind != YamlEventKind.MappingEnd)
+            if (reader.CurrentKind != YamlEventKind.Scalar)
             {
-                if (reader.CurrentKind != YamlEventKind.Scalar)
+                AddError(ref diagnostics, "on.workflow_call.secrets key must be string", reader.CurrentStart);
+                reader.SkipCurrentNode();
+                if (!reader.End && reader.CurrentKind != YamlEventKind.MappingEnd)
                 {
-                    AddError(ref diagnostics, "on.workflow_call.secrets key must be string", reader.CurrentStart);
                     reader.SkipCurrentNode();
-                    if (!reader.End && reader.CurrentKind != YamlEventKind.MappingEnd)
-                    {
-                        reader.SkipCurrentNode();
-                    }
-                    continue;
                 }
-
-                var idMark = reader.CurrentStart;
-                var idSlice = reader.GetScalarSlice();
-                var idUtf8 = reader.GetScalarUtf8();
-                if (!TryRegisterDynamicKey(
-                    source,
-                    idUtf8,
-                    idSlice.Offset,
-                    idSlice.Length,
-                    idMark,
-                    ref diagnostics,
-                    keyStore,
-                    ref keyCount,
-                    caseSensitive: false,
-                    "on.workflow_call.secrets"))
-                {
-                    reader.Read();
-                    if (!reader.End)
-                    {
-                        reader.SkipCurrentNode();
-                    }
-
-                    continue;
-                }
-
-                var nameNode = arena.AddString(idSlice, reader.IsScalarQuoted(), BuildScalarLocation(idMark, idUtf8.Length));
-                reader.Read();
-
-                map.Add(new SliceMap<WorkflowCallEventSecret>.Entry(idSlice, ParseWorkflowCallSecret(ref reader, arena, ref diagnostics, nameNode)));
+                continue;
             }
 
-            if (reader.CurrentKind == YamlEventKind.MappingEnd)
+            var idMark = reader.CurrentStart;
+            var idSlice = reader.GetScalarSlice();
+            var idUtf8 = reader.GetScalarUtf8();
+            if (!TryRegisterDynamicKey(
+                source,
+                idUtf8,
+                idSlice.Offset,
+                idSlice.Length,
+                idMark,
+                ref diagnostics,
+                ref keyStore,
+                ref keyCount,
+                "on.workflow_call.secrets"))
             {
                 reader.Read();
+                if (!reader.End)
+                {
+                    reader.SkipCurrentNode();
+                }
+
+                continue;
             }
 
-            var (secretEntries, secretCount) = map.DetachArray();
-            arena.RegisterSliceMapBuffer(secretEntries);
-            return new SliceMap<WorkflowCallEventSecret>(secretEntries, secretCount, caseSensitive: false);
+            var nameNode = arena.AddString(idSlice, reader.IsScalarQuoted(), BuildScalarLocation(idMark, idUtf8.Length));
+            reader.Read();
+
+            arena.AddWorkflowCallEventSecret(ParseWorkflowCallSecret(ref reader, arena, ref diagnostics, nameNode, idSlice));
         }
-        finally { map.Dispose(); }
+
+        if (reader.CurrentKind == YamlEventKind.MappingEnd)
+        {
+            reader.Read();
+        }
+
+        return new NodeRange(first, arena.WorkflowCallEventSecretCount - first);
     }
 
-    private static WorkflowCallEventSecret ParseWorkflowCallSecret<TReader>(ref TReader reader, AstArena arena, ref PooledBuffer<Diagnostic> diagnostics, StringNodeId nameNode)
+    private static WorkflowCallEventSecretData ParseWorkflowCallSecret<TReader>(ref TReader reader, AstArena arena, ref PooledBuffer<Diagnostic> diagnostics, StringNodeId nameNode, Utf8Slice key)
         where TReader : IYamlStreamReader, allows ref struct
     {
         StringNodeId description = default;
@@ -487,7 +475,7 @@ public static partial class WorkflowParser
                 AddError(ref diagnostics, "on.workflow_call secret must be object", reader.CurrentStart);
                 reader.SkipCurrentNode();
             }
-            return new WorkflowCallEventSecret { Name = nameNode, Description = description, Required = required, Range = arena.GetStringRange(nameNode) };
+            return new WorkflowCallEventSecretData { Key = key, Name = nameNode, Description = description, Required = required, Range = arena.GetStringRange(nameNode) };
         }
 
         reader.Read();
@@ -569,8 +557,9 @@ public static partial class WorkflowParser
             reader.Read();
         }
 
-        return new WorkflowCallEventSecret
+        return new WorkflowCallEventSecretData
         {
+            Key = key,
             Name = nameNode,
             Description = description,
             Required = required,
@@ -578,7 +567,7 @@ public static partial class WorkflowParser
         };
     }
 
-    private static SliceMap<WorkflowCallEventOutput>? ParseWorkflowCallOutputs<TReader>(ref TReader reader, AstArena arena, ref PooledBuffer<Diagnostic> diagnostics, ReadOnlySpan<byte> source)
+    private static NodeRange ParseWorkflowCallOutputs<TReader>(ref TReader reader, AstArena arena, ref PooledBuffer<Diagnostic> diagnostics, ReadOnlySpan<byte> source)
         where TReader : IYamlStreamReader, allows ref struct
     {
         if (reader.CurrentKind != YamlEventKind.MappingStart)
@@ -588,69 +577,62 @@ public static partial class WorkflowParser
             return default;
         }
 
-        var map = new PooledBuffer<SliceMap<WorkflowCallEventOutput>.Entry>(8);
-        try
+        var first = arena.WorkflowCallEventOutputCount;
+        Span<long> keyStore = stackalloc long[64];
+        var keyCount = 0;
+        reader.Read();
+        while (!reader.End && reader.CurrentKind != YamlEventKind.MappingEnd)
         {
-            Span<long> keyStore = stackalloc long[64];
-            var keyCount = 0;
-            reader.Read();
-            while (!reader.End && reader.CurrentKind != YamlEventKind.MappingEnd)
+            if (reader.CurrentKind != YamlEventKind.Scalar)
             {
-                if (reader.CurrentKind != YamlEventKind.Scalar)
+                AddError(ref diagnostics, "on.workflow_call.outputs key must be string", reader.CurrentStart);
+                reader.SkipCurrentNode();
+                if (!reader.End && reader.CurrentKind != YamlEventKind.MappingEnd)
                 {
-                    AddError(ref diagnostics, "on.workflow_call.outputs key must be string", reader.CurrentStart);
                     reader.SkipCurrentNode();
-                    if (!reader.End && reader.CurrentKind != YamlEventKind.MappingEnd)
-                    {
-                        reader.SkipCurrentNode();
-                    }
-                    continue;
                 }
-
-                var idMark = reader.CurrentStart;
-                var idSlice = reader.GetScalarSlice();
-                var idUtf8 = reader.GetScalarUtf8();
-                if (!TryRegisterDynamicKey(
-                    source,
-                    idUtf8,
-                    idSlice.Offset,
-                    idSlice.Length,
-                    idMark,
-                    ref diagnostics,
-                    keyStore,
-                    ref keyCount,
-                    caseSensitive: false,
-                    "on.workflow_call.outputs"))
-                {
-                    reader.Read();
-                    if (!reader.End)
-                    {
-                        reader.SkipCurrentNode();
-                    }
-
-                    continue;
-                }
-
-                var nameNode = arena.AddString(idSlice, reader.IsScalarQuoted(), BuildScalarLocation(idMark, idUtf8.Length));
-                var idText = Encoding.UTF8.GetString(idUtf8);
-                reader.Read();
-
-                map.Add(new SliceMap<WorkflowCallEventOutput>.Entry(idSlice, ParseWorkflowCallOutput(ref reader, arena, ref diagnostics, nameNode, idText)));
+                continue;
             }
 
-            if (reader.CurrentKind == YamlEventKind.MappingEnd)
+            var idMark = reader.CurrentStart;
+            var idSlice = reader.GetScalarSlice();
+            var idUtf8 = reader.GetScalarUtf8();
+            if (!TryRegisterDynamicKey(
+                source,
+                idUtf8,
+                idSlice.Offset,
+                idSlice.Length,
+                idMark,
+                ref diagnostics,
+                ref keyStore,
+                ref keyCount,
+                "on.workflow_call.outputs"))
             {
                 reader.Read();
+                if (!reader.End)
+                {
+                    reader.SkipCurrentNode();
+                }
+
+                continue;
             }
 
-            var (outputEntries, outputCount) = map.DetachArray();
-            arena.RegisterSliceMapBuffer(outputEntries);
-            return new SliceMap<WorkflowCallEventOutput>(outputEntries, outputCount, caseSensitive: false);
+            var nameNode = arena.AddString(idSlice, reader.IsScalarQuoted(), BuildScalarLocation(idMark, idUtf8.Length));
+            var idText = Encoding.UTF8.GetString(idUtf8);
+            reader.Read();
+
+            arena.AddWorkflowCallEventOutput(ParseWorkflowCallOutput(ref reader, arena, ref diagnostics, nameNode, idSlice, idText));
         }
-        finally { map.Dispose(); }
+
+        if (reader.CurrentKind == YamlEventKind.MappingEnd)
+        {
+            reader.Read();
+        }
+
+        return new NodeRange(first, arena.WorkflowCallEventOutputCount - first);
     }
 
-    private static WorkflowCallEventOutput ParseWorkflowCallOutput<TReader>(ref TReader reader, AstArena arena, ref PooledBuffer<Diagnostic> diagnostics, StringNodeId nameNode, string idText)
+    private static WorkflowCallEventOutputData ParseWorkflowCallOutput<TReader>(ref TReader reader, AstArena arena, ref PooledBuffer<Diagnostic> diagnostics, StringNodeId nameNode, Utf8Slice key, string idText)
         where TReader : IYamlStreamReader, allows ref struct
     {
         StringNodeId description = default;
@@ -684,7 +666,7 @@ public static partial class WorkflowParser
                 ref diagnostics,
                 $"on.workflow_call output \"{idText}\" is missing \"value\"",
                 new TextPosition(arena.GetStringRange(nameNode).Start, arena.GetStringRange(nameNode).StartLine, arena.GetStringRange(nameNode).StartColumn));
-            return new WorkflowCallEventOutput { Name = nameNode, Description = description, Value = value, Range = arena.GetStringRange(nameNode) };
+            return new WorkflowCallEventOutputData { Key = key, Name = nameNode, Description = description, Value = value, Range = arena.GetStringRange(nameNode) };
         }
 
         reader.Read();
@@ -784,8 +766,9 @@ public static partial class WorkflowParser
             AddError(ref diagnostics, $"on.workflow_call output \"{idText}\" value should not be empty", new TextPosition(valueRange.Start, valueRange.StartLine, valueRange.StartColumn));
         }
 
-        return new WorkflowCallEventOutput
+        return new WorkflowCallEventOutputData
         {
+            Key = key,
             Name = nameNode,
             Description = description,
             Value = value,

@@ -8,24 +8,24 @@ public sealed class FakeTernaryRule() : RuleBase(RuleId.FakeTernary)
 {
     public override string Name => "Fake Ternary Rule";
 
-    public override void VisitJobPre(Job job)
+    public override void VisitJobPre(JobRef job)
     {
-        ValidateCondition(job.If, job, null);
+        ValidateCondition(job.If, job, default);
     }
 
-    public override void VisitStep(Step step)
+    public override void VisitStep(StepRef step)
     {
-        ValidateCondition(step.If, null, step);
+        ValidateCondition(step.If, default, step);
     }
 
-    private void ValidateCondition(StringNodeId condition, Job? job, Step? step)
+    private void ValidateCondition(StringRef condition, JobRef job, StepRef step)
     {
         if (!condition.HasValue || Config.Utf8Yaml is null)
         {
             return;
         }
 
-        var raw = Arena.GetStringValue(condition);
+        var raw = condition.Value;
         if (raw.Length == 0)
         {
             return;
@@ -45,14 +45,14 @@ public sealed class FakeTernaryRule() : RuleBase(RuleId.FakeTernary)
         }
 
         const string message = "avoid fake ternary pattern 'cond && a || b'; use a case expression (or equivalent explicit branching)";
-        if (job is not null)
+        if (job.HasValue)
         {
-            AddJobWarning(job, message, Arena.GetStringRange(condition));
+            AddJobWarning(job, message, condition.Range);
         }
 
-        if (step is not null)
+        if (step.HasValue)
         {
-            AddStepWarning(step, message, Arena.GetStringRange(condition));
+            AddStepWarning(step, message, condition.Range);
         }
     }
 

@@ -9,9 +9,15 @@ public sealed class WorkflowCallInputDefaultRule() : RuleBase(RuleId.WorkflowCal
 {
     public override string Name => "Workflow Call Input Default Rule";
 
-    public override void VisitEvent(Event ev)
+    public override void VisitEvent(EventRef ev)
     {
-        if (ev is not WorkflowCallEvent workflowCall || Config.Utf8Yaml is null || workflowCall.Inputs is null)
+        if (ev.Kind != EventKind.WorkflowCall || Config.Utf8Yaml is null)
+        {
+            return;
+        }
+
+        var workflowCall = ev.AsWorkflowCall();
+        if (!workflowCall.Inputs.HasValue)
         {
             return;
         }
@@ -19,17 +25,17 @@ public sealed class WorkflowCallInputDefaultRule() : RuleBase(RuleId.WorkflowCal
         for (var i = 0; i < workflowCall.Inputs.Count; i++)
         {
             var input = workflowCall.Inputs[i];
-            ValidateInputDefault(workflowCall, input);
+            ValidateInputDefault(ev, input);
         }
     }
 
-    private void ValidateInputDefault(WorkflowCallEvent workflowCall, WorkflowCallEventInput input)
+    private void ValidateInputDefault(EventRef workflowCall, WorkflowCallEventInputRef input)
     {
         // Check required+default conflict
-        if (input.Required.HasValue && Arena.GetBoolValue(input.Required) && input.Default.HasValue)
+        if (input.Required.HasValue && input.Required.Value && input.Default.HasValue)
         {
-            var inputName = Decode(Arena.GetStringSlice(input.Name));
-            AddEventError(workflowCall, $"workflow_call input '{inputName}' has the default value but is also required. if an input is required, its default value will never be used", Arena.GetStringRange(input.Default));
+            var inputName = input.Name.Decode();
+            AddEventError(workflowCall, $"workflow_call input '{inputName}' has the default value but is also required. if an input is required, its default value will never be used", input.Default.Range);
         }
 
         if (!input.Default.HasValue || IsExpressionOrInterpolation(input.Default))
@@ -37,30 +43,30 @@ public sealed class WorkflowCallInputDefaultRule() : RuleBase(RuleId.WorkflowCal
             return;
         }
 
-        var defaultValue = Arena.GetStringValue(input.Default);
+        var defaultValue = input.Default.Value;
         switch (input.Type)
         {
             case WorkflowCallInputType.Boolean:
                 if (!defaultValue.SequenceEqual("true"u8) && !defaultValue.SequenceEqual("false"u8))
                 {
-                    var inputName = Decode(Arena.GetStringSlice(input.Name));
-                    AddEventError(workflowCall, $"workflow_call input '{inputName}' has boolean type but default is not 'true' or 'false'", Arena.GetStringRange(input.Default));
+                    var inputName = input.Name.Decode();
+                    AddEventError(workflowCall, $"workflow_call input '{inputName}' has boolean type but default is not 'true' or 'false'", input.Default.Range);
                 }
 
                 break;
             case WorkflowCallInputType.Number:
                 if (!double.TryParse(defaultValue, NumberStyles.Float, CultureInfo.InvariantCulture, out _))
                 {
-                    var inputName = Decode(Arena.GetStringSlice(input.Name));
-                    AddEventError(workflowCall, $"workflow_call input '{inputName}' has number type but default is not numeric", Arena.GetStringRange(input.Default));
+                    var inputName = input.Name.Decode();
+                    AddEventError(workflowCall, $"workflow_call input '{inputName}' has number type but default is not numeric", input.Default.Range);
                 }
 
                 break;
         }
     }
 
-    private bool IsExpressionOrInterpolation(StringNodeId node)
+    private bool IsExpressionOrInterpolation(StringRef node)
     {
-        return ExpressionScanHelpers.ContainsExpressionMarker(node, Arena);
+        return ExpressionScanHelpers.ContainsExpressionMarker(node.Id, Arena);
     }
 }

@@ -9,46 +9,46 @@ public sealed class PermissionsRule() : RuleBase(RuleId.Permissions)
 {
     public override string Name => "Permissions Rule";
 
-    public override void VisitWorkflowPre(Workflow workflow)
+    public override void VisitWorkflowPre(WorkflowRef workflow)
     {
         base.VisitWorkflowPre(workflow);
-        ValidatePermissions(workflow.Permissions, workflow, null);
+        ValidatePermissions(workflow.Permissions, workflow, default);
     }
 
-    public override void VisitJobPre(Job job)
+    public override void VisitJobPre(JobRef job)
     {
-        ValidatePermissions(job.Permissions, null, job);
+        ValidatePermissions(job.Permissions, default, job);
     }
 
-    private void ValidatePermissions(Permissions? permissions, Workflow? workflow, Job? job)
+    private void ValidatePermissions(PermissionsRef permissions, WorkflowRef workflow, JobRef job)
     {
-        if (permissions is null)
+        if (!permissions.HasValue)
         {
             return;
         }
 
         if (permissions.All.HasValue)
         {
-            var value = Decode(Arena.GetStringSlice(permissions.All));
+            var value = permissions.All.Decode();
             if (value.Length == 0)
             {
-                AddError("\"\" is invalid for permission for all the scopes. available values are \"read-all\", \"write-all\" or {}", Arena.GetStringRange(permissions.All), workflow, job);
+                AddError("\"\" is invalid for permission for all the scopes. available values are \"read-all\", \"write-all\" or {}", permissions.All.Range, workflow, job);
             }
             else if (!string.Equals(value, "read-all", StringComparison.Ordinal)
                 && !string.Equals(value, "write-all", StringComparison.Ordinal))
             {
-                AddError($"permissions scalar must be 'read-all' or 'write-all', but got '{value}'", Arena.GetStringRange(permissions.All), workflow, job);
+                AddError($"permissions scalar must be 'read-all' or 'write-all', but got '{value}'", permissions.All.Range, workflow, job);
             }
             else
             {
-                var hint = workflow is not null
+                var hint = workflow.HasValue
                     ? "use explicit per-scope mapping in each job's permissions instead"
                     : "use explicit per-scope mapping instead";
-                AddWarning($"permissions scalar '{value}' is overly broad; {hint}", Arena.GetStringRange(permissions.All), workflow, job);
+                AddWarning($"permissions scalar '{value}' is overly broad; {hint}", permissions.All.Range, workflow, job);
             }
         }
 
-        if (permissions.Scopes is null)
+        if (!permissions.Scopes.HasValue)
         {
             return;
         }
@@ -56,13 +56,13 @@ public sealed class PermissionsRule() : RuleBase(RuleId.Permissions)
         foreach (var pair in permissions.Scopes)
         {
             var scope = pair.Value;
-            var scopeName = Decode(scope.NameText);
-            var value = Decode(scope.ValueText);
+            var scopeName = scope.NameText.Decode();
+            var value = scope.ValueText.Decode();
 
             // Validate scope name
             if (!PermissionScopes.IsKnownScope(scopeName))
             {
-                AddError($"unknown permission scope \"{scopeName}\". all available permission scopes are {PermissionScopes.AllScopesList}", Arena.GetStringRange(scope.Name), workflow, job);
+                AddError($"unknown permission scope \"{scopeName}\". all available permission scopes are {PermissionScopes.AllScopesList}", scope.Name.Range, workflow, job);
                 continue;
             }
 
@@ -83,35 +83,35 @@ public sealed class PermissionsRule() : RuleBase(RuleId.Permissions)
                 if (!isAllowed)
                 {
                     var allowedList = string.Join(", ", allowedValues.Select(v => $"\"{v}\""));
-                    AddError($"\"{value}\" is invalid as permission of scope \"{scopeName}\". available values are {allowedList}", Arena.GetStringRange(scope.Value), workflow, job);
+                    AddError($"\"{value}\" is invalid as permission of scope \"{scopeName}\". available values are {allowedList}", scope.Value.Range, workflow, job);
                 }
             }
         }
     }
 
-    private void AddError(string message, TextRange location, Workflow? workflow, Job? job)
+    private void AddError(string message, TextRange location, WorkflowRef workflow, JobRef job)
     {
-        if (job is not null)
+        if (job.HasValue)
         {
             AddJobError(job, message, location);
             return;
         }
 
-        if (workflow is not null)
+        if (workflow.HasValue)
         {
             AddWorkflowError(workflow, message, location);
         }
     }
 
-    private void AddWarning(string message, TextRange location, Workflow? workflow, Job? job)
+    private void AddWarning(string message, TextRange location, WorkflowRef workflow, JobRef job)
     {
-        if (job is not null)
+        if (job.HasValue)
         {
             AddJobWarning(job, message, location);
             return;
         }
 
-        if (workflow is not null)
+        if (workflow.HasValue)
         {
             AddWorkflowWarning(workflow, message, location);
         }

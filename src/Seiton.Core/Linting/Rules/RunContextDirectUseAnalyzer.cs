@@ -20,13 +20,13 @@ internal static class RunContextDirectUseAnalyzer
 
     // Expression Location
 
-    internal static TextRange BuildExpressionLocation(AstArena arena, byte[] utf8Yaml, StringNodeId runNode, int bodyStart, int nextSearchStart, int[] lineStarts)
+    internal static TextRange BuildExpressionLocation(byte[] utf8Yaml, StringRef runNode, int bodyStart, int nextSearchStart, int[] lineStarts)
     {
-        var absoluteStart = arena.GetStringSlice(runNode).Offset + bodyStart - 3;
+        var absoluteStart = runNode.Slice.Offset + bodyStart - 3;
         var absoluteLength = nextSearchStart - (bodyStart - 3);
         if (absoluteStart < 0 || absoluteLength <= 0)
         {
-            return arena.GetStringRange(runNode);
+            return runNode.Range;
         }
 
         var start = OffsetToLineColumn(lineStarts, absoluteStart);
@@ -47,52 +47,61 @@ internal static class RunContextDirectUseAnalyzer
     /// Returns <c>true</c> for PowerShell, <c>false</c> for POSIX shells, or <c>null</c> when the shell
     /// is expression-valued (dynamic) and the correct fix syntax cannot be determined at lint time.
     /// </summary>
-    internal static bool? IsPowerShellWithDefaults(AstArena arena, Step step, Job? currentJob, Workflow? currentWorkflow, byte[] utf8Yaml)
+    internal static bool? IsPowerShellWithDefaults(StepRef step, JobRef currentJob, WorkflowRef currentWorkflow, byte[] utf8Yaml)
     {
         // Priority 1: step-level shell
-        if (step.Exec is ExecRun run && run.Shell.HasValue)
+        if (step.Exec.Kind == StepExecKind.Run)
         {
-            if (ContainsExpressionMarker(run.Shell, arena))
+            var run = step.Exec.AsRun();
+            if (run.Shell.HasValue)
             {
-                return null;
-            }
+                if (ContainsExpressionMarker(run.Shell))
+                {
+                    return null;
+                }
 
-            return IsPowerShell(arena, run.Shell, utf8Yaml);
+                return IsPowerShell(run.Shell, utf8Yaml);
+            }
         }
 
         // Priority 2: job defaults
-        if (currentJob?.Defaults?.Run.Shell is { HasValue: true } jobShell)
+        var jobShell = currentJob.Defaults.Run.Shell;
+        if (jobShell.HasValue)
         {
-            if (ContainsExpressionMarker(jobShell, arena))
+            if (ContainsExpressionMarker(jobShell))
             {
                 return null;
             }
 
-            return IsPowerShell(arena, jobShell, utf8Yaml);
+            return IsPowerShell(jobShell, utf8Yaml);
         }
 
         // Priority 3: workflow defaults
-        if (currentWorkflow?.Defaults?.Run.Shell is { HasValue: true } wfShell)
+        var wfShell = currentWorkflow.Defaults.Run.Shell;
+        if (wfShell.HasValue)
         {
-            if (ContainsExpressionMarker(wfShell, arena))
+            if (ContainsExpressionMarker(wfShell))
             {
                 return null;
             }
 
-            return IsPowerShell(arena, wfShell, utf8Yaml);
+            return IsPowerShell(wfShell, utf8Yaml);
         }
 
         return false;
     }
 
-    internal static bool IsPowerShell(AstArena arena, StringNodeId shellNode, byte[] utf8Yaml)
+    internal static bool ContainsExpressionMarker(StringRef node)
+        => node.Expression.HasValue || ExpressionScanHelpers.ContainsExpressionMarker(node.Value);
+
+    internal static bool IsPowerShell(StringRef shellNode, byte[] utf8Yaml)
     {
-        if (!shellNode.HasValue || ContainsExpressionMarker(shellNode, arena))
+        if (!shellNode.HasValue || ContainsExpressionMarker(shellNode))
         {
             return false;
         }
 
-        var shell = arena.GetStringValue(shellNode);
+        var shell = shellNode.Value;
         return shell.SequenceEqual("pwsh"u8)
             || shell.SequenceEqual("powershell"u8)
             || shell.SequenceEqual("Pwsh"u8)
@@ -119,11 +128,11 @@ internal static class RunContextDirectUseAnalyzer
 
     // Env Value Expression Extraction
 
-    internal static bool TryExtractExpressionBody(AstArena arena, StringNodeId node, byte[] utf8Yaml, out ReadOnlySpan<byte> expressionBody)
+    internal static bool TryExtractExpressionBody(StringRef node, byte[] utf8Yaml, out ReadOnlySpan<byte> expressionBody)
     {
         expressionBody = [];
 
-        var value = TrimAsciiWhiteSpace(arena.GetStringValue(node));
+        var value = TrimAsciiWhiteSpace(node.Value);
         if (value.Length == 0)
         {
             return false;
@@ -134,12 +143,12 @@ internal static class RunContextDirectUseAnalyzer
             return true;
         }
 
-        if (!arena.GetStringExpression(node).HasValue)
+        if (!node.Expression.HasValue)
         {
             return false;
         }
 
-        var expression = TrimAsciiWhiteSpace(arena.GetStringValue(arena.GetStringExpression(node)));
+        var expression = TrimAsciiWhiteSpace(node.Expression.Value);
         if (TryExtractEmbeddedExpressionBody(expression, out expressionBody))
         {
             return true;
@@ -693,20 +702,20 @@ internal static class RunContextDirectUseAnalyzer
 
     // Env-Mapping Resolution
 
-    internal static bool TryResolveShellVariableNameInEnv(AstArena arena, Env? env, byte[] utf8Yaml, string targetName, SimpleReferenceParser parser, out string variableName)
+    internal static bool TryResolveShellVariableNameInEnv(EnvRef env, byte[] utf8Yaml, string targetName, SimpleReferenceParser parser, out string variableName)
     {
         variableName = string.Empty;
-        if (env?.Vars is null || env.Vars.Value.Count == 0)
+        if (env.Vars.Count == 0)
         {
             return false;
         }
 
         var matches = 0;
-        foreach (var pair in env.Vars.Value)
+        foreach (var pair in env.Vars)
         {
             var envVar = pair.Value;
-            var nameBytes = arena.GetStringValue(envVar.Name);
-            var nameSliceLength = arena.GetStringSlice(envVar.Name).Length;
+            var nameBytes = envVar.Name.Value;
+            var nameSliceLength = envVar.Name.Slice.Length;
 
             // Span-based identifier validation — avoids string allocation for non-matching entries
             if (!IsValidIdentifierSpan(nameBytes, nameSliceLength))
@@ -714,7 +723,7 @@ internal static class RunContextDirectUseAnalyzer
                 continue;
             }
 
-            if (!TryExtractExpressionBody(arena, envVar.Value, utf8Yaml, out var body)
+            if (!TryExtractExpressionBody(envVar.Value, utf8Yaml, out var body)
                 || !parser(body, out var candidateName)
                 || !string.Equals(candidateName, targetName, StringComparison.Ordinal))
             {
@@ -762,26 +771,25 @@ internal static class RunContextDirectUseAnalyzer
     }
 
     internal static bool TryResolveShellVariableName(
-        AstArena arena,
-        Env? stepEnv, Env? jobEnv, Env? workflowEnv,
+        EnvRef stepEnv, EnvRef jobEnv, EnvRef workflowEnv,
         byte[] utf8Yaml, string targetName, SimpleReferenceParser parser,
         out string variableName)
     {
         variableName = string.Empty;
         var matchCount = 0;
-        if (TryResolveShellVariableNameInEnv(arena, stepEnv, utf8Yaml, targetName, parser, out var stepVariable))
+        if (TryResolveShellVariableNameInEnv(stepEnv, utf8Yaml, targetName, parser, out var stepVariable))
         {
             variableName = stepVariable;
             matchCount++;
         }
 
-        if (TryResolveShellVariableNameInEnv(arena, jobEnv, utf8Yaml, targetName, parser, out var jobVariable))
+        if (TryResolveShellVariableNameInEnv(jobEnv, utf8Yaml, targetName, parser, out var jobVariable))
         {
             variableName = jobVariable;
             matchCount++;
         }
 
-        if (TryResolveShellVariableNameInEnv(arena, workflowEnv, utf8Yaml, targetName, parser, out var workflowVariable))
+        if (TryResolveShellVariableNameInEnv(workflowEnv, utf8Yaml, targetName, parser, out var workflowVariable))
         {
             variableName = workflowVariable;
             matchCount++;
@@ -1184,7 +1192,7 @@ internal static class RunContextDirectUseAnalyzer
     /// mapping <paramref name="envVarName"/> to <c>${{ expressionString }}</c>.
     /// </summary>
     internal static bool TryBuildStepEnvInsertionEdit(
-        AstArena arena, byte[] utf8Yaml, Step step,
+        byte[] utf8Yaml, StepRef step,
         string envVarName, string expressionString, out TextEdit edit)
     {
         edit = default;
@@ -1204,20 +1212,20 @@ internal static class RunContextDirectUseAnalyzer
 
         var stepKeyIndent = GetStepKeyIndentation(utf8Yaml, runLine);
 
-        if (step.Env?.Vars is not null && step.Env.Vars.Value.Count > 0)
+        if (step.Env.Vars.Count > 0)
         {
             if (IsFlowStyleEnv(utf8Yaml, step.Env))
             {
                 return false;
             }
 
-            var lastEnvLine = FindLastEnvEntryLine(arena, utf8Yaml, step.Env);
+            var lastEnvLine = FindLastEnvEntryLine(utf8Yaml, step.Env);
             if (lastEnvLine < 1)
             {
                 return false;
             }
 
-            var envKeyLine = FindEnvKeyLine(arena, utf8Yaml, step.Env);
+            var envKeyLine = FindEnvKeyLine(utf8Yaml, step.Env);
             var childIndent = envKeyLine >= 0
                 ? FixFormatting.GetLineIndentation(utf8Yaml, envKeyLine)
                 : FixFormatting.GetLineIndentation(utf8Yaml, lastEnvLine);
@@ -1230,7 +1238,7 @@ internal static class RunContextDirectUseAnalyzer
         }
 
         // Empty env mapping (env: {}) cannot be extended by insertion
-        if (step.Env is not null)
+        if (step.Env.HasValue)
         {
             return false;
         }
@@ -1250,19 +1258,19 @@ internal static class RunContextDirectUseAnalyzer
 
     /// <summary>Deduplicates an env var name against existing env names in the step/job/workflow scope.</summary>
     internal static string? DeduplicateEnvName(
-        AstArena arena, string baseName,
-        Env? stepEnv, Env? jobEnv, Env? workflowEnv)
+        string baseName,
+        EnvRef stepEnv, EnvRef jobEnv, EnvRef workflowEnv)
     {
         // Fast path: span-based comparison avoids HashSet allocation when no conflict exists
-        if (!EnvContainsNameIgnoreCase(arena, baseName, stepEnv)
-            && !EnvContainsNameIgnoreCase(arena, baseName, jobEnv)
-            && !EnvContainsNameIgnoreCase(arena, baseName, workflowEnv))
+        if (!EnvContainsNameIgnoreCase(baseName, stepEnv)
+            && !EnvContainsNameIgnoreCase(baseName, jobEnv)
+            && !EnvContainsNameIgnoreCase(baseName, workflowEnv))
         {
             return baseName;
         }
 
         // Conflict found — need full set for numbered suffix search
-        var existing = CollectExistingEnvNames(arena, stepEnv, jobEnv, workflowEnv);
+        var existing = CollectExistingEnvNames(stepEnv, jobEnv, workflowEnv);
         for (var i = 2; i <= 99; i++)
         {
             var candidate = baseName + "_" + i;
@@ -1279,16 +1287,16 @@ internal static class RunContextDirectUseAnalyzer
     /// Checks if any env var in <paramref name="env"/> has a name matching <paramref name="name"/>
     /// (case-insensitive, pure span comparison, zero allocation).
     /// </summary>
-    private static bool EnvContainsNameIgnoreCase(AstArena arena, string name, Env? env)
+    private static bool EnvContainsNameIgnoreCase(string name, EnvRef env)
     {
-        if (env?.Vars is null)
+        if (!env.Vars.HasValue)
         {
             return false;
         }
 
-        foreach (var pair in env.Vars.Value)
+        foreach (var pair in env.Vars)
         {
-            var nameBytes = arena.GetStringValue(pair.Value.Name);
+            var nameBytes = pair.Value.Name.Value;
             if (EqualsUtf8AsciiIgnoreCase(nameBytes, name))
             {
                 return true;
@@ -1326,26 +1334,25 @@ internal static class RunContextDirectUseAnalyzer
     }
 
     private static HashSet<string> CollectExistingEnvNames(
-        AstArena arena,
-        Env? stepEnv, Env? jobEnv, Env? workflowEnv)
+        EnvRef stepEnv, EnvRef jobEnv, EnvRef workflowEnv)
     {
         var names = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        CollectEnvNames(arena, stepEnv, names);
-        CollectEnvNames(arena, jobEnv, names);
-        CollectEnvNames(arena, workflowEnv, names);
+        CollectEnvNames(stepEnv, names);
+        CollectEnvNames(jobEnv, names);
+        CollectEnvNames(workflowEnv, names);
         return names;
     }
 
-    private static void CollectEnvNames(AstArena arena, Env? env, HashSet<string> names)
+    private static void CollectEnvNames(EnvRef env, HashSet<string> names)
     {
-        if (env?.Vars is null)
+        if (!env.Vars.HasValue)
         {
             return;
         }
 
-        foreach (var pair in env.Vars.Value)
+        foreach (var pair in env.Vars)
         {
-            var nameBytes = arena.GetStringValue(pair.Value.Name);
+            var nameBytes = pair.Value.Name.Value;
             var nameIndex = 0;
             if (TryReadIdentifier(nameBytes, ref nameIndex, out var name) && nameIndex == nameBytes.Length)
             {
@@ -1354,17 +1361,17 @@ internal static class RunContextDirectUseAnalyzer
         }
     }
 
-    internal static int FindLastEnvEntryLine(AstArena arena, byte[] utf8Yaml, Env env)
+    internal static int FindLastEnvEntryLine(byte[] utf8Yaml, EnvRef env)
     {
-        if (env.Vars is null)
+        if (!env.Vars.HasValue)
         {
             return -1;
         }
 
         var maxEndOffset = 0;
-        foreach (var pair in env.Vars.Value)
+        foreach (var pair in env.Vars)
         {
-            var valueRange = arena.GetStringRange(pair.Value.Value);
+            var valueRange = pair.Value.Value.Range;
             var endOffset = valueRange.Start + valueRange.Length;
             if (endOffset > maxEndOffset)
             {
@@ -1380,16 +1387,16 @@ internal static class RunContextDirectUseAnalyzer
         return Utf8YamlLineHelpers.FindLineNumberFromOffset(utf8Yaml, maxEndOffset - 1);
     }
 
-    internal static int FindEnvKeyLine(AstArena arena, byte[] utf8Yaml, Env env)
+    internal static int FindEnvKeyLine(byte[] utf8Yaml, EnvRef env)
     {
-        if (env.Vars is null)
+        if (!env.Vars.HasValue)
         {
             return -1;
         }
 
-        foreach (var pair in env.Vars.Value)
+        foreach (var pair in env.Vars)
         {
-            var nameRange = arena.GetStringRange(pair.Value.Name);
+            var nameRange = pair.Value.Name.Range;
             if (nameRange.Start >= 0)
             {
                 return Utf8YamlLineHelpers.FindLineNumberFromOffset(utf8Yaml, nameRange.Start);
@@ -1399,7 +1406,7 @@ internal static class RunContextDirectUseAnalyzer
         return -1;
     }
 
-    internal static bool IsFlowStyleEnv(byte[] utf8Yaml, Env env)
+    internal static bool IsFlowStyleEnv(byte[] utf8Yaml, EnvRef env)
     {
         if (env.Range.Start <= 0 || env.Range.Start > utf8Yaml.Length)
         {

@@ -11,7 +11,7 @@ public sealed class SecretsOutsideEnvRule() : RuleBase(RuleId.SecretsOutsideEnv)
 {
     public override string Name => "Secrets Outside Env Rule";
 
-    public override void VisitJobPre(Job job)
+    public override void VisitJobPre(JobRef job)
     {
         if (Config.Utf8Yaml is null)
         {
@@ -23,16 +23,16 @@ public sealed class SecretsOutsideEnvRule() : RuleBase(RuleId.SecretsOutsideEnv)
             AddJobWarning(
                 job,
                 "job.if must not reference secrets context directly; map secrets to env variables and gate with non-secret signals",
-                Arena.GetStringRange(job.If));
+                job.If.Range);
             return;
         }
 
-        if (job.WorkflowCall?.Inputs is null || job.WorkflowCall.Inputs.Value.Count == 0)
+        if (job.WorkflowCall.Inputs.Count == 0)
         {
             return;
         }
 
-        foreach (var pair in job.WorkflowCall.Inputs.Value)
+        foreach (var pair in job.WorkflowCall.Inputs)
         {
             var value = pair.Value.Value;
             if (!ContainsSecretsReference(value))
@@ -40,16 +40,16 @@ public sealed class SecretsOutsideEnvRule() : RuleBase(RuleId.SecretsOutsideEnv)
                 continue;
             }
 
-            var inputName = Decode(Arena.GetStringSlice(pair.Value.Name));
+            var inputName = pair.Value.Name.Decode();
             AddJobWarning(
                 job,
                 $"reusable workflow input '{inputName}' must not consume secrets context directly outside env handoff",
-                Arena.GetStringRange(value));
+                value.Range);
             return;
         }
     }
 
-    public override void VisitStep(Step step)
+    public override void VisitStep(StepRef step)
     {
         if (Config.Utf8Yaml is null)
         {
@@ -61,41 +61,42 @@ public sealed class SecretsOutsideEnvRule() : RuleBase(RuleId.SecretsOutsideEnv)
             AddStepWarning(
                 step,
                 "step.if must not reference secrets context directly; map secrets to env variables and gate with non-secret signals",
-                Arena.GetStringRange(step.If));
+                step.If.Range);
             return;
         }
 
-        if (step.Exec is ExecAction action)
+        if (step.Exec.Kind == StepExecKind.Action)
         {
+            var action = step.Exec.AsAction();
             if (ContainsSecretsReference(action.Uses))
             {
                 AddStepWarning(
                     step,
                     "action uses must not interpolate secrets context directly outside env handoff",
-                    Arena.GetStringRange(action.Uses));
+                    action.Uses.Range);
                 return;
             }
         }
     }
 
-    private bool ContainsSecretsReference(StringNodeId node)
+    private bool ContainsSecretsReference(StringRef node)
     {
         if (Config.Utf8Yaml is null || !node.HasValue)
         {
             return false;
         }
 
-        if (ContainsSecretsReferenceInValue(Arena.GetStringValue(node)))
+        if (ContainsSecretsReferenceInValue(node.Value))
         {
             return true;
         }
 
-        if (!Arena.GetStringExpression(node).HasValue)
+        if (!node.Expression.HasValue)
         {
             return false;
         }
 
-        var expression = TrimAsciiWhiteSpace(Arena.GetStringValue(Arena.GetStringExpression(node)));
+        var expression = TrimAsciiWhiteSpace(node.Expression.Value);
         return ContainsSecretsReferenceInExpression(expression);
     }
 

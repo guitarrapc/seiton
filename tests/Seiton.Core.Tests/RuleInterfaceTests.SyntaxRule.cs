@@ -24,34 +24,39 @@ public sealed partial class RuleInterfaceTests
         var sourceBytes = Encoding.UTF8.GetBytes(source);
         var arena = new AstArena(sourceBytes);
 
-        var (jobs, _) = SliceMapTestExtensions.CreateSliceMap(
-            (new Utf8String("build"u8), new Job
+        var runPayload = arena.AddExecRun(new ExecRunData
+        {
+            Run = arena.AddString(new Utf8Slice(0, 0), false, default),
+        });
+        var runStep = arena.AddStep(new StepData
+        {
+            ExecKind = StepExecKind.Run,
+            ExecPayload = runPayload,
+        });
+
+        var buildJob = arena.AddJob(new JobData
+        {
+            Id = arena.AddString(
+                new Utf8Slice(source.IndexOf("build", StringComparison.Ordinal), "build".Length),
+                false,
+                new TextRange(0, 0, 1, 1, 1, 1)),
+            RunsOn = arena.AddRunner(new RunnerData()),
+            WorkflowCall = arena.AddWorkflowCall(new WorkflowCallData
             {
-                Id = arena.AddString(
-                    new Utf8Slice(source.IndexOf("build", StringComparison.Ordinal), "build".Length),
-                    false,
-                    new TextRange(0, 0, 1, 1, 1, 1)),
-                RunsOn = new Runner(),
-                WorkflowCall = new WorkflowCall
-                {
-                    Uses = arena.AddString(new Utf8Slice(source.IndexOf("./.github/workflows/reusable.yml", StringComparison.Ordinal), "./.github/workflows/reusable.yml".Length), false, default),
-                },
-                Steps =
-                [
-                    new Step
-                    {
-                        Exec = new ExecRun
-                        {
-                            Kind = StepExecKind.Run,
-                            Run = arena.AddString(new Utf8Slice(0, 0), false, default),
-                        },
-                    },
-                ],
-            }));
+                Uses = arena.AddString(new Utf8Slice(source.IndexOf("./.github/workflows/reusable.yml", StringComparison.Ordinal), "./.github/workflows/reusable.yml".Length), false, default),
+            }),
+            Steps = arena.AddStepIdList([runStep]),
+        });
+        var jobsFirst = arena.JobEntryCount;
+        arena.AddJobEntry(new JobEntryData
+        {
+            Key = new Utf8Slice(source.IndexOf("build", StringComparison.Ordinal), "build".Length),
+            Job = buildJob,
+        });
 
         var workflow = new Workflow
         {
-            Jobs = jobs,
+            Jobs = new NodeRange(jobsFirst, 1),
         };
 
         var visitor = new WorkflowVisitor();
@@ -59,7 +64,7 @@ public sealed partial class RuleInterfaceTests
         rule.SetConfig(new LintConfig { Utf8Yaml = sourceBytes, Arena = arena });
         visitor.AddPass(rule);
 
-        visitor.Visit(workflow);
+        visitor.Visit(new WorkflowRef(arena, workflow));
         var diagnostics = rule.GetDiagnostics();
 
         await Assert.That(diagnostics.Any(x => x.Message.Contains("cannot have both uses and steps", StringComparison.Ordinal))).IsTrue();
@@ -80,40 +85,47 @@ public sealed partial class RuleInterfaceTests
         var buildKeyLength = "build".Length;
 
         var arena = new AstArena(sourceBytes);
-        var inputsEntries = new SliceMap<StringNodeId>.Entry[]
-        {
-            new(new Utf8Slice(inputKeyOffset, inputKeyLength), arena.AddString(new Utf8Slice(0, 0), false, default)),
-        };
 
-        var (jobs, _) = SliceMapTestExtensions.CreateSliceMap(
-            (new Utf8String("build"u8), new Job
-            {
-                Id = arena.AddString(
-                    new Utf8Slice(buildKeyOffset, buildKeyLength),
-                    false,
-                    new TextRange(0, 0, 1, 1, 1, 1)),
-                RunsOn = new Runner(),
-                Steps =
-                [
-                    new Step
-                    {
-                        Exec = new ExecAction
-                        {
-                            Kind = StepExecKind.Action,
-                            Uses = arena.AddString(
-                                new Utf8Slice(0, usesEnd),
-                                false,
-                                new TextRange(0, usesEnd, 1, 1, 1, usesEnd + 1)),
-                            Inputs = new SliceMap<StringNodeId>(inputsEntries, caseSensitive: false),
-                        },
-                        Range = new TextRange(0, 0, 1, 1, 1, 1),
-                    },
-                ],
-            }));
+        var inputsFirst = arena.ActionInputCount;
+        arena.AddActionInput(new ActionInputData
+        {
+            Key = new Utf8Slice(inputKeyOffset, inputKeyLength),
+            Value = arena.AddString(new Utf8Slice(0, 0), false, default),
+        });
+        var actionPayload = arena.AddExecAction(new ExecActionData
+        {
+            Uses = arena.AddString(
+                new Utf8Slice(0, usesEnd),
+                false,
+                new TextRange(0, usesEnd, 1, 1, 1, usesEnd + 1)),
+            Inputs = new NodeRange(inputsFirst, 1),
+        });
+        var actionStep = arena.AddStep(new StepData
+        {
+            ExecKind = StepExecKind.Action,
+            ExecPayload = actionPayload,
+            Range = new TextRange(0, 0, 1, 1, 1, 1),
+        });
+
+        var buildJob = arena.AddJob(new JobData
+        {
+            Id = arena.AddString(
+                new Utf8Slice(buildKeyOffset, buildKeyLength),
+                false,
+                new TextRange(0, 0, 1, 1, 1, 1)),
+            RunsOn = arena.AddRunner(new RunnerData()),
+            Steps = arena.AddStepIdList([actionStep]),
+        });
+        var jobsFirst = arena.JobEntryCount;
+        arena.AddJobEntry(new JobEntryData
+        {
+            Key = new Utf8Slice(buildKeyOffset, buildKeyLength),
+            Job = buildJob,
+        });
 
         var workflow = new Workflow
         {
-            Jobs = jobs,
+            Jobs = new NodeRange(jobsFirst, 1),
         };
 
         var visitor = new WorkflowVisitor();
@@ -121,7 +133,7 @@ public sealed partial class RuleInterfaceTests
         rule.SetConfig(new LintConfig { Utf8Yaml = sourceBytes, Arena = arena });
         visitor.AddPass(rule);
 
-        visitor.Visit(workflow);
+        visitor.Visit(new WorkflowRef(arena, workflow));
         var diagnostics = rule.GetDiagnostics();
 
         await Assert.That(diagnostics.Any(x => x.Severity == DiagnosticSeverity.Warning && x.Message.Contains("unknown input 'fetch-depht' for action 'actions/checkout@v4'", StringComparison.Ordinal))).IsTrue();

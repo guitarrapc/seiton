@@ -10,9 +10,9 @@ public sealed class JobPermissionsRequiredRule() : RuleBase(RuleId.JobPermission
 {
     public override string Name => "Job Permissions Required Rule";
 
-    public override void VisitJobPre(Job job)
+    public override void VisitJobPre(JobRef job)
     {
-        if (job.Permissions is not null)
+        if (job.Permissions.HasValue)
         {
             return;
         }
@@ -20,7 +20,7 @@ public sealed class JobPermissionsRequiredRule() : RuleBase(RuleId.JobPermission
         // Decode the job id into a stack buffer so the diagnostic costs a single string
         // (the message itself) instead of message + intermediate job-id string.
         Span<char> jobIdBuffer = stackalloc char[128];
-        var jobId = DecodeChars(Arena.GetStringSlice(job.Id), jobIdBuffer);
+        var jobId = DecodeChars(job.Id.Slice, jobIdBuffer);
         var message = $"jobs.'{jobId}' does not have permissions defined; set explicit permissions to follow least-privilege principle";
         if (Config.Fix.Enabled && Config.Utf8Yaml is not null && TryBuildPermissionsInsertFix(job, Config.Utf8Yaml, out var fix))
         {
@@ -31,7 +31,7 @@ public sealed class JobPermissionsRequiredRule() : RuleBase(RuleId.JobPermission
         AddJobWarning(job, message);
     }
 
-    private bool TryBuildPermissionsInsertFix(Job job, byte[] utf8Yaml, out DiagnosticFix fix)
+    private bool TryBuildPermissionsInsertFix(JobRef job, byte[] utf8Yaml, out DiagnosticFix fix)
     {
         fix = default;
 
@@ -40,7 +40,7 @@ public sealed class JobPermissionsRequiredRule() : RuleBase(RuleId.JobPermission
             return false;
         }
 
-        var jobLine = Arena.GetStringRange(job.Id).StartLine;
+        var jobLine = job.Id.Range.StartLine;
         if (jobLine < 1)
         {
             return false;
@@ -124,7 +124,7 @@ public sealed class JobPermissionsRequiredRule() : RuleBase(RuleId.JobPermission
         return true;
     }
 
-    private string BuildPermissionsText(Job job, string parentIndent, string bodyIndent, string lineEnding)
+    private string BuildPermissionsText(JobRef job, string parentIndent, string bodyIndent, string lineEnding)
     {
         var merged = CollectRequiredPermissions(job);
         if (merged.Count == 0)
@@ -152,23 +152,24 @@ public sealed class JobPermissionsRequiredRule() : RuleBase(RuleId.JobPermission
         return sb.ToString();
     }
 
-    private Dictionary<string, string> CollectRequiredPermissions(Job job)
+    private Dictionary<string, string> CollectRequiredPermissions(JobRef job)
     {
         var merged = new Dictionary<string, string>(StringComparer.Ordinal);
 
-        if (job.Steps is null)
+        if (!job.Steps.HasValue)
         {
             return merged;
         }
 
         foreach (var step in job.Steps)
         {
-            if (step.Exec is not ExecAction action)
+            if (step.Exec.Kind != StepExecKind.Action)
             {
                 continue;
             }
 
-            var usesValue = Arena.GetStringValue(action.Uses);
+            var action = step.Exec.AsAction();
+            var usesValue = action.Uses.Value;
             if (usesValue.IsEmpty)
             {
                 continue;

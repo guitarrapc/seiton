@@ -44,6 +44,19 @@ Therefore the parser uses a hybrid model:
 3. Rule-style semantic validation over parsed model.
 4. Optional external schema and generated metadata as supporting data, not primary truth.
 
+## AST Storage Model (Data-Oriented)
+
+The AST is not an object graph. Every composite node is a struct row in a typed `NodeTable<T>` owned by `AstArena`:
+
+1. Handles are 1-based typed ID record structs (`JobId`, `StepId`, ...); `default` = absent.
+2. Child lists are `(first, count)` ranges — over shared ID stores (`StringIdRange`, `StepIdRange`) when nested parsing makes row tables non-contiguous, or `NodeRange` directly over contiguous rows (key-embedded maps).
+3. Maps embed the key `Utf8Slice` in the row; lookup is a linear scan within the range. Case sensitivity is fixed per map type (permissions scopes and env vars are case-sensitive; all others case-insensitive).
+4. Polymorphic nodes are tagged unions: a `Kind` enum (`None = 0` first) plus a 1-based payload index into a kind-specific payload table (`StepExecKind`, `EventKind`, `RawYamlKind`).
+5. Consumers (rules, tests) read through readonly-struct Ref facades (`WorkflowRef` / `JobRef` / `StepRef` / `StringRef`, ...); default refs chain safely (`HasValue == false`, never throw).
+6. Arena reset clears table counters only — no object pools, no per-node `Reset()`, no manual buffer registration. A DEBUG-only generation counter turns use-after-dispose into an immediate exception.
+
+Contract details: `.github/docs/Seiton_Parser_csharp_spec.md` §2. Design conventions, invariants (lifecycle wiring, contiguity rule, incremental-parse invariants), and lessons learned: `.github/docs/architecture_spec_ast.md`.
+
 ## Layered Architecture
 
 ### 1) Input and YAML Stream Layer

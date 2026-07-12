@@ -9,30 +9,31 @@ public sealed class IfCondRule() : RuleBase(RuleId.IfCond)
 {
     public override string Name => "If Condition Rule";
 
-    public override void VisitJobPre(Job job)
+    public override void VisitJobPre(JobRef job)
     {
-        ValidateCondition(job.If, job, null, job.IfKeyRange);
+        ValidateCondition(job.If, job, default, job.IfKeyRange);
 
         // snapshot.if
-        if (job.Snapshot is { } snapshot)
+        var snapshot = job.Snapshot;
+        if (snapshot.HasValue)
         {
-            ValidateCondition(snapshot.If, job, null, snapshot.IfKeyRange);
+            ValidateCondition(snapshot.If, job, default, snapshot.IfKeyRange);
         }
     }
 
-    public override void VisitStep(Step step)
+    public override void VisitStep(StepRef step)
     {
-        ValidateCondition(step.If, null, step, step.IfKeyRange);
+        ValidateCondition(step.If, default, step, step.IfKeyRange);
     }
 
-    private void ValidateCondition(StringNodeId condition, Job? job, Step? step, TextRange? ifKeyRange)
+    private void ValidateCondition(StringRef condition, JobRef job, StepRef step, TextRange? ifKeyRange)
     {
         if (!condition.HasValue || Config.Utf8Yaml is null)
         {
             return;
         }
 
-        var raw = Arena.GetStringValue(condition);
+        var raw = condition.Value;
         if (raw.Length == 0)
         {
             return;
@@ -40,7 +41,7 @@ public sealed class IfCondRule() : RuleBase(RuleId.IfCond)
 
         // For block scalars (trailing \n), report at the block indicator position (same line as if: key)
         // instead of the content position (next line). Scan backward from content start to find | or >.
-        var diagRange = Arena.GetStringRange(condition);
+        var diagRange = condition.Range;
         if (raw[raw.Length - 1] == (byte)'\n' && ifKeyRange is { } kr)
         {
             var yaml = Config.Utf8Yaml;
@@ -84,12 +85,12 @@ public sealed class IfCondRule() : RuleBase(RuleId.IfCond)
         {
             var conditionText = FormatConditionText(raw);
             var message = $"if: condition \"{conditionText}\" is always evaluated to true because extra characters are around ${{{{ }}}}";
-            if (job is not null)
+            if (job.HasValue)
             {
                 AddJobWarning(job, message, diagRange);
             }
 
-            if (step is not null)
+            if (step.HasValue)
             {
                 AddStepWarning(step, message, diagRange);
             }
@@ -102,12 +103,12 @@ public sealed class IfCondRule() : RuleBase(RuleId.IfCond)
         var parseResult = Config.ParseExpression(expression);
         if (!parseResult.HasRoot || parseResult.Diagnostics.Length > 0)
         {
-            if (job is not null)
+            if (job.HasValue)
             {
                 AddJobWarning(job, "job if condition contains syntax errors", diagRange);
             }
 
-            if (step is not null)
+            if (step.HasValue)
             {
                 AddStepWarning(step, "step if condition contains syntax errors", diagRange);
             }
@@ -119,12 +120,12 @@ public sealed class IfCondRule() : RuleBase(RuleId.IfCond)
         {
             var expressionText = Encoding.UTF8.GetString(expression).Trim();
             var message = $"constant expression \"{expressionText}\" in condition. remove the if: section";
-            if (job is not null)
+            if (job.HasValue)
             {
                 AddJobWarning(job, message, diagRange);
             }
 
-            if (step is not null)
+            if (step.HasValue)
             {
                 AddStepWarning(step, message, diagRange);
             }

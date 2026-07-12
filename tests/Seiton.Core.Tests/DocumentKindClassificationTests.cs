@@ -39,9 +39,10 @@ public sealed class DocumentKindClassificationTests
         await Assert.That(result.Classification.FinalKind).IsEqualTo(DocumentKind.ActionMetadata);
         await Assert.That(result.ParseResult.Workflow).IsNull();
         await Assert.That(result.ParseResult.ActionMetadata).IsNotNull();
-        await Assert.That(result.ParseResult.ActionMetadata!.Runs).IsNotNull();
-        await Assert.That(result.ParseResult.ActionMetadata.Runs!.Steps).IsNotNull();
-        await Assert.That(result.ParseResult.ActionMetadata.Runs.Steps!.Count).IsEqualTo(1);
+        await Assert.That(result.ParseResult.ActionMetadata!.Runs.HasValue).IsTrue();
+        var runs = arena!.GetActionMetadataRuns(result.ParseResult.ActionMetadata.Runs);
+        await Assert.That(runs.Steps.HasValue).IsTrue();
+        await Assert.That(runs.Steps.Count).IsEqualTo(1);
         await Assert.That(result.ParseResult.Diagnostics.Any(d => d.Message.Contains("\"on\" section is missing in workflow", StringComparison.Ordinal))).IsFalse();
         await Assert.That(result.ParseResult.Diagnostics.Any(d => d.Message.Contains("\"jobs\" section is missing in workflow", StringComparison.Ordinal))).IsFalse();
     }

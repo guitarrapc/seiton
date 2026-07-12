@@ -23,31 +23,31 @@ public abstract class OnlineRuleBase : RuleBase, IOnlineRule
     public override bool SupportsDocumentKind(DocumentKind documentKind)
         => documentKind == DocumentKind.Workflow;
 
-    public override void VisitWorkflowPre(Workflow workflow)
+    public override void VisitWorkflowPre(WorkflowRef workflow)
     {
         base.VisitWorkflowPre(workflow);
         _targets.Clear();
     }
 
-    public override void VisitJobPre(Job job)
+    public override void VisitJobPre(JobRef job)
     {
-        if (job.WorkflowCall is not null)
+        if (job.WorkflowCall.HasValue)
         {
             TryCollectTarget(job.WorkflowCall.Uses);
         }
     }
 
-    public override void VisitStep(Step step)
+    public override void VisitStep(StepRef step)
     {
-        if (step.Exec is ExecAction action)
+        if (step.Exec.Kind == StepExecKind.Action)
         {
-            TryCollectTarget(action.Uses);
+            TryCollectTarget(step.Exec.AsAction().Uses);
         }
     }
 
-    private void TryCollectTarget(StringNodeId usesNode)
+    private void TryCollectTarget(StringRef usesNode)
     {
-        var usesBytes = Arena.GetStringValue(usesNode);
+        var usesBytes = usesNode.Value;
         if (usesBytes.IsEmpty)
         {
             return;
@@ -61,7 +61,7 @@ public abstract class OnlineRuleBase : RuleBase, IOnlineRule
             return;
         }
 
-        _targets.Add(new ActionAuditTarget(usesText, owner, repo, reference, Arena.GetStringRange(usesNode), Config.FilePath!));
+        _targets.Add(new ActionAuditTarget(usesText, owner, repo, reference, usesNode.Range, Config.FilePath!));
     }
 
     public abstract void EvaluateTarget(ActionAuditTarget target, ActionAdvisory? advisory, ActionRefResolution? resolution);
