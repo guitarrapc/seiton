@@ -1,6 +1,4 @@
-﻿using System.Runtime.CompilerServices;
-
-namespace Seiton.Core.Parsing.Ast;
+﻿namespace Seiton.Core.Parsing.Ast;
 
 /// <summary>The root of a parsed workflow document.</summary>
 public readonly struct WorkflowRef
@@ -34,80 +32,79 @@ public readonly struct WorkflowRef
 
     public ConcurrencyRef Concurrency => new(_arena, _node?.Concurrency ?? default);
 
-    public JobRefMap Jobs => new(_arena, _node?.Jobs);
+    public JobRefMap Jobs => new(_arena, _node?.Jobs ?? default);
 
     public TextRange Range => _node?.Range ?? default;
 }
 
 /// <summary>A single job in a workflow.</summary>
-public readonly struct JobRef : IEquatable<JobRef>, INodeRef<Job, JobRef>
+public readonly struct JobRef : IEquatable<JobRef>
 {
     private readonly AstArena? _arena;
-    private readonly Job? _node;
+    private readonly JobId _id;
 
-    internal JobRef(AstArena? arena, Job? node)
+    internal JobRef(AstArena? arena, JobId id)
     {
         _arena = arena;
-        _node = node;
+        _id = id;
     }
 
-    static JobRef INodeRef<Job, JobRef>.Create(AstArena? arena, Job node) => new(arena, node);
+    public bool HasValue => _arena is not null && _id.HasValue;
 
-    public bool HasValue => _node is not null && _arena is not null;
+    public StringRef Id => HasValue ? new(_arena, _arena!.GetJob(_id).Id) : default;
 
-    internal Job? Node => _node;
+    public StringRef Name => HasValue ? new(_arena, _arena!.GetJob(_id).Name) : default;
 
-    public StringRef Id => new(_arena, _node?.Id ?? default);
+    public StringRefList Needs => HasValue ? new(_arena, _arena!.GetJob(_id).Needs) : default;
 
-    public StringRef Name => new(_arena, _node?.Name ?? default);
+    /// <summary>The raw <c>needs:</c> handle range (for callers that resolve via the arena).</summary>
+    internal StringIdRange NeedsRange => HasValue ? _arena!.GetJob(_id).Needs : default;
 
-    public StringRefList Needs => new(_arena, _node?.Needs ?? default);
+    public RunnerRef RunsOn => HasValue ? new(_arena, _arena!.GetJob(_id).RunsOn) : default;
 
-    public RunnerRef RunsOn => new(_arena, _node?.RunsOn ?? default);
+    public TextRange? RunsOnKeyRange => HasValue ? _arena!.GetJob(_id).RunsOnKeyRange : null;
 
-    public TextRange? RunsOnKeyRange => _node?.RunsOnKeyRange;
+    public PermissionsRef Permissions => HasValue ? new(_arena, _arena!.GetJob(_id).Permissions) : default;
 
-    public PermissionsRef Permissions => new(_arena, _node?.Permissions ?? default);
+    public EnvironmentRef Environment => HasValue ? new(_arena, _arena!.GetJob(_id).Environment) : default;
 
-    public EnvironmentRef Environment => new(_arena, _node?.Environment ?? default);
+    public ConcurrencyRef Concurrency => HasValue ? new(_arena, _arena!.GetJob(_id).Concurrency) : default;
 
-    public ConcurrencyRef Concurrency => new(_arena, _node?.Concurrency ?? default);
+    public StringRefMap Outputs => HasValue ? new(_arena, _arena!.GetJob(_id).Outputs) : default;
 
-    public StringRefMap Outputs => new(_arena, _node?.Outputs);
+    public EnvRef Env => HasValue ? new(_arena, _arena!.GetJob(_id).Env) : default;
 
-    public EnvRef Env => new(_arena, _node?.Env ?? default);
+    public DefaultsRef Defaults => HasValue ? new(_arena, _arena!.GetJob(_id).Defaults) : default;
 
-    public DefaultsRef Defaults => new(_arena, _node?.Defaults ?? default);
+    public StringRef If => HasValue ? new(_arena, _arena!.GetJob(_id).If) : default;
 
-    public StringRef If => new(_arena, _node?.If ?? default);
+    public TextRange? IfKeyRange => HasValue ? _arena!.GetJob(_id).IfKeyRange : null;
 
-    public TextRange? IfKeyRange => _node?.IfKeyRange;
+    public StepRefList Steps => HasValue ? new(_arena, _arena!.GetJob(_id).Steps) : default;
 
-    public StepRefList Steps => new(_arena, _node?.Steps ?? default);
+    public TextRange? StepsKeyRange => HasValue ? _arena!.GetJob(_id).StepsKeyRange : null;
 
-    public TextRange? StepsKeyRange => _node?.StepsKeyRange;
+    public FloatRef TimeoutMinutes => HasValue ? new(_arena, _arena!.GetJob(_id).TimeoutMinutes) : default;
 
-    public FloatRef TimeoutMinutes => new(_arena, _node?.TimeoutMinutes ?? default);
+    public StrategyRef Strategy => HasValue ? new(_arena, _arena!.GetJob(_id).Strategy) : default;
 
-    public StrategyRef Strategy => new(_arena, _node?.Strategy ?? default);
+    public BoolRef ContinueOnError => HasValue ? new(_arena, _arena!.GetJob(_id).ContinueOnError) : default;
 
-    public BoolRef ContinueOnError => new(_arena, _node?.ContinueOnError ?? default);
+    public ContainerRef Container => HasValue ? new(_arena, _arena!.GetJob(_id).Container) : default;
 
-    public ContainerRef Container => new(_arena, _node?.Container ?? default);
+    public ServicesRef Services => HasValue ? new(_arena, _arena!.GetJob(_id).Services) : default;
 
-    public ServicesRef Services => new(_arena, _node?.Services ?? default);
+    public WorkflowCallRef WorkflowCall => HasValue ? new(_arena, _arena!.GetJob(_id).WorkflowCall) : default;
 
-    public WorkflowCallRef WorkflowCall => new(_arena, _node?.WorkflowCall ?? default);
+    public SnapshotRef Snapshot => HasValue ? new(_arena, _arena!.GetJob(_id).Snapshot) : default;
 
-    public SnapshotRef Snapshot => new(_arena, _node?.Snapshot ?? default);
+    public TextRange Range => HasValue ? _arena!.GetJob(_id).Range : default;
 
-    public TextRange Range => _node?.Range ?? default;
-
-    public bool Equals(JobRef other) => ReferenceEquals(_node, other._node);
+    public bool Equals(JobRef other) => ReferenceEquals(_arena, other._arena) && _id.Equals(other._id);
 
     public override bool Equals(object? obj) => obj is JobRef other && Equals(other);
 
-    public override int GetHashCode() => _node is null ? 0 : RuntimeHelpers.GetHashCode(_node);
+    public override int GetHashCode() => _id.GetHashCode();
 
     public static bool operator ==(JobRef left, JobRef right) => left.Equals(right);
 

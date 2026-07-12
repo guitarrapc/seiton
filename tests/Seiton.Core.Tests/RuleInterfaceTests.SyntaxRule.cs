@@ -34,24 +34,29 @@ public sealed partial class RuleInterfaceTests
             ExecPayload = runPayload,
         });
 
-        var (jobs, _) = SliceMapTestExtensions.CreateSliceMap(
-            (new Utf8String("build"u8), new Job
+        var buildJob = arena.AddJob(new JobData
+        {
+            Id = arena.AddString(
+                new Utf8Slice(source.IndexOf("build", StringComparison.Ordinal), "build".Length),
+                false,
+                new TextRange(0, 0, 1, 1, 1, 1)),
+            RunsOn = arena.AddRunner(new RunnerData()),
+            WorkflowCall = arena.AddWorkflowCall(new WorkflowCallData
             {
-                Id = arena.AddString(
-                    new Utf8Slice(source.IndexOf("build", StringComparison.Ordinal), "build".Length),
-                    false,
-                    new TextRange(0, 0, 1, 1, 1, 1)),
-                RunsOn = arena.AddRunner(new RunnerData()),
-                WorkflowCall = arena.AddWorkflowCall(new WorkflowCallData
-                {
-                    Uses = arena.AddString(new Utf8Slice(source.IndexOf("./.github/workflows/reusable.yml", StringComparison.Ordinal), "./.github/workflows/reusable.yml".Length), false, default),
-                }),
-                Steps = arena.AddStepIdList([runStep]),
-            }));
+                Uses = arena.AddString(new Utf8Slice(source.IndexOf("./.github/workflows/reusable.yml", StringComparison.Ordinal), "./.github/workflows/reusable.yml".Length), false, default),
+            }),
+            Steps = arena.AddStepIdList([runStep]),
+        });
+        var jobsFirst = arena.JobEntryCount;
+        arena.AddJobEntry(new JobEntryData
+        {
+            Key = new Utf8Slice(source.IndexOf("build", StringComparison.Ordinal), "build".Length),
+            Job = buildJob,
+        });
 
         var workflow = new Workflow
         {
-            Jobs = jobs,
+            Jobs = new NodeRange(jobsFirst, 1),
         };
 
         var visitor = new WorkflowVisitor();
@@ -102,20 +107,25 @@ public sealed partial class RuleInterfaceTests
             Range = new TextRange(0, 0, 1, 1, 1, 1),
         });
 
-        var (jobs, _) = SliceMapTestExtensions.CreateSliceMap(
-            (new Utf8String("build"u8), new Job
-            {
-                Id = arena.AddString(
-                    new Utf8Slice(buildKeyOffset, buildKeyLength),
-                    false,
-                    new TextRange(0, 0, 1, 1, 1, 1)),
-                RunsOn = arena.AddRunner(new RunnerData()),
-                Steps = arena.AddStepIdList([actionStep]),
-            }));
+        var buildJob = arena.AddJob(new JobData
+        {
+            Id = arena.AddString(
+                new Utf8Slice(buildKeyOffset, buildKeyLength),
+                false,
+                new TextRange(0, 0, 1, 1, 1, 1)),
+            RunsOn = arena.AddRunner(new RunnerData()),
+            Steps = arena.AddStepIdList([actionStep]),
+        });
+        var jobsFirst = arena.JobEntryCount;
+        arena.AddJobEntry(new JobEntryData
+        {
+            Key = new Utf8Slice(buildKeyOffset, buildKeyLength),
+            Job = buildJob,
+        });
 
         var workflow = new Workflow
         {
-            Jobs = jobs,
+            Jobs = new NodeRange(jobsFirst, 1),
         };
 
         var visitor = new WorkflowVisitor();

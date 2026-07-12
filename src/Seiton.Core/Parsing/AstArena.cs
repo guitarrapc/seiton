@@ -221,12 +221,13 @@ internal sealed class AstArena : IDisposable
     private NodeTable<ActionMetadataRunsData> _actionMetadataRunsTable;
     private NodeTable<ActionMetadataBrandingData> _actionMetadataBrandingTable;
 
-    // Object pools for composite AST nodes (reused across parse calls)
-    private Job[] _jobs;
-    private int _jobCount;
-
-    // Object pools for section AST nodes (Permissions, Env, Runner, ...).
-    // Same reuse semantics as the Job/Step pools above, via AstNodePool<T>.
+    // Job family tables (Stage 3). Job rows are addressed by JobId; the workflow jobs
+    // map is a NodeRange over key-embedded JobEntryData rows (key + JobId indirection so
+    // incremental parse can splice reused JobIds next to freshly parsed ones), and job
+    // outputs maps are NodeRanges over key-embedded JobOutputData rows.
+    private NodeTable<JobData> _jobTable;
+    private NodeTable<JobEntryData> _jobEntryTable;
+    private NodeTable<JobOutputData> _jobOutputTable;
 
     // D-1: Pooled diagnostics buffer registered by ParseClassified/ParseIncremental.
     // Returned to ArrayPool<Diagnostic>.Shared on Dispose.
@@ -249,7 +250,6 @@ internal sealed class AstArena : IDisposable
         _bools = ArrayPool<BoolNodeData>.Shared.Rent(boolCapacity);
         _ints = ArrayPool<IntNodeData>.Shared.Rent(intCapacity);
         _floats = ArrayPool<FloatNodeData>.Shared.Rent(floatCapacity);
-        _jobs = new Job[DefaultJobCapacity];
     }
 
     /// <summary>
@@ -365,12 +365,6 @@ internal sealed class AstArena : IDisposable
         }
         _sliceMapBufferCount = 0;
 
-        // Reset pooled objects to release references to prior AST graphs (Steps lists, SliceMaps, etc.)
-        // This prevents memory retention across parse calls, which is critical in WASM.
-        for (var i = 0; i < _jobCount; i++) _jobs[i]?.Reset();
-
-        // Section node pools: reset allocated nodes and cap retained capacity
-
         // Data-oriented node tables: clear counts, cap retained capacity
         _stringIdItems.Reset();
         _permissionsTable.Reset();
@@ -424,6 +418,9 @@ internal sealed class AstArena : IDisposable
         _actionMetadataOutputTable.Reset();
         _actionMetadataRunsTable.Reset();
         _actionMetadataBrandingTable.Reset();
+        _jobTable.Reset();
+        _jobEntryTable.Reset();
+        _jobOutputTable.Reset();
         _stringIdItems.ReleaseOversized(DefaultStringIdItemsRetainedCapacity);
         _permissionsTable.ReleaseOversized(DefaultNodeTableRetainedCapacity);
         _permissionScopeTable.ReleaseOversized(DefaultStringIdItemsRetainedCapacity);
@@ -476,34 +473,26 @@ internal sealed class AstArena : IDisposable
         _actionMetadataOutputTable.ReleaseOversized(DefaultStringIdItemsRetainedCapacity);
         _actionMetadataRunsTable.ReleaseOversized(DefaultNodeTableRetainedCapacity);
         _actionMetadataBrandingTable.ReleaseOversized(DefaultNodeTableRetainedCapacity);
-
-        // Capture per-parse usage before the counters reset — the shrink policy below
-        // retains pooled instances up to the most recent use.
-        var jobsUsed = _jobCount;
+        _jobTable.ReleaseOversized(DefaultNodeTableRetainedCapacity);
+        _jobEntryTable.ReleaseOversized(DefaultNodeTableRetainedCapacity);
+        _jobOutputTable.ReleaseOversized(DefaultStringIdItemsRetainedCapacity);
 
         _stringCount = 0;
         _boolCount = 0;
         _intCount = 0;
         _floatCount = 0;
-        _jobCount = 0;
         _source = [];
 
         if (cached is null)
         {
-            // Cap backing arrays to prevent unbounded growth of the ThreadStatic cache,
-            // but retain at least what THIS parse used: shrinking straight to the default
-            // would discard pooled instances the very next parse of the same document
-            // re-allocates, turning the pool into a per-parse alloc/free ping-pong for any
-            // file above default capacity. Retention follows the most recent parse with a
-            // one-parse lag, so a small parse after a large one still releases the peak
-            // (the WASM memory concern the caps exist for).
-            // Scalar arrays go through ArrayPool (re-renting large buckets is allocation-free),
-            // so they keep the plain default cap.
+            // Cap backing arrays to prevent unbounded growth of the ThreadStatic cache
+            // (the WASM memory concern the caps exist for). Scalar arrays go through
+            // ArrayPool (re-renting large buckets is allocation-free), so shrinking to
+            // the default cap does not cause per-parse alloc/free ping-pong.
             ShrinkIfOversized(ref _strings, DefaultStringCapacity);
             ShrinkIfOversized(ref _bools, DefaultBoolCapacity);
             ShrinkIfOversized(ref _ints, DefaultIntCapacity);
             ShrinkIfOversized(ref _floats, DefaultFloatCapacity);
-            ShrinkObjectPoolIfOversized(ref _jobs, Math.Max(DefaultJobCapacity, jobsUsed));
             cached = this;
         }
         else
@@ -565,11 +554,13 @@ internal sealed class AstArena : IDisposable
             _actionMetadataOutputTable.ReleaseAll();
             _actionMetadataRunsTable.ReleaseAll();
             _actionMetadataBrandingTable.ReleaseAll();
+            _jobTable.ReleaseAll();
+            _jobEntryTable.ReleaseAll();
+            _jobOutputTable.ReleaseAll();
             _strings = null!;
             _bools = null!;
             _ints = null!;
             _floats = null!;
-            _jobs = null!;
         }
     }
 
@@ -578,9 +569,6 @@ internal sealed class AstArena : IDisposable
     private const int DefaultBoolCapacity = 32;
     private const int DefaultIntCapacity = 16;
     private const int DefaultFloatCapacity = 8;
-
-    // Object pool default capacities (retain up to these sizes across parses)
-    private const int DefaultJobCapacity = 24;
 
     // Section node pool default capacities. Env appears per step + per job + workflow-level,
     // Runner/Strategy/Matrix/MatrixRow per job, the rest are occasional per-job sections.
@@ -621,7 +609,6 @@ internal sealed class AstArena : IDisposable
         _boolCount = 0;
         _intCount = 0;
         _floatCount = 0;
-        _jobCount = 0;
         _stringIdItems.Reset();
         _permissionsTable.Reset();
         _permissionScopeTable.Reset();
@@ -674,6 +661,9 @@ internal sealed class AstArena : IDisposable
         _actionMetadataOutputTable.Reset();
         _actionMetadataRunsTable.Reset();
         _actionMetadataBrandingTable.Reset();
+        _jobTable.Reset();
+        _jobEntryTable.Reset();
+        _jobOutputTable.Reset();
         EnsureMinCapacity(ref _strings, Math.Max(64, source.Length / 20));
         EnsureMinCapacity(ref _bools, Math.Max(8, source.Length / 200));
         EnsureMinCapacity(ref _ints, Math.Max(4, source.Length / 500));
@@ -898,43 +888,6 @@ internal sealed class AstArena : IDisposable
             array = ArrayPool<T>.Shared.Rent(minCapacity);
         }
     }
-
-    private static void ShrinkObjectPoolIfOversized<T>(ref T[] array, int maxRetainedCapacity) where T : class
-    {
-        if (array.Length > maxRetainedCapacity)
-        {
-            var newArr = new T[maxRetainedCapacity];
-            Array.Copy(array, newArr, maxRetainedCapacity);
-            array = newArr;
-        }
-    }
-
-    private static void GrowObjectPool<T>(ref T[] array) where T : class
-    {
-        var newArr = new T[array.Length * 2];
-        Array.Copy(array, newArr, array.Length);
-        array = newArr;
-    }
-
-    // Object pool allocation methods
-
-    /// <summary>Returns a pooled or new Job instance with all fields reset to default.</summary>
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public Job AllocJob()
-    {
-        if (_jobCount == _jobs.Length) GrowObjectPool(ref _jobs);
-        var obj = _jobs[_jobCount];
-        if (obj is null)
-        {
-            obj = new Job();
-            _jobs[_jobCount] = obj;
-        }
-        obj.Reset();
-        _jobCount++;
-        return obj;
-    }
-
-    // Section node pool allocation methods (same reset-on-alloc semantics as Job above)
 
     // Data-oriented node table accessors (Stage 2)
 
@@ -1452,6 +1405,38 @@ internal sealed class AstArena : IDisposable
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     internal ref readonly SnapshotData GetSnapshot(SnapshotId id) => ref _snapshotTable[id.Index];
 
+    // Job family accessors (Stage 3). Job rows are addressed by JobId; the entries of one
+    // workflow jobs map and the rows of one job outputs map are appended contiguously.
+
+    /// <summary>Appends a <see cref="JobData"/> row and returns its handle.</summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public JobId AddJob(in JobData data) => new(_jobTable.Add(in data) + 1);
+
+    /// <summary>Resolves a <see cref="JobData"/> row.</summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    internal ref readonly JobData GetJob(JobId id) => ref _jobTable[id.Index];
+
+    /// <summary>Appends a <see cref="JobEntryData"/> row (entries of one jobs map must be appended contiguously).</summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public int AddJobEntry(in JobEntryData data) => _jobEntryTable.Add(in data);
+
+    /// <summary>Gets the current job-entry row count (range start capture).</summary>
+    internal int JobEntryCount => _jobEntryTable.Count;
+
+    /// <summary>Resolves one element of a jobs-map <see cref="NodeRange"/>.</summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    internal ref readonly JobEntryData GetJobEntryAt(NodeRange range, int index) => ref _jobEntryTable[range.First + index];
+
+    /// <summary>Appends a <see cref="JobOutputData"/> row (rows of one <c>outputs:</c> map must be appended contiguously).</summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public int AddJobOutput(in JobOutputData data) => _jobOutputTable.Add(in data);
+
+    /// <summary>Gets the current job-output row count (range start capture).</summary>
+    internal int JobOutputCount => _jobOutputTable.Count;
+
+    /// <summary>Resolves one element of a job-outputs <see cref="NodeRange"/>.</summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    internal ref readonly JobOutputData GetJobOutputAt(NodeRange range, int index) => ref _jobOutputTable[range.First + index];
 
     // Incremental parse support
 
@@ -1550,6 +1535,9 @@ internal sealed class AstArena : IDisposable
         _actionMetadataOutputTable.CopyFrom(in source._actionMetadataOutputTable, source._actionMetadataOutputTable.Count);
         _actionMetadataRunsTable.CopyFrom(in source._actionMetadataRunsTable, source._actionMetadataRunsTable.Count);
         _actionMetadataBrandingTable.CopyFrom(in source._actionMetadataBrandingTable, source._actionMetadataBrandingTable.Count);
+        _jobTable.CopyFrom(in source._jobTable, source._jobTable.Count);
+        _jobEntryTable.CopyFrom(in source._jobEntryTable, source._jobEntryTable.Count);
+        _jobOutputTable.CopyFrom(in source._jobOutputTable, source._jobOutputTable.Count);
     }
 
     /// <summary>Gets the current number of string entries in the arena.</summary>
@@ -1563,9 +1551,6 @@ internal sealed class AstArena : IDisposable
 
     /// <summary>Gets the current number of float entries in the arena.</summary>
     internal int FloatCount => _floatCount;
-
-    /// <summary>Gets the number of Job objects allocated from this arena's pool.</summary>
-    internal int JobCount => _jobCount;
 
     // Debug helpers (§6.2 debugging experience)
 

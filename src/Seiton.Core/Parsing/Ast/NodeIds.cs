@@ -472,3 +472,23 @@ public readonly record struct ActionMetadataBrandingId
         get => _raw - 1;
     }
 }
+
+/// <summary>Handle referencing a <see cref="JobData"/> row.</summary>
+public readonly record struct JobId
+{
+    private readonly int _raw;
+
+    internal JobId(int raw) => _raw = raw;
+
+    public bool HasValue
+    {
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        get => _raw > 0;
+    }
+
+    internal int Index
+    {
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        get => _raw - 1;
+    }
+}

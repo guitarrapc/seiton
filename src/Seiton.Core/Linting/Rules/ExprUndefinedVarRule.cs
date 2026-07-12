@@ -236,7 +236,7 @@ public sealed class ExprUndefinedVarRule() : RuleBase(RuleId.ExprUndefinedVar)
             }
 
             var jobsOverride = DynamicContextTypeBuilder.BuildJobsOverride(
-                _currentWorkflow.Node!.Jobs, Config.Utf8Yaml);
+                _currentWorkflow.Jobs, Config.Utf8Yaml);
             var overrides = new (byte[], ExprType)[]
             {
                 jobsOverride,
@@ -269,8 +269,8 @@ public sealed class ExprUndefinedVarRule() : RuleBase(RuleId.ExprUndefinedVar)
         var matrixOverride = DynamicContextTypeBuilder.BuildMatrixOverrideInto(_matrixOverrideProps, job.Strategy.Matrix, yaml);
         var needsOverride = DynamicContextTypeBuilder.BuildNeedsOverrideInto(
             _needsOverrideProps,
-            job.Node!.Needs,
-            _currentWorkflow.Node?.Jobs ?? default,
+            job.NeedsRange,
+            _currentWorkflow.Jobs,
             Arena,
             yaml,
             _localReusableOutputResolverFunc);

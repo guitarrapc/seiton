@@ -16,7 +16,7 @@ namespace Seiton.Core.Parsing.Ast;
 // `.github/docs/plan_data_oriented_ast.md`.
 
 /// <summary>A string scalar in the AST, resolved against its owning arena.</summary>
-public readonly struct StringRef : IEquatable<StringRef>, INodeRef<StringNodeId, StringRef>
+public readonly struct StringRef : IEquatable<StringRef>
 {
     private readonly AstArena? _arena;
     private readonly StringNodeId _id;
@@ -26,8 +26,6 @@ public readonly struct StringRef : IEquatable<StringRef>, INodeRef<StringNodeId,
         _arena = arena;
         _id = id;
     }
-
-    static StringRef INodeRef<StringNodeId, StringRef>.Create(AstArena? arena, StringNodeId node) => new(arena, node);
 
     /// <summary>Whether this ref points to a value present in the document.</summary>
     public bool HasValue => _arena is not null && _id.HasValue;

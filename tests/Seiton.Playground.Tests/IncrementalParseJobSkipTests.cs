@@ -20,9 +20,7 @@ public sealed class IncrementalParseJobSkipTests
 
         var ctx = new IncrementalParseContext();
         var result1 = ctx.ParseIncrementally(yaml1, FilePath);
-
-        // Get reference to the deploy job from first parse
-        var deployJob1 = result1.Workflow.Jobs.GetAt(1).Value;
+        await Assert.That(result1.Workflow.Jobs.Count).IsEqualTo(2);
 
         // Change only the build job (same length: "hello" → "world")
         var yaml2 = Encoding.UTF8.GetBytes(
@@ -33,9 +31,14 @@ public sealed class IncrementalParseJobSkipTests
         await Assert.That(result2.Workflow.HasValue).IsTrue();
         await Assert.That(result2.Workflow.Jobs.Count).IsEqualTo(2);
 
-        // deploy job should be the SAME object instance (reused)
+        // deploy job should be reused (ID-based reuse via BulkImportFrom), build re-parsed
+        await Assert.That(ctx.LastReusedJobs).IsNotNull();
+        await Assert.That(ctx.LastReusedJobs![0]).IsFalse();
+        await Assert.That(ctx.LastReusedJobs![1]).IsTrue();
+
+        // and the reused deploy job must still resolve correctly in the new arena
         var deployJob2 = result2.Workflow.Jobs.GetAt(1).Value;
-        await Assert.That(deployJob1.Equals(deployJob2)).IsTrue();
+        await Assert.That(deployJob2.Steps[0].Exec.AsRun().Run.Decode()).IsEqualTo("echo deploy");
     }
 
     [Test]
@@ -101,7 +104,7 @@ public sealed class IncrementalParseJobSkipTests
 
         var ctx = new IncrementalParseContext();
         var result1 = ctx.ParseIncrementally(yaml1, FilePath);
-        var buildJob1 = result1.Workflow.Jobs.GetAt(0).Value;
+        await Assert.That(result1.Workflow.Jobs.Count).IsEqualTo(2);
 
         // deploy changes to longer text — different total length
         var yaml2 = Encoding.UTF8.GetBytes(
@@ -113,8 +116,10 @@ public sealed class IncrementalParseJobSkipTests
         await Assert.That(result2.Workflow.Jobs.Count).IsEqualTo(2);
 
         // build job should be reused (it's before the edit, same bytes at same offset)
+        await Assert.That(ctx.LastReusedJobs).IsNotNull();
+        await Assert.That(ctx.LastReusedJobs![0]).IsTrue();
         var buildJob2 = result2.Workflow.Jobs.GetAt(0).Value;
-        await Assert.That(buildJob1.Equals(buildJob2)).IsTrue();
+        await Assert.That(buildJob2.Steps[0].Exec.AsRun().Run.Decode()).IsEqualTo("echo ok");
     }
 
     [Test]
@@ -142,8 +147,7 @@ public sealed class IncrementalParseJobSkipTests
 
         var ctx = new IncrementalParseContext();
         var result1 = ctx.ParseIncrementally(yaml1, FilePath);
-        var buildJob1 = result1.Workflow.Jobs.GetAt(0).Value;
-        var deployJob1 = result1.Workflow.Jobs.GetAt(2).Value;
+        await Assert.That(result1.Workflow.Jobs.Count).IsEqualTo(3);
 
         // Change only test job (same length: "test1" → "test2")
         var yaml2 = Encoding.UTF8.GetBytes(
@@ -154,11 +158,16 @@ public sealed class IncrementalParseJobSkipTests
         await Assert.That(result2.Workflow.HasValue).IsTrue();
         await Assert.That(result2.Workflow.Jobs.Count).IsEqualTo(3);
 
-        // build and deploy should be reused (same bytes at same offsets)
+        // build and deploy should be reused (same bytes at same offsets); test re-parsed
+        await Assert.That(ctx.LastReusedJobs).IsNotNull();
+        await Assert.That(ctx.LastReusedJobs![0]).IsTrue();
+        await Assert.That(ctx.LastReusedJobs![1]).IsFalse();
+        await Assert.That(ctx.LastReusedJobs![2]).IsTrue();
+
         var buildJob2 = result2.Workflow.Jobs.GetAt(0).Value;
         var deployJob2 = result2.Workflow.Jobs.GetAt(2).Value;
-        await Assert.That(buildJob1.Equals(buildJob2)).IsTrue();
-        await Assert.That(deployJob1.Equals(deployJob2)).IsTrue();
+        await Assert.That(buildJob2.Steps[0].Exec.AsRun().Run.Decode()).IsEqualTo("echo build");
+        await Assert.That(deployJob2.Steps[0].Exec.AsRun().Run.Decode()).IsEqualTo("echo deploy");
     }
 
     [Test]
@@ -170,7 +179,7 @@ public sealed class IncrementalParseJobSkipTests
 
         var ctx = new IncrementalParseContext();
         var result1 = ctx.ParseIncrementally(yaml1, FilePath);
-        var buildJob1 = result1.Workflow.Jobs.GetAt(0).Value;
+        await Assert.That(result1.Workflow.Jobs.Count).IsEqualTo(1);
 
         // Add a second job
         var yaml2 = Encoding.UTF8.GetBytes(
@@ -181,9 +190,8 @@ public sealed class IncrementalParseJobSkipTests
         await Assert.That(result2.Workflow.HasValue).IsTrue();
         await Assert.That(result2.Workflow.Jobs.Count).IsEqualTo(2);
 
-        // build job should NOT be reused (job count changed → full jobs reparse)
-        var buildJob2 = result2.Workflow.Jobs.GetAt(0).Value;
-        await Assert.That(buildJob1.Equals(buildJob2)).IsFalse();
+        // build job should NOT be reused (job count changed → full parse, no reuse recorded)
+        await Assert.That(ctx.LastReusedJobs).IsNull();
     }
 
     // ─────────────────────────────────────────────────────────────────────

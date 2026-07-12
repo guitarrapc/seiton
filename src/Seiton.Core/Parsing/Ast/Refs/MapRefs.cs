@@ -1,40 +1,38 @@
 ﻿namespace Seiton.Core.Parsing.Ast;
 
-// Map facades over SliceMap<TNode>. Named wrapper types (JobRefMap, StringRefMap, ...)
-// are the stable public contract; RefMap<TNode, TRef> is shared plumbing whose type
-// arguments change in Stage 2 (storage swap). Rule code should never name
-// RefMap<,> explicitly — hold the named wrapper and use foreach/var.
+// Map facades over key-embedded arena row tables. Named wrapper types (JobRefMap,
+// StringRefMap, ...) are the stable public contract; each wraps (arena, NodeRange)
+// over its row table. Rule code should hold the named wrapper and use foreach/var.
 
-/// <summary>Factory contract used by <see cref="RefMap{TNode, TRef}"/> to materialize refs from stored nodes.</summary>
-public interface INodeRef<TNode, TSelf> where TSelf : struct
-{
-    internal static abstract TSelf Create(AstArena? arena, TNode node);
-}
-
-/// <summary>Shared implementation for keyed map facades. Do not name this type in rule code.</summary>
-public readonly struct RefMap<TNode, TRef> where TRef : struct, INodeRef<TNode, TRef>
+/// <summary>The <c>jobs:</c> map of a workflow (case-insensitive keys, row-table backed).</summary>
+public readonly struct JobRefMap
 {
     private readonly AstArena? _arena;
-    private readonly SliceMap<TNode> _map;
-    private readonly bool _hasValue;
+    private readonly NodeRange _range;
 
-    internal RefMap(AstArena? arena, SliceMap<TNode>? map)
+    internal JobRefMap(AstArena? arena, NodeRange range)
     {
         _arena = arena;
-        _map = map ?? default;
-        _hasValue = map.HasValue && arena is not null;
+        _range = range;
     }
 
-    public bool HasValue => _hasValue;
+    public bool HasValue => _arena is not null && _range.HasValue;
 
-    public int Count => _hasValue ? _map.Count : 0;
+    public int Count => _range.Count;
 
-    public bool TryGetValue(ReadOnlySpan<byte> key, out TRef value)
+    public bool TryGetValue(ReadOnlySpan<byte> key, out JobRef value)
     {
-        if (_hasValue && _map.TryGetValue(_arena!.Source, key, out var node))
+        if (_arena is not null)
         {
-            value = TRef.Create(_arena, node);
-            return true;
+            for (var i = 0; i < _range.Count; i++)
+            {
+                ref readonly var entry = ref _arena.GetJobEntryAt(_range, i);
+                if (SliceMap<int>.AsciiEqualsIgnoreCase(entry.Key.AsSpan(_arena.Source), key))
+                {
+                    value = new JobRef(_arena, entry.Job);
+                    return true;
+                }
+            }
         }
 
         value = default;
@@ -46,21 +44,21 @@ public readonly struct RefMap<TNode, TRef> where TRef : struct, INodeRef<TNode, 
     /// <summary>Returns the entry at the given document-order index.</summary>
     public Entry GetAt(int index)
     {
-        if (!_hasValue || (uint)index >= (uint)_map.Count)
+        if (_arena is null || (uint)index >= (uint)_range.Count)
         {
             throw new ArgumentOutOfRangeException(nameof(index));
         }
 
-        ref readonly var entry = ref _map.Entries[index];
-        return new Entry(new KeyRef(_arena, entry.Key), TRef.Create(_arena, entry.Value));
+        ref readonly var entry = ref _arena.GetJobEntryAt(_range, index);
+        return new Entry(new KeyRef(_arena, entry.Key), new JobRef(_arena, entry.Job));
     }
 
-    public Enumerator GetEnumerator() => new(_arena, _hasValue ? _map : default);
+    public Enumerator GetEnumerator() => new(_arena, _range);
 
     /// <summary>A key-value pair yielded during enumeration.</summary>
     public readonly struct Entry
     {
-        internal Entry(KeyRef key, TRef value)
+        internal Entry(KeyRef key, JobRef value)
         {
             Key = key;
             Value = value;
@@ -68,9 +66,9 @@ public readonly struct RefMap<TNode, TRef> where TRef : struct, INodeRef<TNode, 
 
         public KeyRef Key { get; }
 
-        public TRef Value { get; }
+        public JobRef Value { get; }
 
-        public void Deconstruct(out KeyRef key, out TRef value)
+        public void Deconstruct(out KeyRef key, out JobRef value)
         {
             key = Key;
             value = Value;
@@ -80,67 +78,124 @@ public readonly struct RefMap<TNode, TRef> where TRef : struct, INodeRef<TNode, 
     public struct Enumerator
     {
         private readonly AstArena? _arena;
-        private SliceMap<TNode>.Enumerator _inner;
+        private readonly NodeRange _range;
+        private int _index;
 
-        internal Enumerator(AstArena? arena, SliceMap<TNode> map)
+        internal Enumerator(AstArena? arena, NodeRange range)
         {
             _arena = arena;
-            _inner = map.GetEnumerator();
+            _range = range;
+            _index = -1;
         }
 
-        public bool MoveNext() => _inner.MoveNext();
+        public bool MoveNext() => _arena is not null && ++_index < _range.Count;
 
         public readonly Entry Current
         {
             get
             {
-                ref readonly var entry = ref _inner.Current;
-                return new Entry(new KeyRef(_arena, entry.Key), TRef.Create(_arena, entry.Value));
+                ref readonly var entry = ref _arena!.GetJobEntryAt(_range, _index);
+                return new Entry(new KeyRef(_arena, entry.Key), new JobRef(_arena, entry.Job));
             }
         }
     }
 }
 
-/// <summary>The <c>jobs:</c> map of a workflow.</summary>
-public readonly struct JobRefMap
-{
-    private readonly RefMap<Job, JobRef> _core;
-
-    internal JobRefMap(AstArena? arena, SliceMap<Job>? map) => _core = new(arena, map);
-
-    public bool HasValue => _core.HasValue;
-
-    public int Count => _core.Count;
-
-    public bool TryGetValue(ReadOnlySpan<byte> key, out JobRef value) => _core.TryGetValue(key, out value);
-
-    public bool ContainsKey(ReadOnlySpan<byte> key) => _core.ContainsKey(key);
-
-    /// <summary>Returns the entry at the given document-order index.</summary>
-    public RefMap<Job, JobRef>.Entry GetAt(int index) => _core.GetAt(index);
-
-    public RefMap<Job, JobRef>.Enumerator GetEnumerator() => _core.GetEnumerator();
-}
-
-/// <summary>A map whose values are string scalars (e.g. job <c>outputs</c>, action <c>with:</c> inputs).</summary>
+/// <summary>A job <c>outputs:</c> map (case-insensitive keys, row-table backed; values are string scalars).</summary>
 public readonly struct StringRefMap
 {
-    private readonly RefMap<StringNodeId, StringRef> _core;
+    private readonly AstArena? _arena;
+    private readonly NodeRange _range;
 
-    internal StringRefMap(AstArena? arena, SliceMap<StringNodeId>? map) => _core = new(arena, map);
+    internal StringRefMap(AstArena? arena, NodeRange range)
+    {
+        _arena = arena;
+        _range = range;
+    }
 
-    public bool HasValue => _core.HasValue;
+    public bool HasValue => _arena is not null && _range.HasValue;
 
-    public int Count => _core.Count;
+    public int Count => _range.Count;
 
-    public bool TryGetValue(ReadOnlySpan<byte> key, out StringRef value) => _core.TryGetValue(key, out value);
+    public bool TryGetValue(ReadOnlySpan<byte> key, out StringRef value)
+    {
+        if (_arena is not null)
+        {
+            for (var i = 0; i < _range.Count; i++)
+            {
+                ref readonly var row = ref _arena.GetJobOutputAt(_range, i);
+                if (SliceMap<int>.AsciiEqualsIgnoreCase(row.Key.AsSpan(_arena.Source), key))
+                {
+                    value = new StringRef(_arena, row.Value);
+                    return true;
+                }
+            }
+        }
 
-    public bool ContainsKey(ReadOnlySpan<byte> key) => _core.ContainsKey(key);
+        value = default;
+        return false;
+    }
+
+    public bool ContainsKey(ReadOnlySpan<byte> key) => TryGetValue(key, out _);
 
     /// <summary>Returns the entry at the given document-order index.</summary>
-    public RefMap<StringNodeId, StringRef>.Entry GetAt(int index) => _core.GetAt(index);
+    public Entry GetAt(int index)
+    {
+        if (_arena is null || (uint)index >= (uint)_range.Count)
+        {
+            throw new ArgumentOutOfRangeException(nameof(index));
+        }
 
-    public RefMap<StringNodeId, StringRef>.Enumerator GetEnumerator() => _core.GetEnumerator();
+        ref readonly var row = ref _arena.GetJobOutputAt(_range, index);
+        return new Entry(new KeyRef(_arena, row.Key), new StringRef(_arena, row.Value));
+    }
+
+    public Enumerator GetEnumerator() => new(_arena, _range);
+
+    /// <summary>A key-value pair yielded during enumeration.</summary>
+    public readonly struct Entry
+    {
+        internal Entry(KeyRef key, StringRef value)
+        {
+            Key = key;
+            Value = value;
+        }
+
+        public KeyRef Key { get; }
+
+        public StringRef Value { get; }
+
+        public void Deconstruct(out KeyRef key, out StringRef value)
+        {
+            key = Key;
+            value = Value;
+        }
+    }
+
+    public struct Enumerator
+    {
+        private readonly AstArena? _arena;
+        private readonly NodeRange _range;
+        private int _index;
+
+        internal Enumerator(AstArena? arena, NodeRange range)
+        {
+            _arena = arena;
+            _range = range;
+            _index = -1;
+        }
+
+        public bool MoveNext() => _arena is not null && ++_index < _range.Count;
+
+        public readonly Entry Current
+        {
+            get
+            {
+                ref readonly var row = ref _arena!.GetJobOutputAt(_range, _index);
+                return new Entry(new KeyRef(_arena, row.Key), new StringRef(_arena, row.Value));
+            }
+        }
+    }
 }
 
 /// <summary>The <c>with:</c> inputs of an action step (case-insensitive keys, row-table backed).</summary>

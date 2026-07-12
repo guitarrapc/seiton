@@ -162,14 +162,14 @@ public sealed class IncrementalParseTests
     }
 
     /// <summary>
-    /// Regression test: verifies that reused Job objects remain valid after multiple
-    /// incremental parses. This catches the use-after-free bug where disposing a retained
-    /// arena calls Job.Reset() on objects still referenced by the current workflow.
+    /// Regression test: verifies that reused job rows remain valid after multiple
+    /// incremental parses. Reuse is ID-based: BulkImportFrom copies every node table
+    /// wholesale, so a reused JobId (and all IDs/ranges inside its row) must resolve
+    /// in each new arena even though the previous arena is disposed immediately.
     ///
     /// Scenario: only the env section changes (root section), while the job section remains
-    /// byte-identical. This forces job reuse across multiple iterations. If arena lifecycle
-    /// is incorrect (e.g., single-arena retention that disposes the job-owning arena),
-    /// Job.RunsOn and Job.Steps become null after the arena is disposed.
+    /// byte-identical. This forces job reuse across multiple iterations. If a table were
+    /// missing from BulkImportFrom, Job.RunsOn and Job.Steps would stop resolving.
     /// </summary>
     [Test]
     public async Task ParseIncrementally_ReusedJobsSurviveMultipleIncrementalParses()
@@ -216,12 +216,9 @@ public sealed class IncrementalParseTests
     }
 
     /// <summary>
-    /// Regression test: exercises the MaxRetainedArenas cap by performing more incremental
-    /// parses than the cap allows. Verifies that the cap triggers a clean full re-parse
-    /// rather than corrupting data.
-    ///
-    /// This test uses a different job on each "epoch" to force retention accumulation,
-    /// then verifies recovery after cap is hit.
+    /// Regression test: performs many chained incremental parses with reused jobs.
+    /// With ID-based reuse the old arena is disposed after every parse; this verifies
+    /// that long reuse chains never corrupt data or read a disposed arena.
     /// </summary>
     [Test]
     public async Task ParseIncrementally_ExceedsRetentionCap_RecoversByFullReparse()
@@ -282,14 +279,13 @@ public sealed class IncrementalParseTests
     }
 
     /// <summary>
-    /// Regression test: exercises arena retention when the previous incremental arena
-    /// owns a job that is reused in the next iteration. The old heuristic
-    /// (oldArena.JobCount > arena.JobCount) would incorrectly dispose the old arena
-    /// when both have the same JobCount, causing use-after-free.
+    /// Regression test: exercises chained reuse where a job first parsed in an
+    /// intermediate incremental parse is reused by a later incremental parse.
+    /// With ID-based reuse the intermediate arena is disposed immediately; the reused
+    /// JobId must keep resolving because each BulkImportFrom carried its row forward.
     ///
     /// Scenario: Full parse (3 jobs) → Incremental 1 (changes job A, reuses B/C)
-    /// → Incremental 2 (changes job B, reuses A from Incremental 1 arena + C from Full arena).
-    /// The second incremental parse must retain arena from Incremental 1 since it owns the reused A.
+    /// → Incremental 2 (changes job B, reuses A first parsed by Incremental 1 + C from the full parse).
     /// </summary>
     [Test]
     public async Task ParseIncrementally_RetainsIntermediateArenaOwningReusedJob()

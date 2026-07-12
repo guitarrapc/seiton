@@ -17,7 +17,8 @@ public sealed class Workflow
 
     public ConcurrencyId Concurrency { get; internal set; }
 
-    public SliceMap<Job> Jobs { get; internal set; }
+    /// <summary>The <c>jobs:</c> map — range over <see cref="JobEntryData"/> rows. default = key absent.</summary>
+    public NodeRange Jobs { get; internal set; }
 
     public TextRange Range { get; init; }
 }

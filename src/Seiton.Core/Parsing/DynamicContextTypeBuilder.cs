@@ -2,8 +2,6 @@
 using Seiton.Core.Generated;
 using Seiton.Core.Parsing.Ast;
 
-using static Seiton.Core.Parsing.SpanHelpers;
-
 namespace Seiton.Core.Parsing;
 
 /// <summary>
@@ -638,7 +636,7 @@ internal static class DynamicContextTypeBuilder
     /// </summary>
     internal static (byte[] NameUtf8, ExprType Type) BuildNeedsOverride(
         StringIdRange needs,
-        SliceMap<Job> allJobs,
+        JobRefMap allJobs,
         AstArena arena,
         byte[]? utf8Yaml,
         Func<ReadOnlyMemory<byte>, string[]?>? localReusableOutputResolver = null)
@@ -660,7 +658,7 @@ internal static class DynamicContextTypeBuilder
                 continue;
             }
 
-            var outputsType = FindJobOutputsType(needIdBytes, allJobs, arena, utf8Yaml, localReusableOutputResolver);
+            var outputsType = FindJobOutputsType(needIdBytes, allJobs, utf8Yaml, localReusableOutputResolver);
 
             var needsEntryType = ExprType.Object(
                 new Dictionary<Utf8String, ExprType>
@@ -691,7 +689,7 @@ internal static class DynamicContextTypeBuilder
     internal static (byte[] NameUtf8, ExprType Type) BuildNeedsOverrideInto(
         Dictionary<Utf8String, ExprType> reusableProps,
         StringIdRange needs,
-        SliceMap<Job> allJobs,
+        JobRefMap allJobs,
         AstArena arena,
         byte[]? utf8Yaml,
         Func<ReadOnlyMemory<byte>, string[]?>? localReusableOutputResolver = null)
@@ -712,7 +710,7 @@ internal static class DynamicContextTypeBuilder
                 continue;
             }
 
-            var outputsType = FindJobOutputsType(needIdBytes, allJobs, arena, utf8Yaml, localReusableOutputResolver);
+            var outputsType = FindJobOutputsType(needIdBytes, allJobs, utf8Yaml, localReusableOutputResolver);
 
             var needsEntryType = ExprType.Object(
                 new Dictionary<Utf8String, ExprType>
@@ -732,37 +730,31 @@ internal static class DynamicContextTypeBuilder
 
     private static ExprType FindJobOutputsType(
         ReadOnlySpan<byte> jobIdBytes,
-        SliceMap<Job> allJobs,
-        AstArena arena,
+        JobRefMap allJobs,
         byte[]? utf8Yaml,
         Func<ReadOnlyMemory<byte>, string[]?>? localReusableOutputResolver = null)
     {
-        if (utf8Yaml is not null)
+        if (utf8Yaml is not null && allJobs.TryGetValue(jobIdBytes, out var job))
         {
-            foreach (var pair in allJobs)
-            {
-                if (EqualsAsciiIgnoreCase(pair.Key.AsSpan(utf8Yaml), jobIdBytes))
-                {
-                    return BuildJobOutputsType(pair.Value, arena, utf8Yaml, localReusableOutputResolver);
-                }
-            }
+            return BuildJobOutputsType(job, utf8Yaml, localReusableOutputResolver);
         }
 
         return ExprType.Object(dynamicPropertyType: ExprType.String);
     }
 
-    private static ObjectExprType BuildJobOutputsType(Job job, AstArena? arena, byte[]? utf8Yaml, Func<ReadOnlyMemory<byte>, string[]?>? localReusableOutputResolver = null)
+    private static ObjectExprType BuildJobOutputsType(JobRef job, byte[]? utf8Yaml, Func<ReadOnlyMemory<byte>, string[]?>? localReusableOutputResolver = null)
     {
         // Reusable workflow call jobs: outputs come from the called workflow's contract,
         // not from any local outputs: block (which is invalid on a uses: job).
         // Check WorkflowCall first so that an invalid local outputs: block doesn't shadow
         // the called workflow's outputs.
-        if (job.WorkflowCall.HasValue)
+        var workflowCall = job.WorkflowCall;
+        if (workflowCall.HasValue)
         {
             // Try local resolution for local reusable workflow references
-            if (localReusableOutputResolver is not null && arena is not null && utf8Yaml is not null && arena.GetWorkflowCall(job.WorkflowCall).Uses.HasValue)
+            if (localReusableOutputResolver is not null && utf8Yaml is not null && workflowCall.Uses.HasValue)
             {
-                var usesSlice = arena.GetStringSlice(arena.GetWorkflowCall(job.WorkflowCall).Uses);
+                var usesSlice = workflowCall.Uses.Slice;
                 if (!usesSlice.IsEmpty)
                 {
                     var usesMemory = utf8Yaml.AsMemory(usesSlice.Offset, usesSlice.Length);
@@ -790,7 +782,8 @@ internal static class DynamicContextTypeBuilder
             return ExprType.Object(dynamicPropertyType: ExprType.String);
         }
 
-        if (job.Outputs is not { Count: > 0 } outputs || utf8Yaml is null)
+        var outputs = job.Outputs;
+        if (outputs.Count == 0 || utf8Yaml is null)
         {
             // Normal jobs with no outputs — return strict empty so that any outputs.X is flagged as undefined
             return ExprType.Object(strict: true);
@@ -799,7 +792,7 @@ internal static class DynamicContextTypeBuilder
         var props = new Dictionary<Utf8String, ExprType>(outputs.Count);
         foreach (var pair in outputs)
         {
-            props[pair.Key.ToUtf8StringZeroCopy(utf8Yaml)] = ExprType.String;
+            props[pair.Key.Slice.ToUtf8StringZeroCopy(utf8Yaml)] = ExprType.String;
         }
 
         return ExprType.Object(props, strict: true);
@@ -976,7 +969,7 @@ internal static class DynamicContextTypeBuilder
     /// Structure: <c>jobs.&lt;job_id&gt;.result</c> (string) and <c>jobs.&lt;job_id&gt;.outputs.&lt;name&gt;</c>.
     /// </summary>
     internal static (byte[] NameUtf8, ExprType Type) BuildJobsOverride(
-        SliceMap<Job> allJobs,
+        JobRefMap allJobs,
         byte[]? utf8Yaml)
     {
         if (allJobs.Count == 0 || utf8Yaml is null)
@@ -987,7 +980,7 @@ internal static class DynamicContextTypeBuilder
         var props = new Dictionary<Utf8String, ExprType>(allJobs.Count);
         foreach (var pair in allJobs)
         {
-            var outputsType = BuildJobOutputsType(pair.Value, null, utf8Yaml);
+            var outputsType = BuildJobOutputsType(pair.Value, utf8Yaml);
             var jobEntryType = ExprType.Object(
                 new Dictionary<Utf8String, ExprType>
                 {
@@ -995,7 +988,7 @@ internal static class DynamicContextTypeBuilder
                     { outputsKey, outputsType },
                 },
                 strict: true);
-            props[pair.Key.ToUtf8StringZeroCopy(utf8Yaml)] = jobEntryType;
+            props[pair.Key.Slice.ToUtf8StringZeroCopy(utf8Yaml)] = jobEntryType;
         }
 
         return (JobsKeyUtf8, ExprType.Object(props, strict: true));

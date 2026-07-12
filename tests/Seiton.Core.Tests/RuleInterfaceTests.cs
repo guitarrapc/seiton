@@ -24,12 +24,13 @@ public sealed partial class RuleInterfaceTests
             ExecPayload = runPayload,
         });
 
-        var (jobs, _) = SliceMapTestExtensions.CreateSliceMap(
-            (new Utf8String("build"u8), new Job
-            {
-                Id = arena.AddString(new Utf8Slice(0, 0), false, default),
-                Steps = arena.AddStepIdList([runStep]),
-            }));
+        var buildJob = arena.AddJob(new JobData
+        {
+            Id = arena.AddString(new Utf8Slice(0, 0), false, default),
+            Steps = arena.AddStepIdList([runStep]),
+        });
+        var jobsFirst = arena.JobEntryCount;
+        arena.AddJobEntry(new JobEntryData { Key = new Utf8Slice(0, 0), Job = buildJob });
 
         var firstEvent = arena.EventCount;
         arena.AddEvent(new EventData
@@ -51,7 +52,7 @@ public sealed partial class RuleInterfaceTests
         var workflow = new Workflow
         {
             On = new NodeRange(firstEvent, 2),
-            Jobs = jobs,
+            Jobs = new NodeRange(jobsFirst, 1),
         };
 
         var rule = new CountingRule();

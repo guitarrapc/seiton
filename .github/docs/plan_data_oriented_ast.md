@@ -77,8 +77,8 @@ CLI は診断のみを参照し AST 型に依存しない (実測: `src/Seiton/`
 | Stage | 内容 | 検証 |
 |---|---|---|
 | 1 ✅ (2026-07-11 完了) | Ref ファサードを**現行クラスの上に**導入 (`JobRef` が Job オブジェクトを内包)。`IPass`/`RuleBase`/`WorkflowVisitor` 署名と全ルール・テストを Ref へ移行。三値 null 11 ルールと同一性キー 1 ルールを修正 | 全テスト green。ベンチマーク中立 (±10% 以内) |
-| 2 (進行中) | ストレージ差替: 複合ノード → struct 行テーブル + typed ID、子リスト → レンジ、SliceMap → 共有テーブル。パーサ構築サイト書換。Ref 内部を (arena, id) に差替 — **ルールコードは不変** | 全テスト green。Allocated 減少を確認 |
-| 3 | `IncrementalParseContext` を row-copy + ハンドル再配置へ再設計 (`BulkImportFrom` を全テーブル + レンジ再マップに拡張) | Incremental 系 + Playground desktop テスト green |
+| 2 ✅ (2026-07-12 完了) | ストレージ差替: 複合ノード → struct 行テーブル + typed ID、子リスト → レンジ、SliceMap → 共有テーブル。パーサ構築サイト書換。Ref 内部を (arena, id) に差替 — **ルールコードは不変** | 全テスト green。Allocated 減少を確認 |
+| 3 ✅ (2026-07-12 完了) | `IncrementalParseContext` を row-copy + ハンドル再配置へ再設計 (`BulkImportFrom` を全テーブル + レンジ再マップに拡張) | Incremental 系 + Playground desktop テスト green |
 | 4 | `AstNodePool` / オブジェクトプール / 全 `Reset()` / 手動登録の削除。プール系抽象の統合。DEBUG 世代カウンタ | 全テスト green。`Reset(` が src から消えること |
 | 5 | spec 更新 (`Seiton_Parser_csharp_spec.md` §0.5/§2、`Seiton_Linter_csharp_spec.md`、skills)、全ベンチマーク比較の記録 | spec と実装の一致 |
 
@@ -124,7 +124,15 @@ CLI は診断のみを参照し AST 型に依存しない (実測: `src/Seiton/`
 
 意味論の写像 (テスト移行時の規約): 旧 `null` (キー不在) → `default` ID/レンジ (`HasValue == false`)。旧「キーは在るが空」→ `HasValue == true` かつ `Count == 0`。`ParseStringOrStringSequence` は回復パスでも常に present レンジを返す (旧実装で default `ArenaList` が boxing により非 null になっていた挙動の保存)。
 
-残作業: Job/Workflow 行化 + Jobs/Outputs マップ — `IncrementalParseContext` の継ぎ足しと衝突するため **Stage 3 と統合して実施** (Stage 2 として独立に進められる増分はこれで完了)。ActionMetadata ルートクラスも同時に行化する。
+残作業: なし (Job/Workflow 行化 + Jobs/Outputs マップは Stage 3 で実施済み)。
+
+## 6.2 Stage 3 実装記録 (2026-07-12 完了)
+
+- **Job 行化**: `JobData` 行 (23 フィールド) + `JobId`。**Jobs マップは `JobEntryData {Key, JobId}` 行への `NodeRange`** — JobData 行テーブル直接レンジにしない理由は incremental 継ぎ足し: 再利用 JobId (BulkImportFrom で低インデックスに全行コピー済み) と新規パース JobId が 1 つのマップに混在するため、エントリと行を独立にアドレスできる必要がある。`Job.Outputs` は `JobOutputData {Key, StringNodeId}` 行への `NodeRange` (どちらも case-insensitive)。
+- **IncrementalParseContext 再設計 (本 Stage の核心)**: `JobSkipEntry` が Job オブジェクトではなく **JobId を運ぶ**。`BulkImportFrom` が全ノードテーブルを全行コピーするため、前パースの JobId は新 arena でそのまま解決できる — 旧 arena をオブジェクト所有のために生かしておく理由が消滅し、**retention 機構 (~85 行: `_retainedArenas`/`MaxRetainedArenas`/mustRetain 判定/退避キャップの強制フルパース) を削除**。旧 arena は毎回即 Dispose。`_lastReusedJobs` (D-5d lint キャッシュ) と scalar 成長しきい値機構は存置。
+- 巻き添えで消えたもの: Job オブジェクトプール (最後の AST プール)、`SliceMap<Job>`、generic `RefMap<TNode,TRef>`/`INodeRef` core (JobRefMap/StringRefMap が自己完結レンジマップ化して最後のユーザーが消滅)、`ShrinkObjectPoolIfOversized`。
+- テスト意味論の変更点 (唯一): `IncrementalParseJobSkipTests` の 4 assertion が「Job オブジェクト同一性による再利用観測」だったため、ID ベース再利用では観測不能 (旧 arena は即 Dispose) — `ctx.LastReusedJobs` (internal test hook) + 再利用ジョブ内容の解決可能性で書き直し。他の assert 値は全増分を通じて不変。
+- 検証: Core 2000 / CLI 432 / Playground incremental 系全部 (14+11+27+11+9+6) green。Allocated: Parse 240B/840B/2,600B (Job プール分 −8B each)、Lint 34.01KB。IncrementalParseBenchmark も正常 (FullPipeline_SmallEdits Large 559KB)。Mean はマシン熱ドリフト下 (コントロール同率上昇) で判定はコントロール正規化。
 
 ## 7. Lessons Learned (随時追記)
 

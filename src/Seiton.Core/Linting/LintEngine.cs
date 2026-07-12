@@ -1293,10 +1293,12 @@ public sealed class LintEngine
 
     private ReadOnlySpan<Utf8Slice> BuildKnownJobIdSlices(Parsing.Ast.Workflow workflow, AstArena arena)
     {
+        var jobs = workflow.Jobs;
         var count = 0;
-        foreach (var pair in workflow.Jobs)
+        for (var j = 0; j < jobs.Count; j++)
         {
-            if (!arena.GetStringSlice(pair.Value.Id).IsEmpty)
+            ref readonly var job = ref arena.GetJob(arena.GetJobEntryAt(jobs, j).Job);
+            if (!arena.GetStringSlice(job.Id).IsEmpty)
                 count++;
         }
 
@@ -1309,9 +1311,10 @@ public sealed class LintEngine
         }
 
         var i = 0;
-        foreach (var pair in workflow.Jobs)
+        for (var j = 0; j < jobs.Count; j++)
         {
-            var slice = arena.GetStringSlice(pair.Value.Id);
+            ref readonly var job = ref arena.GetJob(arena.GetJobEntryAt(jobs, j).Job);
+            var slice = arena.GetStringSlice(job.Id);
             if (!slice.IsEmpty)
                 _knownJobIdSlices[i++] = slice;
         }
@@ -1322,15 +1325,17 @@ public sealed class LintEngine
     private void BuildJobScopes(Parsing.Ast.Workflow workflow, AstArena arena)
     {
         _jobScopes.Clear();
-        foreach (var pair in workflow.Jobs)
+        var jobs = workflow.Jobs;
+        for (var j = 0; j < jobs.Count; j++)
         {
-            var slice = arena.GetStringSlice(pair.Value.Id);
+            ref readonly var job = ref arena.GetJob(arena.GetJobEntryAt(jobs, j).Job);
+            var slice = arena.GetStringSlice(job.Id);
             if (slice.IsEmpty)
             {
                 continue;
             }
 
-            var range = pair.Value.Range;
+            var range = job.Range;
             if (range.StartLine <= 0 || range.EndLine <= 0)
             {
                 continue;
@@ -1343,9 +1348,10 @@ public sealed class LintEngine
     private void BuildStepScopes(byte[] source, int[] lineStarts, Parsing.Ast.Workflow workflow, ActionMetadata? actionMetadata, AstArena arena)
     {
         _stepScopes.Clear();
-        foreach (var pair in workflow.Jobs)
+        var jobs = workflow.Jobs;
+        for (var j = 0; j < jobs.Count; j++)
         {
-            AddStepScopes(source, lineStarts, new StepRefList(arena, pair.Value.Steps));
+            AddStepScopes(source, lineStarts, new StepRefList(arena, arena.GetJob(arena.GetJobEntryAt(jobs, j).Job).Steps));
         }
 
         var actionRunsSteps = actionMetadata is not null && actionMetadata.Runs.HasValue

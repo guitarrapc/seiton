@@ -6,15 +6,17 @@ namespace Seiton.Core.Parsing;
 
 /// <summary>
 /// Entry for a job that should be skipped during incremental parsing (D-5c).
-/// The parser compares each job's positional index against this list and reuses the previous Job if matched.
+/// The parser compares each job's positional index against this list and reuses the previous
+/// parse's <see cref="JobId"/> if matched. Reused JobIds resolve in the new arena because
+/// <see cref="AstArena.BulkImportFrom"/> copies every node table wholesale from the previous arena.
 /// </summary>
-internal readonly struct JobSkipEntry(Utf8Slice key, Job job)
+internal readonly struct JobSkipEntry(Utf8Slice key, JobId job)
 {
     /// <summary>The job ID key slice (offset+length into source).</summary>
     public readonly Utf8Slice Key = key;
 
-    /// <summary>The previous Job AST node to reuse.</summary>
-    public readonly Job Job = job;
+    /// <summary>The previous parse's job row handle to reuse (default = not reusable).</summary>
+    public readonly JobId Job = job;
 }
 
 /// <summary>
@@ -532,7 +534,7 @@ public static partial class WorkflowParser
         var hasJobs = false;
         var lastRootKeyMark = new TextPosition(0, 1, 1);
         NodeRange onEvents = default;
-        SliceMap<Job> jobs = default;
+        NodeRange jobs = default;
         ulong seen = 0;
         StringNodeId actionDescription = default;
         NodeRange actionInputs = default;
@@ -1501,200 +1503,198 @@ public static partial class WorkflowParser
         return arena.AddBool(false, expressionNode, range);
     }
 
-    private static SliceMap<Job> ParseJobsMapping<TReader>(ref TReader reader, AstArena arena, ref PooledBuffer<Diagnostic> diagnostics, ReadOnlySpan<byte> source)
+    private static NodeRange ParseJobsMapping<TReader>(ref TReader reader, AstArena arena, ref PooledBuffer<Diagnostic> diagnostics, ReadOnlySpan<byte> source)
         where TReader : IYamlStreamReader, allows ref struct
     {
-        var jobs = new PooledBuffer<SliceMap<Job>.Entry>(8);
-        try
+        // Entry rows are appended contiguously: ParseJobNode appends job/step/section rows
+        // but never JobEntryData rows, so the range stays dense.
+        var entriesFirst = arena.JobEntryCount;
+        var entryCount = 0;
+        Span<long> keyStore = stackalloc long[64];
+        var keyCount = 0;
+        // current is MappingStart
+        reader.Read();
+
+        while (!reader.End && reader.CurrentKind != YamlEventKind.MappingEnd)
         {
-            Span<long> keyStore = stackalloc long[64];
-            var keyCount = 0;
-            // current is MappingStart
-            reader.Read();
-
-            while (!reader.End && reader.CurrentKind != YamlEventKind.MappingEnd)
+            if (reader.CurrentKind != YamlEventKind.Scalar)
             {
-                if (reader.CurrentKind != YamlEventKind.Scalar)
+                AddError(ref diagnostics, "job id must be string", reader.CurrentStart);
+                reader.SkipCurrentNode();
+                if (!reader.End && reader.CurrentKind != YamlEventKind.MappingEnd)
                 {
-                    AddError(ref diagnostics, "job id must be string", reader.CurrentStart);
                     reader.SkipCurrentNode();
-                    if (!reader.End && reader.CurrentKind != YamlEventKind.MappingEnd)
-                    {
-                        reader.SkipCurrentNode();
-                    }
-                    continue;
                 }
-
-                var jobIdMark = reader.CurrentStart;
-                var jobId = reader.GetScalarSlice();
-                var jobIdUtf8 = reader.GetScalarUtf8();
-                if (!TryRegisterDynamicKey(
-                    source,
-                    jobIdUtf8,
-                    jobId.Offset,
-                    jobId.Length,
-                    jobIdMark,
-                    ref diagnostics,
-                    keyStore,
-                    ref keyCount,
-                    caseSensitive: false,
-                    "jobs"))
-                {
-                    reader.Read(); // consume key
-                    if (!reader.End)
-                    {
-                        reader.SkipCurrentNode();
-                    }
-
-                    continue;
-                }
-
-                var jobIdNode = arena.AddString(jobId, reader.IsScalarQuoted(), BuildScalarLocation(jobIdMark, jobIdUtf8.Length));
-                reader.Read(); // consume job id
-
-                if (reader.End)
-                {
-                    break;
-                }
-
-                var job = ParseJobNode(ref reader, arena, ref diagnostics, source, jobId, jobIdMark, jobIdNode);
-                jobs.Add(new SliceMap<Job>.Entry(jobId, job));
+                continue;
             }
 
-            if (reader.CurrentKind == YamlEventKind.MappingEnd)
+            var jobIdMark = reader.CurrentStart;
+            var jobId = reader.GetScalarSlice();
+            var jobIdUtf8 = reader.GetScalarUtf8();
+            if (!TryRegisterDynamicKey(
+                source,
+                jobIdUtf8,
+                jobId.Offset,
+                jobId.Length,
+                jobIdMark,
+                ref diagnostics,
+                keyStore,
+                ref keyCount,
+                caseSensitive: false,
+                "jobs"))
             {
-                reader.Read();
+                reader.Read(); // consume key
+                if (!reader.End)
+                {
+                    reader.SkipCurrentNode();
+                }
+
+                continue;
             }
 
-            var (jobEntries, jobCount) = jobs.DetachArray();
-            arena.RegisterSliceMapBuffer(jobEntries);
-            return new SliceMap<Job>(jobEntries, jobCount, caseSensitive: false);
+            var jobIdNode = arena.AddString(jobId, reader.IsScalarQuoted(), BuildScalarLocation(jobIdMark, jobIdUtf8.Length));
+            reader.Read(); // consume job id
+
+            if (reader.End)
+            {
+                break;
+            }
+
+            var job = ParseJobNode(ref reader, arena, ref diagnostics, source, jobId, jobIdMark, jobIdNode);
+            arena.AddJobEntry(new JobEntryData { Key = jobId, Job = job });
+            entryCount++;
         }
-        finally { jobs.Dispose(); }
+
+        if (reader.CurrentKind == YamlEventKind.MappingEnd)
+        {
+            reader.Read();
+        }
+
+        return new NodeRange(entriesFirst, entryCount);
     }
 
     /// <summary>
     /// Incremental variant of <see cref="ParseJobsMapping{TReader}"/> (D-5c).
     /// For each job, checks whether it matches a skip entry (by positional index and key bytes).
-    /// If matched, the job subtree is skipped via <c>SkipCurrentNode()</c> and the previous Job is reused.
+    /// If matched, the job subtree is skipped via <c>SkipCurrentNode()</c> and the previous parse's
+    /// <see cref="JobId"/> is reused (valid after <see cref="AstArena.BulkImportFrom"/>).
     /// </summary>
-    private static SliceMap<Job> ParseJobsMappingIncremental<TReader>(ref TReader reader, AstArena arena, ref PooledBuffer<Diagnostic> diagnostics, ReadOnlySpan<byte> source, JobSkipEntry[] skipEntries)
+    private static NodeRange ParseJobsMappingIncremental<TReader>(ref TReader reader, AstArena arena, ref PooledBuffer<Diagnostic> diagnostics, ReadOnlySpan<byte> source, JobSkipEntry[] skipEntries)
         where TReader : IYamlStreamReader, allows ref struct
     {
-        var jobs = new PooledBuffer<SliceMap<Job>.Entry>(8);
-        try
+        // Entry rows are appended contiguously: ParseJobNode appends job/step/section rows
+        // but never JobEntryData rows, so the range stays dense.
+        var entriesFirst = arena.JobEntryCount;
+        var entryCount = 0;
+        Span<long> keyStore = stackalloc long[64];
+        var keyCount = 0;
+        var jobIndex = 0;
+        // current is MappingStart
+        reader.Read();
+
+        while (!reader.End && reader.CurrentKind != YamlEventKind.MappingEnd)
         {
-            Span<long> keyStore = stackalloc long[64];
-            var keyCount = 0;
-            var jobIndex = 0;
-            // current is MappingStart
-            reader.Read();
-
-            while (!reader.End && reader.CurrentKind != YamlEventKind.MappingEnd)
+            if (reader.CurrentKind != YamlEventKind.Scalar)
             {
-                if (reader.CurrentKind != YamlEventKind.Scalar)
+                AddError(ref diagnostics, "job id must be string", reader.CurrentStart);
+                reader.SkipCurrentNode();
+                if (!reader.End && reader.CurrentKind != YamlEventKind.MappingEnd)
                 {
-                    AddError(ref diagnostics, "job id must be string", reader.CurrentStart);
                     reader.SkipCurrentNode();
-                    if (!reader.End && reader.CurrentKind != YamlEventKind.MappingEnd)
-                    {
-                        reader.SkipCurrentNode();
-                    }
-                    jobIndex++;
-                    continue;
                 }
+                jobIndex++;
+                continue;
+            }
 
-                var jobIdMark = reader.CurrentStart;
-                var jobId = reader.GetScalarSlice();
-                var jobIdUtf8 = reader.GetScalarUtf8();
+            var jobIdMark = reader.CurrentStart;
+            var jobId = reader.GetScalarSlice();
+            var jobIdUtf8 = reader.GetScalarUtf8();
 
-                // D-5c: Check if this job can be skipped (same position, same key bytes)
-                if ((uint)jobIndex < (uint)skipEntries.Length)
+            // D-5c: Check if this job can be skipped (same position, same key bytes)
+            if ((uint)jobIndex < (uint)skipEntries.Length)
+            {
+                var skipEntry = skipEntries[jobIndex];
+                if (skipEntry.Job.HasValue &&
+                    skipEntry.Key.Length == jobId.Length &&
+                    source[skipEntry.Key.Offset..(skipEntry.Key.Offset + skipEntry.Key.Length)]
+                        .SequenceEqual(source[jobId.Offset..(jobId.Offset + jobId.Length)]))
                 {
-                    var skipEntry = skipEntries[jobIndex];
-                    if (skipEntry.Job is not null &&
-                        skipEntry.Key.Length == jobId.Length &&
-                        source[skipEntry.Key.Offset..(skipEntry.Key.Offset + skipEntry.Key.Length)]
-                            .SequenceEqual(source[jobId.Offset..(jobId.Offset + jobId.Length)]))
+                    // Job matches — skip its subtree and reuse the previous parse's JobId
+                    // Register key for duplicate detection; if duplicate, skip without adding
+                    if (!TryRegisterDynamicKey(
+                        source,
+                        jobIdUtf8,
+                        jobId.Offset,
+                        jobId.Length,
+                        jobIdMark,
+                        ref diagnostics,
+                        keyStore,
+                        ref keyCount,
+                        caseSensitive: false,
+                        "jobs"))
                     {
-                        // Job matches — skip its subtree and reuse previous Job
-                        // Register key for duplicate detection; if duplicate, skip without adding
-                        if (!TryRegisterDynamicKey(
-                            source,
-                            jobIdUtf8,
-                            jobId.Offset,
-                            jobId.Length,
-                            jobIdMark,
-                            ref diagnostics,
-                            keyStore,
-                            ref keyCount,
-                            caseSensitive: false,
-                            "jobs"))
-                        {
-                            reader.Read(); // consume key
-                            if (!reader.End)
-                            {
-                                reader.SkipCurrentNode();
-                            }
-                            jobIndex++;
-                            continue;
-                        }
-
-                        reader.Read(); // consume job id key
+                        reader.Read(); // consume key
                         if (!reader.End)
                         {
-                            reader.SkipCurrentNode(); // skip job body
+                            reader.SkipCurrentNode();
                         }
-                        jobs.Add(new SliceMap<Job>.Entry(jobId, skipEntry.Job));
                         jobIndex++;
                         continue;
                     }
-                }
 
-                if (!TryRegisterDynamicKey(
-                    source,
-                    jobIdUtf8,
-                    jobId.Offset,
-                    jobId.Length,
-                    jobIdMark,
-                    ref diagnostics,
-                    keyStore,
-                    ref keyCount,
-                    caseSensitive: false,
-                    "jobs"))
-                {
-                    reader.Read(); // consume key
+                    reader.Read(); // consume job id key
                     if (!reader.End)
                     {
-                        reader.SkipCurrentNode();
+                        reader.SkipCurrentNode(); // skip job body
                     }
+                    arena.AddJobEntry(new JobEntryData { Key = jobId, Job = skipEntry.Job });
+                    entryCount++;
                     jobIndex++;
                     continue;
                 }
-
-                var jobIdNode = arena.AddString(jobId, reader.IsScalarQuoted(), BuildScalarLocation(jobIdMark, jobIdUtf8.Length));
-                reader.Read(); // consume job id
-
-                if (reader.End)
-                {
-                    break;
-                }
-
-                var job = ParseJobNode(ref reader, arena, ref diagnostics, source, jobId, jobIdMark, jobIdNode);
-                jobs.Add(new SliceMap<Job>.Entry(jobId, job));
-                jobIndex++;
             }
 
-            if (reader.CurrentKind == YamlEventKind.MappingEnd)
+            if (!TryRegisterDynamicKey(
+                source,
+                jobIdUtf8,
+                jobId.Offset,
+                jobId.Length,
+                jobIdMark,
+                ref diagnostics,
+                keyStore,
+                ref keyCount,
+                caseSensitive: false,
+                "jobs"))
             {
-                reader.Read();
+                reader.Read(); // consume key
+                if (!reader.End)
+                {
+                    reader.SkipCurrentNode();
+                }
+                jobIndex++;
+                continue;
             }
 
-            var (jobEntries, jobCount) = jobs.DetachArray();
-            arena.RegisterSliceMapBuffer(jobEntries);
-            return new SliceMap<Job>(jobEntries, jobCount, caseSensitive: false);
+            var jobIdNode = arena.AddString(jobId, reader.IsScalarQuoted(), BuildScalarLocation(jobIdMark, jobIdUtf8.Length));
+            reader.Read(); // consume job id
+
+            if (reader.End)
+            {
+                break;
+            }
+
+            var job = ParseJobNode(ref reader, arena, ref diagnostics, source, jobId, jobIdMark, jobIdNode);
+            arena.AddJobEntry(new JobEntryData { Key = jobId, Job = job });
+            entryCount++;
+            jobIndex++;
         }
-        finally { jobs.Dispose(); }
+
+        if (reader.CurrentKind == YamlEventKind.MappingEnd)
+        {
+            reader.Read();
+        }
+
+        return new NodeRange(entriesFirst, entryCount);
     }
 
 }

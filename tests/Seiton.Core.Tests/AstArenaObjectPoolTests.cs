@@ -5,44 +5,6 @@ namespace Seiton.Core.Tests;
 public sealed class AstArenaObjectPoolTests
 {
     [Test]
-    public async Task AllocJob_ReturnsJobWithDefaultFields()
-    {
-        var source = "name: test"u8.ToArray();
-        using var arena = AstArena.Rent(source);
-
-        var job = arena.AllocJob();
-
-        await Assert.That(job).IsNotNull();
-        await Assert.That(job.Id.HasValue).IsFalse();
-        await Assert.That(job.Name.HasValue).IsFalse();
-        await Assert.That(job.Needs.HasValue).IsFalse();
-        await Assert.That(job.Steps.HasValue).IsFalse();
-        await Assert.That(job.RunsOn.HasValue).IsFalse();
-    }
-
-    [Test]
-    public async Task AllocJob_AfterDisposeAndRent_ReusesObjectWithResetFields()
-    {
-        var source = "name: test"u8.ToArray();
-        var arena = AstArena.Rent(source);
-        var job1 = arena.AllocJob();
-        job1.Name = arena.AddString(new Utf8Slice(0, 4), false, default);
-        arena.Dispose();
-
-        // Re-rent (should reuse cached arena with pooled objects)
-        var source2 = "x: y"u8.ToArray();
-        arena = AstArena.Rent(source2);
-        var job2 = arena.AllocJob();
-
-        // Should be same instance reused, but with reset fields
-        await Assert.That(job2).IsSameReferenceAs(job1);
-        await Assert.That(job2.Name.HasValue).IsFalse();
-        await Assert.That(job2.Steps.HasValue).IsFalse();
-        await Assert.That(job2.Needs.HasValue).IsFalse();
-        arena.Dispose();
-    }
-
-    [Test]
     public async Task RegisterSliceMapBuffer_BuffersReturnedOnDispose()
     {
         var source = "ab"u8.ToArray();

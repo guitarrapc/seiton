@@ -12,28 +12,30 @@ public sealed class WorkflowVisitorTests
         var sourceBytes = Array.Empty<byte>();
         var arena = new AstArena(sourceBytes);
 
-        var (jobs, _) = SliceMapTestExtensions.CreateSliceMap(
-            (new Utf8String("build"u8), new Job
-            {
-                Id = arena.AddString(new Utf8Slice(0, 0), false, default),
-                Steps = arena.AddStepIdList(
-                [
-                    AddRunStep(arena),
-                    AddRunStep(arena),
-                ]),
-            }),
-            (new Utf8String("test"u8), new Job
-            {
-                Id = arena.AddString(new Utf8Slice(0, 0), false, default),
-                Steps = arena.AddStepIdList(
-                [
-                    AddRunStep(arena),
-                ]),
-            }));
+        var buildJob = arena.AddJob(new JobData
+        {
+            Id = arena.AddString(new Utf8Slice(0, 0), false, default),
+            Steps = arena.AddStepIdList(
+            [
+                AddRunStep(arena),
+                AddRunStep(arena),
+            ]),
+        });
+        var testJob = arena.AddJob(new JobData
+        {
+            Id = arena.AddString(new Utf8Slice(0, 0), false, default),
+            Steps = arena.AddStepIdList(
+            [
+                AddRunStep(arena),
+            ]),
+        });
+        var jobsFirst = arena.JobEntryCount;
+        arena.AddJobEntry(new JobEntryData { Key = new Utf8Slice(0, 0), Job = buildJob });
+        arena.AddJobEntry(new JobEntryData { Key = new Utf8Slice(0, 0), Job = testJob });
 
         var workflow = new Workflow
         {
-            Jobs = jobs,
+            Jobs = new NodeRange(jobsFirst, 2),
         };
 
         var trace = new List<string>();
@@ -111,16 +113,16 @@ public sealed class WorkflowVisitorTests
             ExecKind = StepExecKind.Parallel,
             ExecPayload = parallelPayload,
         });
-        var job = new Job
+        var job = arena.AddJob(new JobData
         {
             Id = arena.AddString(new Utf8Slice(0, 0), false, default),
             Steps = arena.AddStepIdList([parallelStep]),
-        };
+        });
 
-        var (jobs, _) = SliceMapTestExtensions.CreateSliceMap(
-            (new Utf8String("build"u8), job));
+        var jobsFirst = arena.JobEntryCount;
+        arena.AddJobEntry(new JobEntryData { Key = new Utf8Slice(0, 0), Job = job });
 
-        var workflow = new Workflow { Jobs = jobs };
+        var workflow = new Workflow { Jobs = new NodeRange(jobsFirst, 1) };
 
         var trace = new List<string>();
         var pass = new RecordingPass(trace);

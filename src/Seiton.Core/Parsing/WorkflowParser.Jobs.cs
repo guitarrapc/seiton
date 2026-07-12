@@ -41,7 +41,7 @@ public static partial class WorkflowParser
         _ => "runs-on key",
     };
 
-    private static Job ParseJobNode<TReader>(ref TReader reader, AstArena arena, ref PooledBuffer<Diagnostic> diagnostics, ReadOnlySpan<byte> source, Utf8Slice jobId, TextPosition jobIdMark, StringNodeId jobIdNode)
+    private static JobId ParseJobNode<TReader>(ref TReader reader, AstArena arena, ref PooledBuffer<Diagnostic> diagnostics, ReadOnlySpan<byte> source, Utf8Slice jobId, TextPosition jobIdMark, StringNodeId jobIdNode)
         where TReader : IYamlStreamReader, allows ref struct
     {
         StringNodeId nameNode = default;
@@ -50,7 +50,7 @@ public static partial class WorkflowParser
         PermissionsId permissionsNode = default;
         EnvironmentId environmentNode = default;
         ConcurrencyId concurrencyNode = default;
-        SliceMap<StringNodeId>? outputsNode = null;
+        NodeRange outputsNode = default;
         EnvId envNode = default;
         DefaultsId defaultsNode = default;
         StringNodeId ifNode = default;
@@ -81,10 +81,7 @@ public static partial class WorkflowParser
         {
             AddError(ref diagnostics, $"jobs.'{DecodeUtf8(source, jobId)}' must be object", reader.CurrentStart);
             reader.SkipCurrentNode();
-            var earlyJob = arena.AllocJob();
-            earlyJob.Id = jobIdNode;
-            earlyJob.Range = arena.GetStringRange(jobIdNode);
-            return earlyJob;
+            return arena.AddJob(new JobData { Id = jobIdNode, Range = arena.GetStringRange(jobIdNode) });
         }
 
         ulong seen = 0;
@@ -454,42 +451,43 @@ public static partial class WorkflowParser
             }
         }
 
-        var job = arena.AllocJob();
-        job.Id = jobIdNode;
-        job.Name = nameNode;
-        job.Needs = needsNode;
-        job.RunsOn = runsOnNode;
-        job.RunsOnKeyRange = runsOnNode.HasValue ? BuildScalarLocation(runsOnKeyPos, 7) : null;
-        job.Permissions = permissionsNode;
-        job.Environment = environmentNode;
-        job.Concurrency = concurrencyNode;
-        job.Outputs = outputsNode;
-        job.Env = envNode;
-        job.Defaults = defaultsNode;
-        job.If = ifNode;
-        job.IfKeyRange = ifNode.HasValue ? BuildScalarLocation(ifKeyMark, 2) : null;
-        job.Steps = stepsNode;
-        job.StepsKeyRange = stepsNode.HasValue ? BuildScalarLocation(stepsKeyPos, 5) : null;
-        job.TimeoutMinutes = timeoutMinutesNode;
-        job.Strategy = strategyNode;
-        job.ContinueOnError = continueOnErrorNode;
-        job.Container = containerNode;
-        job.Services = servicesNode;
-        job.WorkflowCall = hasWorkflowCall
-            ? arena.AddWorkflowCall(new WorkflowCallData
-            {
-                Uses = wcUses,
-                UsesKeyRange = wcUsesKeyRange,
-                Inputs = wcInputs,
-                WithKeyRange = wcWithKeyRange,
-                Secrets = wcSecrets,
-                SecretsKeyRange = wcSecretsKeyRange,
-                InheritSecrets = wcInheritSecrets,
-            })
-            : default;
-        job.Snapshot = snapshotNode;
-        job.Range = BuildCompositeLocation(jobIdMark, mappingEndMark);
-        return job;
+        return arena.AddJob(new JobData
+        {
+            Id = jobIdNode,
+            Name = nameNode,
+            Needs = needsNode,
+            RunsOn = runsOnNode,
+            RunsOnKeyRange = runsOnNode.HasValue ? BuildScalarLocation(runsOnKeyPos, 7) : null,
+            Permissions = permissionsNode,
+            Environment = environmentNode,
+            Concurrency = concurrencyNode,
+            Outputs = outputsNode,
+            Env = envNode,
+            Defaults = defaultsNode,
+            If = ifNode,
+            IfKeyRange = ifNode.HasValue ? BuildScalarLocation(ifKeyMark, 2) : null,
+            Steps = stepsNode,
+            StepsKeyRange = stepsNode.HasValue ? BuildScalarLocation(stepsKeyPos, 5) : null,
+            TimeoutMinutes = timeoutMinutesNode,
+            Strategy = strategyNode,
+            ContinueOnError = continueOnErrorNode,
+            Container = containerNode,
+            Services = servicesNode,
+            WorkflowCall = hasWorkflowCall
+                ? arena.AddWorkflowCall(new WorkflowCallData
+                {
+                    Uses = wcUses,
+                    UsesKeyRange = wcUsesKeyRange,
+                    Inputs = wcInputs,
+                    WithKeyRange = wcWithKeyRange,
+                    Secrets = wcSecrets,
+                    SecretsKeyRange = wcSecretsKeyRange,
+                    InheritSecrets = wcInheritSecrets,
+                })
+                : default,
+            Snapshot = snapshotNode,
+            Range = BuildCompositeLocation(jobIdMark, mappingEndMark),
+        });
     }
 
     private enum SnapshotMappingKey : byte
@@ -956,7 +954,7 @@ public static partial class WorkflowParser
         });
     }
 
-    private static SliceMap<StringNodeId>? ParseOutputsNode<TReader>(ref TReader reader, AstArena arena, ref PooledBuffer<Diagnostic> diagnostics, ReadOnlySpan<byte> source, Utf8Slice jobId)
+    private static NodeRange ParseOutputsNode<TReader>(ref TReader reader, AstArena arena, ref PooledBuffer<Diagnostic> diagnostics, ReadOnlySpan<byte> source, Utf8Slice jobId)
         where TReader : IYamlStreamReader, allows ref struct
     {
         if (reader.CurrentKind != YamlEventKind.MappingStart)
@@ -966,71 +964,69 @@ public static partial class WorkflowParser
             return default;
         }
 
-        var outputs = new PooledBuffer<SliceMap<StringNodeId>.Entry>(8);
-        try
+        // Output rows are appended contiguously: values are scalar parses only, so nested
+        // parsing never touches the job-output table.
+        var outputsFirst = arena.JobOutputCount;
+        var outputCount = 0;
+        Span<long> keyStore = stackalloc long[64];
+        var keyCount = 0;
+        reader.Read();
+        while (!reader.End && reader.CurrentKind != YamlEventKind.MappingEnd)
         {
-            Span<long> keyStore = stackalloc long[64];
-            var keyCount = 0;
-            reader.Read();
-            while (!reader.End && reader.CurrentKind != YamlEventKind.MappingEnd)
+            if (reader.CurrentKind != YamlEventKind.Scalar)
             {
-                if (reader.CurrentKind != YamlEventKind.Scalar)
+                AddError(ref diagnostics, $"jobs.'{DecodeUtf8(source, jobId)}'.outputs key must be string", reader.CurrentStart);
+                reader.SkipCurrentNode();
+                if (!reader.End && reader.CurrentKind != YamlEventKind.MappingEnd)
                 {
-                    AddError(ref diagnostics, $"jobs.'{DecodeUtf8(source, jobId)}'.outputs key must be string", reader.CurrentStart);
                     reader.SkipCurrentNode();
-                    if (!reader.End && reader.CurrentKind != YamlEventKind.MappingEnd)
-                    {
-                        reader.SkipCurrentNode();
-                    }
-                    continue;
                 }
-
-                var keySlice = reader.GetScalarSlice();
-                var keyUtf8 = reader.GetScalarUtf8();
-                var keyMark = reader.CurrentStart;
-                if (!TryRegisterDynamicKey(
-                    source,
-                    keyUtf8,
-                    keySlice.Offset,
-                    keySlice.Length,
-                    keyMark,
-                    ref diagnostics,
-                    keyStore,
-                    ref keyCount,
-                    caseSensitive: false,
-                    "outputs"))
-                {
-                    reader.Read();
-                    if (!reader.End)
-                    {
-                        reader.SkipCurrentNode();
-                    }
-
-                    continue;
-                }
-
-                var keyNode = arena.AddString(keySlice, reader.IsScalarQuoted(), BuildScalarLocation(reader.CurrentStart, keyUtf8.Length));
-                reader.Read();
-                if (reader.End)
-                {
-                    break;
-                }
-
-                var value = ParseStringAndValidateExpression(ref reader, arena, ref diagnostics, ExpressionValidationContext.JobOutputs, out var outErr, out var outMark, parseWholeValueIfNoEmbedded: false);
-                if (outErr) AddError(ref diagnostics, $"jobs.'{DecodeUtf8(source, jobId)}'.outputs.{Encoding.UTF8.GetString(keyUtf8)} must be string", outMark);
-                outputs.Add(new SliceMap<StringNodeId>.Entry(keySlice, value.HasValue ? value : keyNode));
+                continue;
             }
 
-            if (reader.CurrentKind == YamlEventKind.MappingEnd)
+            var keySlice = reader.GetScalarSlice();
+            var keyUtf8 = reader.GetScalarUtf8();
+            var keyMark = reader.CurrentStart;
+            if (!TryRegisterDynamicKey(
+                source,
+                keyUtf8,
+                keySlice.Offset,
+                keySlice.Length,
+                keyMark,
+                ref diagnostics,
+                keyStore,
+                ref keyCount,
+                caseSensitive: false,
+                "outputs"))
             {
                 reader.Read();
+                if (!reader.End)
+                {
+                    reader.SkipCurrentNode();
+                }
+
+                continue;
             }
 
-            var (outEntries, outCount) = outputs.DetachArray();
-            arena.RegisterSliceMapBuffer(outEntries);
-            return new SliceMap<StringNodeId>(outEntries, outCount, caseSensitive: false);
+            var keyNode = arena.AddString(keySlice, reader.IsScalarQuoted(), BuildScalarLocation(reader.CurrentStart, keyUtf8.Length));
+            reader.Read();
+            if (reader.End)
+            {
+                break;
+            }
+
+            var value = ParseStringAndValidateExpression(ref reader, arena, ref diagnostics, ExpressionValidationContext.JobOutputs, out var outErr, out var outMark, parseWholeValueIfNoEmbedded: false);
+            if (outErr) AddError(ref diagnostics, $"jobs.'{DecodeUtf8(source, jobId)}'.outputs.{Encoding.UTF8.GetString(keyUtf8)} must be string", outMark);
+            arena.AddJobOutput(new JobOutputData { Key = keySlice, Value = value.HasValue ? value : keyNode });
+            outputCount++;
         }
-        finally { outputs.Dispose(); }
+
+        if (reader.CurrentKind == YamlEventKind.MappingEnd)
+        {
+            reader.Read();
+        }
+
+        return new NodeRange(outputsFirst, outputCount);
     }
 
     private static NodeRange ParseWorkflowCallInputsNode<TReader>(ref TReader reader, AstArena arena, ref PooledBuffer<Diagnostic> diagnostics, ReadOnlySpan<byte> source, Utf8Slice jobId)
