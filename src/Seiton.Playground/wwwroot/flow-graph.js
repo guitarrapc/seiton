@@ -394,7 +394,7 @@ function layoutStepGraph(graph) {
 }
 
 function jobMetaText(job) {
-  if (job.kind === 'reusable') return `uses: ${job.uses ?? ''}`;
+  if (job.kind === 'reusable') return `⧉ reusable · uses: ${job.uses ?? ''}`;
   const parts = [];
   if (job.name) parts.push(job.name);
   if (job.strategy?.hasMatrix) {

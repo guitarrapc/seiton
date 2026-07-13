@@ -211,6 +211,19 @@ public sealed class PlaygroundFlowTabContractTests
     }
 
     [Test]
+    public async Task FlowGraph_ReusableJobs_AreVisuallyDistinct()
+    {
+        var js = await ReadWwwrootFileAsync("flow-graph.js");
+        // Reusable-workflow call jobs get an explicit label, not just a dashed border.
+        await Assert.That(js).Contains("flow-job--reusable");
+        await Assert.That(js).Contains("⧉ reusable");
+
+        var css = await ReadWwwrootFileAsync("style.css");
+        // Distinct header tint so the node reads differently from normal jobs at any LOD.
+        await Assert.That(css).Contains(".flow-job--reusable .flow-job__header");
+    }
+
+    [Test]
     public async Task Stylesheet_DefinesFlowTabAndGraphClasses()
     {
         var css = await ReadWwwrootFileAsync("style.css");

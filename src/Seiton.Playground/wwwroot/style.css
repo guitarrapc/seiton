@@ -1690,3 +1690,19 @@ footer a {
   border-color: var(--accent);
   color: var(--accent);
 }
+
+/* ─── Reusable-workflow job nodes: distinct header tint ─── */
+
+.flow-job--reusable .flow-job__header {
+  fill: var(--info);
+  opacity: 0.18;
+}
+
+.flow-job--reusable .flow-job__header:hover {
+  opacity: 0.32;
+}
+
+.flow-job--reusable .flow-job__meta {
+  fill: var(--info);
+  opacity: 0.9;
+}
