@@ -198,6 +198,8 @@ Output as JSON for programmatic consumption:
 seiton rules --format json
 ```
 
+The `rules` command supports `text` and `json` only. Diagnostic and flow formats are rejected.
+
 Example text output:
 
 ```

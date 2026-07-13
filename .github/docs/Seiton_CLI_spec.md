@@ -754,7 +754,7 @@ Progress (`--verbose`), configuration errors, init hints, fix diffs (when format
 
 #### 6.5.4 Unsupported commands
 
-`seiton rules` does not support `github-actions` (exit code `2`, same as SARIF).
+`seiton rules` supports only `text` and `json`; `sarif`, `github-actions`, `flow-json`, and `flow-mermaid` are rejected with exit code `2`.
 
 ### 6.6 `flow-json` / `flow-mermaid` (flow formats)
 

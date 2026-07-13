@@ -86,6 +86,11 @@ internal static class CheckCommand
 
         if (resolvedFiles.Length == 0 && !files.Contains("-"))
         {
+            if (resolvedFormat is OutputFormat.FlowJson or OutputFormat.FlowMermaid)
+            {
+                return RunFlow(resolvedFiles, stdinFilename, resolvedFormat);
+            }
+
             Console.Error.WriteLine(includeActions ? "no workflow/action files found" : "no workflow files found");
             return ExitCode.Success;
         }

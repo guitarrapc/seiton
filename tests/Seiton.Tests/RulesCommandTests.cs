@@ -100,6 +100,25 @@ public sealed class RulesCommandTests
     }
 
     [Test]
+    [Arguments(OutputFormat.FlowJson, "flow-json")]
+    [Arguments(OutputFormat.FlowMermaid, "flow-mermaid")]
+    public async Task Run_FlowFormat_WritesErrorToInjectedWriter(OutputFormat format, string formatName)
+    {
+        using var stdout = new StringWriter();
+        using var stderr = new StringWriter();
+
+        var exitCode = RulesCommand.Run(
+            config: null,
+            format: format,
+            output: stdout,
+            error: stderr);
+
+        await Assert.That(exitCode).IsEqualTo(ExitCode.InvalidOptions);
+        await Assert.That(stderr.ToString()).Contains(formatName);
+        await Assert.That(stdout.ToString()).IsEqualTo(string.Empty);
+    }
+
+    [Test]
     public async Task Run_TextFormat_OnGitHubActionsRunner_RemainsTextAndSucceeds()
     {
         var originalGha = Environment.GetEnvironmentVariable("GITHUB_ACTIONS");

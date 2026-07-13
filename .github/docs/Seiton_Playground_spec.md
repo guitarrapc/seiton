@@ -116,6 +116,8 @@ Non-functional requirement:
 - **WHY shared contract**: parsing YAML separately in the UI would create interpretation drift between lint and visualization; both CLI and Playground build the flow from the same parsed AST via `WorkflowFlowCollector` in Seiton.Core.
 - Non-workflow documents (e.g. `action.yml`) yield an empty `workflows` array; the Flow tab shows an empty-state notice.
 - Identity-based caching mirrors `RunLint`: an identical `(yamlSource, filePath)` reference pair returns the cached byte array without re-parsing.
+- The UI records its flow staleness key only after a non-error response can be rendered; backend errors and unavailable graph dependencies remain retryable without editing the YAML.
+- While a trailing bare `- uses:` is incomplete, the UI defers the WASM call and clears the previous graph so stale workflow structure is never presented as current.
 
 ---
 

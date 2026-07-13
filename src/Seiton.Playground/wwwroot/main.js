@@ -832,15 +832,23 @@ function refreshFlow(force = false) {
     return;
   }
   if (shouldDeferWasmLintForIncompleteUses(source)) {
+    lastFlowSource = null;
+    lastFlowFilePath = null;
+    lastFlowDiagnostics = null;
+    renderFlow({ version: 1, workflows: [] });
+    flowEmptyEl.textContent = 'Complete the uses value to refresh the workflow flow.';
     return;
   }
   try {
     const utf8Bytes = exports.Seiton.Playground.LintInterop.GetFlowJson(source, filePath);
     const flowDoc = JSON.parse(utf8Decoder.decode(utf8Bytes));
+    renderFlow(flowDoc);
+    if (flowDoc?.error || !globalThis.d3) {
+      return;
+    }
     lastFlowSource = source;
     lastFlowFilePath = filePath;
     lastFlowDiagnostics = lastDiagnostics;
-    renderFlow(flowDoc);
   } catch (err) {
     if (isRuntimeDeadError(err)) {
       handleRuntimeDeath();
@@ -1624,6 +1632,9 @@ function runLint() {
   }
 
   if (shouldDeferWasmLintForIncompleteUses(source)) {
+    if (activeResultsTab === 'flow') {
+      refreshFlow();
+    }
     return;
   }
 

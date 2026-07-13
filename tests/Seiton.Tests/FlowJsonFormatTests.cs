@@ -24,6 +24,61 @@ public sealed class FlowJsonFormatTests
     }
 
     [Test]
+    [Arguments(OutputFormat.FlowJson)]
+    [Arguments(OutputFormat.FlowMermaid)]
+    [NotInParallel("Console")]
+    public async Task Check_FlowFormat_NoDiscoveredWorkflows_EmitsEmptyFlowDocument(OutputFormat format)
+    {
+        var directory = Path.Combine(Path.GetTempPath(), "Seiton.Tests", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(directory);
+        var originalOut = Console.Out;
+        var originalErr = Console.Error;
+        using var stdout = new StringWriter();
+        using var stderr = new StringWriter();
+
+        try
+        {
+#pragma warning disable TUnit0055
+            Console.SetOut(stdout);
+            Console.SetError(stderr);
+#pragma warning restore TUnit0055
+
+            var code = CheckCommand.Run(
+                [directory],
+                config: null,
+                stdinFilename: "stdin.yml",
+                ignore: [],
+                minSeverity: null,
+                format: format,
+                oneline: false,
+                color: ColorMode.Never,
+                noColor: true,
+                verboseLevel: VerboseLevel.Off,
+                includeActions: false,
+                formatExplicitlySet: true);
+
+            await Assert.That(code).IsEqualTo(ExitCode.Success);
+            if (format == OutputFormat.FlowJson)
+            {
+                using var doc = JsonDocument.Parse(stdout.ToString());
+                await Assert.That(doc.RootElement.GetProperty("workflows").GetArrayLength()).IsEqualTo(0);
+            }
+            else
+            {
+                await Assert.That(stdout.ToString()).StartsWith("flowchart LR");
+            }
+        }
+        finally
+        {
+#pragma warning disable TUnit0055
+            Console.SetOut(originalOut);
+            Console.SetError(originalErr);
+#pragma warning restore TUnit0055
+            Directory.Delete(directory, recursive: true);
+        }
+    }
+
+    [Test]
     [NotInParallel("Console")]
     public async Task Check_FlowJsonFormat_EmitsFlowDocument()
     {

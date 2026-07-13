@@ -52,6 +52,144 @@ public sealed class PlaygroundUiLayoutTests
             new PageWaitForFunctionOptions { Timeout = 90_000 });
     }
 
+    [Test]
+    public async Task FlowGraph_NeedsLookup_IsCaseInsensitive()
+    {
+        var host = await PlaygroundUiTestHost.GetOrCreateAsync();
+        var browser = await PlaygroundUiBrowserSession.GetBrowserAsync();
+        await using var context = await browser.NewContextAsync();
+        var page = await context.NewPageAsync();
+        await GotoPlaygroundAndWaitForLinterGridAsync(page, $"{host.BaseUrl.TrimEnd('/')}/?seitonTestHooks=1");
+        await page.WaitForFunctionAsync(
+            "() => typeof globalThis.__SEITON_PLAYGROUND_TEST__?.renderFlow === 'function'",
+            arg: null,
+            new PageWaitForFunctionOptions { Timeout = 30_000 });
+
+        await page.EvaluateAsync(
+            """
+            () => globalThis.__SEITON_PLAYGROUND_TEST__.renderFlow({
+              version: 1,
+              workflows: [{
+                file: 'ci.yml',
+                events: ['push'],
+                jobs: [
+                  { id: 'Build', kind: 'job', needs: [], reducedNeeds: [], runsOn: [], steps: [] },
+                  { id: 'deploy', kind: 'job', needs: ['build'], reducedNeeds: ['build'], runsOn: [], steps: [] },
+                ],
+              }],
+            })
+            """);
+
+        await Assert.That(await page.Locator("#flow-graph .flow-edge").CountAsync()).IsEqualTo(1);
+    }
+
+    [Test]
+    public async Task FlowGraph_GroupEdge_HighlightsWithNeedsChain()
+    {
+        var host = await PlaygroundUiTestHost.GetOrCreateAsync();
+        var browser = await PlaygroundUiBrowserSession.GetBrowserAsync();
+        await using var context = await browser.NewContextAsync();
+        var page = await context.NewPageAsync();
+        await GotoPlaygroundAndWaitForLinterGridAsync(page, $"{host.BaseUrl.TrimEnd('/')}/?seitonTestHooks=1");
+        await page.WaitForFunctionAsync(
+            "() => typeof globalThis.__SEITON_PLAYGROUND_TEST__?.renderFlow === 'function'",
+            arg: null,
+            new PageWaitForFunctionOptions { Timeout = 30_000 });
+
+        await page.EvaluateAsync(
+            """
+            () => globalThis.__SEITON_PLAYGROUND_TEST__.renderFlow({
+              version: 1,
+              workflows: [{
+                file: 'ci.yml',
+                events: ['push'],
+                jobs: [
+                  { id: 'build', kind: 'job', needs: [], reducedNeeds: [], runsOn: [], steps: [] },
+                  { id: 'lint-a', kind: 'job', needs: ['build'], reducedNeeds: ['build'], runsOn: [], steps: [] },
+                  { id: 'lint-b', kind: 'job', needs: ['build'], reducedNeeds: ['build'], runsOn: [], steps: [] },
+                ],
+              }],
+            })
+            """);
+        await page.Locator("#flow-graph .flow-job").Nth(1).DispatchEventAsync("mouseenter");
+
+        await Assert.That(
+            await page.Locator("#flow-graph .flow-edge--group.flow-hover-related").CountAsync()).IsEqualTo(1);
+    }
+
+    [Test]
+    public async Task FlowTab_FailedRender_RetriesUnchangedSource()
+    {
+        var host = await PlaygroundUiTestHost.GetOrCreateAsync();
+        var browser = await PlaygroundUiBrowserSession.GetBrowserAsync();
+        await using var context = await browser.NewContextAsync();
+        var page = await context.NewPageAsync();
+        await GotoPlaygroundAndWaitForLinterGridAsync(page, $"{host.BaseUrl.TrimEnd('/')}/?seitonTestHooks=1");
+        await page.WaitForFunctionAsync(
+            "() => typeof globalThis.__SEITON_PLAYGROUND_TEST__?.selectResultsTab === 'function'",
+            arg: null,
+            new PageWaitForFunctionOptions { Timeout = 30_000 });
+
+        await page.EvaluateAsync(
+            """
+            () => {
+              const cm = document.querySelector('#editor .CodeMirror').CodeMirror;
+              cm.setValue('on: push\njobs:\n  build:\n    runs-on: ubuntu-latest\n    steps:\n      - run: echo ok\n');
+              globalThis.__seitonSavedD3 = globalThis.d3;
+              globalThis.d3 = undefined;
+              globalThis.__SEITON_PLAYGROUND_TEST__.selectResultsTab('flow');
+            }
+            """);
+        await Assert.That(await page.Locator("#flow-graph .flow-job").CountAsync()).IsEqualTo(0);
+
+        await page.EvaluateAsync(
+            """
+            () => {
+              globalThis.d3 = globalThis.__seitonSavedD3;
+              globalThis.__SEITON_PLAYGROUND_TEST__.selectResultsTab('result');
+              globalThis.__SEITON_PLAYGROUND_TEST__.selectResultsTab('flow');
+            }
+            """);
+
+        await Assert.That(await page.Locator("#flow-graph .flow-job").CountAsync()).IsEqualTo(1);
+    }
+
+    [Test]
+    public async Task FlowTab_IncompleteUses_ClearsStaleGraph()
+    {
+        var host = await PlaygroundUiTestHost.GetOrCreateAsync();
+        var browser = await PlaygroundUiBrowserSession.GetBrowserAsync();
+        await using var context = await browser.NewContextAsync();
+        var page = await context.NewPageAsync();
+        await GotoPlaygroundAndWaitForLinterGridAsync(page, $"{host.BaseUrl.TrimEnd('/')}/?seitonTestHooks=1");
+        await page.WaitForFunctionAsync(
+            "() => typeof globalThis.__SEITON_PLAYGROUND_TEST__?.selectResultsTab === 'function'",
+            arg: null,
+            new PageWaitForFunctionOptions { Timeout = 30_000 });
+
+        await page.EvaluateAsync(
+            """
+            () => {
+              const cm = document.querySelector('#editor .CodeMirror').CodeMirror;
+              cm.setValue('on: push\njobs:\n  build:\n    runs-on: ubuntu-latest\n    steps:\n      - run: echo ok\n');
+              globalThis.__SEITON_PLAYGROUND_TEST__.selectResultsTab('flow');
+            }
+            """);
+        await Assert.That(await page.Locator("#flow-graph .flow-job").CountAsync()).IsEqualTo(1);
+
+        await page.EvaluateAsync(
+            """
+            () => {
+              const cm = document.querySelector('#editor .CodeMirror').CodeMirror;
+              cm.setValue('on: push\njobs:\n  build:\n    runs-on: ubuntu-latest\n    steps:\n      - uses:');
+            }
+            """);
+        await page.WaitForTimeoutAsync(700);
+
+        await Assert.That(await page.Locator("#flow-graph .flow-job").CountAsync()).IsEqualTo(0);
+        await Assert.That(await page.Locator("#flow-empty").IsVisibleAsync()).IsTrue();
+    }
+
     /// <summary>
     /// URL input tests only need the lightweight client-side handlers from <c>main.js</c>.
     /// </summary>
