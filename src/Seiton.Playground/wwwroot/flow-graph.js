@@ -79,10 +79,13 @@ export function renderFlowGraph(container, workflow, { onSelect, diagnostics } =
     onSelect?.({ ...info, diagnostics: diagMap.get(info.data) ?? [] });
   };
 
-  drawJobEdges(d3, edgeLayer, jobs, layout);
+  const edgeSelections = drawJobEdges(d3, edgeLayer, jobs, layout);
+  const jobGroups = new Map();
   for (const job of jobs) {
-    drawJobNode(d3, nodeLayer, job, layout.get(job.id), select, diagMap);
+    jobGroups.set(job.id, drawJobNode(d3, nodeLayer, job, layout.get(job.id), select, diagMap));
   }
+
+  wireNeedsHover(svg, jobs, jobGroups, edgeSelections);
 
   const zoom = d3
     .zoom()
@@ -262,19 +265,85 @@ function drawJobEdges(d3, layer, jobs, layout) {
     .linkHorizontal()
     .x((p) => p[0])
     .y((p) => p[1]);
+  const edges = [];
   for (const job of jobs) {
     const target = layout.get(job.id);
     for (const dep of job.needs ?? []) {
       const source = layout.get(dep);
       if (!source) continue;
-      layer
+      const path = layer
         .append('path')
         .attr('class', 'flow-edge')
         .attr('d', link({
           source: [source.x + source.width, source.y + source.height / 2],
           target: [target.x, target.y + target.height / 2],
         }));
+      edges.push({ from: dep, to: job.id, path });
     }
+  }
+
+  return edges;
+}
+
+// ─── Needs-chain hover highlighting ───
+
+/**
+ * Hovering a job highlights its transitive `needs` closure — everything it depends
+ * on (upstream) and everything that depends on it (downstream) — plus the edges
+ * between related jobs, while dimming the rest of the graph.
+ */
+function wireNeedsHover(svg, jobs, jobGroups, edgeSelections) {
+  const dependsOn = new Map();
+  const dependedBy = new Map();
+  for (const job of jobs) {
+    dependsOn.set(job.id, (job.needs ?? []).filter((n) => jobGroups.has(n)));
+  }
+  for (const [id, needs] of dependsOn) {
+    for (const dep of needs) {
+      if (!dependedBy.has(dep)) dependedBy.set(dep, []);
+      dependedBy.get(dep).push(id);
+    }
+  }
+
+  const closure = (start, adjacency) => {
+    const seen = new Set();
+    const queue = [...(adjacency.get(start) ?? [])];
+    while (queue.length > 0) {
+      const id = queue.pop();
+      if (seen.has(id)) continue;
+      seen.add(id);
+      queue.push(...(adjacency.get(id) ?? []));
+    }
+    return seen;
+  };
+
+  const clearHover = () => {
+    svg.classed('flow-svg--hovering', false);
+    for (const group of jobGroups.values()) {
+      group.classed('flow-hover-related', false).classed('flow-hover-focus', false);
+    }
+    for (const edge of edgeSelections) {
+      edge.path.classed('flow-hover-related', false);
+    }
+  };
+
+  const hoverJob = (jobId) => {
+    const related = new Set([jobId, ...closure(jobId, dependsOn), ...closure(jobId, dependedBy)]);
+    svg.classed('flow-svg--hovering', true);
+    for (const [id, group] of jobGroups) {
+      group
+        .classed('flow-hover-related', related.has(id))
+        .classed('flow-hover-focus', id === jobId);
+    }
+    for (const edge of edgeSelections) {
+      edge.path.classed('flow-hover-related', related.has(edge.from) && related.has(edge.to));
+    }
+  };
+
+  for (const [id, group] of jobGroups) {
+    group
+      .on('mouseenter', () => hoverJob(id))
+      .on('mouseleave', clearHover);
   }
 }
 
@@ -553,6 +622,8 @@ function drawJobNode(d3, layer, job, pos, select, diagMap) {
       drawStepNode(inner, node, select, diagMap);
     }
   }
+
+  return g;
 }
 
 function countSteps(steps) {

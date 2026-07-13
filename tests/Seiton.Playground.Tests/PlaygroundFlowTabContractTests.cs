@@ -224,6 +224,22 @@ public sealed class PlaygroundFlowTabContractTests
     }
 
     [Test]
+    public async Task FlowGraph_HoveringJob_HighlightsNeedsChain()
+    {
+        var js = await ReadWwwrootFileAsync("flow-graph.js");
+        // Hover highlights the transitive needs closure (upstream + downstream) and its edges.
+        await Assert.That(js).Contains("flow-hover-related");
+        await Assert.That(js).Contains("flow-hover-focus");
+        await Assert.That(js).Contains("flow-svg--hovering");
+        await Assert.That(js).Contains("mouseenter");
+        await Assert.That(js).Contains("mouseleave");
+
+        var css = await ReadWwwrootFileAsync("style.css");
+        await Assert.That(css).Contains(".flow-svg--hovering");
+        await Assert.That(css).Contains(".flow-hover-related");
+    }
+
+    [Test]
     public async Task Stylesheet_DefinesFlowTabAndGraphClasses()
     {
         var css = await ReadWwwrootFileAsync("style.css");

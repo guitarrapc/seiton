@@ -1706,3 +1706,28 @@ footer a {
   fill: var(--info);
   opacity: 0.9;
 }
+
+/* ─── Needs-chain hover highlighting ─── */
+
+.flow-job,
+.flow-edge {
+  transition: opacity 0.15s ease;
+}
+
+.flow-svg--hovering .flow-job:not(.flow-hover-related) {
+  opacity: 0.25;
+}
+
+.flow-svg--hovering .flow-edge {
+  opacity: 0.12;
+}
+
+.flow-svg--hovering .flow-edge.flow-hover-related {
+  opacity: 1;
+  stroke-width: 2.5;
+}
+
+.flow-job.flow-hover-focus > .flow-job__box {
+  stroke: var(--accent);
+  stroke-width: 1.6;
+}
