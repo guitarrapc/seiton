@@ -64,8 +64,37 @@ public static class WorkflowFlowCollector
             RunsOn = CollectRunsOn(job.RunsOn),
             Uses = isReusable ? NullIfEmpty(workflowCall.Uses) : null,
             Strategy = CollectStrategy(job.Strategy),
+            TimeoutMinutes = CollectTimeout(job.TimeoutMinutes),
+            Permissions = CollectPermissions(job.Permissions),
+            Environment = NullIfEmpty(job.Environment.Name),
             Steps = CollectSteps(job.Steps),
         };
+    }
+
+    private static double? CollectTimeout(FloatRef timeout)
+        => timeout.HasValue && !timeout.Expression.HasText ? timeout.Value : null;
+
+    private static string[]? CollectPermissions(PermissionsRef permissions)
+    {
+        if (!permissions.HasValue)
+        {
+            return null;
+        }
+
+        if (permissions.All.HasText)
+        {
+            return [permissions.All.Decode()];
+        }
+
+        var scopes = permissions.Scopes;
+        var entries = scopes.Count == 0 ? [] : new string[scopes.Count];
+        for (var i = 0; i < entries.Length; i++)
+        {
+            var scope = scopes.GetAt(i);
+            entries[i] = $"{scope.Key.Decode()}: {scope.Value.Value.Decode()}";
+        }
+
+        return entries;
     }
 
     private static string[] CollectRunsOn(RunnerRef runner)
@@ -440,6 +469,8 @@ public static class WorkflowFlowCollector
             Name = NullIfEmpty(step.Name),
             If = NullIfEmpty(step.If),
             Background = step.Background.HasValue && step.Background.Value,
+            TimeoutMinutes = CollectTimeout(step.TimeoutMinutes),
+            ContinueOnError = step.ContinueOnError.HasValue && step.ContinueOnError.Value,
             Run = kind == FlowStepKind.Run ? NullIfEmpty(exec.AsRun().Run) : null,
             Uses = kind == FlowStepKind.Uses ? NullIfEmpty(exec.AsAction().Uses) : null,
             WaitTargets = kind == FlowStepKind.Wait ? DecodeList(exec.AsWait().Targets) : [],

@@ -117,6 +117,27 @@ public static class WorkflowFlowJson
             writer.WriteString("uses"u8, job.Uses);
         }
 
+        if (job.TimeoutMinutes is { } jobTimeout)
+        {
+            writer.WriteNumber("timeoutMinutes"u8, jobTimeout);
+        }
+
+        if (job.Permissions is not null)
+        {
+            writer.WriteStartArray("permissions"u8);
+            foreach (var permission in job.Permissions)
+            {
+                writer.WriteStringValue(permission);
+            }
+
+            writer.WriteEndArray();
+        }
+
+        if (job.Environment is not null)
+        {
+            writer.WriteString("environment"u8, job.Environment);
+        }
+
         if (job.Strategy is not null)
         {
             writer.WriteStartObject("strategy"u8);
@@ -183,6 +204,16 @@ public static class WorkflowFlowJson
         if (step.Background)
         {
             writer.WriteBoolean("background"u8, true);
+        }
+
+        if (step.TimeoutMinutes is { } stepTimeout)
+        {
+            writer.WriteNumber("timeoutMinutes"u8, stepTimeout);
+        }
+
+        if (step.ContinueOnError)
+        {
+            writer.WriteBoolean("continueOnError"u8, true);
         }
 
         if (step.Run is not null)

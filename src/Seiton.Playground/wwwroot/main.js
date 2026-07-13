@@ -898,6 +898,11 @@ function showFlowDetail(info) {
     add('if', job.if);
     add('needs', job.needs);
     add('runs-on', job.runsOn);
+    add('timeout-minutes', job.timeoutMinutes);
+    if (Array.isArray(job.permissions)) {
+      add('permissions', job.permissions.length === 0 ? '{} (deny all)' : job.permissions);
+    }
+    add('environment', job.environment);
     add('uses', job.uses);
     if (job.strategy?.hasMatrix) {
       add('matrix', job.strategy.matrixIsExpression ? '${{ … }} (dynamic)' : job.strategy.matrixKeys);
@@ -919,6 +924,10 @@ function showFlowDetail(info) {
     add('if', step.if);
     if (step.background) {
       add('background', 'true (later steps do not wait for this step)');
+    }
+    add('timeout-minutes', step.timeoutMinutes);
+    if (step.continueOnError) {
+      add('continue-on-error', 'true');
     }
     add('run', step.run);
     add('uses', step.uses);

@@ -48,6 +48,19 @@ public sealed class FlowJob
 
     public FlowStrategy? Strategy { get; init; }
 
+    /// <summary>The declared <c>timeout-minutes</c>, or <c>null</c> when absent or a dynamic expression.</summary>
+    public double? TimeoutMinutes { get; init; }
+
+    /// <summary>
+    /// Declared permissions: <c>["read-all"]</c>/<c>["write-all"]</c> for the scalar form,
+    /// <c>"scope: level"</c> entries for the mapping form (empty array = <c>{}</c> deny-all).
+    /// <c>null</c> when not declared.
+    /// </summary>
+    public string[]? Permissions { get; init; }
+
+    /// <summary>The deployment environment name, if declared.</summary>
+    public string? Environment { get; init; }
+
     public required FlowStep[] Steps { get; init; }
 
     /// <summary>1-based start line of the job block in the source (0 when unknown).</summary>
@@ -102,6 +115,12 @@ public sealed class FlowStep
 
     /// <summary>Whether the step runs in the background (<c>background: true</c>) — later steps do not wait for it.</summary>
     public bool Background { get; init; }
+
+    /// <summary>The declared <c>timeout-minutes</c>, or <c>null</c> when absent or a dynamic expression.</summary>
+    public double? TimeoutMinutes { get; init; }
+
+    /// <summary>Whether the step declares <c>continue-on-error: true</c>.</summary>
+    public bool ContinueOnError { get; init; }
 
     /// <summary>The script body for <see cref="FlowStepKind.Run"/> steps.</summary>
     public string? Run { get; init; }

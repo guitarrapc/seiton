@@ -319,6 +319,10 @@ flow collector は `check --format flow-*` / `GetFlowJson` 要求時のみ動く
 
 学び: parallel step の Range は自身のヘッダー行のみで子 step を含まない。ハイライトでは子孫の endLine の最大値まで拡張する必要がある。また兄弟への spill 行は「他ノード(自身の子孫を除く)の開始行に一致する末尾行をトリム」で除去した。
 
+5. **LOD 拡充(runtime 設定の表示)**: DTO/flow-json に job の `timeoutMinutes` / `permissions`(scalar 形式は `["read-all"]`、map 形式は `"scope: level"`、`{}` は空配列、未宣言は省略)/ `environment`、step の `timeoutMinutes` / `continueOnError` を追加。UI は job ヘッダー下の info 行(`⏱ 15m · perms: … · env: …`、lod0 では非表示、hover で全文)と step ラベルのサフィックス(`⏱5m` / `↷`)、詳細パネルの行として表示。
+
+学び: step ラベルへのサフィックス付加は truncate の**前**に行うとマーカーごと切り落とされる。基底ラベルを `max - marks.length` に切り詰めてからマーカーを付加する。
+
 ## 現時点の結論
 
 flow 可視化は、専用コマンドや UI 先行の個別実装ではなく、まず `check --format flow-json` という共通契約を作り、それを Playground が消費する形で進めるのが最も整合的である。

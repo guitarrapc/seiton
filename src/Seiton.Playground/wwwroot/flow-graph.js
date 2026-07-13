@@ -408,12 +408,28 @@ function jobLegs(job) {
   return job.strategy?.combinations ?? [];
 }
 
+/** Runtime settings line (timeout / permissions / environment), shown when zoomed in. */
+function jobInfoText(job) {
+  const parts = [];
+  if (job.timeoutMinutes !== undefined && job.timeoutMinutes !== null) {
+    parts.push(`⏱ ${job.timeoutMinutes}m`);
+  }
+  if (Array.isArray(job.permissions)) {
+    parts.push(`perms: ${job.permissions.length === 0 ? '{}' : job.permissions.map((p) => p.replace(': ', ':')).join(', ')}`);
+  }
+  if (job.environment) {
+    parts.push(`env: ${job.environment}`);
+  }
+  return parts.join(' · ');
+}
+
 function measureJob(job) {
   const graph = buildStepGraph(job.steps ?? []);
   const content = layoutStepGraph(graph);
   const metaH = jobMetaText(job) ? META_H : 0;
+  const infoH = jobInfoText(job) ? META_H : 0;
   const legsH = jobLegs(job).length > 0 ? LEGS_H : 0;
-  const headerH = HEADER_H + metaH + legsH;
+  const headerH = HEADER_H + metaH + infoH + legsH;
   const height = headerH + (graph.nodes.length > 0 ? JOB_PAD + content.height : 0) + JOB_PAD;
   const width = Math.max(MIN_JOB_W, JOB_PAD * 2 + content.width);
   return { graph, headerH, height, width };
@@ -490,6 +506,19 @@ function drawJobNode(d3, layer, job, pos, select, diagMap) {
       .text(truncate(metaText, 44));
   }
 
+  const metaH = metaText ? META_H : 0;
+  const infoText = jobInfoText(job);
+  if (infoText) {
+    const info = g
+      .append('text')
+      .attr('class', 'flow-job__info')
+      .attr('x', JOB_PAD)
+      .attr('y', HEADER_H + metaH + 13)
+      .text(truncate(infoText, 48));
+    info.append('title').text(infoText);
+  }
+
+  const infoH = infoText ? META_H : 0;
   const legs = jobLegs(job);
   if (legs.length > 0) {
     const chips = legs.slice(0, MAX_LEG_CHIPS).map((c) => legLabel(c));
@@ -497,7 +526,7 @@ function drawJobNode(d3, layer, job, pos, select, diagMap) {
     g.append('text')
       .attr('class', 'flow-job__legs')
       .attr('x', JOB_PAD)
-      .attr('y', HEADER_H + (metaText ? META_H : 0) + 13)
+      .attr('y', HEADER_H + metaH + infoH + 13)
       .text(truncate(`${legs.length} legs: ${chips.join(' | ')}`, 52));
   }
 
@@ -591,7 +620,7 @@ function drawStepNode(layer, node, select, diagMap) {
   text
     .append('tspan')
     .attr('dx', 5)
-    .text(truncate(stepLabel(step), node.lane > 0 ? 18 : 22));
+    .text(stepLabelTruncated(step, node.lane > 0 ? 18 : 22));
 
   drawMarker(g, diagMap.get(step), node.x + node.width - 2, node.y + 2);
 }
@@ -643,7 +672,7 @@ function drawParallelNode(layer, node, select, diagMap) {
       .append('tspan')
       .attr('class', `flow-step__kind flow-step__kind--${child.kind}`)
       .text(kindLabel(child));
-    text.append('tspan').attr('dx', 4).text(truncate(stepLabel(child), 14));
+    text.append('tspan').attr('dx', 4).text(stepLabelTruncated(child, 14));
 
     drawMarker(childG, diagMap.get(child), cx + PAR_CHILD_W - 2, cy + 2);
   });
@@ -665,8 +694,22 @@ function stepLabel(step) {
   if (step.kind === 'parallel') return `${(step.steps ?? []).length} steps`;
   if (step.kind === 'wait') return (step.targets ?? []).join(', ');
   if (step.kind === 'cancel') return step.target ?? '';
-  const base = step.name ?? step.id ?? step.uses ?? firstLine(step.run) ?? '';
-  return step.if ? `${base} ⛊` : base;
+  return step.name ?? step.id ?? step.uses ?? firstLine(step.run) ?? '';
+}
+
+/** Suffix markers (if / timeout / continue-on-error) that must survive truncation. */
+function stepMarks(step) {
+  let marks = '';
+  if (step.if) marks += ' ⛊';
+  if (step.timeoutMinutes !== undefined && step.timeoutMinutes !== null) marks += ` ⏱${step.timeoutMinutes}m`;
+  if (step.continueOnError) marks += ' ↷';
+  return marks;
+}
+
+/** Truncates the base label first so the marker suffix is never cut off. */
+function stepLabelTruncated(step, max) {
+  const marks = stepMarks(step);
+  return truncate(stepLabel(step), Math.max(4, max - marks.length)) + marks;
 }
 
 function firstLine(text) {

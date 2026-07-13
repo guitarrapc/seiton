@@ -1646,3 +1646,16 @@ footer a {
 .flow-hl-line {
   background: color-mix(in srgb, var(--accent) 16%, transparent);
 }
+
+/* ─── Job runtime info line (timeout / permissions / environment) ─── */
+
+.flow-job__info {
+  fill: var(--text);
+  opacity: 0.75;
+  font-size: 11px;
+  pointer-events: none;
+}
+
+.flow-svg--lod0 .flow-job__info {
+  display: none;
+}

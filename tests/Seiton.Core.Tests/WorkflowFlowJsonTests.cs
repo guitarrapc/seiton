@@ -189,6 +189,41 @@ public sealed class WorkflowFlowJsonTests
     }
 
     [Test]
+    public async Task Serialize_RuntimeSettings_EmittedPerContract()
+    {
+        var flow = CollectFlow("""
+            on: push
+            jobs:
+              build:
+                runs-on: ubuntu-latest
+                timeout-minutes: 15
+                permissions:
+                  contents: read
+                environment: production
+                steps:
+                  - run: echo build
+                    timeout-minutes: 5
+                    continue-on-error: true
+                  - run: echo plain
+            """);
+
+        var json = WorkflowFlowJson.Serialize(flow);
+        using var doc = JsonDocument.Parse(json);
+        var job = doc.RootElement.GetProperty("workflows")[0].GetProperty("jobs")[0];
+
+        await Assert.That(job.GetProperty("timeoutMinutes").GetDouble()).IsEqualTo(15d);
+        await Assert.That(job.GetProperty("permissions")[0].GetString()).IsEqualTo("contents: read");
+        await Assert.That(job.GetProperty("environment").GetString()).IsEqualTo("production");
+
+        var steps = job.GetProperty("steps");
+        await Assert.That(steps[0].GetProperty("timeoutMinutes").GetDouble()).IsEqualTo(5d);
+        await Assert.That(steps[0].GetProperty("continueOnError").GetBoolean()).IsTrue();
+        // Absent settings are omitted.
+        await Assert.That(steps[1].TryGetProperty("timeoutMinutes", out _)).IsFalse();
+        await Assert.That(steps[1].TryGetProperty("continueOnError", out _)).IsFalse();
+    }
+
+    [Test]
     public async Task Serialize_MultipleWorkflows_WrappedInSingleDocument()
     {
         var flowA = CollectFlow("""

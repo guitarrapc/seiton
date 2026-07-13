@@ -111,6 +111,34 @@ public sealed class PlaygroundFlowTabContractTests
     }
 
     [Test]
+    public async Task FlowGraphModule_ShowsJobRuntimeInfoLine()
+    {
+        var js = await ReadWwwrootFileAsync("flow-graph.js");
+        // Second job info line (timeout / permissions / environment), visible when zoomed in.
+        await Assert.That(js).Contains("flow-job__info");
+        await Assert.That(js).Contains("timeoutMinutes");
+        await Assert.That(js).Contains("permissions");
+        await Assert.That(js).Contains("environment");
+    }
+
+    [Test]
+    public async Task MainJs_FlowDetail_ShowsRuntimeSettings()
+    {
+        var js = await ReadWwwrootFileAsync("main.js");
+        await Assert.That(js).Contains("timeout-minutes");
+        await Assert.That(js).Contains("continue-on-error");
+        await Assert.That(js).Contains("'permissions'");
+    }
+
+    [Test]
+    public async Task Stylesheet_DefinesJobInfoLineHiddenAtFarZoom()
+    {
+        var css = await ReadWwwrootFileAsync("style.css");
+        await Assert.That(css).Contains(".flow-job__info");
+        await Assert.That(css).Contains(".flow-svg--lod0 .flow-job__info");
+    }
+
+    [Test]
     public async Task MainJs_FlowSelection_HighlightsEditorLines()
     {
         var js = await ReadWwwrootFileAsync("main.js");

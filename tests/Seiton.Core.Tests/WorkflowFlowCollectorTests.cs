@@ -196,6 +196,66 @@ public sealed class WorkflowFlowCollectorTests
     }
 
     [Test]
+    public async Task Collect_JobRuntimeSettings_CapturesTimeoutPermissionsAndEnvironment()
+    {
+        using var result = Parse("""
+            on: push
+            jobs:
+              build:
+                runs-on: ubuntu-latest
+                timeout-minutes: 15
+                permissions:
+                  contents: read
+                  id-token: write
+                environment: production
+                steps:
+                  - run: echo build
+                    timeout-minutes: 5
+                  - run: echo cleanup
+                    continue-on-error: true
+              scan:
+                runs-on: ubuntu-latest
+                permissions: read-all
+                steps:
+                  - run: echo scan
+            """);
+
+        var flow = WorkflowFlowCollector.Collect(result, "wf.yml");
+
+        var build = flow!.Jobs[0];
+        await Assert.That(build.TimeoutMinutes).IsEqualTo(15d);
+        await Assert.That(build.Permissions!.SequenceEqual(["contents: read", "id-token: write"])).IsTrue();
+        await Assert.That(build.Environment).IsEqualTo("production");
+        await Assert.That(build.Steps[0].TimeoutMinutes).IsEqualTo(5d);
+        await Assert.That(build.Steps[0].ContinueOnError).IsFalse();
+        await Assert.That(build.Steps[1].TimeoutMinutes).IsNull();
+        await Assert.That(build.Steps[1].ContinueOnError).IsTrue();
+
+        var scan = flow.Jobs[1];
+        await Assert.That(scan.Permissions!.SequenceEqual(["read-all"])).IsTrue();
+        await Assert.That(scan.TimeoutMinutes).IsNull();
+        await Assert.That(scan.Environment).IsNull();
+    }
+
+    [Test]
+    public async Task Collect_JobWithoutRuntimeSettings_HasNullPermissions()
+    {
+        using var result = Parse("""
+            on: push
+            jobs:
+              build:
+                runs-on: ubuntu-latest
+                steps:
+                  - run: echo hi
+            """);
+
+        var flow = WorkflowFlowCollector.Collect(result, "wf.yml");
+
+        await Assert.That(flow!.Jobs[0].Permissions).IsNull();
+        await Assert.That(flow.Jobs[0].TimeoutMinutes).IsNull();
+    }
+
+    [Test]
     public async Task Collect_BackgroundStep_SetsBackgroundFlag()
     {
         using var result = Parse("""
