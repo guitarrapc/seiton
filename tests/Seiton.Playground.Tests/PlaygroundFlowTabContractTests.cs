@@ -61,6 +61,46 @@ public sealed class PlaygroundFlowTabContractTests
     }
 
     [Test]
+    public async Task FlowGraphModule_DefinesIntraJobFlowWithLod()
+    {
+        var js = await ReadWwwrootFileAsync("flow-graph.js");
+        // Intra-job step flow: background steps fork off the main lane, wait/wait-all join them.
+        await Assert.That(js).Contains("buildStepGraph");
+        await Assert.That(js).Contains("flow-step-edge");
+        await Assert.That(js).Contains("background");
+        await Assert.That(js).Contains("wait-all");
+        // Zoom-driven level of detail.
+        await Assert.That(js).Contains("flow-svg--lod0");
+        await Assert.That(js).Contains("flow-svg--lod2");
+    }
+
+    [Test]
+    public async Task FlowGraphModule_RendersMatrixLegs()
+    {
+        var js = await ReadWwwrootFileAsync("flow-graph.js");
+        await Assert.That(js).Contains("combinations");
+        await Assert.That(js).Contains("flow-job__legs");
+    }
+
+    [Test]
+    public async Task MainJs_FlowDetail_ShowsBackgroundAndMatrixCombinations()
+    {
+        var js = await ReadWwwrootFileAsync("main.js");
+        await Assert.That(js).Contains("combinations");
+        await Assert.That(js).Contains("background");
+    }
+
+    [Test]
+    public async Task Stylesheet_DefinesLodAndStepFlowClasses()
+    {
+        var css = await ReadWwwrootFileAsync("style.css");
+        await Assert.That(css).Contains(".flow-svg--lod0");
+        await Assert.That(css).Contains(".flow-step-edge");
+        await Assert.That(css).Contains(".flow-job__legs");
+        await Assert.That(css).Contains(".flow-job__summary");
+    }
+
+    [Test]
     public async Task Stylesheet_DefinesFlowTabAndGraphClasses()
     {
         var css = await ReadWwwrootFileAsync("style.css");

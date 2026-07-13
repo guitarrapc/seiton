@@ -472,7 +472,7 @@ seiton --format sarif > seiton.sarif
 
 ### Flow JSON (`flow-json`)
 
-Machine-readable workflow structure for visualization and tooling — the same contract consumed by the Playground flow tab. Instead of diagnostics, `check` emits the parsed workflow flow: jobs, `needs` edges, steps (`run` / `uses` / `parallel` / `wait` / `wait-all` / `cancel`), raw `if` expressions, strategy/matrix declarations (never expanded), and reusable-workflow jobs as opaque leaves. Lint rules are not executed and the exit code is always `0` unless option/config errors occur.
+Machine-readable workflow structure for visualization and tooling — the same contract consumed by the Playground flow tab. Instead of diagnostics, `check` emits the parsed workflow flow: jobs, `needs` edges, steps (`run` / `uses` / `parallel` / `wait` / `wait-all` / `cancel`), `background` flags, raw `if` expressions, statically expanded matrix combinations (`include`/`exclude` applied; dynamic `${{ }}` matrices stay unexpanded), and reusable-workflow jobs as opaque leaves. Lint rules are not executed and the exit code is always `0` unless option/config errors occur.
 
 `flow-json` is supported by `check` only; `fix` rejects it.
 

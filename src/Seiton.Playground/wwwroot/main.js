@@ -812,6 +812,15 @@ function showFlowDetail(info) {
     add('uses', job.uses);
     if (job.strategy?.hasMatrix) {
       add('matrix', job.strategy.matrixIsExpression ? '${{ … }} (dynamic)' : job.strategy.matrixKeys);
+      const combinations = job.strategy.combinations ?? [];
+      if (combinations.length > 0) {
+        add(
+          `legs (${combinations.length})`,
+          combinations
+            .map((c) => Object.entries(c).map(([k, v]) => `${k}=${v}`).join(', '))
+            .join('\n'),
+        );
+      }
     }
   } else {
     const step = info.data;
@@ -819,6 +828,9 @@ function showFlowDetail(info) {
     add('kind', step.kind);
     add('id', step.id);
     add('if', step.if);
+    if (step.background) {
+      add('background', 'true (later steps do not wait for this step)');
+    }
     add('run', step.run);
     add('uses', step.uses);
     add('wait targets', step.targets);

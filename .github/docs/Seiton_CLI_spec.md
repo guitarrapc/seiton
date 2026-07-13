@@ -767,9 +767,10 @@ Behavior common to both formats:
 - Supported by `check` (and the root command without `--fix`) only. Fix mode rejects them with exit code `2` and a stderr message.
 - Lint rules are not executed; no diagnostics are emitted. Exit code is `0` unless option/config errors occur.
 - Each input file is parsed once; non-workflow documents (e.g. `action.yml`) are skipped.
-- Matrix strategy is reported as **declaration only** (dimension names / dynamic-expression marker); combinations are never expanded.
+- **Static matrices are expanded** into `combinations` (cross product of the dimension rows, then `exclude` subset removal, then `include` extend/append — approximating GitHub semantics, capped at 256 combinations). Matrices containing any dynamic `${{ }}` dimension or block are reported as declaration only (dimension names / dynamic-expression marker) with empty `combinations`.
 - Reusable workflow jobs (`uses:` at job level) are opaque leaves carrying their `uses` ref; the referenced workflow is not loaded.
 - `if` conditions are carried as raw expressions.
+- `background: true` steps carry a `background` flag so intra-job concurrency (background fork, `wait`/`wait-all` join, `cancel`) can be reconstructed by consumers.
 
 #### 6.6.1 `flow-json`
 
@@ -778,9 +779,10 @@ Single JSON document to stdout:
 ```json
 { "version": 1, "workflows": [ { "file", "name"?, "on": [], "jobs": [
   { "id", "name"?, "kind": "job|reusable", "if"?, "needs": [], "runsOn": [], "uses"?,
-    "strategy"?: { "hasMatrix", "matrixKeys": [], "matrixIsExpression" },
+    "strategy"?: { "hasMatrix", "matrixKeys": [], "matrixIsExpression",
+                   "combinations": [ { "<key>": "<value>", ... } ] },
     "steps": [ { "kind": "run|uses|parallel|wait|wait-all|cancel", "id"?, "name"?, "if"?,
-                 "run"?, "uses"?, "targets"?, "target"?, "steps"? } ] } ] } ] }
+                 "background"?, "run"?, "uses"?, "targets"?, "target"?, "steps"? } ] } ] } ] }
 ```
 
 Absent optional fields are omitted. `steps` on a step appears only for `kind: "parallel"` (nested boundary children). This is the same contract served to the Playground flow tab by `PlaygroundFlowRunner`.

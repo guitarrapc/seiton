@@ -1,17 +1,43 @@
-// Flow tab renderer: draws a flow-json workflow (jobs + needs DAG + step lists +
-// parallel boundaries) as an SVG graph with d3.zoom pan/zoom and click-to-detail.
+// Flow tab renderer: draws a flow-json workflow as an SVG graph.
+//
+// Two levels of structure are rendered:
+//   1. Job DAG: `needs` edges between job boxes (columns = longest-path level).
+//   2. Intra-job step flow: inside each job box the steps form their own flow —
+//      the main lane runs top-to-bottom, `background: true` steps fork into side
+//      lanes, `wait`/`wait-all` join those lanes back, `cancel` cuts them, and
+//      `parallel` boundaries hold simultaneous children.
+//
+// Zoom level drives LOD (level of detail) via CSS classes on the SVG root:
+//   lod0 (far)  — job boxes with a summary line, intra-job flow hidden
+//   lod1 (mid)  — step nodes and edges visible, labels hidden
+//   lod2 (near) — full labels
+// Geometry never changes between LOD levels, only visibility — so zooming stays
+// anchored under the cursor.
+//
 // The flow-json contract is produced by PlaygroundFlowRunner (same as
 // `seiton check --format flow-json`); this module only renders, never parses YAML.
 
-const NODE_WIDTH = 260;
+const NODE_W = 200;
+const NODE_H = 26;
+const BG_NODE_W = 170;
+const BG_LANE_GAP = 18;
+const STEP_GAP_Y = 16;
+const JOB_PAD = 10;
 const HEADER_H = 30;
 const META_H = 18;
-const ROW_H = 22;
-const ROW_TEXT_PAD = 10;
-const PARALLEL_PAD_X = 6;
-const GAP_X = 80;
-const GAP_Y = 28;
-const BOX_BOTTOM_PAD = 8;
+const LEGS_H = 20;
+const MIN_JOB_W = 260;
+const GAP_X = 90;
+const GAP_Y = 36;
+const PAR_HEADER_H = 18;
+const PAR_CHILD_W = 150;
+const PAR_CHILD_H = 24;
+const PAR_PAD = 8;
+const PAR_CHILDREN_PER_ROW = 3;
+const MAX_LEG_CHIPS = 4;
+
+const LOD1_THRESHOLD = 0.55;
+const LOD2_THRESHOLD = 1.05;
 
 /**
  * Renders one workflow into `container`. Returns false when there is nothing to draw
@@ -34,7 +60,7 @@ export function renderFlowGraph(container, workflow, { onSelect } = {}) {
   const svg = d3
     .select(container)
     .append('svg')
-    .attr('class', 'flow-svg')
+    .attr('class', 'flow-svg flow-svg--lod2')
     .attr('role', 'img')
     .attr('aria-label', 'Workflow execution flow graph');
 
@@ -42,7 +68,7 @@ export function renderFlowGraph(container, workflow, { onSelect } = {}) {
   const edgeLayer = viewport.append('g');
   const nodeLayer = viewport.append('g');
 
-  drawEdges(d3, edgeLayer, jobs, layout);
+  drawJobEdges(d3, edgeLayer, jobs, layout);
   for (const job of jobs) {
     drawJobNode(d3, nodeLayer, job, layout.get(job.id), onSelect);
   }
@@ -50,11 +76,22 @@ export function renderFlowGraph(container, workflow, { onSelect } = {}) {
   const zoom = d3
     .zoom()
     .scaleExtent([0.2, 3])
-    .on('zoom', (ev) => viewport.attr('transform', ev.transform));
+    .on('zoom', (ev) => {
+      viewport.attr('transform', ev.transform);
+      applyLod(svg, ev.transform.k);
+    });
   svg.call(zoom);
   fitToView(d3, svg, zoom, layout, container);
   return true;
 }
+
+/** Swaps the LOD class for the current zoom scale (visibility only, never geometry). */
+function applyLod(svg, k) {
+  const cls = k < LOD1_THRESHOLD ? 'flow-svg--lod0' : k < LOD2_THRESHOLD ? 'flow-svg--lod1' : 'flow-svg--lod2';
+  svg.attr('class', `flow-svg ${cls}`);
+}
+
+// ─── Job DAG layout ───
 
 /** Longest-path leveling over `needs` edges; document order within a level. */
 function computeLayout(jobs) {
@@ -77,59 +114,44 @@ function computeLayout(jobs) {
 
   for (const job of jobs) levelOf(job, new Set());
 
-  const columns = new Map();
-  const layout = new Map();
+  // Column x positions depend on the widest job in each preceding column.
+  const columnJobs = new Map();
   for (const job of jobs) {
     const level = levels.get(job.id);
-    const x = level * (NODE_WIDTH + GAP_X);
-    const y = columns.get(level) ?? 0;
-    const rows = buildStepRows(job);
-    const height = nodeHeight(job, rows);
-    layout.set(job.id, { x, y, width: NODE_WIDTH, height, rows });
-    columns.set(level, y + height + GAP_Y);
+    if (!columnJobs.has(level)) columnJobs.set(level, []);
+    columnJobs.get(level).push(job);
+  }
+
+  const measured = new Map();
+  for (const job of jobs) {
+    measured.set(job.id, measureJob(job));
+  }
+
+  const columnX = new Map();
+  let x = 0;
+  const maxLevel = Math.max(...columnJobs.keys());
+  for (let level = 0; level <= maxLevel; level++) {
+    columnX.set(level, x);
+    let widest = MIN_JOB_W;
+    for (const job of columnJobs.get(level) ?? []) {
+      widest = Math.max(widest, measured.get(job.id).width);
+    }
+    x += widest + GAP_X;
+  }
+
+  const layout = new Map();
+  const columnY = new Map();
+  for (const job of jobs) {
+    const level = levels.get(job.id);
+    const m = measured.get(job.id);
+    const y = columnY.get(level) ?? 0;
+    layout.set(job.id, { x: columnX.get(level), y, width: m.width, height: m.height, graph: m.graph, headerH: m.headerH });
+    columnY.set(level, y + m.height + GAP_Y);
   }
   return layout;
 }
 
-/** Flattens steps into rows; parallel children are nested one depth level with a boundary. */
-function buildStepRows(job) {
-  const rows = [];
-  const boundaries = [];
-  appendRows(job.steps ?? [], 0, rows, boundaries);
-  rows.boundaries = boundaries;
-  return rows;
-}
-
-function appendRows(steps, depth, rows, boundaries) {
-  for (const step of steps) {
-    if (step.kind === 'parallel') {
-      const start = rows.length;
-      rows.push({ step, depth, parallelHeader: true });
-      appendRows(step.steps ?? [], depth + 1, rows, boundaries);
-      boundaries.push({ start, end: rows.length - 1, depth });
-    } else {
-      rows.push({ step, depth });
-    }
-  }
-}
-
-function jobMetaText(job) {
-  if (job.kind === 'reusable') return `uses: ${job.uses ?? ''}`;
-  const parts = [];
-  if (job.name) parts.push(job.name);
-  if (job.strategy?.hasMatrix) {
-    parts.push(job.strategy.matrixIsExpression ? 'matrix: ${{ … }}' : `matrix: ${(job.strategy.matrixKeys ?? []).join(' × ')}`);
-  }
-  if (job.if) parts.push('if ⛊');
-  return parts.join(' · ');
-}
-
-function nodeHeight(job, rows) {
-  const metaH = jobMetaText(job) ? META_H : 0;
-  return HEADER_H + metaH + rows.length * ROW_H + BOX_BOTTOM_PAD;
-}
-
-function drawEdges(d3, layer, jobs, layout) {
+function drawJobEdges(d3, layer, jobs, layout) {
   const link = d3
     .linkHorizontal()
     .x((p) => p[0])
@@ -150,11 +172,167 @@ function drawEdges(d3, layer, jobs, layout) {
   }
 }
 
+// ─── Intra-job step flow graph ───
+
+/**
+ * Builds the intra-job flow: main lane chain, background forks, wait/wait-all joins,
+ * cancel cuts, parallel boundary groups.
+ * @param {object[]} steps
+ * @returns {{ nodes: object[], edges: {from: string, to: string, kind: string}[] }}
+ */
+function buildStepGraph(steps) {
+  const nodes = [];
+  const edges = [];
+  let prevMain = null;
+  /** Background steps not yet joined: {stepId, nodeId, lane}. */
+  const activeBg = [];
+  const usedLanes = new Set();
+
+  const allocLane = () => {
+    let lane = 1;
+    while (usedLanes.has(lane)) lane++;
+    usedLanes.add(lane);
+    return lane;
+  };
+  const releaseBg = (entry) => {
+    usedLanes.delete(entry.lane);
+    activeBg.splice(activeBg.indexOf(entry), 1);
+  };
+
+  (steps ?? []).forEach((step, i) => {
+    const id = `n${i}`;
+
+    if (step.kind === 'parallel') {
+      nodes.push({ id, step, kind: 'parallel', lane: 0, children: step.steps ?? [] });
+      if (prevMain) edges.push({ from: prevMain, to: id, kind: 'seq' });
+      prevMain = id;
+      return;
+    }
+
+    if (step.background) {
+      const lane = allocLane();
+      nodes.push({ id, step, kind: 'step', lane });
+      if (prevMain) edges.push({ from: prevMain, to: id, kind: 'bg' });
+      activeBg.push({ stepId: step.id ?? null, nodeId: id, lane });
+      return; // main lane continues without waiting
+    }
+
+    nodes.push({ id, step, kind: 'step', lane: 0 });
+    if (prevMain) edges.push({ from: prevMain, to: id, kind: 'seq' });
+
+    if (step.kind === 'wait') {
+      for (const target of step.targets ?? []) {
+        const entry = activeBg.find((b) => b.stepId === target);
+        if (entry) {
+          edges.push({ from: entry.nodeId, to: id, kind: 'wait' });
+          releaseBg(entry);
+        }
+      }
+    } else if (step.kind === 'wait-all') {
+      for (const entry of [...activeBg]) {
+        edges.push({ from: entry.nodeId, to: id, kind: 'wait' });
+        releaseBg(entry);
+      }
+    } else if (step.kind === 'cancel' && step.target) {
+      const entry = activeBg.find((b) => b.stepId === step.target);
+      if (entry) {
+        edges.push({ from: id, to: entry.nodeId, kind: 'cancel' });
+        releaseBg(entry);
+      }
+    }
+
+    prevMain = id;
+  });
+
+  return { nodes, edges };
+}
+
+function parallelSize(children) {
+  const count = Math.max(1, children.length);
+  const perRow = Math.min(PAR_CHILDREN_PER_ROW, count);
+  const rows = Math.ceil(count / PAR_CHILDREN_PER_ROW);
+  return {
+    width: PAR_PAD * 2 + perRow * PAR_CHILD_W + (perRow - 1) * PAR_PAD,
+    height: PAR_HEADER_H + PAR_PAD + rows * (PAR_CHILD_H + PAR_PAD),
+  };
+}
+
+/** Assigns x/y/width/height to each node; vertical position = document order. */
+function layoutStepGraph(graph) {
+  let y = 0;
+  let maxX = NODE_W;
+  for (const node of graph.nodes) {
+    if (node.kind === 'parallel') {
+      const size = parallelSize(node.children);
+      node.x = 0;
+      node.y = y;
+      node.width = size.width;
+      node.height = size.height;
+      y += size.height + STEP_GAP_Y;
+    } else if (node.lane > 0) {
+      node.x = NODE_W + BG_LANE_GAP + (node.lane - 1) * (BG_NODE_W + BG_LANE_GAP);
+      node.y = y;
+      node.width = BG_NODE_W;
+      node.height = NODE_H;
+      y += NODE_H + STEP_GAP_Y;
+    } else {
+      node.x = 0;
+      node.y = y;
+      node.width = NODE_W;
+      node.height = NODE_H;
+      y += NODE_H + STEP_GAP_Y;
+    }
+    maxX = Math.max(maxX, node.x + node.width);
+  }
+  return { width: maxX, height: Math.max(0, y - STEP_GAP_Y) };
+}
+
+function jobMetaText(job) {
+  if (job.kind === 'reusable') return `uses: ${job.uses ?? ''}`;
+  const parts = [];
+  if (job.name) parts.push(job.name);
+  if (job.strategy?.hasMatrix) {
+    parts.push(job.strategy.matrixIsExpression ? 'matrix: ${{ … }}' : `matrix: ${(job.strategy.matrixKeys ?? []).join(' × ')}`);
+  }
+  if (job.if) parts.push('if ⛊');
+  return parts.join(' · ');
+}
+
+function jobLegs(job) {
+  return job.strategy?.combinations ?? [];
+}
+
+function measureJob(job) {
+  const graph = buildStepGraph(job.steps ?? []);
+  const content = layoutStepGraph(graph);
+  const metaH = jobMetaText(job) ? META_H : 0;
+  const legsH = jobLegs(job).length > 0 ? LEGS_H : 0;
+  const headerH = HEADER_H + metaH + legsH;
+  const height = headerH + (graph.nodes.length > 0 ? JOB_PAD + content.height : 0) + JOB_PAD;
+  const width = Math.max(MIN_JOB_W, JOB_PAD * 2 + content.width);
+  return { graph, headerH, height, width };
+}
+
+// ─── Job node rendering ───
+
 function drawJobNode(d3, layer, job, pos, onSelect) {
   const g = layer
     .append('g')
     .attr('class', job.kind === 'reusable' ? 'flow-job flow-job--reusable' : 'flow-job')
     .attr('transform', `translate(${pos.x},${pos.y})`);
+
+  // Matrix legs render as a stacked-card effect behind the job box.
+  if (jobLegs(job).length > 1) {
+    for (const offset of [8, 4]) {
+      g.append('rect')
+        .attr('class', 'flow-job__stack')
+        .attr('x', offset)
+        .attr('y', offset)
+        .attr('width', pos.width)
+        .attr('height', pos.height)
+        .attr('rx', 8);
+    }
+  }
 
   g.append('rect')
     .attr('class', 'flow-job__box')
@@ -162,72 +340,186 @@ function drawJobNode(d3, layer, job, pos, onSelect) {
     .attr('height', pos.height)
     .attr('rx', 8);
 
-  const metaText = jobMetaText(job);
-  const headerH = HEADER_H + (metaText ? META_H : 0);
   g.append('rect')
     .attr('class', 'flow-job__header')
     .attr('width', pos.width)
-    .attr('height', headerH)
+    .attr('height', pos.headerH)
     .attr('rx', 8)
     .on('click', () => onSelect?.({ type: 'job', data: job }));
 
   g.append('text')
     .attr('class', 'flow-job__title')
-    .attr('x', ROW_TEXT_PAD)
+    .attr('x', JOB_PAD)
     .attr('y', 20)
     .text(truncate(job.kind === 'reusable' ? `⧉ ${job.id}` : job.id, 34));
 
+  const metaText = jobMetaText(job);
   if (metaText) {
     g.append('text')
       .attr('class', 'flow-job__meta')
-      .attr('x', ROW_TEXT_PAD)
+      .attr('x', JOB_PAD)
       .attr('y', HEADER_H + 12)
-      .text(truncate(metaText, 40));
+      .text(truncate(metaText, 44));
   }
 
-  // Parallel boundaries drawn behind their rows so simultaneous steps read as one block.
-  for (const b of pos.rows.boundaries) {
-    g.append('rect')
-      .attr('class', 'flow-parallel-boundary')
-      .attr('x', PARALLEL_PAD_X + b.depth * 10)
-      .attr('y', headerH + b.start * ROW_H + 2)
-      .attr('width', pos.width - 2 * PARALLEL_PAD_X - b.depth * 10)
-      .attr('height', (b.end - b.start + 1) * ROW_H - 4)
-      .attr('rx', 6);
+  const legs = jobLegs(job);
+  if (legs.length > 0) {
+    const chips = legs.slice(0, MAX_LEG_CHIPS).map((c) => legLabel(c));
+    if (legs.length > MAX_LEG_CHIPS) chips.push(`+${legs.length - MAX_LEG_CHIPS}`);
+    g.append('text')
+      .attr('class', 'flow-job__legs')
+      .attr('x', JOB_PAD)
+      .attr('y', HEADER_H + (metaText ? META_H : 0) + 13)
+      .text(truncate(`${legs.length} legs: ${chips.join(' | ')}`, 52));
   }
 
-  pos.rows.forEach((row, i) => {
-    const y = headerH + i * ROW_H;
-    const rowG = g
+  // Far-zoom summary shown instead of the intra-job flow at lod0.
+  const stepCount = countSteps(job.steps ?? []);
+  if (stepCount > 0) {
+    g.append('text')
+      .attr('class', 'flow-job__summary')
+      .attr('x', JOB_PAD)
+      .attr('y', pos.headerH + 20)
+      .text(`${stepCount} steps`);
+  }
+
+  const inner = g
+    .append('g')
+    .attr('class', 'flow-job__inner')
+    .attr('transform', `translate(${JOB_PAD},${pos.headerH + JOB_PAD})`);
+
+  drawStepEdges(d3, inner, pos.graph);
+  for (const node of pos.graph.nodes) {
+    if (node.kind === 'parallel') {
+      drawParallelNode(inner, node, onSelect);
+    } else {
+      drawStepNode(inner, node, onSelect);
+    }
+  }
+}
+
+function countSteps(steps) {
+  let count = 0;
+  for (const step of steps) {
+    count += step.kind === 'parallel' ? 1 + (step.steps?.length ?? 0) : 1;
+  }
+  return count;
+}
+
+function legLabel(combination) {
+  return Object.values(combination).join('·');
+}
+
+function drawStepEdges(d3, layer, graph) {
+  const byId = new Map(graph.nodes.map((n) => [n.id, n]));
+  const vlink = d3.linkVertical().x((p) => p[0]).y((p) => p[1]);
+  for (const edge of graph.edges) {
+    const s = byId.get(edge.from);
+    const t = byId.get(edge.to);
+    if (!s || !t) continue;
+    let source;
+    let target;
+    if (edge.kind === 'bg') {
+      source = [s.x + s.width, s.y + s.height / 2];
+      target = [t.x + t.width / 2, t.y];
+    } else if (edge.kind === 'wait' || edge.kind === 'cancel') {
+      source = [s.x + (s.lane > 0 ? s.width / 2 : s.width), s.y + s.height];
+      target = [t.x + (t.lane > 0 ? t.width / 2 : t.width), t.y + (t.lane > 0 ? 0 : t.height / 2)];
+    } else {
+      source = [s.x + Math.min(s.width, NODE_W) / 2, s.y + s.height];
+      target = [t.x + Math.min(t.width, NODE_W) / 2, t.y];
+    }
+    layer
+      .append('path')
+      .attr('class', `flow-step-edge flow-step-edge--${edge.kind}`)
+      .attr('d', vlink({ source, target }));
+  }
+}
+
+function drawStepNode(layer, node, onSelect) {
+  const step = node.step;
+  const g = layer
+    .append('g')
+    .attr('class', node.lane > 0 ? 'flow-step flow-step--bg' : 'flow-step')
+    .on('click', () => onSelect?.({ type: 'step', data: step }));
+
+  g.append('rect')
+    .attr('class', 'flow-step-node')
+    .attr('x', node.x)
+    .attr('y', node.y)
+    .attr('width', node.width)
+    .attr('height', node.height)
+    .attr('rx', 5);
+
+  const text = g
+    .append('text')
+    .attr('class', 'flow-step__text')
+    .attr('x', node.x + 8)
+    .attr('y', node.y + 17);
+  text
+    .append('tspan')
+    .attr('class', `flow-step__kind flow-step__kind--${step.kind}`)
+    .text(kindLabel(step));
+  text
+    .append('tspan')
+    .attr('dx', 5)
+    .text(truncate(stepLabel(step), node.lane > 0 ? 18 : 22));
+}
+
+function drawParallelNode(layer, node, onSelect) {
+  const g = layer.append('g').attr('class', 'flow-step flow-step--parallel');
+
+  g.append('rect')
+    .attr('class', 'flow-parallel-boundary')
+    .attr('x', node.x)
+    .attr('y', node.y)
+    .attr('width', node.width)
+    .attr('height', node.height)
+    .attr('rx', 6)
+    .on('click', () => onSelect?.({ type: 'step', data: node.step }));
+
+  g.append('text')
+    .attr('class', 'flow-step__text flow-step__kind flow-step__kind--parallel')
+    .attr('x', node.x + PAR_PAD)
+    .attr('y', node.y + 13)
+    .text('⇉ parallel');
+
+  node.children.forEach((child, i) => {
+    const col = i % PAR_CHILDREN_PER_ROW;
+    const row = Math.floor(i / PAR_CHILDREN_PER_ROW);
+    const cx = node.x + PAR_PAD + col * (PAR_CHILD_W + PAR_PAD);
+    const cy = node.y + PAR_HEADER_H + PAR_PAD + row * (PAR_CHILD_H + PAR_PAD);
+    const childG = g
       .append('g')
       .attr('class', 'flow-step')
-      .on('click', () => onSelect?.({ type: 'step', data: row.step }));
-    rowG
+      .on('click', (ev) => {
+        ev.stopPropagation();
+        onSelect?.({ type: 'step', data: child });
+      });
+    childG
       .append('rect')
-      .attr('class', 'flow-step__hit')
-      .attr('x', 2)
-      .attr('y', y)
-      .attr('width', pos.width - 4)
-      .attr('height', ROW_H);
-    const text = rowG
+      .attr('class', 'flow-step-node flow-parallel-child')
+      .attr('x', cx)
+      .attr('y', cy)
+      .attr('width', PAR_CHILD_W)
+      .attr('height', PAR_CHILD_H)
+      .attr('rx', 4);
+    const text = childG
       .append('text')
       .attr('class', 'flow-step__text')
-      .attr('x', ROW_TEXT_PAD + row.depth * 14)
-      .attr('y', y + 15);
+      .attr('x', cx + 6)
+      .attr('y', cy + 16);
     text
       .append('tspan')
-      .attr('class', `flow-step__kind flow-step__kind--${row.step.kind}`)
-      .text(kindLabel(row.step));
-    text
-      .append('tspan')
-      .attr('dx', 6)
-      .text(truncate(stepLabel(row.step), 30 - row.depth * 2));
+      .attr('class', `flow-step__kind flow-step__kind--${child.kind}`)
+      .text(kindLabel(child));
+    text.append('tspan').attr('dx', 4).text(truncate(stepLabel(child), 14));
   });
 }
 
 function kindLabel(step) {
   switch (step.kind) {
-    case 'run': return 'run';
+    case 'run': return step.background ? 'run⇡' : 'run';
     case 'uses': return 'uses';
     case 'parallel': return '⇉ parallel';
     case 'wait': return 'wait';

@@ -150,6 +150,39 @@ public sealed class WorkflowFlowJsonTests
     }
 
     [Test]
+    public async Task Serialize_BackgroundStepAndMatrixCombinations_EmittedPerContract()
+    {
+        var flow = CollectFlow("""
+            on: push
+            jobs:
+              test:
+                runs-on: ubuntu-latest
+                strategy:
+                  matrix:
+                    os: [ubuntu, windows]
+                steps:
+                  - id: server
+                    run: npm run serve
+                    background: true
+                  - run: npm test
+            """);
+
+        var json = WorkflowFlowJson.Serialize(flow);
+        using var doc = JsonDocument.Parse(json);
+        var job = doc.RootElement.GetProperty("workflows")[0].GetProperty("jobs")[0];
+
+        var combos = job.GetProperty("strategy").GetProperty("combinations");
+        await Assert.That(combos.GetArrayLength()).IsEqualTo(2);
+        await Assert.That(combos[0].GetProperty("os").GetString()).IsEqualTo("ubuntu");
+        await Assert.That(combos[1].GetProperty("os").GetString()).IsEqualTo("windows");
+
+        var steps = job.GetProperty("steps");
+        await Assert.That(steps[0].GetProperty("background").GetBoolean()).IsTrue();
+        // background is omitted when false.
+        await Assert.That(steps[1].TryGetProperty("background", out _)).IsFalse();
+    }
+
+    [Test]
     public async Task Serialize_MultipleWorkflows_WrappedInSingleDocument()
     {
         var flowA = CollectFlow("""

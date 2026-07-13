@@ -162,6 +162,166 @@ public sealed class WorkflowFlowCollectorTests
     }
 
     [Test]
+    public async Task Collect_BackgroundStep_SetsBackgroundFlag()
+    {
+        using var result = Parse("""
+            on: push
+            jobs:
+              build:
+                runs-on: ubuntu-latest
+                steps:
+                  - id: server
+                    run: npm run serve
+                    background: true
+                  - run: npm test
+                  - wait: [server]
+            """);
+
+        var flow = WorkflowFlowCollector.Collect(result, "wf.yml");
+
+        var steps = flow!.Jobs[0].Steps;
+        await Assert.That(steps[0].Background).IsTrue();
+        await Assert.That(steps[1].Background).IsFalse();
+        await Assert.That(steps[2].Background).IsFalse();
+    }
+
+    [Test]
+    public async Task Collect_StaticMatrix_ExpandsCrossProductInDeclarationOrder()
+    {
+        using var result = Parse("""
+            on: push
+            jobs:
+              test:
+                runs-on: ubuntu-latest
+                strategy:
+                  matrix:
+                    os: [ubuntu, windows]
+                    node: [18, 20]
+                steps:
+                  - run: npm test
+            """);
+
+        var flow = WorkflowFlowCollector.Collect(result, "wf.yml");
+
+        var combos = flow!.Jobs[0].Strategy!.Combinations;
+        await Assert.That(combos).Count().IsEqualTo(4);
+        await Assert.That(Render(combos[0])).IsEqualTo("os=ubuntu,node=18");
+        await Assert.That(Render(combos[1])).IsEqualTo("os=ubuntu,node=20");
+        await Assert.That(Render(combos[2])).IsEqualTo("os=windows,node=18");
+        await Assert.That(Render(combos[3])).IsEqualTo("os=windows,node=20");
+    }
+
+    [Test]
+    public async Task Collect_MatrixExclude_RemovesSubsetMatches()
+    {
+        using var result = Parse("""
+            on: push
+            jobs:
+              test:
+                runs-on: ubuntu-latest
+                strategy:
+                  matrix:
+                    os: [ubuntu, windows]
+                    node: [18, 20]
+                    exclude:
+                      - os: windows
+                        node: 18
+                      - os: macos
+                steps:
+                  - run: npm test
+            """);
+
+        var flow = WorkflowFlowCollector.Collect(result, "wf.yml");
+
+        var combos = flow!.Jobs[0].Strategy!.Combinations;
+        // "os: macos" matches nothing and must not remove anything.
+        await Assert.That(combos).Count().IsEqualTo(3);
+        await Assert.That(combos.Any(c => Render(c) == "os=windows,node=18")).IsFalse();
+        await Assert.That(combos.Any(c => Render(c) == "os=windows,node=20")).IsTrue();
+    }
+
+    [Test]
+    public async Task Collect_MatrixInclude_ExtendsMatchingAndAppendsNonMatching()
+    {
+        using var result = Parse("""
+            on: push
+            jobs:
+              test:
+                runs-on: ubuntu-latest
+                strategy:
+                  matrix:
+                    os: [ubuntu, windows]
+                    include:
+                      - os: ubuntu
+                        experimental: true
+                      - os: macos
+                steps:
+                  - run: npm test
+            """);
+
+        var flow = WorkflowFlowCollector.Collect(result, "wf.yml");
+
+        var combos = flow!.Jobs[0].Strategy!.Combinations;
+        await Assert.That(combos).Count().IsEqualTo(3);
+        await Assert.That(combos.Any(c => Render(c) == "os=ubuntu,experimental=true")).IsTrue();
+        await Assert.That(combos.Any(c => Render(c) == "os=windows")).IsTrue();
+        await Assert.That(combos.Any(c => Render(c) == "os=macos")).IsTrue();
+    }
+
+    [Test]
+    public async Task Collect_MatrixIncludeOnly_EachEntryBecomesCombination()
+    {
+        using var result = Parse("""
+            on: push
+            jobs:
+              test:
+                runs-on: ubuntu-latest
+                strategy:
+                  matrix:
+                    include:
+                      - os: ubuntu
+                        node: 18
+                      - os: windows
+                        node: 20
+                steps:
+                  - run: npm test
+            """);
+
+        var flow = WorkflowFlowCollector.Collect(result, "wf.yml");
+
+        var combos = flow!.Jobs[0].Strategy!.Combinations;
+        await Assert.That(combos).Count().IsEqualTo(2);
+        await Assert.That(Render(combos[0])).IsEqualTo("os=ubuntu,node=18");
+        await Assert.That(Render(combos[1])).IsEqualTo("os=windows,node=20");
+    }
+
+    [Test]
+    public async Task Collect_MatrixWithDynamicRow_IsNotExpanded()
+    {
+        using var result = Parse("""
+            on: push
+            jobs:
+              test:
+                runs-on: ubuntu-latest
+                strategy:
+                  matrix:
+                    os: ${{ fromJSON(needs.prep.outputs.os) }}
+                    node: [18, 20]
+                steps:
+                  - run: npm test
+            """);
+
+        var flow = WorkflowFlowCollector.Collect(result, "wf.yml");
+
+        var strategy = flow!.Jobs[0].Strategy!;
+        await Assert.That(strategy.HasMatrix).IsTrue();
+        await Assert.That(strategy.Combinations).IsEmpty();
+    }
+
+    private static string Render(KeyValuePair<string, string>[] combination)
+        => string.Join(",", combination.Select(p => $"{p.Key}={p.Value}"));
+
+    [Test]
     public async Task Collect_ReusableWorkflowJob_OpaqueLeafWithUses()
     {
         using var result = Parse("""

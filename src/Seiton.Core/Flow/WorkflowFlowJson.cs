@@ -123,6 +123,19 @@ public static class WorkflowFlowJson
 
             writer.WriteEndArray();
             writer.WriteBoolean("matrixIsExpression"u8, job.Strategy.MatrixIsExpression);
+            writer.WriteStartArray("combinations"u8);
+            foreach (var combination in job.Strategy.Combinations)
+            {
+                writer.WriteStartObject();
+                foreach (var pair in combination)
+                {
+                    writer.WriteString(pair.Key, pair.Value);
+                }
+
+                writer.WriteEndObject();
+            }
+
+            writer.WriteEndArray();
             writer.WriteEndObject();
         }
 
@@ -153,6 +166,11 @@ public static class WorkflowFlowJson
         if (step.If is not null)
         {
             writer.WriteString("if"u8, step.If);
+        }
+
+        if (step.Background)
+        {
+            writer.WriteBoolean("background"u8, true);
         }
 
         if (step.Run is not null)

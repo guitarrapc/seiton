@@ -302,6 +302,15 @@ flow collector は `check --format flow-*` / `GetFlowJson` 要求時のみ動く
 - CoreParsingBenchmark Parse Allocated: 240/840/2600 B(同値)
 - PlaygroundLintBenchmark: NoChange 0 B、Partial/FullChange 57120 B(Small)/ 251840 B(Large)(同値)
 
+### フィードバック対応 (2026-07-13)
+
+初回実装へのフィードバックを受け、v1 で除外していた 2 項目を実装した。
+
+1. **Job 内フローの LOD 展開**: job 内の step は単なる列ではなく `background` / `wait` / `wait-all` / `cancel` / `parallel` でフロー制御されるため、job 内部も flow graph として描画する。main lane を縦に流し、background step は破線サイドレーンに fork、`wait`/`wait-all` が join、`cancel` は赤破線でカット、`parallel` は boundary box。LOD は zoom scale 駆動の CSS class 切替(lod0: job 概要のみ / lod1: 形状のみ / lod2: 全ラベル)で、**ジオメトリは LOD 間で不変**(ズームがカーソル下に留まる)。DTO に `background` フラグを追加した。
+2. **Matrix 静的展開**: `WorkflowFlowCollector` が静的 matrix を展開する — 次元の直積 → `exclude` の subset 除去 → `include` の extend/append(GitHub セマンティクスの近似、上限 256)。動的 `${{ }}` を含む matrix は従来どおり宣言のみ。DTO は `FlowStrategy.Combinations`、flow-json は `strategy.combinations`。UI は stacked-card + legs 行 + 詳細パネルの legs 一覧で表現し、job ノードの複製はしない(大きな matrix でグラフが爆発するため)。
+
+学び: include-only matrix(次元行なし)では「dimension キーを持たない include entry は全 combo に適用」ルールをそのまま使うと 2 件目以降が 1 件目にマージされる。次元行が無い場合は各 entry を独立 combo として追加する分岐が必要。
+
 ## 現時点の結論
 
 flow 可視化は、専用コマンドや UI 先行の個別実装ではなく、まず `check --format flow-json` という共通契約を作り、それを Playground が消費する形で進めるのが最も整合的である。

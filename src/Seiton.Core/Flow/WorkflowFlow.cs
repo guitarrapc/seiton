@@ -51,7 +51,7 @@ public sealed class FlowJob
     public required FlowStep[] Steps { get; init; }
 }
 
-/// <summary>Declaration-only view of <c>strategy:</c> (matrix is never expanded).</summary>
+/// <summary>View of <c>strategy:</c>; static matrices are expanded into <see cref="Combinations"/>.</summary>
 public sealed class FlowStrategy
 {
     public required bool HasMatrix { get; init; }
@@ -61,6 +61,13 @@ public sealed class FlowStrategy
 
     /// <summary>Whether the matrix is a dynamic <c>${{ }}</c> expression that cannot be expanded statically.</summary>
     public required bool MatrixIsExpression { get; init; }
+
+    /// <summary>
+    /// Statically expanded combinations (cross product with <c>exclude</c> subset removal and
+    /// <c>include</c> extend/append, approximating GitHub semantics). Empty when the matrix
+    /// contains dynamic expressions or exceeds the 256-combination limit.
+    /// </summary>
+    public KeyValuePair<string, string>[][] Combinations { get; init; } = [];
 }
 
 /// <summary>The execution kind of a step node.</summary>
@@ -86,6 +93,9 @@ public sealed class FlowStep
 
     /// <summary>The raw <c>if:</c> expression, if present.</summary>
     public string? If { get; init; }
+
+    /// <summary>Whether the step runs in the background (<c>background: true</c>) — later steps do not wait for it.</summary>
+    public bool Background { get; init; }
 
     /// <summary>The script body for <see cref="FlowStepKind.Run"/> steps.</summary>
     public string? Run { get; init; }

@@ -1508,3 +1508,89 @@ footer a {
   white-space: pre-wrap;
   word-break: break-word;
 }
+
+/* ─── Intra-job step flow + LOD ─── */
+
+.flow-step-node {
+  fill: var(--results-surface, transparent);
+  stroke: var(--border-pane);
+  stroke-width: 1;
+  cursor: pointer;
+}
+
+.flow-step-node:hover {
+  stroke: var(--accent);
+}
+
+.flow-step--bg .flow-step-node {
+  stroke-dasharray: 4 2;
+  stroke: var(--info);
+}
+
+.flow-parallel-child {
+  cursor: pointer;
+}
+
+.flow-step-edge {
+  fill: none;
+  stroke: var(--text);
+  stroke-width: 1.2;
+  opacity: 0.45;
+}
+
+.flow-step-edge--bg {
+  stroke: var(--info);
+  stroke-dasharray: 4 3;
+  opacity: 0.8;
+}
+
+.flow-step-edge--wait {
+  stroke: var(--warning);
+  opacity: 0.8;
+}
+
+.flow-step-edge--cancel {
+  stroke: var(--danger);
+  stroke-dasharray: 3 3;
+  opacity: 0.8;
+}
+
+.flow-job__stack {
+  fill: var(--results-surface, transparent);
+  stroke: var(--border-pane);
+  stroke-width: 1;
+  opacity: 0.55;
+}
+
+.flow-job__legs {
+  fill: var(--accent);
+  font-size: 11px;
+  pointer-events: none;
+}
+
+.flow-job__summary {
+  fill: var(--text);
+  opacity: 0.65;
+  font-size: 12px;
+  font-style: italic;
+  pointer-events: none;
+  display: none;
+}
+
+/* lod0 (far): job boxes + summary only */
+.flow-svg--lod0 .flow-job__inner {
+  display: none;
+}
+
+.flow-svg--lod0 .flow-job__summary {
+  display: block;
+}
+
+.flow-svg--lod0 .flow-job__legs {
+  display: none;
+}
+
+/* lod1 (mid): step shapes + edges, no labels */
+.flow-svg--lod1 .flow-step__text {
+  display: none;
+}
