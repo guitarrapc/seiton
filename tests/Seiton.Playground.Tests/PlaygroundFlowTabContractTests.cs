@@ -18,6 +18,9 @@ public sealed class PlaygroundFlowTabContractTests
         await Assert.That(html).Contains("id=\"flow-panel\"", StringComparison.Ordinal);
         await Assert.That(html).Contains("id=\"flow-graph\"", StringComparison.Ordinal);
         await Assert.That(html).Contains("id=\"flow-detail\"", StringComparison.Ordinal);
+        await Assert.That(html).Contains("id=\"flow-zoom-out-btn\"", StringComparison.Ordinal);
+        await Assert.That(html).Contains("id=\"flow-zoom-reset-btn\"", StringComparison.Ordinal);
+        await Assert.That(html).Contains("id=\"flow-zoom-in-btn\"", StringComparison.Ordinal);
         await Assert.That(html).Contains("role=\"tablist\"", StringComparison.Ordinal);
         await Assert.That(html).Contains("aria-selected=\"true\"", StringComparison.Ordinal);
 

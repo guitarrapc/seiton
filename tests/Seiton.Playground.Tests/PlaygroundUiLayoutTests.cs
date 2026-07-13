@@ -53,6 +53,61 @@ public sealed class PlaygroundUiLayoutTests
     }
 
     [Test]
+    public async Task FlowGraph_ZoomControls_ZoomInOutAndResetToInitialView()
+    {
+        var host = await PlaygroundUiTestHost.GetOrCreateAsync();
+        var browser = await PlaygroundUiBrowserSession.GetBrowserAsync();
+        await using var context = await browser.NewContextAsync();
+        var page = await context.NewPageAsync();
+        await GotoPlaygroundAndWaitForLinterGridAsync(page, $"{host.BaseUrl.TrimEnd('/')}/?seitonTestHooks=1");
+        await page.WaitForFunctionAsync(
+            "() => typeof globalThis.__SEITON_PLAYGROUND_TEST__?.renderFlow === 'function'",
+            arg: null,
+            new PageWaitForFunctionOptions { Timeout = 30_000 });
+
+        await page.EvaluateAsync(
+            """
+            () => {
+              globalThis.__SEITON_PLAYGROUND_TEST__.selectResultsTab('flow');
+              globalThis.__SEITON_PLAYGROUND_TEST__.renderFlow({
+                version: 1,
+                workflows: [{
+                  file: 'ci.yml',
+                  events: ['push'],
+                  jobs: [
+                    { id: 'build', kind: 'job', needs: [], reducedNeeds: [], runsOn: [], steps: [] },
+                    { id: 'deploy', kind: 'job', needs: ['build'], reducedNeeds: ['build'], runsOn: [], steps: [] },
+                  ],
+                }],
+              });
+            }
+            """);
+
+        var viewport = page.Locator("#flow-graph .flow-viewport");
+        var initialTransform = await viewport.GetAttributeAsync("transform");
+        await Assert.That(await page.Locator("#flow-zoom-in-btn").IsEnabledAsync()).IsTrue();
+
+        await page.Locator("#flow-zoom-in-btn").ClickAsync();
+        var zoomedInTransform = await viewport.GetAttributeAsync("transform");
+        await Assert.That(zoomedInTransform).IsNotEqualTo(initialTransform);
+
+        await page.Locator("#flow-zoom-reset-btn").ClickAsync();
+        await Assert.That(await viewport.GetAttributeAsync("transform")).IsEqualTo(initialTransform);
+
+        await page.Locator("#flow-zoom-out-btn").ClickAsync();
+        await Assert.That(await viewport.GetAttributeAsync("transform")).IsNotEqualTo(initialTransform);
+
+        await page.Locator("#flow-zoom-reset-btn").ClickAsync();
+        await Assert.That(await viewport.GetAttributeAsync("transform")).IsEqualTo(initialTransform);
+
+        await page.EvaluateAsync(
+            "() => globalThis.__SEITON_PLAYGROUND_TEST__.renderFlow({ version: 1, workflows: [] })");
+        await Assert.That(await page.Locator("#flow-zoom-out-btn").IsDisabledAsync()).IsTrue();
+        await Assert.That(await page.Locator("#flow-zoom-reset-btn").IsDisabledAsync()).IsTrue();
+        await Assert.That(await page.Locator("#flow-zoom-in-btn").IsDisabledAsync()).IsTrue();
+    }
+
+    [Test]
     public async Task FlowGraph_NeedsLookup_IsCaseInsensitive()
     {
         var host = await PlaygroundUiTestHost.GetOrCreateAsync();

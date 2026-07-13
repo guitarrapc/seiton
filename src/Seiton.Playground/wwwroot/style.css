@@ -1371,6 +1371,41 @@ footer a {
   font-weight: 600;
 }
 
+.flow-zoom-controls {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.3rem;
+  margin: 0 0 0.4rem;
+}
+
+.flow-zoom-btn {
+  min-width: 2rem;
+  height: 1.8rem;
+  padding: 0 0.55rem;
+  border: 1px solid var(--border-pane);
+  border-radius: 5px;
+  background: var(--results-surface, transparent);
+  color: var(--text);
+  font: inherit;
+  font-size: 0.9rem;
+  cursor: pointer;
+}
+
+.flow-zoom-btn--reset {
+  min-width: 3.6rem;
+  font-size: 0.75rem;
+}
+
+.flow-zoom-btn:hover:not(:disabled) {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.flow-zoom-btn:disabled {
+  cursor: default;
+  opacity: 0.4;
+}
+
 .flow-graph {
   height: min(72dvh, 640px);
   border: 1px solid var(--border-pane);

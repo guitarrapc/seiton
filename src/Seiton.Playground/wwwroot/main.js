@@ -712,6 +712,9 @@ const flowGraphEl = document.getElementById('flow-graph');
 const flowEmptyEl = document.getElementById('flow-empty');
 const flowDetailEl = document.getElementById('flow-detail');
 const flowWorkflowInfoEl = document.getElementById('flow-workflow-info');
+const flowZoomOutBtn = document.getElementById('flow-zoom-out-btn');
+const flowZoomResetBtn = document.getElementById('flow-zoom-reset-btn');
+const flowZoomInBtn = document.getElementById('flow-zoom-in-btn');
 
 let activeResultsTab = 'result';
 let lastFlowSource = null;
@@ -719,6 +722,7 @@ let lastFlowFilePath = null;
 /** Diagnostics from the most recent lint, shared with the flow graph markers. */
 let lastDiagnostics = [];
 let lastFlowDiagnostics = null;
+let flowZoomController = null;
 
 function selectResultsTab(tab) {
   activeResultsTab = tab;
@@ -813,6 +817,17 @@ function highlightEditorLinesForFlowNode(node) {
 
 tabResultBtn.addEventListener('click', () => selectResultsTab('result'));
 tabFlowBtn.addEventListener('click', () => selectResultsTab('flow'));
+flowZoomOutBtn.addEventListener('click', () => flowZoomController?.zoomOut());
+flowZoomResetBtn.addEventListener('click', () => flowZoomController?.reset());
+flowZoomInBtn.addEventListener('click', () => flowZoomController?.zoomIn());
+
+function setFlowZoomController(controller) {
+  flowZoomController = controller;
+  const disabled = controller === null;
+  flowZoomOutBtn.disabled = disabled;
+  flowZoomResetBtn.disabled = disabled;
+  flowZoomInBtn.disabled = disabled;
+}
 
 /**
  * Fetches flow-json from the WASM backend and re-renders the graph.
@@ -864,11 +879,13 @@ function refreshFlow(force = false) {
  */
 function renderFlow(flowDoc) {
   hideFlowDetail();
+  setFlowZoomController(null);
   const workflow = flowDoc?.workflows?.[0] ?? null;
   flowNodeStartLines = collectFlowStartLines(workflow);
   const rendered = renderFlowGraph(flowGraphEl, workflow, {
     onSelect: showFlowDetail,
     diagnostics: lastDiagnostics,
+    onZoomReady: setFlowZoomController,
   });
   renderWorkflowInfo(rendered ? workflow : null);
   flowEmptyEl.hidden = rendered;

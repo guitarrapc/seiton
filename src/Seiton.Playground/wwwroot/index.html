@@ -183,6 +183,14 @@
         <div id="flow-panel" role="tabpanel" aria-labelledby="tab-flow-btn" hidden>
           <div id="flow-empty" class="notification" hidden>No workflow structure to visualize.</div>
           <div id="flow-workflow-info" class="flow-workflow-info" hidden></div>
+          <div class="flow-zoom-controls" role="group" aria-label="Flow graph zoom controls">
+            <button id="flow-zoom-out-btn" type="button" class="flow-zoom-btn" aria-label="Zoom out"
+              title="Zoom out" disabled>&minus;</button>
+            <button id="flow-zoom-reset-btn" type="button" class="flow-zoom-btn flow-zoom-btn--reset"
+              aria-label="Reset zoom" title="Reset zoom" disabled>Reset</button>
+            <button id="flow-zoom-in-btn" type="button" class="flow-zoom-btn" aria-label="Zoom in"
+              title="Zoom in" disabled>&plus;</button>
+          </div>
           <div id="flow-graph" class="flow-graph"></div>
           <div id="flow-detail" class="flow-detail" hidden></div>
         </div>
