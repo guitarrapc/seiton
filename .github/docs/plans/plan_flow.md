@@ -266,7 +266,7 @@ flow collector と Playground backend は parser/linter の近傍で動くため
 - reusable workflow の参照先読込み
 - ノードのドラッグ再配置
 - 表示密度に応じた高度な LOD
-- share/permalink に flow タブ状態を含めるかどうか
+- ~~share/permalink に flow タブ状態を含めるかどうか~~ → **不要と決定 (2026-07-13)**: flow は共有ペイロードに含まれる YAML から タブを開いた時点で再導出されるため、タブ状態は共有する価値のない一時 UI 状態。
 
 ## 関連ドキュメント
 

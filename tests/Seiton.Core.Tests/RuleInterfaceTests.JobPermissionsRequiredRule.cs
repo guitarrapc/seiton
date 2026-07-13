@@ -46,6 +46,9 @@ public sealed partial class RuleInterfaceTests
                         contents: read
             """,
             []),
+            // Deliberate: reusable-workflow call jobs are NOT exempt. The caller-side
+            // `permissions:` caps the callee's token, so callers should declare scopes
+            // matched to the callee; the strict `{}` auto-fix default is intentional.
             new RuleCase(
             "ng-reusable-workflow-job-no-permissions",
             """

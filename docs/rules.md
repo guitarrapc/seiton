@@ -2285,6 +2285,8 @@ jobs:
 
 Warns when a job omits an explicit `permissions:` declaration. Without explicit permissions the job inherits potentially broad defaults.
 
+This applies to **reusable-workflow call jobs (job-level `uses:`) as well**: the caller-side `permissions:` caps the token the called workflow receives, so callers should declare scopes matched to the callee instead of passing the inherited defaults through.
+
 When auto-fix is enabled, the fix infers minimum required permission scopes from known popular actions used in the job's steps (e.g. `actions/checkout` requires `contents: read`). If multiple actions require the same scope, the highest access level wins (write > read). When no known action requirements are found, the fix inserts `permissions: {}`.
 
 **Why:** Implicit permission inheritance hides effective access and makes least-privilege review harder.
