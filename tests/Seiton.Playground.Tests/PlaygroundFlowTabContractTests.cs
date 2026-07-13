@@ -240,6 +240,36 @@ public sealed class PlaygroundFlowTabContractTests
     }
 
     [Test]
+    public async Task FlowGraph_MatrixJobs_RenderFolderTab()
+    {
+        var js = await ReadWwwrootFileAsync("flow-graph.js");
+        // GitHub-like folder tab marks matrix jobs at every LOD.
+        await Assert.That(js).Contains("flow-job__folder-tab");
+        await Assert.That(js).Contains("Matrix");
+
+        var css = await ReadWwwrootFileAsync("style.css");
+        await Assert.That(css).Contains(".flow-job__folder-tab");
+    }
+
+    [Test]
+    public async Task FlowGraph_FarLod_GroupsSameNeedsJobs()
+    {
+        var js = await ReadWwwrootFileAsync("flow-graph.js");
+        // Jobs sharing the same needs set sort adjacently and get a group card at lod0,
+        // with member edges collapsed into one group edge per dependency.
+        await Assert.That(js).Contains("needsSignature");
+        await Assert.That(js).Contains("flow-needs-group");
+        await Assert.That(js).Contains("flow-edge--group");
+        await Assert.That(js).Contains("flow-edge--in-group");
+
+        var css = await ReadWwwrootFileAsync("style.css");
+        await Assert.That(css).Contains(".flow-needs-group");
+        await Assert.That(css).Contains(".flow-svg--lod0 .flow-needs-group");
+        await Assert.That(css).Contains(".flow-svg--lod0 .flow-edge--group");
+        await Assert.That(css).Contains(".flow-svg--lod0 .flow-edge--in-group");
+    }
+
+    [Test]
     public async Task Stylesheet_DefinesFlowTabAndGraphClasses()
     {
         var css = await ReadWwwrootFileAsync("style.css");

@@ -1555,11 +1555,18 @@ footer a {
   opacity: 0.8;
 }
 
-.flow-job__stack {
-  fill: var(--results-surface, transparent);
+.flow-job__folder-tab {
+  fill: var(--warning);
+  opacity: 0.22;
   stroke: var(--border-pane);
   stroke-width: 1;
-  opacity: 0.55;
+}
+
+.flow-job__folder-tab-text {
+  fill: var(--text);
+  font-size: 10px;
+  font-weight: 600;
+  pointer-events: none;
 }
 
 .flow-job__legs {
@@ -1730,4 +1737,29 @@ footer a {
 .flow-job.flow-hover-focus > .flow-job__box {
   stroke: var(--accent);
   stroke-width: 1.6;
+}
+
+/* ─── Same-needs group cards (far zoom) ─── */
+
+.flow-needs-group {
+  display: none;
+  fill: var(--results-surface, transparent);
+  stroke: var(--border-pane);
+  stroke-width: 1.4;
+}
+
+.flow-svg--lod0 .flow-needs-group {
+  display: inline;
+}
+
+.flow-edge--group {
+  display: none;
+}
+
+.flow-svg--lod0 .flow-edge--group {
+  display: inline;
+}
+
+.flow-svg--lod0 .flow-edge--in-group {
+  display: none;
 }
