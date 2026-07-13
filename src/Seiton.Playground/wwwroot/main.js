@@ -1026,7 +1026,7 @@ function showFlowDetail(info) {
       const combinations = job.strategy.combinations ?? [];
       if (combinations.length > 0) {
         add(
-          `legs (${combinations.length})`,
+          `variants (${combinations.length})`,
           combinations
             .map((c) => Object.entries(c).map(([k, v]) => `${k}=${v}`).join(', '))
             .join('\n'),

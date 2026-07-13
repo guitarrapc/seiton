@@ -78,18 +78,28 @@ public sealed class PlaygroundFlowTabContractTests
     }
 
     [Test]
-    public async Task FlowGraphModule_RendersMatrixLegs()
+    public async Task FlowGraphModule_RendersMatrixVariants()
     {
         var js = await ReadWwwrootFileAsync("flow-graph.js");
         await Assert.That(js).Contains("combinations");
+        await Assert.That(js).Contains("matrixFolderTabText");
+        await Assert.That(js).Contains("matrixVariantCountText");
+        await Assert.That(js).Contains("Matrix (${count})");
+        await Assert.That(js).Contains("variant${count === 1 ? '' : 's'}");
+        await Assert.That(js.Contains(" legs`", StringComparison.Ordinal)).IsFalse();
+        await Assert.That(js.Contains(" legs:", StringComparison.Ordinal)).IsFalse();
+        await Assert.That(js.Contains(" combinations", StringComparison.Ordinal)).IsFalse();
         await Assert.That(js).Contains("flow-job__legs");
     }
 
     [Test]
-    public async Task MainJs_FlowDetail_ShowsBackgroundAndMatrixCombinations()
+    public async Task MainJs_FlowDetail_ShowsBackgroundAndMatrixVariants()
     {
         var js = await ReadWwwrootFileAsync("main.js");
         await Assert.That(js).Contains("combinations");
+        await Assert.That(js).Contains("`variants (${combinations.length})`");
+        await Assert.That(js.Contains("`combinations (", StringComparison.Ordinal)).IsFalse();
+        await Assert.That(js.Contains("`legs (", StringComparison.Ordinal)).IsFalse();
         await Assert.That(js).Contains("background");
     }
 

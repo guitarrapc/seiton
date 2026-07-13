@@ -620,6 +620,14 @@ function jobLegs(job) {
   return job.strategy?.combinations ?? [];
 }
 
+function matrixFolderTabText(count) {
+  return count > 0 ? `Matrix (${count})` : 'Matrix';
+}
+
+function matrixVariantCountText(count) {
+  return `${count} variant${count === 1 ? '' : 's'}`;
+}
+
 /**
  * Runtime settings line (timeout / environment), shown when zoomed in.
  * Permissions are intentionally detail-panel only — even two scopes truncate on the node.
@@ -658,18 +666,20 @@ function drawJobNode(d3, layer, job, pos, select, diagMap) {
   // Matrix jobs get a GitHub-like folder tab above the card.
   if (job.strategy?.hasMatrix) {
     const legCount = jobLegs(job).length;
+    const tabLabel = matrixFolderTabText(legCount);
+    const tabWidth = Math.max(56, Math.min(108, tabLabel.length * 6.2 + 14));
     g.append('rect')
       .attr('class', 'flow-job__folder-tab')
       .attr('x', 0)
       .attr('y', -13)
-      .attr('width', 108)
+      .attr('width', tabWidth)
       .attr('height', 18)
       .attr('rx', 5);
     g.append('text')
       .attr('class', 'flow-job__folder-tab-text')
       .attr('x', 8)
       .attr('y', -2)
-      .text(legCount > 0 ? `Matrix: ${legCount} legs` : 'Matrix');
+      .text(tabLabel);
   }
 
   g.append('rect')
@@ -743,7 +753,7 @@ function drawJobNode(d3, layer, job, pos, select, diagMap) {
       .attr('class', 'flow-job__legs')
       .attr('x', JOB_PAD)
       .attr('y', HEADER_H + metaH + infoH + 13)
-      .text(truncate(`${legs.length} legs: ${chips.join(' | ')}`, 52));
+      .text(truncate(`${matrixVariantCountText(legs.length)}: ${chips.join(' | ')}`, 52));
   }
 
   // Far-zoom summary shown instead of the intra-job flow at lod0.
