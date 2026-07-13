@@ -931,8 +931,14 @@ function fitToView(d3, svg, zoom, layout, container) {
   const cw = container.clientWidth || 600;
   const ch = container.clientHeight || 480;
   const pad = 20;
-  const k = Math.min(1, (cw - pad * 2) / Math.max(1, maxX), (ch - pad * 2) / Math.max(1, maxY));
-  const tx = (cw - maxX * k) / 2;
-  const ty = pad;
-  svg.call(zoom.transform, d3.zoomIdentity.translate(Math.max(pad, tx), ty).scale(k));
+  const k = Math.min(
+    1,
+    Math.max(1, cw - pad * 2) / bounds.width,
+    Math.max(1, ch - pad * 2) / bounds.height,
+  );
+  const [, maxScale] = zoom.scaleExtent();
+  zoom.scaleExtent([Math.min(0.2, k * 0.5), maxScale]);
+  const tx = (cw - bounds.width * k) / 2 - bounds.x * k;
+  const ty = (ch - bounds.height * k) / 2 - bounds.y * k;
+  svg.call(zoom.transform, d3.zoomIdentity.translate(tx, ty).scale(k));
 }

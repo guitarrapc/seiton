@@ -812,7 +812,12 @@ function highlightEditorLinesForFlowNode(node) {
   for (let i = start; i <= end; i++) {
     flowHighlightHandles.push(editor.addLineClass(i, 'background', 'flow-hl-line'));
   }
-  editor.scrollIntoView({ from: { line: start, ch: 0 }, to: { line: end, ch: 0 } }, 60);
+  // On the stacked mobile layout, scrolling the auto-height editor also moves the
+  // whole page away from the tapped graph node. Keep the highlight, but leave the
+  // page position unchanged; wide layouts retain the source-jump behavior.
+  if (!globalThis.matchMedia?.('(max-width: 880px)').matches) {
+    editor.scrollIntoView({ from: { line: start, ch: 0 }, to: { line: end, ch: 0 } }, 60);
+  }
 }
 
 tabResultBtn.addEventListener('click', () => selectResultsTab('result'));

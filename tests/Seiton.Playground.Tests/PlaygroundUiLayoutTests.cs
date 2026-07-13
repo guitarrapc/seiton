@@ -1,4 +1,4 @@
-﻿using System.Text.RegularExpressions;
+using System.Text.RegularExpressions;
 using Microsoft.Playwright;
 
 namespace Seiton.Playground.Tests;
@@ -105,6 +105,196 @@ public sealed class PlaygroundUiLayoutTests
         await Assert.That(await page.Locator("#flow-zoom-out-btn").IsDisabledAsync()).IsTrue();
         await Assert.That(await page.Locator("#flow-zoom-reset-btn").IsDisabledAsync()).IsTrue();
         await Assert.That(await page.Locator("#flow-zoom-in-btn").IsDisabledAsync()).IsTrue();
+    }
+
+    [Test]
+    public async Task FlowGraph_ZoomOut_AfterSmallMobileFit_DecreasesScale()
+    {
+        var host = await PlaygroundUiTestHost.GetOrCreateAsync();
+        var browser = await PlaygroundUiBrowserSession.GetBrowserAsync();
+        await using var context = await browser.NewContextAsync(new BrowserNewContextOptions
+        {
+            ViewportSize = new ViewportSize { Width = 390, Height = 844 },
+        });
+        var page = await context.NewPageAsync();
+        await GotoPlaygroundAndWaitForLinterGridAsync(page, $"{host.BaseUrl.TrimEnd('/')}/?seitonTestHooks=1");
+        await page.WaitForFunctionAsync(
+            "() => typeof globalThis.__SEITON_PLAYGROUND_TEST__?.renderFlow === 'function'",
+            arg: null,
+            new PageWaitForFunctionOptions { Timeout = 30_000 });
+
+        await page.EvaluateAsync(
+            """
+            () => {
+              const jobs = Array.from({ length: 12 }, (_, index) => ({
+                id: `job-${index}`,
+                kind: 'job',
+                needs: index === 0 ? [] : [`job-${index - 1}`],
+                reducedNeeds: index === 0 ? [] : [`job-${index - 1}`],
+                runsOn: [],
+                steps: [],
+              }));
+              globalThis.__SEITON_PLAYGROUND_TEST__.selectResultsTab('flow');
+              globalThis.__SEITON_PLAYGROUND_TEST__.renderFlow({
+                version: 1,
+                workflows: [{ file: 'ci.yml', events: ['push'], jobs }],
+              });
+            }
+            """);
+
+        var scaleBefore = await page.EvaluateAsync<double>(
+            "() => globalThis.d3.zoomTransform(document.querySelector('#flow-graph .flow-svg')).k");
+        await Assert.That(scaleBefore).IsLessThan(0.2);
+
+        await page.Locator("#flow-zoom-out-btn").ClickAsync();
+        var scaleAfter = await page.EvaluateAsync<double>(
+            "() => globalThis.d3.zoomTransform(document.querySelector('#flow-graph .flow-svg')).k");
+        await Assert.That(scaleAfter).IsLessThan(scaleBefore);
+    }
+
+    [Test]
+    public async Task FlowGraph_MobileResize_RefitsAndDragPansWholeGraph()
+    {
+        var host = await PlaygroundUiTestHost.GetOrCreateAsync();
+        var browser = await PlaygroundUiBrowserSession.GetBrowserAsync();
+        await using var context = await browser.NewContextAsync(new BrowserNewContextOptions
+        {
+            ViewportSize = new ViewportSize { Width = 390, Height = 844 },
+        });
+        var page = await context.NewPageAsync();
+        await GotoPlaygroundAndWaitForLinterGridAsync(page, $"{host.BaseUrl.TrimEnd('/')}/?seitonTestHooks=1");
+        await page.WaitForFunctionAsync(
+            "() => typeof globalThis.__SEITON_PLAYGROUND_TEST__?.renderFlow === 'function'",
+            arg: null,
+            new PageWaitForFunctionOptions { Timeout = 30_000 });
+
+        await page.EvaluateAsync(
+            """
+            () => {
+              globalThis.__SEITON_PLAYGROUND_TEST__.selectResultsTab('flow');
+              globalThis.__SEITON_PLAYGROUND_TEST__.renderFlow({
+                version: 1,
+                workflows: [{
+                  file: 'ci.yml',
+                  events: ['push'],
+                  jobs: [
+                    { id: 'a', kind: 'job', needs: [], reducedNeeds: [], runsOn: [], steps: [] },
+                    { id: 'b', kind: 'job', needs: ['a'], reducedNeeds: ['a'], runsOn: [], steps: [] },
+                    { id: 'c', kind: 'job', needs: ['b'], reducedNeeds: ['b'], runsOn: [], steps: [] },
+                    { id: 'd', kind: 'job', needs: ['c'], reducedNeeds: ['c'], runsOn: [], steps: [] },
+                  ],
+                }],
+              });
+            }
+            """);
+
+        await page.SetViewportSizeAsync(320, 700);
+        await page.EvaluateAsync(
+            "() => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)))");
+
+        var fits = await page.EvaluateAsync<bool>(
+            """
+            () => {
+              const graph = document.querySelector('#flow-graph').getBoundingClientRect();
+              const content = document.querySelector('#flow-graph .flow-viewport').getBoundingClientRect();
+              const tolerance = 1;
+              return graph.left >= -tolerance
+                && graph.right <= globalThis.innerWidth + tolerance
+                && graph.height <= globalThis.innerHeight
+                && content.left >= graph.left - tolerance
+                && content.right <= graph.right + tolerance
+                && content.top >= graph.top - tolerance
+                && content.bottom <= graph.bottom + tolerance;
+            }
+            """);
+        await Assert.That(fits).IsTrue();
+
+        var before = await page.EvaluateAsync<FlowPanSnapshot>(
+            """
+            () => {
+              const nodes = [...document.querySelectorAll('#flow-graph .flow-job')]
+                .map((node) => node.getBoundingClientRect());
+              return {
+                transform: document.querySelector('#flow-graph .flow-viewport').getAttribute('transform'),
+                firstToSecondX: nodes[1].x - nodes[0].x,
+                firstToSecondY: nodes[1].y - nodes[0].y,
+              };
+            }
+            """);
+        var graph = page.Locator("#flow-graph");
+        await graph.ScrollIntoViewIfNeededAsync();
+        var graphBox = await graph.BoundingBoxAsync();
+        await page.Mouse.MoveAsync(graphBox!.X + graphBox.Width / 2, graphBox.Y + graphBox.Height / 2);
+        await page.Mouse.DownAsync();
+        await page.Mouse.MoveAsync(graphBox.X + graphBox.Width / 2 + 35, graphBox.Y + graphBox.Height / 2 + 20);
+        await page.Mouse.UpAsync();
+
+        var after = await page.EvaluateAsync<FlowPanSnapshot>(
+            """
+            () => {
+              const nodes = [...document.querySelectorAll('#flow-graph .flow-job')]
+                .map((node) => node.getBoundingClientRect());
+              return {
+                transform: document.querySelector('#flow-graph .flow-viewport').getAttribute('transform'),
+                firstToSecondX: nodes[1].x - nodes[0].x,
+                firstToSecondY: nodes[1].y - nodes[0].y,
+              };
+            }
+            """);
+        await Assert.That(after.Transform).IsNotEqualTo(before.Transform);
+        await Assert.That(after.FirstToSecondX).IsEqualTo(before.FirstToSecondX).Within(0.01);
+        await Assert.That(after.FirstToSecondY).IsEqualTo(before.FirstToSecondY).Within(0.01);
+    }
+
+    [Test]
+    public async Task FlowGraph_MobileNodeSelection_HighlightsEditorWithoutPageJump()
+    {
+        var host = await PlaygroundUiTestHost.GetOrCreateAsync();
+        var browser = await PlaygroundUiBrowserSession.GetBrowserAsync();
+        await using var context = await browser.NewContextAsync(new BrowserNewContextOptions
+        {
+            ViewportSize = new ViewportSize { Width = 390, Height = 844 },
+        });
+        var page = await context.NewPageAsync();
+        await GotoPlaygroundAndWaitForLinterGridAsync(page, $"{host.BaseUrl.TrimEnd('/')}/?seitonTestHooks=1");
+        await page.WaitForFunctionAsync(
+            "() => typeof globalThis.__SEITON_PLAYGROUND_TEST__?.renderFlow === 'function'",
+            arg: null,
+            new PageWaitForFunctionOptions { Timeout = 30_000 });
+
+        await page.EvaluateAsync(
+            """
+            () => {
+              globalThis.__SEITON_PLAYGROUND_TEST__.selectResultsTab('flow');
+              globalThis.__SEITON_PLAYGROUND_TEST__.renderFlow({
+                version: 1,
+                workflows: [{
+                  file: 'ci.yml',
+                  events: ['push'],
+                  jobs: [{
+                    id: 'build',
+                    kind: 'job',
+                    line: 1,
+                    endLine: 4,
+                    needs: [],
+                    reducedNeeds: [],
+                    runsOn: [],
+                    steps: [],
+                  }],
+                }],
+              });
+            }
+            """);
+
+        var graph = page.Locator("#flow-graph");
+        await graph.ScrollIntoViewIfNeededAsync();
+        var scrollBefore = await page.EvaluateAsync<double>("() => globalThis.scrollY");
+        await page.Locator("#flow-graph .flow-job__header").ClickAsync();
+        var scrollAfter = await page.EvaluateAsync<double>("() => globalThis.scrollY");
+
+        await Assert.That(scrollAfter).IsEqualTo(scrollBefore).Within(1);
+        await Assert.That(await page.Locator("#editor .flow-hl-line").CountAsync()).IsGreaterThan(0);
+        await Assert.That(await page.Locator("#flow-detail").IsVisibleAsync()).IsTrue();
     }
 
     [Test]
