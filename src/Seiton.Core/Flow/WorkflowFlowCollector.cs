@@ -24,9 +24,25 @@ public static class WorkflowFlowCollector
 
         var events = workflow.On;
         var on = events.Count == 0 ? [] : new string[events.Count];
+        List<FlowSchedule>? schedules = null;
         for (var i = 0; i < on.Length; i++)
         {
-            on[i] = events[i].EventName.Decode();
+            var evt = events[i];
+            on[i] = evt.EventName.Decode();
+            if (evt.Kind != EventKind.Scheduled)
+            {
+                continue;
+            }
+
+            foreach (var entry in evt.AsScheduled().Schedules)
+            {
+                schedules ??= [];
+                schedules.Add(new FlowSchedule
+                {
+                    Cron = entry.Cron.Decode(),
+                    TimeZone = NullIfEmpty(entry.Timezone),
+                });
+            }
         }
 
         var jobMap = workflow.Jobs;
@@ -42,7 +58,24 @@ public static class WorkflowFlowCollector
             File = filePath,
             Name = NullIfEmpty(workflow.Name),
             On = on,
+            Schedules = schedules is null ? [] : schedules.ToArray(),
+            Concurrency = CollectConcurrency(workflow.Concurrency),
             Jobs = jobs,
+        };
+    }
+
+    private static FlowConcurrency? CollectConcurrency(ConcurrencyRef concurrency)
+    {
+        if (!concurrency.HasValue)
+        {
+            return null;
+        }
+
+        return new FlowConcurrency
+        {
+            Group = NullIfEmpty(concurrency.Group),
+            CancelInProgress = concurrency.CancelInProgress.HasValue && concurrency.CancelInProgress.Value,
+            Queue = NullIfEmpty(concurrency.Queue),
         };
     }
 
@@ -428,7 +461,7 @@ public static class WorkflowFlowCollector
         }
     }
 
-    private static FlowStep[] CollectSteps(StepRefList steps)
+    private static FlowStep[] CollectSteps(StepRefList steps, bool topLevel = true)
     {
         if (steps.Count == 0)
         {
@@ -438,13 +471,57 @@ public static class WorkflowFlowCollector
         var result = new FlowStep[steps.Count];
         for (var i = 0; i < result.Length; i++)
         {
-            result[i] = CollectStep(steps[i]);
+            result[i] = CollectStep(steps[i], topLevel ? ComputeBackgroundOutcome(steps, i) : null);
         }
 
         return result;
     }
 
-    private static FlowStep CollectStep(StepRef step)
+    /// <summary>
+    /// Scans the job's later top-level steps to determine how a background step is joined:
+    /// a matching <c>wait</c> or any <c>wait-all</c> awaits it, a matching <c>cancel</c> cuts it.
+    /// Returns <c>null</c> for non-background steps.
+    /// </summary>
+    private static FlowBackgroundOutcome? ComputeBackgroundOutcome(StepRefList steps, int index)
+    {
+        var step = steps[index];
+        if (!step.Background.HasValue || !step.Background.Value)
+        {
+            return null;
+        }
+
+        var id = step.Id;
+        for (var i = index + 1; i < steps.Count; i++)
+        {
+            var exec = steps[i].Exec;
+            switch (exec.Kind)
+            {
+                case StepExecKind.WaitAll:
+                    return FlowBackgroundOutcome.Awaited;
+                case StepExecKind.Wait when id.HasText:
+                    foreach (var target in exec.AsWait().Targets)
+                    {
+                        if (target.ValueEquals(id.Value))
+                        {
+                            return FlowBackgroundOutcome.Awaited;
+                        }
+                    }
+
+                    break;
+                case StepExecKind.Cancel when id.HasText:
+                    if (exec.AsCancel().Target.ValueEquals(id.Value))
+                    {
+                        return FlowBackgroundOutcome.Cancelled;
+                    }
+
+                    break;
+            }
+        }
+
+        return FlowBackgroundOutcome.Unawaited;
+    }
+
+    private static FlowStep CollectStep(StepRef step, FlowBackgroundOutcome? backgroundOutcome)
     {
         var exec = step.Exec;
         var kind = exec.Kind switch
@@ -469,6 +546,7 @@ public static class WorkflowFlowCollector
             Name = NullIfEmpty(step.Name),
             If = NullIfEmpty(step.If),
             Background = step.Background.HasValue && step.Background.Value,
+            BackgroundOutcome = backgroundOutcome,
             TimeoutMinutes = CollectTimeout(step.TimeoutMinutes),
             ContinueOnError = step.ContinueOnError.HasValue && step.ContinueOnError.Value,
             Run = kind == FlowStepKind.Run ? NullIfEmpty(exec.AsRun().Run) : null,
@@ -477,7 +555,7 @@ public static class WorkflowFlowCollector
             With = kind == FlowStepKind.Uses ? CollectWith(exec.AsAction().Inputs) : null,
             WaitTargets = kind == FlowStepKind.Wait ? DecodeList(exec.AsWait().Targets) : [],
             CancelTarget = kind == FlowStepKind.Cancel ? NullIfEmpty(exec.AsCancel().Target) : null,
-            Steps = kind == FlowStepKind.Parallel ? CollectSteps(exec.AsParallel().Steps) : [],
+            Steps = kind == FlowStepKind.Parallel ? CollectSteps(exec.AsParallel().Steps, topLevel: false) : [],
         };
     }
 

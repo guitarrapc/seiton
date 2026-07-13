@@ -59,14 +59,6 @@ export function renderFlowGraph(container, workflow, { onSelect, diagnostics } =
   const layout = computeLayout(jobs);
   const diagMap = mapDiagnostics(jobs, diagnostics ?? []);
 
-  // Background join status per step DTO, merged across all jobs.
-  const bgStatus = new Map();
-  for (const pos of layout.values()) {
-    for (const [stepObj, status] of pos.graph.statuses) {
-      bgStatus.set(stepObj, status);
-    }
-  }
-
   const svg = d3
     .select(container)
     .append('svg')
@@ -84,11 +76,7 @@ export function renderFlowGraph(container, workflow, { onSelect, diagnostics } =
     if (selectedGroup) selectedGroup.classed('flow-node--selected', false);
     selectedGroup = group;
     group.classed('flow-node--selected', true);
-    onSelect?.({
-      ...info,
-      diagnostics: diagMap.get(info.data) ?? [],
-      bgStatus: bgStatus.get(info.data),
-    });
+    onSelect?.({ ...info, diagnostics: diagMap.get(info.data) ?? [] });
   };
 
   drawJobEdges(d3, edgeLayer, jobs, layout);
@@ -301,10 +289,8 @@ function drawJobEdges(d3, layer, jobs, layout) {
 function buildStepGraph(steps) {
   const nodes = [];
   const edges = [];
-  /** Join status per background step DTO: 'awaited' | 'cancelled' (absent = never joined). */
-  const statuses = new Map();
   let prevMain = null;
-  /** Background steps not yet joined: {stepId, step, nodeId, lane}. */
+  /** Background steps not yet joined: {stepId, nodeId, lane}. */
   const activeBg = [];
   const usedLanes = new Set();
 
@@ -333,7 +319,7 @@ function buildStepGraph(steps) {
       const lane = allocLane();
       nodes.push({ id, step, kind: 'step', lane });
       if (prevMain) edges.push({ from: prevMain, to: id, kind: 'bg' });
-      activeBg.push({ stepId: step.id ?? null, step, nodeId: id, lane });
+      activeBg.push({ stepId: step.id ?? null, nodeId: id, lane });
       return; // main lane continues without waiting
     }
 
@@ -345,21 +331,18 @@ function buildStepGraph(steps) {
         const entry = activeBg.find((b) => b.stepId === target);
         if (entry) {
           edges.push({ from: entry.nodeId, to: id, kind: 'wait' });
-          statuses.set(entry.step, 'awaited');
           releaseBg(entry);
         }
       }
     } else if (step.kind === 'wait-all') {
       for (const entry of [...activeBg]) {
         edges.push({ from: entry.nodeId, to: id, kind: 'wait' });
-        statuses.set(entry.step, 'awaited');
         releaseBg(entry);
       }
     } else if (step.kind === 'cancel' && step.target) {
       const entry = activeBg.find((b) => b.stepId === step.target);
       if (entry) {
         edges.push({ from: id, to: entry.nodeId, kind: 'cancel' });
-        statuses.set(entry.step, 'cancelled');
         releaseBg(entry);
       }
     }
@@ -367,7 +350,7 @@ function buildStepGraph(steps) {
     prevMain = id;
   });
 
-  return { nodes, edges, statuses };
+  return { nodes, edges };
 }
 
 function parallelSize(children) {

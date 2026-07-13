@@ -325,6 +325,8 @@ flow collector は `check --format flow-*` / `GetFlowJson` 要求時のみ動く
 
 6. **表示調整**: permissions は 2 scope でも truncate されるため job ノードの info 行から外し詳細パネル専用に。step 詳細に `working-directory`(run)と `with` 入力(uses)を追加(DTO/flow-json に `workingDirectory` / `with`)。background の注記は step graph の join 追跡(`awaited` / `cancelled` / 未 join)から実際の挙動を反映 — 固定文言「later steps do not wait」は wait/wait-all が後続にある場合は嘘になるため。
 
+7. **workflow コンテキスト + backgroundOutcome の契約化**: flow-json に `schedules`(cron + seiton `timezone` 拡張)と `concurrency`(group / cancelInProgress / seiton `queue` 拡張)を追加し、UI はグラフ上部のチップストリップ(`#flow-workflow-info`)で「何のイベント・スケジュール・concurrency で実行されるか」を表示。また background の join 状態は JS 側導出をやめ、`WorkflowFlowCollector` が計算する `backgroundOutcome`(awaited / cancelled / unawaited)として契約に載せた — Core が唯一の解釈者であるべきで、JS 導出は CLI 消費者と解釈が分岐するリスクがあった。
+
 ## 現時点の結論
 
 flow 可視化は、専用コマンドや UI 先行の個別実装ではなく、まず `check --format flow-json` という共通契約を作り、それを Playground が消費する形で進めるのが最も整合的である。

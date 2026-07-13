@@ -65,6 +65,41 @@ public static class WorkflowFlowJson
 
         writer.WriteEndArray();
 
+        if (workflow.Schedules.Length > 0)
+        {
+            writer.WriteStartArray("schedules"u8);
+            foreach (var schedule in workflow.Schedules)
+            {
+                writer.WriteStartObject();
+                writer.WriteString("cron"u8, schedule.Cron);
+                if (schedule.TimeZone is not null)
+                {
+                    writer.WriteString("timezone"u8, schedule.TimeZone);
+                }
+
+                writer.WriteEndObject();
+            }
+
+            writer.WriteEndArray();
+        }
+
+        if (workflow.Concurrency is { } concurrency)
+        {
+            writer.WriteStartObject("concurrency"u8);
+            if (concurrency.Group is not null)
+            {
+                writer.WriteString("group"u8, concurrency.Group);
+            }
+
+            writer.WriteBoolean("cancelInProgress"u8, concurrency.CancelInProgress);
+            if (concurrency.Queue is not null)
+            {
+                writer.WriteString("queue"u8, concurrency.Queue);
+            }
+
+            writer.WriteEndObject();
+        }
+
         writer.WriteStartArray("jobs"u8);
         foreach (var job in workflow.Jobs)
         {
@@ -204,6 +239,16 @@ public static class WorkflowFlowJson
         if (step.Background)
         {
             writer.WriteBoolean("background"u8, true);
+        }
+
+        if (step.BackgroundOutcome is { } outcome)
+        {
+            writer.WriteString("backgroundOutcome"u8, outcome switch
+            {
+                FlowBackgroundOutcome.Awaited => "awaited"u8,
+                FlowBackgroundOutcome.Cancelled => "cancelled"u8,
+                _ => "unawaited"u8,
+            });
         }
 
         if (step.TimeoutMinutes is { } stepTimeout)

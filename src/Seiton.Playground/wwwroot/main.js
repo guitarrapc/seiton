@@ -711,6 +711,7 @@ const flowPanel = document.getElementById('flow-panel');
 const flowGraphEl = document.getElementById('flow-graph');
 const flowEmptyEl = document.getElementById('flow-empty');
 const flowDetailEl = document.getElementById('flow-detail');
+const flowWorkflowInfoEl = document.getElementById('flow-workflow-info');
 
 let activeResultsTab = 'result';
 let lastFlowSource = null;
@@ -861,6 +862,7 @@ function renderFlow(flowDoc) {
     onSelect: showFlowDetail,
     diagnostics: lastDiagnostics,
   });
+  renderWorkflowInfo(rendered ? workflow : null);
   flowEmptyEl.hidden = rendered;
   flowGraphEl.hidden = !rendered;
   if (!rendered) {
@@ -870,6 +872,46 @@ function renderFlow(flowDoc) {
         ? 'No workflow structure to visualize.'
         : 'Flow graph unavailable: D3.js failed to load.';
   }
+}
+
+/**
+ * Renders the workflow context strip above the graph: trigger events,
+ * schedule cron/timezone entries, and the concurrency declaration.
+ * @param {object|null} workflow
+ */
+function renderWorkflowInfo(workflow) {
+  flowWorkflowInfoEl.replaceChildren();
+  if (!workflow) {
+    flowWorkflowInfoEl.hidden = true;
+    return;
+  }
+
+  const parts = [];
+  if ((workflow.on ?? []).length > 0) {
+    parts.push(`on: ${workflow.on.join(', ')}`);
+  }
+  for (const schedule of workflow.schedules ?? []) {
+    parts.push(`cron: ${schedule.cron}${schedule.timezone ? ` (${schedule.timezone})` : ' (UTC)'}`);
+  }
+  const concurrency = workflow.concurrency;
+  if (concurrency) {
+    let text = `concurrency: ${concurrency.group ?? concurrency.queue ?? '(declared)'}`;
+    if (concurrency.cancelInProgress) text += ' · cancel-in-progress';
+    parts.push(text);
+  }
+
+  if (parts.length === 0) {
+    flowWorkflowInfoEl.hidden = true;
+    return;
+  }
+
+  for (const part of parts) {
+    const chip = document.createElement('span');
+    chip.className = 'flow-workflow-info__chip';
+    chip.textContent = part;
+    flowWorkflowInfoEl.appendChild(chip);
+  }
+  flowWorkflowInfoEl.hidden = false;
 }
 
 /** Shows job/step details for a clicked graph node and highlights its editor lines. */
@@ -923,13 +965,12 @@ function showFlowDetail(info) {
     add('id', step.id);
     add('if', step.if);
     if (step.background) {
-      // info.bgStatus comes from the step graph: a later wait/wait-all may join
-      // this step, or a cancel may cut it — the note must reflect what really happens.
+      // backgroundOutcome is part of the flow-json contract (computed by Seiton.Core).
       add(
         'background',
-        info.bgStatus === 'awaited'
+        step.backgroundOutcome === 'awaited'
           ? 'true (a later wait / wait-all waits for this step)'
-          : info.bgStatus === 'cancelled'
+          : step.backgroundOutcome === 'cancelled'
             ? 'true (cancelled by a later cancel step)'
             : 'true (later steps do not wait for this step)',
       );

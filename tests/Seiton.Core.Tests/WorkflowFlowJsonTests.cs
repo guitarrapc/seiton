@@ -251,6 +251,44 @@ public sealed class WorkflowFlowJsonTests
     }
 
     [Test]
+    public async Task Serialize_WorkflowContextAndBackgroundOutcome_EmittedPerContract()
+    {
+        var flow = CollectFlow("""
+            on:
+              schedule:
+                - cron: '0 0 * * *'
+                  timezone: Asia/Tokyo
+            concurrency:
+              group: deploy
+              cancel-in-progress: true
+            jobs:
+              build:
+                runs-on: ubuntu-latest
+                steps:
+                  - id: server
+                    run: npm run serve
+                    background: true
+                  - wait: [server]
+            """);
+
+        var json = WorkflowFlowJson.Serialize(flow);
+        using var doc = JsonDocument.Parse(json);
+        var workflow = doc.RootElement.GetProperty("workflows")[0];
+
+        var schedule = workflow.GetProperty("schedules")[0];
+        await Assert.That(schedule.GetProperty("cron").GetString()).IsEqualTo("0 0 * * *");
+        await Assert.That(schedule.GetProperty("timezone").GetString()).IsEqualTo("Asia/Tokyo");
+
+        var concurrency = workflow.GetProperty("concurrency");
+        await Assert.That(concurrency.GetProperty("group").GetString()).IsEqualTo("deploy");
+        await Assert.That(concurrency.GetProperty("cancelInProgress").GetBoolean()).IsTrue();
+
+        var steps = workflow.GetProperty("jobs")[0].GetProperty("steps");
+        await Assert.That(steps[0].GetProperty("backgroundOutcome").GetString()).IsEqualTo("awaited");
+        await Assert.That(steps[1].TryGetProperty("backgroundOutcome", out _)).IsFalse();
+    }
+
+    [Test]
     public async Task Serialize_MultipleWorkflows_WrappedInSingleDocument()
     {
         var flowA = CollectFlow("""

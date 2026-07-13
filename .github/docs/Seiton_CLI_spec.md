@@ -773,19 +773,23 @@ Behavior common to both formats:
 - `background: true` steps carry a `background` flag so intra-job concurrency (background fork, `wait`/`wait-all` join, `cancel`) can be reconstructed by consumers.
 - Jobs and steps carry 1-based source line ranges (`line` / `endLine`, omitted when unknown) so consumers can map lint diagnostics onto flow nodes. Ranges of adjacent blocks may overlap on boundary lines; consumers should resolve overlaps by preferring the node with the greatest start line.
 - Runtime settings are carried when declared: job `timeoutMinutes` / `permissions` (`["read-all"]` scalar form or `"scope: level"` entries; empty array = `{}` deny-all; omitted when undeclared) / `environment`, and step `timeoutMinutes` / `continueOnError` / `workingDirectory` (run steps) / `with` (uses steps, key-value object in document order). Dynamic `${{ }}` timeout expressions are omitted.
+- Workflow execution context is carried when declared: `schedules` (cron entries of `on: schedule` with the seiton `timezone` extension; omitted when absent) and `concurrency` (`group` raw expression, `cancelInProgress`, seiton `queue` extension).
+- Background steps carry `backgroundOutcome` (`"awaited"` when a later `wait` targeting the step or any `wait-all` joins it, `"cancelled"` when a later `cancel` cuts it, `"unawaited"` otherwise) computed over the job's later top-level steps — consumers must not re-derive this.
 
 #### 6.6.1 `flow-json`
 
 Single JSON document to stdout:
 
 ```json
-{ "version": 1, "workflows": [ { "file", "name"?, "on": [], "jobs": [
+{ "version": 1, "workflows": [ { "file", "name"?, "on": [],
+  "schedules"?: [ { "cron", "timezone"? } ], "concurrency"?: { "group"?, "cancelInProgress", "queue"? },
+  "jobs": [
   { "id", "name"?, "kind": "job|reusable", "line"?, "endLine"?, "if"?, "needs": [], "runsOn": [], "uses"?,
     "timeoutMinutes"?, "permissions"?: [], "environment"?,
     "strategy"?: { "hasMatrix", "matrixKeys": [], "matrixIsExpression",
                    "combinations": [ { "<key>": "<value>", ... } ] },
     "steps": [ { "kind": "run|uses|parallel|wait|wait-all|cancel", "line"?, "endLine"?, "id"?, "name"?, "if"?,
-                 "background"?, "timeoutMinutes"?, "continueOnError"?,
+                 "background"?, "backgroundOutcome"?, "timeoutMinutes"?, "continueOnError"?,
                  "run"?, "workingDirectory"?, "uses"?, "with"?: {},
                  "targets"?, "target"?, "steps"? } ] } ] } ] }
 ```

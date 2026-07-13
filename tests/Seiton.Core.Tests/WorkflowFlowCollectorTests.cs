@@ -290,6 +290,103 @@ public sealed class WorkflowFlowCollectorTests
     }
 
     [Test]
+    public async Task Collect_WorkflowContext_CapturesSchedulesAndConcurrency()
+    {
+        using var result = Parse("""
+            name: Nightly
+            on:
+              push:
+              schedule:
+                - cron: '0 0 * * *'
+                  timezone: Asia/Tokyo
+                - cron: '30 6 * * 1'
+            concurrency:
+              group: nightly-${{ github.ref }}
+              cancel-in-progress: true
+            jobs:
+              build:
+                runs-on: ubuntu-latest
+                steps:
+                  - run: echo build
+            """);
+
+        var flow = WorkflowFlowCollector.Collect(result, "wf.yml");
+
+        await Assert.That(flow!.On.SequenceEqual(["push", "schedule"])).IsTrue();
+
+        await Assert.That(flow.Schedules).Count().IsEqualTo(2);
+        await Assert.That(flow.Schedules[0].Cron).IsEqualTo("0 0 * * *");
+        await Assert.That(flow.Schedules[0].TimeZone).IsEqualTo("Asia/Tokyo");
+        await Assert.That(flow.Schedules[1].Cron).IsEqualTo("30 6 * * 1");
+        await Assert.That(flow.Schedules[1].TimeZone).IsNull();
+
+        await Assert.That(flow.Concurrency).IsNotNull();
+        await Assert.That(flow.Concurrency!.Group).IsEqualTo("nightly-${{ github.ref }}");
+        await Assert.That(flow.Concurrency.CancelInProgress).IsTrue();
+    }
+
+    [Test]
+    public async Task Collect_WorkflowWithoutContext_HasEmptySchedulesAndNullConcurrency()
+    {
+        using var result = Parse("""
+            on: push
+            jobs:
+              build:
+                runs-on: ubuntu-latest
+                steps:
+                  - run: echo hi
+            """);
+
+        var flow = WorkflowFlowCollector.Collect(result, "wf.yml");
+
+        await Assert.That(flow!.Schedules).IsEmpty();
+        await Assert.That(flow.Concurrency).IsNull();
+    }
+
+    [Test]
+    public async Task Collect_BackgroundOutcome_ReflectsWaitCancelAndUnawaited()
+    {
+        using var result = Parse("""
+            on: push
+            jobs:
+              build:
+                runs-on: ubuntu-latest
+                steps:
+                  - id: server
+                    run: npm run serve
+                    background: true
+                  - id: metrics
+                    run: npm run metrics
+                    background: true
+                  - id: orphan
+                    run: npm run orphan
+                    background: true
+                  - run: npm run build
+                  - wait: [server]
+                  - cancel: metrics
+              scan:
+                runs-on: ubuntu-latest
+                steps:
+                  - id: probe
+                    run: npm run probe
+                    background: true
+                  - wait-all:
+            """);
+
+        var flow = WorkflowFlowCollector.Collect(result, "wf.yml");
+
+        var steps = flow!.Jobs[0].Steps;
+        await Assert.That(steps[0].BackgroundOutcome).IsEqualTo(FlowBackgroundOutcome.Awaited);
+        await Assert.That(steps[1].BackgroundOutcome).IsEqualTo(FlowBackgroundOutcome.Cancelled);
+        await Assert.That(steps[2].BackgroundOutcome).IsEqualTo(FlowBackgroundOutcome.Unawaited);
+        // Non-background steps carry no outcome.
+        await Assert.That(steps[3].BackgroundOutcome).IsNull();
+
+        // wait-all joins every outstanding background step.
+        await Assert.That(flow.Jobs[1].Steps[0].BackgroundOutcome).IsEqualTo(FlowBackgroundOutcome.Awaited);
+    }
+
+    [Test]
     public async Task Collect_BackgroundStep_SetsBackgroundFlag()
     {
         using var result = Parse("""

@@ -123,16 +123,6 @@ public sealed class PlaygroundFlowTabContractTests
     }
 
     [Test]
-    public async Task FlowGraphModule_TracksBackgroundJoinStatus()
-    {
-        var js = await ReadWwwrootFileAsync("flow-graph.js");
-        // Background steps know whether a later wait/wait-all joins them or a cancel cuts them.
-        await Assert.That(js).Contains("bgStatus");
-        await Assert.That(js).Contains("'awaited'");
-        await Assert.That(js).Contains("'cancelled'");
-    }
-
-    [Test]
     public async Task MainJs_FlowDetail_ShowsRuntimeSettings()
     {
         var js = await ReadWwwrootFileAsync("main.js");
@@ -141,8 +131,34 @@ public sealed class PlaygroundFlowTabContractTests
         await Assert.That(js).Contains("'permissions'");
         await Assert.That(js).Contains("working-directory");
         await Assert.That(js).Contains("'with'");
-        // Background note reflects the actual join status instead of a fixed claim.
-        await Assert.That(js).Contains("bgStatus");
+        // Background join status comes from the flow-json contract, not a JS-side derivation.
+        await Assert.That(js).Contains("backgroundOutcome");
+        await Assert.That(js.Contains("bgStatus", StringComparison.Ordinal)).IsFalse();
+    }
+
+    [Test]
+    public async Task IndexTemplate_HasWorkflowInfoStrip()
+    {
+        var html = await ReadWwwrootFileAsync("index.html");
+        await Assert.That(html).Contains("id=\"flow-workflow-info\"", StringComparison.Ordinal);
+    }
+
+    [Test]
+    public async Task MainJs_RendersWorkflowContextStrip()
+    {
+        var js = await ReadWwwrootFileAsync("main.js");
+        // Trigger events, schedule cron/timezone, and concurrency shown above the graph.
+        await Assert.That(js).Contains("flow-workflow-info");
+        await Assert.That(js).Contains("schedules");
+        await Assert.That(js).Contains("concurrency");
+        await Assert.That(js).Contains("cancel-in-progress");
+    }
+
+    [Test]
+    public async Task Stylesheet_DefinesWorkflowInfoStripClass()
+    {
+        var css = await ReadWwwrootFileAsync("style.css");
+        await Assert.That(css).Contains(".flow-workflow-info");
     }
 
     [Test]

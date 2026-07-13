@@ -15,7 +15,34 @@ public sealed class WorkflowFlow
     /// <summary>Trigger event names from <c>on:</c>, in document order.</summary>
     public required string[] On { get; init; }
 
+    /// <summary>Cron entries of <c>on: schedule</c> (with the seiton <c>timezone</c> extension), empty when absent.</summary>
+    public FlowSchedule[] Schedules { get; init; } = [];
+
+    /// <summary>The workflow-level <c>concurrency:</c> declaration, or <c>null</c> when absent.</summary>
+    public FlowConcurrency? Concurrency { get; init; }
+
     public required FlowJob[] Jobs { get; init; }
+}
+
+/// <summary>A single <c>on: schedule</c> cron entry.</summary>
+public sealed class FlowSchedule
+{
+    public required string Cron { get; init; }
+
+    /// <summary>IANA timezone of the seiton <c>timezone</c> extension, or <c>null</c> (UTC default).</summary>
+    public string? TimeZone { get; init; }
+}
+
+/// <summary>The <c>concurrency:</c> declaration of a workflow.</summary>
+public sealed class FlowConcurrency
+{
+    /// <summary>The concurrency group (raw expression preserved).</summary>
+    public string? Group { get; init; }
+
+    public bool CancelInProgress { get; init; }
+
+    /// <summary>The seiton <c>queue</c> extension value, if declared.</summary>
+    public string? Queue { get; init; }
 }
 
 /// <summary>Discriminates normal jobs from reusable-workflow call jobs.</summary>
@@ -89,6 +116,19 @@ public sealed class FlowStrategy
     public KeyValuePair<string, string>[][] Combinations { get; init; } = [];
 }
 
+/// <summary>How a background step is eventually joined (or not) by later steps in the same job.</summary>
+public enum FlowBackgroundOutcome
+{
+    /// <summary>No later step waits for or cancels this background step.</summary>
+    Unawaited,
+
+    /// <summary>A later <c>wait</c> (targeting this step) or <c>wait-all</c> joins this step.</summary>
+    Awaited,
+
+    /// <summary>A later <c>cancel</c> stops this step.</summary>
+    Cancelled,
+}
+
 /// <summary>The execution kind of a step node.</summary>
 public enum FlowStepKind
 {
@@ -115,6 +155,12 @@ public sealed class FlowStep
 
     /// <summary>Whether the step runs in the background (<c>background: true</c>) — later steps do not wait for it.</summary>
     public bool Background { get; init; }
+
+    /// <summary>
+    /// How the job's later steps treat this background step: joined by a <c>wait</c>/<c>wait-all</c>,
+    /// cut by a <c>cancel</c>, or never awaited. <c>null</c> for non-background steps.
+    /// </summary>
+    public FlowBackgroundOutcome? BackgroundOutcome { get; init; }
 
     /// <summary>The declared <c>timeout-minutes</c>, or <c>null</c> when absent or a dynamic expression.</summary>
     public double? TimeoutMinutes { get; init; }

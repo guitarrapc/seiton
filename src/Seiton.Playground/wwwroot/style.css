@@ -1659,3 +1659,22 @@ footer a {
 .flow-svg--lod0 .flow-job__info {
   display: none;
 }
+
+/* ─── Workflow context strip (events / schedule / concurrency) ─── */
+
+.flow-workflow-info {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  margin-bottom: 0.4rem;
+  font-size: 0.78rem;
+}
+
+.flow-workflow-info__chip {
+  border: 1px solid var(--border-pane);
+  border-radius: 999px;
+  padding: 0.15rem 0.6rem;
+  background: var(--results-surface, transparent);
+  color: var(--text);
+  white-space: nowrap;
+}
