@@ -158,28 +158,45 @@ public sealed class PopularActionInputsRule() : RuleBase(RuleId.PopularActionInp
 
         // Threshold: max distance is roughly 1/3 of the input name length, minimum 2
         var maxDistance = Math.Max(2, unknownInput.Length / 3);
-        string? best = null;
-        var bestDistance = maxDistance + 1;
-        var tied = false;
 
-        for (var i = 0; i < inputNames.Length; i++)
+        var count = inputNames.Length;
+        var rented = count > 128 ? System.Buffers.ArrayPool<int>.Shared.Rent(count) : null;
+        Span<int> distances = rented is not null ? rented.AsSpan(0, count) : stackalloc int[count];
+
+        try
         {
-            var candidate = inputNames[i];
-            var distance = EditDistance.ComputeIgnoreCase(unknownInput, candidate, maxDistance);
-            if (distance < bestDistance)
+            // Batch: builds the Myers pattern table from unknownInput once for all candidates.
+            EditDistance.ComputeIgnoreCaseMany(unknownInput, inputNames, maxDistance, distances);
+
+            string? best = null;
+            var bestDistance = maxDistance + 1;
+            var tied = false;
+
+            for (var i = 0; i < count; i++)
             {
-                bestDistance = distance;
-                best = candidate;
-                tied = false;
+                var distance = distances[i];
+                if (distance < bestDistance)
+                {
+                    bestDistance = distance;
+                    best = inputNames[i];
+                    tied = false;
+                }
+                else if (distance == bestDistance && distance <= maxDistance)
+                {
+                    tied = true;
+                }
             }
-            else if (distance == bestDistance && distance <= maxDistance)
+
+            // When multiple candidates are equally close, suppress the suggestion
+            return tied ? null : best;
+        }
+        finally
+        {
+            if (rented is not null)
             {
-                tied = true;
+                System.Buffers.ArrayPool<int>.Shared.Return(rented);
             }
         }
-
-        // When multiple candidates are equally close, suppress the suggestion
-        return tied ? null : best;
     }
 
     private static string FormatAvailableInputs(string[] inputNames)

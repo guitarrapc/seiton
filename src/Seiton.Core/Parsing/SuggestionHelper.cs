@@ -21,20 +21,36 @@ internal static class SuggestionHelper
             return null;
         }
 
-        string? best = null;
-        var bestDistance = maxDistance + 1;
+        var count = candidates.Length;
+        var rented = count > 128 ? System.Buffers.ArrayPool<int>.Shared.Rent(count) : null;
+        Span<int> distances = rented is not null ? rented.AsSpan(0, count) : stackalloc int[count];
 
-        foreach (var candidate in candidates)
+        try
         {
-            var distance = EditDistance.ComputeIgnoreCase(input, candidate, maxDistance);
-            if (distance < bestDistance)
+            // Batch: builds the Myers pattern table from input once for all candidates.
+            EditDistance.ComputeIgnoreCaseMany(input, candidates, maxDistance, distances);
+
+            string? best = null;
+            var bestDistance = maxDistance + 1;
+
+            for (var i = 0; i < count; i++)
             {
-                bestDistance = distance;
-                best = candidate;
+                if (distances[i] < bestDistance)
+                {
+                    bestDistance = distances[i];
+                    best = candidates[i];
+                }
+            }
+
+            return best;
+        }
+        finally
+        {
+            if (rented is not null)
+            {
+                System.Buffers.ArrayPool<int>.Shared.Return(rented);
             }
         }
-
-        return best;
     }
 
     /// <summary>

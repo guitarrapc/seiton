@@ -295,4 +295,203 @@ public sealed class EditDistanceTests
         await Assert.That(() => EditDistance.ComputeIgnoreCase("abc", "xyz", maxDistance: -1))
             .Throws<ArgumentOutOfRangeException>();
     }
+
+    //  Two-word Myers range (shorter side 65..128) and mixed-length dispatch
+
+    [Test]
+    public async Task ComputeIgnoreCase_TwoWordRange_KnownDistances()
+    {
+        var a100 = new string('a', 100);
+        var a100Edited = "x" + new string('a', 98) + "y";
+
+        await Assert.That(EditDistance.ComputeIgnoreCase(a100, a100Edited)).IsEqualTo(2);
+        await Assert.That(EditDistance.ComputeIgnoreCase(a100, a100Edited, maxDistance: 4)).IsEqualTo(2);
+        await Assert.That(EditDistance.ComputeIgnoreCase(a100, a100Edited, maxDistance: 1)).IsEqualTo(2);
+    }
+
+    [Test]
+    public async Task ComputeIgnoreCase_TwoWordRange_CaseInsensitive()
+    {
+        var upper = new string('A', 100);
+        var lower = new string('a', 100);
+        await Assert.That(EditDistance.ComputeIgnoreCase(upper, lower)).IsEqualTo(0);
+    }
+
+    [Test]
+    public async Task ComputeIgnoreCase_MixedLength_ShortPatternLongText()
+    {
+        // shorter side ≤ 64, longer side in 65..128: distance = 100 - 4 common prefix chars
+        var result = EditDistance.ComputeIgnoreCase("aaaa", new string('a', 100));
+        await Assert.That(result).IsEqualTo(96);
+    }
+
+    [Test]
+    public async Task ComputeIgnoreCase_MixedLength_Boundary128And129()
+    {
+        await Assert.That(EditDistance.ComputeIgnoreCase(new string('a', 128), new string('a', 127) + "b")).IsEqualTo(1);
+        await Assert.That(EditDistance.ComputeIgnoreCase(new string('a', 129), new string('a', 128) + "b")).IsEqualTo(1);
+        await Assert.That(EditDistance.ComputeIgnoreCase(new string('a', 128), new string('a', 70))).IsEqualTo(58);
+    }
+
+    //  Parity against a naive reference DP across dispatch boundaries
+
+    [Test]
+    public async Task ComputeIgnoreCase_MatchesNaiveReference_AcrossDispatchBoundaries()
+    {
+        var pairs = new (string Left, string Right)[]
+        {
+            ("tokne", "token"),
+            ("cache-dependency-pathx", "cache-dependency-path"),
+            ("DAYS-BEFORE-STALE", "days-before-stall"),
+            (new string('a', 64), new string('a', 63) + "b"),
+            (new string('a', 65), new string('a', 64) + "b"),
+            (new string('a', 65), new string('a', 65)),
+            (new string('A', 100), "x" + new string('a', 98) + "y"),
+            (string.Concat(Enumerable.Repeat("Ab-", 30)), string.Concat(Enumerable.Repeat("ab-", 30)) + "xy"),
+            ("token", new string('a', 100)),
+            (new string('a', 64), new string('a', 100)),
+            (new string('a', 64) + "b", new string('b', 130)),
+            (new string('a', 128), new string('a', 127) + "b"),
+            (new string('a', 129), new string('a', 128) + "b"),
+            ("café", "cafe"),
+            ("Ångström", "åNGSTRÖM"),
+        };
+
+        foreach (var (left, right) in pairs)
+        {
+            var expected = NaiveLevenshteinIgnoreCase(left, right);
+            await Assert.That(EditDistance.ComputeIgnoreCase(left, right)).IsEqualTo(expected);
+            await Assert.That(EditDistance.ComputeIgnoreCase(right, left)).IsEqualTo(expected);
+
+            foreach (var maxDistance in (int[])[0, 1, 3, 5])
+            {
+                var clamped = expected <= maxDistance ? expected : maxDistance + 1;
+                await Assert.That(EditDistance.ComputeIgnoreCase(left, right, maxDistance)).IsEqualTo(clamped);
+            }
+        }
+    }
+
+    private static int NaiveLevenshteinIgnoreCase(string left, string right)
+    {
+        var m = left.Length;
+        var n = right.Length;
+        var dp = new int[m + 1, n + 1];
+        for (var i = 0; i <= m; i++) dp[i, 0] = i;
+        for (var j = 0; j <= n; j++) dp[0, j] = j;
+
+        for (var i = 1; i <= m; i++)
+        {
+            for (var j = 1; j <= n; j++)
+            {
+                var cost = char.ToLowerInvariant(left[i - 1]) == char.ToLowerInvariant(right[j - 1]) ? 0 : 1;
+                dp[i, j] = Math.Min(Math.Min(dp[i - 1, j] + 1, dp[i, j - 1] + 1), dp[i - 1, j - 1] + cost);
+            }
+        }
+
+        return dp[m, n];
+    }
+
+    //  Batch API: ComputeIgnoreCaseMany must match per-pair ComputeIgnoreCase exactly
+
+    private static readonly string[] StaleCandidates =
+    [
+        "repo-token", "stale-issue-message", "stale-pr-message", "close-issue-message",
+        "close-pr-message", "days-before-stale", "days-before-close", "days-before-issue-stale",
+        "days-before-issue-close", "days-before-pr-stale", "days-before-pr-close",
+        "stale-issue-label", "close-issue-label", "exempt-issue-labels", "stale-pr-label",
+        "close-pr-label", "exempt-pr-labels", "exempt-milestones", "exempt-issue-milestones",
+        "exempt-pr-milestones", "exempt-all-milestones", "only-labels", "only-issue-labels",
+        "only-pr-labels", "any-of-labels", "any-of-issue-labels", "any-of-pr-labels",
+        "operations-per-run", "remove-stale-when-updated", "remove-issue-stale-when-updated",
+        "remove-pr-stale-when-updated", "debug-only", "ascending", "start-date",
+        "delete-branch", "exempt-assignees", "exempt-issue-assignees", "exempt-pr-assignees",
+        "exempt-all-assignees", "exempt-draft-pr", "enable-statistics", "labels-to-add-when-unstale",
+        "labels-to-remove-when-unstale", "ignore-updates", "ignore-issue-updates",
+        "ignore-pr-updates", "include-only-assigned", "exempt-issue-close-reason",
+        "close-issue-reason", "stale-issue-close-reason", "exempt-pr-close-reason",
+        "close-pr-reason", "stale-pr-close-reason", "exempt-all-close-reason",
+        "close-all-reason"
+    ];
+
+    private static async Task AssertManyMatchesPerPair(string input, string[] candidates, int maxDistance)
+    {
+        var distances = new int[candidates.Length];
+        EditDistance.ComputeIgnoreCaseMany(input, candidates, maxDistance, distances);
+
+        for (var i = 0; i < candidates.Length; i++)
+        {
+            var expected = EditDistance.ComputeIgnoreCase(input, candidates[i], maxDistance);
+            await Assert.That(distances[i]).IsEqualTo(expected);
+        }
+    }
+
+    [Test]
+    [Arguments("days-before-stall", 5)]
+    [Arguments("days-before-stall", 0)]
+    [Arguments("tokne", 3)]
+    [Arguments("DAYS-BEFORE-STALE", 5)]
+    [Arguments("zzzzzzzzz", 3)]
+    public async Task ComputeIgnoreCaseMany_StaleCandidates_MatchesPerPair(string input, int maxDistance)
+    {
+        await AssertManyMatchesPerPair(input, StaleCandidates, maxDistance);
+    }
+
+    [Test]
+    [Arguments(1)]
+    [Arguments(2)]
+    [Arguments(3)]
+    [Arguments(4)]
+    [Arguments(5)]
+    [Arguments(7)]
+    [Arguments(8)]
+    [Arguments(9)]
+    public async Task ComputeIgnoreCaseMany_RaggedCandidateCounts_MatchesPerPair(int count)
+    {
+        var candidates = StaleCandidates.AsSpan(0, count).ToArray();
+        await AssertManyMatchesPerPair("days-before-stall", candidates, 5);
+    }
+
+    [Test]
+    public async Task ComputeIgnoreCaseMany_MixedCandidates_MatchesPerPair()
+    {
+        string[] candidates = ["", "token", new string('x', 70), "café-token", "REPO-TOKEN", "tok"];
+        await AssertManyMatchesPerPair("tokne", candidates, 3);
+        await AssertManyMatchesPerPair("tokne", candidates, 0);
+    }
+
+    [Test]
+    public async Task ComputeIgnoreCaseMany_FallbackInputs_MatchesPerPair()
+    {
+        // Non-ASCII, empty, and oversized (> 64 chars) inputs take the per-pair fallback path
+        await AssertManyMatchesPerPair("café", StaleCandidates, 3);
+        await AssertManyMatchesPerPair("", StaleCandidates, 3);
+        await AssertManyMatchesPerPair(new string('q', 70), StaleCandidates, 3);
+    }
+
+    [Test]
+    public async Task ComputeIgnoreCaseMany_EmptyCandidates_NoOp()
+    {
+        await Assert.That(() => EditDistance.ComputeIgnoreCaseMany("token", [], 3, []))
+            .ThrowsNothing();
+    }
+
+    [Test]
+    public async Task ComputeIgnoreCaseMany_NegativeMaxDistance_ThrowsArgumentOutOfRange()
+    {
+        await Assert.That(() =>
+        {
+            var distances = new int[1];
+            EditDistance.ComputeIgnoreCaseMany("abc", ["xyz"], -1, distances);
+        }).Throws<ArgumentOutOfRangeException>();
+    }
+
+    [Test]
+    public async Task ComputeIgnoreCaseMany_DistancesSpanTooShort_ThrowsArgument()
+    {
+        await Assert.That(() =>
+        {
+            var distances = new int[1];
+            EditDistance.ComputeIgnoreCaseMany("abc", ["xyz", "uvw"], 3, distances);
+        }).Throws<ArgumentException>();
+    }
 }
