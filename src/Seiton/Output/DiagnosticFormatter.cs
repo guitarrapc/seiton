@@ -53,7 +53,32 @@ public static class DiagnosticFormatter
             case OutputFormat.Sarif:
                 WriteSarif(output, writer, diagnostics, pathBaseDirectory);
                 break;
+            case OutputFormat.FlowJson:
+                // flow-json is a structural output contract; diagnostics routed here
+                // (e.g. config errors) fall back to the json diagnostic shape.
+                WriteJson(output, writer, diagnostics, pathBaseDirectory);
+                break;
+            case OutputFormat.FlowMermaid:
+                // flow-mermaid is human-oriented; diagnostics fall back to text.
+                WriteText(writer, diagnostics, oneline, color, sourceMap, pathBaseDirectory);
+                break;
         }
+    }
+
+    /// <summary>Writes the Mermaid flowchart (<c>check --format flow-mermaid</c>) to stdout.</summary>
+    public static void WriteFlowMermaidToStandardOutput(ReadOnlySpan<Core.Flow.WorkflowFlow> workflows)
+    {
+        FlushToStandardOutput(Encoding.UTF8.GetBytes(Core.Flow.WorkflowFlowMermaid.Serialize(workflows)));
+    }
+
+    /// <summary>Writes the flow-json document (<c>check --format flow-json</c>) to stdout.</summary>
+    public static void WriteFlowJsonToStandardOutput(ReadOnlySpan<Core.Flow.WorkflowFlow> workflows)
+    {
+        using var buffer = new PooledByteBufferWriter(Math.Max(1024, workflows.Length * 1024));
+        Core.Flow.WorkflowFlowJson.Write(buffer, workflows);
+        var writer = new Utf8Writer(buffer);
+        writer.WriteNewLine();
+        FlushToStandardOutput(buffer.WrittenSpan);
     }
 
     public static void WriteToStandardOutput(

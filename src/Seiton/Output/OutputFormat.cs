@@ -6,6 +6,8 @@ public enum OutputFormat
     Json,
     Sarif,
     GitHubActions,
+    FlowJson,
+    FlowMermaid,
 }
 
 public static class OutputFormatExtensions

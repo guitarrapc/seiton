@@ -86,8 +86,20 @@ internal static class CheckCommand
 
         if (resolvedFiles.Length == 0 && !files.Contains("-"))
         {
+            if (resolvedFormat is OutputFormat.FlowJson or OutputFormat.FlowMermaid)
+            {
+                return RunFlow(resolvedFiles, stdinFilename, resolvedFormat);
+            }
+
             Console.Error.WriteLine(includeActions ? "no workflow/action files found" : "no workflow files found");
             return ExitCode.Success;
+        }
+
+        // Flow formats are structural (read-only) output contracts: parse and collect
+        // the workflow flow without running lint rules or emitting diagnostics.
+        if (resolvedFormat is OutputFormat.FlowJson or OutputFormat.FlowMermaid)
+        {
+            return RunFlow(resolvedFiles, stdinFilename, resolvedFormat);
         }
 
         var lintRunConfig = CreateCheckLintConfig(lintConfig, resolvedFormat);
@@ -315,6 +327,48 @@ internal static class CheckCommand
             WriteTotalTiming(verboseLogger, resolvedFiles.Length, verboseLogger.GetElapsedTime(totalStart));
 
         return HasActionableDiagnostics(allDiagnostics) ? ExitCode.LintIssuesFound : ExitCode.Success;
+    }
+
+    private static int RunFlow(string[] resolvedFiles, string stdinFilename, OutputFormat format)
+    {
+        // Same working-directory-relative display rule as the json format (§6.2/§6.6).
+        var pathResolver = new PathDisplayResolver();
+        var flows = new List<Core.Flow.WorkflowFlow>(resolvedFiles.Length);
+        for (var i = 0; i < resolvedFiles.Length; i++)
+        {
+            var filePath = resolvedFiles[i];
+            byte[] utf8Yaml;
+
+            if (filePath == "-")
+            {
+                using var ms = new MemoryStream();
+                using var stdin = Console.OpenStandardInput();
+                stdin.CopyTo(ms);
+                utf8Yaml = ms.ToArray();
+                filePath = stdinFilename;
+            }
+            else
+            {
+                utf8Yaml = File.ReadAllBytes(filePath);
+            }
+
+            using var result = WorkflowParser.Parse(utf8Yaml, filePath);
+            if (Core.Flow.WorkflowFlowCollector.Collect(result, pathResolver.GetDisplayPath(filePath)) is { } flow)
+            {
+                flows.Add(flow);
+            }
+        }
+
+        if (format == OutputFormat.FlowMermaid)
+        {
+            DiagnosticFormatter.WriteFlowMermaidToStandardOutput(CollectionsMarshal.AsSpan(flows));
+        }
+        else
+        {
+            DiagnosticFormatter.WriteFlowJsonToStandardOutput(CollectionsMarshal.AsSpan(flows));
+        }
+
+        return ExitCode.Success;
     }
 
     internal static LintConfig? CreateCheckLintConfig(LintConfig? lintConfig, OutputFormat format)

@@ -8,6 +8,7 @@ import {
   formatClipboardBundle,
   isShareWithinLimits,
 } from './share-payload.js';
+import { renderFlowGraph } from './flow-graph.js';
 
 /** Built-in snippets (classification depends on Document selector). */
 const SAMPLES = {
@@ -702,6 +703,382 @@ let lastLintedFilePath = '';
 let configVersion = 0;
 let lastConfigVersion = 0;
 
+// ─── Flow tab (Result / Flow switch + D3 graph) ───
+const tabResultBtn = document.getElementById('tab-result-btn');
+const tabFlowBtn = document.getElementById('tab-flow-btn');
+const resultPanel = document.getElementById('result-panel');
+const flowPanel = document.getElementById('flow-panel');
+const flowGraphEl = document.getElementById('flow-graph');
+const flowEmptyEl = document.getElementById('flow-empty');
+const flowDetailEl = document.getElementById('flow-detail');
+const flowWorkflowInfoEl = document.getElementById('flow-workflow-info');
+const flowZoomOutBtn = document.getElementById('flow-zoom-out-btn');
+const flowZoomResetBtn = document.getElementById('flow-zoom-reset-btn');
+const flowZoomInBtn = document.getElementById('flow-zoom-in-btn');
+
+let activeResultsTab = 'result';
+let lastFlowSource = null;
+let lastFlowFilePath = null;
+/** Diagnostics from the most recent lint, shared with the flow graph markers. */
+let lastDiagnostics = [];
+let lastFlowDiagnostics = null;
+let flowZoomController = null;
+
+function selectResultsTab(tab) {
+  activeResultsTab = tab;
+  const flowActive = tab === 'flow';
+  tabResultBtn.classList.toggle('results-tab--active', !flowActive);
+  tabFlowBtn.classList.toggle('results-tab--active', flowActive);
+  tabResultBtn.setAttribute('aria-selected', String(!flowActive));
+  tabFlowBtn.setAttribute('aria-selected', String(flowActive));
+  resultPanel.hidden = flowActive;
+  flowPanel.hidden = !flowActive;
+  if (flowActive) {
+    refreshFlow();
+  } else {
+    clearEditorFlowHighlight();
+  }
+}
+
+// ─── Flow node → editor line highlight ───
+
+/** 0-based start lines of every flow node in the current graph (for spill trimming). */
+let flowNodeStartLines = new Set();
+/** CodeMirror line handles currently carrying the flow highlight class. */
+let flowHighlightHandles = [];
+
+function collectFlowStartLines(workflow) {
+  const set = new Set();
+  const visitSteps = (steps) => {
+    for (const s of steps ?? []) {
+      if (s.line > 0) set.add(s.line - 1);
+      visitSteps(s.steps);
+    }
+  };
+  for (const job of workflow?.jobs ?? []) {
+    if (job.line > 0) set.add(job.line - 1);
+    visitSteps(job.steps);
+  }
+  return set;
+}
+
+/** Start lines of the node itself and its descendants (these may stay highlighted). */
+function ownFlowStartLines(node) {
+  const set = new Set();
+  const visit = (n) => {
+    if (n.line > 0) set.add(n.line - 1);
+    for (const child of n.steps ?? []) visit(child);
+  };
+  visit(node);
+  return set;
+}
+
+function clearEditorFlowHighlight() {
+  for (const handle of flowHighlightHandles) {
+    try {
+      editor.removeLineClass(handle, 'background', 'flow-hl-line');
+    } catch {
+      // line was removed by an edit — nothing to clear
+    }
+  }
+  flowHighlightHandles = [];
+}
+
+/**
+ * Highlights the source lines of a clicked flow node in the editor and scrolls to them.
+ * Parsed ranges can spill into the next sibling's first line, so trailing lines that
+ * are the start of another (non-descendant) node are trimmed off the highlight.
+ * @param {{ line?: number, endLine?: number, steps?: object[] }} node
+ */
+function highlightEditorLinesForFlowNode(node) {
+  clearEditorFlowHighlight();
+  const start = (node.line ?? 0) - 1;
+  if (start < 0 || start >= editor.lineCount()) {
+    return;
+  }
+  // A parallel step's own range covers only its header line, so extend the
+  // highlight to the deepest descendant end line.
+  let maxEndLine = node.endLine ?? node.line ?? 0;
+  const visitEnds = (n) => {
+    if ((n.endLine ?? 0) > maxEndLine) maxEndLine = n.endLine;
+    for (const child of n.steps ?? []) visitEnds(child);
+  };
+  visitEnds(node);
+  let end = Math.min(editor.lineCount() - 1, Math.max(start, maxEndLine - 1));
+  const own = ownFlowStartLines(node);
+  while (end > start && flowNodeStartLines.has(end) && !own.has(end)) {
+    end--;
+  }
+  for (let i = start; i <= end; i++) {
+    flowHighlightHandles.push(editor.addLineClass(i, 'background', 'flow-hl-line'));
+  }
+  editor.scrollIntoView({ from: { line: start, ch: 0 }, to: { line: end, ch: 0 } }, 60);
+}
+
+tabResultBtn.addEventListener('click', () => selectResultsTab('result'));
+tabFlowBtn.addEventListener('click', () => selectResultsTab('flow'));
+flowZoomOutBtn.addEventListener('click', () => flowZoomController?.zoomOut());
+flowZoomResetBtn.addEventListener('click', () => flowZoomController?.reset());
+flowZoomInBtn.addEventListener('click', () => flowZoomController?.zoomIn());
+
+function setFlowZoomController(controller) {
+  flowZoomController = controller;
+  const disabled = controller === null;
+  flowZoomOutBtn.disabled = disabled;
+  flowZoomResetBtn.disabled = disabled;
+  flowZoomInBtn.disabled = disabled;
+}
+
+/**
+ * Fetches flow-json from the WASM backend and re-renders the graph.
+ * Skipped when source + filePath are unchanged since the last render.
+ * @param {boolean} [force]
+ */
+function refreshFlow(force = false) {
+  if (!runtimeAlive || !runtimeReady || !exports) {
+    return;
+  }
+  const source = editor.getValue();
+  const filePath = getSelectedFilePath();
+  if (!force
+    && source === lastFlowSource
+    && filePath === lastFlowFilePath
+    && lastFlowDiagnostics === lastDiagnostics) {
+    return;
+  }
+  if (shouldDeferWasmLintForIncompleteUses(source)) {
+    lastFlowSource = null;
+    lastFlowFilePath = null;
+    lastFlowDiagnostics = null;
+    renderFlow({ version: 1, workflows: [] });
+    flowEmptyEl.textContent = 'Complete the uses value to refresh the workflow flow.';
+    return;
+  }
+  try {
+    const utf8Bytes = exports.Seiton.Playground.LintInterop.GetFlowJson(source, filePath);
+    const flowDoc = JSON.parse(utf8Decoder.decode(utf8Bytes));
+    renderFlow(flowDoc);
+    if (flowDoc?.error || !globalThis.d3) {
+      return;
+    }
+    lastFlowSource = source;
+    lastFlowFilePath = filePath;
+    lastFlowDiagnostics = lastDiagnostics;
+  } catch (err) {
+    if (isRuntimeDeadError(err)) {
+      handleRuntimeDeath();
+      return;
+    }
+    showToast(err?.message ?? String(err), 'error');
+  }
+}
+
+/**
+ * Renders a flow-json document into the flow panel (graph, empty notice, detail reset).
+ * @param {{ version: number, workflows: object[], error?: string }} flowDoc
+ */
+function renderFlow(flowDoc) {
+  hideFlowDetail();
+  setFlowZoomController(null);
+  const workflow = flowDoc?.workflows?.[0] ?? null;
+  flowNodeStartLines = collectFlowStartLines(workflow);
+  const rendered = renderFlowGraph(flowGraphEl, workflow, {
+    onSelect: showFlowDetail,
+    diagnostics: lastDiagnostics,
+    onZoomReady: setFlowZoomController,
+  });
+  renderWorkflowInfo(rendered ? workflow : null);
+  flowEmptyEl.hidden = rendered;
+  flowGraphEl.hidden = !rendered;
+  if (!rendered) {
+    flowEmptyEl.textContent = flowDoc?.error
+      ? `Flow rendering failed: ${flowDoc.error}`
+      : globalThis.d3
+        ? 'No workflow structure to visualize.'
+        : 'Flow graph unavailable: D3.js failed to load.';
+  }
+}
+
+/**
+ * Renders the workflow context strip above the graph: one chip per trigger event.
+ * The schedule chip and the concurrency chip open the detail panel on click,
+ * consistent with clicking a job/step node.
+ * @param {object|null} workflow
+ */
+function renderWorkflowInfo(workflow) {
+  flowWorkflowInfoEl.replaceChildren();
+  if (!workflow) {
+    flowWorkflowInfoEl.hidden = true;
+    return;
+  }
+
+  const addChip = (text, onClick) => {
+    const chip = document.createElement(onClick ? 'button' : 'span');
+    chip.className = onClick
+      ? 'flow-workflow-info__chip flow-workflow-info__chip--clickable'
+      : 'flow-workflow-info__chip';
+    chip.textContent = text;
+    if (onClick) {
+      chip.type = 'button';
+      chip.addEventListener('click', onClick);
+    }
+    flowWorkflowInfoEl.appendChild(chip);
+  };
+
+  const schedules = workflow.schedules ?? [];
+  for (const eventName of workflow.on ?? []) {
+    if (eventName === 'schedule' && schedules.length > 0) {
+      addChip(`on: schedule (${schedules.length})`, () =>
+        showFlowContextDetail(
+          'on: schedule',
+          schedules.map((s, i) => [
+            `cron ${i + 1}`,
+            `${s.cron}${s.timezone ? ` (${s.timezone})` : ' (UTC)'}`,
+          ]),
+        ));
+    } else {
+      addChip(`on: ${eventName}`, null);
+    }
+  }
+
+  const concurrency = workflow.concurrency;
+  if (concurrency) {
+    addChip(`concurrency${concurrency.cancelInProgress ? ' ⛔' : ''}`, () =>
+      showFlowContextDetail('concurrency', [
+        ['group', concurrency.group],
+        ['cancel-in-progress', concurrency.cancelInProgress ? 'true' : 'false'],
+        ['queue', concurrency.queue],
+      ]));
+  }
+
+  flowWorkflowInfoEl.hidden = flowWorkflowInfoEl.childElementCount === 0;
+}
+
+/**
+ * Shows workflow-context details (schedule crons, concurrency) in the detail panel.
+ * @param {string} titleText
+ * @param {Array<[string, string | null | undefined]>} entries
+ */
+function showFlowContextDetail(titleText, entries) {
+  clearEditorFlowHighlight();
+  flowDetailEl.replaceChildren();
+  const title = document.createElement('div');
+  title.className = 'flow-detail__title';
+  title.textContent = titleText;
+  const dl = document.createElement('dl');
+  dl.className = 'flow-detail__list';
+  for (const [label, value] of entries) {
+    if (value === null || value === undefined || value === '') {
+      continue;
+    }
+    const dt = document.createElement('dt');
+    dt.textContent = label;
+    const dd = document.createElement('dd');
+    dd.textContent = value;
+    dl.append(dt, dd);
+  }
+  flowDetailEl.append(title, dl);
+  flowDetailEl.hidden = false;
+}
+
+/** Shows job/step details for a clicked graph node and highlights its editor lines. */
+function showFlowDetail(info) {
+  highlightEditorLinesForFlowNode(info.data);
+  flowDetailEl.replaceChildren();
+  const title = document.createElement('div');
+  title.className = 'flow-detail__title';
+  const dl = document.createElement('dl');
+  dl.className = 'flow-detail__list';
+  const add = (label, value) => {
+    if (value === null || value === undefined || value === '' || (Array.isArray(value) && value.length === 0)) {
+      return;
+    }
+    const dt = document.createElement('dt');
+    dt.textContent = label;
+    const dd = document.createElement('dd');
+    dd.textContent = Array.isArray(value) ? value.join(', ') : String(value);
+    dl.append(dt, dd);
+  };
+  if (info.type === 'job') {
+    const job = info.data;
+    title.textContent = `job: ${job.id}`;
+    add('name', job.name);
+    add('kind', job.kind);
+    add('if', job.if);
+    add('needs', job.needs);
+    add('runs-on', job.runsOn);
+    add('timeout-minutes', job.timeoutMinutes);
+    if (Array.isArray(job.permissions)) {
+      add('permissions', job.permissions.length === 0 ? '{} (deny all)' : job.permissions);
+    }
+    add('environment', job.environment);
+    add('uses', job.uses);
+    if (job.strategy?.hasMatrix) {
+      add('matrix', job.strategy.matrixIsExpression ? '${{ … }} (dynamic)' : job.strategy.matrixKeys);
+      const combinations = job.strategy.combinations ?? [];
+      if (combinations.length > 0) {
+        add(
+          `legs (${combinations.length})`,
+          combinations
+            .map((c) => Object.entries(c).map(([k, v]) => `${k}=${v}`).join(', '))
+            .join('\n'),
+        );
+      }
+    }
+  } else {
+    const step = info.data;
+    title.textContent = `step: ${step.name ?? step.id ?? step.kind}`;
+    add('kind', step.kind);
+    add('id', step.id);
+    add('if', step.if);
+    if (step.background) {
+      // backgroundOutcome is part of the flow-json contract (computed by Seiton.Core).
+      add(
+        'background',
+        step.backgroundOutcome === 'awaited'
+          ? 'true (a later wait / wait-all waits for this step)'
+          : step.backgroundOutcome === 'cancelled'
+            ? 'true (cancelled by a later cancel step)'
+            : 'true (later steps do not wait for this step)',
+      );
+    }
+    add('timeout-minutes', step.timeoutMinutes);
+    if (step.continueOnError) {
+      add('continue-on-error', 'true');
+    }
+    add('run', step.run);
+    add('working-directory', step.workingDirectory);
+    add('uses', step.uses);
+    if (step.with) {
+      add(
+        'with',
+        Object.entries(step.with)
+          .map(([key, value]) => `${key}: ${value}`)
+          .join('\n'),
+      );
+    }
+    add('wait targets', step.targets);
+    add('cancel target', step.target);
+  }
+  const nodeDiags = info.diagnostics ?? [];
+  if (nodeDiags.length > 0) {
+    add(
+      `diagnostics (${nodeDiags.length})`,
+      nodeDiags
+        .map((d) => `[${(d.severity ?? 'Info')}] L${d.line}: ${d.message}`)
+        .join('\n'),
+    );
+  }
+  flowDetailEl.append(title, dl);
+  flowDetailEl.hidden = false;
+}
+
+function hideFlowDetail() {
+  clearEditorFlowHighlight();
+  flowDetailEl.hidden = true;
+  flowDetailEl.replaceChildren();
+}
+
 editor.on('change', (_cm, changeObj) => {
   if (sizingRaf === null) {
     sizingRaf = requestAnimationFrame(() => {
@@ -1272,6 +1649,9 @@ function runLint() {
   }
 
   if (shouldDeferWasmLintForIncompleteUses(source)) {
+    if (activeResultsTab === 'flow') {
+      refreshFlow();
+    }
     return;
   }
 
@@ -1290,8 +1670,12 @@ function runLint() {
       lastLintedSource = source;
       lastLintedFilePath = filePath;
       lastConfigVersion = configVersion;
+      lastDiagnostics = diagnostics;
     }
     renderResults(diagnostics);
+    if (activeResultsTab === 'flow') {
+      refreshFlow();
+    }
   } catch (err) {
     if (isRuntimeDeadError(err)) {
       handleRuntimeDeath();
@@ -1474,6 +1858,19 @@ function installTestHooksIfRequested() {
       shouldCollapseDiagMessage,
       getRuntimeAlive: () => runtimeAlive,
       getRuntimeFlags: () => exports?.Seiton?.Playground?.LintInterop?.GetRuntimeFlags?.() ?? '',
+      getFlow: (source, filePath) => {
+        try {
+          const utf8Bytes = exports.Seiton.Playground.LintInterop.GetFlowJson(
+            source ?? '',
+            filePath ?? getSelectedFilePath(),
+          );
+          return { ok: true, flow: JSON.parse(utf8Decoder.decode(utf8Bytes)) };
+        } catch (err) {
+          return { ok: false, error: String(err?.message ?? err) };
+        }
+      },
+      selectResultsTab: (tab) => selectResultsTab(tab === 'flow' ? 'flow' : 'result'),
+      renderFlow: (flowDoc) => renderFlow(flowDoc ?? { version: 1, workflows: [] }),
     };
   } catch {
     /* ignore */

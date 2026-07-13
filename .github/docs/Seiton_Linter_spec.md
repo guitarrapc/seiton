@@ -175,7 +175,7 @@ Column definitions:
 | `unpinned-uses` | ✓ | — | Warn when `uses:` is not pinned to full commit SHA; validate reference format and local action resolvability. |
 | `unpinned-image` | ✓ | — | Warn when docker image references are not pinned by digest (`@sha256:<64-hex>`). |
 | `dangerous-triggers` | ✓ | — | Warn when dangerous trigger events are used (built-in set plus additive config). |
-| `job-permissions-required` | ✓ | — | Warn when a job omits explicit `permissions`. Auto-fix infers minimum scopes from known popular actions. |
+| `job-permissions-required` | ✓ | — | Warn when a job omits explicit `permissions`. Auto-fix infers minimum scopes from known popular actions. Deliberately applies to reusable-workflow call jobs too: the caller-side `permissions` caps the callee's token, so callers declare scopes matched to the callee (strict `{}` default when unknown). |
 | `needs-graph` | ✓ | — | Error on invalid `needs` graph: unknown targets and circular dependencies. Reports full cycle path (see §4.5). |
 | `shell-name` | ✓ | — | Error when shell names are outside the supported set for workflow/job defaults and `run` steps. |
 | `runner-label` | ✓ | — | Warn on unknown runner labels; error on conflicting OS families (including matrix-expanded labels). Recognizes bare self-hosted preset labels. |

@@ -1338,3 +1338,463 @@ footer a {
 .config-diagnostics:empty {
   display: none;
 }
+
+/* ─── Flow tab (Result / Flow switch + D3 graph) ─── */
+
+.results-tabs {
+  display: flex;
+  gap: 0.25rem;
+  border-bottom: 1px solid var(--border-pane);
+  margin-bottom: 0.4rem;
+}
+
+.results-tab {
+  appearance: none;
+  border: none;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  font-size: 0.85rem;
+  padding: 0.4rem 0.9rem;
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  opacity: 0.75;
+}
+
+.results-tab:hover {
+  opacity: 1;
+}
+
+.results-tab--active {
+  opacity: 1;
+  border-bottom-color: var(--accent);
+  font-weight: 600;
+}
+
+.flow-zoom-controls {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.3rem;
+  margin: 0 0 0.4rem;
+}
+
+.flow-zoom-btn {
+  min-width: 2rem;
+  height: 1.8rem;
+  padding: 0 0.55rem;
+  border: 1px solid var(--border-pane);
+  border-radius: 5px;
+  background: var(--results-surface, transparent);
+  color: var(--text);
+  font: inherit;
+  font-size: 0.9rem;
+  cursor: pointer;
+}
+
+.flow-zoom-btn--reset {
+  min-width: 3.6rem;
+  font-size: 0.75rem;
+}
+
+.flow-zoom-btn:hover:not(:disabled) {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.flow-zoom-btn:disabled {
+  cursor: default;
+  opacity: 0.4;
+}
+
+.flow-graph {
+  height: min(72dvh, 640px);
+  border: 1px solid var(--border-pane);
+  border-radius: 8px;
+  background: var(--results-surface, transparent);
+  overflow: hidden;
+  touch-action: none;
+}
+
+.flow-svg {
+  width: 100%;
+  height: 100%;
+  display: block;
+  cursor: grab;
+}
+
+.flow-svg:active {
+  cursor: grabbing;
+}
+
+.flow-edge {
+  fill: none;
+  stroke: var(--accent);
+  stroke-width: 1.5;
+  opacity: 0.7;
+}
+
+.flow-job__box {
+  fill: var(--results-surface, transparent);
+  stroke: var(--border-pane);
+  stroke-width: 1.2;
+}
+
+.flow-job--reusable .flow-job__box {
+  stroke-dasharray: 5 3;
+}
+
+.flow-job__header {
+  fill: var(--accent);
+  opacity: 0.16;
+  cursor: pointer;
+}
+
+.flow-job__header:hover {
+  opacity: 0.3;
+}
+
+.flow-job__title {
+  fill: var(--text);
+  font-size: 13px;
+  font-weight: 600;
+  pointer-events: none;
+}
+
+.flow-job__meta {
+  fill: var(--text);
+  opacity: 0.7;
+  font-size: 11px;
+  pointer-events: none;
+}
+
+.flow-parallel-boundary {
+  fill: var(--warning);
+  opacity: 0.1;
+  stroke: var(--warning);
+  stroke-width: 1;
+  stroke-dasharray: 4 3;
+}
+
+.flow-step__hit {
+  fill: transparent;
+  cursor: pointer;
+}
+
+.flow-step__hit:hover {
+  fill: var(--accent);
+  opacity: 0.12;
+}
+
+.flow-step__text {
+  fill: var(--text);
+  font-size: 12px;
+  pointer-events: none;
+}
+
+.flow-step__kind {
+  font-weight: 600;
+  opacity: 0.85;
+}
+
+.flow-step__kind--run {
+  fill: var(--info);
+}
+
+.flow-step__kind--uses {
+  fill: var(--accent);
+}
+
+.flow-step__kind--parallel,
+.flow-step__kind--wait,
+.flow-step__kind--wait-all,
+.flow-step__kind--cancel {
+  fill: var(--warning);
+}
+
+.flow-detail {
+  margin-top: 0.4rem;
+  border: 1px solid var(--border-pane);
+  border-radius: 8px;
+  padding: 0.5rem 0.75rem;
+  font-size: 0.82rem;
+  max-height: 12rem;
+  overflow-y: auto;
+}
+
+.flow-detail__title {
+  font-weight: 600;
+  margin-bottom: 0.3rem;
+}
+
+.flow-detail__list {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  column-gap: 0.75rem;
+  row-gap: 0.15rem;
+  margin: 0;
+}
+
+.flow-detail__list dt {
+  opacity: 0.7;
+}
+
+.flow-detail__list dd {
+  margin: 0;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+/* ─── Intra-job step flow + LOD ─── */
+
+.flow-step-node {
+  fill: var(--results-surface, transparent);
+  stroke: var(--border-pane);
+  stroke-width: 1;
+  cursor: pointer;
+}
+
+.flow-step-node:hover {
+  stroke: var(--accent);
+}
+
+.flow-step--bg .flow-step-node {
+  stroke-dasharray: 4 2;
+  stroke: var(--info);
+}
+
+.flow-parallel-child {
+  cursor: pointer;
+}
+
+.flow-step-edge {
+  fill: none;
+  stroke: var(--text);
+  stroke-width: 1.2;
+  opacity: 0.45;
+}
+
+.flow-step-edge--bg {
+  stroke: var(--info);
+  stroke-dasharray: 4 3;
+  opacity: 0.8;
+}
+
+.flow-step-edge--wait {
+  stroke: var(--warning);
+  opacity: 0.8;
+}
+
+.flow-step-edge--cancel {
+  stroke: var(--danger);
+  stroke-dasharray: 3 3;
+  opacity: 0.8;
+}
+
+.flow-job__folder-tab {
+  fill: var(--warning);
+  opacity: 0.22;
+  stroke: var(--border-pane);
+  stroke-width: 1;
+}
+
+.flow-job__folder-tab-text {
+  fill: var(--text);
+  font-size: 10px;
+  font-weight: 600;
+  pointer-events: none;
+}
+
+.flow-job__legs {
+  fill: var(--accent);
+  font-size: 11px;
+  pointer-events: none;
+}
+
+.flow-job__summary {
+  fill: var(--text);
+  opacity: 0.65;
+  font-size: 12px;
+  font-style: italic;
+  pointer-events: none;
+  display: none;
+}
+
+/* lod0 (far): job boxes + summary only */
+.flow-svg--lod0 .flow-job__inner {
+  display: none;
+}
+
+.flow-svg--lod0 .flow-job__summary {
+  display: block;
+}
+
+.flow-svg--lod0 .flow-job__legs {
+  display: none;
+}
+
+/* lod1 (mid): step shapes + edges, no labels */
+.flow-svg--lod1 .flow-step__text {
+  display: none;
+}
+
+/* ─── Flow selection highlight + diagnostic markers ─── */
+
+.flow-job.flow-node--selected > .flow-job__box {
+  stroke: var(--accent);
+  stroke-width: 2;
+}
+
+.flow-step.flow-node--selected .flow-step-node,
+.flow-step.flow-node--selected .flow-parallel-boundary {
+  stroke: var(--accent);
+  stroke-width: 2;
+  stroke-dasharray: none;
+}
+
+.flow-marker circle {
+  stroke: var(--results-surface, #000);
+  stroke-width: 1.5;
+}
+
+.flow-marker--error,
+.flow-marker--error circle {
+  fill: var(--danger);
+}
+
+.flow-marker--warning,
+.flow-marker--warning circle {
+  fill: var(--warning);
+}
+
+.flow-marker--info,
+.flow-marker--info circle {
+  fill: var(--info);
+}
+
+.flow-marker__count {
+  fill: #fff;
+  font-size: 8px;
+  font-weight: 700;
+  pointer-events: none;
+}
+
+.flow-job__diagbadge {
+  font-size: 12px;
+  font-weight: 600;
+}
+
+/* ─── Editor line highlight for the selected flow node ─── */
+
+.flow-hl-line {
+  background: color-mix(in srgb, var(--accent) 16%, transparent);
+}
+
+/* ─── Job runtime info line (timeout / permissions / environment) ─── */
+
+.flow-job__info {
+  fill: var(--text);
+  opacity: 0.75;
+  font-size: 11px;
+  pointer-events: none;
+}
+
+.flow-svg--lod0 .flow-job__info {
+  display: none;
+}
+
+/* ─── Workflow context strip (events / schedule / concurrency) ─── */
+
+.flow-workflow-info {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  margin-bottom: 0.4rem;
+  font-size: 0.78rem;
+}
+
+.flow-workflow-info__chip {
+  border: 1px solid var(--border-pane);
+  border-radius: 999px;
+  padding: 0.15rem 0.6rem;
+  background: var(--results-surface, transparent);
+  color: var(--text);
+  white-space: nowrap;
+}
+
+.flow-workflow-info__chip--clickable {
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.78rem;
+  appearance: none;
+}
+
+.flow-workflow-info__chip--clickable:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+/* ─── Reusable-workflow job nodes: distinct header tint ─── */
+
+.flow-job--reusable .flow-job__header {
+  fill: var(--info);
+  opacity: 0.18;
+}
+
+.flow-job--reusable .flow-job__header:hover {
+  opacity: 0.32;
+}
+
+.flow-job--reusable .flow-job__meta {
+  fill: var(--info);
+  opacity: 0.9;
+}
+
+/* ─── Needs-chain hover highlighting ─── */
+
+.flow-job,
+.flow-edge {
+  transition: opacity 0.15s ease;
+}
+
+.flow-svg--hovering .flow-job:not(.flow-hover-related) {
+  opacity: 0.25;
+}
+
+.flow-svg--hovering .flow-edge {
+  opacity: 0.12;
+}
+
+.flow-svg--hovering .flow-edge.flow-hover-related {
+  opacity: 1;
+  stroke-width: 2.5;
+}
+
+.flow-job.flow-hover-focus > .flow-job__box {
+  stroke: var(--accent);
+  stroke-width: 1.6;
+}
+
+/* ─── Same-needs group cards (far zoom) ─── */
+
+.flow-needs-group {
+  display: none;
+  fill: var(--results-surface, transparent);
+  stroke: var(--border-pane);
+  stroke-width: 1.4;
+}
+
+.flow-svg--lod0 .flow-needs-group {
+  display: inline;
+}
+
+.flow-edge--group {
+  display: none;
+}
+
+.flow-svg--lod0 .flow-edge--group {
+  display: inline;
+}
+
+.flow-svg--lod0 .flow-edge--in-group {
+  display: none;
+}

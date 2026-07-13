@@ -64,6 +64,7 @@ Exported functions callable from JavaScript:
 | `ApplyAllFixes` | `(yamlSource: string, filePath: string)` | `string` | Fixed YAML (original text on error) |
 | `ApplyAllFixesWithNetworkAsync` | `(yamlSource: string, filePath: string)` | `Promise<string>` | JSON: `{"yaml":"...","resolved":N,"skipped":N,"failed":N}` |
 | `SetConfig` | `(configYaml: string)` | UTF-8 JSON byte array | Config diagnostic array (empty = success) |
+| `GetFlowJson` | `(yamlSource: string, filePath: string)` | UTF-8 JSON byte array | flow-json document for the Flow tab (see §2.7) |
 | `GetProductVersion` | none | `string` | Build version string |
 
 #### 2.3.1 SetConfig Behavior
@@ -105,7 +106,18 @@ Non-functional requirement:
 - `RunLint`: on internal error, returns a single-element diagnostic array with `ruleId: "internal-error"`, message prefixed with `[internal error]`, position `(1,1)`, severity `Error`, `fixable: false`.
 - `ApplyAllFixes`: on error, logs to browser console and returns the original input text unchanged.
 - `SetConfig`: on internal error, returns single-element diagnostic array (same as `RunLint` error format); previous valid config is retained.
+- `GetFlowJson`: on internal error, returns an empty flow document with an `error` property (`{"version":1,"workflows":[],"error":"..."}`) so the flow-json shape never breaks the UI parser.
 - `GetProductVersion`: on error, returns `"unknown"`.
+
+### 2.7 Flow API
+
+`GetFlowJson` returns the **flow-json contract** — the same machine-readable workflow-structure document as `seiton check --format flow-json` (see `Seiton_CLI_spec.md` §6.6). It is backed by `PlaygroundFlowRunner` (separate from `PlaygroundLintRunner` so the diagnostics API and the flow API remain independent contracts) and consumed by the Flow tab.
+
+- **WHY shared contract**: parsing YAML separately in the UI would create interpretation drift between lint and visualization; both CLI and Playground build the flow from the same parsed AST via `WorkflowFlowCollector` in Seiton.Core.
+- Non-workflow documents (e.g. `action.yml`) yield an empty `workflows` array; the Flow tab shows an empty-state notice.
+- Identity-based caching mirrors `RunLint`: an identical `(yamlSource, filePath)` reference pair returns the cached byte array without re-parsing.
+- The UI records its flow staleness key only after a non-error response can be rendered; backend errors and unavailable graph dependencies remain retryable without editing the YAML.
+- While a trailing bare `- uses:` is incomplete, the UI defers the WASM call and clears the previous graph so stale workflow structure is never presented as current.
 
 ---
 
@@ -203,6 +215,9 @@ This ensures cosmetic edits (adding/removing blank lines, trailing spaces) do no
 | Version badge | Shown after WASM startup, links to GitHub Release page |
 | Color theme | System / Light / Dark cycle with localStorage persistence |
 | Runtime crash detection | Stops calls, shows reload prompt |
+| Flow tab | Result / Flow tab switch in the results column. Flow renders the flow-json document as an SVG graph (D3) with two structural levels: the `needs` job DAG (edges drawn from the transitively reduced `reducedNeeds`, GitHub-style; hover closures use the full `needs` semantics), and an **intra-job step flow** inside each job box (main lane top-to-bottom; `background: true` steps fork into dashed side lanes; `wait`/`wait-all` join them; `cancel` cuts them with a dashed red edge; `parallel` boundaries hold simultaneous children). Reusable-workflow call jobs (flow-json `kind: "reusable"`) are marked unmistakably: dashed border, info-tinted header, and an explicit `⧉ reusable · uses: …` meta label. Matrix jobs render a GitHub-like **folder tab** (`Matrix: N legs`) above the card at every LOD, plus a legs line (`N legs: …`, capped chips). Within a column, jobs sort by needs signature so same-needs jobs are vertical neighbors; **at lod0 each same-needs run renders as one group card** (frame around the members, member incoming edges hidden, one group edge per shared dependency) — GitHub-style, because job relationships matter more than step detail when zoomed out. Declared runtime settings render as a job info line (`⏱ 15m · env: production`, hidden at lod0, full text on hover — permissions are detail-panel only since even two scopes truncate on the node) and as step label suffixes (`⏱5m` timeout, `↷` continue-on-error) whose markers survive label truncation. The step detail panel additionally shows `working-directory` (run) and `with` inputs (uses); the background note reflects the flow-json `backgroundOutcome` field computed by Seiton.Core (`waits for this step` / `cancelled` / `do not wait`) — the UI never re-derives it. A workflow context strip (`#flow-workflow-info`) above the graph shows one chip per trigger event plus a concurrency chip; the schedule chip (`on: schedule (N)`) and the concurrency chip are buttons that open the detail panel — schedule lists each cron with its seiton `timezone` extension (UTC default), concurrency shows group / cancel-in-progress / queue — consistent with the node click → detail interaction. **LOD by zoom** (geometry never changes, only visibility): lod0 (< 0.55×) job boxes + `N steps` summary, lod1 (< 1.05×) step shapes + edges without labels, lod2 full labels. Interactions: d3.zoom pan/zoom (0.2–3×, fit-to-view on render), **hover a job → needs-chain highlight** (the transitive `needs` closure — upstream dependencies and downstream dependents — plus the edges between related jobs stay at full opacity with thicker accent edges while everything else dims), click job header / step node / parallel child → **selection highlight** (accent border, exactly one node at a time) + detail panel (matrix legs list, background note, node diagnostics) + **editor line highlight** (`flow-hl-line` background over the node's `line..endLine`, extended to the deepest descendant end line for parallel boundaries, boundary-spill lines trimmed via other nodes' start lines; editor scrolls the range into view; cleared on reselection, re-render, and switching back to the Result tab). **Diagnostic markers**: lint diagnostics map to flow nodes by source line (`line`/`endLine` from flow-json; innermost step wins, boundary-line overlaps resolved by greatest start line) — jobs get an aggregated `✖N ⚠N ℹN` header badge (visible at every LOD), steps get a severity dot with hover tooltip. Refreshed on tab activation and after each lint while the Flow tab is active; skipped when source + path + diagnostics unchanged. |
+
+The Flow toolbar provides Zoom out, Reset, and Zoom in buttons in addition to pointer/touch zoom. Reset restores the current graph's initial fit-to-view transform; all three controls are disabled when no graph is rendered.
 
 ### 4.2 Toast System
 
@@ -280,7 +295,9 @@ This ensures cosmetic edits (adding/removing blank lines, trailing spaces) do no
     <main>
       <section #linter>
         editor pane (#editor-wrap > #editor + #apply-fixes-btn + #config-panel)
-        results pane (.results-column > #loading + #lint-result + #success-msg)
+        results pane (.results-column > #loading + #results-tab-bar (Result/Flow tabs)
+                      + #result-panel (#lint-result + #success-msg)
+                      + #flow-panel (#flow-empty + #flow-graph + #flow-detail))
       </section>
     </main>
     <section .playground-about>
@@ -306,6 +323,7 @@ This ensures cosmetic edits (adding/removing blank lines, trailing spaces) do no
 | CodeMirror 5 | 5.65.16 | YAML editor (codemirror.min.js + yaml mode + active-line addon) | SRI hash pinned |
 | CodeMirror material-darker | 5.65.16 | Dark theme | SRI hash pinned |
 | pako | 2.1.0 | Permalink deflate/inflate (ESM import) | — |
+| D3.js | 7.9.0 | Flow tab graph rendering (zoom/pan, selection, edge paths); UMD global `d3` | SRI hash pinned (sha512) |
 
 CSS resources use non-blocking loading pattern (`media="print"` + `onload` swap + `<noscript>` fallback).
 
@@ -388,6 +406,21 @@ Synchronous WASM calls block the main thread. User input queues at the browser l
 - `_framework/` directory requires `.nojekyll` due to underscore prefix
 - Static hosts without import map support (GitHub Pages) require both fingerprinted and non-fingerprinted file output
 
+### 6.4 Flow Tab: LOD Must Not Change Geometry
+
+Zoom-driven LOD (lod0/lod1/lod2) swaps a CSS class on the SVG root and toggles **visibility only** — node positions and sizes never change between LOD levels. Changing geometry on a LOD boundary makes the graph jump out from under the cursor mid-zoom. Same-needs group cards and group edges at lod0 are additive overlays on the invariant geometry, not a re-layout.
+
+### 6.5 Flow Tab: Derived Flow Data Comes from the Contract
+
+Everything the flow tab shows about workflow semantics — reduced edges (`reducedNeeds`), background join status (`backgroundOutcome`), matrix combinations, source line ranges — is computed by Seiton.Core and read from flow-json. JS-side derivation was tried for the background status and reverted: a second interpreter of the same YAML inevitably drifts from CLI consumers.
+
+### 6.6 Flow Tab: Small Rendering Traps
+
+- **Append marker suffixes after truncation**: step labels carry `⛊` / `⏱Nm` / `↷` markers; truncating the combined string cuts the markers off on long names. Truncate the base label to `max - markers.length`, then append.
+- **lod0 group cards hide member edges**, so the hover needs-chain highlight does not extend to the aggregated group edges (they only dim). Known limitation; acceptable because hover exploration happens at closer zoom.
+- **D3 is loaded as a UMD script with a sha512 SRI** (from the cdnjs API): the HTML contract test counts exactly five `sha384-` integrity attributes for CodeMirror, so a sha512 digest adds a pinned dependency without breaking that assertion.
+- **Share payload intentionally excludes flow tab state**: the flow re-derives from the shared YAML the moment the tab opens, so tab state is ephemeral UI state with nothing worth sharing.
+
 ---
 
 ## 7. References
@@ -395,3 +428,5 @@ Synchronous WASM calls block the main thread. User input queues at the browser l
 - [actionlint playground source](https://github.com/rhysd/actionlint/tree/main/playground)
 - [CodeMirror 5](https://codemirror.net/5/)
 - [pako (zlib for browser)](https://github.com/nicolo-ribaudo/pako)
+- [D3.js](https://d3js.org/) (flow tab graph rendering)
+- [Mermaid flowchart syntax](https://mermaid.js.org/syntax/flowchart.html) (flow-mermaid output target)

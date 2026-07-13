@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "playground",
+      "runtimeExecutable": "dotnet",
+      "runtimeArgs": ["run", "--project", "src/Seiton.Playground"],
+      "port": 5176
+    }
+  ]
+}

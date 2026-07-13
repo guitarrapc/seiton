@@ -269,3 +269,227 @@ dotnet ./sandbox/scripts/bump_version.cs major   # e.g. 0.1.0 → 1.0.0
 ## License
 
 Seiton is distributed under the [MIT license](./LICENSE.md).
+Using launch settings from src\Seiton\Properties\launchSettings.json...
+
+```mermaid
+flowchart LR
+  %% .github/workflows/benchmark.yaml — benchmark
+  subgraph j0["benchmark"]
+    direction TB
+    j0n0["uses: Checkout"]
+    j0n1["uses: guitarrapc/actions/.github/actions/setup-dotnet@9122a18b0…"]
+    j0n2["run: Install wasm-tools workload (Seiton.Playground / Blazor WA…"]
+    j0n3["run: dotnet build"]
+    j0n4["run: benchmark"]
+    j0n5["run: Check benchmark result (if)"]
+    j0n6["uses: Upload artifacts"]
+    j0n7["run: Output results to JobSummary"]
+    j0n0 --> j0n1
+    j0n1 --> j0n2
+    j0n2 --> j0n3
+    j0n3 --> j0n4
+    j0n4 --> j0n5
+    j0n5 --> j0n6
+    j0n6 --> j0n7
+  end
+  subgraph j1["update-readme (if)"]
+    direction TB
+    j1n0["uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa7…"]
+    j1n1["uses: Checkout"]
+    j1n2["run: Update README.md benchmark report link"]
+    j1n0 --> j1n1
+    j1n1 --> j1n2
+  end
+  j0 --> j1
+
+flowchart LR
+  %% .github/workflows/build.yaml — build
+  subgraph j0["build"]
+    direction TB
+    j0n0["uses: Checkout"]
+    j0n1["run: Validate Homebrew formula render (fixture)"]
+    j0n2["uses: guitarrapc/actions/.github/actions/setup-dotnet@9122a18b0…"]
+    j0n3["run: Install wasm-tools workload (Seiton.Playground / Blazor WA…"]
+    j0n4["run: Build"]
+    j0n5["run: Install Playwright (Chromium) for playground UI tests"]
+    j0n6["run: Pre-publish Playground for UI tests (avoid in-test WASM AO…"]
+    j0n7["run: Test"]
+    j0n8["run: Publish (CLI)"]
+    j0n9["run: Publish (Playground)"]
+    j0n10["run: Verify CLI build"]
+    j0n11["run: Verify Docker image build (linux/amd64 only, no push)"]
+    j0n12["uses: Set up Docker Buildx"]
+    j0n13["uses: Docker build (load locally)"]
+    j0n14["run: Run seiton in container"]
+    j0n0 --> j0n1
+    j0n1 --> j0n2
+    j0n2 --> j0n3
+    j0n3 --> j0n4
+    j0n4 --> j0n5
+    j0n5 --> j0n6
+    j0n6 --> j0n7
+    j0n7 --> j0n8
+    j0n8 --> j0n9
+    j0n9 --> j0n10
+    j0n10 --> j0n11
+    j0n11 --> j0n12
+    j0n12 --> j0n13
+    j0n13 --> j0n14
+  end
+  subgraph j1["verify-updater"]
+    direction TB
+    j1n0["uses: Checkout"]
+    j1n1["uses: guitarrapc/actions/.github/actions/setup-dotnet@9122a18b0…"]
+    j1n2["run: Validate Popular Actions Targets"]
+    j1n3["run: Verify Generated Data"]
+    j1n0 --> j1n1
+    j1n1 --> j1n2
+    j1n2 --> j1n3
+  end
+
+flowchart LR
+  %% .github/workflows/generated-data-update.yaml — generated-data-update
+  subgraph j0["update-generated-data"]
+    direction TB
+    j0n0["uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa7…"]
+    j0n1["uses: Checkout"]
+    j0n2["uses: guitarrapc/actions/.github/actions/setup-dotnet@9122a18b0…"]
+    j0n3["run: Validate popular-actions targets"]
+    j0n4["run: Sync generated data"]
+    j0n5["run: Verify generated data"]
+    j0n6["run: Detect generated-data changes"]
+    j0n7["run: Commit and push update branch (if)"]
+    j0n8["run: Create or update pull request via gh (if)"]
+    j0n0 --> j0n1
+    j0n1 --> j0n2
+    j0n2 --> j0n3
+    j0n3 --> j0n4
+    j0n4 --> j0n5
+    j0n5 --> j0n6
+    j0n6 --> j0n7
+    j0n7 --> j0n8
+  end
+
+flowchart LR
+  %% .github/workflows/homebrew-formula.yaml — Bump Homebrew Formula
+  subgraph j0["bump-formula"]
+    direction TB
+    j0n0["uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa7…"]
+    j0n1["uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0"]
+    j0n2["run: Commit Formula/seiton.rb"]
+    j0n0 --> j0n1
+    j0n1 --> j0n2
+  end
+
+flowchart LR
+  %% .github/workflows/playground.yaml — Deploy Playground
+  subgraph j0["build"]
+    direction TB
+    j0n0["run: Normalize tag (workflow_dispatch) (if)"]
+    j0n1["run: Verify tag on remote (workflow_dispatch) (if)"]
+    j0n2["uses: Checkout"]
+    j0n3["run: Deploy summary"]
+    j0n4["uses: guitarrapc/actions/.github/actions/setup-dotnet@9122a18b0…"]
+    j0n5["run: Install wasm-tools workload"]
+    j0n6["run: Publish Playground (browser-wasm Release)"]
+    j0n7["run: Add .nojekyll"]
+    j0n8["uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc5…"]
+    j0n0 --> j0n1
+    j0n1 --> j0n2
+    j0n2 --> j0n3
+    j0n3 --> j0n4
+    j0n4 --> j0n5
+    j0n5 --> j0n6
+    j0n6 --> j0n7
+    j0n7 --> j0n8
+  end
+  subgraph j1["deploy"]
+    direction TB
+    j1n0["uses: actions/deploy-pages@cd2ce8fcbc39b97be8ca5fce6e763baed58f…"]
+  end
+  j0 --> j1
+
+flowchart LR
+  %% .github/workflows/pr-harness.yaml — PR Harness
+  j0[["harness — uses: guitarrapc/actions/.github/workflows/pr-harness…"]]
+
+flowchart LR
+  %% .github/workflows/release.yaml — Release
+  subgraph j0["validate"]
+    direction TB
+    j0n0["run: Resolve tag ref"]
+    j0n1["run: Verify tag on remote (workflow_dispatch) (if)"]
+    j0n2["uses: Checkout"]
+    j0n3["run: Verify version ↔ tag consistency"]
+    j0n4["uses: guitarrapc/actions/.github/actions/setup-dotnet@9122a18b0…"]
+    j0n5["run: Install wasm-tools workload (Seiton.Playground / Blazor WA…"]
+    j0n6["run: Build"]
+    j0n7["run: Install Playwright (Chromium) for playground UI tests"]
+    j0n8["run: Pre-publish Playground for UI tests (avoid in-test WASM AO…"]
+    j0n9["run: Test"]
+    j0n10["run: Verify generated data"]
+    j0n0 --> j0n1
+    j0n1 --> j0n2
+    j0n2 --> j0n3
+    j0n3 --> j0n4
+    j0n4 --> j0n5
+    j0n5 --> j0n6
+    j0n6 --> j0n7
+    j0n7 --> j0n8
+    j0n8 --> j0n9
+    j0n9 --> j0n10
+  end
+  subgraph j1["publish (matrix: )"]
+    direction TB
+    j1n0["uses: Checkout"]
+    j1n1["uses: guitarrapc/actions/.github/actions/setup-dotnet@9122a18b0…"]
+    j1n2["run: Publish (AOT)"]
+    j1n3["run: Prepare release bundle"]
+    j1n4["run: Create archive (Linux/macOS) (if)"]
+    j1n5["run: Create archive (Windows) (if)"]
+    j1n6["uses: Upload artifact"]
+    j1n0 --> j1n1
+    j1n1 --> j1n2
+    j1n2 --> j1n3
+    j1n3 --> j1n4
+    j1n4 --> j1n5
+    j1n5 --> j1n6
+  end
+  subgraph j2["docker"]
+    direction TB
+    j2n0["uses: Checkout (Dockerfile)"]
+    j2n1["run: GHCR image name (lowercase)"]
+    j2n2["uses: Download all build artifacts"]
+    j2n3["run: Prepare multi-arch context"]
+    j2n4["uses: Set up QEMU"]
+    j2n5["uses: Set up Docker Buildx"]
+    j2n6["uses: Log in to GHCR"]
+    j2n7["uses: Build and push"]
+    j2n8["run: Image summary"]
+    j2n0 --> j2n1
+    j2n1 --> j2n2
+    j2n2 --> j2n3
+    j2n3 --> j2n4
+    j2n4 --> j2n5
+    j2n5 --> j2n6
+    j2n6 --> j2n7
+    j2n7 --> j2n8
+  end
+  subgraph j3["release"]
+    direction TB
+    j3n0["uses: Checkout"]
+    j3n1["uses: Download all artifacts"]
+    j3n2["run: Collect release assets and generate checksums"]
+    j3n3["uses: Attest build provenance (SLSA)"]
+    j3n4["run: Create GitHub Release"]
+    j3n0 --> j3n1
+    j3n1 --> j3n2
+    j3n2 --> j3n3
+    j3n3 --> j3n4
+  end
+  j0 --> j1
+  j0 --> j2
+  j1 --> j2
+  j0 --> j3
+  j1 --> j3
+```

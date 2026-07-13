@@ -17,6 +17,8 @@ public static class OutputFormatParser
             "json" => Set(out format, OutputFormat.Json),
             "sarif" => Set(out format, OutputFormat.Sarif),
             "github-actions" => Set(out format, OutputFormat.GitHubActions),
+            "flow-json" => Set(out format, OutputFormat.FlowJson),
+            "flow-mermaid" => Set(out format, OutputFormat.FlowMermaid),
             _ => Fail(out format),
         };
     }

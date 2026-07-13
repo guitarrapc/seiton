@@ -201,7 +201,7 @@ Operational rule:
 
 | Flag | Short | Type | Default | Description |
 |---|---|---|---|---|
-| `--format` | | `text\|json\|sarif\|github-actions` | `text` (see §3.1.1) | Output format for diagnostics. |
+| `--format` | | `text\|json\|sarif\|github-actions\|flow-json\|flow-mermaid` | `text` (see §3.1.1) | Output format. The flow formats (§6.6) are check-only, emit workflow structure instead of diagnostics, and are rejected by fix mode (exit code 2). |
 | `--oneline` | | `bool` | `false` | Emit one diagnostic per line (`text` and `github-actions`). |
 | `--color` | | `auto\|always\|never` | `auto` | Color output control. `auto` enables color when stdout is not a TTY or CI is detected. |
 | `--no-color` | | `bool` | `false` | Alias for `--color=never`. |
@@ -250,7 +250,7 @@ Certain CLI flags have environment variable equivalents (listed below). When bot
 | Environment Variable | Equivalent Flag | Notes |
 |---|---|---|
 | `SEITON_CONFIG` | `--config` | Config file path. |
-| `SEITON_FORMAT` | `--format` | Output format (`text`, `json`, `sarif`, `github-actions`). |
+| `SEITON_FORMAT` | `--format` | Output format (`text`, `json`, `sarif`, `github-actions`, `flow-json`, `flow-mermaid`). |
 | `SEITON_NO_COLOR` | `--no-color` | Any non-empty value disables color. |
 | `NO_COLOR` | `--no-color` | Standard `NO_COLOR` convention honored as fallback after `SEITON_NO_COLOR`. |
 | `SEITON_GITHUB_TOKEN` | (internal) | GitHub API token for network-assisted operations. Checked before `GITHUB_TOKEN`. Hardcoded resolution order; not configurable via config file. |
@@ -754,7 +754,64 @@ Progress (`--verbose`), configuration errors, init hints, fix diffs (when format
 
 #### 6.5.4 Unsupported commands
 
-`seiton rules` does not support `github-actions` (exit code `2`, same as SARIF).
+`seiton rules` supports only `text` and `json`; `sarif`, `github-actions`, `flow-json`, and `flow-mermaid` are rejected with exit code `2`.
+
+### 6.6 `flow-json` / `flow-mermaid` (flow formats)
+
+The flow formats emit the **workflow structure** ("flow") instead of diagnostics. They exist so the execution flow of a workflow — the `needs` job DAG combined with per-job step sequences and `parallel` step boundaries — can be visualized without re-interpreting YAML outside the parser.
+
+**WHY**: the Playground flow tab and the CLI must share one machine-readable contract built from the same parsed AST (single source of truth); Mermaid is a thin human-oriented projection of that same contract for pasting into GitHub Markdown.
+
+Behavior common to both formats:
+
+- Supported by `check` (and the root command without `--fix`) only. Fix mode rejects them with exit code `2` and a stderr message.
+- Lint rules are not executed; no diagnostics are emitted. Exit code is `0` unless option/config errors occur.
+- Each input file is parsed once; non-workflow documents (e.g. `action.yml`) are skipped.
+- **Static matrices are expanded** into `combinations` (cross product of the dimension rows, then `exclude` subset removal, then `include` extend/append — approximating GitHub semantics, capped at 256 combinations). Matrices containing any dynamic `${{ }}` dimension or block are reported as declaration only (dimension names / dynamic-expression marker) with empty `combinations`.
+- Reusable workflow jobs (`uses:` at job level) are opaque leaves carrying their `uses` ref; the referenced workflow is not loaded.
+- `if` conditions are carried as raw expressions.
+- `background: true` steps carry a `background` flag so intra-job concurrency (background fork, `wait`/`wait-all` join, `cancel`) can be reconstructed by consumers.
+- Jobs and steps carry 1-based source line ranges (`line` / `endLine`, omitted when unknown) so consumers can map lint diagnostics onto flow nodes. Ranges of adjacent blocks may overlap on boundary lines; consumers should resolve overlaps by preferring the node with the greatest start line.
+- `reducedNeeds` is `needs` after **transitive reduction** (an edge implied by another dependency's chain drops out, e.g. `a` leaves `needs: [a, b]` when `b` already depends on `a`) — matching how GitHub renders its workflow graph. Renderers should draw `reducedNeeds`; dependency semantics (hover closures, scheduling analysis) should use the full `needs`.
+- Runtime settings are carried when declared: job `timeoutMinutes` / `permissions` (`["read-all"]` scalar form or `"scope: level"` entries; empty array = `{}` deny-all; omitted when undeclared) / `environment`, and step `timeoutMinutes` / `continueOnError` / `workingDirectory` (run steps) / `with` (uses steps, key-value object in document order). Dynamic `${{ }}` timeout expressions are omitted.
+- Workflow execution context is carried when declared: `schedules` (cron entries of `on: schedule` with the seiton `timezone` extension; omitted when absent) and `concurrency` (`group` raw expression, `cancelInProgress`, seiton `queue` extension).
+- Background steps carry `backgroundOutcome` (`"awaited"` when a later `wait` targeting the step or any `wait-all` joins it, `"cancelled"` when a later `cancel` cuts it, `"unawaited"` otherwise) computed over the job's later top-level steps — consumers must not re-derive this.
+
+#### 6.6.1 `flow-json`
+
+Single JSON document to stdout:
+
+```json
+{ "version": 1, "workflows": [ { "file", "name"?, "on": [],
+  "schedules"?: [ { "cron", "timezone"? } ], "concurrency"?: { "group"?, "cancelInProgress", "queue"? },
+  "jobs": [
+  { "id", "name"?, "kind": "job|reusable", "line"?, "endLine"?, "if"?, "needs": [], "reducedNeeds": [], "runsOn": [], "uses"?,
+    "timeoutMinutes"?, "permissions"?: [], "environment"?,
+    "strategy"?: { "hasMatrix", "matrixKeys": [], "matrixIsExpression",
+                   "combinations": [ { "<key>": "<value>", ... } ] },
+    "steps": [ { "kind": "run|uses|parallel|wait|wait-all|cancel", "line"?, "endLine"?, "id"?, "name"?, "if"?,
+                 "background"?, "backgroundOutcome"?, "timeoutMinutes"?, "continueOnError"?,
+                 "run"?, "workingDirectory"?, "uses"?, "with"?: {},
+                 "targets"?, "target"?, "steps"? } ] } ] } ] }
+```
+
+Absent optional fields are omitted. `steps` on a step appears only for `kind: "parallel"` (nested boundary children). This is the same contract served to the Playground flow tab by `PlaygroundFlowRunner`.
+
+#### 6.6.2 `flow-mermaid`
+
+Mermaid `flowchart LR` text to stdout: each job is a subgraph with chained step nodes, transitively reduced `needs` edges (`reducedNeeds`) connect job subgraphs, `parallel` boundaries are nested subgraphs whose children are intentionally unchained (simultaneous), and reusable jobs are subroutine nodes (`[[...]]`). Labels are single-line, quote-sanitized, and truncated.
+
+The output is always **exactly one `flowchart` diagram** so it can be wrapped in a single Mermaid code block. Multiple input files become per-workflow wrapper subgraphs (`w0`, `w1`, … labeled with the file name) with prefixed node ids (`w0j0`, `w0j0n0`, …); a single input keeps the unprefixed shape (`j0`, `j0n0`, …). **WHY**: one Mermaid code block holds one diagram — a second `flowchart` keyword is a parse error, which is exactly what blank-line-separated diagrams caused when piped to a Markdown file.
+
+#### 6.6.3 Design decisions and lessons learned
+
+- **Derived data is computed in Seiton.Core and carried in the contract**, never re-derived per consumer: `reducedNeeds` (transitive reduction), `backgroundOutcome` (wait/wait-all/cancel join analysis), and `strategy.combinations` (static matrix expansion) exist so the CLI, Mermaid exporter, and Playground can never drift in interpretation.
+- **The collector walks the Ref facade directly instead of registering an `IPass`** on `WorkflowVisitor`: the visitor flattens `parallel` children into a linear step stream with no boundary enter/exit hooks, but the flow contract needs the nesting. Model new AST consumers that need structure on the collector, not the visitor.
+- **The flow JSON serializer is hand-written `Utf8JsonWriter` in Core** so the NativeAOT CLI and the trimmed WASM Playground emit byte-identical output without registering DTOs in a `JsonSerializerContext`.
+- **Parser range caveats for consumers**: a job/step `Range` can spill onto the next sibling's first line (resolve overlaps by preferring the node with the greatest start line — see §6.6.1), and a `parallel` step's `Range` covers only its own header line (extend to the deepest descendant `endLine` when highlighting the whole boundary).
+- **Matrix expansion approximates GitHub semantics** (cross product → `exclude` subset removal → `include` extend/append, cap 256). Include-only matrices (no dimension rows) must treat every `include` entry as its own combination — the "entry without dimension keys applies to all combinations" rule silently merges entries when there is no base product.
+- **The `parallel` extension does not nest** (the parser rejects `parallel` inside `parallel`), so flow boundaries are always single-level even though the DTO models recursion.
+- **Flow formats deliberately skip lint execution**: they are structural read-only contracts; exit code stays `0` so pipelines can generate diagrams without failing on lint findings.
 
 ---
 
