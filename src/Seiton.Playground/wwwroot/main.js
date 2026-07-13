@@ -8,6 +8,7 @@ import {
   formatClipboardBundle,
   isShareWithinLimits,
 } from './share-payload.js';
+import { renderFlowGraph } from './flow-graph.js';
 
 /** Built-in snippets (classification depends on Document selector). */
 const SAMPLES = {
@@ -702,6 +703,136 @@ let lastLintedFilePath = '';
 let configVersion = 0;
 let lastConfigVersion = 0;
 
+// ─── Flow tab (Result / Flow switch + D3 graph) ───
+const tabResultBtn = document.getElementById('tab-result-btn');
+const tabFlowBtn = document.getElementById('tab-flow-btn');
+const resultPanel = document.getElementById('result-panel');
+const flowPanel = document.getElementById('flow-panel');
+const flowGraphEl = document.getElementById('flow-graph');
+const flowEmptyEl = document.getElementById('flow-empty');
+const flowDetailEl = document.getElementById('flow-detail');
+
+let activeResultsTab = 'result';
+let lastFlowSource = null;
+let lastFlowFilePath = null;
+
+function selectResultsTab(tab) {
+  activeResultsTab = tab;
+  const flowActive = tab === 'flow';
+  tabResultBtn.classList.toggle('results-tab--active', !flowActive);
+  tabFlowBtn.classList.toggle('results-tab--active', flowActive);
+  tabResultBtn.setAttribute('aria-selected', String(!flowActive));
+  tabFlowBtn.setAttribute('aria-selected', String(flowActive));
+  resultPanel.hidden = flowActive;
+  flowPanel.hidden = !flowActive;
+  if (flowActive) {
+    refreshFlow();
+  }
+}
+
+tabResultBtn.addEventListener('click', () => selectResultsTab('result'));
+tabFlowBtn.addEventListener('click', () => selectResultsTab('flow'));
+
+/**
+ * Fetches flow-json from the WASM backend and re-renders the graph.
+ * Skipped when source + filePath are unchanged since the last render.
+ * @param {boolean} [force]
+ */
+function refreshFlow(force = false) {
+  if (!runtimeAlive || !runtimeReady || !exports) {
+    return;
+  }
+  const source = editor.getValue();
+  const filePath = getSelectedFilePath();
+  if (!force && source === lastFlowSource && filePath === lastFlowFilePath) {
+    return;
+  }
+  if (shouldDeferWasmLintForIncompleteUses(source)) {
+    return;
+  }
+  try {
+    const utf8Bytes = exports.Seiton.Playground.LintInterop.GetFlowJson(source, filePath);
+    const flowDoc = JSON.parse(utf8Decoder.decode(utf8Bytes));
+    lastFlowSource = source;
+    lastFlowFilePath = filePath;
+    renderFlow(flowDoc);
+  } catch (err) {
+    if (isRuntimeDeadError(err)) {
+      handleRuntimeDeath();
+      return;
+    }
+    showToast(err?.message ?? String(err), 'error');
+  }
+}
+
+/**
+ * Renders a flow-json document into the flow panel (graph, empty notice, detail reset).
+ * @param {{ version: number, workflows: object[], error?: string }} flowDoc
+ */
+function renderFlow(flowDoc) {
+  hideFlowDetail();
+  const workflow = flowDoc?.workflows?.[0] ?? null;
+  const rendered = renderFlowGraph(flowGraphEl, workflow, { onSelect: showFlowDetail });
+  flowEmptyEl.hidden = rendered;
+  flowGraphEl.hidden = !rendered;
+  if (!rendered) {
+    flowEmptyEl.textContent = flowDoc?.error
+      ? `Flow rendering failed: ${flowDoc.error}`
+      : globalThis.d3
+        ? 'No workflow structure to visualize.'
+        : 'Flow graph unavailable: D3.js failed to load.';
+  }
+}
+
+/** Shows job/step details for a clicked graph node. */
+function showFlowDetail(info) {
+  flowDetailEl.replaceChildren();
+  const title = document.createElement('div');
+  title.className = 'flow-detail__title';
+  const dl = document.createElement('dl');
+  dl.className = 'flow-detail__list';
+  const add = (label, value) => {
+    if (value === null || value === undefined || value === '' || (Array.isArray(value) && value.length === 0)) {
+      return;
+    }
+    const dt = document.createElement('dt');
+    dt.textContent = label;
+    const dd = document.createElement('dd');
+    dd.textContent = Array.isArray(value) ? value.join(', ') : String(value);
+    dl.append(dt, dd);
+  };
+  if (info.type === 'job') {
+    const job = info.data;
+    title.textContent = `job: ${job.id}`;
+    add('name', job.name);
+    add('kind', job.kind);
+    add('if', job.if);
+    add('needs', job.needs);
+    add('runs-on', job.runsOn);
+    add('uses', job.uses);
+    if (job.strategy?.hasMatrix) {
+      add('matrix', job.strategy.matrixIsExpression ? '${{ … }} (dynamic)' : job.strategy.matrixKeys);
+    }
+  } else {
+    const step = info.data;
+    title.textContent = `step: ${step.name ?? step.id ?? step.kind}`;
+    add('kind', step.kind);
+    add('id', step.id);
+    add('if', step.if);
+    add('run', step.run);
+    add('uses', step.uses);
+    add('wait targets', step.targets);
+    add('cancel target', step.target);
+  }
+  flowDetailEl.append(title, dl);
+  flowDetailEl.hidden = false;
+}
+
+function hideFlowDetail() {
+  flowDetailEl.hidden = true;
+  flowDetailEl.replaceChildren();
+}
+
 editor.on('change', (_cm, changeObj) => {
   if (sizingRaf === null) {
     sizingRaf = requestAnimationFrame(() => {
@@ -1292,6 +1423,9 @@ function runLint() {
       lastConfigVersion = configVersion;
     }
     renderResults(diagnostics);
+    if (activeResultsTab === 'flow') {
+      refreshFlow();
+    }
   } catch (err) {
     if (isRuntimeDeadError(err)) {
       handleRuntimeDeath();
@@ -1474,6 +1608,19 @@ function installTestHooksIfRequested() {
       shouldCollapseDiagMessage,
       getRuntimeAlive: () => runtimeAlive,
       getRuntimeFlags: () => exports?.Seiton?.Playground?.LintInterop?.GetRuntimeFlags?.() ?? '',
+      getFlow: (source, filePath) => {
+        try {
+          const utf8Bytes = exports.Seiton.Playground.LintInterop.GetFlowJson(
+            source ?? '',
+            filePath ?? getSelectedFilePath(),
+          );
+          return { ok: true, flow: JSON.parse(utf8Decoder.decode(utf8Bytes)) };
+        } catch (err) {
+          return { ok: false, error: String(err?.message ?? err) };
+        }
+      },
+      selectResultsTab: (tab) => selectResultsTab(tab === 'flow' ? 'flow' : 'result'),
+      renderFlow: (flowDoc) => renderFlow(flowDoc ?? { version: 1, workflows: [] }),
     };
   } catch {
     /* ignore */

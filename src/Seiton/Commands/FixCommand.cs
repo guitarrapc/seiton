@@ -35,6 +35,13 @@ internal static class FixCommand
         var outputWriter = output ?? Console.Out;
         var errorWriter = error ?? Console.Error;
         var resolvedFormat = CliConfigBridge.ResolveOutputFormat(format, formatExplicitlySet);
+        if (resolvedFormat is OutputFormat.FlowJson or OutputFormat.FlowMermaid)
+        {
+            var name = resolvedFormat == OutputFormat.FlowJson ? "flow-json" : "flow-mermaid";
+            errorWriter.WriteLine($"{name} is not supported in fix mode; use 'seiton check --format {name}'");
+            return ExitCode.InvalidOptions;
+        }
+
         GitHubStepSummaryWriter.Reset();
         var colorEnabled = CliConfigBridge.ResolveColorEnabled(color, noColor);
 

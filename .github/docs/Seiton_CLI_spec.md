@@ -201,7 +201,7 @@ Operational rule:
 
 | Flag | Short | Type | Default | Description |
 |---|---|---|---|---|
-| `--format` | | `text\|json\|sarif\|github-actions` | `text` (see §3.1.1) | Output format for diagnostics. |
+| `--format` | | `text\|json\|sarif\|github-actions\|flow-json\|flow-mermaid` | `text` (see §3.1.1) | Output format. The flow formats (§6.6) are check-only, emit workflow structure instead of diagnostics, and are rejected by fix mode (exit code 2). |
 | `--oneline` | | `bool` | `false` | Emit one diagnostic per line (`text` and `github-actions`). |
 | `--color` | | `auto\|always\|never` | `auto` | Color output control. `auto` enables color when stdout is not a TTY or CI is detected. |
 | `--no-color` | | `bool` | `false` | Alias for `--color=never`. |
@@ -250,7 +250,7 @@ Certain CLI flags have environment variable equivalents (listed below). When bot
 | Environment Variable | Equivalent Flag | Notes |
 |---|---|---|
 | `SEITON_CONFIG` | `--config` | Config file path. |
-| `SEITON_FORMAT` | `--format` | Output format (`text`, `json`, `sarif`, `github-actions`). |
+| `SEITON_FORMAT` | `--format` | Output format (`text`, `json`, `sarif`, `github-actions`, `flow-json`, `flow-mermaid`). |
 | `SEITON_NO_COLOR` | `--no-color` | Any non-empty value disables color. |
 | `NO_COLOR` | `--no-color` | Standard `NO_COLOR` convention honored as fallback after `SEITON_NO_COLOR`. |
 | `SEITON_GITHUB_TOKEN` | (internal) | GitHub API token for network-assisted operations. Checked before `GITHUB_TOKEN`. Hardcoded resolution order; not configurable via config file. |
@@ -755,6 +755,39 @@ Progress (`--verbose`), configuration errors, init hints, fix diffs (when format
 #### 6.5.4 Unsupported commands
 
 `seiton rules` does not support `github-actions` (exit code `2`, same as SARIF).
+
+### 6.6 `flow-json` / `flow-mermaid` (flow formats)
+
+The flow formats emit the **workflow structure** ("flow") instead of diagnostics. They exist so the execution flow of a workflow — the `needs` job DAG combined with per-job step sequences and `parallel` step boundaries — can be visualized without re-interpreting YAML outside the parser.
+
+**WHY**: the Playground flow tab and the CLI must share one machine-readable contract built from the same parsed AST (single source of truth); Mermaid is a thin human-oriented projection of that same contract for pasting into GitHub Markdown.
+
+Behavior common to both formats:
+
+- Supported by `check` (and the root command without `--fix`) only. Fix mode rejects them with exit code `2` and a stderr message.
+- Lint rules are not executed; no diagnostics are emitted. Exit code is `0` unless option/config errors occur.
+- Each input file is parsed once; non-workflow documents (e.g. `action.yml`) are skipped.
+- Matrix strategy is reported as **declaration only** (dimension names / dynamic-expression marker); combinations are never expanded.
+- Reusable workflow jobs (`uses:` at job level) are opaque leaves carrying their `uses` ref; the referenced workflow is not loaded.
+- `if` conditions are carried as raw expressions.
+
+#### 6.6.1 `flow-json`
+
+Single JSON document to stdout:
+
+```json
+{ "version": 1, "workflows": [ { "file", "name"?, "on": [], "jobs": [
+  { "id", "name"?, "kind": "job|reusable", "if"?, "needs": [], "runsOn": [], "uses"?,
+    "strategy"?: { "hasMatrix", "matrixKeys": [], "matrixIsExpression" },
+    "steps": [ { "kind": "run|uses|parallel|wait|wait-all|cancel", "id"?, "name"?, "if"?,
+                 "run"?, "uses"?, "targets"?, "target"?, "steps"? } ] } ] } ] }
+```
+
+Absent optional fields are omitted. `steps` on a step appears only for `kind: "parallel"` (nested boundary children). This is the same contract served to the Playground flow tab by `PlaygroundFlowRunner`.
+
+#### 6.6.2 `flow-mermaid`
+
+Mermaid `flowchart LR` text to stdout: each job is a subgraph with chained step nodes, `needs` edges connect job subgraphs, `parallel` boundaries are nested subgraphs whose children are intentionally unchained (simultaneous), and reusable jobs are subroutine nodes (`[[...]]`). Labels are single-line, quote-sanitized, and truncated. Multiple input files emit blank-line-separated diagrams.
 
 ---
 

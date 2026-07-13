@@ -18,7 +18,7 @@ Options:
   --stdin-filename <string>    Filename used when reading from stdin (-). [Default: @"<stdin>"]
   --ignore <string[]?>         Substring patterns for messages to ignore (case-insensitive). [Default: null]
   --min-severity <string?>     Minimum severity to report: error | warning | info. [Default: null]
-  --format <string>            Output format: text | json | sarif | github-actions. [Default: @"text"]
+  --format <string>            Output format: text | json | sarif | github-actions | flow-json | flow-mermaid. [Default: @"text"]
   --oneline                    Print each diagnostic on a single line.
   --color <ColorMode>          Color mode: auto | always | never. [Default: Auto]
   --no-color                   Disable color output (overrides --color).
@@ -345,7 +345,7 @@ These flags are valid only when `--fix` is enabled on the root command.
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
-| `--format` | `text\|json\|sarif\|github-actions` | `text` (see below) | Output format for diagnostics. |
+| `--format` | `text\|json\|sarif\|github-actions\|flow-json\|flow-mermaid` | `text` (see below) | Output format for diagnostics. `flow-json` / `flow-mermaid` are check-only and emit workflow structure instead of diagnostics. |
 | `--oneline` | `bool` | `false` | Emit one diagnostic per line (`text` and `github-actions`). |
 | `--color` | `auto\|always\|never` | `auto` | Color output control. |
 | `--no-color` | `bool` | `false` | Alias for `--color=never`. |
@@ -360,7 +360,7 @@ The following environment variables are recognized. A flag always takes preceden
 | Environment Variable | Equivalent | Description |
 |---|---|---|
 | `SEITON_CONFIG` | `--config` | Config file path. |
-| `SEITON_FORMAT` | `--format` | Output format (`text`, `json`, `sarif`, `github-actions`). |
+| `SEITON_FORMAT` | `--format` | Output format (`text`, `json`, `sarif`, `github-actions`, `flow-json`, `flow-mermaid`). |
 | `SEITON_NO_COLOR` | `--no-color` | Any non-empty value disables color. |
 | `NO_COLOR` | `--no-color` | Standard `NO_COLOR` convention (fallback). |
 | `SEITON_GITHUB_TOKEN` | (internal) | GitHub API token for online rules and network-assisted remediation. Takes priority over `GITHUB_TOKEN`. |
@@ -469,6 +469,72 @@ seiton --format json | ConvertFrom-Json
 ```sh
 seiton --format sarif > seiton.sarif
 ```
+
+### Flow JSON (`flow-json`)
+
+Machine-readable workflow structure for visualization and tooling — the same contract consumed by the Playground flow tab. Instead of diagnostics, `check` emits the parsed workflow flow: jobs, `needs` edges, steps (`run` / `uses` / `parallel` / `wait` / `wait-all` / `cancel`), raw `if` expressions, strategy/matrix declarations (never expanded), and reusable-workflow jobs as opaque leaves. Lint rules are not executed and the exit code is always `0` unless option/config errors occur.
+
+`flow-json` is supported by `check` only; `fix` rejects it.
+
+```sh
+seiton check --format flow-json .github/workflows/ci.yml
+```
+
+```json
+{
+  "version": 1,
+  "workflows": [
+    {
+      "file": ".github/workflows/ci.yml",
+      "name": "CI",
+      "on": ["push"],
+      "jobs": [
+        {
+          "id": "build",
+          "kind": "job",
+          "needs": [],
+          "runsOn": ["ubuntu-latest"],
+          "steps": [
+            { "kind": "uses", "uses": "actions/checkout@v4" },
+            { "kind": "parallel", "steps": [
+              { "kind": "run", "run": "npm run build-app1" },
+              { "kind": "run", "run": "npm run build-app2" }
+            ] }
+          ]
+        }
+      ]
+    }
+  ]
+}
+```
+
+### Flow Mermaid (`flow-mermaid`)
+
+The same flow structure as `flow-json`, rendered as a [Mermaid](https://mermaid.js.org/) `flowchart` for pasting into GitHub Markdown (PRs, issues, docs). Jobs become subgraphs with chained step nodes, `needs` edges connect jobs, `parallel` boundaries become nested subgraphs with unchained (simultaneous) children, and reusable-workflow jobs are subroutine nodes. Like `flow-json`, it is check-only and `fix` rejects it.
+
+```sh
+seiton check --format flow-mermaid .github/workflows/ci.yml
+```
+
+````
+flowchart LR
+  %% .github/workflows/ci.yml — CI
+  subgraph j0["build"]
+    direction TB
+    j0n0["uses: actions/checkout@v4"]
+    subgraph j0g1["parallel"]
+      direction TB
+      j0n2["run: npm run build-app1"]
+      j0n3["run: npm run build-app2"]
+    end
+    j0n0 --> j0g1
+  end
+  subgraph j1["deploy"]
+    direction TB
+    j1n0["run: echo deploy"]
+  end
+  j0 --> j1
+````
 
 ---
 

@@ -69,6 +69,49 @@ public static partial class LintInterop
     }
 
     /// <summary>
+    /// Returns the flow-json document (workflow structure for the flow tab) as UTF-8 JSON bytes.
+    /// Non-workflow documents produce <c>{"version":1,"workflows":[]}</c>; internal errors add an
+    /// <c>error</c> property so the UI can report failures without crashing the runtime.
+    /// </summary>
+    /// <param name="yamlSource">Full YAML text (may be empty).</param>
+    /// <param name="filePath">Virtual path (e.g. <c>.github/workflows/ci.yml</c>).</param>
+    [JSExport]
+    public static byte[] GetFlowJson(string? yamlSource, string? filePath)
+    {
+        try
+        {
+            var path = string.IsNullOrWhiteSpace(filePath)
+                ? ".github/workflows/test.yml"
+                : filePath.Trim();
+            return PlaygroundFlowRunner.RunFlowToJsonUtf8(yamlSource ?? string.Empty, path);
+        }
+        catch (Exception ex)
+        {
+            return SerializeFlowError(ex);
+        }
+    }
+
+    /// <summary>
+    /// Serializes an internal flow error as an empty flow document with an <c>error</c> property,
+    /// keeping the flow-json shape so the UI parser never breaks.
+    /// </summary>
+    private static byte[] SerializeFlowError(Exception ex)
+    {
+        var buffer = new ArrayBufferWriter<byte>(256);
+        using (var writer = new Utf8JsonWriter(buffer))
+        {
+            writer.WriteStartObject();
+            writer.WriteNumber("version"u8, 1);
+            writer.WriteStartArray("workflows"u8);
+            writer.WriteEndArray();
+            writer.WriteString("error"u8, $"{ex.GetType().Name}: {ex.Message}");
+            writer.WriteEndObject();
+        }
+
+        return buffer.WrittenSpan.ToArray();
+    }
+
+    /// <summary>
     /// Applies automatic fixes sequentially. Network-dependent pinning/digest remediation is unavailable in WASM.
     /// The <c>deny-read-all</c> autofix (scalar <c>read-all</c> → empty mapping)
     /// is skipped here so it cannot undo <c>deny-write-all</c>’s <c>read-all</c> suggestion.

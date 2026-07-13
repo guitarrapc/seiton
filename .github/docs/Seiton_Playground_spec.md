@@ -64,6 +64,7 @@ Exported functions callable from JavaScript:
 | `ApplyAllFixes` | `(yamlSource: string, filePath: string)` | `string` | Fixed YAML (original text on error) |
 | `ApplyAllFixesWithNetworkAsync` | `(yamlSource: string, filePath: string)` | `Promise<string>` | JSON: `{"yaml":"...","resolved":N,"skipped":N,"failed":N}` |
 | `SetConfig` | `(configYaml: string)` | UTF-8 JSON byte array | Config diagnostic array (empty = success) |
+| `GetFlowJson` | `(yamlSource: string, filePath: string)` | UTF-8 JSON byte array | flow-json document for the Flow tab (see §2.7) |
 | `GetProductVersion` | none | `string` | Build version string |
 
 #### 2.3.1 SetConfig Behavior
@@ -105,7 +106,16 @@ Non-functional requirement:
 - `RunLint`: on internal error, returns a single-element diagnostic array with `ruleId: "internal-error"`, message prefixed with `[internal error]`, position `(1,1)`, severity `Error`, `fixable: false`.
 - `ApplyAllFixes`: on error, logs to browser console and returns the original input text unchanged.
 - `SetConfig`: on internal error, returns single-element diagnostic array (same as `RunLint` error format); previous valid config is retained.
+- `GetFlowJson`: on internal error, returns an empty flow document with an `error` property (`{"version":1,"workflows":[],"error":"..."}`) so the flow-json shape never breaks the UI parser.
 - `GetProductVersion`: on error, returns `"unknown"`.
+
+### 2.7 Flow API
+
+`GetFlowJson` returns the **flow-json contract** — the same machine-readable workflow-structure document as `seiton check --format flow-json` (see `Seiton_CLI_spec.md` §6.6). It is backed by `PlaygroundFlowRunner` (separate from `PlaygroundLintRunner` so the diagnostics API and the flow API remain independent contracts) and consumed by the Flow tab.
+
+- **WHY shared contract**: parsing YAML separately in the UI would create interpretation drift between lint and visualization; both CLI and Playground build the flow from the same parsed AST via `WorkflowFlowCollector` in Seiton.Core.
+- Non-workflow documents (e.g. `action.yml`) yield an empty `workflows` array; the Flow tab shows an empty-state notice.
+- Identity-based caching mirrors `RunLint`: an identical `(yamlSource, filePath)` reference pair returns the cached byte array without re-parsing.
 
 ---
 
@@ -203,6 +213,7 @@ This ensures cosmetic edits (adding/removing blank lines, trailing spaces) do no
 | Version badge | Shown after WASM startup, links to GitHub Release page |
 | Color theme | System / Light / Dark cycle with localStorage persistence |
 | Runtime crash detection | Stops calls, shows reload prompt |
+| Flow tab | Result / Flow tab switch in the results column. Flow renders the flow-json document as an SVG graph (D3): job boxes with step rows, `needs` edges, dashed `parallel` boundary around simultaneous steps, dashed subroutine style for reusable-workflow jobs, matrix/if annotations. Interactions: d3.zoom pan/zoom (0.2–3×, fit-to-view on render), click job header or step row → detail panel below the graph. Refreshed on tab activation and after each lint while the Flow tab is active; skipped when source + path unchanged. |
 
 ### 4.2 Toast System
 
@@ -280,7 +291,9 @@ This ensures cosmetic edits (adding/removing blank lines, trailing spaces) do no
     <main>
       <section #linter>
         editor pane (#editor-wrap > #editor + #apply-fixes-btn + #config-panel)
-        results pane (.results-column > #loading + #lint-result + #success-msg)
+        results pane (.results-column > #loading + #results-tab-bar (Result/Flow tabs)
+                      + #result-panel (#lint-result + #success-msg)
+                      + #flow-panel (#flow-empty + #flow-graph + #flow-detail))
       </section>
     </main>
     <section .playground-about>
@@ -306,6 +319,7 @@ This ensures cosmetic edits (adding/removing blank lines, trailing spaces) do no
 | CodeMirror 5 | 5.65.16 | YAML editor (codemirror.min.js + yaml mode + active-line addon) | SRI hash pinned |
 | CodeMirror material-darker | 5.65.16 | Dark theme | SRI hash pinned |
 | pako | 2.1.0 | Permalink deflate/inflate (ESM import) | — |
+| D3.js | 7.9.0 | Flow tab graph rendering (zoom/pan, selection, edge paths); UMD global `d3` | SRI hash pinned (sha512) |
 
 CSS resources use non-blocking loading pattern (`media="print"` + `onload` swap + `<noscript>` fallback).
 

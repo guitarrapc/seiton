@@ -22,7 +22,7 @@ internal class SeitonCli
     /// <param name="stdinFilename">Filename used when reading from stdin (-).</param>
     /// <param name="ignore">Substring patterns for messages to ignore (case-insensitive).</param>
     /// <param name="minSeverity">Minimum severity to report: error | warning | info.</param>
-    /// <param name="format">Output format: text | json | sarif | github-actions.</param>
+    /// <param name="format">Output format: text | json | sarif | github-actions | flow-json | flow-mermaid (flow formats are check-only).</param>
     /// <param name="oneline">Print each diagnostic on a single line.</param>
     /// <param name="color">Color mode: auto | always | never.</param>
     /// <param name="noColor">Disable color output (overrides --color).</param>
@@ -66,7 +66,7 @@ internal class SeitonCli
 
         if (!OutputFormatParser.TryParse(format, out var outputFormat))
         {
-            Console.Error.WriteLine("Invalid --format. Valid values: text, json, sarif, github-actions");
+            Console.Error.WriteLine("Invalid --format. Valid values: text, json, sarif, github-actions, flow-json, flow-mermaid");
             Environment.ExitCode = ExitCode.InvalidOptions;
             return;
         }
@@ -85,7 +85,7 @@ internal class SeitonCli
     /// <param name="stdinFilename">Filename used when reading from stdin (-).</param>
     /// <param name="ignore">Substring patterns for messages to ignore (case-insensitive).</param>
     /// <param name="minSeverity">Minimum severity to report: error | warning | info.</param>
-    /// <param name="format">Output format: text | json | sarif | github-actions.</param>
+    /// <param name="format">Output format: text | json | sarif | github-actions | flow-json | flow-mermaid.</param>
     /// <param name="oneline">Print each diagnostic on a single line.</param>
     /// <param name="color">Color mode: auto | always | never.</param>
     /// <param name="noColor">Disable color output (overrides --color).</param>
@@ -109,7 +109,7 @@ internal class SeitonCli
     {
         if (!OutputFormatParser.TryParse(format, out var outputFormat))
         {
-            Console.Error.WriteLine("Invalid --format. Valid values: text, json, sarif, github-actions");
+            Console.Error.WriteLine("Invalid --format. Valid values: text, json, sarif, github-actions, flow-json, flow-mermaid");
             Environment.ExitCode = ExitCode.InvalidOptions;
             return;
         }

@@ -276,6 +276,32 @@ flow collector と Playground backend は parser/linter の近傍で動くため
 - `.github/docs/Seiton_Playground_csharp_spec.md`
 - `.github/docs/Seiton_Parser_csharp_spec.md`
 
+## 実装結果 (2026-07-13)
+
+フェーズ 0-5 をすべて実装し、beyond-v1 として Mermaid export も追加した。実装中に判明した計画からの差分と学びを残す。
+
+### 実装されたもの
+
+- **Core**: `Seiton.Core.Flow` 名前空間に `WorkflowFlow` DTO 群 / `WorkflowFlowCollector` / `WorkflowFlowJson`(手書き Utf8JsonWriter)/ `WorkflowFlowMermaid` を追加。
+- **CLI**: `check --format flow-json` と `check --format flow-mermaid`(beyond v1)。`fix` は両フォーマットを exit code 2 で拒否。file パスは json format と同じ working-directory 相対表示。契約詳細は `Seiton_CLI_spec.md` §6.6。
+- **Playground backend**: `PlaygroundFlowRunner`(lint runner とは独立した契約、identity cache 同型)+ `LintInterop.GetFlowJson`。エラー時は `{"version":1,"workflows":[],"error":"..."}` で shape を維持。
+- **Playground UI**: results column に Result / Flow タブ、`flow-graph.js`(D3 v7.9.0 UMD + SRI, cdnjs)による SVG DAG 描画、zoom/pan(0.2–3×, fit-to-view)、job/step クリックで詳細パネル。parallel boundary は破線ボックス、reusable job は破線 subroutine 表現。
+
+### 計画からの差分と学び
+
+- **collector は `IPass` 登録ではなく Ref facade の直接走査にした**。`WorkflowVisitor.VisitStepRecursive` は parallel 子 step を平坦化して通知し boundary の enter/exit を伝えないため、boundary 付き DTO を組むには自前再帰の方が素直だった。
+- **parallel のネストはパーサーが拒否する**(`ParserTests.ParallelSteps` 参照)。DTO/描画は再帰構造のまま持つが、実際の boundary は常に 1 段。
+- **JSON serializer は Core に手書きで置いた**。NativeAOT CLI と trimmed WASM の両方で JsonSerializerContext 登録なしに同一バイト列を保証できる。
+- **D3 の SRI は cdnjs API が公開する sha512 を使用**。既存 HTML 契約テストは sha384 を 5 件と数えているため、sha512 の追加はそのテストを壊さない。
+
+### ベンチマーク結果(退行なし)
+
+flow collector は `check --format flow-*` / `GetFlowJson` 要求時のみ動く opt-in パスであり、lint/parse hot path には接続していない。実装後の計測(ShortRun)で committed baseline との差分は Mean・Allocated ともに誤差範囲内:
+
+- CoreLintBenchmark Allocated: Small 3824/5240 B, Medium 11064/23592 B, Large 34824/85544 B(baseline と同値)
+- CoreParsingBenchmark Parse Allocated: 240/840/2600 B(同値)
+- PlaygroundLintBenchmark: NoChange 0 B、Partial/FullChange 57120 B(Small)/ 251840 B(Large)(同値)
+
 ## 現時点の結論
 
 flow 可視化は、専用コマンドや UI 先行の個別実装ではなく、まず `check --format flow-json` という共通契約を作り、それを Playground が消費する形で進めるのが最も整合的である。

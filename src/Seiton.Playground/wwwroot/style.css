@@ -1338,3 +1338,173 @@ footer a {
 .config-diagnostics:empty {
   display: none;
 }
+
+/* ─── Flow tab (Result / Flow switch + D3 graph) ─── */
+
+.results-tabs {
+  display: flex;
+  gap: 0.25rem;
+  border-bottom: 1px solid var(--border-pane);
+  margin-bottom: 0.4rem;
+}
+
+.results-tab {
+  appearance: none;
+  border: none;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  font-size: 0.85rem;
+  padding: 0.4rem 0.9rem;
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  opacity: 0.75;
+}
+
+.results-tab:hover {
+  opacity: 1;
+}
+
+.results-tab--active {
+  opacity: 1;
+  border-bottom-color: var(--accent);
+  font-weight: 600;
+}
+
+.flow-graph {
+  height: min(72dvh, 640px);
+  border: 1px solid var(--border-pane);
+  border-radius: 8px;
+  background: var(--results-surface, transparent);
+  overflow: hidden;
+  touch-action: none;
+}
+
+.flow-svg {
+  width: 100%;
+  height: 100%;
+  display: block;
+  cursor: grab;
+}
+
+.flow-svg:active {
+  cursor: grabbing;
+}
+
+.flow-edge {
+  fill: none;
+  stroke: var(--accent);
+  stroke-width: 1.5;
+  opacity: 0.7;
+}
+
+.flow-job__box {
+  fill: var(--results-surface, transparent);
+  stroke: var(--border-pane);
+  stroke-width: 1.2;
+}
+
+.flow-job--reusable .flow-job__box {
+  stroke-dasharray: 5 3;
+}
+
+.flow-job__header {
+  fill: var(--accent);
+  opacity: 0.16;
+  cursor: pointer;
+}
+
+.flow-job__header:hover {
+  opacity: 0.3;
+}
+
+.flow-job__title {
+  fill: var(--text);
+  font-size: 13px;
+  font-weight: 600;
+  pointer-events: none;
+}
+
+.flow-job__meta {
+  fill: var(--text);
+  opacity: 0.7;
+  font-size: 11px;
+  pointer-events: none;
+}
+
+.flow-parallel-boundary {
+  fill: var(--warning);
+  opacity: 0.1;
+  stroke: var(--warning);
+  stroke-width: 1;
+  stroke-dasharray: 4 3;
+}
+
+.flow-step__hit {
+  fill: transparent;
+  cursor: pointer;
+}
+
+.flow-step__hit:hover {
+  fill: var(--accent);
+  opacity: 0.12;
+}
+
+.flow-step__text {
+  fill: var(--text);
+  font-size: 12px;
+  pointer-events: none;
+}
+
+.flow-step__kind {
+  font-weight: 600;
+  opacity: 0.85;
+}
+
+.flow-step__kind--run {
+  fill: var(--info);
+}
+
+.flow-step__kind--uses {
+  fill: var(--accent);
+}
+
+.flow-step__kind--parallel,
+.flow-step__kind--wait,
+.flow-step__kind--wait-all,
+.flow-step__kind--cancel {
+  fill: var(--warning);
+}
+
+.flow-detail {
+  margin-top: 0.4rem;
+  border: 1px solid var(--border-pane);
+  border-radius: 8px;
+  padding: 0.5rem 0.75rem;
+  font-size: 0.82rem;
+  max-height: 12rem;
+  overflow-y: auto;
+}
+
+.flow-detail__title {
+  font-weight: 600;
+  margin-bottom: 0.3rem;
+}
+
+.flow-detail__list {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  column-gap: 0.75rem;
+  row-gap: 0.15rem;
+  margin: 0;
+}
+
+.flow-detail__list dt {
+  opacity: 0.7;
+}
+
+.flow-detail__list dd {
+  margin: 0;
+  white-space: pre-wrap;
+  word-break: break-word;
+}

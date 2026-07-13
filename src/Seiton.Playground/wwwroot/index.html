@@ -69,6 +69,9 @@
   <script defer src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/selection/active-line.min.js"
     integrity="sha384-hcxaXyAtJ30s2NeDu1OHWsQRiHiWuYLTbI596+YFb+f2pFhzO0mDuahZziRPPDxg" crossorigin="anonymous"
     referrerpolicy="no-referrer"></script>
+  <script defer src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.9.0/d3.min.js"
+    integrity="sha512-vc58qvvBdrDR4etbxMdlTt4GBQk1qjvyORR2nrsPsFPyrs+/u5c3+1Ct6upOgdZoIl7eq6k3a1UPDSNAQi/32A=="
+    crossorigin="anonymous" referrerpolicy="no-referrer"></script>
 </head>
 
 <body>
@@ -165,10 +168,23 @@
       </div>
       <div class="split-pane results-column">
         <div id="loading" class="notification">Loading WebAssembly binary...</div>
-        <table id="lint-result" class="result-table" hidden>
-          <tbody id="lint-result-body"></tbody>
-        </table>
-        <div id="success-msg" class="notification success" style="display:none">No issues reported.</div>
+        <div id="results-tab-bar" class="results-tabs" role="tablist" aria-label="Results view">
+          <button id="tab-result-btn" type="button" class="results-tab results-tab--active" role="tab"
+            aria-selected="true" aria-controls="result-panel">Result</button>
+          <button id="tab-flow-btn" type="button" class="results-tab" role="tab" aria-selected="false"
+            aria-controls="flow-panel">Flow</button>
+        </div>
+        <div id="result-panel" role="tabpanel" aria-labelledby="tab-result-btn">
+          <table id="lint-result" class="result-table" hidden>
+            <tbody id="lint-result-body"></tbody>
+          </table>
+          <div id="success-msg" class="notification success" style="display:none">No issues reported.</div>
+        </div>
+        <div id="flow-panel" role="tabpanel" aria-labelledby="tab-flow-btn" hidden>
+          <div id="flow-empty" class="notification" hidden>No workflow structure to visualize.</div>
+          <div id="flow-graph" class="flow-graph"></div>
+          <div id="flow-detail" class="flow-detail" hidden></div>
+        </div>
       </div>
     </section>
   </main>

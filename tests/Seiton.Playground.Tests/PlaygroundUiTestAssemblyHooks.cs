@@ -10,6 +10,7 @@ public static class PlaygroundUiTestAssemblyHooks
     public static void ResetPlaygroundSharedState()
     {
         PlaygroundLintRunner.ResetSharedStateForTests();
+        PlaygroundFlowRunner.ResetSharedStateForTests();
     }
 
     [After(Assembly)]
@@ -18,5 +19,6 @@ public static class PlaygroundUiTestAssemblyHooks
         await PlaygroundUiBrowserSession.DisposeAsync();
         await PlaygroundUiTestHost.ShutdownAsync();
         PlaygroundLintRunner.ResetSharedStateForTests();
+        PlaygroundFlowRunner.ResetSharedStateForTests();
     }
 }
