@@ -155,4 +155,49 @@ public class EditDistanceBenchmark
 
         return best;
     }
+
+    [Benchmark]
+    public int FindClosest_55Candidates_Batch()
+    {
+        // The path PopularActionInputsRule actually takes: shared peq + AVX2 lanes when available
+        var input = "days-before-stall";
+        var maxDistance = Math.Max(2, input.Length / 3); // = 5
+        Span<int> distances = stackalloc int[64];
+        distances = distances[.._staleCandidates.Length];
+
+        EditDistance.ComputeIgnoreCaseMany(input, _staleCandidates, maxDistance, distances);
+
+        var best = int.MaxValue;
+        for (var i = 0; i < distances.Length; i++)
+        {
+            if (distances[i] < best)
+            {
+                best = distances[i];
+            }
+        }
+
+        return best;
+    }
+
+    [Benchmark]
+    public int FindClosest_55Candidates_NoMatch_Batch()
+    {
+        var input = "zzzzzzzzz";
+        var maxDistance = Math.Max(2, input.Length / 3); // = 3
+        Span<int> distances = stackalloc int[64];
+        distances = distances[.._staleCandidates.Length];
+
+        EditDistance.ComputeIgnoreCaseMany(input, _staleCandidates, maxDistance, distances);
+
+        var best = int.MaxValue;
+        for (var i = 0; i < distances.Length; i++)
+        {
+            if (distances[i] < best)
+            {
+                best = distances[i];
+            }
+        }
+
+        return best;
+    }
 }
