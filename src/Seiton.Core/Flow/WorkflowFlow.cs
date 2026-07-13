@@ -1,9 +1,10 @@
 namespace Seiton.Core.Flow;
 
 // Flow DTOs are the shared machine-readable contract between the CLI
-// (`check --format flow-json`) and the Playground flow tab. All values are
-// resolved to plain strings during collection so the DTO outlives the
-// ParseResult/arena that produced it. See `.github/docs/plans/plan_flow.md`.
+// (`check --format flow-json` / `flow-mermaid`) and the Playground flow tab.
+// All values are resolved to plain strings during collection so the DTO
+// outlives the ParseResult/arena that produced it.
+// Contract spec: `.github/docs/Seiton_CLI_spec.md` §6.6.
 
 /// <summary>Flow representation of a single parsed workflow document.</summary>
 public sealed class WorkflowFlow

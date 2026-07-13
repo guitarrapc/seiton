@@ -402,6 +402,21 @@ Synchronous WASM calls block the main thread. User input queues at the browser l
 - `_framework/` directory requires `.nojekyll` due to underscore prefix
 - Static hosts without import map support (GitHub Pages) require both fingerprinted and non-fingerprinted file output
 
+### 6.4 Flow Tab: LOD Must Not Change Geometry
+
+Zoom-driven LOD (lod0/lod1/lod2) swaps a CSS class on the SVG root and toggles **visibility only** — node positions and sizes never change between LOD levels. Changing geometry on a LOD boundary makes the graph jump out from under the cursor mid-zoom. Same-needs group cards and group edges at lod0 are additive overlays on the invariant geometry, not a re-layout.
+
+### 6.5 Flow Tab: Derived Flow Data Comes from the Contract
+
+Everything the flow tab shows about workflow semantics — reduced edges (`reducedNeeds`), background join status (`backgroundOutcome`), matrix combinations, source line ranges — is computed by Seiton.Core and read from flow-json. JS-side derivation was tried for the background status and reverted: a second interpreter of the same YAML inevitably drifts from CLI consumers.
+
+### 6.6 Flow Tab: Small Rendering Traps
+
+- **Append marker suffixes after truncation**: step labels carry `⛊` / `⏱Nm` / `↷` markers; truncating the combined string cuts the markers off on long names. Truncate the base label to `max - markers.length`, then append.
+- **lod0 group cards hide member edges**, so the hover needs-chain highlight does not extend to the aggregated group edges (they only dim). Known limitation; acceptable because hover exploration happens at closer zoom.
+- **D3 is loaded as a UMD script with a sha512 SRI** (from the cdnjs API): the HTML contract test counts exactly five `sha384-` integrity attributes for CodeMirror, so a sha512 digest adds a pinned dependency without breaking that assertion.
+- **Share payload intentionally excludes flow tab state**: the flow re-derives from the shared YAML the moment the tab opens, so tab state is ephemeral UI state with nothing worth sharing.
+
 ---
 
 ## 7. References
@@ -409,3 +424,5 @@ Synchronous WASM calls block the main thread. User input queues at the browser l
 - [actionlint playground source](https://github.com/rhysd/actionlint/tree/main/playground)
 - [CodeMirror 5](https://codemirror.net/5/)
 - [pako (zlib for browser)](https://github.com/nicolo-ribaudo/pako)
+- [D3.js](https://d3js.org/) (flow tab graph rendering)
+- [Mermaid flowchart syntax](https://mermaid.js.org/syntax/flowchart.html) (flow-mermaid output target)

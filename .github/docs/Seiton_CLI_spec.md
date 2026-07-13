@@ -803,6 +803,16 @@ Mermaid `flowchart LR` text to stdout: each job is a subgraph with chained step 
 
 The output is always **exactly one `flowchart` diagram** so it can be wrapped in a single Mermaid code block. Multiple input files become per-workflow wrapper subgraphs (`w0`, `w1`, … labeled with the file name) with prefixed node ids (`w0j0`, `w0j0n0`, …); a single input keeps the unprefixed shape (`j0`, `j0n0`, …). **WHY**: one Mermaid code block holds one diagram — a second `flowchart` keyword is a parse error, which is exactly what blank-line-separated diagrams caused when piped to a Markdown file.
 
+#### 6.6.3 Design decisions and lessons learned
+
+- **Derived data is computed in Seiton.Core and carried in the contract**, never re-derived per consumer: `reducedNeeds` (transitive reduction), `backgroundOutcome` (wait/wait-all/cancel join analysis), and `strategy.combinations` (static matrix expansion) exist so the CLI, Mermaid exporter, and Playground can never drift in interpretation.
+- **The collector walks the Ref facade directly instead of registering an `IPass`** on `WorkflowVisitor`: the visitor flattens `parallel` children into a linear step stream with no boundary enter/exit hooks, but the flow contract needs the nesting. Model new AST consumers that need structure on the collector, not the visitor.
+- **The flow JSON serializer is hand-written `Utf8JsonWriter` in Core** so the NativeAOT CLI and the trimmed WASM Playground emit byte-identical output without registering DTOs in a `JsonSerializerContext`.
+- **Parser range caveats for consumers**: a job/step `Range` can spill onto the next sibling's first line (resolve overlaps by preferring the node with the greatest start line — see §6.6.1), and a `parallel` step's `Range` covers only its own header line (extend to the deepest descendant `endLine` when highlighting the whole boundary).
+- **Matrix expansion approximates GitHub semantics** (cross product → `exclude` subset removal → `include` extend/append, cap 256). Include-only matrices (no dimension rows) must treat every `include` entry as its own combination — the "entry without dimension keys applies to all combinations" rule silently merges entries when there is no base product.
+- **The `parallel` extension does not nest** (the parser rejects `parallel` inside `parallel`), so flow boundaries are always single-level even though the DTO models recursion.
+- **Flow formats deliberately skip lint execution**: they are structural read-only contracts; exit code stays `0` so pipelines can generate diagrams without failing on lint findings.
+
 ---
 
 ## 7. Exit Codes
