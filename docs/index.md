@@ -30,7 +30,8 @@ For every file it analyzes, Seiton:
 | Correctness checks | Job structure, needs-graph cycles, glob syntax, shell names, ID naming, schedule/dispatch validation. |
 | Supply-chain hygiene | Unpinned `uses:` / images, archived actions, and optional online checks (known vulnerabilities, impostor commits, ref confusion, stale refs). |
 | Auto-fix support | `seiton --fix` applies machine-safe remediations in place, including optional network-assisted SHA/digest pinning. |
-| Multiple output formats | `text` (default locally), `github-actions` (default on GitHub Actions: job summary + rich stdout), `json`, `sarif` (GitHub Advanced Security). |
+| Multiple output formats | `text` (default locally), `github-actions` (default on GitHub Actions: job summary + rich stdout), `json`, `sarif` (GitHub Advanced Security), plus `flow-json` / `flow-mermaid` for workflow structure. |
+| Playground | Browser-based linting and interactive flow visualization via WebAssembly — no install, YAML stays local. |
 | Config file | Optional `.github/seiton.yaml` for rule tuning, exclusions, and network options. |
 | Inline suppression | `# seiton: disable-next-line <rule-id>` directives inside workflow files. |
 | NativeAOT binary | Single-file executable; no .NET runtime required at deployment. |
@@ -40,8 +41,10 @@ For every file it analyzes, Seiton:
 
 ## Quick Start
 
+Try the [Playground](https://guitarrapc.github.io/seiton/) first — paste workflow YAML, run lint in the browser, and switch to the **Flow** tab to explore jobs and steps interactively. No install required.
+
 ```sh
-# Lint all workflow files in the current repository
+# Lint all workflow files in the current repository (same as `seiton check`)
 seiton
 
 # Lint specific files
@@ -49,6 +52,10 @@ seiton .github/workflows/ci.yml action.yml
 
 # See all issues as JSON
 seiton --format json
+
+# Export workflow structure as JSON or Mermaid (check-only; no lint diagnostics)
+seiton --format flow-json .github/workflows/ci.yml
+seiton --format flow-mermaid .github/workflows/ci.yml
 
 # On GitHub Actions, omit --format (job summary + default GHA output)
 seiton

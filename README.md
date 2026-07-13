@@ -8,13 +8,15 @@
 **Seiton** is a security-focused linter & fixer for [GitHub Actions](https://github.com/features/actions) workflow files and action metadata files.
 It catches security issues, policy violations, and mistakes before they reach production — then optionally fixes them. Try it out in the [playground](https://guitarrapc.github.io/seiton/).
 
+<img src="https://raw.githubusercontent.com/guitarrapc/seiton/main/assets/playground.png" alt="Seiton playground" width="300">
+
 Features:
 
 - **Security-first rules** — template injection, unpinned actions/images, dangerous triggers, secret misuse, and more.
 - **Correctness checks** — job structure, needs-graph cycles, glob syntax, shell names, ID naming, expression type-checking.
 - **Supply-chain hygiene** — unpinned `uses:`, archived actions, known vulnerable actions (online), impostor commits (online).
 - **Auto-fix support** — `seiton --fix` applies machine-safe remediations in place (including network-assisted SHA/digest pinning).
-- **Multiple output formats** — `text` (default locally), `github-actions` (default on GitHub Actions: job summary Markdown + rich stdout), `json`, `sarif` (GitHub Advanced Security).
+- **Multiple output formats** — `text` (default locally), `github-actions` (default on GitHub Actions: job summary Markdown + rich stdout), `json`, `sarif` (GitHub Advanced Security), plus `flow-json` / `flow-mermaid` for workflow structure (same contract as the Playground Flow tab).
 - **Config file** — optional `.github/seiton.yaml` for rule tuning, exclusions, and network options.
 - **Inline suppression** — `# seiton: disable-next-line <rule-id>` directives inside workflow files.
 - **NativeAOT binary** — single-file executable; no .NET runtime required at deployment.
@@ -181,6 +183,8 @@ seiton --fix --enable-pin-network -c samples/readme/.github/seiton.yaml samples/
 
 ## Quick Start
 
+**No install required:** open the [Playground](https://guitarrapc.github.io/seiton/) in your browser to lint workflow YAML and explore the interactive Flow tab (WebAssembly — your YAML is not uploaded for analysis).
+
 Install Seiton using your preferred method. See [Installation](docs/installation.md) for prebuilt binaries, Docker, and build-from-source details. If you prefer a direct download instead of a package manager, use a release archive from the [GitHub Releases page](https://github.com/guitarrapc/seiton/releases).
 
 ```sh
@@ -204,6 +208,10 @@ seiton .github/workflows/ci.yml action.yml
 
 # See all issues as JSON
 seiton --format json
+
+# Export workflow structure (jobs, needs, steps) as JSON or Mermaid
+seiton check --format flow-json .github/workflows/ci.yml
+seiton check --format flow-mermaid .github/workflows/ci.yml
 
 # Apply auto-fixes
 seiton --fix

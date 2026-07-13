@@ -1,6 +1,6 @@
 # Usage
 
-This page describes how to use `seiton` locally and in CI/CD.
+This page describes how to use `seiton` locally and in CI/CD. To try Seiton without installing, use the [Playground](#playground-browser) (browser lint + interactive Flow tab).
 
 ## Help
 
@@ -375,6 +375,15 @@ When `GITHUB_ACTIONS` is set and you do not pass an explicit `--format` (or `SEI
 ---
 
 ## Output Formats
+
+Seiton has two output families:
+
+| Family | Formats | Purpose |
+|---|---|---|
+| **Diagnostics** | `text`, `github-actions`, `json`, `sarif` | Lint findings (default workflow). |
+| **Flow** | `flow-json`, `flow-mermaid` | Parsed workflow structure — jobs, `needs` edges, steps, matrix variants — for visualization and tooling. |
+
+Flow formats are **`check`-only**: they skip lint rules, always exit `0` on success, and are rejected by `--fix`. The `flow-json` contract is shared with the [Playground](#playground-browser) Flow tab; `flow-mermaid` renders the same structure as a Mermaid diagram for GitHub Markdown.
 
 ### GitHub Actions (`github-actions`)
 
@@ -784,6 +793,8 @@ jobs:
 ## Playground (browser)
 
 The [seiton playground](https://guitarrapc.github.io/seiton/) runs linting in your browser via WebAssembly. Your workflow YAML is not uploaded to a server for analysis.
+
+Good for a first try without installing the CLI: paste YAML, review diagnostics, then open the **Flow** tab to explore the job DAG and intra-job step flow (background steps, `parallel` boundaries, matrix variants). That view uses the same [`flow-json`](#flow-json-flow-json) contract as `seiton check --format flow-json`. To paste a Mermaid diagram into a PR or doc, use [`flow-mermaid`](#flow-mermaid-flow-mermaid) from the CLI.
 
 ### Sharing a link (Share button)
 
