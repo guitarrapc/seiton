@@ -8,8 +8,24 @@
 **Seiton** is a security-focused linter & fixer for [GitHub Actions](https://github.com/features/actions) workflow files and action metadata files.
 It catches security issues, policy violations, and mistakes before they reach production — then optionally fixes them. Try it out in the [playground](https://guitarrapc.github.io/seiton/).
 
-<img src="https://raw.githubusercontent.com/guitarrapc/seiton/main/assets/playground2.png" alt="Seiton playground result" width="300">
-<img src="https://raw.githubusercontent.com/guitarrapc/seiton/main/assets/playground.png" alt="Seiton playground flow" width="300">
+<table align="center">
+  <tr>
+    <td align="center" width="50%">
+      <a href="https://guitarrapc.github.io/seiton/">
+        <img src="https://raw.githubusercontent.com/guitarrapc/seiton/main/assets/playground2.png" alt="Seiton playground — lint results" width="420" />
+      </a>
+      <br />
+      <sub><b>Result</b> — diagnostics &amp; auto-fix</sub>
+    </td>
+    <td align="center" width="50%">
+      <a href="https://guitarrapc.github.io/seiton/">
+        <img src="https://raw.githubusercontent.com/guitarrapc/seiton/main/assets/playground.png" alt="Seiton playground — flow tab" width="420" />
+      </a>
+      <br />
+      <sub><b>Flow</b> — job DAG &amp; step visualization</sub>
+    </td>
+  </tr>
+</table>
 
 Features:
 
@@ -278,4 +294,3 @@ dotnet ./sandbox/scripts/bump_version.cs major   # e.g. 0.1.0 → 1.0.0
 ## License
 
 Seiton is distributed under the [MIT license](./LICENSE.md).
-Using launch settings from src\Seiton\Properties\launchSettings.json...
