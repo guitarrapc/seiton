@@ -46,7 +46,9 @@ const LOD2_THRESHOLD = 1.05;
  * @param {object|null} workflow  one entry of flow-json `workflows`
  * @param {{ onSelect?: (info: {type: string, data: object, diagnostics?: object[]}) => void,
  *           diagnostics?: object[],
- *           onZoomReady?: (controller: {zoomIn: () => void, zoomOut: () => void, reset: () => void}) => void }} [callbacks]
+ *           onZoomReady?: (controller: {
+ *             zoomIn: () => void, zoomOut: () => void, reset: () => void, dispose: () => void
+ *           }) => void }} [callbacks]
  * @returns {boolean}
  */
 export function renderFlowGraph(container, workflow, { onSelect, diagnostics, onZoomReady } = {}) {
@@ -103,11 +105,30 @@ export function renderFlowGraph(container, workflow, { onSelect, diagnostics, on
       applyLod(svg, ev.transform.k);
     });
   svg.call(zoom);
-  fitToView(d3, svg, zoom, layout, container);
+  const fit = () => fitToView(d3, svg, zoom, viewport, container);
+  fit();
+
+  let resizeFrame = null;
+  const resizeObserver = typeof ResizeObserver === 'function'
+    ? new ResizeObserver(() => {
+      if (!globalThis.matchMedia?.('(max-width: 880px)').matches) return;
+      if (resizeFrame !== null) cancelAnimationFrame(resizeFrame);
+      resizeFrame = requestAnimationFrame(() => {
+        resizeFrame = null;
+        fit();
+      });
+    })
+    : null;
+  resizeObserver?.observe(container);
+
   onZoomReady?.({
     zoomIn: () => svg.call(zoom.scaleBy, 1.25),
     zoomOut: () => svg.call(zoom.scaleBy, 0.8),
-    reset: () => fitToView(d3, svg, zoom, layout, container),
+    reset: fit,
+    dispose: () => {
+      resizeObserver?.disconnect();
+      if (resizeFrame !== null) cancelAnimationFrame(resizeFrame);
+    },
   });
   return true;
 }
@@ -920,14 +941,11 @@ function truncate(text, max) {
   return text.length <= max ? text : `${text.slice(0, Math.max(1, max - 1))}…`;
 }
 
-/** Scales and centers the viewport so the whole graph is visible initially. */
-function fitToView(d3, svg, zoom, layout, container) {
-  let maxX = 0;
-  let maxY = 0;
-  for (const pos of layout.values()) {
-    maxX = Math.max(maxX, pos.x + pos.width);
-    maxY = Math.max(maxY, pos.y + pos.height);
-  }
+/** Scales and centers the viewport so every rendered graph element is visible. */
+function fitToView(d3, svg, zoom, viewport, container) {
+  const bounds = viewport.node()?.getBBox();
+  if (!bounds || bounds.width <= 0 || bounds.height <= 0) return;
+
   const cw = container.clientWidth || 600;
   const ch = container.clientHeight || 480;
   const pad = 20;

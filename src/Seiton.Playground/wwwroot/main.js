@@ -827,6 +827,9 @@ flowZoomResetBtn.addEventListener('click', () => flowZoomController?.reset());
 flowZoomInBtn.addEventListener('click', () => flowZoomController?.zoomIn());
 
 function setFlowZoomController(controller) {
+  if (flowZoomController !== controller) {
+    flowZoomController?.dispose();
+  }
   flowZoomController = controller;
   const disabled = controller === null;
   flowZoomOutBtn.disabled = disabled;

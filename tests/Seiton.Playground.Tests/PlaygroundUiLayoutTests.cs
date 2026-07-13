@@ -855,6 +855,13 @@ public sealed class PlaygroundUiLayoutTests
     /// <summary>Forwarded to <see cref="PlaygroundUiBrowserSession"/> for assembly teardown tests.</summary>
     internal static Task DisposePlaywrightSessionAsync() => PlaygroundUiBrowserSession.DisposeAsync();
 
+    private sealed class FlowPanSnapshot
+    {
+        public string? Transform { get; set; }
+        public double FirstToSecondX { get; set; }
+        public double FirstToSecondY { get; set; }
+    }
+
     private sealed class HookRunLintResult
     {
         public bool Ok { get; set; }
