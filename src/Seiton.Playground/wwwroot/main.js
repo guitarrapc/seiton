@@ -875,8 +875,9 @@ function renderFlow(flowDoc) {
 }
 
 /**
- * Renders the workflow context strip above the graph: trigger events,
- * schedule cron/timezone entries, and the concurrency declaration.
+ * Renders the workflow context strip above the graph: one chip per trigger event.
+ * The schedule chip and the concurrency chip open the detail panel on click,
+ * consistent with clicking a job/step node.
  * @param {object|null} workflow
  */
 function renderWorkflowInfo(workflow) {
@@ -886,32 +887,73 @@ function renderWorkflowInfo(workflow) {
     return;
   }
 
-  const parts = [];
-  if ((workflow.on ?? []).length > 0) {
-    parts.push(`on: ${workflow.on.join(', ')}`);
+  const addChip = (text, onClick) => {
+    const chip = document.createElement(onClick ? 'button' : 'span');
+    chip.className = onClick
+      ? 'flow-workflow-info__chip flow-workflow-info__chip--clickable'
+      : 'flow-workflow-info__chip';
+    chip.textContent = text;
+    if (onClick) {
+      chip.type = 'button';
+      chip.addEventListener('click', onClick);
+    }
+    flowWorkflowInfoEl.appendChild(chip);
+  };
+
+  const schedules = workflow.schedules ?? [];
+  for (const eventName of workflow.on ?? []) {
+    if (eventName === 'schedule' && schedules.length > 0) {
+      addChip(`on: schedule (${schedules.length})`, () =>
+        showFlowContextDetail(
+          'on: schedule',
+          schedules.map((s, i) => [
+            `cron ${i + 1}`,
+            `${s.cron}${s.timezone ? ` (${s.timezone})` : ' (UTC)'}`,
+          ]),
+        ));
+    } else {
+      addChip(`on: ${eventName}`, null);
+    }
   }
-  for (const schedule of workflow.schedules ?? []) {
-    parts.push(`cron: ${schedule.cron}${schedule.timezone ? ` (${schedule.timezone})` : ' (UTC)'}`);
-  }
+
   const concurrency = workflow.concurrency;
   if (concurrency) {
-    let text = `concurrency: ${concurrency.group ?? concurrency.queue ?? '(declared)'}`;
-    if (concurrency.cancelInProgress) text += ' · cancel-in-progress';
-    parts.push(text);
+    addChip(`concurrency${concurrency.cancelInProgress ? ' ⛔' : ''}`, () =>
+      showFlowContextDetail('concurrency', [
+        ['group', concurrency.group],
+        ['cancel-in-progress', concurrency.cancelInProgress ? 'true' : 'false'],
+        ['queue', concurrency.queue],
+      ]));
   }
 
-  if (parts.length === 0) {
-    flowWorkflowInfoEl.hidden = true;
-    return;
-  }
+  flowWorkflowInfoEl.hidden = flowWorkflowInfoEl.childElementCount === 0;
+}
 
-  for (const part of parts) {
-    const chip = document.createElement('span');
-    chip.className = 'flow-workflow-info__chip';
-    chip.textContent = part;
-    flowWorkflowInfoEl.appendChild(chip);
+/**
+ * Shows workflow-context details (schedule crons, concurrency) in the detail panel.
+ * @param {string} titleText
+ * @param {Array<[string, string | null | undefined]>} entries
+ */
+function showFlowContextDetail(titleText, entries) {
+  clearEditorFlowHighlight();
+  flowDetailEl.replaceChildren();
+  const title = document.createElement('div');
+  title.className = 'flow-detail__title';
+  title.textContent = titleText;
+  const dl = document.createElement('dl');
+  dl.className = 'flow-detail__list';
+  for (const [label, value] of entries) {
+    if (value === null || value === undefined || value === '') {
+      continue;
+    }
+    const dt = document.createElement('dt');
+    dt.textContent = label;
+    const dd = document.createElement('dd');
+    dd.textContent = value;
+    dl.append(dt, dd);
   }
-  flowWorkflowInfoEl.hidden = false;
+  flowDetailEl.append(title, dl);
+  flowDetailEl.hidden = false;
 }
 
 /** Shows job/step details for a clicked graph node and highlights its editor lines. */

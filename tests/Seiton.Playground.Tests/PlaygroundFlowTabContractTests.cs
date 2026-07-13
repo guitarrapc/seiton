@@ -147,11 +147,13 @@ public sealed class PlaygroundFlowTabContractTests
     public async Task MainJs_RendersWorkflowContextStrip()
     {
         var js = await ReadWwwrootFileAsync("main.js");
-        // Trigger events, schedule cron/timezone, and concurrency shown above the graph.
+        // One chip per trigger event; schedule and concurrency chips open the detail panel.
         await Assert.That(js).Contains("flow-workflow-info");
         await Assert.That(js).Contains("schedules");
         await Assert.That(js).Contains("concurrency");
         await Assert.That(js).Contains("cancel-in-progress");
+        await Assert.That(js).Contains("flow-workflow-info__chip--clickable");
+        await Assert.That(js).Contains("showFlowContextDetail");
     }
 
     [Test]
@@ -159,6 +161,7 @@ public sealed class PlaygroundFlowTabContractTests
     {
         var css = await ReadWwwrootFileAsync("style.css");
         await Assert.That(css).Contains(".flow-workflow-info");
+        await Assert.That(css).Contains(".flow-workflow-info__chip--clickable");
     }
 
     [Test]

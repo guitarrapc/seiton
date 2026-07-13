@@ -325,7 +325,7 @@ flow collector は `check --format flow-*` / `GetFlowJson` 要求時のみ動く
 
 6. **表示調整**: permissions は 2 scope でも truncate されるため job ノードの info 行から外し詳細パネル専用に。step 詳細に `working-directory`(run)と `with` 入力(uses)を追加(DTO/flow-json に `workingDirectory` / `with`)。background の注記は step graph の join 追跡(`awaited` / `cancelled` / 未 join)から実際の挙動を反映 — 固定文言「later steps do not wait」は wait/wait-all が後続にある場合は嘘になるため。
 
-7. **workflow コンテキスト + backgroundOutcome の契約化**: flow-json に `schedules`(cron + seiton `timezone` 拡張)と `concurrency`(group / cancelInProgress / seiton `queue` 拡張)を追加し、UI はグラフ上部のチップストリップ(`#flow-workflow-info`)で「何のイベント・スケジュール・concurrency で実行されるか」を表示。また background の join 状態は JS 側導出をやめ、`WorkflowFlowCollector` が計算する `backgroundOutcome`(awaited / cancelled / unawaited)として契約に載せた — Core が唯一の解釈者であるべきで、JS 導出は CLI 消費者と解釈が分岐するリスクがあった。
+7. **workflow コンテキスト + backgroundOutcome の契約化**: flow-json に `schedules`(cron + seiton `timezone` 拡張)と `concurrency`(group / cancelInProgress / seiton `queue` 拡張)を追加し、UI はグラフ上部のチップストリップ(`#flow-workflow-info`)で「何のイベント・スケジュール・concurrency で実行されるか」を表示。フィードバックを受けて cron 全文をストリップに並べる案から「イベントごとに 1 チップ、schedule / concurrency チップはクリックで詳細パネルに展開」へ変更 — ノードクリック→詳細の操作体系と一貫し、cron が複数でもストリップが伸びない。また background の join 状態は JS 側導出をやめ、`WorkflowFlowCollector` が計算する `backgroundOutcome`(awaited / cancelled / unawaited)として契約に載せた — Core が唯一の解釈者であるべきで、JS 導出は CLI 消費者と解釈が分岐するリスクがあった。
 
 ## 現時点の結論
 

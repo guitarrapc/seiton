@@ -1678,3 +1678,15 @@ footer a {
   color: var(--text);
   white-space: nowrap;
 }
+
+.flow-workflow-info__chip--clickable {
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.78rem;
+  appearance: none;
+}
+
+.flow-workflow-info__chip--clickable:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
