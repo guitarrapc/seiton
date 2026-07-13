@@ -472,11 +472,30 @@ public static class WorkflowFlowCollector
             TimeoutMinutes = CollectTimeout(step.TimeoutMinutes),
             ContinueOnError = step.ContinueOnError.HasValue && step.ContinueOnError.Value,
             Run = kind == FlowStepKind.Run ? NullIfEmpty(exec.AsRun().Run) : null,
+            WorkingDirectory = kind == FlowStepKind.Run ? NullIfEmpty(exec.AsRun().WorkingDirectory) : null,
             Uses = kind == FlowStepKind.Uses ? NullIfEmpty(exec.AsAction().Uses) : null,
+            With = kind == FlowStepKind.Uses ? CollectWith(exec.AsAction().Inputs) : null,
             WaitTargets = kind == FlowStepKind.Wait ? DecodeList(exec.AsWait().Targets) : [],
             CancelTarget = kind == FlowStepKind.Cancel ? NullIfEmpty(exec.AsCancel().Target) : null,
             Steps = kind == FlowStepKind.Parallel ? CollectSteps(exec.AsParallel().Steps) : [],
         };
+    }
+
+    private static KeyValuePair<string, string>[]? CollectWith(ActionInputRefMap inputs)
+    {
+        if (inputs.Count == 0)
+        {
+            return null;
+        }
+
+        var pairs = new KeyValuePair<string, string>[inputs.Count];
+        var i = 0;
+        foreach (var (key, value) in inputs)
+        {
+            pairs[i++] = new(key.Decode(), value.Decode());
+        }
+
+        return pairs;
     }
 
     private static string[] DecodeList(StringRefList list)

@@ -114,11 +114,22 @@ public sealed class PlaygroundFlowTabContractTests
     public async Task FlowGraphModule_ShowsJobRuntimeInfoLine()
     {
         var js = await ReadWwwrootFileAsync("flow-graph.js");
-        // Second job info line (timeout / permissions / environment), visible when zoomed in.
+        // Second job info line (timeout / environment), visible when zoomed in.
+        // Permissions are detail-panel only: they truncate too easily on the node.
         await Assert.That(js).Contains("flow-job__info");
         await Assert.That(js).Contains("timeoutMinutes");
-        await Assert.That(js).Contains("permissions");
         await Assert.That(js).Contains("environment");
+        await Assert.That(js.Contains("permissions", StringComparison.Ordinal)).IsFalse();
+    }
+
+    [Test]
+    public async Task FlowGraphModule_TracksBackgroundJoinStatus()
+    {
+        var js = await ReadWwwrootFileAsync("flow-graph.js");
+        // Background steps know whether a later wait/wait-all joins them or a cancel cuts them.
+        await Assert.That(js).Contains("bgStatus");
+        await Assert.That(js).Contains("'awaited'");
+        await Assert.That(js).Contains("'cancelled'");
     }
 
     [Test]
@@ -128,6 +139,10 @@ public sealed class PlaygroundFlowTabContractTests
         await Assert.That(js).Contains("timeout-minutes");
         await Assert.That(js).Contains("continue-on-error");
         await Assert.That(js).Contains("'permissions'");
+        await Assert.That(js).Contains("working-directory");
+        await Assert.That(js).Contains("'with'");
+        // Background note reflects the actual join status instead of a fixed claim.
+        await Assert.That(js).Contains("bgStatus");
     }
 
     [Test]

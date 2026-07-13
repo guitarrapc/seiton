@@ -256,6 +256,40 @@ public sealed class WorkflowFlowCollectorTests
     }
 
     [Test]
+    public async Task Collect_StepDetails_CaptureWorkingDirectoryAndWithInputs()
+    {
+        using var result = Parse("""
+            on: push
+            jobs:
+              build:
+                runs-on: ubuntu-latest
+                steps:
+                  - run: npm run build
+                    working-directory: src/app
+                  - uses: actions/setup-node@v4
+                    with:
+                      node-version: '20'
+                      cache: npm
+                  - run: echo plain
+            """);
+
+        var flow = WorkflowFlowCollector.Collect(result, "wf.yml");
+
+        var steps = flow!.Jobs[0].Steps;
+        await Assert.That(steps[0].WorkingDirectory).IsEqualTo("src/app");
+
+        await Assert.That(steps[1].With).IsNotNull();
+        await Assert.That(steps[1].With!.SequenceEqual(
+        [
+            new KeyValuePair<string, string>("node-version", "20"),
+            new KeyValuePair<string, string>("cache", "npm"),
+        ])).IsTrue();
+
+        await Assert.That(steps[2].WorkingDirectory).IsNull();
+        await Assert.That(steps[2].With).IsNull();
+    }
+
+    [Test]
     public async Task Collect_BackgroundStep_SetsBackgroundFlag()
     {
         using var result = Parse("""

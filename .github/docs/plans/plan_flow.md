@@ -323,6 +323,8 @@ flow collector は `check --format flow-*` / `GetFlowJson` 要求時のみ動く
 
 学び: step ラベルへのサフィックス付加は truncate の**前**に行うとマーカーごと切り落とされる。基底ラベルを `max - marks.length` に切り詰めてからマーカーを付加する。
 
+6. **表示調整**: permissions は 2 scope でも truncate されるため job ノードの info 行から外し詳細パネル専用に。step 詳細に `working-directory`(run)と `with` 入力(uses)を追加(DTO/flow-json に `workingDirectory` / `with`)。background の注記は step graph の join 追跡(`awaited` / `cancelled` / 未 join)から実際の挙動を反映 — 固定文言「later steps do not wait」は wait/wait-all が後続にある場合は嘘になるため。
+
 ## 現時点の結論
 
 flow 可視化は、専用コマンドや UI 先行の個別実装ではなく、まず `check --format flow-json` という共通契約を作り、それを Playground が消費する形で進めるのが最も整合的である。

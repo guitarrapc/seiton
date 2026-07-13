@@ -125,8 +125,14 @@ public sealed class FlowStep
     /// <summary>The script body for <see cref="FlowStepKind.Run"/> steps.</summary>
     public string? Run { get; init; }
 
+    /// <summary>The <c>working-directory</c> of a <see cref="FlowStepKind.Run"/> step, if declared.</summary>
+    public string? WorkingDirectory { get; init; }
+
     /// <summary>The action reference for <see cref="FlowStepKind.Uses"/> steps.</summary>
     public string? Uses { get; init; }
+
+    /// <summary>The <c>with:</c> inputs of a <see cref="FlowStepKind.Uses"/> step, in document order. <c>null</c> when absent.</summary>
+    public KeyValuePair<string, string>[]? With { get; init; }
 
     /// <summary>Step ids awaited by a <see cref="FlowStepKind.Wait"/> step.</summary>
     public string[] WaitTargets { get; init; } = [];

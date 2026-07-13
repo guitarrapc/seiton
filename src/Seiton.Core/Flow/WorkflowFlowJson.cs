@@ -221,9 +221,25 @@ public static class WorkflowFlowJson
             writer.WriteString("run"u8, step.Run);
         }
 
+        if (step.WorkingDirectory is not null)
+        {
+            writer.WriteString("workingDirectory"u8, step.WorkingDirectory);
+        }
+
         if (step.Uses is not null)
         {
             writer.WriteString("uses"u8, step.Uses);
+        }
+
+        if (step.With is not null)
+        {
+            writer.WriteStartObject("with"u8);
+            foreach (var pair in step.With)
+            {
+                writer.WriteString(pair.Key, pair.Value);
+            }
+
+            writer.WriteEndObject();
         }
 
         if (step.Kind == FlowStepKind.Wait)

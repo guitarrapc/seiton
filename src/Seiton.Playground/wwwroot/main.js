@@ -923,14 +923,32 @@ function showFlowDetail(info) {
     add('id', step.id);
     add('if', step.if);
     if (step.background) {
-      add('background', 'true (later steps do not wait for this step)');
+      // info.bgStatus comes from the step graph: a later wait/wait-all may join
+      // this step, or a cancel may cut it — the note must reflect what really happens.
+      add(
+        'background',
+        info.bgStatus === 'awaited'
+          ? 'true (a later wait / wait-all waits for this step)'
+          : info.bgStatus === 'cancelled'
+            ? 'true (cancelled by a later cancel step)'
+            : 'true (later steps do not wait for this step)',
+      );
     }
     add('timeout-minutes', step.timeoutMinutes);
     if (step.continueOnError) {
       add('continue-on-error', 'true');
     }
     add('run', step.run);
+    add('working-directory', step.workingDirectory);
     add('uses', step.uses);
+    if (step.with) {
+      add(
+        'with',
+        Object.entries(step.with)
+          .map(([key, value]) => `${key}: ${value}`)
+          .join('\n'),
+      );
+    }
     add('wait targets', step.targets);
     add('cancel target', step.target);
   }

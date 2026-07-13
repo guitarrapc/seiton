@@ -772,7 +772,7 @@ Behavior common to both formats:
 - `if` conditions are carried as raw expressions.
 - `background: true` steps carry a `background` flag so intra-job concurrency (background fork, `wait`/`wait-all` join, `cancel`) can be reconstructed by consumers.
 - Jobs and steps carry 1-based source line ranges (`line` / `endLine`, omitted when unknown) so consumers can map lint diagnostics onto flow nodes. Ranges of adjacent blocks may overlap on boundary lines; consumers should resolve overlaps by preferring the node with the greatest start line.
-- Runtime settings are carried when declared: job `timeoutMinutes` / `permissions` (`["read-all"]` scalar form or `"scope: level"` entries; empty array = `{}` deny-all; omitted when undeclared) / `environment`, and step `timeoutMinutes` / `continueOnError`. Dynamic `${{ }}` timeout expressions are omitted.
+- Runtime settings are carried when declared: job `timeoutMinutes` / `permissions` (`["read-all"]` scalar form or `"scope: level"` entries; empty array = `{}` deny-all; omitted when undeclared) / `environment`, and step `timeoutMinutes` / `continueOnError` / `workingDirectory` (run steps) / `with` (uses steps, key-value object in document order). Dynamic `${{ }}` timeout expressions are omitted.
 
 #### 6.6.1 `flow-json`
 
@@ -786,7 +786,8 @@ Single JSON document to stdout:
                    "combinations": [ { "<key>": "<value>", ... } ] },
     "steps": [ { "kind": "run|uses|parallel|wait|wait-all|cancel", "line"?, "endLine"?, "id"?, "name"?, "if"?,
                  "background"?, "timeoutMinutes"?, "continueOnError"?,
-                 "run"?, "uses"?, "targets"?, "target"?, "steps"? } ] } ] } ] }
+                 "run"?, "workingDirectory"?, "uses"?, "with"?: {},
+                 "targets"?, "target"?, "steps"? } ] } ] } ] }
 ```
 
 Absent optional fields are omitted. `steps` on a step appears only for `kind: "parallel"` (nested boundary children). This is the same contract served to the Playground flow tab by `PlaygroundFlowRunner`.

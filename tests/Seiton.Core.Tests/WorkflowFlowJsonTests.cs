@@ -224,6 +224,33 @@ public sealed class WorkflowFlowJsonTests
     }
 
     [Test]
+    public async Task Serialize_StepDetails_EmitWorkingDirectoryAndWith()
+    {
+        var flow = CollectFlow("""
+            on: push
+            jobs:
+              build:
+                runs-on: ubuntu-latest
+                steps:
+                  - run: npm run build
+                    working-directory: src/app
+                  - uses: actions/setup-node@v4
+                    with:
+                      node-version: '20'
+                  - run: echo plain
+            """);
+
+        var json = WorkflowFlowJson.Serialize(flow);
+        using var doc = JsonDocument.Parse(json);
+        var steps = doc.RootElement.GetProperty("workflows")[0].GetProperty("jobs")[0].GetProperty("steps");
+
+        await Assert.That(steps[0].GetProperty("workingDirectory").GetString()).IsEqualTo("src/app");
+        await Assert.That(steps[1].GetProperty("with").GetProperty("node-version").GetString()).IsEqualTo("20");
+        await Assert.That(steps[2].TryGetProperty("workingDirectory", out _)).IsFalse();
+        await Assert.That(steps[2].TryGetProperty("with", out _)).IsFalse();
+    }
+
+    [Test]
     public async Task Serialize_MultipleWorkflows_WrappedInSingleDocument()
     {
         var flowA = CollectFlow("""
