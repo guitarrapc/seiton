@@ -8,8 +8,8 @@
 **Seiton** is a security-focused linter & fixer for [GitHub Actions](https://github.com/features/actions) workflow files and action metadata files.
 It catches security issues, policy violations, and mistakes before they reach production — then optionally fixes them. Try it out in the [playground](https://guitarrapc.github.io/seiton/).
 
-<img src="https://raw.githubusercontent.com/guitarrapc/seiton/main/assets/playground2.png" alt="Seiton playground" width="300">
-<img src="https://raw.githubusercontent.com/guitarrapc/seiton/main/assets/playground.png" alt="Seiton playground" width="300">
+<img src="https://raw.githubusercontent.com/guitarrapc/seiton/main/assets/playground2.png" alt="Seiton playground result" width="300">
+<img src="https://raw.githubusercontent.com/guitarrapc/seiton/main/assets/playground.png" alt="Seiton playground flow" width="300">
 
 Features:
 
