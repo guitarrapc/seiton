@@ -512,6 +512,12 @@ seiton check --format flow-json .github/workflows/ci.yml
 
 The same flow structure as `flow-json`, rendered as a [Mermaid](https://mermaid.js.org/) `flowchart` for pasting into GitHub Markdown (PRs, issues, docs). Jobs become subgraphs with chained step nodes, `needs` edges connect jobs, `parallel` boundaries become nested subgraphs with unchained (simultaneous) children, and reusable-workflow jobs are subroutine nodes. Like `flow-json`, it is check-only and `fix` rejects it.
 
+The output is always **exactly one diagram**, so piping it into a single ```` ```mermaid ```` code block just works. When multiple workflow files are checked, each workflow becomes a wrapper subgraph (`w0`, `w1`, …) labeled with its file name, and node ids are prefixed accordingly — a second `flowchart` keyword inside one code block would be a Mermaid parse error.
+
+```sh
+seiton check --format flow-mermaid > flow.md   # all workflows, one diagram
+```
+
 ```sh
 seiton check --format flow-mermaid .github/workflows/ci.yml
 ```

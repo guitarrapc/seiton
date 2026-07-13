@@ -12,28 +12,27 @@ public static class WorkflowFlowMermaid
 {
     private const int MaxLabelLength = 64;
 
-    /// <summary>Serializes workflows to Mermaid text; multiple workflows emit blank-line-separated diagrams.</summary>
+    /// <summary>
+    /// Serializes workflows to Mermaid text. The output is always exactly one
+    /// <c>flowchart</c> diagram — a second <c>flowchart</c> keyword inside one Mermaid
+    /// code block is a parse error — so multiple workflows become wrapper subgraphs
+    /// (<c>w0</c>, <c>w1</c>, …) whose node ids are prefixed to avoid collisions.
+    /// </summary>
     public static string Serialize(ReadOnlySpan<WorkflowFlow> workflows)
     {
         var sb = new StringBuilder(1024);
-        var first = true;
-        foreach (var workflow in workflows)
+        sb.Append("flowchart LR\n");
+        var wrap = workflows.Length > 1;
+        for (var w = 0; w < workflows.Length; w++)
         {
-            if (!first)
-            {
-                sb.Append('\n');
-            }
-
-            first = false;
-            WriteWorkflow(sb, workflow);
+            WriteWorkflow(sb, workflows[w], wrap ? $"w{w}" : string.Empty, wrap);
         }
 
         return sb.ToString();
     }
 
-    private static void WriteWorkflow(StringBuilder sb, WorkflowFlow workflow)
+    private static void WriteWorkflow(StringBuilder sb, WorkflowFlow workflow, string prefix, bool wrap)
     {
-        sb.Append("flowchart LR\n");
         sb.Append("  %% ").Append(workflow.File);
         if (workflow.Name is not null)
         {
@@ -41,6 +40,13 @@ public static class WorkflowFlowMermaid
         }
 
         sb.Append('\n');
+
+        if (wrap)
+        {
+            var label = workflow.Name is null ? workflow.File : $"{workflow.File} — {workflow.Name}";
+            sb.Append("  subgraph ").Append(prefix).Append("[\"").Append(Escape(label)).Append("\"]\n");
+            sb.Append("    direction LR\n");
+        }
 
         var jobIndexById = new Dictionary<string, int>(workflow.Jobs.Length, StringComparer.OrdinalIgnoreCase);
         for (var i = 0; i < workflow.Jobs.Length; i++)
@@ -51,18 +57,19 @@ public static class WorkflowFlowMermaid
         for (var i = 0; i < workflow.Jobs.Length; i++)
         {
             var job = workflow.Jobs[i];
+            var jobNodeId = $"{prefix}j{i}";
             if (job.Kind == FlowJobKind.Reusable)
             {
-                sb.Append("  j").Append(i).Append("[[\"").Append(Escape($"{job.Id} — uses: {job.Uses}")).Append("\"]]\n");
+                sb.Append("  ").Append(jobNodeId).Append("[[\"").Append(Escape($"{job.Id} — uses: {job.Uses}")).Append("\"]]\n");
                 continue;
             }
 
-            sb.Append("  subgraph j").Append(i).Append("[\"").Append(Escape(JobLabel(job))).Append("\"]\n");
+            sb.Append("  subgraph ").Append(jobNodeId).Append("[\"").Append(Escape(JobLabel(job))).Append("\"]\n");
             sb.Append("    direction TB\n");
 
             var counter = 0;
             var anchors = new List<string>(job.Steps.Length);
-            WriteSteps(sb, job.Steps, i, ref counter, anchors, "    ");
+            WriteSteps(sb, job.Steps, jobNodeId, ref counter, anchors, "    ");
             for (var a = 1; a < anchors.Count; a++)
             {
                 sb.Append("    ").Append(anchors[a - 1]).Append(" --> ").Append(anchors[a]).Append('\n');
@@ -77,29 +84,34 @@ public static class WorkflowFlowMermaid
             {
                 if (jobIndexById.TryGetValue(need, out var dep))
                 {
-                    sb.Append("  j").Append(dep).Append(" --> j").Append(i).Append('\n');
+                    sb.Append("  ").Append(prefix).Append('j').Append(dep).Append(" --> ").Append(prefix).Append('j').Append(i).Append('\n');
                 }
             }
         }
+
+        if (wrap)
+        {
+            sb.Append("  end\n");
+        }
     }
 
-    private static void WriteSteps(StringBuilder sb, FlowStep[] steps, int jobIndex, ref int counter, List<string>? anchors, string indent)
+    private static void WriteSteps(StringBuilder sb, FlowStep[] steps, string jobNodeId, ref int counter, List<string>? anchors, string indent)
     {
         foreach (var step in steps)
         {
             if (step.Kind == FlowStepKind.Parallel)
             {
-                var groupId = $"j{jobIndex}g{counter++}";
+                var groupId = $"{jobNodeId}g{counter++}";
                 anchors?.Add(groupId);
                 sb.Append(indent).Append("subgraph ").Append(groupId).Append("[\"parallel\"]\n");
                 sb.Append(indent).Append("  direction TB\n");
                 // Children run simultaneously, so they are intentionally not chained.
-                WriteSteps(sb, step.Steps, jobIndex, ref counter, anchors: null, indent + "  ");
+                WriteSteps(sb, step.Steps, jobNodeId, ref counter, anchors: null, indent + "  ");
                 sb.Append(indent).Append("end\n");
                 continue;
             }
 
-            var nodeId = $"j{jobIndex}n{counter++}";
+            var nodeId = $"{jobNodeId}n{counter++}";
             anchors?.Add(nodeId);
             sb.Append(indent).Append(nodeId).Append("[\"").Append(Escape(StepLabel(step))).Append("\"]\n");
         }

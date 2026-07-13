@@ -798,7 +798,9 @@ Absent optional fields are omitted. `steps` on a step appears only for `kind: "p
 
 #### 6.6.2 `flow-mermaid`
 
-Mermaid `flowchart LR` text to stdout: each job is a subgraph with chained step nodes, `needs` edges connect job subgraphs, `parallel` boundaries are nested subgraphs whose children are intentionally unchained (simultaneous), and reusable jobs are subroutine nodes (`[[...]]`). Labels are single-line, quote-sanitized, and truncated. Multiple input files emit blank-line-separated diagrams.
+Mermaid `flowchart LR` text to stdout: each job is a subgraph with chained step nodes, `needs` edges connect job subgraphs, `parallel` boundaries are nested subgraphs whose children are intentionally unchained (simultaneous), and reusable jobs are subroutine nodes (`[[...]]`). Labels are single-line, quote-sanitized, and truncated.
+
+The output is always **exactly one `flowchart` diagram** so it can be wrapped in a single Mermaid code block. Multiple input files become per-workflow wrapper subgraphs (`w0`, `w1`, … labeled with the file name) with prefixed node ids (`w0j0`, `w0j0n0`, …); a single input keeps the unprefixed shape (`j0`, `j0n0`, …). **WHY**: one Mermaid code block holds one diagram — a second `flowchart` keyword is a parse error, which is exactly what blank-line-separated diagrams caused when piped to a Markdown file.
 
 ---
 

@@ -111,6 +111,80 @@ public sealed class WorkflowFlowMermaidTests
     }
 
     [Test]
+    public async Task Serialize_MultipleWorkflows_MergesIntoSingleFlowchart()
+    {
+        var flowA = CollectFlow("""
+            on: push
+            jobs:
+              build:
+                runs-on: ubuntu-latest
+                steps:
+                  - run: echo a
+              deploy:
+                runs-on: ubuntu-latest
+                needs: build
+                steps:
+                  - run: echo deploy
+            """, "a.yml");
+        var flowB = CollectFlow("""
+            on: push
+            jobs:
+              build:
+                runs-on: ubuntu-latest
+                steps:
+                  - run: echo b
+            """, "b.yml");
+
+        var mermaid = WorkflowFlowMermaid.Serialize([flowA, flowB]);
+
+        // One mermaid code block can hold exactly one diagram: a second `flowchart`
+        // keyword is a parse error, so multiple workflows merge into one flowchart.
+        await Assert.That(CountOccurrences(mermaid, "flowchart LR")).IsEqualTo(1);
+
+        // Each workflow becomes a wrapper subgraph, and node ids are prefixed so
+        // jobs with the same name in different files cannot collide.
+        await Assert.That(mermaid).Contains("subgraph w0[\"a.yml\"]");
+        await Assert.That(mermaid).Contains("subgraph w1[\"b.yml\"]");
+        await Assert.That(mermaid).Contains("subgraph w0j0[\"build\"]");
+        await Assert.That(mermaid).Contains("subgraph w1j0[\"build\"]");
+        await Assert.That(mermaid).Contains("w0j0n0[\"run: echo a\"]");
+        await Assert.That(mermaid).Contains("w1j0n0[\"run: echo b\"]");
+        await Assert.That(mermaid).Contains("w0j0 --> w0j1");
+    }
+
+    [Test]
+    public async Task Serialize_SingleWorkflow_KeepsUnprefixedShape()
+    {
+        var flow = CollectFlow("""
+            on: push
+            jobs:
+              build:
+                runs-on: ubuntu-latest
+                steps:
+                  - run: echo a
+            """);
+
+        var mermaid = WorkflowFlowMermaid.Serialize([flow]);
+
+        // Single-workflow output has no wrapper subgraph and no id prefix.
+        await Assert.That(mermaid).Contains("subgraph j0[\"build\"]");
+        await Assert.That(mermaid.Contains("subgraph w0", StringComparison.Ordinal)).IsFalse();
+    }
+
+    private static int CountOccurrences(string text, string needle)
+    {
+        var count = 0;
+        var index = 0;
+        while ((index = text.IndexOf(needle, index, StringComparison.Ordinal)) >= 0)
+        {
+            count++;
+            index += needle.Length;
+        }
+
+        return count;
+    }
+
+    [Test]
     public async Task Serialize_MatrixJob_AnnotatesJobLabel()
     {
         var flow = CollectFlow("""

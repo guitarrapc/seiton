@@ -327,6 +327,8 @@ flow collector は `check --format flow-*` / `GetFlowJson` 要求時のみ動く
 
 7. **workflow コンテキスト + backgroundOutcome の契約化**: flow-json に `schedules`(cron + seiton `timezone` 拡張)と `concurrency`(group / cancelInProgress / seiton `queue` 拡張)を追加し、UI はグラフ上部のチップストリップ(`#flow-workflow-info`)で「何のイベント・スケジュール・concurrency で実行されるか」を表示。フィードバックを受けて cron 全文をストリップに並べる案から「イベントごとに 1 チップ、schedule / concurrency チップはクリックで詳細パネルに展開」へ変更 — ノードクリック→詳細の操作体系と一貫し、cron が複数でもストリップが伸びない。また background の join 状態は JS 側導出をやめ、`WorkflowFlowCollector` が計算する `backgroundOutcome`(awaited / cancelled / unawaited)として契約に載せた — Core が唯一の解釈者であるべきで、JS 導出は CLI 消費者と解釈が分岐するリスクがあった。
 
+8. **flow-mermaid の複数 workflow 出力を単一ダイアグラムに統合**: 従来は blank line 区切りで `flowchart LR` ブロックを複数出力していたが、1つの mermaid コードブロックには 1 ダイアグラムしか書けず、2つ目の `flowchart` キーワードでパースエラーになる(`seiton check --format flow-mermaid > SAMPLE.md` をフェンスで囲むユースケースが壊れる)。複数 workflow は wrapper subgraph(`w0`, `w1`, … ファイル名ラベル)+ ノード ID prefix で単一 flowchart に統合。単一 workflow は従来の unprefixed 形状を維持。リポジトリ全 7 workflow の実出力を mermaid v11 実機で parse + render 検証済み。
+
 ## 現時点の結論
 
 flow 可視化は、専用コマンドや UI 先行の個別実装ではなく、まず `check --format flow-json` という共通契約を作り、それを Playground が消費する形で進めるのが最も整合的である。
