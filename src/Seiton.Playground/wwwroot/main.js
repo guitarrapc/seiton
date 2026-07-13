@@ -730,7 +730,84 @@ function selectResultsTab(tab) {
   flowPanel.hidden = !flowActive;
   if (flowActive) {
     refreshFlow();
+  } else {
+    clearEditorFlowHighlight();
   }
+}
+
+// ─── Flow node → editor line highlight ───
+
+/** 0-based start lines of every flow node in the current graph (for spill trimming). */
+let flowNodeStartLines = new Set();
+/** CodeMirror line handles currently carrying the flow highlight class. */
+let flowHighlightHandles = [];
+
+function collectFlowStartLines(workflow) {
+  const set = new Set();
+  const visitSteps = (steps) => {
+    for (const s of steps ?? []) {
+      if (s.line > 0) set.add(s.line - 1);
+      visitSteps(s.steps);
+    }
+  };
+  for (const job of workflow?.jobs ?? []) {
+    if (job.line > 0) set.add(job.line - 1);
+    visitSteps(job.steps);
+  }
+  return set;
+}
+
+/** Start lines of the node itself and its descendants (these may stay highlighted). */
+function ownFlowStartLines(node) {
+  const set = new Set();
+  const visit = (n) => {
+    if (n.line > 0) set.add(n.line - 1);
+    for (const child of n.steps ?? []) visit(child);
+  };
+  visit(node);
+  return set;
+}
+
+function clearEditorFlowHighlight() {
+  for (const handle of flowHighlightHandles) {
+    try {
+      editor.removeLineClass(handle, 'background', 'flow-hl-line');
+    } catch {
+      // line was removed by an edit — nothing to clear
+    }
+  }
+  flowHighlightHandles = [];
+}
+
+/**
+ * Highlights the source lines of a clicked flow node in the editor and scrolls to them.
+ * Parsed ranges can spill into the next sibling's first line, so trailing lines that
+ * are the start of another (non-descendant) node are trimmed off the highlight.
+ * @param {{ line?: number, endLine?: number, steps?: object[] }} node
+ */
+function highlightEditorLinesForFlowNode(node) {
+  clearEditorFlowHighlight();
+  const start = (node.line ?? 0) - 1;
+  if (start < 0 || start >= editor.lineCount()) {
+    return;
+  }
+  // A parallel step's own range covers only its header line, so extend the
+  // highlight to the deepest descendant end line.
+  let maxEndLine = node.endLine ?? node.line ?? 0;
+  const visitEnds = (n) => {
+    if ((n.endLine ?? 0) > maxEndLine) maxEndLine = n.endLine;
+    for (const child of n.steps ?? []) visitEnds(child);
+  };
+  visitEnds(node);
+  let end = Math.min(editor.lineCount() - 1, Math.max(start, maxEndLine - 1));
+  const own = ownFlowStartLines(node);
+  while (end > start && flowNodeStartLines.has(end) && !own.has(end)) {
+    end--;
+  }
+  for (let i = start; i <= end; i++) {
+    flowHighlightHandles.push(editor.addLineClass(i, 'background', 'flow-hl-line'));
+  }
+  editor.scrollIntoView({ from: { line: start, ch: 0 }, to: { line: end, ch: 0 } }, 60);
 }
 
 tabResultBtn.addEventListener('click', () => selectResultsTab('result'));
@@ -779,6 +856,7 @@ function refreshFlow(force = false) {
 function renderFlow(flowDoc) {
   hideFlowDetail();
   const workflow = flowDoc?.workflows?.[0] ?? null;
+  flowNodeStartLines = collectFlowStartLines(workflow);
   const rendered = renderFlowGraph(flowGraphEl, workflow, {
     onSelect: showFlowDetail,
     diagnostics: lastDiagnostics,
@@ -794,8 +872,9 @@ function renderFlow(flowDoc) {
   }
 }
 
-/** Shows job/step details for a clicked graph node. */
+/** Shows job/step details for a clicked graph node and highlights its editor lines. */
 function showFlowDetail(info) {
+  highlightEditorLinesForFlowNode(info.data);
   flowDetailEl.replaceChildren();
   const title = document.createElement('div');
   title.className = 'flow-detail__title';
@@ -860,6 +939,7 @@ function showFlowDetail(info) {
 }
 
 function hideFlowDetail() {
+  clearEditorFlowHighlight();
   flowDetailEl.hidden = true;
   flowDetailEl.replaceChildren();
 }

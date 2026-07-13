@@ -1640,3 +1640,9 @@ footer a {
   font-size: 12px;
   font-weight: 600;
 }
+
+/* ─── Editor line highlight for the selected flow node ─── */
+
+.flow-hl-line {
+  background: color-mix(in srgb, var(--accent) 16%, transparent);
+}

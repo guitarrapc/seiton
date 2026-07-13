@@ -315,6 +315,10 @@ flow collector は `check --format flow-*` / `GetFlowJson` 要求時のみ動く
 
 学び: パーサーの job/step Range は末尾が次の兄弟ブロックの開始行に重なることがある(build の EndLine が deploy の開始行を含み、deploy の診断が build に付いた)。「包含するノードのうち開始行が最大のもの」を選ぶことで解決。この規則は CLI spec §6.6 に契約として明記した。
 
+4. **flow ノードクリック → editor 行ハイライト**: 選択ノードの `line..endLine` に CodeMirror の line background class(`flow-hl-line`)を付け、範囲へスクロール。再選択・再描画・Result タブ復帰でクリア。
+
+学び: parallel step の Range は自身のヘッダー行のみで子 step を含まない。ハイライトでは子孫の endLine の最大値まで拡張する必要がある。また兄弟への spill 行は「他ノード(自身の子孫を除く)の開始行に一致する末尾行をトリム」で除去した。
+
 ## 現時点の結論
 
 flow 可視化は、専用コマンドや UI 先行の個別実装ではなく、まず `check --format flow-json` という共通契約を作り、それを Playground が消費する形で進めるのが最も整合的である。

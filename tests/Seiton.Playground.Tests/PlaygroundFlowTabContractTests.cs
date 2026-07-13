@@ -111,6 +111,24 @@ public sealed class PlaygroundFlowTabContractTests
     }
 
     [Test]
+    public async Task MainJs_FlowSelection_HighlightsEditorLines()
+    {
+        var js = await ReadWwwrootFileAsync("main.js");
+        // Clicking a flow node highlights and scrolls to the source lines in the editor.
+        await Assert.That(js).Contains("flow-hl-line");
+        await Assert.That(js).Contains("addLineClass");
+        await Assert.That(js).Contains("removeLineClass");
+        await Assert.That(js).Contains("scrollIntoView(");
+    }
+
+    [Test]
+    public async Task Stylesheet_DefinesEditorFlowHighlightClass()
+    {
+        var css = await ReadWwwrootFileAsync("style.css");
+        await Assert.That(css).Contains(".flow-hl-line");
+    }
+
+    [Test]
     public async Task Stylesheet_DefinesSelectionAndMarkerClasses()
     {
         var css = await ReadWwwrootFileAsync("style.css");
