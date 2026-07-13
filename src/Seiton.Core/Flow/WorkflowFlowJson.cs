@@ -85,6 +85,12 @@ public static class WorkflowFlowJson
         }
 
         writer.WriteString("kind"u8, job.Kind == FlowJobKind.Reusable ? "reusable"u8 : "job"u8);
+        if (job.Line > 0)
+        {
+            writer.WriteNumber("line"u8, job.Line);
+            writer.WriteNumber("endLine"u8, job.EndLine);
+        }
+
         if (job.If is not null)
         {
             writer.WriteString("if"u8, job.If);
@@ -153,6 +159,12 @@ public static class WorkflowFlowJson
     {
         writer.WriteStartObject();
         writer.WriteString("kind"u8, KindNameUtf8(step.Kind));
+        if (step.Line > 0)
+        {
+            writer.WriteNumber("line"u8, step.Line);
+            writer.WriteNumber("endLine"u8, step.EndLine);
+        }
+
         if (step.Id is not null)
         {
             writer.WriteString("id"u8, step.Id);

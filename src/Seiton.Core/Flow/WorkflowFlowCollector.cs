@@ -50,9 +50,12 @@ public static class WorkflowFlowCollector
     {
         var workflowCall = job.WorkflowCall;
         var isReusable = workflowCall.HasValue;
+        var range = job.Range;
 
         return new FlowJob
         {
+            Line = range.StartLine,
+            EndLine = range.EndLine,
             Id = key.Decode(),
             Name = NullIfEmpty(job.Name),
             Kind = isReusable ? FlowJobKind.Reusable : FlowJobKind.Job,
@@ -426,8 +429,12 @@ public static class WorkflowFlowCollector
             _ => FlowStepKind.Unknown,
         };
 
+        var range = step.Range;
+
         return new FlowStep
         {
+            Line = range.StartLine,
+            EndLine = range.EndLine,
             Kind = kind,
             Id = NullIfEmpty(step.Id),
             Name = NullIfEmpty(step.Name),

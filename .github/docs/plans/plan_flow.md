@@ -311,6 +311,10 @@ flow collector は `check --format flow-*` / `GetFlowJson` 要求時のみ動く
 
 学び: include-only matrix(次元行なし)では「dimension キーを持たない include entry は全 combo に適用」ルールをそのまま使うと 2 件目以降が 1 件目にマージされる。次元行が無い場合は各 entry を独立 combo として追加する分岐が必要。
 
+3. **選択ハイライト + 診断マーカー**: job/step クリックで単一選択のアクセント枠を表示。DTO/flow-json に job・step の `line`/`endLine`(1-based)を追加し、lint 診断を行番号で flow ノードにマップ — job は集約バッジ(✖N ⚠N ℹN、全 LOD で表示)、step は severity ドット + hover tooltip、詳細パネルにノード別診断一覧。
+
+学び: パーサーの job/step Range は末尾が次の兄弟ブロックの開始行に重なることがある(build の EndLine が deploy の開始行を含み、deploy の診断が build に付いた)。「包含するノードのうち開始行が最大のもの」を選ぶことで解決。この規則は CLI spec §6.6 に契約として明記した。
+
 ## 現時点の結論
 
 flow 可視化は、専用コマンドや UI 先行の個別実装ではなく、まず `check --format flow-json` という共通契約を作り、それを Playground が消費する形で進めるのが最も整合的である。

@@ -1594,3 +1594,49 @@ footer a {
 .flow-svg--lod1 .flow-step__text {
   display: none;
 }
+
+/* ─── Flow selection highlight + diagnostic markers ─── */
+
+.flow-job.flow-node--selected > .flow-job__box {
+  stroke: var(--accent);
+  stroke-width: 2;
+}
+
+.flow-step.flow-node--selected .flow-step-node,
+.flow-step.flow-node--selected .flow-parallel-boundary {
+  stroke: var(--accent);
+  stroke-width: 2;
+  stroke-dasharray: none;
+}
+
+.flow-marker circle {
+  stroke: var(--results-surface, #000);
+  stroke-width: 1.5;
+}
+
+.flow-marker--error,
+.flow-marker--error circle {
+  fill: var(--danger);
+}
+
+.flow-marker--warning,
+.flow-marker--warning circle {
+  fill: var(--warning);
+}
+
+.flow-marker--info,
+.flow-marker--info circle {
+  fill: var(--info);
+}
+
+.flow-marker__count {
+  fill: #fff;
+  font-size: 8px;
+  font-weight: 700;
+  pointer-events: none;
+}
+
+.flow-job__diagbadge {
+  font-size: 12px;
+  font-weight: 600;
+}

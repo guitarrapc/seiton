@@ -91,6 +91,36 @@ public sealed class PlaygroundFlowTabContractTests
     }
 
     [Test]
+    public async Task FlowGraphModule_SupportsSelectionHighlightAndDiagnosticMarkers()
+    {
+        var js = await ReadWwwrootFileAsync("flow-graph.js");
+        // Clicking a job/step highlights it.
+        await Assert.That(js).Contains("flow-node--selected");
+        // Lint diagnostics map to the innermost step (or the job) by source line.
+        await Assert.That(js).Contains("diagnostics");
+        await Assert.That(js).Contains("flow-marker");
+        await Assert.That(js).Contains("flow-job__diagbadge");
+    }
+
+    [Test]
+    public async Task MainJs_FlowTab_PassesDiagnosticsAndShowsThemInDetail()
+    {
+        var js = await ReadWwwrootFileAsync("main.js");
+        await Assert.That(js).Contains("lastDiagnostics");
+        await Assert.That(js).Contains("info.diagnostics");
+    }
+
+    [Test]
+    public async Task Stylesheet_DefinesSelectionAndMarkerClasses()
+    {
+        var css = await ReadWwwrootFileAsync("style.css");
+        await Assert.That(css).Contains(".flow-node--selected");
+        await Assert.That(css).Contains(".flow-marker--error");
+        await Assert.That(css).Contains(".flow-marker--warning");
+        await Assert.That(css).Contains(".flow-job__diagbadge");
+    }
+
+    [Test]
     public async Task Stylesheet_DefinesLodAndStepFlowClasses()
     {
         var css = await ReadWwwrootFileAsync("style.css");

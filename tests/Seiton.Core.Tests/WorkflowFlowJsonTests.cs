@@ -180,6 +180,12 @@ public sealed class WorkflowFlowJsonTests
         await Assert.That(steps[0].GetProperty("background").GetBoolean()).IsTrue();
         // background is omitted when false.
         await Assert.That(steps[1].TryGetProperty("background", out _)).IsFalse();
+
+        // Source line ranges for diagnostics mapping.
+        await Assert.That(job.GetProperty("line").GetInt32()).IsGreaterThan(0);
+        await Assert.That(job.GetProperty("endLine").GetInt32()).IsGreaterThanOrEqualTo(job.GetProperty("line").GetInt32());
+        await Assert.That(steps[0].GetProperty("line").GetInt32()).IsGreaterThan(0);
+        await Assert.That(steps[0].GetProperty("endLine").GetInt32()).IsGreaterThanOrEqualTo(steps[0].GetProperty("line").GetInt32());
     }
 
     [Test]

@@ -771,6 +771,7 @@ Behavior common to both formats:
 - Reusable workflow jobs (`uses:` at job level) are opaque leaves carrying their `uses` ref; the referenced workflow is not loaded.
 - `if` conditions are carried as raw expressions.
 - `background: true` steps carry a `background` flag so intra-job concurrency (background fork, `wait`/`wait-all` join, `cancel`) can be reconstructed by consumers.
+- Jobs and steps carry 1-based source line ranges (`line` / `endLine`, omitted when unknown) so consumers can map lint diagnostics onto flow nodes. Ranges of adjacent blocks may overlap on boundary lines; consumers should resolve overlaps by preferring the node with the greatest start line.
 
 #### 6.6.1 `flow-json`
 
@@ -778,10 +779,10 @@ Single JSON document to stdout:
 
 ```json
 { "version": 1, "workflows": [ { "file", "name"?, "on": [], "jobs": [
-  { "id", "name"?, "kind": "job|reusable", "if"?, "needs": [], "runsOn": [], "uses"?,
+  { "id", "name"?, "kind": "job|reusable", "line"?, "endLine"?, "if"?, "needs": [], "runsOn": [], "uses"?,
     "strategy"?: { "hasMatrix", "matrixKeys": [], "matrixIsExpression",
                    "combinations": [ { "<key>": "<value>", ... } ] },
-    "steps": [ { "kind": "run|uses|parallel|wait|wait-all|cancel", "id"?, "name"?, "if"?,
+    "steps": [ { "kind": "run|uses|parallel|wait|wait-all|cancel", "line"?, "endLine"?, "id"?, "name"?, "if"?,
                  "background"?, "run"?, "uses"?, "targets"?, "target"?, "steps"? } ] } ] } ] }
 ```
 

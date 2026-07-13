@@ -715,6 +715,9 @@ const flowDetailEl = document.getElementById('flow-detail');
 let activeResultsTab = 'result';
 let lastFlowSource = null;
 let lastFlowFilePath = null;
+/** Diagnostics from the most recent lint, shared with the flow graph markers. */
+let lastDiagnostics = [];
+let lastFlowDiagnostics = null;
 
 function selectResultsTab(tab) {
   activeResultsTab = tab;
@@ -744,7 +747,10 @@ function refreshFlow(force = false) {
   }
   const source = editor.getValue();
   const filePath = getSelectedFilePath();
-  if (!force && source === lastFlowSource && filePath === lastFlowFilePath) {
+  if (!force
+    && source === lastFlowSource
+    && filePath === lastFlowFilePath
+    && lastFlowDiagnostics === lastDiagnostics) {
     return;
   }
   if (shouldDeferWasmLintForIncompleteUses(source)) {
@@ -755,6 +761,7 @@ function refreshFlow(force = false) {
     const flowDoc = JSON.parse(utf8Decoder.decode(utf8Bytes));
     lastFlowSource = source;
     lastFlowFilePath = filePath;
+    lastFlowDiagnostics = lastDiagnostics;
     renderFlow(flowDoc);
   } catch (err) {
     if (isRuntimeDeadError(err)) {
@@ -772,7 +779,10 @@ function refreshFlow(force = false) {
 function renderFlow(flowDoc) {
   hideFlowDetail();
   const workflow = flowDoc?.workflows?.[0] ?? null;
-  const rendered = renderFlowGraph(flowGraphEl, workflow, { onSelect: showFlowDetail });
+  const rendered = renderFlowGraph(flowGraphEl, workflow, {
+    onSelect: showFlowDetail,
+    diagnostics: lastDiagnostics,
+  });
   flowEmptyEl.hidden = rendered;
   flowGraphEl.hidden = !rendered;
   if (!rendered) {
@@ -835,6 +845,15 @@ function showFlowDetail(info) {
     add('uses', step.uses);
     add('wait targets', step.targets);
     add('cancel target', step.target);
+  }
+  const nodeDiags = info.diagnostics ?? [];
+  if (nodeDiags.length > 0) {
+    add(
+      `diagnostics (${nodeDiags.length})`,
+      nodeDiags
+        .map((d) => `[${(d.severity ?? 'Info')}] L${d.line}: ${d.message}`)
+        .join('\n'),
+    );
   }
   flowDetailEl.append(title, dl);
   flowDetailEl.hidden = false;
@@ -1433,6 +1452,7 @@ function runLint() {
       lastLintedSource = source;
       lastLintedFilePath = filePath;
       lastConfigVersion = configVersion;
+      lastDiagnostics = diagnostics;
     }
     renderResults(diagnostics);
     if (activeResultsTab === 'flow') {

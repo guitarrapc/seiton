@@ -162,6 +162,40 @@ public sealed class WorkflowFlowCollectorTests
     }
 
     [Test]
+    public async Task Collect_JobsAndSteps_CarrySourceLineRanges()
+    {
+        using var result = Parse("""
+            on: push
+            jobs:
+              build:
+                runs-on: ubuntu-latest
+                steps:
+                  - run: echo a
+                  - run: echo b
+              deploy:
+                runs-on: ubuntu-latest
+                needs: build
+                steps:
+                  - run: echo deploy
+            """);
+
+        var flow = WorkflowFlowCollector.Collect(result, "wf.yml");
+
+        var build = flow!.Jobs[0];
+        // The job range must cover its steps so diagnostics can be mapped by line.
+        await Assert.That(build.Line).IsGreaterThan(0);
+        await Assert.That(build.Line).IsLessThanOrEqualTo(6);
+        await Assert.That(build.EndLine).IsGreaterThanOrEqualTo(7);
+
+        await Assert.That(build.Steps[0].Line).IsEqualTo(6);
+        await Assert.That(build.Steps[1].Line).IsEqualTo(7);
+
+        var deploy = flow.Jobs[1];
+        await Assert.That(deploy.Line).IsGreaterThanOrEqualTo(8);
+        await Assert.That(deploy.Steps[0].Line).IsEqualTo(12);
+    }
+
+    [Test]
     public async Task Collect_BackgroundStep_SetsBackgroundFlag()
     {
         using var result = Parse("""

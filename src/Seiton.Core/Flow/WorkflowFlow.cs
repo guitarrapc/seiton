@@ -49,6 +49,12 @@ public sealed class FlowJob
     public FlowStrategy? Strategy { get; init; }
 
     public required FlowStep[] Steps { get; init; }
+
+    /// <summary>1-based start line of the job block in the source (0 when unknown).</summary>
+    public int Line { get; init; }
+
+    /// <summary>1-based end line of the job block in the source (0 when unknown).</summary>
+    public int EndLine { get; init; }
 }
 
 /// <summary>View of <c>strategy:</c>; static matrices are expanded into <see cref="Combinations"/>.</summary>
@@ -111,4 +117,10 @@ public sealed class FlowStep
 
     /// <summary>Nested steps of a <see cref="FlowStepKind.Parallel"/> boundary.</summary>
     public FlowStep[] Steps { get; init; } = [];
+
+    /// <summary>1-based start line of the step in the source (0 when unknown).</summary>
+    public int Line { get; init; }
+
+    /// <summary>1-based end line of the step in the source (0 when unknown).</summary>
+    public int EndLine { get; init; }
 }

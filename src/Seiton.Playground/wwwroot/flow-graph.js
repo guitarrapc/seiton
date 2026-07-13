@@ -44,10 +44,11 @@ const LOD2_THRESHOLD = 1.05;
  * (no jobs, or the d3 global is unavailable).
  * @param {HTMLElement} container
  * @param {object|null} workflow  one entry of flow-json `workflows`
- * @param {{ onSelect?: (info: {type: string, data: object}) => void }} [callbacks]
+ * @param {{ onSelect?: (info: {type: string, data: object, diagnostics?: object[]}) => void,
+ *           diagnostics?: object[] }} [callbacks]
  * @returns {boolean}
  */
-export function renderFlowGraph(container, workflow, { onSelect } = {}) {
+export function renderFlowGraph(container, workflow, { onSelect, diagnostics } = {}) {
   container.replaceChildren();
   const d3 = globalThis.d3;
   if (!d3 || !workflow || !Array.isArray(workflow.jobs) || workflow.jobs.length === 0) {
@@ -56,6 +57,7 @@ export function renderFlowGraph(container, workflow, { onSelect } = {}) {
 
   const jobs = workflow.jobs;
   const layout = computeLayout(jobs);
+  const diagMap = mapDiagnostics(jobs, diagnostics ?? []);
 
   const svg = d3
     .select(container)
@@ -68,9 +70,18 @@ export function renderFlowGraph(container, workflow, { onSelect } = {}) {
   const edgeLayer = viewport.append('g');
   const nodeLayer = viewport.append('g');
 
+  // Click selection: exactly one job/step highlighted at a time.
+  let selectedGroup = null;
+  const select = (group, info) => {
+    if (selectedGroup) selectedGroup.classed('flow-node--selected', false);
+    selectedGroup = group;
+    group.classed('flow-node--selected', true);
+    onSelect?.({ ...info, diagnostics: diagMap.get(info.data) ?? [] });
+  };
+
   drawJobEdges(d3, edgeLayer, jobs, layout);
   for (const job of jobs) {
-    drawJobNode(d3, nodeLayer, job, layout.get(job.id), onSelect);
+    drawJobNode(d3, nodeLayer, job, layout.get(job.id), select, diagMap);
   }
 
   const zoom = d3
@@ -83,6 +94,101 @@ export function renderFlowGraph(container, workflow, { onSelect } = {}) {
   svg.call(zoom);
   fitToView(d3, svg, zoom, layout, container);
   return true;
+}
+
+// ─── Diagnostics mapping ───
+
+/**
+ * Maps lint diagnostics to graph nodes by source line: the innermost step whose
+ * range contains the line wins; lines inside the job but outside any step mark
+ * the job itself. Returns a Map keyed by the job/step DTO object.
+ * @param {object[]} jobs
+ * @param {object[]} diagnostics  playground lint diagnostics ({line, severity, message, ...})
+ * @returns {Map<object, object[]>}
+ */
+function mapDiagnostics(jobs, diagnostics) {
+  const map = new Map();
+  if (diagnostics.length === 0) return map;
+
+  const push = (node, diag) => {
+    const list = map.get(node);
+    if (list) list.push(diag);
+    else map.set(node, [diag]);
+  };
+
+  const inRange = (node, line) => node.line > 0 && line >= node.line && line <= node.endLine;
+
+  // Parsed ranges can spill into the next sibling's first line, so among all
+  // containing nodes the one with the greatest start line wins. Nested parallel
+  // children start later than their parent, so this also picks the deepest node.
+  const matchStep = (steps, line) => {
+    let best = null;
+    const visit = (list) => {
+      for (const step of list ?? []) {
+        if (inRange(step, line) && (!best || step.line >= best.line)) best = step;
+        visit(step.steps);
+      }
+    };
+    visit(steps);
+    return best;
+  };
+
+  for (const diag of diagnostics) {
+    const line = diag.line ?? 0;
+    if (line <= 0) continue;
+    let job = null;
+    for (const candidate of jobs) {
+      if (inRange(candidate, line) && (!job || candidate.line >= job.line)) job = candidate;
+    }
+    if (!job) continue;
+    push(job, diag); // job aggregates everything inside it (badge + detail)
+    const step = matchStep(job.steps, line);
+    if (step) push(step, diag);
+  }
+
+  return map;
+}
+
+/** The highest severity in a diagnostic list, as a css modifier. */
+function maxSeverity(diags) {
+  let level = 'info';
+  for (const d of diags) {
+    const s = (d.severity ?? '').toLowerCase();
+    if (s === 'error') return 'error';
+    if (s === 'warning') level = 'warning';
+  }
+  return level;
+}
+
+function countBySeverity(diags) {
+  const counts = { error: 0, warning: 0, info: 0 };
+  for (const d of diags) {
+    const s = (d.severity ?? 'info').toLowerCase();
+    counts[s === 'error' ? 'error' : s === 'warning' ? 'warning' : 'info']++;
+  }
+  return counts;
+}
+
+/** Adds a severity dot (with hover tooltip) at the top-right corner of a node rect. */
+function drawMarker(group, diags, x, y) {
+  if (!diags || diags.length === 0) return;
+  const severity = maxSeverity(diags);
+  const marker = group
+    .append('g')
+    .attr('class', `flow-marker flow-marker--${severity}`);
+  marker.append('circle').attr('cx', x).attr('cy', y).attr('r', 5);
+  if (diags.length > 1) {
+    marker
+      .append('text')
+      .attr('class', 'flow-marker__count')
+      .attr('x', x)
+      .attr('y', y + 3)
+      .attr('text-anchor', 'middle')
+      .text(diags.length > 9 ? '9+' : String(diags.length));
+  }
+  marker
+    .append('title')
+    .text(diags.map((d) => `${d.severity}: ${d.message}`).join('\n'));
 }
 
 /** Swaps the LOD class for the current zoom scale (visibility only, never geometry). */
@@ -315,7 +421,7 @@ function measureJob(job) {
 
 // ─── Job node rendering ───
 
-function drawJobNode(d3, layer, job, pos, onSelect) {
+function drawJobNode(d3, layer, job, pos, select, diagMap) {
   const g = layer
     .append('g')
     .attr('class', job.kind === 'reusable' ? 'flow-job flow-job--reusable' : 'flow-job')
@@ -345,13 +451,35 @@ function drawJobNode(d3, layer, job, pos, onSelect) {
     .attr('width', pos.width)
     .attr('height', pos.headerH)
     .attr('rx', 8)
-    .on('click', () => onSelect?.({ type: 'job', data: job }));
+    .on('click', () => select(g, { type: 'job', data: job }));
 
   g.append('text')
     .attr('class', 'flow-job__title')
     .attr('x', JOB_PAD)
     .attr('y', 20)
     .text(truncate(job.kind === 'reusable' ? `⧉ ${job.id}` : job.id, 34));
+
+  // Aggregated diagnostics badge (visible at every LOD, including lod0).
+  const jobDiags = diagMap.get(job) ?? [];
+  if (jobDiags.length > 0) {
+    const counts = countBySeverity(jobDiags);
+    const badge = g
+      .append('text')
+      .attr('class', 'flow-job__diagbadge')
+      .attr('x', pos.width - JOB_PAD)
+      .attr('y', 20)
+      .attr('text-anchor', 'end');
+    if (counts.error > 0) {
+      badge.append('tspan').attr('class', 'flow-marker--error').text(`✖${counts.error}`);
+    }
+    if (counts.warning > 0) {
+      badge.append('tspan').attr('class', 'flow-marker--warning').attr('dx', 6).text(`⚠${counts.warning}`);
+    }
+    if (counts.info > 0) {
+      badge.append('tspan').attr('class', 'flow-marker--info').attr('dx', 6).text(`ℹ${counts.info}`);
+    }
+    badge.append('title').text(jobDiags.map((d) => `${d.severity}: ${d.message}`).join('\n'));
+  }
 
   const metaText = jobMetaText(job);
   if (metaText) {
@@ -391,9 +519,9 @@ function drawJobNode(d3, layer, job, pos, onSelect) {
   drawStepEdges(d3, inner, pos.graph);
   for (const node of pos.graph.nodes) {
     if (node.kind === 'parallel') {
-      drawParallelNode(inner, node, onSelect);
+      drawParallelNode(inner, node, select, diagMap);
     } else {
-      drawStepNode(inner, node, onSelect);
+      drawStepNode(inner, node, select, diagMap);
     }
   }
 }
@@ -436,12 +564,12 @@ function drawStepEdges(d3, layer, graph) {
   }
 }
 
-function drawStepNode(layer, node, onSelect) {
+function drawStepNode(layer, node, select, diagMap) {
   const step = node.step;
   const g = layer
     .append('g')
     .attr('class', node.lane > 0 ? 'flow-step flow-step--bg' : 'flow-step')
-    .on('click', () => onSelect?.({ type: 'step', data: step }));
+    .on('click', () => select(g, { type: 'step', data: step }));
 
   g.append('rect')
     .attr('class', 'flow-step-node')
@@ -464,9 +592,11 @@ function drawStepNode(layer, node, onSelect) {
     .append('tspan')
     .attr('dx', 5)
     .text(truncate(stepLabel(step), node.lane > 0 ? 18 : 22));
+
+  drawMarker(g, diagMap.get(step), node.x + node.width - 2, node.y + 2);
 }
 
-function drawParallelNode(layer, node, onSelect) {
+function drawParallelNode(layer, node, select, diagMap) {
   const g = layer.append('g').attr('class', 'flow-step flow-step--parallel');
 
   g.append('rect')
@@ -476,7 +606,7 @@ function drawParallelNode(layer, node, onSelect) {
     .attr('width', node.width)
     .attr('height', node.height)
     .attr('rx', 6)
-    .on('click', () => onSelect?.({ type: 'step', data: node.step }));
+    .on('click', () => select(g, { type: 'step', data: node.step }));
 
   g.append('text')
     .attr('class', 'flow-step__text flow-step__kind flow-step__kind--parallel')
@@ -494,7 +624,7 @@ function drawParallelNode(layer, node, onSelect) {
       .attr('class', 'flow-step')
       .on('click', (ev) => {
         ev.stopPropagation();
-        onSelect?.({ type: 'step', data: child });
+        select(childG, { type: 'step', data: child });
       });
     childG
       .append('rect')
@@ -514,6 +644,8 @@ function drawParallelNode(layer, node, onSelect) {
       .attr('class', `flow-step__kind flow-step__kind--${child.kind}`)
       .text(kindLabel(child));
     text.append('tspan').attr('dx', 4).text(truncate(stepLabel(child), 14));
+
+    drawMarker(childG, diagMap.get(child), cx + PAR_CHILD_W - 2, cy + 2);
   });
 }
 
