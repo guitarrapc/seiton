@@ -139,6 +139,14 @@ public static class WorkflowFlowJson
 
         writer.WriteEndArray();
 
+        writer.WriteStartArray("reducedNeeds"u8);
+        foreach (var need in job.ReducedNeeds)
+        {
+            writer.WriteStringValue(need);
+        }
+
+        writer.WriteEndArray();
+
         writer.WriteStartArray("runsOn"u8);
         foreach (var label in job.RunsOn)
         {

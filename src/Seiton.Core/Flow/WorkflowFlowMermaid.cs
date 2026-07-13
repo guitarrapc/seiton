@@ -80,7 +80,8 @@ public static class WorkflowFlowMermaid
 
         for (var i = 0; i < workflow.Jobs.Length; i++)
         {
-            foreach (var need in workflow.Jobs[i].Needs)
+            // Transitively reduced edges keep the diagram readable, matching GitHub's graph.
+            foreach (var need in workflow.Jobs[i].ReducedNeeds)
             {
                 if (jobIndexById.TryGetValue(need, out var dep))
                 {

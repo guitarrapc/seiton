@@ -80,6 +80,101 @@ public sealed class WorkflowFlowCollectorTests
     }
 
     [Test]
+    public async Task Collect_ReducedNeeds_RemovesTransitivelyImpliedEdges()
+    {
+        using var result = Parse("""
+            on: push
+            jobs:
+              validate:
+                runs-on: ubuntu-24.04
+                steps:
+                  - run: npm test
+              publish:
+                runs-on: ubuntu-24.04
+                needs: validate
+                steps:
+                  - run: npm run publish
+              docker:
+                runs-on: ubuntu-24.04
+                needs: [validate, publish]
+                steps:
+                  - run: docker build .
+              release:
+                runs-on: ubuntu-24.04
+                needs: [validate, publish]
+                steps:
+                  - run: gh release create
+            """);
+
+        var flow = WorkflowFlowCollector.Collect(result, "wf.yml");
+
+        // `validate → docker` is implied by `validate → publish → docker` and drops out;
+        // full `needs` stays untouched as the semantic contract.
+        await Assert.That(flow!.Jobs[0].ReducedNeeds).IsEmpty();
+        await Assert.That(flow.Jobs[1].ReducedNeeds.SequenceEqual(["validate"])).IsTrue();
+        await Assert.That(flow.Jobs[2].ReducedNeeds.SequenceEqual(["publish"])).IsTrue();
+        await Assert.That(flow.Jobs[3].ReducedNeeds.SequenceEqual(["publish"])).IsTrue();
+        await Assert.That(flow.Jobs[2].Needs.SequenceEqual(["validate", "publish"])).IsTrue();
+    }
+
+    [Test]
+    public async Task Collect_ReducedNeeds_KeepsIndependentDiamondEdges()
+    {
+        using var result = Parse("""
+            on: push
+            jobs:
+              a:
+                runs-on: ubuntu-24.04
+                steps:
+                  - run: echo a
+              b:
+                runs-on: ubuntu-24.04
+                needs: a
+                steps:
+                  - run: echo b
+              c:
+                runs-on: ubuntu-24.04
+                needs: a
+                steps:
+                  - run: echo c
+              d:
+                runs-on: ubuntu-24.04
+                needs: [b, c]
+                steps:
+                  - run: echo d
+            """);
+
+        var flow = WorkflowFlowCollector.Collect(result, "wf.yml");
+
+        // b and c do not imply each other — both edges into d must stay.
+        await Assert.That(flow!.Jobs[3].ReducedNeeds.SequenceEqual(["b", "c"])).IsTrue();
+    }
+
+    [Test]
+    public async Task Collect_ReducedNeeds_CyclicNeedsDoNotHang()
+    {
+        using var result = Parse("""
+            on: push
+            jobs:
+              a:
+                runs-on: ubuntu-24.04
+                needs: b
+                steps:
+                  - run: echo a
+              b:
+                runs-on: ubuntu-24.04
+                needs: a
+                steps:
+                  - run: echo b
+            """);
+
+        var flow = WorkflowFlowCollector.Collect(result, "wf.yml");
+
+        await Assert.That(flow!.Jobs[0].ReducedNeeds.Length).IsLessThanOrEqualTo(1);
+        await Assert.That(flow.Jobs[1].ReducedNeeds.Length).IsLessThanOrEqualTo(1);
+    }
+
+    [Test]
     public async Task Collect_JobAndStepIfConditions_KeepRawExpressions()
     {
         using var result = Parse("""

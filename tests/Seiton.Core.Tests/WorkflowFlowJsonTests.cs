@@ -146,6 +146,7 @@ public sealed class WorkflowFlowJsonTests
         await Assert.That(call.GetProperty("kind").GetString()).IsEqualTo("reusable");
         await Assert.That(call.GetProperty("uses").GetString()).IsEqualTo("octo/repo/.github/workflows/deploy.yml@v1");
         await Assert.That(call.GetProperty("needs")[0].GetString()).IsEqualTo("test");
+        await Assert.That(call.GetProperty("reducedNeeds")[0].GetString()).IsEqualTo("test");
         await Assert.That(call.GetProperty("steps").GetArrayLength()).IsEqualTo(0);
     }
 

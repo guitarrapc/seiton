@@ -67,6 +67,14 @@ public sealed class FlowJob
     /// <summary>Job ids this job depends on (<c>needs:</c> edges).</summary>
     public required string[] Needs { get; init; }
 
+    /// <summary>
+    /// <see cref="Needs"/> after transitive reduction: edges implied by another
+    /// dependency's chain are removed (e.g. <c>a</c> drops out of <c>needs: [a, b]</c>
+    /// when <c>b</c> already depends on <c>a</c>). Rendering-oriented — the semantic
+    /// dependency set stays in <see cref="Needs"/>.
+    /// </summary>
+    public required string[] ReducedNeeds { get; init; }
+
     /// <summary>Runner labels, or the raw whole-value expression / group name.</summary>
     public required string[] RunsOn { get; init; }
 

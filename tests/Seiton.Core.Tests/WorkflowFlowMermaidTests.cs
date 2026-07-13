@@ -111,6 +111,36 @@ public sealed class WorkflowFlowMermaidTests
     }
 
     [Test]
+    public async Task Serialize_NeedsEdges_UseTransitiveReduction()
+    {
+        var flow = CollectFlow("""
+            on: push
+            jobs:
+              validate:
+                runs-on: ubuntu-24.04
+                steps:
+                  - run: npm test
+              publish:
+                runs-on: ubuntu-24.04
+                needs: validate
+                steps:
+                  - run: npm run publish
+              docker:
+                runs-on: ubuntu-24.04
+                needs: [validate, publish]
+                steps:
+                  - run: docker build .
+            """);
+
+        var mermaid = WorkflowFlowMermaid.Serialize([flow]);
+
+        await Assert.That(mermaid).Contains("j0 --> j1");
+        await Assert.That(mermaid).Contains("j1 --> j2");
+        // validate → docker is implied via publish and must not render.
+        await Assert.That(mermaid.Contains("j0 --> j2", StringComparison.Ordinal)).IsFalse();
+    }
+
+    [Test]
     public async Task Serialize_MultipleWorkflows_MergesIntoSingleFlowchart()
     {
         var flowA = CollectFlow("""

@@ -333,6 +333,8 @@ flow collector は `check --format flow-*` / `GetFlowJson` 要求時のみ動く
 
 10. **GitHub 風の遠距離 LOD(フォルダタブ + 同一 needs グルーピング)**: GitHub 本家のグラフに倣い、matrix job はカード上部にフォルダタブ(`Matrix: N legs`、全 LOD)を表示。列内の job は needs シグネチャ順に並べ替えて同一 needs の job を縦に隣接させ、lod0 では連続する同一 needs 群を 1 枚のグループカード(フレーム + メンバーの入力エッジ非表示 + 依存ごとに 1 本のグループエッジ)として表示する。遠距離では step の中身より job の関連が分かる方が有意義、という判断。ジオメトリ不変の LOD 原則は維持(フレーム/エッジは可視性切替のみ、並べ替えは全 LOD 共通)。既知の制限: lod0 ではグループメンバーの個別エッジが非表示のため、hover の needs 連鎖強調がグループエッジには波及しない(グループエッジは減光のみ)。
 
+11. **needs エッジの推移簡約**: `docker` が `needs: [validate, publish]` で `publish` が既に `validate` に依存している場合、`validate → docker` は冗長 — GitHub のグラフ描画と同じ推移簡約を適用する。方針どおり導出は Core(`WorkflowFlowCollector.ComputeReducedNeeds`)で計算し、契約に `reducedNeeds` として載せた。**描画(Playground エッジ / グループエッジ / Mermaid)は `reducedNeeds`、意味論(hover 閉包・依存解析)は full `needs`** という使い分けを spec に明記。循環 needs は部分メモ化で停止を保証(needs-graph ルールがエラーにする不正 workflow でも UI が固まらない)。
+
 ## 現時点の結論
 
 flow 可視化は、専用コマンドや UI 先行の個別実装ではなく、まず `check --format flow-json` という共通契約を作り、それを Playground が消費する形で進めるのが最も整合的である。

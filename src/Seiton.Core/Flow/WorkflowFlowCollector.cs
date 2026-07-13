@@ -46,11 +46,25 @@ public static class WorkflowFlowCollector
         }
 
         var jobMap = workflow.Jobs;
-        var jobs = jobMap.Count == 0 ? [] : new FlowJob[jobMap.Count];
-        var jobIndex = 0;
-        foreach (var (key, job) in jobMap)
+        var jobCount = jobMap.Count;
+        var jobs = jobCount == 0 ? [] : new FlowJob[jobCount];
+
+        // First pass: ids and needs, so the transitive reduction can see the whole DAG
+        // before the (init-only) FlowJob instances are constructed.
+        var ids = new string[jobCount];
+        var needs = new string[jobCount][];
+        for (var i = 0; i < jobCount; i++)
         {
-            jobs[jobIndex++] = CollectJob(key, job);
+            var entry = jobMap.GetAt(i);
+            ids[i] = entry.Key.Decode();
+            needs[i] = DecodeList(entry.Value.Needs);
+        }
+
+        var reducedNeeds = ComputeReducedNeeds(ids, needs);
+        for (var i = 0; i < jobCount; i++)
+        {
+            var entry = jobMap.GetAt(i);
+            jobs[i] = CollectJob(entry.Key, entry.Value, ids[i], needs[i], reducedNeeds[i]);
         }
 
         return new WorkflowFlow
@@ -79,7 +93,90 @@ public static class WorkflowFlowCollector
         };
     }
 
-    private static FlowJob CollectJob(KeyRef key, JobRef job)
+    /// <summary>
+    /// Removes needs edges implied by another dependency's transitive chain,
+    /// matching how GitHub renders its workflow graph. Full <c>needs</c> stays
+    /// the semantic contract; cycles are tolerated via partial memoization.
+    /// </summary>
+    private static string[][] ComputeReducedNeeds(string[] ids, string[][] needs)
+    {
+        var indexById = new Dictionary<string, int>(ids.Length, StringComparer.OrdinalIgnoreCase);
+        for (var i = 0; i < ids.Length; i++)
+        {
+            indexById.TryAdd(ids[i], i);
+        }
+
+        // ancestors[i] = every job index reachable upstream from i. Pre-assigning the
+        // set before recursing makes cyclic needs terminate (with a partial result).
+        var ancestors = new HashSet<int>?[ids.Length];
+
+        HashSet<int> AncestorsOf(int index)
+        {
+            if (ancestors[index] is { } cached)
+            {
+                return cached;
+            }
+
+            var set = new HashSet<int>();
+            ancestors[index] = set;
+            foreach (var dep in needs[index])
+            {
+                if (!indexById.TryGetValue(dep, out var depIndex))
+                {
+                    continue;
+                }
+
+                if (set.Add(depIndex))
+                {
+                    set.UnionWith(AncestorsOf(depIndex));
+                }
+            }
+
+            return set;
+        }
+
+        var reduced = new string[ids.Length][];
+        for (var i = 0; i < ids.Length; i++)
+        {
+            var deps = needs[i];
+            if (deps.Length < 2)
+            {
+                reduced[i] = deps;
+                continue;
+            }
+
+            var kept = new List<string>(deps.Length);
+            foreach (var dep in deps)
+            {
+                var redundant = false;
+                if (indexById.TryGetValue(dep, out var depIndex))
+                {
+                    foreach (var other in deps)
+                    {
+                        if (!ReferenceEquals(other, dep)
+                            && indexById.TryGetValue(other, out var otherIndex)
+                            && otherIndex != depIndex
+                            && AncestorsOf(otherIndex).Contains(depIndex))
+                        {
+                            redundant = true;
+                            break;
+                        }
+                    }
+                }
+
+                if (!redundant)
+                {
+                    kept.Add(dep);
+                }
+            }
+
+            reduced[i] = kept.Count == deps.Length ? deps : kept.ToArray();
+        }
+
+        return reduced;
+    }
+
+    private static FlowJob CollectJob(KeyRef key, JobRef job, string id, string[] needs, string[] reducedNeeds)
     {
         var workflowCall = job.WorkflowCall;
         var isReusable = workflowCall.HasValue;
@@ -89,11 +186,12 @@ public static class WorkflowFlowCollector
         {
             Line = range.StartLine,
             EndLine = range.EndLine,
-            Id = key.Decode(),
+            Id = id,
             Name = NullIfEmpty(job.Name),
             Kind = isReusable ? FlowJobKind.Reusable : FlowJobKind.Job,
             If = NullIfEmpty(job.If),
-            Needs = DecodeList(job.Needs),
+            Needs = needs,
+            ReducedNeeds = reducedNeeds,
             RunsOn = CollectRunsOn(job.RunsOn),
             Uses = isReusable ? NullIfEmpty(workflowCall.Uses) : null,
             Strategy = CollectStrategy(job.Strategy),

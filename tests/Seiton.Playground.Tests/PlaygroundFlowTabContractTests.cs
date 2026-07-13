@@ -224,6 +224,15 @@ public sealed class PlaygroundFlowTabContractTests
     }
 
     [Test]
+    public async Task FlowGraph_Edges_UseTransitiveReduction()
+    {
+        var js = await ReadWwwrootFileAsync("flow-graph.js");
+        // Edges render from the Core-computed `reducedNeeds`; hover closure stays
+        // on the full `needs` semantics.
+        await Assert.That(js).Contains("reducedNeeds");
+    }
+
+    [Test]
     public async Task FlowGraph_HoveringJob_HighlightsNeedsChain()
     {
         var js = await ReadWwwrootFileAsync("flow-graph.js");

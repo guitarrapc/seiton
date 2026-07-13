@@ -772,6 +772,7 @@ Behavior common to both formats:
 - `if` conditions are carried as raw expressions.
 - `background: true` steps carry a `background` flag so intra-job concurrency (background fork, `wait`/`wait-all` join, `cancel`) can be reconstructed by consumers.
 - Jobs and steps carry 1-based source line ranges (`line` / `endLine`, omitted when unknown) so consumers can map lint diagnostics onto flow nodes. Ranges of adjacent blocks may overlap on boundary lines; consumers should resolve overlaps by preferring the node with the greatest start line.
+- `reducedNeeds` is `needs` after **transitive reduction** (an edge implied by another dependency's chain drops out, e.g. `a` leaves `needs: [a, b]` when `b` already depends on `a`) — matching how GitHub renders its workflow graph. Renderers should draw `reducedNeeds`; dependency semantics (hover closures, scheduling analysis) should use the full `needs`.
 - Runtime settings are carried when declared: job `timeoutMinutes` / `permissions` (`["read-all"]` scalar form or `"scope: level"` entries; empty array = `{}` deny-all; omitted when undeclared) / `environment`, and step `timeoutMinutes` / `continueOnError` / `workingDirectory` (run steps) / `with` (uses steps, key-value object in document order). Dynamic `${{ }}` timeout expressions are omitted.
 - Workflow execution context is carried when declared: `schedules` (cron entries of `on: schedule` with the seiton `timezone` extension; omitted when absent) and `concurrency` (`group` raw expression, `cancelInProgress`, seiton `queue` extension).
 - Background steps carry `backgroundOutcome` (`"awaited"` when a later `wait` targeting the step or any `wait-all` joins it, `"cancelled"` when a later `cancel` cuts it, `"unawaited"` otherwise) computed over the job's later top-level steps — consumers must not re-derive this.
@@ -784,7 +785,7 @@ Single JSON document to stdout:
 { "version": 1, "workflows": [ { "file", "name"?, "on": [],
   "schedules"?: [ { "cron", "timezone"? } ], "concurrency"?: { "group"?, "cancelInProgress", "queue"? },
   "jobs": [
-  { "id", "name"?, "kind": "job|reusable", "line"?, "endLine"?, "if"?, "needs": [], "runsOn": [], "uses"?,
+  { "id", "name"?, "kind": "job|reusable", "line"?, "endLine"?, "if"?, "needs": [], "reducedNeeds": [], "runsOn": [], "uses"?,
     "timeoutMinutes"?, "permissions"?: [], "environment"?,
     "strategy"?: { "hasMatrix", "matrixKeys": [], "matrixIsExpression",
                    "combinations": [ { "<key>": "<value>", ... } ] },
@@ -798,7 +799,7 @@ Absent optional fields are omitted. `steps` on a step appears only for `kind: "p
 
 #### 6.6.2 `flow-mermaid`
 
-Mermaid `flowchart LR` text to stdout: each job is a subgraph with chained step nodes, `needs` edges connect job subgraphs, `parallel` boundaries are nested subgraphs whose children are intentionally unchained (simultaneous), and reusable jobs are subroutine nodes (`[[...]]`). Labels are single-line, quote-sanitized, and truncated.
+Mermaid `flowchart LR` text to stdout: each job is a subgraph with chained step nodes, transitively reduced `needs` edges (`reducedNeeds`) connect job subgraphs, `parallel` boundaries are nested subgraphs whose children are intentionally unchained (simultaneous), and reusable jobs are subroutine nodes (`[[...]]`). Labels are single-line, quote-sanitized, and truncated.
 
 The output is always **exactly one `flowchart` diagram** so it can be wrapped in a single Mermaid code block. Multiple input files become per-workflow wrapper subgraphs (`w0`, `w1`, … labeled with the file name) with prefixed node ids (`w0j0`, `w0j0n0`, …); a single input keeps the unprefixed shape (`j0`, `j0n0`, …). **WHY**: one Mermaid code block holds one diagram — a second `flowchart` keyword is a parse error, which is exactly what blank-line-separated diagrams caused when piped to a Markdown file.
 
