@@ -332,11 +332,10 @@ public sealed class PlaygroundLintRunnerTests
     }
 
     // ─── SetConfig Tests ───
-    // These tests mutate shared static config state and must not run in parallel.
-    private const string ConfigLockKey = "PlaygroundConfig";
+    // Serialized via class-level [NotInParallel(PlaygroundTestParallelism.AssemblyLockKey)].
+    // Do not add per-method NotInParallel keys — TUnit replaces (not merges) class-level keys.
 
     [Test]
-    [NotInParallel(ConfigLockKey)]
     public async Task SetConfig_Null_ResetsToDefault_ReturnsEmptyArray()
     {
         var result = PlaygroundLintRunner.SetConfig(null);
@@ -345,7 +344,6 @@ public sealed class PlaygroundLintRunnerTests
     }
 
     [Test]
-    [NotInParallel(ConfigLockKey)]
     public async Task SetConfig_Empty_ResetsToDefault_ReturnsEmptyArray()
     {
         var result = PlaygroundLintRunner.SetConfig("");
@@ -354,7 +352,6 @@ public sealed class PlaygroundLintRunnerTests
     }
 
     [Test]
-    [NotInParallel(ConfigLockKey)]
     public async Task SetConfig_WhitespaceOnly_ResetsToDefault_ReturnsEmptyArray()
     {
         var result = PlaygroundLintRunner.SetConfig("   \n  \n");
@@ -363,7 +360,6 @@ public sealed class PlaygroundLintRunnerTests
     }
 
     [Test]
-    [NotInParallel(ConfigLockKey)]
     public async Task SetConfig_ValidConfig_ReturnsEmptyArray()
     {
         const string config = """
@@ -380,7 +376,6 @@ public sealed class PlaygroundLintRunnerTests
     }
 
     [Test]
-    [NotInParallel(ConfigLockKey)]
     public async Task SetConfig_InvalidConfig_ReturnsDiagnostics()
     {
         const string config = """
@@ -396,7 +391,6 @@ public sealed class PlaygroundLintRunnerTests
     }
 
     [Test]
-    [NotInParallel(ConfigLockKey)]
     public async Task SetConfig_HashHit_ReturnsCachedResult()
     {
         const string config = """
@@ -415,7 +409,6 @@ public sealed class PlaygroundLintRunnerTests
     }
 
     [Test]
-    [NotInParallel(ConfigLockKey)]
     public async Task SetConfig_CosmeticEdit_DoesNotTriggerReparse()
     {
         const string config1 = """
@@ -437,7 +430,6 @@ public sealed class PlaygroundLintRunnerTests
     }
 
     [Test]
-    [NotInParallel(ConfigLockKey)]
     public async Task SetConfig_DifferentContent_TriggersReparse()
     {
         const string config1 = """
@@ -466,7 +458,6 @@ public sealed class PlaygroundLintRunnerTests
     }
 
     [Test]
-    [NotInParallel(ConfigLockKey)]
     public async Task SetConfig_AffectsLintResults()
     {
         // Workflow that triggers runner-no-latest diagnostic
@@ -521,7 +512,6 @@ public sealed class PlaygroundLintRunnerTests
     }
 
     [Test]
-    [NotInParallel(ConfigLockKey)]
     public async Task SetConfig_InvalidConfig_RetainsPreviousValidConfig()
     {
         PlaygroundLintRunner.ResetSharedStateForTests();
@@ -567,7 +557,6 @@ public sealed class PlaygroundLintRunnerTests
 
     [Test]
     [Retry(3)]
-    [NotInParallel(ConfigLockKey)]
     public async Task SetConfig_FixDefaults_AppliedByApplyAllFixes()
     {
         // Workflow missing timeout-minutes — triggers job-timeout-minutes-required diagnostic
@@ -599,7 +588,6 @@ public sealed class PlaygroundLintRunnerTests
     }
 
     [Test]
-    [NotInParallel(ConfigLockKey)]
     public async Task SetConfig_ValidAfterInvalid_ReturnsEmptyNotStaleDiagnostics()
     {
         // Regression: set valid config A → set invalid config B → re-submit valid A.
@@ -635,7 +623,6 @@ public sealed class PlaygroundLintRunnerTests
     }
 
     [Test]
-    [NotInParallel(ConfigLockKey)]
     public async Task SetConfig_InvalidHashHit_ReturnsCachedDiagnosticsWithoutReparse()
     {
         // Regression: repeated submission of the same invalid config should be a cache hit

@@ -449,9 +449,14 @@ public static class PlaygroundLintRunner
             return new AsyncFixResult(afterOffline, ResolvedCount: 0, SkippedCount: 0, FailedCount: 0);
         }
 
-        // Create PinRemediationEngine with resolvers
-        var actionResolver = ActionShaResolverOverride ?? DefaultActionShaResolver;
-        var imageResolver = ImageDigestResolverOverride ?? DefaultImageDigestResolver;
+        // Create PinRemediationEngine with resolvers (read overrides under lock — shared with tests).
+        IActionShaResolver? actionResolver;
+        IImageDigestResolver? imageResolver;
+        lock (EngineGate)
+        {
+            actionResolver = ActionShaResolverOverride ?? DefaultActionShaResolver;
+            imageResolver = ImageDigestResolverOverride ?? DefaultImageDigestResolver;
+        }
 
         var engine = new PinRemediationEngine(
             pinningEnabled ? actionResolver : null,

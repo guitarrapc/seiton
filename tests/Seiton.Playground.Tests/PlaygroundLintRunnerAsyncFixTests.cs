@@ -12,10 +12,7 @@ public sealed class PlaygroundLintRunnerAsyncFixTests : IDisposable
 
     public void Dispose()
     {
-        // Reset resolver overrides and config after each test to avoid cross-test contamination.
-        PlaygroundLintRunner.ActionShaResolverOverride = null;
-        PlaygroundLintRunner.ImageDigestResolverOverride = null;
-        PlaygroundLintRunner.SetConfig(null);
+        PlaygroundLintRunner.ResetSharedStateForTests();
     }
 
     [Test]
