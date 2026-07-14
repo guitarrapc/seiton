@@ -1,6 +1,7 @@
 ﻿using System.Buffers;
 using System.Text;
 using System.Text.Json;
+using Seiton.Core.Flow;
 using Seiton.Core.Linting;
 using Seiton.Core.Linting.Fixing;
 using Seiton.Core.Linting.PinRemediation;
@@ -72,6 +73,9 @@ public static class PlaygroundLintRunner
 
     // ─── Identity-based short circuit ───
     private static string? _lastYamlSource;
+
+    /// <summary>Content hash of the last linted YAML (XxHash64). Guarded by <see cref="EngineGate"/>.</summary>
+    private static ulong _lastYamlHash;
 
     /// <summary>Cached last file path for identity-based short circuit. Guarded by <see cref="EngineGate"/>.</summary>
     private static string? _lastFilePath;
@@ -242,6 +246,7 @@ public static class PlaygroundLintRunner
     private static void InvalidateLintCache()
     {
         _lastYamlSource = null;
+        _lastYamlHash = 0;
         _lastFilePath = null;
         _lastJsonOutput = null;
         _defaultActionShaResolver = null;
@@ -260,8 +265,9 @@ public static class PlaygroundLintRunner
 
         lock (EngineGate)
         {
-            // Fast path: if source and filePath are identical to last call, return cached output
-            if (ReferenceEquals(yamlSource, _lastYamlSource)
+            var yamlHash = PlaygroundYamlHash.Compute(yamlSource);
+            // Fast path: same string instance or identical content hash + path.
+            if ((ReferenceEquals(yamlSource, _lastYamlSource) || yamlHash == _lastYamlHash)
                 && string.Equals(filePath, _lastFilePath, StringComparison.Ordinal)
                 && _lastJsonOutput is not null)
             {
@@ -286,12 +292,20 @@ public static class PlaygroundLintRunner
             }
             else
             {
-                using var lintResult = Engine.Check(utf8Yaml, filePath, config);
-                result = SerializeDiagnosticsToResult(lintResult.Diagnostics.AsSpan());
+                using var parseResult = WorkflowParser.Parse(utf8Yaml, filePath);
+                WorkflowFlow? flow;
+                using (var lintResult = Engine.Check(parseResult, utf8Yaml, filePath, config))
+                {
+                    flow = WorkflowFlowCollector.Collect(parseResult, filePath);
+                    result = SerializeDiagnosticsToResult(lintResult.Diagnostics.AsSpan());
+                }
+
+                PlaygroundFlowRunner.StoreFlowFromLint(yamlHash, filePath, flow);
             }
 
-            // Cache for identity-based short circuit
+            // Cache for identity/content-hash short circuit
             _lastYamlSource = yamlSource;
+            _lastYamlHash = yamlHash;
             _lastFilePath = filePath;
             _lastJsonOutput = result;
 

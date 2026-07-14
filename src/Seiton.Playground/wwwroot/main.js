@@ -8,7 +8,7 @@ import {
   formatClipboardBundle,
   isShareWithinLimits,
 } from './share-payload.js';
-import { captureFlowViewState, renderFlowGraph } from './flow-graph.js';
+import { captureFlowViewState, renderFlowGraph, flowStructureSignature, updateFlowGraphDiagnostics } from './flow-graph.js';
 
 /** Built-in snippets (classification depends on Document selector). */
 const SAMPLES = {
@@ -740,9 +740,12 @@ let mermaidPreviewActive = false;
 let mermaidInitialized = false;
 let mermaidRenderSeq = 0;
 let mermaidZoomController = null;
+let mermaidPreviewRenderTimer = null;
+const MERMAID_PREVIEW_DEBOUNCE_MS = 200;
 /** Diagnostics from the most recent lint, shared with the flow graph markers. */
 let lastDiagnostics = [];
 let lastFlowDiagnostics = null;
+let lastRenderedFlowSignature = '';
 let flowZoomController = null;
 
 function selectResultsTab(tab) {
@@ -1065,7 +1068,13 @@ function wireMermaidPreviewZoom(svgElement) {
   fitMermaidPreview(d3, svg, zoom, bounds, viewport);
 
   const resizeObserver = typeof ResizeObserver === 'function'
-    ? new ResizeObserver(() => reset())
+    ? new ResizeObserver(() => {
+      if (resizeFrame !== null) cancelAnimationFrame(resizeFrame);
+      resizeFrame = requestAnimationFrame(() => {
+        resizeFrame = null;
+        reset();
+      });
+    })
     : null;
   resizeObserver?.observe(mermaidPreviewEl);
 
@@ -1092,7 +1101,7 @@ function setMermaidPreviewMode(preview) {
   mermaidOutputEl.hidden = preview;
   mermaidPreviewEl.hidden = !preview;
   if (preview) {
-    void renderMermaidPreviewSvg();
+    scheduleMermaidPreviewRender();
   } else {
     mermaidRenderSeq++;
     setMermaidZoomController(null);
@@ -1137,9 +1146,21 @@ async function renderMermaidPreviewSvg() {
   }
 }
 
+function scheduleMermaidPreviewRender() {
+  if (mermaidPreviewRenderTimer !== null) {
+    clearTimeout(mermaidPreviewRenderTimer);
+  }
+  mermaidPreviewRenderTimer = setTimeout(() => {
+    mermaidPreviewRenderTimer = null;
+    if (mermaidPreviewActive && activeResultsTab === 'mermaid') {
+      void renderMermaidPreviewSvg();
+    }
+  }, MERMAID_PREVIEW_DEBOUNCE_MS);
+}
+
 function refreshMermaidPreviewOnThemeChange() {
   if (mermaidPreviewActive && activeResultsTab === 'mermaid' && lastMermaidText) {
-    void renderMermaidPreviewSvg();
+    scheduleMermaidPreviewRender();
   }
 }
 
@@ -1210,7 +1231,7 @@ function renderMermaid(mermaidText) {
   if (mermaidPreviewActive) {
     mermaidOutputEl.hidden = true;
     mermaidPreviewEl.hidden = false;
-    void renderMermaidPreviewSvg();
+    scheduleMermaidPreviewRender();
   } else {
     mermaidOutputEl.hidden = false;
     mermaidPreviewEl.hidden = true;
@@ -1241,15 +1262,34 @@ mermaidCopyBtn.addEventListener('click', async () => {
 function renderFlow(flowDoc, { preserveView = false } = {}) {
   const initialView = preserveView ? captureFlowViewState(flowGraphEl) : null;
   hideFlowDetail();
-  setFlowZoomController(null);
   const workflow = flowDoc?.workflows?.[0] ?? null;
+  const signature = flowStructureSignature(workflow);
+  const diagOnly = Boolean(
+    signature
+    && signature === lastRenderedFlowSignature
+    && flowGraphEl.querySelector('.flow-svg'),
+  );
   flowNodeStartLines = collectFlowStartLines(workflow);
+  if (diagOnly) {
+    updateFlowGraphDiagnostics(flowGraphEl, workflow, lastDiagnostics);
+    renderWorkflowInfo(workflow);
+    flowEmptyEl.hidden = true;
+    flowGraphEl.hidden = false;
+    return;
+  }
+
+  setFlowZoomController(null);
   const rendered = renderFlowGraph(flowGraphEl, workflow, {
     onSelect: showFlowDetail,
     diagnostics: lastDiagnostics,
     onZoomReady: setFlowZoomController,
     initialView,
   });
+  if (rendered) {
+    lastRenderedFlowSignature = signature;
+  } else {
+    lastRenderedFlowSignature = '';
+  }
   renderWorkflowInfo(rendered ? workflow : null);
   flowEmptyEl.hidden = rendered;
   flowGraphEl.hidden = !rendered;

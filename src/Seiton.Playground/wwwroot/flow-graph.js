@@ -90,14 +90,16 @@ export function renderFlowGraph(container, workflow, { onSelect, diagnostics, on
   }
 
   const jobs = workflow.jobs;
-  const layouts = computeAllLayouts(jobs);
   const startLod = initialView && Number.isFinite(initialView.lod)
     ? Math.max(0, Math.min(2, initialView.lod))
     : 2;
+  const jobsById = new Map(jobs.map((j) => [jobKey(j.id), j]));
   const graphState = {
     currentLod: startLod,
-    layouts,
+    layouts: [],
     jobs,
+    jobsById,
+    stepGraphCache: new Map(),
     jobNodes: new Map(),
     edgeSelections: [],
     groupFrameRects: [],
@@ -117,7 +119,7 @@ export function renderFlowGraph(container, workflow, { onSelect, diagnostics, on
   const edgeLayer = viewport.append('g');
   const nodeLayer = viewport.append('g');
 
-  const initialLayout = layouts[startLod];
+  const initialLayout = ensureLayout(graphState, startLod);
   drawNeedsGroups(groupLayer, edgeLayer, initialLayout.groups, initialLayout.layout, graphState);
   graphState.groupedMembers = new Set(initialLayout.groups.flatMap((g) => g.members));
 
@@ -190,6 +192,7 @@ export function renderFlowGraph(container, workflow, { onSelect, diagnostics, on
       if (resizeFrame !== null) cancelAnimationFrame(resizeFrame);
     },
   });
+  container.__seitonFlowGraphState = graphState;
   return true;
 }
 
@@ -307,8 +310,10 @@ function drawMarker(group, diags, x, y) {
 
 /** Layout-size ratio between LOD tiers, raised to LOD_COMPENSATE_EXP. */
 function lodCompensatingScale(prevLod, nextLod, state) {
-  const prev = layoutBounds(state.layouts[prevLod].layout, state.layouts[prevLod].groups, state.jobs);
-  const next = layoutBounds(state.layouts[nextLod].layout, state.layouts[nextLod].groups, state.jobs);
+  const prevLayout = ensureLayout(state, prevLod);
+  const nextLayout = ensureLayout(state, nextLod);
+  const prev = layoutBounds(prevLayout.layout, prevLayout.groups, state.jobsById);
+  const next = layoutBounds(nextLayout.layout, nextLayout.groups, state.jobsById);
   const prevSize = Math.max(prev.width, prev.height, 1);
   const nextSize = Math.max(next.width, next.height, 1);
   return (prevSize / nextSize) ** LOD_COMPENSATE_EXP;
@@ -373,13 +378,16 @@ function wireLodWheel(svg, zoom, state, d3) {
   return () => node?.removeEventListener('wheel', handler);
 }
 
-function computeAllLayouts(jobs) {
-  return [0, 1, 2].map((lod) => computeLayout(jobs, lod));
+function ensureLayout(state, lod) {
+  if (!state.layouts[lod]) {
+    state.layouts[lod] = computeLayout(state.jobs, lod, state.jobsById, state.stepGraphCache);
+  }
+  return state.layouts[lod];
 }
 
 /** Repositions job cards, edges, and group frames for the active LOD layout. */
 function applyGraphLayout(state, lod, d3) {
-  const { layout, groups } = state.layouts[lod];
+  const { layout, groups } = ensureLayout(state, lod);
   state.currentLod = lod;
   const innerScale = lod === 1 ? INNER_SCALE_LOD1 : 1;
 
@@ -431,7 +439,7 @@ function titleMaxChars(width, diagCounts) {
   return Math.max(4, Math.floor((width - JOB_PAD * 2 - reserved) / 6.2));
 }
 
-function layoutBounds(layout, groups, jobs) {
+function layoutBounds(layout, groups, jobsById) {
   let maxX = 0;
   let maxY = 0;
   for (const pos of layout.values()) {
@@ -439,7 +447,7 @@ function layoutBounds(layout, groups, jobs) {
     maxY = Math.max(maxY, pos.y + pos.height);
   }
   for (const group of groups) {
-    const frame = groupFrameBounds(group.members, layout, jobs);
+    const frame = groupFrameBounds(group.members, layout, jobsById);
     maxX = Math.max(maxX, frame.x + frame.width);
     maxY = Math.max(maxY, frame.y + frame.height);
   }
@@ -459,15 +467,14 @@ function jobAdornmentBounds(job, pos) {
   };
 }
 
-function groupFrameBounds(members, layout, jobs) {
-  const byId = jobs ? new Map(jobs.map((j) => [jobKey(j.id), j])) : null;
+function groupFrameBounds(members, layout, jobsById) {
   let minX = Infinity;
   let minY = Infinity;
   let maxX = 0;
   let maxY = 0;
   for (const id of members) {
     const pos = layout.get(id);
-    const adorn = jobAdornmentBounds(byId?.get(id), pos);
+    const adorn = jobAdornmentBounds(jobsById.get(id), pos);
     minX = Math.min(minX, pos.x - adorn.left);
     minY = Math.min(minY, pos.y - adorn.top);
     maxX = Math.max(maxX, pos.x + pos.width + adorn.right);
@@ -484,7 +491,7 @@ function groupFrameBounds(members, layout, jobs) {
 function updateNeedsGroupFrames(state, groups, layout) {
   for (let i = 0; i < groups.length; i++) {
     const group = groups[i];
-    const frame = groupFrameBounds(group.members, layout, state.jobs);
+    const frame = groupFrameBounds(group.members, layout, state.jobsById);
     group.frame = frame;
     const rect = state.groupFrameRects[i];
     if (rect) {
@@ -498,7 +505,7 @@ function updateEdgePaths(state, d3, layout, groups) {
   for (const edge of state.edgeSelections) {
     if (edge.kind === 'group') {
       const source = layout.get(edge.from);
-      const frame = edge.group.frame ?? groupFrameBounds(edge.group.members, layout, state.jobs);
+      const frame = edge.group.frame ?? groupFrameBounds(edge.group.members, layout, state.jobsById);
       if (!source || !frame) continue;
       const sx = source.x + source.width;
       const sy = source.y + source.height / 2;
@@ -535,8 +542,8 @@ function needsSignature(job) {
  * needs signature sort adjacently (document order otherwise) so they can be
  * grouped into one card at far zoom, like GitHub's own workflow graph.
  */
-function computeLayout(jobs, lod) {
-  const byId = new Map(jobs.map((j) => [jobKey(j.id), j]));
+function computeLayout(jobs, lod, jobsById, stepGraphCache) {
+  const byId = jobsById;
   const levels = new Map();
 
   function levelOf(job, stack) {
@@ -575,7 +582,7 @@ function computeLayout(jobs, lod) {
 
   const measured = new Map();
   for (const job of jobs) {
-    measured.set(jobKey(job.id), measureJob(job, lod));
+    measured.set(jobKey(job.id), measureJob(job, lod, stepGraphCache));
   }
 
   const columnX = new Map();
@@ -628,7 +635,7 @@ const GROUP_PAD = 10;
  */
 function drawNeedsGroups(groupLayer, edgeLayer, groups, layout, state) {
   for (const group of groups) {
-    const frame = groupFrameBounds(group.members, layout, state.jobs);
+    const frame = groupFrameBounds(group.members, layout, state.jobsById);
     group.frame = frame;
 
     const rect = groupLayer
@@ -955,7 +962,7 @@ function measureJobHeader(job, lod) {
   return HEADER_H + metaH + infoH + legsH;
 }
 
-function measureJob(job, lod) {
+function measureJob(job, lod, stepGraphCache) {
   if (lod === 0) {
     const headerH = HEADER_H;
     const stepCount = countSteps(job.steps ?? []);
@@ -969,7 +976,11 @@ function measureJob(job, lod) {
     };
   }
 
-  const graph = buildStepGraph(job.steps ?? []);
+  let graph = stepGraphCache.get(job);
+  if (!graph) {
+    graph = buildStepGraph(job.steps ?? []);
+    stepGraphCache.set(job, graph);
+  }
   const content = layoutStepGraph(graph, LOD2_PROFILE);
   const headerH = measureJobHeader(job, lod);
   const innerScale = lod === 1 ? INNER_SCALE_LOD1 : 1;
@@ -1318,7 +1329,8 @@ function applySavedFlowView(d3, svg, zoom, state, view) {
 function fitToView(d3, svg, zoom, state, container) {
   const lod = 2;
   applyGraphLayout(state, lod, d3);
-  const bounds = layoutBounds(state.layouts[lod].layout, state.layouts[lod].groups, state.jobs);
+  const activeLayout = ensureLayout(state, lod);
+  const bounds = layoutBounds(activeLayout.layout, activeLayout.groups, state.jobsById);
   const cw = container.clientWidth || 600;
   const ch = container.clientHeight || 480;
   const pad = 20;
@@ -1332,4 +1344,90 @@ function fitToView(d3, svg, zoom, state, container) {
   const ty = (ch - bounds.height * k) / 2 - bounds.y * k;
   svg.attr('class', `flow-svg ${LOD_CLASSES[lod]}`);
   svg.call(zoom.transform, d3.zoomIdentity.translate(tx, ty).scale(k));
+}
+
+/**
+ * Stable signature of workflow structure (jobs, needs, step tree) for skipping full graph rebuilds
+ * when only lint diagnostics change.
+ * @param {object|null} workflow
+ * @returns {string}
+ */
+export function flowStructureSignature(workflow) {
+  if (!workflow?.jobs?.length) {
+    return '';
+  }
+  return workflow.jobs.map((job) => signatureJob(job)).join('\n');
+}
+
+function signatureJob(job) {
+  const needs = (job.reducedNeeds ?? job.needs ?? []).join(',');
+  return `${job.id}|${job.kind ?? 'job'}|${needs}|${signatureSteps(job.steps ?? [])}`;
+}
+
+function signatureSteps(steps) {
+  const parts = [];
+  for (const step of steps) {
+    if (step.kind === 'parallel') {
+      parts.push(`parallel(${signatureSteps(step.steps ?? [])})`);
+    } else {
+      parts.push(`${step.kind ?? 'step'}:${step.id ?? ''}:${step.line ?? 0}`);
+    }
+  }
+  return parts.join(',');
+}
+
+function renderJobDiagBadge(parent, jobDiags, posWidth) {
+  parent.selectAll('.flow-job__diagbadge').remove();
+  if (jobDiags.length === 0) {
+    return null;
+  }
+  const diagCounts = countBySeverity(jobDiags);
+  const badge = parent
+    .append('text')
+    .attr('class', 'flow-job__diagbadge')
+    .attr('x', posWidth - JOB_PAD)
+    .attr('y', 20)
+    .attr('text-anchor', 'end');
+  if (diagCounts.error > 0) {
+    badge.append('tspan').attr('class', 'flow-marker--error').text(`✖${diagCounts.error}`);
+  }
+  if (diagCounts.warning > 0) {
+    badge.append('tspan').attr('class', 'flow-marker--warning').attr('dx', 6).text(`⚠${diagCounts.warning}`);
+  }
+  if (diagCounts.info > 0) {
+    badge.append('tspan').attr('class', 'flow-marker--info').attr('dx', 6).text(`ℹ${diagCounts.info}`);
+  }
+  badge.append('title').text(jobDiags.map((d) => `${d.severity}: ${d.message}`).join('\n'));
+  return { diagbadge: badge, diagCounts };
+}
+
+/**
+ * Updates job diagnostic badges without rebuilding the SVG graph.
+ * @param {HTMLElement} container
+ * @param {object|null} workflow
+ * @param {object[]} diagnostics
+ * @returns {boolean}
+ */
+export function updateFlowGraphDiagnostics(container, workflow, diagnostics) {
+  const state = container?.__seitonFlowGraphState;
+  if (!state || !workflow?.jobs?.length) {
+    return false;
+  }
+  const diagMap = mapDiagnostics(workflow.jobs, diagnostics ?? []);
+  const layout = ensureLayout(state, state.currentLod).layout;
+  for (const [id, node] of state.jobNodes) {
+    const job = state.jobsById.get(id);
+    if (!job) {
+      continue;
+    }
+    const pos = layout.get(id);
+    const jobDiags = diagMap.get(job) ?? [];
+    const chrome = renderJobDiagBadge(node.group, jobDiags, pos?.width ?? node.box.attr('width'));
+    node.diagbadge = chrome?.diagbadge ?? null;
+    node.diagCounts = chrome?.diagCounts ?? null;
+    if (node.title && node.titleText) {
+      node.title.text(truncate(node.titleText, titleMaxChars(pos?.width ?? 0, node.diagCounts)));
+    }
+  }
+  return true;
 }

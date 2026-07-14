@@ -1,4 +1,3 @@
-using System.Buffers;
 using System.Text;
 using Seiton.Core.Flow;
 using Seiton.Core.Parsing;
@@ -12,36 +11,21 @@ namespace Seiton.Playground;
 /// </summary>
 public static class PlaygroundFlowRunner
 {
-    /// <summary>Guards the shared buffers and the identity cache (WASM is single-threaded; desktop tests are not).</summary>
+    /// <summary>Guards UTF-8 encoding buffer (WASM is single-threaded; desktop tests are not).</summary>
     private static readonly object FlowGate = new();
-
-    /// <summary>Reusable buffer for JSON serialization. Guarded by <see cref="FlowGate"/>.</summary>
-    private static readonly ArrayBufferWriter<byte> JsonBuffer = new(4096);
 
     /// <summary>Reusable buffer for UTF-8 encoding. Guarded by <see cref="FlowGate"/>.</summary>
     private static byte[]? _utf8Buf;
-
-    // ─── Identity-based short circuit (mirrors PlaygroundLintRunner) ───
-    private static string? _lastYamlSource;
-    private static string? _lastFilePath;
-    private static byte[]? _lastJsonOutput;
-
-    private static string? _lastMermaidYamlSource;
-    private static string? _lastMermaidFilePath;
-    private static byte[]? _lastMermaidOutput;
 
     /// <summary>Clears shared caches between playground tests.</summary>
     internal static void ResetSharedStateForTests()
     {
         lock (FlowGate)
         {
-            _lastYamlSource = null;
-            _lastFilePath = null;
-            _lastJsonOutput = null;
-            _lastMermaidYamlSource = null;
-            _lastMermaidFilePath = null;
-            _lastMermaidOutput = null;
+            _utf8Buf = null;
         }
+
+        PlaygroundFlowOutputCache.ResetForTests();
     }
 
     /// <summary>
@@ -50,39 +34,7 @@ public static class PlaygroundFlowRunner
     /// </summary>
     public static byte[] RunFlowToJsonUtf8(string yamlSource, string filePath)
     {
-        ArgumentNullException.ThrowIfNull(yamlSource);
-        ArgumentException.ThrowIfNullOrEmpty(filePath);
-
-        lock (FlowGate)
-        {
-            // Fast path: if source and filePath are identical to last call, return cached output
-            if (ReferenceEquals(yamlSource, _lastYamlSource)
-                && string.Equals(filePath, _lastFilePath, StringComparison.Ordinal)
-                && _lastJsonOutput is not null)
-            {
-                return _lastJsonOutput;
-            }
-
-            var utf8Yaml = EncodeToReusableBuffer(yamlSource);
-
-            byte[] result;
-            using (var parseResult = WorkflowParser.Parse(utf8Yaml, filePath))
-            {
-                var flow = WorkflowFlowCollector.Collect(parseResult, filePath);
-                JsonBuffer.Clear();
-                WorkflowFlowJson.Write(JsonBuffer, flow is null ? [] : [flow]);
-                var written = JsonBuffer.WrittenSpan;
-                result = _lastJsonOutput is not null && written.SequenceEqual(_lastJsonOutput)
-                    ? _lastJsonOutput
-                    : written.ToArray();
-            }
-
-            _lastYamlSource = yamlSource;
-            _lastFilePath = filePath;
-            _lastJsonOutput = result;
-
-            return result;
-        }
+        return EnsureOutputs(yamlSource, filePath).Json;
     }
 
     /// <summary>
@@ -92,36 +44,42 @@ public static class PlaygroundFlowRunner
     /// </summary>
     public static byte[] RunFlowToMermaidUtf8(string yamlSource, string filePath)
     {
+        return EnsureOutputs(yamlSource, filePath).Mermaid;
+    }
+
+    /// <summary>
+    /// Stores flow outputs produced during a combined lint+flow parse in
+    /// <see cref="PlaygroundLintRunner"/>.
+    /// </summary>
+    internal static void StoreFlowFromLint(ulong yamlHash, string filePath, WorkflowFlow? flow)
+    {
+        PlaygroundFlowOutputCache.Store(yamlHash, filePath, flow);
+    }
+
+    private static (byte[] Json, byte[] Mermaid) EnsureOutputs(string yamlSource, string filePath)
+    {
         ArgumentNullException.ThrowIfNull(yamlSource);
         ArgumentException.ThrowIfNullOrEmpty(filePath);
 
+        var yamlHash = PlaygroundYamlHash.Compute(yamlSource);
+        if (PlaygroundFlowOutputCache.TryGet(yamlHash, filePath, out var cachedJson, out var cachedMermaid))
+        {
+            return (cachedJson, cachedMermaid);
+        }
+
         lock (FlowGate)
         {
-            if (ReferenceEquals(yamlSource, _lastMermaidYamlSource)
-                && string.Equals(filePath, _lastMermaidFilePath, StringComparison.Ordinal)
-                && _lastMermaidOutput is not null)
+            if (PlaygroundFlowOutputCache.TryGet(yamlHash, filePath, out cachedJson, out cachedMermaid))
             {
-                return _lastMermaidOutput;
+                return (cachedJson, cachedMermaid);
             }
 
             var utf8Yaml = EncodeToReusableBuffer(yamlSource);
-
-            byte[] result;
-            using (var parseResult = WorkflowParser.Parse(utf8Yaml, filePath))
-            {
-                var flow = WorkflowFlowCollector.Collect(parseResult, filePath);
-                var mermaid = WorkflowFlowMermaid.Serialize(flow is null ? [] : [flow]);
-                var bytes = Encoding.UTF8.GetBytes(mermaid);
-                result = _lastMermaidOutput is not null && bytes.AsSpan().SequenceEqual(_lastMermaidOutput)
-                    ? _lastMermaidOutput
-                    : bytes;
-            }
-
-            _lastMermaidYamlSource = yamlSource;
-            _lastMermaidFilePath = filePath;
-            _lastMermaidOutput = result;
-
-            return result;
+            using var parseResult = WorkflowParser.Parse(utf8Yaml, filePath);
+            var flow = WorkflowFlowCollector.Collect(parseResult, filePath);
+            PlaygroundFlowOutputCache.Store(yamlHash, filePath, flow);
+            PlaygroundFlowOutputCache.TryGet(yamlHash, filePath, out cachedJson, out cachedMermaid);
+            return (cachedJson, cachedMermaid);
         }
     }
 
@@ -137,6 +95,7 @@ public static class PlaygroundFlowRunner
         {
             _utf8Buf = new byte[byteCount];
         }
+
         Encoding.UTF8.GetBytes(source, _utf8Buf);
         return _utf8Buf;
     }

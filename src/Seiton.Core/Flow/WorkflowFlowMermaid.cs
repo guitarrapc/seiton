@@ -1,3 +1,4 @@
+using System.Buffers;
 using System.Text;
 
 namespace Seiton.Core.Flow;
@@ -20,6 +21,14 @@ public static class WorkflowFlowMermaid
     /// </summary>
     public static string Serialize(ReadOnlySpan<WorkflowFlow> workflows)
     {
+        var buffer = new ArrayBufferWriter<byte>(1024);
+        Write(buffer, workflows);
+        return Encoding.UTF8.GetString(buffer.WrittenSpan);
+    }
+
+    /// <summary>Writes Mermaid flowchart UTF-8 bytes without an intermediate <see cref="string"/>.</summary>
+    public static void Write(IBufferWriter<byte> output, ReadOnlySpan<WorkflowFlow> workflows)
+    {
         var sb = new StringBuilder(1024);
         sb.Append("flowchart LR\n");
         var wrap = workflows.Length > 1;
@@ -28,7 +37,11 @@ public static class WorkflowFlowMermaid
             WriteWorkflow(sb, workflows[w], wrap ? $"w{w}" : string.Empty, wrap);
         }
 
-        return sb.ToString();
+        var text = sb.ToString();
+        var byteCount = Encoding.UTF8.GetByteCount(text);
+        var span = output.GetSpan(byteCount);
+        var written = Encoding.UTF8.GetBytes(text, span);
+        output.Advance(written);
     }
 
     private static void WriteWorkflow(StringBuilder sb, WorkflowFlow workflow, string prefix, bool wrap)

@@ -80,10 +80,22 @@ public sealed class PlaygroundFlowTabContractTests
         await Assert.That(js).Contains("captureFlowViewState");
         await Assert.That(js).Contains("preserveView");
         await Assert.That(js).Contains("initialView");
-        await Assert.That(js).Contains("getMermaid:");
+        await Assert.That(js).Contains("flowStructureSignature");
+        await Assert.That(js).Contains("updateFlowGraphDiagnostics");
+        await Assert.That(js).Contains("scheduleMermaidPreviewRender");
         await Assert.That(js).Contains("renderMermaid");
         await Assert.That(js).Contains("isMermaidPreviewActive");
         await Assert.That(js).Contains("isMermaidEmpty");
+    }
+
+    [Test]
+    public async Task FlowGraphModule_LazyLayoutsAndStructureSignature()
+    {
+        var js = await ReadWwwrootFileAsync("flow-graph.js");
+        await Assert.That(js).Contains("function ensureLayout");
+        await Assert.That(js).Contains("export function flowStructureSignature");
+        await Assert.That(js).Contains("export function updateFlowGraphDiagnostics");
+        await Assert.That(js.Contains("computeAllLayouts", StringComparison.Ordinal)).IsFalse();
     }
 
     [Test]
@@ -137,7 +149,7 @@ public sealed class PlaygroundFlowTabContractTests
         await Assert.That(js).Contains("flow-step__marks");
         await Assert.That(js).Contains("stepLabelParts");
         // Per-LOD job layout: compact cards at far zoom, full geometry at near zoom.
-        await Assert.That(js).Contains("computeAllLayouts");
+        await Assert.That(js).Contains("ensureLayout");
         await Assert.That(js).Contains("applyGraphLayout");
         await Assert.That(js).Contains("MIN_JOB_W_LOD0");
         await Assert.That(js).Contains("INNER_SCALE_LOD1");

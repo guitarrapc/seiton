@@ -127,6 +127,46 @@ public sealed class PlaygroundFlowRunnerTests
     }
 
     [Test]
+    public async Task RunFlowToJsonAndMermaid_SameContentHash_ReturnsCachedOutputs()
+    {
+        const string yaml = """
+            on: push
+            jobs:
+              build:
+                runs-on: ubuntu-latest
+                steps:
+                  - run: echo ok
+            """;
+
+        var json = PlaygroundFlowRunner.RunFlowToJsonUtf8(new string(yaml.AsSpan()), ".github/workflows/ci.yml");
+        var mermaid = PlaygroundFlowRunner.RunFlowToMermaidUtf8(new string(yaml.AsSpan()), ".github/workflows/ci.yml");
+        var jsonAgain = PlaygroundFlowRunner.RunFlowToJsonUtf8(new string(yaml.AsSpan()), ".github/workflows/ci.yml");
+        var mermaidAgain = PlaygroundFlowRunner.RunFlowToMermaidUtf8(new string(yaml.AsSpan()), ".github/workflows/ci.yml");
+
+        await Assert.That(ReferenceEquals(json, jsonAgain)).IsTrue();
+        await Assert.That(ReferenceEquals(mermaid, mermaidAgain)).IsTrue();
+    }
+
+    [Test]
+    public async Task RunFlowToJson_AfterLint_SameContent_ReusesFlowCache()
+    {
+        const string yaml = """
+            on: push
+            jobs:
+              build:
+                runs-on: ubuntu-latest
+                steps:
+                  - run: echo ok
+            """;
+
+        PlaygroundLintRunner.RunToJsonUtf8(yaml, ".github/workflows/ci.yml");
+        var flow = PlaygroundFlowRunner.RunFlowToJsonUtf8(new string(yaml.AsSpan()), ".github/workflows/ci.yml");
+        var flowAgain = PlaygroundFlowRunner.RunFlowToJsonUtf8(new string(yaml.AsSpan()), ".github/workflows/ci.yml");
+
+        await Assert.That(ReferenceEquals(flow, flowAgain)).IsTrue();
+    }
+
+    [Test]
     public async Task RunFlowToJson_RepeatedCalls_ProducesConsistentOutput()
     {
         const string yaml = """
