@@ -1604,6 +1604,16 @@ footer a {
   pointer-events: none;
 }
 
+.flow-job__matrix-stack {
+  pointer-events: none;
+}
+
+.flow-job__matrix-stack-card {
+  fill: var(--results-surface, transparent);
+  stroke: var(--border-pane);
+  stroke-width: 1;
+}
+
 .flow-job__legs {
   fill: var(--accent);
   font-size: 11px;

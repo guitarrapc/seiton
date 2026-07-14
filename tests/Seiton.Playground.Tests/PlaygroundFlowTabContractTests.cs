@@ -304,10 +304,15 @@ public sealed class PlaygroundFlowTabContractTests
         var js = await ReadWwwrootFileAsync("flow-graph.js");
         // GitHub-like folder tab marks matrix jobs at every LOD.
         await Assert.That(js).Contains("flow-job__folder-tab");
+        await Assert.That(js).Contains("flow-job__matrix-stack");
+        await Assert.That(js).Contains("matrixStackLayerCount");
+        await Assert.That(js).Contains("jobAdornmentBounds");
+        await Assert.That(js).Contains("MATRIX_GROUP_EXTRA_PAD");
         await Assert.That(js).Contains("Matrix");
 
         var css = await ReadWwwrootFileAsync("style.css");
         await Assert.That(css).Contains(".flow-job__folder-tab");
+        await Assert.That(css).Contains(".flow-job__matrix-stack-card");
     }
 
     [Test]

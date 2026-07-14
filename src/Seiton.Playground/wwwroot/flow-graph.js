@@ -36,6 +36,12 @@ const PAR_PAD = 8;
 const PAR_CHILDREN_PER_ROW = 3;
 const MAX_LEG_CHIPS = 4;
 
+const MAX_MATRIX_STACK_LAYERS = 3;
+const MATRIX_STACK_DX = 5;
+const MATRIX_STACK_DY = 4;
+const MATRIX_FOLDER_TAB_OVERHANG = 17;
+const MATRIX_GROUP_EXTRA_PAD = 4;
+
 const LOD_CLASSES = ['flow-svg--lod0', 'flow-svg--lod1', 'flow-svg--lod2'];
 
 const DISPLAY_SCALE_MIN = 0.5;
@@ -268,8 +274,8 @@ function drawMarker(group, diags, x, y) {
 
 /** Layout-size ratio between LOD tiers, raised to LOD_COMPENSATE_EXP. */
 function lodCompensatingScale(prevLod, nextLod, state) {
-  const prev = layoutBounds(state.layouts[prevLod].layout, state.layouts[prevLod].groups);
-  const next = layoutBounds(state.layouts[nextLod].layout, state.layouts[nextLod].groups);
+  const prev = layoutBounds(state.layouts[prevLod].layout, state.layouts[prevLod].groups, state.jobs);
+  const next = layoutBounds(state.layouts[nextLod].layout, state.layouts[nextLod].groups, state.jobs);
   const prevSize = Math.max(prev.width, prev.height, 1);
   const nextSize = Math.max(next.width, next.height, 1);
   return (prevSize / nextSize) ** LOD_COMPENSATE_EXP;
@@ -350,6 +356,7 @@ function applyGraphLayout(state, lod, d3) {
     node.box.attr('width', pos.width).attr('height', pos.height);
     node.header.attr('width', pos.width).attr('height', pos.headerH);
     updateJobChrome(node, pos);
+    updateMatrixStack(node, pos);
     if (node.summary) {
       node.summary.attr('y', pos.headerH + 14);
     }
@@ -391,7 +398,7 @@ function titleMaxChars(width, diagCounts) {
   return Math.max(4, Math.floor((width - JOB_PAD * 2 - reserved) / 6.2));
 }
 
-function layoutBounds(layout, groups) {
+function layoutBounds(layout, groups, jobs) {
   let maxX = 0;
   let maxY = 0;
   for (const pos of layout.values()) {
@@ -399,24 +406,39 @@ function layoutBounds(layout, groups) {
     maxY = Math.max(maxY, pos.y + pos.height);
   }
   for (const group of groups) {
-    const frame = groupFrameBounds(group.members, layout);
+    const frame = groupFrameBounds(group.members, layout, jobs);
     maxX = Math.max(maxX, frame.x + frame.width);
     maxY = Math.max(maxY, frame.y + frame.height);
   }
   return { x: 0, y: 0, width: maxX, height: maxY };
 }
 
-function groupFrameBounds(members, layout) {
+function jobAdornmentBounds(job, pos) {
+  if (!job?.strategy?.hasMatrix) {
+    return { top: 0, left: 0, right: 0, bottom: 0 };
+  }
+  const layers = matrixStackLayerCount(jobLegs(job).length);
+  return {
+    top: MATRIX_FOLDER_TAB_OVERHANG + MATRIX_GROUP_EXTRA_PAD,
+    left: MATRIX_GROUP_EXTRA_PAD,
+    right: layers * MATRIX_STACK_DX + MATRIX_GROUP_EXTRA_PAD,
+    bottom: layers * MATRIX_STACK_DY + MATRIX_GROUP_EXTRA_PAD,
+  };
+}
+
+function groupFrameBounds(members, layout, jobs) {
+  const byId = jobs ? new Map(jobs.map((j) => [jobKey(j.id), j])) : null;
   let minX = Infinity;
   let minY = Infinity;
   let maxX = 0;
   let maxY = 0;
   for (const id of members) {
     const pos = layout.get(id);
-    minX = Math.min(minX, pos.x);
-    minY = Math.min(minY, pos.y);
-    maxX = Math.max(maxX, pos.x + pos.width);
-    maxY = Math.max(maxY, pos.y + pos.height);
+    const adorn = jobAdornmentBounds(byId?.get(id), pos);
+    minX = Math.min(minX, pos.x - adorn.left);
+    minY = Math.min(minY, pos.y - adorn.top);
+    maxX = Math.max(maxX, pos.x + pos.width + adorn.right);
+    maxY = Math.max(maxY, pos.y + pos.height + adorn.bottom);
   }
   return {
     x: minX - GROUP_PAD,
@@ -429,7 +451,7 @@ function groupFrameBounds(members, layout) {
 function updateNeedsGroupFrames(state, groups, layout) {
   for (let i = 0; i < groups.length; i++) {
     const group = groups[i];
-    const frame = groupFrameBounds(group.members, layout);
+    const frame = groupFrameBounds(group.members, layout, state.jobs);
     group.frame = frame;
     const rect = state.groupFrameRects[i];
     if (rect) {
@@ -443,7 +465,7 @@ function updateEdgePaths(state, d3, layout, groups) {
   for (const edge of state.edgeSelections) {
     if (edge.kind === 'group') {
       const source = layout.get(edge.from);
-      const frame = edge.group.frame ?? groupFrameBounds(edge.group.members, layout);
+      const frame = edge.group.frame ?? groupFrameBounds(edge.group.members, layout, state.jobs);
       if (!source || !frame) continue;
       const sx = source.x + source.width;
       const sy = source.y + source.height / 2;
@@ -573,7 +595,7 @@ const GROUP_PAD = 10;
  */
 function drawNeedsGroups(groupLayer, edgeLayer, groups, layout, state) {
   for (const group of groups) {
-    const frame = groupFrameBounds(group.members, layout);
+    const frame = groupFrameBounds(group.members, layout, state.jobs);
     group.frame = frame;
 
     const rect = groupLayer
@@ -837,6 +859,47 @@ function matrixVariantCountText(count) {
   return `${count} variant${count === 1 ? '' : 's'}`;
 }
 
+/** Ghost card count behind a matrix job (capped; 0 when only one variant). */
+function matrixStackLayerCount(legCount) {
+  const variants = legCount > 0 ? legCount : 2;
+  if (variants <= 1) return 0;
+  return Math.min(variants - 1, MAX_MATRIX_STACK_LAYERS);
+}
+
+function drawMatrixStack(g, pos, layerCount) {
+  if (layerCount <= 0) return [];
+  const cards = [];
+  const stack = g.append('g').attr('class', 'flow-job__matrix-stack');
+  for (let i = 0; i < layerCount; i++) {
+    const depth = layerCount - i;
+    cards.push(
+      stack
+        .append('rect')
+        .attr('class', 'flow-job__matrix-stack-card')
+        .attr('x', depth * MATRIX_STACK_DX)
+        .attr('y', depth * MATRIX_STACK_DY)
+        .attr('width', pos.width)
+        .attr('height', pos.height)
+        .attr('rx', 8)
+        .attr('opacity', 0.2 + (0.2 * (i + 1)) / layerCount),
+    );
+  }
+  return cards;
+}
+
+function updateMatrixStack(node, pos) {
+  if (!node.matrixStackCards?.length) return;
+  const layerCount = node.matrixStackCards.length;
+  node.matrixStackCards.forEach((rect, i) => {
+    const depth = layerCount - i;
+    rect
+      .attr('x', depth * MATRIX_STACK_DX)
+      .attr('y', depth * MATRIX_STACK_DY)
+      .attr('width', pos.width)
+      .attr('height', pos.height);
+  });
+}
+
 /**
  * Runtime settings line (timeout / environment), shown when zoomed in.
  * Permissions are intentionally detail-panel only — even two scopes truncate on the node.
@@ -887,14 +950,21 @@ function measureJob(job, lod) {
 // ─── Job node rendering ───
 
 function drawJobNode(d3, layer, job, pos, select, diagMap) {
+  const jobClass = job.kind === 'reusable'
+    ? 'flow-job flow-job--reusable'
+    : job.strategy?.hasMatrix
+      ? 'flow-job flow-job--matrix'
+      : 'flow-job';
   const g = layer
     .append('g')
-    .attr('class', job.kind === 'reusable' ? 'flow-job flow-job--reusable' : 'flow-job')
+    .attr('class', jobClass)
     .attr('transform', `translate(${pos.x},${pos.y})`);
 
-  // Matrix jobs get a GitHub-like folder tab above the card.
+  let matrixStackCards = [];
+  // Matrix jobs: stacked ghost cards + folder tab above the front card.
   if (job.strategy?.hasMatrix) {
     const legCount = jobLegs(job).length;
+    matrixStackCards = drawMatrixStack(g, pos, matrixStackLayerCount(legCount));
     const tabLabel = matrixFolderTabText(legCount);
     const tabWidth = Math.max(56, Math.min(108, tabLabel.length * 6.2 + 14));
     g.append('rect')
@@ -1021,7 +1091,7 @@ function drawJobNode(d3, layer, job, pos, select, diagMap) {
   }
 
   const box = g.select('.flow-job__box');
-  return { group: g, box, header, inner, summary, title, titleText, diagbadge, diagCounts };
+  return { group: g, box, header, inner, summary, title, titleText, diagbadge, diagCounts, matrixStackCards };
 }
 
 function countSteps(steps) {
@@ -1204,7 +1274,7 @@ function truncate(text, max) {
 function fitToView(d3, svg, zoom, state, container) {
   const lod = 2;
   applyGraphLayout(state, lod, d3);
-  const bounds = layoutBounds(state.layouts[lod].layout, state.layouts[lod].groups);
+  const bounds = layoutBounds(state.layouts[lod].layout, state.layouts[lod].groups, state.jobs);
   const cw = container.clientWidth || 600;
   const ch = container.clientHeight || 480;
   const pad = 20;
