@@ -6,7 +6,7 @@ on:
       benchmark:
         description: "Benchmark filter"
         required: true
-        default: "*Core*Benchmark*"
+        default: "*"
         type: choice
         options:
           - "*"
