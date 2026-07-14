@@ -298,7 +298,7 @@ function transitionLod(svg, state, d3, prevLod, lod) {
 /** Target LOD after zooming to `k`, using hysteresis thresholds. */
 function lodForScale(lod, k) {
   let next = lod;
-  for (;;) {
+  for (; ;) {
     if (LOD_DROP_K[next] !== null && k < LOD_DROP_K[next] && next > 0) {
       next--;
       continue;
@@ -900,14 +900,14 @@ function drawJobNode(d3, layer, job, pos, select, diagMap) {
     g.append('rect')
       .attr('class', 'flow-job__folder-tab')
       .attr('x', 0)
-      .attr('y', -13)
+      .attr('y', -17)
       .attr('width', tabWidth)
-      .attr('height', 18)
+      .attr('height', 24)
       .attr('rx', 5);
     g.append('text')
       .attr('class', 'flow-job__folder-tab-text')
       .attr('x', 8)
-      .attr('y', -2)
+      .attr('y', -5)
       .text(tabLabel);
   }
 
