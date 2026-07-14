@@ -76,7 +76,19 @@ public sealed class PlaygroundFlowTabContractTests
         await Assert.That(js).Contains("flow-svg--lod0");
         await Assert.That(js).Contains("flow-svg--lod1");
         await Assert.That(js).Contains("flow-svg--lod2");
-        await Assert.That(js).Contains("LOD2_THRESHOLD = 0.85");
+        // Wheel / pinch changes LOD; toolbar buttons change display scale only.
+        // Wheel: continuous zoom + LOD at scale-band edges.
+        await Assert.That(js).Contains("WHEEL_ZOOM_SENS");
+        await Assert.That(js).Contains("LOD_DROP_K");
+        await Assert.That(js).Contains("LOD_RISE_K");
+        await Assert.That(js).Contains("lodForScale");
+        await Assert.That(js).Contains("LOD_COMPENSATE_EXP");
+        await Assert.That(js).Contains("lodCompensatingScale");
+        await Assert.That(js).Contains("scaleTransformAt");
+        await Assert.That(js.Contains("WHEEL_LOD_STEP", StringComparison.Ordinal)).IsFalse();
+        await Assert.That(js.Contains("setLod", StringComparison.Ordinal)).IsFalse();
+        await Assert.That(js).Contains("wireLodWheel");
+        await Assert.That(js).Contains("DISPLAY_SCALE_MIN");
         // Step frames and labels are paired; markers are a separate tspan hidden at lod1.
         await Assert.That(js).Contains("flow-step__label");
         await Assert.That(js).Contains("flow-step__marks");
@@ -86,6 +98,7 @@ public sealed class PlaygroundFlowTabContractTests
         await Assert.That(js).Contains("applyGraphLayout");
         await Assert.That(js).Contains("MIN_JOB_W_LOD0");
         await Assert.That(js).Contains("INNER_SCALE_LOD1");
+        await Assert.That(js.Contains("LOD2_THRESHOLD", StringComparison.Ordinal)).IsFalse();
     }
 
     [Test]

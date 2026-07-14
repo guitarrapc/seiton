@@ -7,12 +7,11 @@
 //      lanes, `wait`/`wait-all` join those lanes back, `cancel` cuts them, and
 //      `parallel` boundaries hold simultaneous children.
 //
-// Zoom scale (k) selects LOD (level of detail). Each LOD uses its own job-card layout
-// so panning out sheds information (lod2 → lod1 → lod0) instead of shrinking text
-// below readability. Zoom buttons still scale the whole SVG for display size.
-//   lod0 (far)  — compact job cards + `N steps` summary, intra-job flow hidden
-//   lod1 (mid)  — tighter job cards, step frames/edges/simplified labels
-//   lod2 (near) — full job cards and labels including markers
+// Wheel / pinch: continuous zoom at the pointer; LOD shifts at zoom-band edges with
+// layout compensation so scroll feels like zooming, not a discrete detail toggle.
+//   lod0 — compact job cards + `N steps` summary, intra-job flow hidden
+//   lod1 — tighter job cards, step frames/edges/simplified labels
+//   lod2 — full job cards and labels including markers
 // Step frames and labels always appear together at lod1/lod2.
 //
 // The flow-json contract is produced by PlaygroundFlowRunner (same as
@@ -37,10 +36,17 @@ const PAR_PAD = 8;
 const PAR_CHILDREN_PER_ROW = 3;
 const MAX_LEG_CHIPS = 4;
 
-const LOD1_THRESHOLD = 0.55;
-const LOD2_THRESHOLD = 0.85;
-
 const LOD_CLASSES = ['flow-svg--lod0', 'flow-svg--lod1', 'flow-svg--lod2'];
+
+const DISPLAY_SCALE_MIN = 0.5;
+const DISPLAY_SCALE_MAX = 1.75;
+// Continuous zoom per wheel tick; LOD shifts when k crosses band edges (with hysteresis).
+const WHEEL_ZOOM_SENS = 0.0014;
+const LOD_COMPENSATE_EXP = 0.55;
+/** Drop to lod-1 when k falls below [n/a, lod1 floor, lod2 floor]. */
+const LOD_DROP_K = [null, 0.6, 0.74];
+/** Rise to lod+1 when k rises above [lod0 ceil, lod1 ceil, n/a]. */
+const LOD_RISE_K = [0.74, 0.92, null];
 
 const MIN_JOB_W_LOD0 = 148;
 const SUMMARY_H = 18;
@@ -124,12 +130,18 @@ export function renderFlowGraph(container, workflow, { onSelect, diagnostics, on
 
   const zoom = d3
     .zoom()
-    .scaleExtent([0.2, 3])
+    .scaleExtent([DISPLAY_SCALE_MIN, DISPLAY_SCALE_MAX])
+    .filter((event) => {
+      // Drag-pan only; wheel / pinch zoom are handled as LOD changes.
+      if (event.type === 'wheel' || event.type === 'dblclick') return false;
+      if (event.type === 'touchstart' && event.touches.length > 1) return false;
+      return !event.button;
+    })
     .on('zoom', (ev) => {
       viewport.attr('transform', ev.transform);
-      applyLodAndLayout(svg, ev.transform.k, graphState, d3);
     });
   svg.call(zoom);
+  const wheelCleanup = wireLodWheel(svg, zoom, graphState, d3);
   const fit = () => fitToView(d3, svg, zoom, graphState, container);
   fit();
 
@@ -151,6 +163,7 @@ export function renderFlowGraph(container, workflow, { onSelect, diagnostics, on
     zoomOut: () => svg.call(zoom.scaleBy, 0.8),
     reset: fit,
     dispose: () => {
+      wheelCleanup?.();
       resizeObserver?.disconnect();
       if (resizeFrame !== null) cancelAnimationFrame(resizeFrame);
     },
@@ -253,18 +266,72 @@ function drawMarker(group, diags, x, y) {
     .text(diags.map((d) => `${d.severity}: ${d.message}`).join('\n'));
 }
 
-/** Maps zoom scale to LOD tier. */
-function lodFromScale(k) {
-  return k < LOD1_THRESHOLD ? 0 : k < LOD2_THRESHOLD ? 1 : 2;
+/** Layout-size ratio between LOD tiers, raised to LOD_COMPENSATE_EXP. */
+function lodCompensatingScale(prevLod, nextLod, state) {
+  const prev = layoutBounds(state.layouts[prevLod].layout, state.layouts[prevLod].groups);
+  const next = layoutBounds(state.layouts[nextLod].layout, state.layouts[nextLod].groups);
+  const prevSize = Math.max(prev.width, prev.height, 1);
+  const nextSize = Math.max(next.width, next.height, 1);
+  return (prevSize / nextSize) ** LOD_COMPENSATE_EXP;
 }
 
-/** Swaps LOD class and per-LOD job layout when the zoom scale crosses a threshold. */
-function applyLodAndLayout(svg, k, state, d3) {
-  const lod = lodFromScale(k);
-  if (lod !== state.currentLod) {
-    applyGraphLayout(state, lod, d3);
-  }
+function clampDisplayScale(k) {
+  return Math.max(DISPLAY_SCALE_MIN, Math.min(DISPLAY_SCALE_MAX, k));
+}
+
+/** Zoom transform that keeps `pointer` (svg-local px) fixed on screen. */
+function scaleTransformAt(d3, transform, newK, pointer) {
+  const [px, py] = pointer;
+  const tx = px - (px - transform.x) * (newK / transform.k);
+  const ty = py - (py - transform.y) * (newK / transform.k);
+  return d3.zoomIdentity.translate(tx, ty).scale(newK);
+}
+
+/** Applies layout + class for `lod` and returns the compensating scale factor from `prevLod`. */
+function transitionLod(svg, state, d3, prevLod, lod) {
+  const compensate = lodCompensatingScale(prevLod, lod, state);
+  applyGraphLayout(state, lod, d3);
   svg.attr('class', `flow-svg ${LOD_CLASSES[lod]}`);
+  return compensate;
+}
+
+/** Target LOD after zooming to `k`, using hysteresis thresholds. */
+function lodForScale(lod, k) {
+  let next = lod;
+  for (;;) {
+    if (LOD_DROP_K[next] !== null && k < LOD_DROP_K[next] && next > 0) {
+      next--;
+      continue;
+    }
+    if (LOD_RISE_K[next] !== null && k > LOD_RISE_K[next] && next < 2) {
+      next++;
+      continue;
+    }
+    return next;
+  }
+}
+
+/** Scroll / pinch: zoom continuously; shift LOD (with compensation) at band boundaries. */
+function wireLodWheel(svg, zoom, state, d3) {
+  const handler = (event) => {
+    event.preventDefault();
+    const pointer = d3.pointer(event, svg.node());
+    const current = d3.zoomTransform(svg.node());
+    const factor = Math.exp(-event.deltaY * WHEEL_ZOOM_SENS);
+    let k = clampDisplayScale(current.k * factor);
+
+    let lod = state.currentLod;
+    const targetLod = lodForScale(lod, k);
+    if (targetLod !== lod) {
+      k = clampDisplayScale(k * transitionLod(svg, state, d3, lod, targetLod));
+      lod = targetLod;
+    }
+
+    svg.call(zoom.transform, scaleTransformAt(d3, current, k, pointer));
+  };
+  const node = svg.node();
+  node?.addEventListener('wheel', handler, { passive: false });
+  return () => node?.removeEventListener('wheel', handler);
 }
 
 function computeAllLayouts(jobs) {
@@ -311,19 +378,6 @@ function layoutBounds(layout, groups) {
     maxY = Math.max(maxY, frame.y + frame.height);
   }
   return { x: 0, y: 0, width: maxX, height: maxY };
-}
-
-function computeFitScale(layout, groups, container) {
-  const bounds = layoutBounds(layout, groups);
-  if (bounds.width <= 0 || bounds.height <= 0) return 1;
-  const cw = container.clientWidth || 600;
-  const ch = container.clientHeight || 480;
-  const pad = 20;
-  return Math.min(
-    1,
-    Math.max(1, cw - pad * 2) / bounds.width,
-    Math.max(1, ch - pad * 2) / bounds.height,
-  );
 }
 
 function groupFrameBounds(members, layout) {
@@ -1114,25 +1168,22 @@ function truncate(text, max) {
   return text.length <= max ? text : `${text.slice(0, Math.max(1, max - 1))}…`;
 }
 
-/** Scales and centers the viewport; picks the LOD layout that fits at a readable scale. */
+/** Fits the graph at lod2 and sets the baseline display scale (toolbar zoom only). */
 function fitToView(d3, svg, zoom, state, container) {
-  let lod = 2;
-  let k = computeFitScale(state.layouts[2].layout, state.layouts[2].groups, container);
-  const lodFromFit = lodFromScale(k);
-  if (lodFromFit !== 2) {
-    lod = lodFromFit;
-    k = computeFitScale(state.layouts[lod].layout, state.layouts[lod].groups, container);
-  }
-
+  const lod = 2;
   applyGraphLayout(state, lod, d3);
   const bounds = layoutBounds(state.layouts[lod].layout, state.layouts[lod].groups);
   const cw = container.clientWidth || 600;
   const ch = container.clientHeight || 480;
   const pad = 20;
+  const rawK = Math.min(
+    1,
+    Math.max(1, cw - pad * 2) / bounds.width,
+    Math.max(1, ch - pad * 2) / bounds.height,
+  );
+  const k = Math.max(DISPLAY_SCALE_MIN, Math.min(DISPLAY_SCALE_MAX, rawK));
   const tx = (cw - bounds.width * k) / 2 - bounds.x * k;
   const ty = (ch - bounds.height * k) / 2 - bounds.y * k;
-  const [, maxScale] = zoom.scaleExtent();
-  zoom.scaleExtent([Math.min(0.2, k * 0.5), maxScale]);
   svg.attr('class', `flow-svg ${LOD_CLASSES[lod]}`);
   svg.call(zoom.transform, d3.zoomIdentity.translate(tx, ty).scale(k));
 }

@@ -144,7 +144,7 @@ public sealed class PlaygroundUiLayoutTests
 
         var scaleBefore = await page.EvaluateAsync<double>(
             "() => globalThis.d3.zoomTransform(document.querySelector('#flow-graph .flow-svg')).k");
-        await Assert.That(scaleBefore).IsLessThan(0.2);
+        await Assert.That(scaleBefore).IsLessThanOrEqualTo(0.5);
 
         await page.Locator("#flow-zoom-out-btn").ClickAsync();
         var scaleAfter = await page.EvaluateAsync<double>(
