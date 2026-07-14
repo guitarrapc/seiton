@@ -22,6 +22,9 @@ public sealed class PlaygroundFlowTabContractTests
         await Assert.That(html).Contains("id=\"mermaid-preview\"", StringComparison.Ordinal);
         await Assert.That(html).Contains("id=\"mermaid-preview-btn\"", StringComparison.Ordinal);
         await Assert.That(html).Contains("id=\"mermaid-copy-btn\"", StringComparison.Ordinal);
+        await Assert.That(html).Contains("id=\"mermaid-zoom-out-btn\"", StringComparison.Ordinal);
+        await Assert.That(html).Contains("id=\"mermaid-zoom-reset-btn\"", StringComparison.Ordinal);
+        await Assert.That(html).Contains("id=\"mermaid-zoom-in-btn\"", StringComparison.Ordinal);
         await Assert.That(html).Contains("id=\"flow-graph\"", StringComparison.Ordinal);
         await Assert.That(html).Contains("id=\"flow-detail\"", StringComparison.Ordinal);
         await Assert.That(html).Contains("id=\"flow-zoom-out-btn\"", StringComparison.Ordinal);
@@ -68,6 +71,10 @@ public sealed class PlaygroundFlowTabContractTests
         await Assert.That(js).Contains("refreshMermaid");
         await Assert.That(js).Contains("setMermaidPreviewMode");
         await Assert.That(js).Contains("renderMermaidPreviewSvg");
+        await Assert.That(js).Contains("wireMermaidPreviewZoom");
+        await Assert.That(js).Contains("fitMermaidPreview");
+        await Assert.That(js).Contains("scaleExtent([fitScale,");
+        await Assert.That(js).Contains("d3.zoom");
         await Assert.That(js).Contains("selectResultsTab");
         await Assert.That(js).Contains("from './flow-graph.js'");
         await Assert.That(js).Contains("captureFlowViewState");
@@ -380,6 +387,8 @@ public sealed class PlaygroundFlowTabContractTests
         await Assert.That(css).Contains(".mermaid-output");
         await Assert.That(css).Contains(".mermaid-preview");
         await Assert.That(css).Contains(".mermaid-toolbar-btn");
+        await Assert.That(css).Contains(".mermaid-preview--zoomable");
+        await Assert.That(css).Contains("cursor: grab");
         await Assert.That(css).Contains(".flow-parallel-boundary");
         await Assert.That(css).Contains(".flow-edge");
     }

@@ -201,6 +201,15 @@
         </div>
         <div id="mermaid-panel" role="tabpanel" aria-labelledby="tab-mermaid-btn" hidden>
           <div class="mermaid-toolbar">
+            <span class="mermaid-zoom-controls" role="group" aria-label="Mermaid preview zoom controls">
+              <button id="mermaid-zoom-out-btn" type="button" class="mermaid-toolbar-btn mermaid-zoom-btn"
+                aria-label="Zoom out" title="Zoom out" disabled>&minus;</button>
+              <button id="mermaid-zoom-reset-btn" type="button"
+                class="mermaid-toolbar-btn mermaid-zoom-btn mermaid-zoom-btn--reset"
+                aria-label="Fit diagram" title="Fit diagram" disabled>Fit</button>
+              <button id="mermaid-zoom-in-btn" type="button" class="mermaid-toolbar-btn mermaid-zoom-btn"
+                aria-label="Zoom in" title="Zoom in" disabled>&plus;</button>
+            </span>
             <button id="mermaid-preview-btn" type="button" class="mermaid-toolbar-btn" disabled
               title="Preview rendered diagram" aria-label="Preview Mermaid diagram">Preview</button>
             <button id="mermaid-copy-btn" type="button" class="mermaid-toolbar-btn" disabled

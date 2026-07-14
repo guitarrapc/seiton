@@ -1576,6 +1576,22 @@ footer a {
   opacity: 0.4;
 }
 
+.mermaid-zoom-controls {
+  display: inline-flex;
+  gap: 0.3rem;
+  margin-right: auto;
+}
+
+.mermaid-zoom-btn {
+  min-width: 2rem;
+  padding: 0 0.55rem;
+}
+
+.mermaid-zoom-btn--reset {
+  min-width: 3.2rem;
+  font-size: 0.75rem;
+}
+
 .mermaid-output {
   margin: 0;
   padding: 0.65rem 0.75rem;
@@ -1593,19 +1609,23 @@ footer a {
 
 .mermaid-preview {
   height: min(72dvh, 640px);
-  overflow: auto;
+  overflow: hidden;
   border: 1px solid var(--border-pane);
   border-radius: 8px;
   background: var(--results-surface, transparent);
-  padding: 0.65rem 0.75rem;
-  display: flex;
-  align-items: flex-start;
-  justify-content: center;
 }
 
 .mermaid-preview svg {
-  max-width: 100%;
-  height: auto;
+  display: block;
+}
+
+.mermaid-preview--zoomable {
+  cursor: grab;
+  touch-action: none;
+}
+
+.mermaid-preview--zoomable:active {
+  cursor: grabbing;
 }
 
 /* ─── Intra-job step flow + LOD ─── */

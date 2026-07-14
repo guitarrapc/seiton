@@ -719,6 +719,9 @@ const mermaidPreviewEl = document.getElementById('mermaid-preview');
 const mermaidEmptyEl = document.getElementById('mermaid-empty');
 const mermaidCopyBtn = document.getElementById('mermaid-copy-btn');
 const mermaidPreviewBtn = document.getElementById('mermaid-preview-btn');
+const mermaidZoomOutBtn = document.getElementById('mermaid-zoom-out-btn');
+const mermaidZoomResetBtn = document.getElementById('mermaid-zoom-reset-btn');
+const mermaidZoomInBtn = document.getElementById('mermaid-zoom-in-btn');
 const flowGraphEl = document.getElementById('flow-graph');
 const flowEmptyEl = document.getElementById('flow-empty');
 const flowDetailEl = document.getElementById('flow-detail');
@@ -736,6 +739,7 @@ let lastMermaidText = '';
 let mermaidPreviewActive = false;
 let mermaidInitialized = false;
 let mermaidRenderSeq = 0;
+let mermaidZoomController = null;
 /** Diagnostics from the most recent lint, shared with the flow graph markers. */
 let lastDiagnostics = [];
 let lastFlowDiagnostics = null;
@@ -849,6 +853,9 @@ tabMermaidBtn.addEventListener('click', () => selectResultsTab('mermaid'));
 flowZoomOutBtn.addEventListener('click', () => flowZoomController?.zoomOut());
 flowZoomResetBtn.addEventListener('click', () => flowZoomController?.reset());
 flowZoomInBtn.addEventListener('click', () => flowZoomController?.zoomIn());
+mermaidZoomOutBtn.addEventListener('click', () => mermaidZoomController?.zoomOut());
+mermaidZoomResetBtn.addEventListener('click', () => mermaidZoomController?.reset());
+mermaidZoomInBtn.addEventListener('click', () => mermaidZoomController?.zoomIn());
 
 function setFlowZoomController(controller) {
   if (flowZoomController !== controller) {
@@ -859,6 +866,17 @@ function setFlowZoomController(controller) {
   flowZoomOutBtn.disabled = disabled;
   flowZoomResetBtn.disabled = disabled;
   flowZoomInBtn.disabled = disabled;
+}
+
+function setMermaidZoomController(controller) {
+  if (mermaidZoomController !== controller) {
+    mermaidZoomController?.dispose();
+  }
+  mermaidZoomController = controller;
+  const disabled = controller === null;
+  mermaidZoomOutBtn.disabled = disabled;
+  mermaidZoomResetBtn.disabled = disabled;
+  mermaidZoomInBtn.disabled = disabled;
 }
 
 /**
@@ -952,6 +970,117 @@ function setMermaidToolbarEnabled(enabled) {
   mermaidPreviewBtn.disabled = !enabled;
 }
 
+function mermaidFitScale(bounds, viewport) {
+  const pad = 24;
+  return Math.max(
+    0.01,
+    Math.min(
+      1,
+      Math.max(1, viewport.width - pad * 2) / bounds.width,
+      Math.max(1, viewport.height - pad * 2) / bounds.height,
+    ),
+  );
+}
+
+function fitMermaidPreview(d3, svg, zoom, bounds, viewport) {
+  const fitScale = mermaidFitScale(bounds, viewport);
+  const tx = (viewport.width - bounds.width * fitScale) / 2 - bounds.x * fitScale;
+  const ty = (viewport.height - bounds.height * fitScale) / 2 - bounds.y * fitScale;
+  const transform = d3.zoomIdentity.translate(tx, ty).scale(fitScale);
+  svg.call(zoom.transform, transform);
+  return transform;
+}
+
+/**
+ * Adds drag, wheel, and pinch navigation to a rendered Mermaid SVG.
+ * The minimum scale is the fit-to-view scale, so zooming out never makes the
+ * complete diagram smaller than its initial fitted view.
+ */
+function wireMermaidPreviewZoom(svgElement) {
+  const d3 = globalThis.d3;
+  const viewBox = svgElement?.viewBox?.baseVal;
+  if (!d3 || !viewBox || viewBox.width <= 0 || viewBox.height <= 0) {
+    return null;
+  }
+
+  const bounds = {
+    x: viewBox.x,
+    y: viewBox.y,
+    width: viewBox.width,
+    height: viewBox.height,
+  };
+  const graphRoots = Array.from(svgElement.children)
+    .filter((child) => child.localName === 'g');
+  if (graphRoots.length === 0) {
+    return null;
+  }
+
+  const wrapper = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+  wrapper.classList.add('mermaid-preview__viewport');
+  svgElement.insertBefore(wrapper, graphRoots[0]);
+  for (const root of graphRoots) {
+    wrapper.appendChild(root);
+  }
+
+  const svg = d3.select(svgElement);
+  const viewportLayer = d3.select(wrapper);
+  let viewport = { width: 1, height: 1 };
+  let fitScale = 1;
+
+  const zoom = d3.zoom()
+    .on('zoom', (event) => {
+      viewportLayer.attr('transform', event.transform);
+    });
+
+  function measureViewport() {
+    viewport = {
+      width: Math.max(1, mermaidPreviewEl.clientWidth),
+      height: Math.max(1, mermaidPreviewEl.clientHeight),
+    };
+    fitScale = mermaidFitScale(bounds, viewport);
+    svg
+      .attr('viewBox', `0 0 ${viewport.width} ${viewport.height}`)
+      .attr('width', viewport.width)
+      .attr('height', viewport.height);
+    zoom
+      .extent([[0, 0], [viewport.width, viewport.height]])
+      .translateExtent([
+        [bounds.x - 24, bounds.y - 24],
+        [bounds.x + bounds.width + 24, bounds.y + bounds.height + 24],
+      ])
+      .scaleExtent([fitScale, Math.max(8, fitScale * 8)]);
+  }
+
+  function reset() {
+    measureViewport();
+    fitMermaidPreview(d3, svg, zoom, bounds, viewport);
+  }
+
+  svgElement.style.maxWidth = 'none';
+  svgElement.style.width = '100%';
+  svgElement.style.height = '100%';
+  mermaidPreviewEl.classList.add('mermaid-preview--zoomable');
+  measureViewport();
+  svg.call(zoom);
+  fitMermaidPreview(d3, svg, zoom, bounds, viewport);
+
+  const resizeObserver = typeof ResizeObserver === 'function'
+    ? new ResizeObserver(() => reset())
+    : null;
+  resizeObserver?.observe(mermaidPreviewEl);
+
+  return {
+    zoomOut: () => svg.transition().duration(160).call(zoom.scaleBy, 0.8),
+    reset: () => reset(),
+    zoomIn: () => svg.transition().duration(160).call(zoom.scaleBy, 1.25),
+    dispose: () => {
+      resizeObserver?.disconnect();
+      svg.on('.zoom', null);
+      mermaidPreviewEl.classList.remove('mermaid-preview--zoomable');
+    },
+  };
+}
+
 function setMermaidPreviewMode(preview) {
   mermaidPreviewActive = preview;
   mermaidPreviewBtn.textContent = preview ? 'Source' : 'Preview';
@@ -965,12 +1094,16 @@ function setMermaidPreviewMode(preview) {
   if (preview) {
     void renderMermaidPreviewSvg();
   } else {
+    mermaidRenderSeq++;
+    setMermaidZoomController(null);
     mermaidPreviewEl.replaceChildren();
   }
 }
 
 async function renderMermaidPreviewSvg() {
   const m = ensureMermaidInitialized();
+  const renderToken = ++mermaidRenderSeq;
+  setMermaidZoomController(null);
   mermaidPreviewEl.replaceChildren();
   if (!m || !lastMermaidText) {
     const msg = document.createElement('p');
@@ -982,12 +1115,21 @@ async function renderMermaidPreviewSvg() {
     return;
   }
   syncMermaidTheme();
-  const id = `seiton-mermaid-${++mermaidRenderSeq}`;
+  const id = `seiton-mermaid-${renderToken}`;
   try {
     const { svg, bindFunctions } = await m.render(id, lastMermaidText);
+    if (!mermaidPreviewActive || renderToken !== mermaidRenderSeq) {
+      return;
+    }
     mermaidPreviewEl.innerHTML = svg;
     bindFunctions?.(mermaidPreviewEl);
+    setMermaidZoomController(
+      wireMermaidPreviewZoom(mermaidPreviewEl.querySelector('svg')),
+    );
   } catch (err) {
+    if (!mermaidPreviewActive || renderToken !== mermaidRenderSeq) {
+      return;
+    }
     const msg = document.createElement('p');
     msg.className = 'notification';
     msg.textContent = `Mermaid preview failed: ${err?.message ?? err}`;

@@ -53,6 +53,57 @@ public sealed class PlaygroundUiLayoutTests
     }
 
     [Test]
+    public async Task MermaidPreview_PansAndZoomsWithoutShrinkingBelowFit()
+    {
+        var host = await PlaygroundUiTestHost.GetOrCreateAsync();
+        var browser = await PlaygroundUiBrowserSession.GetBrowserAsync();
+        await using var context = await browser.NewContextAsync();
+        var page = await context.NewPageAsync();
+        await GotoPlaygroundAndWaitForLinterGridAsync(page, $"{host.BaseUrl.TrimEnd('/')}/?seitonTestHooks=1");
+        await page.WaitForFunctionAsync(
+            "() => typeof globalThis.__SEITON_PLAYGROUND_TEST__?.setMermaidPreviewMode === 'function'",
+            arg: null,
+            new PageWaitForFunctionOptions { Timeout = 30_000 });
+
+        await page.EvaluateAsync(
+            """
+            () => {
+              const hooks = globalThis.__SEITON_PLAYGROUND_TEST__;
+              hooks.selectResultsTab('mermaid');
+              hooks.renderMermaid(`flowchart LR
+                a["checkout"] --> b["build"] --> c["test"] --> d["deploy"]`);
+              hooks.setMermaidPreviewMode(true);
+            }
+            """);
+
+        var viewport = page.Locator("#mermaid-preview .mermaid-preview__viewport");
+        await viewport.WaitForAsync(new LocatorWaitForOptions { Timeout = 30_000 });
+        var initialTransform = await viewport.GetAttributeAsync("transform");
+        await Assert.That(await page.Locator("#mermaid-zoom-out-btn").IsEnabledAsync()).IsTrue();
+
+        // The initial transform is already fit-to-view, so zooming farther out is clamped.
+        await page.Locator("#mermaid-zoom-out-btn").ClickAsync();
+        await page.WaitForTimeoutAsync(250);
+        await Assert.That(await viewport.GetAttributeAsync("transform")).IsEqualTo(initialTransform);
+
+        await page.Locator("#mermaid-zoom-in-btn").ClickAsync();
+        await page.WaitForTimeoutAsync(250);
+        var zoomedTransform = await viewport.GetAttributeAsync("transform");
+        await Assert.That(zoomedTransform).IsNotEqualTo(initialTransform);
+
+        var box = await page.Locator("#mermaid-preview").BoundingBoxAsync();
+        await Assert.That(box).IsNotNull();
+        await page.Mouse.MoveAsync(box!.X + box.Width / 2, box.Y + box.Height / 2);
+        await page.Mouse.DownAsync();
+        await page.Mouse.MoveAsync(box.X + box.Width / 2 + 40, box.Y + box.Height / 2 + 25);
+        await page.Mouse.UpAsync();
+        await Assert.That(await viewport.GetAttributeAsync("transform")).IsNotEqualTo(zoomedTransform);
+
+        await page.Locator("#mermaid-zoom-reset-btn").ClickAsync();
+        await Assert.That(await viewport.GetAttributeAsync("transform")).IsEqualTo(initialTransform);
+    }
+
+    [Test]
     public async Task FlowGraph_ZoomControls_ZoomInOutAndResetToInitialView()
     {
         var host = await PlaygroundUiTestHost.GetOrCreateAsync();
