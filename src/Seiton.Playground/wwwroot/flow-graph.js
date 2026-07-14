@@ -349,6 +349,7 @@ function applyGraphLayout(state, lod, d3) {
     node.group.attr('transform', `translate(${pos.x},${pos.y})`);
     node.box.attr('width', pos.width).attr('height', pos.height);
     node.header.attr('width', pos.width).attr('height', pos.headerH);
+    updateJobChrome(node, pos);
     if (node.summary) {
       node.summary.attr('y', pos.headerH + 14);
     }
@@ -363,6 +364,31 @@ function applyGraphLayout(state, lod, d3) {
 
   updateNeedsGroupFrames(state, groups, layout);
   updateEdgePaths(state, d3, layout, groups);
+}
+
+/** Keeps the job title and diagnostic badge inside the card after LOD resizes. */
+function updateJobChrome(node, pos) {
+  if (node.diagbadge) {
+    node.diagbadge.attr('x', pos.width - JOB_PAD);
+  }
+  if (node.title && node.titleText) {
+    node.title.text(truncate(node.titleText, titleMaxChars(pos.width, node.diagCounts)));
+  }
+}
+
+function diagBadgeReservedPx(counts) {
+  if (!counts) return 0;
+  let segments = 0;
+  if (counts.error > 0) segments++;
+  if (counts.warning > 0) segments++;
+  if (counts.info > 0) segments++;
+  if (segments === 0) return 0;
+  return segments * 22 + (segments - 1) * 6;
+}
+
+function titleMaxChars(width, diagCounts) {
+  const reserved = diagBadgeReservedPx(diagCounts);
+  return Math.max(4, Math.floor((width - JOB_PAD * 2 - reserved) / 6.2));
 }
 
 function layoutBounds(layout, groups) {
@@ -899,33 +925,39 @@ function drawJobNode(d3, layer, job, pos, select, diagMap) {
     .attr('rx', 8)
     .on('click', () => select(g, { type: 'job', data: job }));
 
-  g.append('text')
+  const titleText = job.kind === 'reusable' ? `⧉ ${job.id}` : job.id;
+  let diagbadge = null;
+  let diagCounts = null;
+
+  const title = g
+    .append('text')
     .attr('class', 'flow-job__title')
     .attr('x', JOB_PAD)
-    .attr('y', 20)
-    .text(truncate(job.kind === 'reusable' ? `⧉ ${job.id}` : job.id, 34));
+    .attr('y', 20);
 
   // Aggregated diagnostics badge (visible at every LOD, including lod0).
   const jobDiags = diagMap.get(job) ?? [];
   if (jobDiags.length > 0) {
-    const counts = countBySeverity(jobDiags);
-    const badge = g
+    diagCounts = countBySeverity(jobDiags);
+    diagbadge = g
       .append('text')
       .attr('class', 'flow-job__diagbadge')
       .attr('x', pos.width - JOB_PAD)
       .attr('y', 20)
       .attr('text-anchor', 'end');
-    if (counts.error > 0) {
-      badge.append('tspan').attr('class', 'flow-marker--error').text(`✖${counts.error}`);
+    if (diagCounts.error > 0) {
+      diagbadge.append('tspan').attr('class', 'flow-marker--error').text(`✖${diagCounts.error}`);
     }
-    if (counts.warning > 0) {
-      badge.append('tspan').attr('class', 'flow-marker--warning').attr('dx', 6).text(`⚠${counts.warning}`);
+    if (diagCounts.warning > 0) {
+      diagbadge.append('tspan').attr('class', 'flow-marker--warning').attr('dx', 6).text(`⚠${diagCounts.warning}`);
     }
-    if (counts.info > 0) {
-      badge.append('tspan').attr('class', 'flow-marker--info').attr('dx', 6).text(`ℹ${counts.info}`);
+    if (diagCounts.info > 0) {
+      diagbadge.append('tspan').attr('class', 'flow-marker--info').attr('dx', 6).text(`ℹ${diagCounts.info}`);
     }
-    badge.append('title').text(jobDiags.map((d) => `${d.severity}: ${d.message}`).join('\n'));
+    diagbadge.append('title').text(jobDiags.map((d) => `${d.severity}: ${d.message}`).join('\n'));
   }
+
+  title.text(truncate(titleText, titleMaxChars(pos.width, diagCounts)));
 
   const metaText = jobMetaText(job);
   if (metaText) {
@@ -989,7 +1021,7 @@ function drawJobNode(d3, layer, job, pos, select, diagMap) {
   }
 
   const box = g.select('.flow-job__box');
-  return { group: g, box, header, inner, summary };
+  return { group: g, box, header, inner, summary, title, titleText, diagbadge, diagCounts };
 }
 
 function countSteps(steps) {

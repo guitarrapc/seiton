@@ -98,6 +98,8 @@ public sealed class PlaygroundFlowTabContractTests
         await Assert.That(js).Contains("applyGraphLayout");
         await Assert.That(js).Contains("MIN_JOB_W_LOD0");
         await Assert.That(js).Contains("INNER_SCALE_LOD1");
+        await Assert.That(js).Contains("updateJobChrome");
+        await Assert.That(js).Contains("diagBadgeReservedPx");
         await Assert.That(js.Contains("LOD2_THRESHOLD", StringComparison.Ordinal)).IsFalse();
     }
 
