@@ -1,5 +1,4 @@
 using System.Buffers;
-using System.Text;
 using Seiton.Core.Flow;
 
 namespace Seiton.Playground;
@@ -28,6 +27,8 @@ internal static class PlaygroundFlowOutputCache
             _filePath = null;
             _flowJson = null;
             _flowMermaid = null;
+            JsonBuffer.Clear();
+            MermaidBuffer.Clear();
         }
     }
 
@@ -56,23 +57,47 @@ internal static class PlaygroundFlowOutputCache
         lock (Gate)
         {
             JsonBuffer.Clear();
-            WorkflowFlowJson.Write(JsonBuffer, flow is null ? [] : [flow]);
-            var jsonWritten = JsonBuffer.WrittenSpan;
-            var json = _flowJson is not null && jsonWritten.SequenceEqual(_flowJson)
-                ? _flowJson
-                : jsonWritten.ToArray();
+            if (flow is null)
+            {
+                WorkflowFlowJson.WriteEmpty(JsonBuffer);
+            }
+            else
+            {
+                WorkflowFlowJson.Write(JsonBuffer, flow);
+            }
+
+            _flowJson = UpdateCacheBytes(_flowJson, JsonBuffer.WrittenSpan);
 
             MermaidBuffer.Clear();
-            WorkflowFlowMermaid.Write(MermaidBuffer, flow is null ? [] : [flow]);
-            var mermaidWritten = MermaidBuffer.WrittenSpan;
-            var mermaid = _flowMermaid is not null && mermaidWritten.SequenceEqual(_flowMermaid)
-                ? _flowMermaid
-                : mermaidWritten.ToArray();
+            if (flow is null)
+            {
+                WorkflowFlowMermaid.WriteEmpty(MermaidBuffer);
+            }
+            else
+            {
+                WorkflowFlowMermaid.Write(MermaidBuffer, flow);
+            }
+
+            _flowMermaid = UpdateCacheBytes(_flowMermaid, MermaidBuffer.WrittenSpan);
 
             _yamlHash = yamlHash;
             _filePath = filePath;
-            _flowJson = json;
-            _flowMermaid = mermaid;
         }
+    }
+
+    private static byte[] UpdateCacheBytes(byte[]? existing, ReadOnlySpan<byte> written)
+    {
+        if (existing is not null && existing.Length == written.Length && written.SequenceEqual(existing))
+        {
+            return existing;
+        }
+
+        if (existing is null || existing.Length != written.Length)
+        {
+            existing = new byte[written.Length];
+        }
+
+        written.CopyTo(existing);
+        return existing;
     }
 }

@@ -29,106 +29,250 @@ public static class WorkflowFlowMermaid
     /// <summary>Writes Mermaid flowchart UTF-8 bytes without an intermediate <see cref="string"/>.</summary>
     public static void Write(IBufferWriter<byte> output, ReadOnlySpan<WorkflowFlow> workflows)
     {
-        var sb = new StringBuilder(1024);
-        sb.Append("flowchart LR\n");
+        var writer = new FlowUtf8Writer(output);
+        writer.WriteLiteral("flowchart LR\n"u8);
         var wrap = workflows.Length > 1;
         for (var w = 0; w < workflows.Length; w++)
         {
-            WriteWorkflow(sb, workflows[w], wrap ? $"w{w}" : string.Empty, wrap);
+            WriteWorkflow(writer, workflows[w], wrap ? $"w{w}" : string.Empty, wrap);
         }
-
-        var text = sb.ToString();
-        var byteCount = Encoding.UTF8.GetByteCount(text);
-        var span = output.GetSpan(byteCount);
-        var written = Encoding.UTF8.GetBytes(text, span);
-        output.Advance(written);
     }
 
-    private static void WriteWorkflow(StringBuilder sb, WorkflowFlow workflow, string prefix, bool wrap)
+    /// <summary>Writes a single workflow without allocating a one-element <see cref="WorkflowFlow"/> array.</summary>
+    public static void Write(IBufferWriter<byte> output, WorkflowFlow workflow)
     {
-        sb.Append("  %% ").Append(workflow.File);
+        var writer = new FlowUtf8Writer(output);
+        writer.WriteLiteral("flowchart LR\n"u8);
+        WriteWorkflow(writer, workflow, string.Empty, wrap: false);
+    }
+
+    /// <summary>Writes an empty flowchart when no workflow is available.</summary>
+    public static void WriteEmpty(IBufferWriter<byte> output)
+    {
+        var writer = new FlowUtf8Writer(output);
+        writer.WriteLiteral("flowchart LR\n"u8);
+    }
+
+    private static void WriteWorkflow(FlowUtf8Writer writer, WorkflowFlow workflow, string prefix, bool wrap)
+    {
+        writer.WriteAscii("  %% ");
+        writer.WriteUtf8(workflow.File);
         if (workflow.Name is not null)
         {
-            sb.Append(" — ").Append(workflow.Name);
+            writer.WriteUtf8(" — ");
+            writer.WriteUtf8(workflow.Name);
         }
 
-        sb.Append('\n');
+        writer.WriteNewLine();
 
         if (wrap)
         {
-            var label = workflow.Name is null ? workflow.File : $"{workflow.File} — {workflow.Name}";
-            sb.Append("  subgraph ").Append(prefix).Append("[\"").Append(Escape(label)).Append("\"]\n");
-            sb.Append("    direction LR\n");
-        }
-
-        var jobIndexById = new Dictionary<string, int>(workflow.Jobs.Length, StringComparer.OrdinalIgnoreCase);
-        for (var i = 0; i < workflow.Jobs.Length; i++)
-        {
-            jobIndexById.TryAdd(workflow.Jobs[i].Id, i);
-        }
-
-        for (var i = 0; i < workflow.Jobs.Length; i++)
-        {
-            var job = workflow.Jobs[i];
-            var jobNodeId = $"{prefix}j{i}";
-            if (job.Kind == FlowJobKind.Reusable)
+            writer.WriteAscii("  subgraph ");
+            writer.WriteUtf8(prefix);
+            writer.WriteAscii("[\"");
+            if (workflow.Name is null)
             {
-                sb.Append("  ").Append(jobNodeId).Append("[[\"").Append(Escape($"{job.Id} — uses: {job.Uses}")).Append("\"]]\n");
-                continue;
+                WriteEscaped(writer, workflow.File);
+            }
+            else
+            {
+                WriteEscaped(writer, workflow.File);
+                writer.WriteUtf8(" — ");
+                WriteEscaped(writer, workflow.Name);
             }
 
-            sb.Append("  subgraph ").Append(jobNodeId).Append("[\"").Append(Escape(JobLabel(job))).Append("\"]\n");
-            sb.Append("    direction TB\n");
-
-            var counter = 0;
-            var anchors = new List<string>(job.Steps.Length);
-            WriteSteps(sb, job.Steps, jobNodeId, ref counter, anchors, "    ");
-            for (var a = 1; a < anchors.Count; a++)
-            {
-                sb.Append("    ").Append(anchors[a - 1]).Append(" --> ").Append(anchors[a]).Append('\n');
-            }
-
-            sb.Append("  end\n");
+            writer.WriteAscii("\"]\n");
+            writer.WriteAscii("    direction LR\n");
         }
 
-        for (var i = 0; i < workflow.Jobs.Length; i++)
+        string[]? anchorRent = null;
+        var anchorCapacity = 0;
+        try
         {
-            // Transitively reduced edges keep the diagram readable, matching GitHub's graph.
-            foreach (var need in workflow.Jobs[i].ReducedNeeds)
+            for (var i = 0; i < workflow.Jobs.Length; i++)
             {
-                if (jobIndexById.TryGetValue(need, out var dep))
+                var job = workflow.Jobs[i];
+                var neededAnchors = Math.Max(8, job.Steps.Length * 2);
+                if (anchorRent is null || anchorCapacity < neededAnchors)
                 {
-                    sb.Append("  ").Append(prefix).Append('j').Append(dep).Append(" --> ").Append(prefix).Append('j').Append(i).Append('\n');
+                    if (anchorRent is not null)
+                    {
+                        ArrayPool<string>.Shared.Return(anchorRent);
+                    }
+
+                    anchorRent = ArrayPool<string>.Shared.Rent(neededAnchors);
+                    anchorCapacity = neededAnchors;
+                }
+
+                WriteJob(writer, job, prefix, i, anchorRent, out var anchorCount);
+                WriteStepChain(writer, anchorRent, anchorCount);
+            }
+
+            for (var i = 0; i < workflow.Jobs.Length; i++)
+            {
+                var reducedNeeds = workflow.Jobs[i].ReducedNeeds;
+                for (var n = 0; n < reducedNeeds.Length; n++)
+                {
+                    var dep = FindJobIndex(workflow.Jobs, reducedNeeds[n]);
+                    if (dep < 0)
+                    {
+                        continue;
+                    }
+
+                    writer.WriteAscii("  ");
+                    WriteJobNodeId(writer, prefix, dep);
+                    writer.WriteAscii(" --> ");
+                    WriteJobNodeId(writer, prefix, i);
+                    writer.WriteNewLine();
                 }
             }
         }
+        finally
+        {
+            if (anchorRent is not null)
+            {
+                ArrayPool<string>.Shared.Return(anchorRent);
+            }
+        }
 
         if (wrap)
         {
-            sb.Append("  end\n");
+            writer.WriteAscii("  end\n");
         }
     }
 
-    private static void WriteSteps(StringBuilder sb, FlowStep[] steps, string jobNodeId, ref int counter, List<string>? anchors, string indent)
+    private static void WriteJob(
+        FlowUtf8Writer writer,
+        FlowJob job,
+        string prefix,
+        int jobIndex,
+        string[] anchorRent,
+        out int anchorCount)
     {
-        foreach (var step in steps)
+        if (job.Kind == FlowJobKind.Reusable)
         {
+            writer.WriteAscii("  ");
+            WriteJobNodeId(writer, prefix, jobIndex);
+            writer.WriteAscii("[[\"");
+            WriteEscaped(writer, job.Id);
+            writer.WriteUtf8(" — uses: ");
+            WriteEscaped(writer, job.Uses ?? string.Empty);
+            writer.WriteAscii("\"]]\n");
+            anchorCount = 0;
+            return;
+        }
+
+        writer.WriteAscii("  subgraph ");
+        WriteJobNodeId(writer, prefix, jobIndex);
+        writer.WriteAscii("[\"");
+        WriteEscaped(writer, JobLabel(job));
+        writer.WriteAscii("\"]\n");
+        writer.WriteAscii("    direction TB\n");
+
+        var counter = 0;
+        anchorCount = 0;
+        WriteSteps(writer, job.Steps, prefix, jobIndex, ref counter, anchorRent, ref anchorCount, "    ");
+        writer.WriteAscii("  end\n");
+    }
+
+    private static void WriteStepChain(FlowUtf8Writer writer, string[] anchors, int anchorCount)
+    {
+        for (var a = 1; a < anchorCount; a++)
+        {
+            writer.WriteAscii("    ");
+            writer.WriteUtf8(anchors[a - 1]);
+            writer.WriteAscii(" --> ");
+            writer.WriteUtf8(anchors[a]);
+            writer.WriteNewLine();
+        }
+    }
+
+    private static void WriteSteps(
+        FlowUtf8Writer writer,
+        FlowStep[] steps,
+        string prefix,
+        int jobIndex,
+        ref int counter,
+        string[]? anchors,
+        ref int anchorCount,
+        string indent)
+    {
+        for (var i = 0; i < steps.Length; i++)
+        {
+            var step = steps[i];
             if (step.Kind == FlowStepKind.Parallel)
             {
-                var groupId = $"{jobNodeId}g{counter++}";
-                anchors?.Add(groupId);
-                sb.Append(indent).Append("subgraph ").Append(groupId).Append("[\"parallel\"]\n");
-                sb.Append(indent).Append("  direction TB\n");
-                // Children run simultaneously, so they are intentionally not chained.
-                WriteSteps(sb, step.Steps, jobNodeId, ref counter, anchors: null, indent + "  ");
-                sb.Append(indent).Append("end\n");
+                writer.WriteAscii(indent);
+                writer.WriteAscii("subgraph ");
+                WriteGroupNodeId(writer, prefix, jobIndex, counter);
+                writer.WriteAscii("[\"parallel\"]\n");
+                writer.WriteAscii(indent);
+                writer.WriteAscii("  direction TB\n");
+                var groupId = CaptureGroupNodeId(prefix, jobIndex, counter);
+                counter++;
+                if (anchors is not null)
+                {
+                    anchors[anchorCount++] = groupId;
+                }
+
+                WriteSteps(writer, step.Steps, prefix, jobIndex, ref counter, anchors: null, ref anchorCount, indent + "  ");
+                writer.WriteAscii(indent);
+                writer.WriteAscii("end\n");
                 continue;
             }
 
-            var nodeId = $"{jobNodeId}n{counter++}";
-            anchors?.Add(nodeId);
-            sb.Append(indent).Append(nodeId).Append("[\"").Append(Escape(StepLabel(step))).Append("\"]\n");
+            writer.WriteAscii(indent);
+            WriteStepNodeId(writer, prefix, jobIndex, counter);
+            writer.WriteAscii("[\"");
+            WriteEscaped(writer, StepLabel(step));
+            writer.WriteAscii("\"]\n");
+            if (anchors is not null)
+            {
+                anchors[anchorCount++] = CaptureStepNodeId(prefix, jobIndex, counter);
+            }
+
+            counter++;
         }
+    }
+
+    private static void WriteJobNodeId(FlowUtf8Writer writer, string prefix, int jobIndex)
+    {
+        writer.WriteUtf8(prefix);
+        writer.WriteAscii('j');
+        writer.WriteInt(jobIndex);
+    }
+
+    private static void WriteGroupNodeId(FlowUtf8Writer writer, string prefix, int jobIndex, int counter)
+    {
+        WriteJobNodeId(writer, prefix, jobIndex);
+        writer.WriteAscii('g');
+        writer.WriteInt(counter);
+    }
+
+    private static void WriteStepNodeId(FlowUtf8Writer writer, string prefix, int jobIndex, int counter)
+    {
+        WriteJobNodeId(writer, prefix, jobIndex);
+        writer.WriteAscii('n');
+        writer.WriteInt(counter);
+    }
+
+    private static string CaptureGroupNodeId(string prefix, int jobIndex, int counter)
+        => $"{prefix}j{jobIndex}g{counter}";
+
+    private static string CaptureStepNodeId(string prefix, int jobIndex, int counter)
+        => $"{prefix}j{jobIndex}n{counter}";
+
+    private static int FindJobIndex(FlowJob[] jobs, string need)
+    {
+        for (var i = 0; i < jobs.Length; i++)
+        {
+            if (string.Equals(jobs[i].Id, need, StringComparison.OrdinalIgnoreCase))
+            {
+                return i;
+            }
+        }
+
+        return -1;
     }
 
     private static string JobLabel(FlowJob job)
@@ -170,20 +314,37 @@ public static class WorkflowFlowMermaid
     }
 
     /// <summary>First line only, quotes replaced, truncated — keeps Mermaid labels parseable.</summary>
-    private static string Escape(string text)
+    private static void WriteEscaped(FlowUtf8Writer writer, string text)
     {
         var newline = text.IndexOf('\n');
-        if (newline >= 0)
+        var span = newline >= 0 ? text.AsSpan(0, newline) : text.AsSpan();
+        var end = span.Length;
+        while (end > 0 && (span[end - 1] == '\r' || span[end - 1] == ' '))
         {
-            text = text[..newline];
+            end--;
         }
 
-        text = text.Replace('"', '\'').TrimEnd('\r').Trim();
-        if (text.Length > MaxLabelLength)
+        span = span[..end];
+        var length = Math.Min(span.Length, MaxLabelLength);
+        Span<char> ch = stackalloc char[1];
+        Span<byte> utf8 = stackalloc byte[4];
+        for (var i = 0; i < length; i++)
         {
-            text = text[..(MaxLabelLength - 1)] + "…";
+            var c = span[i] == '"' ? '\'' : span[i];
+            if (c <= 0x7F)
+            {
+                writer.WriteAscii(c);
+                continue;
+            }
+
+            ch[0] = c;
+            var written = Encoding.UTF8.GetBytes(ch, utf8);
+            writer.WriteLiteral(utf8[..written]);
         }
 
-        return text;
+        if (span.Length > MaxLabelLength)
+        {
+            writer.WriteUtf8("…");
+        }
     }
 }

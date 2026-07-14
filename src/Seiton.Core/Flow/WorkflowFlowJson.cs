@@ -37,6 +37,31 @@ public static class WorkflowFlowJson
         writer.Flush();
     }
 
+    /// <summary>Writes a single workflow without allocating a one-element array.</summary>
+    public static void Write(IBufferWriter<byte> output, WorkflowFlow workflow)
+    {
+        using var writer = new Utf8JsonWriter(output, WriterOptions);
+        writer.WriteStartObject();
+        writer.WriteNumber("version"u8, Version);
+        writer.WriteStartArray("workflows"u8);
+        WriteWorkflow(writer, workflow);
+        writer.WriteEndArray();
+        writer.WriteEndObject();
+        writer.Flush();
+    }
+
+    /// <summary>Writes an empty <c>workflows</c> array.</summary>
+    public static void WriteEmpty(IBufferWriter<byte> output)
+    {
+        using var writer = new Utf8JsonWriter(output, WriterOptions);
+        writer.WriteStartObject();
+        writer.WriteNumber("version"u8, Version);
+        writer.WriteStartArray("workflows"u8);
+        writer.WriteEndArray();
+        writer.WriteEndObject();
+        writer.Flush();
+    }
+
     /// <summary>Serializes a single workflow to a flow-json string (test/interop convenience).</summary>
     public static string Serialize(WorkflowFlow workflow) => Serialize([workflow]);
 

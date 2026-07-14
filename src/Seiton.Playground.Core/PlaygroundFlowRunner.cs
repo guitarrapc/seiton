@@ -1,4 +1,3 @@
-using System.Text;
 using Seiton.Core.Flow;
 using Seiton.Core.Parsing;
 
@@ -11,20 +10,13 @@ namespace Seiton.Playground;
 /// </summary>
 public static class PlaygroundFlowRunner
 {
-    /// <summary>Guards UTF-8 encoding buffer (WASM is single-threaded; desktop tests are not).</summary>
+    /// <summary>Guards flow-only parse path (WASM is single-threaded; desktop tests are not).</summary>
     private static readonly object FlowGate = new();
-
-    /// <summary>Reusable buffer for UTF-8 encoding. Guarded by <see cref="FlowGate"/>.</summary>
-    private static byte[]? _utf8Buf;
 
     /// <summary>Clears shared caches between playground tests.</summary>
     internal static void ResetSharedStateForTests()
     {
-        lock (FlowGate)
-        {
-            _utf8Buf = null;
-        }
-
+        PlaygroundUtf8Scratch.ResetForTests();
         PlaygroundFlowOutputCache.ResetForTests();
     }
 
@@ -61,42 +53,19 @@ public static class PlaygroundFlowRunner
         ArgumentNullException.ThrowIfNull(yamlSource);
         ArgumentException.ThrowIfNullOrEmpty(filePath);
 
-        var yamlHash = PlaygroundYamlHash.Compute(yamlSource);
-        if (PlaygroundFlowOutputCache.TryGet(yamlHash, filePath, out var cachedJson, out var cachedMermaid))
-        {
-            return (cachedJson, cachedMermaid);
-        }
-
         lock (FlowGate)
         {
-            if (PlaygroundFlowOutputCache.TryGet(yamlHash, filePath, out cachedJson, out cachedMermaid))
+            var (utf8Yaml, yamlHash) = PlaygroundUtf8Scratch.EncodeAndHash(yamlSource);
+            if (PlaygroundFlowOutputCache.TryGet(yamlHash, filePath, out var cachedJson, out var cachedMermaid))
             {
                 return (cachedJson, cachedMermaid);
             }
 
-            var utf8Yaml = EncodeToReusableBuffer(yamlSource);
             using var parseResult = WorkflowParser.Parse(utf8Yaml, filePath);
             var flow = WorkflowFlowCollector.Collect(parseResult, filePath);
             PlaygroundFlowOutputCache.Store(yamlHash, filePath, flow);
             PlaygroundFlowOutputCache.TryGet(yamlHash, filePath, out cachedJson, out cachedMermaid);
             return (cachedJson, cachedMermaid);
         }
-    }
-
-    /// <summary>
-    /// Encodes <paramref name="source"/> into the reusable buffer and returns it.
-    /// Only allocates when the byte length changes from the last call.
-    /// Must be called under <see cref="FlowGate"/>.
-    /// </summary>
-    private static byte[] EncodeToReusableBuffer(string source)
-    {
-        var byteCount = Encoding.UTF8.GetByteCount(source);
-        if (_utf8Buf is null || _utf8Buf.Length != byteCount)
-        {
-            _utf8Buf = new byte[byteCount];
-        }
-
-        Encoding.UTF8.GetBytes(source, _utf8Buf);
-        return _utf8Buf;
     }
 }

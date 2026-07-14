@@ -71,17 +71,18 @@ public static class PlaygroundLintRunner
     /// <summary>Last SetConfig diagnostic result (cached for hash-hit zero-alloc return).</summary>
     private static byte[] _cachedConfigDiag = EmptyJsonArray;
 
-    // ─── Identity-based short circuit ───
-    private static string? _lastYamlSource;
-
+    // ─── Content-hash lint caching ───
     /// <summary>Content hash of the last linted YAML (XxHash64). Guarded by <see cref="EngineGate"/>.</summary>
     private static ulong _lastYamlHash;
 
-    /// <summary>Cached last file path for identity-based short circuit. Guarded by <see cref="EngineGate"/>.</summary>
+    /// <summary>Cached last file path for content-hash short circuit. Guarded by <see cref="EngineGate"/>.</summary>
     private static string? _lastFilePath;
 
-    /// <summary>Cached last JSON output for identity-based short circuit. Guarded by <see cref="EngineGate"/>.</summary>
+    /// <summary>Cached last JSON output for content-hash short circuit. Guarded by <see cref="EngineGate"/>.</summary>
     private static byte[]? _lastJsonOutput;
+
+    /// <summary>Reusable diagnostics JSON buffer returned from <see cref="SerializeDiagnosticsToResult"/>.</summary>
+    private static byte[] _diagnosticsJsonBuf = EmptyJsonArray;
 
     /// <summary>Gets the active lint config (user config if set, otherwise default).</summary>
     private static LintConfig ActiveConfig => _cachedConfig ?? DefaultConfig;
@@ -94,9 +95,11 @@ public static class PlaygroundLintRunner
             _cachedConfig = null;
             _configHash = 0;
             _cachedConfigDiag = EmptyJsonArray;
+            _diagnosticsJsonBuf = EmptyJsonArray;
             InvalidateLintCache();
             ActionShaResolverOverride = null;
             ImageDigestResolverOverride = null;
+            PlaygroundUtf8Scratch.ResetForTests();
         }
     }
 
@@ -242,10 +245,9 @@ public static class PlaygroundLintRunner
         return buffer.WrittenSpan.ToArray();
     }
 
-    /// <summary>Invalidates identity-based lint cache so next RunToJsonUtf8 re-lints.</summary>
+    /// <summary>Invalidates content-hash lint cache so next RunToJsonUtf8 re-lints.</summary>
     private static void InvalidateLintCache()
     {
-        _lastYamlSource = null;
         _lastYamlHash = 0;
         _lastFilePath = null;
         _lastJsonOutput = null;
@@ -265,16 +267,13 @@ public static class PlaygroundLintRunner
 
         lock (EngineGate)
         {
-            var yamlHash = PlaygroundYamlHash.Compute(yamlSource);
-            // Fast path: same string instance or identical content hash + path.
-            if ((ReferenceEquals(yamlSource, _lastYamlSource) || yamlHash == _lastYamlHash)
+            var (utf8Yaml, yamlHash) = PlaygroundUtf8Scratch.EncodeAndHash(yamlSource);
+            if (yamlHash == _lastYamlHash
                 && string.Equals(filePath, _lastFilePath, StringComparison.Ordinal)
                 && _lastJsonOutput is not null)
             {
                 return _lastJsonOutput;
             }
-
-            var utf8Yaml = EncodeToReusableBuffer(yamlSource);
 
             byte[] result;
 
@@ -303,8 +302,7 @@ public static class PlaygroundLintRunner
                 PlaygroundFlowRunner.StoreFlowFromLint(yamlHash, filePath, flow);
             }
 
-            // Cache for identity/content-hash short circuit
-            _lastYamlSource = yamlSource;
+            // Cache for content-hash short circuit
             _lastYamlHash = yamlHash;
             _lastFilePath = filePath;
             _lastJsonOutput = result;
@@ -339,12 +337,22 @@ public static class PlaygroundLintRunner
         }
 
         var written = JsonBuffer.WrittenSpan;
-        if (_lastJsonOutput is not null && written.SequenceEqual(_lastJsonOutput))
+        if (written.IsEmpty)
         {
-            return _lastJsonOutput;
+            return EmptyJsonArray;
         }
 
-        return written.ToArray();
+        if (_diagnosticsJsonBuf.Length != written.Length)
+        {
+            _diagnosticsJsonBuf = new byte[written.Length];
+        }
+
+        if (!written.SequenceEqual(_diagnosticsJsonBuf))
+        {
+            written.CopyTo(_diagnosticsJsonBuf);
+        }
+
+        return _diagnosticsJsonBuf;
     }
 
     private static void WriteDiagnosticsArray(Utf8JsonWriter writer, ReadOnlySpan<Diagnostic> diagnostics)
@@ -644,28 +652,6 @@ public static class PlaygroundLintRunner
         }
 
         return fixables[0];
-    }
-
-    /// <summary>
-    /// Reusable buffer for UTF-8 encoding. Guarded by <see cref="EngineGate"/>.
-    /// </summary>
-    private static byte[]? _utf8Buf;
-
-    /// <summary>
-    /// Encodes <paramref name="source"/> into the reusable buffer and returns it.
-    /// Only allocates when the byte length changes from the last call.
-    /// The returned array has <c>Length == byteCount</c> (exact size) so VYaml and the
-    /// parser see no trailing garbage. Must be called under <see cref="EngineGate"/>.
-    /// </summary>
-    private static byte[] EncodeToReusableBuffer(string source)
-    {
-        var byteCount = Encoding.UTF8.GetByteCount(source);
-        if (_utf8Buf is null || _utf8Buf.Length != byteCount)
-        {
-            _utf8Buf = new byte[byteCount];
-        }
-        Encoding.UTF8.GetBytes(source, _utf8Buf);
-        return _utf8Buf;
     }
 }
 

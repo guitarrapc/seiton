@@ -234,4 +234,29 @@ public sealed class WorkflowFlowMermaidTests
 
         await Assert.That(mermaid).Contains("subgraph j0[\"test (matrix: os × node)\"]");
     }
+
+    [Test]
+    public async Task Write_Utf8Bytes_MatchesSerializeString()
+    {
+        var flow = CollectFlow("""
+            on: push
+            jobs:
+              build:
+                runs-on: ubuntu-latest
+                steps:
+                  - run: echo a
+              deploy:
+                runs-on: ubuntu-latest
+                needs: build
+                steps:
+                  - run: echo deploy
+            """);
+
+        var expected = WorkflowFlowMermaid.Serialize([flow]);
+        var buffer = new System.Buffers.ArrayBufferWriter<byte>(1024);
+        WorkflowFlowMermaid.Write(buffer, flow);
+        var actual = Encoding.UTF8.GetString(buffer.WrittenSpan);
+
+        await Assert.That(actual).IsEqualTo(expected);
+    }
 }

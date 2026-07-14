@@ -7,7 +7,7 @@ namespace Seiton.Benchmark;
 /// Measures per-call allocation of <see cref="PlaygroundLintRunner.RunToJsonUtf8"/> (Utf8JsonWriter path).
 /// Three scenarios:
 /// <list type="bullet">
-///   <item><description><c>NoChange</c> — same string object every call (reference-equality cache hit)</description></item>
+///   <item><description><c>NoChange</c> — same content every call (content-hash cache hit; new string instance each iteration)</description></item>
 ///   <item><description><c>PartialChange</c> — only one job differs each call (typing-like edits; full parse + full lint)</description></item>
 ///   <item><description><c>FullChange</c> — entirely different content each call (full parse + full lint)</description></item>
 /// </list>
@@ -73,7 +73,7 @@ public partial class PlaygroundLintBenchmark
         PlaygroundLintRunner.RunToJsonUtf8(_yamlSource, FilePath);
     }
 
-    /// <summary>Same string reference every call — exercises reference-equality cache.</summary>
+    /// <summary>Same YAML content every call — exercises content-hash cache (zero managed alloc on hit).</summary>
     [Benchmark(Baseline = true)]
     public int NoChange()
     {
