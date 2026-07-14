@@ -7,13 +7,13 @@
 //      lanes, `wait`/`wait-all` join those lanes back, `cancel` cuts them, and
 //      `parallel` boundaries hold simultaneous children.
 //
-// Zoom level drives LOD (level of detail) via CSS classes on the SVG root:
-//   lod0 (far)  — job boxes with a summary line, intra-job flow hidden
-//   lod1 (mid)  — step frames, edges, and simplified labels (no if/timeout markers)
-//   lod2 (near) — full labels including markers
-// Step frames and labels always appear together — never empty boxes.
-// Geometry never changes between LOD levels, only visibility — so zooming stays
-// anchored under the cursor.
+// Zoom scale (k) selects LOD (level of detail). Each LOD uses its own job-card layout
+// so panning out sheds information (lod2 → lod1 → lod0) instead of shrinking text
+// below readability. Zoom buttons still scale the whole SVG for display size.
+//   lod0 (far)  — compact job cards + `N steps` summary, intra-job flow hidden
+//   lod1 (mid)  — tighter job cards, step frames/edges/simplified labels
+//   lod2 (near) — full job cards and labels including markers
+// Step frames and labels always appear together at lod1/lod2.
 //
 // The flow-json contract is produced by PlaygroundFlowRunner (same as
 // `seiton check --format flow-json`); this module only renders, never parses YAML.
@@ -40,6 +40,22 @@ const MAX_LEG_CHIPS = 4;
 const LOD1_THRESHOLD = 0.55;
 const LOD2_THRESHOLD = 0.85;
 
+const LOD_CLASSES = ['flow-svg--lod0', 'flow-svg--lod1', 'flow-svg--lod2'];
+
+const MIN_JOB_W_LOD0 = 148;
+const SUMMARY_H = 18;
+const INNER_SCALE_LOD1 = 0.85;
+const MIN_JOB_W_LOD1 = 200;
+
+const LOD2_PROFILE = {
+  nodeW: NODE_W,
+  nodeH: NODE_H,
+  bgNodeW: BG_NODE_W,
+  minJobW: MIN_JOB_W,
+  jobPad: JOB_PAD,
+  stepGapY: STEP_GAP_Y,
+};
+
 /**
  * Renders one workflow into `container`. Returns false when there is nothing to draw
  * (no jobs, or the d3 global is unavailable).
@@ -60,7 +76,16 @@ export function renderFlowGraph(container, workflow, { onSelect, diagnostics, on
   }
 
   const jobs = workflow.jobs;
-  const { layout, groups } = computeLayout(jobs);
+  const layouts = computeAllLayouts(jobs);
+  const graphState = {
+    currentLod: 2,
+    layouts,
+    jobs,
+    jobNodes: new Map(),
+    edgeSelections: [],
+    groupFrameRects: [],
+    groupedMembers: new Set(),
+  };
   const diagMap = mapDiagnostics(jobs, diagnostics ?? []);
 
   const svg = d3
@@ -75,8 +100,9 @@ export function renderFlowGraph(container, workflow, { onSelect, diagnostics, on
   const edgeLayer = viewport.append('g');
   const nodeLayer = viewport.append('g');
 
-  const groupEdgeSelections = drawNeedsGroups(groupLayer, edgeLayer, groups, layout);
-  const groupedMembers = new Set(groups.flatMap((g) => g.members));
+  const initialLayout = layouts[2];
+  drawNeedsGroups(groupLayer, edgeLayer, initialLayout.groups, initialLayout.layout, graphState);
+  graphState.groupedMembers = new Set(initialLayout.groups.flatMap((g) => g.members));
 
   // Click selection: exactly one job/step highlighted at a time.
   let selectedGroup = null;
@@ -87,26 +113,24 @@ export function renderFlowGraph(container, workflow, { onSelect, diagnostics, on
     onSelect?.({ ...info, diagnostics: diagMap.get(info.data) ?? [] });
   };
 
-  const edgeSelections = [
-    ...groupEdgeSelections,
-    ...drawJobEdges(d3, edgeLayer, jobs, layout, groupedMembers),
-  ];
-  const jobGroups = new Map();
+  drawJobEdges(d3, edgeLayer, jobs, initialLayout.layout, graphState.groupedMembers, graphState);
   for (const job of jobs) {
-    jobGroups.set(jobKey(job.id), drawJobNode(d3, nodeLayer, job, layout.get(jobKey(job.id)), select, diagMap));
+    const id = jobKey(job.id);
+    const node = drawJobNode(d3, nodeLayer, job, initialLayout.layout.get(id), select, diagMap);
+    graphState.jobNodes.set(id, node);
   }
 
-  wireNeedsHover(svg, jobs, jobGroups, edgeSelections);
+  wireNeedsHover(svg, jobs, graphState.jobNodes, graphState.edgeSelections);
 
   const zoom = d3
     .zoom()
     .scaleExtent([0.2, 3])
     .on('zoom', (ev) => {
       viewport.attr('transform', ev.transform);
-      applyLod(svg, ev.transform.k);
+      applyLodAndLayout(svg, ev.transform.k, graphState, d3);
     });
   svg.call(zoom);
-  const fit = () => fitToView(d3, svg, zoom, viewport, container);
+  const fit = () => fitToView(d3, svg, zoom, graphState, container);
   fit();
 
   let resizeFrame = null;
@@ -229,10 +253,134 @@ function drawMarker(group, diags, x, y) {
     .text(diags.map((d) => `${d.severity}: ${d.message}`).join('\n'));
 }
 
-/** Swaps the LOD class for the current zoom scale (visibility only, never geometry). */
-function applyLod(svg, k) {
-  const cls = k < LOD1_THRESHOLD ? 'flow-svg--lod0' : k < LOD2_THRESHOLD ? 'flow-svg--lod1' : 'flow-svg--lod2';
-  svg.attr('class', `flow-svg ${cls}`);
+/** Maps zoom scale to LOD tier. */
+function lodFromScale(k) {
+  return k < LOD1_THRESHOLD ? 0 : k < LOD2_THRESHOLD ? 1 : 2;
+}
+
+/** Swaps LOD class and per-LOD job layout when the zoom scale crosses a threshold. */
+function applyLodAndLayout(svg, k, state, d3) {
+  const lod = lodFromScale(k);
+  if (lod !== state.currentLod) {
+    applyGraphLayout(state, lod, d3);
+  }
+  svg.attr('class', `flow-svg ${LOD_CLASSES[lod]}`);
+}
+
+function computeAllLayouts(jobs) {
+  return [0, 1, 2].map((lod) => computeLayout(jobs, lod));
+}
+
+/** Repositions job cards, edges, and group frames for the active LOD layout. */
+function applyGraphLayout(state, lod, d3) {
+  const { layout, groups } = state.layouts[lod];
+  state.currentLod = lod;
+  const innerScale = lod === 1 ? INNER_SCALE_LOD1 : 1;
+
+  for (const [id, node] of state.jobNodes) {
+    const pos = layout.get(id);
+    node.group.attr('transform', `translate(${pos.x},${pos.y})`);
+    node.box.attr('width', pos.width).attr('height', pos.height);
+    node.header.attr('width', pos.width).attr('height', pos.headerH);
+    if (node.summary) {
+      node.summary.attr('y', pos.headerH + 14);
+    }
+    const innerY = pos.headerH + JOB_PAD;
+    node.inner.attr(
+      'transform',
+      innerScale < 1
+        ? `translate(${JOB_PAD},${innerY}) scale(${innerScale})`
+        : `translate(${JOB_PAD},${innerY})`,
+    );
+  }
+
+  updateNeedsGroupFrames(state, groups, layout);
+  updateEdgePaths(state, d3, layout, groups);
+}
+
+function layoutBounds(layout, groups) {
+  let maxX = 0;
+  let maxY = 0;
+  for (const pos of layout.values()) {
+    maxX = Math.max(maxX, pos.x + pos.width);
+    maxY = Math.max(maxY, pos.y + pos.height);
+  }
+  for (const group of groups) {
+    const frame = groupFrameBounds(group.members, layout);
+    maxX = Math.max(maxX, frame.x + frame.width);
+    maxY = Math.max(maxY, frame.y + frame.height);
+  }
+  return { x: 0, y: 0, width: maxX, height: maxY };
+}
+
+function computeFitScale(layout, groups, container) {
+  const bounds = layoutBounds(layout, groups);
+  if (bounds.width <= 0 || bounds.height <= 0) return 1;
+  const cw = container.clientWidth || 600;
+  const ch = container.clientHeight || 480;
+  const pad = 20;
+  return Math.min(
+    1,
+    Math.max(1, cw - pad * 2) / bounds.width,
+    Math.max(1, ch - pad * 2) / bounds.height,
+  );
+}
+
+function groupFrameBounds(members, layout) {
+  let minX = Infinity;
+  let minY = Infinity;
+  let maxX = 0;
+  let maxY = 0;
+  for (const id of members) {
+    const pos = layout.get(id);
+    minX = Math.min(minX, pos.x);
+    minY = Math.min(minY, pos.y);
+    maxX = Math.max(maxX, pos.x + pos.width);
+    maxY = Math.max(maxY, pos.y + pos.height);
+  }
+  return {
+    x: minX - GROUP_PAD,
+    y: minY - GROUP_PAD,
+    width: maxX - minX + GROUP_PAD * 2,
+    height: maxY - minY + GROUP_PAD * 2,
+  };
+}
+
+function updateNeedsGroupFrames(state, groups, layout) {
+  for (let i = 0; i < groups.length; i++) {
+    const group = groups[i];
+    const frame = groupFrameBounds(group.members, layout);
+    group.frame = frame;
+    const rect = state.groupFrameRects[i];
+    if (rect) {
+      rect.attr('x', frame.x).attr('y', frame.y).attr('width', frame.width).attr('height', frame.height);
+    }
+  }
+}
+
+function updateEdgePaths(state, d3, layout, groups) {
+  const link = d3.linkHorizontal().x((p) => p[0]).y((p) => p[1]);
+  for (const edge of state.edgeSelections) {
+    if (edge.kind === 'group') {
+      const source = layout.get(edge.from);
+      const frame = edge.group.frame ?? groupFrameBounds(edge.group.members, layout);
+      if (!source || !frame) continue;
+      const sx = source.x + source.width;
+      const sy = source.y + source.height / 2;
+      const tx = frame.x;
+      const ty = frame.y + frame.height / 2;
+      const mx = (sx + tx) / 2;
+      edge.path.attr('d', `M${sx},${sy}C${mx},${sy} ${mx},${ty} ${tx},${ty}`);
+    } else {
+      const source = layout.get(edge.from);
+      const target = layout.get(edge.to);
+      if (!source || !target) continue;
+      edge.path.attr('d', link({
+        source: [source.x + source.width, source.y + source.height / 2],
+        target: [target.x, target.y + target.height / 2],
+      }));
+    }
+  }
 }
 
 // ─── Job DAG layout ───
@@ -252,7 +400,7 @@ function needsSignature(job) {
  * needs signature sort adjacently (document order otherwise) so they can be
  * grouped into one card at far zoom, like GitHub's own workflow graph.
  */
-function computeLayout(jobs) {
+function computeLayout(jobs, lod) {
   const byId = new Map(jobs.map((j) => [jobKey(j.id), j]));
   const levels = new Map();
 
@@ -292,7 +440,7 @@ function computeLayout(jobs) {
 
   const measured = new Map();
   for (const job of jobs) {
-    measured.set(jobKey(job.id), measureJob(job));
+    measured.set(jobKey(job.id), measureJob(job, lod));
   }
 
   const columnX = new Map();
@@ -300,7 +448,7 @@ function computeLayout(jobs) {
   const maxLevel = Math.max(...columnJobs.keys());
   for (let level = 0; level <= maxLevel; level++) {
     columnX.set(level, x);
-    let widest = MIN_JOB_W;
+    let widest = lod === 0 ? MIN_JOB_W_LOD0 : lod === 1 ? MIN_JOB_W_LOD1 : MIN_JOB_W;
     for (const job of columnJobs.get(level) ?? []) {
       widest = Math.max(widest, measured.get(jobKey(job.id)).width);
     }
@@ -343,36 +491,20 @@ const GROUP_PAD = 10;
  * member incoming edges hidden, and a single group edge per shared dependency —
  * job relationships matter more than step detail when zoomed out.
  */
-function drawNeedsGroups(groupLayer, edgeLayer, groups, layout) {
-  const edges = [];
+function drawNeedsGroups(groupLayer, edgeLayer, groups, layout, state) {
   for (const group of groups) {
-    let minX = Infinity;
-    let minY = Infinity;
-    let maxX = 0;
-    let maxY = 0;
-    for (const id of group.members) {
-      const pos = layout.get(id);
-      minX = Math.min(minX, pos.x);
-      minY = Math.min(minY, pos.y);
-      maxX = Math.max(maxX, pos.x + pos.width);
-      maxY = Math.max(maxY, pos.y + pos.height);
-    }
+    const frame = groupFrameBounds(group.members, layout);
+    group.frame = frame;
 
-    group.frame = {
-      x: minX - GROUP_PAD,
-      y: minY - GROUP_PAD,
-      width: maxX - minX + GROUP_PAD * 2,
-      height: maxY - minY + GROUP_PAD * 2,
-    };
-
-    groupLayer
+    const rect = groupLayer
       .append('rect')
       .attr('class', 'flow-needs-group')
-      .attr('x', group.frame.x)
-      .attr('y', group.frame.y)
-      .attr('width', group.frame.width)
-      .attr('height', group.frame.height)
+      .attr('x', frame.x)
+      .attr('y', frame.y)
+      .attr('width', frame.width)
+      .attr('height', frame.height)
       .attr('rx', 10);
+    state.groupFrameRects.push(rect);
 
     // One edge per shared dependency, pointing at the card instead of each member.
     for (const dep of group.needs) {
@@ -380,26 +512,23 @@ function drawNeedsGroups(groupLayer, edgeLayer, groups, layout) {
       if (!source) continue;
       const sx = source.x + source.width;
       const sy = source.y + source.height / 2;
-      const tx = group.frame.x;
-      const ty = group.frame.y + group.frame.height / 2;
+      const tx = frame.x;
+      const ty = frame.y + frame.height / 2;
       const mx = (sx + tx) / 2;
       const path = edgeLayer
         .append('path')
         .attr('class', 'flow-edge flow-edge--group')
         .attr('d', `M${sx},${sy}C${mx},${sy} ${mx},${ty} ${tx},${ty}`);
-      edges.push({ from: jobKey(dep), to: group.members, path });
+      state.edgeSelections.push({ kind: 'group', from: jobKey(dep), group, path });
     }
   }
-
-  return edges;
 }
 
-function drawJobEdges(d3, layer, jobs, layout, groupedMembers) {
+function drawJobEdges(d3, layer, jobs, layout, groupedMembers, state) {
   const link = d3
     .linkHorizontal()
     .x((p) => p[0])
     .y((p) => p[1]);
-  const edges = [];
   for (const job of jobs) {
     const target = layout.get(jobKey(job.id));
     // Transitively reduced edges (computed by Seiton.Core) keep the DAG readable;
@@ -416,11 +545,9 @@ function drawJobEdges(d3, layer, jobs, layout, groupedMembers) {
           source: [source.x + source.width, source.y + source.height / 2],
           target: [target.x, target.y + target.height / 2],
         }));
-      edges.push({ from: jobKey(dep), to: [jobKey(job.id)], path });
+      state.edgeSelections.push({ kind: 'job', from: jobKey(dep), to: jobKey(job.id), path });
     }
   }
-
-  return edges;
 }
 
 // ─── Needs-chain hover highlighting ───
@@ -460,8 +587,8 @@ function wireNeedsHover(svg, jobs, jobGroups, edgeSelections) {
 
   const clearHover = () => {
     svg.classed('flow-svg--hovering', false);
-    for (const group of jobGroups.values()) {
-      group.classed('flow-hover-related', false).classed('flow-hover-focus', false);
+    for (const node of jobGroups.values()) {
+      node.group.classed('flow-hover-related', false).classed('flow-hover-focus', false);
     }
     for (const edge of edgeSelections) {
       edge.path.classed('flow-hover-related', false);
@@ -471,21 +598,22 @@ function wireNeedsHover(svg, jobs, jobGroups, edgeSelections) {
   const hoverJob = (jobId) => {
     const related = new Set([jobId, ...closure(jobId, dependsOn), ...closure(jobId, dependedBy)]);
     svg.classed('flow-svg--hovering', true);
-    for (const [id, group] of jobGroups) {
-      group
+    for (const [id, node] of jobGroups) {
+      node.group
         .classed('flow-hover-related', related.has(id))
         .classed('flow-hover-focus', id === jobId);
     }
     for (const edge of edgeSelections) {
+      const targets = edge.kind === 'group' ? edge.group.members : [edge.to];
       edge.path.classed(
         'flow-hover-related',
-        related.has(edge.from) && edge.to.some((id) => related.has(id)),
+        related.has(edge.from) && targets.some((id) => related.has(id)),
       );
     }
   };
 
-  for (const [id, group] of jobGroups) {
-    group
+  for (const [id, node] of jobGroups) {
+    node.group
       .on('mouseenter', () => hoverJob(id))
       .on('mouseleave', clearHover);
   }
@@ -577,9 +705,9 @@ function parallelSize(children) {
 }
 
 /** Assigns x/y/width/height to each node; vertical position = document order. */
-function layoutStepGraph(graph) {
+function layoutStepGraph(graph, profile = LOD2_PROFILE) {
   let y = 0;
-  let maxX = NODE_W;
+  let maxX = profile.nodeW;
   for (const node of graph.nodes) {
     if (node.kind === 'parallel') {
       const size = parallelSize(node.children);
@@ -587,23 +715,23 @@ function layoutStepGraph(graph) {
       node.y = y;
       node.width = size.width;
       node.height = size.height;
-      y += size.height + STEP_GAP_Y;
+      y += size.height + profile.stepGapY;
     } else if (node.lane > 0) {
-      node.x = NODE_W + BG_LANE_GAP + (node.lane - 1) * (BG_NODE_W + BG_LANE_GAP);
+      node.x = profile.nodeW + BG_LANE_GAP + (node.lane - 1) * (profile.bgNodeW + BG_LANE_GAP);
       node.y = y;
-      node.width = BG_NODE_W;
-      node.height = NODE_H;
-      y += NODE_H + STEP_GAP_Y;
+      node.width = profile.bgNodeW;
+      node.height = profile.nodeH;
+      y += profile.nodeH + profile.stepGapY;
     } else {
       node.x = 0;
       node.y = y;
-      node.width = NODE_W;
-      node.height = NODE_H;
-      y += NODE_H + STEP_GAP_Y;
+      node.width = profile.nodeW;
+      node.height = profile.nodeH;
+      y += profile.nodeH + profile.stepGapY;
     }
     maxX = Math.max(maxX, node.x + node.width);
   }
-  return { width: maxX, height: Math.max(0, y - STEP_GAP_Y) };
+  return { width: maxX, height: Math.max(0, y - profile.stepGapY) };
 }
 
 function jobMetaText(job) {
@@ -644,15 +772,35 @@ function jobInfoText(job) {
   return parts.join(' · ');
 }
 
-function measureJob(job) {
+function measureJobHeader(job, lod) {
+  const metaH = lod >= 1 && jobMetaText(job) ? META_H : 0;
+  const infoH = lod >= 2 && jobInfoText(job) ? META_H : 0;
+  const legsH = lod >= 2 && jobLegs(job).length > 0 ? LEGS_H : 0;
+  return HEADER_H + metaH + infoH + legsH;
+}
+
+function measureJob(job, lod) {
+  if (lod === 0) {
+    const headerH = HEADER_H;
+    const stepCount = countSteps(job.steps ?? []);
+    const summaryH = stepCount > 0 ? SUMMARY_H : 0;
+    const height = headerH + summaryH + JOB_PAD;
+    return {
+      graph: null,
+      headerH,
+      height,
+      width: MIN_JOB_W_LOD0,
+    };
+  }
+
   const graph = buildStepGraph(job.steps ?? []);
-  const content = layoutStepGraph(graph);
-  const metaH = jobMetaText(job) ? META_H : 0;
-  const infoH = jobInfoText(job) ? META_H : 0;
-  const legsH = jobLegs(job).length > 0 ? LEGS_H : 0;
-  const headerH = HEADER_H + metaH + infoH + legsH;
-  const height = headerH + (graph.nodes.length > 0 ? JOB_PAD + content.height : 0) + JOB_PAD;
-  const width = Math.max(MIN_JOB_W, JOB_PAD * 2 + content.width);
+  const content = layoutStepGraph(graph, LOD2_PROFILE);
+  const headerH = measureJobHeader(job, lod);
+  const innerScale = lod === 1 ? INNER_SCALE_LOD1 : 1;
+  const innerBody = graph.nodes.length > 0 ? JOB_PAD + content.height + JOB_PAD : 0;
+  const height = headerH + innerBody * innerScale;
+  const minW = lod === 1 ? MIN_JOB_W_LOD1 : MIN_JOB_W;
+  const width = Math.max(minW, JOB_PAD * 2 + content.width * innerScale);
   return { graph, headerH, height, width };
 }
 
@@ -689,7 +837,8 @@ function drawJobNode(d3, layer, job, pos, select, diagMap) {
     .attr('height', pos.height)
     .attr('rx', 8);
 
-  g.append('rect')
+  const header = g
+    .append('rect')
     .attr('class', 'flow-job__header')
     .attr('width', pos.width)
     .attr('height', pos.headerH)
@@ -759,11 +908,13 @@ function drawJobNode(d3, layer, job, pos, select, diagMap) {
 
   // Far-zoom summary shown instead of the intra-job flow at lod0.
   const stepCount = countSteps(job.steps ?? []);
+  let summary = null;
   if (stepCount > 0) {
-    g.append('text')
+    summary = g
+      .append('text')
       .attr('class', 'flow-job__summary')
       .attr('x', JOB_PAD)
-      .attr('y', pos.headerH + 20)
+      .attr('y', pos.headerH + 14)
       .text(`${stepCount} steps`);
   }
 
@@ -772,16 +923,19 @@ function drawJobNode(d3, layer, job, pos, select, diagMap) {
     .attr('class', 'flow-job__inner')
     .attr('transform', `translate(${JOB_PAD},${pos.headerH + JOB_PAD})`);
 
-  drawStepEdges(d3, inner, pos.graph);
-  for (const node of pos.graph.nodes) {
-    if (node.kind === 'parallel') {
-      drawParallelNode(inner, node, select, diagMap);
-    } else {
-      drawStepNode(inner, node, select, diagMap);
+  if (pos.graph) {
+    drawStepEdges(d3, inner, pos.graph);
+    for (const node of pos.graph.nodes) {
+      if (node.kind === 'parallel') {
+        drawParallelNode(inner, node, select, diagMap);
+      } else {
+        drawStepNode(inner, node, select, diagMap);
+      }
     }
   }
 
-  return g;
+  const box = g.select('.flow-job__box');
+  return { group: g, box, header, inner, summary };
 }
 
 function countSteps(steps) {
@@ -960,22 +1114,25 @@ function truncate(text, max) {
   return text.length <= max ? text : `${text.slice(0, Math.max(1, max - 1))}…`;
 }
 
-/** Scales and centers the viewport so every rendered graph element is visible. */
-function fitToView(d3, svg, zoom, viewport, container) {
-  const bounds = viewport.node()?.getBBox();
-  if (!bounds || bounds.width <= 0 || bounds.height <= 0) return;
+/** Scales and centers the viewport; picks the LOD layout that fits at a readable scale. */
+function fitToView(d3, svg, zoom, state, container) {
+  let lod = 2;
+  let k = computeFitScale(state.layouts[2].layout, state.layouts[2].groups, container);
+  const lodFromFit = lodFromScale(k);
+  if (lodFromFit !== 2) {
+    lod = lodFromFit;
+    k = computeFitScale(state.layouts[lod].layout, state.layouts[lod].groups, container);
+  }
 
+  applyGraphLayout(state, lod, d3);
+  const bounds = layoutBounds(state.layouts[lod].layout, state.layouts[lod].groups);
   const cw = container.clientWidth || 600;
   const ch = container.clientHeight || 480;
   const pad = 20;
-  const k = Math.min(
-    1,
-    Math.max(1, cw - pad * 2) / bounds.width,
-    Math.max(1, ch - pad * 2) / bounds.height,
-  );
-  const [, maxScale] = zoom.scaleExtent();
-  zoom.scaleExtent([Math.min(0.2, k * 0.5), maxScale]);
   const tx = (cw - bounds.width * k) / 2 - bounds.x * k;
   const ty = (ch - bounds.height * k) / 2 - bounds.y * k;
+  const [, maxScale] = zoom.scaleExtent();
+  zoom.scaleExtent([Math.min(0.2, k * 0.5), maxScale]);
+  svg.attr('class', `flow-svg ${LOD_CLASSES[lod]}`);
   svg.call(zoom.transform, d3.zoomIdentity.translate(tx, ty).scale(k));
 }

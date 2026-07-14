@@ -81,6 +81,19 @@ public sealed class PlaygroundFlowTabContractTests
         await Assert.That(js).Contains("flow-step__label");
         await Assert.That(js).Contains("flow-step__marks");
         await Assert.That(js).Contains("stepLabelParts");
+        // Per-LOD job layout: compact cards at far zoom, full geometry at near zoom.
+        await Assert.That(js).Contains("computeAllLayouts");
+        await Assert.That(js).Contains("applyGraphLayout");
+        await Assert.That(js).Contains("MIN_JOB_W_LOD0");
+        await Assert.That(js).Contains("INNER_SCALE_LOD1");
+    }
+
+    [Test]
+    public async Task Stylesheet_Lod1_HidesJobInfoAndLegs()
+    {
+        var css = await ReadWwwrootFileAsync("style.css");
+        await Assert.That(css).Contains(".flow-svg--lod1 .flow-job__info");
+        await Assert.That(css).Contains(".flow-svg--lod1 .flow-job__legs");
     }
 
     [Test]

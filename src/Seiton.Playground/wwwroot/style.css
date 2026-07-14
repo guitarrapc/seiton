@@ -1619,7 +1619,7 @@ footer a {
   display: none;
 }
 
-/* lod0 (far): job boxes + summary only */
+/* lod0 (far): compact job cards + summary only */
 .flow-svg--lod0 .flow-job__inner {
   display: none;
 }
@@ -1628,11 +1628,17 @@ footer a {
   display: block;
 }
 
+.flow-svg--lod0 .flow-job__meta,
 .flow-svg--lod0 .flow-job__legs {
   display: none;
 }
 
-/* lod1 (mid): simplified labels — kind + truncated name; hide if/timeout/continue markers */
+/* lod1 (mid): tighter cards — hide runtime header lines; simplified step labels */
+.flow-svg--lod1 .flow-job__info,
+.flow-svg--lod1 .flow-job__legs {
+  display: none;
+}
+
 .flow-svg--lod1 .flow-step__marks {
   display: none;
 }
