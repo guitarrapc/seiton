@@ -19,6 +19,8 @@ public sealed class PlaygroundFlowTabContractTests
         await Assert.That(html).Contains("id=\"flow-panel\"", StringComparison.Ordinal);
         await Assert.That(html).Contains("id=\"mermaid-panel\"", StringComparison.Ordinal);
         await Assert.That(html).Contains("id=\"mermaid-output\"", StringComparison.Ordinal);
+        await Assert.That(html).Contains("id=\"mermaid-preview\"", StringComparison.Ordinal);
+        await Assert.That(html).Contains("id=\"mermaid-preview-btn\"", StringComparison.Ordinal);
         await Assert.That(html).Contains("id=\"mermaid-copy-btn\"", StringComparison.Ordinal);
         await Assert.That(html).Contains("id=\"flow-graph\"", StringComparison.Ordinal);
         await Assert.That(html).Contains("id=\"flow-detail\"", StringComparison.Ordinal);
@@ -46,6 +48,17 @@ public sealed class PlaygroundFlowTabContractTests
     }
 
     [Test]
+    public async Task IndexTemplate_MermaidCdnAssetHasSubresourceIntegrity()
+    {
+        var html = await ReadWwwrootFileAsync("index.html");
+        await Assert.That(html).Contains("mermaid/11.12.0/mermaid.min.js", StringComparison.Ordinal);
+        // SRI from https://api.cdnjs.com/libraries/mermaid/11.12.0 — recompute when bumping the Mermaid version.
+        await Assert.That(html).Contains(
+            "integrity=\"sha512-5TKaYvhenABhlGIKSxAWLFJBZCSQw7HTV7aL1dJcBokM/+3PNtfgJFlv8E6Us/B1VMlQ4u8sPzjudL9TEQ06ww==\"",
+            StringComparison.Ordinal);
+    }
+
+    [Test]
     public async Task MainJs_FlowTab_WiresInteropTabSwitchAndTestHooks()
     {
         var js = await ReadWwwrootFileAsync("main.js");
@@ -53,6 +66,8 @@ public sealed class PlaygroundFlowTabContractTests
         await Assert.That(js).Contains("GetFlowMermaid");
         await Assert.That(js).Contains("refreshFlow");
         await Assert.That(js).Contains("refreshMermaid");
+        await Assert.That(js).Contains("setMermaidPreviewMode");
+        await Assert.That(js).Contains("renderMermaidPreviewSvg");
         await Assert.That(js).Contains("selectResultsTab");
         await Assert.That(js).Contains("from './flow-graph.js'");
         await Assert.That(js).Contains("captureFlowViewState");
@@ -60,6 +75,7 @@ public sealed class PlaygroundFlowTabContractTests
         await Assert.That(js).Contains("initialView");
         await Assert.That(js).Contains("getMermaid:");
         await Assert.That(js).Contains("renderMermaid");
+        await Assert.That(js).Contains("isMermaidPreviewActive");
         await Assert.That(js).Contains("isMermaidEmpty");
     }
 
@@ -362,7 +378,8 @@ public sealed class PlaygroundFlowTabContractTests
         await Assert.That(css).Contains(".flow-graph");
         await Assert.That(css).Contains(".flow-detail");
         await Assert.That(css).Contains(".mermaid-output");
-        await Assert.That(css).Contains(".mermaid-copy-btn");
+        await Assert.That(css).Contains(".mermaid-preview");
+        await Assert.That(css).Contains(".mermaid-toolbar-btn");
         await Assert.That(css).Contains(".flow-parallel-boundary");
         await Assert.That(css).Contains(".flow-edge");
     }

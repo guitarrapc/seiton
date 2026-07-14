@@ -496,7 +496,10 @@ function syncEditorTheme() {
 }
 
 playgroundColorSchemeDarkQuery().addEventListener('change', () => {
-  if (getStoredColorMode() === 'system') syncEditorTheme();
+  if (getStoredColorMode() === 'system') {
+    syncEditorTheme();
+    refreshMermaidPreviewOnThemeChange();
+  }
 });
 
 const themeCycleBtn = document.getElementById('theme-cycle-btn');
@@ -518,6 +521,7 @@ function cycleColorMode() {
   applyColorModeToDocument(next);
   syncEditorTheme();
   updateThemeCycleButton();
+  refreshMermaidPreviewOnThemeChange();
 }
 
 if (themeCycleBtn) {
@@ -711,8 +715,10 @@ const resultPanel = document.getElementById('result-panel');
 const flowPanel = document.getElementById('flow-panel');
 const mermaidPanel = document.getElementById('mermaid-panel');
 const mermaidOutputEl = document.getElementById('mermaid-output');
+const mermaidPreviewEl = document.getElementById('mermaid-preview');
 const mermaidEmptyEl = document.getElementById('mermaid-empty');
 const mermaidCopyBtn = document.getElementById('mermaid-copy-btn');
+const mermaidPreviewBtn = document.getElementById('mermaid-preview-btn');
 const flowGraphEl = document.getElementById('flow-graph');
 const flowEmptyEl = document.getElementById('flow-empty');
 const flowDetailEl = document.getElementById('flow-detail');
@@ -727,6 +733,9 @@ let lastFlowFilePath = null;
 let lastMermaidSource = null;
 let lastMermaidFilePath = null;
 let lastMermaidText = '';
+let mermaidPreviewActive = false;
+let mermaidInitialized = false;
+let mermaidRenderSeq = 0;
 /** Diagnostics from the most recent lint, shared with the flow graph markers. */
 let lastDiagnostics = [];
 let lastFlowDiagnostics = null;
@@ -904,6 +913,94 @@ function isMermaidEmpty(mermaidText) {
   return !/subgraph\s+j\d/m.test(mermaidText);
 }
 
+function mermaidThemeName() {
+  return effectiveUiIsDark() ? 'dark' : 'default';
+}
+
+function ensureMermaidInitialized() {
+  const m = globalThis.mermaid;
+  if (!m) {
+    return null;
+  }
+  if (!mermaidInitialized) {
+    m.initialize({
+      startOnLoad: false,
+      theme: mermaidThemeName(),
+      securityLevel: 'strict',
+      flowchart: { htmlLabels: false },
+    });
+    mermaidInitialized = true;
+  }
+  return m;
+}
+
+function syncMermaidTheme() {
+  const m = globalThis.mermaid;
+  if (!m || !mermaidInitialized) {
+    return;
+  }
+  m.initialize({
+    startOnLoad: false,
+    theme: mermaidThemeName(),
+    securityLevel: 'strict',
+    flowchart: { htmlLabels: false },
+  });
+}
+
+function setMermaidToolbarEnabled(enabled) {
+  mermaidCopyBtn.disabled = !enabled;
+  mermaidPreviewBtn.disabled = !enabled;
+}
+
+function setMermaidPreviewMode(preview) {
+  mermaidPreviewActive = preview;
+  mermaidPreviewBtn.textContent = preview ? 'Source' : 'Preview';
+  mermaidPreviewBtn.title = preview ? 'Show source text' : 'Preview rendered diagram';
+  mermaidPreviewBtn.setAttribute(
+    'aria-label',
+    preview ? 'Show Mermaid source' : 'Preview Mermaid diagram',
+  );
+  mermaidOutputEl.hidden = preview;
+  mermaidPreviewEl.hidden = !preview;
+  if (preview) {
+    void renderMermaidPreviewSvg();
+  } else {
+    mermaidPreviewEl.replaceChildren();
+  }
+}
+
+async function renderMermaidPreviewSvg() {
+  const m = ensureMermaidInitialized();
+  mermaidPreviewEl.replaceChildren();
+  if (!m || !lastMermaidText) {
+    const msg = document.createElement('p');
+    msg.className = 'notification';
+    msg.textContent = m
+      ? 'Mermaid preview unavailable.'
+      : 'Mermaid preview unavailable: mermaid.js failed to load.';
+    mermaidPreviewEl.appendChild(msg);
+    return;
+  }
+  syncMermaidTheme();
+  const id = `seiton-mermaid-${++mermaidRenderSeq}`;
+  try {
+    const { svg, bindFunctions } = await m.render(id, lastMermaidText);
+    mermaidPreviewEl.innerHTML = svg;
+    bindFunctions?.(mermaidPreviewEl);
+  } catch (err) {
+    const msg = document.createElement('p');
+    msg.className = 'notification';
+    msg.textContent = `Mermaid preview failed: ${err?.message ?? err}`;
+    mermaidPreviewEl.appendChild(msg);
+  }
+}
+
+function refreshMermaidPreviewOnThemeChange() {
+  if (mermaidPreviewActive && activeResultsTab === 'mermaid' && lastMermaidText) {
+    void renderMermaidPreviewSvg();
+  }
+}
+
 /**
  * Fetches flow-mermaid from the WASM backend and updates the Mermaid panel.
  * @param {boolean} [force]
@@ -948,24 +1045,42 @@ function refreshMermaid(force = false) {
 function renderMermaid(mermaidText) {
   lastMermaidText = mermaidText ?? '';
   if (mermaidText.startsWith('%% Seiton error:')) {
+    setMermaidPreviewMode(false);
     mermaidOutputEl.textContent = mermaidText;
     mermaidOutputEl.hidden = false;
+    mermaidPreviewEl.hidden = true;
     mermaidEmptyEl.hidden = true;
-    mermaidCopyBtn.disabled = true;
+    setMermaidToolbarEnabled(false);
     return;
   }
   if (isMermaidEmpty(mermaidText)) {
+    setMermaidPreviewMode(false);
     mermaidOutputEl.hidden = true;
+    mermaidPreviewEl.hidden = true;
     mermaidEmptyEl.hidden = false;
     mermaidEmptyEl.textContent = 'No workflow structure to export.';
-    mermaidCopyBtn.disabled = true;
+    setMermaidToolbarEnabled(false);
     return;
   }
   mermaidOutputEl.textContent = mermaidText;
-  mermaidOutputEl.hidden = false;
   mermaidEmptyEl.hidden = true;
-  mermaidCopyBtn.disabled = false;
+  setMermaidToolbarEnabled(true);
+  if (mermaidPreviewActive) {
+    mermaidOutputEl.hidden = true;
+    mermaidPreviewEl.hidden = false;
+    void renderMermaidPreviewSvg();
+  } else {
+    mermaidOutputEl.hidden = false;
+    mermaidPreviewEl.hidden = true;
+  }
 }
+
+mermaidPreviewBtn.addEventListener('click', () => {
+  if (mermaidPreviewBtn.disabled) {
+    return;
+  }
+  setMermaidPreviewMode(!mermaidPreviewActive);
+});
 
 mermaidCopyBtn.addEventListener('click', async () => {
   if (!lastMermaidText || mermaidCopyBtn.disabled) {
@@ -1998,6 +2113,8 @@ function installTestHooksIfRequested() {
         }
       },
       renderMermaid: (mermaidText) => renderMermaid(mermaidText ?? ''),
+      setMermaidPreviewMode: (preview) => setMermaidPreviewMode(Boolean(preview)),
+      isMermaidPreviewActive: () => mermaidPreviewActive,
       renderFlow: (flowDoc) => renderFlow(flowDoc ?? { version: 1, workflows: [] }),
     };
   } catch {
