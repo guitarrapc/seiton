@@ -1632,8 +1632,8 @@ footer a {
   display: none;
 }
 
-/* lod1 (mid): step shapes + edges, no labels */
-.flow-svg--lod1 .flow-step__text {
+/* lod1 (mid): simplified labels — kind + truncated name; hide if/timeout/continue markers */
+.flow-svg--lod1 .flow-step__marks {
   display: none;
 }
 

@@ -9,8 +9,9 @@
 //
 // Zoom level drives LOD (level of detail) via CSS classes on the SVG root:
 //   lod0 (far)  — job boxes with a summary line, intra-job flow hidden
-//   lod1 (mid)  — step nodes and edges visible, labels hidden
-//   lod2 (near) — full labels
+//   lod1 (mid)  — step frames, edges, and simplified labels (no if/timeout markers)
+//   lod2 (near) — full labels including markers
+// Step frames and labels always appear together — never empty boxes.
 // Geometry never changes between LOD levels, only visibility — so zooming stays
 // anchored under the cursor.
 //
@@ -37,7 +38,7 @@ const PAR_CHILDREN_PER_ROW = 3;
 const MAX_LEG_CHIPS = 4;
 
 const LOD1_THRESHOLD = 0.55;
-const LOD2_THRESHOLD = 1.05;
+const LOD2_THRESHOLD = 0.85;
 
 /**
  * Renders one workflow into `container`. Returns false when there is nothing to draw
@@ -841,14 +842,7 @@ function drawStepNode(layer, node, select, diagMap) {
     .attr('class', 'flow-step__text')
     .attr('x', node.x + 8)
     .attr('y', node.y + 17);
-  text
-    .append('tspan')
-    .attr('class', `flow-step__kind flow-step__kind--${step.kind}`)
-    .text(kindLabel(step));
-  text
-    .append('tspan')
-    .attr('dx', 5)
-    .text(stepLabelTruncated(step, node.lane > 0 ? 18 : 22));
+  appendStepLabelTspans(text, step, node.lane > 0 ? 18 : 22);
 
   drawMarker(g, diagMap.get(step), node.x + node.width - 2, node.y + 2);
 }
@@ -896,11 +890,7 @@ function drawParallelNode(layer, node, select, diagMap) {
       .attr('class', 'flow-step__text')
       .attr('x', cx + 6)
       .attr('y', cy + 16);
-    text
-      .append('tspan')
-      .attr('class', `flow-step__kind flow-step__kind--${child.kind}`)
-      .text(kindLabel(child));
-    text.append('tspan').attr('dx', 4).text(stepLabelTruncated(child, 14));
+    appendStepLabelTspans(text, child, 14, 4);
 
     drawMarker(childG, diagMap.get(child), cx + PAR_CHILD_W - 2, cy + 2);
   });
@@ -925,7 +915,7 @@ function stepLabel(step) {
   return step.name ?? step.id ?? step.uses ?? firstLine(step.run) ?? '';
 }
 
-/** Suffix markers (if / timeout / continue-on-error) that must survive truncation. */
+/** Suffix markers (if / timeout / continue-on-error) hidden at lod1. */
 function stepMarks(step) {
   let marks = '';
   if (step.if) marks += ' ⛊';
@@ -934,10 +924,29 @@ function stepMarks(step) {
   return marks;
 }
 
-/** Truncates the base label first so the marker suffix is never cut off. */
-function stepLabelTruncated(step, max) {
+/** Base label + optional marks, with base truncated so markers fit at lod2. */
+function stepLabelParts(step, max) {
   const marks = stepMarks(step);
-  return truncate(stepLabel(step), Math.max(4, max - marks.length)) + marks;
+  return {
+    base: truncate(stepLabel(step), Math.max(4, max - marks.length)),
+    marks,
+  };
+}
+
+function appendStepLabelTspans(text, step, max, labelDx = 5) {
+  const { base, marks } = stepLabelParts(step, max);
+  text
+    .append('tspan')
+    .attr('class', `flow-step__kind flow-step__kind--${step.kind}`)
+    .text(kindLabel(step));
+  text
+    .append('tspan')
+    .attr('class', 'flow-step__label')
+    .attr('dx', labelDx)
+    .text(base);
+  if (marks) {
+    text.append('tspan').attr('class', 'flow-step__marks').text(marks);
+  }
 }
 
 function firstLine(text) {

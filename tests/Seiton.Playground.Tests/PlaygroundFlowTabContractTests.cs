@@ -74,7 +74,13 @@ public sealed class PlaygroundFlowTabContractTests
         await Assert.That(js).Contains("wait-all");
         // Zoom-driven level of detail.
         await Assert.That(js).Contains("flow-svg--lod0");
+        await Assert.That(js).Contains("flow-svg--lod1");
         await Assert.That(js).Contains("flow-svg--lod2");
+        await Assert.That(js).Contains("LOD2_THRESHOLD = 0.85");
+        // Step frames and labels are paired; markers are a separate tspan hidden at lod1.
+        await Assert.That(js).Contains("flow-step__label");
+        await Assert.That(js).Contains("flow-step__marks");
+        await Assert.That(js).Contains("stepLabelParts");
     }
 
     [Test]
@@ -221,6 +227,9 @@ public sealed class PlaygroundFlowTabContractTests
         await Assert.That(css).Contains(".flow-step-edge");
         await Assert.That(css).Contains(".flow-job__legs");
         await Assert.That(css).Contains(".flow-job__summary");
+        // lod1 keeps step labels visible; only runtime markers (if / timeout / continue) hide.
+        await Assert.That(css).Contains(".flow-svg--lod1 .flow-step__marks");
+        await Assert.That(css.Contains(".flow-svg--lod1 .flow-step__text", StringComparison.Ordinal)).IsFalse();
     }
 
     [Test]
