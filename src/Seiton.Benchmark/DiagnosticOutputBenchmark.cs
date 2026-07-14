@@ -1,4 +1,5 @@
 ﻿using Seiton.Core.Linting;
+using Seiton.Core.Flow;
 using Seiton.Core.Parsing;
 using Seiton.Output;
 using System.Text;
@@ -6,7 +7,7 @@ using System.Text;
 namespace Seiton.Benchmark;
 
 /// <summary>
-/// Baseline for CLI diagnostic formatting across output formats (text, github-actions, sarif, json).
+/// Baseline for CLI diagnostic/flow formatting across output formats (text, github-actions, sarif, json, flow-json, flow-mermaid).
 /// Compare Mean and Allocated after output-path optimizations.
 /// </summary>
 [MemoryDiagnoser]
@@ -24,6 +25,7 @@ public class DiagnosticOutputBenchmark
     public FileCount Count { get; set; }
 
     private Diagnostic[] _diagnostics = [];
+    private WorkflowFlow[] _flows = [];
     private Dictionary<string, byte[]> _sourceMap = new(StringComparer.Ordinal);
 
     [GlobalSetup]
@@ -32,6 +34,7 @@ public class DiagnosticOutputBenchmark
         var n = (int)Count;
         var engine = new LintEngine();
         var list = new List<Diagnostic>(capacity: 256);
+        var flows = new List<WorkflowFlow>(capacity: n);
         _sourceMap = new Dictionary<string, byte[]>(n, StringComparer.Ordinal);
 
         for (var i = 0; i < n; i++)
@@ -47,9 +50,16 @@ public class DiagnosticOutputBenchmark
             {
                 list.AddRange(result.Diagnostics);
             }
+
+            using var parseResult = WorkflowParser.Parse(bytes, path);
+            if (WorkflowFlowCollector.Collect(parseResult, path) is { } flow)
+            {
+                flows.Add(flow);
+            }
         }
 
         _diagnostics = [.. list];
+        _flows = [.. flows];
     }
 
     [Benchmark(Baseline = true, Description = "DiagnosticFormatter text rich")]
@@ -98,5 +108,20 @@ public class DiagnosticOutputBenchmark
         using var buffer = new PooledByteBufferWriter(16_384);
         DiagnosticFormatter.Write(buffer, _diagnostics, OutputFormat.Json, oneline: false, color: false, _sourceMap);
         return buffer.WrittenSpan.Length;
+    }
+
+    [Benchmark(Description = "WorkflowFlowJson flow-json")]
+    public int WriteFlowJson()
+    {
+        using var buffer = new PooledByteBufferWriter(16_384);
+        WorkflowFlowJson.Write(buffer, _flows);
+        return buffer.WrittenSpan.Length;
+    }
+
+    [Benchmark(Description = "WorkflowFlowMermaid flow-mermaid")]
+    public int WriteFlowMermaid()
+    {
+        var output = WorkflowFlowMermaid.Serialize(_flows);
+        return output.Length;
     }
 }

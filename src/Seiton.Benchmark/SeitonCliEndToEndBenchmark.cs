@@ -72,7 +72,7 @@ public class SeitonCliEndToEndBenchmark
         }
     }
 
-    [Benchmark(Baseline = true, Description = "seiton check (auto-discovery, text output)")]
+    [Benchmark(Baseline = true, Description = "seiton check")]
     public int CheckText()
         => RunInRepository(static () => CheckCommand.Run(
             [],
@@ -89,12 +89,44 @@ public class SeitonCliEndToEndBenchmark
             skipAgenticWorkflows: false,
             formatExplicitlySet: true));
 
-    [Benchmark(Description = "seiton validate-config (auto-discovery)")]
+    [Benchmark(Description = "seiton --fix --dry-run")]
+    public int FixDryRunText()
+        => RunInRepository(static () => FixCommand.RunAsync(
+            [],
+            config: null,
+            stdinFilename: "<stdin>",
+            ignore: [],
+            minSeverity: null,
+            format: OutputFormat.Text,
+            oneline: false,
+            color: ColorMode.Never,
+            noColor: true,
+            verboseLevel: VerboseLevel.Off,
+            dryRun: true,
+            check: false,
+            enablePinNetwork: false,
+            enableImageNetwork: false,
+            includeActions: false,
+            skipAgenticWorkflows: false,
+            showDiff: false,
+            formatExplicitlySet: true,
+            output: TextWriter.Null,
+            error: TextWriter.Null).GetAwaiter().GetResult());
+
+    [Benchmark(Description = "seiton validate-config")]
     public int ValidateConfig()
         => RunInRepository(() => ValidateCommand.Run(
             config: null,
             verboseLevel: VerboseLevel.Off,
             baseDirectory: _repositoryRoot,
+            output: TextWriter.Null,
+            error: TextWriter.Null));
+
+    [Benchmark(Description = "seiton rules")]
+    public int RulesText()
+        => RunInRepository(static () => RulesCommand.Run(
+            config: null,
+            format: OutputFormat.Text,
             output: TextWriter.Null,
             error: TextWriter.Null));
 
