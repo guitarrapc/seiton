@@ -46,6 +46,8 @@ const LOD_CLASSES = ['flow-svg--lod0', 'flow-svg--lod1', 'flow-svg--lod2'];
 
 const DISPLAY_SCALE_MIN = 0.5;
 const DISPLAY_SCALE_MAX = 1.75;
+/** Fit-to-view may scale below toolbar/wheel floor so wide graphs fit narrow panes. */
+const FIT_SCALE_MIN = 0.08;
 // Continuous zoom per wheel tick; LOD shifts when k crosses band edges (with hysteresis).
 const WHEEL_ZOOM_SENS = 0.0014;
 const LOD_COMPENSATE_EXP = 0.55;
@@ -77,10 +79,10 @@ const LOD2_PROFILE = {
  *           diagnostics?: object[],
  *           onZoomReady?: (controller: {
  *             zoomIn: () => void, zoomOut: () => void, reset: () => void, dispose: () => void
- *           }) => void }} [callbacks]
+ *           initialView?: { k: number, x: number, y: number, lod: number } }} [callbacks]
  * @returns {boolean}
  */
-export function renderFlowGraph(container, workflow, { onSelect, diagnostics, onZoomReady } = {}) {
+export function renderFlowGraph(container, workflow, { onSelect, diagnostics, onZoomReady, initialView } = {}) {
   container.replaceChildren();
   const d3 = globalThis.d3;
   if (!d3 || !workflow || !Array.isArray(workflow.jobs) || workflow.jobs.length === 0) {
@@ -89,8 +91,11 @@ export function renderFlowGraph(container, workflow, { onSelect, diagnostics, on
 
   const jobs = workflow.jobs;
   const layouts = computeAllLayouts(jobs);
+  const startLod = initialView && Number.isFinite(initialView.lod)
+    ? Math.max(0, Math.min(2, initialView.lod))
+    : 2;
   const graphState = {
-    currentLod: 2,
+    currentLod: startLod,
     layouts,
     jobs,
     jobNodes: new Map(),
@@ -103,7 +108,7 @@ export function renderFlowGraph(container, workflow, { onSelect, diagnostics, on
   const svg = d3
     .select(container)
     .append('svg')
-    .attr('class', 'flow-svg flow-svg--lod2')
+    .attr('class', `flow-svg ${LOD_CLASSES[startLod]}`)
     .attr('role', 'img')
     .attr('aria-label', 'Workflow execution flow graph');
 
@@ -112,7 +117,7 @@ export function renderFlowGraph(container, workflow, { onSelect, diagnostics, on
   const edgeLayer = viewport.append('g');
   const nodeLayer = viewport.append('g');
 
-  const initialLayout = layouts[2];
+  const initialLayout = layouts[startLod];
   drawNeedsGroups(groupLayer, edgeLayer, initialLayout.groups, initialLayout.layout, graphState);
   graphState.groupedMembers = new Set(initialLayout.groups.flatMap((g) => g.members));
 
@@ -136,7 +141,7 @@ export function renderFlowGraph(container, workflow, { onSelect, diagnostics, on
 
   const zoom = d3
     .zoom()
-    .scaleExtent([DISPLAY_SCALE_MIN, DISPLAY_SCALE_MAX])
+    .scaleExtent([FIT_SCALE_MIN, DISPLAY_SCALE_MAX])
     .filter((event) => {
       // Drag-pan only; wheel / pinch zoom are handled as LOD changes.
       if (event.type === 'wheel' || event.type === 'dblclick') return false;
@@ -149,7 +154,11 @@ export function renderFlowGraph(container, workflow, { onSelect, diagnostics, on
   svg.call(zoom);
   const wheelCleanup = wireLodWheel(svg, zoom, graphState, d3);
   const fit = () => fitToView(d3, svg, zoom, graphState, container);
-  fit();
+  if (initialView && Number.isFinite(initialView.k)) {
+    applySavedFlowView(d3, svg, zoom, graphState, initialView);
+  } else {
+    fit();
+  }
 
   let resizeFrame = null;
   const resizeObserver = typeof ResizeObserver === 'function'
@@ -166,7 +175,14 @@ export function renderFlowGraph(container, workflow, { onSelect, diagnostics, on
 
   onZoomReady?.({
     zoomIn: () => svg.call(zoom.scaleBy, 1.25),
-    zoomOut: () => svg.call(zoom.scaleBy, 0.8),
+    zoomOut: () => {
+      const current = d3.zoomTransform(svg.node());
+      const nextK = current.k * 0.8;
+      const k = current.k >= DISPLAY_SCALE_MIN
+        ? Math.max(DISPLAY_SCALE_MIN, nextK)
+        : Math.max(FIT_SCALE_MIN, nextK);
+      svg.call(zoom.transform, d3.zoomIdentity.translate(current.x, current.y).scale(k));
+    },
     reset: fit,
     dispose: () => {
       wheelCleanup?.();
@@ -175,6 +191,23 @@ export function renderFlowGraph(container, workflow, { onSelect, diagnostics, on
     },
   });
   return true;
+}
+
+/**
+ * Reads zoom pan/scale and LOD from an existing flow graph for restore after re-render.
+ * @param {HTMLElement} container  #flow-graph element
+ * @returns {{ k: number, x: number, y: number, lod: number } | null}
+ */
+export function captureFlowViewState(container) {
+  const svg = container?.querySelector?.('.flow-svg');
+  const d3 = globalThis.d3;
+  if (!svg || !d3) return null;
+  const t = d3.zoomTransform(svg);
+  if (!Number.isFinite(t.k)) return null;
+  let lod = 2;
+  if (svg.classList.contains('flow-svg--lod0')) lod = 0;
+  else if (svg.classList.contains('flow-svg--lod1')) lod = 1;
+  return { k: t.k, x: t.x, y: t.y, lod };
 }
 
 // ─── Diagnostics mapping ───
@@ -1270,6 +1303,17 @@ function truncate(text, max) {
   return text.length <= max ? text : `${text.slice(0, Math.max(1, max - 1))}…`;
 }
 
+/** Restores a previously captured pan/zoom/LOD after graph re-render. */
+function applySavedFlowView(d3, svg, zoom, state, view) {
+  const lod = Math.max(0, Math.min(2, view.lod ?? 2));
+  const k = clampDisplayScale(view.k);
+  applyGraphLayout(state, lod, d3);
+  svg.attr('class', `flow-svg ${LOD_CLASSES[lod]}`);
+  const x = Number.isFinite(view.x) ? view.x : 0;
+  const y = Number.isFinite(view.y) ? view.y : 0;
+  svg.call(zoom.transform, d3.zoomIdentity.translate(x, y).scale(k));
+}
+
 /** Fits the graph at lod2 and sets the baseline display scale (toolbar zoom only). */
 function fitToView(d3, svg, zoom, state, container) {
   const lod = 2;
@@ -1283,7 +1327,7 @@ function fitToView(d3, svg, zoom, state, container) {
     Math.max(1, cw - pad * 2) / bounds.width,
     Math.max(1, ch - pad * 2) / bounds.height,
   );
-  const k = Math.max(DISPLAY_SCALE_MIN, Math.min(DISPLAY_SCALE_MAX, rawK));
+  const k = Math.max(FIT_SCALE_MIN, Math.min(DISPLAY_SCALE_MAX, rawK));
   const tx = (cw - bounds.width * k) / 2 - bounds.x * k;
   const ty = (ch - bounds.height * k) / 2 - bounds.y * k;
   svg.attr('class', `flow-svg ${LOD_CLASSES[lod]}`);

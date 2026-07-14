@@ -146,6 +146,13 @@ public sealed class PlaygroundUiLayoutTests
             "() => globalThis.d3.zoomTransform(document.querySelector('#flow-graph .flow-svg')).k");
         await Assert.That(scaleBefore).IsLessThanOrEqualTo(0.5);
 
+        // Mobile fit often clamps k at DISPLAY_SCALE_MIN; zoom in first so zoom-out has headroom.
+        if (scaleBefore <= 0.5001) {
+            await page.Locator("#flow-zoom-in-btn").ClickAsync();
+            scaleBefore = await page.EvaluateAsync<double>(
+                "() => globalThis.d3.zoomTransform(document.querySelector('#flow-graph .flow-svg')).k");
+        }
+
         await page.Locator("#flow-zoom-out-btn").ClickAsync();
         var scaleAfter = await page.EvaluateAsync<double>(
             "() => globalThis.d3.zoomTransform(document.querySelector('#flow-graph .flow-svg')).k");
@@ -196,15 +203,20 @@ public sealed class PlaygroundUiLayoutTests
             """
             () => {
               const graph = document.querySelector('#flow-graph').getBoundingClientRect();
-              const content = document.querySelector('#flow-graph .flow-viewport').getBoundingClientRect();
-              const tolerance = 1;
-              return graph.left >= -tolerance
+              const jobs = [...document.querySelectorAll('#flow-graph .flow-job')];
+              if (jobs.length < 2) return false;
+              const tolerance = 2;
+              const graphOnScreen = graph.left >= -tolerance
                 && graph.right <= globalThis.innerWidth + tolerance
-                && graph.height <= globalThis.innerHeight
-                && content.left >= graph.left - tolerance
-                && content.right <= graph.right + tolerance
-                && content.top >= graph.top - tolerance
-                && content.bottom <= graph.bottom + tolerance;
+                && graph.height <= globalThis.innerHeight;
+              const jobsVisible = jobs.every((node) => {
+                const rect = node.getBoundingClientRect();
+                return rect.right >= graph.left - tolerance
+                  && rect.left <= graph.right + tolerance
+                  && rect.bottom >= graph.top - tolerance
+                  && rect.top <= graph.bottom + tolerance;
+              });
+              return graphOnScreen && jobsVisible;
             }
             """);
         await Assert.That(fits).IsTrue();

@@ -8,7 +8,7 @@ import {
   formatClipboardBundle,
   isShareWithinLimits,
 } from './share-payload.js';
-import { renderFlowGraph } from './flow-graph.js';
+import { captureFlowViewState, renderFlowGraph } from './flow-graph.js';
 
 /** Built-in snippets (classification depends on Document selector). */
 const SAMPLES = {
@@ -865,7 +865,7 @@ function refreshFlow(force = false) {
   try {
     const utf8Bytes = exports.Seiton.Playground.LintInterop.GetFlowJson(source, filePath);
     const flowDoc = JSON.parse(utf8Decoder.decode(utf8Bytes));
-    renderFlow(flowDoc);
+    renderFlow(flowDoc, { preserveView: true });
     if (flowDoc?.error || !globalThis.d3) {
       return;
     }
@@ -884,8 +884,10 @@ function refreshFlow(force = false) {
 /**
  * Renders a flow-json document into the flow panel (graph, empty notice, detail reset).
  * @param {{ version: number, workflows: object[], error?: string }} flowDoc
+ * @param {{ preserveView?: boolean }} [options]
  */
-function renderFlow(flowDoc) {
+function renderFlow(flowDoc, { preserveView = false } = {}) {
+  const initialView = preserveView ? captureFlowViewState(flowGraphEl) : null;
   hideFlowDetail();
   setFlowZoomController(null);
   const workflow = flowDoc?.workflows?.[0] ?? null;
@@ -894,6 +896,7 @@ function renderFlow(flowDoc) {
     onSelect: showFlowDetail,
     diagnostics: lastDiagnostics,
     onZoomReady: setFlowZoomController,
+    initialView,
   });
   renderWorkflowInfo(rendered ? workflow : null);
   flowEmptyEl.hidden = rendered;

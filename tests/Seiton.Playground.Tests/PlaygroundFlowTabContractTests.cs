@@ -49,7 +49,19 @@ public sealed class PlaygroundFlowTabContractTests
         await Assert.That(js).Contains("refreshFlow");
         await Assert.That(js).Contains("selectResultsTab");
         await Assert.That(js).Contains("from './flow-graph.js'");
+        await Assert.That(js).Contains("captureFlowViewState");
+        await Assert.That(js).Contains("preserveView");
+        await Assert.That(js).Contains("initialView");
         await Assert.That(js).Contains("getFlow:");
+    }
+
+    [Test]
+    public async Task FlowGraphModule_PreservesViewStateAcrossRerender()
+    {
+        var js = await ReadWwwrootFileAsync("flow-graph.js");
+        await Assert.That(js).Contains("captureFlowViewState");
+        await Assert.That(js).Contains("applySavedFlowView");
+        await Assert.That(js).Contains("initialView");
     }
 
     [Test]
