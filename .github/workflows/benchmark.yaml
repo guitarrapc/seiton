@@ -10,11 +10,11 @@ on:
         type: choice
         options:
           - "*"
-          - "*ActionRefParseBenchmark*"
           - "*Core*Benchmark*"
           - "*CoreLintBenchmark*"
           - "*CoreParsingBenchmark*"
           - "*DiagnosticOutputBenchmark*"
+          - "*DisableStepInlineSuppressionBenchmark*"
           - "*EditDistanceBenchmark*"
           - "*ExclusionJobIdValidatorBenchmark*"
           - "*FixApplyBenchmark*"
@@ -22,8 +22,6 @@ on:
           - "*InputDiscoveryBenchmark*"
           - "*LintConfigBenchmark*"
           - "*PlaygroundLintBenchmark*"
-          - "*PlaygroundSharePayloadBenchmark*"
-          - "*RuleCatalogBenchmark*"
 
 jobs:
   benchmark:
