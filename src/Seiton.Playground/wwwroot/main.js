@@ -703,11 +703,16 @@ let lastLintedFilePath = '';
 let configVersion = 0;
 let lastConfigVersion = 0;
 
-// ─── Flow tab (Result / Flow switch + D3 graph) ───
+// ─── Flow tab (Result / Flow / Mermaid switch + D3 graph) ───
 const tabResultBtn = document.getElementById('tab-result-btn');
 const tabFlowBtn = document.getElementById('tab-flow-btn');
+const tabMermaidBtn = document.getElementById('tab-mermaid-btn');
 const resultPanel = document.getElementById('result-panel');
 const flowPanel = document.getElementById('flow-panel');
+const mermaidPanel = document.getElementById('mermaid-panel');
+const mermaidOutputEl = document.getElementById('mermaid-output');
+const mermaidEmptyEl = document.getElementById('mermaid-empty');
+const mermaidCopyBtn = document.getElementById('mermaid-copy-btn');
 const flowGraphEl = document.getElementById('flow-graph');
 const flowEmptyEl = document.getElementById('flow-empty');
 const flowDetailEl = document.getElementById('flow-detail');
@@ -719,6 +724,9 @@ const flowZoomInBtn = document.getElementById('flow-zoom-in-btn');
 let activeResultsTab = 'result';
 let lastFlowSource = null;
 let lastFlowFilePath = null;
+let lastMermaidSource = null;
+let lastMermaidFilePath = null;
+let lastMermaidText = '';
 /** Diagnostics from the most recent lint, shared with the flow graph markers. */
 let lastDiagnostics = [];
 let lastFlowDiagnostics = null;
@@ -727,14 +735,20 @@ let flowZoomController = null;
 function selectResultsTab(tab) {
   activeResultsTab = tab;
   const flowActive = tab === 'flow';
-  tabResultBtn.classList.toggle('results-tab--active', !flowActive);
+  const mermaidActive = tab === 'mermaid';
+  tabResultBtn.classList.toggle('results-tab--active', tab === 'result');
   tabFlowBtn.classList.toggle('results-tab--active', flowActive);
-  tabResultBtn.setAttribute('aria-selected', String(!flowActive));
+  tabMermaidBtn.classList.toggle('results-tab--active', mermaidActive);
+  tabResultBtn.setAttribute('aria-selected', String(tab === 'result'));
   tabFlowBtn.setAttribute('aria-selected', String(flowActive));
-  resultPanel.hidden = flowActive;
+  tabMermaidBtn.setAttribute('aria-selected', String(mermaidActive));
+  resultPanel.hidden = tab !== 'result';
   flowPanel.hidden = !flowActive;
+  mermaidPanel.hidden = !mermaidActive;
   if (flowActive) {
     refreshFlow();
+  } else if (mermaidActive) {
+    refreshMermaid();
   } else {
     clearEditorFlowHighlight();
   }
@@ -822,6 +836,7 @@ function highlightEditorLinesForFlowNode(node) {
 
 tabResultBtn.addEventListener('click', () => selectResultsTab('result'));
 tabFlowBtn.addEventListener('click', () => selectResultsTab('flow'));
+tabMermaidBtn.addEventListener('click', () => selectResultsTab('mermaid'));
 flowZoomOutBtn.addEventListener('click', () => flowZoomController?.zoomOut());
 flowZoomResetBtn.addEventListener('click', () => flowZoomController?.reset());
 flowZoomInBtn.addEventListener('click', () => flowZoomController?.zoomIn());
@@ -880,6 +895,86 @@ function refreshFlow(force = false) {
     showToast(err?.message ?? String(err), 'error');
   }
 }
+
+/** True when Mermaid text has no job subgraphs (empty workflow or action.yml). */
+function isMermaidEmpty(mermaidText) {
+  if (!mermaidText || mermaidText.startsWith('%% Seiton error:')) {
+    return false;
+  }
+  return !/subgraph\s+j\d/m.test(mermaidText);
+}
+
+/**
+ * Fetches flow-mermaid from the WASM backend and updates the Mermaid panel.
+ * @param {boolean} [force]
+ */
+function refreshMermaid(force = false) {
+  if (!runtimeAlive || !runtimeReady || !exports) {
+    return;
+  }
+  const source = editor.getValue();
+  const filePath = getSelectedFilePath();
+  if (!force && source === lastMermaidSource && filePath === lastMermaidFilePath) {
+    return;
+  }
+  if (shouldDeferWasmLintForIncompleteUses(source)) {
+    lastMermaidSource = null;
+    lastMermaidFilePath = null;
+    renderMermaid('');
+    mermaidEmptyEl.textContent = 'Complete the uses value to refresh the Mermaid output.';
+    return;
+  }
+  try {
+    const utf8Bytes = exports.Seiton.Playground.LintInterop.GetFlowMermaid(source, filePath);
+    const mermaidText = utf8Decoder.decode(utf8Bytes);
+    renderMermaid(mermaidText);
+    if (!mermaidText.startsWith('%% Seiton error:')) {
+      lastMermaidSource = source;
+      lastMermaidFilePath = filePath;
+    }
+  } catch (err) {
+    if (isRuntimeDeadError(err)) {
+      handleRuntimeDeath();
+      return;
+    }
+    showToast(err?.message ?? String(err), 'error');
+  }
+}
+
+/**
+ * Renders Mermaid flowchart text in the output panel.
+ * @param {string} mermaidText
+ */
+function renderMermaid(mermaidText) {
+  lastMermaidText = mermaidText ?? '';
+  if (mermaidText.startsWith('%% Seiton error:')) {
+    mermaidOutputEl.textContent = mermaidText;
+    mermaidOutputEl.hidden = false;
+    mermaidEmptyEl.hidden = true;
+    mermaidCopyBtn.disabled = true;
+    return;
+  }
+  if (isMermaidEmpty(mermaidText)) {
+    mermaidOutputEl.hidden = true;
+    mermaidEmptyEl.hidden = false;
+    mermaidEmptyEl.textContent = 'No workflow structure to export.';
+    mermaidCopyBtn.disabled = true;
+    return;
+  }
+  mermaidOutputEl.textContent = mermaidText;
+  mermaidOutputEl.hidden = false;
+  mermaidEmptyEl.hidden = true;
+  mermaidCopyBtn.disabled = false;
+}
+
+mermaidCopyBtn.addEventListener('click', async () => {
+  if (!lastMermaidText || mermaidCopyBtn.disabled) {
+    return;
+  }
+  const fenced = `\`\`\`mermaid\n${lastMermaidText.trimEnd()}\n\`\`\``;
+  const copied = await copyTextToClipboard(fenced);
+  showToast(copied ? 'Mermaid copied to clipboard' : 'Copy failed — select the text manually', copied ? 'success' : 'error');
+});
 
 /**
  * Renders a flow-json document into the flow panel (graph, empty notice, detail reset).
@@ -1662,6 +1757,8 @@ function runLint() {
   if (shouldDeferWasmLintForIncompleteUses(source)) {
     if (activeResultsTab === 'flow') {
       refreshFlow();
+    } else if (activeResultsTab === 'mermaid') {
+      refreshMermaid();
     }
     return;
   }
@@ -1686,6 +1783,8 @@ function runLint() {
     renderResults(diagnostics);
     if (activeResultsTab === 'flow') {
       refreshFlow();
+    } else if (activeResultsTab === 'mermaid') {
+      refreshMermaid();
     }
   } catch (err) {
     if (isRuntimeDeadError(err)) {
@@ -1880,7 +1979,25 @@ function installTestHooksIfRequested() {
           return { ok: false, error: String(err?.message ?? err) };
         }
       },
-      selectResultsTab: (tab) => selectResultsTab(tab === 'flow' ? 'flow' : 'result'),
+      getMermaid: (source, filePath) => {
+        try {
+          const utf8Bytes = exports.Seiton.Playground.LintInterop.GetFlowMermaid(
+            source ?? '',
+            filePath ?? getSelectedFilePath(),
+          );
+          return { ok: true, mermaid: utf8Decoder.decode(utf8Bytes) };
+        } catch (err) {
+          return { ok: false, error: String(err?.message ?? err) };
+        }
+      },
+      selectResultsTab: (tab) => {
+        if (tab === 'flow' || tab === 'mermaid') {
+          selectResultsTab(tab);
+        } else {
+          selectResultsTab('result');
+        }
+      },
+      renderMermaid: (mermaidText) => renderMermaid(mermaidText ?? ''),
       renderFlow: (flowDoc) => renderFlow(flowDoc ?? { version: 1, workflows: [] }),
     };
   } catch {

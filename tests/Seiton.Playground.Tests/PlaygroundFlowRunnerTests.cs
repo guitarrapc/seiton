@@ -80,6 +80,53 @@ public sealed class PlaygroundFlowRunnerTests
     }
 
     [Test]
+    public async Task RunFlowToMermaid_Workflow_ReturnsFlowchart()
+    {
+        const string yaml = """
+            name: CI
+            on: push
+            jobs:
+              build:
+                runs-on: ubuntu-latest
+                steps:
+                  - uses: actions/checkout@v4
+                  - run: npm test
+              deploy:
+                runs-on: ubuntu-latest
+                needs: build
+                steps:
+                  - run: echo deploy
+            """;
+
+        var mermaid = System.Text.Encoding.UTF8.GetString(
+            PlaygroundFlowRunner.RunFlowToMermaidUtf8(yaml, ".github/workflows/ci.yml"));
+
+        await Assert.That(mermaid).Contains("flowchart LR");
+        await Assert.That(mermaid).Contains("subgraph j0[\"build\"]");
+        await Assert.That(mermaid).Contains("j0 --> j1");
+    }
+
+    [Test]
+    public async Task RunFlowToMermaid_ActionMetadata_ReturnsMinimalDiagram()
+    {
+        const string yaml = """
+            name: My Action
+            description: does things
+            runs:
+              using: composite
+              steps:
+                - run: echo hi
+                  shell: bash
+            """;
+
+        var mermaid = System.Text.Encoding.UTF8.GetString(
+            PlaygroundFlowRunner.RunFlowToMermaidUtf8(yaml, "action.yml"));
+
+        await Assert.That(mermaid).Contains("flowchart LR");
+        await Assert.That(mermaid.Contains("subgraph j0", StringComparison.Ordinal)).IsFalse();
+    }
+
+    [Test]
     public async Task RunFlowToJson_RepeatedCalls_ProducesConsistentOutput()
     {
         const string yaml = """

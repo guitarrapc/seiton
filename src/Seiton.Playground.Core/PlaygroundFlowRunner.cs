@@ -26,6 +26,10 @@ public static class PlaygroundFlowRunner
     private static string? _lastFilePath;
     private static byte[]? _lastJsonOutput;
 
+    private static string? _lastMermaidYamlSource;
+    private static string? _lastMermaidFilePath;
+    private static byte[]? _lastMermaidOutput;
+
     /// <summary>Clears shared caches between playground tests.</summary>
     internal static void ResetSharedStateForTests()
     {
@@ -34,6 +38,9 @@ public static class PlaygroundFlowRunner
             _lastYamlSource = null;
             _lastFilePath = null;
             _lastJsonOutput = null;
+            _lastMermaidYamlSource = null;
+            _lastMermaidFilePath = null;
+            _lastMermaidOutput = null;
         }
     }
 
@@ -73,6 +80,46 @@ public static class PlaygroundFlowRunner
             _lastYamlSource = yamlSource;
             _lastFilePath = filePath;
             _lastJsonOutput = result;
+
+            return result;
+        }
+    }
+
+    /// <summary>
+    /// Parses <paramref name="yamlSource"/> and returns Mermaid flowchart text as UTF-8 bytes
+    /// (same contract as <c>seiton check --format flow-mermaid</c>).
+    /// Non-workflow documents produce a minimal <c>flowchart LR</c> diagram with no jobs.
+    /// </summary>
+    public static byte[] RunFlowToMermaidUtf8(string yamlSource, string filePath)
+    {
+        ArgumentNullException.ThrowIfNull(yamlSource);
+        ArgumentException.ThrowIfNullOrEmpty(filePath);
+
+        lock (FlowGate)
+        {
+            if (ReferenceEquals(yamlSource, _lastMermaidYamlSource)
+                && string.Equals(filePath, _lastMermaidFilePath, StringComparison.Ordinal)
+                && _lastMermaidOutput is not null)
+            {
+                return _lastMermaidOutput;
+            }
+
+            var utf8Yaml = EncodeToReusableBuffer(yamlSource);
+
+            byte[] result;
+            using (var parseResult = WorkflowParser.Parse(utf8Yaml, filePath))
+            {
+                var flow = WorkflowFlowCollector.Collect(parseResult, filePath);
+                var mermaid = WorkflowFlowMermaid.Serialize(flow is null ? [] : [flow]);
+                var bytes = Encoding.UTF8.GetBytes(mermaid);
+                result = _lastMermaidOutput is not null && bytes.AsSpan().SequenceEqual(_lastMermaidOutput)
+                    ? _lastMermaidOutput
+                    : bytes;
+            }
+
+            _lastMermaidYamlSource = yamlSource;
+            _lastMermaidFilePath = filePath;
+            _lastMermaidOutput = result;
 
             return result;
         }

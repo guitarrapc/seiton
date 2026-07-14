@@ -91,6 +91,22 @@ public static partial class LintInterop
         }
     }
 
+    [JSExport]
+    public static byte[] GetFlowMermaid(string? yamlSource, string? filePath)
+    {
+        try
+        {
+            var path = string.IsNullOrWhiteSpace(filePath)
+                ? ".github/workflows/test.yml"
+                : filePath.Trim();
+            return PlaygroundFlowRunner.RunFlowToMermaidUtf8(yamlSource ?? string.Empty, path);
+        }
+        catch (Exception ex)
+        {
+            return SerializeFlowMermaidError(ex);
+        }
+    }
+
     /// <summary>
     /// Serializes an internal flow error as an empty flow document with an <c>error</c> property,
     /// keeping the flow-json shape so the UI parser never breaks.
@@ -109,6 +125,16 @@ public static partial class LintInterop
         }
 
         return buffer.WrittenSpan.ToArray();
+    }
+
+    /// <summary>
+    /// Serializes an internal Mermaid error as a Mermaid comment line so the UI can display it
+    /// without breaking the interop boundary.
+    /// </summary>
+    private static byte[] SerializeFlowMermaidError(Exception ex)
+    {
+        var message = $"%% Seiton error: {ex.GetType().Name}: {ex.Message}\nflowchart LR\n";
+        return System.Text.Encoding.UTF8.GetBytes(message);
     }
 
     /// <summary>

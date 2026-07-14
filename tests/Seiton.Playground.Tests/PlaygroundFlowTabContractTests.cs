@@ -14,8 +14,12 @@ public sealed class PlaygroundFlowTabContractTests
         await Assert.That(html).Contains("id=\"results-tab-bar\"", StringComparison.Ordinal);
         await Assert.That(html).Contains("id=\"tab-result-btn\"", StringComparison.Ordinal);
         await Assert.That(html).Contains("id=\"tab-flow-btn\"", StringComparison.Ordinal);
+        await Assert.That(html).Contains("id=\"tab-mermaid-btn\"", StringComparison.Ordinal);
         await Assert.That(html).Contains("id=\"result-panel\"", StringComparison.Ordinal);
         await Assert.That(html).Contains("id=\"flow-panel\"", StringComparison.Ordinal);
+        await Assert.That(html).Contains("id=\"mermaid-panel\"", StringComparison.Ordinal);
+        await Assert.That(html).Contains("id=\"mermaid-output\"", StringComparison.Ordinal);
+        await Assert.That(html).Contains("id=\"mermaid-copy-btn\"", StringComparison.Ordinal);
         await Assert.That(html).Contains("id=\"flow-graph\"", StringComparison.Ordinal);
         await Assert.That(html).Contains("id=\"flow-detail\"", StringComparison.Ordinal);
         await Assert.That(html).Contains("id=\"flow-zoom-out-btn\"", StringComparison.Ordinal);
@@ -46,13 +50,17 @@ public sealed class PlaygroundFlowTabContractTests
     {
         var js = await ReadWwwrootFileAsync("main.js");
         await Assert.That(js).Contains("GetFlowJson");
+        await Assert.That(js).Contains("GetFlowMermaid");
         await Assert.That(js).Contains("refreshFlow");
+        await Assert.That(js).Contains("refreshMermaid");
         await Assert.That(js).Contains("selectResultsTab");
         await Assert.That(js).Contains("from './flow-graph.js'");
         await Assert.That(js).Contains("captureFlowViewState");
         await Assert.That(js).Contains("preserveView");
         await Assert.That(js).Contains("initialView");
-        await Assert.That(js).Contains("getFlow:");
+        await Assert.That(js).Contains("getMermaid:");
+        await Assert.That(js).Contains("renderMermaid");
+        await Assert.That(js).Contains("isMermaidEmpty");
     }
 
     [Test]
@@ -353,6 +361,8 @@ public sealed class PlaygroundFlowTabContractTests
         await Assert.That(css).Contains(".results-tab--active");
         await Assert.That(css).Contains(".flow-graph");
         await Assert.That(css).Contains(".flow-detail");
+        await Assert.That(css).Contains(".mermaid-output");
+        await Assert.That(css).Contains(".mermaid-copy-btn");
         await Assert.That(css).Contains(".flow-parallel-boundary");
         await Assert.That(css).Contains(".flow-edge");
     }

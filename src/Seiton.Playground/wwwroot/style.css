@@ -1544,6 +1544,52 @@ footer a {
   word-break: break-word;
 }
 
+/* ─── Mermaid tab (flow-mermaid text output) ─── */
+
+.mermaid-toolbar {
+  display: flex;
+  justify-content: flex-end;
+  margin: 0 0 0.4rem;
+}
+
+.mermaid-copy-btn {
+  min-width: 4.5rem;
+  height: 1.8rem;
+  padding: 0 0.75rem;
+  border: 1px solid var(--border-pane);
+  border-radius: 5px;
+  background: var(--results-surface, transparent);
+  color: var(--text);
+  font: inherit;
+  font-size: 0.8rem;
+  cursor: pointer;
+}
+
+.mermaid-copy-btn:hover:not(:disabled) {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.mermaid-copy-btn:disabled {
+  cursor: default;
+  opacity: 0.4;
+}
+
+.mermaid-output {
+  margin: 0;
+  padding: 0.65rem 0.75rem;
+  height: min(72dvh, 640px);
+  overflow: auto;
+  border: 1px solid var(--border-pane);
+  border-radius: 8px;
+  background: var(--results-surface, transparent);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.78rem;
+  line-height: 1.45;
+  white-space: pre;
+  tab-size: 2;
+}
+
 /* ─── Intra-job step flow + LOD ─── */
 
 .flow-step-node {
