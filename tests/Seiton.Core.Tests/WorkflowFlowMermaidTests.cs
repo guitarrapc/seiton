@@ -236,6 +236,34 @@ public sealed class WorkflowFlowMermaidTests
     }
 
     [Test]
+    public async Task Serialize_CompositeLabels_PreserveJoiningSuffixAndTruncation()
+    {
+        var flow = CollectFlow("""
+            on: push
+            jobs:
+              test:
+                if: ${{ always() }}
+                runs-on: ubuntu-latest
+                strategy:
+                  matrix:
+                    first-dimension-with-a-long-name: [one]
+                    second-dimension-with-a-long-name: [two]
+                steps:
+                  - wait: [background-a, background-b]
+                  - run: echo done
+                    if: ${{ success() }}
+            """);
+
+        var mermaid = WorkflowFlowMermaid.Serialize([flow]);
+
+        await Assert.That(mermaid).Contains(
+            "subgraph j0[\"test (matrix: first-dimension-with-a-long-name × second-dimensio…\"]");
+        await Assert.That(mermaid).Contains(
+            "j0n0[\"wait: background-a, background-b\"]");
+        await Assert.That(mermaid).Contains("j0n1[\"run: echo done (if)\"]");
+    }
+
+    [Test]
     public async Task Write_Utf8Bytes_MatchesSerializeString()
     {
         var flow = CollectFlow("""

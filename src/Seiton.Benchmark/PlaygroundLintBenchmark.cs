@@ -5,11 +5,13 @@ namespace Seiton.Benchmark;
 
 /// <summary>
 /// Measures per-call allocation of <see cref="PlaygroundLintRunner.RunToJsonUtf8"/> (Utf8JsonWriter path).
-/// Three scenarios:
+/// Five scenarios:
 /// <list type="bullet">
 ///   <item><description><c>NoChange</c> — same content every call (content-hash cache hit; new string instance each iteration)</description></item>
 ///   <item><description><c>PartialChange</c> — only one job differs each call (typing-like edits; full parse + full lint)</description></item>
 ///   <item><description><c>FullChange</c> — entirely different content each call (full parse + full lint)</description></item>
+///   <item><description><c>FullChangeFlowJson</c> — full lint plus flow-json collection and serialization</description></item>
+///   <item><description><c>FullChangeMermaid</c> — full lint plus Mermaid collection and serialization</description></item>
 /// </list>
 /// </summary>
 [MemoryDiagnoser]
@@ -107,6 +109,30 @@ public partial class PlaygroundLintBenchmark
         for (var i = 0; i < Iterations; i++)
         {
             totalLength += PlaygroundLintRunner.RunToJsonUtf8(_fullChangeYamls[i], FilePath).Length;
+        }
+
+        return totalLength;
+    }
+
+    [Benchmark]
+    public int FullChangeFlowJson()
+    {
+        var totalLength = 0;
+        for (var i = 0; i < Iterations; i++)
+        {
+            totalLength += PlaygroundLintRunner.RunToJsonWithFlowJsonUtf8(_fullChangeYamls[i], FilePath).Length;
+        }
+
+        return totalLength;
+    }
+
+    [Benchmark]
+    public int FullChangeMermaid()
+    {
+        var totalLength = 0;
+        for (var i = 0; i < Iterations; i++)
+        {
+            totalLength += PlaygroundLintRunner.RunToJsonWithMermaidUtf8(_fullChangeYamls[i], FilePath).Length;
         }
 
         return totalLength;

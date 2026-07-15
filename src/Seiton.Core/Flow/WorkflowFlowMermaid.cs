@@ -171,7 +171,7 @@ public static class WorkflowFlowMermaid
         writer.WriteAscii("  subgraph ");
         WriteJobNodeId(writer, prefix, jobIndex);
         writer.WriteAscii("[\"");
-        WriteEscaped(writer, JobLabel(job));
+        WriteJobLabel(writer, job);
         writer.WriteAscii("\"]\n");
         writer.WriteAscii("    direction TB\n");
 
@@ -229,7 +229,7 @@ public static class WorkflowFlowMermaid
             writer.WriteAscii(indent);
             WriteStepNodeId(writer, prefix, jobIndex, counter);
             writer.WriteAscii("[\"");
-            WriteEscaped(writer, StepLabel(step));
+            WriteStepLabel(writer, step);
             writer.WriteAscii("\"]\n");
             if (anchors is not null)
             {
@@ -286,42 +286,132 @@ public static class WorkflowFlowMermaid
         return -1;
     }
 
-    private static string JobLabel(FlowJob job)
+    private static void WriteJobLabel(FlowUtf8Writer writer, FlowJob job)
     {
-        var label = job.Id;
+        Span<char> label = stackalloc char[MaxLabelLength];
+        var length = 0;
+        var lastNonTrim = 0;
+        var stopped = false;
+        AppendLabelPart(job.Id, label, ref length, ref lastNonTrim, ref stopped);
+
         if (job.Strategy is { HasMatrix: true } strategy)
         {
-            label += strategy.MatrixIsExpression
-                ? " (matrix: dynamic)"
-                : $" (matrix: {string.Join(" × ", strategy.MatrixKeys)})";
+            AppendLabelPart(" (matrix: ", label, ref length, ref lastNonTrim, ref stopped);
+            if (strategy.MatrixIsExpression)
+            {
+                AppendLabelPart("dynamic", label, ref length, ref lastNonTrim, ref stopped);
+            }
+            else
+            {
+                for (var i = 0; i < strategy.MatrixKeys.Length; i++)
+                {
+                    if (i > 0)
+                    {
+                        AppendLabelPart(" × ", label, ref length, ref lastNonTrim, ref stopped);
+                    }
+                    AppendLabelPart(strategy.MatrixKeys[i], label, ref length, ref lastNonTrim, ref stopped);
+                }
+            }
+            AppendLabelPart(")", label, ref length, ref lastNonTrim, ref stopped);
         }
 
         if (job.If is not null)
         {
-            label += " (if)";
+            AppendLabelPart(" (if)", label, ref length, ref lastNonTrim, ref stopped);
         }
 
-        return label;
+        WriteEscapedLabel(writer, label, lastNonTrim);
     }
 
-    private static string StepLabel(FlowStep step)
+    private static void WriteStepLabel(FlowUtf8Writer writer, FlowStep step)
     {
-        var label = step.Kind switch
+        Span<char> label = stackalloc char[MaxLabelLength];
+        var length = 0;
+        var lastNonTrim = 0;
+        var stopped = false;
+
+        switch (step.Kind)
         {
-            FlowStepKind.Run => $"run: {step.Name ?? step.Id ?? step.Run ?? string.Empty}",
-            FlowStepKind.Uses => $"uses: {step.Name ?? step.Uses ?? string.Empty}",
-            FlowStepKind.Wait => $"wait: {string.Join(", ", step.WaitTargets)}",
-            FlowStepKind.WaitAll => "wait-all",
-            FlowStepKind.Cancel => $"cancel: {step.CancelTarget}",
-            _ => step.Name ?? step.Id ?? "step",
-        };
+            case FlowStepKind.Run:
+                AppendLabelPart("run: ", label, ref length, ref lastNonTrim, ref stopped);
+                AppendLabelPart(step.Name ?? step.Id ?? step.Run ?? string.Empty, label, ref length, ref lastNonTrim, ref stopped);
+                break;
+            case FlowStepKind.Uses:
+                AppendLabelPart("uses: ", label, ref length, ref lastNonTrim, ref stopped);
+                AppendLabelPart(step.Name ?? step.Uses ?? string.Empty, label, ref length, ref lastNonTrim, ref stopped);
+                break;
+            case FlowStepKind.Wait:
+                AppendLabelPart("wait: ", label, ref length, ref lastNonTrim, ref stopped);
+                for (var i = 0; i < step.WaitTargets.Length; i++)
+                {
+                    if (i > 0)
+                    {
+                        AppendLabelPart(", ", label, ref length, ref lastNonTrim, ref stopped);
+                    }
+                    AppendLabelPart(step.WaitTargets[i], label, ref length, ref lastNonTrim, ref stopped);
+                }
+                break;
+            case FlowStepKind.WaitAll:
+                AppendLabelPart("wait-all", label, ref length, ref lastNonTrim, ref stopped);
+                break;
+            case FlowStepKind.Cancel:
+                AppendLabelPart("cancel: ", label, ref length, ref lastNonTrim, ref stopped);
+                AppendLabelPart(step.CancelTarget ?? string.Empty, label, ref length, ref lastNonTrim, ref stopped);
+                break;
+            default:
+                AppendLabelPart(step.Name ?? step.Id ?? "step", label, ref length, ref lastNonTrim, ref stopped);
+                break;
+        }
 
         if (step.If is not null)
         {
-            label += " (if)";
+            AppendLabelPart(" (if)", label, ref length, ref lastNonTrim, ref stopped);
         }
 
-        return label;
+        WriteEscapedLabel(writer, label, lastNonTrim);
+    }
+
+    private static void AppendLabelPart(
+        ReadOnlySpan<char> part,
+        Span<char> label,
+        ref int length,
+        ref int lastNonTrim,
+        ref bool stopped)
+    {
+        if (stopped)
+        {
+            return;
+        }
+
+        for (var i = 0; i < part.Length; i++)
+        {
+            var c = part[i];
+            if (c == '\n')
+            {
+                stopped = true;
+                return;
+            }
+
+            if (length < label.Length)
+            {
+                label[length] = c;
+            }
+            length++;
+
+            if (c != '\r' && c != ' ')
+            {
+                lastNonTrim = length;
+            }
+        }
+    }
+
+    private static void WriteEscapedLabel(FlowUtf8Writer writer, ReadOnlySpan<char> label, int length)
+    {
+        WriteEscapedChars(writer, label[..Math.Min(length, label.Length)]);
+        if (length > label.Length)
+        {
+            writer.WriteUtf8("…");
+        }
     }
 
     /// <summary>First line only, quotes replaced, truncated — keeps Mermaid labels parseable.</summary>
@@ -337,9 +427,18 @@ public static class WorkflowFlowMermaid
 
         span = span[..end];
         var length = Math.Min(span.Length, MaxLabelLength);
+        WriteEscapedChars(writer, span[..length]);
+        if (span.Length > MaxLabelLength)
+        {
+            writer.WriteUtf8("…");
+        }
+    }
+
+    private static void WriteEscapedChars(FlowUtf8Writer writer, ReadOnlySpan<char> span)
+    {
         Span<char> ch = stackalloc char[1];
         Span<byte> utf8 = stackalloc byte[4];
-        for (var i = 0; i < length; i++)
+        for (var i = 0; i < span.Length; i++)
         {
             var c = span[i] == '"' ? '\'' : span[i];
             if (c <= 0x7F)
@@ -351,11 +450,6 @@ public static class WorkflowFlowMermaid
             ch[0] = c;
             var written = Encoding.UTF8.GetBytes(ch, utf8);
             writer.WriteLiteral(utf8[..written]);
-        }
-
-        if (span.Length > MaxLabelLength)
-        {
-            writer.WriteUtf8("…");
         }
     }
 }

@@ -100,6 +100,21 @@ public static class WorkflowFlowCollector
     /// </summary>
     private static string[][] ComputeReducedNeeds(string[] ids, string[][] needs)
     {
+        var needsReduction = false;
+        for (var i = 0; i < needs.Length; i++)
+        {
+            if (needs[i].Length >= 2)
+            {
+                needsReduction = true;
+                break;
+            }
+        }
+
+        if (!needsReduction)
+        {
+            return needs;
+        }
+
         var indexById = new Dictionary<string, int>(ids.Length, StringComparer.OrdinalIgnoreCase);
         for (var i = 0; i < ids.Length; i++)
         {
