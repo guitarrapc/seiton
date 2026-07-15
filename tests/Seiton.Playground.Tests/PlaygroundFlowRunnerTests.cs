@@ -187,4 +187,51 @@ public sealed class PlaygroundFlowRunnerTests
             await Assert.That(json).IsEquivalentTo(firstJson);
         }
     }
+
+    [Test]
+    public async Task RunLintWithFlowJson_Workflow_ReturnsDiagnosticsAndFlowFromOneResponse()
+    {
+        const string yaml = """
+            on: push
+            jobs:
+              build:
+                runs-on: ubuntu-latest
+                steps:
+                  - run: echo ok
+            """;
+
+        var response = PlaygroundLintRunner.RunToJsonWithFlowJsonUtf8(
+            yaml,
+            ".github/workflows/ci.yml");
+        using var document = JsonDocument.Parse(response);
+
+        await Assert.That(document.RootElement.GetProperty("diagnostics").ValueKind)
+            .IsEqualTo(JsonValueKind.Array);
+        await Assert.That(document.RootElement.GetProperty("flow").GetProperty("workflows")
+            .GetArrayLength())
+            .IsEqualTo(1);
+    }
+
+    [Test]
+    public async Task RunLintWithMermaid_Workflow_ReturnsDiagnosticsAndMermaidFromOneResponse()
+    {
+        const string yaml = """
+            on: push
+            jobs:
+              build:
+                runs-on: ubuntu-latest
+                steps:
+                  - run: echo ok
+            """;
+
+        var response = PlaygroundLintRunner.RunToJsonWithMermaidUtf8(
+            yaml,
+            ".github/workflows/ci.yml");
+        using var document = JsonDocument.Parse(response);
+
+        await Assert.That(document.RootElement.GetProperty("diagnostics").ValueKind)
+            .IsEqualTo(JsonValueKind.Array);
+        await Assert.That(document.RootElement.GetProperty("mermaid").GetString())
+            .Contains("flowchart LR");
+    }
 }

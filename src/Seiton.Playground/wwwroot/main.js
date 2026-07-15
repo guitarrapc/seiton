@@ -2064,9 +2064,17 @@ function runLint() {
   lintPendingRetry = false;
 
   try {
-    const utf8Bytes = exports.Seiton.Playground.LintInterop.RunLint(source, filePath);
-    const json = utf8Decoder.decode(utf8Bytes);
-    const diagnostics = JSON.parse(json);
+    const flowActive = activeResultsTab === 'flow';
+    const mermaidActive = activeResultsTab === 'mermaid';
+    const utf8Bytes = flowActive
+      ? exports.Seiton.Playground.LintInterop.RunLintWithFlowJson(source, filePath)
+      : mermaidActive
+        ? exports.Seiton.Playground.LintInterop.RunLintWithMermaid(source, filePath)
+      : exports.Seiton.Playground.LintInterop.RunLint(source, filePath);
+    const response = JSON.parse(utf8Decoder.decode(utf8Bytes));
+    const diagnostics = flowActive || mermaidActive ? (response.diagnostics ?? response) : response;
+    const flowDoc = flowActive ? (response.flow ?? { version: 1, workflows: [] }) : null;
+    const mermaidText = mermaidActive ? (response.mermaid ?? '') : null;
     // Do not treat an internal-error fallback as a successful lint: if we cached
     // the staleness key here a transient C# exception would permanently block retries
     // on the same content/path until the user edits the file.
@@ -2078,10 +2086,15 @@ function runLint() {
       lastDiagnostics = diagnostics;
     }
     renderResults(diagnostics);
-    if (activeResultsTab === 'flow') {
-      refreshFlow();
-    } else if (activeResultsTab === 'mermaid') {
-      refreshMermaid();
+    if (flowActive) {
+      renderFlow(flowDoc, { preserveView: true });
+      lastFlowSource = source;
+      lastFlowFilePath = filePath;
+      lastFlowDiagnostics = lastDiagnostics;
+    } else if (mermaidActive) {
+      renderMermaid(mermaidText);
+      lastMermaidSource = source;
+      lastMermaidFilePath = filePath;
     }
   } catch (err) {
     if (isRuntimeDeadError(err)) {
@@ -2298,6 +2311,10 @@ function installTestHooksIfRequested() {
       setMermaidPreviewMode: (preview) => setMermaidPreviewMode(Boolean(preview)),
       isMermaidPreviewActive: () => mermaidPreviewActive,
       renderFlow: (flowDoc) => renderFlow(flowDoc ?? { version: 1, workflows: [] }),
+      renderFlowWithDiagnostics: (flowDoc, diagnostics) => {
+        lastDiagnostics = diagnostics ?? [];
+        renderFlow(flowDoc ?? { version: 1, workflows: [] }, { preserveView: true });
+      },
     };
   } catch {
     /* ignore */

@@ -104,6 +104,7 @@ export function renderFlowGraph(container, workflow, { onSelect, diagnostics, on
     edgeSelections: [],
     groupFrameRects: [],
     groupedMembers: new Set(),
+    diagnostics: diagnostics ?? [],
   };
   const diagMap = mapDiagnostics(jobs, diagnostics ?? []);
 
@@ -129,7 +130,7 @@ export function renderFlowGraph(container, workflow, { onSelect, diagnostics, on
     if (selectedGroup) selectedGroup.classed('flow-node--selected', false);
     selectedGroup = group;
     group.classed('flow-node--selected', true);
-    onSelect?.({ ...info, diagnostics: diagMap.get(info.data) ?? [] });
+    onSelect?.({ ...info, diagnostics: diagnosticsForNode(info.data, graphState.diagnostics) });
   };
 
   drawJobEdges(d3, edgeLayer, jobs, initialLayout.layout, graphState.groupedMembers, graphState);
@@ -264,6 +265,28 @@ function mapDiagnostics(jobs, diagnostics) {
   }
 
   return map;
+}
+
+/** Resolves current diagnostics on click without relying on stale DTO object identity. */
+function diagnosticsForNode(node, diagnostics) {
+  if (!node || !Array.isArray(diagnostics) || diagnostics.length === 0) {
+    return [];
+  }
+
+  const start = node.line ?? 0;
+  const end = node.endLine ?? start;
+  if (start <= 0 || end < start) {
+    return [];
+  }
+
+  const matches = [];
+  for (const diagnostic of diagnostics) {
+    const line = diagnostic.line ?? 0;
+    if (line >= start && line <= end) {
+      matches.push(diagnostic);
+    }
+  }
+  return matches;
 }
 
 /** The highest severity in a diagnostic list, as a css modifier. */
@@ -1356,24 +1379,47 @@ export function flowStructureSignature(workflow) {
   if (!workflow?.jobs?.length) {
     return '';
   }
-  return workflow.jobs.map((job) => signatureJob(job)).join('\n');
-}
 
-function signatureJob(job) {
-  const needs = (job.reducedNeeds ?? job.needs ?? []).join(',');
-  return `${job.id}|${job.kind ?? 'job'}|${needs}|${signatureSteps(job.steps ?? [])}`;
-}
-
-function signatureSteps(steps) {
-  const parts = [];
-  for (const step of steps) {
-    if (step.kind === 'parallel') {
-      parts.push(`parallel(${signatureSteps(step.steps ?? [])})`);
-    } else {
-      parts.push(`${step.kind ?? 'step'}:${step.id ?? ''}:${step.line ?? 0}`);
+  // Hash every serialized DTO field. Unlike the original structural-only signature,
+  // this invalidates the SVG when a displayed label, matrix value, or metadata changes
+  // without allocating a second workflow-sized JSON/string representation.
+  let hashA = 2166136261;
+  let hashB = 5381;
+  const addText = (text) => {
+    const value = String(text ?? '');
+    for (let i = 0; i < value.length; i++) {
+      const code = value.charCodeAt(i);
+      hashA = Math.imul(hashA ^ code, 16777619);
+      hashB = ((hashB << 5) + hashB) ^ code;
     }
-  }
-  return parts.join(',');
+    hashA = Math.imul(hashA ^ 0xFF, 16777619);
+    hashB = ((hashB << 5) + hashB) ^ 0xFF;
+  };
+  const addValue = (value) => {
+    if (value === null || value === undefined) {
+      addText('null');
+      return;
+    }
+    if (Array.isArray(value)) {
+      addText('[');
+      for (let i = 0; i < value.length; i++) addValue(value[i]);
+      addText(']');
+      return;
+    }
+    if (typeof value === 'object') {
+      addText('{');
+      for (const key in value) {
+        addText(key);
+        addValue(value[key]);
+      }
+      addText('}');
+      return;
+    }
+    addText(value);
+  };
+
+  addValue(workflow);
+  return `${hashA >>> 0}:${hashB >>> 0}`;
 }
 
 function renderJobDiagBadge(parent, jobDiags, posWidth) {
@@ -1414,6 +1460,9 @@ export function updateFlowGraphDiagnostics(container, workflow, diagnostics) {
     return false;
   }
   const diagMap = mapDiagnostics(workflow.jobs, diagnostics ?? []);
+  state.jobs = workflow.jobs;
+  state.jobsById = new Map(workflow.jobs.map((job) => [jobKey(job.id), job]));
+  state.diagnostics = diagnostics ?? [];
   const layout = ensureLayout(state, state.currentLod).layout;
   for (const [id, node] of state.jobNodes) {
     const job = state.jobsById.get(id);

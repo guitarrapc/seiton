@@ -13,10 +13,16 @@ public static class PlaygroundFlowRunner
     /// <summary>Guards flow-only parse path (WASM is single-threaded; desktop tests are not).</summary>
     private static readonly object FlowGate = new();
 
+    /// <summary>Caller-owned UTF-8 source buffer. Guarded by <see cref="FlowGate"/>.</summary>
+    private static byte[] _utf8Yaml = [];
+
     /// <summary>Clears shared caches between playground tests.</summary>
     internal static void ResetSharedStateForTests()
     {
-        PlaygroundUtf8Scratch.ResetForTests();
+        lock (FlowGate)
+        {
+            _utf8Yaml = [];
+        }
         PlaygroundFlowOutputCache.ResetForTests();
     }
 
@@ -45,7 +51,7 @@ public static class PlaygroundFlowRunner
     /// </summary>
     internal static void StoreFlowFromLint(ulong yamlHash, string filePath, WorkflowFlow? flow)
     {
-        PlaygroundFlowOutputCache.Store(yamlHash, filePath, flow);
+        _ = PlaygroundFlowOutputCache.Store(yamlHash, filePath, flow);
     }
 
     private static (byte[] Json, byte[] Mermaid) EnsureOutputs(string yamlSource, string filePath)
@@ -55,7 +61,7 @@ public static class PlaygroundFlowRunner
 
         lock (FlowGate)
         {
-            var (utf8Yaml, yamlHash) = PlaygroundUtf8Scratch.EncodeAndHash(yamlSource);
+            var (utf8Yaml, yamlHash) = PlaygroundUtf8Scratch.EncodeAndHash(yamlSource, ref _utf8Yaml);
             if (PlaygroundFlowOutputCache.TryGet(yamlHash, filePath, out var cachedJson, out var cachedMermaid))
             {
                 return (cachedJson, cachedMermaid);
@@ -63,9 +69,7 @@ public static class PlaygroundFlowRunner
 
             using var parseResult = WorkflowParser.Parse(utf8Yaml, filePath);
             var flow = WorkflowFlowCollector.Collect(parseResult, filePath);
-            PlaygroundFlowOutputCache.Store(yamlHash, filePath, flow);
-            PlaygroundFlowOutputCache.TryGet(yamlHash, filePath, out cachedJson, out cachedMermaid);
-            return (cachedJson, cachedMermaid);
+            return PlaygroundFlowOutputCache.Store(yamlHash, filePath, flow);
         }
     }
 }

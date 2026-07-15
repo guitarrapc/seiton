@@ -49,8 +49,8 @@ The [actionlint playground](https://github.com/rhysd/actionlint/tree/main/playgr
 2. `main.js` initializes the WASM runtime
 3. JS obtains references to exported WASM functions
 4. User edits YAML in CodeMirror editor
-5. After debounce (500ms), JS calls `RunLint(yamlSource, filePath)`
-6. WASM side: parse + lint execution
+5. After debounce (500ms), JS calls `RunLint(yamlSource, filePath)` for the Result tab, `RunLintWithFlowJson` for the Flow tab, or `RunLintWithMermaid` for the Mermaid tab.
+6. WASM side: one parse + lint execution; Flow/Mermaid data is materialized only for its active tab.
 7. WASM returns diagnostic results as UTF-8 JSON
 8. JS renders results table + gutter markers in the editor
 
@@ -61,6 +61,8 @@ Exported functions callable from JavaScript:
 | Function | Parameters | Return | Description |
 |---|---|---|---|
 | `RunLint` | `(yamlSource: string, filePath: string)` | UTF-8 JSON byte array | Diagnostic result array |
+| `RunLintWithFlowJson` | `(yamlSource: string, filePath: string)` | UTF-8 JSON byte array | `{"diagnostics":[...],"flow":flow-json}` from one parse |
+| `RunLintWithMermaid` | `(yamlSource: string, filePath: string)` | UTF-8 JSON byte array | `{"diagnostics":[...],"mermaid":"flowchart …"}` from one parse |
 | `ApplyAllFixes` | `(yamlSource: string, filePath: string)` | `string` | Fixed YAML (original text on error) |
 | `ApplyAllFixesWithNetworkAsync` | `(yamlSource: string, filePath: string)` | `Promise<string>` | JSON: `{"yaml":"...","resolved":N,"skipped":N,"failed":N}` |
 | `SetConfig` | `(configYaml: string)` | UTF-8 JSON byte array | Config diagnostic array (empty = success) |
@@ -111,11 +113,11 @@ Non-functional requirement:
 
 ### 2.7 Flow API
 
-`GetFlowJson` returns the **flow-json contract** — the same machine-readable workflow-structure document as `seiton check --format flow-json` (see `Seiton_CLI_spec.md` §6.6). It is backed by `PlaygroundFlowRunner` (separate from `PlaygroundLintRunner` so the diagnostics API and the flow API remain independent contracts) and consumed by the Flow tab.
+`GetFlowJson` returns the **flow-json contract** — the same machine-readable workflow-structure document as `seiton check --format flow-json` (see `Seiton_CLI_spec.md` §6.6). It remains available as an independent API for explicit Flow requests. The interactive Flow tab instead calls `RunLintWithFlowJson`, so diagnostics and flow come from one parse. Likewise, the Mermaid tab calls `RunLintWithMermaid`.
 
 - **WHY shared contract**: parsing YAML separately in the UI would create interpretation drift between lint and visualization; both CLI and Playground build the flow from the same parsed AST via `WorkflowFlowCollector` in Seiton.Core.
 - Non-workflow documents (e.g. `action.yml`) yield an empty `workflows` array; the Flow tab shows an empty-state notice.
-- Identity-based caching mirrors `RunLint`: an identical `(yamlSource, filePath)` reference pair returns the cached byte array without re-parsing.
+- The Flow-only API caches by YAML content hash and path. Interactive tab calls do not issue a second Flow interop request after linting.
 - The UI records its flow staleness key only after a non-error response can be rendered; backend errors and unavailable graph dependencies remain retryable without editing the YAML.
 - While a trailing bare `- uses:` is incomplete, the UI defers the WASM call and clears the previous graph so stale workflow structure is never presented as current.
 

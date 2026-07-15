@@ -159,6 +159,46 @@ public sealed class PlaygroundUiLayoutTests
     }
 
     [Test]
+    public async Task FlowGraph_DiagnosticOnlyUpdate_RefreshesBadgeForFreshFlowObjects()
+    {
+        var host = await PlaygroundUiTestHost.GetOrCreateAsync();
+        var browser = await PlaygroundUiBrowserSession.GetBrowserAsync();
+        await using var context = await browser.NewContextAsync();
+        var page = await context.NewPageAsync();
+        await GotoPlaygroundAndWaitForLinterGridAsync(page, $"{host.BaseUrl.TrimEnd('/')}/?seitonTestHooks=1");
+        await page.WaitForFunctionAsync(
+            "() => typeof globalThis.__SEITON_PLAYGROUND_TEST__?.renderFlowWithDiagnostics === 'function'",
+            arg: null,
+            new PageWaitForFunctionOptions { Timeout = 30_000 });
+
+        await page.EvaluateAsync(
+            """
+            () => {
+              const flow = () => ({
+                version: 1,
+                workflows: [{
+                  file: 'ci.yml',
+                  jobs: [{
+                    id: 'build', kind: 'job', needs: [], reducedNeeds: [], runsOn: [],
+                    line: 3, endLine: 6,
+                    steps: [{ kind: 'run', id: 'test', line: 5, endLine: 5 }],
+                  }],
+                }],
+              });
+              const hooks = globalThis.__SEITON_PLAYGROUND_TEST__;
+              hooks.selectResultsTab('flow');
+              hooks.renderFlowWithDiagnostics(flow(), []);
+              hooks.renderFlowWithDiagnostics(flow(), [{
+                line: 5, column: 1, severity: 'Error', message: 'fresh diagnostic',
+              }]);
+            }
+            """);
+
+        await Assert.That(await page.Locator("#flow-graph .flow-job__diagbadge").TextContentAsync())
+            .Contains("✖1");
+    }
+
+    [Test]
     public async Task FlowGraph_ZoomOut_AfterSmallMobileFit_DecreasesScale()
     {
         var host = await PlaygroundUiTestHost.GetOrCreateAsync();

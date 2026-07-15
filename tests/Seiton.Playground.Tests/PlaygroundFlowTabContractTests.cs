@@ -67,6 +67,7 @@ public sealed class PlaygroundFlowTabContractTests
         var js = await ReadWwwrootFileAsync("main.js");
         await Assert.That(js).Contains("GetFlowJson");
         await Assert.That(js).Contains("GetFlowMermaid");
+        await Assert.That(js).Contains("RunLintWithFlowJson");
         await Assert.That(js).Contains("refreshFlow");
         await Assert.That(js).Contains("refreshMermaid");
         await Assert.That(js).Contains("setMermaidPreviewMode");

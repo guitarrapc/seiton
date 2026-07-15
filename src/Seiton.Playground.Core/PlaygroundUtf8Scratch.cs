@@ -4,26 +4,22 @@ using Seiton.Core.Parsing;
 namespace Seiton.Playground;
 
 /// <summary>
-/// Shared UTF-8 encode buffer for playground WASM hot paths.
-/// Returned arrays are reused; callers must serialize access and consume before the next encode.
+/// UTF-8 encode helper for playground hot paths.
+/// The caller owns and serializes access to its reusable buffer.
 /// </summary>
 internal static class PlaygroundUtf8Scratch
 {
-    private static byte[] _buf = [];
-
-    internal static void ResetForTests() => _buf = [];
-
     /// <summary>Encodes <paramref name="source"/> once and returns the buffer plus its XxHash64.</summary>
-    internal static (byte[] Utf8, ulong Hash) EncodeAndHash(string source)
+    internal static (byte[] Utf8, ulong Hash) EncodeAndHash(string source, ref byte[] buffer)
     {
         ArgumentNullException.ThrowIfNull(source);
         var byteCount = Encoding.UTF8.GetByteCount(source);
-        if (_buf.Length != byteCount)
+        if (buffer.Length != byteCount)
         {
-            _buf = new byte[byteCount];
+            buffer = new byte[byteCount];
         }
 
-        Encoding.UTF8.GetBytes(source, _buf);
-        return (_buf, XxHash64.Hash(_buf.AsSpan(0, byteCount)));
+        Encoding.UTF8.GetBytes(source, buffer);
+        return (buffer, XxHash64.Hash(buffer.AsSpan(0, byteCount)));
     }
 }

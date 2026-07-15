@@ -10,9 +10,11 @@ namespace Seiton.Playground;
 /// </summary>
 internal static class PlaygroundFlowOutputCache
 {
+    private const int MaxRetainedBufferBytes = 256 * 1024;
+
     private static readonly object Gate = new();
-    private static readonly ArrayBufferWriter<byte> JsonBuffer = new(4096);
-    private static readonly ArrayBufferWriter<byte> MermaidBuffer = new(4096);
+    private static ArrayBufferWriter<byte> JsonBuffer = new(4096);
+    private static ArrayBufferWriter<byte> MermaidBuffer = new(4096);
 
     private static ulong _yamlHash;
     private static string? _filePath;
@@ -27,8 +29,8 @@ internal static class PlaygroundFlowOutputCache
             _filePath = null;
             _flowJson = null;
             _flowMermaid = null;
-            JsonBuffer.Clear();
-            MermaidBuffer.Clear();
+            JsonBuffer = new ArrayBufferWriter<byte>(4096);
+            MermaidBuffer = new ArrayBufferWriter<byte>(4096);
         }
     }
 
@@ -52,10 +54,11 @@ internal static class PlaygroundFlowOutputCache
         return false;
     }
 
-    internal static void Store(ulong yamlHash, string filePath, WorkflowFlow? flow)
+    internal static (byte[] Json, byte[] Mermaid) Store(ulong yamlHash, string filePath, WorkflowFlow? flow)
     {
         lock (Gate)
         {
+            ResetIfOversized(ref JsonBuffer);
             JsonBuffer.Clear();
             if (flow is null)
             {
@@ -66,8 +69,9 @@ internal static class PlaygroundFlowOutputCache
                 WorkflowFlowJson.Write(JsonBuffer, flow);
             }
 
-            _flowJson = UpdateCacheBytes(_flowJson, JsonBuffer.WrittenSpan);
+            var json = UpdateCacheBytes(_flowJson, JsonBuffer.WrittenSpan);
 
+            ResetIfOversized(ref MermaidBuffer);
             MermaidBuffer.Clear();
             if (flow is null)
             {
@@ -78,10 +82,24 @@ internal static class PlaygroundFlowOutputCache
                 WorkflowFlowMermaid.Write(MermaidBuffer, flow);
             }
 
-            _flowMermaid = UpdateCacheBytes(_flowMermaid, MermaidBuffer.WrittenSpan);
+            var mermaid = UpdateCacheBytes(_flowMermaid, MermaidBuffer.WrittenSpan);
 
-            _yamlHash = yamlHash;
-            _filePath = filePath;
+            if (json.Length <= MaxRetainedBufferBytes && mermaid.Length <= MaxRetainedBufferBytes)
+            {
+                _yamlHash = yamlHash;
+                _filePath = filePath;
+                _flowJson = json;
+                _flowMermaid = mermaid;
+            }
+            else
+            {
+                _yamlHash = 0;
+                _filePath = null;
+                _flowJson = null;
+                _flowMermaid = null;
+            }
+
+            return (json, mermaid);
         }
     }
 
@@ -99,5 +117,13 @@ internal static class PlaygroundFlowOutputCache
 
         written.CopyTo(existing);
         return existing;
+    }
+
+    private static void ResetIfOversized(ref ArrayBufferWriter<byte> buffer)
+    {
+        if (buffer.Capacity > MaxRetainedBufferBytes)
+        {
+            buffer = new ArrayBufferWriter<byte>(4096);
+        }
     }
 }

@@ -13,6 +13,12 @@ public static class WorkflowFlowMermaid
 {
     private const int MaxLabelLength = 64;
 
+    private readonly struct FlowAnchor(int counter, bool isGroup)
+    {
+        public int Counter { get; } = counter;
+        public bool IsGroup { get; } = isGroup;
+    }
+
     /// <summary>
     /// Serializes workflows to Mermaid text. The output is always exactly one
     /// <c>flowchart</c> diagram — a second <c>flowchart</c> keyword inside one Mermaid
@@ -85,7 +91,7 @@ public static class WorkflowFlowMermaid
             writer.WriteAscii("    direction LR\n");
         }
 
-        string[]? anchorRent = null;
+        FlowAnchor[]? anchorRent = null;
         var anchorCapacity = 0;
         try
         {
@@ -97,15 +103,15 @@ public static class WorkflowFlowMermaid
                 {
                     if (anchorRent is not null)
                     {
-                        ArrayPool<string>.Shared.Return(anchorRent);
+                        ArrayPool<FlowAnchor>.Shared.Return(anchorRent);
                     }
 
-                    anchorRent = ArrayPool<string>.Shared.Rent(neededAnchors);
+                    anchorRent = ArrayPool<FlowAnchor>.Shared.Rent(neededAnchors);
                     anchorCapacity = neededAnchors;
                 }
 
                 WriteJob(writer, job, prefix, i, anchorRent, out var anchorCount);
-                WriteStepChain(writer, anchorRent, anchorCount);
+                WriteStepChain(writer, prefix, i, anchorRent, anchorCount);
             }
 
             for (var i = 0; i < workflow.Jobs.Length; i++)
@@ -131,7 +137,7 @@ public static class WorkflowFlowMermaid
         {
             if (anchorRent is not null)
             {
-                ArrayPool<string>.Shared.Return(anchorRent);
+                ArrayPool<FlowAnchor>.Shared.Return(anchorRent);
             }
         }
 
@@ -146,7 +152,7 @@ public static class WorkflowFlowMermaid
         FlowJob job,
         string prefix,
         int jobIndex,
-        string[] anchorRent,
+        FlowAnchor[] anchorRent,
         out int anchorCount)
     {
         if (job.Kind == FlowJobKind.Reusable)
@@ -175,14 +181,14 @@ public static class WorkflowFlowMermaid
         writer.WriteAscii("  end\n");
     }
 
-    private static void WriteStepChain(FlowUtf8Writer writer, string[] anchors, int anchorCount)
+    private static void WriteStepChain(FlowUtf8Writer writer, string prefix, int jobIndex, FlowAnchor[] anchors, int anchorCount)
     {
         for (var a = 1; a < anchorCount; a++)
         {
             writer.WriteAscii("    ");
-            writer.WriteUtf8(anchors[a - 1]);
+            WriteAnchorId(writer, prefix, jobIndex, anchors[a - 1]);
             writer.WriteAscii(" --> ");
-            writer.WriteUtf8(anchors[a]);
+            WriteAnchorId(writer, prefix, jobIndex, anchors[a]);
             writer.WriteNewLine();
         }
     }
@@ -193,7 +199,7 @@ public static class WorkflowFlowMermaid
         string prefix,
         int jobIndex,
         ref int counter,
-        string[]? anchors,
+        FlowAnchor[]? anchors,
         ref int anchorCount,
         string indent)
     {
@@ -208,13 +214,12 @@ public static class WorkflowFlowMermaid
                 writer.WriteAscii("[\"parallel\"]\n");
                 writer.WriteAscii(indent);
                 writer.WriteAscii("  direction TB\n");
-                var groupId = CaptureGroupNodeId(prefix, jobIndex, counter);
-                counter++;
                 if (anchors is not null)
                 {
-                    anchors[anchorCount++] = groupId;
+                    anchors[anchorCount++] = new FlowAnchor(counter, isGroup: true);
                 }
 
+                counter++;
                 WriteSteps(writer, step.Steps, prefix, jobIndex, ref counter, anchors: null, ref anchorCount, indent + "  ");
                 writer.WriteAscii(indent);
                 writer.WriteAscii("end\n");
@@ -228,7 +233,7 @@ public static class WorkflowFlowMermaid
             writer.WriteAscii("\"]\n");
             if (anchors is not null)
             {
-                anchors[anchorCount++] = CaptureStepNodeId(prefix, jobIndex, counter);
+                anchors[anchorCount++] = new FlowAnchor(counter, isGroup: false);
             }
 
             counter++;
@@ -256,11 +261,17 @@ public static class WorkflowFlowMermaid
         writer.WriteInt(counter);
     }
 
-    private static string CaptureGroupNodeId(string prefix, int jobIndex, int counter)
-        => $"{prefix}j{jobIndex}g{counter}";
-
-    private static string CaptureStepNodeId(string prefix, int jobIndex, int counter)
-        => $"{prefix}j{jobIndex}n{counter}";
+    private static void WriteAnchorId(FlowUtf8Writer writer, string prefix, int jobIndex, FlowAnchor anchor)
+    {
+        if (anchor.IsGroup)
+        {
+            WriteGroupNodeId(writer, prefix, jobIndex, anchor.Counter);
+        }
+        else
+        {
+            WriteStepNodeId(writer, prefix, jobIndex, anchor.Counter);
+        }
+    }
 
     private static int FindJobIndex(FlowJob[] jobs, string need)
     {
