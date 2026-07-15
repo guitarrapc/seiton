@@ -1,3 +1,4 @@
+using System.Text;
 using Seiton.Core.Parsing;
 using Seiton.Core.Parsing.Ast;
 
@@ -49,15 +50,19 @@ public static class WorkflowFlowCollector
         var jobCount = jobMap.Count;
         var jobs = jobCount == 0 ? [] : new FlowJob[jobCount];
 
-        // First pass: ids and needs, so the transitive reduction can see the whole DAG
-        // before the (init-only) FlowJob instances are constructed.
+        // Decode each job id once. Matching needs entries reuse these strings below.
         var ids = new string[jobCount];
+        for (var i = 0; i < jobCount; i++)
+        {
+            ids[i] = jobMap.GetAt(i).Key.Decode();
+        }
+
+        // Resolve needs after all ids are available, so the transitive reduction can see
+        // the whole DAG without materializing duplicate strings for known job ids.
         var needs = new string[jobCount][];
         for (var i = 0; i < jobCount; i++)
         {
-            var entry = jobMap.GetAt(i);
-            ids[i] = entry.Key.Decode();
-            needs[i] = DecodeList(entry.Value.Needs);
+            needs[i] = DecodeNeeds(jobMap.GetAt(i).Value.Needs, jobMap, ids);
         }
 
         var reducedNeeds = ComputeReducedNeeds(ids, needs);
@@ -237,7 +242,7 @@ public static class WorkflowFlowCollector
         for (var i = 0; i < entries.Length; i++)
         {
             var scope = scopes.GetAt(i);
-            entries[i] = $"{scope.Key.Decode()}: {scope.Value.Value.Decode()}";
+            entries[i] = DecodePermission(scope.Key, scope.Value.Value);
         }
 
         return entries;
@@ -313,7 +318,7 @@ public static class WorkflowFlowCollector
             HasMatrix = true,
             MatrixKeys = keys,
             MatrixIsExpression = false,
-            Combinations = ExpandMatrix(matrix),
+            Combinations = ExpandMatrix(matrix, keys),
         };
     }
 
@@ -323,13 +328,13 @@ public static class WorkflowFlowCollector
     /// <c>include</c> entries extend matching combinations (or append when nothing matches).
     /// Any dynamic <c>${{ }}</c> dimension or block makes the matrix non-expandable.
     /// </summary>
-    private static KeyValuePair<string, string>[][] ExpandMatrix(MatrixRef matrix)
+    private static KeyValuePair<string, string>[][] ExpandMatrix(MatrixRef matrix, string[] matrixKeys)
     {
-        var dimKeys = new List<string>();
-        var combos = new List<List<KeyValuePair<string, string>>>();
+        var combos = new List<KeyValuePair<string, string>[]>();
         long total = 1;
+        var dimensionIndex = 0;
 
-        foreach (var (rowKey, row) in matrix.Rows)
+        foreach (var (_, row) in matrix.Rows)
         {
             if (row.Expression.HasText)
             {
@@ -348,8 +353,7 @@ public static class WorkflowFlowCollector
                 return [];
             }
 
-            var key = rowKey.Decode();
-            dimKeys.Add(key);
+            var key = matrixKeys[dimensionIndex++];
 
             if (combos.Count == 0)
             {
@@ -361,14 +365,21 @@ public static class WorkflowFlowCollector
                 continue;
             }
 
-            var next = new List<List<KeyValuePair<string, string>>>(combos.Count * values.Count);
+            var decodedValues = new string[values.Count];
+            var valueIndex = 0;
+            foreach (var value in values)
+            {
+                decodedValues[valueIndex++] = StringifyRawYaml(value);
+            }
+
+            var next = new List<KeyValuePair<string, string>[]>(combos.Count * decodedValues.Length);
             foreach (var combo in combos)
             {
-                foreach (var value in values)
+                for (var i = 0; i < decodedValues.Length; i++)
                 {
-                    var extended = new List<KeyValuePair<string, string>>(combo.Count + 1);
-                    extended.AddRange(combo);
-                    extended.Add(new(key, StringifyRawYaml(value)));
+                    var extended = new KeyValuePair<string, string>[combo.Length + 1];
+                    combo.CopyTo(extended, 0);
+                    extended[^1] = new(key, decodedValues[i]);
                     next.Add(extended);
                 }
             }
@@ -403,9 +414,9 @@ public static class WorkflowFlowCollector
 
                 // Include-only matrix (no dimension rows): every entry is its own combination —
                 // there is no base product for "applies to all" merging to make sense.
-                if (dimKeys.Count == 0)
+                if (matrixKeys.Length == 0)
                 {
-                    combos.Add(new List<KeyValuePair<string, string>>(pairs));
+                    combos.Add(pairs.ToArray());
                     if (combos.Count > MaxMatrixCombinations)
                     {
                         return [];
@@ -418,7 +429,7 @@ public static class WorkflowFlowCollector
                 var extraPairs = new List<KeyValuePair<string, string>>();
                 foreach (var pair in pairs)
                 {
-                    if (ContainsKey(dimKeys, pair.Key))
+                    if (ContainsKey(matrixKeys, pair.Key))
                     {
                         dimPairs.Add(pair);
                     }
@@ -429,21 +440,23 @@ public static class WorkflowFlowCollector
                 }
 
                 var matched = false;
-                foreach (var combo in combos)
+                for (var comboIndex = 0; comboIndex < combos.Count; comboIndex++)
                 {
+                    var combo = combos[comboIndex];
                     if (MatchesSubset(combo, dimPairs))
                     {
                         matched = true;
                         foreach (var extra in extraPairs)
                         {
-                            SetOrAdd(combo, extra);
+                            combo = SetOrAdd(combo, extra);
                         }
+                        combos[comboIndex] = combo;
                     }
                 }
 
                 if (!matched)
                 {
-                    combos.Add(new List<KeyValuePair<string, string>>(pairs));
+                    combos.Add(pairs.ToArray());
                     if (combos.Count > MaxMatrixCombinations)
                     {
                         return [];
@@ -457,13 +470,7 @@ public static class WorkflowFlowCollector
             return [];
         }
 
-        var result = new KeyValuePair<string, string>[combos.Count][];
-        for (var i = 0; i < result.Length; i++)
-        {
-            result[i] = combos[i].ToArray();
-        }
-
-        return result;
+        return combos.ToArray();
     }
 
     private static List<KeyValuePair<string, string>> DecodeCombinationEntry(RawYamlRefMap entry)
@@ -477,7 +484,7 @@ public static class WorkflowFlowCollector
         return pairs;
     }
 
-    private static bool MatchesSubset(List<KeyValuePair<string, string>> combo, List<KeyValuePair<string, string>> subset)
+    private static bool MatchesSubset(KeyValuePair<string, string>[] combo, List<KeyValuePair<string, string>> subset)
     {
         foreach (var pair in subset)
         {
@@ -500,21 +507,26 @@ public static class WorkflowFlowCollector
         return true;
     }
 
-    private static void SetOrAdd(List<KeyValuePair<string, string>> combo, KeyValuePair<string, string> pair)
+    private static KeyValuePair<string, string>[] SetOrAdd(
+        KeyValuePair<string, string>[] combo,
+        KeyValuePair<string, string> pair)
     {
-        for (var i = 0; i < combo.Count; i++)
+        for (var i = 0; i < combo.Length; i++)
         {
             if (string.Equals(combo[i].Key, pair.Key, StringComparison.OrdinalIgnoreCase))
             {
                 combo[i] = pair;
-                return;
+                return combo;
             }
         }
 
-        combo.Add(pair);
+        var extended = new KeyValuePair<string, string>[combo.Length + 1];
+        combo.CopyTo(extended, 0);
+        extended[^1] = pair;
+        return extended;
     }
 
-    private static bool ContainsKey(List<string> keys, string key)
+    private static bool ContainsKey(string[] keys, string key)
     {
         foreach (var existing in keys)
         {
@@ -703,6 +715,52 @@ public static class WorkflowFlowCollector
         }
 
         return items;
+    }
+
+    private static string[] DecodeNeeds(StringRefList list, JobRefMap jobs, string[] jobIds)
+    {
+        if (list.Count == 0)
+        {
+            return [];
+        }
+
+        var items = new string[list.Count];
+        for (var i = 0; i < items.Length; i++)
+        {
+            var need = list[i];
+            var needBytes = need.Value;
+            var canonical = false;
+            for (var jobIndex = 0; jobIndex < jobIds.Length; jobIndex++)
+            {
+                if (jobs.GetAt(jobIndex).Key.ValueEquals(needBytes))
+                {
+                    items[i] = jobIds[jobIndex];
+                    canonical = true;
+                    break;
+                }
+            }
+
+            if (!canonical)
+            {
+                items[i] = need.Decode();
+            }
+        }
+
+        return items;
+    }
+
+    private static string DecodePermission(KeyRef key, StringRef value)
+    {
+        var length = Encoding.UTF8.GetCharCount(key.Bytes)
+            + 2
+            + Encoding.UTF8.GetCharCount(value.Value);
+        return string.Create(length, (Key: key, Value: value), static (chars, state) =>
+        {
+            var written = Encoding.UTF8.GetChars(state.Key.Bytes, chars);
+            chars[written++] = ':';
+            chars[written++] = ' ';
+            Encoding.UTF8.GetChars(state.Value.Value, chars[written..]);
+        });
     }
 
     private static string? NullIfEmpty(StringRef value) => value.HasText ? value.Decode() : null;
