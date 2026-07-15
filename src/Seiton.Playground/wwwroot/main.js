@@ -1273,16 +1273,18 @@ function renderFlow(flowDoc, { preserveView = false, resetView = false } = {}) {
   hideFlowDetail();
   const workflow = flowDoc?.workflows?.[0] ?? null;
   const signature = flowStructureSignature(workflow);
+  const pendingViewReset = flowViewResetPending;
   const diagOnly = Boolean(
     signature
     && signature === lastRenderedFlowSignature
-    && flowGraphEl.querySelector('.flow-svg'),
+    && flowGraphEl.querySelector('.flow-svg')
+    && !pendingViewReset,
   );
   const shouldPreserveView = preserveView
-    && !flowViewResetPending
+    && !pendingViewReset
     && flowGraphEl.querySelector('.flow-svg');
   const initialView = shouldPreserveView ? captureFlowViewState(flowGraphEl) : null;
-  if (flowViewResetPending) {
+  if (pendingViewReset) {
     flowViewResetPending = false;
   }
   flowNodeStartLines = collectFlowStartLines(workflow);

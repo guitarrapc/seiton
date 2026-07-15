@@ -1678,7 +1678,7 @@ export function updateFlowGraphDiagnostics(container, workflow, diagnostics) {
   state.diagnostics = diagnostics ?? [];
   state.diagMap = diagMap;
   invalidateGraphLayoutCaches(state);
-  const layout = ensureLayout(state, state.currentLod).layout;
+  const { layout } = ensureLayout(state, state.currentLod);
   for (const [id, node] of state.jobNodes) {
     const job = state.jobsById.get(id);
     if (!job) {
@@ -1692,6 +1692,10 @@ export function updateFlowGraphDiagnostics(container, workflow, diagnostics) {
     if (node.title && node.titleText) {
       node.title.text(truncate(node.titleText, titleMaxChars(pos?.width ?? 0, node.diagCounts)));
     }
+  }
+  const d3 = globalThis.d3;
+  if (d3 && state.currentLod >= 1) {
+    refreshAllJobInnerSteps(state, d3, layout);
   }
   return true;
 }

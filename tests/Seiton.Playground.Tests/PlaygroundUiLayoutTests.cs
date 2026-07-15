@@ -308,6 +308,67 @@ public sealed class PlaygroundUiLayoutTests
 
         await Assert.That(await page.Locator("#flow-graph .flow-job__diagbadge").TextContentAsync())
             .Contains("✖1");
+        await Assert.That(await page.Locator("#flow-graph .flow-step .flow-marker").CountAsync())
+            .IsGreaterThanOrEqualTo(1);
+    }
+
+    [Test]
+    public async Task FlowGraph_PendingViewReset_SameStructure_ForcesRerender()
+    {
+        var host = await PlaygroundUiTestHost.GetOrCreateAsync();
+        var browser = await PlaygroundUiBrowserSession.GetBrowserAsync();
+        await using var context = await browser.NewContextAsync();
+        var page = await context.NewPageAsync();
+        await GotoPlaygroundAndWaitForLinterGridAsync(page, $"{host.BaseUrl.TrimEnd('/')}/?seitonTestHooks=1");
+        await page.WaitForFunctionAsync(
+            "() => typeof globalThis.__SEITON_PLAYGROUND_TEST__?.renderFlowWithDiagnostics === 'function'",
+            arg: null,
+            new PageWaitForFunctionOptions { Timeout = 30_000 });
+
+        var jobsVisible = await page.EvaluateAsync<bool>(
+            """
+            () => {
+              const hooks = globalThis.__SEITON_PLAYGROUND_TEST__;
+              hooks.selectResultsTab('flow');
+              const flow = {
+                version: 1,
+                workflows: [{
+                  file: 'ci.yml',
+                  events: ['push'],
+                  jobs: [
+                    { id: 'build', kind: 'job', needs: [], reducedNeeds: [], runsOn: [], steps: [
+                      { id: 'checkout', kind: 'uses', line: 8, endLine: 8 },
+                      { id: 'test', kind: 'run', line: 9, endLine: 9 },
+                    ] },
+                    { id: 'verify-updater', kind: 'job', needs: [], reducedNeeds: [], runsOn: [], steps: [
+                      { id: 'validate', kind: 'run', line: 20, endLine: 20 },
+                    ] },
+                  ],
+                }],
+              };
+              hooks.renderFlowWithDiagnostics(flow, []);
+              const svg = document.querySelector('#flow-graph .flow-svg');
+              globalThis.d3.zoom().transform(
+                globalThis.d3.select(svg),
+                globalThis.d3.zoomIdentity.translate(-4000, -3000).scale(0.5),
+              );
+              hooks.resetFlowView();
+              hooks.renderFlowWithDiagnostics(flow, []);
+              const graph = document.querySelector('#flow-graph').getBoundingClientRect();
+              const jobs = [...document.querySelectorAll('#flow-graph .flow-job')];
+              if (jobs.length !== 2) return false;
+              const tolerance = 4;
+              return jobs.every((node) => {
+                const rect = node.getBoundingClientRect();
+                return rect.right >= graph.left - tolerance
+                  && rect.left <= graph.right + tolerance
+                  && rect.bottom >= graph.top - tolerance
+                  && rect.top <= graph.bottom + tolerance;
+              });
+            }
+            """);
+
+        await Assert.That(jobsVisible).IsTrue();
     }
 
     [Test]
