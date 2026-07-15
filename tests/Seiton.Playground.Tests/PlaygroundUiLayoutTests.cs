@@ -96,6 +96,37 @@ public sealed class PlaygroundUiLayoutTests
     }
 
     [Test]
+    public async Task MermaidOutput_EmptyStringShowsEmptyStateAndDisablesToolbar()
+    {
+        var host = await PlaygroundUiTestHost.GetOrCreateAsync();
+        var browser = await PlaygroundUiBrowserSession.GetBrowserAsync();
+        await using var context = await browser.NewContextAsync();
+        var page = await context.NewPageAsync();
+        await GotoPlaygroundAndWaitForLinterGridAsync(page, $"{host.BaseUrl.TrimEnd('/')}/?seitonTestHooks=1");
+        await page.WaitForFunctionAsync(
+            "() => typeof globalThis.__SEITON_PLAYGROUND_TEST__?.renderMermaid === 'function'",
+            arg: null,
+            new PageWaitForFunctionOptions { Timeout = 30_000 });
+
+        var state = await page.EvaluateAsync<bool[]>(
+            """
+            () => {
+              const hooks = globalThis.__SEITON_PLAYGROUND_TEST__;
+              hooks.selectResultsTab('mermaid');
+              hooks.renderMermaid('');
+              return [
+                document.querySelector('#mermaid-empty').hidden,
+                document.querySelector('#mermaid-output').hidden,
+                document.querySelector('#mermaid-preview-btn').disabled,
+                document.querySelector('#mermaid-copy-btn').disabled,
+              ];
+            }
+            """);
+
+        await Assert.That(state).IsEquivalentTo([false, true, true, true]);
+    }
+
+    [Test]
     public async Task MermaidPreview_PansAndZoomsWithoutShrinkingBelowFit()
     {
         var host = await PlaygroundUiTestHost.GetOrCreateAsync();

@@ -928,7 +928,10 @@ function refreshFlow(force = false) {
 
 /** True when Mermaid text has no job nodes or subgraphs (empty workflow or action.yml). */
 function isMermaidEmpty(mermaidText) {
-  if (!mermaidText || mermaidText.startsWith('%% Seiton error:')) {
+  if (!mermaidText) {
+    return true;
+  }
+  if (mermaidText.startsWith('%% Seiton error:')) {
     return false;
   }
   return !/^\s*(?:subgraph\s+)?(?:w\d+)?j\d+\b/m.test(mermaidText);
