@@ -65,7 +65,7 @@ public sealed class PlaygroundUiLayoutTests
             arg: null,
             new PageWaitForFunctionOptions { Timeout = 30_000 });
 
-        await page.EvaluateAsync(
+        var edgeEndsAtGroupFrame = await page.EvaluateAsync<bool>(
             """
             () => {
               const hooks = globalThis.__SEITON_PLAYGROUND_TEST__;
@@ -484,23 +484,78 @@ public sealed class PlaygroundUiLayoutTests
 
         await page.EvaluateAsync(
             """
-            () => globalThis.__SEITON_PLAYGROUND_TEST__.renderFlow({
-              version: 1,
-              workflows: [{
-                file: 'ci.yml',
-                events: ['push'],
-                jobs: [
-                  { id: 'build', kind: 'job', needs: [], reducedNeeds: [], runsOn: [], steps: [] },
-                  { id: 'lint-a', kind: 'job', needs: ['build'], reducedNeeds: ['build'], runsOn: [], steps: [] },
-                  { id: 'lint-b', kind: 'job', needs: ['build'], reducedNeeds: ['build'], runsOn: [], steps: [] },
-                ],
-              }],
-            })
+                        () => globalThis.__SEITON_PLAYGROUND_TEST__.renderFlow({
+                            version: 1,
+                            workflows: [{
+                                file: 'ci.yml',
+                                events: ['push'],
+                                jobs: [
+                                    { id: 'build', kind: 'job', needs: [], reducedNeeds: [], runsOn: [], steps: [] },
+                                    { id: 'lint-a', kind: 'job', needs: ['build'], reducedNeeds: ['build'], runsOn: [], steps: [] },
+                                    { id: 'lint-b', kind: 'job', needs: ['build'], reducedNeeds: ['build'], runsOn: [], steps: [] },
+                                ],
+                            }],
+                        })
             """);
         await page.Locator("#flow-graph .flow-job").Nth(1).DispatchEventAsync("mouseenter");
 
         await Assert.That(
             await page.Locator("#flow-graph .flow-edge--group.flow-hover-related").CountAsync()).IsEqualTo(1);
+    }
+
+    [Test]
+    public async Task FlowGraph_GroupEdge_FollowsFrameAfterLodChange()
+    {
+        var host = await PlaygroundUiTestHost.GetOrCreateAsync();
+        var browser = await PlaygroundUiBrowserSession.GetBrowserAsync();
+        await using var context = await browser.NewContextAsync();
+        var page = await context.NewPageAsync();
+        await GotoPlaygroundAndWaitForLinterGridAsync(page, $"{host.BaseUrl.TrimEnd('/')}/?seitonTestHooks=1");
+        await page.WaitForFunctionAsync(
+            "() => typeof globalThis.__SEITON_PLAYGROUND_TEST__?.renderFlow === 'function'",
+            arg: null,
+            new PageWaitForFunctionOptions { Timeout = 30_000 });
+
+            var edgeEndsAtGroupFrame = await page.EvaluateAsync<bool>(
+                        """
+                        () => {
+                            const hooks = globalThis.__SEITON_PLAYGROUND_TEST__;
+                            hooks.selectResultsTab('flow');
+                            hooks.renderFlow({
+                                version: 1,
+                                workflows: [{
+                                    file: 'ci.yml',
+                                    events: ['push'],
+                                    jobs: [
+                                        { id: 'build', kind: 'job', needs: [], reducedNeeds: [], runsOn: [], steps: [] },
+                                        { id: 'lint-a', kind: 'job', needs: ['build'], reducedNeeds: ['build'], runsOn: [], steps: [] },
+                                        { id: 'lint-b', kind: 'job', needs: ['build'], reducedNeeds: ['build'], runsOn: [], steps: [] },
+                                    ],
+                                }],
+                            });
+                            const svg = document.querySelector('#flow-graph .flow-svg');
+                            svg.dispatchEvent(new WheelEvent('wheel', {
+                                bubbles: true,
+                                cancelable: true,
+                                clientX: 100,
+                                clientY: 100,
+                                deltaY: 1_000,
+                            }));
+                            const edge = document.querySelector('#flow-graph .flow-edge--group');
+                            const frame = document.querySelector('#flow-graph .flow-needs-group');
+                            const match = edge?.getAttribute('d')?.match(/([\d.-]+),([\d.-]+)$/);
+                            if (!svg.classList.contains('flow-svg--lod0') || !frame || !match) return false;
+                            const targetX = Number(match[1]);
+                            const targetY = Number(match[2]);
+                            const frameX = Number(frame.getAttribute('x'));
+                            const frameY = Number(frame.getAttribute('y'));
+                            const frameHeight = Number(frame.getAttribute('height'));
+                            return Math.abs(targetX - frameX) < 0.01
+                                && Math.abs(targetY - (frameY + frameHeight / 2)) < 0.01;
+                        }
+                        """);
+
+        await Assert.That(edgeEndsAtGroupFrame).IsTrue();
     }
 
     [Test]

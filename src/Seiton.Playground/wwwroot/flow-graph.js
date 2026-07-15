@@ -434,7 +434,7 @@ function applyGraphLayout(state, lod, d3) {
   }
 
   updateNeedsGroupFrames(state, groups, layout);
-  updateEdgePaths(state, d3, layout, groups);
+  updateEdgePaths(state, d3, layout);
 }
 
 /** Keeps the job title and diagnostic badge inside the card after LOD resizes. */
@@ -523,12 +523,12 @@ function updateNeedsGroupFrames(state, groups, layout) {
   }
 }
 
-function updateEdgePaths(state, d3, layout, groups) {
+function updateEdgePaths(state, d3, layout) {
   const link = d3.linkHorizontal().x((p) => p[0]).y((p) => p[1]);
   for (const edge of state.edgeSelections) {
     if (edge.kind === 'group') {
       const source = layout.get(edge.from);
-      const frame = edge.group.frame ?? groupFrameBounds(edge.group.members, layout, state.jobsById);
+      const frame = groupFrameBounds(edge.group.members, layout, state.jobsById);
       if (!source || !frame) continue;
       const sx = source.x + source.width;
       const sy = source.y + source.height / 2;
