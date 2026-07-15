@@ -750,6 +750,78 @@ public sealed class PlaygroundUiLayoutTests
     }
 
     [Test]
+    public async Task FlowGraph_ZoomOutAtLod0_StaysAtLod0WithLimitedShrink()
+    {
+        var host = await PlaygroundUiTestHost.GetOrCreateAsync();
+        var browser = await PlaygroundUiBrowserSession.GetBrowserAsync();
+        await using var context = await browser.NewContextAsync();
+        var page = await context.NewPageAsync();
+        await GotoPlaygroundAndWaitForLinterGridAsync(page, $"{host.BaseUrl.TrimEnd('/')}/?seitonTestHooks=1");
+        await page.WaitForFunctionAsync(
+            "() => typeof globalThis.__SEITON_PLAYGROUND_TEST__?.renderFlow === 'function'",
+            arg: null,
+            new PageWaitForFunctionOptions { Timeout = 30_000 });
+
+        var staysLod0 = await page.EvaluateAsync<bool>(
+            """
+            () => {
+              const hooks = globalThis.__SEITON_PLAYGROUND_TEST__;
+              hooks.selectResultsTab('flow');
+              hooks.renderFlow({
+                version: 1,
+                workflows: [{
+                  file: 'ci.yml',
+                  events: ['push'],
+                  jobs: [
+                    { id: 'build', kind: 'job', needs: [], reducedNeeds: [], runsOn: [], steps: [
+                      { id: 'checkout', kind: 'uses', line: 8, endLine: 8 },
+                      { id: 'test', kind: 'run', line: 9, endLine: 9 },
+                    ] },
+                    { id: 'verify-updater', kind: 'job', needs: [], reducedNeeds: [], runsOn: [], steps: [
+                      { id: 'validate', kind: 'run', line: 20, endLine: 20 },
+                    ] },
+                  ],
+                }],
+              });
+              const svg = document.querySelector('#flow-graph .flow-svg');
+              for (let i = 0; i < 40; i++) {
+                svg.dispatchEvent(new WheelEvent('wheel', {
+                  bubbles: true,
+                  cancelable: true,
+                  clientX: 100,
+                  clientY: 100,
+                  deltaY: 400,
+                }));
+              }
+              if (!svg.classList.contains('flow-svg--lod0')) return false;
+              const kAtLod0 = globalThis.d3.zoomTransform(svg).k;
+              for (let i = 0; i < 12; i++) {
+                svg.dispatchEvent(new WheelEvent('wheel', {
+                  bubbles: true,
+                  cancelable: true,
+                  clientX: 100,
+                  clientY: 100,
+                  deltaY: 400,
+                }));
+              }
+              const kAfter = globalThis.d3.zoomTransform(svg).k;
+              const graph = document.querySelector('#flow-graph').getBoundingClientRect();
+              const jobs = [...document.querySelectorAll('#flow-graph .flow-job')];
+              const jobsVisible = jobs.length === 2 && jobs.every((node) => {
+                const rect = node.getBoundingClientRect();
+                return rect.right >= graph.left && rect.left <= graph.right
+                  && rect.bottom >= graph.top && rect.top <= graph.bottom;
+              });
+              return svg.classList.contains('flow-svg--lod0')
+                && kAfter >= kAtLod0 * 0.92
+                && jobsVisible;
+            }
+            """);
+
+        await Assert.That(staysLod0).IsTrue();
+    }
+
+    [Test]
     public async Task FlowGraph_RepeatedWheelZoom_KeepsJobsOnScreen()
     {
         var host = await PlaygroundUiTestHost.GetOrCreateAsync();
