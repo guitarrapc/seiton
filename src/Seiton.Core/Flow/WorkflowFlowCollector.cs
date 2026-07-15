@@ -49,28 +49,20 @@ public static class WorkflowFlowCollector
         var jobMap = workflow.Jobs;
         var jobCount = jobMap.Count;
         var jobs = jobCount == 0 ? [] : new FlowJob[jobCount];
-
-        // Decode each job id once. Matching needs entries reuse these strings below.
-        var ids = new string[jobCount];
-        for (var i = 0; i < jobCount; i++)
-        {
-            ids[i] = jobMap.GetAt(i).Key.Decode();
-        }
-
-        // Resolve needs after all ids are available, so the transitive reduction can see
-        // the whole DAG without materializing duplicate strings for known job ids.
-        var needs = new string[jobCount][];
-        for (var i = 0; i < jobCount; i++)
-        {
-            needs[i] = DecodeNeeds(jobMap.GetAt(i).Value.Needs, jobMap, ids);
-        }
-
-        var reducedNeeds = ComputeReducedNeeds(ids, needs);
         for (var i = 0; i < jobCount; i++)
         {
             var entry = jobMap.GetAt(i);
-            jobs[i] = CollectJob(entry.Key, entry.Value, ids[i], needs[i], reducedNeeds[i]);
+            jobs[i] = CollectJob(entry.Key, entry.Value);
         }
+
+        // Job ids live in their final DTOs before needs are decoded, so matching needs can
+        // reuse those strings without a temporary decoded-id array.
+        for (var i = 0; i < jobCount; i++)
+        {
+            jobs[i].SetNeeds(DecodeNeeds(jobMap.GetAt(i).Value.Needs, jobMap, jobs));
+        }
+
+        ComputeReducedNeeds(jobs);
 
         return new WorkflowFlow
         {
@@ -103,12 +95,12 @@ public static class WorkflowFlowCollector
     /// matching how GitHub renders its workflow graph. Full <c>needs</c> stays
     /// the semantic contract; cycles are tolerated via partial memoization.
     /// </summary>
-    private static string[][] ComputeReducedNeeds(string[] ids, string[][] needs)
+    private static void ComputeReducedNeeds(FlowJob[] jobs)
     {
         var needsReduction = false;
-        for (var i = 0; i < needs.Length; i++)
+        for (var i = 0; i < jobs.Length; i++)
         {
-            if (needs[i].Length >= 2)
+            if (jobs[i].Needs.Length >= 2)
             {
                 needsReduction = true;
                 break;
@@ -117,18 +109,18 @@ public static class WorkflowFlowCollector
 
         if (!needsReduction)
         {
-            return needs;
+            return;
         }
 
-        var indexById = new Dictionary<string, int>(ids.Length, StringComparer.OrdinalIgnoreCase);
-        for (var i = 0; i < ids.Length; i++)
+        var indexById = new Dictionary<string, int>(jobs.Length, StringComparer.OrdinalIgnoreCase);
+        for (var i = 0; i < jobs.Length; i++)
         {
-            indexById.TryAdd(ids[i], i);
+            indexById.TryAdd(jobs[i].Id, i);
         }
 
         // ancestors[i] = every job index reachable upstream from i. Pre-assigning the
         // set before recursing makes cyclic needs terminate (with a partial result).
-        var ancestors = new HashSet<int>?[ids.Length];
+        var ancestors = new HashSet<int>?[jobs.Length];
 
         HashSet<int> AncestorsOf(int index)
         {
@@ -139,7 +131,7 @@ public static class WorkflowFlowCollector
 
             var set = new HashSet<int>();
             ancestors[index] = set;
-            foreach (var dep in needs[index])
+            foreach (var dep in jobs[index].Needs)
             {
                 if (!indexById.TryGetValue(dep, out var depIndex))
                 {
@@ -155,13 +147,11 @@ public static class WorkflowFlowCollector
             return set;
         }
 
-        var reduced = new string[ids.Length][];
-        for (var i = 0; i < ids.Length; i++)
+        for (var i = 0; i < jobs.Length; i++)
         {
-            var deps = needs[i];
+            var deps = jobs[i].Needs;
             if (deps.Length < 2)
             {
-                reduced[i] = deps;
                 continue;
             }
 
@@ -190,13 +180,14 @@ public static class WorkflowFlowCollector
                 }
             }
 
-            reduced[i] = kept.Count == deps.Length ? deps : kept.ToArray();
+            if (kept.Count != deps.Length)
+            {
+                jobs[i].SetReducedNeeds(kept.ToArray());
+            }
         }
-
-        return reduced;
     }
 
-    private static FlowJob CollectJob(KeyRef key, JobRef job, string id, string[] needs, string[] reducedNeeds)
+    private static FlowJob CollectJob(KeyRef key, JobRef job)
     {
         var workflowCall = job.WorkflowCall;
         var isReusable = workflowCall.HasValue;
@@ -206,12 +197,12 @@ public static class WorkflowFlowCollector
         {
             Line = range.StartLine,
             EndLine = range.EndLine,
-            Id = id,
+            Id = key.Decode(),
             Name = NullIfEmpty(job.Name),
             Kind = isReusable ? FlowJobKind.Reusable : FlowJobKind.Job,
             If = NullIfEmpty(job.If),
-            Needs = needs,
-            ReducedNeeds = reducedNeeds,
+            Needs = [],
+            ReducedNeeds = [],
             RunsOn = CollectRunsOn(job.RunsOn),
             Uses = isReusable ? NullIfEmpty(workflowCall.Uses) : null,
             Strategy = CollectStrategy(job.Strategy),
@@ -365,21 +356,18 @@ public static class WorkflowFlowCollector
                 continue;
             }
 
-            var decodedValues = new string[values.Count];
-            var valueIndex = 0;
-            foreach (var value in values)
+            var next = new List<KeyValuePair<string, string>[]>(combos.Count * values.Count);
+            for (var comboIndex = 0; comboIndex < combos.Count; comboIndex++)
             {
-                decodedValues[valueIndex++] = StringifyRawYaml(value);
-            }
-
-            var next = new List<KeyValuePair<string, string>[]>(combos.Count * decodedValues.Length);
-            foreach (var combo in combos)
-            {
-                for (var i = 0; i < decodedValues.Length; i++)
+                var combo = combos[comboIndex];
+                for (var valueIndex = 0; valueIndex < values.Count; valueIndex++)
                 {
                     var extended = new KeyValuePair<string, string>[combo.Length + 1];
                     combo.CopyTo(extended, 0);
-                    extended[^1] = new(key, decodedValues[i]);
+                    var decodedValue = comboIndex == 0
+                        ? StringifyRawYaml(values[valueIndex])
+                        : next[valueIndex][^1].Value;
+                    extended[^1] = new(key, decodedValue);
                     next.Add(extended);
                 }
             }
@@ -717,7 +705,7 @@ public static class WorkflowFlowCollector
         return items;
     }
 
-    private static string[] DecodeNeeds(StringRefList list, JobRefMap jobs, string[] jobIds)
+    private static string[] DecodeNeeds(StringRefList list, JobRefMap jobMap, FlowJob[] jobs)
     {
         if (list.Count == 0)
         {
@@ -730,11 +718,11 @@ public static class WorkflowFlowCollector
             var need = list[i];
             var needBytes = need.Value;
             var canonical = false;
-            for (var jobIndex = 0; jobIndex < jobIds.Length; jobIndex++)
+            for (var jobIndex = 0; jobIndex < jobs.Length; jobIndex++)
             {
-                if (jobs.GetAt(jobIndex).Key.ValueEquals(needBytes))
+                if (jobMap.GetAt(jobIndex).Key.ValueEquals(needBytes))
                 {
-                    items[i] = jobIds[jobIndex];
+                    items[i] = jobs[jobIndex].Id;
                     canonical = true;
                     break;
                 }
