@@ -80,7 +80,11 @@ public sealed class PlaygroundFlowTabContractTests
         await Assert.That(js).Contains("from './flow-graph.js'");
         await Assert.That(js).Contains("captureFlowViewState");
         await Assert.That(js).Contains("preserveView");
+        await Assert.That(js).Contains("flowViewResetPending");
+        await Assert.That(js).Contains("pendingViewReset");
+        await Assert.That(js).Contains("resetView");
         await Assert.That(js).Contains("initialView");
+        await Assert.That(js).Contains("resetFlowView");
         await Assert.That(js).Contains("flowStructureSignature");
         await Assert.That(js).Contains("updateFlowGraphDiagnostics");
         await Assert.That(js).Contains("scheduleMermaidPreviewRender");
@@ -96,6 +100,7 @@ public sealed class PlaygroundFlowTabContractTests
         await Assert.That(js).Contains("function ensureLayout");
         await Assert.That(js).Contains("export function flowStructureSignature");
         await Assert.That(js).Contains("export function updateFlowGraphDiagnostics");
+        await Assert.That(js).Contains("refreshAllJobInnerSteps(state, d3, layout)");
         await Assert.That(js.Contains("computeAllLayouts", StringComparison.Ordinal)).IsFalse();
     }
 
@@ -142,8 +147,20 @@ public sealed class PlaygroundFlowTabContractTests
         await Assert.That(js).Contains("lodCompensatingScale");
         await Assert.That(js).Contains("scaleTransformAt");
         await Assert.That(js.Contains("WHEEL_LOD_STEP", StringComparison.Ordinal)).IsFalse();
+        await Assert.That(js.Contains("transitionLod", StringComparison.Ordinal)).IsFalse();
         await Assert.That(js.Contains("setLod", StringComparison.Ordinal)).IsFalse();
         await Assert.That(js).Contains("wireLodWheel");
+        await Assert.That(js).Contains("applyFlowZoomAt");
+        await Assert.That(js).Contains("zoomingIn");
+        await Assert.That(js).Contains("ensureFlowGraphInView");
+        await Assert.That(js).Contains("isFlowGraphInView");
+        await Assert.That(js).Contains("LOD0_SCALE_MIN");
+        await Assert.That(js).Contains("lod0ZoomFloor");
+        await Assert.That(js).Contains("layoutJobStepGraph");
+        await Assert.That(js).Contains("refreshJobInnerSteps");
+        await Assert.That(js).Contains("invalidateGraphLayoutCaches");
+        await Assert.That(js).Contains("drawJobStepGraph");
+        await Assert.That(js).Contains("anchorTransformForLodStep");
         await Assert.That(js).Contains("DISPLAY_SCALE_MIN");
         // Step frames and labels are paired; markers are a separate tspan hidden at lod1.
         await Assert.That(js).Contains("flow-step__label");

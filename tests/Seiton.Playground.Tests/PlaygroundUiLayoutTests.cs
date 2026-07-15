@@ -308,6 +308,67 @@ public sealed class PlaygroundUiLayoutTests
 
         await Assert.That(await page.Locator("#flow-graph .flow-job__diagbadge").TextContentAsync())
             .Contains("✖1");
+        await Assert.That(await page.Locator("#flow-graph .flow-step .flow-marker").CountAsync())
+            .IsGreaterThanOrEqualTo(1);
+    }
+
+    [Test]
+    public async Task FlowGraph_PendingViewReset_SameStructure_ForcesRerender()
+    {
+        var host = await PlaygroundUiTestHost.GetOrCreateAsync();
+        var browser = await PlaygroundUiBrowserSession.GetBrowserAsync();
+        await using var context = await browser.NewContextAsync();
+        var page = await context.NewPageAsync();
+        await GotoPlaygroundAndWaitForLinterGridAsync(page, $"{host.BaseUrl.TrimEnd('/')}/?seitonTestHooks=1");
+        await page.WaitForFunctionAsync(
+            "() => typeof globalThis.__SEITON_PLAYGROUND_TEST__?.renderFlowWithDiagnostics === 'function'",
+            arg: null,
+            new PageWaitForFunctionOptions { Timeout = 30_000 });
+
+        var jobsVisible = await page.EvaluateAsync<bool>(
+            """
+            () => {
+              const hooks = globalThis.__SEITON_PLAYGROUND_TEST__;
+              hooks.selectResultsTab('flow');
+              const flow = {
+                version: 1,
+                workflows: [{
+                  file: 'ci.yml',
+                  events: ['push'],
+                  jobs: [
+                    { id: 'build', kind: 'job', needs: [], reducedNeeds: [], runsOn: [], steps: [
+                      { id: 'checkout', kind: 'uses', line: 8, endLine: 8 },
+                      { id: 'test', kind: 'run', line: 9, endLine: 9 },
+                    ] },
+                    { id: 'verify-updater', kind: 'job', needs: [], reducedNeeds: [], runsOn: [], steps: [
+                      { id: 'validate', kind: 'run', line: 20, endLine: 20 },
+                    ] },
+                  ],
+                }],
+              };
+              hooks.renderFlowWithDiagnostics(flow, []);
+              const svg = document.querySelector('#flow-graph .flow-svg');
+              globalThis.d3.zoom().transform(
+                globalThis.d3.select(svg),
+                globalThis.d3.zoomIdentity.translate(-4000, -3000).scale(0.5),
+              );
+              hooks.resetFlowView();
+              hooks.renderFlowWithDiagnostics(flow, []);
+              const graph = document.querySelector('#flow-graph').getBoundingClientRect();
+              const jobs = [...document.querySelectorAll('#flow-graph .flow-job')];
+              if (jobs.length !== 2) return false;
+              const tolerance = 4;
+              return jobs.every((node) => {
+                const rect = node.getBoundingClientRect();
+                return rect.right >= graph.left - tolerance
+                  && rect.left <= graph.right + tolerance
+                  && rect.bottom >= graph.top - tolerance
+                  && rect.top <= graph.bottom + tolerance;
+              });
+            }
+            """);
+
+        await Assert.That(jobsVisible).IsTrue();
     }
 
     [Test]
@@ -349,13 +410,30 @@ public sealed class PlaygroundUiLayoutTests
             "() => globalThis.d3.zoomTransform(document.querySelector('#flow-graph .flow-svg')).k");
         await Assert.That(scaleBefore).IsLessThanOrEqualTo(0.5);
 
-        // Mobile fit often clamps k at DISPLAY_SCALE_MIN; zoom in first so zoom-out has headroom.
-        if (scaleBefore <= 0.5001)
+        // Zoom in until one toolbar zoom-out (×0.8) stays within the same LOD tier.
+        for (var i = 0; i < 12; i++)
         {
+            var safe = await page.EvaluateAsync<bool>(
+                """
+                () => {
+                  const svg = document.querySelector('#flow-graph .flow-svg');
+                  const k = globalThis.d3.zoomTransform(svg).k;
+                  const lod = svg.classList.contains('flow-svg--lod2') ? 2
+                    : svg.classList.contains('flow-svg--lod1') ? 1 : 0;
+                  const dropK = lod === 2 ? 0.86 : lod === 1 ? 0.78 : null;
+                  return dropK === null || k * 0.8 >= dropK + 0.01;
+                }
+                """);
+            if (safe)
+            {
+                break;
+            }
             await page.Locator("#flow-zoom-in-btn").ClickAsync();
-            scaleBefore = await page.EvaluateAsync<double>(
-                "() => globalThis.d3.zoomTransform(document.querySelector('#flow-graph .flow-svg')).k");
         }
+
+        scaleBefore = await page.EvaluateAsync<double>(
+            "() => globalThis.d3.zoomTransform(document.querySelector('#flow-graph .flow-svg')).k");
+        await Assert.That(scaleBefore).IsGreaterThan(0.5);
 
         await page.Locator("#flow-zoom-out-btn").ClickAsync();
         var scaleAfter = await page.EvaluateAsync<double>(
@@ -631,6 +709,441 @@ public sealed class PlaygroundUiLayoutTests
                         """);
 
         await Assert.That(edgeEndsAtGroupFrame).IsTrue();
+    }
+
+    [Test]
+    public async Task FlowGraph_StructuralRerender_ResetsViewAfterPan()
+    {
+        var host = await PlaygroundUiTestHost.GetOrCreateAsync();
+        var browser = await PlaygroundUiBrowserSession.GetBrowserAsync();
+        await using var context = await browser.NewContextAsync();
+        var page = await context.NewPageAsync();
+        await GotoPlaygroundAndWaitForLinterGridAsync(page, $"{host.BaseUrl.TrimEnd('/')}/?seitonTestHooks=1");
+        await page.WaitForFunctionAsync(
+            "() => typeof globalThis.__SEITON_PLAYGROUND_TEST__?.renderFlowWithDiagnostics === 'function'",
+            arg: null,
+            new PageWaitForFunctionOptions { Timeout = 30_000 });
+
+        var jobsVisible = await page.EvaluateAsync<bool>(
+            """
+            () => {
+              const hooks = globalThis.__SEITON_PLAYGROUND_TEST__;
+              hooks.selectResultsTab('flow');
+              hooks.renderFlowWithDiagnostics({
+                version: 1,
+                workflows: [{
+                  file: 'a.yml',
+                  events: ['push'],
+                  jobs: [
+                    { id: 'solo', kind: 'job', needs: [], reducedNeeds: [], runsOn: [], steps: [{ id: 's1', kind: 'run', line: 5, endLine: 5 }] },
+                  ],
+                }],
+              }, []);
+              const svg = document.querySelector('#flow-graph .flow-svg');
+              globalThis.d3.zoom().transform(globalThis.d3.select(svg), globalThis.d3.zoomIdentity.translate(-4000, -3000).scale(0.5));
+              hooks.resetFlowView();
+              hooks.renderFlowWithDiagnostics({
+                version: 1,
+                workflows: [{
+                  file: 'b.yml',
+                  events: ['push'],
+                  jobs: [
+                    { id: 'build', kind: 'job', needs: [], reducedNeeds: [], runsOn: [], steps: [{ id: 'checkout', kind: 'uses', line: 8, endLine: 8 }] },
+                    { id: 'verify-updater', kind: 'job', needs: [], reducedNeeds: [], runsOn: [], steps: [{ id: 'validate', kind: 'run', line: 20, endLine: 20 }] },
+                  ],
+                }],
+              }, []);
+              const graph = document.querySelector('#flow-graph').getBoundingClientRect();
+              const jobs = [...document.querySelectorAll('#flow-graph .flow-job')];
+              if (jobs.length !== 2) return false;
+              const tolerance = 4;
+              return jobs.every((node) => {
+                const rect = node.getBoundingClientRect();
+                return rect.right >= graph.left - tolerance
+                  && rect.left <= graph.right + tolerance
+                  && rect.bottom >= graph.top - tolerance
+                  && rect.top <= graph.bottom + tolerance;
+              });
+            }
+            """);
+
+        await Assert.That(jobsVisible).IsTrue();
+    }
+
+    [Test]
+    public async Task FlowGraph_StructuralEdit_PreservesPanWhileTyping()
+    {
+        var host = await PlaygroundUiTestHost.GetOrCreateAsync();
+        var browser = await PlaygroundUiBrowserSession.GetBrowserAsync();
+        await using var context = await browser.NewContextAsync();
+        var page = await context.NewPageAsync();
+        await GotoPlaygroundAndWaitForLinterGridAsync(page, $"{host.BaseUrl.TrimEnd('/')}/?seitonTestHooks=1");
+        await page.WaitForFunctionAsync(
+            "() => typeof globalThis.__SEITON_PLAYGROUND_TEST__?.renderFlowWithDiagnostics === 'function'",
+            arg: null,
+            new PageWaitForFunctionOptions { Timeout = 30_000 });
+
+        var panPreserved = await page.EvaluateAsync<bool>(
+            """
+            () => {
+              const hooks = globalThis.__SEITON_PLAYGROUND_TEST__;
+              hooks.selectResultsTab('flow');
+              const base = {
+                version: 1,
+                workflows: [{
+                  file: 'ci.yml',
+                  events: ['push'],
+                  jobs: [{
+                    id: 'build',
+                    kind: 'job',
+                    needs: [],
+                    reducedNeeds: [],
+                    runsOn: [],
+                    steps: [{ id: 'checkout', kind: 'uses', line: 8, endLine: 8 }],
+                  }],
+                }],
+              };
+              hooks.renderFlowWithDiagnostics(base, []);
+              const svg = document.querySelector('#flow-graph .flow-svg');
+              const pan = globalThis.d3.zoomIdentity.translate(120, 80).scale(1.1);
+              globalThis.d3.zoom().transform(globalThis.d3.select(svg), pan);
+              const edited = structuredClone(base);
+              edited.workflows[0].jobs.push({
+                id: 'verify-updater',
+                kind: 'job',
+                needs: [],
+                reducedNeeds: [],
+                runsOn: [],
+                steps: [{ id: 'validate', kind: 'run', line: 20, endLine: 20 }],
+              });
+              hooks.renderFlowWithDiagnostics(edited, []);
+              const after = globalThis.d3.zoomTransform(svg);
+              return Math.abs(after.x - pan.x) < 0.5
+                && Math.abs(after.y - pan.y) < 0.5
+                && Math.abs(after.k - pan.k) < 0.01;
+            }
+            """);
+
+        await Assert.That(panPreserved).IsTrue();
+    }
+
+    [Test]
+    public async Task FlowGraph_ZoomOutAtLod0_StaysAtLod0WithLimitedShrink()
+    {
+        var host = await PlaygroundUiTestHost.GetOrCreateAsync();
+        var browser = await PlaygroundUiBrowserSession.GetBrowserAsync();
+        await using var context = await browser.NewContextAsync();
+        var page = await context.NewPageAsync();
+        await GotoPlaygroundAndWaitForLinterGridAsync(page, $"{host.BaseUrl.TrimEnd('/')}/?seitonTestHooks=1");
+        await page.WaitForFunctionAsync(
+            "() => typeof globalThis.__SEITON_PLAYGROUND_TEST__?.renderFlow === 'function'",
+            arg: null,
+            new PageWaitForFunctionOptions { Timeout = 30_000 });
+
+        await page.EvaluateAsync(
+            """
+            () => {
+              const hooks = globalThis.__SEITON_PLAYGROUND_TEST__;
+              hooks.selectResultsTab('flow');
+              hooks.renderFlow({
+                version: 1,
+                workflows: [{
+                  file: 'ci.yml',
+                  events: ['push'],
+                  jobs: [
+                    { id: 'build', kind: 'job', needs: [], reducedNeeds: [], runsOn: [], steps: [
+                      { id: 'checkout', kind: 'uses', line: 8, endLine: 8 },
+                      { id: 'test', kind: 'run', line: 9, endLine: 9 },
+                    ] },
+                    { id: 'lint-a', kind: 'job', needs: ['build'], reducedNeeds: ['build'], runsOn: [], steps: [
+                      { id: 'lint', kind: 'run', line: 20, endLine: 20 },
+                    ] },
+                    { id: 'lint-b', kind: 'job', needs: ['build'], reducedNeeds: ['build'], runsOn: [], steps: [
+                      { id: 'lint', kind: 'run', line: 30, endLine: 30 },
+                    ] },
+                  ],
+                }],
+              });
+              const graph = document.querySelector('#flow-graph');
+              const rect = graph.getBoundingClientRect();
+              const cx = rect.left + rect.width / 2;
+              const cy = rect.top + rect.height / 2;
+              const svg = document.querySelector('#flow-graph .flow-svg');
+              svg.dispatchEvent(new WheelEvent('wheel', {
+                bubbles: true,
+                cancelable: true,
+                clientX: cx,
+                clientY: cy,
+                deltaY: 1_000,
+              }));
+            }
+            """);
+
+        await Assert.That(
+            await page.EvaluateAsync<bool>(
+                "() => document.querySelector('#flow-graph .flow-svg')?.classList.contains('flow-svg--lod0') ?? false"))
+            .IsTrue();
+
+        var kAtLod0 = await page.EvaluateAsync<double>(
+            "() => globalThis.d3.zoomTransform(document.querySelector('#flow-graph .flow-svg')).k");
+
+        await page.Locator("#flow-zoom-out-btn").ClickAsync();
+        await page.Locator("#flow-zoom-out-btn").ClickAsync();
+        await page.Locator("#flow-zoom-out-btn").ClickAsync();
+
+        var staysLod0 = await page.EvaluateAsync<bool>(
+            """
+            () => {
+              const svg = document.querySelector('#flow-graph .flow-svg');
+              const kAfter = globalThis.d3.zoomTransform(svg).k;
+              const graph = document.querySelector('#flow-graph').getBoundingClientRect();
+              const jobs = [...document.querySelectorAll('#flow-graph .flow-job')];
+              const tolerance = 6;
+              const visibleCount = jobs.filter((node) => {
+                const rect = node.getBoundingClientRect();
+                return rect.right >= graph.left - tolerance
+                  && rect.left <= graph.right + tolerance
+                  && rect.bottom >= graph.top - tolerance
+                  && rect.top <= graph.bottom + tolerance;
+              }).length;
+              return svg.classList.contains('flow-svg--lod0')
+                && visibleCount >= 2;
+            }
+            """);
+
+        await Assert.That(staysLod0).IsTrue();
+
+        var kAfter = await page.EvaluateAsync<double>(
+            "() => globalThis.d3.zoomTransform(document.querySelector('#flow-graph .flow-svg')).k");
+        await Assert.That(kAfter).IsGreaterThanOrEqualTo(kAtLod0 * 0.92);
+    }
+
+    [Test]
+    public async Task FlowGraph_Lod0RerenderThenZoomIn_ShowsStepFramesAfterMatrixEdit()
+    {
+        var host = await PlaygroundUiTestHost.GetOrCreateAsync();
+        var browser = await PlaygroundUiBrowserSession.GetBrowserAsync();
+        await using var context = await browser.NewContextAsync();
+        var page = await context.NewPageAsync();
+        await GotoPlaygroundAndWaitForLinterGridAsync(page, $"{host.BaseUrl.TrimEnd('/')}/?seitonTestHooks=1");
+        await page.WaitForFunctionAsync(
+            "() => typeof globalThis.__SEITON_PLAYGROUND_TEST__?.renderFlowWithDiagnostics === 'function'",
+            arg: null,
+            new PageWaitForFunctionOptions { Timeout = 30_000 });
+
+        var stepsVisible = await page.EvaluateAsync<string>(
+            """
+            () => {
+              const hooks = globalThis.__SEITON_PLAYGROUND_TEST__;
+              hooks.selectResultsTab('flow');
+              const matrixCombo = (os) => ({ os });
+              const flow = (combinations) => ({
+                version: 1,
+                workflows: [{
+                  file: 'release.yaml',
+                  events: ['push'],
+                  jobs: [
+                    {
+                      id: 'validate',
+                      kind: 'job',
+                      needs: [],
+                      reducedNeeds: [],
+                      runsOn: [],
+                      steps: [{ id: 'build', kind: 'run', line: 20, endLine: 20 }],
+                    },
+                    {
+                      id: 'publish',
+                      kind: 'job',
+                      needs: ['validate'],
+                      reducedNeeds: ['validate'],
+                      runsOn: [],
+                      strategy: { hasMatrix: true, combinations },
+                      steps: [
+                        { id: 'checkout', kind: 'uses', line: 40, endLine: 40 },
+                        { id: 'publish', kind: 'run', line: 41, endLine: 41 },
+                      ],
+                    },
+                  ],
+                }],
+              });
+              const wheel = (deltaY, count) => {
+                const graph = document.querySelector('#flow-graph');
+                const rect = graph.getBoundingClientRect();
+                const cx = rect.left + rect.width / 2;
+                const cy = rect.top + rect.height / 2;
+                const svg = document.querySelector('#flow-graph .flow-svg');
+                for (let i = 0; i < count; i++) {
+                  svg.dispatchEvent(new WheelEvent('wheel', {
+                    bubbles: true,
+                    cancelable: true,
+                    clientX: cx,
+                    clientY: cy,
+                    deltaY,
+                  }));
+                }
+                return svg;
+              };
+              hooks.renderFlowWithDiagnostics(flow([
+                matrixCombo('linux-x64'),
+                matrixCombo('linux-arm64'),
+                matrixCombo('win-x64'),
+              ]), []);
+              wheel(1_000, 1);
+              let svg = document.querySelector('#flow-graph .flow-svg');
+              if (!svg?.classList.contains('flow-svg--lod0')) return 'not-lod0-initial';
+              hooks.renderFlowWithDiagnostics(flow([
+                matrixCombo('linux-x64'),
+                matrixCombo('linux-arm64'),
+              ]), []);
+              svg = document.querySelector('#flow-graph .flow-svg');
+              if (!svg?.classList.contains('flow-svg--lod0')) return 'not-lod0-after-edit';
+              wheel(-1_000, 12);
+              svg = document.querySelector('#flow-graph .flow-svg');
+              const lod = svg.classList.contains('flow-svg--lod2') ? 2
+                : svg.classList.contains('flow-svg--lod1') ? 1
+                : 0;
+              if (lod === 0) return 'lod0-after-zoom-in';
+              const steps = [...document.querySelectorAll('#flow-graph .flow-step-node')];
+              if (steps.length < 2) return 'few-steps';
+              for (const inner of document.querySelectorAll('#flow-graph .flow-job__inner')) {
+                const jobSteps = [...inner.querySelectorAll('.flow-step-node')];
+                const ys = jobSteps.map((el) => Number(el.getAttribute('y')));
+                if (new Set(ys).size !== ys.length) return 'overlap-within-job';
+              }
+              return 'ok';
+            }
+            """);
+
+        await Assert.That(stepsVisible).IsEqualTo("ok");
+    }
+
+    [Test]
+    public async Task FlowGraph_RepeatedWheelZoom_KeepsJobsOnScreen()
+    {
+        var host = await PlaygroundUiTestHost.GetOrCreateAsync();
+        var browser = await PlaygroundUiBrowserSession.GetBrowserAsync();
+        await using var context = await browser.NewContextAsync();
+        var page = await context.NewPageAsync();
+        await GotoPlaygroundAndWaitForLinterGridAsync(page, $"{host.BaseUrl.TrimEnd('/')}/?seitonTestHooks=1");
+        await page.WaitForFunctionAsync(
+            "() => typeof globalThis.__SEITON_PLAYGROUND_TEST__?.renderFlow === 'function'",
+            arg: null,
+            new PageWaitForFunctionOptions { Timeout = 30_000 });
+
+        var jobsVisible = await page.EvaluateAsync<bool>(
+            """
+            () => {
+              const hooks = globalThis.__SEITON_PLAYGROUND_TEST__;
+              hooks.selectResultsTab('flow');
+              hooks.renderFlow({
+                version: 1,
+                workflows: [{
+                  file: 'ci.yml',
+                  events: ['push'],
+                  jobs: [
+                    { id: 'build', kind: 'job', needs: [], reducedNeeds: [], runsOn: [], steps: [
+                      { id: 'checkout', kind: 'uses', line: 8, endLine: 8 },
+                      { id: 'test', kind: 'run', line: 9, endLine: 9 },
+                    ] },
+                    { id: 'verify-updater', kind: 'job', needs: [], reducedNeeds: [], runsOn: [], steps: [
+                      { id: 'validate', kind: 'run', line: 20, endLine: 20 },
+                    ] },
+                  ],
+                }],
+              });
+              const svg = document.querySelector('#flow-graph .flow-svg');
+              for (let i = 0; i < 40; i++) {
+                svg.dispatchEvent(new WheelEvent('wheel', {
+                  bubbles: true,
+                  cancelable: true,
+                  clientX: 120,
+                  clientY: 120,
+                  deltaY: i % 2 === 0 ? 120 : -80,
+                }));
+              }
+              const graph = document.querySelector('#flow-graph').getBoundingClientRect();
+              const jobs = [...document.querySelectorAll('#flow-graph .flow-job')];
+              if (jobs.length !== 2) return false;
+              const tolerance = 6;
+              return jobs.every((node) => {
+                const rect = node.getBoundingClientRect();
+                return rect.right >= graph.left - tolerance
+                  && rect.left <= graph.right + tolerance
+                  && rect.bottom >= graph.top - tolerance
+                  && rect.top <= graph.bottom + tolerance;
+              });
+            }
+            """);
+
+        await Assert.That(jobsVisible).IsTrue();
+    }
+
+    [Test]
+    public async Task FlowGraph_ToolbarZoomIn_AtLod0_SyncsLodWithStepsVisible()
+    {
+        var host = await PlaygroundUiTestHost.GetOrCreateAsync();
+        var browser = await PlaygroundUiBrowserSession.GetBrowserAsync();
+        await using var context = await browser.NewContextAsync();
+        var page = await context.NewPageAsync();
+        await GotoPlaygroundAndWaitForLinterGridAsync(page, $"{host.BaseUrl.TrimEnd('/')}/?seitonTestHooks=1");
+        await page.WaitForFunctionAsync(
+            "() => typeof globalThis.__SEITON_PLAYGROUND_TEST__?.renderFlow === 'function'",
+            arg: null,
+            new PageWaitForFunctionOptions { Timeout = 30_000 });
+
+        await page.EvaluateAsync(
+            """
+            () => {
+              const hooks = globalThis.__SEITON_PLAYGROUND_TEST__;
+              hooks.selectResultsTab('flow');
+              hooks.renderFlow({
+                version: 1,
+                workflows: [{
+                  file: 'ci.yml',
+                  events: ['push'],
+                  jobs: [{
+                    id: 'build',
+                    kind: 'job',
+                    needs: [],
+                    reducedNeeds: [],
+                    runsOn: [],
+                    steps: [
+                      { id: 'checkout', kind: 'uses', line: 8, endLine: 8 },
+                      { id: 'test', kind: 'run', line: 9, endLine: 9 },
+                    ],
+                  }],
+                }],
+              });
+              const svg = document.querySelector('#flow-graph .flow-svg');
+              for (let i = 0; i < 12; i++) {
+                svg.dispatchEvent(new WheelEvent('wheel', {
+                  bubbles: true,
+                  cancelable: true,
+                  clientX: 100,
+                  clientY: 100,
+                  deltaY: 200,
+                }));
+              }
+            }
+            """);
+
+        await page.Locator("#flow-zoom-in-btn").ClickAsync();
+        await page.Locator("#flow-zoom-in-btn").ClickAsync();
+        await page.Locator("#flow-zoom-in-btn").ClickAsync();
+
+        var lodSynced = await page.EvaluateAsync<bool>(
+            """
+            () => {
+              const svg = document.querySelector('#flow-graph .flow-svg');
+              const inner = document.querySelector('#flow-graph .flow-job__inner');
+              if (!svg || !inner) return false;
+              const lod0 = svg.classList.contains('flow-svg--lod0');
+              const innerVisible = inner.getBoundingClientRect().width > 0;
+              return !lod0 && innerVisible;
+            }
+            """);
+
+        await Assert.That(lodSynced).IsTrue();
     }
 
     [Test]
