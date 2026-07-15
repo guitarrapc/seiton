@@ -822,6 +822,98 @@ public sealed class PlaygroundUiLayoutTests
     }
 
     [Test]
+    public async Task FlowGraph_Lod0RerenderThenZoomIn_ShowsStepFramesAfterMatrixEdit()
+    {
+        var host = await PlaygroundUiTestHost.GetOrCreateAsync();
+        var browser = await PlaygroundUiBrowserSession.GetBrowserAsync();
+        await using var context = await browser.NewContextAsync();
+        var page = await context.NewPageAsync();
+        await GotoPlaygroundAndWaitForLinterGridAsync(page, $"{host.BaseUrl.TrimEnd('/')}/?seitonTestHooks=1");
+        await page.WaitForFunctionAsync(
+            "() => typeof globalThis.__SEITON_PLAYGROUND_TEST__?.renderFlowWithDiagnostics === 'function'",
+            arg: null,
+            new PageWaitForFunctionOptions { Timeout = 30_000 });
+
+        var stepsVisible = await page.EvaluateAsync<bool>(
+            """
+            () => {
+              const hooks = globalThis.__SEITON_PLAYGROUND_TEST__;
+              hooks.selectResultsTab('flow');
+              const matrixCombo = (os) => ({ os });
+              const flow = (combinations) => ({
+                version: 1,
+                workflows: [{
+                  file: 'release.yaml',
+                  events: ['push'],
+                  jobs: [
+                    {
+                      id: 'validate',
+                      kind: 'job',
+                      needs: [],
+                      reducedNeeds: [],
+                      runsOn: [],
+                      steps: [{ id: 'build', kind: 'run', line: 20, endLine: 20 }],
+                    },
+                    {
+                      id: 'publish',
+                      kind: 'job',
+                      needs: ['validate'],
+                      reducedNeeds: ['validate'],
+                      runsOn: [],
+                      strategy: { hasMatrix: true, combinations },
+                      steps: [
+                        { id: 'checkout', kind: 'uses', line: 40, endLine: 40 },
+                        { id: 'publish', kind: 'run', line: 41, endLine: 41 },
+                      ],
+                    },
+                  ],
+                }],
+              });
+              hooks.renderFlowWithDiagnostics(flow([
+                matrixCombo('linux-x64'),
+                matrixCombo('linux-arm64'),
+                matrixCombo('win-x64'),
+              ]), []);
+              const svg = document.querySelector('#flow-graph .flow-svg');
+              for (let i = 0; i < 36; i++) {
+                svg.dispatchEvent(new WheelEvent('wheel', {
+                  bubbles: true,
+                  cancelable: true,
+                  clientX: 120,
+                  clientY: 120,
+                  deltaY: 500,
+                }));
+              }
+              if (!svg.classList.contains('flow-svg--lod0')) return false;
+              hooks.renderFlowWithDiagnostics(flow([
+                matrixCombo('linux-x64'),
+                matrixCombo('linux-arm64'),
+              ]), []);
+              if (!svg.classList.contains('flow-svg--lod0')) return false;
+              for (let i = 0; i < 24; i++) {
+                svg.dispatchEvent(new WheelEvent('wheel', {
+                  bubbles: true,
+                  cancelable: true,
+                  clientX: 120,
+                  clientY: 120,
+                  deltaY: -400,
+                }));
+              }
+              const lod = svg.classList.contains('flow-svg--lod2') ? 2
+                : svg.classList.contains('flow-svg--lod1') ? 1
+                : 0;
+              if (lod === 0) return false;
+              const steps = [...document.querySelectorAll('#flow-graph .flow-step-node')];
+              if (steps.length < 2) return false;
+              const ys = steps.map((el) => Number(el.getAttribute('y')));
+              return new Set(ys).size === ys.length;
+            }
+            """);
+
+        await Assert.That(stepsVisible).IsTrue();
+    }
+
+    [Test]
     public async Task FlowGraph_RepeatedWheelZoom_KeepsJobsOnScreen()
     {
         var host = await PlaygroundUiTestHost.GetOrCreateAsync();

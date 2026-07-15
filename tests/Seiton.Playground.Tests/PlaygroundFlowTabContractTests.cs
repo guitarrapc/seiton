@@ -154,6 +154,10 @@ public sealed class PlaygroundFlowTabContractTests
         await Assert.That(js).Contains("isFlowGraphInView");
         await Assert.That(js).Contains("LOD0_SCALE_MIN");
         await Assert.That(js).Contains("lod0ZoomFloor");
+        await Assert.That(js).Contains("layoutJobStepGraph");
+        await Assert.That(js).Contains("refreshJobInnerSteps");
+        await Assert.That(js).Contains("invalidateGraphLayoutCaches");
+        await Assert.That(js).Contains("drawJobStepGraph");
         await Assert.That(js).Contains("anchorTransformForLodStep");
         await Assert.That(js).Contains("DISPLAY_SCALE_MIN");
         // Step frames and labels are paired; markers are a separate tspan hidden at lod1.

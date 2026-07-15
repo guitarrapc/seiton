@@ -111,6 +111,8 @@ export function renderFlowGraph(container, workflow, { onSelect, diagnostics, on
     diagnostics: diagnostics ?? [],
     container,
     lod0ZoomFloor: undefined,
+    select: null,
+    diagMap: null,
   };
   const diagMap = mapDiagnostics(jobs, diagnostics ?? []);
 
@@ -138,11 +140,20 @@ export function renderFlowGraph(container, workflow, { onSelect, diagnostics, on
     group.classed('flow-node--selected', true);
     onSelect?.({ ...info, diagnostics: diagnosticsForNode(info.data, graphState.diagnostics) });
   };
+  graphState.select = select;
+  graphState.diagMap = diagMap;
 
   drawJobEdges(d3, edgeLayer, jobs, initialLayout.layout, graphState.groupedMembers, graphState);
   for (const job of jobs) {
     const id = jobKey(job.id);
-    const node = drawJobNode(d3, nodeLayer, job, initialLayout.layout.get(id), select, diagMap);
+    const node = drawJobNode(
+      d3,
+      nodeLayer,
+      job,
+      initialLayout.layout.get(id),
+      select,
+      diagMap,
+    );
     graphState.jobNodes.set(id, node);
   }
 
@@ -526,6 +537,71 @@ function applyGraphLayout(state, lod, d3) {
 
   updateNeedsGroupFrames(state, groups, layout);
   updateEdgePaths(state, d3, layout);
+  if (lod >= 1) {
+    refreshAllJobInnerSteps(state, d3, layout);
+  }
+}
+
+function invalidateGraphLayoutCaches(state) {
+  state.layouts = [];
+  state.stepGraphCache.clear();
+}
+
+function getJobStepGraph(job, stepGraphCache) {
+  if (!job?.steps?.length) {
+    return null;
+  }
+  let graph = stepGraphCache.get(job);
+  if (!graph) {
+    graph = buildStepGraph(job.steps ?? []);
+    stepGraphCache.set(job, graph);
+  }
+  return graph;
+}
+
+/** Returns the intra-job flow graph with layout coordinates applied. */
+function layoutJobStepGraph(job, stepGraphCache) {
+  const graph = getJobStepGraph(job, stepGraphCache);
+  if (!graph) {
+    return null;
+  }
+  layoutStepGraph(graph, LOD2_PROFILE);
+  return graph;
+}
+
+function drawJobStepGraph(d3, inner, graph, select, diagMap) {
+  drawStepEdges(d3, inner, graph);
+  for (const stepNode of graph.nodes) {
+    if (stepNode.kind === 'parallel') {
+      drawParallelNode(inner, stepNode, select, diagMap);
+    } else {
+      drawStepNode(inner, stepNode, select, diagMap);
+    }
+  }
+}
+
+/** Rebuilds intra-job step SVG for the active lod1/lod2 layout (clear + draw). */
+function refreshJobInnerSteps(state, d3, job, node, pos) {
+  if (!state.select || !state.diagMap) {
+    return;
+  }
+  const graph = pos.graph ?? layoutJobStepGraph(job, state.stepGraphCache);
+  if (!graph) {
+    node.inner.selectAll('*').remove();
+    return;
+  }
+  node.inner.selectAll('*').remove();
+  drawJobStepGraph(d3, node.inner, graph, state.select, state.diagMap);
+}
+
+function refreshAllJobInnerSteps(state, d3, layout) {
+  for (const [id, node] of state.jobNodes) {
+    const job = state.jobsById.get(id);
+    const pos = layout.get(id);
+    if (job && pos) {
+      refreshJobInnerSteps(state, d3, job, node, pos);
+    }
+  }
 }
 
 /** Keeps the job title and diagnostic badge inside the card after LOD resizes. */
@@ -1237,15 +1313,9 @@ function drawJobNode(d3, layer, job, pos, select, diagMap) {
     .attr('class', 'flow-job__inner')
     .attr('transform', `translate(${JOB_PAD},${pos.headerH + JOB_PAD})`);
 
+  // Step frames are drawn when lod1/lod2 layout is active (see refreshJobInnerSteps).
   if (pos.graph) {
-    drawStepEdges(d3, inner, pos.graph);
-    for (const node of pos.graph.nodes) {
-      if (node.kind === 'parallel') {
-        drawParallelNode(inner, node, select, diagMap);
-      } else {
-        drawStepNode(inner, node, select, diagMap);
-      }
-    }
+    drawJobStepGraph(d3, inner, pos.graph, select, diagMap);
   }
 
   const box = g.select('.flow-job__box');
@@ -1608,6 +1678,8 @@ export function updateFlowGraphDiagnostics(container, workflow, diagnostics) {
   state.jobs = workflow.jobs;
   state.jobsById = new Map(workflow.jobs.map((job) => [jobKey(job.id), job]));
   state.diagnostics = diagnostics ?? [];
+  state.diagMap = diagMap;
+  invalidateGraphLayoutCaches(state);
   const layout = ensureLayout(state, state.currentLod).layout;
   for (const [id, node] of state.jobNodes) {
     const job = state.jobsById.get(id);
