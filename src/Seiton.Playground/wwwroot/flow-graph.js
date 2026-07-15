@@ -159,6 +159,9 @@ export function renderFlowGraph(container, workflow, { onSelect, diagnostics, on
   const fit = () => fitToView(d3, svg, zoom, graphState, container);
   if (initialView && Number.isFinite(initialView.k)) {
     applySavedFlowView(d3, svg, zoom, graphState, initialView);
+    if (!isFlowGraphInView(d3, svg, graphState, container)) {
+      fit();
+    }
   } else {
     fit();
   }
@@ -177,14 +180,13 @@ export function renderFlowGraph(container, workflow, { onSelect, diagnostics, on
   resizeObserver?.observe(container);
 
   onZoomReady?.({
-    zoomIn: () => svg.call(zoom.scaleBy, 1.25),
+    zoomIn: () => {
+      const current = d3.zoomTransform(svg.node());
+      applyFlowZoomAt(svg, zoom, graphState, d3, current.k * 1.25, null);
+    },
     zoomOut: () => {
       const current = d3.zoomTransform(svg.node());
-      const nextK = current.k * 0.8;
-      const k = current.k >= DISPLAY_SCALE_MIN
-        ? Math.max(DISPLAY_SCALE_MIN, nextK)
-        : Math.max(FIT_SCALE_MIN, nextK);
-      svg.call(zoom.transform, d3.zoomIdentity.translate(current.x, current.y).scale(k));
+      applyFlowZoomAt(svg, zoom, graphState, d3, current.k * 0.8, null, { allowFitScale: true });
     },
     reset: fit,
     dispose: () => {
@@ -208,9 +210,13 @@ export function captureFlowViewState(container) {
   if (!svg || !d3) return null;
   const t = d3.zoomTransform(svg);
   if (!Number.isFinite(t.k)) return null;
-  let lod = 2;
-  if (svg.classList.contains('flow-svg--lod0')) lod = 0;
-  else if (svg.classList.contains('flow-svg--lod1')) lod = 1;
+  const graphState = container.__seitonFlowGraphState;
+  let lod = graphState?.currentLod;
+  if (!Number.isFinite(lod)) {
+    lod = 2;
+    if (svg.classList.contains('flow-svg--lod0')) lod = 0;
+    else if (svg.classList.contains('flow-svg--lod1')) lod = 1;
+  }
   return { k: t.k, x: t.x, y: t.y, lod };
 }
 
@@ -346,6 +352,10 @@ function clampDisplayScale(k) {
   return Math.max(DISPLAY_SCALE_MIN, Math.min(DISPLAY_SCALE_MAX, k));
 }
 
+function clampToolbarZoomScale(k) {
+  return Math.max(FIT_SCALE_MIN, Math.min(DISPLAY_SCALE_MAX, k));
+}
+
 /** Zoom transform that keeps `pointer` (svg-local px) fixed on screen. */
 function scaleTransformAt(d3, transform, newK, pointer) {
   const [px, py] = pointer;
@@ -354,12 +364,57 @@ function scaleTransformAt(d3, transform, newK, pointer) {
   return d3.zoomIdentity.translate(tx, ty).scale(newK);
 }
 
-/** Applies layout + class for `lod` and returns the compensating scale factor from `prevLod`. */
-function transitionLod(svg, state, d3, prevLod, lod) {
-  const compensate = lodCompensatingScale(prevLod, lod, state);
-  applyGraphLayout(state, lod, d3);
-  svg.attr('class', `flow-svg ${LOD_CLASSES[lod]}`);
-  return compensate;
+function defaultFlowPointer(svg) {
+  const node = svg.node();
+  return [node.clientWidth / 2, node.clientHeight / 2];
+}
+
+function layoutBoundsCenter(bounds) {
+  return { x: bounds.x + bounds.width / 2, y: bounds.y + bounds.height / 2 };
+}
+
+/** Keeps the graph bounds center fixed on screen when LOD layout geometry changes. */
+function anchorTransformForLodStep(d3, state, prevLod, nextLod, transform) {
+  const prevLayout = ensureLayout(state, prevLod);
+  const prevCenter = layoutBoundsCenter(
+    layoutBounds(prevLayout.layout, prevLayout.groups, state.jobsById),
+  );
+  const [screenX, screenY] = transform.apply([prevCenter.x, prevCenter.y]);
+  const nextLayout = ensureLayout(state, nextLod);
+  const nextCenter = layoutBoundsCenter(
+    layoutBounds(nextLayout.layout, nextLayout.groups, state.jobsById),
+  );
+  const k = transform.k;
+  return d3.zoomIdentity
+    .translate(screenX - nextCenter.x * k, screenY - nextCenter.y * k)
+    .scale(k);
+}
+
+/**
+ * Applies target scale at `pointer` with one-tier LOD steps and layout anchoring.
+ * @param {{ allowFitScale?: boolean }} [options] toolbar zoom-out may go below DISPLAY_SCALE_MIN.
+ */
+function applyFlowZoomAt(svg, zoom, state, d3, targetK, pointer, { allowFitScale = false } = {}) {
+  const clampK = allowFitScale ? clampToolbarZoomScale : clampDisplayScale;
+  let k = clampK(targetK);
+  let transform = d3.zoomTransform(svg.node());
+  const pt = pointer ?? defaultFlowPointer(svg);
+
+  let lod = state.currentLod;
+  // Evaluate the target tier once from the requested scale. Re-checking after each
+  // compensation step can oscillate across hysteresis bands (lod0↔lod1) and hang.
+  const targetLod = lodForScale(lod, k);
+  while (lod !== targetLod) {
+    const step = lod < targetLod ? lod + 1 : lod - 1;
+    k = clampK(k * lodCompensatingScale(lod, step, state));
+    transform = anchorTransformForLodStep(d3, state, lod, step, transform);
+    applyGraphLayout(state, step, d3);
+    svg.attr('class', `flow-svg ${LOD_CLASSES[step]}`);
+    lod = step;
+  }
+
+  k = clampK(k);
+  svg.call(zoom.transform, scaleTransformAt(d3, transform, k, pt));
 }
 
 /** Target LOD after zooming to `k`, using hysteresis thresholds. */
@@ -385,16 +440,7 @@ function wireLodWheel(svg, zoom, state, d3) {
     const pointer = d3.pointer(event, svg.node());
     const current = d3.zoomTransform(svg.node());
     const factor = Math.exp(-event.deltaY * WHEEL_ZOOM_SENS);
-    let k = clampDisplayScale(current.k * factor);
-
-    let lod = state.currentLod;
-    const targetLod = lodForScale(lod, k);
-    if (targetLod !== lod) {
-      k = clampDisplayScale(k * transitionLod(svg, state, d3, lod, targetLod));
-      lod = targetLod;
-    }
-
-    svg.call(zoom.transform, scaleTransformAt(d3, current, k, pointer));
+    applyFlowZoomAt(svg, zoom, state, d3, current.k * factor, pointer);
   };
   const node = svg.node();
   node?.addEventListener('wheel', handler, { passive: false });
@@ -1335,6 +1381,25 @@ function firstLine(text) {
 function truncate(text, max) {
   if (!text) return '';
   return text.length <= max ? text : `${text.slice(0, Math.max(1, max - 1))}…`;
+}
+
+/** True when the graph bounds intersect the container viewport (with margin). */
+function isFlowGraphInView(d3, svg, state, container) {
+  const lod = state.currentLod;
+  const { layout, groups } = ensureLayout(state, lod);
+  const bounds = layoutBounds(layout, groups, state.jobsById);
+  if (bounds.width <= 0 || bounds.height <= 0) {
+    return false;
+  }
+  const t = d3.zoomTransform(svg.node());
+  const cw = container.clientWidth || 600;
+  const ch = container.clientHeight || 480;
+  const margin = 48;
+  const x0 = bounds.x * t.k + t.x;
+  const y0 = bounds.y * t.k + t.y;
+  const x1 = (bounds.x + bounds.width) * t.k + t.x;
+  const y1 = (bounds.y + bounds.height) * t.k + t.y;
+  return x1 >= -margin && x0 <= cw + margin && y1 >= -margin && y0 <= ch + margin;
 }
 
 /** Restores a previously captured pan/zoom/LOD after graph re-render. */

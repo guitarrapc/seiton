@@ -746,6 +746,8 @@ const MERMAID_PREVIEW_DEBOUNCE_MS = 200;
 let lastDiagnostics = [];
 let lastFlowDiagnostics = null;
 let lastRenderedFlowSignature = '';
+/** When true, the next flow render fits/resets instead of restoring pan/zoom (URL fetch, sample swap, …). */
+let flowViewResetPending = false;
 let flowZoomController = null;
 
 function selectResultsTab(tab) {
@@ -1262,10 +1264,12 @@ mermaidCopyBtn.addEventListener('click', async () => {
 /**
  * Renders a flow-json document into the flow panel (graph, empty notice, detail reset).
  * @param {{ version: number, workflows: object[], error?: string }} flowDoc
- * @param {{ preserveView?: boolean }} [options]
+ * @param {{ preserveView?: boolean, resetView?: boolean }} [options]
  */
-function renderFlow(flowDoc, { preserveView = false } = {}) {
-  const initialView = preserveView ? captureFlowViewState(flowGraphEl) : null;
+function renderFlow(flowDoc, { preserveView = false, resetView = false } = {}) {
+  if (resetView) {
+    flowViewResetPending = true;
+  }
   hideFlowDetail();
   const workflow = flowDoc?.workflows?.[0] ?? null;
   const signature = flowStructureSignature(workflow);
@@ -1274,6 +1278,13 @@ function renderFlow(flowDoc, { preserveView = false } = {}) {
     && signature === lastRenderedFlowSignature
     && flowGraphEl.querySelector('.flow-svg'),
   );
+  const shouldPreserveView = preserveView
+    && !flowViewResetPending
+    && flowGraphEl.querySelector('.flow-svg');
+  const initialView = shouldPreserveView ? captureFlowViewState(flowGraphEl) : null;
+  if (flowViewResetPending) {
+    flowViewResetPending = false;
+  }
   flowNodeStartLines = collectFlowStartLines(workflow);
   if (diagOnly) {
     updateFlowGraphDiagnostics(flowGraphEl, workflow, lastDiagnostics);
@@ -1525,6 +1536,7 @@ fileSelect.addEventListener('change', () => {
   // filePath changed — invalidate so lint runs even if source is the same.
   lastLintedSource = '';
   lastLintedFilePath = '';
+  flowViewResetPending = true;
   runLint();
 });
 
@@ -1543,6 +1555,7 @@ sampleSelect.addEventListener('change', () => {
   editor.refresh();
   lastLintedSource = '';
   lastLintedFilePath = '';
+  flowViewResetPending = true;
   runLint();
 });
 
@@ -1788,6 +1801,7 @@ async function fetchAndLint() {
     editor.refresh();
     lastLintedSource = '';
     lastLintedFilePath = '';
+    flowViewResetPending = true;
     runLint();
     // Skip the success toast when the runtime died inside runLint() — the crash
     // message is already visible and a "Loaded YAML" toast would be misleading.
@@ -2316,9 +2330,12 @@ function installTestHooksIfRequested() {
       setMermaidPreviewMode: (preview) => setMermaidPreviewMode(Boolean(preview)),
       isMermaidPreviewActive: () => mermaidPreviewActive,
       renderFlow: (flowDoc) => renderFlow(flowDoc ?? { version: 1, workflows: [] }),
-      renderFlowWithDiagnostics: (flowDoc, diagnostics) => {
+      resetFlowView: () => {
+        flowViewResetPending = true;
+      },
+      renderFlowWithDiagnostics: (flowDoc, diagnostics, options) => {
         lastDiagnostics = diagnostics ?? [];
-        renderFlow(flowDoc ?? { version: 1, workflows: [] }, { preserveView: true });
+        renderFlow(flowDoc ?? { version: 1, workflows: [] }, { preserveView: true, ...options });
       },
     };
   } catch {
