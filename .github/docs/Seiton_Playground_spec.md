@@ -115,7 +115,7 @@ Non-functional requirement:
 
 `GetFlowJson` returns the **flow-json contract** — the same machine-readable workflow-structure document as `seiton check --format flow-json` (see `Seiton_CLI_spec.md` §6.6). It remains available as an independent API for explicit Flow requests. The interactive Flow tab instead calls `RunLintWithFlowJson`, so diagnostics and flow come from one parse. Likewise, the Mermaid tab calls `RunLintWithMermaid`.
 
-- **WHY shared contract**: parsing YAML separately in the UI would create interpretation drift between lint and visualization; both CLI and Playground build the flow from the same parsed AST via `WorkflowFlowCollector` in Seiton.Core.
+- **WHY shared contract**: parsing YAML separately in the UI would create interpretation drift between lint and visualization. Both CLI and Playground derive the same Seiton.Core flow contract from the parsed AST; the memory-constrained Playground serializes the live UTF-8 AST directly so it does not need an additional owned flow object graph.
 - Non-workflow documents (e.g. `action.yml`) yield an empty `workflows` array; the Flow tab shows an empty-state notice.
 - The Flow-only API caches by YAML content hash and path. Interactive tab calls do not issue a second Flow interop request after linting.
 - The UI records its flow staleness key only after a non-error response can be rendered; backend errors and unavailable graph dependencies remain retryable without editing the YAML.

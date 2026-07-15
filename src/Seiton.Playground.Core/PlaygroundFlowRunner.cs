@@ -1,4 +1,3 @@
-using Seiton.Core.Flow;
 using Seiton.Core.Parsing;
 
 namespace Seiton.Playground;
@@ -45,15 +44,6 @@ public static class PlaygroundFlowRunner
         return EnsureOutputs(yamlSource, filePath).Mermaid;
     }
 
-    /// <summary>
-    /// Stores flow outputs produced during a combined lint+flow parse in
-    /// <see cref="PlaygroundLintRunner"/>.
-    /// </summary>
-    internal static void StoreFlowFromLint(ulong yamlHash, string filePath, WorkflowFlow? flow)
-    {
-        _ = PlaygroundFlowOutputCache.Store(yamlHash, filePath, flow);
-    }
-
     private static (byte[] Json, byte[] Mermaid) EnsureOutputs(string yamlSource, string filePath)
     {
         ArgumentNullException.ThrowIfNull(yamlSource);
@@ -68,8 +58,7 @@ public static class PlaygroundFlowRunner
             }
 
             using var parseResult = WorkflowParser.Parse(utf8Yaml, filePath);
-            var flow = WorkflowFlowCollector.Collect(parseResult, filePath);
-            return PlaygroundFlowOutputCache.Store(yamlHash, filePath, flow);
+            return PlaygroundFlowOutputCache.Store(yamlHash, filePath, parseResult.Workflow);
         }
     }
 }

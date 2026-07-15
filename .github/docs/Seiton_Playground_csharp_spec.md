@@ -164,6 +164,7 @@ Key implementation details:
 - **Identity-based short circuit**: If `yamlSource` (by reference) and `filePath` are identical to the last call, returns cached JSON output immediately.
 - **Byte-level cache reuse**: When serialized JSON bytes are content-equal to the previous result, the prior `byte[]` instance is reused (avoids allocation for unchanged output).
 - **Diagnostic lifetime invariant**: `DiagnosticList`/`ReadOnlySpan<Diagnostic>` values are consumed while the owning `LintResult`/`AstArena` is still alive. `RunToJsonUtf8` serializes diagnostics before those owners are disposed. Workflow path uses `using var lintResult = Engine.Check(...)`; action metadata uses `LintActionMetadataToJsonUtf8` (`try`/`finally` around arena disposal).
+- **Flow lifetime invariant**: Flow JSON and Mermaid output are serialized from the live UTF-8 workflow AST before its `ParseResult` is disposed. The Playground does not materialize the owned `WorkflowFlow` DTO graph, keeping flow generation allocation-free after reusable buffers and pools are warm.
 
 ### 2.1.1 Config Content-Hash Caching
 

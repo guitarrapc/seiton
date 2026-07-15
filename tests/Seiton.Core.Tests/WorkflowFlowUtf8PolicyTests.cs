@@ -30,6 +30,27 @@ public sealed class WorkflowFlowUtf8PolicyTests
         await Assert.That(violations).IsEmpty();
     }
 
+    [Test]
+    public async Task LiveAstWriters_ShouldNotMaterializeOwnedDto()
+    {
+        var root = FindRepoRoot();
+        var flowDir = Path.Combine(root, "src", "Seiton.Core", "Flow");
+        var files = new[]
+        {
+            Path.Combine(flowDir, "WorkflowFlowJson.Ast.cs"),
+            Path.Combine(flowDir, "WorkflowFlowMermaid.Ast.cs"),
+        };
+
+        var violations = files
+            .Where(file => File.ReadAllText(file).Contains(
+                "WorkflowFlowCollector",
+                StringComparison.Ordinal))
+            .Select(file => Path.GetRelativePath(root, file))
+            .ToArray();
+
+        await Assert.That(violations).IsEmpty();
+    }
+
     private static string FindRepoRoot()
     {
         var current = AppContext.BaseDirectory;

@@ -9,7 +9,7 @@ namespace Seiton.Core.Flow;
 /// <c>needs</c> edges connect jobs, parallel boundaries become nested subgraphs
 /// with unchained children, and reusable-workflow jobs are subroutine nodes.
 /// </summary>
-public static class WorkflowFlowMermaid
+public static partial class WorkflowFlowMermaid
 {
     private const int MaxLabelLength = 64;
 

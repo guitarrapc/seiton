@@ -6,6 +6,7 @@ using Seiton.Core.Linting;
 using Seiton.Core.Linting.Fixing;
 using Seiton.Core.Linting.PinRemediation;
 using Seiton.Core.Parsing;
+using Seiton.Core.Parsing.Ast;
 
 namespace Seiton.Playground;
 
@@ -346,8 +347,10 @@ public static class PlaygroundLintRunner
 
             using var parseResult = WorkflowParser.Parse(utf8Yaml, filePath);
             using var lintResult = Engine.Check(parseResult, utf8Yaml, filePath, config);
-            var flow = WorkflowFlowCollector.Collect(parseResult, filePath);
-            return SerializeLintAndFlow(lintResult.Diagnostics.AsSpan(), flow);
+            return SerializeLintAndFlow(
+                lintResult.Diagnostics.AsSpan(),
+                parseResult.Workflow,
+                filePath);
         }
     }
 
@@ -367,13 +370,15 @@ public static class PlaygroundLintRunner
 
             if (DocumentKindClassifier.GetPathHintKind(filePath) == DocumentKind.ActionMetadata)
             {
-                return SerializeLintAndMermaid(utf8Yaml, filePath, config, flow: null);
+                return SerializeLintAndMermaid(utf8Yaml, filePath, config);
             }
 
             using var parseResult = WorkflowParser.Parse(utf8Yaml, filePath);
             using var lintResult = Engine.Check(parseResult, utf8Yaml, filePath, config);
-            var flow = WorkflowFlowCollector.Collect(parseResult, filePath);
-            return SerializeLintAndMermaid(lintResult.Diagnostics.AsSpan(), flow);
+            return SerializeLintAndMermaid(
+                lintResult.Diagnostics.AsSpan(),
+                parseResult.Workflow,
+                filePath);
         }
     }
 
@@ -418,7 +423,7 @@ public static class PlaygroundLintRunner
         try
         {
             var lintResult = Engine.CheckWithParseResult(utf8Yaml, filePath, config, classifiedResult.ParseResult, arena);
-            return SerializeLintAndFlow(lintResult.Diagnostics.AsSpan(), flow: null);
+            return SerializeLintAndFlow(lintResult.Diagnostics.AsSpan(), default, filePath);
         }
         finally
         {
@@ -426,7 +431,10 @@ public static class PlaygroundLintRunner
         }
     }
 
-    private static byte[] SerializeLintAndFlow(ReadOnlySpan<Diagnostic> diagnostics, WorkflowFlow? flow)
+    private static byte[] SerializeLintAndFlow(
+        ReadOnlySpan<Diagnostic> diagnostics,
+        WorkflowRef workflow,
+        string filePath)
     {
         ResetIfOversized(ref LintFlowJsonBuffer);
         LintFlowJsonBuffer.Clear();
@@ -436,20 +444,20 @@ public static class PlaygroundLintRunner
             writer.WritePropertyName("diagnostics"u8);
             WriteDiagnosticsArray(writer, diagnostics);
             writer.WritePropertyName("flow"u8);
-            WorkflowFlowJson.WriteDocument(writer, flow);
+            WorkflowFlowJson.WriteDocument(writer, workflow, filePath);
             writer.WriteEndObject();
         }
 
         return CopyToReusableOutput(LintFlowJsonBuffer.WrittenSpan, ref _lintFlowJsonOutput);
     }
 
-    private static byte[] SerializeLintAndMermaid(byte[] utf8Yaml, string filePath, LintConfig config, WorkflowFlow? flow)
+    private static byte[] SerializeLintAndMermaid(byte[] utf8Yaml, string filePath, LintConfig config)
     {
         var classifiedResult = WorkflowParser.ParseClassified(utf8Yaml, filePath, out var arena);
         try
         {
             var lintResult = Engine.CheckWithParseResult(utf8Yaml, filePath, config, classifiedResult.ParseResult, arena);
-            return SerializeLintAndMermaid(lintResult.Diagnostics.AsSpan(), flow);
+            return SerializeLintAndMermaid(lintResult.Diagnostics.AsSpan(), default, filePath);
         }
         finally
         {
@@ -457,18 +465,14 @@ public static class PlaygroundLintRunner
         }
     }
 
-    private static byte[] SerializeLintAndMermaid(ReadOnlySpan<Diagnostic> diagnostics, WorkflowFlow? flow)
+    private static byte[] SerializeLintAndMermaid(
+        ReadOnlySpan<Diagnostic> diagnostics,
+        WorkflowRef workflow,
+        string filePath)
     {
         ResetIfOversized(ref MermaidBuffer);
         MermaidBuffer.Clear();
-        if (flow is null)
-        {
-            WorkflowFlowMermaid.WriteEmpty(MermaidBuffer);
-        }
-        else
-        {
-            WorkflowFlowMermaid.Write(MermaidBuffer, flow);
-        }
+        WorkflowFlowMermaid.Write(MermaidBuffer, workflow, filePath);
 
         ResetIfOversized(ref LintFlowJsonBuffer);
         LintFlowJsonBuffer.Clear();

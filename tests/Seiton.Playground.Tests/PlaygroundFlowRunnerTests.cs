@@ -234,4 +234,40 @@ public sealed class PlaygroundFlowRunnerTests
         await Assert.That(document.RootElement.GetProperty("mermaid").GetString())
             .Contains("flowchart LR");
     }
+
+    [Test]
+    public async Task PlaygroundFlowPaths_ShouldNotMaterializeOwnedDto()
+    {
+        var root = FindRepoRoot();
+        var files = new[]
+        {
+            Path.Combine(root, "src", "Seiton.Playground.Core", "PlaygroundFlowRunner.cs"),
+            Path.Combine(root, "src", "Seiton.Playground.Core", "PlaygroundLintRunner.cs"),
+        };
+
+        var violations = files
+            .Where(file => File.ReadAllText(file).Contains(
+                "WorkflowFlowCollector.Collect",
+                StringComparison.Ordinal))
+            .Select(file => Path.GetRelativePath(root, file))
+            .ToArray();
+
+        await Assert.That(violations).IsEmpty();
+    }
+
+    private static string FindRepoRoot()
+    {
+        var current = AppContext.BaseDirectory;
+        while (!string.IsNullOrEmpty(current))
+        {
+            if (File.Exists(Path.Combine(current, "seiton.slnx")))
+            {
+                return current;
+            }
+
+            current = Directory.GetParent(current)?.FullName ?? string.Empty;
+        }
+
+        throw new InvalidOperationException("Repository root not found.");
+    }
 }

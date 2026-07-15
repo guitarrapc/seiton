@@ -1,5 +1,6 @@
 using System.Buffers;
 using Seiton.Core.Flow;
+using Seiton.Core.Parsing.Ast;
 
 namespace Seiton.Playground;
 
@@ -54,34 +55,21 @@ internal static class PlaygroundFlowOutputCache
         return false;
     }
 
-    internal static (byte[] Json, byte[] Mermaid) Store(ulong yamlHash, string filePath, WorkflowFlow? flow)
+    internal static (byte[] Json, byte[] Mermaid) Store(
+        ulong yamlHash,
+        string filePath,
+        WorkflowRef workflow)
     {
         lock (Gate)
         {
             ResetIfOversized(ref JsonBuffer);
             JsonBuffer.Clear();
-            if (flow is null)
-            {
-                WorkflowFlowJson.WriteEmpty(JsonBuffer);
-            }
-            else
-            {
-                WorkflowFlowJson.Write(JsonBuffer, flow);
-            }
-
+            WorkflowFlowJson.Write(JsonBuffer, workflow, filePath);
             var json = UpdateCacheBytes(_flowJson, JsonBuffer.WrittenSpan);
 
             ResetIfOversized(ref MermaidBuffer);
             MermaidBuffer.Clear();
-            if (flow is null)
-            {
-                WorkflowFlowMermaid.WriteEmpty(MermaidBuffer);
-            }
-            else
-            {
-                WorkflowFlowMermaid.Write(MermaidBuffer, flow);
-            }
-
+            WorkflowFlowMermaid.Write(MermaidBuffer, workflow, filePath);
             var mermaid = UpdateCacheBytes(_flowMermaid, MermaidBuffer.WrittenSpan);
 
             if (json.Length <= MaxRetainedBufferBytes && mermaid.Length <= MaxRetainedBufferBytes)

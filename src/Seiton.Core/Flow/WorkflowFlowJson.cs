@@ -9,7 +9,7 @@ namespace Seiton.Core.Flow;
 /// the output identical between the NativeAOT CLI and the trimmed WASM Playground
 /// without registering DTOs in a JsonSerializerContext.
 /// </summary>
-public static class WorkflowFlowJson
+public static partial class WorkflowFlowJson
 {
     /// <summary>The flow-json contract version emitted as the top-level <c>version</c> property.</summary>
     public const int Version = 1;

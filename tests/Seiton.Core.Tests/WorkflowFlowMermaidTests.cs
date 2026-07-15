@@ -287,4 +287,45 @@ public sealed class WorkflowFlowMermaidTests
 
         await Assert.That(actual).IsEqualTo(expected);
     }
+
+    [Test]
+    public async Task Write_LiveAst_MatchesOwnedDto()
+    {
+        const string yaml = """
+            name: Direct mermaid
+            on: push
+            jobs:
+              validate:
+                runs-on: ubuntu-latest
+                steps:
+                  - uses: actions/checkout@v4
+                  - parallel:
+                    - run: npm run lint
+                    - run: npm test
+              publish:
+                needs: validate
+                if: ${{ success() }}
+                runs-on: ubuntu-latest
+                strategy:
+                  matrix:
+                    os: [ubuntu, windows]
+                    node: [18, 20]
+                steps:
+                  - id: server
+                    name: Publish
+                    run: npm publish
+              deploy:
+                needs: [validate, publish]
+                uses: octo/repo/.github/workflows/deploy.yml@v1
+            """;
+
+        using var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "wf.yml");
+        var owned = WorkflowFlowCollector.Collect(result, "wf.yml")!;
+        var expected = WorkflowFlowMermaid.Serialize([owned]);
+        var buffer = new System.Buffers.ArrayBufferWriter<byte>(4096);
+
+        WorkflowFlowMermaid.Write(buffer, result.Workflow, "wf.yml");
+
+        await Assert.That(Encoding.UTF8.GetString(buffer.WrittenSpan)).IsEqualTo(expected);
+    }
 }

@@ -317,4 +317,124 @@ public sealed class WorkflowFlowJsonTests
         await Assert.That(workflows[0].GetProperty("file").GetString()).IsEqualTo("a.yml");
         await Assert.That(workflows[1].GetProperty("file").GetString()).IsEqualTo("b.yml");
     }
+
+    [Test]
+    public async Task Write_LiveAst_MatchesOwnedDto()
+    {
+        const string yaml = """
+            name: Direct flow
+            on:
+              push:
+              schedule:
+                - cron: '0 0 * * *'
+                  timezone: Asia/Tokyo
+            concurrency:
+              group: deploy
+              cancel-in-progress: true
+            jobs:
+              build:
+                runs-on: [self-hosted, linux]
+                permissions:
+                  contents: read
+                  pull-requests: write
+                environment: production
+                strategy:
+                  matrix:
+                    os: [ubuntu, windows]
+                    node: [18, 20]
+                    exclude:
+                      - os: windows
+                        node: 18
+                    include:
+                      - os: ubuntu
+                        node: 18
+                        experimental: true
+                steps:
+                  - id: server
+                    name: Server
+                    run: npm run serve
+                    background: true
+                  - parallel:
+                    - uses: actions/checkout@v4
+                      with:
+                        fetch-depth: '0'
+                    - run: npm test
+                      working-directory: src
+                  - wait: [server]
+              deploy:
+                needs: build
+                uses: octo/repo/.github/workflows/deploy.yml@v1
+            """;
+
+        using var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "wf.yml");
+        var owned = WorkflowFlowCollector.Collect(result, "wf.yml")!;
+        var expected = WorkflowFlowJson.Serialize(owned);
+        var buffer = new System.Buffers.ArrayBufferWriter<byte>(4096);
+
+        WorkflowFlowJson.Write(buffer, result.Workflow, "wf.yml");
+
+        await Assert.That(Encoding.UTF8.GetString(buffer.WrittenSpan)).IsEqualTo(expected);
+    }
+
+    [Test]
+    public async Task Write_LiveAst_MatrixVariantsMatchOwnedDto()
+    {
+        string[] yamls =
+        [
+            """
+            on: push
+            jobs:
+              test:
+                runs-on: ubuntu-latest
+                strategy:
+                  matrix:
+                    include:
+                      - os: ubuntu
+                        node: 18
+                      - os: windows
+                        node: 20
+                steps:
+                  - run: npm test
+            """,
+            """
+            on: push
+            jobs:
+              test:
+                runs-on: ubuntu-latest
+                strategy:
+                  matrix:
+                    os: ${{ fromJSON(needs.prepare.outputs.os) }}
+                    node: [18, 20]
+                steps:
+                  - run: npm test
+            """,
+            """
+            on: push
+            jobs:
+              test:
+                runs-on: ubuntu-latest
+                strategy:
+                  matrix:
+                    target:
+                      - os: ubuntu
+                        arch: [x64, arm64]
+                      - os: windows
+                        arch: [x64]
+                steps:
+                  - run: npm test
+            """,
+        ];
+
+        foreach (var yaml in yamls)
+        {
+            using var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "wf.yml");
+            var owned = WorkflowFlowCollector.Collect(result, "wf.yml")!;
+            var expected = WorkflowFlowJson.Serialize(owned);
+            var buffer = new System.Buffers.ArrayBufferWriter<byte>(4096);
+
+            WorkflowFlowJson.Write(buffer, result.Workflow, "wf.yml");
+
+            await Assert.That(Encoding.UTF8.GetString(buffer.WrittenSpan)).IsEqualTo(expected);
+        }
+    }
 }

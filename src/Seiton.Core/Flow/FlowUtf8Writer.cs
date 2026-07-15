@@ -77,6 +77,9 @@ internal struct FlowUtf8Writer
     public void WriteUtf8(string value) => WriteUtf8(value.AsSpan());
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public void WriteUtf8Bytes(ReadOnlySpan<byte> value) => WriteLiteralCore(_destination, value);
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public void WriteAscii(char c)
     {
         if (c > 0x7F)
