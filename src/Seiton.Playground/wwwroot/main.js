@@ -1067,6 +1067,7 @@ function wireMermaidPreviewZoom(svgElement) {
   svg.call(zoom);
   fitMermaidPreview(d3, svg, zoom, bounds, viewport);
 
+  let resizeFrame = null;
   const resizeObserver = typeof ResizeObserver === 'function'
     ? new ResizeObserver(() => {
       if (resizeFrame !== null) cancelAnimationFrame(resizeFrame);
@@ -1084,6 +1085,7 @@ function wireMermaidPreviewZoom(svgElement) {
     zoomIn: () => svg.transition().duration(160).call(zoom.scaleBy, 1.25),
     dispose: () => {
       resizeObserver?.disconnect();
+      if (resizeFrame !== null) cancelAnimationFrame(resizeFrame);
       svg.on('.zoom', null);
       mermaidPreviewEl.classList.remove('mermaid-preview--zoomable');
     },
@@ -2070,7 +2072,7 @@ function runLint() {
       ? exports.Seiton.Playground.LintInterop.RunLintWithFlowJson(source, filePath)
       : mermaidActive
         ? exports.Seiton.Playground.LintInterop.RunLintWithMermaid(source, filePath)
-      : exports.Seiton.Playground.LintInterop.RunLint(source, filePath);
+        : exports.Seiton.Playground.LintInterop.RunLint(source, filePath);
     const response = JSON.parse(utf8Decoder.decode(utf8Bytes));
     const diagnostics = flowActive || mermaidActive ? (response.diagnostics ?? response) : response;
     const flowDoc = flowActive ? (response.flow ?? { version: 1, workflows: [] }) : null;

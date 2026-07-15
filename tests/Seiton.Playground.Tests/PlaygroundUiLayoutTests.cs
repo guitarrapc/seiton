@@ -1,4 +1,4 @@
-using System.Text.RegularExpressions;
+﻿using System.Text.RegularExpressions;
 using Microsoft.Playwright;
 
 namespace Seiton.Playground.Tests;
@@ -101,6 +101,44 @@ public sealed class PlaygroundUiLayoutTests
 
         await page.Locator("#mermaid-zoom-reset-btn").ClickAsync();
         await Assert.That(await viewport.GetAttributeAsync("transform")).IsEqualTo(initialTransform);
+    }
+
+    [Test]
+    public async Task MermaidPreview_Resize_RefitsWithoutJavaScriptError()
+    {
+        var host = await PlaygroundUiTestHost.GetOrCreateAsync();
+        var browser = await PlaygroundUiBrowserSession.GetBrowserAsync();
+        await using var context = await browser.NewContextAsync(new BrowserNewContextOptions
+        {
+            ViewportSize = new ViewportSize { Width = 900, Height = 700 },
+        });
+        var page = await context.NewPageAsync();
+        var pageErrors = new List<string>();
+        page.PageError += (_, error) => pageErrors.Add(error);
+        await GotoPlaygroundAndWaitForLinterGridAsync(page, $"{host.BaseUrl.TrimEnd('/')}/?seitonTestHooks=1");
+        await page.WaitForFunctionAsync(
+            "() => typeof globalThis.__SEITON_PLAYGROUND_TEST__?.setMermaidPreviewMode === 'function'",
+            arg: null,
+            new PageWaitForFunctionOptions { Timeout = 30_000 });
+
+        await page.EvaluateAsync(
+            """
+            () => {
+              const hooks = globalThis.__SEITON_PLAYGROUND_TEST__;
+              hooks.selectResultsTab('mermaid');
+              hooks.renderMermaid(`flowchart LR
+                a[checkout] --> b[build] --> c[test]`);
+              hooks.setMermaidPreviewMode(true);
+            }
+            """);
+
+        await page.Locator("#mermaid-preview .mermaid-preview__viewport").WaitForAsync(
+            new LocatorWaitForOptions { Timeout = 30_000 });
+        await page.SetViewportSizeAsync(640, 700);
+        await page.EvaluateAsync(
+            "() => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)))");
+
+        await Assert.That(pageErrors).IsEmpty();
     }
 
     [Test]
