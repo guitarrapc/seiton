@@ -176,9 +176,7 @@ export function renderFlowGraph(container, workflow, { onSelect, diagnostics, on
   const fit = () => fitToView(d3, svg, zoom, graphState, container);
   if (initialView && Number.isFinite(initialView.k)) {
     applySavedFlowView(d3, svg, zoom, graphState, initialView);
-    if (!isFlowGraphInView(d3, svg, graphState, container)) {
-      fit();
-    }
+    ensureFlowGraphInView(d3, svg, zoom, graphState, container);
   } else {
     fit();
   }

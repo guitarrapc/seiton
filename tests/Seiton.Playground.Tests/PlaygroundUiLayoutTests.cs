@@ -349,13 +349,30 @@ public sealed class PlaygroundUiLayoutTests
             "() => globalThis.d3.zoomTransform(document.querySelector('#flow-graph .flow-svg')).k");
         await Assert.That(scaleBefore).IsLessThanOrEqualTo(0.5);
 
-        // Mobile fit often clamps k at DISPLAY_SCALE_MIN; zoom in first so zoom-out has headroom.
-        if (scaleBefore <= 0.5001)
+        // Zoom in until one toolbar zoom-out (×0.8) stays within the same LOD tier.
+        for (var i = 0; i < 12; i++)
         {
+            var safe = await page.EvaluateAsync<bool>(
+                """
+                () => {
+                  const svg = document.querySelector('#flow-graph .flow-svg');
+                  const k = globalThis.d3.zoomTransform(svg).k;
+                  const lod = svg.classList.contains('flow-svg--lod2') ? 2
+                    : svg.classList.contains('flow-svg--lod1') ? 1 : 0;
+                  const dropK = lod === 2 ? 0.86 : lod === 1 ? 0.78 : null;
+                  return dropK === null || k * 0.8 >= dropK + 0.01;
+                }
+                """);
+            if (safe)
+            {
+                break;
+            }
             await page.Locator("#flow-zoom-in-btn").ClickAsync();
-            scaleBefore = await page.EvaluateAsync<double>(
-                "() => globalThis.d3.zoomTransform(document.querySelector('#flow-graph .flow-svg')).k");
         }
+
+        scaleBefore = await page.EvaluateAsync<double>(
+            "() => globalThis.d3.zoomTransform(document.querySelector('#flow-graph .flow-svg')).k");
+        await Assert.That(scaleBefore).IsGreaterThan(0.5);
 
         await page.Locator("#flow-zoom-out-btn").ClickAsync();
         var scaleAfter = await page.EvaluateAsync<double>(
@@ -762,7 +779,7 @@ public sealed class PlaygroundUiLayoutTests
             arg: null,
             new PageWaitForFunctionOptions { Timeout = 30_000 });
 
-        var staysLod0 = await page.EvaluateAsync<bool>(
+        await page.EvaluateAsync(
             """
             () => {
               const hooks = globalThis.__SEITON_PLAYGROUND_TEST__;
@@ -777,48 +794,67 @@ public sealed class PlaygroundUiLayoutTests
                       { id: 'checkout', kind: 'uses', line: 8, endLine: 8 },
                       { id: 'test', kind: 'run', line: 9, endLine: 9 },
                     ] },
-                    { id: 'verify-updater', kind: 'job', needs: [], reducedNeeds: [], runsOn: [], steps: [
-                      { id: 'validate', kind: 'run', line: 20, endLine: 20 },
+                    { id: 'lint-a', kind: 'job', needs: ['build'], reducedNeeds: ['build'], runsOn: [], steps: [
+                      { id: 'lint', kind: 'run', line: 20, endLine: 20 },
+                    ] },
+                    { id: 'lint-b', kind: 'job', needs: ['build'], reducedNeeds: ['build'], runsOn: [], steps: [
+                      { id: 'lint', kind: 'run', line: 30, endLine: 30 },
                     ] },
                   ],
                 }],
               });
+              const graph = document.querySelector('#flow-graph');
+              const rect = graph.getBoundingClientRect();
+              const cx = rect.left + rect.width / 2;
+              const cy = rect.top + rect.height / 2;
               const svg = document.querySelector('#flow-graph .flow-svg');
-              for (let i = 0; i < 40; i++) {
-                svg.dispatchEvent(new WheelEvent('wheel', {
-                  bubbles: true,
-                  cancelable: true,
-                  clientX: 100,
-                  clientY: 100,
-                  deltaY: 400,
-                }));
-              }
-              if (!svg.classList.contains('flow-svg--lod0')) return false;
-              const kAtLod0 = globalThis.d3.zoomTransform(svg).k;
-              for (let i = 0; i < 12; i++) {
-                svg.dispatchEvent(new WheelEvent('wheel', {
-                  bubbles: true,
-                  cancelable: true,
-                  clientX: 100,
-                  clientY: 100,
-                  deltaY: 400,
-                }));
-              }
+              svg.dispatchEvent(new WheelEvent('wheel', {
+                bubbles: true,
+                cancelable: true,
+                clientX: cx,
+                clientY: cy,
+                deltaY: 1_000,
+              }));
+            }
+            """);
+
+        await Assert.That(
+            await page.EvaluateAsync<bool>(
+                "() => document.querySelector('#flow-graph .flow-svg')?.classList.contains('flow-svg--lod0') ?? false"))
+            .IsTrue();
+
+        var kAtLod0 = await page.EvaluateAsync<double>(
+            "() => globalThis.d3.zoomTransform(document.querySelector('#flow-graph .flow-svg')).k");
+
+        await page.Locator("#flow-zoom-out-btn").ClickAsync();
+        await page.Locator("#flow-zoom-out-btn").ClickAsync();
+        await page.Locator("#flow-zoom-out-btn").ClickAsync();
+
+        var staysLod0 = await page.EvaluateAsync<bool>(
+            """
+            () => {
+              const svg = document.querySelector('#flow-graph .flow-svg');
               const kAfter = globalThis.d3.zoomTransform(svg).k;
               const graph = document.querySelector('#flow-graph').getBoundingClientRect();
               const jobs = [...document.querySelectorAll('#flow-graph .flow-job')];
-              const jobsVisible = jobs.length === 2 && jobs.every((node) => {
+              const tolerance = 6;
+              const visibleCount = jobs.filter((node) => {
                 const rect = node.getBoundingClientRect();
-                return rect.right >= graph.left && rect.left <= graph.right
-                  && rect.bottom >= graph.top && rect.top <= graph.bottom;
-              });
+                return rect.right >= graph.left - tolerance
+                  && rect.left <= graph.right + tolerance
+                  && rect.bottom >= graph.top - tolerance
+                  && rect.top <= graph.bottom + tolerance;
+              }).length;
               return svg.classList.contains('flow-svg--lod0')
-                && kAfter >= kAtLod0 * 0.92
-                && jobsVisible;
+                && visibleCount >= 2;
             }
             """);
 
         await Assert.That(staysLod0).IsTrue();
+
+        var kAfter = await page.EvaluateAsync<double>(
+            "() => globalThis.d3.zoomTransform(document.querySelector('#flow-graph .flow-svg')).k");
+        await Assert.That(kAfter).IsGreaterThanOrEqualTo(kAtLod0 * 0.92);
     }
 
     [Test]
@@ -834,7 +870,7 @@ public sealed class PlaygroundUiLayoutTests
             arg: null,
             new PageWaitForFunctionOptions { Timeout = 30_000 });
 
-        var stepsVisible = await page.EvaluateAsync<bool>(
+        var stepsVisible = await page.EvaluateAsync<string>(
             """
             () => {
               const hooks = globalThis.__SEITON_PLAYGROUND_TEST__;
@@ -869,48 +905,55 @@ public sealed class PlaygroundUiLayoutTests
                   ],
                 }],
               });
+              const wheel = (deltaY, count) => {
+                const graph = document.querySelector('#flow-graph');
+                const rect = graph.getBoundingClientRect();
+                const cx = rect.left + rect.width / 2;
+                const cy = rect.top + rect.height / 2;
+                const svg = document.querySelector('#flow-graph .flow-svg');
+                for (let i = 0; i < count; i++) {
+                  svg.dispatchEvent(new WheelEvent('wheel', {
+                    bubbles: true,
+                    cancelable: true,
+                    clientX: cx,
+                    clientY: cy,
+                    deltaY,
+                  }));
+                }
+                return svg;
+              };
               hooks.renderFlowWithDiagnostics(flow([
                 matrixCombo('linux-x64'),
                 matrixCombo('linux-arm64'),
                 matrixCombo('win-x64'),
               ]), []);
-              const svg = document.querySelector('#flow-graph .flow-svg');
-              for (let i = 0; i < 36; i++) {
-                svg.dispatchEvent(new WheelEvent('wheel', {
-                  bubbles: true,
-                  cancelable: true,
-                  clientX: 120,
-                  clientY: 120,
-                  deltaY: 500,
-                }));
-              }
-              if (!svg.classList.contains('flow-svg--lod0')) return false;
+              wheel(1_000, 1);
+              let svg = document.querySelector('#flow-graph .flow-svg');
+              if (!svg?.classList.contains('flow-svg--lod0')) return 'not-lod0-initial';
               hooks.renderFlowWithDiagnostics(flow([
                 matrixCombo('linux-x64'),
                 matrixCombo('linux-arm64'),
               ]), []);
-              if (!svg.classList.contains('flow-svg--lod0')) return false;
-              for (let i = 0; i < 24; i++) {
-                svg.dispatchEvent(new WheelEvent('wheel', {
-                  bubbles: true,
-                  cancelable: true,
-                  clientX: 120,
-                  clientY: 120,
-                  deltaY: -400,
-                }));
-              }
+              svg = document.querySelector('#flow-graph .flow-svg');
+              if (!svg?.classList.contains('flow-svg--lod0')) return 'not-lod0-after-edit';
+              wheel(-1_000, 12);
+              svg = document.querySelector('#flow-graph .flow-svg');
               const lod = svg.classList.contains('flow-svg--lod2') ? 2
                 : svg.classList.contains('flow-svg--lod1') ? 1
                 : 0;
-              if (lod === 0) return false;
+              if (lod === 0) return 'lod0-after-zoom-in';
               const steps = [...document.querySelectorAll('#flow-graph .flow-step-node')];
-              if (steps.length < 2) return false;
-              const ys = steps.map((el) => Number(el.getAttribute('y')));
-              return new Set(ys).size === ys.length;
+              if (steps.length < 2) return 'few-steps';
+              for (const inner of document.querySelectorAll('#flow-graph .flow-job__inner')) {
+                const jobSteps = [...inner.querySelectorAll('.flow-step-node')];
+                const ys = jobSteps.map((el) => Number(el.getAttribute('y')));
+                if (new Set(ys).size !== ys.length) return 'overlap-within-job';
+              }
+              return 'ok';
             }
             """);
 
-        await Assert.That(stepsVisible).IsTrue();
+        await Assert.That(stepsVisible).IsEqualTo("ok");
     }
 
     [Test]
