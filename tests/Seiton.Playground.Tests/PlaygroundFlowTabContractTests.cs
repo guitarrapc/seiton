@@ -81,6 +81,7 @@ public sealed class PlaygroundFlowTabContractTests
         await Assert.That(js).Contains("captureFlowViewState");
         await Assert.That(js).Contains("preserveView");
         await Assert.That(js).Contains("flowViewResetPending");
+        await Assert.That(js).Contains("pendingViewReset");
         await Assert.That(js).Contains("resetView");
         await Assert.That(js).Contains("initialView");
         await Assert.That(js).Contains("resetFlowView");
@@ -99,6 +100,7 @@ public sealed class PlaygroundFlowTabContractTests
         await Assert.That(js).Contains("function ensureLayout");
         await Assert.That(js).Contains("export function flowStructureSignature");
         await Assert.That(js).Contains("export function updateFlowGraphDiagnostics");
+        await Assert.That(js).Contains("refreshAllJobInnerSteps(state, d3, layout)");
         await Assert.That(js.Contains("computeAllLayouts", StringComparison.Ordinal)).IsFalse();
     }
 
