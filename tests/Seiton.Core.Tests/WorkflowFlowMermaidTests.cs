@@ -1,4 +1,4 @@
-using System.Text;
+﻿using System.Text;
 using Seiton.Core.Flow;
 using Seiton.Core.Parsing;
 
@@ -286,6 +286,23 @@ public sealed class WorkflowFlowMermaidTests
         var actual = Encoding.UTF8.GetString(buffer.WrittenSpan);
 
         await Assert.That(actual).IsEqualTo(expected);
+    }
+
+    [Test]
+    public async Task Serialize_NonBmpJobId_PreservesUnicodeScalar()
+    {
+        var flow = CollectFlow("""
+            on: push
+            jobs:
+              "deploy-🚀":
+                runs-on: ubuntu-latest
+                steps:
+                  - run: echo deploy
+            """);
+
+        var mermaid = WorkflowFlowMermaid.Serialize([flow]);
+
+        await Assert.That(mermaid).Contains("subgraph j0[\"deploy-🚀\"]");
     }
 
     [Test]

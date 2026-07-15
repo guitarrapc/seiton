@@ -1,4 +1,4 @@
-using System.Text.Json;
+﻿using System.Text.Json;
 using Seiton.Cli;
 using Seiton.Commands;
 using Seiton.Output;

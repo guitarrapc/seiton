@@ -1,4 +1,4 @@
-namespace Seiton.Playground.Tests;
+﻿namespace Seiton.Playground.Tests;
 
 /// <summary>
 /// Fast structural checks for the flow tab UI (no browser, no publish).

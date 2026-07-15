@@ -1,4 +1,4 @@
-using Seiton.Core.Parsing;
+﻿using Seiton.Core.Parsing;
 
 namespace Seiton.Playground;
 

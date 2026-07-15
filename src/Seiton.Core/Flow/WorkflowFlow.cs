@@ -1,4 +1,4 @@
-namespace Seiton.Core.Flow;
+﻿namespace Seiton.Core.Flow;
 
 // Flow DTOs are the shared machine-readable contract between the CLI
 // (`check --format flow-json` / `flow-mermaid`) and the Playground flow tab.

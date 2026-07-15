@@ -1,4 +1,4 @@
-using System.Text;
+﻿using System.Text;
 using Seiton.Core.Parsing;
 using Seiton.Core.Parsing.Ast;
 
@@ -534,40 +534,40 @@ public static class WorkflowFlowCollector
             case RawYamlKind.String:
                 return value.Scalar.Decode();
             case RawYamlKind.Array:
-            {
-                var sb = new System.Text.StringBuilder("[");
-                var first = true;
-                foreach (var item in value.Items)
                 {
-                    if (!first)
+                    var sb = new System.Text.StringBuilder("[");
+                    var first = true;
+                    foreach (var item in value.Items)
                     {
-                        sb.Append(", ");
+                        if (!first)
+                        {
+                            sb.Append(", ");
+                        }
+
+                        first = false;
+                        sb.Append(StringifyRawYaml(item));
                     }
 
-                    first = false;
-                    sb.Append(StringifyRawYaml(item));
+                    return sb.Append(']').ToString();
                 }
-
-                return sb.Append(']').ToString();
-            }
 
             case RawYamlKind.Object:
-            {
-                var sb = new System.Text.StringBuilder("{");
-                var first = true;
-                foreach (var (key, item) in value.Properties)
                 {
-                    if (!first)
+                    var sb = new System.Text.StringBuilder("{");
+                    var first = true;
+                    foreach (var (key, item) in value.Properties)
                     {
-                        sb.Append(", ");
+                        if (!first)
+                        {
+                            sb.Append(", ");
+                        }
+
+                        first = false;
+                        sb.Append(key.Decode()).Append(": ").Append(StringifyRawYaml(item));
                     }
 
-                    first = false;
-                    sb.Append(key.Decode()).Append(": ").Append(StringifyRawYaml(item));
+                    return sb.Append('}').ToString();
                 }
-
-                return sb.Append('}').ToString();
-            }
 
             default:
                 return string.Empty;

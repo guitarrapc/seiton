@@ -1,4 +1,4 @@
-using System.Buffers;
+﻿using System.Buffers;
 using System.Runtime.CompilerServices;
 using System.Text.Json;
 using Seiton.Core.Parsing;
@@ -808,33 +808,33 @@ public static partial class WorkflowFlowJson
             case RawYamlKind.String:
                 return value.Scalar.Value.Length;
             case RawYamlKind.Array:
-            {
-                var length = 2;
-                var items = value.Items;
-                for (var i = 0; i < items.Count; i++)
                 {
-                    if (i > 0)
+                    var length = 2;
+                    var items = value.Items;
+                    for (var i = 0; i < items.Count; i++)
                     {
-                        length = checked(length + 2);
+                        if (i > 0)
+                        {
+                            length = checked(length + 2);
+                        }
+                        length = checked(length + GetAstRawYamlByteCount(items[i]));
                     }
-                    length = checked(length + GetAstRawYamlByteCount(items[i]));
+                    return length;
                 }
-                return length;
-            }
             case RawYamlKind.Object:
-            {
-                var length = 2;
-                var index = 0;
-                foreach (var (key, item) in value.Properties)
                 {
-                    if (index++ > 0)
+                    var length = 2;
+                    var index = 0;
+                    foreach (var (key, item) in value.Properties)
                     {
-                        length = checked(length + 2);
+                        if (index++ > 0)
+                        {
+                            length = checked(length + 2);
+                        }
+                        length = checked(length + key.Bytes.Length + 2 + GetAstRawYamlByteCount(item));
                     }
-                    length = checked(length + key.Bytes.Length + 2 + GetAstRawYamlByteCount(item));
+                    return length;
                 }
-                return length;
-            }
             default:
                 return 0;
         }
@@ -849,41 +849,41 @@ public static partial class WorkflowFlowJson
                 offset += value.Scalar.Value.Length;
                 break;
             case RawYamlKind.Array:
-            {
-                destination[offset++] = (byte)'[';
-                var items = value.Items;
-                for (var i = 0; i < items.Count; i++)
                 {
-                    if (i > 0)
+                    destination[offset++] = (byte)'[';
+                    var items = value.Items;
+                    for (var i = 0; i < items.Count; i++)
                     {
-                        destination[offset++] = (byte)',';
-                        destination[offset++] = (byte)' ';
+                        if (i > 0)
+                        {
+                            destination[offset++] = (byte)',';
+                            destination[offset++] = (byte)' ';
+                        }
+                        WriteAstRawYaml(items[i], destination, ref offset);
                     }
-                    WriteAstRawYaml(items[i], destination, ref offset);
+                    destination[offset++] = (byte)']';
+                    break;
                 }
-                destination[offset++] = (byte)']';
-                break;
-            }
             case RawYamlKind.Object:
-            {
-                destination[offset++] = (byte)'{';
-                var index = 0;
-                foreach (var (key, item) in value.Properties)
                 {
-                    if (index++ > 0)
+                    destination[offset++] = (byte)'{';
+                    var index = 0;
+                    foreach (var (key, item) in value.Properties)
                     {
-                        destination[offset++] = (byte)',';
+                        if (index++ > 0)
+                        {
+                            destination[offset++] = (byte)',';
+                            destination[offset++] = (byte)' ';
+                        }
+                        key.Bytes.CopyTo(destination[offset..]);
+                        offset += key.Bytes.Length;
+                        destination[offset++] = (byte)':';
                         destination[offset++] = (byte)' ';
+                        WriteAstRawYaml(item, destination, ref offset);
                     }
-                    key.Bytes.CopyTo(destination[offset..]);
-                    offset += key.Bytes.Length;
-                    destination[offset++] = (byte)':';
-                    destination[offset++] = (byte)' ';
-                    WriteAstRawYaml(item, destination, ref offset);
+                    destination[offset++] = (byte)'}';
+                    break;
                 }
-                destination[offset++] = (byte)'}';
-                break;
-            }
         }
     }
 

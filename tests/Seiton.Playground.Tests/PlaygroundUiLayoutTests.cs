@@ -53,6 +53,49 @@ public sealed class PlaygroundUiLayoutTests
     }
 
     [Test]
+    public async Task MermaidOutput_EmptyAndJobForms_AreClassifiedCorrectly()
+    {
+        var host = await PlaygroundUiTestHost.GetOrCreateAsync();
+        var browser = await PlaygroundUiBrowserSession.GetBrowserAsync();
+        await using var context = await browser.NewContextAsync();
+        var page = await context.NewPageAsync();
+        await GotoPlaygroundAndWaitForLinterGridAsync(page, $"{host.BaseUrl.TrimEnd('/')}/?seitonTestHooks=1");
+        await page.WaitForFunctionAsync(
+            "() => typeof globalThis.__SEITON_PLAYGROUND_TEST__?.renderMermaid === 'function'",
+            arg: null,
+            new PageWaitForFunctionOptions { Timeout = 30_000 });
+
+        var emptyHiddenByInput = await page.EvaluateAsync<bool[]>(
+            """
+            () => {
+              const hooks = globalThis.__SEITON_PLAYGROUND_TEST__;
+              hooks.selectResultsTab('mermaid');
+              return [
+                `flowchart LR`,
+                `flowchart LR
+                  subgraph j0["build"]
+                  end`,
+                `flowchart LR
+                  j0[["deploy — uses: octo/repo/.github/workflows/deploy.yml@v1"]]`,
+                `flowchart LR
+                  subgraph w0j0["build"]
+                  end`,
+                `flowchart LR
+                  w0j0[["deploy — uses: octo/repo/.github/workflows/deploy.yml@v1"]]`,
+              ].map((mermaid) => {
+                hooks.renderMermaid(mermaid);
+                return document.querySelector('#mermaid-empty').hidden;
+              });
+            }
+            """);
+
+        await Assert.That(emptyHiddenByInput).IsEquivalentTo([false, true, true, true, true]);
+        await Assert.That(await page.Locator("#mermaid-empty").IsHiddenAsync()).IsTrue();
+        await Assert.That(await page.Locator("#mermaid-output").IsVisibleAsync()).IsTrue();
+        await Assert.That(await page.Locator("#mermaid-preview-btn").IsEnabledAsync()).IsTrue();
+    }
+
+    [Test]
     public async Task MermaidPreview_PansAndZoomsWithoutShrinkingBelowFit()
     {
         var host = await PlaygroundUiTestHost.GetOrCreateAsync();
@@ -65,7 +108,7 @@ public sealed class PlaygroundUiLayoutTests
             arg: null,
             new PageWaitForFunctionOptions { Timeout = 30_000 });
 
-        var edgeEndsAtGroupFrame = await page.EvaluateAsync<bool>(
+        await page.EvaluateAsync(
             """
             () => {
               const hooks = globalThis.__SEITON_PLAYGROUND_TEST__;
@@ -276,7 +319,8 @@ public sealed class PlaygroundUiLayoutTests
         await Assert.That(scaleBefore).IsLessThanOrEqualTo(0.5);
 
         // Mobile fit often clamps k at DISPLAY_SCALE_MIN; zoom in first so zoom-out has headroom.
-        if (scaleBefore <= 0.5001) {
+        if (scaleBefore <= 0.5001)
+        {
             await page.Locator("#flow-zoom-in-btn").ClickAsync();
             scaleBefore = await page.EvaluateAsync<double>(
                 "() => globalThis.d3.zoomTransform(document.querySelector('#flow-graph .flow-svg')).k");
@@ -516,8 +560,8 @@ public sealed class PlaygroundUiLayoutTests
             arg: null,
             new PageWaitForFunctionOptions { Timeout = 30_000 });
 
-            var edgeEndsAtGroupFrame = await page.EvaluateAsync<bool>(
-                        """
+        var edgeEndsAtGroupFrame = await page.EvaluateAsync<bool>(
+                    """
                         () => {
                             const hooks = globalThis.__SEITON_PLAYGROUND_TEST__;
                             hooks.selectResultsTab('flow');

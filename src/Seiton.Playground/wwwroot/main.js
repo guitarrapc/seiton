@@ -926,12 +926,12 @@ function refreshFlow(force = false) {
   }
 }
 
-/** True when Mermaid text has no job subgraphs (empty workflow or action.yml). */
+/** True when Mermaid text has no job nodes or subgraphs (empty workflow or action.yml). */
 function isMermaidEmpty(mermaidText) {
   if (!mermaidText || mermaidText.startsWith('%% Seiton error:')) {
     return false;
   }
-  return !/subgraph\s+j\d/m.test(mermaidText);
+  return !/^\s*(?:subgraph\s+)?(?:w\d+)?j\d+\b/m.test(mermaidText);
 }
 
 function mermaidThemeName() {

@@ -1,4 +1,4 @@
-using System.Buffers;
+﻿using System.Buffers;
 using System.Text;
 
 namespace Seiton.Core.Flow;
@@ -436,7 +436,6 @@ public static partial class WorkflowFlowMermaid
 
     private static void WriteEscapedChars(FlowUtf8Writer writer, ReadOnlySpan<char> span)
     {
-        Span<char> ch = stackalloc char[1];
         Span<byte> utf8 = stackalloc byte[4];
         for (var i = 0; i < span.Length; i++)
         {
@@ -447,8 +446,15 @@ public static partial class WorkflowFlowMermaid
                 continue;
             }
 
-            ch[0] = c;
-            var written = Encoding.UTF8.GetBytes(ch, utf8);
+            var status = Rune.DecodeFromUtf16(span[i..], out var rune, out var charsConsumed);
+            if (status != OperationStatus.Done)
+            {
+                rune = Rune.ReplacementChar;
+                charsConsumed = 1;
+            }
+
+            i += charsConsumed - 1;
+            var written = rune.EncodeToUtf8(utf8);
             writer.WriteLiteral(utf8[..written]);
         }
     }
