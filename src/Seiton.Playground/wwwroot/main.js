@@ -8,7 +8,7 @@ import {
   formatClipboardBundle,
   isShareWithinLimits,
 } from './share-payload.js';
-import { renderFlowGraph } from './flow-graph.js';
+import { captureFlowViewState, renderFlowGraph, flowStructureSignature, updateFlowGraphDiagnostics } from './flow-graph.js';
 
 /** Built-in snippets (classification depends on Document selector). */
 const SAMPLES = {
@@ -496,7 +496,10 @@ function syncEditorTheme() {
 }
 
 playgroundColorSchemeDarkQuery().addEventListener('change', () => {
-  if (getStoredColorMode() === 'system') syncEditorTheme();
+  if (getStoredColorMode() === 'system') {
+    syncEditorTheme();
+    refreshMermaidPreviewOnThemeChange();
+  }
 });
 
 const themeCycleBtn = document.getElementById('theme-cycle-btn');
@@ -518,6 +521,7 @@ function cycleColorMode() {
   applyColorModeToDocument(next);
   syncEditorTheme();
   updateThemeCycleButton();
+  refreshMermaidPreviewOnThemeChange();
 }
 
 if (themeCycleBtn) {
@@ -703,11 +707,21 @@ let lastLintedFilePath = '';
 let configVersion = 0;
 let lastConfigVersion = 0;
 
-// ─── Flow tab (Result / Flow switch + D3 graph) ───
+// ─── Flow tab (Result / Flow / Mermaid switch + D3 graph) ───
 const tabResultBtn = document.getElementById('tab-result-btn');
 const tabFlowBtn = document.getElementById('tab-flow-btn');
+const tabMermaidBtn = document.getElementById('tab-mermaid-btn');
 const resultPanel = document.getElementById('result-panel');
 const flowPanel = document.getElementById('flow-panel');
+const mermaidPanel = document.getElementById('mermaid-panel');
+const mermaidOutputEl = document.getElementById('mermaid-output');
+const mermaidPreviewEl = document.getElementById('mermaid-preview');
+const mermaidEmptyEl = document.getElementById('mermaid-empty');
+const mermaidCopyBtn = document.getElementById('mermaid-copy-btn');
+const mermaidPreviewBtn = document.getElementById('mermaid-preview-btn');
+const mermaidZoomOutBtn = document.getElementById('mermaid-zoom-out-btn');
+const mermaidZoomResetBtn = document.getElementById('mermaid-zoom-reset-btn');
+const mermaidZoomInBtn = document.getElementById('mermaid-zoom-in-btn');
 const flowGraphEl = document.getElementById('flow-graph');
 const flowEmptyEl = document.getElementById('flow-empty');
 const flowDetailEl = document.getElementById('flow-detail');
@@ -719,22 +733,38 @@ const flowZoomInBtn = document.getElementById('flow-zoom-in-btn');
 let activeResultsTab = 'result';
 let lastFlowSource = null;
 let lastFlowFilePath = null;
+let lastMermaidSource = null;
+let lastMermaidFilePath = null;
+let lastMermaidText = '';
+let mermaidPreviewActive = false;
+let mermaidInitialized = false;
+let mermaidRenderSeq = 0;
+let mermaidZoomController = null;
+let mermaidPreviewRenderTimer = null;
+const MERMAID_PREVIEW_DEBOUNCE_MS = 200;
 /** Diagnostics from the most recent lint, shared with the flow graph markers. */
 let lastDiagnostics = [];
 let lastFlowDiagnostics = null;
+let lastRenderedFlowSignature = '';
 let flowZoomController = null;
 
 function selectResultsTab(tab) {
   activeResultsTab = tab;
   const flowActive = tab === 'flow';
-  tabResultBtn.classList.toggle('results-tab--active', !flowActive);
+  const mermaidActive = tab === 'mermaid';
+  tabResultBtn.classList.toggle('results-tab--active', tab === 'result');
   tabFlowBtn.classList.toggle('results-tab--active', flowActive);
-  tabResultBtn.setAttribute('aria-selected', String(!flowActive));
+  tabMermaidBtn.classList.toggle('results-tab--active', mermaidActive);
+  tabResultBtn.setAttribute('aria-selected', String(tab === 'result'));
   tabFlowBtn.setAttribute('aria-selected', String(flowActive));
-  resultPanel.hidden = flowActive;
+  tabMermaidBtn.setAttribute('aria-selected', String(mermaidActive));
+  resultPanel.hidden = tab !== 'result';
   flowPanel.hidden = !flowActive;
+  mermaidPanel.hidden = !mermaidActive;
   if (flowActive) {
     refreshFlow();
+  } else if (mermaidActive) {
+    refreshMermaid();
   } else {
     clearEditorFlowHighlight();
   }
@@ -822,9 +852,13 @@ function highlightEditorLinesForFlowNode(node) {
 
 tabResultBtn.addEventListener('click', () => selectResultsTab('result'));
 tabFlowBtn.addEventListener('click', () => selectResultsTab('flow'));
+tabMermaidBtn.addEventListener('click', () => selectResultsTab('mermaid'));
 flowZoomOutBtn.addEventListener('click', () => flowZoomController?.zoomOut());
 flowZoomResetBtn.addEventListener('click', () => flowZoomController?.reset());
 flowZoomInBtn.addEventListener('click', () => flowZoomController?.zoomIn());
+mermaidZoomOutBtn.addEventListener('click', () => mermaidZoomController?.zoomOut());
+mermaidZoomResetBtn.addEventListener('click', () => mermaidZoomController?.reset());
+mermaidZoomInBtn.addEventListener('click', () => mermaidZoomController?.zoomIn());
 
 function setFlowZoomController(controller) {
   if (flowZoomController !== controller) {
@@ -835,6 +869,17 @@ function setFlowZoomController(controller) {
   flowZoomOutBtn.disabled = disabled;
   flowZoomResetBtn.disabled = disabled;
   flowZoomInBtn.disabled = disabled;
+}
+
+function setMermaidZoomController(controller) {
+  if (mermaidZoomController !== controller) {
+    mermaidZoomController?.dispose();
+  }
+  mermaidZoomController = controller;
+  const disabled = controller === null;
+  mermaidZoomOutBtn.disabled = disabled;
+  mermaidZoomResetBtn.disabled = disabled;
+  mermaidZoomInBtn.disabled = disabled;
 }
 
 /**
@@ -865,7 +910,7 @@ function refreshFlow(force = false) {
   try {
     const utf8Bytes = exports.Seiton.Playground.LintInterop.GetFlowJson(source, filePath);
     const flowDoc = JSON.parse(utf8Decoder.decode(utf8Bytes));
-    renderFlow(flowDoc);
+    renderFlow(flowDoc, { preserveView: true });
     if (flowDoc?.error || !globalThis.d3) {
       return;
     }
@@ -881,20 +926,375 @@ function refreshFlow(force = false) {
   }
 }
 
+/** True when Mermaid text has no job nodes or subgraphs (empty workflow or action.yml). */
+function isMermaidEmpty(mermaidText) {
+  if (!mermaidText) {
+    return true;
+  }
+  if (mermaidText.startsWith('%% Seiton error:')) {
+    return false;
+  }
+  return !/^\s*(?:subgraph\s+)?(?:w\d+)?j\d+\b/m.test(mermaidText);
+}
+
+function mermaidThemeName() {
+  return effectiveUiIsDark() ? 'dark' : 'default';
+}
+
+function ensureMermaidInitialized() {
+  const m = globalThis.mermaid;
+  if (!m) {
+    return null;
+  }
+  if (!mermaidInitialized) {
+    m.initialize({
+      startOnLoad: false,
+      theme: mermaidThemeName(),
+      securityLevel: 'strict',
+      flowchart: { htmlLabels: false },
+    });
+    mermaidInitialized = true;
+  }
+  return m;
+}
+
+function syncMermaidTheme() {
+  const m = globalThis.mermaid;
+  if (!m || !mermaidInitialized) {
+    return;
+  }
+  m.initialize({
+    startOnLoad: false,
+    theme: mermaidThemeName(),
+    securityLevel: 'strict',
+    flowchart: { htmlLabels: false },
+  });
+}
+
+function setMermaidToolbarEnabled(enabled) {
+  mermaidCopyBtn.disabled = !enabled;
+  mermaidPreviewBtn.disabled = !enabled;
+}
+
+function mermaidFitScale(bounds, viewport) {
+  const pad = 24;
+  return Math.max(
+    0.01,
+    Math.min(
+      1,
+      Math.max(1, viewport.width - pad * 2) / bounds.width,
+      Math.max(1, viewport.height - pad * 2) / bounds.height,
+    ),
+  );
+}
+
+function fitMermaidPreview(d3, svg, zoom, bounds, viewport) {
+  const fitScale = mermaidFitScale(bounds, viewport);
+  const tx = (viewport.width - bounds.width * fitScale) / 2 - bounds.x * fitScale;
+  const ty = (viewport.height - bounds.height * fitScale) / 2 - bounds.y * fitScale;
+  const transform = d3.zoomIdentity.translate(tx, ty).scale(fitScale);
+  svg.call(zoom.transform, transform);
+  return transform;
+}
+
+/**
+ * Adds drag, wheel, and pinch navigation to a rendered Mermaid SVG.
+ * The minimum scale is the fit-to-view scale, so zooming out never makes the
+ * complete diagram smaller than its initial fitted view.
+ */
+function wireMermaidPreviewZoom(svgElement) {
+  const d3 = globalThis.d3;
+  const viewBox = svgElement?.viewBox?.baseVal;
+  if (!d3 || !viewBox || viewBox.width <= 0 || viewBox.height <= 0) {
+    return null;
+  }
+
+  const bounds = {
+    x: viewBox.x,
+    y: viewBox.y,
+    width: viewBox.width,
+    height: viewBox.height,
+  };
+  const graphRoots = Array.from(svgElement.children)
+    .filter((child) => child.localName === 'g');
+  if (graphRoots.length === 0) {
+    return null;
+  }
+
+  const wrapper = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+  wrapper.classList.add('mermaid-preview__viewport');
+  svgElement.insertBefore(wrapper, graphRoots[0]);
+  for (const root of graphRoots) {
+    wrapper.appendChild(root);
+  }
+
+  const svg = d3.select(svgElement);
+  const viewportLayer = d3.select(wrapper);
+  let viewport = { width: 1, height: 1 };
+  let fitScale = 1;
+
+  const zoom = d3.zoom()
+    .on('zoom', (event) => {
+      viewportLayer.attr('transform', event.transform);
+    });
+
+  function measureViewport() {
+    viewport = {
+      width: Math.max(1, mermaidPreviewEl.clientWidth),
+      height: Math.max(1, mermaidPreviewEl.clientHeight),
+    };
+    fitScale = mermaidFitScale(bounds, viewport);
+    svg
+      .attr('viewBox', `0 0 ${viewport.width} ${viewport.height}`)
+      .attr('width', viewport.width)
+      .attr('height', viewport.height);
+    zoom
+      .extent([[0, 0], [viewport.width, viewport.height]])
+      .translateExtent([
+        [bounds.x - 24, bounds.y - 24],
+        [bounds.x + bounds.width + 24, bounds.y + bounds.height + 24],
+      ])
+      .scaleExtent([fitScale, Math.max(8, fitScale * 8)]);
+  }
+
+  function reset() {
+    measureViewport();
+    fitMermaidPreview(d3, svg, zoom, bounds, viewport);
+  }
+
+  svgElement.style.maxWidth = 'none';
+  svgElement.style.width = '100%';
+  svgElement.style.height = '100%';
+  mermaidPreviewEl.classList.add('mermaid-preview--zoomable');
+  measureViewport();
+  svg.call(zoom);
+  fitMermaidPreview(d3, svg, zoom, bounds, viewport);
+
+  let resizeFrame = null;
+  const resizeObserver = typeof ResizeObserver === 'function'
+    ? new ResizeObserver(() => {
+      if (resizeFrame !== null) cancelAnimationFrame(resizeFrame);
+      resizeFrame = requestAnimationFrame(() => {
+        resizeFrame = null;
+        reset();
+      });
+    })
+    : null;
+  resizeObserver?.observe(mermaidPreviewEl);
+
+  return {
+    zoomOut: () => svg.transition().duration(160).call(zoom.scaleBy, 0.8),
+    reset: () => reset(),
+    zoomIn: () => svg.transition().duration(160).call(zoom.scaleBy, 1.25),
+    dispose: () => {
+      resizeObserver?.disconnect();
+      if (resizeFrame !== null) cancelAnimationFrame(resizeFrame);
+      svg.on('.zoom', null);
+      mermaidPreviewEl.classList.remove('mermaid-preview--zoomable');
+    },
+  };
+}
+
+function setMermaidPreviewMode(preview) {
+  mermaidPreviewActive = preview;
+  mermaidPreviewBtn.textContent = preview ? 'Source' : 'Preview';
+  mermaidPreviewBtn.title = preview ? 'Show source text' : 'Preview rendered diagram';
+  mermaidPreviewBtn.setAttribute(
+    'aria-label',
+    preview ? 'Show Mermaid source' : 'Preview Mermaid diagram',
+  );
+  mermaidOutputEl.hidden = preview;
+  mermaidPreviewEl.hidden = !preview;
+  if (preview) {
+    scheduleMermaidPreviewRender();
+  } else {
+    mermaidRenderSeq++;
+    setMermaidZoomController(null);
+    mermaidPreviewEl.replaceChildren();
+  }
+}
+
+async function renderMermaidPreviewSvg() {
+  const m = ensureMermaidInitialized();
+  const renderToken = ++mermaidRenderSeq;
+  setMermaidZoomController(null);
+  mermaidPreviewEl.replaceChildren();
+  if (!m || !lastMermaidText) {
+    const msg = document.createElement('p');
+    msg.className = 'notification';
+    msg.textContent = m
+      ? 'Mermaid preview unavailable.'
+      : 'Mermaid preview unavailable: mermaid.js failed to load.';
+    mermaidPreviewEl.appendChild(msg);
+    return;
+  }
+  syncMermaidTheme();
+  const id = `seiton-mermaid-${renderToken}`;
+  try {
+    const { svg, bindFunctions } = await m.render(id, lastMermaidText);
+    if (!mermaidPreviewActive || renderToken !== mermaidRenderSeq) {
+      return;
+    }
+    mermaidPreviewEl.innerHTML = svg;
+    bindFunctions?.(mermaidPreviewEl);
+    setMermaidZoomController(
+      wireMermaidPreviewZoom(mermaidPreviewEl.querySelector('svg')),
+    );
+  } catch (err) {
+    if (!mermaidPreviewActive || renderToken !== mermaidRenderSeq) {
+      return;
+    }
+    const msg = document.createElement('p');
+    msg.className = 'notification';
+    msg.textContent = `Mermaid preview failed: ${err?.message ?? err}`;
+    mermaidPreviewEl.appendChild(msg);
+  }
+}
+
+function scheduleMermaidPreviewRender() {
+  if (mermaidPreviewRenderTimer !== null) {
+    clearTimeout(mermaidPreviewRenderTimer);
+  }
+  mermaidPreviewRenderTimer = setTimeout(() => {
+    mermaidPreviewRenderTimer = null;
+    if (mermaidPreviewActive && activeResultsTab === 'mermaid') {
+      void renderMermaidPreviewSvg();
+    }
+  }, MERMAID_PREVIEW_DEBOUNCE_MS);
+}
+
+function refreshMermaidPreviewOnThemeChange() {
+  if (mermaidPreviewActive && activeResultsTab === 'mermaid' && lastMermaidText) {
+    scheduleMermaidPreviewRender();
+  }
+}
+
+/**
+ * Fetches flow-mermaid from the WASM backend and updates the Mermaid panel.
+ * @param {boolean} [force]
+ */
+function refreshMermaid(force = false) {
+  if (!runtimeAlive || !runtimeReady || !exports) {
+    return;
+  }
+  const source = editor.getValue();
+  const filePath = getSelectedFilePath();
+  if (!force && source === lastMermaidSource && filePath === lastMermaidFilePath) {
+    return;
+  }
+  if (shouldDeferWasmLintForIncompleteUses(source)) {
+    lastMermaidSource = null;
+    lastMermaidFilePath = null;
+    renderMermaid('');
+    mermaidEmptyEl.textContent = 'Complete the uses value to refresh the Mermaid output.';
+    return;
+  }
+  try {
+    const utf8Bytes = exports.Seiton.Playground.LintInterop.GetFlowMermaid(source, filePath);
+    const mermaidText = utf8Decoder.decode(utf8Bytes);
+    renderMermaid(mermaidText);
+    if (!mermaidText.startsWith('%% Seiton error:')) {
+      lastMermaidSource = source;
+      lastMermaidFilePath = filePath;
+    }
+  } catch (err) {
+    if (isRuntimeDeadError(err)) {
+      handleRuntimeDeath();
+      return;
+    }
+    showToast(err?.message ?? String(err), 'error');
+  }
+}
+
+/**
+ * Renders Mermaid flowchart text in the output panel.
+ * @param {string} mermaidText
+ */
+function renderMermaid(mermaidText) {
+  lastMermaidText = mermaidText ?? '';
+  if (mermaidText.startsWith('%% Seiton error:')) {
+    setMermaidPreviewMode(false);
+    mermaidOutputEl.textContent = mermaidText;
+    mermaidOutputEl.hidden = false;
+    mermaidPreviewEl.hidden = true;
+    mermaidEmptyEl.hidden = true;
+    setMermaidToolbarEnabled(false);
+    return;
+  }
+  if (isMermaidEmpty(mermaidText)) {
+    setMermaidPreviewMode(false);
+    mermaidOutputEl.hidden = true;
+    mermaidPreviewEl.hidden = true;
+    mermaidEmptyEl.hidden = false;
+    mermaidEmptyEl.textContent = 'No workflow structure to export.';
+    setMermaidToolbarEnabled(false);
+    return;
+  }
+  mermaidOutputEl.textContent = mermaidText;
+  mermaidEmptyEl.hidden = true;
+  setMermaidToolbarEnabled(true);
+  if (mermaidPreviewActive) {
+    mermaidOutputEl.hidden = true;
+    mermaidPreviewEl.hidden = false;
+    scheduleMermaidPreviewRender();
+  } else {
+    mermaidOutputEl.hidden = false;
+    mermaidPreviewEl.hidden = true;
+  }
+}
+
+mermaidPreviewBtn.addEventListener('click', () => {
+  if (mermaidPreviewBtn.disabled) {
+    return;
+  }
+  setMermaidPreviewMode(!mermaidPreviewActive);
+});
+
+mermaidCopyBtn.addEventListener('click', async () => {
+  if (!lastMermaidText || mermaidCopyBtn.disabled) {
+    return;
+  }
+  const fenced = `\`\`\`mermaid\n${lastMermaidText.trimEnd()}\n\`\`\``;
+  const copied = await copyTextToClipboard(fenced);
+  showToast(copied ? 'Mermaid copied to clipboard' : 'Copy failed — select the text manually', copied ? 'success' : 'error');
+});
+
 /**
  * Renders a flow-json document into the flow panel (graph, empty notice, detail reset).
  * @param {{ version: number, workflows: object[], error?: string }} flowDoc
+ * @param {{ preserveView?: boolean }} [options]
  */
-function renderFlow(flowDoc) {
+function renderFlow(flowDoc, { preserveView = false } = {}) {
+  const initialView = preserveView ? captureFlowViewState(flowGraphEl) : null;
   hideFlowDetail();
-  setFlowZoomController(null);
   const workflow = flowDoc?.workflows?.[0] ?? null;
+  const signature = flowStructureSignature(workflow);
+  const diagOnly = Boolean(
+    signature
+    && signature === lastRenderedFlowSignature
+    && flowGraphEl.querySelector('.flow-svg'),
+  );
   flowNodeStartLines = collectFlowStartLines(workflow);
+  if (diagOnly) {
+    updateFlowGraphDiagnostics(flowGraphEl, workflow, lastDiagnostics);
+    renderWorkflowInfo(workflow);
+    flowEmptyEl.hidden = true;
+    flowGraphEl.hidden = false;
+    return;
+  }
+
+  setFlowZoomController(null);
   const rendered = renderFlowGraph(flowGraphEl, workflow, {
     onSelect: showFlowDetail,
     diagnostics: lastDiagnostics,
     onZoomReady: setFlowZoomController,
+    initialView,
   });
+  if (rendered) {
+    lastRenderedFlowSignature = signature;
+  } else {
+    lastRenderedFlowSignature = '';
+  }
   renderWorkflowInfo(rendered ? workflow : null);
   flowEmptyEl.hidden = rendered;
   flowGraphEl.hidden = !rendered;
@@ -1659,6 +2059,8 @@ function runLint() {
   if (shouldDeferWasmLintForIncompleteUses(source)) {
     if (activeResultsTab === 'flow') {
       refreshFlow();
+    } else if (activeResultsTab === 'mermaid') {
+      refreshMermaid();
     }
     return;
   }
@@ -1667,9 +2069,17 @@ function runLint() {
   lintPendingRetry = false;
 
   try {
-    const utf8Bytes = exports.Seiton.Playground.LintInterop.RunLint(source, filePath);
-    const json = utf8Decoder.decode(utf8Bytes);
-    const diagnostics = JSON.parse(json);
+    const flowActive = activeResultsTab === 'flow';
+    const mermaidActive = activeResultsTab === 'mermaid';
+    const utf8Bytes = flowActive
+      ? exports.Seiton.Playground.LintInterop.RunLintWithFlowJson(source, filePath)
+      : mermaidActive
+        ? exports.Seiton.Playground.LintInterop.RunLintWithMermaid(source, filePath)
+        : exports.Seiton.Playground.LintInterop.RunLint(source, filePath);
+    const response = JSON.parse(utf8Decoder.decode(utf8Bytes));
+    const diagnostics = flowActive || mermaidActive ? (response.diagnostics ?? response) : response;
+    const flowDoc = flowActive ? (response.flow ?? { version: 1, workflows: [] }) : null;
+    const mermaidText = mermaidActive ? (response.mermaid ?? '') : null;
     // Do not treat an internal-error fallback as a successful lint: if we cached
     // the staleness key here a transient C# exception would permanently block retries
     // on the same content/path until the user edits the file.
@@ -1681,8 +2091,15 @@ function runLint() {
       lastDiagnostics = diagnostics;
     }
     renderResults(diagnostics);
-    if (activeResultsTab === 'flow') {
-      refreshFlow();
+    if (flowActive) {
+      renderFlow(flowDoc, { preserveView: true });
+      lastFlowSource = source;
+      lastFlowFilePath = filePath;
+      lastFlowDiagnostics = lastDiagnostics;
+    } else if (mermaidActive) {
+      renderMermaid(mermaidText);
+      lastMermaidSource = source;
+      lastMermaidFilePath = filePath;
     }
   } catch (err) {
     if (isRuntimeDeadError(err)) {
@@ -1877,8 +2294,32 @@ function installTestHooksIfRequested() {
           return { ok: false, error: String(err?.message ?? err) };
         }
       },
-      selectResultsTab: (tab) => selectResultsTab(tab === 'flow' ? 'flow' : 'result'),
+      getMermaid: (source, filePath) => {
+        try {
+          const utf8Bytes = exports.Seiton.Playground.LintInterop.GetFlowMermaid(
+            source ?? '',
+            filePath ?? getSelectedFilePath(),
+          );
+          return { ok: true, mermaid: utf8Decoder.decode(utf8Bytes) };
+        } catch (err) {
+          return { ok: false, error: String(err?.message ?? err) };
+        }
+      },
+      selectResultsTab: (tab) => {
+        if (tab === 'flow' || tab === 'mermaid') {
+          selectResultsTab(tab);
+        } else {
+          selectResultsTab('result');
+        }
+      },
+      renderMermaid: (mermaidText) => renderMermaid(mermaidText ?? ''),
+      setMermaidPreviewMode: (preview) => setMermaidPreviewMode(Boolean(preview)),
+      isMermaidPreviewActive: () => mermaidPreviewActive,
       renderFlow: (flowDoc) => renderFlow(flowDoc ?? { version: 1, workflows: [] }),
+      renderFlowWithDiagnostics: (flowDoc, diagnostics) => {
+        lastDiagnostics = diagnostics ?? [];
+        renderFlow(flowDoc ?? { version: 1, workflows: [] }, { preserveView: true });
+      },
     };
   } catch {
     /* ignore */

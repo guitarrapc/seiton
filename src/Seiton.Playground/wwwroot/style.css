@@ -1544,6 +1544,90 @@ footer a {
   word-break: break-word;
 }
 
+/* ─── Mermaid tab (flow-mermaid text output) ─── */
+
+.mermaid-toolbar {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.3rem;
+  margin: 0 0 0.4rem;
+}
+
+.mermaid-toolbar-btn {
+  min-width: 4.5rem;
+  height: 1.8rem;
+  padding: 0 0.75rem;
+  border: 1px solid var(--border-pane);
+  border-radius: 5px;
+  background: var(--results-surface, transparent);
+  color: var(--text);
+  font: inherit;
+  font-size: 0.8rem;
+  cursor: pointer;
+}
+
+.mermaid-toolbar-btn:hover:not(:disabled) {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.mermaid-toolbar-btn:disabled {
+  cursor: default;
+  opacity: 0.4;
+}
+
+.mermaid-zoom-controls {
+  display: inline-flex;
+  gap: 0.3rem;
+  margin-right: auto;
+}
+
+.mermaid-zoom-btn {
+  min-width: 2rem;
+  padding: 0 0.55rem;
+}
+
+.mermaid-zoom-btn--reset {
+  min-width: 3.2rem;
+  font-size: 0.75rem;
+}
+
+.mermaid-output {
+  margin: 0;
+  padding: 0.65rem 0.75rem;
+  height: min(72dvh, 640px);
+  overflow: auto;
+  border: 1px solid var(--border-pane);
+  border-radius: 8px;
+  background: var(--results-surface, transparent);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.78rem;
+  line-height: 1.45;
+  white-space: pre;
+  tab-size: 2;
+}
+
+.mermaid-preview {
+  height: min(72dvh, 640px);
+  overflow: hidden;
+  border: 1px solid var(--border-pane);
+  border-radius: 8px;
+  background: var(--results-surface, transparent);
+}
+
+.mermaid-preview svg {
+  display: block;
+}
+
+.mermaid-preview--zoomable {
+  cursor: grab;
+  touch-action: none;
+}
+
+.mermaid-preview--zoomable:active {
+  cursor: grabbing;
+}
+
 /* ─── Intra-job step flow + LOD ─── */
 
 .flow-step-node {
@@ -1604,6 +1688,16 @@ footer a {
   pointer-events: none;
 }
 
+.flow-job__matrix-stack {
+  pointer-events: none;
+}
+
+.flow-job__matrix-stack-card {
+  fill: var(--results-surface, transparent);
+  stroke: var(--border-pane);
+  stroke-width: 1;
+}
+
 .flow-job__legs {
   fill: var(--accent);
   font-size: 11px;
@@ -1619,7 +1713,7 @@ footer a {
   display: none;
 }
 
-/* lod0 (far): job boxes + summary only */
+/* lod0 (far): compact job cards + summary only */
 .flow-svg--lod0 .flow-job__inner {
   display: none;
 }
@@ -1628,12 +1722,18 @@ footer a {
   display: block;
 }
 
+.flow-svg--lod0 .flow-job__meta,
 .flow-svg--lod0 .flow-job__legs {
   display: none;
 }
 
-/* lod1 (mid): step shapes + edges, no labels */
-.flow-svg--lod1 .flow-step__text {
+/* lod1 (mid): tighter cards — hide runtime header lines; simplified step labels */
+.flow-svg--lod1 .flow-job__info,
+.flow-svg--lod1 .flow-job__legs {
+  display: none;
+}
+
+.flow-svg--lod1 .flow-step__marks {
   display: none;
 }
 

@@ -9,6 +9,8 @@ description: Mandatory test-first workflow for all implementation, modification,
 
 Skip this skill only when the change is limited to documentation, configuration, or generated files (via `Seiton.Update`).
 
+Also follow the performance-requirements skill when changing hot paths in `Seiton`, `Seiton.Core`, `Seiton.Playground` or generated code.
+
 ## Workflow
 
 ### 1. Write Failing Tests First (Red)

@@ -1,4 +1,4 @@
-namespace Seiton.Playground.Tests;
+﻿namespace Seiton.Playground.Tests;
 
 /// <summary>
 /// Fast structural checks for the flow tab UI (no browser, no publish).
@@ -14,8 +14,17 @@ public sealed class PlaygroundFlowTabContractTests
         await Assert.That(html).Contains("id=\"results-tab-bar\"", StringComparison.Ordinal);
         await Assert.That(html).Contains("id=\"tab-result-btn\"", StringComparison.Ordinal);
         await Assert.That(html).Contains("id=\"tab-flow-btn\"", StringComparison.Ordinal);
+        await Assert.That(html).Contains("id=\"tab-mermaid-btn\"", StringComparison.Ordinal);
         await Assert.That(html).Contains("id=\"result-panel\"", StringComparison.Ordinal);
         await Assert.That(html).Contains("id=\"flow-panel\"", StringComparison.Ordinal);
+        await Assert.That(html).Contains("id=\"mermaid-panel\"", StringComparison.Ordinal);
+        await Assert.That(html).Contains("id=\"mermaid-output\"", StringComparison.Ordinal);
+        await Assert.That(html).Contains("id=\"mermaid-preview\"", StringComparison.Ordinal);
+        await Assert.That(html).Contains("id=\"mermaid-preview-btn\"", StringComparison.Ordinal);
+        await Assert.That(html).Contains("id=\"mermaid-copy-btn\"", StringComparison.Ordinal);
+        await Assert.That(html).Contains("id=\"mermaid-zoom-out-btn\"", StringComparison.Ordinal);
+        await Assert.That(html).Contains("id=\"mermaid-zoom-reset-btn\"", StringComparison.Ordinal);
+        await Assert.That(html).Contains("id=\"mermaid-zoom-in-btn\"", StringComparison.Ordinal);
         await Assert.That(html).Contains("id=\"flow-graph\"", StringComparison.Ordinal);
         await Assert.That(html).Contains("id=\"flow-detail\"", StringComparison.Ordinal);
         await Assert.That(html).Contains("id=\"flow-zoom-out-btn\"", StringComparison.Ordinal);
@@ -42,14 +51,61 @@ public sealed class PlaygroundFlowTabContractTests
     }
 
     [Test]
+    public async Task IndexTemplate_MermaidCdnAssetHasSubresourceIntegrity()
+    {
+        var html = await ReadWwwrootFileAsync("index.html");
+        await Assert.That(html).Contains("mermaid/11.12.0/mermaid.min.js", StringComparison.Ordinal);
+        // SRI from https://api.cdnjs.com/libraries/mermaid/11.12.0 — recompute when bumping the Mermaid version.
+        await Assert.That(html).Contains(
+            "integrity=\"sha512-5TKaYvhenABhlGIKSxAWLFJBZCSQw7HTV7aL1dJcBokM/+3PNtfgJFlv8E6Us/B1VMlQ4u8sPzjudL9TEQ06ww==\"",
+            StringComparison.Ordinal);
+    }
+
+    [Test]
     public async Task MainJs_FlowTab_WiresInteropTabSwitchAndTestHooks()
     {
         var js = await ReadWwwrootFileAsync("main.js");
         await Assert.That(js).Contains("GetFlowJson");
+        await Assert.That(js).Contains("GetFlowMermaid");
+        await Assert.That(js).Contains("RunLintWithFlowJson");
         await Assert.That(js).Contains("refreshFlow");
+        await Assert.That(js).Contains("refreshMermaid");
+        await Assert.That(js).Contains("setMermaidPreviewMode");
+        await Assert.That(js).Contains("renderMermaidPreviewSvg");
+        await Assert.That(js).Contains("wireMermaidPreviewZoom");
+        await Assert.That(js).Contains("fitMermaidPreview");
+        await Assert.That(js).Contains("scaleExtent([fitScale,");
+        await Assert.That(js).Contains("d3.zoom");
         await Assert.That(js).Contains("selectResultsTab");
         await Assert.That(js).Contains("from './flow-graph.js'");
-        await Assert.That(js).Contains("getFlow:");
+        await Assert.That(js).Contains("captureFlowViewState");
+        await Assert.That(js).Contains("preserveView");
+        await Assert.That(js).Contains("initialView");
+        await Assert.That(js).Contains("flowStructureSignature");
+        await Assert.That(js).Contains("updateFlowGraphDiagnostics");
+        await Assert.That(js).Contains("scheduleMermaidPreviewRender");
+        await Assert.That(js).Contains("renderMermaid");
+        await Assert.That(js).Contains("isMermaidPreviewActive");
+        await Assert.That(js).Contains("isMermaidEmpty");
+    }
+
+    [Test]
+    public async Task FlowGraphModule_LazyLayoutsAndStructureSignature()
+    {
+        var js = await ReadWwwrootFileAsync("flow-graph.js");
+        await Assert.That(js).Contains("function ensureLayout");
+        await Assert.That(js).Contains("export function flowStructureSignature");
+        await Assert.That(js).Contains("export function updateFlowGraphDiagnostics");
+        await Assert.That(js.Contains("computeAllLayouts", StringComparison.Ordinal)).IsFalse();
+    }
+
+    [Test]
+    public async Task FlowGraphModule_PreservesViewStateAcrossRerender()
+    {
+        var js = await ReadWwwrootFileAsync("flow-graph.js");
+        await Assert.That(js).Contains("captureFlowViewState");
+        await Assert.That(js).Contains("applySavedFlowView");
+        await Assert.That(js).Contains("initialView");
     }
 
     [Test]
@@ -74,7 +130,41 @@ public sealed class PlaygroundFlowTabContractTests
         await Assert.That(js).Contains("wait-all");
         // Zoom-driven level of detail.
         await Assert.That(js).Contains("flow-svg--lod0");
+        await Assert.That(js).Contains("flow-svg--lod1");
         await Assert.That(js).Contains("flow-svg--lod2");
+        // Wheel / pinch changes LOD; toolbar buttons change display scale only.
+        // Wheel: continuous zoom + LOD at scale-band edges.
+        await Assert.That(js).Contains("WHEEL_ZOOM_SENS");
+        await Assert.That(js).Contains("LOD_DROP_K");
+        await Assert.That(js).Contains("LOD_RISE_K");
+        await Assert.That(js).Contains("lodForScale");
+        await Assert.That(js).Contains("LOD_COMPENSATE_EXP");
+        await Assert.That(js).Contains("lodCompensatingScale");
+        await Assert.That(js).Contains("scaleTransformAt");
+        await Assert.That(js.Contains("WHEEL_LOD_STEP", StringComparison.Ordinal)).IsFalse();
+        await Assert.That(js.Contains("setLod", StringComparison.Ordinal)).IsFalse();
+        await Assert.That(js).Contains("wireLodWheel");
+        await Assert.That(js).Contains("DISPLAY_SCALE_MIN");
+        // Step frames and labels are paired; markers are a separate tspan hidden at lod1.
+        await Assert.That(js).Contains("flow-step__label");
+        await Assert.That(js).Contains("flow-step__marks");
+        await Assert.That(js).Contains("stepLabelParts");
+        // Per-LOD job layout: compact cards at far zoom, full geometry at near zoom.
+        await Assert.That(js).Contains("ensureLayout");
+        await Assert.That(js).Contains("applyGraphLayout");
+        await Assert.That(js).Contains("MIN_JOB_W_LOD0");
+        await Assert.That(js).Contains("INNER_SCALE_LOD1");
+        await Assert.That(js).Contains("updateJobChrome");
+        await Assert.That(js).Contains("diagBadgeReservedPx");
+        await Assert.That(js.Contains("LOD2_THRESHOLD", StringComparison.Ordinal)).IsFalse();
+    }
+
+    [Test]
+    public async Task Stylesheet_Lod1_HidesJobInfoAndLegs()
+    {
+        var css = await ReadWwwrootFileAsync("style.css");
+        await Assert.That(css).Contains(".flow-svg--lod1 .flow-job__info");
+        await Assert.That(css).Contains(".flow-svg--lod1 .flow-job__legs");
     }
 
     [Test]
@@ -221,6 +311,9 @@ public sealed class PlaygroundFlowTabContractTests
         await Assert.That(css).Contains(".flow-step-edge");
         await Assert.That(css).Contains(".flow-job__legs");
         await Assert.That(css).Contains(".flow-job__summary");
+        // lod1 keeps step labels visible; only runtime markers (if / timeout / continue) hide.
+        await Assert.That(css).Contains(".flow-svg--lod1 .flow-step__marks");
+        await Assert.That(css.Contains(".flow-svg--lod1 .flow-step__text", StringComparison.Ordinal)).IsFalse();
     }
 
     [Test]
@@ -267,10 +360,15 @@ public sealed class PlaygroundFlowTabContractTests
         var js = await ReadWwwrootFileAsync("flow-graph.js");
         // GitHub-like folder tab marks matrix jobs at every LOD.
         await Assert.That(js).Contains("flow-job__folder-tab");
+        await Assert.That(js).Contains("flow-job__matrix-stack");
+        await Assert.That(js).Contains("matrixStackLayerCount");
+        await Assert.That(js).Contains("jobAdornmentBounds");
+        await Assert.That(js).Contains("MATRIX_GROUP_EXTRA_PAD");
         await Assert.That(js).Contains("Matrix");
 
         var css = await ReadWwwrootFileAsync("style.css");
         await Assert.That(css).Contains(".flow-job__folder-tab");
+        await Assert.That(css).Contains(".flow-job__matrix-stack-card");
     }
 
     [Test]
@@ -299,6 +397,11 @@ public sealed class PlaygroundFlowTabContractTests
         await Assert.That(css).Contains(".results-tab--active");
         await Assert.That(css).Contains(".flow-graph");
         await Assert.That(css).Contains(".flow-detail");
+        await Assert.That(css).Contains(".mermaid-output");
+        await Assert.That(css).Contains(".mermaid-preview");
+        await Assert.That(css).Contains(".mermaid-toolbar-btn");
+        await Assert.That(css).Contains(".mermaid-preview--zoomable");
+        await Assert.That(css).Contains("cursor: grab");
         await Assert.That(css).Contains(".flow-parallel-boundary");
         await Assert.That(css).Contains(".flow-edge");
     }

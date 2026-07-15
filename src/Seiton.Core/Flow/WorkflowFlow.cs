@@ -1,4 +1,4 @@
-namespace Seiton.Core.Flow;
+﻿namespace Seiton.Core.Flow;
 
 // Flow DTOs are the shared machine-readable contract between the CLI
 // (`check --format flow-json` / `flow-mermaid`) and the Playground flow tab.
@@ -56,6 +56,9 @@ public enum FlowJobKind
 /// <summary>A single job node in the flow graph.</summary>
 public sealed class FlowJob
 {
+    private string[] _needs = [];
+    private string[] _reducedNeeds = [];
+
     public required string Id { get; init; }
 
     public string? Name { get; init; }
@@ -66,7 +69,11 @@ public sealed class FlowJob
     public string? If { get; init; }
 
     /// <summary>Job ids this job depends on (<c>needs:</c> edges).</summary>
-    public required string[] Needs { get; init; }
+    public required string[] Needs
+    {
+        get => _needs;
+        init => _needs = value;
+    }
 
     /// <summary>
     /// <see cref="Needs"/> after transitive reduction: edges implied by another
@@ -74,7 +81,11 @@ public sealed class FlowJob
     /// when <c>b</c> already depends on <c>a</c>). Rendering-oriented — the semantic
     /// dependency set stays in <see cref="Needs"/>.
     /// </summary>
-    public required string[] ReducedNeeds { get; init; }
+    public required string[] ReducedNeeds
+    {
+        get => _reducedNeeds;
+        init => _reducedNeeds = value;
+    }
 
     /// <summary>Runner labels, or the raw whole-value expression / group name.</summary>
     public required string[] RunsOn { get; init; }
@@ -104,6 +115,14 @@ public sealed class FlowJob
 
     /// <summary>1-based end line of the job block in the source (0 when unknown).</summary>
     public int EndLine { get; init; }
+
+    internal void SetNeeds(string[] needs)
+    {
+        _needs = needs;
+        _reducedNeeds = needs;
+    }
+
+    internal void SetReducedNeeds(string[] reducedNeeds) => _reducedNeeds = reducedNeeds;
 }
 
 /// <summary>View of <c>strategy:</c>; static matrices are expanded into <see cref="Combinations"/>.</summary>

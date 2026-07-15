@@ -72,6 +72,9 @@
   <script defer src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.9.0/d3.min.js"
     integrity="sha512-vc58qvvBdrDR4etbxMdlTt4GBQk1qjvyORR2nrsPsFPyrs+/u5c3+1Ct6upOgdZoIl7eq6k3a1UPDSNAQi/32A=="
     crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+  <script defer src="https://cdnjs.cloudflare.com/ajax/libs/mermaid/11.12.0/mermaid.min.js"
+    integrity="sha512-5TKaYvhenABhlGIKSxAWLFJBZCSQw7HTV7aL1dJcBokM/+3PNtfgJFlv8E6Us/B1VMlQ4u8sPzjudL9TEQ06ww=="
+    crossorigin="anonymous" referrerpolicy="no-referrer"></script>
 </head>
 
 <body>
@@ -173,6 +176,8 @@
             aria-selected="true" aria-controls="result-panel">Result</button>
           <button id="tab-flow-btn" type="button" class="results-tab" role="tab" aria-selected="false"
             aria-controls="flow-panel">Flow</button>
+          <button id="tab-mermaid-btn" type="button" class="results-tab" role="tab" aria-selected="false"
+            aria-controls="mermaid-panel">Mermaid</button>
         </div>
         <div id="result-panel" role="tabpanel" aria-labelledby="tab-result-btn">
           <table id="lint-result" class="result-table" hidden>
@@ -193,6 +198,26 @@
           </div>
           <div id="flow-graph" class="flow-graph"></div>
           <div id="flow-detail" class="flow-detail" hidden></div>
+        </div>
+        <div id="mermaid-panel" role="tabpanel" aria-labelledby="tab-mermaid-btn" hidden>
+          <div class="mermaid-toolbar">
+            <span class="mermaid-zoom-controls" role="group" aria-label="Mermaid preview zoom controls">
+              <button id="mermaid-zoom-out-btn" type="button" class="mermaid-toolbar-btn mermaid-zoom-btn"
+                aria-label="Zoom out" title="Zoom out" disabled>&minus;</button>
+              <button id="mermaid-zoom-reset-btn" type="button"
+                class="mermaid-toolbar-btn mermaid-zoom-btn mermaid-zoom-btn--reset"
+                aria-label="Fit diagram" title="Fit diagram" disabled>Fit</button>
+              <button id="mermaid-zoom-in-btn" type="button" class="mermaid-toolbar-btn mermaid-zoom-btn"
+                aria-label="Zoom in" title="Zoom in" disabled>&plus;</button>
+            </span>
+            <button id="mermaid-preview-btn" type="button" class="mermaid-toolbar-btn" disabled
+              title="Preview rendered diagram" aria-label="Preview Mermaid diagram">Preview</button>
+            <button id="mermaid-copy-btn" type="button" class="mermaid-toolbar-btn" disabled
+              title="Copy Mermaid diagram for GitHub Markdown" aria-label="Copy Mermaid diagram">Copy</button>
+          </div>
+          <div id="mermaid-empty" class="notification" hidden>No workflow structure to export.</div>
+          <pre id="mermaid-output" class="mermaid-output" hidden></pre>
+          <div id="mermaid-preview" class="mermaid-preview" hidden></div>
         </div>
       </div>
     </section>

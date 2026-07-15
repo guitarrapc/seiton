@@ -1,4 +1,4 @@
-using System.Text;
+﻿using System.Text;
 using Seiton.Core.Flow;
 using Seiton.Core.Parsing;
 
@@ -233,5 +233,116 @@ public sealed class WorkflowFlowMermaidTests
         var mermaid = WorkflowFlowMermaid.Serialize([flow]);
 
         await Assert.That(mermaid).Contains("subgraph j0[\"test (matrix: os × node)\"]");
+    }
+
+    [Test]
+    public async Task Serialize_CompositeLabels_PreserveJoiningSuffixAndTruncation()
+    {
+        var flow = CollectFlow("""
+            on: push
+            jobs:
+              test:
+                if: ${{ always() }}
+                runs-on: ubuntu-latest
+                strategy:
+                  matrix:
+                    first-dimension-with-a-long-name: [one]
+                    second-dimension-with-a-long-name: [two]
+                steps:
+                  - wait: [background-a, background-b]
+                  - run: echo done
+                    if: ${{ success() }}
+            """);
+
+        var mermaid = WorkflowFlowMermaid.Serialize([flow]);
+
+        await Assert.That(mermaid).Contains(
+            "subgraph j0[\"test (matrix: first-dimension-with-a-long-name × second-dimensio…\"]");
+        await Assert.That(mermaid).Contains(
+            "j0n0[\"wait: background-a, background-b\"]");
+        await Assert.That(mermaid).Contains("j0n1[\"run: echo done (if)\"]");
+    }
+
+    [Test]
+    public async Task Write_Utf8Bytes_MatchesSerializeString()
+    {
+        var flow = CollectFlow("""
+            on: push
+            jobs:
+              build:
+                runs-on: ubuntu-latest
+                steps:
+                  - run: echo a
+              deploy:
+                runs-on: ubuntu-latest
+                needs: build
+                steps:
+                  - run: echo deploy
+            """);
+
+        var expected = WorkflowFlowMermaid.Serialize([flow]);
+        var buffer = new System.Buffers.ArrayBufferWriter<byte>(1024);
+        WorkflowFlowMermaid.Write(buffer, flow);
+        var actual = Encoding.UTF8.GetString(buffer.WrittenSpan);
+
+        await Assert.That(actual).IsEqualTo(expected);
+    }
+
+    [Test]
+    public async Task Serialize_NonBmpJobId_PreservesUnicodeScalar()
+    {
+        var flow = CollectFlow("""
+            on: push
+            jobs:
+              "deploy-🚀":
+                runs-on: ubuntu-latest
+                steps:
+                  - run: echo deploy
+            """);
+
+        var mermaid = WorkflowFlowMermaid.Serialize([flow]);
+
+        await Assert.That(mermaid).Contains("subgraph j0[\"deploy-🚀\"]");
+    }
+
+    [Test]
+    public async Task Write_LiveAst_MatchesOwnedDto()
+    {
+        const string yaml = """
+            name: Direct mermaid
+            on: push
+            jobs:
+              validate:
+                runs-on: ubuntu-latest
+                steps:
+                  - uses: actions/checkout@v4
+                  - parallel:
+                    - run: npm run lint
+                    - run: npm test
+              publish:
+                needs: validate
+                if: ${{ success() }}
+                runs-on: ubuntu-latest
+                strategy:
+                  matrix:
+                    os: [ubuntu, windows]
+                    node: [18, 20]
+                steps:
+                  - id: server
+                    name: Publish
+                    run: npm publish
+              deploy:
+                needs: [validate, publish]
+                uses: octo/repo/.github/workflows/deploy.yml@v1
+            """;
+
+        using var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "wf.yml");
+        var owned = WorkflowFlowCollector.Collect(result, "wf.yml")!;
+        var expected = WorkflowFlowMermaid.Serialize([owned]);
+        var buffer = new System.Buffers.ArrayBufferWriter<byte>(4096);
+
+        WorkflowFlowMermaid.Write(buffer, result.Workflow, "wf.yml");
+
+        await Assert.That(Encoding.UTF8.GetString(buffer.WrittenSpan)).IsEqualTo(expected);
     }
 }

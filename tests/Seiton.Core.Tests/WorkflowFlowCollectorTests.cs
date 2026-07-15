@@ -1,4 +1,4 @@
-using System.Text;
+﻿using System.Text;
 using Seiton.Core.Flow;
 using Seiton.Core.Parsing;
 
@@ -77,6 +77,28 @@ public sealed class WorkflowFlowCollectorTests
         await Assert.That(flow.Jobs[0].Needs).IsEmpty();
         await Assert.That(flow.Jobs[1].Needs.SequenceEqual(["prep"])).IsTrue();
         await Assert.That(flow.Jobs[2].Needs.SequenceEqual(["prep", "build"])).IsTrue();
+    }
+
+    [Test]
+    public async Task Collect_NeedsMatchingJobId_ReusesCanonicalString()
+    {
+        using var result = Parse("""
+            on: push
+            jobs:
+              prep:
+                runs-on: ubuntu-latest
+                steps:
+                  - run: echo prep
+              build:
+                runs-on: ubuntu-latest
+                needs: prep
+                steps:
+                  - run: echo build
+            """);
+
+        var flow = WorkflowFlowCollector.Collect(result, "wf.yml");
+
+        await Assert.That(ReferenceEquals(flow!.Jobs[0].Id, flow.Jobs[1].Needs[0])).IsTrue();
     }
 
     [Test]
@@ -523,12 +545,16 @@ public sealed class WorkflowFlowCollectorTests
 
         var flow = WorkflowFlowCollector.Collect(result, "wf.yml");
 
-        var combos = flow!.Jobs[0].Strategy!.Combinations;
+        var strategy = flow!.Jobs[0].Strategy!;
+        var combos = strategy.Combinations;
         await Assert.That(combos).Count().IsEqualTo(4);
         await Assert.That(Render(combos[0])).IsEqualTo("os=ubuntu,node=18");
         await Assert.That(Render(combos[1])).IsEqualTo("os=ubuntu,node=20");
         await Assert.That(Render(combos[2])).IsEqualTo("os=windows,node=18");
         await Assert.That(Render(combos[3])).IsEqualTo("os=windows,node=20");
+        await Assert.That(ReferenceEquals(strategy.MatrixKeys[0], combos[0][0].Key)).IsTrue();
+        await Assert.That(ReferenceEquals(strategy.MatrixKeys[1], combos[0][1].Key)).IsTrue();
+        await Assert.That(ReferenceEquals(combos[0][1].Value, combos[2][1].Value)).IsTrue();
     }
 
     [Test]

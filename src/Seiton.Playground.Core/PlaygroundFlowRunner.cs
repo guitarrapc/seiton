@@ -1,7 +1,4 @@
-using System.Buffers;
-using System.Text;
-using Seiton.Core.Flow;
-using Seiton.Core.Parsing;
+﻿using Seiton.Core.Parsing;
 
 namespace Seiton.Playground;
 
@@ -12,29 +9,20 @@ namespace Seiton.Playground;
 /// </summary>
 public static class PlaygroundFlowRunner
 {
-    /// <summary>Guards the shared buffers and the identity cache (WASM is single-threaded; desktop tests are not).</summary>
+    /// <summary>Guards flow-only parse path (WASM is single-threaded; desktop tests are not).</summary>
     private static readonly object FlowGate = new();
 
-    /// <summary>Reusable buffer for JSON serialization. Guarded by <see cref="FlowGate"/>.</summary>
-    private static readonly ArrayBufferWriter<byte> JsonBuffer = new(4096);
-
-    /// <summary>Reusable buffer for UTF-8 encoding. Guarded by <see cref="FlowGate"/>.</summary>
-    private static byte[]? _utf8Buf;
-
-    // ─── Identity-based short circuit (mirrors PlaygroundLintRunner) ───
-    private static string? _lastYamlSource;
-    private static string? _lastFilePath;
-    private static byte[]? _lastJsonOutput;
+    /// <summary>Caller-owned UTF-8 source buffer. Guarded by <see cref="FlowGate"/>.</summary>
+    private static byte[] _utf8Yaml = [];
 
     /// <summary>Clears shared caches between playground tests.</summary>
     internal static void ResetSharedStateForTests()
     {
         lock (FlowGate)
         {
-            _lastYamlSource = null;
-            _lastFilePath = null;
-            _lastJsonOutput = null;
+            _utf8Yaml = [];
         }
+        PlaygroundFlowOutputCache.ResetForTests();
     }
 
     /// <summary>
@@ -43,54 +31,34 @@ public static class PlaygroundFlowRunner
     /// </summary>
     public static byte[] RunFlowToJsonUtf8(string yamlSource, string filePath)
     {
+        return EnsureOutputs(yamlSource, filePath).Json;
+    }
+
+    /// <summary>
+    /// Parses <paramref name="yamlSource"/> and returns Mermaid flowchart text as UTF-8 bytes
+    /// (same contract as <c>seiton check --format flow-mermaid</c>).
+    /// Non-workflow documents produce a minimal <c>flowchart LR</c> diagram with no jobs.
+    /// </summary>
+    public static byte[] RunFlowToMermaidUtf8(string yamlSource, string filePath)
+    {
+        return EnsureOutputs(yamlSource, filePath).Mermaid;
+    }
+
+    private static (byte[] Json, byte[] Mermaid) EnsureOutputs(string yamlSource, string filePath)
+    {
         ArgumentNullException.ThrowIfNull(yamlSource);
         ArgumentException.ThrowIfNullOrEmpty(filePath);
 
         lock (FlowGate)
         {
-            // Fast path: if source and filePath are identical to last call, return cached output
-            if (ReferenceEquals(yamlSource, _lastYamlSource)
-                && string.Equals(filePath, _lastFilePath, StringComparison.Ordinal)
-                && _lastJsonOutput is not null)
+            var (utf8Yaml, yamlHash) = PlaygroundUtf8Scratch.EncodeAndHash(yamlSource, ref _utf8Yaml);
+            if (PlaygroundFlowOutputCache.TryGet(yamlHash, filePath, out var cachedJson, out var cachedMermaid))
             {
-                return _lastJsonOutput;
+                return (cachedJson, cachedMermaid);
             }
 
-            var utf8Yaml = EncodeToReusableBuffer(yamlSource);
-
-            byte[] result;
-            using (var parseResult = WorkflowParser.Parse(utf8Yaml, filePath))
-            {
-                var flow = WorkflowFlowCollector.Collect(parseResult, filePath);
-                JsonBuffer.Clear();
-                WorkflowFlowJson.Write(JsonBuffer, flow is null ? [] : [flow]);
-                var written = JsonBuffer.WrittenSpan;
-                result = _lastJsonOutput is not null && written.SequenceEqual(_lastJsonOutput)
-                    ? _lastJsonOutput
-                    : written.ToArray();
-            }
-
-            _lastYamlSource = yamlSource;
-            _lastFilePath = filePath;
-            _lastJsonOutput = result;
-
-            return result;
+            using var parseResult = WorkflowParser.Parse(utf8Yaml, filePath);
+            return PlaygroundFlowOutputCache.Store(yamlHash, filePath, parseResult.Workflow);
         }
-    }
-
-    /// <summary>
-    /// Encodes <paramref name="source"/> into the reusable buffer and returns it.
-    /// Only allocates when the byte length changes from the last call.
-    /// Must be called under <see cref="FlowGate"/>.
-    /// </summary>
-    private static byte[] EncodeToReusableBuffer(string source)
-    {
-        var byteCount = Encoding.UTF8.GetByteCount(source);
-        if (_utf8Buf is null || _utf8Buf.Length != byteCount)
-        {
-            _utf8Buf = new byte[byteCount];
-        }
-        Encoding.UTF8.GetBytes(source, _utf8Buf);
-        return _utf8Buf;
     }
 }

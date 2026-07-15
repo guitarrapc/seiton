@@ -1,4 +1,4 @@
-using System.Text.Json;
+﻿using System.Text.Json;
 
 namespace Seiton.Playground.Tests;
 
@@ -80,6 +80,93 @@ public sealed class PlaygroundFlowRunnerTests
     }
 
     [Test]
+    public async Task RunFlowToMermaid_Workflow_ReturnsFlowchart()
+    {
+        const string yaml = """
+            name: CI
+            on: push
+            jobs:
+              build:
+                runs-on: ubuntu-latest
+                steps:
+                  - uses: actions/checkout@v4
+                  - run: npm test
+              deploy:
+                runs-on: ubuntu-latest
+                needs: build
+                steps:
+                  - run: echo deploy
+            """;
+
+        var mermaid = System.Text.Encoding.UTF8.GetString(
+            PlaygroundFlowRunner.RunFlowToMermaidUtf8(yaml, ".github/workflows/ci.yml"));
+
+        await Assert.That(mermaid).Contains("flowchart LR");
+        await Assert.That(mermaid).Contains("subgraph j0[\"build\"]");
+        await Assert.That(mermaid).Contains("j0 --> j1");
+    }
+
+    [Test]
+    public async Task RunFlowToMermaid_ActionMetadata_ReturnsMinimalDiagram()
+    {
+        const string yaml = """
+            name: My Action
+            description: does things
+            runs:
+              using: composite
+              steps:
+                - run: echo hi
+                  shell: bash
+            """;
+
+        var mermaid = System.Text.Encoding.UTF8.GetString(
+            PlaygroundFlowRunner.RunFlowToMermaidUtf8(yaml, "action.yml"));
+
+        await Assert.That(mermaid).Contains("flowchart LR");
+        await Assert.That(mermaid.Contains("subgraph j0", StringComparison.Ordinal)).IsFalse();
+    }
+
+    [Test]
+    public async Task RunFlowToJsonAndMermaid_SameContentHash_ReturnsCachedOutputs()
+    {
+        const string yaml = """
+            on: push
+            jobs:
+              build:
+                runs-on: ubuntu-latest
+                steps:
+                  - run: echo ok
+            """;
+
+        var json = PlaygroundFlowRunner.RunFlowToJsonUtf8(new string(yaml.AsSpan()), ".github/workflows/ci.yml");
+        var mermaid = PlaygroundFlowRunner.RunFlowToMermaidUtf8(new string(yaml.AsSpan()), ".github/workflows/ci.yml");
+        var jsonAgain = PlaygroundFlowRunner.RunFlowToJsonUtf8(new string(yaml.AsSpan()), ".github/workflows/ci.yml");
+        var mermaidAgain = PlaygroundFlowRunner.RunFlowToMermaidUtf8(new string(yaml.AsSpan()), ".github/workflows/ci.yml");
+
+        await Assert.That(ReferenceEquals(json, jsonAgain)).IsTrue();
+        await Assert.That(ReferenceEquals(mermaid, mermaidAgain)).IsTrue();
+    }
+
+    [Test]
+    public async Task RunFlowToJson_AfterLint_SameContent_ReusesFlowCache()
+    {
+        const string yaml = """
+            on: push
+            jobs:
+              build:
+                runs-on: ubuntu-latest
+                steps:
+                  - run: echo ok
+            """;
+
+        PlaygroundLintRunner.RunToJsonUtf8(yaml, ".github/workflows/ci.yml");
+        var flow = PlaygroundFlowRunner.RunFlowToJsonUtf8(new string(yaml.AsSpan()), ".github/workflows/ci.yml");
+        var flowAgain = PlaygroundFlowRunner.RunFlowToJsonUtf8(new string(yaml.AsSpan()), ".github/workflows/ci.yml");
+
+        await Assert.That(ReferenceEquals(flow, flowAgain)).IsTrue();
+    }
+
+    [Test]
     public async Task RunFlowToJson_RepeatedCalls_ProducesConsistentOutput()
     {
         const string yaml = """
@@ -99,5 +186,88 @@ public sealed class PlaygroundFlowRunnerTests
             firstJson ??= json;
             await Assert.That(json).IsEquivalentTo(firstJson);
         }
+    }
+
+    [Test]
+    public async Task RunLintWithFlowJson_Workflow_ReturnsDiagnosticsAndFlowFromOneResponse()
+    {
+        const string yaml = """
+            on: push
+            jobs:
+              build:
+                runs-on: ubuntu-latest
+                steps:
+                  - run: echo ok
+            """;
+
+        var response = PlaygroundLintRunner.RunToJsonWithFlowJsonUtf8(
+            yaml,
+            ".github/workflows/ci.yml");
+        using var document = JsonDocument.Parse(response);
+
+        await Assert.That(document.RootElement.GetProperty("diagnostics").ValueKind)
+            .IsEqualTo(JsonValueKind.Array);
+        await Assert.That(document.RootElement.GetProperty("flow").GetProperty("workflows")
+            .GetArrayLength())
+            .IsEqualTo(1);
+    }
+
+    [Test]
+    public async Task RunLintWithMermaid_Workflow_ReturnsDiagnosticsAndMermaidFromOneResponse()
+    {
+        const string yaml = """
+            on: push
+            jobs:
+              build:
+                runs-on: ubuntu-latest
+                steps:
+                  - run: echo ok
+            """;
+
+        var response = PlaygroundLintRunner.RunToJsonWithMermaidUtf8(
+            yaml,
+            ".github/workflows/ci.yml");
+        using var document = JsonDocument.Parse(response);
+
+        await Assert.That(document.RootElement.GetProperty("diagnostics").ValueKind)
+            .IsEqualTo(JsonValueKind.Array);
+        await Assert.That(document.RootElement.GetProperty("mermaid").GetString())
+            .Contains("flowchart LR");
+    }
+
+    [Test]
+    public async Task PlaygroundFlowPaths_ShouldNotMaterializeOwnedDto()
+    {
+        var root = FindRepoRoot();
+        var files = new[]
+        {
+            Path.Combine(root, "src", "Seiton.Playground.Core", "PlaygroundFlowRunner.cs"),
+            Path.Combine(root, "src", "Seiton.Playground.Core", "PlaygroundLintRunner.cs"),
+        };
+
+        var violations = files
+            .Where(file => File.ReadAllText(file).Contains(
+                "WorkflowFlowCollector.Collect",
+                StringComparison.Ordinal))
+            .Select(file => Path.GetRelativePath(root, file))
+            .ToArray();
+
+        await Assert.That(violations).IsEmpty();
+    }
+
+    private static string FindRepoRoot()
+    {
+        var current = AppContext.BaseDirectory;
+        while (!string.IsNullOrEmpty(current))
+        {
+            if (File.Exists(Path.Combine(current, "seiton.slnx")))
+            {
+                return current;
+            }
+
+            current = Directory.GetParent(current)?.FullName ?? string.Empty;
+        }
+
+        throw new InvalidOperationException("Repository root not found.");
     }
 }

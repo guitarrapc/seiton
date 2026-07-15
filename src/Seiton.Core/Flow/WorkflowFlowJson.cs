@@ -1,4 +1,4 @@
-using System.Buffers;
+﻿using System.Buffers;
 using System.Text;
 using System.Text.Json;
 
@@ -9,7 +9,7 @@ namespace Seiton.Core.Flow;
 /// the output identical between the NativeAOT CLI and the trimmed WASM Playground
 /// without registering DTOs in a JsonSerializerContext.
 /// </summary>
-public static class WorkflowFlowJson
+public static partial class WorkflowFlowJson
 {
     /// <summary>The flow-json contract version emitted as the top-level <c>version</c> property.</summary>
     public const int Version = 1;
@@ -35,6 +35,37 @@ public static class WorkflowFlowJson
         writer.WriteEndArray();
         writer.WriteEndObject();
         writer.Flush();
+    }
+
+    /// <summary>Writes a single workflow without allocating a one-element array.</summary>
+    public static void Write(IBufferWriter<byte> output, WorkflowFlow workflow)
+    {
+        using var writer = new Utf8JsonWriter(output, WriterOptions);
+        WriteDocument(writer, workflow);
+        writer.Flush();
+    }
+
+    /// <summary>Writes an empty <c>workflows</c> array.</summary>
+    public static void WriteEmpty(IBufferWriter<byte> output)
+    {
+        using var writer = new Utf8JsonWriter(output, WriterOptions);
+        WriteDocument(writer, workflow: null);
+        writer.Flush();
+    }
+
+    /// <summary>Writes one flow document into an active JSON object or array value position.</summary>
+    public static void WriteDocument(Utf8JsonWriter writer, WorkflowFlow? workflow)
+    {
+        writer.WriteStartObject();
+        writer.WriteNumber("version"u8, Version);
+        writer.WriteStartArray("workflows"u8);
+        if (workflow is { } flow)
+        {
+            WriteWorkflow(writer, flow);
+        }
+
+        writer.WriteEndArray();
+        writer.WriteEndObject();
     }
 
     /// <summary>Serializes a single workflow to a flow-json string (test/interop convenience).</summary>
@@ -181,20 +212,20 @@ public static class WorkflowFlowJson
             writer.WriteString("environment"u8, job.Environment);
         }
 
-        if (job.Strategy is not null)
+        if (job.Strategy is { } strategy)
         {
             writer.WriteStartObject("strategy"u8);
-            writer.WriteBoolean("hasMatrix"u8, job.Strategy.HasMatrix);
+            writer.WriteBoolean("hasMatrix"u8, strategy.HasMatrix);
             writer.WriteStartArray("matrixKeys"u8);
-            foreach (var key in job.Strategy.MatrixKeys)
+            foreach (var key in strategy.MatrixKeys)
             {
                 writer.WriteStringValue(key);
             }
 
             writer.WriteEndArray();
-            writer.WriteBoolean("matrixIsExpression"u8, job.Strategy.MatrixIsExpression);
+            writer.WriteBoolean("matrixIsExpression"u8, strategy.MatrixIsExpression);
             writer.WriteStartArray("combinations"u8);
-            foreach (var combination in job.Strategy.Combinations)
+            foreach (var combination in strategy.Combinations)
             {
                 writer.WriteStartObject();
                 foreach (var pair in combination)

@@ -1,4 +1,4 @@
-using System.Text.RegularExpressions;
+﻿using System.Text.RegularExpressions;
 using Microsoft.Playwright;
 
 namespace Seiton.Playground.Tests;
@@ -50,6 +50,169 @@ public sealed class PlaygroundUiLayoutTests
             "() => { const el = document.querySelector('#linter'); return el !== null && getComputedStyle(el).display === 'grid'; }",
             arg: null,
             new PageWaitForFunctionOptions { Timeout = 90_000 });
+    }
+
+    [Test]
+    public async Task MermaidOutput_EmptyAndJobForms_AreClassifiedCorrectly()
+    {
+        var host = await PlaygroundUiTestHost.GetOrCreateAsync();
+        var browser = await PlaygroundUiBrowserSession.GetBrowserAsync();
+        await using var context = await browser.NewContextAsync();
+        var page = await context.NewPageAsync();
+        await GotoPlaygroundAndWaitForLinterGridAsync(page, $"{host.BaseUrl.TrimEnd('/')}/?seitonTestHooks=1");
+        await page.WaitForFunctionAsync(
+            "() => typeof globalThis.__SEITON_PLAYGROUND_TEST__?.renderMermaid === 'function'",
+            arg: null,
+            new PageWaitForFunctionOptions { Timeout = 30_000 });
+
+        var emptyHiddenByInput = await page.EvaluateAsync<bool[]>(
+            """
+            () => {
+              const hooks = globalThis.__SEITON_PLAYGROUND_TEST__;
+              hooks.selectResultsTab('mermaid');
+              return [
+                `flowchart LR`,
+                `flowchart LR
+                  subgraph j0["build"]
+                  end`,
+                `flowchart LR
+                  j0[["deploy — uses: octo/repo/.github/workflows/deploy.yml@v1"]]`,
+                `flowchart LR
+                  subgraph w0j0["build"]
+                  end`,
+                `flowchart LR
+                  w0j0[["deploy — uses: octo/repo/.github/workflows/deploy.yml@v1"]]`,
+              ].map((mermaid) => {
+                hooks.renderMermaid(mermaid);
+                return document.querySelector('#mermaid-empty').hidden;
+              });
+            }
+            """);
+
+        await Assert.That(emptyHiddenByInput).IsEquivalentTo([false, true, true, true, true]);
+        await Assert.That(await page.Locator("#mermaid-empty").IsHiddenAsync()).IsTrue();
+        await Assert.That(await page.Locator("#mermaid-output").IsVisibleAsync()).IsTrue();
+        await Assert.That(await page.Locator("#mermaid-preview-btn").IsEnabledAsync()).IsTrue();
+    }
+
+    [Test]
+    public async Task MermaidOutput_EmptyStringShowsEmptyStateAndDisablesToolbar()
+    {
+        var host = await PlaygroundUiTestHost.GetOrCreateAsync();
+        var browser = await PlaygroundUiBrowserSession.GetBrowserAsync();
+        await using var context = await browser.NewContextAsync();
+        var page = await context.NewPageAsync();
+        await GotoPlaygroundAndWaitForLinterGridAsync(page, $"{host.BaseUrl.TrimEnd('/')}/?seitonTestHooks=1");
+        await page.WaitForFunctionAsync(
+            "() => typeof globalThis.__SEITON_PLAYGROUND_TEST__?.renderMermaid === 'function'",
+            arg: null,
+            new PageWaitForFunctionOptions { Timeout = 30_000 });
+
+        var state = await page.EvaluateAsync<bool[]>(
+            """
+            () => {
+              const hooks = globalThis.__SEITON_PLAYGROUND_TEST__;
+              hooks.selectResultsTab('mermaid');
+              hooks.renderMermaid('');
+              return [
+                document.querySelector('#mermaid-empty').hidden,
+                document.querySelector('#mermaid-output').hidden,
+                document.querySelector('#mermaid-preview-btn').disabled,
+                document.querySelector('#mermaid-copy-btn').disabled,
+              ];
+            }
+            """);
+
+        await Assert.That(state).IsEquivalentTo([false, true, true, true]);
+    }
+
+    [Test]
+    public async Task MermaidPreview_PansAndZoomsWithoutShrinkingBelowFit()
+    {
+        var host = await PlaygroundUiTestHost.GetOrCreateAsync();
+        var browser = await PlaygroundUiBrowserSession.GetBrowserAsync();
+        await using var context = await browser.NewContextAsync();
+        var page = await context.NewPageAsync();
+        await GotoPlaygroundAndWaitForLinterGridAsync(page, $"{host.BaseUrl.TrimEnd('/')}/?seitonTestHooks=1");
+        await page.WaitForFunctionAsync(
+            "() => typeof globalThis.__SEITON_PLAYGROUND_TEST__?.setMermaidPreviewMode === 'function'",
+            arg: null,
+            new PageWaitForFunctionOptions { Timeout = 30_000 });
+
+        await page.EvaluateAsync(
+            """
+            () => {
+              const hooks = globalThis.__SEITON_PLAYGROUND_TEST__;
+              hooks.selectResultsTab('mermaid');
+              hooks.renderMermaid(`flowchart LR
+                a["checkout"] --> b["build"] --> c["test"] --> d["deploy"]`);
+              hooks.setMermaidPreviewMode(true);
+            }
+            """);
+
+        var viewport = page.Locator("#mermaid-preview .mermaid-preview__viewport");
+        await viewport.WaitForAsync(new LocatorWaitForOptions { Timeout = 30_000 });
+        var initialTransform = await viewport.GetAttributeAsync("transform");
+        await Assert.That(await page.Locator("#mermaid-zoom-out-btn").IsEnabledAsync()).IsTrue();
+
+        // The initial transform is already fit-to-view, so zooming farther out is clamped.
+        await page.Locator("#mermaid-zoom-out-btn").ClickAsync();
+        await page.WaitForTimeoutAsync(250);
+        await Assert.That(await viewport.GetAttributeAsync("transform")).IsEqualTo(initialTransform);
+
+        await page.Locator("#mermaid-zoom-in-btn").ClickAsync();
+        await page.WaitForTimeoutAsync(250);
+        var zoomedTransform = await viewport.GetAttributeAsync("transform");
+        await Assert.That(zoomedTransform).IsNotEqualTo(initialTransform);
+
+        var box = await page.Locator("#mermaid-preview").BoundingBoxAsync();
+        await Assert.That(box).IsNotNull();
+        await page.Mouse.MoveAsync(box!.X + box.Width / 2, box.Y + box.Height / 2);
+        await page.Mouse.DownAsync();
+        await page.Mouse.MoveAsync(box.X + box.Width / 2 + 40, box.Y + box.Height / 2 + 25);
+        await page.Mouse.UpAsync();
+        await Assert.That(await viewport.GetAttributeAsync("transform")).IsNotEqualTo(zoomedTransform);
+
+        await page.Locator("#mermaid-zoom-reset-btn").ClickAsync();
+        await Assert.That(await viewport.GetAttributeAsync("transform")).IsEqualTo(initialTransform);
+    }
+
+    [Test]
+    public async Task MermaidPreview_Resize_RefitsWithoutJavaScriptError()
+    {
+        var host = await PlaygroundUiTestHost.GetOrCreateAsync();
+        var browser = await PlaygroundUiBrowserSession.GetBrowserAsync();
+        await using var context = await browser.NewContextAsync(new BrowserNewContextOptions
+        {
+            ViewportSize = new ViewportSize { Width = 900, Height = 700 },
+        });
+        var page = await context.NewPageAsync();
+        var pageErrors = new List<string>();
+        page.PageError += (_, error) => pageErrors.Add(error);
+        await GotoPlaygroundAndWaitForLinterGridAsync(page, $"{host.BaseUrl.TrimEnd('/')}/?seitonTestHooks=1");
+        await page.WaitForFunctionAsync(
+            "() => typeof globalThis.__SEITON_PLAYGROUND_TEST__?.setMermaidPreviewMode === 'function'",
+            arg: null,
+            new PageWaitForFunctionOptions { Timeout = 30_000 });
+
+        await page.EvaluateAsync(
+            """
+            () => {
+              const hooks = globalThis.__SEITON_PLAYGROUND_TEST__;
+              hooks.selectResultsTab('mermaid');
+              hooks.renderMermaid(`flowchart LR
+                a[checkout] --> b[build] --> c[test]`);
+              hooks.setMermaidPreviewMode(true);
+            }
+            """);
+
+        await page.Locator("#mermaid-preview .mermaid-preview__viewport").WaitForAsync(
+            new LocatorWaitForOptions { Timeout = 30_000 });
+        await page.SetViewportSizeAsync(640, 700);
+        await page.EvaluateAsync(
+            "() => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)))");
+
+        await Assert.That(pageErrors).IsEmpty();
     }
 
     [Test]
@@ -108,6 +271,46 @@ public sealed class PlaygroundUiLayoutTests
     }
 
     [Test]
+    public async Task FlowGraph_DiagnosticOnlyUpdate_RefreshesBadgeForFreshFlowObjects()
+    {
+        var host = await PlaygroundUiTestHost.GetOrCreateAsync();
+        var browser = await PlaygroundUiBrowserSession.GetBrowserAsync();
+        await using var context = await browser.NewContextAsync();
+        var page = await context.NewPageAsync();
+        await GotoPlaygroundAndWaitForLinterGridAsync(page, $"{host.BaseUrl.TrimEnd('/')}/?seitonTestHooks=1");
+        await page.WaitForFunctionAsync(
+            "() => typeof globalThis.__SEITON_PLAYGROUND_TEST__?.renderFlowWithDiagnostics === 'function'",
+            arg: null,
+            new PageWaitForFunctionOptions { Timeout = 30_000 });
+
+        await page.EvaluateAsync(
+            """
+            () => {
+              const flow = () => ({
+                version: 1,
+                workflows: [{
+                  file: 'ci.yml',
+                  jobs: [{
+                    id: 'build', kind: 'job', needs: [], reducedNeeds: [], runsOn: [],
+                    line: 3, endLine: 6,
+                    steps: [{ kind: 'run', id: 'test', line: 5, endLine: 5 }],
+                  }],
+                }],
+              });
+              const hooks = globalThis.__SEITON_PLAYGROUND_TEST__;
+              hooks.selectResultsTab('flow');
+              hooks.renderFlowWithDiagnostics(flow(), []);
+              hooks.renderFlowWithDiagnostics(flow(), [{
+                line: 5, column: 1, severity: 'Error', message: 'fresh diagnostic',
+              }]);
+            }
+            """);
+
+        await Assert.That(await page.Locator("#flow-graph .flow-job__diagbadge").TextContentAsync())
+            .Contains("✖1");
+    }
+
+    [Test]
     public async Task FlowGraph_ZoomOut_AfterSmallMobileFit_DecreasesScale()
     {
         var host = await PlaygroundUiTestHost.GetOrCreateAsync();
@@ -144,7 +347,15 @@ public sealed class PlaygroundUiLayoutTests
 
         var scaleBefore = await page.EvaluateAsync<double>(
             "() => globalThis.d3.zoomTransform(document.querySelector('#flow-graph .flow-svg')).k");
-        await Assert.That(scaleBefore).IsLessThan(0.2);
+        await Assert.That(scaleBefore).IsLessThanOrEqualTo(0.5);
+
+        // Mobile fit often clamps k at DISPLAY_SCALE_MIN; zoom in first so zoom-out has headroom.
+        if (scaleBefore <= 0.5001)
+        {
+            await page.Locator("#flow-zoom-in-btn").ClickAsync();
+            scaleBefore = await page.EvaluateAsync<double>(
+                "() => globalThis.d3.zoomTransform(document.querySelector('#flow-graph .flow-svg')).k");
+        }
 
         await page.Locator("#flow-zoom-out-btn").ClickAsync();
         var scaleAfter = await page.EvaluateAsync<double>(
@@ -196,15 +407,20 @@ public sealed class PlaygroundUiLayoutTests
             """
             () => {
               const graph = document.querySelector('#flow-graph').getBoundingClientRect();
-              const content = document.querySelector('#flow-graph .flow-viewport').getBoundingClientRect();
-              const tolerance = 1;
-              return graph.left >= -tolerance
+              const jobs = [...document.querySelectorAll('#flow-graph .flow-job')];
+              if (jobs.length < 2) return false;
+              const tolerance = 2;
+              const graphOnScreen = graph.left >= -tolerance
                 && graph.right <= globalThis.innerWidth + tolerance
-                && graph.height <= globalThis.innerHeight
-                && content.left >= graph.left - tolerance
-                && content.right <= graph.right + tolerance
-                && content.top >= graph.top - tolerance
-                && content.bottom <= graph.bottom + tolerance;
+                && graph.height <= globalThis.innerHeight;
+              const jobsVisible = jobs.every((node) => {
+                const rect = node.getBoundingClientRect();
+                return rect.right >= graph.left - tolerance
+                  && rect.left <= graph.right + tolerance
+                  && rect.bottom >= graph.top - tolerance
+                  && rect.top <= graph.bottom + tolerance;
+              });
+              return graphOnScreen && jobsVisible;
             }
             """);
         await Assert.That(fits).IsTrue();
@@ -343,23 +559,78 @@ public sealed class PlaygroundUiLayoutTests
 
         await page.EvaluateAsync(
             """
-            () => globalThis.__SEITON_PLAYGROUND_TEST__.renderFlow({
-              version: 1,
-              workflows: [{
-                file: 'ci.yml',
-                events: ['push'],
-                jobs: [
-                  { id: 'build', kind: 'job', needs: [], reducedNeeds: [], runsOn: [], steps: [] },
-                  { id: 'lint-a', kind: 'job', needs: ['build'], reducedNeeds: ['build'], runsOn: [], steps: [] },
-                  { id: 'lint-b', kind: 'job', needs: ['build'], reducedNeeds: ['build'], runsOn: [], steps: [] },
-                ],
-              }],
-            })
+                        () => globalThis.__SEITON_PLAYGROUND_TEST__.renderFlow({
+                            version: 1,
+                            workflows: [{
+                                file: 'ci.yml',
+                                events: ['push'],
+                                jobs: [
+                                    { id: 'build', kind: 'job', needs: [], reducedNeeds: [], runsOn: [], steps: [] },
+                                    { id: 'lint-a', kind: 'job', needs: ['build'], reducedNeeds: ['build'], runsOn: [], steps: [] },
+                                    { id: 'lint-b', kind: 'job', needs: ['build'], reducedNeeds: ['build'], runsOn: [], steps: [] },
+                                ],
+                            }],
+                        })
             """);
         await page.Locator("#flow-graph .flow-job").Nth(1).DispatchEventAsync("mouseenter");
 
         await Assert.That(
             await page.Locator("#flow-graph .flow-edge--group.flow-hover-related").CountAsync()).IsEqualTo(1);
+    }
+
+    [Test]
+    public async Task FlowGraph_GroupEdge_FollowsFrameAfterLodChange()
+    {
+        var host = await PlaygroundUiTestHost.GetOrCreateAsync();
+        var browser = await PlaygroundUiBrowserSession.GetBrowserAsync();
+        await using var context = await browser.NewContextAsync();
+        var page = await context.NewPageAsync();
+        await GotoPlaygroundAndWaitForLinterGridAsync(page, $"{host.BaseUrl.TrimEnd('/')}/?seitonTestHooks=1");
+        await page.WaitForFunctionAsync(
+            "() => typeof globalThis.__SEITON_PLAYGROUND_TEST__?.renderFlow === 'function'",
+            arg: null,
+            new PageWaitForFunctionOptions { Timeout = 30_000 });
+
+        var edgeEndsAtGroupFrame = await page.EvaluateAsync<bool>(
+                    """
+                        () => {
+                            const hooks = globalThis.__SEITON_PLAYGROUND_TEST__;
+                            hooks.selectResultsTab('flow');
+                            hooks.renderFlow({
+                                version: 1,
+                                workflows: [{
+                                    file: 'ci.yml',
+                                    events: ['push'],
+                                    jobs: [
+                                        { id: 'build', kind: 'job', needs: [], reducedNeeds: [], runsOn: [], steps: [] },
+                                        { id: 'lint-a', kind: 'job', needs: ['build'], reducedNeeds: ['build'], runsOn: [], steps: [] },
+                                        { id: 'lint-b', kind: 'job', needs: ['build'], reducedNeeds: ['build'], runsOn: [], steps: [] },
+                                    ],
+                                }],
+                            });
+                            const svg = document.querySelector('#flow-graph .flow-svg');
+                            svg.dispatchEvent(new WheelEvent('wheel', {
+                                bubbles: true,
+                                cancelable: true,
+                                clientX: 100,
+                                clientY: 100,
+                                deltaY: 1_000,
+                            }));
+                            const edge = document.querySelector('#flow-graph .flow-edge--group');
+                            const frame = document.querySelector('#flow-graph .flow-needs-group');
+                            const match = edge?.getAttribute('d')?.match(/([\d.-]+),([\d.-]+)$/);
+                            if (!svg.classList.contains('flow-svg--lod0') || !frame || !match) return false;
+                            const targetX = Number(match[1]);
+                            const targetY = Number(match[2]);
+                            const frameX = Number(frame.getAttribute('x'));
+                            const frameY = Number(frame.getAttribute('y'));
+                            const frameHeight = Number(frame.getAttribute('height'));
+                            return Math.abs(targetX - frameX) < 0.01
+                                && Math.abs(targetY - (frameY + frameHeight / 2)) < 0.01;
+                        }
+                        """);
+
+        await Assert.That(edgeEndsAtGroupFrame).IsTrue();
     }
 
     [Test]

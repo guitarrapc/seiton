@@ -1,10 +1,12 @@
 ﻿using System.Buffers;
 using System.Text;
 using System.Text.Json;
+using Seiton.Core.Flow;
 using Seiton.Core.Linting;
 using Seiton.Core.Linting.Fixing;
 using Seiton.Core.Linting.PinRemediation;
 using Seiton.Core.Parsing;
+using Seiton.Core.Parsing.Ast;
 
 namespace Seiton.Playground;
 
@@ -21,6 +23,8 @@ namespace Seiton.Playground;
 /// </summary>
 public static class PlaygroundLintRunner
 {
+    private const int MaxRetainedBufferBytes = 256 * 1024;
+
     /// <summary>
     /// Shared engine. WASM is single-threaded so the lock is uncontended at runtime,
     /// but it is required for correctness when the same static is accessed by parallel
@@ -46,7 +50,13 @@ public static class PlaygroundLintRunner
     };
 
     /// <summary>Reusable buffer for JSON serialization. Guarded by <see cref="EngineGate"/>.</summary>
-    private static readonly ArrayBufferWriter<byte> JsonBuffer = new(4096);
+    private static ArrayBufferWriter<byte> JsonBuffer = new(4096);
+
+    /// <summary>Reusable combined lint/flow response buffer. Guarded by <see cref="EngineGate"/>.</summary>
+    private static ArrayBufferWriter<byte> LintFlowJsonBuffer = new(4096);
+
+    /// <summary>Reusable Mermaid scratch buffer for combined lint/Mermaid responses. Guarded by <see cref="EngineGate"/>.</summary>
+    private static ArrayBufferWriter<byte> MermaidBuffer = new(4096);
 
     /// <summary>Cached severity display strings indexed by <see cref="DiagnosticSeverity"/>.</summary>
     private static readonly string[] SeverityStrings = ["Info", "Warning", "Error"];
@@ -70,14 +80,24 @@ public static class PlaygroundLintRunner
     /// <summary>Last SetConfig diagnostic result (cached for hash-hit zero-alloc return).</summary>
     private static byte[] _cachedConfigDiag = EmptyJsonArray;
 
-    // ─── Identity-based short circuit ───
-    private static string? _lastYamlSource;
+    // ─── Content-hash lint caching ───
+    /// <summary>Content hash of the last linted YAML (XxHash64). Guarded by <see cref="EngineGate"/>.</summary>
+    private static ulong _lastYamlHash;
 
-    /// <summary>Cached last file path for identity-based short circuit. Guarded by <see cref="EngineGate"/>.</summary>
+    /// <summary>Cached last file path for content-hash short circuit. Guarded by <see cref="EngineGate"/>.</summary>
     private static string? _lastFilePath;
 
-    /// <summary>Cached last JSON output for identity-based short circuit. Guarded by <see cref="EngineGate"/>.</summary>
+    /// <summary>Cached last JSON output for content-hash short circuit. Guarded by <see cref="EngineGate"/>.</summary>
     private static byte[]? _lastJsonOutput;
+
+    /// <summary>Reusable diagnostics JSON buffer returned from <see cref="SerializeDiagnosticsToResult"/>.</summary>
+    private static byte[] _diagnosticsJsonBuf = EmptyJsonArray;
+
+    /// <summary>Reusable combined Flow/Mermaid response bytes, bounded to avoid retaining hostile input.</summary>
+    private static byte[] _lintFlowJsonOutput = EmptyJsonArray;
+
+    /// <summary>Caller-owned UTF-8 source buffer. Guarded by <see cref="EngineGate"/>.</summary>
+    private static byte[] _utf8Yaml = [];
 
     /// <summary>Gets the active lint config (user config if set, otherwise default).</summary>
     private static LintConfig ActiveConfig => _cachedConfig ?? DefaultConfig;
@@ -90,6 +110,12 @@ public static class PlaygroundLintRunner
             _cachedConfig = null;
             _configHash = 0;
             _cachedConfigDiag = EmptyJsonArray;
+            _diagnosticsJsonBuf = EmptyJsonArray;
+            _lintFlowJsonOutput = EmptyJsonArray;
+            JsonBuffer = new ArrayBufferWriter<byte>(4096);
+            LintFlowJsonBuffer = new ArrayBufferWriter<byte>(4096);
+            MermaidBuffer = new ArrayBufferWriter<byte>(4096);
+            _utf8Yaml = [];
             InvalidateLintCache();
             ActionShaResolverOverride = null;
             ImageDigestResolverOverride = null;
@@ -238,10 +264,10 @@ public static class PlaygroundLintRunner
         return buffer.WrittenSpan.ToArray();
     }
 
-    /// <summary>Invalidates identity-based lint cache so next RunToJsonUtf8 re-lints.</summary>
+    /// <summary>Invalidates content-hash lint cache so next RunToJsonUtf8 re-lints.</summary>
     private static void InvalidateLintCache()
     {
-        _lastYamlSource = null;
+        _lastYamlHash = 0;
         _lastFilePath = null;
         _lastJsonOutput = null;
         _defaultActionShaResolver = null;
@@ -260,15 +286,13 @@ public static class PlaygroundLintRunner
 
         lock (EngineGate)
         {
-            // Fast path: if source and filePath are identical to last call, return cached output
-            if (ReferenceEquals(yamlSource, _lastYamlSource)
+            var (utf8Yaml, yamlHash) = PlaygroundUtf8Scratch.EncodeAndHash(yamlSource, ref _utf8Yaml);
+            if (yamlHash == _lastYamlHash
                 && string.Equals(filePath, _lastFilePath, StringComparison.Ordinal)
                 && _lastJsonOutput is not null)
             {
                 return _lastJsonOutput;
             }
-
-            var utf8Yaml = EncodeToReusableBuffer(yamlSource);
 
             byte[] result;
 
@@ -286,16 +310,75 @@ public static class PlaygroundLintRunner
             }
             else
             {
-                using var lintResult = Engine.Check(utf8Yaml, filePath, config);
-                result = SerializeDiagnosticsToResult(lintResult.Diagnostics.AsSpan());
+                using var parseResult = WorkflowParser.Parse(utf8Yaml, filePath);
+                using (var lintResult = Engine.Check(parseResult, utf8Yaml, filePath, config))
+                {
+                    result = SerializeDiagnosticsToResult(lintResult.Diagnostics.AsSpan());
+                }
             }
 
-            // Cache for identity-based short circuit
-            _lastYamlSource = yamlSource;
+            // Cache for content-hash short circuit
+            _lastYamlHash = yamlHash;
             _lastFilePath = filePath;
             _lastJsonOutput = result;
 
             return result;
+        }
+    }
+
+    /// <summary>
+    /// Parses a workflow once and returns its lint diagnostics plus flow-json in one UTF-8 JSON response.
+    /// This is used only while the Flow tab is active; ordinary linting must not materialize flow data.
+    /// </summary>
+    public static byte[] RunToJsonWithFlowJsonUtf8(string yamlSource, string filePath)
+    {
+        ArgumentNullException.ThrowIfNull(yamlSource);
+        ArgumentException.ThrowIfNullOrEmpty(filePath);
+
+        lock (EngineGate)
+        {
+            var (utf8Yaml, _) = PlaygroundUtf8Scratch.EncodeAndHash(yamlSource, ref _utf8Yaml);
+            var config = ActiveConfig;
+
+            if (DocumentKindClassifier.GetPathHintKind(filePath) == DocumentKind.ActionMetadata)
+            {
+                return SerializeLintAndEmptyFlow(utf8Yaml, filePath, config);
+            }
+
+            using var parseResult = WorkflowParser.Parse(utf8Yaml, filePath);
+            using var lintResult = Engine.Check(parseResult, utf8Yaml, filePath, config);
+            return SerializeLintAndFlow(
+                lintResult.Diagnostics.AsSpan(),
+                parseResult.Workflow,
+                filePath);
+        }
+    }
+
+    /// <summary>
+    /// Parses a workflow once and returns its lint diagnostics plus Mermaid text in one UTF-8 JSON response.
+    /// This is used only while the Mermaid tab is active.
+    /// </summary>
+    public static byte[] RunToJsonWithMermaidUtf8(string yamlSource, string filePath)
+    {
+        ArgumentNullException.ThrowIfNull(yamlSource);
+        ArgumentException.ThrowIfNullOrEmpty(filePath);
+
+        lock (EngineGate)
+        {
+            var (utf8Yaml, _) = PlaygroundUtf8Scratch.EncodeAndHash(yamlSource, ref _utf8Yaml);
+            var config = ActiveConfig;
+
+            if (DocumentKindClassifier.GetPathHintKind(filePath) == DocumentKind.ActionMetadata)
+            {
+                return SerializeLintAndMermaid(utf8Yaml, filePath, config);
+            }
+
+            using var parseResult = WorkflowParser.Parse(utf8Yaml, filePath);
+            using var lintResult = Engine.Check(parseResult, utf8Yaml, filePath, config);
+            return SerializeLintAndMermaid(
+                lintResult.Diagnostics.AsSpan(),
+                parseResult.Workflow,
+                filePath);
         }
     }
 
@@ -318,6 +401,7 @@ public static class PlaygroundLintRunner
 
     private static byte[] SerializeDiagnosticsToResult(ReadOnlySpan<Diagnostic> diagnostics)
     {
+        ResetIfOversized(ref JsonBuffer);
         JsonBuffer.Clear();
         using (var writer = new Utf8JsonWriter(JsonBuffer, CamelCaseWriterOptions))
         {
@@ -325,12 +409,111 @@ public static class PlaygroundLintRunner
         }
 
         var written = JsonBuffer.WrittenSpan;
-        if (_lastJsonOutput is not null && written.SequenceEqual(_lastJsonOutput))
+        if (written.IsEmpty)
         {
-            return _lastJsonOutput;
+            return EmptyJsonArray;
         }
 
-        return written.ToArray();
+        return CopyToReusableOutput(written, ref _diagnosticsJsonBuf);
+    }
+
+    private static byte[] SerializeLintAndEmptyFlow(byte[] utf8Yaml, string filePath, LintConfig config)
+    {
+        var classifiedResult = WorkflowParser.ParseClassified(utf8Yaml, filePath, out var arena);
+        try
+        {
+            var lintResult = Engine.CheckWithParseResult(utf8Yaml, filePath, config, classifiedResult.ParseResult, arena);
+            return SerializeLintAndFlow(lintResult.Diagnostics.AsSpan(), default, filePath);
+        }
+        finally
+        {
+            arena?.Dispose();
+        }
+    }
+
+    private static byte[] SerializeLintAndFlow(
+        ReadOnlySpan<Diagnostic> diagnostics,
+        WorkflowRef workflow,
+        string filePath)
+    {
+        ResetIfOversized(ref LintFlowJsonBuffer);
+        LintFlowJsonBuffer.Clear();
+        using (var writer = new Utf8JsonWriter(LintFlowJsonBuffer, CamelCaseWriterOptions))
+        {
+            writer.WriteStartObject();
+            writer.WritePropertyName("diagnostics"u8);
+            WriteDiagnosticsArray(writer, diagnostics);
+            writer.WritePropertyName("flow"u8);
+            WorkflowFlowJson.WriteDocument(writer, workflow, filePath);
+            writer.WriteEndObject();
+        }
+
+        return CopyToReusableOutput(LintFlowJsonBuffer.WrittenSpan, ref _lintFlowJsonOutput);
+    }
+
+    private static byte[] SerializeLintAndMermaid(byte[] utf8Yaml, string filePath, LintConfig config)
+    {
+        var classifiedResult = WorkflowParser.ParseClassified(utf8Yaml, filePath, out var arena);
+        try
+        {
+            var lintResult = Engine.CheckWithParseResult(utf8Yaml, filePath, config, classifiedResult.ParseResult, arena);
+            return SerializeLintAndMermaid(lintResult.Diagnostics.AsSpan(), default, filePath);
+        }
+        finally
+        {
+            arena?.Dispose();
+        }
+    }
+
+    private static byte[] SerializeLintAndMermaid(
+        ReadOnlySpan<Diagnostic> diagnostics,
+        WorkflowRef workflow,
+        string filePath)
+    {
+        ResetIfOversized(ref MermaidBuffer);
+        MermaidBuffer.Clear();
+        WorkflowFlowMermaid.Write(MermaidBuffer, workflow, filePath);
+
+        ResetIfOversized(ref LintFlowJsonBuffer);
+        LintFlowJsonBuffer.Clear();
+        using (var writer = new Utf8JsonWriter(LintFlowJsonBuffer, CamelCaseWriterOptions))
+        {
+            writer.WriteStartObject();
+            writer.WritePropertyName("diagnostics"u8);
+            WriteDiagnosticsArray(writer, diagnostics);
+            writer.WriteString("mermaid"u8, MermaidBuffer.WrittenSpan);
+            writer.WriteEndObject();
+        }
+
+        return CopyToReusableOutput(LintFlowJsonBuffer.WrittenSpan, ref _lintFlowJsonOutput);
+    }
+
+    private static byte[] CopyToReusableOutput(ReadOnlySpan<byte> written, ref byte[] cache)
+    {
+        if (written.Length > MaxRetainedBufferBytes)
+        {
+            return written.ToArray();
+        }
+
+        if (cache.Length != written.Length)
+        {
+            cache = new byte[written.Length];
+        }
+
+        if (!written.SequenceEqual(cache))
+        {
+            written.CopyTo(cache);
+        }
+
+        return cache;
+    }
+
+    private static void ResetIfOversized(ref ArrayBufferWriter<byte> buffer)
+    {
+        if (buffer.Capacity > MaxRetainedBufferBytes)
+        {
+            buffer = new ArrayBufferWriter<byte>(4096);
+        }
     }
 
     private static void WriteDiagnosticsArray(Utf8JsonWriter writer, ReadOnlySpan<Diagnostic> diagnostics)
@@ -630,28 +813,6 @@ public static class PlaygroundLintRunner
         }
 
         return fixables[0];
-    }
-
-    /// <summary>
-    /// Reusable buffer for UTF-8 encoding. Guarded by <see cref="EngineGate"/>.
-    /// </summary>
-    private static byte[]? _utf8Buf;
-
-    /// <summary>
-    /// Encodes <paramref name="source"/> into the reusable buffer and returns it.
-    /// Only allocates when the byte length changes from the last call.
-    /// The returned array has <c>Length == byteCount</c> (exact size) so VYaml and the
-    /// parser see no trailing garbage. Must be called under <see cref="EngineGate"/>.
-    /// </summary>
-    private static byte[] EncodeToReusableBuffer(string source)
-    {
-        var byteCount = Encoding.UTF8.GetByteCount(source);
-        if (_utf8Buf is null || _utf8Buf.Length != byteCount)
-        {
-            _utf8Buf = new byte[byteCount];
-        }
-        Encoding.UTF8.GetBytes(source, _utf8Buf);
-        return _utf8Buf;
     }
 }
 
