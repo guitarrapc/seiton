@@ -232,11 +232,63 @@ public sealed class WorkflowFlowMermaidTests
 
         var mermaid = WorkflowFlowMermaid.Serialize([flow]);
 
-        await Assert.That(mermaid).Contains("subgraph j0[\"test (matrix: os × node)\"]");
+        await Assert.That(mermaid).Contains("subgraph j0[\"test (matrix: 4)\"]");
     }
 
     [Test]
-    public async Task Serialize_CompositeLabels_PreserveJoiningSuffixAndTruncation()
+    public async Task Serialize_IncludeOnlyMatrix_AnnotatesJobLabelWithCombinationCount()
+    {
+        var flow = CollectFlow("""
+            on: push
+            jobs:
+              test:
+                runs-on: ubuntu-latest
+                strategy:
+                  matrix:
+                    include:
+                      - os: ubuntu
+                        node: 18
+                      - os: windows
+                        node: 20
+                steps:
+                  - run: npm test
+            """);
+
+        var mermaid = WorkflowFlowMermaid.Serialize([flow]);
+
+        await Assert.That(mermaid).Contains("subgraph j0[\"test (matrix: 2)\"]");
+    }
+
+    [Test]
+    public async Task Serialize_DynamicMatrices_AnnotateWhetherTheMatrixItselfIsDynamic()
+    {
+        var flow = CollectFlow("""
+            on: push
+            jobs:
+              whole:
+                runs-on: ubuntu-latest
+                strategy:
+                  matrix: ${{ fromJSON(needs.prepare.outputs.matrix) }}
+                steps:
+                  - run: npm test
+              dimension:
+                runs-on: ubuntu-latest
+                strategy:
+                  matrix:
+                    os: ${{ fromJSON(needs.prepare.outputs.os) }}
+                    node: [18, 20]
+                steps:
+                  - run: npm test
+            """);
+
+        var mermaid = WorkflowFlowMermaid.Serialize([flow]);
+
+        await Assert.That(mermaid).Contains("subgraph j0[\"whole (matrix: dynamic)\"]");
+        await Assert.That(mermaid).Contains("subgraph j1[\"dimension (matrix)\"]");
+    }
+
+    [Test]
+    public async Task Serialize_CompositeLabels_PreserveJoiningSuffix()
     {
         var flow = CollectFlow("""
             on: push
@@ -256,11 +308,28 @@ public sealed class WorkflowFlowMermaidTests
 
         var mermaid = WorkflowFlowMermaid.Serialize([flow]);
 
-        await Assert.That(mermaid).Contains(
-            "subgraph j0[\"test (matrix: first-dimension-with-a-long-name × second-dimensio…\"]");
+        await Assert.That(mermaid).Contains("subgraph j0[\"test (matrix: 1) (if)\"]");
         await Assert.That(mermaid).Contains(
             "j0n0[\"wait: background-a, background-b\"]");
         await Assert.That(mermaid).Contains("j0n1[\"run: echo done (if)\"]");
+    }
+
+    [Test]
+    public async Task Serialize_LongJobLabel_Truncates()
+    {
+        var jobId = new string('a', 70);
+        var flow = CollectFlow($$"""
+            on: push
+            jobs:
+              {{jobId}}:
+                runs-on: ubuntu-latest
+                steps:
+                  - run: echo done
+            """);
+
+        var mermaid = WorkflowFlowMermaid.Serialize([flow]);
+
+        await Assert.That(mermaid).Contains($"subgraph j0[\"{new string('a', 64)}…\"]");
     }
 
     [Test]
@@ -344,5 +413,81 @@ public sealed class WorkflowFlowMermaidTests
         WorkflowFlowMermaid.Write(buffer, result.Workflow, "wf.yml");
 
         await Assert.That(Encoding.UTF8.GetString(buffer.WrittenSpan)).IsEqualTo(expected);
+    }
+
+    [Test]
+    public async Task Write_LiveAst_MatrixVariantsMatchOwnedDto()
+    {
+        string[] yamls =
+        [
+            """
+            on: push
+            jobs:
+              test:
+                runs-on: ubuntu-latest
+                strategy:
+                  matrix:
+                    include:
+                      - os: ubuntu
+                        node: 18
+                      - os: windows
+                        node: 20
+                steps:
+                  - run: npm test
+            """,
+            """
+            on: push
+            jobs:
+              test:
+                runs-on: ubuntu-latest
+                strategy:
+                  matrix: ${{ fromJSON(needs.prepare.outputs.matrix) }}
+                steps:
+                  - run: npm test
+            """,
+            """
+            on: push
+            jobs:
+              test:
+                runs-on: ubuntu-latest
+                strategy:
+                  matrix:
+                    os: ${{ fromJSON(needs.prepare.outputs.os) }}
+                    node: [18, 20]
+                steps:
+                  - run: npm test
+            """,
+            """
+            on: push
+            jobs:
+              test:
+                runs-on: ubuntu-latest
+                strategy:
+                  matrix:
+                    os: [ubuntu, windows]
+                    node: [18, 20]
+                    exclude:
+                      - os: windows
+                        node: 18
+                    include:
+                      - os: ubuntu
+                        node: 18
+                        experimental: true
+                steps:
+                  - run: npm test
+            """,
+        ];
+
+        foreach (var yaml in yamls)
+        {
+            using var result = WorkflowParser.Parse(Encoding.UTF8.GetBytes(yaml), "wf.yml");
+            var owned = WorkflowFlowCollector.Collect(result, "wf.yml")!;
+            var expected = WorkflowFlowMermaid.Serialize([owned]);
+            var buffer = new System.Buffers.ArrayBufferWriter<byte>(4096);
+
+            WorkflowFlowMermaid.Write(buffer, result.Workflow, "wf.yml");
+
+            await Assert.That(Encoding.UTF8.GetString(buffer.WrittenSpan)).IsEqualTo(expected);
+        }
     }
 }

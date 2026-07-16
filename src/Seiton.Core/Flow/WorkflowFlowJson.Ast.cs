@@ -475,6 +475,86 @@ public static partial class WorkflowFlowJson
         }
     }
 
+    internal static bool TryGetAstMatrixCombinationCount(MatrixRef matrix, out int count)
+    {
+        if (matrix.Expression.HasText)
+        {
+            count = 0;
+            return false;
+        }
+
+        if (matrix.Rows.Count == 0)
+        {
+            count = 0;
+            foreach (var block in matrix.Exclude)
+            {
+                if (block.Expression.HasText)
+                {
+                    return false;
+                }
+            }
+
+            foreach (var block in matrix.Include)
+            {
+                if (block.Expression.HasText)
+                {
+                    count = 0;
+                    return false;
+                }
+
+                count += block.Entries.Count;
+                if (count > MaxMatrixCombinations)
+                {
+                    count = 0;
+                    return false;
+                }
+            }
+
+            return count > 0;
+        }
+
+        if (matrix.Exclude.Count == 0 && matrix.Include.Count == 0)
+        {
+            count = 1;
+            foreach (var (_, row) in matrix.Rows)
+            {
+                if (row.Expression.HasText || row.Values.Count == 0)
+                {
+                    count = 0;
+                    return false;
+                }
+
+                if (row.Values.Count > MaxMatrixCombinations / count)
+                {
+                    count = 0;
+                    return false;
+                }
+                count *= row.Values.Count;
+            }
+
+            return true;
+        }
+
+        var pairs = new AstMatrixBuffer<AstMatrixPair>(16);
+        var combinations = new AstMatrixBuffer<AstMatrixCombination>(4);
+        try
+        {
+            if (!TryExpandAstMatrix(matrix, ref pairs, ref combinations))
+            {
+                count = 0;
+                return false;
+            }
+
+            count = combinations.Count;
+            return true;
+        }
+        finally
+        {
+            pairs.Dispose();
+            combinations.Dispose();
+        }
+    }
+
     private static bool TryExpandAstMatrix(
         MatrixRef matrix,
         ref AstMatrixBuffer<AstMatrixPair> pairs,

@@ -296,23 +296,22 @@ public static partial class WorkflowFlowMermaid
 
         if (job.Strategy is { HasMatrix: true } strategy)
         {
-            AppendLabelPart(" (matrix: ", label, ref length, ref lastNonTrim, ref stopped);
             if (strategy.MatrixIsExpression)
             {
+                AppendLabelPart(" (matrix: ", label, ref length, ref lastNonTrim, ref stopped);
                 AppendLabelPart("dynamic", label, ref length, ref lastNonTrim, ref stopped);
+                AppendLabelPart(")", label, ref length, ref lastNonTrim, ref stopped);
+            }
+            else if (strategy.Combinations.Length > 0)
+            {
+                AppendLabelPart(" (matrix: ", label, ref length, ref lastNonTrim, ref stopped);
+                AppendLabelNumber(strategy.Combinations.Length, label, ref length, ref lastNonTrim, ref stopped);
+                AppendLabelPart(")", label, ref length, ref lastNonTrim, ref stopped);
             }
             else
             {
-                for (var i = 0; i < strategy.MatrixKeys.Length; i++)
-                {
-                    if (i > 0)
-                    {
-                        AppendLabelPart(" × ", label, ref length, ref lastNonTrim, ref stopped);
-                    }
-                    AppendLabelPart(strategy.MatrixKeys[i], label, ref length, ref lastNonTrim, ref stopped);
-                }
+                AppendLabelPart(" (matrix)", label, ref length, ref lastNonTrim, ref stopped);
             }
-            AppendLabelPart(")", label, ref length, ref lastNonTrim, ref stopped);
         }
 
         if (job.If is not null)
@@ -403,6 +402,18 @@ public static partial class WorkflowFlowMermaid
                 lastNonTrim = length;
             }
         }
+    }
+
+    private static void AppendLabelNumber(
+        int value,
+        Span<char> label,
+        ref int length,
+        ref int lastNonTrim,
+        ref bool stopped)
+    {
+        Span<char> number = stackalloc char[11];
+        value.TryFormat(number, out var written);
+        AppendLabelPart(number[..written], label, ref length, ref lastNonTrim, ref stopped);
     }
 
     private static void WriteEscapedLabel(FlowUtf8Writer writer, ReadOnlySpan<char> label, int length)
