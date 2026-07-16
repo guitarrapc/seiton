@@ -271,6 +271,78 @@ public sealed class PlaygroundUiLayoutTests
     }
 
     [Test]
+    public async Task FlowGraph_TouchPinch_ChangesScale()
+    {
+        var host = await PlaygroundUiTestHost.GetOrCreateAsync();
+        var browser = await PlaygroundUiBrowserSession.GetBrowserAsync();
+        await using var context = await browser.NewContextAsync(new BrowserNewContextOptions
+        {
+            HasTouch = true,
+            ViewportSize = new ViewportSize { Width = 390, Height = 844 },
+        });
+        var page = await context.NewPageAsync();
+        await GotoPlaygroundAndWaitForLinterGridAsync(page, $"{host.BaseUrl.TrimEnd('/')}/?seitonTestHooks=1");
+        await page.WaitForFunctionAsync(
+            "() => typeof globalThis.__SEITON_PLAYGROUND_TEST__?.renderFlow === 'function'",
+            arg: null,
+            new PageWaitForFunctionOptions { Timeout = 30_000 });
+
+        await page.EvaluateAsync(
+            """
+            () => {
+              globalThis.__SEITON_PLAYGROUND_TEST__.selectResultsTab('flow');
+              globalThis.__SEITON_PLAYGROUND_TEST__.renderFlow({
+                version: 1,
+                workflows: [{
+                  file: 'ci.yml',
+                  events: ['push'],
+                  jobs: [
+                    { id: 'build', kind: 'job', needs: [], reducedNeeds: [], runsOn: [], steps: [] },
+                    { id: 'deploy', kind: 'job', needs: ['build'], reducedNeeds: ['build'], runsOn: [], steps: [] },
+                  ],
+                }],
+              });
+            }
+            """);
+
+        var scaleBefore = await page.EvaluateAsync<double>(
+            "() => globalThis.d3.zoomTransform(document.querySelector('#flow-graph .flow-svg')).k");
+
+        await page.EvaluateAsync(
+            """
+            () => {
+              const svg = document.querySelector('#flow-graph .flow-svg');
+              const rect = svg.getBoundingClientRect();
+              const cx = rect.left + rect.width / 2;
+              const cy = rect.top + rect.height / 2;
+              const makeTouch = (id, x) => new Touch({
+                identifier: id,
+                target: svg,
+                clientX: x,
+                clientY: cy,
+              });
+              const touchEvent = (type, touches) => new TouchEvent(type, {
+                bubbles: true,
+                cancelable: true,
+                touches,
+                targetTouches: touches,
+                changedTouches: touches,
+              });
+              const spread0 = 40;
+              const spread1 = 80;
+              const startTouches = [makeTouch(0, cx - spread0), makeTouch(1, cx + spread0)];
+              svg.dispatchEvent(touchEvent('touchstart', startTouches));
+              const moveTouches = [makeTouch(0, cx - spread1), makeTouch(1, cx + spread1)];
+              svg.dispatchEvent(touchEvent('touchmove', moveTouches));
+            }
+            """);
+
+        var scaleAfter = await page.EvaluateAsync<double>(
+            "() => globalThis.d3.zoomTransform(document.querySelector('#flow-graph .flow-svg')).k");
+        await Assert.That(scaleAfter).IsGreaterThan(scaleBefore);
+    }
+
+    [Test]
     public async Task FlowGraph_DiagnosticOnlyUpdate_RefreshesBadgeForFreshFlowObjects()
     {
         var host = await PlaygroundUiTestHost.GetOrCreateAsync();
