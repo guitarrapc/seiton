@@ -150,6 +150,8 @@ public sealed class PlaygroundFlowTabContractTests
         await Assert.That(js.Contains("transitionLod", StringComparison.Ordinal)).IsFalse();
         await Assert.That(js.Contains("setLod", StringComparison.Ordinal)).IsFalse();
         await Assert.That(js).Contains("wireLodWheel");
+        await Assert.That(js).Contains("wireLodPinch");
+        await Assert.That(js).Contains("stopImmediatePropagation");
         await Assert.That(js).Contains("applyFlowZoomAt");
         await Assert.That(js).Contains("zoomingIn");
         await Assert.That(js).Contains("ensureFlowGraphInView");

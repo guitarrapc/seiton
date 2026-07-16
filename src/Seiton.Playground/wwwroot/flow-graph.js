@@ -173,6 +173,7 @@ export function renderFlowGraph(container, workflow, { onSelect, diagnostics, on
     });
   svg.call(zoom);
   const wheelCleanup = wireLodWheel(svg, zoom, graphState, d3);
+  const pinchCleanup = wireLodPinch(svg, zoom, graphState, d3);
   const fit = () => fitToView(d3, svg, zoom, graphState, container);
   if (initialView && Number.isFinite(initialView.k)) {
     applySavedFlowView(d3, svg, zoom, graphState, initialView);
@@ -209,6 +210,7 @@ export function renderFlowGraph(container, workflow, { onSelect, diagnostics, on
     reset: fit,
     dispose: () => {
       wheelCleanup?.();
+      pinchCleanup?.();
       resizeObserver?.disconnect();
       if (resizeFrame !== null) cancelAnimationFrame(resizeFrame);
     },
@@ -484,7 +486,7 @@ function lodForScale(lod, k, zoomingIn) {
   }
 }
 
-/** Scroll / pinch: zoom continuously; shift LOD (with compensation) at band boundaries. */
+/** Wheel scroll: zoom continuously; shift LOD (with compensation) at band boundaries. */
 function wireLodWheel(svg, zoom, state, d3) {
   const handler = (event) => {
     event.preventDefault();
@@ -496,6 +498,67 @@ function wireLodWheel(svg, zoom, state, d3) {
   const node = svg.node();
   node?.addEventListener('wheel', handler, { passive: false });
   return () => node?.removeEventListener('wheel', handler);
+}
+
+/** Touch pinch: same LOD zoom path as wheel; d3.zoom filter blocks native multi-touch pinch. */
+function wireLodPinch(svg, zoom, state, d3) {
+  const node = svg.node();
+  let pinching = false;
+  let lastDistance = 0;
+
+  function touchDistance(touches) {
+    const t0 = touches[0];
+    const t1 = touches[1];
+    return Math.hypot(t0.clientX - t1.clientX, t0.clientY - t1.clientY);
+  }
+
+  function touchPointer(touches) {
+    const clientX = (touches[0].clientX + touches[1].clientX) / 2;
+    const clientY = (touches[0].clientY + touches[1].clientY) / 2;
+    return d3.pointer({ clientX, clientY }, node);
+  }
+
+  function onTouchStart(event) {
+    if (event.touches.length !== 2) return;
+    pinching = true;
+    lastDistance = touchDistance(event.touches);
+  }
+
+  function onTouchMove(event) {
+    if (!pinching || event.touches.length < 2) return;
+    event.preventDefault();
+    event.stopImmediatePropagation();
+    const distance = touchDistance(event.touches);
+    if (!(lastDistance > 0)) {
+      lastDistance = distance;
+      return;
+    }
+    const factor = distance / lastDistance;
+    lastDistance = distance;
+    const pointer = touchPointer(event.touches);
+    const current = d3.zoomTransform(node);
+    applyFlowZoomAt(svg, zoom, state, d3, current.k * factor, pointer, { zoomingIn: factor > 1 });
+  }
+
+  function onTouchEnd(event) {
+    if (event.touches.length < 2) {
+      pinching = false;
+      lastDistance = 0;
+    }
+  }
+
+  const capture = { capture: true };
+  const capturePassiveFalse = { capture: true, passive: false };
+  node?.addEventListener('touchstart', onTouchStart, capture);
+  node?.addEventListener('touchmove', onTouchMove, capturePassiveFalse);
+  node?.addEventListener('touchend', onTouchEnd, capture);
+  node?.addEventListener('touchcancel', onTouchEnd, capture);
+  return () => {
+    node?.removeEventListener('touchstart', onTouchStart, capture);
+    node?.removeEventListener('touchmove', onTouchMove, capturePassiveFalse);
+    node?.removeEventListener('touchend', onTouchEnd, capture);
+    node?.removeEventListener('touchcancel', onTouchEnd, capture);
+  };
 }
 
 function ensureLayout(state, lod) {
