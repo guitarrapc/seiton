@@ -402,6 +402,16 @@ public sealed class WorkflowFlowJsonTests
               test:
                 runs-on: ubuntu-latest
                 strategy:
+                  matrix: ${{ fromJSON(needs.prepare.outputs.matrix) }}
+                steps:
+                  - run: npm test
+            """,
+            """
+            on: push
+            jobs:
+              test:
+                runs-on: ubuntu-latest
+                strategy:
                   matrix:
                     os: ${{ fromJSON(needs.prepare.outputs.os) }}
                     node: [18, 20]

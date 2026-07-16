@@ -223,24 +223,22 @@ public static partial class WorkflowFlowMermaid
         var matrix = job.Strategy.Matrix;
         if (matrix.HasValue)
         {
-            AppendLabelPart(" (matrix: ", label, ref length, ref lastNonTrim, ref stopped);
             if (matrix.Expression.HasText)
             {
+                AppendLabelPart(" (matrix: ", label, ref length, ref lastNonTrim, ref stopped);
                 AppendLabelPart("dynamic", label, ref length, ref lastNonTrim, ref stopped);
+                AppendLabelPart(")", label, ref length, ref lastNonTrim, ref stopped);
+            }
+            else if (WorkflowFlowJson.TryGetAstMatrixCombinationCount(matrix, out var combinationCount))
+            {
+                AppendLabelPart(" (matrix: ", label, ref length, ref lastNonTrim, ref stopped);
+                AppendLabelNumber(combinationCount, label, ref length, ref lastNonTrim, ref stopped);
+                AppendLabelPart(")", label, ref length, ref lastNonTrim, ref stopped);
             }
             else
             {
-                var rowIndex = 0;
-                foreach (var (rowKey, _) in matrix.Rows)
-                {
-                    if (rowIndex++ > 0)
-                    {
-                        AppendLabelPart(" × ", label, ref length, ref lastNonTrim, ref stopped);
-                    }
-                    AppendAstLabelPart(rowKey.Bytes, label, ref length, ref lastNonTrim, ref stopped);
-                }
+                AppendLabelPart(" (matrix)", label, ref length, ref lastNonTrim, ref stopped);
             }
-            AppendLabelPart(")", label, ref length, ref lastNonTrim, ref stopped);
         }
 
         if (job.If.HasText)
