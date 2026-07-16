@@ -500,7 +500,7 @@ function wireLodWheel(svg, zoom, state, d3) {
   return () => node?.removeEventListener('wheel', handler);
 }
 
-/** Touch pinch: same LOD zoom path as wheel; d3.zoom filter blocks native multi-touch pinch. */
+/** Touch pinch: same LOD zoom path as wheel; d3.zoom filter disables d3’s built-in multi-touch pinch handler. */
 function wireLodPinch(svg, zoom, state, d3) {
   const node = svg.node();
   let pinching = false;
