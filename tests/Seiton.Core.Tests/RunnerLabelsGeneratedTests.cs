@@ -22,6 +22,15 @@ public sealed class RunnerLabelsGeneratedTests
     }
 
     [Test]
+    public async Task IsKnownHostedLabel_PreviewXcode27Labels_AreRecognized()
+    {
+        await Assert.That(RunnerLabels.IsKnownHostedLabel("xcode-27"u8)).IsTrue();
+        await Assert.That(RunnerLabels.IsKnownHostedLabel("xcode-27-xlarge"u8)).IsTrue();
+        await Assert.That(RunnerLabels.IsPreviewHostedLabel("xcode-27"u8)).IsTrue();
+        await Assert.That(RunnerLabels.IsPreviewHostedLabel("xcode-27-xlarge"u8)).IsTrue();
+    }
+
+    [Test]
     public async Task IsKnownHostedLabel_UnknownLabel_ReturnsFalse()
     {
         await Assert.That(RunnerLabels.IsKnownHostedLabel("linux-latest"u8)).IsFalse();

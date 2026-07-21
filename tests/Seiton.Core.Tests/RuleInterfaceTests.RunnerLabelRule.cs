@@ -73,6 +73,30 @@ public sealed partial class RuleInterfaceTests
             """,
             []),
             new RuleCase(
+            "ok-xcode-27-preview",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: xcode-27
+                    permissions: {}
+                    steps:
+                        - run: echo ok
+            """,
+            []),
+            new RuleCase(
+            "ok-xcode-27-xlarge-preview",
+            """
+            on: push
+            jobs:
+                build:
+                    runs-on: xcode-27-xlarge
+                    permissions: {}
+                    steps:
+                        - run: echo ok
+            """,
+            []),
+            new RuleCase(
             "ok-self-hosted-skip",
             """
             on: push
@@ -499,6 +523,8 @@ public sealed partial class RuleInterfaceTests
             "ubuntu-latest-8-cores",
             "ubuntu-latest-16-cores",
             "windows-latest-8-cores",
+            // Supplemental preview runners (not in docs yet)
+            "xcode-27-xlarge",
         };
 
         var engine = new LintEngine([new RunnerLabelRule()]);
