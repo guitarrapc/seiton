@@ -3,7 +3,7 @@
 - source-a: parsed schema input (raw schema file in-repo)
 - source-b: parsed docs input (raw GitHub Docs markdown in-repo)
 - exclude-schema-only: False
-- generated-at-utc: 2026-07-01T11:25:19.6378014Z
+- generated-at-utc: 2026-07-21T14:09:03.2778177Z
 
 Policy: normalized snapshot follows GitHub Docs for activity types when Docs table is parseable.
 

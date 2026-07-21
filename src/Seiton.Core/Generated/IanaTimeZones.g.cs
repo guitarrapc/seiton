@@ -9,7 +9,7 @@ using System.Text;
 
 namespace Seiton.Core.Generated;
 
-/// <summary>IANA Time Zone Database identifiers (version: 2026b). 598 entries.</summary>
+/// <summary>IANA Time Zone Database identifiers (version: 2026c). 598 entries.</summary>
 internal static class IanaTimeZones
 {
     /// <summary>Maximum UTF-8 byte length of any known IANA timezone identifier.</summary>

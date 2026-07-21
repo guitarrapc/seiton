@@ -44,11 +44,11 @@
     },
     {
       "fileName": "pypa_gh-action-pypi-publish.action.yml",
-      "sha256": "sha256:31014244416b6a8b44882377770964566806e4510acb2bab5b36674ad36b0006"
+      "sha256": "sha256:4833fe3c15180e27fc7af77018b1d8c670abf1f17958d45d5e0feb4f9acc5d3d"
     },
     {
       "fileName": "reviewdog_action-actionlint.action.yml",
-      "sha256": "sha256:89826862aec8a9939cdb27e189335acb47d241f0f2df5ded462b2d21aa073c0c"
+      "sha256": "sha256:09b6ee34f4b390c3d6d4fd7d9c34c989a3789f6d83274c8b7aef6ca4daaff8fb"
     },
     {
       "fileName": "rhysd_action-setup-vim.action.yml",

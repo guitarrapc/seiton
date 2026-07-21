@@ -4,10 +4,10 @@
   "rawSources": [
     {
       "fileName": "tzdata.zi",
-      "sha256": "sha256:e500467b589740d2c0311c844896f2f3727ffc4baff7e82d65d0f8c1e7e6f0c1"
+      "sha256": "sha256:c63188e9f5017bb86bf93bcc12613cf4f814f6864119333fae06881b5b603814"
     }
   ],
-  "version": "2026b",
+  "version": "2026c",
   "zones": [
     "Africa/Abidjan",
     "Africa/Algiers",

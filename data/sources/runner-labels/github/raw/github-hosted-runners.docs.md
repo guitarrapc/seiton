@@ -124,7 +124,7 @@ For public repositories, jobs using the workflow labels shown in the table below
 
 ### Standard GitHub-hosted runners for  private repositories
 
-For  private repositories, jobs using the workflow labels shown in the table below will run on virtual machines with the associated specifications. These runners use your GitHub account's allotment of free minutes, and are then charged at the per minute rates. See [Actions runner pricing](/en/billing/reference/actions-minute-multipliers).
+For  private repositories, jobs using the workflow labels shown in the table below will run on virtual machines with the associated specifications. These runners use your GitHub account's allotment of free minutes, and are then charged at the per minute rates. See [Actions runner pricing](/en/billing/reference/actions-runner-pricing).
 
 <table style="width:100%">
   <thead>
@@ -223,7 +223,7 @@ For  private repositories, jobs using the workflow labels shown in the table bel
   </tbody>
 </table>
 
-Workflow logs list the runner used to run a job. For more information, see [Viewing workflow run history](/en/actions/monitoring-and-troubleshooting-workflows/viewing-workflow-run-history).
+Workflow logs list the runner used to run a job. For more information, see [Viewing workflow run history](/en/actions/how-tos/monitor-workflows/view-workflow-run-history).
 
 ### Limitations for arm64 macOS runners
 
@@ -253,7 +253,7 @@ The job timeout for single-CPU runners is 15 minutes. If a job reaches this limi
 
 Larger runners are available for organizations and enterprises on GitHub Team and GitHub Enterprise Cloud plans.
 
-Larger runners are managed virtual machines with more resources than [standard GitHub-hosted runners](/en/actions/how-tos/using-github-hosted-runners/using-github-hosted-runners/about-github-hosted-runners#supported-runners-and-hardware-resources). They offer the following advanced features:
+Larger runners are managed virtual machines with more resources than [standard GitHub-hosted runners](/en/actions/concepts/runners/github-hosted-runners#supported-runners-and-hardware-resources). They offer the following advanced features:
 
 * More RAM, CPU, and disk space
 * Static IP addresses
@@ -264,7 +264,7 @@ Larger runners are managed virtual machines with more resources than [standard G
 
 These larger runners are hosted by GitHub and have the runner application and other tools preinstalled.
 
-For more information, see [Using larger runners](/en/actions/using-github-hosted-runners/about-larger-runners).
+For more information, see [Using larger runners](/en/actions/how-tos/manage-runners/larger-runners).
 
 ## Administrative privileges
 
@@ -278,7 +278,7 @@ To get a list of IP address ranges that GitHub Actions uses for GitHub-hosted ru
 
 Windows and Ubuntu runners are hosted in Azure and subsequently have the same IP address ranges as the Azure datacenters. macOS runners are hosted in GitHub's own macOS cloud.
 
-Since there are so many IP address ranges for GitHub-hosted runners, we do not recommend that you use these as allowlists for your internal resources. Instead, we recommend you use larger runners with a static IP address range, or self-hosted runners. For more information, see [Using larger runners](/en/actions/using-github-hosted-runners/about-larger-runners) or [Self-hosted runners](/en/actions/hosting-your-own-runners/managing-self-hosted-runners/about-self-hosted-runners).
+Since there are so many IP address ranges for GitHub-hosted runners, we do not recommend that you use these as allowlists for your internal resources. Instead, we recommend you use larger runners with a static IP address range, or self-hosted runners. For more information, see [Using larger runners](/en/actions/how-tos/manage-runners/larger-runners) or [Self-hosted runners](/en/actions/concepts/runners/self-hosted-runners).
 
 The list of GitHub Actions IP addresses returned by the API is updated once a week.
 
@@ -370,7 +370,7 @@ GitHub executes actions and shell commands in specific directories on the virtua
 | `workspace`           | `GITHUB_WORKSPACE`   | Actions and shell commands execute in this directory. An action can modify the contents of this directory, which subsequent actions can access.                 |
 | `workflow/event.json` | `GITHUB_EVENT_PATH`  | The `POST` payload of the webhook event that triggered the workflow. GitHub rewrites this each time an action executes to isolate file content between actions. |
 
-For a list of the environment variables GitHub creates for each workflow, see [Store information in variables](/en/actions/learn-github-actions/variables#default-environment-variables).
+For a list of the environment variables GitHub creates for each workflow, see [Store information in variables](/en/actions/how-tos/write-workflows/choose-what-workflows-do/use-variables).
 
 ### Docker container filesystem
 
