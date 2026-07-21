@@ -9,5 +9,8 @@
     "ubuntu-latest-16-cores",
     "windows-latest-8-cores"
   ],
-  "previewLabels": []
+  "previewLabels": [
+    "xcode-27",
+    "xcode-27-xlarge"
+  ]
 }
