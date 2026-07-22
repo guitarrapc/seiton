@@ -2265,9 +2265,11 @@ function shouldDeferWasmLintForIncompleteYaml(source) {
 
 /**
  * Runs lint without updating editor UI. Used by Playwright when <c>?seitonTestHooks=1</c>.
+ * When YAML is in an incomplete state that would crash WASM, returns
+ * <c>{ ok: true, deferred: true, diagnostics: [] }</c> instead of calling the runtime.
  * @param {string} source
  * @param {string} [filePath]
- * @returns {{ ok: boolean, error?: string, diagnostics?: unknown[], internalError?: boolean }}
+ * @returns {{ ok: boolean, error?: string, diagnostics?: unknown[], internalError?: boolean, deferred?: boolean }}
  */
 function runLintForTest(source, filePath) {
   if (shouldDeferWasmLintForIncompleteYaml(source)) {
