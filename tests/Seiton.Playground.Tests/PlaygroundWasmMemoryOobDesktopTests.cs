@@ -51,6 +51,26 @@ public sealed class PlaygroundWasmMemoryOobDesktopTests : IDisposable
               - run: npm install && npm test
         """;
 
+    private const string SimpleWorkflowWithJobKeyPlaceholder = """
+        # Paste your workflow YAML to this code editor
+
+        on:
+          push:
+            branch: main
+
+        jobs:
+          test:
+            __JOB_KEY__
+            runs-on: ubuntu-latest
+            steps:
+        - uses: actions/checkout@v6
+        - uses: actions/cache@v4
+          with:
+          path: ~/.npm
+          key: ubuntu-node-${{ hashFiles('**/package-lock.json') }}
+        - run: npm install && npm test
+        """;
+
     public PlaygroundWasmMemoryOobDesktopTests() => PlaygroundLintRunner.SetConfig(FullFixConfig);
 
     public void Dispose() => PlaygroundLintRunner.SetConfig(null);
@@ -81,6 +101,18 @@ public sealed class PlaygroundWasmMemoryOobDesktopTests : IDisposable
                 with:
                   version: 
             """;
+        _ = PlaygroundLintRunner.RunToJsonUtf8(yaml, ".github/workflows/ci.yml");
+    }
+
+    [Test]
+    [Arguments("s")]
+    [Arguments("st")]
+    [Arguments("str")]
+    [Arguments("strategy")]
+    [Arguments("strategy:")]
+    public void RunLint_IncompleteJobKeyBeforeFollowingProperties_DoesNotThrow(string jobKey)
+    {
+        var yaml = SimpleWorkflowWithJobKeyPlaceholder.Replace("__JOB_KEY__", jobKey, StringComparison.Ordinal);
         _ = PlaygroundLintRunner.RunToJsonUtf8(yaml, ".github/workflows/ci.yml");
     }
 }

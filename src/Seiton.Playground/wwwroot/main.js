@@ -901,7 +901,7 @@ function refreshFlow(force = false) {
     && lastFlowDiagnostics === lastDiagnostics) {
     return;
   }
-  if (shouldDeferWasmLintForIncompleteUses(source)) {
+  if (shouldDeferWasmLintForIncompleteYaml(source)) {
     lastFlowSource = null;
     lastFlowFilePath = null;
     lastFlowDiagnostics = null;
@@ -1184,7 +1184,7 @@ function refreshMermaid(force = false) {
   if (!force && source === lastMermaidSource && filePath === lastMermaidFilePath) {
     return;
   }
-  if (shouldDeferWasmLintForIncompleteUses(source)) {
+  if (shouldDeferWasmLintForIncompleteYaml(source)) {
     lastMermaidSource = null;
     lastMermaidFilePath = null;
     renderMermaid('');
@@ -2072,7 +2072,7 @@ function runLint() {
     return;
   }
 
-  if (shouldDeferWasmLintForIncompleteUses(source)) {
+  if (shouldDeferWasmLintForIncompleteYaml(source)) {
     if (activeResultsTab === 'flow') {
       refreshFlow();
     } else if (activeResultsTab === 'mermaid') {
@@ -2243,26 +2243,40 @@ function getSelectedFilePath() {
 }
 
 /**
- * Bare trailing `- uses:` (no action ref yet) can trap Mono WASM AOT — defer lint until the line is complete.
+ * Some intermediate YAML states can trap Mono WASM AOT — defer lint until the line is complete.
  * @param {string} source
  * @returns {boolean}
  */
-function shouldDeferWasmLintForIncompleteUses(source) {
-  return /(?:^|\n)[ \t]*- uses:\s*$/m.test(source);
+function shouldDeferWasmLintForIncompleteYaml(source) {
+  if (/(?:^|\n)[ \t]*- uses:\s*$/m.test(source)) {
+    return true;
+  }
+
+  if (/(?:^|\n)[ \t]+strategy:/m.test(source)
+    && /(?:^|\n)[ \t]+steps:[ \t]*\r?\n-/m.test(source)) {
+    return true;
+  }
+
+  // A bare prefix of `strategy` immediately after a mapping parent and before an
+  // existing sibling job key makes the YAML reader consume an unstable mapping
+  // shape. Require the parent line so block-scalar contents are not misclassified.
+  return /(?:^|\n)([ \t]*)[A-Za-z0-9_.-]+:[ \t]*\r?\n(\1[ \t]+)(?:s|st|str|stra|strat|strate|strateg|strategy:?)[ \t]*\r?\n\2(?:concurrency|container|continue-on-error|defaults|env|environment|if|name|needs|outputs|permissions|runs-on|secrets|services|snapshot|steps|timeout-minutes|uses|with):/m.test(source);
 }
 
 /**
  * Runs lint without updating editor UI. Used by Playwright when <c>?seitonTestHooks=1</c>.
+ * When YAML is in an incomplete state that would crash WASM, returns
+ * <c>{ ok: true, deferred: true, diagnostics: [] }</c> instead of calling the runtime.
  * @param {string} source
  * @param {string} [filePath]
- * @returns {{ ok: boolean, error?: string, diagnostics?: unknown[], internalError?: boolean }}
+ * @returns {{ ok: boolean, error?: string, diagnostics?: unknown[], internalError?: boolean, deferred?: boolean }}
  */
 function runLintForTest(source, filePath) {
+  if (shouldDeferWasmLintForIncompleteYaml(source)) {
+    return { ok: true, diagnostics: [], deferred: true };
+  }
   if (!runtimeAlive || !runtimeReady || !exports) {
     return { ok: false, error: 'runtime not ready' };
-  }
-  if (shouldDeferWasmLintForIncompleteUses(source)) {
-    return { ok: true, diagnostics: [], deferred: true };
   }
   try {
     const path = filePath ?? getSelectedFilePath();
